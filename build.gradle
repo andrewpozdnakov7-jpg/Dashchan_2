@@ -22,10 +22,67 @@ tasks.withType(JavaCompile) {
 	options.compilerArgs << '-Xlint:unchecked' << '-Xlint:deprecation'
 }
 
+def androidNdkVersion = '21.4.7075529'
+def nativePlayerFfmpegFlavor = project.findProperty('nativePlayerFfmpegFlavor') ?: 'ffmpeg'
+def nativePlayerSupportedAbis = [
+		ffmpeg: ['arm64-v8a', 'armeabi-v7a', 'x86'],
+		ffmpeg8: ['arm64-v8a', 'armeabi-v7a', 'x86']
+]
+if (!nativePlayerSupportedAbis.containsKey(nativePlayerFfmpegFlavor)) {
+	throw new GradleException('Unsupported nativePlayerFfmpegFlavor: ' + nativePlayerFfmpegFlavor)
+}
+def nativeAbis = (project.findProperty('nativeAbis') ?: 'arm64-v8a,armeabi-v7a,x86')
+		.split(',')
+		.collect { it.trim() }
+		.findAll { !it.isEmpty() }
+if (nativeAbis.isEmpty()) {
+	throw new GradleException('nativeAbis must contain at least one ABI')
+}
+def unsupportedNativeAbis = nativeAbis - nativePlayerSupportedAbis[nativePlayerFfmpegFlavor]
+if (!unsupportedNativeAbis.isEmpty()) {
+	throw new GradleException('FFmpeg flavor ' + nativePlayerFfmpegFlavor + ' supports only ' +
+			nativePlayerSupportedAbis[nativePlayerFfmpegFlavor].join(', ') +
+			'; unsupported ABI(s): ' + unsupportedNativeAbis.join(', '))
+}
+
+def builtinWebmEnabled = nativePlayerFfmpegFlavor == 'ffmpeg8'
+def builtinWebmProjectDir = file(project.findProperty('dashchanWebmDir') ?: '../Dashchan-Webm')
+def builtinWebmBuildDir = new File(builtinWebmProjectDir, 'build')
+def builtinWebmSources = new File(builtinWebmBuildDir, 'intermediates/shared_sources')
+def builtinWebmLibraries = new File(builtinWebmBuildDir, 'intermediates/shared_libraries')
+def builtinWebmExternal = new File(builtinWebmBuildDir, 'outputs/external')
+def builtinWebmJniLibDirs = [
+		new File(builtinWebmLibraries, 'dav1d'),
+		new File(builtinWebmLibraries, 'ffmpeg'),
+		new File(builtinWebmLibraries, 'yuv')
+]
+def builtinWebmLibrariesPattern = [
+		'/lib/*/libdav1d.so',
+		'/lib/*/libavcodec.so',
+		'/lib/*/libavformat.so',
+		'/lib/*/libavutil.so',
+		'/lib/*/libswresample.so',
+		'/lib/*/libswscale.so',
+		'/lib/*/libyuv.so'
+]
+def getAndroidSdkDirectory = {
+	def localProperties = new Properties()
+	def localPropertiesFile = rootProject.file('local.properties')
+	if (localPropertiesFile.exists()) {
+		localPropertiesFile.withInputStream { localProperties.load(it) }
+	}
+	def sdkDir = System.getenv('ANDROID_HOME') ?: System.getenv('ANDROID_SDK_ROOT') ?:
+			localProperties.getProperty('sdk.dir')
+	if (!sdkDir) {
+		throw new GradleException('Android SDK path is not defined')
+	}
+	return new File(sdkDir)
+}
+
 android {
 	compileSdkVersion 30
 	buildToolsVersion '30.0.2'
-	ndkVersion '21.4.7075529'
+	ndkVersion androidNdkVersion
 
 	defaultConfig {
 		applicationId 'io.dashchan2'
@@ -65,6 +122,9 @@ android {
 		jni.srcDirs = []
 		jniLibs.srcDirs = []
 	}
+	if (builtinWebmEnabled) {
+		sourceSets.main.jniLibs.srcDirs += builtinWebmJniLibDirs
+	}
 
 	def locales = sourceSets.main.res.srcDirs
 			.collectMany { (it.listFiles() ?: []) as Collection }
@@ -75,7 +135,16 @@ android {
 		resConfigs locales
 	}
 
-	defaultConfig.ndk.abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86'
+	defaultConfig {
+		ndk.abiFilters(*nativeAbis)
+		externalNativeBuild.ndkBuild.arguments "DASHCHAN_FFMPEG_FLAVOR=${nativePlayerFfmpegFlavor}"
+		if (builtinWebmEnabled) {
+			externalNativeBuild.ndkBuild.arguments "DASHCHAN_WEBM_SHARED_LIBRARIES=${builtinWebmLibraries.absolutePath}"
+			externalNativeBuild.ndkBuild.arguments "DASHCHAN_WEBM_EXTERNAL=${builtinWebmExternal.absolutePath}"
+		}
+		buildConfigField 'String', 'NATIVE_PLAYER_FFMPEG_FLAVOR', '"' + nativePlayerFfmpegFlavor + '"'
+		buildConfigField 'String[]', 'NATIVE_PLAYER_ABIS', '{"' + nativeAbis.join('", "') + '"}'
+	}
 	externalNativeBuild.ndkBuild.path 'jni/Android.mk'
 
 	buildTypes.create('leak').debuggable true
@@ -136,12 +205,13 @@ android {
 	}
 
 	packagingOptions {
-		exclude '/lib/*/libavcodec.so'
-		exclude '/lib/*/libavformat.so'
-		exclude '/lib/*/libavutil.so'
-		exclude '/lib/*/libswresample.so'
-		exclude '/lib/*/libswscale.so'
-		exclude '/lib/*/libyuv.so'
+		builtinWebmLibrariesPattern.each { pattern ->
+			if (builtinWebmEnabled) {
+				pickFirst pattern
+			} else {
+				exclude pattern
+			}
+		}
 		exclude '/META-INF/*.version'
 	}
 
@@ -152,6 +222,59 @@ android {
 	compileOptions {
 		sourceCompatibility JavaVersion.VERSION_1_8
 		targetCompatibility JavaVersion.VERSION_1_8
+	}
+}
+
+def requireUnixBuiltinWebmBuild = {
+	if (!builtinWebmEnabled) {
+		return
+	}
+	if (!builtinWebmProjectDir.isDirectory()) {
+		throw new GradleException('Dashchan-Webm checkout was not found: ' + builtinWebmProjectDir +
+				'. Put Dashchan-Webm next to Dashchan_2 or pass -PdashchanWebmDir=<path>.')
+	}
+	if (!org.apache.tools.ant.taskdefs.condition.Os.isFamily(
+			org.apache.tools.ant.taskdefs.condition.Os.FAMILY_UNIX)) {
+		throw new GradleException('Linux x86_64 is required to build bundled WebM libraries')
+	}
+}
+
+tasks.register('prepareBuiltinWebmSources', Exec) {
+	onlyIf { builtinWebmEnabled }
+	workingDir builtinWebmProjectDir
+	commandLine 'bash', new File(builtinWebmProjectDir, 'shared-prepare.sh').absolutePath,
+			builtinWebmSources.absolutePath
+	environment DAV1D_VERSION: '1.5.3',
+			FFMPEG_VERSION: '8.1.2',
+			YUV_VERSION: '6afd9becdf58822b1da6770598d8597c583ccfad'
+	inputs.file new File(builtinWebmProjectDir, 'shared-prepare.sh')
+	inputs.property 'dav1dVersion', '1.5.3'
+	inputs.property 'ffmpegVersion', '8.1.2'
+	inputs.property 'yuvVersion', '6afd9becdf58822b1da6770598d8597c583ccfad'
+	outputs.dir builtinWebmSources
+	doFirst {
+		requireUnixBuiltinWebmBuild()
+	}
+}
+
+tasks.register('buildBuiltinWebmLibraries', Exec) {
+	onlyIf { builtinWebmEnabled }
+	dependsOn tasks.named('prepareBuiltinWebmSources')
+	workingDir builtinWebmProjectDir
+	commandLine 'bash', new File(builtinWebmProjectDir, 'shared-build.sh').absolutePath,
+			builtinWebmSources.absolutePath, builtinWebmLibraries.absolutePath,
+			builtinWebmExternal.absolutePath
+	environment ANDROID_NDK_HOME: new File(getAndroidSdkDirectory(), "ndk/${androidNdkVersion}").absolutePath,
+			DAV1D_VERSION: '1.5.3',
+			EXTERNAL_CORES: Runtime.runtime.availableProcessors().toString(),
+			NATIVE_ABIS: nativeAbis.join(' ')
+	inputs.file new File(builtinWebmProjectDir, 'shared-build.sh')
+	inputs.dir builtinWebmSources
+	inputs.property 'nativeAbis', nativeAbis.join(' ')
+	inputs.property 'dav1dVersion', '1.5.3'
+	outputs.dirs builtinWebmLibraries, builtinWebmExternal
+	doFirst {
+		requireUnixBuiltinWebmBuild()
 	}
 }
 
@@ -167,6 +290,17 @@ dependencies {
 }
 
 afterEvaluate {
+	if (builtinWebmEnabled) {
+		def buildBuiltinWebmLibraries = tasks.named('buildBuiltinWebmLibraries')
+		tasks.matching { task ->
+			task.name.startsWith('pre') && task.name.endsWith('Build') ||
+					task.name.startsWith('externalNativeBuild') &&
+							!task.name.startsWith('externalNativeBuildClean') ||
+					task.name.startsWith('merge') && task.name.endsWith('NativeLibs')
+		}.configureEach {
+			dependsOn buildBuiltinWebmLibraries
+		}
+	}
 	task cxxClean(type: Delete) {
 		delete '.cxx'
 	}

@@ -6,10 +6,22 @@
 #include <libswresample/swresample.h>
 #include <libswscale/swscale.h>
 #include <libavutil/imgutils.h>
+#include <libavutil/mathematics.h>
 #include <libavutil/pixdesc.h>
+#include <libavutil/ffversion.h>
 #include <libavutil/opt.h>
+#include <libavutil/samplefmt.h>
 
+// Bundled libyuv headers still contain old C no-argument prototypes.
+// Keep the NDK 29 strict-prototypes suppression scoped to this third-party include.
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wstrict-prototypes"
+#endif
 #include <libyuv.h>
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 
 #include <SLES/OpenSLES.h>
 #include <SLES/OpenSLES_Android.h>
@@ -43,6 +55,16 @@
 #define HAS_STREAM(p, stream) ((p)->av.stream##StreamIndex != INDEX_NO_STREAM)
 #define GET_STREAM(p, stream) ((p)->av.format->streams[(p)->av.stream##StreamIndex])
 #define GET_CONTEXT(p, stream) ((p)->av.stream##Context)
+
+#ifndef DASHCHAN_FFMPEG_FLAVOR
+#define DASHCHAN_FFMPEG_FLAVOR "ffmpeg"
+#endif
+
+#if LIBAVUTIL_VERSION_MAJOR >= 57
+#define USE_AV_CHANNEL_LAYOUT 1
+#else
+#define USE_AV_CHANNEL_LAYOUT 0
+#endif
 
 static JavaVM * loadJavaVM;
 static SLEngineItf slEngine;
@@ -87,6 +109,7 @@ struct Player {
 	struct {
 		struct {
 			int finished;
+			int threadStarted;
 			pthread_t thread;
 			pthread_mutex_t readMutex;
 			pthread_cond_t flowCond;
@@ -94,11 +117,13 @@ struct Player {
 		} packets;
 
 		struct {
+			int threadStarted;
 			pthread_t thread;
 			pthread_mutex_t frameMutex;
 		} audio;
 
 		struct {
+			int threadStarted;
 			pthread_t thread;
 			pthread_mutex_t frameMutex;
 		} video;
@@ -138,6 +163,7 @@ struct Player {
 		pthread_cond_t queueCond;
 		pthread_mutex_t queueMutex;
 		BufferQueue * bufferQueue;
+		int drawThreadStarted;
 		pthread_t drawThread;
 		ANativeWindow * window;
 		int useLibyuv;
@@ -222,6 +248,73 @@ static int getBytesPerPixel(int videoFormat) {
 		case AV_PIX_FMT_RGB565LE: return 2;
 	}
 	return 0;
+}
+
+static int64_t getTimestampPositionMs(int64_t timestamp, AVRational timeBase) {
+	if (timestamp == AV_NOPTS_VALUE) {
+		return -1;
+	}
+	AVRational msTimeBase = {1, 1000};
+	return max64(av_rescale_q(timestamp, timeBase, msTimeBase), 0);
+}
+
+static int64_t getFramePositionMs(AVFrame * frame, AVStream * stream) {
+	int64_t timestamp = frame->best_effort_timestamp;
+	if (timestamp == AV_NOPTS_VALUE) {
+		timestamp = frame->pts;
+	}
+	if (timestamp == AV_NOPTS_VALUE) {
+		timestamp = frame->pkt_dts;
+	}
+	return getTimestampPositionMs(timestamp, stream->time_base);
+}
+
+static int getAudioContextChannels(const AVCodecContext * context) {
+#if USE_AV_CHANNEL_LAYOUT
+	return context->ch_layout.nb_channels;
+#else
+	return context->channels;
+#endif
+}
+
+static int getCodecParametersChannels(const AVCodecParameters * parameters) {
+#if USE_AV_CHANNEL_LAYOUT
+	return parameters->ch_layout.nb_channels;
+#else
+	return parameters->channels;
+#endif
+}
+
+#if USE_AV_CHANNEL_LAYOUT
+static int getFrameChannels(const AVFrame * frame) {
+	return frame->ch_layout.nb_channels;
+}
+
+static int copyFrameChannelLayout(AVChannelLayout * channelLayout, const AVFrame * frame, int fallbackChannels) {
+	if (frame->ch_layout.nb_channels > 0) {
+		return av_channel_layout_copy(channelLayout, &frame->ch_layout);
+	}
+	av_channel_layout_default(channelLayout, fallbackChannels > 0 ? fallbackChannels : 2);
+	return 0;
+}
+
+static int copyOrMaskChannelLayout(AVChannelLayout * channelLayout,
+		const AVChannelLayout * fallbackChannelLayout, uint64_t channelMask) {
+	if (channelMask != 0) {
+		return av_channel_layout_from_mask(channelLayout, channelMask);
+	}
+	return av_channel_layout_copy(channelLayout, fallbackChannelLayout);
+}
+#endif
+
+static void closeAndFreeCodecContext(AVCodecContext ** context) {
+	if (!context || !*context) {
+		return;
+	}
+#if LIBAVCODEC_VERSION_MAJOR < 59
+	avcodec_close(*context);
+#endif
+	avcodec_free_context(context);
 }
 
 static void packetQueueFreeCallback(void * data) {
@@ -319,8 +412,7 @@ static int enqueueAudioBuffer(Player * player) {
 		if (audioBuffer->index >= audioBuffer->size) {
 			endAudioPosition = audioBuffer->position + audioBuffer->size * 1000 / audioBuffer->divider;
 			player->audio.buffer = NULL;
-			av_freep(&audioBuffer->buffer);
-			free(audioBuffer);
+			audioBufferQueueFreeCallback(audioBuffer);
 		}
 	}
 	if (!player->audio.buffer) {
@@ -411,6 +503,11 @@ static void * performDecodeAudio(void * data) {
 		while (1) {
 			int success = 0;
 			uint8_t ** dstData = NULL;
+#if USE_AV_CHANNEL_LAYOUT
+			AVChannelLayout srcChannelLayout = {0};
+			AVChannelLayout dstChannelLayout = {0};
+			int channelLayoutsInitialized = 0;
+#endif
 			if (player->sync.skip.audioWorkFrame) {
 				goto SKIP_AUDIO_FRAME;
 			}
@@ -429,31 +526,58 @@ static void * performDecodeAudio(void * data) {
 			pthread_mutex_unlock(&player->decode.audio.frameMutex);
 
 			if (ready) {
-				int64_t position;
-				if (frame->pts == AV_NOPTS_VALUE) {
-					position = -1;
-				} else {
-					position = max64(frame->pts * 1000 * stream->time_base.num / stream->time_base.den, 0);
-				}
-				if (player->meta.seekAnyFrame && player->sync.audioPositionNotSync &&
+				int64_t position = getFramePositionMs(frame, stream);
+				if (position >= 0 && player->meta.seekAnyFrame && player->sync.audioPositionNotSync &&
 						position < player->sync.audioPosition) {
 					success = 1;
 					goto SKIP_AUDIO_FRAME;
 				}
 
+#if USE_AV_CHANNEL_LAYOUT
+				int srcChannels = getFrameChannels(frame);
+				if (srcChannels <= 0) {
+					srcChannels = getAudioContextChannels(context);
+				}
+				if (copyFrameChannelLayout(&srcChannelLayout, frame, srcChannels) < 0) {
+					goto SKIP_AUDIO_FRAME;
+				}
+				channelLayoutsInitialized = 1;
+				if (copyOrMaskChannelLayout(&dstChannelLayout, &srcChannelLayout,
+						player->audio.resampleChannels) < 0) {
+					goto SKIP_AUDIO_FRAME;
+				}
+				int dstChannels = dstChannelLayout.nb_channels;
+				if (srcChannels <= 0) {
+					srcChannels = srcChannelLayout.nb_channels;
+				}
+#else
 				if (frame->channel_layout == 0) {
 					frame->channel_layout = av_get_default_channel_layout(frame->channels);
 				}
 				uint64_t srcChannelLayout = frame->channel_layout;
 				uint64_t dstChannelLayout = player->audio.resampleChannels != 0
 						? player->audio.resampleChannels : srcChannelLayout;
+				int srcChannels = frame->channels;
+				int dstChannels = av_get_channel_layout_nb_channels(dstChannelLayout);
+				(void) srcChannels;
+#endif
 				int srcSamples = frame->nb_samples;
 				int srcSampleRate = frame->sample_rate;
 				int dstSampleRate = player->audio.resampleSampleRate != 0
 						? player->audio.resampleSampleRate : srcSampleRate;
 				int dstFormat = AV_SAMPLE_FMT_S16;
+				LOG("audio frame pts=%" PRId64 " best=%" PRId64 " pkt_dts=%" PRId64
+						" pos=%" PRId64 " tb=%d/%d srcRate=%d srcCh=%d dstRate=%d dstCh=%d",
+						frame->pts, frame->best_effort_timestamp, frame->pkt_dts, position,
+						stream->time_base.num, stream->time_base.den, srcSampleRate, srcChannels,
+						dstSampleRate, dstChannels);
+#if USE_AV_CHANNEL_LAYOUT
+				av_opt_set_chlayout(resampleContext, "in_chlayout", &srcChannelLayout, 0);
+				av_opt_set_chlayout(resampleContext, "out_chlayout", &dstChannelLayout, 0);
+#else
 				av_opt_set_int(resampleContext, "in_channel_layout", srcChannelLayout, 0);
 				av_opt_set_int(resampleContext, "out_channel_layout", dstChannelLayout,  0);
+#endif
 				av_opt_set_int(resampleContext, "in_sample_rate", srcSampleRate, 0);
 				av_opt_set_int(resampleContext, "out_sample_rate", dstSampleRate, 0);
 				av_opt_set_sample_fmt(resampleContext, "in_sample_fmt", frame->format, 0);
@@ -462,7 +586,6 @@ static void * performDecodeAudio(void * data) {
 					goto SKIP_AUDIO_FRAME;
 				}
 				int dstSamples = av_rescale_rnd(srcSamples, dstSampleRate, srcSampleRate, AV_ROUND_UP);
-				int dstChannels = av_get_channel_layout_nb_channels(dstChannelLayout);
 				int result = av_samples_alloc_array_and_samples(&dstData, frame->linesize, dstChannels,
 						dstSamples, dstFormat, 0);
 				if (result < 0 || player->sync.skip.audioWorkFrame) {
@@ -518,7 +641,7 @@ static void * performDecodeAudio(void * data) {
 				audioBuffer->index = 0;
 				audioBuffer->size = size;
 				audioBuffer->position = position;
-				audioBuffer->divider = 2 * frame->channels * dstSampleRate;
+				audioBuffer->divider = av_get_bytes_per_sample(dstFormat) * dstChannels * dstSampleRate;
 				// Fix loud click on video start even on low sound level by muting sound buffer for 40 milliseconds
 				if (silentAudioLength < 0) {
 					silentAudioLength = 40 * audioBuffer->divider / 1000;
@@ -538,6 +661,12 @@ static void * performDecodeAudio(void * data) {
 			}
 
 			SKIP_AUDIO_FRAME:
+#if USE_AV_CHANNEL_LAYOUT
+			if (channelLayoutsInitialized) {
+				av_channel_layout_uninit(&srcChannelLayout);
+				av_channel_layout_uninit(&dstChannelLayout);
+			}
+#endif
 			if (dstData) {
 				if (!success) {
 					av_freep(&dstData[0]);
@@ -849,12 +978,11 @@ static void * performDecodeVideo(void * data) {
 				extra = malloc(sizeof(VideoFrameExtra));
 				extra->width = frame->width;
 				extra->height = frame->height;
-				if (frame->pts == AV_NOPTS_VALUE) {
-					extra->position = -1;
-				} else {
-					extra->position = max64(frame->pts * 1000 * stream->time_base.num / stream->time_base.den, 0);
-				}
-				if (player->meta.seekAnyFrame && player->sync.videoPositionNotSync &&
+				extra->position = getFramePositionMs(frame, stream);
+				LOG("video frame pts=%" PRId64 " best=%" PRId64 " pkt_dts=%" PRId64
+						" pos=%" PRId64 " tb=%d/%d", frame->pts, frame->best_effort_timestamp,
+						frame->pkt_dts, extra->position, stream->time_base.num, stream->time_base.den);
+				if (extra->position >= 0 && player->meta.seekAnyFrame && player->sync.videoPositionNotSync &&
 						extra->position < player->sync.videoPosition) {
 					success = 1;
 					goto SKIP_VIDEO_FRAME;
@@ -970,6 +1098,21 @@ static void * performDecodeVideo(void * data) {
 	return NULL;
 }
 
+static void joinStartedWorkerThreads(Player * player) {
+	if (player->decode.audio.threadStarted) {
+		pthread_join(player->decode.audio.thread, NULL);
+		player->decode.audio.threadStarted = 0;
+	}
+	if (player->decode.video.threadStarted) {
+		pthread_join(player->decode.video.thread, NULL);
+		player->decode.video.threadStarted = 0;
+	}
+	if (player->video.drawThreadStarted) {
+		pthread_join(player->video.drawThread, NULL);
+		player->video.drawThreadStarted = 0;
+	}
+}
+
 static PacketHolder * createPacketHolder(int allocPacket, int finish) {
 	PacketHolder * packetHolder = malloc(sizeof(PacketHolder));
 	packetHolder->packet = allocPacket ? malloc(sizeof(AVPacket)) : NULL;
@@ -1051,9 +1194,7 @@ static void * performDecodePackets(void * data) {
 	}
 	blockingQueueAdd(&player->audio.packetQueue, NULL);
 	blockingQueueAdd(&player->video.packetQueue, NULL);
-	pthread_join(player->decode.audio.thread, NULL);
-	pthread_join(player->decode.video.thread, NULL);
-	pthread_join(player->video.drawThread, NULL);
+	joinStartedWorkerThreads(player);
 	(*loadJavaVM)->DetachCurrentThread(loadJavaVM);
 	return NULL;
 }
@@ -1180,7 +1321,7 @@ static int64_t bufferSeekData(void * opaque, int64_t offset, int whence) {
 	return result;
 }
 
-static Player * createPlayer() {
+static Player * createPlayer(void) {
 	Player * player = malloc(sizeof(Player));
 	memset(player, 0, sizeof(Player));
 	player->file.total = -1;
@@ -1270,8 +1411,8 @@ void init(JNIEnv * env, jlong pointer, jobject nativeBridge, jboolean seekAnyFra
 	}
 	AVStream * audioStream = audioStreamIndex != INDEX_NO_STREAM ? formatContext->streams[audioStreamIndex] : NULL;
 	AVStream * videoStream = videoStreamIndex != INDEX_NO_STREAM ? formatContext->streams[videoStreamIndex] : NULL;
-	AVCodec * audioCodec = audioStream ? avcodec_find_decoder(audioStream->codecpar->codec_id) : NULL;
-	AVCodec * videoCodec = videoStream ? avcodec_find_decoder(videoStream->codecpar->codec_id) : NULL;
+	const AVCodec * audioCodec = audioStream ? avcodec_find_decoder(audioStream->codecpar->codec_id) : NULL;
+	const AVCodec * videoCodec = videoStream ? avcodec_find_decoder(videoStream->codecpar->codec_id) : NULL;
 	if (!audioCodec) {
 		audioStreamIndex = INDEX_NO_STREAM;
 		audioStream = NULL;
@@ -1305,11 +1446,30 @@ void init(JNIEnv * env, jlong pointer, jobject nativeBridge, jboolean seekAnyFra
 	if (audioStream) {
 		SLresult result;
 		int success = 0;
-		int channels = player->av.audioContext->channels;
+		int sourceChannels = getAudioContextChannels(player->av.audioContext);
+		int channels = sourceChannels;
+		int streamChannels = getCodecParametersChannels(audioStream->codecpar);
+		if (streamChannels > channels) {
+			channels = streamChannels;
+		}
+#if USE_AV_CHANNEL_LAYOUT
+		int sourceLayoutChannels = sourceChannels > streamChannels ? sourceChannels : streamChannels;
+#else
+		uint64_t sourceChannelLayout = player->av.audioContext->channel_layout != 0
+				? player->av.audioContext->channel_layout : audioStream->codecpar->channel_layout;
+		if (sourceChannelLayout != 0) {
+			int layoutChannels = av_get_channel_layout_nb_channels(sourceChannelLayout);
+			if (layoutChannels > channels) {
+				channels = layoutChannels;
+			}
+		}
+#endif
 		if (channels != 1 && channels != 2) {
 			channels = 2;
-			player->audio.resampleChannels = AV_CH_FRONT_LEFT | AV_CH_FRONT_RIGHT;
 		}
+		uint64_t outputChannelLayout = channels == 2
+				? AV_CH_FRONT_LEFT | AV_CH_FRONT_RIGHT : AV_CH_FRONT_CENTER;
+		player->audio.resampleChannels = outputChannelLayout;
 		int channelMask = channels == 2 ? SL_SPEAKER_FRONT_LEFT | SL_SPEAKER_FRONT_RIGHT : SL_SPEAKER_FRONT_CENTER;
 		const SLInterfaceID volumeIds[] = {SL_IID_VOLUME};
 		const SLboolean volumeRequired[] = {SL_BOOLEAN_FALSE};
@@ -1334,6 +1494,7 @@ void init(JNIEnv * env, jlong pointer, jobject nativeBridge, jboolean seekAnyFra
 		int needResampleSR = NEED_RESAMPLE_NO;
 		int slSampleRate = 0;
 		int sampleRate = player->av.audioContext->sample_rate;
+		int outputSampleRate = sampleRate;
 		switch (sampleRate) {
 			case 8000: slSampleRate = SL_SAMPLINGRATE_8; break;
 			case 11025: slSampleRate = SL_SAMPLINGRATE_11_025; break;
@@ -1352,19 +1513,30 @@ void init(JNIEnv * env, jlong pointer, jobject nativeBridge, jboolean seekAnyFra
 		}
 		while (1) {
 			int mayRepeat = 1;
+			outputSampleRate = sampleRate;
 			if (needResampleSR == NEED_RESAMPLE_MAY_48000 && sampleRate % 48000 == 0) {
 				slSampleRate = SL_SAMPLINGRATE_48;
-				player->audio.resampleSampleRate = 48000;
+				outputSampleRate = 48000;
 			} else if (needResampleSR == NEED_RESAMPLE_MAY_48000 || needResampleSR == NEED_RESAMPLE_FORCE_44100) {
 				slSampleRate = SL_SAMPLINGRATE_44_1;
-				player->audio.resampleSampleRate = 44100;
+				outputSampleRate = 44100;
 				mayRepeat = 0;
 			}
+			player->audio.resampleSampleRate = outputSampleRate;
 			formatPCM.samplesPerSec = slSampleRate;
 			result = (*slEngine)->CreateAudioPlayer(slEngine, &player->audio.sl.player,
 					&dataSource, &dataSink, 1, queueIds, queueRequired);
-			LOGP("SLES CreateAudioPlayer: result=%d, resampleSampleRate=%d",
-					(int) result, (int) player->audio.resampleSampleRate);
+#if USE_AV_CHANNEL_LAYOUT
+			LOGP("SLES CreateAudioPlayer: result=%d, sourceChannels=%d, outputChannels=%d, "
+					"sourceLayoutChannels=%d, sourceSampleRate=%d, outputSampleRate=%d",
+					(int) result, sourceChannels, channels, sourceLayoutChannels,
+					sampleRate, player->audio.resampleSampleRate);
+#else
+			LOGP("SLES CreateAudioPlayer: result=%d, sourceChannels=%d, outputChannels=%d, "
+					"sourceLayout=%llu, sourceSampleRate=%d, outputSampleRate=%d",
+					(int) result, sourceChannels, channels, (unsigned long long) sourceChannelLayout,
+					sampleRate, player->audio.resampleSampleRate);
+#endif
 			if (result == SL_RESULT_CONTENT_UNSUPPORTED && mayRepeat) {
 				if (needResampleSR == NEED_RESAMPLE_NO) {
 					needResampleSR = NEED_RESAMPLE_MAY_48000;
@@ -1408,8 +1580,7 @@ void init(JNIEnv * env, jlong pointer, jobject nativeBridge, jboolean seekAnyFra
 		success = 1;
 		HANDLE_SL_INIT_ERROR:
 		if (!success) {
-			avcodec_close(player->av.audioContext);
-			avcodec_free_context(&player->av.audioContext);
+			closeAndFreeCodecContext(&player->av.audioContext);
 			player->av.audioContext = NULL;
 			audioStreamIndex = INDEX_NO_STREAM;
 			player->av.audioStreamIndex = INDEX_NO_STREAM;
@@ -1417,22 +1588,32 @@ void init(JNIEnv * env, jlong pointer, jobject nativeBridge, jboolean seekAnyFra
 			audioCodec = NULL;
 		}
 	}
-	if (videoStream && pthread_create(&player->video.drawThread, NULL, &performDraw, player) != 0) {
-		player->meta.errorCode = ERROR_START_THREAD;
-		return;
+	if (videoStream) {
+		if (pthread_create(&player->video.drawThread, NULL, &performDraw, player) != 0) {
+			player->meta.errorCode = ERROR_START_THREAD;
+			return;
+		}
+		player->video.drawThreadStarted = 1;
 	}
-	if (audioStream && pthread_create(&player->decode.audio.thread, NULL, &performDecodeAudio, player) != 0) {
-		player->meta.errorCode = ERROR_START_THREAD;
-		return;
+	if (audioStream) {
+		if (pthread_create(&player->decode.audio.thread, NULL, &performDecodeAudio, player) != 0) {
+			player->meta.errorCode = ERROR_START_THREAD;
+			return;
+		}
+		player->decode.audio.threadStarted = 1;
 	}
-	if (videoStream && pthread_create(&player->decode.video.thread, NULL, &performDecodeVideo, player) != 0) {
-		player->meta.errorCode = ERROR_START_THREAD;
-		return;
+	if (videoStream) {
+		if (pthread_create(&player->decode.video.thread, NULL, &performDecodeVideo, player) != 0) {
+			player->meta.errorCode = ERROR_START_THREAD;
+			return;
+		}
+		player->decode.video.threadStarted = 1;
 	}
 	if (pthread_create(&player->decode.packets.thread, NULL, &performDecodePackets, player) != 0) {
 		player->meta.errorCode = ERROR_START_THREAD;
 		return;
 	}
+	player->decode.packets.threadStarted = 1;
 }
 
 void destroy(JNIEnv * env, jlong pointer, jboolean initOnly) {
@@ -1454,7 +1635,12 @@ void destroy(JNIEnv * env, jlong pointer, jboolean initOnly) {
 	condBroadcastLocked(&player->play.finishCond, &player->play.finishMutex);
 	condBroadcastLocked(&player->decode.packets.flowCond, &player->decode.packets.flowMutex);
 
-	pthread_join(player->decode.packets.thread, NULL);
+	if (player->decode.packets.threadStarted) {
+		pthread_join(player->decode.packets.thread, NULL);
+		player->decode.packets.threadStarted = 0;
+	} else {
+		joinStartedWorkerThreads(player);
+	}
 	pthread_mutex_destroy(&player->decode.packets.readMutex);
 	pthread_mutex_destroy(&player->decode.packets.flowMutex);
 	pthread_mutex_destroy(&player->decode.audio.frameMutex);
@@ -1489,13 +1675,11 @@ void destroy(JNIEnv * env, jlong pointer, jboolean initOnly) {
 	}
 	if (HAS_STREAM(player, audio)) {
 		AVCodecContext * audioContext = GET_CONTEXT(player, audio);
-		avcodec_close(audioContext);
-		avcodec_free_context(&audioContext);
+		closeAndFreeCodecContext(&audioContext);
 	}
 	if (HAS_STREAM(player, video)) {
 		AVCodecContext * videoContext = GET_CONTEXT(player, video);
-		avcodec_close(videoContext);
-		avcodec_free_context(&videoContext);
+		closeAndFreeCodecContext(&videoContext);
 	}
 	if (player->av.format) {
 		AVIOContext * ioContext = player->av.format->pb;
@@ -1504,7 +1688,8 @@ void destroy(JNIEnv * env, jlong pointer, jboolean initOnly) {
 		av_free(ioContext);
 	}
 	if (player->audio.buffer) {
-		free(player->audio.buffer);
+		audioBufferQueueFreeCallback(player->audio.buffer);
+		player->audio.buffer = NULL;
 	}
 	releasePlayerSurface(player);
 	sparseArrayDestroy(&player->bridge.array, free);
@@ -1594,7 +1779,7 @@ void setPosition(JNIEnv * env, jlong pointer, jlong position) {
 						}
 						if (outPosition) {
 							AVRational timeBase = player->av.format->streams[packet.stream_index]->time_base;
-							int64_t timestamp = packet.pts * 1000 * timeBase.num / timeBase.den;
+							int64_t timestamp = getTimestampPositionMs(packet.pts, timeBase);
 							if (timestamp > maxPosition) {
 								av_packet_unref(&packet);
 								break;
@@ -1807,7 +1992,7 @@ static jstring newUtfStringSafe(JNIEnv * env, char * string) {
 jobjectArray getMetadata(JNIEnv * env, jlong pointer) {
 	char buffer[24];
 	Player * player = POINTER_CAST(pointer);
-	int entries = av_dict_count(player->av.format->metadata);
+	int entries = av_dict_count(player->av.format->metadata) + 2;
 	if (HAS_STREAM(player, video)) {
 		// Format, width, height, frame rate, pixel format, canvas format, libyuv
 		entries += 7;
@@ -1818,6 +2003,11 @@ jobjectArray getMetadata(JNIEnv * env, jlong pointer) {
 	}
 	jobjectArray result = (*env)->NewObjectArray(env, 2 * entries, (*env)->FindClass(env, "java/lang/String"), NULL);
 	int index = 0;
+	(*env)->SetObjectArrayElement(env, result, index++, (*env)->NewStringUTF(env, "player_ffmpeg"));
+	(*env)->SetObjectArrayElement(env, result, index++, (*env)->NewStringUTF(env,
+			FFMPEG_VERSION " (" DASHCHAN_FFMPEG_FLAVOR ")"));
+	(*env)->SetObjectArrayElement(env, result, index++, (*env)->NewStringUTF(env, "player_libavformat"));
+	(*env)->SetObjectArrayElement(env, result, index++, (*env)->NewStringUTF(env, LIBAVFORMAT_IDENT));
 	if (HAS_STREAM(player, video)) {
 		AVStream * videoStream = GET_STREAM(player, video);
 		AVCodecContext * videoContext = GET_CONTEXT(player, video);
@@ -1870,7 +2060,7 @@ jobjectArray getMetadata(JNIEnv * env, jlong pointer) {
 		(*env)->SetObjectArrayElement(env, result, index++, (*env)->NewStringUTF(env, "audio_format"));
 		(*env)->SetObjectArrayElement(env, result, index++, (*env)->NewStringUTF(env,
 				audioContext->codec->long_name));
-		sprintf(buffer, "%d", audioContext->channels);
+		sprintf(buffer, "%d", getAudioContextChannels(audioContext));
 		(*env)->SetObjectArrayElement(env, result, index++, (*env)->NewStringUTF(env, "channels"));
 		(*env)->SetObjectArrayElement(env, result, index++, (*env)->NewStringUTF(env, buffer));
 		sprintf(buffer, "%d", audioContext->sample_rate);

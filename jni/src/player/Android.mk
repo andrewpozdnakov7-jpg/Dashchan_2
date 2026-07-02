@@ -8,7 +8,12 @@ LOCAL_PATH := $(LOCAL_PATH_SRC_PLAYER)
 include $(CLEAR_VARS)
 LOCAL_MODULE := player
 LOCAL_SRC_FILES := native.c player.c util.c
-LOCAL_CFLAGS += -std=c99 -Wall -Wextra -Wpedantic
+LOCAL_CFLAGS += -std=c99 -Wall -Wextra -Wpedantic -Wno-deprecated-declarations
+ifeq ($(DASHCHAN_FFMPEG_FLAVOR),)
+LOCAL_CFLAGS += -DDASHCHAN_FFMPEG_FLAVOR=\"ffmpeg\"
+else
+LOCAL_CFLAGS += -DDASHCHAN_FFMPEG_FLAVOR=\"$(DASHCHAN_FFMPEG_FLAVOR)\"
+endif
 LOCAL_LDFLAGS += -Wl,--build-id=none
 LOCAL_LDLIBS += -landroid -lOpenSLES -llog
 ifeq ($(notdir $(realpath $(dir $(NDK_OUT)))),ndebug)
@@ -17,4 +22,9 @@ else
 LOCAL_CFLAGS += -Werror
 endif
 LOCAL_SHARED_LIBRARIES := avcodec avformat avutil swresample swscale yuv
+ifeq ($(DASHCHAN_FFMPEG_FLAVOR),ffmpeg8)
+ifneq ($(DASHCHAN_WEBM_SHARED_LIBRARIES),)
+LOCAL_SHARED_LIBRARIES += dav1d
+endif
+endif
 include $(BUILD_SHARED_LIBRARY)
