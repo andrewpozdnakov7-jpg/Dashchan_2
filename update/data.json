@@ -1,3 +1,6 @@
 {
-	"redirect": "/Mishiranu/Dashchan-Meta/master/update/data.json"
+	"meta": {
+		"repository": "Dashchan_2"
+	},
+	"client": []
 }

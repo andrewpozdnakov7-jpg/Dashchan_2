@@ -13,11 +13,14 @@
 	<uses-permission-sdk-23 android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 	<uses-permission-sdk-23 android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 	<uses-permission-sdk-23 android:name="android.permission.REQUEST_DELETE_PACKAGES" />
-	<uses-permission-sdk-23 android:name="android.permission.QUERY_ALL_PACKAGES" />
+
+	<queries>
+		<package android:name="io.dashchan2.chan.dvach" />
+	</queries>
 
 	<application
 		android:name=".content.MainApplication"
-		android:label="Dashchan"
+		android:label="Dashchan_2"
 		android:icon="@mipmap/ic_launcher"
 		android:logo="@mipmap/ic_logo"
 		android:theme="@style/Theme.Launcher"
@@ -96,7 +99,7 @@
 
 		<provider
 			android:name=".content.FileProvider"
-			android:authorities="com.mishiranu.providers.dashchan"
+			android:authorities="io.dashchan2.provider"
 			android:exported="false"
 			android:grantUriPermissions="true" />
 

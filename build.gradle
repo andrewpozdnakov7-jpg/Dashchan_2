@@ -28,8 +28,9 @@ android {
 	ndkVersion '21.4.7075529'
 
 	defaultConfig {
-		versionCode 1043
-		versionName '3.1.4'
+		applicationId 'io.dashchan2'
+		versionCode 1063
+		versionName '3.1.4-r17-dev9'
 
 		minSdkVersion 16
 		targetSdkVersion 30
@@ -45,10 +46,11 @@ android {
 
 		buildConfigField 'String', 'VERSION_DATE', '"' + versions[0].date + '"'
 		buildConfigField 'String', 'URI_UPDATES', '"//raw.githubusercontent.com/' +
-				'Mishiranu/Dashchan/master/update/data.json"'
+				'andrewpozdnakov7-jpg/Dashchan_2/master/update/data.json"'
 		buildConfigField 'String', 'URI_THEMES', '"//raw.githubusercontent.com/' +
-				'Mishiranu/Dashchan/master/update/themes.json"'
-		buildConfigField 'String', 'GITHUB_URI_METADATA', '"//github.com/Mishiranu/Dashchan"'
+				'andrewpozdnakov7-jpg/Dashchan_2/master/update/themes.json"'
+		buildConfigField 'String', 'GITHUB_URI_METADATA',
+				'"//github.com/andrewpozdnakov7-jpg/Dashchan_2"'
 		buildConfigField 'String', 'GITHUB_PATH_METADATA', '"metadata"'
 	}
 

@@ -16,7 +16,7 @@ import java.io.File;
 import java.io.FileNotFoundException;
 
 public class FileProvider extends ContentProvider {
-	private static final String AUTHORITY = "com.mishiranu.providers.dashchan";
+	private static final String AUTHORITY = "io.dashchan2.provider";
 	private static final String PATH_UPDATES = "updates";
 	private static final String PATH_DOWNLOADS = "downloads";
 	private static final String PATH_SHARE = "share";
