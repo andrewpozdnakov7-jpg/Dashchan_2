@@ -1,59 +1,26 @@
-# Dashchan
+# Dashchan_2
 
-Android client for imageboards.
+Скоро здесь будет доступен новый переработанный клиент Dashchan_2.
 
-## Features
+Сейчас проект находится в стадии предварительной версии R17 Dev Preview. Это не финальный публичный релиз, а тестовая сборка для проверки нового пакета, обновленного видеостека и совместимости с расширениями.
 
-* Supports multiple forums using extensions
-* Threads watcher and reply notifications
-* Automatic filter using regular expressions
-* Image gallery and video player
-* Archiving in HTML format
-* Configurable themes
-* Fullscreen layout
+## Что обновилось в текущей версии
 
-Read the [project wiki](https://github.com/Mishiranu/Dashchan/wiki) for further information.
+- Приложение переведено на новый Android applicationId: `io.dashchan2`.
+- Основной клиент теперь рассчитан на Android 11+.
+- Видеоподдержка WebM/MP4/fMP4 встроена в основной APK: отдельный WebM2 APK больше не нужен.
+- Обновлен native-видеостек: FFmpeg 8.1.2, dav1d, libyuv, актуальная сборка под NDK 29.
+- Исправлены проблемы таймингов и seek/duration для MP4/fMP4, а также расчеты аудиобуфера.
+- Обновлена совместимость с расширением Двача для Dashchan_2.
+- Добавлена проверка обновлений через `updates.json` и GitHub Releases fallback. Приложение только открывает страницу загрузки в браузере, не скачивает и не устанавливает APK самостоятельно.
+- Проведена чистка устаревшего кода под minSdk 30 и обновлены Gradle/AGP-сборочные настройки.
+- В packaged main APK нет `QUERY_ALL_PACKAGES`; для расширений используются явные известные пакеты.
 
-## Screenshots
+## Статус
 
-<p>
-<img src="metadata/en-US/images/phoneScreenshots/1.png" width="20%" />
-<img src="metadata/en-US/images/phoneScreenshots/2.png" width="20%" />
-<img src="metadata/en-US/images/phoneScreenshots/3.png" width="20%" />
-<img src="metadata/en-US/images/phoneScreenshots/4.png" width="20%" />
-<img src="metadata/en-US/images/phoneScreenshots/5.png" width="20%" />
-<img src="metadata/en-US/images/phoneScreenshots/6.png" width="20%" />
-<img src="metadata/en-US/images/phoneScreenshots/7.png" width="20%" />
-<img src="metadata/en-US/images/phoneScreenshots/8.png" width="20%" />
-</p>
+Текущая линия: R17 Dev Preview.  
+Финальная публичная публикация будет позже, после дополнительной проверки APK, расширений и update-flow.
 
-## Building Guide
+## Контакты
 
-1. Install JDK 8 or higher
-2. Install Android SDK, define `ANDROID_HOME` environment variable or set `sdk.dir` in `local.properties`
-3. Run `./gradlew assembleRelease`
-
-The resulting APK file will appear in `build/outputs/apk` directory.
-
-### Build Signed Binary
-
-You can create `keystore.properties` in the source code directory with the following properties:
-
-```properties
-store.file=%PATH_TO_KEYSTORE_FILE%
-store.password=%KEYSTORE_PASSWORD%
-key.alias=%KEY_ALIAS%
-key.password=%KEY_PASSWORD%
-```
-
-### Building Extensions
-
-The source code of extensions is available in
-[Dashchan Extensions](https://github.com/Mishiranu/Dashchan-Extensions) repository.
-
-The source code of the video player libraries extension is available in
-[Dashchan Webm](https://github.com/Mishiranu/Dashchan-Webm) repository.
-
-## License
-
-Dashchan is available under the [GNU General Public License, version 3 or later](COPYING).
+По вопросам тестовой сборки, багов и совместимости: dashchan_2@mail.ru
