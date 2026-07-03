@@ -16,7 +16,6 @@ import android.widget.FrameLayout;
 import android.widget.Spinner;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
-import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.util.ViewUtils;
 import java.util.Arrays;
@@ -41,71 +40,65 @@ public class DropdownView extends FrameLayout {
 		spinner.setId(android.R.id.edit);
 		spinner.setPadding(0, 0, 0, 0);
 		addView(spinner, LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT);
-		if (C.API_LOLLIPOP) {
-			EditText editText = new EditText(context);
-			ThemeEngine.applyStyle(editText);
-			setBackground(editText.getBackground());
-			setBackgroundTintList(editText.getBackgroundTintList());
-			setPadding(0, 0, 0, 0);
-			setAddStatesFromChildren(true);
-			int paddingLeft = editText.getPaddingLeft();
-			int paddingTop = editText.getPaddingTop();
-			int paddingRight = editText.getPaddingRight();
-			int paddingBottom = editText.getPaddingBottom();
-			ColorStateList textColors = editText.getTextColors();
-			float textSize = editText.getTextSize();
-			Typeface typeface = editText.getTypeface();
-			factory = () -> {
-				TextView textView = new TextView(context);
-				textView.setPadding(paddingLeft, paddingTop, paddingRight, paddingBottom);
-				textView.setTextColor(textColors);
-				textView.setTextSize(TypedValue.COMPLEX_UNIT_PX, textSize);
-				textView.setTypeface(typeface);
-				textView.setSingleLine(true);
-				return textView;
-			};
+		EditText editText = new EditText(context);
+		ThemeEngine.applyStyle(editText);
+		setBackground(editText.getBackground());
+		setBackgroundTintList(editText.getBackgroundTintList());
+		setPadding(0, 0, 0, 0);
+		setAddStatesFromChildren(true);
+		int paddingLeft = editText.getPaddingLeft();
+		int paddingTop = editText.getPaddingTop();
+		int paddingRight = editText.getPaddingRight();
+		int paddingBottom = editText.getPaddingBottom();
+		ColorStateList textColors = editText.getTextColors();
+		float textSize = editText.getTextSize();
+		Typeface typeface = editText.getTypeface();
+		factory = () -> {
+			TextView textView = new TextView(context);
+			textView.setPadding(paddingLeft, paddingTop, paddingRight, paddingBottom);
+			textView.setTextColor(textColors);
+			textView.setTextSize(TypedValue.COMPLEX_UNIT_PX, textSize);
+			textView.setTypeface(typeface);
+			textView.setSingleLine(true);
+			return textView;
+		};
 
-			editText.setText("XXXXXXXXXX");
-			int measureSpec = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED);
-			editText.measure(measureSpec, measureSpec);
-			Drawable background = spinner.getBackground();
-			Bitmap bitmap = Bitmap.createBitmap(editText.getMeasuredWidth(),
-					editText.getMeasuredHeight(), Bitmap.Config.ARGB_8888);
-			Canvas canvas = new Canvas(bitmap);
-			background.setBounds(0, 0, editText.getMeasuredWidth(), editText.getMeasuredHeight());
-			background.draw(canvas);
-			int[] pixels = new int[bitmap.getHeight()];
-			@SuppressWarnings("MismatchedReadAndWriteOfArray")
-			int[] zeroPixels = new int[bitmap.getHeight()];
-			int left = -1;
-			int right = -1;
-			for (int i = 0; i < bitmap.getWidth(); i++) {
-				bitmap.getPixels(pixels, 0, 1, i, 0, 1, bitmap.getHeight());
-				if (!Arrays.equals(pixels, zeroPixels)) {
-					left = i;
-					break;
-				}
+		editText.setText("XXXXXXXXXX");
+		int measureSpec = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED);
+		editText.measure(measureSpec, measureSpec);
+		Drawable background = spinner.getBackground();
+		Bitmap bitmap = Bitmap.createBitmap(editText.getMeasuredWidth(),
+				editText.getMeasuredHeight(), Bitmap.Config.ARGB_8888);
+		Canvas canvas = new Canvas(bitmap);
+		background.setBounds(0, 0, editText.getMeasuredWidth(), editText.getMeasuredHeight());
+		background.draw(canvas);
+		int[] pixels = new int[bitmap.getHeight()];
+		@SuppressWarnings("MismatchedReadAndWriteOfArray")
+		int[] zeroPixels = new int[bitmap.getHeight()];
+		int left = -1;
+		int right = -1;
+		for (int i = 0; i < bitmap.getWidth(); i++) {
+			bitmap.getPixels(pixels, 0, 1, i, 0, 1, bitmap.getHeight());
+			if (!Arrays.equals(pixels, zeroPixels)) {
+				left = i;
+				break;
 			}
-			for (int i = bitmap.getWidth() - 1; i >= 0; i--) {
-				bitmap.getPixels(pixels, 0, 1, i, 0, 1, bitmap.getHeight());
-				if (!Arrays.equals(pixels, zeroPixels)) {
-					right = bitmap.getWidth() - 1 - i;
-					break;
-				}
+		}
+		for (int i = bitmap.getWidth() - 1; i >= 0; i--) {
+			bitmap.getPixels(pixels, 0, 1, i, 0, 1, bitmap.getHeight());
+			if (!Arrays.equals(pixels, zeroPixels)) {
+				right = bitmap.getWidth() - 1 - i;
+				break;
 			}
-			bitmap.recycle();
-			if (left >= 0 && right >= 0) {
-				int imagePadding = Math.min(left, right);
-				int textPadding = Math.min(paddingLeft, paddingRight);
-				float density = ResourceUtils.obtainDensity(context);
-				int targetPadding = (int) (8f * density) + textPadding;
-				int margin = targetPadding - imagePadding;
-				ViewUtils.setNewMarginRelative(spinner, 0, 0, margin, 0);
-			}
-		} else {
+		}
+		bitmap.recycle();
+		if (left >= 0 && right >= 0) {
+			int imagePadding = Math.min(left, right);
+			int textPadding = Math.min(paddingLeft, paddingRight);
 			float density = ResourceUtils.obtainDensity(context);
-			ViewUtils.setNewMargin(spinner, 0, (int) (4f * density), 0, (int) (4f * density));
-			factory = null;
+			int targetPadding = (int) (8f * density) + textPadding;
+			int margin = targetPadding - imagePadding;
+			ViewUtils.setNewMarginRelative(spinner, 0, 0, margin, 0);
 		}
 	}
 

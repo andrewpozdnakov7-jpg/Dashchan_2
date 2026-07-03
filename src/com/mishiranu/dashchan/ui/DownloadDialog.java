@@ -30,7 +30,6 @@ import chan.content.Chan;
 import chan.util.CommonUtils;
 import chan.util.DataFile;
 import chan.util.StringUtils;
-import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.FileProvider;
 import com.mishiranu.dashchan.content.Preferences;
@@ -261,8 +260,7 @@ public class DownloadDialog {
 				.setOnCancelListener(d -> callback.resolve(choiceRequest, null))
 				.create();
 		dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_HIDDEN |
-				(C.API_R ? WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN
-						: ViewUtils.SOFT_INPUT_ADJUST_RESIZE_COMPAT));
+				WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN);
 		editText.setOnEditorActionListener((v, actionId, event) -> {
 			handleChoiceResolve(choiceRequest, editText, detailNameCheckBox, originalNameCheckBox);
 			dialog.dismiss();
@@ -320,7 +318,7 @@ public class DownloadDialog {
 		int padding = context.getResources().getDimensionPixelSize(R.dimen.dialog_padding_view);
 		LinearLayout linearLayout = new LinearLayout(context);
 		linearLayout.setOrientation(LinearLayout.VERTICAL);
-		linearLayout.setPadding(padding, padding, padding, C.API_LOLLIPOP ? (int) (8f * density) : padding);
+		linearLayout.setPadding(padding, padding, padding, (int) (8f * density));
 		TextView textView = new TextView(context, null, android.R.attr.textAppearanceListItem);
 		textView.setText(context.getResources().getQuantityString
 				(R.plurals.number_files_already_exist__sentence_format, count, count));

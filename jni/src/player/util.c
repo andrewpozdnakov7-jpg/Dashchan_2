@@ -223,13 +223,13 @@ void * sparseArrayGet(SparseArray * sparseArray, int index) {
 	return data;
 }
 
-int64_t getTime() {
+int64_t getTime(void) {
 	struct timeval now;
 	gettimeofday(&now, NULL);
 	return (int64_t) now.tv_sec * 1000 + now.tv_usec / 1000;
 }
 
-int64_t getTimeUs() {
+int64_t getTimeUs(void) {
 	struct timeval now;
 	gettimeofday(&now, NULL);
 	return (int64_t) now.tv_sec * 1000000 + now.tv_usec;

@@ -11,7 +11,6 @@ import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import androidx.annotation.NonNull;
-import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.model.ErrorItem;
@@ -20,6 +19,7 @@ import com.mishiranu.dashchan.ui.ContentFragment;
 import com.mishiranu.dashchan.ui.FragmentHandler;
 import com.mishiranu.dashchan.ui.navigator.manager.UiManager;
 import com.mishiranu.dashchan.ui.navigator.page.ListPage;
+import com.mishiranu.dashchan.util.AndroidUtils;
 import com.mishiranu.dashchan.widget.CustomSearchView;
 import com.mishiranu.dashchan.widget.ExpandedLayout;
 import com.mishiranu.dashchan.widget.ListPosition;
@@ -60,7 +60,7 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 	}
 
 	public Page getPage() {
-		return requireArguments().getParcelable(EXTRA_PAGE);
+		return AndroidUtils.getParcelable(requireArguments(), EXTRA_PAGE, Page.class);
 	}
 
 	public String getRetainId() {
@@ -102,11 +102,11 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 		super.onCreate(savedInstanceState);
 
 		listPosition = savedInstanceState != null && !resetScroll
-				? savedInstanceState.getParcelable(EXTRA_LIST_POSITION) : null;
-		parcelableExtra = savedInstanceState != null ? savedInstanceState
-				.getParcelable(EXTRA_PARCELABLE_EXTRA) : null;
-		initErrorItem = savedInstanceState != null ? savedInstanceState
-				.getParcelable(EXTRA_INIT_ERROR_ITEM) : null;
+				? AndroidUtils.getParcelable(savedInstanceState, EXTRA_LIST_POSITION, ListPosition.class) : null;
+		parcelableExtra = savedInstanceState != null
+				? AndroidUtils.getParcelable(savedInstanceState, EXTRA_PARCELABLE_EXTRA, Parcelable.class) : null;
+		initErrorItem = savedInstanceState != null
+				? AndroidUtils.getParcelable(savedInstanceState, EXTRA_INIT_ERROR_ITEM, ErrorItem.class) : null;
 		searchCurrentQuery = savedInstanceState != null ? savedInstanceState
 				.getString(EXTRA_SEARCH_CURRENT_QUERY) : null;
 		searchSubmitQuery = savedInstanceState != null ? savedInstanceState
@@ -125,11 +125,6 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 		layout.addView(recyclerView, ExpandedLayout.LayoutParams.MATCH_PARENT,
 				ExpandedLayout.LayoutParams.MATCH_PARENT);
 		layout.setRecyclerView(recyclerView);
-		if (!C.API_MARSHMALLOW) {
-			@SuppressWarnings("deprecation")
-			Runnable setAnimationCacheEnabled = () -> recyclerView.setAnimationCacheEnabled(false);
-			setAnimationCacheEnabled.run();
-		}
 		recyclerView.setMotionEventSplittingEnabled(false);
 		recyclerView.setVerticalScrollBarEnabled(true);
 		recyclerView.setClipToPadding(false);

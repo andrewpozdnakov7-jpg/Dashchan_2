@@ -8,6 +8,7 @@ import androidx.fragment.app.DialogFragment;
 import chan.content.ApiException;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.R;
+import com.mishiranu.dashchan.util.AndroidUtils;
 import com.mishiranu.dashchan.util.PostDateFormatter;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.widget.SummaryLayout;
@@ -28,7 +29,7 @@ public class SendPostFailDetailsDialog extends DialogFragment {
 	@NonNull
 	@Override
 	public Dialog onCreateDialog(Bundle savedInstanceState) {
-		ApiException.Extra extra = requireArguments().getParcelable(EXTRA_EXTRA);
+		ApiException.Extra extra = AndroidUtils.getParcelable(requireArguments(), EXTRA_EXTRA, ApiException.Extra.class);
 		AlertDialog dialog = new AlertDialog.Builder(requireContext())
 				.setTitle(R.string.details)
 				.setPositiveButton(android.R.string.ok, null)

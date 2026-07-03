@@ -12,7 +12,6 @@ import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.TextView;
 import chan.content.ChanConfiguration;
-import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.async.ReadCaptchaTask;
@@ -62,13 +61,11 @@ public class CaptchaForm implements View.OnClickListener, View.OnLongClickListen
 		}
 		ImageView cancelView = container.findViewById(R.id.captcha_cancel);
 		this.cancelView = cancelView;
-		if (C.API_LOLLIPOP) {
-			cancelView.setImageTintList(ResourceUtils.getColorStateList(cancelView.getContext(),
-					android.R.attr.textColorPrimary));
-			skipTextView.setAllCaps(true);
-			skipTextView.setTypeface(ResourceUtils.TYPEFACE_MEDIUM);
-			ViewUtils.setTextSizeScaled(skipTextView, 12);
-		}
+		cancelView.setImageTintList(ResourceUtils.getColorStateList(cancelView.getContext(),
+				android.R.attr.textColorPrimary));
+		skipTextView.setAllCaps(true);
+		skipTextView.setTypeface(ResourceUtils.TYPEFACE_MEDIUM);
+		ViewUtils.setTextSizeScaled(skipTextView, 12);
 		updateCaptchaHeight(false);
 		captchaInput = captcha.input;
 		if (captchaInput == null) {

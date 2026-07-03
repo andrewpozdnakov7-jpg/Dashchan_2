@@ -7,7 +7,6 @@ import android.text.style.ForegroundColorSpan;
 import android.view.View;
 import android.widget.EditText;
 import android.widget.TextView;
-import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.widget.ErrorEditTextSetter;
@@ -45,12 +44,10 @@ public class NameEditWatcher implements TextWatcher {
 		if (watchTripcodeWarning) {
 			boolean error = index >= 0;
 			if (this.error != error) {
-				if (C.API_LOLLIPOP) {
-					if (errorSetter == null) {
-						errorSetter = new ErrorEditTextSetter(nameView);
-					}
-					errorSetter.setError(error);
+				if (errorSetter == null) {
+					errorSetter = new ErrorEditTextSetter(nameView);
 				}
+				errorSetter.setError(error);
 				tripcodeWarning.setVisibility(error ? View.VISIBLE : View.GONE);
 				layoutCallback.run();
 				this.error = error;

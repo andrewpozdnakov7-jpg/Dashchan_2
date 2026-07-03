@@ -24,7 +24,6 @@ import chan.content.Chan;
 import chan.content.ChanManager;
 import chan.util.CommonUtils;
 import chan.util.StringUtils;
-import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.UpdaterActivity;
@@ -47,8 +46,10 @@ import com.mishiranu.dashchan.widget.ViewFactory;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 
 public class UpdateFragment extends BaseListFragment {
 	private static final String VERSION_TITLE_RELEASE = "Release";
@@ -71,6 +72,12 @@ public class UpdateFragment extends BaseListFragment {
 		public String target;
 		public int targetIndex;
 		public String warning;
+
+		public void addWarning(String warning) {
+			if (!StringUtils.isEmpty(warning)) {
+				this.warning = StringUtils.isEmpty(this.warning) ? warning : this.warning + "\n" + warning;
+			}
+		}
 
 		public static ListItem create(String extensionName, String extensionTitle, boolean enabled, boolean installed) {
 			String title = Chan.get(extensionName).configuration.getTitle();
@@ -161,12 +168,14 @@ public class UpdateFragment extends BaseListFragment {
 		super.onActivityCreated(savedInstanceState);
 
 		if (isUpdateDataProvided()) {
-			updateDataMap = requireArguments().getParcelable(EXTRA_UPDATE_DATA_MAP);
+			updateDataMap = AndroidUtils.getParcelable(requireArguments(), EXTRA_UPDATE_DATA_MAP,
+					ReadUpdateTask.UpdateDataMap.class);
 		} else {
 			updateDataMap = savedInstanceState != null
-					? savedInstanceState.getParcelable(EXTRA_UPDATE_DATA_MAP) : null;
+					? AndroidUtils.getParcelable(savedInstanceState, EXTRA_UPDATE_DATA_MAP,
+					ReadUpdateTask.UpdateDataMap.class) : null;
 			updateErrorItem = savedInstanceState != null
-					? savedInstanceState.getParcelable(EXTRA_UPDATE_ERROR_ITEM) : null;
+					? AndroidUtils.getParcelable(savedInstanceState, EXTRA_UPDATE_ERROR_ITEM, ErrorItem.class) : null;
 			if (updateErrorItem != null) {
 				setErrorText(updateErrorItem.toString());
 			} else if (updateDataMap == null) {
@@ -274,6 +283,23 @@ public class UpdateFragment extends BaseListFragment {
 		return listItem;
 	}
 
+	private static String summarizeExtensionLoadError(String loadError) {
+		if (StringUtils.isEmpty(loadError)) {
+			return null;
+		}
+		int index = loadError.indexOf('\n');
+		return index >= 0 ? loadError.substring(0, index) : loadError;
+	}
+
+	private static void applyExtensionLoadError(ListItem listItem, Map<String, String> extensionLoadErrors) {
+		if (listItem.installed) {
+			String loadError = summarizeExtensionLoadError(extensionLoadErrors.get(listItem.extensionName));
+			if (!StringUtils.isEmpty(loadError)) {
+				listItem.addWarning("Ошибка загрузки расширения: " + loadError);
+			}
+		}
+	}
+
 	@SuppressWarnings("ComparatorCombinators")
 	private static final Comparator<ReadUpdateTask.ApplicationItem> UPDATE_DATA_COMPARATOR = (lhs, rhs) -> {
 		int result = lhs.type.compareTo(rhs.type);
@@ -330,6 +356,13 @@ public class UpdateFragment extends BaseListFragment {
 		}
 		handledExtensionNames.add(ChanManager.EXTENSION_NAME_CLIENT);
 		ChanManager manager = ChanManager.getInstance();
+		HashMap<String, String> extensionLoadErrors = new HashMap<>();
+		for (ChanManager.ExtensionItem extensionItem : manager.getExtensionItems()) {
+			if (extensionItem.type == ChanManager.ExtensionItem.Type.CHAN &&
+					!StringUtils.isEmpty(extensionItem.loadError)) {
+				extensionLoadErrors.put(extensionItem.name, extensionItem.loadError);
+			}
+		}
 		for (ChanManager.ExtensionItem extensionItem : manager.getExtensionItems()) {
 			if (extensionItem.type == ChanManager.ExtensionItem.Type.LIBRARY) {
 				ReadUpdateTask.ApplicationItem applicationItem = updateDataMap.get(extensionItem.name, true);
@@ -346,6 +379,7 @@ public class UpdateFragment extends BaseListFragment {
 			if (applicationItem != null) {
 				ListItem listItem = handleAddListItem(context, applicationItem,
 						savedInstanceState, minApiVersion, maxApiVersion, true, warningUnsupported);
+				applyExtensionLoadError(listItem, extensionLoadErrors);
 				listItems.add(listItem);
 				handledExtensionNames.add(chan.name);
 			}
@@ -354,6 +388,7 @@ public class UpdateFragment extends BaseListFragment {
 			if (!handledExtensionNames.contains(applicationItem.name)) {
 				ListItem listItem = handleAddListItem(context, applicationItem, savedInstanceState,
 						minApiVersion, maxApiVersion, true, warningUnsupported);
+				applyExtensionLoadError(listItem, extensionLoadErrors);
 				listItems.add(listItem);
 				handledExtensionNames.add(applicationItem.name);
 			}
@@ -565,8 +600,7 @@ public class UpdateFragment extends BaseListFragment {
 		public DividerItemDecoration.Configuration configureDivider
 				(DividerItemDecoration.Configuration configuration, int position) {
 			ListItem current = listItems.get(position);
-			ListItem next = listItems.size() > position + 1 ? listItems.get(position + 1) : null;
-			return configuration.need(!current.isHeader() && (next == null || !next.isHeader() || C.API_LOLLIPOP));
+			return configuration.need(!current.isHeader());
 		}
 
 		@Override

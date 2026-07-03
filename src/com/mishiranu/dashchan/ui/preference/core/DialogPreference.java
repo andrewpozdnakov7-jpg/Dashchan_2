@@ -11,7 +11,6 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import chan.util.StringUtils;
-import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.widget.ThemeEngine;
 
@@ -37,7 +36,7 @@ public abstract class DialogPreference<T> extends Preference<T> {
 
 	protected Pair<View, LinearLayout> createDialogLayout(Context context) {
 		float density = ResourceUtils.obtainDensity(context);
-		int padding = (int) ((C.API_LOLLIPOP ? 20f : 5f) * density);
+		int padding = (int) (20f * density);
 		ScrollView scrollView = new ScrollView(context);
 		scrollView.setOverScrollMode(ScrollView.OVER_SCROLL_IF_CONTENT_SCROLLS);
 		ThemeEngine.applyStyle(scrollView);

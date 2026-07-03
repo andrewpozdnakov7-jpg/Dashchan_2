@@ -27,27 +27,25 @@ public class WatcherNotifications {
 			.newSingleThreadPool(1000, "WatcherNotifications", null);
 
 	public static void configure(Context context) {
-		if (C.API_OREO) {
-			NotificationManager notificationManager = (NotificationManager)
-					context.getSystemService(Context.NOTIFICATION_SERVICE);
-			NotificationChannel channel = new NotificationChannel(C.NOTIFICATION_CHANNEL_REPLIES,
-					context.getString(R.string.replies), NotificationManager.IMPORTANCE_HIGH);
-			channel.enableLights(true);
-			channel.enableVibration(true);
-			notificationManager.createNotificationChannel(channel);
-		}
+		NotificationManager notificationManager = (NotificationManager)
+				context.getSystemService(Context.NOTIFICATION_SERVICE);
+		NotificationChannel channel = new NotificationChannel(C.NOTIFICATION_CHANNEL_REPLIES,
+				context.getString(R.string.replies), NotificationManager.IMPORTANCE_HIGH);
+		channel.enableLights(true);
+		channel.enableVibration(true);
+		notificationManager.createNotificationChannel(channel);
 	}
 
 	public static void notifyReplies(Context context, int color, boolean important, boolean sound, boolean vibration,
 			String title, String chanName, String boardName, String threadNumber,
 			List<PagesDatabase.InsertResult.Reply> replies) {
-		EXECUTOR.execute(new Task(context, color, important, sound, vibration, title,
+		EXECUTOR.execute(new Task(context, color, important, title,
 				chanName, boardName, threadNumber, replies, Collections.emptyList()));
 	}
 
 	public static void cancelReplies(Context context,
 			String chanName, String boardName, String threadNumber, Collection<PostNumber> postNumbers) {
-		EXECUTOR.execute(new Task(context, 0, false, false, false, null,
+		EXECUTOR.execute(new Task(context, 0, false, null,
 				chanName, boardName, threadNumber, Collections.emptyList(), postNumbers));
 	}
 
@@ -57,8 +55,6 @@ public class WatcherNotifications {
 		public final Context context;
 		public final int color;
 		public final boolean important;
-		public final boolean sound;
-		public final boolean vibration;
 		public final String title;
 		public final String chanName;
 		public final String boardName;
@@ -66,14 +62,12 @@ public class WatcherNotifications {
 		public final List<PagesDatabase.InsertResult.Reply> replies;
 		public final Collection<PostNumber> removePostNumbers;
 
-		private Task(Context context, int color, boolean important, boolean sound, boolean vibration,
-				String title, String chanName, String boardName, String threadNumber,
+		private Task(Context context, int color, boolean important, String title,
+				String chanName, String boardName, String threadNumber,
 				List<PagesDatabase.InsertResult.Reply> replies, Collection<PostNumber> removePostNumbers) {
 			this.context = context.getApplicationContext();
 			this.color = color;
 			this.important = important;
-			this.sound = sound;
-			this.vibration = vibration;
 			this.title = title;
 			this.chanName = chanName;
 			this.boardName = boardName;
@@ -89,22 +83,7 @@ public class WatcherNotifications {
 
 		private static void configureNotification(NotificationCompat.Builder builder, int color) {
 			builder.setSmallIcon(R.drawable.ic_notification);
-			if (C.API_LOLLIPOP) {
-				builder.setColor(color);
-			}
-		}
-
-		private static void applyPreferencesPreOreo(NotificationCompat.Builder builder,
-				int color, boolean important, boolean sound, boolean vibration) {
-			builder.setPriority(important ? NotificationCompat.PRIORITY_HIGH : NotificationCompat.PRIORITY_DEFAULT);
-			if (important) {
-				if (C.API_LOLLIPOP && !sound && !vibration) {
-					builder.setVibrate(new long[0]);
-				}
-				builder.setLights(color, 1000, 1000);
-			}
-			builder.setDefaults((sound ? NotificationCompat.DEFAULT_SOUND : 0) |
-					(vibration ? NotificationCompat.DEFAULT_VIBRATE : 0));
+			builder.setColor(color);
 		}
 
 		private static String buildLongComment(String comment) {
@@ -154,16 +133,8 @@ public class WatcherNotifications {
 				builder.setStyle(new NotificationCompat.BigTextStyle().bigText(buildLongComment(comment)));
 				builder.setWhen(reply.timestamp);
 				configureNotification(builder, color);
-				if (C.API_NOUGAT) {
-					builder.setGroup(GROUP_REPLIES);
-					if (C.API_OREO) {
-						builder.setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_SUMMARY);
-					} else {
-						builder.setDefaults(0);
-					}
-				} else {
-					applyPreferencesPreOreo(builder, color, important, sound, vibration);
-				}
+				builder.setGroup(GROUP_REPLIES);
+				builder.setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_SUMMARY);
 				String tag = makeTag(chanName, boardName, threadNumber, reply.postNumber);
 				Intent intent = new Intent(context, MainActivity.class).setAction(tag)
 						.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP)
@@ -175,30 +146,23 @@ public class WatcherNotifications {
 						PendingIntent.FLAG_UPDATE_CURRENT));
 				notificationManager.notify(tag, C.NOTIFICATION_ID_REPLIES, builder.build());
 			}
-			if (C.API_NOUGAT) {
-				NotificationCompat.Builder builder = new NotificationCompat
-						.Builder(context, C.NOTIFICATION_CHANNEL_REPLIES);
-				configureNotification(builder, color);
-				if (!C.API_OREO) {
-					applyPreferencesPreOreo(builder, color, important, sound, vibration);
-				}
-				builder.setGroup(GROUP_REPLIES);
-				builder.setGroupSummary(true);
-				notificationManager.notify(C.NOTIFICATION_ID_REPLIES, builder.build());
-			}
+			NotificationCompat.Builder builder = new NotificationCompat
+					.Builder(context, C.NOTIFICATION_CHANNEL_REPLIES);
+			configureNotification(builder, color);
+			builder.setGroup(GROUP_REPLIES);
+			builder.setGroupSummary(true);
+			notificationManager.notify(C.NOTIFICATION_ID_REPLIES, builder.build());
 		}
 
 		private void cancelReplies(NotificationManager notificationManager) {
 			Set<String> tags = null;
-			if (C.API_NOUGAT) {
-				StatusBarNotification[] notifications = notificationManager.getActiveNotifications();
-				if (notifications != null && notifications.length > 0) {
-					tags = new HashSet<>();
-					for (StatusBarNotification notification : notifications) {
-						String tag = notification.getTag();
-						if (tag != null && notification.getId() == C.NOTIFICATION_ID_REPLIES) {
-							tags.add(tag);
-						}
+			StatusBarNotification[] notifications = notificationManager.getActiveNotifications();
+			if (notifications != null && notifications.length > 0) {
+				tags = new HashSet<>();
+				for (StatusBarNotification notification : notifications) {
+					String tag = notification.getTag();
+					if (tag != null && notification.getId() == C.NOTIFICATION_ID_REPLIES) {
+						tags.add(tag);
 					}
 				}
 			}
@@ -209,7 +173,7 @@ public class WatcherNotifications {
 					tags.remove(tag);
 				}
 			}
-			if (C.API_NOUGAT && tags != null && tags.isEmpty()) {
+			if (tags != null && tags.isEmpty()) {
 				notificationManager.cancel(C.NOTIFICATION_ID_REPLIES);
 			}
 		}

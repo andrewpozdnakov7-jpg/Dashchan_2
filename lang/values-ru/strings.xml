@@ -514,6 +514,17 @@
 	<string name="unsorted">Без сортировки</string>
 	<string name="unsupported_service">Неподдерживаемый сервис</string>
 	<string name="unsupported_version">Неподдерживаемая версия</string>
+	<string name="checking_for_updates__ellipsis">Проверка обновлений...</string>
+	<string name="latest_version_installed">Установлена последняя версия</string>
+	<string name="update_available">Доступно обновление</string>
+	<string name="update_check_failed">Не удалось проверить обновления</string>
+	<string name="update_found_on_github">Найден релиз на GitHub</string>
+	<string name="open_download_page">Открыть страницу загрузки</string>
+	<string name="remind_later">Напомнить позже</string>
+	<string name="skip_this_version">Пропустить эту версию</string>
+	<string name="update_version__format">%1$s (код %2$d)</string>
+	<string name="update_unavailable_min_sdk__format">Для этого обновления нужен Android API %1$d. На устройстве API %2$d.</string>
+	<string name="update_github_unverified_version__sentence">Код версии не удалось проверить; откройте страницу релиза и решите вручную.</string>
 	<string name="update_reminder__sentence">Прогресс загрузки можно отследить в панели уведомлений.\n\nВы можете
 		установить приложения после окончания загрузки.</string>
 	<string name="updates">Обновления</string>

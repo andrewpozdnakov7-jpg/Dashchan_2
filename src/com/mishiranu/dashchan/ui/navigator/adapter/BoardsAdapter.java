@@ -6,7 +6,6 @@ import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 import chan.util.CommonUtils;
 import chan.util.StringUtils;
-import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.content.database.ChanDatabase;
 import com.mishiranu.dashchan.util.ListViewUtils;
 import com.mishiranu.dashchan.widget.CursorAdapter;
@@ -49,11 +48,7 @@ public class BoardsAdapter extends CursorAdapter<ChanDatabase.BoardCursor, Recyc
 	public DividerItemDecoration.Configuration configureDivider
 			(DividerItemDecoration.Configuration configuration, int position) {
 		String header = position + 1 < getItemCount() ? getItemHeader(position + 1) : null;
-		if (C.API_LOLLIPOP) {
-			return configuration.need(header != null);
-		} else {
-			return configuration.need(header == null);
-		}
+		return configuration.need(header != null);
 	}
 
 	public String getItemHeader(int position) {

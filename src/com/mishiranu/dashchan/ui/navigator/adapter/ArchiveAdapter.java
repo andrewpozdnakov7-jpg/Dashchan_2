@@ -6,7 +6,6 @@ import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 import chan.content.model.ThreadSummary;
 import chan.util.StringUtils;
-import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.util.ListViewUtils;
 import com.mishiranu.dashchan.widget.DividerItemDecoration;
 import com.mishiranu.dashchan.widget.SimpleViewHolder;
@@ -96,6 +95,6 @@ public class ArchiveAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 
 	public DividerItemDecoration.Configuration configureDivider(DividerItemDecoration.Configuration configuration,
 			@SuppressWarnings("unused") int position) {
-		return configuration.need(!C.API_LOLLIPOP);
+		return configuration.need(false);
 	}
 }

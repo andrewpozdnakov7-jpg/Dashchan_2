@@ -496,6 +496,17 @@
 	<string name="unsorted">Unsorted</string>
 	<string name="unsupported_service">Unsupported service</string>
 	<string name="unsupported_version">Unsupported version</string>
+	<string name="checking_for_updates__ellipsis">Checking for updates...</string>
+	<string name="latest_version_installed">The latest version is installed</string>
+	<string name="update_available">Update available</string>
+	<string name="update_check_failed">Failed to check for updates</string>
+	<string name="update_found_on_github">Release found on GitHub</string>
+	<string name="open_download_page">Open download page</string>
+	<string name="remind_later">Remind later</string>
+	<string name="skip_this_version">Skip this version</string>
+	<string name="update_version__format">%1$s (code %2$d)</string>
+	<string name="update_unavailable_min_sdk__format">This update requires Android API %1$d. This device uses API %2$d.</string>
+	<string name="update_github_unverified_version__sentence">Version code could not be verified; open the release page to decide manually.</string>
 	<string name="update_reminder__sentence">You can track downloading progress in notification bar.\n\nYou can install
 		applications when download finishes.</string>
 	<string name="updates">Updates</string>

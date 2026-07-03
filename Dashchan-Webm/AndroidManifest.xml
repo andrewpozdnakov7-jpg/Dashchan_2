@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest
+	xmlns:android="http://schemas.android.com/apk/res/android">
+
+	<uses-feature android:name="${libExtensionFeatureName}" />
+
+	<application
+		android:icon="@null"
+		android:allowBackup="false"
+		android:label="${appLabel}">
+
+		<meta-data
+			android:name="lib.extension.name"
+			android:value="${libExtensionName}" />
+
+		<meta-data
+			android:name="lib.extension.title"
+			android:value="${libExtensionTitle}" />
+
+		<meta-data
+			android:name="lib.extension.source"
+			android:value="//raw.githubusercontent.com/Mishiranu/Dashchan/master/update/data.json" />
+
+	</application>
+
+</manifest>

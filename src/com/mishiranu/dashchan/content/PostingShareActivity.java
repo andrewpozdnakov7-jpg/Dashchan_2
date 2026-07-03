@@ -10,6 +10,7 @@ import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.model.FileHolder;
 import com.mishiranu.dashchan.content.storage.DraftsStorage;
 import com.mishiranu.dashchan.ui.MainActivity;
+import com.mishiranu.dashchan.util.AndroidUtils;
 import java.util.ArrayList;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -26,7 +27,7 @@ public class PostingShareActivity extends Activity {
 		Intent intent = getIntent();
 
 		if (Intent.ACTION_SEND.equals(intent.getAction())) {
-			Uri uri = intent.getParcelableExtra(Intent.EXTRA_STREAM);
+			Uri uri = AndroidUtils.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri.class);
 			if (uri != null) {
 				uris = new ArrayList<>(1);
 				uris.add(uri);
@@ -39,7 +40,7 @@ public class PostingShareActivity extends Activity {
 				}
 			}
 		} else if (Intent.ACTION_SEND_MULTIPLE.equals(intent.getAction())) {
-			uris = intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM);
+			uris = AndroidUtils.getParcelableArrayListExtra(intent, Intent.EXTRA_STREAM, Uri.class);
 		}
 
 		int success = 0;

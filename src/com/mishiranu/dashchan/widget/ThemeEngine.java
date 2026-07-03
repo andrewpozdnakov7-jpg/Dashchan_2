@@ -7,7 +7,6 @@ import android.content.ContextWrapper;
 import android.content.res.ColorStateList;
 import android.content.res.TypedArray;
 import android.graphics.Color;
-import android.os.Build;
 import android.util.AttributeSet;
 import android.view.ContextThemeWrapper;
 import android.view.LayoutInflater;
@@ -24,11 +23,9 @@ import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toolbar;
 import androidx.annotation.NonNull;
-import androidx.annotation.RequiresApi;
 import androidx.core.graphics.ColorUtils;
 import androidx.core.view.ViewCompat;
 import chan.util.StringUtils;
-import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.storage.ThemesStorage;
@@ -118,7 +115,7 @@ public class ThemeEngine {
 		}
 
 		public boolean isBlack4() {
-			return !C.API_LOLLIPOP && base == Base.DARK && window == primary && (primary & 0x00ffffff) == 0;
+			return false;
 		}
 
 		public ThemeChoiceDrawable createThemeChoiceDrawable() {
@@ -359,7 +356,7 @@ public class ThemeEngine {
 				if ("DecorView".equals(decorView.getClass().getSimpleName())) {
 					ThemeContext themeContext = obtainThemeContext(decorView.getContext());
 					if (themeContext != null) {
-						if (dialog && C.API_LOLLIPOP && shouldApplyStyle(decorView.getContext())) {
+						if (dialog && shouldApplyStyle(decorView.getContext())) {
 							decorView.setBackgroundTintList(ColorStateList.valueOf(themeContext.theme.card));
 						}
 						Object tag = decorView.getTag(R.id.tag_theme_engine);
@@ -377,7 +374,6 @@ public class ThemeEngine {
 		}
 	}
 
-	@RequiresApi(Build.VERSION_CODES.LOLLIPOP)
 	private static final AttachListener POPUP_ATTACH_LISTENER = new AttachListener() {
 		@Override
 		public boolean isProcessed() {
@@ -430,7 +426,7 @@ public class ThemeEngine {
 			super(original, newContext);
 			this.direct = direct;
 			attachListener = dialog || overlay ? new OverlayAttachListener(direct, dialog)
-					: C.API_LOLLIPOP && popup ? POPUP_ATTACH_LISTENER : null;
+					: popup ? POPUP_ATTACH_LISTENER : null;
 		}
 
 		private static final int[] CLONE_ATTRS = {android.R.attr.windowIsFloating, R.attr.isOverlay, R.attr.isPopup};
@@ -451,7 +447,7 @@ public class ThemeEngine {
 		@Override
 		protected View onCreateView(String name, AttributeSet attrs) throws ClassNotFoundException {
 			View view = createViewInternal(name, attrs);
-			if (C.API_LOLLIPOP && view instanceof Toolbar) {
+			if (view instanceof Toolbar) {
 				LayoutInflater layoutInflater = LayoutInflater.from(view.getContext());
 				if (layoutInflater instanceof ThemeLayoutInflater) {
 					((ThemeLayoutInflater) layoutInflater).toolbar = true;
@@ -514,27 +510,23 @@ public class ThemeEngine {
 		if (context instanceof Activity) {
 			Activity activity = (Activity) context;
 			activity.getWindow().getDecorView().setBackgroundColor(theme.window);
-			if (C.API_LOLLIPOP) {
-				int toolbarColor = theme.primary | 0xff000000;
-				float[] hsl = new float[3];
-				ColorUtils.colorToHSL(toolbarColor, hsl);
-				// Interpolate between 0.25f and 0.5f
-				float lightness = Math.max(0f, Math.min(hsl[2] * 4f - 1f, 1f));
-				int statusBarColor = GraphicsUtils.mixColors(theme.primary,
-						ColorUtils.blendARGB(STATUS_OVERLAY_DARK, STATUS_OVERLAY_LIGHT, lightness));
-				activity.getWindow().setStatusBarColor(statusBarColor);
-				ActivityManager.TaskDescription taskDescription;
-				if (C.API_PIE) {
-					taskDescription = new ActivityManager.TaskDescription(null, R.mipmap.ic_launcher, toolbarColor);
-				} else {
-					@SuppressWarnings("deprecation")
-					ActivityManager.TaskDescription deprecatedTaskDescription = new ActivityManager
-							.TaskDescription(null, null, toolbarColor);
-					taskDescription = deprecatedTaskDescription;
-				}
-				activity.setTaskDescription(taskDescription);
-			}
+			int toolbarColor = theme.primary | 0xff000000;
+			float[] hsl = new float[3];
+			ColorUtils.colorToHSL(toolbarColor, hsl);
+			// Interpolate between 0.25f and 0.5f
+			float lightness = Math.max(0f, Math.min(hsl[2] * 4f - 1f, 1f));
+			int statusBarColor = GraphicsUtils.mixColors(theme.primary,
+					ColorUtils.blendARGB(STATUS_OVERLAY_DARK, STATUS_OVERLAY_LIGHT, lightness));
+			ViewUtils.setStatusBarColor(activity.getWindow(), statusBarColor);
+			ActivityManager.TaskDescription taskDescription = createTaskDescription(toolbarColor);
+			activity.setTaskDescription(taskDescription);
 		}
+	}
+
+	@SuppressWarnings("deprecation")
+	private static ActivityManager.TaskDescription createTaskDescription(int toolbarColor) {
+		// Keep the pre-Android-15 task color behavior; targetSdk migration is handled separately.
+		return new ActivityManager.TaskDescription(null, R.mipmap.ic_launcher, toolbarColor);
 	}
 
 	public static List<Theme> getThemes() {
@@ -582,64 +574,38 @@ public class ThemeEngine {
 			Theme theme = themeContext.theme;
 			if (shouldApplyStyle(context)) {
 				if (view instanceof CompoundButton) {
-					if (C.API_LOLLIPOP_MR1) {
-						((CompoundButton) view).setButtonTintList(themeContext.getCheckBoxColors());
-					}
+					((CompoundButton) view).setButtonTintList(themeContext.getCheckBoxColors());
 					if (view instanceof Switch) {
-						if (C.API_MARSHMALLOW) {
-							Switch switchView = (Switch) view;
-							switchView.setTrackTintList(themeContext.getCheckBoxColors());
-							switchView.setThumbTintList(themeContext.getSwitchThumbColors());
-						}
+						Switch switchView = (Switch) view;
+						switchView.setTrackTintList(themeContext.getCheckBoxColors());
+						switchView.setThumbTintList(themeContext.getSwitchThumbColors());
 					}
 				} else if (view instanceof TextView) {
 					TextView textView = (TextView) view;
 					textView.setLinkTextColor(theme.link);
 					if (view instanceof EditText) {
-						if (C.API_LOLLIPOP_MR1) {
-							view.setBackgroundTintList(themeContext.getEditTextColors());
-						} else {
-							// Fix weird EditText padding on Android 5.0
-							float density = ResourceUtils.obtainDensity(view);
-							if ((int) (view.getPaddingTop() / density) == 4 &&
-									(int) (view.getPaddingBottom() / density) == 13) {
-								view.setPadding(view.getPaddingLeft(), (int) (11f * density + 0.5f),
-										view.getPaddingRight(), (int) (10f * density + 0.5f));
-							}
-						}
+						view.setBackgroundTintList(themeContext.getEditTextColors());
 					} else if (view instanceof CheckedTextView) {
 						// Mostly used by alert dialogs to display lists
-						if (C.API_LOLLIPOP_MR1) {
-							((CheckedTextView) textView).setCheckMarkTintList(themeContext.getCheckBoxColors());
-							if (C.API_MARSHMALLOW) {
-								// On newer Android versions "compound drawable" is used instead of "check mark"
-								textView.setCompoundDrawableTintList(themeContext.getCheckBoxColors());
-							}
-						}
+						((CheckedTextView) textView).setCheckMarkTintList(themeContext.getCheckBoxColors());
+						// On newer Android versions "compound drawable" is used instead of "check mark"
+						textView.setCompoundDrawableTintList(themeContext.getCheckBoxColors());
 					} else if (view instanceof Button) {
-						if (C.API_LOLLIPOP) {
-							if (view instanceof Button) {
-								Button button = (Button) view;
-								if (button.getTextColors().getDefaultColor() ==
-										ResourceUtils.getColor(button.getContext(), android.R.attr.colorAccent)) {
-									button.setTextColor(themeContext.getButtonColors());
-								}
-							}
+						Button button = (Button) view;
+						if (button.getTextColors().getDefaultColor() ==
+								ResourceUtils.getColor(button.getContext(), android.R.attr.colorAccent)) {
+							button.setTextColor(themeContext.getButtonColors());
 						}
 					}
 				} else if (view instanceof ProgressBar) {
-					if (C.API_LOLLIPOP) {
-						ColorStateList tint = ColorStateList.valueOf(theme.accent);
-						ProgressBar progressBar = (ProgressBar) view;
-						progressBar.setIndeterminateTintList(tint);
-						progressBar.setProgressTintList(tint);
-						if (progressBar instanceof AbsSeekBar) {
-							AbsSeekBar seekBar = (AbsSeekBar) progressBar;
-							seekBar.setThumbTintList(tint);
-							if (C.API_NOUGAT) {
-								seekBar.setTickMarkTintList(tint);
-							}
-						}
+					ColorStateList tint = ColorStateList.valueOf(theme.accent);
+					ProgressBar progressBar = (ProgressBar) view;
+					progressBar.setIndeterminateTintList(tint);
+					progressBar.setProgressTintList(tint);
+					if (progressBar instanceof AbsSeekBar) {
+						AbsSeekBar seekBar = (AbsSeekBar) progressBar;
+						seekBar.setThumbTintList(tint);
+						seekBar.setTickMarkTintList(tint);
 					}
 				} else if (view instanceof ScrollView) {
 					ViewUtils.setEdgeEffectColor((ScrollView) view, theme.accent);
@@ -970,15 +936,13 @@ public class ThemeEngine {
 			int thread = GraphicsUtils.applyAlpha(post, postToThreadAlpha);
 			int controlNormal21 = 0;
 			float disabledAlpha21 = 1f;
-			if (C.API_LOLLIPOP) {
-				int[] attrs = {android.R.attr.colorControlNormal, android.R.attr.disabledAlpha};
-				typedArray = context.obtainStyledAttributes(attrs);
-				ColorStateList colorControlNormal = typedArray.getColorStateList(0);
-				disabledAlpha21 = typedArray.getFloat(1, 1f);
-				typedArray.recycle();
-				controlNormal21 = colorControlNormal.getColorForState(new int[] {android.R.attr.state_enabled},
-						colorControlNormal.getDefaultColor());
-			}
+			int[] attrs = {android.R.attr.colorControlNormal, android.R.attr.disabledAlpha};
+			typedArray = context.obtainStyledAttributes(attrs);
+			ColorStateList colorControlNormal = typedArray.getColorStateList(0);
+			disabledAlpha21 = typedArray.getFloat(1, 1f);
+			typedArray.recycle();
+			controlNormal21 = colorControlNormal.getColorForState(new int[] {android.R.attr.state_enabled},
+					colorControlNormal.getDefaultColor());
 			return new Theme(base, name, builtIn, json,
 					window, primary, accent, card, thread, post, meta,
 					spoiler, link, quote, tripcode, capcode, colorGainFactor,

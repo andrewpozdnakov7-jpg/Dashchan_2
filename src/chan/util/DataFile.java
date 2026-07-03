@@ -9,7 +9,6 @@ import android.provider.DocumentsContract;
 import android.util.Pair;
 import androidx.annotation.RequiresApi;
 import chan.annotation.Public;
-import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.content.CacheManager;
 import com.mishiranu.dashchan.content.FileProvider;
 import com.mishiranu.dashchan.content.MainApplication;
@@ -73,7 +72,7 @@ public abstract class DataFile {
 	}
 
 	public static DataFile obtain(Target target, String path) {
-		if (target.safTarget != null && C.USE_SAF) {
+		if (target.safTarget != null) {
 			return new SafFile(target, validatePath(path));
 		} else {
 			return new RegularFile(target, validatePath(path));

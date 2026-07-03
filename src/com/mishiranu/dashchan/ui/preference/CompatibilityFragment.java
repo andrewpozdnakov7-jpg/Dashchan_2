@@ -7,7 +7,6 @@ import android.os.Bundle;
 import android.provider.Settings;
 import android.view.View;
 import androidx.annotation.NonNull;
-import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.ui.FragmentHandler;
@@ -28,18 +27,16 @@ public class CompatibilityFragment extends PreferenceFragment {
 	public void onViewCreated(@NonNull View view, Bundle savedInstanceState) {
 		super.onViewCreated(view, savedInstanceState);
 
-		if (C.API_NOUGAT_MR1) {
-			drawOverOtherApplicationsPreference = addCheck(false, "draw_over_other_applications", false,
-					R.string.draw_over_other_applications, R.string.draw_over_other_applications__summary);
-			drawOverOtherApplicationsPreference.setOnClickListener(p -> {
-				try {
-					startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
-							.setData(Uri.parse("package:" + requireContext().getPackageName())));
-				} catch (ActivityNotFoundException e) {
-					ClickableToast.show(R.string.unknown_address);
-				}
-			});
-		}
+		drawOverOtherApplicationsPreference = addCheck(false, "draw_over_other_applications", false,
+				R.string.draw_over_other_applications, R.string.draw_over_other_applications__summary);
+		drawOverOtherApplicationsPreference.setOnClickListener(p -> {
+			try {
+				startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
+						.setData(Uri.parse("package:" + requireContext().getPackageName())));
+			} catch (ActivityNotFoundException e) {
+				ClickableToast.show(R.string.unknown_address);
+			}
+		});
 		addHeader(R.string.additional);
 		addCheck(true, Preferences.KEY_USE_GMS_PROVIDER, Preferences.DEFAULT_USE_GMS_PROVIDER,
 				R.string.use_gms_security_provider, R.string.use_gms_security_provider__summary);
@@ -62,8 +59,7 @@ public class CompatibilityFragment extends PreferenceFragment {
 		super.onResume();
 
 		if (drawOverOtherApplicationsPreference != null) {
-			drawOverOtherApplicationsPreference.setValue(C.API_NOUGAT_MR1 &&
-					Settings.canDrawOverlays(requireContext()));
+			drawOverOtherApplicationsPreference.setValue(Settings.canDrawOverlays(requireContext()));
 		}
 	}
 }

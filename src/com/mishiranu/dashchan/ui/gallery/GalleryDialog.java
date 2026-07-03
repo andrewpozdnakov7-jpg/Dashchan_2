@@ -15,7 +15,6 @@ import android.view.WindowManager;
 import android.widget.Toolbar;
 import androidx.annotation.NonNull;
 import androidx.fragment.app.Fragment;
-import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.util.ViewUtils;
 import com.mishiranu.dashchan.widget.ViewFactory;
@@ -43,40 +42,33 @@ public class GalleryDialog extends Dialog {
 		getWindow().setAttributes(layoutParams);
 		setVolumeControlStream(AudioManager.STREAM_MUSIC);
 
-		if (C.API_R) {
-			// ActionBarOverlayLayout relies on SYSTEM_UI_FLAG_LAYOUT_STABLE and uses deprecated
-			// getSystemWindowInsetsAsRect instead of getInsetsIgnoringVisibility
-			View decorView = getWindow().getDecorView();
-			View overlay = decorView.findViewById(fragment.getResources()
-					.getIdentifier("decor_content_parent", "id", "android"));
-			View container = decorView.findViewById(fragment.getResources()
-					.getIdentifier("action_bar_container", "id", "android"));
-			if (overlay != null && container != null) {
-				overlay.setOnApplyWindowInsetsListener((v, insets) -> {
-					Insets systemInsets = insets.getInsetsIgnoringVisibility(WindowInsets.Type.systemBars());
-					ViewUtils.setNewMargin(container, systemInsets.left, systemInsets.top, systemInsets.right, null);
-					View actionBar = getActionBarView();
-					if (actionBar != null) {
-						Insets cutoutInsets = insets.getInsetsIgnoringVisibility(WindowInsets.Type.displayCutout());
-						ViewUtils.setNewPadding(actionBar, Math.max(0, cutoutInsets.left - systemInsets.left),
-								Math.max(0, cutoutInsets.top - systemInsets.top),
-								Math.max(0, cutoutInsets.right - systemInsets.right), null);
-					}
-					return insets;
-				});
-			}
+		// ActionBarOverlayLayout relies on SYSTEM_UI_FLAG_LAYOUT_STABLE and uses deprecated
+		// getSystemWindowInsetsAsRect instead of getInsetsIgnoringVisibility.
+		View decorView = getWindow().getDecorView();
+		View overlay = decorView.findViewById(fragment.getResources()
+				.getIdentifier("decor_content_parent", "id", "android"));
+		View container = decorView.findViewById(fragment.getResources()
+				.getIdentifier("action_bar_container", "id", "android"));
+		if (overlay != null && container != null) {
+			overlay.setOnApplyWindowInsetsListener((v, insets) -> {
+				Insets systemInsets = insets.getInsetsIgnoringVisibility(WindowInsets.Type.systemBars());
+				ViewUtils.setNewMargin(container, systemInsets.left, systemInsets.top, systemInsets.right, null);
+				View actionBar = getActionBarView();
+				if (actionBar != null) {
+					Insets cutoutInsets = insets.getInsetsIgnoringVisibility(WindowInsets.Type.displayCutout());
+					ViewUtils.setNewPadding(actionBar, Math.max(0, cutoutInsets.left - systemInsets.left),
+							Math.max(0, cutoutInsets.top - systemInsets.top),
+							Math.max(0, cutoutInsets.right - systemInsets.right), null);
+				}
+				return insets;
+			});
 		}
 	}
 
 	private boolean actionBarAnimationsFixed = false;
 
 	public void setTitleSubtitle(CharSequence title, CharSequence subtitle) {
-		if (C.API_LOLLIPOP) {
-			toolbarHolder.update(title, subtitle);
-		} else {
-			setTitle(title);
-			getActionBar().setSubtitle(subtitle);
-		}
+		toolbarHolder.update(title, subtitle);
 	}
 
 	@Override
@@ -89,7 +81,7 @@ public class GalleryDialog extends Dialog {
 			onStop();
 			onStart();
 		}
-		if (C.API_LOLLIPOP && toolbarHolder == null) {
+		if (toolbarHolder == null) {
 			Toolbar toolbar = (Toolbar) getActionBarView();
 			toolbarHolder = ViewFactory.addToolbarTitle(toolbar);
 			WindowManager.LayoutParams layoutParams = getWindow().getAttributes();
@@ -124,7 +116,9 @@ public class GalleryDialog extends Dialog {
 	}
 
 	@Override
+	@SuppressWarnings("deprecation")
 	public void onBackPressed() {
+		// Keep existing Dialog back dispatch; OnBackInvoked migration is targetSdk-sensitive.
 		if (!(fragment instanceof Callback) || !((Callback) fragment).onBackPressed()) {
 			super.onBackPressed();
 		}

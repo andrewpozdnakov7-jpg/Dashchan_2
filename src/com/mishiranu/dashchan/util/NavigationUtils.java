@@ -194,14 +194,11 @@ public class NavigationUtils {
 		Intent intent = new Intent(context, MainActivity.class)
 				.setAction(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
 				.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-		PendingIntent pendingIntent = PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_CANCEL_CURRENT);
+		int flags = PendingIntent.FLAG_CANCEL_CURRENT | PendingIntent.FLAG_IMMUTABLE;
+		PendingIntent pendingIntent = PendingIntent.getActivity(context, 0, intent, flags);
 		AlarmManager alarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
 		long when = SystemClock.elapsedRealtime() + 1000;
-		if (C.API_KITKAT) {
-			alarmManager.setExact(AlarmManager.ELAPSED_REALTIME, when, pendingIntent);
-		} else {
-			alarmManager.set(AlarmManager.ELAPSED_REALTIME, when, pendingIntent);
-		}
+		alarmManager.setExact(AlarmManager.ELAPSED_REALTIME, when, pendingIntent);
 		System.exit(0);
 	}
 }

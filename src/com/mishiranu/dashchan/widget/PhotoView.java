@@ -21,7 +21,6 @@ import android.view.ViewConfiguration;
 import android.widget.Scroller;
 import androidx.annotation.NonNull;
 import androidx.core.view.ViewCompat;
-import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.graphics.TransparentTileDrawable;
 import com.mishiranu.dashchan.util.AnimationUtils;
 
@@ -239,12 +238,7 @@ public class PhotoView extends View implements ScaleGestureDetector.OnScaleGestu
 		}
 		boolean restoreAlpha = false;
 		if (workAlpha != 0xff) {
-			if (C.API_LOLLIPOP) {
-				canvas.saveLayerAlpha(0, 0, getWidth(), getHeight(), workAlpha);
-			} else {
-				@SuppressWarnings({"deprecation", "unused"})
-				int ignored = canvas.saveLayerAlpha(0, 0, getWidth(), getHeight(), workAlpha, Canvas.ALL_SAVE_FLAG);
-			}
+			canvas.saveLayerAlpha(0, 0, getWidth(), getHeight(), workAlpha);
 			restoreAlpha = true;
 		}
 		if (drawable != null) {
@@ -451,7 +445,7 @@ public class PhotoView extends View implements ScaleGestureDetector.OnScaleGestu
 			isDoubleTapDown = false;
 			gestureDetector.onTouchEvent(event);
 			scaleGestureDetector.onTouchEvent(event);
-			if (action == MotionEvent.ACTION_DOWN && C.API_KITKAT) {
+			if (action == MotionEvent.ACTION_DOWN) {
 				isQuickScale = isDoubleTapDown && scaleGestureDetector.isQuickScaleEnabled();
 				if (isQuickScale) {
 					checkTouchMode();

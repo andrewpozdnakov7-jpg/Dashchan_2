@@ -1,0 +1,13 @@
+/*
+!/.gitattributes
+!/res
+!/.gitignore
+!/AndroidManifest.xml
+!/build.gradle
+!/docs
+!/gradle.properties
+!/README.md
+!/settings.gradle
+!/shared-build.sh
+!/shared-prepare.sh
+!/symbols.sh

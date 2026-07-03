@@ -16,7 +16,6 @@ import chan.content.Chan;
 import chan.content.ChanConfiguration;
 import chan.content.ChanManager;
 import chan.util.StringUtils;
-import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.storage.StatisticsStorage;
 import com.mishiranu.dashchan.ui.FragmentHandler;
@@ -144,7 +143,7 @@ public class StatisticsFragment extends BaseListFragment {
 		private TextView addTextView(LinearLayout parent, boolean end, float weight, int padding) {
 			TextView textView = new TextView(parent.getContext());
 			TextViewCompat.setTextAppearance(textView, ResourceUtils.getResourceId(textView.getContext(),
-					C.API_LOLLIPOP ? android.R.attr.textAppearanceListItem : android.R.attr.textAppearanceMedium,
+					android.R.attr.textAppearanceListItem,
 					android.R.style.TextAppearance_Medium));
 			textView.setSingleLine(true);
 			textView.setEllipsize(TextUtils.TruncateAt.END);
@@ -162,8 +161,8 @@ public class StatisticsFragment extends BaseListFragment {
 			LinearLayout linearLayout = new LinearLayout(parent.getContext());
 			linearLayout.setOrientation(LinearLayout.HORIZONTAL);
 			float density = ResourceUtils.obtainDensity(linearLayout);
-			int outerPadding = (int) ((C.API_LOLLIPOP ? 16f : 6f) * density);
-			int innerPadding = (int) ((C.API_LOLLIPOP ? 8f : 6f) * density);
+			int outerPadding = (int) (16f * density);
+			int innerPadding = (int) (8f * density);
 			linearLayout.setPadding(outerPadding - innerPadding, 0, outerPadding, 0);
 			TextView text1 = addTextView(linearLayout, false, 3f, innerPadding);
 			TextView text2 = addTextView(linearLayout, true, 2f, innerPadding);

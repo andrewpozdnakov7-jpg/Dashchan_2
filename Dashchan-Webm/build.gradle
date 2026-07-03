@@ -1,0 +1,166 @@
+plugins {
+	id 'com.android.application' version '9.2.1'
+}
+
+def androidNdkVersion = '29.0.14206865'
+def nativeAbis = providers.gradleProperty('nativeAbis')
+		.orElse('arm64-v8a,armeabi-v7a,x86')
+		.get()
+		.split(',')
+		.collect { it.trim() }
+		.findAll { !it.isEmpty() }
+
+def getAndroidSdkDirectory = {
+	def localProperties = new Properties()
+	def localPropertiesFile = rootProject.file('local.properties')
+	if (localPropertiesFile.exists()) {
+		localPropertiesFile.withInputStream { localProperties.load(it) }
+	}
+	def sdkDir = System.getenv('ANDROID_HOME') ?: System.getenv('ANDROID_SDK_ROOT') ?: localProperties.getProperty('sdk.dir')
+	if (!sdkDir) {
+		throw new GradleException('Android SDK path is not defined')
+	}
+	return new File(sdkDir)
+}
+
+def externalBuildDir = providers.gradleProperty('externalBuildDir')
+if (externalBuildDir.isPresent()) {
+	layout.buildDirectory.set(file(externalBuildDir.get()))
+}
+
+android {
+	namespace = 'com.mishiranu.dashchan.lib.webm'
+	compileSdk = 36
+	buildToolsVersion = '36.0.0'
+	ndkVersion = androidNdkVersion
+
+	defaultConfig {
+		applicationId = 'com.mishiranu.dashchan.lib.webm'
+		versionCode = 7
+		versionName = '1.8-hevc-r8'
+		manifestPlaceholders = [
+				appLabel: 'Dashchan WebM libraries',
+				libExtensionFeatureName: 'lib.extension',
+				libExtensionName: 'webm',
+				libExtensionTitle: 'WebM libraries'
+		]
+
+		minSdk = 30
+		targetSdk = 36
+
+		ndk {
+			abiFilters(*nativeAbis)
+		}
+	}
+
+	buildTypes {
+		parallel {
+			initWith release
+			applicationIdSuffix = '.test'
+			manifestPlaceholders = [
+					appLabel: 'Dashchan_2 WebM libraries',
+					libExtensionFeatureName: 'lib.extension.dashchan2',
+					libExtensionName: 'webm2',
+					libExtensionTitle: 'WebM2 libraries'
+			]
+		}
+	}
+
+	sourceSets.main {
+		manifest.srcFile 'AndroidManifest.xml'
+		java.srcDirs = ['src']
+		resources.srcDirs = []
+		aidl.srcDirs = ['src']
+		res.srcDirs = ['res']
+		assets.srcDirs = ['assets']
+		jni.srcDirs = []
+		jniLibs.srcDirs = []
+	}
+
+	if (file('keystore.properties').exists()) {
+		def keystoreProperties = new Properties()
+		keystoreProperties.load(new FileInputStream(file('keystore.properties')))
+		signingConfigs.create('general') {
+			storeFile file(keystoreProperties['store.file'])
+			storePassword keystoreProperties['store.password']
+			keyAlias keystoreProperties['key.alias']
+			keyPassword keystoreProperties['key.password']
+		}
+		buildTypes.all { signingConfig signingConfigs.general }
+	}
+
+	buildTypes.all {
+		crunchPngs = false
+		minifyEnabled = false
+	}
+}
+
+import org.apache.tools.ant.taskdefs.condition.Os
+import org.gradle.process.ExecOperations
+import javax.inject.Inject
+
+abstract class ShellTask extends DefaultTask {
+	@InputFile File script
+	@Input List<String> arguments
+	@Input Map<String, Object> environment
+	@OutputDirectories FileCollection output
+
+	@Inject abstract ExecOperations getExecOperations()
+
+	@TaskAction
+	def action() {
+		if (Os.isFamily(Os.FAMILY_UNIX)) {
+			def taskEnvironment = environment
+			execOperations.exec {
+				commandLine 'bash', script.absolutePath
+				args arguments
+				environment taskEnvironment
+			}.rethrowFailure().assertNormalExitValue()
+		} else {
+			throw new RuntimeException('Linux x86_64 is required to execute shell task')
+		}
+	}
+}
+
+def sharedSources = layout.buildDirectory.dir('intermediates/shared_sources').get().asFile
+def sharedLibraries = layout.buildDirectory.dir('intermediates/shared_libraries').get().asFile
+def sharedExternal = layout.buildDirectory.dir('outputs/external').get().asFile
+
+task sharedPrepare(type: ShellTask) {
+	script = file('shared-prepare.sh')
+	arguments = [sharedSources.absolutePath]
+	environment = [
+			DAV1D_VERSION: '1.5.3',
+			FFMPEG_VERSION: '8.1.2',
+			YUV_VERSION: '6afd9becdf58822b1da6770598d8597c583ccfad',
+	]
+	output = files(sharedSources)
+}
+
+task sharedBuild(type: ShellTask) {
+	dependsOn sharedPrepare
+	script = file('shared-build.sh')
+	arguments = [sharedSources.absolutePath, sharedLibraries.absolutePath, sharedExternal.absolutePath]
+	environment = [
+			ANDROID_NDK_HOME: new File(getAndroidSdkDirectory(), "ndk/${androidNdkVersion}").absolutePath,
+			DAV1D_VERSION: '1.5.3',
+			EXTERNAL_CORES: Runtime.runtime.availableProcessors(),
+			NATIVE_ABIS: nativeAbis.join(' ')
+	]
+	output = files(sharedLibraries, sharedExternal)
+}
+
+android.sourceSets.main.jniLibs.srcDirs = [
+		new File(sharedLibraries, 'dav1d'),
+		new File(sharedLibraries, 'ffmpeg'),
+		new File(sharedLibraries, 'yuv')
+]
+
+afterEvaluate {
+	android.buildTypes.all {
+		String name = it.name.capitalize()
+		tasks.named('pre' + name + 'Build').configure {
+			dependsOn sharedBuild
+		}
+	}
+}

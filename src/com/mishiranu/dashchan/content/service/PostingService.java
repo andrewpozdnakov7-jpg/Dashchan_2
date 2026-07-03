@@ -153,20 +153,15 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 	public void onCreate() {
 		super.onCreate();
 		notificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-		int notificationColor = 0;
-		if (C.API_LOLLIPOP) {
-			ThemeEngine.Theme theme = ThemeEngine.attachAndApply(this);
-			notificationColor = theme.accent;
-		}
+		ThemeEngine.Theme theme = ThemeEngine.attachAndApply(this);
+		int notificationColor = theme.accent;
 		this.notificationColor = notificationColor;
-		if (C.API_OREO) {
-			notificationManager.createNotificationChannel
-					(new NotificationChannel(C.NOTIFICATION_CHANNEL_POSTING,
-							getString(R.string.posting), NotificationManager.IMPORTANCE_LOW));
-			notificationManager.createNotificationChannel(AndroidUtils
-					.createHeadsUpNotificationChannel(C.NOTIFICATION_CHANNEL_POSTING_COMPLETE,
-							getString(R.string.sent_posts)));
-		}
+		notificationManager.createNotificationChannel
+				(new NotificationChannel(C.NOTIFICATION_CHANNEL_POSTING,
+						getString(R.string.posting), NotificationManager.IMPORTANCE_LOW));
+		notificationManager.createNotificationChannel(AndroidUtils
+				.createHeadsUpNotificationChannel(C.NOTIFICATION_CHANNEL_POSTING_COMPLETE,
+						getString(R.string.sent_posts)));
 		PowerManager powerManager = (PowerManager) getSystemService(POWER_SERVICE);
 		wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, getPackageName() + ":PostingWakeLock");
 		wakeLock.setReferenceCounted(false);
@@ -214,7 +209,7 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 				return;
 			}
 			if (notificationData.type == NotificationData.Type.CANCEL) {
-				stopForeground(true);
+				AndroidUtils.stopForegroundRemove(this);
 				stopSelf();
 			} else {
 				TaskState taskState = notificationData.taskState;
@@ -223,8 +218,7 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 					builder.setSmallIcon(android.R.drawable.stat_sys_upload);
 					PendingIntent cancelIntent = PendingIntent.getBroadcast(this, 0, new Intent(this, Receiver.class)
 							.setAction(ACTION_CANCEL), PendingIntent.FLAG_UPDATE_CURRENT);
-					builder.addAction(C.API_LOLLIPOP ? 0 : R.drawable.ic_action_cancel_dark,
-							getString(android.R.string.cancel), cancelIntent);
+					builder.addAction(0, getString(android.R.string.cancel), cancelIntent);
 					builder.setColor(notificationColor);
 					AndroidUtils.startAnyService(this, new Intent(this, PostingService.class));
 				}
@@ -491,12 +485,8 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 						C.NOTIFICATION_CHANNEL_POSTING_COMPLETE);
 				builder.setSmallIcon(android.R.drawable.stat_sys_upload_done);
 				builder.setColor(notificationColor);
-				if (C.API_LOLLIPOP) {
-					builder.setPriority(NotificationCompat.PRIORITY_HIGH);
-					builder.setVibrate(new long[0]);
-				} else {
-					builder.setTicker(getString(R.string.post_sent));
-				}
+				builder.setPriority(NotificationCompat.PRIORITY_HIGH);
+				builder.setVibrate(new long[0]);
 				builder.setContentTitle(getString(R.string.post_sent));
 				builder.setContentText(buildNotificationText(chan, data.boardName, targetThreadNumber, postNumber));
 				String tag = newPostData.tag;
@@ -602,7 +592,8 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 			@Override
 			public FailResult createFromParcel(Parcel in) {
 				ErrorItem errorItem = ErrorItem.CREATOR.createFromParcel(in);
-				ApiException.Extra extra = in.readParcelable(FailResult.class.getClassLoader());
+				ApiException.Extra extra = AndroidUtils.readParcelable(in, FailResult.class.getClassLoader(),
+						ApiException.Extra.class);
 				boolean captchaError = in.readByte() != 0;
 				boolean keepCaptcha = in.readByte() != 0;
 				return new FailResult(errorItem, extra, captchaError, keepCaptcha);

@@ -32,7 +32,6 @@ import chan.http.HttpHolder;
 import chan.http.HttpRequest;
 import chan.http.UrlEncodedEntity;
 import chan.util.StringUtils;
-import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.AdvancedPreferences;
 import com.mishiranu.dashchan.content.MainApplication;
@@ -124,7 +123,7 @@ public class RecaptchaReader {
 				return new ChallengeExtra(null, autoResponse, null);
 			}
 		}
-		if (useJavaScript && C.API_KITKAT) {
+		if (useJavaScript) {
 			ChallengeExtra.ForegroundSolver solver = (newHolder, challengeExtra) -> {
 				synchronized (accessLock) {
 					String response = ForegroundManager.getInstance()
@@ -158,12 +157,8 @@ public class RecaptchaReader {
 			if (initialResponse == null) {
 				if (initialResponseText
 						.contains("Please enable JavaScript to get a reCAPTCHA challenge")) {
-					if (C.API_KITKAT) {
-						return getChallenge2(initialHolder, apiKey, invisible, refererFinal,
-								true, solveInBackground, false);
-					} else {
-						throw new HttpException(ErrorItem.Type.UNSUPPORTED_RECAPTCHA, false, false);
-					}
+					return getChallenge2(initialHolder, apiKey, invisible, refererFinal,
+							true, solveInBackground, false);
 				} else {
 					throw new HttpException(ErrorItem.Type.INVALID_RESPONSE, false, false);
 				}

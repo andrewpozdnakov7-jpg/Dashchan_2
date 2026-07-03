@@ -13,7 +13,6 @@ import android.widget.TextView;
 
 import chan.content.ChanConfiguration;
 
-import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.widget.ErrorEditTextSetter;
@@ -94,12 +93,10 @@ public class CommentEditWatcher implements TextWatcher {
 			int color = ResourceUtils.getColor(commentView.getContext(), error ? R.attr.colorTextError
 					: android.R.attr.textColorSecondary);
 			remainingCharacters.setTextColor(color);
-			if (C.API_LOLLIPOP) {
-				if (errorSetter == null) {
-					errorSetter = new ErrorEditTextSetter(commentView);
-				}
-				errorSetter.setError(error);
+			if (errorSetter == null) {
+				errorSetter = new ErrorEditTextSetter(commentView);
 			}
+			errorSetter.setError(error);
 			this.error = error;
 		}
 		if (show) {

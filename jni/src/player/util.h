@@ -95,8 +95,8 @@ void sparseArrayDestroy(SparseArray * sparseArray, SparseArrayDestroyCallback ca
 void sparseArrayAdd(SparseArray * sparseArray, int index, void * data);
 void * sparseArrayGet(SparseArray * sparseArray, int index);
 
-int64_t getTime();
-int64_t getTimeUs();
+int64_t getTime(void);
+int64_t getTimeUs(void);
 
 void condBroadcastLocked(pthread_cond_t * cond, pthread_mutex_t * mutex);
 int condSleepUntilMs(pthread_cond_t * cond, pthread_mutex_t * mutex, int64_t timeMs);

@@ -22,13 +22,11 @@ import androidx.annotation.NonNull;
 import androidx.core.view.ViewCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
-import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.graphics.BaseDrawable;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
 import com.mishiranu.dashchan.util.ListViewUtils;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.util.ViewUtils;
-import com.mishiranu.dashchan.widget.DividerItemDecoration;
 import com.mishiranu.dashchan.widget.PaddedRecyclerView;
 import com.mishiranu.dashchan.widget.ThemeEngine;
 import java.util.ArrayList;
@@ -120,14 +118,9 @@ public class DialogMenu {
 		recyclerView.setMotionEventSplittingEnabled(false);
 		recyclerView.setVerticalScrollBarEnabled(true);
 		recyclerView.setLayoutManager(new LinearLayoutManager(recyclerView.getContext()));
-		if (C.API_LOLLIPOP) {
-			float density = ResourceUtils.obtainDensity(recyclerView);
-			recyclerView.setClipToPadding(false);
-			recyclerView.setPadding(0, (int) (8f * density), 0, (int) (8f * density));
-		} else {
-			recyclerView.addItemDecoration(new DividerItemDecoration(recyclerView.getContext(),
-					(c, position) -> c.need(true)));
-		}
+		float density = ResourceUtils.obtainDensity(recyclerView);
+		recyclerView.setClipToPadding(false);
+		recyclerView.setPadding(0, (int) (8f * density), 0, (int) (8f * density));
 		AlertDialog dialog = builder.setView(recyclerView).create();
 		updateInternal(dialog, recyclerView);
 		return dialog;
@@ -207,15 +200,13 @@ public class DialogMenu {
 						LinearLayout.LayoutParams.MATCH_PARENT);
 				if (viewType == ViewType.MORE) {
 					Drawable drawable = null;
-					if (C.API_NOUGAT) {
-						int[] attrs = {android.R.attr.subMenuArrow};
-						TypedArray typedArray = parent.getContext().obtainStyledAttributes(null,
-								attrs, android.R.attr.listMenuViewStyle, 0);
-						try {
-							drawable = typedArray.getDrawable(0);
-						} finally {
-							typedArray.recycle();
-						}
+					int[] attrs = {android.R.attr.subMenuArrow};
+					TypedArray typedArray = parent.getContext().obtainStyledAttributes(null,
+							attrs, android.R.attr.listMenuViewStyle, 0);
+					try {
+						drawable = typedArray.getDrawable(0);
+					} finally {
+						typedArray.recycle();
 					}
 					if (drawable == null) {
 						drawable = new SubMenuArrowDrawable(parent);

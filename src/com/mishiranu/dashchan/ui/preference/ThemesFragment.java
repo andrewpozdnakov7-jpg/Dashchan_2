@@ -298,13 +298,8 @@ public class ThemesFragment extends BaseListFragment {
 
 		public DividerItemDecoration.Configuration configureDivider
 				(DividerItemDecoration.Configuration configuration, int position) {
-			ListItem current = listItems.get(position);
 			ListItem next = listItems.size() > position + 1 ? listItems.get(position + 1) : null;
-			if (C.API_LOLLIPOP) {
-				return configuration.need(next != null && next.title != null);
-			} else {
-				return configuration.need(current.title == null && (next == null || next.title == null));
-			}
+			return configuration.need(next != null && next.title != null);
 		}
 
 		@Override

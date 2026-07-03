@@ -20,11 +20,11 @@ public class WakabaLikeHtmlBuilder {
 
 	private static final String CLIENT_URI = "https://github.com/Mishiranu/Dashchan/";
 
-	private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("MM/dd/yy(ccc)HH:mm:ss", Locale.US);
-
-	static {
-		DATE_FORMAT.setTimeZone(TimeZone.getTimeZone("Etc/GMT"));
-	}
+	private static final ThreadLocal<SimpleDateFormat> DATE_FORMAT = ThreadLocal.withInitial(() -> {
+		SimpleDateFormat dateFormat = new SimpleDateFormat("MM/dd/yy(ccc)HH:mm:ss", Locale.US);
+		dateFormat.setTimeZone(TimeZone.getTimeZone("Etc/GMT"));
+		return dateFormat;
+	});
 
 	private final StringBuilder builder = new StringBuilder();
 
@@ -300,8 +300,8 @@ public class WakabaLikeHtmlBuilder {
 			}
 			builder.append(" />\n");
 		}
-		builder.append("<span data-timestamp=\"").append(timestamp).append("\">").append(DATE_FORMAT.format(timestamp))
-				.append("</span>\n");
+		builder.append("<span data-timestamp=\"").append(timestamp).append("\">")
+				.append(DATE_FORMAT.get().format(timestamp)).append("</span>\n");
 		builder.append("<span class=\"reflink\">No.").append(number);
 		if (deleted) {
 			builder.append(" <span style=\"color: #f00\">DELETED</span>");

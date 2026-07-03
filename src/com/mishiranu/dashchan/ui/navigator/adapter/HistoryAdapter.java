@@ -6,7 +6,6 @@ import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 import chan.content.Chan;
 import chan.util.StringUtils;
-import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.database.HistoryDatabase;
 import com.mishiranu.dashchan.util.ListViewUtils;
@@ -100,12 +99,7 @@ public class HistoryAdapter extends CursorAdapter<HistoryDatabase.HistoryCursor,
 
 	public DividerItemDecoration.Configuration configureDivider
 			(DividerItemDecoration.Configuration configuration, int position) {
-		if (C.API_LOLLIPOP) {
-			return configuration.need(true);
-		} else {
-			Header header = position + 1 < getItemCount() ? getItemHeader(position + 1) : null;
-			return configuration.need(header == null);
-		}
+		return configuration.need(true);
 	}
 
 	private Header getItemHeader(int position) {

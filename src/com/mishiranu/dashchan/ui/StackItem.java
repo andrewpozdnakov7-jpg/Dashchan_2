@@ -33,12 +33,8 @@ public class StackItem implements Parcelable {
 	public Fragment create(ReplaceFragment replaceFragment) {
 		Fragment fragment;
 		try {
-			fragment = (Fragment) Class.forName(className).newInstance();
-		} catch (ClassNotFoundException e) {
-			throw new RuntimeException(e);
-		} catch (IllegalAccessException e) {
-			throw new RuntimeException(e);
-		} catch (InstantiationException e) {
+			fragment = (Fragment) Class.forName(className).getDeclaredConstructor().newInstance();
+		} catch (ReflectiveOperationException e) {
 			throw new RuntimeException(e);
 		}
 		if (arguments != null) {
