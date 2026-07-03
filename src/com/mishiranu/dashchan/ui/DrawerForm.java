@@ -8,13 +8,11 @@ import android.content.res.TypedArray;
 import android.graphics.Rect;
 import android.net.Uri;
 import android.os.SystemClock;
-import android.text.InputFilter;
 import android.text.InputType;
 import android.text.TextUtils;
 import android.view.ContextThemeWrapper;
 import android.view.Gravity;
 import android.view.KeyEvent;
-import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewConfiguration;
@@ -23,7 +21,6 @@ import android.view.WindowManager;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
-import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.PopupMenu;
@@ -39,7 +36,6 @@ import chan.content.ChanManager;
 import chan.content.ChanMarkup;
 import chan.util.CommonUtils;
 import chan.util.StringUtils;
-import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.model.PostNumber;
@@ -213,12 +209,9 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		});
 		recyclerView.setItemAnimator(null);
 		sortableHelper = new SortableHelper<>(recyclerView, this);
-		drawerIconColor = C.API_LOLLIPOP ? ResourceUtils.getColor(context, android.R.attr.textColorSecondary) : 0;
+		drawerIconColor = ResourceUtils.getColor(context, android.R.attr.textColorSecondary);
 
 		float density = ResourceUtils.obtainDensity(context);
-		if (!C.API_LOLLIPOP) {
-			ViewUtils.setNewPadding(recyclerView, (int) (12f * density), null, (int) (12f * density), null);
-		}
 
 		LinearLayout headerView = new LinearLayout(context);
 		headerView.setOrientation(LinearLayout.VERTICAL);
@@ -246,20 +239,14 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 
 		ImageView searchIcon = new ImageView(context, null, android.R.attr.buttonBarButtonStyle);
 		searchIcon.setImageResource(ResourceUtils.getResourceId(context, R.attr.iconButtonForward, 0));
-		if (C.API_LOLLIPOP) {
-			searchIcon.setImageTintList(ResourceUtils.getColorStateList(searchIcon.getContext(),
-					android.R.attr.textColorPrimary));
-		}
+		searchIcon.setImageTintList(ResourceUtils.getColorStateList(searchIcon.getContext(),
+				android.R.attr.textColorPrimary));
 		searchIcon.setScaleType(ImageView.ScaleType.CENTER);
 		searchIcon.setOnClickListener(v -> onSearchClick());
 		editTextContainer.addView(searchEdit, new LinearLayout.LayoutParams(0,
 				LinearLayout.LayoutParams.WRAP_CONTENT, 1));
 		editTextContainer.addView(searchIcon, (int) (40f * density), (int) (40f * density));
-		if (C.API_LOLLIPOP) {
-			editTextContainer.setPadding((int) (12f * density), (int) (8f * density), (int) (8f * density), 0);
-		} else {
-			editTextContainer.setPadding(0, (int) (2f * density), (int) (4f * density), (int) (2f * density));
-		}
+		editTextContainer.setPadding((int) (12f * density), (int) (8f * density), (int) (8f * density), 0);
 
 		LinearLayout selectorContainer = new LinearLayout(context);
 		this.selectorContainer = selectorContainer;
@@ -273,29 +260,19 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		});
 		headerView.addView(selectorContainer);
 		selectorContainer.setMinimumHeight((int) (40f * density));
-		if (C.API_LOLLIPOP) {
-			selectorContainer.setPadding((int) (16f * density), 0, (int) (16f * density), 0);
-			((LinearLayout.LayoutParams) selectorContainer.getLayoutParams()).topMargin = (int) (4f * density);
-		} else {
-			selectorContainer.setPadding((int) (8f * density), 0, (int) (12f * density), 0);
-		}
+		selectorContainer.setPadding((int) (16f * density), 0, (int) (16f * density), 0);
+		((LinearLayout.LayoutParams) selectorContainer.getLayoutParams()).topMargin = (int) (4f * density);
 
 		chanNameView = new TextView(context, null, android.R.attr.textAppearanceListItem);
-		ViewUtils.setTextSizeScaled(chanNameView, C.API_LOLLIPOP ? 14 : 16);
-		if (C.API_LOLLIPOP) {
-			chanNameView.setTypeface(ResourceUtils.TYPEFACE_MEDIUM);
-		} else {
-			chanNameView.setFilters(new InputFilter[] {new InputFilter.AllCaps()});
-		}
+		ViewUtils.setTextSizeScaled(chanNameView, 14);
+		chanNameView.setTypeface(ResourceUtils.TYPEFACE_MEDIUM);
 		selectorContainer.addView(chanNameView, new LinearLayout.LayoutParams(0,
 				LinearLayout.LayoutParams.WRAP_CONTENT, 1));
 
 		chanSelectorIcon = new ImageView(context);
 		chanSelectorIcon.setImageResource(ResourceUtils.getResourceId(context, R.attr.iconButtonDropDown, 0));
-		if (C.API_LOLLIPOP) {
-			chanSelectorIcon.setImageTintList(ResourceUtils.getColorStateList(context,
-					android.R.attr.textColorPrimary));
-		}
+		chanSelectorIcon.setImageTintList(ResourceUtils.getColorStateList(context,
+				android.R.attr.textColorPrimary));
 		selectorContainer.addView(chanSelectorIcon, (int) (24f * density), (int) (24f * density));
 		((LinearLayout.LayoutParams) chanSelectorIcon.getLayoutParams()).gravity = Gravity.CENTER_VERTICAL
 				| Gravity.END;
@@ -307,13 +284,8 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		TextView restartTextView = new TextView(context, null, android.R.attr.textAppearanceSmall);
 		restartTextView.setText(R.string.new_extensions_installed__sentence);
 		restartTextView.setTextColor(ResourceUtils.getColor(context, android.R.attr.textColorPrimary));
-		if (C.API_LOLLIPOP) {
-			restartTextView.setPadding((int) (16f * density), (int) (8f * density),
-					(int) (16f * density), (int) (8f * density));
-		} else {
-			restartTextView.setPadding((int) (8f * density), (int) (8f * density),
-					(int) (8f * density), (int) (8f * density));
-		}
+		restartTextView.setPadding((int) (16f * density), (int) (8f * density),
+				(int) (16f * density), (int) (8f * density));
 		restartView.addView(restartTextView, LinearLayout.LayoutParams.MATCH_PARENT,
 				LinearLayout.LayoutParams.WRAP_CONTENT);
 
@@ -1011,17 +983,11 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 								}
 							}
 						}
-						PopupMenu popupMenu;
-						if (C.API_LOLLIPOP_MR1) {
-							int resId = ResourceUtils.getResourceId(context, android.R.attr.popupTheme, 0);
-							Context context = v.getContext();
-							Context popupContext = resId != 0 ? new ContextThemeWrapper(context, resId) : context;
-							popupMenu = new PopupMenu(popupContext, v, Gravity.END, 0, R.style.Widget_OverlapPopupMenu);
-						} else if (C.API_KITKAT) {
-							popupMenu = new PopupMenu(v.getContext(), v, Gravity.END);
-						} else {
-							popupMenu = new PopupMenu(context, v);
-						}
+						int resId = ResourceUtils.getResourceId(context, android.R.attr.popupTheme, 0);
+						Context context = v.getContext();
+						Context popupContext = resId != 0 ? new ContextThemeWrapper(context, resId) : context;
+						PopupMenu popupMenu = new PopupMenu(popupContext, v, Gravity.END, 0,
+								R.style.Widget_OverlapPopupMenu);
 						popupMenu.getMenu().add(0, FAVORITES_MENU_REFRESH, 0, R.string.refresh)
 								.setEnabled(hasEnabled);
 						popupMenu.getMenu().add(0, FAVORITES_MENU_CLEAR_DELETED, 0, R.string.clear_deleted)
@@ -1116,19 +1082,19 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 				break;
 			}
 			case PAGE: {
-				viewType = mergeChans && C.API_LOLLIPOP ? ViewType.CLOSEABLE_ICON : ViewType.CLOSEABLE;
+				viewType = mergeChans ? ViewType.CLOSEABLE_ICON : ViewType.CLOSEABLE;
 				break;
 			}
 			case FAVORITE: {
 				if (listItem.threadNumber != null) {
 					boolean watcherSupported = watcherSupportSet.contains(listItem.chanName);
-					if (mergeChans && C.API_LOLLIPOP) {
+					if (mergeChans) {
 						viewType = watcherSupported ? ViewType.WATCHER_ICON : ViewType.ITEM_ICON;
 					} else {
 						viewType = watcherSupported ? ViewType.WATCHER : ViewType.ITEM;
 					}
 				} else {
-					viewType = mergeChans && C.API_LOLLIPOP ? ViewType.ITEM_ICON : ViewType.ITEM;
+					viewType = mergeChans ? ViewType.ITEM_ICON : ViewType.ITEM;
 				}
 				break;
 			}
@@ -1137,7 +1103,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 				break;
 			}
 			case CHAN: {
-				viewType = C.API_LOLLIPOP ? ViewType.ITEM_ICON : ViewType.ITEM;
+				viewType = ViewType.ITEM_ICON;
 				break;
 			}
 			default: {
@@ -1231,22 +1197,19 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	}
 
 	private TextView makeCommonTextView(boolean section) {
-		TextView textView = new TextView(context, null, C.API_LOLLIPOP ? android.R.attr.textAppearanceListItem
-				: android.R.attr.textAppearance);
-		ViewUtils.setTextSizeScaled(textView, C.API_LOLLIPOP ? 14 : 16);
+		TextView textView = new TextView(context, null, android.R.attr.textAppearanceListItem);
+		ViewUtils.setTextSizeScaled(textView, 14);
 		textView.setGravity(Gravity.CENTER_VERTICAL);
 		textView.setEllipsize(TextUtils.TruncateAt.END);
 		textView.setSingleLine(true);
-		if (C.API_LOLLIPOP) {
-			textView.setTypeface(ResourceUtils.TYPEFACE_MEDIUM);
-			int color = textView.getTextColors().getDefaultColor();
-			if (section) {
-				color &= 0x5effffff;
-			} else {
-				color &= 0xddffffff;
-			}
-			textView.setTextColor(color);
+		textView.setTypeface(ResourceUtils.TYPEFACE_MEDIUM);
+		int color = textView.getTextColors().getDefaultColor();
+		if (section) {
+			color &= 0x5effffff;
+		} else {
+			color &= 0xddffffff;
 		}
+		textView.setTextColor(color);
 		return textView;
 	}
 
@@ -1260,9 +1223,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 			iconView = new ImageView(context);
 			iconView.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
 			linearLayout.addView(iconView, (int) (24f * density), size);
-			if (C.API_LOLLIPOP) {
-				iconView.setImageTintList(ColorStateList.valueOf(drawerIconColor));
-			}
+			iconView.setImageTintList(ColorStateList.valueOf(drawerIconColor));
 		}
 		TextView textView = makeCommonTextView(false);
 		linearLayout.addView(textView, new LinearLayout.LayoutParams(0, size, 1));
@@ -1276,10 +1237,8 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 			ImageView closeView = new ImageView(context);
 			closeView.setScaleType(ImageView.ScaleType.CENTER);
 			closeView.setImageResource(ResourceUtils.getResourceId(context, R.attr.iconButtonCancel, 0));
-			if (C.API_LOLLIPOP) {
-				closeView.setImageTintList(ResourceUtils.getColorStateList(closeView.getContext(),
-						android.R.attr.textColorPrimary));
-			}
+			closeView.setImageTintList(ResourceUtils.getColorStateList(closeView.getContext(),
+					android.R.attr.textColorPrimary));
 			closeView.setBackgroundResource(ResourceUtils.getResourceId(context,
 					android.R.attr.borderlessButtonStyle, android.R.attr.background, 0));
 			linearLayout.addView(closeView, size, size);
@@ -1289,29 +1248,15 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		int layoutRightDp = 0;
 		int textLeftDp;
 		int textRightDp;
-		if (C.API_LOLLIPOP) {
-			textLeftDp = 16;
-			textRightDp = 16;
-			if (viewType.icon) {
-				layoutLeftDp = 16;
-				textLeftDp = 32;
-			}
-			if (viewType.watcher || viewType.closeable) {
-				layoutRightDp = 4;
-				textRightDp = 8;
-			}
-		} else {
-			textLeftDp = 8;
+		textLeftDp = 16;
+		textRightDp = 16;
+		if (viewType.icon) {
+			layoutLeftDp = 16;
+			textLeftDp = 32;
+		}
+		if (viewType.watcher || viewType.closeable) {
+			layoutRightDp = 4;
 			textRightDp = 8;
-			if (viewType.icon) {
-				layoutLeftDp = 8;
-				textLeftDp = 6;
-				textView.setAllCaps(true);
-			}
-			if (viewType.watcher || viewType.closeable) {
-				layoutRightDp = 0;
-				textRightDp = 0;
-			}
 		}
 		linearLayout.setPadding((int) (layoutLeftDp * density), 0, (int) (layoutRightDp * density), 0);
 		textView.setPadding((int) (textLeftDp * density), 0, (int) (textRightDp * density), 0);
@@ -1322,68 +1267,33 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	}
 
 	private ViewHolder createSection(ViewGroup parent, boolean button, float density) {
-		if (C.API_LOLLIPOP) {
-			LinearLayout linearLayout = new LinearLayout(context);
-			linearLayout.setOrientation(LinearLayout.VERTICAL);
-			LinearLayout linearLayout2 = new LinearLayout(context);
-			linearLayout2.setOrientation(LinearLayout.HORIZONTAL);
-			linearLayout.addView(linearLayout2, LinearLayout.LayoutParams.MATCH_PARENT,
-					LinearLayout.LayoutParams.WRAP_CONTENT);
-			TextView textView = makeCommonTextView(true);
-			LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams
-					(0, (int) (32f * density), 1);
-			layoutParams.setMargins((int) (16f * density), (int) (8f * density),
-					(int) (16f * density), (int) (8f * density));
-			linearLayout2.addView(textView, layoutParams);
-			ImageView imageView = null;
-			if (button) {
-				imageView = new ImageView(context);
-				imageView.setScaleType(ImageView.ScaleType.CENTER);
-				imageView.setBackgroundResource(ResourceUtils.getResourceId(context,
-						android.R.attr.borderlessButtonStyle, android.R.attr.background, 0));
-				imageView.setOnClickListener(sectionButtonListener);
-				imageView.setImageTintList(textView.getTextColors());
-				int size = (int) (48f * density);
-				layoutParams = new LinearLayout.LayoutParams(size, size);
-				layoutParams.rightMargin = (int) (4f * density);
-				linearLayout2.addView(imageView, layoutParams);
-			}
-			linearLayout.setLayoutParams(new RecyclerView.LayoutParams(RecyclerView.LayoutParams.MATCH_PARENT,
-					RecyclerView.LayoutParams.WRAP_CONTENT));
-			return new ViewHolder(linearLayout, imageView, textView, null);
-		} else {
-			View view = LayoutInflater.from(context).inflate(ResourceUtils.getResourceId(context,
-					android.R.attr.preferenceCategoryStyle, android.R.attr.layout,
-					android.R.layout.preference_category), parent, false);
-			TextView textView = view.findViewById(android.R.id.title);
-			ImageView imageView = null;
-			if (button) {
-				int measureSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
-				view.measure(measureSpec, measureSpec);
-				int size = view.getMeasuredHeight();
-				if (size == 0) {
-					size = (int) (32f * density);
-				}
-				FrameLayout frameLayout = new FrameLayout(context);
-				frameLayout.addView(view);
-				view = frameLayout;
-				imageView = new ImageView(context);
-				imageView.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
-				int padding = (int) (4f * density);
-				imageView.setPadding(padding, padding, padding, padding);
-				frameLayout.addView(imageView, new FrameLayout.LayoutParams
-						((int) (48f * density), size, Gravity.END));
-				View buttonView = new View(context);
-				buttonView.setBackgroundResource(ResourceUtils.getResourceId(context,
-						android.R.attr.selectableItemBackground, 0));
-				buttonView.setOnClickListener(sectionButtonListener);
-				frameLayout.addView(buttonView, FrameLayout.LayoutParams.MATCH_PARENT,
-						FrameLayout.LayoutParams.MATCH_PARENT);
-			}
-			view.setLayoutParams(new RecyclerView.LayoutParams(RecyclerView.LayoutParams.MATCH_PARENT,
-					RecyclerView.LayoutParams.WRAP_CONTENT));
-			return new ViewHolder(view, imageView, textView, null);
+		LinearLayout linearLayout = new LinearLayout(context);
+		linearLayout.setOrientation(LinearLayout.VERTICAL);
+		LinearLayout linearLayout2 = new LinearLayout(context);
+		linearLayout2.setOrientation(LinearLayout.HORIZONTAL);
+		linearLayout.addView(linearLayout2, LinearLayout.LayoutParams.MATCH_PARENT,
+				LinearLayout.LayoutParams.WRAP_CONTENT);
+		TextView textView = makeCommonTextView(true);
+		LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(0, (int) (32f * density), 1);
+		layoutParams.setMargins((int) (16f * density), (int) (8f * density),
+				(int) (16f * density), (int) (8f * density));
+		linearLayout2.addView(textView, layoutParams);
+		ImageView imageView = null;
+		if (button) {
+			imageView = new ImageView(context);
+			imageView.setScaleType(ImageView.ScaleType.CENTER);
+			imageView.setBackgroundResource(ResourceUtils.getResourceId(context,
+					android.R.attr.borderlessButtonStyle, android.R.attr.background, 0));
+			imageView.setOnClickListener(sectionButtonListener);
+			imageView.setImageTintList(textView.getTextColors());
+			int size = (int) (48f * density);
+			layoutParams = new LinearLayout.LayoutParams(size, size);
+			layoutParams.rightMargin = (int) (4f * density);
+			linearLayout2.addView(imageView, layoutParams);
 		}
+		linearLayout.setLayoutParams(new RecyclerView.LayoutParams(RecyclerView.LayoutParams.MATCH_PARENT,
+				RecyclerView.LayoutParams.WRAP_CONTENT));
+		return new ViewHolder(linearLayout, imageView, textView, null);
 	}
 
 	private final ListViewUtils.ClickCallback<Void, ViewHolder> clickCallback = (holder, position, item, longClick) -> {
@@ -1491,7 +1401,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 					originalTextColors = text.getTextColors();
 				}
 				text.setTextColor(activeColor);
-				if (C.API_LOLLIPOP && icon != null) {
+				if (icon != null) {
 					if (originalTintColors == null) {
 						originalTintColors = icon.getImageTintList();
 					}
@@ -1501,7 +1411,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 				if (originalTextColors != null) {
 					text.setTextColor(originalTextColors);
 				}
-				if (C.API_LOLLIPOP && icon != null && originalTintColors != null) {
+				if (icon != null && originalTintColors != null) {
 					icon.setImageTintList(originalTintColors);
 				}
 			}
@@ -1569,32 +1479,17 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	private DividerItemDecoration.Configuration configureDivider
 			(DividerItemDecoration.Configuration configuration, int position) {
 		float density = ResourceUtils.obtainDensity(context);
-		if (C.API_LOLLIPOP) {
-			int padding = (int) (8f * density);
-			ListItem current = getItem(position);
-			ListItem next = position + 1 < getItemCount() ? getItem(position + 1) : null;
-			if (next == null) {
-				return configuration.need(false).vertical(0, 0);
-			} else if (next.type == ListItem.Type.SECTION) {
-				return configuration.need(true).vertical(padding, 0);
-			} else if (needDivider(current, next)) {
-				return configuration.need(true).vertical(padding, padding);
-			} else {
-				return configuration.need(false).vertical(0, 0);
-			}
+		int padding = (int) (8f * density);
+		ListItem current = getItem(position);
+		ListItem next = position + 1 < getItemCount() ? getItem(position + 1) : null;
+		if (next == null) {
+			return configuration.need(false).vertical(0, 0);
+		} else if (next.type == ListItem.Type.SECTION) {
+			return configuration.need(true).vertical(padding, 0);
+		} else if (needDivider(current, next)) {
+			return configuration.need(true).vertical(padding, padding);
 		} else {
-			int height = (int) (2f * density);
-			ListItem current = getItem(position);
-			ListItem next = position + 1 < getItemCount() ? getItem(position + 1) : null;
-			if (current.type == ListItem.Type.SECTION || next != null && next.type == ListItem.Type.SECTION) {
-				return configuration.need(false).height(0);
-			} else if (next == null) {
-				return configuration.need(true).height(0);
-			} else if (needDivider(current, next)) {
-				return configuration.need(true).height(height);
-			} else {
-				return configuration.need(true).height(0);
-			}
+			return configuration.need(false).vertical(0, 0);
 		}
 	}
 

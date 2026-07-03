@@ -16,7 +16,6 @@ import android.widget.ListView;
 import androidx.annotation.NonNull;
 import androidx.fragment.app.DialogFragment;
 import chan.content.ChanConfiguration;
-import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.model.FileHolder;
 import com.mishiranu.dashchan.content.storage.DraftsStorage;
@@ -144,9 +143,7 @@ public class AttachmentOptionsDialog extends DialogFragment implements AdapterVi
 				LinearLayout.LayoutParams.WRAP_CONTENT);
 		listView.setChoiceMode(ListView.CHOICE_MODE_MULTIPLE);
 		int resId = ResourceUtils.obtainAlertDialogLayoutResId(activity, ResourceUtils.DialogLayout.MULTI_CHOICE);
-		if (C.API_LOLLIPOP) {
-			listView.setDividerHeight(0);
-		}
+		listView.setDividerHeight(0);
 		ItemsAdapter adapter = new ItemsAdapter(activity, resId, items);
 		listView.setAdapter(adapter);
 		for (int i = 0; i < optionItems.size(); i++) {

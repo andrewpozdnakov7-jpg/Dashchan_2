@@ -23,7 +23,6 @@ import androidx.annotation.NonNull;
 import androidx.fragment.app.FragmentManager;
 import chan.content.Chan;
 import chan.util.StringUtils;
-import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.AdvancedPreferences;
 import com.mishiranu.dashchan.content.Preferences;
@@ -130,9 +129,7 @@ public class VideoUnit {
 	}
 
 	public void onApplyWindowInsets(int left, int right, int bottom) {
-		if (C.API_LOLLIPOP) {
-			controlsView.setPadding(left, 0, right, bottom);
-		}
+		controlsView.setPadding(left, 0, right, bottom);
 	}
 
 	public boolean isInitialized() {
@@ -293,9 +290,7 @@ public class VideoUnit {
 			timeTextView = new TextView(context, null, android.R.attr.textAppearanceListItem);
 			ViewUtils.setTextSizeScaled(timeTextView, 14);
 			timeTextView.setGravity(Gravity.CENTER_HORIZONTAL);
-			if (C.API_LOLLIPOP) {
-				timeTextView.setTypeface(ResourceUtils.TYPEFACE_MEDIUM);
-			}
+			timeTextView.setTypeface(ResourceUtils.TYPEFACE_MEDIUM);
 			if (oldTimeText != null) {
 				timeTextView.setText(oldTimeText);
 			}
@@ -303,9 +298,7 @@ public class VideoUnit {
 			totalTimeTextView = new TextView(context, null, android.R.attr.textAppearanceListItem);
 			ViewUtils.setTextSizeScaled(totalTimeTextView, 14);
 			totalTimeTextView.setGravity(Gravity.CENTER_HORIZONTAL);
-			if (C.API_LOLLIPOP) {
-				totalTimeTextView.setTypeface(ResourceUtils.TYPEFACE_MEDIUM);
-			}
+			totalTimeTextView.setTypeface(ResourceUtils.TYPEFACE_MEDIUM);
 
 			int oldSecondaryProgress = seekBar != null ? seekBar.getSecondaryProgress() : -1;
 			seekBar = new SeekBar(context);
@@ -358,9 +351,7 @@ public class VideoUnit {
 				ImageView imageView = new ImageView(context);
 				imageView.setImageDrawable(ResourceUtils.getDrawable(context, R.attr.iconActionVolumeOff, 0));
 				imageView.setScaleType(ImageView.ScaleType.CENTER);
-				if (C.API_LOLLIPOP) {
-					imageView.setImageAlpha(0x99);
-				}
+				imageView.setImageAlpha(0x99);
 				configurationView.addView(imageView, (int) (48f * density), (int) (48f * density));
 			}
 			long duration = player.getDuration();
@@ -480,11 +471,28 @@ public class VideoUnit {
 			String pixelFormat = metadata.get("pixel_format");
 			String surfaceFormat = metadata.get("surface_format");
 			String frameConversion = metadata.get("frame_conversion");
+			String playerFfmpeg = metadata.get("player_ffmpeg");
+			String playerLibavformat = metadata.get("player_libavformat");
+			String playerBuild = metadata.get("player_build");
+			String deviceAbis = metadata.get("device_abis");
 			String audioFormat = metadata.get("audio_format");
 			String channels = metadata.get("channels");
 			String sampleRate = metadata.get("sample_rate");
 			String encoder = metadata.get("encoder");
 			String title = metadata.get("title");
+			if (playerFfmpeg != null) {
+				layout.add("FFmpeg", playerFfmpeg);
+			}
+			if (playerLibavformat != null) {
+				layout.add("libavformat", playerLibavformat);
+			}
+			if (playerBuild != null) {
+				layout.add("Build", playerBuild);
+			}
+			if (deviceAbis != null) {
+				layout.add("Device ABIs", deviceAbis);
+			}
+			layout.addDivider();
 			if (videoFormat != null) {
 				layout.add("Video", videoFormat);
 			}

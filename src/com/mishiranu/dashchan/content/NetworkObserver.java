@@ -1,18 +1,13 @@
 package com.mishiranu.dashchan.content;
 
 import android.content.Context;
-import android.content.IntentFilter;
 import android.net.ConnectivityManager;
 import android.net.Network;
 import android.net.NetworkCapabilities;
-import android.os.Build;
 import android.os.SystemClock;
 import android.telephony.TelephonyManager;
 import android.util.Pair;
 import androidx.annotation.NonNull;
-import androidx.annotation.RequiresApi;
-import com.mishiranu.dashchan.C;
-import com.mishiranu.dashchan.util.AndroidUtils;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
 
 public class NetworkObserver {
@@ -34,34 +29,26 @@ public class NetworkObserver {
 		Context context = MainApplication.getInstance();
 		connectivityManager = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
 		onActiveNetworkChange();
-		if (C.API_NOUGAT) {
-			Runnable onActiveNetworkChange = NetworkObserver.this::onActiveNetworkChange;
-			connectivityManager.registerDefaultNetworkCallback(new ConnectivityManager.NetworkCallback() {
-				private void handleChange() {
-					ConcurrentUtils.HANDLER.removeCallbacks(onActiveNetworkChange);
-					ConcurrentUtils.HANDLER.postDelayed(onActiveNetworkChange, 500L);
-				}
+		Runnable onActiveNetworkChange = NetworkObserver.this::onActiveNetworkChange;
+		connectivityManager.registerDefaultNetworkCallback(new ConnectivityManager.NetworkCallback() {
+			private void handleChange() {
+				ConcurrentUtils.HANDLER.removeCallbacks(onActiveNetworkChange);
+				ConcurrentUtils.HANDLER.postDelayed(onActiveNetworkChange, 500L);
+			}
 
-				@Override
-				public void onCapabilitiesChanged(@NonNull Network network,
-						@NonNull NetworkCapabilities networkCapabilities) {
-					handleChange();
-				}
+			@Override
+			public void onCapabilitiesChanged(@NonNull Network network,
+					@NonNull NetworkCapabilities networkCapabilities) {
+				handleChange();
+			}
 
-				@Override
-				public void onLost(@NonNull Network network) {
-					handleChange();
-				}
-			});
-		} else {
-			@SuppressWarnings("deprecation")
-			String action = ConnectivityManager.CONNECTIVITY_ACTION;
-			context.registerReceiver(AndroidUtils.createReceiver((r, c, i) -> onActiveNetworkChange()),
-					new IntentFilter(action));
-		}
+			@Override
+			public void onLost(@NonNull Network network) {
+				handleChange();
+			}
+		});
 	}
 
-	@RequiresApi(Build.VERSION_CODES.M)
 	private Pair<Network, NetworkCapabilities> getNetwork28() {
 		Network network = connectivityManager.getActiveNetwork();
 		if (network != null) {
@@ -82,11 +69,7 @@ public class NetworkObserver {
 			}
 			case MOBILE: {
 				if (SystemClock.elapsedRealtime() - last3GChecked >= 2000) {
-					if (C.API_PIE) {
-						update3GConnected28();
-					} else {
-						update3GConnectedPre28();
-					}
+					update3GConnected28();
 					last3GChecked = SystemClock.elapsedRealtime();
 				}
 				return last3GAvailable;
@@ -99,7 +82,6 @@ public class NetworkObserver {
 	}
 
 	@SuppressWarnings("deprecation")
-	@RequiresApi(Build.VERSION_CODES.M)
 	private void update3GConnected28() {
 		boolean is3GAvailable = false;
 		Pair<Network, NetworkCapabilities> pair = getNetwork28();
@@ -111,21 +93,7 @@ public class NetworkObserver {
 		last3GAvailable = is3GAvailable;
 	}
 
-	@SuppressWarnings("deprecation")
-	private void update3GConnectedPre28() {
-		boolean is3GAvailable = false;
-		android.net.NetworkInfo networkInfo = connectivityManager.getActiveNetworkInfo();
-		if (networkInfo != null && networkInfo.isConnected()) {
-			int type = networkInfo.getType();
-			if (type == ConnectivityManager.TYPE_MOBILE ||
-					type == ConnectivityManager.TYPE_MOBILE_DUN) {
-				is3GAvailable = isNetworkType3G(networkInfo.getSubtype());
-			}
-		}
-		last3GAvailable = is3GAvailable;
-	}
-
-	@SuppressWarnings("DuplicateBranchesInSwitch")
+	@SuppressWarnings({"DuplicateBranchesInSwitch", "deprecation"})
 	private boolean isNetworkType3G(int type) {
 		switch (type) {
 			case TelephonyManager.NETWORK_TYPE_UMTS:
@@ -157,45 +125,16 @@ public class NetworkObserver {
 	}
 
 	private void onActiveNetworkChange() {
-		if (C.API_PIE) {
-			updateNetworkState28();
-		} else {
-			updateNetworkStatePre28();
-		}
+		updateNetworkState28();
 		last3GChecked = 0L;
 	}
 
-	@RequiresApi(Build.VERSION_CODES.P)
 	private void updateNetworkState28() {
 		NetworkState networkState = NetworkState.UNDEFINED;
 		Pair<Network, NetworkCapabilities> pair = getNetwork28();
 		if (pair != null) {
 			networkState = pair.second.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
 					? NetworkState.MOBILE : NetworkState.WIFI;
-		}
-		this.networkState = networkState;
-	}
-
-	@SuppressWarnings("deprecation")
-	private void updateNetworkStatePre28() {
-		NetworkState networkState = NetworkState.UNDEFINED;
-		android.net.NetworkInfo networkInfo = connectivityManager.getActiveNetworkInfo();
-		if (networkInfo != null && networkInfo.isConnected()) {
-			int type = networkInfo.getType();
-			switch (type) {
-				case ConnectivityManager.TYPE_WIFI:
-				case ConnectivityManager.TYPE_WIMAX:
-				case ConnectivityManager.TYPE_BLUETOOTH:
-				case ConnectivityManager.TYPE_ETHERNET: {
-					networkState = NetworkState.WIFI;
-					break;
-				}
-				case ConnectivityManager.TYPE_MOBILE:
-				case ConnectivityManager.TYPE_MOBILE_DUN: {
-					networkState = NetworkState.MOBILE;
-					break;
-				}
-			}
 		}
 		this.networkState = networkState;
 	}

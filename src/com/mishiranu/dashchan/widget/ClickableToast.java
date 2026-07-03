@@ -29,11 +29,9 @@ import androidx.lifecycle.Lifecycle;
 import androidx.lifecycle.LifecycleObserver;
 import androidx.lifecycle.LifecycleOwner;
 import androidx.lifecycle.OnLifecycleEvent;
-import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.model.ErrorItem;
 import com.mishiranu.dashchan.graphics.BaseDrawable;
-import com.mishiranu.dashchan.util.AndroidUtils;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
 import com.mishiranu.dashchan.util.FlagUtils;
 import com.mishiranu.dashchan.util.GraphicsUtils;
@@ -328,24 +326,9 @@ public class ClickableToast implements LifecycleObserver {
 
 	private boolean addContainerToWindowManager() {
 		boolean added = false;
-		if (C.API_OREO) {
-			// TYPE_APPLICATION_OVERLAY requires SYSTEM_ALERT_WINDOW permission
-			if (Settings.canDrawOverlays(activity)) {
-				added = addContainerToWindowManager(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY);
-			}
-		} else if (C.API_NOUGAT_MR1) {
-			// TYPE_TOAST is prohibited on 7.1 when target API is > 7.1 (excuse me, wtf?)
-			// TYPE_PHONE requires SYSTEM_ALERT_WINDOW permission
-			if (Settings.canDrawOverlays(activity)) {
-				@SuppressWarnings("deprecation")
-				int type = WindowManager.LayoutParams.TYPE_PHONE;
-				added = addContainerToWindowManager(type);
-			}
-		} else if (C.API_LOLLIPOP && !AndroidUtils.IS_MIUI) {
-			// TYPE_TOAST works well only on Android 5.0-7.1, but doesn't work on MIUI
-			@SuppressWarnings("deprecation")
-			int type = WindowManager.LayoutParams.TYPE_TOAST;
-			added = addContainerToWindowManager(type);
+		// TYPE_APPLICATION_OVERLAY requires SYSTEM_ALERT_WINDOW permission.
+		if (Settings.canDrawOverlays(activity)) {
+			added = addContainerToWindowManager(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY);
 		}
 		if (!added) {
 			// TYPE_APPLICATION can't even properly overlay dialogs, used as fallback option

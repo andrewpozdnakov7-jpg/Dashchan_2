@@ -10,6 +10,7 @@ import androidx.fragment.app.DialogFragment;
 import chan.content.Chan;
 import chan.content.ChanLocator;
 import com.mishiranu.dashchan.R;
+import com.mishiranu.dashchan.util.AndroidUtils;
 import com.mishiranu.dashchan.util.NavigationUtils;
 
 public class SearchImageDialog extends DialogFragment {
@@ -30,7 +31,7 @@ public class SearchImageDialog extends DialogFragment {
 	public Dialog onCreateDialog(Bundle savedInstanceState) {
 		Context context = requireContext();
 		String chanName = requireArguments().getString(EXTRA_CHAN_NAME);
-		Uri uri = requireArguments().getParcelable(EXTRA_URI);
+		Uri uri = AndroidUtils.getParcelable(requireArguments(), EXTRA_URI, Uri.class);
 		ChanLocator locator = Chan.getFallback().locator;
 		String imageUriString = Chan.get(chanName).locator.convert(uri).toString();
 		return new DialogMenu(new ContextThemeWrapper(context, R.style.Theme_Gallery))

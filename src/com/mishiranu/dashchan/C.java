@@ -1,6 +1,5 @@
 package com.mishiranu.dashchan;
 
-import android.os.Build;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -8,22 +7,6 @@ import java.util.Map;
 import java.util.Set;
 
 public class C {
-	public static final boolean API_JELLY_BEAN_MR1 = Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1;
-	public static final boolean API_JELLY_BEAN_MR2 = Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2;
-	public static final boolean API_KITKAT = Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT;
-	public static final boolean API_LOLLIPOP = Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP;
-	public static final boolean API_LOLLIPOP_MR1 = Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1;
-	public static final boolean API_MARSHMALLOW = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M;
-	public static final boolean API_NOUGAT = Build.VERSION.SDK_INT >= Build.VERSION_CODES.N;
-	public static final boolean API_NOUGAT_MR1 = Build.VERSION.SDK_INT >= Build.VERSION_CODES.N_MR1;
-	public static final boolean API_OREO = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O;
-	public static final boolean API_OREO_MR1 = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1;
-	public static final boolean API_PIE = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P;
-	public static final boolean API_Q = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q;
-	public static final boolean API_R = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R;
-
-	public static final boolean USE_SAF = API_MARSHMALLOW;
-
 	public static final Set<String> IMAGE_EXTENSIONS;
 	public static final Set<String> AUDIO_EXTENSIONS;
 	public static final Set<String> VIDEO_EXTENSIONS;
@@ -31,8 +14,6 @@ public class C {
 	public static final Set<String> OPENABLE_VIDEO_EXTENSIONS;
 
 	public static final Map<String, String> EXTENSION_TRANSFORMATION;
-
-	public static final boolean WEB_VIEW_BITMAP_DECODER_SUPPORTED;
 
 	@SafeVarargs
 	private static <T> Set<T> immutableSet(T... items) {
@@ -46,9 +27,7 @@ public class C {
 	}
 
 	static {
-		WEB_VIEW_BITMAP_DECODER_SUPPORTED = API_KITKAT;
-		IMAGE_EXTENSIONS = immutableSet("jpg", "jpe", "jpeg", "png", "apng", "gif", "webp", "bmp",
-				WEB_VIEW_BITMAP_DECODER_SUPPORTED ? "svg" : null);
+		IMAGE_EXTENSIONS = immutableSet("jpg", "jpe", "jpeg", "png", "apng", "gif", "webp", "bmp", "svg");
 		AUDIO_EXTENSIONS = immutableSet("mp3", "ogg", "flac", "wav");
 		VIDEO_EXTENSIONS = immutableSet("webm", "mkv", "mp4");
 		OPENABLE_VIDEO_EXTENSIONS = immutableSet("webm", "mkv", "mp4");

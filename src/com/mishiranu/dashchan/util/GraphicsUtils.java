@@ -5,6 +5,7 @@ import android.content.Context;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.BitmapRegionDecoder;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.ColorMatrixColorFilter;
@@ -12,21 +13,15 @@ import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
-import android.renderscript.Allocation;
-import android.renderscript.RenderScript;
 import android.util.Base64;
 import android.util.Pair;
 import android.view.Gravity;
 import androidx.core.graphics.ColorUtils;
-import com.mishiranu.dashchan.C;
-import com.mishiranu.dashchan.content.MainApplication;
 import com.mishiranu.dashchan.content.model.FileHolder;
-import com.mishiranu.dashchan.graphics.ScriptC_GammaCorrection;
 import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Random;
 
@@ -66,6 +61,12 @@ public class GraphicsUtils {
 		Bitmap bitmap = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.length);
 		int pixel = bitmap.getPixel(0, 0);
 		SKIA_SUPPORTS_GAMMA_CORRECTION = pixel != 0xff7f7f7f;
+	}
+
+	@SuppressWarnings("deprecation")
+	public static BitmapRegionDecoder createBitmapRegionDecoder(InputStream input) throws IOException {
+		// Keep the existing stream decoder path; ImageDecoder migration needs image/media regression testing.
+		return BitmapRegionDecoder.newInstance(input, false);
 	}
 
 	public static int modifyColorGain(int color, float gain) {
@@ -137,45 +138,8 @@ public class GraphicsUtils {
 		}
 	}
 
-	private static final Field FIELD_GRADIENT_STATE;
-	private static final Field FIELD_GRADIENT_STATE_RADIUS;
-
-	static {
-		Field gradientStateField = null;
-		Field gradientStateRadiusField = null;
-		if (!C.API_NOUGAT) {
-			Field field;
-			try {
-				field = GradientDrawable.class.getDeclaredField("mGradientState");
-				field.setAccessible(true);
-				gradientStateField = field;
-				field = field.getType().getDeclaredField("mRadius");
-				field.setAccessible(true);
-				gradientStateRadiusField = field;
-			} catch (Exception e) {
-				e.printStackTrace();
-				gradientStateField = null;
-				gradientStateRadiusField = null;
-			}
-		}
-		FIELD_GRADIENT_STATE = gradientStateField;
-		FIELD_GRADIENT_STATE_RADIUS = gradientStateRadiusField;
-	}
-
 	public static float getCornerRadius(GradientDrawable drawable) {
-		if (C.API_NOUGAT) {
-			return drawable.getCornerRadius();
-		} else if (FIELD_GRADIENT_STATE != null && FIELD_GRADIENT_STATE_RADIUS != null) {
-			try {
-				Object state = FIELD_GRADIENT_STATE.get(drawable);
-				return FIELD_GRADIENT_STATE_RADIUS.getFloat(state);
-			} catch (Exception e) {
-				e.printStackTrace();
-				return 0f;
-			}
-		} else {
-			return 0f;
-		}
+		return drawable.getCornerRadius();
 	}
 
 	public static Bitmap reduceThumbnailSize(Resources resources, Bitmap bitmap) {
@@ -494,34 +458,23 @@ public class GraphicsUtils {
 		if (bitmap == null) {
 			return null;
 		}
-		if (C.API_LOLLIPOP) {
-			RenderScript renderScript = RenderScript.create(MainApplication.getInstance());
-			Allocation allocation = Allocation.createFromBitmap(renderScript, bitmap);
-			ScriptC_GammaCorrection script = new ScriptC_GammaCorrection(renderScript);
-			script.set_gammaCorrection(gammaCorrection);
-			script.forEach_apply(allocation);
-			allocation.copyTo(bitmap);
-			allocation.destroy();
-			renderScript.destroy();
-		} else {
-			int width = bitmap.getWidth();
-			int height = bitmap.getHeight();
-			int[] pixels = new int[width];
-			for (int y = 0; y < height; y++) {
-				bitmap.getPixels(pixels, 0, width, 0, y, width, 1);
-				for (int x = 0; x < width; x++) {
-					int color = pixels[x];
-					float red = Color.red(color) / 255f;
-					float green = Color.green(color) / 255f;
-					float blue = Color.blue(color) / 255f;
-					red = (float) Math.pow(red, gammaCorrection);
-					green = (float) Math.pow(green, gammaCorrection);
-					blue = (float) Math.pow(blue, gammaCorrection);
-					pixels[x] = Color.argb(Color.alpha(color), (int) (red * 255 + 0.5f),
-							(int) (green * 255 + 0.5f), (int) (blue * 255 + 0.5f));
-				}
-				bitmap.setPixels(pixels, 0, width, 0, y, width, 1);
+		int width = bitmap.getWidth();
+		int height = bitmap.getHeight();
+		int[] pixels = new int[width];
+		for (int y = 0; y < height; y++) {
+			bitmap.getPixels(pixels, 0, width, 0, y, width, 1);
+			for (int x = 0; x < width; x++) {
+				int color = pixels[x];
+				float red = Color.red(color) / 255f;
+				float green = Color.green(color) / 255f;
+				float blue = Color.blue(color) / 255f;
+				red = (float) Math.pow(red, gammaCorrection);
+				green = (float) Math.pow(green, gammaCorrection);
+				blue = (float) Math.pow(blue, gammaCorrection);
+				pixels[x] = Color.argb(Color.alpha(color), (int) (red * 255 + 0.5f),
+						(int) (green * 255 + 0.5f), (int) (blue * 255 + 0.5f));
 			}
+			bitmap.setPixels(pixels, 0, width, 0, y, width, 1);
 		}
 		return bitmap;
 	}

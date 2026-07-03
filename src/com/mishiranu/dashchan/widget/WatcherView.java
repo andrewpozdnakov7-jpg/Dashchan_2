@@ -8,11 +8,11 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Rect;
 import android.graphics.RectF;
+import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.FrameLayout;
 import android.widget.ProgressBar;
-import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.content.service.WatcherService;
 import com.mishiranu.dashchan.util.ResourceUtils;
 
@@ -42,9 +42,7 @@ public class WatcherView extends FrameLayout {
 
 		setBackgroundResource(ResourceUtils.getResourceId(context, android.R.attr.selectableItemBackground, 0));
 		progressBar = new ProgressBar(context, null, android.R.attr.progressBarStyleSmall);
-		if (C.API_LOLLIPOP) {
-			progressBar.setIndeterminateTintList(ColorStateList.valueOf(Color.WHITE));
-		}
+		progressBar.setIndeterminateTintList(ColorStateList.valueOf(Color.WHITE));
 		addView(progressBar, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT,
 				FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER));
 		this.colorSet = colorSet;
@@ -58,16 +56,11 @@ public class WatcherView extends FrameLayout {
 	@Override
 	public void draw(Canvas canvas) {
 		float density = ResourceUtils.obtainDensity(this);
-		if (C.API_LOLLIPOP) {
-			int paddingHorizontal = (int) (8f * density);
-			int paddingVertical = (int) (12f * density);
-			rectF.set(paddingHorizontal, paddingVertical, getWidth() - paddingHorizontal,
-					getHeight() - paddingVertical);
-		} else {
-			int padding = (int) (8f * density);
-			rectF.set(padding, padding, getWidth() - padding, getHeight() - padding);
-		}
-		int cornerRadius = C.API_LOLLIPOP ? (int) density : (int) (4f * density);
+		int paddingHorizontal = (int) (8f * density);
+		int paddingVertical = (int) (12f * density);
+		rectF.set(paddingHorizontal, paddingVertical, getWidth() - paddingHorizontal,
+				getHeight() - paddingVertical);
+		int cornerRadius = (int) density;
 		paint.setColor(color);
 		canvas.drawRoundRect(rectF, cornerRadius, cornerRadius, paint);
 		canvas.save();
@@ -75,12 +68,12 @@ public class WatcherView extends FrameLayout {
 		super.draw(canvas);
 
 		if (progressBar.getVisibility() != View.VISIBLE) {
-			int fontSize = C.API_LOLLIPOP ? 12 : 16;
 			paint.setColor(Color.WHITE);
 			if (!hasNew) {
 				paint.setAlpha(0x99);
 			}
-			paint.setTextSize((int) (fontSize * getResources().getDisplayMetrics().scaledDensity + 0.5f));
+			paint.setTextSize((int) (TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 12,
+					getResources().getDisplayMetrics()) + 0.5f));
 			paint.setTextAlign(Paint.Align.CENTER);
 			paint.getTextBounds(text, 0, text.length(), rect);
 			canvas.drawText(text, getWidth() / 2f, (getHeight() + rect.height()) / 2f, paint);

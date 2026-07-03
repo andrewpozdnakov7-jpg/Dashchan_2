@@ -10,7 +10,6 @@ import android.graphics.Rect;
 import android.graphics.RectF;
 import android.view.View;
 import androidx.annotation.NonNull;
-import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.content.async.ExecutorTask;
 import com.mishiranu.dashchan.content.model.FileHolder;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
@@ -51,7 +50,7 @@ public class DecoderDrawable extends BaseDrawable {
 		if (!fileHolder.isImageRegionDecoderSupported()) {
 			throw new IOException("Decoder drawable is not supported");
 		}
-		decoder = BitmapRegionDecoder.newInstance(fileHolder.openInputStream(), false);
+		decoder = GraphicsUtils.createBitmapRegionDecoder(fileHolder.openInputStream());
 		width = fileHolder.getImageWidth();
 		height = fileHolder.getImageHeight();
 		rotation = fileHolder.getImageRotation();
@@ -250,12 +249,8 @@ public class DecoderDrawable extends BaseDrawable {
 			}
 		}
 
-		@SuppressWarnings("deprecation")
 		public void cancel() {
 			super.cancel();
-			if (!C.API_NOUGAT) {
-				options.mCancel = true;
-			}
 		}
 
 		@Override

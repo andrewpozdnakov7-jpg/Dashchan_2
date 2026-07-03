@@ -16,7 +16,6 @@ import androidx.annotation.NonNull;
 import androidx.core.view.ViewCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
-import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.util.ListViewUtils;
 import com.mishiranu.dashchan.util.ResourceUtils;
@@ -83,14 +82,11 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 
 		float density = ResourceUtils.obtainDensity(this);
 		Drawable thumbDrawable = ResourceUtils.getDrawable(getContext(), android.R.attr.fastScrollThumbDrawable, 0);
-		this.thumbDrawable = C.API_LOLLIPOP ? thumbDrawable : ListViewUtils
-				.colorizeListThumbDrawable4(getContext(), thumbDrawable);
-		if (C.API_LOLLIPOP) {
-			int[][] states = {{android.R.attr.state_enabled, android.R.attr.state_pressed},
-					{android.R.attr.state_enabled}};
-			int[] colors = {theme.accent, theme.controlNormal21};
-			thumbDrawable.setTintList(new ColorStateList(states, colors));
-		}
+		this.thumbDrawable = thumbDrawable;
+		int[][] states = {{android.R.attr.state_enabled, android.R.attr.state_pressed},
+				{android.R.attr.state_enabled}};
+		int[] colors = {theme.accent, theme.controlNormal21};
+		thumbDrawable.setTintList(new ColorStateList(states, colors));
 		trackDrawable = ResourceUtils.getDrawable(getContext(), android.R.attr.fastScrollTrackDrawable, 0);
 		touchSlop = ViewConfiguration.get(getContext()).getScaledTouchSlop();
 		minTrackSize = (int) (16f * density);

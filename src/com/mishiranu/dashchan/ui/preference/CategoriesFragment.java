@@ -7,7 +7,6 @@ import android.view.View;
 import androidx.annotation.NonNull;
 import chan.content.Chan;
 import chan.content.ChanManager;
-import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.ui.FragmentHandler;
@@ -81,7 +80,7 @@ public class CategoriesFragment extends PreferenceFragment {
 	public void onResume() {
 		super.onResume();
 
-		boolean hasIssues = C.API_NOUGAT_MR1 && !Settings.canDrawOverlays(requireContext());
+		boolean hasIssues = !Settings.canDrawOverlays(requireContext());
 		setCategoryTint(compatibilityPreference, hasIssues ? ColorStateList.valueOf(ResourceUtils
 				.getColor(requireContext(), R.attr.colorTextError)) : null);
 	}

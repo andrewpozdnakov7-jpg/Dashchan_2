@@ -1,9 +1,13 @@
 /*
 !/.gitattributes
+!/.github
+!/.github/**
 !/.gitignore
 !/AndroidManifest.xml
 !/build.gradle
 !/COPYING
+!/docs
+!/docs/**
 !/gradle
 !/gradle.properties
 !/gradlew
@@ -11,10 +15,13 @@
 !/icon.sh
 !/icon.svg
 !/jni
+!/keystore.properties.template
 !/lang
 !/metadata
 !/proguard-rules.pro
 !/README.md
 !/res
 !/src
+!/unitTests
+!/unitTests/**
 !/update

@@ -517,8 +517,122 @@
 			"changelog": false
 		},
 		{
+			"code": 1044,
+			"name": "3.1.4-r15.1",
+			"date": "29.06.2026",
+			"changelog": false
+		},
+		{
+			"code": 1045,
+			"name": "3.1.4-r15.2",
+			"date": "29.06.2026",
+			"changelog": false
+		},
+		{
+			"code": 1046,
+			"name": "3.1.4-r15.3",
+			"date": "29.06.2026",
+			"changelog": false
+		},
+		{
+			"code": 1047,
+			"name": "3.1.4-r15.4",
+			"date": "29.06.2026",
+			"changelog": false
+		},
+		{
+			"code": 1048,
+			"name": "3.1.4-r15.5",
+			"date": "29.06.2026",
+			"changelog": false
+		},
+		{
+			"code": 1049,
+			"name": "3.1.4-r15.6",
+			"date": "29.06.2026",
+			"changelog": false
+		},
+		{
+			"code": 1050,
+			"name": "3.1.4-r15.7",
+			"date": "29.06.2026",
+			"changelog": false
+		},
+		{
+			"code": 1051,
+			"name": "3.1.4-r15.8",
+			"date": "29.06.2026",
+			"changelog": false
+		},
+		{
+			"code": 1052,
+			"name": "3.1.4-r15.9",
+			"date": "29.06.2026",
+			"changelog": false
+		},
+		{
+			"code": 1053,
+			"name": "3.1.4-r15.10",
+			"date": "29.06.2026",
+			"changelog": false
+		},
+		{
+			"code": 1054,
+			"name": "3.1.4-r16",
+			"date": "29.06.2026",
+			"changelog": false
+		},
+		{
+			"code": 1055,
+			"name": "3.1.4-r17",
+			"date": "29.06.2026",
+			"changelog": false
+		},
+		{
+			"code": 1056,
+			"name": "3.1.4-r17",
+			"date": "30.06.2026",
+			"changelog": false
+		},
+		{
+			"code": 1057,
+			"name": "3.1.4-r17",
+			"date": "01.07.2026",
+			"changelog": false
+		},
+		{
+			"code": 1058,
+			"name": "3.1.4-r17",
+			"date": "01.07.2026",
+			"changelog": false
+		},
+		{
+			"code": 1059,
+			"name": "3.1.4-r17",
+			"date": "01.07.2026",
+			"changelog": false
+		},
+		{
+			"code": 1060,
+			"name": "3.1.4-r17",
+			"date": "01.07.2026",
+			"changelog": false
+		},
+		{
+			"code": 1061,
+			"name": "3.1.4-r17",
+			"date": "02.07.2026",
+			"changelog": false
+		},
+		{
+			"code": 1062,
+			"name": "3.1.4-r17",
+			"date": "02.07.2026",
+			"changelog": false
+		},
+		{
 			"code": 1063,
-			"name": "3.1.4-r17-dev9",
+			"name": "3.1.4-r17",
 			"date": "02.07.2026",
 			"changelog": false
 		}

@@ -10,14 +10,12 @@ import androidx.annotation.NonNull;
 import androidx.fragment.app.DialogFragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
-import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.ui.preference.core.Preference;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
 import com.mishiranu.dashchan.util.ListViewUtils;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.util.ViewUtils;
-import com.mishiranu.dashchan.widget.DividerItemDecoration;
 import com.mishiranu.dashchan.widget.PaddedRecyclerView;
 import com.mishiranu.dashchan.widget.ThemeEngine;
 import java.util.Collections;
@@ -49,12 +47,8 @@ public class ThemeDialog extends DialogFragment {
 		Context context = requireContext();
 		PaddedRecyclerView recyclerView = new PaddedRecyclerView(context);
 		recyclerView.setLayoutManager(new LinearLayoutManager(context));
-		if (C.API_LOLLIPOP) {
-			float density = ResourceUtils.obtainDensity(context);
-			recyclerView.setPadding(0, (int) (12f * density), 0, 0);
-		} else {
-			recyclerView.addItemDecoration(new DividerItemDecoration(context, (c, p) -> c.need(true)));
-		}
+		float density = ResourceUtils.obtainDensity(context);
+		recyclerView.setPadding(0, (int) (12f * density), 0, 0);
 		AlertDialog dialog = new AlertDialog.Builder(context)
 				.setTitle(R.string.change_theme)
 				.setView(recyclerView)
@@ -84,9 +78,6 @@ public class ThemeDialog extends DialogFragment {
 				float density = ResourceUtils.obtainDensity(itemView);
 				itemView.setPadding(itemView.getPaddingLeft() + (int) (8f * density), itemView.getPaddingTop(),
 						itemView.getPaddingRight() + (int) (8f * density), itemView.getPaddingBottom());
-				if (!C.API_LOLLIPOP) {
-					itemView.setMinimumHeight((int) (56f * density));
-				}
 			}
 		}
 

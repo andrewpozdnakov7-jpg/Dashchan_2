@@ -1,21 +1,16 @@
 package com.mishiranu.dashchan.widget;
 
-import android.annotation.TargetApi;
 import android.content.Context;
-import android.content.res.TypedArray;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.RectF;
-import android.graphics.drawable.Drawable;
-import android.os.Build;
 import android.os.SystemClock;
 import android.util.AttributeSet;
 import android.view.View;
 import android.view.animation.Interpolator;
 import android.view.animation.PathInterpolator;
-import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.util.AnimationUtils;
 import com.mishiranu.dashchan.util.ResourceUtils;
 
@@ -30,17 +25,14 @@ public class CircularProgressBar extends View {
 	private final Path path = new Path();
 	private final RectF rectF = new RectF();
 
-	private final Drawable indeterminateDrawable;
-	private final int indeterminateDuration;
-
 	private final Interpolator lollipopStartInterpolator;
 	private final Interpolator lollipopEndInterpolator;
 
 	private final long startTime = SystemClock.elapsedRealtime();
 
 	private Transient transientState = Transient.NONE;
-	private final float[] circularData = C.API_LOLLIPOP ? new float[2] : null;
-	private final float[] transientData = C.API_LOLLIPOP ? new float[2] : null;
+	private final float[] circularData = new float[2];
+	private final float[] transientData = new float[2];
 	private long timeTransientStart;
 
 	private boolean indeterminate = true;
@@ -55,33 +47,20 @@ public class CircularProgressBar extends View {
 		this(context, null);
 	}
 
-	@TargetApi(Build.VERSION_CODES.LOLLIPOP)
 	public CircularProgressBar(Context context, AttributeSet attrs) {
 		super(context, attrs);
 		paint = new Paint(Paint.ANTI_ALIAS_FLAG);
 		paint.setStyle(Paint.Style.STROKE);
 		paint.setStrokeCap(Paint.Cap.SQUARE);
 		paint.setStrokeJoin(Paint.Join.MITER);
-		if (C.API_LOLLIPOP) {
-			Path startPath = new Path();
-			startPath.lineTo(0.5f, 0f);
-			startPath.cubicTo(0.7f, 0f, 0.6f, 1f, 1f, 1f);
-			lollipopStartInterpolator = new PathInterpolator(startPath);
-			Path endPath = new Path();
-			endPath.cubicTo(0.2f, 0f, 0.1f, 1f, 0.5f, 1f);
-			endPath.lineTo(1f, 1f);
-			lollipopEndInterpolator = new PathInterpolator(endPath);
-			indeterminateDrawable = null;
-			indeterminateDuration = 0;
-		} else {
-			lollipopStartInterpolator = null;
-			lollipopEndInterpolator = null;
-			TypedArray typedArray = context.obtainStyledAttributes(android.R.style.Widget_Holo_ProgressBar_Large,
-					new int[] {android.R.attr.indeterminateDrawable, android.R.attr.indeterminateDuration});
-			indeterminateDrawable = typedArray.getDrawable(0);
-			indeterminateDuration = typedArray.getInteger(1, 3500);
-			typedArray.recycle();
-		}
+		Path startPath = new Path();
+		startPath.lineTo(0.5f, 0f);
+		startPath.cubicTo(0.7f, 0f, 0.6f, 1f, 1f, 1f);
+		lollipopStartInterpolator = new PathInterpolator(startPath);
+		Path endPath = new Path();
+		endPath.cubicTo(0.2f, 0f, 0.1f, 1f, 0.5f, 1f);
+		endPath.lineTo(1f, 1f);
+		lollipopEndInterpolator = new PathInterpolator(endPath);
 	}
 
 	@Override
@@ -196,31 +175,29 @@ public class CircularProgressBar extends View {
 	public void setIndeterminate(boolean indeterminate) {
 		if (this.indeterminate != indeterminate) {
 			long time = SystemClock.elapsedRealtime();
-			if (C.API_LOLLIPOP) {
-				boolean visible = this.visible && time - timeVisibilitySet > 50;
-				if (indeterminate) {
-					if (transientState == Transient.INDETERMINATE_PROGRESS) {
-						calculateLollipopTransientIndeterminateProgress();
-					} else {
-						calculateLollipopProgress();
-					}
-					if (visible) {
-						transientState = Transient.PROGRESS_INDETERMINATE;
-					}
+			boolean visible = this.visible && time - timeVisibilitySet > 50;
+			if (indeterminate) {
+				if (transientState == Transient.INDETERMINATE_PROGRESS) {
+					calculateLollipopTransientIndeterminateProgress();
 				} else {
-					if (transientState == Transient.PROGRESS_INDETERMINATE) {
-						calculateLollipopTransientProgressIndeterminate();
-					} else {
-						calculateLollipopIndeterminate(time);
-					}
-					if (visible) {
-						transientState = Transient.INDETERMINATE_PROGRESS;
-					}
-					timeProgressChange = time;
+					calculateLollipopProgress();
 				}
-				transientData[0] = circularData[0];
-				transientData[1] = circularData[1];
+				if (visible) {
+					transientState = Transient.PROGRESS_INDETERMINATE;
+				}
+			} else {
+				if (transientState == Transient.PROGRESS_INDETERMINATE) {
+					calculateLollipopTransientProgressIndeterminate();
+				} else {
+					calculateLollipopIndeterminate(time);
+				}
+				if (visible) {
+					transientState = Transient.INDETERMINATE_PROGRESS;
+				}
+				timeProgressChange = time;
 			}
+			transientData[0] = circularData[0];
+			transientData[1] = circularData[1];
 			if (!indeterminate) {
 				transientProgress = 0f;
 				progress = 0f;
@@ -285,111 +262,58 @@ public class CircularProgressBar extends View {
 			invalidate = true;
 		}
 
-		if (C.API_LOLLIPOP) {
-			float arcStart;
-			float arcLength;
-			if (transientState != Transient.NONE) {
-				boolean finished = true;
-				if (transientState == Transient.INDETERMINATE_PROGRESS) {
-					finished = calculateLollipopTransientIndeterminateProgress();
-				} else if (transientState == Transient.PROGRESS_INDETERMINATE) {
-					finished = calculateLollipopTransientProgressIndeterminate();
-				}
-				arcStart = circularData[0];
-				arcLength = circularData[1];
-				if (finished) {
-					transientState = Transient.NONE;
-					transientProgress = 0f;
-					timeProgressChange = time;
-				}
-				invalidate = true;
-			} else if (indeterminate) {
-				calculateLollipopIndeterminate(time);
-				arcStart = circularData[0];
-				arcLength = circularData[1];
-				invalidate = true;
-			} else {
-				invalidate |= calculateLollipopProgress();
-				arcStart = circularData[0];
-				arcLength = circularData[1];
+		float arcStart;
+		float arcLength;
+		if (transientState != Transient.NONE) {
+			boolean finished = true;
+			if (transientState == Transient.INDETERMINATE_PROGRESS) {
+				finished = calculateLollipopTransientIndeterminateProgress();
+			} else if (transientState == Transient.PROGRESS_INDETERMINATE) {
+				finished = calculateLollipopTransientProgressIndeterminate();
 			}
-			boolean useAlpha = true;
-			if (visible) {
-				arcStart -= 0.25f * (1f - visibilityValue);
-				arcLength = arcLength * alpha / 0xff;
-				useAlpha = false;
-			} else if (indeterminate || progress < 1f || transientProgress < 0.75f) {
-				// Note, that visibilityValue always changes from 0 to 1, instead of alpha
-				float newArcLength = arcLength * (1f - visibilityValue);
-				arcStart += arcLength - newArcLength;
-				arcLength = newArcLength;
-				if (!indeterminate) {
-					arcStart += 0.25f * visibilityValue;
-				}
-				useAlpha = false;
+			arcStart = circularData[0];
+			arcLength = circularData[1];
+			if (finished) {
+				transientState = Transient.NONE;
+				transientProgress = 0f;
+				timeProgressChange = time;
 			}
-			if (alpha > 0x00) {
-				canvas.save();
-				canvas.translate(width / 2f, height / 2f);
-				int radius = (int) (size * 38f / 48f / 2f + 0.5f);
-				rectF.set(-radius, -radius, radius, radius);
-				Paint paint = this.paint;
-				paint.setStrokeWidth(size / 48f * 4f);
-				paint.setColor(Color.argb(useAlpha ? alpha : 0xff, 0xff, 0xff, 0xff));
-				drawArc(canvas, paint, arcStart, arcLength);
-				canvas.restore();
-			}
+			invalidate = true;
+		} else if (indeterminate) {
+			calculateLollipopIndeterminate(time);
+			arcStart = circularData[0];
+			arcLength = circularData[1];
+			invalidate = true;
 		} else {
-			int interval = 200;
-			float transientValue = time - timeTransientStart >= interval ? 1f
-					: getValue(time, timeTransientStart, interval);
-			if (transientValue < 1f) {
-				invalidate = true;
+			invalidate |= calculateLollipopProgress();
+			arcStart = circularData[0];
+			arcLength = circularData[1];
+		}
+		boolean useAlpha = true;
+		if (visible) {
+			arcStart -= 0.25f * (1f - visibilityValue);
+			arcLength = arcLength * alpha / 0xff;
+			useAlpha = false;
+		} else if (indeterminate || progress < 1f || transientProgress < 0.75f) {
+			// Note, that visibilityValue always changes from 0 to 1, instead of alpha.
+			float newArcLength = arcLength * (1f - visibilityValue);
+			arcStart += arcLength - newArcLength;
+			arcLength = newArcLength;
+			if (!indeterminate) {
+				arcStart += 0.25f * visibilityValue;
 			}
-			int increasingAlpha = (int) (transientValue * alpha);
-			int decreasingAlpha = (int) ((1f - transientValue) * alpha);
-			int indeterminateAlpha;
-			int progressAlpha;
-			if (indeterminate) {
-				indeterminateAlpha = increasingAlpha;
-				progressAlpha = decreasingAlpha;
-			} else {
-				indeterminateAlpha = decreasingAlpha;
-				progressAlpha = increasingAlpha;
-			}
-			if (indeterminateAlpha > 0x00) {
-				int dWidth = indeterminateDrawable.getIntrinsicWidth();
-				int dHeight = indeterminateDrawable.getIntrinsicHeight();
-				int left = (width - dWidth) / 2;
-				int top = (height - dHeight) / 2;
-				indeterminateDrawable.setAlpha(indeterminateAlpha);
-				indeterminateDrawable.setBounds(left, top, left + dWidth, top + dHeight);
-				indeterminateDrawable.setLevel((int) (getValue(time, startTime, indeterminateDuration) * 10000));
-				indeterminateDrawable.draw(canvas);
-				invalidate = true;
-			}
-			if (progressAlpha > 0x00) {
-				canvas.save();
-				canvas.translate(width / 2f, height / 2f);
-				int radius = (int) (size / 2f * 0.75f + 0.5f);
-				rectF.set(-radius, -radius, radius, radius);
-				Paint paint = this.paint;
-				paint.setStrokeWidth(size * 0.065f);
-				paint.setColor(Color.argb(0x80 * progressAlpha / 0xff, 0x80, 0x80, 0x80));
-				drawArc(canvas, paint, 0f, 1f);
-				float progress = calculateTransientProgress();
-				if (progress > 0f) {
-					paint.setColor(Color.argb(0x80 * progressAlpha / 0xff, 0xff, 0xff, 0xff));
-					drawArc(canvas, paint, 0f, progress);
-				}
-				canvas.restore();
-				if (progress != this.progress) {
-					invalidate = true;
-				}
-			}
-			if (alpha == 0x00 && visible) {
-				invalidate = true;
-			}
+			useAlpha = false;
+		}
+		if (alpha > 0x00) {
+			canvas.save();
+			canvas.translate(width / 2f, height / 2f);
+			int radius = (int) (size * 38f / 48f / 2f + 0.5f);
+			rectF.set(-radius, -radius, radius, radius);
+			Paint paint = this.paint;
+			paint.setStrokeWidth(size / 48f * 4f);
+			paint.setColor(Color.argb(useAlpha ? alpha : 0xff, 0xff, 0xff, 0xff));
+			drawArc(canvas, paint, arcStart, arcLength);
+			canvas.restore();
 		}
 
 		if (invalidate && (alpha > 0x00 || visible)) {

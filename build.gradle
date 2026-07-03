@@ -5,7 +5,7 @@ buildscript {
 	}
 
 	dependencies {
-		classpath 'com.android.tools.build:gradle:3.6.4'
+		classpath 'com.android.tools.build:gradle:9.2.1'
 	}
 }
 
@@ -22,7 +22,48 @@ tasks.withType(JavaCompile) {
 	options.compilerArgs << '-Xlint:unchecked' << '-Xlint:deprecation'
 }
 
-def androidNdkVersion = '21.4.7075529'
+def androidNdkVersion = providers.gradleProperty('androidNdkVersion').get()
+def buildConfigStringArray = { values -> '{"' + values.join('", "') + '"}' }
+def knownChanExtensionPackages = [
+		'com.mishiranu.dashchan.chan.archb4k',
+		'com.mishiranu.dashchan.chan.archivedmoe',
+		'com.mishiranu.dashchan.chan.archiveforplebs',
+		'com.mishiranu.dashchan.chan.archiveofsins',
+		'com.mishiranu.dashchan.chan.archiverbt',
+		'com.mishiranu.dashchan.chan.arhivach',
+		'com.mishiranu.dashchan.chan.bunbunmaru',
+		'com.mishiranu.dashchan.chan.cirno',
+		'com.mishiranu.dashchan.chan.desustorage',
+		'com.mishiranu.dashchan.chan.dobrochan',
+		'com.mishiranu.dashchan.chan.dollchan',
+		'com.mishiranu.dashchan.chan.dvach',
+		'com.mishiranu.dashchan.chan.e444',
+		'com.mishiranu.dashchan.chan.endchan',
+		'com.mishiranu.dashchan.chan.erlach',
+		'com.mishiranu.dashchan.chan.fourchan',
+		'com.mishiranu.dashchan.chan.local',
+		'com.mishiranu.dashchan.chan.moechannel',
+		'com.mishiranu.dashchan.chan.nowere',
+		'com.mishiranu.dashchan.chan.palanq',
+		'com.mishiranu.dashchan.chan.palanqwin',
+		'com.mishiranu.dashchan.chan.refugedobrochan',
+		'com.mishiranu.dashchan.chan.sojakparty',
+		'com.mishiranu.dashchan.chan.warosu',
+		'com.mishiranu.dashchan.chan.yakujimoe',
+		'com.trixiether.dashchan.chan.archb4k',
+		'com.trixiether.dashchan.chan.archivedmoe',
+		'com.trixiether.dashchan.chan.archiveforplebs',
+		'com.trixiether.dashchan.chan.archiveofsins',
+		'com.trixiether.dashchan.chan.palanq',
+		'com.trixiether.dashchan.chan.refugedobrochan',
+		'com.trixiether.dashchan.chan.warosu'
+]
+def dashchan2KnownChanExtensionPackages = ['io.dashchan2.chan.dvach'] +
+		knownChanExtensionPackages
+def knownLibExtensionPackages = ['com.mishiranu.dashchan.lib.webm']
+def dashchan2KnownLibExtensionPackages = ['com.mishiranu.dashchan.lib.webm.test'] +
+		knownLibExtensionPackages
+
 def nativePlayerFfmpegFlavor = project.findProperty('nativePlayerFfmpegFlavor') ?: 'ffmpeg'
 def nativePlayerSupportedAbis = [
 		ffmpeg: ['arm64-v8a', 'armeabi-v7a', 'x86'],
@@ -31,7 +72,9 @@ def nativePlayerSupportedAbis = [
 if (!nativePlayerSupportedAbis.containsKey(nativePlayerFfmpegFlavor)) {
 	throw new GradleException('Unsupported nativePlayerFfmpegFlavor: ' + nativePlayerFfmpegFlavor)
 }
-def nativeAbis = (project.findProperty('nativeAbis') ?: 'arm64-v8a,armeabi-v7a,x86')
+def nativeAbisDefault = nativePlayerFfmpegFlavor == 'ffmpeg8'
+		? 'arm64-v8a,armeabi-v7a,x86' : 'arm64-v8a,armeabi-v7a,x86'
+def nativeAbis = (project.findProperty('nativeAbis') ?: nativeAbisDefault)
 		.split(',')
 		.collect { it.trim() }
 		.findAll { !it.isEmpty() }
@@ -46,7 +89,7 @@ if (!unsupportedNativeAbis.isEmpty()) {
 }
 
 def builtinWebmEnabled = nativePlayerFfmpegFlavor == 'ffmpeg8'
-def builtinWebmProjectDir = file(project.findProperty('dashchanWebmDir') ?: '../Dashchan-Webm')
+def builtinWebmProjectDir = file('../Dashchan-Webm')
 def builtinWebmBuildDir = new File(builtinWebmProjectDir, 'build')
 def builtinWebmSources = new File(builtinWebmBuildDir, 'intermediates/shared_sources')
 def builtinWebmLibraries = new File(builtinWebmBuildDir, 'intermediates/shared_libraries')
@@ -80,18 +123,22 @@ def getAndroidSdkDirectory = {
 }
 
 android {
-	compileSdkVersion 30
-	buildToolsVersion '30.0.2'
-	ndkVersion androidNdkVersion
+	namespace = 'com.mishiranu.dashchan'
+	compileSdk = 36
+	buildToolsVersion = '36.0.0'
+	ndkVersion = androidNdkVersion
 
 	defaultConfig {
-		applicationId 'io.dashchan2'
-		versionCode 1063
-		versionName '3.1.4-r17-dev9'
+		applicationId = 'io.dashchan2'
+		versionCode = 1063
+		versionName = '3.1.4-r17'
 
-		minSdkVersion 16
-		targetSdkVersion 30
-		renderscriptTargetApi 21
+		minSdk = 30
+		targetSdk = 30
+		manifestPlaceholders = [
+				appLabel: 'Dashchan',
+				fileProviderAuthority: 'com.mishiranu.providers.dashchan'
+		]
 
 		// noinspection UnnecessaryQualifiedReference
 		def versionsData = new groovy.json.JsonSlurper().parse(new File('metadata/versions.json'))
@@ -106,9 +153,24 @@ android {
 				'andrewpozdnakov7-jpg/Dashchan_2/master/update/data.json"'
 		buildConfigField 'String', 'URI_THEMES', '"//raw.githubusercontent.com/' +
 				'andrewpozdnakov7-jpg/Dashchan_2/master/update/themes.json"'
-		buildConfigField 'String', 'GITHUB_URI_METADATA',
-				'"//github.com/andrewpozdnakov7-jpg/Dashchan_2"'
+		buildConfigField 'String', 'GITHUB_URI_METADATA', '"//github.com/andrewpozdnakov7-jpg/Dashchan_2"'
 		buildConfigField 'String', 'GITHUB_PATH_METADATA', '"metadata"'
+		buildConfigField 'String', 'FILE_PROVIDER_AUTHORITY', '"' +
+				manifestPlaceholders.fileProviderAuthority + '"'
+		buildConfigField 'String', 'UPDATE_MANIFEST_URL', '""'
+		buildConfigField 'String', 'UPDATE_GITHUB_RELEASES_URL',
+				'"https://api.github.com/repos/andrewpozdnakov7-jpg/Dashchan_2/releases"'
+		buildConfigField 'String', 'UPDATE_GITHUB_LATEST_RELEASE_URL', '""'
+		buildConfigField 'String', 'CHAN_EXTENSION_FEATURE_NAME', '"chan.extension"'
+		buildConfigField 'String', 'LIB_EXTENSION_FEATURE_NAME', '"lib.extension"'
+		buildConfigField 'String', 'LIB_WEBM_EXTENSION_NAME', '"webm"'
+		buildConfigField 'String[]', 'CHAN_EXTENSION_FEATURE_NAMES', '{"chan.extension"}'
+		buildConfigField 'String[]', 'LIB_EXTENSION_FEATURE_NAMES', '{"lib.extension"}'
+		buildConfigField 'String[]', 'LIB_WEBM_EXTENSION_NAMES', '{"webm"}'
+		buildConfigField 'String[]', 'KNOWN_CHAN_EXTENSION_PACKAGES',
+				buildConfigStringArray(knownChanExtensionPackages)
+		buildConfigField 'String[]', 'KNOWN_LIB_EXTENSION_PACKAGES',
+				buildConfigStringArray(knownLibExtensionPackages)
 	}
 
 	sourceSets.main {
@@ -116,11 +178,14 @@ android {
 		java.srcDirs = ['src']
 		resources.srcDirs = []
 		aidl.srcDirs = ['src']
-		renderscript.srcDirs = ['src']
 		res.srcDirs = ['res', 'lang']
 		assets.srcDirs = ['assets']
 		jni.srcDirs = []
 		jniLibs.srcDirs = []
+	}
+	sourceSets.test {
+		java.srcDirs = ['unitTests/src']
+		resources.srcDirs = ['unitTests/resources']
 	}
 	if (builtinWebmEnabled) {
 		sourceSets.main.jniLibs.srcDirs += builtinWebmJniLibDirs
@@ -132,7 +197,7 @@ android {
 			.collect { it.getName().with { it.substring(it.indexOf('-') + 1) } }.sort()
 	defaultConfig {
 		buildConfigField 'String[]', 'LOCALES', '{"' + locales.join('", "') + '"}'
-		resConfigs locales
+		resourceConfigurations.addAll(locales)
 	}
 
 	defaultConfig {
@@ -140,83 +205,64 @@ android {
 		externalNativeBuild.ndkBuild.arguments "DASHCHAN_FFMPEG_FLAVOR=${nativePlayerFfmpegFlavor}"
 		if (builtinWebmEnabled) {
 			externalNativeBuild.ndkBuild.arguments "DASHCHAN_WEBM_SHARED_LIBRARIES=${builtinWebmLibraries.absolutePath}"
-			externalNativeBuild.ndkBuild.arguments "DASHCHAN_WEBM_EXTERNAL=${builtinWebmExternal.absolutePath}"
 		}
 		buildConfigField 'String', 'NATIVE_PLAYER_FFMPEG_FLAVOR', '"' + nativePlayerFfmpegFlavor + '"'
 		buildConfigField 'String[]', 'NATIVE_PLAYER_ABIS', '{"' + nativeAbis.join('", "') + '"}'
 	}
 	externalNativeBuild.ndkBuild.path 'jni/Android.mk'
 
-	buildTypes.create('leak').debuggable true
-	buildTypes.create('ndebug').debuggable true
-
-	def keystoreProperties = new Properties()
-	try {
-		file('keystore.properties').newInputStream().withCloseable { keystoreProperties.load(it) }
-	} catch (IOException ignored) {
-		// Ignore
+	buildFeatures {
+		aidl = true
+		buildConfig = true
 	}
-	def storeFile = keystoreProperties['store.file'].with { it != null ? file(it) : null }
-	def storePassword = keystoreProperties['store.password']
-	def keyAlias = keystoreProperties['key.alias']
-	def keyPassword = keystoreProperties['key.password']
-	def signerName = keystoreProperties['signer.name']
 
-	if (storeFile != null && storeFile.exists() && storePassword != null) {
-		def apksigner = new File(sdkDirectory, "build-tools/$buildToolsVersion/lib/apksigner.jar")
-		buildTypes.all { signingConfig null }
-		applicationVariants.all { variant ->
-			if (variant.outputs.size() != 1) {
-				throw new IllegalStateException()
-			}
-			def output = variant.outputs[0]
-			def unsignedName = output.outputFileName
-			if (!unsignedName.contains('-unsigned')) {
-				throw new IllegalStateException()
-			}
-			variant.outputsAreSigned true
-			output.outputFileName unsignedName.replace('-unsigned', '')
-			packageApplicationProvider.configure { packageTask ->
-				def outputDirectory = packageTask.outputDirectory.get().asFile
-				def file = new File(outputDirectory, output.outputFileName)
-				packageTask.doLast {
-					def args = ['sign', '--in', file.path, '--out', file.path]
-					args += ['--v4-signing-enabled', 'false']
-					args += ['--ks', storeFile.path, '--ks-pass', "pass:$storePassword"]
-					if (keyAlias != null && keyPassword != null) {
-						args += ['--ks-key-alias', keyAlias, '--key-pass', "pass:$keyPassword"]
-					}
-					if (signerName != null) {
-						args += ['--v1-signer-name', signerName]
-					}
-					javaexec {
-						classpath files(apksigner)
-						it.args args
-					}.rethrowFailure().assertNormalExitValue()
-				}
-			}
-		}
+	buildTypes.create('leak') {
+		debuggable = true
+	}
+	buildTypes.create('ndebug') {
+		debuggable = false
+		versionNameSuffix '-dev9'
+		manifestPlaceholders = [
+				appLabel: 'Dashchan_2',
+				fileProviderAuthority: 'io.dashchan2.provider'
+		]
+		buildConfigField 'String', 'FILE_PROVIDER_AUTHORITY', '"io.dashchan2.provider"'
+		buildConfigField 'String', 'CHAN_EXTENSION_FEATURE_NAME', '"chan.extension.dashchan2"'
+		buildConfigField 'String', 'LIB_EXTENSION_FEATURE_NAME', '"lib.extension.dashchan2"'
+		buildConfigField 'String', 'LIB_WEBM_EXTENSION_NAME', '"webm2"'
+		buildConfigField 'String[]', 'CHAN_EXTENSION_FEATURE_NAMES',
+				'{"chan.extension.dashchan2", "chan.extension"}'
+		buildConfigField 'String[]', 'LIB_EXTENSION_FEATURE_NAMES',
+				'{"lib.extension.dashchan2", "lib.extension"}'
+		buildConfigField 'String[]', 'LIB_WEBM_EXTENSION_NAMES',
+				'{"webm2", "webm"}'
+		buildConfigField 'String[]', 'KNOWN_CHAN_EXTENSION_PACKAGES',
+				buildConfigStringArray(dashchan2KnownChanExtensionPackages)
+		buildConfigField 'String[]', 'KNOWN_LIB_EXTENSION_PACKAGES',
+				buildConfigStringArray(dashchan2KnownLibExtensionPackages)
 	}
 
 	buildTypes.all {
-		crunchPngs false
-		minifyEnabled !debuggable
-		proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+		crunchPngs = false
+		minifyEnabled = !debuggable
+		proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
 	}
 
-	packagingOptions {
-		builtinWebmLibrariesPattern.each { pattern ->
+	packaging {
+		jniLibs {
 			if (builtinWebmEnabled) {
-				pickFirst pattern
+				pickFirsts += builtinWebmLibrariesPattern
 			} else {
-				exclude pattern
+				excludes += builtinWebmLibrariesPattern
 			}
 		}
-		exclude '/META-INF/*.version'
+		resources {
+			excludes += ['/META-INF/*.version']
+		}
 	}
 
-	lintOptions {
-		disable 'MissingTranslation', 'ValidFragment', 'ResourceType'
+	lint {
+		disable += ['MissingTranslation', 'ValidFragment', 'ResourceType']
 	}
 
 	compileOptions {
@@ -230,8 +276,7 @@ def requireUnixBuiltinWebmBuild = {
 		return
 	}
 	if (!builtinWebmProjectDir.isDirectory()) {
-		throw new GradleException('Dashchan-Webm checkout was not found: ' + builtinWebmProjectDir +
-				'. Put Dashchan-Webm next to Dashchan_2 or pass -PdashchanWebmDir=<path>.')
+		throw new GradleException('Dashchan-Webm checkout was not found: ' + builtinWebmProjectDir)
 	}
 	if (!org.apache.tools.ant.taskdefs.condition.Os.isFamily(
 			org.apache.tools.ant.taskdefs.condition.Os.FAMILY_UNIX)) {
@@ -278,6 +323,18 @@ tasks.register('buildBuiltinWebmLibraries', Exec) {
 	}
 }
 
+tasks.register('syncBuiltinWebmPlayerHeaders', Copy) {
+	onlyIf { builtinWebmEnabled }
+	dependsOn tasks.named('buildBuiltinWebmLibraries')
+	into file('jni/src/player/ffmpeg8')
+	from(new File(builtinWebmExternal, 'ffmpeg/include')) {
+		into 'include'
+	}
+	from(new File(builtinWebmExternal, 'ffmpeg/symbols')) {
+		into 'symbols'
+	}
+}
+
 dependencies {
 	leakImplementation 'com.squareup.leakcanary:leakcanary-android:2.5'
 	compileOnly 'org.ccil.cowan.tagsoup:tagsoup:1.2.1'
@@ -287,24 +344,25 @@ dependencies {
 	implementation 'androidx.drawerlayout:drawerlayout:1.1.1'
 	implementation 'androidx.webkit:webkit:1.4.0'
 	implementation 'org.brotli:dec:0.1.2'
+	testImplementation 'junit:junit:4.13.2'
 }
 
 afterEvaluate {
 	if (builtinWebmEnabled) {
-		def buildBuiltinWebmLibraries = tasks.named('buildBuiltinWebmLibraries')
+		def syncBuiltinWebmPlayerHeaders = tasks.named('syncBuiltinWebmPlayerHeaders')
 		tasks.matching { task ->
 			task.name.startsWith('pre') && task.name.endsWith('Build') ||
 					task.name.startsWith('externalNativeBuild') &&
 							!task.name.startsWith('externalNativeBuildClean') ||
 					task.name.startsWith('merge') && task.name.endsWith('NativeLibs')
 		}.configureEach {
-			dependsOn buildBuiltinWebmLibraries
+			dependsOn syncBuiltinWebmPlayerHeaders
 		}
 	}
 	task cxxClean(type: Delete) {
 		delete '.cxx'
 	}
 	tasks.getByName('clean').dependsOn(cxxClean)
-	tasks.findAll { it.name.startsWith('externalNativeBuildClean') }
-			.forEach { cxxClean.dependsOn(it) }
+	tasks.matching { it.name.startsWith('externalNativeBuildClean') }
+			.configureEach { cxxClean.dependsOn(it) }
 }

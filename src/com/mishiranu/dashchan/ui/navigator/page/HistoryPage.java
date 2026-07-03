@@ -8,7 +8,6 @@ import androidx.fragment.app.FragmentManager;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import chan.content.Chan;
 import chan.util.StringUtils;
-import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.async.GetHistoryTask;
@@ -19,8 +18,6 @@ import com.mishiranu.dashchan.ui.DialogMenu;
 import com.mishiranu.dashchan.ui.InstanceDialog;
 import com.mishiranu.dashchan.ui.navigator.adapter.HistoryAdapter;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
-import com.mishiranu.dashchan.util.ResourceUtils;
-import com.mishiranu.dashchan.util.ViewUtils;
 import com.mishiranu.dashchan.widget.DividerItemDecoration;
 import com.mishiranu.dashchan.widget.HeaderItemDecoration;
 import com.mishiranu.dashchan.widget.ListPosition;
@@ -41,10 +38,6 @@ public class HistoryPage extends ListPage implements HistoryAdapter.Callback, Ge
 	protected void onCreate() {
 		PaddedRecyclerView recyclerView = getRecyclerView();
 		recyclerView.setLayoutManager(new LinearLayoutManager(recyclerView.getContext()));
-		if (!C.API_LOLLIPOP) {
-			float density = ResourceUtils.obtainDensity(recyclerView);
-			ViewUtils.setNewPadding(recyclerView, (int) (16f * density), null, (int) (16f * density), null);
-		}
 		chanName = Preferences.isMergeChans() ? null : getPage().chanName;
 		searchQuery = getInitSearch().currentQuery;
 		CommonDatabase.getInstance().getHistory().registerObserver(updateHistoryRunnable);

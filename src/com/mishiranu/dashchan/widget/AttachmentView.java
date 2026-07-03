@@ -18,7 +18,6 @@ import android.view.View;
 import android.view.ViewConfiguration;
 import android.view.animation.Interpolator;
 import chan.util.CommonUtils;
-import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.graphics.RoundedCornersDrawable;
 import com.mishiranu.dashchan.graphics.TransparentTileDrawable;
@@ -50,26 +49,12 @@ public class AttachmentView extends View {
 	public AttachmentView(Context context, AttributeSet attrs) {
 		super(new ContextThemeWrapper(context, R.style.Theme_Gallery), attrs);
 
-		disableDrawingCacheCompat();
 		ViewUtils.setSelectableItemBackground(this);
 		// Use old context to obtain background color.
 		backgroundColor = ResourceUtils.getColor(context, R.attr.colorAttachmentBackground);
-		if (C.API_LOLLIPOP) {
-			workColorMatrix = new float[] {1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0};
-			colorMatrix1 = new ColorMatrix(workColorMatrix);
-			colorMatrix2 = new ColorMatrix(workColorMatrix);
-		} else {
-			workColorMatrix = null;
-			colorMatrix1 = null;
-			colorMatrix2 = null;
-		}
-	}
-
-	@SuppressWarnings("deprecation")
-	private void disableDrawingCacheCompat() {
-		if (!C.API_PIE) {
-			setDrawingCacheEnabled(false);
-		}
+		workColorMatrix = new float[] {1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0};
+		colorMatrix1 = new ColorMatrix(workColorMatrix);
+		colorMatrix2 = new ColorMatrix(workColorMatrix);
 	}
 
 	public void setCropEnabled(boolean enabled) {
@@ -259,26 +244,22 @@ public class AttachmentView extends View {
 				tileDrawable.draw(canvas);
 			}
 			bitmapPaint.setAlpha((int) (0xff * alpha));
-			if (C.API_LOLLIPOP) {
-				float contrast = interpolator.getInterpolation(Math.min(dt / 300f, 1f));
-				float saturation = interpolator.getInterpolation(Math.min(dt / 400f, 1f));
-				if (saturation < 1f) {
-					float[] matrix = workColorMatrix;
-					float contrastGain = 1f + 2f * (1f -  contrast);
-					float contrastExtra = (1f - contrastGain) * 255f;
-					matrix[0] = matrix[6] = matrix[12] = contrastGain;
-					matrix[4] = matrix[9] = matrix[14] = contrastExtra;
-					colorMatrix2.set(matrix);
-					colorMatrix1.setSaturation(saturation);
-					colorMatrix1.postConcat(colorMatrix2);
-					bitmapPaint.setColorFilter(new ColorMatrixColorFilter(colorMatrix1));
-				} else {
-					bitmapPaint.setColorFilter(null);
-				}
-				invalidate = saturation < 1f;
+			float contrast = interpolator.getInterpolation(Math.min(dt / 300f, 1f));
+			float saturation = interpolator.getInterpolation(Math.min(dt / 400f, 1f));
+			if (saturation < 1f) {
+				float[] matrix = workColorMatrix;
+				float contrastGain = 1f + 2f * (1f -  contrast);
+				float contrastExtra = (1f - contrastGain) * 255f;
+				matrix[0] = matrix[6] = matrix[12] = contrastGain;
+				matrix[4] = matrix[9] = matrix[14] = contrastExtra;
+				colorMatrix2.set(matrix);
+				colorMatrix1.setSaturation(saturation);
+				colorMatrix1.postConcat(colorMatrix2);
+				bitmapPaint.setColorFilter(new ColorMatrixColorFilter(colorMatrix1));
 			} else {
-				invalidate = alpha < 1f;
+				bitmapPaint.setColorFilter(null);
 			}
+			invalidate = saturation < 1f;
 			canvas.drawBitmap(bitmap, source, destination, bitmapPaint);
 		}
 		if (sfwMode) {

@@ -4,10 +4,10 @@ import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.util.AttributeSet;
+import android.util.TypedValue;
 import android.view.View;
 import androidx.core.view.ViewCompat;
 import chan.util.StringUtils;
-import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import java.util.ArrayList;
 import java.util.Locale;
@@ -28,9 +28,7 @@ public class ThreadDescriptionView extends View {
 
 	public ThreadDescriptionView(Context context, AttributeSet attrs) {
 		super(context, attrs);
-		if (C.API_LOLLIPOP) {
-			paint.setTypeface(ResourceUtils.TYPEFACE_MEDIUM);
-		}
+		paint.setTypeface(ResourceUtils.TYPEFACE_MEDIUM);
 	}
 
 	public void setTextColor(int color) {
@@ -39,7 +37,8 @@ public class ThreadDescriptionView extends View {
 	}
 
 	public void setTextSizeSp(float sizeSp) {
-		int size = (int) (sizeSp * getResources().getDisplayMetrics().scaledDensity + 0.5f);
+		int size = (int) (TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, sizeSp,
+				getResources().getDisplayMetrics()) + 0.5f);
 		paint.setTextSize(size);
 		requestLayout();
 	}

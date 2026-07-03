@@ -1,6 +1,5 @@
 package com.mishiranu.dashchan.util;
 
-import android.annotation.TargetApi;
 import android.content.Context;
 import android.content.res.ColorStateList;
 import android.content.res.Configuration;
@@ -12,12 +11,10 @@ import android.graphics.Paint;
 import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.InsetDrawable;
-import android.os.Build;
 import android.view.ContextThemeWrapper;
 import android.view.Gravity;
 import android.view.View;
 import androidx.fragment.app.Fragment;
-import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import java.util.Arrays;
 
@@ -121,9 +118,8 @@ public class ResourceUtils {
 		return notFound;
 	}
 
-	@SuppressWarnings("deprecation")
 	public static Drawable getDrawable(Context context, int resId) {
-		return C.API_LOLLIPOP ? context.getDrawable(resId) : context.getResources().getDrawable(resId);
+		return context.getDrawable(resId);
 	}
 
 	public static Drawable getDrawable(Context context, int attr, int notFound) {
@@ -133,10 +129,8 @@ public class ResourceUtils {
 
 	public static Drawable getActionBarIcon(Context context, int attr) {
 		Drawable drawable = getDrawable(context, attr, 0);
-		if (C.API_LOLLIPOP) {
-			drawable.mutate();
-			drawable.setTint(getColor(context, android.R.attr.textColorPrimary));
-		}
+		drawable.mutate();
+		drawable.setTint(getColor(context, android.R.attr.textColorPrimary));
 		return drawable;
 	}
 
@@ -144,30 +138,16 @@ public class ResourceUtils {
 		return resources.getString(R.string.__colon_format, resources.getString(resId), formatArg);
 	}
 
-	public static final int[] PRESSED_STATE = {android.R.attr.state_window_focused, android.R.attr.state_enabled,
-		android.R.attr.state_pressed};
-
-	@TargetApi(Build.VERSION_CODES.LOLLIPOP)
-	@SuppressWarnings("deprecation")
 	public static int getSystemSelectorColor(Context context) {
-		if (C.API_LOLLIPOP) {
-			return getColor(context, android.R.attr.colorControlHighlight);
-		} else {
-			int resId = getResourceId(context, android.R.attr.listChoiceBackgroundIndicator,
-					android.R.drawable.list_selector_background);
-			Drawable drawable = context.getResources().getDrawable(resId);
-			drawable.setState(PRESSED_STATE);
-			return GraphicsUtils.getDrawableColor(context, drawable, Gravity.CENTER);
-		}
+		return getColor(context, android.R.attr.colorControlHighlight);
 	}
 
-	@TargetApi(Build.VERSION_CODES.KITKAT)
 	public static int getDialogBackground(Context context) {
 		context = new ContextThemeWrapper(context, getResourceId(context, android.R.attr.dialogTheme, 0));
 		TypedArray typedArray = context.obtainStyledAttributes(new int[] {android.R.attr.windowBackground});
 		Drawable drawable = typedArray.getDrawable(0);
 		typedArray.recycle();
-		if (C.API_KITKAT && drawable instanceof InsetDrawable) {
+		if (drawable instanceof InsetDrawable) {
 			drawable = ((InsetDrawable) drawable).getDrawable();
 		}
 		return drawable != null ? GraphicsUtils.getDrawableColor(context, drawable, Gravity.CENTER) : 0;

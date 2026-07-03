@@ -1,3 +1,5 @@
+*.mk text eol=lf
+/gradlew text eol=lf
 /jni/src/gif/dgif/**.c linguist-vendored
 /jni/src/gif/dgif/**.h linguist-vendored
 /jni/src/player/ffmpeg/include/** linguist-vendored

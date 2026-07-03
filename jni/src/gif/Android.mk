@@ -10,7 +10,7 @@ LOCAL_SRC_FILES := native.c gif.c
 LOCAL_CFLAGS += -std=c99 -Wall -Wextra -Wpedantic
 LOCAL_LDFLAGS += -Wl,--build-id=none
 LOCAL_LDLIBS += -ljnigraphics
-ifeq ($(notdir $(realpath $(dir $(NDK_OUT)))),ndebug)
+ifeq ($(NDK_DEBUG),1)
 LOCAL_CFLAGS += -DDEBUG_VERBOSE
 LOCAL_LDLIBS += -llog
 else

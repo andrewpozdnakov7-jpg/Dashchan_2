@@ -15,11 +15,9 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
 import android.view.Window;
-import android.view.WindowManager;
 import android.widget.FrameLayout;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
-import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.graphics.BaseDrawable;
 import com.mishiranu.dashchan.util.AnimationUtils;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
@@ -88,25 +86,11 @@ public class ExpandedScreen implements RecyclerScrollTracker.OnScrollListener {
 		public PreThemeInit(Activity activity, boolean enabled) {
 			this.activity = activity;
 			expandingEnabled = enabled;
-			if (C.API_LOLLIPOP) {
-				fullScreenLayoutEnabled = true;
-			} else if (C.API_KITKAT) {
-				Resources resources = activity.getResources();
-				int resId = resources.getIdentifier("config_enableTranslucentDecor", "bool", "android");
-				fullScreenLayoutEnabled = resId != 0 && resources.getBoolean(resId);
-			} else {
-				fullScreenLayoutEnabled = false;
-			}
-			Window window = activity.getWindow();
-			if (!fullScreenLayoutEnabled && enabled) {
-				window.requestFeature(Window.FEATURE_ACTION_BAR_OVERLAY);
-			}
+			fullScreenLayoutEnabled = true;
 		}
 
 		public Init initAfterTheme() {
-			if (fullScreenLayoutEnabled) {
-				ViewUtils.setWindowLayoutFullscreen(activity.getWindow());
-			}
+			ViewUtils.setWindowLayoutFullscreen(activity.getWindow());
 			return new Init(activity, expandingEnabled, fullScreenLayoutEnabled);
 		}
 	}
@@ -134,27 +118,15 @@ public class ExpandedScreen implements RecyclerScrollTracker.OnScrollListener {
 		ForegroundDrawable statusBarDrawerForeground;
 		List<ForegroundDrawable> foregroundDrawables;
 		if (fullScreenLayoutEnabled) {
-			if (C.API_LOLLIPOP) {
-				int statusBarColor = window.getStatusBarColor() | Color.BLACK;
-				int navigationBarColor = window.getNavigationBarColor() | Color.BLACK;
-				window.setStatusBarColor(Color.TRANSPARENT);
-				window.setNavigationBarColor(Color.TRANSPARENT);
-				contentForeground = new LollipopContentForeground(statusBarColor, navigationBarColor);
-				statusBarContentForeground = new LollipopStatusBarForeground(statusBarColor);
-				statusBarDrawerForeground = new LollipopDrawerForeground();
-				foregroundDrawables = Arrays.asList(contentForeground,
-						statusBarContentForeground, statusBarDrawerForeground);
-			} else if (C.API_KITKAT) {
-				contentForeground = new KitKatContentForeground();
-				statusBarContentForeground = null;
-				statusBarDrawerForeground = null;
-				foregroundDrawables = Collections.singletonList(contentForeground);
-			} else {
-				contentForeground = null;
-				statusBarContentForeground = null;
-				statusBarDrawerForeground = null;
-				foregroundDrawables = Collections.emptyList();
-			}
+			int statusBarColor = ViewUtils.getStatusBarColor(window) | Color.BLACK;
+			int navigationBarColor = ViewUtils.getNavigationBarColor(window) | Color.BLACK;
+			ViewUtils.setStatusBarColor(window, Color.TRANSPARENT);
+			ViewUtils.setNavigationBarColor(window, Color.TRANSPARENT);
+			contentForeground = new LollipopContentForeground(statusBarColor, navigationBarColor);
+			statusBarContentForeground = new LollipopStatusBarForeground(statusBarColor);
+			statusBarDrawerForeground = new LollipopDrawerForeground();
+			foregroundDrawables = Arrays.asList(contentForeground,
+					statusBarContentForeground, statusBarDrawerForeground);
 		} else {
 			contentForeground = null;
 			statusBarContentForeground = null;
@@ -180,17 +152,8 @@ public class ExpandedScreen implements RecyclerScrollTracker.OnScrollListener {
 			InsetsLayout insetsLayout = new InsetsLayout(activity);
 			content.addView(insetsLayout, FrameLayout.LayoutParams.MATCH_PARENT,
 					FrameLayout.LayoutParams.MATCH_PARENT);
-			int actionBarHeight = obtainActionBarHeight(activity);
 			insetsLayout.setOnApplyInsetsListener(applyData -> {
-				InsetsLayout.Insets windowInsets;
-				if (!C.API_LOLLIPOP && applyData.window.top > actionBarHeight) {
-					// Fix for KitKat, assume action bar height > status bar height
-					int top = applyData.window.top - actionBarHeight;
-					windowInsets = new InsetsLayout.Insets(applyData.window.left, top,
-							applyData.window.right, applyData.window.bottom);
-				} else {
-					windowInsets = applyData.window;
-				}
+				InsetsLayout.Insets windowInsets = applyData.window;
 				if (!this.windowInsets.equals(windowInsets) || useGesture29 != applyData.useGesture29 ||
 						imeBottom29 != applyData.imeBottom29) {
 					this.windowInsets = windowInsets;
@@ -219,20 +182,6 @@ public class ExpandedScreen implements RecyclerScrollTracker.OnScrollListener {
 		public void applyAlpha(int alpha) {
 			this.alpha = alpha;
 			invalidateSelf();
-		}
-	}
-
-	private class KitKatContentForeground extends AlphaForegroundDrawable {
-		private final Paint paint = new Paint();
-
-		@Override
-		public void draw(@NonNull Canvas canvas) {
-			int statusBarHeight = windowInsets.top;
-			if (statusBarHeight > 0 && alpha != 0x00 && alpha != 0xff) {
-				// Black while action bar animated
-				paint.setColor(Color.BLACK);
-				canvas.drawRect(0f, 0f, getBounds().width(), statusBarHeight, paint);
-			}
 		}
 	}
 
@@ -377,38 +326,9 @@ public class ExpandedScreen implements RecyclerScrollTracker.OnScrollListener {
 		public void onAnimationRepeat(Animator animation) {}
 	}
 
-	private boolean lastTranslucent19 = false;
-
 	private void setState(State state, boolean value) {
 		if (expandingEnabled) {
-			boolean oldShow = checkState(State.SHOW);
-			boolean newShow = state == State.SHOW ? value : oldShow;
-			boolean oldActionMode = checkState(State.ACTION_MODE);
-			boolean newActionMode = state == State.ACTION_MODE ? value : oldActionMode;
 			stateFlags = FlagUtils.set(stateFlags, state.flag(), value);
-			if (fullScreenLayoutEnabled && C.API_KITKAT && !C.API_LOLLIPOP) {
-				boolean wasDisplayed = oldShow || oldActionMode;
-				boolean willDisplayed = newShow || newActionMode;
-				if (wasDisplayed == willDisplayed) {
-					return;
-				}
-				setTranslucent19Only(!willDisplayed);
-			}
-		}
-	}
-
-	@SuppressWarnings("deprecation")
-	private void setTranslucent19Only(boolean translucent) {
-		if (lastTranslucent19 != translucent) {
-			lastTranslucent19 = translucent;
-			Window window = activity.getWindow();
-			if (translucent) {
-				window.addFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS
-						| WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION);
-			} else {
-				window.clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS
-						| WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION);
-			}
 		}
 	}
 
@@ -575,7 +495,7 @@ public class ExpandedScreen implements RecyclerScrollTracker.OnScrollListener {
 				}
 			}
 			if (drawerContent != null) {
-				int paddingTop = C.API_LOLLIPOP && drawerOverToolbarEnabled && toolbarView != null
+				int paddingTop = drawerOverToolbarEnabled && toolbarView != null
 						? statusBarHeight : statusBarHeight + actionBarHeight;
 				if (drawerHeader != null) {
 					ViewUtils.setNewPadding(drawerHeader, null, paddingTop, null, null);
@@ -616,7 +536,7 @@ public class ExpandedScreen implements RecyclerScrollTracker.OnScrollListener {
 
 	public void setActionModeState(boolean actionMode) {
 		if (actionMode && !actionModeViewInitialized) {
-			if (C.API_LOLLIPOP && drawerInterlayer != null) {
+			if (drawerInterlayer != null) {
 				// ActionModeBar view has lazy initialization
 				int actionModeBarId = activity.getResources().getIdentifier("action_mode_bar", "id", "android");
 				View actionModeView = actionModeBarId != 0 ? activity.findViewById(actionModeBarId) : null;

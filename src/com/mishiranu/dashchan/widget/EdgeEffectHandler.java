@@ -6,7 +6,6 @@ import android.graphics.Paint;
 import android.widget.EdgeEffect;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
-import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.util.ViewUtils;
 
 public class EdgeEffectHandler {
@@ -75,12 +74,10 @@ public class EdgeEffectHandler {
 				int shift = this.shift.getEdgeEffectShift(side);
 				boolean needShift = shift != 0;
 				if (needShift) {
-					if (C.API_LOLLIPOP) {
-						int color = getColor();
-						Paint paint = shiftPaint;
-						paint.setColor(color);
-						canvas.drawRect(0, 0, width, shift, paint);
-					}
+					int color = getColor();
+					Paint paint = shiftPaint;
+					paint.setColor(color);
+					canvas.drawRect(0, 0, width, shift, paint);
 					canvas.save();
 					canvas.translate(0, shift);
 				}

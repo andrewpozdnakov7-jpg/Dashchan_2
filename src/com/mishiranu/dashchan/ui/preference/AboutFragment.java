@@ -10,7 +10,6 @@ import androidx.fragment.app.DialogFragment;
 import chan.util.CommonUtils;
 import chan.util.DataFile;
 import com.mishiranu.dashchan.BuildConfig;
-import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.BackupManager;
 import com.mishiranu.dashchan.content.Preferences;
@@ -88,7 +87,7 @@ public class AboutFragment extends PreferenceFragment implements FragmentHandler
 	}
 
 	private void restoreBackup() {
-		if (C.USE_SAF && Preferences.getDownloadUriTree(requireContext()) == null) {
+		if (Preferences.getDownloadUriTree(requireContext()) == null) {
 			if (((FragmentHandler) requireActivity()).requestStorage()) {
 				inStorageRequest = true;
 			}

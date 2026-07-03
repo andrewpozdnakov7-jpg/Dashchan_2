@@ -280,7 +280,7 @@ public abstract class FileHolder {
 			if (mayUseRegionDecoder && imageData.isRegionDecoderSupported()) {
 				BitmapRegionDecoder decoder = null;
 				try (InputStream input = openInputStream()) {
-					decoder = BitmapRegionDecoder.newInstance(input, false);
+					decoder = GraphicsUtils.createBitmapRegionDecoder(input);
 					return decoder.decodeRegion(new Rect(0, 0, decoder.getWidth(), decoder.getHeight()), options);
 				} catch (IOException e) {
 					e.printStackTrace();

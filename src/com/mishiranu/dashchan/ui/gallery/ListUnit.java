@@ -26,12 +26,10 @@ import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import chan.content.Chan;
 import chan.util.StringUtils;
-import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.CacheManager;
 import com.mishiranu.dashchan.content.ImageLoader;
 import com.mishiranu.dashchan.content.model.GalleryItem;
-import com.mishiranu.dashchan.graphics.SelectorBorderDrawable;
 import com.mishiranu.dashchan.graphics.SelectorCheckDrawable;
 import com.mishiranu.dashchan.ui.DialogMenu;
 import com.mishiranu.dashchan.ui.InstanceDialog;
@@ -151,13 +149,10 @@ public class ListUnit implements ActionMode.Callback {
 	}
 
 	public boolean onApplyWindowInsets(InsetsLayout.Insets insets) {
-		if (C.API_LOLLIPOP) {
-			int top = insets.top + (C.API_R ? getActionBarHeight() : 0);
-			ViewUtils.setNewMargin(recyclerView, insets.left, null, insets.right, null);
-			ViewUtils.setNewPadding(recyclerView, null, top, null, insets.bottom);
-			return true;
-		}
-		return false;
+		int top = insets.top + getActionBarHeight();
+		ViewUtils.setNewMargin(recyclerView, insets.left, null, insets.right, null);
+		ViewUtils.setNewPadding(recyclerView, null, top, null, insets.bottom);
+		return true;
 	}
 
 	private static final float GRID_SCALE = 1.1f;
@@ -248,11 +243,7 @@ public class ListUnit implements ActionMode.Callback {
 	private void updateGalleryItemChecked(View view, int position) {
 		boolean checked = callback.isItemChecked(position);
 		GridAdapter.ViewHolder holder = (GridAdapter.ViewHolder) recyclerView.getChildViewHolder(view);
-		if (C.API_LOLLIPOP) {
-			holder.selectorCheckDrawable.setSelected(checked, true);
-		} else {
-			holder.selectorBorderDrawable.setSelected(checked);
-		}
+		holder.selectorCheckDrawable.setSelected(checked, true);
 	}
 
 	private void updateAllGalleryItemsChecked() {
@@ -335,10 +326,6 @@ public class ListUnit implements ActionMode.Callback {
 		int size = ResourceUtils.isTablet(configuration) ? 160 : 100;
 		int spanCount = (widthDp - GRID_SPACING_DP) / (size + GRID_SPACING_DP);
 		((GridLayoutManager) recyclerView.getLayoutManager()).setSpanCount(spanCount);
-		if (!C.API_LOLLIPOP) {
-			// Update top padding on old devices, on new devices paddings will be updated in onApplyWindowPaddings
-			recyclerView.setPadding(0, getActionBarHeight(), 0, 0);
-		}
 	}
 
 	private static class GalleryRecyclerView extends PaddedRecyclerView {
@@ -384,7 +371,7 @@ public class ListUnit implements ActionMode.Callback {
 				if (length > 0) {
 					rect.top = t + offset;
 					rect.bottom = t + offset + length;
-					paint.setColor(Color.argb(0x7f * (C.API_KITKAT ? scrollBar.getAlpha() : 0xff) / 0xff,
+					paint.setColor(Color.argb(0x7f * scrollBar.getAlpha() / 0xff,
 							0xff, 0xff, 0xff));
 					canvas.drawRect(rect, paint);
 				}
@@ -412,7 +399,6 @@ public class ListUnit implements ActionMode.Callback {
 		private static class ViewHolder extends RecyclerView.ViewHolder {
 			public final AttachmentView thumbnail;
 			public final TextView attachmentInfo;
-			public final SelectorBorderDrawable selectorBorderDrawable;
 			public final SelectorCheckDrawable selectorCheckDrawable;
 
 			public ViewHolder(ViewGroup parent, Callback callback) {
@@ -437,19 +423,10 @@ public class ListUnit implements ActionMode.Callback {
 				attachmentInfo.setBackgroundColor(0xaa111111);
 				attachmentInfo.setGravity(Gravity.CENTER);
 				attachmentInfo.setSingleLine(true);
-				if (C.API_LOLLIPOP) {
-					attachmentInfo.setTypeface(ResourceUtils.TYPEFACE_MEDIUM);
-				}
+				attachmentInfo.setTypeface(ResourceUtils.TYPEFACE_MEDIUM);
 				ListViewUtils.bind(this, itemView.findViewById(R.id.attachment_click), true, null, callback);
-				if (C.API_LOLLIPOP) {
-					selectorBorderDrawable = null;
-					selectorCheckDrawable = new SelectorCheckDrawable();
-					child.setForeground(selectorCheckDrawable);
-				} else {
-					selectorBorderDrawable = new SelectorBorderDrawable(parent.getContext());
-					selectorCheckDrawable = null;
-					child.setForeground(selectorBorderDrawable);
-				}
+				selectorCheckDrawable = new SelectorCheckDrawable();
+				child.setForeground(selectorCheckDrawable);
 			}
 		}
 
@@ -502,11 +479,7 @@ public class ListUnit implements ActionMode.Callback {
 				ImageLoader.getInstance().cancel(holder.thumbnail);
 			}
 			boolean checked = callback.isItemChecked(position);
-			if (C.API_LOLLIPOP) {
-				holder.selectorCheckDrawable.setSelected(checked, false);
-			} else {
-				holder.selectorBorderDrawable.setSelected(checked);
-			}
+			holder.selectorCheckDrawable.setSelected(checked, false);
 		}
 	}
 

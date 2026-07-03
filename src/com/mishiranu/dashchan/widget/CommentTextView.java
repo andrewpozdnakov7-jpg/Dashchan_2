@@ -4,6 +4,9 @@ import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.ContextWrapper;
 import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.Path;
 import android.graphics.Point;
 import android.net.Uri;
 import android.os.SystemClock;
@@ -30,11 +33,11 @@ import androidx.core.view.ViewCompat;
 import androidx.recyclerview.widget.RecyclerView;
 import chan.content.Chan;
 import chan.util.StringUtils;
-import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.text.style.LinkSpan;
 import com.mishiranu.dashchan.text.style.OverlineSpan;
 import com.mishiranu.dashchan.text.style.SpoilerSpan;
 import com.mishiranu.dashchan.util.AndroidUtils;
+import com.mishiranu.dashchan.util.GraphicsUtils;
 import com.mishiranu.dashchan.util.ListViewUtils;
 import com.mishiranu.dashchan.util.NavigationUtils;
 import com.mishiranu.dashchan.util.ResourceUtils;
@@ -62,6 +65,8 @@ public class CommentTextView extends TextView {
 	private long lastXYSet;
 	private int linesLimit;
 	private int linesLimitAdditionalHeight;
+	private final Path selectionHighlightPath = new Path();
+	private final Paint selectionHighlightPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 	private View selectionPaddingView;
 	private boolean useAdditionalPadding;
 
@@ -105,7 +110,7 @@ public class CommentTextView extends TextView {
 	}
 
 	public CommentTextView(Context context, AttributeSet attrs, int defStyleAttr) {
-		super(C.API_LOLLIPOP && AndroidUtils.IS_MIUI ? new MiuiContext(context) : context, attrs, defStyleAttr);
+		super(AndroidUtils.IS_MIUI ? new MiuiContext(context) : context, attrs, defStyleAttr);
 		ThemeEngine.applyStyle(this);
 		float density = ResourceUtils.obtainDensity(this);
 		int delta = (int) (RING_RADIUS * density);
@@ -374,6 +379,7 @@ public class CommentTextView extends TextView {
 			}
 			requestLayout();
 		}
+		invalidate();
 	}
 
 	private void removeSelection() {
@@ -395,10 +401,34 @@ public class CommentTextView extends TextView {
 
 	private static final Pattern LIST_PATTERN = Pattern.compile("^(?:(?:\\d+[.)]|[\u2022-]) |>(?!>) ?)");
 
-	private void sendFakeMotionEvent(int action, int x, int y) {
-		MotionEvent motionEvent = MotionEvent.obtain(0, SystemClock.uptimeMillis(), action, x, y, 0);
-		onTouchEvent(motionEvent);
+	private int[] getSelectionTapPoint(int offset) {
+		CharSequence text = getText();
+		Layout layout = getLayout();
+		if (text != null && layout != null && text.length() > 0) {
+			offset = Math.max(0, Math.min(offset, text.length() - 1));
+			int line = layout.getLineForOffset(offset);
+			int x = Math.round(layout.getPrimaryHorizontal(offset)) + getTotalPaddingLeft();
+			int y = (layout.getLineTop(line) + layout.getLineBottom(line)) / 2 + getTotalPaddingTop();
+			x = Math.max(getTotalPaddingLeft(), Math.min(x, getWidth() - getTotalPaddingRight() - 1));
+			y = Math.max(getTotalPaddingTop(), Math.min(y, getHeight() - getTotalPaddingBottom() - 1));
+			return new int[] {x, y};
+		}
+		return new int[] {getTotalPaddingLeft(), getTotalPaddingTop()};
+	}
+
+	private void sendSelectionTapEvent(int action, long downTime, long eventTime, int x, int y) {
+		MotionEvent motionEvent = MotionEvent.obtain(downTime, eventTime, action, x, y, 0);
+		super.onTouchEvent(motionEvent);
 		motionEvent.recycle();
+	}
+
+	private void startSystemSelectionUi(int x, int y) {
+		long firstDownTime = SystemClock.uptimeMillis();
+		long secondDownTime = firstDownTime + 80L;
+		sendSelectionTapEvent(MotionEvent.ACTION_DOWN, firstDownTime, firstDownTime, x, y);
+		sendSelectionTapEvent(MotionEvent.ACTION_UP, firstDownTime, firstDownTime + 20L, x, y);
+		sendSelectionTapEvent(MotionEvent.ACTION_DOWN, secondDownTime, secondDownTime, x, y);
+		sendSelectionTapEvent(MotionEvent.ACTION_UP, secondDownTime, secondDownTime + 20L, x, y);
 	}
 
 	private void startSelection(int x, int y, int start, int end) {
@@ -444,11 +474,7 @@ public class CommentTextView extends TextView {
 			start = 0;
 			end = text.length();
 		}
-		x = getTotalPaddingLeft();
-		y = getTotalPaddingRight();
 		setSelectionMode(SelectionMode.INITIAL);
-		int finalX = x;
-		int finalY = y;
 		int finalStart = start;
 		int finalEnd = end;
 		post(() -> {
@@ -461,14 +487,20 @@ public class CommentTextView extends TextView {
 			int max = newText.length();
 			Runnable restoreSelectionRunnable = () -> Selection.setSelection(newText,
 					Math.min(finalStart, max), Math.min(finalEnd, max));
-			// restoreSelectionRunnable can be nullified during sending motion event
 			this.restoreSelectionRunnable = restoreSelectionRunnable;
-			sendFakeMotionEvent(MotionEvent.ACTION_DOWN, finalX, finalY);
-			sendFakeMotionEvent(MotionEvent.ACTION_UP, finalX, finalY);
-			sendFakeMotionEvent(MotionEvent.ACTION_DOWN, finalX, finalY);
-			sendFakeMotionEvent(MotionEvent.ACTION_UP, finalX, finalY);
+			int[] tapPoint = getSelectionTapPoint(Math.min(finalStart, max));
+			startSystemSelectionUi(tapPoint[0], tapPoint[1]);
 			restoreSelectionRunnable.run();
-			postDelayed(resetSelectionRunnable, 500);
+			postDelayed(() -> {
+				if (isSelectionMode() && !selectionMode.isActive()) {
+					restoreSelectionRunnable.run();
+					ActionMode actionMode = startActionMode(new CustomSelectionCallback(this),
+							ActionMode.TYPE_FLOATING);
+					if (actionMode == null) {
+						postDelayed(resetSelectionRunnable, 500);
+					}
+				}
+			}, 150);
 		});
 	}
 
@@ -517,7 +549,7 @@ public class CommentTextView extends TextView {
 			CommentTextView textView = this.textView.get();
 			textView.setSelectionMode(selectionMode);
 			currentActionMode = mode;
-			boolean floating = C.API_MARSHMALLOW && mode.getType() == ActionMode.TYPE_FLOATING;
+			boolean floating = mode.getType() == ActionMode.TYPE_FLOATING;
 			// Only "cut" menu item uses this order "1" which doesn't present in non-editable TextView
 			textView.onCreateSelectionMenu(menu, floating ? 1 : 0);
 			return true;
@@ -747,6 +779,10 @@ public class CommentTextView extends TextView {
 						.setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS | MenuItem.SHOW_AS_ACTION_WITH_TEXT);
 			}
 		}
+		if (menu.findItem(android.R.id.copy) == null) {
+			menu.add(0, android.R.id.copy, order, android.R.string.copy)
+					.setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS | MenuItem.SHOW_AS_ACTION_WITH_TEXT);
+		}
 	}
 
 	private void onPrepareSelectionMenu(Menu menu) {
@@ -801,6 +837,7 @@ public class CommentTextView extends TextView {
 				restoreSelectionRunnable.run();
 			}
 			selectionMode.invalidateMenu();
+			invalidate();
 		}
 	}
 
@@ -865,6 +902,47 @@ public class CommentTextView extends TextView {
 
 	public long getPreferredDoubleTapTimeout() {
 		return Math.max(ViewConfiguration.getDoubleTapTimeout(), 500);
+	}
+
+	private int getSelectionHighlightColor() {
+		int color = getHighlightColor();
+		if (Color.alpha(color) == 0) {
+			color = ResourceUtils.getColor(getContext(), android.R.attr.textColorHighlight);
+		}
+		if (Color.alpha(color) == 0) {
+			ThemeEngine.Theme theme = ThemeEngine.getTheme(getContext());
+			color = GraphicsUtils.isLight(theme.window) ? 0x66666666 : 0x66aaaaaa;
+		}
+		return color;
+	}
+
+	private void drawSelectionHighlight(Canvas canvas) {
+		if (!isSelectionMode()) {
+			return;
+		}
+		CharSequence text = getText();
+		Layout layout = getLayout();
+		if (text == null || layout == null) {
+			return;
+		}
+		int start = getSelectionStart();
+		int end = getSelectionEnd();
+		int length = text.length();
+		int min = Math.max(0, Math.min(Math.min(start, end), length));
+		int max = Math.max(0, Math.min(Math.max(start, end), length));
+		if (max <= min) {
+			return;
+		}
+		selectionHighlightPath.reset();
+		layout.getSelectionPath(min, max, selectionHighlightPath);
+		if (selectionHighlightPath.isEmpty()) {
+			return;
+		}
+		selectionHighlightPaint.setColor(getSelectionHighlightColor());
+		canvas.save();
+		canvas.translate(getTotalPaddingLeft(), getTotalPaddingTop());
+		canvas.drawPath(selectionHighlightPath, selectionHighlightPaint);
+		canvas.restore();
 	}
 
 	private Uri createUri(String uriString) {
@@ -951,12 +1029,12 @@ public class CommentTextView extends TextView {
 		if (!isEnabled()) {
 			return false;
 		}
+		int action = event.getActionMasked();
+		float x = event.getX();
+		float y = event.getY();
 		if (isSelectionMode()) {
 			return super.onTouchEvent(event);
 		}
-		int action = event.getAction();
-		float x = event.getX();
-		float y = event.getY();
 		Point layoutPosition = fillLayoutPosition(x, y);
 		lastX = x;
 		lastY = y;
@@ -1096,6 +1174,7 @@ public class CommentTextView extends TextView {
 
 	@Override
 	protected void onDraw(Canvas canvas) {
+		drawSelectionHighlight(canvas);
 		super.onDraw(canvas);
 		OverlineSpan.draw(this, canvas);
 	}

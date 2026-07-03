@@ -10,7 +10,6 @@ import chan.content.ChanConfiguration;
 import chan.content.RedirectException;
 import chan.util.CommonUtils;
 import chan.util.StringUtils;
-import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.content.NetworkObserver;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.WatcherNotifications;
@@ -1068,10 +1067,8 @@ public class WatcherService extends BaseService {
 	};
 
 	private void updateNotificationColor() {
-		if (C.API_LOLLIPOP) {
-			ThemeEngine.Theme theme = ThemeEngine.attachAndApply(this);
-			notificationColor = theme.accent;
-		}
+		ThemeEngine.Theme theme = ThemeEngine.attachAndApply(this);
+		notificationColor = theme.accent;
 	}
 
 	private static final Worker WORKER_FOREGROUND = new Worker(ConcurrentUtils.PARALLEL_EXECUTOR);

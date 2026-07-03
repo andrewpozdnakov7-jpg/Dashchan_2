@@ -6,6 +6,7 @@ import android.content.pm.ApplicationInfo;
 import android.graphics.Bitmap;
 import android.graphics.Point;
 import android.graphics.SurfaceTexture;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.ParcelFileDescriptor;
@@ -16,65 +17,104 @@ import android.view.TextureView;
 import android.view.View;
 import chan.content.ChanManager;
 import chan.util.StringUtils;
+import com.mishiranu.dashchan.BuildConfig;
 import dalvik.system.PathClassLoader;
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.lang.ref.WeakReference;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.Collections;
+import java.util.Enumeration;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.concurrent.Semaphore;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
 
 public class VideoPlayer {
 	private static boolean loaded = false;
 	private static HolderInterface holder;
+
+	// Extraction requirements. The Holder static initializer below keeps the
+	// actual System.loadLibrary order explicit because the JNI dependencies are order-sensitive.
+	private static final String[] PLAYER_LIBRARIES = {"player"};
+	private static final String[] WEBM_REQUIRED_LIBRARIES =
+			{"avutil", "swresample", "swscale", "avcodec", "avformat", "yuv"};
+	private static final String[] WEBM_OPTIONAL_LIBRARIES = {"dav1d"};
+	private static final String[] BUNDLED_REQUIRED_LIBRARIES =
+			{"player", "dav1d", "avutil", "swresample", "swscale", "avcodec", "avformat", "yuv"};
 
 	public static Pair<Boolean, String> loadLibraries(Context context) {
 		synchronized (VideoPlayer.class) {
 			if (loaded) {
 				return new Pair<>(true, null);
 			}
-			ChanManager.ExtensionItem extensionItem = ChanManager.getInstance()
-					.getLibraryExtension(ChanManager.EXTENSION_NAME_LIB_WEBM);
-			if (extensionItem != null) {
-				String dir = extensionItem.getNativeLibraryDir();
-				if (dir != null) {
-					// System.loadLibrary uses a path from ClassLoader, so I must create one
-					// containing all paths to native libraries (client + webm libraries package).
-					// Holder class is loaded from this class loader, so all libraries will load correctly.
-					ApplicationInfo applicationInfo = context.getApplicationInfo();
-					PathClassLoader classLoader = new PathClassLoader(applicationInfo.sourceDir, applicationInfo
-							.nativeLibraryDir + File.pathSeparatorChar + dir, Context.class.getClassLoader());
-					try {
-						// Initialize class (invoke static block)
-						Class<?> holderClass = Class.forName(Holder.class.getName(), true, classLoader);
-						Field instanceField = holderClass.getDeclaredField("INSTANCE");
-						instanceField.setAccessible(true);
-						InvocationHandler handler = (InvocationHandler) instanceField.get(null);
-						holder = (HolderInterface) Proxy.newProxyInstance(VideoPlayer.class.getClassLoader(),
-								new Class[] { HolderInterface.class }, handler);
-						loaded = true;
-						return new Pair<>(true, null);
-					} catch (Exception | LinkageError e) {
-						e.printStackTrace();
-						String message = StringUtils.emptyIfNull(e.getMessage());
-						message = shortenMessagePath(context.getPackageCodePath(), message);
-						message = shortenMessagePath(dir, message);
-						if (message.endsWith("...")) {
-							message = message.substring(0, message.length() - 3);
-						} else if (message.endsWith(".")) {
-							message = message.substring(0, message.length() - 1);
-						}
-						return new Pair<>(false, message);
-					}
+			NativeLibraryPlan plan;
+			try {
+				plan = NativeLibraryPlan.createBundled(context);
+			} catch (IOException e) {
+				ChanManager.ExtensionItem extensionItem = ChanManager.getInstance().getWebmLibraryExtension();
+				if (extensionItem == null) {
+					e.printStackTrace();
+					return new Pair<>(false, formatLoadFailure("Bundled video libraries missing or broken", e));
+				}
+				try {
+					plan = NativeLibraryPlan.createExternal(context, extensionItem);
+				} catch (IOException externalException) {
+					e.printStackTrace();
+					externalException.printStackTrace();
+					return new Pair<>(false, formatLoadFailure("Bundled video libraries missing or broken", e) +
+							"\n\n" + formatLoadFailure("External WebM2 fallback failed", externalException));
 				}
 			}
-			return new Pair<>(false, null);
+			// System.loadLibrary uses a path from ClassLoader, so I must create one
+			// containing all paths to native libraries (client + webm libraries package).
+			// Holder class is loaded from this class loader, so all libraries will load correctly.
+			PathClassLoader classLoader = new PathClassLoader(plan.dexPath,
+					plan.librarySearchPath, Context.class.getClassLoader());
+			try {
+				// Initialize class (invoke static block)
+				Class<?> holderClass = Class.forName(Holder.class.getName(), true, classLoader);
+				Field instanceField = holderClass.getDeclaredField("INSTANCE");
+				instanceField.setAccessible(true);
+				InvocationHandler handler = (InvocationHandler) instanceField.get(null);
+				holder = (HolderInterface) Proxy.newProxyInstance(VideoPlayer.class.getClassLoader(),
+						new Class[] { HolderInterface.class }, handler);
+				loaded = true;
+				return new Pair<>(true, null);
+			} catch (Exception | LinkageError e) {
+				e.printStackTrace();
+				String message = StringUtils.emptyIfNull(e.getMessage());
+				message = shortenMessagePath(context.getPackageCodePath(), message);
+				message = shortenMessagePath(plan.librarySearchPath, message);
+				if (message.endsWith("...")) {
+					message = message.substring(0, message.length() - 3);
+				} else if (message.endsWith(".")) {
+					message = message.substring(0, message.length() - 1);
+				}
+				if (StringUtils.isEmpty(message)) {
+					message = e.getClass().getName();
+				}
+				return new Pair<>(false, message + "\n" + plan.describe());
+			}
 		}
+	}
+
+	private static String formatLoadFailure(String label, IOException exception) {
+		String message = exception.getMessage();
+		if (StringUtils.isEmpty(message)) {
+			message = exception.getClass().getName();
+		}
+		return label + ":\n" + message;
 	}
 
 	private static String shortenMessagePath(String path, String message) {
@@ -87,6 +127,17 @@ public class VideoPlayer {
 		} else {
 			return message;
 		}
+	}
+
+	private static String joinArray(String[] array) {
+		StringBuilder builder = new StringBuilder();
+		for (String item : array) {
+			if (builder.length() > 0) {
+				builder.append(", ");
+			}
+			builder.append(item);
+		}
+		return builder.toString();
 	}
 
 	public static boolean isLoaded() {
@@ -472,6 +523,9 @@ public class VideoPlayer {
 							result.put(key, value);
 						}
 					}
+					result.put("player_build", BuildConfig.NATIVE_PLAYER_FFMPEG_FLAVOR
+							+ " / " + joinArray(BuildConfig.NATIVE_PLAYER_ABIS));
+					result.put("device_abis", joinArray(Build.SUPPORTED_ABIS));
 					return result;
 				}
 			}
@@ -746,7 +800,343 @@ public class VideoPlayer {
 		@Override public native String[] getMetadata(long pointer);
 
 		static {
+			try {
+				System.loadLibrary("dav1d");
+			} catch (UnsatisfiedLinkError ignored) {
+				// Optional in older WebM library builds.
+			}
+			System.loadLibrary("avutil");
+			System.loadLibrary("swresample");
+			System.loadLibrary("swscale");
+			System.loadLibrary("avcodec");
+			System.loadLibrary("avformat");
+			System.loadLibrary("yuv");
 			System.loadLibrary("player");
 		}
+	}
+
+	private static class NativeLibraryPlan {
+		public final String dexPath;
+		public final String librarySearchPath;
+		private final String description;
+
+		private NativeLibraryPlan(String dexPath, String librarySearchPath, String description) {
+			this.dexPath = dexPath;
+			this.librarySearchPath = librarySearchPath;
+			this.description = description;
+		}
+
+		public String describe() {
+			return description;
+		}
+
+		public static NativeLibraryPlan createBundled(Context context)
+				throws IOException {
+			ApplicationInfo applicationInfo = context.getApplicationInfo();
+			String applicationSourceDir = requirePath(applicationInfo.sourceDir, "Application APK is unavailable");
+			File applicationSourceFile = requireSourceFile("app", applicationSourceDir);
+			try (ZipFile applicationZipFile = new ZipFile(applicationSourceFile)) {
+				String abi = findBundledAbi(applicationZipFile);
+				if (abi == null) {
+					throw new IOException(createBundledAbiError(applicationZipFile));
+				}
+				File bundledExtractedDir = extractLibraries(context, "bundled-webm", applicationZipFile,
+						applicationSourceFile, context.getPackageName(), BuildConfig.VERSION_CODE, abi,
+						BUNDLED_REQUIRED_LIBRARIES, null);
+				cleanupStaleNativeCache(context, bundledExtractedDir);
+				String librarySearchPath = bundledExtractedDir.getPath();
+				StringBuilder description = new StringBuilder();
+				description.append("bundledWebm=true");
+				description.append("\ndexPath=").append(applicationSourceDir);
+				description.append("\nlibrarySearchPath=").append(librarySearchPath);
+				description.append("\nplayerBuild=").append(BuildConfig.NATIVE_PLAYER_FFMPEG_FLAVOR)
+						.append(" / ").append(joinArray(BuildConfig.NATIVE_PLAYER_ABIS));
+				description.append("\ndeviceAbis=").append(joinArray(Build.SUPPORTED_ABIS));
+				description.append("\nselectedAbi=").append(abi);
+				description.append("\nappAvailableAbis=").append(describeAvailableAbis(applicationZipFile));
+				description.append("\nbundledWebmMissing=")
+						.append(StringUtils.emptyIfNull(describeMissingLibraries(applicationZipFile,
+								abi, BUNDLED_REQUIRED_LIBRARIES)));
+				description.append("\nbundledExtracted=").append(bundledExtractedDir.getPath());
+				return new NativeLibraryPlan(applicationSourceDir, librarySearchPath, description.toString());
+			}
+		}
+
+		public static NativeLibraryPlan createExternal(Context context, ChanManager.ExtensionItem extensionItem)
+				throws IOException {
+			ApplicationInfo applicationInfo = context.getApplicationInfo();
+			String applicationSourceDir = requirePath(applicationInfo.sourceDir, "Application APK is unavailable");
+			String extensionSourceDir = requirePath(extensionItem.getSourceDir(),
+					"WebM2 extension APK is unavailable: " + extensionItem.packageName);
+			File applicationSourceFile = requireSourceFile("app", applicationSourceDir);
+			File extensionSourceFile = requireSourceFile("webm", extensionSourceDir);
+			LinkedHashSet<String> dexPaths = new LinkedHashSet<>();
+			dexPaths.add(applicationSourceDir);
+			dexPaths.add(extensionSourceDir);
+			LinkedHashSet<String> libraryPaths = new LinkedHashSet<>();
+			try (ZipFile applicationZipFile = new ZipFile(applicationSourceFile);
+					ZipFile extensionZipFile = new ZipFile(extensionSourceFile)) {
+				String abi = findCommonAbi(applicationZipFile, extensionZipFile);
+				if (abi == null) {
+					throw new IOException(createCommonAbiError(applicationZipFile, extensionZipFile));
+				}
+				File applicationExtractedDir = extractLibraries(context, "app", applicationZipFile,
+						applicationSourceFile, context.getPackageName(), BuildConfig.VERSION_CODE, abi,
+						PLAYER_LIBRARIES, null);
+				File extensionExtractedDir = extractLibraries(context, "webm", extensionZipFile,
+						extensionSourceFile, extensionItem.packageName, extensionItem.versionCode, abi,
+						WEBM_REQUIRED_LIBRARIES, WEBM_OPTIONAL_LIBRARIES);
+				cleanupStaleNativeCache(context, applicationExtractedDir, extensionExtractedDir);
+				libraryPaths.add(applicationExtractedDir.getPath());
+				libraryPaths.add(extensionExtractedDir.getPath());
+				String librarySearchPath = joinPaths(libraryPaths);
+				StringBuilder description = new StringBuilder();
+				description.append("bundledWebm=false");
+				description.append("\nexternalWebm=true");
+				description.append("\ndexPath=").append(joinPaths(dexPaths));
+				description.append("\nlibrarySearchPath=").append(librarySearchPath);
+				description.append("\nplayerBuild=").append(BuildConfig.NATIVE_PLAYER_FFMPEG_FLAVOR)
+						.append(" / ").append(joinArray(BuildConfig.NATIVE_PLAYER_ABIS));
+				description.append("\ndeviceAbis=").append(joinArray(Build.SUPPORTED_ABIS));
+				description.append("\nselectedAbi=").append(abi);
+				description.append("\nappAvailableAbis=").append(describeAvailableAbis(applicationZipFile));
+				description.append("\nwebmAvailableAbis=").append(describeAvailableAbis(extensionZipFile));
+				description.append("\nappExtracted=").append(applicationExtractedDir.getPath());
+				description.append("\nwebmExtracted=").append(extensionExtractedDir.getPath());
+				return new NativeLibraryPlan(joinPaths(dexPaths), librarySearchPath, description.toString());
+			}
+		}
+
+		private static String requirePath(String path, String message) throws IOException {
+			if (StringUtils.isEmpty(path)) {
+				throw new IOException(message);
+			}
+			return path;
+		}
+
+		private static File requireSourceFile(String label, String sourceDir) throws IOException {
+			File sourceFile = new File(sourceDir);
+			if (!sourceFile.isFile()) {
+				throw new IOException(label + " APK is unavailable: " + sourceDir);
+			}
+			return sourceFile;
+		}
+
+		private static String joinPaths(Iterable<String> paths) {
+			StringBuilder builder = new StringBuilder();
+			for (String path : paths) {
+				if (StringUtils.isEmpty(path)) {
+					continue;
+				}
+				if (builder.length() > 0) {
+					builder.append(File.pathSeparatorChar);
+				}
+				builder.append(path);
+			}
+			return builder.toString();
+		}
+
+		private static File extractLibraries(Context context, String label, ZipFile zipFile, File sourceFile,
+				String packageName, long versionCode, String abi, String[] requiredLibraries,
+				String[] optionalLibraries) throws IOException {
+			File targetDir = new File(getNativeCacheDir(context), sanitize(label + "-" + packageName)
+					+ "-" + versionCode + "-" + sourceFile.lastModified() + "-" + abi);
+			if (!isExtractionComplete(targetDir, requiredLibraries)) {
+				deleteRecursively(targetDir);
+				if (!targetDir.mkdirs() && !targetDir.isDirectory()) {
+					throw new IOException("Unable to create native library cache: " + targetDir.getPath());
+				}
+				extractLibrarySet(zipFile, abi, targetDir, requiredLibraries, true);
+				extractLibrarySet(zipFile, abi, targetDir, optionalLibraries, false);
+				File marker = new File(targetDir, ".complete");
+				if (!marker.createNewFile() && !marker.isFile()) {
+					throw new IOException("Unable to mark native library cache complete: " + targetDir.getPath());
+				}
+			}
+			return targetDir;
+		}
+
+		private static File getNativeCacheDir(Context context) {
+			File cacheDir = context.getCodeCacheDir();
+			if (cacheDir == null) {
+				cacheDir = context.getCacheDir();
+			}
+			return new File(cacheDir, "native-player");
+		}
+
+		private static String findBundledAbi(ZipFile applicationZipFile) {
+			for (String abi : Build.SUPPORTED_ABIS) {
+				if (hasLibraries(applicationZipFile, abi, BUNDLED_REQUIRED_LIBRARIES)) {
+					return abi;
+				}
+			}
+			return null;
+		}
+
+		private static String findCommonAbi(ZipFile applicationZipFile, ZipFile extensionZipFile) {
+			for (String abi : Build.SUPPORTED_ABIS) {
+				if (hasLibraries(applicationZipFile, abi, PLAYER_LIBRARIES) &&
+						hasLibraries(extensionZipFile, abi, WEBM_REQUIRED_LIBRARIES)) {
+					return abi;
+				}
+			}
+			return null;
+		}
+
+		private static boolean hasLibraries(ZipFile zipFile, String abi, String[] libraries) {
+			for (String library : libraries) {
+				if (zipFile.getEntry(getEntryName(abi, library)) == null) {
+					return false;
+				}
+			}
+			return true;
+		}
+
+		private static String createBundledAbiError(ZipFile applicationZipFile) {
+			StringBuilder builder = new StringBuilder();
+			builder.append("Missing bundled native ABI for video player");
+			builder.append(": device=").append(joinArray(Build.SUPPORTED_ABIS));
+			builder.append(", appApk=").append(describeAvailableAbis(applicationZipFile));
+			builder.append(", playerBuild=").append(BuildConfig.NATIVE_PLAYER_FFMPEG_FLAVOR)
+					.append(" / ").append(joinArray(BuildConfig.NATIVE_PLAYER_ABIS));
+			for (String abi : Build.SUPPORTED_ABIS) {
+				String bundledMissing = describeMissingLibraries(applicationZipFile, abi, BUNDLED_REQUIRED_LIBRARIES);
+				if (!StringUtils.isEmpty(bundledMissing)) {
+					builder.append("\n").append(abi).append(": bundledMissing=").append(bundledMissing);
+				}
+			}
+			return builder.toString();
+		}
+
+		private static String createCommonAbiError(ZipFile applicationZipFile, ZipFile extensionZipFile) {
+			StringBuilder builder = new StringBuilder();
+			builder.append("Missing common native ABI for video player");
+			builder.append(": device=").append(joinArray(Build.SUPPORTED_ABIS));
+			builder.append(", appApk=").append(describeAvailableAbis(applicationZipFile));
+			builder.append(", webmApk=").append(describeAvailableAbis(extensionZipFile));
+			for (String abi : Build.SUPPORTED_ABIS) {
+				String appMissing = describeMissingLibraries(applicationZipFile, abi, PLAYER_LIBRARIES);
+				String webmMissing = describeMissingLibraries(extensionZipFile, abi, WEBM_REQUIRED_LIBRARIES);
+				if (!StringUtils.isEmpty(appMissing) || !StringUtils.isEmpty(webmMissing)) {
+					builder.append("\n").append(abi).append(": appMissing=")
+							.append(StringUtils.emptyIfNull(appMissing));
+					builder.append(", webmMissing=").append(StringUtils.emptyIfNull(webmMissing));
+				}
+			}
+			return builder.toString();
+		}
+
+		private static String describeMissingLibraries(ZipFile zipFile, String abi, String[] libraries) {
+			StringBuilder builder = new StringBuilder();
+			for (String library : libraries) {
+				if (zipFile.getEntry(getEntryName(abi, library)) == null) {
+					if (builder.length() > 0) {
+						builder.append(", ");
+					}
+					builder.append("lib").append(library).append(".so");
+				}
+			}
+			return builder.toString();
+		}
+
+		private static String describeAvailableAbis(ZipFile zipFile) {
+			LinkedHashSet<String> abis = new LinkedHashSet<>();
+			Enumeration<? extends ZipEntry> entries = zipFile.entries();
+			while (entries.hasMoreElements()) {
+				String name = entries.nextElement().getName();
+				if (name.startsWith("lib/") && name.endsWith(".so")) {
+					int start = "lib/".length();
+					int end = name.indexOf('/', start);
+					if (end > start) {
+						abis.add(name.substring(start, end));
+					}
+				}
+			}
+			return abis.isEmpty() ? "none" : joinArray(abis.toArray(new String[0]));
+		}
+
+		private static void cleanupStaleNativeCache(Context context, File... keepDirs) throws IOException {
+			File cacheDir = getNativeCacheDir(context);
+			File[] children = cacheDir.listFiles();
+			if (children == null) {
+				return;
+			}
+			LinkedHashSet<String> keepPaths = new LinkedHashSet<>();
+			for (File keepDir : keepDirs) {
+				keepPaths.add(keepDir.getCanonicalPath());
+			}
+			for (File child : children) {
+				if (!keepPaths.contains(child.getCanonicalPath())) {
+					deleteRecursively(child);
+				}
+			}
+		}
+
+		private static boolean isExtractionComplete(File targetDir, String[] requiredLibraries) {
+			if (!new File(targetDir, ".complete").isFile()) {
+				return false;
+			}
+			for (String library : requiredLibraries) {
+				if (!new File(targetDir, "lib" + library + ".so").isFile()) {
+					return false;
+				}
+			}
+			return true;
+		}
+
+		private static void extractLibrarySet(ZipFile zipFile, String abi, File targetDir,
+				String[] libraries, boolean required) throws IOException {
+			if (libraries == null) {
+				return;
+			}
+			for (String library : libraries) {
+				ZipEntry entry = zipFile.getEntry(getEntryName(abi, library));
+				if (entry == null) {
+					if (required) {
+						throw new IOException("Missing native library: " + library + " for " + abi);
+					}
+				} else {
+					extractLibrary(zipFile, entry, new File(targetDir, "lib" + library + ".so"));
+				}
+			}
+		}
+
+		private static String getEntryName(String abi, String library) {
+			return "lib/" + abi + "/lib" + library + ".so";
+		}
+
+		private static void extractLibrary(ZipFile zipFile, ZipEntry entry, File targetFile) throws IOException {
+			try (InputStream input = new BufferedInputStream(zipFile.getInputStream(entry));
+					OutputStream output = new BufferedOutputStream(new FileOutputStream(targetFile))) {
+				byte[] buffer = new byte[64 * 1024];
+				int count;
+				while ((count = input.read(buffer)) != -1) {
+					output.write(buffer, 0, count);
+				}
+			}
+			targetFile.setReadable(true, true);
+		}
+
+		private static void deleteRecursively(File file) throws IOException {
+			if (!file.exists()) {
+				return;
+			}
+			if (file.isDirectory()) {
+				File[] files = file.listFiles();
+				if (files != null) {
+					for (File child : files) {
+						deleteRecursively(child);
+					}
+				}
+			}
+			if (!file.delete() && file.exists()) {
+				throw new IOException("Unable to delete stale native cache file: " + file.getPath());
+			}
+		}
+
+		private static String sanitize(String value) {
+			return value.replaceAll("[^a-zA-Z0-9._-]", "_");
+		}
+
 	}
 }

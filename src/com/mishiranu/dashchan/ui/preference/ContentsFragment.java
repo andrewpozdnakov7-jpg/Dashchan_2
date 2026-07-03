@@ -1,7 +1,6 @@
 package com.mishiranu.dashchan.ui.preference;
 
 import android.app.AlertDialog;
-import android.app.Dialog;
 import android.content.DialogInterface;
 import android.os.Bundle;
 import android.util.Pair;
@@ -10,7 +9,6 @@ import androidx.annotation.NonNull;
 import androidx.fragment.app.DialogFragment;
 import androidx.lifecycle.ViewModelProvider;
 import chan.util.StringUtils;
-import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.async.ExecutorTask;
@@ -28,8 +26,6 @@ import com.mishiranu.dashchan.widget.ProgressDialog;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
-import java.util.Set;
 
 public class ContentsFragment extends PreferenceFragment {
 	private CheckPreference replyNotifications;
@@ -75,14 +71,9 @@ public class ContentsFragment extends PreferenceFragment {
 		replyNotifications = addCheck(false, "reply_notifications", false,
 				R.string.reply_notifications, R.string.reply_notifications__format);
 		replyNotifications.setOnClickListener(p -> {
-			if (C.API_OREO) {
-				Preferences.setWatcherNotifications(p.getValue() ? Collections.emptySet()
-						: Collections.singleton(Preferences.NotificationFeature.ENABLED));
-				invalidateReplyNotifications();
-			} else {
-				WatcherNotificationsDialog dialog = new WatcherNotificationsDialog();
-				dialog.show(getChildFragmentManager(), WatcherNotificationsDialog.class.getName());
-			}
+			Preferences.setWatcherNotifications(p.getValue() ? Collections.emptySet()
+					: Collections.singleton(Preferences.NotificationFeature.ENABLED));
+			invalidateReplyNotifications();
 		});
 		invalidateReplyNotifications();
 
@@ -111,51 +102,6 @@ public class ContentsFragment extends PreferenceFragment {
 	private void invalidateReplyNotifications() {
 		replyNotifications.setValue(Preferences.getWatcherNotifications()
 				.contains(Preferences.NotificationFeature.ENABLED));
-	}
-
-	public static class WatcherNotificationsDialog extends DialogFragment {
-		private static final String EXTRA_CHECKED_ITEMS = "checkedItems";
-
-		private boolean[] checkedItems;
-
-		@NonNull
-		@Override
-		public Dialog onCreateDialog(Bundle savedInstanceState) {
-			String[] items = new String[Preferences.NotificationFeature.values().length];
-			for (int i = 0; i < items.length; i++) {
-				items[i] = getString(Preferences.NotificationFeature.values()[i].titleResId);
-			}
-			if (savedInstanceState != null) {
-				checkedItems = savedInstanceState.getBooleanArray(EXTRA_CHECKED_ITEMS);
-			} else {
-				checkedItems = new boolean[Preferences.NotificationFeature.values().length];
-				Set<Preferences.NotificationFeature> notificationFeatures = Preferences.getWatcherNotifications();
-				for (int i = 0; i < checkedItems.length; i++) {
-					checkedItems[i] = notificationFeatures.contains(Preferences.NotificationFeature.values()[i]);
-				}
-			}
-			return new AlertDialog.Builder(requireContext())
-					.setTitle(R.string.reply_notifications)
-					.setMultiChoiceItems(items, checkedItems, (d, which, isChecked) -> checkedItems[which] = isChecked)
-					.setPositiveButton(android.R.string.ok, (d, which) -> {
-						HashSet<Preferences.NotificationFeature> notificationFeatures = new HashSet<>();
-						for (int i = 0; i < checkedItems.length; i++) {
-							if (checkedItems[i]) {
-								notificationFeatures.add(Preferences.NotificationFeature.values()[i]);
-							}
-						}
-						Preferences.setWatcherNotifications(notificationFeatures);
-						((ContentsFragment) getParentFragment()).invalidateReplyNotifications();
-					})
-					.setNegativeButton(android.R.string.cancel, null)
-					.create();
-		}
-
-		@Override
-		public void onSaveInstanceState(@NonNull Bundle outState) {
-			super.onSaveInstanceState(outState);
-			outState.putBooleanArray(EXTRA_CHECKED_ITEMS, checkedItems);
-		}
 	}
 
 	public static class ClearCacheDialog extends DialogFragment {

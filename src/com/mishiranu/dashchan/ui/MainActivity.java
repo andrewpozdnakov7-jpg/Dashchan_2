@@ -3,14 +3,12 @@ package com.mishiranu.dashchan.ui;
 import android.animation.LayoutTransition;
 import android.app.AlertDialog;
 import android.app.NotificationManager;
-import android.app.PendingIntent;
 import android.content.ActivityNotFoundException;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
 import android.content.res.Configuration;
-import android.graphics.drawable.ColorDrawable;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.IBinder;
@@ -19,7 +17,6 @@ import android.os.SystemClock;
 import android.provider.DocumentsContract;
 import android.util.Pair;
 import android.view.ActionMode;
-import android.view.ContextThemeWrapper;
 import android.view.KeyEvent;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -31,7 +28,6 @@ import android.view.inputmethod.InputMethodManager;
 import android.widget.FrameLayout;
 import android.widget.Toolbar;
 import androidx.annotation.NonNull;
-import androidx.core.app.NotificationCompat;
 import androidx.core.view.GravityCompat;
 import androidx.fragment.app.FragmentManager;
 import androidx.fragment.app.FragmentTransaction;
@@ -49,7 +45,6 @@ import com.mishiranu.dashchan.content.CacheManager;
 import com.mishiranu.dashchan.content.LocaleManager;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.async.ReadUpdateTask;
-import com.mishiranu.dashchan.content.async.TaskViewModel;
 import com.mishiranu.dashchan.content.database.ChanDatabase;
 import com.mishiranu.dashchan.content.model.GalleryItem;
 import com.mishiranu.dashchan.content.model.PostNumber;
@@ -58,6 +53,7 @@ import com.mishiranu.dashchan.content.service.DownloadService;
 import com.mishiranu.dashchan.content.service.PostingService;
 import com.mishiranu.dashchan.content.service.WatcherService;
 import com.mishiranu.dashchan.content.storage.FavoritesStorage;
+import com.mishiranu.dashchan.content.update.UpdateDialogHelper;
 import com.mishiranu.dashchan.ui.gallery.GalleryOverlay;
 import com.mishiranu.dashchan.ui.navigator.Page;
 import com.mishiranu.dashchan.ui.navigator.PageFragment;
@@ -157,18 +153,14 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
-		if (C.API_LOLLIPOP) {
-			requestWindowFeature(Window.FEATURE_NO_TITLE);
-			requestWindowFeature(Window.FEATURE_ACTION_MODE_OVERLAY);
-		}
+		requestWindowFeature(Window.FEATURE_NO_TITLE);
+		requestWindowFeature(Window.FEATURE_ACTION_MODE_OVERLAY);
 		ExpandedScreen.PreThemeInit expandedScreenPreThemeInit = new ExpandedScreen
 				.PreThemeInit(this, Preferences.isExpandedScreen());
 		ThemeEngine.applyTheme(this);
 		ExpandedScreen.Init expandedScreenInit = expandedScreenPreThemeInit.initAfterTheme();
 		super.onCreate(savedInstanceState);
-		// ExpandedScreen should handle this for R+
-		getWindow().setSoftInputMode(C.API_R ? WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING
-				: ViewUtils.SOFT_INPUT_ADJUST_RESIZE_COMPAT);
+		getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING);
 		float density = ResourceUtils.obtainDensity(this);
 		setContentView(R.layout.activity_main);
 		ClickableToast.register(this);
@@ -181,20 +173,8 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		drawerCommon = findViewById(R.id.drawer_common);
 		drawerWide = findViewById(R.id.drawer_wide);
 		ThemeEngine.Theme theme = ThemeEngine.getTheme(this);
-		Context drawerContext;
-		int drawerBackground;
-		if (C.API_LOLLIPOP) {
-			drawerContext = this;
-			drawerBackground = theme.card;
-		} else {
-			boolean black = theme.isBlack4();
-			drawerContext = new ContextThemeWrapper(this, R.style.Theme_Main_Dark);
-			drawerBackground = black ? 0xff000000 : 0xff202020;
-			if (black) {
-				getActionBar().setLogo(android.R.color.transparent);
-				getActionBar().setBackgroundDrawable(new ColorDrawable(0xff000000));
-			}
-		}
+		Context drawerContext = this;
+		int drawerBackground = theme.card;
 		drawerCommon.setBackgroundColor(drawerBackground);
 		drawerWide.setBackgroundColor(drawerBackground);
 		drawerForm = new DrawerForm(drawerContext, this, getSupportFragmentManager(), watcherServiceClient);
@@ -204,34 +184,25 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		drawerLayout = findViewById(R.id.drawer_layout);
 		drawerLayout.setSaveEnabled(false);
 		FrameLayout drawerInterlayer = findViewById(R.id.drawer_interlayer);
-		if (C.API_LOLLIPOP) {
-			getLayoutInflater().inflate(R.layout.widget_toolbar, drawerInterlayer);
-			Toolbar toolbar = findViewById(R.id.toolbar);
-			setActionBar(toolbar);
-			setTitle(null);
-			// Allow CustomSearchView to ignore content inset
-			toolbar.setClipChildren(false);
-			toolbarHolder = ViewFactory.addToolbarTitle(toolbar);
-			toolbarExtra = findViewById(R.id.toolbar_extra);
-			LayoutTransition layoutTransition = new LayoutTransition();
-			layoutTransition.setStartDelay(LayoutTransition.APPEARING, 0);
-			layoutTransition.setStartDelay(LayoutTransition.CHANGE_DISAPPEARING, 0);
-			layoutTransition.setDuration(100);
-			toolbarExtra.setLayoutTransition(layoutTransition);
-		} else {
-			// Show white logo on search
-			getActionBar().setIcon(R.mipmap.ic_logo);
-		}
+		getLayoutInflater().inflate(R.layout.widget_toolbar, drawerInterlayer);
+		Toolbar toolbar = findViewById(R.id.toolbar);
+		setActionBar(toolbar);
+		setTitle(null);
+		// Allow CustomSearchView to ignore content inset
+		toolbar.setClipChildren(false);
+		toolbarHolder = ViewFactory.addToolbarTitle(toolbar);
+		toolbarExtra = findViewById(R.id.toolbar_extra);
+		LayoutTransition layoutTransition = new LayoutTransition();
+		layoutTransition.setStartDelay(LayoutTransition.APPEARING, 0);
+		layoutTransition.setStartDelay(LayoutTransition.CHANGE_DISAPPEARING, 0);
+		layoutTransition.setDuration(100);
+		toolbarExtra.setLayoutTransition(layoutTransition);
 		View toolbarLayout = findViewById(R.id.toolbar_layout);
 
 		drawerToggle = new DrawerToggle(this, toolbarHolder != null
 				? toolbarHolder.toolbar.getContext() : null, drawerLayout);
-		if (C.API_LOLLIPOP) {
-			drawerCommon.setElevation(4f * density);
-			drawerWide.setElevation(4f * density);
-		} else {
-			drawerLayout.setDrawerShadow(R.drawable.drawer_shadow, GravityCompat.START);
-		}
+		drawerCommon.setElevation(4f * density);
+		drawerWide.setElevation(4f * density);
 		drawerLayout.addDrawerListener(drawerToggle);
 		drawerLayout.addDrawerListener(drawerForm);
 		if (toolbarHolder == null) {
@@ -330,8 +301,8 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 				}
 			}
 			if (savedInstanceState != null) {
-				currentFragmentFromSaved = (ContentFragment) savedInstanceState
-						.<StackItem>getParcelable(EXTRA_CURRENT_FRAGMENT).create(null);
+				currentFragmentFromSaved = (ContentFragment) AndroidUtils
+						.getParcelable(savedInstanceState, EXTRA_CURRENT_FRAGMENT, StackItem.class).create(null);
 				if (currentFragmentFromSaved == null) {
 					savedInstanceState = null;
 				}
@@ -339,10 +310,13 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		}
 
 		if (savedInstanceState != null) {
-			fragments.addAll(savedInstanceState.getParcelableArrayList(EXTRA_FRAGMENTS));
-			stackPageItems.addAll(savedInstanceState.getParcelableArrayList(EXTRA_STACK_PAGE_ITEMS));
-			preservedPageItems.addAll(savedInstanceState.getParcelableArrayList(EXTRA_PRESERVED_PAGE_ITEMS));
-			currentPageItem = savedInstanceState.getParcelable(EXTRA_CURRENT_PAGE_ITEM);
+			fragments.addAll(AndroidUtils.getParcelableArrayList(savedInstanceState, EXTRA_FRAGMENTS,
+					StackItem.class));
+			stackPageItems.addAll(AndroidUtils.getParcelableArrayList(savedInstanceState, EXTRA_STACK_PAGE_ITEMS,
+					SavedPageItem.class));
+			preservedPageItems.addAll(AndroidUtils.getParcelableArrayList(savedInstanceState,
+					EXTRA_PRESERVED_PAGE_ITEMS, SavedPageItem.class));
+			currentPageItem = AndroidUtils.getParcelable(savedInstanceState, EXTRA_CURRENT_PAGE_ITEM, PageItem.class);
 		}
 		Iterator<SavedPageItem> iterator = new ConcatIterable<>(preservedPageItems, stackPageItems).iterator();
 		while (iterator.hasNext()) {
@@ -396,7 +370,9 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 			}
 		}
 
-		startUpdateTask(savedInstanceState == null);
+		if (savedInstanceState == null) {
+			UpdateDialogHelper.checkAutomatically(this);
+		}
 		ExtensionsTrustLoop.handleUntrustedExtensions(this, extensionsTrustLoopState);
 		if (storageRequestState == StorageRequestState.INSTRUCTIONS) {
 			showStorageInstructionsDialog();
@@ -455,12 +431,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	@Override
 	public void setTitleSubtitle(CharSequence title, CharSequence subtitle) {
-		if (C.API_LOLLIPOP) {
-			toolbarHolder.update(title, subtitle);
-		} else {
-			setTitle(title);
-			getActionBar().setSubtitle(subtitle);
-		}
+		toolbarHolder.update(title, subtitle);
 	}
 
 	@Override
@@ -605,7 +576,8 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	}
 
 	private void navigateIntentUnchecked(Intent intent) {
-		ReadUpdateTask.UpdateDataMap updateDataMap = intent.getParcelableExtra(C.EXTRA_UPDATE_DATA_MAP);
+		ReadUpdateTask.UpdateDataMap updateDataMap = AndroidUtils.getParcelableExtra(intent,
+				C.EXTRA_UPDATE_DATA_MAP, ReadUpdateTask.UpdateDataMap.class);
 		if (updateDataMap != null) {
 			fragments.clear();
 			navigateFragment(new UpdateFragment(updateDataMap), null, true);
@@ -613,7 +585,8 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 			String chanName = intent.getStringExtra(C.EXTRA_CHAN_NAME);
 			String boardName = intent.getStringExtra(C.EXTRA_BOARD_NAME);
 			String threadNumber = intent.getStringExtra(C.EXTRA_THREAD_NUMBER);
-			PostingService.FailResult failResult = intent.getParcelableExtra(C.EXTRA_FAIL_RESULT);
+			PostingService.FailResult failResult = AndroidUtils.getParcelableExtra(intent,
+					C.EXTRA_FAIL_RESULT, PostingService.FailResult.class);
 			ContentFragment currentFragment = getCurrentFragment();
 			boolean replace = true;
 			if (currentFragment instanceof PostingFragment &&
@@ -1879,17 +1852,13 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 		@Override
 		public void requestPermission() {
-			if (C.USE_SAF) {
-				if (storageRequestState == StorageRequestState.NONE) {
-					if (Preferences.getDownloadUriTree(MainActivity.this) != null) {
-						downloadBinder.onPermissionResult(DownloadService.PermissionResult.SUCCESS);
-					} else {
-						storageRequestState = StorageRequestState.INSTRUCTIONS;
-						showStorageInstructionsDialog();
-					}
+			if (storageRequestState == StorageRequestState.NONE) {
+				if (Preferences.getDownloadUriTree(MainActivity.this) != null) {
+					downloadBinder.onPermissionResult(DownloadService.PermissionResult.SUCCESS);
+				} else {
+					storageRequestState = StorageRequestState.INSTRUCTIONS;
+					showStorageInstructionsDialog();
 				}
-			} else {
-				downloadBinder.onPermissionResult(DownloadService.PermissionResult.SUCCESS);
 			}
 		}
 	};
@@ -1929,10 +1898,8 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 							.putExtra("android.provider.extra.SHOW_ADVANCED", true)
 							.putExtra("android.content.extra.SHOW_ADVANCED", true)
 							.putExtra(Intent.EXTRA_LOCAL_ONLY, true);
-					if (C.API_OREO) {
-						intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, DocumentsContract
-								.buildRootUri("com.android.externalstorage.documents", "primary"));
-					}
+					intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, DocumentsContract
+							.buildRootUri("com.android.externalstorage.documents", "primary"));
 					try {
 						startActivityForResult(intent, C.REQUEST_CODE_OPEN_URI_TREE);
 					} catch (ActivityNotFoundException e) {
@@ -1968,57 +1935,6 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		} else {
 			lastStorageRequestResult = cancel;
 		}
-	}
-
-	public static class UpdateViewModel extends TaskViewModel.Proxy<ReadUpdateTask, ReadUpdateTask.Callback> {}
-
-	private void startUpdateTask(boolean allowStart) {
-		// Check for updates once per 12 hours
-		UpdateViewModel viewModel = new ViewModelProvider(this).get(UpdateViewModel.class);
-		if (allowStart && !viewModel.hasTaskOrValue() && Preferences.isCheckUpdatesOnStart() &&
-				System.currentTimeMillis() - Preferences.getLastUpdateCheck() >= 12 * 60 * 60 * 1000) {
-			ReadUpdateTask task = new ReadUpdateTask(this, viewModel.callback);
-			task.execute(ConcurrentUtils.PARALLEL_EXECUTOR);
-			viewModel.attach(task);
-		}
-		viewModel.observe(this, (updateDataMap, errorItem) -> {
-			Preferences.setLastUpdateCheck(System.currentTimeMillis());
-			if (updateDataMap != null) {
-				int count = UpdateFragment.checkNewVersions(updateDataMap);
-				if (count > 0) {
-					handleUpdateData(updateDataMap, count);
-				}
-			}
-		});
-	}
-
-	private void handleUpdateData(ReadUpdateTask.UpdateDataMap updateDataMap, int count) {
-		NotificationManager notificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-		if (C.API_OREO) {
-			notificationManager.createNotificationChannel(AndroidUtils
-					.createHeadsUpNotificationChannel(C.NOTIFICATION_CHANNEL_UPDATES,
-							getString(R.string.updates)));
-		}
-		NotificationCompat.Builder builder = new NotificationCompat.Builder(this, C.NOTIFICATION_CHANNEL_UPDATES);
-		builder.setSmallIcon(R.drawable.ic_new_releases_white_24dp);
-		String text = ResourceUtils.getColonString(getResources(), R.string.updates_available__genitive, count);
-		if (C.API_LOLLIPOP) {
-			builder.setColor(ThemeEngine.getTheme(this).accent);
-			builder.setPriority(NotificationCompat.PRIORITY_HIGH);
-			builder.setVibrate(new long[0]);
-		} else {
-			builder.setTicker(text);
-		}
-		builder.setContentTitle(getString(R.string.application_name_update__format,
-				AndroidUtils.getApplicationLabel(this)));
-		builder.setContentText(text);
-		// Set action to ensure unique pending intent
-		Intent intent = new Intent(this, MainActivity.class).setAction("updates")
-				.putExtra(C.EXTRA_UPDATE_DATA_MAP, updateDataMap)
-				.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-		builder.setContentIntent(PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT));
-		builder.setAutoCancel(true);
-		notificationManager.notify(C.NOTIFICATION_ID_UPDATES, builder.build());
 	}
 
 	@Override

@@ -11,12 +11,11 @@ import android.os.ParcelFileDescriptor;
 import android.provider.OpenableColumns;
 import androidx.annotation.NonNull;
 import chan.util.CommonUtils;
-import com.mishiranu.dashchan.C;
 import java.io.File;
 import java.io.FileNotFoundException;
 
 public class FileProvider extends ContentProvider {
-	private static final String AUTHORITY = "io.dashchan2.provider";
+	private static final String AUTHORITY = "com.mishiranu.providers.dashchan";
 	private static final String PATH_UPDATES = "updates";
 	private static final String PATH_DOWNLOADS = "downloads";
 	private static final String PATH_SHARE = "share";
@@ -61,7 +60,7 @@ public class FileProvider extends ContentProvider {
 	}
 
 	public static Uri convertUpdatesUri(Uri uri) {
-		if (C.API_NOUGAT && "file".equals(uri.getScheme())) {
+		if ("file".equals(uri.getScheme())) {
 			File fileParent = new File(uri.getPath()).getParentFile();
 			File directory = getUpdatesDirectory();
 			if (fileParent != null && fileParent.equals(directory)) {
@@ -88,18 +87,16 @@ public class FileProvider extends ContentProvider {
 	private static InternalFile shareFile;
 
 	private static InternalFile convertFile(File directory, File file, String type, String providerPath) {
-		if (C.API_NOUGAT) {
-			String filePath = file.getAbsolutePath();
-			String directoryPath = directory.getAbsolutePath();
-			if (filePath.startsWith(directoryPath)) {
-				filePath = filePath.substring(directoryPath.length());
-				if (filePath.startsWith("/")) {
-					filePath = filePath.substring(1);
-				}
-				Uri uri = new Uri.Builder().scheme("content").authority(AUTHORITY)
-						.appendPath(providerPath).appendEncodedPath(filePath).build();
-				return new InternalFile(file, type, uri);
+		String filePath = file.getAbsolutePath();
+		String directoryPath = directory.getAbsolutePath();
+		if (filePath.startsWith(directoryPath)) {
+			filePath = filePath.substring(directoryPath.length());
+			if (filePath.startsWith("/")) {
+				filePath = filePath.substring(1);
 			}
+			Uri uri = new Uri.Builder().scheme("content").authority(AUTHORITY)
+					.appendPath(providerPath).appendEncodedPath(filePath).build();
+			return new InternalFile(file, type, uri);
 		}
 		return null;
 	}

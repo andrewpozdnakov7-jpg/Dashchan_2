@@ -446,11 +446,88 @@ public class Preferences {
 	public static final boolean DEFAULT_CHECK_UPDATES_ON_START = true;
 
 	public static boolean isCheckUpdatesOnStart() {
-		return PREFERENCES.getBoolean(KEY_CHECK_UPDATES_ON_START, DEFAULT_CHECK_UPDATES_ON_START);
+		return isUpdateAutoCheckEnabled();
 	}
 
 	public static void setCheckUpdatesOnStart(boolean checkUpdatesOnStart) {
-		PREFERENCES.edit().put(KEY_CHECK_UPDATES_ON_START, checkUpdatesOnStart).close();
+		setUpdateAutoCheckEnabled(checkUpdatesOnStart);
+	}
+
+	public static final String KEY_UPDATE_AUTO_CHECK_ENABLED = "update_auto_check_enabled";
+	public static final boolean DEFAULT_UPDATE_AUTO_CHECK_ENABLED = true;
+
+	public static boolean isUpdateAutoCheckEnabled() {
+		if (PREFERENCES.getAll().containsKey(KEY_UPDATE_AUTO_CHECK_ENABLED)) {
+			return PREFERENCES.getBoolean(KEY_UPDATE_AUTO_CHECK_ENABLED, DEFAULT_UPDATE_AUTO_CHECK_ENABLED);
+		}
+		return PREFERENCES.getBoolean(KEY_CHECK_UPDATES_ON_START, DEFAULT_UPDATE_AUTO_CHECK_ENABLED);
+	}
+
+	public static void setUpdateAutoCheckEnabled(boolean updateAutoCheckEnabled) {
+		PREFERENCES.edit()
+				.put(KEY_UPDATE_AUTO_CHECK_ENABLED, updateAutoCheckEnabled)
+				.put(KEY_CHECK_UPDATES_ON_START, updateAutoCheckEnabled)
+				.close();
+	}
+
+	public static final String KEY_UPDATE_LAST_CHECK_TIME = "update_last_check_time";
+
+	public static long getUpdateLastCheckTime() {
+		return PREFERENCES.getLong(KEY_UPDATE_LAST_CHECK_TIME, 0L);
+	}
+
+	public static void setUpdateLastCheckTime(long updateLastCheckTime) {
+		PREFERENCES.edit().put(KEY_UPDATE_LAST_CHECK_TIME, updateLastCheckTime).close();
+	}
+
+	public static final String KEY_UPDATE_LAST_ERROR = "update_last_error";
+
+	public static String getUpdateLastError() {
+		return PREFERENCES.getString(KEY_UPDATE_LAST_ERROR, null);
+	}
+
+	public static void setUpdateLastError(String updateLastError) {
+		PREFERENCES.edit().put(KEY_UPDATE_LAST_ERROR, updateLastError).close();
+	}
+
+	public static final String KEY_UPDATE_SKIPPED_VERSION_CODE = "update_skipped_version_code";
+
+	public static int getUpdateSkippedVersionCode() {
+		return PREFERENCES.getInt(KEY_UPDATE_SKIPPED_VERSION_CODE, 0);
+	}
+
+	public static void setUpdateSkippedVersionCode(int updateSkippedVersionCode) {
+		PREFERENCES.edit().put(KEY_UPDATE_SKIPPED_VERSION_CODE, updateSkippedVersionCode).close();
+	}
+
+	public static final String KEY_UPDATE_REMIND_AFTER_TIME = "update_remind_after_time";
+
+	public static long getUpdateRemindAfterTime() {
+		return PREFERENCES.getLong(KEY_UPDATE_REMIND_AFTER_TIME, 0L);
+	}
+
+	public static void setUpdateRemindAfterTime(long updateRemindAfterTime) {
+		PREFERENCES.edit().put(KEY_UPDATE_REMIND_AFTER_TIME, updateRemindAfterTime).close();
+	}
+
+	public static final String KEY_UPDATE_LAST_SEEN_VERSION_CODE = "update_last_seen_version_code";
+
+	public static int getUpdateLastSeenVersionCode() {
+		return PREFERENCES.getInt(KEY_UPDATE_LAST_SEEN_VERSION_CODE, 0);
+	}
+
+	public static void setUpdateLastSeenVersionCode(int updateLastSeenVersionCode) {
+		PREFERENCES.edit().put(KEY_UPDATE_LAST_SEEN_VERSION_CODE, updateLastSeenVersionCode).close();
+	}
+
+	public static final String KEY_UPDATE_LAST_SOURCE = "update_last_source";
+
+	public static String getUpdateLastSource() {
+		return PREFERENCES.getString(KEY_UPDATE_LAST_SOURCE, null);
+	}
+
+	public static void setUpdateLastSource(String updateLastSource) {
+		PREFERENCES.edit().put(KEY_UPDATE_LAST_SOURCE, updateLastSource).close();
 	}
 
 	public static final String KEY_CLOSE_ON_BACK = "close_on_back";
@@ -1234,7 +1311,7 @@ public class Preferences {
 	}
 
 	public static final String KEY_USE_VIDEO_PLAYER = "use_video_player";
-	public static final boolean DEFAULT_USE_VIDEO_PLAYER = false;
+	public static final boolean DEFAULT_USE_VIDEO_PLAYER = true;
 
 	public static boolean isUseVideoPlayer() {
 		return PREFERENCES.getBoolean(KEY_USE_VIDEO_PLAYER, DEFAULT_USE_VIDEO_PLAYER);

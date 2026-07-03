@@ -91,11 +91,6 @@ public abstract class ContentFragment extends Fragment {
 			}
 			if (!hasMenuItems) {
 				return true;
-			} else if (C.API_OREO && !C.API_PIE) {
-				// Fix invalid hardware menu layout on Android 8 and 8.1
-				Toolbar toolbar = (Toolbar) ((FragmentHandler) requireActivity()).getToolbarView();
-				toolbar.showOverflowMenu();
-				return true;
 			}
 		}
 		return false;
@@ -212,12 +207,8 @@ public abstract class ContentFragment extends Fragment {
 	}
 
 	private boolean isPrimaryMenu(Menu menu) {
-		if (C.API_LOLLIPOP) {
-			Toolbar toolbar = (Toolbar) ((FragmentHandler) requireActivity()).getToolbarView();
-			return toolbar.getMenu() == menu;
-		} else {
-			return true;
-		}
+		Toolbar toolbar = (Toolbar) ((FragmentHandler) requireActivity()).getToolbarView();
+		return toolbar.getMenu() == menu;
 	}
 
 	private ViewHolderFragment getViewHolder() {
@@ -255,8 +246,8 @@ public abstract class ContentFragment extends Fragment {
 		private CustomSearchView obtainSearchView(ContentFragment fragment) {
 			resetSearchView(null);
 			if (searchView == null) {
-				searchView = new CustomSearchView(C.API_LOLLIPOP ? new ContextThemeWrapper(requireContext(),
-						R.style.Theme_Special_White) : requireActivity().getActionBar().getThemedContext());
+				searchView = new CustomSearchView(new ContextThemeWrapper(requireContext(),
+						R.style.Theme_Special_White));
 			}
 			searchViewOwner = new WeakReference<>(fragment);
 			ViewUtils.removeFromParent(searchView);

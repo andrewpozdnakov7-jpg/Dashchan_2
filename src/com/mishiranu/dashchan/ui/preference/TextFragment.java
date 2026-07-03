@@ -28,6 +28,7 @@ import com.mishiranu.dashchan.graphics.ColorScheme;
 import com.mishiranu.dashchan.text.SpanComparator;
 import com.mishiranu.dashchan.text.style.HeadingSpan;
 import com.mishiranu.dashchan.ui.FragmentHandler;
+import com.mishiranu.dashchan.util.AndroidUtils;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
 import com.mishiranu.dashchan.util.IOUtils;
 import com.mishiranu.dashchan.util.ListViewUtils;
@@ -101,9 +102,10 @@ public class TextFragment extends BaseListFragment {
 			}
 			case CHANGELOG: {
 				((FragmentHandler) requireActivity()).setTitleSubtitle(getString(R.string.changelog), null);
-				changelogEntries = savedInstanceState != null ? savedInstanceState
-						.getParcelableArrayList(EXTRA_CHANGELOG_ENTRIES) : null;
-				errorItem = savedInstanceState != null ? savedInstanceState.getParcelable(EXTRA_ERROR_ITEM) : null;
+				changelogEntries = savedInstanceState != null ? AndroidUtils.getParcelableArrayList
+						(savedInstanceState, EXTRA_CHANGELOG_ENTRIES, ReadChangelogTask.Entry.class) : null;
+				errorItem = savedInstanceState != null
+						? AndroidUtils.getParcelable(savedInstanceState, EXTRA_ERROR_ITEM, ErrorItem.class) : null;
 				if (errorItem != null) {
 					recyclerView.setVisibility(View.GONE);
 					setErrorText(errorItem.toString());
@@ -355,12 +357,13 @@ public class TextFragment extends BaseListFragment {
 		}
 	}
 
-	private static final SimpleDateFormat DATE_FORMAT_CHANGELOG = new SimpleDateFormat("dd.MM.yyyy", Locale.US);
+	private static final ThreadLocal<SimpleDateFormat> DATE_FORMAT_CHANGELOG =
+			ThreadLocal.withInitial(() -> new SimpleDateFormat("dd.MM.yyyy", Locale.US));
 
 	public static String formatChangelogDate(DateFormat dateFormat, String dateString) {
 		long date;
 		try {
-			date = DATE_FORMAT_CHANGELOG.parse(dateString).getTime();
+			date = DATE_FORMAT_CHANGELOG.get().parse(dateString).getTime();
 		} catch (java.text.ParseException e) {
 			e.printStackTrace();
 			return null;

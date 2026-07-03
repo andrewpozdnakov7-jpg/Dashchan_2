@@ -3,7 +3,6 @@ package com.mishiranu.dashchan.ui.preference.core;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.res.ColorStateList;
-import android.content.res.TypedArray;
 import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 import android.util.Pair;
@@ -17,7 +16,6 @@ import androidx.core.content.ContextCompat;
 import androidx.fragment.app.DialogFragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
-import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.ui.ContentFragment;
 import com.mishiranu.dashchan.util.ListViewUtils;
@@ -106,16 +104,9 @@ public abstract class PreferenceFragment extends ContentFragment {
 			Preference<?> current = preferences.get(position);
 			Preference<?> next = preferences.size() > position + 1 ? preferences.get(position + 1) : null;
 			boolean need = !(current instanceof HeaderPreference) &&
-					(!(next instanceof HeaderPreference) || C.API_LOLLIPOP);
-			if (need && C.API_LOLLIPOP) {
-				need = !(current instanceof CategoryPreference) && !(next instanceof CategoryPreference);
-			}
+					!(current instanceof CategoryPreference) && !(next instanceof CategoryPreference);
 			return c.need(need);
 		}));
-		if (!C.API_LOLLIPOP) {
-			float density = ResourceUtils.obtainDensity(recyclerView);
-			ViewUtils.setNewPadding(recyclerView, (int) (16f * density), null, (int) (16f * density), null);
-		}
 		ExpandedLayout layout = new ExpandedLayout(container.getContext(), true);
 		layout.addView(recyclerView, ExpandedLayout.LayoutParams.MATCH_PARENT,
 				ExpandedLayout.LayoutParams.MATCH_PARENT);
@@ -215,8 +206,7 @@ public abstract class PreferenceFragment extends ContentFragment {
 	}
 
 	public Preference<Void> addCategory(int titleResId, int iconResId) {
-		return addCategory(getString(titleResId), C.API_LOLLIPOP
-				? ContextCompat.getDrawable(requireContext(), iconResId) : null);
+		return addCategory(getString(titleResId), ContextCompat.getDrawable(requireContext(), iconResId));
 	}
 
 	public Preference<Void> addCategory(CharSequence title, Drawable icon) {
@@ -498,19 +488,7 @@ public abstract class PreferenceFragment extends ContentFragment {
 
 		@Override
 		public ViewHolder createViewHolder(ViewGroup parent) {
-			ViewHolder viewHolder = super.createViewHolder(parent);
-			if (C.API_LOLLIPOP) {
-				return createIconViewHolder(parent);
-			} else  {
-				TypedArray typedArray = parent.getContext()
-						.obtainStyledAttributes(new int[] {android.R.attr.listPreferredItemHeightSmall});
-				if (typedArray.hasValue(0)) {
-					viewHolder.view.setMinimumHeight(typedArray.getDimensionPixelSize(0,
-							viewHolder.view.getMinimumHeight()));
-				}
-				typedArray.recycle();
-				return viewHolder;
-			}
+			return createIconViewHolder(parent);
 		}
 
 		@Override

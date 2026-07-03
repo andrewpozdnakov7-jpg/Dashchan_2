@@ -1,19 +1,14 @@
 package com.mishiranu.dashchan.content;
 
-import android.annotation.TargetApi;
 import android.app.ActivityManager;
 import android.app.Application;
 import android.content.Context;
-import android.content.res.Configuration;
 import android.database.sqlite.SQLiteDatabase;
-import android.os.Build;
 import android.os.Process;
-import androidx.annotation.NonNull;
 import chan.content.ChanManager;
 import chan.http.HttpClient;
 import chan.util.CommonUtils;
 import chan.util.StringUtils;
-import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.content.database.ChanDatabase;
 import com.mishiranu.dashchan.content.database.CommonDatabase;
 import com.mishiranu.dashchan.content.database.PagesDatabase;
@@ -62,7 +57,6 @@ public class MainApplication extends Application {
 			}
 		}
 
-		LocaleManager.getInstance().updateConfiguration(getResources().getConfiguration());
 		if (isMainProcess()) {
 			Logger.init(this);
 			ChanManager.getInstance();
@@ -77,12 +71,6 @@ public class MainApplication extends Application {
 		}
 	}
 
-	@Override
-	public void onConfigurationChanged(@NonNull Configuration newConfig) {
-		super.onConfigurationChanged(newConfig);
-		LocaleManager.getInstance().updateConfiguration(newConfig);
-	}
-
 	public static MainApplication getInstance() {
 		return instance;
 	}
@@ -91,14 +79,9 @@ public class MainApplication extends Application {
 		return LocaleManager.getInstance().applyApplication(this);
 	}
 
-	@TargetApi(Build.VERSION_CODES.KITKAT)
 	public boolean isLowRam() {
-		if (C.API_KITKAT) {
-			ActivityManager activityManager = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
-			return activityManager != null && activityManager.isLowRamDevice();
-		} else {
-			return Runtime.getRuntime().maxMemory() <= 64 * 1024 * 1024;
-		}
+		ActivityManager activityManager = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
+		return activityManager != null && activityManager.isLowRamDevice();
 	}
 
 	public File getSharedPrefsDir() {

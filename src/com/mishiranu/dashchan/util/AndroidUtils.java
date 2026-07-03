@@ -4,15 +4,19 @@ import android.annotation.SuppressLint;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.app.Service;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
+import android.os.Bundle;
 import android.os.Handler;
+import android.os.Parcel;
+import android.os.Parcelable;
 import androidx.annotation.RequiresApi;
 import chan.util.StringUtils;
-import com.mishiranu.dashchan.C;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 
 public class AndroidUtils {
 	public static final boolean IS_MIUI;
@@ -44,23 +48,83 @@ public class AndroidUtils {
 	}
 
 	public static void startAnyService(Context context, Intent intent) {
-		if (C.API_OREO) {
-			context.startForegroundService(intent);
-		} else {
-			context.startService(intent);
-		}
+		context.startForegroundService(intent);
 	}
 
 	public static PendingIntent getAnyServicePendingIntent(Context context, int requestCode, Intent intent, int flags) {
-		if (C.API_OREO) {
-			return PendingIntent.getForegroundService(context, requestCode, intent, flags);
-		} else {
-			return PendingIntent.getService(context, requestCode, intent, flags);
-		}
+		return PendingIntent.getForegroundService(context, requestCode, intent, flags);
 	}
 
 	public static String getApplicationLabel(Context context) {
 		return context.getApplicationInfo().loadLabel(context.getPackageManager()).toString();
+	}
+
+	public static <T extends Parcelable> T getParcelable(Bundle bundle, String key, Class<T> clazz) {
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+			return bundle.getParcelable(key, clazz);
+		} else {
+			@SuppressWarnings("deprecation")
+			T result = bundle.getParcelable(key);
+			return result;
+		}
+	}
+
+	public static <T extends Parcelable> ArrayList<T> getParcelableArrayList
+			(Bundle bundle, String key, Class<? extends T> clazz) {
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+			return bundle.getParcelableArrayList(key, clazz);
+		} else {
+			@SuppressWarnings("deprecation")
+			ArrayList<T> result = bundle.getParcelableArrayList(key);
+			return result;
+		}
+	}
+
+	public static Parcelable[] getParcelableArray(Bundle bundle, String key, Class<? extends Parcelable> clazz) {
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+			return bundle.getParcelableArray(key, clazz);
+		} else {
+			@SuppressWarnings("deprecation")
+			Parcelable[] result = bundle.getParcelableArray(key);
+			return result;
+		}
+	}
+
+	public static <T extends Parcelable> T getParcelableExtra(Intent intent, String key, Class<T> clazz) {
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+			return intent.getParcelableExtra(key, clazz);
+		} else {
+			@SuppressWarnings("deprecation")
+			T result = intent.getParcelableExtra(key);
+			return result;
+		}
+	}
+
+	public static <T extends Parcelable> ArrayList<T> getParcelableArrayListExtra
+			(Intent intent, String key, Class<? extends T> clazz) {
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+			return intent.getParcelableArrayListExtra(key, clazz);
+		} else {
+			@SuppressWarnings("deprecation")
+			ArrayList<T> result = intent.getParcelableArrayListExtra(key);
+			return result;
+		}
+	}
+
+	public static <T extends Parcelable> T readParcelable(Parcel source, ClassLoader loader, Class<T> clazz) {
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+			return source.readParcelable(loader, clazz);
+		} else {
+			@SuppressWarnings("deprecation")
+			T result = source.readParcelable(loader);
+			return result;
+		}
+	}
+
+	@SuppressWarnings("deprecation")
+	public static void stopForegroundRemove(Service service) {
+		// Keep the targetSdk 30 foreground-service lifecycle semantics for this cleanup pass.
+		service.stopForeground(true);
 	}
 
 	@RequiresApi(Build.VERSION_CODES.O)

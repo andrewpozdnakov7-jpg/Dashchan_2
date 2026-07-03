@@ -17,14 +17,12 @@ import android.view.ContextThemeWrapper;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
-import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowManager;
 import androidx.annotation.NonNull;
 import androidx.core.view.ViewCompat;
 import androidx.customview.widget.ViewDragHelper;
-import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.util.GraphicsUtils;
 import com.mishiranu.dashchan.util.ResourceUtils;
@@ -88,37 +86,34 @@ public class DialogStack<T extends DialogStack.ViewFactory<T>> implements Iterab
 			}
 		});
 		int[] attrs = {android.R.attr.windowAnimationStyle, android.R.attr.backgroundDimAmount,
-				android.R.attr.windowBackground, C.API_LOLLIPOP ? android.R.attr.windowElevation : 0};
+				android.R.attr.windowBackground, android.R.attr.windowElevation};
 		TypedArray typedArray = styledContext.obtainStyledAttributes(attrs);
 		try {
 			dialogAnimations = typedArray.getResourceId(0, 0);
 			dialogDimAmount = typedArray.getFloat(1, 0.6f);
 			dialogBackgroundResId = typedArray.getResourceId(2, 0);
-			dialogElevation = C.API_LOLLIPOP ? typedArray.getDimension(3, 0f) : 0;
+			dialogElevation = typedArray.getDimension(3, 0f);
 		} finally {
 			typedArray.recycle();
 		}
 
-		if (C.API_LOLLIPOP) {
-			// Apply elevation to visible children only so their shadows didn't overlap each other too much
-			rootView.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
-				int maxHeight = 0;
-				ListIterator<Pair<T, DialogView>> iterator = visibleViews.listIterator(visibleViews.size());
-				while (iterator.hasPrevious()) {
-					Pair<T, DialogView> pair = iterator.previous();
-					int height = pair.second.getHeight();
-					boolean taller = height > maxHeight;
-					if (taller) {
-						maxHeight = height;
-					}
-					pair.second.setElevated(taller);
+		// Apply elevation to visible children only so their shadows didn't overlap each other too much.
+		rootView.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
+			int maxHeight = 0;
+			ListIterator<Pair<T, DialogView>> iterator = visibleViews.listIterator(visibleViews.size());
+			while (iterator.hasPrevious()) {
+				Pair<T, DialogView> pair = iterator.previous();
+				int height = pair.second.getHeight();
+				boolean taller = height > maxHeight;
+				if (taller) {
+					maxHeight = height;
 				}
-			});
-		}
+				pair.second.setElevated(taller);
+			}
+		});
 	}
 
-	private final KeyBackHandler keyBackHandler = C.API_MARSHMALLOW && !C.API_OREO
-			? new MarshmallowKeyBackHandler() : new RegularKeyBackHandler();
+	private final KeyBackHandler keyBackHandler = new RegularKeyBackHandler();
 
 	private interface KeyBackHandler {
 		boolean onBackKey(KeyEvent event, boolean allowPop);
@@ -141,33 +136,6 @@ public class DialogStack<T extends DialogStack.ViewFactory<T>> implements Iterab
 			return false;
 		}
 	}
-
-	// https://issuetracker.google.com/37106088
-	private class MarshmallowKeyBackHandler implements KeyBackHandler {
-		private boolean posted = false;
-		private final Runnable longPressRunnable = () -> {
-			posted = false;
-			clear();
-		};
-
-		@Override
-		public boolean onBackKey(KeyEvent event, boolean allowPop) {
-			if (event.getAction() == KeyEvent.ACTION_DOWN) {
-				if (!posted) {
-					rootView.postDelayed(longPressRunnable, ViewConfiguration.getLongPressTimeout());
-					posted = true;
-				}
-			} else if (event.getAction() == KeyEvent.ACTION_UP) {
-				rootView.removeCallbacks(longPressRunnable);
-				posted = false;
-				if (allowPop) {
-					popInternal();
-				}
-			}
-			return false;
-		}
-	}
-
 	private final LinkedList<T> hiddenViews = new LinkedList<>();
 	private final LinkedList<Pair<T, DialogView>> visibleViews = new LinkedList<>();
 	private Dialog dialog;
@@ -238,11 +206,9 @@ public class DialogStack<T extends DialogStack.ViewFactory<T>> implements Iterab
 			layoutParams.dimAmount = dialogDimAmount;
 			// For hierarchy view (layout inspector)
 			layoutParams.setTitle(context.getPackageName() + "/" + getClass().getName());
-			if (C.API_LOLLIPOP) {
-				window.setStatusBarColor(0x00000000);
-				window.setNavigationBarColor(0x00000000);
-				ViewUtils.setWindowLayoutFullscreen(window);
-			}
+			ViewUtils.setStatusBarColor(window, 0x00000000);
+			ViewUtils.setNavigationBarColor(window, 0x00000000);
+			ViewUtils.setWindowLayoutFullscreen(window);
 			dialog.show();
 			this.dialog = dialog;
 		}
@@ -627,17 +593,13 @@ public class DialogStack<T extends DialogStack.ViewFactory<T>> implements Iterab
 	private static class ContentView extends DragLayout {
 		public ContentView(Context context, Side side, Callback callback) {
 			super(context, side, callback);
-			if (C.API_LOLLIPOP) {
-				setWillNotDraw(false);
-			}
+			setWillNotDraw(false);
 		}
 
 		@Override
 		public void draw(Canvas canvas) {
 			super.draw(canvas);
-			if (C.API_LOLLIPOP) {
-				ViewUtils.drawSystemInsetsOver(this, canvas, InsetsLayout.isTargetGesture29(this));
-			}
+			ViewUtils.drawSystemInsetsOver(this, canvas, InsetsLayout.isTargetGesture29(this));
 		}
 	}
 
@@ -714,9 +676,7 @@ public class DialogStack<T extends DialogStack.ViewFactory<T>> implements Iterab
 
 			setBackgroundResource(backgroundResId);
 			this.elevation = elevation;
-			if (C.API_LOLLIPOP) {
-				setBackgroundTintList(ColorStateList.valueOf(ThemeEngine.getTheme(context).card));
-			}
+			setBackgroundTintList(ColorStateList.valueOf(ThemeEngine.getTheme(context).card));
 			paint.setColor((int) (dimAmount * 0xff) << 24);
 			setActive(true);
 		}

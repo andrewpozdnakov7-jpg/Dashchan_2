@@ -33,6 +33,7 @@ import chan.content.ChanLocator;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
+import com.mishiranu.dashchan.util.AndroidUtils;
 import com.mishiranu.dashchan.util.AnimationUtils;
 import com.mishiranu.dashchan.util.NavigationUtils;
 import com.mishiranu.dashchan.util.ResourceUtils;
@@ -130,7 +131,7 @@ public class BrowserFragment extends ContentFragment implements DownloadListener
 		((FragmentHandler) requireActivity()).setTitleSubtitle(getString(R.string.web_browser), null);
 		if (savedInstanceState == null) {
 			WebViewUtils.clearAll(webView);
-			webView.loadUrl(requireArguments().<Uri>getParcelable(EXTRA_URI).toString());
+			webView.loadUrl(AndroidUtils.getParcelable(requireArguments(), EXTRA_URI, Uri.class).toString());
 		}
 	}
 
@@ -283,7 +284,8 @@ public class BrowserFragment extends ContentFragment implements DownloadListener
 		@Override
 		public Dialog onCreateDialog(Bundle savedInstanceState) {
 			String chanName = requireArguments().getString(EXTRA_CHAN_NAME);
-			ChanLocator.NavigationData navigationData = requireArguments().getParcelable(EXTRA_NAVIGATION_DATA);
+			ChanLocator.NavigationData navigationData = AndroidUtils.getParcelable(requireArguments(),
+					EXTRA_NAVIGATION_DATA, ChanLocator.NavigationData.class);
 			return new AlertDialog.Builder(requireContext())
 					.setMessage(R.string.follow_the_link__sentence)
 					.setNegativeButton(android.R.string.cancel, null)

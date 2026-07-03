@@ -1,6 +1,5 @@
 package com.mishiranu.dashchan.widget;
 
-import android.annotation.TargetApi;
 import android.content.Context;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
@@ -9,12 +8,10 @@ import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.RectF;
-import android.os.Build;
 import android.os.SystemClock;
 import android.view.MotionEvent;
 import android.view.animation.Interpolator;
 import android.view.animation.PathInterpolator;
-import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.util.AnimationUtils;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import java.lang.ref.WeakReference;
@@ -31,8 +28,8 @@ public class PullableWrapper {
 	public PullableWrapper(Wrapped listView) {
 		this.listView = listView;
 		Context context = listView.getContext();
-		topView = C.API_LOLLIPOP ? new LollipopView(listView, true) : new JellyBeanView(listView, true);
-		bottomView = C.API_LOLLIPOP ? new LollipopView(listView, false) : new JellyBeanView(listView, false);
+		topView = new LollipopView(listView, true);
+		bottomView = new LollipopView(listView, false);
 		pullDeltaGain = ResourceUtils.isTablet(context.getResources().getConfiguration()) ? 6f : 4f;
 		setColor(ThemeEngine.getTheme(listView.getContext()).accent);
 	}
@@ -277,240 +274,6 @@ public class PullableWrapper {
 		int calculateJumpValue(long jumpStartTime);
 	}
 
-	private static class JellyBeanView implements PullView {
-		private static final int IDLE_FOLD_TIME = 500;
-		private static final int LOADING_HALF_CYCLE_TIME = 600;
-
-		private final WeakReference<Wrapped> wrapped;
-		private final Paint paint = new Paint();
-		private final int height;
-		private final boolean top;
-
-		private State previousState = State.IDLE;
-		private State state = State.IDLE;
-
-		private int startIdlePullStrain = 0;
-		private long timeIdleStart = 0L;
-		private long timeLoadingStart = 0L;
-		private long timeLoadingToIdleStart = 0L;
-
-		private int pullStrain = 0;
-
-		private int color;
-
-		public JellyBeanView(Wrapped wrapped, boolean top) {
-			this.wrapped = new WeakReference<>(wrapped);
-			this.height = (int) (3f * ResourceUtils.obtainDensity(wrapped.getContext()) + 0.5f);
-			this.top = top;
-		}
-
-		@Override
-		public void setColor(int color) {
-			this.color = color;
-		}
-
-		private void invalidate(int padding) {
-			Wrapped wrapped = this.wrapped.get();
-			if (wrapped != null) {
-				int offset = top ? padding : wrapped.getHeight() - height - padding;
-				invalidate(0, offset, wrapped.getWidth(), offset + height);
-			}
-		}
-
-		private void invalidate(int l, int t, int r, int b) {
-			Wrapped wrapped = this.wrapped.get();
-			if (wrapped != null) {
-				wrapped.invalidate(l, t, r, b);
-			}
-		}
-
-		@Override
-		public void setState(State state, int padding) {
-			if (this.state != state) {
-				State prePreviousState = previousState;
-				previousState = this.state;
-				this.state = state;
-				long time = SystemClock.elapsedRealtime();
-				switch (this.state) {
-					case IDLE: {
-						timeIdleStart = time;
-						if (previousState == State.LOADING) {
-							timeLoadingToIdleStart = time;
-						}
-						startIdlePullStrain = previousState == State.LOADING ? 0 : pullStrain;
-						pullStrain = 0;
-						break;
-					}
-					case PULL: {
-						break;
-					}
-					case LOADING: {
-						// May continue use old animation until it over
-						boolean loadingToLoading = prePreviousState == State.LOADING &&
-								previousState == State.IDLE && time - timeIdleStart < LOADING_HALF_CYCLE_TIME;
-						if (!loadingToLoading) {
-							timeLoadingStart = previousState == State.IDLE ? time + LOADING_HALF_CYCLE_TIME : time;
-						}
-						timeLoadingToIdleStart = 0L;
-						break;
-					}
-				}
-				invalidate(padding);
-			}
-		}
-
-		@Override
-		public void setPullStrain(int pullStrain, int padding) {
-			this.pullStrain = pullStrain;
-			if (this.pullStrain > MAX_STRAIN) {
-				this.pullStrain = MAX_STRAIN;
-			} else if (this.pullStrain < 0) {
-				this.pullStrain = 0;
-			}
-			if (state == State.PULL) {
-				invalidate(padding);
-			}
-		}
-
-		@Override
-		public int getPullStrain() {
-			return pullStrain;
-		}
-
-		@Override
-		public int getAndResetIdlePullStrain() {
-			if (startIdlePullStrain == 0) {
-				return 0;
-			}
-			try {
-				return (int) (MAX_STRAIN * getIdleTransientPullStrainValue(SystemClock.elapsedRealtime()));
-			} finally {
-				startIdlePullStrain = 0;
-			}
-		}
-
-		private float getIdleTransientPullStrainValue(long time) {
-			int foldTime = IDLE_FOLD_TIME * startIdlePullStrain / MAX_STRAIN;
-			if (foldTime <= 0) {
-				return 0f;
-			}
-			float value = Math.min((float) (time - timeIdleStart) / foldTime, 1f);
-			return (1f - value) * startIdlePullStrain / MAX_STRAIN;
-		}
-
-		@Override
-		public void draw(Canvas canvas, int padding) {
-			Wrapped wrapped = this.wrapped.get();
-			if (wrapped == null) {
-				return;
-			}
-			Paint paint = this.paint;
-			long time = SystemClock.elapsedRealtime();
-			int width = wrapped.getWidth();
-			int height = this.height;
-			int offset = top ? padding : wrapped.getHeight() - height - padding;
-			State state = this.state;
-			State previousState = this.previousState;
-			int primaryColor = color;
-			int secondaryColor = 0x80 << 24 | 0x00ffffff & color;
-			boolean needInvalidate = false;
-
-			if (state == State.PULL) {
-				int size = (int) (width / 2f * Math.pow((float) pullStrain / MAX_STRAIN, 2f));
-				paint.setColor(primaryColor);
-				canvas.drawRect(width / 2f - size, offset, width / 2f + size, offset + height, paint);
-			}
-
-			if (state == State.IDLE && previousState != State.LOADING) {
-				float value = getIdleTransientPullStrainValue(time);
-				int size = (int) (width / 2f * Math.pow(value, 4f));
-				paint.setColor(primaryColor);
-				canvas.drawRect(width / 2f - size, offset, width / 2f + size, offset + height, paint);
-				if (value != 0) {
-					needInvalidate = true;
-				}
-			}
-
-			if (state == State.LOADING || timeLoadingToIdleStart > 0L) {
-				Interpolator interpolator = AnimationUtils.ACCELERATE_DECELERATE_INTERPOLATOR;
-				final int cycle = 2 * LOADING_HALF_CYCLE_TIME;
-				final int half = LOADING_HALF_CYCLE_TIME;
-				long elapsed = time - timeLoadingStart;
-				boolean startTransient = elapsed < 0;
-				if (startTransient) {
-					elapsed += cycle;
-				}
-				int phase = (int) (elapsed % cycle);
-				int partWidth;
-				if (state != State.LOADING) {
-					long elapsedIdle = time - timeLoadingToIdleStart;
-					float value = Math.min((float) elapsedIdle / half, 1f);
-					partWidth = (int) (width / 2f * (1f - interpolator.getInterpolation(value)));
-					if (partWidth <= 0) {
-						partWidth = 0;
-						timeLoadingToIdleStart = 0L;
-					}
-				} else {
-					partWidth = (int) (width / 2f);
-				}
-				if (!startTransient) {
-					paint.setColor(secondaryColor);
-					canvas.drawRect(0, offset, partWidth, offset + height, paint);
-					canvas.drawRect(width - partWidth, offset, width, offset + height, paint);
-				}
-				paint.setColor(primaryColor);
-				if (phase <= half) {
-					float value = (float) phase / half;
-					int size = (int) (width / 2f * interpolator.getInterpolation(value));
-					int left = Math.min(width / 2 - size, partWidth);
-					int right = Math.max(width / 2 + size, width - partWidth);
-					canvas.drawRect(0, offset, left, offset + height, paint);
-					canvas.drawRect(right, offset, width, offset + height, paint);
-				} else {
-					float value = (float) (phase - half) / half;
-					int size = (int) (width / 2f * interpolator.getInterpolation(value));
-					int left = width / 2 - size;
-					int right = width / 2 + size;
-					if (left < partWidth) {
-						canvas.drawRect(left, offset, partWidth, offset + height, paint);
-						canvas.drawRect(width - partWidth, offset, right, offset + height, paint);
-					}
-				}
-				needInvalidate = true;
-			}
-
-			if (needInvalidate) {
-				invalidate(0, offset, width, offset + height);
-			}
-		}
-
-		@Override
-		public long calculateJumpStartTime() {
-			return SystemClock.elapsedRealtime() - BUSY_JUMP_TIME * (MAX_STRAIN - pullStrain) / MAX_STRAIN;
-		}
-
-		@Override
-		public int calculateJumpValue(long jumpStartTime) {
-			int value = 0;
-			switch (state) {
-				case PULL: {
-					value = pullStrain;
-					break;
-				}
-				case IDLE:
-				case LOADING: {
-					if (jumpStartTime > 0) {
-						value = (int) (MAX_STRAIN * (SystemClock.elapsedRealtime() - jumpStartTime) / BUSY_JUMP_TIME);
-						value = value < MAX_STRAIN ? MAX_STRAIN - value : 0;
-					}
-					break;
-				}
-			}
-			return value;
-		}
-	}
-
-	@TargetApi(Build.VERSION_CODES.LOLLIPOP)
 	private static class LollipopView implements PullView {
 		private static final int IDLE_FOLD_TIME = 100;
 		private static final int LOADING_FOLD_TIME = 150;
@@ -578,8 +341,7 @@ public class PullableWrapper {
 			Paint shadowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 			shadowPaint.setColor(0x7f000000);
 			shadowPaint.setMaskFilter(new BlurMaskFilter(shadowSize, BlurMaskFilter.Blur.NORMAL));
-			canvas.drawCircle(bitmapSize / 2f, bitmapSize / 2f,
-					C.API_Q ? radius - shadowSize : radius - shadowSize / 2f, shadowPaint);
+			canvas.drawCircle(bitmapSize / 2f, bitmapSize / 2f, radius - shadowSize, shadowPaint);
 		}
 
 		@Override

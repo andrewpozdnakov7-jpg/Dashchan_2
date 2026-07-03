@@ -1,17 +1,14 @@
 package chan.http;
 
 import android.annotation.SuppressLint;
-import android.annotation.TargetApi;
 import android.content.Context;
 import android.net.Uri;
-import android.os.Build;
 import android.os.SystemClock;
 import android.util.Pair;
 import androidx.annotation.NonNull;
 import chan.content.Chan;
 import chan.util.CommonUtils;
 import chan.util.StringUtils;
-import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.content.AdvancedPreferences;
 import com.mishiranu.dashchan.content.MainApplication;
 import com.mishiranu.dashchan.content.Preferences;
@@ -30,7 +27,6 @@ import java.io.InterruptedIOException;
 import java.io.OutputStream;
 import java.io.SequenceInputStream;
 import java.io.UnsupportedEncodingException;
-import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.net.CookieHandler;
 import java.net.CookieManager;
@@ -92,22 +88,6 @@ public class HttpClient {
 	static final int HTTP_TEMPORARY_REDIRECT = 307;
 
 	static {
-		if (!C.API_PIE) {
-			int poolSize = 20;
-			System.setProperty("http.maxConnections", Integer.toString(poolSize));
-			try {
-				// http.maxConnections may do nothing because ConnectionPool inits earlier. Android bug?
-				@SuppressLint("PrivateApi")
-				Object connectionPool = Class.forName("com.android.okhttp.ConnectionPool")
-						.getMethod("getDefault").invoke(null);
-				Field maxIdleConnectionsField = connectionPool.getClass().getDeclaredField("maxIdleConnections");
-				maxIdleConnectionsField.setAccessible(true);
-				maxIdleConnectionsField.setInt(connectionPool, poolSize);
-			} catch (Exception e) {
-				// Reflective operation, ignore exception
-			}
-		}
-
 		SHORT_RESPONSE_MESSAGES.put("Internal Server Error", "Internal Error");
 		SHORT_RESPONSE_MESSAGES.put("Service Temporarily Unavailable", "Service Unavailable");
 
@@ -313,9 +293,6 @@ public class HttpClient {
 				sslSocketFactory = HttpsURLConnection.getDefaultSSLSocketFactory();
 				sslSocketFactory = new SSLSocketFactoryWrapper(sslSocketFactory,
 						socket -> new HandshakeSSLSocket(socket, handshakeSessions.get()));
-				if (!C.API_LOLLIPOP_MR1) {
-					sslSocketFactory = new SSLSocketFactoryWrapper(sslSocketFactory, TLSv12SSLSocket::new);
-				}
 			}
 			if (verifyCertificate) {
 				return sslSocketFactory;
@@ -407,7 +384,6 @@ public class HttpClient {
 		return new URL(uriStringBuilder.toString());
 	}
 
-	@TargetApi(Build.VERSION_CODES.KITKAT)
 	private HttpResponse executeInternal(HttpSession session, HttpRequest request)
 			throws HttpException, RetryException {
 		session.checkThread();
@@ -504,11 +480,7 @@ public class HttpClient {
 				connection.setRequestProperty("Content-Type", entity.getContentType());
 				long contentLength = entity.getContentLength();
 				if (contentLength > 0) {
-					if (C.API_KITKAT) {
-						connection.setFixedLengthStreamingMode(contentLength);
-					} else {
-						connection.setFixedLengthStreamingMode((int) contentLength);
-					}
+					connection.setFixedLengthStreamingMode(contentLength);
 				}
 				try (ClientOutputStream output = new ClientOutputStream(new BufferedOutputStream(connection
 						.getOutputStream(), 1024), session, forceGet ? null : request.outputListener, contentLength)) {
@@ -1239,42 +1211,6 @@ public class HttpClient {
 					}
 				}
 				throw e;
-			}
-		}
-	}
-
-	private static class TLSv12SSLSocket extends SSLSocketWrapper {
-		private static final List<String> PROTOCOLS;
-
-		static {
-			ArrayList<String> protocols = new ArrayList<>();
-			for (String protocol : Arrays.asList("TLSv1.1", "TLSv1.2")) {
-				boolean supported;
-				try {
-					SSLContext.getInstance(protocol);
-					supported = true;
-				} catch (Exception e) {
-					supported = false;
-				}
-				if (supported) {
-					protocols.add(protocol);
-				}
-			}
-			PROTOCOLS = Collections.unmodifiableList(protocols);
-		}
-
-		public TLSv12SSLSocket(SSLSocket socket) {
-			super(socket);
-			String[] protocolsArray = getEnabledProtocols();
-			List<String> protocols = protocolsArray != null ? Arrays.asList(protocolsArray) : Collections.emptyList();
-			if (!protocols.containsAll(PROTOCOLS)) {
-				ArrayList<String> enabledProtocols = new ArrayList<>(protocols);
-				for (String protocol : PROTOCOLS) {
-					if (!enabledProtocols.contains(protocol)) {
-						enabledProtocols.add(protocol);
-					}
-				}
-				setEnabledProtocols(CommonUtils.toArray(enabledProtocols, String.class));
 			}
 		}
 	}

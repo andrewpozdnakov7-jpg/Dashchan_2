@@ -13,7 +13,6 @@ import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.content.MainApplication;
 import com.mishiranu.dashchan.content.model.FileHolder;
 import com.mishiranu.dashchan.util.IOUtils;
@@ -151,7 +150,6 @@ public class WebViewDecoder extends WebViewClient {
 					WebView webView = new WebView(MainApplication.getInstance());
 					WebSettings settings = webView.getSettings();
 					settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
-					settings.setAppCacheEnabled(false);
 					settings.setJavaScriptEnabled(true);
 					webView.setInitialScale(100 / decoder.sampleSize);
 					webView.setWebViewClient(decoder);
@@ -197,7 +195,7 @@ public class WebViewDecoder extends WebViewClient {
 	}
 
 	public static Bitmap loadBitmap(FileHolder fileHolder, BitmapFactory.Options options) {
-		if (C.WEB_VIEW_BITMAP_DECODER_SUPPORTED && !MainApplication.getInstance().isLowRam()) {
+		if (!MainApplication.getInstance().isLowRam()) {
 			WebViewDecoder decoder;
 			try {
 				decoder = new WebViewDecoder(fileHolder, options);

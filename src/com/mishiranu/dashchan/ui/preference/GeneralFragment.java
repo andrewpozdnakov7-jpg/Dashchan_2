@@ -12,7 +12,6 @@ import chan.content.Chan;
 import chan.content.ChanManager;
 import chan.http.HttpException;
 import chan.http.HttpHolder;
-import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.LocaleManager;
 import com.mishiranu.dashchan.content.Preferences;
@@ -64,10 +63,8 @@ public class GeneralFragment extends PreferenceFragment implements FragmentHandl
 				R.string.internal_browser, R.string.internal_browser__sumamry);
 
 		addHeader(R.string.services);
-		if (C.API_KITKAT) {
-			addCheck(true, Preferences.KEY_RECAPTCHA_JAVASCRIPT, Preferences.DEFAULT_RECAPTCHA_JAVASCRIPT,
-					R.string.use_javascript_for_recaptcha, R.string.use_javascript_for_recaptcha__summary);
-		}
+		addCheck(true, Preferences.KEY_RECAPTCHA_JAVASCRIPT, Preferences.DEFAULT_RECAPTCHA_JAVASCRIPT,
+				R.string.use_javascript_for_recaptcha, R.string.use_javascript_for_recaptcha__summary);
 		captchaSolvingPreference = addMultipleEdit(Preferences.KEY_CAPTCHA_SOLVING, R.string.captcha_solving,
 				p -> configureCaptchaSolvingSummary(false),
 				Arrays.asList("Endpoint", "Token", getString(R.string.timeout_sec)),

@@ -1,6 +1,5 @@
 package com.mishiranu.dashchan.util;
 
-import android.annotation.TargetApi;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.DialogInterface;
@@ -10,12 +9,10 @@ import android.graphics.Insets;
 import android.graphics.Outline;
 import android.graphics.Paint;
 import android.graphics.PorterDuff;
-import android.graphics.PorterDuffColorFilter;
 import android.graphics.PorterDuffXfermode;
 import android.graphics.Rect;
 import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
-import android.os.Build;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.util.TypedValue;
@@ -31,9 +28,7 @@ import android.widget.EditText;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import androidx.core.view.ViewCompat;
-import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
-import java.lang.reflect.Field;
 import java.util.ArrayList;
 
 public class ViewUtils {
@@ -74,38 +69,30 @@ public class ViewUtils {
 	}
 
 	public static boolean isGestureNavigationOverlap(View view, boolean checkLeft, boolean checkRight) {
-		if (C.API_Q) {
-			WindowInsets windowInsets = view.getRootWindowInsets();
-			Insets insets;
-			if (C.API_R) {
-				insets = windowInsets.getInsets(WindowInsets.Type.systemGestures());
-			} else {
-				@SuppressWarnings("deprecation")
-				Insets insetsDeprecated = windowInsets.getSystemGestureInsets();
-				insets = insetsDeprecated;
-			}
-			if (checkLeft && insets.left > 0 || checkRight && insets.right > 0) {
-				int left = view.getLeft();
-				View parentView = (View) view.getParent();
-				while (true) {
-					left += parentView.getLeft();
-					ViewParent parent = parentView.getParent();
-					if (parent instanceof View) {
-						parentView = (View) parent;
-					} else {
-						break;
-					}
+		WindowInsets windowInsets = view.getRootWindowInsets();
+		Insets insets = windowInsets.getInsets(WindowInsets.Type.systemGestures());
+		if (checkLeft && insets.left > 0 || checkRight && insets.right > 0) {
+			int left = view.getLeft();
+			View parentView = (View) view.getParent();
+			while (true) {
+				left += parentView.getLeft();
+				ViewParent parent = parentView.getParent();
+				if (parent instanceof View) {
+					parentView = (View) parent;
+				} else {
+					break;
 				}
-				int right = parentView.getWidth() - left - view.getWidth();
-				return checkLeft && insets.left > left || checkRight && insets.right > right;
 			}
+			int right = parentView.getWidth() - left - view.getWidth();
+			return checkLeft && insets.left > left || checkRight && insets.right > right;
 		}
 		return false;
 	}
 
 	public static void setTextSizeScaled(TextView textView, int sizeSp) {
 		// Avoid fractional sizes (the same logic is used for sizes specified in XML)
-		int sizePx = (int) (sizeSp * textView.getResources().getDisplayMetrics().scaledDensity + 0.5f);
+		int sizePx = (int) (TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, sizeSp,
+				textView.getResources().getDisplayMetrics()) + 0.5f);
 		textView.setTextSize(TypedValue.COMPLEX_UNIT_PX, sizePx);
 	}
 
@@ -143,110 +130,31 @@ public class ViewUtils {
 		}
 	}
 
-	@TargetApi(Build.VERSION_CODES.LOLLIPOP)
 	public static void makeRoundedCorners(View view, final int radius, final boolean withPaddings) {
-		if (C.API_LOLLIPOP) {
-			view.setClipToOutline(true);
-			view.setOutlineProvider(new ViewOutlineProvider() {
-				private final Rect rect = new Rect();
+		view.setClipToOutline(true);
+		view.setOutlineProvider(new ViewOutlineProvider() {
+			private final Rect rect = new Rect();
 
-				@Override
-				public void getOutline(View view, Outline outline) {
-					Rect rect = this.rect;
-					if (withPaddings) {
-						rect.set(view.getPaddingLeft(), view.getPaddingTop(), view.getWidth() - view.getPaddingRight(),
-								view.getHeight() - view.getPaddingBottom());
-					} else {
-						rect.set(0, 0, view.getWidth(), view.getHeight());
-					}
-					outline.setRoundRect(rect, radius);
+			@Override
+			public void getOutline(View view, Outline outline) {
+				Rect rect = this.rect;
+				if (withPaddings) {
+					rect.set(view.getPaddingLeft(), view.getPaddingTop(), view.getWidth() - view.getPaddingRight(),
+							view.getHeight() - view.getPaddingBottom());
+				} else {
+					rect.set(0, 0, view.getWidth(), view.getHeight());
 				}
-			});
-		}
-	}
-
-	private static final Field FIELD_SCROLL_BAR_EDGE_GLOW_TOP;
-	private static final Field FIELD_SCROLL_BAR_EDGE_GLOW_BOTTOM;
-
-	static {
-		Field scrollBarEdgeGlowTopField = null;
-		Field scrollBarEdgeGlowBottomField = null;
-		if (!C.API_Q) {
-			try {
-				scrollBarEdgeGlowTopField = ScrollView.class.getDeclaredField("mEdgeGlowTop");
-				scrollBarEdgeGlowTopField.setAccessible(true);
-				scrollBarEdgeGlowBottomField = ScrollView.class.getDeclaredField("mEdgeGlowBottom");
-				scrollBarEdgeGlowBottomField.setAccessible(true);
-			} catch (Exception e) {
-				scrollBarEdgeGlowTopField = null;
-				scrollBarEdgeGlowBottomField = null;
+				outline.setRoundRect(rect, radius);
 			}
-		}
-		FIELD_SCROLL_BAR_EDGE_GLOW_TOP = scrollBarEdgeGlowTopField;
-		FIELD_SCROLL_BAR_EDGE_GLOW_BOTTOM = scrollBarEdgeGlowBottomField;
+		});
 	}
 
 	public static void setEdgeEffectColor(ScrollView scrollView, int color) {
-		if (C.API_Q) {
-			scrollView.setEdgeEffectColor(color);
-		} else {
-			EdgeEffect topEdgeEffect = null;
-			EdgeEffect bottomEdgeEffect = null;
-			if (FIELD_SCROLL_BAR_EDGE_GLOW_TOP != null && FIELD_SCROLL_BAR_EDGE_GLOW_BOTTOM != null) {
-				try {
-					topEdgeEffect = (EdgeEffect) FIELD_SCROLL_BAR_EDGE_GLOW_TOP.get(scrollView);
-					bottomEdgeEffect = (EdgeEffect) FIELD_SCROLL_BAR_EDGE_GLOW_BOTTOM.get(scrollView);
-				} catch (Exception e) {
-					// Ignore
-				}
-			}
-			if (topEdgeEffect != null && bottomEdgeEffect != null) {
-				setEdgeEffectColor(topEdgeEffect, color);
-				setEdgeEffectColor(bottomEdgeEffect, color);
-			}
-		}
-	}
-
-	private static final Field FIELD_EDGE_EFFECT_EDGE;
-	private static final Field FIELD_EDGE_EFFECT_GLOW;
-
-	static {
-		Field edgeEffectEdgeField = null;
-		Field edgeEffectGlowField = null;
-		if (!C.API_LOLLIPOP) {
-			try {
-				edgeEffectEdgeField = EdgeEffect.class.getDeclaredField("mEdge");
-				edgeEffectEdgeField.setAccessible(true);
-				edgeEffectGlowField = EdgeEffect.class.getDeclaredField("mGlow");
-				edgeEffectGlowField.setAccessible(true);
-			} catch (Exception e) {
-				edgeEffectEdgeField = null;
-				edgeEffectGlowField = null;
-			}
-		}
-		FIELD_EDGE_EFFECT_EDGE = edgeEffectEdgeField;
-		FIELD_EDGE_EFFECT_GLOW = edgeEffectGlowField;
+		scrollView.setEdgeEffectColor(color);
 	}
 
 	public static void setEdgeEffectColor(EdgeEffect edgeEffect, int color) {
-		if (C.API_LOLLIPOP) {
-			edgeEffect.setColor(color);
-		} else {
-			Drawable edge = null;
-			Drawable glow = null;
-			if (FIELD_EDGE_EFFECT_EDGE != null && FIELD_EDGE_EFFECT_GLOW != null) {
-				try {
-					edge = (Drawable) FIELD_EDGE_EFFECT_EDGE.get(edgeEffect);
-					glow = (Drawable) FIELD_EDGE_EFFECT_GLOW.get(edgeEffect);
-				} catch (Exception e) {
-					// Ignore
-				}
-			}
-			if (edge != null && glow != null) {
-				edge.mutate().setColorFilter(new PorterDuffColorFilter(color, PorterDuff.Mode.SRC_ATOP));
-				glow.mutate().setColorFilter(new PorterDuffColorFilter(color, PorterDuff.Mode.SRC_ATOP));
-			}
-		}
+		edgeEffect.setColor(color);
 	}
 
 	public static void setSelectableItemBackground(View view) {
@@ -335,17 +243,37 @@ public class ViewUtils {
 	}
 
 	public static void setWindowLayoutFullscreen(Window window) {
-		if (C.API_R) {
-			window.setDecorFitsSystemWindows(false);
-		} else {
-			setWindowLayoutFullscreen21(window);
-		}
+		setDecorFitsSystemWindows(window, false);
 	}
 
 	@SuppressWarnings("deprecation")
-	private static void setWindowLayoutFullscreen21(Window window) {
-		window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE |
-				View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
+	private static void setDecorFitsSystemWindows(Window window, boolean decorFitsSystemWindows) {
+		// Edge-to-edge behavior is targetSdk-sensitive; keep the R-era behavior until that migration.
+		window.setDecorFitsSystemWindows(decorFitsSystemWindows);
+	}
+
+	@SuppressWarnings("deprecation")
+	public static int getStatusBarColor(Window window) {
+		// Window color APIs are kept for targetSdk 30 system-bars behavior.
+		return window.getStatusBarColor();
+	}
+
+	@SuppressWarnings("deprecation")
+	public static int getNavigationBarColor(Window window) {
+		// Window color APIs are kept for targetSdk 30 system-bars behavior.
+		return window.getNavigationBarColor();
+	}
+
+	@SuppressWarnings("deprecation")
+	public static void setStatusBarColor(Window window, int color) {
+		// Window color APIs are kept for targetSdk 30 system-bars behavior.
+		window.setStatusBarColor(color);
+	}
+
+	@SuppressWarnings("deprecation")
+	public static void setNavigationBarColor(Window window, int color) {
+		// Window color APIs are kept for targetSdk 30 system-bars behavior.
+		window.setNavigationBarColor(color);
 	}
 
 	public static void drawSystemInsetsOver(View view, Canvas canvas, boolean gestureNavigation) {
@@ -437,63 +365,11 @@ public class ViewUtils {
 		}
 	}
 
-	private static final Field FIELD_OUTLINE_RECT;
-	private static final Field FIELD_OUTLINE_RADIUS;
-
-	static {
-		Field outlineRectFieldField = null;
-		Field outlineRadiusFieldField = null;
-		if (C.API_LOLLIPOP && !C.API_NOUGAT) {
-			try {
-				outlineRectFieldField = Outline.class.getDeclaredField("mRect");
-				outlineRectFieldField.setAccessible(true);
-				outlineRadiusFieldField = Outline.class.getDeclaredField("mRadius");
-				outlineRadiusFieldField.setAccessible(true);
-			} catch (Exception e) {
-				outlineRectFieldField = null;
-				outlineRadiusFieldField = null;
-			}
-		}
-		FIELD_OUTLINE_RECT = outlineRectFieldField;
-		FIELD_OUTLINE_RADIUS = outlineRadiusFieldField;
-	}
-
 	public static boolean getOutlineRect(Outline outline, Rect outRect) {
-		if (C.API_NOUGAT) {
-			return outline.getRect(outRect);
-		} else {
-			Rect rect = null;
-			if (FIELD_OUTLINE_RECT != null) {
-				try {
-					rect = (Rect) FIELD_OUTLINE_RECT.get(outline);
-				} catch (Exception e) {
-					// Ignore
-				}
-			}
-			if (rect != null) {
-				outRect.set(rect);
-				return true;
-			}
-			return false;
-		}
+		return outline.getRect(outRect);
 	}
 
 	public static float getOutlineRadius(Outline outline) {
-		if (C.API_NOUGAT) {
-			return outline.getRadius();
-		} else {
-			float radius = 0f;
-			if (FIELD_OUTLINE_RECT != null) {
-				try {
-					Object rect = FIELD_OUTLINE_RECT.get(outline);
-					if (rect != null) {
-						radius = FIELD_OUTLINE_RADIUS.getFloat(outline);
-					}
-				} catch (Exception e) {
-					// Ignore
-				}
-			}
-			return radius;
-		}
+		return outline.getRadius();
 	}
 }

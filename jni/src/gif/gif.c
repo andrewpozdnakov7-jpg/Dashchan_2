@@ -122,7 +122,7 @@ void getSummary(JNIEnv * env, jlong pointer, jintArray output) {
 	(*env)->SetIntArrayRegion(env, output, 0, 2, result);
 }
 
-static int64_t getTime() {
+static int64_t getTime(void) {
 	struct timeval now;
 	gettimeofday(&now, NULL);
 	return (int64_t) now.tv_sec * 1000 + now.tv_usec / 1000;
