@@ -80,11 +80,6 @@ video playback.
   external browser.
 - Added a first local unit-test skeleton outside the nonstandard main `src`
   source root.
-- R17 Dev4 was smoke-tested on a OnePlus 13: app launch, WebM2/Dvach
-  detection, problematic MP4/fMP4 playback, WebM, GIF, Dvach thread browsing,
-  and posting with captcha. R17 Dev6 removes the remaining Java compiler
-  warnings and old minSdk 30 compatibility guards; repeat the manual smoke
-  matrix before wider posting.
 
 ### Identity Summary
 
