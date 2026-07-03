@@ -89,7 +89,7 @@ if (!unsupportedNativeAbis.isEmpty()) {
 }
 
 def builtinWebmEnabled = nativePlayerFfmpegFlavor == 'ffmpeg8'
-def builtinWebmProjectDir = file('../Dashchan-Webm')
+def builtinWebmProjectDir = file('Dashchan-Webm')
 def builtinWebmBuildDir = new File(builtinWebmProjectDir, 'build')
 def builtinWebmSources = new File(builtinWebmBuildDir, 'intermediates/shared_sources')
 def builtinWebmLibraries = new File(builtinWebmBuildDir, 'intermediates/shared_libraries')
@@ -276,7 +276,7 @@ def requireUnixBuiltinWebmBuild = {
 		return
 	}
 	if (!builtinWebmProjectDir.isDirectory()) {
-		throw new GradleException('Dashchan-Webm checkout was not found: ' + builtinWebmProjectDir)
+		throw new GradleException('Bundled Dashchan-Webm source directory was not found: ' + builtinWebmProjectDir)
 	}
 	if (!org.apache.tools.ant.taskdefs.condition.Os.isFamily(
 			org.apache.tools.ant.taskdefs.condition.Os.FAMILY_UNIX)) {

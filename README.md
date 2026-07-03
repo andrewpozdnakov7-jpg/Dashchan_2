@@ -166,8 +166,9 @@ The update checker manifest format is documented in
 `docs/UPDATES_MANIFEST.md`; a fill-in example lives at
 `docs/examples/updates.json`.
 
-Run it from the parent checkout that contains `Dashchan`, `Dashchan-Webm`,
-`Dashchan-Extensions`, and `tools`. See `docs/SIGNING.md` for details.
+Run it from the parent checkout that contains `Dashchan`, `Dashchan-Extensions`,
+and `tools`. The WebM2/FFmpeg source used by the built-in player is bundled
+inside this repository as `Dashchan-Webm`. See `docs/SIGNING.md` for details.
 
 ### Building Extensions
 
