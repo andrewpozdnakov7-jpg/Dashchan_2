@@ -1,0 +1,15 @@
+{
+	"base": "light",
+	"name": "teplo",
+	"window": "#C4B2A6",
+	"primary": "#967a69",
+	"accent": "@link",
+	"link": "#4d3833",
+	"meta": "@link",
+	"card": "@window",
+	"quote": "#c9540c",
+	"tripcode": "#ff33cc88",
+	"capcode": "#ff66bbff",
+	"post": "#000000",
+	"spoiler": "#ad9485"
+}

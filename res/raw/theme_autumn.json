@@ -1,0 +1,13 @@
+{
+	"base": "light",
+	"name": "Autumn",
+	"window": "#FFF9F9FF",
+	"primary": "#FFFFA577",
+	"accent": "#FFD55448",
+	"card": "@window",
+	"quote": "#1253e0",
+	"tripcode": "#ff33cc88",
+	"capcode": "#ff66bbff",
+	"spoiler": "#FFCDBEA7",
+	"meta": "#FF896E69"
+}

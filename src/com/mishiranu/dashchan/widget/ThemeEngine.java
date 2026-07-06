@@ -673,7 +673,8 @@ public class ThemeEngine {
 
 	private static final int[] DEFAULT_THEME_RESOURCES = {R.raw.theme_normie, R.raw.theme_tomorrow,
 			R.raw.theme_amoled, R.raw.theme_burichan, R.raw.theme_hardon, R.raw.theme_neutron,
-			R.raw.theme_photon};
+			R.raw.theme_photon, R.raw.theme_yotsuba_a, R.raw.theme_teplo, R.raw.theme_monet_dark,
+			R.raw.theme_autumn, R.raw.theme_futaba, R.raw.theme_lipstick_q};
 
 	private LinkedHashMap<String, Theme> themes;
 

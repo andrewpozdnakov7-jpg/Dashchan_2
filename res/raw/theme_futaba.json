@@ -1,0 +1,15 @@
+{
+	"base": "light",
+	"name": "Futaba",
+	"accent": "#e04000",
+	"window": "#f0e0d6",
+	"primary": "#eeaa88",
+	"card": "#f9e9d9",
+	"meta": "#806060",
+	"link": "#0000ee",
+	"quote": "#789922",
+	"post": "#800000",
+	"spoiler": "#f0d0b6",
+	"tripcode": "#228854",
+	"capcode": "#ff0000"
+}

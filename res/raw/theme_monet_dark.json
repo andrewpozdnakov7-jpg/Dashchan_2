@@ -1,0 +1,9 @@
+{
+	"base": "dark",
+	"name": "Monet dark",
+	"window": "#ff121318",
+	"primary": "@window",
+	"accent": "#ffb2c5ff",
+	"card": "#ff1e1f25",
+	"quote": "#ffe1bbdc"
+}

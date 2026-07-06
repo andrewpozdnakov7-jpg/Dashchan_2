@@ -1,0 +1,15 @@
+{
+	"base": "light",
+	"name": "Yotsuba A",
+	"window": "#d5daf0",
+	"primary": "#f44236",
+	"accent": "#972933",
+	"card": "#c5cade",
+	"post": "#000000",
+	"meta": "#808080",
+	"link": "#c62125",
+	"spoiler": "#9da0b0",
+	"quote": "#523a94",
+	"capcode": "#ff0000",
+	"tripcode": "#84d5d9"
+}

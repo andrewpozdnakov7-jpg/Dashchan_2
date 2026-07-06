@@ -1,0 +1,14 @@
+{
+	"base": "dark",
+	"name": "Lipstick Q",
+	"window": "#ff413e59",
+	"primary": "#ff8f4850",
+	"accent": "#ffde5859",
+	"card": "#ff2d3348",
+	"quote": "#34b382",
+	"tripcode": "#ff33cc88",
+	"capcode": "#ff66bbff",
+	"spoiler": "#ff535163",
+	"meta": "#ffffdc7d",
+	"post": "#ffccefff"
+}
