@@ -671,7 +671,9 @@ public class ThemeEngine {
 		decorView.setTag(R.id.tag_theme_engine, true);
 	}
 
-	private static final int[] DEFAULT_THEME_RESOURCES = {R.raw.theme_normie, R.raw.theme_tomorrow};
+	private static final int[] DEFAULT_THEME_RESOURCES = {R.raw.theme_normie, R.raw.theme_tomorrow,
+			R.raw.theme_amoled, R.raw.theme_burichan, R.raw.theme_hardon, R.raw.theme_neutron,
+			R.raw.theme_photon};
 
 	private LinkedHashMap<String, Theme> themes;
 

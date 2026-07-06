@@ -51,6 +51,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -58,6 +59,8 @@ import org.json.JSONObject;
 
 public class ThemesFragment extends BaseListFragment {
 	private static final String EXTRA_AVAILABLE_THEMES = "availableThemes";
+	private static final String URI_TRIXI_THEMES = "//raw.githubusercontent.com/" +
+			"TrixiEther/Dashchan-Meta/master/update/themes.json";
 
 	private List<JSONObject> availableJsonThemes;
 
@@ -202,8 +205,10 @@ public class ThemesFragment extends BaseListFragment {
 
 	private void updateThemes() {
 		ArrayList<ListItem> listItems = new ArrayList<>();
+		HashSet<String> knownThemeNames = new HashSet<>();
 		boolean installedAdded = false;
 		for (ThemeEngine.Theme theme : ThemeEngine.getThemes()) {
+			knownThemeNames.add(theme.name);
 			if (!theme.builtIn && !installedAdded) {
 				listItems.add(new ListItem(null, false, getString(R.string.installed__plural)));
 				installedAdded = true;
@@ -214,7 +219,7 @@ public class ThemesFragment extends BaseListFragment {
 		if (availableJsonThemes != null) {
 			for (JSONObject jsonObject : availableJsonThemes) {
 				ThemeEngine.Theme theme = ThemeEngine.parseTheme(requireContext(), jsonObject);
-				if (theme != null) {
+				if (theme != null && knownThemeNames.add(theme.name)) {
 					availableThemes.add(theme);
 				}
 			}
@@ -404,8 +409,29 @@ public class ThemesFragment extends BaseListFragment {
 
 		@Override
 		protected Pair<ErrorItem, List<JSONObject>> run(HttpHolder holder) {
+			ArrayList<JSONObject> themes = new ArrayList<>();
+			HashSet<String> themeNames = new HashSet<>();
+			ErrorItem errorItem = null;
+			for (String uriString : new String[] {BuildConfig.URI_THEMES, URI_TRIXI_THEMES}) {
+				Pair<ErrorItem, List<JSONObject>> result = readThemes(holder, uriString);
+				if (result.second != null) {
+					for (JSONObject jsonObject : result.second) {
+						String name = jsonObject.optString("name");
+						if (!StringUtils.isEmpty(name) && themeNames.add(name)) {
+							themes.add(jsonObject);
+						}
+					}
+				} else if (errorItem == null) {
+					errorItem = result.first;
+				}
+			}
+			return themes.isEmpty() ? new Pair<>(errorItem != null
+					? errorItem : new ErrorItem(ErrorItem.Type.EMPTY_RESPONSE), null) : new Pair<>(null, themes);
+		}
+
+		private Pair<ErrorItem, List<JSONObject>> readThemes(HttpHolder holder, String uriString) {
 			try {
-				Uri uri = Chan.getFallback().locator.setSchemeIfEmpty(Uri.parse(BuildConfig.URI_THEMES), null);
+				Uri uri = Chan.getFallback().locator.setSchemeIfEmpty(Uri.parse(uriString), null);
 				int redirects = 0;
 				while (redirects++ < 5) {
 					JSONObject jsonObject = new JSONObject(new HttpRequest(uri, holder).perform().readString());
