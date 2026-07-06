@@ -227,6 +227,7 @@
 	<string name="load_nearest_image">Загружать ближайшее изображение</string>
 	<string name="load_thumbnails">Загружать миниатюры</string>
 	<string name="loading__ellipsis">Загрузка…</string>
+	<string name="loading_themes__ellipsis">Загрузка доступных тем…</string>
 	<string name="local_archive">Локальный архив</string>
 	<string name="lock_navigation">Фиксир. панель</string>
 	<string name="main_application">Основное приложение</string>

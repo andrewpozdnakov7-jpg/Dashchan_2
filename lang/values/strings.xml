@@ -227,6 +227,7 @@
 	<string name="load_nearest_image">Load nearest image</string>
 	<string name="load_thumbnails">Load thumbnails</string>
 	<string name="loading__ellipsis">Loading…</string>
+	<string name="loading_themes__ellipsis">Loading downloadable themes…</string>
 	<string name="local_archive">Local archive</string>
 	<string name="lock_navigation">Lock navigation</string>
 	<string name="main_application">Main application</string>

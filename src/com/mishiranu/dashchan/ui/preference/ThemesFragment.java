@@ -112,6 +112,7 @@ public class ThemesFragment extends BaseListFragment {
 					updateThemes();
 				} else {
 					availableJsonThemes = Collections.emptyList();
+					updateThemes();
 					ClickableToast.show(result.first);
 				}
 			});
@@ -206,6 +207,9 @@ public class ThemesFragment extends BaseListFragment {
 	private void updateThemes() {
 		ArrayList<ListItem> listItems = new ArrayList<>();
 		HashSet<String> knownThemeNames = new HashSet<>();
+		if (availableJsonThemes == null) {
+			listItems.add(new ListItem(null, false, getString(R.string.loading_themes__ellipsis)));
+		}
 		boolean installedAdded = false;
 		for (ThemeEngine.Theme theme : ThemeEngine.getThemes()) {
 			knownThemeNames.add(theme.name);
