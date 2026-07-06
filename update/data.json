@@ -6,12 +6,12 @@
 		{
 			"title": "Release",
 			"name": "3.1.4-r17-dev10",
-			"code": 1064,
+			"code": 1065,
 			"minVersion": 1,
 			"maxVersion": 1,
 			"minSdk": 30,
 			"length": 25248203,
-			"source": "https://github.com/andrewpozdnakov7-jpg/Dashchan_2/releases/download/r17-dev10-1064/Dashchan_2-3.1.4-r17-dev10-1064-ffmpeg8-user-themes-all-abi.apk",
+			"source": "https://github.com/andrewpozdnakov7-jpg/Dashchan_2/releases/download/r17-dev10-1065/Dashchan_2-3.1.4-r17-dev10-1065-ffmpeg8-user-themes-all-abi.apk",
 			"fingerprint": "a9fbac6c498f7ad8e7c56849afe43881966bed2ed2bc1dd1c73d0ffe0b9ebeba"
 		}
 	]
