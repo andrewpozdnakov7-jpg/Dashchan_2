@@ -130,6 +130,7 @@ public final class Post implements Comparable<Post> {
 		int ORIGINAL_POSTER = 0x00000080;
 		int DEFAULT_NAME = 0x00000100;
 		int BUMP_LIMIT_REACHED = 0x00000200;
+		int AI_GENERATED = 0x00000400;
 	}
 
 	public final PostNumber number;
@@ -205,6 +206,14 @@ public final class Post implements Comparable<Post> {
 
 	public boolean isBumpLimitReached() {
 		return FlagUtils.get(flags, Flags.BUMP_LIMIT_REACHED);
+	}
+
+	public boolean isAIGenerated() {
+		return FlagUtils.get(flags, Flags.AI_GENERATED);
+	}
+
+	public boolean isAiGenerated() {
+		return isAIGenerated();
 	}
 
 	@Override
@@ -607,6 +616,14 @@ public final class Post implements Comparable<Post> {
 
 		public void setBumpLimitReached(boolean bumpLimitReached) {
 			flags = FlagUtils.set(flags, Flags.BUMP_LIMIT_REACHED, bumpLimitReached);
+		}
+
+		public boolean isAIGenerated() {
+			return FlagUtils.get(flags, Flags.AI_GENERATED);
+		}
+
+		public void setAIGenerated(boolean aiGenerated) {
+			flags = FlagUtils.set(flags, Flags.AI_GENERATED, aiGenerated);
 		}
 
 		public Post build(boolean deleted) {

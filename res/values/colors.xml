@@ -20,6 +20,8 @@
 	<color name="color_primary_light">#ff666666</color>
 	<color name="color_accent_light">@color/color_primary_light</color>
 	<color name="color_selection_light">#66666666</color>
+	<color name="color_post_mark_user_post_light">#3a833c</color>
+	<color name="color_post_mark_reply_light">#e41a0c</color>
 
 	<color name="background_popup_dark">#ff303030</color>
 	<color name="background_window_dark">#ff181818</color>
@@ -37,5 +39,7 @@
 	<color name="color_primary_dark">#ffaaaaaa</color>
 	<color name="color_accent_dark">@color/color_primary_dark</color>
 	<color name="color_selection_dark">#66aaaaaa</color>
+	<color name="color_post_mark_user_post_dark">#4cae4f</color>
+	<color name="color_post_mark_reply_dark">#f76e64</color>
 
 </resources>

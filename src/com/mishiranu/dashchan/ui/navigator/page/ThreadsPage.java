@@ -2,6 +2,7 @@ package com.mishiranu.dashchan.ui.navigator.page;
 
 import android.app.AlertDialog;
 import android.content.Context;
+import android.graphics.Canvas;
 import android.graphics.Rect;
 import android.net.Uri;
 import android.util.Pair;
@@ -12,6 +13,7 @@ import android.view.View;
 import androidx.annotation.NonNull;
 import androidx.fragment.app.FragmentManager;
 import androidx.recyclerview.widget.GridLayoutManager;
+import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.RecyclerView;
 import chan.content.Chan;
 import chan.content.ChanConfiguration;
@@ -119,6 +121,9 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 		ThreadsAdapter adapter = new ThreadsAdapter(context, this, page.chanName, uiManager,
 				postStateProvider, getFragmentManager());
 		recyclerView.setAdapter(adapter);
+		if (Preferences.isHideThreadsWithSwipe()) {
+			setupHideThreadsWithSwipe(recyclerView);
+		}
 		recyclerView.addItemDecoration(new RecyclerView.ItemDecoration() {
 			@Override
 			public void getItemOffsets(@NonNull Rect outRect, @NonNull View view, @NonNull RecyclerView parent,
@@ -174,6 +179,63 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 			}
 		}
 		readViewModel.observe(this, this);
+	}
+
+	private void setupHideThreadsWithSwipe(RecyclerView recyclerView) {
+		ItemTouchHelper.Callback callback = new ItemTouchHelper.SimpleCallback
+				(0, ItemTouchHelper.LEFT | ItemTouchHelper.RIGHT) {
+			@Override
+			public int getSwipeDirs(@NonNull RecyclerView recyclerView,
+					@NonNull RecyclerView.ViewHolder viewHolder) {
+				int position = viewHolder.getAdapterPosition();
+				ThreadsAdapter adapter = getAdapter();
+				if (position == RecyclerView.NO_POSITION || position >= adapter.getItemCount()) {
+					return 0;
+				}
+				PostItem postItem = adapter.getThread(position);
+				return postItem.getHideState().hidden ? 0 : super.getSwipeDirs(recyclerView, viewHolder);
+			}
+
+			@Override
+			public boolean onMove(@NonNull RecyclerView recyclerView,
+					@NonNull RecyclerView.ViewHolder viewHolder, @NonNull RecyclerView.ViewHolder target) {
+				return false;
+			}
+
+			@Override
+			public void onSwiped(@NonNull RecyclerView.ViewHolder viewHolder, int direction) {
+				int position = viewHolder.getAdapterPosition();
+				ThreadsAdapter adapter = getAdapter();
+				if (position != RecyclerView.NO_POSITION && position < adapter.getItemCount()) {
+					PostItem postItem = adapter.getThread(position);
+					setThreadHideState(postItem, PostItem.HideState.HIDDEN);
+					adapter.notifyThreadHidden(postItem);
+					ClickableToast.show(R.string.thread_hidden);
+				} else {
+					adapter.notifyDataSetChanged();
+				}
+			}
+
+			@Override
+			public void onChildDraw(@NonNull Canvas canvas, @NonNull RecyclerView recyclerView,
+					@NonNull RecyclerView.ViewHolder viewHolder, float dX, float dY,
+					int actionState, boolean isCurrentlyActive) {
+				if (actionState == ItemTouchHelper.ACTION_STATE_SWIPE) {
+					float width = Math.max(1f, viewHolder.itemView.getWidth());
+					float alpha = Math.max(0f, 1f - 1.5f * Math.abs(dX) / width);
+					viewHolder.itemView.setAlpha(alpha);
+				}
+				super.onChildDraw(canvas, recyclerView, viewHolder, dX, dY, actionState, isCurrentlyActive);
+			}
+
+			@Override
+			public void clearView(@NonNull RecyclerView recyclerView,
+					@NonNull RecyclerView.ViewHolder viewHolder) {
+				viewHolder.itemView.setAlpha(1f);
+				super.clearView(recyclerView, viewHolder);
+			}
+		};
+		new ItemTouchHelper(callback).attachToRecyclerView(recyclerView);
 	}
 
 	@Override

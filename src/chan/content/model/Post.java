@@ -335,6 +335,22 @@ public final class Post implements Comparable<Post> {
 	}
 
 	@Public
+	public boolean isAIGenerated() {
+		return builder.builder.isAIGenerated();
+	}
+
+	@Public
+	public boolean isAiGenerated() {
+		return isAIGenerated();
+	}
+
+	@Public
+	public Post setAIGenerated(boolean aiGenerated) {
+		builder.builder.setAIGenerated(aiGenerated);
+		return this;
+	}
+
+	@Public
 	@Override
 	public int compareTo(Post another) {
 		return builder.builder.number.compareTo(another.builder.builder.number);

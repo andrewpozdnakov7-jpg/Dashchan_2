@@ -1,6 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
+	<string name="ai_generated_post">AI-сгенерированный пост</string>
+	<string name="hide_ai_posts">Скрывать AI-сгенерированные посты</string>
+	<string name="hide_threads_with_swipe">Скрывать треды свайпом</string>
+	<string name="highlight_my_posts">Подсвечивать мои посты</string>
+	<string name="thread_hidden">Тред скрыт</string>
 	<string name="about">О программе</string>
 	<string name="action_on_playback_completion">Действие при завершении воспроизведения</string>
 	<string name="active_scrollbar">Активная полоса прокрутки</string>

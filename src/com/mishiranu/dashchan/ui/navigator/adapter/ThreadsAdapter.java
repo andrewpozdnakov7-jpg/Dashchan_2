@@ -335,4 +335,28 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 			return 1;
 		}
 	}
+
+	public PostItem getThread(int position) {
+		return getItem(position);
+	}
+
+	public void notifyThreadHidden(PostItem postItem) {
+		int position = getPostItems().indexOf(postItem);
+		if (position < 0) {
+			notifyDataSetChanged();
+			return;
+		}
+		if (Preferences.isDisplayHiddenThreads()) {
+			notifyItemChanged(position);
+		} else {
+			postItems.remove(postItem);
+			if (catalogSortedPostItems != null) {
+				catalogSortedPostItems.remove(postItem);
+			}
+			if (filteredPostItems != null) {
+				filteredPostItems.remove(postItem);
+			}
+			notifyItemRemoved(position);
+		}
+	}
 }

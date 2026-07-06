@@ -386,6 +386,14 @@ public class PostItem implements AttachmentItem.Master, ChanMarkup.MarkupExtra, 
 		return post.isPosterBanned();
 	}
 
+	public boolean isAIGenerated() {
+		return post.isAIGenerated();
+	}
+
+	public boolean isAiGenerated() {
+		return isAIGenerated();
+	}
+
 	public enum BumpLimitState {NOT_REACHED, REACHED, NEED_COUNT}
 
 	public BumpLimitState getBumpLimitReachedState(Chan chan, int postsCount) {

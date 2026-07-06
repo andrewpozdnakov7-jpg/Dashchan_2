@@ -59,6 +59,8 @@ public class InterfaceFragment extends PreferenceFragment {
 				R.string.paged_board_navigation, R.string.paged_board_navigation__summary);
 		addCheck(true, Preferences.KEY_DISPLAY_HIDDEN_THREADS,
 				Preferences.DEFAULT_DISPLAY_HIDDEN_THREADS, R.string.display_hidden_threads, 0);
+		addCheck(true, Preferences.KEY_HIDE_THREADS_WITH_SWIPE,
+				Preferences.DEFAULT_HIDE_THREADS_WITH_SWIPE, R.string.hide_threads_with_swipe, 0);
 
 		addHeader(R.string.posts_list);
 		addEdit(Preferences.KEY_POST_MAX_LINES, Preferences.DEFAULT_POST_MAX_LINES,
@@ -68,6 +70,8 @@ public class InterfaceFragment extends PreferenceFragment {
 		addList(Preferences.KEY_HIGHLIGHT_UNREAD, enumList(Preferences.HighlightUnreadMode.values(), o -> o.value),
 				Preferences.DEFAULT_HIGHLIGHT_UNREAD.value, R.string.highlight_unread_posts,
 				enumResList(Preferences.HighlightUnreadMode.values(), o -> o.titleResId));
+		addCheck(true, Preferences.KEY_SHOW_MY_POSTS, Preferences.DEFAULT_SHOW_MY_POSTS,
+				R.string.highlight_my_posts, 0);
 		addCheck(true, Preferences.KEY_ADVANCED_SEARCH, Preferences.DEFAULT_ADVANCED_SEARCH,
 				R.string.advanced_search, R.string.advanced_search__summary)
 				.setOnAfterChangeListener(p -> {

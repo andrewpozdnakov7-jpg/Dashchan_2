@@ -137,6 +137,8 @@
 		<item name="colorTextQuote">@color/color_text_quote_light</item>
 		<item name="colorTextTripcode">@color/color_text_tripcode_light</item>
 		<item name="colorTextCapcode">@color/color_text_capcode_light</item>
+		<item name="colorPostMarkUserPost">@color/color_post_mark_user_post_light</item>
+		<item name="colorPostMarkReply">@color/color_post_mark_reply_light</item>
 
 		<item name="colorGainFactor">0.75</item>
 
@@ -165,6 +167,8 @@
 		<item name="colorTextQuote">@color/color_text_quote_dark</item>
 		<item name="colorTextTripcode">@color/color_text_tripcode_dark</item>
 		<item name="colorTextCapcode">@color/color_text_capcode_dark</item>
+		<item name="colorPostMarkUserPost">@color/color_post_mark_user_post_dark</item>
+		<item name="colorPostMarkReply">@color/color_post_mark_reply_dark</item>
 
 		<item name="colorGainFactor">1.25</item>
 

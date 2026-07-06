@@ -2,6 +2,7 @@ package com.mishiranu.dashchan.content;
 
 import android.content.Context;
 import chan.content.Chan;
+import chan.content.ChanConfiguration;
 import chan.text.JsonSerial;
 import chan.text.ParseException;
 import chan.util.StringUtils;
@@ -32,6 +33,7 @@ public class HidePerformer {
 	private final AutohideStorage autohideStorage = AutohideStorage.getInstance();
 	private final SimilarTextEstimator estimator = new SimilarTextEstimator(MAX_COMMENT_LENGTH, true);
 	private final String autohidePrefix;
+	private final String aiGeneratedPost;
 	private PostsProvider postsProvider;
 
 	private LinkedHashSet<PostNumber> replies;
@@ -40,6 +42,7 @@ public class HidePerformer {
 
 	public HidePerformer(Context context) {
 		autohidePrefix = context != null ? context.getString(R.string.autohide) + ": " : "";
+		aiGeneratedPost = context != null ? context.getString(R.string.ai_generated_post) : "AI-generated post";
 	}
 
 	public void setPostsProvider(PostsProvider postsProvider) {
@@ -57,7 +60,18 @@ public class HidePerformer {
 		if (message == null) {
 			message = checkHiddenGlobalAutohide(chan, postItem);
 		}
-		return message != null ? autohidePrefix + message : null;
+		if (message != null) {
+			return autohidePrefix + message;
+		}
+		return checkHiddenAIGenerated(chan, postItem);
+	}
+
+	private String checkHiddenAIGenerated(Chan chan, PostItem postItem) {
+		if (chan.configuration.getOption(ChanConfiguration.OPTION_AI_POSTING) &&
+				Preferences.isHideAIPosts(chan) && postItem.isAIGenerated()) {
+			return aiGeneratedPost;
+		}
+		return null;
 	}
 
 	private String checkHiddenByReplies(PostItem postItem) {

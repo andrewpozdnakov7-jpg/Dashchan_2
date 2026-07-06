@@ -100,6 +100,10 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 			addCheck(true, Preferences.KEY_LOAD_CATALOG.bind(chanName), Preferences.DEFAULT_LOAD_CATALOG,
 					R.string.load_catalog, R.string.load_catalog__summary);
 		}
+		if (chan.configuration.getOption(ChanConfiguration.OPTION_AI_POSTING)) {
+			addCheck(true, Preferences.KEY_HIDE_AI_POSTS.bind(chanName), Preferences.DEFAULT_HIDE_AI_POSTS,
+					R.string.hide_ai_posts, 0);
+		}
 		if (deleting != null && deleting.password) {
 			Preferences.getPassword(chan); // Ensure password existence
 			addEdit(Preferences.KEY_PASSWORD.bind(chanName), null,

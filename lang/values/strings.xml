@@ -3,6 +3,7 @@
 
 	<string name="__colon_format">%1$s: %2$s</string>
 	<string name="__enumeration_format">%1$s, %2$s</string>
+	<string name="ai_generated_post">AI-generated post</string>
 	<string name="about">About</string>
 	<string name="action_on_playback_completion">Action on playback completion</string>
 	<string name="active_scrollbar">Active scrollbar</string>
@@ -189,10 +190,13 @@
 	<string name="hidden_posts">Hidden posts</string>
 	<string name="hide">Hide</string>
 	<string name="hide_eventually__imperfective">Hide eventually</string>
+	<string name="hide_ai_posts">Hide AI-generated posts</string>
+	<string name="hide_threads_with_swipe">Hide threads with swipe</string>
 	<string name="hide_on_tap__imperfective">Hide on tap</string>
 	<string name="hide_pages">Hide pages</string>
 	<string name="hide_personal_data_block">Hide personal data block</string>
 	<string name="highlight_unread_posts">Highlight unread posts</string>
+	<string name="highlight_my_posts">Highlight my posts</string>
 	<string name="history">History</string>
 	<string name="history_is_empty">History is empty</string>
 	<string name="huge_captcha">Huge captcha</string>
@@ -470,6 +474,7 @@
 	<string name="this_week">This week</string>
 	<string name="thread">Thread</string>
 	<string name="thread_doesnt_exist">The thread doesn\'t exist</string>
+	<string name="thread_hidden">Thread hidden</string>
 	<string name="thread_is_closed">Thread is closed</string>
 	<string name="thread_will_be_deleted_from_cache__sentence">The thread will be deleted from cache.</string>
 	<string name="threads">Threads</string>
