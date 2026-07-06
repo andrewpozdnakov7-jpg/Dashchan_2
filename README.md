@@ -42,6 +42,7 @@ WebM2/FFmpeg/dav1d/yuv теперь встроены в основной APK. О
 - Добавлена информация о сборке native player в metadata dialog:
   `player_build` и `player_ffmpeg`.
 - Добавлена проверка обновлений через `update/data.json` и GitHub Releases.
+- Добавлены темы.
 - Встроенные WebM/FFmpeg исходники находятся в папке `Dashchan-Webm`.
 
 ### Сборка
@@ -134,6 +135,7 @@ WebM2 APK is no longer required for normal video playback.
 - Added native-player metadata keys shown in the metadata dialog:
   `player_build` and `player_ffmpeg`.
 - Added update checking through `update/data.json` and GitHub Releases.
+- Added themes.
 - Bundled WebM/FFmpeg source is stored in `Dashchan-Webm`.
 
 ### Building
