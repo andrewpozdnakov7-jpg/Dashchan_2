@@ -16,7 +16,6 @@ import java.net.URLConnection;
 import org.json.JSONException;
 
 public class UpdateChecker {
-	public static final long AUTO_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000L;
 	public static final long REMIND_LATER_INTERVAL_MS = 24 * 60 * 60 * 1000L;
 	private static final int TIMEOUT_MS = 10_000;
 	private static final String USER_AGENT = "Dashchan_2 UpdateChecker";
@@ -53,9 +52,8 @@ public class UpdateChecker {
 		return task;
 	}
 
-	public static boolean shouldStartAutomaticCheck(long now) {
-		return Preferences.isUpdateAutoCheckEnabled() &&
-				now - Preferences.getUpdateLastCheckTime() >= AUTO_CHECK_INTERVAL_MS;
+	public static boolean shouldStartAutomaticCheck() {
+		return Preferences.isUpdateAutoCheckEnabled();
 	}
 
 	public static boolean shouldShowAutomatically(UpdateResult result, long now) {

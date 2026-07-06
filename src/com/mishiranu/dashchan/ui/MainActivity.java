@@ -370,9 +370,6 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 			}
 		}
 
-		if (savedInstanceState == null) {
-			UpdateDialogHelper.checkAutomatically(this);
-		}
 		ExtensionsTrustLoop.handleUntrustedExtensions(this, extensionsTrustLoopState);
 		if (storageRequestState == StorageRequestState.INSTRUCTIONS) {
 			showStorageInstructionsDialog();
@@ -1131,6 +1128,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	protected void onStart() {
 		super.onStart();
 
+		UpdateDialogHelper.checkAutomatically(this);
 		handleChansChangedDelayed();
 		watcherServiceClient.notifyForeground();
 	}

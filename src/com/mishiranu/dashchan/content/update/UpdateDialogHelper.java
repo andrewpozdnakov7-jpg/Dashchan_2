@@ -20,6 +20,7 @@ public class UpdateDialogHelper {
 	private static final int ACTION_REMIND_LATER = 1;
 	private static final int ACTION_SKIP = 2;
 	private static final int ACTION_CLOSE = 3;
+	private static boolean automaticCheckRunning = false;
 
 	public static void checkManually(Fragment fragment) {
 		if (!fragment.isAdded()) {
@@ -46,11 +47,12 @@ public class UpdateDialogHelper {
 	}
 
 	public static void checkAutomatically(Activity activity) {
-		long now = System.currentTimeMillis();
-		if (!UpdateChecker.shouldStartAutomaticCheck(now)) {
+		if (!UpdateChecker.shouldStartAutomaticCheck() || automaticCheckRunning) {
 			return;
 		}
+		automaticCheckRunning = true;
 		UpdateChecker.checkAsync(activity, result -> {
+			automaticCheckRunning = false;
 			long displayTime = System.currentTimeMillis();
 			if (!activity.isFinishing() && !activity.isDestroyed() &&
 					UpdateChecker.shouldShowAutomatically(result, displayTime)) {
@@ -88,15 +90,19 @@ public class UpdateDialogHelper {
 			case UPDATE_AVAILABLE:
 			case UPDATE_UNAVAILABLE:
 			case RELEASE_FOUND: {
-				showUpdateDialog(context, result);
+				showUpdateDialog(context, result, manual);
 				return;
 			}
 		}
 	}
 
-	private static void showUpdateDialog(Context context, UpdateResult result) {
+	private static void showUpdateDialog(Context context, UpdateResult result, boolean manual) {
 		int versionCode = result.getPreferenceVersionCode();
 		Preferences.setUpdateLastSeenVersionCode(versionCode);
+		if (!manual) {
+			Preferences.setUpdateRemindAfterTime(System.currentTimeMillis()
+					+ UpdateChecker.REMIND_LATER_INTERVAL_MS);
+		}
 		String title = result.title;
 		if (StringUtils.isEmpty(title)) {
 			title = context.getString(result.status == UpdateResult.Status.RELEASE_FOUND
