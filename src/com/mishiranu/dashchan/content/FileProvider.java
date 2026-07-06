@@ -11,11 +11,12 @@ import android.os.ParcelFileDescriptor;
 import android.provider.OpenableColumns;
 import androidx.annotation.NonNull;
 import chan.util.CommonUtils;
+import com.mishiranu.dashchan.BuildConfig;
 import java.io.File;
 import java.io.FileNotFoundException;
 
 public class FileProvider extends ContentProvider {
-	private static final String AUTHORITY = "com.mishiranu.providers.dashchan";
+	private static final String AUTHORITY = BuildConfig.FILE_PROVIDER_AUTHORITY;
 	private static final String PATH_UPDATES = "updates";
 	private static final String PATH_DOWNLOADS = "downloads";
 	private static final String PATH_SHARE = "share";

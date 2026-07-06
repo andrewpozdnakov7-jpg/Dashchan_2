@@ -1,5 +1,7 @@
 package com.mishiranu.dashchan.content;
 
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
@@ -8,11 +10,15 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.IBinder;
 import androidx.annotation.NonNull;
+import androidx.core.app.NotificationCompat;
 import chan.content.ChanManager;
 import chan.util.DataFile;
 import chan.util.StringUtils;
+import com.mishiranu.dashchan.C;
+import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.service.DownloadService;
 import com.mishiranu.dashchan.ui.StateActivity;
+import com.mishiranu.dashchan.util.AndroidUtils;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -33,6 +39,7 @@ public class UpdaterActivity extends StateActivity {
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 
+		((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).cancel(C.NOTIFICATION_ID_UPDATES);
 		if (savedInstanceState == null) {
 			performInstallation();
 		} else {
@@ -91,6 +98,30 @@ public class UpdaterActivity extends StateActivity {
 	}
 
 	private static Connection activeConnection;
+
+	private static Intent createInstallIntent(Context context, ArrayList<String> files) {
+		return new Intent(context, UpdaterActivity.class)
+				.putStringArrayListExtra(EXTRA_FILES, files)
+				.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+	}
+
+	private static void notifyInstallReady(Context context, ArrayList<String> files) {
+		NotificationManager notificationManager = (NotificationManager)
+				context.getSystemService(NOTIFICATION_SERVICE);
+		notificationManager.createNotificationChannel(AndroidUtils.createHeadsUpNotificationChannel
+				(C.NOTIFICATION_CHANNEL_UPDATES, context.getString(R.string.updates)));
+		PendingIntent pendingIntent = PendingIntent.getActivity(context, 0,
+				createInstallIntent(context, files), PendingIntent.FLAG_UPDATE_CURRENT);
+		NotificationCompat.Builder builder = new NotificationCompat.Builder(context, C.NOTIFICATION_CHANNEL_UPDATES)
+				.setSmallIcon(android.R.drawable.stat_sys_download_done)
+				.setContentTitle(context.getString(R.string.update_downloaded))
+				.setContentText(context.getString(R.string.tap_to_install_update__sentence))
+				.setContentIntent(pendingIntent)
+				.setAutoCancel(true)
+				.setPriority(NotificationCompat.PRIORITY_HIGH)
+				.setVibrate(new long[0]);
+		notificationManager.notify(C.NOTIFICATION_ID_UPDATES, builder.build());
+	}
 
 	private static class Connection implements ServiceConnection, DownloadService.Callback {
 		private final Context context;
@@ -161,9 +192,12 @@ public class UpdaterActivity extends StateActivity {
 							files.add(downloadItem.name);
 						}
 						if (files.size() == downloadItems.size()) {
-							context.startActivity(new Intent(context, UpdaterActivity.class)
-									.putStringArrayListExtra(EXTRA_FILES, files)
-									.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+							notifyInstallReady(context, files);
+							try {
+								context.startActivity(createInstallIntent(context, files));
+							} catch (RuntimeException e) {
+								e.printStackTrace();
+							}
 						}
 					}
 				}
