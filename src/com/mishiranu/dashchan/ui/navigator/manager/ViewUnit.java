@@ -383,22 +383,19 @@ public class ViewUnit {
 			}
 		}
 		int postMark = PostLinearLayout.MARK_NONE;
-		int postMarkColor = 0;
 		if (showMyPosts && !configurationSet.isDialog && demandSet.selection != UiManager.Selection.THREADSHOT) {
 			if (configurationSet.postStateProvider.isUserPost(postNumber)) {
 				postMark = PostLinearLayout.MARK_USER_POST;
-				postMarkColor = holder.userPostMarkColor;
 			} else {
 				for (PostNumber referenceTo : postItem.getReferencesTo()) {
 					if (configurationSet.postStateProvider.isUserPost(referenceTo)) {
 						postMark = PostLinearLayout.MARK_REPLY;
-						postMarkColor = holder.replyMarkColor;
 						break;
 					}
 				}
 			}
 		}
-		holder.layout.setPostMark(postMark, postMarkColor);
+		holder.layout.setPostMark(postMark, postMark != PostLinearLayout.MARK_NONE ? colorScheme.linkColor : 0);
 		LinkSpan[] linkSpans = postItem.getLinkSpansAfterComment();
 		if (linkSpans != null) {
 			for (LinkSpan linkSpan : linkSpans) {
@@ -1199,8 +1196,6 @@ public class ViewUnit {
 		public ArrayList<ImageView> badgeImages;
 		public final ImageView[] stateImages = new ImageView[PostState.POST_ITEM_STATES.size()];
 		public final int highlightBackgroundColor;
-		public final int userPostMarkColor;
-		public final int replyMarkColor;
 
 		public final UiManager.ThumbnailClickListener thumbnailClickListener;
 		public final UiManager.ThumbnailLongClickListener thumbnailLongClickListener;
@@ -1234,8 +1229,6 @@ public class ViewUnit {
 			bottomBarExpand = itemView.findViewById(R.id.bottom_bar_expand);
 			bottomBarOpenThread = itemView.findViewById(R.id.bottom_bar_open_thread);
 			highlightBackgroundColor = ThemeEngine.getColorScheme(itemView.getContext()).highlightBackgroundColor;
-			userPostMarkColor = ResourceUtils.getColor(itemView.getContext(), R.attr.colorPostMarkUserPost);
-			replyMarkColor = ResourceUtils.getColor(itemView.getContext(), R.attr.colorPostMarkReply);
 
 			thumbnailClickListener = uiManager.interaction().createThumbnailClickListener();
 			thumbnailLongClickListener = uiManager.interaction().createThumbnailLongClickListener();
