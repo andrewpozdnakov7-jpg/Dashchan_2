@@ -1,2 +1,0 @@
-* Allow to close current page in navigation drawer
-* Display superscript and subscript in comments

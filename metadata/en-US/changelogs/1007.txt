@@ -1,3 +1,0 @@
-* [ext] Catalog support
-* [cfg] Limit displayed lines in posts
-* Allow paging for images in threads list and search
