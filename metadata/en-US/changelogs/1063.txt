@@ -1,1 +1,7 @@
-* First public Dashchan_2 release
+* First public Dashchan_2 release.
+* The app was renamed and moved to an updated code base.
+* The code was significantly cleaned up and refactored.
+* Fixed playback of problematic fragmented MP4/fMP4 videos.
+* Updated the built-in video player to FFmpeg 8.1.2.
+* Added support for arm64-v8a, armeabi-v7a, and x86.
+* Minimum Android version is now Android 11+.
