@@ -18,7 +18,7 @@ public class ImportantPostsMarksFastScrollBarDecoration {
 	private Data data;
 
 	public ImportantPostsMarksFastScrollBarDecoration(PaddedRecyclerView recyclerView) {
-		postMarkMinSize = 2f * ResourceUtils.obtainDensity(recyclerView);
+		postMarkMinSize = ResourceUtils.obtainDensity(recyclerView);
 		userPostMarkPaint.setColor(USER_POST_COLOR);
 		replyMarkPaint.setColor(REPLY_COLOR);
 	}
