@@ -203,11 +203,11 @@ public class TextFragment extends BaseListFragment {
 			String header;
 			String subHeader;
 			ReadChangelogTask.Entry.Version start = entry.versions.get(0);
-			String startName = start.getMajorMinor();
+			String startName = context.getString(R.string.update_version__format, start.name, start.code);
 			String startDate = formatChangelogDate(dateFormat, start.date);
 			if (entry.versions.size() >= 2) {
 				ReadChangelogTask.Entry.Version end = entry.versions.get(entry.versions.size() - 1);
-				String endName = end.getMajorMinor();
+				String endName = context.getString(R.string.update_version__format, end.name, end.code);
 				String endDate = formatChangelogDate(dateFormat, end.date);
 				if (startName.equals(endName)) {
 					if (startDate.equals(endDate)) {
@@ -222,12 +222,7 @@ public class TextFragment extends BaseListFragment {
 					subHeader = startDate + " — " + endDate;
 				}
 			} else {
-				String startNameSuffix = start.name.substring(startName.length());
-				if (startNameSuffix.equals(".0")) {
-					header = versionText + " " + startName;
-				} else {
-					header = versionText + " " + start.name;
-				}
+				header = versionText + " " + startName;
 				subHeader = startDate;
 			}
 			builder.append(header);

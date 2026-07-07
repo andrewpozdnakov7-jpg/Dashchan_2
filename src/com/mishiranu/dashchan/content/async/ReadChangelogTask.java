@@ -30,18 +30,14 @@ public class ReadChangelogTask extends ExecutorTask<Void, Pair<ErrorItem, List<R
 
 	public static class Entry implements Parcelable {
 		public static class Version {
+			public final int code;
 			public final String name;
 			public final String date;
 
-			public Version(String name, String date) {
+			public Version(int code, String name, String date) {
+				this.code = code;
 				this.name = name;
 				this.date = date;
-			}
-
-			public String getMajorMinor() {
-				int index = name.indexOf('.');
-				index = name.indexOf('.', index + 1);
-				return index >= 0 ? name.substring(0, index) : name;
 			}
 		}
 
@@ -53,20 +49,6 @@ public class ReadChangelogTask extends ExecutorTask<Void, Pair<ErrorItem, List<R
 			this.texts = texts;
 		}
 
-		private String getSingleMajorMinorOrNull() {
-			String majorMinor = null;
-			for (Version version : versions) {
-				String versionMajorMinor = version.getMajorMinor();
-				if (majorMinor == null) {
-					majorMinor = versionMajorMinor;
-				} else if (!versionMajorMinor.equals(majorMinor)) {
-					majorMinor = null;
-					break;
-				}
-			}
-			return majorMinor;
-		}
-
 		@Override
 		public int describeContents() {
 			return 0;
@@ -76,6 +58,7 @@ public class ReadChangelogTask extends ExecutorTask<Void, Pair<ErrorItem, List<R
 		public void writeToParcel(Parcel dest, int flags) {
 			dest.writeInt(versions.size());
 			for (Version version : versions) {
+				dest.writeInt(version.code);
 				dest.writeString(version.name);
 				dest.writeString(version.date);
 			}
@@ -91,9 +74,10 @@ public class ReadChangelogTask extends ExecutorTask<Void, Pair<ErrorItem, List<R
 				int versionsSize = source.readInt();
 				ArrayList<Version> versions = new ArrayList<>(versionsSize);
 				for (int i = 0; i < versionsSize; i++) {
+					int code = source.readInt();
 					String name = source.readString();
 					String date = source.readString();
-					versions.add(new Version(name, date));
+					versions.add(new Version(code, name, date));
 				}
 				int textsSize = source.readInt();
 				ArrayList<String> texts = new ArrayList<>(textsSize);
@@ -240,43 +224,29 @@ public class ReadChangelogTask extends ExecutorTask<Void, Pair<ErrorItem, List<R
 			TreeMap<Long, Entry> entriesMap = new TreeMap<>();
 			for (int i = 0; i < versionsArray.length(); i++) {
 				JSONObject jsonObject = versionsArray.getJSONObject(i);
-				long code = jsonObject.getLong("code");
+				int code = jsonObject.getInt("code");
 				String name = jsonObject.getString("name");
 				String date = jsonObject.getString("date");
-				Entry entry = entriesMap.get(code);
+				Entry entry = entriesMap.get((long) code);
 				if ((entry == null || entry.texts.isEmpty()) && jsonObject.optBoolean("changelog")) {
-					String changelog = changelogs.get(code);
+					String changelog = changelogs.get((long) code);
 					if (changelog != null) {
 						entry = new Entry(entry != null ? entry.versions : new ArrayList<>(),
 								entry != null ? entry.texts : new ArrayList<>());
 						entry.texts.add(changelog);
-						entriesMap.put(code, entry);
+						entriesMap.put((long) code, entry);
 					}
 				}
 				if (entry == null) {
 					entry = new Entry(new ArrayList<>(), new ArrayList<>());
-					entriesMap.put(code, entry);
+					entriesMap.put((long) code, entry);
 				}
-				entry.versions.add(new Entry.Version(name, date));
+				entry.versions.add(new Entry.Version(code, name, date));
 			}
 
 			ArrayList<Entry> entries = new ArrayList<>(entriesMap.size());
 			for (Entry entry : entriesMap.values()) {
-				if (!entries.isEmpty()) {
-					Entry lastEntry = entries.get(entries.size() - 1);
-					if (entry.texts.isEmpty()) {
-						lastEntry.versions.addAll(entry.versions);
-					} else {
-						String majorMinor = entry.getSingleMajorMinorOrNull();
-						String lastMajorMinor = lastEntry.getSingleMajorMinorOrNull();
-						if (majorMinor != null && majorMinor.equals(lastMajorMinor)) {
-							lastEntry.versions.addAll(entry.versions);
-							lastEntry.texts.addAll(entry.texts);
-						} else {
-							entries.add(entry);
-						}
-					}
-				} else if (!entry.texts.isEmpty()) {
+				if (!entry.texts.isEmpty()) {
 					entries.add(entry);
 				}
 			}
