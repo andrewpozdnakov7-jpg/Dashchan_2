@@ -1,4 +1,0 @@
-* Account JPEG orientation in gallery
-* Allow to re-encode images
-* Allow to view metadata from JPEG images
-* [cfg] Unread posts highlighting modes

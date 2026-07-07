@@ -1,5 +1,0 @@
-* Themes support
-* [ext] Makaba engine support on 2ch.hk
-* [ext] Load and display boards list
-* Display and play audio attachments
-* Vocaroo support
