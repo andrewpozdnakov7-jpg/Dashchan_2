@@ -153,6 +153,10 @@
 	<string name="favorite_threads_order">Favorite threads order</string>
 	<string name="favorites">Favorites</string>
 	<string name="favorites_first">Favorites first</string>
+	<string name="favorites_hide_all">Hide all</string>
+	<string name="favorites_hide_deleted">Hide deleted</string>
+	<string name="favorites_show_all">Show all</string>
+	<string name="favorites_show_deleted">Show deleted</string>
 	<string name="favorites_watcher">Favorites watcher</string>
 	<string name="fields_limit_exceeded">Fields limit exceeded</string>
 	<string name="file_contains_data__format_sentence">This file contains the following data: %s.</string>

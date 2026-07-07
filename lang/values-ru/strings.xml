@@ -157,6 +157,10 @@
 	<string name="favorite_threads_order">Сортировка избранных тредов</string>
 	<string name="favorites">Избранное</string>
 	<string name="favorites_first">Сначала избранное</string>
+	<string name="favorites_hide_all">Скрыть все</string>
+	<string name="favorites_hide_deleted">Скрыть удалённые</string>
+	<string name="favorites_show_all">Показать все</string>
+	<string name="favorites_show_deleted">Показать удалённые</string>
 	<string name="favorites_watcher">Отслеживание избранного</string>
 	<string name="fields_limit_exceeded">Превышение лимита полей</string>
 	<string name="file_contains_data__format_sentence">Данный файл содержит следующие данные: %s.</string>

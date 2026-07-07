@@ -842,9 +842,11 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 					}
 					addSection = false;
 				}
-				ListItem listItem = new ListItem(ListItem.Type.FAVORITE, 0, favoriteItem.chanName,
-						favoriteItem.boardName, favoriteItem.threadNumber, favoriteItem.title);
-				favorites.add(listItem);
+				if (!isFavoriteThreadHidden(favoriteItem)) {
+					ListItem listItem = new ListItem(ListItem.Type.FAVORITE, 0, favoriteItem.chanName,
+							favoriteItem.boardName, favoriteItem.threadNumber, favoriteItem.title);
+					favorites.add(listItem);
+				}
 			}
 		}
 		addSection = true;
@@ -864,6 +866,15 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 						null, chan.configuration.getBoardTitle(favoriteItem.boardName)));
 			}
 		}
+	}
+
+	private boolean isFavoriteThreadHidden(FavoritesStorage.FavoriteItem favoriteItem) {
+		if (Preferences.isFavoritesHidedAll()) {
+			return true;
+		}
+		return Preferences.isFavoritesHidedDeleted() &&
+				watcherServiceClient.getCounter(favoriteItem.chanName, favoriteItem.boardName,
+						favoriteItem.threadNumber).deleted;
 	}
 
 	private String formatBoardThreadTitle(boolean threadItem, String boardName, String threadNumber, String title) {
@@ -955,6 +966,8 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 
 	private static final int FAVORITES_MENU_REFRESH = 1;
 	private static final int FAVORITES_MENU_CLEAR_DELETED = 2;
+	private static final int FAVORITES_MENU_HIDE_DELETED = 3;
+	private static final int FAVORITES_MENU_HIDE_ALL = 4;
 
 	private final View.OnClickListener sectionButtonListener = new View.OnClickListener() {
 		@SuppressLint("NewApi")
@@ -992,6 +1005,13 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 								.setEnabled(hasEnabled);
 						popupMenu.getMenu().add(0, FAVORITES_MENU_CLEAR_DELETED, 0, R.string.clear_deleted)
 								.setEnabled(!deleteFavoriteItems.isEmpty());
+						popupMenu.getMenu().add(0, FAVORITES_MENU_HIDE_DELETED, 0,
+								Preferences.isFavoritesHidedDeleted()
+										? R.string.favorites_show_deleted : R.string.favorites_hide_deleted)
+								.setEnabled(!Preferences.isFavoritesHidedAll());
+						popupMenu.getMenu().add(0, FAVORITES_MENU_HIDE_ALL, 0,
+								Preferences.isFavoritesHidedAll()
+										? R.string.favorites_show_all : R.string.favorites_hide_all);
 						popupMenu.setOnMenuItemClickListener(item -> {
 							switch (item.getItemId()) {
 								case FAVORITES_MENU_REFRESH: {
@@ -1011,6 +1031,22 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 												favoriteItem.boardName, favoriteItem.threadNumber, favoriteItem.title));
 									}
 									showDeleteFavoritesDialog(fragmentManager, builder, deleteFavoriteItems);
+									return true;
+								}
+								case FAVORITES_MENU_HIDE_DELETED: {
+									Preferences.setFavoritesHideDeleted(!Preferences.isFavoritesHidedDeleted());
+									updateListFavorites();
+									notifyDataSetChanged();
+									return true;
+								}
+								case FAVORITES_MENU_HIDE_ALL: {
+									boolean hideAll = !Preferences.isFavoritesHidedAll();
+									if (!hideAll) {
+										Preferences.setFavoritesHideDeleted(false);
+									}
+									Preferences.setFavoritesHideAll(hideAll);
+									updateListFavorites();
+									notifyDataSetChanged();
 									return true;
 								}
 							}
@@ -1497,6 +1533,19 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		return watcherServiceClient.getCounter(listItem.chanName, listItem.boardName, listItem.threadNumber);
 	}
 
+	private boolean removeFavoriteThreadFromList(String chanName, String boardName, String threadNumber) {
+		boolean removed = false;
+		for (int i = favorites.size() - 1; i >= 0; i--) {
+			ListItem favorite = favorites.get(i);
+			if (favorite.type == ListItem.Type.FAVORITE && favorite.isThreadItem() &&
+					favorite.compare(chanName, boardName, threadNumber)) {
+				favorites.remove(i);
+				removed = true;
+			}
+		}
+		return removed;
+	}
+
 	private final View.OnClickListener watcherClickListener = v -> {
 		DrawerForm.ListItem listItem = getItemFromChild(v);
 		if (listItem != null) {
@@ -1507,7 +1556,11 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 
 	public void onWatcherUpdate(String chanName, String boardName, String threadNumber,
 			WatcherService.Counter counter) {
-		if (mergeChans || chanName.equals(this.chanName)) {
+		if (counter.deleted && Preferences.isFavoritesHidedDeleted()) {
+			if (removeFavoriteThreadFromList(chanName, boardName, threadNumber)) {
+				notifyDataSetChanged();
+			}
+		} else if (!Preferences.isFavoritesHidedAll() && (mergeChans || chanName.equals(this.chanName))) {
 			int childCount = recyclerView.getChildCount();
 			for (int i = 0; i < childCount; i++) {
 				ViewHolder holder = (ViewHolder) recyclerView.getChildViewHolder(recyclerView.getChildAt(i));
