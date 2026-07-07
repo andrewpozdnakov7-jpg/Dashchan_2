@@ -209,7 +209,7 @@ public class Preferences {
 	}
 
 	public static final ChanKey KEY_HIDE_AI_POSTS = new ChanKey("hide_ai_posts");
-	public static final boolean DEFAULT_HIDE_AI_POSTS = false;
+	public static final boolean DEFAULT_HIDE_AI_POSTS = true;
 
 	public static boolean isHideAIPosts(Chan chan) {
 		if (chan.configuration.getOption(ChanConfiguration.OPTION_AI_POSTING)) {

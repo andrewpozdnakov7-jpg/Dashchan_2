@@ -101,6 +101,7 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 					R.string.load_catalog, R.string.load_catalog__summary);
 		}
 		if (chan.configuration.getOption(ChanConfiguration.OPTION_AI_POSTING)) {
+			addHeader(R.string.ai_settings);
 			addCheck(true, Preferences.KEY_HIDE_AI_POSTS.bind(chanName), Preferences.DEFAULT_HIDE_AI_POSTS,
 					R.string.hide_ai_posts, 0);
 		}
