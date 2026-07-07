@@ -5,13 +5,12 @@ import android.os.Parcel;
 import android.os.Parcelable;
 import android.util.Pair;
 import chan.content.Chan;
-import chan.http.HttpClient;
 import chan.http.HttpException;
-import chan.http.InetSocket;
+import chan.http.HttpHolder;
+import chan.http.HttpRequest;
+import chan.http.HttpResponse;
 import com.mishiranu.dashchan.BuildConfig;
 import com.mishiranu.dashchan.content.model.ErrorItem;
-import com.mishiranu.dashchan.content.net.SubversionProtocol;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -120,95 +119,121 @@ public class ReadChangelogTask extends ExecutorTask<Void, Pair<ErrorItem, List<R
 		this.locales = locales;
 	}
 
-	private static String decodeDiffToString(byte[] svnDiff) throws IOException {
-		byte[] decoded;
-		try {
-			decoded = SubversionProtocol.applyDiff(null, svnDiff);
-		} catch (IllegalArgumentException e) {
-			Throwable cause = e.getCause();
-			if (cause instanceof IOException) {
-				throw (IOException) cause;
-			} else {
-				throw new IOException(e);
+	private static void appendPathSegments(Uri.Builder builder, String path) {
+		for (String segment : path.split("/")) {
+			if (!segment.isEmpty()) {
+				builder.appendPath(segment);
 			}
 		}
-		return decoded != null ? new String(decoded) : null;
+	}
+
+	private static Uri buildRawGithubUri(Uri githubUri, String metadataPath, String... pathSegments) {
+		Uri.Builder builder = new Uri.Builder().scheme(githubUri.getScheme())
+				.authority("raw.githubusercontent.com");
+		for (String segment : githubUri.getPathSegments()) {
+			builder.appendPath(segment);
+		}
+		builder.appendPath("master");
+		appendPathSegments(builder, metadataPath);
+		for (String pathSegment : pathSegments) {
+			appendPathSegments(builder, pathSegment);
+		}
+		return builder.build();
+	}
+
+	private static String downloadString(HttpHolder holder, Uri githubUri, String metadataPath, String... pathSegments)
+			throws HttpException {
+		Uri uri = buildRawGithubUri(githubUri, metadataPath, pathSegments);
+		try (HttpHolder.Use ignored = holder.use()) {
+			HttpResponse response = new HttpRequest(uri, holder).perform();
+			response.setEncoding("UTF-8");
+			return response.readString();
+		}
+	}
+
+	private static String downloadStringOrNull(HttpHolder holder, Uri githubUri,
+			String metadataPath, String... pathSegments) throws HttpException {
+		try {
+			return downloadString(holder, githubUri, metadataPath, pathSegments);
+		} catch (HttpException e) {
+			if (e.isHttpException() && e.getResponseCode() == 404) {
+				return null;
+			}
+			throw e;
+		}
+	}
+
+	private static boolean addLocale(ArrayList<String> downloadLocales, HashSet<String> addedLocales, String locale) {
+		if (locale != null && !locale.isEmpty() && !addedLocales.contains(locale)) {
+			addedLocales.add(locale);
+			downloadLocales.add(locale);
+			return true;
+		}
+		return false;
+	}
+
+	private static ArrayList<String> collectDownloadLocales(List<Locale> locales) {
+		ArrayList<String> downloadLocales = new ArrayList<>();
+		HashSet<String> addedLocales = new HashSet<>();
+		for (Locale locale : locales) {
+			String language = locale.getLanguage();
+			String country = locale.getCountry();
+			if (language != null && !language.isEmpty()) {
+				if (country != null && !country.isEmpty()) {
+					addLocale(downloadLocales, addedLocales, language + "-" + country);
+				}
+				addLocale(downloadLocales, addedLocales, language);
+			}
+		}
+		for (String fallbackLocaleDir : Arrays.asList("en-US", "en")) {
+			addLocale(downloadLocales, addedLocales, fallbackLocaleDir);
+		}
+		return downloadLocales;
 	}
 
 	@Override
 	protected Pair<ErrorItem, List<Entry>> run() throws InterruptedException {
 		Uri githubUri = Chan.getFallback().locator.setSchemeIfEmpty(Uri.parse(BuildConfig.GITHUB_URI_METADATA), null);
 		String metadataPath = BuildConfig.GITHUB_PATH_METADATA;
+		HttpHolder holder = new HttpHolder(Chan.getFallback());
 		try {
-			HashMap<String, byte[]> metadataFiles = SubversionProtocol.listGithubFiles(githubUri, metadataPath);
+			String versionsFile = downloadString(holder, githubUri, metadataPath, "versions.json");
 			if (isCancelled()) {
 				return null;
 			}
-			HashSet<String> metadataDirs = new HashSet<>();
-			for (HashMap.Entry<String, byte[]> entry : metadataFiles.entrySet()) {
-				if (entry.getValue() == null) {
-					metadataDirs.add(entry.getKey());
-				}
-			}
-			if (metadataDirs.isEmpty()) {
-				return new Pair<>(new ErrorItem(ErrorItem.Type.UNKNOWN), null);
-			}
-			byte[] versionsFile = metadataFiles.get("versions.json");
-			if (versionsFile == null) {
-				return new Pair<>(new ErrorItem(ErrorItem.Type.UNKNOWN), null);
-			}
-			JSONArray versionsArray = new JSONObject(decodeDiffToString(versionsFile)).getJSONArray("versions");
-
-			ArrayList<String> downloadLocales = new ArrayList<>();
-			for (Locale locale : locales) {
-				String language = locale.getLanguage();
-				String country = locale.getCountry();
-				String languageCountry = country != null ? language + "-" + country : language;
-				if (metadataDirs.contains(languageCountry)) {
-					downloadLocales.add(languageCountry);
-				} else {
-					if (country == null) {
-						for (String metadataDir : metadataDirs) {
-							if (metadataDir.startsWith(language + "-")) {
-								downloadLocales.add(metadataDir);
-							}
-						}
-					} else if (metadataDirs.contains(language)) {
-						downloadLocales.add(language);
-					}
-				}
-			}
-			for (String fallbackLocaleDir : Arrays.asList("en-US", "en")) {
-				if (metadataDirs.contains(fallbackLocaleDir)) {
-					downloadLocales.add(fallbackLocaleDir);
-				}
-			}
+			JSONArray versionsArray = new JSONObject(versionsFile).getJSONArray("versions");
+			ArrayList<String> downloadLocales = collectDownloadLocales(locales);
 			if (downloadLocales.isEmpty()) {
 				return new Pair<>(new ErrorItem(ErrorItem.Type.UNKNOWN), null);
 			}
 
-			HashSet<String> checkedLocales = new HashSet<>();
-			HashMap<String, byte[]> changelogFiles = null;
-			for (String localeDir : downloadLocales) {
-				if (!checkedLocales.contains(localeDir)) {
-					checkedLocales.add(localeDir);
-					try {
-						changelogFiles = SubversionProtocol.listGithubFiles(githubUri,
-								metadataPath + "/" + localeDir + "/changelogs");
-						if (isCancelled()) {
-							return null;
-						}
-						if (changelogFiles != null && !changelogFiles.isEmpty()) {
-							break;
-						}
-					} catch (HttpException e) {
-						if (!e.isHttpException()) {
-							throw e;
-						}
+			HashSet<Long> changelogCodesSet = new HashSet<>();
+			ArrayList<Long> changelogCodes = new ArrayList<>();
+			for (int i = 0; i < versionsArray.length(); i++) {
+				JSONObject jsonObject = versionsArray.getJSONObject(i);
+				if (jsonObject.optBoolean("changelog")) {
+					long code = jsonObject.getLong("code");
+					if (!changelogCodesSet.contains(code)) {
+						changelogCodesSet.add(code);
+						changelogCodes.add(code);
 					}
 				}
 			}
-			if (changelogFiles == null || changelogFiles.isEmpty()) {
+			HashMap<Long, String> changelogs = new HashMap<>();
+			for (long code : changelogCodes) {
+				for (String localeDir : downloadLocales) {
+					String changelog = downloadStringOrNull(holder, githubUri, metadataPath,
+							localeDir, "changelogs", code + ".txt");
+					if (isCancelled()) {
+						return null;
+					}
+					if (changelog != null) {
+						changelogs.put(code, changelog);
+						break;
+					}
+				}
+			}
+			if (changelogs.isEmpty()) {
 				throw HttpException.createNotFoundException();
 			}
 
@@ -220,8 +245,7 @@ public class ReadChangelogTask extends ExecutorTask<Void, Pair<ErrorItem, List<R
 				String date = jsonObject.getString("date");
 				Entry entry = entriesMap.get(code);
 				if ((entry == null || entry.texts.isEmpty()) && jsonObject.optBoolean("changelog")) {
-					byte[] file = changelogFiles.get(code + ".txt");
-					String changelog = decodeDiffToString(file);
+					String changelog = changelogs.get(code);
 					if (changelog != null) {
 						entry = new Entry(entry != null ? entry.versions : new ArrayList<>(),
 								entry != null ? entry.texts : new ArrayList<>());
@@ -260,12 +284,6 @@ public class ReadChangelogTask extends ExecutorTask<Void, Pair<ErrorItem, List<R
 			return new Pair<>(null, entries);
 		} catch (HttpException e) {
 			return new Pair<>(e.getErrorItemAndHandle(), null);
-		} catch (InetSocket.InvalidCertificateException e) {
-			e.printStackTrace();
-			return new Pair<>(new ErrorItem(ErrorItem.Type.INVALID_CERTIFICATE), null);
-		} catch (IOException e) {
-			e.printStackTrace();
-			return new Pair<>(HttpClient.transformIOException(e).getErrorItemAndHandle(), null);
 		} catch (JSONException e) {
 			e.printStackTrace();
 			return new Pair<>(new ErrorItem(ErrorItem.Type.INVALID_RESPONSE), null);
