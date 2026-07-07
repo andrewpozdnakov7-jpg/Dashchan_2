@@ -3,7 +3,7 @@ package com.mishiranu.dashchan.content.async;
 import android.net.Uri;
 import android.os.Parcel;
 import android.os.Parcelable;
-import android.util.Pair;
+import android.os.SystemClock;
 import chan.content.Chan;
 import chan.http.HttpException;
 import chan.http.HttpHolder;
@@ -28,9 +28,23 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-public class ReadChangelogTask extends ExecutorTask<Void, Pair<ErrorItem, List<ReadChangelogTask.Entry>>> {
+public class ReadChangelogTask extends ExecutorTask<Void, ReadChangelogTask.Result> {
+	private static final long NETWORK_FALLBACK_TIMEOUT_MS = 20 * 1000L;
+
 	public interface Callback {
-		void onReadChangelogComplete(List<Entry> entries, ErrorItem errorItem);
+		void onReadChangelogComplete(List<Entry> entries, ErrorItem errorItem, boolean localFallback);
+	}
+
+	public static class Result {
+		public final ErrorItem errorItem;
+		public final List<Entry> entries;
+		public final boolean localFallback;
+
+		public Result(ErrorItem errorItem, List<Entry> entries, boolean localFallback) {
+			this.errorItem = errorItem;
+			this.entries = entries;
+			this.localFallback = localFallback;
+		}
 	}
 
 	public static class Entry implements Parcelable {
@@ -105,6 +119,14 @@ public class ReadChangelogTask extends ExecutorTask<Void, Pair<ErrorItem, List<R
 
 	private interface ChangelogReader {
 		String read(String... pathSegments) throws HttpException;
+	}
+
+	private static class NetworkResult {
+		public boolean done;
+		public boolean interrupted;
+		public List<Entry> entries;
+		public HttpException httpException;
+		public JSONException jsonException;
 	}
 
 	public ReadChangelogTask(Callback callback, List<Locale> locales) {
@@ -286,32 +308,87 @@ public class ReadChangelogTask extends ExecutorTask<Void, Pair<ErrorItem, List<R
 		return entries;
 	}
 
+	private List<Entry> readNetworkEntriesWithTimeout(Uri githubUri, String metadataPath) throws InterruptedException,
+			HttpException, JSONException {
+		HttpHolder holder = new HttpHolder(Chan.getFallback());
+		NetworkResult result = new NetworkResult();
+		Thread thread = new Thread(() -> {
+			try {
+				result.entries = readEntries(pathSegments ->
+						downloadStringOrNull(holder, githubUri, metadataPath, pathSegments));
+			} catch (InterruptedException e) {
+				result.interrupted = true;
+			} catch (HttpException e) {
+				result.httpException = e;
+			} catch (JSONException e) {
+				result.jsonException = e;
+			} finally {
+				synchronized (result) {
+					result.done = true;
+					result.notifyAll();
+				}
+			}
+		}, "ReadChangelogNetwork");
+		thread.setDaemon(true);
+		thread.start();
+		long end = SystemClock.elapsedRealtime() + NETWORK_FALLBACK_TIMEOUT_MS;
+		synchronized (result) {
+			while (!result.done) {
+				long timeout = end - SystemClock.elapsedRealtime();
+				if (timeout <= 0) {
+					break;
+				}
+				result.wait(timeout);
+			}
+		}
+		if (!result.done) {
+			holder.interrupt();
+			return null;
+		}
+		if (result.interrupted) {
+			throw new InterruptedException();
+		}
+		if (result.httpException != null) {
+			throw result.httpException;
+		}
+		if (result.jsonException != null) {
+			throw result.jsonException;
+		}
+		return result.entries;
+	}
+
 	@Override
-	protected Pair<ErrorItem, List<Entry>> run() throws InterruptedException {
+	protected Result run() throws InterruptedException {
 		Uri githubUri = Chan.getFallback().locator.setSchemeIfEmpty(Uri.parse(BuildConfig.GITHUB_URI_METADATA), null);
 		String metadataPath = BuildConfig.GITHUB_PATH_METADATA;
-		HttpHolder holder = new HttpHolder(Chan.getFallback());
 		try {
-			List<Entry> entries = readEntries(ReadChangelogTask::readBundledStringOrNull);
-			if (entries == null) {
-				entries = readEntries(pathSegments ->
-						downloadStringOrNull(holder, githubUri, metadataPath, pathSegments));
+			List<Entry> entries = null;
+			boolean localFallback = false;
+			try {
+				entries = readNetworkEntriesWithTimeout(githubUri, metadataPath);
+			} catch (HttpException | JSONException e) {
+				// Use bundled metadata when GitHub is unavailable or returns invalid data.
 			}
+			if (entries == null) {
+				entries = readEntries(ReadChangelogTask::readBundledStringOrNull);
+				localFallback = entries != null;
+			}
+
 			if (entries != null) {
-				return new Pair<>(null, entries);
+				return new Result(null, entries, localFallback);
 			} else {
 				throw HttpException.createNotFoundException();
 			}
 		} catch (HttpException e) {
-			return new Pair<>(e.getErrorItemAndHandle(), null);
+			return new Result(e.getErrorItemAndHandle(), null, false);
 		} catch (JSONException e) {
 			e.printStackTrace();
-			return new Pair<>(new ErrorItem(ErrorItem.Type.INVALID_RESPONSE), null);
+			return new Result(new ErrorItem(ErrorItem.Type.INVALID_RESPONSE), null, false);
 		}
 	}
 
 	@Override
-	protected void onComplete(Pair<ErrorItem, List<Entry>> result) {
-		callback.onReadChangelogComplete(result.second, result.first);
+	protected void onComplete(Result result) {
+		callback.onReadChangelogComplete(result.entries, result.errorItem, result.localFallback);
 	}
 }

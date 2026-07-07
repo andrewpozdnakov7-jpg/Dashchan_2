@@ -517,6 +517,7 @@
 	<string name="remind_later">Remind later</string>
 	<string name="skip_this_version">Skip this version</string>
 	<string name="update_version__format">%1$s (code %2$d)</string>
+	<string name="changelog_loaded_from_local_copy__sentence">Changelog loaded from the local copy.</string>
 	<string name="update_unavailable_min_sdk__format">This update requires Android API %1$d. This device uses API %2$d.</string>
 	<string name="update_github_unverified_version__sentence">Version code could not be verified; open the release page to decide manually.</string>
 	<string name="tap_to_install_update__sentence">Tap to install the downloaded update.</string>

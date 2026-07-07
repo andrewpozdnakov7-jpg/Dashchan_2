@@ -535,6 +535,7 @@
 	<string name="remind_later">Напомнить позже</string>
 	<string name="skip_this_version">Пропустить эту версию</string>
 	<string name="update_version__format">%1$s (код %2$d)</string>
+	<string name="changelog_loaded_from_local_copy__sentence">Список изменений загружен из локальной копии.</string>
 	<string name="update_unavailable_min_sdk__format">Для этого обновления нужен Android API %1$d. На устройстве API %2$d.</string>
 	<string name="update_github_unverified_version__sentence">Код версии не удалось проверить; откройте страницу релиза и решите вручную.</string>
 	<string name="tap_to_install_update__sentence">Нажмите, чтобы установить скачанное обновление.</string>
