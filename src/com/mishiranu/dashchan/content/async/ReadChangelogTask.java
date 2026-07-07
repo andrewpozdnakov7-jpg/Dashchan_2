@@ -10,7 +10,12 @@ import chan.http.HttpHolder;
 import chan.http.HttpRequest;
 import chan.http.HttpResponse;
 import com.mishiranu.dashchan.BuildConfig;
+import com.mishiranu.dashchan.content.MainApplication;
 import com.mishiranu.dashchan.content.model.ErrorItem;
+import com.mishiranu.dashchan.util.IOUtils;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -98,6 +103,10 @@ public class ReadChangelogTask extends ExecutorTask<Void, Pair<ErrorItem, List<R
 	private final Callback callback;
 	private final List<Locale> locales;
 
+	private interface ChangelogReader {
+		String read(String... pathSegments) throws HttpException;
+	}
+
 	public ReadChangelogTask(Callback callback, List<Locale> locales) {
 		this.callback = callback;
 		this.locales = locales;
@@ -175,83 +184,124 @@ public class ReadChangelogTask extends ExecutorTask<Void, Pair<ErrorItem, List<R
 		return downloadLocales;
 	}
 
+	private static String buildAssetPath(String... pathSegments) {
+		StringBuilder builder = new StringBuilder();
+		for (String pathSegment : pathSegments) {
+			for (String segment : pathSegment.split("/")) {
+				if (!segment.isEmpty()) {
+					if (builder.length() > 0) {
+						builder.append('/');
+					}
+					builder.append(segment);
+				}
+			}
+		}
+		return builder.toString();
+	}
+
+	private static String readBundledStringOrNull(String... pathSegments) {
+		String assetPath = buildAssetPath(pathSegments);
+		try (InputStream input = MainApplication.getInstance().getAssets().open(assetPath);
+				ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+			IOUtils.copyStream(input, output);
+			return output.toString("UTF-8");
+		} catch (IOException e) {
+			return null;
+		}
+	}
+
+	private List<Entry> readEntries(ChangelogReader reader) throws HttpException, JSONException, InterruptedException {
+		String versionsFile = reader.read("versions.json");
+		if (versionsFile == null) {
+			return null;
+		}
+		if (isCancelled()) {
+			return null;
+		}
+		JSONArray versionsArray = new JSONObject(versionsFile).getJSONArray("versions");
+		ArrayList<String> downloadLocales = collectDownloadLocales(locales);
+		if (downloadLocales.isEmpty()) {
+			throw new JSONException("No locales");
+		}
+
+		HashSet<Long> changelogCodesSet = new HashSet<>();
+		ArrayList<Long> changelogCodes = new ArrayList<>();
+		for (int i = 0; i < versionsArray.length(); i++) {
+			JSONObject jsonObject = versionsArray.getJSONObject(i);
+			if (jsonObject.optBoolean("changelog")) {
+				long code = jsonObject.getLong("code");
+				if (!changelogCodesSet.contains(code)) {
+					changelogCodesSet.add(code);
+					changelogCodes.add(code);
+				}
+			}
+		}
+		HashMap<Long, String> changelogs = new HashMap<>();
+		for (long code : changelogCodes) {
+			for (String localeDir : downloadLocales) {
+				String changelog = reader.read(localeDir, "changelogs", code + ".txt");
+				if (isCancelled()) {
+					return null;
+				}
+				if (changelog != null) {
+					changelogs.put(code, changelog);
+					break;
+				}
+			}
+		}
+		if (changelogs.isEmpty()) {
+			return null;
+		}
+
+		TreeMap<Long, Entry> entriesMap = new TreeMap<>();
+		for (int i = 0; i < versionsArray.length(); i++) {
+			JSONObject jsonObject = versionsArray.getJSONObject(i);
+			int code = jsonObject.getInt("code");
+			String name = jsonObject.getString("name");
+			String date = jsonObject.getString("date");
+			Entry entry = entriesMap.get((long) code);
+			if ((entry == null || entry.texts.isEmpty()) && jsonObject.optBoolean("changelog")) {
+				String changelog = changelogs.get((long) code);
+				if (changelog != null) {
+					entry = new Entry(entry != null ? entry.versions : new ArrayList<>(),
+							entry != null ? entry.texts : new ArrayList<>());
+					entry.texts.add(changelog);
+					entriesMap.put((long) code, entry);
+				}
+			}
+			if (entry == null) {
+				entry = new Entry(new ArrayList<>(), new ArrayList<>());
+				entriesMap.put((long) code, entry);
+			}
+			entry.versions.add(new Entry.Version(code, name, date));
+		}
+
+		ArrayList<Entry> entries = new ArrayList<>(entriesMap.size());
+		for (Entry entry : entriesMap.values()) {
+			if (!entry.texts.isEmpty()) {
+				entries.add(entry);
+			}
+		}
+		Collections.reverse(entries);
+		return entries;
+	}
+
 	@Override
 	protected Pair<ErrorItem, List<Entry>> run() throws InterruptedException {
 		Uri githubUri = Chan.getFallback().locator.setSchemeIfEmpty(Uri.parse(BuildConfig.GITHUB_URI_METADATA), null);
 		String metadataPath = BuildConfig.GITHUB_PATH_METADATA;
 		HttpHolder holder = new HttpHolder(Chan.getFallback());
 		try {
-			String versionsFile = downloadString(holder, githubUri, metadataPath, "versions.json");
-			if (isCancelled()) {
-				return null;
+			List<Entry> entries = readEntries(ReadChangelogTask::readBundledStringOrNull);
+			if (entries == null) {
+				entries = readEntries(pathSegments ->
+						downloadStringOrNull(holder, githubUri, metadataPath, pathSegments));
 			}
-			JSONArray versionsArray = new JSONObject(versionsFile).getJSONArray("versions");
-			ArrayList<String> downloadLocales = collectDownloadLocales(locales);
-			if (downloadLocales.isEmpty()) {
-				return new Pair<>(new ErrorItem(ErrorItem.Type.UNKNOWN), null);
-			}
-
-			HashSet<Long> changelogCodesSet = new HashSet<>();
-			ArrayList<Long> changelogCodes = new ArrayList<>();
-			for (int i = 0; i < versionsArray.length(); i++) {
-				JSONObject jsonObject = versionsArray.getJSONObject(i);
-				if (jsonObject.optBoolean("changelog")) {
-					long code = jsonObject.getLong("code");
-					if (!changelogCodesSet.contains(code)) {
-						changelogCodesSet.add(code);
-						changelogCodes.add(code);
-					}
-				}
-			}
-			HashMap<Long, String> changelogs = new HashMap<>();
-			for (long code : changelogCodes) {
-				for (String localeDir : downloadLocales) {
-					String changelog = downloadStringOrNull(holder, githubUri, metadataPath,
-							localeDir, "changelogs", code + ".txt");
-					if (isCancelled()) {
-						return null;
-					}
-					if (changelog != null) {
-						changelogs.put(code, changelog);
-						break;
-					}
-				}
-			}
-			if (changelogs.isEmpty()) {
+			if (entries != null) {
+				return new Pair<>(null, entries);
+			} else {
 				throw HttpException.createNotFoundException();
 			}
-
-			TreeMap<Long, Entry> entriesMap = new TreeMap<>();
-			for (int i = 0; i < versionsArray.length(); i++) {
-				JSONObject jsonObject = versionsArray.getJSONObject(i);
-				int code = jsonObject.getInt("code");
-				String name = jsonObject.getString("name");
-				String date = jsonObject.getString("date");
-				Entry entry = entriesMap.get((long) code);
-				if ((entry == null || entry.texts.isEmpty()) && jsonObject.optBoolean("changelog")) {
-					String changelog = changelogs.get((long) code);
-					if (changelog != null) {
-						entry = new Entry(entry != null ? entry.versions : new ArrayList<>(),
-								entry != null ? entry.texts : new ArrayList<>());
-						entry.texts.add(changelog);
-						entriesMap.put((long) code, entry);
-					}
-				}
-				if (entry == null) {
-					entry = new Entry(new ArrayList<>(), new ArrayList<>());
-					entriesMap.put((long) code, entry);
-				}
-				entry.versions.add(new Entry.Version(code, name, date));
-			}
-
-			ArrayList<Entry> entries = new ArrayList<>(entriesMap.size());
-			for (Entry entry : entriesMap.values()) {
-				if (!entry.texts.isEmpty()) {
-					entries.add(entry);
-				}
-			}
-			Collections.reverse(entries);
-			return new Pair<>(null, entries);
 		} catch (HttpException e) {
 			return new Pair<>(e.getErrorItemAndHandle(), null);
 		} catch (JSONException e) {

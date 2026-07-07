@@ -179,7 +179,7 @@ android {
 		resources.srcDirs = []
 		aidl.srcDirs = ['src']
 		res.srcDirs = ['res', 'lang']
-		assets.srcDirs = ['assets']
+		assets.srcDirs = ['assets', 'metadata']
 		jni.srcDirs = []
 		jniLibs.srcDirs = []
 	}
