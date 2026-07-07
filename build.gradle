@@ -130,7 +130,7 @@ android {
 
 	defaultConfig {
 		applicationId = 'io.dashchan2'
-		versionCode = 1065
+		versionCode = 1066
 		versionName = '3.1.4-r17'
 
 		minSdk = 30
@@ -221,7 +221,7 @@ android {
 	}
 	buildTypes.create('ndebug') {
 		debuggable = false
-		versionNameSuffix '-dev10'
+		versionNameSuffix '-dev11'
 		manifestPlaceholders = [
 				appLabel: 'Dashchan_2',
 				fileProviderAuthority: 'io.dashchan2.provider'

@@ -1,0 +1,6 @@
+* Added an experimental setting for video playback speed selection.
+* Added AI-generated post hiding for 2ch/Dvach, enabled by default.
+* Added important post markers on the fast scroll bar and highlighting for own posts/replies.
+* Added thread hiding by swipe and improved the favorites section.
+* Attachment privacy options are now enabled by default.
+* Improved changelog loading: a bundled local copy is used when the network is unavailable.
