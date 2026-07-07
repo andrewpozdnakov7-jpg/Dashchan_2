@@ -70,6 +70,7 @@ import com.mishiranu.dashchan.util.SearchHelper;
 import com.mishiranu.dashchan.util.ViewUtils;
 import com.mishiranu.dashchan.widget.ClickableToast;
 import com.mishiranu.dashchan.widget.DividerItemDecoration;
+import com.mishiranu.dashchan.widget.ImportantPostsMarksFastScrollBarDecoration;
 import com.mishiranu.dashchan.widget.ListPosition;
 import com.mishiranu.dashchan.widget.PaddedRecyclerView;
 import com.mishiranu.dashchan.widget.PostsLayoutManager;
@@ -98,6 +99,7 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 		public final HashMap<PostNumber, PostItem> postItems = new HashMap<>();
 		public final PostItem.HideState.Map<PostNumber> hiddenPosts = new PostItem.HideState.Map<>();
 		public final HashSet<PostNumber> userPosts = new HashSet<>();
+		public ImportantPostsMarksFastScrollBarDecoration.Data importantPostsMarksFastScrollBarDecorationData;
 		public byte[] threadExtra;
 		public ErrorItem errorItem;
 
@@ -275,6 +277,7 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 
 	private Set<PostNumber> lastNewPostNumbers = Collections.emptySet();
 	private Set<PostNumber> lastEditedPostNumbers = Collections.emptySet();
+	private ImportantPostsMarksFastScrollBarDecoration importantPostsMarksFastScrollBarDecoration;
 
 	private final UiManager.PostStateProvider postStateProvider = new UiManager.PostStateProvider() {
 		@Override
@@ -363,6 +366,7 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 		uiManager.observable().register(this);
 		FavoritesStorage.getInstance().getObservable().register(this);
 		hidePerformer.setPostsProvider(adapter);
+		initializeImportantPostsMarksFastScrollBarDecoration(recyclerView, retainableExtra);
 
 		Context toolbarContext = getToolbarContext();
 		LinearLayout searchControlLayout = new LinearLayout(toolbarContext);
@@ -1600,6 +1604,7 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 				retainableExtra.errorItem = null;
 			}
 
+			updateImportantPostsFastScrollBarDecorationData();
 			ReadViewModel readViewModel = getViewModel(ReadViewModel.class);
 			readViewModel.notifyExtracted();
 		}
@@ -1686,6 +1691,65 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 		cancelProgressIfNecessary();
 	}
 
+	private void initializeImportantPostsMarksFastScrollBarDecoration(PaddedRecyclerView recyclerView,
+			RetainableExtra retainableExtra) {
+		if (Preferences.isActiveScrollbar()) {
+			importantPostsMarksFastScrollBarDecoration =
+					new ImportantPostsMarksFastScrollBarDecoration(recyclerView);
+			recyclerView.setImportantPostsMarksFastScrollBarDecoration(importantPostsMarksFastScrollBarDecoration);
+			ImportantPostsMarksFastScrollBarDecoration.Data data =
+					retainableExtra.importantPostsMarksFastScrollBarDecorationData;
+			if (data != null) {
+				importantPostsMarksFastScrollBarDecoration.setData(data);
+			} else {
+				updateImportantPostsFastScrollBarDecorationData();
+			}
+		} else {
+			importantPostsMarksFastScrollBarDecoration = null;
+			retainableExtra.importantPostsMarksFastScrollBarDecorationData = null;
+			recyclerView.setImportantPostsMarksFastScrollBarDecoration(null);
+		}
+	}
+
+	private void updateImportantPostsFastScrollBarDecorationData() {
+		if (importantPostsMarksFastScrollBarDecoration == null) {
+			return;
+		}
+
+		ImportantPostsMarksFastScrollBarDecoration.Data data = null;
+		RetainableExtra retainableExtra = getRetainableExtra(RetainableExtra.FACTORY);
+		if (!retainableExtra.userPosts.isEmpty()) {
+			PostsAdapter adapter = getAdapter();
+			Set<Integer> userPostsPositions = new HashSet<>();
+			Set<Integer> repliesPositions = new HashSet<>();
+			for (PostNumber userPostNumber : retainableExtra.userPosts) {
+				int userPostPosition = adapter.positionOfPostNumber(userPostNumber);
+				if (userPostPosition < 0) {
+					continue;
+				}
+				PostItem userPostItem = adapter.getItem(userPostPosition);
+				if (!postStateProvider.isHiddenResolve(userPostItem)) {
+					userPostsPositions.add(userPostPosition);
+				}
+				for (PostNumber replyPostNumber : userPostItem.getReferencesFrom()) {
+					int replyPosition = adapter.positionOfPostNumber(replyPostNumber);
+					if (replyPosition >= 0) {
+						PostItem replyPostItem = adapter.getItem(replyPosition);
+						if (!postStateProvider.isHiddenResolve(replyPostItem)) {
+							repliesPositions.add(replyPosition);
+						}
+					}
+				}
+			}
+			data = new ImportantPostsMarksFastScrollBarDecoration.Data(userPostsPositions,
+					repliesPositions, adapter.getItemCount());
+		}
+
+		retainableExtra.importantPostsMarksFastScrollBarDecorationData = data;
+		importantPostsMarksFastScrollBarDecoration.setData(data);
+		getRecyclerView().invalidate();
+	}
+
 	@Override
 	public void onReadPostsSuccess(PagesDatabase.Cache.State cacheState, ConsumeReplies consumeReplies) {
 		ReadViewModel readViewModel = getViewModel(ReadViewModel.class);
@@ -1744,12 +1808,14 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 			}
 			case PERFORM_SWITCH_USER_MARK: {
 				setPostUserPost(postItem, !postStateProvider.isUserPost(postItem.getPostNumber()));
+				updateImportantPostsFastScrollBarDecorationData();
 				getUiManager().sendPostItemMessage(postItem, UiManager.Message.POST_INVALIDATE_ALL_VIEWS);
 				break;
 			}
 			case PERFORM_SWITCH_HIDE: {
 				setPostHideState(postItem, !postItem.getHideState().hidden
 						? PostItem.HideState.HIDDEN : PostItem.HideState.SHOWN);
+				updateImportantPostsFastScrollBarDecorationData();
 				getUiManager().sendPostItemMessage(postItem, UiManager.Message.POST_INVALIDATE_ALL_VIEWS);
 				break;
 			}
@@ -1781,9 +1847,11 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 					adapter.invalidateHidden();
 					notifyAllAdaptersChanged();
 					encodeAndStoreThreadExtra();
+					updateImportantPostsFastScrollBarDecorationData();
 				} else if (result == HidePerformer.AddResult.EXISTS && !postItem.getHideState().hidden) {
 					setPostHideState(postItem, PostItem.HideState.UNDEFINED);
 					notifyAllAdaptersChanged();
+					updateImportantPostsFastScrollBarDecorationData();
 				}
 				adapter.preloadPosts(((LinearLayoutManager) recyclerView.getLayoutManager())
 						.findFirstVisibleItemPosition());

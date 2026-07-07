@@ -35,6 +35,7 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 	private final Drawable trackDrawable;
 	private final int touchSlop;
 	private final int minTrackSize;
+	private ImportantPostsMarksFastScrollBarDecoration importantPostsMarksFastScrollBarDecoration;
 
 	private boolean fastScrollerEnabled;
 	private boolean fastScrollerAllowed;
@@ -133,6 +134,12 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 			fastScrollingDown = false;
 			updateFastScroller(true, fastScrollerEnabled, fastScrollerAllowed, regularScrolling, false);
 		}
+	}
+
+	public void setImportantPostsMarksFastScrollBarDecoration
+			(ImportantPostsMarksFastScrollBarDecoration importantPostsMarksFastScrollBarDecoration) {
+		this.importantPostsMarksFastScrollBarDecoration = importantPostsMarksFastScrollBarDecoration;
+		invalidate();
 	}
 
 	private boolean isFastScrollerAvailable() {
@@ -381,14 +388,21 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 			int trackBottom = top + height - (thumbBitmap ? thumbHeight / 2 : 0);
 			trackDrawable.setState(fastScrolling ? STATE_PRESSED : STATE_NORMAL);
 			int trackExtra = (maxWidth - trackDrawable.getIntrinsicWidth()) / 2;
+			int trackLeft;
+			int trackRight;
 			if (rtl) {
-				trackDrawable.setBounds(trackExtra - translateX, trackTop,
-						trackExtra + trackDrawable.getIntrinsicWidth() - translateX, trackBottom);
+				trackLeft = trackExtra - translateX;
+				trackRight = trackExtra + trackDrawable.getIntrinsicWidth() - translateX;
 			} else {
-				trackDrawable.setBounds(getWidth() - trackExtra - trackDrawable.getIntrinsicWidth() + translateX,
-						trackTop, getWidth() - trackExtra + translateX, trackBottom);
+				trackLeft = getWidth() - trackExtra - trackDrawable.getIntrinsicWidth() + translateX;
+				trackRight = getWidth() - trackExtra + translateX;
 			}
+			trackDrawable.setBounds(trackLeft, trackTop, trackRight, trackBottom);
 			trackDrawable.draw(canvas);
+			if (importantPostsMarksFastScrollBarDecoration != null &&
+					importantPostsMarksFastScrollBarDecoration.hasMarks()) {
+				importantPostsMarksFastScrollBarDecoration.draw(trackLeft, trackTop, trackRight, trackBottom, canvas);
+			}
 			int thumbExtra = (maxWidth - thumbDrawable.getIntrinsicWidth()) / 2;
 			thumbDrawable.setState(fastScrolling ? STATE_PRESSED : STATE_NORMAL);
 			if (rtl) {
