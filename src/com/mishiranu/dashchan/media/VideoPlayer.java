@@ -43,6 +43,7 @@ import java.util.zip.ZipFile;
 public class VideoPlayer {
 	private static boolean loaded = false;
 	private static HolderInterface holder;
+	private static boolean playbackSpeedSupported = true;
 
 	// Extraction requirements. The Holder static initializer below keeps the
 	// actual System.loadLibrary order explicit because the JNI dependencies are order-sensitive.
@@ -180,6 +181,7 @@ public class VideoPlayer {
 
 	private boolean consumed = false;
 	private boolean playing = false;
+	private int playbackSpeed = 1000;
 
 	private boolean lastSeeking = false;
 	private volatile boolean lastBuffering = false;
@@ -223,6 +225,7 @@ public class VideoPlayer {
 							throw new InitializationException(errorCode);
 						}
 						sessionData = initData;
+						applyPlaybackSpeedLocked();
 						seekerThread.start();
 					}
 				}
@@ -481,6 +484,28 @@ public class VideoPlayer {
 					this.seekToPosition = seekToPosition != null
 							? new SeekToPosition(seekToPosition.position, false) : null;
 				}
+			}
+		}
+	}
+
+	public void setPlaybackSpeed(int speed) {
+		if (speed < 100) {
+			speed = 100;
+		} else if (speed > 4000) {
+			speed = 4000;
+		}
+		synchronized (this) {
+			playbackSpeed = speed;
+			applyPlaybackSpeedLocked();
+		}
+	}
+
+	private void applyPlaybackSpeedLocked() {
+		if (isInitialized() && playbackSpeedSupported) {
+			try {
+				holder.setPlaybackSpeed(sessionData.pointer, playbackSpeed);
+			} catch (RuntimeException | LinkageError e) {
+				playbackSpeedSupported = false;
 			}
 		}
 	}
@@ -749,6 +774,7 @@ public class VideoPlayer {
 		void setRange(long pointer, long start, long end, long total);
 		void setCancelSeek(long pointer, boolean cancelSeek);
 
+		void setPlaybackSpeed(long pointer, int speed);
 		void setSurface(long pointer, Surface surface);
 		void setPlaying(long pointer, boolean playing);
 
@@ -793,6 +819,7 @@ public class VideoPlayer {
 		@Override public native void setRange(long pointer, long start, long end, long total);
 		@Override public native void setCancelSeek(long pointer, boolean busy);
 
+		@Override public native void setPlaybackSpeed(long pointer, int speed);
 		@Override public native void setSurface(long pointer, Surface surface);
 		@Override public native void setPlaying(long pointer, boolean playing);
 

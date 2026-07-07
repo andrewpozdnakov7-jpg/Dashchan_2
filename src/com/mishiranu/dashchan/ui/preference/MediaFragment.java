@@ -115,10 +115,15 @@ public class MediaFragment extends PreferenceFragment implements FragmentHandler
 				R.string.play_after_scroll, R.string.play_after_scroll__summary).setEnabled(playerLoadResult.first);
 		addCheck(true, Preferences.KEY_VIDEO_SEEK_ANY_FRAME, Preferences.DEFAULT_VIDEO_SEEK_ANY_FRAME,
 				R.string.seek_any_frame, R.string.seek_any_frame__summary).setEnabled(playerLoadResult.first);
+		addCheck(true, Preferences.KEY_VIDEO_PLAYBACK_SPEED_CONTROL,
+				Preferences.DEFAULT_VIDEO_PLAYBACK_SPEED_CONTROL,
+				R.string.enable_video_playback_speed_control,
+				R.string.enable_video_playback_speed_control__summary).setEnabled(playerLoadResult.first);
 		if (playerLoadResult.first) {
 			addDependency(Preferences.KEY_VIDEO_COMPLETION, Preferences.KEY_USE_VIDEO_PLAYER, true);
 			addDependency(Preferences.KEY_VIDEO_PLAY_AFTER_SCROLL, Preferences.KEY_USE_VIDEO_PLAYER, true);
 			addDependency(Preferences.KEY_VIDEO_SEEK_ANY_FRAME, Preferences.KEY_USE_VIDEO_PLAYER, true);
+			addDependency(Preferences.KEY_VIDEO_PLAYBACK_SPEED_CONTROL, Preferences.KEY_USE_VIDEO_PLAYER, true);
 		}
 
 		addHeader(R.string.additional);

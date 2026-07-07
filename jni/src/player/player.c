@@ -51,6 +51,9 @@
 #define AUDIO_MAX_ENQUEUE_SIZE 256
 #define WINDOW_FORMAT_YV12 0x32315659
 #define MAX_FPS 60
+#define PLAYBACK_SPEED_DEFAULT 1000
+#define PLAYBACK_SPEED_MIN 100
+#define PLAYBACK_SPEED_MAX 4000
 
 #define HAS_STREAM(p, stream) ((p)->av.stream##StreamIndex != INDEX_NO_STREAM)
 #define GET_STREAM(p, stream) ((p)->av.format->streams[(p)->av.stream##StreamIndex])
@@ -178,6 +181,7 @@ struct Player {
 	} video;
 
 	struct {
+		int playbackSpeed;
 		int64_t audioPosition;
 		int64_t videoPosition;
 		int audioPositionNotSync;
@@ -341,9 +345,37 @@ static void videoBufferQueueFreeCallback(BufferItem * bufferItem) {
 	}
 }
 
+static int clampPlaybackSpeed(int speed) {
+	if (speed < PLAYBACK_SPEED_MIN) {
+		return PLAYBACK_SPEED_MIN;
+	}
+	if (speed > PLAYBACK_SPEED_MAX) {
+		return PLAYBACK_SPEED_MAX;
+	}
+	return speed;
+}
+
+static int getPlaybackSpeed(Player * player) {
+	int speed = player->sync.playbackSpeed;
+	return speed > 0 ? speed : PLAYBACK_SPEED_DEFAULT;
+}
+
+static int64_t scalePlaybackElapsed(Player * player, int64_t elapsed) {
+	return elapsed * getPlaybackSpeed(player) / PLAYBACK_SPEED_DEFAULT;
+}
+
+static int64_t unscalePlaybackPosition(Player * player, int64_t position) {
+	return position * PLAYBACK_SPEED_DEFAULT / getPlaybackSpeed(player);
+}
+
+static int getPlaybackSampleRate(Player * player, int sampleRate) {
+	int result = (int) (sampleRate * (int64_t) PLAYBACK_SPEED_DEFAULT / getPlaybackSpeed(player));
+	return result > 0 ? result : 1;
+}
+
 static void updateAudioPositionSurrogate(Player * player, int64_t position, int forceUpdate) {
 	if (forceUpdate || player->sync.audioPositionNotSync) {
-		player->sync.startTime = getTime() - position;
+		player->sync.startTime = getTime() - unscalePlaybackPosition(player, position);
 		if ((!HAS_STREAM(player, audio) || player->audio.finished) && !forceUpdate) {
 			player->sync.audioPositionNotSync = 0;
 		}
@@ -354,7 +386,7 @@ static int64_t calculatePosition(Player * player, int mayCalculateStartTime) {
 	if (!HAS_STREAM(player, audio) || player->audio.finished) {
 		if (player->play.playing) {
 			if (mayCalculateStartTime || !player->video.finished) {
-				return getTime() - player->sync.startTime;
+				return scalePlaybackElapsed(player, getTime() - player->sync.startTime);
 			} else {
 				return player->sync.videoPosition;
 			}
@@ -382,8 +414,9 @@ static void markStreamFinished(Player * player, int video) {
 	}
 }
 
-static int64_t calculateFrameTime(int64_t waitTime) {
-	return getTime() + waitTime - min64(max64(waitTime / 2, 25), 100);
+static int64_t calculateFrameTime(Player * player, int64_t waitTime) {
+	int64_t scaledWaitTime = unscalePlaybackPosition(player, waitTime);
+	return getTime() + scaledWaitTime - min64(max64(scaledWaitTime / 2, 25), 100);
 }
 
 static int decodeFrame(Player * player, AVPacket * packet, AVFrame * frame, int video, int finish) {
@@ -563,8 +596,9 @@ static void * performDecodeAudio(void * data) {
 #endif
 				int srcSamples = frame->nb_samples;
 				int srcSampleRate = frame->sample_rate;
-				int dstSampleRate = player->audio.resampleSampleRate != 0
+				int outputSampleRate = player->audio.resampleSampleRate != 0
 						? player->audio.resampleSampleRate : srcSampleRate;
+				int dstSampleRate = getPlaybackSampleRate(player, outputSampleRate);
 				int dstFormat = AV_SAMPLE_FMT_S16;
 				LOG("audio frame pts=%" PRId64 " best=%" PRId64 " pkt_dts=%" PRId64
 						" pos=%" PRId64 " tb=%d/%d srcRate=%d srcCh=%d dstRate=%d dstCh=%d",
@@ -626,7 +660,7 @@ static void * performDecodeAudio(void * data) {
 				int64_t gaining = player->video.finished ? 0 : position - videoPosition;
 				if (gaining > GAINING_THRESHOLD) {
 					LOG("sleep audio %" PRId64 " %" PRId64, gaining, position);
-					int64_t time = calculateFrameTime(gaining);
+					int64_t time = calculateFrameTime(player, gaining);
 					while (!player->meta.interrupt && !player->sync.skip.audioWorkFrame) {
 						if (condSleepUntilMs(&player->audio.sleepCond, &player->audio.sleepBufferMutex, time)) {
 							break;
@@ -806,7 +840,7 @@ static void * performDraw(void * data) {
 		}
 		if (waitTime > 0) {
 			LOG("sleep video %" PRId64 " %" PRId64 " %" PRId64, waitTime, player->sync.videoPosition, position);
-			int64_t time = calculateFrameTime(waitTime);
+			int64_t time = calculateFrameTime(player, waitTime);
 			while (!player->meta.interrupt && !player->sync.skip.drawWorkFrame) {
 				if (condSleepUntilMs(&player->video.sleepCond, &player->video.sleepDrawMutex, time)) {
 					break;
@@ -1330,6 +1364,7 @@ static Player * createPlayer(void) {
 	player->video.useLibyuv = -1;
 	player->video.lastBuffer.width = -1;
 	player->video.lastBuffer.height = -1;
+	player->sync.playbackSpeed = PLAYBACK_SPEED_DEFAULT;
 	sparseArrayInit(&player->bridge.array, 4);
 	pthread_mutex_init(&player->file.controlMutex, NULL);
 	pthread_cond_init(&player->file.controlCond, NULL);
@@ -1856,6 +1891,38 @@ void setCancelSeek(jlong pointer, jboolean cancelSeek) {
 	player->file.cancelSeek = !!cancelSeek;
 	pthread_cond_broadcast(&player->file.controlCond);
 	pthread_mutex_unlock(&player->file.controlMutex);
+}
+
+void setPlaybackSpeed(jlong pointer, jint speed) {
+	Player * player = POINTER_CAST(pointer);
+	speed = clampPlaybackSpeed(speed);
+	if (player->sync.playbackSpeed != speed) {
+		pthread_mutex_lock(&player->play.finishMutex);
+		pthread_mutex_lock(&player->audio.sleepBufferMutex);
+		pthread_mutex_lock(&player->video.sleepDrawMutex);
+		int64_t position = calculatePosition(player, 1);
+		player->sync.playbackSpeed = speed;
+		player->sync.audioPosition = position;
+		player->sync.pausedPosition = position;
+		updateAudioPositionSurrogate(player, position, 1);
+		if (HAS_STREAM(player, audio)) {
+			blockingQueueClear(&player->audio.bufferQueue, audioBufferQueueFreeCallback);
+			audioBufferQueueFreeCallback(player->audio.buffer);
+			player->audio.buffer = NULL;
+			if (player->audio.sl.queue) {
+				(*player->audio.sl.queue)->Clear(player->audio.sl.queue);
+			}
+			player->audio.bufferNeedEnqueueAfterDecode = 1;
+			player->sync.audioPositionNotSync = 0;
+			player->sync.skip.audioWorkFrame = 1;
+		}
+		pthread_cond_broadcast(&player->audio.sleepCond);
+		pthread_cond_broadcast(&player->audio.bufferCond);
+		pthread_cond_broadcast(&player->video.sleepCond);
+		pthread_mutex_unlock(&player->video.sleepDrawMutex);
+		pthread_mutex_unlock(&player->audio.sleepBufferMutex);
+		pthread_mutex_unlock(&player->play.finishMutex);
+	}
 }
 
 void setPlaying(jlong pointer, jboolean playing) {

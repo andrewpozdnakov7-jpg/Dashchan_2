@@ -11,12 +11,14 @@ import android.graphics.PixelFormat;
 import android.graphics.Point;
 import android.graphics.Rect;
 import android.net.Uri;
+import android.view.ContextThemeWrapper;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.FrameLayout;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.PopupMenu;
 import android.widget.SeekBar;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
@@ -43,6 +45,9 @@ import java.util.Locale;
 import java.util.Map;
 
 public class VideoUnit {
+	private static final int[] PLAYBACK_SPEEDS = {800, 1000, 1250, 1500, 2000, 3000};
+	private static final String[] PLAYBACK_SPEED_LABELS = {"0.8x", "1x", "1.25x", "1.5x", "2x", "3x"};
+
 	private final PagerInstance instance;
 	private final LinearLayout controlsView;
 	private final AudioFocus audioFocus;
@@ -53,9 +58,12 @@ public class VideoUnit {
 	private TextView totalTimeTextView;
 	private SeekBar seekBar;
 	private ImageButton playPauseButton;
+	private TextView playbackSpeedButton;
+	private PopupMenu playbackSpeedPopupMenu;
 
 	private VideoPlayer player;
 	private BackgroundDrawable backgroundDrawable;
+	private int playbackSpeed = 1000;
 	private boolean initialized;
 	private boolean wasPlaying;
 	private boolean pausedByTransientLossOfFocus;
@@ -141,6 +149,7 @@ public class VideoUnit {
 	}
 
 	public void interrupt() {
+		dismissPlaybackSpeedPopupMenu();
 		if (readVideoCallback != null) {
 			readVideoCallback.cancel();
 			readVideoCallback = null;
@@ -181,6 +190,8 @@ public class VideoUnit {
 		wasPlaying = true;
 		finishedPlayback = false;
 		hideSurfaceOnInit = false;
+		playbackSpeed = 1000;
+		dismissPlaybackSpeedPopupMenu();
 		boolean seekAnyFrame = Preferences.isVideoSeekAnyFrame();
 		VideoPlayer player = new VideoPlayer(playerListener, seekAnyFrame);
 		boolean loadedFromFile = false;
@@ -270,10 +281,11 @@ public class VideoUnit {
 				seekBar.removeCallbacks(progressRunnable);
 			}
 			trackingNow = false;
+			playbackSpeedButton = null;
 
 			configurationView = new LinearLayout(context);
 			configurationView.setOrientation(LinearLayout.HORIZONTAL);
-			configurationView.setGravity(Gravity.END);
+			configurationView.setGravity(Gravity.CENTER_VERTICAL);
 			configurationView.setPadding((int) (8f * density), 0, (int) (8f * density), 0);
 			controlsView.addView(configurationView, LinearLayout.LayoutParams.MATCH_PARENT,
 					LinearLayout.LayoutParams.WRAP_CONTENT);
@@ -311,6 +323,18 @@ public class VideoUnit {
 			playPauseButton.setScaleType(ImageButton.ScaleType.CENTER);
 			playPauseButton.setOnClickListener(playPauseClickListener);
 
+			if (Preferences.isVideoPlaybackSpeedControl()) {
+				playbackSpeedButton = new TextView(context, null, android.R.attr.textAppearanceListItem);
+				ViewUtils.setTextSizeScaled(playbackSpeedButton, 14);
+				playbackSpeedButton.setGravity(Gravity.CENTER);
+				playbackSpeedButton.setTypeface(ResourceUtils.TYPEFACE_MEDIUM);
+				playbackSpeedButton.setContentDescription(context.getString(R.string.playback_speed));
+				playbackSpeedButton.setPadding((int) (8f * density), 0, (int) (8f * density), 0);
+				ViewUtils.setSelectableItemBackground(playbackSpeedButton);
+				playbackSpeedButton.setOnClickListener(playbackSpeedClickListener);
+				updatePlaybackSpeedButton();
+			}
+
 			if (longLayout) {
 				controls.setGravity(Gravity.CENTER_VERTICAL);
 				controls.addView(timeTextView, (int) (48f * density), LinearLayout.LayoutParams.WRAP_CONTENT);
@@ -347,6 +371,11 @@ public class VideoUnit {
 		}
 		if (player != null) {
 			configurationView.removeAllViews();
+			if (playbackSpeedButton != null) {
+				configurationView.addView(playbackSpeedButton, (int) (56f * density), (int) (48f * density));
+				View spacer = new View(context);
+				configurationView.addView(spacer, new LinearLayout.LayoutParams(0, 1, 1f));
+			}
 			if (!player.isAudioPresent()) {
 				ImageView imageView = new ImageView(context);
 				imageView.setImageDrawable(ResourceUtils.getDrawable(context, R.attr.iconActionVolumeOff, 0));
@@ -369,6 +398,71 @@ public class VideoUnit {
 		int s = (int) (position % 60);
 		return String.format(Locale.US, "%02d:%02d", m, s);
 	}
+
+	private static String formatPlaybackSpeed(int speed) {
+		for (int i = 0; i < PLAYBACK_SPEEDS.length; i++) {
+			if (PLAYBACK_SPEEDS[i] == speed) {
+				return PLAYBACK_SPEED_LABELS[i];
+			}
+		}
+		return "1x";
+	}
+
+	private void updatePlaybackSpeedButton() {
+		if (playbackSpeedButton != null) {
+			playbackSpeedButton.setText(formatPlaybackSpeed(playbackSpeed));
+		}
+	}
+
+	private void setPlaybackSpeed(int playbackSpeed) {
+		this.playbackSpeed = playbackSpeed;
+		updatePlaybackSpeedButton();
+		if (player != null && initialized) {
+			player.setPlaybackSpeed(playbackSpeed);
+		}
+	}
+
+	private void dismissPlaybackSpeedPopupMenu() {
+		if (playbackSpeedPopupMenu != null) {
+			PopupMenu popupMenu = playbackSpeedPopupMenu;
+			playbackSpeedPopupMenu = null;
+			popupMenu.dismiss();
+		}
+	}
+
+	private final View.OnClickListener playbackSpeedClickListener = new View.OnClickListener() {
+		@Override
+		public void onClick(View v) {
+			if (!Preferences.isVideoPlaybackSpeedControl()) {
+				return;
+			}
+			if (playbackSpeedPopupMenu != null) {
+				dismissPlaybackSpeedPopupMenu();
+				return;
+			}
+			Context context = v.getContext();
+			int resId = ResourceUtils.getResourceId(context, android.R.attr.popupTheme, 0);
+			Context popupContext = resId != 0 ? new ContextThemeWrapper(context, resId) : context;
+			PopupMenu popupMenu = new PopupMenu(popupContext, v, Gravity.START, 0,
+					R.style.Widget_OverlapPopupMenu);
+			popupMenu.getMenu().setGroupCheckable(0, true, true);
+			for (int i = 0; i < PLAYBACK_SPEEDS.length; i++) {
+				popupMenu.getMenu().add(0, i, i, PLAYBACK_SPEED_LABELS[i])
+						.setCheckable(true).setChecked(PLAYBACK_SPEEDS[i] == playbackSpeed);
+			}
+			popupMenu.setOnMenuItemClickListener(item -> {
+				setPlaybackSpeed(PLAYBACK_SPEEDS[item.getItemId()]);
+				return true;
+			});
+			popupMenu.setOnDismissListener(menu -> {
+				if (playbackSpeedPopupMenu == popupMenu) {
+					playbackSpeedPopupMenu = null;
+				}
+			});
+			playbackSpeedPopupMenu = popupMenu;
+			popupMenu.show();
+		}
+	};
 
 	private final View.OnClickListener playPauseClickListener = new View.OnClickListener() {
 		@Override

@@ -44,6 +44,10 @@ void JCALL(setCancelSeek)(UNUSED JNIEnv * env, UNUSED jobject this, jlong pointe
 	setCancelSeek(pointer, cancelSeek);
 }
 
+void JCALL(setPlaybackSpeed)(UNUSED JNIEnv * env, UNUSED jobject this, jlong pointer, jint speed) {
+	setPlaybackSpeed(pointer, speed);
+}
+
 void JCALL(setPlaying)(UNUSED JNIEnv * env, UNUSED jobject this, jlong pointer, jboolean playing) {
 	setPlaying(pointer, playing);
 }
