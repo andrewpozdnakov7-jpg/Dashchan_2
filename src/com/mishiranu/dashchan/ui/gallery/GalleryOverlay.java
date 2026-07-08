@@ -27,7 +27,6 @@ import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
-import androidx.core.view.ViewCompat;
 import androidx.fragment.app.DialogFragment;
 import chan.content.Chan;
 import chan.util.CommonUtils;
@@ -758,7 +757,7 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 
 	private void displayShowcase() {
 		if (showcaseDestroy != null || !Preferences.isShowcaseGalleryEnabled() ||
-				!ViewCompat.isAttachedToWindow(rootView)) {
+				!rootView.isAttachedToWindow()) {
 			return;
 		}
 

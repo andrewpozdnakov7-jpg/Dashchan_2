@@ -1294,7 +1294,7 @@ public class ViewUnit {
 		}
 
 		public void installBackground() {
-			if (ViewCompat.isAttachedToWindow(itemView)) {
+			if (itemView.isAttachedToWindow()) {
 				installBackgroundUnchecked();
 			}
 		}

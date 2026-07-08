@@ -35,6 +35,7 @@ import com.mishiranu.dashchan.widget.ProgressDialog;
 
 public class MediaFragment extends PreferenceFragment implements FragmentHandler.Callback {
 	private static final String EXTRA_IN_STORAGE_REQUEST = "inStorageRequest";
+	private static final String REQUEST_CLEAR_CACHE_FINISHED = "mediaClearCacheFinished";
 
 	private Preference<?> downloadUriTreePreference;
 	private Preference<?> clearCachePreference;
@@ -55,6 +56,13 @@ public class MediaFragment extends PreferenceFragment implements FragmentHandler
 	@Override
 	public void onViewCreated(@NonNull View view, Bundle savedInstanceState) {
 		super.onViewCreated(view, savedInstanceState);
+
+		getParentFragmentManager().setFragmentResultListener(REQUEST_CLEAR_CACHE_FINISHED, getViewLifecycleOwner(),
+				(requestKey, result) -> {
+					if (clearCachePreference != null) {
+						clearCachePreference.invalidate();
+					}
+				});
 
 		addHeader(R.string.images);
 		addList(Preferences.KEY_LOAD_THUMBNAILS, enumList(Preferences.NetworkMode.values(), v -> v.value),
@@ -202,7 +210,6 @@ public class MediaFragment extends PreferenceFragment implements FragmentHandler
 					.setMultiChoiceItems(items, checkedItems, (d, which, isChecked) -> checkedItems[which] = isChecked)
 					.setPositiveButton(android.R.string.ok, (d, w) -> {
 						ClearingDialog clearingDialog = new ClearingDialog(checkedItems[0], checkedItems[1]);
-						clearingDialog.setTargetFragment(getParentFragment(), 0);
 						clearingDialog.show(getParentFragment().getParentFragmentManager(),
 								ClearingDialog.class.getName());
 					})
@@ -258,7 +265,7 @@ public class MediaFragment extends PreferenceFragment implements FragmentHandler
 		}
 
 		private void sendUpdateCacheSize() {
-			((MediaFragment) getTargetFragment()).clearCachePreference.invalidate();
+			getParentFragmentManager().setFragmentResult(REQUEST_CLEAR_CACHE_FINISHED, Bundle.EMPTY);
 		}
 
 		@Override

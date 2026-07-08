@@ -448,7 +448,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 			sortableHelper.start(holder);
 			return true;
 		}
-		ListItem listItem = getItem(holder.getAdapterPosition());
+		ListItem listItem = getItem(holder.getBindingAdapterPosition());
 		if (listItem.type == ListItem.Type.FAVORITE && listItem.threadNumber != null &&
 				FavoritesStorage.getInstance().canSortManually() && holder.isMultipleFingers()) {
 			sortableHelper.start(holder);
@@ -1502,7 +1502,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	private ListItem getItemFromChild(View child) {
 		View view = ListViewUtils.getRootViewInList(child);
 		ViewHolder holder = ListViewUtils.getViewHolder(view, ViewHolder.class);
-		int position = holder.getAdapterPosition();
+		int position = holder.getBindingAdapterPosition();
 		return position >= 0 ? getItem(position) : null;
 	}
 
@@ -1567,7 +1567,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 			int childCount = recyclerView.getChildCount();
 			for (int i = 0; i < childCount; i++) {
 				ViewHolder holder = (ViewHolder) recyclerView.getChildViewHolder(recyclerView.getChildAt(i));
-				int position = holder.getAdapterPosition();
+				int position = holder.getBindingAdapterPosition();
 				if (position >= 0) {
 					ListItem listItem = getItem(position);
 					if (listItem.type == ListItem.Type.FAVORITE &&
@@ -1626,8 +1626,8 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 
 	@Override
 	public boolean onDragCanMove(ViewHolder fromHolder, ViewHolder toHolder) {
-		DrawerForm.ListItem from = getItem(fromHolder.getAdapterPosition());
-		DrawerForm.ListItem to = getItem(toHolder.getAdapterPosition());
+		DrawerForm.ListItem from = getItem(fromHolder.getBindingAdapterPosition());
+		DrawerForm.ListItem to = getItem(toHolder.getBindingAdapterPosition());
 		return from.type == to.type && (from.type == DrawerForm.ListItem.Type.CHAN ||
 				from.type == DrawerForm.ListItem.Type.FAVORITE && CommonUtils.equals(from.chanName, to.chanName) &&
 						(from.threadNumber == null) == (to.threadNumber == null));
@@ -1635,8 +1635,8 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 
 	@Override
 	public boolean onDragMove(ViewHolder fromHolder, ViewHolder toHolder) {
-		int fromIndex = fromHolder.getAdapterPosition();
-		int toIndex = toHolder.getAdapterPosition();
+		int fromIndex = fromHolder.getBindingAdapterPosition();
+		int toIndex = toHolder.getBindingAdapterPosition();
 		DrawerForm.ListItem from = getItem(fromIndex);
 		DrawerForm.ListItem to = getItem(toIndex);
 		int chansFrom = chans.indexOf(from);

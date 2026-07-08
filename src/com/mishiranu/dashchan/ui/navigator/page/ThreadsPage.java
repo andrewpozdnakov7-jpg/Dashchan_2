@@ -187,7 +187,7 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 			@Override
 			public int getSwipeDirs(@NonNull RecyclerView recyclerView,
 					@NonNull RecyclerView.ViewHolder viewHolder) {
-				int position = viewHolder.getAdapterPosition();
+				int position = viewHolder.getBindingAdapterPosition();
 				ThreadsAdapter adapter = getAdapter();
 				if (position == RecyclerView.NO_POSITION || position >= adapter.getItemCount()) {
 					return 0;
@@ -204,7 +204,7 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 
 			@Override
 			public void onSwiped(@NonNull RecyclerView.ViewHolder viewHolder, int direction) {
-				int position = viewHolder.getAdapterPosition();
+				int position = viewHolder.getBindingAdapterPosition();
 				ThreadsAdapter adapter = getAdapter();
 				if (position != RecyclerView.NO_POSITION && position < adapter.getItemCount()) {
 					PostItem postItem = adapter.getThread(position);
@@ -733,7 +733,7 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 			int childCount = recyclerView.getChildCount();
 			if (childCount > 0) {
 				View child = recyclerView.getChildAt(childCount - 1);
-				int position = recyclerView.getChildViewHolder(child).getAdapterPosition();
+				int position = recyclerView.getChildViewHolder(child).getBindingAdapterPosition();
 				needScroll = position + 1 == oldCount &&
 						recyclerView.getHeight() - recyclerView.getPaddingBottom() - child.getBottom() >= 0;
 			}

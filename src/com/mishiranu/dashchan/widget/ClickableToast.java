@@ -25,10 +25,9 @@ import android.widget.TextView;
 import androidx.activity.ComponentActivity;
 import androidx.annotation.NonNull;
 import androidx.core.view.ViewCompat;
+import androidx.lifecycle.DefaultLifecycleObserver;
 import androidx.lifecycle.Lifecycle;
-import androidx.lifecycle.LifecycleObserver;
 import androidx.lifecycle.LifecycleOwner;
-import androidx.lifecycle.OnLifecycleEvent;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.model.ErrorItem;
 import com.mishiranu.dashchan.graphics.BaseDrawable;
@@ -42,7 +41,7 @@ import java.lang.reflect.Field;
 import java.util.Objects;
 import java.util.UUID;
 
-public class ClickableToast implements LifecycleObserver {
+public class ClickableToast implements DefaultLifecycleObserver {
 	private static final int Y_OFFSET;
 	private static final int LAYOUT_ID;
 
@@ -257,23 +256,20 @@ public class ClickableToast implements LifecycleObserver {
 		button = message2;
 	}
 
-	@SuppressWarnings("unused")
-	@OnLifecycleEvent(Lifecycle.Event.ON_RESUME)
-	private void onResume() {
+	@Override
+	public void onResume(@NonNull LifecycleOwner owner) {
 		resumed = true;
 		updateAndApplyLayoutChecked();
 	}
 
-	@SuppressWarnings("unused")
-	@OnLifecycleEvent(Lifecycle.Event.ON_PAUSE)
-	private void onPause() {
+	@Override
+	public void onPause(@NonNull LifecycleOwner owner) {
 		resumed = false;
 		updateAndApplyLayoutChecked();
 	}
 
-	@SuppressWarnings("unused")
-	@OnLifecycleEvent(Lifecycle.Event.ON_DESTROY)
-	private void onDestroy(LifecycleOwner owner) {
+	@Override
+	public void onDestroy(@NonNull LifecycleOwner owner) {
 		if (currentActivity != null && currentActivity.get() == owner) {
 			currentActivity = null;
 		}
