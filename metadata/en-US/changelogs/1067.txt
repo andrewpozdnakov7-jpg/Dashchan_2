@@ -1,0 +1,10 @@
+* Updated the internal browser and link handling.
+* The About screen now shows the WebView version.
+* Added the 2ch.org domain for Dvach.
+* Added experimental video playback speed selection up to 4x.
+* Fixed playback speed display when switching between videos.
+* Fixed selected text copying on MIUI/HyperOS.
+* Improved own post and reply markers in threads.
+* Fixed small interface color issues when opening the drawer.
+* Updated internal app and extension libraries.
+* Fixed screen rotation in threads and the gallery.

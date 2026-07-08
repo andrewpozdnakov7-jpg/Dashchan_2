@@ -161,6 +161,12 @@
 			"name": "3.1.4-r17",
 			"date": "07.07.2026",
 			"changelog": true
+		},
+		{
+			"code": 1067,
+			"name": "3.1.4-r17",
+			"date": "08.07.2026",
+			"changelog": true
 		}
 	]
 }
