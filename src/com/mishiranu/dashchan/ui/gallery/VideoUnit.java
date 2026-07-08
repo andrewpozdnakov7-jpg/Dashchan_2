@@ -45,8 +45,8 @@ import java.util.Locale;
 import java.util.Map;
 
 public class VideoUnit {
-	private static final int[] PLAYBACK_SPEEDS = {800, 1000, 1250, 1500, 2000, 3000};
-	private static final String[] PLAYBACK_SPEED_LABELS = {"0.8x", "1x", "1.25x", "1.5x", "2x", "3x"};
+	private static final int[] PLAYBACK_SPEEDS = {800, 1000, 1250, 1500, 2000, 4000};
+	private static final String[] PLAYBACK_SPEED_LABELS = {"0.8x", "1x", "1.25x", "1.5x", "2x", "4x"};
 
 	private final PagerInstance instance;
 	private final LinearLayout controlsView;

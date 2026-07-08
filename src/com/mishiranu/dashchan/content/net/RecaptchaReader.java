@@ -18,7 +18,10 @@ import android.view.ViewGroup;
 import android.view.Window;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
+import android.webkit.WebResourceError;
+import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
+import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
@@ -42,6 +45,7 @@ import com.mishiranu.dashchan.util.ConcurrentUtils;
 import com.mishiranu.dashchan.util.GraphicsUtils;
 import com.mishiranu.dashchan.util.IOUtils;
 import com.mishiranu.dashchan.util.ResourceUtils;
+import com.mishiranu.dashchan.util.WebViewUtils;
 import com.mishiranu.dashchan.widget.ScaledWebView;
 import java.util.Arrays;
 import java.util.regex.Matcher;
@@ -353,8 +357,10 @@ public class RecaptchaReader {
 			if (webView == null) {
 				load = true;
 				webView = new ScaledWebView(context, minScale, EXTRA_SCALE_FOR_SYSTEM_PADDING);
-				webView.getSettings().setJavaScriptEnabled(true);
-				webView.getSettings().setBuiltInZoomControls(false);
+				WebSettings settings = webView.getSettings();
+				WebViewUtils.configureCommonSettings(settings);
+				settings.setJavaScriptEnabled(true);
+				settings.setBuiltInZoomControls(false);
 				webView.setHorizontalScrollBarEnabled(false);
 				webView.setVerticalScrollBarEnabled(false);
 				webView.addJavascriptInterface(javascriptInterface, "jsi");
@@ -511,20 +517,42 @@ public class RecaptchaReader {
 				}
 			}
 
+			@Override
+			public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+				return true;
+			}
+
 			@SuppressWarnings("deprecation")
 			@Override
 			public boolean shouldOverrideUrlLoading(WebView view, String url) {
 				return true;
 			}
 
+			@Override
+			public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+				return handleInterceptRequest(request.getUrl());
+			}
+
 			@SuppressWarnings("deprecation")
 			@Override
 			public WebResourceResponse shouldInterceptRequest(WebView view, String url) {
-				Uri uri = Uri.parse(url);
+				return handleInterceptRequest(Uri.parse(url));
+			}
+
+			private WebResourceResponse handleInterceptRequest(Uri uri) {
 				if ("favicon.ico".equals(uri.getLastPathSegment())) {
 					return new WebResourceResponse("text/plain", "ISO-8859-1", null);
 				} else {
-					return super.shouldInterceptRequest(view, url);
+					return null;
+				}
+			}
+
+			@Override
+			public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+				super.onReceivedError(view, request, error);
+
+				if (request == null || request.isForMainFrame()) {
+					handleReceivedError(request != null ? request.getUrl().toString() : null);
 				}
 			}
 
@@ -533,6 +561,10 @@ public class RecaptchaReader {
 			public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
 				super.onReceivedError(view, errorCode, description, failingUrl);
 
+				handleReceivedError(failingUrl);
+			}
+
+			private void handleReceivedError(String failingUrl) {
 				if (failingUrl != null) {
 					Uri uri = Uri.parse(failingUrl);
 					if ("google.com".equals(uri.getHost()) || "www.google.com".equals(uri.getHost())) {

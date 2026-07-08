@@ -13,6 +13,7 @@ import android.net.Uri;
 import android.os.SystemClock;
 import android.provider.Browser;
 import android.util.Pair;
+import androidx.browser.customtabs.CustomTabsIntent;
 import chan.content.Chan;
 import chan.content.ChanLocator;
 import chan.content.ChanManager;
@@ -28,6 +29,7 @@ import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.service.AudioPlayerService;
 import com.mishiranu.dashchan.media.VideoPlayer;
 import com.mishiranu.dashchan.ui.MainActivity;
+import com.mishiranu.dashchan.widget.ThemeEngine;
 import com.mishiranu.dashchan.widget.ClickableToast;
 import java.io.File;
 import java.util.ArrayList;
@@ -69,6 +71,10 @@ public class NavigationUtils {
 		if (internalBrowser) {
 			intent = new Intent(context, MainActivity.class).setAction(C.ACTION_BROWSER).setData(uri);
 		} else {
+			boolean attachmentUri = chanName != null && Chan.get(chanName).locator.safe(false).isAttachmentUri(uri);
+			if (isWeb && !attachmentUri && openCustomTab(context, uri)) {
+				return;
+			}
 			intent = new Intent(Intent.ACTION_VIEW, uri);
 			intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
 			intent.putExtra(Browser.EXTRA_APPLICATION_ID, context.getPackageName());
@@ -98,6 +104,24 @@ public class NavigationUtils {
 			ClickableToast.show(R.string.unknown_address);
 		} catch (Exception e) {
 			ClickableToast.show(e.getMessage());
+		}
+	}
+
+	private static boolean openCustomTab(Context context, Uri uri) {
+		try {
+			CustomTabsIntent customTabsIntent = new CustomTabsIntent.Builder()
+					.setShowTitle(true)
+					.setToolbarColor(ThemeEngine.getTheme(context).primary | 0xff000000)
+					.build();
+			customTabsIntent.intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+			customTabsIntent.intent.putExtra(Browser.EXTRA_APPLICATION_ID, context.getPackageName());
+			customTabsIntent.launchUrl(context, uri);
+			return true;
+		} catch (ActivityNotFoundException e) {
+			return false;
+		} catch (RuntimeException e) {
+			e.printStackTrace();
+			return false;
 		}
 	}
 

@@ -9,6 +9,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
 import android.webkit.JavascriptInterface;
+import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
@@ -16,6 +17,7 @@ import android.webkit.WebViewClient;
 import com.mishiranu.dashchan.content.MainApplication;
 import com.mishiranu.dashchan.content.model.FileHolder;
 import com.mishiranu.dashchan.util.IOUtils;
+import com.mishiranu.dashchan.util.WebViewUtils;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InterruptedIOException;
@@ -51,9 +53,18 @@ public class WebViewDecoder extends WebViewClient {
 		}
 	}
 
+	@Override
+	public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+		return handleInterceptRequest(request.getUrl().toString());
+	}
+
 	@SuppressWarnings("deprecation")
 	@Override
 	public WebResourceResponse shouldInterceptRequest(WebView view, String url) {
+		return handleInterceptRequest(url);
+	}
+
+	private WebResourceResponse handleInterceptRequest(String url) {
 		if (url.startsWith("http://") || url.startsWith("https://")) {
 			if (url.endsWith("//127.0.0.1/image.jpeg")) {
 				InputStream inputStream = null;
@@ -149,6 +160,7 @@ public class WebViewDecoder extends WebViewClient {
 					height /= decoder.sampleSize;
 					WebView webView = new WebView(MainApplication.getInstance());
 					WebSettings settings = webView.getSettings();
+					WebViewUtils.configureCommonSettings(settings);
 					settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
 					settings.setJavaScriptEnabled(true);
 					webView.setInitialScale(100 / decoder.sampleSize);

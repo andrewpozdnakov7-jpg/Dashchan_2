@@ -18,6 +18,7 @@ import com.mishiranu.dashchan.ui.FragmentHandler;
 import com.mishiranu.dashchan.ui.preference.core.PreferenceFragment;
 import com.mishiranu.dashchan.util.NavigationUtils;
 import com.mishiranu.dashchan.util.SharedPreferences;
+import com.mishiranu.dashchan.util.WebViewUtils;
 import com.mishiranu.dashchan.widget.ClickableToast;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -62,6 +63,8 @@ public class AboutFragment extends PreferenceFragment implements FragmentHandler
 				(DateFormat.getDateFormat(requireContext()), BuildConfig.VERSION_DATE);
 		addButton(getString(R.string.version), BuildConfig.VERSION_NAME +
 				(versionDate != null ? " " + versionDate : ""));
+		String webViewProvider = WebViewUtils.getProviderSummary(requireContext());
+		addButton("WebView", webViewProvider != null ? webViewProvider : "-").setSelectable(false);
 	}
 
 	@Override

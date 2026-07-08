@@ -4,23 +4,36 @@ import android.app.Application;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageInfo;
 import android.net.Proxy;
 import android.net.ProxyInfo;
 import android.util.Pair;
 import android.webkit.CookieManager;
 import android.webkit.WebStorage;
+import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewDatabase;
 import androidx.webkit.ProxyConfig;
 import androidx.webkit.ProxyController;
 import androidx.webkit.WebViewFeature;
 import chan.http.HttpClient;
+import chan.util.StringUtils;
 import com.mishiranu.dashchan.content.MainApplication;
 import java.lang.reflect.Field;
 import java.util.Map;
 import java.util.concurrent.Executor;
 
 public class WebViewUtils {
+	@SuppressWarnings("deprecation")
+	public static void configureCommonSettings(WebSettings settings) {
+		settings.setAllowFileAccess(false);
+		settings.setAllowContentAccess(false);
+		settings.setAllowFileAccessFromFileURLs(false);
+		settings.setAllowUniversalAccessFromFileURLs(false);
+		settings.setSafeBrowsingEnabled(true);
+	}
+
 	@SuppressWarnings("deprecation")
 	public static void clearCookie() {
 		CookieManager.getInstance().removeAllCookie();
@@ -36,6 +49,47 @@ public class WebViewUtils {
 		webViewDatabase.clearFormData();
 		webViewDatabase.clearHttpAuthUsernamePassword();
 		WebStorage.getInstance().deleteAllData();
+	}
+
+	public static String getProviderSummary(Context context) {
+		PackageInfo packageInfo = null;
+		try {
+			packageInfo = WebView.getCurrentWebViewPackage();
+		} catch (RuntimeException e) {
+			e.printStackTrace();
+		}
+		if (packageInfo == null) {
+			return null;
+		}
+
+		CharSequence label = null;
+		ApplicationInfo applicationInfo = packageInfo.applicationInfo;
+		if (applicationInfo != null) {
+			try {
+				label = applicationInfo.loadLabel(context.getPackageManager());
+			} catch (RuntimeException e) {
+				e.printStackTrace();
+			}
+		}
+
+		String packageName = packageInfo.packageName;
+		String versionName = packageInfo.versionName;
+		StringBuilder builder = new StringBuilder(!StringUtils.isEmpty(label)
+				? label.toString() : StringUtils.emptyIfNull(packageName));
+		if (!StringUtils.isEmpty(versionName)) {
+			if (builder.length() > 0) {
+				builder.append(' ');
+			}
+			builder.append(versionName);
+		}
+		if (!StringUtils.isEmpty(packageName)) {
+			if (builder.length() > 0) {
+				builder.append(" (").append(packageName).append(')');
+			} else {
+				builder.append(packageName);
+			}
+		}
+		return builder.length() > 0 ? builder.toString() : null;
 	}
 
 	private static final Field FIELD_APPLICATION_LOADED_APK;

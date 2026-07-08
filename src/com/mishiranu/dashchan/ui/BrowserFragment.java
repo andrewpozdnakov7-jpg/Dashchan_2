@@ -22,6 +22,7 @@ import android.view.ViewGroup;
 import android.webkit.DownloadListener;
 import android.webkit.SslErrorHandler;
 import android.webkit.WebChromeClient;
+import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -80,6 +81,7 @@ public class BrowserFragment extends ContentFragment implements DownloadListener
 		((FragmentHandler) requireActivity()).setNavigationAreaLocked(navigationDrawerLocker, true);
 
 		WebSettings settings = webView.getSettings();
+		WebViewUtils.configureCommonSettings(settings);
 		settings.setBuiltInZoomControls(true);
 		settings.setDisplayZoomControls(false);
 		settings.setUseWideViewPort(true);
@@ -213,10 +215,18 @@ public class BrowserFragment extends ContentFragment implements DownloadListener
 	}
 
 	private class CustomWebViewClient extends WebViewClient {
+		@Override
+		public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+			return request.isForMainFrame() && handleUrlLoading(view, request.getUrl());
+		}
+
 		@SuppressWarnings("deprecation")
 		@Override
 		public boolean shouldOverrideUrlLoading(WebView view, String url) {
-			Uri uri = Uri.parse(url);
+			return handleUrlLoading(view, Uri.parse(url));
+		}
+
+		private boolean handleUrlLoading(WebView view, Uri uri) {
 			Chan chan = Chan.getPreferred(null, uri);
 			if (chan.name != null) {
 				ChanLocator.NavigationData navigationData;
@@ -245,7 +255,7 @@ public class BrowserFragment extends ContentFragment implements DownloadListener
 					return true;
 				}
 			}
-			view.loadUrl(url);
+			view.loadUrl(uri.toString());
 			return true;
 		}
 

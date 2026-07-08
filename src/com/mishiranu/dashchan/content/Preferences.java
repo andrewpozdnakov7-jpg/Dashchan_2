@@ -914,7 +914,7 @@ public class Preferences {
 	}
 
 	public static final String KEY_INTERNAL_BROWSER = "internal_browser";
-	public static final boolean DEFAULT_INTERNAL_BROWSER = true;
+	public static final boolean DEFAULT_INTERNAL_BROWSER = false;
 
 	public static boolean isUseInternalBrowser() {
 		return PREFERENCES.getBoolean(KEY_INTERNAL_BROWSER, DEFAULT_INTERNAL_BROWSER);
