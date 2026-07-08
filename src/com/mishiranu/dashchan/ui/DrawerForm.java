@@ -155,7 +155,8 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		this.fragmentManager = fragmentManager;
 		this.watcherServiceClient = watcherServiceClient;
 
-		int enabledColor = ThemeEngine.getTheme(context).accent;
+		ThemeEngine.Theme theme = ThemeEngine.getTheme(context);
+		int enabledColor = theme.accent;
 		int disabledColor = 0xff666666;
 		int unavailableColor = GraphicsUtils.mixColors(disabledColor, enabledColor & 0x7fffffff);
 		watcherViewColorSet = new WatcherView.ColorSet(enabledColor, unavailableColor, disabledColor);
@@ -165,6 +166,8 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		recyclerView.setMotionEventSplittingEnabled(false);
 		recyclerView.setClipToPadding(false);
 		recyclerView.setEdgeEffectShift(this);
+		// Drawer overscroll is not a refresh affordance, keep it from flashing accent under system bars.
+		recyclerView.getEdgeEffectHandler().setColor(theme.card);
 		recyclerView.setLayoutManager(new LinearLayoutManager(recyclerView.getContext()) {
 			@Override
 			public boolean requestChildRectangleOnScreen(@NonNull RecyclerView parent, @NonNull View child,

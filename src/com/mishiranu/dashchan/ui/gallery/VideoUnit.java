@@ -190,7 +190,9 @@ public class VideoUnit {
 		wasPlaying = true;
 		finishedPlayback = false;
 		hideSurfaceOnInit = false;
-		playbackSpeed = 1000;
+		if (!Preferences.isVideoPlaybackSpeedControl()) {
+			playbackSpeed = 1000;
+		}
 		dismissPlaybackSpeedPopupMenu();
 		boolean seekAnyFrame = Preferences.isVideoSeekAnyFrame();
 		VideoPlayer player = new VideoPlayer(playerListener, seekAnyFrame);
@@ -257,6 +259,7 @@ public class VideoUnit {
 		playPauseButton.setEnabled(true);
 		seekBar.setEnabled(true);
 		initialized = true;
+		setPlaybackSpeed(playbackSpeed);
 		pausedByTransientLossOfFocus = false;
 		if (hideSurfaceOnInit) {
 			showHideVideoView(false);

@@ -92,6 +92,7 @@
 		<item name="iconActionAddRule">@drawable/ic_playlist_add</item>
 		<item name="iconActionAddToFavorites">@drawable/ic_star_outline</item>
 		<item name="iconActionBack">@drawable/ic_arrow_back</item>
+		<item name="iconActionCopy">@drawable/ic_content_copy</item>
 		<item name="iconActionDelete">@drawable/ic_delete</item>
 		<item name="iconActionDownload">@drawable/ic_file_download</item>
 		<item name="iconActionForward">@drawable/ic_arrow_forward</item>
@@ -163,6 +164,7 @@
 		<item name="iconActionAddRule">@drawable/ic_playlist_add</item>
 		<item name="iconActionAddToFavorites">@drawable/ic_star_outline</item>
 		<item name="iconActionBack">@drawable/ic_arrow_back</item>
+		<item name="iconActionCopy">@drawable/ic_content_copy</item>
 		<item name="iconActionDelete">@drawable/ic_delete</item>
 		<item name="iconActionDownload">@drawable/ic_file_download</item>
 		<item name="iconActionForward">@drawable/ic_arrow_forward</item>

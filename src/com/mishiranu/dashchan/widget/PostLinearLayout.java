@@ -103,7 +103,7 @@ public class PostLinearLayout extends LinearLayout {
 			return;
 		}
 		float density = getResources().getDisplayMetrics().density;
-		float markWidth = 4f * density;
+		float markWidth = 3f * density;
 		float horizontalInset = 4f * density;
 		boolean rtl = getLayoutDirection() == LAYOUT_DIRECTION_RTL;
 		float markX = rtl ? getWidth() - horizontalInset - markWidth / 2f : horizontalInset + markWidth / 2f;

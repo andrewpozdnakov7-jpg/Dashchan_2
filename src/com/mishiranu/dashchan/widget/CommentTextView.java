@@ -33,6 +33,7 @@ import androidx.core.view.ViewCompat;
 import androidx.recyclerview.widget.RecyclerView;
 import chan.content.Chan;
 import chan.util.StringUtils;
+import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.text.style.LinkSpan;
 import com.mishiranu.dashchan.text.style.OverlineSpan;
 import com.mishiranu.dashchan.text.style.SpoilerSpan;
@@ -771,17 +772,19 @@ public class CommentTextView extends TextView {
 	}
 
 	private void onCreateSelectionMenu(Menu menu, int order) {
+		menu.removeItem(android.R.id.copy);
+		menu.removeItem(R.id.menu_copy_text);
+		menu.add(0, R.id.menu_copy_text, order, android.R.string.copy)
+				.setIcon(ResourceUtils.getDrawable(getContext(), R.attr.iconActionCopy, 0))
+				.setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS | MenuItem.SHOW_AS_ACTION_WITH_TEXT);
+		int extraOrder = order + 1;
 		for (int i = 0; i < EXTRA_BUTTON_IDS.length; i++) {
 			ExtraButton extraButton = getExtraButton(i);
 			if (extraButton != null) {
-				menu.add(0, EXTRA_BUTTON_IDS[i], order, extraButton.title)
+				menu.add(0, EXTRA_BUTTON_IDS[i], extraOrder, extraButton.title)
 						.setIcon(ResourceUtils.getDrawable(getContext(), extraButton.iconAttr, 0))
 						.setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS | MenuItem.SHOW_AS_ACTION_WITH_TEXT);
 			}
-		}
-		if (menu.findItem(android.R.id.copy) == null) {
-			menu.add(0, android.R.id.copy, order, android.R.string.copy)
-					.setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS | MenuItem.SHOW_AS_ACTION_WITH_TEXT);
 		}
 	}
 
@@ -798,14 +801,12 @@ public class CommentTextView extends TextView {
 
 	private boolean onSelectionItemClicked(int id) {
 		ExtraButton.Text text = getExtraButtonText();
-		switch (id) {
-			case android.R.id.copy: {
-				if (text.text instanceof Spannable) {
-					StringUtils.copyToClipboard(getContext(),
-							getPartialCommentString((Spannable) text.text, text.start, text.end));
-				}
-				return true;
+		if (id == android.R.id.copy || id == R.id.menu_copy_text) {
+			if (text.text instanceof Spannable) {
+				StringUtils.copyToClipboard(getContext(),
+						getPartialCommentString((Spannable) text.text, text.start, text.end));
 			}
+			return true;
 		}
 		for (int i = 0; i < EXTRA_BUTTON_IDS.length; i++) {
 			if (EXTRA_BUTTON_IDS[i] == id) {

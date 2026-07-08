@@ -28,6 +28,7 @@
 	<attr name="iconActionAddRule" format="reference" />
 	<attr name="iconActionAddToFavorites" format="reference" />
 	<attr name="iconActionBack" format="reference" />
+	<attr name="iconActionCopy" format="reference" />
 	<attr name="iconActionDelete" format="reference" />
 	<attr name="iconActionDownload" format="reference" />
 	<attr name="iconActionForward" format="reference" />

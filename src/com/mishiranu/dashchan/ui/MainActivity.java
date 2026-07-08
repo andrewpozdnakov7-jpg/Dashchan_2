@@ -236,7 +236,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 		updateWideConfiguration(true);
 		expandedScreen = new ExpandedScreen(expandedScreenInit, drawerLayout, toolbarLayout, drawerInterlayer,
-				drawerParent, drawerForm.getContentView(), drawerForm.getHeaderView());
+				drawerParent, drawerForm.getContentView(), drawerForm.getHeaderView(), drawerBackground);
 		expandedScreen.setDrawerOverToolbarEnabled(!wideMode);
 		uiManager = new UiManager(this, this, this);
 		uiManager.attach(this);

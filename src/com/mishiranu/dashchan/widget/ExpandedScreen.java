@@ -108,7 +108,7 @@ public class ExpandedScreen implements RecyclerScrollTracker.OnScrollListener {
 	}
 
 	public ExpandedScreen(Init init, View rootView, View toolbarView, FrameLayout drawerInterlayer,
-			FrameLayout drawerParent, View drawerContent, View drawerHeader) {
+			FrameLayout drawerParent, View drawerContent, View drawerHeader, int drawerBackgroundColor) {
 		expandingEnabled = init.expandingEnabled;
 		fullScreenLayoutEnabled = init.fullScreenLayoutEnabled;
 		activity = init.activity;
@@ -124,7 +124,7 @@ public class ExpandedScreen implements RecyclerScrollTracker.OnScrollListener {
 			ViewUtils.setNavigationBarColor(window, Color.TRANSPARENT);
 			contentForeground = new LollipopContentForeground(statusBarColor, navigationBarColor);
 			statusBarContentForeground = new LollipopStatusBarForeground(statusBarColor);
-			statusBarDrawerForeground = new LollipopDrawerForeground();
+			statusBarDrawerForeground = new LollipopDrawerForeground(drawerBackgroundColor);
 			foregroundDrawables = Arrays.asList(contentForeground,
 					statusBarContentForeground, statusBarDrawerForeground);
 		} else {
@@ -274,6 +274,13 @@ public class ExpandedScreen implements RecyclerScrollTracker.OnScrollListener {
 
 	private class LollipopDrawerForeground extends ForegroundDrawable {
 		private final Paint paint = new Paint();
+		private final int statusBarColor;
+
+		public LollipopDrawerForeground(int drawerBackgroundColor) {
+			// Own these pixels; transparent system bars may otherwise reveal the toolbar below the drawer.
+			statusBarColor = GraphicsUtils.mixColors(0xff000000 | drawerBackgroundColor,
+					ViewUtils.STATUS_OVERLAY_TRANSPARENT);
+		}
 
 		@Override
 		public void draw(@NonNull Canvas canvas) {
@@ -281,7 +288,7 @@ public class ExpandedScreen implements RecyclerScrollTracker.OnScrollListener {
 				int width = getBounds().width();
 				int statusBarHeight = windowInsets.top;
 				if (statusBarHeight > 0) {
-					paint.setColor(ViewUtils.STATUS_OVERLAY_TRANSPARENT);
+					paint.setColor(statusBarColor);
 					canvas.drawRect(0f, 0f, width, statusBarHeight, paint);
 				}
 			}

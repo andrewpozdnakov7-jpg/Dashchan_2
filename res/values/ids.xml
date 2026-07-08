@@ -17,6 +17,7 @@
 	<item type="id" name="menu_clear_old" />
 	<item type="id" name="menu_contents" />
 	<item type="id" name="menu_copy_link" />
+	<item type="id" name="menu_copy_text" />
 	<item type="id" name="menu_date_created" />
 	<item type="id" name="menu_delete" />
 	<item type="id" name="menu_download" />
