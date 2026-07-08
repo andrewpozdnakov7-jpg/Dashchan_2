@@ -26,7 +26,7 @@ public abstract class StateActivity extends FragmentActivity {
 	@Override
 	protected void onDestroy() {
 		super.onDestroy();
-		callOnFinish(true);
+		callOnFinish(false);
 	}
 
 	private void callOnFinish(boolean force) {
