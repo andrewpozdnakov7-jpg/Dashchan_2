@@ -27,8 +27,6 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.fragment.app.DialogFragment;
-import androidx.lifecycle.ViewModel;
-import androidx.lifecycle.ViewModelProvider;
 import chan.content.Chan;
 import chan.util.CommonUtils;
 import chan.util.StringUtils;
@@ -72,7 +70,6 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 	private List<GalleryItem> queuedGalleryItems;
 	private WeakReference<View> queuedFromView;
 
-	private GalleryViewModel viewModel;
 	private InsetsLayout rootView;
 	private GalleryInstance instance;
 	private PagerUnit pagerUnit;
@@ -91,10 +88,6 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 
 	private static final int ACTION_BAR_COLOR = 0xaa202020;
 	private static final int BACKGROUND_COLOR = 0xf0101010;
-
-	public static class GalleryViewModel extends ViewModel {
-		private List<GalleryItem> galleryItems;
-	}
 
 	public GalleryOverlay() {}
 
@@ -136,13 +129,10 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 	}
 
 	@Override
+	@SuppressWarnings("deprecation")
 	public void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
-		viewModel = new ViewModelProvider(this).get(GalleryViewModel.class);
-		if (queuedGalleryItems != null) {
-			viewModel.galleryItems = queuedGalleryItems;
-			queuedGalleryItems = null;
-		}
+		setRetainInstance(true);
 		startSavedInstanceState = savedInstanceState;
 	}
 
@@ -263,7 +253,7 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 				galleryItems = Collections.singletonList(new GalleryItem(uri, boardName, threadNumber));
 				imagePosition = 0;
 			} else {
-				galleryItems = viewModel.galleryItems;
+				galleryItems = queuedGalleryItems;
 				queuedGalleryItems = null;
 				imagePosition = savedInstanceState != null ? savedInstanceState.getInt(EXTRA_POSITION)
 						: requireArguments().getInt(EXTRA_IMAGE_INDEX);
