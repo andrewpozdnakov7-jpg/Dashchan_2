@@ -38,8 +38,9 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
-import androidx.core.view.ViewCompat;
 import androidx.core.widget.TextViewCompat;
 import androidx.lifecycle.ViewModelProvider;
 import chan.content.Chan;
@@ -49,7 +50,6 @@ import chan.content.ChanPerformer;
 import chan.text.CommentEditor;
 import chan.util.CommonUtils;
 import chan.util.StringUtils;
-import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.async.ReadCaptchaTask;
@@ -173,6 +173,9 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 	private int attachmentColumnCount;
 
 	private final ArrayList<AttachmentHolder> attachments = new ArrayList<>();
+	private final ActivityResultLauncher<Intent> attachLauncher = registerForActivityResult
+			(new ActivityResultContracts.StartActivityForResult(),
+					result -> handleAttachActivityResult(result.getResultCode(), result.getData()));
 
 	private boolean allowDialog = true;
 	private boolean sendButtonEnabled = true;
@@ -857,7 +860,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 				}
 				intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
 				try {
-					startActivityForResult(intent, C.REQUEST_CODE_ATTACH);
+					attachLauncher.launch(intent);
 				} catch (ActivityNotFoundException e) {
 					ClickableToast.show(R.string.unknown_address);
 				}
@@ -1158,40 +1161,34 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		updateSendButtonState();
 	}
 
-	@Override
-	public void onActivityResult(int requestCode, int resultCode, Intent data) {
-		if (resultCode == Activity.RESULT_OK) {
-			switch (requestCode) {
-				case C.REQUEST_CODE_ATTACH: {
-					LinkedHashSet<Uri> uris = new LinkedHashSet<>();
-					Uri dataUri = data.getData();
-					if (dataUri != null) {
-						uris.add(dataUri);
+	private void handleAttachActivityResult(int resultCode, Intent data) {
+		if (resultCode == Activity.RESULT_OK && data != null) {
+			LinkedHashSet<Uri> uris = new LinkedHashSet<>();
+			Uri dataUri = data.getData();
+			if (dataUri != null) {
+				uris.add(dataUri);
+			}
+			ClipData clipData = data.getClipData();
+			if (clipData != null) {
+				for (int i = 0; i < clipData.getItemCount(); i++) {
+					ClipData.Item item = clipData.getItemAt(i);
+					Uri uri = item.getUri();
+					if (uri != null) {
+						uris.add(uri);
 					}
-					ClipData clipData = data.getClipData();
-					if (clipData != null) {
-						for (int i = 0; i < clipData.getItemCount(); i++) {
-							ClipData.Item item = clipData.getItemAt(i);
-							Uri uri = item.getUri();
-							if (uri != null) {
-								uris.add(uri);
-							}
-						}
-					}
-					ArrayList<Pair<String, String>> attachmentsToAdd = new ArrayList<>();
-					for (Uri uri : uris) {
-						FileHolder fileHolder = FileHolder.obtain(uri);
-						if (fileHolder != null) {
-							String hash = DraftsStorage.getInstance().store(fileHolder);
-							if (hash != null) {
-								attachmentsToAdd.add(new Pair<>(hash, fileHolder.getName()));
-							}
-						}
-					}
-					handleAttachmentsToAdd(attachmentsToAdd, uris.size());
-					break;
 				}
 			}
+			ArrayList<Pair<String, String>> attachmentsToAdd = new ArrayList<>();
+			for (Uri uri : uris) {
+				FileHolder fileHolder = FileHolder.obtain(uri);
+				if (fileHolder != null) {
+					String hash = DraftsStorage.getInstance().store(fileHolder);
+					if (hash != null) {
+						attachmentsToAdd.add(new Pair<>(hash, fileHolder.getName()));
+					}
+				}
+			}
+			handleAttachmentsToAdd(attachmentsToAdd, uris.size());
 		}
 	}
 
@@ -1364,7 +1361,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		textLayout.setGravity(Gravity.CENTER_VERTICAL);
 		controls.addView(textLayout, 0, LinearLayout.LayoutParams.MATCH_PARENT);
 		((LinearLayout.LayoutParams) textLayout.getLayoutParams()).weight = 1f;
-		ViewCompat.setPaddingRelative(textLayout, (int) (4f * density), 0, (int) (8f * density), 0);
+		textLayout.setPaddingRelative((int) (4f * density), 0, (int) (8f * density), 0);
 		TextView fileName = new TextView(controls.getContext());
 		textLayout.addView(fileName, LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
 		TextViewCompat.setTextAppearance(fileName, ResourceUtils.getResourceId(fileName.getContext(),

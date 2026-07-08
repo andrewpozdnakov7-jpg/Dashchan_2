@@ -27,6 +27,9 @@ import android.view.WindowManager;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.FrameLayout;
 import android.widget.Toolbar;
+import androidx.activity.OnBackPressedCallback;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.core.view.GravityCompat;
 import androidx.fragment.app.FragmentManager;
@@ -141,6 +144,22 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	private Intent navigateIntentOnResume;
 	private StorageRequestState storageRequestState;
+	private final ActivityResultLauncher<Intent> storageRequestLauncher = registerForActivityResult
+			(new ActivityResultContracts.StartActivityForResult(),
+					result -> handleStorageActivityResult(result.getResultCode(), result.getData()));
+	private final OnBackPressedCallback backPressedCallback = new OnBackPressedCallback(true) {
+		@Override
+		public void handleOnBackPressed() {
+			handleBackPressed(false, true, () -> {
+				setEnabled(false);
+				try {
+					getOnBackPressedDispatcher().onBackPressed();
+				} finally {
+					setEnabled(true);
+				}
+			});
+		}
+	};
 
 	private static final String LOCKER_DRAWER = "drawer";
 	private static final String LOCKER_NON_PAGE = "nonPage";
@@ -160,6 +179,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		ThemeEngine.applyTheme(this);
 		ExpandedScreen.Init expandedScreenInit = expandedScreenPreThemeInit.initAfterTheme();
 		super.onCreate(savedInstanceState);
+		getOnBackPressedDispatcher().addCallback(this, backPressedCallback);
 		getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING);
 		float density = ResourceUtils.obtainDensity(this);
 		setContentView(R.layout.activity_main);
@@ -402,18 +422,13 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		return CacheManager.getInstance().getInternalCacheFile("saved-pages");
 	}
 
-	@Override
-	protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-		super.onActivityResult(requestCode, resultCode, data);
-
-		if (requestCode == C.REQUEST_CODE_OPEN_URI_TREE) {
-			boolean cancel = resultCode != RESULT_OK;
-			storageRequestState = StorageRequestState.NONE;
-			if (!cancel && data != null) {
-				Preferences.setDownloadUriTree(this, data.getData(), data.getFlags());
-			}
-			handleStorageRequestResult(cancel);
+	private void handleStorageActivityResult(int resultCode, Intent data) {
+		boolean cancel = resultCode != RESULT_OK;
+		storageRequestState = StorageRequestState.NONE;
+		if (!cancel && data != null) {
+			Preferences.setDownloadUriTree(this, data.getData(), data.getFlags());
 		}
+		handleStorageRequestResult(cancel);
 	}
 
 	private ContentFragment getCurrentFragment() {
@@ -1203,17 +1218,12 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	@Override
 	public void removeFragment() {
-		onBackPressed(true, false, () -> navigateInitial(true));
+		handleBackPressed(true, false, () -> navigateInitial(true));
 	}
 
 	private long backPressed = 0;
 
-	@Override
-	public void onBackPressed() {
-		onBackPressed(false, true, super::onBackPressed);
-	}
-
-	private void onBackPressed(boolean homeHandled, boolean allowTimeout, Runnable close) {
+	private void handleBackPressed(boolean homeHandled, boolean allowTimeout, Runnable close) {
 		if (!wideMode && drawerLayout.isDrawerOpen(GravityCompat.START)) {
 			drawerLayout.closeDrawers();
 		} else {
@@ -1899,7 +1909,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 					intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, DocumentsContract
 							.buildRootUri("com.android.externalstorage.documents", "primary"));
 					try {
-						startActivityForResult(intent, C.REQUEST_CODE_OPEN_URI_TREE);
+						storageRequestLauncher.launch(intent);
 					} catch (ActivityNotFoundException e) {
 						ClickableToast.show(R.string.unknown_address);
 						storageRequestState = StorageRequestState.NONE;

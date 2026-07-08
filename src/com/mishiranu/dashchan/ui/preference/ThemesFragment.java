@@ -13,6 +13,8 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.MimeTypeMap;
 import android.widget.TextView;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.fragment.app.DialogFragment;
 import androidx.lifecycle.ViewModelProvider;
@@ -24,7 +26,6 @@ import chan.http.HttpRequest;
 import chan.util.CommonUtils;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.BuildConfig;
-import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.async.HttpHolderTask;
@@ -63,6 +64,9 @@ public class ThemesFragment extends BaseListFragment {
 			"TrixiEther/Dashchan-Meta/master/update/themes.json";
 
 	private List<JSONObject> availableJsonThemes;
+	private final ActivityResultLauncher<Intent> addThemeLauncher = registerForActivityResult
+			(new ActivityResultContracts.StartActivityForResult(),
+					result -> handleThemeActivityResult(result.getResultCode(), result.getData()));
 
 	@Override
 	public void onViewCreated(@NonNull View view, Bundle savedInstanceState) {
@@ -151,48 +155,42 @@ public class ThemesFragment extends BaseListFragment {
 				// SHOW_ADVANCED to show folder navigation
 				Intent intent = new Intent(Intent.ACTION_GET_CONTENT).addCategory(Intent.CATEGORY_OPENABLE)
 						.setType(mimeType).putExtra("android.content.extra.SHOW_ADVANCED", true);
-				startActivityForResult(intent, C.REQUEST_CODE_ATTACH);
+				addThemeLauncher.launch(intent);
 				return true;
 			}
 		}
 		return super.onMenuItemSelected(item);
 	}
 
-	@Override
-	public void onActivityResult(int requestCode, int resultCode, Intent data) {
-		if (resultCode == Activity.RESULT_OK) {
-			switch (requestCode) {
-				case C.REQUEST_CODE_ATTACH: {
-					Uri uri = data.getData();
-					FileHolder fileHolder = uri != null ? FileHolder.obtain(uri) : null;
-					if (fileHolder != null) {
-						ByteArrayOutputStream output = new ByteArrayOutputStream();
-						boolean success;
-						try (InputStream input = fileHolder.openInputStream()) {
-							IOUtils.copyStream(input, output);
-							success = true;
-						} catch (IOException e) {
-							e.printStackTrace();
-							success = false;
-						}
-						byte[] array = output.toByteArray();
-						if (success && array.length > 0) {
-							JSONObject jsonObject;
-							try {
-								jsonObject = new JSONObject(new String(array));
-							} catch (JSONException e) {
-								jsonObject = null;
-							}
-							ThemeEngine.Theme theme = jsonObject != null
-									? ThemeEngine.parseTheme(requireContext(), jsonObject) : null;
-							if (theme != null) {
-								installTheme(theme, false);
-							} else {
-								ClickableToast.show(R.string.invalid_data_format);
-							}
-						}
+	private void handleThemeActivityResult(int resultCode, Intent data) {
+		if (resultCode == Activity.RESULT_OK && data != null) {
+			Uri uri = data.getData();
+			FileHolder fileHolder = uri != null ? FileHolder.obtain(uri) : null;
+			if (fileHolder != null) {
+				ByteArrayOutputStream output = new ByteArrayOutputStream();
+				boolean success;
+				try (InputStream input = fileHolder.openInputStream()) {
+					IOUtils.copyStream(input, output);
+					success = true;
+				} catch (IOException e) {
+					e.printStackTrace();
+					success = false;
+				}
+				byte[] array = output.toByteArray();
+				if (success && array.length > 0) {
+					JSONObject jsonObject;
+					try {
+						jsonObject = new JSONObject(new String(array));
+					} catch (JSONException e) {
+						jsonObject = null;
 					}
-					break;
+					ThemeEngine.Theme theme = jsonObject != null
+							? ThemeEngine.parseTheme(requireContext(), jsonObject) : null;
+					if (theme != null) {
+						installTheme(theme, false);
+					} else {
+						ClickableToast.show(R.string.invalid_data_format);
+					}
 				}
 			}
 		}

@@ -15,6 +15,7 @@ public abstract class StateActivity extends FragmentActivity {
 	}
 
 	@Override
+	@SuppressWarnings("deprecation")
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 

@@ -24,7 +24,6 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import androidx.activity.ComponentActivity;
 import androidx.annotation.NonNull;
-import androidx.core.view.ViewCompat;
 import androidx.lifecycle.DefaultLifecycleObserver;
 import androidx.lifecycle.Lifecycle;
 import androidx.lifecycle.LifecycleOwner;
@@ -246,7 +245,7 @@ public class ClickableToast implements DefaultLifecycleObserver {
 		linearLayout.setBackground(partialClickDrawable);
 		linearLayout.setOnTouchListener(partialClickDrawable);
 		message1.setPadding(0, 0, 0, 0);
-		ViewCompat.setPaddingRelative(message2, innerPadding, 0, 0, 0);
+		message2.setPaddingRelative(innerPadding, 0, 0, 0);
 		message1.setSingleLine(true);
 		message2.setSingleLine(true);
 		message1.setEllipsize(TextUtils.TruncateAt.END);
