@@ -13,6 +13,7 @@ import android.net.Uri;
 import android.os.SystemClock;
 import android.provider.Browser;
 import android.util.Pair;
+import androidx.browser.customtabs.CustomTabColorSchemeParams;
 import androidx.browser.customtabs.CustomTabsIntent;
 import chan.content.Chan;
 import chan.content.ChanLocator;
@@ -109,9 +110,13 @@ public class NavigationUtils {
 
 	private static boolean openCustomTab(Context context, Uri uri) {
 		try {
+			int toolbarColor = ThemeEngine.getTheme(context).primary | 0xff000000;
+			CustomTabColorSchemeParams colorSchemeParams = new CustomTabColorSchemeParams.Builder()
+					.setToolbarColor(toolbarColor)
+					.build();
 			CustomTabsIntent customTabsIntent = new CustomTabsIntent.Builder()
 					.setShowTitle(true)
-					.setToolbarColor(ThemeEngine.getTheme(context).primary | 0xff000000)
+					.setDefaultColorSchemeParams(colorSchemeParams)
 					.build();
 			customTabsIntent.intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
 			customTabsIntent.intent.putExtra(Browser.EXTRA_APPLICATION_ID, context.getPackageName());

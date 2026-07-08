@@ -104,7 +104,7 @@ public class JsonSerial {
 				while (true) {
 					JsonToken token = parser.nextToken();
 					if (token == JsonToken.FIELD_NAME) {
-						String name = parser.getCurrentName();
+						String name = parser.currentName();
 						token = parser.nextToken();
 						if (token != JsonToken.VALUE_NULL) {
 							currentName = name;
@@ -168,7 +168,7 @@ public class JsonSerial {
 				if (checkToken(JsonToken.FIELD_NAME)) {
 					String name = currentName;
 					if (name == null) {
-						name = parser.getCurrentName();
+						name = parser.currentName();
 						nextTokenUnchecked();
 					} else {
 						currentName = null;
