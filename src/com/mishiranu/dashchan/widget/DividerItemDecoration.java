@@ -6,7 +6,6 @@ import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
 import android.view.View;
 import androidx.annotation.NonNull;
-import androidx.core.view.ViewCompat;
 import androidx.recyclerview.widget.RecyclerView;
 import com.mishiranu.dashchan.util.ResourceUtils;
 
@@ -93,7 +92,7 @@ public class DividerItemDecoration extends RecyclerView.ItemDecoration {
 		int childCount = parent.getChildCount();
 		int left = parent.getPaddingLeft();
 		int right = parent.getWidth() - parent.getPaddingRight();
-		boolean rtl = ViewCompat.getLayoutDirection(parent) == ViewCompat.LAYOUT_DIRECTION_RTL;
+		boolean rtl = parent.getLayoutDirection() == View.LAYOUT_DIRECTION_RTL;
 		for (int i = 0; i < childCount; i++) {
 			View view = parent.getChildAt(i);
 			int position = parent.getChildAdapterPosition(view);

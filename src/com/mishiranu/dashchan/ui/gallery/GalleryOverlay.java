@@ -14,7 +14,6 @@ import android.util.Pair;
 import android.view.ContextThemeWrapper;
 import android.view.Gravity;
 import android.view.Menu;
-import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
@@ -84,6 +83,8 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 	private Pair<CharSequence, CharSequence> titleSubtitle;
 	private boolean screenOnFixed = false;
 	private int systemUiVisibilityFlags = GalleryInstance.Flags.LOCKED_USER;
+	private Bundle startSavedInstanceState;
+	private boolean startHandled;
 
 	private static final int ACTION_BAR_COLOR = 0xaa202020;
 	private static final int BACKGROUND_COLOR = 0xf0101010;
@@ -131,11 +132,13 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 	public void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		setRetainInstance(true);
+		startSavedInstanceState = savedInstanceState;
 	}
 
 	@NonNull
 	@Override
 	public GalleryDialog onCreateDialog(Bundle savedInstanceState) {
+		startSavedInstanceState = savedInstanceState;
 		return new GalleryDialog(this);
 	}
 
@@ -147,12 +150,19 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 	@Override
 	public void onDestroyView() {
 		super.onDestroyView();
+		startHandled = false;
 		destroyShowcase(false);
 	}
 
 	@Override
-	public void onActivityCreated(Bundle savedInstanceState) {
-		super.onActivityCreated(savedInstanceState);
+	public void onStart() {
+		super.onStart();
+		if (startHandled) {
+			return;
+		}
+		startHandled = true;
+		Bundle savedInstanceState = startSavedInstanceState;
+		startSavedInstanceState = null;
 
 		View queuedFromView = this.queuedFromView != null ? this.queuedFromView.get() : null;
 		this.queuedFromView = null;
@@ -371,8 +381,7 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 		return returnToGallery();
 	}
 
-	@Override
-	public void onCreateOptionsMenu(@NonNull Menu menu, @NonNull MenuInflater inflater) {
+	public void onCreateGalleryOptionsMenu(@NonNull Menu menu) {
 		menu.add(0, R.id.menu_save, 0, R.string.save)
 				.setIcon(ResourceUtils.getActionBarIcon(instance.context, R.attr.iconActionSave))
 				.setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
@@ -384,8 +393,7 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 				.setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
 	}
 
-	@Override
-	public void onPrepareOptionsMenu(@NonNull Menu menu) {
+	public void onPrepareGalleryOptionsMenu(@NonNull Menu menu) {
 		for (int i = 0; i < menu.size(); i++) {
 			menu.getItem(i).setVisible(false);
 		}
@@ -404,8 +412,7 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 		}
 	}
 
-	@Override
-	public boolean onOptionsItemSelected(@NonNull MenuItem item) {
+	public boolean onGalleryMenuItemSelected(@NonNull MenuItem item) {
 		PagerInstance.ViewHolder holder = pagerUnit != null ? pagerUnit.getCurrentHolder() : null;
 		switch (item.getItemId()) {
 			case android.R.id.home: {

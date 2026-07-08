@@ -67,8 +67,8 @@ public class InstanceDialog extends DialogFragment {
 	}
 
 	@Override
-	public void onActivityCreated(Bundle savedInstanceState) {
-		super.onActivityCreated(savedInstanceState);
+	public void onStart() {
+		super.onStart();
 		if (getDialog() instanceof DismissDialog) {
 			dismiss();
 		}

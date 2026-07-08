@@ -74,11 +74,6 @@ public class AutohideFragment extends BaseListFragment {
 				searchQuery = query;
 			}
 		});
-	}
-
-	@Override
-	public void onActivityCreated(Bundle savedInstanceState) {
-		super.onActivityCreated(savedInstanceState);
 
 		((FragmentHandler) requireActivity()).setTitleSubtitle(getString(R.string.autohide), null);
 		items.addAll(AutohideStorage.getInstance().getItems());
@@ -138,7 +133,7 @@ public class AutohideFragment extends BaseListFragment {
 					searchQuery = null;
 				}
 				((Adapter) getRecyclerView().getAdapter()).setSearchQuery(searchQuery);
-				onPrepareOptionsMenu(menu);
+				onPrepareOptionsMenu(menu, true);
 				return true;
 			}));
 			if (searchQuery != null) {
@@ -153,7 +148,7 @@ public class AutohideFragment extends BaseListFragment {
 	}
 
 	@Override
-	public boolean onOptionsItemSelected(MenuItem item) {
+	public boolean onMenuItemSelected(MenuItem item) {
 		switch (item.getItemId()) {
 			case R.id.menu_new_rule: {
 				editRule(null, -1);
@@ -172,7 +167,7 @@ public class AutohideFragment extends BaseListFragment {
 				}
 			}
 		}
-		return super.onOptionsItemSelected(item);
+		return super.onMenuItemSelected(item);
 	}
 
 	private void editRule(AutohideStorage.AutohideItem autohideItem, int index) {

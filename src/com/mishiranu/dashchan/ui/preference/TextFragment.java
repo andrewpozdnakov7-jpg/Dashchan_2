@@ -86,8 +86,8 @@ public class TextFragment extends BaseListFragment {
 	}
 
 	@Override
-	public void onActivityCreated(Bundle savedInstanceState) {
-		super.onActivityCreated(savedInstanceState);
+	public void onViewCreated(@NonNull View view, Bundle savedInstanceState) {
+		super.onViewCreated(view, savedInstanceState);
 
 		RecyclerView recyclerView = getRecyclerView();
 		Context context = recyclerView.getContext();

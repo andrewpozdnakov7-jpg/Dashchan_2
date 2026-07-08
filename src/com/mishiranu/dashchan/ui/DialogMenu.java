@@ -249,7 +249,7 @@ public class DialogMenu {
 		public SubMenuArrowDrawable(View view) {
 			float density = ResourceUtils.obtainDensity(view);
 			color = ResourceUtils.getColorStateList(view.getContext(), android.R.attr.textColorSecondary);
-			rtl = ViewCompat.getLayoutDirection(view) == ViewCompat.LAYOUT_DIRECTION_RTL;
+			rtl = view.getLayoutDirection() == View.LAYOUT_DIRECTION_RTL;
 			size = (int) (SIZE_DP * density);
 		}
 

@@ -65,8 +65,8 @@ public class ThemesFragment extends BaseListFragment {
 	private List<JSONObject> availableJsonThemes;
 
 	@Override
-	public void onActivityCreated(Bundle savedInstanceState) {
-		super.onActivityCreated(savedInstanceState);
+	public void onViewCreated(@NonNull View view, Bundle savedInstanceState) {
+		super.onViewCreated(view, savedInstanceState);
 
 		((FragmentHandler) requireActivity()).setTitleSubtitle(getString(R.string.themes), null);
 		RecyclerView recyclerView = getRecyclerView();
@@ -140,7 +140,7 @@ public class ThemesFragment extends BaseListFragment {
 	}
 
 	@Override
-	public boolean onOptionsItemSelected(@NonNull MenuItem item) {
+	public boolean onMenuItemSelected(@NonNull MenuItem item) {
 		switch (item.getItemId()) {
 			case R.id.menu_add_theme: {
 				// Check Android supports "application/json" MIME-type
@@ -155,7 +155,7 @@ public class ThemesFragment extends BaseListFragment {
 				return true;
 			}
 		}
-		return super.onOptionsItemSelected(item);
+		return super.onMenuItemSelected(item);
 	}
 
 	@Override

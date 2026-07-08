@@ -179,7 +179,6 @@ public class ForegroundManager implements Handler.Callback {
 
 		void show(@NonNull FragmentManager manager, String tag);
 		@NonNull Bundle requireArguments();
-		@NonNull FragmentManager requireFragmentManager();
 		void dismiss();
 
 		default void fillArguments(Bundle args, String pendingDataId) {
@@ -198,7 +197,8 @@ public class ForegroundManager implements Handler.Callback {
 
 		default T getPendingDataOrDismiss() {
 			T pendingData = getPendingData();
-			if (pendingData == null && !requireFragmentManager().isStateSaved()) {
+			FragmentManager fragmentManager = ((Fragment) this).getParentFragmentManager();
+			if (pendingData == null && !fragmentManager.isStateSaved()) {
 				dismiss();
 			}
 			return pendingData;
@@ -246,6 +246,8 @@ public class ForegroundManager implements Handler.Callback {
 		private CaptchaForm captchaForm;
 
 		private Button positiveButton;
+		private Bundle startSavedInstanceState;
+		private boolean startHandled;
 
 		public CaptchaDialog() {}
 
@@ -263,9 +265,20 @@ public class ForegroundManager implements Handler.Callback {
 		}
 
 		@Override
-		public void onActivityCreated(Bundle savedInstanceState) {
-			super.onActivityCreated(savedInstanceState);
+		public void onCreate(Bundle savedInstanceState) {
+			super.onCreate(savedInstanceState);
+			startSavedInstanceState = savedInstanceState;
+		}
 
+		@Override
+		public void onStart() {
+			super.onStart();
+			if (startHandled) {
+				return;
+			}
+			startHandled = true;
+			Bundle savedInstanceState = startSavedInstanceState;
+			startSavedInstanceState = null;
 			CaptchaPendingData pendingData = getPendingDataOrDismiss();
 			if (pendingData == null) {
 				return;
@@ -416,6 +429,7 @@ public class ForegroundManager implements Handler.Callback {
 		@Override
 		public void onDestroyView() {
 			super.onDestroyView();
+			startHandled = false;
 			captchaForm = null;
 		}
 
@@ -526,6 +540,7 @@ public class ForegroundManager implements Handler.Callback {
 
 		private boolean[] selected;
 		private boolean hasImage;
+		private boolean startHandled;
 
 		public ItemChoiceDialog() {}
 
@@ -542,8 +557,12 @@ public class ForegroundManager implements Handler.Callback {
 		}
 
 		@Override
-		public void onActivityCreated(Bundle savedInstanceState) {
-			super.onActivityCreated(savedInstanceState);
+		public void onStart() {
+			super.onStart();
+			if (startHandled) {
+				return;
+			}
+			startHandled = true;
 			getPendingDataOrDismiss();
 		}
 
@@ -650,6 +669,8 @@ public class ForegroundManager implements Handler.Callback {
 
 		private FrameLayout[] selectionViews;
 		private boolean[] selected;
+		private Bundle startSavedInstanceState;
+		private boolean startHandled;
 
 		public ImageChoiceDialog() {}
 
@@ -678,8 +699,20 @@ public class ForegroundManager implements Handler.Callback {
 		}
 
 		@Override
-		public void onActivityCreated(Bundle savedInstanceState) {
-			super.onActivityCreated(savedInstanceState);
+		public void onCreate(Bundle savedInstanceState) {
+			super.onCreate(savedInstanceState);
+			startSavedInstanceState = savedInstanceState;
+		}
+
+		@Override
+		public void onStart() {
+			super.onStart();
+			if (startHandled) {
+				return;
+			}
+			startHandled = true;
+			Bundle savedInstanceState = startSavedInstanceState;
+			startSavedInstanceState = null;
 			PendingData pendingData = getPendingDataOrDismiss();
 			if (pendingData == null) {
 				return;

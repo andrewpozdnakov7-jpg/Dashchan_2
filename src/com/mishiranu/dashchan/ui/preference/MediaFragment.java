@@ -147,6 +147,7 @@ public class MediaFragment extends PreferenceFragment implements FragmentHandler
 
 		addDependency(Preferences.KEY_SUBDIR_PATTERN, Preferences.KEY_DOWNLOAD_SUBDIR, false,
 				Preferences.DownloadSubdirMode.DISABLED.value);
+		((FragmentHandler) requireActivity()).setTitleSubtitle(getString(R.string.media), null);
 	}
 
 	@Override
@@ -155,12 +156,6 @@ public class MediaFragment extends PreferenceFragment implements FragmentHandler
 
 		downloadUriTreePreference = null;
 		clearCachePreference = null;
-	}
-
-	@Override
-	public void onActivityCreated(Bundle savedInstanceState) {
-		super.onActivityCreated(savedInstanceState);
-		((FragmentHandler) requireActivity()).setTitleSubtitle(getString(R.string.media), null);
 	}
 
 	@Override
@@ -246,8 +241,8 @@ public class MediaFragment extends PreferenceFragment implements FragmentHandler
 		}
 
 		@Override
-		public void onActivityCreated(Bundle savedInstanceState) {
-			super.onActivityCreated(savedInstanceState);
+		public void onCreate(Bundle savedInstanceState) {
+			super.onCreate(savedInstanceState);
 
 			ClearCacheViewModel viewModel = new ViewModelProvider(this).get(ClearCacheViewModel.class);
 			if (!viewModel.hasTaskOrValue()) {

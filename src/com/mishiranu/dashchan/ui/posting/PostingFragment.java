@@ -540,6 +540,13 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		if (!captchaRestoreSuccess) {
 			refreshCaptcha(false, true, false);
 		}
+		((FragmentHandler) requireActivity()).setTitleSubtitle(getString(StringUtils.isEmpty(getThreadNumber())
+				? R.string.new_thread : R.string.new_post), null);
+		requireActivity().bindService(new Intent(requireContext(), PostingService.class),
+				postingConnection, Context.BIND_AUTO_CREATE);
+
+		CaptchaViewModel viewModel = new ViewModelProvider(this).get(CaptchaViewModel.class);
+		viewModel.observe(getViewLifecycleOwner(), this);
 	}
 
 	@Override
@@ -573,19 +580,6 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		captchaForm = null;
 		sendButton = null;
 		attachments.clear();
-	}
-
-	@Override
-	public void onActivityCreated(Bundle savedInstanceState) {
-		super.onActivityCreated(savedInstanceState);
-
-		((FragmentHandler) requireActivity()).setTitleSubtitle(getString(StringUtils.isEmpty(getThreadNumber())
-				? R.string.new_thread : R.string.new_post), null);
-		requireActivity().bindService(new Intent(requireContext(), PostingService.class),
-				postingConnection, Context.BIND_AUTO_CREATE);
-
-		CaptchaViewModel viewModel = new ViewModelProvider(this).get(CaptchaViewModel.class);
-		viewModel.observe(getViewLifecycleOwner(), this);
 	}
 
 	private DraftsStorage.PostDraft obtainPostDraft() {
@@ -848,7 +842,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 	}
 
 	@Override
-	public boolean onOptionsItemSelected(MenuItem item) {
+	public boolean onMenuItemSelected(MenuItem item) {
 		switch (item.getItemId()) {
 			case R.id.menu_attach: {
 				// SHOW_ADVANCED to show folder navigation

@@ -211,7 +211,7 @@ public class ViewUtils {
 	}
 
 	public static void setNewMarginRelative(View view, Integer start, Integer top, Integer end, Integer bottom) {
-		if (ViewCompat.getLayoutDirection(view) == ViewCompat.LAYOUT_DIRECTION_RTL) {
+		if (view.getLayoutDirection() == View.LAYOUT_DIRECTION_RTL) {
 			setNewMargin(view, end, top, start, bottom);
 		} else {
 			setNewMargin(view, start, top, end, bottom);

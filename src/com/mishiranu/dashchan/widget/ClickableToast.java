@@ -513,7 +513,7 @@ public class ClickableToast implements DefaultLifecycleObserver {
 				drawable.setColorFilter(colorFilter);
 				canvas.save();
 				Rect bounds = getBounds();
-				if (ViewCompat.getLayoutDirection(button) == ViewCompat.LAYOUT_DIRECTION_RTL) {
+				if (button.getLayoutDirection() == View.LAYOUT_DIRECTION_RTL) {
 					int shift = button.getRight();
 					canvas.clipRect(bounds.left + shift, bounds.top, bounds.left + shift, bounds.bottom);
 				} else {

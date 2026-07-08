@@ -6,7 +6,6 @@ import android.graphics.Insets;
 import android.media.AudioManager;
 import android.view.ActionMode;
 import android.view.Menu;
-import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.Window;
@@ -14,7 +13,6 @@ import android.view.WindowInsets;
 import android.view.WindowManager;
 import android.widget.Toolbar;
 import androidx.annotation.NonNull;
-import androidx.fragment.app.Fragment;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.util.ViewUtils;
 import com.mishiranu.dashchan.widget.ViewFactory;
@@ -25,17 +23,15 @@ public class GalleryDialog extends Dialog {
 		void onCreateActionContextBarView();
 	}
 
-	private final Fragment fragment;
-	private final MenuInflater menuInflater;
+	private final GalleryOverlay fragment;
 
 	private ViewFactory.ToolbarHolder toolbarHolder;
 	private View actionBar;
 	private View actionContextBar;
 
-	public GalleryDialog(Fragment fragment) {
+	public GalleryDialog(GalleryOverlay fragment) {
 		super(fragment.requireContext(), R.style.Theme_Gallery);
 		this.fragment = fragment;
-		this.menuInflater = fragment.requireActivity().getMenuInflater();
 		getWindow().addFlags(WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED);
 		WindowManager.LayoutParams layoutParams = getWindow().getAttributes();
 		layoutParams.setTitle(getContext().getPackageName() + "/" + getClass().getName());
@@ -136,7 +132,7 @@ public class GalleryDialog extends Dialog {
 	@Override
 	public boolean onCreateOptionsMenu(@NonNull Menu menu) {
 		if (fragment.isAdded()) {
-			fragment.onCreateOptionsMenu(menu, menuInflater);
+			fragment.onCreateGalleryOptionsMenu(menu);
 		}
 		return true;
 	}
@@ -144,7 +140,7 @@ public class GalleryDialog extends Dialog {
 	@Override
 	public boolean onPrepareOptionsMenu(@NonNull Menu menu) {
 		if (fragment.isAdded()) {
-			fragment.onPrepareOptionsMenu(menu);
+			fragment.onPrepareGalleryOptionsMenu(menu);
 		}
 		return true;
 	}
@@ -160,7 +156,7 @@ public class GalleryDialog extends Dialog {
 
 	@Override
 	public boolean onOptionsItemSelected(@NonNull MenuItem item) {
-		return fragment.isAdded() && fragment.onOptionsItemSelected(item);
+		return fragment.isAdded() && fragment.onGalleryMenuItemSelected(item);
 	}
 
 	@Override

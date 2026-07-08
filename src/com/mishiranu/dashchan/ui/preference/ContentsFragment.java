@@ -94,18 +94,13 @@ public class ContentsFragment extends PreferenceFragment {
 			dialog.show(getChildFragmentManager(), ClearCacheDialog.class.getName());
 		});
 		clearCachePreference.invalidate();
+		((FragmentHandler) requireActivity()).setTitleSubtitle(getString(R.string.contents), null);
 	}
 
 	@Override
 	public void onDestroyView() {
 		super.onDestroyView();
 		clearCachePreference = null;
-	}
-
-	@Override
-	public void onActivityCreated(Bundle savedInstanceState) {
-		super.onActivityCreated(savedInstanceState);
-		((FragmentHandler) requireActivity()).setTitleSubtitle(getString(R.string.contents), null);
 	}
 
 	private void invalidateReplyNotifications() {
@@ -162,8 +157,8 @@ public class ContentsFragment extends PreferenceFragment {
 		}
 
 		@Override
-		public void onActivityCreated(Bundle savedInstanceState) {
-			super.onActivityCreated(savedInstanceState);
+		public void onCreate(Bundle savedInstanceState) {
+			super.onCreate(savedInstanceState);
 
 			ClearCacheViewModel viewModel = new ViewModelProvider(this).get(ClearCacheViewModel.class);
 			if (!viewModel.hasTaskOrValue()) {
