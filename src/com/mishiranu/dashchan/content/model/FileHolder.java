@@ -499,7 +499,7 @@ public abstract class FileHolder {
 						}
 					}
 				}
-			} catch (RuntimeException e) {
+			} catch (SecurityException e) {
 				e.printStackTrace();
 				return null;
 			}
