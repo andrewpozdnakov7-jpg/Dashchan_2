@@ -847,6 +847,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 			case R.id.menu_attach: {
 				// SHOW_ADVANCED to show folder navigation
 				Intent intent = new Intent(Intent.ACTION_GET_CONTENT).addCategory(Intent.CATEGORY_OPENABLE)
+						.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
 						.putExtra("android.content.extra.SHOW_ADVANCED", true);
 				ArrayList<String> mimeTypes = buildMimeTypeList(postingConfiguration.attachmentMimeTypes);
 				if (mimeTypes.size() >= 2) {
@@ -1187,12 +1188,16 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 			}
 			ArrayList<Pair<String, String>> attachmentsToAdd = new ArrayList<>();
 			for (Uri uri : uris) {
-				FileHolder fileHolder = FileHolder.obtain(uri);
-				if (fileHolder != null) {
-					String hash = DraftsStorage.getInstance().store(fileHolder);
-					if (hash != null) {
-						attachmentsToAdd.add(new Pair<>(hash, fileHolder.getName()));
+				try {
+					FileHolder fileHolder = FileHolder.obtain(uri);
+					if (fileHolder != null) {
+						String hash = DraftsStorage.getInstance().store(fileHolder);
+						if (hash != null) {
+							attachmentsToAdd.add(new Pair<>(hash, fileHolder.getName()));
+						}
 					}
+				} catch (RuntimeException | OutOfMemoryError e) {
+					e.printStackTrace();
 				}
 			}
 			handleAttachmentsToAdd(attachmentsToAdd, uris.size());
@@ -1203,7 +1208,11 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		int oldCount = attachments.size();
 		for (Pair<String, String> attachmentToAdd : attachmentsToAdd) {
 			if (attachments.size() < postingConfiguration.attachmentCount) {
-				addAttachment(attachmentToAdd.first, attachmentToAdd.second);
+				try {
+					addAttachment(attachmentToAdd.first, attachmentToAdd.second);
+				} catch (RuntimeException | OutOfMemoryError e) {
+					e.printStackTrace();
+				}
 			}
 		}
 		int newCount = attachments.size() - oldCount;
@@ -1405,7 +1414,15 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 
 	private void addAttachment(String hash, String name) {
 		FileHolder fileHolder = DraftsStorage.getInstance().getAttachmentDraftFileHolder(hash);
-		GraphicsUtils.Reencoding reencoding = fileHolder != null && fileHolder.isImage()
+		boolean image = false;
+		if (fileHolder != null) {
+			try {
+				image = fileHolder.isImage();
+			} catch (RuntimeException | OutOfMemoryError e) {
+				e.printStackTrace();
+			}
+		}
+		GraphicsUtils.Reencoding reencoding = image
 				? new GraphicsUtils.Reencoding(GraphicsUtils.Reencoding.FORMAT_JPEG, 90, 1) : null;
 		addAttachment(hash, name, null, true, true, true, false, reencoding);
 	}
@@ -1414,8 +1431,20 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 			boolean optionRemoveMetadata, boolean optionRemoveFileName, boolean optionSpoiler,
 			GraphicsUtils.Reencoding reencoding) {
 		FileHolder fileHolder = DraftsStorage.getInstance().getAttachmentDraftFileHolder(hash);
-		JpegData jpegData = fileHolder != null ? fileHolder.getJpegData() : null;
-		PngData pngData = fileHolder != null ? fileHolder.getPngData() : null;
+		JpegData jpegData = null;
+		PngData pngData = null;
+		boolean image = false;
+		if (fileHolder != null) {
+			try {
+				image = fileHolder.isImage();
+				if (image) {
+					jpegData = fileHolder.getJpegData();
+					pngData = fileHolder.getPngData();
+				}
+			} catch (RuntimeException | OutOfMemoryError e) {
+				e.printStackTrace();
+			}
+		}
 		AttachmentHolder holder = addNewAttachment();
 		holder.hash = hash;
 		holder.name = name;
@@ -1432,13 +1461,13 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		DisplayMetrics metrics = getResources().getDisplayMetrics();
 		int targetImageSize = Math.max(metrics.widthPixels, metrics.heightPixels);
 		if (fileHolder != null) {
-			if (fileHolder.isImage()) {
+			if (image) {
 				try {
 					bitmap = fileHolder.readImageBitmap(targetImageSize, false, false);
-				} catch (OutOfMemoryError e) {
-					// Ignore
+					fileSize += " " + fileHolder.getImageWidth() + '×' + fileHolder.getImageHeight();
+				} catch (RuntimeException | OutOfMemoryError e) {
+					e.printStackTrace();
 				}
-				fileSize += " " + fileHolder.getImageWidth() + '×' + fileHolder.getImageHeight();
 			}
 			if (bitmap == null) {
 				if (Chan.getFallback().locator.isVideoExtension(fileHolder.getName())) {
