@@ -38,8 +38,6 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
-import androidx.activity.result.ActivityResultLauncher;
-import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.core.widget.TextViewCompat;
 import androidx.lifecycle.ViewModelProvider;
@@ -50,6 +48,7 @@ import chan.content.ChanPerformer;
 import chan.text.CommentEditor;
 import chan.util.CommonUtils;
 import chan.util.StringUtils;
+import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.async.ReadCaptchaTask;
@@ -173,9 +172,6 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 	private int attachmentColumnCount;
 
 	private final ArrayList<AttachmentHolder> attachments = new ArrayList<>();
-	private final ActivityResultLauncher<Intent> attachLauncher = registerForActivityResult
-			(new ActivityResultContracts.StartActivityForResult(),
-					result -> handleAttachActivityResult(result.getResultCode(), result.getData()));
 
 	private boolean allowDialog = true;
 	private boolean sendButtonEnabled = true;
@@ -845,6 +841,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 	}
 
 	@Override
+	@SuppressWarnings("deprecation")
 	public boolean onMenuItemSelected(MenuItem item) {
 		switch (item.getItemId()) {
 			case R.id.menu_attach: {
@@ -860,7 +857,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 				}
 				intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
 				try {
-					attachLauncher.launch(intent);
+					startActivityForResult(intent, C.REQUEST_CODE_ATTACH);
 				} catch (ActivityNotFoundException e) {
 					ClickableToast.show(R.string.unknown_address);
 				}
@@ -1159,6 +1156,16 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 			});
 		}
 		updateSendButtonState();
+	}
+
+	@Override
+	@SuppressWarnings("deprecation")
+	public void onActivityResult(int requestCode, int resultCode, Intent data) {
+		if (requestCode == C.REQUEST_CODE_ATTACH) {
+			handleAttachActivityResult(resultCode, data);
+		} else {
+			super.onActivityResult(requestCode, resultCode, data);
+		}
 	}
 
 	private void handleAttachActivityResult(int resultCode, Intent data) {
