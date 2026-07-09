@@ -80,6 +80,7 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 	/* init */ {
 		ThemeEngine.Theme theme = ThemeEngine.getTheme(getContext());
 		edgeEffectHandler.setColor(theme.accent);
+		edgeEffectHandler.setShiftColor(theme.window);
 
 		float density = ResourceUtils.obtainDensity(this);
 		Drawable thumbDrawable = ResourceUtils.getDrawable(getContext(), android.R.attr.fastScrollThumbDrawable, 0);

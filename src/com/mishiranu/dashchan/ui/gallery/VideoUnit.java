@@ -72,6 +72,7 @@ public class VideoUnit {
 	private boolean hideSurfaceOnInit;
 
 	private ReadVideoCallback readVideoCallback;
+	private boolean playbackSpeedControl;
 
 	public VideoUnit(PagerInstance instance) {
 		this.instance = instance;
@@ -274,9 +275,11 @@ public class VideoUnit {
 		float density = ResourceUtils.obtainDensity(context);
 		int targetLayoutCounfiguration = ResourceUtils.isTabletOrLandscape(context.getResources()
 				.getConfiguration()) ? 1 : 0;
-		if (targetLayoutCounfiguration != layoutConfiguration) {
+		boolean speedControl = Preferences.isVideoPlaybackSpeedControl();
+		if (targetLayoutCounfiguration != layoutConfiguration || speedControl != playbackSpeedControl) {
 			boolean firstTimeLayout = layoutConfiguration < 0;
 			layoutConfiguration = targetLayoutCounfiguration;
+			playbackSpeedControl = speedControl;
 			boolean longLayout = targetLayoutCounfiguration == 1;
 
 			controlsView.removeAllViews();
@@ -288,7 +291,7 @@ public class VideoUnit {
 
 			configurationView = new LinearLayout(context);
 			configurationView.setOrientation(LinearLayout.HORIZONTAL);
-			configurationView.setGravity(Gravity.CENTER_VERTICAL);
+			configurationView.setGravity(Gravity.CENTER_VERTICAL | Gravity.END);
 			configurationView.setPadding((int) (8f * density), 0, (int) (8f * density), 0);
 			controlsView.addView(configurationView, LinearLayout.LayoutParams.MATCH_PARENT,
 					LinearLayout.LayoutParams.WRAP_CONTENT);
@@ -326,7 +329,7 @@ public class VideoUnit {
 			playPauseButton.setScaleType(ImageButton.ScaleType.CENTER);
 			playPauseButton.setOnClickListener(playPauseClickListener);
 
-			if (Preferences.isVideoPlaybackSpeedControl()) {
+			if (playbackSpeedControl) {
 				playbackSpeedButton = new TextView(context, null, android.R.attr.textAppearanceListItem);
 				ViewUtils.setTextSizeScaled(playbackSpeedButton, 14);
 				playbackSpeedButton.setGravity(Gravity.CENTER);

@@ -1,0 +1,5 @@
+* Improved post text selection: the system copy menu is more reliable, and selection closes when scrolled off screen.
+* Added a Copy action fallback for ROMs with broken or limited system text-selection menus.
+* Fixed the blue strip during fast scrolling and overscroll with custom themes.
+* Enabled video playback speed control by default.
+* Fixed video control row positioning.

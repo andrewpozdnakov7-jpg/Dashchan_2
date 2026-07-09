@@ -4,9 +4,6 @@ import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.ContextWrapper;
 import android.graphics.Canvas;
-import android.graphics.Color;
-import android.graphics.Paint;
-import android.graphics.Path;
 import android.graphics.Point;
 import android.net.Uri;
 import android.os.SystemClock;
@@ -20,6 +17,7 @@ import android.text.style.RelativeSizeSpan;
 import android.text.style.TypefaceSpan;
 import android.util.AttributeSet;
 import android.view.ActionMode;
+import android.view.InputDevice;
 import android.view.KeyEvent;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -38,7 +36,6 @@ import com.mishiranu.dashchan.text.style.LinkSpan;
 import com.mishiranu.dashchan.text.style.OverlineSpan;
 import com.mishiranu.dashchan.text.style.SpoilerSpan;
 import com.mishiranu.dashchan.util.AndroidUtils;
-import com.mishiranu.dashchan.util.GraphicsUtils;
 import com.mishiranu.dashchan.util.ListViewUtils;
 import com.mishiranu.dashchan.util.NavigationUtils;
 import com.mishiranu.dashchan.util.ResourceUtils;
@@ -66,8 +63,6 @@ public class CommentTextView extends TextView {
 	private long lastXYSet;
 	private int linesLimit;
 	private int linesLimitAdditionalHeight;
-	private final Path selectionHighlightPath = new Path();
-	private final Paint selectionHighlightPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 	private View selectionPaddingView;
 	private boolean useAdditionalPadding;
 
@@ -380,13 +375,26 @@ public class CommentTextView extends TextView {
 			}
 			requestLayout();
 		}
-		invalidate();
 	}
 
 	private void removeSelection() {
 		Spannable text = getSpannableText();
 		if (text != null) {
 			Selection.removeSelection(text);
+		}
+	}
+
+	public void stopSelection() {
+		if (isSelectionMode()) {
+			restoreSelectionRunnable = null;
+			// onVisibilityChanged causes stopTextActionMode call
+			int visibility = getVisibility();
+			if (visibility == View.VISIBLE) {
+				onVisibilityChanged(this, View.INVISIBLE);
+				onVisibilityChanged(this, View.VISIBLE);
+			}
+			removeSelection();
+			setSelectionMode(null);
 		}
 	}
 
@@ -402,34 +410,33 @@ public class CommentTextView extends TextView {
 
 	private static final Pattern LIST_PATTERN = Pattern.compile("^(?:(?:\\d+[.)]|[\u2022-]) |>(?!>) ?)");
 
-	private int[] getSelectionTapPoint(int offset) {
+	private int[] getSelectionTapPoint(Layout layout, int offset, int fallbackX, int fallbackY) {
+		int left = getTotalPaddingLeft();
+		int top = getTotalPaddingTop();
+		int right = Math.max(left, getWidth() - getTotalPaddingRight() - 1);
+		int bottom = Math.max(top, getHeight() - getTotalPaddingBottom() - 1);
+		if (fallbackX != Integer.MAX_VALUE && fallbackY != Integer.MAX_VALUE &&
+				fallbackX >= left && fallbackX <= right && fallbackY >= top && fallbackY <= bottom) {
+			return new int[] {fallbackX, fallbackY};
+		}
 		CharSequence text = getText();
-		Layout layout = getLayout();
 		if (text != null && layout != null && text.length() > 0) {
 			offset = Math.max(0, Math.min(offset, text.length() - 1));
 			int line = layout.getLineForOffset(offset);
-			int x = Math.round(layout.getPrimaryHorizontal(offset)) + getTotalPaddingLeft();
-			int y = (layout.getLineTop(line) + layout.getLineBottom(line)) / 2 + getTotalPaddingTop();
-			x = Math.max(getTotalPaddingLeft(), Math.min(x, getWidth() - getTotalPaddingRight() - 1));
-			y = Math.max(getTotalPaddingTop(), Math.min(y, getHeight() - getTotalPaddingBottom() - 1));
+			int x = Math.round(layout.getPrimaryHorizontal(offset)) + left;
+			int y = (layout.getLineTop(line) + layout.getLineBottom(line)) / 2 + top;
+			x = Math.max(left, Math.min(x, right));
+			y = Math.max(top, Math.min(y, bottom));
 			return new int[] {x, y};
 		}
-		return new int[] {getTotalPaddingLeft(), getTotalPaddingTop()};
+		return new int[] {left, top};
 	}
 
-	private void sendSelectionTapEvent(int action, long downTime, long eventTime, int x, int y) {
-		MotionEvent motionEvent = MotionEvent.obtain(downTime, eventTime, action, x, y, 0);
-		super.onTouchEvent(motionEvent);
+	private void sendFakeMotionEvent(int action, int x, int y) {
+		MotionEvent motionEvent = MotionEvent.obtain(0, SystemClock.uptimeMillis(), action, x, y, 0);
+		motionEvent.setSource(InputDevice.SOURCE_TOUCHSCREEN);
+		onTouchEvent(motionEvent);
 		motionEvent.recycle();
-	}
-
-	private void startSystemSelectionUi(int x, int y) {
-		long firstDownTime = SystemClock.uptimeMillis();
-		long secondDownTime = firstDownTime + 80L;
-		sendSelectionTapEvent(MotionEvent.ACTION_DOWN, firstDownTime, firstDownTime, x, y);
-		sendSelectionTapEvent(MotionEvent.ACTION_UP, firstDownTime, firstDownTime + 20L, x, y);
-		sendSelectionTapEvent(MotionEvent.ACTION_DOWN, secondDownTime, secondDownTime, x, y);
-		sendSelectionTapEvent(MotionEvent.ACTION_UP, secondDownTime, secondDownTime + 20L, x, y);
 	}
 
 	private void startSelection(int x, int y, int start, int end) {
@@ -475,7 +482,12 @@ public class CommentTextView extends TextView {
 			start = 0;
 			end = text.length();
 		}
+		int[] tapPoint = getSelectionTapPoint(layout, start, x, y);
+		x = tapPoint[0];
+		y = tapPoint[1];
 		setSelectionMode(SelectionMode.INITIAL);
+		int finalX = x;
+		int finalY = y;
 		int finalStart = start;
 		int finalEnd = end;
 		post(() -> {
@@ -488,20 +500,14 @@ public class CommentTextView extends TextView {
 			int max = newText.length();
 			Runnable restoreSelectionRunnable = () -> Selection.setSelection(newText,
 					Math.min(finalStart, max), Math.min(finalEnd, max));
+			// restoreSelectionRunnable can be nullified during sending motion event
 			this.restoreSelectionRunnable = restoreSelectionRunnable;
-			int[] tapPoint = getSelectionTapPoint(Math.min(finalStart, max));
-			startSystemSelectionUi(tapPoint[0], tapPoint[1]);
+			sendFakeMotionEvent(MotionEvent.ACTION_DOWN, finalX, finalY);
+			sendFakeMotionEvent(MotionEvent.ACTION_UP, finalX, finalY);
+			sendFakeMotionEvent(MotionEvent.ACTION_DOWN, finalX, finalY);
+			sendFakeMotionEvent(MotionEvent.ACTION_UP, finalX, finalY);
 			restoreSelectionRunnable.run();
-			postDelayed(() -> {
-				if (isSelectionMode() && !selectionMode.isActive()) {
-					restoreSelectionRunnable.run();
-					ActionMode actionMode = startActionMode(new CustomSelectionCallback(this),
-							ActionMode.TYPE_FLOATING);
-					if (actionMode == null) {
-						postDelayed(resetSelectionRunnable, 500);
-					}
-				}
-			}, 150);
+			postDelayed(resetSelectionRunnable, 500);
 		});
 	}
 
@@ -517,6 +523,26 @@ public class CommentTextView extends TextView {
 
 	public void startSelection(int start, int end) {
 		startSelection(Integer.MAX_VALUE, Integer.MAX_VALUE, start, end);
+	}
+
+	public boolean getSelectionVerticalBounds(int[] outBounds) {
+		CharSequence text = getText();
+		Layout layout = getLayout();
+		if (!isSelectionMode() || text == null || layout == null || text.length() == 0 || outBounds == null ||
+				outBounds.length < 2) {
+			return false;
+		}
+		int length = text.length();
+		int start = Math.max(0, Math.min(Math.min(getSelectionStart(), getSelectionEnd()), length));
+		int end = Math.max(0, Math.min(Math.max(getSelectionStart(), getSelectionEnd()), length));
+		if (end <= start) {
+			return false;
+		}
+		int startLine = layout.getLineForOffset(start);
+		int endLine = layout.getLineForOffset(end);
+		outBounds[0] = getTotalPaddingTop() + layout.getLineTop(startLine);
+		outBounds[1] = getTotalPaddingTop() + layout.getLineBottom(endLine);
+		return true;
 	}
 
 	private String getPartialCommentString(Spannable text, int start, int end) {
@@ -772,11 +798,11 @@ public class CommentTextView extends TextView {
 	}
 
 	private void onCreateSelectionMenu(Menu menu, int order) {
-		menu.removeItem(android.R.id.copy);
-		menu.removeItem(R.id.menu_copy_text);
-		menu.add(0, R.id.menu_copy_text, order, android.R.string.copy)
-				.setIcon(ResourceUtils.getDrawable(getContext(), R.attr.iconActionCopy, 0))
-				.setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS | MenuItem.SHOW_AS_ACTION_WITH_TEXT);
+		if (menu.findItem(android.R.id.copy) == null) {
+			menu.add(0, android.R.id.copy, order, android.R.string.copy)
+					.setIcon(ResourceUtils.getDrawable(getContext(), R.attr.iconActionCopy, 0))
+					.setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS | MenuItem.SHOW_AS_ACTION_WITH_TEXT);
+		}
 		int extraOrder = order + 1;
 		for (int i = 0; i < EXTRA_BUTTON_IDS.length; i++) {
 			ExtraButton extraButton = getExtraButton(i);
@@ -801,12 +827,14 @@ public class CommentTextView extends TextView {
 
 	private boolean onSelectionItemClicked(int id) {
 		ExtraButton.Text text = getExtraButtonText();
-		if (id == android.R.id.copy || id == R.id.menu_copy_text) {
-			if (text.text instanceof Spannable) {
-				StringUtils.copyToClipboard(getContext(),
-						getPartialCommentString((Spannable) text.text, text.start, text.end));
+		switch (id) {
+			case android.R.id.copy: {
+				if (text.text instanceof Spannable) {
+					StringUtils.copyToClipboard(getContext(),
+							getPartialCommentString((Spannable) text.text, text.start, text.end));
+				}
+				return true;
 			}
-			return true;
 		}
 		for (int i = 0; i < EXTRA_BUTTON_IDS.length; i++) {
 			if (EXTRA_BUTTON_IDS[i] == id) {
@@ -838,7 +866,6 @@ public class CommentTextView extends TextView {
 				restoreSelectionRunnable.run();
 			}
 			selectionMode.invalidateMenu();
-			invalidate();
 		}
 	}
 
@@ -903,47 +930,6 @@ public class CommentTextView extends TextView {
 
 	public long getPreferredDoubleTapTimeout() {
 		return Math.max(ViewConfiguration.getDoubleTapTimeout(), 500);
-	}
-
-	private int getSelectionHighlightColor() {
-		int color = getHighlightColor();
-		if (Color.alpha(color) == 0) {
-			color = ResourceUtils.getColor(getContext(), android.R.attr.textColorHighlight);
-		}
-		if (Color.alpha(color) == 0) {
-			ThemeEngine.Theme theme = ThemeEngine.getTheme(getContext());
-			color = GraphicsUtils.isLight(theme.window) ? 0x66666666 : 0x66aaaaaa;
-		}
-		return color;
-	}
-
-	private void drawSelectionHighlight(Canvas canvas) {
-		if (!isSelectionMode()) {
-			return;
-		}
-		CharSequence text = getText();
-		Layout layout = getLayout();
-		if (text == null || layout == null) {
-			return;
-		}
-		int start = getSelectionStart();
-		int end = getSelectionEnd();
-		int length = text.length();
-		int min = Math.max(0, Math.min(Math.min(start, end), length));
-		int max = Math.max(0, Math.min(Math.max(start, end), length));
-		if (max <= min) {
-			return;
-		}
-		selectionHighlightPath.reset();
-		layout.getSelectionPath(min, max, selectionHighlightPath);
-		if (selectionHighlightPath.isEmpty()) {
-			return;
-		}
-		selectionHighlightPaint.setColor(getSelectionHighlightColor());
-		canvas.save();
-		canvas.translate(getTotalPaddingLeft(), getTotalPaddingTop());
-		canvas.drawPath(selectionHighlightPath, selectionHighlightPaint);
-		canvas.restore();
 	}
 
 	private Uri createUri(String uriString) {
@@ -1030,12 +1016,12 @@ public class CommentTextView extends TextView {
 		if (!isEnabled()) {
 			return false;
 		}
-		int action = event.getActionMasked();
-		float x = event.getX();
-		float y = event.getY();
 		if (isSelectionMode()) {
 			return super.onTouchEvent(event);
 		}
+		int action = event.getAction();
+		float x = event.getX();
+		float y = event.getY();
 		Point layoutPosition = fillLayoutPosition(x, y);
 		lastX = x;
 		lastY = y;
@@ -1175,7 +1161,6 @@ public class CommentTextView extends TextView {
 
 	@Override
 	protected void onDraw(Canvas canvas) {
-		drawSelectionHighlight(canvas);
 		super.onDraw(canvas);
 		OverlineSpan.draw(this, canvas);
 	}

@@ -1424,7 +1424,7 @@ public class Preferences {
 	}
 
 	public static final String KEY_VIDEO_PLAYBACK_SPEED_CONTROL = "video_playback_speed_control";
-	public static final boolean DEFAULT_VIDEO_PLAYBACK_SPEED_CONTROL = false;
+	public static final boolean DEFAULT_VIDEO_PLAYBACK_SPEED_CONTROL = true;
 
 	public static boolean isVideoPlaybackSpeedControl() {
 		return PREFERENCES.getBoolean(KEY_VIDEO_PLAYBACK_SPEED_CONTROL, DEFAULT_VIDEO_PLAYBACK_SPEED_CONTROL);

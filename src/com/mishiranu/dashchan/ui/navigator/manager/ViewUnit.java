@@ -166,9 +166,42 @@ public class ViewUnit {
 	private final ListViewUtils.UnlimitedRecycledViewPool threadsPostsViewPool =
 			new ListViewUtils.UnlimitedRecycledViewPool();
 
+	private final RecyclerView.OnScrollListener commentSelectionScrollListener = new RecyclerView.OnScrollListener() {
+		@Override
+		public void onScrolled(RecyclerView recyclerView, int dx, int dy) {
+			if (dx != 0 || dy != 0) {
+				stopCommentSelectionIfOutsideVisibleArea(recyclerView);
+			}
+		}
+	};
+
 	public void bindThreadsPostRecyclerView(RecyclerView recyclerView) {
 		recyclerView.setRecycledViewPool(threadsPostsViewPool);
 		((LinearLayoutManager) recyclerView.getLayoutManager()).setRecycleChildrenOnDetach(true);
+		recyclerView.removeOnScrollListener(commentSelectionScrollListener);
+		recyclerView.addOnScrollListener(commentSelectionScrollListener);
+	}
+
+	private void stopCommentSelectionIfOutsideVisibleArea(RecyclerView recyclerView) {
+		int safeTop = recyclerView.getPaddingTop();
+		int safeBottom = recyclerView.getHeight() - recyclerView.getPaddingBottom();
+		int[] bounds = new int[2];
+		for (int i = 0, count = recyclerView.getChildCount(); i < count; i++) {
+			View view = recyclerView.getChildAt(i);
+			CommentTextView.RecyclerKeeper.Holder holder =
+					ListViewUtils.getViewHolder(view, CommentTextView.RecyclerKeeper.Holder.class);
+			if (holder != null) {
+				CommentTextView comment = holder.getCommentTextView();
+				if (comment.isSelectionMode() && comment.getSelectionVerticalBounds(bounds)) {
+					int top = view.getTop() + comment.getTop() + bounds[0];
+					int bottom = view.getTop() + comment.getTop() + bounds[1];
+					if (top < safeTop || bottom <= safeTop || top >= safeBottom) {
+						comment.stopSelection();
+					}
+					break;
+				}
+			}
+		}
 	}
 
 	public RecyclerView.ViewHolder createView(ViewGroup parent, ViewType viewType) {

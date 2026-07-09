@@ -18,6 +18,7 @@ public class EdgeEffectHandler {
 	private static class ControlledEdgeEffect extends EdgeEffect {
 		private final Shift shift;
 		private final Side side;
+		private int shiftColor;
 
 		public ControlledEdgeEffect(Context context, Shift shift, Side side) {
 			super(context);
@@ -74,9 +75,8 @@ public class EdgeEffectHandler {
 				int shift = this.shift.getEdgeEffectShift(side);
 				boolean needShift = shift != 0;
 				if (needShift) {
-					int color = getColor();
 					Paint paint = shiftPaint;
-					paint.setColor(color);
+					paint.setColor(shiftColor);
 					canvas.drawRect(0, 0, width, shift, paint);
 					canvas.save();
 					canvas.translate(0, shift);
@@ -106,6 +106,12 @@ public class EdgeEffectHandler {
 	public void setColor(int color) {
 		ViewUtils.setEdgeEffectColor(topEdgeEffect, color);
 		ViewUtils.setEdgeEffectColor(bottomEdgeEffect, color);
+		setShiftColor(color);
+	}
+
+	public void setShiftColor(int color) {
+		topEdgeEffect.shiftColor = color;
+		bottomEdgeEffect.shiftColor = color;
 	}
 
 	private ControlledEdgeEffect getEdgeEffect(Side side) {

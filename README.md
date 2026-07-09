@@ -9,11 +9,11 @@ Dashchan_2 - неофициальная ветка Dashchan для Android 11+.
 расширения. Приложение ставится отдельно от оригинального Dashchan и использует
 собственный package name.
 
-### Текущие APK
+### Текущие версии
 
 | Компонент | Package | Версия | Минимальный Android |
 | --- | --- | --- | --- |
-| Dashchan_2 | `io.dashchan2` | `3.1.5`, code `1068` | API 30 / Android 11+ |
+| Dashchan_2 | `io.dashchan2` | `3.1.6`, code `1069` | API 30 / Android 11+ |
 | Dvach extension | `io.dashchan2.chan.dvach` | `1.43-experimental-1.6-r11`, code `8` | API 30 / Android 11+ |
 
 Для работы с 2ch/Dvach нужно установить оба APK:
@@ -43,6 +43,11 @@ WebM2/FFmpeg/dav1d/yuv теперь встроены в основной APK. О
   `player_build` и `player_ffmpeg`.
 - Добавлена проверка обновлений через `update/data.json` и GitHub Releases.
 - Добавлены темы.
+- Улучшено выделение и копирование текста в постах, включая обходной вариант
+  для прошивок с урезанным системным меню выделения.
+- Исправлена синяя полоса при резкой прокрутке и overscroll на пользовательских
+  темах.
+- Выбор скорости видео включен по умолчанию.
 - Встроенные WebM/FFmpeg исходники находятся в папке `Dashchan-Webm`.
 
 ### Сборка
@@ -108,11 +113,11 @@ updates the build environment, and bundles the current video player directly
 into the main APK instead of requiring a separate WebM extension. The app can be
 installed beside the original Dashchan because it uses its own package name.
 
-### Current APKs
+### Current Versions
 
 | Component | Package | Version | Minimum Android |
 | --- | --- | --- | --- |
-| Dashchan_2 | `io.dashchan2` | `3.1.5`, code `1068` | API 30 / Android 11+ |
+| Dashchan_2 | `io.dashchan2` | `3.1.6`, code `1069` | API 30 / Android 11+ |
 | Dvach extension | `io.dashchan2.chan.dvach` | `1.43-experimental-1.6-r11`, code `8` | API 30 / Android 11+ |
 
 Install both APKs to use 2ch/Dvach:
@@ -143,6 +148,10 @@ WebM2 APK is no longer required for normal video playback.
   `player_build` and `player_ffmpeg`.
 - Added update checking through `update/data.json` and GitHub Releases.
 - Added themes.
+- Improved post text selection and copying, including a fallback for ROMs with
+  limited system text-selection menus.
+- Fixed the blue strip during fast scrolling and overscroll with custom themes.
+- Enabled video playback speed control by default.
 - Bundled WebM/FFmpeg source is stored in `Dashchan-Webm`.
 
 ### Building
