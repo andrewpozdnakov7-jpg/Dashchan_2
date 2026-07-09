@@ -1401,7 +1401,10 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 	}
 
 	private void addAttachment(String hash, String name) {
-		addAttachment(hash, name, null, false, false, false, false, null);
+		FileHolder fileHolder = DraftsStorage.getInstance().getAttachmentDraftFileHolder(hash);
+		GraphicsUtils.Reencoding reencoding = fileHolder != null && fileHolder.isImage()
+				? new GraphicsUtils.Reencoding(GraphicsUtils.Reencoding.FORMAT_JPEG, 90, 1) : null;
+		addAttachment(hash, name, null, true, true, true, false, reencoding);
 	}
 
 	private void addAttachment(String hash, String name, String rating, boolean optionUniqueHash,
