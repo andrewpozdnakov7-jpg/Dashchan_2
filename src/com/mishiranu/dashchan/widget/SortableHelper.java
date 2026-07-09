@@ -103,7 +103,7 @@ public class SortableHelper<VH extends RecyclerView.ViewHolder> extends ItemTouc
 	public void onChildDraw(@NonNull Canvas c, @NonNull RecyclerView recyclerView,
 			@NonNull RecyclerView.ViewHolder viewHolder, float dX, float dY,
 			int actionState, boolean isCurrentlyActive) {
-		int position = viewHolder.getBindingAdapterPosition();
+		int position = viewHolder.getAdapterPosition();
 		int count = recyclerView.getLayoutManager().getItemCount();
 		if (position == 0) {
 			dY = Math.max(0f, dY);

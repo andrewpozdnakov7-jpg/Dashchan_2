@@ -38,7 +38,7 @@ public class ListViewUtils {
 
 	private static <T, VH extends RecyclerView.ViewHolder> boolean handleClick(VH holder,
 			boolean longClick, DataCallback<T> dataCallback, ClickCallback<T, VH> callback) {
-		int position = holder.getBindingAdapterPosition();
+		int position = holder.getAdapterPosition();
 		// position can be NO_POSITION if click event is fired after notifyDataSetChanged
 		return position >= 0 && callback.onItemClick(holder, position,
 				dataCallback != null ? dataCallback.getData(position) : null, longClick);

@@ -9,8 +9,6 @@ import android.content.ServiceConnection;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.IBinder;
-import androidx.activity.result.ActivityResultLauncher;
-import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.core.app.NotificationCompat;
 import chan.content.ChanManager;
@@ -32,9 +30,6 @@ public class UpdaterActivity extends StateActivity {
 	private static final String EXTRA_INDEX = "index";
 
 	private int index = 0;
-	private final ActivityResultLauncher<Intent> installLauncher = registerForActivityResult
-			(new ActivityResultContracts.StartActivityForResult(),
-					result -> handleInstallActivityResult(result.getResultCode(), result.getData()));
 
 	private List<String> getFiles() {
 		return getIntent().getStringArrayListExtra(EXTRA_FILES);
@@ -69,11 +64,11 @@ public class UpdaterActivity extends StateActivity {
 				Uri uri = FileProvider.convertUpdatesUri(Uri.fromFile(file));
 				@SuppressWarnings("deprecation")
 				String action = Intent.ACTION_INSTALL_PACKAGE;
-				installLauncher.launch(new Intent(action)
+				startActivityForResult(new Intent(action)
 						.setDataAndType(uri, "application/vnd.android.package-archive")
 						.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
 						.putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true)
-						.putExtra(Intent.EXTRA_RETURN_RESULT, true));
+						.putExtra(Intent.EXTRA_RETURN_RESULT, true), 0);
 			}
 		} else {
 			finish();
@@ -83,17 +78,22 @@ public class UpdaterActivity extends StateActivity {
 	// Hidden error code in PackageManager
 	private static final int INSTALL_FAILED_INVALID_APK = -2;
 
-	private void handleInstallActivityResult(int resultCode, Intent data) {
-		if (resultCode == RESULT_OK) {
-			index++;
-			performInstallation();
-		} else if (resultCode == RESULT_FIRST_USER && data != null &&
-				data.getIntExtra("android.intent.extra.INSTALL_RESULT", 0) == INSTALL_FAILED_INVALID_APK) {
-			// Retry on failure. Workaround for Android 10+ bug in FLAG_GRANT_READ_URI_PERMISSION behavior:
-			// sometimes the flag doesn't take effect and package installer is unable to access the package file.
-			performInstallation();
-		} else {
-			finish();
+	@Override
+	protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+		super.onActivityResult(requestCode, resultCode, data);
+
+		if (requestCode == 0) {
+			if (resultCode == RESULT_OK) {
+				index++;
+				performInstallation();
+			} else if (resultCode == RESULT_FIRST_USER && data != null &&
+					data.getIntExtra("android.intent.extra.INSTALL_RESULT", 0) == INSTALL_FAILED_INVALID_APK) {
+				// Retry on failure. Workaround for Android 10+ bug in FLAG_GRANT_READ_URI_PERMISSION behavior:
+				// sometimes the flag doesn't take effect and package installer is unable to access the package file.
+				performInstallation();
+			} else {
+				finish();
+			}
 		}
 	}
 

@@ -65,6 +65,11 @@ public class AboutFragment extends PreferenceFragment implements FragmentHandler
 				(versionDate != null ? " " + versionDate : ""));
 		String webViewProvider = WebViewUtils.getProviderSummary(requireContext());
 		addButton("WebView", webViewProvider != null ? webViewProvider : "-").setSelectable(false);
+	}
+
+	@Override
+	public void onActivityCreated(Bundle savedInstanceState) {
+		super.onActivityCreated(savedInstanceState);
 		((FragmentHandler) requireActivity()).setTitleSubtitle(getString(R.string.about), null);
 	}
 

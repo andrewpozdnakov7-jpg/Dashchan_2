@@ -39,6 +39,7 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
+import androidx.core.view.ViewCompat;
 import androidx.core.widget.TextViewCompat;
 import androidx.lifecycle.ViewModelProvider;
 import chan.content.Chan;
@@ -539,13 +540,6 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		if (!captchaRestoreSuccess) {
 			refreshCaptcha(false, true, false);
 		}
-		((FragmentHandler) requireActivity()).setTitleSubtitle(getString(StringUtils.isEmpty(getThreadNumber())
-				? R.string.new_thread : R.string.new_post), null);
-		requireActivity().bindService(new Intent(requireContext(), PostingService.class),
-				postingConnection, Context.BIND_AUTO_CREATE);
-
-		CaptchaViewModel viewModel = new ViewModelProvider(this).get(CaptchaViewModel.class);
-		viewModel.observe(getViewLifecycleOwner(), this);
 	}
 
 	@Override
@@ -579,6 +573,19 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		captchaForm = null;
 		sendButton = null;
 		attachments.clear();
+	}
+
+	@Override
+	public void onActivityCreated(Bundle savedInstanceState) {
+		super.onActivityCreated(savedInstanceState);
+
+		((FragmentHandler) requireActivity()).setTitleSubtitle(getString(StringUtils.isEmpty(getThreadNumber())
+				? R.string.new_thread : R.string.new_post), null);
+		requireActivity().bindService(new Intent(requireContext(), PostingService.class),
+				postingConnection, Context.BIND_AUTO_CREATE);
+
+		CaptchaViewModel viewModel = new ViewModelProvider(this).get(CaptchaViewModel.class);
+		viewModel.observe(getViewLifecycleOwner(), this);
 	}
 
 	private DraftsStorage.PostDraft obtainPostDraft() {
@@ -841,8 +848,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 	}
 
 	@Override
-	@SuppressWarnings("deprecation")
-	public boolean onMenuItemSelected(MenuItem item) {
+	public boolean onOptionsItemSelected(MenuItem item) {
 		switch (item.getItemId()) {
 			case R.id.menu_attach: {
 				// SHOW_ADVANCED to show folder navigation
@@ -1159,7 +1165,6 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 	}
 
 	@Override
-	@SuppressWarnings("deprecation")
 	public void onActivityResult(int requestCode, int resultCode, Intent data) {
 		if (resultCode == Activity.RESULT_OK) {
 			switch (requestCode) {
@@ -1365,7 +1370,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		textLayout.setGravity(Gravity.CENTER_VERTICAL);
 		controls.addView(textLayout, 0, LinearLayout.LayoutParams.MATCH_PARENT);
 		((LinearLayout.LayoutParams) textLayout.getLayoutParams()).weight = 1f;
-		textLayout.setPaddingRelative((int) (4f * density), 0, (int) (8f * density), 0);
+		ViewCompat.setPaddingRelative(textLayout, (int) (4f * density), 0, (int) (8f * density), 0);
 		TextView fileName = new TextView(controls.getContext());
 		textLayout.addView(fileName, LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
 		TextViewCompat.setTextAppearance(fileName, ResourceUtils.getResourceId(fileName.getContext(),

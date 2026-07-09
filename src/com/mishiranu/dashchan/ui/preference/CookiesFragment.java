@@ -40,8 +40,8 @@ public class CookiesFragment extends BaseListFragment implements FragmentHandler
 	}
 
 	@Override
-	public void onViewCreated(@NonNull View view, Bundle savedInstanceState) {
-		super.onViewCreated(view, savedInstanceState);
+	public void onActivityCreated(Bundle savedInstanceState) {
+		super.onActivityCreated(savedInstanceState);
 
 		((FragmentHandler) requireActivity()).setTitleSubtitle(getString(R.string.manage_cookies), null);
 		getRecyclerView().setAdapter(new Adapter(this::onCookieClick));

@@ -62,13 +62,18 @@ public class CategoriesFragment extends PreferenceFragment {
 		addCategory(R.string.about, R.drawable.ic_info)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 						.pushFragment(new AboutFragment()));
-		((FragmentHandler) requireActivity()).setTitleSubtitle(getString(R.string.preferences), null);
 	}
 
 	@Override
 	public void onDestroyView() {
 		super.onDestroyView();
 		compatibilityPreference = null;
+	}
+
+	@Override
+	public void onActivityCreated(Bundle savedInstanceState) {
+		super.onActivityCreated(savedInstanceState);
+		((FragmentHandler) requireActivity()).setTitleSubtitle(getString(R.string.preferences), null);
 	}
 
 	@Override

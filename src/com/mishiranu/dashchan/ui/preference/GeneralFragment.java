@@ -82,6 +82,22 @@ public class GeneralFragment extends PreferenceFragment implements FragmentHandl
 				R.string.secure_connection, R.string.secure_connection__summary);
 		addCheck(true, Preferences.KEY_VERIFY_CERTIFICATE, Preferences.DEFAULT_VERIFY_CERTIFICATE,
 				R.string.verify_certificate, R.string.verify_certificate__summary);
+	}
+
+	@Override
+	public void onDestroyView() {
+		super.onDestroyView();
+
+		captchaSolvingPreference = null;
+		if (captchaSolvingCheckDialog != null) {
+			captchaSolvingCheckDialog.dismiss();
+			captchaSolvingCheckDialog = null;
+		}
+	}
+
+	@Override
+	public void onActivityCreated(Bundle savedInstanceState) {
+		super.onActivityCreated(savedInstanceState);
 
 		((FragmentHandler) requireActivity()).setTitleSubtitle(getString(R.string.general), null);
 		CheckViewModel viewModel = new ViewModelProvider(this).get(CheckViewModel.class);
@@ -104,17 +120,6 @@ public class GeneralFragment extends PreferenceFragment implements FragmentHandl
 				}
 			}
 		});
-	}
-
-	@Override
-	public void onDestroyView() {
-		super.onDestroyView();
-
-		captchaSolvingPreference = null;
-		if (captchaSolvingCheckDialog != null) {
-			captchaSolvingCheckDialog.dismiss();
-			captchaSolvingCheckDialog = null;
-		}
 	}
 
 	@Override

@@ -25,6 +25,7 @@ import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.TextView;
+import androidx.core.view.ViewCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import chan.content.Chan;
@@ -936,7 +937,7 @@ public class ViewUnit {
 		int top = (int) (topDp * density + 0.5f);
 		int start = (int) (startDp * density + 0.5f);
 		int end = (int) (endDp * density + 0.5f);
-		boolean rtl = parent.getLayoutDirection() == View.LAYOUT_DIRECTION_RTL;
+		boolean rtl = ViewCompat.getLayoutDirection(parent) == ViewCompat.LAYOUT_DIRECTION_RTL;
 		int left = rtl ? end : start;
 		int right = rtl ? start : end;
 		int[] attrs = new int[states.size()];
@@ -1293,7 +1294,7 @@ public class ViewUnit {
 		}
 
 		public void installBackground() {
-			if (itemView.isAttachedToWindow()) {
+			if (ViewCompat.isAttachedToWindow(itemView)) {
 				installBackgroundUnchecked();
 			}
 		}

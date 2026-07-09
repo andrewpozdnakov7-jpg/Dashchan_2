@@ -329,7 +329,7 @@ public class SearchPage extends ListPage implements SearchAdapter.Callback,
 					int childCount = recyclerView.getChildCount();
 					if (childCount > 0) {
 						View child = recyclerView.getChildAt(childCount - 1);
-						int position = recyclerView.getChildViewHolder(child).getBindingAdapterPosition();
+						int position = recyclerView.getChildViewHolder(child).getAdapterPosition();
 						needScroll = position + 1 == oldCount &&
 								recyclerView.getHeight() - recyclerView.getPaddingBottom() - child.getBottom() >= 0;
 					}

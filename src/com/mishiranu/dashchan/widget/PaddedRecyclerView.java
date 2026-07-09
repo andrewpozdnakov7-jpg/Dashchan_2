@@ -13,6 +13,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewConfiguration;
 import androidx.annotation.NonNull;
+import androidx.core.view.ViewCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import com.mishiranu.dashchan.R;
@@ -297,7 +298,7 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 			if (!fastScrollerAvailable) {
 				return false;
 			}
-			boolean rtl = getLayoutDirection() == View.LAYOUT_DIRECTION_RTL;
+			boolean rtl = ViewCompat.getLayoutDirection(this) == ViewCompat.LAYOUT_DIRECTION_RTL;
 			int trackWidth = Math.max(minTrackSize, Math.max(thumbDrawable.getIntrinsicWidth(),
 					trackDrawable.getIntrinsicWidth()));
 			boolean atThumbVertical = rtl ? event.getX() <= trackWidth : event.getX() >= getWidth() - trackWidth;
@@ -373,7 +374,7 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 		stateValue = Math.max(0, Math.min(stateValue, 1));
 
 		if (stateValue > 0f) {
-			boolean rtl = getLayoutDirection() == View.LAYOUT_DIRECTION_RTL;
+			boolean rtl = ViewCompat.getLayoutDirection(this) == ViewCompat.LAYOUT_DIRECTION_RTL;
 			int maxWidth = Math.max(thumbDrawable.getIntrinsicWidth(), trackDrawable.getIntrinsicHeight());
 			int translateX = (int) (maxWidth * (1f - stateValue) + 0.5f);
 			int top = getEdgeEffectShift(EdgeEffectHandler.Side.TOP);

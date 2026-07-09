@@ -28,8 +28,6 @@ import java.util.Collection;
 import java.util.Collections;
 
 public class ContentsFragment extends PreferenceFragment {
-	private static final String REQUEST_CLEAR_CACHE_FINISHED = "contentsClearCacheFinished";
-
 	private CheckPreference replyNotifications;
 	private Preference<?> clearCachePreference;
 
@@ -41,13 +39,6 @@ public class ContentsFragment extends PreferenceFragment {
 	@Override
 	public void onViewCreated(@NonNull View view, Bundle savedInstanceState) {
 		super.onViewCreated(view, savedInstanceState);
-
-		getParentFragmentManager().setFragmentResultListener(REQUEST_CLEAR_CACHE_FINISHED, getViewLifecycleOwner(),
-				(requestKey, result) -> {
-					if (clearCachePreference != null) {
-						clearCachePreference.invalidate();
-					}
-				});
 
 		addHeader(R.string.threads);
 		addSeek(Preferences.KEY_AUTO_REFRESH_INTERVAL, Preferences.DEFAULT_AUTO_REFRESH_INTERVAL,
@@ -94,13 +85,18 @@ public class ContentsFragment extends PreferenceFragment {
 			dialog.show(getChildFragmentManager(), ClearCacheDialog.class.getName());
 		});
 		clearCachePreference.invalidate();
-		((FragmentHandler) requireActivity()).setTitleSubtitle(getString(R.string.contents), null);
 	}
 
 	@Override
 	public void onDestroyView() {
 		super.onDestroyView();
 		clearCachePreference = null;
+	}
+
+	@Override
+	public void onActivityCreated(Bundle savedInstanceState) {
+		super.onActivityCreated(savedInstanceState);
+		((FragmentHandler) requireActivity()).setTitleSubtitle(getString(R.string.contents), null);
 	}
 
 	private void invalidateReplyNotifications() {
@@ -123,6 +119,7 @@ public class ContentsFragment extends PreferenceFragment {
 					.setSingleChoiceItems(items, checkedIndex, (d, which) -> checkedIndex = which)
 					.setPositiveButton(android.R.string.ok, (d, w) -> {
 						ClearingDialog clearingDialog = new ClearingDialog(checkedIndex == 1);
+						clearingDialog.setTargetFragment(getParentFragment(), 0);
 						clearingDialog.show(getParentFragment().getParentFragmentManager(),
 								ClearingDialog.class.getName());
 					})
@@ -157,8 +154,8 @@ public class ContentsFragment extends PreferenceFragment {
 		}
 
 		@Override
-		public void onCreate(Bundle savedInstanceState) {
-			super.onCreate(savedInstanceState);
+		public void onActivityCreated(Bundle savedInstanceState) {
+			super.onActivityCreated(savedInstanceState);
 
 			ClearCacheViewModel viewModel = new ViewModelProvider(this).get(ClearCacheViewModel.class);
 			if (!viewModel.hasTaskOrValue()) {
@@ -187,7 +184,7 @@ public class ContentsFragment extends PreferenceFragment {
 		}
 
 		private void sendUpdateCacheSize() {
-			getParentFragmentManager().setFragmentResult(REQUEST_CLEAR_CACHE_FINISHED, Bundle.EMPTY);
+			((ContentsFragment) getTargetFragment()).clearCachePreference.invalidate();
 		}
 
 		@Override

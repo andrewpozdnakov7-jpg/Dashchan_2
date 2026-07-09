@@ -13,7 +13,7 @@ Dashchan_2 - неофициальная ветка Dashchan для Android 11+.
 
 | Компонент | Package | Версия | Минимальный Android |
 | --- | --- | --- | --- |
-| Dashchan_2 | `io.dashchan2` | `3.1.4-r17-dev12`, code `1067` | API 30 / Android 11+ |
+| Dashchan_2 | `io.dashchan2` | `3.1.5`, code `1068` | API 30 / Android 11+ |
 | Dvach extension | `io.dashchan2.chan.dvach` | `1.43-experimental-1.6-r11`, code `8` | API 30 / Android 11+ |
 
 Для работы с 2ch/Dvach нужно установить оба APK:
@@ -43,17 +43,6 @@ WebM2/FFmpeg/dav1d/yuv теперь встроены в основной APK. О
   `player_build` и `player_ffmpeg`.
 - Добавлена проверка обновлений через `update/data.json` и GitHub Releases.
 - Добавлены темы.
-- Обновлена WebView/browser-обвязка: системный WebView user agent,
-  актуальные WebView callbacks, Custom Tabs для внешних ссылок и отображение
-  версии WebView в разделе "О программе".
-- Добавлена поддержка домена `2ch.org` для Dvach.
-- Добавлена экспериментальная настройка скорости видео до `4x`.
-- Исправлено копирование выделенного текста на MIUI/HyperOS.
-- Добавлены маркеры своих постов и ответов, а также отметки важных постов на
-  полосе быстрой прокрутки.
-- Исправлены сценарии поворота экрана в треде и галерее.
-- Обновлены AndroidX/Jackson/LeakCanary зависимости и устранена часть
-  предупреждений Gradle/Java об устаревших API.
 - Встроенные WebM/FFmpeg исходники находятся в папке `Dashchan-Webm`.
 
 ### Сборка
@@ -123,7 +112,7 @@ installed beside the original Dashchan because it uses its own package name.
 
 | Component | Package | Version | Minimum Android |
 | --- | --- | --- | --- |
-| Dashchan_2 | `io.dashchan2` | `3.1.4-r17-dev12`, code `1067` | API 30 / Android 11+ |
+| Dashchan_2 | `io.dashchan2` | `3.1.5`, code `1068` | API 30 / Android 11+ |
 | Dvach extension | `io.dashchan2.chan.dvach` | `1.43-experimental-1.6-r11`, code `8` | API 30 / Android 11+ |
 
 Install both APKs to use 2ch/Dvach:
@@ -154,16 +143,6 @@ WebM2 APK is no longer required for normal video playback.
   `player_build` and `player_ffmpeg`.
 - Added update checking through `update/data.json` and GitHub Releases.
 - Added themes.
-- Updated the WebView/browser integration: system WebView user agent, current
-  WebView callbacks, Custom Tabs for external links, and WebView version display
-  on the About screen.
-- Added `2ch.org` domain support for Dvach.
-- Added experimental video playback speed selection up to `4x`.
-- Fixed selected text copying on MIUI/HyperOS.
-- Added own-post/reply markers and important-post marks on the fast scroll bar.
-- Fixed screen rotation scenarios in threads and the gallery.
-- Updated AndroidX/Jackson/LeakCanary dependencies and cleaned up several
-  Gradle/Java deprecated API warnings.
 - Bundled WebM/FFmpeg source is stored in `Dashchan-Webm`.
 
 ### Building

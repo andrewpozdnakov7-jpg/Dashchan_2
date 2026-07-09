@@ -27,8 +27,8 @@ import java.util.List;
 
 public class StatisticsFragment extends BaseListFragment {
 	@Override
-	public void onViewCreated(@NonNull View view, Bundle savedInstanceState) {
-		super.onViewCreated(view, savedInstanceState);
+	public void onActivityCreated(Bundle savedInstanceState) {
+		super.onActivityCreated(savedInstanceState);
 
 		long startTime = StatisticsStorage.getInstance().getStartTime();
 		((FragmentHandler) requireActivity()).setTitleSubtitle(getString(R.string.statistics),
@@ -88,7 +88,7 @@ public class StatisticsFragment extends BaseListFragment {
 	}
 
 	@Override
-	public boolean onMenuItemSelected(MenuItem item) {
+	public boolean onOptionsItemSelected(MenuItem item) {
 		switch (item.getItemId()) {
 			case R.id.menu_clear: {
 				StatisticsStorage.getInstance().clear();
@@ -96,7 +96,7 @@ public class StatisticsFragment extends BaseListFragment {
 				break;
 			}
 		}
-		return super.onMenuItemSelected(item);
+		return super.onOptionsItemSelected(item);
 	}
 
 	private static class Adapter extends RecyclerView.Adapter<Adapter.ViewHolder> {

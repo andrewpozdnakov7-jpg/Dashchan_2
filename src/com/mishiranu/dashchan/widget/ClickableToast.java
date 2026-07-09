@@ -24,9 +24,11 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import androidx.activity.ComponentActivity;
 import androidx.annotation.NonNull;
-import androidx.lifecycle.DefaultLifecycleObserver;
+import androidx.core.view.ViewCompat;
 import androidx.lifecycle.Lifecycle;
+import androidx.lifecycle.LifecycleObserver;
 import androidx.lifecycle.LifecycleOwner;
+import androidx.lifecycle.OnLifecycleEvent;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.model.ErrorItem;
 import com.mishiranu.dashchan.graphics.BaseDrawable;
@@ -40,7 +42,7 @@ import java.lang.reflect.Field;
 import java.util.Objects;
 import java.util.UUID;
 
-public class ClickableToast implements DefaultLifecycleObserver {
+public class ClickableToast implements LifecycleObserver {
 	private static final int Y_OFFSET;
 	private static final int LAYOUT_ID;
 
@@ -245,7 +247,7 @@ public class ClickableToast implements DefaultLifecycleObserver {
 		linearLayout.setBackground(partialClickDrawable);
 		linearLayout.setOnTouchListener(partialClickDrawable);
 		message1.setPadding(0, 0, 0, 0);
-		message2.setPaddingRelative(innerPadding, 0, 0, 0);
+		ViewCompat.setPaddingRelative(message2, innerPadding, 0, 0, 0);
 		message1.setSingleLine(true);
 		message2.setSingleLine(true);
 		message1.setEllipsize(TextUtils.TruncateAt.END);
@@ -255,20 +257,23 @@ public class ClickableToast implements DefaultLifecycleObserver {
 		button = message2;
 	}
 
-	@Override
-	public void onResume(@NonNull LifecycleOwner owner) {
+	@SuppressWarnings("unused")
+	@OnLifecycleEvent(Lifecycle.Event.ON_RESUME)
+	private void onResume() {
 		resumed = true;
 		updateAndApplyLayoutChecked();
 	}
 
-	@Override
-	public void onPause(@NonNull LifecycleOwner owner) {
+	@SuppressWarnings("unused")
+	@OnLifecycleEvent(Lifecycle.Event.ON_PAUSE)
+	private void onPause() {
 		resumed = false;
 		updateAndApplyLayoutChecked();
 	}
 
-	@Override
-	public void onDestroy(@NonNull LifecycleOwner owner) {
+	@SuppressWarnings("unused")
+	@OnLifecycleEvent(Lifecycle.Event.ON_DESTROY)
+	private void onDestroy(LifecycleOwner owner) {
 		if (currentActivity != null && currentActivity.get() == owner) {
 			currentActivity = null;
 		}
@@ -512,7 +517,7 @@ public class ClickableToast implements DefaultLifecycleObserver {
 				drawable.setColorFilter(colorFilter);
 				canvas.save();
 				Rect bounds = getBounds();
-				if (button.getLayoutDirection() == View.LAYOUT_DIRECTION_RTL) {
+				if (ViewCompat.getLayoutDirection(button) == ViewCompat.LAYOUT_DIRECTION_RTL) {
 					int shift = button.getRight();
 					canvas.clipRect(bounds.left + shift, bounds.top, bounds.left + shift, bounds.bottom);
 				} else {

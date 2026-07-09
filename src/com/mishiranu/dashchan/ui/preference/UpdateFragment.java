@@ -164,8 +164,8 @@ public class UpdateFragment extends BaseListFragment {
 	}
 
 	@Override
-	public void onViewCreated(@NonNull View view, Bundle savedInstanceState) {
-		super.onViewCreated(view, savedInstanceState);
+	public void onActivityCreated(Bundle savedInstanceState) {
+		super.onActivityCreated(savedInstanceState);
 
 		if (isUpdateDataProvided()) {
 			updateDataMap = AndroidUtils.getParcelable(requireArguments(), EXTRA_UPDATE_DATA_MAP,
@@ -470,7 +470,7 @@ public class UpdateFragment extends BaseListFragment {
 	}
 
 	@Override
-	public boolean onMenuItemSelected(MenuItem item) {
+	public boolean onOptionsItemSelected(MenuItem item) {
 		switch (item.getItemId()) {
 			case R.id.menu_download: {
 				ArrayList<UpdaterActivity.Request> requests = new ArrayList<>();

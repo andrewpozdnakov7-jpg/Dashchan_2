@@ -29,6 +29,7 @@ import android.view.ViewConfiguration;
 import android.view.WindowManager;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
+import androidx.core.view.ViewCompat;
 import androidx.recyclerview.widget.RecyclerView;
 import chan.content.Chan;
 import chan.util.StringUtils;
@@ -737,7 +738,7 @@ public class CommentTextView extends TextView {
 			if (hasAttachedViews) {
 				boolean hasAttachedViews = false;
 				for (View view : addedViews.keySet()) {
-					if (view != v && view.isAttachedToWindow()) {
+					if (view != v && ViewCompat.isAttachedToWindow(view)) {
 						hasAttachedViews = true;
 						break;
 					}

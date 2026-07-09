@@ -257,8 +257,6 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 				startActivity(intent);
 			}
 		});
-
-		((FragmentHandler) requireActivity()).setTitleSubtitle(chan.configuration.getTitle(), null);
 	}
 
 	@Override
@@ -268,6 +266,14 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 		captchaPassPreference = null;
 		userAuthorizationPreference = null;
 		cookiePreference = null;
+	}
+
+	@Override
+	public void onActivityCreated(Bundle savedInstanceState) {
+		super.onActivityCreated(savedInstanceState);
+
+		Chan chan = Chan.get(getChanName());
+		((FragmentHandler) requireActivity()).setTitleSubtitle(chan.configuration.getTitle(), null);
 	}
 
 	@Override
@@ -346,8 +352,8 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 		}
 
 		@Override
-		public void onCreate(Bundle savedInstanceState) {
-			super.onCreate(savedInstanceState);
+		public void onActivityCreated(Bundle savedInstanceState) {
+			super.onActivityCreated(savedInstanceState);
 
 			CheckAuthorizationViewModel viewModel = new ViewModelProvider(this).get(CheckAuthorizationViewModel.class);
 			if (!viewModel.hasTaskOrValue()) {

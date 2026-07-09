@@ -109,11 +109,7 @@ public class BrowserFragment extends ContentFragment implements DownloadListener
 
 		if (savedInstanceState != null) {
 			webView.restoreState(savedInstanceState);
-		} else {
-			WebViewUtils.clearAll(webView);
-			webView.loadUrl(AndroidUtils.getParcelable(requireArguments(), EXTRA_URI, Uri.class).toString());
 		}
-		((FragmentHandler) requireActivity()).setTitleSubtitle(getString(R.string.web_browser), null);
 	}
 
 	@Override
@@ -128,6 +124,17 @@ public class BrowserFragment extends ContentFragment implements DownloadListener
 		ViewUtils.removeFromParent(webView);
 		webView = null;
 		progressView = null;
+	}
+
+	@Override
+	public void onActivityCreated(Bundle savedInstanceState) {
+		super.onActivityCreated(savedInstanceState);
+
+		((FragmentHandler) requireActivity()).setTitleSubtitle(getString(R.string.web_browser), null);
+		if (savedInstanceState == null) {
+			WebViewUtils.clearAll(webView);
+			webView.loadUrl(AndroidUtils.getParcelable(requireArguments(), EXTRA_URI, Uri.class).toString());
+		}
 	}
 
 	@Override
@@ -161,7 +168,7 @@ public class BrowserFragment extends ContentFragment implements DownloadListener
 	}
 
 	@Override
-	public boolean onMenuItemSelected(MenuItem item) {
+	public boolean onOptionsItemSelected(MenuItem item) {
 		switch (item.getItemId()) {
 			case R.id.menu_reload: {
 				webView.reload();

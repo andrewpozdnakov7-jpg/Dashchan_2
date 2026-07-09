@@ -1,0 +1,2 @@
+* Renamed the app version to Dashchan_2 3.1.5.
+* Rolled back to the stable base to fix crashes when attaching and sending files.

@@ -1,8 +1,33 @@
 package com.mishiranu.dashchan.ui;
 
+import android.os.Bundle;
+import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentActivity;
+import androidx.fragment.app.FragmentManager;
 
 public abstract class StateActivity extends FragmentActivity {
+	public static class InstanceFragment extends Fragment {
+		@Override
+		public void onDetach() {
+			((StateActivity) getActivity()).callOnFinish(true);
+			super.onDetach();
+		}
+	}
+
+	@Override
+	protected void onCreate(Bundle savedInstanceState) {
+		super.onCreate(savedInstanceState);
+
+		String tag = "instance";
+		FragmentManager fragmentManager = getSupportFragmentManager();
+		InstanceFragment fragment = (InstanceFragment) fragmentManager.findFragmentByTag(tag);
+		if (fragment == null) {
+			fragment = new InstanceFragment();
+			fragment.setRetainInstance(true);
+			fragmentManager.beginTransaction().add(fragment, tag).commit();
+		}
+	}
+
 	private boolean onFinishCalled = false;
 
 	@Override

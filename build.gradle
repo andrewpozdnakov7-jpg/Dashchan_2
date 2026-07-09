@@ -130,8 +130,8 @@ android {
 
 	defaultConfig {
 		applicationId = 'io.dashchan2'
-		versionCode = 1067
-		versionName = '3.1.4-r17'
+		versionCode = 1068
+		versionName = '3.1.5'
 
 		minSdk = 30
 		targetSdk = 30
@@ -221,7 +221,6 @@ android {
 	}
 	buildTypes.create('ndebug') {
 		debuggable = false
-		versionNameSuffix '-dev12'
 		manifestPlaceholders = [
 				appLabel: 'Dashchan_2',
 				fileProviderAuthority: 'io.dashchan2.provider'
@@ -339,8 +338,8 @@ dependencies {
 	leakImplementation 'com.squareup.leakcanary:leakcanary-android:3.0-alpha-9'
 	compileOnly 'org.ccil.cowan.tagsoup:tagsoup:1.2.1'
 	implementation 'com.fasterxml.jackson.core:jackson-core:2.22.1'
-	implementation 'androidx.fragment:fragment:1.9.0-alpha02'
-	implementation 'androidx.recyclerview:recyclerview:1.4.0'
+	implementation 'androidx.fragment:fragment:1.2.5'
+	implementation 'androidx.recyclerview:recyclerview:1.1.0'
 	implementation 'androidx.drawerlayout:drawerlayout:1.2.0'
 	implementation 'androidx.webkit:webkit:1.16.0'
 	implementation 'androidx.browser:browser:1.10.0'

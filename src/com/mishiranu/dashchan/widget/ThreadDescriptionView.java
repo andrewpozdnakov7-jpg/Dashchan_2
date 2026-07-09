@@ -6,6 +6,7 @@ import android.graphics.Paint;
 import android.util.AttributeSet;
 import android.util.TypedValue;
 import android.view.View;
+import androidx.core.view.ViewCompat;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import java.util.ArrayList;
@@ -141,7 +142,7 @@ public class ThreadDescriptionView extends View {
 		int baseline = getHeight() - getPaddingBottom() - (int) Math.ceil(fontMetrics.bottom);
 		float left = getPaddingLeft();
 		float right = getWidth() - getPaddingRight();
-		boolean rtl = getLayoutDirection() == View.LAYOUT_DIRECTION_RTL;
+		boolean rtl = ViewCompat.getLayoutDirection(this) == ViewCompat.LAYOUT_DIRECTION_RTL;
 		if (rtl != toEnd) {
 			for (int i = measurements.length - 1; i >= 0; i--) {
 				String text = description.get(i);

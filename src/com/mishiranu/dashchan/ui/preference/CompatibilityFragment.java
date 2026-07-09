@@ -40,13 +40,18 @@ public class CompatibilityFragment extends PreferenceFragment {
 		addHeader(R.string.additional);
 		addCheck(true, Preferences.KEY_USE_GMS_PROVIDER, Preferences.DEFAULT_USE_GMS_PROVIDER,
 				R.string.use_gms_security_provider, R.string.use_gms_security_provider__summary);
-		((FragmentHandler) requireActivity()).setTitleSubtitle(getString(R.string.compatibility), null);
 	}
 
 	@Override
 	public void onDestroyView() {
 		super.onDestroyView();
 		drawOverOtherApplicationsPreference = null;
+	}
+
+	@Override
+	public void onActivityCreated(Bundle savedInstanceState) {
+		super.onActivityCreated(savedInstanceState);
+		((FragmentHandler) requireActivity()).setTitleSubtitle(getString(R.string.compatibility), null);
 	}
 
 	@Override
