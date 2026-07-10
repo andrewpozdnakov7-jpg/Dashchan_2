@@ -1,5 +1,8 @@
 #include "player.h"
 #include "util.h"
+#ifdef DASHCHAN_HAS_ATEMPO
+#include "tempo.h"
+#endif
 
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
@@ -366,10 +369,16 @@ static int64_t unscalePlaybackPosition(Player * player, int64_t position) {
 	return position * PLAYBACK_SPEED_DEFAULT / getPlaybackSpeed(player);
 }
 
-static int getPlaybackSampleRate(Player * player, int sampleRate) {
-	int result = (int) (sampleRate * (int64_t) PLAYBACK_SPEED_DEFAULT / getPlaybackSpeed(player));
+static int getPlaybackSampleRateForSpeed(int sampleRate, int speed) {
+	int result = (int) (sampleRate * (int64_t) PLAYBACK_SPEED_DEFAULT / speed);
 	return result > 0 ? result : 1;
 }
+
+#ifndef DASHCHAN_HAS_ATEMPO
+static int getPlaybackSampleRate(Player * player, int sampleRate) {
+	return getPlaybackSampleRateForSpeed(sampleRate, getPlaybackSpeed(player));
+}
+#endif
 
 static void updateAudioPositionSurrogate(Player * player, int64_t position, int forceUpdate) {
 	if (forceUpdate || player->sync.audioPositionNotSync) {
@@ -499,6 +508,108 @@ static void audioPlayerCallback(UNUSED SLAndroidSimpleBufferQueueItf slQueue, vo
 	markStreamFinished(player, 0);
 }
 
+static int queueDecodedAudio(Player * player, uint8_t * buffer, int size,
+		int64_t position, int64_t divider, int * silentAudioLength) {
+	if (!buffer || size <= 0 || divider <= 0) {
+		return 0;
+	}
+	pthread_mutex_lock(&player->audio.sleepBufferMutex);
+	if (player->meta.interrupt || player->sync.skip.audioWorkFrame) {
+		pthread_mutex_unlock(&player->audio.sleepBufferMutex);
+		return 0;
+	}
+	while (!player->meta.interrupt && !player->sync.skip.audioWorkFrame &&
+			blockingQueueCount(&player->audio.bufferQueue) >= 5) {
+		pthread_cond_wait(&player->audio.bufferCond, &player->audio.sleepBufferMutex);
+	}
+	if (player->meta.interrupt || player->sync.skip.audioWorkFrame) {
+		pthread_mutex_unlock(&player->audio.sleepBufferMutex);
+		return 0;
+	}
+	if (position >= 0 && player->audio.bufferNeedEnqueueAfterDecode) {
+		player->sync.audioPosition = position;
+		player->sync.audioPositionNotSync = 0;
+	}
+	while (!player->meta.interrupt && !player->sync.skip.audioWorkFrame && player->sync.videoPositionNotSync) {
+		pthread_cond_wait(&player->audio.sleepCond, &player->audio.sleepBufferMutex);
+	}
+	if (player->meta.interrupt || player->sync.skip.audioWorkFrame) {
+		pthread_mutex_unlock(&player->audio.sleepBufferMutex);
+		return 0;
+	}
+	int64_t videoPosition = player->sync.videoPosition;
+	int64_t gaining = position >= 0 && !player->video.finished ? position - videoPosition : 0;
+	if (gaining > GAINING_THRESHOLD) {
+		LOG("sleep audio %" PRId64 " %" PRId64, gaining, position);
+		int64_t time = calculateFrameTime(player, gaining);
+		while (!player->meta.interrupt && !player->sync.skip.audioWorkFrame) {
+			if (condSleepUntilMs(&player->audio.sleepCond, &player->audio.sleepBufferMutex, time)) {
+				break;
+			}
+		}
+	}
+	if (player->meta.interrupt || player->sync.skip.audioWorkFrame) {
+		pthread_mutex_unlock(&player->audio.sleepBufferMutex);
+		return 0;
+	}
+	AudioBuffer * audioBuffer = malloc(sizeof(AudioBuffer));
+	if (!audioBuffer) {
+		pthread_mutex_unlock(&player->audio.sleepBufferMutex);
+		return 0;
+	}
+	audioBuffer->buffer = buffer;
+	audioBuffer->index = 0;
+	audioBuffer->size = size;
+	audioBuffer->position = position;
+	audioBuffer->divider = divider;
+	// Fix loud click on video start even on low sound level by muting sound buffer for 40 milliseconds.
+	if (*silentAudioLength < 0) {
+		*silentAudioLength = 40 * divider / 1000;
+	}
+	if (*silentAudioLength > 0) {
+		int count = *silentAudioLength >= size ? size : *silentAudioLength;
+		memset(audioBuffer->buffer, 0, count);
+		*silentAudioLength -= count;
+	}
+	int needEnqueue = player->audio.bufferNeedEnqueueAfterDecode;
+	blockingQueueAdd(&player->audio.bufferQueue, audioBuffer);
+	if (needEnqueue) {
+		enqueueAudioBuffer(player);
+	}
+	pthread_mutex_unlock(&player->audio.sleepBufferMutex);
+	return 1;
+}
+
+#ifdef DASHCHAN_HAS_ATEMPO
+static int drainTempoProcessor(Player * player, TempoProcessor * processor,
+		int sampleRate, int channels, int speed, int64_t startPosition,
+		int64_t * outputSamples, int * silentAudioLength) {
+	while (!player->meta.interrupt && !player->sync.skip.audioWorkFrame) {
+		uint8_t * buffer = NULL;
+		int size = 0;
+		int samples = 0;
+		int result = tempoProcessorPull(processor, &buffer, &size, &samples);
+		if (result < 0) {
+			LOG("atempo pull failed %d", result);
+			return 0;
+		}
+		if (result == 0) {
+			return 1;
+		}
+		int64_t position = startPosition >= 0
+				? startPosition + av_rescale(*outputSamples, speed, sampleRate) : -1;
+		*outputSamples += samples;
+		int64_t divider = av_get_bytes_per_sample(AV_SAMPLE_FMT_S16) * channels *
+				(int64_t) getPlaybackSampleRateForSpeed(sampleRate, speed);
+		if (!queueDecodedAudio(player, buffer, size, position, divider, silentAudioLength)) {
+			av_free(buffer);
+			return 0;
+		}
+	}
+	return 0;
+}
+#endif
+
 static void * performDecodeAudio(void * data) {
 	Player * player = (Player *) data;
 	player->audio.bufferNeedEnqueueAfterDecode = 1;
@@ -508,11 +619,24 @@ static void * performDecodeAudio(void * data) {
 	SwrContext * resampleContext = swr_alloc();
 	int silentAudioLength = -1;
 	PacketHolder * packetHolder = NULL;
+#ifdef DASHCHAN_HAS_ATEMPO
+	TempoProcessor * tempoProcessor = NULL;
+	int tempoSampleRate = 0;
+	int tempoChannels = 0;
+	int tempoSpeed = PLAYBACK_SPEED_DEFAULT;
+	int64_t tempoStartPosition = -1;
+	int64_t tempoOutputSamples = 0;
+#endif
 
 	while (!player->meta.interrupt) {
 		packetHolder = (PacketHolder *) blockingQueueGet(&player->audio.packetQueue, 1);
 		if (player->sync.skip.audioWorkFrame) {
 			player->sync.skip.audioWorkFrame = 0;
+#ifdef DASHCHAN_HAS_ATEMPO
+			tempoProcessorFree(&tempoProcessor);
+			tempoStartPosition = -1;
+			tempoOutputSamples = 0;
+#endif
 		}
 		if (!packetHolder || player->meta.interrupt) {
 			break;
@@ -593,7 +717,12 @@ static void * performDecodeAudio(void * data) {
 				int srcSampleRate = frame->sample_rate;
 				int outputSampleRate = player->audio.resampleSampleRate != 0
 						? player->audio.resampleSampleRate : srcSampleRate;
+#ifdef DASHCHAN_HAS_ATEMPO
+				int playbackSpeed = getPlaybackSpeed(player);
+				int dstSampleRate = outputSampleRate;
+#else
 				int dstSampleRate = getPlaybackSampleRate(player, outputSampleRate);
+#endif
 				int dstFormat = AV_SAMPLE_FMT_S16;
 				LOG("audio frame pts=%" PRId64 " best=%" PRId64 " pkt_dts=%" PRId64
 						" pos=%" PRId64 " tb=%d/%d srcRate=%d srcCh=%d dstRate=%d dstCh=%d",
@@ -631,62 +760,51 @@ static void * performDecodeAudio(void * data) {
 				if (size < 0) {
 					goto SKIP_AUDIO_FRAME;
 				}
-				pthread_mutex_lock(&player->audio.sleepBufferMutex);
-				if (player->sync.skip.audioWorkFrame) {
-					UNLOCK_AND_GOTO(&player->audio.sleepBufferMutex, SKIP_AUDIO_FRAME);
-				}
-				while (!player->meta.interrupt && blockingQueueCount(&player->audio.bufferQueue) >= 5) {
-					pthread_cond_wait(&player->audio.bufferCond, &player->audio.sleepBufferMutex);
-				}
-				if (player->sync.skip.audioWorkFrame) {
-					UNLOCK_AND_GOTO(&player->audio.sleepBufferMutex, SKIP_AUDIO_FRAME);
-				}
-				if (position >= 0 && player->audio.bufferNeedEnqueueAfterDecode) {
-					player->sync.audioPosition = position;
-					player->sync.audioPositionNotSync = 0;
-				}
-				while (!player->meta.interrupt && player->sync.videoPositionNotSync) {
-					pthread_cond_wait(&player->audio.sleepCond, &player->audio.sleepBufferMutex);
-				}
-				if (player->sync.skip.audioWorkFrame) {
-					UNLOCK_AND_GOTO(&player->audio.sleepBufferMutex, SKIP_AUDIO_FRAME);
-				}
-				int64_t videoPosition = player->sync.videoPosition;
-				int64_t gaining = player->video.finished ? 0 : position - videoPosition;
-				if (gaining > GAINING_THRESHOLD) {
-					LOG("sleep audio %" PRId64 " %" PRId64, gaining, position);
-					int64_t time = calculateFrameTime(player, gaining);
-					while (!player->meta.interrupt && !player->sync.skip.audioWorkFrame) {
-						if (condSleepUntilMs(&player->audio.sleepCond, &player->audio.sleepBufferMutex, time)) {
-							break;
+#ifdef DASHCHAN_HAS_ATEMPO
+				if (playbackSpeed != PLAYBACK_SPEED_DEFAULT) {
+					if (!tempoProcessor || tempoSampleRate != dstSampleRate ||
+							tempoChannels != dstChannels || tempoSpeed != playbackSpeed) {
+						tempoProcessorFree(&tempoProcessor);
+						tempoProcessor = tempoProcessorCreate(dstSampleRate, dstChannels, playbackSpeed);
+						if (!tempoProcessor) {
+							LOG("atempo create failed rate=%d channels=%d speed=%d",
+									dstSampleRate, dstChannels, playbackSpeed);
+							goto SKIP_AUDIO_FRAME;
 						}
+						tempoSampleRate = dstSampleRate;
+						tempoChannels = dstChannels;
+						tempoSpeed = playbackSpeed;
+						tempoStartPosition = position;
+						tempoOutputSamples = 0;
+					}
+					int tempoResult = tempoProcessorPush(tempoProcessor, dstData[0], result);
+					if (tempoResult < 0) {
+						LOG("atempo push failed %d", tempoResult);
+						goto SKIP_AUDIO_FRAME;
+					}
+					if (!drainTempoProcessor(player, tempoProcessor, tempoSampleRate, tempoChannels,
+							tempoSpeed, tempoStartPosition, &tempoOutputSamples, &silentAudioLength)) {
+						goto SKIP_AUDIO_FRAME;
+					}
+					success = 1;
+				} else {
+					tempoProcessorFree(&tempoProcessor);
+					tempoStartPosition = -1;
+					tempoOutputSamples = 0;
+					int64_t divider = av_get_bytes_per_sample(dstFormat) * dstChannels *
+							(int64_t) getPlaybackSampleRateForSpeed(dstSampleRate, playbackSpeed);
+					if (queueDecodedAudio(player, dstData[0], size, position, divider, &silentAudioLength)) {
+						dstData[0] = NULL;
+						success = 1;
 					}
 				}
-				if (player->sync.skip.audioWorkFrame) {
-					UNLOCK_AND_GOTO(&player->audio.sleepBufferMutex, SKIP_AUDIO_FRAME);
+#else
+				int64_t divider = av_get_bytes_per_sample(dstFormat) * dstChannels * (int64_t) dstSampleRate;
+				if (queueDecodedAudio(player, dstData[0], size, position, divider, &silentAudioLength)) {
+					dstData[0] = NULL;
+					success = 1;
 				}
-				AudioBuffer * audioBuffer = malloc(sizeof(AudioBuffer));
-				audioBuffer->buffer = dstData[0];
-				audioBuffer->index = 0;
-				audioBuffer->size = size;
-				audioBuffer->position = position;
-				audioBuffer->divider = av_get_bytes_per_sample(dstFormat) * dstChannels * dstSampleRate;
-				// Fix loud click on video start even on low sound level by muting sound buffer for 40 milliseconds
-				if (silentAudioLength < 0) {
-					silentAudioLength = 40 * audioBuffer->divider / 1000;
-				}
-				if (silentAudioLength > 0) {
-					int count = silentAudioLength >= size ? size : silentAudioLength;
-					memset(audioBuffer->buffer, 0, count);
-					silentAudioLength -= count;
-				}
-				int needEnqueue = player->audio.bufferNeedEnqueueAfterDecode;
-				blockingQueueAdd(&player->audio.bufferQueue, audioBuffer);
-				if (needEnqueue) {
-					enqueueAudioBuffer(player);
-				}
-				pthread_mutex_unlock(&player->audio.sleepBufferMutex);
-				success = 1;
+#endif
 			}
 
 			SKIP_AUDIO_FRAME:
@@ -697,21 +815,36 @@ static void * performDecodeAudio(void * data) {
 			}
 #endif
 			if (dstData) {
-				if (!success) {
-					av_freep(&dstData[0]);
-				}
+				av_freep(&dstData[0]);
 				av_freep(&dstData);
 			}
 			if (!success) {
 				break;
 			}
 		}
+#ifdef DASHCHAN_HAS_ATEMPO
+		if (!packetHolder->packet && tempoProcessor) {
+			int result = tempoProcessorFinish(tempoProcessor);
+			if (result < 0) {
+				LOG("atempo finish failed %d", result);
+			} else {
+				drainTempoProcessor(player, tempoProcessor, tempoSampleRate, tempoChannels,
+						tempoSpeed, tempoStartPosition, &tempoOutputSamples, &silentAudioLength);
+			}
+			tempoProcessorFree(&tempoProcessor);
+			tempoStartPosition = -1;
+			tempoOutputSamples = 0;
+		}
+#endif
 		packetQueueFreeCallback(packetHolder);
 		packetHolder = NULL;
 	}
 	if (packetHolder) {
 		packetQueueFreeCallback(packetHolder);
 	}
+#ifdef DASHCHAN_HAS_ATEMPO
+	tempoProcessorFree(&tempoProcessor);
+#endif
 	swr_free(&resampleContext);
 	av_frame_free(&frame);
 	return NULL;
@@ -2015,7 +2148,7 @@ static jstring newUtfStringSafe(JNIEnv * env, char * string) {
 jobjectArray getMetadata(JNIEnv * env, jlong pointer) {
 	char buffer[24];
 	Player * player = POINTER_CAST(pointer);
-	int entries = av_dict_count(player->av.format->metadata) + 2;
+	int entries = av_dict_count(player->av.format->metadata) + 3;
 	if (HAS_STREAM(player, video)) {
 		// Format, width, height, frame rate, pixel format, canvas format, libyuv
 		entries += 7;
@@ -2031,6 +2164,12 @@ jobjectArray getMetadata(JNIEnv * env, jlong pointer) {
 			FFMPEG_VERSION " (" DASHCHAN_FFMPEG_FLAVOR ")"));
 	(*env)->SetObjectArrayElement(env, result, index++, (*env)->NewStringUTF(env, "player_libavformat"));
 	(*env)->SetObjectArrayElement(env, result, index++, (*env)->NewStringUTF(env, LIBAVFORMAT_IDENT));
+	(*env)->SetObjectArrayElement(env, result, index++, (*env)->NewStringUTF(env, "speed_processing"));
+#ifdef DASHCHAN_HAS_ATEMPO
+	(*env)->SetObjectArrayElement(env, result, index++, (*env)->NewStringUTF(env, "FFmpeg atempo"));
+#else
+	(*env)->SetObjectArrayElement(env, result, index++, (*env)->NewStringUTF(env, "sample-rate fallback"));
+#endif
 	if (HAS_STREAM(player, video)) {
 		AVStream * videoStream = GET_STREAM(player, video);
 		AVCodecContext * videoContext = GET_CONTEXT(player, video);

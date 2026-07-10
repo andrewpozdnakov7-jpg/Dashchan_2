@@ -47,12 +47,16 @@ public class VideoPlayer {
 
 	// Extraction requirements. The Holder static initializer below keeps the
 	// actual System.loadLibrary order explicit because the JNI dependencies are order-sensitive.
-	private static final String[] PLAYER_LIBRARIES = {"player"};
+	private static final boolean BUNDLED_ATEMPO = "ffmpeg8".equals(BuildConfig.NATIVE_PLAYER_FFMPEG_FLAVOR);
+	private static final String[] PLAYER_LIBRARIES = BUNDLED_ATEMPO
+			? new String[] {"player", "avfilter"} : new String[] {"player"};
 	private static final String[] WEBM_REQUIRED_LIBRARIES =
 			{"avutil", "swresample", "swscale", "avcodec", "avformat", "yuv"};
 	private static final String[] WEBM_OPTIONAL_LIBRARIES = {"dav1d"};
-	private static final String[] BUNDLED_REQUIRED_LIBRARIES =
-			{"player", "dav1d", "avutil", "swresample", "swscale", "avcodec", "avformat", "yuv"};
+	private static final String[] BUNDLED_REQUIRED_LIBRARIES = BUNDLED_ATEMPO
+			? new String[] {"player", "dav1d", "avutil", "swresample", "swscale", "avcodec", "avformat",
+					"avfilter", "yuv"}
+			: new String[] {"player", "dav1d", "avutil", "swresample", "swscale", "avcodec", "avformat", "yuv"};
 
 	public static Pair<Boolean, String> loadLibraries(Context context) {
 		synchronized (VideoPlayer.class) {
@@ -837,6 +841,9 @@ public class VideoPlayer {
 			System.loadLibrary("swscale");
 			System.loadLibrary("avcodec");
 			System.loadLibrary("avformat");
+			if (BUNDLED_ATEMPO) {
+				System.loadLibrary("avfilter");
+			}
 			System.loadLibrary("yuv");
 			System.loadLibrary("player");
 		}

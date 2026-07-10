@@ -13,7 +13,7 @@ Dashchan_2 - неофициальная ветка Dashchan для Android 11+.
 
 | Компонент | Package | Версия | Минимальный Android |
 | --- | --- | --- | --- |
-| Dashchan_2 | `io.dashchan2` | `3.1.6`, code `1069` | API 30 / Android 11+ |
+| Dashchan_2 | `io.dashchan2` | `3.1.7`, code `1070` | API 30 / Android 11+ |
 | Dvach extension | `io.dashchan2.chan.dvach` | `1.43-experimental-1.6-r11`, code `8` | API 30 / Android 11+ |
 
 Для работы с 2ch/Dvach нужно установить оба APK:
@@ -40,14 +40,16 @@ WebM2/FFmpeg/dav1d/yuv теперь встроены в основной APK. О
 - Исправлено воспроизведение проблемных fragmented MP4/fMP4 роликов.
 - Исправлен расчет длительности аудиобуфера в native player.
 - Добавлена информация о сборке native player в metadata dialog:
-  `player_build` и `player_ffmpeg`.
+  `player_build`, `player_ffmpeg` и `speed_processing`.
 - Добавлена проверка обновлений через `update/data.json` и GitHub Releases.
 - Добавлены темы.
 - Улучшено выделение и копирование текста в постах, включая обходной вариант
   для прошивок с урезанным системным меню выделения.
 - Исправлена синяя полоса при резкой прокрутке и overscroll на пользовательских
   темах.
-- Выбор скорости видео включен по умолчанию.
+- Исправлено зависание некоторых HEVC-видео при продолжающемся звуке.
+- Выбор скорости видео сохраняет нормальный тембр с помощью FFmpeg `atempo`.
+- Добавлена настройка сохранения выбранной скорости между видео.
 - Встроенные WebM/FFmpeg исходники находятся в папке `Dashchan-Webm`.
 
 ### Сборка
@@ -117,7 +119,7 @@ installed beside the original Dashchan because it uses its own package name.
 
 | Component | Package | Version | Minimum Android |
 | --- | --- | --- | --- |
-| Dashchan_2 | `io.dashchan2` | `3.1.6`, code `1069` | API 30 / Android 11+ |
+| Dashchan_2 | `io.dashchan2` | `3.1.7`, code `1070` | API 30 / Android 11+ |
 | Dvach extension | `io.dashchan2.chan.dvach` | `1.43-experimental-1.6-r11`, code `8` | API 30 / Android 11+ |
 
 Install both APKs to use 2ch/Dvach:
@@ -145,13 +147,15 @@ WebM2 APK is no longer required for normal video playback.
 - Fixed playback of problematic fragmented MP4/fMP4 videos.
 - Fixed native-player audio-buffer duration calculation.
 - Added native-player metadata keys shown in the metadata dialog:
-  `player_build` and `player_ffmpeg`.
+  `player_build`, `player_ffmpeg`, and `speed_processing`.
 - Added update checking through `update/data.json` and GitHub Releases.
 - Added themes.
 - Improved post text selection and copying, including a fallback for ROMs with
   limited system text-selection menus.
 - Fixed the blue strip during fast scrolling and overscroll with custom themes.
-- Enabled video playback speed control by default.
+- Fixed some HEVC videos freezing while audio continued.
+- Playback speed now preserves pitch through FFmpeg `atempo`.
+- Added an option to keep the selected playback speed between videos.
 - Bundled WebM/FFmpeg source is stored in `Dashchan-Webm`.
 
 ### Building

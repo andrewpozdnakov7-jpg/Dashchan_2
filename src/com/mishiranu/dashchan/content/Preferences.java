@@ -1430,6 +1430,13 @@ public class Preferences {
 		return PREFERENCES.getBoolean(KEY_VIDEO_PLAYBACK_SPEED_CONTROL, DEFAULT_VIDEO_PLAYBACK_SPEED_CONTROL);
 	}
 
+	public static final String KEY_REMEMBER_VIDEO_PLAYBACK_SPEED = "remember_video_playback_speed";
+	public static final boolean DEFAULT_REMEMBER_VIDEO_PLAYBACK_SPEED = true;
+
+	public static boolean isRememberVideoPlaybackSpeed() {
+		return PREFERENCES.getBoolean(KEY_REMEMBER_VIDEO_PLAYBACK_SPEED, DEFAULT_REMEMBER_VIDEO_PLAYBACK_SPEED);
+	}
+
 	public static final String KEY_WATCHER_REFRESH_INTERVAL = "watcher_refresh_interval";
 	public static final int DISABLED_WATCHER_REFRESH_INTERVAL = 0;
 	public static final int MIN_WATCHER_REFRESH_INTERVAL = 15;

@@ -173,6 +173,12 @@
 			"name": "3.1.6",
 			"date": "09.07.2026",
 			"changelog": true
+		},
+		{
+			"code": 1070,
+			"name": "3.1.7",
+			"date": "10.07.2026",
+			"changelog": true
 		}
 	]
 }

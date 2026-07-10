@@ -103,6 +103,7 @@ def builtinWebmLibrariesPattern = [
 		'/lib/*/libdav1d.so',
 		'/lib/*/libavcodec.so',
 		'/lib/*/libavformat.so',
+		'/lib/*/libavfilter.so',
 		'/lib/*/libavutil.so',
 		'/lib/*/libswresample.so',
 		'/lib/*/libswscale.so',
@@ -130,8 +131,8 @@ android {
 
 	defaultConfig {
 		applicationId = 'io.dashchan2'
-		versionCode = 1069
-		versionName = '3.1.6'
+		versionCode = 1070
+		versionName = '3.1.7'
 
 		minSdk = 30
 		targetSdk = 30

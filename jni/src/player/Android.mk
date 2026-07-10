@@ -23,6 +23,9 @@ LOCAL_CFLAGS += -Werror
 endif
 LOCAL_SHARED_LIBRARIES := avcodec avformat avutil swresample swscale yuv
 ifeq ($(DASHCHAN_FFMPEG_FLAVOR),ffmpeg8)
+LOCAL_CFLAGS += -DDASHCHAN_HAS_ATEMPO=1
+LOCAL_SRC_FILES += tempo.c
+LOCAL_SHARED_LIBRARIES += avfilter
 ifneq ($(DASHCHAN_WEBM_SHARED_LIBRARIES),)
 LOCAL_SHARED_LIBRARIES += dav1d
 endif

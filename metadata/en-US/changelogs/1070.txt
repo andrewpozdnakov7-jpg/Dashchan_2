@@ -1,0 +1,4 @@
+* Fixed some HEVC videos freezing after a few seconds while audio continued.
+* Playback speed now preserves voice and music pitch using FFmpeg atempo.
+* Playback speed control is no longer experimental.
+* Added an option to keep the selected playback speed between videos, enabled by default.

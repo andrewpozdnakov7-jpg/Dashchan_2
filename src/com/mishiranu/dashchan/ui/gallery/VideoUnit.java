@@ -191,7 +191,8 @@ public class VideoUnit {
 		wasPlaying = true;
 		finishedPlayback = false;
 		hideSurfaceOnInit = false;
-		if (!Preferences.isVideoPlaybackSpeedControl()) {
+		if (!Preferences.isVideoPlaybackSpeedControl() ||
+				(!reload && !Preferences.isRememberVideoPlaybackSpeed())) {
 			playbackSpeed = 1000;
 		}
 		dismissPlaybackSpeedPopupMenu();
@@ -574,6 +575,7 @@ public class VideoUnit {
 			String playerFfmpeg = metadata.get("player_ffmpeg");
 			String playerLibavformat = metadata.get("player_libavformat");
 			String playerBuild = metadata.get("player_build");
+			String speedProcessing = metadata.get("speed_processing");
 			String deviceAbis = metadata.get("device_abis");
 			String audioFormat = metadata.get("audio_format");
 			String channels = metadata.get("channels");
@@ -588,6 +590,9 @@ public class VideoUnit {
 			}
 			if (playerBuild != null) {
 				layout.add("Build", playerBuild);
+			}
+			if (speedProcessing != null) {
+				layout.add("Speed processing", speedProcessing);
 			}
 			if (deviceAbis != null) {
 				layout.add("Device ABIs", deviceAbis);
