@@ -207,7 +207,6 @@ struct Bridge {
 
 struct PacketHolder {
 	AVPacket * packet;
-	int finish;
 };
 
 struct AudioBuffer {
@@ -324,8 +323,7 @@ static void closeAndFreeCodecContext(AVCodecContext ** context) {
 static void packetQueueFreeCallback(void * data) {
 	PacketHolder * packetHolder = (PacketHolder *) data;
 	if (packetHolder->packet) {
-		av_packet_unref(packetHolder->packet);
-		free(packetHolder->packet);
+		av_packet_free(&packetHolder->packet);
 	}
 	free(packetHolder);
 }
@@ -419,19 +417,32 @@ static int64_t calculateFrameTime(Player * player, int64_t waitTime) {
 	return getTime() + scaledWaitTime - min64(max64(scaledWaitTime / 2, 25), 100);
 }
 
-static int decodeFrame(Player * player, AVPacket * packet, AVFrame * frame, int video, int finish) {
-	AVCodecContext * context = video ? GET_CONTEXT(player, video) : GET_CONTEXT(player, audio);
-	avcodec_send_packet(context, packet);
-	int ready = !avcodec_receive_frame(context, frame);
-	if (finish) {
-		// Sometimes need to decode more times after packets decoding finished to get more frames
-		int finishAttempts = 10;
-		while (!ready && finishAttempts-- > 0) {
-			avcodec_send_packet(context, packet);
-			ready = !avcodec_receive_frame(context, frame);
+static int decodeFrame(AVCodecContext * context, AVPacket * packet, AVFrame * frame, int * packetSent) {
+	if (!*packetSent) {
+		int result = avcodec_send_packet(context, packet);
+		if (result == 0) {
+			*packetSent = 1;
+		} else if (result != AVERROR(EAGAIN)) {
+			if (result != AVERROR_EOF) {
+				LOG("send packet failed %d", result);
+			}
+			return 0;
 		}
 	}
-	return ready;
+
+	int result = avcodec_receive_frame(context, frame);
+	if (result == 0) {
+		return 1;
+	}
+	if (result == AVERROR(EAGAIN)) {
+		if (!*packetSent) {
+			// FFmpeg guarantees that send and receive cannot both return EAGAIN without progress.
+			LOG("decoder did not accept input or produce output");
+		}
+	} else if (result != AVERROR_EOF) {
+		LOG("receive frame failed %d", result);
+	}
+	return 0;
 }
 
 static int enqueueAudioBuffer(Player * player) {
@@ -497,27 +508,14 @@ static void * performDecodeAudio(void * data) {
 	SwrContext * resampleContext = swr_alloc();
 	int silentAudioLength = -1;
 	PacketHolder * packetHolder = NULL;
-	AVPacket lastPacket;
-	int lastPacketValid = 0;
 
 	while (!player->meta.interrupt) {
 		packetHolder = (PacketHolder *) blockingQueueGet(&player->audio.packetQueue, 1);
 		if (player->sync.skip.audioWorkFrame) {
-			if (lastPacketValid) {
-				av_packet_unref(&lastPacket);
-				lastPacketValid = 0;
-			}
 			player->sync.skip.audioWorkFrame = 0;
 		}
 		if (!packetHolder || player->meta.interrupt) {
 			break;
-		}
-		if (packetHolder->packet) {
-			if (lastPacketValid) {
-				av_packet_unref(&lastPacket);
-			}
-			av_packet_ref(&lastPacket, packetHolder->packet);
-			lastPacketValid = 1;
 		}
 		condBroadcastLocked(&player->decode.packets.flowCond, &player->decode.packets.flowMutex);
 		if (player->meta.interrupt) {
@@ -533,6 +531,7 @@ static void * performDecodeAudio(void * data) {
 			break;
 		}
 
+		int packetSent = 0;
 		while (1) {
 			int success = 0;
 			uint8_t ** dstData = NULL;
@@ -544,19 +543,15 @@ static void * performDecodeAudio(void * data) {
 			if (player->sync.skip.audioWorkFrame) {
 				goto SKIP_AUDIO_FRAME;
 			}
-			AVPacket * packet = packetHolder->packet;
-			if (!packet) {
-				if (!lastPacketValid) {
-					goto SKIP_AUDIO_FRAME;
-				}
-				packet = &lastPacket;
-			}
 			pthread_mutex_lock(&player->decode.audio.frameMutex);
 			if (player->sync.skip.audioWorkFrame) {
 				UNLOCK_AND_GOTO(&player->decode.audio.frameMutex, SKIP_AUDIO_FRAME);
 			}
-			int ready = decodeFrame(player, packet, frame, 0, packetHolder->finish);
+			int ready = decodeFrame(context, packetHolder->packet, frame, &packetSent);
 			pthread_mutex_unlock(&player->decode.audio.frameMutex);
+			if (!ready) {
+				break;
+			}
 
 			if (ready) {
 				int64_t position = getFramePositionMs(frame, stream);
@@ -707,15 +702,7 @@ static void * performDecodeAudio(void * data) {
 				}
 				av_freep(&dstData);
 			}
-			if (!success || !packetHolder->finish) {
-				break;
-			}
-			if (packetHolder->finish && frame->pts >= packet->pts) {
-				pthread_mutex_lock(&player->decode.audio.frameMutex);
-				if (!player->sync.skip.audioWorkFrame) {
-					avcodec_flush_buffers(context);
-				}
-				pthread_mutex_unlock(&player->decode.audio.frameMutex);
+			if (!success) {
 				break;
 			}
 		}
@@ -724,9 +711,6 @@ static void * performDecodeAudio(void * data) {
 	}
 	if (packetHolder) {
 		packetQueueFreeCallback(packetHolder);
-	}
-	if (lastPacketValid) {
-		av_packet_unref(&lastPacket);
 	}
 	swr_free(&resampleContext);
 	av_frame_free(&frame);
@@ -948,8 +932,6 @@ static void * performDecodeVideo(void * data) {
 	SparseArray scaleContexts;
 	sparseArrayInit(&scaleContexts, 1);
 	PacketHolder * packetHolder = NULL;
-	AVPacket lastPacket;
-	int lastPacketValid = 0;
 
 	int totalMeasurements = 10;
 	int currentMeasurement = 0;
@@ -958,21 +940,10 @@ static void * performDecodeVideo(void * data) {
 	while (!player->meta.interrupt) {
 		packetHolder = (PacketHolder *) blockingQueueGet(&player->video.packetQueue, 1);
 		if (player->sync.skip.videoWorkFrame) {
-			if (lastPacketValid) {
-				av_packet_unref(&lastPacket);
-				lastPacketValid = 0;
-			}
 			player->sync.skip.videoWorkFrame = 0;
 		}
 		if (!packetHolder || player->meta.interrupt) {
 			break;
-		}
-		if (packetHolder->packet) {
-			if (lastPacketValid) {
-				av_packet_unref(&lastPacket);
-			}
-			av_packet_ref(&lastPacket, packetHolder->packet);
-			lastPacketValid = 1;
 		}
 		condBroadcastLocked(&player->decode.packets.flowCond, &player->decode.packets.flowMutex);
 		if (player->meta.interrupt) {
@@ -988,25 +959,22 @@ static void * performDecodeVideo(void * data) {
 			break;
 		}
 
+		int packetSent = 0;
 		while (1) {
 			int success = 0;
 			VideoFrameExtra * extra = NULL;
 			if (player->sync.skip.videoWorkFrame) {
 				goto SKIP_VIDEO_FRAME;
 			}
-			AVPacket * packet = packetHolder->packet;
-			if (!packet) {
-				if (!lastPacketValid) {
-					goto SKIP_VIDEO_FRAME;
-				}
-				packet = &lastPacket;
-			}
 			pthread_mutex_lock(&player->decode.video.frameMutex);
 			if (player->sync.skip.videoWorkFrame) {
 				UNLOCK_AND_GOTO(&player->decode.video.frameMutex, SKIP_VIDEO_FRAME);
 			}
-			int ready = decodeFrame(player, packet, frame, 1, packetHolder->finish);
+			int ready = decodeFrame(context, packetHolder->packet, frame, &packetSent);
 			pthread_mutex_unlock(&player->decode.video.frameMutex);
+			if (!ready) {
+				break;
+			}
 
 			if (ready) {
 				extra = malloc(sizeof(VideoFrameExtra));
@@ -1104,15 +1072,7 @@ static void * performDecodeVideo(void * data) {
 			if (!success && extra) {
 				free(extra);
 			}
-			if (!success || !packetHolder->finish) {
-				break;
-			}
-			if (packetHolder->finish && frame->pts >= packet->pts) {
-				pthread_mutex_lock(&player->decode.video.frameMutex);
-				if (!player->sync.skip.videoWorkFrame) {
-					avcodec_flush_buffers(context);
-				}
-				pthread_mutex_unlock(&player->decode.video.frameMutex);
+			if (!success) {
 				break;
 			}
 		}
@@ -1122,9 +1082,6 @@ static void * performDecodeVideo(void * data) {
 	}
 	if (packetHolder) {
 		packetQueueFreeCallback(packetHolder);
-	}
-	if (lastPacketValid) {
-		av_packet_unref(&lastPacket);
 	}
 	sparseArrayDestroy(&scaleContexts, (SparseArrayDestroyCallback) sws_freeContext);
 	av_free(scaleHolder.scaleBuffer);
@@ -1147,10 +1104,9 @@ static void joinStartedWorkerThreads(Player * player) {
 	}
 }
 
-static PacketHolder * createPacketHolder(int allocPacket, int finish) {
+static PacketHolder * createPacketHolder(int allocPacket) {
 	PacketHolder * packetHolder = malloc(sizeof(PacketHolder));
-	packetHolder->packet = allocPacket ? malloc(sizeof(AVPacket)) : NULL;
-	packetHolder->finish = finish;
+	packetHolder->packet = allocPacket ? av_packet_alloc() : NULL;
 	return packetHolder;
 }
 
@@ -1184,7 +1140,7 @@ static void * performDecodePackets(void * data) {
 			int isAudio = packet.stream_index == player->av.audioStreamIndex;
 			int isVideo = packet.stream_index == player->av.videoStreamIndex;
 			if (isAudio || isVideo) {
-				PacketHolder * packetHolder = createPacketHolder(1, 0);
+				PacketHolder * packetHolder = createPacketHolder(1);
 				av_packet_ref(packetHolder->packet, &packet);
 				if (isAudio) {
 					blockingQueueAdd(&player->audio.packetQueue, packetHolder);
@@ -1203,11 +1159,11 @@ static void * performDecodePackets(void * data) {
 		pthread_mutex_lock(&player->decode.packets.flowMutex);
 		if (!player->sync.skip.readFrame) {
 			if (HAS_STREAM(player, audio)) {
-				blockingQueueAdd(&player->audio.packetQueue, createPacketHolder(0, 1));
+				blockingQueueAdd(&player->audio.packetQueue, createPacketHolder(0));
 				player->audio.finished = 0;
 			}
 			if (HAS_STREAM(player, video)) {
-				blockingQueueAdd(&player->video.packetQueue, createPacketHolder(0, 1));
+				blockingQueueAdd(&player->video.packetQueue, createPacketHolder(0));
 				player->video.finished = 0;
 			}
 		}
