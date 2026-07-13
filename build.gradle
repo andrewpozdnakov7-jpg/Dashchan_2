@@ -58,7 +58,10 @@ def knownChanExtensionPackages = [
 		'com.trixiether.dashchan.chan.refugedobrochan',
 		'com.trixiether.dashchan.chan.warosu'
 ]
-def dashchan2KnownChanExtensionPackages = ['io.dashchan2.chan.dvach'] +
+def dashchan2KnownChanExtensionPackages = [
+		'io.dashchan2.chan.dvach',
+		'io.dashchan2.chan.fourchan'
+] +
 		knownChanExtensionPackages
 def knownLibExtensionPackages = ['com.mishiranu.dashchan.lib.webm']
 def dashchan2KnownLibExtensionPackages = ['com.mishiranu.dashchan.lib.webm.test'] +
@@ -131,8 +134,8 @@ android {
 
 	defaultConfig {
 		applicationId = 'io.dashchan2'
-		versionCode = 1070
-		versionName = '3.1.7'
+		versionCode = 1072
+		versionName = '3.1.8'
 
 		minSdk = 30
 		targetSdk = 30
@@ -152,16 +155,25 @@ android {
 		buildConfigField 'String', 'VERSION_DATE', '"' + versions[0].date + '"'
 		buildConfigField 'String', 'URI_UPDATES', '"//raw.githubusercontent.com/' +
 				'andrewpozdnakov7-jpg/Dashchan_2/master/update/data.json"'
+		buildConfigField 'String', 'URI_UPDATES_BETA', '"//raw.githubusercontent.com/' +
+				'andrewpozdnakov7-jpg/Dashchan_2_Update_Test/master/update/data.json"'
 		buildConfigField 'String', 'URI_THEMES', '"//raw.githubusercontent.com/' +
 				'andrewpozdnakov7-jpg/Dashchan_2/master/update/themes.json"'
 		buildConfigField 'String', 'GITHUB_URI_METADATA', '"//github.com/andrewpozdnakov7-jpg/Dashchan_2"'
 		buildConfigField 'String', 'GITHUB_PATH_METADATA', '"metadata"'
+		buildConfigField 'String', 'GITHUB_URI_METADATA_BETA',
+				'"//github.com/andrewpozdnakov7-jpg/Dashchan_2_Update_Test"'
+		buildConfigField 'String', 'GITHUB_PATH_METADATA_BETA', '"metadata"'
 		buildConfigField 'String', 'FILE_PROVIDER_AUTHORITY', '"' +
 				manifestPlaceholders.fileProviderAuthority + '"'
 		buildConfigField 'String', 'UPDATE_MANIFEST_URL', '""'
+		buildConfigField 'String', 'UPDATE_MANIFEST_BETA_URL', '""'
 		buildConfigField 'String', 'UPDATE_GITHUB_RELEASES_URL',
 				'"https://api.github.com/repos/andrewpozdnakov7-jpg/Dashchan_2/releases"'
 		buildConfigField 'String', 'UPDATE_GITHUB_LATEST_RELEASE_URL', '""'
+		buildConfigField 'String', 'UPDATE_GITHUB_BETA_RELEASES_URL',
+				'"https://api.github.com/repos/andrewpozdnakov7-jpg/Dashchan_2_Update_Test/releases"'
+		buildConfigField 'String', 'UPDATE_GITHUB_BETA_LATEST_RELEASE_URL', '""'
 		buildConfigField 'String', 'CHAN_EXTENSION_FEATURE_NAME', '"chan.extension"'
 		buildConfigField 'String', 'LIB_EXTENSION_FEATURE_NAME', '"lib.extension"'
 		buildConfigField 'String', 'LIB_WEBM_EXTENSION_NAME', '"webm"'
@@ -339,6 +351,7 @@ dependencies {
 	leakImplementation 'com.squareup.leakcanary:leakcanary-android:3.0-alpha-9'
 	compileOnly 'org.ccil.cowan.tagsoup:tagsoup:1.2.1'
 	implementation 'com.fasterxml.jackson.core:jackson-core:2.22.1'
+	implementation 'androidx.core:core:1.16.0'
 	implementation 'androidx.fragment:fragment:1.2.5'
 	implementation 'androidx.recyclerview:recyclerview:1.1.0'
 	implementation 'androidx.drawerlayout:drawerlayout:1.2.0'

@@ -56,6 +56,22 @@ sanitize_ffmpeg_configuration() {
 		'config.h'
 }
 
+patch_ffmpeg_sources() {
+	local mov_source='libavformat/mov.c'
+	local old_call='    ff_mov_read_chnl(c->fc, pb, st);'
+	local fixed_call='    ret = ff_mov_read_chnl(c->fc, pb, st);'
+	if grep -Fq "$old_call" "$mov_source"; then
+		sed -i "s|^$old_call$|$fixed_call|" "$mov_source"
+	elif ! grep -Fq "$fixed_call" "$mov_source"; then
+		echo 'Unable to apply FFmpeg mov_read_chnl return-value fix' >&2
+		exit 1
+	fi
+	grep -Fq "$fixed_call" "$mov_source" || {
+		echo 'FFmpeg mov_read_chnl return-value fix was not applied' >&2
+		exit 1
+	}
+}
+
 ffmpeg_options=(
 	'--enable-cross-compile'
 	'--target-os=android'
@@ -64,6 +80,7 @@ ffmpeg_options=(
 	'--disable-symver'
 	'--disable-debug'
 	'--disable-doc'
+	'--extra-cflags=-Wno-unused-function -Wno-unused-label'
 	'--disable-everything'
 	'--disable-programs'
 	'--enable-avfilter'
@@ -85,6 +102,102 @@ ffmpeg_options=(
 	'--enable-decoder=opus'
 	'--enable-decoder=aac'
 	'--enable-decoder=mp3'
+	# Modern, professional and legacy QuickTime/MOV video codecs.
+	'--enable-decoder=prores'
+	'--enable-decoder=prores_raw'
+	'--enable-decoder=aic'
+	'--enable-decoder=pixlet'
+	'--enable-decoder=mjpeg'
+	'--enable-decoder=mjpegb'
+	'--enable-decoder=mpeg1video'
+	'--enable-decoder=mpeg2video'
+	'--enable-decoder=mpeg4'
+	'--enable-decoder=h263'
+	'--enable-decoder=h263i'
+	'--enable-decoder=h263p'
+	'--enable-decoder=vvc'
+	'--enable-decoder=8bps'
+	'--enable-decoder=qdraw'
+	'--enable-decoder=qtrle'
+	'--enable-decoder=rpza'
+	'--enable-decoder=smc'
+	'--enable-decoder=cinepak'
+	'--enable-decoder=svq1'
+	'--enable-decoder=svq3'
+	'--enable-decoder=indeo3'
+	'--enable-decoder=indeo4'
+	'--enable-decoder=indeo5'
+	'--enable-decoder=dnxhd'
+	'--enable-decoder=dvvideo'
+	'--enable-decoder=cfhd'
+	'--enable-decoder=hap'
+	'--enable-decoder=jpeg2000'
+	'--enable-decoder=ffv1'
+	'--enable-decoder=ffvhuff'
+	'--enable-decoder=huffyuv'
+	'--enable-decoder=magicyuv'
+	'--enable-decoder=sheervideo'
+	'--enable-decoder=speedhq'
+	'--enable-decoder=utvideo'
+	'--enable-decoder=rawvideo'
+	'--enable-decoder=v210'
+	'--enable-decoder=v210x'
+	'--enable-decoder=r10k'
+	'--enable-decoder=r210'
+	'--enable-decoder=png'
+	'--enable-decoder=tiff'
+	'--enable-decoder=photocd'
+	'--enable-decoder=vc1'
+	'--enable-decoder=wmv3'
+	# QuickTime/MOV audio codecs and uncompressed audio variants.
+	'--enable-decoder=alac'
+	'--enable-decoder=flac'
+	'--enable-decoder=aac_latm'
+	'--enable-decoder=mp2'
+	'--enable-decoder=ac3'
+	'--enable-decoder=eac3'
+	'--enable-decoder=dca'
+	'--enable-decoder=truehd'
+	'--enable-decoder=amrnb'
+	'--enable-decoder=amrwb'
+	'--enable-decoder=adpcm_ima_qt'
+	'--enable-decoder=adpcm_ms'
+	'--enable-decoder=qdm2'
+	'--enable-decoder=qdmc'
+	'--enable-decoder=mace3'
+	'--enable-decoder=mace6'
+	'--enable-decoder=nellymoser'
+	'--enable-decoder=wavpack'
+	'--enable-decoder=tta'
+	'--enable-decoder=shorten'
+	'--enable-decoder=pcm_alaw'
+	'--enable-decoder=pcm_mulaw'
+	'--enable-decoder=pcm_s8'
+	'--enable-decoder=pcm_u8'
+	'--enable-decoder=pcm_s16be'
+	'--enable-decoder=pcm_s16le'
+	'--enable-decoder=pcm_s16be_planar'
+	'--enable-decoder=pcm_s16le_planar'
+	'--enable-decoder=pcm_u16be'
+	'--enable-decoder=pcm_u16le'
+	'--enable-decoder=pcm_s24be'
+	'--enable-decoder=pcm_s24le'
+	'--enable-decoder=pcm_s24le_planar'
+	'--enable-decoder=pcm_u24be'
+	'--enable-decoder=pcm_u24le'
+	'--enable-decoder=pcm_s32be'
+	'--enable-decoder=pcm_s32le'
+	'--enable-decoder=pcm_s32le_planar'
+	'--enable-decoder=pcm_u32be'
+	'--enable-decoder=pcm_u32le'
+	'--enable-decoder=pcm_s64be'
+	'--enable-decoder=pcm_s64le'
+	'--enable-decoder=pcm_f16le'
+	'--enable-decoder=pcm_f24le'
+	'--enable-decoder=pcm_f32be'
+	'--enable-decoder=pcm_f32le'
+	'--enable-decoder=pcm_f64be'
+	'--enable-decoder=pcm_f64le'
 )
 
 dav1d_build() {
@@ -135,6 +248,7 @@ ffmpeg_build() {
 	local prefix="$toolchain/bin/$build-linux-$target-"
 	local cc="$toolchain/bin/$build_cc-linux-$target$android-clang"
 	prepare_sources "$sources_ffmpeg"
+	patch_ffmpeg_sources
 	cat > 'libavutil/dashchan_legacy_channel_layout.c' <<'EOF'
 #include <stdint.h>
 

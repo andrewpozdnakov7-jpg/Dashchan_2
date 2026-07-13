@@ -372,19 +372,21 @@ public abstract class FileHolder {
 		private final String name;
 		private final int size;
 
-		public ContentFileHolder(Uri uri, String name, int size) {
+		public ContentFileHolder(Uri uri, String name, int size, boolean calculateSize) {
 			this.uriString = uri.toString();
 			this.name = name;
-			try (InputStream input = openInputStream()) {
-				int newSize = 0;
-				byte[] buffer = new byte[8192];
-				int count;
-				while ((count = input.read(buffer)) >= 0) {
-					newSize += count;
+			if (calculateSize) {
+				try (InputStream input = openInputStream()) {
+					int newSize = 0;
+					byte[] buffer = new byte[8192];
+					int count;
+					while ((count = input.read(buffer)) >= 0) {
+						newSize += count;
+					}
+					size = newSize;
+				} catch (IOException e) {
+					// Ignore
 				}
-				size = newSize;
-			} catch (IOException e) {
-				// Ignore
 			}
 			this.size = size;
 		}
@@ -458,6 +460,14 @@ public abstract class FileHolder {
 	}
 
 	public static FileHolder obtain(Uri uri) {
+		return obtain(uri, true);
+	}
+
+	public static FileHolder obtainForStreaming(Uri uri) {
+		return obtain(uri, false);
+	}
+
+	private static FileHolder obtain(Uri uri, boolean calculateSize) {
 		String scheme = uri.getScheme();
 		if ("file".equals(scheme)) {
 			String path = uri.getPath();
@@ -468,9 +478,9 @@ public abstract class FileHolder {
 				if (cursor != null && cursor.moveToFirst()) {
 					int nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
 					int sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE);
-					if (nameIndex >= 0 && sizeIndex >= 0) {
+					if (nameIndex >= 0 && (sizeIndex >= 0 || !calculateSize)) {
 						String name = cursor.getString(nameIndex);
-						int size = cursor.getInt(sizeIndex);
+						int size = sizeIndex >= 0 ? cursor.getInt(sizeIndex) : -1;
 						if (StringUtils.isEmpty(name)) {
 							@SuppressWarnings("deprecation")
 							String column = MediaStore.MediaColumns.DATA;
@@ -495,7 +505,7 @@ public abstract class FileHolder {
 							}
 						}
 						if (!StringUtils.isEmpty(name)) {
-							return new ContentFileHolder(uri, name, size);
+							return new ContentFileHolder(uri, name, size, calculateSize);
 						}
 					}
 				}

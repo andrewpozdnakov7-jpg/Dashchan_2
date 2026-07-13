@@ -1,0 +1,6 @@
+* Added stable and beta update channel selection.
+* Improved attaching images and animations from the clipboard.
+* Video and other media downloads now resume automatically after temporary connection failures.
+* Added MOV playback with support for modern and legacy QuickTime codecs.
+* MOV files can now be attached to 2ch posts, with a clearer explanation when the server rejects a file.
+* Added a separate read-only 4chan extension for browsing boards and threads.

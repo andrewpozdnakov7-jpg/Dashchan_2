@@ -63,6 +63,7 @@ public class MimeTypes {
 		pairs.add(new Pair<>("txt", "text/plain"));
 		pairs.add(new Pair<>("xml", "text/xml"));
 		pairs.add(new Pair<>("mp4", "video/mp4"));
+		pairs.add(new Pair<>("mov", "video/quicktime"));
 		pairs.add(new Pair<>("webm", "video/webm"));
 
 		for (Pair<String, String> pair : pairs) {

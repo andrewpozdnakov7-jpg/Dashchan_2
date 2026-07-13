@@ -15,9 +15,9 @@ import chan.http.HttpHolder;
 import chan.http.HttpRequest;
 import chan.util.CommonUtils;
 import chan.util.StringUtils;
-import com.mishiranu.dashchan.BuildConfig;
 import com.mishiranu.dashchan.content.FileProvider;
 import com.mishiranu.dashchan.content.model.ErrorItem;
+import com.mishiranu.dashchan.content.update.UpdateConfiguration;
 import java.io.File;
 import java.net.HttpURLConnection;
 import java.util.ArrayList;
@@ -544,7 +544,7 @@ public class ReadUpdateTask extends HttpHolderTask<Void, Pair<ErrorItem, ReadUpd
 		LinkedHashMap<TargetUri, HashSet<String>> targets = new LinkedHashMap<>();
 		HashMap<TargetUri, String> requestedScheme = new HashMap<>();
 		{
-			Uri uri = Uri.parse(BuildConfig.URI_UPDATES);
+			Uri uri = Uri.parse(UpdateConfiguration.getLegacyManifestUrl());
 			TargetUri targetUri = new TargetUri(uri);
 			HashSet<String> extensionNames = new HashSet<>();
 			extensionNames.add(ChanManager.EXTENSION_NAME_CLIENT);
@@ -555,15 +555,16 @@ public class ReadUpdateTask extends HttpHolderTask<Void, Pair<ErrorItem, ReadUpd
 			}
 		}
 		for (ChanManager.ExtensionItem extensionItem : extensionItems) {
-			if (extensionItem.updateUri != null) {
-				TargetUri targetUri = new TargetUri(extensionItem.updateUri);
+			Uri updateUri = UpdateConfiguration.resolveExtensionUpdateUri(extensionItem.updateUri);
+			if (updateUri != null) {
+				TargetUri targetUri = new TargetUri(updateUri);
 				HashSet<String> extensionNames = targets.get(targetUri);
 				if (extensionNames == null) {
 					extensionNames = new HashSet<>();
 					targets.put(targetUri, extensionNames);
 				}
 				extensionNames.add(extensionItem.name);
-				String scheme = extensionItem.updateUri.getScheme();
+				String scheme = updateUri.getScheme();
 				if (!StringUtils.isEmpty(scheme)) {
 					requestedScheme.put(targetUri, scheme);
 				}

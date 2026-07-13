@@ -11,28 +11,34 @@ import org.json.JSONObject;
 public class GitHubReleaseFallback {
 	private static final Pattern[] VERSION_CODE_PATTERNS = {
 			Pattern.compile("(?i)\\bversion\\s*code\\b\\s*[:=#-]?\\s*(\\d{3,})"),
-			Pattern.compile("(?i)\\bcode\\b\\s*[:=#-]?\\s*(\\d{3,})")
+			Pattern.compile("(?i)\\bcode\\b\\s*[:=#-]?\\s*(\\d{3,})"),
+			Pattern.compile("(?i)(?:^|[-_])(?:beta|test)[-_]?(\\d{3,})\\b")
 	};
 
-	public static UpdateResult check(String releasesUrl, String latestReleaseUrl) throws Exception {
+	public static UpdateResult check(String releasesUrl, String latestReleaseUrl,
+			boolean includePrereleases) throws Exception {
 		if (!StringUtils.isEmpty(releasesUrl)) {
-			UpdateResult result = checkReleasesList(releasesUrl);
+			UpdateResult result = checkReleasesList(releasesUrl, includePrereleases);
 			if (result != null) {
 				return result;
 			}
 		}
 		if (!StringUtils.isEmpty(latestReleaseUrl)) {
 			JSONObject release = new JSONObject(UpdateChecker.downloadString(latestReleaseUrl));
+			if (!includePrereleases && release.optBoolean("prerelease", false)) {
+				return UpdateResult.noUpdate(UpdateResult.Source.GITHUB_RELEASES);
+			}
 			return resultFromRelease(release);
 		}
 		return null;
 	}
 
-	private static UpdateResult checkReleasesList(String releasesUrl) throws Exception {
+	private static UpdateResult checkReleasesList(String releasesUrl, boolean includePrereleases) throws Exception {
 		JSONArray releases = new JSONArray(UpdateChecker.downloadString(appendPerPage(releasesUrl)));
 		for (int i = 0; i < releases.length(); i++) {
 			JSONObject release = releases.getJSONObject(i);
-			if (!release.optBoolean("draft", false)) {
+			if (!release.optBoolean("draft", false) &&
+					(includePrereleases || !release.optBoolean("prerelease", false))) {
 				return resultFromRelease(release);
 			}
 		}

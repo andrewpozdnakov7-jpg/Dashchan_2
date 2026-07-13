@@ -74,7 +74,7 @@ public class UpdateChecker {
 		Preferences.setUpdateLastCheckTime(now);
 		Exception lastException = null;
 		boolean hasSource = false;
-		String manifestUrl = BuildConfig.UPDATE_MANIFEST_URL;
+		String manifestUrl = UpdateConfiguration.getApplicationManifestUrl();
 		if (!StringUtils.isEmpty(manifestUrl)) {
 			hasSource = true;
 			try {
@@ -87,12 +87,13 @@ public class UpdateChecker {
 				lastException = e;
 			}
 		}
-		String releasesUrl = BuildConfig.UPDATE_GITHUB_RELEASES_URL;
-		String latestReleaseUrl = BuildConfig.UPDATE_GITHUB_LATEST_RELEASE_URL;
+		String releasesUrl = UpdateConfiguration.getGitHubReleasesUrl();
+		String latestReleaseUrl = UpdateConfiguration.getGitHubLatestReleaseUrl();
 		if (!StringUtils.isEmpty(releasesUrl) || !StringUtils.isEmpty(latestReleaseUrl)) {
 			hasSource = true;
 			try {
-				UpdateResult result = GitHubReleaseFallback.check(releasesUrl, latestReleaseUrl);
+				UpdateResult result = GitHubReleaseFallback.check(releasesUrl, latestReleaseUrl,
+						UpdateConfiguration.isBetaChannel());
 				if (result != null) {
 					saveResult(result);
 					return result;

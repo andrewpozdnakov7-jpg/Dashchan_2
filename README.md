@@ -13,13 +13,18 @@ Dashchan_2 - неофициальная ветка Dashchan для Android 11+.
 
 | Компонент | Package | Версия | Минимальный Android |
 | --- | --- | --- | --- |
-| Dashchan_2 | `io.dashchan2` | `3.1.7`, code `1070` | API 30 / Android 11+ |
-| Dvach extension | `io.dashchan2.chan.dvach` | `1.43-experimental-1.6-r11`, code `8` | API 30 / Android 11+ |
+| Dashchan_2 | `io.dashchan2` | `3.1.8`, code `1072` | API 30 / Android 11+ |
+| Dvach extension | `io.dashchan2.chan.dvach` | `1.43-r12`, code `9` | API 30 / Android 11+ |
+| Fourchan extension | `io.dashchan2.chan.fourchan` | `1.27-read-only-1`, code `1` | API 30 / Android 11+ |
 
 Для работы с 2ch/Dvach нужно установить оба APK:
 
 - основной APK `Dashchan_2`;
 - APK расширения `Dashchan_2 for 2ch`.
+
+Для просмотра 4chan установите основной APK и отдельное расширение
+`Dashchan_2 Fourchan`. Первая версия расширения работает только на чтение:
+публикация постов пока отключена.
 
 WebM2/FFmpeg/dav1d/yuv теперь встроены в основной APK. Отдельный WebM2 APK для
 обычного воспроизведения видео больше не нужен.
@@ -29,7 +34,7 @@ WebM2/FFmpeg/dav1d/yuv теперь встроены в основной APK. О
 - Приложение переименовано в `Dashchan_2`.
 - Application ID изменен на `io.dashchan2`.
 - Добавлен отдельный file provider: `io.dashchan2.provider`.
-- Поддерживается отдельное Dvach-расширение `io.dashchan2.chan.dvach`.
+- Поддерживаются отдельные расширения Dvach и Fourchan.
 - Добавлены явные Android package queries для известных расширений Dashchan_2.
 - Убрана необходимость `QUERY_ALL_PACKAGES` для поиска расширений.
 - Минимальная версия Android поднята до API 30 / Android 11+.
@@ -90,7 +95,7 @@ Gradle configuration cache включен по умолчанию. Если ло
 
 Актуальные исходники расширений Dashchan_2 находятся в соседнем репозитории
 `Dashchan_2-Extensions`. Для 2ch/Dvach используется package
-`io.dashchan2.chan.dvach`.
+`io.dashchan2.chan.dvach`, для 4chan - `io.dashchan2.chan.fourchan`.
 
 ### Происхождение и авторы
 
@@ -119,13 +124,18 @@ installed beside the original Dashchan because it uses its own package name.
 
 | Component | Package | Version | Minimum Android |
 | --- | --- | --- | --- |
-| Dashchan_2 | `io.dashchan2` | `3.1.7`, code `1070` | API 30 / Android 11+ |
-| Dvach extension | `io.dashchan2.chan.dvach` | `1.43-experimental-1.6-r11`, code `8` | API 30 / Android 11+ |
+| Dashchan_2 | `io.dashchan2` | `3.1.8`, code `1072` | API 30 / Android 11+ |
+| Dvach extension | `io.dashchan2.chan.dvach` | `1.43-r12`, code `9` | API 30 / Android 11+ |
+| Fourchan extension | `io.dashchan2.chan.fourchan` | `1.27-read-only-1`, code `1` | API 30 / Android 11+ |
 
 Install both APKs to use 2ch/Dvach:
 
 - the main `Dashchan_2` APK;
 - the `Dashchan_2 for 2ch` extension APK.
+
+To browse 4chan, install the main APK and the separate
+`Dashchan_2 Fourchan` extension. Its first release is read-only; posting is
+currently disabled.
 
 WebM2/FFmpeg/dav1d/yuv libraries are bundled into the main APK. A separate
 WebM2 APK is no longer required for normal video playback.
@@ -135,8 +145,7 @@ WebM2 APK is no longer required for normal video playback.
 - Renamed the app to `Dashchan_2`.
 - Changed the application ID to `io.dashchan2`.
 - Added a separate file provider authority: `io.dashchan2.provider`.
-- Added support for the Dashchan_2 Dvach extension
-  `io.dashchan2.chan.dvach`.
+- Added support for separate Dashchan_2 Dvach and Fourchan extensions.
 - Added explicit Android package queries for known Dashchan_2 extensions.
 - Removed the need for `QUERY_ALL_PACKAGES` in extension discovery.
 - Raised the minimum Android version to API 30 / Android 11+.
@@ -195,8 +204,9 @@ Build and release documentation:
 ### Extensions
 
 Current Dashchan_2 extension sources are maintained in the sibling
-`Dashchan_2-Extensions` repository. The 2ch/Dvach extension package is
-`io.dashchan2.chan.dvach`.
+`Dashchan_2-Extensions` repository. The packages are
+`io.dashchan2.chan.dvach` for 2ch/Dvach and
+`io.dashchan2.chan.fourchan` for 4chan.
 
 ### Upstream And Credits
 

@@ -52,6 +52,7 @@ import chan.util.StringUtils;
 import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
+import com.mishiranu.dashchan.content.async.ExecutorTask;
 import com.mishiranu.dashchan.content.async.ReadCaptchaTask;
 import com.mishiranu.dashchan.content.async.SendPostTask;
 import com.mishiranu.dashchan.content.async.TaskViewModel;
@@ -85,6 +86,7 @@ import com.mishiranu.dashchan.widget.DropdownView;
 import com.mishiranu.dashchan.widget.ExpandedLayout;
 import com.mishiranu.dashchan.widget.ProgressDialog;
 import com.mishiranu.dashchan.widget.ThemeEngine;
+import com.mishiranu.dashchan.widget.UriPasteEditText;
 import com.mishiranu.dashchan.widget.ViewFactory;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -93,7 +95,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 
 public class PostingFragment extends ContentFragment implements FragmentHandler.Callback, CaptchaForm.Callback,
-		ReadCaptchaTask.Callback, PostingDialogCallback {
+		ReadCaptchaTask.Callback, PostingDialogCallback, UriPasteEditText.Callback {
 	private static final String EXTRA_CHAN_NAME = "chanName";
 	private static final String EXTRA_BOARD_NAME = "boardName";
 	private static final String EXTRA_THREAD_NUMBER = "threadNumber";
@@ -154,7 +156,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 	private long captchaLoadTime;
 
 	private ScrollView scrollView;
-	private EditText commentView;
+	private UriPasteEditText commentView;
 	private CheckBox sageCheckBox;
 	private CheckBox spoilerCheckBox;
 	private CheckBox originalPosterCheckBox;
@@ -176,6 +178,8 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 
 	private boolean allowDialog = true;
 	private boolean sendButtonEnabled = true;
+	private boolean attachmentImportInProgress;
+	private AttachmentImportViewModel attachmentImportViewModel;
 
 	private PostingService.Binder postingBinder;
 	private final ServiceConnection postingConnection = new ServiceConnection() {
@@ -270,6 +274,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		commentView.setOnFocusChangeListener((v, hasFocus) -> updateFocusButtons(hasFocus));
 		commentView.addTextChangedListener(commentEditWatcher);
 		commentView.addTextChangedListener(new QuoteEditWatcher(requireContext()));
+		commentView.setCallback(this, buildMimeTypeList(postingConfiguration.attachmentMimeTypes));
 		boolean addPaddingToRoot = false;
 		boolean landscape = getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE;
 		ViewGroup extra = landscape ? ((FragmentHandler) requireActivity()).getToolbarView()
@@ -572,6 +577,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		commentEditWatcher = null;
 		captchaForm = null;
 		sendButton = null;
+		attachmentImportViewModel = null;
 		attachments.clear();
 	}
 
@@ -586,6 +592,10 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 
 		CaptchaViewModel viewModel = new ViewModelProvider(this).get(CaptchaViewModel.class);
 		viewModel.observe(getViewLifecycleOwner(), this);
+
+		attachmentImportViewModel = new ViewModelProvider(this).get(AttachmentImportViewModel.class);
+		setAttachmentImportInProgress(attachmentImportViewModel.hasTaskOrValue());
+		attachmentImportViewModel.observe(getViewLifecycleOwner(), this::onAttachmentImportComplete);
 	}
 
 	private DraftsStorage.PostDraft obtainPostDraft() {
@@ -819,7 +829,8 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 
 	@Override
 	public void onPrepareOptionsMenu(Menu menu, boolean primary) {
-		menu.findItem(R.id.menu_attach).setVisible(attachments.size() < postingConfiguration.attachmentCount);
+		menu.findItem(R.id.menu_attach).setVisible(!attachmentImportInProgress &&
+				attachments.size() < postingConfiguration.attachmentCount);
 	}
 
 	private void handleMimeTypeGroup(ArrayList<String> list, Collection<String> mimeTypes, String mimeTypeGroup) {
@@ -848,9 +859,161 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 	}
 
 	@Override
+	public UriPasteEditText.PasteResult onUrisWithAllowedMimeTypePasted(
+			List<UriPasteEditText.UriContent> uriContents) {
+		if (uriContents == null || uriContents.isEmpty()) {
+			return UriPasteEditText.PasteResult.FAILED;
+		}
+		if (attachmentImportViewModel == null) {
+			return UriPasteEditText.PasteResult.FAILED;
+		}
+		if (attachmentImportViewModel.hasTaskOrValue()) {
+			return UriPasteEditText.PasteResult.IMPORT_IN_PROGRESS;
+		}
+		int availableCount = postingConfiguration.attachmentCount - attachments.size();
+		if (availableCount <= 0) {
+			return UriPasteEditText.PasteResult.FILES_LIMIT_REACHED;
+		}
+		int acceptedCount = Math.min(availableCount, uriContents.size());
+		ArrayList<UriPasteEditText.UriContent> acceptedUriContents = new ArrayList<>(acceptedCount);
+		for (int i = 0; i < uriContents.size(); i++) {
+			UriPasteEditText.UriContent uriContent = uriContents.get(i);
+			if (i < acceptedCount) {
+				acceptedUriContents.add(uriContent);
+			} else {
+				uriContent.releasePermission();
+			}
+		}
+		int rejectedCount = uriContents.size() - acceptedCount;
+		if (rejectedCount > 0) {
+			ClickableToast.show(getResources().getQuantityString(R.plurals
+					.number_files_havent_been_attached__format, rejectedCount, rejectedCount));
+		}
+		AttachmentImportTask task = new AttachmentImportTask(attachmentImportViewModel, acceptedUriContents);
+		try {
+			task.execute(ConcurrentUtils.SEPARATE_EXECUTOR);
+		} catch (RuntimeException e) {
+			return UriPasteEditText.PasteResult.FAILED;
+		}
+		attachmentImportViewModel.attach(task);
+		setAttachmentImportInProgress(true);
+		return UriPasteEditText.PasteResult.ACCEPTED;
+	}
+
+	private void setAttachmentImportInProgress(boolean inProgress) {
+		attachmentImportInProgress = inProgress;
+		if (sendButton != null) {
+			updateSendButtonState();
+			if (inProgress) {
+				Button currentSendButton = sendButton;
+				currentSendButton.postDelayed(() -> {
+					if (sendButton == currentSendButton && attachmentImportInProgress) {
+						ClickableToast.show(R.string.processing_data__ellipsis);
+					}
+				}, 500L);
+			}
+		}
+		invalidateOptionsMenu();
+	}
+
+	private void onAttachmentImportComplete(AttachmentImportResult result) {
+		setAttachmentImportInProgress(false);
+		if (result == null) {
+			ClickableToast.show(R.string.unknown_error);
+			return;
+		}
+		int oldCount = attachments.size();
+		for (Pair<String, String> attachment : result.attachments) {
+			if (attachments.size() < postingConfiguration.attachmentCount) {
+				addAttachment(attachment.first, attachment.second);
+			}
+		}
+		int attachedCount = attachments.size() - oldCount;
+		if (attachedCount > 0) {
+			DraftsStorage.getInstance().store(obtainPostDraft());
+		}
+		int errorCount = result.requestedCount - attachedCount;
+		if (errorCount > 0) {
+			ClickableToast.show(getResources().getQuantityString(R.plurals
+					.number_files_havent_been_attached__format, errorCount, errorCount));
+		}
+	}
+
+	private static class AttachmentImportResult {
+		public final ArrayList<Pair<String, String>> attachments;
+		public final int requestedCount;
+
+		public AttachmentImportResult(ArrayList<Pair<String, String>> attachments, int requestedCount) {
+			this.attachments = attachments;
+			this.requestedCount = requestedCount;
+		}
+	}
+
+	public static class AttachmentImportViewModel extends TaskViewModel<AttachmentImportTask,
+			AttachmentImportResult> {}
+
+	private static class AttachmentImportTask extends ExecutorTask<Void, AttachmentImportResult> {
+		private final AttachmentImportViewModel viewModel;
+		private final ArrayList<UriPasteEditText.UriContent> uriContents;
+
+		public AttachmentImportTask(AttachmentImportViewModel viewModel,
+				ArrayList<UriPasteEditText.UriContent> uriContents) {
+			this.viewModel = viewModel;
+			this.uriContents = uriContents;
+		}
+
+		@Override
+		protected AttachmentImportResult run() {
+			ArrayList<Pair<String, String>> attachments = new ArrayList<>(uriContents.size());
+			try {
+				for (UriPasteEditText.UriContent uriContent : uriContents) {
+					if (isCancelled()) {
+						return null;
+					}
+					try {
+						FileHolder fileHolder = FileHolder.obtainForStreaming(uriContent.getUri());
+						if (fileHolder != null) {
+							String hash = DraftsStorage.getInstance().storeAttachmentFile(fileHolder);
+							if (hash != null && !isCancelled()) {
+								attachments.add(new Pair<>(hash, fileHolder.getName()));
+							}
+						}
+					} catch (RuntimeException e) {
+						// Continue importing the other items from the same receive-content payload.
+					}
+				}
+				return isCancelled() ? null : new AttachmentImportResult(attachments, uriContents.size());
+			} finally {
+				releasePermissions();
+			}
+		}
+
+		@Override
+		protected void onCancel(AttachmentImportResult result) {
+			releasePermissions();
+		}
+
+		@Override
+		protected void onComplete(AttachmentImportResult result) {
+			viewModel.handleResult(result != null ? result
+					: new AttachmentImportResult(new ArrayList<>(), uriContents.size()));
+		}
+
+		private void releasePermissions() {
+			for (UriPasteEditText.UriContent uriContent : uriContents) {
+				uriContent.releasePermission();
+			}
+		}
+	}
+
+	@Override
 	public boolean onOptionsItemSelected(MenuItem item) {
 		switch (item.getItemId()) {
 			case R.id.menu_attach: {
+				if (attachmentImportInProgress) {
+					ClickableToast.show(R.string.processing_data__ellipsis);
+					return true;
+				}
 				// SHOW_ADVANCED to show folder navigation
 				Intent intent = new Intent(Intent.ACTION_GET_CONTENT).addCategory(Intent.CATEGORY_OPENABLE)
 						.putExtra("android.content.extra.SHOW_ADVANCED", true);
@@ -902,7 +1065,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 	};
 
 	private void updateSendButtonState() {
-		sendButton.setEnabled(sendButtonEnabled && captchaState != null &&
+		sendButton.setEnabled(sendButtonEnabled && !attachmentImportInProgress && captchaState != null &&
 				captchaState != ReadCaptchaTask.CaptchaState.NEED_LOAD);
 	}
 
@@ -915,6 +1078,10 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 	}
 
 	private void executeSendPost() {
+		if (attachmentImportInProgress) {
+			ClickableToast.show(R.string.processing_data__ellipsis);
+			return;
+		}
 		if (postingBinder == null) {
 			return;
 		}
@@ -1407,7 +1574,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 
 	private void addAttachment(String hash, String name) {
 		FileHolder fileHolder = DraftsStorage.getInstance().getAttachmentDraftFileHolder(hash);
-		GraphicsUtils.Reencoding reencoding = fileHolder != null && fileHolder.isImage()
+		GraphicsUtils.Reencoding reencoding = fileHolder != null && GraphicsUtils.canReencode(fileHolder)
 				? new GraphicsUtils.Reencoding(GraphicsUtils.Reencoding.FORMAT_JPEG, 90, 1) : null;
 		addAttachment(hash, name, null, true, true, true, false, reencoding);
 	}

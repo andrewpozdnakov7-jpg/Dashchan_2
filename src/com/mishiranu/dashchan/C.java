@@ -29,8 +29,8 @@ public class C {
 	static {
 		IMAGE_EXTENSIONS = immutableSet("jpg", "jpe", "jpeg", "png", "apng", "gif", "webp", "bmp", "svg");
 		AUDIO_EXTENSIONS = immutableSet("mp3", "ogg", "flac", "wav");
-		VIDEO_EXTENSIONS = immutableSet("webm", "mkv", "mp4");
-		OPENABLE_VIDEO_EXTENSIONS = immutableSet("webm", "mkv", "mp4");
+		VIDEO_EXTENSIONS = immutableSet("webm", "mkv", "mp4", "mov");
+		OPENABLE_VIDEO_EXTENSIONS = immutableSet("webm", "mkv", "mp4", "mov");
 		HashMap<String, String> extensionTransformation = new HashMap<>();
 		extensionTransformation.put("jpg", "jpeg");
 		extensionTransformation.put("jpe", "jpeg");

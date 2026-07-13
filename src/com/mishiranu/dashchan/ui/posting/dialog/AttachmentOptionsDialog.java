@@ -113,7 +113,7 @@ public class AttachmentOptionsDialog extends DialogFragment implements AdapterVi
 					holder.optionRemoveMetadata));
 			optionIndices.put(Type.REMOVE_METADATA, index++);
 		}
-		if (fileHolder.isImage()) {
+		if (GraphicsUtils.canReencode(fileHolder)) {
 			optionItems.add(new OptionItem(getString(R.string.reencode_image), Type.REENCODE_IMAGE,
 					holder.reencoding != null));
 			optionIndices.put(Type.REENCODE_IMAGE, index++);

@@ -186,6 +186,19 @@ public class GraphicsUtils {
 				|| fileHolder.getImageType() == FileHolder.ImageType.IMAGE_PNG;
 	}
 
+	public static boolean canReencode(FileHolder fileHolder) {
+		switch (fileHolder.getImageType()) {
+			case IMAGE_GIF:
+			case IMAGE_WEBP: {
+				// Bitmap reencoding would keep only the first frame of an animated image.
+				return false;
+			}
+			default: {
+				return fileHolder.isImage();
+			}
+		}
+	}
+
 	public static class SkipRange {
 		public final int start;
 		public final int count;
@@ -220,7 +233,7 @@ public class GraphicsUtils {
 		String newFileName = null;
 		int newWidth = -1;
 		int newHeight = -1;
-		if (reencoding != null && fileHolder.isImage()) {
+		if (reencoding != null && canReencode(fileHolder)) {
 			Bitmap bitmap;
 			try {
 				bitmap = fileHolder.readImageBitmap(Integer.MAX_VALUE, true, true);

@@ -121,24 +121,38 @@ public class ImageLoader {
 							}
 						}
 					} else {
-						HttpResponse response;
-						try {
-							ChanPerformer.ReadContentResult result = chan.performer.safe()
-									.onReadContent(new ChanPerformer.ReadContentData(uri,
-											CONNECT_TIMEOUT, READ_TIMEOUT, holder, -1, -1));
-							response = result != null ? result.response : null;
-						} catch (ExtensionException e) {
-							e.getErrorItemAndHandle();
-							return null;
-						}
-						if (response != null) {
+						HttpException lastException = null;
+						for (int attempt = 0; attempt < 2 && bitmap == null; attempt++) {
+							HttpResponse response = null;
 							try {
-								bitmap = response.readBitmap();
+								ChanPerformer.ReadContentResult result = chan.performer.safe()
+										.onReadContent(new ChanPerformer.ReadContentData(uri,
+												CONNECT_TIMEOUT, READ_TIMEOUT, holder, -1, -1));
+								response = result != null ? result.response : null;
+								if (response != null) {
+									bitmap = response.readBitmap();
+								}
+							} catch (ExtensionException e) {
+								e.getErrorItemAndHandle();
+								return null;
+							} catch (HttpException e) {
+								lastException = e;
+								if (!e.isSocketException() || attempt > 0 || isCancelled()) {
+									throw e;
+								}
 							} finally {
-								response.cleanupAndDisconnect();
+								if (response != null) {
+									response.cleanupAndDisconnect();
+								}
+							}
+							if (bitmap == null && lastException != null) {
+								SystemClock.sleep(250L);
 							}
 						}
 						if (bitmap == null) {
+							if (lastException != null) {
+								throw lastException;
+							}
 							throw new HttpException(ErrorItem.Type.DOWNLOAD, false, false);
 						}
 					}

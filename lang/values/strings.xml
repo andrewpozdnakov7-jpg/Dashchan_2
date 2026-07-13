@@ -518,6 +518,10 @@
 	<string name="update_check_failed">Failed to check for updates</string>
 	<string name="update_downloaded">Update downloaded</string>
 	<string name="update_found_on_github">Release found on GitHub</string>
+	<string name="update_channel">Update channel</string>
+	<string name="update_channel_stable">Stable (recommended)</string>
+	<string name="update_channel_beta">Beta</string>
+	<string name="beta_update_channel_warning__sentence">Beta versions are intended for testing and may contain bugs. Android does not allow installing an older stable build over a newer beta build. You can return to stable updates when a stable version with a higher version code is released.</string>
 	<string name="open_download_page">Open download page</string>
 	<string name="remind_later">Remind later</string>
 	<string name="skip_this_version">Skip this version</string>

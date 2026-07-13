@@ -536,6 +536,10 @@
 	<string name="update_check_failed">Не удалось проверить обновления</string>
 	<string name="update_downloaded">Обновление загружено</string>
 	<string name="update_found_on_github">Найден релиз на GitHub</string>
+	<string name="update_channel">Канал обновлений</string>
+	<string name="update_channel_stable">Стабильный (рекомендуется)</string>
+	<string name="update_channel_beta">Бета</string>
+	<string name="beta_update_channel_warning__sentence">Бета-версии предназначены для тестирования и могут содержать ошибки. Android не позволяет установить более старую стабильную сборку поверх новой бета-версии. Вернуться на стабильные обновления можно после выхода стабильной версии с более высоким кодом.</string>
 	<string name="open_download_page">Открыть страницу загрузки</string>
 	<string name="remind_later">Напомнить позже</string>
 	<string name="skip_this_version">Пропустить эту версию</string>

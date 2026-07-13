@@ -3,6 +3,8 @@ package com.mishiranu.dashchan.util;
 import chan.util.StringUtils;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InterruptedIOException;
+import java.io.OutputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
@@ -23,6 +25,19 @@ public final class Hasher {
 		int count;
 		while ((count = inputStream.read(buffer, 0, buffer.length)) >= 0) {
 			digest.update(buffer, 0, count);
+		}
+		return digest.digest();
+	}
+
+	public byte[] calculateAndCopy(InputStream inputStream, OutputStream outputStream) throws IOException {
+		digest.reset();
+		int count;
+		while ((count = inputStream.read(buffer, 0, buffer.length)) >= 0) {
+			if (Thread.currentThread().isInterrupted()) {
+				throw new InterruptedIOException();
+			}
+			digest.update(buffer, 0, count);
+			outputStream.write(buffer, 0, count);
 		}
 		return digest.digest();
 	}

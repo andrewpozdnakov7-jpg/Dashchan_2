@@ -481,6 +481,43 @@ public class Preferences {
 				.close();
 	}
 
+	public enum UpdateChannel {
+		STABLE("stable", R.string.update_channel_stable),
+		BETA("beta", R.string.update_channel_beta);
+
+		public final String value;
+		public final int titleResId;
+
+		UpdateChannel(String value, int titleResId) {
+			this.value = value;
+			this.titleResId = titleResId;
+		}
+	}
+
+	public static final String KEY_UPDATE_CHANNEL = "update_channel";
+	public static final UpdateChannel DEFAULT_UPDATE_CHANNEL = UpdateChannel.STABLE;
+
+	public static UpdateChannel getUpdateChannel() {
+		String value = PREFERENCES.getString(KEY_UPDATE_CHANNEL, DEFAULT_UPDATE_CHANNEL.value);
+		for (UpdateChannel channel : UpdateChannel.values()) {
+			if (channel.value.equals(value)) {
+				return channel;
+			}
+		}
+		return DEFAULT_UPDATE_CHANNEL;
+	}
+
+	public static void resetUpdatePromptState() {
+		PREFERENCES.edit()
+				.remove(KEY_UPDATE_LAST_CHECK_TIME)
+				.remove(KEY_UPDATE_LAST_ERROR)
+				.remove(KEY_UPDATE_SKIPPED_VERSION_CODE)
+				.remove(KEY_UPDATE_REMIND_AFTER_TIME)
+				.remove(KEY_UPDATE_LAST_SEEN_VERSION_CODE)
+				.remove(KEY_UPDATE_LAST_SOURCE)
+				.close();
+	}
+
 	public static final String KEY_UPDATE_LAST_CHECK_TIME = "update_last_check_time";
 
 	public static long getUpdateLastCheckTime() {

@@ -15,6 +15,7 @@ import com.mishiranu.dashchan.content.BackupManager;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.service.DownloadService;
 import com.mishiranu.dashchan.ui.FragmentHandler;
+import com.mishiranu.dashchan.ui.preference.core.ListPreference;
 import com.mishiranu.dashchan.ui.preference.core.PreferenceFragment;
 import com.mishiranu.dashchan.util.NavigationUtils;
 import com.mishiranu.dashchan.util.SharedPreferences;
@@ -28,6 +29,7 @@ public class AboutFragment extends PreferenceFragment implements FragmentHandler
 	private static final String EXTRA_IN_STORAGE_REQUEST = "inStorageRequest";
 
 	private boolean inStorageRequest = false;
+	private boolean confirmingBetaChannel = false;
 
 	@Override
 	protected SharedPreferences getPreferences() {
@@ -53,6 +55,31 @@ public class AboutFragment extends PreferenceFragment implements FragmentHandler
 		addButton(R.string.changelog, 0)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 						.pushFragment(new TextFragment(TextFragment.Type.CHANGELOG)));
+		ListPreference updateChannelPreference = addList(Preferences.KEY_UPDATE_CHANNEL,
+				enumList(Preferences.UpdateChannel.values(), channel -> channel.value),
+				Preferences.DEFAULT_UPDATE_CHANNEL.value, R.string.update_channel,
+				enumResList(Preferences.UpdateChannel.values(), channel -> channel.titleResId));
+		updateChannelPreference.setOnBeforeChangeListener((preference, value) -> {
+			if (!confirmingBetaChannel && Preferences.UpdateChannel.BETA.value.equals(value) &&
+					!Preferences.UpdateChannel.BETA.value.equals(preference.getValue())) {
+				new AlertDialog.Builder(requireContext())
+						.setTitle(R.string.update_channel_beta)
+						.setMessage(R.string.beta_update_channel_warning__sentence)
+						.setNegativeButton(android.R.string.cancel, null)
+						.setPositiveButton(android.R.string.ok, (dialog, which) -> {
+							confirmingBetaChannel = true;
+							preference.setValue(value);
+							confirmingBetaChannel = false;
+						})
+						.show();
+				return false;
+			}
+			return true;
+		});
+		updateChannelPreference.setOnAfterChangeListener(preference -> {
+			Preferences.resetUpdatePromptState();
+			((FragmentHandler) requireActivity()).pushFragment(new UpdateFragment());
+		});
 		addButton(R.string.check_for_updates, 0)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 						.pushFragment(new UpdateFragment()));

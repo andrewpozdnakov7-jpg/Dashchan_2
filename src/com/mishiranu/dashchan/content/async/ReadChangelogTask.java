@@ -12,6 +12,7 @@ import chan.http.HttpResponse;
 import com.mishiranu.dashchan.BuildConfig;
 import com.mishiranu.dashchan.content.MainApplication;
 import com.mishiranu.dashchan.content.model.ErrorItem;
+import com.mishiranu.dashchan.content.update.UpdateConfiguration;
 import com.mishiranu.dashchan.util.IOUtils;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -316,6 +317,17 @@ public class ReadChangelogTask extends ExecutorTask<Void, ReadChangelogTask.Resu
 			try {
 				result.entries = readEntries(pathSegments ->
 						downloadStringOrNull(holder, githubUri, metadataPath, pathSegments));
+				if (UpdateConfiguration.isBetaChannel()) {
+					try {
+						Uri betaGithubUri = Chan.getFallback().locator.setSchemeIfEmpty(
+								Uri.parse(UpdateConfiguration.getBetaMetadataUri()), null);
+						List<Entry> betaEntries = readEntries(pathSegments -> downloadStringOrNull(holder,
+								betaGithubUri, UpdateConfiguration.getBetaMetadataPath(), pathSegments));
+						result.entries = mergeEntries(result.entries, betaEntries);
+					} catch (HttpException | JSONException e) {
+						// Stable changelog remains available when beta metadata is temporarily unavailable.
+					}
+				}
 			} catch (InterruptedException e) {
 				result.interrupted = true;
 			} catch (HttpException e) {
@@ -355,6 +367,20 @@ public class ReadChangelogTask extends ExecutorTask<Void, ReadChangelogTask.Resu
 			throw result.jsonException;
 		}
 		return result.entries;
+	}
+
+	private static List<Entry> mergeEntries(List<Entry> stableEntries, List<Entry> betaEntries) {
+		if (betaEntries == null || betaEntries.isEmpty()) {
+			return stableEntries;
+		}
+		if (stableEntries == null || stableEntries.isEmpty()) {
+			return betaEntries;
+		}
+		ArrayList<Entry> entries = new ArrayList<>(stableEntries.size() + betaEntries.size());
+		entries.addAll(stableEntries);
+		entries.addAll(betaEntries);
+		entries.sort((left, right) -> Integer.compare(right.versions.get(0).code, left.versions.get(0).code));
+		return entries;
 	}
 
 	@Override

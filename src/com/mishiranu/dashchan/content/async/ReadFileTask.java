@@ -155,28 +155,77 @@ public class ReadFileTask extends HttpHolderTask<long[], Boolean> {
 					return false;
 				}
 			} else {
-				ChanPerformer.ReadContentResult result = chan.performer.safe()
-						.onReadContent(new ChanPerformer.ReadContentData(fromUri,
-								CONNECT_TIMEOUT, READ_TIMEOUT, holder, -1, -1));
-				HttpResponse response = result != null ? result.response : null;
-				if (response == null) {
-					errorItem = new ErrorItem(ErrorItem.Type.DOWNLOAD);
-					return false;
-				}
-				progressHandler.setInputProgressMax(response.getLength());
-				try (InputStream input = response.open();
-						OutputStream output = toFile.openOutputStream()) {
-					copyStream(input, output, progressHandler, digest);
-				} catch (IOException e) {
-					ErrorItem.Type errorType = getErrorTypeFromExceptionAndHandle(e);
-					if (errorType != null) {
-						errorItem = new ErrorItem(errorType);
+				File regularFile = toFile.getFileOrUri().first;
+				if (regularFile != null) {
+					MessageDigest downloadDigest = digest;
+					try {
+						RetryableMediaDownload.download(chan, fromUri, holder, regularFile, 0L,
+								CONNECT_TIMEOUT, READ_TIMEOUT, new RetryableMediaDownload.Callback() {
+									@Override
+									public boolean isCancelled() {
+										return ReadFileTask.this.isCancelled();
+									}
+
+									@Override
+									public void onInit(long total) {
+										progressHandler.setInputProgressMax(total);
+									}
+
+									@Override
+									public void onBytes(byte[] buffer, int count) {
+										if (downloadDigest != null) {
+											downloadDigest.update(buffer, 0, count);
+										}
+									}
+
+									@Override
+									public void onProgress(long position, long total) {
+										if (total >= 0L) {
+											progressHandler.setInputProgressMax(total);
+										}
+										progressHandler.updateProgress(position);
+									}
+
+									@Override
+									public void onRestart() {
+										if (downloadDigest != null) {
+											downloadDigest.reset();
+										}
+										progressHandler.updateProgress(0L);
+									}
+								});
+					} catch (RetryableMediaDownload.RangeNotSupportedException e) {
+						errorItem = new ErrorItem(ErrorItem.Type.INVALID_RESPONSE);
 						return false;
-					} else {
-						throw response.fail(e);
+					} catch (IOException e) {
+						ErrorItem.Type errorType = getErrorTypeFromExceptionAndHandle(e);
+						errorItem = new ErrorItem(errorType != null ? errorType : ErrorItem.Type.DOWNLOAD);
+						return false;
 					}
-				} finally {
-					response.cleanupAndDisconnect();
+				} else {
+					ChanPerformer.ReadContentResult result = chan.performer.safe()
+							.onReadContent(new ChanPerformer.ReadContentData(fromUri,
+									CONNECT_TIMEOUT, READ_TIMEOUT, holder, -1, -1));
+					HttpResponse response = result != null ? result.response : null;
+					if (response == null) {
+						errorItem = new ErrorItem(ErrorItem.Type.DOWNLOAD);
+						return false;
+					}
+					progressHandler.setInputProgressMax(response.getLength());
+					try (InputStream input = response.open();
+							OutputStream output = toFile.openOutputStream()) {
+						copyStream(input, output, progressHandler, digest);
+					} catch (IOException e) {
+						ErrorItem.Type errorType = getErrorTypeFromExceptionAndHandle(e);
+						if (errorType != null) {
+							errorItem = new ErrorItem(errorType);
+							return false;
+						} else {
+							throw response.fail(e);
+						}
+					} finally {
+						response.cleanupAndDisconnect();
+					}
 				}
 			}
 			if (digest != null) {

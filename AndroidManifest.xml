@@ -28,6 +28,7 @@
 		<package android:name="com.mishiranu.dashchan.chan.dollchan" />
 		<package android:name="com.mishiranu.dashchan.chan.dvach" />
 		<package android:name="io.dashchan2.chan.dvach" />
+		<package android:name="io.dashchan2.chan.fourchan" />
 		<package android:name="com.mishiranu.dashchan.chan.e444" />
 		<package android:name="com.mishiranu.dashchan.chan.endchan" />
 		<package android:name="com.mishiranu.dashchan.chan.erlach" />

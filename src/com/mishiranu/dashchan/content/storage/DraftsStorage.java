@@ -16,7 +16,6 @@ import com.mishiranu.dashchan.content.async.ReadCaptchaTask;
 import com.mishiranu.dashchan.content.model.FileHolder;
 import com.mishiranu.dashchan.util.GraphicsUtils;
 import com.mishiranu.dashchan.util.Hasher;
-import com.mishiranu.dashchan.util.IOUtils;
 import com.mishiranu.dashchan.util.LruCache;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -202,27 +201,46 @@ public class DraftsStorage extends StorageManager.Storage<Pair<List<DraftsStorag
 	}
 
 	public String store(FileHolder fileHolder) {
-		String hash;
-		try (InputStream input = fileHolder.openInputStream()) {
-			hash = StringUtils.formatHex(Hasher.getInstanceSha256().calculate(input));
+		return storeAttachmentFile(fileHolder, true);
+	}
+
+	public String storeAttachmentFile(FileHolder fileHolder) {
+		return storeAttachmentFile(fileHolder, false);
+	}
+
+	private String storeAttachmentFile(FileHolder fileHolder, boolean serializeNewFile) {
+		File directory = getAttachmentDraftsDirectory();
+		if (directory == null) {
+			return null;
+		}
+		File tempFile;
+		try {
+			tempFile = File.createTempFile("attachment-", ".tmp", directory);
 		} catch (IOException e) {
 			return null;
 		}
-		File file = getAttachmentDraftFile(hash);
-		if (file == null) {
-			return null;
-		}
-		if (file.isFile()) {
-			return hash;
-		}
-		try (InputStream input = fileHolder.openInputStream();
-				FileOutputStream output = new FileOutputStream(file)) {
-			IOUtils.copyStream(input, output);
-			serialize();
+		try {
+			String hash;
+			try (InputStream input = fileHolder.openInputStream();
+					FileOutputStream output = new FileOutputStream(tempFile)) {
+				hash = StringUtils.formatHex(Hasher.getInstanceSha256().calculateAndCopy(input, output));
+			}
+			File file = new File(directory, hash);
+			boolean newFile = !file.isFile();
+			if (newFile && !tempFile.renameTo(file)) {
+				if (!file.isFile()) {
+					return null;
+				}
+				newFile = false;
+			}
+			if (serializeNewFile && newFile) {
+				serialize();
+			}
 			return hash;
 		} catch (IOException e) {
-			file.delete();
 			return null;
+		} finally {
+			tempFile.delete();
 		}
 	}
 
