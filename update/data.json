@@ -5,25 +5,25 @@
 	"client": [
 		{
 			"title": "Release",
-			"name": "3.1.7",
-			"code": 1070,
+			"name": "3.1.8",
+			"code": 1072,
 			"minVersion": 1,
 			"maxVersion": 1,
 			"minSdk": 30,
-			"length": 25994415,
-			"source": "https://github.com/andrewpozdnakov7-jpg/Dashchan_2/releases/download/3.1.7-1070/Dashchan_2-3.1.7-1070-ffmpeg8-all-abi-signed.apk",
+			"length": 35097956,
+			"source": "https://github.com/andrewpozdnakov7-jpg/Dashchan_2/releases/download/3.1.8-1072/Dashchan_2-3.1.8-1072-ffmpeg8-all-abi-signed.apk",
 			"fingerprint": "a9fbac6c498f7ad8e7c56849afe43881966bed2ed2bc1dd1c73d0ffe0b9ebeba"
 		}
 	],
 	"dvach": [
 		{
 			"title": "Release",
-			"name": "1.43-experimental-1.6-r11",
-			"code": 8,
+			"name": "1.43-r12",
+			"code": 9,
 			"version": 1,
 			"minSdk": 30,
 			"length": 292899,
-			"source": "https://github.com/andrewpozdnakov7-jpg/Dashchan_2/releases/download/3.1.7-1070/Dashchan_2-Dvach-1.43-experimental-1.6-r11-8-signed.apk",
+			"source": "https://github.com/andrewpozdnakov7-jpg/Dashchan_2/releases/download/3.1.8-1072/Dashchan_2-Dvach-1.43-r12-9-signed.apk",
 			"fingerprint": "a9fbac6c498f7ad8e7c56849afe43881966bed2ed2bc1dd1c73d0ffe0b9ebeba"
 		}
 	]
