@@ -50,8 +50,10 @@ public final class HttpRequest {
 		// alterchan chaosach haibane kurisach onechanca owlchan synch tiretirech
 		// Added: 18.10.20 01:50
 		@Public
-		Action onRedirectReached(int responseCode, Uri requestedUri, Uri redirectedUri, HttpHolder holder)
-				throws HttpException;
+		default Action onRedirectReached(int responseCode, Uri requestedUri, Uri redirectedUri, HttpHolder holder)
+				throws HttpException {
+			return Action.GET;
+		}
 
 		@Public
 		RedirectHandler NONE = new RedirectHandler() {

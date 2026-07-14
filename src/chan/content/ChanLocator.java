@@ -150,8 +150,9 @@ public class ChanLocator implements Chan.Linked {
 	}
 
 	@Public
-	public static ChanLocator get(Object object) {
-		return ((Chan.Linked) object).get().locator;
+	@SuppressWarnings("unchecked")
+	public static <T extends ChanLocator> T get(Object object) {
+		return (T) ((Chan.Linked) object).get().locator;
 	}
 
 	@Public

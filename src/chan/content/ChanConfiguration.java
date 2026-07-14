@@ -98,8 +98,9 @@ public class ChanConfiguration implements Chan.Linked {
 	@Public public static final String CAPTCHA_TYPE_HCAPTCHA = "hcaptcha";
 
 	@Public
-	public static ChanConfiguration get(Object object) {
-		return ((Chan.Linked) object).get().configuration;
+	@SuppressWarnings("unchecked")
+	public static <T extends ChanConfiguration> T get(Object object) {
+		return (T) ((Chan.Linked) object).get().configuration;
 	}
 
 	@Public
@@ -143,6 +144,7 @@ public class ChanConfiguration implements Chan.Linked {
 		@Public public String title;
 		@Public public Input input = Input.ALL;
 		@Public public Validity validity = Validity.LONG_LIFETIME;
+		@Public public int ttl;
 
 		@Public
 		public Captcha() {}

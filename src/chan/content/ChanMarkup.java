@@ -58,8 +58,9 @@ public class ChanMarkup implements Chan.Linked {
 	}
 
 	@Public
-	public static ChanMarkup get(Object object) {
-		return ((Chan.Linked) object).get().markup;
+	@SuppressWarnings("unchecked")
+	public static <T extends ChanMarkup> T get(Object object) {
+		return (T) ((Chan.Linked) object).get().markup;
 	}
 
 	@Public public static final int TAG_BOLD = 0x00000001;

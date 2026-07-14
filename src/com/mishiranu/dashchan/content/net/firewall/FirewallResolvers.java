@@ -116,8 +116,9 @@ public class FirewallResolvers extends FirewallResolver.Implementation {
 		}
 
 		@Override
-		public ChanConfiguration getChanConfiguration() {
-			return chan.configuration;
+		@SuppressWarnings("unchecked")
+		public <T extends ChanConfiguration> T getChanConfiguration() {
+			return (T) chan.configuration;
 		}
 
 		@Override

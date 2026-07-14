@@ -117,7 +117,7 @@ public abstract class FirewallResolver {
 		Chan getChan();
 
 		@Public
-		ChanConfiguration getChanConfiguration();
+		<T extends ChanConfiguration> T getChanConfiguration();
 
 		@Public
 		Identifier getIdentifier();

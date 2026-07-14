@@ -74,8 +74,9 @@ public class ChanPerformer implements Chan.Linked {
 	}
 
 	@Public
-	public static ChanPerformer get(Object object) {
-		return ((Chan.Linked) object).get().performer;
+	@SuppressWarnings("unchecked")
+	public static <T extends ChanPerformer> T get(Object object) {
+		return (T) ((Chan.Linked) object).get().performer;
 	}
 
 	private void checkInit() {
