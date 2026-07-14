@@ -577,4 +577,7 @@
 
 	<string name="reorder_attachment">Reorder attachment</string>
 	<string name="preview_video_attachment">Preview video</string>
+	<string name="preference_captcha_full_keyboard">Use full keyboard for captcha</string>
+	<string name="emoji_captcha_input">Select all icons from the picture (any order)</string>
+	<string name="posting_file_not_supported">The 2ch server rejected the file: its format or internal codec is not supported by the site. For video, try MP4 (H.264/AAC) or WebM.</string>
 </resources>

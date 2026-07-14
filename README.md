@@ -13,14 +13,12 @@ Dashchan_2 - неофициальная ветка Dashchan для Android 11+.
 
 | Компонент | Package | Версия | Минимальный Android |
 | --- | --- | --- | --- |
-| Dashchan_2 | `io.dashchan2` | `3.1.8`, code `1072` | API 30 / Android 11+ |
-| Dvach extension | `io.dashchan2.chan.dvach` | `1.43-r12`, code `9` | API 30 / Android 11+ |
+| Dashchan_2 с поддержкой Двача | `io.dashchan2` | `3.1.9-beta4`, code `1076` | API 30 / Android 11+ |
 | Fourchan extension | `io.dashchan2.chan.fourchan` | `1.27-read-only-1`, code `1` | API 30 / Android 11+ |
 
-Для работы с 2ch/Dvach нужно установить оба APK:
-
-- основной APK `Dashchan_2`;
-- APK расширения `Dashchan_2 for 2ch`.
+Поддержка 2ch/Dvach встроена в основной APK `Dashchan_2`. Отдельное дополнение
+`Dashchan_2 for 2ch` больше не требуется; установленную старую версию дополнения
+можно удалить после проверки встроенного Двача.
 
 Для просмотра 4chan установите основной APK и отдельное расширение
 `Dashchan_2 Fourchan`. Первая версия расширения работает только на чтение:
@@ -34,7 +32,7 @@ WebM2/FFmpeg/dav1d/yuv теперь встроены в основной APK. О
 - Приложение переименовано в `Dashchan_2`.
 - Application ID изменен на `io.dashchan2`.
 - Добавлен отдельный file provider: `io.dashchan2.provider`.
-- Поддерживаются отдельные расширения Dvach и Fourchan.
+- Поддержка Dvach встроена в основной APK; Fourchan остается отдельным расширением.
 - Добавлены явные Android package queries для известных расширений Dashchan_2.
 - Убрана необходимость `QUERY_ALL_PACKAGES` для поиска расширений.
 - Минимальная версия Android поднята до API 30 / Android 11+.
@@ -93,9 +91,11 @@ Gradle configuration cache включен по умолчанию. Если ло
 
 ### Расширения
 
-Актуальные исходники расширений Dashchan_2 находятся в соседнем репозитории
-`Dashchan_2-Extensions`. Для 2ch/Dvach используется package
-`io.dashchan2.chan.dvach`, для 4chan - `io.dashchan2.chan.fourchan`.
+Код поддержки 2ch/Dvach встроен в этот репозиторий и загружается как внутренний
+канал `dvach`, благодаря чему сохраняются существующие настройки, история и
+избранное. Актуальные исходники внешних расширений находятся в соседнем
+репозитории `Dashchan_2-Extensions`; для 4chan используется package
+`io.dashchan2.chan.fourchan`.
 
 ### Происхождение и авторы
 
@@ -124,14 +124,12 @@ installed beside the original Dashchan because it uses its own package name.
 
 | Component | Package | Version | Minimum Android |
 | --- | --- | --- | --- |
-| Dashchan_2 | `io.dashchan2` | `3.1.8`, code `1072` | API 30 / Android 11+ |
-| Dvach extension | `io.dashchan2.chan.dvach` | `1.43-r12`, code `9` | API 30 / Android 11+ |
+| Dashchan_2 with Dvach support | `io.dashchan2` | `3.1.9-beta4`, code `1076` | API 30 / Android 11+ |
 | Fourchan extension | `io.dashchan2.chan.fourchan` | `1.27-read-only-1`, code `1` | API 30 / Android 11+ |
 
-Install both APKs to use 2ch/Dvach:
-
-- the main `Dashchan_2` APK;
-- the `Dashchan_2 for 2ch` extension APK.
+2ch/Dvach support is bundled into the main `Dashchan_2` APK. The separate
+`Dashchan_2 for 2ch` extension is no longer required; an installed legacy copy
+can be removed after verifying the built-in channel.
 
 To browse 4chan, install the main APK and the separate
 `Dashchan_2 Fourchan` extension. Its first release is read-only; posting is
@@ -145,7 +143,7 @@ WebM2 APK is no longer required for normal video playback.
 - Renamed the app to `Dashchan_2`.
 - Changed the application ID to `io.dashchan2`.
 - Added a separate file provider authority: `io.dashchan2.provider`.
-- Added support for separate Dashchan_2 Dvach and Fourchan extensions.
+- Bundled Dvach support into the main APK; Fourchan remains a separate extension.
 - Added explicit Android package queries for known Dashchan_2 extensions.
 - Removed the need for `QUERY_ALL_PACKAGES` in extension discovery.
 - Raised the minimum Android version to API 30 / Android 11+.
@@ -203,10 +201,11 @@ Build and release documentation:
 
 ### Extensions
 
-Current Dashchan_2 extension sources are maintained in the sibling
-`Dashchan_2-Extensions` repository. The packages are
-`io.dashchan2.chan.dvach` for 2ch/Dvach and
-`io.dashchan2.chan.fourchan` for 4chan.
+The 2ch/Dvach implementation is bundled in this repository and registered as
+the internal `dvach` channel, preserving existing settings, history, and
+favorites. Current external extension sources are maintained in the sibling
+`Dashchan_2-Extensions` repository; the 4chan extension uses
+`io.dashchan2.chan.fourchan`.
 
 ### Upstream And Credits
 

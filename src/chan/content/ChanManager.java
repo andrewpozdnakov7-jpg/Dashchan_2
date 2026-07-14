@@ -83,6 +83,9 @@ public class ChanManager {
 	private static final String META_LIB_EXTENSION_NAME = "lib.extension.name";
 	private static final String META_LIB_EXTENSION_TITLE = "lib.extension.title";
 	private static final String META_LIB_EXTENSION_SOURCE = "lib.extension.source";
+	private static final String BUILTIN_DVACH_NAME = "dvach";
+	private static final String[] BUILTIN_REPLACED_PACKAGE_NAMES = {
+			"com.mishiranu.dashchan.chan.dvach", "io.dashchan2.chan.dvach"};
 
 	private static final int PACKAGE_MANAGER_SIGNATURE_FLAGS = PackageManager.GET_SIGNING_CERTIFICATES;
 
@@ -185,6 +188,7 @@ public class ChanManager {
 		public final int iconResId;
 		public final Uri updateUri;
 		public final String loadError;
+		public final boolean builtIn;
 
 		public final String classConfiguration;
 		public final String classPerformer;
@@ -203,7 +207,7 @@ public class ChanManager {
 				String packageName, String versionName, long versionCode, ApplicationInfo applicationInfo,
 				Fingerprints fingerprints, int apiVersion, boolean supported, int iconResId, Uri updateUri,
 				String loadError, String classConfiguration, String classPerformer, String classLocator,
-				String classMarkup) {
+				String classMarkup, boolean builtIn) {
 			this.type = type;
 			this.name = name;
 			this.title = title;
@@ -218,6 +222,7 @@ public class ChanManager {
 			this.iconResId = iconResId;
 			this.updateUri = updateUri;
 			this.loadError = loadError;
+			this.builtIn = builtIn;
 
 			this.classConfiguration = classConfiguration;
 			this.classPerformer = classPerformer;
@@ -232,7 +237,7 @@ public class ChanManager {
 			this(Type.CHAN, name, title, TrustState.UNTRUSTED,
 					packageName, versionName, versionCode, applicationInfo,
 					fingerprints, apiVersion, supported, iconResId, updateUri,
-					null, classConfiguration, classPerformer, classLocator, classMarkup);
+					null, classConfiguration, classPerformer, classLocator, classMarkup, false);
 		}
 
 		public ExtensionItem(String name, String title, String packageName,
@@ -240,7 +245,7 @@ public class ChanManager {
 				Fingerprints fingerprints, Uri updateUri) {
 			this(Type.LIBRARY, name, title, TrustState.UNTRUSTED,
 					packageName, versionName, versionCode, applicationInfo,
-					fingerprints, 0, true, 0, updateUri, null, null, null, null, null);
+					fingerprints, 0, true, 0, updateUri, null, null, null, null, null, false);
 		}
 
 		public ExtensionItem changeTrustState(boolean trusted) {
@@ -251,14 +256,14 @@ public class ChanManager {
 			return new ExtensionItem(type, name, title, trustState,
 					packageName, versionName, versionCode, applicationInfo,
 					fingerprints, apiVersion, supported, iconResId, updateUri,
-					loadError, classConfiguration, classPerformer, classLocator, classMarkup);
+					loadError, classConfiguration, classPerformer, classLocator, classMarkup, builtIn);
 		}
 
 		public ExtensionItem changeLoadError(String loadError) {
 			return new ExtensionItem(type, name, title, trustState,
 					packageName, versionName, versionCode, applicationInfo,
 					fingerprints, apiVersion, supported, iconResId, updateUri,
-					loadError, classConfiguration, classPerformer, classLocator, classMarkup);
+					loadError, classConfiguration, classPerformer, classLocator, classMarkup, builtIn);
 		}
 	}
 
@@ -304,6 +309,20 @@ public class ChanManager {
 		return Collections.unmodifiableMap(map);
 	}
 
+	private static Extension loadBuiltinDvach(Fingerprints applicationFingerprints) {
+		MainApplication application = MainApplication.getInstance();
+		ExtensionItem extensionItem = new ExtensionItem(ExtensionItem.Type.CHAN, BUILTIN_DVACH_NAME, "2ch.su",
+				ExtensionItem.TrustState.TRUSTED, application.getPackageName(), BuildConfig.VERSION_NAME,
+				BuildConfig.VERSION_CODE, application.getApplicationInfo(), applicationFingerprints,
+				MAX_VERSION, true, R.drawable.ic_custom_dvach, null, null,
+				"com.mishiranu.dashchan.chan.dvach.DvachChanConfiguration",
+				"com.mishiranu.dashchan.chan.dvach.DvachChanPerformer",
+				"com.mishiranu.dashchan.chan.dvach.DvachChanLocator",
+				"com.mishiranu.dashchan.chan.dvach.DvachChanMarkup", true);
+		LoadChanResult result = loadChan(extensionItem, application.getPackageManager());
+		return new Extension(extensionItem.changeLoadError(result.error), result.chan);
+	}
+
 	@SuppressLint("PackageManagerGetSignatures")
 	private ChanManager() {
 		String packageName = MainApplication.getInstance().getPackageName();
@@ -331,6 +350,10 @@ public class ChanManager {
 			ArrayList<Extension> extensions = new ArrayList<>();
 			HashSet<String> usedExtensionNames = new HashSet<>();
 			HashSet<String> loadedPackageNames = new HashSet<>();
+			Extension builtInDvach = loadBuiltinDvach(applicationFingerprints);
+			extensions.add(builtInDvach);
+			usedExtensionNames.add(builtInDvach.item.name);
+			Collections.addAll(loadedPackageNames, BUILTIN_REPLACED_PACKAGE_NAMES);
 			for (String knownPackageName : BuildConfig.KNOWN_CHAN_EXTENSION_PACKAGES) {
 				loadKnownExtension(packageManager, knownPackageName, loadedPackageNames,
 						applicationFingerprints, usedExtensionNames, extensions);
@@ -380,6 +403,9 @@ public class ChanManager {
 			}
 			String packageName = uri.getSchemeSpecificPart();
 			if (packageName == null) {
+				return;
+			}
+			if (isKnownPackage(packageName, BUILTIN_REPLACED_PACKAGE_NAMES)) {
 				return;
 			}
 			if (Intent.ACTION_PACKAGE_ADDED.equals(intent.getAction())) {
@@ -703,14 +729,21 @@ public class ChanManager {
 		if (chanItem.supported) {
 			String chanName = chanItem.name;
 			try {
-				String nativeLibraryDir = chanItem.applicationInfo.nativeLibraryDir;
-				if (nativeLibraryDir != null && !new File(nativeLibraryDir).exists()) {
-					nativeLibraryDir = null;
+				ClassLoader classLoader;
+				Resources resources;
+				if (chanItem.builtIn) {
+					classLoader = ChanManager.class.getClassLoader();
+					resources = MainApplication.getInstance().getResources();
+				} else {
+					String nativeLibraryDir = chanItem.applicationInfo.nativeLibraryDir;
+					if (nativeLibraryDir != null && !new File(nativeLibraryDir).exists()) {
+						nativeLibraryDir = null;
+					}
+					String dexPath = chanItem.applicationInfo.sourceDir;
+					ClassLoader parent = ChanManager.class.getClassLoader();
+					classLoader = new DelegateLastClassLoader(dexPath, nativeLibraryDir, parent);
+					resources = packageManager.getResourcesForApplication(chanItem.applicationInfo);
 				}
-				String dexPath = chanItem.applicationInfo.sourceDir;
-				ClassLoader parent = ChanManager.class.getClassLoader();
-				ClassLoader classLoader = new DelegateLastClassLoader(dexPath, nativeLibraryDir, parent);
-				Resources resources = packageManager.getResourcesForApplication(chanItem.applicationInfo);
 				Chan.Provider chanProvider = new Chan.Provider(null);
 				ChanConfiguration configuration = ChanConfiguration.INITIALIZER.initialize(classLoader,
 						chanItem.classConfiguration, chanName, chanProvider, resources);

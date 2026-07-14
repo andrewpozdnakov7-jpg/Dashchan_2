@@ -595,4 +595,7 @@
 
 	<string name="reorder_attachment">Изменить порядок вложений</string>
 	<string name="preview_video_attachment">Предпросмотр видео</string>
+	<string name="preference_captcha_full_keyboard">Использовать полную клавиатуру для капчи</string>
+	<string name="emoji_captcha_input">Выберите все символы на картинке (в любом порядке)</string>
+	<string name="posting_file_not_supported">Сервер Двача отклонил файл: его формат или внутренний кодек не поддерживается сайтом. Для видео попробуйте MP4 (H.264/AAC) или WebM.</string>
 </resources>

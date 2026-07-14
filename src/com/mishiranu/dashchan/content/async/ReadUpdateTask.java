@@ -555,6 +555,9 @@ public class ReadUpdateTask extends HttpHolderTask<Void, Pair<ErrorItem, ReadUpd
 			}
 		}
 		for (ChanManager.ExtensionItem extensionItem : extensionItems) {
+			if (extensionItem.builtIn) {
+				continue;
+			}
 			Uri updateUri = UpdateConfiguration.resolveExtensionUpdateUri(extensionItem.updateUri);
 			if (updateUri != null) {
 				TargetUri targetUri = new TargetUri(updateUri);
@@ -661,6 +664,9 @@ public class ReadUpdateTask extends HttpHolderTask<Void, Pair<ErrorItem, ReadUpd
 		fingerprintsMap.put(ChanManager.EXTENSION_NAME_CLIENT,
 				ChanManager.getInstance().getApplicationFingerprints());
 		for (ChanManager.ExtensionItem extensionItem : extensionItems) {
+			if (extensionItem.builtIn) {
+				continue;
+			}
 			fingerprintsMap.put(extensionItem.name, extensionItem.fingerprints);
 		}
 		String applicationTitle;
@@ -683,6 +689,9 @@ public class ReadUpdateTask extends HttpHolderTask<Void, Pair<ErrorItem, ReadUpd
 					ChanManager.MIN_VERSION, ChanManager.MAX_VERSION, 0, -1, null, null, null));
 			updateDataMap.put(ChanManager.EXTENSION_NAME_CLIENT, applicationItem);
 			for (ChanManager.ExtensionItem extensionItem : extensionItems) {
+				if (extensionItem.builtIn) {
+					continue;
+				}
 				applicationItem = new ApplicationItem(extensionItem.type == ChanManager.ExtensionItem.Type.LIBRARY
 						? ApplicationItem.Type.LIBRARY : ApplicationItem.Type.CHAN,
 						extensionItem.name, extensionItem.title, new ArrayList<>());

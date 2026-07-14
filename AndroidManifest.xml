@@ -82,6 +82,25 @@
 				<data android:scheme="https" />
 			</intent-filter>
 
+			<intent-filter>
+				<action android:name="android.intent.action.VIEW" />
+				<category android:name="android.intent.category.DEFAULT" />
+				<category android:name="android.intent.category.BROWSABLE" />
+				<data android:scheme="http" />
+				<data android:scheme="https" />
+				<data android:host="2ch.su" />
+				<data android:host="2ch.org" />
+				<data android:host="2ch.life" />
+				<data android:host="2ch.hk" />
+				<data android:host="2ch.pm" />
+				<data android:host="2ch.cm" />
+				<data android:host="2ch.re" />
+				<data android:host="2ch.tf" />
+				<data android:host="2ch.wf" />
+				<data android:host="2ch.yt" />
+				<data android:host="2-ch.so" />
+			</intent-filter>
+
 		</activity>
 
 		<activity
