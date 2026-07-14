@@ -379,6 +379,11 @@
 	<string name="enable_video_playback_speed_control__summary">Показывать пресеты скорости во встроенном видеоплеере</string>
 	<string name="remember_video_playback_speed">Сохранять скорость воспроизведения между видео</string>
 	<string name="remember_video_playback_speed__summary">Использовать выбранную скорость при открытии следующего видео</string>
+	<string name="attachment_video_preview">Предпросмотр прикреплённых видео</string>
+	<string name="attachment_video_preview__summary">Разрешить открывать видео перед отправкой; миниатюры показываются всегда</string>
+	<string name="mute_video">Выключить звук</string>
+	<string name="unmute_video">Включить звук</string>
+	<string name="video_has_no_audio">В видео нет звука</string>
 	<string name="port">Порт</string>
 	<string name="post_is_not_found">Сообщение не найдено</string>
 	<string name="post_rejected">Сообщение отклонено</string>

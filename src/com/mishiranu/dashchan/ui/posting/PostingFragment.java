@@ -1793,7 +1793,8 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 			}
 		}
 		if (video) {
-			holder.previewButton.setVisibility(View.VISIBLE);
+			holder.previewButton.setVisibility(Preferences.isAttachmentVideoPreview()
+					&& Preferences.isUseVideoPlayer() ? View.VISIBLE : View.GONE);
 			holder.view.getLayoutParams().height = (int) (128f * ResourceUtils.obtainDensity(this));
 			VideoThumbnailTask task = new VideoThumbnailTask(holder, hash, targetImageSize);
 			videoThumbnailTasks.put(holder, task);

@@ -23,6 +23,7 @@
 		<item name="iconActionSelect">@drawable/ic_action_view_as_grid_dark</item>
 		<item name="iconActionSelectAll">@drawable/ic_action_select_all_dark</item>
 		<item name="iconActionSync">@drawable/ic_action_refresh_dark</item>
+		<item name="iconActionVolumeOn">@drawable/ic_volume_up</item>
 		<item name="iconActionVolumeOff">@drawable/ic_action_volume_muted_dark</item>
 
 		<item name="iconButtonCancel">@drawable/ic_action_cancel_light</item>
@@ -82,6 +83,7 @@
 		<item name="iconActionSelect">@drawable/ic_action_view_as_grid_dark</item>
 		<item name="iconActionSelectAll">@drawable/ic_action_select_all_dark</item>
 		<item name="iconActionSync">@drawable/ic_action_refresh_dark</item>
+		<item name="iconActionVolumeOn">@drawable/ic_volume_up</item>
 		<item name="iconActionVolumeOff">@drawable/ic_action_volume_muted_dark</item>
 
 		<item name="iconButtonCancel">@drawable/ic_action_cancel_dark</item>

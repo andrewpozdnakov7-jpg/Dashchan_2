@@ -53,6 +53,10 @@ void JCALL(setPlaybackSpeed)(UNUSED JNIEnv * env, UNUSED jobject this, jlong poi
 	setPlaybackSpeed(pointer, speed);
 }
 
+jboolean JCALL(setMuted)(UNUSED JNIEnv * env, UNUSED jobject this, jlong pointer, jboolean muted) {
+	return setMuted(pointer, muted);
+}
+
 void JCALL(setPlaying)(UNUSED JNIEnv * env, UNUSED jobject this, jlong pointer, jboolean playing) {
 	setPlaying(pointer, playing);
 }

@@ -359,6 +359,11 @@
 	<string name="enable_video_playback_speed_control__summary">Show playback speed presets in the built-in video player</string>
 	<string name="remember_video_playback_speed">Keep playback speed between videos</string>
 	<string name="remember_video_playback_speed__summary">Use the selected speed when opening the next video</string>
+	<string name="attachment_video_preview">Preview attached videos</string>
+	<string name="attachment_video_preview__summary">Allow opening videos before posting; thumbnails are always shown</string>
+	<string name="mute_video">Mute video</string>
+	<string name="unmute_video">Unmute video</string>
+	<string name="video_has_no_audio">Video has no audio</string>
 	<string name="port">Port</string>
 	<string name="post_is_not_found">The post isn\'t found</string>
 	<string name="post_rejected">Post rejected</string>

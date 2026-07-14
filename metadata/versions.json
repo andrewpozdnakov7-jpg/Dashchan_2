@@ -185,6 +185,12 @@
 			"name": "3.1.8",
 			"date": "13.07.2026",
 			"changelog": true
+		},
+		{
+			"code": 1073,
+			"name": "3.1.9-beta1",
+			"date": "14.07.2026",
+			"changelog": false
 		}
 	]
 }

@@ -148,6 +148,7 @@ struct Player {
 			SLObjectItf player;
 			SLPlayItf play;
 			SLAndroidSimpleBufferQueueItf queue;
+			SLVolumeItf volume;
 		} sl;
 
 		BlockingQueue packetQueue;
@@ -1624,8 +1625,8 @@ void init(JNIEnv * env, jlong pointer, jobject nativeBridge, jboolean seekAnyFra
 		SLDataSource dataSource = {&locatorQueue, &formatPCM};
 		SLDataLocator_OutputMix locatorOutputMix = {SL_DATALOCATOR_OUTPUTMIX, player->audio.sl.outputMix};
 		SLDataSink dataSink = {&locatorOutputMix, NULL};
-		const SLInterfaceID queueIds[] = {SL_IID_ANDROIDSIMPLEBUFFERQUEUE};
-		const SLboolean queueRequired[] = {SL_BOOLEAN_TRUE};
+		const SLInterfaceID playerIds[] = {SL_IID_ANDROIDSIMPLEBUFFERQUEUE, SL_IID_VOLUME};
+		const SLboolean playerRequired[] = {SL_BOOLEAN_TRUE, SL_BOOLEAN_FALSE};
 		int needResampleSR = NEED_RESAMPLE_NO;
 		int slSampleRate = 0;
 		int sampleRate = player->av.audioContext->sample_rate;
@@ -1660,7 +1661,7 @@ void init(JNIEnv * env, jlong pointer, jobject nativeBridge, jboolean seekAnyFra
 			player->audio.resampleSampleRate = outputSampleRate;
 			formatPCM.samplesPerSec = slSampleRate;
 			result = (*slEngine)->CreateAudioPlayer(slEngine, &player->audio.sl.player,
-					&dataSource, &dataSink, 1, queueIds, queueRequired);
+					&dataSource, &dataSink, 2, playerIds, playerRequired);
 #if USE_AV_CHANNEL_LAYOUT
 			LOGP("SLES CreateAudioPlayer: result=%d, sourceChannels=%d, outputChannels=%d, "
 					"sourceLayoutChannels=%d, sourceSampleRate=%d, outputSampleRate=%d",
@@ -1701,6 +1702,12 @@ void init(JNIEnv * env, jlong pointer, jobject nativeBridge, jboolean seekAnyFra
 		if (result != SL_RESULT_SUCCESS) {
 			LOGP("SLES player.GetInterface(SL_IID_PLAY): result=%d", (int) result);
 			goto HANDLE_SL_INIT_ERROR;
+		}
+		result = (*player->audio.sl.player)->GetInterface(player->audio.sl.player,
+				SL_IID_VOLUME, &player->audio.sl.volume);
+		if (result != SL_RESULT_SUCCESS) {
+			LOGP("SLES player.GetInterface(SL_IID_VOLUME): result=%d", (int) result);
+			player->audio.sl.volume = NULL;
 		}
 		result = (*player->audio.sl.queue)->RegisterCallback(player->audio.sl.queue, audioPlayerCallback, player);
 		if (result != SL_RESULT_SUCCESS) {
@@ -2023,6 +2030,18 @@ void setPlaybackSpeed(jlong pointer, jint speed) {
 		pthread_mutex_unlock(&player->audio.sleepBufferMutex);
 		pthread_mutex_unlock(&player->play.finishMutex);
 	}
+}
+
+jboolean setMuted(jlong pointer, jboolean muted) {
+	Player * player = POINTER_CAST(pointer);
+	if (!HAS_STREAM(player, audio) || !player->audio.sl.volume) {
+		return 0;
+	}
+	pthread_mutex_lock(&player->audio.sleepBufferMutex);
+	SLresult result = (*player->audio.sl.volume)->SetMute(player->audio.sl.volume,
+			muted ? SL_BOOLEAN_TRUE : SL_BOOLEAN_FALSE);
+	pthread_mutex_unlock(&player->audio.sleepBufferMutex);
+	return result == SL_RESULT_SUCCESS;
 }
 
 void setPlaying(jlong pointer, jboolean playing) {

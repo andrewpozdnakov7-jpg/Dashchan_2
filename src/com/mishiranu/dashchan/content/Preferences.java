@@ -1474,6 +1474,13 @@ public class Preferences {
 		return PREFERENCES.getBoolean(KEY_REMEMBER_VIDEO_PLAYBACK_SPEED, DEFAULT_REMEMBER_VIDEO_PLAYBACK_SPEED);
 	}
 
+	public static final String KEY_ATTACHMENT_VIDEO_PREVIEW = "attachment_video_preview";
+	public static final boolean DEFAULT_ATTACHMENT_VIDEO_PREVIEW = true;
+
+	public static boolean isAttachmentVideoPreview() {
+		return PREFERENCES.getBoolean(KEY_ATTACHMENT_VIDEO_PREVIEW, DEFAULT_ATTACHMENT_VIDEO_PREVIEW);
+	}
+
 	public static final String KEY_WATCHER_REFRESH_INTERVAL = "watcher_refresh_interval";
 	public static final int DISABLED_WATCHER_REFRESH_INTERVAL = 0;
 	public static final int MIN_WATCHER_REFRESH_INTERVAL = 15;

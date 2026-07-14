@@ -2,6 +2,7 @@ package com.mishiranu.dashchan.ui.gallery;
 
 import android.app.AlertDialog;
 import android.content.Context;
+import android.content.res.ColorStateList;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
@@ -16,7 +17,6 @@ import android.view.Gravity;
 import android.view.View;
 import android.widget.FrameLayout;
 import android.widget.ImageButton;
-import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.PopupMenu;
 import android.widget.SeekBar;
@@ -59,11 +59,14 @@ public class VideoUnit {
 	private SeekBar seekBar;
 	private ImageButton playPauseButton;
 	private TextView playbackSpeedButton;
+	private ImageButton muteButton;
 	private PopupMenu playbackSpeedPopupMenu;
 
 	private VideoPlayer player;
 	private BackgroundDrawable backgroundDrawable;
 	private int playbackSpeed = 1000;
+	private boolean muted;
+	private boolean muteSupported = true;
 	private boolean initialized;
 	private boolean wasPlaying;
 	private boolean pausedByTransientLossOfFocus;
@@ -227,7 +230,7 @@ public class VideoUnit {
 
 	private boolean setPlaying(boolean playing, boolean resetFocus) {
 		if (player.isPlaying() != playing) {
-			if (resetFocus && player.isAudioPresent()) {
+			if (resetFocus && player.isAudioPresent() && !muted) {
 				if (playing) {
 					if (!audioFocus.acquire()) {
 						return false;
@@ -257,6 +260,10 @@ public class VideoUnit {
 		View videoView = player.getVideoView(instance.galleryInstance.context);
 		holder.surfaceParent.addView(videoView, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,
 				FrameLayout.LayoutParams.MATCH_PARENT, Gravity.CENTER));
+		muteSupported = !player.isAudioPresent() || player.setMuted(muted);
+		if (!muteSupported) {
+			muted = false;
+		}
 		recreateVideoControls();
 		playPauseButton.setEnabled(true);
 		seekBar.setEnabled(true);
@@ -289,6 +296,7 @@ public class VideoUnit {
 			}
 			trackingNow = false;
 			playbackSpeedButton = null;
+			muteButton = null;
 
 			configurationView = new LinearLayout(context);
 			configurationView.setOrientation(LinearLayout.HORIZONTAL);
@@ -341,6 +349,9 @@ public class VideoUnit {
 				playbackSpeedButton.setOnClickListener(playbackSpeedClickListener);
 				updatePlaybackSpeedButton();
 			}
+			muteButton = new ImageButton(context, null, android.R.attr.borderlessButtonStyle);
+			muteButton.setScaleType(ImageButton.ScaleType.CENTER);
+			muteButton.setOnClickListener(muteClickListener);
 
 			if (longLayout) {
 				controls.setGravity(Gravity.CENTER_VERTICAL);
@@ -380,16 +391,11 @@ public class VideoUnit {
 			configurationView.removeAllViews();
 			if (playbackSpeedButton != null) {
 				configurationView.addView(playbackSpeedButton, (int) (56f * density), (int) (48f * density));
-				View spacer = new View(context);
-				configurationView.addView(spacer, new LinearLayout.LayoutParams(0, 1, 1f));
 			}
-			if (!player.isAudioPresent()) {
-				ImageView imageView = new ImageView(context);
-				imageView.setImageDrawable(ResourceUtils.getDrawable(context, R.attr.iconActionVolumeOff, 0));
-				imageView.setScaleType(ImageView.ScaleType.CENTER);
-				imageView.setImageAlpha(0x99);
-				configurationView.addView(imageView, (int) (48f * density), (int) (48f * density));
-			}
+			configurationView.addView(muteButton, (int) (48f * density), (int) (48f * density));
+			View spacer = new View(context);
+			configurationView.addView(spacer, new LinearLayout.LayoutParams(0, 1, 1f));
+			updateMuteButton();
 			long duration = player.getDuration();
 			totalTimeTextView.setText(formatVideoTime(duration));
 			seekBar.setMax((int) duration);
@@ -470,6 +476,50 @@ public class VideoUnit {
 			popupMenu.show();
 		}
 	};
+
+	private void updateMuteButton() {
+		if (muteButton != null) {
+			boolean audioPresent = player != null && player.isAudioPresent();
+			boolean enabled = audioPresent && muteSupported;
+			boolean showMuted = !audioPresent || muted;
+			Context context = muteButton.getContext();
+			muteButton.setEnabled(enabled);
+			muteButton.setActivated(enabled && muted);
+			muteButton.setAlpha(enabled ? 1f : 0.45f);
+			muteButton.setImageResource(ResourceUtils.getResourceId(context,
+					showMuted ? R.attr.iconActionVolumeOff : R.attr.iconActionVolumeOn, 0));
+			muteButton.setImageTintList(ColorStateList.valueOf(enabled && muted ? 0xffff5252 : Color.WHITE));
+			muteButton.setContentDescription(context.getString(!audioPresent ? R.string.video_has_no_audio
+					: muted ? R.string.unmute_video : R.string.mute_video));
+		}
+	}
+
+	private void setMuted(boolean muted) {
+		if (player == null || !initialized || !player.isAudioPresent() || !muteSupported || this.muted == muted) {
+			return;
+		}
+		boolean acquiredFocus = false;
+		if (!muted && player.isPlaying()) {
+			acquiredFocus = audioFocus.acquire();
+			if (!acquiredFocus) {
+				return;
+			}
+		}
+		if (player.setMuted(muted)) {
+			this.muted = muted;
+			if (muted) {
+				audioFocus.release();
+			}
+		} else {
+			if (acquiredFocus) {
+				audioFocus.release();
+			}
+			muteSupported = false;
+		}
+		updateMuteButton();
+	}
+
+	private final View.OnClickListener muteClickListener = v -> setMuted(!muted);
 
 	private final View.OnClickListener playPauseClickListener = new View.OnClickListener() {
 		@Override

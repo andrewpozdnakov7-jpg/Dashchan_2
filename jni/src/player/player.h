@@ -19,6 +19,7 @@ void setCancelSeek(jlong, jboolean);
 
 void setAudioEnabled(jlong, jboolean);
 void setPlaybackSpeed(jlong, jint);
+jboolean setMuted(jlong, jboolean);
 void setPlaying(jlong, jboolean);
 void setSurface(JNIEnv *, jlong, jobject);
 

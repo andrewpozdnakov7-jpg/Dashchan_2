@@ -553,6 +553,19 @@ public class VideoPlayer {
 		}
 	}
 
+	public boolean setMuted(boolean muted) {
+		synchronized (this) {
+			if (isInitialized()) {
+				try {
+					return holder.setMuted(sessionData.pointer, muted);
+				} catch (RuntimeException | LinkageError e) {
+					return false;
+				}
+			}
+			return false;
+		}
+	}
+
 	private void applyPlaybackSpeedLocked() {
 		if (isInitialized() && playbackSpeedSupported) {
 			try {
@@ -829,6 +842,7 @@ public class VideoPlayer {
 
 		void setAudioEnabled(long pointer, boolean audioEnabled);
 		void setPlaybackSpeed(long pointer, int speed);
+		boolean setMuted(long pointer, boolean muted);
 		void setSurface(long pointer, Surface surface);
 		void setPlaying(long pointer, boolean playing);
 
@@ -875,6 +889,7 @@ public class VideoPlayer {
 
 		@Override public native void setAudioEnabled(long pointer, boolean audioEnabled);
 		@Override public native void setPlaybackSpeed(long pointer, int speed);
+		@Override public native boolean setMuted(long pointer, boolean muted);
 		@Override public native void setSurface(long pointer, Surface surface);
 		@Override public native void setPlaying(long pointer, boolean playing);
 
