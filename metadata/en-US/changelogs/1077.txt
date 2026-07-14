@@ -1,0 +1,7 @@
+* 2ch support is now bundled into the main APK. The separate 2ch extension is no longer required.
+* Added attachment reordering and previews for attached videos before posting.
+* Added a mute button to the video player.
+* Added an option to remember playback speed after closing the app.
+* Improved update downloads and resuming on unstable connections.
+* Available update notifications are now shown immediately after launching the app.
+* The application shortcut is temporarily named “ДВАЧ”.

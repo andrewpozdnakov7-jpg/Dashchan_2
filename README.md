@@ -13,7 +13,7 @@ Dashchan_2 - неофициальная ветка Dashchan для Android 11+.
 
 | Компонент | Package | Версия | Минимальный Android |
 | --- | --- | --- | --- |
-| Dashchan_2 с поддержкой Двача | `io.dashchan2` | `3.1.9-beta4`, code `1076` | API 30 / Android 11+ |
+| Dashchan_2 с поддержкой Двача | `io.dashchan2` | `3.1.9`, code `1077` | API 30 / Android 11+ |
 | Fourchan extension | `io.dashchan2.chan.fourchan` | `1.27-read-only-1`, code `1` | API 30 / Android 11+ |
 
 Поддержка 2ch/Dvach встроена в основной APK `Dashchan_2`. Отдельное дополнение
@@ -124,7 +124,7 @@ installed beside the original Dashchan because it uses its own package name.
 
 | Component | Package | Version | Minimum Android |
 | --- | --- | --- | --- |
-| Dashchan_2 with Dvach support | `io.dashchan2` | `3.1.9-beta4`, code `1076` | API 30 / Android 11+ |
+| Dashchan_2 with Dvach support | `io.dashchan2` | `3.1.9`, code `1077` | API 30 / Android 11+ |
 | Fourchan extension | `io.dashchan2.chan.fourchan` | `1.27-read-only-1`, code `1` | API 30 / Android 11+ |
 
 2ch/Dvach support is bundled into the main `Dashchan_2` APK. The separate
