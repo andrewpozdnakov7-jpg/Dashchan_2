@@ -46,6 +46,7 @@
 
 	<attr name="iconButtonCancel" format="reference" />
 	<attr name="iconButtonDropDown" format="reference" />
+	<attr name="iconButtonDragHandle" format="reference" />
 	<attr name="iconButtonForward" format="reference" />
 	<attr name="iconButtonMore" format="reference" />
 	<attr name="iconButtonPause" format="reference" />

@@ -22,6 +22,7 @@ import android.text.Editable;
 import android.text.TextUtils;
 import android.util.DisplayMetrics;
 import android.util.Pair;
+import android.view.DragEvent;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.Menu;
@@ -175,6 +176,8 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 	private int attachmentColumnCount;
 
 	private final ArrayList<AttachmentHolder> attachments = new ArrayList<>();
+	private AttachmentHolder draggedAttachment;
+	private AttachmentHolder attachmentDragTarget;
 
 	private boolean allowDialog = true;
 	private boolean sendButtonEnabled = true;
@@ -245,6 +248,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		iconView = view.findViewById(R.id.icon);
 		personalDataBlock = view.findViewById(R.id.personal_data_block);
 		attachmentContainer = view.findViewById(R.id.attachment_container);
+		attachmentContainer.setOnDragListener(attachmentContainerDragListener);
 		FrameLayout footerContainer = view.findViewById(R.id.footer_container);
 		int[] oldScrollViewHeight = {-1};
 		scrollView.addOnLayoutChangeListener((v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
@@ -566,6 +570,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		spoilerCheckBox = null;
 		originalPosterCheckBox = null;
 		checkBoxParent = null;
+		clearAttachmentDragState();
 		attachmentContainer = null;
 		nameView = null;
 		emailView = null;
@@ -1419,6 +1424,133 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		new AttachmentRatingDialog(attachmentIndex).show(getChildFragmentManager(), AttachmentRatingDialog.TAG);
 	};
 
+	private final View.OnLongClickListener attachmentDragStartListener = v -> {
+		AttachmentHolder holder = (AttachmentHolder) v.getTag();
+		if (holder == null || attachments.size() < 2 || !attachments.contains(holder)) {
+			return false;
+		}
+		return v.startDragAndDrop(ClipData.newPlainText("", ""),
+				new View.DragShadowBuilder(holder.view), holder, 0);
+	};
+
+	private final View.OnDragListener attachmentContainerDragListener = (v, event) -> {
+		Object localState = event.getLocalState();
+		if (!(localState instanceof AttachmentHolder)) {
+			return false;
+		}
+		AttachmentHolder holder = (AttachmentHolder) localState;
+		switch (event.getAction()) {
+			case DragEvent.ACTION_DRAG_STARTED: {
+				if (!attachments.contains(holder)) {
+					return false;
+				}
+				draggedAttachment = holder;
+				holder.view.setAlpha(0.45f);
+				setAttachmentDragTarget(holder);
+				return true;
+			}
+			case DragEvent.ACTION_DRAG_LOCATION: {
+				scrollPostingFormDuringAttachmentDrag(event.getY());
+				int index = findAttachmentDropIndex(event.getX(), event.getY());
+				setAttachmentDragTarget(index >= 0 ? attachments.get(index) : null);
+				return true;
+			}
+			case DragEvent.ACTION_DROP: {
+				int index = findAttachmentDropIndex(event.getX(), event.getY());
+				if (index >= 0) {
+					moveAttachment(holder, index);
+				}
+				clearAttachmentDragState();
+				return true;
+			}
+			case DragEvent.ACTION_DRAG_ENDED: {
+				clearAttachmentDragState();
+				return true;
+			}
+		}
+		return true;
+	};
+
+	private void setAttachmentDragTarget(AttachmentHolder target) {
+		if (attachmentDragTarget == target) {
+			return;
+		}
+		if (attachmentDragTarget != null && attachmentDragTarget != draggedAttachment) {
+			attachmentDragTarget.view.setScaleX(1f);
+			attachmentDragTarget.view.setScaleY(1f);
+		}
+		attachmentDragTarget = target;
+		if (target != null && target != draggedAttachment) {
+			target.view.setScaleX(0.96f);
+			target.view.setScaleY(0.96f);
+		}
+	}
+
+	private int findAttachmentDropIndex(float x, float y) {
+		int result = -1;
+		float minDistance = Float.MAX_VALUE;
+		Rect rect = new Rect();
+		for (int i = 0; i < attachments.size(); i++) {
+			View view = attachments.get(i).view;
+			view.getDrawingRect(rect);
+			attachmentContainer.offsetDescendantRectToMyCoords(view, rect);
+			if (rect.contains((int) x, (int) y)) {
+				return i;
+			}
+			float dx = x - rect.exactCenterX();
+			float dy = y - rect.exactCenterY();
+			float distance = dx * dx + dy * dy;
+			if (distance < minDistance) {
+				minDistance = distance;
+				result = i;
+			}
+		}
+		return result;
+	}
+
+	private void scrollPostingFormDuringAttachmentDrag(float y) {
+		if (scrollView == null || attachmentContainer == null) {
+			return;
+		}
+		int[] containerLocation = new int[2];
+		int[] scrollLocation = new int[2];
+		attachmentContainer.getLocationOnScreen(containerLocation);
+		scrollView.getLocationOnScreen(scrollLocation);
+		float screenY = containerLocation[1] + y;
+		float density = ResourceUtils.obtainDensity(getResources());
+		int threshold = (int) (48f * density);
+		int step = (int) (12f * density);
+		if (screenY < scrollLocation[1] + threshold && scrollView.canScrollVertically(-1)) {
+			scrollView.scrollBy(0, -step);
+		} else if (screenY > scrollLocation[1] + scrollView.getHeight() - threshold
+				&& scrollView.canScrollVertically(1)) {
+			scrollView.scrollBy(0, step);
+		}
+	}
+
+	private void moveAttachment(AttachmentHolder holder, int targetIndex) {
+		int sourceIndex = attachments.indexOf(holder);
+		if (sourceIndex < 0 || sourceIndex == targetIndex) {
+			return;
+		}
+		attachments.remove(sourceIndex);
+		attachments.add(targetIndex, holder);
+		invalidateAttachments(true);
+		DraftsStorage.getInstance().store(obtainPostDraft());
+	}
+
+	private void clearAttachmentDragState() {
+		if (draggedAttachment != null) {
+			draggedAttachment.view.setAlpha(1f);
+		}
+		if (attachmentDragTarget != null && attachmentDragTarget != draggedAttachment) {
+			attachmentDragTarget.view.setScaleX(1f);
+			attachmentDragTarget.view.setScaleY(1f);
+		}
+		draggedAttachment = null;
+		attachmentDragTarget = null;
+	}
+
 	private final View.OnClickListener attachmentRemoveListener = new View.OnClickListener() {
 		@Override
 		public void onClick(View v) {
@@ -1557,6 +1689,8 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 				R.attr.iconButtonWarning, attachmentWarningListener);
 		View ratingButton = addAttachmentButton(controls, minHeight,
 				R.attr.iconButtonRating, attachmentRatingListener);
+		View dragButton = addAttachmentButton(controls, minHeight,
+				R.attr.iconButtonDragHandle, null);
 		View removeButton = addAttachmentButton(controls, minHeight,
 				R.attr.iconButtonCancel, attachmentRemoveListener);
 
@@ -1564,6 +1698,9 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 				warningButton, ratingButton);
 		warningButton.setTag(holder);
 		ratingButton.setTag(holder);
+		dragButton.setTag(holder);
+		dragButton.setContentDescription(getString(R.string.reorder_attachment));
+		dragButton.setOnLongClickListener(attachmentDragStartListener);
 		removeButton.setTag(holder);
 		options.setTag(holder);
 		attachments.add(holder);

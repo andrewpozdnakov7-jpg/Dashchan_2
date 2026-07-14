@@ -110,6 +110,7 @@
 
 		<item name="iconButtonCancel">@drawable/ic_close</item>
 		<item name="iconButtonDropDown">@drawable/ic_arrow_drop_down</item>
+		<item name="iconButtonDragHandle">@drawable/ic_drag_handle</item>
 		<item name="iconButtonForward">@drawable/ic_arrow_forward</item>
 		<item name="iconButtonMore">@drawable/ic_custom_diamond_dot</item>
 		<item name="iconButtonPause">@drawable/ic_pause</item>
@@ -182,6 +183,7 @@
 
 		<item name="iconButtonCancel">@drawable/ic_close</item>
 		<item name="iconButtonDropDown">@drawable/ic_arrow_drop_down</item>
+		<item name="iconButtonDragHandle">@drawable/ic_drag_handle</item>
 		<item name="iconButtonForward">@drawable/ic_arrow_forward</item>
 		<item name="iconButtonMore">@drawable/ic_custom_diamond_dot</item>
 		<item name="iconButtonPause">@drawable/ic_pause</item>

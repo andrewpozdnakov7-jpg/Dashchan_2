@@ -27,6 +27,7 @@
 
 		<item name="iconButtonCancel">@drawable/ic_action_cancel_light</item>
 		<item name="iconButtonDropDown">@drawable/ic_action_expand_light</item>
+		<item name="iconButtonDragHandle">@drawable/ic_drag_handle</item>
 		<item name="iconButtonForward">@drawable/ic_action_forward_light</item>
 		<item name="iconButtonMore">@drawable/ic_action_expand_light</item>
 		<item name="iconButtonPause">@drawable/ic_action_pause_light</item>
@@ -85,6 +86,7 @@
 
 		<item name="iconButtonCancel">@drawable/ic_action_cancel_dark</item>
 		<item name="iconButtonDropDown">@drawable/ic_action_expand_dark</item>
+		<item name="iconButtonDragHandle">@drawable/ic_drag_handle</item>
 		<item name="iconButtonForward">@drawable/ic_action_forward_dark</item>
 		<item name="iconButtonMore">@drawable/ic_action_expand_dark</item>
 		<item name="iconButtonPause">@drawable/ic_action_pause_dark</item>
