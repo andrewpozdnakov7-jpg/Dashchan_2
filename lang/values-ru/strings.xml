@@ -379,6 +379,8 @@
 	<string name="enable_video_playback_speed_control__summary">Показывать пресеты скорости во встроенном видеоплеере</string>
 	<string name="remember_video_playback_speed">Сохранять скорость воспроизведения между видео</string>
 	<string name="remember_video_playback_speed__summary">Использовать выбранную скорость при открытии следующего видео</string>
+	<string name="persist_video_playback_speed">Запоминать скорость после закрытия приложения</string>
+	<string name="persist_video_playback_speed__summary">Использовать выбранную скорость для следующих видео после перезапуска приложения</string>
 	<string name="attachment_video_preview">Предпросмотр прикреплённых видео</string>
 	<string name="attachment_video_preview__summary">Разрешить открывать видео перед отправкой; миниатюры показываются всегда</string>
 	<string name="mute_video">Выключить звук</string>

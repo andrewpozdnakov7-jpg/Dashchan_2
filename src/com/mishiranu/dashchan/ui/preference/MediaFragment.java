@@ -123,6 +123,10 @@ public class MediaFragment extends PreferenceFragment implements FragmentHandler
 				Preferences.DEFAULT_REMEMBER_VIDEO_PLAYBACK_SPEED,
 				R.string.remember_video_playback_speed,
 				R.string.remember_video_playback_speed__summary).setEnabled(playerLoadResult.first);
+		addCheck(true, Preferences.KEY_PERSIST_VIDEO_PLAYBACK_SPEED,
+				Preferences.DEFAULT_PERSIST_VIDEO_PLAYBACK_SPEED,
+				R.string.persist_video_playback_speed,
+				R.string.persist_video_playback_speed__summary).setEnabled(playerLoadResult.first);
 		addCheck(true, Preferences.KEY_ATTACHMENT_VIDEO_PREVIEW,
 				Preferences.DEFAULT_ATTACHMENT_VIDEO_PREVIEW,
 				R.string.attachment_video_preview,
@@ -134,6 +138,8 @@ public class MediaFragment extends PreferenceFragment implements FragmentHandler
 			addDependency(Preferences.KEY_VIDEO_PLAYBACK_SPEED_CONTROL, Preferences.KEY_USE_VIDEO_PLAYER, true);
 			addDependency(Preferences.KEY_REMEMBER_VIDEO_PLAYBACK_SPEED,
 					Preferences.KEY_VIDEO_PLAYBACK_SPEED_CONTROL, true);
+			addDependency(Preferences.KEY_PERSIST_VIDEO_PLAYBACK_SPEED,
+					Preferences.KEY_REMEMBER_VIDEO_PLAYBACK_SPEED, true);
 			addDependency(Preferences.KEY_ATTACHMENT_VIDEO_PREVIEW, Preferences.KEY_USE_VIDEO_PLAYER, true);
 		}
 

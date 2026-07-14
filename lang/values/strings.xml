@@ -359,6 +359,8 @@
 	<string name="enable_video_playback_speed_control__summary">Show playback speed presets in the built-in video player</string>
 	<string name="remember_video_playback_speed">Keep playback speed between videos</string>
 	<string name="remember_video_playback_speed__summary">Use the selected speed when opening the next video</string>
+	<string name="persist_video_playback_speed">Remember speed between app sessions</string>
+	<string name="persist_video_playback_speed__summary">Use the selected speed for subsequent videos after restarting the app</string>
 	<string name="attachment_video_preview">Preview attached videos</string>
 	<string name="attachment_video_preview__summary">Allow opening videos before posting; thumbnails are always shown</string>
 	<string name="mute_video">Mute video</string>

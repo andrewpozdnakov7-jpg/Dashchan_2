@@ -79,6 +79,9 @@ public class VideoUnit {
 
 	public VideoUnit(PagerInstance instance) {
 		this.instance = instance;
+		if (Preferences.isRememberVideoPlaybackSpeed() && Preferences.isPersistVideoPlaybackSpeed()) {
+			playbackSpeed = normalizePlaybackSpeed(Preferences.getSavedVideoPlaybackSpeed());
+		}
 		controlsView = new LinearLayout(instance.galleryInstance.context);
 		controlsView.setOrientation(LinearLayout.VERTICAL);
 		controlsView.setVisibility(View.GONE);
@@ -421,6 +424,15 @@ public class VideoUnit {
 		return "1x";
 	}
 
+	private static int normalizePlaybackSpeed(int speed) {
+		for (int playbackSpeed : PLAYBACK_SPEEDS) {
+			if (playbackSpeed == speed) {
+				return speed;
+			}
+		}
+		return 1000;
+	}
+
 	private void updatePlaybackSpeedButton() {
 		if (playbackSpeedButton != null) {
 			playbackSpeedButton.setText(formatPlaybackSpeed(playbackSpeed));
@@ -464,7 +476,12 @@ public class VideoUnit {
 						.setCheckable(true).setChecked(PLAYBACK_SPEEDS[i] == playbackSpeed);
 			}
 			popupMenu.setOnMenuItemClickListener(item -> {
-				setPlaybackSpeed(PLAYBACK_SPEEDS[item.getItemId()]);
+				int playbackSpeed = PLAYBACK_SPEEDS[item.getItemId()];
+				setPlaybackSpeed(playbackSpeed);
+				if (Preferences.isRememberVideoPlaybackSpeed() &&
+						Preferences.isPersistVideoPlaybackSpeed()) {
+					Preferences.setSavedVideoPlaybackSpeed(playbackSpeed);
+				}
 				return true;
 			});
 			popupMenu.setOnDismissListener(menu -> {

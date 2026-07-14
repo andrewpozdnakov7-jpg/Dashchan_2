@@ -1474,6 +1474,23 @@ public class Preferences {
 		return PREFERENCES.getBoolean(KEY_REMEMBER_VIDEO_PLAYBACK_SPEED, DEFAULT_REMEMBER_VIDEO_PLAYBACK_SPEED);
 	}
 
+	public static final String KEY_PERSIST_VIDEO_PLAYBACK_SPEED = "persist_video_playback_speed";
+	public static final boolean DEFAULT_PERSIST_VIDEO_PLAYBACK_SPEED = false;
+	private static final String KEY_SAVED_VIDEO_PLAYBACK_SPEED = "saved_video_playback_speed";
+	public static final int DEFAULT_SAVED_VIDEO_PLAYBACK_SPEED = 1000;
+
+	public static boolean isPersistVideoPlaybackSpeed() {
+		return PREFERENCES.getBoolean(KEY_PERSIST_VIDEO_PLAYBACK_SPEED, DEFAULT_PERSIST_VIDEO_PLAYBACK_SPEED);
+	}
+
+	public static int getSavedVideoPlaybackSpeed() {
+		return PREFERENCES.getInt(KEY_SAVED_VIDEO_PLAYBACK_SPEED, DEFAULT_SAVED_VIDEO_PLAYBACK_SPEED);
+	}
+
+	public static void setSavedVideoPlaybackSpeed(int playbackSpeed) {
+		PREFERENCES.edit().put(KEY_SAVED_VIDEO_PLAYBACK_SPEED, playbackSpeed).close();
+	}
+
 	public static final String KEY_ATTACHMENT_VIDEO_PREVIEW = "attachment_video_preview";
 	public static final boolean DEFAULT_ATTACHMENT_VIDEO_PREVIEW = true;
 
