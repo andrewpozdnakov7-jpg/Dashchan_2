@@ -1,3 +1,4 @@
 -dontobfuscate
+-dontwarn javax.annotation.**
 -keep class com.mishiranu.dashchan.** { *; }
 -keep class chan.** { *; }
