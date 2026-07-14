@@ -546,6 +546,7 @@
 	<string name="update_channel_beta">Бета</string>
 	<string name="beta_update_channel_warning__sentence">Бета-версии предназначены для тестирования и могут содержать ошибки. Android не позволяет установить более старую стабильную сборку поверх новой бета-версии. Вернуться на стабильные обновления можно после выхода стабильной версии с более высоким кодом.</string>
 	<string name="open_download_page">Открыть страницу загрузки</string>
+	<string name="open_updates">Открыть обновления</string>
 	<string name="remind_later">Напомнить позже</string>
 	<string name="skip_this_version">Пропустить эту версию</string>
 	<string name="update_version__format">%1$s (код %2$d)</string>

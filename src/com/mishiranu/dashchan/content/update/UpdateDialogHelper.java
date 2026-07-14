@@ -10,6 +10,8 @@ import chan.util.StringUtils;
 import com.mishiranu.dashchan.BuildConfig;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
+import com.mishiranu.dashchan.ui.FragmentHandler;
+import com.mishiranu.dashchan.ui.preference.UpdateFragment;
 import com.mishiranu.dashchan.util.AndroidUtils;
 import com.mishiranu.dashchan.util.NavigationUtils;
 import com.mishiranu.dashchan.widget.ProgressDialog;
@@ -121,7 +123,7 @@ public class UpdateDialogHelper {
 		actions.add(ACTION_SKIP);
 		labels.add(context.getString(android.R.string.cancel));
 		actions.add(ACTION_CLOSE);
-		new AlertDialog.Builder(context)
+		AlertDialog.Builder builder = new AlertDialog.Builder(context)
 				.setTitle(title)
 				.setMessage(message)
 				.setItems(labels.toArray(new String[0]), (dialog, which) -> {
@@ -144,8 +146,12 @@ public class UpdateDialogHelper {
 							break;
 						}
 					}
-				})
-				.show();
+				});
+		if (context instanceof FragmentHandler) {
+			builder.setPositiveButton(R.string.open_updates, (dialog, which) ->
+					((FragmentHandler) context).pushFragment(new UpdateFragment()));
+		}
+		builder.show();
 	}
 
 	private static String buildMessage(Context context, UpdateResult result) {
