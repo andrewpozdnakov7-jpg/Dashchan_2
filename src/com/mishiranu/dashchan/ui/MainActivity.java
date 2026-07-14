@@ -1128,7 +1128,10 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	protected void onStart() {
 		super.onStart();
 
-		UpdateDialogHelper.checkAutomatically(this);
+		if (!instanceViewModel.updateCheckStarted) {
+			instanceViewModel.updateCheckStarted = true;
+			UpdateDialogHelper.checkAutomatically(this);
+		}
 		handleChansChangedDelayed();
 		watcherServiceClient.notifyForeground();
 	}
@@ -2041,6 +2044,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	public static class InstanceViewModel extends ViewModel {
 		private final HashMap<String, ListPage.Retainable> extras = new HashMap<>();
 		private final Runnable cookiesRequirement = ChanDatabase.getInstance().requireCookies();
+		private boolean updateCheckStarted;
 
 		@Override
 		protected void onCleared() {

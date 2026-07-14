@@ -134,8 +134,8 @@ android {
 
 	defaultConfig {
 		applicationId = 'io.dashchan2'
-		versionCode = 1075
-		versionName = '3.1.9-beta3'
+		versionCode = 1076
+		versionName = '3.1.9-beta4'
 
 		minSdk = 30
 		targetSdk = 30

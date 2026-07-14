@@ -25,7 +25,6 @@ import chan.content.ChanManager;
 import chan.util.CommonUtils;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.R;
-import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.UpdaterActivity;
 import com.mishiranu.dashchan.content.async.ReadUpdateTask;
 import com.mishiranu.dashchan.content.async.TaskViewModel;
@@ -449,7 +448,6 @@ public class UpdateFragment extends BaseListFragment {
 		menu.add(0, R.id.menu_download, 0, R.string.download_files)
 				.setIcon(((FragmentHandler) requireActivity()).getActionBarIcon(R.attr.iconActionDownload))
 				.setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM);
-		menu.add(0, R.id.menu_check_on_start, 0, R.string.check_on_startup).setCheckable(true);
 	}
 
 	@Override
@@ -471,7 +469,6 @@ public class UpdateFragment extends BaseListFragment {
 					StringUtils.formatFileSize(length, false));
 		}
 		menu.findItem(R.id.menu_download).setTitle(downloadTitle);
-		menu.findItem(R.id.menu_check_on_start).setChecked(Preferences.isCheckUpdatesOnStart());
 	}
 
 	@Override
@@ -501,10 +498,6 @@ public class UpdateFragment extends BaseListFragment {
 					ClickableToast.show(R.string.no_available_updates);
 				}
 				return true;
-			}
-			case R.id.menu_check_on_start: {
-				Preferences.setCheckUpdatesOnStart(!item.isChecked());
-				break;
 			}
 		}
 		return false;

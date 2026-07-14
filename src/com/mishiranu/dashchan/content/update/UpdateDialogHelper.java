@@ -19,9 +19,8 @@ import java.util.ArrayList;
 
 public class UpdateDialogHelper {
 	private static final int ACTION_OPEN = 0;
-	private static final int ACTION_REMIND_LATER = 1;
-	private static final int ACTION_SKIP = 2;
-	private static final int ACTION_CLOSE = 3;
+	private static final int ACTION_SKIP = 1;
+	private static final int ACTION_CLOSE = 2;
 	private static boolean automaticCheckRunning = false;
 
 	public static void checkManually(Fragment fragment) {
@@ -49,15 +48,14 @@ public class UpdateDialogHelper {
 	}
 
 	public static void checkAutomatically(Activity activity) {
-		if (!UpdateChecker.shouldStartAutomaticCheck() || automaticCheckRunning) {
+		if (automaticCheckRunning) {
 			return;
 		}
 		automaticCheckRunning = true;
 		UpdateChecker.checkAsync(activity, result -> {
 			automaticCheckRunning = false;
-			long displayTime = System.currentTimeMillis();
 			if (!activity.isFinishing() && !activity.isDestroyed() &&
-					UpdateChecker.shouldShowAutomatically(result, displayTime)) {
+					UpdateChecker.shouldShowAutomatically(result)) {
 				showResult(activity, result, false);
 			}
 		});
@@ -92,19 +90,15 @@ public class UpdateDialogHelper {
 			case UPDATE_AVAILABLE:
 			case UPDATE_UNAVAILABLE:
 			case RELEASE_FOUND: {
-				showUpdateDialog(context, result, manual);
+				showUpdateDialog(context, result);
 				return;
 			}
 		}
 	}
 
-	private static void showUpdateDialog(Context context, UpdateResult result, boolean manual) {
+	private static void showUpdateDialog(Context context, UpdateResult result) {
 		int versionCode = result.getPreferenceVersionCode();
 		Preferences.setUpdateLastSeenVersionCode(versionCode);
-		if (!manual) {
-			Preferences.setUpdateRemindAfterTime(System.currentTimeMillis()
-					+ UpdateChecker.REMIND_LATER_INTERVAL_MS);
-		}
 		String title = result.title;
 		if (StringUtils.isEmpty(title)) {
 			title = context.getString(result.status == UpdateResult.Status.RELEASE_FOUND
@@ -117,8 +111,6 @@ public class UpdateDialogHelper {
 			labels.add(context.getString(R.string.open_download_page));
 			actions.add(ACTION_OPEN);
 		}
-		labels.add(context.getString(R.string.remind_later));
-		actions.add(ACTION_REMIND_LATER);
 		labels.add(context.getString(R.string.skip_this_version));
 		actions.add(ACTION_SKIP);
 		labels.add(context.getString(android.R.string.cancel));
@@ -130,11 +122,6 @@ public class UpdateDialogHelper {
 					switch (actions.get(which)) {
 						case ACTION_OPEN: {
 							openDownloadPage(context, result);
-							break;
-						}
-						case ACTION_REMIND_LATER: {
-							Preferences.setUpdateRemindAfterTime(System.currentTimeMillis()
-									+ UpdateChecker.REMIND_LATER_INTERVAL_MS);
 							break;
 						}
 						case ACTION_SKIP: {

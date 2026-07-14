@@ -16,7 +16,6 @@ import java.net.URLConnection;
 import org.json.JSONException;
 
 public class UpdateChecker {
-	public static final long REMIND_LATER_INTERVAL_MS = 24 * 60 * 60 * 1000L;
 	private static final int TIMEOUT_MS = 10_000;
 	private static final String USER_AGENT = "Dashchan_2 UpdateChecker";
 
@@ -52,11 +51,7 @@ public class UpdateChecker {
 		return task;
 	}
 
-	public static boolean shouldStartAutomaticCheck() {
-		return Preferences.isUpdateAutoCheckEnabled();
-	}
-
-	public static boolean shouldShowAutomatically(UpdateResult result, long now) {
+	public static boolean shouldShowAutomatically(UpdateResult result) {
 		if (result == null || result.status != UpdateResult.Status.UPDATE_AVAILABLE &&
 				result.status != UpdateResult.Status.UPDATE_UNAVAILABLE &&
 				result.status != UpdateResult.Status.RELEASE_FOUND) {
@@ -66,7 +61,7 @@ public class UpdateChecker {
 		if (Preferences.getUpdateSkippedVersionCode() == versionCode) {
 			return false;
 		}
-		return now >= Preferences.getUpdateRemindAfterTime();
+		return true;
 	}
 
 	private static UpdateResult check(Context context) {

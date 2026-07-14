@@ -203,6 +203,12 @@
 			"name": "3.1.9-beta3",
 			"date": "14.07.2026",
 			"changelog": false
+		},
+		{
+			"code": 1076,
+			"name": "3.1.9-beta4",
+			"date": "14.07.2026",
+			"changelog": false
 		}
 	]
 }

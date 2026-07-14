@@ -11,7 +11,6 @@
 	<item type="id" name="menu_cards" />
 	<item type="id" name="menu_catalog" />
 	<item type="id" name="menu_change_theme" />
-	<item type="id" name="menu_check_on_start" />
 	<item type="id" name="menu_clear" />
 	<item type="id" name="menu_clear_deleted" />
 	<item type="id" name="menu_clear_old" />
