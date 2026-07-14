@@ -57,6 +57,7 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 	public enum NavigatePostMode {DISABLED, MANUALLY, ENABLED}
 
 	private static final String EXTRA_URI = "uri";
+	private static final String EXTRA_FILE_NAME = "fileName";
 	private static final String EXTRA_CHAN_NAME = "chanName";
 	private static final String EXTRA_IMAGE_INDEX = "imageIndex";
 	private static final String EXTRA_THREAD_TITLE = "threadTitle";
@@ -92,12 +93,16 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 	public GalleryOverlay() {}
 
 	public GalleryOverlay(Uri uri) {
-		this(uri, null, null, 0, null, null, NavigatePostMode.DISABLED, false);
+		this(uri, null);
+	}
+
+	public GalleryOverlay(Uri uri, String fileName) {
+		this(uri, fileName, null, null, 0, null, null, NavigatePostMode.DISABLED, false);
 	}
 
 	public GalleryOverlay(String chanName, List<GalleryItem> galleryItems, int imageIndex, String threadTitle,
 			View fromView, NavigatePostMode navigatePostMode, boolean initialGalleryMode) {
-		this(null, chanName, galleryItems, imageIndex, threadTitle, fromView,
+		this(null, null, chanName, galleryItems, imageIndex, threadTitle, fromView,
 				navigatePostMode, initialGalleryMode);
 	}
 
@@ -105,10 +110,12 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 		return requireArguments().getString(EXTRA_CHAN_NAME);
 	}
 
-	private GalleryOverlay(Uri uri, String chanName, List<GalleryItem> galleryItems, int imageIndex, String threadTitle,
+	private GalleryOverlay(Uri uri, String fileName, String chanName, List<GalleryItem> galleryItems, int imageIndex,
+			String threadTitle,
 			View fromView, NavigatePostMode navigatePostMode, boolean initialGalleryMode) {
 		Bundle args = new Bundle();
 		args.putParcelable(EXTRA_URI, uri);
+		args.putString(EXTRA_FILE_NAME, fileName);
 		args.putString(EXTRA_CHAN_NAME, chanName);
 		args.putInt(EXTRA_IMAGE_INDEX, imageIndex);
 		args.putString(EXTRA_THREAD_TITLE, threadTitle);
@@ -240,7 +247,8 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 					boardName = chan.locator.safe(true).getBoardName(uri);
 					threadNumber = chan.locator.safe(true).getThreadNumber(uri);
 				}
-				galleryItems = Collections.singletonList(new GalleryItem(uri, boardName, threadNumber));
+				String fileName = requireArguments().getString(EXTRA_FILE_NAME);
+				galleryItems = Collections.singletonList(new GalleryItem(uri, fileName, boardName, threadNumber));
 				imagePosition = 0;
 			} else {
 				galleryItems = queuedGalleryItems;

@@ -190,9 +190,14 @@ public class DraftsStorage extends StorageManager.Storage<Pair<List<DraftsStorag
 		return null;
 	}
 
-	private static File getAttachmentDraftFile(String hash) {
+	private static File resolveAttachmentDraftFile(String hash) {
 		File directory = getAttachmentDraftsDirectory();
 		return directory != null ? new File(directory, hash) : null;
+	}
+
+	public File getAttachmentDraftFile(String hash) {
+		File file = resolveAttachmentDraftFile(hash);
+		return file != null && file.isFile() ? file : null;
 	}
 
 	public FileHolder getAttachmentDraftFileHolder(String hash) {
@@ -295,7 +300,7 @@ public class DraftsStorage extends StorageManager.Storage<Pair<List<DraftsStorag
 		HashSet<String> hashes = collectAttachmentDraftHashes();
 		for (AttachmentDraft attachmentDraft : attachmentDrafts) {
 			if (!hashes.contains(attachmentDraft.hash)) {
-				File file = getAttachmentDraftFile(attachmentDraft.hash);
+				File file = resolveAttachmentDraftFile(attachmentDraft.hash);
 				if (file != null) {
 					file.delete();
 				}

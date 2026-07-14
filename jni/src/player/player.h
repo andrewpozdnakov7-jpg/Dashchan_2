@@ -17,6 +17,7 @@ void setPosition(JNIEnv *, jlong, jlong);
 void setRange(jlong, jlong, jlong, jlong);
 void setCancelSeek(jlong, jboolean);
 
+void setAudioEnabled(jlong, jboolean);
 void setPlaybackSpeed(jlong, jint);
 void setPlaying(jlong, jboolean);
 void setSurface(JNIEnv *, jlong, jobject);

@@ -87,6 +87,7 @@ struct Player {
 		int interrupt;
 		int errorCode;
 		int seekAnyFrame;
+		int audioEnabled;
 	} meta;
 
 	struct {
@@ -1448,6 +1449,7 @@ static Player * createPlayer(void) {
 	Player * player = malloc(sizeof(Player));
 	memset(player, 0, sizeof(Player));
 	player->file.total = -1;
+	player->meta.audioEnabled = 1;
 	player->av.audioStreamIndex = INDEX_NO_STREAM;
 	player->av.videoStreamIndex = INDEX_NO_STREAM;
 	player->video.useLibyuv = -1;
@@ -1485,6 +1487,11 @@ jlong preInit(UNUSED JNIEnv * env, jint fd) {
 	Player * player = createPlayer();
 	player->file.fd = fd;
 	return (jlong) (long) player;
+}
+
+void setAudioEnabled(jlong pointer, jboolean audioEnabled) {
+	Player * player = POINTER_CAST(pointer);
+	player->meta.audioEnabled = !!audioEnabled;
 }
 
 void init(JNIEnv * env, jlong pointer, jobject nativeBridge, jboolean seekAnyFrame) {
@@ -1535,6 +1542,10 @@ void init(JNIEnv * env, jlong pointer, jobject nativeBridge, jboolean seekAnyFra
 	}
 	AVStream * audioStream = audioStreamIndex != INDEX_NO_STREAM ? formatContext->streams[audioStreamIndex] : NULL;
 	AVStream * videoStream = videoStreamIndex != INDEX_NO_STREAM ? formatContext->streams[videoStreamIndex] : NULL;
+	if (!player->meta.audioEnabled) {
+		audioStreamIndex = INDEX_NO_STREAM;
+		audioStream = NULL;
+	}
 	const AVCodec * audioCodec = audioStream ? avcodec_find_decoder(audioStream->codecpar->codec_id) : NULL;
 	const AVCodec * videoCodec = videoStream ? avcodec_find_decoder(videoStream->codecpar->codec_id) : NULL;
 	if (!audioCodec) {

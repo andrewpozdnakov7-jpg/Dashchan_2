@@ -44,6 +44,11 @@ void JCALL(setCancelSeek)(UNUSED JNIEnv * env, UNUSED jobject this, jlong pointe
 	setCancelSeek(pointer, cancelSeek);
 }
 
+void JCALL(setAudioEnabled)(UNUSED JNIEnv * env, UNUSED jobject this,
+		jlong pointer, jboolean audioEnabled) {
+	setAudioEnabled(pointer, audioEnabled);
+}
+
 void JCALL(setPlaybackSpeed)(UNUSED JNIEnv * env, UNUSED jobject this, jlong pointer, jint speed) {
 	setPlaybackSpeed(pointer, speed);
 }

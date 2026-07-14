@@ -588,4 +588,5 @@
 	<string name="you_need_to_attach_a_file">Необходимо прикрепить файл</string>
 
 	<string name="reorder_attachment">Изменить порядок вложений</string>
+	<string name="preview_video_attachment">Предпросмотр видео</string>
 </resources>

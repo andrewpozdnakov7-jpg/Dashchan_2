@@ -12,6 +12,7 @@ import java.util.TreeMap;
 public class GalleryItem {
 	private final String fileUriString;
 	private final String thumbnailUriString;
+	private final String fileNameOverride;
 
 	public final String boardName;
 	public final String threadNumber;
@@ -30,6 +31,7 @@ public class GalleryItem {
 			String originalName, int width, int height, int size) {
 		fileUriString = fileUri != null ? fileUri.toString() : null;
 		thumbnailUriString = thumbnailUri != null ? thumbnailUri.toString() : null;
+		fileNameOverride = null;
 		this.boardName = boardName;
 		this.threadNumber = threadNumber;
 		this.postNumber = postNumber;
@@ -40,8 +42,13 @@ public class GalleryItem {
 	}
 
 	public GalleryItem(Uri fileUri, String boardName, String threadNumber) {
+		this(fileUri, null, boardName, threadNumber);
+	}
+
+	public GalleryItem(Uri fileUri, String fileName, String boardName, String threadNumber) {
 		fileUriString = null;
 		thumbnailUriString = null;
+		fileNameOverride = fileName;
 		this.boardName = boardName;
 		this.threadNumber = threadNumber;
 		postNumber = null;
@@ -83,6 +90,9 @@ public class GalleryItem {
 	}
 
 	public String getFileName(Chan chan) {
+		if (fileNameOverride != null) {
+			return fileNameOverride;
+		}
 		Uri fileUri = getFileUri(chan);
 		return chan.locator.createAttachmentFileName(fileUri);
 	}

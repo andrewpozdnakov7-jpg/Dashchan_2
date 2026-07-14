@@ -12,11 +12,9 @@ import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.Outline;
 import android.graphics.Rect;
-import android.media.MediaMetadataRetriever;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.IBinder;
-import android.os.ParcelFileDescriptor;
 import android.os.SystemClock;
 import android.text.Editable;
 import android.text.TextUtils;
@@ -52,6 +50,7 @@ import chan.util.CommonUtils;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
+import com.mishiranu.dashchan.content.MainApplication;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.async.ExecutorTask;
 import com.mishiranu.dashchan.content.async.ReadCaptchaTask;
@@ -66,9 +65,11 @@ import com.mishiranu.dashchan.graphics.RoundedCornersDrawable;
 import com.mishiranu.dashchan.graphics.TransparentTileDrawable;
 import com.mishiranu.dashchan.media.JpegData;
 import com.mishiranu.dashchan.media.PngData;
+import com.mishiranu.dashchan.media.VideoPlayer;
 import com.mishiranu.dashchan.ui.CaptchaForm;
 import com.mishiranu.dashchan.ui.ContentFragment;
 import com.mishiranu.dashchan.ui.FragmentHandler;
+import com.mishiranu.dashchan.ui.gallery.GalleryOverlay;
 import com.mishiranu.dashchan.ui.posting.dialog.AttachmentOptionsDialog;
 import com.mishiranu.dashchan.ui.posting.dialog.AttachmentRatingDialog;
 import com.mishiranu.dashchan.ui.posting.dialog.AttachmentWarningDialog;
@@ -89,11 +90,14 @@ import com.mishiranu.dashchan.widget.ProgressDialog;
 import com.mishiranu.dashchan.widget.ThemeEngine;
 import com.mishiranu.dashchan.widget.UriPasteEditText;
 import com.mishiranu.dashchan.widget.ViewFactory;
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.concurrent.Executor;
 
 public class PostingFragment extends ContentFragment implements FragmentHandler.Callback, CaptchaForm.Callback,
 		ReadCaptchaTask.Callback, PostingDialogCallback, UriPasteEditText.Callback {
@@ -176,6 +180,9 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 	private int attachmentColumnCount;
 
 	private final ArrayList<AttachmentHolder> attachments = new ArrayList<>();
+	private static final Executor VIDEO_THUMBNAIL_EXECUTOR = ConcurrentUtils
+			.newSingleThreadPool(3000, "PostingThumbnail", null);
+	private final HashMap<AttachmentHolder, VideoThumbnailTask> videoThumbnailTasks = new HashMap<>();
 	private AttachmentHolder draggedAttachment;
 	private AttachmentHolder attachmentDragTarget;
 
@@ -571,6 +578,10 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		originalPosterCheckBox = null;
 		checkBoxParent = null;
 		clearAttachmentDragState();
+		for (VideoThumbnailTask task : videoThumbnailTasks.values()) {
+			task.cancel();
+		}
+		videoThumbnailTasks.clear();
 		attachmentContainer = null;
 		nameView = null;
 		emailView = null;
@@ -1424,6 +1435,22 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		new AttachmentRatingDialog(attachmentIndex).show(getChildFragmentManager(), AttachmentRatingDialog.TAG);
 	};
 
+	private final View.OnClickListener attachmentPreviewListener = v -> {
+		AttachmentHolder holder = (AttachmentHolder) v.getTag();
+		if (holder == null || !attachments.contains(holder)) {
+			return;
+		}
+		File file = DraftsStorage.getInstance().getAttachmentDraftFile(holder.hash);
+		if (file == null) {
+			ClickableToast.show(R.string.unknown_error);
+			return;
+		}
+		String tag = GalleryOverlay.class.getName();
+		if (getParentFragmentManager().findFragmentByTag(tag) == null) {
+			new GalleryOverlay(Uri.fromFile(file), holder.name).show(getParentFragmentManager(), tag);
+		}
+	};
+
 	private final View.OnLongClickListener attachmentDragStartListener = v -> {
 		AttachmentHolder holder = (AttachmentHolder) v.getTag();
 		if (holder == null || attachments.size() < 2 || !attachments.contains(holder)) {
@@ -1556,6 +1583,10 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		public void onClick(View v) {
 			AttachmentHolder holder = (AttachmentHolder) v.getTag();
 			if (attachments.remove(holder)) {
+				VideoThumbnailTask task = videoThumbnailTasks.remove(holder);
+				if (task != null) {
+					task.cancel();
+				}
 				if (attachmentColumnCount == 1) {
 					attachmentContainer.removeView(holder.view);
 				} else {
@@ -1658,6 +1689,18 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		ViewUtils.setSelectableItemBackground(options);
 		options.setOnClickListener(attachmentOptionsListener);
 		view.addView(options, FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT);
+		ImageView previewButton = new ImageView(view.getContext(), null, android.R.attr.borderlessButtonStyle);
+		previewButton.setScaleType(ImageView.ScaleType.CENTER);
+		previewButton.setImageDrawable(ResourceUtils.getDrawable(previewButton.getContext(),
+				R.attr.iconAttachmentVideo, 0));
+		previewButton.setVisibility(View.GONE);
+		previewButton.setContentDescription(getString(R.string.preview_video_attachment));
+		previewButton.setOnClickListener(attachmentPreviewListener);
+		int previewButtonSize = (int) (48f * density);
+		view.addView(previewButton, previewButtonSize, previewButtonSize);
+		FrameLayout.LayoutParams previewLayoutParams = (FrameLayout.LayoutParams) previewButton.getLayoutParams();
+		previewLayoutParams.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
+		previewLayoutParams.topMargin = (int) (16f * density);
 
 		LinearLayout controls = new LinearLayout(view.getContext());
 		controls.setOrientation(LinearLayout.HORIZONTAL);
@@ -1694,13 +1737,14 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		View removeButton = addAttachmentButton(controls, minHeight,
 				R.attr.iconButtonCancel, attachmentRemoveListener);
 
-		AttachmentHolder holder = new AttachmentHolder(view, fileName, fileSize, imageView,
+		AttachmentHolder holder = new AttachmentHolder(view, fileName, fileSize, imageView, previewButton,
 				warningButton, ratingButton);
 		warningButton.setTag(holder);
 		ratingButton.setTag(holder);
 		dragButton.setTag(holder);
 		dragButton.setContentDescription(getString(R.string.reorder_attachment));
 		dragButton.setOnLongClickListener(attachmentDragStartListener);
+		previewButton.setTag(holder);
 		removeButton.setTag(holder);
 		options.setTag(holder);
 		attachments.add(holder);
@@ -1737,6 +1781,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		Bitmap bitmap = null;
 		DisplayMetrics metrics = getResources().getDisplayMetrics();
 		int targetImageSize = Math.max(metrics.widthPixels, metrics.heightPixels);
+		boolean video = Chan.getFallback().locator.isVideoExtension(name);
 		if (fileHolder != null) {
 			if (fileHolder.isImage()) {
 				try {
@@ -1746,20 +1791,13 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 				}
 				fileSize += " " + fileHolder.getImageWidth() + '×' + fileHolder.getImageHeight();
 			}
-			if (bitmap == null) {
-				if (Chan.getFallback().locator.isVideoExtension(fileHolder.getName())) {
-					MediaMetadataRetriever retriever = new MediaMetadataRetriever();
-					try (ParcelFileDescriptor descriptor = fileHolder.openFileDescriptor()) {
-						retriever.setDataSource(descriptor.getFileDescriptor());
-						Bitmap fullBitmap = retriever.getFrameAtTime(-1);
-						if (fullBitmap != null) {
-							bitmap = GraphicsUtils.reduceBitmapSize(fullBitmap, targetImageSize, true);
-						}
-					} catch (Exception | OutOfMemoryError e) {
-						e.printStackTrace();
-					}
-				}
-			}
+		}
+		if (video) {
+			holder.previewButton.setVisibility(View.VISIBLE);
+			holder.view.getLayoutParams().height = (int) (128f * ResourceUtils.obtainDensity(this));
+			VideoThumbnailTask task = new VideoThumbnailTask(holder, hash, targetImageSize);
+			videoThumbnailTasks.put(holder, task);
+			task.execute(VIDEO_THUMBNAIL_EXECUTOR);
 		}
 		if (bitmap != null) {
 			holder.imageView.setVisibility(View.VISIBLE);
@@ -1771,6 +1809,52 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 			holder.warningButton.setVisibility(View.GONE);
 		}
 		updateAttachmentConfiguration(holder);
+	}
+
+	private class VideoThumbnailTask extends ExecutorTask<Void, Bitmap> {
+		private final AttachmentHolder holder;
+		private final String hash;
+		private final int targetImageSize;
+
+		public VideoThumbnailTask(AttachmentHolder holder, String hash, int targetImageSize) {
+			this.holder = holder;
+			this.hash = hash;
+			this.targetImageSize = targetImageSize;
+		}
+
+		@Override
+		protected Bitmap run() throws InterruptedException {
+			File file = DraftsStorage.getInstance().getAttachmentDraftFile(hash);
+			if (file == null || !VideoPlayer.loadLibraries(MainApplication.getInstance()).first) {
+				return null;
+			}
+			try {
+				Bitmap bitmap = VideoPlayer.createThumbnail(file);
+				return bitmap != null ? GraphicsUtils.reduceBitmapSize(bitmap, targetImageSize, true) : null;
+			} catch (java.io.IOException | RuntimeException | LinkageError | OutOfMemoryError e) {
+				return null;
+			}
+		}
+
+		@Override
+		protected void onCancel(Bitmap bitmap) {
+			if (bitmap != null) {
+				bitmap.recycle();
+			}
+		}
+
+		@Override
+		protected void onComplete(Bitmap bitmap) {
+			if (videoThumbnailTasks.get(holder) == this) {
+				videoThumbnailTasks.remove(holder);
+			}
+			if (bitmap != null && attachments.contains(holder) && hash.equals(holder.hash)) {
+				holder.imageView.setImageBitmap(bitmap);
+				holder.imageView.setVisibility(View.VISIBLE);
+			} else if (bitmap != null) {
+				bitmap.recycle();
+			}
+		}
 	}
 
 	private void updateAttachmentConfiguration(AttachmentHolder holder) {

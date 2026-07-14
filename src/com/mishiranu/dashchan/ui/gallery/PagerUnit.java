@@ -298,7 +298,13 @@ public class PagerUnit implements PagerInstance.Callback {
 		}
 		holder.playButton.setVisibility(View.GONE);
 		Uri uri = galleryItem.getFileUri(chan);
-		File cachedFile = cacheManager.getMediaFile(uri, true);
+		File cachedFile;
+		if (uri != null && "file".equals(uri.getScheme())) {
+			String path = uri.getPath();
+			cachedFile = path != null ? new File(path) : null;
+		} else {
+			cachedFile = cacheManager.getMediaFile(uri, true);
+		}
 		if (cachedFile == null) {
 			showError(holder, galleryInstance.context.getString(R.string.cache_is_unavailable));
 		} else if (isImage) {

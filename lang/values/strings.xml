@@ -570,4 +570,5 @@
 	<string name="you_need_to_attach_a_file">You need to attach a file</string>
 
 	<string name="reorder_attachment">Reorder attachment</string>
+	<string name="preview_video_attachment">Preview video</string>
 </resources>

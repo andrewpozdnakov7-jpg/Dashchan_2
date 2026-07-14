@@ -179,6 +179,7 @@ public class VideoPlayer {
 
 	private final Listener listener;
 	private final boolean seekAnyFrame;
+	private final boolean audioEnabled;
 
 	private SessionData sessionData;
 	private SessionData initData;
@@ -191,8 +192,53 @@ public class VideoPlayer {
 	private volatile boolean lastBuffering = false;
 
 	public VideoPlayer(Listener listener, boolean seekAnyFrame) {
+		this(listener, seekAnyFrame, true);
+	}
+
+	private VideoPlayer(Listener listener, boolean seekAnyFrame, boolean audioEnabled) {
 		this.listener = listener;
 		this.seekAnyFrame = seekAnyFrame;
+		this.audioEnabled = audioEnabled;
+	}
+
+	public static Bitmap createThumbnail(File file) throws IOException, InterruptedException {
+		if (!isLoaded()) {
+			return null;
+		}
+		VideoPlayer player = new VideoPlayer(null, true, false);
+		SurfaceTexture surfaceTexture = null;
+		Surface surface = null;
+		try {
+			player.init(file, null);
+			Point dimensions = player.getDimensions();
+			surfaceTexture = new SurfaceTexture(false);
+			surfaceTexture.setDefaultBufferSize(Math.max(dimensions.x, 1), Math.max(dimensions.y, 1));
+			surface = new Surface(surfaceTexture);
+			player.setSurface(surface);
+			player.setPlaying(true);
+			long timeout = System.currentTimeMillis() + 3000L;
+			while (!Thread.currentThread().isInterrupted() && System.currentTimeMillis() < timeout) {
+				Bitmap bitmap = player.getCurrentFrame();
+				if (bitmap != null) {
+					return bitmap;
+				}
+				Thread.sleep(40L);
+			}
+			if (Thread.currentThread().isInterrupted()) {
+				throw new InterruptedException();
+			}
+			return null;
+		} finally {
+			player.setPlaying(false);
+			player.setSurface(null);
+			if (surface != null) {
+				surface.release();
+			}
+			if (surfaceTexture != null) {
+				surfaceTexture.release();
+			}
+			player.destroy();
+		}
 	}
 
 	public void init(File file, RangeCallback rangeCallback) throws IOException {
@@ -214,6 +260,9 @@ public class VideoPlayer {
 					}
 					initData = new SessionData(initPointer, rangeCallback);
 					this.initData = initData;
+					if (!audioEnabled) {
+						holder.setAudioEnabled(initPointer, false);
+					}
 				}
 			}
 			if (initData != null) {
@@ -778,6 +827,7 @@ public class VideoPlayer {
 		void setRange(long pointer, long start, long end, long total);
 		void setCancelSeek(long pointer, boolean cancelSeek);
 
+		void setAudioEnabled(long pointer, boolean audioEnabled);
 		void setPlaybackSpeed(long pointer, int speed);
 		void setSurface(long pointer, Surface surface);
 		void setPlaying(long pointer, boolean playing);
@@ -823,6 +873,7 @@ public class VideoPlayer {
 		@Override public native void setRange(long pointer, long start, long end, long total);
 		@Override public native void setCancelSeek(long pointer, boolean busy);
 
+		@Override public native void setAudioEnabled(long pointer, boolean audioEnabled);
 		@Override public native void setPlaybackSpeed(long pointer, int speed);
 		@Override public native void setSurface(long pointer, Surface surface);
 		@Override public native void setPlaying(long pointer, boolean playing);
