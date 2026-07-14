@@ -115,7 +115,7 @@ final class RetryableMediaDownload {
 				if (response != null) {
 					response.cleanupAndDisconnect();
 				}
-				if (e.isSocketException() && position > initialStart && retryState.prepareRetry(position)
+				if (e.isSocketException() && retryState.prepareRetry(position)
 						&& waitBeforeRetry(retryState, callback)) {
 					continue;
 				}

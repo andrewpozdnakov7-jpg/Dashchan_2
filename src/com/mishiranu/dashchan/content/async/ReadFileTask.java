@@ -27,6 +27,7 @@ import java.util.Arrays;
 public class ReadFileTask extends HttpHolderTask<long[], Boolean> {
 	private static final int CONNECT_TIMEOUT = 15000;
 	private static final int READ_TIMEOUT = 15000;
+	private static final int UPDATE_READ_TIMEOUT = 30000;
 
 	public interface Callback {
 		void onStartDownloading();
@@ -159,8 +160,10 @@ public class ReadFileTask extends HttpHolderTask<long[], Boolean> {
 				if (regularFile != null) {
 					MessageDigest downloadDigest = digest;
 					try {
+						int readTimeout = toFile.getTarget() == DataFile.Target.UPDATES
+								? UPDATE_READ_TIMEOUT : READ_TIMEOUT;
 						RetryableMediaDownload.download(chan, fromUri, holder, regularFile, 0L,
-								CONNECT_TIMEOUT, READ_TIMEOUT, new RetryableMediaDownload.Callback() {
+								CONNECT_TIMEOUT, readTimeout, new RetryableMediaDownload.Callback() {
 									@Override
 									public boolean isCancelled() {
 										return ReadFileTask.this.isCancelled();

@@ -30,6 +30,7 @@ import com.mishiranu.dashchan.content.UpdaterActivity;
 import com.mishiranu.dashchan.content.async.ReadUpdateTask;
 import com.mishiranu.dashchan.content.async.TaskViewModel;
 import com.mishiranu.dashchan.content.model.ErrorItem;
+import com.mishiranu.dashchan.content.update.UpdateConfiguration;
 import com.mishiranu.dashchan.ui.FragmentHandler;
 import com.mishiranu.dashchan.ui.InstanceDialog;
 import com.mishiranu.dashchan.ui.preference.core.CheckPreference;
@@ -243,6 +244,12 @@ public class UpdateFragment extends BaseListFragment {
 				!CommonUtils.equals(installed.versionName, update.versionName);
 	}
 
+	private static boolean shouldSelectUpdate(ReadUpdateTask.PackageItem installed,
+			ReadUpdateTask.PackageItem update) {
+		return compareForUpdates(installed, update) &&
+				(VERSION_TITLE_RELEASE.equals(update.title) || UpdateConfiguration.isBetaChannel());
+	}
+
 	private static ListItem handleAddListItem(Context context, ReadUpdateTask.ApplicationItem applicationItem,
 			Bundle savedInstanceState, int minApiVersion, int maxApiVersion,
 			boolean installed, String warningUnsupported) {
@@ -260,8 +267,7 @@ public class UpdateFragment extends BaseListFragment {
 					ReadUpdateTask.PackageItem updatePackageItem = applicationItem.packageItems.get(i);
 					if (checkVersionValid(applicationItem, updatePackageItem, minApiVersion, maxApiVersion)) {
 						// targetIndex < 0 - means installed version is not supported
-						if (targetIndex < 0 || VERSION_TITLE_RELEASE.equals(updatePackageItem.title)
-								&& compareForUpdates(installedExtensionData, updatePackageItem)) {
+						if (targetIndex < 0 || shouldSelectUpdate(installedExtensionData, updatePackageItem)) {
 							targetIndex = i;
 							break;
 						}
@@ -341,9 +347,8 @@ public class UpdateFragment extends BaseListFragment {
 				targetIndex = 0;
 				for (int i = 1; i < applicationItem.packageItems.size(); i++) {
 					ReadUpdateTask.PackageItem updatePackageItem = applicationItem.packageItems.get(i);
-					if (VERSION_TITLE_RELEASE.equals(updatePackageItem.title) &&
-							compareForUpdates(applicationItem.packageItems.get(0), updatePackageItem)) {
-						targetIndex = 1;
+					if (shouldSelectUpdate(applicationItem.packageItems.get(0), updatePackageItem)) {
+						targetIndex = i;
 						break;
 					}
 				}
