@@ -67,13 +67,8 @@
 
 		<activity
 			android:name=".ui.MainActivity"
+			android:exported="true"
 			android:launchMode="singleTask">
-
-			<intent-filter>
-				<action android:name="android.intent.action.MAIN" />
-				<category android:name="android.intent.category.LAUNCHER" />
-				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
-			</intent-filter>
 
 			<intent-filter>
 				<action android:name="chan.intent.action.HANDLE_URI" />
@@ -102,6 +97,51 @@
 			</intent-filter>
 
 		</activity>
+
+		<activity-alias
+			android:name=".launcher.Dashchan2Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@mipmap/ic_launcher"
+			android:label="Dashchan_2"
+			android:logo="@mipmap/ic_logo">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.SlopchanAlias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@mipmap/ic_launcher"
+			android:label="Slopchan"
+			android:logo="@mipmap/ic_logo">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.DvachAlias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="true"
+			android:exported="true"
+			android:icon="@mipmap/ic_launcher"
+			android:label="ДВАЧ"
+			android:logo="@mipmap/ic_logo">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
 
 		<activity
 			android:name=".content.PostingShareActivity"

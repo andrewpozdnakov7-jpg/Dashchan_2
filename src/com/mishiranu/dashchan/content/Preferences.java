@@ -177,6 +177,14 @@ public class Preferences {
 		return defaultValue;
 	}
 
+	public static final String KEY_APPLICATION_NAME = "application_name";
+	public static final String DEFAULT_APPLICATION_NAME = LauncherIconManager.VALUE_DVACH;
+
+	public static String getApplicationName() {
+		String value = PREFERENCES.getString(KEY_APPLICATION_NAME, DEFAULT_APPLICATION_NAME);
+		return LauncherIconManager.isValidValue(value) ? value : DEFAULT_APPLICATION_NAME;
+	}
+
 	public enum NetworkMode {
 		ALWAYS("always", R.string.always, o -> true),
 		WIFI_3G("wifi_3g", R.string.wifi_or_3g_plus, NetworkObserver::isMobile3GConnected),

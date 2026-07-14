@@ -60,6 +60,7 @@ public class MainApplication extends Application {
 
 		if (isMainProcess()) {
 			Logger.init(this);
+			LauncherIconManager.apply(this, Preferences.getApplicationName());
 			UserAgentProvider.initialize(this);
 			ChanManager.getInstance();
 			HttpClient.getInstance();

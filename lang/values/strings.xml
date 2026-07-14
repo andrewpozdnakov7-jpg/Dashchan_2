@@ -582,4 +582,10 @@
 	<string name="preference_captcha_full_keyboard">Use full keyboard for captcha</string>
 	<string name="emoji_captcha_input">Select all icons from the picture (any order)</string>
 	<string name="posting_file_not_supported">The 2ch server rejected the file: its format or internal codec is not supported by the site. For video, try MP4 (H.264/AAC) or WebM.</string>
+	<string name="application_shortcut">Application shortcut</string>
+	<string name="application_name">Application name</string>
+	<string name="custom_application_shortcut">Custom shortcut...</string>
+	<string name="custom_application_shortcut__summary">Create an additional Home screen shortcut with any name</string>
+	<string name="confirm_custom_shortcut">Confirm adding the shortcut on the Home screen</string>
+	<string name="custom_shortcuts_not_supported">The current launcher does not support pinned shortcuts</string>
 </resources>

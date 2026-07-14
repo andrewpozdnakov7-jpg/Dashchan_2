@@ -600,4 +600,10 @@
 	<string name="preference_captcha_full_keyboard">Использовать полную клавиатуру для капчи</string>
 	<string name="emoji_captcha_input">Выберите все символы на картинке (в любом порядке)</string>
 	<string name="posting_file_not_supported">Сервер Двача отклонил файл: его формат или внутренний кодек не поддерживается сайтом. Для видео попробуйте MP4 (H.264/AAC) или WebM.</string>
+	<string name="application_shortcut">Ярлык приложения</string>
+	<string name="application_name">Название приложения</string>
+	<string name="custom_application_shortcut">Свой ярлык...</string>
+	<string name="custom_application_shortcut__summary">Создать дополнительный ярлык на рабочем столе с любым названием</string>
+	<string name="confirm_custom_shortcut">Подтвердите добавление ярлыка на рабочий стол</string>
+	<string name="custom_shortcuts_not_supported">Текущий лаунчер не поддерживает закреплённые ярлыки</string>
 </resources>
