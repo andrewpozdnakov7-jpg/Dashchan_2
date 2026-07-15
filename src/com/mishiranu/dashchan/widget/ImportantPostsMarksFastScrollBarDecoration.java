@@ -9,9 +9,6 @@ import java.util.List;
 import java.util.Set;
 
 public class ImportantPostsMarksFastScrollBarDecoration {
-	private static final int USER_POST_COLOR = 0xff3a833c;
-	private static final int REPLY_COLOR = 0xffe41a0c;
-
 	private final Paint userPostMarkPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 	private final Paint replyMarkPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 	private final float postMarkMinSize;
@@ -19,8 +16,9 @@ public class ImportantPostsMarksFastScrollBarDecoration {
 
 	public ImportantPostsMarksFastScrollBarDecoration(PaddedRecyclerView recyclerView) {
 		postMarkMinSize = ResourceUtils.obtainDensity(recyclerView);
-		userPostMarkPaint.setColor(USER_POST_COLOR);
-		replyMarkPaint.setColor(REPLY_COLOR);
+		PostMarksColorProvider.Colors colors = PostMarksColorProvider.obtain(recyclerView.getContext(), true);
+		userPostMarkPaint.setColor(colors.userPost);
+		replyMarkPaint.setColor(colors.reply);
 	}
 
 	public void setData(Data data) {

@@ -11,6 +11,7 @@ import chan.content.ChanConfiguration;
 import chan.content.ChanMarkup;
 import chan.util.DataFile;
 import chan.util.StringUtils;
+import com.mishiranu.dashchan.content.CacheManager;
 import com.mishiranu.dashchan.content.model.Post;
 import com.mishiranu.dashchan.content.model.PostNumber;
 import com.mishiranu.dashchan.content.service.DownloadService;
@@ -30,13 +31,21 @@ import com.mishiranu.dashchan.util.Hasher;
 import com.mishiranu.dashchan.util.MimeTypes;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.UnsupportedEncodingException;
+import java.io.OutputStreamWriter;
+import java.io.Writer;
 import java.net.URLConnection;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 
@@ -97,30 +106,64 @@ public class SendLocalArchiveTask extends ExecutorTask<Integer, SendLocalArchive
 		}
 	}
 
+	private static class SpanEvent {
+		public final int offset;
+		public final boolean opening;
+		public final SpanItem spanItem;
+		public final int order;
+
+		public SpanEvent(int offset, boolean opening, SpanItem spanItem, int order) {
+			this.offset = offset;
+			this.opening = opening;
+			this.spanItem = spanItem;
+			this.order = order;
+		}
+	}
+
 	@Override
 	protected Result run() {
 		Chan chan = this.chan;
 		String boardName = this.boardName;
 		String threadNumber = this.threadNumber;
 		Collection<Post> posts = this.posts;
+		if (posts.isEmpty()) {
+			return null;
+		}
 		Object[] decodeTo = new Object[2];
 		ArrayList<SpanItem> spanItems = new ArrayList<>();
+		ArrayList<SpanEvent> spanEvents = new ArrayList<>();
 		String archiveName = chan.name + '-' + boardName + '-' + threadNumber;
-		ArrayList<String> existFilesLc = new ArrayList<>();
-		ArrayList<String> existThumbnailsLc = new ArrayList<>();
+		HashSet<String> existFilesLc = new HashSet<>();
+		HashSet<String> existThumbnailsLc = new HashSet<>();
 		HashMap<String, String> iconNames = new HashMap<>();
 		Hasher hasher = Hasher.getInstanceSha256();
 		int totalFilesCount = 0;
 		for (Post post : posts) {
 			totalFilesCount += post.attachments.size();
 		}
-		String defaultName = chan.configuration.getDefaultName(boardName);
-		WakabaLikeHtmlBuilder htmlBuilder = new WakabaLikeHtmlBuilder(posts.iterator().next().subject,
-				boardName, chan.configuration.getBoardTitle(boardName), chan.configuration.getTitle(),
-				chan.locator.safe(false).createThreadUri(boardName, threadNumber), posts.size(), totalFilesCount);
-		ArrayList<DownloadService.DownloadItem> filesToDownload = new ArrayList<>();
-		ArrayList<DownloadService.DownloadItem> thumbnailsToDownload = new ArrayList<>();
-		for (Post post : posts) {
+		File cacheFile = CacheManager.getInstance().getInternalCacheFile("archive");
+		if (cacheFile == null) {
+			return null;
+		}
+		File archiveFile;
+		try {
+			archiveFile = File.createTempFile("archive-", ".html", cacheFile.getParentFile());
+		} catch (IOException e) {
+			return null;
+		}
+		boolean success = false;
+		ArrayList<DownloadService.DownloadItem> filesToDownload = new ArrayList<>(
+				saveFiles ? totalFilesCount : 0);
+		ArrayList<DownloadService.DownloadItem> thumbnailsToDownload = new ArrayList<>(
+				saveThumbnails ? totalFilesCount : 0);
+		try {
+			try (Writer writer = new OutputStreamWriter(new FileOutputStream(archiveFile), StandardCharsets.UTF_8)) {
+			String defaultName = chan.configuration.getDefaultName(boardName);
+			WakabaLikeHtmlBuilder htmlBuilder = new WakabaLikeHtmlBuilder(posts.iterator().next().subject,
+					boardName, chan.configuration.getBoardTitle(boardName), chan.configuration.getTitle(),
+					chan.locator.safe(false).createThreadUri(boardName, threadNumber), posts.size(), totalFilesCount);
+			htmlBuilder.writeHeader(writer);
+			for (Post post : posts) {
 			PostNumber number = post.number;
 			String name = StringUtils.emptyIfNull(post.name).trim();
 			String identifier = post.identifier;
@@ -137,66 +180,7 @@ public class SendLocalArchiveTask extends ExecutorTask<Integer, SendLocalArchive
 			if (name.isEmpty()) {
 				name = defaultName;
 			}
-			CharSequence charSequence = HtmlParser.spanify(comment, chan.markup.getMarkup(), null, null, this);
-			spanItems.clear();
-			SpannableStringBuilder spannable = new SpannableStringBuilder(charSequence);
-			replaceSpannable(spannable, '<', "&lt;");
-			replaceSpannable(spannable, '>', "&gt;");
-			Object[] spans = spannable.getSpans(0, spannable.length(), Object.class);
-			for (Object span : spans) {
-				getSpanType(span, decodeTo);
-				int what = (int) decodeTo[0];
-				if (what != 0) {
-					int start = spannable.getSpanStart(span);
-					int end = spannable.getSpanEnd(span);
-					Object extra = decodeTo[1];
-					if (what == ChanMarkup.TAG_SPECIAL_LINK) {
-						String text = spannable.subSequence(start, end).toString();
-						if (text.startsWith("&gt;&gt;")) {
-							Uri uri = chan.locator.validateClickedUriString((String) decodeTo[1],
-									boardName, threadNumber);
-							if (threadNumber.equals(chan.locator.safe(false).getThreadNumber(uri))) {
-								PostNumber postNumber = chan.locator.safe(false).getPostNumber(uri);
-								String postNumberString = postNumber == null ? threadNumber : postNumber.toString();
-								extra = "#" + postNumberString;
-							} else {
-								extra = uri.toString();
-							}
-						}
-					}
-					SpanItem spanItem = makeSpanItem(what, extra);
-					if (spanItem != null) {
-						spanItem.start = start;
-						spanItem.end = end;
-						spanItems.add(spanItem);
-					}
-				}
-			}
-			StringBuilder builder = new StringBuilder(spannable.toString());
-			for (int i = 0; i < spanItems.size(); i++) {
-				SpanItem spanItem = spanItems.get(i);
-				int openLength = spanItem.openTag.length();
-				int closeLength = spanItem.closeTag.length();
-				builder.insert(spanItem.start, spanItem.openTag).insert(spanItem.end + openLength, spanItem.closeTag);
-				for (int j = i + 1; j < spanItems.size(); j++) {
-					SpanItem editingItem = spanItems.get(j);
-					if (editingItem.start >= spanItem.start) {
-						if (editingItem.start >= spanItem.end) {
-							editingItem.start += openLength + closeLength;
-						} else {
-							editingItem.start += openLength;
-						}
-					}
-					if (editingItem.end > spanItem.start) {
-						if (editingItem.end > spanItem.end) {
-							editingItem.end += openLength + closeLength;
-						} else {
-							editingItem.end += openLength;
-						}
-					}
-				}
-			}
-			comment = builder.toString().replaceAll("\r", "").replaceAll("\n", "<br />");
+			comment = formatComment(comment, decodeTo, spanItems, spanEvents);
 			htmlBuilder.addPost(number.toString(), subject, name, identifier, tripcode, capcode, email,
 					sage, originalPoster, timestamp, deleted, useDefaultName, comment);
 			for (Post.Icon icon : post.icons) {
@@ -275,13 +259,24 @@ public class SendLocalArchiveTask extends ExecutorTask<Integer, SendLocalArchive
 					}
 				}
 			}
-			if (isCancelled()) {
-				return null;
+				htmlBuilder.writePost(writer);
+				if (isCancelled()) {
+					return null;
+				}
+				notifyIncrement();
 			}
-			notifyIncrement();
+			notifyProgress(progress);
+			htmlBuilder.writeFooter(writer);
+			}
+			success = true;
+			return new Result(archiveFile, archiveName, filesToDownload, thumbnailsToDownload);
+		} catch (IOException e) {
+			return null;
+		} finally {
+			if (!success) {
+				archiveFile.delete();
+			}
 		}
-		String html = htmlBuilder.build();
-		return new Result(html, archiveName, filesToDownload, thumbnailsToDownload);
 	}
 
 	@Override
@@ -289,20 +284,21 @@ public class SendLocalArchiveTask extends ExecutorTask<Integer, SendLocalArchive
 		callback.onLocalArchivationProgressUpdate(value);
 	}
 
-	@SuppressWarnings("CharsetObjectCanBeUsed")
 	@Override
 	protected void onComplete(Result result) {
 		DownloadResult downloadResult = null;
 		if (result != null) {
-			byte[] htmlBytes;
+			InputStream archiveInput;
 			try {
-				htmlBytes = result.html.getBytes("UTF-8");
-			} catch (UnsupportedEncodingException e) {
-				throw new RuntimeException(e);
+				archiveInput = new DeleteOnCloseFileInputStream(result.archiveFile);
+			} catch (FileNotFoundException e) {
+				result.archiveFile.delete();
+				callback.onLocalArchivationComplete(null);
+				return;
 			}
 			ArrayList<DownloadResult> results = new ArrayList<>();
 			results.add(createDownload(".nomedia", new ByteArrayInputStream(new byte[0])));
-			results.add(createDownload(result.archiveName + ".html", new ByteArrayInputStream(htmlBytes)));
+			results.add(createDownload(result.archiveName + ".html", archiveInput));
 			results.add(createDownload(result.archiveName + "/" + DIRECTORY_THUMBNAILS, result.thumbnailsToDownload));
 			results.add(createDownload(result.archiveName + "/" + DIRECTORY_FILES, result.filesToDownload));
 			downloadResult = binder -> {
@@ -340,26 +336,133 @@ public class SendLocalArchiveTask extends ExecutorTask<Integer, SendLocalArchive
 		};
 	}
 
+	private static class DeleteOnCloseFileInputStream extends FilterInputStream {
+		private final File file;
+
+		public DeleteOnCloseFileInputStream(File file) throws FileNotFoundException {
+			super(new FileInputStream(file));
+			this.file = file;
+		}
+
+		@Override
+		public void close() throws IOException {
+			try {
+				super.close();
+			} finally {
+				file.delete();
+			}
+		}
+	}
+
 	public static class Result {
-		public final String html;
+		public final File archiveFile;
 		public final String archiveName;
 		public final List<DownloadService.DownloadItem> filesToDownload;
 		public final List<DownloadService.DownloadItem> thumbnailsToDownload;
 
-		private Result(String html, String archiveName,
+		private Result(File archiveFile, String archiveName,
 				List<DownloadService.DownloadItem> filesToDownload,
 				List<DownloadService.DownloadItem> thumbnailsToDownload) {
-			this.html = html;
+			this.archiveFile = archiveFile;
 			this.archiveName = archiveName;
 			this.filesToDownload = filesToDownload;
 			this.thumbnailsToDownload = thumbnailsToDownload;
 		}
 	}
 
-	private void replaceSpannable(SpannableStringBuilder spannable, char what, String with) {
-		for (int i = 0; i < spannable.length(); i++) {
-			if (spannable.charAt(i) == what) {
-				spannable.replace(i, i + 1, with);
+	private String formatComment(String comment, Object[] decodeTo, ArrayList<SpanItem> spanItems,
+			ArrayList<SpanEvent> spanEvents) {
+		CharSequence charSequence = HtmlParser.spanify(comment, chan.markup.getMarkup(), null, null, this);
+		SpannableStringBuilder spannable = new SpannableStringBuilder(charSequence);
+		spanItems.clear();
+		spanEvents.clear();
+		Object[] spans = spannable.getSpans(0, spannable.length(), Object.class);
+		int tagsLength = 0;
+		for (Object span : spans) {
+			getSpanType(span, decodeTo);
+			int what = (int) decodeTo[0];
+			if (what == 0) {
+				continue;
+			}
+			int start = spannable.getSpanStart(span);
+			int end = spannable.getSpanEnd(span);
+			if (start < 0 || end <= start) {
+				continue;
+			}
+			Object extra = decodeTo[1];
+			if (what == ChanMarkup.TAG_SPECIAL_LINK) {
+				String text = spannable.subSequence(start, end).toString();
+				if (text.startsWith(">>")) {
+					Uri uri = chan.locator.validateClickedUriString((String) decodeTo[1], boardName, threadNumber);
+					if (threadNumber.equals(chan.locator.safe(false).getThreadNumber(uri))) {
+						PostNumber postNumber = chan.locator.safe(false).getPostNumber(uri);
+						String postNumberString = postNumber == null ? threadNumber : postNumber.toString();
+						extra = "#" + postNumberString;
+					} else {
+						extra = uri.toString();
+					}
+				}
+			}
+			SpanItem spanItem = makeSpanItem(what, extra);
+			if (spanItem != null) {
+				spanItem.start = start;
+				spanItem.end = end;
+				int order = spanItems.size();
+				spanItems.add(spanItem);
+				spanEvents.add(new SpanEvent(start, true, spanItem, order));
+				spanEvents.add(new SpanEvent(end, false, spanItem, order));
+				tagsLength += spanItem.openTag.length() + spanItem.closeTag.length();
+			}
+		}
+		spanEvents.sort((first, second) -> {
+			int result = Integer.compare(first.offset, second.offset);
+			if (result != 0) {
+				return result;
+			}
+			if (first.opening != second.opening) {
+				return first.opening ? 1 : -1;
+			}
+			if (first.opening) {
+				result = Integer.compare(second.spanItem.end, first.spanItem.end);
+				return result != 0 ? result : Integer.compare(first.order, second.order);
+			} else {
+				result = Integer.compare(second.spanItem.start, first.spanItem.start);
+				return result != 0 ? result : Integer.compare(second.order, first.order);
+			}
+		});
+		StringBuilder builder = new StringBuilder(spannable.length() + tagsLength);
+		int offset = 0;
+		for (SpanEvent event : spanEvents) {
+			appendCommentText(builder, spannable, offset, event.offset);
+			builder.append(event.opening ? event.spanItem.openTag : event.spanItem.closeTag);
+			offset = event.offset;
+		}
+		appendCommentText(builder, spannable, offset, spannable.length());
+		return builder.toString();
+	}
+
+	private static void appendCommentText(StringBuilder builder, CharSequence text, int start, int end) {
+		for (int i = start; i < end; i++) {
+			switch (text.charAt(i)) {
+				case '<': {
+					builder.append("&lt;");
+					break;
+				}
+				case '>': {
+					builder.append("&gt;");
+					break;
+				}
+				case '\r': {
+					break;
+				}
+				case '\n': {
+					builder.append("<br />");
+					break;
+				}
+				default: {
+					builder.append(text.charAt(i));
+					break;
+				}
 			}
 		}
 	}
@@ -478,9 +581,9 @@ public class SendLocalArchiveTask extends ExecutorTask<Integer, SendLocalArchive
 		return result;
 	}
 
-	private String chooseFileName(ArrayList<String> fileNamesLc, String fileName) {
+	private String chooseFileName(HashSet<String> fileNamesLc, String fileName) {
 		if (fileName != null) {
-			Locale locale = Locale.getDefault();
+			Locale locale = Locale.ROOT;
 			String fileNameLc = fileName.toLowerCase(locale);
 			if (fileNamesLc.contains(fileNameLc)) {
 				String extension = StringUtils.getFileExtension(fileName);

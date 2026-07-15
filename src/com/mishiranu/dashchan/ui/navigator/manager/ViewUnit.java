@@ -52,6 +52,7 @@ import com.mishiranu.dashchan.widget.CardView;
 import com.mishiranu.dashchan.widget.CommentTextView;
 import com.mishiranu.dashchan.widget.LinebreakLayout;
 import com.mishiranu.dashchan.widget.PostLinearLayout;
+import com.mishiranu.dashchan.widget.PostMarksColorProvider;
 import com.mishiranu.dashchan.widget.ThemeEngine;
 import com.mishiranu.dashchan.widget.ThreadDescriptionView;
 import java.lang.ref.WeakReference;
@@ -428,7 +429,12 @@ public class ViewUnit {
 				}
 			}
 		}
-		holder.layout.setPostMark(postMark, postMark != PostLinearLayout.MARK_NONE ? colorScheme.linkColor : 0);
+		int postMarkColor = 0;
+		if (postMark != PostLinearLayout.MARK_NONE) {
+			PostMarksColorProvider.Colors colors = PostMarksColorProvider.obtain(holder.layout.getContext(), false);
+			postMarkColor = postMark == PostLinearLayout.MARK_USER_POST ? colors.userPost : colors.reply;
+		}
+		holder.layout.setPostMark(postMark, postMarkColor);
 		LinkSpan[] linkSpans = postItem.getLinkSpansAfterComment();
 		if (linkSpans != null) {
 			for (LinkSpan linkSpan : linkSpans) {

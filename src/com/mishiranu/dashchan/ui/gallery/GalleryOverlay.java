@@ -80,6 +80,7 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 
 	private boolean galleryWindow;
 	private boolean galleryMode;
+	private boolean predictiveBackRunning;
 	private CornerAnimator cornerAnimator;
 	private final boolean scrollThread = Preferences.isScrollThreadGallery();
 
@@ -154,6 +155,7 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 
 	@Override
 	public void onDestroyView() {
+		resetPredictiveBackView(false);
 		super.onDestroyView();
 		destroyShowcase(false);
 	}
@@ -378,6 +380,51 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 			return true;
 		}
 		return returnToGallery();
+	}
+
+	@Override
+	public void onPredictiveBackStarted(boolean fromLeft) {
+		if (rootView != null) {
+			predictiveBackRunning = true;
+			rootView.animate().cancel();
+		}
+	}
+
+	@Override
+	public void onPredictiveBackProgressed(float progress, boolean fromLeft) {
+		if (predictiveBackRunning && rootView != null) {
+			float easedProgress = 1f - (float) Math.pow(1f - progress, 3f);
+			float direction = fromLeft ? 1f : -1f;
+			rootView.setTranslationX(direction * 24f * ResourceUtils.obtainDensity(rootView.getContext()) * easedProgress);
+			rootView.setScaleX(1f - 0.04f * easedProgress);
+			rootView.setScaleY(1f - 0.04f * easedProgress);
+			rootView.setAlpha(1f - 0.18f * easedProgress);
+		}
+	}
+
+	@Override
+	public void onPredictiveBackCancelled() {
+		resetPredictiveBackView(true);
+	}
+
+	@Override
+	public void onPredictiveBackCommitted() {
+		resetPredictiveBackView(true);
+	}
+
+	private void resetPredictiveBackView(boolean animate) {
+		predictiveBackRunning = false;
+		if (rootView != null) {
+			rootView.animate().cancel();
+			if (animate && rootView.isAttachedToWindow()) {
+				rootView.animate().translationX(0f).scaleX(1f).scaleY(1f).alpha(1f).setDuration(150).start();
+			} else {
+				rootView.setTranslationX(0f);
+				rootView.setScaleX(1f);
+				rootView.setScaleY(1f);
+				rootView.setAlpha(1f);
+			}
+		}
 	}
 
 	@Override

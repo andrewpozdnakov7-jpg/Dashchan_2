@@ -4,4 +4,4 @@
 * Added an option to remember playback speed after closing the app.
 * Improved update downloads and resuming on unstable connections.
 * Available update notifications are now shown immediately after launching the app.
-* Added application name presets (Dashchan_2, Slopchan, or “ДВАЧ”) and custom-named Home screen shortcuts.
+* Added application name presets (Dashchan_2, Slopchan_1, or “ДВАЧ”) and custom-named Home screen shortcuts.

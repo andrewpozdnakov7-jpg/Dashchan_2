@@ -134,6 +134,8 @@
 		<item name="colorPrimarySupport">@color/color_primary_light</item>
 		<item name="colorAccentSupport">@color/color_accent_light</item>
 		<item name="colorTextError">@color/color_text_error</item>
+		<item name="colorPostMarkUserPost">@color/color_post_mark_user_post_light</item>
+		<item name="colorPostMarkReply">@color/color_post_mark_reply_light</item>
 
 		<item name="colorTextThread">@color/color_text_thread_light</item>
 		<item name="colorTextPost">@color/color_text_post_light</item>
@@ -162,6 +164,8 @@
 		<item name="colorPrimarySupport">@color/color_primary_dark</item>
 		<item name="colorAccentSupport">@color/color_accent_dark</item>
 		<item name="colorTextError">@color/color_text_error</item>
+		<item name="colorPostMarkUserPost">@color/color_post_mark_user_post_dark</item>
+		<item name="colorPostMarkReply">@color/color_post_mark_reply_dark</item>
 
 		<item name="colorTextThread">@color/color_text_thread_dark</item>
 		<item name="colorTextPost">@color/color_text_post_dark</item>

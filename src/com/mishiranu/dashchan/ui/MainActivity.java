@@ -10,6 +10,7 @@ import android.content.Intent;
 import android.content.ServiceConnection;
 import android.content.res.Configuration;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.os.Parcel;
@@ -27,6 +28,7 @@ import android.view.WindowManager;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.FrameLayout;
 import android.widget.Toolbar;
+import androidx.activity.BackEventCompat;
 import androidx.annotation.NonNull;
 import androidx.core.view.GravityCompat;
 import androidx.fragment.app.FragmentManager;
@@ -205,6 +207,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		drawerWide.setElevation(4f * density);
 		drawerLayout.addDrawerListener(drawerToggle);
 		drawerLayout.addDrawerListener(drawerForm);
+		drawerLayout.addDrawerListener(new PredictiveBackDrawerListener());
 		if (toolbarHolder == null) {
 			drawerLayout.addDrawerListener(new ExpandedScreenDrawerLocker());
 		}
@@ -716,6 +719,24 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		return null;
 	}
 
+	private boolean hasTargetPreviousPage(boolean allowForeignChan) {
+		if (currentPageItem != null && allowForeignChan && currentPageItem.allowReturn && !stackPageItems.isEmpty()) {
+			return true;
+		}
+		ContentFragment currentFragment = getCurrentFragment();
+		if (!(currentFragment instanceof PageFragment)) {
+			return false;
+		}
+		String chanName = ((PageFragment) currentFragment).getPage().chanName;
+		boolean mergeChans = Preferences.isMergeChans();
+		for (int i = stackPageItems.size() - 1; i >= 0; i--) {
+			if (mergeChans || getSavedPage(stackPageItems.get(i)).chanName.equals(chanName)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
 	private void clearStackAndCurrent() {
 		ContentFragment currentFragment = getCurrentFragment();
 		boolean mergeChans = Preferences.isMergeChans();
@@ -986,6 +1007,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 				}
 			}
 		}
+		scheduleSystemBackCallbackUpdate();
 	}
 
 	private void closeOverlaysForNavigation() {
@@ -1139,6 +1161,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	@Override
 	protected void onResume() {
 		super.onResume();
+		updateSystemBackCallback();
 
 		drawerForm.updateRestartViewVisibility();
 		drawerForm.updateItems(true, true);
@@ -1160,6 +1183,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	@Override
 	protected void onStop() {
+		resetPredictiveBackView(false);
 		super.onStop();
 
 		// Intent is valid only for onNewIntent -> onResume behavior
@@ -1210,10 +1234,100 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	}
 
 	private long backPressed = 0;
+	private View predictiveBackView;
+
+	private boolean canHandleBackInApp() {
+		if (!wideMode && drawerLayout != null && drawerLayout.isDrawerOpen(GravityCompat.START)) {
+			return true;
+		}
+		ContentFragment currentFragment = getCurrentFragment();
+		if (currentFragment == null) {
+			return false;
+		}
+		if (currentFragment.canHandleBack()) {
+			return true;
+		}
+		if (currentFragment instanceof PageFragment) {
+			return hasTargetPreviousPage(true);
+		}
+		return !fragments.isEmpty() || !stackPageItems.isEmpty();
+	}
+
+	private void scheduleSystemBackCallbackUpdate() {
+		if (drawerLayout != null) {
+			drawerLayout.post(this::updateSystemBackCallback);
+		} else {
+			updateSystemBackCallback();
+		}
+	}
 
 	@Override
-	public void onBackPressed() {
-		onBackPressed(false, true, super::onBackPressed);
+	protected boolean isSystemPredictiveBackEnabled() {
+		return Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && Preferences.isPredictiveBackEnabled();
+	}
+
+	@Override
+	protected boolean shouldHandleSystemBack() {
+		return !isSystemPredictiveBackEnabled() || canHandleBackInApp();
+	}
+
+	@Override
+	protected void onSystemBackStarted(BackEventCompat backEvent) {
+		if (isSystemPredictiveBackEnabled() && drawerLayout != null &&
+				!drawerLayout.isDrawerOpen(GravityCompat.START)) {
+			ContentFragment currentFragment = getCurrentFragment();
+			predictiveBackView = currentFragment != null ? currentFragment.getView() : null;
+			if (predictiveBackView != null) {
+				predictiveBackView.animate().cancel();
+			}
+		}
+	}
+
+	@Override
+	protected void onSystemBackProgressed(BackEventCompat backEvent) {
+		if (predictiveBackView != null) {
+			float progress = 1f - (float) Math.pow(1f - backEvent.getProgress(), 3f);
+			float direction = backEvent.getSwipeEdge() == BackEventCompat.EDGE_LEFT ? 1f : -1f;
+			float translation = 32f * ResourceUtils.obtainDensity(this) * progress;
+			predictiveBackView.setTranslationX(direction * translation);
+			predictiveBackView.setScaleX(1f - 0.02f * progress);
+			predictiveBackView.setScaleY(1f - 0.02f * progress);
+			predictiveBackView.setAlpha(1f - 0.08f * progress);
+		}
+	}
+
+	@Override
+	protected void onSystemBackCancelled() {
+		resetPredictiveBackView(true);
+	}
+
+	private void resetPredictiveBackView(boolean animate) {
+		View view = predictiveBackView;
+		predictiveBackView = null;
+		resetPredictiveBackView(view, animate);
+	}
+
+	private void resetPredictiveBackView(View view, boolean animate) {
+		if (view != null) {
+			view.animate().cancel();
+			if (animate && view.isAttachedToWindow()) {
+				view.animate().translationX(0f).scaleX(1f).scaleY(1f).alpha(1f).setDuration(150).start();
+			} else {
+				view.setTranslationX(0f);
+				view.setScaleX(1f);
+				view.setScaleY(1f);
+				view.setAlpha(1f);
+			}
+		}
+	}
+
+	@Override
+	protected void onSystemBackPressed() {
+		View predictiveBackView = this.predictiveBackView;
+		this.predictiveBackView = null;
+		onBackPressed(false, true, this::performDefaultBack);
+		resetPredictiveBackView(predictiveBackView, true);
+		scheduleSystemBackCallbackUpdate();
 	}
 
 	private void onBackPressed(boolean homeHandled, boolean allowTimeout, Runnable close) {
@@ -1420,7 +1534,12 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		}
 	}
 
-	private final SharedPreferences.Listener preferencesListener = key -> drawerForm.updatePreferences();
+	private final SharedPreferences.Listener preferencesListener = key -> {
+		drawerForm.updatePreferences();
+		if (Preferences.KEY_PREDICTIVE_BACK.equals(key)) {
+			updateSystemBackCallback();
+		}
+	};
 
 	@Override
 	public void onSelectChan(String chanName) {
@@ -2035,6 +2154,24 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		@Override
 		public void onDrawerClosed(@NonNull View drawerView) {
 			setActionBarLocked(LOCKER_DRAWER, false);
+		}
+
+		@Override
+		public void onDrawerStateChanged(int newState) {}
+	}
+
+	private class PredictiveBackDrawerListener implements CustomDrawerLayout.DrawerListener {
+		@Override
+		public void onDrawerSlide(@NonNull View drawerView, float slideOffset) {}
+
+		@Override
+		public void onDrawerOpened(@NonNull View drawerView) {
+			updateSystemBackCallback();
+		}
+
+		@Override
+		public void onDrawerClosed(@NonNull View drawerView) {
+			updateSystemBackCallback();
 		}
 
 		@Override

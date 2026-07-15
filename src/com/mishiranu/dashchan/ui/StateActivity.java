@@ -1,11 +1,15 @@
 package com.mishiranu.dashchan.ui;
 
 import android.os.Bundle;
+import androidx.activity.BackEventCompat;
+import androidx.activity.OnBackPressedCallback;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentActivity;
 import androidx.fragment.app.FragmentManager;
 
 public abstract class StateActivity extends FragmentActivity {
+	private OnBackPressedCallback systemBackCallback;
+
 	public static class InstanceFragment extends Fragment {
 		@Override
 		public void onDetach() {
@@ -17,6 +21,29 @@ public abstract class StateActivity extends FragmentActivity {
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
+		systemBackCallback = new OnBackPressedCallback(true) {
+			@Override
+			public void handleOnBackStarted(BackEventCompat backEvent) {
+				onSystemBackStarted(backEvent);
+			}
+
+			@Override
+			public void handleOnBackProgressed(BackEventCompat backEvent) {
+				onSystemBackProgressed(backEvent);
+			}
+
+			@Override
+			public void handleOnBackCancelled() {
+				onSystemBackCancelled();
+			}
+
+			@Override
+			public void handleOnBackPressed() {
+				onSystemBackPressed();
+			}
+		};
+		getOnBackPressedDispatcher().addCallback(this, systemBackCallback);
+		updateSystemBackCallback();
 
 		String tag = "instance";
 		FragmentManager fragmentManager = getSupportFragmentManager();
@@ -25,6 +52,43 @@ public abstract class StateActivity extends FragmentActivity {
 			fragment = new InstanceFragment();
 			fragment.setRetainInstance(true);
 			fragmentManager.beginTransaction().add(fragment, tag).commit();
+		}
+	}
+
+	protected boolean isSystemPredictiveBackEnabled() {
+		return false;
+	}
+
+	protected boolean shouldHandleSystemBack() {
+		return !isSystemPredictiveBackEnabled();
+	}
+
+	public final void updateSystemBackCallback() {
+		if (systemBackCallback != null) {
+			systemBackCallback.setEnabled(shouldHandleSystemBack());
+		}
+	}
+
+	protected void onSystemBackStarted(BackEventCompat backEvent) {}
+
+	protected void onSystemBackProgressed(BackEventCompat backEvent) {}
+
+	protected void onSystemBackCancelled() {}
+
+	protected void onSystemBackPressed() {
+		performDefaultBack();
+	}
+
+	protected final void performDefaultBack() {
+		if (systemBackCallback == null) {
+			return;
+		}
+		boolean enabled = systemBackCallback.isEnabled();
+		systemBackCallback.setEnabled(false);
+		try {
+			getOnBackPressedDispatcher().onBackPressed();
+		} finally {
+			systemBackCallback.setEnabled(enabled);
 		}
 	}
 

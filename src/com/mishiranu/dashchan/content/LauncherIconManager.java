@@ -6,6 +6,7 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.ShortcutInfo;
 import android.content.pm.ShortcutManager;
+import android.graphics.Bitmap;
 import android.graphics.drawable.Icon;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.ui.MainActivity;
@@ -62,6 +63,28 @@ public final class LauncherIconManager {
 		if (shortcutManager == null || !shortcutManager.isRequestPinShortcutSupported()) {
 			return false;
 		}
+		return requestCustomShortcut(context, shortcutManager, name,
+				Icon.createWithResource(context, R.mipmap.ic_launcher));
+	}
+
+	public static boolean requestCustomShortcut(Context context, String name, Bitmap bitmap) {
+		ShortcutManager shortcutManager = context.getSystemService(ShortcutManager.class);
+		if (shortcutManager == null || !shortcutManager.isRequestPinShortcutSupported()) {
+			return false;
+		}
+		int maxWidth = shortcutManager.getIconMaxWidth();
+		int maxHeight = shortcutManager.getIconMaxHeight();
+		Bitmap iconBitmap = bitmap;
+		if (bitmap.getWidth() > maxWidth || bitmap.getHeight() > maxHeight) {
+			float scale = Math.min((float) maxWidth / bitmap.getWidth(), (float) maxHeight / bitmap.getHeight());
+			iconBitmap = Bitmap.createScaledBitmap(bitmap, Math.max(1, Math.round(bitmap.getWidth() * scale)),
+					Math.max(1, Math.round(bitmap.getHeight() * scale)), true);
+		}
+		return requestCustomShortcut(context, shortcutManager, name, Icon.createWithAdaptiveBitmap(iconBitmap));
+	}
+
+	private static boolean requestCustomShortcut(Context context, ShortcutManager shortcutManager,
+			String name, Icon icon) {
 		Intent intent = new Intent(context, MainActivity.class)
 				.setAction(Intent.ACTION_MAIN)
 				.addCategory(Intent.CATEGORY_LAUNCHER)
@@ -70,7 +93,7 @@ public final class LauncherIconManager {
 		ShortcutInfo shortcut = new ShortcutInfo.Builder(context, shortcutId)
 				.setShortLabel(name)
 				.setLongLabel(name)
-				.setIcon(Icon.createWithResource(context, R.mipmap.ic_launcher))
+				.setIcon(icon)
 				.setIntent(intent)
 				.build();
 		return shortcutManager.requestPinShortcut(shortcut, null);

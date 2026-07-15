@@ -47,6 +47,17 @@ public abstract class ContentFragment extends Fragment {
 		return false;
 	}
 
+	public boolean canHandleBack() {
+		return false;
+	}
+
+	protected final void notifyBackNavigationChanged() {
+		FragmentActivity activity = getActivity();
+		if (activity instanceof StateActivity) {
+			((StateActivity) activity).updateSystemBackCallback();
+		}
+	}
+
 	private void clearOptionMenus() {
 		for (WeakHashMap.Entry<Menu, MenuState> entry : menuStates.entrySet()) {
 			if (entry.getValue().created) {

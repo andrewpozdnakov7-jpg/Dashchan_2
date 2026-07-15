@@ -3,6 +3,8 @@ package com.mishiranu.dashchan.text;
 import android.net.Uri;
 import android.util.Pair;
 import chan.util.StringUtils;
+import java.io.IOException;
+import java.io.Writer;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Locale;
@@ -424,11 +426,26 @@ public class WakabaLikeHtmlBuilder {
 		}
 	}
 
-	public String build() {
+	private void writeAndClear(Writer writer) throws IOException {
+		writer.append(builder);
+		builder.setLength(0);
+	}
+
+	public void writeHeader(Writer writer) throws IOException {
+		writeAndClear(writer);
+	}
+
+	public void writePost(Writer writer) throws IOException {
 		closePost();
-		return builder.append("<br style=\"clear: left;\" />\n<hr />\n</div>\n")
+		writeAndClear(writer);
+	}
+
+	public void writeFooter(Writer writer) throws IOException {
+		closePost();
+		builder.append("<br style=\"clear: left;\" />\n<hr />\n</div>\n")
 				.append("<p class=\"footer\">\n- <a href=\"").append(CLIENT_URI).append("\">dashchan</a> + ")
 				.append("<a href=\"http://wakaba.c3.cx/\">wakaba</a> + ")
-				.append("<a href=\"http://www.2chan.net/\">futaba</a> -\n</p>\n</body>\n</html>").toString();
+				.append("<a href=\"http://www.2chan.net/\">futaba</a> -\n</p>\n</body>\n</html>");
+		writeAndClear(writer);
 	}
 }

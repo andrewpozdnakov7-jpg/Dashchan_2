@@ -111,6 +111,7 @@ struct Player {
 		int videoStreamIndex;
 		AVCodecContext * audioContext;
 		AVCodecContext * videoContext;
+		int64_t timelineOffsetMs;
 	} av;
 
 	struct {
@@ -258,15 +259,16 @@ static int getBytesPerPixel(int videoFormat) {
 	return 0;
 }
 
-static int64_t getTimestampPositionMs(int64_t timestamp, AVRational timeBase) {
+static int64_t getTimestampPositionMs(Player * player, int64_t timestamp, AVRational timeBase) {
 	if (timestamp == AV_NOPTS_VALUE) {
 		return -1;
 	}
 	AVRational msTimeBase = {1, 1000};
-	return max64(av_rescale_q(timestamp, timeBase, msTimeBase), 0);
+	int64_t position = av_rescale_q(timestamp, timeBase, msTimeBase) - player->av.timelineOffsetMs;
+	return max64(position, 0);
 }
 
-static int64_t getFramePositionMs(AVFrame * frame, AVStream * stream) {
+static int64_t getFramePositionMs(Player * player, AVFrame * frame, AVStream * stream) {
 	int64_t timestamp = frame->best_effort_timestamp;
 	if (timestamp == AV_NOPTS_VALUE) {
 		timestamp = frame->pts;
@@ -274,7 +276,12 @@ static int64_t getFramePositionMs(AVFrame * frame, AVStream * stream) {
 	if (timestamp == AV_NOPTS_VALUE) {
 		timestamp = frame->pkt_dts;
 	}
-	return getTimestampPositionMs(timestamp, stream->time_base);
+	return getTimestampPositionMs(player, timestamp, stream->time_base);
+}
+
+static int64_t getSeekTimestampUs(Player * player, int64_t position) {
+	AVRational msTimeBase = {1, 1000};
+	return av_rescale_q(position + player->av.timelineOffsetMs, msTimeBase, AV_TIME_BASE_Q);
 }
 
 static int getAudioContextChannels(const AVCodecContext * context) {
@@ -680,7 +687,7 @@ static void * performDecodeAudio(void * data) {
 			}
 
 			if (ready) {
-				int64_t position = getFramePositionMs(frame, stream);
+				int64_t position = getFramePositionMs(player, frame, stream);
 				if (position >= 0 && player->meta.seekAnyFrame && player->sync.audioPositionNotSync &&
 						position < player->sync.audioPosition) {
 					success = 1;
@@ -1115,7 +1122,7 @@ static void * performDecodeVideo(void * data) {
 				extra = malloc(sizeof(VideoFrameExtra));
 				extra->width = frame->width;
 				extra->height = frame->height;
-				extra->position = getFramePositionMs(frame, stream);
+				extra->position = getFramePositionMs(player, frame, stream);
 				LOG("video frame pts=%" PRId64 " best=%" PRId64 " pkt_dts=%" PRId64
 						" pos=%" PRId64 " tb=%d/%d", frame->pts, frame->best_effort_timestamp,
 						frame->pkt_dts, extra->position, stream->time_base.num, stream->time_base.den);
@@ -1527,6 +1534,11 @@ void init(JNIEnv * env, jlong pointer, jobject nativeBridge, jboolean seekAnyFra
 		return;
 	}
 	LOG("end avformat_find_stream_info");
+	if (formatContext->start_time != AV_NOPTS_VALUE) {
+		AVRational msTimeBase = {1, 1000};
+		player->av.timelineOffsetMs = av_rescale_q(formatContext->start_time, AV_TIME_BASE_Q, msTimeBase);
+	}
+	LOG("timeline offset=%" PRId64 " ms", player->av.timelineOffsetMs);
 	int audioStreamIndex = INDEX_NO_STREAM;
 	int videoStreamIndex = INDEX_NO_STREAM;
 	for (int i = 0; i < (int) formatContext->nb_streams; i++) {
@@ -1907,7 +1919,8 @@ void setPosition(JNIEnv * env, jlong pointer, jlong position) {
 			for (int i = 1; audioPosition == -1 || videoPosition == -1; i++) {
 				int64_t seekPosition = max64(position - i * i * 1000, 0);
 				int64_t maxPosition = max64(position - (i - 1) * (i - 1) * 1000, 0);
-				av_seek_frame(player->av.format, -1, seekPosition * 1000, AVSEEK_FLAG_BACKWARD | AVSEEK_FLAG_ANY);
+				av_seek_frame(player->av.format, -1, getSeekTimestampUs(player, seekPosition),
+						AVSEEK_FLAG_BACKWARD | AVSEEK_FLAG_ANY);
 				while (1) {
 					if (av_read_frame(player->av.format, &packet) < 0) {
 						break;
@@ -1921,7 +1934,7 @@ void setPosition(JNIEnv * env, jlong pointer, jlong position) {
 						}
 						if (outPosition) {
 							AVRational timeBase = player->av.format->streams[packet.stream_index]->time_base;
-							int64_t timestamp = getTimestampPositionMs(packet.pts, timeBase);
+							int64_t timestamp = getTimestampPositionMs(player, packet.pts, timeBase);
 							if (timestamp > maxPosition) {
 								av_packet_unref(&packet);
 								break;
@@ -1945,7 +1958,7 @@ void setPosition(JNIEnv * env, jlong pointer, jlong position) {
 			}
 			position = min64(audioPosition, videoPosition);
 		}
-		av_seek_frame(player->av.format, -1, position * 1000, AVSEEK_FLAG_BACKWARD);
+		av_seek_frame(player->av.format, -1, getSeekTimestampUs(player, position), AVSEEK_FLAG_BACKWARD);
 		player->decode.packets.finished = 0;
 		player->audio.finished = 0;
 		player->video.finished = 0;

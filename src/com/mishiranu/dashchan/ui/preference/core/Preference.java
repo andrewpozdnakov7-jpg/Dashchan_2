@@ -12,7 +12,7 @@ import com.mishiranu.dashchan.util.SharedPreferences;
 import com.mishiranu.dashchan.widget.ViewFactory;
 
 public abstract class Preference<T> {
-	public enum ViewType {NORMAL, CATEGORY, HEADER, CHECK}
+	public enum ViewType {NORMAL, CATEGORY, HEADER, CHECK, COLOR}
 
 	public interface SummaryProvider<T> {
 		CharSequence getSummary(Preference<T> value);

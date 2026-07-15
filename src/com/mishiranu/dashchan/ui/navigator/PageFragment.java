@@ -292,6 +292,7 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 					menuItem.collapseActionView();
 				}
 			}
+			notifyBackNavigationChanged();
 			return true;
 		}
 		return false;
@@ -416,6 +417,11 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 	@Override
 	public boolean onBackPressed() {
 		return setSearchMode(false);
+	}
+
+	@Override
+	public boolean canHandleBack() {
+		return searchMode;
 	}
 
 	@Override

@@ -63,11 +63,13 @@
 		android:allowBackup="true"
 		android:fullBackupContent="true"
 		android:usesCleartextTraffic="true"
+		android:enableOnBackInvokedCallback="false"
 		tools:ignore="GoogleAppIndexingWarning,UnusedAttribute">
 
 		<activity
 			android:name=".ui.MainActivity"
 			android:exported="true"
+			android:enableOnBackInvokedCallback="true"
 			android:launchMode="singleTask">
 
 			<intent-filter>
@@ -119,7 +121,7 @@
 			android:enabled="false"
 			android:exported="true"
 			android:icon="@mipmap/ic_launcher"
-			android:label="Slopchan"
+			android:label="Slopchan_1"
 			android:logo="@mipmap/ic_logo">
 			<intent-filter>
 				<action android:name="android.intent.action.MAIN" />

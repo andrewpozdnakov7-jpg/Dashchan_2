@@ -234,6 +234,55 @@ public class Preferences {
 		return PREFERENCES.getBoolean(KEY_ACTIVE_SCROLLBAR, DEFAULT_ACTIVE_SCROLLBAR);
 	}
 
+	public enum PostMarksColorMode {
+		DEFAULT("default", R.string.post_marks_colors_default),
+		THEME("theme", R.string.post_marks_colors_theme),
+		CUSTOM("custom", R.string.post_marks_colors_custom);
+
+		private static final EnumValueProvider<PostMarksColorMode> VALUE_PROVIDER = o -> o.value;
+
+		public final String value;
+		public final int titleResId;
+
+		PostMarksColorMode(String value, int titleResId) {
+			this.value = value;
+			this.titleResId = titleResId;
+		}
+	}
+
+	public static final String KEY_POST_MARKS_COLOR_MODE = "post_marks_color_mode";
+	public static final PostMarksColorMode DEFAULT_POST_MARKS_COLOR_MODE = PostMarksColorMode.DEFAULT;
+	public static final String KEY_USER_POST_MARK_COLOR = "user_post_mark_color";
+	public static final String KEY_REPLY_POST_MARK_COLOR = "reply_post_mark_color";
+	public static final int DEFAULT_USER_POST_MARK_COLOR = 0xff4cae4f;
+	public static final int DEFAULT_REPLY_POST_MARK_COLOR = 0xfff76e64;
+
+	public static PostMarksColorMode getPostMarksColorMode() {
+		return getEnumValue(KEY_POST_MARKS_COLOR_MODE, PostMarksColorMode.values(),
+				DEFAULT_POST_MARKS_COLOR_MODE, PostMarksColorMode.VALUE_PROVIDER);
+	}
+
+	public static int getUserPostMarkColor() {
+		return PREFERENCES.getInt(KEY_USER_POST_MARK_COLOR, DEFAULT_USER_POST_MARK_COLOR) | 0xff000000;
+	}
+
+	public static int getReplyPostMarkColor() {
+		return PREFERENCES.getInt(KEY_REPLY_POST_MARK_COLOR, DEFAULT_REPLY_POST_MARK_COLOR) | 0xff000000;
+	}
+
+	public static void setUserPostMarkColor(int color) {
+		PREFERENCES.edit().put(KEY_USER_POST_MARK_COLOR, color | 0xff000000).close();
+	}
+
+	public static void setReplyPostMarkColor(int color) {
+		PREFERENCES.edit().put(KEY_REPLY_POST_MARK_COLOR, color | 0xff000000).close();
+	}
+
+	public static void resetPostMarksColors() {
+		PREFERENCES.edit().remove(KEY_POST_MARKS_COLOR_MODE)
+				.remove(KEY_USER_POST_MARK_COLOR).remove(KEY_REPLY_POST_MARK_COLOR).close();
+	}
+
 	public static final String KEY_ADVANCED_SEARCH = "advanced_search";
 	public static final boolean DEFAULT_ADVANCED_SEARCH = false;
 
@@ -1033,6 +1082,13 @@ public class Preferences {
 
 	public static boolean isPageByPage() {
 		return PREFERENCES.getBoolean(KEY_PAGE_BY_PAGE, DEFAULT_PAGE_BY_PAGE);
+	}
+
+	public static final String KEY_PREDICTIVE_BACK = "predictive_back";
+	public static final boolean DEFAULT_PREDICTIVE_BACK = false;
+
+	public static boolean isPredictiveBackEnabled() {
+		return PREFERENCES.getBoolean(KEY_PREDICTIVE_BACK, DEFAULT_PREDICTIVE_BACK);
 	}
 
 	public enum PagesListMode {

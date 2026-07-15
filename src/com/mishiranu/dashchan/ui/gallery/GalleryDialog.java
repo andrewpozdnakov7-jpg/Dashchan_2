@@ -4,6 +4,7 @@ import android.app.ActionBar;
 import android.app.Dialog;
 import android.graphics.Insets;
 import android.media.AudioManager;
+import android.os.Build;
 import android.view.ActionMode;
 import android.view.Menu;
 import android.view.MenuInflater;
@@ -14,14 +15,20 @@ import android.view.WindowInsets;
 import android.view.WindowManager;
 import android.widget.Toolbar;
 import androidx.annotation.NonNull;
+import androidx.annotation.RequiresApi;
 import androidx.fragment.app.Fragment;
 import com.mishiranu.dashchan.R;
+import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.util.ViewUtils;
 import com.mishiranu.dashchan.widget.ViewFactory;
 
 public class GalleryDialog extends Dialog {
 	public interface Callback {
 		boolean onBackPressed();
+		void onPredictiveBackStarted(boolean fromLeft);
+		void onPredictiveBackProgressed(float progress, boolean fromLeft);
+		void onPredictiveBackCancelled();
+		void onPredictiveBackCommitted();
 		void onCreateActionContextBarView();
 	}
 
@@ -31,6 +38,7 @@ public class GalleryDialog extends Dialog {
 	private ViewFactory.ToolbarHolder toolbarHolder;
 	private View actionBar;
 	private View actionContextBar;
+	private Object predictiveBackCallback;
 
 	public GalleryDialog(Fragment fragment) {
 		super(fragment.requireContext(), R.style.Theme_Gallery);
@@ -66,6 +74,110 @@ public class GalleryDialog extends Dialog {
 	}
 
 	private boolean actionBarAnimationsFixed = false;
+
+	@Override
+	protected void onStart() {
+		super.onStart();
+		registerPredictiveBackCallback();
+	}
+
+	@Override
+	protected void onStop() {
+		unregisterPredictiveBackCallback();
+		super.onStop();
+	}
+
+	private void registerPredictiveBackCallback() {
+		if (predictiveBackCallback == null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+				Preferences.isPredictiveBackEnabled()) {
+			predictiveBackCallback = Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE
+					? Api34Impl.register(this) : Api33Impl.register(this);
+		}
+	}
+
+	private void unregisterPredictiveBackCallback() {
+		if (predictiveBackCallback != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+			Api33Impl.unregister(this, predictiveBackCallback);
+			predictiveBackCallback = null;
+		}
+	}
+
+	private void dispatchPredictiveBackStarted(boolean fromLeft) {
+		if (fragment instanceof Callback) {
+			((Callback) fragment).onPredictiveBackStarted(fromLeft);
+		}
+	}
+
+	private void dispatchPredictiveBackProgressed(float progress, boolean fromLeft) {
+		if (fragment instanceof Callback) {
+			((Callback) fragment).onPredictiveBackProgressed(progress, fromLeft);
+		}
+	}
+
+	private void dispatchPredictiveBackCancelled() {
+		if (fragment instanceof Callback) {
+			((Callback) fragment).onPredictiveBackCancelled();
+		}
+	}
+
+	private void dispatchPredictiveBackPressed() {
+		if (fragment instanceof Callback && fragment.isAdded()) {
+			Callback callback = (Callback) fragment;
+			boolean handled = callback.onBackPressed();
+			callback.onPredictiveBackCommitted();
+			if (handled) {
+				return;
+			}
+		}
+		cancel();
+	}
+
+	@RequiresApi(Build.VERSION_CODES.TIRAMISU)
+	private static class Api33Impl {
+		public static Object register(GalleryDialog dialog) {
+			android.window.OnBackInvokedCallback callback = dialog::dispatchPredictiveBackPressed;
+			dialog.getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
+					android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, callback);
+			return callback;
+		}
+
+		public static void unregister(GalleryDialog dialog, Object callback) {
+			dialog.getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(
+					(android.window.OnBackInvokedCallback) callback);
+		}
+	}
+
+	@RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+	private static class Api34Impl {
+		public static Object register(GalleryDialog dialog) {
+			android.window.OnBackAnimationCallback callback = new android.window.OnBackAnimationCallback() {
+				@Override
+				public void onBackStarted(android.window.BackEvent backEvent) {
+					dialog.dispatchPredictiveBackStarted(
+							backEvent.getSwipeEdge() == android.window.BackEvent.EDGE_LEFT);
+				}
+
+				@Override
+				public void onBackProgressed(android.window.BackEvent backEvent) {
+					dialog.dispatchPredictiveBackProgressed(backEvent.getProgress(),
+							backEvent.getSwipeEdge() == android.window.BackEvent.EDGE_LEFT);
+				}
+
+				@Override
+				public void onBackCancelled() {
+					dialog.dispatchPredictiveBackCancelled();
+				}
+
+				@Override
+				public void onBackInvoked() {
+					dialog.dispatchPredictiveBackPressed();
+				}
+			};
+			dialog.getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
+					android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, callback);
+			return callback;
+		}
+	}
 
 	public void setTitleSubtitle(CharSequence title, CharSequence subtitle) {
 		toolbarHolder.update(title, subtitle);
@@ -118,7 +230,6 @@ public class GalleryDialog extends Dialog {
 	@Override
 	@SuppressWarnings("deprecation")
 	public void onBackPressed() {
-		// Keep existing Dialog back dispatch; OnBackInvoked migration is targetSdk-sensitive.
 		if (!(fragment instanceof Callback) || !((Callback) fragment).onBackPressed()) {
 			super.onBackPressed();
 		}

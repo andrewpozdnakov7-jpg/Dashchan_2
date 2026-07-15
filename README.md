@@ -13,7 +13,7 @@ Dashchan_2 - неофициальная ветка Dashchan для Android 11+.
 
 | Компонент | Package | Версия | Минимальный Android |
 | --- | --- | --- | --- |
-| Dashchan_2 с поддержкой Двача | `io.dashchan2` | `3.1.9`, code `1078` | API 30 / Android 11+ |
+| Dashchan_2 с поддержкой Двача | `io.dashchan2` | `3.2.0`, code `1079` | API 30 / Android 11+ |
 | Fourchan extension | `io.dashchan2.chan.fourchan` | `1.27-read-only-1`, code `1` | API 30 / Android 11+ |
 
 Поддержка 2ch/Dvach встроена в основной APK `Dashchan_2`. Отдельное дополнение
@@ -51,9 +51,16 @@ WebM2/FFmpeg/dav1d/yuv теперь встроены в основной APK. О
 - Исправлена синяя полоса при резкой прокрутке и overscroll на пользовательских
   темах.
 - Исправлено зависание некоторых HEVC-видео при продолжающемся звуке.
+- Исправлено воспроизведение и перемотка некорректно обрезанных видео со
+  смещенной временной шкалой.
 - Выбор скорости видео сохраняет нормальный тембр с помощью FFmpeg `atempo`.
 - Добавлена настройка сохранения выбранной скорости между видео.
-- Добавлен выбор названия приложения и создание ярлыка со своим именем.
+- Устранены задержки интерфейса при архивации больших тредов, сохранении
+  оригиналов и миниатюр.
+- Добавлена экспериментальная поддержка Predictive Back на Android 13+.
+- Добавлена настройка цветов меток своих постов и ответов.
+- Добавлен выбор названия приложения и создание ярлыка со своим именем и
+  изображением; доступен шаблон промта для генерации иконки.
 - Встроенные WebM/FFmpeg исходники находятся в папке `Dashchan-Webm`.
 
 ### Сборка
@@ -130,7 +137,7 @@ installed beside the original Dashchan because it uses its own package name.
 
 | Component | Package | Version | Minimum Android |
 | --- | --- | --- | --- |
-| Dashchan_2 with Dvach support | `io.dashchan2` | `3.1.9`, code `1078` | API 30 / Android 11+ |
+| Dashchan_2 with Dvach support | `io.dashchan2` | `3.2.0`, code `1079` | API 30 / Android 11+ |
 | Fourchan extension | `io.dashchan2.chan.fourchan` | `1.27-read-only-1`, code `1` | API 30 / Android 11+ |
 
 2ch/Dvach support is bundled into the main `Dashchan_2` APK. The separate
@@ -167,9 +174,16 @@ WebM2 APK is no longer required for normal video playback.
   limited system text-selection menus.
 - Fixed the blue strip during fast scrolling and overscroll with custom themes.
 - Fixed some HEVC videos freezing while audio continued.
+- Fixed playback and seeking in incorrectly trimmed videos with shifted
+  timelines.
 - Playback speed now preserves pitch through FFmpeg `atempo`.
 - Added an option to keep the selected playback speed between videos.
-- Added application name presets and custom-named Home screen shortcuts.
+- Removed UI delays when archiving large threads and saving original files and
+  thumbnails.
+- Added experimental Predictive Back support on Android 13+.
+- Added color settings for markers of your posts and replies.
+- Added application name presets and Home screen shortcuts with custom names
+  and images; an image-generation prompt template is included.
 - Bundled WebM/FFmpeg source is stored in `Dashchan-Webm`.
 
 ### Building

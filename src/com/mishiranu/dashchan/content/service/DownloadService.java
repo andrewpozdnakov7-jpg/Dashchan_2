@@ -62,13 +62,15 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 
 public class DownloadService extends BaseService implements ReadFileTask.Callback {
-	private static final Executor SINGLE_THREAD_EXECUTOR = Executors.newSingleThreadExecutor();
+	private static final ExecutorService SINGLE_THREAD_EXECUTOR = Executors.newSingleThreadExecutor();
 
 	private static final String ACTION_CANCEL = "cancel";
 	private static final String ACTION_RETRY = "retry";
@@ -87,7 +89,7 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 	private boolean isForegroundWorker;
 
 	private final WeakObservable<Callback> callbacks = new WeakObservable<>();
-	private final HashMap<String, DataFile> cachedDirectories = new HashMap<>();
+	private final ConcurrentHashMap<String, DataFile> cachedDirectories = new ConcurrentHashMap<>();
 
 	private Request primaryRequest;
 	private final ArrayList<DirectRequest> directRequests = new ArrayList<>();
@@ -96,6 +98,12 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 	private final LinkedHashMap<String, TaskData> successTasks = new LinkedHashMap<>();
 	private final LinkedHashMap<String, TaskData> errorTasks = new LinkedHashMap<>();
 	private Pair<TaskData, ReadFileTask> activeTask;
+	private TaskData activePreparingTask;
+	private Future<?> activePreparingFuture;
+	private DataFile activeTaskDataFile;
+	private TaskData activeInputTask;
+	private Future<?> activeInputFuture;
+	private DataFile lastSuccessTaskDataFile;
 
 	private NotificationCompat.Builder builder;
 
@@ -193,6 +201,10 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 			activeTask.second.cancel();
 			activeTask = null;
 		}
+		cancelActivePreparingTask();
+		cancelActiveInputTask();
+		activeTaskDataFile = null;
+		lastSuccessTaskDataFile = null;
 		// Should also stop foreground and remove notification
 		refreshNotification(NotificationUpdate.SYNC);
 		wakeLock.release();
@@ -241,31 +253,92 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 	}
 
 	private void startNextTask() {
-		if (activeTask == null && !queuedTasks.isEmpty()) {
+		if (activeTask == null && activePreparingTask == null && activeInputTask == null && !queuedTasks.isEmpty()) {
 			Iterator<TaskData> iterator = queuedTasks.values().iterator();
 			TaskData taskData = iterator.next();
 			iterator.remove();
 			if (taskData.input != null) {
-				boolean success = false;
-				try (InputStream input = taskData.input;
-						OutputStream output = getDataFile(taskData).openOutputStream()) {
-					IOUtils.copyStream(input, output);
-					success = true;
-				} catch (IOException e) {
-					e.printStackTrace();
-				}
-				onFinishDownloadingInternal(success, new TaskData(taskData.chanName, taskData.overwrite,
-						null, taskData.target, taskData.path, taskData.name, taskData.allowWrite));
+				activeInputTask = taskData;
+				activeInputFuture = SINGLE_THREAD_EXECUTOR.submit(() -> {
+					boolean success = false;
+					DataFile taskDataFile = null;
+					try {
+						taskDataFile = getDataFile(taskData);
+						try (InputStream input = taskData.input; OutputStream output = taskDataFile.openOutputStream()) {
+							IOUtils.copyStream(input, output);
+							success = true;
+						}
+					} catch (IOException | RuntimeException e) {
+						e.printStackTrace();
+					}
+					boolean finalSuccess = success;
+					DataFile finalTaskDataFile = taskDataFile;
+					ConcurrentUtils.HANDLER.post(() -> finishInputTask(taskData,
+							finalSuccess, finalTaskDataFile));
+				});
 			} else {
-				Chan chan = Chan.getPreferred(taskData.chanName, taskData.uri);
-				ReadFileTask readFileTask = ReadFileTask.createShared(this, chan,
-						taskData.uri, getDataFile(taskData), taskData.overwrite,
-						taskData.checkSha256, taskData.checkFingerprints);
-				activeTask = new Pair<>(taskData, readFileTask);
-				readFileTask.execute(SINGLE_THREAD_EXECUTOR);
+				activePreparingTask = taskData;
+				activePreparingFuture = SINGLE_THREAD_EXECUTOR.submit(() -> {
+					DataFile taskDataFile = null;
+					try {
+						taskDataFile = getDataFile(taskData);
+					} catch (RuntimeException e) {
+						e.printStackTrace();
+					}
+					DataFile finalTaskDataFile = taskDataFile;
+					ConcurrentUtils.HANDLER.post(() -> finishPreparingTask(taskData, finalTaskDataFile));
+				});
 			}
-		} else {
+		} else if (activeTask == null && activePreparingTask == null && activeInputTask == null) {
 			cachedDirectories.clear();
+		}
+	}
+
+	private void finishPreparingTask(TaskData taskData, DataFile taskDataFile) {
+		if (activePreparingTask != taskData) {
+			return;
+		}
+		activePreparingTask = null;
+		activePreparingFuture = null;
+		if (taskDataFile == null) {
+			onFinishDownloadingInternal(false, taskData, null);
+			return;
+		}
+		Chan chan = Chan.getPreferred(taskData.chanName, taskData.uri);
+		ReadFileTask readFileTask = ReadFileTask.createShared(this, chan,
+				taskData.uri, taskDataFile, taskData.overwrite,
+				taskData.checkSha256, taskData.checkFingerprints);
+		activeTaskDataFile = taskDataFile;
+		activeTask = new Pair<>(taskData, readFileTask);
+		readFileTask.execute(SINGLE_THREAD_EXECUTOR);
+	}
+
+	private void cancelActivePreparingTask() {
+		activePreparingTask = null;
+		if (activePreparingFuture != null) {
+			activePreparingFuture.cancel(true);
+			activePreparingFuture = null;
+		}
+	}
+
+	private void finishInputTask(TaskData taskData, boolean success, DataFile taskDataFile) {
+		if (activeInputTask != taskData) {
+			return;
+		}
+		activeInputTask = null;
+		activeInputFuture = null;
+		onFinishDownloadingInternal(success, new TaskData(taskData.chanName, taskData.overwrite,
+				null, taskData.target, taskData.path, taskData.name, taskData.allowWrite), taskDataFile);
+	}
+
+	private void cancelActiveInputTask() {
+		if (activeInputTask != null) {
+			IOUtils.close(activeInputTask.input);
+			activeInputTask = null;
+		}
+		if (activeInputFuture != null) {
+			activeInputFuture.cancel(true);
+			activeInputFuture = null;
 		}
 	}
 
@@ -274,6 +347,13 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 		if (activeTask != null && activeTask.first.getKey().equals(key)) {
 			activeTask.second.cancel();
 			activeTask = null;
+			activeTaskDataFile = null;
+		}
+		if (activePreparingTask != null && activePreparingTask.getKey().equals(key)) {
+			cancelActivePreparingTask();
+		}
+		if (activeInputTask != null && activeInputTask.getKey().equals(key)) {
+			cancelActiveInputTask();
 		}
 		TaskData oldTaskData = queuedTasks.remove(key);
 		if (oldTaskData != null && oldTaskData.input != null) {
@@ -358,6 +438,12 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 		HashSet<String> activeKeys = new HashSet<>(queuedTasks.keySet());
 		if (activeTask != null) {
 			activeKeys.add(activeTask.first.getKey());
+		}
+		if (activePreparingTask != null) {
+			activeKeys.add(activePreparingTask.getKey());
+		}
+		if (activeInputTask != null) {
+			activeKeys.add(activeInputTask.getKey());
 		}
 		return activeKeys;
 	}
@@ -590,7 +676,7 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 		}
 
 		private void retry() {
-			if (activeTask == null && queuedTasks.isEmpty()) {
+			if (activeTask == null && activePreparingTask == null && activeInputTask == null && queuedTasks.isEmpty()) {
 				successTasks.clear();
 				ArrayList<TaskData> errorTasks = new ArrayList<>(DownloadService.this.errorTasks.values());
 				DownloadService.this.errorTasks.clear();
@@ -1070,7 +1156,7 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 	private enum NotificationUpdate {NORMAL, HEADS_UP, SYNC}
 
 	private void refreshNotification(NotificationUpdate notificationUpdate) {
-		boolean hasTask = activeTask != null;
+		boolean hasTask = activeTask != null || activePreparingTask != null || activeInputTask != null;
 		boolean hasResults = !queuedTasks.isEmpty() || !successTasks.isEmpty() || !errorTasks.isEmpty();
 		boolean hasRequests = primaryRequest != null || !directRequests.isEmpty();
 		boolean needForegroundOrNotification = hasTask || hasResults || hasRequests;
@@ -1096,13 +1182,15 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 					}
 				}
 			}
-			DataFile lastSuccessFile = lastSuccessFileTaskData != null ? getDataFile(lastSuccessFileTaskData) : null;
+			DataFile lastSuccessFile = lastSuccessFileTaskData != null ? lastSuccessTaskDataFile : null;
 			boolean allowWrite = lastSuccessFileTaskData != null && lastSuccessFileTaskData.allowWrite;
 			NotificationData.Type type = hasTask ? NotificationData.Type.PROGRESS : hasRequests
 					? NotificationData.Type.REQUEST : NotificationData.Type.RESULT;
 			boolean allowHeadsUp = type == NotificationData.Type.RESULT &&
 					notificationUpdate == NotificationUpdate.HEADS_UP;
-			String activeName = hasTask ? activeTask.second.getFileName() : null;
+			String activeName = activeTask != null ? activeTask.second.getFileName()
+					: activePreparingTask != null ? activePreparingTask.name
+					: activeInputTask != null ? activeInputTask.name : null;
 			notificationsQueue.add(NotificationData.updateData(type, allowHeadsUp,
 					queuedTasks.size(), successTasks.size(), errorTasks.size(), allowRetry, hasNotFromCache,
 					lastSuccessFile, allowWrite, activeName, progress, progressMax));
@@ -1136,13 +1224,15 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 	@Override
 	public void onFinishDownloading(boolean success, Uri uri, DataFile file, ErrorItem errorItem) {
 		TaskData taskData = activeTask.first.newFinishedFromCache(activeTask.second.isDownloadingFromCache());
+		DataFile taskDataFile = activeTaskDataFile;
 		activeTask = null;
-		onFinishDownloadingInternal(success, taskData);
+		activeTaskDataFile = null;
+		onFinishDownloadingInternal(success, taskData, taskDataFile);
 	}
 
-	private void onFinishDownloadingInternal(boolean success, TaskData taskData) {
+	private void onFinishDownloadingInternal(boolean success, TaskData taskData, DataFile taskDataFile) {
 		if (success) {
-			File file = getDataFile(taskData).getFileOrUri().first;
+			File file = taskDataFile != null ? taskDataFile.getFileOrUri().first : null;
 			if (file != null) {
 				scanFileLegacy(file, null);
 			}
@@ -1151,6 +1241,7 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 			callback.onFinishDownloading(success, taskData.target, taskData.path, taskData.name);
 		}
 		if (success) {
+			lastSuccessTaskDataFile = taskDataFile;
 			successTasks.put(taskData.getKey(), taskData);
 		} else {
 			errorTasks.put(taskData.getKey(), taskData);
@@ -1158,7 +1249,7 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 		if (!queuedTasks.isEmpty()) {
 			if (success && taskData.target.isExternal()) {
 				// Update image explicitly, because task type won't be changed
-				notificationsQueue.add(NotificationData.updateImageOnly(getDataFile(taskData), taskData.allowWrite));
+				notificationsQueue.add(NotificationData.updateImageOnly(taskDataFile, taskData.allowWrite));
 			}
 			startNextTask();
 		} else {

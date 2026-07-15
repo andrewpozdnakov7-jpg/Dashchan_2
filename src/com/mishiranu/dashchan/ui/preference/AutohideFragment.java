@@ -117,6 +117,11 @@ public class AutohideFragment extends BaseListFragment {
 	}
 
 	@Override
+	public boolean canHandleBack() {
+		return searchMenuItem != null && searchMenuItem.isActionViewExpanded();
+	}
+
+	@Override
 	public void onCreateOptionsMenu(Menu menu, boolean primary) {
 		menu.add(0, R.id.menu_new_rule, 0, R.string.new_rule)
 				.setIcon(((FragmentHandler) requireActivity()).getActionBarIcon(R.attr.iconActionAddRule))
@@ -139,6 +144,7 @@ public class AutohideFragment extends BaseListFragment {
 				}
 				((Adapter) getRecyclerView().getAdapter()).setSearchQuery(searchQuery);
 				onPrepareOptionsMenu(menu);
+				requireView().post(this::notifyBackNavigationChanged);
 				return true;
 			}));
 			if (searchQuery != null) {

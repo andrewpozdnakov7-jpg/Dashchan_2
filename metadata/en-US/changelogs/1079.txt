@@ -1,0 +1,6 @@
+* Added experimental Predictive Back support on Android 13+. System gesture navigation must be enabled. The feature is disabled by default.
+* Added color settings for markers of your posts and replies: default, theme colors, or custom colors.
+* Removed UI freezes when archiving large threads and saving original files and thumbnails.
+* Fixed playback and seeking in incorrectly trimmed videos with shifted timelines.
+* Custom shortcuts can now use a custom image; an image-generation prompt template was added.
+* Renamed the Slopchan application-name preset to Slopchan_1.

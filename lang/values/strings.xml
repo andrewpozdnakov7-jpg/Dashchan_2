@@ -139,6 +139,8 @@
 		toasts, ensure reliable application restarts, and allow to launch application when posting fails</string>
 	<string name="empty_response">Empty response</string>
 	<string name="enabled">Enabled</string>
+	<string name="enable_predictive_back">Enable Predictive Back (experimental)</string>
+	<string name="enable_predictive_back__summary">Use Predictive Back on Android 13+. System gesture navigation must be enabled. Leaving the app uses the system animation; on Android 14+ internal pages and the gallery follow the gesture. Experimental: use the toolbar arrow if your firmware behaves unexpectedly. Behavior is unchanged on Android 11–12.</string>
 	<string name="enter_valid_data">Enter a valid data</string>
 	<string name="erase">Erase</string>
 	<string name="every_number_sec__format">Every %d sec.</string>
@@ -584,8 +586,33 @@
 	<string name="posting_file_not_supported">The 2ch server rejected the file: its format or internal codec is not supported by the site. For video, try MP4 (H.264/AAC) or WebM.</string>
 	<string name="application_shortcut">Application shortcut</string>
 	<string name="application_name">Application name</string>
-	<string name="custom_application_shortcut">Custom shortcut...</string>
-	<string name="custom_application_shortcut__summary">Create an additional Home screen shortcut with any name</string>
+	<string name="custom_application_shortcut">Custom shortcut</string>
+	<string name="custom_application_shortcut__summary">Create an additional Home screen shortcut with your own name and image</string>
 	<string name="confirm_custom_shortcut">Confirm adding the shortcut on the Home screen</string>
 	<string name="custom_shortcuts_not_supported">The current launcher does not support pinned shortcuts</string>
+	<string name="custom_shortcut_ai_prompt_title">Prompt for an image generator</string>
+	<string name="custom_shortcut_ai_prompt">Create a square Android app icon: [DESCRIBE YOUR IDEA].\n\nImage size 1024×1024 pixels, PNG format, sRGB color space, opaque background. Place the main object exactly in the center and limit it to 60–65% of the image. Leave clear space around the edges because Android may crop the icon into a circle, square, or another shape.\n\nDo not add text, a border, rounded corners, a phone mockup, watermarks, or small details near the edges. The image must remain clearly readable at a small size.</string>
+	<string name="copy_prompt">Copy prompt</string>
+	<string name="custom_shortcut_prompt_copied">Prompt copied</string>
+	<string name="shortcut_name">Shortcut name</string>
+	<string name="select_shortcut_image">Select image</string>
+	<string name="shortcut_image">Shortcut image</string>
+	<string name="shortcut_crop_center">Crop from center</string>
+	<string name="shortcut_fit_image">Fit the whole image</string>
+	<string name="create_shortcut">Create shortcut</string>
+	<string name="custom_shortcut_select_image_first">Select an image first</string>
+	<string name="custom_shortcut_image_error">Could not open this image</string>
+	<string name="post_marks_colors">Post marker colors</string>
+	<string name="post_marks_colors__summary">Configure marks beside posts and on the thread scrollbar</string>
+	<string name="post_marks_color_source">Color source</string>
+	<string name="post_marks_colors_default">Default</string>
+	<string name="post_marks_colors_theme">From theme</string>
+	<string name="post_marks_colors_custom">Custom colors</string>
+	<string name="user_posts_color">My posts</string>
+	<string name="replies_to_me_color">Replies to me</string>
+	<string name="reset_post_marks_colors">Reset colors</string>
+	<string name="reset_post_marks_colors__summary">Restore the default colors and behavior</string>
+	<string name="post_marks_colors_reset">Colors reset</string>
+	<string name="post_marks_color_palette">Quick colors</string>
+	<string name="invalid_hex_color">Enter a color in #RRGGBB format</string>
 </resources>

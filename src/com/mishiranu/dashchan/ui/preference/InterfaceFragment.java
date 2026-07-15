@@ -2,13 +2,9 @@ package com.mishiranu.dashchan.ui.preference;
 
 import android.app.AlertDialog;
 import android.content.Context;
-import android.text.InputFilter;
 import android.os.Bundle;
 import android.text.InputType;
 import android.view.View;
-import android.view.WindowManager;
-import android.widget.EditText;
-import android.widget.LinearLayout;
 import androidx.annotation.NonNull;
 import androidx.fragment.app.FragmentManager;
 import chan.content.ChanMarkup;
@@ -17,12 +13,11 @@ import com.mishiranu.dashchan.content.LauncherIconManager;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.ui.FragmentHandler;
 import com.mishiranu.dashchan.ui.InstanceDialog;
+import com.mishiranu.dashchan.ui.StateActivity;
 import com.mishiranu.dashchan.ui.preference.core.PreferenceFragment;
 import com.mishiranu.dashchan.util.IOUtils;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.util.SharedPreferences;
-import com.mishiranu.dashchan.widget.ClickableToast;
-import com.mishiranu.dashchan.widget.SafePasteEditText;
 import java.util.Arrays;
 
 public class InterfaceFragment extends PreferenceFragment {
@@ -39,10 +34,11 @@ public class InterfaceFragment extends PreferenceFragment {
 		addList(Preferences.KEY_APPLICATION_NAME, Arrays.asList(LauncherIconManager.VALUE_DASHCHAN_2,
 				LauncherIconManager.VALUE_SLOPCHAN, LauncherIconManager.VALUE_DVACH),
 				Preferences.DEFAULT_APPLICATION_NAME, R.string.application_name,
-				Arrays.asList("Dashchan_2", "Slopchan", "ДВАЧ"))
+				Arrays.asList("Dashchan_2", "Slopchan_1", "ДВАЧ"))
 				.setOnAfterChangeListener(p -> LauncherIconManager.apply(requireContext(), p.getValue()));
 		addButton(R.string.custom_application_shortcut, R.string.custom_application_shortcut__summary)
-				.setOnClickListener(p -> displayCustomShortcutDialog(getChildFragmentManager()));
+				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
+						.pushFragment(new CustomShortcutFragment()));
 
 		addHeader(R.string.appearance);
 		String scaleFormat = ResourceUtils.getColonString(getResources(), R.string.scale, "%d%%");
@@ -62,6 +58,9 @@ public class InterfaceFragment extends PreferenceFragment {
 				R.string.scroll_thread_when_scrolling_gallery, 0);
 		addButton(R.string.themes, 0).setOnClickListener(p -> ((FragmentHandler) requireActivity())
 				.pushFragment(new ThemesFragment()));
+		addCheck(true, Preferences.KEY_PREDICTIVE_BACK, Preferences.DEFAULT_PREDICTIVE_BACK,
+				R.string.enable_predictive_back, R.string.enable_predictive_back__summary)
+				.setOnAfterChangeListener(p -> ((StateActivity) requireActivity()).updateSystemBackCallback());
 
 		addHeader(R.string.navigation_drawer);
 		addList(Preferences.KEY_PAGES_LIST, enumList(Preferences.PagesListMode.values(), o -> o.value),
@@ -90,6 +89,9 @@ public class InterfaceFragment extends PreferenceFragment {
 				enumResList(Preferences.HighlightUnreadMode.values(), o -> o.titleResId));
 		addCheck(true, Preferences.KEY_SHOW_MY_POSTS, Preferences.DEFAULT_SHOW_MY_POSTS,
 				R.string.highlight_my_posts, 0);
+		addButton(getString(R.string.post_marks_colors), preference -> getString(
+				Preferences.getPostMarksColorMode().titleResId)).setOnClickListener(preference ->
+				((FragmentHandler) requireActivity()).pushFragment(new PostMarksColorsFragment()));
 		addCheck(true, Preferences.KEY_ADVANCED_SEARCH, Preferences.DEFAULT_ADVANCED_SEARCH,
 				R.string.advanced_search, R.string.advanced_search__summary)
 				.setOnAfterChangeListener(p -> {
@@ -122,38 +124,6 @@ public class InterfaceFragment extends PreferenceFragment {
 					.setMessage(BUILDER_ADVANCED_SEARCH.fromHtmlReduced(html))
 					.setPositiveButton(android.R.string.ok, null)
 					.create();
-		});
-	}
-
-	private static void displayCustomShortcutDialog(FragmentManager fragmentManager) {
-		new InstanceDialog(fragmentManager, null, provider -> {
-			Context context = provider.getContext();
-			EditText editText = new SafePasteEditText(context);
-			editText.setId(android.R.id.edit);
-			editText.setSingleLine(true);
-			editText.setFilters(new InputFilter[] {new InputFilter.LengthFilter(40)});
-			LinearLayout layout = new LinearLayout(context);
-			layout.setOrientation(LinearLayout.HORIZONTAL);
-			layout.addView(editText, LinearLayout.LayoutParams.MATCH_PARENT,
-					LinearLayout.LayoutParams.WRAP_CONTENT);
-			int padding = context.getResources().getDimensionPixelSize(R.dimen.dialog_padding_view);
-			layout.setPadding(padding, padding, padding, padding);
-			AlertDialog dialog = new AlertDialog.Builder(context)
-					.setTitle(R.string.custom_application_shortcut)
-					.setView(layout)
-					.setNegativeButton(android.R.string.cancel, null)
-					.setPositiveButton(android.R.string.ok, (d, which) -> {
-						String name = editText.getText().toString().trim();
-						if (name.isEmpty()) {
-							ClickableToast.show(R.string.enter_valid_data);
-						} else if (LauncherIconManager.requestCustomShortcut(context, name)) {
-							ClickableToast.show(R.string.confirm_custom_shortcut);
-						} else {
-							ClickableToast.show(R.string.custom_shortcuts_not_supported);
-						}
-					}).create();
-			dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE);
-			return dialog;
 		});
 	}
 

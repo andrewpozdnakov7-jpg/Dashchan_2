@@ -62,6 +62,9 @@ public class CategoriesFragment extends PreferenceFragment {
 		addCategory(R.string.about, R.drawable.ic_info)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 						.pushFragment(new AboutFragment()));
+		addCategory(R.string.custom_application_shortcut, R.drawable.ic_camera_alt)
+				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
+						.pushFragment(new CustomShortcutFragment()));
 	}
 
 	@Override
