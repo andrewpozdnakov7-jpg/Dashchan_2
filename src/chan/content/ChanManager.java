@@ -84,8 +84,10 @@ public class ChanManager {
 	private static final String META_LIB_EXTENSION_TITLE = "lib.extension.title";
 	private static final String META_LIB_EXTENSION_SOURCE = "lib.extension.source";
 	private static final String BUILTIN_DVACH_NAME = "dvach";
+	private static final String BUILTIN_FOURCHAN_NAME = "fourchan";
 	private static final String[] BUILTIN_REPLACED_PACKAGE_NAMES = {
-			"com.mishiranu.dashchan.chan.dvach", "io.dashchan2.chan.dvach"};
+			"com.mishiranu.dashchan.chan.dvach", "io.dashchan2.chan.dvach",
+			"com.mishiranu.dashchan.chan.fourchan", "io.dashchan2.chan.fourchan"};
 
 	private static final int PACKAGE_MANAGER_SIGNATURE_FLAGS = PackageManager.GET_SIGNING_CERTIFICATES;
 
@@ -323,6 +325,20 @@ public class ChanManager {
 		return new Extension(extensionItem.changeLoadError(result.error), result.chan);
 	}
 
+	private static Extension loadBuiltinFourchan(Fingerprints applicationFingerprints) {
+		MainApplication application = MainApplication.getInstance();
+		ExtensionItem extensionItem = new ExtensionItem(ExtensionItem.Type.CHAN, BUILTIN_FOURCHAN_NAME, "4chan",
+				ExtensionItem.TrustState.TRUSTED, application.getPackageName(), BuildConfig.VERSION_NAME,
+				BuildConfig.VERSION_CODE, application.getApplicationInfo(), applicationFingerprints,
+				MAX_VERSION, true, R.drawable.ic_custom_fourchan, null, null,
+				"com.mishiranu.dashchan.chan.fourchan.FourchanChanConfiguration",
+				"com.mishiranu.dashchan.chan.fourchan.FourchanChanPerformer",
+				"com.mishiranu.dashchan.chan.fourchan.FourchanChanLocator",
+				"com.mishiranu.dashchan.chan.fourchan.FourchanChanMarkup", true);
+		LoadChanResult result = loadChan(extensionItem, application.getPackageManager());
+		return new Extension(extensionItem.changeLoadError(result.error), result.chan);
+	}
+
 	@SuppressLint("PackageManagerGetSignatures")
 	private ChanManager() {
 		String packageName = MainApplication.getInstance().getPackageName();
@@ -353,6 +369,9 @@ public class ChanManager {
 			Extension builtInDvach = loadBuiltinDvach(applicationFingerprints);
 			extensions.add(builtInDvach);
 			usedExtensionNames.add(builtInDvach.item.name);
+			Extension builtInFourchan = loadBuiltinFourchan(applicationFingerprints);
+			extensions.add(builtInFourchan);
+			usedExtensionNames.add(builtInFourchan.item.name);
 			Collections.addAll(loadedPackageNames, BUILTIN_REPLACED_PACKAGE_NAMES);
 			for (String knownPackageName : BuildConfig.KNOWN_CHAN_EXTENSION_PACKAGES) {
 				loadKnownExtension(packageManager, knownPackageName, loadedPackageNames,
@@ -382,6 +401,11 @@ public class ChanManager {
 			Preferences.PREFERENCES.register(key -> {
 				if (Preferences.KEY_CHANS_ORDER.equals(key)) {
 					updateExtensions(null, null, true);
+				} else {
+					String chanName = Preferences.getChanNameByEnabledKey(key);
+					if (chanName != null) {
+						notifyChanEnabledChanged(chanName);
+					}
 				}
 			});
 		} else {
@@ -929,8 +953,11 @@ public class ChanManager {
 
 	private static final ExtensionsIterable.FilterMap<ExtensionItem> FILTER_MAP_EXTENSION_ITEMS
 			= extension -> extension.item;
+	private static final ExtensionsIterable.FilterMap<Chan> FILTER_MAP_ALL_CHANS
+			= extension -> extension.chan;
 	private static final ExtensionsIterable.FilterMap<Chan> FILTER_MAP_AVAILABLE_CHAN_NAMES
-			= extension -> extension.chan != null ? extension.chan : null;
+			= extension -> extension.chan != null && Preferences.isChanEnabled(extension.item.name)
+					? extension.chan : null;
 
 	public Iterable<ExtensionItem> getExtensionItems() {
 		return new ExtensionsIterable<>(extensions.values(), FILTER_MAP_EXTENSION_ITEMS);
@@ -970,6 +997,15 @@ public class ChanManager {
 		return extension != null && extension.item.type == ExtensionItem.Type.CHAN;
 	}
 
+	public boolean isBuiltInChan(String chanName) {
+		Extension extension = extensions.get(chanName);
+		return extension != null && extension.item.type == ExtensionItem.Type.CHAN && extension.item.builtIn;
+	}
+
+	public Iterable<Chan> getAllChans() {
+		return new ExtensionsIterable<>(extensions.values(), FILTER_MAP_ALL_CHANS);
+	}
+
 	public Iterable<Chan> getAvailableChans() {
 		return new ExtensionsIterable<>(extensions.values(), FILTER_MAP_AVAILABLE_CHAN_NAMES);
 	}
@@ -977,7 +1013,7 @@ public class ChanManager {
 	public boolean hasMultipleAvailableChans() {
 		int count = 0;
 		for (Extension extension : extensions.values()) {
-			if (extension.chan != null && ++count >= 2) {
+			if (extension.chan != null && Preferences.isChanEnabled(extension.item.name) && ++count >= 2) {
 				return true;
 			}
 		}
@@ -993,7 +1029,7 @@ public class ChanManager {
 
 	public Chan getDefaultChan() {
 		for (Extension extension : extensions.values()) {
-			if (extension.chan != null) {
+			if (extension.chan != null && Preferences.isChanEnabled(extension.item.name)) {
 				return extension.chan;
 			}
 		}
@@ -1003,12 +1039,28 @@ public class ChanManager {
 	String getChanNameByHost(String host) {
 		if (host != null) {
 			for (Extension extension : extensions.values()) {
-				if (extension.chan != null && extension.chan.locator.isChanHost(host)) {
+				if (extension.chan != null && Preferences.isChanEnabled(extension.item.name)
+						&& extension.chan.locator.isChanHost(host)) {
 					return extension.item.name;
 				}
 			}
 		}
 		return null;
+	}
+
+	private void notifyChanEnabledChanged(String chanName) {
+		Extension extension = extensions.get(chanName);
+		if (extension == null || extension.chan == null) {
+			return;
+		}
+		boolean enabled = Preferences.isChanEnabled(chanName);
+		for (Callback callback : observable) {
+			if (enabled) {
+				callback.onChanInstalled(extension.chan);
+			} else {
+				callback.onChanUninstalled(extension.chan);
+			}
+		}
 	}
 
 	public ChanIconDrawable getIcon(Chan chan) {

@@ -26,7 +26,6 @@ import androidx.annotation.RequiresApi;
 import androidx.core.view.ViewCompat;
 import androidx.customview.widget.ViewDragHelper;
 import com.mishiranu.dashchan.R;
-import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.util.GraphicsUtils;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.util.ViewUtils;
@@ -307,8 +306,7 @@ public class DialogStack<T extends DialogStack.ViewFactory<T>> implements Iterab
 	}
 
 	private void registerPredictiveBackCallback(Dialog dialog) {
-		if (predictiveBackCallback == null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-				Preferences.isPredictiveBackEnabled()) {
+		if (predictiveBackCallback == null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
 			predictiveBackCallback = Api33Impl.register(dialog, () -> {
 				if (!visibleViews.isEmpty()) {
 					popInternal();

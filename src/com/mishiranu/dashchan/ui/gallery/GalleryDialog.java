@@ -88,9 +88,9 @@ public class GalleryDialog extends Dialog {
 	}
 
 	private void registerPredictiveBackCallback() {
-		if (predictiveBackCallback == null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-				Preferences.isPredictiveBackEnabled()) {
-			predictiveBackCallback = Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE
+		if (predictiveBackCallback == null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+			predictiveBackCallback = Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
+					Preferences.isPredictiveBackEnabled()
 					? Api34Impl.register(this) : Api33Impl.register(this);
 		}
 	}

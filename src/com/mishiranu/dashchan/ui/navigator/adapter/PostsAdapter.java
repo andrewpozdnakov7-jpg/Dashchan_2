@@ -72,6 +72,7 @@ public class PostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
 
 	private int bumpLimitOrdinalIndex = PostItem.ORDINAL_INDEX_NONE;
 	private boolean selection = false;
+	private boolean removeHiddenPosts = false;
 
 	public PostsAdapter(Callback callback, String chanName, UiManager uiManager, Replyable replyable,
 			UiManager.PostStateProvider postStateProvider, FragmentManager fragmentManager, RecyclerView recyclerView,
@@ -83,15 +84,8 @@ public class PostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
 		recyclerKeeper = new CommentTextView.RecyclerKeeper(recyclerView);
 		super.registerAdapterDataObserver(recyclerKeeper);
 		this.postItemsMap = postItemsMap;
-		postNumbers.addAll(postItemsMap.keySet());
-		Collections.sort(postNumbers);
+		rebuildPosts(false);
 		preloadPosts(0);
-		for (PostItem postItem : postItemsMap.values()) {
-			if (postItem.isOriginalPost()) {
-				gallerySet.setThreadTitle(postItem.getSubjectOrComment());
-			}
-			gallerySet.put(postItem.getPostNumber(), postItem.getAttachmentItems());
-		}
 	}
 
 	public RecyclerView.ItemDecoration createPostItemDecoration(Context context, int dividerPadding) {
@@ -162,7 +156,11 @@ public class PostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
 	}
 
 	public List<PostItem> copyItems() {
-		return new ArrayList<>(postItemsMap.values());
+		ArrayList<PostItem> postItems = new ArrayList<>(postNumbers.size());
+		for (PostNumber postNumber : postNumbers) {
+			postItems.add(postItemsMap.get(postNumber));
+		}
+		return postItems;
 	}
 
 	public PostItem getItem(int position) {
@@ -200,6 +198,48 @@ public class PostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
 
 	public UiManager.ConfigurationSet getConfigurationSet() {
 		return configurationSet;
+	}
+
+	private void rebuildPosts(boolean filterHidden) {
+		postNumbers.clear();
+		gallerySet.clear();
+		for (PostItem postItem : postItemsMap.values()) {
+			if (postItem.isOriginalPost()) {
+				gallerySet.setThreadTitle(postItem.getSubjectOrComment());
+			}
+			boolean hidden = removeHiddenPosts && filterHidden
+					&& configurationSet.postStateProvider.isHiddenResolve(postItem);
+			if (!hidden || postItem.isOriginalPost()) {
+				postNumbers.add(postItem.getPostNumber());
+			}
+			if (!hidden) {
+				gallerySet.put(postItem.getPostNumber(), postItem.getAttachmentItems());
+			}
+		}
+		Collections.sort(postNumbers);
+		selected.retainAll(postNumbers);
+	}
+
+	public boolean setRemoveHiddenPosts(boolean removeHiddenPosts) {
+		if (this.removeHiddenPosts == removeHiddenPosts) {
+			return false;
+		}
+		this.removeHiddenPosts = removeHiddenPosts;
+		cancelPreloading();
+		rebuildPosts(true);
+		notifyDataSetChanged();
+		preloadPosts(0);
+		return true;
+	}
+
+	public boolean refreshHiddenVisibility() {
+		if (!removeHiddenPosts) {
+			return false;
+		}
+		cancelPreloading();
+		rebuildPosts(true);
+		preloadPosts(0);
+		return true;
 	}
 
 	@Override
@@ -261,15 +301,8 @@ public class PostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
 
 		postItemsMap.putAll(changed);
 		postItemsMap.keySet().removeAll(removed);
-		postNumbers.clear();
-		postNumbers.addAll(postItemsMap.keySet());
-		Collections.sort(postNumbers);
 
 		for (PostItem postItem : changed.values()) {
-			if (postItem.isOriginalPost()) {
-				gallerySet.setThreadTitle(postItem.getSubjectOrComment());
-			}
-			gallerySet.put(postItem.getPostNumber(), postItem.getAttachmentItems());
 			for (PostNumber referenceTo : postItem.getReferencesTo()) {
 				PostItem referenced = postItemsMap.get(referenceTo);
 				if (referenced != null) {
@@ -277,6 +310,8 @@ public class PostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
 				}
 			}
 		}
+		// Hidden flags and local filters are restored by PostsPage after this method.
+		rebuildPosts(false);
 
 		int ordinalIndex = 0;
 		bumpLimitOrdinalIndex = PostItem.ORDINAL_INDEX_NONE;
@@ -327,20 +362,28 @@ public class PostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
 			}
 		}
 		if (removed) {
-			postNumbers.clear();
-			postNumbers.addAll(postItemsMap.keySet());
-			Collections.sort(postNumbers);
+			rebuildPosts(true);
 			notifyDataSetChanged();
 		}
 		return removed;
 	}
 
 	public boolean hasOldPosts() {
-		return getItemCount() >= 2 && getItem(0).isCyclical() && getItem(1).isDeleted();
+		PostNumber first = null;
+		PostNumber second = null;
+		for (PostNumber postNumber : postItemsMap.keySet()) {
+			if (first == null || postNumber.compareTo(first) < 0) {
+				second = first;
+				first = postNumber;
+			} else if (second == null || postNumber.compareTo(second) < 0) {
+				second = postNumber;
+			}
+		}
+		return second != null && postItemsMap.get(first).isCyclical() && postItemsMap.get(second).isDeleted();
 	}
 
 	public boolean hasDeletedPosts() {
-		for (PostItem postItem : this) {
+		for (PostItem postItem : postItemsMap.values()) {
 			if (postItem.isDeleted()) {
 				return true;
 			}
@@ -460,11 +503,12 @@ public class PostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
 		}
 	}
 
-	public void invalidateHidden() {
+	public boolean invalidateHidden() {
 		cancelPreloading();
-		for (PostItem postItem : this) {
+		for (PostItem postItem : postItemsMap.values()) {
 			postItem.setHidden(PostItem.HideState.UNDEFINED, null);
 		}
+		return refreshHiddenVisibility();
 	}
 
 	public void setHighlightText(Collection<String> highlightText) {

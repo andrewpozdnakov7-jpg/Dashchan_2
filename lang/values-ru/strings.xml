@@ -26,6 +26,7 @@
 	<string name="all_threads">Все треды</string>
 	<string name="allow_this_extension__sentence">Разрешить этому расширению управление приложением?</string>
 	<string name="always">Всегда</string>
+	<string name="ask_every_time">Спрашивать каждый раз</string>
 	<string name="another">Другой</string>
 	<string name="appearance">Внешний вид</string>
 	<string name="application_name_update__format">Обновление %s</string>
@@ -100,6 +101,7 @@
 		контекстного меню.</string>
 	<string name="copy">Копировать</string>
 	<string name="copy_email">Копировать email</string>
+	<string name="copy_image">Копировать изображение</string>
 	<string name="copy_link">Копировать ссылку</string>
 	<string name="copy_markup">Копировать разметку</string>
 	<string name="copy_text">Копировать текст</string>
@@ -209,6 +211,7 @@
 	<string name="history_is_empty">История пуста</string>
 	<string name="huge_captcha">Большая капча</string>
 	<string name="icons_are_enabled">Иконки включены</string>
+	<string name="image_copied">Изображение скопировано</string>
 	<string name="image_is_corrupted">Изображение повреждено</string>
 	<string name="images">Изображения</string>
 	<string name="images_are_disabled">Картинки отключены</string>
@@ -221,11 +224,12 @@
 	<string name="insufficient_device_space">Недостаточно места на утройстве</string>
 	<string name="internal_browser">Встроенный браузер</string>
 	<string name="internal_browser__sumamry">Открывать внешние ссылки во встроенном браузере</string>
+	<string name="if_file_already_exists">Если файл уже существует</string>
 	<string name="invalid_authorization_data">Некорректные данные авторизации</string>
 	<string name="invalid_certificate">Недостоверный сертификат</string>
 	<string name="invalid_data_format">Некорректный формат данных</string>
 	<string name="invalid_server_response">Некорректный ответ сервера</string>
-	<string name="keep_all">Сохранить все</string>
+	<string name="keep_all">Сохранить копии</string>
 	<string name="keep_current_version">Без обновления</string>
 	<string name="language">Язык</string>
 	<string name="large_grid">Крупная сетка</string>
@@ -392,9 +396,13 @@
 	<string name="post_is_not_found">Сообщение не найдено</string>
 	<string name="post_rejected">Сообщение отклонено</string>
 	<string name="post_sent">Сообщение отправлено</string>
+	<string name="post_not_sent">Сообщение не отправлено</string>
+	<string name="post_waiting_to_send">Сообщение ожидает отправки</string>
 	<string name="posting">Отправка сообщений</string>
 	<string name="posts">Сообщения</string>
 	<string name="posts_list">Список сообщений</string>
+	<string name="remove_hidden_posts">Полностью убирать скрытые сообщения</string>
+	<string name="remove_hidden_posts__summary">Не показывать даже свёрнутые строки скрытых сообщений. Действует на ручное скрытие, правила автоскрытия и фильтр AI-постов.</string>
 	<string name="posts_with_files__genitive">Сообщений с файлами</string>
 	<string name="posts_with_same_name">Сообщения с таким же именем</string>
 	<string name="preferences">Настройки</string>
@@ -425,6 +433,7 @@
 	<string name="rename">Переименовать</string>
 	<string name="repeated_files_are_prohibited">Повторные файлы запрещены</string>
 	<string name="replace">Заменить</string>
+	<string name="save_copy_with_new_name">Сохранить копию с новым именем</string>
 	<string name="replies">Ответы</string>
 	<string name="replies_count">Количество ответов</string>
 	<string name="replies_to_number__format">Ответы на %s</string>
@@ -633,4 +642,23 @@
 	<string name="post_marks_colors_reset">Цвета сброшены</string>
 	<string name="post_marks_color_palette">Быстрые цвета</string>
 	<string name="invalid_hex_color">Введите цвет в формате #RRGGBB</string>
+	<string name="forum_dvach">Двач</string>
+	<string name="forum_fourchan">4chan</string>
+	<string name="forum_pikabu">Пикабу</string>
+	<string name="forum_gosuslugi">Госуслуги</string>
+	<string name="pikabu_extension_in_development">Расширение Пикабу находится в разработке.</string>
+	<string name="gosuslugi_authorization_in_development">Авторизация в Госуслугах находится в разработке.</string>
+	<string name="display_post_year">Отображать год в датах постов</string>
+
+	<string name="boards_work_safe">Безопасные для просмотра</string>
+	<string name="boards_not_safe_for_work">Для взрослых</string>
+	<string name="preference_math_tags">Обработка тегов [math]</string>
+	<string name="preference_math_tags_summary">Показывать ссылки на изображения через веб-сервис quicklatex.com</string>
+	<string name="select_the_most_readable_captcha">Выберите наиболее читаемую капчу</string>
+	<plurals name="capthca_cooldown_message__format">
+		<item quantity="one">Повторная попытка через %d секунду</item>
+		<item quantity="few">Повторная попытка через %d секунды</item>
+		<item quantity="many">Повторная попытка через %d секунд</item>
+		<item quantity="other">Повторная попытка через %d секунд</item>
+	</plurals>
 </resources>

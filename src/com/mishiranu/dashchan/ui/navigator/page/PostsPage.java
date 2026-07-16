@@ -477,6 +477,9 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 				}
 			}
 		}
+		if (adapter.setRemoveHiddenPosts(Preferences.isRemoveHiddenPosts())) {
+			updateImportantPostsFastScrollBarDecorationData();
+		}
 		extractViewModel.observe(this, this);
 		readViewModel.observe(this, this);
 		if (retainableExtra.dialogsState != null) {
@@ -488,6 +491,9 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 
 	@Override
 	protected void onResume() {
+		if (getAdapter().setRemoveHiddenPosts(Preferences.isRemoveHiddenPosts())) {
+			updateImportantPostsFastScrollBarDecorationData();
+		}
 		RetainableExtra retainableExtra = getRetainableExtra(RetainableExtra.FACTORY);
 		if (retainableExtra.dialogsState != null) {
 			retainableExtra.dialogsState.dropState();
@@ -1514,7 +1520,8 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 				retainableExtra.archivedThreadUri = result.archivedThreadUri;
 				retainableExtra.uniquePosters = result.uniquePosters;
 			}
-			if (!result.postItems.isEmpty() || !result.removedPosts.isEmpty()) {
+			boolean postItemsChanged = !result.postItems.isEmpty() || !result.removedPosts.isEmpty();
+			if (postItemsChanged) {
 				if (adapter.getItemCount() > 0) {
 					ListPosition listPosition = ListPosition.obtain(recyclerView,
 							position -> !adapter.getItem(position).isDeleted());
@@ -1526,16 +1533,25 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 				adapter.insertItems(result.postItems, result.removedPosts);
 				updateAdapters = true;
 			}
+			boolean hiddenRulesChanged = false;
 			if (result.flags != null) {
 				retainableExtra.hiddenPosts.clear();
 				retainableExtra.hiddenPosts.addAll(result.flags.hiddenPosts);
 				retainableExtra.userPosts.clear();
 				retainableExtra.userPosts.addAll(result.flags.userPosts);
+				hiddenRulesChanged = true;
 			}
 			if (result.stateExtra != null) {
 				listPositionFromState = transformPairToListPosition(decodeThreadState(result.stateExtra.state));
 				retainableExtra.threadExtra = result.stateExtra.extra;
 				decodeThreadExtra();
+				hiddenRulesChanged = true;
+			}
+			if (hiddenRulesChanged) {
+				adapter.invalidateHidden();
+				updateAdapters = true;
+			} else if (postItemsChanged && adapter.refreshHiddenVisibility()) {
+				updateAdapters = true;
 			}
 
 			int newCount = result.newPosts.size();
@@ -1813,8 +1829,12 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 				break;
 			}
 			case PERFORM_SWITCH_HIDE: {
+				PostsAdapter adapter = getAdapter();
 				setPostHideState(postItem, !postItem.getHideState().hidden
 						? PostItem.HideState.HIDDEN : PostItem.HideState.SHOWN);
+				if (adapter.refreshHiddenVisibility()) {
+					notifyAllAdaptersChanged();
+				}
 				updateImportantPostsFastScrollBarDecorationData();
 				getUiManager().sendPostItemMessage(postItem, UiManager.Message.POST_INVALIDATE_ALL_VIEWS);
 				break;
@@ -1850,6 +1870,7 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 					updateImportantPostsFastScrollBarDecorationData();
 				} else if (result == HidePerformer.AddResult.EXISTS && !postItem.getHideState().hidden) {
 					setPostHideState(postItem, PostItem.HideState.UNDEFINED);
+					adapter.refreshHiddenVisibility();
 					notifyAllAdaptersChanged();
 					updateImportantPostsFastScrollBarDecorationData();
 				}

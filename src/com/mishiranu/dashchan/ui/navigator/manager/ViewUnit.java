@@ -76,7 +76,7 @@ public class ViewUnit {
 	ViewUnit(UiManager uiManager) {
 		Context context = uiManager.getContext();
 		this.uiManager = uiManager;
-		postDateFormatter = new PostDateFormatter(context);
+		postDateFormatter = new PostDateFormatter(context, Preferences.isDisplayPostYear());
 
 		extraButtons = Arrays
 				.asList(new CommentTextView.ExtraButton(context.getString(R.string.quote__verb),

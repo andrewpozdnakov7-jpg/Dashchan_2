@@ -13,16 +13,15 @@ Dashchan_2 - неофициальная ветка Dashchan для Android 11+.
 
 | Компонент | Package | Версия | Минимальный Android |
 | --- | --- | --- | --- |
-| Dashchan_2 с поддержкой Двача | `io.dashchan2` | `3.2.0`, code `1079` | API 30 / Android 11+ |
-| Fourchan extension | `io.dashchan2.chan.fourchan` | `1.27-read-only-1`, code `1` | API 30 / Android 11+ |
+| Dashchan_2 со встроенными Dvach и 4chan | `io.dashchan2` | `3.2.2`, code `1082` | API 30 / Android 11+ |
 
 Поддержка 2ch/Dvach встроена в основной APK `Dashchan_2`. Отдельное дополнение
 `Dashchan_2 for 2ch` больше не требуется; установленную старую версию дополнения
 можно удалить после проверки встроенного Двача.
 
-Для просмотра 4chan установите основной APK и отдельное расширение
-`Dashchan_2 Fourchan`. Первая версия расширения работает только на чтение:
-публикация постов пока отключена.
+Экспериментальная поддержка 4chan также встроена в основной APK, работает
+только на чтение и по умолчанию выключена. Ее можно включить в разделе
+`Настройки` > `Форум`; публикация постов пока отключена.
 
 WebM2/FFmpeg/dav1d/yuv теперь встроены в основной APK. Отдельный WebM2 APK для
 обычного воспроизведения видео больше не нужен.
@@ -32,7 +31,7 @@ WebM2/FFmpeg/dav1d/yuv теперь встроены в основной APK. О
 - Приложение переименовано в `Dashchan_2`.
 - Application ID изменен на `io.dashchan2`.
 - Добавлен отдельный file provider: `io.dashchan2.provider`.
-- Поддержка Dvach встроена в основной APK; Fourchan остается отдельным расширением.
+- Поддержка Dvach и экспериментальная read-only поддержка 4chan встроены в основной APK.
 - Добавлены явные Android package queries для известных расширений Dashchan_2.
 - Убрана необходимость `QUERY_ALL_PACKAGES` для поиска расширений.
 - Минимальная версия Android поднята до API 30 / Android 11+.
@@ -99,11 +98,11 @@ Gradle configuration cache включен по умолчанию. Если ло
 
 ### Расширения
 
-Код поддержки 2ch/Dvach встроен в этот репозиторий и загружается как внутренний
-канал `dvach`, благодаря чему сохраняются существующие настройки, история и
-избранное. Актуальные исходники внешних расширений находятся в соседнем
-репозитории `Dashchan_2-Extensions`; для 4chan используется package
-`io.dashchan2.chan.fourchan`.
+Код поддержки 2ch/Dvach и экспериментальной read-only поддержки 4chan встроен
+в этот репозиторий. Каналы загружаются внутри основного приложения, благодаря
+чему для них не требуются отдельные APK. 4chan по умолчанию выключен и пока не
+поддерживает публикацию постов. Исходники других внешних расширений находятся
+в соседнем репозитории `Dashchan_2-Extensions`.
 
 ### Происхождение и авторы
 
@@ -137,15 +136,14 @@ installed beside the original Dashchan because it uses its own package name.
 
 | Component | Package | Version | Minimum Android |
 | --- | --- | --- | --- |
-| Dashchan_2 with Dvach support | `io.dashchan2` | `3.2.0`, code `1079` | API 30 / Android 11+ |
-| Fourchan extension | `io.dashchan2.chan.fourchan` | `1.27-read-only-1`, code `1` | API 30 / Android 11+ |
+| Dashchan_2 with built-in Dvach and 4chan | `io.dashchan2` | `3.2.2`, code `1082` | API 30 / Android 11+ |
 
 2ch/Dvach support is bundled into the main `Dashchan_2` APK. The separate
 `Dashchan_2 for 2ch` extension is no longer required; an installed legacy copy
 can be removed after verifying the built-in channel.
 
-To browse 4chan, install the main APK and the separate
-`Dashchan_2 Fourchan` extension. Its first release is read-only; posting is
+Experimental 4chan support is also bundled into the main APK. It is read-only
+and disabled by default. Enable it under `Settings` > `Forum`; posting is
 currently disabled.
 
 WebM2/FFmpeg/dav1d/yuv libraries are bundled into the main APK. A separate
@@ -156,7 +154,7 @@ WebM2 APK is no longer required for normal video playback.
 - Renamed the app to `Dashchan_2`.
 - Changed the application ID to `io.dashchan2`.
 - Added a separate file provider authority: `io.dashchan2.provider`.
-- Bundled Dvach support into the main APK; Fourchan remains a separate extension.
+- Bundled Dvach and experimental read-only 4chan support into the main APK.
 - Added explicit Android package queries for known Dashchan_2 extensions.
 - Removed the need for `QUERY_ALL_PACKAGES` in extension discovery.
 - Raised the minimum Android version to API 30 / Android 11+.
@@ -222,11 +220,11 @@ Build and release documentation:
 
 ### Extensions
 
-The 2ch/Dvach implementation is bundled in this repository and registered as
-the internal `dvach` channel, preserving existing settings, history, and
-favorites. Current external extension sources are maintained in the sibling
-`Dashchan_2-Extensions` repository; the 4chan extension uses
-`io.dashchan2.chan.fourchan`.
+The 2ch/Dvach implementation and experimental read-only 4chan support are
+bundled in this repository. Both channels load inside the main application and
+do not require separate APKs. 4chan is disabled by default and does not yet
+support posting. Sources for other external extensions are maintained in the
+sibling `Dashchan_2-Extensions` repository.
 
 ### Upstream And Credits
 

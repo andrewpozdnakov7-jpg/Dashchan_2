@@ -1202,6 +1202,9 @@ public class DvachChanPerformer extends ChanPerformer {
 		if (extra != null) {
 			throw new ApiException(errorType, extra);
 		}
+		if (errorType != 0) {
+			throw new ApiException(errorType);
+		}
 		if (!StringUtils.isEmpty(reason)) {
 			throw new ApiException(reason);
 		}

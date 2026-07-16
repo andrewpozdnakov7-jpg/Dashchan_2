@@ -484,6 +484,20 @@ public class Preferences {
 	}
 
 	public static final String KEY_CHANS_ORDER = "chans_order";
+	private static final String KEY_CHAN_ENABLED_PREFIX = "chan_enabled_";
+
+	public static String getChanEnabledKey(String chanName) {
+		return KEY_CHAN_ENABLED_PREFIX + chanName;
+	}
+
+	public static String getChanNameByEnabledKey(String key) {
+		return key != null && key.startsWith(KEY_CHAN_ENABLED_PREFIX)
+				? key.substring(KEY_CHAN_ENABLED_PREFIX.length()) : null;
+	}
+
+	public static boolean isChanEnabled(String chanName) {
+		return PREFERENCES.getBoolean(getChanEnabledKey(chanName), "dvach".equals(chanName));
+	}
 
 	public static ArrayList<String> getChansOrder() {
 		String data = PREFERENCES.getString(KEY_CHANS_ORDER, null);
@@ -692,6 +706,13 @@ public class Preferences {
 		return PREFERENCES.getBoolean(KEY_DISPLAY_HIDDEN_THREADS, DEFAULT_DISPLAY_HIDDEN_THREADS);
 	}
 
+	public static final String KEY_REMOVE_HIDDEN_POSTS = "remove_hidden_posts";
+	public static final boolean DEFAULT_REMOVE_HIDDEN_POSTS = false;
+
+	public static boolean isRemoveHiddenPosts() {
+		return PREFERENCES.getBoolean(KEY_REMOVE_HIDDEN_POSTS, DEFAULT_REMOVE_HIDDEN_POSTS);
+	}
+
 	public static final String KEY_HIDE_THREADS_WITH_SWIPE = "hide_threads_with_swipe";
 	public static final boolean DEFAULT_HIDE_THREADS_WITH_SWIPE = true;
 
@@ -704,6 +725,13 @@ public class Preferences {
 
 	public static boolean isDisplayIcons() {
 		return PREFERENCES.getBoolean(KEY_DISPLAY_ICONS, DEFAULT_DISPLAY_ICONS);
+	}
+
+	public static final String KEY_DISPLAY_POST_YEAR = "display_post_year";
+	public static final boolean DEFAULT_DISPLAY_POST_YEAR = false;
+
+	public static boolean isDisplayPostYear() {
+		return PREFERENCES.getBoolean(KEY_DISPLAY_POST_YEAR, DEFAULT_DISPLAY_POST_YEAR);
 	}
 
 	public static final ChanKey KEY_DOMAIN = new ChanKey("domain");
@@ -728,6 +756,31 @@ public class Preferences {
 
 	public static boolean isDownloadOriginalName() {
 		return PREFERENCES.getBoolean(KEY_DOWNLOAD_ORIGINAL_NAME, DEFAULT_DOWNLOAD_ORIGINAL_NAME);
+	}
+
+	public enum DownloadConflictMode {
+		RENAME("rename", R.string.save_copy_with_new_name),
+		REPLACE("replace", R.string.replace),
+		SKIP("skip", R.string.skip),
+		ASK("ask", R.string.ask_every_time);
+
+		private static final EnumValueProvider<DownloadConflictMode> VALUE_PROVIDER = o -> o.value;
+
+		public final String value;
+		public final int titleResId;
+
+		DownloadConflictMode(String value, int titleResId) {
+			this.value = value;
+			this.titleResId = titleResId;
+		}
+	}
+
+	public static final String KEY_DOWNLOAD_CONFLICT_MODE = "download_conflict_mode";
+	public static final DownloadConflictMode DEFAULT_DOWNLOAD_CONFLICT_MODE = DownloadConflictMode.RENAME;
+
+	public static DownloadConflictMode getDownloadConflictMode() {
+		return getEnumValue(KEY_DOWNLOAD_CONFLICT_MODE, DownloadConflictMode.values(),
+				DEFAULT_DOWNLOAD_CONFLICT_MODE, DownloadConflictMode.VALUE_PROVIDER);
 	}
 
 	public static final String KEY_DOWNLOAD_PATH = "download_path";

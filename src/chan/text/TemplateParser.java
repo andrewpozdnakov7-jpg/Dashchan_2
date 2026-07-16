@@ -4,6 +4,8 @@ import android.util.Pair;
 import chan.annotation.Extendable;
 import chan.annotation.Public;
 import chan.util.CommonUtils;
+import java.io.IOException;
+import java.io.Reader;
 import java.util.ArrayList;
 import java.util.HashMap;
 
@@ -202,6 +204,18 @@ public final class TemplateParser<H> {
 		}
 		try {
 			GroupParser.parse(source, new Implementation<>(this, holder));
+		} catch (FinishException e) {
+			// finish() was called
+		}
+	}
+
+	@Public
+	public void parse(Reader reader, H holder) throws IOException, ParseException {
+		if (!ready) {
+			throw new IllegalStateException("prepare() was not called");
+		}
+		try {
+			GroupParser.parse(reader, new Implementation<>(this, holder));
 		} catch (FinishException e) {
 			// finish() was called
 		}

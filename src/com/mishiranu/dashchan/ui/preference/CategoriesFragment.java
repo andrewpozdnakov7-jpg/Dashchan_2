@@ -5,8 +5,6 @@ import android.os.Bundle;
 import android.provider.Settings;
 import android.view.View;
 import androidx.annotation.NonNull;
-import chan.content.Chan;
-import chan.content.ChanManager;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.ui.FragmentHandler;
@@ -14,7 +12,6 @@ import com.mishiranu.dashchan.ui.preference.core.Preference;
 import com.mishiranu.dashchan.ui.preference.core.PreferenceFragment;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.util.SharedPreferences;
-import java.util.Iterator;
 
 public class CategoriesFragment extends PreferenceFragment {
 	private Preference<Void> compatibilityPreference;
@@ -28,22 +25,12 @@ public class CategoriesFragment extends PreferenceFragment {
 	public void onViewCreated(@NonNull View view, Bundle savedInstanceState) {
 		super.onViewCreated(view, savedInstanceState);
 
-		Iterator<Chan> chans = ChanManager.getInstance().getAvailableChans().iterator();
-		boolean hasChan = chans.hasNext();
-		String singleChanName = hasChan ? chans.next().name : null;
-		boolean hasMultipleChans = hasChan && chans.hasNext();
 		addCategory(R.string.general, R.drawable.ic_map)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 						.pushFragment(new GeneralFragment()));
-		if (hasMultipleChans) {
-			addCategory(R.string.forums, R.drawable.ic_public)
-					.setOnClickListener(p -> ((FragmentHandler) requireActivity())
-							.pushFragment(new ChansFragment()));
-		} else if (hasChan) {
-			addCategory(R.string.forum, R.drawable.ic_public)
-					.setOnClickListener(p -> ((FragmentHandler) requireActivity())
-							.pushFragment(new ChanFragment(singleChanName)));
-		}
+		addCategory(R.string.forums, R.drawable.ic_public)
+				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
+						.pushFragment(new ChansFragment()));
 		compatibilityPreference = addCategory(R.string.compatibility, R.drawable.ic_verified);
 		compatibilityPreference.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 				.pushFragment(new CompatibilityFragment()));

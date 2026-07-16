@@ -228,13 +228,6 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 					downloadBinder.resolve(replaceRequest, action);
 				}
 			}
-
-			@Override
-			public void cancel(DownloadService.PrepareRequest prepareRequest) {
-				if (downloadBinder != null) {
-					downloadBinder.cancel(prepareRequest);
-				}
-			}
 		});
 
 		updateWideConfiguration(true);

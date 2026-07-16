@@ -1,0 +1,7 @@
+* Images and videos are now saved in the background without a blocking dialog; completion is reported through a notification.
+* Added a file-name conflict setting: save a renamed copy, replace, skip, or ask every time.
+* With Passcode enabled, posts rejected for being sent too quickly are queued and retried automatically; the result is reported through a notification.
+* Added copying images to the clipboard from the gallery.
+* Added options to remove hidden posts completely and show the year in post dates.
+* Forum settings are now organized by channel; experimental read-only 4chan support is bundled into the main APK and disabled by default.
+* Fixed the Predictive Back gesture in referenced-post preview dialogs.

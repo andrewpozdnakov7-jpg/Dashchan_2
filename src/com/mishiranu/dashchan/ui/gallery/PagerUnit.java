@@ -632,6 +632,16 @@ public class PagerUnit implements PagerInstance.Callback {
 				dialogMenu.add(R.string.go_to_post, () -> galleryInstance.callback
 						.navigatePost(galleryItem, true, true));
 			}
+			if (capabilities.shareFile && galleryItem.isImage(chan)) {
+				dialogMenu.add(R.string.copy_image, () -> {
+					File file = CacheManager.getInstance().getMediaFile(galleryItem.getFileUri(chan), false);
+					if (file == null) {
+						ClickableToast.show(R.string.cache_is_unavailable);
+					} else if (NavigationUtils.copyFileToClipboard(context, file, galleryItem.getFileName(chan))) {
+						ClickableToast.show(R.string.image_copied);
+					}
+				});
+			}
 			dialogMenu.add(R.string.copy_link, () -> StringUtils.copyToClipboard(context,
 					galleryItem.getFileUri(chan).toString()));
 			dialogMenu.add(R.string.share_link, () -> {

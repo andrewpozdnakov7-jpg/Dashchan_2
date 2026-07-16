@@ -24,6 +24,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 
@@ -43,6 +45,7 @@ public class DraftsStorage extends StorageManager.Storage<Pair<List<DraftsStorag
 	private String captchaChanName;
 	private CaptchaDraft captchaDraft;
 	private final ArrayList<AttachmentDraft> futureAttachmentDrafts = new ArrayList<>();
+	private final HashMap<String, Integer> retainedAttachmentDraftHashes = new HashMap<>();
 
 	private DraftsStorage() {
 		super("drafts", 2000, 10000);
@@ -161,6 +164,16 @@ public class DraftsStorage extends StorageManager.Storage<Pair<List<DraftsStorag
 		}
 	}
 
+	public boolean removePostDraft(PostDraft expectedPostDraft) {
+		String key = makeKey(expectedPostDraft);
+		if (postDrafts.get(key) == expectedPostDraft) {
+			postDrafts.remove(key);
+			serialize();
+			return true;
+		}
+		return false;
+	}
+
 	public void store(String chanName, CaptchaDraft captchaDraft) {
 		this.captchaChanName = chanName;
 		this.captchaDraft = captchaDraft;
@@ -250,7 +263,7 @@ public class DraftsStorage extends StorageManager.Storage<Pair<List<DraftsStorag
 	}
 
 	private HashSet<String> collectAttachmentDraftHashes() {
-		HashSet<String> hashes = new HashSet<>();
+		HashSet<String> hashes = new HashSet<>(retainedAttachmentDraftHashes.keySet());
 		for (PostDraft postDraft : postDrafts.values()) {
 			if (postDraft.attachmentDrafts != null) {
 				for (AttachmentDraft attachmentDraft : postDraft.attachmentDrafts) {
@@ -262,6 +275,38 @@ public class DraftsStorage extends StorageManager.Storage<Pair<List<DraftsStorag
 			hashes.add(attachmentDraft.hash);
 		}
 		return hashes;
+	}
+
+	public void retainAttachmentDrafts(Collection<String> hashes) {
+		for (String hash : hashes) {
+			Integer count = retainedAttachmentDraftHashes.get(hash);
+			retainedAttachmentDraftHashes.put(hash, count != null ? count + 1 : 1);
+		}
+	}
+
+	public void releaseAttachmentDrafts(Collection<String> hashes) {
+		for (String hash : hashes) {
+			Integer count = retainedAttachmentDraftHashes.get(hash);
+			if (count != null) {
+				if (count > 1) {
+					retainedAttachmentDraftHashes.put(hash, count - 1);
+				} else {
+					retainedAttachmentDraftHashes.remove(hash);
+				}
+			}
+		}
+		File directory = getAttachmentDraftsDirectory();
+		if (directory != null) {
+			HashSet<String> referencedHashes = collectAttachmentDraftHashes();
+			for (String hash : hashes) {
+				if (!referencedHashes.contains(hash)) {
+					File file = resolveAttachmentDraftFile(hash);
+					if (file != null) {
+						file.delete();
+					}
+				}
+			}
+		}
 	}
 
 	public boolean storeFuture(FileHolder fileHolder) {

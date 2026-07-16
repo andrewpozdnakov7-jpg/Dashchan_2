@@ -246,17 +246,19 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 					R.string.partial_thread_loading__summary);
 		}
 
-		addHeader(R.string.additional);
-		addButton(R.string.uninstall_extension, 0).setOnClickListener(p -> {
-			Chan innerChan = Chan.get(chanName);
-			if (innerChan.name != null) {
-				@SuppressWarnings("deprecation")
-				Intent intent = new Intent(Intent.ACTION_UNINSTALL_PACKAGE)
-						.setData(Uri.parse("package:" + innerChan.packageName))
-						.putExtra(Intent.EXTRA_RETURN_RESULT, true);
-				startActivity(intent);
-			}
-		});
+		if (!ChanManager.getInstance().isBuiltInChan(chanName)) {
+			addHeader(R.string.additional);
+			addButton(R.string.uninstall_extension, 0).setOnClickListener(p -> {
+				Chan innerChan = Chan.get(chanName);
+				if (innerChan.name != null) {
+					@SuppressWarnings("deprecation")
+					Intent intent = new Intent(Intent.ACTION_UNINSTALL_PACKAGE)
+							.setData(Uri.parse("package:" + innerChan.packageName))
+							.putExtra(Intent.EXTRA_RETURN_RESULT, true);
+					startActivity(intent);
+				}
+			});
+		}
 	}
 
 	@Override

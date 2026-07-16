@@ -500,11 +500,31 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 
 			@Override
 			public void onResult(ReplaceRequest result) {
-				primaryRequest = result;
 				if (result == null) {
+					primaryRequest = null;
 					directRequests.add(directRequest);
+					handleRequests();
+					return;
 				}
-				handleRequests();
+				switch (Preferences.getDownloadConflictMode()) {
+					case RENAME: {
+						resolveReplaceRequest(result, ReplaceRequest.Action.KEEP_ALL);
+						break;
+					}
+					case REPLACE: {
+						resolveReplaceRequest(result, ReplaceRequest.Action.REPLACE);
+						break;
+					}
+					case SKIP: {
+						resolveReplaceRequest(result, ReplaceRequest.Action.SKIP);
+						break;
+					}
+					case ASK: {
+						primaryRequest = result;
+						handleRequests();
+						break;
+					}
+				}
 			}
 		});
 		task.execute(ConcurrentUtils.SEPARATE_EXECUTOR);
@@ -537,9 +557,9 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 						downloadItem.name.length() - dotExtension.length());
 				String name;
 				String key;
-				int i = 0;
+				int i = 1;
 				do {
-					String append = (i > 0 ? "-" + i : "") + dotExtension;
+					String append = "_" + i + dotExtension;
 					name = nameWithoutExtension + append;
 					key = getTargetPathKey(target, path, nameWithoutExtension + append);
 					i++;
@@ -553,7 +573,7 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 				throw new InterruptedException();
 			}
 		}
-		return new DirectRequest(target, path, replaceRequest.directRequest.overwrite,
+		return new DirectRequest(target, path, false,
 				finalItems, replaceRequest.directRequest.input, replaceRequest.directRequest.allowWrite);
 	}
 
@@ -579,6 +599,38 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 		});
 		task.execute(ConcurrentUtils.SEPARATE_EXECUTOR);
 		primaryRequest = new PrepareRequest(task);
+	}
+
+	private void resolveReplaceRequest(ReplaceRequest replaceRequest, ReplaceRequest.Action action) {
+		primaryRequest = null;
+		if (action != null) {
+			switch (action) {
+				case REPLACE: {
+					directRequests.add(replaceRequest.directRequest);
+					break;
+				}
+				case KEEP_ALL: {
+					handlePrimaryReplaceKeepAllReplace(replaceRequest);
+					break;
+				}
+				case SKIP: {
+					if (!replaceRequest.availableItems.isEmpty()) {
+						directRequests.add(new DirectRequest(replaceRequest.directRequest.target,
+								replaceRequest.directRequest.path, replaceRequest.directRequest.overwrite,
+								replaceRequest.availableItems, replaceRequest.directRequest.input,
+								replaceRequest.directRequest.allowWrite));
+					} else {
+						// Request with input should contain only 1 download item.
+						// Cleanup the request to ensure input stream is closed.
+						replaceRequest.cleanup();
+					}
+					break;
+				}
+			}
+		} else {
+			replaceRequest.cleanup();
+		}
+		handleRequests();
 	}
 
 	public interface Callback {
@@ -617,35 +669,7 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 
 		public void resolve(ReplaceRequest replaceRequest, ReplaceRequest.Action action) {
 			if (primaryRequest == replaceRequest) {
-				primaryRequest = null;
-				if (action != null) {
-					switch (action) {
-						case REPLACE: {
-							directRequests.add(replaceRequest.directRequest);
-							break;
-						}
-						case KEEP_ALL: {
-							handlePrimaryReplaceKeepAllReplace(replaceRequest);
-							break;
-						}
-						case SKIP: {
-							if (!replaceRequest.availableItems.isEmpty()) {
-								directRequests.add(new DirectRequest(replaceRequest.directRequest.target,
-										replaceRequest.directRequest.path, replaceRequest.directRequest.overwrite,
-										replaceRequest.availableItems, replaceRequest.directRequest.input,
-										replaceRequest.directRequest.allowWrite));
-							} else {
-								// Request with input should contain only 1 download item.
-								// Cleanup the request to ensure input stream is closed.
-								replaceRequest.cleanup();
-							}
-							break;
-						}
-					}
-				} else {
-					replaceRequest.cleanup();
-				}
-				handleRequests();
+				resolveReplaceRequest(replaceRequest, action);
 			}
 		}
 
@@ -815,6 +839,7 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 	private static class NotificationData {
 		public enum Type {
 			PROGRESS(android.R.drawable.stat_sys_download),
+			PREPARING(android.R.drawable.stat_sys_download),
 			RESULT(android.R.drawable.stat_sys_download_done),
 			REQUEST(android.R.drawable.stat_sys_warning);
 
@@ -1050,6 +1075,7 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 			}
 			switch (notificationData.type) {
 				case PROGRESS:
+				case PREPARING:
 				case REQUEST: {
 					builder.addAction(0, getString(android.R.string.cancel), PendingIntent.getBroadcast(this, 0,
 									new Intent(this, Receiver.class).setAction(ACTION_CANCEL),
@@ -1092,6 +1118,14 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 				builder.setProgress(notificationData.progressMax, notificationData.progress,
 						notificationData.progressMax == 0 || notificationData.progress > notificationData.progressMax
 								|| notificationData.progress < 0);
+				break;
+			}
+			case PREPARING: {
+				contentTitle = getString(R.string.processing_data__ellipsis);
+				contentText = getString(R.string.downloads);
+				headsUp = false;
+				foreground = true;
+				builder.setProgress(0, 0, true);
 				break;
 			}
 			case RESULT: {
@@ -1156,9 +1190,11 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 	private enum NotificationUpdate {NORMAL, HEADS_UP, SYNC}
 
 	private void refreshNotification(NotificationUpdate notificationUpdate) {
-		boolean hasTask = activeTask != null || activePreparingTask != null || activeInputTask != null;
+		boolean hasPrepareRequest = primaryRequest instanceof PrepareRequest;
+		boolean hasTransferTask = activeTask != null || activePreparingTask != null || activeInputTask != null;
+		boolean hasTask = hasTransferTask || hasPrepareRequest;
 		boolean hasResults = !queuedTasks.isEmpty() || !successTasks.isEmpty() || !errorTasks.isEmpty();
-		boolean hasRequests = primaryRequest != null || !directRequests.isEmpty();
+		boolean hasRequests = (primaryRequest != null && !hasPrepareRequest) || !directRequests.isEmpty();
 		boolean needForegroundOrNotification = hasTask || hasResults || hasRequests;
 		if (needForegroundOrNotification) {
 			boolean allowRetry = false;
@@ -1184,10 +1220,10 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 			}
 			DataFile lastSuccessFile = lastSuccessFileTaskData != null ? lastSuccessTaskDataFile : null;
 			boolean allowWrite = lastSuccessFileTaskData != null && lastSuccessFileTaskData.allowWrite;
-			NotificationData.Type type = hasTask ? NotificationData.Type.PROGRESS : hasRequests
+			NotificationData.Type type = hasTransferTask ? NotificationData.Type.PROGRESS
+					: hasPrepareRequest ? NotificationData.Type.PREPARING : hasRequests
 					? NotificationData.Type.REQUEST : NotificationData.Type.RESULT;
-			boolean allowHeadsUp = type == NotificationData.Type.RESULT &&
-					notificationUpdate == NotificationUpdate.HEADS_UP;
+			boolean allowHeadsUp = false;
 			String activeName = activeTask != null ? activeTask.second.getFileName()
 					: activePreparingTask != null ? activePreparingTask.name
 					: activeInputTask != null ? activeInputTask.name : null;

@@ -40,7 +40,6 @@ import com.mishiranu.dashchan.util.MimeTypes;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.util.ViewUtils;
 import com.mishiranu.dashchan.widget.ClickableToast;
-import com.mishiranu.dashchan.widget.ProgressDialog;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -55,7 +54,6 @@ public class DownloadDialog {
 	public interface Callback {
 		void resolve(DownloadService.ChoiceRequest choiceRequest, DownloadService.DirectRequest directRequest);
 		void resolve(DownloadService.ReplaceRequest replaceRequest, DownloadService.ReplaceRequest.Action action);
-		void cancel(DownloadService.PrepareRequest prepareRequest);
 	}
 
 	private final Context context;
@@ -88,7 +86,6 @@ public class DownloadDialog {
 
 	private final DialogHolder<DownloadService.ChoiceRequest> choiceDialog = new DialogHolder<>();
 	private final DialogHolder<DownloadService.ReplaceRequest> replaceDialog = new DialogHolder<>();
-	private final DialogHolder<DownloadService.PrepareRequest> prepareDialog = new DialogHolder<>();
 
 	public DownloadDialog(Context context, Callback callback) {
 		this.context = new ContextThemeWrapper(context, R.style.Theme_Gallery);
@@ -100,7 +97,6 @@ public class DownloadDialog {
 			DownloadService.ChoiceRequest choiceRequest = (DownloadService.ChoiceRequest) request;
 			choiceDialog.dismissIfNotEqual(choiceRequest);
 			replaceDialog.dismissIfNotEqual(null);
-			prepareDialog.dismissIfNotEqual(null);
 			if (choiceDialog.dialog == null) {
 				choiceDialog.install(choiceRequest, createChoice(choiceRequest, choiceDialog::onDismiss));
 			}
@@ -108,22 +104,15 @@ public class DownloadDialog {
 			DownloadService.ReplaceRequest replaceRequest = (DownloadService.ReplaceRequest) request;
 			choiceDialog.dismissIfNotEqual(null);
 			replaceDialog.dismissIfNotEqual(replaceRequest);
-			prepareDialog.dismissIfNotEqual(null);
 			if (replaceDialog.dialog == null) {
 				replaceDialog.install(replaceRequest, createReplace(replaceRequest, choiceDialog::onDismiss));
 			}
 		} else if (request instanceof DownloadService.PrepareRequest) {
-			DownloadService.PrepareRequest prepareRequest = (DownloadService.PrepareRequest) request;
 			choiceDialog.dismissIfNotEqual(null);
 			replaceDialog.dismissIfNotEqual(null);
-			prepareDialog.dismissIfNotEqual(prepareRequest);
-			if (prepareDialog.dialog == null) {
-				prepareDialog.install(prepareRequest, createPrepare(prepareRequest, choiceDialog::onDismiss));
-			}
 		} else if (request == null) {
 			choiceDialog.dismissIfNotEqual(null);
 			replaceDialog.dismissIfNotEqual(null);
-			prepareDialog.dismissIfNotEqual(null);
 		} else {
 			throw new IllegalArgumentException("Request is not supported");
 		}
@@ -392,18 +381,6 @@ public class DownloadDialog {
 		} else {
 			dialog = builder.create();
 		}
-		dialog.setOnDismissListener(onDismissListener);
-		dialog.show();
-		return dialog;
-	}
-
-	private ProgressDialog createPrepare(DownloadService.PrepareRequest prepareRequest,
-			ProgressDialog.OnDismissListener onDismissListener) {
-		ProgressDialog dialog = new ProgressDialog(context, null);
-		dialog.setMessage(context.getString(R.string.processing_data__ellipsis));
-		dialog.setButton(ProgressDialog.BUTTON_NEGATIVE, context.getString(android.R.string.cancel),
-				(d, w) -> callback.cancel(prepareRequest));
-		dialog.setOnCancelListener(d -> callback.cancel(prepareRequest));
 		dialog.setOnDismissListener(onDismissListener);
 		dialog.show();
 		return dialog;

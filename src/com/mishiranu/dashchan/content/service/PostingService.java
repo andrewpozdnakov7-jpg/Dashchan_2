@@ -8,7 +8,9 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
 import android.os.Parcel;
 import android.os.Parcelable;
 import android.os.PowerManager;
@@ -40,20 +42,29 @@ import com.mishiranu.dashchan.util.ConcurrentUtils;
 import com.mishiranu.dashchan.util.Hasher;
 import com.mishiranu.dashchan.util.WeakObservable;
 import com.mishiranu.dashchan.widget.ThemeEngine;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
 
 public class PostingService extends BaseService implements SendPostTask.Callback<PostingService.Key> {
 	private static final String ACTION_CANCEL = "cancel";
+	private static final long FLOOD_RETRY_DELAY = 5000L;
+	private static final int MAX_FLOOD_RETRIES = 12;
 
 	private final HashMap<Key, ArrayList<Callback>> callbacks = new HashMap<>();
 	private final WeakObservable<GlobalCallback> globalCallbacks = new WeakObservable<>();
 	private final HashMap<Callback, Key> callbackKeys = new HashMap<>();
+	private final ArrayDeque<QueueItem> postQueue = new ArrayDeque<>();
+	private final Handler handler = new Handler(Looper.getMainLooper());
+	private Runnable retryRunnable;
 	private TaskState taskState;
 
 	private NotificationManager notificationManager;
@@ -97,11 +108,34 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 		}
 	}
 
-	private static class TaskState {
+	private static class QueueItem {
 		public final Key key;
-		public final SendPostTask<Key> task;
+		public final String chanName;
+		public final ChanPerformer.SendPostData data;
+		public final DraftsStorage.PostDraft postDraft;
+		public final ArrayList<String> attachmentHashes;
+		public final boolean allowFloodRetry;
+		public int floodRetryCount;
+
+		public QueueItem(String chanName, ChanPerformer.SendPostData data,
+				DraftsStorage.PostDraft postDraft, Collection<String> attachmentHashes,
+				boolean allowFloodRetry) {
+			this.key = new Key(chanName, data.boardName, data.threadNumber);
+			this.chanName = chanName;
+			this.data = data;
+			this.postDraft = postDraft;
+			this.attachmentHashes = new ArrayList<>(attachmentHashes);
+			this.allowFloodRetry = allowFloodRetry;
+		}
+	}
+
+	private static class TaskState {
+		public final QueueItem queueItem;
+		public final Key key;
+		public SendPostTask<Key> task;
 		public final NotificationCompat.Builder builder;
 		public final String text;
+		public boolean waitingForRetry;
 
 		private SendPostTask.ProgressState progressState = SendPostTask.ProgressState.CONNECTING;
 		private int attachmentIndex = 0;
@@ -110,12 +144,22 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 		private long progress = 0;
 		private long progressMax = 0;
 
-		public TaskState(Key key, SendPostTask<Key> task, Context context, Chan chan,
-				ChanPerformer.SendPostData data) {
-			this.key = key;
+		public TaskState(QueueItem queueItem, SendPostTask<Key> task, Context context, Chan chan) {
+			this.queueItem = queueItem;
+			this.key = queueItem.key;
 			this.task = task;
 			builder = new NotificationCompat.Builder(context, C.NOTIFICATION_CHANNEL_POSTING);
-			text = buildNotificationText(chan, data.boardName, data.threadNumber, null);
+			text = buildNotificationText(chan, queueItem.data.boardName, queueItem.data.threadNumber, null);
+		}
+
+		public void reset(SendPostTask<Key> task) {
+			this.task = task;
+			waitingForRetry = false;
+			progressState = SendPostTask.ProgressState.CONNECTING;
+			attachmentIndex = 0;
+			attachmentsCount = 0;
+			progress = 0;
+			progressMax = 0;
 		}
 	}
 
@@ -131,6 +175,55 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 			this.taskState = taskState;
 			this.syncLatch = syncLatch;
 		}
+	}
+
+	private static final Set<DraftsStorage.PostDraft> QUEUED_POST_DRAFTS = Collections
+			.newSetFromMap(new IdentityHashMap<>());
+	private static final HashMap<Key, ArrayDeque<QueueItem>> FAILED_POSTS = new HashMap<>();
+
+	public static synchronized boolean isPostDraftQueued(DraftsStorage.PostDraft postDraft) {
+		return postDraft != null && QUEUED_POST_DRAFTS.contains(postDraft);
+	}
+
+	public static synchronized DraftsStorage.PostDraft restoreFailedPostDraft(String chanName,
+			String boardName, String threadNumber) {
+		Key key = new Key(chanName, boardName, threadNumber);
+		ArrayDeque<QueueItem> queueItems = FAILED_POSTS.get(key);
+		QueueItem queueItem = queueItems != null ? queueItems.pollFirst() : null;
+		if (queueItems != null && queueItems.isEmpty()) {
+			FAILED_POSTS.remove(key);
+		}
+		if (queueItem != null) {
+			DraftsStorage draftsStorage = DraftsStorage.getInstance();
+			draftsStorage.store(queueItem.postDraft);
+			draftsStorage.releaseAttachmentDrafts(queueItem.attachmentHashes);
+			return queueItem.postDraft;
+		}
+		return null;
+	}
+
+	private static synchronized void markPostDraftQueued(QueueItem queueItem) {
+		QUEUED_POST_DRAFTS.add(queueItem.postDraft);
+	}
+
+	private static synchronized void unmarkPostDraftQueued(QueueItem queueItem) {
+		QUEUED_POST_DRAFTS.remove(queueItem.postDraft);
+	}
+
+	private static synchronized void storeFailedPost(QueueItem queueItem) {
+		unmarkPostDraftQueued(queueItem);
+		DraftsStorage draftsStorage = DraftsStorage.getInstance();
+		if (draftsStorage.getPostDraft(queueItem.key.chanName, queueItem.key.boardName,
+				queueItem.key.threadNumber) == queueItem.postDraft) {
+			draftsStorage.releaseAttachmentDrafts(queueItem.attachmentHashes);
+			return;
+		}
+		ArrayDeque<QueueItem> queueItems = FAILED_POSTS.get(queueItem.key);
+		if (queueItems == null) {
+			queueItems = new ArrayDeque<>();
+			FAILED_POSTS.put(queueItem.key, queueItems);
+		}
+		queueItems.addLast(queueItem);
 	}
 
 	public static String buildNotificationText(Chan chan, String boardName, String threadNumber,
@@ -175,7 +268,9 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 		super.onDestroy();
 
 		performFinish(null, true);
-		wakeLock.release();
+		if (wakeLock.isHeld()) {
+			wakeLock.release();
+		}
 		// Ensure queue is empty
 		refreshNotification(NotificationData.Type.CANCEL, null);
 		notificationsWorker.interrupt();
@@ -223,7 +318,11 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 					AndroidUtils.startAnyService(this, new Intent(this, PostingService.class));
 				}
 				boolean progressMode = taskState.task.isProgressMode();
-				switch (taskState.progressState) {
+				builder.setProgress(0, 0, false);
+				if (taskState.waitingForRetry) {
+					builder.setProgress(0, 0, true);
+					builder.setContentTitle(getString(R.string.post_waiting_to_send));
+				} else switch (taskState.progressState) {
 					case CONNECTING: {
 						if (progressMode) {
 							builder.setProgress(1, 0, true);
@@ -281,26 +380,26 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 	}
 
 	public class Binder extends android.os.Binder {
-		public boolean executeSendPost(String chanName, ChanPerformer.SendPostData data) {
-			if (taskState == null) {
-				Key key = new Key(chanName, data.boardName, data.threadNumber);
-				AndroidUtils.startAnyService(PostingService.this, new Intent(PostingService.this, PostingService.class));
-				wakeLock.acquire();
-				Chan chan = Chan.get(chanName);
-				SendPostTask<Key> task = new SendPostTask<>(key, PostingService.this, chan, data);
-				task.execute(ConcurrentUtils.PARALLEL_EXECUTOR);
-				TaskState taskState = new TaskState(key, task, PostingService.this, chan, data);
-				refreshNotification(NotificationData.Type.CREATE, taskState);
-				PostingService.this.taskState = taskState;
-				ArrayList<Callback> callbacks = PostingService.this.callbacks.get(key);
-				if (callbacks != null) {
-					for (Callback callback : callbacks) {
-						notifyInit(callback, taskState);
-					}
-				}
-				return true;
+		public boolean executeSendPost(String chanName, ChanPerformer.SendPostData data,
+				DraftsStorage.PostDraft postDraft, Collection<String> attachmentHashes,
+				boolean allowFloodRetry) {
+			if (!postQueue.isEmpty() && !allowFloodRetry) {
+				return false;
 			}
-			return false;
+			QueueItem queueItem = new QueueItem(chanName, data, postDraft, attachmentHashes, allowFloodRetry);
+			DraftsStorage.getInstance().retainAttachmentDrafts(queueItem.attachmentHashes);
+			markPostDraftQueued(queueItem);
+			boolean start = postQueue.isEmpty();
+			postQueue.addLast(queueItem);
+			if (start) {
+				AndroidUtils.startAnyService(PostingService.this,
+						new Intent(PostingService.this, PostingService.class));
+				if (!wakeLock.isHeld()) {
+					wakeLock.acquire();
+				}
+				startCurrentPost();
+			}
+			return true;
 		}
 
 		public void cancelSendPost(String chanName, String boardName, String threadNumber) {
@@ -320,7 +419,7 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 				PostingService.this.callbacks.put(key, callbacks);
 			}
 			callbacks.add(callback);
-			if (taskState != null && taskState.key.equals(key)) {
+			if (taskState != null && !taskState.queueItem.allowFloodRetry && taskState.key.equals(key)) {
 				notifyInit(callback, taskState);
 			}
 		}
@@ -358,6 +457,65 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 		}
 	}
 
+	private void startCurrentPost() {
+		QueueItem queueItem = postQueue.peekFirst();
+		if (queueItem == null) {
+			return;
+		}
+		Chan chan = Chan.get(queueItem.chanName);
+		SendPostTask<Key> task = new SendPostTask<>(queueItem.key, this, chan, queueItem.data);
+		TaskState taskState = this.taskState;
+		if (taskState == null || taskState.queueItem != queueItem) {
+			taskState = new TaskState(queueItem, task, this, chan);
+			this.taskState = taskState;
+			refreshNotification(NotificationData.Type.CREATE, taskState);
+		} else {
+			taskState.reset(task);
+			refreshNotification(NotificationData.Type.UPDATE, taskState);
+		}
+		task.execute(ConcurrentUtils.PARALLEL_EXECUTOR);
+		if (!queueItem.allowFloodRetry) {
+			ArrayList<Callback> callbacks = this.callbacks.get(queueItem.key);
+			if (callbacks != null) {
+				for (Callback callback : callbacks) {
+					notifyInit(callback, taskState);
+				}
+			}
+		}
+	}
+
+	private QueueItem takeCurrentPost(Key key) {
+		TaskState taskState = this.taskState;
+		QueueItem queueItem = postQueue.peekFirst();
+		if (taskState != null && queueItem != null && taskState.queueItem == queueItem
+				&& taskState.key.equals(key)) {
+			if (retryRunnable != null) {
+				handler.removeCallbacks(retryRunnable);
+				retryRunnable = null;
+			}
+			this.taskState = null;
+			postQueue.removeFirst();
+			return queueItem;
+		}
+		return null;
+	}
+
+	private void releaseQueueItem(QueueItem queueItem) {
+		unmarkPostDraftQueued(queueItem);
+		DraftsStorage.getInstance().releaseAttachmentDrafts(queueItem.attachmentHashes);
+	}
+
+	private void advanceQueue() {
+		if (!postQueue.isEmpty()) {
+			startCurrentPost();
+		} else {
+			refreshNotification(NotificationData.Type.CANCEL, null);
+			if (wakeLock.isHeld()) {
+				wakeLock.release();
+			}
+		}
+	}
+
 	private void notifyInit(Callback callback, TaskState taskState) {
 		boolean progressMode = taskState.task.isProgressMode();
 		callback.onState(progressMode, taskState.progressState, taskState.attachmentIndex,
@@ -368,14 +526,29 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 	private boolean performFinish(Key key, boolean cancel) {
 		TaskState taskState = this.taskState;
 		if (taskState != null && (key == null || taskState.key.equals(key))) {
+			if (retryRunnable != null) {
+				handler.removeCallbacks(retryRunnable);
+				retryRunnable = null;
+			}
 			this.taskState = null;
 			if (cancel) {
 				taskState.task.cancel();
 			}
-			refreshNotification(NotificationData.Type.CANCEL, taskState);
-			wakeLock.release();
-			if (cancel) {
-				ArrayList<Callback> callbacks = this.callbacks.get(key);
+			ArrayList<QueueItem> cancelledItems = new ArrayList<>(postQueue);
+			postQueue.clear();
+			for (QueueItem queueItem : cancelledItems) {
+				if (queueItem.allowFloodRetry) {
+					storeFailedPost(queueItem);
+				} else {
+					releaseQueueItem(queueItem);
+				}
+			}
+			refreshNotification(NotificationData.Type.CANCEL, null);
+			if (wakeLock.isHeld()) {
+				wakeLock.release();
+			}
+			if (cancel && !taskState.queueItem.allowFloodRetry) {
+				ArrayList<Callback> callbacks = this.callbacks.get(taskState.key);
 				if (callbacks != null) {
 					for (Callback callback : callbacks) {
 						callback.onStop(false);
@@ -397,7 +570,7 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 			taskState.attachmentsCount = attachmentsCount;
 			refreshNotification(NotificationData.Type.UPDATE, taskState);
 			ArrayList<Callback> callbacks = this.callbacks.get(key);
-			if (callbacks != null) {
+			if (!taskState.queueItem.allowFloodRetry && callbacks != null) {
 				boolean progressMode = taskState.task.isProgressMode();
 				for (Callback callback : callbacks) {
 					callback.onState(progressMode, progressState, attachmentIndex, attachmentsCount);
@@ -414,7 +587,7 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 			taskState.progressMax = progressMax;
 			refreshNotification(NotificationData.Type.UPDATE, taskState);
 			ArrayList<Callback> callbacks = this.callbacks.get(key);
-			if (callbacks != null) {
+			if (!taskState.queueItem.allowFloodRetry && callbacks != null) {
 				for (Callback callback : callbacks) {
 					callback.onProgress(progress, progressMax);
 				}
@@ -425,14 +598,18 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 	@Override
 	public void onSendPostSuccess(Key key, ChanPerformer.SendPostData data,
 			String chanName, String threadNumber, PostNumber postNumber) {
-		if (performFinish(key, false)) {
+		QueueItem queueItem = takeCurrentPost(key);
+		if (queueItem != null) {
 			Chan chan = Chan.get(chanName);
 			String targetThreadNumber = data.threadNumber != null ? data.threadNumber
 					: StringUtils.nullIfEmpty(threadNumber);
 			DraftsStorage draftsStorage = DraftsStorage.getInstance();
-			draftsStorage.removeCaptchaDraft();
-			draftsStorage.removePostDraft(chanName, data.boardName, data.threadNumber);
-			if (targetThreadNumber != null) {
+			if (!queueItem.allowFloodRetry) {
+				draftsStorage.removeCaptchaDraft();
+			}
+			draftsStorage.removePostDraft(queueItem.postDraft);
+			if (targetThreadNumber != null && draftsStorage
+					.getPostDraft(chanName, data.boardName, targetThreadNumber) == null) {
 				String password = Preferences.getPassword(chan);
 				if (CommonUtils.equals(password, data.password)) {
 					password = null;
@@ -507,7 +684,7 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 			}
 			StatisticsStorage.getInstance().incrementPostsSent(chanName, data.threadNumber == null);
 			ArrayList<Callback> callbacks = this.callbacks.get(key);
-			if (callbacks != null) {
+			if (!queueItem.allowFloodRetry && callbacks != null) {
 				for (Callback callback : callbacks) {
 					callback.onStop(true);
 				}
@@ -515,24 +692,86 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 			for (GlobalCallback globalCallback : globalCallbacks) {
 				globalCallback.onPostSent();
 			}
+			releaseQueueItem(queueItem);
+			advanceQueue();
 		}
 	}
 
 	@Override
 	public void onSendPostFail(Key key, ChanPerformer.SendPostData data, String chanName, ErrorItem errorItem,
 			ApiException.Extra extra, boolean captchaError, boolean keepCaptcha) {
-		if (performFinish(key, false)) {
+		TaskState taskState = this.taskState;
+		QueueItem currentItem = postQueue.peekFirst();
+		// Transport errors are not retried because the server may have accepted the post before disconnecting.
+		boolean tooFast = errorItem.type == ErrorItem.Type.API
+				&& errorItem.specialType == ApiException.SEND_ERROR_TOO_FAST;
+		if (taskState != null && currentItem != null && taskState.queueItem == currentItem
+				&& taskState.key.equals(key) && currentItem.allowFloodRetry && tooFast
+				&& currentItem.floodRetryCount < MAX_FLOOD_RETRIES) {
+			currentItem.floodRetryCount++;
+			taskState.waitingForRetry = true;
+			refreshNotification(NotificationData.Type.UPDATE, taskState);
+			retryRunnable = () -> {
+				retryRunnable = null;
+				if (this.taskState == taskState && postQueue.peekFirst() == currentItem) {
+					startCurrentPost();
+				}
+			};
+			handler.postDelayed(retryRunnable, FLOOD_RETRY_DELAY);
+			return;
+		}
+
+		QueueItem queueItem = takeCurrentPost(key);
+		if (queueItem != null) {
+			FailResult failResult = new FailResult(errorItem, extra, captchaError, keepCaptcha);
+			if (queueItem.allowFloodRetry) {
+				storeFailedPost(queueItem);
+				showPostFailedNotification(queueItem, failResult);
+			} else {
+				releaseQueueItem(queueItem);
+			}
 			ArrayList<Callback> callbacks = this.callbacks.get(key);
-			if (callbacks != null) {
+			if (!queueItem.allowFloodRetry && callbacks != null) {
 				for (Callback callback : callbacks) {
 					callback.onStop(false);
 				}
 			}
-			startActivity(new Intent(this, MainActivity.class).setAction(C.ACTION_POSTING)
-					.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK).putExtra(C.EXTRA_CHAN_NAME, chanName)
-					.putExtra(C.EXTRA_BOARD_NAME, data.boardName).putExtra(C.EXTRA_THREAD_NUMBER, data.threadNumber)
-					.putExtra(C.EXTRA_FAIL_RESULT, new FailResult(errorItem, extra, captchaError, keepCaptcha)));
+			advanceQueue();
+			if (!queueItem.allowFloodRetry) {
+				startActivity(new Intent(this, MainActivity.class).setAction(C.ACTION_POSTING)
+						.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK).putExtra(C.EXTRA_CHAN_NAME, chanName)
+						.putExtra(C.EXTRA_BOARD_NAME, data.boardName)
+						.putExtra(C.EXTRA_THREAD_NUMBER, data.threadNumber)
+						.putExtra(C.EXTRA_FAIL_RESULT, failResult));
+			}
 		}
+	}
+
+	private void showPostFailedNotification(QueueItem queueItem, FailResult failResult) {
+		Chan chan = Chan.get(queueItem.chanName);
+		String details = buildNotificationText(chan, queueItem.data.boardName, queueItem.data.threadNumber, null)
+				+ ": " + failResult.errorItem;
+		NotificationCompat.Builder builder = new NotificationCompat.Builder(this,
+				C.NOTIFICATION_CHANNEL_POSTING_COMPLETE);
+		builder.setSmallIcon(android.R.drawable.stat_notify_error);
+		builder.setColor(notificationColor);
+		builder.setPriority(NotificationCompat.PRIORITY_HIGH);
+		builder.setVibrate(new long[0]);
+		builder.setContentTitle(getString(R.string.post_not_sent));
+		builder.setContentText(details);
+		builder.setStyle(new NotificationCompat.BigTextStyle().bigText(details));
+		Intent intent = new Intent(this, MainActivity.class).setAction(C.ACTION_POSTING)
+				.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP)
+				.putExtra(C.EXTRA_CHAN_NAME, queueItem.chanName)
+				.putExtra(C.EXTRA_BOARD_NAME, queueItem.data.boardName)
+				.putExtra(C.EXTRA_THREAD_NUMBER, queueItem.data.threadNumber)
+				.putExtra(C.EXTRA_FAIL_RESULT, failResult);
+		String tag = "posting-fail:" + StringUtils.formatHex(Hasher.getInstanceSha256().calculate(
+				queueItem.chanName + "/" + queueItem.data.boardName + "/" + queueItem.data.threadNumber + "/"
+						+ System.nanoTime()));
+		builder.setContentIntent(PendingIntent.getActivity(this, tag.hashCode(), intent,
+				PendingIntent.FLAG_UPDATE_CURRENT));
+		notificationManager.notify(tag, 0, builder.build());
 	}
 
 	public static class Receiver extends BroadcastReceiver {

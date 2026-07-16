@@ -24,6 +24,7 @@
 	<string name="all_threads">All threads</string>
 	<string name="allow_this_extension__sentence">Allow this extension to manage application?</string>
 	<string name="always">Always</string>
+	<string name="ask_every_time">Ask every time</string>
 	<string name="another">Another</string>
 	<string name="appearance">Appearance</string>
 	<string name="application_name_update__format">%s update</string>
@@ -96,6 +97,7 @@
 	<string name="context_menu_description__sentence">Use long tap to display context menu.</string>
 	<string name="copy">Copy</string>
 	<string name="copy_email">Copy email</string>
+	<string name="copy_image">Copy image</string>
 	<string name="copy_link">Copy link</string>
 	<string name="copy_markup">Copy markup</string>
 	<string name="copy_text">Copy text</string>
@@ -208,6 +210,7 @@
 	<string name="history_is_empty">History is empty</string>
 	<string name="huge_captcha">Huge captcha</string>
 	<string name="icons_are_enabled">Icons are enabled</string>
+	<string name="image_copied">Image copied</string>
 	<string name="image_is_corrupted">Image is corrupted</string>
 	<string name="images">Images</string>
 	<string name="images_are_disabled">Images are disabled</string>
@@ -220,11 +223,12 @@
 	<string name="insufficient_device_space">Insufficient device space</string>
 	<string name="internal_browser">Internal browser</string>
 	<string name="internal_browser__sumamry">Open external links in internal browser</string>
+	<string name="if_file_already_exists">If a file already exists</string>
 	<string name="invalid_authorization_data">Invalid authorization data</string>
 	<string name="invalid_certificate">Invalid certificate</string>
 	<string name="invalid_data_format">Invalid data format</string>
 	<string name="invalid_server_response">Invalid server response</string>
-	<string name="keep_all">Keep all</string>
+	<string name="keep_all">Save copies</string>
 	<string name="keep_current_version">Keep current version</string>
 	<string name="language">Language</string>
 	<string name="large_grid">Large grid</string>
@@ -372,9 +376,13 @@
 	<string name="post_is_not_found">The post isn\'t found</string>
 	<string name="post_rejected">Post rejected</string>
 	<string name="post_sent">Post sent</string>
+	<string name="post_not_sent">Post wasn’t sent</string>
+	<string name="post_waiting_to_send">Post is waiting to be sent</string>
 	<string name="posting">Posting</string>
 	<string name="posts">Posts</string>
 	<string name="posts_list">Posts list</string>
+	<string name="remove_hidden_posts">Fully remove hidden posts</string>
+	<string name="remove_hidden_posts__summary">Do not show even collapsed rows for hidden posts. Applies to manual hiding, autohide rules, and the AI post filter.</string>
 	<string name="posts_sent">Posts sent</string>
 	<string name="posts_with_files__genitive">Posts with files</string>
 	<string name="posts_with_same_name">Posts with the same name</string>
@@ -406,6 +414,7 @@
 	<string name="rename">Rename</string>
 	<string name="repeated_files_are_prohibited">Repeated files are prohibited</string>
 	<string name="replace">Replace</string>
+	<string name="save_copy_with_new_name">Save a copy with a new name</string>
 	<string name="replies">Replies</string>
 	<string name="replies_count">Replies count</string>
 	<string name="replies_to_number__format">Replies to %s</string>
@@ -615,4 +624,22 @@
 	<string name="post_marks_colors_reset">Colors reset</string>
 	<string name="post_marks_color_palette">Quick colors</string>
 	<string name="invalid_hex_color">Enter a color in #RRGGBB format</string>
+	<string name="forum_dvach">Dvach</string>
+	<string name="forum_fourchan">4chan</string>
+	<string name="forum_pikabu">Pikabu</string>
+	<string name="forum_gosuslugi">Gosuslugi</string>
+	<string name="pikabu_extension_in_development">The Pikabu extension is in development.</string>
+	<string name="gosuslugi_authorization_in_development">Gosuslugi authorization is in development.</string>
+	<string name="display_post_year">Show year in post dates</string>
+
+	<string name="boards_work_safe">Work Safe</string>
+	<string name="boards_not_safe_for_work">Not Safe For Work</string>
+	<string name="preference_math_tags">Handle [math] tags</string>
+	<string name="preference_math_tags_summary">Show image links using the quicklatex.com web service</string>
+	<string name="select_the_most_readable_captcha">Select the most readable captcha</string>
+	<plurals name="capthca_cooldown_message__format">
+		<item quantity="one">Retry after %d second</item>
+		<item quantity="many">Retry after %d seconds</item>
+		<item quantity="other">Retry after %d seconds</item>
+	</plurals>
 </resources>

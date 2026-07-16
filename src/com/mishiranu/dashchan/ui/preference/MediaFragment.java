@@ -76,6 +76,10 @@ public class MediaFragment extends PreferenceFragment implements FragmentHandler
 				inStorageRequest = true;
 			}
 		});
+		addList(Preferences.KEY_DOWNLOAD_CONFLICT_MODE,
+				enumList(Preferences.DownloadConflictMode.values(), v -> v.value),
+				Preferences.DEFAULT_DOWNLOAD_CONFLICT_MODE.value, R.string.if_file_already_exists,
+				enumResList(Preferences.DownloadConflictMode.values(), v -> v.titleResId));
 		addList(Preferences.KEY_DOWNLOAD_SUBDIR, enumList(Preferences.DownloadSubdirMode.values(), v -> v.value),
 				Preferences.DEFAULT_DOWNLOAD_SUBDIR.value, R.string.show_download_configuration_dialog,
 				enumResList(Preferences.DownloadSubdirMode.values(), v -> v.titleResId));

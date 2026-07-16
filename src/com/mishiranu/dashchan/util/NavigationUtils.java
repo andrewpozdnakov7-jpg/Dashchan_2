@@ -3,6 +3,8 @@ package com.mishiranu.dashchan.util;
 import android.app.AlarmManager;
 import android.app.PendingIntent;
 import android.content.ActivityNotFoundException;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
@@ -217,6 +219,21 @@ public class NavigationUtils {
 		context.startActivity(Intent.createChooser(new Intent(Intent.ACTION_SEND)
 				.setType(data.second).setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
 				.putExtra(Intent.EXTRA_STREAM, data.first), null));
+	}
+
+	public static boolean copyFileToClipboard(Context context, File file, String fileName) {
+		Pair<Uri, String> data = CacheManager.getInstance().prepareFileForShare(file, fileName);
+		if (data == null) {
+			ClickableToast.show(R.string.cache_is_unavailable);
+			return false;
+		}
+		ClipboardManager clipboardManager = context.getSystemService(ClipboardManager.class);
+		if (clipboardManager == null) {
+			ClickableToast.show(R.string.unknown_error);
+			return false;
+		}
+		clipboardManager.setPrimaryClip(ClipData.newUri(context.getContentResolver(), fileName, data.first));
+		return true;
 	}
 
 	public static void restartApplication(Context context) {

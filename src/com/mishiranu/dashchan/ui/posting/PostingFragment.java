@@ -375,6 +375,11 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		attachments.clear();
 		DraftsStorage.PostDraft postDraft = draftsStorage
 				.getPostDraft(getChanName(), getBoardName(), getThreadNumber());
+		if (postDraft == null || PostingService.isPostDraftQueued(postDraft)) {
+			DraftsStorage.PostDraft failedPostDraft = PostingService.restoreFailedPostDraft(getChanName(),
+					getBoardName(), getThreadNumber());
+			postDraft = failedPostDraft != null ? failedPostDraft : null;
+		}
 		if (postDraft != null) {
 			if (!StringUtils.isEmpty(postDraft.comment)) {
 				builder.append(postDraft.comment);
@@ -1114,6 +1119,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		boolean optionOriginalPoster = isCheckedIfVisible(originalPosterCheckBox);
 		String userIcon = iconView.getVisibility() == View.VISIBLE ? getUserIcon() : null;
 		ArrayList<ChanPerformer.SendPostData.Attachment> array = new ArrayList<>();
+		ArrayList<String> attachmentHashes = new ArrayList<>();
 		DraftsStorage draftsStorage = DraftsStorage.getInstance();
 		for (int i = 0; i < attachments.size(); i++) {
 			AttachmentHolder data = attachments.get(i);
@@ -1137,6 +1143,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 			}
 			FileHolder fileHolder = draftsStorage.getAttachmentDraftFileHolder(data.hash);
 			if (fileHolder != null) {
+				attachmentHashes.add(data.hash);
 				array.add(new ChanPerformer.SendPostData.Attachment(fileHolder, data.name, rating,
 						data.optionUniqueHash, data.optionRemoveMetadata, data.optionRemoveFileName,
 						postingConfiguration.attachmentSpoiler && data.optionSpoiler, data.reencoding));
@@ -1157,9 +1164,13 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		ChanPerformer.SendPostData data = new ChanPerformer.SendPostData(getBoardName(), getThreadNumber(),
 				subject, comment, name, email, password, attachments, optionSage, optionSpoiler, optionOriginalPoster,
 				userIcon, captchaType, captchaData, captchaNeedLoad, 15000, 45000);
-		DraftsStorage.getInstance().store(obtainPostDraft());
+		DraftsStorage.PostDraft postDraft = obtainPostDraft();
+		draftsStorage.store(postDraft);
+		draftsStorage.store(getChanName(), obtainCaptchaDraft());
+		draftSaved = true;
 		allowDialog = false;
-		if (postingBinder.executeSendPost(getChanName(), data)) {
+		boolean allowFloodRetry = captchaState == ReadCaptchaTask.CaptchaState.PASS;
+		if (postingBinder.executeSendPost(getChanName(), data, postDraft, attachmentHashes, allowFloodRetry)) {
 			sendButtonEnabled = false;
 			updateSendButtonState();
 			if (progressDialog != null) {
@@ -1169,6 +1180,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 			onSendPostMinimize();
 		} else {
 			allowDialog = true;
+			draftSaved = false;
 		}
 	}
 

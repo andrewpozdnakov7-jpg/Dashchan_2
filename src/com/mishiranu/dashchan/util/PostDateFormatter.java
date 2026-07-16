@@ -12,8 +12,13 @@ public class PostDateFormatter {
 	private final DateFormat dateFormat;
 	private final DateFormat dateFormatLong;
 	private final DateFormat timeFormat;
+	private final boolean alwaysShowYear;
 
 	public PostDateFormatter(Context context) {
+		this(context, false);
+	}
+
+	public PostDateFormatter(Context context, boolean alwaysShowYear) {
 		SimpleDateFormat systemFormat = (SimpleDateFormat) android.text.format.DateFormat.getDateFormat(context);
 		String systemPattern = systemFormat.toPattern();
 		String dayFormat = systemPattern.contains("dd") ? "dd" : "d";
@@ -25,24 +30,25 @@ public class PostDateFormatter {
 		String longDateFormat = systemPattern.indexOf('d') > systemPattern.indexOf('y')
 				? "yy" + divider + shortDateFormat : shortDateFormat + divider + "yy";
 		String timeFormat = android.text.format.DateFormat.is24HourFormat(context) ? "HH:mm:ss" : "hh:mm:ss aa";
-		this.instance = longDateFormat + timeFormat + Locale.getDefault().toString();
+		this.instance = longDateFormat + timeFormat + Locale.getDefault().toString() + alwaysShowYear;
 		this.dateFormat = new SimpleDateFormat(shortDateFormat, Locale.getDefault());
 		this.dateFormatLong = new SimpleDateFormat(longDateFormat, Locale.getDefault());
 		this.timeFormat = new SimpleDateFormat(timeFormat, Locale.US);
+		this.alwaysShowYear = alwaysShowYear;
 	}
 
 	public String formatDate(long timestamp) {
 		Calendar calendar = Calendar.getInstance();
 		int year = calendar.get(Calendar.YEAR);
 		calendar.setTimeInMillis(timestamp);
-		return (calendar.get(Calendar.YEAR) != year ? dateFormatLong : dateFormat).format(timestamp);
+		return (alwaysShowYear || calendar.get(Calendar.YEAR) != year ? dateFormatLong : dateFormat).format(timestamp);
 	}
 
 	public String formatDateTime(long timestamp) {
 		Calendar calendar = Calendar.getInstance();
 		int year = calendar.get(Calendar.YEAR);
 		calendar.setTimeInMillis(timestamp);
-		return (calendar.get(Calendar.YEAR) != year ? dateFormatLong : dateFormat).format(timestamp)
+		return (alwaysShowYear || calendar.get(Calendar.YEAR) != year ? dateFormatLong : dateFormat).format(timestamp)
 				+ " " + timeFormat.format(timestamp);
 	}
 
