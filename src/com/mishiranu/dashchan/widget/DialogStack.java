@@ -11,6 +11,7 @@ import android.graphics.Path;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.InsetDrawable;
+import android.os.Build;
 import android.util.Pair;
 import android.view.ActionMode;
 import android.view.ContextThemeWrapper;
@@ -21,9 +22,11 @@ import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowManager;
 import androidx.annotation.NonNull;
+import androidx.annotation.RequiresApi;
 import androidx.core.view.ViewCompat;
 import androidx.customview.widget.ViewDragHelper;
 import com.mishiranu.dashchan.R;
+import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.util.GraphicsUtils;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.util.ViewUtils;
@@ -139,6 +142,7 @@ public class DialogStack<T extends DialogStack.ViewFactory<T>> implements Iterab
 	private final LinkedList<T> hiddenViews = new LinkedList<>();
 	private final LinkedList<Pair<T, DialogView>> visibleViews = new LinkedList<>();
 	private Dialog dialog;
+	private Object predictiveBackCallback;
 
 	@SuppressWarnings("FieldCanBeLocal")
 	private final ThemeEngine.OnOverlayFocusListener overlayFocusListener = stack -> {
@@ -169,6 +173,18 @@ public class DialogStack<T extends DialogStack.ViewFactory<T>> implements Iterab
 	public void push(T viewFactory) {
 		if (dialog == null) {
 			Dialog dialog = new Dialog(context, ResourceUtils.getResourceId(context, R.attr.overlayTheme, 0)) {
+				@Override
+				protected void onStart() {
+					super.onStart();
+					registerPredictiveBackCallback(this);
+				}
+
+				@Override
+				protected void onStop() {
+					unregisterPredictiveBackCallback(this);
+					super.onStop();
+				}
+
 				@Override
 				public void onActionModeStarted(ActionMode mode) {
 					currentActionMode = new WeakReference<>(mode);
@@ -288,6 +304,39 @@ public class DialogStack<T extends DialogStack.ViewFactory<T>> implements Iterab
 		}
 		last.first.destroyView(last.second.getContent(), true);
 		return last.first;
+	}
+
+	private void registerPredictiveBackCallback(Dialog dialog) {
+		if (predictiveBackCallback == null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+				Preferences.isPredictiveBackEnabled()) {
+			predictiveBackCallback = Api33Impl.register(dialog, () -> {
+				if (!visibleViews.isEmpty()) {
+					popInternal();
+				}
+			});
+		}
+	}
+
+	private void unregisterPredictiveBackCallback(Dialog dialog) {
+		if (predictiveBackCallback != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+			Api33Impl.unregister(dialog, predictiveBackCallback);
+			predictiveBackCallback = null;
+		}
+	}
+
+	@RequiresApi(Build.VERSION_CODES.TIRAMISU)
+	private static class Api33Impl {
+		public static Object register(Dialog dialog, Runnable onBackPressed) {
+			android.window.OnBackInvokedCallback callback = onBackPressed::run;
+			dialog.getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
+					android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, callback);
+			return callback;
+		}
+
+		public static void unregister(Dialog dialog, Object callback) {
+			dialog.getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(
+					(android.window.OnBackInvokedCallback) callback);
+		}
 	}
 
 	private DialogView addDialogView(T viewFactory, int index) {

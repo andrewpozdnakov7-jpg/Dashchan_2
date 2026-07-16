@@ -221,6 +221,12 @@
 			"name": "3.2.0",
 			"date": "15.07.2026",
 			"changelog": true
+		},
+		{
+			"code": 1080,
+			"name": "3.2.1-beta1",
+			"date": "16.07.2026",
+			"changelog": false
 		}
 	]
 }
