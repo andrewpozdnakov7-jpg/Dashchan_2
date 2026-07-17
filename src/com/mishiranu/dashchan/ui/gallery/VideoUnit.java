@@ -151,6 +151,10 @@ public class VideoUnit {
 		return initialized;
 	}
 
+	public boolean isAudioPresent() {
+		return initialized && player != null && player.isAudioPresent();
+	}
+
 	public boolean isCreated() {
 		return player != null;
 	}

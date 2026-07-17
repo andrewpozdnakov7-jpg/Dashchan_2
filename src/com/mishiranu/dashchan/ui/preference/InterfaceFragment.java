@@ -14,6 +14,7 @@ import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.ui.FragmentHandler;
 import com.mishiranu.dashchan.ui.InstanceDialog;
 import com.mishiranu.dashchan.ui.StateActivity;
+import com.mishiranu.dashchan.ui.preference.core.Preference;
 import com.mishiranu.dashchan.ui.preference.core.PreferenceFragment;
 import com.mishiranu.dashchan.util.IOUtils;
 import com.mishiranu.dashchan.util.ResourceUtils;
@@ -21,6 +22,8 @@ import com.mishiranu.dashchan.util.SharedPreferences;
 import java.util.Arrays;
 
 public class InterfaceFragment extends PreferenceFragment {
+	private Preference<Void> applicationLogoPreference;
+
 	@Override
 	protected SharedPreferences getPreferences() {
 		return Preferences.PREFERENCES;
@@ -36,6 +39,13 @@ public class InterfaceFragment extends PreferenceFragment {
 				Preferences.DEFAULT_APPLICATION_NAME, R.string.application_name,
 				Arrays.asList("Dashchan_2", "Slopchan_1", "ДВАЧ"))
 				.setOnAfterChangeListener(p -> LauncherIconManager.apply(requireContext(), p.getValue()));
+		if (LauncherIconManager.arePresetLogosReady()) {
+			Preference<Void> logoPreference = addButton(getString(R.string.application_logo), preference ->
+					getString(LauncherIconManager.getLogoOption(Preferences.getApplicationLogo()).titleResId));
+			applicationLogoPreference = logoPreference;
+			logoPreference.setOnClickListener(preference ->
+					ApplicationLogoDialog.show(getChildFragmentManager()));
+		}
 		addButton(R.string.custom_application_shortcut, R.string.custom_application_shortcut__summary)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 						.pushFragment(new CustomShortcutFragment()));
@@ -111,6 +121,18 @@ public class InterfaceFragment extends PreferenceFragment {
 				Preferences.DEFAULT_HIDE_PERSONAL_DATA, R.string.hide_personal_data_block, 0);
 		addCheck(true, Preferences.KEY_HUGE_CAPTCHA, Preferences.DEFAULT_HUGE_CAPTCHA,
 				R.string.huge_captcha, 0);
+	}
+
+	void onApplicationLogoChanged() {
+		if (applicationLogoPreference != null) {
+			applicationLogoPreference.invalidate();
+		}
+	}
+
+	@Override
+	public void onDestroyView() {
+		applicationLogoPreference = null;
+		super.onDestroyView();
 	}
 
 	@Override

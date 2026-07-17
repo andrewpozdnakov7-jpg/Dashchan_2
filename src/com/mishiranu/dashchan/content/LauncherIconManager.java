@@ -8,39 +8,138 @@ import android.content.pm.ShortcutInfo;
 import android.content.pm.ShortcutManager;
 import android.graphics.Bitmap;
 import android.graphics.drawable.Icon;
+import androidx.annotation.DrawableRes;
+import androidx.annotation.StringRes;
+import chan.content.Chan;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.ui.MainActivity;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 
 public final class LauncherIconManager {
 	public static final String VALUE_DASHCHAN_2 = "dashchan_2";
 	public static final String VALUE_SLOPCHAN = "slopchan";
 	public static final String VALUE_DVACH = "dvach";
+	public static final String LOGO_DEFAULT = "default";
+	public static final String LOGO_2 = "logo_2";
+	public static final String LOGO_3 = "logo_3";
+	public static final String LOGO_4 = "logo_4";
+	public static final String LOGO_5 = "logo_5";
+	public static final String LOGO_6 = "logo_6";
+	public static final String LOGO_DVACH_PASS = "dvach_pass";
+	public static final String LOGO_SUBSCRIBER = "subscriber";
+
+	private static final boolean PRESET_LOGOS_READY = true;
+
+	public enum LogoAccess {PUBLIC, DVACH_PASS, SUBSCRIBER}
+
+	public static final class LogoOption {
+		public final String value;
+		@StringRes public final int titleResId;
+		@DrawableRes public final int iconResId;
+		public final LogoAccess access;
+		private final String classSuffix;
+
+		private LogoOption(String value, @StringRes int titleResId, @DrawableRes int iconResId,
+				LogoAccess access, String classSuffix) {
+			this.value = value;
+			this.titleResId = titleResId;
+			this.iconResId = iconResId;
+			this.access = access;
+			this.classSuffix = classSuffix;
+		}
+	}
+
+	private static final List<LogoOption> LOGO_OPTIONS = Collections.unmodifiableList(Arrays.asList(
+			new LogoOption(LOGO_DEFAULT, R.string.application_logo_default, R.mipmap.ic_launcher,
+					LogoAccess.PUBLIC, ""),
+			new LogoOption(LOGO_2, R.string.application_logo_2, R.drawable.application_logo_2,
+					LogoAccess.PUBLIC, "Logo2"),
+			new LogoOption(LOGO_3, R.string.application_logo_3, R.drawable.application_logo_3,
+					LogoAccess.PUBLIC, "Logo3"),
+			new LogoOption(LOGO_4, R.string.application_logo_4, R.drawable.application_logo_4,
+					LogoAccess.PUBLIC, "Logo4"),
+			new LogoOption(LOGO_5, R.string.application_logo_5, R.drawable.application_logo_5,
+					LogoAccess.PUBLIC, "Logo5"),
+			new LogoOption(LOGO_6, R.string.application_logo_6, R.drawable.application_logo_6,
+					LogoAccess.PUBLIC, "Logo6"),
+			new LogoOption(LOGO_DVACH_PASS, R.string.application_logo_dvach_pass,
+					R.drawable.application_logo_pass, LogoAccess.DVACH_PASS, "Pass"),
+			new LogoOption(LOGO_SUBSCRIBER, R.string.application_logo_subscriber,
+					R.drawable.application_logo_subscriber, LogoAccess.SUBSCRIBER, "Subscriber")));
 
 	private static final String CLASS_DASHCHAN_2 = "com.mishiranu.dashchan.launcher.Dashchan2Alias";
 	private static final String CLASS_SLOPCHAN = "com.mishiranu.dashchan.launcher.SlopchanAlias";
 	private static final String CLASS_DVACH = "com.mishiranu.dashchan.launcher.DvachAlias";
-
 	private LauncherIconManager() {}
 
 	public static boolean isValidValue(String value) {
 		return VALUE_DASHCHAN_2.equals(value) || VALUE_SLOPCHAN.equals(value) || VALUE_DVACH.equals(value);
 	}
 
-	public static void apply(Context context, String value) {
-		String selectedClass = getClassName(isValidValue(value) ? value : VALUE_DVACH);
-		PackageManager packageManager = context.getPackageManager();
-		setEnabled(packageManager, context, selectedClass, true);
-		setEnabled(packageManager, context, CLASS_DASHCHAN_2, CLASS_DASHCHAN_2.equals(selectedClass));
-		setEnabled(packageManager, context, CLASS_SLOPCHAN, CLASS_SLOPCHAN.equals(selectedClass));
-		setEnabled(packageManager, context, CLASS_DVACH, CLASS_DVACH.equals(selectedClass));
+	public static boolean isValidLogoValue(String value) {
+		for (LogoOption option : LOGO_OPTIONS) {
+			if (option.value.equals(value)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
-	private static String getClassName(String value) {
-		switch (value) {
-			case VALUE_DASHCHAN_2: return CLASS_DASHCHAN_2;
-			case VALUE_SLOPCHAN: return CLASS_SLOPCHAN;
-			default: return CLASS_DVACH;
+	public static boolean arePresetLogosReady() {
+		return PRESET_LOGOS_READY;
+	}
+
+	public static List<LogoOption> getLogoOptions() {
+		return LOGO_OPTIONS;
+	}
+
+	public static LogoOption getLogoOption(String value) {
+		for (LogoOption option : LOGO_OPTIONS) {
+			if (option.value.equals(value)) {
+				return option;
+			}
 		}
+		return LOGO_OPTIONS.get(0);
+	}
+
+	public static boolean hasDvachPass() {
+		try {
+			Chan chan = Chan.get(VALUE_DVACH);
+			return VALUE_DVACH.equals(chan.name)
+					&& Preferences.checkHasMultipleValues(Preferences.getCaptchaPass(chan));
+		} catch (RuntimeException e) {
+			return false;
+		}
+	}
+
+	public static void apply(Context context, String value) {
+		apply(context, value, Preferences.getApplicationLogo());
+	}
+
+	public static void apply(Context context, String value, String logoValue) {
+		String applicationName = isValidValue(value) ? value : VALUE_DVACH;
+		LogoOption selectedLogo = getLogoOption(logoValue);
+		String selectedClass = getClassName(applicationName, selectedLogo);
+		PackageManager packageManager = context.getPackageManager();
+		setEnabled(packageManager, context, selectedClass, true);
+		for (LogoOption option : LOGO_OPTIONS) {
+			for (String name : Arrays.asList(VALUE_DASHCHAN_2, VALUE_SLOPCHAN, VALUE_DVACH)) {
+				String className = getClassName(name, option);
+				setEnabled(packageManager, context, className, className.equals(selectedClass));
+			}
+		}
+	}
+
+	private static String getClassName(String value, LogoOption option) {
+		String prefix;
+		switch (value) {
+			case VALUE_DASHCHAN_2: prefix = "Dashchan2"; break;
+			case VALUE_SLOPCHAN: prefix = "Slopchan"; break;
+			default: prefix = "Dvach"; break;
+		}
+		return "com.mishiranu.dashchan.launcher." + prefix + option.classSuffix + "Alias";
 	}
 
 	private static void setEnabled(PackageManager packageManager, Context context,

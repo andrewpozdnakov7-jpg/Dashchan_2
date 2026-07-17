@@ -55,7 +55,6 @@ import com.mishiranu.dashchan.widget.ViewFactory;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -81,7 +80,6 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 	private static final String FILTER_PICTURES = "pictures";
 	private static final String FILTER_GIF = "gif";
 	private static final String FILTER_VIDEO = "video";
-	private static final String FILTER_EXTENSION_PREFIX = "extension:";
 
 	private enum GallerySort {
 		POST_ORDER, NEWEST_FIRST, LARGEST_FIRST, SMALLEST_FIRST, HIGHEST_RESOLUTION
@@ -622,21 +620,13 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 		return "jpeg".equals(extension) ? "jpg" : extension;
 	}
 
-	private static String getGalleryExtensionTitle(String extension) {
-		return "jpg".equals(extension) ? "JPG / JPEG" : extension.toUpperCase(Locale.US);
-	}
-
 	private List<GalleryFilterOption> createGalleryFilterOptions() {
 		Chan chan = Chan.get(instance.chanName);
 		int pictures = 0;
 		int gifs = 0;
 		int videos = 0;
-		Map<String, Integer> extensionCounts = new LinkedHashMap<>();
 		for (GalleryItem galleryItem : allGalleryItems) {
 			String extension = getGalleryExtension(galleryItem, chan);
-			if (!extension.isEmpty()) {
-				extensionCounts.put(extension, extensionCounts.getOrDefault(extension, 0) + 1);
-			}
 			if ("gif".equals(extension)) {
 				gifs++;
 			} else if (galleryItem.isVideo(chan)) {
@@ -659,13 +649,6 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 		if (videos > 0) {
 			options.add(new GalleryFilterOption(FILTER_VIDEO, getString(R.string.gallery_filter_video), videos));
 		}
-
-		ArrayList<String> extensions = new ArrayList<>(extensionCounts.keySet());
-		extensions.sort(Comparator.comparing(GalleryOverlay::getGalleryExtensionTitle));
-		for (String extension : extensions) {
-			options.add(new GalleryFilterOption(FILTER_EXTENSION_PREFIX + extension,
-					getGalleryExtensionTitle(extension), extensionCounts.get(extension)));
-		}
 		return options;
 	}
 
@@ -685,8 +668,7 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 				return true;
 			}
 			default: {
-				return filter.startsWith(FILTER_EXTENSION_PREFIX)
-						&& filter.substring(FILTER_EXTENSION_PREFIX.length()).equals(extension);
+				return false;
 			}
 		}
 	}
@@ -803,23 +785,13 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 		Map<Integer, String> filterValues = new LinkedHashMap<>();
 		List<GalleryFilterOption> filterOptions = createGalleryFilterOptions();
 		container.addView(createGalleryFilterSection(context, R.string.gallery_filter_show, verticalPadding));
-		int typeOptions = 0;
 		for (GalleryFilterOption option : filterOptions) {
-			boolean extension = option.value.startsWith(FILTER_EXTENSION_PREFIX);
-			if (extension && typeOptions >= 0) {
-				filterGroup.addView(createGalleryFilterSection(context,
-						R.string.gallery_filter_formats, verticalPadding));
-				typeOptions = -1;
-			}
 			RadioButton radioButton = createGalleryFilterRadio(context,
 					getString(R.string.gallery_filter_option_with_count__format, option.title, option.count));
 			filterValues.put(radioButton.getId(), option.value);
 			filterGroup.addView(radioButton);
 			if (option.value.equals(galleryFilter)) {
 				radioButton.setChecked(true);
-			}
-			if (!extension && typeOptions >= 0) {
-				typeOptions++;
 			}
 		}
 		container.addView(filterGroup);

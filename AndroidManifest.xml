@@ -6,6 +6,7 @@
 	<uses-permission android:name="android.permission.INTERNET" />
 	<uses-permission android:name="android.permission.WAKE_LOCK" />
 	<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+	<uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 	<uses-permission android:name="android.permission.VIBRATE" android:maxSdkVersion="18" />
 	<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="22" />
 	<uses-permission-sdk-23 android:name="android.permission.FOREGROUND_SERVICE" />
@@ -152,6 +153,323 @@
 			android:icon="@mipmap/ic_launcher"
 			android:label="ДВАЧ"
 			android:logo="@mipmap/ic_logo">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
++		<activity-alias
+			android:name=".launcher.Dashchan2Logo2Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_2"
+			android:label="Dashchan_2"
+			android:logo="@drawable/application_logo_2">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.SlopchanLogo2Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_2"
+			android:label="Slopchan_1"
+			android:logo="@drawable/application_logo_2">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.DvachLogo2Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_2"
+			android:label="@string/launcher_name_dvach"
+			android:logo="@drawable/application_logo_2">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.Dashchan2Logo3Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_3"
+			android:label="Dashchan_2"
+			android:logo="@drawable/application_logo_3">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.SlopchanLogo3Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_3"
+			android:label="Slopchan_1"
+			android:logo="@drawable/application_logo_3">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.DvachLogo3Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_3"
+			android:label="@string/launcher_name_dvach"
+			android:logo="@drawable/application_logo_3">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.Dashchan2Logo4Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_4"
+			android:label="Dashchan_2"
+			android:logo="@drawable/application_logo_4">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.SlopchanLogo4Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_4"
+			android:label="Slopchan_1"
+			android:logo="@drawable/application_logo_4">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.DvachLogo4Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_4"
+			android:label="@string/launcher_name_dvach"
+			android:logo="@drawable/application_logo_4">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.Dashchan2Logo5Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_5"
+			android:label="Dashchan_2"
+			android:logo="@drawable/application_logo_5">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.SlopchanLogo5Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_5"
+			android:label="Slopchan_1"
+			android:logo="@drawable/application_logo_5">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.DvachLogo5Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_5"
+			android:label="@string/launcher_name_dvach"
+			android:logo="@drawable/application_logo_5">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.Dashchan2Logo6Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_6"
+			android:label="Dashchan_2"
+			android:logo="@drawable/application_logo_6">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.SlopchanLogo6Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_6"
+			android:label="Slopchan_1"
+			android:logo="@drawable/application_logo_6">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.DvachLogo6Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_6"
+			android:label="@string/launcher_name_dvach"
+			android:logo="@drawable/application_logo_6">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+
+		<!-- Restricted logo presets remain visible in settings and are enabled only after access checks. -->
+		<activity-alias
+			android:name=".launcher.Dashchan2PassAlias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_pass"
+			android:label="Dashchan_2"
+			android:logo="@drawable/application_logo_pass">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.SlopchanPassAlias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_pass"
+			android:label="Slopchan_1"
+			android:logo="@drawable/application_logo_pass">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.DvachPassAlias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_pass"
+			android:label="@string/launcher_name_dvach"
+			android:logo="@drawable/application_logo_pass">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.Dashchan2SubscriberAlias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_subscriber"
+			android:label="Dashchan_2"
+			android:logo="@drawable/application_logo_subscriber">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.SlopchanSubscriberAlias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_subscriber"
+			android:label="Slopchan_1"
+			android:logo="@drawable/application_logo_subscriber">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.DvachSubscriberAlias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_subscriber"
+			android:label="@string/launcher_name_dvach"
+			android:logo="@drawable/application_logo_subscriber">
 			<intent-filter>
 				<action android:name="android.intent.action.MAIN" />
 				<category android:name="android.intent.category.LAUNCHER" />

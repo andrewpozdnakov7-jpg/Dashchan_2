@@ -1,0 +1,5 @@
+* Added gallery filters by media type and file format.
+* Added gesture volume control to the video player.
+* Added a choice of bundled application icons.
+* Fixed crashes when creating a post and sharing text to Dashchan_2.
+* Improved scrolling compatibility with some modified Android builds.

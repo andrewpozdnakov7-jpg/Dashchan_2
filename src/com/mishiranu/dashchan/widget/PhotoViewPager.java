@@ -57,6 +57,9 @@ public class PhotoViewPager extends ViewGroup {
 		void onPositionChange(PhotoViewPager view, int index, View centerView, View leftView, View rightView,
 				boolean manually);
 		void onSwipingStateChange(PhotoViewPager view, boolean swiping);
+		boolean onVerticalGestureStart(PhotoViewPager view, float x, float y);
+		void onVerticalGestureProgress(PhotoViewPager view, float distance);
+		void onVerticalGestureEnd(PhotoViewPager view);
 	}
 
 	@Override
@@ -162,6 +165,7 @@ public class PhotoViewPager extends ViewGroup {
 
 	private boolean allowMove;
 	private boolean lastEventToPhotoView;
+	private boolean verticalGesture;
 
 	private float startX;
 	private float startY;
@@ -194,6 +198,7 @@ public class PhotoViewPager extends ViewGroup {
 			case MotionEvent.ACTION_DOWN: {
 				photoView.dispatchSpecialTouchEvent(event);
 				allowMove = false;
+				verticalGesture = false;
 				lastEventToPhotoView = true;
 				updateCurrentScrollIndex(false);
 				startX = lastX = event.getX();
@@ -208,6 +213,10 @@ public class PhotoViewPager extends ViewGroup {
 			case MotionEvent.ACTION_MOVE: {
 				float x = event.getX();
 				float y = event.getY();
+				if (verticalGesture) {
+					adapter.onVerticalGestureProgress(this, startY - y);
+					return true;
+				}
 				float previousX = x;
 				float previousY = y;
 				boolean previousValid = false;
@@ -222,13 +231,26 @@ public class PhotoViewPager extends ViewGroup {
 					previousValid = true;
 				}
 				if (!allowMove) {
-					if (Math.abs(event.getX() - startX) <= touchSlop &&
-							Math.abs(event.getY() - startY) <= touchSlop) {
+					float distanceX = Math.abs(x - startX);
+					float distanceY = Math.abs(y - startY);
+					if (distanceX <= touchSlop && distanceY <= touchSlop) {
 						// Too short movement, skip it
 						return true;
 					}
 					removeCallbacks(longTapRunnable);
 					allowMove = true;
+					if (singlePointer && distanceY > distanceX
+							&& adapter.onVerticalGestureStart(this, startX, startY)) {
+						verticalGesture = true;
+						MotionEvent cancelEvent = MotionEvent.obtain(event);
+						cancelEvent.setAction(MotionEvent.ACTION_CANCEL);
+						photoView.dispatchSpecialTouchEvent(cancelEvent);
+						cancelEvent.recycle();
+						lastEventToPhotoView = false;
+						notifySwiping(false);
+						adapter.onVerticalGestureProgress(this, startY - y);
+						return true;
+					}
 				}
 				boolean sendToPhotoView = count == 1 || photoView.isScaling();
 				int currentScrollX = getScrollX();
@@ -296,6 +318,17 @@ public class PhotoViewPager extends ViewGroup {
 			}
 			case MotionEvent.ACTION_CANCEL:
 			case MotionEvent.ACTION_UP: {
+				if (verticalGesture) {
+					verticalGesture = false;
+					adapter.onVerticalGestureEnd(this);
+					if (velocityTracker != null) {
+						velocityTracker.recycle();
+						velocityTracker = null;
+					}
+					removeCallbacks(longTapRunnable);
+					edgeEffect.onRelease();
+					return true;
+				}
 				if (lastEventToPhotoView || action == MotionEvent.ACTION_CANCEL) {
 					photoView.dispatchSpecialTouchEvent(event);
 				} else {

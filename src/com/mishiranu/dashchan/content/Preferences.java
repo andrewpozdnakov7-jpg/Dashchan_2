@@ -179,11 +179,23 @@ public class Preferences {
 
 	public static final String KEY_APPLICATION_NAME = "application_name";
 	public static final String DEFAULT_APPLICATION_NAME = LauncherIconManager.VALUE_DVACH;
+	public static final String KEY_APPLICATION_LOGO = "application_logo";
+	public static final String DEFAULT_APPLICATION_LOGO = LauncherIconManager.LOGO_DEFAULT;
 	private static final String KEY_FUTURE_POST_TEXT = "future_post_text";
 
 	public static String getApplicationName() {
 		String value = PREFERENCES.getString(KEY_APPLICATION_NAME, DEFAULT_APPLICATION_NAME);
 		return LauncherIconManager.isValidValue(value) ? value : DEFAULT_APPLICATION_NAME;
+	}
+
+	public static String getApplicationLogo() {
+		String value = PREFERENCES.getString(KEY_APPLICATION_LOGO, DEFAULT_APPLICATION_LOGO);
+		return LauncherIconManager.isValidLogoValue(value) ? value : DEFAULT_APPLICATION_LOGO;
+	}
+
+	public static void setApplicationLogo(String value) {
+		PREFERENCES.edit().put(KEY_APPLICATION_LOGO,
+				LauncherIconManager.isValidLogoValue(value) ? value : DEFAULT_APPLICATION_LOGO).close();
 	}
 
 	public static synchronized void storeFuturePostText(String text) {
@@ -1593,6 +1605,13 @@ public class Preferences {
 
 	public static boolean isVideoSeekAnyFrame() {
 		return PREFERENCES.getBoolean(KEY_VIDEO_SEEK_ANY_FRAME, DEFAULT_VIDEO_SEEK_ANY_FRAME);
+	}
+
+	public static final String KEY_VIDEO_VOLUME_GESTURE = "video_volume_gesture";
+	public static final boolean DEFAULT_VIDEO_VOLUME_GESTURE = true;
+
+	public static boolean isVideoVolumeGesture() {
+		return PREFERENCES.getBoolean(KEY_VIDEO_VOLUME_GESTURE, DEFAULT_VIDEO_VOLUME_GESTURE);
 	}
 
 	public static final String KEY_VIDEO_PLAYBACK_SPEED_CONTROL = "video_playback_speed_control";

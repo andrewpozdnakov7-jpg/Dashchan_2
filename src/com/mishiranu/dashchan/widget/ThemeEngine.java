@@ -27,6 +27,7 @@ import androidx.core.graphics.ColorUtils;
 import androidx.core.view.ViewCompat;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.R;
+import com.mishiranu.dashchan.content.LauncherIconManager;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.storage.ThemesStorage;
 import com.mishiranu.dashchan.graphics.ColorScheme;
@@ -526,7 +527,8 @@ public class ThemeEngine {
 	@SuppressWarnings("deprecation")
 	private static ActivityManager.TaskDescription createTaskDescription(int toolbarColor) {
 		// Keep the pre-Android-15 task color behavior; targetSdk migration is handled separately.
-		return new ActivityManager.TaskDescription(null, R.mipmap.ic_launcher, toolbarColor);
+		int iconResId = LauncherIconManager.getLogoOption(Preferences.getApplicationLogo()).iconResId;
+		return new ActivityManager.TaskDescription(null, iconResId, toolbarColor);
 	}
 
 	public static List<Theme> getThemes() {
