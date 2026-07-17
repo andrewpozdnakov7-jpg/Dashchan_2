@@ -179,10 +179,28 @@ public class Preferences {
 
 	public static final String KEY_APPLICATION_NAME = "application_name";
 	public static final String DEFAULT_APPLICATION_NAME = LauncherIconManager.VALUE_DVACH;
+	private static final String KEY_FUTURE_POST_TEXT = "future_post_text";
 
 	public static String getApplicationName() {
 		String value = PREFERENCES.getString(KEY_APPLICATION_NAME, DEFAULT_APPLICATION_NAME);
 		return LauncherIconManager.isValidValue(value) ? value : DEFAULT_APPLICATION_NAME;
+	}
+
+	public static synchronized void storeFuturePostText(String text) {
+		text = text != null ? StringUtils.nullIfEmpty(text.trim()) : null;
+		if (text != null) {
+			String previous = PREFERENCES.getString(KEY_FUTURE_POST_TEXT, null);
+			String value = StringUtils.isEmpty(previous) ? text : previous + '\n' + text;
+			PREFERENCES.edit().put(KEY_FUTURE_POST_TEXT, value).close();
+		}
+	}
+
+	public static synchronized String consumeFuturePostText() {
+		String text = PREFERENCES.getString(KEY_FUTURE_POST_TEXT, null);
+		if (text != null) {
+			PREFERENCES.edit().remove(KEY_FUTURE_POST_TEXT).close();
+		}
+		return text;
 	}
 
 	public enum NetworkMode {

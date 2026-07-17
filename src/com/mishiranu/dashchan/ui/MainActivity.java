@@ -595,6 +595,22 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 			if (failResult != null) {
 				((PostingFragment) currentFragment).handleFailResult(failResult);
 			}
+		} else if (C.ACTION_POSTING_SHARE.equals(intent.getAction())) {
+			ContentFragment currentFragment = getCurrentFragment();
+			boolean handled = false;
+			if (currentFragment instanceof PostingFragment) {
+				((PostingFragment) currentFragment).consumeFuturePostText();
+				handled = true;
+			} else if (currentFragment instanceof PageFragment) {
+				Page page = ((PageFragment) currentFragment).getPage();
+				if (page.content == Page.Content.POSTS && page.boardName != null && page.threadNumber != null) {
+					navigatePosting(page.chanName, page.boardName, page.threadNumber);
+					handled = true;
+				}
+			}
+			if (!handled) {
+				ClickableToast.show(R.string.shared_text_saved_for_posting);
+			}
 		} else if (C.ACTION_GALLERY.equals(intent.getAction())) {
 			navigateGalleryUri(intent.getData());
 		} else if (C.ACTION_PLAYER.equals(intent.getAction())) {

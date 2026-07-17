@@ -116,6 +116,21 @@ public class PagerUnit implements PagerInstance.Callback {
 		return viewPager.getCurrentIndex();
 	}
 
+	public GalleryItem getCurrentGalleryItem() {
+		PagerInstance.ViewHolder holder = pagerInstance.currentHolder;
+		return holder != null ? holder.galleryItem : null;
+	}
+
+	public void onGalleryItemsChanged(int position) {
+		if (galleryInstance.galleryItems.isEmpty()) {
+			return;
+		}
+		interrupt(true);
+		pagerAdapter.recycleAll();
+		viewPager.setCount(galleryInstance.galleryItems.size());
+		viewPager.setCurrentIndex(Math.max(0, Math.min(position, galleryInstance.galleryItems.size() - 1)));
+	}
+
 	public void onApplyWindowInsets(InsetsLayout.Insets insets) {
 		videoUnit.onApplyWindowInsets(insets.left, insets.right, insets.bottom);
 	}

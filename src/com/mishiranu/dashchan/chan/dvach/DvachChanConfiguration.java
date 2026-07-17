@@ -37,6 +37,7 @@ public class DvachChanConfiguration extends ChanConfiguration {
 	private static final String KEY_MAX_COMMENT_LENGTH = "max_comment_length";
 	private static final String KEY_LIKES_ENABLED = "likes_enabled";
 
+	private static final String KEY_MONKEY_BUTTONS = "monkey_buttons";
 	private static final String KEY_CAPTCHA_FULL_KEYBOARD = "captcha_full_keyboard";
 	private static final int CAPTCHA_TTL = 90;
 
@@ -52,6 +53,7 @@ public class DvachChanConfiguration extends ChanConfiguration {
 		for (String captchaType : CAPTCHA_TYPES.keySet()) {
 			addCaptchaType(captchaType);
 		}
+		addCustomPreference(KEY_MONKEY_BUTTONS, false);
 		addCustomPreference(KEY_CAPTCHA_FULL_KEYBOARD, false);
 	}
 
@@ -202,14 +204,27 @@ public class DvachChanConfiguration extends ChanConfiguration {
 
 	@Override
 	public CustomPreference obtainCustomPreferenceConfiguration(String key) {
-		if (key.equals(KEY_CAPTCHA_FULL_KEYBOARD)) {
-			Resources resources = getResources();
-			String title = resources.getString(R.string.preference_captcha_full_keyboard);
-			CustomPreference captchaFullKeyboardPreference = new CustomPreference();
-			captchaFullKeyboardPreference.title = title;
-			return captchaFullKeyboardPreference;
+		Resources resources = getResources();
+		switch (key) {
+			case KEY_MONKEY_BUTTONS: {
+				CustomPreference preference = new CustomPreference();
+				preference.title = resources.getString(R.string.preference_monkey_buttons);
+				preference.summary = resources.getString(R.string.preference_monkey_buttons_summary);
+				return preference;
+			}
+			case KEY_CAPTCHA_FULL_KEYBOARD: {
+				CustomPreference preference = new CustomPreference();
+				preference.title = resources.getString(R.string.preference_captcha_full_keyboard);
+				return preference;
+			}
+			default: {
+				return null;
+			}
 		}
-		return null;
+	}
+
+	public boolean areMonkeyButtonsEnabled() {
+		return get(null, KEY_MONKEY_BUTTONS, false);
 	}
 
 	boolean isFullKeyboardForCaptchaEnabled() {

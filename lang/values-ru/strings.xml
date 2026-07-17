@@ -139,6 +139,7 @@
 	<string name="downloading_number_of_number__format">Загрузка %1$d из %2$d</string>
 	<string name="downloads">Загрузки</string>
 	<string name="draft_saved">Черновик сохранён</string>
+	<string name="shared_text_saved_for_posting">Текст сохранён. Откройте редактор сообщения, чтобы вставить его.</string>
 	<string name="draw_over_other_applications">Отображать поверх других приложений</string>
 	<string name="draw_over_other_applications__summary">Данное разрешение необходимо для полноценной работы всплывающих
 		уведомлений с кнопкой, обеспечения надёжного перезапуска приложения и возможности запустить приложение при
@@ -175,6 +176,21 @@
 	<string name="files_limit_reached">Достигнут лимит файлов</string>
 	<string name="files_only">Только файлы</string>
 	<string name="filter">Фильтр</string>
+	<string name="gallery_filter">Фильтр галереи</string>
+	<string name="gallery_filter_show">Показывать</string>
+	<string name="gallery_filter_all_files">Все файлы</string>
+	<string name="gallery_filter_pictures">Изображения</string>
+	<string name="gallery_filter_gif">GIF-анимации</string>
+	<string name="gallery_filter_video">Видео</string>
+	<string name="gallery_filter_formats">Форматы в этой галерее</string>
+	<string name="gallery_filter_option_with_count__format">%1$s (%2$d)</string>
+	<string name="gallery_filter_reset">Сбросить</string>
+	<string name="gallery_filtered_count__format">%1$d из %2$d файлов</string>
+	<string name="gallery_sort_post_order">По порядку постов</string>
+	<string name="gallery_sort_newest_first">Сначала новые</string>
+	<string name="gallery_sort_largest_first">Сначала большие файлы</string>
+	<string name="gallery_sort_smallest_first">Сначала маленькие файлы</string>
+	<string name="gallery_sort_highest_resolution">Сначала высокое разрешение</string>
 	<string name="find_in_comments">Искать в комментариях</string>
 	<string name="find_in_file_names">Искать в названиях файлов</string>
 	<string name="find_in_names">Искать в именах</string>
@@ -609,6 +625,10 @@
 	<string name="reorder_attachment">Изменить порядок вложений</string>
 	<string name="preview_video_attachment">Предпросмотр видео</string>
 	<string name="preference_captcha_full_keyboard">Использовать полную клавиатуру для капчи</string>
+	<string name="preference_monkey_buttons">Кнопки Манки и Артманки в редакторе</string>
+	<string name="preference_monkey_buttons_summary">Добавлять кнопки Манки и Артманки в панель редактора новых постов и ответов. Только для владельцев Passcode.</string>
+	<string name="monkey_command_button">Манки — вставить команду текстовой нейросети</string>
+	<string name="artmonkey_command_button">Артманки — вставить команду генерации изображения</string>
 	<string name="emoji_captcha_input">Выберите все символы на картинке (в любом порядке)</string>
 	<string name="posting_file_not_supported">Сервер Двача отклонил файл: его формат или внутренний кодек не поддерживается сайтом. Для видео попробуйте MP4 (H.264/AAC) или WebM.</string>
 	<string name="application_shortcut">Ярлык приложения</string>

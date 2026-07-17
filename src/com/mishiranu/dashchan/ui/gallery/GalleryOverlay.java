@@ -1,6 +1,7 @@
 package com.mishiranu.dashchan.ui.gallery;
 
 import android.app.ActionBar;
+import android.app.AlertDialog;
 import android.content.Context;
 import android.content.res.Configuration;
 import android.graphics.Color;
@@ -25,6 +26,9 @@ import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
+import android.widget.RadioButton;
+import android.widget.RadioGroup;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.core.view.ViewCompat;
@@ -51,7 +55,11 @@ import com.mishiranu.dashchan.widget.ViewFactory;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 
 public class GalleryOverlay extends DialogFragment implements GalleryDialog.Callback, GalleryInstance.Callback {
 	public enum NavigatePostMode {DISABLED, MANUALLY, ENABLED}
@@ -69,8 +77,18 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 	private static final String EXTRA_GALLERY_WINDOW = "galleryWindow";
 	private static final String EXTRA_GALLERY_MODE = "galleryMode";
 	private static final String EXTRA_SYSTEM_UI_VISIBILITY = "systemUiVisibility";
+	private static final String FILTER_ALL = "all";
+	private static final String FILTER_PICTURES = "pictures";
+	private static final String FILTER_GIF = "gif";
+	private static final String FILTER_VIDEO = "video";
+	private static final String FILTER_EXTENSION_PREFIX = "extension:";
+
+	private enum GallerySort {
+		POST_ORDER, NEWEST_FIRST, LARGEST_FIRST, SMALLEST_FIRST, HIGHEST_RESOLUTION
+	}
 
 	private List<GalleryItem> queuedGalleryItems;
+	private List<GalleryItem> allGalleryItems;
 	private WeakReference<View> queuedFromView;
 
 	private InsetsLayout rootView;
@@ -82,6 +100,8 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 	private boolean galleryMode;
 	private boolean predictiveBackRunning;
 	private CornerAnimator cornerAnimator;
+	private String galleryFilter = FILTER_ALL;
+	private GallerySort gallerySort = GallerySort.POST_ORDER;
 	private final boolean scrollThread = Preferences.isScrollThreadGallery();
 
 	private Pair<CharSequence, CharSequence> titleSubtitle;
@@ -258,8 +278,9 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 				imagePosition = savedInstanceState != null ? savedInstanceState.getInt(EXTRA_POSITION)
 						: requireArguments().getInt(EXTRA_IMAGE_INDEX);
 			}
+			allGalleryItems = new ArrayList<>(galleryItems != null ? galleryItems : Collections.emptyList());
 			instance = new GalleryInstance(rootView.getContext(), this, ACTION_BAR_COLOR, chan.name,
-					galleryItems != null ? galleryItems : Collections.emptyList());
+					new ArrayList<>(allGalleryItems));
 			if (!instance.galleryItems.isEmpty()) {
 				listUnit = new ListUnit(instance);
 				pagerUnit = new PagerUnit(instance);
@@ -435,6 +456,9 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 		menu.add(0, R.id.menu_refresh, 0, R.string.refresh)
 				.setIcon(ResourceUtils.getActionBarIcon(instance.context, R.attr.iconActionRefresh))
 				.setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
+		menu.add(0, R.id.menu_filter, 0, R.string.filter)
+				.setIcon(R.drawable.ic_action_filter)
+				.setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
 		menu.add(0, R.id.menu_select, 0, R.string.select)
 				.setIcon(ResourceUtils.getActionBarIcon(instance.context, R.attr.iconActionSelect))
 				.setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
@@ -456,6 +480,12 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 				pagerUnit.invalidatePopupMenu();
 			}
 		} else {
+			MenuItem filterItem = menu.findItem(R.id.menu_filter);
+			filterItem.setVisible(listUnit.areItemsSelectable());
+			Drawable filterIcon = instance.context.getDrawable(R.drawable.ic_action_filter).mutate();
+			filterIcon.setTint(isGalleryFilterActive()
+					? ThemeEngine.getTheme(instance.context).accent : Color.WHITE);
+			filterItem.setIcon(filterIcon);
 			menu.findItem(R.id.menu_select).setVisible(listUnit.areItemsSelectable());
 		}
 	}
@@ -474,6 +504,10 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 			}
 			case R.id.menu_refresh: {
 				pagerUnit.refreshCurrent();
+				break;
+			}
+			case R.id.menu_filter: {
+				showGalleryFilterDialog();
 				break;
 			}
 			case R.id.menu_select: {
@@ -551,10 +585,7 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 		pagerUnit.switchMode(galleryMode, duration);
 		listUnit.switchMode(galleryMode, duration);
 		if (galleryMode) {
-			int count = instance.galleryItems.size();
-			getDialog().setTitleSubtitle(getString(R.string.gallery), getResources()
-					.getQuantityString(R.plurals.number_files__format, count, count));
-			titleSubtitle = null;
+			updateGalleryModeTitle();
 		}
 		modifySystemUiVisibility(GalleryInstance.Flags.LOCKED_GRID, galleryMode);
 		this.galleryMode = galleryMode;
@@ -568,6 +599,260 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 		if (!galleryMode) {
 			displayShowcase();
 		}
+	}
+
+	private static class GalleryFilterOption {
+		public final String value;
+		public final String title;
+		public final int count;
+
+		public GalleryFilterOption(String value, String title, int count) {
+			this.value = value;
+			this.title = title;
+			this.count = count;
+		}
+	}
+
+	private static String getGalleryExtension(GalleryItem galleryItem, Chan chan) {
+		String extension = StringUtils.getFileExtension(galleryItem.getFileName(chan));
+		if (StringUtils.isEmpty(extension)) {
+			return "";
+		}
+		extension = extension.toLowerCase(Locale.US);
+		return "jpeg".equals(extension) ? "jpg" : extension;
+	}
+
+	private static String getGalleryExtensionTitle(String extension) {
+		return "jpg".equals(extension) ? "JPG / JPEG" : extension.toUpperCase(Locale.US);
+	}
+
+	private List<GalleryFilterOption> createGalleryFilterOptions() {
+		Chan chan = Chan.get(instance.chanName);
+		int pictures = 0;
+		int gifs = 0;
+		int videos = 0;
+		Map<String, Integer> extensionCounts = new LinkedHashMap<>();
+		for (GalleryItem galleryItem : allGalleryItems) {
+			String extension = getGalleryExtension(galleryItem, chan);
+			if (!extension.isEmpty()) {
+				extensionCounts.put(extension, extensionCounts.getOrDefault(extension, 0) + 1);
+			}
+			if ("gif".equals(extension)) {
+				gifs++;
+			} else if (galleryItem.isVideo(chan)) {
+				videos++;
+			} else if (galleryItem.isImage(chan)) {
+				pictures++;
+			}
+		}
+
+		ArrayList<GalleryFilterOption> options = new ArrayList<>();
+		options.add(new GalleryFilterOption(FILTER_ALL, getString(R.string.gallery_filter_all_files),
+				allGalleryItems.size()));
+		if (pictures > 0) {
+			options.add(new GalleryFilterOption(FILTER_PICTURES,
+					getString(R.string.gallery_filter_pictures), pictures));
+		}
+		if (gifs > 0) {
+			options.add(new GalleryFilterOption(FILTER_GIF, getString(R.string.gallery_filter_gif), gifs));
+		}
+		if (videos > 0) {
+			options.add(new GalleryFilterOption(FILTER_VIDEO, getString(R.string.gallery_filter_video), videos));
+		}
+
+		ArrayList<String> extensions = new ArrayList<>(extensionCounts.keySet());
+		extensions.sort(Comparator.comparing(GalleryOverlay::getGalleryExtensionTitle));
+		for (String extension : extensions) {
+			options.add(new GalleryFilterOption(FILTER_EXTENSION_PREFIX + extension,
+					getGalleryExtensionTitle(extension), extensionCounts.get(extension)));
+		}
+		return options;
+	}
+
+	private boolean matchesGalleryFilter(GalleryItem galleryItem, Chan chan, String filter) {
+		String extension = getGalleryExtension(galleryItem, chan);
+		switch (filter) {
+			case FILTER_PICTURES: {
+				return galleryItem.isImage(chan) && !"gif".equals(extension);
+			}
+			case FILTER_GIF: {
+				return "gif".equals(extension);
+			}
+			case FILTER_VIDEO: {
+				return galleryItem.isVideo(chan);
+			}
+			case FILTER_ALL: {
+				return true;
+			}
+			default: {
+				return filter.startsWith(FILTER_EXTENSION_PREFIX)
+						&& filter.substring(FILTER_EXTENSION_PREFIX.length()).equals(extension);
+			}
+		}
+	}
+
+	private static long getGalleryResolution(GalleryItem galleryItem) {
+		return (long) galleryItem.width * galleryItem.height;
+	}
+
+	private static int compareKnownValues(long left, long right, boolean descending) {
+		if (left <= 0 || right <= 0) {
+			if (left <= 0 && right <= 0) {
+				return 0;
+			}
+			return left <= 0 ? 1 : -1;
+		}
+		return descending ? Long.compare(right, left) : Long.compare(left, right);
+	}
+
+	private void applyGalleryFilter(String filter, GallerySort sort) {
+		GalleryItem currentGalleryItem = pagerUnit.getCurrentGalleryItem();
+		Chan chan = Chan.get(instance.chanName);
+		ArrayList<GalleryItem> galleryItems = new ArrayList<>();
+		for (GalleryItem galleryItem : allGalleryItems) {
+			if (matchesGalleryFilter(galleryItem, chan, filter)) {
+				galleryItems.add(galleryItem);
+			}
+		}
+		if (galleryItems.isEmpty()) {
+			filter = FILTER_ALL;
+			galleryItems.addAll(allGalleryItems);
+		}
+		switch (sort) {
+			case NEWEST_FIRST: {
+				Collections.reverse(galleryItems);
+				break;
+			}
+			case LARGEST_FIRST: {
+				galleryItems.sort((left, right) -> compareKnownValues(left.size, right.size, true));
+				break;
+			}
+			case SMALLEST_FIRST: {
+				galleryItems.sort((left, right) -> compareKnownValues(left.size, right.size, false));
+				break;
+			}
+			case HIGHEST_RESOLUTION: {
+				galleryItems.sort((left, right) -> compareKnownValues(getGalleryResolution(left),
+						getGalleryResolution(right), true));
+				break;
+			}
+			case POST_ORDER: {
+				break;
+			}
+		}
+
+		galleryFilter = filter;
+		gallerySort = sort;
+		instance.galleryItems.clear();
+		instance.galleryItems.addAll(galleryItems);
+		int position = currentGalleryItem != null ? instance.galleryItems.indexOf(currentGalleryItem) : -1;
+		if (position < 0) {
+			position = 0;
+		}
+		listUnit.onGalleryItemsChanged();
+		pagerUnit.onGalleryItemsChanged(position);
+		if (galleryMode) {
+			listUnit.scrollListToPosition(position, false);
+			updateGalleryModeTitle();
+		} else {
+			updateTitle();
+		}
+		invalidateOptionsMenu();
+	}
+
+	private void updateGalleryModeTitle() {
+		int count = instance.galleryItems.size();
+		int total = allGalleryItems.size();
+		CharSequence subtitle = count == total ? getResources()
+				.getQuantityString(R.plurals.number_files__format, count, count)
+				: getString(R.string.gallery_filtered_count__format, count, total);
+		getDialog().setTitleSubtitle(getString(R.string.gallery), subtitle);
+		titleSubtitle = null;
+	}
+
+	private boolean isGalleryFilterActive() {
+		return !FILTER_ALL.equals(galleryFilter) || gallerySort != GallerySort.POST_ORDER;
+	}
+
+	private TextView createGalleryFilterSection(Context context, int textResId, int topPadding) {
+		TextView textView = new TextView(context);
+		textView.setText(textResId);
+		textView.setTextColor(ThemeEngine.getTheme(context).accent);
+		textView.setTextSize(14f);
+		textView.setPadding(0, topPadding, 0, topPadding / 3);
+		return textView;
+	}
+
+	private static RadioButton createGalleryFilterRadio(Context context, CharSequence text) {
+		RadioButton radioButton = new RadioButton(context);
+		radioButton.setId(View.generateViewId());
+		radioButton.setText(text);
+		return radioButton;
+	}
+
+	private void showGalleryFilterDialog() {
+		Context context = getDialog().getContext();
+		float density = ResourceUtils.obtainDensity(context);
+		int horizontalPadding = (int) (24f * density);
+		int verticalPadding = (int) (12f * density);
+		LinearLayout container = new LinearLayout(context);
+		container.setOrientation(LinearLayout.VERTICAL);
+		container.setPadding(horizontalPadding, 0, horizontalPadding, verticalPadding);
+
+		RadioGroup filterGroup = new RadioGroup(context);
+		Map<Integer, String> filterValues = new LinkedHashMap<>();
+		List<GalleryFilterOption> filterOptions = createGalleryFilterOptions();
+		container.addView(createGalleryFilterSection(context, R.string.gallery_filter_show, verticalPadding));
+		int typeOptions = 0;
+		for (GalleryFilterOption option : filterOptions) {
+			boolean extension = option.value.startsWith(FILTER_EXTENSION_PREFIX);
+			if (extension && typeOptions >= 0) {
+				filterGroup.addView(createGalleryFilterSection(context,
+						R.string.gallery_filter_formats, verticalPadding));
+				typeOptions = -1;
+			}
+			RadioButton radioButton = createGalleryFilterRadio(context,
+					getString(R.string.gallery_filter_option_with_count__format, option.title, option.count));
+			filterValues.put(radioButton.getId(), option.value);
+			filterGroup.addView(radioButton);
+			if (option.value.equals(galleryFilter)) {
+				radioButton.setChecked(true);
+			}
+			if (!extension && typeOptions >= 0) {
+				typeOptions++;
+			}
+		}
+		container.addView(filterGroup);
+
+		container.addView(createGalleryFilterSection(context, R.string.sorting, verticalPadding));
+		RadioGroup sortGroup = new RadioGroup(context);
+		Map<Integer, GallerySort> sortValues = new LinkedHashMap<>();
+		int[] sortTitles = {R.string.gallery_sort_post_order, R.string.gallery_sort_newest_first,
+				R.string.gallery_sort_largest_first, R.string.gallery_sort_smallest_first,
+				R.string.gallery_sort_highest_resolution};
+		GallerySort[] sorts = GallerySort.values();
+		for (int i = 0; i < sorts.length; i++) {
+			RadioButton radioButton = createGalleryFilterRadio(context, getString(sortTitles[i]));
+			sortValues.put(radioButton.getId(), sorts[i]);
+			sortGroup.addView(radioButton);
+			if (sorts[i] == gallerySort) {
+				radioButton.setChecked(true);
+			}
+		}
+		container.addView(sortGroup);
+
+		ScrollView scrollView = new ScrollView(context);
+		scrollView.addView(container);
+		new AlertDialog.Builder(context).setTitle(R.string.gallery_filter).setView(scrollView)
+				.setNegativeButton(android.R.string.cancel, null)
+				.setNeutralButton(R.string.gallery_filter_reset, (dialog, which) ->
+						applyGalleryFilter(FILTER_ALL, GallerySort.POST_ORDER))
+				.setPositiveButton(android.R.string.ok, (dialog, which) -> {
+					String filter = filterValues.get(filterGroup.getCheckedRadioButtonId());
+					GallerySort sort = sortValues.get(sortGroup.getCheckedRadioButtonId());
+					applyGalleryFilter(filter != null ? filter : FILTER_ALL,
+							sort != null ? sort : GallerySort.POST_ORDER);
+				}).show();
 	}
 
 	private class CornerAnimator implements Runnable {

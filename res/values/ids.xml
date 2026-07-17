@@ -23,6 +23,7 @@
 	<item type="id" name="menu_drawer" />
 	<item type="id" name="menu_erase" />
 	<item type="id" name="menu_expanded_screen" />
+	<item type="id" name="menu_filter" />
 	<item type="id" name="menu_gallery" />
 	<item type="id" name="menu_group" />
 	<item type="id" name="menu_hidden_posts" />

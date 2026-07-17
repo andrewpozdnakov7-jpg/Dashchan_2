@@ -136,6 +136,7 @@
 	<string name="downloading_number_of_number__format">Downloading %1$d of %2$d</string>
 	<string name="downloads">Downloads</string>
 	<string name="draft_saved">Draft saved</string>
+	<string name="shared_text_saved_for_posting">Shared text saved. Open a post editor to insert it.</string>
 	<string name="draw_over_other_applications">Draw over other applications</string>
 	<string name="draw_over_other_applications__summary">This permission is needed to enable all features of clickable
 		toasts, ensure reliable application restarts, and allow to launch application when posting fails</string>
@@ -171,6 +172,21 @@
 	<string name="files_limit_reached">Files limit reached</string>
 	<string name="files_only">Files only</string>
 	<string name="filter">Filter</string>
+	<string name="gallery_filter">Gallery filter</string>
+	<string name="gallery_filter_show">Show</string>
+	<string name="gallery_filter_all_files">All files</string>
+	<string name="gallery_filter_pictures">Pictures</string>
+	<string name="gallery_filter_gif">GIF animations</string>
+	<string name="gallery_filter_video">Video</string>
+	<string name="gallery_filter_formats">Formats in this gallery</string>
+	<string name="gallery_filter_option_with_count__format">%1$s (%2$d)</string>
+	<string name="gallery_filter_reset">Reset</string>
+	<string name="gallery_filtered_count__format">%1$d of %2$d files</string>
+	<string name="gallery_sort_post_order">Post order</string>
+	<string name="gallery_sort_newest_first">Newest first</string>
+	<string name="gallery_sort_largest_first">Largest files first</string>
+	<string name="gallery_sort_smallest_first">Smallest files first</string>
+	<string name="gallery_sort_highest_resolution">Highest resolution first</string>
 	<string name="find_in_comments">Find in comments</string>
 	<string name="find_in_file_names">Find in file names</string>
 	<string name="find_in_names">Find in names</string>
@@ -591,6 +607,10 @@
 	<string name="reorder_attachment">Reorder attachment</string>
 	<string name="preview_video_attachment">Preview video</string>
 	<string name="preference_captcha_full_keyboard">Use full keyboard for captcha</string>
+	<string name="preference_monkey_buttons">Monkey and ArtMonkey buttons in the editor</string>
+	<string name="preference_monkey_buttons_summary">Show Monkey and ArtMonkey buttons in the new post and reply editor. For Passcode owners only.</string>
+	<string name="monkey_command_button">Monkey — insert the text AI command</string>
+	<string name="artmonkey_command_button">ArtMonkey — insert the image generation command</string>
 	<string name="emoji_captcha_input">Select all icons from the picture (any order)</string>
 	<string name="posting_file_not_supported">The 2ch server rejected the file: its format or internal codec is not supported by the site. For video, try MP4 (H.264/AAC) or WebM.</string>
 	<string name="application_shortcut">Application shortcut</string>

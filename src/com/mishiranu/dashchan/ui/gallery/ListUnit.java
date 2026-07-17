@@ -130,6 +130,15 @@ public class ListUnit implements ActionMode.Callback {
 		return getAdapter().getItemCount() > 0;
 	}
 
+	public void onGalleryItemsChanged() {
+		if (selectionMode != null) {
+			selectionMode.finish();
+		} else {
+			selected.clear();
+		}
+		getAdapter().notifyDataSetChanged();
+	}
+
 	public void startSelectionMode(int[] selected) {
 		this.selected.clear();
 		selectionMode = recyclerView.startActionMode(this);

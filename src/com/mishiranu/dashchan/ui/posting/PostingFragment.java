@@ -17,6 +17,7 @@ import android.os.Bundle;
 import android.os.IBinder;
 import android.os.SystemClock;
 import android.text.Editable;
+import android.text.SpannableStringBuilder;
 import android.text.TextUtils;
 import android.util.DisplayMetrics;
 import android.util.Pair;
@@ -33,6 +34,7 @@ import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.FrameLayout;
+import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -50,6 +52,7 @@ import chan.util.CommonUtils;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
+import com.mishiranu.dashchan.chan.dvach.DvachChanConfiguration;
 import com.mishiranu.dashchan.content.MainApplication;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.async.ExecutorTask;
@@ -105,6 +108,10 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 	private static final String EXTRA_BOARD_NAME = "boardName";
 	private static final String EXTRA_THREAD_NUMBER = "threadNumber";
 	private static final String EXTRA_REPLY_DATA_LIST = "replyDataList";
+	private static final String CHAN_NAME_DVACH = "dvach";
+	private static final String COMMAND_MONKEY = "@monkey";
+	private static final String COMMAND_ART_MONKEY = "@artmonkey";
+	private static final int SERVER_COMMAND_BUTTON_WIDTH_DP = 40;
 
 	private static final String EXTRA_CAPTCHA_DRAFT = "captchaDraft";
 
@@ -665,6 +672,9 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		super.onResume();
 
 		DraftsStorage draftsStorage = DraftsStorage.getInstance();
+		if (allowPosting) {
+			consumeFuturePostText();
+		}
 		ArrayList<DraftsStorage.AttachmentDraft> futureAttachmentDrafts = draftsStorage.getFutureAttachmentDrafts();
 		if (!futureAttachmentDrafts.isEmpty()) {
 			ArrayList<Pair<String, String>> attachmentsToAdd = new ArrayList<>(futureAttachmentDrafts.size());
@@ -684,6 +694,25 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		if (!allowPosting || sendSuccess) {
 			((FragmentHandler) requireActivity()).removeFragment();
 		}
+	}
+
+	public boolean consumeFuturePostText() {
+		if (!allowPosting || commentView == null) {
+			return false;
+		}
+		String text = Preferences.consumeFuturePostText();
+		if (StringUtils.isEmpty(text)) {
+			return false;
+		}
+		Editable editable = commentView.getText();
+		if (editable.length() > 0 && editable.charAt(editable.length() - 1) != '\n') {
+			editable.append('\n');
+		}
+		editable.append(text);
+		commentView.setSelection(editable.length());
+		commentView.requestFocus();
+		DraftsStorage.getInstance().store(obtainPostDraft());
+		return true;
 	}
 
 	@Override
@@ -1084,6 +1113,63 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 			}
 		}
 	};
+
+	private boolean shouldShowServerCommandButtons() {
+		if (!allowPosting || !CHAN_NAME_DVACH.equals(getChanName())) {
+			return false;
+		}
+		Chan chan = Chan.get(getChanName());
+		if (!(chan.configuration instanceof DvachChanConfiguration)) {
+			return false;
+		}
+		DvachChanConfiguration configuration = (DvachChanConfiguration) chan.configuration;
+		return configuration.areMonkeyButtonsEnabled()
+				&& Preferences.checkHasMultipleValues(Preferences.getCaptchaPass(chan));
+	}
+
+	private void insertServerCommand(String command) {
+		Editable editable = commentView.getText();
+		int length = editable.length();
+		int rawSelectionStart = commentView.getSelectionStart();
+		int rawSelectionEnd = commentView.getSelectionEnd();
+		if (rawSelectionStart < 0) {
+			rawSelectionStart = length;
+		}
+		if (rawSelectionEnd < 0) {
+			rawSelectionEnd = rawSelectionStart;
+		}
+		int selectionStart = Math.min(Math.min(rawSelectionStart, rawSelectionEnd), length);
+		int selectionEnd = Math.min(Math.max(rawSelectionStart, rawSelectionEnd), length);
+
+		int lineStart = selectionStart;
+		while (lineStart > 0 && editable.charAt(lineStart - 1) != '\n') {
+			lineStart--;
+		}
+		boolean hasTextBeforeCursor = false;
+		for (int i = lineStart; i < selectionStart; i++) {
+			if (!Character.isWhitespace(editable.charAt(i))) {
+				hasTextBeforeCursor = true;
+				break;
+			}
+		}
+
+		SpannableStringBuilder replacement = new SpannableStringBuilder();
+		if (hasTextBeforeCursor) {
+			replacement.append('\n');
+		}
+		replacement.append(command).append(' ');
+		if (selectionStart != selectionEnd) {
+			replacement.append(editable, selectionStart, selectionEnd);
+		}
+		editable.replace(selectionStart, selectionEnd, replacement);
+		commentView.setSelection(selectionStart + replacement.length());
+		commentView.requestFocus();
+		InputMethodManager inputMethodManager = (InputMethodManager) requireContext()
+				.getSystemService(Context.INPUT_METHOD_SERVICE);
+		if (inputMethodManager != null) {
+			inputMethodManager.showSoftInput(commentView, 0);
+		}
+	}
 
 	private void updateSendButtonState() {
 		sendButton.setEnabled(sendButtonEnabled && !attachmentImportInProgress && captchaState != null &&
@@ -1963,22 +2049,31 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 
 		private int lastSupportedTags;
 		private int lastDisplayedTags;
+		private boolean lastShowServerCommands;
 
 		private void fillContainer() {
 			float density = ResourceUtils.obtainDensity(getResources());
 			int maxButtonsWidth = lastWidth - textFormatView.getPaddingLeft() - textFormatView.getPaddingRight();
 			int buttonMarginLeft = (int) (-4f * density);
+			boolean showServerCommands = shouldShowServerCommandButtons();
+			if (showServerCommands) {
+				int commandButtonsWidth = (int) (2f * SERVER_COMMAND_BUTTON_WIDTH_DP * density)
+						+ 2 * buttonMarginLeft;
+				maxButtonsWidth -= commandButtonsWidth;
+			}
 			Pair<Integer, Integer> supportedAndDisplayedTags = MarkupButtonProvider
 					.obtainSupportedAndDisplayedTags(allowPosting ? Chan.get(getChanName()).markup : null,
 							getBoardName(), density, maxButtonsWidth, buttonMarginLeft);
 			int supportedTags = supportedAndDisplayedTags.first;
 			int displayedTags = supportedAndDisplayedTags.second;
-			if (lastSupportedTags == supportedTags && lastDisplayedTags == displayedTags) {
+			if (lastSupportedTags == supportedTags && lastDisplayedTags == displayedTags
+					&& lastShowServerCommands == showServerCommands) {
 				return;
 			}
 
 			lastSupportedTags = supportedTags;
 			lastDisplayedTags = displayedTags;
+			lastShowServerCommands = showServerCommands;
 			if (commentEditor != null) {
 				commentEditor.handleSimilar(supportedTags);
 			}
@@ -2001,6 +2096,12 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 				textFormatView.addView(button, layoutParams);
 				firstMarkupButton = false;
 			}
+			if (showServerCommands) {
+				addServerCommandButton(R.drawable.ic_monkey_text, R.string.monkey_command_button,
+						COMMAND_MONKEY, density, buttonMarginLeft);
+				addServerCommandButton(R.drawable.ic_art_monkey_image, R.string.artmonkey_command_button,
+						COMMAND_ART_MONKEY, density, buttonMarginLeft);
+			}
 			textFormatView.setVisibility(textFormatView.getChildCount() > 0 ? View.VISIBLE : View.GONE);
 
 			if (addPaddingToRoot) {
@@ -2014,6 +2115,28 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 				}
 				((ExpandedLayout) getView()).setExtraTop(padding);
 			}
+		}
+
+		private void addServerCommandButton(int iconResId, int descriptionResId, String command,
+				float density, int buttonMarginLeft) {
+			ImageButton button = new ImageButton(textFormatView.getContext(), null,
+					android.R.attr.borderlessButtonStyle);
+			button.setImageResource(iconResId);
+			button.setImageTintList(ResourceUtils.getColorStateList(button.getContext(),
+					android.R.attr.textColorPrimary));
+			button.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+			int padding = (int) (8f * density);
+			button.setPadding(padding, padding, padding, padding);
+			String description = getString(descriptionResId);
+			button.setContentDescription(description);
+			button.setTooltipText(description);
+			button.setOnClickListener(v -> insertServerCommand(command));
+			LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(
+					(int) (SERVER_COMMAND_BUTTON_WIDTH_DP * density), (int) (40f * density));
+			if (textFormatView.getChildCount() > 0) {
+				layoutParams.leftMargin = buttonMarginLeft;
+			}
+			textFormatView.addView(button, layoutParams);
 		}
 	}
 }
