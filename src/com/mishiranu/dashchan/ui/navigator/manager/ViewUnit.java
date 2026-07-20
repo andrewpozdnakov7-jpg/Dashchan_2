@@ -71,6 +71,11 @@ public class ViewUnit {
 
 	private static final float ALPHA_HIDDEN_POST = 0.2f;
 	private static final float ALPHA_DELETED_POST = 0.5f;
+	private static final int VOTE_LIKE_COUNT_COLOR = 0xff008000;
+	private static final int VOTE_DISLIKE_COLOR = 0xffff0000;
+	private static final int VOTE_LIKE_ACTIVE_COLOR = 0xffff6600;
+	private static final int VOTE_ICON_LIGHT_COLOR = 0xff9e9e9e;
+	private static final int VOTE_ICON_DARK_COLOR = 0xff565656;
 
 	@SuppressLint("InflateParams")
 	ViewUnit(UiManager uiManager) {
@@ -456,6 +461,17 @@ public class ViewUnit {
 				makeHighlightedText(demandSet.highlightText, comment));
 		holder.comment.setVisibility(subject.length() > 0 || comment.length() > 0 ? View.VISIBLE : View.GONE);
 		holder.comment.bindSelectionPaddingView(demandSet.lastInList ? holder.textSelectionPadding : null);
+		if (postItem.isShowVotes()) {
+			holder.voteLike.setText(Integer.toString(postItem.getLikes()));
+			holder.voteDislike.setText(Integer.toString(postItem.getDislikes()));
+			holder.voteLike.setContentDescription(holder.itemView.getContext().getString(R.string.vote_like)
+					+ ": " + postItem.getLikes());
+			holder.voteDislike.setContentDescription(holder.itemView.getContext().getString(R.string.vote_dislike)
+					+ ": " + postItem.getDislikes());
+			holder.voting.setVisibility(View.VISIBLE);
+		} else {
+			holder.voting.setVisibility(View.GONE);
+		}
 
 		handlePostViewIcons(holder);
 		handlePostViewAttachments(holder);
@@ -497,6 +513,19 @@ public class ViewUnit {
 		holder.invalidateBottomBar();
 
 		boolean viewsEnabled = demandSet.selection == UiManager.Selection.DISABLED;
+		boolean voteEnabled = viewsEnabled && !postItem.isDeleted() && !postItem.hasSubmittedVote();
+		holder.voteLike.setEnabled(voteEnabled);
+		holder.voteDislike.setEnabled(voteEnabled);
+		int inactiveVoteIconColor = ThemeEngine.getTheme(holder.itemView.getContext()).base
+				== ThemeEngine.Theme.Base.DARK ? VOTE_ICON_DARK_COLOR : VOTE_ICON_LIGHT_COLOR;
+		boolean submittedLike = postItem.hasSubmittedVote() && postItem.isSubmittedVoteLike();
+		boolean submittedDislike = postItem.hasSubmittedVote() && !postItem.isSubmittedVoteLike();
+		holder.voteLike.setCompoundDrawableTintList(ColorStateList.valueOf(submittedLike
+				? VOTE_LIKE_ACTIVE_COLOR : inactiveVoteIconColor));
+		holder.voteDislike.setCompoundDrawableTintList(ColorStateList.valueOf(submittedDislike
+				? VOTE_DISLIKE_COLOR : inactiveVoteIconColor));
+		holder.voteLike.setAlpha(1f);
+		holder.voteDislike.setAlpha(1f);
 		holder.thumbnail.setEnabled(viewsEnabled);
 		holder.comment.setEnabled(viewsEnabled);
 		holder.head.setEnabled(viewsEnabled);
@@ -1223,6 +1252,9 @@ public class ViewUnit {
 		public final AttachmentView thumbnail;
 		public final TextView attachmentInfo;
 		public final CommentTextView comment;
+		public final LinebreakLayout voting;
+		public final TextView voteLike;
+		public final TextView voteDislike;
 		public final View textSelectionPadding;
 		public final View textBarPadding;
 		public final View bottomBar;
@@ -1261,6 +1293,11 @@ public class ViewUnit {
 			thumbnail = itemView.findViewById(R.id.thumbnail);
 			attachmentInfo = itemView.findViewById(R.id.attachment_info);
 			comment = itemView.findViewById(R.id.comment);
+			voting = itemView.findViewById(R.id.voting);
+			voteLike = itemView.findViewById(R.id.vote_like);
+			voteDislike = itemView.findViewById(R.id.vote_dislike);
+			voteLike.setTextColor(VOTE_LIKE_COUNT_COLOR);
+			voteDislike.setTextColor(VOTE_DISLIKE_COLOR);
 			textSelectionPadding = itemView.findViewById(R.id.text_selection_padding);
 			textBarPadding = itemView.findViewById(R.id.text_bar_padding);
 			bottomBar = itemView.findViewById(R.id.bottom_bar);
@@ -1285,6 +1322,8 @@ public class ViewUnit {
 			bottomBarReplies.setOnClickListener(uiManager.view().repliesBlockClickListener);
 			bottomBarExpand.setOnClickListener(this);
 			bottomBarOpenThread.setOnClickListener(uiManager.view().threadLinkBlockClickListener);
+			voteLike.setOnClickListener(v -> sendVote(uiManager, true));
+			voteDislike.setOnClickListener(v -> sendVote(uiManager, false));
 
 			index.setTypeface(ResourceUtils.TYPEFACE_MEDIUM);
 			bottomBarReplies.setTypeface(ResourceUtils.TYPEFACE_MEDIUM);
@@ -1293,7 +1332,7 @@ public class ViewUnit {
 			float textScale = Preferences.getTextScale();
 			if (textScale != 1f) {
 				ViewUtils.applyScaleSize(textScale, number, name, index, date, comment, attachmentInfo,
-						bottomBarReplies, bottomBarExpand, bottomBarOpenThread);
+						voteLike, voteDislike, bottomBarReplies, bottomBarExpand, bottomBarOpenThread);
 				ViewUtils.applyScaleSize(textScale, stateImages);
 				head.setHorizontalSpacing((int) (head.getHorizontalSpacing() * textScale));
 			}
@@ -1307,6 +1346,15 @@ public class ViewUnit {
 				thumbnailLayoutParams.height = thumbnailLayoutParams.width;
 			} else {
 				thumbnailLayoutParams.width = this.dimensions.thumbnailWidth;
+			}
+		}
+
+		private void sendVote(UiManager uiManager, boolean like) {
+			PostItem postItem = getPostItem();
+			UiManager.ConfigurationSet configurationSet = getConfigurationSet();
+			if (postItem != null && configurationSet != null) {
+				uiManager.dialog().performSendVotePost(configurationSet.fragmentManager,
+						configurationSet.chanName, postItem, like);
 			}
 		}
 

@@ -13,7 +13,7 @@ public class SeekPreference extends DialogPreference<Integer> {
 	private static final String STATE_ENABLED = "enabled";
 	private static final String STATE_VALUE = "value";
 
-	private final String valueFormat;
+	private final String dialogValueFormat;
 	private final Integer specialValue;
 	private final int minValue;
 	private final int maxValue;
@@ -26,7 +26,8 @@ public class SeekPreference extends DialogPreference<Integer> {
 		if (specialValue != null && specialValue.first >= minValue && specialValue.first <= maxValue) {
 			throw new IllegalArgumentException();
 		}
-		this.valueFormat = valueFormat;
+		int lineBreak = valueFormat != null ? valueFormat.indexOf('\n') : -1;
+		dialogValueFormat = lineBreak >= 0 ? valueFormat.substring(0, lineBreak) : valueFormat;
 		this.specialValue = specialValue != null ? specialValue.first : null;
 		this.minValue = minValue;
 		this.maxValue = maxValue;
@@ -46,7 +47,7 @@ public class SeekPreference extends DialogPreference<Integer> {
 	@Override
 	protected AlertDialog.Builder configureDialog(Bundle savedInstanceState, AlertDialog.Builder builder) {
 		ViewFactory.SeekLayoutHolder holder = ViewFactory.createSeekLayout(builder.getContext(),
-				specialValue != null, minValue, maxValue, step, valueFormat);
+				specialValue != null, minValue, maxValue, step, dialogValueFormat);
 		if (savedInstanceState != null) {
 			holder.setEnabled(savedInstanceState.getBoolean(STATE_ENABLED));
 			holder.setValue(savedInstanceState.getInt(STATE_VALUE));

@@ -105,6 +105,9 @@ public class PostItem implements AttachmentItem.Master, ChanMarkup.MarkupExtra, 
 
 	private HideState hideState = HideState.UNDEFINED;
 	private String hideReason;
+	private int localLikeOffset;
+	private int localDislikeOffset;
+	private Boolean submittedVoteLike;
 
 	private static class ThreadData {
 		public static class Base {
@@ -174,6 +177,37 @@ public class PostItem implements AttachmentItem.Master, ChanMarkup.MarkupExtra, 
 
 	public Post getPost() {
 		return post;
+	}
+
+	public boolean isShowVotes() {
+		return post.vote != null;
+	}
+
+	public int getLikes() {
+		return post.vote != null ? post.vote.likes + localLikeOffset : 0;
+	}
+
+	public int getDislikes() {
+		return post.vote != null ? post.vote.dislikes + localDislikeOffset : 0;
+	}
+
+	public boolean hasSubmittedVote() {
+		return submittedVoteLike != null;
+	}
+
+	public boolean isSubmittedVoteLike() {
+		return Boolean.TRUE.equals(submittedVoteLike);
+	}
+
+	public void applyVote(boolean like) {
+		if (submittedVoteLike == null) {
+			submittedVoteLike = like;
+			if (like) {
+				localLikeOffset++;
+			} else {
+				localDislikeOffset++;
+			}
+		}
 	}
 
 	public static Set<PostNumber> collectReferences(Set<PostNumber> references, String comment) {

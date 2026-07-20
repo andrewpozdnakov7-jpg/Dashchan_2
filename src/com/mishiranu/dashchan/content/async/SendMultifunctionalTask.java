@@ -10,6 +10,7 @@ import chan.content.InvalidResponseException;
 import chan.http.HttpException;
 import chan.http.HttpHolder;
 import com.mishiranu.dashchan.content.model.ErrorItem;
+import com.mishiranu.dashchan.content.model.PostItem;
 import com.mishiranu.dashchan.content.model.PostNumber;
 import java.net.HttpURLConnection;
 import java.util.ArrayList;
@@ -30,7 +31,7 @@ public class SendMultifunctionalTask extends HttpHolderTask<Void, Boolean> {
 	private String archiveThreadNumber;
 	private ErrorItem errorItem;
 
-	public enum Operation {DELETE, REPORT, ARCHIVE}
+	public enum Operation {DELETE, REPORT, VOTE, ARCHIVE}
 
 	public interface Callback {
 		void onSendSuccess(String archiveBoardName, String archiveThreadNumber);
@@ -49,6 +50,8 @@ public class SendMultifunctionalTask extends HttpHolderTask<Void, Boolean> {
 		public List<Pair<String, String>> options;
 
 		public boolean commentField;
+		public boolean like;
+		public PostItem votePostItem;
 
 		public List<PostNumber> postNumbers;
 		public String archiveThreadTitle;
@@ -110,6 +113,11 @@ public class SendMultifunctionalTask extends HttpHolderTask<Void, Boolean> {
 					chan.performer.safe().onSendReportPosts(new ChanPerformer
 							.SendReportPostsData(state.boardName, state.threadNumber,
 							createPostNumberList(state.postNumbers), type, options, text, holder));
+					break;
+				}
+				case VOTE: {
+					chan.performer.safe().onSendVotePost(new ChanPerformer.SendVotePostData(state.boardName,
+							state.threadNumber, state.postNumbers.get(0).toString(), state.like, holder));
 					break;
 				}
 				case ARCHIVE: {

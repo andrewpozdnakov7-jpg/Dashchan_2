@@ -1384,6 +1384,22 @@ public class DialogUnit {
 		showPerformSendDialog(fragmentManager, state, null, null, null, null, true);
 	}
 
+	public void performSendVotePost(FragmentManager fragmentManager, String chanName, PostItem postItem,
+			boolean like) {
+		Chan chan = Chan.get(chanName);
+		ChanConfiguration.Voting voting = chan.configuration.safe().obtainVoting(postItem.getBoardName());
+		if (voting == null || postItem.hasSubmittedVote()
+				|| like && !voting.allowLike || !like && !voting.allowDislike) {
+			return;
+		}
+		SendMultifunctionalTask.State state = new SendMultifunctionalTask.State(SendMultifunctionalTask
+				.Operation.VOTE, chanName, postItem.getBoardName(), postItem.getThreadNumber(), null, null, false);
+		state.postNumbers = Collections.singletonList(postItem.getPostNumber());
+		state.like = like;
+		state.votePostItem = postItem;
+		startMultifunctionalProcess(fragmentManager, state, null, null, null);
+	}
+
 	public void performSendArchiveThread(FragmentManager fragmentManager,
 			String chanName, String boardName, String threadNumber, String threadTitle, Collection<Post> posts) {
 		performSendArchiveThread(uiManager.getContext(), fragmentManager,
@@ -1630,8 +1646,17 @@ public class DialogUnit {
 				public void onSendSuccess(String archiveBoardName, String archiveThreadNumber) {
 					provider.dismiss();
 					switch (state.operation) {
-						case DELETE:
+					case DELETE:
 						case REPORT: {
+							ClickableToast.show(R.string.request_has_been_sent_successfully);
+							break;
+						}
+						case VOTE: {
+							if (state.votePostItem != null) {
+								state.votePostItem.applyVote(state.like);
+								UiManager.extract(provider).sendPostItemMessage(state.votePostItem,
+										UiManager.Message.POST_INVALIDATE_ALL_VIEWS);
+							}
 							ClickableToast.show(R.string.request_has_been_sent_successfully);
 							break;
 						}

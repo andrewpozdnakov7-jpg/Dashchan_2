@@ -335,6 +335,27 @@ public final class Post implements Comparable<Post> {
 	}
 
 	@Public
+	public Post setVote(int likes, int dislikes) {
+		builder.vote = new Vote(likes, dislikes);
+		return this;
+	}
+
+	@Public
+	public int getLikes() {
+		return builder.vote != null ? builder.vote.getLikes() : 0;
+	}
+
+	@Public
+	public int getDislikes() {
+		return builder.vote != null ? builder.vote.getDislikes() : 0;
+	}
+
+	@Public
+	public boolean isShowVotes() {
+		return builder.vote != null && builder.vote.isShowVotes();
+	}
+
+	@Public
 	public boolean isAIGenerated() {
 		return builder.builder.isAIGenerated();
 	}
@@ -364,6 +385,7 @@ public final class Post implements Comparable<Post> {
 		public String parentPostNumber;
 		public Attachment[] attachments;
 		public Icon[] icons;
+		public Vote vote;
 	}
 
 	public com.mishiranu.dashchan.content.model.Post build() {
@@ -398,6 +420,10 @@ public final class Post implements Comparable<Post> {
 					}
 				}
 			}
+		}
+		if (builder.vote != null) {
+			builder.builder.vote = com.mishiranu.dashchan.content.model.Post.Vote.createExternal(
+					builder.vote.getLikes(), builder.vote.getDislikes());
 		}
 		return builder.builder.build(false);
 	}

@@ -125,6 +125,7 @@ public class PhotoView extends View implements ScaleGestureDetector.OnScaleGestu
 
 	public interface Listener {
 		void onClick(PhotoView photoView, boolean image, float x, float y);
+		boolean onDoubleClick(PhotoView photoView, float x, float y);
 		void onLongClick(PhotoView photoView, float x, float y);
 		void onVerticalSwipe(PhotoView photoView, boolean down, float value);
 		boolean onClose(PhotoView photoView, boolean down);
@@ -356,9 +357,12 @@ public class PhotoView extends View implements ScaleGestureDetector.OnScaleGestu
 		if (e.getAction() == MotionEvent.ACTION_DOWN) {
 			isDoubleTapDown = true;
 		} else if (e.getAction() == MotionEvent.ACTION_UP && !scaleGestureDetector.isInProgress()) {
-			float scale = getScale();
 			float x = e.getX();
 			float y = e.getY();
+			if (listener != null && listener.onDoubleClick(this, x, y)) {
+				return true;
+			}
+			float scale = getScale();
 			setScale(scale < doubleTapScale ? doubleTapScale : minimumScale, x, y, true);
 			return true;
 		}

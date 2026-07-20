@@ -232,6 +232,8 @@ public class DvachModelMapper {
 		ArrayList<Icon> icons = null;
 		int likes = 0;
 		int dislikes = 0;
+		boolean likesPresent = false;
+		boolean dislikesPresent = false;
 
 		reader.startObject();
 		while (!reader.endStruct()) {
@@ -400,10 +402,12 @@ public class DvachModelMapper {
 				}
 				case "likes": {
 					likes = reader.nextInt();
+					likesPresent = true;
 					break;
 				}
 				case "dislikes": {
 					dislikes = reader.nextInt();
+					dislikesPresent = true;
 					break;
 				}
 				default: {
@@ -430,6 +434,9 @@ public class DvachModelMapper {
 			comment = comment.replace("\\r\\n", "").replace("\\t", "");
 		}
 		post.setComment(comment);
+		if (likesPresent || dislikesPresent) {
+			post.setVote(likes, dislikes);
+		}
 
 		String userAgentData = null;
 		String identifier = null;

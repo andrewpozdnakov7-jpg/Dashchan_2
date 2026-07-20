@@ -11,6 +11,7 @@ import android.graphics.Paint;
 import android.graphics.PixelFormat;
 import android.graphics.Point;
 import android.graphics.Rect;
+import android.media.AudioManager;
 import android.net.Uri;
 import android.view.ContextThemeWrapper;
 import android.view.Gravity;
@@ -51,6 +52,7 @@ public class VideoUnit {
 	private final PagerInstance instance;
 	private final LinearLayout controlsView;
 	private final AudioFocus audioFocus;
+	private final AudioManager audioManager;
 
 	private int layoutConfiguration = -1;
 	private LinearLayout configurationView;
@@ -73,12 +75,20 @@ public class VideoUnit {
 	private boolean finishedPlayback;
 	private boolean trackingNow;
 	private boolean hideSurfaceOnInit;
+	private int lastNonZeroSystemVolume;
 
 	private ReadVideoCallback readVideoCallback;
 	private boolean playbackSpeedControl;
 
-	public VideoUnit(PagerInstance instance) {
+	public VideoUnit(PagerInstance instance, AudioManager audioManager) {
 		this.instance = instance;
+		this.audioManager = audioManager;
+		if (audioManager != null) {
+			int volume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC);
+			if (volume > 0) {
+				lastNonZeroSystemVolume = volume;
+			}
+		}
 		if (Preferences.isRememberVideoPlaybackSpeed() && Preferences.isPersistVideoPlaybackSpeed()) {
 			playbackSpeed = normalizePlaybackSpeed(Preferences.getSavedVideoPlaybackSpeed());
 		}
@@ -501,18 +511,44 @@ public class VideoUnit {
 	private void updateMuteButton() {
 		if (muteButton != null) {
 			boolean audioPresent = player != null && player.isAudioPresent();
-			boolean enabled = audioPresent && muteSupported;
-			boolean showMuted = !audioPresent || muted;
+			boolean systemMuted = audioManager != null
+					&& audioManager.getStreamVolume(AudioManager.STREAM_MUSIC) <= 0;
+			boolean effectiveMuted = muted || systemMuted;
+			boolean enabled = audioPresent && (muteSupported || systemMuted);
+			boolean showMuted = !audioPresent || effectiveMuted;
 			Context context = muteButton.getContext();
 			muteButton.setEnabled(enabled);
-			muteButton.setActivated(enabled && muted);
+			muteButton.setActivated(enabled && effectiveMuted);
 			muteButton.setAlpha(enabled ? 1f : 0.45f);
 			muteButton.setImageResource(ResourceUtils.getResourceId(context,
 					showMuted ? R.attr.iconActionVolumeOff : R.attr.iconActionVolumeOn, 0));
-			muteButton.setImageTintList(ColorStateList.valueOf(enabled && muted ? 0xffff5252 : Color.WHITE));
+			muteButton.setImageTintList(ColorStateList.valueOf(enabled && effectiveMuted
+					? 0xffff5252 : Color.WHITE));
 			muteButton.setContentDescription(context.getString(!audioPresent ? R.string.video_has_no_audio
-					: muted ? R.string.unmute_video : R.string.mute_video));
+					: effectiveMuted ? R.string.unmute_video : R.string.mute_video));
 		}
+	}
+
+	void onSystemVolumeGestureStart(int volume) {
+		if (volume > 0) {
+			lastNonZeroSystemVolume = volume;
+		}
+		updateMuteButton();
+	}
+
+	void onSystemVolumeGestureProgress(int volume) {
+		if (volume > 0 && muted) {
+			setMuted(false);
+		} else {
+			updateMuteButton();
+		}
+	}
+
+	void onSystemVolumeGestureEnd(int volume) {
+		if (volume > 0) {
+			lastNonZeroSystemVolume = volume;
+		}
+		updateMuteButton();
 	}
 
 	private void setMuted(boolean muted) {
@@ -540,7 +576,30 @@ public class VideoUnit {
 		updateMuteButton();
 	}
 
-	private final View.OnClickListener muteClickListener = v -> setMuted(!muted);
+	private final View.OnClickListener muteClickListener = v -> handleMuteClick();
+
+	private void handleMuteClick() {
+		if (audioManager != null && audioManager.getStreamVolume(AudioManager.STREAM_MUSIC) <= 0) {
+			int maximum = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+			int volume = lastNonZeroSystemVolume > 0 ? Math.min(lastNonZeroSystemVolume, maximum)
+					: Math.max(1, Math.round(maximum * 0.5f));
+			audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, volume, 0);
+			lastNonZeroSystemVolume = volume;
+			if (muted) {
+				setMuted(false);
+			} else {
+				updateMuteButton();
+			}
+		} else {
+			if (!muted && audioManager != null) {
+				int volume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC);
+				if (volume > 0) {
+					lastNonZeroSystemVolume = volume;
+				}
+			}
+			setMuted(!muted);
+		}
+	}
 
 	private final View.OnClickListener playPauseClickListener = new View.OnClickListener() {
 		@Override
@@ -558,6 +617,36 @@ public class VideoUnit {
 			}
 		}
 	};
+
+	public static class SeekResult {
+		public final long position;
+		public final long duration;
+
+		private SeekResult(long position, long duration) {
+			this.position = position;
+			this.duration = duration;
+		}
+	}
+
+	public SeekResult seekBy(long offset) {
+		if (!initialized || player == null) {
+			return null;
+		}
+		long duration = player.getDuration();
+		if (duration <= 0L) {
+			return null;
+		}
+		long position = player.getPosition();
+		long nextPosition = Math.max(0L, Math.min(duration, position + offset));
+		player.setPosition(nextPosition);
+		seekBar.setProgress((int) nextPosition);
+		timeTextView.setText(formatVideoTime(nextPosition));
+		if (finishedPlayback && nextPosition < duration) {
+			finishedPlayback = false;
+			updatePlayState();
+		}
+		return new SeekResult(nextPosition, duration);
+	}
 
 	private final Runnable progressRunnable = new Runnable() {
 		@Override

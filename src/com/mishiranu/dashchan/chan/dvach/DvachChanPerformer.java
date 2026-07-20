@@ -1271,4 +1271,51 @@ public class DvachChanPerformer extends ChanPerformer {
 		}
 	}
 
+	@Override
+	public SendVotePostResult onSendVotePost(SendVotePostData data) throws HttpException, ApiException,
+			InvalidResponseException {
+		DvachChanLocator locator = DvachChanLocator.get(this);
+		Uri uri = locator.buildPath("api", data.isLike ? "like" : "dislike").buildUpon()
+				.appendQueryParameter("board", data.boardName)
+				.appendQueryParameter("num", data.postNumber)
+				.build();
+		String response = new HttpRequest(uri, data).addCookie(buildCookiesWithCaptchaPass()).setGetMethod()
+				.setRedirectHandler(HttpRequest.RedirectHandler.STRICT).perform().readString();
+		try {
+			JSONObject jsonObject = new JSONObject(response);
+			Object resultValue = jsonObject.opt("result");
+			if (Boolean.TRUE.equals(resultValue) || resultValue instanceof Number
+					&& ((Number) resultValue).intValue() == 1 || "1".equals(String.valueOf(resultValue))
+					|| "true".equalsIgnoreCase(String.valueOf(resultValue))) {
+				return new SendVotePostResult();
+			}
+			Object errorValue = jsonObject.opt("error");
+			String error = null;
+			if (errorValue instanceof JSONObject) {
+				JSONObject errorObject = (JSONObject) errorValue;
+				error = errorObject.optString("message", errorObject.optString("error", null));
+			} else if (errorValue != null && errorValue != JSONObject.NULL) {
+				error = errorValue.toString();
+				if (error.startsWith("{")) {
+					JSONObject errorObject = new JSONObject(error);
+					error = errorObject.optString("message", errorObject.optString("error", error));
+				}
+			}
+			if (StringUtils.isEmpty(error)) {
+				error = jsonObject.optString("message", null);
+			}
+			if (!StringUtils.isEmpty(error)) {
+				String lowerError = error.toLowerCase();
+				if (lowerError.contains("уже голос") || lowerError.contains("already voted")
+						|| lowerError.contains("постинг запрещ") || lowerError.contains("posting prohibited")) {
+					throw new ApiException(ApiException.VOTE_ERROR_ALREADY_VOTED);
+				}
+				throw new ApiException(error);
+			}
+			throw new InvalidResponseException();
+		} catch (JSONException e) {
+			throw new InvalidResponseException(e);
+		}
+	}
+
 }

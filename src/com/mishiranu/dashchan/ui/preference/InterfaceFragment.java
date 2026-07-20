@@ -37,7 +37,7 @@ public class InterfaceFragment extends PreferenceFragment {
 		addList(Preferences.KEY_APPLICATION_NAME, Arrays.asList(LauncherIconManager.VALUE_DASHCHAN_2,
 				LauncherIconManager.VALUE_SLOPCHAN, LauncherIconManager.VALUE_DVACH),
 				Preferences.DEFAULT_APPLICATION_NAME, R.string.application_name,
-				Arrays.asList("Dashchan_2", "Slopchan_1", "ДВАЧ"))
+				Arrays.asList("Dashchan_2", "Slopchan_1", "Slooop"))
 				.setOnAfterChangeListener(p -> LauncherIconManager.apply(requireContext(), p.getValue()));
 		if (LauncherIconManager.arePresetLogosReady()) {
 			Preference<Void> logoPreference = addButton(getString(R.string.application_logo), preference ->
@@ -52,10 +52,6 @@ public class InterfaceFragment extends PreferenceFragment {
 
 		addHeader(R.string.appearance);
 		String scaleFormat = ResourceUtils.getColonString(getResources(), R.string.scale, "%d%%");
-		addSeek(Preferences.KEY_TEXT_SCALE, Preferences.DEFAULT_TEXT_SCALE,
-				getString(R.string.text_scale), scaleFormat, null,
-				Preferences.MIN_TEXT_SCALE, Preferences.MAX_TEXT_SCALE, Preferences.STEP_TEXT_SCALE)
-				.setOnAfterChangeListener(p -> requireActivity().recreate());
 		addSeek(Preferences.KEY_THUMBNAILS_SCALE, Preferences.DEFAULT_THUMBNAILS_SCALE,
 				getString(R.string.thumbnail_scale), scaleFormat, null,
 				Preferences.MIN_THUMBNAILS_SCALE, Preferences.MAX_THUMBNAILS_SCALE, Preferences.STEP_THUMBNAILS_SCALE)

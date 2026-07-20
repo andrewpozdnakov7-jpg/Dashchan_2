@@ -42,6 +42,8 @@ public final class ApiException extends Exception {
 	@Public public static final int REPORT_ERROR_EMPTY_COMMENT = 302;
 	@Public public static final int ARCHIVE_ERROR_NO_ACCESS = 400;
 	@Public public static final int ARCHIVE_ERROR_TOO_OFTEN = 401;
+	@Public public static final int VOTE_ERROR_POSTING_PROHIBITED = 500;
+	@Public public static final int VOTE_ERROR_ALREADY_VOTED = VOTE_ERROR_POSTING_PROHIBITED;
 
 	@Public public static final int FLAG_KEEP_CAPTCHA = 0x00000001;
 
@@ -224,6 +226,10 @@ public final class ApiException extends Exception {
 			}
 			case ApiException.ARCHIVE_ERROR_TOO_OFTEN: {
 				resId = R.string.you_cant_send_too_often;
+				break;
+			}
+			case ApiException.VOTE_ERROR_POSTING_PROHIBITED: {
+				resId = R.string.vote_already_submitted;
 				break;
 			}
 		}

@@ -92,6 +92,34 @@
 		android:paddingRight="12dp"
 		android:paddingBottom="2dp" />
 
+	<com.mishiranu.dashchan.widget.LinebreakLayout
+		android:id="@+id/voting"
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:horizontalSpacing="4dp"
+		android:paddingLeft="6dp"
+		android:paddingRight="6dp"
+		android:paddingBottom="2dp"
+		android:visibility="gone">
+
+		<TextView
+			android:id="@+id/vote_like"
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:drawableStart="@drawable/ic_vote_like"
+			android:drawablePadding="4dp"
+			style="@style/Widget.PostButton" />
+
+		<TextView
+			android:id="@+id/vote_dislike"
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:drawableStart="@drawable/ic_vote_dislike"
+			android:drawablePadding="4dp"
+			style="@style/Widget.PostButton" />
+
+	</com.mishiranu.dashchan.widget.LinebreakLayout>
+
 	<View
 		android:id="@+id/text_selection_padding"
 		android:layout_width="match_parent"

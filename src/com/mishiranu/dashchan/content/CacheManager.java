@@ -30,7 +30,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 
 public class CacheManager implements Runnable {
 	private static final int MAX_THUMBNAILS_PART = 1;
-	private static final int MAX_MEDIA_PART = 2;
+	private static final int MAX_MEDIA_PART = 4;
 
 	private static final float TRIM_FACTOR = 0.3f;
 

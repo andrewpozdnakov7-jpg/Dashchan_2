@@ -147,11 +147,26 @@ public final class Post implements Comparable<Post> {
 	public final String email;
 	public final List<Attachment> attachments;
 	public final List<Icon> icons;
+	public final Vote vote;
+
+	public static final class Vote {
+		public final int likes;
+		public final int dislikes;
+
+		private Vote(int likes, int dislikes) {
+			this.likes = Math.max(0, likes);
+			this.dislikes = Math.max(0, dislikes);
+		}
+
+		public static Vote createExternal(int likes, int dislikes) {
+			return new Vote(likes, dislikes);
+		}
+	}
 
 	private Post(PostNumber number, boolean deleted, int flags, long timestamp,
 			String subject, String comment, String commentMarkup,
 			String name, String identifier, String tripcode, String capcode, String email,
-			List<Attachment> attachments, List<Icon> icons) {
+			List<Attachment> attachments, List<Icon> icons, Vote vote) {
 		this.number = number;
 		this.deleted = deleted;
 		this.flags = flags;
@@ -166,6 +181,7 @@ public final class Post implements Comparable<Post> {
 		this.email = email;
 		this.attachments = attachments;
 		this.icons = icons;
+		this.vote = vote;
 	}
 
 	public boolean isSage() {
@@ -338,6 +354,15 @@ public final class Post implements Comparable<Post> {
 			}
 			writer.endArray();
 		}
+		if (vote != null) {
+			writer.name("vote");
+			writer.startObject();
+			writer.name("likes");
+			writer.value(vote.likes);
+			writer.name("dislikes");
+			writer.value(vote.dislikes);
+			writer.endObject();
+		}
 		writer.endObject();
 	}
 
@@ -355,6 +380,7 @@ public final class Post implements Comparable<Post> {
 		String email = "";
 		List<Attachment> attachments = Collections.emptyList();
 		List<Icon> icons = Collections.emptyList();
+		Vote vote = null;
 		reader.startObject();
 		while (!reader.endStruct()) {
 			switch (reader.nextName()) {
@@ -513,6 +539,29 @@ public final class Post implements Comparable<Post> {
 					}
 					break;
 				}
+				case "vote": {
+					int likes = 0;
+					int dislikes = 0;
+					reader.startObject();
+					while (!reader.endStruct()) {
+						switch (reader.nextName()) {
+							case "likes": {
+								likes = reader.nextInt();
+								break;
+							}
+							case "dislikes": {
+								dislikes = reader.nextInt();
+								break;
+							}
+							default: {
+								reader.skip();
+								break;
+							}
+						}
+					}
+					vote = new Vote(likes, dislikes);
+					break;
+				}
 				default: {
 					reader.skip();
 					break;
@@ -520,7 +569,7 @@ public final class Post implements Comparable<Post> {
 			}
 		}
 		return new Post(number, deleted, flags, timestamp, subject, comment, commentMarkup,
-				name, identifier, tripcode, capcode, email, attachments, icons);
+				name, identifier, tripcode, capcode, email, attachments, icons, vote);
 	}
 
 	public static final class Builder {
@@ -537,6 +586,7 @@ public final class Post implements Comparable<Post> {
 		public String email;
 		public List<Attachment> attachments;
 		public List<Icon> icons;
+		public Vote vote;
 
 		public boolean isSage() {
 			return FlagUtils.get(flags, Flags.SAGE);
@@ -648,7 +698,7 @@ public final class Post implements Comparable<Post> {
 				icons = Collections.emptyList();
 			}
 			return new Post(number, deleted, flags, timestamp, subject, comment, commentMarkup,
-					name, identifier, tripcode, capcode, email, attachments, icons);
+					name, identifier, tripcode, capcode, email, attachments, icons, vote);
 		}
 	}
 }

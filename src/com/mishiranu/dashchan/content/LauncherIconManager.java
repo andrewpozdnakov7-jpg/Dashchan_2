@@ -27,6 +27,11 @@ public final class LauncherIconManager {
 	public static final String LOGO_4 = "logo_4";
 	public static final String LOGO_5 = "logo_5";
 	public static final String LOGO_6 = "logo_6";
+	public static final String LOGO_7 = "logo_7";
+	public static final String LOGO_8 = "logo_8";
+	public static final String LOGO_9 = "logo_9";
+	public static final String LOGO_10 = "logo_10";
+	public static final String LOGO_11 = "logo_11";
 	public static final String LOGO_DVACH_PASS = "dvach_pass";
 	public static final String LOGO_SUBSCRIBER = "subscriber";
 
@@ -56,6 +61,8 @@ public final class LauncherIconManager {
 					LogoAccess.PUBLIC, ""),
 			new LogoOption(LOGO_2, R.string.application_logo_2, R.drawable.application_logo_2,
 					LogoAccess.PUBLIC, "Logo2"),
+			new LogoOption(LOGO_7, R.string.application_logo_7, R.drawable.application_logo_7,
+					LogoAccess.PUBLIC, "Logo7"),
 			new LogoOption(LOGO_3, R.string.application_logo_3, R.drawable.application_logo_3,
 					LogoAccess.PUBLIC, "Logo3"),
 			new LogoOption(LOGO_4, R.string.application_logo_4, R.drawable.application_logo_4,
@@ -64,6 +71,14 @@ public final class LauncherIconManager {
 					LogoAccess.PUBLIC, "Logo5"),
 			new LogoOption(LOGO_6, R.string.application_logo_6, R.drawable.application_logo_6,
 					LogoAccess.PUBLIC, "Logo6"),
+			new LogoOption(LOGO_8, R.string.application_logo_8, R.drawable.application_logo_8,
+					LogoAccess.PUBLIC, "Logo8"),
+			new LogoOption(LOGO_9, R.string.application_logo_9, R.drawable.application_logo_9,
+					LogoAccess.PUBLIC, "Logo9"),
+			new LogoOption(LOGO_10, R.string.application_logo_10, R.drawable.application_logo_10,
+					LogoAccess.PUBLIC, "Logo10"),
+			new LogoOption(LOGO_11, R.string.application_logo_11, R.drawable.application_logo_11,
+					LogoAccess.PUBLIC, "Logo11"),
 			new LogoOption(LOGO_DVACH_PASS, R.string.application_logo_dvach_pass,
 					R.drawable.application_logo_pass, LogoAccess.DVACH_PASS, "Pass"),
 			new LogoOption(LOGO_SUBSCRIBER, R.string.application_logo_subscriber,

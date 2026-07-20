@@ -31,7 +31,6 @@ import com.mishiranu.dashchan.content.async.HttpHolderTask;
 import com.mishiranu.dashchan.content.async.ReadUpdateTask;
 import com.mishiranu.dashchan.content.async.TaskViewModel;
 import com.mishiranu.dashchan.content.model.ErrorItem;
-import com.mishiranu.dashchan.content.model.FileHolder;
 import com.mishiranu.dashchan.content.service.DownloadService;
 import com.mishiranu.dashchan.ui.DialogMenu;
 import com.mishiranu.dashchan.ui.FragmentHandler;
@@ -49,6 +48,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -149,8 +149,9 @@ public class ThemesFragment extends BaseListFragment {
 					mimeType = "*/*";
 				}
 				// SHOW_ADVANCED to show folder navigation
-				Intent intent = new Intent(Intent.ACTION_GET_CONTENT).addCategory(Intent.CATEGORY_OPENABLE)
-						.setType(mimeType).putExtra("android.content.extra.SHOW_ADVANCED", true);
+				Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
+						.setType(mimeType).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+						.putExtra("android.content.extra.SHOW_ADVANCED", true);
 				startActivityForResult(intent, C.REQUEST_CODE_ATTACH);
 				return true;
 			}
@@ -160,42 +161,79 @@ public class ThemesFragment extends BaseListFragment {
 
 	@Override
 	public void onActivityResult(int requestCode, int resultCode, Intent data) {
-		if (resultCode == Activity.RESULT_OK) {
+		super.onActivityResult(requestCode, resultCode, data);
+		if (resultCode == Activity.RESULT_OK && data != null) {
 			switch (requestCode) {
 				case C.REQUEST_CODE_ATTACH: {
 					Uri uri = data.getData();
-					FileHolder fileHolder = uri != null ? FileHolder.obtain(uri) : null;
-					if (fileHolder != null) {
+					if (uri != null) {
 						ByteArrayOutputStream output = new ByteArrayOutputStream();
 						boolean success;
-						try (InputStream input = fileHolder.openInputStream()) {
+						try (InputStream input = requireContext().getContentResolver().openInputStream(uri)) {
+							if (input == null) {
+								throw new IOException("Input stream is empty");
+							}
 							IOUtils.copyStream(input, output);
 							success = true;
-						} catch (IOException e) {
+						} catch (IOException | SecurityException e) {
 							e.printStackTrace();
 							success = false;
+							ClickableToast.show(R.string.no_access_to_memory);
 						}
 						byte[] array = output.toByteArray();
 						if (success && array.length > 0) {
 							JSONObject jsonObject;
 							try {
-								jsonObject = new JSONObject(new String(array));
+								jsonObject = new JSONObject(new String(array, StandardCharsets.UTF_8));
 							} catch (JSONException e) {
 								jsonObject = null;
 							}
 							ThemeEngine.Theme theme = jsonObject != null
-									? ThemeEngine.parseTheme(requireContext(), jsonObject) : null;
+									? prepareImportedTheme(jsonObject) : null;
 							if (theme != null) {
 								installTheme(theme, false);
 							} else {
 								ClickableToast.show(R.string.invalid_data_format);
 							}
+						} else if (success) {
+							ClickableToast.show(R.string.invalid_data_format);
 						}
 					}
 					break;
 				}
 			}
 		}
+	}
+
+	private ThemeEngine.Theme prepareImportedTheme(JSONObject jsonObject) {
+		ThemeEngine.Theme theme = ThemeEngine.parseTheme(requireContext(), jsonObject);
+		if (theme == null) {
+			return null;
+		}
+		HashSet<String> names = new HashSet<>();
+		for (ThemeEngine.Theme existingTheme : ThemeEngine.getThemes()) {
+			names.add(existingTheme.name);
+		}
+		if (!names.contains(theme.name)) {
+			return theme;
+		}
+		String uniqueName;
+		for (int index = 1;; index++) {
+			uniqueName = theme.name + "_" + index;
+			if (!names.contains(uniqueName)) {
+				break;
+			}
+		}
+		try {
+			jsonObject.put("name", uniqueName);
+		} catch (JSONException e) {
+			return null;
+		}
+		theme = ThemeEngine.parseTheme(requireContext(), jsonObject);
+		if (theme != null) {
+			ClickableToast.show(getString(R.string.theme_imported_as_format, uniqueName));
+		}
+		return theme;
 	}
 
 	@Override
@@ -245,7 +283,7 @@ public class ThemesFragment extends BaseListFragment {
 			if (ThemeEngine.addTheme(theme)) {
 				updateThemes();
 			} else {
-				ClickableToast.show(R.string.no_access);
+				ClickableToast.show(R.string.built_in_theme_name_conflict);
 				return;
 			}
 		}

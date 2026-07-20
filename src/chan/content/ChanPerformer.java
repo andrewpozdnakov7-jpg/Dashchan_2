@@ -193,6 +193,13 @@ public class ChanPerformer implements Chan.Linked {
 
 	@SuppressWarnings("RedundantThrows")
 	@Extendable
+	protected SendVotePostResult onSendVotePost(SendVotePostData data) throws HttpException, ApiException,
+			InvalidResponseException {
+		throw new UnsupportedOperationException();
+	}
+
+	@SuppressWarnings("RedundantThrows")
+	@Extendable
 	protected SendAddToArchiveResult onSendAddToArchive(SendAddToArchiveData data) throws HttpException, ApiException,
 			InvalidResponseException {
 		throw new UnsupportedOperationException();
@@ -1182,6 +1189,37 @@ public class ChanPerformer implements Chan.Linked {
 	}
 
 	@Public
+	public static class SendVotePostData implements HttpRequest.Preset {
+		@Public public final String boardName;
+		@Public public final String threadNumber;
+		@Public public final String postNumber;
+		@Public public final boolean isLike;
+		@Public public final boolean isDislike;
+		public final HttpHolder holder;
+
+		public SendVotePostData(String boardName, String threadNumber, String postNumber, boolean isLike,
+				HttpHolder holder) {
+			this.boardName = boardName;
+			this.threadNumber = threadNumber;
+			this.postNumber = postNumber;
+			this.isLike = isLike;
+			this.isDislike = !isLike;
+			this.holder = holder;
+		}
+
+		@Override
+		public HttpHolder getHolder() {
+			return holder;
+		}
+	}
+
+	@Public
+	public static final class SendVotePostResult {
+		@Public
+		public SendVotePostResult() {}
+	}
+
+	@Public
 	public static class SendAddToArchiveData implements HttpRequest.Preset {
 		@Public public final Uri uri;
 		@Public public final String boardName;
@@ -1481,6 +1519,18 @@ public class ChanPerformer implements Chan.Linked {
 			PerformerContext context = performer.enterContext();
 			try {
 				return performer.onSendReportPosts(data);
+			} catch (LinkageError | RuntimeException e) {
+				throw new ExtensionException(e);
+			} finally {
+				performer.exitContext(context);
+			}
+		}
+
+		public SendVotePostResult onSendVotePost(SendVotePostData data) throws ExtensionException,
+				HttpException, ApiException, InvalidResponseException {
+			PerformerContext context = performer.enterContext();
+			try {
+				return performer.onSendVotePost(data);
 			} catch (LinkageError | RuntimeException e) {
 				throw new ExtensionException(e);
 			} finally {

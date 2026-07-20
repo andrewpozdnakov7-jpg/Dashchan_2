@@ -357,13 +357,27 @@ public class Preferences {
 	}
 
 	public static final String KEY_CACHE_SIZE = "cache_size";
-	public static final int MIN_CACHE_SIZE = 100;
-	public static final int MAX_CACHE_SIZE = 800;
-	public static final int STEP_CACHE_SIZE = 50;
-	public static final int DEFAULT_CACHE_SIZE = 200;
+	private static final String KEY_CACHE_SIZE_1GB_MIGRATED = "cache_size_1gb_migrated";
+	public static final int MIN_CACHE_SIZE = 300;
+	public static final int MAX_CACHE_SIZE = 8000;
+	public static final int STEP_CACHE_SIZE = 100;
+	public static final int DEFAULT_CACHE_SIZE = 1000;
+
+	static {
+		if (PREFERENCES != null && !PREFERENCES.getBoolean(KEY_CACHE_SIZE_1GB_MIGRATED, false)) {
+			Object value = PREFERENCES.getAll().get(KEY_CACHE_SIZE);
+			try (SharedPreferences.Editor editor = PREFERENCES.edit()) {
+				editor.put(KEY_CACHE_SIZE_1GB_MIGRATED, true);
+				if (value instanceof Integer && (int) value < DEFAULT_CACHE_SIZE) {
+					editor.put(KEY_CACHE_SIZE, DEFAULT_CACHE_SIZE);
+				}
+			}
+		}
+	}
 
 	public static int getCacheSize() {
-		return PREFERENCES.getInt(KEY_CACHE_SIZE, DEFAULT_CACHE_SIZE);
+		return Math.max(MIN_CACHE_SIZE, Math.min(MAX_CACHE_SIZE,
+				PREFERENCES.getInt(KEY_CACHE_SIZE, DEFAULT_CACHE_SIZE)));
 	}
 
 	public static final ChanKey KEY_CAPTCHA = new ChanKey("captcha");
@@ -1424,7 +1438,7 @@ public class Preferences {
 
 	public static final String KEY_TEXT_SCALE = "text_scale";
 	public static final int MIN_TEXT_SCALE = 75;
-	public static final int MAX_TEXT_SCALE = 200;
+	public static final int MAX_TEXT_SCALE = 500;
 	public static final int STEP_TEXT_SCALE = 5;
 	public static final int DEFAULT_TEXT_SCALE = 100;
 
@@ -1612,6 +1626,31 @@ public class Preferences {
 
 	public static boolean isVideoVolumeGesture() {
 		return PREFERENCES.getBoolean(KEY_VIDEO_VOLUME_GESTURE, DEFAULT_VIDEO_VOLUME_GESTURE);
+	}
+
+	public static final String KEY_VIDEO_DOUBLE_TAP_SEEK = "video_double_tap_seek";
+	public static final boolean DEFAULT_VIDEO_DOUBLE_TAP_SEEK = true;
+
+	public static boolean isVideoDoubleTapSeek() {
+		return PREFERENCES.getBoolean(KEY_VIDEO_DOUBLE_TAP_SEEK, DEFAULT_VIDEO_DOUBLE_TAP_SEEK);
+	}
+
+	public static final String KEY_VIDEO_DOUBLE_TAP_SEEK_INTERVAL = "video_double_tap_seek_interval";
+	public static final String DEFAULT_VIDEO_DOUBLE_TAP_SEEK_INTERVAL = "5";
+
+	public static int getVideoDoubleTapSeekInterval() {
+		try {
+			int value = Integer.parseInt(PREFERENCES.getString(KEY_VIDEO_DOUBLE_TAP_SEEK_INTERVAL,
+					DEFAULT_VIDEO_DOUBLE_TAP_SEEK_INTERVAL));
+			for (int allowed : new int[] {5, 10, 15, 30, 60}) {
+				if (value == allowed) {
+					return value;
+				}
+			}
+		} catch (Exception e) {
+			return Integer.parseInt(DEFAULT_VIDEO_DOUBLE_TAP_SEEK_INTERVAL);
+		}
+		return Integer.parseInt(DEFAULT_VIDEO_DOUBLE_TAP_SEEK_INTERVAL);
 	}
 
 	public static final String KEY_VIDEO_PLAYBACK_SPEED_CONTROL = "video_playback_speed_control";

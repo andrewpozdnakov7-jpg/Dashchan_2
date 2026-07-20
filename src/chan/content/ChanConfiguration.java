@@ -118,6 +118,7 @@ public class ChanConfiguration implements Chan.Linked {
 		@Public public boolean allowPosting;
 		@Public public boolean allowDeleting;
 		@Public public boolean allowReporting;
+		@Public public boolean allowVotes;
 
 		@Public
 		public Board() {}
@@ -195,6 +196,15 @@ public class ChanConfiguration implements Chan.Linked {
 
 		@Public
 		public Reporting() {}
+	}
+
+	@Public
+	public static final class Voting {
+		@Public public boolean allowLike;
+		@Public public boolean allowDislike;
+
+		@Public
+		public Voting() {}
 	}
 
 	@Public
@@ -662,6 +672,11 @@ public class ChanConfiguration implements Chan.Linked {
 	}
 
 	@Extendable
+	protected Voting obtainVotingConfiguration(String boardName) {
+		return null;
+	}
+
+	@Extendable
 	protected Authorization obtainCaptchaPassConfiguration() {
 		Authorization authorization = new Authorization();
 		authorization.fieldsCount = 1;
@@ -859,6 +874,16 @@ public class ChanConfiguration implements Chan.Linked {
 				ExtensionException.logException(e, false);
 			}
 			return reporting;
+		}
+
+		public Voting obtainVoting(String boardName) {
+			Voting voting = null;
+			try {
+				voting = configuration.obtainVotingConfiguration(boardName);
+			} catch (LinkageError | RuntimeException e) {
+				ExtensionException.logException(e, false);
+			}
+			return voting;
 		}
 
 		public Authorization obtainCaptchaPass() {

@@ -347,6 +347,18 @@ public class InteractionUnit {
 					configurationSet.chanName, postItem, PostCopyShareAction.SHARE_LINK));
 		}
 		if (!postItem.isDeleted()) {
+			ChanConfiguration.Voting voting = board.allowVotes
+					? chan.configuration.safe().obtainVoting(postItem.getBoardName()) : null;
+			if (voting != null && !postItem.hasSubmittedVote()) {
+				if (voting.allowLike) {
+					dialogMenu.add(R.string.vote_like, () -> uiManager.dialog().performSendVotePost(
+							configurationSet.fragmentManager, chan.name, postItem, true));
+				}
+				if (voting.allowDislike) {
+					dialogMenu.add(R.string.vote_dislike, () -> uiManager.dialog().performSendVotePost(
+							configurationSet.fragmentManager, chan.name, postItem, false));
+				}
+			}
 			if (board.allowReporting) {
 				dialogMenu.add(R.string.report, () -> uiManager.dialog()
 						.performSendReportPosts(configurationSet.fragmentManager, chan.name, postItem.getBoardName(),

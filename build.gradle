@@ -140,7 +140,7 @@ android {
 		minSdk = 30
 		targetSdk = 30
 		manifestPlaceholders = [
-				appLabel: 'ДВАЧ',
+				appLabel: 'Slooop',
 				fileProviderAuthority: 'com.mishiranu.providers.dashchan'
 		]
 
@@ -235,7 +235,7 @@ android {
 	buildTypes.create('ndebug') {
 		debuggable = false
 		manifestPlaceholders = [
-				appLabel: 'ДВАЧ',
+				appLabel: 'Slooop',
 				fileProviderAuthority: 'io.dashchan2.provider'
 		]
 		buildConfigField 'String', 'FILE_PROVIDER_AUTHORITY', '"io.dashchan2.provider"'

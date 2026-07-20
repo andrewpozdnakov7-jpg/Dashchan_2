@@ -13,6 +13,7 @@ import android.graphics.drawable.ShapeDrawable;
 import android.graphics.drawable.shapes.Shape;
 import android.media.AudioManager;
 import android.net.Uri;
+import android.os.SystemClock;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -58,18 +59,24 @@ public class PagerUnit implements PagerInstance.Callback {
 	private final PagerAdapter pagerAdapter;
 	private final AudioManager audioManager;
 	private final TextView volumeGestureView;
+	private final TextView seekGestureView;
 	private int volumeGestureStart;
+	private int volumeGestureCurrent;
 	private int volumeGestureMaximum;
 	private final Runnable hideVolumeGesture;
+	private final Runnable hideSeekGesture;
+	private int seekGestureDirection;
+	private int seekGestureSeconds;
+	private long lastSeekGestureTime;
 
 	public PagerUnit(GalleryInstance instance) {
 		galleryInstance = instance;
 		pagerInstance = new PagerInstance(instance, this);
 		imageUnit = new ImageUnit(pagerInstance);
-		videoUnit = new VideoUnit(pagerInstance);
+		audioManager = (AudioManager) instance.context.getSystemService(Context.AUDIO_SERVICE);
+		videoUnit = new VideoUnit(pagerInstance, audioManager);
 		float density = ResourceUtils.obtainDensity(instance.context);
 		viewPagerParent = new FrameLayout(instance.context);
-		audioManager = (AudioManager) instance.context.getSystemService(Context.AUDIO_SERVICE);
 		pagerAdapter = new PagerAdapter(instance.galleryItems);
 		pagerAdapter.setWaitBeforeNextVideo(PhotoView.INITIAL_SCALE_TRANSITION_TIME + 100);
 		viewPager = new PhotoViewPager(instance.context, pagerAdapter);
@@ -93,6 +100,27 @@ public class PagerUnit implements PagerInstance.Callback {
 		hideVolumeGesture = () -> volumeGestureView.setVisibility(View.GONE);
 		viewPagerParent.addView(volumeGestureView, new FrameLayout.LayoutParams(
 				FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER));
+		seekGestureView = new TextView(instance.context);
+		seekGestureView.setTextColor(Color.WHITE);
+		seekGestureView.setTextSize(20f);
+		seekGestureView.setGravity(Gravity.CENTER);
+		seekGestureView.setPadding(horizontalPadding, verticalPadding, horizontalPadding, verticalPadding);
+		GradientDrawable seekBackground = new GradientDrawable();
+		seekBackground.setColor(0xcc202020);
+		seekBackground.setCornerRadius(4f * density);
+		seekGestureView.setBackground(seekBackground);
+		seekGestureView.setVisibility(View.GONE);
+		hideSeekGesture = () -> {
+			seekGestureView.setVisibility(View.GONE);
+			seekGestureDirection = 0;
+			seekGestureSeconds = 0;
+		};
+		FrameLayout.LayoutParams seekLayoutParams = new FrameLayout.LayoutParams(
+				FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT,
+				Gravity.CENTER_VERTICAL | Gravity.START);
+		seekLayoutParams.setMarginStart((int) (32f * density));
+		seekLayoutParams.setMarginEnd((int) (32f * density));
+		viewPagerParent.addView(seekGestureView, seekLayoutParams);
 		viewPager.setCount(instance.galleryItems.size());
 		PagerUnitViewModel viewModel = new ViewModelProvider(instance.callback).get(PagerUnitViewModel.class);
 		viewModel.pagerUnit = new WeakReference<>(this);
@@ -136,6 +164,8 @@ public class PagerUnit implements PagerInstance.Callback {
 		resumed = false;
 		volumeGestureView.removeCallbacks(hideVolumeGesture);
 		volumeGestureView.setVisibility(View.GONE);
+		seekGestureView.removeCallbacks(hideSeekGesture);
+		hideSeekGesture.run();
 		videoUnit.onPause();
 	}
 
@@ -282,12 +312,16 @@ public class PagerUnit implements PagerInstance.Callback {
 	}
 
 	private void interrupt(boolean force) {
+		seekGestureView.removeCallbacks(hideSeekGesture);
+		hideSeekGesture.run();
 		imageUnit.interrupt(force);
 		videoUnit.interrupt();
 	}
 
 	public void onFinish() {
 		volumeGestureView.removeCallbacks(hideVolumeGesture);
+		seekGestureView.removeCallbacks(hideSeekGesture);
+		hideSeekGesture.run();
 		PagerInstance.ViewHolder[] holders = {pagerInstance.leftHolder,
 				pagerInstance.currentHolder, pagerInstance.rightHolder};
 		for (PagerInstance.ViewHolder holder : holders) {
@@ -465,6 +499,25 @@ public class PagerUnit implements PagerInstance.Callback {
 		}
 
 		@Override
+		public boolean onDoubleClick(PhotoView photoView, float x, float y) {
+			PagerInstance.ViewHolder holder = pagerInstance.currentHolder;
+			if (holder == null || holder.galleryItem == null
+					|| !holder.galleryItem.isVideo(Chan.get(galleryInstance.chanName))) {
+				return false;
+			}
+			if (!Preferences.isVideoDoubleTapSeek()) {
+				return true;
+			}
+			int direction = x < photoView.getWidth() / 2f ? -1 : 1;
+			int seconds = Preferences.getVideoDoubleTapSeekInterval();
+			VideoUnit.SeekResult result = videoUnit.seekBy(direction * seconds * 1000L);
+			if (result != null) {
+				showSeekGesture(direction, seconds, result);
+			}
+			return true;
+		}
+
+		@Override
 		public void onLongClick(PhotoView photoView, float x, float y) {
 			displayPopupMenu(galleryInstance.callback.getChildFragmentManager());
 		}
@@ -487,6 +540,32 @@ public class PagerUnit implements PagerInstance.Callback {
 			return true;
 		}
 	};
+
+	private void showSeekGesture(int direction, int seconds, VideoUnit.SeekResult result) {
+		long now = SystemClock.uptimeMillis();
+		if (direction == seekGestureDirection && now - lastSeekGestureTime <= 900L) {
+			seekGestureSeconds += seconds;
+		} else {
+			seekGestureDirection = direction;
+			seekGestureSeconds = seconds;
+		}
+		lastSeekGestureTime = now;
+		if (result.position <= 0L) {
+			seekGestureView.setText(R.string.video_seek_beginning);
+		} else if (result.position >= result.duration) {
+			seekGestureView.setText(R.string.video_seek_end);
+		} else {
+			seekGestureView.setText(galleryInstance.context.getString(direction < 0
+					? R.string.video_seek_backward__format : R.string.video_seek_forward__format,
+					seekGestureSeconds));
+		}
+		FrameLayout.LayoutParams layoutParams = (FrameLayout.LayoutParams) seekGestureView.getLayoutParams();
+		layoutParams.gravity = Gravity.CENTER_VERTICAL | (direction < 0 ? Gravity.START : Gravity.END);
+		seekGestureView.setLayoutParams(layoutParams);
+		seekGestureView.removeCallbacks(hideSeekGesture);
+		seekGestureView.setVisibility(View.VISIBLE);
+		seekGestureView.postDelayed(hideSeekGesture, 700L);
+	}
 
 	private static class PlayShape extends Shape {
 		private final Path path = new Path();
@@ -631,7 +710,7 @@ public class PagerUnit implements PagerInstance.Callback {
 			boolean landscape = galleryInstance.context.getResources().getConfiguration().orientation
 					== Configuration.ORIENTATION_LANDSCAPE;
 			if (!Preferences.isVideoVolumeGesture()
-					|| x < view.getWidth() * 0.8f || (landscape && y < view.getHeight() * 0.4f)
+					|| x < view.getWidth() * 0.7f || (landscape && y < view.getHeight() * 0.4f)
 					|| !videoUnit.isAudioPresent() || audioManager == null
 					|| audioManager.isVolumeFixed()) {
 				return false;
@@ -646,6 +725,8 @@ public class PagerUnit implements PagerInstance.Callback {
 				return false;
 			}
 			volumeGestureStart = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC);
+			volumeGestureCurrent = volumeGestureStart;
+			videoUnit.onSystemVolumeGestureStart(volumeGestureStart);
 			volumeGestureView.removeCallbacks(hideVolumeGesture);
 			int percent = Math.round(100f * volumeGestureStart / volumeGestureMaximum);
 			volumeGestureView.setText(galleryInstance.context.getString(R.string.video_volume__format, percent));
@@ -658,13 +739,18 @@ public class PagerUnit implements PagerInstance.Callback {
 			int volume = volumeGestureStart + Math.round(distance / Math.max(1, view.getHeight())
 					* volumeGestureMaximum);
 			volume = Math.max(0, Math.min(volumeGestureMaximum, volume));
-			audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, volume, 0);
+			if (volume != volumeGestureCurrent) {
+				volumeGestureCurrent = volume;
+				audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, volume, 0);
+				videoUnit.onSystemVolumeGestureProgress(volume);
+			}
 			int percent = Math.round(100f * volume / volumeGestureMaximum);
 			volumeGestureView.setText(galleryInstance.context.getString(R.string.video_volume__format, percent));
 		}
 
 		@Override
 		public void onVerticalGestureEnd(PhotoViewPager view) {
+			videoUnit.onSystemVolumeGestureEnd(volumeGestureCurrent);
 			volumeGestureView.removeCallbacks(hideVolumeGesture);
 			volumeGestureView.postDelayed(hideVolumeGesture, 600);
 		}

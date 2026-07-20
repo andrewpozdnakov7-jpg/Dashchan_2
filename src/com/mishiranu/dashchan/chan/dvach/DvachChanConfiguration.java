@@ -65,6 +65,7 @@ public class DvachChanConfiguration extends ChanConfiguration {
 		board.allowArchive = true;
 		board.allowPosting = true;
 		board.allowReporting = true;
+		board.allowVotes = get(boardName, KEY_LIKES_ENABLED, false);
 		return board;
 	}
 
@@ -122,6 +123,17 @@ public class DvachChanConfiguration extends ChanConfiguration {
 		reporting.comment = true;
 		reporting.multiplePosts = true;
 		return reporting;
+	}
+
+	@Override
+	public Voting obtainVotingConfiguration(String boardName) {
+		if (!get(boardName, KEY_LIKES_ENABLED, false)) {
+			return null;
+		}
+		Voting voting = new Voting();
+		voting.allowLike = true;
+		voting.allowDislike = true;
+		return voting;
 	}
 
 	private volatile int filesCount = -1;

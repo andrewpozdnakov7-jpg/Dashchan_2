@@ -32,6 +32,9 @@ import com.mishiranu.dashchan.util.IOUtils;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.util.SharedPreferences;
 import com.mishiranu.dashchan.widget.ProgressDialog;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 public class MediaFragment extends PreferenceFragment implements FragmentHandler.Callback {
 	private static final String EXTRA_IN_STORAGE_REQUEST = "inStorageRequest";
@@ -122,6 +125,17 @@ public class MediaFragment extends PreferenceFragment implements FragmentHandler
 		addCheck(true, Preferences.KEY_VIDEO_VOLUME_GESTURE, Preferences.DEFAULT_VIDEO_VOLUME_GESTURE,
 				R.string.video_volume_gesture, R.string.video_volume_gesture__summary)
 				.setEnabled(playerLoadResult.first);
+		addCheck(true, Preferences.KEY_VIDEO_DOUBLE_TAP_SEEK, Preferences.DEFAULT_VIDEO_DOUBLE_TAP_SEEK,
+				R.string.video_double_tap_seek, R.string.video_double_tap_seek__summary)
+				.setEnabled(playerLoadResult.first);
+		List<String> seekIntervalValues = Arrays.asList("5", "10", "15", "30", "60");
+		List<CharSequence> seekIntervalEntries = new ArrayList<>(seekIntervalValues.size());
+		for (String value : seekIntervalValues) {
+			seekIntervalEntries.add(getString(R.string.video_seek_seconds__format, Integer.parseInt(value)));
+		}
+		addList(Preferences.KEY_VIDEO_DOUBLE_TAP_SEEK_INTERVAL, seekIntervalValues,
+				Preferences.DEFAULT_VIDEO_DOUBLE_TAP_SEEK_INTERVAL, R.string.video_double_tap_seek_interval,
+				seekIntervalEntries).setEnabled(playerLoadResult.first);
 		addCheck(true, Preferences.KEY_VIDEO_PLAYBACK_SPEED_CONTROL,
 				Preferences.DEFAULT_VIDEO_PLAYBACK_SPEED_CONTROL,
 				R.string.enable_video_playback_speed_control,
@@ -143,6 +157,9 @@ public class MediaFragment extends PreferenceFragment implements FragmentHandler
 			addDependency(Preferences.KEY_VIDEO_PLAY_AFTER_SCROLL, Preferences.KEY_USE_VIDEO_PLAYER, true);
 			addDependency(Preferences.KEY_VIDEO_SEEK_ANY_FRAME, Preferences.KEY_USE_VIDEO_PLAYER, true);
 			addDependency(Preferences.KEY_VIDEO_VOLUME_GESTURE, Preferences.KEY_USE_VIDEO_PLAYER, true);
+			addDependency(Preferences.KEY_VIDEO_DOUBLE_TAP_SEEK, Preferences.KEY_USE_VIDEO_PLAYER, true);
+			addDependency(Preferences.KEY_VIDEO_DOUBLE_TAP_SEEK_INTERVAL,
+					Preferences.KEY_VIDEO_DOUBLE_TAP_SEEK, true);
 			addDependency(Preferences.KEY_VIDEO_PLAYBACK_SPEED_CONTROL, Preferences.KEY_USE_VIDEO_PLAYER, true);
 			addDependency(Preferences.KEY_REMEMBER_VIDEO_PLAYBACK_SPEED,
 					Preferences.KEY_VIDEO_PLAYBACK_SPEED_CONTROL, true);
