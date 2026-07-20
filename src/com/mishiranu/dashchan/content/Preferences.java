@@ -1635,6 +1635,13 @@ public class Preferences {
 		return PREFERENCES.getBoolean(KEY_VIDEO_DOUBLE_TAP_SEEK, DEFAULT_VIDEO_DOUBLE_TAP_SEEK);
 	}
 
+	public static final String KEY_VIDEO_PICTURE_IN_PICTURE = "video_picture_in_picture";
+	public static final boolean DEFAULT_VIDEO_PICTURE_IN_PICTURE = false;
+
+	public static boolean isVideoPictureInPicture() {
+		return PREFERENCES.getBoolean(KEY_VIDEO_PICTURE_IN_PICTURE, DEFAULT_VIDEO_PICTURE_IN_PICTURE);
+	}
+
 	public static final String KEY_VIDEO_DOUBLE_TAP_SEEK_INTERVAL = "video_double_tap_seek_interval";
 	public static final String DEFAULT_VIDEO_DOUBLE_TAP_SEEK_INTERVAL = "5";
 

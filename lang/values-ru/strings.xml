@@ -409,6 +409,9 @@
 	<string name="video_volume_gesture__summary">Проведите вверх или вниз по правому краю видео; в горизонтальном режиме жест начинается в нижних 60% экрана</string>
 	<string name="video_double_tap_seek">Перемотка двойным нажатием</string>
 	<string name="video_double_tap_seek__summary">Дважды нажмите слева или справа по видео, чтобы перемотать назад или вперёд в любой ориентации</string>
+	<string name="video_picture_in_picture">Воспроизведение «картинка в картинке»</string>
+	<string name="video_picture_in_picture__summary">Показывать кнопку для продолжения текущего видео в плавающем системном окне. Экспериментальная функция</string>
+	<string name="enter_picture_in_picture">Открыть картинку в картинке</string>
 	<string name="video_double_tap_seek_interval">Шаг перемотки</string>
 	<string name="video_seek_seconds__format">%d сек</string>
 	<string name="video_seek_backward__format">‹‹ −%d сек</string>

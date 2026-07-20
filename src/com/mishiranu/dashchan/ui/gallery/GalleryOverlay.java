@@ -96,6 +96,7 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 
 	private boolean galleryWindow;
 	private boolean galleryMode;
+	private boolean hiddenForPictureInPicture;
 	private boolean predictiveBackRunning;
 	private CornerAnimator cornerAnimator;
 	private String galleryFilter = FILTER_ALL;
@@ -349,6 +350,12 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 	public void onResume() {
 		super.onResume();
 
+		if (hiddenForPictureInPicture) {
+			GalleryDialog dialog = getDialog();
+			if (dialog != null) {
+				dialog.hide();
+			}
+		}
 		if (pagerUnit != null) {
 			pagerUnit.onResume();
 		}
@@ -937,6 +944,36 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 		}
 		if (!returnToGallery()) {
 			getWindow().getDecorView().post(this::dismiss);
+		}
+	}
+
+	@Override
+	public void setGalleryVisibleForPictureInPicture(boolean visible) {
+		hiddenForPictureInPicture = !visible;
+		GalleryDialog dialog = getDialog();
+		if (dialog != null) {
+			if (visible) {
+				dialog.show();
+				invalidateSystemUiVisibility();
+			} else {
+				dialog.hide();
+			}
+		}
+	}
+
+	@Override
+	public void closeGallery() {
+		boolean wasHiddenForPictureInPicture = hiddenForPictureInPicture;
+		hiddenForPictureInPicture = false;
+		if (wasHiddenForPictureInPicture) {
+			dismiss();
+			return;
+		}
+		Window window = getWindow();
+		if (window != null) {
+			window.getDecorView().post(this::dismiss);
+		} else {
+			dismiss();
 		}
 	}
 

@@ -37,7 +37,7 @@ public class InterfaceFragment extends PreferenceFragment {
 		addList(Preferences.KEY_APPLICATION_NAME, Arrays.asList(LauncherIconManager.VALUE_DASHCHAN_2,
 				LauncherIconManager.VALUE_SLOPCHAN, LauncherIconManager.VALUE_DVACH),
 				Preferences.DEFAULT_APPLICATION_NAME, R.string.application_name,
-				Arrays.asList("Dashchan_2", "Slopchan_1", "Slooop"))
+				Arrays.asList("Dashchan_2", "Двач", "Slooop"))
 				.setOnAfterChangeListener(p -> LauncherIconManager.apply(requireContext(), p.getValue()));
 		if (LauncherIconManager.arePresetLogosReady()) {
 			Preference<Void> logoPreference = addButton(getString(R.string.application_logo), preference ->

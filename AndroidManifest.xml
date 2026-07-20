@@ -136,7 +136,7 @@
 			android:enabled="false"
 			android:exported="true"
 			android:icon="@mipmap/ic_launcher"
-			android:label="Slopchan_1"
+			android:label="Двач"
 			android:logo="@mipmap/ic_logo">
 			<intent-filter>
 				<action android:name="android.intent.action.MAIN" />
@@ -181,7 +181,7 @@
 			android:enabled="false"
 			android:exported="true"
 			android:icon="@drawable/application_logo_2"
-			android:label="Slopchan_1"
+			android:label="Двач"
 			android:logo="@drawable/application_logo_2">
 			<intent-filter>
 				<action android:name="android.intent.action.MAIN" />
@@ -226,7 +226,7 @@
 			android:enabled="false"
 			android:exported="true"
 			android:icon="@drawable/application_logo_3"
-			android:label="Slopchan_1"
+			android:label="Двач"
 			android:logo="@drawable/application_logo_3">
 			<intent-filter>
 				<action android:name="android.intent.action.MAIN" />
@@ -271,7 +271,7 @@
 			android:enabled="false"
 			android:exported="true"
 			android:icon="@drawable/application_logo_4"
-			android:label="Slopchan_1"
+			android:label="Двач"
 			android:logo="@drawable/application_logo_4">
 			<intent-filter>
 				<action android:name="android.intent.action.MAIN" />
@@ -316,7 +316,7 @@
 			android:enabled="false"
 			android:exported="true"
 			android:icon="@drawable/application_logo_5"
-			android:label="Slopchan_1"
+			android:label="Двач"
 			android:logo="@drawable/application_logo_5">
 			<intent-filter>
 				<action android:name="android.intent.action.MAIN" />
@@ -361,7 +361,7 @@
 			android:enabled="false"
 			android:exported="true"
 			android:icon="@drawable/application_logo_6"
-			android:label="Slopchan_1"
+			android:label="Двач"
 			android:logo="@drawable/application_logo_6">
 			<intent-filter>
 				<action android:name="android.intent.action.MAIN" />
@@ -406,7 +406,7 @@
 			android:enabled="false"
 			android:exported="true"
 			android:icon="@drawable/application_logo_7"
-			android:label="Slopchan_1"
+			android:label="Двач"
 			android:logo="@drawable/application_logo_7">
 			<intent-filter>
 				<action android:name="android.intent.action.MAIN" />
@@ -451,7 +451,7 @@
 			android:enabled="false"
 			android:exported="true"
 			android:icon="@drawable/application_logo_8"
-			android:label="Slopchan_1"
+			android:label="Двач"
 			android:logo="@drawable/application_logo_8">
 			<intent-filter>
 				<action android:name="android.intent.action.MAIN" />
@@ -496,7 +496,7 @@
 			android:enabled="false"
 			android:exported="true"
 			android:icon="@drawable/application_logo_9"
-			android:label="Slopchan_1"
+			android:label="Двач"
 			android:logo="@drawable/application_logo_9">
 			<intent-filter>
 				<action android:name="android.intent.action.MAIN" />
@@ -541,7 +541,7 @@
 			android:enabled="false"
 			android:exported="true"
 			android:icon="@drawable/application_logo_10"
-			android:label="Slopchan_1"
+			android:label="Двач"
 			android:logo="@drawable/application_logo_10">
 			<intent-filter>
 				<action android:name="android.intent.action.MAIN" />
@@ -586,7 +586,7 @@
 			android:enabled="false"
 			android:exported="true"
 			android:icon="@drawable/application_logo_11"
-			android:label="Slopchan_1"
+			android:label="Двач"
 			android:logo="@drawable/application_logo_11">
 			<intent-filter>
 				<action android:name="android.intent.action.MAIN" />
@@ -633,7 +633,7 @@
 			android:enabled="false"
 			android:exported="true"
 			android:icon="@drawable/application_logo_pass"
-			android:label="Slopchan_1"
+			android:label="Двач"
 			android:logo="@drawable/application_logo_pass">
 			<intent-filter>
 				<action android:name="android.intent.action.MAIN" />
@@ -678,7 +678,7 @@
 			android:enabled="false"
 			android:exported="true"
 			android:icon="@drawable/application_logo_subscriber"
-			android:label="Slopchan_1"
+			android:label="Двач"
 			android:logo="@drawable/application_logo_subscriber">
 			<intent-filter>
 				<action android:name="android.intent.action.MAIN" />
@@ -727,6 +727,15 @@
 			android:name=".content.UpdaterActivity"
 			android:excludeFromRecents="true"
 			android:theme="@android:style/Theme.Panel" />
+
+		<activity
+			android:name=".ui.gallery.VideoPipActivity"
+			android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"
+			android:excludeFromRecents="true"
+			android:exported="false"
+			android:resizeableActivity="true"
+			android:supportsPictureInPicture="true"
+			android:theme="@style/Theme.VideoPip" />
 
 		<service
 			android:name=".content.service.PostingService" />

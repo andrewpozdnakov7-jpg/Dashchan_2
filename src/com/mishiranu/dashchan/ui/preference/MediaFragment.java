@@ -128,6 +128,10 @@ public class MediaFragment extends PreferenceFragment implements FragmentHandler
 		addCheck(true, Preferences.KEY_VIDEO_DOUBLE_TAP_SEEK, Preferences.DEFAULT_VIDEO_DOUBLE_TAP_SEEK,
 				R.string.video_double_tap_seek, R.string.video_double_tap_seek__summary)
 				.setEnabled(playerLoadResult.first);
+		addCheck(true, Preferences.KEY_VIDEO_PICTURE_IN_PICTURE,
+				Preferences.DEFAULT_VIDEO_PICTURE_IN_PICTURE,
+				R.string.video_picture_in_picture,
+				R.string.video_picture_in_picture__summary).setEnabled(playerLoadResult.first);
 		List<String> seekIntervalValues = Arrays.asList("5", "10", "15", "30", "60");
 		List<CharSequence> seekIntervalEntries = new ArrayList<>(seekIntervalValues.size());
 		for (String value : seekIntervalValues) {
@@ -158,6 +162,7 @@ public class MediaFragment extends PreferenceFragment implements FragmentHandler
 			addDependency(Preferences.KEY_VIDEO_SEEK_ANY_FRAME, Preferences.KEY_USE_VIDEO_PLAYER, true);
 			addDependency(Preferences.KEY_VIDEO_VOLUME_GESTURE, Preferences.KEY_USE_VIDEO_PLAYER, true);
 			addDependency(Preferences.KEY_VIDEO_DOUBLE_TAP_SEEK, Preferences.KEY_USE_VIDEO_PLAYER, true);
+			addDependency(Preferences.KEY_VIDEO_PICTURE_IN_PICTURE, Preferences.KEY_USE_VIDEO_PLAYER, true);
 			addDependency(Preferences.KEY_VIDEO_DOUBLE_TAP_SEEK_INTERVAL,
 					Preferences.KEY_VIDEO_DOUBLE_TAP_SEEK, true);
 			addDependency(Preferences.KEY_VIDEO_PLAYBACK_SPEED_CONTROL, Preferences.KEY_USE_VIDEO_PLAYER, true);

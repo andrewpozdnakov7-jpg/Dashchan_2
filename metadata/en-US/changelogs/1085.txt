@@ -1,0 +1,7 @@
+* Added picture-in-picture playback that keeps video playing over the thread. It can be enabled in media settings and is disabled by default.
+* Added configurable double-tap seeking and improved volume and mute controls in the video player.
+* Added viewing and submitting likes and dislikes on supported Dvach boards.
+* Added an accessibility section with text scaling up to 500%.
+* Increased the default media cache to 1 GB, with an available range from 300 MB to 8 GB.
+* Expanded and optimized the bundled application icon collection.
+* Fixed custom theme imports: themes with duplicate names are now stored separately.

@@ -2,6 +2,8 @@ package com.mishiranu.dashchan.ui.gallery;
 
 import android.app.AlertDialog;
 import android.content.Context;
+import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.content.res.ColorStateList;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
@@ -22,6 +24,7 @@ import android.widget.LinearLayout;
 import android.widget.PopupMenu;
 import android.widget.SeekBar;
 import android.widget.TextView;
+import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.fragment.app.FragmentManager;
 import chan.content.Chan;
@@ -62,6 +65,7 @@ public class VideoUnit {
 	private ImageButton playPauseButton;
 	private TextView playbackSpeedButton;
 	private ImageButton muteButton;
+	private ImageButton pictureInPictureButton;
 	private PopupMenu playbackSpeedPopupMenu;
 
 	private VideoPlayer player;
@@ -75,10 +79,13 @@ public class VideoUnit {
 	private boolean finishedPlayback;
 	private boolean trackingNow;
 	private boolean hideSurfaceOnInit;
+	private boolean pictureInPictureTransferred;
 	private int lastNonZeroSystemVolume;
+	private File sourceFile;
 
 	private ReadVideoCallback readVideoCallback;
 	private boolean playbackSpeedControl;
+	private boolean pictureInPictureControl;
 
 	public VideoUnit(PagerInstance instance, AudioManager audioManager) {
 		this.instance = instance;
@@ -128,6 +135,9 @@ public class VideoUnit {
 	}
 
 	public void onResume() {
+		if (pictureInPictureTransferred) {
+			return;
+		}
 		if (player != null && initialized) {
 			setPlaying(wasPlaying, true);
 			updatePlayState();
@@ -137,6 +147,9 @@ public class VideoUnit {
 	}
 
 	public void onPause() {
+		if (pictureInPictureTransferred) {
+			return;
+		}
 		if (player != null && initialized) {
 			wasPlaying = player.isPlaying();
 			setPlaying(false, true);
@@ -175,16 +188,22 @@ public class VideoUnit {
 			readVideoCallback.cancel();
 			readVideoCallback = null;
 		}
-		if (initialized) {
+		if (initialized && !pictureInPictureTransferred) {
 			audioFocus.release();
 			initialized = false;
 		}
 		invalidateControlsVisibility();
-		if (player != null) {
+		if (player != null && !pictureInPictureTransferred) {
 			player.destroy();
 			player = null;
 			instance.currentHolder.progressBar.setVisible(false, false);
 		}
+		if (pictureInPictureTransferred) {
+			pictureInPictureTransferred = false;
+			player = null;
+			initialized = false;
+		}
+		sourceFile = null;
 		if (backgroundDrawable != null) {
 			backgroundDrawable.recycle();
 			backgroundDrawable = null;
@@ -208,6 +227,7 @@ public class VideoUnit {
 	}
 
 	public void applyVideo(Uri uri, File file, boolean reload) {
+		sourceFile = file;
 		wasPlaying = true;
 		finishedPlayback = false;
 		hideSurfaceOnInit = false;
@@ -236,6 +256,7 @@ public class VideoUnit {
 				instance.galleryInstance.callback.updateTitle();
 			}
 			instance.currentHolder.loadState = PagerInstance.LoadState.COMPLETE;
+			updatePictureInPictureButton();
 			instance.galleryInstance.callback.invalidateOptionsMenu();
 		} else {
 			instance.currentHolder.progressBar.setIndeterminate(true);
@@ -301,10 +322,14 @@ public class VideoUnit {
 		int targetLayoutCounfiguration = ResourceUtils.isTabletOrLandscape(context.getResources()
 				.getConfiguration()) ? 1 : 0;
 		boolean speedControl = Preferences.isVideoPlaybackSpeedControl();
-		if (targetLayoutCounfiguration != layoutConfiguration || speedControl != playbackSpeedControl) {
+		boolean pictureInPictureControl = Preferences.isVideoPictureInPicture() && context.getPackageManager()
+				.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE);
+		if (targetLayoutCounfiguration != layoutConfiguration || speedControl != playbackSpeedControl
+				|| pictureInPictureControl != this.pictureInPictureControl) {
 			boolean firstTimeLayout = layoutConfiguration < 0;
 			layoutConfiguration = targetLayoutCounfiguration;
 			playbackSpeedControl = speedControl;
+			this.pictureInPictureControl = pictureInPictureControl;
 			boolean longLayout = targetLayoutCounfiguration == 1;
 
 			controlsView.removeAllViews();
@@ -314,6 +339,7 @@ public class VideoUnit {
 			trackingNow = false;
 			playbackSpeedButton = null;
 			muteButton = null;
+			pictureInPictureButton = null;
 
 			configurationView = new LinearLayout(context);
 			configurationView.setOrientation(LinearLayout.HORIZONTAL);
@@ -369,6 +395,13 @@ public class VideoUnit {
 			muteButton = new ImageButton(context, null, android.R.attr.borderlessButtonStyle);
 			muteButton.setScaleType(ImageButton.ScaleType.CENTER);
 			muteButton.setOnClickListener(muteClickListener);
+			if (pictureInPictureControl) {
+				pictureInPictureButton = new ImageButton(context, null, android.R.attr.borderlessButtonStyle);
+				pictureInPictureButton.setScaleType(ImageButton.ScaleType.CENTER);
+				pictureInPictureButton.setImageResource(R.drawable.ic_picture_in_picture);
+				pictureInPictureButton.setContentDescription(context.getString(R.string.enter_picture_in_picture));
+				pictureInPictureButton.setOnClickListener(pictureInPictureClickListener);
+			}
 
 			if (longLayout) {
 				controls.setGravity(Gravity.CENTER_VERTICAL);
@@ -409,10 +442,14 @@ public class VideoUnit {
 			if (playbackSpeedButton != null) {
 				configurationView.addView(playbackSpeedButton, (int) (56f * density), (int) (48f * density));
 			}
+			if (pictureInPictureButton != null) {
+				configurationView.addView(pictureInPictureButton, (int) (48f * density), (int) (48f * density));
+			}
 			configurationView.addView(muteButton, (int) (48f * density), (int) (48f * density));
 			View spacer = new View(context);
 			configurationView.addView(spacer, new LinearLayout.LayoutParams(0, 1, 1f));
 			updateMuteButton();
+			updatePictureInPictureButton();
 			long duration = player.getDuration();
 			totalTimeTextView.setText(formatVideoTime(duration));
 			seekBar.setMax((int) duration);
@@ -577,6 +614,91 @@ public class VideoUnit {
 	}
 
 	private final View.OnClickListener muteClickListener = v -> handleMuteClick();
+
+	private void updatePictureInPictureButton() {
+		if (pictureInPictureButton != null) {
+			boolean enabled = initialized && player != null && sourceFile != null && sourceFile.isFile()
+					&& instance.currentHolder != null
+					&& instance.currentHolder.loadState == PagerInstance.LoadState.COMPLETE;
+			pictureInPictureButton.setEnabled(enabled);
+			pictureInPictureButton.setAlpha(enabled ? 1f : 0.45f);
+		}
+	}
+
+	private final View.OnClickListener pictureInPictureClickListener = this::handlePictureInPictureClick;
+
+	private void handlePictureInPictureClick(View v) {
+		if (player == null || !initialized || sourceFile == null || !sourceFile.isFile()) {
+			return;
+		}
+		boolean playing = player.isPlaying();
+		long position = player.getPosition();
+		VideoPlayer transferredPlayer = player;
+		Intent intent = VideoPipActivity.createIntent(v.getContext(), sourceFile, position,
+				playbackSpeed, muted, playing, this, transferredPlayer);
+		wasPlaying = false;
+		setPlaying(false, true);
+		transferredPlayer.releaseVideoView();
+		pictureInPictureTransferred = true;
+		instance.galleryInstance.callback.setGalleryVisibleForPictureInPicture(false);
+		try {
+			instance.galleryInstance.callback.getWindow().getContext().startActivity(intent);
+		} catch (RuntimeException e) {
+			VideoPipActivity.cancelPendingTransfer(this, transferredPlayer);
+			restorePictureInPicturePlayer(transferredPlayer, position, playbackSpeed, muted, playing);
+			Toast.makeText(v.getContext(), R.string.unknown_error, Toast.LENGTH_SHORT).show();
+		}
+	}
+
+	boolean restorePictureInPicturePlayer(VideoPlayer transferredPlayer, long position, int playbackSpeed,
+			boolean muted, boolean playing) {
+		if (!pictureInPictureTransferred || player != transferredPlayer || !initialized
+				|| instance.currentHolder == null) {
+			return false;
+		}
+		transferredPlayer.releaseVideoView();
+		transferredPlayer.setListener(playerListener);
+		View videoView = transferredPlayer.getVideoView(instance.galleryInstance.context);
+		instance.currentHolder.surfaceParent.addView(videoView, new FrameLayout.LayoutParams(
+				FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT, Gravity.CENTER));
+		pictureInPictureTransferred = false;
+		this.playbackSpeed = normalizePlaybackSpeed(playbackSpeed);
+		this.muted = muted;
+		transferredPlayer.setPlaybackSpeed(this.playbackSpeed);
+		muteSupported = !transferredPlayer.isAudioPresent() || transferredPlayer.setMuted(muted);
+		instance.galleryInstance.callback.setGalleryVisibleForPictureInPicture(true);
+		if (seekBar != null) {
+			seekBar.setProgress((int) position);
+		}
+		if (timeTextView != null) {
+			timeTextView.setText(formatVideoTime(position));
+		}
+		updatePlaybackSpeedButton();
+		updateMuteButton();
+		finishedPlayback = false;
+		wasPlaying = playing;
+		setPlaying(playing, true);
+		updatePlayState();
+		return true;
+	}
+
+	boolean closePictureInPicturePlayer(VideoPlayer transferredPlayer) {
+		if (!pictureInPictureTransferred || player != transferredPlayer) {
+			return false;
+		}
+		pictureInPictureTransferred = false;
+		audioFocus.release();
+		transferredPlayer.setListener(null);
+		transferredPlayer.releaseVideoView();
+		transferredPlayer.setPlaying(false);
+		transferredPlayer.destroy();
+		player = null;
+		initialized = false;
+		wasPlaying = false;
+		sourceFile = null;
+		instance.galleryInstance.callback.closeGallery();
+		return true;
+	}
 
 	private void handleMuteClick() {
 		if (audioManager != null && audioManager.getStreamVolume(AudioManager.STREAM_MUSIC) <= 0) {
@@ -950,6 +1072,7 @@ public class VideoUnit {
 								if (downloadTask == null) {
 									seekBar.setSecondaryProgress(seekBar.getMax());
 									holder.loadState = PagerInstance.LoadState.COMPLETE;
+									updatePictureInPictureButton();
 								}
 								instance.galleryInstance.callback.invalidateOptionsMenu();
 							} else {
@@ -1013,6 +1136,7 @@ public class VideoUnit {
 					if (initialized) {
 						seekBar.setSecondaryProgress(seekBar.getMax());
 						holder.loadState = PagerInstance.LoadState.COMPLETE;
+						updatePictureInPictureButton();
 						instance.galleryInstance.callback.invalidateOptionsMenu();
 					}
 				}

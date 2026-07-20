@@ -15,6 +15,7 @@ import android.util.Pair;
 import android.view.Surface;
 import android.view.TextureView;
 import android.view.View;
+import android.view.ViewGroup;
 import chan.content.ChanManager;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.BuildConfig;
@@ -177,7 +178,7 @@ public class VideoPlayer {
 		}
 	}
 
-	private final Listener listener;
+	private volatile Listener listener;
 	private final boolean seekAnyFrame;
 	private final boolean audioEnabled;
 
@@ -199,6 +200,10 @@ public class VideoPlayer {
 		this.listener = listener;
 		this.seekAnyFrame = seekAnyFrame;
 		this.audioEnabled = audioEnabled;
+	}
+
+	public void setListener(Listener listener) {
+		this.listener = listener;
 	}
 
 	public static Bitmap createThumbnail(File file) throws IOException, InterruptedException {
@@ -426,6 +431,7 @@ public class VideoPlayer {
 	}
 
 	private void onComplete() {
+		Listener listener = this.listener;
 		if (listener != null && !consumed) {
 			listener.onComplete(this);
 		}
@@ -435,6 +441,7 @@ public class VideoPlayer {
 		if (videoView != null) {
 			videoView.requestLayout();
 		}
+		Listener listener = this.listener;
 		if (listener != null) {
 			listener.onDimensionChange(this);
 		}
@@ -503,6 +510,14 @@ public class VideoPlayer {
 			videoView = new PlayerTextureView(context, this);
 		}
 		return videoView;
+	}
+
+	public void releaseVideoView() {
+		View videoView = this.videoView;
+		this.videoView = null;
+		if (videoView != null && videoView.getParent() instanceof ViewGroup) {
+			((ViewGroup) videoView.getParent()).removeView(videoView);
+		}
 	}
 
 	private void setSurface(Surface surface) {
@@ -663,6 +678,7 @@ public class VideoPlayer {
 		if (bufferingChange && lastSeeking) {
 			return;
 		}
+		Listener listener = this.listener;
 		if (listener != null && !consumed) {
 			listener.onBusyStateChange(this, lastSeeking || lastBuffering);
 		}

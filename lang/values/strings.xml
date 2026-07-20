@@ -389,6 +389,9 @@
 	<string name="video_volume_gesture__summary">Swipe up or down along the right edge; in landscape mode, start within the lower 60% of the screen</string>
 	<string name="video_double_tap_seek">Double-tap to seek</string>
 	<string name="video_double_tap_seek__summary">Double-tap the left or right side of a video to seek backward or forward in any orientation</string>
+	<string name="video_picture_in_picture">Picture-in-picture playback</string>
+	<string name="video_picture_in_picture__summary">Show a button that continues the current video in a floating system window. Experimental</string>
+	<string name="enter_picture_in_picture">Open picture in picture</string>
 	<string name="video_double_tap_seek_interval">Double-tap seek interval</string>
 	<string name="video_seek_seconds__format">%d sec</string>
 	<string name="video_seek_backward__format">‹‹ −%d sec</string>
