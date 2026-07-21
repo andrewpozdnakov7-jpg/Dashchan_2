@@ -1,244 +1,141 @@
 # Dashchan_2
 
+[![Latest release](https://img.shields.io/github/v/release/andrewpozdnakov7-jpg/Dashchan_2?label=release)](https://github.com/andrewpozdnakov7-jpg/Dashchan_2/releases/latest)
+[![Android 11+](https://img.shields.io/badge/Android-11%2B-3DDC84)](https://developer.android.com/about/versions/11)
+[![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)](COPYING)
+
 ## Русский
 
-Dashchan_2 - неофициальная ветка Dashchan для Android 11+.
+Dashchan_2 - неофициальная ветка Dashchan для Android 11 и новее. Она устанавливается рядом с оригинальным Dashchan, использует пакет `io.dashchan2` и содержит встроенную поддержку Двача, экспериментальный режим чтения 4chan и собственный видеоплеер на FFmpeg.
 
-Цель проекта - сохранить рабочий клиент для имиджборд на современных Android,
-обновить сборочную среду и встроить актуальный видеоплеер без отдельного WebM
-расширения. Приложение ставится отдельно от оригинального Dashchan и использует
-собственный package name.
+### Скачать
 
-### Текущие версии
+Стабильные APK публикуются только в [GitHub Releases](https://github.com/andrewpozdnakov7-jpg/Dashchan_2/releases). Для обычной установки нужен файл с окончанием `all-abi-signed.apk`. Не устанавливайте `unsigned`-файлы из сторонних источников.
 
-| Компонент | Package | Версия | Минимальный Android |
-| --- | --- | --- | --- |
-| Dashchan_2 со встроенными Dvach и 4chan | `io.dashchan2` | `3.2.5`, code `1085` | API 30 / Android 11+ |
+| Компонент | Значение |
+| --- | --- |
+| Текущая версия | `3.2.5`, code `1085` |
+| Android package | `io.dashchan2` |
+| Минимальная версия | API 30 / Android 11 |
+| ABI | `arm64-v8a`, `armeabi-v7a`, `x86` |
+| Видеоплеер | FFmpeg 8.1.2, dav1d 1.5.3 |
 
-Поддержка 2ch/Dvach встроена в основной APK `Dashchan_2`. Отдельное дополнение
-`Dashchan_2 for 2ch` больше не требуется; установленную старую версию дополнения
-можно удалить после проверки встроенного Двача.
+Поддержка 2ch/Dvach и нативные библиотеки плеера встроены в основной APK. Отдельные дополнения Двача и WebM для нормальной работы больше не требуются. Старые отдельные дополнения можно удалить после проверки встроенных компонентов.
 
-Экспериментальная поддержка 4chan также встроена в основной APK, работает
-только на чтение и по умолчанию выключена. Ее можно включить в разделе
-`Настройки` > `Форум`; публикация постов пока отключена.
+### Возможности
 
-WebM2/FFmpeg/dav1d/yuv теперь встроены в основной APK. Отдельный WebM2 APK для
-обычного воспроизведения видео больше не нужен.
+- просмотр досок, тредов, изображений и видео, избранное и уведомления об ответах;
+- встроенный Двач с отправкой постов, Passcode, AI-фильтром и лайками/дизлайками на поддерживаемых досках;
+- экспериментальный 4chan только для чтения, выключенный по умолчанию;
+- FFmpeg-плеер для WebM, MP4, fMP4, MOV, H.264, HEVC, VP8, VP9 и AV1;
+- скорость воспроизведения с сохранением тембра, перемотка двойным нажатием, жест громкости и режим «картинка в картинке»;
+- галерея с фильтрами, копирование изображений и фоновое сохранение медиа;
+- архивирование тредов в HTML без блокировки интерфейса;
+- встроенные, загружаемые и пользовательские темы;
+- Predictive Back на Android 13+, настройка масштаба текста и цветов меток постов;
+- выбор имени и значка приложения, а также создание собственного ярлыка;
+- стабильный и добровольный beta-каналы обновлений с докачиванием APK.
 
-### Что изменено
+### Ограничения
 
-- Приложение переименовано в `Dashchan_2`.
-- Application ID изменен на `io.dashchan2`.
-- Добавлен отдельный file provider: `io.dashchan2.provider`.
-- Поддержка Dvach и экспериментальная read-only поддержка 4chan встроены в основной APK.
-- Добавлены явные Android package queries для известных расширений Dashchan_2.
-- Убрана необходимость `QUERY_ALL_PACKAGES` для поиска расширений.
-- Минимальная версия Android поднята до API 30 / Android 11+.
-- Сборка обновлена до Android Gradle Plugin 9.2.1, Gradle 9.4.1,
-  compile SDK 36, Build Tools 36.0.0 и NDK 29.0.14206865.
-- Встроенный видеоплеер обновлен до FFmpeg 8.1.2.
-- Добавлена поддержка `arm64-v8a`, `armeabi-v7a` и `x86`.
-- Исправлено воспроизведение проблемных fragmented MP4/fMP4 роликов.
-- Исправлен расчет длительности аудиобуфера в native player.
-- Добавлена информация о сборке native player в metadata dialog:
-  `player_build`, `player_ffmpeg` и `speed_processing`.
-- Добавлена проверка обновлений через `update/data.json` и GitHub Releases.
-- Добавлены темы.
-- Улучшено выделение и копирование текста в постах, включая обходной вариант
-  для прошивок с урезанным системным меню выделения.
-- Исправлена синяя полоса при резкой прокрутке и overscroll на пользовательских
-  темах.
-- Исправлено зависание некоторых HEVC-видео при продолжающемся звуке.
-- Исправлено воспроизведение и перемотка некорректно обрезанных видео со
-  смещенной временной шкалой.
-- Выбор скорости видео сохраняет нормальный тембр с помощью FFmpeg `atempo`.
-- Добавлена настройка сохранения выбранной скорости между видео.
-- Устранены задержки интерфейса при архивации больших тредов, сохранении
-  оригиналов и миниатюр.
-- Добавлена экспериментальная поддержка Predictive Back на Android 13+.
-- Добавлена настройка цветов меток своих постов и ответов.
-- Добавлен выбор названия приложения и создание ярлыка со своим именем и
-  изображением; доступен шаблон промта для генерации иконки.
-- Встроенные WebM/FFmpeg исходники находятся в папке `Dashchan-Webm`.
+- 4chan пока не поддерживает отправку постов и может быть недоступен в отдельных сетях;
+- Predictive Back и «картинка в картинке» включаются вручную;
+- `targetSdk` намеренно остаётся 30 ради совместимости старого приложения; `minSdk` также равен 30.
 
 ### Сборка
 
-Требуется:
-
-- JDK 17 или новее;
-- Android SDK Platform 36;
-- Android SDK Build Tools 36.0.0;
-- Android NDK 29.0.14206865;
-- Gradle 9.4.1;
-- Linux/WSL для сборки native FFmpeg/WebM библиотек.
-
-Локальная all-ABI сборка:
+Необходимы JDK 17+, Android SDK Platform 36, Build Tools 36.0.0, NDK 29.0.14206865 и Linux x86_64/WSL для нативных библиотек. Gradle Wrapper загружает Gradle 9.4.1.
 
 ```sh
-../tools/gradle-9.4.1/bin/gradle assembleNdebug \
+./gradlew assembleNdebug \
   -PnativePlayerFfmpegFlavor=ffmpeg8 \
   -PnativeAbis=arm64-v8a,armeabi-v7a,x86
 ```
 
-APK появится в `build/outputs/apk`.
+APK появится в `build/outputs/apk`. Первая сборка скачивает исходники FFmpeg, dav1d и libyuv и может занять заметное время. Репозиторий не содержит приватный ключ публикации и не создаёт официальный подписанный APK автоматически.
 
-Gradle configuration cache включен по умолчанию. Если локальная Gradle-задача
-падает из-за configuration cache, повторите команду с `--no-configuration-cache`
-и сообщите имя задачи.
+Подробные инструкции:
 
-Документация по сборке и релизу:
+- [Сборка и окружение](docs/BUILDING.md)
+- [Подписание APK](docs/SIGNING.md)
+- [Обновление NDK 29](docs/NDK_UPGRADE_R29.md)
+- [Проверки и автоматизация](docs/CI.md)
+- [Ручное тестирование](docs/TESTING.md)
+- [Чек-лист релиза](docs/RELEASE_CHECKLIST.md)
+- [Configuration Cache](docs/GRADLE_CONFIGURATION_CACHE.md)
+- [Метаданные обновлений](update/README.md)
+- [Встроенные библиотеки плеера](Dashchan-Webm/README.md)
 
-- `docs/SIGNING.md`
-- `docs/NDK_UPGRADE_R29.md`
-- `docs/CI.md`
-- `docs/TESTING.md`
-- `docs/RELEASE_CHECKLIST.md`
-- `docs/GRADLE_CONFIGURATION_CACHE.md`
+### Обратная связь
 
-### Расширения
+Перед сообщением об ошибке проверьте последний стабильный релиз. Баги и предложения оформляйте через [GitHub Issues](https://github.com/andrewpozdnakov7-jpg/Dashchan_2/issues). Для уязвимостей используйте инструкции из [SECURITY.md](SECURITY.md), а не публичный issue.
 
-Код поддержки 2ch/Dvach и экспериментальной read-only поддержки 4chan встроен
-в этот репозиторий. Каналы загружаются внутри основного приложения, благодаря
-чему для них не требуются отдельные APK. 4chan по умолчанию выключен и пока не
-поддерживает публикацию постов. Исходники других внешних расширений находятся
-в соседнем репозитории `Dashchan_2-Extensions`.
+Правила участия находятся в [CONTRIBUTING.md](CONTRIBUTING.md), нормы общения - в [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 
 ### Происхождение и авторы
 
-Dashchan_2 основан на исходном коде Dashchan. Отдельные идеи и участки кода
-были изучены и адаптированы из форка `TrixiEther/DashchanFork`, а темы - из
-`TrixiEther/Dashchan-Meta`. Большое спасибо авторам оригинального Dashchan,
-TrixiEther и участникам этих проектов.
+Dashchan_2 основан на исходном коде Dashchan. Отдельные идеи и участки кода были изучены и адаптированы из [TrixiEther/DashchanFork](https://github.com/TrixiEther/DashchanFork), а темы - из [TrixiEther/Dashchan-Meta](https://github.com/TrixiEther/Dashchan-Meta). Спасибо авторам оригинального Dashchan, TrixiEther и участникам этих проектов.
 
-При анализе, разработке и проверке изменений использовались
-[OpenAI Codex](https://github.com/openai) и
-[Anthropic Claude](https://github.com/claude). Окончательные решения и
-ответственность за публикуемые изменения остаются за сопровождающим проекта.
+[OpenAI Codex](https://github.com/openai) и [Anthropic Claude](https://github.com/claude) использовались при анализе, разработке и проверке изменений. Решения и ответственность за публикацию остаются за сопровождающим проекта.
 
-### Лицензия
-
-Dashchan_2 основан на Dashchan и распространяется по лицензии
-[GNU General Public License, version 3 or later](COPYING).
+Проект распространяется по лицензии [GNU General Public License, version 3 or later](COPYING).
 
 ---
 
 ## English
 
-Dashchan_2 is an unofficial Dashchan branch for Android 11+.
+Dashchan_2 is an unofficial Dashchan branch for Android 11 and newer. It installs alongside the original Dashchan under the `io.dashchan2` package and bundles Dvach support, experimental read-only 4chan support, and an FFmpeg-based video player.
 
-The project keeps a working imageboard client usable on modern Android devices,
-updates the build environment, and bundles the current video player directly
-into the main APK instead of requiring a separate WebM extension. The app can be
-installed beside the original Dashchan because it uses its own package name.
+### Download
 
-### Current Versions
+Stable APKs are published only through [GitHub Releases](https://github.com/andrewpozdnakov7-jpg/Dashchan_2/releases). Regular users need the asset ending in `all-abi-signed.apk`. Do not install unsigned files obtained from third parties.
 
-| Component | Package | Version | Minimum Android |
-| --- | --- | --- | --- |
-| Dashchan_2 with built-in Dvach and 4chan | `io.dashchan2` | `3.2.5`, code `1085` | API 30 / Android 11+ |
+| Component | Value |
+| --- | --- |
+| Current version | `3.2.5`, code `1085` |
+| Android package | `io.dashchan2` |
+| Minimum Android | API 30 / Android 11 |
+| ABIs | `arm64-v8a`, `armeabi-v7a`, `x86` |
+| Video player | FFmpeg 8.1.2, dav1d 1.5.3 |
 
-2ch/Dvach support is bundled into the main `Dashchan_2` APK. The separate
-`Dashchan_2 for 2ch` extension is no longer required; an installed legacy copy
-can be removed after verifying the built-in channel.
+2ch/Dvach support and the native player libraries are bundled into the main APK. Separate Dvach and WebM extensions are no longer required for normal use.
 
-Experimental 4chan support is also bundled into the main APK. It is read-only
-and disabled by default. Enable it under `Settings` > `Forum`; posting is
-currently disabled.
+### Highlights
 
-WebM2/FFmpeg/dav1d/yuv libraries are bundled into the main APK. A separate
-WebM2 APK is no longer required for normal video playback.
+- boards, threads, media gallery, favorites, thread watching, and reply notifications;
+- built-in Dvach posting, Passcode support, AI filtering, and votes on supported boards;
+- optional experimental read-only 4chan channel;
+- FFmpeg playback for WebM, MP4, fMP4, MOV, H.264, HEVC, VP8, VP9, and AV1;
+- pitch-preserving speed control, double-tap seeking, volume gestures, and picture-in-picture;
+- gallery filters, clipboard image copying, background media saving, and HTML thread archives;
+- bundled, downloadable, and user-imported themes;
+- Predictive Back, text scaling, post-marker colors, and configurable app names and icons;
+- stable and opt-in beta update channels with resumable APK downloads.
 
-### Changes
+### Limitations
 
-- Renamed the app to `Dashchan_2`.
-- Changed the application ID to `io.dashchan2`.
-- Added a separate file provider authority: `io.dashchan2.provider`.
-- Bundled Dvach and experimental read-only 4chan support into the main APK.
-- Added explicit Android package queries for known Dashchan_2 extensions.
-- Removed the need for `QUERY_ALL_PACKAGES` in extension discovery.
-- Raised the minimum Android version to API 30 / Android 11+.
-- Updated the build stack to Android Gradle Plugin 9.2.1, Gradle 9.4.1,
-  compile SDK 36, Build Tools 36.0.0, and NDK 29.0.14206865.
-- Updated the built-in video player to FFmpeg 8.1.2.
-- Added `arm64-v8a`, `armeabi-v7a`, and `x86` native builds.
-- Fixed playback of problematic fragmented MP4/fMP4 videos.
-- Fixed native-player audio-buffer duration calculation.
-- Added native-player metadata keys shown in the metadata dialog:
-  `player_build`, `player_ffmpeg`, and `speed_processing`.
-- Added update checking through `update/data.json` and GitHub Releases.
-- Added themes.
-- Improved post text selection and copying, including a fallback for ROMs with
-  limited system text-selection menus.
-- Fixed the blue strip during fast scrolling and overscroll with custom themes.
-- Fixed some HEVC videos freezing while audio continued.
-- Fixed playback and seeking in incorrectly trimmed videos with shifted
-  timelines.
-- Playback speed now preserves pitch through FFmpeg `atempo`.
-- Added an option to keep the selected playback speed between videos.
-- Removed UI delays when archiving large threads and saving original files and
-  thumbnails.
-- Added experimental Predictive Back support on Android 13+.
-- Added color settings for markers of your posts and replies.
-- Added application name presets and Home screen shortcuts with custom names
-  and images; an image-generation prompt template is included.
-- Bundled WebM/FFmpeg source is stored in `Dashchan-Webm`.
+- 4chan posting is not implemented and the service may be unreachable on some networks;
+- Predictive Back and picture-in-picture are opt-in settings;
+- `targetSdk` intentionally remains 30 for legacy compatibility; `minSdk` is also 30.
 
 ### Building
 
-Requirements:
-
-- JDK 17 or newer;
-- Android SDK Platform 36;
-- Android SDK Build Tools 36.0.0;
-- Android NDK 29.0.14206865;
-- Gradle 9.4.1;
-- Linux/WSL for native FFmpeg/WebM builds.
-
-Local all-ABI build:
+Install JDK 17+, Android SDK Platform 36, Build Tools 36.0.0, NDK 29.0.14206865, and use Linux x86_64 or WSL for native libraries. The Gradle Wrapper downloads Gradle 9.4.1.
 
 ```sh
-../tools/gradle-9.4.1/bin/gradle assembleNdebug \
+./gradlew assembleNdebug \
   -PnativePlayerFfmpegFlavor=ffmpeg8 \
   -PnativeAbis=arm64-v8a,armeabi-v7a,x86
 ```
 
-The APK will be written to `build/outputs/apk`.
+The APK is written under `build/outputs/apk`. The first build downloads FFmpeg, dav1d, and libyuv sources. The repository does not contain the private release key and does not automatically produce the official signed APK.
 
-Gradle configuration cache is enabled by default. If a local Gradle task fails
-because of configuration cache, rerun it once with `--no-configuration-cache`
-and report the task name.
+See [docs/BUILDING.md](docs/BUILDING.md), [docs/TESTING.md](docs/TESTING.md), and [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md) for the complete workflow.
 
-Build and release documentation:
+### Feedback, Credits, And License
 
-- `docs/SIGNING.md`
-- `docs/NDK_UPGRADE_R29.md`
-- `docs/CI.md`
-- `docs/TESTING.md`
-- `docs/RELEASE_CHECKLIST.md`
-- `docs/GRADLE_CONFIGURATION_CACHE.md`
+Use [GitHub Issues](https://github.com/andrewpozdnakov7-jpg/Dashchan_2/issues) for reproducible bugs and feature requests. Report vulnerabilities according to [SECURITY.md](SECURITY.md). Contributions are described in [CONTRIBUTING.md](CONTRIBUTING.md).
 
-### Extensions
+Dashchan_2 is based on Dashchan. Ideas and code paths were studied and adapted from [TrixiEther/DashchanFork](https://github.com/TrixiEther/DashchanFork), and themes were imported from [TrixiEther/Dashchan-Meta](https://github.com/TrixiEther/Dashchan-Meta). OpenAI Codex and Anthropic Claude assisted with development and verification; final responsibility remains with the maintainer.
 
-The 2ch/Dvach implementation and experimental read-only 4chan support are
-bundled in this repository. Both channels load inside the main application and
-do not require separate APKs. 4chan is disabled by default and does not yet
-support posting. Sources for other external extensions are maintained in the
-sibling `Dashchan_2-Extensions` repository.
-
-### Upstream And Credits
-
-Dashchan_2 is based on the original Dashchan source code. Some ideas and code
-paths were studied and adapted from `TrixiEther/DashchanFork`, and downloadable
-themes were imported from `TrixiEther/Dashchan-Meta`. Thanks to the original
-Dashchan authors, TrixiEther, and contributors to those projects.
-
-[OpenAI Codex](https://github.com/openai) and
-[Anthropic Claude](https://github.com/claude) assisted with analysis,
-development, and verification. Final decisions and responsibility for the
-published changes remain with the project maintainer.
-
-### License
-
-Dashchan_2 is based on Dashchan and is available under the
-[GNU General Public License, version 3 or later](COPYING).
+Licensed under the [GNU General Public License, version 3 or later](COPYING).

@@ -1,61 +1,55 @@
-# Fragmented MP4 playback test notes
+# Fragmented MP4 Playback Notes
 
-Dashchan-Webm supplies the FFmpeg native libraries used by the Dashchan built-in
-video player. When playback is slow for a valid MP4 file, first check whether the
-file is a fragmented MP4/DASH-like container and whether a library-only update is
-enough before changing Dashchan core player timing code.
+Dashchan_2 bundles the FFmpeg libraries from `Dashchan-Webm` into its main APK. Fragmented MP4 and malformed timestamp fixes involve both these libraries and the client player, so tests must use a rebuilt main application rather than installing a separate WebM extension.
 
-## Modern SDK baseline
+## Baseline
 
-The project is migrated to Android Gradle Plugin 9.2.x, compile SDK 36, target
-SDK 36, SDK Build Tools 36.0.0, and Android NDK 29.0.14206865.
+- Android Gradle Plugin 9.2.1;
+- compile SDK 36 and target SDK 30 in the main app;
+- minimum SDK 30 / Android 11;
+- Build Tools 36.0.0 and NDK 29.0.14206865;
+- FFmpeg 8.1.2 and dav1d 1.5.3.
 
-The minimum SDK is raised from 16 to 21 because Android NDK 29 only provides
-toolchain wrappers for API 21 and higher. The extension keeps the same
-`applicationId` and `lib.extension.name=webm`, so Dashchan can still discover it
-as the WebM library extension.
+## Useful Sample Traits
 
-## Sample markers
+Regression samples may include:
 
-The problematic sample used for this investigation has these relevant traits:
+- MP4 brands such as `iso6` and `dash`;
+- `sidx` followed by multiple `moof`/`mdat` pairs;
+- H.264 B-frames or HEVC streams;
+- HE-AACv2 audio;
+- non-zero, negative, discontinuous, or incorrectly trimmed timestamps;
+- audio continuing after video frame delivery stalls.
 
-- MP4 major brand `iso6` with compatible brand `dash`
-- top-level `sidx` followed by multiple `moof`/`mdat` pairs
-- H.264 video with B-frames
-- HE-AACv2 audio
-- approximately 20.2 seconds duration
+Do not commit user-provided media unless redistribution is explicitly permitted and metadata has been audited.
 
-Do not commit sample media files unless their redistribution is explicitly
-allowed.
+## External Analysis
 
-## Test variants
-
-Generate media variants outside the repository:
+Keep generated variants outside the repository:
 
 ```sh
 mkdir -p ../test-media
 cp /path/to/original.mp4 ../test-media/original.mp4
-ffmpeg -y -i ../test-media/original.mp4 -map 0 -c copy -movflags +faststart ../test-media/remux_faststart.mp4
-ffmpeg -y -i ../test-media/original.mp4 -c:v copy -c:a aac -profile:a aac_low -b:a 96k ../test-media/aac_lc.mp4
-ffmpeg -y -i ../test-media/original.mp4 -c:v libx264 -x264-params bframes=0 -c:a copy ../test-media/no_bframes.mp4
-ffmpeg -y -i ../test-media/original.mp4 -an -c:v copy ../test-media/video_only.mp4
+ffmpeg -y -i ../test-media/original.mp4 -map 0 -c copy \
+  -movflags +faststart ../test-media/remux_faststart.mp4
+ffmpeg -y -i ../test-media/original.mp4 -c:v copy -c:a aac \
+  -profile:a aac_low -b:a 96k ../test-media/aac_lc.mp4
+ffmpeg -y -i ../test-media/original.mp4 -an -c:v copy \
+  ../test-media/video_only.mp4
 for file in ../test-media/*.mp4; do
-	ffprobe -v error -show_format -show_streams -print_format json "$file" > "$file.ffprobe.json"
+  ffprobe -v error -show_format -show_streams -print_format json \
+    "$file" > "$file.ffprobe.json"
 done
 ```
 
-## Manual playback matrix
-
-Install the rebuilt WebM extension, trust it in Dashchan if prompted, and test:
+## Device Matrix
 
 | File | Purpose | Expected result |
 | --- | --- | --- |
-| `original.mp4` | fragmented MP4 + H.264 + HE-AACv2 regression case | plays at normal speed |
-| `remux_faststart.mp4` | same streams with conventional MP4 layout | separates fMP4 container issues |
-| `aac_lc.mp4` | replaces HE-AACv2 audio | separates AAC/audio-clock issues |
-| `no_bframes.mp4` | removes B-frames | separates PTS/DTS ordering issues |
-| `video_only.mp4` | removes audio sync | separates audio/video sync issues |
+| Original | Exact forum regression case | Starts, advances, seeks, and reaches the end |
+| Fast-start remux | Separates fragmented-container behavior | Same streams play normally |
+| AAC-LC variant | Separates audio-clock/profile behavior | Audio and video remain synchronized |
+| Video-only variant | Separates audio synchronization | Video frame delivery does not stall |
+| Shifted/truncated sample | Exercises timestamp normalization | Duration and seeking remain usable |
 
-Capture `adb logcat` around each run and record whether playback starts, whether
-speed is normal, whether audio is present, and whether audio/video drift is
-visible.
+For each file, test normal speed, a non-1x speed, seeking, pause/resume, rotation, and picture-in-picture. Record whether audio/video drift appears and whether returning from PiP restores one player instance with visible controls.

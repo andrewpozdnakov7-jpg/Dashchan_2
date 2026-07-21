@@ -1,1 +1,1 @@
-Client for imageboards
+Imageboard client for Android 11+

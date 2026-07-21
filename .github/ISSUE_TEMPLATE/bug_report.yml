@@ -1,0 +1,73 @@
+name: Bug report
+description: Report a reproducible Dashchan_2 problem
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Russian or English is welcome. Remove personal data, Passcodes, cookies, IP addresses, and unrelated application logs before submitting.
+  - type: input
+    id: version
+    attributes:
+      label: Dashchan_2 version
+      description: Include both version name and code from Settings > About.
+      placeholder: "3.2.5 (1085)"
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device and Android version
+      placeholder: "Device model, Android version, ROM/firmware"
+    validations:
+      required: true
+  - type: dropdown
+    id: channel
+    attributes:
+      label: Update channel
+      options:
+        - Stable
+        - Beta
+        - Unknown
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open ...
+        2. Tap ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Sanitized logs or screenshots
+      description: Paste the crash section from logcat when available. Do not upload private information.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I tested the latest available version.
+          required: true
+        - label: I searched existing issues.
+          required: true
+        - label: I removed sensitive information from attachments.
+          required: true

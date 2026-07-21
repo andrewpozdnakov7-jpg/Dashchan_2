@@ -5,6 +5,8 @@
 !/.gitignore
 !/AndroidManifest.xml
 !/build.gradle
+!/CODE_OF_CONDUCT.md
+!/CONTRIBUTING.md
 !/COPYING
 !/Dashchan-Webm
 !/Dashchan-Webm/**
@@ -22,6 +24,7 @@
 !/metadata
 !/proguard-rules.pro
 !/README.md
+!/SECURITY.md
 !/res
 !/src
 !/unitTests
