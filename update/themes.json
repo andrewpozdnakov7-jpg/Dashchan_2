@@ -145,6 +145,21 @@
 			"quote": "#ff3366cc",
 			"tripcode": "#ff8800aa",
 			"capcode": "#ff0088aa"
+		},
+		{
+			"base": "dark",
+			"name": "YAPIDOR",
+			"window": "#171717",
+			"primary": "@window",
+			"accent": "#DB8202",
+			"card": "@window",
+			"quote": "#bede6a",
+			"tripcode": "#ff33cc88",
+			"capcode": "#ff66bbff",
+			"post": "#C6C6C8",
+			"meta": "#707070",
+			"spoiler": "#3B3B3B",
+			"link": "#DB8202"
 		}
 	]
 }
