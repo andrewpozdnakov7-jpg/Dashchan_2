@@ -15,6 +15,8 @@ import android.graphics.Point;
 import android.graphics.drawable.Icon;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Rational;
 import android.view.Gravity;
 import android.view.View;
@@ -24,7 +26,7 @@ import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.media.VideoPlayer;
 import com.mishiranu.dashchan.util.AudioFocus;
 import java.io.File;
-import java.util.Collections;
+import java.util.Arrays;
 
 public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 	private static final String EXTRA_FILE_PATH = "filePath";
@@ -33,7 +35,11 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 	private static final String EXTRA_MUTED = "muted";
 	private static final String EXTRA_PLAYING = "playing";
 	private static final String ACTION_TOGGLE_PLAYBACK = VideoPipActivity.class.getName() + ".TOGGLE_PLAYBACK";
+	private static final String ACTION_SEEK_BACKWARD = VideoPipActivity.class.getName() + ".SEEK_BACKWARD";
+	private static final String ACTION_SEEK_FORWARD = VideoPipActivity.class.getName() + ".SEEK_FORWARD";
 	private static final int REQUEST_TOGGLE_PLAYBACK = 1;
+	private static final int REQUEST_SEEK_BACKWARD = 2;
+	private static final int REQUEST_SEEK_FORWARD = 3;
 
 	private static final Object TRANSFER_LOCK = new Object();
 	// The PiP activity runs in the same process, so it can reuse the initialized native player.
@@ -94,11 +100,29 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 	private boolean exitedPictureInPicture;
 	private boolean returnedToGallery;
 	private boolean receiverRegistered;
+	private final Handler handler = new Handler(Looper.getMainLooper());
+	private final Runnable finishDismissedPictureInPicture = () -> {
+		if (enteredPictureInPicture && exitedPictureInPicture && !returnedToGallery
+				&& !isFinishing() && !hasWindowFocus()) {
+			VideoPlayer player = this.player;
+			if (player != null) {
+				player.setPlaying(false);
+			}
+			if (audioFocus != null) {
+				audioFocus.release();
+			}
+			finishAndRemoveTask();
+		}
+	};
 	private final BroadcastReceiver controlReceiver = new BroadcastReceiver() {
 		@Override
 		public void onReceive(Context context, Intent intent) {
 			if (ACTION_TOGGLE_PLAYBACK.equals(intent.getAction())) {
 				togglePlayback();
+			} else if (ACTION_SEEK_BACKWARD.equals(intent.getAction())) {
+				seekBy(-1);
+			} else if (ACTION_SEEK_FORWARD.equals(intent.getAction())) {
+				seekBy(1);
 			}
 		}
 	};
@@ -107,6 +131,9 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		overridePendingTransition(0, 0);
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+			getSplashScreen().setOnExitAnimationListener(splashScreenView -> splashScreenView.remove());
+		}
 		if (!getPackageManager().hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) {
 			finish();
 			return;
@@ -134,6 +161,8 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 		setContentView(rootView);
 
 		IntentFilter controlFilter = new IntentFilter(ACTION_TOGGLE_PLAYBACK);
+		controlFilter.addAction(ACTION_SEEK_BACKWARD);
+		controlFilter.addAction(ACTION_SEEK_FORWARD);
 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
 			registerReceiver(controlReceiver, controlFilter, Context.RECEIVER_NOT_EXPORTED);
 		} else {
@@ -195,6 +224,9 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 
 	private PictureInPictureParams createPictureInPictureParams(Point dimensions) {
 		PictureInPictureParams.Builder builder = new PictureInPictureParams.Builder();
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+			builder.setSeamlessResizeEnabled(true);
+		}
 		if (dimensions != null && dimensions.x > 0 && dimensions.y > 0) {
 			int width = dimensions.x;
 			int height = dimensions.y;
@@ -211,12 +243,22 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 		boolean playing = player != null && player.isPlaying();
 		int iconResource = playing ? R.drawable.ic_pause : R.drawable.ic_play_arrow;
 		String title = getString(playing ? R.string.pause : R.string.play);
-		Intent controlIntent = new Intent(ACTION_TOGGLE_PLAYBACK).setPackage(getPackageName());
-		PendingIntent pendingIntent = PendingIntent.getBroadcast(this, REQUEST_TOGGLE_PLAYBACK, controlIntent,
-				PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-		RemoteAction action = new RemoteAction(Icon.createWithResource(this, iconResource), title, title, pendingIntent);
-		builder.setActions(Collections.singletonList(action));
+		int seekSeconds = Preferences.getVideoDoubleTapSeekInterval();
+		RemoteAction seekBackward = createRemoteAction(ACTION_SEEK_BACKWARD, REQUEST_SEEK_BACKWARD,
+				R.drawable.ic_fast_rewind, getString(R.string.video_seek_backward__format, seekSeconds));
+		RemoteAction toggle = createRemoteAction(ACTION_TOGGLE_PLAYBACK, REQUEST_TOGGLE_PLAYBACK,
+				iconResource, title);
+		RemoteAction seekForward = createRemoteAction(ACTION_SEEK_FORWARD, REQUEST_SEEK_FORWARD,
+				R.drawable.ic_fast_forward, getString(R.string.video_seek_forward__format, seekSeconds));
+		builder.setActions(Arrays.asList(seekBackward, toggle, seekForward));
 		return builder.build();
+	}
+
+	private RemoteAction createRemoteAction(String action, int requestCode, int iconResource, String title) {
+		Intent controlIntent = new Intent(action).setPackage(getPackageName());
+		PendingIntent pendingIntent = PendingIntent.getBroadcast(this, requestCode, controlIntent,
+				PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+		return new RemoteAction(Icon.createWithResource(this, iconResource), title, title, pendingIntent);
 	}
 
 	private void updatePictureInPictureParams() {
@@ -242,6 +284,20 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 		startPlaying = playing;
 		player.setPlaying(playing);
 		updatePictureInPictureParams();
+	}
+
+	private void seekBy(int direction) {
+		VideoPlayer player = this.player;
+		if (player == null) {
+			return;
+		}
+		long position = player.getPosition()
+				+ direction * Preferences.getVideoDoubleTapSeekInterval() * 1000L;
+		long duration = player.getDuration();
+		if (duration > 0L) {
+			position = Math.min(position, duration);
+		}
+		player.setPosition(Math.max(position, 0L));
 	}
 
 	private void maybeReturnToGallery() {
@@ -276,13 +332,24 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 	@Override
 	protected void onResume() {
 		super.onResume();
+		handler.removeCallbacks(finishDismissedPictureInPicture);
 		maybeReturnToGallery();
+	}
+
+	@Override
+	protected void onStop() {
+		super.onStop();
+		if (enteredPictureInPicture && !isInPictureInPictureMode() && !returnedToGallery
+				&& !isChangingConfigurations() && !isFinishing()) {
+			finishAndRemoveTask();
+		}
 	}
 
 	@Override
 	public void onWindowFocusChanged(boolean hasFocus) {
 		super.onWindowFocusChanged(hasFocus);
 		if (hasFocus) {
+			handler.removeCallbacks(finishDismissedPictureInPicture);
 			maybeReturnToGallery();
 		}
 	}
@@ -291,14 +358,18 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 	public void onPictureInPictureModeChanged(boolean isInPictureInPictureMode, Configuration newConfig) {
 		super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig);
 		if (isInPictureInPictureMode) {
+			handler.removeCallbacks(finishDismissedPictureInPicture);
 			enteredPictureInPicture = true;
 		} else if (enteredPictureInPicture) {
 			exitedPictureInPicture = true;
+			handler.removeCallbacks(finishDismissedPictureInPicture);
+			handler.postDelayed(finishDismissedPictureInPicture, 250L);
 		}
 	}
 
 	@Override
 	protected void onDestroy() {
+		handler.removeCallbacks(finishDismissedPictureInPicture);
 		if (receiverRegistered) {
 			unregisterReceiver(controlReceiver);
 			receiverRegistered = false;

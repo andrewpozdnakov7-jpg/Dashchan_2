@@ -53,6 +53,8 @@ public class GeneralFragment extends PreferenceFragment implements FragmentHandl
 		addHeader(R.string.navigation);
 		addCheck(true, Preferences.KEY_CLOSE_ON_BACK, Preferences.DEFAULT_CLOSE_ON_BACK,
 				R.string.close_pages, R.string.close_pages__summary);
+		addCheck(true, Preferences.KEY_RESTORE_PAGES, Preferences.DEFAULT_RESTORE_PAGES,
+				R.string.restore_pages, R.string.restore_pages__summary);
 		addCheck(true, Preferences.KEY_REMEMBER_HISTORY, Preferences.DEFAULT_REMEMBER_HISTORY,
 				R.string.remember_history, 0);
 		if (ChanManager.getInstance().hasMultipleAvailableChans()) {

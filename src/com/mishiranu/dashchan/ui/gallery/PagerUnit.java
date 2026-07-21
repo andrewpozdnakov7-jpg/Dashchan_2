@@ -169,6 +169,10 @@ public class PagerUnit implements PagerInstance.Callback {
 		videoUnit.onPause();
 	}
 
+	public boolean enterPictureInPictureIfPlaying() {
+		return videoUnit.enterPictureInPictureIfPlaying();
+	}
+
 	public int getCurrentIndex() {
 		return viewPager.getCurrentIndex();
 	}
@@ -665,7 +669,7 @@ public class PagerUnit implements PagerInstance.Callback {
 		@Override
 		public void onPositionChange(PhotoViewPager view, int index, View centerView, View leftView, View rightView,
 				boolean manually) {
-			boolean mayShowThumbnailOnly = !manually && !Preferences.isVideoPlayAfterScroll();
+			boolean mayShowThumbnailOnly = galleryMode || (!manually && !Preferences.isVideoPlayAfterScroll());
 			PagerInstance.ViewHolder holder = (PagerInstance.ViewHolder) centerView.getTag();
 			if (index < previousIndex) {
 				pagerInstance.scrollingLeft = true;
@@ -709,8 +713,12 @@ public class PagerUnit implements PagerInstance.Callback {
 		public boolean onVerticalGestureStart(PhotoViewPager view, float x, float y) {
 			boolean landscape = galleryInstance.context.getResources().getConfiguration().orientation
 					== Configuration.ORIENTATION_LANDSCAPE;
+			int widthPercent = Preferences.getVideoVolumeGestureWidth(landscape);
+			int[] insets = Preferences.getVideoVolumeGestureInsets(landscape);
 			if (!Preferences.isVideoVolumeGesture()
-					|| x < view.getWidth() * 0.7f || (landscape && y < view.getHeight() * 0.4f)
+					|| x < view.getWidth() * (100 - widthPercent) / 100f
+					|| y < view.getHeight() * insets[0] / 100f
+					|| y > view.getHeight() * (100 - insets[1]) / 100f
 					|| !videoUnit.isAudioPresent() || audioManager == null
 					|| audioManager.isVolumeFixed()) {
 				return false;

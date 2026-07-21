@@ -22,6 +22,7 @@ public final class LauncherIconManager {
 	public static final String VALUE_SLOPCHAN = "slopchan";
 	public static final String VALUE_DVACH = "dvach";
 	public static final String LOGO_DEFAULT = "default";
+	public static final String LOGO_OLD_SCHOOL = "old_school";
 	public static final String LOGO_2 = "logo_2";
 	public static final String LOGO_3 = "logo_3";
 	public static final String LOGO_4 = "logo_4";
@@ -57,8 +58,10 @@ public final class LauncherIconManager {
 	}
 
 	private static final List<LogoOption> LOGO_OPTIONS = Collections.unmodifiableList(Arrays.asList(
-			new LogoOption(LOGO_DEFAULT, R.string.application_logo_default, R.mipmap.ic_launcher,
+			new LogoOption(LOGO_DEFAULT, R.string.application_logo_default, R.drawable.application_logo_default,
 					LogoAccess.PUBLIC, ""),
+			new LogoOption(LOGO_OLD_SCHOOL, R.string.application_logo_old_school, R.mipmap.ic_launcher,
+					LogoAccess.PUBLIC, "OldSchool"),
 			new LogoOption(LOGO_2, R.string.application_logo_2, R.drawable.application_logo_2,
 					LogoAccess.PUBLIC, "Logo2"),
 			new LogoOption(LOGO_7, R.string.application_logo_7, R.drawable.application_logo_7,
@@ -178,7 +181,7 @@ public final class LauncherIconManager {
 			return false;
 		}
 		return requestCustomShortcut(context, shortcutManager, name,
-				Icon.createWithResource(context, R.mipmap.ic_launcher));
+				Icon.createWithResource(context, R.drawable.application_logo_default));
 	}
 
 	public static boolean requestCustomShortcut(Context context, String name, Bitmap bitmap) {

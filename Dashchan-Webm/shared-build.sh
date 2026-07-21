@@ -90,6 +90,7 @@ ffmpeg_options=(
 	'--enable-swresample'
 	'--enable-swscale'
 	'--enable-filter=atempo'
+	'--enable-demuxer=avi'
 	'--enable-demuxer=matroska'
 	'--enable-demuxer=mov'
 	'--enable-decoder=vp8'

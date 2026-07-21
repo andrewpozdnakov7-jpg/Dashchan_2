@@ -26,6 +26,7 @@ import androidx.annotation.RequiresApi;
 import androidx.core.view.ViewCompat;
 import androidx.customview.widget.ViewDragHelper;
 import com.mishiranu.dashchan.R;
+import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.util.GraphicsUtils;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.util.ViewUtils;
@@ -723,7 +724,12 @@ public class DialogStack<T extends DialogStack.ViewFactory<T>> implements Iterab
 
 			setBackgroundResource(backgroundResId);
 			this.elevation = elevation;
-			setBackgroundTintList(ColorStateList.valueOf(ThemeEngine.getTheme(context).card));
+			int cardColor = ThemeEngine.getTheme(context).card;
+			if (Preferences.isRoundedDialogs()) {
+				ThemeEngine.applyRoundedDialogBackground(this, cardColor);
+			} else {
+				setBackgroundTintList(ColorStateList.valueOf(cardColor));
+			}
 			paint.setColor((int) (dimAmount * 0xff) << 24);
 			setActive(true);
 		}

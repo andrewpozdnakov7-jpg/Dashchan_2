@@ -251,6 +251,12 @@
 			"name": "3.2.5",
 			"date": "20.07.2026",
 			"changelog": true
+		},
+		{
+			"code": 1086,
+			"name": "3.2.6",
+			"date": "21.07.2026",
+			"changelog": true
 		}
 	]
 }

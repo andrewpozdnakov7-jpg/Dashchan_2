@@ -700,6 +700,13 @@ public class Preferences {
 		return PREFERENCES.getBoolean(KEY_CLOSE_ON_BACK, DEFAULT_CLOSE_ON_BACK);
 	}
 
+	public static final String KEY_RESTORE_PAGES = "restore_pages";
+	public static final boolean DEFAULT_RESTORE_PAGES = true;
+
+	public static boolean isRestorePages() {
+		return PREFERENCES.getBoolean(KEY_RESTORE_PAGES, DEFAULT_RESTORE_PAGES);
+	}
+
 	public static final String KEY_CUT_THUMBNAILS = "cut_thumbnails";
 	public static final boolean DEFAULT_CUT_THUMBNAILS = true;
 
@@ -1508,6 +1515,13 @@ public class Preferences {
 				DEFAULT_THUMBNAILS_SCALE), MAX_THUMBNAILS_SCALE)) / 100f;
 	}
 
+	public static final String KEY_ROUNDED_DIALOGS = "rounded_dialogs";
+	public static final boolean DEFAULT_ROUNDED_DIALOGS = false;
+
+	public static boolean isRoundedDialogs() {
+		return PREFERENCES.getBoolean(KEY_ROUNDED_DIALOGS, DEFAULT_ROUNDED_DIALOGS);
+	}
+
 	public static final String KEY_TRUSTED_EXSTENSIONS = "trusted_extensions";
 
 	public static boolean isExtensionTrusted(String packageName, String fingerprint) {
@@ -1623,9 +1637,72 @@ public class Preferences {
 
 	public static final String KEY_VIDEO_VOLUME_GESTURE = "video_volume_gesture";
 	public static final boolean DEFAULT_VIDEO_VOLUME_GESTURE = true;
+	public static final String KEY_VIDEO_VOLUME_GESTURE_PORTRAIT_WIDTH = "video_volume_gesture_portrait_width";
+	public static final String KEY_VIDEO_VOLUME_GESTURE_PORTRAIT_TOP = "video_volume_gesture_portrait_top";
+	public static final String KEY_VIDEO_VOLUME_GESTURE_PORTRAIT_BOTTOM = "video_volume_gesture_portrait_bottom";
+	public static final String KEY_VIDEO_VOLUME_GESTURE_LANDSCAPE_WIDTH = "video_volume_gesture_landscape_width";
+	public static final String KEY_VIDEO_VOLUME_GESTURE_LANDSCAPE_TOP = "video_volume_gesture_landscape_top";
+	public static final String KEY_VIDEO_VOLUME_GESTURE_LANDSCAPE_BOTTOM = "video_volume_gesture_landscape_bottom";
+	public static final int DEFAULT_VIDEO_VOLUME_GESTURE_PORTRAIT_WIDTH = 30;
+	public static final int DEFAULT_VIDEO_VOLUME_GESTURE_PORTRAIT_TOP = 0;
+	public static final int DEFAULT_VIDEO_VOLUME_GESTURE_PORTRAIT_BOTTOM = 0;
+	public static final int DEFAULT_VIDEO_VOLUME_GESTURE_LANDSCAPE_WIDTH = 30;
+	public static final int DEFAULT_VIDEO_VOLUME_GESTURE_LANDSCAPE_TOP = 40;
+	public static final int DEFAULT_VIDEO_VOLUME_GESTURE_LANDSCAPE_BOTTOM = 0;
+	public static final int MIN_VIDEO_VOLUME_GESTURE_WIDTH = 10;
+	public static final int MAX_VIDEO_VOLUME_GESTURE_WIDTH = 50;
+	public static final int MAX_VIDEO_VOLUME_GESTURE_INSET = 70;
+	public static final int MIN_VIDEO_VOLUME_GESTURE_HEIGHT = 20;
 
 	public static boolean isVideoVolumeGesture() {
 		return PREFERENCES.getBoolean(KEY_VIDEO_VOLUME_GESTURE, DEFAULT_VIDEO_VOLUME_GESTURE);
+	}
+
+	public static int getVideoVolumeGestureWidth(boolean landscape) {
+		return clamp(PREFERENCES.getInt(landscape ? KEY_VIDEO_VOLUME_GESTURE_LANDSCAPE_WIDTH
+				: KEY_VIDEO_VOLUME_GESTURE_PORTRAIT_WIDTH, landscape
+				? DEFAULT_VIDEO_VOLUME_GESTURE_LANDSCAPE_WIDTH
+				: DEFAULT_VIDEO_VOLUME_GESTURE_PORTRAIT_WIDTH),
+				MIN_VIDEO_VOLUME_GESTURE_WIDTH, MAX_VIDEO_VOLUME_GESTURE_WIDTH);
+	}
+
+	public static int[] getVideoVolumeGestureInsets(boolean landscape) {
+		int top = clamp(PREFERENCES.getInt(landscape ? KEY_VIDEO_VOLUME_GESTURE_LANDSCAPE_TOP
+				: KEY_VIDEO_VOLUME_GESTURE_PORTRAIT_TOP, landscape
+				? DEFAULT_VIDEO_VOLUME_GESTURE_LANDSCAPE_TOP
+				: DEFAULT_VIDEO_VOLUME_GESTURE_PORTRAIT_TOP), 0, MAX_VIDEO_VOLUME_GESTURE_INSET);
+		int bottom = clamp(PREFERENCES.getInt(landscape ? KEY_VIDEO_VOLUME_GESTURE_LANDSCAPE_BOTTOM
+				: KEY_VIDEO_VOLUME_GESTURE_PORTRAIT_BOTTOM, landscape
+				? DEFAULT_VIDEO_VOLUME_GESTURE_LANDSCAPE_BOTTOM
+				: DEFAULT_VIDEO_VOLUME_GESTURE_PORTRAIT_BOTTOM), 0, MAX_VIDEO_VOLUME_GESTURE_INSET);
+		int maximumInsets = 100 - MIN_VIDEO_VOLUME_GESTURE_HEIGHT;
+		if (top + bottom > maximumInsets) {
+			bottom = maximumInsets - top;
+			if (bottom < 0) {
+				bottom = 0;
+				top = maximumInsets;
+			}
+		}
+		return new int[] {top, bottom};
+	}
+
+	public static void setVideoVolumeGestureArea(boolean landscape, int width, int top, int bottom) {
+		width = clamp(width, MIN_VIDEO_VOLUME_GESTURE_WIDTH, MAX_VIDEO_VOLUME_GESTURE_WIDTH);
+		top = clamp(top, 0, MAX_VIDEO_VOLUME_GESTURE_INSET);
+		bottom = clamp(bottom, 0, MAX_VIDEO_VOLUME_GESTURE_INSET);
+		bottom = Math.min(bottom, 100 - MIN_VIDEO_VOLUME_GESTURE_HEIGHT - top);
+		try (SharedPreferences.Editor editor = PREFERENCES.edit()) {
+			editor.put(landscape ? KEY_VIDEO_VOLUME_GESTURE_LANDSCAPE_WIDTH
+					: KEY_VIDEO_VOLUME_GESTURE_PORTRAIT_WIDTH, width);
+			editor.put(landscape ? KEY_VIDEO_VOLUME_GESTURE_LANDSCAPE_TOP
+					: KEY_VIDEO_VOLUME_GESTURE_PORTRAIT_TOP, top);
+			editor.put(landscape ? KEY_VIDEO_VOLUME_GESTURE_LANDSCAPE_BOTTOM
+					: KEY_VIDEO_VOLUME_GESTURE_PORTRAIT_BOTTOM, bottom);
+		}
+	}
+
+	private static int clamp(int value, int minimum, int maximum) {
+		return Math.max(minimum, Math.min(maximum, value));
 	}
 
 	public static final String KEY_VIDEO_DOUBLE_TAP_SEEK = "video_double_tap_seek";
@@ -1640,6 +1717,14 @@ public class Preferences {
 
 	public static boolean isVideoPictureInPicture() {
 		return PREFERENCES.getBoolean(KEY_VIDEO_PICTURE_IN_PICTURE, DEFAULT_VIDEO_PICTURE_IN_PICTURE);
+	}
+
+	public static final String KEY_VIDEO_PICTURE_IN_PICTURE_AUTO = "video_picture_in_picture_auto";
+	public static final boolean DEFAULT_VIDEO_PICTURE_IN_PICTURE_AUTO = true;
+
+	public static boolean isVideoPictureInPictureAuto() {
+		return PREFERENCES.getBoolean(KEY_VIDEO_PICTURE_IN_PICTURE_AUTO,
+				DEFAULT_VIDEO_PICTURE_IN_PICTURE_AUTO);
 	}
 
 	public static final String KEY_VIDEO_DOUBLE_TAP_SEEK_INTERVAL = "video_double_tap_seek_interval";

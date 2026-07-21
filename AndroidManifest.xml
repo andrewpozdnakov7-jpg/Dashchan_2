@@ -57,8 +57,8 @@
 	<application
 		android:name=".content.MainApplication"
 		android:label="${appLabel}"
-		android:icon="@mipmap/ic_launcher"
-		android:logo="@mipmap/ic_logo"
+		android:icon="@drawable/application_logo_default"
+		android:logo="@drawable/application_logo_default"
 		android:theme="@style/Theme.Launcher"
 		android:largeHeap="true"
 		android:allowBackup="true"
@@ -120,6 +120,51 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
+			android:icon="@drawable/application_logo_default"
+			android:label="Dashchan_2"
+			android:logo="@drawable/application_logo_default">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.SlopchanAlias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_default"
+			android:label="Двач"
+			android:logo="@drawable/application_logo_default">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.DvachAlias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="true"
+			android:exported="true"
+			android:icon="@drawable/application_logo_default"
+			android:label="Slooop"
+			android:logo="@drawable/application_logo_default">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.Dashchan2OldSchoolAlias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
 			android:icon="@mipmap/ic_launcher"
 			android:label="Dashchan_2"
 			android:logo="@mipmap/ic_logo">
@@ -131,7 +176,7 @@
 		</activity-alias>
 
 		<activity-alias
-			android:name=".launcher.SlopchanAlias"
+			android:name=".launcher.SlopchanOldSchoolAlias"
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
@@ -146,9 +191,9 @@
 		</activity-alias>
 
 		<activity-alias
-			android:name=".launcher.DvachAlias"
+			android:name=".launcher.DvachOldSchoolAlias"
 			android:targetActivity=".ui.MainActivity"
-			android:enabled="true"
+			android:enabled="false"
 			android:exported="true"
 			android:icon="@mipmap/ic_launcher"
 			android:label="Slooop"
@@ -733,6 +778,7 @@
 			android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"
 			android:excludeFromRecents="true"
 			android:exported="false"
+			android:icon="@drawable/ic_transparent"
 			android:resizeableActivity="true"
 			android:supportsPictureInPicture="true"
 			android:theme="@style/Theme.VideoPip" />

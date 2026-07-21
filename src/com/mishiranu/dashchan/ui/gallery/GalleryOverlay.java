@@ -606,6 +606,11 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 		}
 	}
 
+	public boolean enterPictureInPictureIfPlaying() {
+		return pagerUnit != null && !hiddenForPictureInPicture
+				&& pagerUnit.enterPictureInPictureIfPlaying();
+	}
+
 	private static class GalleryFilterOption {
 		public final String value;
 		public final String title;

@@ -7,6 +7,10 @@ import android.content.ContextWrapper;
 import android.content.res.ColorStateList;
 import android.content.res.TypedArray;
 import android.graphics.Color;
+import android.graphics.Rect;
+import android.graphics.drawable.Drawable;
+import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.InsetDrawable;
 import android.util.AttributeSet;
 import android.view.ContextThemeWrapper;
 import android.view.LayoutInflater;
@@ -55,6 +59,25 @@ public class ThemeEngine {
 
 	private static final int STATUS_OVERLAY_LIGHT = 0x22000000;
 	private static final int STATUS_OVERLAY_DARK = 0x33000000;
+	private static final float ROUNDED_DIALOG_RADIUS_DP = 28f;
+
+	static void applyRoundedDialogBackground(View view, int color) {
+		GradientDrawable roundedDrawable = new GradientDrawable();
+		roundedDrawable.setColor(color);
+		roundedDrawable.setCornerRadius(ROUNDED_DIALOG_RADIUS_DP * ResourceUtils.obtainDensity(view));
+
+		Drawable oldBackground = view.getBackground();
+		Drawable background = roundedDrawable;
+		if (oldBackground instanceof InsetDrawable) {
+			Rect insets = new Rect();
+			oldBackground.getPadding(insets);
+			background = new InsetDrawable(roundedDrawable,
+					insets.left, insets.top, insets.right, insets.bottom);
+		}
+		view.setBackgroundTintList(null);
+		view.setBackground(background);
+		view.setClipToOutline(true);
+	}
 
 	public static class Theme implements Comparable<Theme> {
 		public enum Base {
@@ -337,11 +360,13 @@ public class ThemeEngine {
 	private static class OverlayAttachListener implements AttachListener {
 		private final boolean direct;
 		private final boolean dialog;
+		private final boolean roundableDialog;
 		private boolean processed = false;
 
-		public OverlayAttachListener(boolean direct, boolean dialog) {
+		public OverlayAttachListener(boolean direct, boolean dialog, boolean overlay) {
 			this.direct = direct;
 			this.dialog = dialog;
+			roundableDialog = dialog && !overlay;
 		}
 
 		@Override
@@ -358,7 +383,11 @@ public class ThemeEngine {
 					ThemeContext themeContext = obtainThemeContext(decorView.getContext());
 					if (themeContext != null) {
 						if (dialog && shouldApplyStyle(decorView.getContext())) {
-							decorView.setBackgroundTintList(ColorStateList.valueOf(themeContext.theme.card));
+							if (roundableDialog && Preferences.isRoundedDialogs()) {
+								applyRoundedDialogBackground(decorView, themeContext.theme.card);
+							} else {
+								decorView.setBackgroundTintList(ColorStateList.valueOf(themeContext.theme.card));
+							}
 						}
 						Object tag = decorView.getTag(R.id.tag_theme_engine);
 						boolean forceDialog = tag instanceof Boolean && (boolean) tag;
@@ -426,7 +455,7 @@ public class ThemeEngine {
 				boolean direct, boolean dialog, boolean overlay, boolean popup) {
 			super(original, newContext);
 			this.direct = direct;
-			attachListener = dialog || overlay ? new OverlayAttachListener(direct, dialog)
+			attachListener = dialog || overlay ? new OverlayAttachListener(direct, dialog, overlay)
 					: popup ? POPUP_ATTACH_LISTENER : null;
 		}
 

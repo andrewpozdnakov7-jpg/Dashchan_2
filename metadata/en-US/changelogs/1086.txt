@@ -1,0 +1,7 @@
+* Improved picture-in-picture playback with automatic entry when minimized, seek controls, and proper playback shutdown after dismissing the PiP window.
+* Added gesture controls with separate volume-gesture area settings for portrait and landscape orientations.
+* Added restoration of open boards and threads after restarting the application.
+* Added an optional rounded style for dialogs and post preview windows.
+* Expanded video support: the built-in player now handles AVI with MPEG-4 Part 2/Xvid video and AC-3 audio.
+* Fixed the first video starting automatically after applying a gallery filter.
+* Updated the default application icon while keeping the previous design as the "Old school" option.

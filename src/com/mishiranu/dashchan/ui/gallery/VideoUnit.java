@@ -628,13 +628,25 @@ public class VideoUnit {
 	private final View.OnClickListener pictureInPictureClickListener = this::handlePictureInPictureClick;
 
 	private void handlePictureInPictureClick(View v) {
-		if (player == null || !initialized || sourceFile == null || !sourceFile.isFile()) {
-			return;
+		enterPictureInPicture(v.getContext(), false);
+	}
+
+	boolean enterPictureInPictureIfPlaying() {
+		return Preferences.isVideoPictureInPicture() && Preferences.isVideoPictureInPictureAuto()
+				&& enterPictureInPicture(instance.galleryInstance.context, true);
+	}
+
+	private boolean enterPictureInPicture(Context context, boolean requirePlaying) {
+		if (pictureInPictureTransferred || player == null || !initialized || sourceFile == null
+				|| !sourceFile.isFile() || instance.currentHolder == null
+				|| instance.currentHolder.loadState != PagerInstance.LoadState.COMPLETE
+				|| requirePlaying && !player.isPlaying()) {
+			return false;
 		}
 		boolean playing = player.isPlaying();
 		long position = player.getPosition();
 		VideoPlayer transferredPlayer = player;
-		Intent intent = VideoPipActivity.createIntent(v.getContext(), sourceFile, position,
+		Intent intent = VideoPipActivity.createIntent(context, sourceFile, position,
 				playbackSpeed, muted, playing, this, transferredPlayer);
 		wasPlaying = false;
 		setPlaying(false, true);
@@ -643,10 +655,12 @@ public class VideoUnit {
 		instance.galleryInstance.callback.setGalleryVisibleForPictureInPicture(false);
 		try {
 			instance.galleryInstance.callback.getWindow().getContext().startActivity(intent);
+			return true;
 		} catch (RuntimeException e) {
 			VideoPipActivity.cancelPendingTransfer(this, transferredPlayer);
 			restorePictureInPicturePlayer(transferredPlayer, position, playbackSpeed, muted, playing);
-			Toast.makeText(v.getContext(), R.string.unknown_error, Toast.LENGTH_SHORT).show();
+			Toast.makeText(context, R.string.unknown_error, Toast.LENGTH_SHORT).show();
+			return false;
 		}
 	}
 

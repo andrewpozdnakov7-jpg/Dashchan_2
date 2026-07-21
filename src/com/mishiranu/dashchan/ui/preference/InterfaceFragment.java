@@ -64,9 +64,14 @@ public class InterfaceFragment extends PreferenceFragment {
 				R.string.scroll_thread_when_scrolling_gallery, 0);
 		addButton(R.string.themes, 0).setOnClickListener(p -> ((FragmentHandler) requireActivity())
 				.pushFragment(new ThemesFragment()));
+		addCheck(true, Preferences.KEY_ROUNDED_DIALOGS, Preferences.DEFAULT_ROUNDED_DIALOGS,
+				R.string.rounded_dialogs, R.string.rounded_dialogs__summary);
 		addCheck(true, Preferences.KEY_PREDICTIVE_BACK, Preferences.DEFAULT_PREDICTIVE_BACK,
 				R.string.enable_predictive_back, R.string.enable_predictive_back__summary)
 				.setOnAfterChangeListener(p -> ((StateActivity) requireActivity()).updateSystemBackCallback());
+		addButton(R.string.gesture_controls, R.string.gesture_controls__summary)
+				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
+						.pushFragment(new GestureSettingsFragment()));
 
 		addHeader(R.string.navigation_drawer);
 		addList(Preferences.KEY_PAGES_LIST, enumList(Preferences.PagesListMode.values(), o -> o.value),

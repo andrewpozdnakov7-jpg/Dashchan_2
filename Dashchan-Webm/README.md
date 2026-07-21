@@ -13,7 +13,7 @@ This directory contains the reproducible native-library build used by the Dashch
 | Android Build Tools | 36.0.0 |
 | Native ABIs | `arm64-v8a`, `armeabi-v7a`, `x86` |
 
-The enabled media set includes Matroska/WebM and MOV/MP4 containers; VP8, VP9, AV1, H.264, and H.265/HEVC video; and Vorbis, Opus, AAC, and MP3 audio. Compatibility wrappers expose legacy FFmpeg symbols still expected by the Dashchan native player.
+The enabled media set includes AVI, Matroska/WebM, and MOV/MP4 containers; VP8, VP9, AV1, H.264, H.265/HEVC, and MPEG-4 Part 2 video; and Vorbis, Opus, AAC, MP3, and AC-3 audio. Compatibility wrappers expose legacy FFmpeg symbols still expected by the Dashchan native player.
 
 ## Main Application Build
 

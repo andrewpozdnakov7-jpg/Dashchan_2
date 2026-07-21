@@ -16,6 +16,7 @@ import android.os.IBinder;
 import android.os.Parcel;
 import android.os.SystemClock;
 import android.provider.DocumentsContract;
+import android.util.AtomicFile;
 import android.util.Pair;
 import android.view.ActionMode;
 import android.view.KeyEvent;
@@ -83,7 +84,6 @@ import com.mishiranu.dashchan.widget.CustomDrawerLayout;
 import com.mishiranu.dashchan.widget.ExpandedScreen;
 import com.mishiranu.dashchan.widget.ThemeEngine;
 import com.mishiranu.dashchan.widget.ViewFactory;
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -111,6 +111,8 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	private static final String EXTRA_DRAWER_EXPANDED = "drawerExpanded";
 	private static final String EXTRA_DRAWER_CHAN_SELECT_MODE = "drawerChanSelectMode";
 	private static final String EXTRA_STORAGE_REQUEST_STATE = "storageRequestState";
+	private static final String EXTRA_PAGES_STATE_VERSION = "pagesStateVersion";
+	private static final int PAGES_STATE_VERSION = 1;
 
 	private static final PageFragment REFERENCE_FRAGMENT = new PageFragment();
 
@@ -275,32 +277,31 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 				.valueOf(savedInstanceState.getString(EXTRA_STORAGE_REQUEST_STATE)) : StorageRequestState.NONE;
 
 		ContentFragment currentFragmentFromSaved = null;
+		boolean restoredPagesSession = false;
 		if (savedInstanceState == null) {
 			File file = getSavedPagesFile();
-			if (file != null && file.exists()) {
-				Parcel parcel = Parcel.obtain();
-				ByteArrayOutputStream output = new ByteArrayOutputStream();
-				try (FileInputStream input = new FileInputStream(file)) {
-					IOUtils.copyStream(input, output);
-					byte[] data = output.toByteArray();
-					parcel.unmarshall(data, 0, data.length);
-					parcel.setDataPosition(0);
-					Bundle bundle = new Bundle();
-					bundle.setClassLoader(getClass().getClassLoader());
-					bundle.readFromParcel(parcel);
-					savedInstanceState = bundle;
-				} catch (IOException e) {
-					// Ignore
-				} finally {
-					parcel.recycle();
-					file.delete();
+			savedInstanceState = readPagesState(file, true, false);
+			if (savedInstanceState == null) {
+				File sessionFile = getPagesSessionFile();
+				if (Preferences.isRestorePages()) {
+					savedInstanceState = readPagesState(sessionFile, false, true);
+					restoredPagesSession = savedInstanceState != null;
+				} else {
+					deletePagesState(sessionFile);
 				}
 			}
 			if (savedInstanceState != null) {
-				currentFragmentFromSaved = (ContentFragment) AndroidUtils
-						.getParcelable(savedInstanceState, EXTRA_CURRENT_FRAGMENT, StackItem.class).create(null);
+				try {
+					StackItem stackItem = AndroidUtils.getParcelable(savedInstanceState,
+							EXTRA_CURRENT_FRAGMENT, StackItem.class);
+					currentFragmentFromSaved = stackItem != null ? (ContentFragment) stackItem.create(null) : null;
+				} catch (RuntimeException e) {
+					currentFragmentFromSaved = null;
+				}
 				if (currentFragmentFromSaved == null) {
 					savedInstanceState = null;
+					restoredPagesSession = false;
+					deletePagesState(getPagesSessionFile());
 				}
 			}
 		}
@@ -313,6 +314,9 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 			preservedPageItems.addAll(AndroidUtils.getParcelableArrayList(savedInstanceState,
 					EXTRA_PRESERVED_PAGE_ITEMS, SavedPageItem.class));
 			currentPageItem = AndroidUtils.getParcelable(savedInstanceState, EXTRA_CURRENT_PAGE_ITEM, PageItem.class);
+			if (restoredPagesSession) {
+				rebasePagesRealtime();
+			}
 		}
 		Iterator<SavedPageItem> iterator = new ConcatIterable<>(preservedPageItems, stackPageItems).iterator();
 		while (iterator.hasNext()) {
@@ -350,7 +354,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		}
 
 		if (!FlagUtils.get(getIntent().getFlags(), Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) &&
-				savedInstanceState == null) {
+				(savedInstanceState == null || restoredPagesSession)) {
 			navigateIntent(getIntent(), false);
 		}
 		if (getCurrentFragment() == null) {
@@ -396,6 +400,139 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	private File getSavedPagesFile() {
 		return CacheManager.getInstance().getInternalCacheFile("saved-pages");
+	}
+
+	private File getPagesSessionFile() {
+		return new File(getFilesDir(), "pages-session");
+	}
+
+	private Bundle readPagesState(File file, boolean deleteAfterRead, boolean checkVersion) {
+		if (file == null) {
+			return null;
+		}
+		Parcel parcel = Parcel.obtain();
+		ByteArrayOutputStream output = new ByteArrayOutputStream();
+		AtomicFile atomicFile = new AtomicFile(file);
+		boolean success = false;
+		try (FileInputStream input = atomicFile.openRead()) {
+			IOUtils.copyStream(input, output);
+			byte[] data = output.toByteArray();
+			parcel.unmarshall(data, 0, data.length);
+			parcel.setDataPosition(0);
+			Bundle bundle = new Bundle();
+			bundle.setClassLoader(getClass().getClassLoader());
+			bundle.readFromParcel(parcel);
+			if (checkVersion && bundle.getInt(EXTRA_PAGES_STATE_VERSION, 0) != PAGES_STATE_VERSION) {
+				return null;
+			}
+			success = true;
+			return bundle;
+		} catch (IOException | RuntimeException e) {
+			return null;
+		} finally {
+			parcel.recycle();
+			if (deleteAfterRead || !success) {
+				atomicFile.delete();
+			}
+		}
+	}
+
+	private static void deletePagesState(File file) {
+		if (file != null) {
+			new AtomicFile(file).delete();
+		}
+	}
+
+	private boolean writePagesState(File file, Bundle state) {
+		Parcel parcel = Parcel.obtain();
+		AtomicFile atomicFile = new AtomicFile(file);
+		FileOutputStream output = null;
+		try {
+			state.writeToParcel(parcel, 0);
+			byte[] data = parcel.marshall();
+			output = atomicFile.startWrite();
+			output.write(data);
+			atomicFile.finishWrite(output);
+			return true;
+		} catch (IOException | RuntimeException e) {
+			if (output != null) {
+				atomicFile.failWrite(output);
+			}
+			return false;
+		} finally {
+			parcel.recycle();
+		}
+	}
+
+	private Bundle createPagesState(boolean pagesOnly) {
+		ContentFragment currentFragment = getCurrentFragment();
+		if (currentFragment == null) {
+			return null;
+		}
+		Bundle state = new Bundle();
+		if (!pagesOnly || currentFragment instanceof PageFragment && currentPageItem != null) {
+			writePagesState(state);
+			state.putParcelable(EXTRA_CURRENT_FRAGMENT,
+					new StackItem(getSupportFragmentManager(), currentFragment, null));
+		} else if (!stackPageItems.isEmpty()) {
+			ArrayList<SavedPageItem> savedPages = new ArrayList<>(stackPageItems);
+			SavedPageItem currentSavedPage = savedPages.remove(savedPages.size() - 1);
+			PageItem pageItem = new PageItem();
+			pageItem.createdRealtime = currentSavedPage.createdRealtime;
+			pageItem.threadTitle = currentSavedPage.threadTitle;
+			pageItem.allowReturn = currentSavedPage.allowReturn;
+			state.putParcelableArrayList(EXTRA_FRAGMENTS, new ArrayList<StackItem>());
+			state.putParcelableArrayList(EXTRA_STACK_PAGE_ITEMS, savedPages);
+			state.putParcelableArrayList(EXTRA_PRESERVED_PAGE_ITEMS,
+					new ArrayList<>(preservedPageItems));
+			state.putParcelable(EXTRA_CURRENT_PAGE_ITEM, pageItem);
+			state.putParcelable(EXTRA_CURRENT_FRAGMENT, currentSavedPage.stackItem);
+		} else {
+			return null;
+		}
+		state.putInt(EXTRA_PAGES_STATE_VERSION, PAGES_STATE_VERSION);
+		return state;
+	}
+
+	private void savePagesSession() {
+		File file = getPagesSessionFile();
+		if (!Preferences.isRestorePages()) {
+			deletePagesState(file);
+			return;
+		}
+		Bundle state;
+		try {
+			state = createPagesState(true);
+		} catch (RuntimeException e) {
+			return;
+		}
+		if (state != null) {
+			writePagesState(file, state);
+		}
+	}
+
+	private void rebasePagesRealtime() {
+		long maximum = currentPageItem != null ? currentPageItem.createdRealtime : 0L;
+		for (SavedPageItem item : new ConcatIterable<>(preservedPageItems, stackPageItems)) {
+			maximum = Math.max(maximum, item.createdRealtime);
+		}
+		if (maximum <= 0L) {
+			return;
+		}
+		long offset = SystemClock.elapsedRealtime() - maximum;
+		if (currentPageItem != null) {
+			currentPageItem.createdRealtime += offset;
+		}
+		rebasePagesRealtime(preservedPageItems, offset);
+		rebasePagesRealtime(stackPageItems, offset);
+	}
+
+	private static void rebasePagesRealtime(ArrayList<SavedPageItem> items, long offset) {
+		for (int i = 0; i < items.size(); i++) {
+			SavedPageItem item = items.get(i);
+			items.set(i, new SavedPageItem(item.stackItem, item.createdRealtime + offset,
+					item.threadTitle, item.allowReturn));
+		}
 	}
 
 	@Override
@@ -1191,6 +1328,24 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	}
 
 	@Override
+	protected void onPause() {
+		savePagesSession();
+		super.onPause();
+	}
+
+	@Override
+	protected void onUserLeaveHint() {
+		super.onUserLeaveHint();
+		if (Preferences.isVideoPictureInPicture() && Preferences.isVideoPictureInPictureAuto()) {
+			String tag = GalleryOverlay.class.getName();
+			GalleryOverlay galleryOverlay = (GalleryOverlay) getSupportFragmentManager().findFragmentByTag(tag);
+			if (galleryOverlay != null) {
+				galleryOverlay.enterPictureInPictureIfPlaying();
+			}
+		}
+	}
+
+	@Override
 	protected void onStop() {
 		resetPredictiveBackView(false);
 		super.onStop();
@@ -1547,6 +1702,8 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		drawerForm.updatePreferences();
 		if (Preferences.KEY_PREDICTIVE_BACK.equals(key)) {
 			updateSystemBackCallback();
+		} else if (Preferences.KEY_RESTORE_PAGES.equals(key) && !Preferences.isRestorePages()) {
+			deletePagesState(getPagesSessionFile());
 		}
 	};
 
@@ -1922,22 +2079,10 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	@Override
 	public void restartApplication() {
-		Bundle outState = new Bundle();
-		writePagesState(outState);
-		outState.putParcelable(EXTRA_CURRENT_FRAGMENT,
-				new StackItem(getSupportFragmentManager(), getCurrentFragment(), null));
+		Bundle outState = createPagesState(false);
 		File file = getSavedPagesFile();
-		if (file != null) {
-			Parcel parcel = Parcel.obtain();
-			try (FileOutputStream output = new FileOutputStream(file)) {
-				outState.writeToParcel(parcel, 0);
-				byte[] data = parcel.marshall();
-				IOUtils.copyStream(new ByteArrayInputStream(data), output);
-			} catch (IOException e) {
-				file.delete();
-			} finally {
-				parcel.recycle();
-			}
+		if (file != null && outState != null && !writePagesState(file, outState)) {
+			deletePagesState(file);
 		}
 		if (file != null && file.exists()) {
 			NavigationUtils.restartApplication(this);
