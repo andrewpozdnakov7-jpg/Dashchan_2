@@ -68,7 +68,7 @@ New archives use schema `slooop-local-archive`, currently format version `2`:
   "name": "dvach-b-123",
   "html": "dvach-b-123.html",
   "resources": "dvach-b-123",
-  "view": "adaptive",
+  "view": "native",
   "chan": "dvach",
   "board": "b",
   "thread": "123",
@@ -90,12 +90,18 @@ Rules for future changes:
 
 ## Viewer modes
 
-`LocalArchiveViewerFragment` keeps the source HTML unchanged in memory and can reload it in either mode:
+`LocalArchiveViewerFragment` keeps the source HTML unchanged in memory and can display it in three modes:
 
 - **Original HTML**: renders the page as saved. Legacy archives open in this mode by default.
 - **Adaptive view**: reads the post markers and `data-*` metadata embedded by `WakabaLikeHtmlBuilder`, then builds
-  a separate theme-aware mobile post feed with headers, attachments, and comments. New format-2 Slooop archives
-  open in this mode by default. Old pages without structured post markers retain the responsive CSS fallback.
+  a separate theme-aware mobile HTML feed with headers, attachments, and comments. Old pages without structured
+  post markers retain the responsive CSS fallback.
+- **Slooop view**: reconstructs `Post` and `PostItem` objects from the same structured markers and renders them with
+  the application's normal `PostsAdapter`. New format-2 Slooop archives open in this mode by default. Archives that
+  do not contain enough board/thread metadata automatically fall back to an HTML mode.
+
+The overflow menu contains one view-mode command. It opens a single-choice dialog instead of relying on checkable
+submenu items, because Android devices may maintain separate toolbar and overflow `Menu` instances.
 
 The generated feed and fallback CSS are not written back to disk. JavaScript stays disabled. Local resources are
 served through the synthetic `https://local.archive/` origin; non-local links are delegated to the external browser.
@@ -119,11 +125,13 @@ When extending this subsystem, verify these cases:
 
 1. Legacy standalone HTML without JSON opens in Original HTML mode.
 2. Legacy format-1 ZIP opens and resolves embedded media.
-3. New loose HTML plus JSON defaults to Adaptive view and can switch back to Original HTML.
-4. New ZIP defaults to Adaptive view and resolves thumbnails and originals.
+3. New loose HTML plus JSON defaults to Slooop view and can switch to both HTML modes.
+4. New ZIP defaults to Slooop view and resolves thumbnails and originals.
 5. Equal archive names in the default folder and an added SAF folder remain separate list entries.
 6. Revoking one SAF permission does not prevent the default Archive folder from loading.
 7. Malformed manifests fall back to legacy behavior.
 8. Unsafe resource paths are rejected.
-9. Switching viewer modes immediately moves the checked radio item and never modifies the saved HTML.
-10. A Slooop/Wakaba page with structured post markers renders as a post feed in Adaptive view.
+9. Switching viewer modes through the dialog immediately changes the visible renderer and never modifies the saved
+   HTML.
+10. A Slooop/Wakaba page with structured post markers renders both as an Adaptive HTML feed and through the native
+    post adapter.

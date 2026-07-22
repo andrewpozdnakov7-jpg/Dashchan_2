@@ -1,13 +1,13 @@
 package com.mishiranu.dashchan.ui;
 
 import android.annotation.SuppressLint;
+import android.app.AlertDialog;
 import android.net.Uri;
 import android.os.Bundle;
 import android.util.Base64;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
-import android.view.SubMenu;
 import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.WebResourceRequest;
@@ -47,7 +47,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.UUID;
-import java.util.WeakHashMap;
 import org.json.JSONObject;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -60,25 +59,9 @@ public class LocalArchiveViewerFragment extends ContentFragment implements Posts
 	private static final String LOCAL_HOST = "local.archive";
 	private static final String LOCAL_BASE_URL = "https://" + LOCAL_HOST + "/";
 	private static final int MENU_VIEW_MODE = 0x6100;
-	private static final int MENU_VIEW_ORIGINAL = 0x6101;
-	private static final int MENU_VIEW_ADAPTIVE = 0x6102;
-	private static final int MENU_VIEW_NATIVE = 0x6103;
-	private static final int MENU_GROUP_VIEW = 0x6110;
 	private static final int VIEW_ORIGINAL = 0;
 	private static final int VIEW_ADAPTIVE = 1;
 	private static final int VIEW_NATIVE = 2;
-
-	private static class ViewModeItems {
-		public final MenuItem original;
-		public final MenuItem adaptive;
-		public final MenuItem nativeView;
-
-		public ViewModeItems(MenuItem original, MenuItem adaptive, MenuItem nativeView) {
-			this.original = original;
-			this.adaptive = adaptive;
-			this.nativeView = nativeView;
-		}
-	}
 
 	private WebView webView;
 	private PaddedRecyclerView recyclerView;
@@ -88,8 +71,8 @@ public class LocalArchiveViewerFragment extends ContentFragment implements Posts
 	private String adaptiveHtml;
 	private int viewMode = VIEW_ADAPTIVE;
 	private boolean viewModeInitialized;
+	private int loadGeneration;
 	private String navigationDrawerLocker;
-	private final WeakHashMap<Menu, ViewModeItems> viewModeMenus = new WeakHashMap<>();
 
 	public LocalArchiveViewerFragment() {}
 
@@ -155,61 +138,77 @@ public class LocalArchiveViewerFragment extends ContentFragment implements Posts
 
 	@Override
 	public void onCreateOptionsMenu(Menu menu, boolean primary) {
-		SubMenu viewMenu = menu.addSubMenu(0, MENU_VIEW_MODE, 0, R.string.local_archive_view_mode);
-		MenuItem original = viewMenu.add(MENU_GROUP_VIEW, MENU_VIEW_ORIGINAL, 0,
-				R.string.local_archive_view_original).setCheckable(true);
-		MenuItem adaptive = viewMenu.add(MENU_GROUP_VIEW, MENU_VIEW_ADAPTIVE, 1,
-				R.string.local_archive_view_adaptive).setCheckable(true);
-		MenuItem nativeView = viewMenu.add(MENU_GROUP_VIEW, MENU_VIEW_NATIVE, 2,
-				R.string.local_archive_view_native).setCheckable(true);
-		viewMenu.setGroupCheckable(MENU_GROUP_VIEW, true, true);
-		viewModeMenus.put(menu, new ViewModeItems(original, adaptive, nativeView));
-		updateViewModeMenus();
+		menu.add(0, MENU_VIEW_MODE, 0, R.string.local_archive_view_mode);
+		updateViewModeMenu(menu);
 	}
 
 	@Override
 	public void onPrepareOptionsMenu(Menu menu, boolean primary) {
-		updateViewModeMenus();
+		updateViewModeMenu(menu);
 	}
 
 	@Override
 	public boolean onOptionsItemSelected(MenuItem item) {
-		int itemId = item.getItemId();
-		if (itemId == MENU_VIEW_ORIGINAL || itemId == MENU_VIEW_ADAPTIVE || itemId == MENU_VIEW_NATIVE) {
-			int newMode = itemId == MENU_VIEW_ORIGINAL ? VIEW_ORIGINAL
-					: itemId == MENU_VIEW_ADAPTIVE ? VIEW_ADAPTIVE : VIEW_NATIVE;
-			if (viewMode != newMode) {
-				viewMode = newMode;
-				viewModeInitialized = true;
-				displayArchive();
-			}
-			updateViewModeMenus();
+		if (item.getItemId() == MENU_VIEW_MODE) {
+			showViewModeDialog();
 			return true;
 		}
 		return false;
 	}
 
-	private void updateViewModeMenus() {
-		for (ViewModeItems items : viewModeMenus.values()) {
-			items.original.setChecked(viewMode == VIEW_ORIGINAL);
-			items.adaptive.setChecked(viewMode == VIEW_ADAPTIVE);
-			items.nativeView.setChecked(viewMode == VIEW_NATIVE);
-			items.nativeView.setEnabled(postsAdapter != null);
+	private void updateViewModeMenu(Menu menu) {
+		MenuItem item = menu.findItem(MENU_VIEW_MODE);
+		if (item != null) {
+			item.setTitle(getString(R.string.local_archive_view_mode) + ": " + getViewModeTitle(viewMode));
+			item.setEnabled(viewModeInitialized);
 		}
+	}
+
+	private CharSequence getViewModeTitle(int mode) {
+		return getString(mode == VIEW_ORIGINAL ? R.string.local_archive_view_original
+				: mode == VIEW_NATIVE ? R.string.local_archive_view_native : R.string.local_archive_view_adaptive);
+	}
+
+	private void showViewModeDialog() {
+		if (!viewModeInitialized) {
+			return;
+		}
+		int count = postsAdapter != null ? 3 : 2;
+		CharSequence[] items = new CharSequence[count];
+		for (int i = 0; i < count; i++) {
+			items[i] = getViewModeTitle(i);
+		}
+		new InstanceDialog(getParentFragmentManager(), "local-archive-view-mode", provider ->
+				new AlertDialog.Builder(provider.getContext()).setTitle(R.string.local_archive_view_mode)
+						.setSingleChoiceItems(items, Math.min(viewMode, count - 1), (dialog, which) -> {
+							applyViewMode(which);
+							dialog.dismiss();
+						}).setNegativeButton(android.R.string.cancel, null).create());
+	}
+
+	private void applyViewMode(int mode) {
+		if (mode < VIEW_ORIGINAL || mode > VIEW_NATIVE || (mode == VIEW_NATIVE && postsAdapter == null)) {
+			return;
+		}
+		if (viewMode != mode) {
+			viewMode = mode;
+			displayArchive();
+		}
+		invalidateOptionsMenu();
 	}
 
 	private void loadArchive(String id, Integer restoredMode) {
 		ThemeEngine.Theme theme = ThemeEngine.getTheme(requireContext());
+		int generation = ++loadGeneration;
 		ConcurrentUtils.PARALLEL_EXECUTOR.execute(() -> {
 			LocalArchiveManager.Item found = LocalArchiveManager.findById(id);
-			byte[] html = null;
+			String sourceHtml = null;
 			String adaptiveHtml = null;
 			int preferredViewMode = VIEW_ADAPTIVE;
 			NativeArchive nativeArchive = null;
 			if (found != null) {
 				try {
-					html = LocalArchiveManager.readHtml(found);
-					String sourceHtml = new String(html, StandardCharsets.UTF_8);
+					sourceHtml = new String(LocalArchiveManager.readHtml(found), StandardCharsets.UTF_8);
 					String htmlText = sourceHtml.toLowerCase(Locale.ROOT);
 					JSONObject manifest = LocalArchiveManager.readManifest(found);
 					boolean slooopArchive = (manifest != null && LocalArchiveManager.MANIFEST_SCHEMA.equals(
@@ -228,32 +227,32 @@ public class LocalArchiveViewerFragment extends ContentFragment implements Posts
 				}
 			}
 			LocalArchiveManager.Item finalFound = found;
-			byte[] finalHtml = html;
+			String finalSourceHtml = sourceHtml;
 			String finalAdaptiveHtml = adaptiveHtml;
 			int finalPreferredViewMode = preferredViewMode;
 			NativeArchive finalNativeArchive = nativeArchive;
-			WebView webView = this.webView;
-			if (webView != null) {
-				webView.post(() -> {
-					if (this.webView == webView && finalFound != null && finalHtml != null) {
-						archiveItem = finalFound;
-						rawHtml = new String(finalHtml, StandardCharsets.UTF_8);
-						this.adaptiveHtml = finalAdaptiveHtml;
-						viewMode = restoredMode != null ? restoredMode : finalPreferredViewMode;
-						if (viewMode == VIEW_NATIVE && finalNativeArchive == null) {
-							viewMode = VIEW_ADAPTIVE;
-						}
-						installNativeArchive(finalNativeArchive);
-						viewModeInitialized = true;
-						((FragmentHandler) requireActivity()).setTitleSubtitle(finalFound.name,
-								getString(R.string.local_archives));
-						displayArchive();
-						invalidateOptionsMenu();
-					} else if (isAdded()) {
-						ClickableToast.show(R.string.local_archive_open_failed);
+			ConcurrentUtils.HANDLER.post(() -> {
+				if (loadGeneration != generation || webView == null || !isAdded()) {
+					return;
+				}
+				if (finalFound != null && finalSourceHtml != null) {
+					archiveItem = finalFound;
+					rawHtml = finalSourceHtml;
+					this.adaptiveHtml = finalAdaptiveHtml;
+					viewMode = restoredMode != null ? restoredMode : finalPreferredViewMode;
+					if (viewMode == VIEW_NATIVE && finalNativeArchive == null) {
+						viewMode = VIEW_ADAPTIVE;
 					}
-				});
-			}
+					installNativeArchive(finalNativeArchive);
+					viewModeInitialized = true;
+					((FragmentHandler) requireActivity()).setTitleSubtitle(finalFound.name,
+							getString(R.string.local_archives));
+					displayArchive();
+					invalidateOptionsMenu();
+				} else {
+					ClickableToast.show(R.string.local_archive_open_failed);
+				}
+			});
 		});
 	}
 
@@ -517,16 +516,8 @@ public class LocalArchiveViewerFragment extends ContentFragment implements Posts
 	private static String makeAdaptiveHtml(String html, ThemeEngine.Theme theme) {
 		try {
 			Document source = Jsoup.parse(html, LOCAL_BASE_URL);
-			Element postsRoot = source.getElementById("delform");
-			ArrayList<Element> markers = new ArrayList<>();
-			if (postsRoot != null) {
-				for (Element child : postsRoot.children()) {
-					if (child.hasAttr("data-number")) {
-						markers.add(child);
-					}
-				}
-			}
-			if (!markers.isEmpty()) {
+			ArrayList<ArchivePostSource> posts = collectPostSources(source.getElementById("delform"));
+			if (!posts.isEmpty()) {
 				Document output = Document.createShell(LOCAL_BASE_URL);
 				output.outputSettings().prettyPrint(false);
 				output.title(source.title());
@@ -534,45 +525,11 @@ public class LocalArchiveViewerFragment extends ContentFragment implements Posts
 						.attr("content", "width=device-width,initial-scale=1,maximum-scale=5");
 				output.head().appendElement("style").appendText(makePostFeedStyle(theme));
 				Element feed = output.body().appendElement("main").addClass("archive-feed");
-				int rendered = 0;
-				for (int i = 0; i < markers.size(); i++) {
-					Element marker = markers.get(i);
-					Element boundary = i + 1 < markers.size() ? markers.get(i + 1) : null;
-					Element next = marker.nextElementSibling();
-					Element scope = next != null && "table".equals(next.normalName())
-							? next.selectFirst("td.reply") : null;
-					Element header = null;
-					Element comment = null;
-					ArrayList<Element> files = new ArrayList<>();
-					if (scope != null) {
-						header = scope.selectFirst("div.replyheader");
-						comment = scope.selectFirst("[data-comment]");
-						files.addAll(scope.select("span[data-file]"));
-					} else {
-						for (Element sibling = next; sibling != null && sibling != boundary;
-								sibling = sibling.nextElementSibling()) {
-							if (header == null && "div".equals(sibling.normalName())
-									&& sibling.selectFirst("a[name]") != null) {
-								header = sibling;
-							}
-							if (comment == null && sibling.hasAttr("data-comment")) {
-								comment = sibling;
-							}
-							if (sibling.hasAttr("data-file")) {
-								files.add(sibling);
-							}
-							files.addAll(sibling.select("span[data-file]"));
-						}
-					}
-					if (header == null || comment == null) {
-						continue;
-					}
-					appendPost(feed, marker.attr("data-number"), header, files, comment, rendered == 0);
-					rendered++;
+				for (int i = 0; i < posts.size(); i++) {
+					ArchivePostSource post = posts.get(i);
+					appendPost(feed, post.number, post.header, post.files, post.comment, i == 0);
 				}
-				if (rendered > 0) {
-					return output.outerHtml();
-				}
+				return output.outerHtml();
 			}
 		} catch (RuntimeException e) {
 			// Third-party and very old archives fall back to the original document with adaptive CSS.
@@ -677,6 +634,7 @@ public class LocalArchiveViewerFragment extends ContentFragment implements Posts
 
 	@Override
 	public void onDestroyView() {
+		loadGeneration++;
 		((FragmentHandler) requireActivity()).setNavigationAreaLocked(navigationDrawerLocker, false);
 		if (postsAdapter != null) {
 			postsAdapter.cancelPreloading();
@@ -696,7 +654,6 @@ public class LocalArchiveViewerFragment extends ContentFragment implements Posts
 		rawHtml = null;
 		adaptiveHtml = null;
 		viewModeInitialized = false;
-		viewModeMenus.clear();
 		super.onDestroyView();
 	}
 
