@@ -19,7 +19,10 @@ import com.mishiranu.dashchan.ui.preference.core.PreferenceFragment;
 import com.mishiranu.dashchan.util.IOUtils;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.util.SharedPreferences;
+import com.mishiranu.dashchan.widget.ThemeEngine;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 public class InterfaceFragment extends PreferenceFragment {
 	private Preference<Void> applicationLogoPreference;
@@ -34,10 +37,9 @@ public class InterfaceFragment extends PreferenceFragment {
 		super.onViewCreated(view, savedInstanceState);
 
 		addHeader(R.string.application_shortcut);
-		addList(Preferences.KEY_APPLICATION_NAME, Arrays.asList(LauncherIconManager.VALUE_DASHCHAN_2,
-				LauncherIconManager.VALUE_SLOPCHAN, LauncherIconManager.VALUE_DVACH),
+		addList(Preferences.KEY_APPLICATION_NAME, LauncherIconManager.getApplicationNames(),
 				Preferences.DEFAULT_APPLICATION_NAME, R.string.application_name,
-				Arrays.asList("Dashchan_2", "Двач", "Slooop"))
+				Arrays.asList("Sloop", "Dashchan_2", "Двач", "Slooop", "Slopchan", "Slopchan_1", "Slopchan_2"))
 				.setOnAfterChangeListener(p -> LauncherIconManager.apply(requireContext(), p.getValue()));
 		if (LauncherIconManager.arePresetLogosReady()) {
 			Preference<Void> logoPreference = addButton(getString(R.string.application_logo), preference ->
@@ -60,6 +62,27 @@ public class InterfaceFragment extends PreferenceFragment {
 				R.string.scroll_thread_when_scrolling_gallery, 0);
 		addButton(R.string.themes, 0).setOnClickListener(p -> ((FragmentHandler) requireActivity())
 				.pushFragment(new ThemesFragment()));
+		List<String> lightThemeValues = new ArrayList<>();
+		List<CharSequence> lightThemeEntries = new ArrayList<>();
+		List<String> darkThemeValues = new ArrayList<>();
+		List<CharSequence> darkThemeEntries = new ArrayList<>();
+		for (ThemeEngine.Theme theme : ThemeEngine.getThemes()) {
+			List<String> values = theme.base == ThemeEngine.Theme.Base.DARK ? darkThemeValues : lightThemeValues;
+			List<CharSequence> entries = theme.base == ThemeEngine.Theme.Base.DARK
+					? darkThemeEntries : lightThemeEntries;
+			values.add(theme.name);
+			entries.add(theme.name);
+		}
+		addCheck(true, Preferences.KEY_AUTOMATIC_DAY_NIGHT_THEME,
+				Preferences.DEFAULT_AUTOMATIC_DAY_NIGHT_THEME, R.string.automatic_day_night_themes,
+				R.string.automatic_day_night_themes__summary)
+				.setOnAfterChangeListener(p -> requireActivity().recreate());
+		addList(Preferences.KEY_DAY_THEME, lightThemeValues, lightThemeValues.get(0),
+				R.string.day_theme, lightThemeEntries).setOnAfterChangeListener(p -> requireActivity().recreate());
+		addList(Preferences.KEY_NIGHT_THEME, darkThemeValues, darkThemeValues.get(0),
+				R.string.night_theme, darkThemeEntries).setOnAfterChangeListener(p -> requireActivity().recreate());
+		addDependency(Preferences.KEY_DAY_THEME, Preferences.KEY_AUTOMATIC_DAY_NIGHT_THEME, true);
+		addDependency(Preferences.KEY_NIGHT_THEME, Preferences.KEY_AUTOMATIC_DAY_NIGHT_THEME, true);
 		addCheck(true, Preferences.KEY_ROUNDED_DIALOGS, Preferences.DEFAULT_ROUNDED_DIALOGS,
 				R.string.rounded_dialogs, R.string.rounded_dialogs__summary);
 		addCheck(true, Preferences.KEY_PREDICTIVE_BACK, Preferences.DEFAULT_PREDICTIVE_BACK,

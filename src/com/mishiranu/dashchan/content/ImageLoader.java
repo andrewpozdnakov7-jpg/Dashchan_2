@@ -24,6 +24,7 @@ import com.mishiranu.dashchan.util.GraphicsUtils;
 import com.mishiranu.dashchan.util.LruCache;
 import com.mishiranu.dashchan.widget.AttachmentView;
 import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -95,6 +96,7 @@ public class ImageLoader {
 			String scheme = uri.getScheme();
 			boolean chanScheme = ChanConfiguration.SCHEME_CHAN.equals(scheme);
 			boolean dataScheme = "data".equals(scheme);
+			boolean localArchiveScheme = LocalArchiveManager.RESOURCE_SCHEME.equals(scheme);
 			boolean storeExternal = !chanScheme && !dataScheme;
 			Bitmap bitmap = null;
 			try {
@@ -102,7 +104,7 @@ public class ImageLoader {
 				if (isCancelled()) {
 					return null;
 				}
-				if (bitmap == null && !fromCacheOnly) {
+				if (bitmap == null && (!fromCacheOnly || localArchiveScheme)) {
 					if (chanScheme) {
 						ByteArrayOutputStream output = new ByteArrayOutputStream();
 						if (!chan.configuration.readResourceUri(uri, output)) {
@@ -119,6 +121,15 @@ public class ImageLoader {
 							if (bytes != null) {
 								bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
 							}
+						}
+					} else if (localArchiveScheme) {
+						try (InputStream input = LocalArchiveManager.openResource(uri)) {
+							if (input != null) {
+								bitmap = BitmapFactory.decodeStream(input);
+							}
+						}
+						if (bitmap == null) {
+							throw HttpException.createNotFoundException();
 						}
 					} else {
 						HttpException lastException = null;

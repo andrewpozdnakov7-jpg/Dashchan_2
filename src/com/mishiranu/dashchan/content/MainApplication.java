@@ -61,6 +61,7 @@ public class MainApplication extends Application {
 
 		if (isMainProcess()) {
 			Logger.init(this);
+			FontManager.register(this);
 			LauncherIconManager.apply(this, Preferences.getApplicationName());
 			UserAgentProvider.initialize(this);
 			ChanManager.getInstance();

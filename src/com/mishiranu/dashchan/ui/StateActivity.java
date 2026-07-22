@@ -6,6 +6,7 @@ import androidx.activity.OnBackPressedCallback;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentActivity;
 import androidx.fragment.app.FragmentManager;
+import com.mishiranu.dashchan.content.FontManager;
 
 public abstract class StateActivity extends FragmentActivity {
 	private OnBackPressedCallback systemBackCallback;
@@ -21,6 +22,7 @@ public abstract class StateActivity extends FragmentActivity {
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
+		FontManager.attach(this);
 		systemBackCallback = new OnBackPressedCallback(true) {
 			@Override
 			public void handleOnBackStarted(BackEventCompat backEvent) {

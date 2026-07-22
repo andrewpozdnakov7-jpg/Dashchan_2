@@ -14,7 +14,7 @@ Dashchan_2 - неофициальная ветка Dashchan для Android 11 и
 
 | Компонент | Значение |
 | --- | --- |
-| Текущая версия | `3.2.5`, code `1085` |
+| Текущая версия | `3.2.7`, code `1087` |
 | Android package | `io.dashchan2` |
 | Минимальная версия | API 30 / Android 11 |
 | ABI | `arm64-v8a`, `armeabi-v7a`, `x86` |
@@ -24,15 +24,15 @@ Dashchan_2 - неофициальная ветка Dashchan для Android 11 и
 
 ### Возможности
 
-- просмотр досок, тредов, изображений и видео, избранное и уведомления об ответах;
+- просмотр досок, тредов, изображений и видео, избранное и фоновые уведомления об ответах;
 - встроенный Двач с отправкой постов, Passcode, AI-фильтром и лайками/дизлайками на поддерживаемых досках;
 - экспериментальный 4chan только для чтения, выключенный по умолчанию;
 - FFmpeg-плеер для WebM, MP4, fMP4, MOV, H.264, HEVC, VP8, VP9 и AV1;
 - скорость воспроизведения с сохранением тембра, перемотка двойным нажатием, жест громкости и режим «картинка в картинке»;
 - галерея с фильтрами, копирование изображений и фоновое сохранение медиа;
-- архивирование тредов в HTML без блокировки интерфейса;
-- встроенные, загружаемые и пользовательские темы;
-- Predictive Back на Android 13+, настройка масштаба текста и цветов меток постов;
+- локальные архивы тредов в HTML и ZIP, встроенный просмотрщик и подключение дополнительных папок;
+- встроенные, загружаемые и пользовательские темы с автоматическим дневным и ночным режимом;
+- Predictive Back на Android 13+, масштаб текста, встроенные шрифты, OpenDyslexic и импорт TTF/OTF;
 - выбор имени и значка приложения, а также создание собственного ярлыка;
 - стабильный и добровольный beta-каналы обновлений с докачиванием APK.
 
@@ -92,7 +92,7 @@ Stable APKs are published only through [GitHub Releases](https://github.com/andr
 
 | Component | Value |
 | --- | --- |
-| Current version | `3.2.5`, code `1085` |
+| Current version | `3.2.7`, code `1087` |
 | Android package | `io.dashchan2` |
 | Minimum Android | API 30 / Android 11 |
 | ABIs | `arm64-v8a`, `armeabi-v7a`, `x86` |
@@ -102,14 +102,14 @@ Stable APKs are published only through [GitHub Releases](https://github.com/andr
 
 ### Highlights
 
-- boards, threads, media gallery, favorites, thread watching, and reply notifications;
+- boards, threads, media gallery, favorites, thread watching, and background reply notifications;
 - built-in Dvach posting, Passcode support, AI filtering, and votes on supported boards;
 - optional experimental read-only 4chan channel;
 - FFmpeg playback for WebM, MP4, fMP4, MOV, H.264, HEVC, VP8, VP9, and AV1;
 - pitch-preserving speed control, double-tap seeking, volume gestures, and picture-in-picture;
-- gallery filters, clipboard image copying, background media saving, and HTML thread archives;
-- bundled, downloadable, and user-imported themes;
-- Predictive Back, text scaling, post-marker colors, and configurable app names and icons;
+- gallery filters, clipboard image copying, background media saving, and local HTML/ZIP thread archives;
+- bundled, downloadable, and user-imported themes with automatic day and night switching;
+- Predictive Back, text scaling, bundled fonts, OpenDyslexic, custom TTF/OTF fonts, and configurable app names and icons;
 - stable and opt-in beta update channels with resumable APK downloads.
 
 ### Limitations

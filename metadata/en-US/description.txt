@@ -1,7 +1,7 @@
 * Built-in Dvach and experimental read-only 4chan support
-* Threads, favorites, reply notifications, and automatic hiding
+* Threads, favorites, optional background reply notifications, and automatic hiding
 * Filterable gallery with background file saving
 * FFmpeg video player with seeking, speed, gestures, and PiP
-* HTML thread archiving
+* Local HTML/ZIP thread archives with built-in viewing
 * Bundled, downloadable, and custom themes
-* Configurable icons, shortcuts, and accessibility options
+* Configurable icons, shortcuts, bundled fonts, and custom TTF/OTF fonts

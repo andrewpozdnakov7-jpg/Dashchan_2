@@ -287,8 +287,8 @@ public class ThemesFragment extends BaseListFragment {
 				return;
 			}
 		}
-		if (!installed || !theme.name.equals(Preferences.getTheme())) {
-			Preferences.setTheme(theme.name);
+		if (!installed || !theme.name.equals(Preferences.getTheme(requireContext()))) {
+			Preferences.setThemeForCurrentMode(requireContext(), theme.name);
 			requireActivity().recreate();
 		}
 	}
@@ -296,7 +296,7 @@ public class ThemesFragment extends BaseListFragment {
 	private void deleteTheme(String name) {
 		if (ThemeEngine.deleteTheme(name)) {
 			updateThemes();
-			if (name.equals(Preferences.getTheme())) {
+			if (name.equals(Preferences.getTheme(requireContext()))) {
 				requireActivity().recreate();
 			}
 		}

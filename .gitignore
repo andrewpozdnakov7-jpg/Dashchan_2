@@ -4,6 +4,8 @@
 !/.github/**
 !/.gitignore
 !/AndroidManifest.xml
+!/assets
+!/assets/**
 !/build.gradle
 !/CODE_OF_CONDUCT.md
 !/CONTRIBUTING.md

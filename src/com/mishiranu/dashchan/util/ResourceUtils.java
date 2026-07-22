@@ -19,8 +19,10 @@ import com.mishiranu.dashchan.R;
 import java.util.Arrays;
 
 public class ResourceUtils {
-	public static final Typeface TYPEFACE_MEDIUM;
-	public static final Typeface TYPEFACE_LIGHT = Typeface.create("sans-serif-light", Typeface.NORMAL);
+	public static Typeface TYPEFACE_MEDIUM;
+	public static Typeface TYPEFACE_LIGHT;
+	private static Typeface SYSTEM_TYPEFACE_MEDIUM;
+	private static Typeface SYSTEM_TYPEFACE_LIGHT;
 
 	static {
 		int size = 20;
@@ -38,7 +40,20 @@ public class ResourceUtils {
 		int[] mediumPixels = new int[size * size];
 		regularBitmap.getPixels(regularPixels, 0, size, 0, 0, size, size);
 		mediumBitmap.getPixels(mediumPixels, 0, size, 0, 0, size, size);
-		TYPEFACE_MEDIUM = Arrays.equals(regularPixels, mediumPixels) ? Typeface.DEFAULT_BOLD : mediumTypeface;
+		SYSTEM_TYPEFACE_MEDIUM = Arrays.equals(regularPixels, mediumPixels) ? Typeface.DEFAULT_BOLD : mediumTypeface;
+		SYSTEM_TYPEFACE_LIGHT = Typeface.create("sans-serif-light", Typeface.NORMAL);
+		TYPEFACE_MEDIUM = SYSTEM_TYPEFACE_MEDIUM;
+		TYPEFACE_LIGHT = SYSTEM_TYPEFACE_LIGHT;
+	}
+
+	public static void setApplicationTypeface(Typeface typeface) {
+		if (typeface != null) {
+			TYPEFACE_MEDIUM = Typeface.create(typeface, 500, false);
+			TYPEFACE_LIGHT = Typeface.create(typeface, 300, false);
+		} else {
+			TYPEFACE_MEDIUM = SYSTEM_TYPEFACE_MEDIUM;
+			TYPEFACE_LIGHT = SYSTEM_TYPEFACE_LIGHT;
+		}
 	}
 
 	public static float obtainDensity(View view) {

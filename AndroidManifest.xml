@@ -747,6 +747,951 @@
 			</intent-filter>
 		</activity-alias>
 
+		<activity-alias
+			android:name=".launcher.Dashchan2MaterialYouAlias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@mipmap/ic_launcher_material"
+			android:label="Dashchan_2"
+			android:logo="@mipmap/ic_logo">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.SlopchanMaterialYouAlias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@mipmap/ic_launcher_material"
+			android:label="Двач"
+			android:logo="@mipmap/ic_logo">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.DvachMaterialYouAlias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@mipmap/ic_launcher_material"
+			android:label="Slooop"
+			android:logo="@mipmap/ic_logo">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.SloopAlias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_default"
+			android:label="Sloop"
+			android:logo="@drawable/application_logo_default">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.SlopchanPlainAlias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_default"
+			android:label="Slopchan"
+			android:logo="@drawable/application_logo_default">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.Slopchan1Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_default"
+			android:label="Slopchan_1"
+			android:logo="@drawable/application_logo_default">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.Slopchan2Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_default"
+			android:label="Slopchan_2"
+			android:logo="@drawable/application_logo_default">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.SloopOldSchoolAlias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@mipmap/ic_launcher"
+			android:label="Sloop"
+			android:logo="@mipmap/ic_logo">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.SlopchanPlainOldSchoolAlias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@mipmap/ic_launcher"
+			android:label="Slopchan"
+			android:logo="@mipmap/ic_logo">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.Slopchan1OldSchoolAlias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@mipmap/ic_launcher"
+			android:label="Slopchan_1"
+			android:logo="@mipmap/ic_logo">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.Slopchan2OldSchoolAlias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@mipmap/ic_launcher"
+			android:label="Slopchan_2"
+			android:logo="@mipmap/ic_logo">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.SloopLogo2Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_2"
+			android:label="Sloop"
+			android:logo="@drawable/application_logo_2">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.SlopchanPlainLogo2Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_2"
+			android:label="Slopchan"
+			android:logo="@drawable/application_logo_2">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.Slopchan1Logo2Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_2"
+			android:label="Slopchan_1"
+			android:logo="@drawable/application_logo_2">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.Slopchan2Logo2Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_2"
+			android:label="Slopchan_2"
+			android:logo="@drawable/application_logo_2">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.SloopLogo3Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_3"
+			android:label="Sloop"
+			android:logo="@drawable/application_logo_3">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.SlopchanPlainLogo3Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_3"
+			android:label="Slopchan"
+			android:logo="@drawable/application_logo_3">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.Slopchan1Logo3Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_3"
+			android:label="Slopchan_1"
+			android:logo="@drawable/application_logo_3">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.Slopchan2Logo3Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_3"
+			android:label="Slopchan_2"
+			android:logo="@drawable/application_logo_3">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.SloopLogo4Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_4"
+			android:label="Sloop"
+			android:logo="@drawable/application_logo_4">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.SlopchanPlainLogo4Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_4"
+			android:label="Slopchan"
+			android:logo="@drawable/application_logo_4">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.Slopchan1Logo4Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_4"
+			android:label="Slopchan_1"
+			android:logo="@drawable/application_logo_4">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.Slopchan2Logo4Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_4"
+			android:label="Slopchan_2"
+			android:logo="@drawable/application_logo_4">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.SloopLogo5Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_5"
+			android:label="Sloop"
+			android:logo="@drawable/application_logo_5">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.SlopchanPlainLogo5Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_5"
+			android:label="Slopchan"
+			android:logo="@drawable/application_logo_5">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.Slopchan1Logo5Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_5"
+			android:label="Slopchan_1"
+			android:logo="@drawable/application_logo_5">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.Slopchan2Logo5Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_5"
+			android:label="Slopchan_2"
+			android:logo="@drawable/application_logo_5">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.SloopLogo6Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_6"
+			android:label="Sloop"
+			android:logo="@drawable/application_logo_6">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.SlopchanPlainLogo6Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_6"
+			android:label="Slopchan"
+			android:logo="@drawable/application_logo_6">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.Slopchan1Logo6Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_6"
+			android:label="Slopchan_1"
+			android:logo="@drawable/application_logo_6">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.Slopchan2Logo6Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_6"
+			android:label="Slopchan_2"
+			android:logo="@drawable/application_logo_6">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.SloopLogo7Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_7"
+			android:label="Sloop"
+			android:logo="@drawable/application_logo_7">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.SlopchanPlainLogo7Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_7"
+			android:label="Slopchan"
+			android:logo="@drawable/application_logo_7">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.Slopchan1Logo7Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_7"
+			android:label="Slopchan_1"
+			android:logo="@drawable/application_logo_7">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.Slopchan2Logo7Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_7"
+			android:label="Slopchan_2"
+			android:logo="@drawable/application_logo_7">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.SloopLogo8Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_8"
+			android:label="Sloop"
+			android:logo="@drawable/application_logo_8">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.SlopchanPlainLogo8Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_8"
+			android:label="Slopchan"
+			android:logo="@drawable/application_logo_8">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.Slopchan1Logo8Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_8"
+			android:label="Slopchan_1"
+			android:logo="@drawable/application_logo_8">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.Slopchan2Logo8Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_8"
+			android:label="Slopchan_2"
+			android:logo="@drawable/application_logo_8">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.SloopLogo9Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_9"
+			android:label="Sloop"
+			android:logo="@drawable/application_logo_9">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.SlopchanPlainLogo9Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_9"
+			android:label="Slopchan"
+			android:logo="@drawable/application_logo_9">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.Slopchan1Logo9Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_9"
+			android:label="Slopchan_1"
+			android:logo="@drawable/application_logo_9">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.Slopchan2Logo9Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_9"
+			android:label="Slopchan_2"
+			android:logo="@drawable/application_logo_9">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.SloopLogo10Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_10"
+			android:label="Sloop"
+			android:logo="@drawable/application_logo_10">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.SlopchanPlainLogo10Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_10"
+			android:label="Slopchan"
+			android:logo="@drawable/application_logo_10">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.Slopchan1Logo10Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_10"
+			android:label="Slopchan_1"
+			android:logo="@drawable/application_logo_10">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.Slopchan2Logo10Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_10"
+			android:label="Slopchan_2"
+			android:logo="@drawable/application_logo_10">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.SloopLogo11Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_11"
+			android:label="Sloop"
+			android:logo="@drawable/application_logo_11">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.SlopchanPlainLogo11Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_11"
+			android:label="Slopchan"
+			android:logo="@drawable/application_logo_11">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.Slopchan1Logo11Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_11"
+			android:label="Slopchan_1"
+			android:logo="@drawable/application_logo_11">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.Slopchan2Logo11Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_11"
+			android:label="Slopchan_2"
+			android:logo="@drawable/application_logo_11">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.SloopPassAlias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_pass"
+			android:label="Sloop"
+			android:logo="@drawable/application_logo_pass">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.SlopchanPlainPassAlias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_pass"
+			android:label="Slopchan"
+			android:logo="@drawable/application_logo_pass">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.Slopchan1PassAlias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_pass"
+			android:label="Slopchan_1"
+			android:logo="@drawable/application_logo_pass">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.Slopchan2PassAlias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_pass"
+			android:label="Slopchan_2"
+			android:logo="@drawable/application_logo_pass">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.SloopSubscriberAlias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_subscriber"
+			android:label="Sloop"
+			android:logo="@drawable/application_logo_subscriber">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.SlopchanPlainSubscriberAlias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_subscriber"
+			android:label="Slopchan"
+			android:logo="@drawable/application_logo_subscriber">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.Slopchan1SubscriberAlias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_subscriber"
+			android:label="Slopchan_1"
+			android:logo="@drawable/application_logo_subscriber">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.Slopchan2SubscriberAlias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@drawable/application_logo_subscriber"
+			android:label="Slopchan_2"
+			android:logo="@drawable/application_logo_subscriber">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.SloopMaterialYouAlias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@mipmap/ic_launcher_material"
+			android:label="Sloop"
+			android:logo="@mipmap/ic_logo">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.SlopchanPlainMaterialYouAlias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@mipmap/ic_launcher_material"
+			android:label="Slopchan"
+			android:logo="@mipmap/ic_logo">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.Slopchan1MaterialYouAlias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@mipmap/ic_launcher_material"
+			android:label="Slopchan_1"
+			android:logo="@mipmap/ic_logo">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.Slopchan2MaterialYouAlias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@mipmap/ic_launcher_material"
+			android:label="Slopchan_2"
+			android:logo="@mipmap/ic_logo">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
 		<activity
 			android:name=".content.PostingShareActivity"
 			android:taskAffinity=".postingshare"

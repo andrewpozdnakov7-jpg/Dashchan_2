@@ -529,11 +529,24 @@ public class ThemeEngine {
 	public static void applyTheme(Context context) {
 		ThemeContext themeContext = requireThemeContext(context);
 		INSTANCE.prepareThemes(context);
-		String themeString = Preferences.getTheme();
+		String themeString = Preferences.getTheme(context);
 		Theme theme = INSTANCE.themes.get(themeString);
 		if (theme == null) {
-			theme = INSTANCE.themes.values().iterator().next();
-			Preferences.setTheme(theme.name);
+			if (Preferences.isAutomaticDayNightTheme()) {
+				Theme.Base base = Preferences.isNightMode(context) ? Theme.Base.DARK : Theme.Base.LIGHT;
+				for (Theme candidate : INSTANCE.themes.values()) {
+					if (candidate.base == base) {
+						theme = candidate;
+						break;
+					}
+				}
+			}
+			if (theme == null) {
+				theme = INSTANCE.themes.values().iterator().next();
+			}
+			if (!Preferences.isAutomaticDayNightTheme()) {
+				Preferences.setTheme(theme.name);
+			}
 		}
 		themeContext.theme = theme;
 		context.setTheme(theme.base.resId);

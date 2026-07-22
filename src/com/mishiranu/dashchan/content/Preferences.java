@@ -4,6 +4,7 @@ import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.UriPermission;
+import android.content.res.Configuration;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
@@ -1475,14 +1476,52 @@ public class Preferences {
 				DEFAULT_TEXT_SCALE), MAX_TEXT_SCALE)) / 100f;
 	}
 
+	public static final String KEY_APPLICATION_FONT = "application_font";
+
+	public static String getApplicationFont() {
+		return PREFERENCES.getString(KEY_APPLICATION_FONT, FontManager.FONT_SYSTEM);
+	}
+
+	public static void setApplicationFont(String value) {
+		PREFERENCES.edit().put(KEY_APPLICATION_FONT, value).close();
+	}
+
 	public static final String KEY_THEME = "theme";
+	public static final String KEY_AUTOMATIC_DAY_NIGHT_THEME = "automatic_day_night_theme";
+	public static final String KEY_DAY_THEME = "day_theme";
+	public static final String KEY_NIGHT_THEME = "night_theme";
+	public static final boolean DEFAULT_AUTOMATIC_DAY_NIGHT_THEME = false;
 
 	public static String getTheme() {
 		return PREFERENCES.getString(KEY_THEME, null);
 	}
 
+	public static String getTheme(Context context) {
+		if (isAutomaticDayNightTheme()) {
+			return PREFERENCES.getString(isNightMode(context) ? KEY_NIGHT_THEME : KEY_DAY_THEME, null);
+		}
+		return getTheme();
+	}
+
+	public static boolean isAutomaticDayNightTheme() {
+		return PREFERENCES.getBoolean(KEY_AUTOMATIC_DAY_NIGHT_THEME, DEFAULT_AUTOMATIC_DAY_NIGHT_THEME);
+	}
+
+	public static boolean isNightMode(Context context) {
+		return (context.getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK)
+				== Configuration.UI_MODE_NIGHT_YES;
+	}
+
 	public static void setTheme(String value) {
 		PREFERENCES.edit().put(KEY_THEME, value).close();
+	}
+
+	public static void setThemeForCurrentMode(Context context, String value) {
+		SharedPreferences.Editor editor = PREFERENCES.edit().put(KEY_THEME, value);
+		if (isAutomaticDayNightTheme()) {
+			editor.put(isNightMode(context) ? KEY_NIGHT_THEME : KEY_DAY_THEME, value);
+		}
+		editor.close();
 	}
 
 	public enum ThreadsView {

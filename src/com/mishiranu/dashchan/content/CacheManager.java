@@ -427,7 +427,7 @@ public class CacheManager implements Runnable {
 				} else {
 					data = uriString;
 				}
-			} else if ("chan".equals(scheme)) {
+			} else if ("chan".equals(scheme) || LocalArchiveManager.RESOURCE_SCHEME.equals(scheme)) {
 				data = uri.toString();
 			} else {
 				Chan chan = Chan.getPreferred(null, uri);

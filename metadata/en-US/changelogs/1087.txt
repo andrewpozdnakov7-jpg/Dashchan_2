@@ -1,0 +1,11 @@
+* Added local archives: saved threads can now be opened directly in Slooop.
+* Added HTML thread saving and complete ZIP copies with media files.
+* Added three archive viewing modes: Slooop view, adaptive page, and original HTML.
+* Additional folders containing older archives can now be connected.
+* Added optional background reply checks approximately every 15 minutes.
+* Added automatic day and night theme switching based on the Android system mode.
+* Added 10 bundled fonts, including OpenDyslexic, and custom TTF/OTF font installation.
+* Added a Material You icon and new application name presets.
+* Improved large local thread opening: thumbnails load after posts are displayed.
+* Fixed audio continuing after quickly closing a video.
+* Fixed reported interface and local archive issues.

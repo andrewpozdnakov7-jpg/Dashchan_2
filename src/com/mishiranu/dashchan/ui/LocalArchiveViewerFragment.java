@@ -4,7 +4,6 @@ import android.annotation.SuppressLint;
 import android.app.AlertDialog;
 import android.net.Uri;
 import android.os.Bundle;
-import android.util.Base64;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -27,7 +26,6 @@ import com.mishiranu.dashchan.content.model.PostItem;
 import com.mishiranu.dashchan.content.model.PostNumber;
 import com.mishiranu.dashchan.ui.navigator.adapter.PostsAdapter;
 import com.mishiranu.dashchan.ui.navigator.manager.UiManager;
-import com.mishiranu.dashchan.util.IOUtils;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
 import com.mishiranu.dashchan.util.MimeTypes;
@@ -39,7 +37,6 @@ import com.mishiranu.dashchan.widget.DividerItemDecoration;
 import com.mishiranu.dashchan.widget.PaddedRecyclerView;
 import com.mishiranu.dashchan.widget.ThemeEngine;
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -214,10 +211,15 @@ public class LocalArchiveViewerFragment extends ContentFragment implements Posts
 					boolean slooopArchive = (manifest != null && LocalArchiveManager.MANIFEST_SCHEMA.equals(
 							manifest.optString("schema"))) || htmlText.contains("name=\"slooop-local-archive\"");
 					String preferredView = manifest != null ? manifest.optString("view") : null;
+					boolean prefersAdaptive = manifest != null && LocalArchiveManager.MANIFEST_SCHEMA.equals(
+							manifest.optString("schema")) && manifest.optInt("format", 0) >=
+							LocalArchiveManager.MANIFEST_FORMAT && "adaptive".equals(preferredView);
 					preferredViewMode = "native".equals(preferredView) ? VIEW_NATIVE
-							: LocalArchiveManager.prefersAdaptiveView(found) || slooopArchive
-							? VIEW_ADAPTIVE : VIEW_ORIGINAL;
-					adaptiveHtml = makeAdaptiveHtml(sourceHtml, theme);
+							: prefersAdaptive || slooopArchive ? VIEW_ADAPTIVE : VIEW_ORIGINAL;
+					int initialViewMode = restoredMode != null ? restoredMode : preferredViewMode;
+					if (initialViewMode == VIEW_ADAPTIVE) {
+						adaptiveHtml = makeAdaptiveHtml(sourceHtml, theme);
+					}
 					nativeArchive = parseNativeArchive(found, sourceHtml, manifest);
 					if (preferredViewMode == VIEW_NATIVE && nativeArchive == null) {
 						preferredViewMode = VIEW_ADAPTIVE;
@@ -249,8 +251,25 @@ public class LocalArchiveViewerFragment extends ContentFragment implements Posts
 							getString(R.string.local_archives));
 					displayArchive();
 					invalidateOptionsMenu();
+					if (finalAdaptiveHtml == null) {
+						prepareAdaptiveHtml(finalSourceHtml, theme, generation);
+					}
 				} else {
 					ClickableToast.show(R.string.local_archive_open_failed);
+				}
+			});
+		});
+	}
+
+	private void prepareAdaptiveHtml(String sourceHtml, ThemeEngine.Theme theme, int generation) {
+		ConcurrentUtils.PARALLEL_EXECUTOR.execute(() -> {
+			String preparedHtml = makeAdaptiveHtml(sourceHtml, theme);
+			ConcurrentUtils.HANDLER.post(() -> {
+				if (loadGeneration == generation && webView != null && isAdded()) {
+					adaptiveHtml = preparedHtml;
+					if (viewMode == VIEW_ADAPTIVE) {
+						displayArchive();
+					}
 				}
 			});
 		});
@@ -365,7 +384,7 @@ public class LocalArchiveViewerFragment extends ContentFragment implements Posts
 					}
 					Uri fileUri = !StringUtils.isEmpty(filePath) ? createArchiveUri(filePath) : null;
 					Uri thumbnailUri = !StringUtils.isEmpty(thumbnailPath)
-							? readDataUri(item, thumbnailPath) : null;
+							? LocalArchiveManager.createResourceUri(item, thumbnailPath) : null;
 					Post.Attachment.File attachment = Post.Attachment.File.createExternal(fileUri, thumbnailUri,
 							file.attr("data-original-name"), parseInt(file.attr("data-size")),
 							parseInt(file.attr("data-width")), parseInt(file.attr("data-height")), false);
@@ -444,22 +463,6 @@ public class LocalArchiveViewerFragment extends ContentFragment implements Posts
 
 	private static Uri createArchiveUri(String path) {
 		return Uri.parse(LOCAL_BASE_URL + Uri.encode(path, "/"));
-	}
-
-	private static Uri readDataUri(LocalArchiveManager.Item item, String path) {
-		try (InputStream input = LocalArchiveManager.openResource(item, path)) {
-			if (input == null) {
-				return null;
-			}
-			ByteArrayOutputStream output = new ByteArrayOutputStream();
-			IOUtils.copyStream(input, output);
-			String extension = StringUtils.getFileExtension(path);
-			String mimeType = MimeTypes.forExtension(extension, "image/jpeg");
-			return Uri.parse("data:" + mimeType + ";base64,"
-					+ Base64.encodeToString(output.toByteArray(), Base64.NO_WRAP));
-		} catch (IOException e) {
-			return null;
-		}
 	}
 
 	private static int parseInt(String value) {

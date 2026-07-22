@@ -49,6 +49,7 @@ public class C {
 	public static final int REQUEST_CODE_ATTACH = 1;
 	public static final int REQUEST_CODE_OPEN_URI_TREE = 2;
 	public static final int REQUEST_CODE_LOCAL_ARCHIVE_TREE = 3;
+	public static final int REQUEST_CODE_FONT = 4;
 
 	public static final int NOTIFICATION_ID_POSTING = 1;
 	public static final int NOTIFICATION_ID_DOWNLOADING = 2;

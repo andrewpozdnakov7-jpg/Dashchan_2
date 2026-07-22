@@ -679,7 +679,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	public void navigateSetTheme(ThemeEngine.Theme theme) {
 		ConcurrentUtils.HANDLER.post(() -> {
 			if (ThemeEngine.addTheme(theme)) {
-				Preferences.setTheme(theme.name);
+				Preferences.setThemeForCurrentMode(this, theme.name);
 				recreate();
 			}
 		});
@@ -1690,7 +1690,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	@Override
 	public void onThemeSelected(ThemeEngine.Theme theme) {
 		if (theme != null) {
-			Preferences.setTheme(theme.name);
+			Preferences.setThemeForCurrentMode(this, theme.name);
 			recreate();
 		} else {
 			fragments.clear();

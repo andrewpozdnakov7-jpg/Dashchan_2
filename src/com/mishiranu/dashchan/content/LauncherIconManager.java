@@ -21,8 +21,13 @@ public final class LauncherIconManager {
 	public static final String VALUE_DASHCHAN_2 = "dashchan_2";
 	public static final String VALUE_SLOPCHAN = "slopchan";
 	public static final String VALUE_DVACH = "dvach";
+	public static final String VALUE_SLOOP = "sloop";
+	public static final String VALUE_SLOPCHAN_PLAIN = "slopchan_plain";
+	public static final String VALUE_SLOPCHAN_1 = "slopchan_1";
+	public static final String VALUE_SLOPCHAN_2 = "slopchan_2";
 	public static final String LOGO_DEFAULT = "default";
 	public static final String LOGO_OLD_SCHOOL = "old_school";
+	public static final String LOGO_MATERIAL_YOU = "material_you";
 	public static final String LOGO_2 = "logo_2";
 	public static final String LOGO_3 = "logo_3";
 	public static final String LOGO_4 = "logo_4";
@@ -62,6 +67,8 @@ public final class LauncherIconManager {
 					LogoAccess.PUBLIC, ""),
 			new LogoOption(LOGO_OLD_SCHOOL, R.string.application_logo_old_school, R.mipmap.ic_launcher,
 					LogoAccess.PUBLIC, "OldSchool"),
+			new LogoOption(LOGO_MATERIAL_YOU, R.string.application_logo_material_you,
+					R.mipmap.ic_launcher_material, LogoAccess.PUBLIC, "MaterialYou"),
 			new LogoOption(LOGO_2, R.string.application_logo_2, R.drawable.application_logo_2,
 					LogoAccess.PUBLIC, "Logo2"),
 			new LogoOption(LOGO_7, R.string.application_logo_7, R.drawable.application_logo_7,
@@ -90,10 +97,17 @@ public final class LauncherIconManager {
 	private static final String CLASS_DASHCHAN_2 = "com.mishiranu.dashchan.launcher.Dashchan2Alias";
 	private static final String CLASS_SLOPCHAN = "com.mishiranu.dashchan.launcher.SlopchanAlias";
 	private static final String CLASS_DVACH = "com.mishiranu.dashchan.launcher.DvachAlias";
+	private static final List<String> APPLICATION_NAMES = Collections.unmodifiableList(Arrays.asList(VALUE_SLOOP,
+			VALUE_DASHCHAN_2, VALUE_SLOPCHAN, VALUE_DVACH, VALUE_SLOPCHAN_PLAIN, VALUE_SLOPCHAN_1,
+			VALUE_SLOPCHAN_2));
 	private LauncherIconManager() {}
 
 	public static boolean isValidValue(String value) {
-		return VALUE_DASHCHAN_2.equals(value) || VALUE_SLOPCHAN.equals(value) || VALUE_DVACH.equals(value);
+		return APPLICATION_NAMES.contains(value);
+	}
+
+	public static List<String> getApplicationNames() {
+		return APPLICATION_NAMES;
 	}
 
 	public static boolean isValidLogoValue(String value) {
@@ -143,7 +157,7 @@ public final class LauncherIconManager {
 		PackageManager packageManager = context.getPackageManager();
 		setEnabled(packageManager, context, selectedClass, true);
 		for (LogoOption option : LOGO_OPTIONS) {
-			for (String name : Arrays.asList(VALUE_DASHCHAN_2, VALUE_SLOPCHAN, VALUE_DVACH)) {
+			for (String name : APPLICATION_NAMES) {
 				String className = getClassName(name, option);
 				setEnabled(packageManager, context, className, className.equals(selectedClass));
 			}
@@ -153,8 +167,12 @@ public final class LauncherIconManager {
 	private static String getClassName(String value, LogoOption option) {
 		String prefix;
 		switch (value) {
+			case VALUE_SLOOP: prefix = "Sloop"; break;
 			case VALUE_DASHCHAN_2: prefix = "Dashchan2"; break;
 			case VALUE_SLOPCHAN: prefix = "Slopchan"; break;
+			case VALUE_SLOPCHAN_PLAIN: prefix = "SlopchanPlain"; break;
+			case VALUE_SLOPCHAN_1: prefix = "Slopchan1"; break;
+			case VALUE_SLOPCHAN_2: prefix = "Slopchan2"; break;
 			default: prefix = "Dvach"; break;
 		}
 		return "com.mishiranu.dashchan.launcher." + prefix + option.classSuffix + "Alias";

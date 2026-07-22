@@ -1061,7 +1061,8 @@ public class WatcherService extends BaseService {
 		if (Preferences.KEY_WATCHER_REFRESH_INTERVAL.equals(key)) {
 			ConcurrentUtils.HANDLER.removeCallbacks(refreshAllRunnable);
 			startNext();
-		} else if (Preferences.KEY_THEME.equals(key)) {
+		} else if (Preferences.KEY_THEME.equals(key) || Preferences.KEY_AUTOMATIC_DAY_NIGHT_THEME.equals(key)
+				|| Preferences.KEY_DAY_THEME.equals(key) || Preferences.KEY_NIGHT_THEME.equals(key)) {
 			updateNotificationColor();
 		}
 	};

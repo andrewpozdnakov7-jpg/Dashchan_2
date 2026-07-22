@@ -7,6 +7,7 @@ import android.provider.DocumentsContract;
 import chan.util.DataFile;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.util.IOUtils;
+import com.mishiranu.dashchan.util.Hasher;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -15,6 +16,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.zip.Deflater;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -28,6 +30,9 @@ public class LocalArchiveManager {
 	public static final String DIRECTORY_THUMBNAILS = "thumb";
 	public static final String MANIFEST_SCHEMA = "slooop-local-archive";
 	public static final int MANIFEST_FORMAT = 2;
+	public static final String RESOURCE_SCHEME = "slooop-archive";
+
+	private static final ConcurrentHashMap<String, Item> RESOURCE_ITEMS = new ConcurrentHashMap<>();
 
 	private LocalArchiveManager() {}
 
@@ -357,6 +362,28 @@ public class LocalArchiveManager {
 		}
 		InputStream zipInput = open(item.zipFile, item.zipUri);
 		return zipInput != null ? openZipEntry(zipInput, path) : null;
+	}
+
+	public static Uri createResourceUri(Item item, String path) {
+		if (item == null || !isSafePath(path)) {
+			return null;
+		}
+		String token = StringUtils.formatHex(Hasher.getInstanceSha256().calculate(item.id));
+		RESOURCE_ITEMS.put(token, item);
+		return new Uri.Builder().scheme(RESOURCE_SCHEME).authority(token)
+				.encodedPath('/' + Uri.encode(path, "/")).build();
+	}
+
+	public static InputStream openResource(Uri uri) throws IOException {
+		if (uri == null || !RESOURCE_SCHEME.equals(uri.getScheme())) {
+			return null;
+		}
+		Item item = RESOURCE_ITEMS.get(uri.getHost());
+		String path = uri.getPath();
+		if (item == null || path == null || path.length() <= 1) {
+			return null;
+		}
+		return openResource(item, path.substring(1));
 	}
 
 	private static InputStream open(DataFile file, Uri uri) throws IOException {
