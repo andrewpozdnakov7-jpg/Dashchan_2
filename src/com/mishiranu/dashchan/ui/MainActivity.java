@@ -1934,6 +1934,13 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 				content = Page.Content.HISTORY;
 				break;
 			}
+			case DrawerForm.MENU_ITEM_LOCAL_ARCHIVES: {
+				if (!(getCurrentFragment() instanceof LocalArchivesFragment)) {
+					fragments.clear();
+					navigateFragment(new LocalArchivesFragment(), null, true);
+				}
+				break;
+			}
 			case DrawerForm.MENU_ITEM_PREFERENCES: {
 				if (!(getCurrentFragment() instanceof CategoriesFragment)) {
 					fragments.clear();

@@ -108,7 +108,8 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	public static final int MENU_ITEM_BOARDS = 1;
 	public static final int MENU_ITEM_USER_BOARDS = 2;
 	public static final int MENU_ITEM_HISTORY = 3;
-	public static final int MENU_ITEM_PREFERENCES = 4;
+	public static final int MENU_ITEM_LOCAL_ARCHIVES = 4;
+	public static final int MENU_ITEM_PREFERENCES = 5;
 
 	private enum CategoriesOrder {PAGES_FIRST, FAVORITES_FIRST, HIDE_PAGES}
 
@@ -311,7 +312,8 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 			menu.clear();
 			Context context = this.context;
 			TypedArray typedArray = context.obtainStyledAttributes(new int[] {R.attr.iconDrawerMenuBoards,
-					R.attr.iconDrawerMenuUserBoards, R.attr.iconDrawerMenuHistory, R.attr.iconDrawerMenuPreferences});
+					R.attr.iconDrawerMenuUserBoards, R.attr.iconDrawerMenuHistory,
+					R.attr.iconDrawerMenuLocalArchives, R.attr.iconDrawerMenuPreferences});
 			boolean hasUserBoards = chan.configuration.getOption(ChanConfiguration.OPTION_READ_USER_BOARDS);
 			if (chanName != null && !chan.configuration.getOption(ChanConfiguration.OPTION_SINGLE_BOARD_MODE)) {
 				menu.add(new ListItem(ListItem.Type.MENU, MENU_ITEM_BOARDS, typedArray.getResourceId(0, 0),
@@ -325,7 +327,9 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 				menu.add(new ListItem(ListItem.Type.MENU, MENU_ITEM_HISTORY, typedArray.getResourceId(2, 0),
 						context.getString(R.string.history)));
 			}
-			menu.add(new ListItem(ListItem.Type.MENU, MENU_ITEM_PREFERENCES, typedArray.getResourceId(3, 0),
+			menu.add(new ListItem(ListItem.Type.MENU, MENU_ITEM_LOCAL_ARCHIVES, typedArray.getResourceId(3, 0),
+					context.getString(R.string.local_archives)));
+			menu.add(new ListItem(ListItem.Type.MENU, MENU_ITEM_PREFERENCES, typedArray.getResourceId(4, 0),
 					context.getString(R.string.preferences)));
 			typedArray.recycle();
 			updateItems(true, true);

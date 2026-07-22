@@ -56,6 +56,7 @@
 		<item name="iconDrawerMenuBoards">@drawable/ic_action_labels_dark</item>
 		<item name="iconDrawerMenuUserBoards">@drawable/ic_action_group_dark</item>
 		<item name="iconDrawerMenuHistory">@drawable/ic_action_history_dark</item>
+		<item name="iconDrawerMenuLocalArchives">@drawable/ic_action_save_dark</item>
 		<item name="iconDrawerMenuPreferences">@drawable/ic_action_settings_dark</item>
 
 	</style>
@@ -116,6 +117,7 @@
 		<item name="iconDrawerMenuBoards">@drawable/ic_action_labels_dark</item>
 		<item name="iconDrawerMenuUserBoards">@drawable/ic_action_group_dark</item>
 		<item name="iconDrawerMenuHistory">@drawable/ic_action_history_dark</item>
+		<item name="iconDrawerMenuLocalArchives">@drawable/ic_action_save_dark</item>
 		<item name="iconDrawerMenuPreferences">@drawable/ic_action_settings_dark</item>
 
 	</style>

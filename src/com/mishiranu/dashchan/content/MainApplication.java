@@ -13,6 +13,7 @@ import com.mishiranu.dashchan.content.database.ChanDatabase;
 import com.mishiranu.dashchan.content.database.CommonDatabase;
 import com.mishiranu.dashchan.content.database.PagesDatabase;
 import com.mishiranu.dashchan.content.net.UserAgentProvider;
+import com.mishiranu.dashchan.content.service.BackgroundWatcherWorker;
 import com.mishiranu.dashchan.util.IOUtils;
 import com.mishiranu.dashchan.util.Logger;
 import java.io.File;
@@ -69,6 +70,7 @@ public class MainApplication extends Application {
 			ChanDatabase.getInstance();
 			CacheManager.getInstance();
 			ChanManager.getInstance().loadLibraries();
+			BackgroundWatcherWorker.restoreSchedule(this);
 		} else if (checkProcess(PROCESS_WEB_VIEW)) {
 			IOUtils.deleteRecursive(getWebViewCacheDir());
 		}

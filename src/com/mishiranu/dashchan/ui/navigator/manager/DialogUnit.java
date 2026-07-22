@@ -1439,6 +1439,7 @@ public class DialogUnit {
 
 	public static final String OPTION_THUMBNAILS = "thumbnails";
 	public static final String OPTION_FILES = "files";
+	public static final String OPTION_ZIP = "zip";
 
 	private static void performSendArchiveThreadInternal(Context context, FragmentManager fragmentManager,
 			SendMultifunctionalTask.State state, String archiveChanName, Collection<Post> posts) {
@@ -1447,6 +1448,7 @@ public class DialogUnit {
 			archivation = new ChanConfiguration.Archivation();
 			archivation.options.add(new Pair<>(OPTION_THUMBNAILS, context.getString(R.string.save_thumbnails)));
 			archivation.options.add(new Pair<>(OPTION_FILES, context.getString(R.string.save_files)));
+			archivation.options.add(new Pair<>(OPTION_ZIP, context.getString(R.string.create_zip_copy)));
 		} else {
 			Chan archiveChan = Chan.get(archiveChanName);
 			archivation = archiveChan.configuration.safe().obtainArchivation();
@@ -1614,9 +1616,18 @@ public class DialogUnit {
 				if (posts.isEmpty()) {
 					ClickableToast.show(R.string.cache_is_unavailable);
 				} else {
-					startLocalArchiveProcess(provider.getFragmentManager(), state.chanName,
-							state.boardName, state.threadNumber, posts,
-							options.contains(OPTION_THUMBNAILS), options.contains(OPTION_FILES));
+					boolean saveThumbnails = options.contains(OPTION_THUMBNAILS);
+					boolean saveFiles = options.contains(OPTION_FILES);
+					boolean createZip = options.contains(OPTION_ZIP);
+					if (createZip && (saveThumbnails || saveFiles)) {
+						showLocalArchiveWarning(provider.getFragmentManager(), state.chanName,
+								state.boardName, state.threadNumber, posts,
+								saveThumbnails, saveFiles);
+					} else {
+						startLocalArchiveProcess(provider.getFragmentManager(), state.chanName,
+								state.boardName, state.threadNumber, posts,
+								saveThumbnails, saveFiles, createZip);
+					}
 				}
 			} else {
 				startMultifunctionalProcess(provider.getFragmentManager(), state, type, text, options);
@@ -1701,6 +1712,18 @@ public class DialogUnit {
 
 	private static final SendLocalArchiveTask.DownloadResult DOWNLOAD_RESULT_ERROR = binder -> {};
 
+	private static void showLocalArchiveWarning(FragmentManager fragmentManager,
+			String chanName, String boardName, String threadNumber, Collection<Post> posts,
+			boolean saveThumbnails, boolean saveFiles) {
+		new InstanceDialog(fragmentManager, null, provider -> new AlertDialog.Builder(provider.getContext())
+				.setMessage(R.string.zip_archive_warning)
+				.setNegativeButton(android.R.string.cancel, null)
+				.setPositiveButton(android.R.string.ok, (dialog, which) -> startLocalArchiveProcess(
+						provider.getFragmentManager(), chanName, boardName, threadNumber, posts,
+						saveThumbnails, saveFiles, true))
+				.create());
+	}
+
 	public static class LocalArchiveViewModel extends TaskViewModel<SendLocalArchiveTask,
 			SendLocalArchiveTask.DownloadResult> implements SendLocalArchiveTask.Callback {
 		public final MutableLiveData<Integer> progress = new MutableLiveData<>();
@@ -1718,7 +1741,7 @@ public class DialogUnit {
 
 	private static void startLocalArchiveProcess(FragmentManager fragmentManager,
 			String chanName, String boardName, String threadNumber, Collection<Post> posts,
-			boolean saveThumbnails, boolean saveFiles) {
+			boolean saveThumbnails, boolean saveFiles, boolean createZip) {
 		new InstanceDialog(fragmentManager, null, provider -> {
 			Context context = provider.getContext();
 			ProgressDialog dialog = new ProgressDialog(context, "%d / %d");
@@ -1727,7 +1750,7 @@ public class DialogUnit {
 			LocalArchiveViewModel viewModel = provider.getViewModel(LocalArchiveViewModel.class);
 			if (!viewModel.hasTaskOrValue()) {
 				SendLocalArchiveTask task = new SendLocalArchiveTask(viewModel, Chan.get(chanName),
-						boardName, threadNumber, posts, saveThumbnails, saveFiles);
+						boardName, threadNumber, posts, saveThumbnails, saveFiles, createZip);
 				task.execute(ConcurrentUtils.PARALLEL_EXECUTOR);
 				viewModel.attach(task);
 			}

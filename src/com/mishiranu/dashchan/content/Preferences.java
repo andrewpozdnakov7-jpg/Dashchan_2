@@ -178,6 +178,25 @@ public class Preferences {
 	}
 
 	public static final String KEY_APPLICATION_NAME = "application_name";
+	private static final String KEY_LOCAL_ARCHIVE_URI_TREES = "local_archive_uri_trees";
+
+	public static List<String> getLocalArchiveUriTrees() {
+		Set<String> values = PREFERENCES.getStringSet(KEY_LOCAL_ARCHIVE_URI_TREES, Collections.emptySet());
+		return new ArrayList<>(values);
+	}
+
+	public static void addLocalArchiveUriTree(Uri uri) {
+		HashSet<String> values = new HashSet<>(getLocalArchiveUriTrees());
+		values.add(uri.toString());
+		PREFERENCES.edit().put(KEY_LOCAL_ARCHIVE_URI_TREES, values).close();
+	}
+
+	public static void removeLocalArchiveUriTrees(Collection<String> uriStrings) {
+		HashSet<String> values = new HashSet<>(getLocalArchiveUriTrees());
+		values.removeAll(uriStrings);
+		PREFERENCES.edit().put(KEY_LOCAL_ARCHIVE_URI_TREES, values).close();
+	}
+
 	public static final String DEFAULT_APPLICATION_NAME = LauncherIconManager.VALUE_DVACH;
 	public static final String KEY_APPLICATION_LOGO = "application_logo";
 	public static final String DEFAULT_APPLICATION_LOGO = LauncherIconManager.LOGO_DEFAULT;
@@ -896,8 +915,10 @@ public class Preferences {
 	@RequiresApi(Build.VERSION_CODES.KITKAT)
 	public static void setDownloadUriTree(Context context, Uri uri, int uriFlags) {
 		ContentResolver contentResolver = context.getContentResolver();
+		HashSet<String> localArchiveUriTrees = new HashSet<>(getLocalArchiveUriTrees());
 		for (UriPermission uriPermission : contentResolver.getPersistedUriPermissions()) {
-			if (uri == null || !uri.equals(uriPermission.getUri())) {
+			if ((uri == null || !uri.equals(uriPermission.getUri()))
+					&& !localArchiveUriTrees.contains(uriPermission.getUri().toString())) {
 				int flags = (uriPermission.isReadPermission() ? Intent.FLAG_GRANT_READ_URI_PERMISSION : 0) |
 						(uriPermission.isWritePermission() ? Intent.FLAG_GRANT_WRITE_URI_PERMISSION : 0);
 				contentResolver.releasePersistableUriPermission(uriPermission.getUri(), flags);
@@ -1881,5 +1902,12 @@ public class Preferences {
 
 	public static boolean isWatcherWifiOnly() {
 		return PREFERENCES.getBoolean(KEY_WATCHER_WIFI_ONLY, DEFAULT_WATCHER_WIFI_ONLY);
+	}
+
+	public static final String KEY_BACKGROUND_REPLY_CHECK = "background_reply_check";
+	public static final boolean DEFAULT_BACKGROUND_REPLY_CHECK = false;
+
+	public static boolean isBackgroundReplyCheckEnabled() {
+		return PREFERENCES.getBoolean(KEY_BACKGROUND_REPLY_CHECK, DEFAULT_BACKGROUND_REPLY_CHECK);
 	}
 }

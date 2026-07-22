@@ -80,7 +80,8 @@ public abstract class Preference<T> {
 	}
 
 	public ViewHolder createViewHolder(ViewGroup parent) {
-		ViewFactory.TwoLinesViewHolder holder = ViewFactory.makeTwoLinesListItem(parent, ViewFactory.FEATURE_WIDGET);
+		ViewFactory.TwoLinesViewHolder holder = ViewFactory.makeTwoLinesListItem(parent,
+				ViewFactory.FEATURE_WIDGET | ViewFactory.FEATURE_MULTILINE_TITLE);
 		return new ViewHolder(holder.view, holder.text1, holder.text2, holder.widgetFrame);
 	}
 

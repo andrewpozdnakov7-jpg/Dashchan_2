@@ -139,6 +139,7 @@
 		<item name="iconDrawerMenuBoards">@drawable/ic_local_offer</item>
 		<item name="iconDrawerMenuUserBoards">@drawable/ic_group</item>
 		<item name="iconDrawerMenuHistory">@drawable/ic_history</item>
+		<item name="iconDrawerMenuLocalArchives">@drawable/ic_save</item>
 		<item name="iconDrawerMenuPreferences">@drawable/ic_settings</item>
 
 	</style>
@@ -213,6 +214,7 @@
 		<item name="iconDrawerMenuBoards">@drawable/ic_local_offer</item>
 		<item name="iconDrawerMenuUserBoards">@drawable/ic_group</item>
 		<item name="iconDrawerMenuHistory">@drawable/ic_history</item>
+		<item name="iconDrawerMenuLocalArchives">@drawable/ic_save</item>
 		<item name="iconDrawerMenuPreferences">@drawable/ic_settings</item>
 
 	</style>

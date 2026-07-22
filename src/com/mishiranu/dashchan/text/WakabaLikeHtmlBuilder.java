@@ -34,7 +34,8 @@ public class WakabaLikeHtmlBuilder {
 			String chanTitle, Uri threadUri, int postsCount, int filesCount) {
 		StringBuilder builder = this.builder;
 		builder.append("<!DOCTYPE html>\n<html>\n<head>\n")
-				.append("<meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\" />\n");
+				.append("<meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\" />\n")
+				.append("<meta name=\"slooop-local-archive\" content=\"2\" />\n");
 		builder.append("<title>");
 		if (!StringUtils.isEmpty(threadTitle)) {
 			builder.append(threadTitle).append(" — ");

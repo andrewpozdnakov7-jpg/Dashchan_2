@@ -201,6 +201,7 @@ public class PagerUnit implements PagerInstance.Callback {
 	}
 
 	public void onBackToGallery() {
+		videoUnit.forcePause();
 		videoUnit.showHideVideoView(false);
 	}
 

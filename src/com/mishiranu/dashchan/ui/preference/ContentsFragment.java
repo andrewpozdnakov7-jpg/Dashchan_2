@@ -15,6 +15,7 @@ import com.mishiranu.dashchan.content.async.ExecutorTask;
 import com.mishiranu.dashchan.content.async.TaskViewModel;
 import com.mishiranu.dashchan.content.database.PagesDatabase;
 import com.mishiranu.dashchan.content.storage.FavoritesStorage;
+import com.mishiranu.dashchan.content.service.BackgroundWatcherWorker;
 import com.mishiranu.dashchan.ui.DrawerForm;
 import com.mishiranu.dashchan.ui.FragmentHandler;
 import com.mishiranu.dashchan.ui.preference.core.CheckPreference;
@@ -26,6 +27,8 @@ import com.mishiranu.dashchan.widget.ProgressDialog;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
 
 public class ContentsFragment extends PreferenceFragment {
 	private CheckPreference replyNotifications;
@@ -67,7 +70,23 @@ public class ContentsFragment extends PreferenceFragment {
 				new Pair<>(Preferences.DISABLED_WATCHER_REFRESH_INTERVAL, R.string.disabled),
 				Preferences.MIN_WATCHER_REFRESH_INTERVAL, Preferences.MAX_WATCHER_REFRESH_INTERVAL,
 				Preferences.STEP_WATCHER_REFRESH_INTERVAL);
-		addCheck(true, Preferences.KEY_WATCHER_WIFI_ONLY, Preferences.DEFAULT_WATCHER_WIFI_ONLY, R.string.wifi_only, 0);
+		CheckPreference backgroundReplyCheck = addCheck(true, Preferences.KEY_BACKGROUND_REPLY_CHECK,
+				Preferences.DEFAULT_BACKGROUND_REPLY_CHECK, R.string.background_reply_check,
+				R.string.background_reply_check__summary);
+		backgroundReplyCheck.setOnAfterChangeListener(p -> {
+			if (p.getValue()) {
+				Set<Preferences.NotificationFeature> notificationFeatures =
+						new HashSet<>(Preferences.getWatcherNotifications());
+				if (notificationFeatures.add(Preferences.NotificationFeature.ENABLED)) {
+					Preferences.setWatcherNotifications(notificationFeatures);
+					invalidateReplyNotifications();
+				}
+			}
+			BackgroundWatcherWorker.updateSchedule(requireContext());
+		});
+		addCheck(true, Preferences.KEY_WATCHER_WIFI_ONLY, Preferences.DEFAULT_WATCHER_WIFI_ONLY,
+				R.string.wifi_only, 0).setOnAfterChangeListener(p ->
+				BackgroundWatcherWorker.updateSchedule(requireContext()));
 		replyNotifications = addCheck(false, "reply_notifications", false,
 				R.string.reply_notifications, R.string.reply_notifications__format);
 		replyNotifications.setOnClickListener(p -> {

@@ -46,10 +46,6 @@ public class InterfaceFragment extends PreferenceFragment {
 			logoPreference.setOnClickListener(preference ->
 					ApplicationLogoDialog.show(getChildFragmentManager()));
 		}
-		addButton(R.string.custom_application_shortcut, R.string.custom_application_shortcut__summary)
-				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
-						.pushFragment(new CustomShortcutFragment()));
-
 		addHeader(R.string.appearance);
 		String scaleFormat = ResourceUtils.getColonString(getResources(), R.string.scale, "%d%%");
 		addSeek(Preferences.KEY_THUMBNAILS_SCALE, Preferences.DEFAULT_THUMBNAILS_SCALE,

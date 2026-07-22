@@ -28,6 +28,7 @@ public class ViewFactory {
 	public static final int FEATURE_WIDGET = 0x00000001;
 	public static final int FEATURE_SINGLE_LINE = 0x00000002;
 	public static final int FEATURE_TEXT2_END = 0x00000004;
+	public static final int FEATURE_MULTILINE_TITLE = 0x00000008;
 
 	public static TextView makeListTextHeader(ViewGroup parent) {
 		TextView textView = new TextView(parent.getContext());
@@ -117,7 +118,11 @@ public class ViewFactory {
 			outerLayout.setMinimumHeight(typedArray.getDimensionPixelSize(0, 0));
 			TextView text1 = new TextView(parent.getContext());
 			TextViewCompat.setTextAppearance(text1, typedArray.getResourceId(1, 0));
-			text1.setSingleLine(true);
+			if (FlagUtils.get(features, FEATURE_MULTILINE_TITLE)) {
+				text1.setMaxLines(2);
+			} else {
+				text1.setSingleLine(true);
+			}
 			text1.setEllipsize(TextUtils.TruncateAt.END);
 			TextView text2 = new TextView(parent.getContext());
 			TextViewCompat.setTextAppearance(text2, typedArray.getResourceId(2, 0));

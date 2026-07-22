@@ -220,8 +220,8 @@ public class VideoUnit {
 	}
 
 	public void forcePause() {
+		wasPlaying = false;
 		if (initialized) {
-			wasPlaying = false;
 			setPlaying(false, true);
 		}
 	}

@@ -11,7 +11,9 @@ import chan.content.ChanConfiguration;
 import chan.content.ChanMarkup;
 import chan.util.DataFile;
 import chan.util.StringUtils;
+import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.CacheManager;
+import com.mishiranu.dashchan.content.LocalArchiveManager;
 import com.mishiranu.dashchan.content.model.Post;
 import com.mishiranu.dashchan.content.model.PostNumber;
 import com.mishiranu.dashchan.content.service.DownloadService;
@@ -29,6 +31,8 @@ import com.mishiranu.dashchan.text.style.ScriptSpan;
 import com.mishiranu.dashchan.text.style.SpoilerSpan;
 import com.mishiranu.dashchan.util.Hasher;
 import com.mishiranu.dashchan.util.MimeTypes;
+import com.mishiranu.dashchan.util.ConcurrentUtils;
+import com.mishiranu.dashchan.widget.ClickableToast;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -48,12 +52,13 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import org.json.JSONException;
 
 public class SendLocalArchiveTask extends ExecutorTask<Integer, SendLocalArchiveTask.Result>
 		implements ChanMarkup.MarkupExtra {
-	private static final String DIRECTORY_ARCHIVE = "Archive";
-	private static final String DIRECTORY_FILES = "src";
-	private static final String DIRECTORY_THUMBNAILS = "thumb";
+	private static final String DIRECTORY_ARCHIVE = LocalArchiveManager.DIRECTORY_ARCHIVE;
+	private static final String DIRECTORY_FILES = LocalArchiveManager.DIRECTORY_FILES;
+	private static final String DIRECTORY_THUMBNAILS = LocalArchiveManager.DIRECTORY_THUMBNAILS;
 
 	private final Callback callback;
 	private final Chan chan;
@@ -62,6 +67,7 @@ public class SendLocalArchiveTask extends ExecutorTask<Integer, SendLocalArchive
 	private final Collection<Post> posts;
 	private final boolean saveThumbnails;
 	private final boolean saveFiles;
+	private final boolean createZip;
 
 	public interface DownloadResult {
 		void run(DownloadService.Binder binder);
@@ -73,7 +79,7 @@ public class SendLocalArchiveTask extends ExecutorTask<Integer, SendLocalArchive
 	}
 
 	public SendLocalArchiveTask(Callback callback, Chan chan, String boardName, String threadNumber,
-			Collection<Post> posts, boolean saveThumbnails, boolean saveFiles) {
+			Collection<Post> posts, boolean saveThumbnails, boolean saveFiles, boolean createZip) {
 		this.callback = callback;
 		this.chan = chan;
 		this.boardName = boardName;
@@ -81,6 +87,7 @@ public class SendLocalArchiveTask extends ExecutorTask<Integer, SendLocalArchive
 		this.posts = posts;
 		this.saveThumbnails = saveThumbnails;
 		this.saveFiles = saveFiles;
+		this.createZip = createZip;
 	}
 
 	@Override
@@ -132,7 +139,7 @@ public class SendLocalArchiveTask extends ExecutorTask<Integer, SendLocalArchive
 		Object[] decodeTo = new Object[2];
 		ArrayList<SpanItem> spanItems = new ArrayList<>();
 		ArrayList<SpanEvent> spanEvents = new ArrayList<>();
-		String archiveName = chan.name + '-' + boardName + '-' + threadNumber;
+		String archiveName = chooseArchiveName(chan.name + '-' + boardName + '-' + threadNumber);
 		HashSet<String> existFilesLc = new HashSet<>();
 		HashSet<String> existThumbnailsLc = new HashSet<>();
 		HashMap<String, String> iconNames = new HashMap<>();
@@ -157,9 +164,10 @@ public class SendLocalArchiveTask extends ExecutorTask<Integer, SendLocalArchive
 		ArrayList<DownloadService.DownloadItem> thumbnailsToDownload = new ArrayList<>(
 				saveThumbnails ? totalFilesCount : 0);
 		try {
+			String threadTitle = posts.iterator().next().subject;
 			try (Writer writer = new OutputStreamWriter(new FileOutputStream(archiveFile), StandardCharsets.UTF_8)) {
 			String defaultName = chan.configuration.getDefaultName(boardName);
-			WakabaLikeHtmlBuilder htmlBuilder = new WakabaLikeHtmlBuilder(posts.iterator().next().subject,
+			WakabaLikeHtmlBuilder htmlBuilder = new WakabaLikeHtmlBuilder(threadTitle,
 					boardName, chan.configuration.getBoardTitle(boardName), chan.configuration.getTitle(),
 					chan.locator.safe(false).createThreadUri(boardName, threadNumber), posts.size(), totalFilesCount);
 			htmlBuilder.writeHeader(writer);
@@ -268,9 +276,12 @@ public class SendLocalArchiveTask extends ExecutorTask<Integer, SendLocalArchive
 			notifyProgress(progress);
 			htmlBuilder.writeFooter(writer);
 			}
+			byte[] manifest = LocalArchiveManager.createManifest(archiveName, chan.name, boardName,
+					threadNumber, threadTitle, posts.size(), totalFilesCount, saveFiles, saveThumbnails)
+					.toString(2).getBytes(StandardCharsets.UTF_8);
 			success = true;
-			return new Result(archiveFile, archiveName, filesToDownload, thumbnailsToDownload);
-		} catch (IOException e) {
+			return new Result(archiveFile, archiveName, manifest, filesToDownload, thumbnailsToDownload);
+		} catch (IOException | JSONException e) {
 			return null;
 		} finally {
 			if (!success) {
@@ -298,16 +309,25 @@ public class SendLocalArchiveTask extends ExecutorTask<Integer, SendLocalArchive
 			}
 			ArrayList<DownloadResult> results = new ArrayList<>();
 			results.add(createDownload(".nomedia", new ByteArrayInputStream(new byte[0])));
+			results.add(createDownload(result.archiveName + ".json",
+					new ByteArrayInputStream(result.manifest)));
 			results.add(createDownload(result.archiveName + ".html", archiveInput));
-			results.add(createDownload(result.archiveName + "/" + DIRECTORY_THUMBNAILS, result.thumbnailsToDownload));
-			results.add(createDownload(result.archiveName + "/" + DIRECTORY_FILES, result.filesToDownload));
-			downloadResult = binder -> {
+			results.add(createDownload(result.archiveName + "/" + DIRECTORY_THUMBNAILS,
+					result.thumbnailsToDownload, createZip));
+			results.add(createDownload(result.archiveName + "/" + DIRECTORY_FILES,
+					result.filesToDownload, createZip));
+			DownloadResult enqueueResult = binder -> {
 				try (DownloadService.Accumulate ignored = binder.accumulate()) {
 					for (DownloadResult innerDownloadResult : results) {
 						innerDownloadResult.run(binder);
 					}
 				}
 			};
+			if (createZip) {
+				downloadResult = binder -> new ZipCoordinator(binder, result, enqueueResult).start();
+			} else {
+				downloadResult = enqueueResult;
+			}
 		}
 		callback.onLocalArchivationComplete(downloadResult);
 	}
@@ -328,12 +348,148 @@ public class SendLocalArchiveTask extends ExecutorTask<Integer, SendLocalArchive
 		return binder -> binder.downloadDirect(DataFile.Target.DOWNLOADS, DIRECTORY_ARCHIVE, name, input);
 	}
 
-	private static DownloadResult createDownload(String path, List<DownloadService.DownloadItem> downloadItems) {
+	private static DownloadResult createDownload(String path,
+			List<DownloadService.DownloadItem> downloadItems, boolean overwrite) {
 		return binder -> {
 			if (path != null && downloadItems.size() > 0) {
-				binder.downloadDirect(DataFile.Target.DOWNLOADS, DIRECTORY_ARCHIVE + "/" + path, false, downloadItems);
+				binder.downloadDirect(DataFile.Target.DOWNLOADS,
+						DIRECTORY_ARCHIVE + "/" + path, overwrite, downloadItems);
 			}
 		};
+	}
+
+	private static class ZipCoordinator implements DownloadService.Callback, PackLocalArchiveTask.Callback {
+		private static final HashSet<ZipCoordinator> ACTIVE = new HashSet<>();
+
+		private final DownloadService.Binder binder;
+		private final Result result;
+		private final DownloadResult enqueueResult;
+		private int htmlRemaining = 1;
+		private int manifestRemaining = 1;
+		private final HashSet<String> filesRemaining;
+		private final HashSet<String> thumbnailsRemaining;
+		private boolean success = true;
+		private boolean finished;
+
+		private ZipCoordinator(DownloadService.Binder binder, Result result, DownloadResult enqueueResult) {
+			this.binder = binder;
+			this.result = result;
+			this.enqueueResult = enqueueResult;
+			filesRemaining = obtainNamesSet(result.filesToDownload);
+			thumbnailsRemaining = obtainNamesSet(result.thumbnailsToDownload);
+		}
+
+		public void start() {
+			synchronized (ACTIVE) {
+				ACTIVE.add(this);
+			}
+			binder.register(this);
+			enqueueResult.run(binder);
+		}
+
+		@Override
+		public void onFinishDownloading(boolean success, DataFile.Target target, String path, String name) {
+			if (finished || target != DataFile.Target.DOWNLOADS) {
+				return;
+			}
+			String archivePath = DIRECTORY_ARCHIVE + "/" + result.archiveName;
+			boolean handled = false;
+			if (DIRECTORY_ARCHIVE.equals(path) && (result.archiveName + ".html").equals(name)
+					&& htmlRemaining > 0) {
+				htmlRemaining--;
+				handled = true;
+			} else if (DIRECTORY_ARCHIVE.equals(path) && (result.archiveName + ".json").equals(name)
+					&& manifestRemaining > 0) {
+				manifestRemaining--;
+				handled = true;
+			} else if ((archivePath + "/" + DIRECTORY_FILES).equals(path)) {
+				handled = filesRemaining.remove(name);
+			} else if ((archivePath + "/" + DIRECTORY_THUMBNAILS).equals(path)
+					&& thumbnailsRemaining.remove(name)) {
+				handled = true;
+			}
+			if (handled) {
+				this.success &= success;
+				if (htmlRemaining == 0 && manifestRemaining == 0
+						&& filesRemaining.isEmpty() && thumbnailsRemaining.isEmpty()) {
+					finished = true;
+					ConcurrentUtils.HANDLER.post(this::finishDownloads);
+				}
+			}
+		}
+
+		private void finishDownloads() {
+			binder.unregister(this);
+			synchronized (ACTIVE) {
+				ACTIVE.remove(this);
+			}
+			if (success) {
+				PackLocalArchiveTask task = new PackLocalArchiveTask(this, result.archiveName,
+						obtainNames(result.filesToDownload), obtainNames(result.thumbnailsToDownload));
+				task.execute(ConcurrentUtils.PARALLEL_EXECUTOR);
+			} else {
+				onPackLocalArchiveComplete(false);
+			}
+		}
+
+		@Override
+		public void onCleanup() {
+			if (!finished) {
+				finished = true;
+				ConcurrentUtils.HANDLER.post(() -> {
+					binder.unregister(this);
+					synchronized (ACTIVE) {
+						ACTIVE.remove(this);
+					}
+				});
+			}
+		}
+
+		@Override
+		public void onPackLocalArchiveComplete(boolean success) {
+			ClickableToast.show(success ? R.string.zip_archive_created : R.string.zip_archive_failed);
+		}
+	}
+
+	private static List<String> obtainNames(List<DownloadService.DownloadItem> downloadItems) {
+		ArrayList<String> names = new ArrayList<>(downloadItems.size());
+		for (DownloadService.DownloadItem downloadItem : downloadItems) {
+			names.add(downloadItem.name);
+		}
+		return names;
+	}
+
+	private static HashSet<String> obtainNamesSet(List<DownloadService.DownloadItem> downloadItems) {
+		HashSet<String> names = new HashSet<>(downloadItems.size());
+		for (DownloadService.DownloadItem downloadItem : downloadItems) {
+			names.add(downloadItem.name);
+		}
+		return names;
+	}
+
+	private static String chooseArchiveName(String baseName) {
+		HashSet<String> existingNames = new HashSet<>();
+		List<DataFile> children = DataFile.obtain(DataFile.Target.DOWNLOADS, DIRECTORY_ARCHIVE).getChildren();
+		if (children != null) {
+			for (DataFile child : children) {
+				String name = child.getName();
+				if (!child.isDirectory()) {
+					String extension = StringUtils.getFileExtension(name);
+					if ("html".equalsIgnoreCase(extension) || "htm".equalsIgnoreCase(extension)
+							|| "zip".equalsIgnoreCase(extension)
+							|| "json".equalsIgnoreCase(extension)) {
+						name = name.substring(0, name.length() - extension.length() - 1);
+					}
+				}
+				existingNames.add(name.toLowerCase(Locale.ROOT));
+			}
+		}
+		String archiveName = baseName;
+		int index = 1;
+		while (existingNames.contains(archiveName.toLowerCase(Locale.ROOT))) {
+			archiveName = baseName + "_" + index++;
+		}
+		return archiveName;
 	}
 
 	private static class DeleteOnCloseFileInputStream extends FilterInputStream {
@@ -357,14 +513,16 @@ public class SendLocalArchiveTask extends ExecutorTask<Integer, SendLocalArchive
 	public static class Result {
 		public final File archiveFile;
 		public final String archiveName;
+		public final byte[] manifest;
 		public final List<DownloadService.DownloadItem> filesToDownload;
 		public final List<DownloadService.DownloadItem> thumbnailsToDownload;
 
-		private Result(File archiveFile, String archiveName,
+		private Result(File archiveFile, String archiveName, byte[] manifest,
 				List<DownloadService.DownloadItem> filesToDownload,
 				List<DownloadService.DownloadItem> thumbnailsToDownload) {
 			this.archiveFile = archiveFile;
 			this.archiveName = archiveName;
+			this.manifest = manifest;
 			this.filesToDownload = filesToDownload;
 			this.thumbnailsToDownload = thumbnailsToDownload;
 		}
