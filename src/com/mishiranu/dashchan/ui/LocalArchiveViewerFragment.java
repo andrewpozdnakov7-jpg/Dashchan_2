@@ -382,7 +382,8 @@ public class LocalArchiveViewerFragment extends ContentFragment implements Posts
 					if (StringUtils.isEmpty(filePath) && StringUtils.isEmpty(thumbnailPath)) {
 						continue;
 					}
-					Uri fileUri = !StringUtils.isEmpty(filePath) ? createArchiveUri(filePath) : null;
+					Uri fileUri = !StringUtils.isEmpty(filePath)
+							? LocalArchiveManager.createResourceUri(item, filePath) : null;
 					Uri thumbnailUri = !StringUtils.isEmpty(thumbnailPath)
 							? LocalArchiveManager.createResourceUri(item, thumbnailPath) : null;
 					Post.Attachment.File attachment = Post.Attachment.File.createExternal(fileUri, thumbnailUri,
@@ -459,10 +460,6 @@ public class LocalArchiveViewerFragment extends ContentFragment implements Posts
 			}
 		}
 		return result;
-	}
-
-	private static Uri createArchiveUri(String path) {
-		return Uri.parse(LOCAL_BASE_URL + Uri.encode(path, "/"));
 	}
 
 	private static int parseInt(String value) {

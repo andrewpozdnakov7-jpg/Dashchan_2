@@ -22,6 +22,7 @@ import chan.util.StringUtils;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.async.HttpHolderTask;
+import com.mishiranu.dashchan.content.service.AutoBumpWorker;
 import com.mishiranu.dashchan.content.async.TaskViewModel;
 import com.mishiranu.dashchan.content.database.ChanDatabase;
 import com.mishiranu.dashchan.content.model.ErrorItem;
@@ -143,6 +144,15 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 					}
 				});
 			}
+		}
+		if ("dvach".equals(chanName)) {
+			CheckPreference autoBumpPreference = addCheck(true, Preferences.KEY_AUTO_BUMP_ENABLED,
+					Preferences.DEFAULT_AUTO_BUMP_ENABLED, R.string.auto_bump, R.string.auto_bump__summary);
+			autoBumpPreference.setOnAfterChangeListener(p -> AutoBumpWorker.scheduleNext(requireContext()));
+			Preference<Void> manageAutoBump = addButton(R.string.manage_auto_bump,
+					R.string.manage_auto_bump__summary);
+			manageAutoBump.setOnClickListener(p -> ((FragmentHandler) requireActivity())
+					.pushFragment(new AutoBumpFragment()));
 		}
 		if (chan.configuration.getOption(ChanConfiguration.OPTION_ALLOW_USER_AUTHORIZATION)) {
 			ChanConfiguration.Authorization authorization = chan.configuration.safe().obtainUserAuthorization();

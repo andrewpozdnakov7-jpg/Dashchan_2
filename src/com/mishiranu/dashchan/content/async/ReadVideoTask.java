@@ -7,10 +7,13 @@ import chan.content.InvalidResponseException;
 import chan.http.HttpException;
 import chan.http.HttpHolder;
 import com.mishiranu.dashchan.content.CacheManager;
+import com.mishiranu.dashchan.content.LocalArchiveManager;
 import com.mishiranu.dashchan.content.model.ErrorItem;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 
 public class ReadVideoTask extends HttpHolderTask<long[], Boolean> {
 	private static final int CONNECT_TIMEOUT = 15000;
@@ -25,6 +28,7 @@ public class ReadVideoTask extends HttpHolderTask<long[], Boolean> {
 
 	private ErrorItem errorItem;
 	private boolean disallowRangeRequests;
+	private final boolean localArchiveResource;
 
 	public interface Callback {
 		void onReadVideoInit(File partialFile);
@@ -47,6 +51,7 @@ public class ReadVideoTask extends HttpHolderTask<long[], Boolean> {
 		this.chan = chan;
 		this.uri = uri;
 		this.start = start;
+		localArchiveResource = LocalArchiveManager.RESOURCE_SCHEME.equals(uri.getScheme());
 		file = CacheManager.getInstance().getMediaFile(uri, false);
 		partialFile = CacheManager.getInstance().getPartialMediaFile(uri);
 	}
@@ -59,6 +64,33 @@ public class ReadVideoTask extends HttpHolderTask<long[], Boolean> {
 		}
 		boolean success = false;
 		try {
+			if (localArchiveResource) {
+				try (InputStream input = LocalArchiveManager.openResource(uri);
+						FileOutputStream output = new FileOutputStream(partialFile)) {
+					if (input == null) {
+						throw new IOException("Local archive resource is missing");
+					}
+					ConcurrentUtils.mainGet(() -> {
+						callback.onReadVideoInit(partialFile);
+						return null;
+					});
+					byte[] buffer = new byte[8192];
+					long progress = 0L;
+					int count;
+					while ((count = input.read(buffer)) >= 0) {
+						if (isCancelled()) {
+							throw new IOException("Cancelled");
+						}
+						if (count > 0) {
+							output.write(buffer, 0, count);
+							progress += count;
+							progressHandler.updateProgress(progress);
+						}
+					}
+				}
+				success = true;
+				return true;
+			}
 			RetryableMediaDownload.download(chan, uri, holder, partialFile, start,
 					CONNECT_TIMEOUT, READ_TIMEOUT, new RetryableMediaDownload.Callback() {
 						@Override
@@ -110,7 +142,7 @@ public class ReadVideoTask extends HttpHolderTask<long[], Boolean> {
 			errorItem = e.getErrorItemAndHandle();
 			return false;
 		} finally {
-			if (start <= 0) {
+			if (start <= 0 || localArchiveResource) {
 				file.delete();
 				if (success) {
 					partialFile.renameTo(file);
@@ -128,7 +160,7 @@ public class ReadVideoTask extends HttpHolderTask<long[], Boolean> {
 
 	@Override
 	protected void onProgress(long[] values) {
-		if (start > 0) {
+		if (start > 0 && !localArchiveResource) {
 			callback.onReadVideoRangeUpdate(start, start + values[0]);
 		} else {
 			callback.onReadVideoProgressUpdate(values[0], values[1]);
@@ -138,7 +170,7 @@ public class ReadVideoTask extends HttpHolderTask<long[], Boolean> {
 	@Override
 	protected void onComplete(Boolean success) {
 		if (success) {
-			callback.onReadVideoSuccess(start > 0, file);
+			callback.onReadVideoSuccess(!localArchiveResource && start > 0, file);
 		} else {
 			callback.onReadVideoFail(start > 0, errorItem, disallowRangeRequests);
 		}

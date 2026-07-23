@@ -83,8 +83,6 @@ public class InterfaceFragment extends PreferenceFragment {
 				R.string.night_theme, darkThemeEntries).setOnAfterChangeListener(p -> requireActivity().recreate());
 		addDependency(Preferences.KEY_DAY_THEME, Preferences.KEY_AUTOMATIC_DAY_NIGHT_THEME, true);
 		addDependency(Preferences.KEY_NIGHT_THEME, Preferences.KEY_AUTOMATIC_DAY_NIGHT_THEME, true);
-		addCheck(true, Preferences.KEY_ROUNDED_DIALOGS, Preferences.DEFAULT_ROUNDED_DIALOGS,
-				R.string.rounded_dialogs, R.string.rounded_dialogs__summary);
 		addCheck(true, Preferences.KEY_PREDICTIVE_BACK, Preferences.DEFAULT_PREDICTIVE_BACK,
 				R.string.enable_predictive_back, R.string.enable_predictive_back__summary)
 				.setOnAfterChangeListener(p -> ((StateActivity) requireActivity()).updateSystemBackCallback());

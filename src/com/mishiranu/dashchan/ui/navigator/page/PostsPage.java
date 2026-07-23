@@ -51,6 +51,7 @@ import com.mishiranu.dashchan.content.model.PostItem;
 import com.mishiranu.dashchan.content.model.PostNumber;
 import com.mishiranu.dashchan.content.service.PostingService;
 import com.mishiranu.dashchan.content.service.WatcherService;
+import com.mishiranu.dashchan.content.storage.AutoBumpStorage;
 import com.mishiranu.dashchan.content.storage.FavoritesStorage;
 import com.mishiranu.dashchan.content.storage.StatisticsStorage;
 import com.mishiranu.dashchan.ui.DrawerForm;
@@ -61,6 +62,7 @@ import com.mishiranu.dashchan.ui.navigator.adapter.PostsAdapter;
 import com.mishiranu.dashchan.ui.navigator.manager.DialogUnit;
 import com.mishiranu.dashchan.ui.navigator.manager.ThreadshotPerformer;
 import com.mishiranu.dashchan.ui.navigator.manager.UiManager;
+import com.mishiranu.dashchan.ui.preference.AutoBumpDialog;
 import com.mishiranu.dashchan.ui.posting.Replyable;
 import com.mishiranu.dashchan.util.AndroidUtils;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
@@ -646,6 +648,7 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 				.setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
 		menu.add(0, R.id.menu_open_original_thread, 0, R.string.open_original);
 		menu.add(0, R.id.menu_archive, 0, R.string.archive__verb);
+		menu.add(0, R.id.menu_auto_bump, 0, R.string.add_to_auto_bump);
 	}
 
 	@Override
@@ -670,6 +673,30 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 		boolean canBeArchived = !ChanManager.getInstance().getArchiveChanNames(page.chanName).isEmpty() ||
 				!getChan().configuration.getOption(ChanConfiguration.OPTION_LOCAL_MODE);
 		menu.findItem(R.id.menu_archive).setVisible(canBeArchived);
+		MenuItem autoBumpItem = menu.findItem(R.id.menu_auto_bump);
+		boolean showAutoBump = "dvach".equals(page.chanName);
+		autoBumpItem.setVisible(showAutoBump);
+		if (showAutoBump) {
+			AutoBumpStorage.Task task = AutoBumpStorage.getInstance()
+					.findTask(page.chanName, page.boardName, page.threadNumber);
+			if (task == null) {
+				autoBumpItem.setTitle(R.string.add_to_auto_bump);
+			} else if (task.completed) {
+				autoBumpItem.setTitle(R.string.auto_bump_menu_completed);
+			} else if (!task.enabled) {
+				autoBumpItem.setTitle(R.string.auto_bump_menu_paused);
+			} else if (!Preferences.isAutoBumpEnabled()) {
+				autoBumpItem.setTitle(R.string.auto_bump_menu_disabled);
+			} else if (!Preferences.checkHasMultipleValues(Preferences.getCaptchaPass(getChan()))) {
+				autoBumpItem.setTitle(R.string.auto_bump_menu_pass_required);
+			} else {
+				long remainingMinutes = AutoBumpStorage.calculateRemainingMinutes(task.nextRunAt,
+						System.currentTimeMillis());
+				autoBumpItem.setTitle(remainingMinutes > 0L
+						? getString(R.string.auto_bump_menu_time__format, remainingMinutes)
+						: getString(R.string.auto_bump_menu_due));
+			}
+		}
 	}
 
 	@Override
@@ -774,6 +801,22 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 				}
 				getUiManager().dialog().performSendArchiveThread(getFragmentManager(),
 						page.chanName, page.boardName, page.threadNumber, threadTitle, posts);
+				return true;
+			}
+			case R.id.menu_auto_bump: {
+				AutoBumpStorage.Task task = AutoBumpStorage.getInstance()
+						.findTask(page.chanName, page.boardName, page.threadNumber);
+				if (task != null) {
+					AutoBumpDialog.editTask(task.id).show(getFragmentManager(),
+							AutoBumpDialog.class.getName());
+				} else if (!Preferences.checkHasMultipleValues(Preferences.getCaptchaPass(getChan()))) {
+					ClickableToast.show(R.string.auto_bump_pass_required);
+				} else {
+					String threadTitle = adapter.getItemCount() > 0
+							? adapter.getItem(0).getSubjectOrComment() : null;
+					AutoBumpDialog.newTask(page.boardName, page.threadNumber, threadTitle)
+							.show(getFragmentManager(), AutoBumpDialog.class.getName());
+				}
 				return true;
 			}
 		}

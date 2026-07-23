@@ -59,12 +59,10 @@ public class ThemeEngine {
 
 	private static final int STATUS_OVERLAY_LIGHT = 0x22000000;
 	private static final int STATUS_OVERLAY_DARK = 0x33000000;
-	private static final float ROUNDED_DIALOG_RADIUS_DP = 28f;
-
 	static void applyRoundedDialogBackground(View view, int color) {
 		GradientDrawable roundedDrawable = new GradientDrawable();
 		roundedDrawable.setColor(color);
-		roundedDrawable.setCornerRadius(ROUNDED_DIALOG_RADIUS_DP * ResourceUtils.obtainDensity(view));
+		roundedDrawable.setCornerRadius(Preferences.getRoundedDialogsRadius() * ResourceUtils.obtainDensity(view));
 
 		Drawable oldBackground = view.getBackground();
 		Drawable background = roundedDrawable;

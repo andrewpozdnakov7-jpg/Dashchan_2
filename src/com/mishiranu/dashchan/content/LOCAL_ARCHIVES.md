@@ -10,13 +10,25 @@ This document describes the local thread archive pipeline and its on-disk format
 - Offer a mobile post-feed view inside Slooop without rewriting the saved HTML.
 - Keep old Dashchan/Wakaba HTML archives readable.
 - Optionally package the page and downloaded resources into one ZIP file.
-- Allow read-only browsing of archives in additional folders selected through Android's Storage Access Framework.
+- Browse archives in additional folders selected through Android's Storage Access Framework and delete them when
+  the provider grants write access.
+
+## Deletion
+
+Long-pressing an entry on the local archives screen opens a deletion confirmation. Deletion removes the matching
+HTML, ZIP, JSON manifest, and the resource directory containing saved media and thumbnails. It never removes the
+archive root or a user-added source directory.
+
+Deleting from a user-added Storage Access Framework directory requires a persisted write grant. A directory added
+by an older build with read-only access may need to be added again before its archives can be deleted.
 
 ## Save pipeline
 
 1. `SendLocalArchiveTask` snapshots the posts into Wakaba-style UTF-8 HTML in an internal temporary file.
 2. It builds a versioned JSON manifest and sends the HTML and manifest to `DownloadService`.
 3. Requested thumbnails and original files are downloaded to sibling resource directories.
+   Selecting original files in the local archive dialog also selects thumbnails as a safe default. The user may
+   explicitly clear the thumbnail option before starting the archive.
 4. When ZIP output is enabled, `ZipCoordinator` waits for the HTML, manifest, thumbnails, and original files.
 5. `PackLocalArchiveTask` calls `LocalArchiveManager.createZip`. Media is stored without recompression so that
    packaging is fast and does not heat the device unnecessarily.

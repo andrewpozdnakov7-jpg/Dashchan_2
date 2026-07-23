@@ -16,7 +16,6 @@ import android.text.SpannableString;
 import android.text.SpannableStringBuilder;
 import android.text.style.BackgroundColorSpan;
 import android.text.style.RelativeSizeSpan;
-import android.text.style.TypefaceSpan;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
@@ -39,6 +38,7 @@ import com.mishiranu.dashchan.content.model.PostItem;
 import com.mishiranu.dashchan.content.model.PostNumber;
 import com.mishiranu.dashchan.graphics.ColorScheme;
 import com.mishiranu.dashchan.text.style.LinkSpan;
+import com.mishiranu.dashchan.text.style.LightSpan;
 import com.mishiranu.dashchan.text.style.LinkSuffixSpan;
 import com.mishiranu.dashchan.ui.gallery.GalleryOverlay;
 import com.mishiranu.dashchan.ui.posting.Replyable;
@@ -308,10 +308,10 @@ public class ViewUnit {
 			holder.subject.setVisibility(View.VISIBLE);
 			holder.subject.setSingleLine(!small);
 			SpannableStringBuilder builder = new SpannableStringBuilder(subject.trim());
+			builder.setSpan(new LightSpan(), 0, builder.length(),
+					SpannableStringBuilder.SPAN_EXCLUSIVE_EXCLUSIVE);
 			if (!small) {
 				builder.setSpan(new RelativeSizeSpan(4f / 3f), 0, builder.length(),
-						SpannableStringBuilder.SPAN_EXCLUSIVE_EXCLUSIVE);
-				builder.setSpan(new TypefaceSpan("sans-serif-light"), 0, builder.length(),
 						SpannableStringBuilder.SPAN_EXCLUSIVE_EXCLUSIVE);
 			}
 			holder.subject.setText(builder);

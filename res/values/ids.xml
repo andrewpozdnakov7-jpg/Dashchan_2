@@ -7,6 +7,7 @@
 	<item type="id" name="menu_add_theme" />
 	<item type="id" name="menu_appearance" />
 	<item type="id" name="menu_archive" />
+	<item type="id" name="menu_auto_bump" />
 	<item type="id" name="menu_attach" />
 	<item type="id" name="menu_cards" />
 	<item type="id" name="menu_catalog" />

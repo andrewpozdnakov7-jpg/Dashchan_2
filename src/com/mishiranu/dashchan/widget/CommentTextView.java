@@ -14,7 +14,6 @@ import android.text.Spannable;
 import android.text.SpannableStringBuilder;
 import android.text.Spanned;
 import android.text.style.RelativeSizeSpan;
-import android.text.style.TypefaceSpan;
 import android.util.AttributeSet;
 import android.view.ActionMode;
 import android.view.InputDevice;
@@ -33,6 +32,7 @@ import chan.content.Chan;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.text.style.LinkSpan;
+import com.mishiranu.dashchan.text.style.LightSpan;
 import com.mishiranu.dashchan.text.style.OverlineSpan;
 import com.mishiranu.dashchan.text.style.SpoilerSpan;
 import com.mishiranu.dashchan.util.AndroidUtils;
@@ -270,7 +270,7 @@ public class CommentTextView extends TextView {
 			SpannableStringBuilder spannable = new SpannableStringBuilder();
 			spannable.append(subject);
 			int length = spannable.length();
-			spannable.setSpan(new TypefaceSpan("sans-serif-light"), 0, length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+			spannable.setSpan(new LightSpan(), 0, length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
 			spannable.setSpan(new RelativeSizeSpan(4f / 3f), 0, length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
 			if (hasComment) {
 				spannable.append("\n\n");

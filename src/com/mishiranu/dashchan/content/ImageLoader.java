@@ -192,7 +192,7 @@ public class ImageLoader {
 			// Don't remove task but instead mark it as finished,
 			// so targets could be extracted later.
 			finished = true;
-			if (notFound) {
+			if (notFound && !LocalArchiveManager.RESOURCE_SCHEME.equals(uri.getScheme())) {
 				notFoundMap.put(key, SystemClock.elapsedRealtime());
 			}
 			if (bitmap != null) {

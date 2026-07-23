@@ -111,6 +111,8 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 	private static final String CHAN_NAME_DVACH = "dvach";
 	private static final String COMMAND_MONKEY = "@monkey";
 	private static final String COMMAND_ART_MONKEY = "@artmonkey";
+	private static final int SERVER_COMMAND_BUTTON_MONKEY = 1;
+	private static final int SERVER_COMMAND_BUTTON_ART_MONKEY = 1 << 1;
 	private static final int SERVER_COMMAND_BUTTON_WIDTH_DP = 40;
 
 	private static final String EXTRA_CAPTCHA_DRAFT = "captchaDraft";
@@ -1114,17 +1116,24 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		}
 	};
 
-	private boolean shouldShowServerCommandButtons() {
+	private int getServerCommandButtons() {
 		if (!allowPosting || !CHAN_NAME_DVACH.equals(getChanName())) {
-			return false;
+			return 0;
 		}
 		Chan chan = Chan.get(getChanName());
 		if (!(chan.configuration instanceof DvachChanConfiguration)) {
-			return false;
+			return 0;
 		}
 		DvachChanConfiguration configuration = (DvachChanConfiguration) chan.configuration;
-		return configuration.areMonkeyButtonsEnabled()
-				&& Preferences.checkHasMultipleValues(Preferences.getCaptchaPass(chan));
+		int buttons = 0;
+		if (configuration.isMonkeyButtonEnabled()) {
+			buttons |= SERVER_COMMAND_BUTTON_MONKEY;
+		}
+		if (configuration.isArtMonkeyButtonEnabled()
+				&& Preferences.checkHasMultipleValues(Preferences.getCaptchaPass(chan))) {
+			buttons |= SERVER_COMMAND_BUTTON_ART_MONKEY;
+		}
+		return buttons;
 	}
 
 	private void insertServerCommand(String command) {
@@ -2049,16 +2058,18 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 
 		private int lastSupportedTags;
 		private int lastDisplayedTags;
-		private boolean lastShowServerCommands;
+		private int lastServerCommandButtons;
 
 		private void fillContainer() {
 			float density = ResourceUtils.obtainDensity(getResources());
 			int maxButtonsWidth = lastWidth - textFormatView.getPaddingLeft() - textFormatView.getPaddingRight();
 			int buttonMarginLeft = (int) (-4f * density);
-			boolean showServerCommands = shouldShowServerCommandButtons();
-			if (showServerCommands) {
-				int commandButtonsWidth = (int) (2f * SERVER_COMMAND_BUTTON_WIDTH_DP * density)
-						+ 2 * buttonMarginLeft;
+			int serverCommandButtons = getServerCommandButtons();
+			int serverCommandButtonCount = Integer.bitCount(serverCommandButtons);
+			if (serverCommandButtonCount > 0) {
+				int commandButtonsWidth = (int) (serverCommandButtonCount
+						* SERVER_COMMAND_BUTTON_WIDTH_DP * density)
+						+ serverCommandButtonCount * buttonMarginLeft;
 				maxButtonsWidth -= commandButtonsWidth;
 			}
 			Pair<Integer, Integer> supportedAndDisplayedTags = MarkupButtonProvider
@@ -2067,13 +2078,13 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 			int supportedTags = supportedAndDisplayedTags.first;
 			int displayedTags = supportedAndDisplayedTags.second;
 			if (lastSupportedTags == supportedTags && lastDisplayedTags == displayedTags
-					&& lastShowServerCommands == showServerCommands) {
+					&& lastServerCommandButtons == serverCommandButtons) {
 				return;
 			}
 
 			lastSupportedTags = supportedTags;
 			lastDisplayedTags = displayedTags;
-			lastShowServerCommands = showServerCommands;
+			lastServerCommandButtons = serverCommandButtons;
 			if (commentEditor != null) {
 				commentEditor.handleSimilar(supportedTags);
 			}
@@ -2096,9 +2107,11 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 				textFormatView.addView(button, layoutParams);
 				firstMarkupButton = false;
 			}
-			if (showServerCommands) {
+			if ((serverCommandButtons & SERVER_COMMAND_BUTTON_MONKEY) != 0) {
 				addServerCommandButton(R.drawable.ic_monkey_text, R.string.monkey_command_button,
 						COMMAND_MONKEY, density, buttonMarginLeft);
+			}
+			if ((serverCommandButtons & SERVER_COMMAND_BUTTON_ART_MONKEY) != 0) {
 				addServerCommandButton(R.drawable.ic_art_monkey_image, R.string.artmonkey_command_button,
 						COMMAND_ART_MONKEY, density, buttonMarginLeft);
 			}

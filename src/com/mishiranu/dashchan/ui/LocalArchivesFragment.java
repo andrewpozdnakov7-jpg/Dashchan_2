@@ -46,7 +46,17 @@ public class LocalArchivesFragment extends ContentFragment {
 		FrameLayout root = new FrameLayout(container.getContext());
 		recyclerView = new PaddedRecyclerView(root.getContext());
 		recyclerView.setLayoutManager(new LinearLayoutManager(root.getContext()));
-		adapter = new ArchiveAdapter(this::openArchive);
+		adapter = new ArchiveAdapter(new ArchiveAdapter.Callback() {
+			@Override
+			public void onClick(LocalArchiveManager.Item item) {
+				openArchive(item);
+			}
+
+			@Override
+			public void onLongClick(LocalArchiveManager.Item item) {
+				confirmDeleteArchive(item);
+			}
+		});
 		recyclerView.setAdapter(adapter);
 		recyclerView.addItemDecoration(new DividerItemDecoration(recyclerView.getContext(),
 				(configuration, position) -> configuration.need(true)));
@@ -100,6 +110,7 @@ public class LocalArchivesFragment extends ContentFragment {
 		} else if (item.getItemId() == MENU_ADD_FOLDER) {
 			Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
 					.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
+							| Intent.FLAG_GRANT_WRITE_URI_PERMISSION
 							| Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
 					.putExtra("android.content.extra.SHOW_ADVANCED", true);
 			startActivityForResult(intent, C.REQUEST_CODE_LOCAL_ARCHIVE_TREE);
@@ -118,8 +129,9 @@ public class LocalArchivesFragment extends ContentFragment {
 				&& data != null && data.getData() != null) {
 			Uri uri = data.getData();
 			try {
-				requireContext().getContentResolver().takePersistableUriPermission(uri,
-						Intent.FLAG_GRANT_READ_URI_PERMISSION);
+				int flags = data.getFlags() & (Intent.FLAG_GRANT_READ_URI_PERMISSION
+						| Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+				requireContext().getContentResolver().takePersistableUriPermission(uri, flags);
 				Preferences.addLocalArchiveUriTree(uri);
 				ClickableToast.show(R.string.local_archive_folder_added);
 				loadArchives();
@@ -153,9 +165,13 @@ public class LocalArchivesFragment extends ContentFragment {
 							try {
 								for (UriPermission permission : requireContext().getContentResolver()
 										.getPersistedUriPermissions()) {
-									if (uri.equals(permission.getUri()) && permission.isReadPermission()) {
+									if (uri.equals(permission.getUri())) {
+										int flags = (permission.isReadPermission()
+												? Intent.FLAG_GRANT_READ_URI_PERMISSION : 0)
+												| (permission.isWritePermission()
+												? Intent.FLAG_GRANT_WRITE_URI_PERMISSION : 0);
 										requireContext().getContentResolver().releasePersistableUriPermission(uri,
-												Intent.FLAG_GRANT_READ_URI_PERMISSION);
+												flags);
 										break;
 									}
 								}
@@ -194,9 +210,37 @@ public class LocalArchivesFragment extends ContentFragment {
 		((FragmentHandler) requireActivity()).pushFragment(new LocalArchiveViewerFragment(item.id));
 	}
 
+	private void confirmDeleteArchive(LocalArchiveManager.Item item) {
+		new AlertDialog.Builder(requireContext())
+				.setTitle(R.string.delete_local_archive)
+				.setMessage(getString(R.string.delete_local_archive_confirmation__format, item.name))
+				.setNegativeButton(android.R.string.cancel, null)
+				.setPositiveButton(R.string.delete, (dialog, which) -> deleteArchive(item))
+				.show();
+	}
+
+	private void deleteArchive(LocalArchiveManager.Item item) {
+		int generation = ++loadGeneration;
+		progressBar.setVisibility(View.VISIBLE);
+		ConcurrentUtils.PARALLEL_EXECUTOR.execute(() -> {
+			boolean success = LocalArchiveManager.delete(item);
+			PaddedRecyclerView recyclerView = this.recyclerView;
+			if (recyclerView != null) {
+				recyclerView.post(() -> {
+					if (generation == loadGeneration && isAdded()) {
+						ClickableToast.show(success ? R.string.local_archive_deleted
+								: R.string.local_archive_delete_failed);
+						loadArchives();
+					}
+				});
+			}
+		});
+	}
+
 	private static class ArchiveAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
 		private interface Callback {
 			void onClick(LocalArchiveManager.Item item);
+			void onLongClick(LocalArchiveManager.Item item);
 		}
 
 		private final Callback callback;
@@ -227,6 +271,14 @@ public class LocalArchivesFragment extends ContentFragment {
 				if (position != RecyclerView.NO_POSITION) {
 					callback.onClick(items.get(position));
 				}
+			});
+			viewHolder.itemView.setOnLongClickListener(view -> {
+				int position = viewHolder.getAdapterPosition();
+				if (position != RecyclerView.NO_POSITION) {
+					callback.onLongClick(items.get(position));
+					return true;
+				}
+				return false;
 			});
 			return viewHolder;
 		}

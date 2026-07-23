@@ -38,6 +38,7 @@ public class DvachChanConfiguration extends ChanConfiguration {
 	private static final String KEY_LIKES_ENABLED = "likes_enabled";
 
 	private static final String KEY_MONKEY_BUTTONS = "monkey_buttons";
+	private static final String KEY_ART_MONKEY_BUTTON = "artmonkey_button";
 	private static final String KEY_CAPTCHA_FULL_KEYBOARD = "captcha_full_keyboard";
 	private static final int CAPTCHA_TTL = 90;
 
@@ -54,6 +55,7 @@ public class DvachChanConfiguration extends ChanConfiguration {
 			addCaptchaType(captchaType);
 		}
 		addCustomPreference(KEY_MONKEY_BUTTONS, false);
+		addCustomPreference(KEY_ART_MONKEY_BUTTON, false);
 		addCustomPreference(KEY_CAPTCHA_FULL_KEYBOARD, false);
 	}
 
@@ -220,8 +222,14 @@ public class DvachChanConfiguration extends ChanConfiguration {
 		switch (key) {
 			case KEY_MONKEY_BUTTONS: {
 				CustomPreference preference = new CustomPreference();
-				preference.title = resources.getString(R.string.preference_monkey_buttons);
-				preference.summary = resources.getString(R.string.preference_monkey_buttons_summary);
+				preference.title = resources.getString(R.string.preference_monkey_button);
+				preference.summary = resources.getString(R.string.preference_monkey_button_summary);
+				return preference;
+			}
+			case KEY_ART_MONKEY_BUTTON: {
+				CustomPreference preference = new CustomPreference();
+				preference.title = resources.getString(R.string.preference_artmonkey_button);
+				preference.summary = resources.getString(R.string.preference_artmonkey_button_summary);
 				return preference;
 			}
 			case KEY_CAPTCHA_FULL_KEYBOARD: {
@@ -235,8 +243,12 @@ public class DvachChanConfiguration extends ChanConfiguration {
 		}
 	}
 
-	public boolean areMonkeyButtonsEnabled() {
+	public boolean isMonkeyButtonEnabled() {
 		return get(null, KEY_MONKEY_BUTTONS, false);
+	}
+
+	public boolean isArtMonkeyButtonEnabled() {
+		return get(null, KEY_ART_MONKEY_BUTTON, false);
 	}
 
 	boolean isFullKeyboardForCaptchaEnabled() {

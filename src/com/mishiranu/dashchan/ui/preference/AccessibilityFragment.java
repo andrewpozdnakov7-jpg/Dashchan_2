@@ -69,6 +69,12 @@ public class AccessibilityFragment extends PreferenceFragment {
 				getString(R.string.text_scale), scaleFormat, null,
 				Preferences.MIN_TEXT_SCALE, Preferences.MAX_TEXT_SCALE, Preferences.STEP_TEXT_SCALE)
 				.setOnAfterChangeListener(p -> requireActivity().recreate());
+		addCheck(true, Preferences.KEY_ROUNDED_DIALOGS, Preferences.DEFAULT_ROUNDED_DIALOGS,
+				R.string.rounded_dialogs, R.string.rounded_dialogs__summary);
+		RoundedDialogsRadiusPreference roundedDialogsRadiusPreference =
+				new RoundedDialogsRadiusPreference(requireContext());
+		addDialogPreference(roundedDialogsRadiusPreference);
+		addDependency(Preferences.KEY_ROUNDED_DIALOGS_RADIUS, Preferences.KEY_ROUNDED_DIALOGS, true);
 	}
 
 	private void selectCustomFont() {

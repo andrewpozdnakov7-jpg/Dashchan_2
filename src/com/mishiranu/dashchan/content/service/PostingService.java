@@ -33,6 +33,7 @@ import com.mishiranu.dashchan.content.model.ErrorItem;
 import com.mishiranu.dashchan.content.model.PendingUserPost;
 import com.mishiranu.dashchan.content.model.PostItem;
 import com.mishiranu.dashchan.content.model.PostNumber;
+import com.mishiranu.dashchan.content.storage.AutoBumpStorage;
 import com.mishiranu.dashchan.content.storage.DraftsStorage;
 import com.mishiranu.dashchan.content.storage.FavoritesStorage;
 import com.mishiranu.dashchan.content.storage.StatisticsStorage;
@@ -66,6 +67,11 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 	private final Handler handler = new Handler(Looper.getMainLooper());
 	private Runnable retryRunnable;
 	private TaskState taskState;
+	private static volatile boolean postingInProgress;
+
+	public static boolean isPostingInProgress() {
+		return postingInProgress;
+	}
 
 	private NotificationManager notificationManager;
 	private int notificationColor;
@@ -268,6 +274,7 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 		super.onDestroy();
 
 		performFinish(null, true);
+		postingInProgress = false;
 		if (wakeLock.isHeld()) {
 			wakeLock.release();
 		}
@@ -391,6 +398,7 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 			markPostDraftQueued(queueItem);
 			boolean start = postQueue.isEmpty();
 			postQueue.addLast(queueItem);
+			postingInProgress = true;
 			if (start) {
 				AndroidUtils.startAnyService(PostingService.this,
 						new Intent(PostingService.this, PostingService.class));
@@ -509,6 +517,7 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 		if (!postQueue.isEmpty()) {
 			startCurrentPost();
 		} else {
+			postingInProgress = false;
 			refreshNotification(NotificationData.Type.CANCEL, null);
 			if (wakeLock.isHeld()) {
 				wakeLock.release();
@@ -536,6 +545,7 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 			}
 			ArrayList<QueueItem> cancelledItems = new ArrayList<>(postQueue);
 			postQueue.clear();
+			postingInProgress = false;
 			for (QueueItem queueItem : cancelledItems) {
 				if (queueItem.allowFloodRetry) {
 					storeFailedPost(queueItem);
@@ -678,6 +688,11 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 				notificationManager.notify(tag, 0, builder.build());
 			}
 
+			if (targetThreadNumber != null && !data.optionSage && AutoBumpStorage.getInstance()
+					.updateAfterManualPost(chanName, data.boardName, targetThreadNumber,
+							postNumber != null ? postNumber.toString() : null, System.currentTimeMillis())) {
+				AutoBumpWorker.scheduleNext(this);
+			}
 			if (targetThreadNumber != null && Preferences.getFavoriteOnReply().isEnabled(data.optionSage)) {
 				// Add to favorites after processing the response to ensure watcher is not triggered too early
 				FavoritesStorage.getInstance().add(chanName, data.boardName, targetThreadNumber, null, true);
@@ -857,6 +872,17 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 	}
 
 	private static final HashMap<Key, HashSet<PendingUserPost>> PENDING_USER_POST_MAP = new HashMap<>();
+
+	public static void registerPendingUserPost(String chanName, String boardName, String threadNumber,
+			String comment) {
+		Key key = new Key(chanName, boardName, threadNumber);
+		HashSet<PendingUserPost> pendingUserPosts = PENDING_USER_POST_MAP.get(key);
+		if (pendingUserPosts == null) {
+			pendingUserPosts = new HashSet<>(1);
+			PENDING_USER_POST_MAP.put(key, pendingUserPosts);
+		}
+		pendingUserPosts.add(new PendingUserPost.SimilarComment(comment, System.currentTimeMillis()));
+	}
 
 	public static Set<PendingUserPost> getPendingUserPosts(String chanName, String boardName,
 			String threadNumber) {

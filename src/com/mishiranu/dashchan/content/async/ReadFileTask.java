@@ -13,6 +13,7 @@ import chan.http.HttpHolder;
 import chan.http.HttpResponse;
 import chan.util.DataFile;
 import com.mishiranu.dashchan.content.CacheManager;
+import com.mishiranu.dashchan.content.LocalArchiveManager;
 import com.mishiranu.dashchan.content.model.ErrorItem;
 import java.io.File;
 import java.io.FileInputStream;
@@ -139,6 +140,18 @@ public class ReadFileTask extends HttpHolderTask<long[], Boolean> {
 				progressHandler.setInputProgressMax(cachedMediaFile.length());
 				try (FileInputStream input = new FileInputStream(cachedMediaFile);
 						OutputStream output = toFile.openOutputStream()) {
+					copyStream(input, output, progressHandler, digest);
+				} catch (IOException e) {
+					ErrorItem.Type type = getErrorTypeFromExceptionAndHandle(e);
+					errorItem = new ErrorItem(type != null ? type : ErrorItem.Type.UNKNOWN);
+					return false;
+				}
+			} else if (LocalArchiveManager.RESOURCE_SCHEME.equals(fromUri.getScheme())) {
+				try (InputStream input = LocalArchiveManager.openResource(fromUri);
+						OutputStream output = toFile.openOutputStream()) {
+					if (input == null) {
+						throw new FileNotFoundException("Local archive resource is missing");
+					}
 					copyStream(input, output, progressHandler, digest);
 				} catch (IOException e) {
 					ErrorItem.Type type = getErrorTypeFromExceptionAndHandle(e);

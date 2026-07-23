@@ -1577,9 +1577,18 @@ public class Preferences {
 
 	public static final String KEY_ROUNDED_DIALOGS = "rounded_dialogs";
 	public static final boolean DEFAULT_ROUNDED_DIALOGS = false;
+	public static final String KEY_ROUNDED_DIALOGS_RADIUS = "rounded_dialogs_radius";
+	public static final int MIN_ROUNDED_DIALOGS_RADIUS = 0;
+	public static final int MAX_ROUNDED_DIALOGS_RADIUS = 64;
+	public static final int DEFAULT_ROUNDED_DIALOGS_RADIUS = 28;
 
 	public static boolean isRoundedDialogs() {
 		return PREFERENCES.getBoolean(KEY_ROUNDED_DIALOGS, DEFAULT_ROUNDED_DIALOGS);
+	}
+
+	public static int getRoundedDialogsRadius() {
+		return Math.max(MIN_ROUNDED_DIALOGS_RADIUS, Math.min(PREFERENCES.getInt(KEY_ROUNDED_DIALOGS_RADIUS,
+				DEFAULT_ROUNDED_DIALOGS_RADIUS), MAX_ROUNDED_DIALOGS_RADIUS));
 	}
 
 	public static final String KEY_TRUSTED_EXSTENSIONS = "trusted_extensions";
@@ -1948,5 +1957,12 @@ public class Preferences {
 
 	public static boolean isBackgroundReplyCheckEnabled() {
 		return PREFERENCES.getBoolean(KEY_BACKGROUND_REPLY_CHECK, DEFAULT_BACKGROUND_REPLY_CHECK);
+	}
+
+	public static final String KEY_AUTO_BUMP_ENABLED = "auto_bump_enabled";
+	public static final boolean DEFAULT_AUTO_BUMP_ENABLED = false;
+
+	public static boolean isAutoBumpEnabled() {
+		return PREFERENCES.getBoolean(KEY_AUTO_BUMP_ENABLED, DEFAULT_AUTO_BUMP_ENABLED);
 	}
 }

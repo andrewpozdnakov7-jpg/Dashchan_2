@@ -1,18 +1,13 @@
 package com.mishiranu.dashchan.text.style;
 
-import android.text.TextPaint;
-import android.text.style.MetricAffectingSpan;
-import androidx.annotation.NonNull;
-import com.mishiranu.dashchan.util.ResourceUtils;
+import android.graphics.Typeface;
+import android.text.style.StyleSpan;
 
-public class MediumSpan extends MetricAffectingSpan {
-	@Override
-	public void updateDrawState(@NonNull TextPaint paint) {
-		paint.setTypeface(ResourceUtils.TYPEFACE_MEDIUM);
-	}
-
-	@Override
-	public void updateMeasureState(@NonNull TextPaint paint) {
-		updateDrawState(paint);
+/**
+ * Historical name retained because archive export recognizes this span as bold markup.
+ */
+public class MediumSpan extends StyleSpan {
+	public MediumSpan() {
+		super(Typeface.BOLD);
 	}
 }

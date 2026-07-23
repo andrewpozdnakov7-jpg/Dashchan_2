@@ -1520,6 +1520,8 @@ public class DialogUnit {
 		if (state.options != null && state.options.size() > 0) {
 			checkBoxGroup = new LinearLayout(context);
 			checkBoxGroup.setOrientation(RadioGroup.VERTICAL);
+			CheckBox thumbnailsCheckBox = null;
+			CheckBox filesCheckBox = null;
 			for (Pair<String, String> option : state.options) {
 				CheckBox checkBox = new CheckBox(context);
 				ThemeEngine.applyStyle(checkBox);
@@ -1528,7 +1530,24 @@ public class DialogUnit {
 				if (defaultOptions != null && defaultOptions.contains(option.first)) {
 					checkBox.setChecked(true);
 				}
+				if (OPTION_THUMBNAILS.equals(option.first)) {
+					thumbnailsCheckBox = checkBox;
+				} else if (OPTION_FILES.equals(option.first)) {
+					filesCheckBox = checkBox;
+				}
 				checkBoxGroup.addView(checkBox);
+			}
+			if (state.operation == SendMultifunctionalTask.Operation.ARCHIVE && state.archiveChanName == null
+					&& thumbnailsCheckBox != null && filesCheckBox != null) {
+				CheckBox finalThumbnailsCheckBox = thumbnailsCheckBox;
+				filesCheckBox.setOnCheckedChangeListener((buttonView, isChecked) -> {
+					if (isChecked && !finalThumbnailsCheckBox.isChecked()) {
+						finalThumbnailsCheckBox.setChecked(true);
+					}
+				});
+				if (filesCheckBox.isChecked()) {
+					thumbnailsCheckBox.setChecked(true);
+				}
 			}
 		} else {
 			checkBoxGroup = null;

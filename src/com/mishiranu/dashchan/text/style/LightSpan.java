@@ -6,29 +6,16 @@ import android.text.style.MetricAffectingSpan;
 import androidx.annotation.NonNull;
 import com.mishiranu.dashchan.util.ResourceUtils;
 
-// Application light typeface + RelativeSizeSpan(SCALE)
-public class HeadingSpan extends MetricAffectingSpan {
-	private static final float SCALE = 5f / 4f;
-
+public class LightSpan extends MetricAffectingSpan {
 	@Override
 	public void updateDrawState(@NonNull TextPaint paint) {
-		applyTypeface(paint);
-		applyScale(paint);
-	}
-
-	@Override
-	public void updateMeasureState(@NonNull TextPaint paint) {
-		applyTypeface(paint);
-		applyScale(paint);
-	}
-
-	private void applyTypeface(TextPaint paint) {
 		Typeface current = paint.getTypeface();
 		boolean italic = current != null && current.isItalic();
 		paint.setTypeface(Typeface.create(ResourceUtils.TYPEFACE_LIGHT, 300, italic));
 	}
 
-	private void applyScale(TextPaint paint) {
-		paint.setTextSize((int) (paint.getTextSize() * SCALE + 0.5f));
+	@Override
+	public void updateMeasureState(@NonNull TextPaint paint) {
+		updateDrawState(paint);
 	}
 }

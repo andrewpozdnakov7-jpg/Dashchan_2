@@ -1,6 +1,7 @@
 package com.mishiranu.dashchan.content;
 
 import android.content.ContentResolver;
+import android.content.UriPermission;
 import android.database.Cursor;
 import android.net.Uri;
 import android.provider.DocumentsContract;
@@ -9,6 +10,7 @@ import chan.util.StringUtils;
 import com.mishiranu.dashchan.util.IOUtils;
 import com.mishiranu.dashchan.util.Hasher;
 import java.io.ByteArrayOutputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -115,6 +117,74 @@ public class LocalArchiveManager {
 			}
 		}
 		return null;
+	}
+
+	public static boolean delete(Item item) {
+		boolean success;
+		if (item.treeUri == null) {
+			success = delete(item.htmlFile) & delete(item.zipFile) & delete(item.manifestFile);
+			DataFile resources = DataFile.obtain(DataFile.Target.DOWNLOADS, DIRECTORY_ARCHIVE)
+					.getChild(item.name);
+			success &= deleteRecursively(resources);
+		} else {
+			ContentResolver resolver = MainApplication.getInstance().getContentResolver();
+			if (!hasWritePermission(resolver, item.treeUri)) {
+				return false;
+			}
+			try {
+				success = delete(resolver, item.htmlUri) & delete(resolver, item.zipUri)
+						& delete(resolver, item.manifestUri);
+				success &= delete(resolver, findDocument(item.treeUri, item.name));
+			} catch (RuntimeException e) {
+				success = false;
+			}
+		}
+		if (success) {
+			for (String token : RESOURCE_ITEMS.keySet()) {
+				RESOURCE_ITEMS.remove(token, item);
+			}
+		}
+		return success;
+	}
+
+	private static boolean hasWritePermission(ContentResolver resolver, Uri treeUri) {
+		for (UriPermission permission : resolver.getPersistedUriPermissions()) {
+			if (treeUri.equals(permission.getUri()) && permission.isWritePermission()) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private static boolean delete(DataFile file) {
+		return file == null || !file.exists() || file.delete();
+	}
+
+	private static boolean deleteRecursively(DataFile file) {
+		if (!file.exists()) {
+			return true;
+		}
+		boolean success = true;
+		if (file.isDirectory()) {
+			List<DataFile> children = file.getChildren();
+			if (children != null) {
+				for (DataFile child : children) {
+					success &= deleteRecursively(child);
+				}
+			}
+		}
+		return file.delete() && success;
+	}
+
+	private static boolean delete(ContentResolver resolver, Uri uri) {
+		if (uri == null) {
+			return true;
+		}
+		try {
+			return DocumentsContract.deleteDocument(resolver, uri);
+		} catch (FileNotFoundException | SecurityException | IllegalArgumentException e) {
+			return false;
+		}
 	}
 
 	public static String getTreeName(String uriString) {

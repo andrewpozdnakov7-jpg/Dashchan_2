@@ -67,6 +67,7 @@ public final class FontManager {
 
 	private static final WeakHashMap<Activity, ActivityController> CONTROLLERS = new WeakHashMap<>();
 	private static final WeakHashMap<TextView, AppliedTypeface> APPLIED_VIEWS = new WeakHashMap<>();
+	private static Application application;
 	private static String cachedId;
 	private static Typeface cachedTypeface;
 	private static int generation;
@@ -74,6 +75,8 @@ public final class FontManager {
 	private FontManager() {}
 
 	public static void register(Application application) {
+		FontManager.application = application;
+		getSelectedTypeface(application);
 		application.registerActivityLifecycleCallbacks(new Application.ActivityLifecycleCallbacks() {
 			@Override
 			public void onActivityCreated(@NonNull Activity activity, Bundle savedInstanceState) {
@@ -112,6 +115,10 @@ public final class FontManager {
 			cachedId = null;
 			cachedTypeface = null;
 			generation++;
+		}
+		Application application = FontManager.application;
+		if (application != null) {
+			getSelectedTypeface(application);
 		}
 	}
 
@@ -220,6 +227,11 @@ public final class FontManager {
 	private static Typeface getSelectedTypeface(Context context) {
 		String id = Preferences.getApplicationFont();
 		if (FONT_SYSTEM.equals(id)) {
+			synchronized (FontManager.class) {
+				cachedId = id;
+				cachedTypeface = null;
+				ResourceUtils.setApplicationTypeface(null);
+			}
 			return null;
 		}
 		synchronized (FontManager.class) {
