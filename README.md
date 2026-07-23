@@ -14,7 +14,7 @@ Dashchan_2 - неофициальная ветка Dashchan для Android 11 и
 
 | Компонент | Значение |
 | --- | --- |
-| Текущая версия | `3.2.7`, code `1087` |
+| Текущая версия | `3.2.8`, code `1088` |
 | Android package | `io.dashchan2` |
 | Минимальная версия | API 30 / Android 11 |
 | ABI | `arm64-v8a`, `armeabi-v7a`, `x86` |
@@ -92,7 +92,7 @@ Stable APKs are published only through [GitHub Releases](https://github.com/andr
 
 | Component | Value |
 | --- | --- |
-| Current version | `3.2.7`, code `1087` |
+| Current version | `3.2.8`, code `1088` |
 | Android package | `io.dashchan2` |
 | Minimum Android | API 30 / Android 11 |
 | ABIs | `arm64-v8a`, `armeabi-v7a`, `x86` |

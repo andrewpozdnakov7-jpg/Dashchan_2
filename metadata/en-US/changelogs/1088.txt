@@ -1,0 +1,7 @@
+* Added activity-aware auto-bump tasks for Dvach threads with per-thread timers, numbered message templates, status indicators, notifications, and duplicate-send protection.
+* Split Monkey and ArtMonkey editor buttons into independent settings. Both buttons are hidden by default.
+* Improved custom font consistency in post subjects, headings, and other interface elements.
+* Fixed bold and bold-italic text rendering with bundled and imported fonts.
+* Added safe deletion of local archives together with their saved media and thumbnails.
+* Added configurable rounded dialog radius with a live preview.
+* Improved auto-bump field labels, instructions, countdown display, and small-screen scrolling.
