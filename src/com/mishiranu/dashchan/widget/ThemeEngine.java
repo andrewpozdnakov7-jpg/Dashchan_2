@@ -15,6 +15,7 @@ import android.util.AttributeSet;
 import android.view.ContextThemeWrapper;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
 import android.widget.AbsSeekBar;
@@ -105,16 +106,18 @@ public class ThemeEngine {
 
 				boolean roundLeftCorners = true;
 				boolean roundRightCorners = true;
-				if (backgroundView.getWidth() > 0) {
+				Rect popupFrame = new Rect();
+				if (decorView.getLocalVisibleRect(popupFrame) && !popupFrame.isEmpty()) {
+					int[] location = new int[2];
+					decorView.getLocationOnScreen(location);
+					popupFrame.offset(location[0], location[1]);
 					Rect displayFrame = new Rect();
 					decorView.getWindowVisibleDisplayFrame(displayFrame);
 					if (!displayFrame.isEmpty()) {
-						int[] location = new int[2];
-						backgroundView.getLocationOnScreen(location);
-						int edgeTolerance = Math.round(ResourceUtils.obtainDensity(backgroundView));
-						roundLeftCorners = location[0] > displayFrame.left + edgeTolerance;
-						roundRightCorners = location[0] + backgroundView.getWidth()
-								< displayFrame.right - edgeTolerance;
+						int edgeTolerance = Math.max(Math.round(ResourceUtils.obtainDensity(decorView)),
+								ViewConfiguration.get(decorView.getContext()).getScaledWindowTouchSlop());
+						roundLeftCorners = popupFrame.left - displayFrame.left > edgeTolerance;
+						roundRightCorners = displayFrame.right - popupFrame.right > edgeTolerance;
 					}
 				}
 				applyRoundedBackground(backgroundView, color, roundLeftCorners, roundRightCorners);

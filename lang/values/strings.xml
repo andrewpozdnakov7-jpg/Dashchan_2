@@ -500,6 +500,11 @@
 	<string name="read_only">Read only</string>
 	<string name="read_timeout_expired">Read timeout expired</string>
 	<string name="reason">Reason</string>
+	<string name="quick_filter">Quick filter</string>
+	<string name="quick_filter_action">Aa</string>
+	<string name="quick_filter_already_exists">This filter already exists</string>
+	<string name="quick_filter_empty">Enter a word or phrase</string>
+	<string name="quick_filter_instructions">Enter a word or phrase. Posts containing this text in the subject or comment will be hidden automatically. Matching is case-insensitive.</string>
 	<string name="reduce">Reduce</string>
 	<string name="reencode_image">Re-encode image</string>
 	<string name="refresh">Refresh</string>
@@ -540,6 +545,7 @@
 		system providers such as Nextcloud or Google Drive since their support is incomplete.</string>
 	<string name="sage_is_disabled">Sage is disabled</string>
 	<string name="save">Save</string>
+	<string name="save_filter">Add</string>
 	<string name="save_completed">Save completed</string>
 	<string name="save_data">Save data</string>
 	<string name="save_files">Save files</string>
@@ -623,6 +629,8 @@
 	<string name="summary">Summary</string>
 	<string name="test_string">Test string</string>
 	<string name="text_scale">Text scale</string>
+	<string name="volume_buttons_text_scale">Change text size with volume buttons</string>
+	<string name="volume_buttons_text_scale__summary">When media is not playing, use the volume buttons to adjust text scale</string>
 	<string name="large_text_layout_warning">At scales above 300%, some interface elements may be displayed incorrectly.</string>
 	<string name="font">Font</string>
 	<string name="application_font">Application font</string>
@@ -726,6 +734,7 @@
 	<string name="wifi_only">Wi-Fi only</string>
 	<string name="wifi_or_3g_plus">Wi-Fi or 3G+</string>
 	<string name="with_name_name__format">With name %s</string>
+	<string name="word_or_phrase">Word or phrase</string>
 	<string name="yesterday">Yesterday</string>
 	<string name="you_are_banned">You are banned</string>
 	<string name="you_cant_delete_too_new_posts">You can\'t delete too new posts</string>

@@ -9,6 +9,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
 import android.content.res.Configuration;
+import android.media.AudioManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -149,6 +150,12 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	private static final String LOCKER_DRAWER = "drawer";
 	private static final String LOCKER_NON_PAGE = "nonPage";
 	private static final String LOCKER_ACTION_MODE = "actionMode";
+	private static final long TEXT_SCALE_REPEAT_INTERVAL_MS = 150L;
+	private static final long TEXT_SCALE_APPLY_DELAY_MS = 300L;
+
+	private long lastTextScaleChangeTime;
+	private String textScaleToastId;
+	private final Runnable applyTextScaleChanges = this::recreate;
 
 	@Override
 	protected void attachBaseContext(Context newBase) {
@@ -1356,6 +1363,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	@Override
 	protected void onFinish() {
+		ConcurrentUtils.HANDLER.removeCallbacks(applyTextScaleChanges);
 		super.onFinish();
 
 		if (postingBinder != null) {
@@ -1684,7 +1692,55 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	@Override
 	public boolean dispatchKeyEvent(KeyEvent event) {
 		ContentFragment fragment = getCurrentFragment();
-		return fragment.dispatchKeyEvent(event) || super.dispatchKeyEvent(event);
+		return fragment.dispatchKeyEvent(event) || handleTextScaleVolumeKey(event) || super.dispatchKeyEvent(event);
+	}
+
+	private boolean handleTextScaleVolumeKey(KeyEvent event) {
+		int direction;
+		switch (event.getKeyCode()) {
+			case KeyEvent.KEYCODE_VOLUME_UP: {
+				direction = 1;
+				break;
+			}
+			case KeyEvent.KEYCODE_VOLUME_DOWN: {
+				direction = -1;
+				break;
+			}
+			default: {
+				return false;
+			}
+		}
+		if (!Preferences.isVolumeButtonsTextScale() || shouldPreserveMediaVolumeKeys()) {
+			return false;
+		}
+		if (event.getAction() == KeyEvent.ACTION_DOWN && (event.getRepeatCount() == 0 ||
+				event.getEventTime() - lastTextScaleChangeTime >= TEXT_SCALE_REPEAT_INTERVAL_MS)) {
+			int currentScale = Preferences.getTextScalePercent();
+			int newScale = Preferences.getNextVolumeButtonTextScalePercent(currentScale, direction);
+			if (newScale != currentScale) {
+				lastTextScaleChangeTime = event.getEventTime();
+				Preferences.setTextScalePercent(newScale);
+				textScaleToastId = ClickableToast.show(ResourceUtils.getColonString(getResources(),
+						R.string.text_scale, newScale + "%"), textScaleToastId, null);
+				ConcurrentUtils.HANDLER.removeCallbacks(applyTextScaleChanges);
+				ConcurrentUtils.HANDLER.postDelayed(applyTextScaleChanges, TEXT_SCALE_APPLY_DELAY_MS);
+			} else if (event.getRepeatCount() == 0) {
+				textScaleToastId = ClickableToast.show(ResourceUtils.getColonString(getResources(),
+						R.string.text_scale, currentScale + "%"), textScaleToastId, null);
+			}
+		}
+		return true;
+	}
+
+	private boolean shouldPreserveMediaVolumeKeys() {
+		AudioManager audioManager = getSystemService(AudioManager.class);
+		if (audioManager != null && (audioManager.getMode() != AudioManager.MODE_NORMAL ||
+				audioManager.isMusicActive())) {
+			return true;
+		}
+		FragmentManager fragmentManager = getSupportFragmentManager();
+		return fragmentManager.findFragmentByTag(GalleryOverlay.class.getName()) != null ||
+				fragmentManager.findFragmentByTag(AudioPlayerDialog.class.getName()) != null;
 	}
 
 	@Override

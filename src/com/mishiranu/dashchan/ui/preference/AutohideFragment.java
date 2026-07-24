@@ -126,6 +126,8 @@ public class AutohideFragment extends BaseListFragment {
 		menu.add(0, R.id.menu_new_rule, 0, R.string.new_rule)
 				.setIcon(((FragmentHandler) requireActivity()).getActionBarIcon(R.attr.iconActionAddRule))
 				.setShowAsActionFlags(MenuItem.SHOW_AS_ACTION_IF_ROOM);
+		menu.add(0, R.id.menu_quick_filter, 1, R.string.quick_filter_action)
+				.setShowAsActionFlags(MenuItem.SHOW_AS_ACTION_IF_ROOM);
 		MenuItem searchMenuItem = menu.add(0, R.id.menu_search, 0, R.string.filter)
 				.setShowAsActionFlags(MenuItem.SHOW_AS_ACTION_COLLAPSE_ACTION_VIEW);
 		if (primary) {
@@ -156,6 +158,7 @@ public class AutohideFragment extends BaseListFragment {
 	@Override
 	public void onPrepareOptionsMenu(Menu menu, boolean primary) {
 		menu.findItem(R.id.menu_new_rule).setVisible(searchQuery == null);
+		menu.findItem(R.id.menu_quick_filter).setVisible(searchQuery == null);
 	}
 
 	@Override
@@ -163,6 +166,10 @@ public class AutohideFragment extends BaseListFragment {
 		switch (item.getItemId()) {
 			case R.id.menu_new_rule: {
 				editRule(null, -1);
+				return true;
+			}
+			case R.id.menu_quick_filter: {
+				editQuickRule(null, -1);
 				return true;
 			}
 			case R.id.menu_search: {
@@ -186,6 +193,11 @@ public class AutohideFragment extends BaseListFragment {
 		dialog.show(getChildFragmentManager(), AutohideDialog.class.getName());
 	}
 
+	private void editQuickRule(AutohideStorage.AutohideItem autohideItem, int index) {
+		QuickAutohideDialog dialog = new QuickAutohideDialog(autohideItem, index);
+		dialog.show(getChildFragmentManager(), QuickAutohideDialog.class.getName());
+	}
+
 	private void onEditComplete(AutohideStorage.AutohideItem autohideItem, int index) {
 		Adapter adapter = (Adapter) getRecyclerView().getAdapter();
 		if (index == -1) {
@@ -197,6 +209,24 @@ public class AutohideFragment extends BaseListFragment {
 			items.set(index, autohideItem);
 		}
 		adapter.invalidate();
+	}
+
+	private boolean hasDuplicateQuickRule(String value, int editedIndex) {
+		for (int i = 0; i < items.size(); i++) {
+			AutohideStorage.AutohideItem item = items.get(i);
+			if (i != editedIndex && item.matchMode == AutohideStorage.AutohideItem.MatchMode.LITERAL
+					&& item.value.equalsIgnoreCase(value)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private void onQuickEditComplete(String value, int index) {
+		AutohideStorage.AutohideItem autohideItem = new AutohideStorage.AutohideItem(null, null, null,
+				false, false, true, true, false, false,
+				AutohideStorage.AutohideItem.MatchMode.LITERAL, value);
+		onEditComplete(autohideItem, index);
 	}
 
 	private void onDelete(int index) {
@@ -245,7 +275,12 @@ public class AutohideFragment extends BaseListFragment {
 		@Override
 		public boolean onItemClick(RecyclerView.ViewHolder holder, int position, Void nothing, boolean longClick) {
 			AutohideStorage.AutohideItem autohideItem = getItem(position);
-			editRule(autohideItem, items.indexOf(autohideItem));
+			int index = items.indexOf(autohideItem);
+			if (autohideItem.matchMode == AutohideStorage.AutohideItem.MatchMode.LITERAL) {
+				editQuickRule(autohideItem, index);
+			} else {
+				editRule(autohideItem, index);
+			}
 			return true;
 		}
 
@@ -345,6 +380,83 @@ public class AutohideFragment extends BaseListFragment {
 				builder.append("false");
 			}
 			viewHolder.text2.setText(builder);
+		}
+	}
+
+	public static class QuickAutohideDialog extends DialogFragment {
+		private static final String EXTRA_ITEM = "item";
+		private static final String EXTRA_INDEX = "index";
+		private static final String EXTRA_VALUE = "value";
+
+		private View dialogView;
+		private EditText valueEdit;
+
+		public QuickAutohideDialog() {}
+
+		public QuickAutohideDialog(AutohideStorage.AutohideItem autohideItem, int index) {
+			Bundle args = new Bundle();
+			args.putParcelable(EXTRA_ITEM, autohideItem);
+			args.putInt(EXTRA_INDEX, index);
+			setArguments(args);
+		}
+
+		@SuppressLint("InflateParams")
+		@Override
+		public void onCreate(Bundle savedInstanceState) {
+			super.onCreate(savedInstanceState);
+			dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_quick_autohide, null);
+			valueEdit = dialogView.findViewById(R.id.quick_filter_value);
+			String value = savedInstanceState != null ? savedInstanceState.getString(EXTRA_VALUE) : null;
+			if (value == null) {
+				AutohideStorage.AutohideItem autohideItem = AndroidUtils.getParcelable(requireArguments(),
+						EXTRA_ITEM, AutohideStorage.AutohideItem.class);
+				if (autohideItem != null) {
+					value = autohideItem.value;
+				}
+			}
+			valueEdit.setText(value);
+			valueEdit.setSelection(valueEdit.length());
+		}
+
+		@Override
+		public void onSaveInstanceState(@NonNull Bundle outState) {
+			super.onSaveInstanceState(outState);
+			outState.putString(EXTRA_VALUE, valueEdit.getText().toString());
+		}
+
+		@NonNull
+		@Override
+		public AlertDialog onCreateDialog(Bundle savedInstanceState) {
+			int index = requireArguments().getInt(EXTRA_INDEX);
+			AlertDialog.Builder builder = new AlertDialog.Builder(requireContext())
+					.setTitle(R.string.quick_filter)
+					.setView(dialogView)
+					.setNegativeButton(android.R.string.cancel, null)
+					.setPositiveButton(index >= 0 ? R.string.save : R.string.save_filter, null);
+			if (index >= 0) {
+				builder.setNeutralButton(R.string.delete,
+						(dialog, which) -> ((AutohideFragment) getParentFragment()).onDelete(index));
+			}
+			AlertDialog dialog = builder.create();
+			dialog.setOnShowListener(ignored -> {
+				dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+					String value = valueEdit.getText().toString().trim();
+					if (StringUtils.isEmpty(value)) {
+						valueEdit.setError(getString(R.string.quick_filter_empty));
+						return;
+					}
+					AutohideFragment fragment = (AutohideFragment) getParentFragment();
+					if (fragment.hasDuplicateQuickRule(value, index)) {
+						valueEdit.setError(getString(R.string.quick_filter_already_exists));
+						return;
+					}
+					fragment.onQuickEditComplete(value, index);
+					dialog.dismiss();
+				});
+				valueEdit.requestFocus();
+			});
+			dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN);
+			return dialog;
 		}
 	}
 
@@ -495,7 +607,8 @@ public class AutohideFragment extends BaseListFragment {
 			String value = valueEdit.getText().toString();
 			return new AutohideStorage.AutohideItem(selectedChanNames.size() > 0 ? selectedChanNames : null,
 					boardName, threadNumber, optionOriginalPost, optionSage,
-					optionSubject, optionComment, optionName, optionFileName, value);
+					optionSubject, optionComment, optionName, optionFileName,
+					AutohideStorage.AutohideItem.MatchMode.REGEX, value);
 		}
 
 		@Override

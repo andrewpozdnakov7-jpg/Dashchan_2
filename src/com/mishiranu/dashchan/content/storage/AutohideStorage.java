@@ -25,7 +25,9 @@ public class AutohideStorage extends StorageManager.JsonOrgStorage<List<Autohide
 	private static final String KEY_OPTION_COMMENT = "optionComment";
 	private static final String KEY_OPTION_NAME = "optionName";
 	private static final String KEY_OPTION_FILE_NAME = "optionFileName";
+	private static final String KEY_MATCH_MODE = "matchMode";
 	private static final String KEY_VALUE = "value";
+	private static final String VALUE_MATCH_MODE_LITERAL = "literal";
 
 	private static final AutohideStorage INSTANCE = new AutohideStorage();
 
@@ -81,9 +83,12 @@ public class AutohideStorage extends StorageManager.JsonOrgStorage<List<Autohide
 					boolean optionComment = jsonObject.optBoolean(KEY_OPTION_COMMENT);
 					boolean optionName = jsonObject.optBoolean(KEY_OPTION_NAME);
 					boolean optionFileName = jsonObject.optBoolean(KEY_OPTION_FILE_NAME);
+					AutohideItem.MatchMode matchMode = VALUE_MATCH_MODE_LITERAL.equals(
+							jsonObject.optString(KEY_MATCH_MODE, null))
+							? AutohideItem.MatchMode.LITERAL : AutohideItem.MatchMode.REGEX;
 					String value = jsonObject.optString(KEY_VALUE, null);
 					autohideItems.add(new AutohideItem(chanNames, boardName, threadNumber, optionOriginalPost,
-							optionSage, optionSubject, optionComment, optionName, optionFileName, value));
+							optionSage, optionSubject, optionComment, optionName, optionFileName, matchMode, value));
 				}
 			}
 		}
@@ -110,6 +115,9 @@ public class AutohideStorage extends StorageManager.JsonOrgStorage<List<Autohide
 				putJson(jsonObject, KEY_OPTION_COMMENT, autohideItem.optionComment);
 				putJson(jsonObject, KEY_OPTION_NAME, autohideItem.optionName);
 				putJson(jsonObject, KEY_OPTION_FILE_NAME, autohideItem.optionFileName);
+				if (autohideItem.matchMode == AutohideItem.MatchMode.LITERAL) {
+					jsonObject.put(KEY_MATCH_MODE, VALUE_MATCH_MODE_LITERAL);
+				}
 				putJson(jsonObject, KEY_VALUE, autohideItem.value);
 				jsonArray.put(jsonObject);
 			}
@@ -161,6 +169,7 @@ public class AutohideStorage extends StorageManager.JsonOrgStorage<List<Autohide
 		public boolean optionName;
 		public boolean optionFileName;
 
+		public MatchMode matchMode;
 		public String value;
 
 		private volatile boolean ready = false;
@@ -173,23 +182,31 @@ public class AutohideStorage extends StorageManager.JsonOrgStorage<List<Autohide
 			this(autohideItem.chanNames, autohideItem.boardName, autohideItem.threadNumber,
 					autohideItem.optionOriginalPost, autohideItem.optionSage, autohideItem.optionSubject,
 					autohideItem.optionComment, autohideItem.optionName, autohideItem.optionFileName,
-					autohideItem.value);
+					autohideItem.matchMode, autohideItem.value);
 		}
 
 		public AutohideItem(HashSet<String> chanNames, String boardName, String threadNumber,
 				boolean optionOriginalPost, boolean optionSage, boolean optionSubject, boolean optionComment,
-				boolean optionName, boolean optionFileName, String value) {
+				boolean optionName, boolean optionFileName, MatchMode matchMode, String value) {
 			update(chanNames, boardName, threadNumber, optionOriginalPost, optionSage,
-					optionSubject, optionComment, optionName, optionFileName, value);
+					optionSubject, optionComment, optionName, optionFileName, matchMode, value);
 		}
 
 		public static Pattern makePattern(String value) {
 			return Pattern.compile(value, Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
 		}
 
+		private static Pattern makePattern(String value, MatchMode matchMode) {
+			if (matchMode == MatchMode.LITERAL) {
+				return Pattern.compile(Pattern.quote(value),
+						Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE | Pattern.DOTALL);
+			}
+			return makePattern(value);
+		}
+
 		public void update(HashSet<String> chanNames, String boardName, String threadNumber,
 				boolean optionOriginalPost, boolean optionSage, boolean optionSubject,
-				boolean optionComment, boolean optionName, boolean optionFileName, String value) {
+				boolean optionComment, boolean optionName, boolean optionFileName, MatchMode matchMode, String value) {
 			this.chanNames = chanNames;
 			this.boardName = boardName;
 			this.threadNumber = threadNumber;
@@ -199,7 +216,10 @@ public class AutohideStorage extends StorageManager.JsonOrgStorage<List<Autohide
 			this.optionComment = optionComment;
 			this.optionName = optionName;
 			this.optionFileName = optionFileName;
+			this.matchMode = matchMode != null ? matchMode : MatchMode.REGEX;
 			this.value = StringUtils.emptyIfNull(value);
+			ready = false;
+			pattern = null;
 		}
 
 		public String find(String data) {
@@ -207,7 +227,7 @@ public class AutohideStorage extends StorageManager.JsonOrgStorage<List<Autohide
 				synchronized (this) {
 					if (!ready) {
 						try {
-							pattern = makePattern(value);
+							pattern = makePattern(value, matchMode);
 						} catch (Exception e) {
 							// Invalid pattern syntax, ignore exception
 						}
@@ -271,6 +291,7 @@ public class AutohideStorage extends StorageManager.JsonOrgStorage<List<Autohide
 			dest.writeByte((byte) (optionName ? 1 : 0));
 			dest.writeByte((byte) (optionFileName ? 1 : 0));
 			dest.writeString(value);
+			dest.writeByte((byte) (matchMode == MatchMode.LITERAL ? 1 : 0));
 		}
 
 		public static final Creator<AutohideItem> CREATOR = new Creator<AutohideItem>() {
@@ -290,7 +311,8 @@ public class AutohideStorage extends StorageManager.JsonOrgStorage<List<Autohide
 				autohideItem.optionComment = source.readByte() != 0;
 				autohideItem.optionName = source.readByte() != 0;
 				autohideItem.optionFileName = source.readByte() != 0;
-				autohideItem.value = source.readString();
+				autohideItem.value = StringUtils.emptyIfNull(source.readString());
+				autohideItem.matchMode = source.readByte() != 0 ? MatchMode.LITERAL : MatchMode.REGEX;
 				return autohideItem;
 			}
 
@@ -299,5 +321,7 @@ public class AutohideStorage extends StorageManager.JsonOrgStorage<List<Autohide
 				return new AutohideItem[size];
 			}
 		};
+
+		public enum MatchMode {REGEX, LITERAL}
 	}
 }

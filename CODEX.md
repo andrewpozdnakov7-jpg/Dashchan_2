@@ -27,7 +27,8 @@ Allowed:
 
 - edit source files and documentation;
 - inspect files and repository state;
-- prepare a source-only report.
+- prepare a source-only report;
+- create a source-only ZIP when the user explicitly requests one.
 
 Forbidden:
 
@@ -39,6 +40,26 @@ Forbidden:
 - creating GitHub Releases;
 - pushing tags;
 - publishing anything.
+
+### Source ZIP handoff workflow
+
+When the user explicitly requests a source ZIP for external compilation:
+
+1. Freeze the intended working-tree state and create the ZIP before starting
+   lengthy archive-content verification.
+2. As soon as the ZIP is closed and its SHA-256 is available, report its path
+   and hash in a commentary update marked `created; verification in progress`.
+   This lets the user start transferring or compiling it immediately.
+3. Continue verification against that frozen ZIP: check readability, duplicate
+   entries, forbidden or sensitive files, and exact source-file contents.
+4. Do not change source files between creating the ZIP and completing its
+   verification.
+5. If verification fails, immediately mark that ZIP as invalid, explain why,
+   create a replacement, and repeat the workflow.
+6. In the final response, clearly report whether verification passed.
+
+Creating this source-only ZIP does not authorize Gradle, compilation, APK/AAB
+packaging, installation, publication, or upload.
 
 ## 2. FAST LOCAL TEST
 

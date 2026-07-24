@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+	xmlns:android="http://schemas.android.com/apk/res/android"
+	android:layout_width="match_parent"
+	android:layout_height="wrap_content"
+	android:orientation="vertical"
+	android:paddingLeft="@dimen/dialog_padding_view"
+	android:paddingTop="@dimen/dialog_padding_text_half"
+	android:paddingRight="@dimen/dialog_padding_view"
+	android:paddingBottom="@dimen/dialog_padding_text_half">
+
+	<TextView
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:layout_marginLeft="@dimen/dialog_padding_text_half"
+		android:layout_marginRight="@dimen/dialog_padding_text_half"
+		android:layout_marginBottom="@dimen/dialog_padding_text_half"
+		android:text="@string/quick_filter_instructions"
+		android:textAppearance="?android:attr/textAppearanceSmall" />
+
+	<com.mishiranu.dashchan.widget.SafePasteEditText
+		android:id="@+id/quick_filter_value"
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:hint="@string/word_or_phrase"
+		android:imeOptions="actionDone|flagNoExtractUi|flagNoFullscreen"
+		android:inputType="text"
+		android:singleLine="true" />
+
+</LinearLayout>

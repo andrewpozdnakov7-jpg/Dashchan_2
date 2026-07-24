@@ -1473,14 +1473,69 @@ public class Preferences {
 	}
 
 	public static final String KEY_TEXT_SCALE = "text_scale";
-	public static final int MIN_TEXT_SCALE = 75;
+	public static final int MIN_TEXT_SCALE = 30;
 	public static final int MAX_TEXT_SCALE = 500;
 	public static final int STEP_TEXT_SCALE = 5;
 	public static final int DEFAULT_TEXT_SCALE = 100;
 
-	public static float getTextScale() {
+	public static int getTextScalePercent() {
 		return Math.max(MIN_TEXT_SCALE, Math.min(PREFERENCES.getInt(KEY_TEXT_SCALE,
-				DEFAULT_TEXT_SCALE), MAX_TEXT_SCALE)) / 100f;
+				DEFAULT_TEXT_SCALE), MAX_TEXT_SCALE));
+	}
+
+	public static float getTextScale() {
+		return getTextScalePercent() / 100f;
+	}
+
+	public static void setTextScalePercent(int value) {
+		PREFERENCES.edit().put(KEY_TEXT_SCALE, Math.max(MIN_TEXT_SCALE, Math.min(value, MAX_TEXT_SCALE))).close();
+	}
+
+	public static int getNextVolumeButtonTextScalePercent(int currentValue, int direction) {
+		int current = Math.max(MIN_TEXT_SCALE, Math.min(currentValue, MAX_TEXT_SCALE));
+		if (direction > 0) {
+			int step;
+			int upperBound;
+			if (current < 50) {
+				step = 10;
+				upperBound = 50;
+			} else if (current < 150) {
+				step = 5;
+				upperBound = 150;
+			} else if (current < 250) {
+				step = 10;
+				upperBound = 250;
+			} else {
+				step = 25;
+				upperBound = MAX_TEXT_SCALE;
+			}
+			return Math.min((current / step + 1) * step, upperBound);
+		} else if (direction < 0) {
+			int step;
+			int lowerBound;
+			if (current > 250) {
+				step = 25;
+				lowerBound = 250;
+			} else if (current > 150) {
+				step = 10;
+				lowerBound = 150;
+			} else if (current > 50) {
+				step = 5;
+				lowerBound = 50;
+			} else {
+				step = 10;
+				lowerBound = MIN_TEXT_SCALE;
+			}
+			return Math.max((current - 1) / step * step, lowerBound);
+		}
+		return current;
+	}
+
+	public static final String KEY_VOLUME_BUTTONS_TEXT_SCALE = "volume_buttons_text_scale";
+	public static final boolean DEFAULT_VOLUME_BUTTONS_TEXT_SCALE = false;
+
+	public static boolean isVolumeButtonsTextScale() {
+		return PREFERENCES.getBoolean(KEY_VOLUME_BUTTONS_TEXT_SCALE, DEFAULT_VOLUME_BUTTONS_TEXT_SCALE);
 	}
 
 	public static final String KEY_APPLICATION_FONT = "application_font";

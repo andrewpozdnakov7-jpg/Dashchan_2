@@ -519,6 +519,11 @@
 	<string name="read_only">Только чтение</string>
 	<string name="read_timeout_expired">Время ожидания приёма истекло</string>
 	<string name="reason">Причина</string>
+	<string name="quick_filter">Быстрый фильтр</string>
+	<string name="quick_filter_action">Аа</string>
+	<string name="quick_filter_already_exists">Такой фильтр уже существует</string>
+	<string name="quick_filter_empty">Введите слово или фразу</string>
+	<string name="quick_filter_instructions">Введите слово или фразу. Сообщения с этим текстом в теме или комментарии будут автоматически скрываться. Регистр не учитывается.</string>
 	<string name="reduce">Уменьшить</string>
 	<string name="reencode_image">Перекодировать</string>
 	<string name="refresh">Обновить</string>
@@ -559,6 +564,7 @@
 		удалённых файловых хранилищ, таких как Nextcloud или Google Drive.</string>
 	<string name="sage_is_disabled">Sage отключено</string>
 	<string name="save">Сохранить</string>
+	<string name="save_filter">Добавить</string>
 	<string name="save_completed">Сохранение завершено</string>
 	<string name="save_data">Сохранить данные</string>
 	<string name="save_files">Сохранить файлы</string>
@@ -643,6 +649,8 @@
 	<string name="summary">Информация</string>
 	<string name="test_string">Тестовая строка</string>
 	<string name="text_scale">Масштаб текста</string>
+	<string name="volume_buttons_text_scale">Изменять размер текста кнопками громкости</string>
+	<string name="volume_buttons_text_scale__summary">Когда медиа не воспроизводится, кнопки громкости изменяют масштаб текста</string>
 	<string name="large_text_layout_warning">При масштабе выше 300% некоторые элементы интерфейса могут отображаться некорректно.</string>
 	<string name="font">Шрифт</string>
 	<string name="application_font">Шрифт приложения</string>
@@ -744,6 +752,7 @@
 	<string name="wifi_only">Только через Wi-Fi</string>
 	<string name="wifi_or_3g_plus">Через Wi-Fi или 3G+</string>
 	<string name="with_name_name__format">С именем %s</string>
+	<string name="word_or_phrase">Слово или фраза</string>
 	<string name="yesterday">Вчера</string>
 	<string name="you_are_banned">Вы заблокированы</string>
 	<string name="you_cant_delete_too_new_posts">Нельзя удалять новые сообщения</string>

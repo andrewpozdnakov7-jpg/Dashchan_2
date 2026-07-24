@@ -35,6 +35,7 @@
 	<item type="id" name="menu_my_posts" />
 	<item type="id" name="menu_new_rule" />
 	<item type="id" name="menu_new_thread" />
+	<item type="id" name="menu_quick_filter" />
 	<item type="id" name="menu_open_original_thread" />
 	<item type="id" name="menu_pages" />
 	<item type="id" name="menu_refresh" />
