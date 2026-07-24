@@ -324,7 +324,7 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 		this.player = null;
 		if (source == null || !source.restorePictureInPicturePlayer(player, position,
 				playbackSpeed, muted, playing)) {
-			player.destroy();
+			player.destroyAsync();
 		}
 		finish();
 	}
@@ -393,7 +393,7 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 				handled = source != null && source.closePictureInPicturePlayer(player);
 			}
 			if (!handled) {
-				player.destroy();
+				player.destroyAsync();
 			}
 			this.player = null;
 			this.source = null;

@@ -1700,6 +1700,13 @@ public class Preferences {
 		return PREFERENCES.getBoolean(KEY_USE_VIDEO_PLAYER, DEFAULT_USE_VIDEO_PLAYER);
 	}
 
+	public static final String KEY_HARDWARE_VIDEO_ACCELERATION = "hardware_video_acceleration";
+	public static final boolean DEFAULT_HARDWARE_VIDEO_ACCELERATION = false;
+
+	public static boolean isHardwareVideoAcceleration() {
+		return PREFERENCES.getBoolean(KEY_HARDWARE_VIDEO_ACCELERATION, DEFAULT_HARDWARE_VIDEO_ACCELERATION);
+	}
+
 	public static final String KEY_USER_AGENT_REFERENCE = "user_agent_reference";
 
 	public static String getUserAgentReference() {

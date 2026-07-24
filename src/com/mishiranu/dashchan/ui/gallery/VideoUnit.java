@@ -195,8 +195,10 @@ public class VideoUnit {
 		}
 		invalidateControlsVisibility();
 		if (player != null && !pictureInPictureTransferred) {
-			player.destroy();
+			VideoPlayer workPlayer = player;
 			player = null;
+			workPlayer.setPlaying(false);
+			workPlayer.releaseVideoViewAndDestroyAsync();
 			instance.currentHolder.progressBar.setVisible(false, false);
 		}
 		if (pictureInPictureTransferred) {
@@ -297,6 +299,8 @@ public class VideoUnit {
 		holder.recyclePhotoView();
 		holder.photoView.setImage(backgroundDrawable, false, true, false);
 		View videoView = player.getVideoView(instance.galleryInstance.context);
+		holder.surfaceParent.setClickable(false);
+		holder.surfaceParent.setFocusable(false);
 		holder.surfaceParent.addView(videoView, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,
 				FrameLayout.LayoutParams.MATCH_PARENT, Gravity.CENTER));
 		muteSupported = !player.isAudioPresent() || player.setMuted(muted);
@@ -707,9 +711,8 @@ public class VideoUnit {
 		pictureInPictureTransferred = false;
 		audioFocus.release();
 		transferredPlayer.setListener(null);
-		transferredPlayer.releaseVideoView();
 		transferredPlayer.setPlaying(false);
-		transferredPlayer.destroy();
+		transferredPlayer.releaseVideoViewAndDestroyAsync();
 		player = null;
 		initialized = false;
 		wasPlaying = false;

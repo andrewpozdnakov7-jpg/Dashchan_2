@@ -269,6 +269,12 @@
 			"name": "3.2.8",
 			"date": "23.07.2026",
 			"changelog": true
+		},
+		{
+			"code": 1089,
+			"name": "3.2.9",
+			"date": "24.07.2026",
+			"changelog": true
 		}
 	]
 }

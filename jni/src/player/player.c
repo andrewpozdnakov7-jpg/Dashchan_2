@@ -5,10 +5,18 @@
 #endif
 
 #include <libavcodec/avcodec.h>
+#ifdef DASHCHAN_HAS_MEDIACODEC
+#include <libavcodec/jni.h>
+#include <libavcodec/mediacodec.h>
+#endif
 #include <libavformat/avformat.h>
 #include <libswresample/swresample.h>
 #include <libswscale/swscale.h>
 #include <libavutil/imgutils.h>
+#ifdef DASHCHAN_HAS_MEDIACODEC
+#include <libavutil/hwcontext.h>
+#include <libavutil/hwcontext_mediacodec.h>
+#endif
 #include <libavutil/mathematics.h>
 #include <libavutil/pixdesc.h>
 #include <libavutil/ffversion.h>
@@ -30,6 +38,12 @@
 #include <SLES/OpenSLES_Android.h>
 #include <android/native_window_jni.h>
 
+#include <inttypes.h>
+#include <stdarg.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+#include <time.h>
 #include <unistd.h>
 
 #define POINTER_CAST(addr) (void *) (long) addr
@@ -51,6 +65,7 @@
 
 #define INDEX_NO_STREAM -1
 #define GAINING_THRESHOLD 100
+#define MEDIACODEC_MAX_SCHEDULE_AHEAD_MS 50
 #define AUDIO_MAX_ENQUEUE_SIZE 256
 #define WINDOW_FORMAT_YV12 0x32315659
 #define MAX_FPS 60
@@ -75,6 +90,166 @@
 static JavaVM * loadJavaVM;
 static SLEngineItf slEngine;
 
+#define DIAGNOSTICS_BUFFER_SIZE (512 * 1024)
+#define DIAGNOSTICS_SUMMARY_RESERVE (4 * 1024)
+
+typedef struct {
+	uint64_t videoPackets;
+	uint64_t videoKeyPackets;
+	uint64_t packetsSubmitted;
+	uint64_t outputFrames;
+	uint64_t renderedScheduled;
+	uint64_t renderedImmediate;
+	uint64_t droppedLate;
+	uint64_t droppedSeek;
+	uint64_t droppedState;
+	uint64_t outputWithoutBuffer;
+	uint64_t releaseErrors;
+	uint64_t decoderErrors;
+	uint64_t surfaceAttached;
+	uint64_t surfaceDetached;
+	uint64_t decoderEnabled;
+	uint64_t decoderUnavailable;
+	uint64_t softwareFallbacks;
+	int64_t firstOutputElapsedMs;
+	int64_t minWaitMs;
+	int64_t maxWaitMs;
+} DiagnosticsStats;
+
+static struct {
+	pthread_mutex_t mutex;
+	int active;
+	int truncated;
+	int64_t startedAt;
+	size_t length;
+	char buffer[DIAGNOSTICS_BUFFER_SIZE];
+	DiagnosticsStats stats;
+} diagnostics = {
+	.mutex = PTHREAD_MUTEX_INITIALIZER
+};
+static unsigned int nextDiagnosticsPlayerId;
+
+static int diagnosticsActive(void) {
+	return __atomic_load_n(&diagnostics.active, __ATOMIC_RELAXED);
+}
+
+static void diagnosticsAppendVLineLocked(size_t limit, const char * format, va_list arguments) {
+	if (diagnostics.length >= limit - 1) {
+		diagnostics.truncated = 1;
+		return;
+	}
+	int64_t elapsed = diagnostics.startedAt > 0 ? getTime() - diagnostics.startedAt : 0;
+	int prefix = snprintf(diagnostics.buffer + diagnostics.length, limit - diagnostics.length,
+			"[+%" PRId64 "ms] ", elapsed);
+	if (prefix < 0 || (size_t) prefix >= limit - diagnostics.length) {
+		diagnostics.length = limit - 1;
+		diagnostics.buffer[diagnostics.length] = '\0';
+		diagnostics.truncated = 1;
+		return;
+	}
+	diagnostics.length += (size_t) prefix;
+	int written = vsnprintf(diagnostics.buffer + diagnostics.length, limit - diagnostics.length,
+			format, arguments);
+	if (written < 0 || (size_t) written >= limit - diagnostics.length) {
+		diagnostics.length = limit - 1;
+		diagnostics.buffer[diagnostics.length] = '\0';
+		diagnostics.truncated = 1;
+		return;
+	}
+	diagnostics.length += (size_t) written;
+	if (diagnostics.length + 1 < limit) {
+		diagnostics.buffer[diagnostics.length++] = '\n';
+		diagnostics.buffer[diagnostics.length] = '\0';
+	} else {
+		diagnostics.truncated = 1;
+	}
+}
+
+static void diagnosticsAppendLineLocked(size_t limit, const char * format, ...) {
+	va_list arguments;
+	va_start(arguments, format);
+	diagnosticsAppendVLineLocked(limit, format, arguments);
+	va_end(arguments);
+}
+
+static void diagnosticsLog(const char * format, ...) {
+	if (!diagnosticsActive()) {
+		return;
+	}
+	pthread_mutex_lock(&diagnostics.mutex);
+	if (diagnosticsActive()) {
+		va_list arguments;
+		va_start(arguments, format);
+		diagnosticsAppendVLineLocked(DIAGNOSTICS_BUFFER_SIZE - DIAGNOSTICS_SUMMARY_RESERVE,
+				format, arguments);
+		va_end(arguments);
+	}
+	pthread_mutex_unlock(&diagnostics.mutex);
+}
+
+void startPlayerDiagnostics(void) {
+	if (diagnosticsActive()) {
+		return;
+	}
+	pthread_mutex_lock(&diagnostics.mutex);
+	if (!diagnosticsActive()) {
+		memset(&diagnostics.stats, 0, sizeof(diagnostics.stats));
+		diagnostics.stats.firstOutputElapsedMs = -1;
+		diagnostics.stats.minWaitMs = INT64_MAX;
+		diagnostics.stats.maxWaitMs = INT64_MIN;
+		diagnostics.truncated = 0;
+		diagnostics.length = 0;
+		diagnostics.buffer[0] = '\0';
+		diagnostics.startedAt = getTime();
+		__atomic_store_n(&diagnostics.active, 1, __ATOMIC_RELAXED);
+		diagnosticsAppendLineLocked(DIAGNOSTICS_BUFFER_SIZE - DIAGNOSTICS_SUMMARY_RESERVE,
+				"capture_started=true");
+	}
+	pthread_mutex_unlock(&diagnostics.mutex);
+}
+
+jstring stopPlayerDiagnostics(JNIEnv * env) {
+	__atomic_store_n(&diagnostics.active, 0, __ATOMIC_RELAXED);
+	pthread_mutex_lock(&diagnostics.mutex);
+	diagnosticsAppendLineLocked(DIAGNOSTICS_BUFFER_SIZE, "capture_stopped=true");
+	diagnosticsAppendLineLocked(DIAGNOSTICS_BUFFER_SIZE,
+			"summary video_packets=%" PRIu64 " key_packets=%" PRIu64
+			" submitted=%" PRIu64 " output_frames=%" PRIu64,
+			diagnostics.stats.videoPackets, diagnostics.stats.videoKeyPackets,
+			diagnostics.stats.packetsSubmitted, diagnostics.stats.outputFrames);
+	diagnosticsAppendLineLocked(DIAGNOSTICS_BUFFER_SIZE,
+			"summary rendered_scheduled=%" PRIu64 " rendered_immediate=%" PRIu64
+			" dropped_late=%" PRIu64 " dropped_seek=%" PRIu64 " dropped_state=%" PRIu64,
+			diagnostics.stats.renderedScheduled, diagnostics.stats.renderedImmediate,
+			diagnostics.stats.droppedLate, diagnostics.stats.droppedSeek, diagnostics.stats.droppedState);
+	diagnosticsAppendLineLocked(DIAGNOSTICS_BUFFER_SIZE,
+			"summary no_output_buffer=%" PRIu64 " release_errors=%" PRIu64
+			" decoder_errors=%" PRIu64,
+			diagnostics.stats.outputWithoutBuffer, diagnostics.stats.releaseErrors,
+			diagnostics.stats.decoderErrors);
+	diagnosticsAppendLineLocked(DIAGNOSTICS_BUFFER_SIZE,
+			"summary surfaces_attached=%" PRIu64 " surfaces_detached=%" PRIu64
+			" decoder_enabled=%" PRIu64 " decoder_unavailable=%" PRIu64
+			" software_fallbacks=%" PRIu64,
+			diagnostics.stats.surfaceAttached, diagnostics.stats.surfaceDetached,
+			diagnostics.stats.decoderEnabled, diagnostics.stats.decoderUnavailable,
+			diagnostics.stats.softwareFallbacks);
+	if (diagnostics.stats.outputFrames > 0) {
+		diagnosticsAppendLineLocked(DIAGNOSTICS_BUFFER_SIZE,
+				"summary first_output_ms=%" PRId64 " min_wait_ms=%" PRId64 " max_wait_ms=%" PRId64,
+				diagnostics.stats.firstOutputElapsedMs, diagnostics.stats.minWaitMs,
+				diagnostics.stats.maxWaitMs);
+	} else {
+		diagnosticsAppendLineLocked(DIAGNOSTICS_BUFFER_SIZE,
+				"summary first_output_ms=none min_wait_ms=none max_wait_ms=none");
+	}
+	diagnosticsAppendLineLocked(DIAGNOSTICS_BUFFER_SIZE,
+			"summary truncated=%s", diagnostics.truncated ? "true" : "false");
+	jstring result = (*env)->NewStringUTF(env, diagnostics.buffer);
+	pthread_mutex_unlock(&diagnostics.mutex);
+	return result;
+}
+
 typedef struct Player Player;
 typedef struct Bridge Bridge;
 typedef struct PacketHolder PacketHolder;
@@ -88,6 +263,7 @@ struct Player {
 		int errorCode;
 		int seekAnyFrame;
 		int audioEnabled;
+		unsigned int diagnosticsId;
 	} meta;
 
 	struct {
@@ -167,6 +343,11 @@ struct Player {
 	struct {
 		BlockingQueue packetQueue;
 		int finished;
+		int hardwareAccelerationRequested;
+		int hardwareDecoderActive;
+		int hardwareDecoderFailed;
+		int hardwareSurfaceInitialized;
+		int hardwareDecodeErrors;
 		pthread_cond_t sleepCond;
 		pthread_mutex_t sleepDrawMutex;
 		pthread_cond_t queueCond;
@@ -235,6 +416,172 @@ struct ScaleHolder {
 	uint8_t * scaleData[4];
 	int scaleLinesize[4];
 };
+
+static void diagnosticsIncrement(uint64_t * value) {
+	if (!diagnosticsActive()) {
+		return;
+	}
+	pthread_mutex_lock(&diagnostics.mutex);
+	if (diagnosticsActive()) {
+		(*value)++;
+	}
+	pthread_mutex_unlock(&diagnostics.mutex);
+}
+
+static void diagnosticsRecordVideoPacket(Player * player, AVPacket * packet) {
+	if (!diagnosticsActive() || !packet) {
+		return;
+	}
+	pthread_mutex_lock(&diagnostics.mutex);
+	if (diagnosticsActive()) {
+		uint64_t count = ++diagnostics.stats.videoPackets;
+		int key = !!(packet->flags & AV_PKT_FLAG_KEY);
+		if (key) {
+			diagnostics.stats.videoKeyPackets++;
+		}
+		if (count <= 12 || key || count % 120 == 0) {
+			diagnosticsAppendLineLocked(DIAGNOSTICS_BUFFER_SIZE - DIAGNOSTICS_SUMMARY_RESERVE,
+					"player=%u video_packet count=%" PRIu64 " pts=%" PRId64
+					" dts=%" PRId64 " duration=%" PRId64 " size=%d key=%d",
+					player->meta.diagnosticsId, count, packet->pts, packet->dts,
+					packet->duration, packet->size, key);
+		}
+	}
+	pthread_mutex_unlock(&diagnostics.mutex);
+}
+
+#ifdef DASHCHAN_HAS_MEDIACODEC
+#define DIAGNOSTICS_OUTPUT_SCHEDULED 0
+#define DIAGNOSTICS_OUTPUT_IMMEDIATE 1
+#define DIAGNOSTICS_OUTPUT_DROPPED_LATE 2
+#define DIAGNOSTICS_OUTPUT_DROPPED_SEEK 3
+#define DIAGNOSTICS_OUTPUT_DROPPED_STATE 4
+#define DIAGNOSTICS_OUTPUT_NO_BUFFER 5
+
+static void diagnosticsRecordPacketSubmitted(void) {
+	if (!diagnosticsActive()) {
+		return;
+	}
+	pthread_mutex_lock(&diagnostics.mutex);
+	if (diagnosticsActive()) {
+		diagnostics.stats.packetsSubmitted++;
+	}
+	pthread_mutex_unlock(&diagnostics.mutex);
+}
+
+static void diagnosticsRecordDecoderError(Player * player, const char * stage, int error) {
+	if (!diagnosticsActive()) {
+		return;
+	}
+	pthread_mutex_lock(&diagnostics.mutex);
+	if (diagnosticsActive()) {
+		diagnostics.stats.decoderErrors++;
+		diagnosticsAppendLineLocked(DIAGNOSTICS_BUFFER_SIZE - DIAGNOSTICS_SUMMARY_RESERVE,
+				"player=%u decoder_error stage=%s code=%d",
+				player->meta.diagnosticsId, stage, error);
+	}
+	pthread_mutex_unlock(&diagnostics.mutex);
+}
+
+static void diagnosticsRecordOutput(Player * player, AVFrame * frame, int64_t framePosition,
+		int64_t waitTime, int action, int result) {
+	if (!diagnosticsActive()) {
+		return;
+	}
+	const char * actionName;
+	pthread_mutex_lock(&diagnostics.mutex);
+	if (diagnosticsActive()) {
+		uint64_t count = ++diagnostics.stats.outputFrames;
+		if (diagnostics.stats.firstOutputElapsedMs < 0) {
+			diagnostics.stats.firstOutputElapsedMs = getTime() - diagnostics.startedAt;
+		}
+		if (waitTime < diagnostics.stats.minWaitMs) {
+			diagnostics.stats.minWaitMs = waitTime;
+		}
+		if (waitTime > diagnostics.stats.maxWaitMs) {
+			diagnostics.stats.maxWaitMs = waitTime;
+		}
+		switch (action) {
+			case DIAGNOSTICS_OUTPUT_SCHEDULED:
+				diagnostics.stats.renderedScheduled++;
+				actionName = "render_scheduled";
+				break;
+			case DIAGNOSTICS_OUTPUT_IMMEDIATE:
+				diagnostics.stats.renderedImmediate++;
+				actionName = "render_immediate";
+				break;
+			case DIAGNOSTICS_OUTPUT_DROPPED_LATE:
+				diagnostics.stats.droppedLate++;
+				actionName = "drop_late";
+				break;
+			case DIAGNOSTICS_OUTPUT_DROPPED_SEEK:
+				diagnostics.stats.droppedSeek++;
+				actionName = "drop_seek";
+				break;
+			case DIAGNOSTICS_OUTPUT_DROPPED_STATE:
+				diagnostics.stats.droppedState++;
+				actionName = "drop_state";
+				break;
+			default:
+				diagnostics.stats.outputWithoutBuffer++;
+				actionName = "no_output_buffer";
+				break;
+		}
+		if (result < 0) {
+			diagnostics.stats.releaseErrors++;
+		}
+		if (count <= 12 || count % 120 == 0 || result < 0) {
+			diagnosticsAppendLineLocked(DIAGNOSTICS_BUFFER_SIZE - DIAGNOSTICS_SUMMARY_RESERVE,
+					"player=%u video_output count=%" PRIu64 " pts=%" PRId64
+					" best=%" PRId64 " pos_ms=%" PRId64 " wait_ms=%" PRId64
+					" width=%d height=%d format=%d action=%s release_result=%d",
+					player->meta.diagnosticsId, count, frame->pts, frame->best_effort_timestamp,
+					framePosition, waitTime, frame->width, frame->height, frame->format,
+					actionName, result);
+		}
+	}
+	pthread_mutex_unlock(&diagnostics.mutex);
+}
+#endif
+
+static void diagnosticsRecordMediaInfo(Player * player) {
+	if (!diagnosticsActive() || !HAS_STREAM(player, video)) {
+		return;
+	}
+	AVFormatContext * format = player->av.format;
+	AVStream * video = GET_STREAM(player, video);
+	AVCodecParameters * parameters = video->codecpar;
+	const char * pixelFormat = parameters->format >= 0
+			? av_get_pix_fmt_name(parameters->format) : NULL;
+	diagnosticsLog("player=%u native_build ffmpeg=%s flavor=%s",
+			player->meta.diagnosticsId, FFMPEG_VERSION, DASHCHAN_FFMPEG_FLAVOR);
+	diagnosticsLog("player=%u media format=%s duration_us=%" PRId64
+			" start_us=%" PRId64 " streams=%u",
+			player->meta.diagnosticsId,
+			format->iformat && format->iformat->name ? format->iformat->name : "unknown",
+			format->duration, format->start_time, format->nb_streams);
+	diagnosticsLog("player=%u video codec=%s profile=%d level=%d width=%d height=%d"
+			" pixel_format=%s time_base=%d/%d avg_frame_rate=%d/%d extradata_size=%d",
+			player->meta.diagnosticsId, avcodec_get_name(parameters->codec_id),
+			parameters->profile, parameters->level, parameters->width, parameters->height,
+			pixelFormat ? pixelFormat : "unknown", video->time_base.num, video->time_base.den,
+			video->avg_frame_rate.num, video->avg_frame_rate.den, parameters->extradata_size);
+	if (HAS_STREAM(player, audio)) {
+		AVStream * audio = GET_STREAM(player, audio);
+		AVCodecParameters * audioParameters = audio->codecpar;
+		diagnosticsLog("player=%u audio codec=%s profile=%d sample_rate=%d"
+				" time_base=%d/%d extradata_size=%d",
+				player->meta.diagnosticsId, avcodec_get_name(audioParameters->codec_id),
+				audioParameters->profile, audioParameters->sample_rate,
+				audio->time_base.num, audio->time_base.den, audioParameters->extradata_size);
+	} else {
+		diagnosticsLog("player=%u audio=absent_or_disabled", player->meta.diagnosticsId);
+	}
+}
+
+#ifdef DASHCHAN_HAS_MEDIACODEC
+static int fallbackMediaCodecToSoftware(Player * player, JNIEnv * env);
+#endif
 
 static Bridge * obtainBridge(Player * player, JNIEnv * env) {
 	int index = pthread_self();
@@ -332,6 +679,14 @@ static void closeAndFreeCodecContext(AVCodecContext ** context) {
 	avcodec_free_context(context);
 }
 
+static void closeAndFreeVideoCodecContext(Player * player, AVCodecContext ** context) {
+	if (!context || !*context) {
+		return;
+	}
+	(void) player;
+	closeAndFreeCodecContext(context);
+}
+
 static void packetQueueFreeCallback(void * data) {
 	PacketHolder * packetHolder = (PacketHolder *) data;
 	if (packetHolder->packet) {
@@ -416,7 +771,8 @@ static int64_t calculatePosition(Player * player, int mayCalculateStartTime) {
 
 static void markStreamFinished(Player * player, int video) {
 	if (video) {
-		if (bufferQueueCount(player->video.bufferQueue) == 0 &&
+		int decodedCount = player->video.bufferQueue ? bufferQueueCount(player->video.bufferQueue) : 0;
+		if (decodedCount == 0 &&
 				blockingQueueCount(&player->video.packetQueue) == 0) {
 			player->video.finished = 1;
 			condBroadcastLocked(&player->play.finishCond, &player->play.finishMutex);
@@ -434,6 +790,14 @@ static int64_t calculateFrameTime(Player * player, int64_t waitTime) {
 	int64_t scaledWaitTime = unscalePlaybackPosition(player, waitTime);
 	return getTime() + scaledWaitTime - min64(max64(scaledWaitTime / 2, 25), 100);
 }
+
+#ifdef DASHCHAN_HAS_MEDIACODEC
+static int64_t getMonotonicTimeNs(void) {
+	struct timespec time;
+	clock_gettime(CLOCK_MONOTONIC, &time);
+	return (int64_t) time.tv_sec * 1000000000LL + time.tv_nsec;
+}
+#endif
 
 static int decodeFrame(AVCodecContext * context, AVPacket * packet, AVFrame * frame, int * packetSent) {
 	if (!*packetSent) {
@@ -1048,19 +1412,206 @@ static void extendScaleHolder(ScaleHolder * scaleHolder, int bufferSize, int wid
 	scaleHolder->scaleLinesize[3] = 0;
 }
 
+#ifdef DASHCHAN_HAS_MEDIACODEC
+static int decodeMediaCodecFrame(Player * player, AVCodecContext * context, AVPacket * packet,
+		AVFrame * frame, int * packetSent) {
+	if (!*packetSent) {
+		int result = avcodec_send_packet(context, packet);
+		if (result == 0) {
+			*packetSent = 1;
+			if (packet) {
+				diagnosticsRecordPacketSubmitted();
+			}
+		} else if (result != AVERROR(EAGAIN) && result != AVERROR_EOF) {
+			LOGP("MediaCodec packet submission failed: %d", result);
+			diagnosticsRecordDecoderError(player, "send_packet", result);
+			return -1;
+		}
+	}
+	int result = avcodec_receive_frame(context, frame);
+	if (result == 0) {
+		return 1;
+	}
+	if (result == AVERROR(EAGAIN) || result == AVERROR_EOF) {
+		return 0;
+	}
+	LOGP("MediaCodec frame receive failed: %d", result);
+	diagnosticsRecordDecoderError(player, "receive_frame", result);
+	return -1;
+}
+
+static int renderMediaCodecFrame(Player * player, JNIEnv * env, AVStream * stream, AVFrame * frame) {
+	AVMediaCodecBuffer * buffer = (AVMediaCodecBuffer *) frame->data[3];
+	int64_t framePosition = getFramePositionMs(player, frame, stream);
+	if (frame->format != AV_PIX_FMT_MEDIACODEC || !buffer) {
+		diagnosticsLog("player=%u mediacodec_output invalid_format=%d expected_format=%d"
+				" output_buffer=%d",
+				player->meta.diagnosticsId, frame->format, AV_PIX_FMT_MEDIACODEC,
+				buffer != NULL);
+		diagnosticsRecordOutput(player, frame, framePosition, 0,
+				DIAGNOSTICS_OUTPUT_NO_BUFFER, 0);
+		av_frame_unref(frame);
+		return -1;
+	}
+	int render = 1;
+	int renderResult = 0;
+	int outputAction = DIAGNOSTICS_OUTPUT_IMMEDIATE;
+	int64_t waitTime = 0;
+	pthread_mutex_lock(&player->video.sleepDrawMutex);
+	if (player->meta.interrupt || player->sync.skip.videoWorkFrame) {
+		render = 0;
+		outputAction = DIAGNOSTICS_OUTPUT_DROPPED_STATE;
+		goto RELEASE_BUFFER;
+	}
+	if (framePosition >= 0 && player->meta.seekAnyFrame && player->sync.videoPositionNotSync &&
+			framePosition < player->sync.videoPosition) {
+		render = 0;
+		outputAction = DIAGNOSTICS_OUTPUT_DROPPED_SEEK;
+		goto RELEASE_BUFFER;
+	}
+	int64_t position = calculatePosition(player, 1);
+	if (framePosition >= 0) {
+		player->sync.videoPosition = framePosition;
+		waitTime = framePosition - position;
+		if (player->sync.videoPositionNotSync) {
+			player->sync.videoPositionNotSync = 0;
+			Bridge * bridge = obtainBridge(player, env);
+			SEND_MESSAGE(env, player, bridge, BRIDGE_MESSAGE_END_SEEKING);
+			pthread_mutex_unlock(&player->video.sleepDrawMutex);
+			condBroadcastLocked(&player->audio.sleepCond, &player->audio.sleepBufferMutex);
+			pthread_mutex_lock(&player->video.sleepDrawMutex);
+			if (player->meta.interrupt || player->sync.skip.videoWorkFrame) {
+				render = 0;
+				outputAction = DIAGNOSTICS_OUTPUT_DROPPED_STATE;
+				goto RELEASE_BUFFER;
+			}
+		}
+	}
+	if (waitTime < -GAINING_THRESHOLD && HAS_STREAM(player, audio)) {
+		render = 0;
+		outputAction = DIAGNOSTICS_OUTPUT_DROPPED_LATE;
+	} else if (!HAS_STREAM(player, audio) && -waitTime > GAINING_THRESHOLD) {
+		player->sync.startTime -= waitTime;
+		waitTime = 0;
+	}
+	while (render && waitTime > 0) {
+		int64_t scaledWaitTime = unscalePlaybackPosition(player, waitTime);
+		if (scaledWaitTime <= MEDIACODEC_MAX_SCHEDULE_AHEAD_MS) {
+			int64_t renderTimeNs = getMonotonicTimeNs() + scaledWaitTime * 1000000LL;
+			renderResult = av_mediacodec_render_buffer_at_time(buffer, renderTimeNs);
+			outputAction = DIAGNOSTICS_OUTPUT_SCHEDULED;
+			buffer = NULL;
+			break;
+		}
+		int64_t wakeTime = getTime() + scaledWaitTime - MEDIACODEC_MAX_SCHEDULE_AHEAD_MS;
+		condSleepUntilMs(&player->video.sleepCond, &player->video.sleepDrawMutex, wakeTime);
+		if (player->meta.interrupt || player->sync.skip.videoWorkFrame) {
+			render = 0;
+			outputAction = DIAGNOSTICS_OUTPUT_DROPPED_STATE;
+			break;
+		}
+		position = calculatePosition(player, 1);
+		waitTime = framePosition - position;
+	}
+
+	RELEASE_BUFFER:
+	if (buffer) {
+		renderResult = av_mediacodec_release_buffer(buffer, render);
+	}
+	if (renderResult < 0) {
+		LOGP("MediaCodec output buffer release failed: %d", renderResult);
+	}
+	diagnosticsRecordOutput(player, frame, framePosition, waitTime, outputAction, renderResult);
+	av_frame_unref(frame);
+	pthread_mutex_unlock(&player->video.sleepDrawMutex);
+	return 1;
+}
+
+static void performDecodeVideoMediaCodec(Player * player, AVStream * stream) {
+	JNIEnv * env;
+	(*loadJavaVM)->AttachCurrentThread(loadJavaVM, &env, NULL);
+	AVFrame * frame = av_frame_alloc();
+	PacketHolder * packetHolder = NULL;
+	while (!player->meta.interrupt && player->video.hardwareDecoderActive) {
+		packetHolder = (PacketHolder *) blockingQueueGet(&player->video.packetQueue, 1);
+		if (!player->video.hardwareDecoderActive) {
+			if (packetHolder) {
+				packetQueueFreeCallback(packetHolder);
+				packetHolder = NULL;
+			}
+			break;
+		}
+		if (player->sync.skip.videoWorkFrame) {
+			player->sync.skip.videoWorkFrame = 0;
+		}
+		if (!packetHolder || player->meta.interrupt) {
+			break;
+		}
+		condBroadcastLocked(&player->decode.packets.flowCond, &player->decode.packets.flowMutex);
+		if (player->meta.interrupt) {
+			break;
+		}
+		pthread_mutex_lock(&player->play.finishMutex);
+		while (!player->meta.interrupt && !player->play.playing) {
+			pthread_cond_wait(&player->play.finishCond, &player->play.finishMutex);
+		}
+		pthread_mutex_unlock(&player->play.finishMutex);
+		if (player->meta.interrupt) {
+			break;
+		}
+		int packetSent = 0;
+		while (!player->meta.interrupt && !player->sync.skip.videoWorkFrame) {
+			pthread_mutex_lock(&player->decode.video.frameMutex);
+			AVCodecContext * context = GET_CONTEXT(player, video);
+			int decodeResult = decodeMediaCodecFrame(player, context, packetHolder->packet, frame, &packetSent);
+			int renderResult = decodeResult > 0
+					? renderMediaCodecFrame(player, env, stream, frame) : 0;
+			if (decodeResult > 0 && renderResult > 0) {
+				player->video.hardwareDecodeErrors = 0;
+			} else if ((decodeResult < 0 || renderResult < 0) &&
+					++player->video.hardwareDecodeErrors >= 3) {
+				fallbackMediaCodecToSoftware(player, env);
+			}
+			pthread_mutex_unlock(&player->decode.video.frameMutex);
+			if (decodeResult <= 0 || renderResult <= 0) {
+				break;
+			}
+		}
+		if (!packetHolder->packet) {
+			markStreamFinished(player, 1);
+		}
+		packetQueueFreeCallback(packetHolder);
+		packetHolder = NULL;
+	}
+	if (packetHolder) {
+		packetQueueFreeCallback(packetHolder);
+	}
+	av_frame_free(&frame);
+	(*loadJavaVM)->DetachCurrentThread(loadJavaVM);
+}
+#endif
+
 static void * performDecodeVideo(void * data) {
 	Player * player = (Player *) data;
 	AVStream * stream = GET_STREAM(player, video);
-	AVCodecContext * context = GET_CONTEXT(player, video);
 	pthread_mutex_lock(&player->video.sleepDrawMutex);
-	while (!player->meta.interrupt && !player->video.bufferQueue) {
+	while (!player->meta.interrupt && !player->video.bufferQueue && !player->video.hardwareDecoderActive) {
 		pthread_cond_wait(&player->video.sleepCond, &player->video.sleepDrawMutex);
 	}
 	pthread_mutex_unlock(&player->video.sleepDrawMutex);
 	if (player->meta.interrupt) {
 		return NULL;
 	}
+#ifdef DASHCHAN_HAS_MEDIACODEC
+	if (player->video.hardwareDecoderActive) {
+		performDecodeVideoMediaCodec(player, stream);
+		if (player->meta.interrupt || player->video.hardwareDecoderActive) {
+			return NULL;
+		}
+	}
+#endif
 
+	AVCodecContext * context = GET_CONTEXT(player, video);
 	int bytesPerPixel = getBytesPerPixel(player->video.format);
 	int isYUV = player->video.format == AV_PIX_FMT_YUV420P;
 	AVFrame * frame = av_frame_alloc();
@@ -1231,18 +1782,29 @@ static void * performDecodeVideo(void * data) {
 	return NULL;
 }
 
+static void logDestroyStage(Player * player, const char * stage) {
+	diagnosticsLog("player=%u destroy_stage=%s", player->meta.diagnosticsId, stage);
+	LOGP("player=%u destroy stage=%s", player->meta.diagnosticsId, stage);
+}
+
 static void joinStartedWorkerThreads(Player * player) {
 	if (player->decode.audio.threadStarted) {
+		logDestroyStage(player, "join_audio_started");
 		pthread_join(player->decode.audio.thread, NULL);
 		player->decode.audio.threadStarted = 0;
+		logDestroyStage(player, "join_audio_finished");
 	}
 	if (player->decode.video.threadStarted) {
+		logDestroyStage(player, "join_video_started");
 		pthread_join(player->decode.video.thread, NULL);
 		player->decode.video.threadStarted = 0;
+		logDestroyStage(player, "join_video_finished");
 	}
 	if (player->video.drawThreadStarted) {
+		logDestroyStage(player, "join_draw_started");
 		pthread_join(player->video.drawThread, NULL);
 		player->video.drawThreadStarted = 0;
+		logDestroyStage(player, "join_draw_finished");
 	}
 }
 
@@ -1291,6 +1853,7 @@ static void * performDecodePackets(void * data) {
 				} else if (isVideo) {
 					blockingQueueAdd(&player->video.packetQueue, packetHolder);
 					player->video.finished = 0;
+					diagnosticsRecordVideoPacket(player, &packet);
 					LOG("enqueue video %" PRId64, packet.pts);
 				}
 			}
@@ -1326,7 +1889,9 @@ static void * performDecodePackets(void * data) {
 	}
 	blockingQueueAdd(&player->audio.packetQueue, NULL);
 	blockingQueueAdd(&player->video.packetQueue, NULL);
+	logDestroyStage(player, "packet_thread_join_workers");
 	joinStartedWorkerThreads(player);
+	logDestroyStage(player, "packet_thread_finished");
 	(*loadJavaVM)->DetachCurrentThread(loadJavaVM);
 	return NULL;
 }
@@ -1338,66 +1903,245 @@ static void releasePlayerSurface(Player * player) {
 	}
 }
 
-static void setPlayerSurfaceLocked(JNIEnv * env, Player * player, jobject surface) {
-	if (surface) {
-		player->video.window = ANativeWindow_fromSurface(env, surface);
-		int format = ANativeWindow_getFormat(player->video.window);
-		AVCodecContext * context = GET_CONTEXT(player, video);
-		int width = context->width;
-		int height = context->height;
-		if (!player->video.bufferQueue) {
-			int videoFormat = -1;
-			switch (format) {
-				case WINDOW_FORMAT_RGBA_8888:
-				case WINDOW_FORMAT_RGBX_8888: {
-					videoFormat = AV_PIX_FMT_RGBA;
-					break;
-				}
-				case WINDOW_FORMAT_RGB_565: {
-					videoFormat = AV_PIX_FMT_RGB565LE;
-					break;
-				}
-				case WINDOW_FORMAT_YV12: {
-					videoFormat = AV_PIX_FMT_YUV420P;
-					break;
-				}
+static int getSoftwareVideoFormat(int windowFormat) {
+	switch (windowFormat) {
+		case WINDOW_FORMAT_RGBA_8888:
+		case WINDOW_FORMAT_RGBX_8888: return AV_PIX_FMT_RGBA;
+		case WINDOW_FORMAT_RGB_565: return AV_PIX_FMT_RGB565LE;
+		case WINDOW_FORMAT_YV12: return AV_PIX_FMT_YUV420P;
+		default: return -1;
+	}
+}
+
+static int prepareSoftwareVideoOutputLocked(JNIEnv * env, Player * player) {
+	if (!player->video.window) {
+		return 0;
+	}
+	int windowFormat = ANativeWindow_getFormat(player->video.window);
+	int videoFormat = getSoftwareVideoFormat(windowFormat);
+	if (videoFormat < 0) {
+		return 0;
+	}
+	AVCodecContext * context = GET_CONTEXT(player, video);
+	int width = context->width;
+	int height = context->height;
+	if (!player->video.bufferQueue) {
+		int videoBufferSize = getVideoBufferSize(videoFormat, width, height);
+		player->video.format = videoFormat;
+		player->video.bufferQueue = malloc(sizeof(BufferQueue));
+		bufferQueueInit(player->video.bufferQueue, videoBufferSize, 3);
+		player->video.lastBuffer.data = malloc(videoBufferSize);
+		player->video.lastBuffer.size = videoBufferSize;
+		if (videoFormat == AV_PIX_FMT_RGBA) {
+			// RGBA_8888 "black" buffer
+			int count = 4 * width * height;
+			memset(player->video.lastBuffer.data, 0x00, count);
+			for (int i = 3; i < count; i += 4) {
+				player->video.lastBuffer.data[i] = 0xff;
 			}
-			if (videoFormat >= 0) {
-				int videoBufferSize = getVideoBufferSize(videoFormat, width, height);
-				player->video.format = videoFormat;
-				player->video.bufferQueue = malloc(sizeof(BufferQueue));
-				bufferQueueInit(player->video.bufferQueue, videoBufferSize, 3);
-				player->video.lastBuffer.data = malloc(videoBufferSize);
-				player->video.lastBuffer.size = videoBufferSize;
-				if (videoFormat == AV_PIX_FMT_RGBA) {
-					// RGBA_8888 "black" buffer
-					int count = 4 * width * height;
-					memset(player->video.lastBuffer.data, 0x00, count);
-					for (int i = 3; i < count; i += 4) {
-						player->video.lastBuffer.data[i] = 0xff;
-					}
-				} else if (videoFormat == AV_PIX_FMT_RGB565LE) {
-					// RGB_565 "black" buffer
-					memset(player->video.lastBuffer.data, 0x00, 2 * width * height);
-				} else if (videoFormat == AV_PIX_FMT_YUV420P) {
-					// YV12 "black" buffer
-					memset(player->video.lastBuffer.data, 0, width * height);
-					memset(player->video.lastBuffer.data + width * height, 0x7f, width * height / 2);
-				}
-				pthread_cond_broadcast(&player->video.sleepCond);
-			}
+		} else if (videoFormat == AV_PIX_FMT_RGB565LE) {
+			// RGB_565 "black" buffer
+			memset(player->video.lastBuffer.data, 0x00, 2 * width * height);
+		} else if (videoFormat == AV_PIX_FMT_YUV420P) {
+			// YV12 "black" buffer
+			memset(player->video.lastBuffer.data, 0, width * height);
+			memset(player->video.lastBuffer.data + width * height, 0x7f, width * height / 2);
 		}
-		if (player->video.lastBuffer.width >= 0) {
-			width = player->video.lastBuffer.width;
-		}
-		if (player->video.lastBuffer.height >= 0) {
-			height = player->video.lastBuffer.height;
-		}
-		ANativeWindow_setBuffersGeometry(player->video.window, width, height, format);
-		if (player->video.lastBuffer.data) {
-			drawWindow(player, player->video.lastBuffer.data, width, height, width, height, env);
+		pthread_cond_broadcast(&player->video.sleepCond);
+	}
+	if (player->video.lastBuffer.width >= 0) {
+		width = player->video.lastBuffer.width;
+	}
+	if (player->video.lastBuffer.height >= 0) {
+		height = player->video.lastBuffer.height;
+	}
+	ANativeWindow_setBuffersGeometry(player->video.window, width, height, windowFormat);
+	if (player->video.lastBuffer.data) {
+		drawWindow(player, player->video.lastBuffer.data, width, height, width, height, env);
+	}
+	return 1;
+}
+
+#ifdef DASHCHAN_HAS_MEDIACODEC
+static AVCodecContext * createSoftwareVideoCodecContext(Player * player) {
+	AVStream * stream = GET_STREAM(player, video);
+	const AVCodec * codec = avcodec_find_decoder(stream->codecpar->codec_id);
+	if (!codec) {
+		return NULL;
+	}
+	AVCodecContext * context = avcodec_alloc_context3(codec);
+	if (!context || avcodec_parameters_to_context(context, stream->codecpar) != 0) {
+		closeAndFreeCodecContext(&context);
+		return NULL;
+	}
+	context->pkt_timebase = stream->time_base;
+	if (avcodec_open2(context, codec, NULL) < 0) {
+		closeAndFreeCodecContext(&context);
+		return NULL;
+	}
+	return context;
+}
+
+static const char * getMediaCodecDecoderName(enum AVCodecID codecId) {
+	switch (codecId) {
+		case AV_CODEC_ID_H264: return "h264_mediacodec";
+		case AV_CODEC_ID_HEVC: return "hevc_mediacodec";
+		default: return NULL;
+	}
+}
+
+static AVCodecContext * createMediaCodecVideoContext(Player * player, jobject surface) {
+	AVStream * stream = GET_STREAM(player, video);
+	const char * decoderName = getMediaCodecDecoderName(stream->codecpar->codec_id);
+	const AVCodec * codec = decoderName ? avcodec_find_decoder_by_name(decoderName) : NULL;
+	if (!codec) {
+		diagnosticsLog("player=%u mediacodec_open failed_stage=find_decoder requested=%s",
+				player->meta.diagnosticsId, decoderName ? decoderName : "unsupported_codec");
+		return NULL;
+	}
+	AVCodecContext * context = avcodec_alloc_context3(codec);
+	if (!context) {
+		diagnosticsLog("player=%u mediacodec_open failed_stage=allocate_context",
+				player->meta.diagnosticsId);
+		return NULL;
+	}
+	int result = avcodec_parameters_to_context(context, stream->codecpar);
+	if (result != 0) {
+		diagnosticsLog("player=%u mediacodec_open failed_stage=copy_parameters code=%d",
+				player->meta.diagnosticsId, result);
+		closeAndFreeCodecContext(&context);
+		return NULL;
+	}
+	context->pkt_timebase = stream->time_base;
+	context->hw_device_ctx = av_hwdevice_ctx_alloc(AV_HWDEVICE_TYPE_MEDIACODEC);
+	if (!context->hw_device_ctx) {
+		diagnosticsLog("player=%u mediacodec_open failed_stage=allocate_device_context",
+				player->meta.diagnosticsId);
+		closeAndFreeCodecContext(&context);
+		return NULL;
+	}
+	AVHWDeviceContext * deviceContext = (AVHWDeviceContext *) context->hw_device_ctx->data;
+	AVMediaCodecDeviceContext * mediaCodecContext =
+			(AVMediaCodecDeviceContext *) deviceContext->hwctx;
+	/*
+	 * The decoder uses FFmpeg's Java MediaCodec backend when a JVM is available.
+	 * That backend needs android.view.Surface itself; an ANativeWindow is only
+	 * consumed by the NDK backend and otherwise produces output buffers with no
+	 * visible Surface attached.
+	 */
+	mediaCodecContext->surface = surface;
+	result = av_opt_set_int(context->priv_data, "ndk_codec", 0, 0);
+	if (result < 0) {
+		diagnosticsLog("player=%u mediacodec_open failed_stage=select_java_backend code=%d",
+				player->meta.diagnosticsId, result);
+		closeAndFreeCodecContext(&context);
+		return NULL;
+	}
+	result = av_hwdevice_ctx_init(context->hw_device_ctx);
+	if (result < 0) {
+		diagnosticsLog("player=%u mediacodec_open failed_stage=initialize_device_context code=%d",
+				player->meta.diagnosticsId, result);
+		closeAndFreeCodecContext(&context);
+		return NULL;
+	}
+	diagnosticsLog("player=%u mediacodec_surface configured_via=java_surface"
+			" java_surface=%d hw_device=%d",
+			player->meta.diagnosticsId, surface != NULL, context->hw_device_ctx != NULL);
+	result = avcodec_open2(context, codec, NULL);
+	if (result < 0) {
+		diagnosticsLog("player=%u mediacodec_open failed_stage=open_codec code=%d",
+				player->meta.diagnosticsId, result);
+		closeAndFreeCodecContext(&context);
+		return NULL;
+	}
+	diagnosticsLog("player=%u mediacodec_open success decoder=%s pixel_format=%d"
+			" hw_device=%d",
+			player->meta.diagnosticsId, codec->name, context->pix_fmt,
+			context->hw_device_ctx != NULL);
+	return context;
+}
+
+static int configureMediaCodecSurface(Player * player, jobject surface) {
+	if (!player->video.hardwareAccelerationRequested || player->video.hardwareDecoderFailed) {
+		diagnosticsLog("player=%u mediacodec_configure skipped requested=%d failed=%d",
+				player->meta.diagnosticsId, player->video.hardwareAccelerationRequested,
+				player->video.hardwareDecoderFailed);
+		return 0;
+	}
+	int decoderReset = player->video.hardwareSurfaceInitialized;
+	diagnosticsLog("player=%u mediacodec_configure started reset=%d",
+			player->meta.diagnosticsId, decoderReset);
+	AVCodecContext * context = createMediaCodecVideoContext(player, surface);
+	if (context) {
+		closeAndFreeVideoCodecContext(player, &player->av.videoContext);
+		player->av.videoContext = context;
+		player->video.hardwareDecoderActive = 1;
+		player->video.hardwareSurfaceInitialized = 1;
+		diagnosticsIncrement(&diagnostics.stats.decoderEnabled);
+		diagnosticsLog("player=%u mediacodec_configure success decoder=%s",
+				player->meta.diagnosticsId, context->codec->name);
+		LOGP("MediaCodec video decoder enabled: %s", context->codec->name);
+		return decoderReset;
+	}
+	player->video.hardwareDecoderFailed = 1;
+	diagnosticsIncrement(&diagnostics.stats.decoderUnavailable);
+	diagnosticsLog("player=%u mediacodec_configure failed", player->meta.diagnosticsId);
+	LOGP("MediaCodec video decoder unavailable, using software decoder");
+	if (player->video.hardwareDecoderActive) {
+		context = createSoftwareVideoCodecContext(player);
+		if (context) {
+			closeAndFreeVideoCodecContext(player, &player->av.videoContext);
+			player->av.videoContext = context;
+			player->video.hardwareDecoderActive = 0;
 		}
 	}
+	return decoderReset;
+}
+
+static int fallbackMediaCodecToSoftware(Player * player, JNIEnv * env) {
+	if (!player->video.window ||
+			getSoftwareVideoFormat(ANativeWindow_getFormat(player->video.window)) < 0) {
+		return 0;
+	}
+	AVCodecContext * context = createSoftwareVideoCodecContext(player);
+	if (!context) {
+		return 0;
+	}
+	pthread_mutex_lock(&player->video.sleepDrawMutex);
+	closeAndFreeVideoCodecContext(player, &player->av.videoContext);
+	player->av.videoContext = context;
+	player->video.hardwareDecoderActive = 0;
+	player->video.hardwareDecoderFailed = 1;
+	player->video.hardwareDecodeErrors = 0;
+	int outputPrepared = prepareSoftwareVideoOutputLocked(env, player);
+	pthread_mutex_unlock(&player->video.sleepDrawMutex);
+	diagnosticsIncrement(&diagnostics.stats.softwareFallbacks);
+	diagnosticsLog("player=%u mediacodec_runtime_fallback output_prepared=%d",
+			player->meta.diagnosticsId, outputPrepared);
+	LOGP("MediaCodec failed during playback, switched to software decoder");
+	return outputPrepared;
+}
+#endif
+
+static int setPlayerSurfaceLocked(JNIEnv * env, Player * player, jobject surface) {
+	int decoderReset = 0;
+	if (surface) {
+		player->video.window = ANativeWindow_fromSurface(env, surface);
+		if (!player->video.window) {
+			diagnosticsLog("player=%u surface_attach failed_stage=create_native_window",
+					player->meta.diagnosticsId);
+			return 0;
+		}
+#ifdef DASHCHAN_HAS_MEDIACODEC
+		decoderReset = configureMediaCodecSurface(player, surface);
+#endif
+		if (player->video.hardwareDecoderActive) {
+			pthread_cond_broadcast(&player->video.sleepCond);
+			return decoderReset;
+		}
+		prepareSoftwareVideoOutputLocked(env, player);
+	}
+	return decoderReset;
 }
 
 static int bufferReadData(void * opaque, uint8_t * buf, int bufSize) {
@@ -1456,6 +2200,7 @@ static int64_t bufferSeekData(void * opaque, int64_t offset, int whence) {
 static Player * createPlayer(void) {
 	Player * player = malloc(sizeof(Player));
 	memset(player, 0, sizeof(Player));
+	player->meta.diagnosticsId = __atomic_add_fetch(&nextDiagnosticsPlayerId, 1, __ATOMIC_RELAXED);
 	player->file.total = -1;
 	player->meta.audioEnabled = 1;
 	player->av.audioStreamIndex = INDEX_NO_STREAM;
@@ -1494,6 +2239,7 @@ static Player * createPlayer(void) {
 jlong preInit(UNUSED JNIEnv * env, jint fd) {
 	Player * player = createPlayer();
 	player->file.fd = fd;
+	diagnosticsLog("player=%u created", player->meta.diagnosticsId);
 	return (jlong) (long) player;
 }
 
@@ -1502,8 +2248,28 @@ void setAudioEnabled(jlong pointer, jboolean audioEnabled) {
 	player->meta.audioEnabled = !!audioEnabled;
 }
 
+void setHardwareAcceleration(jlong pointer, jboolean hardwareAcceleration) {
+	Player * player = POINTER_CAST(pointer);
+#ifdef DASHCHAN_HAS_MEDIACODEC
+	player->video.hardwareAccelerationRequested = !!hardwareAcceleration;
+#else
+	(void) hardwareAcceleration;
+	player->video.hardwareAccelerationRequested = 0;
+#endif
+	diagnosticsLog("player=%u hardware_acceleration_requested=%d available_in_build=%d",
+			player->meta.diagnosticsId, player->video.hardwareAccelerationRequested,
+#ifdef DASHCHAN_HAS_MEDIACODEC
+			1
+#else
+			0
+#endif
+	);
+}
+
 void init(JNIEnv * env, jlong pointer, jobject nativeBridge, jboolean seekAnyFrame) {
 	Player * player = POINTER_CAST(pointer);
+	diagnosticsLog("player=%u init_started seek_any_frame=%d",
+			player->meta.diagnosticsId, !!seekAnyFrame);
 	player->meta.seekAnyFrame = !!seekAnyFrame;
 	player->bridge.native = (*env)->NewGlobalRef(env, nativeBridge);
 	obtainBridge(player, env);
@@ -1571,8 +2337,13 @@ void init(JNIEnv * env, jlong pointer, jobject nativeBridge, jboolean seekAnyFra
 	}
 	if (audioCodec) {
 		AVCodecContext * audioContext = avcodec_alloc_context3(audioCodec);
-		if (avcodec_parameters_to_context(audioContext, audioStream->codecpar) ||
-				avcodec_open2(audioContext, audioCodec, NULL) < 0) {
+		if (!audioContext || avcodec_parameters_to_context(audioContext, audioStream->codecpar)) {
+			avcodec_free_context(&audioContext);
+			player->meta.errorCode = ERROR_OPEN_CODEC;
+			return;
+		}
+		audioContext->pkt_timebase = audioStream->time_base;
+		if (avcodec_open2(audioContext, audioCodec, NULL) < 0) {
 			avcodec_free_context(&audioContext);
 			player->meta.errorCode = ERROR_OPEN_CODEC;
 			return;
@@ -1582,8 +2353,13 @@ void init(JNIEnv * env, jlong pointer, jobject nativeBridge, jboolean seekAnyFra
 	}
 	if (videoCodec) {
 		AVCodecContext * videoContext = avcodec_alloc_context3(videoCodec);
-		if (avcodec_parameters_to_context(videoContext, videoStream->codecpar) ||
-				avcodec_open2(videoContext, videoCodec, NULL) < 0) {
+		if (!videoContext || avcodec_parameters_to_context(videoContext, videoStream->codecpar)) {
+			avcodec_free_context(&videoContext);
+			player->meta.errorCode = ERROR_OPEN_CODEC;
+			return;
+		}
+		videoContext->pkt_timebase = videoStream->time_base;
+		if (avcodec_open2(videoContext, videoCodec, NULL) < 0) {
 			avcodec_free_context(&videoContext);
 			player->meta.errorCode = ERROR_OPEN_CODEC;
 			return;
@@ -1591,6 +2367,7 @@ void init(JNIEnv * env, jlong pointer, jobject nativeBridge, jboolean seekAnyFra
 		player->av.videoStreamIndex = videoStreamIndex;
 		player->av.videoContext = videoContext;
 	}
+	diagnosticsRecordMediaInfo(player);
 	if (audioStream) {
 		SLresult result;
 		int success = 0;
@@ -1772,9 +2549,14 @@ void init(JNIEnv * env, jlong pointer, jobject nativeBridge, jboolean seekAnyFra
 
 void destroy(JNIEnv * env, jlong pointer, jboolean initOnly) {
 	Player * player = POINTER_CAST(pointer);
+	diagnosticsLog("player=%u destroy init_only=%d error_code=%d hardware_active=%d",
+			player->meta.diagnosticsId, !!initOnly, player->meta.errorCode,
+			player->video.hardwareDecoderActive);
+	logDestroyStage(player, "started");
 	player->meta.interrupt = 1;
 	condBroadcastLocked(&player->file.controlCond, &player->file.controlMutex);
 	if (!!initOnly) {
+		logDestroyStage(player, "init_only_finished");
 		return;
 	}
 
@@ -1788,13 +2570,17 @@ void destroy(JNIEnv * env, jlong pointer, jboolean initOnly) {
 	condBroadcastLocked(&player->video.queueCond, &player->video.queueMutex);
 	condBroadcastLocked(&player->play.finishCond, &player->play.finishMutex);
 	condBroadcastLocked(&player->decode.packets.flowCond, &player->decode.packets.flowMutex);
+	logDestroyStage(player, "workers_signaled");
 
 	if (player->decode.packets.threadStarted) {
+		logDestroyStage(player, "join_packets_started");
 		pthread_join(player->decode.packets.thread, NULL);
 		player->decode.packets.threadStarted = 0;
+		logDestroyStage(player, "join_packets_finished");
 	} else {
 		joinStartedWorkerThreads(player);
 	}
+	logDestroyStage(player, "synchronization_cleanup_started");
 	pthread_mutex_destroy(&player->decode.packets.readMutex);
 	pthread_mutex_destroy(&player->decode.packets.flowMutex);
 	pthread_mutex_destroy(&player->decode.audio.frameMutex);
@@ -1811,6 +2597,7 @@ void destroy(JNIEnv * env, jlong pointer, jboolean initOnly) {
 	pthread_cond_destroy(&player->video.sleepCond);
 	pthread_cond_destroy(&player->video.queueCond);
 	pthread_cond_destroy(&player->file.controlCond);
+	logDestroyStage(player, "synchronization_cleanup_finished");
 
 	blockingQueueDestroy(&player->audio.packetQueue, packetQueueFreeCallback);
 	blockingQueueDestroy(&player->video.packetQueue, packetQueueFreeCallback);
@@ -1820,32 +2607,43 @@ void destroy(JNIEnv * env, jlong pointer, jboolean initOnly) {
 		free(player->video.bufferQueue);
 		free(player->video.lastBuffer.data);
 	}
+	logDestroyStage(player, "buffers_cleanup_finished");
 
 	if (player->audio.sl.player) {
+		logDestroyStage(player, "opensl_player_destroy_started");
 		(*player->audio.sl.player)->Destroy(player->audio.sl.player);
+		logDestroyStage(player, "opensl_player_destroy_finished");
 	}
 	if (player->audio.sl.outputMix) {
+		logDestroyStage(player, "opensl_output_mix_destroy_started");
 		(*player->audio.sl.outputMix)->Destroy(player->audio.sl.outputMix);
+		logDestroyStage(player, "opensl_output_mix_destroy_finished");
 	}
 	if (HAS_STREAM(player, audio)) {
+		logDestroyStage(player, "audio_codec_close_started");
 		AVCodecContext * audioContext = GET_CONTEXT(player, audio);
 		closeAndFreeCodecContext(&audioContext);
+		logDestroyStage(player, "audio_codec_close_finished");
 	}
 	if (HAS_STREAM(player, video)) {
-		AVCodecContext * videoContext = GET_CONTEXT(player, video);
-		closeAndFreeCodecContext(&videoContext);
+		logDestroyStage(player, "video_codec_close_started");
+		closeAndFreeVideoCodecContext(player, &player->av.videoContext);
+		logDestroyStage(player, "video_codec_close_finished");
 	}
 	if (player->av.format) {
+		logDestroyStage(player, "format_close_started");
 		AVIOContext * ioContext = player->av.format->pb;
 		avformat_close_input(&player->av.format);
 		av_free(ioContext->buffer);
 		av_free(ioContext);
+		logDestroyStage(player, "format_close_finished");
 	}
 	if (player->audio.buffer) {
 		audioBufferQueueFreeCallback(player->audio.buffer);
 		player->audio.buffer = NULL;
 	}
 	releasePlayerSurface(player);
+	logDestroyStage(player, "surface_released");
 	sparseArrayDestroy(&player->bridge.array, free);
 	if (player->bridge.native) {
 		(*env)->DeleteGlobalRef(env, player->bridge.native);
@@ -1853,11 +2651,15 @@ void destroy(JNIEnv * env, jlong pointer, jboolean initOnly) {
 	if (player->file.fd > 0) {
 		close(player->file.fd);
 	}
+	logDestroyStage(player, "finished");
 	free(player);
 }
 
 jint getErrorCode(jlong pointer) {
 	Player * player = POINTER_CAST(pointer);
+	diagnosticsLog("player=%u init_finished error_code=%d audio_stream=%d video_stream=%d",
+			player->meta.diagnosticsId, player->meta.errorCode,
+			player->av.audioStreamIndex, player->av.videoStreamIndex);
 	return player->meta.errorCode;
 }
 
@@ -1883,6 +2685,8 @@ jlong getPosition(jlong pointer) {
 
 void setPosition(JNIEnv * env, jlong pointer, jlong position) {
 	Player * player = POINTER_CAST(pointer);
+	diagnosticsLog("player=%u seek requested_position_ms=%" PRId64,
+			player->meta.diagnosticsId, (int64_t) position);
 	if (position >= 0) {
 		// Leave the call below even without variable declaration to init a bridge here
 		Bridge * bridge = obtainBridge(player, env);
@@ -2061,6 +2865,7 @@ void setPlaying(jlong pointer, jboolean playing) {
 	Player * player = POINTER_CAST(pointer);
 	playing = !!playing;
 	if (player->play.playing != playing) {
+		diagnosticsLog("player=%u playing=%d", player->meta.diagnosticsId, playing);
 		LOG("switch playing %d", playing);
 		pthread_mutex_lock(&player->play.finishMutex);
 		if (playing) {
@@ -2085,12 +2890,30 @@ void setPlaying(jlong pointer, jboolean playing) {
 	}
 }
 
-void setSurface(JNIEnv * env, jlong pointer, jobject surface) {
+jboolean setSurface(JNIEnv * env, jlong pointer, jobject surface) {
 	Player * player = POINTER_CAST(pointer);
+	diagnosticsLog("player=%u set_surface_started attached=%d",
+			player->meta.diagnosticsId, surface != NULL);
+	LOGP("player=%u set surface started attached=%d",
+			player->meta.diagnosticsId, surface != NULL);
+	pthread_mutex_lock(&player->decode.video.frameMutex);
 	pthread_mutex_lock(&player->video.sleepDrawMutex);
 	releasePlayerSurface(player);
-	setPlayerSurfaceLocked(env, player, surface);
+	int decoderReset = setPlayerSurfaceLocked(env, player, surface);
+	if (surface) {
+		diagnosticsIncrement(&diagnostics.stats.surfaceAttached);
+	} else {
+		diagnosticsIncrement(&diagnostics.stats.surfaceDetached);
+	}
+	diagnosticsLog("player=%u surface attached=%d decoder_reset=%d hardware_active=%d"
+			" native_window=%d",
+			player->meta.diagnosticsId, surface != NULL, decoderReset,
+			player->video.hardwareDecoderActive, player->video.window != NULL);
 	pthread_mutex_unlock(&player->video.sleepDrawMutex);
+	pthread_mutex_unlock(&player->decode.video.frameMutex);
+	LOGP("player=%u set surface finished attached=%d",
+			player->meta.diagnosticsId, surface != NULL);
+	return decoderReset;
 }
 
 jintArray getCurrentFrame(JNIEnv * env, jlong pointer, jintArray dimensions) {
@@ -2193,8 +3016,8 @@ jobjectArray getMetadata(JNIEnv * env, jlong pointer) {
 	Player * player = POINTER_CAST(pointer);
 	int entries = av_dict_count(player->av.format->metadata) + 3;
 	if (HAS_STREAM(player, video)) {
-		// Format, width, height, frame rate, pixel format, canvas format, libyuv
-		entries += 7;
+		// Format, decoder backend, width, height, frame rate, pixel format, canvas format, conversion
+		entries += 8;
 	}
 	if (HAS_STREAM(player, audio)) {
 		// Format, channels, sample rate
@@ -2219,6 +3042,9 @@ jobjectArray getMetadata(JNIEnv * env, jlong pointer) {
 		(*env)->SetObjectArrayElement(env, result, index++, (*env)->NewStringUTF(env, "video_format"));
 		(*env)->SetObjectArrayElement(env, result, index++, (*env)->NewStringUTF(env,
 				videoContext->codec->long_name));
+		(*env)->SetObjectArrayElement(env, result, index++, (*env)->NewStringUTF(env, "video_decoder_backend"));
+		(*env)->SetObjectArrayElement(env, result, index++, (*env)->NewStringUTF(env,
+				player->video.hardwareDecoderActive ? "MediaCodec" : "FFmpeg software"));
 		sprintf(buffer, "%d", videoContext->width);
 		(*env)->SetObjectArrayElement(env, result, index++, (*env)->NewStringUTF(env, "width"));
 		(*env)->SetObjectArrayElement(env, result, index++, (*env)->NewStringUTF(env, buffer));
@@ -2258,7 +3084,9 @@ jobjectArray getMetadata(JNIEnv * env, jlong pointer) {
 		}
 		(*env)->SetObjectArrayElement(env, result, index++, (*env)->NewStringUTF(env, "frame_conversion"));
 		(*env)->SetObjectArrayElement(env, result, index++, (*env)->NewStringUTF(env,
-				player->video.useLibyuv == 1 ? "libyuv" : player->video.useLibyuv == 0 ? "libswscale" : "Unknown"));
+				player->video.hardwareDecoderActive ? "MediaCodec surface" :
+				player->video.useLibyuv == 1 ? "libyuv" :
+				player->video.useLibyuv == 0 ? "libswscale" : "Unknown"));
 	}
 	if (HAS_STREAM(player, audio)) {
 		AVCodecContext * audioContext = GET_CONTEXT(player, audio);
@@ -2282,6 +3110,11 @@ jobjectArray getMetadata(JNIEnv * env, jlong pointer) {
 
 void initLibs(JavaVM * javaVM) {
 	loadJavaVM = javaVM;
+#ifdef DASHCHAN_HAS_MEDIACODEC
+	if (av_jni_set_java_vm(javaVM, NULL) < 0) {
+		LOGP("Cannot register Java VM for MediaCodec");
+	}
+#endif
 	SLObjectItf engineObject;
 	slCreateEngine(&engineObject, 0, NULL, 0, NULL, NULL);
 	(*engineObject)->Realize(engineObject, SL_BOOLEAN_FALSE);

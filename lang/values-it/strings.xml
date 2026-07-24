@@ -67,7 +67,7 @@
     <string name="code_number_address">Board, numero pag. o indirizzo</string>
     <string name="comment">Commento</string>
     <string name="comment_is_too_short">Il commento è troppo corto</string>
-    <string name="compatibility">Compatibilità</string>
+	<string name="experimental_features">Funzioni sperimentali</string>
     <string name="completed">Completato</string>
     <string name="completed_downloads">Download completati</string>
     <string name="configuration">Configurazione</string>
@@ -464,6 +464,18 @@
     <string name="updates_available__genitive">Aggiornamenti disponibili</string>
     <string name="use_built_in_video_player">Usa il player video interno</string>
     <string name="use_built_in_video_player__summary">Riproduci allegati video WebM</string>
+    <string name="video_diagnostics_start">Registra diagnostica video</string>
+    <string name="video_diagnostics_start__summary">Avvia un log tecnico limitato, riproduci il problema video e poi interrompi la registrazione qui</string>
+    <string name="video_diagnostics_stop">Interrompi e salva la diagnostica</string>
+    <string name="video_diagnostics_stop__summary">Registrazione attiva. Apri un video problematico per 10–20 secondi, poi torna qui</string>
+    <string name="video_diagnostics_share">Condividi l’ultimo log diagnostico</string>
+    <string name="video_diagnostics_share__summary">Il log rimane solo sul dispositivo finché non viene eliminato o sostituito da log più recenti</string>
+    <string name="video_diagnostics_delete">Elimina l’ultimo log diagnostico</string>
+    <string name="video_diagnostics_deleted">Log diagnostico eliminato</string>
+    <string name="video_diagnostics_saved">Log diagnostico salvato</string>
+    <string name="video_diagnostics_saved__message">Il log è stato salvato nella cache dell’applicazione. Puoi condividerlo ora o in seguito da questa schermata.</string>
+    <string name="video_diagnostics_save_failed">Impossibile salvare il log diagnostico</string>
+    <string name="video_diagnostics_privacy_notice">Dopo l’avvio, apri un video problematico per 10–20 secondi, poi torna qui e interrompi la registrazione.\n\nIl log contiene le versioni dell’applicazione e di Android, produttore e modello del dispositivo, nomi dei decoder video disponibili, parametri del formato video, timestamp, contatori dei fotogrammi, errori del decoder e stato della Surface.\n\nNon contiene URL, testo dei post, dati multimediali, nomi di file, account, passcode, cookie, indirizzi IP, Android ID o numeri di serie. Nulla viene caricato automaticamente.</string>
     <string name="use_gms_security_provider">Usa provider sicurezza GMS</string>
     <string name="use_gms_security_provider__summary">Il provider di sicurezza di Google Play Services aggiunge il
         supporto alla nuova

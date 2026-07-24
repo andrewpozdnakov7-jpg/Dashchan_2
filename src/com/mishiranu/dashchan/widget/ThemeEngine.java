@@ -106,19 +106,24 @@ public class ThemeEngine {
 
 				boolean roundLeftCorners = true;
 				boolean roundRightCorners = true;
-				Rect popupFrame = new Rect();
-				if (decorView.getLocalVisibleRect(popupFrame) && !popupFrame.isEmpty()) {
+				if (decorView.getWidth() > 0 && decorView.getHeight() > 0) {
 					int[] location = new int[2];
 					decorView.getLocationOnScreen(location);
-					popupFrame.offset(location[0], location[1]);
+					Rect popupFrame = new Rect(location[0], location[1],
+							location[0] + decorView.getWidth(), location[1] + decorView.getHeight());
+					int edgeTolerance = Math.max(Math.round(ResourceUtils.obtainDensity(decorView)),
+							ViewConfiguration.get(decorView.getContext()).getScaledWindowTouchSlop());
+					int screenWidth = decorView.getResources().getDisplayMetrics().widthPixels;
+					int leftDistance = Math.abs(popupFrame.left);
+					int rightDistance = Math.abs(screenWidth - popupFrame.right);
 					Rect displayFrame = new Rect();
 					decorView.getWindowVisibleDisplayFrame(displayFrame);
 					if (!displayFrame.isEmpty()) {
-						int edgeTolerance = Math.max(Math.round(ResourceUtils.obtainDensity(decorView)),
-								ViewConfiguration.get(decorView.getContext()).getScaledWindowTouchSlop());
-						roundLeftCorners = popupFrame.left - displayFrame.left > edgeTolerance;
-						roundRightCorners = displayFrame.right - popupFrame.right > edgeTolerance;
+						leftDistance = Math.min(leftDistance, Math.abs(popupFrame.left - displayFrame.left));
+						rightDistance = Math.min(rightDistance, Math.abs(displayFrame.right - popupFrame.right));
 					}
+					roundLeftCorners = leftDistance > edgeTolerance;
+					roundRightCorners = rightDistance > edgeTolerance;
 				}
 				applyRoundedBackground(backgroundView, color, roundLeftCorners, roundRightCorners);
 				return true;

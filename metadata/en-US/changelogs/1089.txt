@@ -1,0 +1,7 @@
+* Added optional experimental H.264 and HEVC hardware decoding through Android MediaCodec. It is disabled by default and falls back to the software decoder when unavailable.
+* Added privacy-limited video diagnostics for investigating decoder and Surface problems without uploading anything automatically.
+* Fixed black video, severely reduced frame rate, and player freezes when switching videos or closing picture-in-picture playback with hardware decoding.
+* Added quick automatic hiding by a word or phrase.
+* Added optional text-scale control with the volume buttons, a 30–500% range, and adaptive steps.
+* Added an option to hide the thread title and address from the toolbar.
+* Improved bundled and imported font consistency, bold styles, and rounded pop-up menus.

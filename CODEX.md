@@ -47,16 +47,42 @@ When the user explicitly requests a source ZIP for external compilation:
 
 1. Freeze the intended working-tree state and create the ZIP before starting
    lengthy archive-content verification.
-2. As soon as the ZIP is closed and its SHA-256 is available, report its path
+2. Run PowerShell archive preparation with `Set-StrictMode -Version Latest`
+   and `$ErrorActionPreference = "Stop"` so that a failed copy or missing path
+   aborts the operation instead of producing a partial staging directory.
+3. Assume the archive command runs under Windows PowerShell 5.1 and the
+   matching .NET Framework. Do not use newer runtime APIs such as
+   `System.IO.Path.GetRelativePath`; calculate relative paths only after
+   validating an exact source-root prefix.
+4. Never combine `Copy-Item -LiteralPath` with wildcard paths such as `*`.
+   `-LiteralPath` does not expand wildcards. To copy directory contents while
+   preserving hidden files, enumerate them with
+   `Get-ChildItem -LiteralPath <source> -Force` and pipe those items to
+   `Copy-Item -Destination <stage> -Recurse -Force`.
+5. Before creating the ZIP, run a mandatory staging gate: verify that the
+   staging directory contains the expected top-level source directories,
+   build scripts, and required files such as `Dashchan_2/build.gradle`.
+   Abort if the staging directory is empty, incomplete, or unexpectedly
+   wrapped.
+6. On Windows, create every ZIP entry with an explicitly normalized `/`
+   separator. Do not use archive helpers that preserve Windows `\` path
+   separators. Build entry names from relative paths and replace `\` with `/`
+   before adding them to the archive.
+7. Before handing off the ZIP, run a mandatory fast layout gate: reject the
+   archive if any entry name contains `\`, if required top-level entries such
+   as `Dashchan_2/build.gradle` are missing, or if the source tree is wrapped
+   in an unexpected extra directory.
+8. As soon as the ZIP is closed, the fast layout gate passes, and its SHA-256
+   is available, report its path
    and hash in a commentary update marked `created; verification in progress`.
    This lets the user start transferring or compiling it immediately.
-3. Continue verification against that frozen ZIP: check readability, duplicate
+9. Continue verification against that frozen ZIP: check readability, duplicate
    entries, forbidden or sensitive files, and exact source-file contents.
-4. Do not change source files between creating the ZIP and completing its
+10. Do not change source files between creating the ZIP and completing its
    verification.
-5. If verification fails, immediately mark that ZIP as invalid, explain why,
-   create a replacement, and repeat the workflow.
-6. In the final response, clearly report whether verification passed.
+11. If verification fails, immediately mark that ZIP as invalid, explain why,
+    create a replacement, and repeat the workflow.
+12. In the final response, clearly report whether verification passed.
 
 Creating this source-only ZIP does not authorize Gradle, compilation, APK/AAB
 packaging, installation, publication, or upload.

@@ -49,6 +49,11 @@ void JCALL(setAudioEnabled)(UNUSED JNIEnv * env, UNUSED jobject this,
 	setAudioEnabled(pointer, audioEnabled);
 }
 
+void JCALL(setHardwareAcceleration)(UNUSED JNIEnv * env, UNUSED jobject this,
+		jlong pointer, jboolean hardwareAcceleration) {
+	setHardwareAcceleration(pointer, hardwareAcceleration);
+}
+
 void JCALL(setPlaybackSpeed)(UNUSED JNIEnv * env, UNUSED jobject this, jlong pointer, jint speed) {
 	setPlaybackSpeed(pointer, speed);
 }
@@ -61,8 +66,8 @@ void JCALL(setPlaying)(UNUSED JNIEnv * env, UNUSED jobject this, jlong pointer, 
 	setPlaying(pointer, playing);
 }
 
-void JCALL(setSurface)(JNIEnv * env, UNUSED jobject this, jlong pointer, jobject surface) {
-	setSurface(env, pointer, surface);
+jboolean JCALL(setSurface)(JNIEnv * env, UNUSED jobject this, jlong pointer, jobject surface) {
+	return setSurface(env, pointer, surface);
 }
 
 jintArray JCALL(getCurrentFrame)(JNIEnv * env, UNUSED jobject this, jlong pointer, jintArray dimensions) {
@@ -71,6 +76,14 @@ jintArray JCALL(getCurrentFrame)(JNIEnv * env, UNUSED jobject this, jlong pointe
 
 jobjectArray JCALL(getMetadata)(JNIEnv * env, UNUSED jobject this, jlong pointer) {
 	return getMetadata(env, pointer);
+}
+
+void JCALL(startDiagnostics)(UNUSED JNIEnv * env, UNUSED jobject this) {
+	startPlayerDiagnostics();
+}
+
+jstring JCALL(stopDiagnostics)(JNIEnv * env, UNUSED jobject this) {
+	return stopPlayerDiagnostics(env);
 }
 
 jint JNI_OnLoad(JavaVM * javaVM, UNUSED void * reserved) {

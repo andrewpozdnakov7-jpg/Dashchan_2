@@ -71,6 +71,7 @@ public abstract class Preference<T> {
 		this.context = context;
 		this.key = key;
 		this.defaultValue = defaultValue;
+		this.value = defaultValue;
 		this.title = title;
 		this.summaryProvider = summaryProvider;
 	}

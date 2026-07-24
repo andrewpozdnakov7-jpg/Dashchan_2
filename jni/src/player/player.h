@@ -18,13 +18,16 @@ void setRange(jlong, jlong, jlong, jlong);
 void setCancelSeek(jlong, jboolean);
 
 void setAudioEnabled(jlong, jboolean);
+void setHardwareAcceleration(jlong, jboolean);
 void setPlaybackSpeed(jlong, jint);
 jboolean setMuted(jlong, jboolean);
 void setPlaying(jlong, jboolean);
-void setSurface(JNIEnv *, jlong, jobject);
+jboolean setSurface(JNIEnv *, jlong, jobject);
 
 jintArray getCurrentFrame(JNIEnv *, jlong, jintArray);
 jobjectArray getMetadata(JNIEnv *, jlong);
+void startPlayerDiagnostics(void);
+jstring stopPlayerDiagnostics(JNIEnv *);
 
 void initLibs(JavaVM * javaVM);
 

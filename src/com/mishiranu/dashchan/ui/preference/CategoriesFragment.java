@@ -14,7 +14,7 @@ import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.util.SharedPreferences;
 
 public class CategoriesFragment extends PreferenceFragment {
-	private Preference<Void> compatibilityPreference;
+	private Preference<Void> experimentalPreference;
 
 	@Override
 	protected SharedPreferences getPreferences() {
@@ -31,9 +31,9 @@ public class CategoriesFragment extends PreferenceFragment {
 		addCategory(R.string.forums, R.drawable.ic_public)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 						.pushFragment(new ChansFragment()));
-		compatibilityPreference = addCategory(R.string.compatibility, R.drawable.ic_verified);
-		compatibilityPreference.setOnClickListener(p -> ((FragmentHandler) requireActivity())
-				.pushFragment(new CompatibilityFragment()));
+		experimentalPreference = addCategory(R.string.experimental_features, R.drawable.ic_verified);
+		experimentalPreference.setOnClickListener(p -> ((FragmentHandler) requireActivity())
+				.pushFragment(new ExperimentalFragment()));
 		addCategory(R.string.user_interface, R.drawable.ic_color_lens)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 						.pushFragment(new InterfaceFragment()));
@@ -60,7 +60,7 @@ public class CategoriesFragment extends PreferenceFragment {
 	@Override
 	public void onDestroyView() {
 		super.onDestroyView();
-		compatibilityPreference = null;
+		experimentalPreference = null;
 	}
 
 	@Override
@@ -74,7 +74,7 @@ public class CategoriesFragment extends PreferenceFragment {
 		super.onResume();
 
 		boolean hasIssues = !Settings.canDrawOverlays(requireContext());
-		setCategoryTint(compatibilityPreference, hasIssues ? ColorStateList.valueOf(ResourceUtils
+		setCategoryTint(experimentalPreference, hasIssues ? ColorStateList.valueOf(ResourceUtils
 				.getColor(requireContext(), R.attr.colorTextError)) : null);
 	}
 }

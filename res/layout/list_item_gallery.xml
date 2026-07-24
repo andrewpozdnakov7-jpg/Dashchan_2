@@ -4,13 +4,13 @@
 	android:layout_width="match_parent"
 	android:layout_height="match_parent">
 
-	<FrameLayout
-		android:id="@+id/surface_parent"
+	<com.mishiranu.dashchan.widget.PhotoView
+		android:id="@+id/photo_view"
 		android:layout_width="match_parent"
 		android:layout_height="match_parent" />
 
-	<com.mishiranu.dashchan.widget.PhotoView
-		android:id="@+id/photo_view"
+	<FrameLayout
+		android:id="@+id/surface_parent"
 		android:layout_width="match_parent"
 		android:layout_height="match_parent" />
 

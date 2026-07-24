@@ -19,6 +19,8 @@ import android.view.ViewGroup;
 import chan.content.ChanManager;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.BuildConfig;
+import com.mishiranu.dashchan.content.Preferences;
+import com.mishiranu.dashchan.util.ConcurrentUtils;
 import dalvik.system.PathClassLoader;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -96,6 +98,9 @@ public class VideoPlayer {
 				holder = (HolderInterface) Proxy.newProxyInstance(VideoPlayer.class.getClassLoader(),
 						new Class[] { HolderInterface.class }, handler);
 				loaded = true;
+				if (VideoDiagnostics.isRecording()) {
+					startDiagnosticCapture();
+				}
 				return new Pair<>(true, null);
 			} catch (Exception | LinkageError e) {
 				e.printStackTrace();
@@ -149,6 +154,31 @@ public class VideoPlayer {
 	public static boolean isLoaded() {
 		synchronized (VideoPlayer.class) {
 			return loaded;
+		}
+	}
+
+	static void startDiagnosticCapture() {
+		synchronized (VideoPlayer.class) {
+			if (holder != null) {
+				try {
+					holder.startDiagnostics();
+				} catch (RuntimeException | LinkageError ignored) {
+					// Diagnostics are unavailable with an older external native player.
+				}
+			}
+		}
+	}
+
+	static String stopDiagnosticCapture() {
+		synchronized (VideoPlayer.class) {
+			if (holder != null) {
+				try {
+					return holder.stopDiagnostics();
+				} catch (RuntimeException | LinkageError ignored) {
+					return "native_diagnostics_unavailable=true\n";
+				}
+			}
+			return null;
 		}
 	}
 
@@ -235,7 +265,6 @@ public class VideoPlayer {
 			return null;
 		} finally {
 			player.setPlaying(false);
-			player.setSurface(null);
 			if (surface != null) {
 				surface.release();
 			}
@@ -268,6 +297,8 @@ public class VideoPlayer {
 					if (!audioEnabled) {
 						holder.setAudioEnabled(initPointer, false);
 					}
+					holder.setHardwareAcceleration(initPointer,
+							audioEnabled && Preferences.isHardwareVideoAcceleration());
 				}
 			}
 			if (initData != null) {
@@ -450,11 +481,17 @@ public class VideoPlayer {
 	@SuppressLint("ViewConstructor")
 	private static class PlayerTextureView extends TextureView implements TextureView.SurfaceTextureListener {
 		private final WeakReference<VideoPlayer> player;
+		private final int diagnosticsId = System.identityHashCode(this);
+		private Surface playerSurface;
+		private int surfaceUpdates;
 
 		public PlayerTextureView(Context context, VideoPlayer player) {
 			super(context);
 			this.player = new WeakReference<>(player);
 			setSurfaceTextureListener(this);
+			setClickable(false);
+			setFocusable(false);
+			VideoDiagnostics.recordUi("texture=" + diagnosticsId + " created");
 		}
 
 		@Override
@@ -483,16 +520,21 @@ public class VideoPlayer {
 			if (player == null) {
 				return;
 			}
-			player.setSurface(new Surface(surface));
+			releasePlayerSurface();
+			playerSurface = new Surface(surface);
+			surfaceUpdates = 0;
+			VideoDiagnostics.recordUi("texture=" + diagnosticsId + " surface_available"
+					+ " surface_size=" + width + "x" + height
+					+ " view_size=" + getWidth() + "x" + getHeight()
+					+ " visibility=" + getVisibility() + " alpha=" + getAlpha());
+			player.setSurface(playerSurface);
 		}
 
 		@Override
 		public boolean onSurfaceTextureDestroyed(SurfaceTexture surface) {
-			VideoPlayer player = this.player.get();
-			if (player == null) {
-				return true;
-			}
-			player.setSurface(null);
+			VideoDiagnostics.recordUi("texture=" + diagnosticsId + " surface_destroyed"
+					+ " updates=" + surfaceUpdates);
+			releasePlayerSurface();
 			return true;
 		}
 
@@ -500,7 +542,65 @@ public class VideoPlayer {
 		public void onSurfaceTextureSizeChanged(SurfaceTexture surface, int width, int height) {}
 
 		@Override
-		public void onSurfaceTextureUpdated(SurfaceTexture surface) {}
+		public void onSurfaceTextureUpdated(SurfaceTexture surface) {
+			surfaceUpdates++;
+			if (surfaceUpdates == 1 || surfaceUpdates == 30 || surfaceUpdates % 120 == 0) {
+				VideoDiagnostics.recordUi("texture=" + diagnosticsId + " surface_updated"
+						+ " count=" + surfaceUpdates + " view_size=" + getWidth() + "x" + getHeight()
+						+ " visibility=" + getVisibility() + " alpha=" + getAlpha());
+			}
+		}
+
+		@Override
+		protected void onAttachedToWindow() {
+			super.onAttachedToWindow();
+			VideoDiagnostics.recordUi("texture=" + diagnosticsId + " attached"
+					+ " visibility=" + getVisibility());
+		}
+
+		@Override
+		protected void onDetachedFromWindow() {
+			VideoDiagnostics.recordUi("texture=" + diagnosticsId + " detached"
+					+ " updates=" + surfaceUpdates);
+			releasePlayerSurface();
+			super.onDetachedFromWindow();
+		}
+
+		@Override
+		protected void onVisibilityChanged(View changedView, int visibility) {
+			super.onVisibilityChanged(changedView, visibility);
+			if (changedView == this) {
+				VideoDiagnostics.recordUi("texture=" + diagnosticsId
+						+ " visibility=" + visibility + " updates=" + surfaceUpdates);
+			}
+		}
+
+		private void releasePlayerSurface() {
+			Surface surface = playerSurface;
+			if (surface != null) {
+				playerSurface = null;
+				surface.release();
+				VideoDiagnostics.recordUi("texture=" + diagnosticsId + " surface_released"
+						+ " native_replacement_deferred=true");
+			}
+		}
+
+		public Bitmap getCurrentFrame() {
+			if (isAvailable() && surfaceUpdates > 0 && getWidth() > 0 && getHeight() > 0) {
+				try {
+					Bitmap bitmap = getBitmap();
+					if (bitmap != null) {
+						VideoDiagnostics.recordUi("texture=" + diagnosticsId
+								+ " snapshot=" + bitmap.getWidth() + "x" + bitmap.getHeight());
+					}
+					return bitmap;
+				} catch (RuntimeException e) {
+					VideoDiagnostics.recordUi("texture=" + diagnosticsId
+							+ " snapshot_failed=" + e.getClass().getSimpleName());
+				}
+			}
+			return null;
+		}
 	}
 
 	private View videoView;
@@ -515,9 +615,21 @@ public class VideoPlayer {
 	public void releaseVideoView() {
 		View videoView = this.videoView;
 		this.videoView = null;
+		if (videoView instanceof PlayerTextureView) {
+			((PlayerTextureView) videoView).releasePlayerSurface();
+		}
 		if (videoView != null && videoView.getParent() instanceof ViewGroup) {
 			((ViewGroup) videoView.getParent()).removeView(videoView);
 		}
+	}
+
+	public void releaseVideoViewAndDestroyAsync() {
+		VideoDiagnostics.recordUi("player_release_and_destroy scheduled");
+		releaseVideoView();
+		ConcurrentUtils.SEPARATE_EXECUTOR.execute(() -> {
+			VideoDiagnostics.recordUi("player_release_and_destroy native_destroy_started");
+			destroy();
+		});
 	}
 
 	private void setSurface(Surface surface) {
@@ -527,7 +639,11 @@ public class VideoPlayer {
 				if (playing) {
 					setPlaying(false);
 				}
-				holder.setSurface(sessionData.pointer, surface);
+				long position = holder.getPosition(sessionData.pointer);
+				boolean decoderReset = holder.setSurface(sessionData.pointer, surface);
+				if (decoderReset) {
+					setPosition(position);
+				}
 				if (playing) {
 					setPlaying(true);
 				}
@@ -602,6 +718,13 @@ public class VideoPlayer {
 	public Bitmap getCurrentFrame() {
 		synchronized (this) {
 			if (isInitialized()) {
+				View videoView = this.videoView;
+				if (videoView instanceof PlayerTextureView) {
+					Bitmap bitmap = ((PlayerTextureView) videoView).getCurrentFrame();
+					if (bitmap != null) {
+						return bitmap;
+					}
+				}
 				int[] dimensions = dimensionsOutput;
 				int[] frame = holder.getCurrentFrame(sessionData.pointer, dimensions);
 				if (frame != null) {
@@ -641,6 +764,10 @@ public class VideoPlayer {
 
 	public void destroy() {
 		destroyInternal(null);
+	}
+
+	public void destroyAsync() {
+		ConcurrentUtils.SEPARATE_EXECUTOR.execute(this::destroy);
 	}
 
 	private void destroyInternal(SessionData preInitSessionData) {
@@ -857,13 +984,16 @@ public class VideoPlayer {
 		void setCancelSeek(long pointer, boolean cancelSeek);
 
 		void setAudioEnabled(long pointer, boolean audioEnabled);
+		void setHardwareAcceleration(long pointer, boolean hardwareAcceleration);
 		void setPlaybackSpeed(long pointer, int speed);
 		boolean setMuted(long pointer, boolean muted);
-		void setSurface(long pointer, Surface surface);
+		boolean setSurface(long pointer, Surface surface);
 		void setPlaying(long pointer, boolean playing);
 
 		int[] getCurrentFrame(long pointer, int[] dimensions);
 		String[] getMetadata(long pointer);
+		void startDiagnostics();
+		String stopDiagnostics();
 	}
 
 	private static class Holder implements HolderInterface, InvocationHandler {
@@ -904,13 +1034,16 @@ public class VideoPlayer {
 		@Override public native void setCancelSeek(long pointer, boolean busy);
 
 		@Override public native void setAudioEnabled(long pointer, boolean audioEnabled);
+		@Override public native void setHardwareAcceleration(long pointer, boolean hardwareAcceleration);
 		@Override public native void setPlaybackSpeed(long pointer, int speed);
 		@Override public native boolean setMuted(long pointer, boolean muted);
-		@Override public native void setSurface(long pointer, Surface surface);
+		@Override public native boolean setSurface(long pointer, Surface surface);
 		@Override public native void setPlaying(long pointer, boolean playing);
 
 		@Override public native int[] getCurrentFrame(long pointer, int[] dimensions);
 		@Override public native String[] getMetadata(long pointer);
+		@Override public native void startDiagnostics();
+		@Override public native String stopDiagnostics();
 
 		static {
 			try {
