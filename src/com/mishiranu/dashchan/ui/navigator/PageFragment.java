@@ -44,7 +44,7 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 		UiManager getUiManager();
 		ListPage.Retainable getRetainableExtra(String retainId);
 		void storeRetainableExtra(String retainId, ListPage.Retainable extra);
-		void setPageTitle(String title, String subtitle);
+		void setPageTitle(String title, String subtitle, String threadTitle);
 		void invalidateHomeUpState();
 		void handleRedirect(String chanName, String boardName, String threadNumber, PostNumber postNumber);
 		void closeCurrentPage();
@@ -427,8 +427,17 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 	@Override
 	public void notifyTitleChanged() {
 		Pair<String, String> titleSubtitle = listPage.obtainTitleSubtitle();
-		getCallback().setPageTitle(titleSubtitle != null ? titleSubtitle.first : null,
-				titleSubtitle != null ? titleSubtitle.second : null);
+		String title = titleSubtitle != null ? titleSubtitle.first : null;
+		String subtitle = titleSubtitle != null ? titleSubtitle.second : null;
+		String threadTitle = null;
+		if (getPage().content == Page.Content.POSTS) {
+			threadTitle = listPage.obtainTitle();
+			if (Preferences.isHideThreadTitle()) {
+				title = null;
+				subtitle = null;
+			}
+		}
+		getCallback().setPageTitle(title, subtitle, threadTitle);
 	}
 
 	@Override

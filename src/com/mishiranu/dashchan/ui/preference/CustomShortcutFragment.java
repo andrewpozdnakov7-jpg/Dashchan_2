@@ -83,6 +83,7 @@ public class CustomShortcutFragment extends ContentFragment {
 		layout.addView(promptHeader);
 
 		TextView prompt = new TextView(context);
+		ThemeEngine.applyStyle(prompt);
 		prompt.setText(R.string.custom_shortcut_ai_prompt);
 		prompt.setTextIsSelectable(true);
 		prompt.setPadding(0, 0, 0, smallPadding);
@@ -90,6 +91,7 @@ public class CustomShortcutFragment extends ContentFragment {
 				ViewGroup.LayoutParams.WRAP_CONTENT));
 
 		Button copyButton = new Button(context);
+		ThemeEngine.applyStyle(copyButton);
 		copyButton.setText(R.string.copy_prompt);
 		Drawable copyIcon = ResourceUtils.getActionBarIcon(context, R.attr.iconActionCopy);
 		copyButton.setCompoundDrawablesWithIntrinsicBounds(copyIcon, null, null, null);
@@ -133,6 +135,7 @@ public class CustomShortcutFragment extends ContentFragment {
 		layout.addView(progressBar, progressParams);
 
 		Button selectButton = new Button(context);
+		ThemeEngine.applyStyle(selectButton);
 		selectButton.setText(R.string.select_shortcut_image);
 		selectButton.setOnClickListener(v -> selectImage());
 		layout.addView(selectButton, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
@@ -141,9 +144,11 @@ public class CustomShortcutFragment extends ContentFragment {
 		RadioGroup radioGroup = new RadioGroup(context);
 		radioGroup.setOrientation(LinearLayout.VERTICAL);
 		cropButton = new RadioButton(context);
+		ThemeEngine.applyStyle(cropButton);
 		cropButton.setId(View.generateViewId());
 		cropButton.setText(R.string.shortcut_crop_center);
 		fitButton = new RadioButton(context);
+		ThemeEngine.applyStyle(fitButton);
 		fitButton.setId(View.generateViewId());
 		fitButton.setText(R.string.shortcut_fit_image);
 		radioGroup.addView(cropButton);
@@ -156,6 +161,7 @@ public class CustomShortcutFragment extends ContentFragment {
 		layout.addView(radioGroup, radioParams);
 
 		createButton = new Button(context);
+		ThemeEngine.applyStyle(createButton);
 		createButton.setText(R.string.create_shortcut);
 		createButton.setEnabled(false);
 		createButton.setOnClickListener(v -> createShortcut());

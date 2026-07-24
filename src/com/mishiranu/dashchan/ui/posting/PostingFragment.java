@@ -337,6 +337,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 				super.setTranslationZ(Math.min(translationZ, maxTranslationZ));
 			}
 		};
+		ThemeEngine.applyStyle(sendButton);
 		Rect rect = new Rect();
 		// Limit elevation height since the shadow looks ugly when the view is at the bottom.
 		sendButton.setOutlineProvider(new ViewOutlineProvider() {
@@ -1824,6 +1825,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		textLayout.addView(fileName, LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
 		TextViewCompat.setTextAppearance(fileName, ResourceUtils.getResourceId(fileName.getContext(),
 				android.R.attr.textAppearanceListItem, 0));
+		ThemeEngine.applyStyle(fileName);
 		fileName.setSingleLine(true);
 		fileName.setEllipsize(TextUtils.TruncateAt.END);
 		ViewUtils.setTextSizeScaled(fileName, 12);
@@ -1832,6 +1834,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		textLayout.addView(fileSize, LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
 		TextViewCompat.setTextAppearance(fileSize, ResourceUtils.getResourceId(fileSize.getContext(),
 				android.R.attr.textAppearanceListItem, 0));
+		ThemeEngine.applyStyle(fileSize);
 		fileSize.setSingleLine(true);
 		fileSize.setEllipsize(TextUtils.TruncateAt.END);
 		ViewUtils.setTextSizeScaled(fileSize, 12);

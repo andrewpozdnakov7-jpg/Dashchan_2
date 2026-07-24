@@ -43,6 +43,7 @@ import com.mishiranu.dashchan.util.ConcurrentUtils;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.util.ViewUtils;
 import com.mishiranu.dashchan.widget.SummaryLayout;
+import com.mishiranu.dashchan.widget.ThemeEngine;
 import java.io.File;
 import java.io.IOException;
 import java.util.Locale;
@@ -358,6 +359,7 @@ public class VideoUnit {
 
 			CharSequence oldTimeText = timeTextView != null ? timeTextView.getText() : null;
 			timeTextView = new TextView(context, null, android.R.attr.textAppearanceListItem);
+			ThemeEngine.applyStyle(timeTextView);
 			ViewUtils.setTextSizeScaled(timeTextView, 14);
 			timeTextView.setGravity(Gravity.CENTER_HORIZONTAL);
 			timeTextView.setTypeface(ResourceUtils.TYPEFACE_MEDIUM);
@@ -366,6 +368,7 @@ public class VideoUnit {
 			}
 
 			totalTimeTextView = new TextView(context, null, android.R.attr.textAppearanceListItem);
+			ThemeEngine.applyStyle(totalTimeTextView);
 			ViewUtils.setTextSizeScaled(totalTimeTextView, 14);
 			totalTimeTextView.setGravity(Gravity.CENTER_HORIZONTAL);
 			totalTimeTextView.setTypeface(ResourceUtils.TYPEFACE_MEDIUM);
@@ -383,6 +386,7 @@ public class VideoUnit {
 
 			if (playbackSpeedControl) {
 				playbackSpeedButton = new TextView(context, null, android.R.attr.textAppearanceListItem);
+				ThemeEngine.applyStyle(playbackSpeedButton);
 				ViewUtils.setTextSizeScaled(playbackSpeedButton, 14);
 				playbackSpeedButton.setGravity(Gravity.CENTER);
 				playbackSpeedButton.setTypeface(ResourceUtils.TYPEFACE_MEDIUM);

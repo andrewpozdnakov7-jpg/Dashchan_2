@@ -21,6 +21,7 @@ import com.mishiranu.dashchan.content.storage.StatisticsStorage;
 import com.mishiranu.dashchan.ui.FragmentHandler;
 import com.mishiranu.dashchan.util.PostDateFormatter;
 import com.mishiranu.dashchan.util.ResourceUtils;
+import com.mishiranu.dashchan.widget.ThemeEngine;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -145,6 +146,7 @@ public class StatisticsFragment extends BaseListFragment {
 			TextViewCompat.setTextAppearance(textView, ResourceUtils.getResourceId(textView.getContext(),
 					android.R.attr.textAppearanceListItem,
 					android.R.style.TextAppearance_Medium));
+			ThemeEngine.applyStyle(textView);
 			textView.setSingleLine(true);
 			textView.setEllipsize(TextUtils.TruncateAt.END);
 			textView.setGravity(Gravity.CENTER_VERTICAL | (end ? Gravity.END : Gravity.START));

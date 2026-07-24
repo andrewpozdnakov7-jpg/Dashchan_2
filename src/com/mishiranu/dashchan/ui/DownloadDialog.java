@@ -40,6 +40,7 @@ import com.mishiranu.dashchan.util.MimeTypes;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.util.ViewUtils;
 import com.mishiranu.dashchan.widget.ClickableToast;
+import com.mishiranu.dashchan.widget.ThemeEngine;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -309,6 +310,7 @@ public class DownloadDialog {
 		linearLayout.setOrientation(LinearLayout.VERTICAL);
 		linearLayout.setPadding(padding, padding, padding, (int) (8f * density));
 		TextView textView = new TextView(context, null, android.R.attr.textAppearanceListItem);
+		ThemeEngine.applyStyle(textView);
 		textView.setText(context.getResources().getQuantityString
 				(R.plurals.number_files_already_exist__sentence_format, count, count));
 		linearLayout.addView(textView);
@@ -319,6 +321,7 @@ public class DownloadDialog {
 		int[] ids = {android.R.id.button1, android.R.id.button2, android.R.id.button3};
 		for (int i = 0; i < options.length; i++) {
 			RadioButton radioButton = new RadioButton(context);
+			ThemeEngine.applyStyle(radioButton);
 			radioButton.setText(options[i]);
 			radioButton.setId(ids[i]);
 			radioGroup.addView(radioButton);

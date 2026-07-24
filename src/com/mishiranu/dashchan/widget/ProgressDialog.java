@@ -47,6 +47,7 @@ public class ProgressDialog extends AlertDialog {
 			layout.addView(progressBar, LinearLayout.LayoutParams.WRAP_CONTENT,
 					LinearLayout.LayoutParams.WRAP_CONTENT);
 			message = new TextView(context);
+			ThemeEngine.applyStyle(message);
 			layout.addView(message, LinearLayout.LayoutParams.MATCH_PARENT,
 					LinearLayout.LayoutParams.WRAP_CONTENT);
 			if (message.getLayoutDirection() == TextView.LAYOUT_DIRECTION_RTL) {
@@ -68,9 +69,11 @@ public class ProgressDialog extends AlertDialog {
 					LinearLayout.LayoutParams.WRAP_CONTENT);
 			inner.setOrientation(LinearLayout.HORIZONTAL);
 			percent = new TextView(context);
+			ThemeEngine.applyStyle(percent);
 			inner.addView(percent, LinearLayout.LayoutParams.WRAP_CONTENT,
 					LinearLayout.LayoutParams.WRAP_CONTENT);
 			progress = new TextView(context);
+			ThemeEngine.applyStyle(progress);
 			inner.addView(progress, 0, LinearLayout.LayoutParams.WRAP_CONTENT);
 			((LinearLayout.LayoutParams) progress.getLayoutParams()).weight = 1f;
 			progress.setGravity(Gravity.END);

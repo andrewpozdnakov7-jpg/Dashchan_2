@@ -1,24 +1,14 @@
 package com.mishiranu.dashchan.content;
 
-import android.app.Activity;
 import android.app.Application;
-import android.app.Dialog;
 import android.content.Context;
 import android.database.Cursor;
 import android.graphics.Typeface;
 import android.net.Uri;
-import android.os.Bundle;
 import android.provider.OpenableColumns;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.ViewTreeObserver;
-import android.view.Window;
 import android.widget.TextView;
-import androidx.annotation.NonNull;
-import androidx.fragment.app.DialogFragment;
-import androidx.fragment.app.Fragment;
-import androidx.fragment.app.FragmentActivity;
-import androidx.fragment.app.FragmentManager;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -34,7 +24,6 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
-import java.util.WeakHashMap;
 
 public final class FontManager {
 	public static final String FONT_SYSTEM = "system";
@@ -65,56 +54,21 @@ public final class FontManager {
 			new FontOption("montserrat", "Montserrat", "fonts/montserrat.ttf"),
 			new FontOption("open_dyslexic", "OpenDyslexic", "fonts/open_dyslexic.otf")));
 
-	private static final WeakHashMap<Activity, ActivityController> CONTROLLERS = new WeakHashMap<>();
-	private static final WeakHashMap<TextView, AppliedTypeface> APPLIED_VIEWS = new WeakHashMap<>();
 	private static Application application;
 	private static String cachedId;
 	private static Typeface cachedTypeface;
-	private static int generation;
 
 	private FontManager() {}
 
 	public static void register(Application application) {
 		FontManager.application = application;
 		getSelectedTypeface(application);
-		application.registerActivityLifecycleCallbacks(new Application.ActivityLifecycleCallbacks() {
-			@Override
-			public void onActivityCreated(@NonNull Activity activity, Bundle savedInstanceState) {
-				attach(activity);
-			}
-
-			@Override public void onActivityStarted(@NonNull Activity activity) {}
-			@Override public void onActivityResumed(@NonNull Activity activity) {}
-			@Override public void onActivityPaused(@NonNull Activity activity) {}
-			@Override public void onActivityStopped(@NonNull Activity activity) {}
-			@Override public void onActivitySaveInstanceState(@NonNull Activity activity, @NonNull Bundle outState) {}
-
-			@Override
-			public void onActivityDestroyed(@NonNull Activity activity) {
-				synchronized (CONTROLLERS) {
-					CONTROLLERS.remove(activity);
-				}
-			}
-		});
-	}
-
-	public static void attach(Activity activity) {
-		if (FONT_SYSTEM.equals(Preferences.getApplicationFont())) {
-			ResourceUtils.setApplicationTypeface(null);
-			return;
-		}
-		synchronized (CONTROLLERS) {
-			if (!CONTROLLERS.containsKey(activity)) {
-				CONTROLLERS.put(activity, new ActivityController(activity));
-			}
-		}
 	}
 
 	public static void invalidate() {
 		synchronized (FontManager.class) {
 			cachedId = null;
 			cachedTypeface = null;
-			generation++;
 		}
 		Application application = FontManager.application;
 		if (application != null) {
@@ -124,6 +78,17 @@ public final class FontManager {
 
 	public static void apply(View root) {
 		applyTree(root.getContext(), root);
+	}
+
+	/**
+	 * Applies the selected application family while preserving the weight and italic style
+	 * established by the view's theme or text appearance.
+	 */
+	public static void applyTypeface(TextView view) {
+		Typeface selectedTypeface = getSelectedTypeface(view.getContext());
+		if (selectedTypeface != null) {
+			applyTextView(view, selectedTypeface);
+		}
 	}
 
 	public static List<FontOption> getBuiltInFonts() {
@@ -289,31 +254,15 @@ public final class FontManager {
 	}
 
 	private static void applyTextView(TextView view, Typeface selectedTypeface) {
-		synchronized (APPLIED_VIEWS) {
-			Typeface current = view.getTypeface();
-			AppliedTypeface applied = APPLIED_VIEWS.get(view);
-			if (applied != null && applied.generation == generation && applied.typeface.equals(current)) {
-				return;
-			}
-			if (current != null && current.equals(Typeface.create("monospace", current.getStyle()))) {
-				APPLIED_VIEWS.put(view, new AppliedTypeface(generation, current));
-				return;
-			}
-			int weight = current != null ? current.getWeight() : 400;
-			boolean italic = current != null && current.isItalic();
-			Typeface typeface = Typeface.create(selectedTypeface, weight, italic);
-			view.setTypeface(typeface);
-			APPLIED_VIEWS.put(view, new AppliedTypeface(generation, typeface));
+		Typeface current = view.getTypeface();
+		if (current != null && current.equals(Typeface.create("monospace", current.getStyle()))) {
+			return;
 		}
-	}
-
-	private static final class AppliedTypeface {
-		private final int generation;
-		private final Typeface typeface;
-
-		private AppliedTypeface(int generation, Typeface typeface) {
-			this.generation = generation;
-			this.typeface = typeface;
+		int weight = current != null ? current.getWeight() : 400;
+		boolean italic = current != null && current.isItalic();
+		Typeface typeface = Typeface.create(selectedTypeface, weight, italic);
+		if (!typeface.equals(current)) {
+			view.setTypeface(typeface);
 		}
 	}
 
@@ -369,43 +318,4 @@ public final class FontManager {
 		return file;
 	}
 
-	private static final class ActivityController {
-		private final Activity activity;
-
-		private ActivityController(Activity activity) {
-			this.activity = activity;
-			attachWindow(activity.getWindow());
-			if (activity instanceof FragmentActivity) {
-				((FragmentActivity) activity).getSupportFragmentManager().registerFragmentLifecycleCallbacks(
-						new FragmentManager.FragmentLifecycleCallbacks() {
-					@Override
-					public void onFragmentViewCreated(@NonNull FragmentManager fragmentManager,
-							@NonNull Fragment fragment, @NonNull View view, Bundle savedInstanceState) {
-						applyTree(activity, view);
-					}
-
-					@Override
-					public void onFragmentStarted(@NonNull FragmentManager fragmentManager,
-							@NonNull Fragment fragment) {
-						if (fragment instanceof DialogFragment) {
-							Dialog dialog = ((DialogFragment) fragment).getDialog();
-							if (dialog != null) {
-								attachWindow(dialog.getWindow());
-							}
-						}
-					}
-				}, true);
-			}
-		}
-
-		private void attachWindow(Window window) {
-			if (window == null) {
-				return;
-			}
-			View decorView = window.getDecorView();
-			ViewTreeObserver observer = decorView.getViewTreeObserver();
-			observer.addOnGlobalLayoutListener(() -> applyTree(activity, decorView));
-			applyTree(activity, decorView);
-		}
-	}
 }

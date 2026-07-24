@@ -39,6 +39,7 @@ public class ViewFactory {
 		textView.setGravity(Gravity.CENTER_VERTICAL);
 		textView.setTextColor(ThemeEngine.getTheme(textView.getContext()).accent);
 		textView.setTypeface(ResourceUtils.TYPEFACE_MEDIUM);
+		ThemeEngine.applyStyle(textView);
 		ViewUtils.setTextSizeScaled(textView, 14);
 		textView.setPadding((int) (16f * density), (int) (16f * density), (int) (16f * density),
 				(int) (8f * density));
@@ -53,6 +54,7 @@ public class ViewFactory {
 				android.R.attr.textAppearanceListItem,
 				android.R.attr.listPreferredItemHeightSmall});
 		TextViewCompat.setTextAppearance(textView, typedArray.getResourceId(0, 0));
+		ThemeEngine.applyStyle(textView);
 		textView.setMinimumHeight(typedArray.getDimensionPixelSize(1, 0));
 		typedArray.recycle();
 		ViewUtils.setSelectableItemBackground(textView);
@@ -118,6 +120,7 @@ public class ViewFactory {
 			outerLayout.setMinimumHeight(typedArray.getDimensionPixelSize(0, 0));
 			TextView text1 = new TextView(parent.getContext());
 			TextViewCompat.setTextAppearance(text1, typedArray.getResourceId(1, 0));
+			ThemeEngine.applyStyle(text1);
 			if (FlagUtils.get(features, FEATURE_MULTILINE_TITLE)) {
 				text1.setMaxLines(2);
 			} else {
@@ -126,6 +129,7 @@ public class ViewFactory {
 			text1.setEllipsize(TextUtils.TruncateAt.END);
 			TextView text2 = new TextView(parent.getContext());
 			TextViewCompat.setTextAppearance(text2, typedArray.getResourceId(2, 0));
+			ThemeEngine.applyStyle(text2);
 			text2.setTextColor(typedArray.getColorStateList(3));
 			boolean featureText2End = FlagUtils.get(features, FEATURE_TEXT2_END);
 			if (FlagUtils.get(features, FEATURE_SINGLE_LINE) || featureText2End) {
@@ -138,6 +142,7 @@ public class ViewFactory {
 			if (featureText2End) {
 				text2End = new TextView(parent.getContext());
 				TextViewCompat.setTextAppearance(text2End, typedArray.getResourceId(2, 0));
+				ThemeEngine.applyStyle(text2End);
 				text2End.setTextColor(typedArray.getColorStateList(3));
 				text2.setSingleLine(true);
 				text2.setEllipsize(TextUtils.TruncateAt.END);
@@ -212,11 +217,13 @@ public class ViewFactory {
 		TextView title = new TextView(layout.getContext());
 		layout.addView(title, LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
 		TextViewCompat.setTextAppearance(title, android.R.style.TextAppearance_Material_Widget_Toolbar_Title);
+		ThemeEngine.applyStyle(title);
 		title.setSingleLine(true);
 		title.setEllipsize(TextUtils.TruncateAt.END);
 		TextView subtitle = new TextView(layout.getContext());
 		layout.addView(subtitle, LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
 		TextViewCompat.setTextAppearance(subtitle, android.R.style.TextAppearance_Material_Widget_Toolbar_Subtitle);
+		ThemeEngine.applyStyle(subtitle);
 		subtitle.setSingleLine(true);
 		subtitle.setEllipsize(TextUtils.TruncateAt.END);
 		Configuration configuration = toolbar.getResources().getConfiguration();
@@ -261,6 +268,7 @@ public class ViewFactory {
 		TextView text = new TextView(layout.getContext());
 		TextViewCompat.setTextAppearance(text, ResourceUtils.getResourceId(text.getContext(),
 				android.R.attr.textAppearanceMedium, 0));
+		ThemeEngine.applyStyle(text);
 		text.setGravity(Gravity.CENTER);
 		float density = ResourceUtils.obtainDensity(parent);
 		text.setPadding((int) (16f * density), 0, (int) (16f * density), 0);

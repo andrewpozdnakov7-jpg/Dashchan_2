@@ -805,6 +805,13 @@ public class Preferences {
 		return PREFERENCES.getBoolean(KEY_DISPLAY_POST_YEAR, DEFAULT_DISPLAY_POST_YEAR);
 	}
 
+	public static final String KEY_HIDE_THREAD_TITLE = "hide_thread_title";
+	public static final boolean DEFAULT_HIDE_THREAD_TITLE = false;
+
+	public static boolean isHideThreadTitle() {
+		return PREFERENCES.getBoolean(KEY_HIDE_THREAD_TITLE, DEFAULT_HIDE_THREAD_TITLE);
+	}
+
 	public static final ChanKey KEY_DOMAIN = new ChanKey("domain");
 
 	public static String getDomainUnhandled(Chan chan) {

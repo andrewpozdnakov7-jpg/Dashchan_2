@@ -90,6 +90,7 @@ public class AudioPlayerDialog extends DialogFragment {
 		int padding = getResources().getDimensionPixelSize(R.dimen.dialog_padding_view);
 		linearLayout.setPadding(padding, padding, padding, (int) (8f * density));
 		textView = new TextView(context, null, android.R.attr.textAppearanceListItem);
+		ThemeEngine.applyStyle(textView);
 		linearLayout.addView(textView, LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
 		textView.setPadding(0, 0, 0, 0);
 		textView.setEllipsize(TextUtils.TruncateAt.END);

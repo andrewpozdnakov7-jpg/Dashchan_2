@@ -268,6 +268,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		((LinearLayout.LayoutParams) selectorContainer.getLayoutParams()).topMargin = (int) (4f * density);
 
 		chanNameView = new TextView(context, null, android.R.attr.textAppearanceListItem);
+		ThemeEngine.applyStyle(chanNameView);
 		ViewUtils.setTextSizeScaled(chanNameView, 14);
 		chanNameView.setTypeface(ResourceUtils.TYPEFACE_MEDIUM);
 		selectorContainer.addView(chanNameView, new LinearLayout.LayoutParams(0,
@@ -286,6 +287,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		this.restartView = restartView;
 
 		TextView restartTextView = new TextView(context, null, android.R.attr.textAppearanceSmall);
+		ThemeEngine.applyStyle(restartTextView);
 		restartTextView.setText(R.string.new_extensions_installed__sentence);
 		restartTextView.setTextColor(ResourceUtils.getColor(context, android.R.attr.textColorPrimary));
 		restartTextView.setPadding((int) (16f * density), (int) (8f * density),
@@ -1241,6 +1243,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 
 	private TextView makeCommonTextView(boolean section) {
 		TextView textView = new TextView(context, null, android.R.attr.textAppearanceListItem);
+		ThemeEngine.applyStyle(textView);
 		ViewUtils.setTextSizeScaled(textView, 14);
 		textView.setGravity(Gravity.CENTER_VERTICAL);
 		textView.setEllipsize(TextUtils.TruncateAt.END);

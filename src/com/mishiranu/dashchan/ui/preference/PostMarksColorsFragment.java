@@ -196,6 +196,7 @@ public class PostMarksColorsFragment extends PreferenceFragment {
 			layout.addView(preview, previewParams);
 
 			TextView paletteTitle = new TextView(context);
+			ThemeEngine.applyStyle(paletteTitle);
 			paletteTitle.setText(R.string.post_marks_color_palette);
 			paletteTitle.setTextColor(ThemeEngine.getTheme(context).meta);
 			layout.addView(paletteTitle, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,

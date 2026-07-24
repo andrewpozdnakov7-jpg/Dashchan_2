@@ -2242,10 +2242,10 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	}
 
 	@Override
-	public void setPageTitle(String title, String subtitle) {
+	public void setPageTitle(String title, String subtitle, String threadTitle) {
 		setTitleSubtitle(title, subtitle);
 		if (((PageFragment) getCurrentFragment()).getPage().content == Page.Content.POSTS) {
-			currentPageItem.threadTitle = title;
+			currentPageItem.threadTitle = threadTitle;
 		}
 		drawerForm.updateItems(true, false);
 	}

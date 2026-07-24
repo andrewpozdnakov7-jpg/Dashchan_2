@@ -462,7 +462,7 @@
 	<string name="gesture_controls">Управление жестами</string>
 	<string name="gesture_controls__summary">Настройка областей жестов видеоплеера</string>
 	<string name="rounded_dialogs">Скруглённые всплывающие окна</string>
-	<string name="rounded_dialogs__summary">Скругляет углы диалогов и окон предпросмотра постов</string>
+	<string name="rounded_dialogs__summary">Скругляет углы диалогов, меню и окон предпросмотра постов</string>
 	<string name="rounded_dialogs_radius">Радиус скругления</string>
 	<string name="rounded_dialogs_radius__summary_format">%1$d dp</string>
 	<string name="rounded_dialogs_preview">Тестовое окно</string>
@@ -822,6 +822,8 @@
 	<string name="pikabu_extension_in_development">Расширение Пикабу находится в разработке.</string>
 	<string name="gosuslugi_authorization_in_development">Авторизация в Госуслугах находится в разработке.</string>
 	<string name="display_post_year">Отображать год в датах постов</string>
+	<string name="hide_thread_title">Скрывать заголовок треда в верхней панели</string>
+	<string name="hide_thread_title__summary">Не показывать название и адрес треда при его просмотре</string>
 
 	<string name="boards_work_safe">Безопасные для просмотра</string>
 	<string name="boards_not_safe_for_work">Для взрослых</string>

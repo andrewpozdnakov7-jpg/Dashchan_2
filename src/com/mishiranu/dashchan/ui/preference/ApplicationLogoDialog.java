@@ -23,6 +23,7 @@ import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.util.ViewUtils;
 import com.mishiranu.dashchan.widget.ClickableToast;
+import com.mishiranu.dashchan.widget.ThemeEngine;
 import java.util.List;
 
 public class ApplicationLogoDialog extends DialogFragment {
@@ -51,6 +52,7 @@ public class ApplicationLogoDialog extends DialogFragment {
 
 		TextView invitation = new TextView(context);
 		invitation.setText(R.string.application_logo_invitation);
+		ThemeEngine.applyStyle(invitation);
 		invitation.setAutoLinkMask(Linkify.EMAIL_ADDRESSES);
 		invitation.setPadding(padding, padding, padding, smallPadding);
 		layout.addView(invitation, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
@@ -59,6 +61,7 @@ public class ApplicationLogoDialog extends DialogFragment {
 		TextView requirements = new TextView(context);
 		requirements.setText(R.string.application_logo_requirements);
 		requirements.setTextAppearance(android.R.style.TextAppearance_Material_Caption);
+		ThemeEngine.applyStyle(requirements);
 		requirements.setPadding(padding, 0, padding, smallPadding);
 		layout.addView(requirements, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
 				ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -106,6 +109,7 @@ public class ApplicationLogoDialog extends DialogFragment {
 		TextView title = new TextView(context);
 		title.setText(option.titleResId);
 		title.setTextAppearance(android.R.style.TextAppearance_Material_Subhead);
+		ThemeEngine.applyStyle(title);
 		textLayout.addView(title);
 
 		int summaryResId = 0;
@@ -117,10 +121,12 @@ public class ApplicationLogoDialog extends DialogFragment {
 			TextView summary = new TextView(context);
 			summary.setText(summaryResId);
 			summary.setTextAppearance(android.R.style.TextAppearance_Material_Caption);
+			ThemeEngine.applyStyle(summary);
 			textLayout.addView(summary);
 		}
 
 		RadioButton radioButton = new RadioButton(context);
+		ThemeEngine.applyStyle(radioButton);
 		radioButton.setChecked(selected);
 		radioButton.setClickable(false);
 		row.addView(radioButton, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,

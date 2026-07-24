@@ -42,6 +42,7 @@ import com.mishiranu.dashchan.widget.ClickableToast;
 import com.mishiranu.dashchan.widget.InsetsLayout;
 import com.mishiranu.dashchan.widget.PhotoView;
 import com.mishiranu.dashchan.widget.PhotoViewPager;
+import com.mishiranu.dashchan.widget.ThemeEngine;
 import com.mishiranu.dashchan.widget.ViewFactory;
 import java.io.File;
 import java.lang.ref.WeakReference;
@@ -86,6 +87,7 @@ public class PagerUnit implements PagerInstance.Callback {
 		viewPagerParent.addView(viewPager, FrameLayout.LayoutParams.MATCH_PARENT,
 				FrameLayout.LayoutParams.MATCH_PARENT);
 		volumeGestureView = new TextView(instance.context);
+		ThemeEngine.applyStyle(volumeGestureView);
 		volumeGestureView.setTextColor(Color.WHITE);
 		volumeGestureView.setTextSize(22f);
 		volumeGestureView.setGravity(Gravity.CENTER);
@@ -101,6 +103,7 @@ public class PagerUnit implements PagerInstance.Callback {
 		viewPagerParent.addView(volumeGestureView, new FrameLayout.LayoutParams(
 				FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER));
 		seekGestureView = new TextView(instance.context);
+		ThemeEngine.applyStyle(seekGestureView);
 		seekGestureView.setTextColor(Color.WHITE);
 		seekGestureView.setTextSize(20f);
 		seekGestureView.setGravity(Gravity.CENTER);

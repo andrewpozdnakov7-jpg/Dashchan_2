@@ -26,6 +26,7 @@ import com.mishiranu.dashchan.content.service.AutoBumpWorker;
 import com.mishiranu.dashchan.content.storage.AutoBumpStorage;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.widget.ClickableToast;
+import com.mishiranu.dashchan.widget.ThemeEngine;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -86,6 +87,7 @@ public class AutoBumpDialog extends DialogFragment {
 						| InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
 		messageEdit.setMinLines(2);
 		TextView hint = new TextView(context);
+		ThemeEngine.applyStyle(hint);
 		hint.setText(R.string.auto_bump_message__hint);
 		layout.addView(hint, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
 				ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -94,9 +96,11 @@ public class AutoBumpDialog extends DialogFragment {
 		intervalEdit = addLabeledEdit(layout, getString(R.string.auto_bump_interval_minutes,
 				AutoBumpStorage.MIN_INTERVAL_MINUTES), InputType.TYPE_CLASS_NUMBER, smallGap);
 		enabledCheck = new CheckBox(context);
+		ThemeEngine.applyStyle(enabledCheck);
 		enabledCheck.setText(R.string.auto_bump_task_enabled);
 		layout.addView(enabledCheck);
 		sendNowCheck = new CheckBox(context);
+		ThemeEngine.applyStyle(sendNowCheck);
 		sendNowCheck.setText(R.string.auto_bump_send_now);
 		layout.addView(sendNowCheck);
 
@@ -148,6 +152,7 @@ public class AutoBumpDialog extends DialogFragment {
 
 	private EditText addEdit(LinearLayout layout, int hintResId, int inputType) {
 		EditText editText = new EditText(layout.getContext());
+		ThemeEngine.applyStyle(editText);
 		if (hintResId != 0) {
 			editText.setHint(hintResId);
 		}
@@ -161,6 +166,7 @@ public class AutoBumpDialog extends DialogFragment {
 		TextView label = new TextView(layout.getContext());
 		label.setText(labelText);
 		label.setTextAppearance(android.R.style.TextAppearance_Material_Caption);
+		ThemeEngine.applyStyle(label);
 		LinearLayout.LayoutParams labelLayoutParams = new LinearLayout.LayoutParams(
 				ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
 		labelLayoutParams.topMargin = topMargin;

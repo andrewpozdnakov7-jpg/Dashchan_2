@@ -442,7 +442,7 @@
 	<string name="gesture_controls">Gesture controls</string>
 	<string name="gesture_controls__summary">Configure video player gesture areas</string>
 	<string name="rounded_dialogs">Rounded pop-up windows</string>
-	<string name="rounded_dialogs__summary">Round the corners of dialogs and post previews</string>
+	<string name="rounded_dialogs__summary">Round the corners of dialogs, menus, and post previews</string>
 	<string name="rounded_dialogs_radius">Corner radius</string>
 	<string name="rounded_dialogs_radius__summary_format">%1$d dp</string>
 	<string name="rounded_dialogs_preview">Preview window</string>
@@ -804,6 +804,8 @@
 	<string name="pikabu_extension_in_development">The Pikabu extension is in development.</string>
 	<string name="gosuslugi_authorization_in_development">Gosuslugi authorization is in development.</string>
 	<string name="display_post_year">Show year in post dates</string>
+	<string name="hide_thread_title">Hide thread title in toolbar</string>
+	<string name="hide_thread_title__summary">Do not show the thread name or address while viewing it</string>
 
 	<string name="boards_work_safe">Work Safe</string>
 	<string name="boards_not_safe_for_work">Not Safe For Work</string>

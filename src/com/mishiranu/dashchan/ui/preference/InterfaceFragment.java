@@ -112,6 +112,8 @@ public class InterfaceFragment extends PreferenceFragment {
 				R.string.remove_hidden_posts, R.string.remove_hidden_posts__summary);
 		addCheck(true, Preferences.KEY_DISPLAY_POST_YEAR, Preferences.DEFAULT_DISPLAY_POST_YEAR,
 				R.string.display_post_year, 0).setOnAfterChangeListener(p -> requireActivity().recreate());
+		addCheck(true, Preferences.KEY_HIDE_THREAD_TITLE, Preferences.DEFAULT_HIDE_THREAD_TITLE,
+				R.string.hide_thread_title, R.string.hide_thread_title__summary);
 		addEdit(Preferences.KEY_POST_MAX_LINES, Preferences.DEFAULT_POST_MAX_LINES,
 				R.string.max_lines_count, R.string.max_lines_count__summary, null, InputType.TYPE_CLASS_NUMBER);
 		addCheck(true, Preferences.KEY_ALL_ATTACHMENTS, Preferences.DEFAULT_ALL_ATTACHMENTS,

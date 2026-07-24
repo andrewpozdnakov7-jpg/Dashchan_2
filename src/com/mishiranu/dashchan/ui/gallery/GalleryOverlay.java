@@ -770,6 +770,7 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 
 	private TextView createGalleryFilterSection(Context context, int textResId, int topPadding) {
 		TextView textView = new TextView(context);
+		ThemeEngine.applyStyle(textView);
 		textView.setText(textResId);
 		textView.setTextColor(ThemeEngine.getTheme(context).accent);
 		textView.setTextSize(14f);
@@ -779,6 +780,7 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 
 	private static RadioButton createGalleryFilterRadio(Context context, CharSequence text) {
 		RadioButton radioButton = new RadioButton(context);
+		ThemeEngine.applyStyle(radioButton);
 		radioButton.setId(View.generateViewId());
 		radioButton.setText(text);
 		return radioButton;
@@ -1126,6 +1128,7 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 				FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER));
 
 		Button button = new Button(context, null, android.R.attr.borderlessButtonStyle);
+		ThemeEngine.applyStyle(button);
 		button.setText(R.string.got_it);
 		button.setMinimumWidth(0);
 		button.setMinWidth(0);
@@ -1140,10 +1143,12 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 
 		for (int i = 0; i < titles.length; i++) {
 			TextView textView1 = new TextView(context, null, android.R.attr.textAppearanceLarge);
+			ThemeEngine.applyStyle(textView1);
 			textView1.setText(titles[i]);
 			textView1.setTypeface(ResourceUtils.TYPEFACE_LIGHT);
 			textView1.setPadding(paddingLeft, paddingTop, paddingRight, (int) (4f * density));
 			TextView textView2 = new TextView(context, null, android.R.attr.textAppearanceSmall);
+			ThemeEngine.applyStyle(textView2);
 			textView2.setText(messages[i]);
 			textView2.setPadding(paddingLeft, 0, paddingRight, paddingBottom);
 			linearLayout.addView(textView1, LinearLayout.LayoutParams.MATCH_PARENT,

@@ -62,6 +62,7 @@ public class RoundedDialogsRadiusPreference extends DialogPreference<Integer> {
 		int containerPadding = (int) (18f * density);
 		previewContainer.setPadding(containerPadding, containerPadding, containerPadding, containerPadding);
 		preview = new TextView(context);
+		ThemeEngine.applyStyle(preview);
 		preview.setGravity(Gravity.CENTER);
 		preview.setText(R.string.rounded_dialogs_preview);
 		preview.setTextColor(ThemeEngine.getTheme(context).post);
@@ -78,6 +79,7 @@ public class RoundedDialogsRadiusPreference extends DialogPreference<Integer> {
 		LinearLayout valueLayout = new LinearLayout(context);
 		valueLayout.setGravity(Gravity.CENTER_VERTICAL);
 		valueEdit = new EditText(context);
+		ThemeEngine.applyStyle(valueEdit);
 		valueEdit.setSingleLine(true);
 		valueEdit.setSelectAllOnFocus(true);
 		valueEdit.setInputType(InputType.TYPE_CLASS_NUMBER);
@@ -85,6 +87,7 @@ public class RoundedDialogsRadiusPreference extends DialogPreference<Integer> {
 		valueLayout.addView(valueEdit, new LinearLayout.LayoutParams(0,
 				LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
 		TextView unitView = new TextView(context);
+		ThemeEngine.applyStyle(unitView);
 		unitView.setText(R.string.dp);
 		int unitPadding = (int) (12f * density);
 		unitView.setPadding(unitPadding, 0, 0, 0);

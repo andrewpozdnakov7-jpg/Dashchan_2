@@ -27,6 +27,7 @@ import com.mishiranu.dashchan.util.PostDateFormatter;
 import com.mishiranu.dashchan.widget.DividerItemDecoration;
 import com.mishiranu.dashchan.widget.PaddedRecyclerView;
 import com.mishiranu.dashchan.widget.ClickableToast;
+import com.mishiranu.dashchan.widget.ThemeEngine;
 import com.mishiranu.dashchan.widget.ViewFactory;
 import java.util.ArrayList;
 import java.util.List;
@@ -64,6 +65,7 @@ public class LocalArchivesFragment extends ContentFragment {
 		root.addView(recyclerView, FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT);
 
 		emptyView = new TextView(root.getContext());
+		ThemeEngine.applyStyle(emptyView);
 		emptyView.setText(R.string.local_archives_empty);
 		emptyView.setGravity(Gravity.CENTER);
 		emptyView.setVisibility(View.GONE);

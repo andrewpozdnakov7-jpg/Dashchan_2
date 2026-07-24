@@ -146,6 +146,7 @@ public class GestureSettingsFragment extends PreferenceFragment {
 			layout.setPadding(padding, Math.round(8f * density), padding, Math.round(4f * density));
 
 			TextView hint = new TextView(context);
+			ThemeEngine.applyStyle(hint);
 			hint.setText(R.string.video_volume_gesture_area_preview_hint);
 			hint.setTextColor(ThemeEngine.getTheme(context).meta);
 			layout.addView(hint, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
@@ -154,9 +155,11 @@ public class GestureSettingsFragment extends PreferenceFragment {
 			RadioGroup orientationGroup = new RadioGroup(context);
 			orientationGroup.setOrientation(LinearLayout.HORIZONTAL);
 			RadioButton portraitButton = new RadioButton(context);
+			ThemeEngine.applyStyle(portraitButton);
 			portraitButton.setId(View.generateViewId());
 			portraitButton.setText(R.string.gesture_orientation_portrait);
 			RadioButton landscapeButton = new RadioButton(context);
+			ThemeEngine.applyStyle(landscapeButton);
 			landscapeButton.setId(View.generateViewId());
 			landscapeButton.setText(R.string.gesture_orientation_landscape);
 			orientationGroup.addView(portraitButton,
@@ -279,6 +282,7 @@ public class GestureSettingsFragment extends PreferenceFragment {
 
 		private TextView addControl(Context context, LinearLayout layout, int min, int max, float density) {
 			TextView label = new TextView(context);
+			ThemeEngine.applyStyle(label);
 			LinearLayout.LayoutParams labelParams = new LinearLayout.LayoutParams(
 					ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
 			labelParams.topMargin = Math.round(4f * density);

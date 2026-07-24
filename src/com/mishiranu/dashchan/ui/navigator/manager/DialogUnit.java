@@ -1334,6 +1334,7 @@ public class DialogUnit {
 						android.R.attr.textColorSecondary));
 			}
 			TextView textView = new TextView(context, null, android.R.attr.textAppearanceListItem);
+			ThemeEngine.applyStyle(textView);
 			linearLayout.addView(textView, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
 			textView.setSingleLine(true);
 			textView.setText(icon.title);

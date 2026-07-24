@@ -75,6 +75,7 @@ import com.mishiranu.dashchan.widget.DividerItemDecoration;
 import com.mishiranu.dashchan.widget.ImportantPostsMarksFastScrollBarDecoration;
 import com.mishiranu.dashchan.widget.ListPosition;
 import com.mishiranu.dashchan.widget.PaddedRecyclerView;
+import com.mishiranu.dashchan.widget.ThemeEngine;
 import com.mishiranu.dashchan.widget.PostsLayoutManager;
 import com.mishiranu.dashchan.widget.PullableWrapper;
 import com.mishiranu.dashchan.widget.SummaryLayout;
@@ -377,6 +378,7 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 		searchControlLayout.setGravity(Gravity.CENTER_VERTICAL);
 		int buttonPadding = (int) (10f * density);
 		searchResultText = new Button(toolbarContext, null, android.R.attr.borderlessButtonStyle);
+		ThemeEngine.applyStyle(searchResultText);
 		ViewUtils.setTextSizeScaled(searchResultText, 11);
 		searchResultText.setPadding((int) (14f * density), 0, (int) (14f * density), 0);
 		searchResultText.setMinimumWidth(0);

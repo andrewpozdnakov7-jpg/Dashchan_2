@@ -48,6 +48,7 @@ public abstract class DialogPreference<T> extends Preference<T> {
 			EditText testEditText = new EditText(linearLayout.getContext());
 			TextView descriptionView = new TextView(linearLayout.getContext(), null,
 					android.R.attr.textAppearanceListItemSmall);
+			ThemeEngine.applyStyle(descriptionView);
 			descriptionView.setPadding(testEditText.getPaddingLeft(), 0,
 					testEditText.getPaddingRight(), (int) (8f * density));
 			descriptionView.setText(description);

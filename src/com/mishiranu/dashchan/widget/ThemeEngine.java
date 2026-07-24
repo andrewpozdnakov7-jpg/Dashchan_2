@@ -16,6 +16,7 @@ import android.view.ContextThemeWrapper;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewTreeObserver;
 import android.widget.AbsSeekBar;
 import android.widget.Button;
 import android.widget.CheckedTextView;
@@ -31,6 +32,7 @@ import androidx.core.graphics.ColorUtils;
 import androidx.core.view.ViewCompat;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.R;
+import com.mishiranu.dashchan.content.FontManager;
 import com.mishiranu.dashchan.content.LauncherIconManager;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.storage.ThemesStorage;
@@ -59,10 +61,20 @@ public class ThemeEngine {
 
 	private static final int STATUS_OVERLAY_LIGHT = 0x22000000;
 	private static final int STATUS_OVERLAY_DARK = 0x33000000;
-	static void applyRoundedDialogBackground(View view, int color) {
+
+	private static void applyRoundedBackground(View view, int color,
+			boolean roundLeftCorners, boolean roundRightCorners) {
 		GradientDrawable roundedDrawable = new GradientDrawable();
 		roundedDrawable.setColor(color);
-		roundedDrawable.setCornerRadius(Preferences.getRoundedDialogsRadius() * ResourceUtils.obtainDensity(view));
+		float radius = Preferences.getRoundedDialogsRadius() * ResourceUtils.obtainDensity(view);
+		if (roundLeftCorners && roundRightCorners) {
+			roundedDrawable.setCornerRadius(radius);
+		} else {
+			float leftRadius = roundLeftCorners ? radius : 0f;
+			float rightRadius = roundRightCorners ? radius : 0f;
+			roundedDrawable.setCornerRadii(new float[] {leftRadius, leftRadius,
+					rightRadius, rightRadius, rightRadius, rightRadius, leftRadius, leftRadius});
+		}
 
 		Drawable oldBackground = view.getBackground();
 		Drawable background = roundedDrawable;
@@ -75,6 +87,40 @@ public class ThemeEngine {
 		view.setBackgroundTintList(null);
 		view.setBackground(background);
 		view.setClipToOutline(true);
+	}
+
+	static void applyRoundedDialogBackground(View view, int color) {
+		applyRoundedBackground(view, color, true, true);
+	}
+
+	private static void applyRoundedPopupBackground(View decorView, View backgroundView, int color) {
+		ViewTreeObserver viewTreeObserver = decorView.getViewTreeObserver();
+		viewTreeObserver.addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
+			@Override
+			public boolean onPreDraw() {
+				ViewTreeObserver currentViewTreeObserver = decorView.getViewTreeObserver();
+				if (currentViewTreeObserver.isAlive()) {
+					currentViewTreeObserver.removeOnPreDrawListener(this);
+				}
+
+				boolean roundLeftCorners = true;
+				boolean roundRightCorners = true;
+				if (backgroundView.getWidth() > 0) {
+					Rect displayFrame = new Rect();
+					decorView.getWindowVisibleDisplayFrame(displayFrame);
+					if (!displayFrame.isEmpty()) {
+						int[] location = new int[2];
+						backgroundView.getLocationOnScreen(location);
+						int edgeTolerance = Math.round(ResourceUtils.obtainDensity(backgroundView));
+						roundLeftCorners = location[0] > displayFrame.left + edgeTolerance;
+						roundRightCorners = location[0] + backgroundView.getWidth()
+								< displayFrame.right - edgeTolerance;
+					}
+				}
+				applyRoundedBackground(backgroundView, color, roundLeftCorners, roundRightCorners);
+				return true;
+			}
+		});
 	}
 
 	public static class Theme implements Comparable<Theme> {
@@ -430,7 +476,11 @@ public class ThemeEngine {
 							}
 						}
 						ThemeContext themeContext = requireThemeContext(decorView.getContext());
-						backgroundView.setBackgroundTintList(ColorStateList.valueOf(themeContext.theme.card));
+						if (Preferences.isRoundedDialogs()) {
+							applyRoundedPopupBackground(decorView, backgroundView, themeContext.theme.card);
+						} else {
+							backgroundView.setBackgroundTintList(ColorStateList.valueOf(themeContext.theme.card));
+						}
 					}
 				}
 			}
@@ -609,6 +659,11 @@ public class ThemeEngine {
 
 	public static void applyStyle(View view) {
 		// Stateful tints are buggy on Android 5.0, so some changes are applied to 5.1+ only
+		// ThemeLayoutInflater sends every inflated view through this method. Programmatically
+		// created text widgets use the same entry point so font application is deterministic.
+		if (view instanceof TextView) {
+			FontManager.applyTypeface((TextView) view);
+		}
 		Context context = view.getContext();
 		ThemeContext themeContext = obtainThemeContext(context);
 		if (themeContext != null) {

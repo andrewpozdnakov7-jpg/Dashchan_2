@@ -39,13 +39,15 @@ public class MarkupButtonProvider {
 	}
 
 	public Button createButton(Context context, int defStyleAttr) {
-		return new Button(context, null, defStyleAttr) {
+		Button button = new Button(context, null, defStyleAttr) {
 			@Override
 			protected void onDraw(Canvas canvas) {
 				super.onDraw(canvas);
 				OverlineSpan.draw(this, canvas);
 			}
 		};
+		ThemeEngine.applyStyle(button);
+		return button;
 	}
 
 	public Object getSpan(Context context) {
