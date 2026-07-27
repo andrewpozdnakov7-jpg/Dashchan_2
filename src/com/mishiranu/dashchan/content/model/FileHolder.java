@@ -427,7 +427,7 @@ public abstract class FileHolder {
 					throw new FileNotFoundException("File descriptor is null");
 				}
 				return descriptor;
-			} catch (SecurityException e) {
+			} catch (SecurityException | IllegalArgumentException e) {
 				throw new IOException(e);
 			}
 		}
@@ -511,6 +511,10 @@ public abstract class FileHolder {
 				}
 			} catch (SecurityException e) {
 				e.printStackTrace();
+				return null;
+			} catch (IllegalArgumentException e) {
+				// A document provider may reject a URI when the file was removed after
+				// it had been resolved. Treat it as an unavailable file.
 				return null;
 			}
 		}
