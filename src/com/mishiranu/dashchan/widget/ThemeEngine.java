@@ -507,6 +507,10 @@ public class ThemeEngine {
 			return direct || toolbar;
 		}
 
+		public boolean isToolbar() {
+			return toolbar;
+		}
+
 		protected ThemeLayoutInflater(LayoutInflater original, Context newContext,
 				boolean direct, boolean dialog, boolean overlay, boolean popup) {
 			super(original, newContext);
@@ -665,6 +669,11 @@ public class ThemeEngine {
 		return layoutInflater instanceof ThemeLayoutInflater && ((ThemeLayoutInflater) layoutInflater).isDirect();
 	}
 
+	private static boolean isToolbarContext(Context context) {
+		LayoutInflater layoutInflater = LayoutInflater.from(context);
+		return layoutInflater instanceof ThemeLayoutInflater && ((ThemeLayoutInflater) layoutInflater).isToolbar();
+	}
+
 	public static void applyStyle(View view) {
 		// Stateful tints are buggy on Android 5.0, so some changes are applied to 5.1+ only
 		// ThemeLayoutInflater sends every inflated view through this method. Programmatically
@@ -695,7 +704,9 @@ public class ThemeEngine {
 						((CheckedTextView) textView).setCheckMarkTintList(themeContext.getCheckBoxColors());
 						// On newer Android versions "compound drawable" is used instead of "check mark"
 						textView.setCompoundDrawableTintList(themeContext.getCheckBoxColors());
-					} else if (view instanceof Button) {
+					} else if (view instanceof Button && !isToolbarContext(context)) {
+						// Toolbar controls use the action bar foreground palette, which is chosen
+						// for contrast with the primary-colored toolbar background.
 						Button button = (Button) view;
 						if (button.getTextColors().getDefaultColor() ==
 								ResourceUtils.getColor(button.getContext(), android.R.attr.colorAccent)) {
