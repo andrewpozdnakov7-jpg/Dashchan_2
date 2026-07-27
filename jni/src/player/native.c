@@ -62,6 +62,10 @@ jboolean JCALL(setMuted)(UNUSED JNIEnv * env, UNUSED jobject this, jlong pointer
 	return setMuted(pointer, muted);
 }
 
+void JCALL(stopAudio)(UNUSED JNIEnv * env, UNUSED jobject this, jlong pointer) {
+	stopAudio(pointer);
+}
+
 void JCALL(setPlaying)(UNUSED JNIEnv * env, UNUSED jobject this, jlong pointer, jboolean playing) {
 	setPlaying(pointer, playing);
 }

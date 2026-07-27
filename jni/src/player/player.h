@@ -21,6 +21,7 @@ void setAudioEnabled(jlong, jboolean);
 void setHardwareAcceleration(jlong, jboolean);
 void setPlaybackSpeed(jlong, jint);
 jboolean setMuted(jlong, jboolean);
+void stopAudio(jlong);
 void setPlaying(jlong, jboolean);
 jboolean setSurface(JNIEnv *, jlong, jobject);
 

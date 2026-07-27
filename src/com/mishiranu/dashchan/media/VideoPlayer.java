@@ -215,7 +215,7 @@ public class VideoPlayer {
 	private SessionData sessionData;
 	private SessionData initData;
 
-	private boolean consumed = false;
+	private volatile boolean consumed = false;
 	private boolean playing = false;
 	private int playbackSpeed = 1000;
 
@@ -437,24 +437,33 @@ public class VideoPlayer {
 				: holder.getPosition(sessionData.pointer) : 0;
 	}
 
-	private void cancelSetPositionLocked() {
+	private void cancelSetPositionLocked(boolean wait) {
 		boolean locked = seekerMutex.tryAcquire();
 		if (!locked) {
+			VideoDiagnostics.recordUi("seek_cancel requested wait=" + wait);
 			holder.setCancelSeek(sessionData.pointer, true);
-			seekerMutex.acquireUninterruptibly();
-			holder.setCancelSeek(sessionData.pointer, false);
+			if (wait) {
+				seekerMutex.acquireUninterruptibly();
+				holder.setCancelSeek(sessionData.pointer, false);
+				locked = true;
+			}
 		}
-		seekerMutex.release();
+		if (locked) {
+			seekerMutex.release();
+		}
 	}
 
 	public void setPosition(long position) {
 		synchronized (this) {
 			if (isInitialized()) {
 				if (playing) {
-					cancelSetPositionLocked();
+					cancelSetPositionLocked(false);
 				}
 				synchronized (seekerThread) {
-					seekToPosition = new SeekToPosition(position, playing);
+					long requestId = ++nextSeekRequestId;
+					seekToPosition = new SeekToPosition(requestId, position, playing);
+					VideoDiagnostics.recordUi("seek_request id=" + requestId + " position=" + position
+							+ " allowed=" + playing);
 					seekerThread.notifyAll();
 				}
 			}
@@ -625,6 +634,8 @@ public class VideoPlayer {
 
 	public void releaseVideoViewAndDestroyAsync() {
 		VideoDiagnostics.recordUi("player_release_and_destroy scheduled");
+		setPlaying(false);
+		stopAudioImmediately();
 		releaseVideoView();
 		ConcurrentUtils.SEPARATE_EXECUTOR.execute(() -> {
 			VideoDiagnostics.recordUi("player_release_and_destroy native_destroy_started");
@@ -655,7 +666,7 @@ public class VideoPlayer {
 		synchronized (this) {
 			if (isInitialized() && this.playing != playing) {
 				SeekToPosition seekToPosition = this.seekToPosition;
-				cancelSetPositionLocked();
+				cancelSetPositionLocked(false);
 				this.playing = playing;
 				if (playing) {
 					holder.setPlaying(sessionData.pointer, true);
@@ -666,8 +677,17 @@ public class VideoPlayer {
 					holder.setPlaying(sessionData.pointer, false);
 					// Restore value after cancelSetPosition
 					this.seekToPosition = seekToPosition != null
-							? new SeekToPosition(seekToPosition.position, false) : null;
+							? new SeekToPosition(seekToPosition.requestId, seekToPosition.position, false) : null;
 				}
+			}
+		}
+	}
+
+	private void stopAudioImmediately() {
+		synchronized (this) {
+			if (isInitialized()) {
+				VideoDiagnostics.recordUi("player_audio_stop_immediate");
+				holder.stopAudio(sessionData.pointer);
 			}
 		}
 	}
@@ -767,6 +787,8 @@ public class VideoPlayer {
 	}
 
 	public void destroyAsync() {
+		setPlaying(false);
+		stopAudioImmediately();
 		ConcurrentUtils.SEPARATE_EXECUTOR.execute(this::destroy);
 	}
 
@@ -779,7 +801,7 @@ public class VideoPlayer {
 				}
 				SessionData sessionData = preInitSessionData != null ? preInitSessionData : this.sessionData;
 				if (sessionData != null) {
-					cancelSetPositionLocked();
+					cancelSetPositionLocked(true);
 					synchronized (seekerThread) {
 						seekerThread.notifyAll();
 					}
@@ -844,8 +866,8 @@ public class VideoPlayer {
 			}
 			case RETRY_SET_POSITION: {
 				long position = (long) msg.obj;
-				// Sometimes player hangs during setPosition (ffmpeg seek too far away from real position)
-				// I can do nothing better than repeat seeking
+				// A slow FFmpeg seek may be waiting for a distant range. Queue a replacement request;
+				// setPosition cancels the active native scan without waiting on the main thread.
 				setPosition(position);
 				return true;
 			}
@@ -859,28 +881,30 @@ public class VideoPlayer {
 	});
 
 	private static class SeekToPosition {
+		public final long requestId;
 		public final long position;
 		public final boolean allow;
 
-		public SeekToPosition(long position, boolean allow) {
+		public SeekToPosition(long requestId, long position, boolean allow) {
+			this.requestId = requestId;
 			this.position = position;
 			this.allow = allow;
 		}
 	}
 
-	private SeekToPosition seekToPosition = null;
+	private volatile SeekToPosition seekToPosition = null;
+	private long nextSeekRequestId;
 	private final Semaphore seekerMutex = new Semaphore(1);
 	private final Thread seekerThread = new Thread(this::seekerThread);
 
 	private void seekerThread() {
 		Thread seekerThread = Thread.currentThread();
 		while (true) {
-			long position;
+			SeekToPosition workSeekToPosition;
 			synchronized (seekerThread) {
-				SeekToPosition seekToPosition;
 				while (true) {
-					seekToPosition = this.seekToPosition;
-					if ((seekToPosition == null || !seekToPosition.allow) && !consumed) {
+					workSeekToPosition = seekToPosition;
+					if ((workSeekToPosition == null || !workSeekToPosition.allow) && !consumed) {
 						try {
 							seekerThread.wait();
 						} catch (InterruptedException e) {
@@ -894,23 +918,32 @@ public class VideoPlayer {
 					return;
 				}
 				if (sessionData != null) {
-					position = seekToPosition.position;
 					seekerMutex.acquireUninterruptibly();
+					holder.setCancelSeek(sessionData.pointer, false);
 				} else {
 					continue;
 				}
 			}
 			try {
+				long position = workSeekToPosition.position;
+				VideoDiagnostics.recordUi("seek_started id=" + workSeekToPosition.requestId
+						+ " position=" + position);
 				handler.removeMessages(Message.END_BUFFERING.ordinal());
 				handler.sendEmptyMessageDelayed(Message.START_BUFFERING.ordinal(), 200);
 				handler.sendMessageDelayed(handler.obtainMessage
 						(Message.RETRY_SET_POSITION.ordinal(), position), 1000);
 				holder.setPosition(sessionData.pointer, position);
+				VideoDiagnostics.recordUi("seek_native_finished id=" + workSeekToPosition.requestId);
 				handler.removeMessages(Message.RETRY_SET_POSITION.ordinal());
 				handler.removeMessages(Message.START_BUFFERING.ordinal());
 				handler.sendEmptyMessageDelayed(Message.END_BUFFERING.ordinal(), 100);
 			} finally {
-				seekToPosition = null;
+				synchronized (seekerThread) {
+					if (seekToPosition == workSeekToPosition) {
+						seekToPosition = null;
+					}
+				}
+				holder.setCancelSeek(sessionData.pointer, false);
 				seekerMutex.release();
 			}
 		}
@@ -987,6 +1020,7 @@ public class VideoPlayer {
 		void setHardwareAcceleration(long pointer, boolean hardwareAcceleration);
 		void setPlaybackSpeed(long pointer, int speed);
 		boolean setMuted(long pointer, boolean muted);
+		void stopAudio(long pointer);
 		boolean setSurface(long pointer, Surface surface);
 		void setPlaying(long pointer, boolean playing);
 
@@ -1037,6 +1071,7 @@ public class VideoPlayer {
 		@Override public native void setHardwareAcceleration(long pointer, boolean hardwareAcceleration);
 		@Override public native void setPlaybackSpeed(long pointer, int speed);
 		@Override public native boolean setMuted(long pointer, boolean muted);
+		@Override public native void stopAudio(long pointer);
 		@Override public native boolean setSurface(long pointer, Surface surface);
 		@Override public native void setPlaying(long pointer, boolean playing);
 
