@@ -868,7 +868,7 @@ public class VideoPlayer {
 			}
 			case REPORT_STALLED_SEEK: {
 				SeekToPosition seekToPosition = (SeekToPosition) msg.obj;
-				if (this.seekToPosition == seekToPosition && seekerMutex.availablePermits() == 0) {
+				if (this.seekToPosition == seekToPosition) {
 					VideoDiagnostics.recordUi("seek_stalled id=" + seekToPosition.requestId
 							+ " position=" + seekToPosition.position
 							+ " elapsed_ms=" + SEEK_STALL_REPORT_DELAY);
