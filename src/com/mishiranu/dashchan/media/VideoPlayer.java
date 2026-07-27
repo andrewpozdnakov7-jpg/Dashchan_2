@@ -44,6 +44,8 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 public class VideoPlayer {
+	private static final long SEEK_STALL_REPORT_DELAY = 5000L;
+
 	private static boolean loaded = false;
 	private static HolderInterface holder;
 	private static boolean playbackSpeedSupported = true;
@@ -834,7 +836,7 @@ public class VideoPlayer {
 	}
 
 	private enum Message {PLAYBACK_COMPLETE, SIZE_CHANGED, START_SEEKING, END_SEEKING, START_BUFFERING, END_BUFFERING,
-		RETRY_SET_POSITION, REQUEST_RANGE}
+		REPORT_STALLED_SEEK, REQUEST_RANGE}
 
 	private final Handler handler = new Handler(Looper.getMainLooper(), msg -> {
 		switch (Message.values()[msg.what]) {
@@ -864,11 +866,13 @@ public class VideoPlayer {
 				}
 				return true;
 			}
-			case RETRY_SET_POSITION: {
-				long position = (long) msg.obj;
-				// A slow FFmpeg seek may be waiting for a distant range. Queue a replacement request;
-				// setPosition cancels the active native scan without waiting on the main thread.
-				setPosition(position);
+			case REPORT_STALLED_SEEK: {
+				SeekToPosition seekToPosition = (SeekToPosition) msg.obj;
+				if (this.seekToPosition == seekToPosition && seekerMutex.availablePermits() == 0) {
+					VideoDiagnostics.recordUi("seek_stalled id=" + seekToPosition.requestId
+							+ " position=" + seekToPosition.position
+							+ " elapsed_ms=" + SEEK_STALL_REPORT_DELAY);
+				}
 				return true;
 			}
 			case REQUEST_RANGE: {
@@ -931,13 +935,13 @@ public class VideoPlayer {
 				handler.removeMessages(Message.END_BUFFERING.ordinal());
 				handler.sendEmptyMessageDelayed(Message.START_BUFFERING.ordinal(), 200);
 				handler.sendMessageDelayed(handler.obtainMessage
-						(Message.RETRY_SET_POSITION.ordinal(), position), 1000);
+						(Message.REPORT_STALLED_SEEK.ordinal(), workSeekToPosition), SEEK_STALL_REPORT_DELAY);
 				holder.setPosition(sessionData.pointer, position);
 				VideoDiagnostics.recordUi("seek_native_finished id=" + workSeekToPosition.requestId);
-				handler.removeMessages(Message.RETRY_SET_POSITION.ordinal());
 				handler.removeMessages(Message.START_BUFFERING.ordinal());
 				handler.sendEmptyMessageDelayed(Message.END_BUFFERING.ordinal(), 100);
 			} finally {
+				handler.removeMessages(Message.REPORT_STALLED_SEEK.ordinal(), workSeekToPosition);
 				synchronized (seekerThread) {
 					if (seekToPosition == workSeekToPosition) {
 						seekToPosition = null;
