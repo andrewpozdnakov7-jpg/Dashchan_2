@@ -1,0 +1,9 @@
+Added settings search with navigation to matching options.
+Added per-video Slooop volume; the volume gesture can now control either video or system volume.
+Added experimental audio boost for quiet videos. Disabled by default.
+Double-tapping the center of a video now pauses or resumes playback.
+Added optional classic styling for Monkey responses. Disabled by default.
+Local archive completion notifications now open the saved thread.
+Fixed stalls and delays while seeking or closing some videos.
+Fixed toolbar button contrast with custom themes.
+Improved handling of removed or unavailable files.

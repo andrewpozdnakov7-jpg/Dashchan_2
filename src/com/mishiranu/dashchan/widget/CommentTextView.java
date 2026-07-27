@@ -31,6 +31,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import chan.content.Chan;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.R;
+import com.mishiranu.dashchan.text.style.AIGeneratedSpan;
 import com.mishiranu.dashchan.text.style.LinkSpan;
 import com.mishiranu.dashchan.text.style.LightSpan;
 import com.mishiranu.dashchan.text.style.OverlineSpan;
@@ -71,6 +72,7 @@ public class CommentTextView extends TextView {
 	private PrepareToCopyListener prepareToCopyListener;
 	private LinkListener linkListener;
 	private LinkConfiguration linkConfiguration;
+	private boolean aiGeneratedStyleEnabled;
 	private List<ExtraButton> extraButtons;
 	private boolean spoilersEnabled;
 
@@ -250,6 +252,10 @@ public class CommentTextView extends TextView {
 		this.extraButtons = extraButtons;
 	}
 
+	public void setAIGeneratedStyleEnabled(boolean enabled) {
+		aiGeneratedStyleEnabled = enabled;
+	}
+
 	private LinkListener getLinkListener() {
 		return linkListener != null ? linkListener : DEFAULT_LINK_LISTENER;
 	}
@@ -258,6 +264,14 @@ public class CommentTextView extends TextView {
 		boolean hasSubject = !StringUtils.isEmpty(subject);
 		boolean hasComment = !StringUtils.isEmpty(comment);
 		if (hasComment && comment instanceof Spanned) {
+			AIGeneratedSpan[] aiGeneratedSpans = ((Spanned) comment).getSpans(0, comment.length(),
+					AIGeneratedSpan.class);
+			if (aiGeneratedSpans != null) {
+				int leadingMargin = Math.round(getTextSize());
+				for (AIGeneratedSpan aiGeneratedSpan : aiGeneratedSpans) {
+					aiGeneratedSpan.setDisplayEnabled(aiGeneratedStyleEnabled, leadingMargin);
+				}
+			}
 			SpoilerSpan[] spoilerSpans = ((Spanned) comment).getSpans(0, comment.length(), SpoilerSpan.class);
 			if (spoilerSpans != null) {
 				boolean enabled = spoilersEnabled;

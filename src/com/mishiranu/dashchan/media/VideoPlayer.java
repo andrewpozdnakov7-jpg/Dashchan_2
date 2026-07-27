@@ -706,6 +706,20 @@ public class VideoPlayer {
 		}
 	}
 
+	public boolean setVolume(int volume, int boostDb) {
+		synchronized (this) {
+			if (isInitialized()) {
+				try {
+					return holder.setVolume(sessionData.pointer, Math.max(0, Math.min(volume, 100)),
+							Math.max(0, Math.min(boostDb, 12)));
+				} catch (RuntimeException | LinkageError e) {
+					return false;
+				}
+			}
+			return false;
+		}
+	}
+
 	public boolean setMuted(boolean muted) {
 		synchronized (this) {
 			if (isInitialized()) {
@@ -1023,6 +1037,7 @@ public class VideoPlayer {
 		void setAudioEnabled(long pointer, boolean audioEnabled);
 		void setHardwareAcceleration(long pointer, boolean hardwareAcceleration);
 		void setPlaybackSpeed(long pointer, int speed);
+		boolean setVolume(long pointer, int volume, int boostDb);
 		boolean setMuted(long pointer, boolean muted);
 		void stopAudio(long pointer);
 		boolean setSurface(long pointer, Surface surface);
@@ -1074,6 +1089,7 @@ public class VideoPlayer {
 		@Override public native void setAudioEnabled(long pointer, boolean audioEnabled);
 		@Override public native void setHardwareAcceleration(long pointer, boolean hardwareAcceleration);
 		@Override public native void setPlaybackSpeed(long pointer, int speed);
+		@Override public native boolean setVolume(long pointer, int volume, int boostDb);
 		@Override public native boolean setMuted(long pointer, boolean muted);
 		@Override public native void stopAudio(long pointer);
 		@Override public native boolean setSurface(long pointer, Surface surface);

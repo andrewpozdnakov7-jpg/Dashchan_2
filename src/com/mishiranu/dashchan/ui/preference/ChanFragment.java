@@ -105,6 +105,9 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 			addHeader(R.string.ai_settings);
 			addCheck(true, Preferences.KEY_HIDE_AI_POSTS.bind(chanName), Preferences.DEFAULT_HIDE_AI_POSTS,
 					R.string.hide_ai_posts, 0);
+			addCheck(true, Preferences.KEY_CLASSIC_MONKEY_RESPONSES.bind(chanName),
+					Preferences.DEFAULT_CLASSIC_MONKEY_RESPONSES, R.string.classic_monkey_responses,
+					R.string.classic_monkey_responses__summary);
 		}
 		if (deleting != null && deleting.password) {
 			Preferences.getPassword(chan); // Ensure password existence

@@ -277,6 +277,18 @@ public class Preferences {
 		}
 	}
 
+	public static final ChanKey KEY_CLASSIC_MONKEY_RESPONSES = new ChanKey("classic_monkey_responses");
+	public static final boolean DEFAULT_CLASSIC_MONKEY_RESPONSES = false;
+
+	public static boolean isClassicMonkeyResponses(Chan chan) {
+		if (chan.configuration.getOption(ChanConfiguration.OPTION_AI_POSTING)) {
+			return PREFERENCES.getBoolean(KEY_CLASSIC_MONKEY_RESPONSES.bind(chan.name),
+					DEFAULT_CLASSIC_MONKEY_RESPONSES);
+		} else {
+			return false;
+		}
+	}
+
 	public static final String KEY_ACTIVE_SCROLLBAR = "active_scrollbar";
 	public static final boolean DEFAULT_ACTIVE_SCROLLBAR = true;
 
@@ -1702,9 +1714,24 @@ public class Preferences {
 
 	public static final String KEY_HARDWARE_VIDEO_ACCELERATION = "hardware_video_acceleration";
 	public static final boolean DEFAULT_HARDWARE_VIDEO_ACCELERATION = false;
+	public static final String KEY_VIDEO_AUDIO_BOOST = "video_audio_boost";
+	public static final boolean DEFAULT_VIDEO_AUDIO_BOOST = false;
+	public static final String KEY_VIDEO_AUDIO_BOOST_DB = "video_audio_boost_db";
+	public static final int DEFAULT_VIDEO_AUDIO_BOOST_DB = 6;
+	public static final int MIN_VIDEO_AUDIO_BOOST_DB = 3;
+	public static final int MAX_VIDEO_AUDIO_BOOST_DB = 12;
 
 	public static boolean isHardwareVideoAcceleration() {
 		return PREFERENCES.getBoolean(KEY_HARDWARE_VIDEO_ACCELERATION, DEFAULT_HARDWARE_VIDEO_ACCELERATION);
+	}
+
+	public static boolean isVideoAudioBoost() {
+		return PREFERENCES.getBoolean(KEY_VIDEO_AUDIO_BOOST, DEFAULT_VIDEO_AUDIO_BOOST);
+	}
+
+	public static int getVideoAudioBoostDb() {
+		return clamp(PREFERENCES.getInt(KEY_VIDEO_AUDIO_BOOST_DB, DEFAULT_VIDEO_AUDIO_BOOST_DB),
+				MIN_VIDEO_AUDIO_BOOST_DB, MAX_VIDEO_AUDIO_BOOST_DB);
 	}
 
 	public static final String KEY_USER_AGENT_REFERENCE = "user_agent_reference";
@@ -1775,6 +1802,32 @@ public class Preferences {
 
 	public static final String KEY_VIDEO_VOLUME_GESTURE = "video_volume_gesture";
 	public static final boolean DEFAULT_VIDEO_VOLUME_GESTURE = true;
+	private static final String LEGACY_KEY_VIDEO_LOCAL_VOLUME = "video_local_volume";
+
+	public enum VideoVolumeGestureTarget {
+		VIDEO("video", R.string.video_volume_gesture_target_video,
+				R.string.video_volume_gesture_target_video__summary),
+		SYSTEM("system", R.string.video_volume_gesture_target_system,
+				R.string.video_volume_gesture_target_system__summary);
+
+		private static final EnumValueProvider<VideoVolumeGestureTarget> VALUE_PROVIDER = o -> o.value;
+
+		public final String value;
+		public final int titleResId;
+		public final int summaryResId;
+
+		VideoVolumeGestureTarget(String value, int titleResId, int summaryResId) {
+			this.value = value;
+			this.titleResId = titleResId;
+			this.summaryResId = summaryResId;
+		}
+	}
+
+	public static final String KEY_VIDEO_VOLUME_GESTURE_TARGET = "video_volume_gesture_target";
+	public static final VideoVolumeGestureTarget DEFAULT_VIDEO_VOLUME_GESTURE_TARGET =
+			VideoVolumeGestureTarget.VIDEO;
+	private static final String KEY_VIDEO_LOCAL_VOLUME_LEVEL = "video_local_volume_level";
+	public static final int DEFAULT_VIDEO_LOCAL_VOLUME_LEVEL = 100;
 	public static final String KEY_VIDEO_VOLUME_GESTURE_PORTRAIT_WIDTH = "video_volume_gesture_portrait_width";
 	public static final String KEY_VIDEO_VOLUME_GESTURE_PORTRAIT_TOP = "video_volume_gesture_portrait_top";
 	public static final String KEY_VIDEO_VOLUME_GESTURE_PORTRAIT_BOTTOM = "video_volume_gesture_portrait_bottom";
@@ -1794,6 +1847,29 @@ public class Preferences {
 
 	public static boolean isVideoVolumeGesture() {
 		return PREFERENCES.getBoolean(KEY_VIDEO_VOLUME_GESTURE, DEFAULT_VIDEO_VOLUME_GESTURE);
+	}
+
+	public static VideoVolumeGestureTarget getVideoVolumeGestureTarget() {
+		if (!PREFERENCES.contains(KEY_VIDEO_VOLUME_GESTURE_TARGET)
+				&& PREFERENCES.contains(LEGACY_KEY_VIDEO_LOCAL_VOLUME)) {
+			return PREFERENCES.getBoolean(LEGACY_KEY_VIDEO_LOCAL_VOLUME, true)
+					? VideoVolumeGestureTarget.VIDEO : VideoVolumeGestureTarget.SYSTEM;
+		}
+		return getEnumValue(KEY_VIDEO_VOLUME_GESTURE_TARGET, VideoVolumeGestureTarget.values(),
+				DEFAULT_VIDEO_VOLUME_GESTURE_TARGET, VideoVolumeGestureTarget.VALUE_PROVIDER);
+	}
+
+	public static boolean isVideoLocalVolume() {
+		return getVideoVolumeGestureTarget() == VideoVolumeGestureTarget.VIDEO;
+	}
+
+	public static int getVideoLocalVolume() {
+		return clamp(PREFERENCES.getInt(KEY_VIDEO_LOCAL_VOLUME_LEVEL,
+				DEFAULT_VIDEO_LOCAL_VOLUME_LEVEL), 0, 100);
+	}
+
+	public static void setVideoLocalVolume(int volume) {
+		PREFERENCES.edit().put(KEY_VIDEO_LOCAL_VOLUME_LEVEL, clamp(volume, 0, 100)).close();
 	}
 
 	public static int getVideoVolumeGestureWidth(boolean landscape) {

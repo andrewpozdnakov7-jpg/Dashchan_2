@@ -11,6 +11,7 @@ import chan.text.CommentEditor;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.content.model.PostNumber;
 import com.mishiranu.dashchan.text.HtmlParser;
+import com.mishiranu.dashchan.text.style.AIGeneratedSpan;
 import com.mishiranu.dashchan.text.style.GainedColorSpan;
 import com.mishiranu.dashchan.text.style.HeadingSpan;
 import com.mishiranu.dashchan.text.style.ItalicSpan;
@@ -728,6 +729,7 @@ public class ChanMarkup implements Chan.Linked {
 							break;
 						}
 						case TAG_AI: {
+							span = new AIGeneratedSpan();
 							break;
 						}
 					}

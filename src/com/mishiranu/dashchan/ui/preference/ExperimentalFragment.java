@@ -15,6 +15,7 @@ import com.mishiranu.dashchan.ui.FragmentHandler;
 import com.mishiranu.dashchan.ui.preference.core.CheckPreference;
 import com.mishiranu.dashchan.ui.preference.core.Preference;
 import com.mishiranu.dashchan.ui.preference.core.PreferenceFragment;
+import com.mishiranu.dashchan.ui.preference.core.SeekPreference;
 import com.mishiranu.dashchan.util.NavigationUtils;
 import com.mishiranu.dashchan.util.SharedPreferences;
 import com.mishiranu.dashchan.widget.ClickableToast;
@@ -52,6 +53,15 @@ public class ExperimentalFragment extends PreferenceFragment {
 		if (hardwareAccelerationPreference.getValue()) {
 			addVideoDiagnosticsPreferences();
 		}
+		CheckPreference audioBoostPreference = addCheck(true, Preferences.KEY_VIDEO_AUDIO_BOOST,
+				Preferences.DEFAULT_VIDEO_AUDIO_BOOST, R.string.video_audio_boost,
+				R.string.video_audio_boost__summary);
+		SeekPreference audioBoostLevelPreference = addSeek(Preferences.KEY_VIDEO_AUDIO_BOOST_DB,
+				Preferences.DEFAULT_VIDEO_AUDIO_BOOST_DB, R.string.video_audio_boost_level,
+				R.string.video_audio_boost_level__format, null, Preferences.MIN_VIDEO_AUDIO_BOOST_DB,
+				Preferences.MAX_VIDEO_AUDIO_BOOST_DB, 3);
+		audioBoostLevelPreference.setEnabled(audioBoostPreference.getValue());
+		audioBoostPreference.setOnAfterChangeListener(p -> refreshPreferences());
 		addHeader(R.string.additional);
 		drawOverOtherApplicationsPreference = addCheck(false, "draw_over_other_applications", false,
 				R.string.draw_over_other_applications, R.string.draw_over_other_applications__summary);

@@ -54,7 +54,7 @@ public class LocalArchiveManager {
 		private Item(String sourceId, String name, String sourceName, DataFile htmlFile, DataFile zipFile,
 				DataFile manifestFile, Uri treeUri, Uri htmlUri, Uri zipUri, Uri manifestUri,
 				long htmlModified, long zipModified) {
-			this.id = sourceId + ':' + name.toLowerCase(Locale.ROOT);
+			this.id = createId(sourceId, name);
 			this.name = name;
 			this.sourceName = sourceName;
 			this.htmlFile = htmlFile;
@@ -78,6 +78,14 @@ public class LocalArchiveManager {
 		public boolean isExternal() {
 			return treeUri != null;
 		}
+	}
+
+	private static String createId(String sourceId, String name) {
+		return sourceId + ':' + name.toLowerCase(Locale.ROOT);
+	}
+
+	public static String createDefaultId(String name) {
+		return createId("default", name);
 	}
 
 	private static class MutableItem {

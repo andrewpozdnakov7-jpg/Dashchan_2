@@ -317,7 +317,8 @@ public class SendLocalArchiveTask extends ExecutorTask<Integer, SendLocalArchive
 			results.add(createDownload(result.archiveName + "/" + DIRECTORY_FILES,
 					result.filesToDownload, createZip));
 			DownloadResult enqueueResult = binder -> {
-				try (DownloadService.Accumulate ignored = binder.accumulate()) {
+				String localArchiveId = LocalArchiveManager.createDefaultId(result.archiveName);
+				try (DownloadService.Accumulate ignored = binder.accumulateLocalArchive(localArchiveId)) {
 					for (DownloadResult innerDownloadResult : results) {
 						innerDownloadResult.run(binder);
 					}

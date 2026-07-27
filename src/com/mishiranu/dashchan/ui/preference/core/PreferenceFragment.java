@@ -34,6 +34,9 @@ import java.util.HashSet;
 import java.util.List;
 
 public abstract class PreferenceFragment extends ContentFragment {
+	private static final String EXTRA_SEARCH_TARGET_KEY = "preferenceSearchTargetKey";
+	private static final String EXTRA_SEARCH_TARGET_TITLE = "preferenceSearchTargetTitle";
+
 	private final ArrayList<Preference<?>> preferences = new ArrayList<>();
 	private final HashSet<Preference<?>> persistent = new HashSet<>();
 	private final ArrayList<Dependency> dependencies = new ArrayList<>();
@@ -111,6 +114,61 @@ public abstract class PreferenceFragment extends ContentFragment {
 		layout.addView(recyclerView, ExpandedLayout.LayoutParams.MATCH_PARENT,
 				ExpandedLayout.LayoutParams.MATCH_PARENT);
 		return layout;
+	}
+
+	public static void putSearchTarget(Bundle arguments, String key, CharSequence title) {
+		arguments.putString(EXTRA_SEARCH_TARGET_KEY, key);
+		arguments.putCharSequence(EXTRA_SEARCH_TARGET_TITLE, title);
+	}
+
+	@Override
+	public void onActivityCreated(Bundle savedInstanceState) {
+		super.onActivityCreated(savedInstanceState);
+
+		Bundle arguments = getArguments();
+		if (arguments != null && arguments.containsKey(EXTRA_SEARCH_TARGET_TITLE)) {
+			String key = arguments.getString(EXTRA_SEARCH_TARGET_KEY);
+			CharSequence title = arguments.getCharSequence(EXTRA_SEARCH_TARGET_TITLE);
+			arguments.remove(EXTRA_SEARCH_TARGET_KEY);
+			arguments.remove(EXTRA_SEARCH_TARGET_TITLE);
+			recyclerView.post(() -> revealSearchTarget(key, title));
+		}
+	}
+
+	private void revealSearchTarget(String key, CharSequence title) {
+		int position = -1;
+		if (key != null) {
+			for (int i = 0; i < preferences.size(); i++) {
+				if (key.equals(preferences.get(i).key)) {
+					position = i;
+					break;
+				}
+			}
+		}
+		if (position < 0 && title != null) {
+			for (int i = 0; i < preferences.size(); i++) {
+				CharSequence preferenceTitle = preferences.get(i).getTitle();
+				if (preferenceTitle != null && title.toString().contentEquals(preferenceTitle)) {
+					position = i;
+					break;
+				}
+			}
+		}
+		if (position >= 0) {
+			recyclerView.scrollToPosition(position);
+			revealSearchTargetView(position, 0);
+		}
+	}
+
+	private void revealSearchTargetView(int position, int attempt) {
+		RecyclerView.ViewHolder holder = recyclerView.findViewHolderForAdapterPosition(position);
+		if (holder != null) {
+			holder.itemView.animate().cancel();
+			holder.itemView.setAlpha(0.35f);
+			holder.itemView.animate().alpha(1f).setDuration(700L).start();
+		} else if (attempt < 3) {
+			recyclerView.postDelayed(() -> revealSearchTargetView(position, attempt + 1), 50L);
+		}
 	}
 
 	@Override
@@ -293,8 +351,13 @@ public abstract class PreferenceFragment extends ContentFragment {
 
 	public ListPreference addList(String key, List<String> values,
 			String defaultValue, int titleResId, List<CharSequence> entries) {
+		return addList(key, values, defaultValue, titleResId, entries, entries);
+	}
+
+	public ListPreference addList(String key, List<String> values, String defaultValue, int titleResId,
+			List<CharSequence> entries, List<CharSequence> summaries) {
 		ListPreference preference = new ListPreference(requireContext(), key, defaultValue, getString(titleResId),
-				entries, values);
+				entries, values, summaries);
 		addDialogPreference(preference);
 		return preference;
 	}

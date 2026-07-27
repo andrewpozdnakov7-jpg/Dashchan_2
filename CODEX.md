@@ -61,7 +61,11 @@ When the user explicitly requests a source ZIP for external compilation:
    `Copy-Item -Destination <stage> -Recurse -Force`.
 5. Before creating the ZIP, run a mandatory staging gate: verify that the
    staging directory contains the expected top-level source directories,
-   build scripts, and required files such as `Dashchan_2/build.gradle`.
+   build scripts, and required files such as `Dashchan_2/build.gradle`,
+   `Dashchan_2/gradlew`, `Dashchan_2/gradle/wrapper/gradle-wrapper.properties`,
+   and a non-empty `Dashchan_2/gradle/wrapper/gradle-wrapper.jar`. Verify that
+   the wrapper JAR is readable and contains
+   `org/gradle/wrapper/GradleWrapperMain.class`.
    Abort if the staging directory is empty, incomplete, or unexpectedly
    wrapped.
 6. On Windows, create every ZIP entry with an explicitly normalized `/`
@@ -70,8 +74,9 @@ When the user explicitly requests a source ZIP for external compilation:
    before adding them to the archive.
 7. Before handing off the ZIP, run a mandatory fast layout gate: reject the
    archive if any entry name contains `\`, if required top-level entries such
-   as `Dashchan_2/build.gradle` are missing, or if the source tree is wrapped
-   in an unexpected extra directory.
+   as `Dashchan_2/build.gradle` or the Gradle wrapper files from the staging
+   gate are missing, or if the source tree is wrapped in an unexpected extra
+   directory. Verify the wrapper JAR again from the frozen ZIP contents.
 8. As soon as the ZIP is closed, the fast layout gate passes, and its SHA-256
    is available, report its path
    and hash in a commentary update marked `created; verification in progress`.
@@ -83,6 +88,42 @@ When the user explicitly requests a source ZIP for external compilation:
 11. If verification fails, immediately mark that ZIP as invalid, explain why,
     create a replacement, and repeat the workflow.
 12. In the final response, clearly report whether verification passed.
+
+#### Reliable first-pass implementation
+
+Use this exact sequence for Windows source bundles. Do not collapse it into one
+large PowerShell command:
+
+1. Choose a new timestamped bundle name and a new staging directory. If either
+   path already exists, stop and choose another timestamp; do not delete or
+   reuse an old staging directory during archive creation.
+2. Enumerate the project snapshot with
+   `git ls-files --cached --others --exclude-standard`. This includes intended
+   tracked and untracked source files while excluding ignored Gradle caches and
+   build outputs. Validate every resolved file against the exact repository-root
+   prefix before copying it to `Dashchan_2/` in staging.
+3. If WSL helper files are copied from the most recent verified bundle, copy
+   only the known top-level helper files. Never reuse that bundle's
+   `Dashchan_2/` tree.
+4. Treat copied `SOURCE_PACKAGE_INFO.txt` and `README_BUILD_WSL.md` as templates.
+   They may have CRLF line endings that make a line-level patch unreliable.
+   Replace each entire staged metadata file with `apply_patch` delete/add and
+   write the new bundle name, timestamp, version, commit, and change summary.
+5. Run the staging gate as its own short command. Only after it passes, run a
+   separate archive-creation command using `ZipArchive` and explicitly `/`
+   normalized entry names.
+6. Run the frozen-ZIP fast gate and SHA-256 calculation as a third command.
+   Validate the embedded Gradle wrapper directly from a `MemoryStream`; do not
+   create and delete a temporary wrapper file.
+7. Do not put `Remove-Item`, staging cleanup, archive creation, and verification
+   into the same command. Long mixed commands are harder to audit and may be
+   rejected before the ZIP is created. Keep cleanup separate and perform it
+   only after the verified archive has been handed off and cleanup is actually
+   requested.
+8. After reporting the ZIP path and hash, compare every frozen ZIP entry with
+   staging, compare every `Dashchan_2/` entry with the current
+   `git ls-files` snapshot, scan for local paths and credential files, and
+   assert that the latest feature files and strings are present.
 
 Creating this source-only ZIP does not authorize Gradle, compilation, APK/AAB
 packaging, installation, publication, or upload.

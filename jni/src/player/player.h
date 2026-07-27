@@ -20,6 +20,7 @@ void setCancelSeek(jlong, jboolean);
 void setAudioEnabled(jlong, jboolean);
 void setHardwareAcceleration(jlong, jboolean);
 void setPlaybackSpeed(jlong, jint);
+jboolean setVolume(jlong, jint, jint);
 jboolean setMuted(jlong, jboolean);
 void stopAudio(jlong);
 void setPlaying(jlong, jboolean);

@@ -328,7 +328,8 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 		activeInputTask = null;
 		activeInputFuture = null;
 		onFinishDownloadingInternal(success, new TaskData(taskData.chanName, taskData.overwrite,
-				null, taskData.target, taskData.path, taskData.name, taskData.allowWrite), taskDataFile);
+				null, taskData.target, taskData.path, taskData.name, taskData.allowWrite,
+				taskData.localArchiveId), taskDataFile);
 	}
 
 	private void cancelActiveInputTask() {
@@ -387,12 +388,14 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 						}
 						DownloadItem downloadItem = directRequest.downloadItems.get(0);
 						enqueue(new TaskData(downloadItem.chanName, directRequest.overwrite, directRequest.input,
-								directRequest.target, directRequest.path, downloadItem.name, directRequest.allowWrite));
+								directRequest.target, directRequest.path, downloadItem.name, directRequest.allowWrite,
+								directRequest.localArchiveId));
 					} else {
 						for (DownloadItem downloadItem : directRequest.downloadItems) {
 							enqueue(new TaskData(downloadItem.chanName, directRequest.overwrite, downloadItem.uri,
 									downloadItem.checkSha256, downloadItem.checkFingerprints, directRequest.target,
-									directRequest.path, downloadItem.name, directRequest.allowWrite));
+									directRequest.path, downloadItem.name, directRequest.allowWrite,
+									directRequest.localArchiveId));
 						}
 					}
 				}
@@ -573,8 +576,8 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 				throw new InterruptedException();
 			}
 		}
-		return new DirectRequest(target, path, false,
-				finalItems, replaceRequest.directRequest.input, replaceRequest.directRequest.allowWrite);
+		return new DirectRequest(target, path, false, finalItems, replaceRequest.directRequest.input,
+				replaceRequest.directRequest.allowWrite, replaceRequest.directRequest.localArchiveId);
 	}
 
 	private void handlePrimaryReplaceKeepAllReplace(ReplaceRequest replaceRequest) {
@@ -618,7 +621,8 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 						directRequests.add(new DirectRequest(replaceRequest.directRequest.target,
 								replaceRequest.directRequest.path, replaceRequest.directRequest.overwrite,
 								replaceRequest.availableItems, replaceRequest.directRequest.input,
-								replaceRequest.directRequest.allowWrite));
+								replaceRequest.directRequest.allowWrite,
+								replaceRequest.directRequest.localArchiveId));
 					} else {
 						// Request with input should contain only 1 download item.
 						// Cleanup the request to ensure input stream is closed.
@@ -757,15 +761,29 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 		}
 
 		private Boolean accumulateState;
+		private String accumulateLocalArchiveId;
 
 		public Accumulate accumulate() {
+			return accumulate(null);
+		}
+
+		public Accumulate accumulateLocalArchive(String localArchiveId) {
+			if (StringUtils.isEmpty(localArchiveId)) {
+				throw new IllegalArgumentException();
+			}
+			return accumulate(localArchiveId);
+		}
+
+		private Accumulate accumulate(String localArchiveId) {
 			if (accumulateState != null) {
 				throw new IllegalStateException();
 			}
 			accumulateState = false;
+			accumulateLocalArchiveId = localArchiveId;
 			return () -> {
 				boolean accumulateState = this.accumulateState;
 				this.accumulateState = null;
+				this.accumulateLocalArchiveId = null;
 				if (accumulateState) {
 					handleRequests();
 				}
@@ -782,13 +800,15 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 
 		public void downloadDirect(DataFile.Target target, String path, boolean overwrite,
 				List<DownloadItem> downloadItems) {
-			directRequests.add(new DirectRequest(target, path, overwrite, downloadItems, null, false));
+			directRequests.add(new DirectRequest(target, path, overwrite, downloadItems, null, false,
+					accumulateLocalArchiveId));
 			handleRequestsOrAccumulate();
 		}
 
 		public void downloadDirect(DataFile.Target target, String path, String name, InputStream input) {
 			directRequests.add(new DirectRequest(target, path, true,
-					Collections.singletonList(new DownloadItem(null, null, name, null, null)), input, false));
+					Collections.singletonList(new DownloadItem(null, null, name, null, null)), input, false,
+					accumulateLocalArchiveId));
 			handleRequestsOrAccumulate();
 		}
 
@@ -859,6 +879,7 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 		public final boolean hasNotFromCache;
 		public final DataFile lastSuccessFile;
 		public final boolean allowWrite;
+		public final String localArchiveId;
 		public final String activeName;
 		public final int progress;
 		public final int progressMax;
@@ -868,7 +889,8 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 		private NotificationData(Type type, boolean allowHeadsUp,
 				int queuedTasks, int successTasks, int errorTasks, boolean allowRetry,
 				boolean hasNotFromCache, DataFile lastSuccessFile, boolean allowWrite,
-				String activeName, int progress, int progressMax, boolean updateImageOnly, CountDownLatch syncLatch) {
+				String localArchiveId, String activeName, int progress, int progressMax,
+				boolean updateImageOnly, CountDownLatch syncLatch) {
 			this.type = type;
 			this.allowHeadsUp = allowHeadsUp;
 			this.queuedTasks = queuedTasks;
@@ -878,6 +900,7 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 			this.hasNotFromCache = hasNotFromCache;
 			this.lastSuccessFile = lastSuccessFile;
 			this.allowWrite = allowWrite;
+			this.localArchiveId = localArchiveId;
 			this.activeName = activeName;
 			this.progress = progress;
 			this.progressMax = progressMax;
@@ -887,20 +910,21 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 
 		public static NotificationData updateData(Type type, boolean allowHeadsUp,
 				int queuedTasks, int successTasks, int errorTasks, boolean allowRetry, boolean hasExternal,
-				DataFile lastSuccessFile, boolean allowWrite, String activeName, int progress, int progressMax) {
+				DataFile lastSuccessFile, boolean allowWrite, String localArchiveId,
+				String activeName, int progress, int progressMax) {
 			return new NotificationData(type, allowHeadsUp, queuedTasks, successTasks, errorTasks,
-					allowRetry, hasExternal, lastSuccessFile, allowWrite,
+					allowRetry, hasExternal, lastSuccessFile, allowWrite, localArchiveId,
 					activeName, progress, progressMax, false, null);
 		}
 
 		public static NotificationData updateImageOnly(DataFile lastSuccessFile, boolean allowWrite) {
 			return new NotificationData(null, false, 0, 0, 0, false, false,
-					lastSuccessFile, allowWrite, null, 0, 0, true, null);
+					lastSuccessFile, allowWrite, null, null, 0, 0, true, null);
 		}
 
 		public static NotificationData sync(CountDownLatch syncLatch) {
 			return new NotificationData(null, false, 0, 0, 0, false, false,
-					null, false, null, 0, 0, false, syncLatch);
+					null, false, null, null, 0, 0, false, syncLatch);
 		}
 	}
 
@@ -945,10 +969,11 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 		public final String path;
 		public final String name;
 		public final boolean allowWrite;
+		public final String localArchiveId;
 
 		private TaskData(String chanName, boolean finishedFromCache, boolean overwrite,
 				InputStream input, Uri uri, byte[] checkSha256, ChanManager.Fingerprints checkFingerprints,
-				DataFile.Target target, String path, String name, boolean allowWrite) {
+				DataFile.Target target, String path, String name, boolean allowWrite, String localArchiveId) {
 			this.chanName = chanName;
 			this.finishedFromCache = finishedFromCache;
 			this.overwrite = overwrite;
@@ -960,23 +985,27 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 			this.path = path;
 			this.name = name;
 			this.allowWrite = allowWrite;
+			this.localArchiveId = localArchiveId;
 		}
 
 		public TaskData(String chanName, boolean overwrite,
-				InputStream input, DataFile.Target target, String path, String name, boolean allowWrite) {
-			this(chanName, true, overwrite, input, null, null, null, target, path, name, allowWrite);
+				InputStream input, DataFile.Target target, String path, String name, boolean allowWrite,
+				String localArchiveId) {
+			this(chanName, true, overwrite, input, null, null, null, target, path, name, allowWrite,
+					localArchiveId);
 		}
 
 		public TaskData(String chanName, boolean overwrite,
 				Uri from, byte[] checkSha256, ChanManager.Fingerprints checkFingerprints,
-				DataFile.Target target, String path, String name, boolean allowWrite) {
+				DataFile.Target target, String path, String name, boolean allowWrite, String localArchiveId) {
 			this(chanName, false, overwrite, null, from, checkSha256, checkFingerprints,
-					target, path, name, allowWrite);
+					target, path, name, allowWrite, localArchiveId);
 		}
 
 		public TaskData newFinishedFromCache(boolean finishedFromCache) {
 			return this.finishedFromCache == finishedFromCache ? this : new TaskData(chanName, finishedFromCache,
-					overwrite, input, uri, checkSha256, checkFingerprints, target, path, name, allowWrite);
+					overwrite, input, uri, checkSha256, checkFingerprints, target, path, name, allowWrite,
+					localArchiveId);
 		}
 
 		public String getKey() {
@@ -1020,7 +1049,7 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 				String name = source.readString();
 				boolean allowWrite = source.readByte() != 0;
 				return new TaskData(chanName, finishedFromCache, overwrite, null, uri,
-						checkSha256, checkFingerprints, target, path, name, allowWrite);
+						checkSha256, checkFingerprints, target, path, name, allowWrite, null);
 			}
 
 			@Override
@@ -1094,6 +1123,14 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 			if (notificationData.type == NotificationData.Type.REQUEST) {
 				builder.setContentIntent(PendingIntent.getActivity(this, 0,
 						new Intent(this, MainActivity.class), PendingIntent.FLAG_UPDATE_CURRENT));
+			} else if (notificationData.localArchiveId != null) {
+				Intent intent = new Intent(this, MainActivity.class)
+						.setAction(C.ACTION_LOCAL_ARCHIVE)
+						.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP)
+						.putExtra(C.EXTRA_LOCAL_ARCHIVE_ID, notificationData.localArchiveId);
+				builder.setContentIntent(PendingIntent.getActivity(this,
+						notificationData.localArchiveId.hashCode(), intent,
+						PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
 			} else if (notificationData.lastSuccessFile != null) {
 				builder.setContentIntent(PendingIntent.getBroadcast(this, 0, new Intent(this, Receiver.class)
 						.putExtra(EXTRA_FILE_TARGET, notificationData.lastSuccessFile.getTarget().name())
@@ -1199,6 +1236,8 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 		if (needForegroundOrNotification) {
 			boolean allowRetry = false;
 			boolean hasNotFromCache = false;
+			boolean hasOrdinarySuccess = false;
+			String localArchiveId = null;
 			TaskData lastSuccessFileTaskData = null;
 			if (hasTask || !hasRequests) {
 				for (TaskData taskData : successTasks.values()) {
@@ -1207,6 +1246,13 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 					}
 					if (taskData.target.isExternal()) {
 						lastSuccessFileTaskData = taskData;
+					}
+					if (taskData.localArchiveId == null) {
+						hasOrdinarySuccess = true;
+					} else if (localArchiveId == null) {
+						localArchiveId = taskData.localArchiveId;
+					} else if (!localArchiveId.equals(taskData.localArchiveId)) {
+						hasOrdinarySuccess = true;
 					}
 				}
 				for (TaskData taskData : errorTasks.values()) {
@@ -1217,6 +1263,9 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 						allowRetry = true;
 					}
 				}
+			}
+			if (hasOrdinarySuccess) {
+				localArchiveId = null;
 			}
 			DataFile lastSuccessFile = lastSuccessFileTaskData != null ? lastSuccessTaskDataFile : null;
 			boolean allowWrite = lastSuccessFileTaskData != null && lastSuccessFileTaskData.allowWrite;
@@ -1229,7 +1278,7 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 					: activeInputTask != null ? activeInputTask.name : null;
 			notificationsQueue.add(NotificationData.updateData(type, allowHeadsUp,
 					queuedTasks.size(), successTasks.size(), errorTasks.size(), allowRetry, hasNotFromCache,
-					lastSuccessFile, allowWrite, activeName, progress, progressMax));
+					lastSuccessFile, allowWrite, localArchiveId, activeName, progress, progressMax));
 		}
 		if (hasTask) {
 			wakeLock.acquire();
@@ -1413,15 +1462,17 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 		public final InputStream input;
 		public final List<DownloadItem> downloadItems;
 		public final boolean allowWrite;
+		public final String localArchiveId;
 
 		private DirectRequest(DataFile.Target target, String path, boolean overwrite,
-				List<DownloadItem> downloadItems, InputStream input, boolean allowWrite) {
+				List<DownloadItem> downloadItems, InputStream input, boolean allowWrite, String localArchiveId) {
 			this.target = target;
 			this.path = path;
 			this.overwrite = overwrite;
 			this.downloadItems = downloadItems;
 			this.input = input;
 			this.allowWrite = allowWrite;
+			this.localArchiveId = localArchiveId;
 		}
 
 		private void cleanup() {
@@ -1504,7 +1555,7 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 						requestItem.fileName, originalName ? requestItem.originalName : null, detailName,
 						chanName, boardName, threadNumber), null, null));
 			}
-			return new DirectRequest(DataFile.Target.DOWNLOADS, path, true, downloadItems, null, allowWrite);
+			return new DirectRequest(DataFile.Target.DOWNLOADS, path, true, downloadItems, null, allowWrite, null);
 		}
 	}
 
@@ -1535,7 +1586,7 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 					chanName, boardName, threadNumber) : this.fileName;
 			DownloadItem downloadItem = new DownloadItem(chanName, null, fileName, null, null);
 			return new DirectRequest(DataFile.Target.DOWNLOADS, path, true,
-					Collections.singletonList(downloadItem), input, allowWrite);
+					Collections.singletonList(downloadItem), input, allowWrite, null);
 		}
 
 		@Override

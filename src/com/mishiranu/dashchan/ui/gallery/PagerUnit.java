@@ -58,12 +58,8 @@ public class PagerUnit implements PagerInstance.Callback {
 	private final FrameLayout viewPagerParent;
 	private final PhotoViewPager viewPager;
 	private final PagerAdapter pagerAdapter;
-	private final AudioManager audioManager;
 	private final TextView volumeGestureView;
 	private final TextView seekGestureView;
-	private int volumeGestureStart;
-	private int volumeGestureCurrent;
-	private int volumeGestureMaximum;
 	private final Runnable hideVolumeGesture;
 	private final Runnable hideSeekGesture;
 	private int seekGestureDirection;
@@ -74,7 +70,7 @@ public class PagerUnit implements PagerInstance.Callback {
 		galleryInstance = instance;
 		pagerInstance = new PagerInstance(instance, this);
 		imageUnit = new ImageUnit(pagerInstance);
-		audioManager = (AudioManager) instance.context.getSystemService(Context.AUDIO_SERVICE);
+		AudioManager audioManager = (AudioManager) instance.context.getSystemService(Context.AUDIO_SERVICE);
 		videoUnit = new VideoUnit(pagerInstance, audioManager);
 		float density = ResourceUtils.obtainDensity(instance.context);
 		viewPagerParent = new FrameLayout(instance.context);
@@ -516,7 +512,12 @@ public class PagerUnit implements PagerInstance.Callback {
 			if (!Preferences.isVideoDoubleTapSeek()) {
 				return true;
 			}
-			int direction = x < photoView.getWidth() / 2f ? -1 : 1;
+			float zoneWidth = photoView.getWidth() / 3f;
+			if (x >= zoneWidth && x < 2f * zoneWidth) {
+				videoUnit.togglePlayback();
+				return true;
+			}
+			int direction = x < zoneWidth ? -1 : 1;
 			int seconds = Preferences.getVideoDoubleTapSeekInterval();
 			VideoUnit.SeekResult result = videoUnit.seekBy(direction * seconds * 1000L);
 			if (result != null) {
@@ -573,6 +574,18 @@ public class PagerUnit implements PagerInstance.Callback {
 		seekGestureView.removeCallbacks(hideSeekGesture);
 		seekGestureView.setVisibility(View.VISIBLE);
 		seekGestureView.postDelayed(hideSeekGesture, 700L);
+	}
+
+	private void updateVolumeGestureText(int percent) {
+		if (videoUnit.isVolumeGestureLocal()) {
+			int boostDb = videoUnit.getVolumeGestureBoostDb();
+			volumeGestureView.setText(boostDb > 0
+					? galleryInstance.context.getString(R.string.video_boosted_volume__format, percent, boostDb)
+					: galleryInstance.context.getString(R.string.video_local_volume__format, percent));
+		} else {
+			volumeGestureView.setText(galleryInstance.context.getString(
+					R.string.video_system_volume__format, percent));
+		}
 	}
 
 	private static class PlayShape extends Shape {
@@ -723,8 +736,7 @@ public class PagerUnit implements PagerInstance.Callback {
 					|| x < view.getWidth() * (100 - widthPercent) / 100f
 					|| y < view.getHeight() * insets[0] / 100f
 					|| y > view.getHeight() * (100 - insets[1]) / 100f
-					|| !videoUnit.isAudioPresent() || audioManager == null
-					|| audioManager.isVolumeFixed()) {
+					|| !videoUnit.isAudioPresent()) {
 				return false;
 			}
 			PagerInstance.ViewHolder holder = pagerInstance.currentHolder;
@@ -732,37 +744,25 @@ public class PagerUnit implements PagerInstance.Callback {
 					|| !holder.galleryItem.isVideo(Chan.get(galleryInstance.chanName))) {
 				return false;
 			}
-			volumeGestureMaximum = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
-			if (volumeGestureMaximum <= 0) {
+			int percent = videoUnit.onVolumeGestureStart();
+			if (percent < 0) {
 				return false;
 			}
-			volumeGestureStart = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC);
-			volumeGestureCurrent = volumeGestureStart;
-			videoUnit.onSystemVolumeGestureStart(volumeGestureStart);
 			volumeGestureView.removeCallbacks(hideVolumeGesture);
-			int percent = Math.round(100f * volumeGestureStart / volumeGestureMaximum);
-			volumeGestureView.setText(galleryInstance.context.getString(R.string.video_volume__format, percent));
+			updateVolumeGestureText(percent);
 			volumeGestureView.setVisibility(View.VISIBLE);
 			return true;
 		}
 
 		@Override
 		public void onVerticalGestureProgress(PhotoViewPager view, float distance) {
-			int volume = volumeGestureStart + Math.round(distance / Math.max(1, view.getHeight())
-					* volumeGestureMaximum);
-			volume = Math.max(0, Math.min(volumeGestureMaximum, volume));
-			if (volume != volumeGestureCurrent) {
-				volumeGestureCurrent = volume;
-				audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, volume, 0);
-				videoUnit.onSystemVolumeGestureProgress(volume);
-			}
-			int percent = Math.round(100f * volume / volumeGestureMaximum);
-			volumeGestureView.setText(galleryInstance.context.getString(R.string.video_volume__format, percent));
+			int percent = videoUnit.onVolumeGestureProgress(distance / Math.max(1f, view.getHeight()));
+			updateVolumeGestureText(percent);
 		}
 
 		@Override
 		public void onVerticalGestureEnd(PhotoViewPager view) {
-			videoUnit.onSystemVolumeGestureEnd(volumeGestureCurrent);
+			videoUnit.onVolumeGestureEnd();
 			volumeGestureView.removeCallbacks(hideVolumeGesture);
 			volumeGestureView.postDelayed(hideVolumeGesture, 600);
 		}

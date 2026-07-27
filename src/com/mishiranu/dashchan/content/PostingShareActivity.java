@@ -135,7 +135,10 @@ public class PostingShareActivity extends Activity {
 		}
 
 		if (success > 0) {
-			Preferences.storeFuturePostText(sharedText);
+			// Browsers commonly attach the source URL as EXTRA_TEXT when sharing an image.
+			// It describes the attachment rather than a message the user entered. Keep
+			// text importing for text-only shares, including fallback for invalid streams.
+			Preferences.storeFuturePostText(uris.isEmpty() ? sharedText : null);
 			Toast.makeText(this, R.string.draft_saved, Toast.LENGTH_SHORT).show();
 		} else if (contentUri != null) {
 			startActivity(new Intent(this, MainActivity.class).setData(contentUri));

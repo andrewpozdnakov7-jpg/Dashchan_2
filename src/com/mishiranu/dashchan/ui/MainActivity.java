@@ -718,6 +718,12 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		if (updateDataMap != null) {
 			fragments.clear();
 			navigateFragment(new UpdateFragment(updateDataMap), null, true);
+		} else if (C.ACTION_LOCAL_ARCHIVE.equals(intent.getAction())) {
+			String id = intent.getStringExtra(C.EXTRA_LOCAL_ARCHIVE_ID);
+			if (id != null && !id.isEmpty()) {
+				fragments.clear();
+				navigateFragment(new LocalArchiveViewerFragment(id), null, true);
+			}
 		} else if (C.ACTION_POSTING.equals(intent.getAction())) {
 			String chanName = intent.getStringExtra(C.EXTRA_CHAN_NAME);
 			String boardName = intent.getStringExtra(C.EXTRA_BOARD_NAME);

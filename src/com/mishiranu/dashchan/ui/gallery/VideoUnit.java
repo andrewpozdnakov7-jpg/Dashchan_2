@@ -82,6 +82,13 @@ public class VideoUnit {
 	private boolean hideSurfaceOnInit;
 	private boolean pictureInPictureTransferred;
 	private int lastNonZeroSystemVolume;
+	private int localVolume;
+	private int lastNonZeroLocalVolume;
+	private boolean localVolumeSupported = true;
+	private boolean volumeGestureLocal;
+	private int volumeGestureStart;
+	private int volumeGestureCurrent;
+	private int volumeGestureMaximum;
 	private File sourceFile;
 
 	private ReadVideoCallback readVideoCallback;
@@ -97,6 +104,9 @@ public class VideoUnit {
 				lastNonZeroSystemVolume = volume;
 			}
 		}
+		localVolume = Preferences.getVideoLocalVolume();
+		lastNonZeroLocalVolume = localVolume > 0 ? localVolume
+				: Preferences.DEFAULT_VIDEO_LOCAL_VOLUME_LEVEL;
 		if (Preferences.isRememberVideoPlaybackSpeed() && Preferences.isPersistVideoPlaybackSpeed()) {
 			playbackSpeed = normalizePlaybackSpeed(Preferences.getSavedVideoPlaybackSpeed());
 		}
@@ -303,6 +313,7 @@ public class VideoUnit {
 		holder.surfaceParent.setFocusable(false);
 		holder.surfaceParent.addView(videoView, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,
 				FrameLayout.LayoutParams.MATCH_PARENT, Gravity.CENTER));
+		applyPlayerVolume(player);
 		muteSupported = !player.isAudioPresent() || player.setMuted(muted);
 		if (!muteSupported) {
 			muted = false;
@@ -558,8 +569,9 @@ public class VideoUnit {
 			boolean audioPresent = player != null && player.isAudioPresent();
 			boolean systemMuted = audioManager != null
 					&& audioManager.getStreamVolume(AudioManager.STREAM_MUSIC) <= 0;
-			boolean effectiveMuted = muted || systemMuted;
-			boolean enabled = audioPresent && (muteSupported || systemMuted);
+			boolean localVolumeActive = isLocalVolumeActive();
+			boolean effectiveMuted = muted || (localVolumeActive ? localVolume <= 0 : systemMuted);
+			boolean enabled = audioPresent && (muteSupported || (!localVolumeActive && systemMuted));
 			boolean showMuted = !audioPresent || effectiveMuted;
 			Context context = muteButton.getContext();
 			muteButton.setEnabled(enabled);
@@ -574,26 +586,106 @@ public class VideoUnit {
 		}
 	}
 
-	void onSystemVolumeGestureStart(int volume) {
-		if (volume > 0) {
-			lastNonZeroSystemVolume = volume;
-		}
-		updateMuteButton();
+	private boolean isLocalVolumeActive() {
+		return Preferences.isVideoLocalVolume() && localVolumeSupported;
 	}
 
-	void onSystemVolumeGestureProgress(int volume) {
-		if (volume > 0 && muted) {
-			setMuted(false);
+	private int getLocalVolumeBoostDb() {
+		return Preferences.isVideoAudioBoost() ? Preferences.getVideoAudioBoostDb() : 0;
+	}
+
+	private boolean setPlayerLocalVolume(int volume) {
+		return player.setVolume(volume, getLocalVolumeBoostDb());
+	}
+
+	private void applyPlayerVolume(VideoPlayer player) {
+		if (player == null || !player.isAudioPresent()) {
+			localVolumeSupported = true;
+			return;
+		}
+		int volume = Preferences.isVideoLocalVolume() ? localVolume : 100;
+		localVolumeSupported = player.setVolume(volume,
+				Preferences.isVideoLocalVolume() ? getLocalVolumeBoostDb() : 0);
+	}
+
+	int onVolumeGestureStart() {
+		if (!initialized || player == null || !player.isAudioPresent()) {
+			return -1;
+		}
+		volumeGestureLocal = isLocalVolumeActive();
+		if (volumeGestureLocal) {
+			if (!setPlayerLocalVolume(localVolume)) {
+				localVolumeSupported = false;
+				volumeGestureLocal = false;
+			}
+		} else if (localVolumeSupported) {
+			// The legacy mode controls STREAM_MUSIC. Remove a previously applied
+			// per-player attenuation so the two volume scales are never multiplied.
+			player.setVolume(100, 0);
+		}
+		if (volumeGestureLocal) {
+			volumeGestureMaximum = 100;
+			volumeGestureStart = localVolume;
 		} else {
-			updateMuteButton();
+			if (audioManager == null || audioManager.isVolumeFixed()) {
+				return -1;
+			}
+			volumeGestureMaximum = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+			if (volumeGestureMaximum <= 0) {
+				return -1;
+			}
+			volumeGestureStart = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC);
+			if (volumeGestureStart > 0) {
+				lastNonZeroSystemVolume = volumeGestureStart;
+			}
 		}
+		volumeGestureCurrent = volumeGestureStart;
+		updateMuteButton();
+		return Math.round(100f * volumeGestureCurrent / volumeGestureMaximum);
 	}
 
-	void onSystemVolumeGestureEnd(int volume) {
-		if (volume > 0) {
-			lastNonZeroSystemVolume = volume;
+	int onVolumeGestureProgress(float distanceFraction) {
+		int volume = volumeGestureStart + Math.round(distanceFraction * volumeGestureMaximum);
+		volume = Math.max(0, Math.min(volumeGestureMaximum, volume));
+		if (volume != volumeGestureCurrent) {
+			if (volumeGestureLocal) {
+				if (!setPlayerLocalVolume(volume)) {
+					localVolumeSupported = false;
+					return Math.round(100f * volumeGestureCurrent / volumeGestureMaximum);
+				}
+				localVolume = volume;
+				if (volume > 0) {
+					lastNonZeroLocalVolume = volume;
+				}
+			} else {
+				audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, volume, 0);
+				if (volume > 0) {
+					lastNonZeroSystemVolume = volume;
+				}
+			}
+			volumeGestureCurrent = volume;
+			if (volume > 0 && muted) {
+				setMuted(false);
+			} else {
+				updateMuteButton();
+			}
+		}
+		return Math.round(100f * volumeGestureCurrent / volumeGestureMaximum);
+	}
+
+	void onVolumeGestureEnd() {
+		if (volumeGestureLocal) {
+			Preferences.setVideoLocalVolume(localVolume);
 		}
 		updateMuteButton();
+	}
+
+	boolean isVolumeGestureLocal() {
+		return volumeGestureLocal;
+	}
+
+	int getVolumeGestureBoostDb() {
+		return volumeGestureLocal ? getLocalVolumeBoostDb() : 0;
 	}
 
 	private void setMuted(boolean muted) {
@@ -687,6 +779,7 @@ public class VideoUnit {
 		this.playbackSpeed = normalizePlaybackSpeed(playbackSpeed);
 		this.muted = muted;
 		transferredPlayer.setPlaybackSpeed(this.playbackSpeed);
+		applyPlayerVolume(transferredPlayer);
 		muteSupported = !transferredPlayer.isAudioPresent() || transferredPlayer.setMuted(muted);
 		instance.galleryInstance.callback.setGalleryVisibleForPictureInPicture(true);
 		if (seekBar != null) {
@@ -722,6 +815,27 @@ public class VideoUnit {
 	}
 
 	private void handleMuteClick() {
+		if (isLocalVolumeActive()) {
+			if (localVolume <= 0) {
+				int volume = Math.max(1, Math.min(lastNonZeroLocalVolume, 100));
+				if (setPlayerLocalVolume(volume)) {
+					localVolume = volume;
+					lastNonZeroLocalVolume = volume;
+					Preferences.setVideoLocalVolume(volume);
+					if (muted) {
+						setMuted(false);
+					} else {
+						updateMuteButton();
+					}
+				} else {
+					localVolumeSupported = false;
+					updateMuteButton();
+				}
+			} else {
+				setMuted(!muted);
+			}
+			return;
+		}
 		if (audioManager != null && audioManager.getStreamVolume(AudioManager.STREAM_MUSIC) <= 0) {
 			int maximum = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
 			int volume = lastNonZeroSystemVolume > 0 ? Math.min(lastNonZeroSystemVolume, maximum)
@@ -744,22 +858,23 @@ public class VideoUnit {
 		}
 	}
 
-	private final View.OnClickListener playPauseClickListener = new View.OnClickListener() {
-		@Override
-		public void onClick(View v) {
-			if (initialized) {
-				if (finishedPlayback) {
-					finishedPlayback = false;
-					player.setPosition(0);
-					setPlaying(true, true);
-				} else {
-					boolean playing = !player.isPlaying();
-					setPlaying(playing, true);
-				}
-				updatePlayState();
-			}
+	boolean togglePlayback() {
+		if (!initialized || player == null) {
+			return false;
 		}
-	};
+		if (finishedPlayback) {
+			finishedPlayback = false;
+			player.setPosition(0);
+			setPlaying(true, true);
+		} else {
+			boolean playing = !player.isPlaying();
+			setPlaying(playing, true);
+		}
+		updatePlayState();
+		return true;
+	}
+
+	private final View.OnClickListener playPauseClickListener = v -> togglePlayback();
 
 	public static class SeekResult {
 		public final long position;
@@ -987,6 +1102,12 @@ public class VideoUnit {
 					holder.progressBar.setIndeterminate(true);
 				}
 				holder.progressBar.setVisible(busy, false);
+				if (!busy) {
+					// The shared progress bar normally remains visible for at least 500 ms.
+					// A seek is already debounced before it reaches this callback, so keeping
+					// the indicator after the first frame is rendered only adds a false stall.
+					holder.progressBar.cancelVisibilityTransient();
+				}
 			}
 		}
 

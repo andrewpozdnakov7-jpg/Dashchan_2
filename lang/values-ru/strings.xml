@@ -3,6 +3,8 @@
 
 	<string name="ai_generated_post">AI-сгенерированный пост</string>
 	<string name="ai_settings">Настройки AI-агентов</string>
+	<string name="classic_monkey_responses">Классическое оформление ответов Манки</string>
+	<string name="classic_monkey_responses__summary">Показывать ответ Манки с отступом и оформлять его как спойлер.</string>
 	<string name="hide_ai_posts">Скрывать AI-сгенерированные посты</string>
 	<string name="hide_threads_with_swipe">Скрывать треды свайпом</string>
 	<string name="highlight_my_posts">Подсвечивать мои посты</string>
@@ -261,10 +263,14 @@
 	<string name="gallery">Галерея</string>
 	<string name="hardware_video_acceleration">Использовать аппаратное ускорение</string>
 	<string name="hardware_video_acceleration__summary">Декодировать поддерживаемое видео через MediaCodec. Если аппаратное декодирование недоступно, используется программный декодер</string>
+	<string name="video_audio_boost">Усиление звука видео</string>
+	<string name="video_audio_boost__summary">Позволяет Slooop усиливать звук видео выше обычного уровня, не меняя системную громкость. Возможны компрессия и искажения. По умолчанию выключено</string>
+	<string name="video_audio_boost_level">Максимальное усиление звука видео</string>
+	<string name="video_audio_boost_level__format">+%d дБ</string>
 	<string name="video_diagnostics_start">Записать диагностику видео</string>
 	<string name="video_diagnostics_start__summary">Начать ограниченную запись технических событий, воспроизвести проблему и остановить запись здесь</string>
 	<string name="video_diagnostics_stop">Остановить и сохранить диагностику</string>
-	<string name="video_diagnostics_stop__summary">Запись активна. Откройте проблемное видео на 10–20 секунд, затем вернитесь сюда</string>
+	<string name="video_diagnostics_stop__summary">Запись активна. Воспроизведите проблему, включая перемотки; после зависания подождите 5–10 секунд и вернитесь сюда</string>
 	<string name="video_diagnostics_share">Поделиться последним логом</string>
 	<string name="video_diagnostics_share__summary">Лог хранится только на устройстве, пока вы его не удалите или пока его не заменят более новые логи</string>
 	<string name="video_diagnostics_delete">Удалить последний лог</string>
@@ -272,7 +278,7 @@
 	<string name="video_diagnostics_saved">Диагностический лог сохранён</string>
 	<string name="video_diagnostics_saved__message">Лог сохранён в кэше приложения. Его можно отправить сейчас или позже с этого экрана.</string>
 	<string name="video_diagnostics_save_failed">Не удалось сохранить диагностический лог</string>
-	<string name="video_diagnostics_privacy_notice">После запуска откройте проблемное видео на 10–20 секунд, затем вернитесь сюда и остановите запись.\n\nВ лог попадут версии приложения и Android, производитель и модель устройства, названия доступных видеодекодеров, параметры видеоформата, временные метки, счётчики кадров, ошибки декодера и состояние Surface.\n\nВ лог не попадают адреса, текст постов, содержимое медиафайлов, имена файлов, аккаунты, паскоды, cookie, IP-адреса, Android ID и серийные номера. Ничего не отправляется автоматически.</string>
+	<string name="video_diagnostics_privacy_notice">После запуска откройте проблемное видео, воспроизведите проблему, включая перемотки, затем вернитесь сюда и остановите запись. Если плеер завис, подождите 5–10 секунд перед остановкой.\n\nВ лог попадут версии приложения и Android, производитель и модель устройства, названия доступных видеодекодеров, параметры видеоформата, временные метки, счётчики кадров, ошибки декодера, состояние Surface, этапы перемотки и состояния синхронизации нативных потоков.\n\nВ лог не попадают адреса, текст постов, содержимое медиафайлов, имена файлов, аккаунты, паскоды, cookie, IP-адреса, Android ID и серийные номера. Ничего не отправляется автоматически.</string>
 	<string name="gallery_description__sentence">Смахните изображение вниз для доступа к галерее изображений.</string>
 	<string name="gallery_is_empty">Галерея пуста</string>
 	<string name="general">Общие</string>
@@ -473,6 +479,11 @@
 	<string name="persist_video_playback_speed__summary">Использовать выбранную скорость для следующих видео после перезапуска приложения</string>
 	<string name="video_volume_gesture">Регулировать громкость жестом</string>
 	<string name="video_volume_gesture__summary">Проведите вверх или вниз внутри настроенной области у правого края видео</string>
+	<string name="video_volume_gesture_target">Что регулирует жест громкости</string>
+	<string name="video_volume_gesture_target_video">Громкость видео в Slooop</string>
+	<string name="video_volume_gesture_target_video__summary">Жест регулирует только текущее видео. Физические кнопки телефона регулируют общую громкость мультимедиа</string>
+	<string name="video_volume_gesture_target_system">Системную громкость мультимедиа</string>
+	<string name="video_volume_gesture_target_system__summary">Жест и физические кнопки телефона регулируют общую громкость мультимедиа</string>
 	<string name="gesture_controls">Управление жестами</string>
 	<string name="gesture_controls__summary">Настройка областей жестов видеоплеера</string>
 	<string name="rounded_dialogs">Скруглённые всплывающие окна</string>
@@ -490,8 +501,8 @@
 	<string name="video_volume_gesture_top__format">Отступ сверху: %1$d%%</string>
 	<string name="video_volume_gesture_bottom__format">Отступ снизу: %1$d%%</string>
 	<string name="restore_defaults">Вернуть по умолчанию</string>
-	<string name="video_double_tap_seek">Перемотка двойным нажатием</string>
-	<string name="video_double_tap_seek__summary">Дважды нажмите слева или справа по видео, чтобы перемотать назад или вперёд в любой ориентации</string>
+	<string name="video_double_tap_seek">Управление видео двойным нажатием</string>
+	<string name="video_double_tap_seek__summary">Слева и справа — перемотка, по центру — пауза или продолжение воспроизведения</string>
 	<string name="video_picture_in_picture">Воспроизведение «картинка в картинке»</string>
 	<string name="video_picture_in_picture__summary">Показывать кнопку для продолжения текущего видео в плавающем системном окне. Экспериментальная функция</string>
 	<string name="video_picture_in_picture_auto">Автоматически включать PiP при сворачивании</string>
@@ -504,6 +515,9 @@
 	<string name="video_seek_beginning">Начало видео</string>
 	<string name="video_seek_end">Конец видео</string>
 	<string name="video_volume__format">Громкость: %1$d%%</string>
+	<string name="video_local_volume__format">Видео: %1$d%%</string>
+	<string name="video_boosted_volume__format">Видео: %1$d%% · усиление до +%2$d дБ</string>
+	<string name="video_system_volume__format">Система: %1$d%%</string>
 	<string name="attachment_video_preview">Предпросмотр прикреплённых видео</string>
 	<string name="attachment_video_preview__summary">Разрешить открывать видео перед отправкой; миниатюры показываются всегда</string>
 	<string name="mute_video">Выключить звук</string>
@@ -523,6 +537,9 @@
 	<string name="posts_with_files__genitive">Сообщений с файлами</string>
 	<string name="posts_with_same_name">Сообщения с таким же именем</string>
 	<string name="preferences">Настройки</string>
+	<string name="search_settings">Поиск настроек</string>
+	<string name="search_settings_hint">Введите название настройки</string>
+	<string name="no_settings_found">Подходящие настройки не найдены</string>
 	<string name="press_again_to_exit">Нажмите ещё раз, чтобы выйти</string>
 	<string name="proceed">Продолжить</string>
 	<string name="processing_data__ellipsis">Обработка данных…</string>

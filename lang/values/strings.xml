@@ -5,6 +5,8 @@
 	<string name="__enumeration_format">%1$s, %2$s</string>
 	<string name="ai_generated_post">AI-generated post</string>
 	<string name="ai_settings">AI-agents settings</string>
+	<string name="classic_monkey_responses">Classic Monkey response style</string>
+	<string name="classic_monkey_responses__summary">Indent Monkey responses and display them as spoilers.</string>
 	<string name="about">About</string>
 	<string name="action_on_playback_completion">Action on playback completion</string>
 	<string name="active_scrollbar">Active scrollbar</string>
@@ -257,10 +259,14 @@
 	<string name="gallery">Gallery</string>
 	<string name="hardware_video_acceleration">Use hardware acceleration</string>
 	<string name="hardware_video_acceleration__summary">Decode supported video with MediaCodec. The software decoder is used when hardware decoding is unavailable</string>
+	<string name="video_audio_boost">Boost video audio</string>
+	<string name="video_audio_boost__summary">Allow Slooop to amplify video audio above its normal level without changing system volume. Compression or distortion may occur. Disabled by default</string>
+	<string name="video_audio_boost_level">Maximum video audio boost</string>
+	<string name="video_audio_boost_level__format">+%d dB</string>
 	<string name="video_diagnostics_start">Record video diagnostics</string>
 	<string name="video_diagnostics_start__summary">Start a limited technical log, reproduce the video problem, then stop the recording here</string>
 	<string name="video_diagnostics_stop">Stop and save diagnostics</string>
-	<string name="video_diagnostics_stop__summary">Recording is active. Open a problematic video for 10–20 seconds, then return here</string>
+	<string name="video_diagnostics_stop__summary">Recording is active. Reproduce the problem, including seeking; after a stall wait 5–10 seconds and return here</string>
 	<string name="video_diagnostics_share">Share last diagnostic log</string>
 	<string name="video_diagnostics_share__summary">The log remains on this device until it is deleted or replaced by newer logs</string>
 	<string name="video_diagnostics_delete">Delete last diagnostic log</string>
@@ -268,7 +274,7 @@
 	<string name="video_diagnostics_saved">Diagnostic log saved</string>
 	<string name="video_diagnostics_saved__message">The log was saved in the application cache. You can share it now or later from this screen.</string>
 	<string name="video_diagnostics_save_failed">Could not save the diagnostic log</string>
-	<string name="video_diagnostics_privacy_notice">After starting, open a problematic video for 10–20 seconds, then return here and stop the recording.\n\nThe log contains the application and Android versions, device manufacturer and model, available video decoder names, video format parameters, timestamps, frame counters, decoder errors, and Surface state.\n\nIt does not contain URLs, post text, media bytes, file names, accounts, passcodes, cookies, IP addresses, Android ID, or serial numbers. Nothing is uploaded automatically.</string>
+	<string name="video_diagnostics_privacy_notice">After starting, open a problematic video, reproduce the problem including seeking, then return here and stop the recording. If the player stalls, wait 5–10 seconds before stopping.\n\nThe log contains the application and Android versions, device manufacturer and model, available video decoder names, video format parameters, timestamps, frame counters, decoder errors, Surface state, seek stages, and native thread synchronization states.\n\nIt does not contain URLs, post text, media bytes, file names, accounts, passcodes, cookies, IP addresses, Android ID, or serial numbers. Nothing is uploaded automatically.</string>
 	<string name="gallery_description__sentence">Swipe image down to open the images gallery.</string>
 	<string name="gallery_is_empty">Gallery is empty</string>
 	<string name="general">General</string>
@@ -453,6 +459,11 @@
 	<string name="persist_video_playback_speed__summary">Use the selected speed for subsequent videos after restarting the app</string>
 	<string name="video_volume_gesture">Adjust volume with a gesture</string>
 	<string name="video_volume_gesture__summary">Swipe up or down inside the configured area along the right edge of a video</string>
+	<string name="video_volume_gesture_target">Volume gesture controls</string>
+	<string name="video_volume_gesture_target_video">Slooop video volume</string>
+	<string name="video_volume_gesture_target_video__summary">The gesture controls only the current video. The phone\'s physical buttons control the overall media volume</string>
+	<string name="video_volume_gesture_target_system">System media volume</string>
+	<string name="video_volume_gesture_target_system__summary">The gesture and the phone\'s physical buttons control the overall media volume</string>
 	<string name="gesture_controls">Gesture controls</string>
 	<string name="gesture_controls__summary">Configure video player gesture areas</string>
 	<string name="rounded_dialogs">Rounded pop-up windows</string>
@@ -470,8 +481,8 @@
 	<string name="video_volume_gesture_top__format">Top inset: %1$d%%</string>
 	<string name="video_volume_gesture_bottom__format">Bottom inset: %1$d%%</string>
 	<string name="restore_defaults">Restore defaults</string>
-	<string name="video_double_tap_seek">Double-tap to seek</string>
-	<string name="video_double_tap_seek__summary">Double-tap the left or right side of a video to seek backward or forward in any orientation</string>
+	<string name="video_double_tap_seek">Double-tap video controls</string>
+	<string name="video_double_tap_seek__summary">Double-tap the left or right side to seek, or the center to pause or resume playback</string>
 	<string name="video_picture_in_picture">Picture-in-picture playback</string>
 	<string name="video_picture_in_picture__summary">Show a button that continues the current video in a floating system window. Experimental</string>
 	<string name="video_picture_in_picture_auto">Automatically enter PiP when minimized</string>
@@ -484,6 +495,9 @@
 	<string name="video_seek_beginning">Beginning of video</string>
 	<string name="video_seek_end">End of video</string>
 	<string name="video_volume__format">Volume: %1$d%%</string>
+	<string name="video_local_volume__format">Video: %1$d%%</string>
+	<string name="video_boosted_volume__format">Video: %1$d%% · boost up to +%2$d dB</string>
+	<string name="video_system_volume__format">System: %1$d%%</string>
 	<string name="attachment_video_preview">Preview attached videos</string>
 	<string name="attachment_video_preview__summary">Allow opening videos before posting; thumbnails are always shown</string>
 	<string name="mute_video">Mute video</string>
@@ -504,6 +518,9 @@
 	<string name="posts_with_files__genitive">Posts with files</string>
 	<string name="posts_with_same_name">Posts with the same name</string>
 	<string name="preferences">Preferences</string>
+	<string name="search_settings">Search settings</string>
+	<string name="search_settings_hint">Enter a setting name</string>
+	<string name="no_settings_found">No matching settings found</string>
 	<string name="press_again_to_exit">Press again to exit</string>
 	<string name="proceed">Proceed</string>
 	<string name="processing_data__ellipsis">Processing data…</string>

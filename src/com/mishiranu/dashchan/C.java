@@ -45,6 +45,7 @@ public class C {
 	public static final String ACTION_GALLERY = "com.mishiranu.dashchan.action.GALLERY";
 	public static final String ACTION_PLAYER = "com.mishiranu.dashchan.action.PLAYER";
 	public static final String ACTION_BROWSER = "com.mishiranu.dashchan.action.BROWSER";
+	public static final String ACTION_LOCAL_ARCHIVE = "com.mishiranu.dashchan.action.LOCAL_ARCHIVE";
 
 	public static final int REQUEST_CODE_ATTACH = 1;
 	public static final int REQUEST_CODE_OPEN_URI_TREE = 2;
@@ -72,6 +73,7 @@ public class C {
 	public static final String EXTRA_FAIL_RESULT = "com.mishiranu.dashchan.extra.FAIL_RESULT";
 	public static final String EXTRA_POST_NUMBER = "com.mishiranu.dashchan.extra.POST_NUMBER";
 	public static final String EXTRA_FROM_CLIENT = "com.mishiranu.dashchan.extra.FROM_CLIENT";
+	public static final String EXTRA_LOCAL_ARCHIVE_ID = "com.mishiranu.dashchan.extra.LOCAL_ARCHIVE_ID";
 	public static final String EXTRA_THREAD_NUMBER = "com.mishiranu.dashchan.extra.THREAD_NUMBER";
 	public static final String EXTRA_UPDATE_DATA_MAP = "com.mishiranu.dashchan.extra.UPDATE_DATA_MAP";
 }

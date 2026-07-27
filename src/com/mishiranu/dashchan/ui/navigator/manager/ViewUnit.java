@@ -457,6 +457,7 @@ public class ViewUnit {
 			}
 		}
 		holder.comment.setSpoilersEnabled(!Preferences.isShowSpoilers());
+		holder.comment.setAIGeneratedStyleEnabled(Preferences.isClassicMonkeyResponses(chan));
 		holder.comment.setSubjectAndComment(makeHighlightedText(demandSet.highlightText, subject),
 				makeHighlightedText(demandSet.highlightText, comment));
 		holder.comment.setVisibility(subject.length() > 0 || comment.length() > 0 ? View.VISIBLE : View.GONE);

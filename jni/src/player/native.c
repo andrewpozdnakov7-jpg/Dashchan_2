@@ -58,6 +58,11 @@ void JCALL(setPlaybackSpeed)(UNUSED JNIEnv * env, UNUSED jobject this, jlong poi
 	setPlaybackSpeed(pointer, speed);
 }
 
+jboolean JCALL(setVolume)(UNUSED JNIEnv * env, UNUSED jobject this,
+		jlong pointer, jint volume, jint boostDb) {
+	return setVolume(pointer, volume, boostDb);
+}
+
 jboolean JCALL(setMuted)(UNUSED JNIEnv * env, UNUSED jobject this, jlong pointer, jboolean muted) {
 	return setMuted(pointer, muted);
 }

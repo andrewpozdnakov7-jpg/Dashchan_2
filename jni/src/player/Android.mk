@@ -15,7 +15,7 @@ else
 LOCAL_CFLAGS += -DDASHCHAN_FFMPEG_FLAVOR=\"$(DASHCHAN_FFMPEG_FLAVOR)\"
 endif
 LOCAL_LDFLAGS += -Wl,--build-id=none
-LOCAL_LDLIBS += -landroid -lOpenSLES -llog
+LOCAL_LDLIBS += -landroid -lOpenSLES -llog -lm
 ifeq ($(NDK_DEBUG),1)
 LOCAL_CFLAGS += -DDEBUG_VERBOSE
 else

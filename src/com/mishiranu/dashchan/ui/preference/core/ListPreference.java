@@ -22,8 +22,13 @@ public class ListPreference extends DialogPreference<String> {
 
 	public ListPreference(Context context, String key, String defaultValue, CharSequence title,
 			List<CharSequence> entries, List<String> values) {
-		super(context, key, defaultValue, title, p -> entries.get(getIndex((ListPreference) p)));
-		if (entries.size() != values.size()) {
+		this(context, key, defaultValue, title, entries, values, entries);
+	}
+
+	public ListPreference(Context context, String key, String defaultValue, CharSequence title,
+			List<CharSequence> entries, List<String> values, List<CharSequence> summaries) {
+		super(context, key, defaultValue, title, p -> summaries.get(getIndex((ListPreference) p)));
+		if (entries.size() != values.size() || summaries.size() != values.size()) {
 			throw new IllegalArgumentException();
 		}
 		this.entries = entries;

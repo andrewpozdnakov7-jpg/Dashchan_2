@@ -135,6 +135,10 @@ public abstract class Preference<T> {
 		return value;
 	}
 
+	public CharSequence getTitle() {
+		return title;
+	}
+
 	public void setOnClickListener(OnClickListener<T> listener) {
 		this.onClickListener = listener;
 	}
