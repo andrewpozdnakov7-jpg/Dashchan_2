@@ -341,8 +341,8 @@ struct Player {
 			pthread_t thread;
 			pthread_mutex_t frameMutex;
 			int diagnosticsStage;
-			uint64_t diagnosticsFrameSerial;
-			int64_t diagnosticsFramePosition;
+			uint64_t diagnosticsFrameSerial __attribute__((aligned(8)));
+			int64_t diagnosticsFramePosition __attribute__((aligned(8)));
 		} video;
 	} decode;
 
@@ -2513,7 +2513,7 @@ static Player * createPlayer(void) {
 	player->video.useLibyuv = -1;
 	player->video.lastBuffer.width = -1;
 	player->video.lastBuffer.height = -1;
-	player->decode.video.diagnosticsFramePosition = -1;
+	__atomic_store_n(&player->decode.video.diagnosticsFramePosition, -1, __ATOMIC_RELAXED);
 	player->audio.localVolume = 100;
 	player->sync.playbackSpeed = PLAYBACK_SPEED_DEFAULT;
 	sparseArrayInit(&player->bridge.array, 4);
