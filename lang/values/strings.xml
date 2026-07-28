@@ -256,6 +256,12 @@
 	<string name="forums">Forums</string>
 	<string name="foss_licenses">FOSS licenses</string>
 	<string name="foss_licenses__summary">License details for free and open source software</string>
+	<string name="project_author">Author and maintenance</string>
+	<string name="based_on_dashchan">Based on Dashchan</string>
+	<string name="based_on_dashchan__summary">Fukurou Mishiranu and project contributors</string>
+	<string name="contact_email">Email</string>
+	<string name="contact_email__summary">%1$s\nTap to write; touch and hold to copy</string>
+	<string name="email_address_copied">Email address copied</string>
 	<string name="gallery">Gallery</string>
 	<string name="hardware_video_acceleration">Use hardware acceleration</string>
 	<string name="hardware_video_acceleration__summary">Decode supported video with MediaCodec. The software decoder is used when hardware decoding is unavailable</string>

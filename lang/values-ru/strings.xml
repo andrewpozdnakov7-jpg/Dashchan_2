@@ -260,6 +260,12 @@
 	<string name="forums">Форумы</string>
 	<string name="foss_licenses">Лицензии FOSS</string>
 	<string name="foss_licenses__summary">Сведения о лицензиях на свободное ПО и ПО с открытым исходным кодом</string>
+	<string name="project_author">Автор и сопровождение</string>
+	<string name="based_on_dashchan">Основано на Dashchan</string>
+	<string name="based_on_dashchan__summary">Fukurou Mishiranu и участники проекта</string>
+	<string name="contact_email">Электронная почта</string>
+	<string name="contact_email__summary">%1$s\nНажмите, чтобы написать; удерживайте, чтобы скопировать</string>
+	<string name="email_address_copied">Адрес электронной почты скопирован</string>
 	<string name="gallery">Галерея</string>
 	<string name="hardware_video_acceleration">Использовать аппаратное ускорение</string>
 	<string name="hardware_video_acceleration__summary">Декодировать поддерживаемое видео через MediaCodec. Если аппаратное декодирование недоступно, используется программный декодер</string>

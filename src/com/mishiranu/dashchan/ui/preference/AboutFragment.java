@@ -2,6 +2,7 @@ package com.mishiranu.dashchan.ui.preference;
 
 import android.app.AlertDialog;
 import android.content.DialogInterface;
+import android.net.Uri;
 import android.os.Bundle;
 import android.text.format.DateFormat;
 import android.view.View;
@@ -9,6 +10,7 @@ import androidx.annotation.NonNull;
 import androidx.fragment.app.DialogFragment;
 import chan.util.CommonUtils;
 import chan.util.DataFile;
+import chan.util.StringUtils;
 import com.mishiranu.dashchan.BuildConfig;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.BackupManager;
@@ -27,6 +29,8 @@ import java.util.List;
 
 public class AboutFragment extends PreferenceFragment implements FragmentHandler.Callback {
 	private static final String EXTRA_IN_STORAGE_REQUEST = "inStorageRequest";
+	private static final String PROJECT_AUTHOR = "andrewpozdnakov7-jpg";
+	private static final String CONTACT_EMAIL = "andrewpozdnakov7@gmail.com";
 
 	private boolean inStorageRequest = false;
 	private boolean confirmingBetaChannel = false;
@@ -83,6 +87,18 @@ public class AboutFragment extends PreferenceFragment implements FragmentHandler
 		addButton(R.string.check_for_updates, 0)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 						.pushFragment(new UpdateFragment()));
+		addButton(getString(R.string.project_author), PROJECT_AUTHOR)
+				.setOnClickListener(p -> NavigationUtils.handleUriInternal(requireContext(), null,
+						Uri.parse("https:" + BuildConfig.GITHUB_URI_METADATA)));
+		addButton(R.string.based_on_dashchan, R.string.based_on_dashchan__summary).setSelectable(false);
+		Preference<Void> emailPreference = addButton(getString(R.string.contact_email),
+				getString(R.string.contact_email__summary, CONTACT_EMAIL));
+		emailPreference.setOnClickListener(p -> NavigationUtils.handleUriInternal(requireContext(), null,
+				Uri.parse("mailto:" + CONTACT_EMAIL)));
+		emailPreference.setOnLongClickListener(p -> {
+			StringUtils.copyToClipboard(requireContext(), CONTACT_EMAIL);
+			ClickableToast.show(R.string.email_address_copied);
+		});
 		addButton(R.string.foss_licenses, R.string.foss_licenses__summary)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 						.pushFragment(new TextFragment(TextFragment.Type.LICENSES)));

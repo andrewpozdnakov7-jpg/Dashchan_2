@@ -498,7 +498,10 @@ public abstract class PreferenceFragment extends ContentFragment {
 
 		@Override
 		public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
-			preferences.get(position).bindViewHolder(holder.viewHolder);
+			Preference<?> preference = preferences.get(position);
+			preference.bindViewHolder(holder.viewHolder);
+			holder.itemView.setOnLongClickListener(preference.hasLongClickListener()
+					? view -> preference.performLongClick() : null);
 		}
 	}
 

@@ -22,6 +22,10 @@ public abstract class Preference<T> {
 		void onClick(Preference<T> preference);
 	}
 
+	public interface OnLongClickListener<T> {
+		void onLongClick(Preference<T> preference);
+	}
+
 	protected interface OnChangeListener {
 		void onChange(boolean newValue);
 	}
@@ -62,6 +66,7 @@ public abstract class Preference<T> {
 	private boolean enabled = true;
 	private boolean selectable = true;
 	private OnClickListener<T> onClickListener;
+	private OnLongClickListener<T> onLongClickListener;
 	private OnChangeListener onChangeListener;
 	private OnBeforeChangeListener<T> onBeforeChangeListener;
 	private OnAfterChangeListener<T> onAfterChangeListener;
@@ -107,6 +112,18 @@ public abstract class Preference<T> {
 		}
 	}
 
+	public boolean performLongClick() {
+		if (onLongClickListener != null) {
+			onLongClickListener.onLongClick(this);
+			return true;
+		}
+		return false;
+	}
+
+	public boolean hasLongClickListener() {
+		return onLongClickListener != null;
+	}
+
 	protected abstract void extract(SharedPreferences preferences);
 	protected abstract void persist(SharedPreferences preferences);
 
@@ -141,6 +158,10 @@ public abstract class Preference<T> {
 
 	public void setOnClickListener(OnClickListener<T> listener) {
 		this.onClickListener = listener;
+	}
+
+	public void setOnLongClickListener(OnLongClickListener<T> listener) {
+		this.onLongClickListener = listener;
 	}
 
 	protected void setOnChangeListener(OnChangeListener listener) {
