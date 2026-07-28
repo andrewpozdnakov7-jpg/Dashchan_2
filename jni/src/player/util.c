@@ -113,6 +113,7 @@ void bufferQueueInit(BufferQueue * bufferQueue, int bufferSize, int maxCount) {
 		BufferItem * bufferItem = malloc(sizeof(BufferItem));
 		bufferItem->buffer = buffer;
 		bufferItem->bufferSize = bufferSize;
+		bufferItem->dataSize = 0;
 		bufferItem->extra = NULL;
 		queueAdd(&bufferQueue->freeQueue, bufferItem);
 	}
@@ -158,6 +159,9 @@ BufferItem * bufferQueuePrepare(BufferQueue * bufferQueue) {
 		free(bufferItem->buffer);
 		bufferItem->buffer = buffer;
 		bufferItem->bufferSize = bufferQueue->bufferSize;
+	}
+	if (bufferItem) {
+		bufferItem->dataSize = 0;
 	}
 	return bufferItem;
 }

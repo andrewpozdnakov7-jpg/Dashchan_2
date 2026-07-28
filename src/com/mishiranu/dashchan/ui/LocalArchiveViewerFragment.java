@@ -247,7 +247,7 @@ public class LocalArchiveViewerFragment extends ContentFragment implements Posts
 					}
 					installNativeArchive(finalNativeArchive);
 					viewModeInitialized = true;
-					((FragmentHandler) requireActivity()).setTitleSubtitle(finalFound.name,
+					((FragmentHandler) requireActivity()).setTitleSubtitle(finalFound.getDisplayName(),
 							getString(R.string.local_archives));
 					displayArchive();
 					invalidateOptionsMenu();

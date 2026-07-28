@@ -357,6 +357,9 @@ public final class SettingsSearchIndex {
 				R.string.video_volume_gesture__summary, Preferences.KEY_VIDEO_VOLUME_GESTURE);
 		add(context, entries, Screen.GESTURES, R.string.video_volume_gesture_target, 0,
 				Preferences.KEY_VIDEO_VOLUME_GESTURE_TARGET);
+		add(context, entries, Screen.GESTURES, R.string.video_volume_gesture_sensitivity,
+				R.string.video_volume_gesture_sensitivity__search_summary,
+				Preferences.KEY_VIDEO_VOLUME_GESTURE_SENSITIVITY);
 		add(context, entries, Screen.GESTURES, R.string.video_volume_gesture_area);
 		add(context, entries, Screen.GESTURES, R.string.video_double_tap_seek,
 				R.string.video_double_tap_seek__summary, Preferences.KEY_VIDEO_DOUBLE_TAP_SEEK);

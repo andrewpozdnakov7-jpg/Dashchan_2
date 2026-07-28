@@ -34,6 +34,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashMap;
@@ -188,6 +189,7 @@ public class VideoPlayer {
 		void onComplete(VideoPlayer player);
 		void onBusyStateChange(VideoPlayer player, boolean busy);
 		void onDimensionChange(VideoPlayer player);
+		default void onDurationChange(VideoPlayer player, long duration) {}
 	}
 
 	public interface RangeCallback {
@@ -220,6 +222,11 @@ public class VideoPlayer {
 	private volatile boolean consumed = false;
 	private boolean playing = false;
 	private int playbackSpeed = 1000;
+	private long nextSurfaceGeneration;
+	private long latestSurfaceGeneration;
+	// Surface.release() invalidates the Java wrapper even if JNI still has a global reference.
+	// Keep each wrapper alive until the video thread confirms that its generation was handled.
+	private final ArrayList<SurfaceRequest> surfaceRequests = new ArrayList<>();
 
 	private boolean lastSeeking = false;
 	private volatile boolean lastBuffering = false;
@@ -251,7 +258,7 @@ public class VideoPlayer {
 			surfaceTexture = new SurfaceTexture(false);
 			surfaceTexture.setDefaultBufferSize(Math.max(dimensions.x, 1), Math.max(dimensions.y, 1));
 			surface = new Surface(surfaceTexture);
-			player.setSurface(surface);
+			player.setSurface(surface, Math.max(dimensions.x, 1), Math.max(dimensions.y, 1));
 			player.setPlaying(true);
 			long timeout = System.currentTimeMillis() + 3000L;
 			while (!Thread.currentThread().isInterrupted() && System.currentTimeMillis() < timeout) {
@@ -267,13 +274,10 @@ public class VideoPlayer {
 			return null;
 		} finally {
 			player.setPlaying(false);
-			if (surface != null) {
-				surface.release();
-			}
+			player.destroy();
 			if (surfaceTexture != null) {
 				surfaceTexture.release();
 			}
-			player.destroy();
 		}
 	}
 
@@ -458,6 +462,8 @@ public class VideoPlayer {
 	public void setPosition(long position) {
 		synchronized (this) {
 			if (isInitialized()) {
+				long duration = holder.getDuration(sessionData.pointer);
+				position = Math.max(0L, duration > 0L ? Math.min(position, duration) : position);
 				if (playing) {
 					cancelSetPositionLocked(false);
 				}
@@ -538,7 +544,7 @@ public class VideoPlayer {
 					+ " surface_size=" + width + "x" + height
 					+ " view_size=" + getWidth() + "x" + getHeight()
 					+ " visibility=" + getVisibility() + " alpha=" + getAlpha());
-			player.setSurface(playerSurface);
+			player.setSurface(playerSurface, width, height);
 		}
 
 		@Override
@@ -550,7 +556,14 @@ public class VideoPlayer {
 		}
 
 		@Override
-		public void onSurfaceTextureSizeChanged(SurfaceTexture surface, int width, int height) {}
+		public void onSurfaceTextureSizeChanged(SurfaceTexture surface, int width, int height) {
+			VideoPlayer player = this.player.get();
+			if (player != null) {
+				VideoDiagnostics.recordUi("texture=" + diagnosticsId + " surface_size_changed"
+						+ " surface_size=" + width + "x" + height);
+				player.setSurfaceSize(width, height);
+			}
+		}
 
 		@Override
 		public void onSurfaceTextureUpdated(SurfaceTexture surface) {
@@ -587,12 +600,10 @@ public class VideoPlayer {
 		}
 
 		private void releasePlayerSurface() {
-			Surface surface = playerSurface;
-			if (surface != null) {
+			if (playerSurface != null) {
 				playerSurface = null;
-				surface.release();
-				VideoDiagnostics.recordUi("texture=" + diagnosticsId + " surface_released"
-						+ " native_replacement_deferred=true");
+				VideoDiagnostics.recordUi("texture=" + diagnosticsId + " surface_handed_off"
+						+ " player_ownership_deferred=true");
 			}
 		}
 
@@ -645,23 +656,66 @@ public class VideoPlayer {
 		});
 	}
 
-	private void setSurface(Surface surface) {
+	private void setSurface(Surface surface, int width, int height) {
 		synchronized (this) {
 			if (isInitialized()) {
-				boolean playing = isPlaying();
-				if (playing) {
-					setPlaying(false);
-				}
-				long position = holder.getPosition(sessionData.pointer);
-				boolean decoderReset = holder.setSurface(sessionData.pointer, surface);
-				if (decoderReset) {
-					setPosition(position);
-				}
-				if (playing) {
-					setPlaying(true);
-				}
+				cancelSetPositionLocked(false);
+				long generation = ++nextSurfaceGeneration;
+				latestSurfaceGeneration = generation;
+				surfaceRequests.add(new SurfaceRequest(generation, surface));
+				VideoDiagnostics.recordUi("surface_request generation=" + generation
+						+ " valid=" + surface.isValid() + " size=" + width + "x" + height);
+				holder.requestSurface(sessionData.pointer, surface, generation, width, height);
+			} else {
+				surface.release();
 			}
 		}
+	}
+
+	private void setSurfaceSize(int width, int height) {
+		synchronized (this) {
+			if (isInitialized() && width > 0 && height > 0) {
+				holder.setSurfaceSize(sessionData.pointer, width, height);
+			}
+		}
+	}
+
+	private void onSurfaceApplied(SurfaceApplied surfaceApplied) {
+		synchronized (this) {
+			releaseSurfaceRequestsLocked(surfaceApplied.generation);
+			if (!isInitialized() || surfaceApplied.generation != latestSurfaceGeneration) {
+				VideoDiagnostics.recordUi("surface_applied_stale generation=" + surfaceApplied.generation
+						+ " latest=" + latestSurfaceGeneration);
+				return;
+			}
+			VideoDiagnostics.recordUi("surface_applied generation=" + surfaceApplied.generation
+					+ " position=" + surfaceApplied.position
+					+ " decoder_reset=" + surfaceApplied.decoderReset
+					+ " resume=" + playing);
+			if (surfaceApplied.decoderReset) {
+				setPosition(surfaceApplied.position);
+			}
+			if (playing) {
+				holder.setPlaying(sessionData.pointer, true);
+			}
+		}
+	}
+
+	private void releaseSurfaceRequestsLocked(long appliedGeneration) {
+		for (int i = surfaceRequests.size() - 1; i >= 0; i--) {
+			SurfaceRequest request = surfaceRequests.get(i);
+			if (request.generation <= appliedGeneration) {
+				request.surface.release();
+				surfaceRequests.remove(i);
+			}
+		}
+	}
+
+	private void releaseAllSurfaceRequestsLocked() {
+		for (SurfaceRequest request : surfaceRequests) {
+			request.surface.release();
+		}
+		surfaceRequests.clear();
 	}
 
 	public void setPlaying(boolean playing) {
@@ -812,16 +866,20 @@ public class VideoPlayer {
 		synchronized (this) {
 			if (!consumed) {
 				consumed = true;
-				if (initData != null) {
-					holder.destroy(initData.pointer, true);
-				}
-				SessionData sessionData = preInitSessionData != null ? preInitSessionData : this.sessionData;
-				if (sessionData != null) {
-					cancelSetPositionLocked(true);
-					synchronized (seekerThread) {
-						seekerThread.notifyAll();
+				try {
+					if (initData != null) {
+						holder.destroy(initData.pointer, true);
 					}
-					holder.destroy(sessionData.pointer, false);
+					SessionData sessionData = preInitSessionData != null ? preInitSessionData : this.sessionData;
+					if (sessionData != null) {
+						cancelSetPositionLocked(true);
+						synchronized (seekerThread) {
+							seekerThread.notifyAll();
+						}
+						holder.destroy(sessionData.pointer, false);
+					}
+				} finally {
+					releaseAllSurfaceRequestsLocked();
 				}
 			}
 		}
@@ -850,7 +908,7 @@ public class VideoPlayer {
 	}
 
 	private enum Message {PLAYBACK_COMPLETE, SIZE_CHANGED, START_SEEKING, END_SEEKING, START_BUFFERING, END_BUFFERING,
-		REPORT_STALLED_SEEK, REQUEST_RANGE}
+		REPORT_STALLED_SEEK, SURFACE_APPLIED, REQUEST_RANGE, DURATION_CHANGED}
 
 	private final Handler handler = new Handler(Looper.getMainLooper(), msg -> {
 		switch (Message.values()[msg.what]) {
@@ -889,9 +947,27 @@ public class VideoPlayer {
 				}
 				return true;
 			}
+			case SURFACE_APPLIED: {
+				onSurfaceApplied((SurfaceApplied) msg.obj);
+				return true;
+			}
 			case REQUEST_RANGE: {
 				long position = (long) msg.obj;
 				requestRange(position);
+				return true;
+			}
+			case DURATION_CHANGED: {
+				long duration = (long) msg.obj;
+				synchronized (this) {
+					SeekToPosition seekToPosition = this.seekToPosition;
+					if (duration > 0L && seekToPosition != null && seekToPosition.position > duration) {
+						setPosition(duration);
+					}
+				}
+				Listener listener = this.listener;
+				if (listener != null && !consumed) {
+					listener.onDurationChange(this, duration);
+				}
 				return true;
 			}
 		}
@@ -907,6 +983,28 @@ public class VideoPlayer {
 			this.requestId = requestId;
 			this.position = position;
 			this.allow = allow;
+		}
+	}
+
+	private static class SurfaceApplied {
+		public final long generation;
+		public final long position;
+		public final boolean decoderReset;
+
+		public SurfaceApplied(long generation, long position, boolean decoderReset) {
+			this.generation = generation;
+			this.position = position;
+			this.decoderReset = decoderReset;
+		}
+	}
+
+	private static class SurfaceRequest {
+		public final long generation;
+		public final Surface surface;
+
+		public SurfaceRequest(long generation, Surface surface) {
+			this.generation = generation;
+			this.surface = surface;
 		}
 	}
 
@@ -988,6 +1086,21 @@ public class VideoPlayer {
 			}
 		}
 
+		public void onDurationChanged(long duration) {
+			VideoPlayer player = this.player.get();
+			if (player != null) {
+				player.handler.obtainMessage(Message.DURATION_CHANGED.ordinal(), duration).sendToTarget();
+			}
+		}
+
+		public void onSurfaceApplied(long generation, long position, boolean decoderReset) {
+			VideoPlayer player = this.player.get();
+			if (player != null) {
+				player.handler.obtainMessage(Message.SURFACE_APPLIED.ordinal(),
+						new SurfaceApplied(generation, position, decoderReset)).sendToTarget();
+			}
+		}
+
 		public void onMessage(int what) {
 			VideoPlayer player = this.player.get();
 			if (player != null) {
@@ -1040,7 +1153,8 @@ public class VideoPlayer {
 		boolean setVolume(long pointer, int volume, int boostDb);
 		boolean setMuted(long pointer, boolean muted);
 		void stopAudio(long pointer);
-		boolean setSurface(long pointer, Surface surface);
+		void requestSurface(long pointer, Surface surface, long generation, int width, int height);
+		void setSurfaceSize(long pointer, int width, int height);
 		void setPlaying(long pointer, boolean playing);
 
 		int[] getCurrentFrame(long pointer, int[] dimensions);
@@ -1092,7 +1206,9 @@ public class VideoPlayer {
 		@Override public native boolean setVolume(long pointer, int volume, int boostDb);
 		@Override public native boolean setMuted(long pointer, boolean muted);
 		@Override public native void stopAudio(long pointer);
-		@Override public native boolean setSurface(long pointer, Surface surface);
+		@Override public native void requestSurface(long pointer, Surface surface, long generation,
+				int width, int height);
+		@Override public native void setSurfaceSize(long pointer, int width, int height);
 		@Override public native void setPlaying(long pointer, boolean playing);
 
 		@Override public native int[] getCurrentFrame(long pointer, int[] dimensions);

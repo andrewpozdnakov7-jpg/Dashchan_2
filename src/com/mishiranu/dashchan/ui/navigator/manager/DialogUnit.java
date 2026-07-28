@@ -1641,11 +1641,11 @@ public class DialogUnit {
 					boolean createZip = options.contains(OPTION_ZIP);
 					if (createZip && (saveThumbnails || saveFiles)) {
 						showLocalArchiveWarning(provider.getFragmentManager(), state.chanName,
-								state.boardName, state.threadNumber, posts,
+								state.boardName, state.threadNumber, state.archiveThreadTitle, posts,
 								saveThumbnails, saveFiles);
 					} else {
 						startLocalArchiveProcess(provider.getFragmentManager(), state.chanName,
-								state.boardName, state.threadNumber, posts,
+								state.boardName, state.threadNumber, state.archiveThreadTitle, posts,
 								saveThumbnails, saveFiles, createZip);
 					}
 				}
@@ -1733,13 +1733,13 @@ public class DialogUnit {
 	private static final SendLocalArchiveTask.DownloadResult DOWNLOAD_RESULT_ERROR = binder -> {};
 
 	private static void showLocalArchiveWarning(FragmentManager fragmentManager,
-			String chanName, String boardName, String threadNumber, Collection<Post> posts,
+			String chanName, String boardName, String threadNumber, String threadTitle, Collection<Post> posts,
 			boolean saveThumbnails, boolean saveFiles) {
 		new InstanceDialog(fragmentManager, null, provider -> new AlertDialog.Builder(provider.getContext())
 				.setMessage(R.string.zip_archive_warning)
 				.setNegativeButton(android.R.string.cancel, null)
 				.setPositiveButton(android.R.string.ok, (dialog, which) -> startLocalArchiveProcess(
-						provider.getFragmentManager(), chanName, boardName, threadNumber, posts,
+						provider.getFragmentManager(), chanName, boardName, threadNumber, threadTitle, posts,
 						saveThumbnails, saveFiles, true))
 				.create());
 	}
@@ -1760,7 +1760,7 @@ public class DialogUnit {
 	}
 
 	private static void startLocalArchiveProcess(FragmentManager fragmentManager,
-			String chanName, String boardName, String threadNumber, Collection<Post> posts,
+			String chanName, String boardName, String threadNumber, String threadTitle, Collection<Post> posts,
 			boolean saveThumbnails, boolean saveFiles, boolean createZip) {
 		new InstanceDialog(fragmentManager, null, provider -> {
 			Context context = provider.getContext();
@@ -1770,7 +1770,7 @@ public class DialogUnit {
 			LocalArchiveViewModel viewModel = provider.getViewModel(LocalArchiveViewModel.class);
 			if (!viewModel.hasTaskOrValue()) {
 				SendLocalArchiveTask task = new SendLocalArchiveTask(viewModel, Chan.get(chanName),
-						boardName, threadNumber, posts, saveThumbnails, saveFiles, createZip);
+						boardName, threadNumber, threadTitle, posts, saveThumbnails, saveFiles, createZip);
 				task.execute(ConcurrentUtils.PARALLEL_EXECUTOR);
 				viewModel.attach(task);
 			}

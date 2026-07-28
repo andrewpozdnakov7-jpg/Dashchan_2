@@ -484,6 +484,14 @@
 	<string name="video_volume_gesture_target_video__summary">Жест регулирует только текущее видео. Физические кнопки телефона регулируют общую громкость мультимедиа</string>
 	<string name="video_volume_gesture_target_system">Системную громкость мультимедиа</string>
 	<string name="video_volume_gesture_target_system__summary">Жест и физические кнопки телефона регулируют общую громкость мультимедиа</string>
+	<string name="video_volume_gesture_sensitivity">Чувствительность жеста</string>
+	<string name="video_volume_gesture_sensitivity__summary_format">%1$d%% · Нажмите, чтобы настроить и проверить</string>
+	<string name="video_volume_gesture_sensitivity__search_summary">Настройка длины свайпа и проверка жеста громкости</string>
+	<string name="video_volume_gesture_sensitivity_range__format">От %1$d до %2$d</string>
+	<string name="video_volume_gesture_configure_and_test">Настройка и проверка жеста</string>
+	<string name="video_volume_gesture_test_hint">Проведите вверх или вниз в выделенной области. При 50% нужны две высоты экрана, при 100% — вся высота, при 300% — треть. Тест не изменяет настоящую громкость.</string>
+	<string name="video_volume_gesture_test_area">Область проверки жеста громкости</string>
+	<string name="video_volume_gesture_test_reset">Вернуть тестовую громкость к 50%</string>
 	<string name="gesture_controls">Управление жестами</string>
 	<string name="gesture_controls__summary">Настройка областей жестов видеоплеера</string>
 	<string name="rounded_dialogs">Скруглённые всплывающие окна</string>
@@ -516,8 +524,6 @@
 	<string name="video_seek_end">Конец видео</string>
 	<string name="video_volume__format">Громкость: %1$d%%</string>
 	<string name="video_local_volume__format">Видео: %1$d%%</string>
-	<string name="video_boosted_volume__format">Видео: %1$d%% · усиление до +%2$d дБ</string>
-	<string name="video_system_volume__format">Система: %1$d%%</string>
 	<string name="attachment_video_preview">Предпросмотр прикреплённых видео</string>
 	<string name="attachment_video_preview__summary">Разрешить открывать видео перед отправкой; миниатюры показываются всегда</string>
 	<string name="mute_video">Выключить звук</string>

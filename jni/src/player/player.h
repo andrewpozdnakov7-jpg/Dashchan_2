@@ -24,7 +24,8 @@ jboolean setVolume(jlong, jint, jint);
 jboolean setMuted(jlong, jboolean);
 void stopAudio(jlong);
 void setPlaying(jlong, jboolean);
-jboolean setSurface(JNIEnv *, jlong, jobject);
+void requestSurface(JNIEnv *, jlong, jobject, jlong, jint, jint);
+void setSurfaceSize(jlong, jint, jint);
 
 jintArray getCurrentFrame(JNIEnv *, jlong, jintArray);
 jobjectArray getMetadata(JNIEnv *, jlong);

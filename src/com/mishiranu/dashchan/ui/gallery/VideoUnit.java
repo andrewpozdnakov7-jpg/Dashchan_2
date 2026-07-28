@@ -36,6 +36,7 @@ import com.mishiranu.dashchan.content.async.ReadVideoTask;
 import com.mishiranu.dashchan.content.model.ErrorItem;
 import com.mishiranu.dashchan.graphics.BaseDrawable;
 import com.mishiranu.dashchan.media.VideoPlayer;
+import com.mishiranu.dashchan.media.VolumeGestureUtils;
 import com.mishiranu.dashchan.ui.InstanceDialog;
 import com.mishiranu.dashchan.util.AnimationUtils;
 import com.mishiranu.dashchan.util.AudioFocus;
@@ -89,6 +90,7 @@ public class VideoUnit {
 	private int volumeGestureStart;
 	private int volumeGestureCurrent;
 	private int volumeGestureMaximum;
+	private int volumeGestureSensitivity;
 	private File sourceFile;
 
 	private ReadVideoCallback readVideoCallback;
@@ -469,9 +471,7 @@ public class VideoUnit {
 			configurationView.addView(spacer, new LinearLayout.LayoutParams(0, 1, 1f));
 			updateMuteButton();
 			updatePictureInPictureButton();
-			long duration = player.getDuration();
-			totalTimeTextView.setText(formatVideoTime(duration));
-			seekBar.setMax((int) duration);
+			updateDuration(player.getDuration());
 		}
 		seekBar.removeCallbacks(progressRunnable);
 		seekBar.post(progressRunnable);
@@ -483,6 +483,17 @@ public class VideoUnit {
 		int m = (int) (position / 60 % 60);
 		int s = (int) (position % 60);
 		return String.format(Locale.US, "%02d:%02d", m, s);
+	}
+
+	private void updateDuration(long duration) {
+		duration = Math.max(duration, 0L);
+		int maximum = (int) Math.min(duration, Integer.MAX_VALUE);
+		int progress = Math.min(seekBar.getProgress(), maximum);
+		int secondaryProgress = Math.min(seekBar.getSecondaryProgress(), maximum);
+		totalTimeTextView.setText(formatVideoTime(duration));
+		seekBar.setMax(maximum);
+		seekBar.setProgress(progress);
+		seekBar.setSecondaryProgress(secondaryProgress);
 	}
 
 	private static String formatPlaybackSpeed(int speed) {
@@ -640,13 +651,14 @@ public class VideoUnit {
 			}
 		}
 		volumeGestureCurrent = volumeGestureStart;
+		volumeGestureSensitivity = Preferences.getVideoVolumeGestureSensitivity();
 		updateMuteButton();
 		return Math.round(100f * volumeGestureCurrent / volumeGestureMaximum);
 	}
 
 	int onVolumeGestureProgress(float distanceFraction) {
-		int volume = volumeGestureStart + Math.round(distanceFraction * volumeGestureMaximum);
-		volume = Math.max(0, Math.min(volumeGestureMaximum, volume));
+		int volume = VolumeGestureUtils.calculateVolume(volumeGestureStart, volumeGestureMaximum,
+				distanceFraction, volumeGestureSensitivity);
 		if (volume != volumeGestureCurrent) {
 			if (volumeGestureLocal) {
 				if (!setPlayerLocalVolume(volume)) {
@@ -682,10 +694,6 @@ public class VideoUnit {
 
 	boolean isVolumeGestureLocal() {
 		return volumeGestureLocal;
-	}
-
-	int getVolumeGestureBoostDb() {
-		return volumeGestureLocal ? getLocalVolumeBoostDb() : 0;
 	}
 
 	private void setMuted(boolean muted) {
@@ -1108,6 +1116,13 @@ public class VideoUnit {
 					// the indicator after the first frame is rendered only adds a false stall.
 					holder.progressBar.cancelVisibilityTransient();
 				}
+			}
+		}
+
+		@Override
+		public void onDurationChange(VideoPlayer player, long duration) {
+			if (initialized && player == VideoUnit.this.player) {
+				updateDuration(duration);
 			}
 		}
 

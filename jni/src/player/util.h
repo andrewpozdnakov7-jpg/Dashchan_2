@@ -56,6 +56,7 @@ typedef struct BufferQueue BufferQueue;
 struct BufferItem {
 	uint8_t * buffer;
 	int bufferSize;
+	int dataSize;
 	void * extra;
 };
 

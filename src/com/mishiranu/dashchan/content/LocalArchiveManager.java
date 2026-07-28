@@ -43,6 +43,7 @@ public class LocalArchiveManager {
 		public final String name;
 		public final String sourceName;
 		public final long lastModified;
+		private String title;
 		private final DataFile htmlFile;
 		private final DataFile zipFile;
 		private final DataFile manifestFile;
@@ -77,6 +78,14 @@ public class LocalArchiveManager {
 
 		public boolean isExternal() {
 			return treeUri != null;
+		}
+
+		public String getTitle() {
+			return title;
+		}
+
+		public String getDisplayName() {
+			return !StringUtils.isEmpty(title) ? title : name;
 		}
 	}
 
@@ -113,6 +122,9 @@ public class LocalArchiveManager {
 			} catch (RuntimeException e) {
 				// A provider may disappear or revoke access. Keep other sources available.
 			}
+		}
+		for (Item item : items) {
+			item.title = readManifestTitle(item);
 		}
 		items.sort((first, second) -> Long.compare(second.lastModified, first.lastModified));
 		return items;
@@ -414,6 +426,19 @@ public class LocalArchiveManager {
 			// Old and third-party archives may not have a manifest.
 		}
 		return null;
+	}
+
+	private static String readManifestTitle(Item item) {
+		JSONObject manifest = readManifest(item);
+		if (manifest == null) {
+			return null;
+		}
+		String title = manifest.optString("title", null);
+		if (StringUtils.isEmpty(title)) {
+			return null;
+		}
+		title = StringUtils.cutIfLongerToLine(title.replace('\r', ' ').replace('\n', ' '), 100, true);
+		return StringUtils.nullIfEmpty(title);
 	}
 
 	public static boolean prefersAdaptiveView(Item item) {

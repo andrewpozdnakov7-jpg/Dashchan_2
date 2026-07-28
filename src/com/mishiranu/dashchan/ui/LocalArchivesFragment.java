@@ -289,13 +289,14 @@ public class LocalArchivesFragment extends ContentFragment {
 		public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
 			LocalArchiveManager.Item item = items.get(position);
 			ViewFactory.TwoLinesViewHolder viewHolder = (ViewFactory.TwoLinesViewHolder) holder.itemView.getTag();
-			viewHolder.text1.setText(item.name);
+			viewHolder.text1.setText(item.getDisplayName());
 			int typeResId = item.hasHtml() && item.hasZip() ? R.string.local_archive_html_zip
 					: item.hasHtml() ? R.string.local_archive_html : R.string.local_archive_zip;
 			CharSequence type = holder.itemView.getContext().getText(typeResId);
-			viewHolder.text2.setText(item.isExternal()
+			CharSequence details = item.isExternal()
 					? holder.itemView.getContext().getString(R.string.local_archive_type_source, type, item.sourceName)
-					: type);
+					: type;
+			viewHolder.text2.setText(item.getTitle() != null ? item.name + " · " + details : details);
 			viewHolder.text2End.setText(postDateFormatter.formatDate(item.lastModified));
 		}
 

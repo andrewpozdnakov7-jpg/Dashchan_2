@@ -578,13 +578,11 @@ public class PagerUnit implements PagerInstance.Callback {
 
 	private void updateVolumeGestureText(int percent) {
 		if (videoUnit.isVolumeGestureLocal()) {
-			int boostDb = videoUnit.getVolumeGestureBoostDb();
-			volumeGestureView.setText(boostDb > 0
-					? galleryInstance.context.getString(R.string.video_boosted_volume__format, percent, boostDb)
-					: galleryInstance.context.getString(R.string.video_local_volume__format, percent));
+			volumeGestureView.setText(galleryInstance.context.getString(
+					R.string.video_local_volume__format, percent));
 		} else {
 			volumeGestureView.setText(galleryInstance.context.getString(
-					R.string.video_system_volume__format, percent));
+					R.string.video_volume__format, percent));
 		}
 	}
 

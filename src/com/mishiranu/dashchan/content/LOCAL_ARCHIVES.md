@@ -24,7 +24,8 @@ by an older build with read-only access may need to be added again before its ar
 
 ## Save pipeline
 
-1. `SendLocalArchiveTask` snapshots the posts into Wakaba-style UTF-8 HTML in an internal temporary file.
+1. `SendLocalArchiveTask` snapshots the posts into Wakaba-style UTF-8 HTML in an internal temporary file. The page
+   title is the same normalized thread title shown by the live posts page: subject first, then a short OP comment.
 2. It builds a versioned JSON manifest and sends the HTML and manifest to `DownloadService`.
 3. Requested thumbnails and original files are downloaded to sibling resource directories.
    Selecting original files in the local archive dialog also selects thumbnails as a safe default. The user may
@@ -36,6 +37,9 @@ by an older build with read-only access may need to be added again before its ar
 
 An incomplete media download prevents creation of the ZIP copy. The loose HTML and successfully downloaded files
 remain available.
+
+The archive list and viewer toolbar use the optional manifest `title` when it is present. The stable archive name
+remains visible in the list details and is the fallback for legacy or third-party archives without title metadata.
 
 ## Loose archive layout
 
@@ -147,3 +151,5 @@ When extending this subsystem, verify these cases:
    HTML.
 10. A Slooop/Wakaba page with structured post markers renders both as an Adaptive HTML feed and through the native
     post adapter.
+11. A thread without a dedicated subject stores the live page's short OP-comment title in both HTML and the manifest.
+12. The archive list and viewer show the manifest title, while archives without one fall back to the stable name.

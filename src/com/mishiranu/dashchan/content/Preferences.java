@@ -1826,6 +1826,10 @@ public class Preferences {
 	public static final String KEY_VIDEO_VOLUME_GESTURE_TARGET = "video_volume_gesture_target";
 	public static final VideoVolumeGestureTarget DEFAULT_VIDEO_VOLUME_GESTURE_TARGET =
 			VideoVolumeGestureTarget.VIDEO;
+	public static final String KEY_VIDEO_VOLUME_GESTURE_SENSITIVITY = "video_volume_gesture_sensitivity";
+	public static final int DEFAULT_VIDEO_VOLUME_GESTURE_SENSITIVITY = 300;
+	public static final int MIN_VIDEO_VOLUME_GESTURE_SENSITIVITY = 50;
+	public static final int MAX_VIDEO_VOLUME_GESTURE_SENSITIVITY = 600;
 	private static final String KEY_VIDEO_LOCAL_VOLUME_LEVEL = "video_local_volume_level";
 	public static final int DEFAULT_VIDEO_LOCAL_VOLUME_LEVEL = 100;
 	public static final String KEY_VIDEO_VOLUME_GESTURE_PORTRAIT_WIDTH = "video_volume_gesture_portrait_width";
@@ -1861,6 +1865,12 @@ public class Preferences {
 
 	public static boolean isVideoLocalVolume() {
 		return getVideoVolumeGestureTarget() == VideoVolumeGestureTarget.VIDEO;
+	}
+
+	public static int getVideoVolumeGestureSensitivity() {
+		return clamp(PREFERENCES.getInt(KEY_VIDEO_VOLUME_GESTURE_SENSITIVITY,
+				DEFAULT_VIDEO_VOLUME_GESTURE_SENSITIVITY), MIN_VIDEO_VOLUME_GESTURE_SENSITIVITY,
+				MAX_VIDEO_VOLUME_GESTURE_SENSITIVITY);
 	}
 
 	public static int getVideoLocalVolume() {

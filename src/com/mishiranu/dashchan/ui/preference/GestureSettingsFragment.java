@@ -54,6 +54,11 @@ public class GestureSettingsFragment extends PreferenceFragment {
 				enumResList(Preferences.VideoVolumeGestureTarget.values(), value -> value.summaryResId));
 		addDependency(Preferences.KEY_VIDEO_VOLUME_GESTURE_TARGET,
 				Preferences.KEY_VIDEO_VOLUME_GESTURE, true);
+		VolumeGestureSensitivityPreference sensitivityPreference =
+				new VolumeGestureSensitivityPreference(requireContext());
+		addDialogPreference(sensitivityPreference);
+		addDependency(Preferences.KEY_VIDEO_VOLUME_GESTURE_SENSITIVITY,
+				Preferences.KEY_VIDEO_VOLUME_GESTURE, true);
 		areaPreference = addButton(getString(R.string.video_volume_gesture_area),
 				preference -> formatAreaSummary());
 		areaPreference.setEnabled(enabledPreference.getValue());

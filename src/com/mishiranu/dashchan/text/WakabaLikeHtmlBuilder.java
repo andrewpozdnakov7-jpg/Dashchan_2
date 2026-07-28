@@ -38,7 +38,7 @@ public class WakabaLikeHtmlBuilder {
 				.append("<meta name=\"slooop-local-archive\" content=\"2\" />\n");
 		builder.append("<title>");
 		if (!StringUtils.isEmpty(threadTitle)) {
-			builder.append(threadTitle).append(" — ");
+			builder.append(escapeHtml(threadTitle)).append(" — ");
 		}
 		builder.append('/').append(boardName).append('/').append(" — ");
 		if (!StringUtils.isEmpty(boardTitle)) {

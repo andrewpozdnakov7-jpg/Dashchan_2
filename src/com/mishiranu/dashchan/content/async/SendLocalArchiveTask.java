@@ -64,6 +64,7 @@ public class SendLocalArchiveTask extends ExecutorTask<Integer, SendLocalArchive
 	private final Chan chan;
 	private final String boardName;
 	private final String threadNumber;
+	private final String threadTitle;
 	private final Collection<Post> posts;
 	private final boolean saveThumbnails;
 	private final boolean saveFiles;
@@ -79,11 +80,12 @@ public class SendLocalArchiveTask extends ExecutorTask<Integer, SendLocalArchive
 	}
 
 	public SendLocalArchiveTask(Callback callback, Chan chan, String boardName, String threadNumber,
-			Collection<Post> posts, boolean saveThumbnails, boolean saveFiles, boolean createZip) {
+			String threadTitle, Collection<Post> posts, boolean saveThumbnails, boolean saveFiles, boolean createZip) {
 		this.callback = callback;
 		this.chan = chan;
 		this.boardName = boardName;
 		this.threadNumber = threadNumber;
+		this.threadTitle = threadTitle;
 		this.posts = posts;
 		this.saveThumbnails = saveThumbnails;
 		this.saveFiles = saveFiles;
@@ -164,7 +166,10 @@ public class SendLocalArchiveTask extends ExecutorTask<Integer, SendLocalArchive
 		ArrayList<DownloadService.DownloadItem> thumbnailsToDownload = new ArrayList<>(
 				saveThumbnails ? totalFilesCount : 0);
 		try {
-			String threadTitle = posts.iterator().next().subject;
+			String threadTitle = StringUtils.nullIfEmpty(this.threadTitle);
+			if (threadTitle == null) {
+				threadTitle = posts.iterator().next().subject;
+			}
 			try (Writer writer = new OutputStreamWriter(new FileOutputStream(archiveFile), StandardCharsets.UTF_8)) {
 			String defaultName = chan.configuration.getDefaultName(boardName);
 			WakabaLikeHtmlBuilder htmlBuilder = new WakabaLikeHtmlBuilder(threadTitle,

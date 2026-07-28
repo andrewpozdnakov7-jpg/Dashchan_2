@@ -75,8 +75,14 @@ void JCALL(setPlaying)(UNUSED JNIEnv * env, UNUSED jobject this, jlong pointer, 
 	setPlaying(pointer, playing);
 }
 
-jboolean JCALL(setSurface)(JNIEnv * env, UNUSED jobject this, jlong pointer, jobject surface) {
-	return setSurface(env, pointer, surface);
+void JCALL(requestSurface)(JNIEnv * env, UNUSED jobject this,
+		jlong pointer, jobject surface, jlong generation, jint width, jint height) {
+	requestSurface(env, pointer, surface, generation, width, height);
+}
+
+void JCALL(setSurfaceSize)(UNUSED JNIEnv * env, UNUSED jobject this,
+		jlong pointer, jint width, jint height) {
+	setSurfaceSize(pointer, width, height);
 }
 
 jintArray JCALL(getCurrentFrame)(JNIEnv * env, UNUSED jobject this, jlong pointer, jintArray dimensions) {
