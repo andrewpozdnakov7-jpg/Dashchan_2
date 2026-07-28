@@ -5,13 +5,13 @@
 	"client": [
 		{
 			"title": "Release",
-			"name": "3.2.10",
-			"code": 1090,
+			"name": "3.2.11",
+			"code": 1091,
 			"minVersion": 1,
 			"maxVersion": 1,
 			"minSdk": 30,
-			"length": 41219354,
-			"source": "https://github.com/andrewpozdnakov7-jpg/Dashchan_2/releases/download/3.2.10-1090/Dashchan_2-3.2.10-1090-ffmpeg8-all-abi-signed.apk",
+			"length": 41305523,
+			"source": "https://github.com/andrewpozdnakov7-jpg/Dashchan_2/releases/download/3.2.11-1091/Dashchan_2-3.2.11-1091-ffmpeg8-all-abi-signed.apk",
 			"fingerprint": "a9fbac6c498f7ad8e7c56849afe43881966bed2ed2bc1dd1c73d0ffe0b9ebeba"
 		}
 	],
