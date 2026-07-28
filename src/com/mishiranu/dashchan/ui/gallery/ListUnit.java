@@ -231,7 +231,8 @@ public class ListUnit implements ActionMode.Callback {
 		dialogMenu.add(R.string.download_file, () -> callback.downloadGalleryItem(galleryItem));
 		if (galleryItem.getDisplayImageUri(chan) != null) {
 			dialogMenu.add(R.string.search_image, () -> new SearchImageDialog(chanName,
-					galleryItem.getDisplayImageUri(chan)).show(provider.getFragmentManager(), null));
+					galleryItem.getDisplayImageUri(chan), galleryItem.getThumbnailUri(chan))
+					.show(provider.getFragmentManager(), null));
 		}
 		dialogMenu.add(R.string.copy_link, () -> StringUtils.copyToClipboard(context,
 				galleryItem.getFileUri(chan).toString()));

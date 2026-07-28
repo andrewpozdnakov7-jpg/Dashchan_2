@@ -271,7 +271,8 @@ public class InteractionUnit {
 					Uri fileUri = attachmentItem.getType() == AttachmentItem.Type.IMAGE
 							? attachmentItem.getFileUri(chan) : attachmentItem.getThumbnailUri(chan);
 					Chan fileChan = Chan.getPreferred(null, fileUri);
-					new SearchImageDialog(fileChan.name, fileUri).show(provider.getFragmentManager(), null);
+					new SearchImageDialog(fileChan.name, fileUri, attachmentItem.getThumbnailUri(chan))
+							.show(provider.getFragmentManager(), null);
 				});
 			}
 		}

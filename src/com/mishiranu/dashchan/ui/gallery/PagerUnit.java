@@ -806,7 +806,8 @@ public class PagerUnit implements PagerInstance.Callback {
 			if (capabilities.searchImage) {
 				dialogMenu.add(R.string.search_image, () -> {
 					videoUnit.forcePause();
-					new SearchImageDialog(galleryInstance.chanName, galleryItem.getDisplayImageUri(chan))
+					new SearchImageDialog(galleryInstance.chanName, galleryItem.getDisplayImageUri(chan),
+							galleryItem.getThumbnailUri(chan))
 							.show(galleryInstance.callback.getChildFragmentManager(), null);
 				});
 			}

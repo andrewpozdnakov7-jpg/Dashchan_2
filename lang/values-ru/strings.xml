@@ -644,6 +644,7 @@
 	<string name="search">Поиск</string>
 	<string name="search_completed">Поиск завершён</string>
 	<string name="search_image">Поиск изображения</string>
+	<string name="search_image_with_app">Искать через приложение</string>
 	<string name="secure_connection">Защищённое соединение</string>
 	<string name="secure_connection__summary">Использовать протокол HTTPS</string>
 	<string name="seek_any_frame">Перемотка к любому кадру</string>

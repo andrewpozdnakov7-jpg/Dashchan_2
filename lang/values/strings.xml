@@ -625,6 +625,7 @@
 	<string name="search">Search</string>
 	<string name="search_completed">Search completed</string>
 	<string name="search_image">Search image</string>
+	<string name="search_image_with_app">Search with an app</string>
 	<string name="secure_connection">Secure connection</string>
 	<string name="secure_connection__summary">Use HTTPS protocol</string>
 	<string name="seek_any_frame">Seek any frame</string>
