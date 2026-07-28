@@ -7,8 +7,8 @@ LOCAL_PATH := $(LOCAL_PATH_SRC_PLAYER)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE := player
-LOCAL_SRC_FILES := native.c player.c player_audio.c player_diagnostics.c player_duration.c player_timing.c \
-		player_video_mediacodec.c player_video_software.c util.c
+LOCAL_SRC_FILES := native.c player.c player_audio.c player_demux.c player_diagnostics.c player_duration.c \
+		player_seek.c player_timing.c player_video_mediacodec.c player_video_software.c util.c
 LOCAL_CFLAGS += -std=c99 -Wall -Wextra -Wpedantic -Wno-deprecated-declarations
 ifeq ($(DASHCHAN_FFMPEG_FLAVOR),)
 LOCAL_CFLAGS += -DDASHCHAN_FFMPEG_FLAVOR=\"ffmpeg\"

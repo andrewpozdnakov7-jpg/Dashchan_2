@@ -72,7 +72,8 @@ enum {
 };
 
 struct Player {
-	struct {
+	// Lifecycle-owned configuration and terminal state.
+	struct PlayerMetaState {
 		int interrupt;
 		int errorCode;
 		int seekAnyFrame;
@@ -80,7 +81,8 @@ struct Player {
 		unsigned int diagnosticsId;
 	} meta;
 
-	struct {
+	// Demux owns the descriptor/range state while holding controlMutex.
+	struct PlayerFileState {
 		int fd;
 		long start;
 		long end;
@@ -90,12 +92,14 @@ struct Player {
 		pthread_mutex_t controlMutex;
 	} file;
 
-	struct {
+	// JNI bridge objects are created by the lifecycle facade and reused by workers.
+	struct PlayerBridgeState {
 		jobject native;
 		SparseArray array;
 	} bridge;
 
-	struct {
+	// Container and codec contexts are initialized and destroyed by the lifecycle facade.
+	struct PlayerAvState {
 		AVFormatContext * format;
 		int audioStreamIndex;
 		int videoStreamIndex;
@@ -113,7 +117,8 @@ struct Player {
 		} duration;
 	} av;
 
-	struct {
+	// Demux coordinates worker generations; each decoder owns its frame mutex.
+	struct PlayerDecodeState {
 		struct {
 			int finished;
 			int threadStarted;
@@ -141,13 +146,15 @@ struct Player {
 		} video;
 	} decode;
 
-	struct {
+	// Playback completion and pause state are serialized by finishMutex.
+	struct PlayerPlaybackState {
 		int playing;
 		pthread_cond_t finishCond;
 		pthread_mutex_t finishMutex;
 	} play;
 
-	struct {
+	// Audio pipeline state is owned by player_audio.c.
+	struct PlayerAudioState {
 		struct {
 			SLObjectItf outputMix;
 			SLObjectItf player;
@@ -177,7 +184,8 @@ struct Player {
 		pthread_mutex_t sleepBufferMutex;
 	} audio;
 
-	struct {
+	// Video output, software decode and MediaCodec share the video lock contract.
+	struct PlayerVideoState {
 		BlockingQueue packetQueue;
 		int finished;
 		int hardwareAccelerationRequested;
@@ -227,7 +235,8 @@ struct Player {
 		} lastBuffer;
 	} video;
 
-	struct {
+	// Cross-stream clocks and seek recovery state are committed by player_seek.c.
+	struct PlayerSyncState {
 		int playbackSpeed;
 		int64_t audioPosition;
 		int64_t videoPosition;
