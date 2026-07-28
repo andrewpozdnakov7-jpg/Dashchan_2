@@ -18,6 +18,7 @@ import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.service.DownloadService;
 import com.mishiranu.dashchan.ui.FragmentHandler;
 import com.mishiranu.dashchan.ui.preference.core.ListPreference;
+import com.mishiranu.dashchan.ui.preference.core.Preference;
 import com.mishiranu.dashchan.ui.preference.core.PreferenceFragment;
 import com.mishiranu.dashchan.util.NavigationUtils;
 import com.mishiranu.dashchan.util.SharedPreferences;
