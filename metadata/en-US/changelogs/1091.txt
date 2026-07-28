@@ -1,0 +1,8 @@
+Improved playback of high-resolution and difficult videos with adaptive software scaling and frame recovery.
+Fixed stalls, visual artifacts, incorrect timing and audio desynchronization after seeking some videos.
+Added configurable volume-gesture sensitivity from 50% to 600%, including an interactive test screen.
+Fixed thread titles in local archives, including archives imported from 4chan.
+Repaired reverse-image search with Google Lens, HTTPS provider URLs and thumbnail-aware searches.
+Added a cached-image fallback for searching through installed Android applications.
+Added author, repository and contact information to the About screen.
+Refactored the native player into isolated lifecycle, demux, seek, audio and video modules.
