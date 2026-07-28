@@ -1,8 +1,11 @@
 #include "player.h"
+#include "player_audio.h"
 #include "player_diagnostics.h"
 #include "player_duration.h"
 #include "player_internal.h"
 #include "player_timing.h"
+#include "player_video_mediacodec.h"
+#include "player_video_software.h"
 #include "util.h"
 #ifdef DASHCHAN_HAS_ATEMPO
 #include "tempo.h"
@@ -11,36 +14,11 @@
 #include <libavcodec/avcodec.h>
 #ifdef DASHCHAN_HAS_MEDIACODEC
 #include <libavcodec/jni.h>
-#include <libavcodec/mediacodec.h>
 #endif
 #include <libavformat/avformat.h>
-#include <libswresample/swresample.h>
-#include <libswscale/swscale.h>
-#include <libavutil/imgutils.h>
-#ifdef DASHCHAN_HAS_MEDIACODEC
-#include <libavutil/hwcontext.h>
-#include <libavutil/hwcontext_mediacodec.h>
-#endif
 #include <libavutil/mathematics.h>
 #include <libavutil/pixdesc.h>
 #include <libavutil/ffversion.h>
-#include <libavutil/opt.h>
-#include <libavutil/samplefmt.h>
-
-// Bundled libyuv headers still contain old C no-argument prototypes.
-// Keep the NDK 29 strict-prototypes suppression scoped to this third-party include.
-#ifdef __clang__
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wstrict-prototypes"
-#endif
-#include <libyuv.h>
-#ifdef __clang__
-#pragma clang diagnostic pop
-#endif
-
-#include <SLES/OpenSLES.h>
-#include <SLES/OpenSLES_Android.h>
-#include <android/native_window_jni.h>
 
 #include <inttypes.h>
 #include <limits.h>
@@ -52,10 +30,6 @@
 #include <time.h>
 #include <unistd.h>
 
-#define POINTER_CAST(addr) (void *) (long) addr
-#define UNLOCK_AND_GOTO(mutex, label) {pthread_mutex_unlock(mutex); goto label;}
-#define SEND_MESSAGE(env, p, b, what) (*(env))->CallVoidMethod(env, (p)->bridge.native, (b)->methodOnMessage, what)
-
 #define ERROR_LOAD_IO 1
 #define ERROR_LOAD_FORMAT 2
 #define ERROR_START_THREAD 3
@@ -64,67 +38,31 @@
 #define ERROR_FIND_CODEC 6
 #define ERROR_OPEN_CODEC 7
 
-#define BRIDGE_MESSAGE_PLAYBACK_COMPLETE 1
-#define BRIDGE_MESSAGE_SIZE_CHANGED 2
-#define BRIDGE_MESSAGE_START_SEEKING 3
-#define BRIDGE_MESSAGE_END_SEEKING 4
-
-#define PACKET_HOLDER_MEDIA 0
-#define PACKET_HOLDER_END_OF_STREAM 1
-#define PACKET_HOLDER_SURFACE_REQUEST 2
-
-#define GAINING_THRESHOLD 100
-#define MEDIACODEC_MAX_SCHEDULE_AHEAD_MS 50
 #define SEEK_KEYFRAME_DISCOVERY_THRESHOLD_MS 3000
-#define SOFTWARE_LATE_DROP_THRESHOLD_MS 100
-#define SOFTWARE_GOVERNOR_LATE_THRESHOLD_MS 250
-#define SOFTWARE_GOVERNOR_LATE_FRAMES 8
-#define SOFTWARE_GOVERNOR_RECOVERY_THRESHOLD_MS 80
-#define SOFTWARE_GOVERNOR_RECOVERY_FRAMES 6
-#define SOFTWARE_GOVERNOR_MIN_DISCARD_MS 500
-#define SOFTWARE_GOVERNOR_SLOW_CONVERSION_US 25000
-#define SOFTWARE_GOVERNOR_SLOW_CONVERSIONS 6
-#define SOFTWARE_LATE_ANCHOR_INTERVAL_MS 200
-#define SOFTWARE_SEEK_FAST_MIN_GAP_MS 600
-#define SOFTWARE_SEEK_FAST_RESTORE_MARGIN_MS 500
-#define AUDIO_MAX_BOOST_DB 12
-#define AUDIO_TARGET_CHUNK_MS 40
-#define AUDIO_MIN_ENQUEUE_SIZE 256
-#define WINDOW_FORMAT_YV12 0x32315659
-#define MAX_FPS 60
 
 #ifndef DASHCHAN_FFMPEG_FLAVOR
 #define DASHCHAN_FFMPEG_FLAVOR "ffmpeg"
 #endif
 
-#if LIBAVUTIL_VERSION_MAJOR >= 57
-#define USE_AV_CHANNEL_LAYOUT 1
-#else
-#define USE_AV_CHANNEL_LAYOUT 0
-#endif
-
 static JavaVM * loadJavaVM;
-static SLEngineItf slEngine;
 
-static int getSkipFlag(int * flag) {
+JavaVM * playerGetJavaVM(void) {
+	return loadJavaVM;
+}
+
+int playerGetSkipFlag(int * flag) {
 	return __atomic_load_n(flag, __ATOMIC_ACQUIRE);
 }
 
-static void setSkipFlag(int * flag, int value) {
+void playerSetSkipFlag(int * flag, int value) {
 	__atomic_store_n(flag, value, __ATOMIC_RELEASE);
 }
 
-static int hasPendingSurface(Player * player) {
-	return __atomic_load_n(&player->video.surfaceRequestPending, __ATOMIC_ACQUIRE);
-}
-
-static void applyPendingSurface(Player * player, JNIEnv * env);
-
-static void setDiagnosticsAudioStage(Player * player, int stage) {
+void playerSetDiagnosticsAudioStage(Player * player, int stage) {
 	__atomic_store_n(&player->decode.audio.diagnosticsStage, stage, __ATOMIC_RELAXED);
 }
 
-static void setDiagnosticsMediaCodecStage(Player * player, int stage, int64_t framePosition) {
+void playerSetDiagnosticsMediaCodecStage(Player * player, int stage, int64_t framePosition) {
 	if (framePosition >= 0) {
 		__atomic_store_n(&player->decode.video.diagnosticsFramePosition,
 				framePosition, __ATOMIC_RELAXED);
@@ -137,9 +75,9 @@ static void requestSeekWorkersStop(Player * player) {
 	// these flags, it cannot start another packet before the seek has reset decoder
 	// state. Publish the flags before waiting for either frame mutex so a renderer
 	// sleeping on a future MediaCodec presentation time can release video.frameMutex.
-	setSkipFlag(&player->sync.skip.audioWorkFrame, 1);
-	setSkipFlag(&player->sync.skip.videoWorkFrame, 1);
-	setSkipFlag(&player->sync.skip.drawWorkFrame, 1);
+	playerSetSkipFlag(&player->sync.skip.audioWorkFrame, 1);
+	playerSetSkipFlag(&player->sync.skip.videoWorkFrame, 1);
+	playerSetSkipFlag(&player->sync.skip.drawWorkFrame, 1);
 	diagnosticsLogSeekLock(player, "prepare", "workers", "stop_requested");
 
 	pthread_mutex_lock(&player->audio.sleepBufferMutex);
@@ -157,11 +95,7 @@ static void requestSeekWorkersStop(Player * player) {
 	diagnosticsLogSeekLock(player, "prepare", "workers", "wake_finished");
 }
 
-#ifdef DASHCHAN_HAS_MEDIACODEC
-static int fallbackMediaCodecToSoftware(Player * player);
-#endif
-
-static Bridge * obtainBridge(Player * player, JNIEnv * env) {
+Bridge * playerObtainBridge(Player * player, JNIEnv * env) {
 	int index = pthread_self();
 	Bridge * bridge = sparseArrayGet(&player->bridge.array, index);
 	if (!bridge) {
@@ -182,166 +116,10 @@ static Bridge * obtainBridge(Player * player, JNIEnv * env) {
 void playerNotifyDurationChanged(Player * player, int64_t duration) {
 	JNIEnv * env;
 	if ((*loadJavaVM)->AttachCurrentThread(loadJavaVM, &env, NULL) == JNI_OK) {
-		Bridge * bridge = obtainBridge(player, env);
+		Bridge * bridge = playerObtainBridge(player, env);
 		(*env)->CallVoidMethod(env, player->bridge.native,
 				bridge->methodOnDurationChanged, (jlong) duration);
 		(*loadJavaVM)->DetachCurrentThread(loadJavaVM);
-	}
-}
-
-// Callers hold decode.video.frameMutex. The normal late-frame governor may
-// already require non-reference discard, so seek acceleration always restores
-// the decoder to that session baseline instead of unconditionally disabling it.
-static enum AVDiscard getSoftwareFrameDiscardBaseline(Player * player) {
-	return player->video.softwareDecoderDiscardActive ? AVDISCARD_NONREF : AVDISCARD_DEFAULT;
-}
-
-// Callers hold decode.video.frameMutex. Non-reference discard is a temporary
-// catch-up mode, not a permanent quality setting. Keep seek acceleration and
-// the normal playback governor independent so either one can restore its own
-// state without accidentally disabling the other.
-static void setSoftwareDecoderDiscardLocked(Player * player, AVCodecContext * context,
-		int active, const char * reason, int64_t lateness) {
-	active = !!active;
-	if (player->video.softwareDecoderDiscardActive == active) {
-		return;
-	}
-	if (active) {
-		player->video.softwareDecoderDiscardActive = 1;
-		player->video.softwareDecoderDiscardStartedAt = getTime();
-		player->video.softwareConsecutiveLateFrames = 0;
-		player->video.softwareConsecutiveRecoveryFrames = 0;
-		context->skip_frame = AVDISCARD_NONREF;
-		diagnosticsIncrement(PLAYER_DIAGNOSTICS_SOFTWARE_DECODER_DISCARD_ENABLED);
-		diagnosticsLog("player=%u software_governor decoder_discard=nonref"
-				" reason=%s late_ms=%" PRId64,
-				player->meta.diagnosticsId, reason, lateness);
-	} else {
-		int64_t activeTime = player->video.softwareDecoderDiscardStartedAt > 0
-				? getTime() - player->video.softwareDecoderDiscardStartedAt : 0;
-		player->video.softwareDecoderDiscardActive = 0;
-		player->video.softwareDecoderDiscardStartedAt = 0;
-		player->video.softwareConsecutiveLateFrames = 0;
-		player->video.softwareConsecutiveRecoveryFrames = 0;
-		context->skip_frame = player->video.softwareSeekFastActive
-				? AVDISCARD_NONREF : AVDISCARD_DEFAULT;
-		diagnosticsIncrement(PLAYER_DIAGNOSTICS_SOFTWARE_DECODER_DISCARD_RESTORED);
-		diagnosticsLog("player=%u software_governor decoder_discard=default"
-				" reason=%s late_ms=%" PRId64 " active_ms=%" PRId64
-				" seek_fast=%d", player->meta.diagnosticsId, reason, lateness,
-				activeTime, player->video.softwareSeekFastActive);
-	}
-}
-
-// Callers hold decode.video.frameMutex.
-static void resetSoftwareDecoderGovernorLocked(Player * player, AVCodecContext * context,
-		const char * reason) {
-	player->video.softwareConsecutiveLateFrames = 0;
-	player->video.softwareConsecutiveRecoveryFrames = 0;
-	__atomic_store_n(&player->video.softwareLastFrameQueuedAt, 0, __ATOMIC_RELEASE);
-	if (player->video.softwareDecoderDiscardActive) {
-		setSoftwareDecoderDiscardLocked(player, context, 0, reason, 0);
-	} else if (!player->video.softwareSeekFastActive) {
-		context->skip_frame = AVDISCARD_DEFAULT;
-	}
-}
-
-static void updateSoftwareDecoderGovernor(Player * player, AVCodecContext * context,
-		int synchronized, int64_t lateness) {
-	pthread_mutex_lock(&player->decode.video.frameMutex);
-	if (!synchronized || !player->play.playing) {
-		player->video.softwareConsecutiveLateFrames = 0;
-		player->video.softwareConsecutiveRecoveryFrames = 0;
-		pthread_mutex_unlock(&player->decode.video.frameMutex);
-		return;
-	}
-	if (!player->video.softwareDecoderDiscardActive) {
-		if (lateness > SOFTWARE_GOVERNOR_LATE_THRESHOLD_MS) {
-			player->video.softwareConsecutiveLateFrames++;
-		} else {
-			player->video.softwareConsecutiveLateFrames = 0;
-		}
-		if (player->video.softwareConsecutiveLateFrames >= SOFTWARE_GOVERNOR_LATE_FRAMES) {
-			setSoftwareDecoderDiscardLocked(player, context, 1, "sustained_lateness", lateness);
-		}
-	} else {
-		if (lateness <= SOFTWARE_GOVERNOR_RECOVERY_THRESHOLD_MS) {
-			player->video.softwareConsecutiveRecoveryFrames++;
-		} else {
-			player->video.softwareConsecutiveRecoveryFrames = 0;
-		}
-		int64_t activeTime = player->video.softwareDecoderDiscardStartedAt > 0
-				? getTime() - player->video.softwareDecoderDiscardStartedAt : 0;
-		int caughtUp = player->video.softwareConsecutiveRecoveryFrames >=
-				SOFTWARE_GOVERNOR_RECOVERY_FRAMES;
-		if (activeTime >= SOFTWARE_GOVERNOR_MIN_DISCARD_MS && caughtUp) {
-			setSoftwareDecoderDiscardLocked(player, context, 0, "caught_up", lateness);
-		}
-	}
-	pthread_mutex_unlock(&player->decode.video.frameMutex);
-}
-
-static void restoreSoftwareSeekFastDecodeLocked(Player * player, AVCodecContext * context,
-		const char * reason, int64_t packetPosition) {
-	if (!player->video.softwareSeekFastActive) {
-		context->skip_frame = getSoftwareFrameDiscardBaseline(player);
-		return;
-	}
-	int64_t elapsed = getTime() - player->video.softwareSeekFastStartedAt;
-	context->skip_frame = getSoftwareFrameDiscardBaseline(player);
-	player->video.softwareSeekFastActive = 0;
-	diagnosticsIncrement(PLAYER_DIAGNOSTICS_SOFTWARE_SEEK_FAST_RESTORED);
-	diagnosticsLog("player=%u software_seek_fast restored reason=%s packet_ms=%" PRId64
-			" target_ms=%" PRId64 " elapsed_ms=%" PRId64 " packets=%d frames=%d baseline=%s",
-			player->meta.diagnosticsId, reason, packetPosition,
-			player->video.softwareSeekFastTargetPosition, elapsed,
-			player->video.softwareSeekFastPackets, player->video.softwareSeekFastFrames,
-			player->video.softwareDecoderDiscardActive ? "nonref" : "default");
-}
-
-static void startSoftwareSeekFastDecodeLocked(Player * player, AVCodecContext * context,
-		int64_t keyframePosition, int64_t targetPosition) {
-	restoreSoftwareSeekFastDecodeLocked(player, context, "new_seek", keyframePosition);
-	player->video.softwareSeekFastPackets = 0;
-	player->video.softwareSeekFastFrames = 0;
-	int64_t gap = targetPosition - keyframePosition;
-	if (player->video.hardwareDecoderActive || player->video.softwareDecoderDiscardActive ||
-			gap < SOFTWARE_SEEK_FAST_MIN_GAP_MS) {
-		diagnosticsLog("player=%u software_seek_fast skipped keyframe_ms=%" PRId64
-				" target_ms=%" PRId64 " gap_ms=%" PRId64 " hardware=%d baseline=%s",
-				player->meta.diagnosticsId, keyframePosition, targetPosition, gap,
-				player->video.hardwareDecoderActive,
-				player->video.softwareDecoderDiscardActive ? "nonref" : "default");
-		return;
-	}
-	player->video.softwareSeekFastActive = 1;
-	player->video.softwareSeekFastTargetPosition = targetPosition;
-	player->video.softwareSeekFastRestorePosition =
-			max64(targetPosition - SOFTWARE_SEEK_FAST_RESTORE_MARGIN_MS, keyframePosition);
-	player->video.softwareSeekFastStartedAt = getTime();
-	context->skip_frame = AVDISCARD_NONREF;
-	diagnosticsIncrement(PLAYER_DIAGNOSTICS_SOFTWARE_SEEK_FAST_STARTED);
-	diagnosticsLog("player=%u software_seek_fast started keyframe_ms=%" PRId64
-			" target_ms=%" PRId64 " gap_ms=%" PRId64 " restore_ms=%" PRId64
-			" discard=nonref",
-			player->meta.diagnosticsId, keyframePosition, targetPosition, gap,
-			player->video.softwareSeekFastRestorePosition);
-}
-
-static void updateSoftwareSeekFastDecodeForPacketLocked(Player * player, AVCodecContext * context,
-		AVStream * stream, AVPacket * packet) {
-	if (!player->video.softwareSeekFastActive) {
-		return;
-	}
-	if (!packet) {
-		restoreSoftwareSeekFastDecodeLocked(player, context, "end_of_stream", -1);
-		return;
-	}
-	player->video.softwareSeekFastPackets++;
-	int64_t timestamp = packet->dts != AV_NOPTS_VALUE ? packet->dts : packet->pts;
-	int64_t packetPosition = getTimestampPositionMs(player, timestamp, stream->time_base);
-	if (packetPosition >= 0 && packetPosition >= player->video.softwareSeekFastRestorePosition) {
-		restoreSoftwareSeekFastDecodeLocked(player, context, "restore_margin", packetPosition);
 	}
 }
 
@@ -394,45 +172,7 @@ static int seekFrame(Player * player, int64_t position, int flags,
 	return result;
 }
 
-static int getAudioContextChannels(const AVCodecContext * context) {
-#if USE_AV_CHANNEL_LAYOUT
-	return context->ch_layout.nb_channels;
-#else
-	return context->channels;
-#endif
-}
-
-static int getCodecParametersChannels(const AVCodecParameters * parameters) {
-#if USE_AV_CHANNEL_LAYOUT
-	return parameters->ch_layout.nb_channels;
-#else
-	return parameters->channels;
-#endif
-}
-
-#if USE_AV_CHANNEL_LAYOUT
-static int getFrameChannels(const AVFrame * frame) {
-	return frame->ch_layout.nb_channels;
-}
-
-static int copyFrameChannelLayout(AVChannelLayout * channelLayout, const AVFrame * frame, int fallbackChannels) {
-	if (frame->ch_layout.nb_channels > 0) {
-		return av_channel_layout_copy(channelLayout, &frame->ch_layout);
-	}
-	av_channel_layout_default(channelLayout, fallbackChannels > 0 ? fallbackChannels : 2);
-	return 0;
-}
-
-static int copyOrMaskChannelLayout(AVChannelLayout * channelLayout,
-		const AVChannelLayout * fallbackChannelLayout, uint64_t channelMask) {
-	if (channelMask != 0) {
-		return av_channel_layout_from_mask(channelLayout, channelMask);
-	}
-	return av_channel_layout_copy(channelLayout, fallbackChannelLayout);
-}
-#endif
-
-static void closeAndFreeCodecContext(AVCodecContext ** context) {
+void playerCloseAndFreeCodecContext(AVCodecContext ** context) {
 	if (!context || !*context) {
 		return;
 	}
@@ -442,15 +182,15 @@ static void closeAndFreeCodecContext(AVCodecContext ** context) {
 	avcodec_free_context(context);
 }
 
-static void closeAndFreeVideoCodecContext(Player * player, AVCodecContext ** context) {
+void playerCloseAndFreeVideoCodecContext(Player * player, AVCodecContext ** context) {
 	if (!context || !*context) {
 		return;
 	}
 	(void) player;
-	closeAndFreeCodecContext(context);
+	playerCloseAndFreeCodecContext(context);
 }
 
-static void packetQueueFreeCallback(void * data) {
+void playerPacketQueueFreeCallback(void * data) {
 	PacketHolder * packetHolder = (PacketHolder *) data;
 	if (packetHolder->packet) {
 		av_packet_free(&packetHolder->packet);
@@ -458,98 +198,7 @@ static void packetQueueFreeCallback(void * data) {
 	free(packetHolder);
 }
 
-static void audioBufferQueueFreeCallback(void * data) {
-	AudioBuffer * audioBuffer = (AudioBuffer *) data;
-	if (audioBuffer) {
-		av_freep(&audioBuffer->buffer);
-		free(audioBuffer);
-	}
-}
-
-// Callers hold audio.sleepBufferMutex. OpenSL keeps submitted PCM memory by
-// reference until the matching callback, so every distinct owner must remain
-// alive while its chunks are present in outputChunks.
-static void clearAudioOutputLocked(Player * player, int clearDecodedBuffers) {
-	if (player->audio.sl.queue) {
-		(*player->audio.sl.queue)->Clear(player->audio.sl.queue);
-	}
-	if (clearDecodedBuffers) {
-		blockingQueueClear(&player->audio.bufferQueue, audioBufferQueueFreeCallback);
-	}
-	AudioBuffer * buffers[AUDIO_OUTPUT_QUEUE_CAPACITY + 1];
-	int bufferCount = 0;
-	if (player->audio.buffer) {
-		buffers[bufferCount++] = player->audio.buffer;
-	}
-	for (int i = 0; i < player->audio.outputChunkCount; i++) {
-		int index = (player->audio.outputChunkHead + i) % AUDIO_OUTPUT_QUEUE_CAPACITY;
-		AudioBuffer * buffer = player->audio.outputChunks[index].buffer;
-		int duplicate = 0;
-		for (int j = 0; j < bufferCount; j++) {
-			if (buffers[j] == buffer) {
-				duplicate = 1;
-				break;
-			}
-		}
-		if (buffer && !duplicate) {
-			buffers[bufferCount++] = buffer;
-		}
-	}
-	memset(player->audio.outputChunks, 0, sizeof(player->audio.outputChunks));
-	player->audio.buffer = NULL;
-	player->audio.outputChunkHead = 0;
-	player->audio.outputChunkCount = 0;
-	player->audio.bufferNeedEnqueueAfterDecode = 1;
-	for (int i = 0; i < bufferCount; i++) {
-		audioBufferQueueFreeCallback(buffers[i]);
-	}
-}
-
-static int16_t limitBoostedAudioSample(float sample) {
-	const float maximum = 32767.f;
-	const float knee = maximum * 0.85f;
-	float magnitude = fabsf(sample);
-	if (magnitude <= knee) {
-		return (int16_t) lroundf(sample);
-	}
-	float limited = knee + (maximum - knee) *
-			(1.f - expf(-(magnitude - knee) / (maximum - knee)));
-	if (limited > maximum) {
-		limited = maximum;
-	}
-	return sample < 0.f ? (int16_t) -lroundf(limited) : (int16_t) lroundf(limited);
-}
-
-static void applyAudioBoost(Player * player, uint8_t * buffer, int size) {
-	if (player->audio.boostDb <= 0 || !buffer || size < (int) sizeof(int16_t)) {
-		return;
-	}
-	if (player->audio.localVolume <= 0) {
-		memset(buffer, 0, size);
-		return;
-	}
-	float gain = player->audio.localVolume / 100.f * powf(10.f, player->audio.boostDb / 20.f);
-	int16_t * samples = (int16_t *) buffer;
-	int count = size / (int) sizeof(int16_t);
-	if (gain <= 1.f) {
-		for (int i = 0; i < count; i++) {
-			samples[i] = (int16_t) lroundf(samples[i] * gain);
-		}
-	} else {
-		for (int i = 0; i < count; i++) {
-			samples[i] = limitBoostedAudioSample(samples[i] * gain);
-		}
-	}
-}
-
-static void videoBufferQueueFreeCallback(BufferItem * bufferItem) {
-	if (bufferItem->extra) {
-		free(bufferItem->extra);
-		bufferItem->extra = NULL;
-	}
-}
-
-static void markStreamFinished(Player * player, int video) {
+void playerMarkStreamFinished(Player * player, int video) {
 	if (video) {
 		int decodedCount = player->video.bufferQueue ? bufferQueueCount(player->video.bufferQueue) : 0;
 		if (decodedCount == 0 &&
@@ -567,7 +216,7 @@ static void markStreamFinished(Player * player, int video) {
 	}
 }
 
-static int decodeFrame(AVCodecContext * context, AVPacket * packet, AVFrame * frame, int * packetSent) {
+int playerDecodeFrame(AVCodecContext * context, AVPacket * packet, AVFrame * frame, int * packetSent) {
 	if (!*packetSent) {
 		int result = avcodec_send_packet(context, packet);
 		if (result == 0) {
@@ -595,1291 +244,29 @@ static int decodeFrame(AVCodecContext * context, AVPacket * packet, AVFrame * fr
 	return 0;
 }
 
-static int getAudioChunkSize(AudioBuffer * audioBuffer) {
-	int remaining = audioBuffer->size - audioBuffer->index;
-	int64_t target = audioBuffer->divider * AUDIO_TARGET_CHUNK_MS / 1000;
-	target = max64(target, AUDIO_MIN_ENQUEUE_SIZE);
-	target = min64(target, INT_MAX);
-	int frameSize = audioBuffer->frameSize > 0 ? audioBuffer->frameSize : 1;
-	target -= target % frameSize;
-	target = max64(target, frameSize);
-	return min32(remaining, (int) target);
-}
-
-static void updateAudioPositionForChunkLocked(Player * player, int index) {
-	AudioBuffer * audioBuffer = player->audio.outputChunks[index].buffer;
-	if (audioBuffer && audioBuffer->position >= 0 && audioBuffer->divider > 0) {
-		player->sync.audioPosition = audioBuffer->position +
-				player->audio.outputChunks[index].offset * 1000 / audioBuffer->divider;
-		player->sync.audioPositionNotSync = 0;
-		LOG("play audio %" PRId64, player->sync.audioPosition);
-	}
-}
-
-// Remove the chunk that OpenSL has just finished. Returns its end position so
-// the surrogate clock can continue at EOF if no replacement data is available.
-static int64_t completeAudioChunkLocked(Player * player) {
-	if (player->audio.outputChunkCount <= 0) {
-		return -1;
-	}
-	int index = player->audio.outputChunkHead;
-	AudioBuffer * audioBuffer = player->audio.outputChunks[index].buffer;
-	int offset = player->audio.outputChunks[index].offset;
-	int size = player->audio.outputChunks[index].size;
-	player->audio.outputChunks[index].buffer = NULL;
-	player->audio.outputChunks[index].offset = 0;
-	player->audio.outputChunks[index].size = 0;
-	player->audio.outputChunkHead = (index + 1) % AUDIO_OUTPUT_QUEUE_CAPACITY;
-	player->audio.outputChunkCount--;
-	int64_t endPosition = -1;
-	if (audioBuffer) {
-		audioBuffer->pendingChunks--;
-		if (audioBuffer->position >= 0 && audioBuffer->divider > 0) {
-			endPosition = audioBuffer->position + (offset + size) * 1000 / audioBuffer->divider;
-		}
-		if (audioBuffer->index >= audioBuffer->size && audioBuffer->pendingChunks <= 0 &&
-				player->audio.buffer != audioBuffer) {
-			audioBufferQueueFreeCallback(audioBuffer);
-		}
-	}
-	if (player->audio.outputChunkCount > 0) {
-		updateAudioPositionForChunkLocked(player, player->audio.outputChunkHead);
-	}
-	return endPosition;
-}
-
-// Fill both OpenSL slots whenever possible. Decoded buffers and every submitted
-// PCM owner stay alive until their completion callbacks, avoiding the one tiny
-// 256-byte buffer cadence that could repeatedly starve AudioTrack under load.
-static int enqueueAudioBuffer(Player * player) {
-	if (!player->play.playing || !player->audio.sl.queue) {
-		player->audio.bufferNeedEnqueueAfterDecode = 1;
-		return 0;
-	}
-	int enqueued = 0;
-	while (player->audio.outputChunkCount < AUDIO_OUTPUT_QUEUE_CAPACITY) {
-		if (!player->audio.buffer) {
-			player->audio.buffer = blockingQueueGet(&player->audio.bufferQueue, 0);
-		}
-		AudioBuffer * audioBuffer = player->audio.buffer;
-		if (!audioBuffer) {
-			break;
-		}
-		if (audioBuffer->index >= audioBuffer->size) {
-			player->audio.buffer = NULL;
-			if (audioBuffer->pendingChunks <= 0) {
-				audioBufferQueueFreeCallback(audioBuffer);
-			}
-			continue;
-		}
-		int offset = audioBuffer->index;
-		int enqueueSize = getAudioChunkSize(audioBuffer);
-		if (enqueueSize <= 0) {
-			break;
-		}
-		SLresult result = (*player->audio.sl.queue)->Enqueue(player->audio.sl.queue,
-				audioBuffer->buffer + offset, enqueueSize);
-		if (result != SL_RESULT_SUCCESS) {
-			diagnosticsLog("player=%u audio_output enqueue_failed result=%d bytes=%d depth=%d",
-					player->meta.diagnosticsId, (int) result, enqueueSize,
-					player->audio.outputChunkCount);
-			break;
-		}
-		int index = (player->audio.outputChunkHead + player->audio.outputChunkCount) %
-				AUDIO_OUTPUT_QUEUE_CAPACITY;
-		player->audio.outputChunks[index].buffer = audioBuffer;
-		player->audio.outputChunks[index].offset = offset;
-		player->audio.outputChunks[index].size = enqueueSize;
-		if (player->audio.outputChunkCount == 0) {
-			updateAudioPositionForChunkLocked(player, index);
-		}
-		player->audio.outputChunkCount++;
-		audioBuffer->pendingChunks++;
-		audioBuffer->index += enqueueSize;
-		if (audioBuffer->index >= audioBuffer->size) {
-			player->audio.buffer = NULL;
-		}
-		enqueued++;
-		diagnosticsRecordAudioChunk(player, enqueueSize, player->audio.outputChunkCount);
-	}
-	player->audio.bufferNeedEnqueueAfterDecode =
-			player->audio.outputChunkCount < AUDIO_OUTPUT_QUEUE_CAPACITY;
-	return enqueued;
-}
-
-static void audioPlayerCallback(UNUSED SLAndroidSimpleBufferQueueItf slQueue, void * context) {
-	Player * player = (Player *) context;
-	if (player->meta.interrupt) {
-		return;
-	}
-	LOG("audio callback");
-	pthread_mutex_lock(&player->audio.sleepBufferMutex);
-	if (getSkipFlag(&player->sync.skip.audioWorkFrame)) {
-		pthread_mutex_unlock(&player->audio.sleepBufferMutex);
-		return;
-	}
-	int64_t endAudioPosition = completeAudioChunkLocked(player);
-	int result = enqueueAudioBuffer(player);
-	if (result > 0) {
-		pthread_cond_broadcast(&player->audio.bufferCond);
-	}
-	int reachedEnd = player->decode.packets.finished && !player->audio.buffer &&
-			blockingQueueCount(&player->audio.bufferQueue) == 0 &&
-			blockingQueueCount(&player->audio.packetQueue) == 0;
-	if (player->audio.outputChunkCount == 0 &&
-			blockingQueueCount(&player->audio.packetQueue) == 0 && endAudioPosition >= 0) {
-		updateAudioPositionSurrogate(player, endAudioPosition, 1);
-	}
-	if (player->audio.outputChunkCount == 0 && player->play.playing &&
-			!player->sync.videoPositionNotSync && !player->audio.finished && !reachedEnd) {
-		diagnosticsRecordAudioUnderrun(player);
-	}
-	pthread_mutex_unlock(&player->audio.sleepBufferMutex);
-	markStreamFinished(player, 0);
-}
-
-static int queueDecodedAudio(Player * player, uint8_t * buffer, int size,
-		int frameSize, int64_t position, int64_t divider, int * silentAudioLength) {
-	if (!buffer || size <= 0 || divider <= 0) {
-		return 0;
-	}
-	setDiagnosticsAudioStage(player, DIAGNOSTICS_AUDIO_STAGE_WAIT_SLEEP_BUFFER_MUTEX);
-	pthread_mutex_lock(&player->audio.sleepBufferMutex);
-	setDiagnosticsAudioStage(player, DIAGNOSTICS_AUDIO_STAGE_QUEUE_BUFFER);
-	if (player->meta.interrupt || getSkipFlag(&player->sync.skip.audioWorkFrame)) {
-		pthread_mutex_unlock(&player->audio.sleepBufferMutex);
-		setDiagnosticsAudioStage(player, DIAGNOSTICS_AUDIO_STAGE_IDLE);
-		return 0;
-	}
-	while (!player->meta.interrupt && !getSkipFlag(&player->sync.skip.audioWorkFrame) &&
-			blockingQueueCount(&player->audio.bufferQueue) >= 5) {
-		pthread_cond_wait(&player->audio.bufferCond, &player->audio.sleepBufferMutex);
-	}
-	if (player->meta.interrupt || getSkipFlag(&player->sync.skip.audioWorkFrame)) {
-		pthread_mutex_unlock(&player->audio.sleepBufferMutex);
-		setDiagnosticsAudioStage(player, DIAGNOSTICS_AUDIO_STAGE_IDLE);
-		return 0;
-	}
-	int waitedForVideo = player->sync.videoPositionNotSync;
-	while (!player->meta.interrupt && !getSkipFlag(&player->sync.skip.audioWorkFrame)
-			&& player->sync.videoPositionNotSync) {
-		pthread_cond_wait(&player->audio.sleepCond, &player->audio.sleepBufferMutex);
-	}
-	if (player->meta.interrupt || getSkipFlag(&player->sync.skip.audioWorkFrame)) {
-		pthread_mutex_unlock(&player->audio.sleepBufferMutex);
-		setDiagnosticsAudioStage(player, DIAGNOSTICS_AUDIO_STAGE_IDLE);
-		return 0;
-	}
-	if (waitedForVideo) {
-		// The first post-seek video frame is the only synchronization gate. Once
-		// it is visible, audio becomes the master clock and must not be paused to
-		// match a software decoder that cannot sustain the source frame rate.
-		diagnosticsRecordAudioMasterResumed(player, position);
-	}
-	AudioBuffer * audioBuffer = malloc(sizeof(AudioBuffer));
-	if (!audioBuffer) {
-		pthread_mutex_unlock(&player->audio.sleepBufferMutex);
-		setDiagnosticsAudioStage(player, DIAGNOSTICS_AUDIO_STAGE_IDLE);
-		return 0;
-	}
-	audioBuffer->buffer = buffer;
-	audioBuffer->index = 0;
-	audioBuffer->size = size;
-	audioBuffer->pendingChunks = 0;
-	audioBuffer->frameSize = frameSize;
-	audioBuffer->position = position;
-	audioBuffer->divider = divider;
-	// Fix loud click on video start even on low sound level by muting sound buffer for 40 milliseconds.
-	if (*silentAudioLength < 0) {
-		*silentAudioLength = 40 * divider / 1000;
-	}
-	if (*silentAudioLength > 0) {
-		int count = *silentAudioLength >= size ? size : *silentAudioLength;
-		memset(audioBuffer->buffer, 0, count);
-		*silentAudioLength -= count;
-	}
-	applyAudioBoost(player, audioBuffer->buffer, audioBuffer->size);
-	int needEnqueue = player->audio.bufferNeedEnqueueAfterDecode;
-	blockingQueueAdd(&player->audio.bufferQueue, audioBuffer);
-	if (needEnqueue) {
-		enqueueAudioBuffer(player);
-	}
-	pthread_mutex_unlock(&player->audio.sleepBufferMutex);
-	setDiagnosticsAudioStage(player, DIAGNOSTICS_AUDIO_STAGE_IDLE);
-	return 1;
-}
-
-#ifdef DASHCHAN_HAS_ATEMPO
-static int drainTempoProcessor(Player * player, TempoProcessor * processor,
-		int sampleRate, int channels, int speed, int64_t startPosition,
-		int64_t * outputSamples, int * silentAudioLength) {
-	while (!player->meta.interrupt && !getSkipFlag(&player->sync.skip.audioWorkFrame)) {
-		uint8_t * buffer = NULL;
-		int size = 0;
-		int samples = 0;
-		int result = tempoProcessorPull(processor, &buffer, &size, &samples);
-		if (result < 0) {
-			LOG("atempo pull failed %d", result);
-			return 0;
-		}
-		if (result == 0) {
-			return 1;
-		}
-		int64_t position = startPosition >= 0
-				? startPosition + av_rescale(*outputSamples, speed, sampleRate) : -1;
-		*outputSamples += samples;
-		int64_t divider = av_get_bytes_per_sample(AV_SAMPLE_FMT_S16) * channels *
-				(int64_t) getPlaybackSampleRateForSpeed(sampleRate, speed);
-		int frameSize = av_get_bytes_per_sample(AV_SAMPLE_FMT_S16) * channels;
-		if (!queueDecodedAudio(player, buffer, size, frameSize,
-				position, divider, silentAudioLength)) {
-			av_free(buffer);
-			return 0;
-		}
-	}
-	return 0;
-}
-#endif
-
-static void * performDecodeAudio(void * data) {
-	Player * player = (Player *) data;
-	player->audio.bufferNeedEnqueueAfterDecode = 1;
-	AVStream * stream = GET_STREAM(player, audio);
-	AVCodecContext * context = GET_CONTEXT(player, audio);
-	AVFrame * frame = av_frame_alloc();
-	SwrContext * resampleContext = swr_alloc();
-	int silentAudioLength = -1;
-	PacketHolder * packetHolder = NULL;
-#ifdef DASHCHAN_HAS_ATEMPO
-	TempoProcessor * tempoProcessor = NULL;
-	int tempoSampleRate = 0;
-	int tempoChannels = 0;
-	int tempoSpeed = PLAYBACK_SPEED_DEFAULT;
-	int64_t tempoStartPosition = -1;
-	int64_t tempoOutputSamples = 0;
-#endif
-
-	while (!player->meta.interrupt) {
-		packetHolder = (PacketHolder *) blockingQueueGet(&player->audio.packetQueue, 1);
-		if (getSkipFlag(&player->sync.skip.audioWorkFrame)) {
-			setSkipFlag(&player->sync.skip.audioWorkFrame, 0);
-#ifdef DASHCHAN_HAS_ATEMPO
-			tempoProcessorFree(&tempoProcessor);
-			tempoStartPosition = -1;
-			tempoOutputSamples = 0;
-#endif
-		}
-		if (!packetHolder || player->meta.interrupt) {
-			break;
-		}
-		condBroadcastLocked(&player->decode.packets.flowCond, &player->decode.packets.flowMutex);
-		if (player->meta.interrupt) {
-			break;
-		}
-
-		pthread_mutex_lock(&player->play.finishMutex);
-		while (!player->meta.interrupt && !player->play.playing) {
-			pthread_cond_wait(&player->play.finishCond, &player->play.finishMutex);
-		}
-		pthread_mutex_unlock(&player->play.finishMutex);
-		if (player->meta.interrupt) {
-			break;
-		}
-
-		int packetSent = 0;
-		while (1) {
-			int success = 0;
-			uint8_t ** dstData = NULL;
-#if USE_AV_CHANNEL_LAYOUT
-			AVChannelLayout srcChannelLayout = {0};
-			AVChannelLayout dstChannelLayout = {0};
-			int channelLayoutsInitialized = 0;
-#endif
-			if (getSkipFlag(&player->sync.skip.audioWorkFrame)) {
-				goto SKIP_AUDIO_FRAME;
-			}
-			setDiagnosticsAudioStage(player, DIAGNOSTICS_AUDIO_STAGE_WAIT_FRAME_MUTEX);
-			pthread_mutex_lock(&player->decode.audio.frameMutex);
-			if (getSkipFlag(&player->sync.skip.audioWorkFrame)) {
-				setDiagnosticsAudioStage(player, DIAGNOSTICS_AUDIO_STAGE_IDLE);
-				UNLOCK_AND_GOTO(&player->decode.audio.frameMutex, SKIP_AUDIO_FRAME);
-			}
-			setDiagnosticsAudioStage(player, DIAGNOSTICS_AUDIO_STAGE_DECODE_FRAME);
-			int ready = decodeFrame(context, packetHolder->packet, frame, &packetSent);
-			pthread_mutex_unlock(&player->decode.audio.frameMutex);
-			setDiagnosticsAudioStage(player, DIAGNOSTICS_AUDIO_STAGE_IDLE);
-			if (!ready) {
-				break;
-			}
-
-			if (ready) {
-				int64_t position = getFramePositionMs(player, frame, stream);
-				if (position >= 0 && player->sync.seekDiscardBeforeTarget &&
-						player->sync.audioPositionNotSync &&
-						position < player->sync.audioPosition) {
-					success = 1;
-					goto SKIP_AUDIO_FRAME;
-				}
-
-#if USE_AV_CHANNEL_LAYOUT
-				int srcChannels = getFrameChannels(frame);
-				if (srcChannels <= 0) {
-					srcChannels = getAudioContextChannels(context);
-				}
-				if (copyFrameChannelLayout(&srcChannelLayout, frame, srcChannels) < 0) {
-					goto SKIP_AUDIO_FRAME;
-				}
-				channelLayoutsInitialized = 1;
-				if (copyOrMaskChannelLayout(&dstChannelLayout, &srcChannelLayout,
-						player->audio.resampleChannels) < 0) {
-					goto SKIP_AUDIO_FRAME;
-				}
-				int dstChannels = dstChannelLayout.nb_channels;
-				if (srcChannels <= 0) {
-					srcChannels = srcChannelLayout.nb_channels;
-				}
-#else
-				if (frame->channel_layout == 0) {
-					frame->channel_layout = av_get_default_channel_layout(frame->channels);
-				}
-				uint64_t srcChannelLayout = frame->channel_layout;
-				uint64_t dstChannelLayout = player->audio.resampleChannels != 0
-						? player->audio.resampleChannels : srcChannelLayout;
-				int srcChannels = frame->channels;
-				int dstChannels = av_get_channel_layout_nb_channels(dstChannelLayout);
-				(void) srcChannels;
-#endif
-				int srcSamples = frame->nb_samples;
-				int srcSampleRate = frame->sample_rate;
-				int outputSampleRate = player->audio.resampleSampleRate != 0
-						? player->audio.resampleSampleRate : srcSampleRate;
-#ifdef DASHCHAN_HAS_ATEMPO
-				int playbackSpeed = getPlaybackSpeed(player);
-				int dstSampleRate = outputSampleRate;
-#else
-				int dstSampleRate = getPlaybackSampleRate(player, outputSampleRate);
-#endif
-				int dstFormat = AV_SAMPLE_FMT_S16;
-				LOG("audio frame pts=%" PRId64 " best=%" PRId64 " pkt_dts=%" PRId64
-						" pos=%" PRId64 " tb=%d/%d srcRate=%d srcCh=%d dstRate=%d dstCh=%d",
-						frame->pts, frame->best_effort_timestamp, frame->pkt_dts, position,
-						stream->time_base.num, stream->time_base.den, srcSampleRate, srcChannels,
-						dstSampleRate, dstChannels);
-#if USE_AV_CHANNEL_LAYOUT
-				av_opt_set_chlayout(resampleContext, "in_chlayout", &srcChannelLayout, 0);
-				av_opt_set_chlayout(resampleContext, "out_chlayout", &dstChannelLayout, 0);
-#else
-				av_opt_set_int(resampleContext, "in_channel_layout", srcChannelLayout, 0);
-				av_opt_set_int(resampleContext, "out_channel_layout", dstChannelLayout,  0);
-#endif
-				av_opt_set_int(resampleContext, "in_sample_rate", srcSampleRate, 0);
-				av_opt_set_int(resampleContext, "out_sample_rate", dstSampleRate, 0);
-				av_opt_set_sample_fmt(resampleContext, "in_sample_fmt", frame->format, 0);
-				av_opt_set_sample_fmt(resampleContext, "out_sample_fmt", dstFormat,  0);
-				if (swr_init(resampleContext) < 0
-						|| getSkipFlag(&player->sync.skip.audioWorkFrame)) {
-					goto SKIP_AUDIO_FRAME;
-				}
-				int dstSamples = av_rescale_rnd(srcSamples, dstSampleRate, srcSampleRate, AV_ROUND_UP);
-				int result = av_samples_alloc_array_and_samples(&dstData, frame->linesize, dstChannels,
-						dstSamples, dstFormat, 0);
-				if (result < 0 || getSkipFlag(&player->sync.skip.audioWorkFrame)) {
-					goto SKIP_AUDIO_FRAME;
-				}
-				dstSamples = av_rescale_rnd(swr_get_delay(resampleContext, srcSampleRate) + srcSamples,
-						dstSampleRate, srcSampleRate, AV_ROUND_UP);
-				result = swr_convert(resampleContext, dstData, dstSamples, (const uint8_t **) frame->data, srcSamples);
-				if (result < 0 || getSkipFlag(&player->sync.skip.audioWorkFrame)) {
-					goto SKIP_AUDIO_FRAME;
-				}
-
-				int size = av_samples_get_buffer_size(NULL, dstChannels, result, dstFormat, 1);
-				if (size < 0) {
-					goto SKIP_AUDIO_FRAME;
-				}
-#ifdef DASHCHAN_HAS_ATEMPO
-				if (playbackSpeed != PLAYBACK_SPEED_DEFAULT) {
-					if (!tempoProcessor || tempoSampleRate != dstSampleRate ||
-							tempoChannels != dstChannels || tempoSpeed != playbackSpeed) {
-						tempoProcessorFree(&tempoProcessor);
-						tempoProcessor = tempoProcessorCreate(dstSampleRate, dstChannels, playbackSpeed);
-						if (!tempoProcessor) {
-							LOG("atempo create failed rate=%d channels=%d speed=%d",
-									dstSampleRate, dstChannels, playbackSpeed);
-							goto SKIP_AUDIO_FRAME;
-						}
-						tempoSampleRate = dstSampleRate;
-						tempoChannels = dstChannels;
-						tempoSpeed = playbackSpeed;
-						tempoStartPosition = position;
-						tempoOutputSamples = 0;
-					}
-					int tempoResult = tempoProcessorPush(tempoProcessor, dstData[0], result);
-					if (tempoResult < 0) {
-						LOG("atempo push failed %d", tempoResult);
-						goto SKIP_AUDIO_FRAME;
-					}
-					if (!drainTempoProcessor(player, tempoProcessor, tempoSampleRate, tempoChannels,
-							tempoSpeed, tempoStartPosition, &tempoOutputSamples, &silentAudioLength)) {
-						goto SKIP_AUDIO_FRAME;
-					}
-					success = 1;
-				} else {
-					tempoProcessorFree(&tempoProcessor);
-					tempoStartPosition = -1;
-					tempoOutputSamples = 0;
-					int64_t divider = av_get_bytes_per_sample(dstFormat) * dstChannels *
-							(int64_t) getPlaybackSampleRateForSpeed(dstSampleRate, playbackSpeed);
-					int frameSize = av_get_bytes_per_sample(dstFormat) * dstChannels;
-					if (queueDecodedAudio(player, dstData[0], size, frameSize,
-							position, divider, &silentAudioLength)) {
-						dstData[0] = NULL;
-						success = 1;
-					}
-				}
-#else
-				int64_t divider = av_get_bytes_per_sample(dstFormat) * dstChannels * (int64_t) dstSampleRate;
-				int frameSize = av_get_bytes_per_sample(dstFormat) * dstChannels;
-				if (queueDecodedAudio(player, dstData[0], size, frameSize,
-						position, divider, &silentAudioLength)) {
-					dstData[0] = NULL;
-					success = 1;
-				}
-#endif
-			}
-
-			SKIP_AUDIO_FRAME:
-#if USE_AV_CHANNEL_LAYOUT
-			if (channelLayoutsInitialized) {
-				av_channel_layout_uninit(&srcChannelLayout);
-				av_channel_layout_uninit(&dstChannelLayout);
-			}
-#endif
-			if (dstData) {
-				av_freep(&dstData[0]);
-				av_freep(&dstData);
-			}
-			if (!success) {
-				break;
-			}
-		}
-#ifdef DASHCHAN_HAS_ATEMPO
-		if (!packetHolder->packet && tempoProcessor) {
-			int result = tempoProcessorFinish(tempoProcessor);
-			if (result < 0) {
-				LOG("atempo finish failed %d", result);
-			} else {
-				drainTempoProcessor(player, tempoProcessor, tempoSampleRate, tempoChannels,
-						tempoSpeed, tempoStartPosition, &tempoOutputSamples, &silentAudioLength);
-			}
-			tempoProcessorFree(&tempoProcessor);
-			tempoStartPosition = -1;
-			tempoOutputSamples = 0;
-		}
-#endif
-		packetQueueFreeCallback(packetHolder);
-		packetHolder = NULL;
-	}
-	if (packetHolder) {
-		packetQueueFreeCallback(packetHolder);
-	}
-#ifdef DASHCHAN_HAS_ATEMPO
-	tempoProcessorFree(&tempoProcessor);
-#endif
-	swr_free(&resampleContext);
-	av_frame_free(&frame);
-	return NULL;
-}
-
-static void drawWindow(Player * player, uint8_t * buffer, int width, int height,
-		int lastWidth, int lastHeight) {
-	if (player->video.window) {
-		if (width != lastWidth || height != lastHeight) {
-			ANativeWindow_setBuffersGeometry(player->video.window, width, height,
-					ANativeWindow_getFormat(player->video.window));
-		}
-		ANativeWindow_Buffer canvas;
-		if (ANativeWindow_lock(player->video.window, &canvas, NULL) == 0) {
-			if (canvas.width >= width && canvas.height >= height) {
-				// Width and height can be smaller in the moment of surface changing and before it was handled
-				uint8_t * to = canvas.bits;
-				if (player->video.format == AV_PIX_FMT_YUV420P) {
-					for (int i = 0; i < height; i++) {
-						memcpy(to, buffer, width);
-						to += canvas.stride;
-						buffer += width;
-					}
-					memset(to, 127, canvas.stride * height / 2);
-					for (int i = 0; i < height / 2; i++) {
-						memcpy(to, buffer, width / 2);
-						to += canvas.stride / 2;
-						buffer += width / 2;
-					}
-					if (canvas.stride % 32 != 0) {
-						to += height / 2 * 8; // Align to 16
-					}
-					for (int i = 0; i < height / 2; i++) {
-						memcpy(to, buffer, width / 2);
-						to += canvas.stride / 2;
-						buffer += width / 2;
-					}
-				} else {
-					int bytesPerPixel = getBytesPerPixel(player->video.format);
-					if (bytesPerPixel > 0) {
-						for (int i = 0; i < height; i++) {
-							memcpy(to, buffer, bytesPerPixel * width);
-							to += bytesPerPixel * canvas.stride;
-							buffer += bytesPerPixel * width;
-						}
-					}
-				}
-			}
-			ANativeWindow_unlockAndPost(player->video.window);
-		}
-	}
-}
-
-static void * performDraw(void * data) {
-	Player * player = (Player *) data;
-	JNIEnv * env;
-	(*loadJavaVM)->AttachCurrentThread(loadJavaVM, &env, NULL);
-	AVCodecContext * context = GET_CONTEXT(player, video);
-	int lastWidth = player->video.lastBuffer.width > 0
-			? player->video.lastBuffer.width : context->width;
-	int lastHeight = player->video.lastBuffer.height > 0
-			? player->video.lastBuffer.height : context->height;
-	while (!player->meta.interrupt) {
-		BufferItem * bufferItem = NULL;
-		pthread_mutex_lock(&player->video.queueMutex);
-		while (!player->meta.interrupt && !bufferItem) {
-			if (player->video.bufferQueue) {
-				bufferItem = bufferQueueSeize(player->video.bufferQueue);
-			}
-			if (!bufferItem) {
-				pthread_cond_wait(&player->video.queueCond, &player->video.queueMutex);
-			}
-		}
-		setSkipFlag(&player->sync.skip.drawWorkFrame, 0);
-		pthread_mutex_unlock(&player->video.queueMutex);
-		if (player->meta.interrupt) {
-			goto SKIP_DRAW_FRAME;
-		}
-
-		pthread_mutex_lock(&player->play.finishMutex);
-		while (!player->meta.interrupt && !player->play.playing) {
-			pthread_cond_wait(&player->play.finishCond, &player->play.finishMutex);
-		}
-		pthread_mutex_unlock(&player->play.finishMutex);
-		if (player->meta.interrupt) {
-			goto SKIP_DRAW_FRAME;
-		}
-
-		pthread_mutex_lock(&player->video.sleepDrawMutex);
-		if (getSkipFlag(&player->sync.skip.drawWorkFrame)) {
-			UNLOCK_AND_GOTO(&player->video.sleepDrawMutex, SKIP_DRAW_FRAME);
-		}
-		VideoFrameExtra * extra = bufferItem->extra;
-		int64_t position = calculatePosition(player, 1);
-		int64_t waitTime = 0;
-		int finishSeeking = 0;
-		if (extra->position >= 0) {
-			player->sync.videoPosition = extra->position;
-			waitTime = extra->position - position;
-			if (player->sync.videoPositionNotSync) {
-				finishSeeking = 1;
-				diagnosticsLog("player=%u seek_first_frame position_ms=%" PRId64
-						" target_ms=%" PRId64 " hardware=0",
-						player->meta.diagnosticsId, extra->position,
-						player->sync.seekTargetPosition);
-				// The old frame is still on screen until this one is drawn. Do not
-				// schedule the first post-seek frame into the future or hide the busy
-				// indicator before it actually replaces the old image.
-				waitTime = 0;
-			}
-		}
-		if (waitTime > 0) {
-			LOG("sleep video %" PRId64 " %" PRId64 " %" PRId64, waitTime, player->sync.videoPosition, position);
-			int64_t time = calculateFrameTime(player, waitTime);
-			while (!player->meta.interrupt && !getSkipFlag(&player->sync.skip.drawWorkFrame)) {
-				if (condSleepUntilMs(&player->video.sleepCond, &player->video.sleepDrawMutex, time)) {
-					break;
-				}
-			}
-			position = calculatePosition(player, 1);
-			waitTime = extra->position >= 0 ? extra->position - position : 0;
-		}
-		if (getSkipFlag(&player->sync.skip.drawWorkFrame)) {
-			UNLOCK_AND_GOTO(&player->video.sleepDrawMutex, SKIP_DRAW_FRAME);
-		}
-		if (!finishSeeking && !extra->forcePresent && HAS_STREAM(player, audio) &&
-				!player->sync.audioPositionNotSync &&
-				waitTime < -SOFTWARE_LATE_DROP_THRESHOLD_MS) {
-			diagnosticsRecordSoftwareDrop(player, 0, extra->position, position, -waitTime);
-			UNLOCK_AND_GOTO(&player->video.sleepDrawMutex, SKIP_DRAW_FRAME);
-		}
-		if (player->sync.audioPositionNotSync) {
-			updateAudioPositionSurrogate(player, position, 0);
-		} else {
-			int64_t gaining = -waitTime;
-			if (!HAS_STREAM(player, audio) && gaining > GAINING_THRESHOLD) {
-				player->sync.startTime += gaining;
-			}
-		}
-		LOG("draw video %" PRId64, player->sync.videoPosition);
-		int bufferSize = bufferItem->dataSize;
-		if (bufferSize <= 0 || bufferSize > bufferItem->bufferSize) {
-			UNLOCK_AND_GOTO(&player->video.sleepDrawMutex, SKIP_DRAW_FRAME);
-		}
-		if (bufferSize > player->video.lastBuffer.size) {
-			player->video.lastBuffer.data = realloc(player->video.lastBuffer.data, bufferSize);
-			player->video.lastBuffer.size = bufferSize;
-		}
-		memcpy(player->video.lastBuffer.data, bufferItem->buffer, bufferSize);
-		player->video.lastBuffer.dataSize = bufferSize;
-		player->video.lastBuffer.width = extra->width;
-		player->video.lastBuffer.height = extra->height;
-		int rendered = 0;
-		if (extra->forcePresent ||
-				(player->sync.lastDrawTimes[0] - player->sync.lastDrawTimes[1]) * MAX_FPS >= 1000
-				|| (getTime() - player->sync.lastDrawTimes[0]) * MAX_FPS >= 1000) {
-			// Avoid FPS > MAX_FPS
-			drawWindow(player, bufferItem->buffer, extra->width, extra->height,
-					lastWidth, lastHeight);
-			rendered = 1;
-			diagnosticsIncrement(PLAYER_DIAGNOSTICS_SOFTWARE_RENDERED);
-			lastWidth = extra->width;
-			lastHeight = extra->height;
-			player->sync.lastDrawTimes[1] = player->sync.lastDrawTimes[0];
-			player->sync.lastDrawTimes[0] = getTime();
-			if (extra->forcePresent) {
-				diagnosticsRecordSoftwareLateAnchor(player, 1, extra->position,
-						position, position - extra->position);
-			}
-		}
-		if (finishSeeking && rendered) {
-			player->sync.videoPositionNotSync = 0;
-			diagnosticsLog("player=%u seek_first_frame_rendered position_ms=%" PRId64 " hardware=0",
-					player->meta.diagnosticsId, extra->position);
-			Bridge * bridge = obtainBridge(player, env);
-			SEND_MESSAGE(env, player, bridge, BRIDGE_MESSAGE_END_SEEKING);
-			pthread_mutex_unlock(&player->video.sleepDrawMutex);
-			condBroadcastLocked(&player->audio.sleepCond, &player->audio.sleepBufferMutex);
-			pthread_mutex_lock(&player->video.sleepDrawMutex);
-		}
-		pthread_mutex_unlock(&player->video.sleepDrawMutex);
-
-		SKIP_DRAW_FRAME:
-		if (bufferItem) {
-			free(bufferItem->extra);
-			bufferItem->extra = NULL;
-			pthread_mutex_lock(&player->video.queueMutex);
-			bufferQueueRelease(player->video.bufferQueue, bufferItem);
-			pthread_cond_broadcast(&player->video.queueCond);
-			pthread_mutex_unlock(&player->video.queueMutex);
-			markStreamFinished(player, 1);
-		}
-	}
-	(*loadJavaVM)->DetachCurrentThread(loadJavaVM);
-	return NULL;
-}
-
-static void extendScaleHolder(ScaleHolder * scaleHolder, int bufferSize, int width, int height,
-		int bytesPerPixel, int isYUV) {
-	if (bufferSize > scaleHolder->bufferSize) {
-		scaleHolder->bufferSize = bufferSize;
-		if (scaleHolder->scaleBuffer) {
-			av_free(scaleHolder->scaleBuffer);
-		}
-		scaleHolder->scaleBuffer = av_malloc(bufferSize);
-	}
-	scaleHolder->scaleData[0] = scaleHolder->scaleBuffer;
-	scaleHolder->scaleData[1] = isYUV ? scaleHolder->scaleBuffer + width * height + width * height / 4 : NULL;
-	scaleHolder->scaleData[2] = isYUV ? scaleHolder->scaleBuffer + width * height : NULL;
-	scaleHolder->scaleData[3] = NULL;
-	scaleHolder->scaleLinesize[0] = bytesPerPixel * width;
-	scaleHolder->scaleLinesize[1] = isYUV ? width / 2 : 0;
-	scaleHolder->scaleLinesize[2] = isYUV ? width / 2 : 0;
-	scaleHolder->scaleLinesize[3] = 0;
-}
-
-#ifdef DASHCHAN_HAS_MEDIACODEC
-static int decodeMediaCodecFrame(Player * player, AVCodecContext * context, AVPacket * packet,
-		AVFrame * frame, int * packetSent) {
-	if (!*packetSent) {
-		setDiagnosticsMediaCodecStage(player, DIAGNOSTICS_MEDIACODEC_STAGE_SEND_PACKET, -1);
-		int result = avcodec_send_packet(context, packet);
-		if (result == 0) {
-			*packetSent = 1;
-			if (packet) {
-				diagnosticsRecordPacketSubmitted();
-			}
-		} else if (result != AVERROR(EAGAIN) && result != AVERROR_EOF) {
-			LOGP("MediaCodec packet submission failed: %d", result);
-			diagnosticsRecordDecoderError(player, "send_packet", result);
-			return -1;
-		}
-	}
-	setDiagnosticsMediaCodecStage(player, DIAGNOSTICS_MEDIACODEC_STAGE_RECEIVE_FRAME, -1);
-	int result = avcodec_receive_frame(context, frame);
-	if (result == 0) {
-		return 1;
-	}
-	if (result == AVERROR(EAGAIN) || result == AVERROR_EOF) {
-		return 0;
-	}
-	LOGP("MediaCodec frame receive failed: %d", result);
-	diagnosticsRecordDecoderError(player, "receive_frame", result);
-	return -1;
-}
-
-static int renderMediaCodecFrame(Player * player, JNIEnv * env, AVStream * stream, AVFrame * frame) {
-	AVMediaCodecBuffer * buffer = (AVMediaCodecBuffer *) frame->data[3];
-	int64_t framePosition = getFramePositionMs(player, frame, stream);
-	setDiagnosticsMediaCodecStage(player, DIAGNOSTICS_MEDIACODEC_STAGE_WAIT_SLEEP_DRAW_MUTEX,
-			framePosition);
-	if (frame->format != AV_PIX_FMT_MEDIACODEC || !buffer) {
-		diagnosticsLog("player=%u mediacodec_output invalid_format=%d expected_format=%d"
-				" output_buffer=%d",
-				player->meta.diagnosticsId, frame->format, AV_PIX_FMT_MEDIACODEC,
-				buffer != NULL);
-		diagnosticsRecordOutput(player, frame, framePosition, 0,
-				DIAGNOSTICS_OUTPUT_NO_BUFFER, 0);
-		setDiagnosticsMediaCodecStage(player, DIAGNOSTICS_MEDIACODEC_STAGE_UNREF_FRAME,
-				framePosition);
-		av_frame_unref(frame);
-		setDiagnosticsMediaCodecStage(player, DIAGNOSTICS_MEDIACODEC_STAGE_IDLE,
-				framePosition);
-		return -1;
-	}
-	int render = 1;
-	int renderResult = 0;
-	int outputAction = DIAGNOSTICS_OUTPUT_IMMEDIATE;
-	int64_t waitTime = 0;
-	int finishSeeking = 0;
-	pthread_mutex_lock(&player->video.sleepDrawMutex);
-	setDiagnosticsMediaCodecStage(player, DIAGNOSTICS_MEDIACODEC_STAGE_RENDER_FRAME,
-			framePosition);
-	if (player->meta.interrupt || getSkipFlag(&player->sync.skip.videoWorkFrame)) {
-		render = 0;
-		outputAction = DIAGNOSTICS_OUTPUT_DROPPED_STATE;
-		goto RELEASE_BUFFER;
-	}
-	if (framePosition >= 0 && player->sync.seekDiscardBeforeTarget &&
-			player->sync.videoPositionNotSync &&
-			framePosition < player->sync.videoPosition) {
-		render = 0;
-		outputAction = DIAGNOSTICS_OUTPUT_DROPPED_SEEK;
-		goto RELEASE_BUFFER;
-	}
-	int64_t position = calculatePosition(player, 1);
-	if (framePosition >= 0) {
-		player->sync.videoPosition = framePosition;
-		waitTime = framePosition - position;
-		if (player->sync.videoPositionNotSync) {
-			finishSeeking = 1;
-			diagnosticsLog("player=%u seek_first_frame position_ms=%" PRId64
-					" target_ms=%" PRId64 " hardware=1",
-					player->meta.diagnosticsId, framePosition,
-					player->sync.seekTargetPosition);
-			// Render the first post-seek output immediately. Scheduling it against
-			// the still-running clock leaves the old frame visible while audio has
-			// already resumed, especially when a sparse keyframe is slightly ahead.
-			waitTime = 0;
-		}
-	}
-	if (waitTime < -GAINING_THRESHOLD && HAS_STREAM(player, audio)) {
-		render = 0;
-		outputAction = DIAGNOSTICS_OUTPUT_DROPPED_LATE;
-	} else if (!HAS_STREAM(player, audio) && -waitTime > GAINING_THRESHOLD) {
-		player->sync.startTime -= waitTime;
-		waitTime = 0;
-	}
-	while (render && waitTime > 0) {
-		int64_t scaledWaitTime = unscalePlaybackPosition(player, waitTime);
-		if (scaledWaitTime <= MEDIACODEC_MAX_SCHEDULE_AHEAD_MS) {
-			int64_t renderTimeNs = getMonotonicTimeNs() + scaledWaitTime * 1000000LL;
-			setDiagnosticsMediaCodecStage(player, DIAGNOSTICS_MEDIACODEC_STAGE_SCHEDULE_BUFFER,
-					framePosition);
-			renderResult = av_mediacodec_render_buffer_at_time(buffer, renderTimeNs);
-			outputAction = DIAGNOSTICS_OUTPUT_SCHEDULED;
-			buffer = NULL;
-			break;
-		}
-		int64_t wakeTime = getTime() + scaledWaitTime - MEDIACODEC_MAX_SCHEDULE_AHEAD_MS;
-		setDiagnosticsMediaCodecStage(player, DIAGNOSTICS_MEDIACODEC_STAGE_WAIT_RENDER_TIME,
-				framePosition);
-		condSleepUntilMs(&player->video.sleepCond, &player->video.sleepDrawMutex, wakeTime);
-		if (player->meta.interrupt || getSkipFlag(&player->sync.skip.videoWorkFrame)) {
-			render = 0;
-			outputAction = DIAGNOSTICS_OUTPUT_DROPPED_STATE;
-			break;
-		}
-		position = calculatePosition(player, 1);
-		waitTime = framePosition - position;
-	}
-
-	RELEASE_BUFFER:
-	if (buffer) {
-		setDiagnosticsMediaCodecStage(player, DIAGNOSTICS_MEDIACODEC_STAGE_RELEASE_BUFFER,
-				framePosition);
-		renderResult = av_mediacodec_release_buffer(buffer, render);
-	}
-	if (renderResult < 0) {
-		LOGP("MediaCodec output buffer release failed: %d", renderResult);
-	}
-	if (finishSeeking && render && renderResult >= 0) {
-		player->sync.videoPositionNotSync = 0;
-		diagnosticsLog("player=%u seek_first_frame_rendered position_ms=%" PRId64 " hardware=1",
-				player->meta.diagnosticsId, framePosition);
-		Bridge * bridge = obtainBridge(player, env);
-		SEND_MESSAGE(env, player, bridge, BRIDGE_MESSAGE_END_SEEKING);
-		pthread_mutex_unlock(&player->video.sleepDrawMutex);
-		setDiagnosticsMediaCodecStage(player, DIAGNOSTICS_MEDIACODEC_STAGE_FINISH_SEEK,
-				framePosition);
-		condBroadcastLocked(&player->audio.sleepCond, &player->audio.sleepBufferMutex);
-		setDiagnosticsMediaCodecStage(player, DIAGNOSTICS_MEDIACODEC_STAGE_WAIT_SLEEP_DRAW_MUTEX,
-				framePosition);
-		pthread_mutex_lock(&player->video.sleepDrawMutex);
-		setDiagnosticsMediaCodecStage(player, DIAGNOSTICS_MEDIACODEC_STAGE_RENDER_FRAME,
-				framePosition);
-	}
-	setDiagnosticsMediaCodecStage(player, DIAGNOSTICS_MEDIACODEC_STAGE_RECORD_OUTPUT,
-			framePosition);
-	diagnosticsRecordOutput(player, frame, framePosition, waitTime, outputAction, renderResult);
-	setDiagnosticsMediaCodecStage(player, DIAGNOSTICS_MEDIACODEC_STAGE_UNREF_FRAME,
-			framePosition);
-	av_frame_unref(frame);
-	pthread_mutex_unlock(&player->video.sleepDrawMutex);
-	setDiagnosticsMediaCodecStage(player, DIAGNOSTICS_MEDIACODEC_STAGE_UNLOCK_FRAME_MUTEX,
-			framePosition);
-	return 1;
-}
-
-static void performDecodeVideoMediaCodec(Player * player, JNIEnv * env, AVStream * stream) {
-	AVFrame * frame = av_frame_alloc();
-	PacketHolder * packetHolder = NULL;
-	while (!player->meta.interrupt && player->video.hardwareDecoderActive) {
-		if (hasPendingSurface(player)) {
-			applyPendingSurface(player, env);
-			continue;
-		}
-		packetHolder = (PacketHolder *) blockingQueueGet(&player->video.packetQueue, 1);
-		if (packetHolder && packetHolder->type == PACKET_HOLDER_SURFACE_REQUEST) {
-			packetQueueFreeCallback(packetHolder);
-			packetHolder = NULL;
-			applyPendingSurface(player, env);
-			continue;
-		}
-		if (!player->video.hardwareDecoderActive) {
-			if (packetHolder) {
-				packetQueueFreeCallback(packetHolder);
-				packetHolder = NULL;
-			}
-			break;
-		}
-		if (getSkipFlag(&player->sync.skip.videoWorkFrame)) {
-			setSkipFlag(&player->sync.skip.videoWorkFrame, 0);
-		}
-		if (!packetHolder || player->meta.interrupt) {
-			break;
-		}
-		condBroadcastLocked(&player->decode.packets.flowCond, &player->decode.packets.flowMutex);
-		if (player->meta.interrupt) {
-			break;
-		}
-		pthread_mutex_lock(&player->play.finishMutex);
-		while (!player->meta.interrupt && !player->play.playing && !hasPendingSurface(player)) {
-			pthread_cond_wait(&player->play.finishCond, &player->play.finishMutex);
-		}
-		pthread_mutex_unlock(&player->play.finishMutex);
-		if (player->meta.interrupt) {
-			break;
-		}
-		if (hasPendingSurface(player)) {
-			packetQueueFreeCallback(packetHolder);
-			packetHolder = NULL;
-			applyPendingSurface(player, env);
-			continue;
-		}
-		int packetSent = 0;
-		while (!player->meta.interrupt && !getSkipFlag(&player->sync.skip.videoWorkFrame)) {
-			setDiagnosticsMediaCodecStage(player, DIAGNOSTICS_MEDIACODEC_STAGE_WAIT_FRAME_MUTEX, -1);
-			pthread_mutex_lock(&player->decode.video.frameMutex);
-			if (player->meta.interrupt || getSkipFlag(&player->sync.skip.videoWorkFrame)) {
-				pthread_mutex_unlock(&player->decode.video.frameMutex);
-				setDiagnosticsMediaCodecStage(player, DIAGNOSTICS_MEDIACODEC_STAGE_IDLE, -1);
-				break;
-			}
-			__atomic_add_fetch(&player->decode.video.diagnosticsFrameSerial, 1, __ATOMIC_RELAXED);
-			AVCodecContext * context = GET_CONTEXT(player, video);
-			int decodeResult = decodeMediaCodecFrame(player, context, packetHolder->packet, frame, &packetSent);
-			int renderResult = decodeResult > 0
-					? renderMediaCodecFrame(player, env, stream, frame) : 0;
-			if (decodeResult > 0 && renderResult > 0) {
-				player->video.hardwareDecodeErrors = 0;
-			} else if ((decodeResult < 0 || renderResult < 0) &&
-					++player->video.hardwareDecodeErrors >= 3) {
-				fallbackMediaCodecToSoftware(player);
-			}
-			pthread_mutex_unlock(&player->decode.video.frameMutex);
-			setDiagnosticsMediaCodecStage(player, DIAGNOSTICS_MEDIACODEC_STAGE_IDLE, -1);
-			if (decodeResult <= 0 || renderResult <= 0) {
-				break;
-			}
-		}
-		if (!packetHolder->packet) {
-			markStreamFinished(player, 1);
-		}
-		packetQueueFreeCallback(packetHolder);
-		packetHolder = NULL;
-	}
-	if (packetHolder) {
-		packetQueueFreeCallback(packetHolder);
-	}
-	setDiagnosticsMediaCodecStage(player, DIAGNOSTICS_MEDIACODEC_STAGE_IDLE, -1);
-	av_frame_free(&frame);
-}
-#endif
-
-static void * performDecodeVideo(void * data) {
-	Player * player = (Player *) data;
-	JNIEnv * env;
-	(*loadJavaVM)->AttachCurrentThread(loadJavaVM, &env, NULL);
-	AVStream * stream = GET_STREAM(player, video);
-	while (!player->meta.interrupt && !player->video.bufferQueue && !player->video.hardwareDecoderActive) {
-		if (hasPendingSurface(player)) {
-			applyPendingSurface(player, env);
-			continue;
-		}
-		pthread_mutex_lock(&player->video.sleepDrawMutex);
-		if (!player->meta.interrupt && !player->video.bufferQueue
-				&& !player->video.hardwareDecoderActive && !hasPendingSurface(player)) {
-			pthread_cond_wait(&player->video.sleepCond, &player->video.sleepDrawMutex);
-		}
-		pthread_mutex_unlock(&player->video.sleepDrawMutex);
-	}
-	if (player->meta.interrupt) {
-		(*loadJavaVM)->DetachCurrentThread(loadJavaVM);
-		return NULL;
-	}
-#ifdef DASHCHAN_HAS_MEDIACODEC
-	if (player->video.hardwareDecoderActive) {
-		performDecodeVideoMediaCodec(player, env, stream);
-		if (player->meta.interrupt || player->video.hardwareDecoderActive) {
-			(*loadJavaVM)->DetachCurrentThread(loadJavaVM);
-			return NULL;
-		}
-	}
-#endif
-
-	AVCodecContext * context = GET_CONTEXT(player, video);
-	int bytesPerPixel = getBytesPerPixel(player->video.format);
-	int isYUV = player->video.format == AV_PIX_FMT_YUV420P;
-	AVFrame * frame = av_frame_alloc();
-	ScaleHolder scaleHolder;
-	scaleHolder.bufferSize = 0;
-	scaleHolder.scaleBuffer = NULL;
-	int lastSourceWidth = context->width;
-	int lastSourceHeight = context->height;
-	int lastOutputWidth;
-	int lastOutputHeight;
-	calculateSoftwareOutputSize(player, lastSourceWidth, lastSourceHeight,
-			&lastOutputWidth, &lastOutputHeight);
-	int initialBufferSize = getVideoBufferSize(player->video.format,
-			lastOutputWidth, lastOutputHeight);
-	extendScaleHolder(&scaleHolder, initialBufferSize, lastOutputWidth, lastOutputHeight,
-			bytesPerPixel, isYUV);
-	struct SwsContext * scaleContext = NULL;
-	PacketHolder * packetHolder = NULL;
-
-	int totalMeasurements = 10;
-	int currentMeasurement = 0;
-	int measurements[2 * totalMeasurements];
-
-	while (!player->meta.interrupt) {
-		if (hasPendingSurface(player)) {
-			applyPendingSurface(player, env);
-			continue;
-		}
-		packetHolder = (PacketHolder *) blockingQueueGet(&player->video.packetQueue, 1);
-		if (packetHolder && packetHolder->type == PACKET_HOLDER_SURFACE_REQUEST) {
-			packetQueueFreeCallback(packetHolder);
-			packetHolder = NULL;
-			applyPendingSurface(player, env);
-			continue;
-		}
-		if (getSkipFlag(&player->sync.skip.videoWorkFrame)) {
-			setSkipFlag(&player->sync.skip.videoWorkFrame, 0);
-		}
-		if (!packetHolder || player->meta.interrupt) {
-			break;
-		}
-		condBroadcastLocked(&player->decode.packets.flowCond, &player->decode.packets.flowMutex);
-		if (player->meta.interrupt) {
-			break;
-		}
-
-		pthread_mutex_lock(&player->play.finishMutex);
-		while (!player->meta.interrupt && !player->play.playing && !hasPendingSurface(player)) {
-			pthread_cond_wait(&player->play.finishCond, &player->play.finishMutex);
-		}
-		pthread_mutex_unlock(&player->play.finishMutex);
-		if (player->meta.interrupt) {
-			break;
-		}
-		if (hasPendingSurface(player)) {
-			packetQueueFreeCallback(packetHolder);
-			packetHolder = NULL;
-			applyPendingSurface(player, env);
-			continue;
-		}
-
-		int packetSent = 0;
-		while (1) {
-			int success = 0;
-			VideoFrameExtra * extra = NULL;
-			int64_t decodedFramePosition = -1;
-			if (getSkipFlag(&player->sync.skip.videoWorkFrame)) {
-				goto SKIP_VIDEO_FRAME;
-			}
-			pthread_mutex_lock(&player->decode.video.frameMutex);
-			if (getSkipFlag(&player->sync.skip.videoWorkFrame)) {
-				UNLOCK_AND_GOTO(&player->decode.video.frameMutex, SKIP_VIDEO_FRAME);
-			}
-			if (!packetSent) {
-				updateSoftwareSeekFastDecodeForPacketLocked(player, context, stream,
-						packetHolder->packet);
-			}
-			int ready = decodeFrame(context, packetHolder->packet, frame, &packetSent);
-			if (ready) {
-				decodedFramePosition = getFramePositionMs(player, frame, stream);
-				if (player->video.softwareSeekFastActive) {
-					player->video.softwareSeekFastFrames++;
-					if (decodedFramePosition >= player->video.softwareSeekFastRestorePosition) {
-						restoreSoftwareSeekFastDecodeLocked(player, context,
-								"decoded_restore_margin", decodedFramePosition);
-					}
-				}
-			}
-			pthread_mutex_unlock(&player->decode.video.frameMutex);
-			if (!ready) {
-				break;
-			}
-
-			if (ready) {
-				extra = malloc(sizeof(VideoFrameExtra));
-				extra->position = decodedFramePosition;
-				extra->forcePresent = 0;
-				diagnosticsIncrement(PLAYER_DIAGNOSTICS_SOFTWARE_DECODED);
-				LOG("video frame pts=%" PRId64 " best=%" PRId64 " pkt_dts=%" PRId64
-						" pos=%" PRId64 " tb=%d/%d", frame->pts, frame->best_effort_timestamp,
-						frame->pkt_dts, extra->position, stream->time_base.num, stream->time_base.den);
-				if (extra->position >= 0 && player->sync.seekDiscardBeforeTarget &&
-						player->sync.videoPositionNotSync &&
-						extra->position < player->sync.videoPosition) {
-					success = 1;
-					goto SKIP_VIDEO_FRAME;
-				}
-				if (getSkipFlag(&player->sync.skip.videoWorkFrame)) {
-					goto SKIP_VIDEO_FRAME;
-				}
-
-				int64_t playbackPosition = calculatePosition(player, 1);
-				int64_t lateness = extra->position >= 0 ? playbackPosition - extra->position : 0;
-				int canDropLate = extra->position >= 0 && HAS_STREAM(player, audio) &&
-						!player->sync.audioPositionNotSync && !player->sync.videoPositionNotSync;
-				updateSoftwareDecoderGovernor(player, context, canDropLate, lateness);
-				if (canDropLate && lateness > SOFTWARE_LATE_DROP_THRESHOLD_MS) {
-					int64_t now = getTime();
-					int64_t lastQueuedAt = __atomic_load_n(
-							&player->video.softwareLastFrameQueuedAt, __ATOMIC_ACQUIRE);
-					if (lastQueuedAt <= 0 || now - lastQueuedAt >= SOFTWARE_LATE_ANCHOR_INTERVAL_MS) {
-						extra->forcePresent = 1;
-					} else {
-						diagnosticsRecordSoftwareDrop(player, 1, extra->position,
-								playbackPosition, lateness);
-						success = 1;
-						goto SKIP_VIDEO_FRAME;
-					}
-				}
-
-				int outputWidth;
-				int outputHeight;
-				calculateSoftwareOutputSize(player, frame->width, frame->height,
-						&outputWidth, &outputHeight);
-				int outputBufferSize = getVideoBufferSize(player->video.format,
-						outputWidth, outputHeight);
-				if (outputBufferSize <= 0) {
-					goto SKIP_VIDEO_FRAME;
-				}
-				extra->width = outputWidth;
-				extra->height = outputHeight;
-				int sourceChanged = lastSourceWidth != frame->width ||
-						lastSourceHeight != frame->height;
-				int outputChanged = sourceChanged || lastOutputWidth != outputWidth ||
-						lastOutputHeight != outputHeight;
-				if (outputChanged) {
-					extendScaleHolder(&scaleHolder, outputBufferSize, outputWidth, outputHeight,
-							bytesPerPixel, isYUV);
-					diagnosticsLog("player=%u software_output source=%dx%d surface=%dx%d"
-							" output=%dx%d level=%s buffer_bytes=%d",
-							player->meta.diagnosticsId, frame->width, frame->height,
-							__atomic_load_n(&player->video.surfaceWidth, __ATOMIC_ACQUIRE),
-							__atomic_load_n(&player->video.surfaceHeight, __ATOMIC_ACQUIRE),
-							outputWidth, outputHeight,
-							player->video.softwareOutputLevel > 0 ? "hd" : "fhd",
-							outputBufferSize);
-					lastSourceWidth = frame->width;
-					lastSourceHeight = frame->height;
-					lastOutputWidth = outputWidth;
-					lastOutputHeight = outputHeight;
-					if (sourceChanged) {
-						Bridge * bridge = obtainBridge(player, env);
-						SEND_MESSAGE(env, player, bridge, BRIDGE_MESSAGE_SIZE_CHANGED);
-					}
-				}
-				int useLibyuv = frame->format == AV_PIX_FMT_YUV420P &&
-						player->video.format == AV_PIX_FMT_RGBA && frame->width == outputWidth &&
-						frame->height == outputHeight;
-				uint64_t conversionStartedAt = getTimeUs();
-				uint64_t measurementStartedAt = 0;
-				if (useLibyuv) {
-					if (player->video.useLibyuv >= 0) {
-						useLibyuv = player->video.useLibyuv;
-					} else {
-						if (currentMeasurement < totalMeasurements) {
-							useLibyuv = 0;
-						}
-						if (currentMeasurement < 2 * totalMeasurements) {
-							measurementStartedAt = getTimeUs();
-						}
-					}
-				}
-				if (useLibyuv) {
-					I420ToABGR(frame->data[0], frame->linesize[0], frame->data[1], frame->linesize[1],
-							frame->data[2], frame->linesize[2], scaleHolder.scaleBuffer, 4 * outputWidth,
-							outputWidth, outputHeight);
-				} else {
-					scaleContext = sws_getCachedContext(scaleContext,
-							frame->width, frame->height, frame->format,
-							outputWidth, outputHeight, player->video.format,
-							SWS_FAST_BILINEAR, NULL, NULL, NULL);
-					if (!scaleContext) {
-						goto SKIP_VIDEO_FRAME;
-					}
-					sws_scale(scaleContext, (uint8_t const * const *) frame->data, frame->linesize,
-							0, frame->height, scaleHolder.scaleData, scaleHolder.scaleLinesize);
-				}
-				int64_t conversionTime = getTimeUs() - conversionStartedAt;
-				if (measurementStartedAt != 0) {
-					if (currentMeasurement < 2 * totalMeasurements) {
-						measurements[currentMeasurement++] = (int) (getTimeUs() - measurementStartedAt);
-						if (currentMeasurement == 2 * totalMeasurements) {
-							int avg1 = 0;
-							int avg2 = 0;
-							for (int i = 0; i < totalMeasurements; i++) {
-								avg1 += measurements[i];
-							}
-							for (int i = totalMeasurements; i < 2 * totalMeasurements; i++) {
-								avg2 += measurements[i];
-							}
-							player->video.useLibyuv = avg2 <= avg1 ? 1 : 0;
-						}
-					}
-				}
-				if (conversionTime >= SOFTWARE_GOVERNOR_SLOW_CONVERSION_US) {
-					player->video.softwareSlowConversions++;
-				} else if (player->video.softwareSlowConversions > 0) {
-					player->video.softwareSlowConversions--;
-				}
-				if (player->video.softwareOutputLevel == 0 &&
-						player->video.softwareSlowConversions >= SOFTWARE_GOVERNOR_SLOW_CONVERSIONS) {
-					player->video.softwareOutputLevel = 1;
-					diagnosticsIncrement(PLAYER_DIAGNOSTICS_SOFTWARE_OUTPUT_DOWNGRADE);
-					diagnosticsLog("player=%u software_governor output_level=hd"
-							" conversion_us=%" PRId64 " slow_frames=%d",
-							player->meta.diagnosticsId, conversionTime,
-							player->video.softwareSlowConversions);
-				}
-
-				pthread_mutex_lock(&player->video.queueMutex);
-				if (getSkipFlag(&player->sync.skip.videoWorkFrame)) {
-					UNLOCK_AND_GOTO(&player->video.queueMutex, SKIP_VIDEO_FRAME);
-				}
-				bufferQueueExtend(player->video.bufferQueue, outputBufferSize);
-				BufferItem * bufferItem = NULL;
-				while (!player->meta.interrupt && !getSkipFlag(&player->sync.skip.videoWorkFrame)
-						&& !bufferItem) {
-					bufferItem = bufferQueuePrepare(player->video.bufferQueue);
-					if (!bufferItem) {
-						pthread_cond_wait(&player->video.queueCond, &player->video.queueMutex);
-					}
-				}
-				if (bufferItem) {
-					int forcePresent = extra->forcePresent;
-					memcpy(bufferItem->buffer, scaleHolder.scaleBuffer, outputBufferSize);
-					bufferItem->dataSize = outputBufferSize;
-					bufferItem->extra = extra;
-					extra = NULL;
-					bufferQueueAdd(player->video.bufferQueue, bufferItem);
-					__atomic_store_n(&player->video.softwareLastFrameQueuedAt,
-							getTime(), __ATOMIC_RELEASE);
-					if (forcePresent) {
-						diagnosticsRecordSoftwareLateAnchor(player, 0,
-								((VideoFrameExtra *) bufferItem->extra)->position,
-								playbackPosition, lateness);
-					}
-					pthread_cond_broadcast(&player->video.queueCond);
-					success = 1;
-				}
-				pthread_mutex_unlock(&player->video.queueMutex);
-			}
-
-			SKIP_VIDEO_FRAME:
-			if (extra) {
-				free(extra);
-			}
-			if (!success) {
-				break;
-			}
-		}
-		markStreamFinished(player, 1);
-		packetQueueFreeCallback(packetHolder);
-		packetHolder = NULL;
-	}
-	if (packetHolder) {
-		packetQueueFreeCallback(packetHolder);
-	}
-	sws_freeContext(scaleContext);
-	av_free(scaleHolder.scaleBuffer);
-	av_frame_free(&frame);
-	(*loadJavaVM)->DetachCurrentThread(loadJavaVM);
-	return NULL;
-}
-
-static void logDestroyStage(Player * player, const char * stage) {
+void playerLogDestroyStage(Player * player, const char * stage) {
 	diagnosticsLog("player=%u destroy_stage=%s", player->meta.diagnosticsId, stage);
 	LOGP("player=%u destroy stage=%s", player->meta.diagnosticsId, stage);
 }
 
 static void joinStartedWorkerThreads(Player * player) {
 	if (player->decode.audio.threadStarted) {
-		logDestroyStage(player, "join_audio_started");
+		playerLogDestroyStage(player, "join_audio_started");
 		pthread_join(player->decode.audio.thread, NULL);
 		player->decode.audio.threadStarted = 0;
-		logDestroyStage(player, "join_audio_finished");
+		playerLogDestroyStage(player, "join_audio_finished");
 	}
 	if (player->decode.video.threadStarted) {
-		logDestroyStage(player, "join_video_started");
+		playerLogDestroyStage(player, "join_video_started");
 		pthread_join(player->decode.video.thread, NULL);
 		player->decode.video.threadStarted = 0;
-		logDestroyStage(player, "join_video_finished");
+		playerLogDestroyStage(player, "join_video_finished");
 	}
 	if (player->video.drawThreadStarted) {
-		logDestroyStage(player, "join_draw_started");
+		playerLogDestroyStage(player, "join_draw_started");
 		pthread_join(player->video.drawThread, NULL);
 		player->video.drawThreadStarted = 0;
-		logDestroyStage(player, "join_draw_finished");
+		playerLogDestroyStage(player, "join_draw_finished");
 	}
 }
 
@@ -1890,7 +277,7 @@ static PacketHolder * createPacketHolder(int allocPacket) {
 	return packetHolder;
 }
 
-static PacketHolder * createSurfaceRequestPacketHolder(void) {
+PacketHolder * playerCreateSurfaceRequestPacketHolder(void) {
 	PacketHolder * packetHolder = createPacketHolder(0);
 	packetHolder->type = PACKET_HOLDER_SURFACE_REQUEST;
 	return packetHolder;
@@ -1900,7 +287,7 @@ static void * performDecodePackets(void * data) {
 	Player * player = (Player *) data;
 	JNIEnv * env;
 	(*loadJavaVM)->AttachCurrentThread(loadJavaVM, &env, NULL);
-	Bridge * bridge = obtainBridge(player, env);
+	Bridge * bridge = playerObtainBridge(player, env);
 	AVPacket packet;
 	while (!player->meta.interrupt) {
 		uint64_t endGeneration = __atomic_load_n(&player->decode.packets.generation,
@@ -2010,7 +397,7 @@ static void * performDecodePackets(void * data) {
 					(player->audio.finished || !HAS_STREAM(player, audio)) &&
 					(player->video.finished || !HAS_STREAM(player, video))) {
 				needSendFinishMessage = 0;
-				SEND_MESSAGE(env, player, bridge, BRIDGE_MESSAGE_PLAYBACK_COMPLETE);
+				PLAYER_SEND_MESSAGE(env, player, bridge, BRIDGE_MESSAGE_PLAYBACK_COMPLETE);
 			}
 			pthread_cond_wait(&player->play.finishCond, &player->play.finishMutex);
 		}
@@ -2018,351 +405,11 @@ static void * performDecodePackets(void * data) {
 	}
 	blockingQueueAdd(&player->audio.packetQueue, NULL);
 	blockingQueueAdd(&player->video.packetQueue, NULL);
-	logDestroyStage(player, "packet_thread_join_workers");
+	playerLogDestroyStage(player, "packet_thread_join_workers");
 	joinStartedWorkerThreads(player);
-	logDestroyStage(player, "packet_thread_finished");
+	playerLogDestroyStage(player, "packet_thread_finished");
 	(*loadJavaVM)->DetachCurrentThread(loadJavaVM);
 	return NULL;
-}
-
-static void releasePlayerSurface(Player * player) {
-	if (player->video.window) {
-		ANativeWindow_release(player->video.window);
-		player->video.window = NULL;
-	}
-}
-
-static int getSoftwareVideoFormat(int windowFormat) {
-	switch (windowFormat) {
-		case WINDOW_FORMAT_RGBA_8888:
-		case WINDOW_FORMAT_RGBX_8888: return AV_PIX_FMT_RGBA;
-		case WINDOW_FORMAT_RGB_565: return AV_PIX_FMT_RGB565LE;
-		case WINDOW_FORMAT_YV12: return AV_PIX_FMT_YUV420P;
-		default: return -1;
-	}
-}
-
-static int prepareSoftwareVideoOutputLocked(Player * player) {
-	if (!player->video.window) {
-		return 0;
-	}
-	int windowFormat = ANativeWindow_getFormat(player->video.window);
-	int videoFormat = getSoftwareVideoFormat(windowFormat);
-	if (videoFormat < 0) {
-		return 0;
-	}
-	AVCodecContext * context = GET_CONTEXT(player, video);
-	int sourceWidth = context->width;
-	int sourceHeight = context->height;
-	int width;
-	int height;
-	calculateSoftwareOutputSize(player, sourceWidth, sourceHeight, &width, &height);
-	if (!player->video.bufferQueue) {
-		int videoBufferSize = getVideoBufferSize(videoFormat, width, height);
-		if (videoBufferSize <= 0) {
-			return 0;
-		}
-		player->video.format = videoFormat;
-		player->video.bufferQueue = malloc(sizeof(BufferQueue));
-		bufferQueueInit(player->video.bufferQueue, videoBufferSize, 3);
-		player->video.lastBuffer.data = malloc(videoBufferSize);
-		player->video.lastBuffer.size = videoBufferSize;
-		player->video.lastBuffer.dataSize = videoBufferSize;
-		player->video.lastBuffer.width = width;
-		player->video.lastBuffer.height = height;
-		if (videoFormat == AV_PIX_FMT_RGBA) {
-			// RGBA_8888 "black" buffer
-			int count = 4 * width * height;
-			memset(player->video.lastBuffer.data, 0x00, count);
-			for (int i = 3; i < count; i += 4) {
-				player->video.lastBuffer.data[i] = 0xff;
-			}
-		} else if (videoFormat == AV_PIX_FMT_RGB565LE) {
-			// RGB_565 "black" buffer
-			memset(player->video.lastBuffer.data, 0x00, 2 * width * height);
-		} else if (videoFormat == AV_PIX_FMT_YUV420P) {
-			// YV12 "black" buffer
-			memset(player->video.lastBuffer.data, 0, width * height);
-			memset(player->video.lastBuffer.data + width * height, 0x7f, width * height / 2);
-		}
-		pthread_cond_broadcast(&player->video.sleepCond);
-		diagnosticsLog("player=%u software_output source=%dx%d surface=%dx%d"
-				" output=%dx%d level=fhd buffer_bytes=%d initialized=1",
-				player->meta.diagnosticsId, sourceWidth, sourceHeight,
-				__atomic_load_n(&player->video.surfaceWidth, __ATOMIC_ACQUIRE),
-				__atomic_load_n(&player->video.surfaceHeight, __ATOMIC_ACQUIRE),
-				width, height, videoBufferSize);
-	}
-	if (player->video.lastBuffer.width >= 0) {
-		width = player->video.lastBuffer.width;
-	}
-	if (player->video.lastBuffer.height >= 0) {
-		height = player->video.lastBuffer.height;
-	}
-	ANativeWindow_setBuffersGeometry(player->video.window, width, height, windowFormat);
-	if (player->video.lastBuffer.data) {
-		drawWindow(player, player->video.lastBuffer.data, width, height, width, height);
-	}
-	return 1;
-}
-
-#ifdef DASHCHAN_HAS_MEDIACODEC
-static AVCodecContext * createSoftwareVideoCodecContext(Player * player) {
-	AVStream * stream = GET_STREAM(player, video);
-	const AVCodec * codec = avcodec_find_decoder(stream->codecpar->codec_id);
-	if (!codec) {
-		return NULL;
-	}
-	AVCodecContext * context = avcodec_alloc_context3(codec);
-	if (!context || avcodec_parameters_to_context(context, stream->codecpar) != 0) {
-		closeAndFreeCodecContext(&context);
-		return NULL;
-	}
-	context->pkt_timebase = stream->time_base;
-	if (avcodec_open2(context, codec, NULL) < 0) {
-		closeAndFreeCodecContext(&context);
-		return NULL;
-	}
-	return context;
-}
-
-static const char * getMediaCodecDecoderName(enum AVCodecID codecId) {
-	switch (codecId) {
-		case AV_CODEC_ID_H264: return "h264_mediacodec";
-		case AV_CODEC_ID_HEVC: return "hevc_mediacodec";
-		default: return NULL;
-	}
-}
-
-static AVCodecContext * createMediaCodecVideoContext(Player * player, jobject surface) {
-	AVStream * stream = GET_STREAM(player, video);
-	AVCodecParameters * parameters = stream->codecpar;
-	const char * decoderName = getMediaCodecDecoderName(stream->codecpar->codec_id);
-	diagnosticsLog("player=%u mediacodec_capability_check mode=configure_original_stream"
-			" codec=%s profile=%d level=%d size=%dx%d fps=%d/%d",
-			player->meta.diagnosticsId, avcodec_get_name(parameters->codec_id),
-			parameters->profile, parameters->level, parameters->width, parameters->height,
-			stream->avg_frame_rate.num, stream->avg_frame_rate.den);
-	const AVCodec * codec = decoderName ? avcodec_find_decoder_by_name(decoderName) : NULL;
-	if (!codec) {
-		diagnosticsLog("player=%u mediacodec_open failed_stage=find_decoder requested=%s",
-				player->meta.diagnosticsId, decoderName ? decoderName : "unsupported_codec");
-		return NULL;
-	}
-	AVCodecContext * context = avcodec_alloc_context3(codec);
-	if (!context) {
-		diagnosticsLog("player=%u mediacodec_open failed_stage=allocate_context",
-				player->meta.diagnosticsId);
-		return NULL;
-	}
-	int result = avcodec_parameters_to_context(context, stream->codecpar);
-	if (result != 0) {
-		diagnosticsLog("player=%u mediacodec_open failed_stage=copy_parameters code=%d",
-				player->meta.diagnosticsId, result);
-		closeAndFreeCodecContext(&context);
-		return NULL;
-	}
-	context->pkt_timebase = stream->time_base;
-	context->hw_device_ctx = av_hwdevice_ctx_alloc(AV_HWDEVICE_TYPE_MEDIACODEC);
-	if (!context->hw_device_ctx) {
-		diagnosticsLog("player=%u mediacodec_open failed_stage=allocate_device_context",
-				player->meta.diagnosticsId);
-		closeAndFreeCodecContext(&context);
-		return NULL;
-	}
-	AVHWDeviceContext * deviceContext = (AVHWDeviceContext *) context->hw_device_ctx->data;
-	AVMediaCodecDeviceContext * mediaCodecContext =
-			(AVMediaCodecDeviceContext *) deviceContext->hwctx;
-	/*
-	 * The decoder uses FFmpeg's Java MediaCodec backend when a JVM is available.
-	 * That backend needs android.view.Surface itself; an ANativeWindow is only
-	 * consumed by the NDK backend and otherwise produces output buffers with no
-	 * visible Surface attached.
-	 */
-	mediaCodecContext->surface = surface;
-	result = av_opt_set_int(context->priv_data, "ndk_codec", 0, 0);
-	if (result < 0) {
-		diagnosticsLog("player=%u mediacodec_open failed_stage=select_java_backend code=%d",
-				player->meta.diagnosticsId, result);
-		closeAndFreeCodecContext(&context);
-		return NULL;
-	}
-	result = av_hwdevice_ctx_init(context->hw_device_ctx);
-	if (result < 0) {
-		diagnosticsLog("player=%u mediacodec_open failed_stage=initialize_device_context code=%d",
-				player->meta.diagnosticsId, result);
-		closeAndFreeCodecContext(&context);
-		return NULL;
-	}
-	diagnosticsLog("player=%u mediacodec_surface configured_via=java_surface"
-			" java_surface=%d hw_device=%d",
-			player->meta.diagnosticsId, surface != NULL, context->hw_device_ctx != NULL);
-	result = avcodec_open2(context, codec, NULL);
-	if (result < 0) {
-		diagnosticsLog("player=%u mediacodec_open failed_stage=open_codec code=%d",
-				player->meta.diagnosticsId, result);
-		closeAndFreeCodecContext(&context);
-		return NULL;
-	}
-	diagnosticsLog("player=%u mediacodec_open success decoder=%s pixel_format=%d"
-			" hw_device=%d",
-			player->meta.diagnosticsId, codec->name, context->pix_fmt,
-			context->hw_device_ctx != NULL);
-	return context;
-}
-
-static int configureMediaCodecSurface(Player * player, jobject surface) {
-	if (!player->video.hardwareAccelerationRequested || player->video.hardwareDecoderFailed) {
-		diagnosticsLog("player=%u mediacodec_configure skipped requested=%d failed=%d",
-				player->meta.diagnosticsId, player->video.hardwareAccelerationRequested,
-				player->video.hardwareDecoderFailed);
-		return 0;
-	}
-	int decoderReset = player->video.hardwareSurfaceInitialized;
-	diagnosticsLog("player=%u mediacodec_configure started reset=%d",
-			player->meta.diagnosticsId, decoderReset);
-	AVCodecContext * context = createMediaCodecVideoContext(player, surface);
-	if (context) {
-		closeAndFreeVideoCodecContext(player, &player->av.videoContext);
-		player->av.videoContext = context;
-		player->video.hardwareDecoderActive = 1;
-		player->video.hardwareSurfaceInitialized = 1;
-		diagnosticsIncrement(PLAYER_DIAGNOSTICS_DECODER_ENABLED);
-		diagnosticsLog("player=%u mediacodec_configure success decoder=%s",
-				player->meta.diagnosticsId, context->codec->name);
-		LOGP("MediaCodec video decoder enabled: %s", context->codec->name);
-		return decoderReset;
-	}
-	player->video.hardwareDecoderFailed = 1;
-	diagnosticsIncrement(PLAYER_DIAGNOSTICS_DECODER_UNAVAILABLE);
-	diagnosticsLog("player=%u mediacodec_configure failed", player->meta.diagnosticsId);
-	LOGP("MediaCodec video decoder unavailable, using software decoder");
-	if (player->video.hardwareDecoderActive) {
-		context = createSoftwareVideoCodecContext(player);
-		if (context) {
-			closeAndFreeVideoCodecContext(player, &player->av.videoContext);
-			player->av.videoContext = context;
-			player->video.hardwareDecoderActive = 0;
-		}
-	}
-	return decoderReset;
-}
-
-static int fallbackMediaCodecToSoftware(Player * player) {
-	if (!player->video.window ||
-			getSoftwareVideoFormat(ANativeWindow_getFormat(player->video.window)) < 0) {
-		return 0;
-	}
-	AVCodecContext * context = createSoftwareVideoCodecContext(player);
-	if (!context) {
-		return 0;
-	}
-	pthread_mutex_lock(&player->video.sleepDrawMutex);
-	closeAndFreeVideoCodecContext(player, &player->av.videoContext);
-	player->av.videoContext = context;
-	player->video.hardwareDecoderActive = 0;
-	player->video.hardwareDecoderFailed = 1;
-	player->video.hardwareDecodeErrors = 0;
-	int outputPrepared = prepareSoftwareVideoOutputLocked(player);
-	pthread_mutex_unlock(&player->video.sleepDrawMutex);
-	diagnosticsIncrement(PLAYER_DIAGNOSTICS_SOFTWARE_FALLBACK);
-	diagnosticsLog("player=%u mediacodec_runtime_fallback output_prepared=%d",
-			player->meta.diagnosticsId, outputPrepared);
-	LOGP("MediaCodec failed during playback, switched to software decoder");
-	return outputPrepared;
-}
-#endif
-
-static int setPlayerSurfaceLocked(JNIEnv * env, Player * player, jobject surface) {
-	int decoderReset = 0;
-	if (surface) {
-		player->video.window = ANativeWindow_fromSurface(env, surface);
-		if ((*env)->ExceptionCheck(env)) {
-			(*env)->ExceptionClear(env);
-			diagnosticsLog("player=%u surface_attach failed_stage=create_native_window_exception",
-					player->meta.diagnosticsId);
-		}
-		if (!player->video.window) {
-			diagnosticsLog("player=%u surface_attach failed_stage=create_native_window",
-					player->meta.diagnosticsId);
-			return 0;
-		}
-#ifdef DASHCHAN_HAS_MEDIACODEC
-		decoderReset = configureMediaCodecSurface(player, surface);
-#endif
-		if (player->video.hardwareDecoderActive) {
-			pthread_cond_broadcast(&player->video.sleepCond);
-			return decoderReset;
-		}
-		prepareSoftwareVideoOutputLocked(player);
-	}
-	return decoderReset;
-}
-
-static void applyPendingSurface(Player * player, JNIEnv * env) {
-	// The decoder thread is the sole consumer. MediaCodec replacement and decoder locks
-	// therefore never run from TextureView callbacks on Android's main thread.
-	jobject surface = NULL;
-	int64_t generation = 0;
-	int surfaceWidth = 0;
-	int surfaceHeight = 0;
-	pthread_mutex_lock(&player->video.surfaceMutex);
-	if (player->video.surfaceRequestPending) {
-		surface = player->video.pendingSurface;
-		generation = player->video.pendingSurfaceGeneration;
-		surfaceWidth = player->video.pendingSurfaceWidth;
-		surfaceHeight = player->video.pendingSurfaceHeight;
-		player->video.pendingSurface = NULL;
-		__atomic_store_n(&player->video.surfaceRequestPending, 0, __ATOMIC_RELEASE);
-	}
-	pthread_mutex_unlock(&player->video.surfaceMutex);
-	if (!surface) {
-		return;
-	}
-
-	int mediaCodecStage = __atomic_load_n(&player->decode.video.diagnosticsStage,
-			__ATOMIC_ACQUIRE);
-	int64_t startedAt = getTime();
-	int wasPlaying = player->play.playing;
-	if (wasPlaying) {
-		setPlaying((jlong) (long) player, 0);
-	}
-	int64_t position = getPosition((jlong) (long) player);
-	diagnosticsLog("player=%u surface_apply_started generation=%" PRId64
-			" position_ms=%" PRId64 " was_playing=%d mediacodec_stage=%s",
-			player->meta.diagnosticsId, generation, position, wasPlaying,
-			diagnosticsGetMediaCodecStageName(mediaCodecStage));
-
-	pthread_mutex_lock(&player->decode.video.frameMutex);
-	pthread_mutex_lock(&player->video.sleepDrawMutex);
-	if (surfaceWidth > 0 && surfaceHeight > 0) {
-		__atomic_store_n(&player->video.surfaceWidth, surfaceWidth, __ATOMIC_RELEASE);
-		__atomic_store_n(&player->video.surfaceHeight, surfaceHeight, __ATOMIC_RELEASE);
-	}
-	jobject oldSurface = player->video.activeSurface;
-	releasePlayerSurface(player);
-	int decoderReset = setPlayerSurfaceLocked(env, player, surface);
-	int attached = player->video.window != NULL;
-	player->video.activeSurface = attached ? surface : NULL;
-	if (attached) {
-		diagnosticsIncrement(PLAYER_DIAGNOSTICS_SURFACE_ATTACHED);
-	}
-	pthread_mutex_unlock(&player->video.sleepDrawMutex);
-	pthread_mutex_unlock(&player->decode.video.frameMutex);
-
-	if (oldSurface) {
-		(*env)->DeleteGlobalRef(env, oldSurface);
-	}
-	if (!attached) {
-		(*env)->DeleteGlobalRef(env, surface);
-	}
-	diagnosticsLog("player=%u surface_apply_finished generation=%" PRId64
-			" attached=%d decoder_reset=%d size=%dx%d elapsed_ms=%" PRId64,
-			player->meta.diagnosticsId, generation, attached, decoderReset,
-			surfaceWidth, surfaceHeight, getTime() - startedAt);
-	Bridge * bridge = obtainBridge(player, env);
-	(*env)->CallVoidMethod(env, player->bridge.native, bridge->methodOnSurfaceApplied,
-			(jlong) generation, (jlong) position, (jboolean) !!decoderReset);
 }
 
 static int bufferReadData(void * opaque, uint8_t * buf, int bufSize) {
@@ -2467,10 +514,6 @@ static Player * createPlayer(void) {
 	return player;
 }
 
-#define NEED_RESAMPLE_NO 0
-#define NEED_RESAMPLE_MAY_48000 1
-#define NEED_RESAMPLE_FORCE_44100 2
-
 jlong preInit(UNUSED JNIEnv * env, jint fd) {
 	Player * player = createPlayer();
 	player->file.fd = fd;
@@ -2483,31 +526,13 @@ void setAudioEnabled(jlong pointer, jboolean audioEnabled) {
 	player->meta.audioEnabled = !!audioEnabled;
 }
 
-void setHardwareAcceleration(jlong pointer, jboolean hardwareAcceleration) {
-	Player * player = POINTER_CAST(pointer);
-#ifdef DASHCHAN_HAS_MEDIACODEC
-	player->video.hardwareAccelerationRequested = !!hardwareAcceleration;
-#else
-	(void) hardwareAcceleration;
-	player->video.hardwareAccelerationRequested = 0;
-#endif
-	diagnosticsLog("player=%u hardware_acceleration_requested=%d available_in_build=%d",
-			player->meta.diagnosticsId, player->video.hardwareAccelerationRequested,
-#ifdef DASHCHAN_HAS_MEDIACODEC
-			1
-#else
-			0
-#endif
-	);
-}
-
 void init(JNIEnv * env, jlong pointer, jobject nativeBridge, jboolean seekAnyFrame) {
 	Player * player = POINTER_CAST(pointer);
 	diagnosticsLog("player=%u init_started seek_any_frame=%d",
 			player->meta.diagnosticsId, !!seekAnyFrame);
 	player->meta.seekAnyFrame = !!seekAnyFrame;
 	player->bridge.native = (*env)->NewGlobalRef(env, nativeBridge);
-	obtainBridge(player, env);
+	playerObtainBridge(player, env);
 	int contextBufferSize = 8 * 1024;
 	uint8_t * contextBuffer = av_malloc(contextBufferSize);
 	AVIOContext * ioContext = avio_alloc_context(contextBuffer, contextBufferSize, 0, player,
@@ -2619,173 +644,28 @@ void init(JNIEnv * env, jlong pointer, jobject nativeBridge, jboolean seekAnyFra
 			player->meta.diagnosticsId, declaredDuration, streamDuration,
 			effectiveDuration, player->av.duration.probeRequired);
 	diagnosticsRecordMediaInfo(player);
-	if (audioStream) {
-		SLresult result;
-		int success = 0;
-		int sourceChannels = getAudioContextChannels(player->av.audioContext);
-		int channels = sourceChannels;
-		int streamChannels = getCodecParametersChannels(audioStream->codecpar);
-		if (streamChannels > channels) {
-			channels = streamChannels;
-		}
-#if USE_AV_CHANNEL_LAYOUT
-		int sourceLayoutChannels = sourceChannels > streamChannels ? sourceChannels : streamChannels;
-#else
-		uint64_t sourceChannelLayout = player->av.audioContext->channel_layout != 0
-				? player->av.audioContext->channel_layout : audioStream->codecpar->channel_layout;
-		if (sourceChannelLayout != 0) {
-			int layoutChannels = av_get_channel_layout_nb_channels(sourceChannelLayout);
-			if (layoutChannels > channels) {
-				channels = layoutChannels;
-			}
-		}
-#endif
-		if (channels != 1 && channels != 2) {
-			channels = 2;
-		}
-		uint64_t outputChannelLayout = channels == 2
-				? AV_CH_FRONT_LEFT | AV_CH_FRONT_RIGHT : AV_CH_FRONT_CENTER;
-		player->audio.resampleChannels = outputChannelLayout;
-		int channelMask = channels == 2 ? SL_SPEAKER_FRONT_LEFT | SL_SPEAKER_FRONT_RIGHT : SL_SPEAKER_FRONT_CENTER;
-		const SLInterfaceID volumeIds[] = {SL_IID_VOLUME};
-		const SLboolean volumeRequired[] = {SL_BOOLEAN_FALSE};
-		result = (*slEngine)->CreateOutputMix(slEngine, &player->audio.sl.outputMix, 1, volumeIds, volumeRequired);
-		if (result != SL_RESULT_SUCCESS) {
-			LOGP("SLES CreateOutputMix: result=%d", (int) result);
-			goto HANDLE_SL_INIT_ERROR;
-		}
-		result = (*player->audio.sl.outputMix)->Realize(player->audio.sl.outputMix, SL_BOOLEAN_FALSE);
-		if (result != SL_RESULT_SUCCESS) {
-			LOGP("SLES outputMix.Realize: result=%d", (int) result);
-			goto HANDLE_SL_INIT_ERROR;
-		}
-		SLDataLocator_AndroidSimpleBufferQueue locatorQueue = {SL_DATALOCATOR_ANDROIDSIMPLEBUFFERQUEUE, 2};
-		SLDataFormat_PCM formatPCM = {SL_DATAFORMAT_PCM, channels, 0, SL_PCMSAMPLEFORMAT_FIXED_16,
-				SL_PCMSAMPLEFORMAT_FIXED_16, channelMask, SL_BYTEORDER_LITTLEENDIAN};
-		SLDataSource dataSource = {&locatorQueue, &formatPCM};
-		SLDataLocator_OutputMix locatorOutputMix = {SL_DATALOCATOR_OUTPUTMIX, player->audio.sl.outputMix};
-		SLDataSink dataSink = {&locatorOutputMix, NULL};
-		const SLInterfaceID playerIds[] = {SL_IID_ANDROIDSIMPLEBUFFERQUEUE, SL_IID_VOLUME};
-		const SLboolean playerRequired[] = {SL_BOOLEAN_TRUE, SL_BOOLEAN_FALSE};
-		int needResampleSR = NEED_RESAMPLE_NO;
-		int slSampleRate = 0;
-		int sampleRate = player->av.audioContext->sample_rate;
-		int outputSampleRate = sampleRate;
-		switch (sampleRate) {
-			case 8000: slSampleRate = SL_SAMPLINGRATE_8; break;
-			case 11025: slSampleRate = SL_SAMPLINGRATE_11_025; break;
-			case 12000: slSampleRate = SL_SAMPLINGRATE_12; break;
-			case 16000: slSampleRate = SL_SAMPLINGRATE_16; break;
-			case 22050: slSampleRate = SL_SAMPLINGRATE_22_05; break;
-			case 24000: slSampleRate = SL_SAMPLINGRATE_24; break;
-			case 32000: slSampleRate = SL_SAMPLINGRATE_32; break;
-			case 44100: slSampleRate = SL_SAMPLINGRATE_44_1; break;
-			case 48000: slSampleRate = SL_SAMPLINGRATE_48; break;
-			case 64000: slSampleRate = SL_SAMPLINGRATE_64; break;
-			case 88200: slSampleRate = SL_SAMPLINGRATE_88_2; break;
-			case 96000: slSampleRate = SL_SAMPLINGRATE_96; break;
-			case 192000: slSampleRate = SL_SAMPLINGRATE_192; break;
-			default: needResampleSR = NEED_RESAMPLE_MAY_48000;
-		}
-		while (1) {
-			int mayRepeat = 1;
-			outputSampleRate = sampleRate;
-			if (needResampleSR == NEED_RESAMPLE_MAY_48000 && sampleRate % 48000 == 0) {
-				slSampleRate = SL_SAMPLINGRATE_48;
-				outputSampleRate = 48000;
-			} else if (needResampleSR == NEED_RESAMPLE_MAY_48000 || needResampleSR == NEED_RESAMPLE_FORCE_44100) {
-				slSampleRate = SL_SAMPLINGRATE_44_1;
-				outputSampleRate = 44100;
-				mayRepeat = 0;
-			}
-			player->audio.resampleSampleRate = outputSampleRate;
-			formatPCM.samplesPerSec = slSampleRate;
-			result = (*slEngine)->CreateAudioPlayer(slEngine, &player->audio.sl.player,
-					&dataSource, &dataSink, 2, playerIds, playerRequired);
-#if USE_AV_CHANNEL_LAYOUT
-			LOGP("SLES CreateAudioPlayer: result=%d, sourceChannels=%d, outputChannels=%d, "
-					"sourceLayoutChannels=%d, sourceSampleRate=%d, outputSampleRate=%d",
-					(int) result, sourceChannels, channels, sourceLayoutChannels,
-					sampleRate, player->audio.resampleSampleRate);
-#else
-			LOGP("SLES CreateAudioPlayer: result=%d, sourceChannels=%d, outputChannels=%d, "
-					"sourceLayout=%llu, sourceSampleRate=%d, outputSampleRate=%d",
-					(int) result, sourceChannels, channels, (unsigned long long) sourceChannelLayout,
-					sampleRate, player->audio.resampleSampleRate);
-#endif
-			if (result == SL_RESULT_CONTENT_UNSUPPORTED && mayRepeat) {
-				if (needResampleSR == NEED_RESAMPLE_NO) {
-					needResampleSR = NEED_RESAMPLE_MAY_48000;
-				} else if (needResampleSR == NEED_RESAMPLE_MAY_48000) {
-					needResampleSR = NEED_RESAMPLE_FORCE_44100;
-				}
-			} else {
-				break;
-			}
-		}
-		if (result != SL_RESULT_SUCCESS) {
-			goto HANDLE_SL_INIT_ERROR;
-		}
-		result = (*player->audio.sl.player)->Realize(player->audio.sl.player, SL_BOOLEAN_FALSE);
-		if (result != SL_RESULT_SUCCESS) {
-			LOGP("SLES player.Realize: result=%d", (int) result);
-			goto HANDLE_SL_INIT_ERROR;
-		}
-		result = (*player->audio.sl.player)->GetInterface(player->audio.sl.player,
-				SL_IID_BUFFERQUEUE, &player->audio.sl.queue);
-		if (result != SL_RESULT_SUCCESS) {
-			LOGP("SLES player.GetInterface(SL_IID_BUFFERQUEUE): result=%d", (int) result);
-			goto HANDLE_SL_INIT_ERROR;
-		}
-		result = (*player->audio.sl.player)->GetInterface(player->audio.sl.player,
-				SL_IID_PLAY, &player->audio.sl.play);
-		if (result != SL_RESULT_SUCCESS) {
-			LOGP("SLES player.GetInterface(SL_IID_PLAY): result=%d", (int) result);
-			goto HANDLE_SL_INIT_ERROR;
-		}
-		result = (*player->audio.sl.player)->GetInterface(player->audio.sl.player,
-				SL_IID_VOLUME, &player->audio.sl.volume);
-		if (result != SL_RESULT_SUCCESS) {
-			LOGP("SLES player.GetInterface(SL_IID_VOLUME): result=%d", (int) result);
-			player->audio.sl.volume = NULL;
-		}
-		result = (*player->audio.sl.queue)->RegisterCallback(player->audio.sl.queue, audioPlayerCallback, player);
-		if (result != SL_RESULT_SUCCESS) {
-			LOGP("SLES player.RegisterCallback: result=%d", (int) result);
-			goto HANDLE_SL_INIT_ERROR;
-		}
-		result = (*player->audio.sl.play)->SetPlayState(player->audio.sl.play, SL_PLAYSTATE_PLAYING);
-		if (result != SL_RESULT_SUCCESS) {
-			LOGP("SLES player.SetPlayState: result=%d", (int) result);
-			goto HANDLE_SL_INIT_ERROR;
-		}
-		success = 1;
-		HANDLE_SL_INIT_ERROR:
-		if (!success) {
-			closeAndFreeCodecContext(&player->av.audioContext);
-			player->av.audioContext = NULL;
-			audioStreamIndex = INDEX_NO_STREAM;
-			player->av.audioStreamIndex = INDEX_NO_STREAM;
-			audioStream = NULL;
-			audioCodec = NULL;
-		}
+	if (audioStream && !playerAudioInitialize(player, audioStream)) {
+		audioStreamIndex = INDEX_NO_STREAM;
+		player->av.audioStreamIndex = INDEX_NO_STREAM;
+		audioStream = NULL;
+		audioCodec = NULL;
 	}
 	if (videoStream) {
-		if (pthread_create(&player->video.drawThread, NULL, &performDraw, player) != 0) {
+		if (pthread_create(&player->video.drawThread, NULL, &playerVideoDrawThread, player) != 0) {
 			player->meta.errorCode = ERROR_START_THREAD;
 			return;
 		}
 		player->video.drawThreadStarted = 1;
 	}
 	if (audioStream) {
-		if (pthread_create(&player->decode.audio.thread, NULL, &performDecodeAudio, player) != 0) {
+		if (pthread_create(&player->decode.audio.thread, NULL, &playerAudioDecodeThread, player) != 0) {
 			player->meta.errorCode = ERROR_START_THREAD;
 			return;
 		}
 		player->decode.audio.threadStarted = 1;
 	}
 	if (videoStream) {
-		if (pthread_create(&player->decode.video.thread, NULL, &performDecodeVideo, player) != 0) {
+		if (pthread_create(&player->decode.video.thread, NULL, &playerVideoDecodeThread, player) != 0) {
 			player->meta.errorCode = ERROR_START_THREAD;
 			return;
 		}
@@ -2807,11 +687,11 @@ void destroy(JNIEnv * env, jlong pointer, jboolean initOnly) {
 	diagnosticsLog("player=%u destroy init_only=%d error_code=%d hardware_active=%d",
 			player->meta.diagnosticsId, !!initOnly, player->meta.errorCode,
 			player->video.hardwareDecoderActive);
-	logDestroyStage(player, "started");
+	playerLogDestroyStage(player, "started");
 	player->meta.interrupt = 1;
 	condBroadcastLocked(&player->file.controlCond, &player->file.controlMutex);
 	if (!!initOnly) {
-		logDestroyStage(player, "init_only_finished");
+		playerLogDestroyStage(player, "init_only_finished");
 		return;
 	}
 
@@ -2825,21 +705,21 @@ void destroy(JNIEnv * env, jlong pointer, jboolean initOnly) {
 	condBroadcastLocked(&player->video.queueCond, &player->video.queueMutex);
 	condBroadcastLocked(&player->play.finishCond, &player->play.finishMutex);
 	condBroadcastLocked(&player->decode.packets.flowCond, &player->decode.packets.flowMutex);
-	logDestroyStage(player, "workers_signaled");
+	playerLogDestroyStage(player, "workers_signaled");
 
 	if (player->decode.packets.threadStarted) {
-		logDestroyStage(player, "join_packets_started");
+		playerLogDestroyStage(player, "join_packets_started");
 		pthread_join(player->decode.packets.thread, NULL);
 		player->decode.packets.threadStarted = 0;
-		logDestroyStage(player, "join_packets_finished");
+		playerLogDestroyStage(player, "join_packets_finished");
 	} else {
 		joinStartedWorkerThreads(player);
 	}
 	if (player->av.duration.probeThreadStarted) {
-		logDestroyStage(player, "join_duration_probe_started");
+		playerLogDestroyStage(player, "join_duration_probe_started");
 		pthread_join(player->av.duration.probeThread, NULL);
 		player->av.duration.probeThreadStarted = 0;
-		logDestroyStage(player, "join_duration_probe_finished");
+		playerLogDestroyStage(player, "join_duration_probe_finished");
 	}
 	jobject pendingSurface = NULL;
 	jobject activeSurface = NULL;
@@ -2851,9 +731,9 @@ void destroy(JNIEnv * env, jlong pointer, jboolean initOnly) {
 	__atomic_store_n(&player->video.surfaceRequestPending, 0, __ATOMIC_RELEASE);
 	pthread_mutex_unlock(&player->video.surfaceMutex);
 	pthread_mutex_lock(&player->audio.sleepBufferMutex);
-	clearAudioOutputLocked(player, 0);
+	playerAudioClearOutputLocked(player, 0);
 	pthread_mutex_unlock(&player->audio.sleepBufferMutex);
-	logDestroyStage(player, "synchronization_cleanup_started");
+	playerLogDestroyStage(player, "synchronization_cleanup_started");
 	pthread_mutex_destroy(&player->decode.packets.readMutex);
 	pthread_mutex_destroy(&player->decode.packets.flowMutex);
 	pthread_mutex_destroy(&player->decode.audio.frameMutex);
@@ -2871,55 +751,40 @@ void destroy(JNIEnv * env, jlong pointer, jboolean initOnly) {
 	pthread_cond_destroy(&player->video.sleepCond);
 	pthread_cond_destroy(&player->video.queueCond);
 	pthread_cond_destroy(&player->file.controlCond);
-	logDestroyStage(player, "synchronization_cleanup_finished");
+	playerLogDestroyStage(player, "synchronization_cleanup_finished");
 
-	blockingQueueDestroy(&player->audio.packetQueue, packetQueueFreeCallback);
-	blockingQueueDestroy(&player->video.packetQueue, packetQueueFreeCallback);
-	blockingQueueDestroy(&player->audio.bufferQueue, audioBufferQueueFreeCallback);
+	blockingQueueDestroy(&player->audio.packetQueue, playerPacketQueueFreeCallback);
+	blockingQueueDestroy(&player->video.packetQueue, playerPacketQueueFreeCallback);
+	blockingQueueDestroy(&player->audio.bufferQueue, playerAudioBufferQueueFreeCallback);
 	if (player->video.bufferQueue) {
-		bufferQueueDestroy(player->video.bufferQueue, videoBufferQueueFreeCallback);
+		bufferQueueDestroy(player->video.bufferQueue, playerVideoBufferQueueFreeCallback);
 		free(player->video.bufferQueue);
 		free(player->video.lastBuffer.data);
 	}
-	logDestroyStage(player, "buffers_cleanup_finished");
+	playerLogDestroyStage(player, "buffers_cleanup_finished");
 
-	if (player->audio.sl.player) {
-		logDestroyStage(player, "opensl_player_destroy_started");
-		(*player->audio.sl.player)->Destroy(player->audio.sl.player);
-		logDestroyStage(player, "opensl_player_destroy_finished");
-	}
-	if (player->audio.sl.outputMix) {
-		logDestroyStage(player, "opensl_output_mix_destroy_started");
-		(*player->audio.sl.outputMix)->Destroy(player->audio.sl.outputMix);
-		logDestroyStage(player, "opensl_output_mix_destroy_finished");
-	}
-	if (HAS_STREAM(player, audio)) {
-		logDestroyStage(player, "audio_codec_close_started");
-		AVCodecContext * audioContext = GET_CONTEXT(player, audio);
-		closeAndFreeCodecContext(&audioContext);
-		logDestroyStage(player, "audio_codec_close_finished");
-	}
+	playerAudioDestroy(player);
 	if (HAS_STREAM(player, video)) {
-		logDestroyStage(player, "video_codec_close_started");
-		closeAndFreeVideoCodecContext(player, &player->av.videoContext);
-		logDestroyStage(player, "video_codec_close_finished");
+		playerLogDestroyStage(player, "video_codec_close_started");
+		playerCloseAndFreeVideoCodecContext(player, &player->av.videoContext);
+		playerLogDestroyStage(player, "video_codec_close_finished");
 	}
 	if (player->av.format) {
-		logDestroyStage(player, "format_close_started");
+		playerLogDestroyStage(player, "format_close_started");
 		AVIOContext * ioContext = player->av.format->pb;
 		avformat_close_input(&player->av.format);
 		av_free(ioContext->buffer);
 		av_free(ioContext);
-		logDestroyStage(player, "format_close_finished");
+		playerLogDestroyStage(player, "format_close_finished");
 	}
-	releasePlayerSurface(player);
+	playerVideoReleaseSurface(player);
 	if (pendingSurface) {
 		(*env)->DeleteGlobalRef(env, pendingSurface);
 	}
 	if (activeSurface) {
 		(*env)->DeleteGlobalRef(env, activeSurface);
 	}
-	logDestroyStage(player, "surface_released");
+	playerLogDestroyStage(player, "surface_released");
 	sparseArrayDestroy(&player->bridge.array, free);
 	if (player->bridge.native) {
 		(*env)->DeleteGlobalRef(env, player->bridge.native);
@@ -2927,7 +792,7 @@ void destroy(JNIEnv * env, jlong pointer, jboolean initOnly) {
 	if (player->file.fd > 0) {
 		close(player->file.fd);
 	}
-	logDestroyStage(player, "finished");
+	playerLogDestroyStage(player, "finished");
 	free(player);
 }
 
@@ -3205,7 +1070,7 @@ void setPosition(JNIEnv * env, jlong pointer, jlong position) {
 	// The read mutex serializes demuxer access for the whole seek. Decoder, audio and
 	// rendering locks are held only while their state is reset, so pausing and closing
 	// the player never wait for precise packet scanning or a streaming range request.
-	Bridge * bridge = obtainBridge(player, env);
+	Bridge * bridge = playerObtainBridge(player, env);
 	diagnosticsLogSeekLock(player, "prepare", "packets.read", "waiting");
 	pthread_mutex_lock(&player->decode.packets.readMutex);
 	diagnosticsLogSeekLock(player, "prepare", "packets.read", "acquired");
@@ -3224,12 +1089,12 @@ void setPosition(JNIEnv * env, jlong pointer, jlong position) {
 	diagnosticsLogSeekLock(player, "prepare", "video.frame", "waiting");
 	pthread_mutex_lock(&player->decode.video.frameMutex);
 	diagnosticsLogSeekLock(player, "prepare", "video.frame", "acquired");
-	setSkipFlag(&player->sync.skip.audioWorkFrame, 1);
-	setSkipFlag(&player->sync.skip.videoWorkFrame, 1);
+	playerSetSkipFlag(&player->sync.skip.audioWorkFrame, 1);
+	playerSetSkipFlag(&player->sync.skip.videoWorkFrame, 1);
 	diagnosticsLog("player=%u seek_phase=packet_queues_clear_started",
 			player->meta.diagnosticsId);
-	blockingQueueClear(&player->audio.packetQueue, packetQueueFreeCallback);
-	blockingQueueClear(&player->video.packetQueue, packetQueueFreeCallback);
+	blockingQueueClear(&player->audio.packetQueue, playerPacketQueueFreeCallback);
+	blockingQueueClear(&player->video.packetQueue, playerPacketQueueFreeCallback);
 	diagnosticsLog("player=%u seek_phase=packet_queues_clear_finished",
 			player->meta.diagnosticsId);
 	player->decode.packets.finished = 0;
@@ -3241,7 +1106,7 @@ void setPosition(JNIEnv * env, jlong pointer, jlong position) {
 	diagnosticsLogSeekLock(player, "prepare", "audio.sleep_buffer", "acquired");
 	diagnosticsLog("player=%u seek_phase=audio_output_clear_started",
 			player->meta.diagnosticsId);
-	clearAudioOutputLocked(player, 1);
+	playerAudioClearOutputLocked(player, 1);
 	pthread_cond_broadcast(&player->audio.sleepCond);
 	pthread_cond_broadcast(&player->audio.bufferCond);
 	diagnosticsLog("player=%u seek_phase=audio_output_clear_finished",
@@ -3256,9 +1121,9 @@ void setPosition(JNIEnv * env, jlong pointer, jlong position) {
 	diagnosticsLogSeekLock(player, "prepare", "video.queue", "acquired");
 	diagnosticsLog("player=%u seek_phase=video_output_clear_started",
 			player->meta.diagnosticsId);
-	setSkipFlag(&player->sync.skip.drawWorkFrame, 1);
+	playerSetSkipFlag(&player->sync.skip.drawWorkFrame, 1);
 	if (player->video.bufferQueue) {
-		bufferQueueClear(player->video.bufferQueue, videoBufferQueueFreeCallback);
+		bufferQueueClear(player->video.bufferQueue, playerVideoBufferQueueFreeCallback);
 	}
 	pthread_cond_broadcast(&player->video.sleepCond);
 	pthread_cond_broadcast(&player->video.queueCond);
@@ -3276,9 +1141,9 @@ void setPosition(JNIEnv * env, jlong pointer, jlong position) {
 		diagnosticsLog("player=%u seek_phase=video_flush_started hardware=%d",
 				player->meta.diagnosticsId, player->video.hardwareDecoderActive);
 		if (!player->video.hardwareDecoderActive) {
-			restoreSoftwareSeekFastDecodeLocked(player, GET_CONTEXT(player, video),
+			playerVideoSoftwareRestoreSeekFastLocked(player, GET_CONTEXT(player, video),
 					"seek_prepare", -1);
-			resetSoftwareDecoderGovernorLocked(player, GET_CONTEXT(player, video),
+			playerVideoSoftwareResetGovernorLocked(player, GET_CONTEXT(player, video),
 					"seek_prepare");
 		}
 		avcodec_flush_buffers(GET_CONTEXT(player, video));
@@ -3409,12 +1274,12 @@ void setPosition(JNIEnv * env, jlong pointer, jlong position) {
 	player->sync.seekTargetPosition = requestedPosition;
 	if (HAS_STREAM(player, video) && seekResult >= 0 && recoveredFromNonKey &&
 			!player->video.hardwareDecoderActive) {
-		startSoftwareSeekFastDecodeLocked(player, GET_CONTEXT(player, video),
+		playerVideoSoftwareStartSeekFastLocked(player, GET_CONTEXT(player, video),
 				keyframePosition, position);
 	}
-	setSkipFlag(&player->sync.skip.audioWorkFrame, 1);
-	setSkipFlag(&player->sync.skip.videoWorkFrame, 1);
-	setSkipFlag(&player->sync.skip.drawWorkFrame, 1);
+	playerSetSkipFlag(&player->sync.skip.audioWorkFrame, 1);
+	playerSetSkipFlag(&player->sync.skip.videoWorkFrame, 1);
+	playerSetSkipFlag(&player->sync.skip.drawWorkFrame, 1);
 	player->sync.lastDrawTimes[0] = 0;
 	player->sync.lastDrawTimes[1] = 0;
 	if (primedVideoPacket) {
@@ -3431,7 +1296,7 @@ void setPosition(JNIEnv * env, jlong pointer, jlong position) {
 		diagnosticsRecordVideoPacket(player, packetHolder->packet);
 	}
 	if (HAS_STREAM(player, video)) {
-		SEND_MESSAGE(env, player, bridge, BRIDGE_MESSAGE_START_SEEKING);
+		PLAYER_SEND_MESSAGE(env, player, bridge, BRIDGE_MESSAGE_START_SEEKING);
 	}
 	pthread_cond_broadcast(&player->play.finishCond);
 	pthread_cond_broadcast(&player->decode.packets.flowCond);
@@ -3484,8 +1349,8 @@ void setPlaybackSpeed(jlong pointer, jint speed) {
 		player->sync.pausedPosition = position;
 		updateAudioPositionSurrogate(player, position, 1);
 		if (HAS_STREAM(player, audio)) {
-			setSkipFlag(&player->sync.skip.audioWorkFrame, 1);
-			clearAudioOutputLocked(player, 1);
+			playerSetSkipFlag(&player->sync.skip.audioWorkFrame, 1);
+			playerAudioClearOutputLocked(player, 1);
 			player->sync.audioPositionNotSync = 0;
 		}
 		pthread_cond_broadcast(&player->audio.sleepCond);
@@ -3495,76 +1360,6 @@ void setPlaybackSpeed(jlong pointer, jint speed) {
 		pthread_mutex_unlock(&player->audio.sleepBufferMutex);
 		pthread_mutex_unlock(&player->play.finishMutex);
 	}
-}
-
-jboolean setVolume(jlong pointer, jint volume, jint boostDb) {
-	Player * player = POINTER_CAST(pointer);
-	if (!HAS_STREAM(player, audio) || !player->audio.sl.volume) {
-		return 0;
-	}
-	if (volume < 0) {
-		volume = 0;
-	} else if (volume > 100) {
-		volume = 100;
-	}
-	if (boostDb < 0) {
-		boostDb = 0;
-	} else if (boostDb > AUDIO_MAX_BOOST_DB) {
-		boostDb = AUDIO_MAX_BOOST_DB;
-	}
-	SLmillibel level;
-	if (volume <= 0) {
-		level = SL_MILLIBEL_MIN;
-	} else if (boostDb > 0) {
-		// Positive gain is applied once to each decoded PCM buffer before it enters
-		// the OpenSL queue. The system media volume stays untouched and remains the
-		// final output control.
-		level = 0;
-	} else {
-		// OpenSL ES uses millibels. Convert a linear 0..100 amplitude to dB
-		// so the UI percentage remains useful across the whole audible range.
-		level = (SLmillibel) lroundf(2000.f * log10f(volume / 100.f));
-	}
-	pthread_mutex_lock(&player->audio.sleepBufferMutex);
-	SLmillibel maximumLevel = 0;
-	if ((*player->audio.sl.volume)->GetMaxVolumeLevel(player->audio.sl.volume,
-			&maximumLevel) == SL_RESULT_SUCCESS && level > maximumLevel) {
-		level = maximumLevel;
-	}
-	SLresult result = (*player->audio.sl.volume)->SetVolumeLevel(player->audio.sl.volume, level);
-	if (result == SL_RESULT_SUCCESS) {
-		player->audio.localVolume = volume;
-		player->audio.boostDb = boostDb;
-		diagnosticsLog("player=%u local_volume=%d boost_db=%d",
-				player->meta.diagnosticsId, volume, boostDb);
-	}
-	pthread_mutex_unlock(&player->audio.sleepBufferMutex);
-	return result == SL_RESULT_SUCCESS;
-}
-
-jboolean setMuted(jlong pointer, jboolean muted) {
-	Player * player = POINTER_CAST(pointer);
-	if (!HAS_STREAM(player, audio) || !player->audio.sl.volume) {
-		return 0;
-	}
-	pthread_mutex_lock(&player->audio.sleepBufferMutex);
-	SLresult result = (*player->audio.sl.volume)->SetMute(player->audio.sl.volume,
-			muted ? SL_BOOLEAN_TRUE : SL_BOOLEAN_FALSE);
-	pthread_mutex_unlock(&player->audio.sleepBufferMutex);
-	return result == SL_RESULT_SUCCESS;
-}
-
-void stopAudio(jlong pointer) {
-	Player * player = POINTER_CAST(pointer);
-	if (!HAS_STREAM(player, audio) || !player->audio.sl.play) {
-		return;
-	}
-	diagnosticsLog("player=%u audio_stop_immediate started", player->meta.diagnosticsId);
-	pthread_mutex_lock(&player->audio.sleepBufferMutex);
-	(*player->audio.sl.play)->SetPlayState(player->audio.sl.play, SL_PLAYSTATE_PAUSED);
-	clearAudioOutputLocked(player, 0);
-	pthread_mutex_unlock(&player->audio.sleepBufferMutex);
-	diagnosticsLog("player=%u audio_stop_immediate finished", player->meta.diagnosticsId);
 }
 
 void setPlaying(jlong pointer, jboolean playing) {
@@ -3584,7 +1379,7 @@ void setPlaying(jlong pointer, jboolean playing) {
 		pthread_mutex_unlock(&player->play.finishMutex);
 		if (!playing && HAS_STREAM(player, video) && !player->video.hardwareDecoderActive) {
 			pthread_mutex_lock(&player->decode.video.frameMutex);
-			resetSoftwareDecoderGovernorLocked(player, GET_CONTEXT(player, video), "pause");
+			playerVideoSoftwareResetGovernorLocked(player, GET_CONTEXT(player, video), "pause");
 			pthread_mutex_unlock(&player->decode.video.frameMutex);
 		}
 		if (HAS_STREAM(player, audio)) {
@@ -3594,150 +1389,11 @@ void setPlaying(jlong pointer, jboolean playing) {
 			if (playing && player->audio.bufferNeedEnqueueAfterDecode
 					&& blockingQueueCount(&player->audio.bufferQueue) > 0) {
 				// Queue count checked to free from obligation to handle audio finish flag
-				enqueueAudioBuffer(player);
+				playerAudioEnqueueBuffer(player);
 			}
 			pthread_mutex_unlock(&player->audio.sleepBufferMutex);
 		}
 	}
-}
-
-void requestSurface(JNIEnv * env, jlong pointer, jobject surface, jlong generation,
-		jint width, jint height) {
-	Player * player = POINTER_CAST(pointer);
-	if (!surface || player->meta.interrupt) {
-		return;
-	}
-	jobject surfaceReference = (*env)->NewGlobalRef(env, surface);
-	if (!surfaceReference) {
-		diagnosticsLog("player=%u surface_request_rejected generation=%" PRId64
-				" reason=global_reference", player->meta.diagnosticsId, (int64_t) generation);
-		return;
-	}
-
-	// The caller only publishes the latest generation under this short mutex. A queue
-	// marker wakes a decoder blocked on packets; the actual Surface switch happens there.
-	pthread_mutex_lock(&player->video.surfaceMutex);
-	jobject replacedSurface = player->video.pendingSurface;
-	player->video.pendingSurface = surfaceReference;
-	player->video.pendingSurfaceGeneration = generation;
-	player->video.pendingSurfaceWidth = width;
-	player->video.pendingSurfaceHeight = height;
-	__atomic_store_n(&player->video.surfaceRequestPending, 1, __ATOMIC_RELEASE);
-	pthread_mutex_unlock(&player->video.surfaceMutex);
-	if (replacedSurface) {
-		(*env)->DeleteGlobalRef(env, replacedSurface);
-	}
-
-	int mediaCodecStage = __atomic_load_n(&player->decode.video.diagnosticsStage,
-			__ATOMIC_ACQUIRE);
-	diagnosticsLog("player=%u surface_request generation=%" PRId64
-			" replaced=%d size=%dx%d mediacodec_stage=%s",
-			player->meta.diagnosticsId, (int64_t) generation,
-			replacedSurface != NULL, width, height,
-			diagnosticsGetMediaCodecStageName(mediaCodecStage));
-	setSkipFlag(&player->sync.skip.videoWorkFrame, 1);
-	setSkipFlag(&player->sync.skip.drawWorkFrame, 1);
-	pthread_cond_broadcast(&player->video.sleepCond);
-	pthread_cond_broadcast(&player->video.queueCond);
-	pthread_cond_broadcast(&player->play.finishCond);
-	blockingQueueAdd(&player->video.packetQueue, createSurfaceRequestPacketHolder());
-}
-
-void setSurfaceSize(jlong pointer, jint width, jint height) {
-	Player * player = POINTER_CAST(pointer);
-	if (width <= 0 || height <= 0 || player->meta.interrupt) {
-		return;
-	}
-	pthread_mutex_lock(&player->video.surfaceMutex);
-	if (player->video.surfaceRequestPending) {
-		player->video.pendingSurfaceWidth = width;
-		player->video.pendingSurfaceHeight = height;
-	}
-	__atomic_store_n(&player->video.surfaceWidth, width, __ATOMIC_RELEASE);
-	__atomic_store_n(&player->video.surfaceHeight, height, __ATOMIC_RELEASE);
-	pthread_mutex_unlock(&player->video.surfaceMutex);
-	diagnosticsLog("player=%u surface_size width=%d height=%d",
-			player->meta.diagnosticsId, width, height);
-}
-
-jintArray getCurrentFrame(JNIEnv * env, jlong pointer, jintArray dimensions) {
-	Player * player = POINTER_CAST(pointer);
-	pthread_mutex_lock(&player->video.sleepDrawMutex);
-	uint8_t * buffer = player->video.lastBuffer.data;
-	int sourceWidth = player->video.lastBuffer.width;
-	int sourceHeight = player->video.lastBuffer.height;
-	int destWidth = sourceWidth;
-	int destHeight = sourceHeight;
-	int maxDimension = 1000;
-	if (destWidth > maxDimension || destHeight > maxDimension) {
-		int sampleHorizontal = (destWidth + maxDimension - 1) / maxDimension;
-		int sampleVertical = (destHeight + maxDimension - 1) / maxDimension;
-		int sample = sampleHorizontal > sampleVertical ? sampleHorizontal : sampleVertical;
-		if (sample >= 2) {
-			destWidth = (destWidth + sample - 1) / sample;
-			destHeight = (destHeight + sample - 1) / sample;
-		}
-	}
-	(*env)->SetIntArrayRegion(env, dimensions, 0, 1, &destWidth);
-	(*env)->SetIntArrayRegion(env, dimensions, 1, 1, &destHeight);
-	jintArray result = 0;
-	int success = 0;
-	if (buffer != 0 && destWidth > 0 && destHeight > 0) {
-		if (player->video.format != AV_PIX_FMT_RGB565LE && player->video.format != AV_PIX_FMT_YUV420P
-				&& player->video.format != AV_PIX_FMT_RGBA) {
-			goto RESULT;
-		}
-		result = (*env)->NewIntArray(env, destWidth * destHeight);
-		if (!result) {
-			goto RESULT;
-		}
-		struct SwsContext * scaleContext = sws_getContext(sourceWidth, sourceHeight, player->video.format,
-				destWidth, destHeight, AV_PIX_FMT_BGRA, SWS_FAST_BILINEAR, NULL, NULL, NULL);
-		if (!scaleContext) {
-			goto RESULT;
-		}
-		uint8_t * newBuffer = (*env)->GetPrimitiveArrayCritical(env, result, NULL);
-		if (!newBuffer) {
-			goto SWS_FREE_CONTEXT;
-		}
-		uint8_t * newData[4] = {newBuffer, 0, 0, 0};
-		int newLinesize[4] = {4 * destWidth, 0, 0, 0};
-		if (player->video.format == AV_PIX_FMT_RGBA) {
-			if (player->video.lastBuffer.dataSize < 4 * sourceWidth * sourceHeight) {
-				goto RELEASE_PRIMITIVE_ARRAY;
-			}
-			const uint8_t * const oldData[4] = {buffer, 0, 0, 0};
-			int oldLinesize[4] = {4 * sourceWidth, 0, 0, 0};
-			sws_scale(scaleContext, oldData, oldLinesize, 0, sourceHeight, newData, newLinesize);
-		} else if (player->video.format == AV_PIX_FMT_RGB565LE) {
-			if (player->video.lastBuffer.dataSize < 2 * sourceWidth * sourceHeight) {
-				goto RELEASE_PRIMITIVE_ARRAY;
-			}
-			const uint8_t * const oldData[4] = {buffer, 0, 0, 0};
-			int oldLinesize[4] = {2 * sourceWidth, 0, 0, 0};
-			sws_scale(scaleContext, oldData, oldLinesize, 0, sourceHeight, newData, newLinesize);
-		} else if (player->video.format == AV_PIX_FMT_YUV420P) {
-			if (player->video.lastBuffer.dataSize < sourceWidth * sourceHeight * 3 / 2) {
-				goto RELEASE_PRIMITIVE_ARRAY;
-			}
-			const uint8_t * const oldData[4] = {buffer, buffer + sourceWidth * sourceHeight +
-					sourceWidth * sourceHeight / 4, buffer + sourceWidth * sourceHeight, 0};
-			int oldLinesize[4] = {sourceWidth, sourceWidth / 2, sourceWidth / 2, 0};
-			sws_scale(scaleContext, oldData, oldLinesize, 0, sourceHeight, newData, newLinesize);
-		}
-		success = 1;
-		RELEASE_PRIMITIVE_ARRAY:
-		(*env)->ReleasePrimitiveArrayCritical(env, result, newBuffer, 0);
-		SWS_FREE_CONTEXT:
-		sws_freeContext(scaleContext);
-	}
-	RESULT:
-	pthread_mutex_unlock(&player->video.sleepDrawMutex);
-	if (!success && result) {
-		(*env)->DeleteLocalRef(env, result);
-		result = 0;
-	}
-	return result;
 }
 
 static jstring newUtfStringSafe(JNIEnv * env, char * string) {
@@ -3837,7 +1493,7 @@ jobjectArray getMetadata(JNIEnv * env, jlong pointer) {
 		(*env)->SetObjectArrayElement(env, result, index++, (*env)->NewStringUTF(env, "audio_format"));
 		(*env)->SetObjectArrayElement(env, result, index++, (*env)->NewStringUTF(env,
 				audioContext->codec->long_name));
-		sprintf(buffer, "%d", getAudioContextChannels(audioContext));
+		sprintf(buffer, "%d", playerAudioGetContextChannels(audioContext));
 		(*env)->SetObjectArrayElement(env, result, index++, (*env)->NewStringUTF(env, "channels"));
 		(*env)->SetObjectArrayElement(env, result, index++, (*env)->NewStringUTF(env, buffer));
 		sprintf(buffer, "%d", audioContext->sample_rate);
@@ -3859,8 +1515,5 @@ void initLibs(JavaVM * javaVM) {
 		LOGP("Cannot register Java VM for MediaCodec");
 	}
 #endif
-	SLObjectItf engineObject;
-	slCreateEngine(&engineObject, 0, NULL, 0, NULL, NULL);
-	(*engineObject)->Realize(engineObject, SL_BOOLEAN_FALSE);
-	(*engineObject)->GetInterface(engineObject, SL_IID_ENGINE, &slEngine);
+	playerAudioInitializeLibrary();
 }

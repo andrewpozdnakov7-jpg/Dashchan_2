@@ -19,6 +19,22 @@
 #define PLAYBACK_SPEED_DEFAULT 1000
 #define PLAYBACK_SPEED_MIN 100
 #define PLAYBACK_SPEED_MAX 4000
+#define WINDOW_FORMAT_YV12 0x32315659
+
+#define POINTER_CAST(addr) (void *) (long) (addr)
+#define UNLOCK_AND_GOTO(mutex, label) {pthread_mutex_unlock(mutex); goto label;}
+
+#define BRIDGE_MESSAGE_PLAYBACK_COMPLETE 1
+#define BRIDGE_MESSAGE_SIZE_CHANGED 2
+#define BRIDGE_MESSAGE_START_SEEKING 3
+#define BRIDGE_MESSAGE_END_SEEKING 4
+
+#define PACKET_HOLDER_MEDIA 0
+#define PACKET_HOLDER_END_OF_STREAM 1
+#define PACKET_HOLDER_SURFACE_REQUEST 2
+
+#define PLAYER_SEND_MESSAGE(env, p, b, what) \
+	(*(env))->CallVoidMethod((env), (p)->bridge.native, (b)->methodOnMessage, (what))
 
 #define HAS_STREAM(p, stream) ((p)->av.stream##StreamIndex != INDEX_NO_STREAM)
 #define GET_STREAM(p, stream) ((p)->av.format->streams[(p)->av.stream##StreamIndex])
@@ -269,6 +285,20 @@ struct ScaleHolder {
 	int scaleLinesize[4];
 };
 
+JavaVM * playerGetJavaVM(void);
+int playerGetSkipFlag(int * flag);
+void playerSetSkipFlag(int * flag, int value);
+void playerSetDiagnosticsAudioStage(Player * player, int stage);
+void playerSetDiagnosticsMediaCodecStage(Player * player, int stage, int64_t framePosition);
+Bridge * playerObtainBridge(Player * player, JNIEnv * env);
+void playerCloseAndFreeCodecContext(AVCodecContext ** context);
+void playerCloseAndFreeVideoCodecContext(Player * player, AVCodecContext ** context);
+void playerPacketQueueFreeCallback(void * data);
+void playerMarkStreamFinished(Player * player, int video);
+int playerDecodeFrame(AVCodecContext * context, AVPacket * packet, AVFrame * frame,
+		int * packetSent);
+PacketHolder * playerCreateSurfaceRequestPacketHolder(void);
+void playerLogDestroyStage(Player * player, const char * stage);
 void playerNotifyDurationChanged(Player * player, int64_t duration);
 
 #endif // PLAYER_INTERNAL_H
