@@ -18,6 +18,7 @@ import com.mishiranu.dashchan.ui.navigator.manager.ViewUnit;
 import com.mishiranu.dashchan.util.AnimationUtils;
 import com.mishiranu.dashchan.util.ListViewUtils;
 import com.mishiranu.dashchan.util.ResourceUtils;
+import com.mishiranu.dashchan.util.ViewUtils;
 import com.mishiranu.dashchan.widget.DividerItemDecoration;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -312,7 +313,7 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 		if (threadsView == Preferences.ThreadsView.LARGE_GRID ||
 				threadsView == Preferences.ThreadsView.SMALL_GRID) {
 			float density = ResourceUtils.obtainDensity(context);
-			int totalWidth = (int) (context.getResources().getConfiguration().screenWidthDp * density);
+			int totalWidth = ViewUtils.getWindowContentSize(context).x;
 			int minWidthSmall = (int) (CARD_MIN_WIDTH_SMALL_DP * density);
 			int minWidthLarge = (int) (CARD_MIN_WIDTH_LARGE_DP * density);
 			int paddingOut = (int) (CARD_PADDING_OUT_DP * density);

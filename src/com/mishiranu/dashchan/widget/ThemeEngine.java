@@ -614,21 +614,25 @@ public class ThemeEngine {
 			Activity activity = (Activity) context;
 			activity.getWindow().getDecorView().setBackgroundColor(theme.window);
 			int toolbarColor = theme.primary | 0xff000000;
-			float[] hsl = new float[3];
-			ColorUtils.colorToHSL(toolbarColor, hsl);
-			// Interpolate between 0.25f and 0.5f
-			float lightness = Math.max(0f, Math.min(hsl[2] * 4f - 1f, 1f));
-			int statusBarColor = GraphicsUtils.mixColors(theme.primary,
-					ColorUtils.blendARGB(STATUS_OVERLAY_DARK, STATUS_OVERLAY_LIGHT, lightness));
-			ViewUtils.setStatusBarColor(activity.getWindow(), statusBarColor);
+			ViewUtils.setStatusBarColor(activity.getWindow(), getStatusBarColor(theme));
 			ActivityManager.TaskDescription taskDescription = createTaskDescription(toolbarColor);
 			activity.setTaskDescription(taskDescription);
 		}
 	}
 
+	public static int getStatusBarColor(Theme theme) {
+		int toolbarColor = theme.primary | 0xff000000;
+		float[] hsl = new float[3];
+		ColorUtils.colorToHSL(toolbarColor, hsl);
+		// Interpolate between 0.25f and 0.5f.
+		float lightness = Math.max(0f, Math.min(hsl[2] * 4f - 1f, 1f));
+		return GraphicsUtils.mixColors(theme.primary,
+				ColorUtils.blendARGB(STATUS_OVERLAY_DARK, STATUS_OVERLAY_LIGHT, lightness));
+	}
+
 	@SuppressWarnings("deprecation")
 	private static ActivityManager.TaskDescription createTaskDescription(int toolbarColor) {
-		// Keep the pre-Android-15 task color behavior; targetSdk migration is handled separately.
+		// The legacy constructor remains the compatible way to supply the task color on API 30+.
 		int iconResId = LauncherIconManager.getLogoOption(Preferences.getApplicationLogo()).iconResId;
 		return new ActivityManager.TaskDescription(null, iconResId, toolbarColor);
 	}

@@ -4,7 +4,6 @@ import android.annotation.SuppressLint;
 import android.app.Dialog;
 import android.content.Context;
 import android.content.DialogInterface;
-import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.net.Uri;
@@ -45,6 +44,7 @@ import com.mishiranu.dashchan.util.ConcurrentUtils;
 import com.mishiranu.dashchan.util.GraphicsUtils;
 import com.mishiranu.dashchan.util.IOUtils;
 import com.mishiranu.dashchan.util.ResourceUtils;
+import com.mishiranu.dashchan.util.ViewUtils;
 import com.mishiranu.dashchan.util.WebViewUtils;
 import com.mishiranu.dashchan.widget.ScaledWebView;
 import java.util.Arrays;
@@ -333,15 +333,14 @@ public class RecaptchaReader {
 		@SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
 		private WebView obtainWebView(Context context,
 				ViewGroup newParent, int index, ArgumentsProvider argumentsProvider) {
+			int dialogPaddingDp = 16;
+			int screenWidthDp = ViewUtils.getWindowContentWidthDp(context) - 2 * dialogPaddingDp;
+			int screenHeightDp = ViewUtils.getWindowContentHeightDp(context) - 2 * dialogPaddingDp;
 			context = context.getApplicationContext();
 			int widthUnscaled = 300;
 			int maxHeightUnscaled = 580;
 			int minHeightUnscaled = 250;
-			Configuration configuration = context.getResources().getConfiguration();
 			float density = ResourceUtils.obtainDensity(context);
-			int dialogPaddingDp = 16;
-			int screenWidthDp = configuration.screenWidthDp - 2 * dialogPaddingDp;
-			int screenHeightDp = configuration.screenHeightDp - 2 * dialogPaddingDp;
 			float minScaleMultiplier = Float.MAX_VALUE;
 			for (float size : Arrays.asList(screenWidthDp, screenHeightDp)) {
 				for (float max : Arrays.asList(widthUnscaled, maxHeightUnscaled)) {

@@ -245,7 +245,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 			commentEditor = chan.markup.safe().obtainCommentEditor(getBoardName());
 		}
 		float density = ResourceUtils.obtainDensity(view);
-		int screenWidthDp = getResources().getConfiguration().screenWidthDp;
+		int screenWidthDp = ViewUtils.getWindowContentWidthDp(requireContext());
 		boolean hugeCaptcha = Preferences.isHugeCaptcha();
 		boolean longLayout = screenWidthDp >= 480;
 
@@ -316,8 +316,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		postingLayout.removeView(commentParent);
 		ViewUtils.setNewMargin(checkBoxParent, 0, (int) (4f * density), 0, 0);
 		updatePostingConfiguration(true, false, false);
-		new MarkupButtonsBuilder(addPaddingToRoot, (int) (getResources().getConfiguration().screenWidthDp *
-				ResourceUtils.obtainDensity(getResources())));
+		new MarkupButtonsBuilder(addPaddingToRoot, ViewUtils.getWindowContentSize(requireContext()).x);
 
 		boolean longFooter = longLayout && !hugeCaptcha;
 		int resId = longFooter ? R.layout.activity_posting_footer_long : R.layout.activity_posting_footer_common;

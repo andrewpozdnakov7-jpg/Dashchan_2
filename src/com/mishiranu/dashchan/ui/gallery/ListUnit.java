@@ -332,7 +332,7 @@ public class ListUnit implements ActionMode.Callback {
 		// Items count in row must fit to this inequality: (widthDp - (i + 1) * GRID_SPACING_DP) / i >= SIZE
 		// Where SIZE - size of item in grid, i - items count in row, unknown quantity
 		// The solution is: i <= (widthDp + GRID_SPACING_DP) / (SIZE + GRID_SPACING_DP)
-		int widthDp = configuration.screenWidthDp;
+		int widthDp = ViewUtils.getWindowContentWidthDp(instance.context);
 		int size = ResourceUtils.isTablet(configuration) ? 160 : 100;
 		int spanCount = (widthDp - GRID_SPACING_DP) / (size + GRID_SPACING_DP);
 		((GridLayoutManager) recyclerView.getLayoutManager()).setSpanCount(spanCount);

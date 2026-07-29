@@ -309,6 +309,7 @@ public class AudioPlayerService extends BaseService implements MediaPlayer.OnCom
 			cleanup(true, true);
 			return;
 		}
+		startForeground(getPlaybackNotification(true), ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
 		play(true);
 		startForeground(getPlaybackNotification(true), ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
 	}

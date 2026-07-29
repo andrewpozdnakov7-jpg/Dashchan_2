@@ -3,11 +3,11 @@ package com.mishiranu.dashchan.util;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.DialogInterface;
-import android.content.res.Configuration;
 import android.graphics.Canvas;
 import android.graphics.Insets;
 import android.graphics.Outline;
 import android.graphics.Paint;
+import android.graphics.Point;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffXfermode;
 import android.graphics.Rect;
@@ -23,6 +23,7 @@ import android.view.ViewParent;
 import android.view.Window;
 import android.view.WindowInsets;
 import android.view.WindowManager;
+import android.view.WindowMetrics;
 import android.widget.EdgeEffect;
 import android.widget.EditText;
 import android.widget.ScrollView;
@@ -62,10 +63,10 @@ public class ViewUtils {
 		}
 	}
 
-	public static boolean isDrawerLockable(Configuration configuration) {
+	public static boolean isDrawerLockable(Context context) {
 		// Should always result "true" for tablets in landscape mode (+ in portrait mode on large screens).
 		// Sometimes it will result "true" for screens with low DPI configuration, which is intentional.
-		return configuration.screenWidthDp >= 720;
+		return getWindowContentWidthDp(context) >= 720;
 	}
 
 	public static boolean isGestureNavigationOverlap(View view, boolean checkLeft, boolean checkRight) {
@@ -246,33 +247,48 @@ public class ViewUtils {
 		setDecorFitsSystemWindows(window, false);
 	}
 
-	@SuppressWarnings("deprecation")
 	private static void setDecorFitsSystemWindows(Window window, boolean decorFitsSystemWindows) {
-		// Edge-to-edge behavior is targetSdk-sensitive; keep the R-era behavior until that migration.
 		window.setDecorFitsSystemWindows(decorFitsSystemWindows);
+	}
+
+	public static Point getWindowContentSize(Context context) {
+		WindowMetrics metrics = context.getSystemService(WindowManager.class).getCurrentWindowMetrics();
+		Rect bounds = metrics.getBounds();
+		Insets insets = metrics.getWindowInsets().getInsetsIgnoringVisibility(
+				WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
+		return new Point(Math.max(0, bounds.width() - insets.left - insets.right),
+				Math.max(0, bounds.height() - insets.top - insets.bottom));
+	}
+
+	public static int getWindowContentWidthDp(Context context) {
+		return (int) (getWindowContentSize(context).x / ResourceUtils.obtainDensity(context) + 0.5f);
+	}
+
+	public static int getWindowContentHeightDp(Context context) {
+		return (int) (getWindowContentSize(context).y / ResourceUtils.obtainDensity(context) + 0.5f);
 	}
 
 	@SuppressWarnings("deprecation")
 	public static int getStatusBarColor(Window window) {
-		// Window color APIs are kept for targetSdk 30 system-bars behavior.
+		// Kept as a compatibility fallback for windows that are not rendered by the custom inset layer.
 		return window.getStatusBarColor();
 	}
 
 	@SuppressWarnings("deprecation")
 	public static int getNavigationBarColor(Window window) {
-		// Window color APIs are kept for targetSdk 30 system-bars behavior.
+		// Kept as a compatibility fallback for windows that are not rendered by the custom inset layer.
 		return window.getNavigationBarColor();
 	}
 
 	@SuppressWarnings("deprecation")
 	public static void setStatusBarColor(Window window, int color) {
-		// Window color APIs are kept for targetSdk 30 system-bars behavior.
+		// Android 15 edge-to-edge windows render this color in the custom inset layer instead.
 		window.setStatusBarColor(color);
 	}
 
 	@SuppressWarnings("deprecation")
 	public static void setNavigationBarColor(Window window, int color) {
-		// Window color APIs are kept for targetSdk 30 system-bars behavior.
+		// Android 15 edge-to-edge windows render this color in the custom inset layer instead.
 		window.setNavigationBarColor(color);
 	}
 

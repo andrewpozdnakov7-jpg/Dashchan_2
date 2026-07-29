@@ -1289,7 +1289,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	private void updateWideConfiguration(boolean forced) {
 		Configuration configuration = getResources().getConfiguration();
-		boolean newWideMode = ViewUtils.isDrawerLockable(configuration) && Preferences.isDrawerLocked();
+		boolean newWideMode = ViewUtils.isDrawerLockable(this) && Preferences.isDrawerLocked();
 		if (wideMode != newWideMode || forced) {
 			wideMode = newWideMode;
 			if (!forced) {
@@ -1306,7 +1306,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		float density = ResourceUtils.obtainDensity(this);
 		int actionBarSize = getResources().getDimensionPixelSize(ResourceUtils.getResourceId(this,
 				android.R.attr.actionBarSize, 0));
-		int drawerWidth = Math.min((int) (configuration.screenWidthDp * density + 0.5f) - actionBarSize,
+		int drawerWidth = Math.min(ViewUtils.getWindowContentSize(this).x - actionBarSize,
 				(int) (320 * density + 0.5f));
 		drawerCommon.getLayoutParams().width = drawerWide.getLayoutParams().width = drawerWidth;
 	}
@@ -1617,7 +1617,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 			appearanceOptionsMenu.findItem(R.id.menu_my_posts)
 					.setChecked(Preferences.isShowMyPosts());
 			appearanceOptionsMenu.findItem(R.id.menu_drawer)
-					.setVisible(ViewUtils.isDrawerLockable(getResources().getConfiguration()))
+					.setVisible(ViewUtils.isDrawerLockable(this))
 					.setChecked(Preferences.isDrawerLocked());
 			appearanceOptionsMenu.findItem(R.id.menu_sfw_mode)
 					.setChecked(Preferences.isSfwMode());

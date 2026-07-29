@@ -19,12 +19,16 @@ import android.os.Handler;
 import android.os.Looper;
 import android.util.Rational;
 import android.view.Gravity;
-import android.view.View;
+import android.view.Window;
+import android.view.WindowInsets;
+import android.view.WindowInsetsController;
+import android.view.WindowManager;
 import android.widget.FrameLayout;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.media.VideoPlayer;
 import com.mishiranu.dashchan.util.AudioFocus;
+import com.mishiranu.dashchan.util.ViewUtils;
 import java.io.File;
 import java.util.Arrays;
 
@@ -151,11 +155,16 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 		muted = intent.getBooleanExtra(EXTRA_MUTED, false);
 		startPlaying = intent.getBooleanExtra(EXTRA_PLAYING, true);
 
-		getWindow().setStatusBarColor(Color.BLACK);
-		getWindow().setNavigationBarColor(Color.BLACK);
-		getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-				| View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-				| View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
+		Window window = getWindow();
+		ViewUtils.setWindowLayoutFullscreen(window);
+		WindowManager.LayoutParams attributes = window.getAttributes();
+		attributes.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS;
+		window.setAttributes(attributes);
+		WindowInsetsController insetsController = window.getInsetsController();
+		if (insetsController != null) {
+			insetsController.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+			insetsController.hide(WindowInsets.Type.systemBars());
+		}
 		rootView = new FrameLayout(this);
 		rootView.setBackgroundColor(Color.BLACK);
 		setContentView(rootView);

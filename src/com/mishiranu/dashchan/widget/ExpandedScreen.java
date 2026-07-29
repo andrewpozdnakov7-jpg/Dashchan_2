@@ -118,8 +118,8 @@ public class ExpandedScreen implements RecyclerScrollTracker.OnScrollListener {
 		ForegroundDrawable statusBarDrawerForeground;
 		List<ForegroundDrawable> foregroundDrawables;
 		if (fullScreenLayoutEnabled) {
-			int statusBarColor = ViewUtils.getStatusBarColor(window) | Color.BLACK;
-			int navigationBarColor = ViewUtils.getNavigationBarColor(window) | Color.BLACK;
+			int statusBarColor = ThemeEngine.getStatusBarColor(ThemeEngine.getTheme(activity)) | Color.BLACK;
+			int navigationBarColor = Color.BLACK;
 			ViewUtils.setStatusBarColor(window, Color.TRANSPARENT);
 			ViewUtils.setNavigationBarColor(window, Color.TRANSPARENT);
 			contentForeground = new LollipopContentForeground(statusBarColor, navigationBarColor);
@@ -137,7 +137,7 @@ public class ExpandedScreen implements RecyclerScrollTracker.OnScrollListener {
 		Resources resources = activity.getResources();
 		float density = ResourceUtils.obtainDensity(resources);
 		lastItemLimit = (int) (72f * density);
-		minItemsCount = resources.getConfiguration().screenHeightDp / 48;
+		minItemsCount = ViewUtils.getWindowContentHeightDp(activity) / 48;
 		this.rootView = rootView;
 		this.toolbarView = toolbarView;
 		this.drawerInterlayer = drawerInterlayer;

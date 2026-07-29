@@ -194,7 +194,7 @@ public class ClickableToast implements LifecycleObserver {
 			builder.append('W');
 		}
 		message1.setText(builder);
-		int measureSize = (int) (activity.getResources().getConfiguration().screenWidthDp * density + 0.5f);
+		int measureSize = ViewUtils.getWindowContentSize(activity).x;
 		toast1.measure(View.MeasureSpec.makeMeasureSpec(measureSize, View.MeasureSpec.AT_MOST),
 				View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
 		int lineCount = message1.getLayout().getLineCount();

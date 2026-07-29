@@ -104,7 +104,7 @@ public class ListViewUtils {
 	}
 
 	public static int getScrollJumpThreshold(Context context) {
-		return context.getResources().getConfiguration().screenHeightDp / 40;
+		return ViewUtils.getWindowContentHeightDp(context) / 40;
 	}
 
 	public static void smoothScrollToPosition(RecyclerView recyclerView, int position) {

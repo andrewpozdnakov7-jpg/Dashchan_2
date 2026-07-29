@@ -14,6 +14,12 @@ public abstract class BaseService extends Service {
 	}
 
 	@Override
+	public void onTimeout(int startId, int foregroundServiceType) {
+		// Android 15 requires a data-sync foreground service to stop promptly after its time quota expires.
+		stopSelf();
+	}
+
+	@Override
 	public void onDestroy() {
 		super.onDestroy();
 		if (onDestroyListeners != null) {
