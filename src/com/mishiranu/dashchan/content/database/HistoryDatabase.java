@@ -178,6 +178,23 @@ public class HistoryDatabase implements CommonDatabase.Instance {
 		}
 	}
 
+	public String getTitle(@NonNull String chanName, String boardName, @NonNull String threadNumber) {
+		Objects.requireNonNull(chanName);
+		Objects.requireNonNull(threadNumber);
+		return database.execute(database -> {
+			String[] projection = {Schema.History.Columns.TITLE};
+			Expression.Filter filter = Expression.filter()
+					.equals(Schema.History.Columns.CHAN_NAME, chanName)
+					.equals(Schema.History.Columns.BOARD_NAME, StringUtils.emptyIfNull(boardName))
+					.equals(Schema.History.Columns.THREAD_NUMBER, threadNumber)
+					.build();
+			try (Cursor cursor = database.query(false, Schema.History.TABLE_NAME,
+					projection, filter.value, filter.args, null, null, null, "1")) {
+				return cursor.moveToFirst() ? cursor.getString(0) : null;
+			}
+		});
+	}
+
 	public HistoryCursor getHistory(String chanName, String searchQuery,
 			CancellationSignal signal) throws OperationCanceledException {
 		int count = database.execute(database -> {

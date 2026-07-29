@@ -7,6 +7,7 @@ import chan.content.InvalidResponseException;
 import chan.content.model.ThreadSummary;
 import chan.http.HttpException;
 import chan.http.HttpHolder;
+import com.mishiranu.dashchan.content.ArchiveThreadTitleResolver;
 import com.mishiranu.dashchan.content.model.ErrorItem;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -48,8 +49,9 @@ public class ReadThreadSummariesTask extends HttpHolderTask<Void, List<ThreadSum
 					.onReadThreadSummaries(new ChanPerformer
 							.ReadThreadSummariesData(boardName, pageNumber, type, holder));
 			ThreadSummary[] threadSummaries = result != null ? result.threadSummaries : null;
-			return threadSummaries != null && threadSummaries.length > 0
+			List<ThreadSummary> summaries = threadSummaries != null && threadSummaries.length > 0
 					? Arrays.asList(threadSummaries) : Collections.emptyList();
+			return ArchiveThreadTitleResolver.resolve(chan, summaries);
 		} catch (ExtensionException | HttpException | InvalidResponseException e) {
 			errorItem = e.getErrorItemAndHandle();
 			return null;

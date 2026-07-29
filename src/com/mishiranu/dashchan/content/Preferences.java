@@ -1713,7 +1713,7 @@ public class Preferences {
 	}
 
 	public static final String KEY_HARDWARE_VIDEO_ACCELERATION = "hardware_video_acceleration";
-	public static final boolean DEFAULT_HARDWARE_VIDEO_ACCELERATION = false;
+	public static final boolean DEFAULT_HARDWARE_VIDEO_ACCELERATION = true;
 	public static final String KEY_VIDEO_AUDIO_BOOST = "video_audio_boost";
 	public static final boolean DEFAULT_VIDEO_AUDIO_BOOST = false;
 	public static final String KEY_VIDEO_AUDIO_BOOST_DB = "video_audio_boost_db";

@@ -42,12 +42,9 @@ public class ArchiveAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 		if (!StringUtils.isEmpty(text)) {
 			text = text.toLowerCase(Locale.getDefault());
 			for (ThreadSummary threadSummary : archiveItems) {
-				boolean add = false;
-				String title = threadSummary.getDescription();
-				if (title != null && title.toLowerCase(Locale.getDefault()).contains(text)) {
-					add = true;
-				}
-				if (add) {
+				String title = getDisplayTitle(threadSummary).toLowerCase(Locale.getDefault());
+				String threadNumber = threadSummary.getThreadNumber();
+				if (title.contains(text) || threadNumber.contains(text)) {
 					filteredArchiveItems.add(threadSummary);
 				}
 			}
@@ -71,6 +68,12 @@ public class ArchiveAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 		return getItem(position).getThreadNumber();
 	}
 
+	private static String getDisplayTitle(ThreadSummary threadSummary) {
+		String description = threadSummary.getDescription();
+		return !StringUtils.isEmptyOrWhitespace(description)
+				? description : "#" + threadSummary.getThreadNumber();
+	}
+
 	public void setItems(List<ThreadSummary> threadSummaries) {
 		archiveItems.clear();
 		if (threadSummaries != null) {
@@ -90,7 +93,7 @@ public class ArchiveAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 	@Override
 	public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
 		ThreadSummary threadSummary = getItem(position);
-		((TextView) holder.itemView).setText(threadSummary.getDescription());
+		((TextView) holder.itemView).setText(getDisplayTitle(threadSummary));
 	}
 
 	public DividerItemDecoration.Configuration configureDivider(DividerItemDecoration.Configuration configuration,
