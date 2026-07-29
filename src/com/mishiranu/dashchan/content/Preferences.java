@@ -2093,6 +2093,16 @@ public class Preferences {
 		PREFERENCES.edit().put(KEY_WATCHER_NOTIFICATIONS, strings).close();
 	}
 
+	public static final String KEY_NOTIFICATION_PERMISSION_REQUESTED = "notification_permission_requested";
+
+	public static boolean isNotificationPermissionRequested() {
+		return PREFERENCES.getBoolean(KEY_NOTIFICATION_PERMISSION_REQUESTED, false);
+	}
+
+	public static void setNotificationPermissionRequested() {
+		PREFERENCES.edit().put(KEY_NOTIFICATION_PERMISSION_REQUESTED, true).close();
+	}
+
 	public static final String KEY_WATCHER_WATCH_INITIALLY = "watcher_watch_initially";
 	public static final boolean DEFAULT_WATCHER_WATCH_INITIALLY = false;
 

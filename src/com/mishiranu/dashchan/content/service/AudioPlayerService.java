@@ -5,6 +5,7 @@ import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.ServiceInfo;
 import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.PowerManager;
@@ -156,8 +157,8 @@ public class AudioPlayerService extends BaseService implements MediaPlayer.OnCom
 		super.onDestroy();
 	}
 
-	private void startForeground(NotificationCompat.Builder builder) {
-		startForeground(C.NOTIFICATION_ID_AUDIO_PLAYER, builder.build());
+	private void startForeground(NotificationCompat.Builder builder, int foregroundServiceType) {
+		startForeground(C.NOTIFICATION_ID_AUDIO_PLAYER, builder.build(), foregroundServiceType);
 	}
 
 	private void cleanup(boolean stopSelf, boolean notify) {
@@ -174,7 +175,7 @@ public class AudioPlayerService extends BaseService implements MediaPlayer.OnCom
 		wakeLock.release();
 		if (stopSelf) {
 			// Ensure service was started foreground at least once
-			startForeground(getPlaybackNotification(false));
+			startForeground(getPlaybackNotification(false), ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
 			AndroidUtils.stopForegroundRemove(this);
 			stopSelf();
 		}
@@ -190,7 +191,7 @@ public class AudioPlayerService extends BaseService implements MediaPlayer.OnCom
 		} else {
 			success = play(true);
 		}
-		startForeground(getPlaybackNotification(true));
+		startForeground(getPlaybackNotification(true), ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
 		if (success) {
 			notifyToggle();
 		} else {
@@ -309,7 +310,7 @@ public class AudioPlayerService extends BaseService implements MediaPlayer.OnCom
 			return;
 		}
 		play(true);
-		startForeground(getPlaybackNotification(true));
+		startForeground(getPlaybackNotification(true), ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
 	}
 
 	private int progress, progressMax;
@@ -381,7 +382,8 @@ public class AudioPlayerService extends BaseService implements MediaPlayer.OnCom
 	@Override
 	public void onStartDownloading() {
 		lastUpdate = 0L;
-		startForeground(getDownloadingNotification(true, false, null));
+		startForeground(getDownloadingNotification(true, false, null),
+				ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
 	}
 
 	@Override
@@ -404,7 +406,8 @@ public class AudioPlayerService extends BaseService implements MediaPlayer.OnCom
 		long t = SystemClock.elapsedRealtime();
 		if (t - lastUpdate >= 1000L) {
 			lastUpdate = t;
-			startForeground(getDownloadingNotification(false, false, null));
+			startForeground(getDownloadingNotification(false, false, null),
+					ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
 		}
 	}
 

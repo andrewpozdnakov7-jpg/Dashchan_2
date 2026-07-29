@@ -8,6 +8,7 @@ import android.app.Service;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -45,6 +46,14 @@ public class AndroidUtils {
 				listener.onReceive(this, context, intent);
 			}
 		};
+	}
+
+	public static void registerSystemReceiver(Context context, BroadcastReceiver receiver, IntentFilter filter) {
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+			context.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED);
+		} else {
+			context.registerReceiver(receiver, filter);
+		}
 	}
 
 	public static void startAnyService(Context context, Intent intent) {

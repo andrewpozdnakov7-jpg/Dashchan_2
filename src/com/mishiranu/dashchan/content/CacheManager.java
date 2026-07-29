@@ -46,8 +46,8 @@ public class CacheManager implements Runnable {
 			syncCache();
 			IntentFilter intentFilter = new IntentFilter(Intent.ACTION_MEDIA_MOUNTED);
 			intentFilter.addDataScheme("file");
-			MainApplication.getInstance()
-					.registerReceiver(AndroidUtils.createReceiver((r, c, i) -> syncCache()), intentFilter);
+			AndroidUtils.registerSystemReceiver(MainApplication.getInstance(),
+					AndroidUtils.createReceiver((r, c, i) -> syncCache()), intentFilter);
 			new Thread(this, "CacheManagerWorker").start();
 		}
 	}

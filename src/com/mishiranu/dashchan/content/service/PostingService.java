@@ -8,6 +8,7 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
+import android.content.pm.ServiceInfo;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
@@ -363,7 +364,8 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 					}
 				}
 				builder.setContentText(taskState.text);
-				startForeground(C.NOTIFICATION_ID_POSTING, builder.build());
+				startForeground(C.NOTIFICATION_ID_POSTING, builder.build(),
+						ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
 			}
 			if (notificationData.syncLatch != null) {
 				notificationData.syncLatch.countDown();

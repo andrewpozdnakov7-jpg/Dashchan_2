@@ -9,6 +9,7 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
+import android.content.pm.ServiceInfo;
 import android.media.MediaScannerConnection;
 import android.net.Uri;
 import android.os.IBinder;
@@ -1041,7 +1042,8 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 					isForegroundWorker = true;
 					AndroidUtils.startAnyService(this, new Intent(this, DownloadService.class));
 				}
-				startForeground(C.NOTIFICATION_ID_DOWNLOADING, notification);
+				startForeground(C.NOTIFICATION_ID_DOWNLOADING, notification,
+						ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
 			} else {
 				if (isForegroundWorker) {
 					isForegroundWorker = false;

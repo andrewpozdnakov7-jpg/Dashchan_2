@@ -1,6 +1,5 @@
 package com.mishiranu.dashchan.util;
 
-import android.app.AlarmManager;
 import android.app.PendingIntent;
 import android.content.ActivityNotFoundException;
 import android.content.ClipData;
@@ -13,7 +12,6 @@ import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.net.Uri;
 import android.os.Build;
-import android.os.SystemClock;
 import android.provider.Browser;
 import android.util.Pair;
 import androidx.browser.customtabs.CustomTabColorSchemeParams;
@@ -30,6 +28,7 @@ import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.AdvancedPreferences;
 import com.mishiranu.dashchan.content.CacheManager;
 import com.mishiranu.dashchan.content.Preferences;
+import com.mishiranu.dashchan.content.RestartActivity;
 import com.mishiranu.dashchan.content.service.AudioPlayerService;
 import com.mishiranu.dashchan.media.VideoPlayer;
 import com.mishiranu.dashchan.ui.MainActivity;
@@ -258,18 +257,7 @@ public class NavigationUtils {
 	}
 
 	public static void restartApplication(Context context) {
-		Intent intent = new Intent(context, MainActivity.class)
-				.setAction(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
-				.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-		int flags = PendingIntent.FLAG_CANCEL_CURRENT | PendingIntent.FLAG_IMMUTABLE;
-		PendingIntent pendingIntent = PendingIntent.getActivity(context, 0, intent, flags);
-		AlarmManager alarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
-		long when = SystemClock.elapsedRealtime() + 1000;
-		if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarmManager.canScheduleExactAlarms()) {
-			alarmManager.setExact(AlarmManager.ELAPSED_REALTIME, when, pendingIntent);
-		} else {
-			alarmManager.set(AlarmManager.ELAPSED_REALTIME, when, pendingIntent);
-		}
+		context.startActivity(RestartActivity.createIntent(context));
 		System.exit(0);
 	}
 }

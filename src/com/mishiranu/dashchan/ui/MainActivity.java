@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui;
 
+import android.Manifest;
 import android.animation.LayoutTransition;
 import android.app.AlertDialog;
 import android.app.NotificationManager;
@@ -8,6 +9,7 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
+import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.media.AudioManager;
 import android.net.Uri;
@@ -114,6 +116,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	private static final String EXTRA_STORAGE_REQUEST_STATE = "storageRequestState";
 	private static final String EXTRA_PAGES_STATE_VERSION = "pagesStateVersion";
 	private static final int PAGES_STATE_VERSION = 1;
+	private static final int REQUEST_CODE_POST_NOTIFICATIONS = 1;
 
 	private static final PageFragment REFERENCE_FRAGMENT = new PageFragment();
 
@@ -380,6 +383,18 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		ExtensionsTrustLoop.handleUntrustedExtensions(this, extensionsTrustLoopState);
 		if (storageRequestState == StorageRequestState.INSTRUCTIONS) {
 			showStorageInstructionsDialog();
+		}
+		requestNotificationPermissionIfNeeded();
+	}
+
+	private void requestNotificationPermissionIfNeeded() {
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+				!Preferences.isNotificationPermissionRequested()) {
+			Preferences.setNotificationPermissionRequested();
+			if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+				requestPermissions(new String[] {Manifest.permission.POST_NOTIFICATIONS},
+						REQUEST_CODE_POST_NOTIFICATIONS);
+			}
 		}
 	}
 

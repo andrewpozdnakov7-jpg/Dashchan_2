@@ -420,7 +420,8 @@ public class ChanManager {
 		filter.addAction(Intent.ACTION_PACKAGE_ADDED);
 		filter.addAction(Intent.ACTION_PACKAGE_REMOVED);
 		filter.addDataScheme("package");
-		MainApplication.getInstance().registerReceiver(AndroidUtils.createReceiver((receiver, context, intent) -> {
+		AndroidUtils.registerSystemReceiver(MainApplication.getInstance(),
+				AndroidUtils.createReceiver((receiver, context, intent) -> {
 			Uri uri = intent.getData();
 			if (uri == null) {
 				return;
