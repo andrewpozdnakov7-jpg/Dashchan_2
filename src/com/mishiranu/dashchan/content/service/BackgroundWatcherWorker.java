@@ -38,9 +38,14 @@ public class BackgroundWatcherWorker extends Worker {
 	private static final String UNIQUE_WORK_NAME = "background-reply-check";
 	private static final long INTERVAL_MINUTES = 15;
 	private static final long MAX_RUN_MINUTES = 8;
+	private static final Object RUN_LOCK = new Object();
+	private static BackgroundWatcherWorker currentRun;
 
 	private final List<ReadPostsTask> tasks = Collections.synchronizedList(new ArrayList<>());
+	private final AtomicBoolean acceptResults = new AtomicBoolean();
 	private volatile ExecutorService executor;
+	private volatile CountDownLatch completionLatch;
+	private volatile boolean stoppedForForeground;
 
 	public BackgroundWatcherWorker(@NonNull Context context, @NonNull WorkerParameters workerParams) {
 		super(context, workerParams);
@@ -81,13 +86,59 @@ public class BackgroundWatcherWorker extends Worker {
 		return processInfo.importance <= ActivityManager.RunningAppProcessInfo.IMPORTANCE_VISIBLE;
 	}
 
+	static void cancelForForeground() {
+		BackgroundWatcherWorker worker;
+		synchronized (RUN_LOCK) {
+			worker = currentRun;
+		}
+		if (worker != null) {
+			worker.stopRun(true);
+		}
+	}
+
+	private boolean beginRun() {
+		if (!Preferences.isBackgroundReplyCheckEnabled()) {
+			return false;
+		}
+		synchronized (RUN_LOCK) {
+			if (currentRun != null && currentRun != this) {
+				return false;
+			}
+			currentRun = this;
+			acceptResults.set(true);
+		}
+		if (isApplicationVisible()) {
+			stopRun(true);
+			finishRun();
+			return false;
+		}
+		return true;
+	}
+
+	private void finishRun() {
+		acceptResults.set(false);
+		completionLatch = null;
+		synchronized (RUN_LOCK) {
+			if (currentRun == this) {
+				currentRun = null;
+			}
+		}
+	}
+
 	@NonNull
 	@Override
 	public Result doWork() {
-		if (!Preferences.isBackgroundReplyCheckEnabled() || isApplicationVisible()) {
+		if (!beginRun()) {
 			return Result.success();
 		}
+		try {
+			return runCheck();
+		} finally {
+			finishRun();
+		}
+	}
 
+	private Result runCheck() {
 		List<FavoritesStorage.FavoriteItem> favorites = ConcurrentUtils.mainGet(() -> {
 			ArrayList<FavoritesStorage.FavoriteItem> result = new ArrayList<>();
 			for (FavoritesStorage.FavoriteItem favoriteItem : FavoritesStorage.getInstance().getThreads(null)) {
@@ -110,16 +161,21 @@ public class BackgroundWatcherWorker extends Worker {
 		int notificationColor = ConcurrentUtils.mainGet(() -> ThemeEngine.attachAndApply(context).accent);
 		Set<Preferences.NotificationFeature> notificationFeatures = Preferences.getWatcherNotifications();
 		CountDownLatch latch = new CountDownLatch(favorites.size());
+		completionLatch = latch;
 		executor = ConcurrentUtils.newThreadPool(3, 3, 0, "BackgroundWatcher", null);
 
 		for (FavoritesStorage.FavoriteItem favoriteItem : favorites) {
+			if (!acceptResults.get() || isApplicationVisible()) {
+				stopRun(true);
+				break;
+			}
 			Set<PendingUserPost> pendingUserPosts = ConcurrentUtils.mainGet(() -> {
 				Set<PendingUserPost> pending = PostingService.getPendingUserPosts(favoriteItem.chanName,
 						favoriteItem.boardName, favoriteItem.threadNumber);
 				return pending != null ? new HashSet<>(pending) : null;
 			});
 			ReadPostsTask.Callback callback = new Callback(context, favoriteItem, notificationColor,
-					notificationFeatures, latch);
+					notificationFeatures, latch, acceptResults);
 			ReadPostsTask task = new ReadPostsTask(callback, Chan.get(favoriteItem.chanName),
 					favoriteItem.boardName, favoriteItem.threadNumber, false, pendingUserPosts);
 			tasks.add(task);
@@ -139,13 +195,16 @@ public class BackgroundWatcherWorker extends Worker {
 			cancelTasks();
 			return Result.retry();
 		} finally {
+			completionLatch = null;
 			ExecutorService executor = this.executor;
 			if (executor != null) {
 				executor.shutdownNow();
 			}
 			this.executor = null;
 		}
-		if (!complete) {
+		if (stoppedForForeground) {
+			return Result.success();
+		} else if (!complete) {
 			cancelTasks();
 			return Result.retry();
 		}
@@ -155,10 +214,24 @@ public class BackgroundWatcherWorker extends Worker {
 	@Override
 	public void onStopped() {
 		super.onStopped();
+		stopRun(false);
+	}
+
+	private void stopRun(boolean forForeground) {
+		if (forForeground) {
+			stoppedForForeground = true;
+		}
+		acceptResults.set(false);
 		cancelTasks();
 		ExecutorService executor = this.executor;
 		if (executor != null) {
 			executor.shutdownNow();
+		}
+		CountDownLatch latch = completionLatch;
+		if (latch != null) {
+			while (latch.getCount() > 0) {
+				latch.countDown();
+			}
 		}
 	}
 
@@ -177,20 +250,23 @@ public class BackgroundWatcherWorker extends Worker {
 		private final int notificationColor;
 		private final Set<Preferences.NotificationFeature> notificationFeatures;
 		private final CountDownLatch latch;
+		private final AtomicBoolean acceptResults;
 		private final AtomicBoolean finished = new AtomicBoolean();
 
 		public Callback(Context context, FavoritesStorage.FavoriteItem favoriteItem, int notificationColor,
-				Set<Preferences.NotificationFeature> notificationFeatures, CountDownLatch latch) {
+				Set<Preferences.NotificationFeature> notificationFeatures, CountDownLatch latch,
+				AtomicBoolean acceptResults) {
 			this.context = context;
 			this.favoriteItem = favoriteItem;
 			this.notificationColor = notificationColor;
 			this.notificationFeatures = notificationFeatures;
 			this.latch = latch;
+			this.acceptResults = acceptResults;
 		}
 
 		@Override
 		public void onPendingUserPostsConsumed(Set<PendingUserPost> pendingUserPosts) {
-			if (pendingUserPosts != null && !pendingUserPosts.isEmpty()) {
+			if (acceptResults.get() && pendingUserPosts != null && !pendingUserPosts.isEmpty()) {
 				PostingService.consumePendingUserPosts(favoriteItem.chanName, favoriteItem.boardName,
 						favoriteItem.threadNumber, pendingUserPosts);
 			}
@@ -199,7 +275,8 @@ public class BackgroundWatcherWorker extends Worker {
 		@Override
 		public void onReadPostsSuccess(PagesDatabase.Cache.State cacheState,
 				List<PagesDatabase.InsertResult.Reply> replies, Integer newCount) {
-			if (!replies.isEmpty() && notificationFeatures.contains(Preferences.NotificationFeature.ENABLED)) {
+			if (acceptResults.get() && !replies.isEmpty() &&
+					notificationFeatures.contains(Preferences.NotificationFeature.ENABLED)) {
 				String title = StringUtils.emptyIfNull(favoriteItem.title);
 				if (title.trim().isEmpty()) {
 					Chan chan = Chan.get(favoriteItem.chanName);
@@ -218,14 +295,16 @@ public class BackgroundWatcherWorker extends Worker {
 
 		@Override
 		public void onReadPostsRedirect(RedirectException.Target target) {
-			FavoritesStorage.getInstance().setWatcherEnabled(favoriteItem.chanName,
-					favoriteItem.boardName, favoriteItem.threadNumber, false);
+			if (acceptResults.get()) {
+				FavoritesStorage.getInstance().setWatcherEnabled(favoriteItem.chanName,
+						favoriteItem.boardName, favoriteItem.threadNumber, false);
+			}
 			finish();
 		}
 
 		@Override
 		public void onReadPostsFail(ErrorItem errorItem) {
-			if (errorItem.type == ErrorItem.Type.THREAD_NOT_EXISTS) {
+			if (acceptResults.get() && errorItem.type == ErrorItem.Type.THREAD_NOT_EXISTS) {
 				FavoritesStorage.getInstance().setWatcherEnabled(favoriteItem.chanName,
 						favoriteItem.boardName, favoriteItem.threadNumber, false);
 			}

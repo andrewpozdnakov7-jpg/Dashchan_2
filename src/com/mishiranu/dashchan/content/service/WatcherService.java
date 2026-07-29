@@ -204,6 +204,7 @@ public class WatcherService extends BaseService {
 
 		@Override
 		public void notifyForeground() {
+			BackgroundWatcherWorker.cancelForForeground();
 			WatcherService service = getService();
 			if (service != null) {
 				service.startNextFinished(true);
