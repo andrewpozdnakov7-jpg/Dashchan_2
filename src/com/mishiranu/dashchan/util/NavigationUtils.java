@@ -12,6 +12,7 @@ import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.net.Uri;
+import android.os.Build;
 import android.os.SystemClock;
 import android.provider.Browser;
 import android.util.Pair;
@@ -264,7 +265,11 @@ public class NavigationUtils {
 		PendingIntent pendingIntent = PendingIntent.getActivity(context, 0, intent, flags);
 		AlarmManager alarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
 		long when = SystemClock.elapsedRealtime() + 1000;
-		alarmManager.setExact(AlarmManager.ELAPSED_REALTIME, when, pendingIntent);
+		if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarmManager.canScheduleExactAlarms()) {
+			alarmManager.setExact(AlarmManager.ELAPSED_REALTIME, when, pendingIntent);
+		} else {
+			alarmManager.set(AlarmManager.ELAPSED_REALTIME, when, pendingIntent);
+		}
 		System.exit(0);
 	}
 }

@@ -7,6 +7,7 @@
 	<uses-permission android:name="android.permission.WAKE_LOCK" />
 	<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 	<uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+	<uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 	<uses-permission android:name="android.permission.VIBRATE" android:maxSdkVersion="18" />
 	<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="22" />
 	<uses-permission-sdk-23 android:name="android.permission.FOREGROUND_SERVICE" />
@@ -1694,6 +1695,7 @@
 
 		<activity
 			android:name=".content.PostingShareActivity"
+			android:exported="true"
 			android:taskAffinity=".postingshare"
 			android:launchMode="singleInstance"
 			android:excludeFromRecents="true"
@@ -1716,7 +1718,15 @@
 		<activity
 			android:name=".content.UpdaterActivity"
 			android:excludeFromRecents="true"
+			android:exported="false"
 			android:theme="@android:style/Theme.Panel" />
+
+		<activity
+			android:name=".content.OpenFileActivity"
+			android:excludeFromRecents="true"
+			android:exported="false"
+			android:noHistory="true"
+			android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
 		<activity
 			android:name=".ui.gallery.VideoPipActivity"
@@ -1729,25 +1739,32 @@
 			android:theme="@style/Theme.VideoPip" />
 
 		<service
-			android:name=".content.service.PostingService" />
+			android:name=".content.service.PostingService"
+			android:exported="false" />
 
 		<receiver
-			android:name=".content.service.PostingService$Receiver" />
+			android:name=".content.service.PostingService$Receiver"
+			android:exported="false" />
 
 		<service
-			android:name=".content.service.DownloadService" />
+			android:name=".content.service.DownloadService"
+			android:exported="false" />
 
 		<receiver
-			android:name=".content.service.DownloadService$Receiver" />
+			android:name=".content.service.DownloadService$Receiver"
+			android:exported="false" />
 
 		<service
-			android:name=".content.service.WatcherService" />
+			android:name=".content.service.WatcherService"
+			android:exported="false" />
 
 		<service
-			android:name=".content.service.AudioPlayerService" />
+			android:name=".content.service.AudioPlayerService"
+			android:exported="false" />
 
 		<service
 			android:name=".content.service.webview.WebViewService"
+			android:exported="false"
 			android:process=":webview" />
 
 		<provider

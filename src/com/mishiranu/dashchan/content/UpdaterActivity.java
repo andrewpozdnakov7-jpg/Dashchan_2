@@ -111,7 +111,8 @@ public class UpdaterActivity extends StateActivity {
 		notificationManager.createNotificationChannel(AndroidUtils.createHeadsUpNotificationChannel
 				(C.NOTIFICATION_CHANNEL_UPDATES, context.getString(R.string.updates)));
 		PendingIntent pendingIntent = PendingIntent.getActivity(context, 0,
-				createInstallIntent(context, files), PendingIntent.FLAG_UPDATE_CURRENT);
+				createInstallIntent(context, files),
+				PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 		NotificationCompat.Builder builder = new NotificationCompat.Builder(context, C.NOTIFICATION_CHANNEL_UPDATES)
 				.setSmallIcon(android.R.drawable.stat_sys_download_done)
 				.setContentTitle(context.getString(R.string.update_downloaded))

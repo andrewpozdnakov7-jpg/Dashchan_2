@@ -143,7 +143,7 @@ public class WatcherNotifications {
 						.putExtra(C.EXTRA_THREAD_NUMBER, threadNumber)
 						.putExtra(C.EXTRA_POST_NUMBER, reply.postNumber.toString());
 				builder.setContentIntent(PendingIntent.getActivity(context, 0, intent,
-						PendingIntent.FLAG_UPDATE_CURRENT));
+						PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
 				notificationManager.notify(tag, C.NOTIFICATION_ID_REPLIES, builder.build());
 			}
 			NotificationCompat.Builder builder = new NotificationCompat

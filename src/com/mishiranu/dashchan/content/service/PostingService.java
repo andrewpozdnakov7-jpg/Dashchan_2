@@ -319,7 +319,8 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 				if (notificationData.type == NotificationData.Type.CREATE) {
 					builder.setSmallIcon(android.R.drawable.stat_sys_upload);
 					PendingIntent cancelIntent = PendingIntent.getBroadcast(this, 0, new Intent(this, Receiver.class)
-							.setAction(ACTION_CANCEL), PendingIntent.FLAG_UPDATE_CURRENT);
+							.setAction(ACTION_CANCEL),
+							PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 					builder.addAction(0, getString(android.R.string.cancel), cancelIntent);
 					builder.setColor(notificationColor);
 					AndroidUtils.startAnyService(this, new Intent(this, PostingService.class));
@@ -684,7 +685,7 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 						.putExtra(C.EXTRA_THREAD_NUMBER, targetThreadNumber)
 						.putExtra(C.EXTRA_POST_NUMBER, postNumber != null ? postNumber.toString() : null);
 				builder.setContentIntent(PendingIntent.getActivity(this, 0, intent,
-						PendingIntent.FLAG_UPDATE_CURRENT));
+						PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
 				notificationManager.notify(tag, 0, builder.build());
 			}
 
@@ -785,7 +786,7 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 				queueItem.chanName + "/" + queueItem.data.boardName + "/" + queueItem.data.threadNumber + "/"
 						+ System.nanoTime()));
 		builder.setContentIntent(PendingIntent.getActivity(this, tag.hashCode(), intent,
-				PendingIntent.FLAG_UPDATE_CURRENT));
+				PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
 		notificationManager.notify(tag, 0, builder.build());
 	}
 

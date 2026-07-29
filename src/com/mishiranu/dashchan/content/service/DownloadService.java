@@ -4,7 +4,6 @@ import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
-import android.content.ActivityNotFoundException;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
@@ -29,8 +28,8 @@ import chan.util.StringUtils;
 import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.CacheManager;
-import com.mishiranu.dashchan.content.FileProvider;
 import com.mishiranu.dashchan.content.LocaleManager;
+import com.mishiranu.dashchan.content.OpenFileActivity;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.async.ExecutorTask;
 import com.mishiranu.dashchan.content.async.ReadFileTask;
@@ -41,7 +40,6 @@ import com.mishiranu.dashchan.ui.MainActivity;
 import com.mishiranu.dashchan.util.AndroidUtils;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
 import com.mishiranu.dashchan.util.IOUtils;
-import com.mishiranu.dashchan.util.MimeTypes;
 import com.mishiranu.dashchan.util.WeakObservable;
 import com.mishiranu.dashchan.widget.ClickableToast;
 import com.mishiranu.dashchan.widget.ThemeEngine;
@@ -74,11 +72,6 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 
 	private static final String ACTION_CANCEL = "cancel";
 	private static final String ACTION_RETRY = "retry";
-	private static final String ACTION_OPEN = "open";
-
-	private static final String EXTRA_FILE_TARGET = "fileTarget";
-	private static final String EXTRA_FILE_PATH = "filePath";
-	private static final String EXTRA_ALLOW_WRITE = "allowWrite";
 
 	private NotificationManager notificationManager;
 	private int notificationColor;
@@ -736,30 +729,6 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 			}
 		}
 
-		private void open(DataFile file, boolean allowWrite) {
-			refreshNotification(NotificationUpdate.SYNC);
-			String extension = StringUtils.getFileExtension(file.getName());
-			String type = MimeTypes.forExtension(extension, "image/jpeg");
-			if (file.exists()) {
-				ScanCallback callback = uri -> {
-					try {
-						startActivity(new Intent(Intent.ACTION_VIEW)
-								.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_GRANT_READ_URI_PERMISSION |
-										(allowWrite ? Intent.FLAG_GRANT_WRITE_URI_PERMISSION : 0))
-								.setDataAndType(uri, type));
-					} catch (ActivityNotFoundException e) {
-						ClickableToast.show(R.string.unknown_address);
-					}
-				};
-				Pair<File, Uri> fileOrUri = file.getFileOrUri();
-				if (fileOrUri.first != null) {
-					scanFileLegacy(fileOrUri.first, new Pair<>(type, callback));
-				} else if (fileOrUri.second != null) {
-					callback.onComplete(fileOrUri.second);
-				}
-			}
-		}
-
 		private Boolean accumulateState;
 		private String accumulateLocalArchiveId;
 
@@ -777,6 +746,12 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 		private Accumulate accumulate(String localArchiveId) {
 			if (accumulateState != null) {
 				throw new IllegalStateException();
+			}
+			if (activeTask == null && activePreparingTask == null && activeInputTask == null &&
+					queuedTasks.isEmpty() && primaryRequest == null && directRequests.isEmpty()) {
+				successTasks.clear();
+				errorTasks.clear();
+				lastSuccessTaskDataFile = null;
 			}
 			accumulateState = false;
 			accumulateLocalArchiveId = localArchiveId;
@@ -1096,7 +1071,8 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 			notificationManager.cancel(C.NOTIFICATION_ID_DOWNLOADING);
 			builder = new NotificationCompat.Builder(this, C.NOTIFICATION_CHANNEL_DOWNLOADING);
 			builder.setDeleteIntent(PendingIntent.getBroadcast(this, 0, new Intent(this, Receiver.class)
-					.setAction(ACTION_CANCEL), PendingIntent.FLAG_UPDATE_CURRENT));
+					.setAction(ACTION_CANCEL),
+					PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
 			builder.setSmallIcon(notificationData.type.iconResId);
 			builder.setColor(notificationColor);
 			if (notificationData.lastSuccessFile != null) {
@@ -1108,37 +1084,39 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 				case REQUEST: {
 					builder.addAction(0, getString(android.R.string.cancel), PendingIntent.getBroadcast(this, 0,
 									new Intent(this, Receiver.class).setAction(ACTION_CANCEL),
-									PendingIntent.FLAG_UPDATE_CURRENT));
+									PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
 					break;
 				}
 				case RESULT: {
 					if (notificationData.allowRetry) {
 						builder.addAction(0, getString(R.string.retry), PendingIntent.getBroadcast(this, 0,
 										new Intent(this, Receiver.class).setAction(ACTION_RETRY),
-										PendingIntent.FLAG_UPDATE_CURRENT));
+										PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
 					}
 					break;
 				}
 			}
-			if (notificationData.type == NotificationData.Type.REQUEST) {
-				builder.setContentIntent(PendingIntent.getActivity(this, 0,
-						new Intent(this, MainActivity.class), PendingIntent.FLAG_UPDATE_CURRENT));
-			} else if (notificationData.localArchiveId != null) {
+		}
+		PendingIntent contentIntent = null;
+		if (notificationData.type == NotificationData.Type.REQUEST) {
+			contentIntent = PendingIntent.getActivity(this, 0, new Intent(this, MainActivity.class),
+					PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+		} else if (notificationData.type == NotificationData.Type.RESULT) {
+			if (notificationData.localArchiveId != null) {
 				Intent intent = new Intent(this, MainActivity.class)
 						.setAction(C.ACTION_LOCAL_ARCHIVE)
 						.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP)
 						.putExtra(C.EXTRA_LOCAL_ARCHIVE_ID, notificationData.localArchiveId);
-				builder.setContentIntent(PendingIntent.getActivity(this,
-						notificationData.localArchiveId.hashCode(), intent,
-						PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
+				contentIntent = PendingIntent.getActivity(this, notificationData.localArchiveId.hashCode(), intent,
+						PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 			} else if (notificationData.lastSuccessFile != null) {
-				builder.setContentIntent(PendingIntent.getBroadcast(this, 0, new Intent(this, Receiver.class)
-						.putExtra(EXTRA_FILE_TARGET, notificationData.lastSuccessFile.getTarget().name())
-						.putExtra(EXTRA_FILE_PATH, notificationData.lastSuccessFile.getRelativePath())
-						.putExtra(EXTRA_ALLOW_WRITE, notificationData.allowWrite)
-						.setAction(ACTION_OPEN), PendingIntent.FLAG_UPDATE_CURRENT));
+				contentIntent = PendingIntent.getActivity(this, 0,
+						OpenFileActivity.createIntent(this, notificationData.lastSuccessFile,
+								notificationData.allowWrite),
+						PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 			}
 		}
+		builder.setContentIntent(contentIntent);
 		String contentTitle;
 		String contentText;
 		boolean headsUp;
@@ -1319,7 +1297,7 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 		if (success) {
 			File file = taskDataFile != null ? taskDataFile.getFileOrUri().first : null;
 			if (file != null) {
-				scanFileLegacy(file, null);
+				scanFileLegacy(file);
 			}
 		}
 		for (Callback callback : callbacks) {
@@ -1354,35 +1332,9 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 		}
 	}
 
-	private interface ScanCallback {
-		void onComplete(Uri uri);
-	}
-
-	private void scanFileLegacy(File file, Pair<String, ScanCallback> callback) {
+	private void scanFileLegacy(File file) {
 		String[] fileArray = {file.getAbsolutePath()};
-		MediaScannerConnection.OnScanCompletedListener listener;
-		if (callback != null) {
-			boolean[] handled = {false};
-			listener = (f, uri) -> {
-				synchronized (handled) {
-					if (!handled[0]) {
-						handled[0] = true;
-						callback.second.onComplete(uri);
-					}
-				}
-			};
-			ConcurrentUtils.HANDLER.postDelayed(() -> {
-				synchronized (handled) {
-					if (!handled[0]) {
-						handled[0] = true;
-						callback.second.onComplete(FileProvider.convertDownloadsLegacyFile(file, callback.first));
-					}
-				}
-			}, 1000);
-		} else {
-			listener = null;
-		}
-		MediaScannerConnection.scanFile(this, fileArray, null, listener);
+		MediaScannerConnection.scanFile(this, fileArray, null, null);
 	}
 
 	private static String getFileNameWithChanBoardThreadData(String fileName,
@@ -1690,14 +1642,8 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 			String action = intent != null ? intent.getAction() : null;
 			boolean cancel = ACTION_CANCEL.equals(action);
 			boolean retry = ACTION_RETRY.equals(action);
-			boolean open = ACTION_OPEN.equals(action);
 			Context bindContext = context.getApplicationContext();
-			if (cancel || retry || open) {
-				String targetString = intent.getStringExtra(EXTRA_FILE_TARGET);
-				String path = intent.getStringExtra(EXTRA_FILE_PATH);
-				boolean allowWrite = intent.getBooleanExtra(EXTRA_ALLOW_WRITE, false);
-				DataFile file = targetString != null && path != null
-						? DataFile.obtain(DataFile.Target.valueOf(targetString), path) : null;
+			if (cancel || retry) {
 				// Broadcast receivers can't bind to services
 				ServiceConnection[] connection = {null};
 				connection[0] = new ServiceConnection() {
@@ -1706,10 +1652,8 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 						Binder downloadBinder = (Binder) binder;
 						if (cancel) {
 							downloadBinder.cancelAll();
-						} else if (retry) {
+						} else {
 							downloadBinder.retry();
-						} else if (open) {
-							downloadBinder.open(file, allowWrite);
 						}
 						bindContext.unbindService(connection[0]);
 					}
