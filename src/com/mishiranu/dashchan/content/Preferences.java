@@ -1714,6 +1714,8 @@ public class Preferences {
 
 	public static final String KEY_HARDWARE_VIDEO_ACCELERATION = "hardware_video_acceleration";
 	public static final boolean DEFAULT_HARDWARE_VIDEO_ACCELERATION = true;
+	public static final String KEY_IMAGE_EDITOR = "image_editor";
+	public static final boolean DEFAULT_IMAGE_EDITOR = false;
 	public static final String KEY_VIDEO_AUDIO_BOOST = "video_audio_boost";
 	public static final boolean DEFAULT_VIDEO_AUDIO_BOOST = false;
 	public static final String KEY_VIDEO_AUDIO_BOOST_DB = "video_audio_boost_db";
@@ -1723,6 +1725,10 @@ public class Preferences {
 
 	public static boolean isHardwareVideoAcceleration() {
 		return PREFERENCES.getBoolean(KEY_HARDWARE_VIDEO_ACCELERATION, DEFAULT_HARDWARE_VIDEO_ACCELERATION);
+	}
+
+	public static boolean isImageEditorEnabled() {
+		return PREFERENCES.getBoolean(KEY_IMAGE_EDITOR, DEFAULT_IMAGE_EDITOR);
 	}
 
 	public static boolean isVideoAudioBoost() {
@@ -1937,7 +1943,7 @@ public class Preferences {
 	}
 
 	public static final String KEY_VIDEO_PICTURE_IN_PICTURE = "video_picture_in_picture";
-	public static final boolean DEFAULT_VIDEO_PICTURE_IN_PICTURE = false;
+	public static final boolean DEFAULT_VIDEO_PICTURE_IN_PICTURE = true;
 
 	public static boolean isVideoPictureInPicture() {
 		return PREFERENCES.getBoolean(KEY_VIDEO_PICTURE_IN_PICTURE, DEFAULT_VIDEO_PICTURE_IN_PICTURE);
@@ -1949,6 +1955,33 @@ public class Preferences {
 	public static boolean isVideoPictureInPictureAuto() {
 		return PREFERENCES.getBoolean(KEY_VIDEO_PICTURE_IN_PICTURE_AUTO,
 				DEFAULT_VIDEO_PICTURE_IN_PICTURE_AUTO);
+	}
+
+	public enum VideoScreenOffAction {
+		PAUSE("pause", R.string.video_screen_off_action_pause,
+				R.string.video_screen_off_action_pause__summary),
+		CONTINUE("continue", R.string.video_screen_off_action_continue,
+				R.string.video_screen_off_action_continue__summary);
+
+		private static final EnumValueProvider<VideoScreenOffAction> VALUE_PROVIDER = o -> o.value;
+
+		public final String value;
+		public final int titleResId;
+		public final int summaryResId;
+
+		VideoScreenOffAction(String value, int titleResId, int summaryResId) {
+			this.value = value;
+			this.titleResId = titleResId;
+			this.summaryResId = summaryResId;
+		}
+	}
+
+	public static final String KEY_VIDEO_SCREEN_OFF_ACTION = "video_screen_off_action";
+	public static final VideoScreenOffAction DEFAULT_VIDEO_SCREEN_OFF_ACTION = VideoScreenOffAction.PAUSE;
+
+	public static VideoScreenOffAction getVideoScreenOffAction() {
+		return getEnumValue(KEY_VIDEO_SCREEN_OFF_ACTION, VideoScreenOffAction.values(),
+				DEFAULT_VIDEO_SCREEN_OFF_ACTION, VideoScreenOffAction.VALUE_PROVIDER);
 	}
 
 	public static final String KEY_VIDEO_DOUBLE_TAP_SEEK_INTERVAL = "video_double_tap_seek_interval";

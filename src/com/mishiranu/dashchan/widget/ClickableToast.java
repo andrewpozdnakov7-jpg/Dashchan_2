@@ -11,7 +11,6 @@ import android.graphics.PixelFormat;
 import android.graphics.Rect;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
-import android.provider.Settings;
 import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.LayoutInflater;
@@ -325,16 +324,9 @@ public class ClickableToast implements LifecycleObserver {
 	}
 
 	private boolean addContainerToWindowManager() {
-		boolean added = false;
-		// TYPE_APPLICATION_OVERLAY requires SYSTEM_ALERT_WINDOW permission.
-		if (Settings.canDrawOverlays(activity)) {
-			added = addContainerToWindowManager(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY);
-		}
-		if (!added) {
-			// TYPE_APPLICATION can't even properly overlay dialogs, used as fallback option
-			added = addContainerToWindowManager(WindowManager.LayoutParams.TYPE_APPLICATION);
-		}
-		return added;
+		// Keep the toast inside the owning activity. A global application overlay can block trusted touches and
+		// makes Android warn that the application is drawing over other apps.
+		return addContainerToWindowManager(WindowManager.LayoutParams.TYPE_APPLICATION);
 	}
 
 	private boolean addContainerToWindowManager(int type) {

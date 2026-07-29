@@ -805,6 +805,10 @@ public class VideoUnit {
 		return true;
 	}
 
+	void bringGalleryToForeground(Context context) {
+		instance.galleryInstance.callback.bringGalleryToForeground(context);
+	}
+
 	boolean closePictureInPicturePlayer(VideoPlayer transferredPlayer) {
 		if (!pictureInPictureTransferred || player != transferredPlayer) {
 			return false;

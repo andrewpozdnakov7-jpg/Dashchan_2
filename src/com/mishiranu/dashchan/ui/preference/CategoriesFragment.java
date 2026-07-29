@@ -1,8 +1,6 @@
 package com.mishiranu.dashchan.ui.preference;
 
-import android.content.res.ColorStateList;
 import android.os.Bundle;
-import android.provider.Settings;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
@@ -10,9 +8,7 @@ import androidx.annotation.NonNull;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.ui.FragmentHandler;
-import com.mishiranu.dashchan.ui.preference.core.Preference;
 import com.mishiranu.dashchan.ui.preference.core.PreferenceFragment;
-import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.util.SharedPreferences;
 import com.mishiranu.dashchan.widget.CustomSearchView;
 import com.mishiranu.dashchan.widget.MenuExpandListener;
@@ -22,7 +18,6 @@ public class CategoriesFragment extends PreferenceFragment {
 	private static final String EXTRA_SEARCH_QUERY = "searchQuery";
 	private static final String EXTRA_SEARCH_FOCUSED = "searchFocused";
 
-	private Preference<Void> experimentalPreference;
 	private List<SettingsSearchIndex.Entry> searchIndex;
 	private CustomSearchView searchView;
 	private MenuItem searchMenuItem;
@@ -60,7 +55,6 @@ public class CategoriesFragment extends PreferenceFragment {
 
 	private void populatePreferences() {
 		removeAllPreferences();
-		experimentalPreference = null;
 		if (searchQuery != null) {
 			List<SettingsSearchIndex.Entry> results = SettingsSearchIndex.search(searchIndex, searchQuery);
 			if (searchQuery.trim().isEmpty()) {
@@ -82,9 +76,9 @@ public class CategoriesFragment extends PreferenceFragment {
 		addCategory(R.string.forums, R.drawable.ic_public)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 						.pushFragment(new ChansFragment()));
-		experimentalPreference = addCategory(R.string.experimental_features, R.drawable.ic_verified);
-		experimentalPreference.setOnClickListener(p -> ((FragmentHandler) requireActivity())
-				.pushFragment(new ExperimentalFragment()));
+		addCategory(R.string.experimental_features, R.drawable.ic_verified)
+				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
+						.pushFragment(new ExperimentalFragment()));
 		addCategory(R.string.user_interface, R.drawable.ic_color_lens)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 						.pushFragment(new InterfaceFragment()));
@@ -106,22 +100,12 @@ public class CategoriesFragment extends PreferenceFragment {
 		addCategory(R.string.accessibility, R.drawable.ic_accessibility)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 						.pushFragment(new AccessibilityFragment()));
-		updateExperimentalTint();
-	}
-
-	private void updateExperimentalTint() {
-		if (experimentalPreference != null) {
-			boolean hasIssues = !Settings.canDrawOverlays(requireContext());
-			setCategoryTint(experimentalPreference, hasIssues ? ColorStateList.valueOf(ResourceUtils
-					.getColor(requireContext(), R.attr.colorTextError)) : null);
-		}
 	}
 
 	@Override
 	public void onDestroyView() {
 		super.onDestroyView();
 
-		experimentalPreference = null;
 		searchIndex = null;
 		searchView = null;
 		searchMenuItem = null;
@@ -151,8 +135,6 @@ public class CategoriesFragment extends PreferenceFragment {
 		searchIndex = SettingsSearchIndex.create(requireContext());
 		if (searchQuery != null) {
 			populatePreferences();
-		} else {
-			updateExperimentalTint();
 		}
 	}
 

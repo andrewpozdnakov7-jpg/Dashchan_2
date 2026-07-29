@@ -1,8 +1,10 @@
 package com.mishiranu.dashchan.ui.gallery;
 
 import android.app.ActionBar;
+import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Context;
+import android.content.Intent;
 import android.content.res.Configuration;
 import android.graphics.Color;
 import android.graphics.PixelFormat;
@@ -36,6 +38,7 @@ import androidx.fragment.app.DialogFragment;
 import chan.content.Chan;
 import chan.util.CommonUtils;
 import chan.util.StringUtils;
+import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.MainApplication;
 import com.mishiranu.dashchan.content.Preferences;
@@ -965,6 +968,18 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 			} else {
 				dialog.hide();
 			}
+		}
+	}
+
+	@Override
+	public void bringGalleryToForeground(Context context) {
+		Activity activity = getActivity();
+		if (activity != null) {
+			Intent intent = new Intent(context, activity.getClass())
+					.setAction(C.ACTION_RETURN_FROM_PICTURE_IN_PICTURE)
+					.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP
+							| Intent.FLAG_ACTIVITY_SINGLE_TOP);
+			context.startActivity(intent);
 		}
 	}
 

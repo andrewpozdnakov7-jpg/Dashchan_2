@@ -297,12 +297,12 @@ public final class SettingsSearchIndex {
 
 		add(context, entries, Screen.EXPERIMENTAL, R.string.hardware_video_acceleration,
 				R.string.hardware_video_acceleration__summary, Preferences.KEY_HARDWARE_VIDEO_ACCELERATION);
+		add(context, entries, Screen.EXPERIMENTAL, R.string.image_editor,
+				R.string.image_editor__summary, Preferences.KEY_IMAGE_EDITOR);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.video_audio_boost,
 				R.string.video_audio_boost__summary, Preferences.KEY_VIDEO_AUDIO_BOOST);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.video_audio_boost_level, 0,
 				Preferences.KEY_VIDEO_AUDIO_BOOST_DB);
-		add(context, entries, Screen.EXPERIMENTAL, R.string.draw_over_other_applications,
-				R.string.draw_over_other_applications__summary, "draw_over_other_applications");
 		add(context, entries, Screen.EXPERIMENTAL, R.string.use_gms_security_provider,
 				R.string.use_gms_security_provider__summary, Preferences.KEY_USE_GMS_PROVIDER);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.video_diagnostics_start,
@@ -419,6 +419,8 @@ public final class SettingsSearchIndex {
 				R.string.video_picture_in_picture__summary, Preferences.KEY_VIDEO_PICTURE_IN_PICTURE);
 		add(context, entries, Screen.MEDIA, R.string.video_picture_in_picture_auto,
 				R.string.video_picture_in_picture_auto__summary, Preferences.KEY_VIDEO_PICTURE_IN_PICTURE_AUTO);
+		add(context, entries, Screen.MEDIA, R.string.video_screen_off_action,
+				R.string.video_screen_off_action__summary, Preferences.KEY_VIDEO_SCREEN_OFF_ACTION);
 		add(context, entries, Screen.MEDIA, R.string.enable_video_playback_speed_control,
 				R.string.enable_video_playback_speed_control__summary, Preferences.KEY_VIDEO_PLAYBACK_SPEED_CONTROL);
 		add(context, entries, Screen.MEDIA, R.string.remember_video_playback_speed,

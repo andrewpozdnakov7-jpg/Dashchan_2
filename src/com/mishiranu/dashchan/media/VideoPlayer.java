@@ -1361,7 +1361,7 @@ public class VideoPlayer {
 				String[] optionalLibraries) throws IOException {
 			File targetDir = new File(getNativeCacheDir(context), sanitize(label + "-" + packageName)
 					+ "-" + versionCode + "-" + sourceFile.lastModified() + "-" + abi);
-			if (!isExtractionComplete(targetDir, requiredLibraries)) {
+			if (!isExtractionComplete(targetDir, requiredLibraries, optionalLibraries)) {
 				deleteRecursively(targetDir);
 				if (!targetDir.mkdirs() && !targetDir.isDirectory()) {
 					throw new IOException("Unable to create native library cache: " + targetDir.getPath());
@@ -1492,13 +1492,32 @@ public class VideoPlayer {
 			}
 		}
 
-		private static boolean isExtractionComplete(File targetDir, String[] requiredLibraries) {
+		private static boolean isExtractionComplete(File targetDir, String[] requiredLibraries,
+				String[] optionalLibraries) {
 			if (!new File(targetDir, ".complete").isFile()) {
 				return false;
 			}
 			for (String library : requiredLibraries) {
-				if (!new File(targetDir, "lib" + library + ".so").isFile()) {
+				File libraryFile = new File(targetDir, "lib" + library + ".so");
+				if (!libraryFile.isFile()) {
 					return false;
+				}
+				try {
+					makeNativeLibraryReadOnly(libraryFile);
+				} catch (IOException e) {
+					return false;
+				}
+			}
+			if (optionalLibraries != null) {
+				for (String library : optionalLibraries) {
+					File libraryFile = new File(targetDir, "lib" + library + ".so");
+					if (libraryFile.isFile()) {
+						try {
+							makeNativeLibraryReadOnly(libraryFile);
+						} catch (IOException e) {
+							return false;
+						}
+					}
 				}
 			}
 			return true;
@@ -1534,7 +1553,17 @@ public class VideoPlayer {
 					output.write(buffer, 0, count);
 				}
 			}
-			targetFile.setReadable(true, true);
+			makeNativeLibraryReadOnly(targetFile);
+		}
+
+		private static void makeNativeLibraryReadOnly(File file) throws IOException {
+			if (!file.setReadable(true, true) && !file.canRead()) {
+				throw new IOException("Unable to make native library readable: " + file.getPath());
+			}
+			file.setReadOnly();
+			if (file.canWrite()) {
+				throw new IOException("Unable to make native library read-only: " + file.getPath());
+			}
 		}
 
 		private static void deleteRecursively(File file) throws IOException {

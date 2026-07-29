@@ -728,6 +728,9 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	}
 
 	private void navigateIntentUnchecked(Intent intent) {
+		if (C.ACTION_RETURN_FROM_PICTURE_IN_PICTURE.equals(intent.getAction())) {
+			return;
+		}
 		ReadUpdateTask.UpdateDataMap updateDataMap = AndroidUtils.getParcelableExtra(intent,
 				C.EXTRA_UPDATE_DATA_MAP, ReadUpdateTask.UpdateDataMap.class);
 		if (updateDataMap != null) {

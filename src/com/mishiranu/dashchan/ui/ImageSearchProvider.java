@@ -4,13 +4,7 @@ import android.net.Uri;
 
 final class ImageSearchProvider {
 	private static final ImageSearchProvider[] PROVIDERS = {
-			new ImageSearchProvider("Google Lens", "lens.google.com", "uploadbyurl", "url", false),
-			new ImageSearchProvider("Yandex", "yandex.ru", "images/search", "url", false,
-					"rpt", "imageview"),
-			new ImageSearchProvider("TinEye", "www.tineye.com", "search", "url", false),
-			new ImageSearchProvider("SauceNAO", "saucenao.com", "search.php", "url", false),
-			new ImageSearchProvider("iqdb.org", "iqdb.org", null, "url", true),
-			new ImageSearchProvider("trace.moe", "trace.moe", null, "url", true)
+			new ImageSearchProvider("Google Lens", "lens.google.com", "uploadbyurl", "url", false)
 	};
 
 	public static ImageSearchProvider[] getProviders() {

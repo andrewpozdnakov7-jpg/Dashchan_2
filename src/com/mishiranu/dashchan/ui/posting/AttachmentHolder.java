@@ -13,6 +13,7 @@ public class AttachmentHolder {
 	public final View previewButton;
 	public final View warningButton;
 	public final View ratingButton;
+	public final View editButton;
 
 	public String hash;
 	public String name;
@@ -24,7 +25,7 @@ public class AttachmentHolder {
 	public GraphicsUtils.Reencoding reencoding;
 
 	public AttachmentHolder(View view, TextView fileName, TextView fileSize, ImageView imageView, View previewButton,
-			View warningButton, View ratingButton) {
+			View warningButton, View ratingButton, View editButton) {
 		this.view = view;
 		this.fileName = fileName;
 		this.fileSize = fileSize;
@@ -32,5 +33,6 @@ public class AttachmentHolder {
 		this.previewButton = previewButton;
 		this.warningButton = warningButton;
 		this.ratingButton = ratingButton;
+		this.editButton = editButton;
 	}
 }

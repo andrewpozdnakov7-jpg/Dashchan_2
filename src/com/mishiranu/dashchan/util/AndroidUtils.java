@@ -130,10 +130,8 @@ public class AndroidUtils {
 		}
 	}
 
-	@SuppressWarnings("deprecation")
 	public static void stopForegroundRemove(Service service) {
-		// Keep the targetSdk 30 foreground-service lifecycle semantics for this cleanup pass.
-		service.stopForeground(true);
+		service.stopForeground(Service.STOP_FOREGROUND_REMOVE);
 	}
 
 	@RequiresApi(Build.VERSION_CODES.O)

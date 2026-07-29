@@ -127,6 +127,12 @@ public class MediaFragment extends PreferenceFragment implements FragmentHandler
 				Preferences.DEFAULT_VIDEO_PICTURE_IN_PICTURE_AUTO,
 				R.string.video_picture_in_picture_auto,
 				R.string.video_picture_in_picture_auto__summary).setEnabled(playerLoadResult.first);
+		addList(Preferences.KEY_VIDEO_SCREEN_OFF_ACTION,
+				enumList(Preferences.VideoScreenOffAction.values(), value -> value.value),
+				Preferences.DEFAULT_VIDEO_SCREEN_OFF_ACTION.value, R.string.video_screen_off_action,
+				enumResList(Preferences.VideoScreenOffAction.values(), value -> value.titleResId),
+				enumResList(Preferences.VideoScreenOffAction.values(), value -> value.summaryResId))
+				.setEnabled(playerLoadResult.first);
 		addCheck(true, Preferences.KEY_VIDEO_PLAYBACK_SPEED_CONTROL,
 				Preferences.DEFAULT_VIDEO_PLAYBACK_SPEED_CONTROL,
 				R.string.enable_video_playback_speed_control,
@@ -149,6 +155,8 @@ public class MediaFragment extends PreferenceFragment implements FragmentHandler
 			addDependency(Preferences.KEY_VIDEO_SEEK_ANY_FRAME, Preferences.KEY_USE_VIDEO_PLAYER, true);
 			addDependency(Preferences.KEY_VIDEO_PICTURE_IN_PICTURE, Preferences.KEY_USE_VIDEO_PLAYER, true);
 			addDependency(Preferences.KEY_VIDEO_PICTURE_IN_PICTURE_AUTO,
+					Preferences.KEY_VIDEO_PICTURE_IN_PICTURE, true);
+			addDependency(Preferences.KEY_VIDEO_SCREEN_OFF_ACTION,
 					Preferences.KEY_VIDEO_PICTURE_IN_PICTURE, true);
 			addDependency(Preferences.KEY_VIDEO_PLAYBACK_SPEED_CONTROL, Preferences.KEY_USE_VIDEO_PLAYER, true);
 			addDependency(Preferences.KEY_REMEMBER_VIDEO_PLAYBACK_SPEED,

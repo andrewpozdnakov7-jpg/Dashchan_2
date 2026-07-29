@@ -1487,6 +1487,22 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 					handleAttachmentsToAdd(attachmentsToAdd, uris.size());
 					break;
 				}
+				case C.REQUEST_CODE_IMAGE_EDITOR: {
+					int index = data.getIntExtra(ImageEditorActivity.EXTRA_RESULT_ATTACHMENT_INDEX, -1);
+					String hash = data.getStringExtra(ImageEditorActivity.EXTRA_RESULT_HASH);
+					String name = data.getStringExtra(ImageEditorActivity.EXTRA_RESULT_NAME);
+					AttachmentHolder holder = getAttachmentHolder(index);
+					if (holder != null && hash != null && name != null) {
+						holder.hash = hash;
+						holder.name = name;
+						FileHolder fileHolder = DraftsStorage.getInstance().getAttachmentDraftFileHolder(hash);
+						holder.reencoding = fileHolder != null && GraphicsUtils.canReencode(fileHolder)
+								? new GraphicsUtils.Reencoding(GraphicsUtils.Reencoding.FORMAT_JPEG, 90, 1) : null;
+						bindAttachmentFile(holder, fileHolder);
+						DraftsStorage.getInstance().store(obtainPostDraft());
+					}
+					break;
+				}
 			}
 		}
 	}
@@ -1555,6 +1571,15 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		String tag = GalleryOverlay.class.getName();
 		if (getParentFragmentManager().findFragmentByTag(tag) == null) {
 			new GalleryOverlay(Uri.fromFile(file), holder.name).show(getParentFragmentManager(), tag);
+		}
+	};
+
+	private final View.OnClickListener attachmentEditListener = v -> {
+		AttachmentHolder holder = (AttachmentHolder) v.getTag();
+		int attachmentIndex = attachments.indexOf(holder);
+		if (attachmentIndex >= 0 && Preferences.isImageEditorEnabled()) {
+			startActivityForResult(ImageEditorActivity.createIntent(requireContext(), holder.hash, holder.name,
+					attachmentIndex), C.REQUEST_CODE_IMAGE_EDITOR);
 		}
 	};
 
@@ -1759,6 +1784,20 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 
 	private static View addAttachmentButton(LinearLayout parent, int width,
 			int attrResId, View.OnClickListener listener) {
+		ImageView imageView = createAttachmentButton(parent, width, listener);
+		imageView.setImageDrawable(ResourceUtils.getDrawable(imageView.getContext(), attrResId, 0));
+		return imageView;
+	}
+
+	private static View addAttachmentButtonResource(LinearLayout parent, int width,
+			int drawableResId, View.OnClickListener listener) {
+		ImageView imageView = createAttachmentButton(parent, width, listener);
+		imageView.setImageResource(drawableResId);
+		return imageView;
+	}
+
+	private static ImageView createAttachmentButton(LinearLayout parent, int width,
+			View.OnClickListener listener) {
 		float density = ResourceUtils.obtainDensity(parent);
 		ImageView imageView = new ImageView(parent.getContext(), null, android.R.attr.borderlessButtonStyle);
 		parent.addView(imageView, width, LinearLayout.LayoutParams.MATCH_PARENT);
@@ -1766,7 +1805,6 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		layoutParams.gravity = Gravity.CENTER_VERTICAL;
 		ViewUtils.setNewMarginRelative(imageView, (int) (-8f * density), 0, 0, 0);
 		imageView.setScaleType(ImageView.ScaleType.CENTER);
-		imageView.setImageDrawable(ResourceUtils.getDrawable(imageView.getContext(), attrResId, 0));
 		imageView.setImageTintList(ResourceUtils.getColorStateList(imageView.getContext(),
 				android.R.attr.textColorPrimary));
 		imageView.setOnClickListener(listener);
@@ -1841,15 +1879,23 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 				R.attr.iconButtonWarning, attachmentWarningListener);
 		View ratingButton = addAttachmentButton(controls, minHeight,
 				R.attr.iconButtonRating, attachmentRatingListener);
+		View editButton = addAttachmentButtonResource(controls, minHeight,
+				R.drawable.ic_edit, attachmentEditListener);
+		int editIconColor = GraphicsUtils.isLight(ResourceUtils.getColor(editButton.getContext(),
+				R.attr.colorBlockBackground)) ? 0xff000000 : 0xffffffff;
+		((ImageView) editButton).setImageTintList(ColorStateList.valueOf(editIconColor));
+		editButton.setVisibility(View.GONE);
+		editButton.setContentDescription(getString(R.string.edit_image));
 		View dragButton = addAttachmentButton(controls, minHeight,
 				R.attr.iconButtonDragHandle, null);
 		View removeButton = addAttachmentButton(controls, minHeight,
 				R.attr.iconButtonCancel, attachmentRemoveListener);
 
 		AttachmentHolder holder = new AttachmentHolder(view, fileName, fileSize, imageView, previewButton,
-				warningButton, ratingButton);
+				warningButton, ratingButton, editButton);
 		warningButton.setTag(holder);
 		ratingButton.setTag(holder);
+		editButton.setTag(holder);
 		dragButton.setTag(holder);
 		dragButton.setContentDescription(getString(R.string.reorder_attachment));
 		dragButton.setOnLongClickListener(attachmentDragStartListener);
@@ -1873,8 +1919,6 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 			boolean optionRemoveMetadata, boolean optionRemoveFileName, boolean optionSpoiler,
 			GraphicsUtils.Reencoding reencoding) {
 		FileHolder fileHolder = DraftsStorage.getInstance().getAttachmentDraftFileHolder(hash);
-		JpegData jpegData = fileHolder != null ? fileHolder.getJpegData() : null;
-		PngData pngData = fileHolder != null ? fileHolder.getPngData() : null;
 		AttachmentHolder holder = addNewAttachment();
 		holder.hash = hash;
 		holder.name = name;
@@ -1884,13 +1928,28 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		holder.optionRemoveFileName = optionRemoveFileName;
 		holder.optionSpoiler = optionSpoiler;
 		holder.reencoding = reencoding;
-		holder.fileName.setText(name);
+		bindAttachmentFile(holder, fileHolder);
+		updateAttachmentConfiguration(holder);
+	}
+
+	private void bindAttachmentFile(AttachmentHolder holder, FileHolder fileHolder) {
+		VideoThumbnailTask oldTask = videoThumbnailTasks.remove(holder);
+		if (oldTask != null) oldTask.cancel();
+		JpegData jpegData = fileHolder != null ? fileHolder.getJpegData() : null;
+		PngData pngData = fileHolder != null ? fileHolder.getPngData() : null;
+		holder.fileName.setText(holder.name);
 		int size = fileHolder != null ? fileHolder.getSize() : 0;
 		String fileSize = StringUtils.formatFileSize(size, false);
 		Bitmap bitmap = null;
 		DisplayMetrics metrics = getResources().getDisplayMetrics();
 		int targetImageSize = Math.max(metrics.widthPixels, metrics.heightPixels);
-		boolean video = Chan.getFallback().locator.isVideoExtension(name);
+		boolean video = Chan.getFallback().locator.isVideoExtension(holder.name);
+		holder.imageView.setImageDrawable(null);
+		holder.imageView.setVisibility(View.GONE);
+		holder.previewButton.setVisibility(View.GONE);
+		holder.warningButton.setVisibility(View.VISIBLE);
+		holder.editButton.setVisibility(View.GONE);
+		holder.view.getLayoutParams().height = (int) (48f * ResourceUtils.obtainDensity(this));
 		if (fileHolder != null) {
 			if (fileHolder.isImage()) {
 				try {
@@ -1905,9 +1964,12 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 			holder.previewButton.setVisibility(Preferences.isAttachmentVideoPreview()
 					&& Preferences.isUseVideoPlayer() ? View.VISIBLE : View.GONE);
 			holder.view.getLayoutParams().height = (int) (128f * ResourceUtils.obtainDensity(this));
-			VideoThumbnailTask task = new VideoThumbnailTask(holder, hash, targetImageSize);
+			VideoThumbnailTask task = new VideoThumbnailTask(holder, holder.hash, targetImageSize);
 			videoThumbnailTasks.put(holder, task);
 			task.execute(VIDEO_THUMBNAIL_EXECUTOR);
+		}
+		if (fileHolder != null && Preferences.isImageEditorEnabled() && isEditableImage(fileHolder, holder.name)) {
+			holder.editButton.setVisibility(View.VISIBLE);
 		}
 		if (bitmap != null) {
 			holder.imageView.setVisibility(View.VISIBLE);
@@ -1918,7 +1980,18 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		if ((jpegData == null || jpegData.exifData == null) && (pngData == null || !pngData.hasMetadata)) {
 			holder.warningButton.setVisibility(View.GONE);
 		}
-		updateAttachmentConfiguration(holder);
+	}
+
+	private static boolean isEditableImage(FileHolder fileHolder, String name) {
+		String extension = StringUtils.getFileExtension(name);
+		if ("gif".equals(extension) || "apng".equals(extension) || "svg".equals(extension)) return false;
+		switch (fileHolder.getImageType()) {
+			case IMAGE_JPEG:
+			case IMAGE_PNG:
+			case IMAGE_WEBP:
+			case IMAGE_BMP: return true;
+			default: return false;
+		}
 	}
 
 	private class VideoThumbnailTask extends ExecutorTask<Void, Bitmap> {

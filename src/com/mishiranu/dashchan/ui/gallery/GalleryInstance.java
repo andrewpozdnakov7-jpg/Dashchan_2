@@ -47,6 +47,7 @@ public class GalleryInstance {
 
 		void navigateGalleryOrFinish(boolean enableGalleryMode);
 		void setGalleryVisibleForPictureInPicture(boolean visible);
+		void bringGalleryToForeground(Context context);
 		void closeGallery();
 		void navigatePageFromList(int position);
 		void navigatePost(GalleryItem galleryItem, boolean manually, boolean force);

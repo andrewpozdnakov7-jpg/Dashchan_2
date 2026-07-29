@@ -1,11 +1,7 @@
 package com.mishiranu.dashchan.ui.preference;
 
 import android.app.AlertDialog;
-import android.content.ActivityNotFoundException;
-import android.content.Intent;
-import android.net.Uri;
 import android.os.Bundle;
-import android.provider.Settings;
 import android.view.View;
 import androidx.annotation.NonNull;
 import com.mishiranu.dashchan.R;
@@ -22,8 +18,6 @@ import com.mishiranu.dashchan.widget.ClickableToast;
 import java.io.File;
 
 public class ExperimentalFragment extends PreferenceFragment {
-	private CheckPreference drawOverOtherApplicationsPreference;
-
 	@Override
 	protected SharedPreferences getPreferences() {
 		return Preferences.PREFERENCES;
@@ -53,6 +47,8 @@ public class ExperimentalFragment extends PreferenceFragment {
 		if (hardwareAccelerationPreference.getValue()) {
 			addVideoDiagnosticsPreferences();
 		}
+		addCheck(true, Preferences.KEY_IMAGE_EDITOR, Preferences.DEFAULT_IMAGE_EDITOR,
+				R.string.image_editor, R.string.image_editor__summary);
 		CheckPreference audioBoostPreference = addCheck(true, Preferences.KEY_VIDEO_AUDIO_BOOST,
 				Preferences.DEFAULT_VIDEO_AUDIO_BOOST, R.string.video_audio_boost,
 				R.string.video_audio_boost__summary);
@@ -63,17 +59,6 @@ public class ExperimentalFragment extends PreferenceFragment {
 		audioBoostLevelPreference.setEnabled(audioBoostPreference.getValue());
 		audioBoostPreference.setOnAfterChangeListener(p -> refreshPreferences());
 		addHeader(R.string.additional);
-		drawOverOtherApplicationsPreference = addCheck(false, "draw_over_other_applications", false,
-				R.string.draw_over_other_applications, R.string.draw_over_other_applications__summary);
-		drawOverOtherApplicationsPreference.setValue(Settings.canDrawOverlays(requireContext()));
-		drawOverOtherApplicationsPreference.setOnClickListener(p -> {
-			try {
-				startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
-						.setData(Uri.parse("package:" + requireContext().getPackageName())));
-			} catch (ActivityNotFoundException e) {
-				ClickableToast.show(R.string.unknown_address);
-			}
-		});
 		addCheck(true, Preferences.KEY_USE_GMS_PROVIDER, Preferences.DEFAULT_USE_GMS_PROVIDER,
 				R.string.use_gms_security_provider, R.string.use_gms_security_provider__summary);
 	}
@@ -131,12 +116,6 @@ public class ExperimentalFragment extends PreferenceFragment {
 	}
 
 	@Override
-	public void onDestroyView() {
-		super.onDestroyView();
-		drawOverOtherApplicationsPreference = null;
-	}
-
-	@Override
 	public void onActivityCreated(Bundle savedInstanceState) {
 		super.onActivityCreated(savedInstanceState);
 		((FragmentHandler) requireActivity()).setTitleSubtitle(getString(R.string.experimental_features), null);
@@ -145,10 +124,7 @@ public class ExperimentalFragment extends PreferenceFragment {
 	@Override
 	public void onResume() {
 		super.onResume();
-
 		refreshPreferences();
-		if (drawOverOtherApplicationsPreference != null) {
-			drawOverOtherApplicationsPreference.setValue(Settings.canDrawOverlays(requireContext()));
-		}
 	}
+
 }

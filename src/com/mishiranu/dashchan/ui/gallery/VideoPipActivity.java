@@ -127,6 +127,8 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 				seekBy(-1);
 			} else if (ACTION_SEEK_FORWARD.equals(intent.getAction())) {
 				seekBy(1);
+			} else if (Intent.ACTION_SCREEN_OFF.equals(intent.getAction())) {
+				handleScreenOff();
 			}
 		}
 	};
@@ -160,18 +162,19 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 		WindowManager.LayoutParams attributes = window.getAttributes();
 		attributes.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS;
 		window.setAttributes(attributes);
+		rootView = new FrameLayout(this);
+		rootView.setBackgroundColor(Color.BLACK);
+		setContentView(rootView);
 		WindowInsetsController insetsController = window.getInsetsController();
 		if (insetsController != null) {
 			insetsController.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
 			insetsController.hide(WindowInsets.Type.systemBars());
 		}
-		rootView = new FrameLayout(this);
-		rootView.setBackgroundColor(Color.BLACK);
-		setContentView(rootView);
 
 		IntentFilter controlFilter = new IntentFilter(ACTION_TOGGLE_PLAYBACK);
 		controlFilter.addAction(ACTION_SEEK_BACKWARD);
 		controlFilter.addAction(ACTION_SEEK_FORWARD);
+		controlFilter.addAction(Intent.ACTION_SCREEN_OFF);
 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
 			registerReceiver(controlReceiver, controlFilter, Context.RECEIVER_NOT_EXPORTED);
 		} else {
@@ -309,6 +312,19 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 		player.setPosition(Math.max(position, 0L));
 	}
 
+	private void handleScreenOff() {
+		VideoPlayer player = this.player;
+		if (player != null && player.isPlaying() && Preferences.getVideoScreenOffAction()
+				== Preferences.VideoScreenOffAction.PAUSE) {
+			startPlaying = false;
+			player.setPlaying(false);
+			if (audioFocus != null) {
+				audioFocus.release();
+			}
+			updatePictureInPictureParams();
+		}
+	}
+
 	private void maybeReturnToGallery() {
 		if (exitedPictureInPicture && enteredPictureInPicture && !isInPictureInPictureMode()
 				&& hasWindowFocus() && !returnedToGallery) {
@@ -331,8 +347,11 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 		VideoUnit source = this.source;
 		this.source = null;
 		this.player = null;
-		if (source == null || !source.restorePictureInPicturePlayer(player, position,
-				playbackSpeed, muted, playing)) {
+		boolean restored = source != null && source.restorePictureInPicturePlayer(player, position,
+				playbackSpeed, muted, playing);
+		if (restored) {
+			source.bringGalleryToForeground(this);
+		} else {
 			player.destroyAsync();
 		}
 		finish();
