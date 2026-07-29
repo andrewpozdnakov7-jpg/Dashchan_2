@@ -1,4 +1,4 @@
-# Dashchan_2
+# Slooop (Dashchan_2)
 
 [![Latest release](https://img.shields.io/github/v/release/andrewpozdnakov7-jpg/Dashchan_2?label=release)](https://github.com/andrewpozdnakov7-jpg/Dashchan_2/releases/latest)
 [![Android 11+](https://img.shields.io/badge/Android-11%2B-3DDC84)](https://developer.android.com/about/versions/11)
@@ -6,7 +6,7 @@
 
 ## Русский
 
-Dashchan_2 - неофициальная ветка Dashchan для Android 11 и новее. Она устанавливается рядом с оригинальным Dashchan, использует пакет `io.dashchan2` и содержит встроенную поддержку Двача, экспериментальный режим чтения 4chan и собственный видеоплеер на FFmpeg.
+Slooop - пользовательское название неофициальной ветки Dashchan_2 для Android 11 и новее. Приложение устанавливается рядом с оригинальным Dashchan, использует пакет `io.dashchan2` и содержит встроенную поддержку Двача, экспериментальный режим чтения 4chan и собственный видеоплеер на FFmpeg.
 
 ### Скачать
 
@@ -25,14 +25,14 @@ Dashchan_2 - неофициальная ветка Dashchan для Android 11 и
 ### Возможности
 
 - просмотр досок, тредов, изображений и видео, избранное и фоновые уведомления об ответах;
-- встроенный Двач с отправкой постов, Passcode, AI-фильтром и лайками/дизлайками на поддерживаемых досках;
+- встроенный Двач с отправкой постов, Passcode, AI-фильтром, автобампом для владельцев Passcode и лайками/дизлайками на поддерживаемых досках;
 - экспериментальный 4chan только для чтения, выключенный по умолчанию;
 - FFmpeg-плеер для WebM, MP4, fMP4, MOV, H.264, HEVC, VP8, VP9 и AV1;
-- скорость воспроизведения с сохранением тембра, перемотка двойным нажатием, жест громкости и режим «картинка в картинке»;
-- галерея с фильтрами, копирование изображений и фоновое сохранение медиа;
+- скорость воспроизведения с сохранением тембра, перемотка двойным нажатием, отдельная громкость видео, настраиваемый жест громкости и режим «картинка в картинке»;
+- галерея с фильтрами, копирование и поиск по изображениям, а также фоновое сохранение медиа;
 - локальные архивы тредов в HTML и ZIP, встроенный просмотрщик и подключение дополнительных папок;
 - встроенные, загружаемые и пользовательские темы с автоматическим дневным и ночным режимом;
-- Predictive Back на Android 13+, масштаб текста, встроенные шрифты, OpenDyslexic и импорт TTF/OTF;
+- поиск по настройкам, Predictive Back на Android 13+, масштаб текста, встроенные шрифты, OpenDyslexic и импорт TTF/OTF;
 - выбор имени и значка приложения, а также создание собственного ярлыка;
 - стабильный и добровольный beta-каналы обновлений с докачиванием APK.
 
@@ -40,11 +40,11 @@ Dashchan_2 - неофициальная ветка Dashchan для Android 11 и
 
 - 4chan пока не поддерживает отправку постов и может быть недоступен в отдельных сетях;
 - Predictive Back и «картинка в картинке» включаются вручную;
-- `targetSdk` намеренно остаётся 30 ради совместимости старого приложения; `minSdk` также равен 30.
+- `targetSdk` равен 37 для совместимости с Android 17; `minSdk` остаётся равен 30.
 
 ### Сборка
 
-Необходимы JDK 17+, Android SDK Platform 36, Build Tools 36.0.0, NDK 29.0.14206865 и Linux x86_64/WSL для нативных библиотек. Gradle Wrapper загружает Gradle 9.4.1.
+Необходимы JDK 17+, Android SDK Platform 37, Build Tools 36.0.0, NDK 29.0.14206865 и Linux x86_64/WSL для нативных библиотек. Gradle Wrapper загружает Gradle 9.4.1.
 
 ```sh
 ./gradlew assembleNdebug \
@@ -84,7 +84,7 @@ Dashchan_2 основан на исходном коде Dashchan. Отдель�
 
 ## English
 
-Dashchan_2 is an unofficial Dashchan branch for Android 11 and newer. It installs alongside the original Dashchan under the `io.dashchan2` package and bundles Dvach support, experimental read-only 4chan support, and an FFmpeg-based video player.
+Slooop is the user-facing name of the unofficial Dashchan_2 branch for Android 11 and newer. It installs alongside the original Dashchan under the `io.dashchan2` package and bundles Dvach support, experimental read-only 4chan support, and an FFmpeg-based video player.
 
 ### Download
 
@@ -103,24 +103,24 @@ Stable APKs are published only through [GitHub Releases](https://github.com/andr
 ### Highlights
 
 - boards, threads, media gallery, favorites, thread watching, and background reply notifications;
-- built-in Dvach posting, Passcode support, AI filtering, and votes on supported boards;
+- built-in Dvach posting, Passcode support, AI filtering, Passcode-only auto-bump tasks, and votes on supported boards;
 - optional experimental read-only 4chan channel;
 - FFmpeg playback for WebM, MP4, fMP4, MOV, H.264, HEVC, VP8, VP9, and AV1;
-- pitch-preserving speed control, double-tap seeking, volume gestures, and picture-in-picture;
-- gallery filters, clipboard image copying, background media saving, and local HTML/ZIP thread archives;
+- pitch-preserving speed control, double-tap seeking, per-video volume, configurable volume gestures, and picture-in-picture;
+- gallery filters, clipboard image copying, reverse-image search, background media saving, and local HTML/ZIP thread archives;
 - bundled, downloadable, and user-imported themes with automatic day and night switching;
-- Predictive Back, text scaling, bundled fonts, OpenDyslexic, custom TTF/OTF fonts, and configurable app names and icons;
+- settings search, Predictive Back, text scaling, bundled fonts, OpenDyslexic, custom TTF/OTF fonts, and configurable app names and icons;
 - stable and opt-in beta update channels with resumable APK downloads.
 
 ### Limitations
 
 - 4chan posting is not implemented and the service may be unreachable on some networks;
 - Predictive Back and picture-in-picture are opt-in settings;
-- `targetSdk` intentionally remains 30 for legacy compatibility; `minSdk` is also 30.
+- `targetSdk` is 37 for Android 17 compatibility; `minSdk` remains 30.
 
 ### Building
 
-Install JDK 17+, Android SDK Platform 36, Build Tools 36.0.0, NDK 29.0.14206865, and use Linux x86_64 or WSL for native libraries. The Gradle Wrapper downloads Gradle 9.4.1.
+Install JDK 17+, Android SDK Platform 37, Build Tools 36.0.0, NDK 29.0.14206865, and use Linux x86_64 or WSL for native libraries. The Gradle Wrapper downloads Gradle 9.4.1.
 
 ```sh
 ./gradlew assembleNdebug \

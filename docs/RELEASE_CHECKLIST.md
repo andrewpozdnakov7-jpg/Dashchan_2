@@ -24,7 +24,7 @@
 ## GitHub Release
 
 - [ ] Agree on Russian and English release notes.
-- [ ] Create a stable tag in the form `VERSION-CODE`, for example `3.2.5-1085`.
+- [ ] Create a stable tag in the form `VERSION-CODE`, for example `1.2.3-1234`.
 - [ ] Upload only the signed all-ABI APK.
 - [ ] Do not upload unsigned APKs, diagnostic reports, local properties, or signing material.
 - [ ] Download the published APK and compare its SHA-256 with the local candidate.

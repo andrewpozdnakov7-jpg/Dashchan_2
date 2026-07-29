@@ -20,6 +20,7 @@ Automated tests do not cover the full Dashchan UI, Android firmware differences,
 - captcha and Passcode flows;
 - queued retry after a rate-limit response;
 - likes/dislikes on a board that supports them;
+- auto-bump task creation, countdown, activity reset, pause, and removal without unintended duplicate posts;
 - AI-post hiding and other autohide rules;
 - experimental 4chan read-only channel when the network permits access.
 
@@ -28,8 +29,9 @@ Never use production testing to spam a board. Remove test posts when the service
 ## Media Player
 
 - WebM, regular MP4, fragmented MP4, MOV, H.264, HEVC, VP8, VP9, and AV1 samples;
-- malformed or shifted timestamps and truncated clips;
-- seek bar, double-tap seek, pause/resume, mute, and volume gesture;
+- malformed or shifted timestamps, truncated clips, high-resolution samples, and difficult clips that exercise frame recovery;
+- repeated seek-bar and double-tap seeking while checking the first frame, playback state, and audio/video synchronization;
+- pause/resume, mute, per-video and system-volume modes, gesture sensitivity, its test screen, and optional audio boost;
 - every playback-speed option with and without audio;
 - speed persistence settings;
 - portrait/landscape rotation;
@@ -41,10 +43,11 @@ Do not commit user-provided test media unless redistribution is explicitly permi
 ## UI And Storage
 
 - built-in and downloaded themes, plus duplicate-name JSON imports;
+- settings search with navigation to results in different settings sections;
 - post selection/copying on stock Android and modified ROMs where available;
-- gallery filters and image clipboard copying;
+- gallery filters, image clipboard copying, provider-based reverse-image search, and Android application fallback;
 - background media saves and all file-name conflict policies;
-- HTML thread archive with originals and thumbnails;
+- HTML/ZIP thread archives with originals, thumbnails, imported folders, and titles from Dvach and 4chan archives;
 - Predictive Back with system gesture navigation;
 - text scale from 75% through high accessibility values;
 - launcher name/icon switching and custom shortcut creation;

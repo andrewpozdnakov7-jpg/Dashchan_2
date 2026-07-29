@@ -13,7 +13,7 @@ body:
     attributes:
       label: Dashchan_2 version
       description: Include both version name and code from Settings > About.
-      placeholder: "3.2.5 (1085)"
+      placeholder: "For example: 3.x.x (version code)"
     validations:
       required: true
   - type: input
