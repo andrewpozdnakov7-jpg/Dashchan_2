@@ -89,7 +89,7 @@ public class AboutFragment extends PreferenceFragment implements FragmentHandler
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 						.pushFragment(new UpdateFragment()));
 		addButton(getString(R.string.project_author), PROJECT_AUTHOR)
-				.setOnClickListener(p -> NavigationUtils.handleUriInternal(requireContext(), null,
+				.setOnClickListener(p -> NavigationUtils.openSystemBrowser(requireContext(),
 						Uri.parse("https:" + BuildConfig.GITHUB_URI_METADATA)));
 		addButton(R.string.based_on_dashchan, R.string.based_on_dashchan__summary).setSelectable(false);
 		Preference<Void> emailPreference = addButton(getString(R.string.contact_email),

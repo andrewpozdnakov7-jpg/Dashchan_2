@@ -42,6 +42,26 @@ import java.util.List;
 public class NavigationUtils {
 	public enum BrowserType {AUTO, INTERNAL, EXTERNAL}
 
+	public static void openSystemBrowser(Context context, Uri uri) {
+		Intent intent = Intent.makeMainSelectorActivity(Intent.ACTION_MAIN, Intent.CATEGORY_APP_BROWSER)
+				.setData(uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+		try {
+			context.startActivity(intent);
+		} catch (ActivityNotFoundException e) {
+			// Some Android variants do not expose CATEGORY_APP_BROWSER. Fall back to a regular external URI.
+			try {
+				context.startActivity(new Intent(Intent.ACTION_VIEW, uri).addCategory(Intent.CATEGORY_BROWSABLE)
+						.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+			} catch (ActivityNotFoundException exception) {
+				ClickableToast.show(R.string.unknown_address);
+			} catch (Exception exception) {
+				ClickableToast.show(exception.getMessage());
+			}
+		} catch (Exception e) {
+			ClickableToast.show(e.getMessage());
+		}
+	}
+
 	public static void handleUri(Context context, String chanName, Uri uri, BrowserType browserType) {
 		if (chanName != null) {
 			uri = Chan.get(chanName).locator.convert(uri);
