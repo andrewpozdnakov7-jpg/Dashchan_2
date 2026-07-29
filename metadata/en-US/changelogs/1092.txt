@@ -1,0 +1,12 @@
+Added an experimental attachment image editor with crop, rotate, flip, marker, eraser, undo and redo tools, plus movable and resizable emoji stickers.
+Reworked picture-in-picture mode: it is enabled by default, with fixes for crashes and returning to the video and thread.
+Added a screen-off playback setting to pause the video or keep it playing.
+Enabled hardware video decoding by default, with automatic fallback to the software decoder when needed.
+Improved native video-player library loading compatibility with newer Android versions.
+Simplified reverse-image search to Google Lens and sharing the file with an installed Android application.
+Fixed titles of saved threads and imported 4chan archives.
+Optimized Favorites and drawer opening with a large number of saved threads.
+Fixed duplicate pop-up messages when tapping a post author.
+Removed the unnecessary permission request for displaying over other applications.
+Updated the application to targetSdk 37 and prepared it for Android 17.
+Updated the project description, build instructions, and testing checklist.
