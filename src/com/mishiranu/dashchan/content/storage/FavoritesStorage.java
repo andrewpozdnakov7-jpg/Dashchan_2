@@ -258,9 +258,9 @@ public class FavoritesStorage extends StorageManager.Storage<List<FavoritesStora
 					stateChanged = true;
 				}
 				if (fromUser) {
-					boolean mofidiedTitle = !empty;
-					stateChanged = favoriteItem.modifiedTitle != mofidiedTitle;
-					favoriteItem.modifiedTitle = mofidiedTitle;
+					boolean modifiedTitle = !empty;
+					stateChanged |= favoriteItem.modifiedTitle != modifiedTitle;
+					favoriteItem.modifiedTitle = modifiedTitle;
 				}
 				if (stateChanged) {
 					if (titleChanged) {
@@ -344,11 +344,8 @@ public class FavoritesStorage extends StorageManager.Storage<List<FavoritesStora
 	}
 
 	private final Comparator<FavoriteItem> chanNameIndexAscendingComparator = (lhs, rhs) -> {
-		int result = compareChanNames(lhs, rhs);
-		if (result != 0) {
-			return result;
-		}
-		return favoriteItemsList.indexOf(lhs) - favoriteItemsList.indexOf(rhs);
+		// Collections.sort is stable, so equal chan names keep the order from favoriteItemsList.
+		return compareChanNames(lhs, rhs);
 	};
 
 	private final Comparator<FavoriteItem> identifiersComparator = (lhs, rhs) -> {
@@ -364,7 +361,8 @@ public class FavoritesStorage extends StorageManager.Storage<List<FavoritesStora
 		if (result != 0) {
 			return result;
 		}
-		return favoriteItemsList.indexOf(lhs) - favoriteItemsList.indexOf(rhs);
+		// Identical identifiers cannot occur in the map. Keep the source order defensively.
+		return 0;
 	};
 
 	private final Comparator<FavoriteItem> titlesComparator = (lhs, rhs) -> {

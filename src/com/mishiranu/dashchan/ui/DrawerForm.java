@@ -166,6 +166,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		recyclerView.setId(R.id.drawer_recycler_view);
 		recyclerView.setMotionEventSplittingEnabled(false);
 		recyclerView.setClipToPadding(false);
+		recyclerView.setHasFixedSize(true);
 		recyclerView.setEdgeEffectShift(this);
 		// Drawer overscroll is not a refresh affordance, keep it from flashing accent under system bars.
 		recyclerView.getEdgeEffectHandler().setColor(theme.card);
@@ -914,15 +915,59 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		public final String threadNumber;
 		public final String title;
 
-		private static long nextItemId = 0;
+		private static final long ID_HASH_OFFSET = 0xcbf29ce484222325L;
+		private static final long ID_HASH_PRIME = 0x100000001b3L;
 
-		private static long getNextItemId() {
-			return nextItemId++;
+		private static long appendIdHash(long hash, int value) {
+			for (int i = 0; i < Integer.BYTES; i++) {
+				hash = (hash ^ value & 0xffL) * ID_HASH_PRIME;
+				value >>>= 8;
+			}
+			return hash;
+		}
+
+		private static long appendIdHash(long hash, String value) {
+			if (value != null) {
+				for (int i = 0; i < value.length(); i++) {
+					hash = (hash ^ value.charAt(i)) * ID_HASH_PRIME;
+				}
+			}
+			return (hash ^ 0xffL) * ID_HASH_PRIME;
+		}
+
+		private static long calculateId(Type type, int data,
+				String chanName, String boardName, String threadNumber, String title) {
+			long hash = appendIdHash(ID_HASH_OFFSET, type.ordinal());
+			switch (type) {
+				case PAGE:
+				case FAVORITE: {
+					hash = appendIdHash(hash, chanName);
+					hash = appendIdHash(hash, boardName);
+					return appendIdHash(hash, threadNumber);
+				}
+				case CHAN: {
+					return appendIdHash(hash, chanName);
+				}
+				case SECTION: {
+					hash = appendIdHash(hash, data);
+					return appendIdHash(hash, title);
+				}
+				case MENU: {
+					return appendIdHash(hash, data);
+				}
+				case HEADER:
+				case RESTART: {
+					return hash;
+				}
+				default: {
+					throw new IllegalStateException();
+				}
+			}
 		}
 
 		private ListItem(Type type, int data, boolean iconChan, int iconResId,
 				String chanName, String boardName, String threadNumber, String title) {
-			id = getNextItemId();
+			id = calculateId(type, data, chanName, boardName, threadNumber, title);
 			this.type = type;
 			this.data = data;
 			this.iconChan = iconChan;
