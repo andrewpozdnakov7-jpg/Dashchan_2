@@ -35,6 +35,12 @@ public class WatcherView extends FrameLayout {
 
 	private String text = "";
 	private boolean hasNew = false;
+	private WatcherService.Counter.State state;
+	private boolean running;
+	private boolean deleted;
+	private boolean error;
+	private int newCount;
+	private boolean progressAnimationEnabled = true;
 	private int color;
 
 	public WatcherView(Context context, ColorSet colorSet) {
@@ -67,8 +73,16 @@ public class WatcherView extends FrameLayout {
 		canvas.clipRect(rectF);
 		super.draw(canvas);
 
-		if (progressBar.getVisibility() != View.VISIBLE) {
+		if (running && !progressAnimationEnabled) {
 			paint.setColor(Color.WHITE);
+			paint.setAlpha(0xff);
+			if (!hasNew) {
+				paint.setAlpha(0x99);
+			}
+			canvas.drawCircle(getWidth() / 2f, getHeight() / 2f, (int) (3f * density), paint);
+		} else if (progressBar.getVisibility() != View.VISIBLE) {
+			paint.setColor(Color.WHITE);
+			paint.setAlpha(0xff);
 			if (!hasNew) {
 				paint.setAlpha(0x99);
 			}
@@ -84,8 +98,25 @@ public class WatcherView extends FrameLayout {
 		canvas.restore();
 	}
 
+	public void setProgressAnimationEnabled(boolean enabled) {
+		if (progressAnimationEnabled != enabled) {
+			progressAnimationEnabled = enabled;
+			progressBar.setVisibility(running && enabled ? View.VISIBLE : View.GONE);
+			invalidate();
+		}
+	}
+
 	public void update(WatcherService.Counter counter) {
-		progressBar.setVisibility(counter.running ? View.VISIBLE : View.GONE);
+		if (state == counter.state && running == counter.running && newCount == counter.newCount &&
+				deleted == counter.deleted && error == counter.error) {
+			return;
+		}
+		state = counter.state;
+		running = counter.running;
+		newCount = counter.newCount;
+		deleted = counter.deleted;
+		error = counter.error;
+		progressBar.setVisibility(running && progressAnimationEnabled ? View.VISIBLE : View.GONE);
 		switch (counter.state) {
 			case ENABLED: {
 				color = colorSet.enabledColor;

@@ -63,6 +63,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -93,6 +94,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	private final ArrayList<ListItem> pages = new ArrayList<>();
 	private final ArrayList<ListItem> favorites = new ArrayList<>();
 	private final ArrayList<ListItem> menu = new ArrayList<>();
+	private final HashMap<WatcherUpdateKey, WatcherService.Counter> pendingWatcherUpdates = new HashMap<>();
 
 	private boolean mergeChans = false;
 	private boolean showHistory = false;
@@ -101,6 +103,9 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	private boolean showRestartButton = false;
 	private CategoriesOrder categoriesOrder;
 	private String chanName;
+	private int drawerState = DrawerLayout.STATE_IDLE;
+	private boolean drawerOpened;
+	private boolean drawerAlwaysVisible;
 
 	public static final int RESULT_REMOVE_ERROR_MESSAGE = 0x00000001;
 	public static final int RESULT_SUCCESS = 0x00000002;
@@ -550,16 +555,56 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	public void onDrawerSlide(@NonNull View drawerView, float slideOffset) {}
 
 	@Override
-	public void onDrawerOpened(@NonNull View drawerView) {}
+	public void onDrawerOpened(@NonNull View drawerView) {
+		drawerOpened = true;
+		applyDrawerWatcherState();
+	}
 
 	@Override
 	public void onDrawerClosed(@NonNull View drawerView) {
+		drawerOpened = false;
+		setWatcherProgressAnimationsEnabled(false);
 		hideKeyboard();
 		setChanSelectMode(false);
 	}
 
 	@Override
-	public void onDrawerStateChanged(int newState) { }
+	public void onDrawerStateChanged(int newState) {
+		drawerState = newState;
+		applyDrawerWatcherState();
+	}
+
+	public void setDrawerAlwaysVisible(boolean alwaysVisible) {
+		if (drawerAlwaysVisible != alwaysVisible) {
+			drawerAlwaysVisible = alwaysVisible;
+			applyDrawerWatcherState();
+		}
+	}
+
+	private boolean canApplyWatcherUpdates() {
+		return drawerState == DrawerLayout.STATE_IDLE && (drawerOpened || drawerAlwaysVisible);
+	}
+
+	private void applyDrawerWatcherState() {
+		boolean active = canApplyWatcherUpdates();
+		if (active) {
+			flushPendingWatcherUpdates();
+		}
+		setWatcherProgressAnimationsEnabled(active);
+	}
+
+	private void setWatcherProgressAnimationsEnabled(boolean enabled) {
+		int childCount = recyclerView.getChildCount();
+		for (int i = 0; i < childCount; i++) {
+			RecyclerView.ViewHolder holder = recyclerView.getChildViewHolder(recyclerView.getChildAt(i));
+			if (holder instanceof ViewHolder) {
+				WatcherView watcher = ((ViewHolder) holder).watcher;
+				if (watcher != null) {
+					watcher.setProgressAnimationEnabled(enabled);
+				}
+			}
+		}
+	}
 
 	private void clearTextAndHideKeyboard() {
 		searchEdit.setText(null);
@@ -1441,6 +1486,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 						listItem.boardName, listItem.threadNumber, listItem.title));
 				if (listItem.type == ListItem.Type.FAVORITE && listItem.isThreadItem() &&
 						watcherSupportSet.contains(listItem.chanName)) {
+					holder.watcher.setProgressAnimationEnabled(canApplyWatcherUpdates());
 					holder.watcher.update(getCounter(listItem));
 				}
 				break;
@@ -1609,26 +1655,74 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		}
 	};
 
-	public void onWatcherUpdate(String chanName, String boardName, String threadNumber,
-			WatcherService.Counter counter) {
+	private static class WatcherUpdateKey {
+		public final String chanName;
+		public final String boardName;
+		public final String threadNumber;
+
+		public WatcherUpdateKey(String chanName, String boardName, String threadNumber) {
+			this.chanName = chanName;
+			this.boardName = boardName;
+			this.threadNumber = threadNumber;
+		}
+
+		@Override
+		public boolean equals(Object o) {
+			if (o == this) {
+				return true;
+			}
+			if (o instanceof WatcherUpdateKey) {
+				WatcherUpdateKey key = (WatcherUpdateKey) o;
+				return CommonUtils.equals(chanName, key.chanName) && CommonUtils.equals(boardName, key.boardName) &&
+						CommonUtils.equals(threadNumber, key.threadNumber);
+			}
+			return false;
+		}
+
+		@Override
+		public int hashCode() {
+			int result = chanName != null ? chanName.hashCode() : 0;
+			result = 31 * result + (boardName != null ? boardName.hashCode() : 0);
+			return 31 * result + (threadNumber != null ? threadNumber.hashCode() : 0);
+		}
+	}
+
+	private boolean applyWatcherUpdate(WatcherUpdateKey key, WatcherService.Counter counter) {
 		if (counter.deleted && Preferences.isFavoritesHidedDeleted()) {
-			if (removeFavoriteThreadFromList(chanName, boardName, threadNumber)) {
+			return removeFavoriteThreadFromList(key.chanName, key.boardName, key.threadNumber);
+		}
+		if (!Preferences.isFavoritesHidedAll() && (mergeChans || key.chanName.equals(chanName))) {
+			long id = ListItem.calculateId(ListItem.Type.FAVORITE, 0,
+					key.chanName, key.boardName, key.threadNumber, null);
+			RecyclerView.ViewHolder holder = recyclerView.findViewHolderForItemId(id);
+			if (holder instanceof ViewHolder && ((ViewHolder) holder).watcher != null) {
+				((ViewHolder) holder).watcher.update(counter);
+			}
+		}
+		return false;
+	}
+
+	private void flushPendingWatcherUpdates() {
+		if (!pendingWatcherUpdates.isEmpty()) {
+			boolean itemsRemoved = false;
+			for (Map.Entry<WatcherUpdateKey, WatcherService.Counter> entry
+					: pendingWatcherUpdates.entrySet()) {
+				itemsRemoved |= applyWatcherUpdate(entry.getKey(), entry.getValue());
+			}
+			pendingWatcherUpdates.clear();
+			if (itemsRemoved) {
 				notifyDataSetChanged();
 			}
-		} else if (!Preferences.isFavoritesHidedAll() && (mergeChans || chanName.equals(this.chanName))) {
-			int childCount = recyclerView.getChildCount();
-			for (int i = 0; i < childCount; i++) {
-				ViewHolder holder = (ViewHolder) recyclerView.getChildViewHolder(recyclerView.getChildAt(i));
-				int position = holder.getAdapterPosition();
-				if (position >= 0) {
-					ListItem listItem = getItem(position);
-					if (listItem.type == ListItem.Type.FAVORITE &&
-							listItem.compare(chanName, boardName, threadNumber)) {
-						holder.watcher.update(counter);
-						break;
-					}
-				}
-			}
+		}
+	}
+
+	public void onWatcherUpdate(String chanName, String boardName, String threadNumber,
+			WatcherService.Counter counter) {
+		WatcherUpdateKey key = new WatcherUpdateKey(chanName, boardName, threadNumber);
+		if (!canApplyWatcherUpdates()) {
+			pendingWatcherUpdates.put(key, counter);
+		} else if (applyWatcherUpdate(key, counter)) {
+			notifyDataSetChanged();
 		}
 	}
 

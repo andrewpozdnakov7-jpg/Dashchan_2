@@ -1285,6 +1285,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 			drawerWide.setVisibility(wideMode ? View.VISIBLE : View.GONE);
 			ViewUtils.removeFromParent(drawerParent);
 			(wideMode ? drawerWide : drawerCommon).addView(drawerParent);
+			drawerForm.setDrawerAlwaysVisible(wideMode);
 			invalidateHomeUpState();
 		}
 		float density = ResourceUtils.obtainDensity(this);
