@@ -168,9 +168,9 @@ jobs:
 
           badging="$("$AAPT" dump badging "$signed_apk")"
           package_line="$(sed -n 's/^package: //p' <<< "$badging")"
-          package_name="$(sed -n "s/.*name='\([^']*\)'.*/\1/p" <<< "$package_line")"
-          version_code="$(sed -n "s/.*versionCode='\([^']*\)'.*/\1/p" <<< "$package_line")"
-          version_name="$(sed -n "s/.*versionName='\([^']*\)'.*/\1/p" <<< "$package_line")"
+          package_name="$(sed -n "s/^name='\([^']*\)'.*/\1/p" <<< "$package_line")"
+          version_code="$(sed -n "s/^name='[^']*' versionCode='\([^']*\)'.*/\1/p" <<< "$package_line")"
+          version_name="$(sed -n "s/^name='[^']*' versionCode='[^']*' versionName='\([^']*\)'.*/\1/p" <<< "$package_line")"
           if [ "$package_name" != 'io.dashchan2' ]; then
             echo "::error::Unexpected application ID: $package_name"
             exit 1
