@@ -20,6 +20,7 @@ public class AutohideStorage extends StorageManager.JsonOrgStorage<List<Autohide
 	private static final String KEY_BOARD_NAME = "boardName";
 	private static final String KEY_THREAD_NUMBER = "threadNumber";
 	private static final String KEY_OPTION_ORIGINAL_POST = "optionOriginalPost";
+	private static final String KEY_OPTION_REPLIES = "optionReplies";
 	private static final String KEY_OPTION_SAGE = "optionSage";
 	private static final String KEY_OPTION_SUBJECT = "optionSubject";
 	private static final String KEY_OPTION_COMMENT = "optionComment";
@@ -77,7 +78,18 @@ public class AutohideStorage extends StorageManager.JsonOrgStorage<List<Autohide
 					}
 					String boardName = jsonObject.optString(KEY_BOARD_NAME, null);
 					String threadNumber = jsonObject.optString(KEY_THREAD_NUMBER, null);
-					boolean optionOriginalPost = jsonObject.optBoolean(KEY_OPTION_ORIGINAL_POST);
+					boolean optionOriginalPost;
+					boolean optionReplies;
+					if (jsonObject.has(KEY_OPTION_REPLIES)) {
+						optionOriginalPost = jsonObject.optBoolean(KEY_OPTION_ORIGINAL_POST);
+						optionReplies = jsonObject.optBoolean(KEY_OPTION_REPLIES);
+					} else {
+						// Legacy rules stored whether they were restricted to the original post.
+						// Convert that condition to explicit, independently switchable scopes.
+						boolean onlyOriginalPost = jsonObject.optBoolean(KEY_OPTION_ORIGINAL_POST);
+						optionOriginalPost = true;
+						optionReplies = !onlyOriginalPost;
+					}
 					boolean optionSage = jsonObject.optBoolean(KEY_OPTION_SAGE);
 					boolean optionSubject = jsonObject.optBoolean(KEY_OPTION_SUBJECT);
 					boolean optionComment = jsonObject.optBoolean(KEY_OPTION_COMMENT);
@@ -88,7 +100,8 @@ public class AutohideStorage extends StorageManager.JsonOrgStorage<List<Autohide
 							? AutohideItem.MatchMode.LITERAL : AutohideItem.MatchMode.REGEX;
 					String value = jsonObject.optString(KEY_VALUE, null);
 					autohideItems.add(new AutohideItem(chanNames, boardName, threadNumber, optionOriginalPost,
-							optionSage, optionSubject, optionComment, optionName, optionFileName, matchMode, value));
+							optionReplies, optionSage, optionSubject, optionComment, optionName, optionFileName,
+							matchMode, value));
 				}
 			}
 		}
@@ -109,7 +122,9 @@ public class AutohideStorage extends StorageManager.JsonOrgStorage<List<Autohide
 				}
 				putJson(jsonObject, KEY_BOARD_NAME, autohideItem.boardName);
 				putJson(jsonObject, KEY_THREAD_NUMBER, autohideItem.threadNumber);
-				putJson(jsonObject, KEY_OPTION_ORIGINAL_POST, autohideItem.optionOriginalPost);
+				// Both scope values are written explicitly: false means that the scope is paused.
+				jsonObject.put(KEY_OPTION_ORIGINAL_POST, autohideItem.optionOriginalPost);
+				jsonObject.put(KEY_OPTION_REPLIES, autohideItem.optionReplies);
 				putJson(jsonObject, KEY_OPTION_SAGE, autohideItem.optionSage);
 				putJson(jsonObject, KEY_OPTION_SUBJECT, autohideItem.optionSubject);
 				putJson(jsonObject, KEY_OPTION_COMMENT, autohideItem.optionComment);
@@ -150,6 +165,18 @@ public class AutohideStorage extends StorageManager.JsonOrgStorage<List<Autohide
 		serialize();
 	}
 
+	public void setScope(int index, AutohideItem.Scope scope, boolean enabled) {
+		autohideItems.get(index).setScope(scope, enabled);
+		serialize();
+	}
+
+	public void setScopeForAll(AutohideItem.Scope scope, boolean enabled) {
+		for (AutohideItem autohideItem : autohideItems) {
+			autohideItem.setScope(scope, enabled);
+		}
+		serialize();
+	}
+
 	public void delete(int index) {
 		autohideItems.remove(index);
 		serialize();
@@ -162,6 +189,7 @@ public class AutohideStorage extends StorageManager.JsonOrgStorage<List<Autohide
 		public String threadNumber;
 
 		public boolean optionOriginalPost;
+		public boolean optionReplies;
 		public boolean optionSage;
 
 		public boolean optionSubject;
@@ -180,15 +208,15 @@ public class AutohideStorage extends StorageManager.JsonOrgStorage<List<Autohide
 		@SuppressWarnings("CopyConstructorMissesField")
 		public AutohideItem(AutohideItem autohideItem) {
 			this(autohideItem.chanNames, autohideItem.boardName, autohideItem.threadNumber,
-					autohideItem.optionOriginalPost, autohideItem.optionSage, autohideItem.optionSubject,
-					autohideItem.optionComment, autohideItem.optionName, autohideItem.optionFileName,
-					autohideItem.matchMode, autohideItem.value);
+					autohideItem.optionOriginalPost, autohideItem.optionReplies, autohideItem.optionSage,
+					autohideItem.optionSubject, autohideItem.optionComment, autohideItem.optionName,
+					autohideItem.optionFileName, autohideItem.matchMode, autohideItem.value);
 		}
 
 		public AutohideItem(HashSet<String> chanNames, String boardName, String threadNumber,
-				boolean optionOriginalPost, boolean optionSage, boolean optionSubject, boolean optionComment,
-				boolean optionName, boolean optionFileName, MatchMode matchMode, String value) {
-			update(chanNames, boardName, threadNumber, optionOriginalPost, optionSage,
+				boolean optionOriginalPost, boolean optionReplies, boolean optionSage, boolean optionSubject,
+				boolean optionComment, boolean optionName, boolean optionFileName, MatchMode matchMode, String value) {
+			update(chanNames, boardName, threadNumber, optionOriginalPost, optionReplies, optionSage,
 					optionSubject, optionComment, optionName, optionFileName, matchMode, value);
 		}
 
@@ -205,12 +233,13 @@ public class AutohideStorage extends StorageManager.JsonOrgStorage<List<Autohide
 		}
 
 		public void update(HashSet<String> chanNames, String boardName, String threadNumber,
-				boolean optionOriginalPost, boolean optionSage, boolean optionSubject,
+				boolean optionOriginalPost, boolean optionReplies, boolean optionSage, boolean optionSubject,
 				boolean optionComment, boolean optionName, boolean optionFileName, MatchMode matchMode, String value) {
 			this.chanNames = chanNames;
 			this.boardName = boardName;
 			this.threadNumber = threadNumber;
 			this.optionOriginalPost = optionOriginalPost;
+			this.optionReplies = optionReplies;
 			this.optionSage = optionSage;
 			this.optionSubject = optionSubject;
 			this.optionComment = optionComment;
@@ -220,6 +249,26 @@ public class AutohideStorage extends StorageManager.JsonOrgStorage<List<Autohide
 			this.value = StringUtils.emptyIfNull(value);
 			ready = false;
 			pattern = null;
+		}
+
+		public boolean isEnabled() {
+			return optionOriginalPost || optionReplies;
+		}
+
+		public boolean isEnabledFor(boolean originalPost) {
+			return originalPost ? optionOriginalPost : optionReplies;
+		}
+
+		public boolean isScopeEnabled(Scope scope) {
+			return scope == Scope.ORIGINAL_POST ? optionOriginalPost : optionReplies;
+		}
+
+		public void setScope(Scope scope, boolean enabled) {
+			if (scope == Scope.ORIGINAL_POST) {
+				optionOriginalPost = enabled;
+			} else {
+				optionReplies = enabled;
+			}
 		}
 
 		public String find(String data) {
@@ -285,6 +334,7 @@ public class AutohideStorage extends StorageManager.JsonOrgStorage<List<Autohide
 			dest.writeString(boardName);
 			dest.writeString(threadNumber);
 			dest.writeByte((byte) (optionOriginalPost ? 1 : 0));
+			dest.writeByte((byte) (optionReplies ? 1 : 0));
 			dest.writeByte((byte) (optionSage ? 1 : 0));
 			dest.writeByte((byte) (optionSubject ? 1 : 0));
 			dest.writeByte((byte) (optionComment ? 1 : 0));
@@ -306,6 +356,7 @@ public class AutohideStorage extends StorageManager.JsonOrgStorage<List<Autohide
 				autohideItem.boardName = source.readString();
 				autohideItem.threadNumber = source.readString();
 				autohideItem.optionOriginalPost = source.readByte() != 0;
+				autohideItem.optionReplies = source.readByte() != 0;
 				autohideItem.optionSage = source.readByte() != 0;
 				autohideItem.optionSubject = source.readByte() != 0;
 				autohideItem.optionComment = source.readByte() != 0;
@@ -323,5 +374,7 @@ public class AutohideStorage extends StorageManager.JsonOrgStorage<List<Autohide
 		};
 
 		public enum MatchMode {REGEX, LITERAL}
+
+		public enum Scope {ORIGINAL_POST, REPLIES}
 	}
 }

@@ -69,7 +69,14 @@
 				android:id="@+id/autohide_original_post"
 				android:layout_width="wrap_content"
 				android:layout_height="wrap_content"
-				android:text="@string/only_original_posts"
+				android:text="@string/hide_in_original_post"
+				android:textAppearance="?android:attr/textAppearanceSmall" />
+
+			<CheckBox
+				android:id="@+id/autohide_replies"
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:text="@string/hide_in_replies"
 				android:textAppearance="?android:attr/textAppearanceSmall" />
 
 			<CheckBox

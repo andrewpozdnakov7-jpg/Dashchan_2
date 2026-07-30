@@ -25,6 +25,7 @@
 	<string name="all_attachments__summary">Display thumbnails for all attachments</string>
 	<string name="all_forums">All forums</string>
 	<string name="all_posts">All posts</string>
+	<string name="all_rules">All rules</string>
 	<string name="all_threads">All threads</string>
 	<string name="allow_this_extension__sentence">Allow this extension to manage application?</string>
 	<string name="always">Always</string>
@@ -40,6 +41,8 @@
 	<string name="audio_playback">Audio playback</string>
 	<string name="audio_player">Audio player</string>
 	<string name="autohide">Autohide</string>
+	<string name="autohide_scope">Hide in</string>
+	<string name="automatic_update_check">Automatic update checks</string>
 	<string name="available__plural">Available</string>
 	<string name="backup_data">Backup data</string>
 	<string name="backup_data__summary">Save all your settings, favorites, history, and autohide rules</string>
@@ -312,6 +315,8 @@
 	<string name="hidden_posts">Hidden posts</string>
 	<string name="hide">Hide</string>
 	<string name="hide_eventually__imperfective">Hide eventually</string>
+	<string name="hide_in_original_post">Hide in original post</string>
+	<string name="hide_in_replies">Hide in replies</string>
 	<string name="hide_ai_posts">Hide AI-generated posts</string>
 	<string name="hide_threads_with_swipe">Hide threads with swipe</string>
 	<string name="hide_on_tap__imperfective">Hide on tap</string>
@@ -454,9 +459,11 @@
 	<string name="orientation">Orientation</string>
 	<string name="original_file_name">Original file name</string>
 	<string name="original_file_name__summary">Download files with original file name if it\'s possible</string>
+	<string name="original_post_short">OP</string>
 	<string name="original_poster">Original poster</string>
 	<string name="paged_board_navigation">Paged board navigation</string>
 	<string name="paged_board_navigation__summary">Don\'t use long list</string>
+	<string name="partially_enabled">Partially enabled</string>
 	<string name="pages">Pages</string>
 	<string name="pages_count">Pages count</string>
 	<string name="pages_first">Pages first</string>
@@ -640,6 +647,9 @@
 	<string name="delete_local_archive_confirmation__format">Delete “%1$s” together with its saved media and thumbnails?</string>
 	<string name="local_archive_deleted">Local archive deleted</string>
 	<string name="local_archive_delete_failed">Could not delete the archive. For an added folder, add it again and allow file changes.</string>
+	<string name="local_archive_updated__format">Local archive updated: %1$d → %2$d posts</string>
+	<string name="local_archive_replace_failed">The updated archive was saved, but the previous copy could not be removed</string>
+	<string name="save_or_update_thread">Save or update thread</string>
 	<string name="save_to_directory__format">Save to \"%s\"</string>
 	<string name="save_to_subdirectory">Save to subdirectory</string>
 	<string name="scale">Scale</string>

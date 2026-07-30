@@ -1328,7 +1328,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	protected void onStart() {
 		super.onStart();
 
-		if (!instanceViewModel.updateCheckStarted) {
+		if (!instanceViewModel.updateCheckStarted && Preferences.isUpdateAutoCheckEnabled()) {
 			instanceViewModel.updateCheckStarted = true;
 			UpdateDialogHelper.checkAutomatically(this);
 		}

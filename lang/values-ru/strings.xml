@@ -27,6 +27,7 @@
 	<string name="all_attachments__summary">Показывать миниатюры всех вложений</string>
 	<string name="all_forums">Все форумы</string>
 	<string name="all_posts">Все сообщения</string>
+	<string name="all_rules">Все правила</string>
 	<string name="all_threads">Все треды</string>
 	<string name="allow_this_extension__sentence">Разрешить этому расширению управление приложением?</string>
 	<string name="always">Всегда</string>
@@ -42,6 +43,8 @@
 	<string name="audio_playback">Воспроизведение аудио</string>
 	<string name="audio_player">Аудиоплеер</string>
 	<string name="autohide">Автоскрытие</string>
+	<string name="autohide_scope">Область скрытия</string>
+	<string name="automatic_update_check">Автоматическая проверка обновлений</string>
 	<string name="available__plural">Доступные</string>
 	<string name="backup_data">Резервное копирование данных</string>
 	<string name="backup_data__summary">Сохранение всех настроек, избранного, истории и правил автоскрытия</string>
@@ -316,6 +319,8 @@
 	<string name="hidden_posts">Скрытые сообщения</string>
 	<string name="hide">Скрыть</string>
 	<string name="hide_eventually__imperfective">Скрывать со временем</string>
+	<string name="hide_in_original_post">Скрывать в ОП</string>
+	<string name="hide_in_replies">Скрывать в ответах</string>
 	<string name="hide_on_tap__imperfective">Скрывать при нажатии</string>
 	<string name="hide_pages">Скрывать страницы</string>
 	<string name="hide_personal_data_block">Скрыть блок личных данных</string>
@@ -474,9 +479,11 @@
 	<string name="orientation">Ориентация</string>
 	<string name="original_file_name">Исходное имя файла</string>
 	<string name="original_file_name__summary">Загружать файлы с исходным названием, если возможно</string>
+	<string name="original_post_short">ОП</string>
 	<string name="original_poster">Создатель треда</string>
 	<string name="paged_board_navigation">Постраничное перелистывание раздела</string>
 	<string name="paged_board_navigation__summary">Не использовать длинный список тредов</string>
+	<string name="partially_enabled">Включено частично</string>
 	<string name="pages">Страницы</string>
 	<string name="pages_count">Количество страниц</string>
 	<string name="pages_first">Сначала страницы</string>
@@ -659,6 +666,9 @@
 	<string name="delete_local_archive_confirmation__format">Удалить «%1$s» вместе с сохранёнными медиафайлами и миниатюрами?</string>
 	<string name="local_archive_deleted">Локальный архив удалён</string>
 	<string name="local_archive_delete_failed">Не удалось удалить архив. Для добавленной папки подключите её заново и разрешите изменение файлов.</string>
+	<string name="local_archive_updated__format">Локальный архив обновлён: %1$d → %2$d постов</string>
+	<string name="local_archive_replace_failed">Обновлённый архив сохранён, но предыдущую копию удалить не удалось</string>
+	<string name="save_or_update_thread">Сохранить или обновить тред</string>
 	<string name="save_to_directory__format">Сохранить в \"%s\"</string>
 	<string name="save_to_subdirectory">Сохранить в подкаталоге</string>
 	<string name="scale">Масштаб</string>
