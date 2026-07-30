@@ -47,6 +47,7 @@ copy_provided_source() {
 			exit 1
 			;;
 	esac
+	echo "Using provided $name source: $source_real"
 	rm -rf "$target"
 	mkdir -p "$target"
 	tar -C "$source_real" --exclude='./.git' --exclude='./.git/*' -cf - . | tar -C "$target" -xf -

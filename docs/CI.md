@@ -1,6 +1,6 @@
 # Checks And Automation
 
-`Android CI` automatically builds the `github` arm64 variant for pull requests and `master`. A manual run can select either the `github` or `fdroid` distribution and arm64 or all supported ABIs. These APKs are unsigned test artifacts and are never published as releases.
+`Android CI` automatically builds the `github` arm64 variant for pull requests and `master`. A manual run can select either the `github` or `fdroid` distribution and arm64 or all supported ABIs. For `fdroid`, CI acquires the pinned native sources before Gradle and passes them through the pre-provided source interface, exercising the same network-free Gradle path expected by fdroiddata. These APKs are unsigned test artifacts and are never published as releases.
 
 The protected `Android Signed Candidate` workflow builds and signs only the `github` all-ABI variant from `master`. It uploads a temporary candidate artifact after package, version, ABI, alignment, certificate, and checksum validation. It does not create tags, GitHub Releases, or update public metadata.
 

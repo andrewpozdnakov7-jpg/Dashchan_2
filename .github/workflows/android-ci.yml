@@ -79,6 +79,22 @@ jobs:
             'build-tools;36.0.0' \
             'ndk;29.0.14206865'
 
+      - name: Prepare F-Droid native source inputs
+        if: env.BUILD_TASK == 'assembleFdroidNdebug'
+        env:
+          DAV1D_VERSION: '1.5.3'
+          FFMPEG_VERSION: '8.1.2'
+          YUV_VERSION: '6afd9becdf58822b1da6770598d8597c583ccfad'
+        run: |
+          set -euo pipefail
+          source_root="$RUNNER_TEMP/fdroid-native-sources"
+          bash Dashchan-Webm/shared-prepare.sh "$source_root"
+          {
+            echo "DASHCHAN_DAV1D_SOURCE_DIR=$source_root/dav1d"
+            echo "DASHCHAN_FFMPEG_SOURCE_DIR=$source_root/ffmpeg"
+            echo "DASHCHAN_LIBYUV_SOURCE_DIR=$source_root/yuv"
+          } >> "$GITHUB_ENV"
+
       - name: Build APK
         run: |
           set -o pipefail
