@@ -1,6 +1,8 @@
 # Checks And Automation
 
-The repository currently does not publish APKs through GitHub Actions. Release APKs are built on a controlled Linux/WSL machine, tested on a device, audited, and uploaded manually.
+`Android CI` automatically builds the `github` arm64 variant for pull requests and `master`. A manual run can select either the `github` or `fdroid` distribution and arm64 or all supported ABIs. For `fdroid`, CI acquires the pinned native sources before Gradle and passes them through the pre-provided source interface, exercising the same network-free Gradle path expected by fdroiddata. These APKs are unsigned test artifacts and are never published as releases.
+
+The protected `Android Signed Candidate` workflow builds and signs only the `github` all-ABI variant from `master`. It uploads a temporary candidate artifact after package, version, ABI, alignment, certificate, and checksum validation. It does not create tags, GitHub Releases, or update public metadata.
 
 ## Required Local Checks
 
@@ -8,8 +10,8 @@ Run from the repository root:
 
 ```sh
 ./gradlew test
-./gradlew lintNdebug
-./gradlew assembleNdebug \
+./gradlew lintGithubNdebug
+./gradlew assembleGithubNdebug \
   -PnativePlayerFfmpegFlavor=ffmpeg8 \
   -PnativeAbis=arm64-v8a,armeabi-v7a,x86
 ```
@@ -23,6 +25,6 @@ Also verify:
 - certificate, package name, version, permissions, and SHA-256 are expected;
 - no local paths, usernames, IP addresses, credentials, or private keys appear in release artifacts.
 
-## Future GitHub Actions
+## Release Boundary
 
-A future workflow may run Java tests, JSON validation, documentation-link checks, and non-native lint. Official signing should remain outside public CI unless a carefully reviewed secret-management process is introduced. Pull requests must not require access to release secrets.
+Pull requests never receive release secrets. A successful CI or signed-candidate run does not authorize publication; the explicit release modes and checks in `CODEX.md` still apply.

@@ -10,7 +10,6 @@ import chan.content.Chan;
 import chan.util.CommonUtils;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.content.AdvancedPreferences;
-import com.mishiranu.dashchan.content.MainApplication;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.model.ErrorItem;
 import com.mishiranu.dashchan.util.IOUtils;
@@ -27,7 +26,6 @@ import java.io.InterruptedIOException;
 import java.io.OutputStream;
 import java.io.SequenceInputStream;
 import java.io.UnsupportedEncodingException;
-import java.lang.reflect.Method;
 import java.net.CookieHandler;
 import java.net.CookieManager;
 import java.net.HttpURLConnection;
@@ -91,19 +89,7 @@ public class HttpClient {
 		SHORT_RESPONSE_MESSAGES.put("Internal Server Error", "Internal Error");
 		SHORT_RESPONSE_MESSAGES.put("Service Temporarily Unavailable", "Service Unavailable");
 
-		if (Preferences.isUseGmsProvider()) {
-			try {
-				// Load GmsCore_OpenSSL from Google Play Services package
-				Context context = MainApplication.getInstance().createPackageContext("com.google.android.gms",
-						Context.CONTEXT_IGNORE_SECURITY | Context.CONTEXT_INCLUDE_CODE);
-				Class<?> providerInstallerImplClass = Class.forName("com.google.android.gms.common.security"
-						+ ".ProviderInstallerImpl", false, context.getClassLoader());
-				Method insertProviderMethod = providerInstallerImplClass.getMethod("insertProvider", Context.class);
-				insertProviderMethod.invoke(null, context);
-			} catch (Exception e) {
-				// Reflective operation, ignore exception
-			}
-		}
+		SecurityProviderInstaller.installIfEnabled();
 
 		/*
 		 * MediaPlayer uses MediaHTTPConnection that uses its own CookieHandler instance.

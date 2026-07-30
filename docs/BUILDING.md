@@ -20,7 +20,7 @@ Set `ANDROID_HOME` or `ANDROID_SDK_ROOT`, or create an untracked `local.properti
 Use the checked-in Gradle Wrapper:
 
 ```sh
-./gradlew assembleNdebug \
+./gradlew assembleGithubNdebug \
   -PnativePlayerFfmpegFlavor=ffmpeg8 \
   -PnativeAbis=arm64-v8a,armeabi-v7a,x86
 ```
@@ -30,18 +30,28 @@ The first run executes `prepareBuiltinWebmSources` and `buildBuiltinWebmLibrarie
 To build only one ABI for a quick device test:
 
 ```sh
-./gradlew assembleNdebug \
+./gradlew assembleGithubNdebug \
   -PnativePlayerFfmpegFlavor=ffmpeg8 \
   -PnativeAbis=arm64-v8a
 ```
 
 APK outputs are written under `build/outputs/apk`. Native intermediates are kept under `Dashchan-Webm/build` and `.cxx` and can be reused by later builds.
 
+The F-Droid distribution uses the same application ID and source tree but removes application self-update endpoints and the optional GMS security-provider path:
+
+```sh
+./gradlew assembleFdroidNdebug \
+  -PnativePlayerFfmpegFlavor=ffmpeg8 \
+  -PnativeAbis=arm64-v8a,armeabi-v7a,x86
+```
+
+See [FDROID.md](FDROID.md) for the pre-provided native-source variables required by a network-free F-Droid recipe.
+
 ## Unit Tests And Static Checks
 
 ```sh
 ./gradlew test
-./gradlew lintNdebug
+./gradlew lintGithubNdebug
 ```
 
 The unit-test set is intentionally small; a release still requires the manual checks in [TESTING.md](TESTING.md).
@@ -50,7 +60,7 @@ The unit-test set is intentionally small; a release still requires the manual ch
 
 ```sh
 ./gradlew clean
-./gradlew assembleNdebug \
+./gradlew assembleGithubNdebug \
   --no-configuration-cache \
   -PnativePlayerFfmpegFlavor=ffmpeg8 \
   -PnativeAbis=arm64-v8a,armeabi-v7a,x86

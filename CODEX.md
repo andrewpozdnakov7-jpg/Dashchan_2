@@ -139,7 +139,7 @@ FAST LOCAL TEST
 Allowed command:
 
 ```sh
-./gradlew assembleNdebug -PnativePlayerFfmpegFlavor=ffmpeg8 -PnativeAbis=arm64-v8a
+./gradlew assembleGithubNdebug -PnativePlayerFfmpegFlavor=ffmpeg8 -PnativeAbis=arm64-v8a
 ```
 
 This mode produces a local test APK only. It must not publish anything.

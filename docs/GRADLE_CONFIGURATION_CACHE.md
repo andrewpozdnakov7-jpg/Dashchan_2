@@ -8,7 +8,7 @@ Run normal tasks without extra flags. Gradle will report whether the configurati
 
 ```sh
 ./gradlew test
-./gradlew assembleNdebug -PnativePlayerFfmpegFlavor=ffmpeg8 -PnativeAbis=arm64-v8a
+./gradlew assembleGithubNdebug -PnativePlayerFfmpegFlavor=ffmpeg8 -PnativeAbis=arm64-v8a
 ```
 
 ## Troubleshooting

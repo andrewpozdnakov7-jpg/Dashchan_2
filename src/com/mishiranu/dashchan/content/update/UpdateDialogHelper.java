@@ -134,7 +134,7 @@ public class UpdateDialogHelper {
 						}
 					}
 				});
-		if (context instanceof FragmentHandler) {
+		if (BuildConfig.ALLOW_APPLICATION_SELF_UPDATE && context instanceof FragmentHandler) {
 			builder.setPositiveButton(R.string.open_updates, (dialog, which) ->
 					((FragmentHandler) context).pushFragment(new UpdateFragment()));
 		}

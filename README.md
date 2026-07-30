@@ -47,16 +47,17 @@ Slooop - пользовательское название неофициаль�
 Необходимы JDK 17+, Android SDK Platform 37, Build Tools 36.0.0, NDK 29.0.14206865 и Linux x86_64/WSL для нативных библиотек. Gradle Wrapper загружает Gradle 9.4.1.
 
 ```sh
-./gradlew assembleNdebug \
+./gradlew assembleGithubNdebug \
   -PnativePlayerFfmpegFlavor=ffmpeg8 \
   -PnativeAbis=arm64-v8a,armeabi-v7a,x86
 ```
 
-APK появится в `build/outputs/apk`. Первая сборка скачивает исходники FFmpeg, dav1d и libyuv и может занять заметное время. Репозиторий не содержит приватный ключ публикации и не создаёт официальный подписанный APK автоматически.
+APK появится в `build/outputs/apk`. Первая сборка скачивает исходники FFmpeg, dav1d и libyuv и может занять заметное время. Репозиторий не содержит приватный ключ публикации. Защищённый ручной workflow может создать временный подписанный кандидат, но ничего не публикует автоматически.
 
 Подробные инструкции:
 
 - [Сборка и окружение](docs/BUILDING.md)
+- [Подготовка сборки F-Droid](docs/FDROID.md)
 - [Подписание APK](docs/SIGNING.md)
 - [Обновление NDK 29](docs/NDK_UPGRADE_R29.md)
 - [Проверки и автоматизация](docs/CI.md)
@@ -123,12 +124,12 @@ Stable APKs are published only through [GitHub Releases](https://github.com/andr
 Install JDK 17+, Android SDK Platform 37, Build Tools 36.0.0, NDK 29.0.14206865, and use Linux x86_64 or WSL for native libraries. The Gradle Wrapper downloads Gradle 9.4.1.
 
 ```sh
-./gradlew assembleNdebug \
+./gradlew assembleGithubNdebug \
   -PnativePlayerFfmpegFlavor=ffmpeg8 \
   -PnativeAbis=arm64-v8a,armeabi-v7a,x86
 ```
 
-The APK is written under `build/outputs/apk`. The first build downloads FFmpeg, dav1d, and libyuv sources. The repository does not contain the private release key and does not automatically produce the official signed APK.
+The APK is written under `build/outputs/apk`. The first build downloads FFmpeg, dav1d, and libyuv sources. The repository does not contain the private release key. A protected manual workflow can create a temporary signed candidate, but it never publishes a release automatically.
 
 See [docs/BUILDING.md](docs/BUILDING.md), [docs/TESTING.md](docs/TESTING.md), and [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md) for the complete workflow.
 

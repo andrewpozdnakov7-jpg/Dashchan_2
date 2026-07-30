@@ -4,6 +4,7 @@ import android.app.AlertDialog;
 import android.os.Bundle;
 import android.view.View;
 import androidx.annotation.NonNull;
+import com.mishiranu.dashchan.BuildConfig;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.media.VideoDiagnostics;
@@ -59,8 +60,10 @@ public class ExperimentalFragment extends PreferenceFragment {
 		audioBoostLevelPreference.setEnabled(audioBoostPreference.getValue());
 		audioBoostPreference.setOnAfterChangeListener(p -> refreshPreferences());
 		addHeader(R.string.additional);
-		addCheck(true, Preferences.KEY_USE_GMS_PROVIDER, Preferences.DEFAULT_USE_GMS_PROVIDER,
-				R.string.use_gms_security_provider, R.string.use_gms_security_provider__summary);
+		if (BuildConfig.ALLOW_GMS_SECURITY_PROVIDER) {
+			addCheck(true, Preferences.KEY_USE_GMS_PROVIDER, Preferences.DEFAULT_USE_GMS_PROVIDER,
+					R.string.use_gms_security_provider, R.string.use_gms_security_provider__summary);
+		}
 	}
 
 	private void addVideoDiagnosticsPreferences() {
