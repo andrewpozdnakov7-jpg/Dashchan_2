@@ -50,11 +50,17 @@ jobs:
 
       - name: Install Android SDK components
         run: |
+          ANDROID_SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          SDKMANAGER="$ANDROID_SDK/cmdline-tools/latest/bin/sdkmanager"
+          if [ -z "$ANDROID_SDK" ] || [ ! -x "$SDKMANAGER" ]; then
+            echo "::error::sdkmanager not found at $SDKMANAGER"
+            exit 1
+          fi
           # sdkmanager closes stdin after the last prompt, which makes yes exit on SIGPIPE.
           set +o pipefail
-          yes | sdkmanager --licenses >/dev/null
+          yes | "$SDKMANAGER" --licenses >/dev/null
           set -o pipefail
-          sdkmanager \
+          "$SDKMANAGER" \
             'platform-tools' \
             'platforms;android-37' \
             'build-tools;36.0.0' \
