@@ -5,6 +5,7 @@ Slooop uses `io.dashchan2` as its application ID and is licensed under GPL-3.0-o
 ## Native source policy
 
 The player builds FFmpeg 8.1.2, dav1d 1.5.3, and libyuv commit `6afd9becdf58822b1da6770598d8597c583ccfad` from source. A regular build downloads these pinned sources and verifies the release archives or exact Git commit.
+If the primary FFmpeg release host is temporarily unreachable, source preparation falls back to the official FFmpeg GitHub mirror, resolves tag `n8.1.2`, and requires commit `38b88335f99e76ed89ff3c93f877fdefce736c13` before exporting the tree.
 
 For an F-Droid build, the fdroiddata recipe must acquire the three source trees before Gradle starts and expose them through:
 
