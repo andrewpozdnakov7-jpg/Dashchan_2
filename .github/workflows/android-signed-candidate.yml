@@ -1,0 +1,248 @@
+name: Android Signed Candidate
+
+run-name: Signed candidate from ${{ github.ref_name }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type SIGN CANDIDATE to continue
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-signed-candidate
+  cancel-in-progress: false
+
+jobs:
+  build-and-sign:
+    name: Build and sign all-ABI candidate
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    environment:
+      name: release-signing
+      deployment: false
+    env:
+      NATIVE_ABIS: arm64-v8a,armeabi-v7a,x86
+      EXPECTED_CERT_SHA256: a9fbac6c498f7ad8e7c56849afe43881966bed2ed2bc1dd1c73d0ffe0b9ebeba
+
+    steps:
+      - name: Confirm signing request
+        env:
+          SIGNING_CONFIRMATION: ${{ inputs.confirmation }}
+          REF_PROTECTED: ${{ github.ref_protected }}
+        run: |
+          if [ "$SIGNING_CONFIRMATION" != 'SIGN CANDIDATE' ]; then
+            echo '::error::Signing confirmation does not match SIGN CANDIDATE'
+            exit 1
+          fi
+          if [ "$REF_PROTECTED" != 'true' ]; then
+            echo '::error::The master ref is not protected by a branch rule or ruleset'
+            exit 1
+          fi
+
+      - name: Check out sources
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - name: Set up Java
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4.8.0
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@748248ddd2a24f49513d8f472f81c3a07d4d50e1 # v4.4.4
+
+      - name: Install native build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            bzip2 cmake curl meson nasm ninja-build pkg-config unzip xz-utils
+
+      - name: Install Android SDK components
+        run: |
+          ANDROID_SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          SDKMANAGER="$ANDROID_SDK/cmdline-tools/latest/bin/sdkmanager"
+          if [ -z "$ANDROID_SDK" ] || [ ! -x "$SDKMANAGER" ]; then
+            echo "::error::sdkmanager not found at $SDKMANAGER"
+            exit 1
+          fi
+          # sdkmanager closes stdin after the last prompt, which makes yes exit on SIGPIPE.
+          set +o pipefail
+          yes | "$SDKMANAGER" --licenses >/dev/null
+          set -o pipefail
+          "$SDKMANAGER" \
+            'platform-tools' \
+            'platforms;android-37.0' \
+            'build-tools;36.0.0' \
+            'ndk;29.0.14206865'
+
+      - name: Build unsigned all-ABI APK
+        run: |
+          chmod +x gradlew Dashchan-Webm/*.sh
+          ./gradlew --no-daemon --stacktrace assembleNdebug \
+            -PnativePlayerFfmpegFlavor=ffmpeg8 \
+            -PnativeAbis="$NATIVE_ABIS"
+
+      - name: Align, sign and verify candidate
+        id: candidate
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          umask 077
+
+          for variable in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD \
+              ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [ -z "${!variable:-}" ]; then
+              echo "::error::Required release-signing secret is missing: $variable"
+              exit 1
+            fi
+          done
+
+          ANDROID_SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          BUILD_TOOLS="$ANDROID_SDK/build-tools/36.0.0"
+          ZIPALIGN="$BUILD_TOOLS/zipalign"
+          APKSIGNER="$BUILD_TOOLS/apksigner"
+          AAPT="$BUILD_TOOLS/aapt"
+          for tool in "$ZIPALIGN" "$APKSIGNER" "$AAPT"; do
+            if [ ! -x "$tool" ]; then
+              echo "::error::Required Android build tool is missing: $tool"
+              exit 1
+            fi
+          done
+
+          mapfile -d '' unsigned_apks < <(find build/outputs/apk/ndebug -maxdepth 1 \
+            -type f -name '*-unsigned.apk' -print0 | sort -z)
+          if [ "${#unsigned_apks[@]}" -ne 1 ]; then
+            echo "::error::Expected exactly one unsigned APK, found ${#unsigned_apks[@]}"
+            exit 1
+          fi
+
+          keystore="$RUNNER_TEMP/slooop-release.jks"
+          aligned_apk="$RUNNER_TEMP/slooop-aligned.apk"
+          signed_apk="$RUNNER_TEMP/slooop-signed.apk"
+          cleanup() {
+            rm -f "$keystore" "$aligned_apk" "$signed_apk"
+          }
+          trap cleanup EXIT
+
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$keystore"
+          chmod 600 "$keystore"
+          unset ANDROID_KEYSTORE_BASE64
+
+          "$ZIPALIGN" -P 16 -f 4 "${unsigned_apks[0]}" "$aligned_apk"
+          "$APKSIGNER" sign \
+            --ks "$keystore" \
+            --ks-key-alias "$ANDROID_KEY_ALIAS" \
+            --ks-pass env:ANDROID_KEYSTORE_PASSWORD \
+            --key-pass env:ANDROID_KEY_PASSWORD \
+            --v4-signing-enabled false \
+            --out "$signed_apk" \
+            "$aligned_apk"
+
+          verification="$("$APKSIGNER" verify --verbose "$signed_apk")"
+          printf '%s\n' "$verification"
+          grep -Fq 'Verified using v3 scheme (APK Signature Scheme v3): true' \
+              <<< "$verification" || {
+              echo '::error::APK Signature Scheme v3 verification failed'
+              exit 1
+            }
+          "$ZIPALIGN" -c -P 16 -v 4 "$signed_apk"
+
+          certificate="$("$APKSIGNER" verify --print-certs "$signed_apk")"
+          actual_cert="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' \
+            <<< "$certificate" | \
+            tr -d ':' | tr '[:upper:]' '[:lower:]')"
+          if [ -z "$actual_cert" ] || [ "$actual_cert" != "$EXPECTED_CERT_SHA256" ]; then
+            echo "::error::Signing certificate SHA-256 mismatch: ${actual_cert:-missing}"
+            exit 1
+          fi
+
+          badging="$("$AAPT" dump badging "$signed_apk")"
+          package_line="$(sed -n 's/^package: //p' <<< "$badging")"
+          package_name="$(sed -n "s/.*name='\([^']*\)'.*/\1/p" <<< "$package_line")"
+          version_code="$(sed -n "s/.*versionCode='\([^']*\)'.*/\1/p" <<< "$package_line")"
+          version_name="$(sed -n "s/.*versionName='\([^']*\)'.*/\1/p" <<< "$package_line")"
+          if [ "$package_name" != 'io.dashchan2' ]; then
+            echo "::error::Unexpected application ID: $package_name"
+            exit 1
+          fi
+          if grep -Fq 'application-debuggable' <<< "$badging"; then
+            echo '::error::Signed candidate is unexpectedly debuggable'
+            exit 1
+          fi
+          case "$version_code" in
+            ''|*[!0-9]*) echo '::error::Invalid version code'; exit 1 ;;
+          esac
+          case "$version_name" in
+            ''|*[!0-9A-Za-z._-]*) echo '::error::Invalid version name'; exit 1 ;;
+          esac
+
+          actual_abis="$(unzip -Z1 "$signed_apk" | sed -n 's#^lib/\([^/]*\)/.*#\1#p' | sort -u)"
+          expected_abis="$(printf '%s\n' arm64-v8a armeabi-v7a x86 | sort)"
+          if [ "$actual_abis" != "$expected_abis" ]; then
+            echo '::error::Unexpected native ABI set'
+            printf 'Expected:\n%s\nActual:\n%s\n' "$expected_abis" "$actual_abis"
+            exit 1
+          fi
+
+          if [ -e signed-artifacts ]; then
+            echo '::error::signed-artifacts already exists in the source tree'
+            exit 1
+          fi
+          mkdir signed-artifacts
+          apk_name="Slooop-$version_name-$version_code-ffmpeg8-all-abi-signed.apk"
+          mv "$signed_apk" "signed-artifacts/$apk_name"
+          (cd signed-artifacts && sha256sum "$apk_name" > SHA256SUMS.txt)
+          apk_sha256="$(cut -d ' ' -f 1 signed-artifacts/SHA256SUMS.txt)"
+          apk_bytes="$(stat -c '%s' "signed-artifacts/$apk_name")"
+
+          printf 'APK: %s\nSHA-256: %s\nBytes: %s\nCertificate SHA-256: %s\nABIs:\n%s\n' \
+            "$apk_name" "$apk_sha256" "$apk_bytes" "$actual_cert" "$actual_abis"
+          {
+            echo "apk_name=$apk_name"
+            echo "apk_sha256=$apk_sha256"
+            echo "apk_bytes=$apk_bytes"
+            echo "version_name=$version_name"
+            echo "version_code=$version_code"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Write candidate summary
+        env:
+          APK_NAME: ${{ steps.candidate.outputs.apk_name }}
+          APK_SHA256: ${{ steps.candidate.outputs.apk_sha256 }}
+          APK_BYTES: ${{ steps.candidate.outputs.apk_bytes }}
+          VERSION_NAME: ${{ steps.candidate.outputs.version_name }}
+          VERSION_CODE: ${{ steps.candidate.outputs.version_code }}
+        run: |
+          {
+            echo '### Signed Android candidate'
+            echo
+            echo "- APK: \`$APK_NAME\`"
+            echo "- Version: \`$VERSION_NAME ($VERSION_CODE)\`"
+            echo "- SHA-256: \`$APK_SHA256\`"
+            echo "- Bytes: \`$APK_BYTES\`"
+            echo "- Certificate SHA-256: \`$EXPECTED_CERT_SHA256\`"
+            echo '- ABIs: `arm64-v8a`, `armeabi-v7a`, `x86`'
+            echo
+            echo 'This workflow does not publish a GitHub Release.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload signed candidate
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: android-signed-candidate-${{ github.run_number }}
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+          path: |
+            signed-artifacts/*.apk
+            signed-artifacts/SHA256SUMS.txt
