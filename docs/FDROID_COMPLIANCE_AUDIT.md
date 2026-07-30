@@ -52,12 +52,12 @@ does not fetch native sources.
 - Before submission, `fdroid scanner` and manual packager review must confirm that no undocumented third-party asset
   was introduced after this audit.
 
-## Expected Anti-Features
+## Expected Anti-Features and content notice
 
-- `NSFW`: imageboards can contain adult content. This should be declared rather than hidden.
-- Network-service labels require packager review. Slooop connects to user-selected imageboards, while the built-in
-  integrations target specific public services. The final metadata must follow the label selected by F-Droid
-  reviewers.
+- `NonFreeNet` is expected because the built-in integrations depend on third-party imageboard services. The final
+  wording remains subject to F-Droid packager review.
+- Imageboards can contain adult content. The current F-Droid Anti-Feature list has no separate `NSFW` key, so this is
+  disclosed as a prominent content notice in the application description instead of inventing an invalid label.
 - The extension installer is disclosed here because it downloads executable APK files. The F-Droid flavor requires
   informed opt-in consent before each selected batch and does not download anything when cancelled.
 - `Tracking` is not expected: the F-Droid flavor does not check for application updates, send analytics, or upload

@@ -14,6 +14,10 @@ For an F-Droid build, the fdroiddata recipe must acquire the three source trees 
 
 All three variables are required for the network-free F-Droid path. `Dashchan-Webm/shared-prepare.sh` copies the supplied trees into the isolated Gradle build directory and does not invoke `curl` or `git` for those components.
 
+An fdroiddata recipe can provide the same paths through Gradle properties named `dashchanDav1dSourceDir`,
+`dashchanFfmpegSourceDir`, and `dashchanLibyuvSourceDir`. Environment variables take precedence. This allows the
+recipe to use fdroiddata `srclibs` without patching the application source.
+
 ## Distribution profiles
 
 The `github` and `fdroid` product flavors share the same source code and `io.dashchan2` application ID:

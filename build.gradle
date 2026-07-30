@@ -113,9 +113,12 @@ def builtinWebmLibrariesPattern = [
 		'/lib/*/libyuv.so'
 ]
 def builtinWebmProvidedSourceDirectories = [
-		dav1d: providers.environmentVariable('DASHCHAN_DAV1D_SOURCE_DIR'),
-		ffmpeg: providers.environmentVariable('DASHCHAN_FFMPEG_SOURCE_DIR'),
+		dav1d: providers.environmentVariable('DASHCHAN_DAV1D_SOURCE_DIR')
+				.orElse(providers.gradleProperty('dashchanDav1dSourceDir')),
+		ffmpeg: providers.environmentVariable('DASHCHAN_FFMPEG_SOURCE_DIR')
+				.orElse(providers.gradleProperty('dashchanFfmpegSourceDir')),
 		libyuv: providers.environmentVariable('DASHCHAN_LIBYUV_SOURCE_DIR')
+				.orElse(providers.gradleProperty('dashchanLibyuvSourceDir'))
 ]
 def getAndroidSdkDirectory = {
 	def localProperties = new Properties()

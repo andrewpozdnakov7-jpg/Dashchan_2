@@ -148,9 +148,9 @@ jobs:
           source_root="$RUNNER_TEMP/fdroid-native-sources"
           bash Dashchan-Webm/shared-prepare.sh "$source_root"
           {
-            echo "DASHCHAN_DAV1D_SOURCE_DIR=$source_root/dav1d"
-            echo "DASHCHAN_FFMPEG_SOURCE_DIR=$source_root/ffmpeg"
-            echo "DASHCHAN_LIBYUV_SOURCE_DIR=$source_root/yuv"
+            echo "ORG_GRADLE_PROJECT_dashchanDav1dSourceDir=$source_root/dav1d"
+            echo "ORG_GRADLE_PROJECT_dashchanFfmpegSourceDir=$source_root/ffmpeg"
+            echo "ORG_GRADLE_PROJECT_dashchanLibyuvSourceDir=$source_root/yuv"
           } >> "$GITHUB_ENV"
 
       - name: Build APK
