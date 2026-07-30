@@ -22,3 +22,19 @@ The `github` and `fdroid` product flavors share the same source code and `io.das
 - `assembleFdroidNdebug` uses a no-op security-provider source set, excludes the GMS option and application self-update interface, forces automatic update checks off even for migrated preferences, removes upstream application-update endpoints, and rejects client APK requests in the shared updater. The package installer remains available internally for separately installed imageboard extensions.
 
 The final fdroiddata recipe must invoke `assembleFdroidNdebug`. Anti-feature declarations, screenshots, and reproducible-build comparison are handled after this source profile is validated.
+
+## Extension APK policy
+
+The F-Droid distribution may still install separately packaged imageboard extensions, but it never starts an
+extension APK download implicitly. Before downloading, it presents an F-Droid-specific confirmation that:
+
+- identifies the downloads as extension APK files;
+- states that F-Droid did not build or review those files;
+- tells the user to continue only when the selected repositories are trusted;
+- offers a normal cancel action which performs no download.
+
+`BuildConfig.REQUIRE_EXTENSION_INSTALL_CONSENT` enforces this gate in the updater as well as in the user interface.
+The application client itself remains excluded from this updater in the F-Droid distribution.
+
+See [FDROID_COMPLIANCE_AUDIT.md](FDROID_COMPLIANCE_AUDIT.md) for the current dependency, asset, Anti-Feature, and
+privacy review. That audit is preparation material and is not a substitute for `fdroid scanner` or packager review.

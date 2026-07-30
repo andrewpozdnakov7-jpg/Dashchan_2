@@ -185,6 +185,7 @@ android {
 			dimension = 'distribution'
 			buildConfigField 'boolean', 'ALLOW_GMS_SECURITY_PROVIDER', 'true'
 			buildConfigField 'boolean', 'ALLOW_APPLICATION_SELF_UPDATE', 'true'
+			buildConfigField 'boolean', 'REQUIRE_EXTENSION_INSTALL_CONSENT', 'false'
 			buildConfigField 'String', 'URI_UPDATES', '"//raw.githubusercontent.com/' +
 					'andrewpozdnakov7-jpg/Dashchan_2/master/update/data.json"'
 			buildConfigField 'String', 'URI_UPDATES_BETA', '"//raw.githubusercontent.com/' +
@@ -202,6 +203,7 @@ android {
 			dimension = 'distribution'
 			buildConfigField 'boolean', 'ALLOW_GMS_SECURITY_PROVIDER', 'false'
 			buildConfigField 'boolean', 'ALLOW_APPLICATION_SELF_UPDATE', 'false'
+			buildConfigField 'boolean', 'REQUIRE_EXTENSION_INSTALL_CONSENT', 'true'
 			buildConfigField 'String', 'URI_UPDATES', '""'
 			buildConfigField 'String', 'URI_UPDATES_BETA', '""'
 			buildConfigField 'String', 'UPDATE_MANIFEST_URL', '""'
