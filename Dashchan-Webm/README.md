@@ -34,6 +34,18 @@ Use the root Gradle Wrapper:
 
 Linux x86_64 or WSL is required. The generated sources and libraries are stored below `Dashchan-Webm/build` and are excluded from Git.
 
+## Pre-provided Native Sources
+
+Build environments that acquire and audit source code before the Gradle build, such as F-Droid, can bypass all network access in `shared-prepare.sh`. Set all three variables to clean source trees at the pinned revisions:
+
+```sh
+export DASHCHAN_DAV1D_SOURCE_DIR=/sources/dav1d-1.5.3
+export DASHCHAN_FFMPEG_SOURCE_DIR=/sources/ffmpeg-8.1.2
+export DASHCHAN_LIBYUV_SOURCE_DIR=/sources/libyuv-6afd9becdf58822b1da6770598d8597c583ccfad
+```
+
+The preparation step copies these trees into its private build directory without VCS metadata. An invalid or missing directory aborts the build. When a variable is unset, the existing pinned download-and-verification path remains in use; ordinary local and GitHub Actions builds therefore keep their current behavior.
+
 ## Standalone Compatibility Module
 
 `Dashchan-Webm/build.gradle` can still produce the historical standalone library package for compatibility testing:

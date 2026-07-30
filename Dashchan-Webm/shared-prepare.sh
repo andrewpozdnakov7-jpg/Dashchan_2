@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -e
+set -e -o pipefail
 sources="$1"
 [ -n "$sources" ] || {
 	echo 'Invalid usage' >&2
@@ -17,6 +17,40 @@ sources="$1"
 [ -n "$YUV_VERSION" ] || {
 	echo 'YUV_VERSION is not defined' >&2
 	exit 1
+}
+
+copy_provided_source() {
+	local name="$1"
+	local version="$2"
+	local source="$3"
+	local target="$4"
+	local marker="$target/.dashchan-version"
+	local expected="$name:$version"
+	local source_real target_parent target_real
+	[ -d "$source" ] || {
+		echo "Provided $name source directory does not exist: $source" >&2
+		exit 1
+	}
+	source_real="$(cd "$source" && pwd -P)"
+	mkdir -p "$(dirname "$target")"
+	target_parent="$(cd "$(dirname "$target")" && pwd -P)"
+	target_real="$target_parent/$(basename "$target")"
+	case "$source_real/" in
+		"$target_real/"*)
+			echo "Provided $name source is inside its build target: $source_real" >&2
+			exit 1
+			;;
+	esac
+	case "$target_real/" in
+		"$source_real/"*)
+			echo "Build target for $name is inside the provided source: $target_real" >&2
+			exit 1
+			;;
+	esac
+	rm -rf "$target"
+	mkdir -p "$target"
+	tar -C "$source_real" --exclude='./.git' --exclude='./.git/*' -cf - . | tar -C "$target" -xf -
+	printf '%s\n' "$expected" > "$marker"
 }
 
 # Pinned checksums for stable release archives. libyuv is fetched and verified
@@ -103,13 +137,25 @@ sources_dav1d="$sources/dav1d"
 sources_ffmpeg="$sources/ffmpeg"
 sources_yuv="$sources/yuv"
 
-prepare_source dav1d "$DAV1D_VERSION" \
-	"https://downloads.videolan.org/videolan/dav1d/$DAV1D_VERSION/dav1d-$DAV1D_VERSION.tar.xz" \
-	"$DAV1D_SHA256" "$sources_dav1d" -xJ --touch --strip-components=1
+if [ -n "${DASHCHAN_DAV1D_SOURCE_DIR:-}" ]; then
+	copy_provided_source dav1d "$DAV1D_VERSION" "$DASHCHAN_DAV1D_SOURCE_DIR" "$sources_dav1d"
+else
+	prepare_source dav1d "$DAV1D_VERSION" \
+		"https://downloads.videolan.org/videolan/dav1d/$DAV1D_VERSION/dav1d-$DAV1D_VERSION.tar.xz" \
+		"$DAV1D_SHA256" "$sources_dav1d" -xJ --touch --strip-components=1
+fi
 
-prepare_source ffmpeg "$FFMPEG_VERSION" \
-	"https://ffmpeg.org/releases/ffmpeg-$FFMPEG_VERSION.tar.bz2" \
-	"$FFMPEG_SHA256" "$sources_ffmpeg" -xj --touch --strip-components=1
+if [ -n "${DASHCHAN_FFMPEG_SOURCE_DIR:-}" ]; then
+	copy_provided_source ffmpeg "$FFMPEG_VERSION" "$DASHCHAN_FFMPEG_SOURCE_DIR" "$sources_ffmpeg"
+else
+	prepare_source ffmpeg "$FFMPEG_VERSION" \
+		"https://ffmpeg.org/releases/ffmpeg-$FFMPEG_VERSION.tar.bz2" \
+		"$FFMPEG_SHA256" "$sources_ffmpeg" -xj --touch --strip-components=1
+fi
 
-prepare_git_source yuv "$YUV_VERSION" \
-	"https://chromium.googlesource.com/libyuv/libyuv" "$sources_yuv"
+if [ -n "${DASHCHAN_LIBYUV_SOURCE_DIR:-}" ]; then
+	copy_provided_source yuv "$YUV_VERSION" "$DASHCHAN_LIBYUV_SOURCE_DIR" "$sources_yuv"
+else
+	prepare_git_source yuv "$YUV_VERSION" \
+		"https://chromium.googlesource.com/libyuv/libyuv" "$sources_yuv"
+fi

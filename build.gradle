@@ -112,6 +112,11 @@ def builtinWebmLibrariesPattern = [
 		'/lib/*/libswscale.so',
 		'/lib/*/libyuv.so'
 ]
+def builtinWebmProvidedSourceDirectories = [
+		dav1d: providers.environmentVariable('DASHCHAN_DAV1D_SOURCE_DIR'),
+		ffmpeg: providers.environmentVariable('DASHCHAN_FFMPEG_SOURCE_DIR'),
+		libyuv: providers.environmentVariable('DASHCHAN_LIBYUV_SOURCE_DIR')
+]
 def getAndroidSdkDirectory = {
 	def localProperties = new Properties()
 	def localPropertiesFile = rootProject.file('local.properties')
@@ -308,6 +313,12 @@ tasks.register('prepareBuiltinWebmSources', Exec) {
 	inputs.property 'dav1dVersion', '1.5.3'
 	inputs.property 'ffmpegVersion', '8.1.2'
 	inputs.property 'yuvVersion', '6afd9becdf58822b1da6770598d8597c583ccfad'
+	builtinWebmProvidedSourceDirectories.each { name, directory ->
+		inputs.property "${name}ProvidedSourceDirectory", directory.orElse('')
+		if (directory.isPresent()) {
+			inputs.dir directory
+		}
+	}
 	outputs.dir builtinWebmSources
 	doFirst {
 		requireUnixBuiltinWebmBuild()
