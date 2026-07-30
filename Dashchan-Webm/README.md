@@ -27,7 +27,7 @@ The root project invokes:
 Use the root Gradle Wrapper:
 
 ```sh
-./gradlew assembleNdebug \
+./gradlew assembleGithubNdebug \
   -PnativePlayerFfmpegFlavor=ffmpeg8 \
   -PnativeAbis=arm64-v8a,armeabi-v7a,x86
 ```

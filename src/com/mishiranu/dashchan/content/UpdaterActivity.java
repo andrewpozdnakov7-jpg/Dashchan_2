@@ -14,6 +14,7 @@ import androidx.core.app.NotificationCompat;
 import chan.content.ChanManager;
 import chan.util.DataFile;
 import chan.util.StringUtils;
+import com.mishiranu.dashchan.BuildConfig;
 import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.service.DownloadService;
@@ -240,6 +241,10 @@ public class UpdaterActivity extends StateActivity {
 		DownloadService.DownloadItem clientDownloadItem = null;
 		ArrayList<DownloadService.DownloadItem> downloadItems = new ArrayList<>();
 		for (Request request : requests) {
+			if (!BuildConfig.ALLOW_APPLICATION_SELF_UPDATE &&
+					ChanManager.EXTENSION_NAME_CLIENT.equals(request.extensionName)) {
+				continue;
+			}
 			String name = request.extensionName + "-" + request.versionName + ".apk";
 			DownloadService.DownloadItem downloadItem = new DownloadService.DownloadItem(null,
 					request.uri, name, request.sha256sum, request.checkFingerprints);
@@ -251,6 +256,9 @@ public class UpdaterActivity extends StateActivity {
 		}
 		if (clientDownloadItem != null) {
 			downloadItems.add(clientDownloadItem);
+		}
+		if (downloadItems.isEmpty()) {
+			return;
 		}
 		if (activeConnection != null) {
 			activeConnection.cancel();

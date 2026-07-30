@@ -158,10 +158,6 @@ android {
 		}
 
 		buildConfigField 'String', 'VERSION_DATE', '"' + versions[0].date + '"'
-		buildConfigField 'String', 'URI_UPDATES', '"//raw.githubusercontent.com/' +
-				'andrewpozdnakov7-jpg/Dashchan_2/master/update/data.json"'
-		buildConfigField 'String', 'URI_UPDATES_BETA', '"//raw.githubusercontent.com/' +
-				'andrewpozdnakov7-jpg/Dashchan_2_Update_Test/master/update/data.json"'
 		buildConfigField 'String', 'URI_THEMES', '"//raw.githubusercontent.com/' +
 				'andrewpozdnakov7-jpg/Dashchan_2/master/update/themes.json"'
 		buildConfigField 'String', 'GITHUB_URI_METADATA', '"//github.com/andrewpozdnakov7-jpg/Dashchan_2"'
@@ -171,14 +167,6 @@ android {
 		buildConfigField 'String', 'GITHUB_PATH_METADATA_BETA', '"metadata"'
 		buildConfigField 'String', 'FILE_PROVIDER_AUTHORITY', '"' +
 				manifestPlaceholders.fileProviderAuthority + '"'
-		buildConfigField 'String', 'UPDATE_MANIFEST_URL', '""'
-		buildConfigField 'String', 'UPDATE_MANIFEST_BETA_URL', '""'
-		buildConfigField 'String', 'UPDATE_GITHUB_RELEASES_URL',
-				'"https://api.github.com/repos/andrewpozdnakov7-jpg/Dashchan_2/releases"'
-		buildConfigField 'String', 'UPDATE_GITHUB_LATEST_RELEASE_URL', '""'
-		buildConfigField 'String', 'UPDATE_GITHUB_BETA_RELEASES_URL',
-				'"https://api.github.com/repos/andrewpozdnakov7-jpg/Dashchan_2_Update_Test/releases"'
-		buildConfigField 'String', 'UPDATE_GITHUB_BETA_LATEST_RELEASE_URL', '""'
 		buildConfigField 'String', 'CHAN_EXTENSION_FEATURE_NAME', '"chan.extension"'
 		buildConfigField 'String', 'LIB_EXTENSION_FEATURE_NAME', '"lib.extension"'
 		buildConfigField 'String', 'LIB_WEBM_EXTENSION_NAME', '"webm"'
@@ -191,6 +179,40 @@ android {
 				buildConfigStringArray(knownLibExtensionPackages)
 	}
 
+	flavorDimensions += 'distribution'
+	productFlavors {
+		github {
+			dimension = 'distribution'
+			buildConfigField 'boolean', 'ALLOW_GMS_SECURITY_PROVIDER', 'true'
+			buildConfigField 'boolean', 'ALLOW_APPLICATION_SELF_UPDATE', 'true'
+			buildConfigField 'String', 'URI_UPDATES', '"//raw.githubusercontent.com/' +
+					'andrewpozdnakov7-jpg/Dashchan_2/master/update/data.json"'
+			buildConfigField 'String', 'URI_UPDATES_BETA', '"//raw.githubusercontent.com/' +
+					'andrewpozdnakov7-jpg/Dashchan_2_Update_Test/master/update/data.json"'
+			buildConfigField 'String', 'UPDATE_MANIFEST_URL', '""'
+			buildConfigField 'String', 'UPDATE_MANIFEST_BETA_URL', '""'
+			buildConfigField 'String', 'UPDATE_GITHUB_RELEASES_URL',
+					'"https://api.github.com/repos/andrewpozdnakov7-jpg/Dashchan_2/releases"'
+			buildConfigField 'String', 'UPDATE_GITHUB_LATEST_RELEASE_URL', '""'
+			buildConfigField 'String', 'UPDATE_GITHUB_BETA_RELEASES_URL',
+					'"https://api.github.com/repos/andrewpozdnakov7-jpg/Dashchan_2_Update_Test/releases"'
+			buildConfigField 'String', 'UPDATE_GITHUB_BETA_LATEST_RELEASE_URL', '""'
+		}
+		fdroid {
+			dimension = 'distribution'
+			buildConfigField 'boolean', 'ALLOW_GMS_SECURITY_PROVIDER', 'false'
+			buildConfigField 'boolean', 'ALLOW_APPLICATION_SELF_UPDATE', 'false'
+			buildConfigField 'String', 'URI_UPDATES', '""'
+			buildConfigField 'String', 'URI_UPDATES_BETA', '""'
+			buildConfigField 'String', 'UPDATE_MANIFEST_URL', '""'
+			buildConfigField 'String', 'UPDATE_MANIFEST_BETA_URL', '""'
+			buildConfigField 'String', 'UPDATE_GITHUB_RELEASES_URL', '""'
+			buildConfigField 'String', 'UPDATE_GITHUB_LATEST_RELEASE_URL', '""'
+			buildConfigField 'String', 'UPDATE_GITHUB_BETA_RELEASES_URL', '""'
+			buildConfigField 'String', 'UPDATE_GITHUB_BETA_LATEST_RELEASE_URL', '""'
+		}
+	}
+
 	sourceSets.main {
 		manifest.srcFile 'AndroidManifest.xml'
 		java.srcDirs = ['src']
@@ -201,6 +223,8 @@ android {
 		jni.srcDirs = []
 		jniLibs.srcDirs = []
 	}
+	sourceSets.github.java.srcDir 'distribution/github/src'
+	sourceSets.fdroid.java.srcDir 'distribution/fdroid/src'
 	sourceSets.test {
 		java.srcDirs = ['unitTests/src']
 		resources.srcDirs = ['unitTests/resources']

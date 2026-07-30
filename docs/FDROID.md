@@ -14,8 +14,11 @@ For an F-Droid build, the fdroiddata recipe must acquire the three source trees 
 
 All three variables are required for the network-free F-Droid path. `Dashchan-Webm/shared-prepare.sh` copies the supplied trees into the isolated Gradle build directory and does not invoke `curl` or `git` for those components.
 
-## Planned distribution profile
+## Distribution profiles
 
-A later source change will add a dedicated F-Droid build profile. It will preserve the `io.dashchan2` application ID while excluding the optional Google Play Services security-provider integration and the GitHub application self-updater. The normal GitHub build will retain its current behavior.
+The `github` and `fdroid` product flavors share the same source code and `io.dashchan2` application ID:
 
-The final fdroiddata recipe, anti-feature declarations, screenshots, and reproducible-build comparison are intentionally handled after the source-only F-Droid profile is complete.
+- `assembleGithubNdebug` retains the optional Google Play Services security provider, application update channels, automatic update checks, and package installer used by the existing GitHub distribution;
+- `assembleFdroidNdebug` uses a no-op security-provider source set, excludes the GMS option and application self-update interface, forces automatic update checks off even for migrated preferences, removes upstream application-update endpoints, and rejects client APK requests in the shared updater. The package installer remains available internally for separately installed imageboard extensions.
+
+The final fdroiddata recipe must invoke `assembleFdroidNdebug`. Anti-feature declarations, screenshots, and reproducible-build comparison are handled after this source profile is validated.

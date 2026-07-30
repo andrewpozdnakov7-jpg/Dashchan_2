@@ -16,6 +16,7 @@ import chan.content.Chan;
 import chan.content.ChanConfiguration;
 import chan.content.ChanManager;
 import chan.util.StringUtils;
+import com.mishiranu.dashchan.BuildConfig;
 import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.util.SharedPreferences;
@@ -615,6 +616,9 @@ public class Preferences {
 	public static final boolean DEFAULT_UPDATE_AUTO_CHECK_ENABLED = true;
 
 	public static boolean isUpdateAutoCheckEnabled() {
+		if (!BuildConfig.ALLOW_APPLICATION_SELF_UPDATE) {
+			return false;
+		}
 		if (PREFERENCES.getAll().containsKey(KEY_UPDATE_AUTO_CHECK_ENABLED)) {
 			return PREFERENCES.getBoolean(KEY_UPDATE_AUTO_CHECK_ENABLED, DEFAULT_UPDATE_AUTO_CHECK_ENABLED);
 		}
@@ -622,6 +626,9 @@ public class Preferences {
 	}
 
 	public static void setUpdateAutoCheckEnabled(boolean updateAutoCheckEnabled) {
+		if (!BuildConfig.ALLOW_APPLICATION_SELF_UPDATE) {
+			return;
+		}
 		PREFERENCES.edit()
 				.put(KEY_UPDATE_AUTO_CHECK_ENABLED, updateAutoCheckEnabled)
 				.put(KEY_CHECK_UPDATES_ON_START, updateAutoCheckEnabled)
@@ -1686,7 +1693,8 @@ public class Preferences {
 	public static final boolean DEFAULT_USE_GMS_PROVIDER = false;
 
 	public static boolean isUseGmsProvider() {
-		return PREFERENCES.getBoolean(KEY_USE_GMS_PROVIDER, DEFAULT_USE_GMS_PROVIDER);
+		return BuildConfig.ALLOW_GMS_SECURITY_PROVIDER &&
+				PREFERENCES.getBoolean(KEY_USE_GMS_PROVIDER, DEFAULT_USE_GMS_PROVIDER);
 	}
 
 	public static final ChanKey KEY_USE_HTTPS = new ChanKey("use_https");

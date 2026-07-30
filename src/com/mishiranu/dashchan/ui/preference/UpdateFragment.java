@@ -24,6 +24,7 @@ import chan.content.Chan;
 import chan.content.ChanManager;
 import chan.util.CommonUtils;
 import chan.util.StringUtils;
+import com.mishiranu.dashchan.BuildConfig;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.UpdaterActivity;
 import com.mishiranu.dashchan.content.async.ReadUpdateTask;
@@ -337,26 +338,29 @@ public class UpdateFragment extends BaseListFragment {
 		int maxApiVersion;
 		{
 			ReadUpdateTask.ApplicationItem applicationItem = updateDataMap.get(ChanManager.EXTENSION_NAME_CLIENT, true);
-			ListItem listItem = new ListItem(ChanManager.EXTENSION_NAME_CLIENT,
-					context != null ? AndroidUtils.getApplicationLabel(context) : null,
-					applicationItem.packageItems.size() >= 2, true);
-			int targetIndex = savedInstanceState != null ? savedInstanceState.getInt(EXTRA_TARGET_PREFIX
-					+ listItem.extensionName, -1) : -1;
-			if (targetIndex < 0) {
-				targetIndex = 0;
-				for (int i = 1; i < applicationItem.packageItems.size(); i++) {
-					ReadUpdateTask.PackageItem updatePackageItem = applicationItem.packageItems.get(i);
-					if (shouldSelectUpdate(applicationItem.packageItems.get(0), updatePackageItem)) {
-						targetIndex = i;
-						break;
+			int targetIndex = 0;
+			if (BuildConfig.ALLOW_APPLICATION_SELF_UPDATE) {
+				ListItem listItem = new ListItem(ChanManager.EXTENSION_NAME_CLIENT,
+						context != null ? AndroidUtils.getApplicationLabel(context) : null,
+						applicationItem.packageItems.size() >= 2, true);
+				targetIndex = savedInstanceState != null ? savedInstanceState.getInt(EXTRA_TARGET_PREFIX
+						+ listItem.extensionName, -1) : -1;
+				if (targetIndex < 0) {
+					targetIndex = 0;
+					for (int i = 1; i < applicationItem.packageItems.size(); i++) {
+						ReadUpdateTask.PackageItem updatePackageItem = applicationItem.packageItems.get(i);
+						if (shouldSelectUpdate(applicationItem.packageItems.get(0), updatePackageItem)) {
+							targetIndex = i;
+							break;
+						}
 					}
 				}
+				listItem.setTarget(context, applicationItem, targetIndex);
+				listItems.add(listItem);
 			}
-			listItem.setTarget(context, applicationItem, targetIndex);
 			ReadUpdateTask.PackageItem currentApplicationPackageItem = applicationItem.packageItems.get(targetIndex);
 			minApiVersion = currentApplicationPackageItem.minApiVersion;
 			maxApiVersion = currentApplicationPackageItem.maxApiVersion;
-			listItems.add(listItem);
 		}
 		handledExtensionNames.add(ChanManager.EXTENSION_NAME_CLIENT);
 		ChanManager manager = ChanManager.getInstance();

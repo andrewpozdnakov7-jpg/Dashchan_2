@@ -61,38 +61,40 @@ public class AboutFragment extends PreferenceFragment implements FragmentHandler
 		addButton(R.string.changelog, 0)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 						.pushFragment(new TextFragment(TextFragment.Type.CHANGELOG)));
-		ListPreference updateChannelPreference = addList(Preferences.KEY_UPDATE_CHANNEL,
-				enumList(Preferences.UpdateChannel.values(), channel -> channel.value),
-				Preferences.DEFAULT_UPDATE_CHANNEL.value, R.string.update_channel,
-				enumResList(Preferences.UpdateChannel.values(), channel -> channel.titleResId));
-		updateChannelPreference.setOnBeforeChangeListener((preference, value) -> {
-			if (!confirmingBetaChannel && Preferences.UpdateChannel.BETA.value.equals(value) &&
-					!Preferences.UpdateChannel.BETA.value.equals(preference.getValue())) {
-				new AlertDialog.Builder(requireContext())
-						.setTitle(R.string.update_channel_beta)
-						.setMessage(R.string.beta_update_channel_warning__sentence)
-						.setNegativeButton(android.R.string.cancel, null)
-						.setPositiveButton(android.R.string.ok, (dialog, which) -> {
-							confirmingBetaChannel = true;
-							preference.setValue(value);
-							confirmingBetaChannel = false;
-						})
-						.show();
-				return false;
-			}
-			return true;
-		});
-		updateChannelPreference.setOnAfterChangeListener(preference -> {
-			Preferences.resetUpdatePromptState();
-			((FragmentHandler) requireActivity()).pushFragment(new UpdateFragment());
-		});
-		CheckPreference automaticUpdateCheck = addCheck(false, Preferences.KEY_UPDATE_AUTO_CHECK_ENABLED,
-				Preferences.isUpdateAutoCheckEnabled(), R.string.automatic_update_check, 0);
-		automaticUpdateCheck.setOnAfterChangeListener(preference ->
-				Preferences.setUpdateAutoCheckEnabled(preference.getValue()));
-		addButton(R.string.check_for_updates, 0)
-				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
-						.pushFragment(new UpdateFragment()));
+		if (BuildConfig.ALLOW_APPLICATION_SELF_UPDATE) {
+			ListPreference updateChannelPreference = addList(Preferences.KEY_UPDATE_CHANNEL,
+					enumList(Preferences.UpdateChannel.values(), channel -> channel.value),
+					Preferences.DEFAULT_UPDATE_CHANNEL.value, R.string.update_channel,
+					enumResList(Preferences.UpdateChannel.values(), channel -> channel.titleResId));
+			updateChannelPreference.setOnBeforeChangeListener((preference, value) -> {
+				if (!confirmingBetaChannel && Preferences.UpdateChannel.BETA.value.equals(value) &&
+						!Preferences.UpdateChannel.BETA.value.equals(preference.getValue())) {
+					new AlertDialog.Builder(requireContext())
+							.setTitle(R.string.update_channel_beta)
+							.setMessage(R.string.beta_update_channel_warning__sentence)
+							.setNegativeButton(android.R.string.cancel, null)
+							.setPositiveButton(android.R.string.ok, (dialog, which) -> {
+								confirmingBetaChannel = true;
+								preference.setValue(value);
+								confirmingBetaChannel = false;
+							})
+							.show();
+					return false;
+				}
+				return true;
+			});
+			updateChannelPreference.setOnAfterChangeListener(preference -> {
+				Preferences.resetUpdatePromptState();
+				((FragmentHandler) requireActivity()).pushFragment(new UpdateFragment());
+			});
+			CheckPreference automaticUpdateCheck = addCheck(false, Preferences.KEY_UPDATE_AUTO_CHECK_ENABLED,
+					Preferences.isUpdateAutoCheckEnabled(), R.string.automatic_update_check, 0);
+			automaticUpdateCheck.setOnAfterChangeListener(preference ->
+					Preferences.setUpdateAutoCheckEnabled(preference.getValue()));
+			addButton(R.string.check_for_updates, 0)
+					.setOnClickListener(p -> ((FragmentHandler) requireActivity())
+							.pushFragment(new UpdateFragment()));
+		}
 		addButton(getString(R.string.project_author), PROJECT_AUTHOR)
 				.setOnClickListener(p -> NavigationUtils.openSystemBrowser(requireContext(),
 						Uri.parse("https:" + BuildConfig.GITHUB_URI_METADATA)));

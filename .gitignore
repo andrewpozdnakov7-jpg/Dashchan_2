@@ -16,6 +16,8 @@
 !/Dashchan-Webm/**
 !/docs
 !/docs/**
+!/distribution
+!/distribution/**
 !/gradle
 !/gradle.properties
 !/gradlew

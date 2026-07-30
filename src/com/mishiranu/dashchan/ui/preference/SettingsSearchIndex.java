@@ -6,6 +6,7 @@ import chan.content.Chan;
 import chan.content.ChanConfiguration;
 import chan.content.ChanManager;
 import chan.util.StringUtils;
+import com.mishiranu.dashchan.BuildConfig;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.ui.ContentFragment;
@@ -303,8 +304,10 @@ public final class SettingsSearchIndex {
 				R.string.video_audio_boost__summary, Preferences.KEY_VIDEO_AUDIO_BOOST);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.video_audio_boost_level, 0,
 				Preferences.KEY_VIDEO_AUDIO_BOOST_DB);
-		add(context, entries, Screen.EXPERIMENTAL, R.string.use_gms_security_provider,
-				R.string.use_gms_security_provider__summary, Preferences.KEY_USE_GMS_PROVIDER);
+		if (BuildConfig.ALLOW_GMS_SECURITY_PROVIDER) {
+			add(context, entries, Screen.EXPERIMENTAL, R.string.use_gms_security_provider,
+					R.string.use_gms_security_provider__summary, Preferences.KEY_USE_GMS_PROVIDER);
+		}
 		add(context, entries, Screen.EXPERIMENTAL, R.string.video_diagnostics_start,
 				R.string.video_diagnostics_start__summary, null);
 
@@ -448,10 +451,12 @@ public final class SettingsSearchIndex {
 		add(context, entries, Screen.ABOUT, R.string.statistics);
 		add(context, entries, Screen.ABOUT, R.string.backup_data, R.string.backup_data__summary, null);
 		add(context, entries, Screen.ABOUT, R.string.changelog);
-		add(context, entries, Screen.ABOUT, R.string.update_channel, 0, Preferences.KEY_UPDATE_CHANNEL);
-		add(context, entries, Screen.ABOUT, R.string.automatic_update_check, 0,
-				Preferences.KEY_UPDATE_AUTO_CHECK_ENABLED);
-		add(context, entries, Screen.ABOUT, R.string.check_for_updates);
+		if (BuildConfig.ALLOW_APPLICATION_SELF_UPDATE) {
+			add(context, entries, Screen.ABOUT, R.string.update_channel, 0, Preferences.KEY_UPDATE_CHANNEL);
+			add(context, entries, Screen.ABOUT, R.string.automatic_update_check, 0,
+					Preferences.KEY_UPDATE_AUTO_CHECK_ENABLED);
+			add(context, entries, Screen.ABOUT, R.string.check_for_updates);
+		}
 		add(context, entries, Screen.ABOUT, R.string.project_author);
 		add(context, entries, Screen.ABOUT, R.string.based_on_dashchan, R.string.based_on_dashchan__summary, null);
 		add(context, entries, Screen.ABOUT, R.string.contact_email);

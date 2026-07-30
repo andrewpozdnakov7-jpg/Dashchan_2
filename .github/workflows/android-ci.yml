@@ -9,6 +9,14 @@ on:
       - master
   workflow_dispatch:
     inputs:
+      distribution:
+        description: Distribution profile
+        required: true
+        default: github
+        type: choice
+        options:
+          - github
+          - fdroid
       build_scope:
         description: Native ABI set
         required: true
@@ -32,6 +40,7 @@ jobs:
     timeout-minutes: 120
     env:
       NATIVE_ABIS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.build_scope == 'all' && 'arm64-v8a,armeabi-v7a,x86' || 'arm64-v8a' }}
+      BUILD_TASK: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.distribution == 'fdroid' && 'assembleFdroidNdebug' || 'assembleGithubNdebug' }}
 
     steps:
       - name: Check out sources
@@ -74,7 +83,7 @@ jobs:
         run: |
           set -o pipefail
           chmod +x gradlew Dashchan-Webm/*.sh
-          ./gradlew --no-daemon --stacktrace assembleNdebug \
+          ./gradlew --no-daemon --stacktrace "$BUILD_TASK" \
             -PnativePlayerFfmpegFlavor=ffmpeg8 \
             -PnativeAbis="$NATIVE_ABIS" 2>&1 | tee build-main.log
 
@@ -93,7 +102,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: android-ndebug-${{ github.event_name == 'workflow_dispatch' && github.event.inputs.build_scope || 'arm64' }}-${{ github.run_number }}
+          name: android-${{ github.event_name == 'workflow_dispatch' && github.event.inputs.distribution || 'github' }}-ndebug-${{ github.event_name == 'workflow_dispatch' && github.event.inputs.build_scope || 'arm64' }}-${{ github.run_number }}
           if-no-files-found: warn
           retention-days: 14
           path: |
