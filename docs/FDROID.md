@@ -19,14 +19,18 @@ An fdroiddata recipe can provide the same paths through Gradle properties named 
 `dashchanFfmpegSourceDir`, and `dashchanLibyuvSourceDir`. Environment variables take precedence. This allows the
 recipe to use fdroiddata `srclibs` without patching the application source.
 
+The recipe uses the conventional `fdroid` flavor and `release` build type (`assembleFdroidRelease`). The release
+build type shares the production manifest and extension compatibility configuration used by the upstream `ndebug`
+build, while remaining unsigned for F-Droid to sign.
+
 ## Distribution profiles
 
 The `github` and `fdroid` product flavors share the same source code and `io.dashchan2` application ID:
 
 - `assembleGithubNdebug` retains the optional Google Play Services security provider, application update channels, automatic update checks, and package installer used by the existing GitHub distribution;
-- `assembleFdroidNdebug` uses a no-op security-provider source set, excludes the GMS option and application self-update interface, forces automatic update checks off even for migrated preferences, removes upstream application-update endpoints, and rejects client APK requests in the shared updater. The package installer remains available internally for separately installed imageboard extensions.
+- `assembleFdroidRelease` uses a no-op security-provider source set, excludes the GMS option and application self-update interface, forces automatic update checks off even for migrated preferences, removes upstream application-update endpoints, and rejects client APK requests in the shared updater. The package installer remains available internally for separately installed imageboard extensions.
 
-The final fdroiddata recipe must invoke `assembleFdroidNdebug`. Anti-feature declarations, screenshots, and reproducible-build comparison are handled after this source profile is validated.
+The final fdroiddata recipe must select the `fdroid` flavor so fdroidserver invokes `assembleFdroidRelease`. Anti-feature declarations, screenshots, and reproducible-build comparison are handled after this source profile is validated.
 
 ## Extension APK policy
 

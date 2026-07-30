@@ -266,27 +266,29 @@ android {
 	buildTypes.create('leak') {
 		debuggable = true
 	}
-	buildTypes.create('ndebug') {
-		debuggable = false
-		manifestPlaceholders = [
+	def configureProductionBuildType = { buildType ->
+		buildType.debuggable = false
+		buildType.manifestPlaceholders = [
 				appLabel: 'Slooop',
 				fileProviderAuthority: 'io.dashchan2.provider'
 		]
-		buildConfigField 'String', 'FILE_PROVIDER_AUTHORITY', '"io.dashchan2.provider"'
-		buildConfigField 'String', 'CHAN_EXTENSION_FEATURE_NAME', '"chan.extension.dashchan2"'
-		buildConfigField 'String', 'LIB_EXTENSION_FEATURE_NAME', '"lib.extension.dashchan2"'
-		buildConfigField 'String', 'LIB_WEBM_EXTENSION_NAME', '"webm2"'
-		buildConfigField 'String[]', 'CHAN_EXTENSION_FEATURE_NAMES',
+		buildType.buildConfigField 'String', 'FILE_PROVIDER_AUTHORITY', '"io.dashchan2.provider"'
+		buildType.buildConfigField 'String', 'CHAN_EXTENSION_FEATURE_NAME', '"chan.extension.dashchan2"'
+		buildType.buildConfigField 'String', 'LIB_EXTENSION_FEATURE_NAME', '"lib.extension.dashchan2"'
+		buildType.buildConfigField 'String', 'LIB_WEBM_EXTENSION_NAME', '"webm2"'
+		buildType.buildConfigField 'String[]', 'CHAN_EXTENSION_FEATURE_NAMES',
 				'{"chan.extension.dashchan2", "chan.extension"}'
-		buildConfigField 'String[]', 'LIB_EXTENSION_FEATURE_NAMES',
+		buildType.buildConfigField 'String[]', 'LIB_EXTENSION_FEATURE_NAMES',
 				'{"lib.extension.dashchan2", "lib.extension"}'
-		buildConfigField 'String[]', 'LIB_WEBM_EXTENSION_NAMES',
+		buildType.buildConfigField 'String[]', 'LIB_WEBM_EXTENSION_NAMES',
 				'{"webm2", "webm"}'
-		buildConfigField 'String[]', 'KNOWN_CHAN_EXTENSION_PACKAGES',
+		buildType.buildConfigField 'String[]', 'KNOWN_CHAN_EXTENSION_PACKAGES',
 				buildConfigStringArray(dashchan2KnownChanExtensionPackages)
-		buildConfigField 'String[]', 'KNOWN_LIB_EXTENSION_PACKAGES',
+		buildType.buildConfigField 'String[]', 'KNOWN_LIB_EXTENSION_PACKAGES',
 				buildConfigStringArray(dashchan2KnownLibExtensionPackages)
 	}
+	configureProductionBuildType(buildTypes.getByName('release'))
+	configureProductionBuildType(buildTypes.create('ndebug'))
 
 	buildTypes.all {
 		crunchPngs = false
