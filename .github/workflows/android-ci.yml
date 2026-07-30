@@ -1,0 +1,99 @@
+name: Android CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      build_scope:
+        description: Native ABI set
+        required: true
+        default: arm64
+        type: choice
+        options:
+          - arm64
+          - all
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Ndebug (${{ github.event_name == 'workflow_dispatch' && github.event.inputs.build_scope || 'arm64' }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      NATIVE_ABIS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.build_scope == 'all' && 'arm64-v8a,armeabi-v7a,x86' || 'arm64-v8a' }}
+
+    steps:
+      - name: Check out sources
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - name: Set up Java
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4.8.0
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@748248ddd2a24f49513d8f472f81c3a07d4d50e1 # v4.4.4
+
+      - name: Install native build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            bzip2 cmake curl meson nasm ninja-build pkg-config xz-utils
+
+      - name: Install Android SDK components
+        run: |
+          ANDROID_SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          SDKMANAGER="$ANDROID_SDK/cmdline-tools/latest/bin/sdkmanager"
+          if [ -z "$ANDROID_SDK" ] || [ ! -x "$SDKMANAGER" ]; then
+            echo "::error::sdkmanager not found at $SDKMANAGER"
+            exit 1
+          fi
+          # sdkmanager closes stdin after the last prompt, which makes yes exit on SIGPIPE.
+          set +o pipefail
+          yes | "$SDKMANAGER" --licenses >/dev/null
+          set -o pipefail
+          "$SDKMANAGER" \
+            'platform-tools' \
+            'platforms;android-37.0' \
+            'build-tools;36.0.0' \
+            'ndk;29.0.14206865'
+
+      - name: Build APK
+        run: |
+          set -o pipefail
+          chmod +x gradlew Dashchan-Webm/*.sh
+          ./gradlew --no-daemon --stacktrace assembleNdebug \
+            -PnativePlayerFfmpegFlavor=ffmpeg8 \
+            -PnativeAbis="$NATIVE_ABIS" 2>&1 | tee build-main.log
+
+      - name: Create APK checksums
+        run: |
+          set -euo pipefail
+          mapfile -d '' apks < <(find build/outputs/apk -type f -name '*.apk' -print0 | sort -z)
+          if [ "${#apks[@]}" -eq 0 ]; then
+            echo 'No APK files were produced' >&2
+            exit 1
+          fi
+          sha256sum "${apks[@]}" > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Upload APK, checksums and diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: android-ndebug-${{ github.event_name == 'workflow_dispatch' && github.event.inputs.build_scope || 'arm64' }}-${{ github.run_number }}
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            build/outputs/apk/**/*.apk
+            SHA256SUMS.txt
+            build-main.log
+            build/reports/**

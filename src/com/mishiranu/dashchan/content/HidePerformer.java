@@ -130,13 +130,13 @@ public class HidePerformer {
 		ArrayList<AutohideStorage.AutohideItem> autohideItems = autohideStorage.getItems();
 		for (int i = 0; i < autohideItems.size(); i++) {
 			AutohideStorage.AutohideItem autohideItem = autohideItems.get(i);
-			// AND selection (only if chan, board, thread, op, and sage match the rule)
+			// AND selection (only if chan, board, thread, scope, and sage match the rule)
 			if (autohideItem.chanNames == null || autohideItem.chanNames.contains(chan.name)) {
 				if (StringUtils.isEmpty(autohideItem.boardName) || boardName == null
 						|| autohideItem.boardName.equals(boardName)) {
 					if (StringUtils.isEmpty(autohideItem.threadNumber) || autohideItem.boardName != null &&
 							autohideItem.threadNumber.equals(originalPostNumberString)) {
-						if ((!autohideItem.optionOriginalPost || autohideItem.optionOriginalPost == originalPost)
+						if (autohideItem.isEnabledFor(originalPost)
 								&& (!autohideItem.optionSage || autohideItem.optionSage == sage)) {
 							String result;
 							// OR selection (hide if subject, comment, or name match the rule)

@@ -2,11 +2,15 @@ package com.mishiranu.dashchan.ui.preference;
 
 import android.annotation.SuppressLint;
 import android.app.AlertDialog;
+import android.content.Context;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.Layout;
 import android.text.TextWatcher;
 import android.text.style.BackgroundColorSpan;
+import android.util.TypedValue;
+import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -15,6 +19,8 @@ import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.widget.CheckBox;
 import android.widget.EditText;
+import android.widget.FrameLayout;
+import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
@@ -32,7 +38,7 @@ import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.widget.CustomSearchView;
 import com.mishiranu.dashchan.widget.ErrorEditTextSetter;
 import com.mishiranu.dashchan.widget.MenuExpandListener;
-import com.mishiranu.dashchan.widget.SimpleViewHolder;
+import com.mishiranu.dashchan.widget.ThemeEngine;
 import com.mishiranu.dashchan.widget.ViewFactory;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -223,8 +229,15 @@ public class AutohideFragment extends BaseListFragment {
 	}
 
 	private void onQuickEditComplete(String value, int index) {
+		boolean optionOriginalPost = true;
+		boolean optionReplies = true;
+		if (index >= 0) {
+			AutohideStorage.AutohideItem oldItem = items.get(index);
+			optionOriginalPost = oldItem.optionOriginalPost;
+			optionReplies = oldItem.optionReplies;
+		}
 		AutohideStorage.AutohideItem autohideItem = new AutohideStorage.AutohideItem(null, null, null,
-				false, false, true, true, false, false,
+				optionOriginalPost, optionReplies, false, true, true, false, false,
 				AutohideStorage.AutohideItem.MatchMode.LITERAL, value);
 		onEditComplete(autohideItem, index);
 	}
@@ -240,6 +253,10 @@ public class AutohideFragment extends BaseListFragment {
 
 	private class Adapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
 			implements ListViewUtils.ClickCallback<Void, RecyclerView.ViewHolder> {
+		private static final int VIEW_TYPE_HEADER = 0;
+		private static final int VIEW_TYPE_RULE = 1;
+		private static final float PAUSED_ALPHA = 0.5f;
+
 		private final ArrayList<AutohideStorage.AutohideItem> filteredItems = new ArrayList<>();
 		private String searchQuery;
 
@@ -264,16 +281,25 @@ public class AutohideFragment extends BaseListFragment {
 		}
 
 		public AutohideStorage.AutohideItem getItem(int position) {
-			return !StringUtils.isEmpty(searchQuery) ? filteredItems.get(position) : items.get(position);
+			int itemPosition = position - 1;
+			return !StringUtils.isEmpty(searchQuery) ? filteredItems.get(itemPosition) : items.get(itemPosition);
 		}
 
 		@Override
 		public int getItemCount() {
-			return !StringUtils.isEmpty(searchQuery) ? filteredItems.size() : items.size();
+			return 1 + (!StringUtils.isEmpty(searchQuery) ? filteredItems.size() : items.size());
+		}
+
+		@Override
+		public int getItemViewType(int position) {
+			return position == 0 ? VIEW_TYPE_HEADER : VIEW_TYPE_RULE;
 		}
 
 		@Override
 		public boolean onItemClick(RecyclerView.ViewHolder holder, int position, Void nothing, boolean longClick) {
+			if (position == 0) {
+				return false;
+			}
 			AutohideStorage.AutohideItem autohideItem = getItem(position);
 			int index = items.indexOf(autohideItem);
 			if (autohideItem.matchMode == AutohideStorage.AutohideItem.MatchMode.LITERAL) {
@@ -287,20 +313,45 @@ public class AutohideFragment extends BaseListFragment {
 		@NonNull
 		@Override
 		public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-			return ListViewUtils.bind(new SimpleViewHolder(ViewFactory.makeTwoLinesListItem(parent,
-					ViewFactory.FEATURE_SINGLE_LINE).view), false, null, this);
+			if (viewType == VIEW_TYPE_HEADER) {
+				HeaderViewHolder holder = new HeaderViewHolder(makeHeaderView(parent));
+				holder.originalPost.checkBox.setOnClickListener(v -> setScopeForAll(
+						AutohideStorage.AutohideItem.Scope.ORIGINAL_POST, holder.originalPost.checkBox.isChecked()));
+				holder.replies.checkBox.setOnClickListener(v -> setScopeForAll(
+						AutohideStorage.AutohideItem.Scope.REPLIES, holder.replies.checkBox.isChecked()));
+				return holder;
+			}
+			ViewFactory.TwoLinesViewHolder twoLines = ViewFactory.makeTwoLinesListItem(parent,
+					ViewFactory.FEATURE_SINGLE_LINE | ViewFactory.FEATURE_WIDGET);
+			twoLines.widgetFrame.setVisibility(View.VISIBLE);
+			twoLines.widgetFrame.setOrientation(LinearLayout.HORIZONTAL);
+			RuleViewHolder holder = new RuleViewHolder(twoLines,
+					addScopeCheckBox(twoLines.widgetFrame, R.string.hide_in_original_post),
+					addScopeCheckBox(twoLines.widgetFrame, R.string.hide_in_replies));
+			holder.originalPost.setOnClickListener(v -> setScope(holder,
+					AutohideStorage.AutohideItem.Scope.ORIGINAL_POST, holder.originalPost.isChecked()));
+			holder.replies.setOnClickListener(v -> setScope(holder,
+					AutohideStorage.AutohideItem.Scope.REPLIES, holder.replies.isChecked()));
+			return ListViewUtils.bind(holder, false, null, this);
 		}
 
 		@Override
 		public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
-			ViewFactory.TwoLinesViewHolder viewHolder = (ViewFactory.TwoLinesViewHolder) holder.itemView.getTag();
+			if (holder instanceof HeaderViewHolder) {
+				bindHeader((HeaderViewHolder) holder);
+				return;
+			}
+			RuleViewHolder ruleHolder = (RuleViewHolder) holder;
+			ViewFactory.TwoLinesViewHolder viewHolder = ruleHolder.twoLines;
 			AutohideStorage.AutohideItem autohideItem = getItem(position);
+			ruleHolder.originalPost.setChecked(autohideItem.optionOriginalPost);
+			ruleHolder.replies.setChecked(autohideItem.optionReplies);
+			holder.itemView.setAlpha(autohideItem.isEnabled() ? 1f : PAUSED_ALPHA);
 			viewHolder.text1.setText(StringUtils.isEmpty(autohideItem.value)
 					? getString(R.string.all_posts) : autohideItem.value);
 			StringBuilder builder = new StringBuilder();
 			boolean and = false;
-			if (!StringUtils.isEmpty(autohideItem.boardName) || autohideItem.optionOriginalPost
-					|| autohideItem.optionSage) {
+			if (!StringUtils.isEmpty(autohideItem.boardName) || autohideItem.optionSage) {
 				if (!StringUtils.isEmpty(autohideItem.boardName)) {
 					if (and) {
 						builder.append(" & ");
@@ -309,13 +360,6 @@ public class AutohideFragment extends BaseListFragment {
 					if (!StringUtils.isEmpty(autohideItem.threadNumber)) {
 						builder.append(" & ").append(autohideItem.threadNumber);
 					}
-					and = true;
-				}
-				if (autohideItem.optionOriginalPost) {
-					if (and) {
-						builder.append(" & ");
-					}
-					builder.append("op");
 					and = true;
 				}
 				if (autohideItem.optionSage) {
@@ -381,6 +425,170 @@ public class AutohideFragment extends BaseListFragment {
 			}
 			viewHolder.text2.setText(builder);
 		}
+
+		private void setScope(RuleViewHolder holder, AutohideStorage.AutohideItem.Scope scope,
+				boolean enabled) {
+			int position = holder.getAdapterPosition();
+			if (position > 0) {
+				AutohideStorage.AutohideItem autohideItem = getItem(position);
+				int index = items.indexOf(autohideItem);
+				if (index >= 0) {
+					AutohideStorage.getInstance().setScope(index, scope, enabled);
+					notifyItemChanged(position);
+					notifyItemChanged(0);
+				}
+			}
+		}
+
+		private void setScopeForAll(AutohideStorage.AutohideItem.Scope scope, boolean enabled) {
+			AutohideStorage.getInstance().setScopeForAll(scope, enabled);
+			notifyDataSetChanged();
+		}
+
+		private void bindHeader(HeaderViewHolder holder) {
+			int originalPostCount = 0;
+			int repliesCount = 0;
+			for (AutohideStorage.AutohideItem item : items) {
+				if (item.optionOriginalPost) {
+					originalPostCount++;
+				}
+				if (item.optionReplies) {
+					repliesCount++;
+				}
+			}
+			holder.originalPost.setState(items.size(), originalPostCount);
+			holder.replies.setState(items.size(), repliesCount);
+		}
+	}
+
+	private static class RuleViewHolder extends RecyclerView.ViewHolder {
+		public final ViewFactory.TwoLinesViewHolder twoLines;
+		public final CheckBox originalPost;
+		public final CheckBox replies;
+
+		public RuleViewHolder(ViewFactory.TwoLinesViewHolder twoLines, CheckBox originalPost, CheckBox replies) {
+			super(twoLines.view);
+			this.twoLines = twoLines;
+			this.originalPost = originalPost;
+			this.replies = replies;
+		}
+	}
+
+	private static class HeaderViewHolder extends RecyclerView.ViewHolder {
+		public final AggregateCheckView originalPost;
+		public final AggregateCheckView replies;
+
+		public HeaderViewHolder(View itemView) {
+			super(itemView);
+			originalPost = itemView.findViewById(R.id.autohide_scope_original_post);
+			replies = itemView.findViewById(R.id.autohide_scope_replies);
+		}
+	}
+
+	private static class AggregateCheckView extends FrameLayout {
+		public final CheckBox checkBox;
+		private final View mixedIndicator;
+		private final CharSequence label;
+
+		public AggregateCheckView(Context context, int labelResId) {
+			super(context);
+			label = context.getText(labelResId);
+			checkBox = new CheckBox(context);
+			ThemeEngine.applyStyle(checkBox);
+			LayoutParams checkParams = new LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT,
+					Gravity.CENTER);
+			addView(checkBox, checkParams);
+
+			mixedIndicator = new View(context);
+			GradientDrawable background = new GradientDrawable();
+			background.setColor(ThemeEngine.getTheme(context).accent);
+			mixedIndicator.setBackground(background);
+			int indicatorSize = dp(context, 8f);
+			addView(mixedIndicator, new LayoutParams(indicatorSize, indicatorSize, Gravity.CENTER));
+			mixedIndicator.setVisibility(GONE);
+			mixedIndicator.setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
+		}
+
+		public void setState(int totalCount, int checkedCount) {
+			boolean mixed = checkedCount > 0 && checkedCount < totalCount;
+			checkBox.setEnabled(totalCount > 0);
+			checkBox.setChecked(totalCount > 0 && checkedCount == totalCount);
+			mixedIndicator.setVisibility(mixed ? VISIBLE : GONE);
+			int stateResId = mixed ? R.string.partially_enabled
+					: checkedCount > 0 ? R.string.enabled : R.string.disabled;
+			checkBox.setContentDescription(label + ": " + getContext().getString(stateResId));
+		}
+	}
+
+	private static View makeHeaderView(ViewGroup parent) {
+		Context context = parent.getContext();
+		LinearLayout root = new LinearLayout(context);
+		root.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+				ViewGroup.LayoutParams.WRAP_CONTENT));
+		root.setOrientation(LinearLayout.HORIZONTAL);
+		root.setGravity(Gravity.CENTER_VERTICAL);
+		root.setPaddingRelative(dp(context, 16f), dp(context, 8f), dp(context, 16f), dp(context, 8f));
+		root.setMinimumHeight(dp(context, 72f));
+
+		LinearLayout textLayout = new LinearLayout(context);
+		textLayout.setOrientation(LinearLayout.VERTICAL);
+		TextView title = makeHeaderText(context, R.string.autohide_scope, 16f, false);
+		title.setTypeface(ResourceUtils.TYPEFACE_MEDIUM);
+		TextView summary = makeHeaderText(context, R.string.all_rules, 14f, true);
+		textLayout.addView(title, LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+		textLayout.addView(summary, LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+		LinearLayout.LayoutParams textParams = new LinearLayout.LayoutParams(0,
+				LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+		textParams.setMarginEnd(dp(context, 16f));
+		root.addView(textLayout, textParams);
+
+		root.addView(makeHeaderScope(context, R.string.original_post_short,
+				R.id.autohide_scope_original_post), new LinearLayout.LayoutParams(dp(context, 64f),
+				LinearLayout.LayoutParams.WRAP_CONTENT));
+		root.addView(makeHeaderScope(context, R.string.replies,
+				R.id.autohide_scope_replies), new LinearLayout.LayoutParams(dp(context, 64f),
+				LinearLayout.LayoutParams.WRAP_CONTENT));
+		return root;
+	}
+
+	private static LinearLayout makeHeaderScope(Context context, int titleResId, int checkId) {
+		LinearLayout column = new LinearLayout(context);
+		column.setOrientation(LinearLayout.VERTICAL);
+		column.setGravity(Gravity.CENTER_HORIZONTAL);
+		TextView label = makeHeaderText(context, titleResId, 12f, true);
+		column.addView(label, LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+		AggregateCheckView checkView = new AggregateCheckView(context, titleResId);
+		checkView.setId(checkId);
+		column.addView(checkView, LinearLayout.LayoutParams.MATCH_PARENT, dp(context, 48f));
+		return column;
+	}
+
+	private static TextView makeHeaderText(Context context, int textResId, float textSize, boolean secondary) {
+		TextView textView = new TextView(context);
+		textView.setText(textResId);
+		textView.setTextSize(TypedValue.COMPLEX_UNIT_SP, textSize);
+		if (secondary) {
+			textView.setTextColor(ResourceUtils.getColorStateList(context, android.R.attr.textColorSecondary));
+		}
+		ThemeEngine.applyStyle(textView);
+		return textView;
+	}
+
+	private static CheckBox addScopeCheckBox(LinearLayout parent, int descriptionResId) {
+		Context context = parent.getContext();
+		FrameLayout cell = new FrameLayout(context);
+		parent.addView(cell, new LinearLayout.LayoutParams(dp(context, 64f),
+				LinearLayout.LayoutParams.MATCH_PARENT));
+		CheckBox checkBox = new CheckBox(context);
+		ThemeEngine.applyStyle(checkBox);
+		checkBox.setContentDescription(context.getText(descriptionResId));
+		cell.addView(checkBox, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT,
+				FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER));
+		return checkBox;
+	}
+
+	private static int dp(Context context, float value) {
+		return (int) (value * ResourceUtils.obtainDensity(context) + 0.5f);
 	}
 
 	public static class QuickAutohideDialog extends DialogFragment {
@@ -471,6 +679,7 @@ public class AutohideFragment extends BaseListFragment {
 		private EditText boardNameEdit;
 		private EditText threadNumberEdit;
 		private CheckBox autohideOriginalPost;
+		private CheckBox autohideReplies;
 		private CheckBox autohideSage;
 		private CheckBox autohideSubject;
 		private CheckBox autohideComment;
@@ -501,6 +710,7 @@ public class AutohideFragment extends BaseListFragment {
 			boardNameEdit = view.findViewById(R.id.board_name);
 			threadNumberEdit = view.findViewById(R.id.thread_number);
 			autohideOriginalPost = view.findViewById(R.id.autohide_original_post);
+			autohideReplies = view.findViewById(R.id.autohide_replies);
 			autohideSage = view.findViewById(R.id.autohide_sage);
 			autohideSubject = view.findViewById(R.id.autohide_subject);
 			autohideComment = view.findViewById(R.id.autohide_comment);
@@ -534,6 +744,7 @@ public class AutohideFragment extends BaseListFragment {
 				boardNameEdit.setText(autohideItem.boardName);
 				threadNumberEdit.setText(autohideItem.threadNumber);
 				autohideOriginalPost.setChecked(autohideItem.optionOriginalPost);
+				autohideReplies.setChecked(autohideItem.optionReplies);
 				autohideSage.setChecked(autohideItem.optionSage);
 				autohideSubject.setChecked(autohideItem.optionSubject);
 				autohideComment.setChecked(autohideItem.optionComment);
@@ -544,7 +755,8 @@ public class AutohideFragment extends BaseListFragment {
 				chanNameSelector.setText(R.string.all_forums);
 				boardNameEdit.setText(null);
 				threadNumberEdit.setText(null);
-				autohideOriginalPost.setChecked(false);
+				autohideOriginalPost.setChecked(true);
+				autohideReplies.setChecked(true);
 				autohideSage.setChecked(false);
 				autohideSubject.setChecked(true);
 				autohideComment.setChecked(true);
@@ -599,6 +811,7 @@ public class AutohideFragment extends BaseListFragment {
 			String boardName = boardNameEdit.getText().toString();
 			String threadNumber = threadNumberEdit.getText().toString();
 			boolean optionOriginalPost = autohideOriginalPost.isChecked();
+			boolean optionReplies = autohideReplies.isChecked();
 			boolean optionSage = autohideSage.isChecked();
 			boolean optionSubject = autohideSubject.isChecked();
 			boolean optionComment = autohideComment.isChecked();
@@ -606,7 +819,7 @@ public class AutohideFragment extends BaseListFragment {
 			boolean optionFileName = autohideFileName.isChecked();
 			String value = valueEdit.getText().toString();
 			return new AutohideStorage.AutohideItem(selectedChanNames.size() > 0 ? selectedChanNames : null,
-					boardName, threadNumber, optionOriginalPost, optionSage,
+					boardName, threadNumber, optionOriginalPost, optionReplies, optionSage,
 					optionSubject, optionComment, optionName, optionFileName,
 					AutohideStorage.AutohideItem.MatchMode.REGEX, value);
 		}

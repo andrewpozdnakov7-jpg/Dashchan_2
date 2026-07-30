@@ -139,13 +139,26 @@ public class LocalArchiveManager {
 		return null;
 	}
 
+	public static Item findDefaultThreadArchive(String chanName, String boardName, String threadNumber) {
+		for (Item item : collect()) {
+			if (item.isExternal()) {
+				continue;
+			}
+			JSONObject manifest = readManifest(item);
+			if (manifest != null && MANIFEST_SCHEMA.equals(manifest.optString("schema"))
+					&& chanName.equals(manifest.optString("chan"))
+					&& boardName.equals(manifest.optString("board"))
+					&& threadNumber.equals(manifest.optString("thread"))) {
+				return item;
+			}
+		}
+		return null;
+	}
+
 	public static boolean delete(Item item) {
 		boolean success;
 		if (item.treeUri == null) {
-			success = delete(item.htmlFile) & delete(item.zipFile) & delete(item.manifestFile);
-			DataFile resources = DataFile.obtain(DataFile.Target.DOWNLOADS, DIRECTORY_ARCHIVE)
-					.getChild(item.name);
-			success &= deleteRecursively(resources);
+			success = deleteDefault(item.name);
 		} else {
 			ContentResolver resolver = MainApplication.getInstance().getContentResolver();
 			if (!hasWritePermission(resolver, item.treeUri)) {
@@ -165,6 +178,18 @@ public class LocalArchiveManager {
 			}
 		}
 		return success;
+	}
+
+	public static boolean deleteDefault(String name) {
+		if (!DataFile.isValidSegment(name)) {
+			return false;
+		}
+		DataFile directory = DataFile.obtain(DataFile.Target.DOWNLOADS, DIRECTORY_ARCHIVE);
+		boolean success = delete(directory.getChild(name + ".html"))
+				& delete(directory.getChild(name + ".htm"))
+				& delete(directory.getChild(name + ".zip"))
+				& delete(directory.getChild(name + ".json"));
+		return deleteRecursively(directory.getChild(name)) & success;
 	}
 
 	private static boolean hasWritePermission(ContentResolver resolver, Uri treeUri) {

@@ -14,7 +14,10 @@ import chan.util.StringUtils;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.CacheManager;
 import com.mishiranu.dashchan.content.LocalArchiveManager;
+import com.mishiranu.dashchan.content.LocalArchiveReader;
+import com.mishiranu.dashchan.content.MainApplication;
 import com.mishiranu.dashchan.content.model.Post;
+import com.mishiranu.dashchan.content.model.PostItem;
 import com.mishiranu.dashchan.content.model.PostNumber;
 import com.mishiranu.dashchan.content.service.DownloadService;
 import com.mishiranu.dashchan.text.HtmlParser;
@@ -52,7 +55,9 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.TreeMap;
 import org.json.JSONException;
+import org.json.JSONObject;
 
 public class SendLocalArchiveTask extends ExecutorTask<Integer, SendLocalArchiveTask.Result>
 		implements ChanMarkup.MarkupExtra {
@@ -137,6 +142,35 @@ public class SendLocalArchiveTask extends ExecutorTask<Integer, SendLocalArchive
 		Collection<Post> posts = this.posts;
 		if (posts.isEmpty()) {
 			return null;
+		}
+		LocalArchiveManager.Item replacedArchive = LocalArchiveManager.findDefaultThreadArchive(
+				chan.name, boardName, threadNumber);
+		boolean saveThumbnails = this.saveThumbnails;
+		boolean saveFiles = this.saveFiles;
+		boolean createZip = this.createZip;
+		int previousPostsCount = 0;
+		if (replacedArchive != null) {
+			LocalArchiveReader.Archive archive = LocalArchiveReader.read(replacedArchive);
+			if (archive != null && chan.name.equals(archive.chanName) && boardName.equals(archive.boardName)
+					&& threadNumber.equals(archive.threadNumber)) {
+				TreeMap<PostNumber, Post> mergedPosts = new TreeMap<>();
+				for (PostItem postItem : archive.postItems.values()) {
+					mergedPosts.put(postItem.getPostNumber(), postItem.getPost());
+				}
+				previousPostsCount = mergedPosts.size();
+				for (Post post : posts) {
+					mergedPosts.put(post.number, post);
+				}
+				posts = mergedPosts.values();
+				JSONObject manifest = LocalArchiveManager.readManifest(replacedArchive);
+				if (manifest != null) {
+					saveFiles |= manifest.optBoolean("savedFiles");
+					saveThumbnails |= manifest.optBoolean("savedThumbnails");
+				}
+				createZip |= replacedArchive.hasZip();
+			} else {
+				replacedArchive = null;
+			}
 		}
 		Object[] decodeTo = new Object[2];
 		ArrayList<SpanItem> spanItems = new ArrayList<>();
@@ -285,7 +319,8 @@ public class SendLocalArchiveTask extends ExecutorTask<Integer, SendLocalArchive
 					threadNumber, threadTitle, posts.size(), totalFilesCount, saveFiles, saveThumbnails)
 					.toString(2).getBytes(StandardCharsets.UTF_8);
 			success = true;
-			return new Result(archiveFile, archiveName, manifest, filesToDownload, thumbnailsToDownload);
+			return new Result(archiveFile, archiveName, manifest, filesToDownload, thumbnailsToDownload,
+					createZip, replacedArchive, previousPostsCount, posts.size());
 		} catch (IOException | JSONException e) {
 			return null;
 		} finally {
@@ -318,9 +353,9 @@ public class SendLocalArchiveTask extends ExecutorTask<Integer, SendLocalArchive
 					new ByteArrayInputStream(result.manifest)));
 			results.add(createDownload(result.archiveName + ".html", archiveInput));
 			results.add(createDownload(result.archiveName + "/" + DIRECTORY_THUMBNAILS,
-					result.thumbnailsToDownload, createZip));
+					result.thumbnailsToDownload, result.createZip));
 			results.add(createDownload(result.archiveName + "/" + DIRECTORY_FILES,
-					result.filesToDownload, createZip));
+					result.filesToDownload, result.createZip));
 			DownloadResult enqueueResult = binder -> {
 				String localArchiveId = LocalArchiveManager.createDefaultId(result.archiveName);
 				try (DownloadService.Accumulate ignored = binder.accumulateLocalArchive(localArchiveId)) {
@@ -329,11 +364,7 @@ public class SendLocalArchiveTask extends ExecutorTask<Integer, SendLocalArchive
 					}
 				}
 			};
-			if (createZip) {
-				downloadResult = binder -> new ZipCoordinator(binder, result, enqueueResult).start();
-			} else {
-				downloadResult = enqueueResult;
-			}
+			downloadResult = binder -> new ArchiveCoordinator(binder, result, enqueueResult).start();
 		}
 		callback.onLocalArchivationComplete(downloadResult);
 	}
@@ -364,8 +395,8 @@ public class SendLocalArchiveTask extends ExecutorTask<Integer, SendLocalArchive
 		};
 	}
 
-	private static class ZipCoordinator implements DownloadService.Callback, PackLocalArchiveTask.Callback {
-		private static final HashSet<ZipCoordinator> ACTIVE = new HashSet<>();
+	private static class ArchiveCoordinator implements DownloadService.Callback, PackLocalArchiveTask.Callback {
+		private static final HashSet<ArchiveCoordinator> ACTIVE = new HashSet<>();
 
 		private final DownloadService.Binder binder;
 		private final Result result;
@@ -377,7 +408,7 @@ public class SendLocalArchiveTask extends ExecutorTask<Integer, SendLocalArchive
 		private boolean success = true;
 		private boolean finished;
 
-		private ZipCoordinator(DownloadService.Binder binder, Result result, DownloadResult enqueueResult) {
+		private ArchiveCoordinator(DownloadService.Binder binder, Result result, DownloadResult enqueueResult) {
 			this.binder = binder;
 			this.result = result;
 			this.enqueueResult = enqueueResult;
@@ -429,12 +460,12 @@ public class SendLocalArchiveTask extends ExecutorTask<Integer, SendLocalArchive
 			synchronized (ACTIVE) {
 				ACTIVE.remove(this);
 			}
-			if (success) {
+			if (success && result.createZip) {
 				PackLocalArchiveTask task = new PackLocalArchiveTask(this, result.archiveName,
 						obtainNames(result.filesToDownload), obtainNames(result.thumbnailsToDownload));
 				task.execute(ConcurrentUtils.PARALLEL_EXECUTOR);
 			} else {
-				onPackLocalArchiveComplete(false);
+				complete(success);
 			}
 		}
 
@@ -447,13 +478,41 @@ public class SendLocalArchiveTask extends ExecutorTask<Integer, SendLocalArchive
 					synchronized (ACTIVE) {
 						ACTIVE.remove(this);
 					}
+					ConcurrentUtils.PARALLEL_EXECUTOR.execute(
+							() -> LocalArchiveManager.deleteDefault(result.archiveName));
 				});
 			}
 		}
 
 		@Override
 		public void onPackLocalArchiveComplete(boolean success) {
-			ClickableToast.show(success ? R.string.zip_archive_created : R.string.zip_archive_failed);
+			if (result.replacedArchive == null) {
+				ClickableToast.show(success ? R.string.zip_archive_created : R.string.zip_archive_failed);
+			}
+			complete(success);
+		}
+
+		private void complete(boolean success) {
+			if (success && result.replacedArchive != null) {
+				ConcurrentUtils.PARALLEL_EXECUTOR.execute(() -> {
+					boolean deleted = LocalArchiveManager.delete(result.replacedArchive);
+					ConcurrentUtils.HANDLER.post(() -> {
+						if (deleted) {
+							ClickableToast.show(MainApplication.getInstance().getString(
+									R.string.local_archive_updated__format,
+									result.previousPostsCount, result.postsCount));
+						} else {
+							ClickableToast.show(R.string.local_archive_replace_failed);
+						}
+					});
+				});
+			} else if (!success) {
+				ConcurrentUtils.PARALLEL_EXECUTOR.execute(
+						() -> LocalArchiveManager.deleteDefault(result.archiveName));
+				if (result.createZip && result.replacedArchive != null) {
+					ClickableToast.show(R.string.zip_archive_failed);
+				}
+			}
 		}
 	}
 
@@ -522,15 +581,24 @@ public class SendLocalArchiveTask extends ExecutorTask<Integer, SendLocalArchive
 		public final byte[] manifest;
 		public final List<DownloadService.DownloadItem> filesToDownload;
 		public final List<DownloadService.DownloadItem> thumbnailsToDownload;
+		public final boolean createZip;
+		public final LocalArchiveManager.Item replacedArchive;
+		public final int previousPostsCount;
+		public final int postsCount;
 
 		private Result(File archiveFile, String archiveName, byte[] manifest,
 				List<DownloadService.DownloadItem> filesToDownload,
-				List<DownloadService.DownloadItem> thumbnailsToDownload) {
+				List<DownloadService.DownloadItem> thumbnailsToDownload, boolean createZip,
+				LocalArchiveManager.Item replacedArchive, int previousPostsCount, int postsCount) {
 			this.archiveFile = archiveFile;
 			this.archiveName = archiveName;
 			this.manifest = manifest;
 			this.filesToDownload = filesToDownload;
 			this.thumbnailsToDownload = thumbnailsToDownload;
+			this.createZip = createZip;
+			this.replacedArchive = replacedArchive;
+			this.previousPostsCount = previousPostsCount;
+			this.postsCount = postsCount;
 		}
 	}
 

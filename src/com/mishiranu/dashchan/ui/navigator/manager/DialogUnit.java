@@ -1591,7 +1591,8 @@ public class DialogUnit {
 					break;
 				}
 				case ARCHIVE: {
-					resId = R.string.archive__verb;
+					resId = state.archiveChanName == null
+							? R.string.save_or_update_thread : R.string.archive__verb;
 					break;
 				}
 			}

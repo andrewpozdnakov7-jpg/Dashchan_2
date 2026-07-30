@@ -17,6 +17,7 @@ import com.mishiranu.dashchan.content.BackupManager;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.service.DownloadService;
 import com.mishiranu.dashchan.ui.FragmentHandler;
+import com.mishiranu.dashchan.ui.preference.core.CheckPreference;
 import com.mishiranu.dashchan.ui.preference.core.ListPreference;
 import com.mishiranu.dashchan.ui.preference.core.Preference;
 import com.mishiranu.dashchan.ui.preference.core.PreferenceFragment;
@@ -85,6 +86,10 @@ public class AboutFragment extends PreferenceFragment implements FragmentHandler
 			Preferences.resetUpdatePromptState();
 			((FragmentHandler) requireActivity()).pushFragment(new UpdateFragment());
 		});
+		CheckPreference automaticUpdateCheck = addCheck(false, Preferences.KEY_UPDATE_AUTO_CHECK_ENABLED,
+				Preferences.isUpdateAutoCheckEnabled(), R.string.automatic_update_check, 0);
+		automaticUpdateCheck.setOnAfterChangeListener(preference ->
+				Preferences.setUpdateAutoCheckEnabled(preference.getValue()));
 		addButton(R.string.check_for_updates, 0)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 						.pushFragment(new UpdateFragment()));
