@@ -19,11 +19,10 @@ sources="$1"
 	exit 1
 }
 
-# Pinned checksums for the exact source archives downloaded below. A version or
-# archive change must update the matching checksum explicitly.
+# Pinned checksums for stable release archives. libyuv is fetched and verified
+# separately by its full Git commit ID because Gitiles archives are not byte-stable.
 DAV1D_SHA256="732010aa5ef461fa93355ed2c6c5fedb48ddc4b74e697eaabe8907eaeb943011"
 FFMPEG_SHA256="b4925bd4411e654ad3884bc8da1860b0d860bd64a95a17220de48cfcd5f0a859"
-YUV_SHA256="9b6958a52fcfa237e0f4eac3d58eb82e0814139ed98a60ae71510d8b9ed810ee"
 
 download_and_extract() {
 	local url="$1"
@@ -72,6 +71,34 @@ prepare_source() {
 	fi
 }
 
+prepare_git_source() {
+	local name="$1"
+	local version="$2"
+	local url="$3"
+	local target="$4"
+	local marker="$target/.dashchan-version"
+	local expected="$name:$version"
+	local repository
+	if [ -f "$marker" ] && [ "$(cat "$marker")" != "$expected" ]; then
+		rm -rf "$target"
+	fi
+	if [ ! -f "$marker" ]; then
+		repository="$(mktemp -d)"
+		rm -rf "$target"
+		mkdir -p "$target"
+		git -C "$repository" init -q
+		git -C "$repository" remote add origin "$url"
+		git -C "$repository" fetch -q --depth=1 origin "$version"
+		[ "$(git -C "$repository" rev-parse FETCH_HEAD)" = "$version" ] || {
+			rm -rf "$repository" "$target"
+			exit 1
+		}
+		git -C "$repository" archive FETCH_HEAD | tar -C "$target" -x
+		rm -rf "$repository"
+		printf '%s\n' "$expected" > "$marker"
+	fi
+}
+
 sources_dav1d="$sources/dav1d"
 sources_ffmpeg="$sources/ffmpeg"
 sources_yuv="$sources/yuv"
@@ -84,6 +111,5 @@ prepare_source ffmpeg "$FFMPEG_VERSION" \
 	"https://ffmpeg.org/releases/ffmpeg-$FFMPEG_VERSION.tar.bz2" \
 	"$FFMPEG_SHA256" "$sources_ffmpeg" -xj --touch --strip-components=1
 
-prepare_source yuv "$YUV_VERSION" \
-	"https://chromium.googlesource.com/libyuv/libyuv/+archive/$YUV_VERSION.tar.gz" \
-	"$YUV_SHA256" "$sources_yuv" -xz --touch
+prepare_git_source yuv "$YUV_VERSION" \
+	"https://chromium.googlesource.com/libyuv/libyuv" "$sources_yuv"
