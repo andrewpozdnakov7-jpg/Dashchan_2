@@ -1,9 +1,6 @@
 name: Android CI
 
 on:
-  push:
-    branches:
-      - master
   pull_request:
     branches:
       - master
@@ -45,23 +42,84 @@ jobs:
     steps:
       - name: Check out sources
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: 2
+
+      - name: Select validation path
+        id: validation
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          build_required=true
+          if [ "$EVENT_NAME" != 'workflow_dispatch' ] &&
+              git rev-parse --verify HEAD^ >/dev/null 2>&1; then
+            mapfile -t changed_files < <(git diff --name-only HEAD^ HEAD)
+            if [ "${#changed_files[@]}" -gt 0 ]; then
+              build_required=false
+              for path in "${changed_files[@]}"; do
+                if [ "$path" != 'update/data.json' ]; then
+                  build_required=true
+                  break
+                fi
+              done
+            fi
+          fi
+
+          echo "build_required=$build_required" >> "$GITHUB_OUTPUT"
+          echo "APK build required: $build_required"
+
+      - name: Validate update manifest
+        run: |
+          python3 - <<'PY'
+          import json
+          import re
+          from pathlib import Path
+          from urllib.parse import urlparse
+
+          data = json.loads(Path("update/data.json").read_text(encoding="utf-8"))
+          fingerprint = re.compile(r"^[0-9a-f]{64}$")
+          for section in ("client", "dvach"):
+              entries = data.get(section)
+              if not isinstance(entries, list) or not entries:
+                  raise SystemExit(f"Missing update section: {section}")
+              for entry in entries:
+                  if not isinstance(entry.get("code"), int) or entry["code"] <= 0:
+                      raise SystemExit(f"Invalid code in {section}")
+                  if not isinstance(entry.get("length"), int) or entry["length"] <= 0:
+                      raise SystemExit(f"Invalid length in {section}")
+                  parsed = urlparse(entry.get("source", ""))
+                  if parsed.scheme != "https" or parsed.netloc != "github.com":
+                      raise SystemExit(f"Invalid source URL in {section}")
+                  if not fingerprint.fullmatch(entry.get("fingerprint", "")):
+                      raise SystemExit(f"Invalid signing fingerprint in {section}")
+          print("update/data.json is valid")
+          PY
+
+      - name: Record manifest-only fast path
+        if: steps.validation.outputs.build_required != 'true'
+        run: echo 'Only update/data.json changed; APK compilation is not required.'
 
       - name: Set up Java
+        if: steps.validation.outputs.build_required == 'true'
         uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4.8.0
         with:
           distribution: temurin
           java-version: '17'
 
       - name: Set up Gradle
+        if: steps.validation.outputs.build_required == 'true'
         uses: gradle/actions/setup-gradle@748248ddd2a24f49513d8f472f81c3a07d4d50e1 # v4.4.4
 
       - name: Install native build tools
+        if: steps.validation.outputs.build_required == 'true'
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y \
             bzip2 cmake curl meson nasm ninja-build pkg-config xz-utils
 
       - name: Install Android SDK components
+        if: steps.validation.outputs.build_required == 'true'
         run: |
           ANDROID_SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
           SDKMANAGER="$ANDROID_SDK/cmdline-tools/latest/bin/sdkmanager"
@@ -80,7 +138,7 @@ jobs:
             'ndk;29.0.14206865'
 
       - name: Prepare F-Droid native source inputs
-        if: env.BUILD_TASK == 'assembleFdroidNdebug'
+        if: steps.validation.outputs.build_required == 'true' && env.BUILD_TASK == 'assembleFdroidNdebug'
         env:
           DAV1D_VERSION: '1.5.3'
           FFMPEG_VERSION: '8.1.2'
@@ -96,6 +154,7 @@ jobs:
           } >> "$GITHUB_ENV"
 
       - name: Build APK
+        if: steps.validation.outputs.build_required == 'true'
         run: |
           set -o pipefail
           chmod +x gradlew Dashchan-Webm/*.sh
@@ -104,6 +163,7 @@ jobs:
             -PnativeAbis="$NATIVE_ABIS" 2>&1 | tee build-main.log
 
       - name: Create APK checksums
+        if: steps.validation.outputs.build_required == 'true'
         run: |
           set -euo pipefail
           mapfile -d '' apks < <(find build/outputs/apk -type f -name '*.apk' -print0 | sort -z)
@@ -115,7 +175,7 @@ jobs:
           cat SHA256SUMS.txt
 
       - name: Upload APK, checksums and diagnostics
-        if: always()
+        if: always() && steps.validation.outputs.build_required == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: android-${{ github.event_name == 'workflow_dispatch' && github.event.inputs.distribution || 'github' }}-ndebug-${{ github.event_name == 'workflow_dispatch' && github.event.inputs.build_scope || 'arm64' }}-${{ github.run_number }}
