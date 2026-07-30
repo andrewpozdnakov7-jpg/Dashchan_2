@@ -10,6 +10,8 @@ The private release key is not part of this repository or source archives. Never
 
 `keystore.properties.template` documents the expected field names only. The main application build does not treat that template as a release credential.
 
+The manual GitHub Actions signing procedure is documented in [GITHUB_SIGNING.md](GITHUB_SIGNING.md). Configure it only after protecting the default branch and the `release-signing` Environment.
+
 ## Certificate Continuity
 
 Android accepts an update only when it is signed by the same key as the installed application. Before publishing, compare the candidate with the previous stable APK:
