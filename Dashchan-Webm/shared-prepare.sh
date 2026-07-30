@@ -19,10 +19,11 @@ sources="$1"
 	exit 1
 }
 
-# Optional checksum hooks. Keep empty until release checksums are pinned.
-DAV1D_SHA256="${DAV1D_SHA256:-}"
-FFMPEG_SHA256="${FFMPEG_SHA256:-}"
-YUV_SHA256="${YUV_SHA256:-}"
+# Pinned checksums for the exact source archives downloaded below. A version or
+# archive change must update the matching checksum explicitly.
+DAV1D_SHA256="732010aa5ef461fa93355ed2c6c5fedb48ddc4b74e697eaabe8907eaeb943011"
+FFMPEG_SHA256="b4925bd4411e654ad3884bc8da1860b0d860bd64a95a17220de48cfcd5f0a859"
+YUV_SHA256="9b6958a52fcfa237e0f4eac3d58eb82e0814139ed98a60ae71510d8b9ed810ee"
 
 download_and_extract() {
 	local url="$1"
