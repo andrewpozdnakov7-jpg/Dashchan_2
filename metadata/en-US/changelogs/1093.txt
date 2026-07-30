@@ -1,0 +1,6 @@
+Added separate original-post and reply scopes to quick autohide rules.
+Added bulk controls for enabling or disabling autohide scopes across all rules.
+Added an automatic update check setting; update checks remain enabled by default.
+Existing local thread archives can now be refreshed with newly loaded posts.
+Enabled automated APK builds through GitHub Actions.
+Started preparing Slooop for publication in the F-Droid catalog.
