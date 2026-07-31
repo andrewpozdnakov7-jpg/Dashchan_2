@@ -1,0 +1,3 @@
+Restored Yandex reverse image search alongside Google Lens and Android application sharing.
+Local and cached images are uploaded through a dedicated background task with progress and error reporting.
+Images uploaded to Yandex are resized and re-encoded without the original file name or embedded metadata.

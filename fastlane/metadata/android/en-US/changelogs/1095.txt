@@ -1,0 +1,1 @@
+Restored Yandex reverse image search alongside Google Lens and Android app sharing. Local images are resized and re-encoded without their original file name or embedded metadata before upload.
