@@ -79,8 +79,8 @@ matching GitHub/F-Droid versions, and the exact `arm64-v8a`, `armeabi-v7a`, and 
 Download the temporary artifact and independently verify it before testing:
 
 ```sh
-version=3.2.14
-code=1094
+version=3.2.15
+code=1095
 sha256sum -c SHA256SUMS.txt
 apksigner verify --verbose --print-certs "Slooop-$version-$code-ffmpeg8-all-abi-signed.apk"
 apksigner verify --verbose --print-certs "Slooop-$version-$code-fdroid-ffmpeg8-all-abi-signed.apk"
