@@ -1,0 +1,1 @@
+Added a dedicated F-Droid build profile without the app self-updater or optional Google Play Services provider. Extension APK downloads now require explicit confirmation. Native FFmpeg, dav1d and libyuv sources are pinned for reproducible builds.
