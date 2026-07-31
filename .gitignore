@@ -18,6 +18,8 @@
 !/docs/**
 !/distribution
 !/distribution/**
+!/fastlane
+!/fastlane/**
 !/gradle
 !/gradle.properties
 !/gradlew
