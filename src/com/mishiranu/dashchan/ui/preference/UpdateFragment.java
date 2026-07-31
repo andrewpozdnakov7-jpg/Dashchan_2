@@ -496,8 +496,12 @@ public class UpdateFragment extends BaseListFragment {
 					}
 				}
 				if (!requests.isEmpty()) {
-					displayUpdateReminderDialog(getChildFragmentManager());
-					UpdaterActivity.startUpdater(requests);
+					if (BuildConfig.REQUIRE_EXTENSION_INSTALL_CONSENT) {
+						displayExtensionInstallConsentDialog(getChildFragmentManager(), requests);
+					} else {
+						displayUpdateReminderDialog(getChildFragmentManager());
+						UpdaterActivity.startUpdater(requests);
+					}
 				} else {
 					ClickableToast.show(R.string.no_available_updates);
 				}
@@ -505,6 +509,20 @@ public class UpdateFragment extends BaseListFragment {
 			}
 		}
 		return false;
+	}
+
+	private static void displayExtensionInstallConsentDialog(FragmentManager fragmentManager,
+			ArrayList<UpdaterActivity.Request> requests) {
+		new InstanceDialog(fragmentManager, null, provider -> new AlertDialog
+				.Builder(provider.getContext())
+				.setTitle(R.string.extension_install_consent_title)
+				.setMessage(R.string.extension_install_consent__sentence)
+				.setNegativeButton(android.R.string.cancel, null)
+				.setPositiveButton(R.string.download_files, (dialog, which) -> {
+					UpdaterActivity.startUpdaterAfterExtensionInstallConsent(requests);
+					((FragmentHandler) provider.getActivity()).removeFragment();
+				})
+				.create());
 	}
 
 	private static void displayUpdateReminderDialog(FragmentManager fragmentManager) {

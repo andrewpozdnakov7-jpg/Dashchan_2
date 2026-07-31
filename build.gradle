@@ -113,9 +113,12 @@ def builtinWebmLibrariesPattern = [
 		'/lib/*/libyuv.so'
 ]
 def builtinWebmProvidedSourceDirectories = [
-		dav1d: providers.environmentVariable('DASHCHAN_DAV1D_SOURCE_DIR'),
-		ffmpeg: providers.environmentVariable('DASHCHAN_FFMPEG_SOURCE_DIR'),
+		dav1d: providers.environmentVariable('DASHCHAN_DAV1D_SOURCE_DIR')
+				.orElse(providers.gradleProperty('dashchanDav1dSourceDir')),
+		ffmpeg: providers.environmentVariable('DASHCHAN_FFMPEG_SOURCE_DIR')
+				.orElse(providers.gradleProperty('dashchanFfmpegSourceDir')),
 		libyuv: providers.environmentVariable('DASHCHAN_LIBYUV_SOURCE_DIR')
+				.orElse(providers.gradleProperty('dashchanLibyuvSourceDir'))
 ]
 def getAndroidSdkDirectory = {
 	def localProperties = new Properties()
@@ -139,8 +142,8 @@ android {
 
 	defaultConfig {
 		applicationId = 'io.dashchan2'
-		versionCode = 1093
-		versionName = '3.2.13'
+		versionCode = 1094
+		versionName = '3.2.14'
 
 		minSdk = 30
 		targetSdk = 37
@@ -185,6 +188,7 @@ android {
 			dimension = 'distribution'
 			buildConfigField 'boolean', 'ALLOW_GMS_SECURITY_PROVIDER', 'true'
 			buildConfigField 'boolean', 'ALLOW_APPLICATION_SELF_UPDATE', 'true'
+			buildConfigField 'boolean', 'REQUIRE_EXTENSION_INSTALL_CONSENT', 'false'
 			buildConfigField 'String', 'URI_UPDATES', '"//raw.githubusercontent.com/' +
 					'andrewpozdnakov7-jpg/Dashchan_2/master/update/data.json"'
 			buildConfigField 'String', 'URI_UPDATES_BETA', '"//raw.githubusercontent.com/' +
@@ -202,6 +206,7 @@ android {
 			dimension = 'distribution'
 			buildConfigField 'boolean', 'ALLOW_GMS_SECURITY_PROVIDER', 'false'
 			buildConfigField 'boolean', 'ALLOW_APPLICATION_SELF_UPDATE', 'false'
+			buildConfigField 'boolean', 'REQUIRE_EXTENSION_INSTALL_CONSENT', 'true'
 			buildConfigField 'String', 'URI_UPDATES', '""'
 			buildConfigField 'String', 'URI_UPDATES_BETA', '""'
 			buildConfigField 'String', 'UPDATE_MANIFEST_URL', '""'
@@ -261,27 +266,29 @@ android {
 	buildTypes.create('leak') {
 		debuggable = true
 	}
-	buildTypes.create('ndebug') {
-		debuggable = false
-		manifestPlaceholders = [
+	def configureProductionBuildType = { buildType ->
+		buildType.debuggable = false
+		buildType.manifestPlaceholders = [
 				appLabel: 'Slooop',
 				fileProviderAuthority: 'io.dashchan2.provider'
 		]
-		buildConfigField 'String', 'FILE_PROVIDER_AUTHORITY', '"io.dashchan2.provider"'
-		buildConfigField 'String', 'CHAN_EXTENSION_FEATURE_NAME', '"chan.extension.dashchan2"'
-		buildConfigField 'String', 'LIB_EXTENSION_FEATURE_NAME', '"lib.extension.dashchan2"'
-		buildConfigField 'String', 'LIB_WEBM_EXTENSION_NAME', '"webm2"'
-		buildConfigField 'String[]', 'CHAN_EXTENSION_FEATURE_NAMES',
+		buildType.buildConfigField 'String', 'FILE_PROVIDER_AUTHORITY', '"io.dashchan2.provider"'
+		buildType.buildConfigField 'String', 'CHAN_EXTENSION_FEATURE_NAME', '"chan.extension.dashchan2"'
+		buildType.buildConfigField 'String', 'LIB_EXTENSION_FEATURE_NAME', '"lib.extension.dashchan2"'
+		buildType.buildConfigField 'String', 'LIB_WEBM_EXTENSION_NAME', '"webm2"'
+		buildType.buildConfigField 'String[]', 'CHAN_EXTENSION_FEATURE_NAMES',
 				'{"chan.extension.dashchan2", "chan.extension"}'
-		buildConfigField 'String[]', 'LIB_EXTENSION_FEATURE_NAMES',
+		buildType.buildConfigField 'String[]', 'LIB_EXTENSION_FEATURE_NAMES',
 				'{"lib.extension.dashchan2", "lib.extension"}'
-		buildConfigField 'String[]', 'LIB_WEBM_EXTENSION_NAMES',
+		buildType.buildConfigField 'String[]', 'LIB_WEBM_EXTENSION_NAMES',
 				'{"webm2", "webm"}'
-		buildConfigField 'String[]', 'KNOWN_CHAN_EXTENSION_PACKAGES',
+		buildType.buildConfigField 'String[]', 'KNOWN_CHAN_EXTENSION_PACKAGES',
 				buildConfigStringArray(dashchan2KnownChanExtensionPackages)
-		buildConfigField 'String[]', 'KNOWN_LIB_EXTENSION_PACKAGES',
+		buildType.buildConfigField 'String[]', 'KNOWN_LIB_EXTENSION_PACKAGES',
 				buildConfigStringArray(dashchan2KnownLibExtensionPackages)
 	}
+	configureProductionBuildType(buildTypes.getByName('release'))
+	configureProductionBuildType(buildTypes.create('ndebug'))
 
 	buildTypes.all {
 		crunchPngs = false

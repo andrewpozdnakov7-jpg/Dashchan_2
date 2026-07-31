@@ -238,6 +238,17 @@ public class UpdaterActivity extends StateActivity {
 	}
 
 	public static void startUpdater(List<Request> requests) {
+		startUpdater(requests, false);
+	}
+
+	public static void startUpdaterAfterExtensionInstallConsent(List<Request> requests) {
+		startUpdater(requests, true);
+	}
+
+	private static void startUpdater(List<Request> requests, boolean extensionInstallConsent) {
+		if (BuildConfig.REQUIRE_EXTENSION_INSTALL_CONSENT && !extensionInstallConsent) {
+			return;
+		}
 		DownloadService.DownloadItem clientDownloadItem = null;
 		ArrayList<DownloadService.DownloadItem> downloadItems = new ArrayList<>();
 		for (Request request : requests) {

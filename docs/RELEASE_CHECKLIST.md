@@ -13,27 +13,30 @@
 
 ## Build And Test
 
-- [ ] Build the all-ABI `ndebug` APK from the exact source commit being released.
+- [ ] Build the all-ABI GitHub and F-Droid APKs from the exact source commit in one protected candidate run.
 - [ ] Complete [TESTING.md](TESTING.md), including posting, attachments, media, rotation, and updates.
-- [ ] Confirm package `io.dashchan2`, expected version, API 30 minimum, and all three ABIs.
+- [ ] Confirm package `io.dashchan2`, expected version, API 30 minimum, and all three ABIs in both candidates.
 - [ ] Compare APK permissions with the previous stable release.
-- [ ] Verify the signing certificate against [SIGNING.md](SIGNING.md).
-- [ ] Scan the APK for local paths, credentials, keystores, private keys, and unexpected signing files.
-- [ ] Record byte length and SHA-256.
+- [ ] Verify both signing certificates against [SIGNING.md](SIGNING.md).
+- [ ] Scan both APKs for local paths, credentials, keystores, private keys, and unexpected signing files.
+- [ ] Rebuild the F-Droid variant with fdroidserver and verify it against the signed reference APK.
+- [ ] Record byte length and SHA-256 for both candidates.
 
 ## GitHub Release
 
 - [ ] Agree on Russian and English release notes.
 - [ ] Create a stable tag in the form `VERSION-CODE`, for example `1.2.3-1234`.
-- [ ] Upload only the signed all-ABI APK.
+- [ ] Upload only the intended signed all-ABI GitHub APK and, when reproducibility is verified, the signed F-Droid
+  reference APK.
 - [ ] Do not upload unsigned APKs, diagnostic reports, local properties, or signing material.
-- [ ] Download the published APK and compare its SHA-256 with the local candidate.
+- [ ] Download every published APK and compare its SHA-256 with the protected-workflow candidate.
 - [ ] Verify Cyrillic release notes are not corrupted.
 
 ## Update Metadata
 
 - [ ] Update the stable `update/data.json` only after the release asset is available.
-- [ ] Set the exact version name, code, byte length, download URL, and certificate fingerprint.
+- [ ] Point `update/data.json` only to the normal GitHub APK and set its exact version, code, byte length, URL, and
+  certificate fingerprint.
 - [ ] Preserve compatibility entries unless their removal is intentional.
 - [ ] Commit and push the manifest separately.
 - [ ] Read the published manifest from GitHub and confirm that the app discovers the update.

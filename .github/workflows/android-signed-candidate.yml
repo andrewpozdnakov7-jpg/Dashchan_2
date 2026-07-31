@@ -19,7 +19,7 @@ concurrency:
 
 jobs:
   build-and-sign:
-    name: Build and sign all-ABI candidate
+    name: Build and sign GitHub and F-Droid candidates
     if: github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     timeout-minutes: 150
@@ -78,17 +78,35 @@ jobs:
           "$SDKMANAGER" \
             'platform-tools' \
             'platforms;android-37.0' \
+            'build-tools;34.0.0' \
             'build-tools;36.0.0' \
             'ndk;29.0.14206865'
 
-      - name: Build unsigned all-ABI APK
+      - name: Prepare pinned native source inputs
+        env:
+          DAV1D_VERSION: '1.5.3'
+          FFMPEG_VERSION: '8.1.2'
+          YUV_VERSION: '6afd9becdf58822b1da6770598d8597c583ccfad'
         run: |
+          set -euo pipefail
+          source_root="$RUNNER_TEMP/fdroid-native-sources"
+          bash Dashchan-Webm/shared-prepare.sh "$source_root"
+          {
+            echo "ORG_GRADLE_PROJECT_dashchanDav1dSourceDir=$source_root/dav1d"
+            echo "ORG_GRADLE_PROJECT_dashchanFfmpegSourceDir=$source_root/ffmpeg"
+            echo "ORG_GRADLE_PROJECT_dashchanLibyuvSourceDir=$source_root/yuv"
+          } >> "$GITHUB_ENV"
+
+      - name: Build unsigned GitHub and F-Droid all-ABI APKs
+        run: |
+          set -euo pipefail
           chmod +x gradlew Dashchan-Webm/*.sh
-          ./gradlew --no-daemon --stacktrace assembleGithubNdebug \
+          ./gradlew --no-daemon --stacktrace \
+            assembleGithubNdebug assembleFdroidRelease \
             -PnativePlayerFfmpegFlavor=ffmpeg8 \
             -PnativeAbis="$NATIVE_ABIS"
 
-      - name: Align, sign and verify candidate
+      - name: Align, sign and verify candidates
         id: candidate
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -109,8 +127,9 @@ jobs:
 
           ANDROID_SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
           BUILD_TOOLS="$ANDROID_SDK/build-tools/36.0.0"
+          SIGNING_BUILD_TOOLS="$ANDROID_SDK/build-tools/34.0.0"
           ZIPALIGN="$BUILD_TOOLS/zipalign"
-          APKSIGNER="$BUILD_TOOLS/apksigner"
+          APKSIGNER="$SIGNING_BUILD_TOOLS/apksigner"
           AAPT="$BUILD_TOOLS/aapt"
           for tool in "$ZIPALIGN" "$APKSIGNER" "$AAPT"; do
             if [ ! -x "$tool" ]; then
@@ -119,18 +138,23 @@ jobs:
             fi
           done
 
-          mapfile -d '' unsigned_apks < <(find build/outputs/apk/github/ndebug -maxdepth 1 \
+          mapfile -d '' github_unsigned_apks < <(find build/outputs/apk/github/ndebug -maxdepth 1 \
             -type f -name '*-unsigned.apk' -print0 | sort -z)
-          if [ "${#unsigned_apks[@]}" -ne 1 ]; then
-            echo "::error::Expected exactly one unsigned APK, found ${#unsigned_apks[@]}"
+          mapfile -d '' fdroid_unsigned_apks < <(find build/outputs/apk/fdroid/release -maxdepth 1 \
+            -type f -name '*-unsigned.apk' -print0 | sort -z)
+          if [ "${#github_unsigned_apks[@]}" -ne 1 ]; then
+            echo "::error::Expected exactly one unsigned GitHub APK, found ${#github_unsigned_apks[@]}"
+            exit 1
+          fi
+          if [ "${#fdroid_unsigned_apks[@]}" -ne 1 ]; then
+            echo "::error::Expected exactly one unsigned F-Droid APK, found ${#fdroid_unsigned_apks[@]}"
             exit 1
           fi
 
           keystore="$RUNNER_TEMP/slooop-release.jks"
-          aligned_apk="$RUNNER_TEMP/slooop-aligned.apk"
-          signed_apk="$RUNNER_TEMP/slooop-signed.apk"
           cleanup() {
-            rm -f "$keystore" "$aligned_apk" "$signed_apk"
+            rm -f "$keystore" "$RUNNER_TEMP"/slooop-*-aligned.apk \
+              "$RUNNER_TEMP"/slooop-*-signed.apk
           }
           trap cleanup EXIT
 
@@ -138,100 +162,140 @@ jobs:
           chmod 600 "$keystore"
           unset ANDROID_KEYSTORE_BASE64
 
-          "$ZIPALIGN" -P 16 -f 4 "${unsigned_apks[0]}" "$aligned_apk"
-          "$APKSIGNER" sign \
-            --ks "$keystore" \
-            --ks-key-alias "$ANDROID_KEY_ALIAS" \
-            --ks-pass env:ANDROID_KEYSTORE_PASSWORD \
-            --key-pass env:ANDROID_KEY_PASSWORD \
-            --v4-signing-enabled false \
-            --out "$signed_apk" \
-            "$aligned_apk"
-
-          verification="$("$APKSIGNER" verify --verbose "$signed_apk")"
-          printf '%s\n' "$verification"
-          grep -Fq 'Verified using v3 scheme (APK Signature Scheme v3): true' \
-              <<< "$verification" || {
-              echo '::error::APK Signature Scheme v3 verification failed'
-              exit 1
-            }
-          "$ZIPALIGN" -c -P 16 -v 4 "$signed_apk"
-
-          certificate="$("$APKSIGNER" verify --print-certs "$signed_apk")"
-          actual_cert="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' \
-            <<< "$certificate" | \
-            tr -d ':' | tr '[:upper:]' '[:lower:]')"
-          if [ -z "$actual_cert" ] || [ "$actual_cert" != "$EXPECTED_CERT_SHA256" ]; then
-            echo "::error::Signing certificate SHA-256 mismatch: ${actual_cert:-missing}"
-            exit 1
-          fi
-
-          badging="$("$AAPT" dump badging "$signed_apk")"
-          package_line="$(sed -n 's/^package: //p' <<< "$badging")"
-          package_name="$(sed -n "s/^name='\([^']*\)'.*/\1/p" <<< "$package_line")"
-          version_code="$(sed -n "s/^name='[^']*' versionCode='\([^']*\)'.*/\1/p" <<< "$package_line")"
-          version_name="$(sed -n "s/^name='[^']*' versionCode='[^']*' versionName='\([^']*\)'.*/\1/p" <<< "$package_line")"
-          if [ "$package_name" != 'io.dashchan2' ]; then
-            echo "::error::Unexpected application ID: $package_name"
-            exit 1
-          fi
-          if grep -Fq 'application-debuggable' <<< "$badging"; then
-            echo '::error::Signed candidate is unexpectedly debuggable'
-            exit 1
-          fi
-          case "$version_code" in
-            ''|*[!0-9]*) echo '::error::Invalid version code'; exit 1 ;;
-          esac
-          case "$version_name" in
-            ''|*[!0-9A-Za-z._-]*) echo '::error::Invalid version name'; exit 1 ;;
-          esac
-
-          actual_abis="$(unzip -Z1 "$signed_apk" | sed -n 's#^lib/\([^/]*\)/.*#\1#p' | sort -u)"
           expected_abis="$(printf '%s\n' arm64-v8a armeabi-v7a x86 | sort)"
-          if [ "$actual_abis" != "$expected_abis" ]; then
-            echo '::error::Unexpected native ABI set'
-            printf 'Expected:\n%s\nActual:\n%s\n' "$expected_abis" "$actual_abis"
-            exit 1
-          fi
-
           if [ -e signed-artifacts ]; then
             echo '::error::signed-artifacts already exists in the source tree'
             exit 1
           fi
           mkdir signed-artifacts
-          apk_name="Slooop-$version_name-$version_code-ffmpeg8-all-abi-signed.apk"
-          mv "$signed_apk" "signed-artifacts/$apk_name"
-          (cd signed-artifacts && sha256sum "$apk_name" > SHA256SUMS.txt)
-          apk_sha256="$(cut -d ' ' -f 1 signed-artifacts/SHA256SUMS.txt)"
-          apk_bytes="$(stat -c '%s' "signed-artifacts/$apk_name")"
 
-          printf 'APK: %s\nSHA-256: %s\nBytes: %s\nCertificate SHA-256: %s\nABIs:\n%s\n' \
-            "$apk_name" "$apk_sha256" "$apk_bytes" "$actual_cert" "$actual_abis"
+          sign_and_verify() {
+            local distribution="$1"
+            local unsigned_apk="$2"
+            local aligned_apk="$RUNNER_TEMP/slooop-$distribution-aligned.apk"
+            local signed_apk="$RUNNER_TEMP/slooop-$distribution-signed.apk"
+
+            "$ZIPALIGN" -P 16 -f 4 "$unsigned_apk" "$aligned_apk"
+            "$APKSIGNER" sign \
+              --ks "$keystore" \
+              --ks-key-alias "$ANDROID_KEY_ALIAS" \
+              --ks-pass env:ANDROID_KEYSTORE_PASSWORD \
+              --key-pass env:ANDROID_KEY_PASSWORD \
+              --v4-signing-enabled false \
+              --out "$signed_apk" \
+              "$aligned_apk"
+
+            local verification
+            verification="$("$APKSIGNER" verify --verbose "$signed_apk")"
+            printf '%s\n' "$verification"
+            grep -Fq 'Verified using v3 scheme (APK Signature Scheme v3): true' \
+                <<< "$verification" || {
+                echo "::error::$distribution APK Signature Scheme v3 verification failed"
+                exit 1
+              }
+            "$ZIPALIGN" -c -P 16 -v 4 "$signed_apk"
+
+            local certificate actual_cert
+            certificate="$("$APKSIGNER" verify --print-certs "$signed_apk")"
+            actual_cert="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' \
+              <<< "$certificate" | tr -d ':' | tr '[:upper:]' '[:lower:]')"
+            if [ -z "$actual_cert" ] || [ "$actual_cert" != "$EXPECTED_CERT_SHA256" ]; then
+              echo "::error::$distribution signing certificate SHA-256 mismatch: ${actual_cert:-missing}"
+              exit 1
+            fi
+
+            local badging package_line package_name version_code version_name
+            badging="$("$AAPT" dump badging "$signed_apk")"
+            package_line="$(sed -n 's/^package: //p' <<< "$badging")"
+            package_name="$(sed -n "s/^name='\([^']*\)'.*/\1/p" <<< "$package_line")"
+            version_code="$(sed -n "s/^name='[^']*' versionCode='\([^']*\)'.*/\1/p" <<< "$package_line")"
+            version_name="$(sed -n "s/^name='[^']*' versionCode='[^']*' versionName='\([^']*\)'.*/\1/p" <<< "$package_line")"
+            if [ "$package_name" != 'io.dashchan2' ]; then
+              echo "::error::$distribution application ID is unexpected: $package_name"
+              exit 1
+            fi
+            if grep -Fq 'application-debuggable' <<< "$badging"; then
+              echo "::error::$distribution candidate is unexpectedly debuggable"
+              exit 1
+            fi
+            case "$version_code" in
+              ''|*[!0-9]*) echo "::error::$distribution version code is invalid"; exit 1 ;;
+            esac
+            case "$version_name" in
+              ''|*[!0-9A-Za-z._-]*) echo "::error::$distribution version name is invalid"; exit 1 ;;
+            esac
+
+            local actual_abis
+            actual_abis="$(unzip -Z1 "$signed_apk" | sed -n 's#^lib/\([^/]*\)/.*#\1#p' | sort -u)"
+            if [ "$actual_abis" != "$expected_abis" ]; then
+              echo "::error::$distribution native ABI set is unexpected"
+              printf 'Expected:\n%s\nActual:\n%s\n' "$expected_abis" "$actual_abis"
+              exit 1
+            fi
+
+            local apk_name apk_sha256 apk_bytes
+            if [ "$distribution" = 'github' ]; then
+              apk_name="Slooop-$version_name-$version_code-ffmpeg8-all-abi-signed.apk"
+            else
+              apk_name="Slooop-$version_name-$version_code-fdroid-ffmpeg8-all-abi-signed.apk"
+            fi
+            mv "$signed_apk" "signed-artifacts/$apk_name"
+            apk_sha256="$(sha256sum "signed-artifacts/$apk_name" | cut -d ' ' -f 1)"
+            apk_bytes="$(stat -c '%s' "signed-artifacts/$apk_name")"
+
+            printf '%s APK: %s\nSHA-256: %s\nBytes: %s\nCertificate SHA-256: %s\nABIs:\n%s\n' \
+              "$distribution" "$apk_name" "$apk_sha256" "$apk_bytes" "$actual_cert" "$actual_abis"
+            printf -v "${distribution}_apk_name" '%s' "$apk_name"
+            printf -v "${distribution}_apk_sha256" '%s' "$apk_sha256"
+            printf -v "${distribution}_apk_bytes" '%s' "$apk_bytes"
+            printf -v "${distribution}_version_name" '%s' "$version_name"
+            printf -v "${distribution}_version_code" '%s' "$version_code"
+          }
+
+          sign_and_verify github "${github_unsigned_apks[0]}"
+          sign_and_verify fdroid "${fdroid_unsigned_apks[0]}"
+          if [ "$github_version_name" != "$fdroid_version_name" ] || \
+              [ "$github_version_code" != "$fdroid_version_code" ]; then
+            echo '::error::GitHub and F-Droid candidate versions do not match'
+            exit 1
+          fi
+
+          (cd signed-artifacts && sha256sum ./*.apk > SHA256SUMS.txt)
           {
-            echo "apk_name=$apk_name"
-            echo "apk_sha256=$apk_sha256"
-            echo "apk_bytes=$apk_bytes"
-            echo "version_name=$version_name"
-            echo "version_code=$version_code"
+            echo "github_apk_name=$github_apk_name"
+            echo "github_apk_sha256=$github_apk_sha256"
+            echo "github_apk_bytes=$github_apk_bytes"
+            echo "fdroid_apk_name=$fdroid_apk_name"
+            echo "fdroid_apk_sha256=$fdroid_apk_sha256"
+            echo "fdroid_apk_bytes=$fdroid_apk_bytes"
+            echo "version_name=$github_version_name"
+            echo "version_code=$github_version_code"
           } >> "$GITHUB_OUTPUT"
 
       - name: Write candidate summary
         env:
-          APK_NAME: ${{ steps.candidate.outputs.apk_name }}
-          APK_SHA256: ${{ steps.candidate.outputs.apk_sha256 }}
-          APK_BYTES: ${{ steps.candidate.outputs.apk_bytes }}
+          GITHUB_APK_NAME: ${{ steps.candidate.outputs.github_apk_name }}
+          GITHUB_APK_SHA256: ${{ steps.candidate.outputs.github_apk_sha256 }}
+          GITHUB_APK_BYTES: ${{ steps.candidate.outputs.github_apk_bytes }}
+          FDROID_APK_NAME: ${{ steps.candidate.outputs.fdroid_apk_name }}
+          FDROID_APK_SHA256: ${{ steps.candidate.outputs.fdroid_apk_sha256 }}
+          FDROID_APK_BYTES: ${{ steps.candidate.outputs.fdroid_apk_bytes }}
           VERSION_NAME: ${{ steps.candidate.outputs.version_name }}
           VERSION_CODE: ${{ steps.candidate.outputs.version_code }}
         run: |
           {
-            echo '### Signed Android candidate'
+            echo '### Signed Android candidates'
             echo
-            echo "- APK: \`$APK_NAME\`"
             echo "- Version: \`$VERSION_NAME ($VERSION_CODE)\`"
-            echo "- SHA-256: \`$APK_SHA256\`"
-            echo "- Bytes: \`$APK_BYTES\`"
+            echo "- GitHub APK: \`$GITHUB_APK_NAME\`"
+            echo "  - SHA-256: \`$GITHUB_APK_SHA256\`"
+            echo "  - Bytes: \`$GITHUB_APK_BYTES\`"
+            echo "- F-Droid APK: \`$FDROID_APK_NAME\`"
+            echo "  - SHA-256: \`$FDROID_APK_SHA256\`"
+            echo "  - Bytes: \`$FDROID_APK_BYTES\`"
             echo "- Certificate SHA-256: \`$EXPECTED_CERT_SHA256\`"
             echo '- ABIs: `arm64-v8a`, `armeabi-v7a`, `x86`'
+            echo '- Signing tool: `apksigner` from Android Build Tools 34.0.0'
             echo
             echo 'This workflow does not publish a GitHub Release.'
           } >> "$GITHUB_STEP_SUMMARY"

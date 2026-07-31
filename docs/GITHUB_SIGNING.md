@@ -1,6 +1,8 @@
 # GitHub Actions Signing
 
-The `Android Signed Candidate` workflow creates a temporary signed all-ABI APK for verification. It does not create a tag, GitHub Release, or update manifest entry.
+The `Android Signed Candidate` workflow creates temporary signed all-ABI APKs for the normal GitHub distribution
+and the F-Droid distribution. It prepares the pinned native sources once and builds both variants in one Gradle
+invocation. It does not create a tag, GitHub Release, or update manifest entry.
 
 ## Security model
 
@@ -8,8 +10,10 @@ The `Android Signed Candidate` workflow creates a temporary signed all-ABI APK f
 - Signing secrets are provided by the protected `release-signing` GitHub Environment.
 - Gradle builds the unsigned APK without access to signing secrets.
 - The keystore exists only in the runner temporary directory during the signing step.
-- The artifact contains only the signed APK and `SHA256SUMS.txt`.
-- The candidate must use the established public certificate fingerprint from [SIGNING.md](SIGNING.md).
+- The artifact contains only the two signed APKs and `SHA256SUMS.txt`.
+- Both candidates must use the established public certificate fingerprint from [SIGNING.md](SIGNING.md).
+- APK signing uses `apksigner` from Android Build Tools 34.0.0 so F-Droid can copy and verify the upstream
+  developer signature during a reproducible-build check.
 
 Anyone who can modify a workflow on `master` could attempt to access Environment secrets. Protect `master`, require CI and pull-request review, disable force pushes, and restrict the Environment to `master` before adding the keystore.
 
@@ -67,18 +71,26 @@ After the workflow has been reviewed and merged into protected `master`:
 4. Approve the `release-signing` Environment if a reviewer gate is configured.
 5. Wait for every verification step to pass.
 
-The workflow checks alignment, APK Signature Scheme v3, certificate continuity, application ID, version fields, and the exact `arm64-v8a`, `armeabi-v7a`, and `x86` ABI set.
+The workflow checks alignment, APK Signature Scheme v3, certificate continuity, application ID, version fields,
+matching GitHub/F-Droid versions, and the exact `arm64-v8a`, `armeabi-v7a`, and `x86` ABI set.
 
 ## Candidate audit
 
 Download the temporary artifact and independently verify it before testing:
 
 ```sh
+version=3.2.14
+code=1094
 sha256sum -c SHA256SUMS.txt
-apksigner verify --verbose --print-certs Slooop-*-all-abi-signed.apk
-zipalign -c -P 16 -v 4 Slooop-*-all-abi-signed.apk
+apksigner verify --verbose --print-certs "Slooop-$version-$code-ffmpeg8-all-abi-signed.apk"
+apksigner verify --verbose --print-certs "Slooop-$version-$code-fdroid-ffmpeg8-all-abi-signed.apk"
+zipalign -c -P 16 -v 4 "Slooop-$version-$code-ffmpeg8-all-abi-signed.apk"
+zipalign -c -P 16 -v 4 "Slooop-$version-$code-fdroid-ffmpeg8-all-abi-signed.apk"
 ```
 
-Confirm that the certificate matches [SIGNING.md](SIGNING.md), then install the candidate over the latest public Slooop without uninstalling it. Verify that application data remains intact.
+Confirm that both certificates match [SIGNING.md](SIGNING.md). Install each candidate over the latest public
+Slooop without uninstalling it and verify that application data remains intact. The normal GitHub APK is the
+application release candidate. The F-Droid APK is the upstream reference binary for a separate `fdroidserver`
+rebuild and reproducibility check.
 
 Passing this workflow does not authorize public distribution. Publishing still requires the explicit release process defined in `CODEX.md`.

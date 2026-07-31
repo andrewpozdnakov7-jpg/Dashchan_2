@@ -58,6 +58,7 @@ copy_provided_source() {
 # separately by its full Git commit ID because Gitiles archives are not byte-stable.
 DAV1D_SHA256="732010aa5ef461fa93355ed2c6c5fedb48ddc4b74e697eaabe8907eaeb943011"
 FFMPEG_SHA256="b4925bd4411e654ad3884bc8da1860b0d860bd64a95a17220de48cfcd5f0a859"
+FFMPEG_COMMIT="38b88335f99e76ed89ff3c93f877fdefce736c13"
 
 download_and_extract() {
 	local url="$1"
@@ -68,22 +69,23 @@ download_and_extract() {
 	archive="$(mktemp)"
 	rm -rf "$target"
 	mkdir -p "$target"
-	curl -L "$url" -o "$archive" || {
+	curl --fail --location --retry 1 --retry-delay 2 --retry-all-errors \
+			--connect-timeout 10 --max-time 120 "$url" -o "$archive" || {
 		rm -f "$archive"
 		rm -rf "$target"
-		exit 1
+		return 1
 	}
 	if [ -n "$checksum" ]; then
 		echo "$checksum  $archive" | sha256sum -c - || {
 			rm -f "$archive"
 			rm -rf "$target"
-			exit 1
+			return 1
 		}
 	fi
 	tar -C "$target" "$@" -f "$archive" || {
 		rm -f "$archive"
 		rm -rf "$target"
-		exit 1
+		return 1
 	}
 	rm -f "$archive"
 }
@@ -109,8 +111,10 @@ prepare_source() {
 prepare_git_source() {
 	local name="$1"
 	local version="$2"
-	local url="$3"
-	local target="$4"
+	local reference="$3"
+	local commit="$4"
+	local url="$5"
+	local target="$6"
 	local marker="$target/.dashchan-version"
 	local expected="$name:$version"
 	local repository
@@ -123,14 +127,42 @@ prepare_git_source() {
 		mkdir -p "$target"
 		git -C "$repository" init -q
 		git -C "$repository" remote add origin "$url"
-		git -C "$repository" fetch -q --depth=1 origin "$version"
-		[ "$(git -C "$repository" rev-parse FETCH_HEAD)" = "$version" ] || {
+		git -C "$repository" fetch -q --depth=1 origin "$reference" || {
 			rm -rf "$repository" "$target"
-			exit 1
+			return 1
 		}
-		git -C "$repository" archive FETCH_HEAD | tar -C "$target" -x
+		[ "$(git -C "$repository" rev-parse 'FETCH_HEAD^{commit}')" = "$commit" ] || {
+			rm -rf "$repository" "$target"
+			return 1
+		}
+		git -C "$repository" archive 'FETCH_HEAD^{commit}' | tar -C "$target" -x
 		rm -rf "$repository"
 		printf '%s\n' "$expected" > "$marker"
+	fi
+}
+
+prepare_source_with_git_fallback() {
+	local name="$1"
+	local version="$2"
+	local url="$3"
+	local checksum="$4"
+	local git_reference="$5"
+	local git_commit="$6"
+	local git_url="$7"
+	local target="$8"
+	shift 8
+	local marker="$target/.dashchan-version"
+	local expected="$name:$version"
+	if [ -f "$marker" ] && [ "$(cat "$marker")" != "$expected" ]; then
+		rm -rf "$target"
+	fi
+	if [ ! -f "$marker" ]; then
+		if download_and_extract "$url" "$checksum" "$target" "$@"; then
+			printf '%s\n' "$expected" > "$marker"
+		else
+			echo "Primary $name archive is unavailable; using pinned Git fallback" >&2
+			prepare_git_source "$name" "$version" "$git_reference" "$git_commit" "$git_url" "$target"
+		fi
 	fi
 }
 
@@ -149,14 +181,16 @@ fi
 if [ -n "${DASHCHAN_FFMPEG_SOURCE_DIR:-}" ]; then
 	copy_provided_source ffmpeg "$FFMPEG_VERSION" "$DASHCHAN_FFMPEG_SOURCE_DIR" "$sources_ffmpeg"
 else
-	prepare_source ffmpeg "$FFMPEG_VERSION" \
+	prepare_source_with_git_fallback ffmpeg "$FFMPEG_VERSION" \
 		"https://ffmpeg.org/releases/ffmpeg-$FFMPEG_VERSION.tar.bz2" \
-		"$FFMPEG_SHA256" "$sources_ffmpeg" -xj --touch --strip-components=1
+		"$FFMPEG_SHA256" "refs/tags/n$FFMPEG_VERSION" "$FFMPEG_COMMIT" \
+		"https://github.com/FFmpeg/FFmpeg.git" "$sources_ffmpeg" \
+		-xj --touch --strip-components=1
 fi
 
 if [ -n "${DASHCHAN_LIBYUV_SOURCE_DIR:-}" ]; then
 	copy_provided_source yuv "$YUV_VERSION" "$DASHCHAN_LIBYUV_SOURCE_DIR" "$sources_yuv"
 else
-	prepare_git_source yuv "$YUV_VERSION" \
+	prepare_git_source yuv "$YUV_VERSION" "$YUV_VERSION" "$YUV_VERSION" \
 		"https://chromium.googlesource.com/libyuv/libyuv" "$sources_yuv"
 fi
