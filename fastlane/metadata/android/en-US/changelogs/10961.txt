@@ -1,0 +1,1 @@
+Prepared separate per-ABI packages for F-Droid distribution.

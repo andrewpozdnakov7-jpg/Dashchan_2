@@ -142,8 +142,20 @@ android {
 
 	defaultConfig {
 		applicationId = 'io.dashchan2'
-		versionCode = 1095
-		versionName = '3.2.15'
+		versionCode = 10960
+		versionName = '3.2.16'
+		def releaseVersionCode = versionCode
+		def packageVersionCodeProperty = project.findProperty('packageVersionCode')
+		if (packageVersionCodeProperty != null) {
+			try {
+				versionCode = Integer.parseInt(packageVersionCodeProperty.toString())
+			} catch (NumberFormatException e) {
+				throw new GradleException('packageVersionCode must be a positive integer', e)
+			}
+			if (versionCode <= 0) {
+				throw new GradleException('packageVersionCode must be a positive integer')
+			}
+		}
 
 		minSdk = 30
 		targetSdk = 37
@@ -154,10 +166,12 @@ android {
 
 		// noinspection UnnecessaryQualifiedReference
 		def versionsData = new groovy.json.JsonSlurper().parse(new File('metadata/versions.json'))
-		def versions = versionsData.versions.findAll { it.code == versionCode && it.name == versionName }
+		def versions = versionsData.versions.findAll {
+			it.code == releaseVersionCode && it.name == versionName
+		}
 		if (versions.size() != 1) {
 			throw new RuntimeException('Invalid metadata: ' + versions.size() + ' ' +
-					'version declarations for ' + versionCode + ' ' + versionName)
+					'version declarations for ' + releaseVersionCode + ' ' + versionName)
 		}
 
 		buildConfigField 'String', 'VERSION_DATE', '"' + versions[0].date + '"'

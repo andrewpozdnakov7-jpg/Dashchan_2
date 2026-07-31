@@ -13,21 +13,24 @@
 
 ## Build And Test
 
-- [ ] Build the all-ABI GitHub and F-Droid APKs from the exact source commit in one protected candidate run.
+- [ ] Build the all-ABI GitHub APK and three single-ABI F-Droid APKs from the exact source commit in one protected
+  candidate run.
 - [ ] Complete [TESTING.md](TESTING.md), including posting, attachments, media, rotation, and updates.
-- [ ] Confirm package `io.dashchan2`, expected version, API 30 minimum, and all three ABIs in both candidates.
+- [ ] Confirm package `io.dashchan2`, expected version, API 30 minimum, all three ABIs in the GitHub candidate,
+  and exactly one expected ABI in every F-Droid candidate.
 - [ ] Compare APK permissions with the previous stable release.
-- [ ] Verify both signing certificates against [SIGNING.md](SIGNING.md).
-- [ ] Scan both APKs for local paths, credentials, keystores, private keys, and unexpected signing files.
-- [ ] Rebuild the F-Droid variant with fdroidserver and verify it against the signed reference APK.
-- [ ] Record byte length and SHA-256 for both candidates.
+- [ ] Verify all signing certificates against [SIGNING.md](SIGNING.md).
+- [ ] Scan all APKs for local paths, credentials, keystores, private keys, and unexpected signing files.
+- [ ] Rebuild all F-Droid variants with fdroidserver and verify them against the signed reference APKs.
+- [ ] Record byte length and SHA-256 for all candidates.
 
 ## GitHub Release
 
 - [ ] Agree on Russian and English release notes.
-- [ ] Create a stable tag in the form `VERSION-CODE`, for example `1.2.3-1234`.
-- [ ] Upload only the intended signed all-ABI GitHub APK and, when reproducibility is verified, the signed F-Droid
-  reference APK.
+- [ ] Starting with 3.2.16, create the stable release tag from `VERSION`, for example `3.2.16`; historical
+  `VERSION-CODE` tags remain unchanged.
+- [ ] Upload only the intended signed all-ABI GitHub APK and, when reproducibility is verified, the three signed
+  F-Droid reference APKs.
 - [ ] Do not upload unsigned APKs, diagnostic reports, local properties, or signing material.
 - [ ] Download every published APK and compare its SHA-256 with the protected-workflow candidate.
 - [ ] Verify Cyrillic release notes are not corrupted.

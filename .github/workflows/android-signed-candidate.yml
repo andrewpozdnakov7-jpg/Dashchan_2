@@ -27,7 +27,7 @@ jobs:
       name: release-signing
       deployment: false
     env:
-      NATIVE_ABIS: arm64-v8a,armeabi-v7a,x86
+      GITHUB_NATIVE_ABIS: arm64-v8a,armeabi-v7a,x86
       EXPECTED_CERT_SHA256: a9fbac6c498f7ad8e7c56849afe43881966bed2ed2bc1dd1c73d0ffe0b9ebeba
 
     steps:
@@ -97,14 +97,59 @@ jobs:
             echo "ORG_GRADLE_PROJECT_dashchanLibyuvSourceDir=$source_root/yuv"
           } >> "$GITHUB_ENV"
 
-      - name: Build unsigned GitHub and F-Droid all-ABI APKs
+      - name: Build unsigned GitHub universal and F-Droid split APKs
         run: |
           set -euo pipefail
           chmod +x gradlew Dashchan-Webm/*.sh
-          ./gradlew --no-daemon --stacktrace \
-            assembleGithubNdebug assembleFdroidRelease \
+          release_version_code="$(python3 - <<'PY'
+          import re
+          from pathlib import Path
+
+          text = Path('build.gradle').read_text(encoding='utf-8')
+          matches = re.findall(r'^\s*versionCode\s*=\s*(\d+)\s*$', text, re.MULTILINE)
+          if len(matches) != 1:
+              raise SystemExit(f'Expected one literal versionCode, found {len(matches)}')
+          print(matches[0])
+          PY
+          )"
+          if [ $((release_version_code % 10)) -ne 0 ]; then
+            echo "::error::Release versionCode must reserve its final digit for ABI splits: $release_version_code"
+            exit 1
+          fi
+
+          rm -rf unsigned-candidates
+          mkdir unsigned-candidates
+
+          ./gradlew --no-daemon --stacktrace assembleGithubNdebug \
             -PnativePlayerFfmpegFlavor=ffmpeg8 \
-            -PnativeAbis="$NATIVE_ABIS"
+            -PnativeAbis="$GITHUB_NATIVE_ABIS"
+          mapfile -d '' github_apks < <(find build/outputs/apk/github/ndebug -maxdepth 1 \
+            -type f -name '*-unsigned.apk' -print0 | sort -z)
+          if [ "${#github_apks[@]}" -ne 1 ]; then
+            echo "::error::Expected exactly one unsigned GitHub APK, found ${#github_apks[@]}"
+            exit 1
+          fi
+          cp "${github_apks[0]}" unsigned-candidates/github-all.apk
+
+          for candidate in \
+              'armv7:armeabi-v7a:1' \
+              'arm64:arm64-v8a:2' \
+              'x86:x86:3'; do
+            IFS=: read -r label abi offset <<< "$candidate"
+            package_version_code=$((release_version_code + offset))
+            rm -rf build/outputs/apk/fdroid/release
+            ./gradlew --no-daemon --stacktrace assembleFdroidRelease \
+              -PnativePlayerFfmpegFlavor=ffmpeg8 \
+              -PnativeAbis="$abi" \
+              -PpackageVersionCode="$package_version_code"
+            mapfile -d '' fdroid_apks < <(find build/outputs/apk/fdroid/release -maxdepth 1 \
+              -type f -name '*-unsigned.apk' -print0 | sort -z)
+            if [ "${#fdroid_apks[@]}" -ne 1 ]; then
+              echo "::error::Expected exactly one unsigned F-Droid $label APK, found ${#fdroid_apks[@]}"
+              exit 1
+            fi
+            cp "${fdroid_apks[0]}" "unsigned-candidates/fdroid-$label.apk"
+          done
 
       - name: Align, sign and verify candidates
         id: candidate
@@ -138,18 +183,16 @@ jobs:
             fi
           done
 
-          mapfile -d '' github_unsigned_apks < <(find build/outputs/apk/github/ndebug -maxdepth 1 \
-            -type f -name '*-unsigned.apk' -print0 | sort -z)
-          mapfile -d '' fdroid_unsigned_apks < <(find build/outputs/apk/fdroid/release -maxdepth 1 \
-            -type f -name '*-unsigned.apk' -print0 | sort -z)
-          if [ "${#github_unsigned_apks[@]}" -ne 1 ]; then
-            echo "::error::Expected exactly one unsigned GitHub APK, found ${#github_unsigned_apks[@]}"
-            exit 1
-          fi
-          if [ "${#fdroid_unsigned_apks[@]}" -ne 1 ]; then
-            echo "::error::Expected exactly one unsigned F-Droid APK, found ${#fdroid_unsigned_apks[@]}"
-            exit 1
-          fi
+          for candidate in \
+              unsigned-candidates/github-all.apk \
+              unsigned-candidates/fdroid-armv7.apk \
+              unsigned-candidates/fdroid-arm64.apk \
+              unsigned-candidates/fdroid-x86.apk; do
+            if [ ! -f "$candidate" ]; then
+              echo "::error::Unsigned candidate is missing: $candidate"
+              exit 1
+            fi
+          done
 
           keystore="$RUNNER_TEMP/slooop-release.jks"
           cleanup() {
@@ -162,7 +205,6 @@ jobs:
           chmod 600 "$keystore"
           unset ANDROID_KEYSTORE_BASE64
 
-          expected_abis="$(printf '%s\n' arm64-v8a armeabi-v7a x86 | sort)"
           if [ -e signed-artifacts ]; then
             echo '::error::signed-artifacts already exists in the source tree'
             exit 1
@@ -172,6 +214,8 @@ jobs:
           sign_and_verify() {
             local distribution="$1"
             local unsigned_apk="$2"
+            local expected_abis="$3"
+            local artifact_abi="$4"
             local aligned_apk="$RUNNER_TEMP/slooop-$distribution-aligned.apk"
             local signed_apk="$RUNNER_TEMP/slooop-$distribution-signed.apk"
 
@@ -237,7 +281,7 @@ jobs:
             if [ "$distribution" = 'github' ]; then
               apk_name="Slooop-$version_name-$version_code-ffmpeg8-all-abi-signed.apk"
             else
-              apk_name="Slooop-$version_name-$version_code-fdroid-ffmpeg8-all-abi-signed.apk"
+              apk_name="Slooop-$version_name-$version_code-fdroid-ffmpeg8-$artifact_abi-signed.apk"
             fi
             mv "$signed_apk" "signed-artifacts/$apk_name"
             apk_sha256="$(sha256sum "signed-artifacts/$apk_name" | cut -d ' ' -f 1)"
@@ -252,22 +296,41 @@ jobs:
             printf -v "${distribution}_version_code" '%s' "$version_code"
           }
 
-          sign_and_verify github "${github_unsigned_apks[0]}"
-          sign_and_verify fdroid "${fdroid_unsigned_apks[0]}"
-          if [ "$github_version_name" != "$fdroid_version_name" ] || \
-              [ "$github_version_code" != "$fdroid_version_code" ]; then
-            echo '::error::GitHub and F-Droid candidate versions do not match'
+          github_abis="$(printf '%s\n' arm64-v8a armeabi-v7a x86 | sort)"
+          sign_and_verify github unsigned-candidates/github-all.apk "$github_abis" all-abi
+          sign_and_verify fdroid_armv7 unsigned-candidates/fdroid-armv7.apk armeabi-v7a armeabi-v7a
+          sign_and_verify fdroid_arm64 unsigned-candidates/fdroid-arm64.apk arm64-v8a arm64-v8a
+          sign_and_verify fdroid_x86 unsigned-candidates/fdroid-x86.apk x86 x86
+
+          if [ $((github_version_code % 10)) -ne 0 ]; then
+            echo "::error::GitHub version code does not reserve its final digit: $github_version_code"
             exit 1
           fi
+          for candidate in 'fdroid_armv7:1' 'fdroid_arm64:2' 'fdroid_x86:3'; do
+            IFS=: read -r distribution offset <<< "$candidate"
+            version_name_variable="${distribution}_version_name"
+            version_code_variable="${distribution}_version_code"
+            if [ "${!version_name_variable}" != "$github_version_name" ] || \
+                [ "${!version_code_variable}" -ne $((github_version_code + offset)) ]; then
+              echo "::error::$distribution candidate version does not match the ABI version-code scheme"
+              exit 1
+            fi
+          done
 
           (cd signed-artifacts && sha256sum ./*.apk > SHA256SUMS.txt)
           {
             echo "github_apk_name=$github_apk_name"
             echo "github_apk_sha256=$github_apk_sha256"
             echo "github_apk_bytes=$github_apk_bytes"
-            echo "fdroid_apk_name=$fdroid_apk_name"
-            echo "fdroid_apk_sha256=$fdroid_apk_sha256"
-            echo "fdroid_apk_bytes=$fdroid_apk_bytes"
+            echo "fdroid_armv7_apk_name=$fdroid_armv7_apk_name"
+            echo "fdroid_armv7_apk_sha256=$fdroid_armv7_apk_sha256"
+            echo "fdroid_armv7_apk_bytes=$fdroid_armv7_apk_bytes"
+            echo "fdroid_arm64_apk_name=$fdroid_arm64_apk_name"
+            echo "fdroid_arm64_apk_sha256=$fdroid_arm64_apk_sha256"
+            echo "fdroid_arm64_apk_bytes=$fdroid_arm64_apk_bytes"
+            echo "fdroid_x86_apk_name=$fdroid_x86_apk_name"
+            echo "fdroid_x86_apk_sha256=$fdroid_x86_apk_sha256"
+            echo "fdroid_x86_apk_bytes=$fdroid_x86_apk_bytes"
             echo "version_name=$github_version_name"
             echo "version_code=$github_version_code"
           } >> "$GITHUB_OUTPUT"
@@ -277,9 +340,15 @@ jobs:
           GITHUB_APK_NAME: ${{ steps.candidate.outputs.github_apk_name }}
           GITHUB_APK_SHA256: ${{ steps.candidate.outputs.github_apk_sha256 }}
           GITHUB_APK_BYTES: ${{ steps.candidate.outputs.github_apk_bytes }}
-          FDROID_APK_NAME: ${{ steps.candidate.outputs.fdroid_apk_name }}
-          FDROID_APK_SHA256: ${{ steps.candidate.outputs.fdroid_apk_sha256 }}
-          FDROID_APK_BYTES: ${{ steps.candidate.outputs.fdroid_apk_bytes }}
+          FDROID_ARMV7_APK_NAME: ${{ steps.candidate.outputs.fdroid_armv7_apk_name }}
+          FDROID_ARMV7_APK_SHA256: ${{ steps.candidate.outputs.fdroid_armv7_apk_sha256 }}
+          FDROID_ARMV7_APK_BYTES: ${{ steps.candidate.outputs.fdroid_armv7_apk_bytes }}
+          FDROID_ARM64_APK_NAME: ${{ steps.candidate.outputs.fdroid_arm64_apk_name }}
+          FDROID_ARM64_APK_SHA256: ${{ steps.candidate.outputs.fdroid_arm64_apk_sha256 }}
+          FDROID_ARM64_APK_BYTES: ${{ steps.candidate.outputs.fdroid_arm64_apk_bytes }}
+          FDROID_X86_APK_NAME: ${{ steps.candidate.outputs.fdroid_x86_apk_name }}
+          FDROID_X86_APK_SHA256: ${{ steps.candidate.outputs.fdroid_x86_apk_sha256 }}
+          FDROID_X86_APK_BYTES: ${{ steps.candidate.outputs.fdroid_x86_apk_bytes }}
           VERSION_NAME: ${{ steps.candidate.outputs.version_name }}
           VERSION_CODE: ${{ steps.candidate.outputs.version_code }}
         run: |
@@ -290,11 +359,18 @@ jobs:
             echo "- GitHub APK: \`$GITHUB_APK_NAME\`"
             echo "  - SHA-256: \`$GITHUB_APK_SHA256\`"
             echo "  - Bytes: \`$GITHUB_APK_BYTES\`"
-            echo "- F-Droid APK: \`$FDROID_APK_NAME\`"
-            echo "  - SHA-256: \`$FDROID_APK_SHA256\`"
-            echo "  - Bytes: \`$FDROID_APK_BYTES\`"
+            echo "- F-Droid armeabi-v7a APK: \`$FDROID_ARMV7_APK_NAME\`"
+            echo "  - SHA-256: \`$FDROID_ARMV7_APK_SHA256\`"
+            echo "  - Bytes: \`$FDROID_ARMV7_APK_BYTES\`"
+            echo "- F-Droid arm64-v8a APK: \`$FDROID_ARM64_APK_NAME\`"
+            echo "  - SHA-256: \`$FDROID_ARM64_APK_SHA256\`"
+            echo "  - Bytes: \`$FDROID_ARM64_APK_BYTES\`"
+            echo "- F-Droid x86 APK: \`$FDROID_X86_APK_NAME\`"
+            echo "  - SHA-256: \`$FDROID_X86_APK_SHA256\`"
+            echo "  - Bytes: \`$FDROID_X86_APK_BYTES\`"
             echo "- Certificate SHA-256: \`$EXPECTED_CERT_SHA256\`"
-            echo '- ABIs: `arm64-v8a`, `armeabi-v7a`, `x86`'
+            echo '- GitHub ABI set: `arm64-v8a`, `armeabi-v7a`, `x86`'
+            echo '- F-Droid APKs: one ABI per package'
             echo '- Signing tool: `apksigner` from Android Build Tools 34.0.0'
             echo
             echo 'This workflow does not publish a GitHub Release.'

@@ -20,7 +20,9 @@ on:
         default: arm64
         type: choice
         options:
+          - armv7
           - arm64
+          - x86
           - all
 
 permissions:
@@ -36,7 +38,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     env:
-      NATIVE_ABIS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.build_scope == 'all' && 'arm64-v8a,armeabi-v7a,x86' || 'arm64-v8a' }}
+      BUILD_SCOPE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.build_scope || 'arm64' }}
+      NATIVE_ABIS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.build_scope == 'all' && 'arm64-v8a,armeabi-v7a,x86' || github.event_name == 'workflow_dispatch' && github.event.inputs.build_scope == 'armv7' && 'armeabi-v7a' || github.event_name == 'workflow_dispatch' && github.event.inputs.build_scope == 'x86' && 'x86' || 'arm64-v8a' }}
       BUILD_TASK: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.distribution == 'fdroid' && 'assembleFdroidRelease' || 'assembleGithubNdebug' }}
 
     steps:
@@ -156,11 +159,41 @@ jobs:
       - name: Build APK
         if: steps.validation.outputs.build_required == 'true'
         run: |
+          set -euo pipefail
           set -o pipefail
           chmod +x gradlew Dashchan-Webm/*.sh
-          ./gradlew --no-daemon --stacktrace "$BUILD_TASK" \
-            -PnativePlayerFfmpegFlavor=ffmpeg8 \
-            -PnativeAbis="$NATIVE_ABIS" 2>&1 | tee build-main.log
+          gradle_args=(
+            -PnativePlayerFfmpegFlavor=ffmpeg8
+            -PnativeAbis="$NATIVE_ABIS"
+          )
+          if [ "$BUILD_TASK" = 'assembleFdroidRelease' ] && [ "$BUILD_SCOPE" != 'all' ]; then
+            release_version_code="$(python3 - <<'PY'
+          import re
+          from pathlib import Path
+
+          text = Path('build.gradle').read_text(encoding='utf-8')
+          matches = re.findall(r'^\s*versionCode\s*=\s*(\d+)\s*$', text, re.MULTILINE)
+          if len(matches) != 1:
+              raise SystemExit(f'Expected one literal versionCode, found {len(matches)}')
+          print(matches[0])
+          PY
+            )"
+            if [ $((release_version_code % 10)) -ne 0 ]; then
+              echo "::error::Release versionCode must reserve its final digit for ABI splits: $release_version_code"
+              exit 1
+            fi
+            case "$BUILD_SCOPE" in
+              armv7) abi_offset=1 ;;
+              arm64) abi_offset=2 ;;
+              x86) abi_offset=3 ;;
+              *) echo "::error::Unsupported F-Droid build scope: $BUILD_SCOPE"; exit 1 ;;
+            esac
+            package_version_code=$((release_version_code + abi_offset))
+            gradle_args+=("-PpackageVersionCode=$package_version_code")
+            echo "F-Droid package versionCode: $package_version_code"
+          fi
+          ./gradlew --no-daemon --stacktrace "$BUILD_TASK" "${gradle_args[@]}" \
+            2>&1 | tee build-main.log
 
       - name: Create APK checksums
         if: steps.validation.outputs.build_required == 'true'
