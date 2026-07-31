@@ -21,7 +21,14 @@ recipe to use fdroiddata `srclibs` without patching the application source.
 
 The recipe uses the conventional `fdroid` flavor and `release` build type (`assembleFdroidRelease`). The release
 build type shares the production manifest and extension compatibility configuration used by the upstream `ndebug`
-build, while remaining unsigned for F-Droid to sign.
+build. Gradle leaves this APK unsigned. The protected upstream workflow signs the matching reference APK with the
+established developer key and `apksigner` from Android Build Tools 34.0.0.
+
+F-Droid independently rebuilds the unsigned APK from the tagged source and recipe. Publication with the upstream
+developer signature is enabled only after F-Droid can copy the signature from the signed reference APK to its
+rebuild and verify the result. The final fdroiddata metadata then uses a versioned `Binaries` URL and
+`AllowedAPKSigningKeys`. Both fields remain absent from the disabled draft until the exact tag, release asset, and
+reproducibility result exist.
 
 ## Distribution profiles
 
@@ -44,6 +51,15 @@ extension APK download implicitly. Before downloading, it presents an F-Droid-sp
 
 `BuildConfig.REQUIRE_EXTENSION_INSTALL_CONSENT` enforces this gate in the updater as well as in the user interface.
 The application client itself remains excluded from this updater in the F-Droid distribution.
+
+## Reproducibility
+
+The native build disables GNU build IDs for the app-owned JNI libraries and externally built libyuv. This removes
+the last known environment-dependent byte difference between independent GitHub and fdroidserver APKs. A final
+comparison is still required for every release; source-level configuration alone is not proof of reproducibility.
+
+The normal GitHub APK and the F-Droid reference APK keep the same application ID and developer certificate, so a
+tested F-Droid package can replace the GitHub package in place without deleting application data.
 
 See [FDROID_COMPLIANCE_AUDIT.md](FDROID_COMPLIANCE_AUDIT.md) for the current dependency, asset, Anti-Feature, and
 privacy review. That audit is preparation material and is not a substitute for `fdroid scanner` or packager review.

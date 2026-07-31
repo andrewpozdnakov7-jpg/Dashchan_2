@@ -8,7 +8,7 @@ filesystem paths, workstation identifiers, signing data, credentials, or private
 - Application ID: `io.dashchan2`.
 - Display name: Slooop.
 - Project license: GPL-3.0, with the full text in `COPYING`.
-- Build task: `assembleFdroidNdebug`.
+- Build task: `assembleFdroidRelease`.
 - The F-Droid flavor disables the Google Play Services security-provider path.
 - The F-Droid flavor disables application self-update endpoints, UI, background checks, and client APK requests.
 - Imageboard extensions remain separate APKs and require an explicit F-Droid-specific warning and confirmation
@@ -68,6 +68,7 @@ does not fetch native sources.
 1. Run `fdroid readmeta`, `rewritemeta`, `lint`, and `scanner` against the real fdroiddata recipe.
 2. Build in an isolated F-Droid build-server environment without Gradle network access to native source archives.
 3. Test the actual F-Droid APK on a phone, including cancelling and accepting the extension warning.
-4. Compare two clean unsigned builds and document any reproducibility differences.
+4. Compare the upstream reference APK with a clean fdroidserver rebuild and verify reproducibility by signature
+   copying.
 5. Audit the final tagged source and APK for local paths, credentials, signing files, logs, and private metadata.
 6. Obtain explicit approval before pushing a fdroiddata branch or opening a public merge request.

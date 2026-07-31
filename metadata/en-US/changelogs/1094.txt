@@ -1,0 +1,4 @@
+Added a dedicated F-Droid distribution profile without the built-in application updater or optional Google Play Services provider.
+Added informed confirmation before downloading separately packaged imageboard extensions in the F-Droid build.
+Prepared reproducible native inputs and developer-signature verification for F-Droid publication.
+Normal GitHub builds retain their existing update and provider functionality.

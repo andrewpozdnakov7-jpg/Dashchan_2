@@ -362,6 +362,7 @@ prepare_sources "$sources_yuv"
 	APP_BUILD_SCRIPT=Android.mk \
 	NDK_PROJECT_PATH=. \
 	APP_ABI="$native_abis" \
+	APP_LDFLAGS='-Wl,--build-id=none' \
 	LIBYUV_DISABLE_JPEG='"yes"' $makeflags
 rm -rf "$libraries_yuv" "$external_yuv"
 mkdir -p "$libraries_yuv" "$external_yuv"
