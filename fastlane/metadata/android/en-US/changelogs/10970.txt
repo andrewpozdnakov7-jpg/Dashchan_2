@@ -1,0 +1,1 @@
+Added batch removal of favorite threads and expanded the image editor with editable stickers, brush controls, and zoom and pan gestures.

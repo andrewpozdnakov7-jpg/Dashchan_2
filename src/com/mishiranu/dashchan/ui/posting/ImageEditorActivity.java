@@ -13,7 +13,9 @@ import android.graphics.Path;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffXfermode;
 import android.graphics.RectF;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
+import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
@@ -22,10 +24,12 @@ import android.view.Window;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.widget.FrameLayout;
+import android.widget.GridLayout;
 import android.widget.HorizontalScrollView;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
+import android.widget.SeekBar;
 import android.widget.TextView;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.LocaleManager;
@@ -37,6 +41,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 
 /**
  * A deliberately self-contained editor for posting attachments. It never overwrites the source draft:
@@ -74,6 +79,8 @@ public class ImageEditorActivity extends Activity {
 	private String sourceName;
 	private int attachmentIndex;
 	private volatile boolean stopped;
+	private float brushWidthRatio = 0.035f;
+	private int brushColor = Color.BLACK;
 
 	@Override
 	protected void attachBaseContext(Context newBase) {
@@ -219,7 +226,7 @@ public class ImageEditorActivity extends Activity {
 		});
 		addTool(R.drawable.ic_editor_brush, R.string.image_editor_marker, v -> {
 			leaveCropMode();
-			editorView.setMode(EditorView.Mode.DRAW);
+			showBrushSettings();
 		});
 		addTool(R.drawable.ic_editor_eraser, R.string.image_editor_eraser, v -> {
 			leaveCropMode();
@@ -227,10 +234,126 @@ public class ImageEditorActivity extends Activity {
 		});
 		addTool(R.drawable.ic_editor_sticker, R.string.image_editor_sticker, v -> {
 			leaveCropMode();
-			new AlertDialog.Builder(this).setTitle(R.string.image_editor_sticker_hint)
-					.setItems(STICKERS, (dialog, which) -> editorView.setSticker(STICKERS[which])).show();
+			showStickerPicker();
 		});
 		updateHistoryButtons();
+	}
+
+	private void showBrushSettings() {
+		float density = getResources().getDisplayMetrics().density;
+		LinearLayout layout = new LinearLayout(this);
+		layout.setOrientation(LinearLayout.VERTICAL);
+		int padding = (int) (20f * density);
+		layout.setPadding(padding, (int) (8f * density), padding, 0);
+
+		TextView widthLabel = new TextView(this);
+		layout.addView(widthLabel, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+		SeekBar widthSeek = new SeekBar(this);
+		widthSeek.setMax(95);
+		widthSeek.setProgress(Math.max(0, Math.min(95, Math.round(brushWidthRatio * 1000f) - 5)));
+		layout.addView(widthSeek, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+		Runnable updateWidthLabel = () -> widthLabel.setText(getString(R.string.image_editor_brush_size__format,
+				(widthSeek.getProgress() + 5) / 10f));
+		widthSeek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+			@Override
+			public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+				updateWidthLabel.run();
+			}
+
+			@Override public void onStartTrackingTouch(SeekBar seekBar) {}
+			@Override public void onStopTrackingTouch(SeekBar seekBar) {}
+		});
+		updateWidthLabel.run();
+
+		TextView colorLabel = new TextView(this);
+		colorLabel.setText(R.string.image_editor_brush_color);
+		LinearLayout.LayoutParams colorLabelParams = new LinearLayout.LayoutParams(
+				ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+		colorLabelParams.topMargin = (int) (8f * density);
+		layout.addView(colorLabel, colorLabelParams);
+		GridLayout colorsLayout = new GridLayout(this);
+		colorsLayout.setColumnCount(3);
+		colorsLayout.setRowCount(2);
+		LinearLayout.LayoutParams colorsParams = new LinearLayout.LayoutParams(
+				ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+		colorsParams.gravity = Gravity.CENTER_HORIZONTAL;
+		layout.addView(colorsLayout, colorsParams);
+		int[] colors = {Color.BLACK, Color.WHITE, 0xffe53935, 0xffffd600, 0xff43a047, 0xff1e88e5};
+		int[] pendingColor = {brushColor};
+		ArrayList<View> chips = new ArrayList<>();
+		Runnable updateColors = () -> {
+			for (int i = 0; i < chips.size(); i++) {
+				chips.get(i).setBackground(createColorChipBackground(colors[i], colors[i] == pendingColor[0], density));
+			}
+		};
+		for (int color : colors) {
+			View chip = new View(this);
+			chip.setContentDescription(getString(R.string.image_editor_brush_color));
+			chip.setOnClickListener(v -> {
+				pendingColor[0] = color;
+				updateColors.run();
+			});
+			GridLayout.LayoutParams params = new GridLayout.LayoutParams();
+			params.width = (int) (48f * density);
+			params.height = (int) (48f * density);
+			params.setMargins((int) (4f * density), (int) (6f * density),
+					(int) (4f * density), (int) (6f * density));
+			colorsLayout.addView(chip, params);
+			chips.add(chip);
+		}
+		updateColors.run();
+
+		new AlertDialog.Builder(this).setTitle(R.string.image_editor_marker).setView(layout)
+				.setNegativeButton(android.R.string.cancel, null)
+				.setPositiveButton(android.R.string.ok, (dialog, which) -> {
+					brushWidthRatio = (widthSeek.getProgress() + 5) / 1000f;
+					brushColor = pendingColor[0];
+					editorView.setBrush(brushWidthRatio, brushColor);
+					editorView.setMode(EditorView.Mode.DRAW);
+				}).show();
+	}
+
+	private static GradientDrawable createColorChipBackground(int color, boolean selected, float density) {
+		GradientDrawable drawable = new GradientDrawable();
+		drawable.setColor(color);
+		drawable.setCornerRadius(8f * density);
+		drawable.setStroke((int) ((selected ? 3f : 1f) * density),
+				selected ? 0xff64b5f6 : 0xff808080);
+		return drawable;
+	}
+
+	private void showStickerPicker() {
+		float density = getResources().getDisplayMetrics().density;
+		GridLayout grid = new GridLayout(this);
+		grid.setColumnCount(3);
+		grid.setRowCount((STICKERS.length + 2) / 3);
+		int padding = (int) (8f * density);
+		grid.setPadding(padding, padding, padding, padding);
+		FrameLayout container = new FrameLayout(this);
+		FrameLayout.LayoutParams gridParams = new FrameLayout.LayoutParams(
+				ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER);
+		container.addView(grid, gridParams);
+		AlertDialog[] dialog = new AlertDialog[1];
+		for (String sticker : STICKERS) {
+			TextView button = new TextView(this, null, android.R.attr.borderlessButtonStyle);
+			button.setText(sticker);
+			button.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 28f);
+			button.setGravity(Gravity.CENTER);
+			button.setContentDescription(sticker);
+			button.setOnClickListener(v -> {
+				editorView.setSticker(sticker);
+				dialog[0].dismiss();
+			});
+			GridLayout.LayoutParams params = new GridLayout.LayoutParams();
+			params.width = (int) (72f * density);
+			params.height = (int) (64f * density);
+			params.setMargins((int) (2f * density), (int) (2f * density),
+					(int) (2f * density), (int) (2f * density));
+			grid.addView(button, params);
+		}
+		dialog[0] = new AlertDialog.Builder(this).setTitle(R.string.image_editor_sticker_hint)
+				.setView(container).setNegativeButton(android.R.string.cancel, null).create();
+		dialog[0].show();
 	}
 
 	private ImageButton addTool(int drawableResId, int descriptionResId, View.OnClickListener listener) {
@@ -386,6 +509,10 @@ public class ImageEditorActivity extends Activity {
 		private static final int CROP_RIGHT = 4;
 		private static final int CROP_BOTTOM = 8;
 		private static final int CROP_MOVE = 16;
+		private static final int STICKER_TOUCH_NONE = 0;
+		private static final int STICKER_TOUCH_MOVE = 1;
+		private static final int STICKER_TOUCH_SCALE = 2;
+		private static final float MAX_VIEWPORT_SCALE = 6f;
 
 		private Bitmap baseBitmap;
 		private Bitmap overlayBitmap;
@@ -400,19 +527,36 @@ public class ImageEditorActivity extends Activity {
 		private final Path brushPath = new Path();
 		private final ArrayDeque<Snapshot> undo = new ArrayDeque<>();
 		private final ArrayDeque<Snapshot> redo = new ArrayDeque<>();
+		private final ArrayList<StickerPlacement> stickers = new ArrayList<>();
 		private final Runnable historyChanged;
 		private Mode mode = Mode.NONE;
 		private String selectedSticker;
 		private StickerPlacement activeSticker;
+		private float brushWidthRatio = 0.035f;
+		private int brushColor = Color.BLACK;
 		private int cropTouch;
 		private float touchStartX;
 		private float touchStartY;
 		private float lastBrushX;
 		private float lastBrushY;
+		private boolean brushStarted;
 		private float stickerDragOffsetX;
 		private float stickerDragOffsetY;
+		private int stickerTouchMode;
+		private boolean stickerHistoryPushed;
 		private float stickerScaleStartDistance;
 		private float stickerScaleStartSize;
+		private boolean stickerPendingPlacement;
+		private float stickerPendingX;
+		private float stickerPendingY;
+		private float viewportScale = 1f;
+		private float viewportOffsetX;
+		private float viewportOffsetY;
+		private boolean viewportGesture;
+		private float viewportGestureStartDistance;
+		private float viewportGestureStartScale;
+		private float viewportFocusBitmapX;
+		private float viewportFocusBitmapY;
 
 		EditorView(Context context, Bitmap source, Runnable historyChanged) {
 			super(context);
@@ -457,6 +601,11 @@ public class ImageEditorActivity extends Activity {
 			invalidate();
 		}
 
+		void setBrush(float widthRatio, int color) {
+			brushWidthRatio = Math.max(0.005f, Math.min(0.1f, widthRatio));
+			brushColor = color;
+		}
+
 		boolean isCropping() { return mode == Mode.CROP; }
 		boolean canUndo() { return !undo.isEmpty(); }
 		boolean canRedo() { return !redo.isEmpty(); }
@@ -468,14 +617,31 @@ public class ImageEditorActivity extends Activity {
 
 		private void updateMatrices() {
 			if (baseBitmap == null || getWidth() == 0 || getHeight() == 0) return;
-			float scale = Math.min((float) getWidth() / baseBitmap.getWidth(),
+			float fitScale = Math.min((float) getWidth() / baseBitmap.getWidth(),
 					(float) getHeight() / baseBitmap.getHeight());
+			float scale = fitScale * viewportScale;
+			clampViewportOffset(scale);
 			float dx = (getWidth() - baseBitmap.getWidth() * scale) / 2f;
 			float dy = (getHeight() - baseBitmap.getHeight() * scale) / 2f;
 			bitmapToView.reset();
 			bitmapToView.postScale(scale, scale);
-			bitmapToView.postTranslate(dx, dy);
+			bitmapToView.postTranslate(dx + viewportOffsetX, dy + viewportOffsetY);
 			bitmapToView.invert(viewToBitmap);
+		}
+
+		private void clampViewportOffset(float scale) {
+			float overflowX = Math.max(0f, baseBitmap.getWidth() * scale - getWidth()) / 2f;
+			float overflowY = Math.max(0f, baseBitmap.getHeight() * scale - getHeight()) / 2f;
+			viewportOffsetX = Math.max(-overflowX, Math.min(overflowX, viewportOffsetX));
+			viewportOffsetY = Math.max(-overflowY, Math.min(overflowY, viewportOffsetY));
+		}
+
+		private void resetViewport() {
+			viewportScale = 1f;
+			viewportOffsetX = 0f;
+			viewportOffsetY = 0f;
+			viewportGesture = false;
+			updateMatrices();
 		}
 
 		@Override
@@ -484,6 +650,12 @@ public class ImageEditorActivity extends Activity {
 			if (baseBitmap == null) return;
 			canvas.drawBitmap(baseBitmap, bitmapToView, bitmapPaint);
 			canvas.drawBitmap(overlayBitmap, bitmapToView, bitmapPaint);
+			if (!stickers.isEmpty()) {
+				int save = canvas.save();
+				canvas.concat(bitmapToView);
+				for (StickerPlacement sticker : stickers) drawSticker(canvas, sticker);
+				canvas.restoreToCount(save);
+			}
 			if (activeSticker != null) drawActiveSticker(canvas);
 			if (mode == Mode.CROP) drawCrop(canvas);
 		}
@@ -491,7 +663,6 @@ public class ImageEditorActivity extends Activity {
 		private void drawActiveSticker(Canvas canvas) {
 			int save = canvas.save();
 			canvas.concat(bitmapToView);
-			drawSticker(canvas, activeSticker);
 			Paint border = new Paint(Paint.ANTI_ALIAS_FLAG);
 			border.setColor(Color.WHITE);
 			border.setStyle(Paint.Style.STROKE);
@@ -499,9 +670,24 @@ public class ImageEditorActivity extends Activity {
 			float half = activeSticker.size * 0.55f;
 			canvas.drawRect(activeSticker.x - half, activeSticker.y - half,
 					activeSticker.x + half, activeSticker.y + half, border);
+			float inverseScale = 1f / Math.max(0.01f, getMatrixScale());
+			float deleteHandle = 40f * inverseScale;
+			float resizeHandle = 58f * inverseScale;
 			border.setStyle(Paint.Style.FILL);
-			float handle = 5f / Math.max(0.01f, getMatrixScale());
-			canvas.drawCircle(activeSticker.x + half, activeSticker.y + half, handle, border);
+			border.setColor(0xffd32f2f);
+			canvas.drawCircle(activeSticker.x - half, activeSticker.y - half, deleteHandle, border);
+			border.setColor(Color.WHITE);
+			border.setStrokeWidth(5f * inverseScale);
+			border.setStyle(Paint.Style.STROKE);
+			float cross = 30f * inverseScale;
+			canvas.drawLine(activeSticker.x - half - cross, activeSticker.y - half - cross,
+					activeSticker.x - half + cross, activeSticker.y - half + cross, border);
+			canvas.drawLine(activeSticker.x - half + cross, activeSticker.y - half - cross,
+					activeSticker.x - half - cross, activeSticker.y - half + cross, border);
+			border.setStyle(Paint.Style.FILL);
+			canvas.drawCircle(activeSticker.x + half, activeSticker.y + half, resizeHandle, border);
+			border.setColor(0xff202124);
+			canvas.drawCircle(activeSticker.x + half, activeSticker.y + half, 50f * inverseScale, border);
 			canvas.restoreToCount(save);
 		}
 
@@ -537,10 +723,15 @@ public class ImageEditorActivity extends Activity {
 
 		@Override
 		public boolean onTouchEvent(MotionEvent event) {
+			if (handleViewportTouch(event)) return true;
 			float[] point = {event.getX(), event.getY()};
 			viewToBitmap.mapPoints(point);
 			float x = point[0], y = point[1];
-			if (x < 0 || y < 0 || x > baseBitmap.getWidth() || y > baseBitmap.getHeight()) return true;
+			if (x < 0 || y < 0 || x > baseBitmap.getWidth() || y > baseBitmap.getHeight()) {
+				if (event.getActionMasked() == MotionEvent.ACTION_DOWN) return true;
+				x = Math.max(0f, Math.min(baseBitmap.getWidth(), x));
+				y = Math.max(0f, Math.min(baseBitmap.getHeight(), y));
+			}
 			switch (mode) {
 				case CROP: return handleCropTouch(event, x, y);
 				case DRAW:
@@ -550,49 +741,124 @@ public class ImageEditorActivity extends Activity {
 			}
 		}
 
+		private boolean handleViewportTouch(MotionEvent event) {
+			switch (event.getActionMasked()) {
+				case MotionEvent.ACTION_POINTER_DOWN: {
+					if (event.getPointerCount() >= 2) {
+						stickerPendingPlacement = false;
+						stickerTouchMode = STICKER_TOUCH_NONE;
+						brushStarted = false;
+						brushPath.reset();
+						viewportGesture = true;
+						viewportGestureStartDistance = getPointerDistanceView(event);
+						viewportGestureStartScale = viewportScale;
+						float[] focus = getPointerCenterView(event);
+						viewToBitmap.mapPoints(focus);
+						viewportFocusBitmapX = focus[0];
+						viewportFocusBitmapY = focus[1];
+						return true;
+					}
+					break;
+				}
+				case MotionEvent.ACTION_MOVE: {
+					if (viewportGesture) {
+						if (event.getPointerCount() >= 2 && viewportGestureStartDistance > 0f) {
+							float newScale = viewportGestureStartScale * getPointerDistanceView(event)
+									/ viewportGestureStartDistance;
+							viewportScale = Math.max(1f, Math.min(MAX_VIEWPORT_SCALE, newScale));
+							float fitScale = Math.min((float) getWidth() / baseBitmap.getWidth(),
+									(float) getHeight() / baseBitmap.getHeight());
+							float scale = fitScale * viewportScale;
+							float[] focus = getPointerCenterView(event);
+							float centeredX = (getWidth() - baseBitmap.getWidth() * scale) / 2f;
+							float centeredY = (getHeight() - baseBitmap.getHeight() * scale) / 2f;
+							viewportOffsetX = focus[0] - centeredX - viewportFocusBitmapX * scale;
+							viewportOffsetY = focus[1] - centeredY - viewportFocusBitmapY * scale;
+							updateMatrices();
+							invalidate();
+						}
+						return true;
+					}
+					break;
+				}
+				case MotionEvent.ACTION_POINTER_UP: {
+					if (viewportGesture) return true;
+					break;
+				}
+				case MotionEvent.ACTION_UP:
+				case MotionEvent.ACTION_CANCEL: {
+					if (viewportGesture) {
+						viewportGesture = false;
+						viewportGestureStartDistance = 0f;
+						return true;
+					}
+					break;
+				}
+			}
+			return false;
+		}
+
+		private static float getPointerDistanceView(MotionEvent event) {
+			return (float) Math.hypot(event.getX(1) - event.getX(0), event.getY(1) - event.getY(0));
+		}
+
+		private static float[] getPointerCenterView(MotionEvent event) {
+			return new float[] {(event.getX(0) + event.getX(1)) / 2f,
+					(event.getY(0) + event.getY(1)) / 2f};
+		}
+
 		private boolean handleStickerTouch(MotionEvent event, float x, float y) {
 			switch (event.getActionMasked()) {
 				case MotionEvent.ACTION_DOWN: {
-					if (activeSticker == null) {
-						if (selectedSticker == null) return true;
-						pushHistory();
-						float size = Math.max(48f,
-								Math.min(baseBitmap.getWidth(), baseBitmap.getHeight()) * 0.16f);
-						activeSticker = new StickerPlacement(selectedSticker, x, y, size);
-						clampActiveSticker();
-						historyChanged.run();
-					} else {
-						float half = activeSticker.size * 0.65f;
-						if (Math.abs(x - activeSticker.x) > half || Math.abs(y - activeSticker.y) > half) {
-							activeSticker.x = x;
-							activeSticker.y = y;
-							clampActiveSticker();
+					stickerTouchMode = STICKER_TOUCH_NONE;
+					stickerHistoryPushed = false;
+					if (activeSticker != null) {
+						float half = activeSticker.size * 0.55f;
+						float inverseScale = 1f / Math.max(0.01f, getMatrixScale());
+						float deleteTolerance = 60f * inverseScale;
+						float resizeTolerance = 76f * inverseScale;
+						if (Math.hypot(x - (activeSticker.x - half), y - (activeSticker.y - half))
+								<= deleteTolerance) {
+							pushHistory();
+							stickers.remove(activeSticker);
+							activeSticker = null;
+							historyChanged.run();
+							invalidate();
+							return true;
+						}
+						if (Math.hypot(x - (activeSticker.x + half), y - (activeSticker.y + half))
+								<= resizeTolerance) {
+							stickerTouchMode = STICKER_TOUCH_SCALE;
+							stickerScaleStartDistance = Math.max(1f,
+									(float) Math.hypot(x - activeSticker.x, y - activeSticker.y));
+							stickerScaleStartSize = activeSticker.size;
+							return true;
 						}
 					}
-					stickerDragOffsetX = x - activeSticker.x;
-					stickerDragOffsetY = y - activeSticker.y;
+					activeSticker = findSticker(x, y);
+					stickerPendingPlacement = activeSticker == null && selectedSticker != null;
+					stickerPendingX = x;
+					stickerPendingY = y;
+					if (activeSticker != null) {
+						stickerTouchMode = STICKER_TOUCH_MOVE;
+						stickerDragOffsetX = x - activeSticker.x;
+						stickerDragOffsetY = y - activeSticker.y;
+					}
 					invalidate();
 					return true;
 				}
-				case MotionEvent.ACTION_POINTER_DOWN: {
-					if (activeSticker != null && event.getPointerCount() >= 2) {
-						stickerScaleStartDistance = getPointerDistance(event);
-						stickerScaleStartSize = activeSticker.size;
-					}
-					return true;
-				}
 				case MotionEvent.ACTION_MOVE: {
+					if (stickerPendingPlacement) placeSticker(stickerPendingX, stickerPendingY);
 					if (activeSticker == null) return true;
-					if (event.getPointerCount() >= 2 && stickerScaleStartDistance > 0f) {
-						float distance = getPointerDistance(event);
+					if (stickerTouchMode == STICKER_TOUCH_SCALE && stickerScaleStartDistance > 0f) {
+						ensureStickerHistory();
+						float distance = (float) Math.hypot(x - activeSticker.x, y - activeSticker.y);
 						float minimum = Math.min(baseBitmap.getWidth(), baseBitmap.getHeight()) * 0.06f;
 						float maximum = Math.min(baseBitmap.getWidth(), baseBitmap.getHeight()) * 0.75f;
 						activeSticker.size = Math.max(minimum, Math.min(maximum,
 								stickerScaleStartSize * distance / stickerScaleStartDistance));
-						float[] center = getPointerCenter(event);
-						activeSticker.x = center[0];
-						activeSticker.y = center[1];
-					} else {
+					} else if (stickerTouchMode == STICKER_TOUCH_MOVE) {
+						ensureStickerHistory();
 						activeSticker.x = x - stickerDragOffsetX;
 						activeSticker.y = y - stickerDragOffsetY;
 					}
@@ -600,13 +866,16 @@ public class ImageEditorActivity extends Activity {
 					invalidate();
 					return true;
 				}
-				case MotionEvent.ACTION_POINTER_UP: {
-					stickerScaleStartDistance = 0f;
-					return true;
-				}
 				case MotionEvent.ACTION_UP:
 				case MotionEvent.ACTION_CANCEL: {
+					if (event.getActionMasked() == MotionEvent.ACTION_UP && stickerPendingPlacement) {
+						placeSticker(x, y);
+					}
+					stickerPendingPlacement = false;
+					stickerTouchMode = STICKER_TOUCH_NONE;
 					stickerScaleStartDistance = 0f;
+					if (stickerHistoryPushed) historyChanged.run();
+					stickerHistoryPushed = false;
 					invalidate();
 					return true;
 				}
@@ -614,48 +883,72 @@ public class ImageEditorActivity extends Activity {
 			return true;
 		}
 
-		private float getPointerDistance(MotionEvent event) {
-			float[] points = {event.getX(0), event.getY(0), event.getX(1), event.getY(1)};
-			viewToBitmap.mapPoints(points);
-			return (float) Math.hypot(points[2] - points[0], points[3] - points[1]);
+		private void placeSticker(float x, float y) {
+			if (!stickerPendingPlacement || selectedSticker == null) return;
+			pushHistory();
+			stickerHistoryPushed = true;
+			float size = Math.max(48f,
+					Math.min(baseBitmap.getWidth(), baseBitmap.getHeight()) * 0.16f);
+			activeSticker = new StickerPlacement(selectedSticker, x, y, size);
+			stickers.add(activeSticker);
+			stickerPendingPlacement = false;
+			stickerTouchMode = STICKER_TOUCH_MOVE;
+			stickerDragOffsetX = 0f;
+			stickerDragOffsetY = 0f;
+			clampActiveSticker();
+			historyChanged.run();
 		}
 
-		private float[] getPointerCenter(MotionEvent event) {
-			float[] points = {event.getX(0), event.getY(0), event.getX(1), event.getY(1)};
-			viewToBitmap.mapPoints(points);
-			return new float[] {(points[0] + points[2]) / 2f, (points[1] + points[3]) / 2f};
+		private void ensureStickerHistory() {
+			if (!stickerHistoryPushed) {
+				pushHistory();
+				stickerHistoryPushed = true;
+			}
+		}
+
+		private StickerPlacement findSticker(float x, float y) {
+			for (int i = stickers.size() - 1; i >= 0; i--) {
+				StickerPlacement sticker = stickers.get(i);
+				float half = sticker.size * 0.65f;
+				if (Math.abs(x - sticker.x) <= half && Math.abs(y - sticker.y) <= half) return sticker;
+			}
+			return null;
 		}
 
 		private void clampActiveSticker() {
-			if (activeSticker == null) return;
-			float margin = activeSticker.size * 0.5f;
-			activeSticker.x = Math.max(margin, Math.min(baseBitmap.getWidth() - margin, activeSticker.x));
-			activeSticker.y = Math.max(margin, Math.min(baseBitmap.getHeight() - margin, activeSticker.y));
+			if (activeSticker != null) clampSticker(activeSticker);
+		}
+
+		private void clampSticker(StickerPlacement sticker) {
+			float margin = sticker.size * 0.5f;
+			sticker.x = Math.max(margin, Math.min(baseBitmap.getWidth() - margin, sticker.x));
+			sticker.y = Math.max(margin, Math.min(baseBitmap.getHeight() - margin, sticker.y));
 		}
 
 		private void commitActiveSticker() {
-			if (activeSticker != null) {
-				drawSticker(overlayCanvas, activeSticker);
-				activeSticker = null;
-				stickerScaleStartDistance = 0f;
-				invalidate();
-			}
+			activeSticker = null;
+			stickerTouchMode = STICKER_TOUCH_NONE;
+			stickerScaleStartDistance = 0f;
+			invalidate();
 		}
 
 		private boolean handleBrushTouch(MotionEvent event, float x, float y) {
 			switch (event.getActionMasked()) {
 				case MotionEvent.ACTION_DOWN: {
-					pushHistory();
 					configureBrush();
 					brushPath.reset();
 					brushPath.moveTo(x, y);
 					lastBrushX = x;
 					lastBrushY = y;
-					overlayCanvas.drawPoint(x, y, brushPaint);
-					invalidate();
+					brushStarted = false;
 					return true;
 				}
 				case MotionEvent.ACTION_MOVE: {
+					if (!brushStarted) {
+						pushHistory();
+						brushStarted = true;
+						overlayCanvas.drawPoint(lastBrushX, lastBrushY, brushPaint);
+					}
 					float middleX = (lastBrushX + x) / 2f;
 					float middleY = (lastBrushY + y) / 2f;
 					brushPath.quadTo(lastBrushX, lastBrushY, middleX, middleY);
@@ -667,10 +960,17 @@ public class ImageEditorActivity extends Activity {
 				}
 				case MotionEvent.ACTION_UP:
 				case MotionEvent.ACTION_CANCEL: {
-					brushPath.lineTo(x, y);
-					overlayCanvas.drawPath(brushPath, brushPaint);
+					if (!brushStarted && event.getActionMasked() == MotionEvent.ACTION_UP) {
+						pushHistory();
+						brushStarted = true;
+						overlayCanvas.drawPoint(x, y, brushPaint);
+					} else if (brushStarted) {
+						brushPath.lineTo(x, y);
+						overlayCanvas.drawPath(brushPath, brushPaint);
+					}
 					invalidate();
-					historyChanged.run();
+					if (brushStarted) historyChanged.run();
+					brushStarted = false;
 					return true;
 				}
 			}
@@ -678,13 +978,13 @@ public class ImageEditorActivity extends Activity {
 		}
 
 		private void configureBrush() {
-			brushPaint.setStrokeWidth(Math.max(18f,
-					Math.min(baseBitmap.getWidth(), baseBitmap.getHeight()) * 0.035f));
+			brushPaint.setStrokeWidth(Math.max(2f,
+					Math.min(baseBitmap.getWidth(), baseBitmap.getHeight()) * brushWidthRatio));
 			if (mode == Mode.ERASE) {
 				brushPaint.setColor(Color.TRANSPARENT);
 				brushPaint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.CLEAR));
 			} else {
-				brushPaint.setColor(Color.BLACK);
+				brushPaint.setColor(brushColor);
 				brushPaint.setXfermode(null);
 			}
 		}
@@ -754,6 +1054,19 @@ public class ImageEditorActivity extends Activity {
 				pushHistory();
 				replaceBitmaps(Bitmap.createBitmap(baseBitmap, left, top, right - left, bottom - top),
 						Bitmap.createBitmap(overlayBitmap, left, top, right - left, bottom - top));
+				for (int i = stickers.size() - 1; i >= 0; i--) {
+					StickerPlacement sticker = stickers.get(i);
+					sticker.x -= left;
+					sticker.y -= top;
+					float half = sticker.size * 0.55f;
+					if (sticker.x + half < 0f || sticker.y + half < 0f
+							|| sticker.x - half > baseBitmap.getWidth()
+							|| sticker.y - half > baseBitmap.getHeight()) {
+						stickers.remove(i);
+					} else {
+						clampSticker(sticker);
+					}
+				}
 				historyChanged.run();
 			}
 			mode = Mode.NONE;
@@ -763,22 +1076,34 @@ public class ImageEditorActivity extends Activity {
 		void rotate() {
 			commitActiveSticker();
 			pushHistory();
+			int oldHeight = baseBitmap.getHeight();
 			Matrix matrix = new Matrix();
 			matrix.postRotate(90f);
 			replaceBitmaps(Bitmap.createBitmap(baseBitmap, 0, 0, baseBitmap.getWidth(), baseBitmap.getHeight(),
 					matrix, true), Bitmap.createBitmap(overlayBitmap, 0, 0, overlayBitmap.getWidth(),
 					overlayBitmap.getHeight(), matrix, true));
+			for (StickerPlacement sticker : stickers) {
+				float oldX = sticker.x;
+				sticker.x = oldHeight - sticker.y;
+				sticker.y = oldX;
+				clampSticker(sticker);
+			}
 			historyChanged.run();
 		}
 
 		void flip() {
 			commitActiveSticker();
 			pushHistory();
+			int oldWidth = baseBitmap.getWidth();
 			Matrix matrix = new Matrix();
 			matrix.postScale(-1f, 1f);
 			replaceBitmaps(Bitmap.createBitmap(baseBitmap, 0, 0, baseBitmap.getWidth(), baseBitmap.getHeight(),
 					matrix, true), Bitmap.createBitmap(overlayBitmap, 0, 0, overlayBitmap.getWidth(),
 					overlayBitmap.getHeight(), matrix, true));
+			for (StickerPlacement sticker : stickers) {
+				sticker.x = oldWidth - sticker.x;
+				clampSticker(sticker);
+			}
 			historyChanged.run();
 		}
 
@@ -788,13 +1113,13 @@ public class ImageEditorActivity extends Activity {
 			baseBitmap = ensureArgbBitmap(base);
 			overlayBitmap = ensureArgbBitmap(overlay);
 			overlayCanvas = new Canvas(overlayBitmap);
-			updateMatrices();
+			resetViewport();
 			invalidate();
 		}
 
 		private void pushHistory() {
 			try {
-				undo.addLast(new Snapshot(baseBitmap, overlayBitmap));
+				undo.addLast(new Snapshot(baseBitmap, overlayBitmap, stickers));
 				while (undo.size() > MAX_HISTORY) undo.removeFirst().recycle();
 				clearHistory(redo);
 			} catch (OutOfMemoryError e) {
@@ -806,7 +1131,7 @@ public class ImageEditorActivity extends Activity {
 		void undo() {
 			commitActiveSticker();
 			if (undo.isEmpty()) return;
-			redo.addLast(new Snapshot(baseBitmap, overlayBitmap));
+			redo.addLast(new Snapshot(baseBitmap, overlayBitmap, stickers));
 			while (redo.size() > MAX_HISTORY) redo.removeFirst().recycle();
 			restore(undo.removeLast());
 		}
@@ -814,7 +1139,7 @@ public class ImageEditorActivity extends Activity {
 		void redo() {
 			commitActiveSticker();
 			if (redo.isEmpty()) return;
-			undo.addLast(new Snapshot(baseBitmap, overlayBitmap));
+			undo.addLast(new Snapshot(baseBitmap, overlayBitmap, stickers));
 			while (undo.size() > MAX_HISTORY) undo.removeFirst().recycle();
 			restore(redo.removeLast());
 		}
@@ -825,10 +1150,12 @@ public class ImageEditorActivity extends Activity {
 			baseBitmap = snapshot.base;
 			overlayBitmap = snapshot.overlay;
 			overlayCanvas = new Canvas(overlayBitmap);
+			stickers.clear();
+			stickers.addAll(snapshot.stickers);
 			mode = Mode.NONE;
 			selectedSticker = null;
 			activeSticker = null;
-			updateMatrices();
+			resetViewport();
 			invalidate();
 			historyChanged.run();
 		}
@@ -837,7 +1164,9 @@ public class ImageEditorActivity extends Activity {
 			commitActiveSticker();
 			try {
 				Bitmap result = baseBitmap.copy(Bitmap.Config.ARGB_8888, true);
-				new Canvas(result).drawBitmap(overlayBitmap, 0f, 0f, bitmapPaint);
+				Canvas canvas = new Canvas(result);
+				canvas.drawBitmap(overlayBitmap, 0f, 0f, bitmapPaint);
+				for (StickerPlacement sticker : stickers) drawSticker(canvas, sticker);
 				return result;
 			} catch (OutOfMemoryError e) {
 				return null;
@@ -858,10 +1187,13 @@ public class ImageEditorActivity extends Activity {
 		private static class Snapshot {
 			final Bitmap base;
 			final Bitmap overlay;
+			final ArrayList<StickerPlacement> stickers;
 
-			Snapshot(Bitmap base, Bitmap overlay) {
+			Snapshot(Bitmap base, Bitmap overlay, ArrayList<StickerPlacement> stickers) {
 				this.base = base.copy(Bitmap.Config.ARGB_8888, true);
 				this.overlay = overlay.copy(Bitmap.Config.ARGB_8888, true);
+				this.stickers = new ArrayList<>(stickers.size());
+				for (StickerPlacement sticker : stickers) this.stickers.add(new StickerPlacement(sticker));
 			}
 
 			void recycle() {
@@ -881,6 +1213,10 @@ public class ImageEditorActivity extends Activity {
 				this.x = x;
 				this.y = y;
 				this.size = size;
+			}
+
+			StickerPlacement(StickerPlacement other) {
+				this(other.text, other.x, other.y, other.size);
 			}
 		}
 	}

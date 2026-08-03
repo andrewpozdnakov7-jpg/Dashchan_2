@@ -223,6 +223,13 @@
 	<string name="favorites_hide_all">Скрыть все</string>
 	<string name="favorites_hide_deleted">Скрыть удалённые</string>
 	<string name="favorites_show_all">Показать все</string>
+	<string name="select_threads">Выбрать треды</string>
+	<plurals name="favorites_remove_selected_confirmation__format">
+		<item quantity="one">Удалить %d выбранный тред из избранного?</item>
+		<item quantity="few">Удалить %d выбранных треда из избранного?</item>
+		<item quantity="many">Удалить %d выбранных тредов из избранного?</item>
+		<item quantity="other">Удалить %d выбранного треда из избранного?</item>
+	</plurals>
 	<string name="favorites_show_deleted">Показать удалённые</string>
 	<string name="favorites_watcher">Отслеживание избранного</string>
 	<string name="background_reply_check">Проверять ответы в фоне</string>
@@ -284,11 +291,13 @@
 	<string name="image_editor_rotate">Повернуть</string>
 	<string name="image_editor_flip">Отразить</string>
 	<string name="image_editor_marker">Замазать</string>
+	<string name="image_editor_brush_size__format">Размер кисти: %1$.1f%%</string>
+	<string name="image_editor_brush_color">Цвет кисти</string>
 	<string name="image_editor_eraser">Ластик</string>
 	<string name="image_editor_sticker">Стикер</string>
 	<string name="image_editor_undo">Отменить</string>
 	<string name="image_editor_redo">Повторить</string>
-	<string name="image_editor_sticker_hint">Выберите стикер, коснитесь изображения, перетаскивайте одним пальцем и меняйте размер щипком</string>
+	<string name="image_editor_sticker_hint">Выберите стикер</string>
 	<string name="video_audio_boost">Усиление звука видео</string>
 	<string name="video_audio_boost__summary">Позволяет Slooop усиливать звук видео выше обычного уровня, не меняя системную громкость. Возможны компрессия и искажения. По умолчанию выключено</string>
 	<string name="video_audio_boost_level">Максимальное усиление звука видео</string>

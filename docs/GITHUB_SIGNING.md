@@ -80,8 +80,8 @@ the ABI version-code scheme, all three ABIs in the GitHub APK, and exactly one e
 Download the temporary artifact and independently verify it before testing:
 
 ```sh
-version=3.2.16
-code=10960
+version=3.2.17
+code=10970
 sha256sum -c SHA256SUMS.txt
 apksigner verify --verbose --print-certs "Slooop-$version-$code-ffmpeg8-all-abi-signed.apk"
 apksigner verify --verbose --print-certs "Slooop-$version-$((code + 1))-fdroid-ffmpeg8-armeabi-v7a-signed.apk"
