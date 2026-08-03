@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -303,6 +304,25 @@ public class FavoritesStorage extends StorageManager.Storage<List<FavoritesStora
 				notifyFavoritesUpdate(favoriteItem, Action.WATCHER_DISABLE);
 			}
 			notifyFavoritesUpdate(favoriteItem, Action.REMOVE);
+			serialize();
+		}
+	}
+
+	public void remove(Collection<FavoriteItem> favoriteItems) {
+		boolean changed = false;
+		for (FavoriteItem requestedItem : favoriteItems) {
+			FavoriteItem favoriteItem = favoriteItemsMap.remove(makeKey(requestedItem));
+			if (favoriteItem != null) {
+				favoriteItemsList.remove(favoriteItem);
+				if (favoriteItem.watcherEnabled) {
+					favoriteItem.watcherEnabled = false;
+					notifyFavoritesUpdate(favoriteItem, Action.WATCHER_DISABLE);
+				}
+				notifyFavoritesUpdate(favoriteItem, Action.REMOVE);
+				changed = true;
+			}
+		}
+		if (changed) {
 			serialize();
 		}
 	}

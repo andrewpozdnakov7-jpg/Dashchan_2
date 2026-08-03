@@ -219,6 +219,11 @@
 	<string name="favorites_hide_all">Hide all</string>
 	<string name="favorites_hide_deleted">Hide deleted</string>
 	<string name="favorites_show_all">Show all</string>
+	<string name="select_threads">Select threads</string>
+	<plurals name="favorites_remove_selected_confirmation__format">
+		<item quantity="one">Remove %d selected thread from favorites?</item>
+		<item quantity="other">Remove %d selected threads from favorites?</item>
+	</plurals>
 	<string name="favorites_show_deleted">Show deleted</string>
 	<string name="favorites_watcher">Favorites watcher</string>
 	<string name="background_reply_check">Check replies in background</string>
@@ -280,11 +285,13 @@
 	<string name="image_editor_rotate">Rotate</string>
 	<string name="image_editor_flip">Flip</string>
 	<string name="image_editor_marker">Cover</string>
+	<string name="image_editor_brush_size__format">Brush size: %1$.1f%%</string>
+	<string name="image_editor_brush_color">Brush color</string>
 	<string name="image_editor_eraser">Eraser</string>
 	<string name="image_editor_sticker">Sticker</string>
 	<string name="image_editor_undo">Undo</string>
 	<string name="image_editor_redo">Redo</string>
-	<string name="image_editor_sticker_hint">Choose a sticker, tap the image to place it, drag to move, and pinch to resize</string>
+	<string name="image_editor_sticker_hint">Choose a sticker</string>
 	<string name="video_audio_boost">Boost video audio</string>
 	<string name="video_audio_boost__summary">Allow Slooop to amplify video audio above its normal level without changing system volume. Compression or distortion may occur. Disabled by default</string>
 	<string name="video_audio_boost_level">Maximum video audio boost</string>
