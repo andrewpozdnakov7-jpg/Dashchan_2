@@ -292,6 +292,15 @@
 	<string name="image_editor_undo">Undo</string>
 	<string name="image_editor_redo">Redo</string>
 	<string name="image_editor_sticker_hint">Choose a sticker</string>
+	<string name="dvach_emoji_captcha_auto_solver">Automatic 2ch captcha recognition</string>
+	<string name="dvach_emoji_captcha_auto_solver__summary">Experimental beta feature for the /test/ board only. Recognition runs locally and is disabled by default. After a successful post, wait 5 minutes before using it again</string>
+	<string name="captcha_recognize">Recognize</string>
+	<string name="captcha_auto_solver_warning_title">Experimental captcha recognition</string>
+	<string name="captcha_auto_solver_warning_message">This beta feature is being coordinated with the 2ch administration and is available only on /test/. Recognition runs locally on this device. It selects captcha symbols but never submits or retries a post automatically. You must review and send the post yourself. After a successful solver-assisted post, recognition is unavailable for 5 minutes.</string>
+	<string name="captcha_auto_solver_continue">Recognize captcha</string>
+	<string name="captcha_auto_solver_cooldown__format">Automatic recognition will be available in %1$d min %2$02d sec</string>
+	<string name="captcha_auto_solver_uncertain">Recognition was not confident enough. Solve the captcha manually or try a new captcha</string>
+	<string name="captcha_auto_solver_unavailable">Automatic recognition could not be started. Solve the captcha manually</string>
 	<string name="video_audio_boost">Boost video audio</string>
 	<string name="video_audio_boost__summary">Allow Slooop to amplify video audio above its normal level without changing system volume. Compression or distortion may occur. Disabled by default</string>
 	<string name="video_audio_boost_level">Maximum video audio boost</string>

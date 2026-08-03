@@ -50,6 +50,10 @@ public class ExperimentalFragment extends PreferenceFragment {
 		}
 		addCheck(true, Preferences.KEY_IMAGE_EDITOR, Preferences.DEFAULT_IMAGE_EDITOR,
 				R.string.image_editor, R.string.image_editor__summary);
+		addCheck(true, Preferences.KEY_DVACH_EMOJI_CAPTCHA_AUTO_SOLVER,
+				Preferences.DEFAULT_DVACH_EMOJI_CAPTCHA_AUTO_SOLVER,
+				R.string.dvach_emoji_captcha_auto_solver,
+				R.string.dvach_emoji_captcha_auto_solver__summary);
 		CheckPreference audioBoostPreference = addCheck(true, Preferences.KEY_VIDEO_AUDIO_BOOST,
 				Preferences.DEFAULT_VIDEO_AUDIO_BOOST, R.string.video_audio_boost,
 				R.string.video_audio_boost__summary);

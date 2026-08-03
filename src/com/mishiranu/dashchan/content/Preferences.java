@@ -1724,6 +1724,11 @@ public class Preferences {
 	public static final boolean DEFAULT_HARDWARE_VIDEO_ACCELERATION = true;
 	public static final String KEY_IMAGE_EDITOR = "image_editor";
 	public static final boolean DEFAULT_IMAGE_EDITOR = true;
+	public static final String KEY_DVACH_EMOJI_CAPTCHA_AUTO_SOLVER = "dvach_emoji_captcha_auto_solver";
+	public static final boolean DEFAULT_DVACH_EMOJI_CAPTCHA_AUTO_SOLVER = false;
+	private static final String KEY_DVACH_EMOJI_CAPTCHA_AUTO_SOLVER_NEXT_USE_TIME =
+			"dvach_emoji_captcha_auto_solver_next_use_time";
+	public static final long DVACH_EMOJI_CAPTCHA_AUTO_SOLVER_COOLDOWN = 5L * 60L * 1000L;
 	public static final String KEY_VIDEO_AUDIO_BOOST = "video_audio_boost";
 	public static final boolean DEFAULT_VIDEO_AUDIO_BOOST = false;
 	public static final String KEY_VIDEO_AUDIO_BOOST_DB = "video_audio_boost_db";
@@ -1737,6 +1742,29 @@ public class Preferences {
 
 	public static boolean isImageEditorEnabled() {
 		return PREFERENCES.getBoolean(KEY_IMAGE_EDITOR, DEFAULT_IMAGE_EDITOR);
+	}
+
+	public static boolean isDvachEmojiCaptchaAutoSolverEnabled() {
+		return PREFERENCES.getBoolean(KEY_DVACH_EMOJI_CAPTCHA_AUTO_SOLVER,
+				DEFAULT_DVACH_EMOJI_CAPTCHA_AUTO_SOLVER);
+	}
+
+	public static long getDvachEmojiCaptchaAutoSolverCooldownRemaining() {
+		long remaining = PREFERENCES.getLong(KEY_DVACH_EMOJI_CAPTCHA_AUTO_SOLVER_NEXT_USE_TIME, 0L)
+				- System.currentTimeMillis();
+		if (remaining <= 0L) {
+			return 0L;
+		}
+		if (remaining > DVACH_EMOJI_CAPTCHA_AUTO_SOLVER_COOLDOWN) {
+			PREFERENCES.edit().remove(KEY_DVACH_EMOJI_CAPTCHA_AUTO_SOLVER_NEXT_USE_TIME).close();
+			return 0L;
+		}
+		return remaining;
+	}
+
+	public static void markDvachEmojiCaptchaAutoSolverSuccessfulUse() {
+		PREFERENCES.edit().put(KEY_DVACH_EMOJI_CAPTCHA_AUTO_SOLVER_NEXT_USE_TIME,
+				System.currentTimeMillis() + DVACH_EMOJI_CAPTCHA_AUTO_SOLVER_COOLDOWN).close();
 	}
 
 	public static boolean isVideoAudioBoost() {

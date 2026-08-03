@@ -298,6 +298,15 @@
 	<string name="image_editor_undo">Отменить</string>
 	<string name="image_editor_redo">Повторить</string>
 	<string name="image_editor_sticker_hint">Выберите стикер</string>
+	<string name="dvach_emoji_captcha_auto_solver">Автораспознавание капчи 2ch</string>
+	<string name="dvach_emoji_captcha_auto_solver__summary">Экспериментальная функция бета-канала только для раздела /test/. Распознавание выполняется локально и по умолчанию отключено. После успешной отправки повторное использование доступно через 5 минут</string>
+	<string name="captcha_recognize">Распознать</string>
+	<string name="captcha_auto_solver_warning_title">Экспериментальное распознавание капчи</string>
+	<string name="captcha_auto_solver_warning_message">Функция бета-канала согласовывается с администрацией 2ch и доступна только в /test/. Распознавание выполняется локально на этом устройстве. Приложение выбирает символы капчи, но никогда не отправляет пост и не повторяет отправку автоматически. Проверьте сообщение и отправьте его сами. После успешной отправки с автораспознаванием функция недоступна 5 минут.</string>
+	<string name="captcha_auto_solver_continue">Распознать капчу</string>
+	<string name="captcha_auto_solver_cooldown__format">Автораспознавание будет доступно через %1$d мин %2$02d с</string>
+	<string name="captcha_auto_solver_uncertain">Недостаточно уверенное распознавание. Решите капчу вручную или загрузите новую</string>
+	<string name="captcha_auto_solver_unavailable">Не удалось запустить автораспознавание. Решите капчу вручную</string>
 	<string name="video_audio_boost">Усиление звука видео</string>
 	<string name="video_audio_boost__summary">Позволяет Slooop усиливать звук видео выше обычного уровня, не меняя системную громкость. Возможны компрессия и искажения. По умолчанию выключено</string>
 	<string name="video_audio_boost_level">Максимальное усиление звука видео</string>

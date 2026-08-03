@@ -739,10 +739,18 @@ public class ChanPerformer implements Chan.Linked {
 		@Public public final String requirement;
 		@Public public final String boardName;
 		@Public public final String threadNumber;
+		@Public public final boolean solveCaptchaAutomatically;
 		public final HttpHolder holder;
 
 		public ReadCaptchaData(String captchaType, String[] captchaPass, boolean mayShowLoadButton,
 				String requirement, String boardName, String threadNumber, HttpHolder holder) {
+			this(captchaType, captchaPass, mayShowLoadButton, requirement, boardName, threadNumber, holder, false);
+		}
+
+		@Public
+		public ReadCaptchaData(String captchaType, String[] captchaPass, boolean mayShowLoadButton,
+				String requirement, String boardName, String threadNumber, HttpHolder holder,
+				boolean solveCaptchaAutomatically) {
 			this.captchaType = captchaType;
 			this.captchaPass = captchaPass;
 			this.mayShowLoadButton = mayShowLoadButton;
@@ -750,6 +758,7 @@ public class ChanPerformer implements Chan.Linked {
 			this.boardName = boardName;
 			this.threadNumber = threadNumber;
 			this.holder = holder;
+			this.solveCaptchaAutomatically = solveCaptchaAutomatically;
 		}
 
 		@Override

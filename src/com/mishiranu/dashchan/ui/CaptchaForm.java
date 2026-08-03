@@ -30,6 +30,7 @@ public class CaptchaForm implements View.OnClickListener, View.OnLongClickListen
 	private final View blockView;
 	private final View skipBlockView;
 	private final TextView skipTextView;
+	private final TextView automaticSolveView;
 	private final View loadingView;
 	private final ImageView imageView;
 	private final View inputParentView;
@@ -40,6 +41,7 @@ public class CaptchaForm implements View.OnClickListener, View.OnLongClickListen
 
 	public interface Callback {
 		void onRefreshCaptcha(boolean forceRefresh);
+		default void onSolveCaptchaAutomatically() {}
 		void onConfirmCaptcha();
 	}
 
@@ -54,6 +56,7 @@ public class CaptchaForm implements View.OnClickListener, View.OnLongClickListen
 		loadingView = container.findViewById(R.id.captcha_loading);
 		skipBlockView = container.findViewById(R.id.captcha_skip_block);
 		skipTextView = container.findViewById(R.id.captcha_skip_text);
+		automaticSolveView = container.findViewById(R.id.captcha_auto_solve);
 		this.inputParentView = inputParentView;
 		this.inputView = inputView;
 		if (hideInput) {
@@ -66,6 +69,9 @@ public class CaptchaForm implements View.OnClickListener, View.OnLongClickListen
 		skipTextView.setAllCaps(true);
 		skipTextView.setTypeface(ResourceUtils.TYPEFACE_MEDIUM);
 		ViewUtils.setTextSizeScaled(skipTextView, 12);
+		automaticSolveView.setAllCaps(true);
+		automaticSolveView.setTypeface(ResourceUtils.TYPEFACE_MEDIUM);
+		ViewUtils.setTextSizeScaled(automaticSolveView, 12);
 		updateCaptchaHeight(false);
 		captchaInput = captcha.input;
 		if (captchaInput == null) {
@@ -75,6 +81,7 @@ public class CaptchaForm implements View.OnClickListener, View.OnLongClickListen
 		inputView.setFilters(new InputFilter[] {new InputFilter.LengthFilter(50)});
 		inputView.setOnEditorActionListener(this);
 		cancelView.setOnClickListener(this);
+		automaticSolveView.setOnClickListener(this);
 		blockParentView.setOnClickListener(this);
 		blockParentView.setOnLongClickListener(this);
 		if (inputParentView != null) {
@@ -115,6 +122,8 @@ public class CaptchaForm implements View.OnClickListener, View.OnLongClickListen
 	public void onClick(View v) {
 		if (v == cancelView) {
 			callback.onRefreshCaptcha(true);
+		} else if (v == automaticSolveView) {
+			callback.onSolveCaptchaAutomatically();
 		} else if (v == blockParentView && v.isClickable()) {
 			callback.onRefreshCaptcha(false);
 		} else if (inputParentView != null && v == inputParentView) {
@@ -187,6 +196,10 @@ public class CaptchaForm implements View.OnClickListener, View.OnLongClickListen
 		switchToCaptchaView(CaptchaViewType.LOADING, null, false);
 	}
 
+	public void setAutomaticSolverVisible(boolean visible) {
+		automaticSolveView.setVisibility(visible ? View.VISIBLE : View.GONE);
+	}
+
 	private void setInputEnabled(boolean enabled, boolean switchVisibility) {
 		inputView.setEnabled(enabled);
 		if (hideInput && switchVisibility) {
@@ -196,6 +209,7 @@ public class CaptchaForm implements View.OnClickListener, View.OnLongClickListen
 
 	private void switchToCaptchaView(CaptchaViewType captchaViewType,
 			ChanConfiguration.Captcha.Input input, boolean large) {
+		automaticSolveView.setVisibility(View.GONE);
 		switch (captchaViewType) {
 			case LOADING: {
 				blockParentView.setClickable(true);

@@ -1,6 +1,7 @@
 package com.mishiranu.dashchan.ui.posting;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.ActivityNotFoundException;
 import android.content.ClipData;
 import android.content.ComponentName;
@@ -53,6 +54,7 @@ import chan.util.StringUtils;
 import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.chan.dvach.DvachChanConfiguration;
+import com.mishiranu.dashchan.chan.dvach.DvachEmojiCaptchaAutoSolver;
 import com.mishiranu.dashchan.content.MainApplication;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.async.ExecutorTask;
@@ -696,6 +698,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		if (!allowPosting || sendSuccess) {
 			((FragmentHandler) requireActivity()).removeFragment();
 		}
+		updateAutomaticCaptchaSolverButton();
 	}
 
 	public boolean consumeFuturePostText() {
@@ -742,6 +745,32 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 	@Override
 	public void onRefreshCaptcha(boolean forceRefresh) {
 		refreshCaptcha(forceRefresh, false, true);
+	}
+
+	@Override
+	public void onSolveCaptchaAutomatically() {
+		if (!canOfferAutomaticCaptchaSolver()) {
+			updateAutomaticCaptchaSolverButton();
+			return;
+		}
+		long remaining = DvachEmojiCaptchaAutoSolver.getCooldownRemaining();
+		if (remaining > 0L) {
+			long remainingSeconds = (remaining + 999L) / 1000L;
+			ClickableToast.show(getString(R.string.captcha_auto_solver_cooldown__format,
+					remainingSeconds / 60L, remainingSeconds % 60L));
+			return;
+		}
+		new AlertDialog.Builder(requireContext())
+				.setTitle(R.string.captcha_auto_solver_warning_title)
+				.setMessage(R.string.captcha_auto_solver_warning_message)
+				.setPositiveButton(R.string.captcha_auto_solver_continue, (dialog, which) -> {
+					if (canOfferAutomaticCaptchaSolver()
+							&& DvachEmojiCaptchaAutoSolver.getCooldownRemaining() <= 0L) {
+						refreshCaptcha(false, false, true, true);
+					}
+				})
+				.setNegativeButton(android.R.string.cancel, null)
+				.show();
 	}
 
 	@Override
@@ -1382,6 +1411,11 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 	}
 
 	private void refreshCaptcha(boolean forceCaptcha, boolean mayShowLoadButton, boolean restart) {
+		refreshCaptcha(forceCaptcha, mayShowLoadButton, restart, false);
+	}
+
+	private void refreshCaptcha(boolean forceCaptcha, boolean mayShowLoadButton, boolean restart,
+			boolean solveCaptchaAutomatically) {
 		boolean allowSolveAutomatically = !forceCaptcha ||
 				captchaState != ReadCaptchaTask.CaptchaState.MAY_LOAD_SOLVING;
 		captchaState = null;
@@ -1394,7 +1428,8 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 			Chan chan = Chan.get(getChanName());
 			List<String> captchaPass = forceCaptcha ? null : Preferences.getCaptchaPass(chan);
 			ReadCaptchaTask task = new ReadCaptchaTask(viewModel.callback, null, captchaType, null, captchaPass,
-					mayShowLoadButton, allowSolveAutomatically, chan, getBoardName(), getThreadNumber());
+					mayShowLoadButton, allowSolveAutomatically, chan, getBoardName(), getThreadNumber(),
+					solveCaptchaAutomatically);
 			task.execute(ConcurrentUtils.PARALLEL_EXECUTOR);
 			viewModel.attach(task);
 		}
@@ -1404,6 +1439,13 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 
 	@Override
 	public void onReadCaptchaSuccess(ReadCaptchaTask.Result result) {
+		String automaticFailure = result.captchaData != null ? result.captchaData
+				.get(DvachEmojiCaptchaAutoSolver.CAPTCHA_DATA_AUTOMATIC_FAILURE) : null;
+		if (DvachEmojiCaptchaAutoSolver.FAILURE_UNCERTAIN.equals(automaticFailure)) {
+			ClickableToast.show(R.string.captcha_auto_solver_uncertain);
+		} else if (DvachEmojiCaptchaAutoSolver.FAILURE_UNAVAILABLE.equals(automaticFailure)) {
+			ClickableToast.show(R.string.captcha_auto_solver_unavailable);
+		}
 		captchaLoadTime = SystemClock.elapsedRealtime();
 		showCaptcha(result.captchaState, result.captchaData, result.captchaType, result.input, result.validity,
 				result.image, result.large, result.blackAndWhite);
@@ -1444,6 +1486,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		boolean invertColors = blackAndWhite && !GraphicsUtils
 				.isLight(ResourceUtils.getColor(requireContext(), android.R.attr.colorBackground));
 		captchaForm.showCaptcha(captchaState, input, image, large, invertColors);
+		updateAutomaticCaptchaSolverButton();
 		if (scrollView.getScrollY() + scrollView.getHeight() >= scrollView.getChildAt(0).getHeight()) {
 			scrollView.post(() -> {
 				if (scrollView != null) {
@@ -1452,6 +1495,20 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 			});
 		}
 		updateSendButtonState();
+	}
+
+	private boolean canOfferAutomaticCaptchaSolver() {
+		String effectiveCaptchaType = loadedCaptchaType != null ? loadedCaptchaType : captchaType;
+		return captchaForm != null && captchaState == ReadCaptchaTask.CaptchaState.NEED_LOAD
+				&& CHAN_NAME_DVACH.equals(getChanName()) && "test".equals(getBoardName())
+				&& DvachChanConfiguration.CAPTCHA_TYPE_2CH_EMOJI_CAPTCHA.equals(effectiveCaptchaType)
+				&& DvachEmojiCaptchaAutoSolver.isEnabled();
+	}
+
+	private void updateAutomaticCaptchaSolverButton() {
+		if (captchaForm != null) {
+			captchaForm.setAutomaticSolverVisible(canOfferAutomaticCaptchaSolver());
+		}
 	}
 
 	@Override

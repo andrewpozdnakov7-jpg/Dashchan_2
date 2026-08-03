@@ -37,6 +37,7 @@ class DvachEmojiCaptchaProvider {
     private final DvachChanPerformer.ReadCaptchaData data;
 
     private final DvachEmojiCaptchaAnswerRetriever answerRetriever;
+    private final DvachEmojiCaptchaAutoSolver autoSolver;
 
     /**
      * Main constructor. For each captcha task we creating new instance of this class.
@@ -48,11 +49,13 @@ class DvachEmojiCaptchaProvider {
     DvachEmojiCaptchaProvider(DvachChanPerformer.ReadCaptchaData data,
                                      DvachChanLocator locator,
                                      String id,
-                                     DvachEmojiCaptchaAnswerRetriever answerRetriever) {
+                                     DvachEmojiCaptchaAnswerRetriever answerRetriever,
+                                     DvachEmojiCaptchaAutoSolver autoSolver) {
         this.locator = locator;
         this.data = data;
         this.captchaId = id;
         this.answerRetriever = answerRetriever;
+        this.autoSolver = autoSolver;
     }
 
     /**
@@ -110,7 +113,17 @@ class DvachEmojiCaptchaProvider {
             }
 
             // send task image and keyboard, receive user input
-            Integer answer = answerRetriever.getAnswer(comboBitmap, keyboardImages);
+            Integer answer = autoSolver != null ? autoSolver.select(captchaImage, keyboardImages)
+                    : answerRetriever.getAnswer(comboBitmap, keyboardImages);
+
+            if (autoSolver != null && answer != null && answer < 0) {
+                ChanPerformer.CaptchaData captchaData = new ChanPerformer.CaptchaData();
+                captchaData.put(DvachEmojiCaptchaAutoSolver.CAPTCHA_DATA_AUTOMATIC_FAILURE,
+                        answer == DvachEmojiCaptchaAutoSolver.RESULT_UNCERTAIN
+                                ? DvachEmojiCaptchaAutoSolver.FAILURE_UNCERTAIN
+                                : DvachEmojiCaptchaAutoSolver.FAILURE_UNAVAILABLE);
+                return new ChanPerformer.ReadCaptchaResult(ChanPerformer.CaptchaState.NEED_LOAD, captchaData);
+            }
 
             // if user skipped answer, or made improper input, then we stopping captcha solving
             if (answer == null || answer == -1 || answer >= keyboardImages.length) {
@@ -154,6 +167,9 @@ class DvachEmojiCaptchaProvider {
             ChanPerformer.ReadCaptchaResult result = new ChanPerformer.ReadCaptchaResult(ChanPerformer.CaptchaState.SKIP, captchaData);
             // Fill the challenge field with result, to use it later when we send post
             captchaData.put(ChanPerformer.CaptchaData.CHALLENGE, success.success);
+            if (autoSolver != null) {
+                captchaData.put(DvachEmojiCaptchaAutoSolver.CAPTCHA_DATA_AUTOMATIC, "1");
+            }
             return result;
         }
     }

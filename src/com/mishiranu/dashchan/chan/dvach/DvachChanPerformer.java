@@ -965,6 +965,23 @@ public class DvachChanPerformer extends ChanPerformer {
 				if (data.mayShowLoadButton) {
 					return new ReadCaptchaResult(CaptchaState.NEED_LOAD, null);
 				}
+				if (data.solveCaptchaAutomatically) {
+					if (!"test".equals(data.boardName) || !DvachEmojiCaptchaAutoSolver.isEnabled()
+							|| DvachEmojiCaptchaAutoSolver.getCooldownRemaining() > 0L) {
+						CaptchaData captchaData = new CaptchaData();
+						captchaData.put(DvachEmojiCaptchaAutoSolver.CAPTCHA_DATA_AUTOMATIC_FAILURE,
+								DvachEmojiCaptchaAutoSolver.FAILURE_UNAVAILABLE);
+						return new ReadCaptchaResult(CaptchaState.NEED_LOAD, captchaData);
+					}
+					try (DvachEmojiCaptchaAutoSolver autoSolver = new DvachEmojiCaptchaAutoSolver()) {
+						return new DvachEmojiCaptchaProvider(data, locator, id, null, autoSolver).loadEmojiCaptcha();
+					} catch (RuntimeException e) {
+						CaptchaData captchaData = new CaptchaData();
+						captchaData.put(DvachEmojiCaptchaAutoSolver.CAPTCHA_DATA_AUTOMATIC_FAILURE,
+								DvachEmojiCaptchaAutoSolver.FAILURE_UNAVAILABLE);
+						return new ReadCaptchaResult(CaptchaState.NEED_LOAD, captchaData);
+					}
+				}
 				DvachEmojiCaptchaProvider.DvachEmojiCaptchaAnswerRetriever retriever =
 						(Bitmap task, Bitmap[] keyboardImages) -> {
 							try {
@@ -975,7 +992,7 @@ public class DvachChanPerformer extends ChanPerformer {
 								return -1;
 							}
 						};
-				return new DvachEmojiCaptchaProvider(data, locator, id, retriever).loadEmojiCaptcha();
+				return new DvachEmojiCaptchaProvider(data, locator, id, retriever, null).loadEmojiCaptcha();
 			} else {
 				if (exception != null) {
 					// If wakaba is swaying, but passcode is verified, let's try to use it

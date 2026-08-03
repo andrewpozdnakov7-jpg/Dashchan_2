@@ -300,6 +300,9 @@ public final class SettingsSearchIndex {
 				R.string.hardware_video_acceleration__summary, Preferences.KEY_HARDWARE_VIDEO_ACCELERATION);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.image_editor,
 				R.string.image_editor__summary, Preferences.KEY_IMAGE_EDITOR);
+		add(context, entries, Screen.EXPERIMENTAL, R.string.dvach_emoji_captcha_auto_solver,
+				R.string.dvach_emoji_captcha_auto_solver__summary,
+				Preferences.KEY_DVACH_EMOJI_CAPTCHA_AUTO_SOLVER);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.video_audio_boost,
 				R.string.video_audio_boost__summary, Preferences.KEY_VIDEO_AUDIO_BOOST);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.video_audio_boost_level, 0,

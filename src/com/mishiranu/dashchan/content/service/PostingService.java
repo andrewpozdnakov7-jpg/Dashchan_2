@@ -25,6 +25,7 @@ import chan.util.CommonUtils;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
+import com.mishiranu.dashchan.chan.dvach.DvachEmojiCaptchaAutoSolver;
 import com.mishiranu.dashchan.content.LocaleManager;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.async.SendPostTask;
@@ -611,6 +612,7 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 	@Override
 	public void onSendPostSuccess(Key key, ChanPerformer.SendPostData data,
 			String chanName, String threadNumber, PostNumber postNumber) {
+		DvachEmojiCaptchaAutoSolver.markSuccessfulPost(data);
 		QueueItem queueItem = takeCurrentPost(key);
 		if (queueItem != null) {
 			Chan chan = Chan.get(chanName);

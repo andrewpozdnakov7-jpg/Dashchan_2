@@ -36,6 +36,7 @@ public class ReadCaptchaTask extends ExecutorTask<Void, Pair<ErrorItem, ReadCapt
 	private final Chan chan;
 	private final String boardName;
 	private final String threadNumber;
+	private final boolean solveCaptchaAutomatically;
 
 	public interface Callback {
 		void onReadCaptchaSuccess(Result result);
@@ -109,6 +110,14 @@ public class ReadCaptchaTask extends ExecutorTask<Void, Pair<ErrorItem, ReadCapt
 	public ReadCaptchaTask(Callback callback, CaptchaReader captchaReader,
 			String captchaType, String requirement, List<String> captchaPass, boolean mayShowLoadButton,
 			boolean allowSolveAutomatically, Chan chan, String boardName, String threadNumber) {
+		this(callback, captchaReader, captchaType, requirement, captchaPass, mayShowLoadButton,
+				allowSolveAutomatically, chan, boardName, threadNumber, false);
+	}
+
+	public ReadCaptchaTask(Callback callback, CaptchaReader captchaReader,
+			String captchaType, String requirement, List<String> captchaPass, boolean mayShowLoadButton,
+			boolean allowSolveAutomatically, Chan chan, String boardName, String threadNumber,
+			boolean solveCaptchaAutomatically) {
 		chanHolder = new HttpHolder(chan);
 		if (captchaReader == null) {
 			captchaReader = new ChanCaptchaReader(chan);
@@ -123,6 +132,7 @@ public class ReadCaptchaTask extends ExecutorTask<Void, Pair<ErrorItem, ReadCapt
 		this.chan = chan;
 		this.boardName = boardName;
 		this.threadNumber = threadNumber;
+		this.solveCaptchaAutomatically = solveCaptchaAutomatically;
 	}
 
 	private static boolean allowSolveAutomatically(String chanName) {
@@ -181,7 +191,7 @@ public class ReadCaptchaTask extends ExecutorTask<Void, Pair<ErrorItem, ReadCapt
 		try (HttpHolder.Use ignore = chanHolder.use()) {
 			result = captchaReader.onReadCaptcha(new ChanPerformer.ReadCaptchaData(captchaType,
 					CommonUtils.toArray(captchaPass, String.class), mayShowLoadButton,
-					requirement, boardName, threadNumber, chanHolder));
+					requirement, boardName, threadNumber, chanHolder, solveCaptchaAutomatically));
 		} catch (ExtensionException | HttpException | InvalidResponseException e) {
 			return new Pair<>(e.getErrorItemAndHandle(), null);
 		} finally {
