@@ -1,0 +1,1 @@
+Prepared JDK 21 builds and separate per-ABI packages for F-Droid distribution.
