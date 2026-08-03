@@ -6,7 +6,7 @@ The Android and Java parts can be inspected on any desktop platform, but a compl
 
 Required tools:
 
-- JDK 17 or newer;
+- JDK 21;
 - Android SDK Platform 37;
 - Android SDK Build Tools 36.0.0;
 - Android NDK 29.0.14206865;

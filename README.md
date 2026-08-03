@@ -14,7 +14,7 @@ Slooop - пользовательское название неофициаль�
 
 | Компонент | Значение |
 | --- | --- |
-| Текущая версия | `3.2.13`, code `1093` |
+| Текущая версия | `3.2.16`, code `10960` |
 | Android package | `io.dashchan2` |
 | Минимальная версия | API 30 / Android 11 |
 | ABI | `arm64-v8a`, `armeabi-v7a`, `x86` |
@@ -44,7 +44,7 @@ Slooop - пользовательское название неофициаль�
 
 ### Сборка
 
-Необходимы JDK 17+, Android SDK Platform 37, Build Tools 36.0.0, NDK 29.0.14206865 и Linux x86_64/WSL для нативных библиотек. Gradle Wrapper загружает Gradle 9.4.1.
+Необходимы JDK 21, Android SDK Platform 37, Build Tools 36.0.0, NDK 29.0.14206865 и Linux x86_64/WSL для нативных библиотек. Gradle Wrapper загружает Gradle 9.4.1.
 
 ```sh
 ./gradlew assembleGithubNdebug \
@@ -93,7 +93,7 @@ Stable APKs are published only through [GitHub Releases](https://github.com/andr
 
 | Component | Value |
 | --- | --- |
-| Current version | `3.2.13`, code `1093` |
+| Current version | `3.2.16`, code `10960` |
 | Android package | `io.dashchan2` |
 | Minimum Android | API 30 / Android 11 |
 | ABIs | `arm64-v8a`, `armeabi-v7a`, `x86` |
@@ -121,7 +121,7 @@ Stable APKs are published only through [GitHub Releases](https://github.com/andr
 
 ### Building
 
-Install JDK 17+, Android SDK Platform 37, Build Tools 36.0.0, NDK 29.0.14206865, and use Linux x86_64 or WSL for native libraries. The Gradle Wrapper downloads Gradle 9.4.1.
+Install JDK 21, Android SDK Platform 37, Build Tools 36.0.0, NDK 29.0.14206865, and use Linux x86_64 or WSL for native libraries. The Gradle Wrapper downloads Gradle 9.4.1.
 
 ```sh
 ./gradlew assembleGithubNdebug \

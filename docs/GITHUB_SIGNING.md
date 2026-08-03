@@ -1,6 +1,6 @@
 # GitHub Actions Signing
 
-The `Android Signed Candidate` workflow creates one temporary signed all-ABI APK for the normal GitHub
+The `Android Signed Candidate` workflow runs on JDK 21 and creates one temporary signed all-ABI APK for the normal GitHub
 distribution and three single-ABI APKs for F-Droid. It prepares the pinned native sources once, builds the GitHub
 package, and then builds the F-Droid packages for `armeabi-v7a`, `arm64-v8a`, and `x86`. It does not create a tag,
 GitHub Release, or update manifest entry.

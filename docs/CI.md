@@ -1,14 +1,18 @@
 # Checks And Automation
 
-`Android CI` automatically builds the `github` arm64 variant for pull requests. A manual run from `master` can select either the `github` or `fdroid` distribution and arm64 or all supported ABIs. For `fdroid`, CI acquires the pinned native sources before Gradle and passes them through the pre-provided Gradle-property interface, exercising the same network-free Gradle path expected by fdroiddata. These APKs are unsigned test artifacts and are never published as releases.
+`Android CI` automatically builds the `github` arm64 variant for pull requests with JDK 21. A manual run can
+select either the `github` or `fdroid` distribution and `armeabi-v7a`, `arm64-v8a`, `x86`, or all supported ABIs.
+For `fdroid`, CI acquires the pinned native sources before Gradle and passes them through the pre-provided
+Gradle-property interface, exercising the same network-free Gradle path expected by fdroiddata. These APKs are
+unsigned test artifacts and are never published as releases.
 
 Pull requests that change only `update/data.json` keep the required `Ndebug (arm64)` status but use a fast path: the workflow validates the update manifest and skips Java, Gradle, Android SDK, native tools, APK compilation, and artifact upload. Merges do not trigger a second build because protected `master` accepts changes only through an up-to-date checked pull request.
 
-The protected `Android Signed Candidate` workflow prepares the pinned native inputs once and builds the `github`
-and `fdroid` all-ABI variants in one Gradle invocation from `master`. It signs both with the established developer
-key, using `apksigner` from Android Build Tools 34.0.0 for F-Droid reproducible-signature compatibility, and uploads
-one temporary artifact after package, version, ABI, alignment, certificate, and checksum validation. It does not
-create tags, GitHub Releases, or update public metadata.
+The protected `Android Signed Candidate` workflow uses JDK 21, prepares the pinned native inputs once, and builds
+one universal `github` APK plus three single-ABI `fdroid` APKs from `master`. It signs all four with the established
+developer key, using `apksigner` from Android Build Tools 34.0.0 for F-Droid reproducible-signature compatibility,
+and uploads one temporary artifact after package, version, ABI, alignment, certificate, and checksum validation.
+It does not create tags, GitHub Releases, or update public metadata.
 
 ## Required Local Checks
 

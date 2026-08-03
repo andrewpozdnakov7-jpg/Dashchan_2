@@ -15,6 +15,7 @@
 
 - [ ] Build the all-ABI GitHub APK and three single-ABI F-Droid APKs from the exact source commit in one protected
   candidate run.
+- [ ] Confirm that both the protected candidate workflow and the F-Droid recipe use JDK 21.
 - [ ] Complete [TESTING.md](TESTING.md), including posting, attachments, media, rotation, and updates.
 - [ ] Confirm package `io.dashchan2`, expected version, API 30 minimum, all three ABIs in the GitHub candidate,
   and exactly one expected ABI in every F-Droid candidate.
