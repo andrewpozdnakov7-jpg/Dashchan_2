@@ -207,7 +207,7 @@ jobs:
                 *) echo "::error::Beta candidate version name is not marked beta: $release_version_name"; exit 1 ;;
               esac
               master_version_code="$(git show refs/remotes/origin/master:build.gradle | python3 -c \
-                'import re,sys; m=re.findall(r"^\\s*versionCode\\s*=\\s*(\\d+)\\s*$", sys.stdin.read(), re.M); print(m[0]) if len(m) == 1 else sys.exit(1)')"
+                'import re,sys; m=re.findall(r"^\s*versionCode\s*=\s*(\d+)\s*$", sys.stdin.read(), re.M); print(m[0]) if len(m) == 1 else sys.exit(1)')"
               if [ "$release_version_code" -le $((master_version_code + 3)) ]; then
                 echo "::error::Beta versionCode must exceed stable and reserved ABI codes: $release_version_code"
                 exit 1
