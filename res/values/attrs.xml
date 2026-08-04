@@ -44,6 +44,7 @@
 	<attr name="iconActionSelect" format="reference" />
 	<attr name="iconActionSelectAll" format="reference" />
 	<attr name="iconActionSync" format="reference" />
+	<attr name="iconActionTranslate" format="reference" />
 	<attr name="iconActionVolumeOn" format="reference" />
 	<attr name="iconActionVolumeOff" format="reference" />
 

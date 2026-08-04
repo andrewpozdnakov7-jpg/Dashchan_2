@@ -1724,6 +1724,12 @@ public class Preferences {
 	public static final boolean DEFAULT_HARDWARE_VIDEO_ACCELERATION = true;
 	public static final String KEY_IMAGE_EDITOR = "image_editor";
 	public static final boolean DEFAULT_IMAGE_EDITOR = true;
+	public static final String KEY_LOCAL_TRANSLATION = "local_translation";
+	public static final boolean DEFAULT_LOCAL_TRANSLATION = false;
+	public static final String KEY_TRANSLATION_NATIVE_LANGUAGE = "translation_native_language";
+	public static final String DEFAULT_TRANSLATION_NATIVE_LANGUAGE = "ru";
+	public static final String KEY_TRANSLATION_AUTO = "translation_auto";
+	public static final boolean DEFAULT_TRANSLATION_AUTO = true;
 	public static final String KEY_VIDEO_AUDIO_BOOST = "video_audio_boost";
 	public static final boolean DEFAULT_VIDEO_AUDIO_BOOST = false;
 	public static final String KEY_VIDEO_AUDIO_BOOST_DB = "video_audio_boost_db";
@@ -1737,6 +1743,21 @@ public class Preferences {
 
 	public static boolean isImageEditorEnabled() {
 		return PREFERENCES.getBoolean(KEY_IMAGE_EDITOR, DEFAULT_IMAGE_EDITOR);
+	}
+
+	public static boolean isLocalTranslationEnabled() {
+		return BuildConfig.ENABLE_LOCAL_TRANSLATION &&
+				PREFERENCES.getBoolean(KEY_LOCAL_TRANSLATION, DEFAULT_LOCAL_TRANSLATION);
+	}
+
+	public static String getTranslationNativeLanguage() {
+		String language = PREFERENCES.getString(KEY_TRANSLATION_NATIVE_LANGUAGE,
+				DEFAULT_TRANSLATION_NATIVE_LANGUAGE);
+		return "en".equals(language) ? "en" : "ru";
+	}
+
+	public static boolean isTranslationAutoEnabled() {
+		return PREFERENCES.getBoolean(KEY_TRANSLATION_AUTO, DEFAULT_TRANSLATION_AUTO);
 	}
 
 	public static boolean isVideoAudioBoost() {

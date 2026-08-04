@@ -5,6 +5,7 @@ import android.app.Application;
 import android.content.Context;
 import android.database.sqlite.SQLiteDatabase;
 import android.os.Process;
+import android.webkit.WebView;
 import chan.content.ChanManager;
 import chan.http.HttpClient;
 import chan.util.CommonUtils;
@@ -18,11 +19,11 @@ import com.mishiranu.dashchan.content.service.BackgroundWatcherWorker;
 import com.mishiranu.dashchan.util.IOUtils;
 import com.mishiranu.dashchan.util.Logger;
 import java.io.File;
-import java.util.Collections;
 import java.util.List;
 
 public class MainApplication extends Application {
 	private static final String PROCESS_WEB_VIEW = "webview";
+	private static final String PROCESS_TRANSLATION = "translation";
 
 	private static MainApplication instance;
 
@@ -44,20 +45,29 @@ public class MainApplication extends Application {
 	public void onCreate() {
 		super.onCreate();
 
-		ActivityManager activityManager = (ActivityManager) getSystemService(ACTIVITY_SERVICE);
-		List<ActivityManager.RunningAppProcessInfo> processes = activityManager.getRunningAppProcesses();
-		if (processes == null) {
-			processes = Collections.emptyList();
-		}
-		int pid = Process.myPid();
-		for (ActivityManager.RunningAppProcessInfo process : processes) {
-			if (process.pid == pid) {
-				int index = process.processName.indexOf(':');
-				if (index >= 0) {
-					processSuffix = StringUtils.nullIfEmpty(process.processName.substring(index + 1));
+		String processName = Application.getProcessName();
+		if (StringUtils.isEmpty(processName)) {
+			ActivityManager activityManager = (ActivityManager) getSystemService(ACTIVITY_SERVICE);
+			List<ActivityManager.RunningAppProcessInfo> processes = activityManager != null
+					? activityManager.getRunningAppProcesses() : null;
+			if (processes != null) {
+				int pid = Process.myPid();
+				for (ActivityManager.RunningAppProcessInfo process : processes) {
+					if (process.pid == pid) {
+						processName = process.processName;
+						break;
+					}
 				}
-				break;
 			}
+		}
+		if (!StringUtils.isEmpty(processName)) {
+			int index = processName.indexOf(':');
+			if (index >= 0) {
+				processSuffix = StringUtils.nullIfEmpty(processName.substring(index + 1));
+			}
+		}
+		if (checkProcess(PROCESS_WEB_VIEW) || checkProcess(PROCESS_TRANSLATION)) {
+			WebView.setDataDirectorySuffix(processSuffix);
 		}
 
 		if (isMainProcess()) {
@@ -74,8 +84,8 @@ public class MainApplication extends Application {
 			ChanManager.getInstance().loadLibraries();
 			BackgroundWatcherWorker.restoreSchedule(this);
 			AutoBumpWorker.restoreSchedule(this);
-		} else if (checkProcess(PROCESS_WEB_VIEW)) {
-			IOUtils.deleteRecursive(getWebViewCacheDir());
+		} else if (checkProcess(PROCESS_WEB_VIEW) || checkProcess(PROCESS_TRANSLATION)) {
+			IOUtils.deleteRecursive(getIsolatedWebViewCacheDir());
 		}
 	}
 
@@ -96,14 +106,14 @@ public class MainApplication extends Application {
 		return new File(getCacheDir().getParentFile(), "shared_prefs");
 	}
 
-	private File getWebViewCacheDir() {
-		return new File(super.getCacheDir(), "webview");
+	private File getIsolatedWebViewCacheDir() {
+		return new File(super.getCacheDir(), checkProcess(PROCESS_TRANSLATION) ? "translation" : "webview");
 	}
 
 	@Override
 	public File getCacheDir() {
-		if (checkProcess(PROCESS_WEB_VIEW)) {
-			File dir = new File(getWebViewCacheDir(), "cache");
+		if (checkProcess(PROCESS_WEB_VIEW) || checkProcess(PROCESS_TRANSLATION)) {
+			File dir = new File(getIsolatedWebViewCacheDir(), "cache");
 			dir.mkdirs();
 			return dir;
 		}
@@ -112,8 +122,8 @@ public class MainApplication extends Application {
 
 	@Override
 	public File getDir(String name, int mode) {
-		if (checkProcess(PROCESS_WEB_VIEW)) {
-			File dir = new File(getWebViewCacheDir(), name);
+		if (checkProcess(PROCESS_WEB_VIEW) || checkProcess(PROCESS_TRANSLATION)) {
+			File dir = new File(getIsolatedWebViewCacheDir(), name);
 			dir.mkdirs();
 			return dir;
 		} else {

@@ -1785,6 +1785,11 @@
 			android:exported="false"
 			android:process=":webview" />
 
+		<service
+			android:name=".content.service.translation.TranslationService"
+			android:exported="false"
+			android:process=":translation" />
+
 		<provider
 			android:name=".content.FileProvider"
 			android:authorities="${fileProviderAuthority}"

@@ -185,6 +185,8 @@ public class UiManager {
 		public final boolean allowHiding;
 		public final boolean allowGoToPost;
 		public final PostNumber repliesToPost;
+		public boolean showTranslatedComments;
+		public String translationKey;
 
 		public ConfigurationSet(String chanName, Replyable replyable,
 				PostsProvider postsProvider, PostStateProvider postStateProvider,
@@ -215,7 +217,14 @@ public class UiManager {
 				boolean mayCollapse, boolean isDialog, PostNumber repliesToPost) {
 			return new ConfigurationSet(chanName, replyable, postsProvider, postStateProvider,
 					galleryProvider, fragmentManager, stackInstance, linkListener, clickCallback,
-					mayCollapse, isDialog, allowMyMarkEdit, allowHiding, allowGoToPost, repliesToPost);
+					mayCollapse, isDialog, allowMyMarkEdit, allowHiding, allowGoToPost, repliesToPost)
+					.copyDisplayStateFrom(this);
+		}
+
+		ConfigurationSet copyDisplayStateFrom(ConfigurationSet source) {
+			showTranslatedComments = source.showTranslatedComments;
+			translationKey = source.translationKey;
+			return this;
 		}
 	}
 

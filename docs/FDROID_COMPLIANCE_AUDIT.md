@@ -11,6 +11,8 @@ filesystem paths, workstation identifiers, signing data, credentials, or private
 - Build task: `assembleFdroidRelease`.
 - The F-Droid flavor disables the Google Play Services security-provider path.
 - The F-Droid flavor disables application self-update endpoints, UI, background checks, and client APK requests.
+- The experimental Bergamot translator is disabled and the prebuilt WebAssembly runtime is not packaged. A separate
+  source-build and reviewer-policy pass is required before this feature can be enabled for F-Droid.
 - Imageboard extensions remain separate APKs and require an explicit F-Droid-specific warning and confirmation
   before any download starts.
 

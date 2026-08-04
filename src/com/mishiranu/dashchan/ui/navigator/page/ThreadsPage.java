@@ -33,6 +33,7 @@ import com.mishiranu.dashchan.content.model.ErrorItem;
 import com.mishiranu.dashchan.content.model.PostItem;
 import com.mishiranu.dashchan.content.service.PostingService;
 import com.mishiranu.dashchan.content.storage.FavoritesStorage;
+import com.mishiranu.dashchan.content.translation.TranslationController;
 import com.mishiranu.dashchan.ui.DialogMenu;
 import com.mishiranu.dashchan.ui.DrawerForm;
 import com.mishiranu.dashchan.ui.InstanceDialog;
@@ -65,6 +66,7 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 		public int startPageNumber;
 		public int boardSpeed;
 		public HttpValidator validator;
+		public Boolean translationEnabled;
 
 		public DialogUnit.StackInstance.State dialogsState;
 
@@ -120,6 +122,11 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 		uiManager.view().bindThreadsPostRecyclerView(recyclerView);
 		ThreadsAdapter adapter = new ThreadsAdapter(context, this, page.chanName, uiManager,
 				postStateProvider, getFragmentManager());
+		if (retainableExtra.translationEnabled == null) {
+			retainableExtra.translationEnabled = TranslationController.isReadyForChan(page.chanName) &&
+					Preferences.isTranslationAutoEnabled();
+		}
+		adapter.setTranslationEnabled(Boolean.TRUE.equals(retainableExtra.translationEnabled));
 		recyclerView.setAdapter(adapter);
 		if (Preferences.isHideThreadsWithSwipe()) {
 			setupHideThreadsWithSwipe(recyclerView);
@@ -368,6 +375,9 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 		menu.add(0, R.id.menu_refresh, 0, R.string.refresh)
 				.setIcon(getActionBarIcon(R.attr.iconActionRefresh))
 				.setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM);
+		menu.add(0, R.id.menu_translate, 0, R.string.translate_posts)
+				.setIcon(getActionBarIcon(R.attr.iconActionTranslate))
+				.setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
 		menu.add(0, R.id.menu_search, 0, R.string.search)
 				.setShowAsAction(MenuItem.SHOW_AS_ACTION_COLLAPSE_ACTION_VIEW);
 		menu.add(0, R.id.menu_catalog, 0, R.string.catalog);
@@ -405,6 +415,18 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 		ChanConfiguration.Board board = chan.configuration.safe().obtainBoard(page.boardName);
 		this.allowSearch = board.allowSearch;
 		boolean isCatalogOpen = retainableExtra.startPageNumber == PAGE_NUMBER_CATALOG;
+		MenuItem translateItem = menu.findItem(R.id.menu_translate);
+		boolean showTranslation = TranslationController.isEnabledForChan(page.chanName);
+		if ((!showTranslation || !TranslationController.isReadyForChan(page.chanName)) &&
+				getAdapter().isTranslationEnabled()) {
+			retainableExtra.translationEnabled = false;
+			getAdapter().setTranslationEnabled(false);
+		}
+		translateItem.setVisible(showTranslation);
+		if (showTranslation) {
+			translateItem.setTitle(getAdapter().isTranslationEnabled()
+					? R.string.show_original_posts : R.string.translate_posts);
+		}
 		menu.findItem(R.id.menu_search).setTitle(board.allowSearch ? R.string.search : R.string.filter);
 		menu.findItem(R.id.menu_catalog).setVisible(board.allowCatalog && !isCatalogOpen);
 		menu.findItem(R.id.menu_pages).setVisible(board.allowCatalog && isCatalogOpen);
@@ -430,6 +452,26 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 		switch (item.getItemId()) {
 			case R.id.menu_refresh: {
 				refreshThreads(RefreshPage.CURRENT);
+				return true;
+			}
+			case R.id.menu_translate: {
+				if (!TranslationController.isReadyForChan(page.chanName)) {
+					ClickableToast.show(R.string.translation_package_unavailable);
+					return true;
+				}
+				boolean enabled = !getAdapter().isTranslationEnabled();
+				boolean initializing = false;
+				if (enabled) {
+					GridLayoutManager layoutManager = (GridLayoutManager) getRecyclerView().getLayoutManager();
+					initializing = getAdapter().hasUntranslatedThreads(layoutManager.findFirstVisibleItemPosition(),
+							layoutManager.findLastVisibleItemPosition());
+				}
+				getRetainableExtra(RetainableExtra.FACTORY).translationEnabled = enabled;
+				getAdapter().setTranslationEnabled(enabled);
+				if (initializing) {
+					ClickableToast.show(R.string.translation_initializing);
+				}
+				updateOptionsMenu();
 				return true;
 			}
 			case R.id.menu_catalog: {
