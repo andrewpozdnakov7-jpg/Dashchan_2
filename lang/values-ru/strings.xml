@@ -947,9 +947,7 @@
 	<string name="forum_dvach">Двач</string>
 	<string name="forum_fourchan">4chan</string>
 	<string name="forum_pikabu">Пикабу</string>
-	<string name="forum_gosuslugi">Госуслуги</string>
 	<string name="pikabu_extension_in_development">Расширение Пикабу находится в разработке.</string>
-	<string name="gosuslugi_authorization_in_development">Авторизация в Госуслугах находится в разработке.</string>
 	<string name="display_post_year">Отображать год в датах постов</string>
 	<string name="hide_thread_title">Скрывать заголовок треда в верхней панели</string>
 	<string name="hide_thread_title__summary">Не показывать название и адрес треда при его просмотре</string>
