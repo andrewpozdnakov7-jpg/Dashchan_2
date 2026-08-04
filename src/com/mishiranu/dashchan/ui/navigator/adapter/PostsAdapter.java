@@ -22,6 +22,7 @@ import com.mishiranu.dashchan.content.model.AttachmentItem;
 import com.mishiranu.dashchan.content.model.GalleryItem;
 import com.mishiranu.dashchan.content.model.PostItem;
 import com.mishiranu.dashchan.content.model.PostNumber;
+import com.mishiranu.dashchan.content.translation.TranslationController;
 import com.mishiranu.dashchan.ui.navigator.manager.UiManager;
 import com.mishiranu.dashchan.ui.navigator.manager.ViewUnit;
 import com.mishiranu.dashchan.ui.posting.Replyable;
@@ -146,6 +147,16 @@ public class PostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
 						}
 					}
 				}
+				if (configurationSet.showTranslatedComments &&
+						!postItem.hasTranslatedComment(configurationSet.translationKey)) {
+					TranslationController.getInstance().requestPostTranslation(postItem,
+							Chan.get(configurationSet.chanName), () -> {
+						int currentPosition = positionOfPostNumber(postItem.getPostNumber());
+						if (currentPosition >= 0) {
+							notifyItemChanged(currentPosition, SimpleViewHolder.EMPTY_PAYLOAD);
+						}
+					});
+				}
 				break;
 			}
 			case POST_HIDDEN: {
@@ -161,6 +172,31 @@ public class PostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
 			postItems.add(postItemsMap.get(postNumber));
 		}
 		return postItems;
+	}
+
+	public void setTranslationEnabled(boolean enabled) {
+		configurationSet.showTranslatedComments = enabled;
+		configurationSet.translationKey = enabled ? TranslationController.getCurrentDirection().id : null;
+		notifyDataSetChanged();
+	}
+
+	public boolean isTranslationEnabled() {
+		return configurationSet.showTranslatedComments;
+	}
+
+	public boolean hasUntranslatedPosts(int firstPosition, int lastPosition) {
+		if (firstPosition < 0 || lastPosition < firstPosition) {
+			return false;
+		}
+		String key = TranslationController.getCurrentDirection().id;
+		int end = Math.min(lastPosition, getItemCount() - 1);
+		for (int position = firstPosition; position <= end; position++) {
+			if (ViewUnit.ViewType.values()[getItemViewType(position)] == ViewUnit.ViewType.POST &&
+					!getItem(position).hasTranslatedComment(key)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	public PostItem getItem(int position) {

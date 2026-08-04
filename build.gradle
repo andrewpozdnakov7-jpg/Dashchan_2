@@ -134,6 +134,108 @@ def getAndroidSdkDirectory = {
 	return new File(sdkDir)
 }
 
+abstract class PrepareBergamotRuntimeTask extends org.gradle.api.DefaultTask {
+	@org.gradle.api.tasks.Input
+	abstract org.gradle.api.provider.Property<String> getRuntimeFilesJson()
+
+	@org.gradle.api.tasks.OutputDirectory
+	abstract org.gradle.api.file.DirectoryProperty getOutputDirectory()
+
+	@org.gradle.api.tasks.Internal
+	abstract org.gradle.api.file.DirectoryProperty getCacheDirectory()
+
+	@org.gradle.api.tasks.TaskAction
+	void prepare() {
+		def runtimeFiles = new groovy.json.JsonSlurper().parseText(runtimeFilesJson.get())
+		File directory = new File(outputDirectory.get().asFile, 'translation')
+		File cache = cacheDirectory.get().asFile
+		if ((!directory.mkdirs() && !directory.isDirectory()) ||
+				(!cache.mkdirs() && !cache.isDirectory())) {
+			throw new GradleException('Cannot create Bergamot runtime directory')
+		}
+		def calculateSha256 = { File file ->
+			def digest = java.security.MessageDigest.getInstance('SHA-256')
+			file.withInputStream { input ->
+				byte[] buffer = new byte[65536]
+				for (int count; (count = input.read(buffer)) >= 0;) {
+					if (count > 0) digest.update(buffer, 0, count)
+				}
+			}
+			return digest.digest().collect { String.format('%02x', it & 0xff) }.join()
+		}
+		def isValid = { File file, runtimeFile ->
+			return file.isFile() && file.length() == runtimeFile.size &&
+					calculateSha256(file) == runtimeFile.sha256
+		}
+		def moveReplace = { File source, File destination ->
+			try {
+				java.nio.file.Files.move(source.toPath(), destination.toPath(),
+						java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+						java.nio.file.StandardCopyOption.ATOMIC_MOVE)
+			} catch (java.nio.file.AtomicMoveNotSupportedException ignored) {
+				java.nio.file.Files.move(source.toPath(), destination.toPath(),
+						java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+			}
+		}
+		runtimeFiles.each { runtimeFile ->
+			File target = new File(directory, runtimeFile.name)
+			if (isValid(target, runtimeFile)) return
+			File cached = new File(cache, runtimeFile.name)
+			if (!isValid(cached, runtimeFile)) {
+				File download = new File(cache, runtimeFile.name + '.part')
+				if (download.exists() && !download.delete()) {
+					throw new GradleException('Cannot replace temporary Bergamot file: ' + download)
+				}
+				new URL(runtimeFile.url).openConnection().with { connection ->
+					connectTimeout = 30000
+					readTimeout = 120000
+					setRequestProperty('User-Agent', 'Slooop-Build/1')
+					inputStream.withCloseable { input ->
+						download.withOutputStream { output -> output << input }
+					}
+				}
+				if (!isValid(download, runtimeFile)) {
+					download.delete()
+					throw new GradleException('Bergamot size or checksum mismatch for ' + runtimeFile.name)
+				}
+				moveReplace(download, cached)
+			}
+			File temporary = new File(directory, runtimeFile.name + '.part')
+			java.nio.file.Files.copy(cached.toPath(), temporary.toPath(),
+					java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+			if (!isValid(temporary, runtimeFile)) {
+				temporary.delete()
+				throw new GradleException('Cached Bergamot file changed while copying: ' + runtimeFile.name)
+			}
+			moveReplace(temporary, target)
+		}
+	}
+}
+
+def bergamotRuntimeFiles = [
+		[
+				name: 'bergamot-translator.js',
+				url: 'https://raw.githubusercontent.com/mozilla-firefox/firefox/' +
+						'8c19fa8bd6e924436ee5f8126b12b50f324348ba/toolkit/components/translations/' +
+						'bergamot-translator/bergamot-translator.js',
+				size: 100020L,
+				sha256: 'fb2dfc1d7a416aa8850af223f3e494b4a90efa16e121941dd75671294f87871f'
+		],
+		[
+				name: 'bergamot-translator.wasm',
+				url: 'https://firefox-settings-attachments.cdn.mozilla.net/main-workspace/' +
+						'translations-wasm/05082c31-aee8-4249-9e01-c1865afd7520.wasm',
+				size: 4960506L,
+				sha256: 'a3a89d9ad0a4ed8f27bf3e403701b23f5709816f6376438503f2fa5b0182c2dc'
+		]
+]
+def prepareBergamotRuntime = tasks.register('prepareBergamotRuntime', PrepareBergamotRuntimeTask) {
+	description = 'Downloads the pinned Mozilla Bergamot WebAssembly runtime for GitHub builds.'
+	runtimeFilesJson.set(groovy.json.JsonOutput.toJson(bergamotRuntimeFiles))
+	outputDirectory.set(layout.buildDirectory.dir('generated/bergamot/assets'))
+	cacheDirectory.set(new File(gradle.gradleUserHomeDir, 'caches/dashchan2/bergamot/v0.6.0'))
+}
+
 android {
 	namespace = 'com.mishiranu.dashchan'
 	compileSdk = 37
@@ -142,8 +244,8 @@ android {
 
 	defaultConfig {
 		applicationId = 'io.dashchan2'
-		versionCode = 10970
-		versionName = '3.2.17'
+		versionCode = 10980
+		versionName = '3.2.18'
 		def releaseVersionCode = versionCode
 		def packageVersionCodeProperty = project.findProperty('packageVersionCode')
 		if (packageVersionCodeProperty != null) {
@@ -200,6 +302,7 @@ android {
 	productFlavors {
 		github {
 			dimension = 'distribution'
+			buildConfigField 'boolean', 'ENABLE_LOCAL_TRANSLATION', 'true'
 			buildConfigField 'boolean', 'ALLOW_GMS_SECURITY_PROVIDER', 'true'
 			buildConfigField 'boolean', 'ALLOW_APPLICATION_SELF_UPDATE', 'true'
 			buildConfigField 'boolean', 'REQUIRE_EXTENSION_INSTALL_CONSENT', 'false'
@@ -218,6 +321,7 @@ android {
 		}
 		fdroid {
 			dimension = 'distribution'
+			buildConfigField 'boolean', 'ENABLE_LOCAL_TRANSLATION', 'false'
 			buildConfigField 'boolean', 'ALLOW_GMS_SECURITY_PROVIDER', 'false'
 			buildConfigField 'boolean', 'ALLOW_APPLICATION_SELF_UPDATE', 'false'
 			buildConfigField 'boolean', 'REQUIRE_EXTENSION_INSTALL_CONSENT', 'true'
@@ -330,6 +434,19 @@ android {
 	compileOptions {
 		sourceCompatibility JavaVersion.VERSION_1_8
 		targetCompatibility JavaVersion.VERSION_1_8
+	}
+}
+
+androidComponents {
+	onVariants(selector().all()) { variant ->
+		boolean github = variant.productFlavors.any { flavor ->
+			flavor.first == 'distribution' && flavor.second == 'github'
+		}
+		if (github && variant.sources.assets != null) {
+			variant.sources.assets.addGeneratedSourceDirectory(prepareBergamotRuntime) { task ->
+				task.outputDirectory
+			}
+		}
 	}
 }
 

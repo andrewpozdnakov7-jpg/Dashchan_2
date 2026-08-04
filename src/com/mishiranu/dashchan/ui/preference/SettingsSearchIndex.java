@@ -296,10 +296,21 @@ public final class SettingsSearchIndex {
 		add(context, entries, Screen.GENERAL, R.string.verify_certificate, R.string.verify_certificate__summary,
 				Preferences.KEY_VERIFY_CERTIFICATE);
 
+		add(context, entries, Screen.EXPERIMENTAL, R.string.whats_new_preview,
+				R.string.whats_new_preview__summary, null);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.hardware_video_acceleration,
 				R.string.hardware_video_acceleration__summary, Preferences.KEY_HARDWARE_VIDEO_ACCELERATION);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.image_editor,
 				R.string.image_editor__summary, Preferences.KEY_IMAGE_EDITOR);
+		if (BuildConfig.ENABLE_LOCAL_TRANSLATION) {
+			add(context, entries, Screen.EXPERIMENTAL, R.string.local_translation,
+					R.string.local_translation__summary, Preferences.KEY_LOCAL_TRANSLATION);
+			add(context, entries, Screen.EXPERIMENTAL, R.string.translation_native_language, 0,
+					Preferences.KEY_TRANSLATION_NATIVE_LANGUAGE);
+			add(context, entries, Screen.EXPERIMENTAL, R.string.translation_automatic,
+					R.string.translation_automatic__summary, Preferences.KEY_TRANSLATION_AUTO);
+			add(context, entries, Screen.EXPERIMENTAL, R.string.translation_language_package);
+		}
 		add(context, entries, Screen.EXPERIMENTAL, R.string.video_audio_boost,
 				R.string.video_audio_boost__summary, Preferences.KEY_VIDEO_AUDIO_BOOST);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.video_audio_boost_level, 0,

@@ -13,6 +13,7 @@ import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.model.AttachmentItem;
 import com.mishiranu.dashchan.content.model.GalleryItem;
 import com.mishiranu.dashchan.content.model.PostItem;
+import com.mishiranu.dashchan.content.translation.TranslationController;
 import com.mishiranu.dashchan.ui.navigator.manager.UiManager;
 import com.mishiranu.dashchan.ui.navigator.manager.ViewUnit;
 import com.mishiranu.dashchan.util.AnimationUtils;
@@ -99,6 +100,7 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 						}
 					}
 				}
+				requestTranslation(postItem);
 				break;
 			}
 			case THREAD_HIDDEN:
@@ -117,9 +119,49 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 						}
 					}
 				}
+				requestTranslation(postItem);
 				break;
 			}
 		}
+	}
+
+	private void requestTranslation(PostItem postItem) {
+		if (configurationSet.showTranslatedComments &&
+				!postItem.hasTranslatedComment(configurationSet.translationKey)) {
+			TranslationController.getInstance().requestPostTranslation(postItem,
+					Chan.get(configurationSet.chanName), () -> {
+				int position = getPostItems().indexOf(postItem);
+				if (position >= 0) {
+					notifyItemChanged(position);
+				}
+			});
+		}
+	}
+
+	public void setTranslationEnabled(boolean enabled) {
+		configurationSet.showTranslatedComments = enabled;
+		configurationSet.translationKey = enabled ? TranslationController.getCurrentDirection().id : null;
+		notifyDataSetChanged();
+	}
+
+	public boolean isTranslationEnabled() {
+		return configurationSet.showTranslatedComments;
+	}
+
+	public boolean hasUntranslatedThreads(int firstPosition, int lastPosition) {
+		if (firstPosition < 0 || lastPosition < firstPosition) {
+			return false;
+		}
+		String key = TranslationController.getCurrentDirection().id;
+		int end = Math.min(lastPosition, getItemCount() - 1);
+		for (int position = firstPosition; position <= end; position++) {
+			ViewUnit.ViewType viewType = ViewUnit.ViewType.values()[getItemViewType(position)];
+			if (viewType != ViewUnit.ViewType.THREAD_HIDDEN && viewType != ViewUnit.ViewType.THREAD_CARD_HIDDEN &&
+					!getItem(position).hasTranslatedComment(key)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	public UiManager.ConfigurationSet getConfigurationSet() {

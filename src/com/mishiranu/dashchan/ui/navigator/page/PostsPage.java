@@ -54,6 +54,7 @@ import com.mishiranu.dashchan.content.service.WatcherService;
 import com.mishiranu.dashchan.content.storage.AutoBumpStorage;
 import com.mishiranu.dashchan.content.storage.FavoritesStorage;
 import com.mishiranu.dashchan.content.storage.StatisticsStorage;
+import com.mishiranu.dashchan.content.translation.TranslationController;
 import com.mishiranu.dashchan.ui.DrawerForm;
 import com.mishiranu.dashchan.ui.InstanceDialog;
 import com.mishiranu.dashchan.ui.gallery.GalleryOverlay;
@@ -137,6 +138,7 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 		public String threadTitle;
 		public PostNumber scrollToPostNumber;
 		public Set<PostNumber> selectedPosts;
+		public Boolean translationEnabled;
 
 		@Override
 		public int describeContents() {
@@ -165,6 +167,7 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 					number.writeToParcel(dest, flags);
 				}
 			}
+			dest.writeByte((byte) (translationEnabled == null ? -1 : translationEnabled ? 1 : 0));
 		}
 
 		public static final Creator<ParcelableExtra> CREATOR = new Creator<ParcelableExtra>() {
@@ -191,6 +194,10 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 						selectedPosts.add(PostNumber.CREATOR.createFromParcel(source));
 					}
 					parcelableExtra.selectedPosts = selectedPosts;
+				}
+				if (source.dataAvail() > 0) {
+					byte translationEnabled = source.readByte();
+					parcelableExtra.translationEnabled = translationEnabled < 0 ? null : translationEnabled != 0;
 				}
 				return parcelableExtra;
 			}
@@ -360,6 +367,11 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 		};
 		PostsAdapter adapter = new PostsAdapter(this, page.chanName, uiManager,
 				replyable, postStateProvider, getFragmentManager(), recyclerView, retainableExtra.postItems);
+		if (parcelableExtra.translationEnabled == null) {
+			parcelableExtra.translationEnabled = TranslationController.isReadyForChan(page.chanName) &&
+					Preferences.isTranslationAutoEnabled();
+		}
+		adapter.setTranslationEnabled(Boolean.TRUE.equals(parcelableExtra.translationEnabled));
 		recyclerView.setAdapter(adapter);
 		recyclerView.addItemDecoration(new DividerItemDecoration(recyclerView.getContext(),
 				(c, position) -> adapter.configureDivider(c, position).horizontal(dividerPadding, dividerPadding)));
@@ -637,6 +649,9 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 		contentsMenu.add(0, R.id.menu_erase, 0, R.string.erase);
 		contentsMenu.add(0, R.id.menu_clear_old, 0, R.string.clear_old);
 		contentsMenu.add(0, R.id.menu_clear_deleted, 0, R.string.clear_deleted);
+		menu.add(0, R.id.menu_translate, 0, R.string.translate_posts)
+				.setIcon(getActionBarIcon(R.attr.iconActionTranslate))
+				.setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM);
 		menu.add(0, R.id.menu_summary, 0, R.string.summary);
 		menu.add(0, R.id.menu_hidden_posts, 0, R.string.hidden_posts);
 		menu.addSubMenu(0, R.id.menu_appearance, 0, R.string.appearance);
@@ -663,6 +678,18 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 		menu.findItem(R.id.menu_clear_old).setVisible(adapter.hasOldPosts());
 		menu.findItem(R.id.menu_clear_deleted).setVisible(adapter.hasDeletedPosts());
 		menu.findItem(R.id.menu_hidden_posts).setVisible(hidePerformer.hasLocalFilters());
+		MenuItem translateItem = menu.findItem(R.id.menu_translate);
+		boolean showTranslation = TranslationController.isEnabledForChan(page.chanName);
+		if ((!showTranslation || !TranslationController.isReadyForChan(page.chanName)) &&
+				adapter.isTranslationEnabled()) {
+			getParcelableExtra(ParcelableExtra.FACTORY).translationEnabled = false;
+			adapter.setTranslationEnabled(false);
+		}
+		translateItem.setVisible(showTranslation);
+		if (showTranslation) {
+			translateItem.setTitle(adapter.isTranslationEnabled()
+					? R.string.show_original_posts : R.string.translate_posts);
+		}
 		boolean isFavorite = FavoritesStorage.getInstance().hasFavorite(page.chanName, page.boardName,
 				page.threadNumber);
 		boolean iconFavorite = ResourceUtils.isTabletOrLandscape(getResources().getConfiguration());
@@ -737,6 +764,26 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 			}
 			case R.id.menu_refresh: {
 				refreshPosts(false);
+				return true;
+			}
+			case R.id.menu_translate: {
+				if (!TranslationController.isReadyForChan(page.chanName)) {
+					ClickableToast.show(R.string.translation_package_unavailable);
+					return true;
+				}
+				boolean enabled = !adapter.isTranslationEnabled();
+				boolean initializing = false;
+				if (enabled) {
+					LinearLayoutManager layoutManager = (LinearLayoutManager) getRecyclerView().getLayoutManager();
+					initializing = adapter.hasUntranslatedPosts(layoutManager.findFirstVisibleItemPosition(),
+							layoutManager.findLastVisibleItemPosition());
+				}
+				getParcelableExtra(ParcelableExtra.FACTORY).translationEnabled = enabled;
+				adapter.setTranslationEnabled(enabled);
+				if (initializing) {
+					ClickableToast.show(R.string.translation_initializing);
+				}
+				updateOptionsMenu();
 				return true;
 			}
 			case R.id.menu_reload: {
