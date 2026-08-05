@@ -120,7 +120,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	private static final PageFragment REFERENCE_FRAGMENT = new PageFragment();
 
-	private enum StorageRequestState {NONE, INSTRUCTIONS, PICKER}
+	private enum StorageRequestState {NONE, INITIAL_INSTRUCTIONS, INSTRUCTIONS, PICKER}
 
 	private final ArrayList<StackItem> fragments = new ArrayList<>();
 	private final ArrayList<SavedPageItem> stackPageItems = new ArrayList<>();
@@ -381,10 +381,18 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		}
 
 		ExtensionsTrustLoop.handleUntrustedExtensions(this, extensionsTrustLoopState);
-		if (storageRequestState == StorageRequestState.INSTRUCTIONS) {
+		if (storageRequestState == StorageRequestState.INITIAL_INSTRUCTIONS) {
+			showInitialStorageSetupDialog();
+		} else if (storageRequestState == StorageRequestState.INSTRUCTIONS) {
 			showStorageInstructionsDialog();
+		} else if (storageRequestState == StorageRequestState.NONE
+				&& Preferences.shouldRequestDownloadDirectorySetup(this)) {
+			Preferences.setDownloadDirectorySetupPrompted();
+			storageRequestState = StorageRequestState.INITIAL_INSTRUCTIONS;
+			showInitialStorageSetupDialog();
+		} else if (storageRequestState == StorageRequestState.NONE) {
+			requestNotificationPermissionIfNeeded();
 		}
-		requestNotificationPermissionIfNeeded();
 	}
 
 	private void requestNotificationPermissionIfNeeded() {
@@ -568,6 +576,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 				Preferences.setDownloadUriTree(this, data.getData(), data.getFlags());
 			}
 			handleStorageRequestResult(cancel);
+			requestNotificationPermissionIfNeeded();
 		}
 	}
 
@@ -2254,31 +2263,51 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		new AlertDialog.Builder(this)
 				.setTitle(R.string.download_directory)
 				.setMessage(R.string.saf_instructions__sentence)
-				.setPositiveButton(R.string.proceed, (d, w) -> {
-					storageRequestState = StorageRequestState.PICKER;
-					Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
-							.putExtra("android.provider.extra.SHOW_ADVANCED", true)
-							.putExtra("android.content.extra.SHOW_ADVANCED", true)
-							.putExtra(Intent.EXTRA_LOCAL_ONLY, true);
-					intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, DocumentsContract
-							.buildRootUri("com.android.externalstorage.documents", "primary"));
-					try {
-						startActivityForResult(intent, C.REQUEST_CODE_OPEN_URI_TREE);
-					} catch (ActivityNotFoundException e) {
-						ClickableToast.show(R.string.unknown_address);
-						storageRequestState = StorageRequestState.NONE;
-						handleStorageRequestResult(true);
-					}
-				})
+				.setPositiveButton(R.string.proceed, (d, w) -> startStorageDirectoryPicker())
 				.setNegativeButton(android.R.string.cancel, (d, w) -> {
 					storageRequestState = StorageRequestState.NONE;
 					handleStorageRequestResult(true);
+					requestNotificationPermissionIfNeeded();
 				})
 				.setOnCancelListener(d -> {
 					storageRequestState = StorageRequestState.NONE;
 					handleStorageRequestResult(true);
+					requestNotificationPermissionIfNeeded();
 				})
 				.show();
+	}
+
+	private void showInitialStorageSetupDialog() {
+		new AlertDialog.Builder(this)
+				.setTitle(R.string.download_directory)
+				.setMessage(R.string.download_directory_setup__sentence)
+				.setPositiveButton(R.string.select_folder, (d, w) -> startStorageDirectoryPicker())
+				.setNegativeButton(R.string.later, (d, w) -> finishInitialStorageSetup())
+				.setOnCancelListener(d -> finishInitialStorageSetup())
+				.show();
+	}
+
+	private void finishInitialStorageSetup() {
+		storageRequestState = StorageRequestState.NONE;
+		requestNotificationPermissionIfNeeded();
+	}
+
+	private void startStorageDirectoryPicker() {
+		storageRequestState = StorageRequestState.PICKER;
+		Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
+				.putExtra("android.provider.extra.SHOW_ADVANCED", true)
+				.putExtra("android.content.extra.SHOW_ADVANCED", true)
+				.putExtra(Intent.EXTRA_LOCAL_ONLY, true);
+		intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, DocumentsContract
+				.buildRootUri("com.android.externalstorage.documents", "primary"));
+		try {
+			startActivityForResult(intent, C.REQUEST_CODE_OPEN_URI_TREE);
+		} catch (ActivityNotFoundException e) {
+			ClickableToast.show(R.string.unknown_address);
+			storageRequestState = StorageRequestState.NONE;
+			handleStorageRequestResult(true);
+			requestNotificationPermissionIfNeeded();
+		}
 	}
 
 	private void handleStorageRequestResult(boolean cancel) {

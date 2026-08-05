@@ -16,6 +16,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.os.SystemClock;
+import android.provider.DocumentsContract;
 import android.text.Editable;
 import android.text.SpannableStringBuilder;
 import android.text.TextUtils;
@@ -1066,26 +1067,63 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 					ClickableToast.show(R.string.processing_data__ellipsis);
 					return true;
 				}
-				// SHOW_ADVANCED to show folder navigation
-				Intent intent = new Intent(Intent.ACTION_GET_CONTENT).addCategory(Intent.CATEGORY_OPENABLE)
-						.putExtra("android.content.extra.SHOW_ADVANCED", true);
-				ArrayList<String> mimeTypes = buildMimeTypeList(postingConfiguration.attachmentMimeTypes);
-				if (mimeTypes.size() >= 2) {
-					intent.setType("*/*");
-					intent.putExtra(Intent.EXTRA_MIME_TYPES, CommonUtils.toArray(mimeTypes, String.class));
-				} else if (mimeTypes.size() == 1) {
-					intent.setType(mimeTypes.get(0));
-				}
-				intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
-				try {
-					startActivityForResult(intent, C.REQUEST_CODE_ATTACH);
-				} catch (ActivityNotFoundException e) {
-					ClickableToast.show(R.string.unknown_address);
+				if (Preferences.isOpenConfiguredAttachmentFolderEnabled()) {
+					openConfiguredAttachmentFolder();
+				} else {
+					openSystemAttachmentPicker();
 				}
 				break;
 			}
 		}
 		return true;
+	}
+
+	private void openConfiguredAttachmentFolder() {
+		Uri treeUri = Preferences.getDownloadUriTree(requireContext());
+		if (treeUri == null) {
+			((FragmentHandler) requireActivity()).requestStorage();
+			return;
+		}
+		try {
+			Uri initialUri = DocumentsContract.buildDocumentUriUsingTree(treeUri,
+					DocumentsContract.getTreeDocumentId(treeUri));
+			openSystemAttachmentPicker(Intent.ACTION_OPEN_DOCUMENT, initialUri);
+		} catch (RuntimeException e) {
+			openSystemAttachmentPicker();
+		}
+	}
+
+	private void openSystemAttachmentPicker() {
+		openSystemAttachmentPicker(Intent.ACTION_GET_CONTENT, null);
+	}
+
+	private void openSystemAttachmentPicker(String action, Uri initialUri) {
+		// SHOW_ADVANCED is only a hint. Some photo providers still hide folder navigation.
+		Intent intent = new Intent(action).addCategory(Intent.CATEGORY_OPENABLE)
+				.putExtra("android.content.extra.SHOW_ADVANCED", true);
+		if (initialUri != null) {
+			intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, initialUri);
+			intent.putExtra(Intent.EXTRA_LOCAL_ONLY, true);
+		}
+		ArrayList<String> mimeTypes = buildMimeTypeList(postingConfiguration.attachmentMimeTypes);
+		if (mimeTypes.size() >= 2) {
+			intent.setType("*/*");
+			intent.putExtra(Intent.EXTRA_MIME_TYPES, CommonUtils.toArray(mimeTypes, String.class));
+		} else if (mimeTypes.size() == 1) {
+			intent.setType(mimeTypes.get(0));
+		} else {
+			intent.setType("*/*");
+		}
+		intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+		try {
+			startActivityForResult(intent, C.REQUEST_CODE_ATTACH);
+		} catch (ActivityNotFoundException e) {
+			if (initialUri != null) {
+				openSystemAttachmentPicker();
+			} else {
+				ClickableToast.show(R.string.unknown_address);
+			}
+		}
 	}
 
 	private void updateFocusButtons(boolean commentFocused) {
@@ -1459,6 +1497,9 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		if (resultCode == Activity.RESULT_OK) {
 			switch (requestCode) {
 				case C.REQUEST_CODE_ATTACH: {
+					if (data == null) {
+						break;
+					}
 					LinkedHashSet<Uri> uris = new LinkedHashSet<>();
 					Uri dataUri = data.getData();
 					if (dataUri != null) {
