@@ -70,7 +70,14 @@ public class MediaFragment extends PreferenceFragment implements FragmentHandler
 		addCheck(true, Preferences.KEY_DOWNLOAD_ORIGINAL_NAME, Preferences.DEFAULT_DOWNLOAD_ORIGINAL_NAME,
 				R.string.original_file_name, R.string.original_file_name__summary);
 		downloadUriTreePreference = addButton(getString(R.string.download_directory),
-				p -> DataFile.obtain(DataFile.Target.DOWNLOADS, null).getName());
+				p -> {
+					if (Preferences.getDownloadUriTree(requireContext()) == null) {
+						return getString(R.string.download_directory_not_selected);
+					}
+					String name = DataFile.obtain(DataFile.Target.DOWNLOADS, null).getName();
+					return !StringUtils.isEmpty(name) ? name
+							: getString(R.string.download_directory_not_selected);
+				});
 		downloadUriTreePreference.setOnClickListener(p -> {
 			if (((FragmentHandler) requireActivity()).requestStorage()) {
 				inStorageRequest = true;

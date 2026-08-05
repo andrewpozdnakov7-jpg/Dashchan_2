@@ -302,6 +302,9 @@ public final class SettingsSearchIndex {
 				R.string.hardware_video_acceleration__summary, Preferences.KEY_HARDWARE_VIDEO_ACCELERATION);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.image_editor,
 				R.string.image_editor__summary, Preferences.KEY_IMAGE_EDITOR);
+		add(context, entries, Screen.EXPERIMENTAL, R.string.open_configured_attachment_folder,
+				R.string.open_configured_attachment_folder__summary,
+				Preferences.KEY_OPEN_CONFIGURED_ATTACHMENT_FOLDER);
 		if (BuildConfig.ENABLE_LOCAL_TRANSLATION) {
 			add(context, entries, Screen.EXPERIMENTAL, R.string.local_translation,
 					R.string.local_translation__summary, Preferences.KEY_LOCAL_TRANSLATION);

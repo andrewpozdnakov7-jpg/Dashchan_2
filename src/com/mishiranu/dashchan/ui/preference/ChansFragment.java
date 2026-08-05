@@ -56,8 +56,6 @@ public class ChansFragment extends PreferenceFragment implements FragmentHandler
 		}
 		addForumPreference("pikabu", R.string.forum_pikabu, 0,
 				() -> showDevelopmentDialog(R.string.pikabu_extension_in_development));
-		addForumPreference("gosuslugi", R.string.forum_gosuslugi, 0,
-				() -> showDevelopmentDialog(R.string.gosuslugi_authorization_in_development));
 	}
 
 	private void addChanPreference(Chan chan) {

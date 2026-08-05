@@ -213,6 +213,10 @@
 	<string name="dont_install">Don\'t install</string>
 	<string name="download_completed">Download completed</string>
 	<string name="download_directory">Download directory</string>
+	<string name="download_directory_not_selected">Not selected</string>
+	<string name="download_directory_setup__sentence">Choose a folder where Slooop will store images, videos,
+		archives and other files. On the next screen, open the device storage and select an existing folder or create
+		a new one.</string>
 	<string name="download_file">Download file</string>
 	<string name="download_files">Download files</string>
 	<string name="download_path">Download path</string>
@@ -302,6 +306,8 @@
 	<string name="hardware_video_acceleration__summary">Decode supported video with MediaCodec. The software decoder is used when hardware decoding is unavailable</string>
 	<string name="image_editor">Photo editor</string>
 	<string name="image_editor__summary">Show an editor for attached photos. Crop, rotate, flip, cover details, erase added marks, and add emoji stickers</string>
+	<string name="open_configured_attachment_folder">Open the download folder for attachments</string>
+	<string name="open_configured_attachment_folder__summary">Open the system Android file picker in the download folder configured in Media settings. When disabled, Android chooses the initial location</string>
 	<string name="edit_image">Edit image</string>
 	<string name="image_editor_loading">Loading image…</string>
 	<string name="image_editor_saving">Saving edited copy…</string>
@@ -383,6 +389,7 @@
 	<string name="keep_all">Save copies</string>
 	<string name="keep_current_version">Keep current version</string>
 	<string name="language">Language</string>
+	<string name="later">Later</string>
 	<string name="large_grid">Large grid</string>
 	<string name="links_attachments__genitive">Links-attachments</string>
 	<string name="list">List</string>
@@ -681,6 +688,15 @@
 	<string name="delete_local_archive_confirmation__format">Delete “%1$s” together with its saved media and thumbnails?</string>
 	<string name="local_archive_deleted">Local archive deleted</string>
 	<string name="local_archive_delete_failed">Could not delete the archive. For an added folder, add it again and allow file changes.</string>
+	<plurals name="local_archives_delete_selected_confirmation__format">
+		<item quantity="one">Delete %d selected local archive together with its saved media and thumbnails?</item>
+		<item quantity="other">Delete %d selected local archives together with their saved media and thumbnails?</item>
+	</plurals>
+	<plurals name="local_archives_deleted__format">
+		<item quantity="one">Deleted %d local archive</item>
+		<item quantity="other">Deleted %d local archives</item>
+	</plurals>
+	<string name="local_archives_deleted_partial__format">Deleted %1$d of %2$d local archives</string>
 	<string name="local_archive_updated__format">Local archive updated: %1$d → %2$d posts</string>
 	<string name="local_archive_replace_failed">The updated archive was saved, but the previous copy could not be removed</string>
 	<string name="save_or_update_thread">Save or update thread</string>
@@ -701,6 +717,7 @@
 	<string name="seek_any_frame">Seek any frame</string>
 	<string name="seek_any_frame__summary">Increases accuracy but lowers performance</string>
 	<string name="select">Select</string>
+	<string name="select_folder">Select folder</string>
 	<string name="select_all">Select all</string>
 	<string name="select_where_to_save">Select where to save</string>
 	<string name="selected">Selected</string>
@@ -927,9 +944,7 @@
 	<string name="forum_dvach">Dvach</string>
 	<string name="forum_fourchan">4chan</string>
 	<string name="forum_pikabu">Pikabu</string>
-	<string name="forum_gosuslugi">Gosuslugi</string>
 	<string name="pikabu_extension_in_development">The Pikabu extension is in development.</string>
-	<string name="gosuslugi_authorization_in_development">Gosuslugi authorization is in development.</string>
 	<string name="display_post_year">Show year in post dates</string>
 	<string name="hide_thread_title">Hide thread title in toolbar</string>
 	<string name="hide_thread_title__summary">Do not show the thread name or address while viewing it</string>

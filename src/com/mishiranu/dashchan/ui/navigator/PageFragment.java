@@ -1,6 +1,7 @@
 package com.mishiranu.dashchan.ui.navigator;
 
 import android.content.Context;
+import android.os.BadParcelableException;
 import android.os.Bundle;
 import android.os.Parcelable;
 import android.util.Pair;
@@ -103,8 +104,20 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 
 		listPosition = savedInstanceState != null && !resetScroll
 				? AndroidUtils.getParcelable(savedInstanceState, EXTRA_LIST_POSITION, ListPosition.class) : null;
-		parcelableExtra = savedInstanceState != null
-				? AndroidUtils.getParcelable(savedInstanceState, EXTRA_PARCELABLE_EXTRA, Parcelable.class) : null;
+		if (savedInstanceState != null) {
+			try {
+				parcelableExtra = AndroidUtils.getParcelable(savedInstanceState,
+						EXTRA_PARCELABLE_EXTRA, Parcelable.class);
+			} catch (BadParcelableException e) {
+				// Saved page state may come from an older application version whose custom Parcelable
+				// layout is shorter. Discard only this transient UI state and rebuild the page instead of
+				// failing the whole activity restoration on strict Android versions.
+				savedInstanceState.remove(EXTRA_PARCELABLE_EXTRA);
+				parcelableExtra = null;
+			}
+		} else {
+			parcelableExtra = null;
+		}
 		initErrorItem = savedInstanceState != null
 				? AndroidUtils.getParcelable(savedInstanceState, EXTRA_INIT_ERROR_ITEM, ErrorItem.class) : null;
 		searchCurrentQuery = savedInstanceState != null ? savedInstanceState

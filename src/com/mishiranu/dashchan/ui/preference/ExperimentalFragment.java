@@ -56,6 +56,10 @@ public class ExperimentalFragment extends PreferenceFragment implements Translat
 		}
 		addCheck(true, Preferences.KEY_IMAGE_EDITOR, Preferences.DEFAULT_IMAGE_EDITOR,
 				R.string.image_editor, R.string.image_editor__summary);
+		addCheck(true, Preferences.KEY_OPEN_CONFIGURED_ATTACHMENT_FOLDER,
+				Preferences.DEFAULT_OPEN_CONFIGURED_ATTACHMENT_FOLDER,
+				R.string.open_configured_attachment_folder,
+				R.string.open_configured_attachment_folder__summary);
 		if (BuildConfig.ENABLE_LOCAL_TRANSLATION) {
 			addTranslationPreferences();
 		}

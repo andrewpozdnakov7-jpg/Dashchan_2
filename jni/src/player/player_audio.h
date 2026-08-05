@@ -9,6 +9,8 @@ int playerAudioInitialize(Player * player, AVStream * stream);
 void playerAudioInitializeLibrary(void);
 void * playerAudioDecodeThread(void * data);
 void playerAudioClearOutputLocked(Player * player, int clearDecodedBuffers);
+void playerAudioPrepareOutputResetLocked(Player * player, int clearDecodedBuffers,
+		const char * reason);
 int playerAudioEnqueueBuffer(Player * player);
 void playerAudioBufferQueueFreeCallback(void * data);
 void playerAudioDestroy(Player * player);
