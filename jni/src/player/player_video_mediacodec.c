@@ -10,6 +10,7 @@
 #include <libavutil/hwcontext.h>
 #include <libavutil/hwcontext_mediacodec.h>
 #include <libavutil/opt.h>
+#include <libavutil/pixdesc.h>
 #endif
 #include <android/native_window_jni.h>
 #include <inttypes.h>
@@ -271,19 +272,107 @@ static const char * getMediaCodecDecoderName(enum AVCodecID codecId) {
 	switch (codecId) {
 		case AV_CODEC_ID_H264: return "h264_mediacodec";
 		case AV_CODEC_ID_HEVC: return "hevc_mediacodec";
+		case AV_CODEC_ID_VP8: return "vp8_mediacodec";
+		case AV_CODEC_ID_VP9: return "vp9_mediacodec";
+		case AV_CODEC_ID_AV1: return "av1_mediacodec";
 		default: return NULL;
 	}
 }
 
-static AVCodecContext * createMediaCodecVideoContext(Player * player, jobject surface) {
+static const char * getMediaCodecMimeType(enum AVCodecID codecId) {
+	switch (codecId) {
+		case AV_CODEC_ID_H264: return "video/avc";
+		case AV_CODEC_ID_HEVC: return "video/hevc";
+		case AV_CODEC_ID_VP8: return "video/x-vnd.on2.vp8";
+		case AV_CODEC_ID_VP9: return "video/x-vnd.on2.vp9";
+		case AV_CODEC_ID_AV1: return "video/av01";
+		default: return NULL;
+	}
+}
+
+static int getCodecBitDepth(AVCodecParameters * parameters) {
+	if (parameters->bits_per_raw_sample > 0) {
+		return parameters->bits_per_raw_sample;
+	}
+	if (parameters->format == AV_PIX_FMT_NONE) {
+		return 0;
+	}
+	const AVPixFmtDescriptor * descriptor = av_pix_fmt_desc_get(parameters->format);
+	int bitDepth = 0;
+	if (descriptor) {
+		for (int i = 0; i < descriptor->nb_components; i++) {
+			if (descriptor->comp[i].depth > bitDepth) {
+				bitDepth = descriptor->comp[i].depth;
+			}
+		}
+	}
+	return bitDepth;
+}
+
+static int isHardwareMediaCodecSupported(Player * player, JNIEnv * env,
+		const char * mimeType, AVCodecParameters * parameters, AVRational frameRate) {
+	if (!mimeType) {
+		return 0;
+	}
+	Bridge * bridge = playerObtainBridge(player, env);
+	jstring mimeTypeString = (*env)->NewStringUTF(env, mimeType);
+	if (!mimeTypeString) {
+		diagnosticsLog("player=%u mediacodec_preflight failed_stage=create_mime",
+				player->meta.diagnosticsId);
+		return 0;
+	}
+	float frameRateValue = frameRate.den > 0 && frameRate.num > 0
+			? (float) frameRate.num / (float) frameRate.den : 0.f;
+	int bitDepth = getCodecBitDepth(parameters);
+	jstring decoderName = (jstring) (*env)->CallObjectMethod(env, player->bridge.native,
+			bridge->methodFindHardwareVideoDecoder, mimeTypeString,
+			(jint) parameters->width, (jint) parameters->height, (jfloat) frameRateValue,
+			(jint) parameters->profile, (jint) parameters->level, (jint) bitDepth,
+			(jint) parameters->color_trc);
+	(*env)->DeleteLocalRef(env, mimeTypeString);
+	if ((*env)->ExceptionCheck(env)) {
+		(*env)->ExceptionClear(env);
+		diagnosticsLog("player=%u mediacodec_preflight failed_stage=java_exception mime=%s",
+				player->meta.diagnosticsId, mimeType);
+		return 0;
+	}
+	if (!decoderName) {
+		diagnosticsLog("player=%u mediacodec_preflight unsupported mime=%s size=%dx%d fps=%.3f"
+				" profile=%d level=%d bit_depth=%d color_trc=%d",
+				player->meta.diagnosticsId, mimeType, parameters->width, parameters->height,
+				frameRateValue, parameters->profile, parameters->level, bitDepth,
+				parameters->color_trc);
+		return 0;
+	}
+	const char * decoderNameChars = (*env)->GetStringUTFChars(env, decoderName, NULL);
+	if (decoderNameChars) {
+		diagnosticsLog("player=%u mediacodec_preflight supported mime=%s decoder=%s"
+				" size=%dx%d fps=%.3f profile=%d level=%d bit_depth=%d color_trc=%d",
+				player->meta.diagnosticsId, mimeType, decoderNameChars,
+				parameters->width, parameters->height, frameRateValue, parameters->profile,
+				parameters->level, bitDepth, parameters->color_trc);
+		(*env)->ReleaseStringUTFChars(env, decoderName, decoderNameChars);
+	}
+	(*env)->DeleteLocalRef(env, decoderName);
+	return 1;
+}
+
+static AVCodecContext * createMediaCodecVideoContext(Player * player, JNIEnv * env, jobject surface) {
 	AVStream * stream = GET_STREAM(player, video);
 	AVCodecParameters * parameters = stream->codecpar;
 	const char * decoderName = getMediaCodecDecoderName(stream->codecpar->codec_id);
+	const char * mimeType = getMediaCodecMimeType(stream->codecpar->codec_id);
 	diagnosticsLog("player=%u mediacodec_capability_check mode=configure_original_stream"
 			" codec=%s profile=%d level=%d size=%dx%d fps=%d/%d",
 			player->meta.diagnosticsId, avcodec_get_name(parameters->codec_id),
 			parameters->profile, parameters->level, parameters->width, parameters->height,
 			stream->avg_frame_rate.num, stream->avg_frame_rate.den);
+	if (!decoderName || !isHardwareMediaCodecSupported(player, env, mimeType,
+			parameters, stream->avg_frame_rate)) {
+		diagnosticsLog("player=%u mediacodec_open failed_stage=capability_preflight requested=%s",
+				player->meta.diagnosticsId, decoderName ? decoderName : "unsupported_codec");
+		return NULL;
+	}
 	const AVCodec * codec = decoderName ? avcodec_find_decoder_by_name(decoderName) : NULL;
 	if (!codec) {
 		diagnosticsLog("player=%u mediacodec_open failed_stage=find_decoder requested=%s",
@@ -352,7 +441,7 @@ static AVCodecContext * createMediaCodecVideoContext(Player * player, jobject su
 	return context;
 }
 
-static int configureMediaCodecSurface(Player * player, jobject surface) {
+static int configureMediaCodecSurface(Player * player, JNIEnv * env, jobject surface) {
 	if (!player->video.hardwareAccelerationRequested || player->video.hardwareDecoderFailed) {
 		diagnosticsLog("player=%u mediacodec_configure skipped requested=%d failed=%d",
 				player->meta.diagnosticsId, player->video.hardwareAccelerationRequested,
@@ -362,7 +451,7 @@ static int configureMediaCodecSurface(Player * player, jobject surface) {
 	int decoderReset = player->video.hardwareSurfaceInitialized;
 	diagnosticsLog("player=%u mediacodec_configure started reset=%d",
 			player->meta.diagnosticsId, decoderReset);
-	AVCodecContext * context = createMediaCodecVideoContext(player, surface);
+	AVCodecContext * context = createMediaCodecVideoContext(player, env, surface);
 	if (context) {
 		playerCloseAndFreeVideoCodecContext(player, &player->av.videoContext);
 		player->av.videoContext = context;
@@ -428,7 +517,7 @@ static int setPlayerSurfaceLocked(JNIEnv * env, Player * player, jobject surface
 			return 0;
 		}
 #ifdef DASHCHAN_HAS_MEDIACODEC
-		decoderReset = configureMediaCodecSurface(player, surface);
+		decoderReset = configureMediaCodecSurface(player, env, surface);
 #endif
 		if (player->video.hardwareDecoderActive) {
 			pthread_cond_broadcast(&player->video.sleepCond);

@@ -149,7 +149,8 @@ void startPlayerDiagnostics(void) {
 				" seek_worker_stop=1 surface_queue=1 duration_probe=1 packet_generation=1"
 				" software_output_scaling=1 software_late_drop=1 software_decode_governor=1"
 				" software_governor_recovery=2 software_late_anchor_ms=200"
-				" software_seek_fast_decode=1 audio_master_clock=1"
+				" software_seek_fast_decode=1 audio_master_clock=1 audio_output_seek_restart=1"
+				" audio_output_queue_state=1"
 				" audio_output_prefill=2 audio_chunk_target_ms=40");
 	}
 	pthread_mutex_unlock(&diagnostics.mutex);

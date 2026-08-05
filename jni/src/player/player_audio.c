@@ -81,6 +81,7 @@ void playerAudioClearOutputLocked(Player * player, int clearDecodedBuffers) {
 	if (player->audio.sl.queue) {
 		(*player->audio.sl.queue)->Clear(player->audio.sl.queue);
 	}
+	player->audio.outputRestartPending = 0;
 	if (clearDecodedBuffers) {
 		blockingQueueClear(&player->audio.bufferQueue, playerAudioBufferQueueFreeCallback);
 	}
@@ -111,6 +112,27 @@ void playerAudioClearOutputLocked(Player * player, int clearDecodedBuffers) {
 	for (int i = 0; i < bufferCount; i++) {
 		playerAudioBufferQueueFreeCallback(buffers[i]);
 	}
+}
+
+// Callers hold audio.sleepBufferMutex. Android documents STOPPED -> Clear() as
+// the portable way to return a simple buffer queue to a known state. Defer
+// PLAYING until current-generation PCM has been queued, so seek and speed
+// changes cannot leave the audio master clock advancing at a fraction of real
+// time on vendor OpenSL implementations.
+void playerAudioPrepareOutputResetLocked(Player * player, int clearDecodedBuffers,
+		const char * reason) {
+	int restartWhenReady = player->play.playing && player->audio.sl.play;
+	SLresult stopResult = SL_RESULT_SUCCESS;
+	if (player->audio.sl.play) {
+		stopResult = (*player->audio.sl.play)->SetPlayState(player->audio.sl.play,
+				SL_PLAYSTATE_STOPPED);
+	}
+	playerAudioClearOutputLocked(player, clearDecodedBuffers);
+	player->audio.outputRestartPending = restartWhenReady;
+	diagnosticsLog("player=%u audio_output reset reason=%s was_playing=%d"
+			" stop_result=%d restart_pending=%d",
+			player->meta.diagnosticsId, reason ? reason : "unknown",
+			restartWhenReady, (int) stopResult, player->audio.outputRestartPending);
 }
 
 static int16_t limitBoostedAudioSample(float sample) {
@@ -259,10 +281,21 @@ int playerAudioEnqueueBuffer(Player * player) {
 	}
 	player->audio.bufferNeedEnqueueAfterDecode =
 			player->audio.outputChunkCount < AUDIO_OUTPUT_QUEUE_CAPACITY;
+	if (player->audio.outputRestartPending && player->play.playing &&
+			player->audio.outputChunkCount > 0 && player->audio.sl.play) {
+		SLresult result = (*player->audio.sl.play)->SetPlayState(player->audio.sl.play,
+				SL_PLAYSTATE_PLAYING);
+		if (result == SL_RESULT_SUCCESS) {
+			player->audio.outputRestartPending = 0;
+		}
+		diagnosticsLog("player=%u audio_output resume_after_reset result=%d depth=%d"
+				" restart_pending=%d", player->meta.diagnosticsId, (int) result,
+				player->audio.outputChunkCount, player->audio.outputRestartPending);
+	}
 	return enqueued;
 }
 
-static void audioPlayerCallback(UNUSED SLAndroidSimpleBufferQueueItf slQueue, void * context) {
+static void audioPlayerCallback(SLAndroidSimpleBufferQueueItf slQueue, void * context) {
 	Player * player = (Player *) context;
 	if (player->meta.interrupt) {
 		return;
@@ -273,7 +306,19 @@ static void audioPlayerCallback(UNUSED SLAndroidSimpleBufferQueueItf slQueue, vo
 		pthread_mutex_unlock(&player->audio.sleepBufferMutex);
 		return;
 	}
-	int64_t endAudioPosition = completeAudioChunkLocked(player);
+	SLAndroidSimpleBufferQueueState queueState = {0};
+	SLresult stateResult = (*slQueue)->GetState(slQueue, &queueState);
+	int completedChunk = stateResult != SL_RESULT_SUCCESS ||
+			queueState.count < (SLuint32) player->audio.outputChunkCount;
+	int64_t endAudioPosition = completedChunk ? completeAudioChunkLocked(player) : -1;
+	if (!completedChunk) {
+		// STOPPED and Clear() are both allowed to trigger a callback. If fresh
+		// buffers won the mutex race, GetState still reports all tracked chunks;
+		// do not consume one of the new owners as if an old buffer had finished.
+		diagnosticsLog("player=%u audio_output callback_without_completion depth=%d"
+				" native_depth=%u", player->meta.diagnosticsId,
+				player->audio.outputChunkCount, (unsigned int) queueState.count);
+	}
 	int result = playerAudioEnqueueBuffer(player);
 	if (result > 0) {
 		pthread_cond_broadcast(&player->audio.bufferCond);
@@ -441,6 +486,7 @@ void * playerAudioDecodeThread(void * data) {
 			break;
 		}
 
+		int endOfStream = packetHolder->type == PACKET_HOLDER_END_OF_STREAM;
 		int packetSent = 0;
 		while (1) {
 			int success = 0;
@@ -634,6 +680,20 @@ void * playerAudioDecodeThread(void * data) {
 #endif
 		playerPacketQueueFreeCallback(packetHolder);
 		packetHolder = NULL;
+		if (endOfStream) {
+			// OpenSL normally performs the final finished-state check from its
+			// completion callback. After a seek beyond a shorter audio track there
+			// is no PCM to submit, therefore no callback will arrive. Re-evaluate
+			// the stream directly after draining the decoder so video can fall back
+			// to the monotonic clock instead of waiting on a silent audio master.
+			playerMarkStreamFinished(player, 0);
+			diagnosticsLog("player=%u audio_end_of_stream finished=%d"
+					" packet_queue=%d decoded_queue=%d output_chunks=%d",
+					player->meta.diagnosticsId, player->audio.finished,
+					blockingQueueCount(&player->audio.packetQueue),
+					blockingQueueCount(&player->audio.bufferQueue),
+					player->audio.outputChunkCount);
+		}
 	}
 	if (packetHolder) {
 		playerPacketQueueFreeCallback(packetHolder);
@@ -883,7 +943,7 @@ void stopAudio(jlong pointer) {
 	}
 	diagnosticsLog("player=%u audio_stop_immediate started", player->meta.diagnosticsId);
 	pthread_mutex_lock(&player->audio.sleepBufferMutex);
-	(*player->audio.sl.play)->SetPlayState(player->audio.sl.play, SL_PLAYSTATE_PAUSED);
+	(*player->audio.sl.play)->SetPlayState(player->audio.sl.play, SL_PLAYSTATE_STOPPED);
 	playerAudioClearOutputLocked(player, 0);
 	pthread_mutex_unlock(&player->audio.sleepBufferMutex);
 	diagnosticsLog("player=%u audio_stop_immediate finished", player->meta.diagnosticsId);

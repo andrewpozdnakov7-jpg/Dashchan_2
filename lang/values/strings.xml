@@ -681,6 +681,15 @@
 	<string name="delete_local_archive_confirmation__format">Delete “%1$s” together with its saved media and thumbnails?</string>
 	<string name="local_archive_deleted">Local archive deleted</string>
 	<string name="local_archive_delete_failed">Could not delete the archive. For an added folder, add it again and allow file changes.</string>
+	<plurals name="local_archives_delete_selected_confirmation__format">
+		<item quantity="one">Delete %d selected local archive together with its saved media and thumbnails?</item>
+		<item quantity="other">Delete %d selected local archives together with their saved media and thumbnails?</item>
+	</plurals>
+	<plurals name="local_archives_deleted__format">
+		<item quantity="one">Deleted %d local archive</item>
+		<item quantity="other">Deleted %d local archives</item>
+	</plurals>
+	<string name="local_archives_deleted_partial__format">Deleted %1$d of %2$d local archives</string>
 	<string name="local_archive_updated__format">Local archive updated: %1$d → %2$d posts</string>
 	<string name="local_archive_replace_failed">The updated archive was saved, but the previous copy could not be removed</string>
 	<string name="save_or_update_thread">Save or update thread</string>

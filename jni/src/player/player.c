@@ -83,6 +83,8 @@ Bridge * playerObtainBridge(Player * player, JNIEnv * env) {
 				"onDurationChanged", "(J)V");
 		bridge->methodOnSurfaceApplied = (*env)->GetMethodID(env, class,
 				"onSurfaceApplied", "(JJZ)V");
+		bridge->methodFindHardwareVideoDecoder = (*env)->GetMethodID(env, class,
+				"findHardwareVideoDecoder", "(Ljava/lang/String;IIFIIII)Ljava/lang/String;");
 		sparseArrayAdd(&player->bridge.array, index, bridge);
 	}
 	return bridge;
@@ -549,7 +551,7 @@ void setPlaybackSpeed(jlong pointer, jint speed) {
 		updateAudioPositionSurrogate(player, position, 1);
 		if (HAS_STREAM(player, audio)) {
 			playerSetSkipFlag(&player->sync.skip.audioWorkFrame, 1);
-			playerAudioClearOutputLocked(player, 1);
+			playerAudioPrepareOutputResetLocked(player, 1, "playback_speed");
 			player->sync.audioPositionNotSync = 0;
 		}
 		pthread_cond_broadcast(&player->audio.sleepCond);
@@ -583,8 +585,15 @@ void setPlaying(jlong pointer, jboolean playing) {
 		}
 		if (HAS_STREAM(player, audio)) {
 			pthread_mutex_lock(&player->audio.sleepBufferMutex);
-			(*player->audio.sl.play)->SetPlayState(player->audio.sl.play,
-					playing ? SL_PLAYSTATE_PLAYING : SL_PLAYSTATE_PAUSED);
+			if (playing && player->audio.outputRestartPending) {
+				// A seek/speed reset resumes OpenSL only after fresh PCM is queued.
+				// Calling the enqueue helper also handles a queue that was prepared
+				// while playback was paused.
+				playerAudioEnqueueBuffer(player);
+			} else {
+				(*player->audio.sl.play)->SetPlayState(player->audio.sl.play,
+						playing ? SL_PLAYSTATE_PLAYING : SL_PLAYSTATE_PAUSED);
+			}
 			if (playing && player->audio.bufferNeedEnqueueAfterDecode
 					&& blockingQueueCount(&player->audio.bufferQueue) > 0) {
 				// Queue count checked to free from obligation to handle audio finish flag

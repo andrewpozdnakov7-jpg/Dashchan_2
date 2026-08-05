@@ -702,6 +702,19 @@
 	<string name="delete_local_archive_confirmation__format">Удалить «%1$s» вместе с сохранёнными медиафайлами и миниатюрами?</string>
 	<string name="local_archive_deleted">Локальный архив удалён</string>
 	<string name="local_archive_delete_failed">Не удалось удалить архив. Для добавленной папки подключите её заново и разрешите изменение файлов.</string>
+	<plurals name="local_archives_delete_selected_confirmation__format">
+		<item quantity="one">Удалить %d выбранный локальный архив вместе с сохранёнными медиафайлами и миниатюрами?</item>
+		<item quantity="few">Удалить %d выбранных локальных архива вместе с сохранёнными медиафайлами и миниатюрами?</item>
+		<item quantity="many">Удалить %d выбранных локальных архивов вместе с сохранёнными медиафайлами и миниатюрами?</item>
+		<item quantity="other">Удалить %d выбранных локальных архива вместе с сохранёнными медиафайлами и миниатюрами?</item>
+	</plurals>
+	<plurals name="local_archives_deleted__format">
+		<item quantity="one">Удалён %d локальный архив</item>
+		<item quantity="few">Удалено %d локальных архива</item>
+		<item quantity="many">Удалено %d локальных архивов</item>
+		<item quantity="other">Удалено %d локальных архива</item>
+	</plurals>
+	<string name="local_archives_deleted_partial__format">Удалено %1$d из %2$d локальных архивов</string>
 	<string name="local_archive_updated__format">Локальный архив обновлён: %1$d → %2$d постов</string>
 	<string name="local_archive_replace_failed">Обновлённый архив сохранён, но предыдущую копию удалить не удалось</string>
 	<string name="save_or_update_thread">Сохранить или обновить тред</string>
