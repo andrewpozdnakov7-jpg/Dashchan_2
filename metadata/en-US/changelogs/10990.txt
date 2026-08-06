@@ -1,0 +1,5 @@
+Improved video playback and previews: added hardware decoding for VP8, VP9, and AV1 on supported devices, improved seeking, and fixed black thumbnails.
+Added bulk selection and deletion of saved archives.
+The system file picker now opens in the configured download folder. On a clean installation, Slooop prompts the user to choose a storage folder.
+Fixed a crash on Android 17 when restoring the application state after an update.
+Removed the non-functional Gosuslugi forum.
