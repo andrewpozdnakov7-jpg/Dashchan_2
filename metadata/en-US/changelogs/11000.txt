@@ -1,0 +1,6 @@
+Synchronized the F-Droid build with Slooop 3.2.19.
+Added bulk removal of favorite threads and saved archives.
+Improved the image editor, video playback, and media previews.
+Improved storage folder selection and fixed Android 17 state restoration.
+Removed the non-functional Gosuslugi forum.
+The beta update channel is completely disabled in F-Droid builds.
