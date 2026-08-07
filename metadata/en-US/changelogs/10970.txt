@@ -1,0 +1,3 @@
+Added selection mode for removing multiple favorite threads at once.
+Improved the image editor with editable stickers and brush size and color controls.
+Added pinch zoom and two-finger panning; the image editor is now enabled by default.

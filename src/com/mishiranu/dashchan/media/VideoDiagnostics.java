@@ -216,7 +216,7 @@ public final class VideoDiagnostics {
 				}
 				boolean supported = false;
 				for (String type : codecInfo.getSupportedTypes()) {
-					if ("video/avc".equalsIgnoreCase(type) || "video/hevc".equalsIgnoreCase(type)) {
+					if (VideoDecoderCapabilities.isSupportedMimeType(type)) {
 						supported = true;
 						break;
 					}

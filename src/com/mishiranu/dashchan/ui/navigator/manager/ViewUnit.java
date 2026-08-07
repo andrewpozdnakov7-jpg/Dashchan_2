@@ -254,7 +254,9 @@ public class ViewUnit {
 			holder.stateImages[i].setVisibility(visible ? View.VISIBLE : View.GONE);
 		}
 
-		String subject = postItem.getSubject();
+		boolean translated = configurationSet.showTranslatedComments &&
+				postItem.hasTranslatedComment(configurationSet.translationKey);
+		String subject = postItem.getSubject(translated);
 		if (!StringUtils.isEmpty(subject)) {
 			holder.subject.setVisibility(View.VISIBLE);
 			holder.subject.setText(subject);
@@ -263,8 +265,9 @@ public class ViewUnit {
 		}
 		int parentWidth = (int) (ResourceUtils.obtainDensity(holder.itemView) *
 				holder.itemView.getResources().getConfiguration().screenWidthDp);
-		CharSequence comment = postItem.getThreadCommentShort(parentWidth, holder.comment.getTextSize(), 8);
-		colorScheme.apply(postItem.getThreadCommentShortSpans());
+		CharSequence comment = postItem.getThreadCommentShort(parentWidth, holder.comment.getTextSize(), 8,
+				translated);
+		colorScheme.apply(postItem.getThreadCommentShortSpans(translated));
 		if (StringUtils.isEmpty(subject) && StringUtils.isEmpty(comment)) {
 			// Avoid 0 height
 			comment = " ";
@@ -303,7 +306,9 @@ public class ViewUnit {
 		List<AttachmentItem> attachmentItems = postItem.getAttachmentItems();
 		boolean hidden = postItem.getHideState().hidden;
 		((View) holder.threadContent.getParent()).setAlpha(hidden ? ALPHA_HIDDEN_POST : 1f);
-		String subject = postItem.getSubject();
+		boolean translated = configurationSet.showTranslatedComments &&
+				postItem.hasTranslatedComment(configurationSet.translationKey);
+		String subject = postItem.getSubject(translated);
 		if (!StringUtils.isEmptyOrWhitespace(subject) && !hidden) {
 			holder.subject.setVisibility(View.VISIBLE);
 			holder.subject.setSingleLine(!small);
@@ -325,8 +330,8 @@ public class ViewUnit {
 			int parentWidth = (int) (ResourceUtils.obtainDensity(holder.itemView) *
 					holder.itemView.getResources().getConfiguration().screenWidthDp);
 			comment = postItem.getThreadCommentShort(parentWidth / 2,
-					holder.comment.getTextSize(), attachmentItems != null ? 4 : 12);
-			colorScheme.apply(postItem.getThreadCommentShortSpans());
+					holder.comment.getTextSize(), attachmentItems != null ? 4 : 12, translated);
+			colorScheme.apply(postItem.getThreadCommentShortSpans(translated));
 		}
 		holder.comment.setText(comment);
 		holder.comment.setVisibility(StringUtils.isEmpty(comment) ? View.GONE : View.VISIBLE);
@@ -409,11 +414,12 @@ public class ViewUnit {
 		holder.name.setText(makeHighlightedText(demandSet.highlightText, name));
 		holder.date.setText(postItem.getDateTime(postDateFormatter));
 
-		String subject = postItem.getSubject();
-		CharSequence comment = configurationSet.repliesToPost != null
-				? postItem.getComment(chan, configurationSet.repliesToPost) : postItem.getComment(chan);
-				colorScheme.apply(postItem.getCommentSpans());
-		LinkSuffixSpan[] linkSuffixSpans = postItem.getLinkSuffixSpansAfterComment();
+		boolean translated = configurationSet.showTranslatedComments &&
+				postItem.hasTranslatedComment(configurationSet.translationKey);
+		String subject = postItem.getSubject(translated);
+		CharSequence comment = postItem.getComment(chan, configurationSet.repliesToPost, translated);
+		colorScheme.apply(postItem.getCommentSpans(translated));
+		LinkSuffixSpan[] linkSuffixSpans = postItem.getLinkSuffixSpansAfterComment(translated);
 		boolean showMyPosts = Preferences.isShowMyPosts();
 		if (linkSuffixSpans != null) {
 			for (LinkSuffixSpan span : linkSuffixSpans) {
@@ -440,7 +446,7 @@ public class ViewUnit {
 			postMarkColor = postMark == PostLinearLayout.MARK_USER_POST ? colors.userPost : colors.reply;
 		}
 		holder.layout.setPostMark(postMark, postMarkColor);
-		LinkSpan[] linkSpans = postItem.getLinkSpansAfterComment();
+		LinkSpan[] linkSpans = postItem.getLinkSpansAfterComment(translated);
 		if (linkSpans != null) {
 			for (LinkSpan linkSpan : linkSpans) {
 				if (linkSpan.postNumber != null) {

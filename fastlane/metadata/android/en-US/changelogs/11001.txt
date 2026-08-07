@@ -1,0 +1,1 @@
+Synchronized with Slooop 3.2.19: improved bulk management, the image editor, video playback, media previews, and storage folder selection. Fixed Android 17 state restoration and removed the non-functional Gosuslugi forum. Hardened F-Droid isolation by removing residual beta repository references.

@@ -121,6 +121,10 @@
 	<string name="catalog">Каталог</string>
 	<string name="change_theme">Сменить тему</string>
 	<string name="changelog">Список изменений</string>
+	<string name="whats_new_title__format">Что нового в Slooop %1$s</string>
+	<string name="whats_new_preview">Показать окно «Что нового»</string>
+	<string name="whats_new_preview__summary">Предпросмотр изменений текущей версии. Автоматически окно не показывается</string>
+	<string name="whats_new_unavailable">Для этой версии в приложение не добавлен список изменений.</string>
 	<string name="check_for_updates">Проверить наличие обновлений</string>
 	<string name="check_on_startup">Проверять при запуске</string>
 	<string name="choose">Выбрать</string>
@@ -142,6 +146,29 @@
 	<string name="comment">Комментарий</string>
 	<string name="comment_is_too_short">Комментарий слишком короткий</string>
 	<string name="experimental_features">Экспериментальные функции</string>
+	<string name="local_translation">Офлайн-перевод постов</string>
+	<string name="local_translation__summary">Переводить посты локально через Mozilla Bergamot. Текст не покидает устройство</string>
+	<string name="translation_native_language">Родной язык</string>
+	<string name="translation_language_russian">Русский</string>
+	<string name="translation_language_english">Английский</string>
+	<string name="translation_automatic">Автоматически переводить посты</string>
+	<string name="translation_automatic__summary">Автоматически показывать перевод на 4chan для русскоязычных и на 2ch для англоязычных пользователей</string>
+	<string name="translation_language_package">Языковой пакет</string>
+	<string name="translation_package_not_installed__format">%1$s · загрузка %2$s</string>
+	<string name="translation_package_downloading__format">Загрузка %1$d%%</string>
+	<string name="translation_package_installed__format">%1$s · установлен (%2$s)</string>
+	<string name="translation_package_error__format">Ошибка загрузки: %1$s</string>
+	<string name="translation_package_download">Загрузить языковой пакет?</string>
+	<string name="translation_package_download_action">Загрузить</string>
+	<string name="translation_package_download__message">Пакет загружается с серверов Mozilla, проверяется по SHA-256 и хранится только на этом устройстве.</string>
+	<string name="translation_package_delete">Удалить языковой пакет?</string>
+	<string name="translation_package_delete__message">Перевод не будет работать, пока пакет не будет загружен заново.</string>
+	<string name="translation_package_deleted">Языковой пакет удалён</string>
+	<string name="translation_package_unavailable">Сначала загрузите языковой пакет в экспериментальных функциях</string>
+	<string name="translate_posts">Перевести посты</string>
+	<string name="show_original_posts">Показать оригинал</string>
+	<string name="translation_initializing">Подготовка офлайн-переводчика…</string>
+	<string name="translation_failed">Не удалось перевести посты</string>
 	<string name="completed">Завершено</string>
 	<string name="completed_downloads">Завершённые загрузки</string>
 	<string name="configuration">Конфигурация</string>
@@ -190,6 +217,10 @@
 	<string name="dont_install">Не устанавливать</string>
 	<string name="download_completed">Загрузка завершена</string>
 	<string name="download_directory">Директория загрузки</string>
+	<string name="download_directory_not_selected">Папка не выбрана</string>
+	<string name="download_directory_setup__sentence">Выберите папку, в которой Slooop будет хранить изображения,
+		видео, архивы и другие файлы. На следующем экране откройте хранилище устройства и выберите существующую
+		папку или создайте новую.</string>
 	<string name="download_file">Загрузить файл</string>
 	<string name="download_files">Загрузить файлы</string>
 	<string name="download_path">Путь загрузки</string>
@@ -223,6 +254,13 @@
 	<string name="favorites_hide_all">Скрыть все</string>
 	<string name="favorites_hide_deleted">Скрыть удалённые</string>
 	<string name="favorites_show_all">Показать все</string>
+	<string name="select_threads">Выбрать треды</string>
+	<plurals name="favorites_remove_selected_confirmation__format">
+		<item quantity="one">Удалить %d выбранный тред из избранного?</item>
+		<item quantity="few">Удалить %d выбранных треда из избранного?</item>
+		<item quantity="many">Удалить %d выбранных тредов из избранного?</item>
+		<item quantity="other">Удалить %d выбранного треда из избранного?</item>
+	</plurals>
 	<string name="favorites_show_deleted">Показать удалённые</string>
 	<string name="favorites_watcher">Отслеживание избранного</string>
 	<string name="background_reply_check">Проверять ответы в фоне</string>
@@ -274,6 +312,8 @@
 	<string name="hardware_video_acceleration__summary">Декодировать поддерживаемое видео через MediaCodec. Если аппаратное декодирование недоступно, используется программный декодер</string>
 	<string name="image_editor">Редактор фото</string>
 	<string name="image_editor__summary">Показывать редактор для прикреплённых фотографий: обрезка, поворот, отражение, замазка, стирание добавленных мазков и эмодзи-стикеры</string>
+	<string name="open_configured_attachment_folder">Открывать папку загрузок для вложений</string>
+	<string name="open_configured_attachment_folder__summary">Открывать системный выбор файлов Android в папке загрузок, указанной в разделе «Медиа». Если отключено, начальную папку выбирает Android</string>
 	<string name="edit_image">Редактировать изображение</string>
 	<string name="image_editor_loading">Загрузка изображения…</string>
 	<string name="image_editor_saving">Сохранение изменённой копии…</string>
@@ -284,11 +324,13 @@
 	<string name="image_editor_rotate">Повернуть</string>
 	<string name="image_editor_flip">Отразить</string>
 	<string name="image_editor_marker">Замазать</string>
+	<string name="image_editor_brush_size__format">Размер кисти: %1$.1f%%</string>
+	<string name="image_editor_brush_color">Цвет кисти</string>
 	<string name="image_editor_eraser">Ластик</string>
 	<string name="image_editor_sticker">Стикер</string>
 	<string name="image_editor_undo">Отменить</string>
 	<string name="image_editor_redo">Повторить</string>
-	<string name="image_editor_sticker_hint">Выберите стикер, коснитесь изображения, перетаскивайте одним пальцем и меняйте размер щипком</string>
+	<string name="image_editor_sticker_hint">Выберите стикер</string>
 	<string name="video_audio_boost">Усиление звука видео</string>
 	<string name="video_audio_boost__summary">Позволяет Slooop усиливать звук видео выше обычного уровня, не меняя системную громкость. Возможны компрессия и искажения. По умолчанию выключено</string>
 	<string name="video_audio_boost_level">Максимальное усиление звука видео</string>
@@ -350,6 +392,7 @@
 	<string name="keep_all">Сохранить копии</string>
 	<string name="keep_current_version">Без обновления</string>
 	<string name="language">Язык</string>
+	<string name="later">Позже</string>
 	<string name="large_grid">Крупная сетка</string>
 	<string name="links_attachments__genitive">Вложений-ссылок</string>
 	<string name="list">Список</string>
@@ -666,6 +709,19 @@
 	<string name="delete_local_archive_confirmation__format">Удалить «%1$s» вместе с сохранёнными медиафайлами и миниатюрами?</string>
 	<string name="local_archive_deleted">Локальный архив удалён</string>
 	<string name="local_archive_delete_failed">Не удалось удалить архив. Для добавленной папки подключите её заново и разрешите изменение файлов.</string>
+	<plurals name="local_archives_delete_selected_confirmation__format">
+		<item quantity="one">Удалить %d выбранный локальный архив вместе с сохранёнными медиафайлами и миниатюрами?</item>
+		<item quantity="few">Удалить %d выбранных локальных архива вместе с сохранёнными медиафайлами и миниатюрами?</item>
+		<item quantity="many">Удалить %d выбранных локальных архивов вместе с сохранёнными медиафайлами и миниатюрами?</item>
+		<item quantity="other">Удалить %d выбранных локальных архива вместе с сохранёнными медиафайлами и миниатюрами?</item>
+	</plurals>
+	<plurals name="local_archives_deleted__format">
+		<item quantity="one">Удалён %d локальный архив</item>
+		<item quantity="few">Удалено %d локальных архива</item>
+		<item quantity="many">Удалено %d локальных архивов</item>
+		<item quantity="other">Удалено %d локальных архива</item>
+	</plurals>
+	<string name="local_archives_deleted_partial__format">Удалено %1$d из %2$d локальных архивов</string>
 	<string name="local_archive_updated__format">Локальный архив обновлён: %1$d → %2$d постов</string>
 	<string name="local_archive_replace_failed">Обновлённый архив сохранён, но предыдущую копию удалить не удалось</string>
 	<string name="save_or_update_thread">Сохранить или обновить тред</string>
@@ -686,6 +742,7 @@
 	<string name="seek_any_frame">Перемотка к любому кадру</string>
 	<string name="seek_any_frame__summary">Повышенная точность при меньшей производительности</string>
 	<string name="select">Выделить</string>
+	<string name="select_folder">Выбрать папку</string>
 	<string name="select_all">Выделить всё</string>
 	<string name="select_where_to_save">Выберите путь сохранения</string>
 	<string name="selected">Выбрано</string>
@@ -911,9 +968,7 @@
 	<string name="forum_dvach">Двач</string>
 	<string name="forum_fourchan">4chan</string>
 	<string name="forum_pikabu">Пикабу</string>
-	<string name="forum_gosuslugi">Госуслуги</string>
 	<string name="pikabu_extension_in_development">Расширение Пикабу находится в разработке.</string>
-	<string name="gosuslugi_authorization_in_development">Авторизация в Госуслугах находится в разработке.</string>
 	<string name="display_post_year">Отображать год в датах постов</string>
 	<string name="hide_thread_title">Скрывать заголовок треда в верхней панели</string>
 	<string name="hide_thread_title__summary">Не показывать название и адрес треда при его просмотре</string>

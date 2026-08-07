@@ -296,10 +296,24 @@ public final class SettingsSearchIndex {
 		add(context, entries, Screen.GENERAL, R.string.verify_certificate, R.string.verify_certificate__summary,
 				Preferences.KEY_VERIFY_CERTIFICATE);
 
+		add(context, entries, Screen.EXPERIMENTAL, R.string.whats_new_preview,
+				R.string.whats_new_preview__summary, null);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.hardware_video_acceleration,
 				R.string.hardware_video_acceleration__summary, Preferences.KEY_HARDWARE_VIDEO_ACCELERATION);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.image_editor,
 				R.string.image_editor__summary, Preferences.KEY_IMAGE_EDITOR);
+		add(context, entries, Screen.EXPERIMENTAL, R.string.open_configured_attachment_folder,
+				R.string.open_configured_attachment_folder__summary,
+				Preferences.KEY_OPEN_CONFIGURED_ATTACHMENT_FOLDER);
+		if (BuildConfig.ENABLE_LOCAL_TRANSLATION) {
+			add(context, entries, Screen.EXPERIMENTAL, R.string.local_translation,
+					R.string.local_translation__summary, Preferences.KEY_LOCAL_TRANSLATION);
+			add(context, entries, Screen.EXPERIMENTAL, R.string.translation_native_language, 0,
+					Preferences.KEY_TRANSLATION_NATIVE_LANGUAGE);
+			add(context, entries, Screen.EXPERIMENTAL, R.string.translation_automatic,
+					R.string.translation_automatic__summary, Preferences.KEY_TRANSLATION_AUTO);
+			add(context, entries, Screen.EXPERIMENTAL, R.string.translation_language_package);
+		}
 		add(context, entries, Screen.EXPERIMENTAL, R.string.video_audio_boost,
 				R.string.video_audio_boost__summary, Preferences.KEY_VIDEO_AUDIO_BOOST);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.video_audio_boost_level, 0,
@@ -452,7 +466,9 @@ public final class SettingsSearchIndex {
 		add(context, entries, Screen.ABOUT, R.string.backup_data, R.string.backup_data__summary, null);
 		add(context, entries, Screen.ABOUT, R.string.changelog);
 		if (BuildConfig.ALLOW_APPLICATION_SELF_UPDATE) {
-			add(context, entries, Screen.ABOUT, R.string.update_channel, 0, Preferences.KEY_UPDATE_CHANNEL);
+			if (BuildConfig.ALLOW_BETA_UPDATE_CHANNEL) {
+				add(context, entries, Screen.ABOUT, R.string.update_channel, 0, Preferences.KEY_UPDATE_CHANNEL);
+			}
 			add(context, entries, Screen.ABOUT, R.string.automatic_update_check, 0,
 					Preferences.KEY_UPDATE_AUTO_CHECK_ENABLED);
 			add(context, entries, Screen.ABOUT, R.string.check_for_updates);

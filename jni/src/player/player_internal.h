@@ -179,6 +179,7 @@ struct Player {
 		} outputChunks[AUDIO_OUTPUT_QUEUE_CAPACITY];
 		int outputChunkHead;
 		int outputChunkCount;
+		int outputRestartPending;
 		pthread_cond_t sleepCond;
 		pthread_cond_t bufferCond;
 		pthread_mutex_t sleepBufferMutex;
@@ -232,6 +233,7 @@ struct Player {
 			int height;
 			int size;
 			int dataSize;
+			uint64_t frameGeneration;
 		} lastBuffer;
 	} video;
 
@@ -263,6 +265,7 @@ struct Bridge {
 	jmethodID methodOnMessage;
 	jmethodID methodOnDurationChanged;
 	jmethodID methodOnSurfaceApplied;
+	jmethodID methodFindHardwareVideoDecoder;
 };
 
 struct PacketHolder {

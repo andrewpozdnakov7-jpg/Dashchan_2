@@ -52,6 +52,7 @@ import com.mishiranu.dashchan.content.model.PostItem;
 import com.mishiranu.dashchan.content.model.PostNumber;
 import com.mishiranu.dashchan.content.service.AudioPlayerService;
 import com.mishiranu.dashchan.content.storage.FavoritesStorage;
+import com.mishiranu.dashchan.content.translation.TranslationController;
 import com.mishiranu.dashchan.ui.InstanceDialog;
 import com.mishiranu.dashchan.ui.gallery.GalleryOverlay;
 import com.mishiranu.dashchan.ui.posting.Replyable;
@@ -538,7 +539,8 @@ public class DialogUnit {
 						.ConfigurationSet(configurationSet.chanName, replyable, dialogProvider,
 						UiManager.PostStateProvider.DEFAULT, gallerySet, configurationSet.fragmentManager,
 						configurationSet.stackInstance, dialogProvider, dialogProvider,
-						false, true, false, false, false, null), postItem, gallerySet);
+						false, true, false, false, false, null).copyDisplayStateFrom(configurationSet),
+						postItem, gallerySet);
 			}
 		}
 
@@ -765,7 +767,7 @@ public class DialogUnit {
 						.ConfigurationSet(configurationSet.chanName, null, dialogProvider,
 						UiManager.PostStateProvider.DEFAULT, gallerySet, configurationSet.fragmentManager,
 						configurationSet.stackInstance, null, dialogProvider,
-						false, true, false, false, false, null), this,
+						false, true, false, false, false, null).copyDisplayStateFrom(configurationSet), this,
 						chanName, boardName, threadNumber, postNumber, gallerySet);
 			}
 
@@ -1066,6 +1068,17 @@ public class DialogUnit {
 								uiManager.view().bindPostViewReloadAttachment(holder, (AttachmentItem) object);
 							}
 						}
+					}
+					UiManager.ConfigurationSet configurationSet = dialogProvider.configurationSet;
+					if (configurationSet.showTranslatedComments &&
+							!postItem.hasTranslatedComment(configurationSet.translationKey)) {
+						TranslationController.getInstance().requestPostTranslation(postItem,
+								Chan.get(configurationSet.chanName), () -> {
+							int currentPosition = postItems.indexOf(postItem);
+							if (currentPosition >= 0) {
+								notifyItemChanged(currentPosition);
+							}
+						});
 					}
 					break;
 				}

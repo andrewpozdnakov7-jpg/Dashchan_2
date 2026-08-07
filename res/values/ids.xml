@@ -58,6 +58,7 @@
 	<item type="id" name="menu_star_text" />
 	<item type="id" name="menu_summary" />
 	<item type="id" name="menu_threads_view" />
+	<item type="id" name="menu_translate" />
 	<item type="id" name="menu_unsorted" />
 	<item type="id" name="menu_unstar_icon" />
 	<item type="id" name="menu_unstar_text" />

@@ -341,6 +341,7 @@ void * playerVideoDrawThread(void * data) {
 		player->video.lastBuffer.dataSize = bufferSize;
 		player->video.lastBuffer.width = extra->width;
 		player->video.lastBuffer.height = extra->height;
+		player->video.lastBuffer.frameGeneration++;
 		int rendered = 0;
 		if (extra->forcePresent ||
 				(player->sync.lastDrawTimes[0] - player->sync.lastDrawTimes[1]) * MAX_FPS >= 1000
@@ -820,6 +821,10 @@ AVCodecContext * playerVideoSoftwareCreateCodecContext(Player * player) {
 jintArray getCurrentFrame(JNIEnv * env, jlong pointer, jintArray dimensions) {
 	Player * player = POINTER_CAST(pointer);
 	pthread_mutex_lock(&player->video.sleepDrawMutex);
+	if (player->video.lastBuffer.frameGeneration == 0) {
+		pthread_mutex_unlock(&player->video.sleepDrawMutex);
+		return 0;
+	}
 	uint8_t * buffer = player->video.lastBuffer.data;
 	int sourceWidth = player->video.lastBuffer.width;
 	int sourceHeight = player->video.lastBuffer.height;

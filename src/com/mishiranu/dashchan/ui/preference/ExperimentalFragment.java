@@ -7,6 +7,8 @@ import androidx.annotation.NonNull;
 import com.mishiranu.dashchan.BuildConfig;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
+import com.mishiranu.dashchan.content.translation.TranslationModel;
+import com.mishiranu.dashchan.content.translation.TranslationModelManager;
 import com.mishiranu.dashchan.media.VideoDiagnostics;
 import com.mishiranu.dashchan.ui.FragmentHandler;
 import com.mishiranu.dashchan.ui.preference.core.CheckPreference;
@@ -17,8 +19,10 @@ import com.mishiranu.dashchan.util.NavigationUtils;
 import com.mishiranu.dashchan.util.SharedPreferences;
 import com.mishiranu.dashchan.widget.ClickableToast;
 import java.io.File;
+import java.util.Arrays;
+import java.util.Locale;
 
-public class ExperimentalFragment extends PreferenceFragment {
+public class ExperimentalFragment extends PreferenceFragment implements TranslationModelManager.Listener {
 	@Override
 	protected SharedPreferences getPreferences() {
 		return Preferences.PREFERENCES;
@@ -35,6 +39,8 @@ public class ExperimentalFragment extends PreferenceFragment {
 			return;
 		}
 		removeAllPreferences();
+		addButton(R.string.whats_new_preview, R.string.whats_new_preview__summary)
+				.setOnClickListener(p -> WhatsNewDialog.show(getChildFragmentManager()));
 		CheckPreference hardwareAccelerationPreference = addCheck(true,
 				Preferences.KEY_HARDWARE_VIDEO_ACCELERATION,
 				Preferences.DEFAULT_HARDWARE_VIDEO_ACCELERATION,
@@ -50,6 +56,13 @@ public class ExperimentalFragment extends PreferenceFragment {
 		}
 		addCheck(true, Preferences.KEY_IMAGE_EDITOR, Preferences.DEFAULT_IMAGE_EDITOR,
 				R.string.image_editor, R.string.image_editor__summary);
+		addCheck(true, Preferences.KEY_OPEN_CONFIGURED_ATTACHMENT_FOLDER,
+				Preferences.DEFAULT_OPEN_CONFIGURED_ATTACHMENT_FOLDER,
+				R.string.open_configured_attachment_folder,
+				R.string.open_configured_attachment_folder__summary);
+		if (BuildConfig.ENABLE_LOCAL_TRANSLATION) {
+			addTranslationPreferences();
+		}
 		CheckPreference audioBoostPreference = addCheck(true, Preferences.KEY_VIDEO_AUDIO_BOOST,
 				Preferences.DEFAULT_VIDEO_AUDIO_BOOST, R.string.video_audio_boost,
 				R.string.video_audio_boost__summary);
@@ -64,6 +77,79 @@ public class ExperimentalFragment extends PreferenceFragment {
 			addCheck(true, Preferences.KEY_USE_GMS_PROVIDER, Preferences.DEFAULT_USE_GMS_PROVIDER,
 					R.string.use_gms_security_provider, R.string.use_gms_security_provider__summary);
 		}
+	}
+
+	private void addTranslationPreferences() {
+		CheckPreference translationPreference = addCheck(true, Preferences.KEY_LOCAL_TRANSLATION,
+				Preferences.DEFAULT_LOCAL_TRANSLATION, R.string.local_translation,
+				R.string.local_translation__summary);
+		translationPreference.setOnAfterChangeListener(p -> refreshPreferences());
+		if (!translationPreference.getValue()) {
+			return;
+		}
+		addList(Preferences.KEY_TRANSLATION_NATIVE_LANGUAGE, Arrays.asList("ru", "en"),
+				Preferences.DEFAULT_TRANSLATION_NATIVE_LANGUAGE, R.string.translation_native_language,
+				Arrays.asList(getText(R.string.translation_language_russian),
+						getText(R.string.translation_language_english)))
+				.setOnAfterChangeListener(p -> refreshPreferences());
+		addCheck(true, Preferences.KEY_TRANSLATION_AUTO, Preferences.DEFAULT_TRANSLATION_AUTO,
+				R.string.translation_automatic, R.string.translation_automatic__summary);
+
+		TranslationModel.Direction direction = TranslationModel.forNativeLanguage(
+				Preferences.getTranslationNativeLanguage());
+		TranslationModelManager manager = TranslationModelManager.getInstance();
+		TranslationModelManager.Snapshot snapshot = manager.getSnapshot(direction);
+		String directionName = direction.getDisplayName(requireContext());
+		String summary;
+		switch (snapshot.state) {
+			case INSTALLED: {
+				summary = getString(R.string.translation_package_installed__format, directionName,
+						formatSize(direction.uncompressedSize));
+				break;
+			}
+			case DOWNLOADING: {
+				summary = getString(R.string.translation_package_downloading__format, snapshot.progress);
+				break;
+			}
+			case ERROR: {
+				summary = getString(R.string.translation_package_error__format, snapshot.error);
+				break;
+			}
+			default: {
+				summary = getString(R.string.translation_package_not_installed__format, directionName,
+						formatSize(direction.compressedSize));
+				break;
+			}
+		}
+		Preference<Void> packagePreference = addButton(getString(R.string.translation_language_package), summary);
+		packagePreference.setSelectable(snapshot.state != TranslationModelManager.State.DOWNLOADING);
+		packagePreference.setOnClickListener(p -> {
+			if (snapshot.state == TranslationModelManager.State.INSTALLED) {
+				new AlertDialog.Builder(requireContext())
+						.setTitle(R.string.translation_package_delete)
+						.setMessage(R.string.translation_package_delete__message)
+						.setPositiveButton(R.string.delete, (dialog, which) -> {
+							if (manager.delete(direction)) {
+								ClickableToast.show(R.string.translation_package_deleted);
+								refreshPreferences();
+							}
+						})
+						.setNegativeButton(android.R.string.cancel, null)
+						.show();
+			} else {
+				new AlertDialog.Builder(requireContext())
+						.setTitle(R.string.translation_package_download)
+						.setMessage(R.string.translation_package_download__message)
+						.setPositiveButton(R.string.translation_package_download_action,
+								(dialog, which) -> manager.download(direction))
+						.setNegativeButton(android.R.string.cancel, null)
+						.show();
+			}
+		});
+	}
+
+	private static String formatSize(long bytes) {
+		return String.format(Locale.getDefault(), "%.1f MB", bytes / 1024f / 1024f);
 	}
 
 	private void addVideoDiagnosticsPreferences() {
@@ -127,6 +213,23 @@ public class ExperimentalFragment extends PreferenceFragment {
 	@Override
 	public void onResume() {
 		super.onResume();
+		if (BuildConfig.ENABLE_LOCAL_TRANSLATION) {
+			TranslationModelManager.getInstance().register(this);
+		}
+		refreshPreferences();
+	}
+
+	@Override
+	public void onPause() {
+		if (BuildConfig.ENABLE_LOCAL_TRANSLATION) {
+			TranslationModelManager.getInstance().unregister(this);
+		}
+		super.onPause();
+	}
+
+	@Override
+	public void onTranslationModelChanged(TranslationModel.Direction direction,
+			TranslationModelManager.Snapshot snapshot) {
 		refreshPreferences();
 	}
 

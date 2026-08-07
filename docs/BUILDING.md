@@ -27,6 +27,10 @@ Use the checked-in Gradle Wrapper:
 
 The first run executes `prepareBuiltinWebmSources` and `buildBuiltinWebmLibraries`. These tasks download and build FFmpeg 8.1.2, dav1d 1.5.3, and the pinned libyuv revision.
 
+GitHub-flavor builds also run `prepareBergamotRuntime`. It downloads the pinned MPL-2.0 Mozilla Bergamot JavaScript
+and WebAssembly runtime, verifies both files by SHA-256, and places them in generated assets. Language models are not
+part of the build or APK. Exact provenance is documented in [OFFLINE_TRANSLATION.md](OFFLINE_TRANSLATION.md).
+
 To build only one ABI for a quick device test:
 
 ```sh
@@ -46,6 +50,7 @@ The F-Droid distribution uses the same application ID and source tree but remove
 ```
 
 See [FDROID.md](FDROID.md) for the pre-provided native-source variables required by a network-free F-Droid recipe.
+The experimental offline translator is also disabled in this flavor and its prebuilt WebAssembly runtime is absent.
 
 ## Unit Tests And Static Checks
 

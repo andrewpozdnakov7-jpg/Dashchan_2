@@ -46,6 +46,9 @@ import java.util.zip.ZipFile;
 
 public class VideoPlayer {
 	private static final long SEEK_STALL_REPORT_DELAY = 5000L;
+	private static final long THUMBNAIL_MIN_POSITION = 250L;
+	private static final long THUMBNAIL_MAX_POSITION = 2000L;
+	private static final long THUMBNAIL_END_MARGIN = 250L;
 
 	private static boolean loaded = false;
 	private static HolderInterface holder;
@@ -255,23 +258,22 @@ public class VideoPlayer {
 		try {
 			player.init(file, null);
 			Point dimensions = player.getDimensions();
+			long duration = player.getDuration();
+			long targetPosition = calculateThumbnailPosition(duration);
 			surfaceTexture = new SurfaceTexture(false);
 			surfaceTexture.setDefaultBufferSize(Math.max(dimensions.x, 1), Math.max(dimensions.y, 1));
 			surface = new Surface(surfaceTexture);
 			player.setSurface(surface, Math.max(dimensions.x, 1), Math.max(dimensions.y, 1));
+			if (targetPosition > 0L) {
+				player.setPosition(targetPosition);
+			}
 			player.setPlaying(true);
-			long timeout = System.currentTimeMillis() + 3000L;
-			while (!Thread.currentThread().isInterrupted() && System.currentTimeMillis() < timeout) {
-				Bitmap bitmap = player.getCurrentFrame();
-				if (bitmap != null) {
-					return bitmap;
-				}
-				Thread.sleep(40L);
+			Bitmap bitmap = waitForThumbnailFrame(player, targetPosition > 0L ? 2000L : 3000L);
+			if (bitmap == null && targetPosition > 0L) {
+				player.setPosition(0L);
+				bitmap = waitForThumbnailFrame(player, 1500L);
 			}
-			if (Thread.currentThread().isInterrupted()) {
-				throw new InterruptedException();
-			}
-			return null;
+			return bitmap;
 		} finally {
 			player.setPlaying(false);
 			player.destroy();
@@ -279,6 +281,30 @@ public class VideoPlayer {
 				surfaceTexture.release();
 			}
 		}
+	}
+
+	private static Bitmap waitForThumbnailFrame(VideoPlayer player, long timeoutMs) throws InterruptedException {
+		long timeout = System.currentTimeMillis() + timeoutMs;
+		while (!Thread.currentThread().isInterrupted() && System.currentTimeMillis() < timeout) {
+			Bitmap bitmap = player.getCurrentFrame();
+			if (bitmap != null) {
+				return bitmap;
+			}
+			Thread.sleep(40L);
+		}
+		if (Thread.currentThread().isInterrupted()) {
+			throw new InterruptedException();
+		}
+		return null;
+	}
+
+	private static long calculateThumbnailPosition(long duration) {
+		if (duration <= 2L * THUMBNAIL_END_MARGIN) {
+			return 0L;
+		}
+		long position = Math.max(THUMBNAIL_MIN_POSITION, duration / 10L);
+		position = Math.min(position, THUMBNAIL_MAX_POSITION);
+		return Math.min(position, duration - THUMBNAIL_END_MARGIN);
 	}
 
 	public void init(File file, RangeCallback rangeCallback) throws IOException {
@@ -1099,6 +1125,12 @@ public class VideoPlayer {
 				player.handler.obtainMessage(Message.SURFACE_APPLIED.ordinal(),
 						new SurfaceApplied(generation, position, decoderReset)).sendToTarget();
 			}
+		}
+
+		public String findHardwareVideoDecoder(String mimeType, int width, int height, float frameRate,
+				int codecProfile, int codecLevel, int bitDepth, int colorTransfer) {
+			return VideoDecoderCapabilities.findHardwareDecoder(mimeType, width, height, frameRate,
+					codecProfile, codecLevel, bitDepth, colorTransfer);
 		}
 
 		public void onMessage(int what) {

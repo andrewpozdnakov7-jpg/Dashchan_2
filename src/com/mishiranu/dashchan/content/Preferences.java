@@ -652,6 +652,9 @@ public class Preferences {
 	public static final UpdateChannel DEFAULT_UPDATE_CHANNEL = UpdateChannel.STABLE;
 
 	public static UpdateChannel getUpdateChannel() {
+		if (!BuildConfig.ALLOW_BETA_UPDATE_CHANNEL) {
+			return UpdateChannel.STABLE;
+		}
 		String value = PREFERENCES.getString(KEY_UPDATE_CHANNEL, DEFAULT_UPDATE_CHANNEL.value);
 		for (UpdateChannel channel : UpdateChannel.values()) {
 			if (channel.value.equals(value)) {
@@ -881,6 +884,8 @@ public class Preferences {
 	}
 
 	public static final String KEY_DOWNLOAD_PATH = "download_path";
+	private static final String KEY_DOWNLOAD_URI_TREE = "download_uri_tree";
+	private static final String KEY_DOWNLOAD_DIRECTORY_SETUP_PROMPTED = "download_directory_setup_prompted";
 
 	private static String getDownloadPathLegacy() {
 		String path = PREFERENCES.getString(KEY_DOWNLOAD_PATH, null);
@@ -919,44 +924,100 @@ public class Preferences {
 	public static Uri getDownloadUriTree(Context context) {
 		ContentResolver contentResolver = context.getContentResolver();
 		List<UriPermission> uriPermissions = contentResolver.getPersistedUriPermissions();
-		if (uriPermissions == null) {
+		if (uriPermissions == null || uriPermissions.isEmpty()) {
 			return null;
 		}
-		for (UriPermission uriPermission : uriPermissions) {
-			if (uriPermission.isReadPermission() && uriPermission.isWritePermission()) {
-				Uri treeUri = uriPermission.getUri();
-				Uri uri = DocumentsContract.buildDocumentUriUsingTree(treeUri,
-						DocumentsContract.getTreeDocumentId(treeUri));
-				try (Cursor cursor = contentResolver.query(uri, null, null, null, null)) {
-					if (cursor != null && cursor.moveToFirst()) {
-						return treeUri;
-					}
-				} catch (SecurityException e) {
-					e.printStackTrace();
+		String configuredUriString = PREFERENCES.getString(KEY_DOWNLOAD_URI_TREE, null);
+		if (!StringUtils.isEmpty(configuredUriString)) {
+			Uri configuredUri = Uri.parse(configuredUriString);
+			for (UriPermission uriPermission : uriPermissions) {
+				if (configuredUri.equals(uriPermission.getUri()) && uriPermission.isReadPermission()
+						&& uriPermission.isWritePermission() && isUriTreeAvailable(contentResolver, configuredUri)) {
+					return configuredUri;
 				}
 			}
+			return null;
 		}
-		return null;
+
+		// Older versions did not store the downloads URI explicitly. Their storage picker released every unrelated
+		// non-archive grant, so a single remaining candidate can be migrated without changing existing setups.
+		HashSet<String> localArchiveUriTrees = new HashSet<>(getLocalArchiveUriTrees());
+		Uri legacyUri = null;
+		for (UriPermission uriPermission : uriPermissions) {
+			Uri treeUri = uriPermission.getUri();
+			if (uriPermission.isReadPermission() && uriPermission.isWritePermission()
+					&& !localArchiveUriTrees.contains(treeUri.toString())
+					&& isUriTreeAvailable(contentResolver, treeUri)) {
+				if (legacyUri != null) {
+					return null;
+				}
+				legacyUri = treeUri;
+			}
+		}
+		if (legacyUri != null) {
+			PREFERENCES.edit().put(KEY_DOWNLOAD_URI_TREE, legacyUri.toString()).close();
+		}
+		return legacyUri;
+	}
+
+	private static boolean isUriTreeAvailable(ContentResolver contentResolver, Uri treeUri) {
+		try {
+			Uri uri = DocumentsContract.buildDocumentUriUsingTree(treeUri,
+					DocumentsContract.getTreeDocumentId(treeUri));
+			try (Cursor cursor = contentResolver.query(uri, null, null, null, null)) {
+				return cursor != null && cursor.moveToFirst();
+			}
+		} catch (RuntimeException e) {
+			return false;
+		}
+	}
+
+	public static boolean shouldRequestDownloadDirectorySetup(Context context) {
+		if (getDownloadUriTree(context) != null) {
+			return false;
+		}
+		if (!StringUtils.isEmpty(PREFERENCES.getString(KEY_DOWNLOAD_URI_TREE, null))) {
+			// A preferences backup may restore the URI string after reinstalling the app, but Android does not restore
+			// the corresponding persistable permission. Treat that state as a new unresolved setup and ask once again.
+			PREFERENCES.edit().remove(KEY_DOWNLOAD_URI_TREE)
+					.put(KEY_DOWNLOAD_DIRECTORY_SETUP_PROMPTED, false).close();
+			return true;
+		}
+		return !PREFERENCES.getBoolean(KEY_DOWNLOAD_DIRECTORY_SETUP_PROMPTED, false);
+	}
+
+	public static void setDownloadDirectorySetupPrompted() {
+		PREFERENCES.edit().put(KEY_DOWNLOAD_DIRECTORY_SETUP_PROMPTED, true).close();
 	}
 
 	@RequiresApi(Build.VERSION_CODES.KITKAT)
 	public static void setDownloadUriTree(Context context, Uri uri, int uriFlags) {
 		ContentResolver contentResolver = context.getContentResolver();
-		HashSet<String> localArchiveUriTrees = new HashSet<>(getLocalArchiveUriTrees());
-		for (UriPermission uriPermission : contentResolver.getPersistedUriPermissions()) {
-			if ((uri == null || !uri.equals(uriPermission.getUri()))
-					&& !localArchiveUriTrees.contains(uriPermission.getUri().toString())) {
-				int flags = (uriPermission.isReadPermission() ? Intent.FLAG_GRANT_READ_URI_PERMISSION : 0) |
-						(uriPermission.isWritePermission() ? Intent.FLAG_GRANT_WRITE_URI_PERMISSION : 0);
-				contentResolver.releasePersistableUriPermission(uriPermission.getUri(), flags);
-			}
-		}
 		if (uri == null || "com.android.providers.downloads.documents".equals(uri.getAuthority())) {
 			// Downloads provider fails when ".nomedia" files present
 			ClickableToast.show(R.string.no_access_to_memory);
 		} else {
-			contentResolver.takePersistableUriPermission(uri, uriFlags &
-					(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION));
+			int takeFlags = uriFlags & (Intent.FLAG_GRANT_READ_URI_PERMISSION
+					| Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+			try {
+				contentResolver.takePersistableUriPermission(uri, takeFlags);
+			} catch (SecurityException e) {
+				ClickableToast.show(R.string.no_access_to_memory);
+				return;
+			}
+			PREFERENCES.edit().put(KEY_DOWNLOAD_URI_TREE, uri.toString())
+					.put(KEY_DOWNLOAD_DIRECTORY_SETUP_PROMPTED, true).close();
+			HashSet<String> localArchiveUriTrees = new HashSet<>(getLocalArchiveUriTrees());
+			for (UriPermission uriPermission : contentResolver.getPersistedUriPermissions()) {
+				if (!uri.equals(uriPermission.getUri())
+						&& !localArchiveUriTrees.contains(uriPermission.getUri().toString())) {
+					int flags = (uriPermission.isReadPermission() ? Intent.FLAG_GRANT_READ_URI_PERMISSION : 0) |
+							(uriPermission.isWritePermission() ? Intent.FLAG_GRANT_WRITE_URI_PERMISSION : 0);
+					if (flags != 0) {
+						contentResolver.releasePersistableUriPermission(uriPermission.getUri(), flags);
+					}
+				}
+			}
 		}
 	}
 
@@ -1723,7 +1784,15 @@ public class Preferences {
 	public static final String KEY_HARDWARE_VIDEO_ACCELERATION = "hardware_video_acceleration";
 	public static final boolean DEFAULT_HARDWARE_VIDEO_ACCELERATION = true;
 	public static final String KEY_IMAGE_EDITOR = "image_editor";
-	public static final boolean DEFAULT_IMAGE_EDITOR = false;
+	public static final boolean DEFAULT_IMAGE_EDITOR = true;
+	public static final String KEY_OPEN_CONFIGURED_ATTACHMENT_FOLDER = "open_configured_attachment_folder";
+	public static final boolean DEFAULT_OPEN_CONFIGURED_ATTACHMENT_FOLDER = false;
+	public static final String KEY_LOCAL_TRANSLATION = "local_translation";
+	public static final boolean DEFAULT_LOCAL_TRANSLATION = false;
+	public static final String KEY_TRANSLATION_NATIVE_LANGUAGE = "translation_native_language";
+	public static final String DEFAULT_TRANSLATION_NATIVE_LANGUAGE = "ru";
+	public static final String KEY_TRANSLATION_AUTO = "translation_auto";
+	public static final boolean DEFAULT_TRANSLATION_AUTO = true;
 	public static final String KEY_VIDEO_AUDIO_BOOST = "video_audio_boost";
 	public static final boolean DEFAULT_VIDEO_AUDIO_BOOST = false;
 	public static final String KEY_VIDEO_AUDIO_BOOST_DB = "video_audio_boost_db";
@@ -1737,6 +1806,26 @@ public class Preferences {
 
 	public static boolean isImageEditorEnabled() {
 		return PREFERENCES.getBoolean(KEY_IMAGE_EDITOR, DEFAULT_IMAGE_EDITOR);
+	}
+
+	public static boolean isOpenConfiguredAttachmentFolderEnabled() {
+		return PREFERENCES.getBoolean(KEY_OPEN_CONFIGURED_ATTACHMENT_FOLDER,
+				DEFAULT_OPEN_CONFIGURED_ATTACHMENT_FOLDER);
+	}
+
+	public static boolean isLocalTranslationEnabled() {
+		return BuildConfig.ENABLE_LOCAL_TRANSLATION &&
+				PREFERENCES.getBoolean(KEY_LOCAL_TRANSLATION, DEFAULT_LOCAL_TRANSLATION);
+	}
+
+	public static String getTranslationNativeLanguage() {
+		String language = PREFERENCES.getString(KEY_TRANSLATION_NATIVE_LANGUAGE,
+				DEFAULT_TRANSLATION_NATIVE_LANGUAGE);
+		return "en".equals(language) ? "en" : "ru";
+	}
+
+	public static boolean isTranslationAutoEnabled() {
+		return PREFERENCES.getBoolean(KEY_TRANSLATION_AUTO, DEFAULT_TRANSLATION_AUTO);
 	}
 
 	public static boolean isVideoAudioBoost() {

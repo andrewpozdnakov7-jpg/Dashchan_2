@@ -97,6 +97,12 @@ public class PostItem implements AttachmentItem.Master, ChanMarkup.MarkupExtra, 
 	private ColorScheme.Span[] fullNameSpans;
 	private LinkSpan[] linkSpans;
 	private LinkSuffixSpan[] linkSuffixSpans;
+	private String translatedCommentKey;
+	private String translatedSubject;
+	private CharSequence translatedComment;
+	private ColorScheme.Span[] translatedCommentSpans;
+	private LinkSpan[] translatedLinkSpans;
+	private LinkSuffixSpan[] translatedLinkSuffixSpans;
 	private PostDateFormatter.Holder dateTimeHolder;
 	private boolean useDefaultName;
 
@@ -128,6 +134,7 @@ public class PostItem implements AttachmentItem.Master, ChanMarkup.MarkupExtra, 
 		public final CharSequence commentShort;
 		public final ColorScheme.Span[] commentShortSpans;
 		public final GalleryItem.Set gallerySet;
+		private List<PostItem> postItems;
 
 		public ThreadData(Base base, CharSequence commentShort, ColorScheme.Span[] commentShortSpans,
 				GalleryItem.Set gallerySet) {
@@ -480,6 +487,10 @@ public class PostItem implements AttachmentItem.Master, ChanMarkup.MarkupExtra, 
 		return subject;
 	}
 
+	public String getSubject(boolean translated) {
+		return translated && translatedSubject != null ? translatedSubject : getSubject();
+	}
+
 	private static CharSequence obtainComment(String comment, ChanMarkup markup,
 			String threadNumber, PostNumber originalPostNumber, ChanMarkup.MarkupExtra extra) {
 		return StringUtils.isEmpty(comment) ? "" : HtmlParser.spanify(comment, markup.getMarkup(),
@@ -540,14 +551,73 @@ public class PostItem implements AttachmentItem.Master, ChanMarkup.MarkupExtra, 
 		return comment;
 	}
 
+	@NonNull
+	public CharSequence getComment(Chan chan, PostNumber repliesToPost, boolean translated) {
+		CharSequence source = translated && translatedComment != null ? translatedComment : getComment(chan);
+		if (repliesToPost == null) {
+			return source;
+		}
+		SpannableString comment = new SpannableString(source);
+		LinkSpan[] spans = comment.getSpans(0, comment.length(), LinkSpan.class);
+		String commentString = comment.toString();
+		String reference = ">>" + repliesToPost;
+		for (LinkSpan linkSpan : spans) {
+			int start = comment.getSpanStart(linkSpan);
+			if (commentString.indexOf(reference, start) == start) {
+				comment.setSpan(new MediumSpan(), start, comment.getSpanEnd(linkSpan),
+						SpannableString.SPAN_EXCLUSIVE_EXCLUSIVE);
+			}
+		}
+		return comment;
+	}
+
 	public ColorScheme.Span[] getCommentSpans() {
 		return commentSpans;
 	}
 
+	public ColorScheme.Span[] getCommentSpans(boolean translated) {
+		return translated && translatedComment != null ? translatedCommentSpans : commentSpans;
+	}
+
+	public String getCommentHtmlForTranslation() {
+		return post.comment;
+	}
+
+	public boolean hasTranslatedComment(String key) {
+		return key != null && key.equals(translatedCommentKey) && translatedComment != null;
+	}
+
+	public void setTranslatedPost(String key, String subject, String html, Chan chan) {
+		CharSequence comment;
+		if (threadData != null) {
+			comment = obtainThreadComment(html, chan.markup, this);
+		} else {
+			comment = obtainComment(html, chan.markup,
+					getThreadNumber(), getOriginalPostNumber(), this);
+			comment = StringUtils.reduceEmptyLines(comment);
+		}
+		translatedCommentKey = key;
+		translatedSubject = subject != null ? subject.replace("\r", "").replace("\n", " ").trim() : null;
+		if (translatedSubject != null && translatedSubject.length() == 1 &&
+				(translatedSubject.charAt(0) == '\u202d' || translatedSubject.charAt(0) == '\u202e')) {
+			translatedSubject = "";
+		}
+		translatedComment = comment;
+		translatedCommentSpans = ColorScheme.getSpans(comment);
+		translatedLinkSpans = comment instanceof Spanned ? ((Spanned) comment)
+				.getSpans(0, comment.length(), LinkSpan.class) : null;
+		translatedLinkSuffixSpans = comment instanceof Spanned ? ((Spanned) comment)
+				.getSpans(0, comment.length(), LinkSuffixSpan.class) : null;
+	}
+
 	public CharSequence getThreadCommentShort(int maxWidth, float textSize, int maxLines) {
+		return getThreadCommentShort(maxWidth, textSize, maxLines, false);
+	}
+
+	public CharSequence getThreadCommentShort(int maxWidth, float textSize, int maxLines, boolean translated) {
 		float factor = maxWidth * maxLines / textSize;
 		int count = (int) (factor * 3f);
-		CharSequence comment = threadData.commentShort;
+		CharSequence comment = translated && translatedComment != null ? translatedComment : threadData.commentShort;
 		if (comment instanceof Spanned) {
 			SpoilerSpan[] spoilerSpans = ((Spanned) comment).getSpans(0, comment.length(), SpoilerSpan.class);
 			if (spoilerSpans != null) {
@@ -562,6 +632,10 @@ public class PostItem implements AttachmentItem.Master, ChanMarkup.MarkupExtra, 
 
 	public ColorScheme.Span[] getThreadCommentShortSpans() {
 		return threadData.commentShortSpans;
+	}
+
+	public ColorScheme.Span[] getThreadCommentShortSpans(boolean translated) {
+		return translated && translatedComment != null ? translatedCommentSpans : threadData.commentShortSpans;
 	}
 
 	public String getCommentMarkup(Chan chan) {
@@ -579,9 +653,17 @@ public class PostItem implements AttachmentItem.Master, ChanMarkup.MarkupExtra, 
 		return linkSuffixSpans;
 	}
 
+	public LinkSuffixSpan[] getLinkSuffixSpansAfterComment(boolean translated) {
+		return translated && translatedComment != null ? translatedLinkSuffixSpans : linkSuffixSpans;
+	}
+
 	// Must be called only after getComment.
 	public LinkSpan[] getLinkSpansAfterComment() {
 		return linkSpans;
+	}
+
+	public LinkSpan[] getLinkSpansAfterComment(boolean translated) {
+		return translated && translatedComment != null ? translatedLinkSpans : linkSpans;
 	}
 
 	public List<Post.Icon> getIcons() {
@@ -656,6 +738,9 @@ public class PostItem implements AttachmentItem.Master, ChanMarkup.MarkupExtra, 
 	}
 
 	public List<PostItem> getThreadPosts(Chan chan) {
+		if (threadData.postItems != null) {
+			return threadData.postItems;
+		}
 		int count = threadData.base.posts.size();
 		if (count >= 2) {
 			int startIndex = threadData.base.postsCount - count + 1;
@@ -665,9 +750,11 @@ public class PostItem implements AttachmentItem.Master, ChanMarkup.MarkupExtra, 
 				postItem.setOrdinalIndex(startIndex > 0 ? startIndex++ : ORDINAL_INDEX_NONE);
 				postItems.add(postItem);
 			}
-			return postItems;
+			threadData.postItems = Collections.unmodifiableList(postItems);
+			return threadData.postItems;
 		}
-		return Collections.emptyList();
+		threadData.postItems = Collections.emptyList();
+		return threadData.postItems;
 	}
 
 	public interface DescriptionBuilder {

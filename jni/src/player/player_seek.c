@@ -342,7 +342,7 @@ void playerSeekSetPosition(JNIEnv * env, Player * player, int64_t position) {
 	diagnosticsLogSeekLock(player, "prepare", "audio.sleep_buffer", "acquired");
 	diagnosticsLog("player=%u seek_phase=audio_output_clear_started",
 			player->meta.diagnosticsId);
-	playerAudioClearOutputLocked(player, 1);
+	playerAudioPrepareOutputResetLocked(player, 1, "seek");
 	pthread_cond_broadcast(&player->audio.sleepCond);
 	pthread_cond_broadcast(&player->audio.bufferCond);
 	diagnosticsLog("player=%u seek_phase=audio_output_clear_finished",

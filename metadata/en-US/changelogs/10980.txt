@@ -1,0 +1,5 @@
+Added experimental offline post translation between Russian and English with Mozilla Bergamot.
+Translation runs locally; the language package is downloaded on demand, verified, and stored on the device.
+Added automatic translation, original/translation switching, and translation of loaded replies in thread previews.
+Fixed apostrophes and other special characters in translated text.
+Added a manual “What’s new” preview under Experimental features; it is not shown automatically yet.
