@@ -5,13 +5,14 @@
 	"client": [
 		{
 			"title": "Release",
-			"name": "3.2.19",
-			"code": 10990,
+			"name": "3.2.21",
+			"code": 11010,
 			"minVersion": 1,
 			"maxVersion": 1,
 			"minSdk": 30,
-			"length": 43298349,
-			"source": "https://github.com/andrewpozdnakov7-jpg/Dashchan_2/releases/download/3.2.19/Slooop-3.2.19-10990-ffmpeg8-all-abi-signed.apk",
+			"length": 44523747,
+			"sha256sum": "fbd782556e5e1c2d3028aaceb8fdc2779b2b8c421aaaf3742328c89464cb83db",
+			"source": "https://github.com/andrewpozdnakov7-jpg/Dashchan_2/releases/download/3.2.21/Slooop-3.2.21-11010-ffmpeg8-all-abi-signed.apk",
 			"fingerprint": "a9fbac6c498f7ad8e7c56849afe43881966bed2ed2bc1dd1c73d0ffe0b9ebeba"
 		}
 	],
