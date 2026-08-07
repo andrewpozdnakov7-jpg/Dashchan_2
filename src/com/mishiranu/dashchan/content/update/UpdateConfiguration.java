@@ -8,7 +8,8 @@ public final class UpdateConfiguration {
 	private UpdateConfiguration() {}
 
 	public static boolean isBetaChannel() {
-		return Preferences.getUpdateChannel() == Preferences.UpdateChannel.BETA;
+		return BuildConfig.ALLOW_BETA_UPDATE_CHANNEL &&
+				Preferences.getUpdateChannel() == Preferences.UpdateChannel.BETA;
 	}
 
 	public static String getLegacyManifestUrl() {
@@ -30,11 +31,11 @@ public final class UpdateConfiguration {
 	}
 
 	public static String getBetaMetadataUri() {
-		return BuildConfig.GITHUB_URI_METADATA_BETA;
+		return BuildConfig.ALLOW_BETA_UPDATE_CHANNEL ? BuildConfig.GITHUB_URI_METADATA_BETA : "";
 	}
 
 	public static String getBetaMetadataPath() {
-		return BuildConfig.GITHUB_PATH_METADATA_BETA;
+		return BuildConfig.ALLOW_BETA_UPDATE_CHANNEL ? BuildConfig.GITHUB_PATH_METADATA_BETA : "";
 	}
 
 	public static Uri resolveExtensionUpdateUri(Uri updateUri) {
