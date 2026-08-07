@@ -18,6 +18,7 @@ import android.os.Bundle;
 import android.os.IBinder;
 import android.os.Parcel;
 import android.os.SystemClock;
+import android.os.Trace;
 import android.provider.DocumentsContract;
 import android.util.AtomicFile;
 import android.util.Pair;
@@ -115,6 +116,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	private static final String EXTRA_DRAWER_CHAN_SELECT_MODE = "drawerChanSelectMode";
 	private static final String EXTRA_STORAGE_REQUEST_STATE = "storageRequestState";
 	private static final String EXTRA_PAGES_STATE_VERSION = "pagesStateVersion";
+	private static final String EXTRA_PAGES_STATE_STORED_EXTERNALLY = "pagesStateStoredExternally";
 	private static final int PAGES_STATE_VERSION = 1;
 	private static final int REQUEST_CODE_POST_NOTIFICATIONS = 1;
 
@@ -137,6 +139,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	private FrameLayout drawerParent;
 	private CustomDrawerLayout drawerLayout;
 	private DrawerToggle drawerToggle;
+	private Runnable pendingDrawerNavigation;
 	private final HashSet<String> navigationAreaLockers = new HashSet<>();
 
 	private ExpandedScreen expandedScreen;
@@ -219,6 +222,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		drawerWide.setElevation(4f * density);
 		drawerLayout.addDrawerListener(drawerToggle);
 		drawerLayout.addDrawerListener(drawerForm);
+		drawerLayout.addDrawerListener(new DeferredDrawerNavigationListener());
 		drawerLayout.addDrawerListener(new PredictiveBackDrawerListener());
 		if (toolbarHolder == null) {
 			drawerLayout.addDrawerListener(new ExpandedScreenDrawerLocker());
@@ -286,44 +290,63 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		storageRequestState = savedInstanceState != null ? StorageRequestState
 				.valueOf(savedInstanceState.getString(EXTRA_STORAGE_REQUEST_STATE)) : StorageRequestState.NONE;
 
+		Bundle pagesState = savedInstanceState;
+		if (savedInstanceState != null &&
+				savedInstanceState.getBoolean(EXTRA_PAGES_STATE_STORED_EXTERNALLY)) {
+			pagesState = readPagesState(getPagesInstanceStateFile(), true, true);
+			if (pagesState == null) {
+				// Keep the restored current page usable even if the external state was removed or damaged.
+				pagesState = savedInstanceState;
+			}
+		}
+
 		ContentFragment currentFragmentFromSaved = null;
 		boolean restoredPagesSession = false;
 		if (savedInstanceState == null) {
 			File file = getSavedPagesFile();
-			savedInstanceState = readPagesState(file, true, false);
-			if (savedInstanceState == null) {
+			pagesState = readPagesState(file, true, false);
+			if (pagesState == null) {
 				File sessionFile = getPagesSessionFile();
 				if (Preferences.isRestorePages()) {
-					savedInstanceState = readPagesState(sessionFile, false, true);
-					restoredPagesSession = savedInstanceState != null;
+					pagesState = readPagesState(sessionFile, false, true);
+					restoredPagesSession = pagesState != null;
 				} else {
 					deletePagesState(sessionFile);
 				}
 			}
-			if (savedInstanceState != null) {
+			if (pagesState != null) {
 				try {
-					StackItem stackItem = AndroidUtils.getParcelable(savedInstanceState,
+					StackItem stackItem = AndroidUtils.getParcelable(pagesState,
 							EXTRA_CURRENT_FRAGMENT, StackItem.class);
 					currentFragmentFromSaved = stackItem != null ? (ContentFragment) stackItem.create(null) : null;
 				} catch (RuntimeException e) {
 					currentFragmentFromSaved = null;
 				}
 				if (currentFragmentFromSaved == null) {
-					savedInstanceState = null;
+					pagesState = null;
 					restoredPagesSession = false;
 					deletePagesState(getPagesSessionFile());
 				}
 			}
 		}
 
-		if (savedInstanceState != null) {
-			fragments.addAll(AndroidUtils.getParcelableArrayList(savedInstanceState, EXTRA_FRAGMENTS,
-					StackItem.class));
-			stackPageItems.addAll(AndroidUtils.getParcelableArrayList(savedInstanceState, EXTRA_STACK_PAGE_ITEMS,
-					SavedPageItem.class));
-			preservedPageItems.addAll(AndroidUtils.getParcelableArrayList(savedInstanceState,
-					EXTRA_PRESERVED_PAGE_ITEMS, SavedPageItem.class));
-			currentPageItem = AndroidUtils.getParcelable(savedInstanceState, EXTRA_CURRENT_PAGE_ITEM, PageItem.class);
+		if (pagesState != null) {
+			ArrayList<StackItem> restoredFragments = AndroidUtils.getParcelableArrayList(pagesState,
+					EXTRA_FRAGMENTS, StackItem.class);
+			ArrayList<SavedPageItem> restoredStackPageItems = AndroidUtils.getParcelableArrayList(pagesState,
+					EXTRA_STACK_PAGE_ITEMS, SavedPageItem.class);
+			ArrayList<SavedPageItem> restoredPreservedPageItems = AndroidUtils.getParcelableArrayList(pagesState,
+					EXTRA_PRESERVED_PAGE_ITEMS, SavedPageItem.class);
+			if (restoredFragments != null) {
+				fragments.addAll(restoredFragments);
+			}
+			if (restoredStackPageItems != null) {
+				stackPageItems.addAll(restoredStackPageItems);
+			}
+			if (restoredPreservedPageItems != null) {
+				preservedPageItems.addAll(restoredPreservedPageItems);
+			}
+			currentPageItem = AndroidUtils.getParcelable(pagesState, EXTRA_CURRENT_PAGE_ITEM, PageItem.class);
 			if (restoredPagesSession) {
 				rebasePagesRealtime();
 			}
@@ -415,7 +438,17 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	protected void onSaveInstanceState(@NonNull Bundle outState) {
 		super.onSaveInstanceState(outState);
 
-		writePagesState(outState);
+		Bundle pagesState = new Bundle();
+		writePagesState(pagesState);
+		pagesState.putInt(EXTRA_PAGES_STATE_VERSION, PAGES_STATE_VERSION);
+		File pagesStateFile = getPagesInstanceStateFile();
+		if (writePagesState(pagesStateFile, pagesState)) {
+			outState.putBoolean(EXTRA_PAGES_STATE_STORED_EXTERNALLY, true);
+		} else {
+			deletePagesState(pagesStateFile);
+		}
+		// This object is small and provides a safe fallback when the external file cannot be read.
+		outState.putParcelable(EXTRA_CURRENT_PAGE_ITEM, currentPageItem);
 		outState.putBoolean(EXTRA_DRAWER_EXPANDED, drawerLayout.isDrawerOpen(GravityCompat.START));
 		outState.putBoolean(EXTRA_DRAWER_CHAN_SELECT_MODE, drawerForm.isChanSelectMode());
 		outState.putString(EXTRA_STORAGE_REQUEST_STATE, storageRequestState.name());
@@ -434,6 +467,10 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	private File getPagesSessionFile() {
 		return new File(getFilesDir(), "pages-session");
+	}
+
+	private File getPagesInstanceStateFile() {
+		return new File(getFilesDir(), "pages-instance-state");
 	}
 
 	private Bundle readPagesState(File file, boolean deleteAfterRead, boolean checkVersion) {
@@ -1203,6 +1240,31 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		}
 	}
 
+	private boolean deferNavigationUntilDrawerClosed(Runnable navigation) {
+		if (!wideMode && drawerLayout.isDrawerVisible(GravityCompat.START)) {
+			// Fragment creation can take several frames; don't run it concurrently with the drawer animation.
+			pendingDrawerNavigation = navigation;
+			drawerLayout.closeDrawer(GravityCompat.START);
+			return true;
+		}
+		return false;
+	}
+
+	private void runPendingDrawerNavigation() {
+		Runnable navigation = pendingDrawerNavigation;
+		pendingDrawerNavigation = null;
+		if (navigation != null) {
+			drawerLayout.post(() -> {
+				Trace.beginSection("MainActivity#drawerNavigation");
+				try {
+					navigation.run();
+				} finally {
+					Trace.endSection();
+				}
+			});
+		}
+	}
+
 	private void updatePostFragmentConfiguration() {
 		ContentFragment currentFragment = getCurrentFragment();
 		String chanName;
@@ -1799,6 +1861,9 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	@Override
 	public void onSelectChan(String chanName) {
+		if (deferNavigationUntilDrawerClosed(() -> onSelectChan(chanName))) {
+			return;
+		}
 		ContentFragment currentFragment = getCurrentFragment();
 		Page page = currentFragment instanceof PageFragment ? ((PageFragment) currentFragment).getPage() : null;
 		if (page == null || !page.chanName.equals(chanName)) {
@@ -1844,6 +1909,10 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	@Override
 	public void onSelectBoard(String chanName, String boardName, boolean fromCache) {
+		String requestedBoardName = boardName;
+		if (deferNavigationUntilDrawerClosed(() -> onSelectBoard(chanName, requestedBoardName, fromCache))) {
+			return;
+		}
 		ContentFragment currentFragment = getCurrentFragment();
 		Page page = currentFragment instanceof PageFragment ? ((PageFragment) currentFragment).getPage() : null;
 		Chan chan = Chan.get(chanName);
@@ -1860,6 +1929,11 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	@Override
 	public boolean onSelectThread(String chanName, String boardName, String threadNumber, PostNumber postNumber,
 			String threadTitle, boolean fromCache) {
+		String requestedBoardName = boardName;
+		if (deferNavigationUntilDrawerClosed(() -> onSelectThread(chanName, requestedBoardName, threadNumber,
+				postNumber, threadTitle, fromCache))) {
+			return true;
+		}
 		ContentFragment currentFragment = getCurrentFragment();
 		Page page = currentFragment instanceof PageFragment ? ((PageFragment) currentFragment).getPage() : null;
 		Chan chan = Chan.get(chanName);
@@ -2010,6 +2084,9 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	@Override
 	public void onSelectDrawerMenuItem(int item) {
+		if (deferNavigationUntilDrawerClosed(() -> onSelectDrawerMenuItem(item))) {
+			return;
+		}
 		Page.Content content = null;
 		switch (item) {
 			case DrawerForm.MENU_ITEM_BOARDS: {
@@ -2411,6 +2488,22 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 			navigationAreaLockers.remove(locker);
 		}
 		drawerLayout.setExpandableFromAnyPoint(navigationAreaLockers.isEmpty());
+	}
+
+	private class DeferredDrawerNavigationListener implements CustomDrawerLayout.DrawerListener {
+		@Override
+		public void onDrawerSlide(@NonNull View drawerView, float slideOffset) {}
+
+		@Override
+		public void onDrawerOpened(@NonNull View drawerView) {}
+
+		@Override
+		public void onDrawerClosed(@NonNull View drawerView) {
+			runPendingDrawerNavigation();
+		}
+
+		@Override
+		public void onDrawerStateChanged(int newState) {}
 	}
 
 	private class ExpandedScreenDrawerLocker implements CustomDrawerLayout.DrawerListener {

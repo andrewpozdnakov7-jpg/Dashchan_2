@@ -101,7 +101,7 @@ public class WatcherView extends FrameLayout {
 	public void setProgressAnimationEnabled(boolean enabled) {
 		if (progressAnimationEnabled != enabled) {
 			progressAnimationEnabled = enabled;
-			progressBar.setVisibility(running && enabled ? View.VISIBLE : View.GONE);
+			progressBar.setVisibility(running && enabled ? View.VISIBLE : View.INVISIBLE);
 			invalidate();
 		}
 	}
@@ -116,7 +116,7 @@ public class WatcherView extends FrameLayout {
 		newCount = counter.newCount;
 		deleted = counter.deleted;
 		error = counter.error;
-		progressBar.setVisibility(running && progressAnimationEnabled ? View.VISIBLE : View.GONE);
+		progressBar.setVisibility(running && progressAnimationEnabled ? View.VISIBLE : View.INVISIBLE);
 		switch (counter.state) {
 			case ENABLED: {
 				color = colorSet.enabledColor;

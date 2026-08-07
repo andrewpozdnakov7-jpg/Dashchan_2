@@ -32,14 +32,17 @@ public final class TranslationController {
 
 	private static final class PendingCall {
 		public final long id;
+		public final TranslationEngine engine;
 		public final TranslationModel.Direction direction;
 		public final String subject;
 		public final String html;
 		public final ResultCallback callback;
 
-		private PendingCall(long id, TranslationModel.Direction direction, String subject, String html,
+		private PendingCall(long id, TranslationEngine engine, TranslationModel.Direction direction,
+				String subject, String html,
 				ResultCallback callback) {
 			this.id = id;
+			this.engine = engine;
 			this.direction = direction;
 			this.subject = subject;
 			this.html = html;
@@ -57,6 +60,14 @@ public final class TranslationController {
 		return TranslationModel.forNativeLanguage(Preferences.getTranslationNativeLanguage());
 	}
 
+	public static TranslationEngine getCurrentEngine() {
+		return Preferences.getTranslationEngine();
+	}
+
+	public static String getCurrentCacheKey() {
+		return getCurrentEngine().getCacheKey(getCurrentDirection());
+	}
+
 	public static boolean isEnabledForChan(String chanName) {
 		return BuildConfig.ENABLE_LOCAL_TRANSLATION && Preferences.isLocalTranslationEnabled() &&
 				TranslationModel.isForeignChan(getCurrentDirection(), chanName);
@@ -64,8 +75,24 @@ public final class TranslationController {
 
 	public static boolean isReadyForChan(String chanName) {
 		TranslationModel.Direction direction = getCurrentDirection();
-		return isEnabledForChan(chanName) && TranslationModelManager.getInstance().getSnapshot(direction).state ==
-				TranslationModelManager.State.INSTALLED;
+		if (!isEnabledForChan(chanName)) {
+			return false;
+		}
+		TranslationEngine engine = getCurrentEngine();
+		switch (engine) {
+			case GOOGLE: {
+				return GoogleTranslationBridge.getSnapshot(direction).state ==
+						TranslationModelManager.State.INSTALLED;
+			}
+			case GEMINI_NANO: {
+				return GeminiNanoTranslationBridge.getSnapshot(direction).state ==
+						TranslationModelManager.State.INSTALLED;
+			}
+			default: {
+				return TranslationModelManager.getInstance().getSnapshot(direction).state ==
+						TranslationModelManager.State.INSTALLED;
+			}
+		}
 	}
 
 	private final MainApplication application = MainApplication.getInstance();
@@ -116,8 +143,9 @@ public final class TranslationController {
 	private TranslationController() {}
 
 	public void requestPostTranslation(PostItem postItem, Chan chan, Runnable onTranslated) {
+		TranslationEngine engine = getCurrentEngine();
 		TranslationModel.Direction direction = getCurrentDirection();
-		String key = direction.id;
+		String key = engine.getCacheKey(direction);
 		if (!isReadyForChan(chan.name) || postItem.hasTranslatedComment(key)) {
 			return;
 		}
@@ -127,7 +155,7 @@ public final class TranslationController {
 			}
 			pendingPosts.put(postItem, key);
 		}
-		translate(direction, postItem.getSubject(), postItem.getCommentHtmlForTranslation(),
+		translate(engine, direction, postItem.getSubject(), postItem.getCommentHtmlForTranslation(),
 				(translatedSubject, translatedHtml, error) -> {
 			synchronized (pendingPosts) {
 				if (key.equals(pendingPosts.get(postItem))) {
@@ -146,11 +174,11 @@ public final class TranslationController {
 		failAll("Translator unloaded");
 	}
 
-	private void translate(TranslationModel.Direction direction, String subject, String html,
+	private void translate(TranslationEngine engine, TranslationModel.Direction direction, String subject, String html,
 			ResultCallback resultCallback) {
 		handler.removeCallbacks(idleDisconnectRunnable);
 		long id = nextRequestId.getAndIncrement();
-		calls.put(id, new PendingCall(id, direction, subject != null ? subject : "",
+		calls.put(id, new PendingCall(id, engine, direction, subject != null ? subject : "",
 				html != null ? html : "", resultCallback));
 		handler.postDelayed(() -> finish(id, null, null, "Translation timed out"), REQUEST_TIMEOUT_MS);
 		if (service != null) {
@@ -175,7 +203,7 @@ public final class TranslationController {
 			return;
 		}
 		try {
-			service.translate(call.id, call.direction.sourceLanguage, call.direction.targetLanguage,
+			service.translate(call.id, call.engine.value, call.direction.sourceLanguage, call.direction.targetLanguage,
 					call.subject, call.html, callback);
 		} catch (RemoteException e) {
 			finish(call.id, null, null, "Translation service failed");

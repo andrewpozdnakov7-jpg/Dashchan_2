@@ -16,6 +16,9 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import androidx.annotation.Nullable;
+import com.mishiranu.dashchan.content.translation.GeminiNanoTranslationBridge;
+import com.mishiranu.dashchan.content.translation.GoogleTranslationBridge;
+import com.mishiranu.dashchan.content.translation.TranslationEngine;
 import com.mishiranu.dashchan.content.translation.TranslationModel;
 import java.io.ByteArrayInputStream;
 import java.io.File;
@@ -51,6 +54,9 @@ public class TranslationService extends Service {
 	private final Handler handler = new Handler(Looper.getMainLooper());
 	private final Map<Long, Request> requests = new LinkedHashMap<>();
 	private WebView webView;
+	private final GeminiNanoTranslationBridge geminiNanoBridge = new GeminiNanoTranslationBridge();
+	private final GoogleTranslationBridge googleBridge = new GoogleTranslationBridge();
+	private TranslationEngine engine;
 	private TranslationModel.Direction direction;
 	private boolean ready;
 	private boolean initializationStarted;
@@ -65,12 +71,13 @@ public class TranslationService extends Service {
 
 	private final ITranslationService.Stub binder = new ITranslationService.Stub() {
 		@Override
-		public void translate(long requestId, String sourceLanguage, String targetLanguage, String subject, String html,
+		public void translate(long requestId, String engine, String sourceLanguage, String targetLanguage,
+				String subject, String html,
 				ITranslationCallback callback) {
 			if (callback == null) {
 				return;
 			}
-			handler.post(() -> enqueue(requestId, sourceLanguage, targetLanguage, subject, html, callback));
+			handler.post(() -> enqueue(requestId, engine, sourceLanguage, targetLanguage, subject, html, callback));
 		}
 
 		@Override
@@ -101,23 +108,56 @@ public class TranslationService extends Service {
 		super.onDestroy();
 	}
 
-	private void enqueue(long requestId, String sourceLanguage, String targetLanguage, String subject, String html,
+	private void enqueue(long requestId, String engineValue, String sourceLanguage, String targetLanguage,
+			String subject, String html,
 			ITranslationCallback callback) {
+		TranslationEngine requestedEngine = TranslationEngine.fromValue(engineValue);
 		TranslationModel.Direction requestedDirection = obtainDirection(sourceLanguage, targetLanguage);
-		if (requestedDirection == null || subject == null || html == null) {
+		if (!requestedEngine.isAvailable() || requestedDirection == null || subject == null || html == null) {
 			reportError(callback, requestId, "Unsupported translation direction");
 			return;
 		}
-		if (!TranslationModel.isInstalled(this, requestedDirection)) {
+		if (requestedEngine == TranslationEngine.MOZILLA && !TranslationModel.isInstalled(this, requestedDirection)) {
 			reportError(callback, requestId, "Language package is not installed");
 			return;
 		}
-		if (direction != requestedDirection) {
+		if (engine != requestedEngine || direction != requestedDirection) {
 			resetEngine("Translation direction changed");
+			engine = requestedEngine;
 			direction = requestedDirection;
 		}
 		requests.put(requestId, new Request(requestId, subject, html, callback));
-		if (webView == null) {
+		if (engine == TranslationEngine.GOOGLE) {
+			final int currentGeneration = generation;
+			googleBridge.translate(this, direction, subject, html, new GoogleTranslationBridge.Callback() {
+				@Override
+				public void onSuccess(String translatedSubject, String translatedHtml) {
+					handler.post(() -> onResult(currentGeneration, Long.toString(requestId), translatedSubject,
+							translatedHtml, null));
+				}
+
+				@Override
+				public void onError(String message) {
+					handler.post(() -> onResult(currentGeneration, Long.toString(requestId), null, null,
+							message != null ? message : "Translation failed"));
+				}
+			});
+		} else if (engine == TranslationEngine.GEMINI_NANO) {
+			final int currentGeneration = generation;
+			geminiNanoBridge.translate(this, direction, subject, html, new GeminiNanoTranslationBridge.Callback() {
+				@Override
+				public void onSuccess(String translatedSubject, String translatedHtml) {
+					handler.post(() -> onResult(currentGeneration, Long.toString(requestId), translatedSubject,
+							translatedHtml, null));
+				}
+
+				@Override
+				public void onError(String message) {
+					handler.post(() -> onResult(currentGeneration, Long.toString(requestId), null, null,
+							message != null ? message : "Translation failed"));
+				}
+			});
+		} else if (webView == null) {
 			createEngine();
 		} else if (ready) {
 			sendRequest(requests.get(requestId));
@@ -219,6 +259,9 @@ public class TranslationService extends Service {
 		ready = false;
 		initializationStarted = false;
 		direction = null;
+		engine = null;
+		geminiNanoBridge.unload();
+		googleBridge.unload();
 		if (webView != null) {
 			webView.stopLoading();
 			webView.removeJavascriptInterface("SlooopTranslation");

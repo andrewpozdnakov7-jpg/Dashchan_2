@@ -7,7 +7,9 @@ import android.content.res.ColorStateList;
 import android.content.res.TypedArray;
 import android.graphics.Rect;
 import android.net.Uri;
+import android.os.Looper;
 import android.os.SystemClock;
+import android.os.Trace;
 import android.text.InputType;
 import android.text.TextUtils;
 import android.view.ContextThemeWrapper;
@@ -32,6 +34,7 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.fragment.app.FragmentManager;
+import androidx.recyclerview.widget.DiffUtil;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import chan.content.Chan;
@@ -99,6 +102,9 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	private final ArrayList<ListItem> favorites = new ArrayList<>();
 	private final ArrayList<ListItem> menu = new ArrayList<>();
 	private final HashMap<WatcherUpdateKey, WatcherService.Counter> pendingWatcherUpdates = new HashMap<>();
+	private static final int PREWARM_ITEM_COUNT = 12;
+	private boolean drawerPrewarmScheduled;
+	private boolean drawerPrewarmed;
 
 	private boolean mergeChans = false;
 	private boolean showHistory = false;
@@ -320,6 +326,13 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 
 	private void updateConfigurationInternal(String chanName, boolean force) {
 		if (!CommonUtils.equals(chanName, this.chanName) || force || menu.isEmpty()) {
+			updateConfigurationInternal(chanName, force, createAdapterSnapshot());
+		}
+	}
+
+	private void updateConfigurationInternal(String chanName, boolean force,
+			ArrayList<AdapterItem> previousItems) {
+		if (!CommonUtils.equals(chanName, this.chanName) || force || menu.isEmpty()) {
 			this.chanName = chanName;
 			Chan chan = Chan.get(chanName);
 			chanNameView.setText(chan.configuration.getTitle());
@@ -346,7 +359,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 			menu.add(new ListItem(ListItem.Type.MENU, MENU_ITEM_PREFERENCES, typedArray.getResourceId(4, 0),
 					context.getString(R.string.preferences)));
 			typedArray.recycle();
-			updateItems(true, true);
+			updateItems(true, true, previousItems);
 		}
 	}
 
@@ -364,9 +377,10 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 
 	public void setChanSelectMode(boolean enabled) {
 		if (chans.size() >= 2 && chanSelectMode != enabled) {
+			ArrayList<AdapterItem> previousItems = createAdapterSnapshot();
 			chanSelectMode = enabled;
 			chanSelectorIcon.setRotation(enabled ? 180f : 0f);
-			notifyDataSetChanged();
+			dispatchAdapterDiff(previousItems);
 			recyclerView.scrollToPosition(0);
 			updateRestartViewVisibility();
 		}
@@ -379,14 +393,16 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	public void updateRestartViewVisibility() {
 		boolean showRestartButton = !chanSelectMode && ChanManager.getInstance().isRestartRequired();
 		if (this.showRestartButton != showRestartButton) {
+			ArrayList<AdapterItem> previousItems = createAdapterSnapshot();
 			this.showRestartButton = showRestartButton;
-			notifyDataSetChanged();
+			dispatchAdapterDiff(previousItems);
 		}
 	}
 
 	public void updateChans() {
+		ArrayList<AdapterItem> previousItems = createAdapterSnapshot();
 		updateChansWithoutConfiguration();
-		updateConfigurationInternal(chanName, true);
+		updateConfigurationInternal(chanName, true, previousItems);
 	}
 
 	private void updateChansWithoutConfiguration() {
@@ -404,14 +420,15 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		}
 		selectorContainer.setVisibility(availableChansCount >= 2 ? View.VISIBLE : View.GONE);
 		if (chanSelectMode && availableChansCount <= 1) {
-			setChanSelectMode(false);
+			chanSelectMode = false;
+			chanSelectorIcon.setRotation(0f);
 		}
-		notifyDataSetChanged();
 	}
 
 	public void updatePreferences() {
+		ArrayList<AdapterItem> previousItems = createAdapterSnapshot();
 		if (updatePreferencesWithoutConfiguration()) {
-			updateConfigurationInternal(chanName, true);
+			updateConfigurationInternal(chanName, true, previousItems);
 		}
 	}
 
@@ -461,7 +478,9 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 			}
 			case CHAN: {
 				callback.onSelectChan(listItem.chanName);
-				setChanSelectMode(false);
+				if (drawerAlwaysVisible) {
+					setChanSelectMode(false);
+				}
 				break;
 			}
 		}
@@ -498,10 +517,11 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 
 	private void startFavoriteSelection() {
 		if (favoriteSelectionActionMode == null && getVisibleFavoriteThreadCount() > 0) {
+			ArrayList<AdapterItem> previousItems = createAdapterSnapshot();
 			ActionMode actionMode = recyclerView.startActionMode(favoriteSelectionCallback);
 			favoriteSelectionActionMode = actionMode;
 			if (actionMode != null) {
-				notifyDataSetChanged();
+				dispatchAdapterDiff(previousItems);
 				updateFavoriteSelectionActionMode();
 			}
 		}
@@ -632,6 +652,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	@Override
 	public void onDrawerOpened(@NonNull View drawerView) {
 		drawerOpened = true;
+		drawerPrewarmed = true;
 		applyDrawerWatcherState();
 	}
 
@@ -653,6 +674,9 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	public void setDrawerAlwaysVisible(boolean alwaysVisible) {
 		if (drawerAlwaysVisible != alwaysVisible) {
 			drawerAlwaysVisible = alwaysVisible;
+			if (alwaysVisible) {
+				drawerPrewarmed = true;
+			}
 			applyDrawerWatcherState();
 		}
 	}
@@ -885,6 +909,11 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	});
 
 	public void updateItems(boolean pages, boolean favorites) {
+		ArrayList<AdapterItem> previousItems = createAdapterSnapshot();
+		updateItems(pages, favorites, previousItems);
+	}
+
+	private void updateItems(boolean pages, boolean favorites, ArrayList<AdapterItem> previousItems) {
 		if (pages && pagesListMode != Preferences.PagesListMode.HIDE_PAGES) {
 			updateListPages();
 		}
@@ -912,7 +941,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 				}
 			}
 		}
-		notifyDataSetChanged();
+		dispatchAdapterDiff(previousItems);
 	}
 
 	private void updateListPages() {
@@ -1124,6 +1153,13 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 			return threadNumber != null;
 		}
 
+		public boolean contentEquals(ListItem other) {
+			return other != null && type == other.type && data == other.data && iconChan == other.iconChan &&
+					iconResId == other.iconResId && CommonUtils.equals(chanName, other.chanName) &&
+					CommonUtils.equals(boardName, other.boardName) &&
+					CommonUtils.equals(threadNumber, other.threadNumber) && CommonUtils.equals(title, other.title);
+		}
+
 		public boolean compare(String chanName, String boardName, String threadNumber) {
 			return CommonUtils.equals(this.chanName, chanName) && CommonUtils.equals(this.boardName, boardName)
 					&& CommonUtils.equals(this.threadNumber, threadNumber);
@@ -1219,8 +1255,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 								}
 								case FAVORITES_MENU_HIDE_DELETED: {
 									Preferences.setFavoritesHideDeleted(!Preferences.isFavoritesHidedDeleted());
-									updateListFavorites();
-									notifyDataSetChanged();
+									updateItems(false, true);
 									return true;
 								}
 								case FAVORITES_MENU_HIDE_ALL: {
@@ -1229,8 +1264,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 										Preferences.setFavoritesHideDeleted(false);
 									}
 									Preferences.setFavoritesHideAll(hideAll);
-									updateListFavorites();
-									notifyDataSetChanged();
+									updateItems(false, true);
 									return true;
 								}
 								case FAVORITES_MENU_SELECT: {
@@ -1271,13 +1305,14 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		public boolean onActionItemClicked(ActionMode mode, MenuItem item) {
 			switch (item.getItemId()) {
 				case FAVORITE_SELECTION_SELECT_ALL: {
+					ArrayList<AdapterItem> previousItems = createAdapterSnapshot();
 					selectedFavoriteIds.clear();
 					for (ListItem listItem : favorites) {
 						if (listItem.type == ListItem.Type.FAVORITE && listItem.isThreadItem()) {
 							selectedFavoriteIds.add(listItem.id);
 						}
 					}
-					notifyDataSetChanged();
+					dispatchAdapterDiff(previousItems);
 					updateFavoriteSelectionActionMode();
 					return true;
 				}
@@ -1292,9 +1327,10 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 
 		@Override
 		public void onDestroyActionMode(ActionMode mode) {
+			ArrayList<AdapterItem> previousItems = createAdapterSnapshot();
 			favoriteSelectionActionMode = null;
 			selectedFavoriteIds.clear();
-			notifyDataSetChanged();
+			dispatchAdapterDiff(previousItems);
 		}
 	};
 
@@ -1399,6 +1435,122 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 
 	@SuppressWarnings("unchecked")
 	private final List<ListItem>[] categoriesArray = new List[2];
+
+	private static class AdapterItem {
+		public final ListItem listItem;
+		public final int viewType;
+		public final boolean selected;
+
+		public AdapterItem(ListItem listItem, int viewType, boolean selected) {
+			this.listItem = listItem;
+			this.viewType = viewType;
+			this.selected = selected;
+		}
+
+		public boolean contentEquals(AdapterItem other) {
+			return other != null && viewType == other.viewType && selected == other.selected &&
+					listItem.contentEquals(other.listItem);
+		}
+	}
+
+	private ArrayList<AdapterItem> createAdapterSnapshot() {
+		if (categoriesOrder == null) {
+			return null;
+		}
+		int count = getItemCount();
+		ArrayList<AdapterItem> items = new ArrayList<>(count);
+		for (int position = 0; position < count; position++) {
+			ListItem listItem = getItem(position);
+			boolean selected = favoriteSelectionActionMode != null && selectedFavoriteIds.contains(listItem.id);
+			items.add(new AdapterItem(listItem, getItemViewType(position), selected));
+		}
+		return items;
+	}
+
+	private void dispatchAdapterDiff(ArrayList<AdapterItem> previousItems) {
+		if (previousItems == null) {
+			notifyDataSetChanged();
+			scheduleDrawerPrewarm();
+			return;
+		}
+		ArrayList<AdapterItem> currentItems = createAdapterSnapshot();
+		if (currentItems == null) {
+			notifyDataSetChanged();
+			scheduleDrawerPrewarm();
+			return;
+		}
+		Trace.beginSection("DrawerForm#calculateDiff");
+		try {
+			DiffUtil.calculateDiff(new DiffUtil.Callback() {
+				@Override
+				public int getOldListSize() {
+					return previousItems.size();
+				}
+
+				@Override
+				public int getNewListSize() {
+					return currentItems.size();
+				}
+
+				@Override
+				public boolean areItemsTheSame(int oldItemPosition, int newItemPosition) {
+					return previousItems.get(oldItemPosition).listItem.id ==
+							currentItems.get(newItemPosition).listItem.id;
+				}
+
+				@Override
+				public boolean areContentsTheSame(int oldItemPosition, int newItemPosition) {
+					return previousItems.get(oldItemPosition).contentEquals(currentItems.get(newItemPosition));
+				}
+			}, false).dispatchUpdatesTo(this);
+		} finally {
+			Trace.endSection();
+		}
+		scheduleDrawerPrewarm();
+	}
+
+	private void scheduleDrawerPrewarm() {
+		if (drawerPrewarmed || drawerPrewarmScheduled || categoriesOrder == null) {
+			return;
+		}
+		drawerPrewarmScheduled = true;
+		// RecyclerView otherwise creates every visible drawer row during the first opening animation.
+		Looper.myQueue().addIdleHandler(() -> {
+			drawerPrewarmScheduled = false;
+			if (!drawerOpened && !drawerAlwaysVisible && drawerState == DrawerLayout.STATE_IDLE && !drawerPrewarmed) {
+				prewarmDrawerHolders();
+			}
+			return false;
+		});
+	}
+
+	private void prewarmDrawerHolders() {
+		Trace.beginSection("DrawerForm#prewarmHolders");
+		try {
+			int count = Math.min(getItemCount(), PREWARM_ITEM_COUNT);
+			int[] typeCounts = new int[ViewType.values().length];
+			for (int position = 0; position < count; position++) {
+				int viewType = getItemViewType(position);
+				ViewType type = ViewType.values()[viewType];
+				if (type != ViewType.HEADER && type != ViewType.RESTART) {
+					typeCounts[viewType]++;
+				}
+			}
+			RecyclerView.RecycledViewPool pool = recyclerView.getRecycledViewPool();
+			for (int viewType = 0; viewType < typeCounts.length; viewType++) {
+				int typeCount = typeCounts[viewType];
+				if (typeCount > 0) {
+					pool.setMaxRecycledViews(viewType, Math.max(5, typeCount));
+					for (int i = 0; i < typeCount; i++) {
+						pool.putRecycledView(createViewHolder(recyclerView, viewType));
+					}
+				}
+			}
+			drawerPrewarmed = true;
+		} finally {
+			Trace.endSection();
+		}
+	}
 
 	private int prepareCategoriesArray() {
 		switch (categoriesOrder) {
@@ -1853,10 +2005,11 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		}
 	}
 
-	private boolean applyWatcherUpdate(WatcherUpdateKey key, WatcherService.Counter counter) {
-		if (counter.deleted && Preferences.isFavoritesHidedDeleted()) {
-			return removeFavoriteThreadFromList(key.chanName, key.boardName, key.threadNumber);
-		}
+	private boolean shouldRemoveWatcherItem(WatcherService.Counter counter) {
+		return counter.deleted && Preferences.isFavoritesHidedDeleted();
+	}
+
+	private void updateVisibleWatcher(WatcherUpdateKey key, WatcherService.Counter counter) {
 		if (!Preferences.isFavoritesHidedAll() && (mergeChans || key.chanName.equals(chanName))) {
 			long id = ListItem.calculateId(ListItem.Type.FAVORITE, 0,
 					key.chanName, key.boardName, key.threadNumber, null);
@@ -1865,19 +2018,34 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 				((ViewHolder) holder).watcher.update(counter);
 			}
 		}
-		return false;
 	}
 
 	private void flushPendingWatcherUpdates() {
 		if (!pendingWatcherUpdates.isEmpty()) {
+			Trace.beginSection("DrawerForm#flushWatcherUpdates");
+			ArrayList<AdapterItem> previousItems = null;
 			boolean itemsRemoved = false;
-			for (Map.Entry<WatcherUpdateKey, WatcherService.Counter> entry
-					: pendingWatcherUpdates.entrySet()) {
-				itemsRemoved |= applyWatcherUpdate(entry.getKey(), entry.getValue());
-			}
-			pendingWatcherUpdates.clear();
-			if (itemsRemoved) {
-				notifyDataSetChanged();
+			try {
+				for (Map.Entry<WatcherUpdateKey, WatcherService.Counter> entry
+						: pendingWatcherUpdates.entrySet()) {
+					WatcherService.Counter counter = entry.getValue();
+					if (shouldRemoveWatcherItem(counter)) {
+						if (previousItems == null) {
+							previousItems = createAdapterSnapshot();
+						}
+						WatcherUpdateKey key = entry.getKey();
+						itemsRemoved |= removeFavoriteThreadFromList(key.chanName, key.boardName,
+								key.threadNumber);
+					} else {
+						updateVisibleWatcher(entry.getKey(), counter);
+					}
+				}
+				pendingWatcherUpdates.clear();
+				if (itemsRemoved) {
+					dispatchAdapterDiff(previousItems);
+				}
+			} finally {
+				Trace.endSection();
 			}
 		}
 	}
@@ -1887,8 +2055,14 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		WatcherUpdateKey key = new WatcherUpdateKey(chanName, boardName, threadNumber);
 		if (!canApplyWatcherUpdates()) {
 			pendingWatcherUpdates.put(key, counter);
-		} else if (applyWatcherUpdate(key, counter)) {
-			notifyDataSetChanged();
+		} else if (shouldRemoveWatcherItem(counter)) {
+			// Only structural watcher changes need a list snapshot and DiffUtil pass.
+			ArrayList<AdapterItem> previousItems = createAdapterSnapshot();
+			if (removeFavoriteThreadFromList(key.chanName, key.boardName, key.threadNumber)) {
+				dispatchAdapterDiff(previousItems);
+			}
+		} else {
+			updateVisibleWatcher(key, counter);
 		}
 	}
 

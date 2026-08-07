@@ -244,8 +244,8 @@ android {
 
 	defaultConfig {
 		applicationId = 'io.dashchan2'
-		versionCode = 10990
-		versionName = '3.2.19'
+		versionCode = 11010
+		versionName = '3.2.21'
 		def releaseVersionCode = versionCode
 		def packageVersionCodeProperty = project.findProperty('packageVersionCode')
 		if (packageVersionCodeProperty != null) {
@@ -300,6 +300,8 @@ android {
 		github {
 			dimension = 'distribution'
 			buildConfigField 'boolean', 'ENABLE_LOCAL_TRANSLATION', 'true'
+			buildConfigField 'boolean', 'ENABLE_GOOGLE_TRANSLATION', 'true'
+			buildConfigField 'boolean', 'ENABLE_GEMINI_NANO_TRANSLATION', 'true'
 			buildConfigField 'boolean', 'ALLOW_GMS_SECURITY_PROVIDER', 'true'
 			buildConfigField 'boolean', 'ALLOW_APPLICATION_SELF_UPDATE', 'true'
 			buildConfigField 'boolean', 'ALLOW_BETA_UPDATE_CHANNEL', 'true'
@@ -323,6 +325,8 @@ android {
 		fdroid {
 			dimension = 'distribution'
 			buildConfigField 'boolean', 'ENABLE_LOCAL_TRANSLATION', 'false'
+			buildConfigField 'boolean', 'ENABLE_GOOGLE_TRANSLATION', 'false'
+			buildConfigField 'boolean', 'ENABLE_GEMINI_NANO_TRANSLATION', 'false'
 			buildConfigField 'boolean', 'ALLOW_GMS_SECURITY_PROVIDER', 'false'
 			buildConfigField 'boolean', 'ALLOW_APPLICATION_SELF_UPDATE', 'false'
 			buildConfigField 'boolean', 'ALLOW_BETA_UPDATE_CHANNEL', 'false'
@@ -526,6 +530,8 @@ tasks.register('syncBuiltinWebmPlayerHeaders', Copy) {
 
 dependencies {
 	leakImplementation 'com.squareup.leakcanary:leakcanary-android:3.0-alpha-9'
+	githubImplementation 'com.google.mlkit:translate:17.0.3'
+	githubImplementation 'com.google.mlkit:genai-prompt:1.0.0-beta2'
 	compileOnly 'org.ccil.cowan.tagsoup:tagsoup:1.2.1'
 	implementation 'com.fasterxml.jackson.core:jackson-core:2.22.1'
 	implementation 'androidx.activity:activity:1.10.1'
