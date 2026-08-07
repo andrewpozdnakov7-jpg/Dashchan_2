@@ -147,7 +147,7 @@
 	<string name="comment_is_too_short">Комментарий слишком короткий</string>
 	<string name="experimental_features">Экспериментальные функции</string>
 	<string name="local_translation">Офлайн-перевод постов</string>
-	<string name="local_translation__summary">Переводить посты на устройстве через Mozilla Bergamot, Google ML Kit или Gemini Nano</string>
+	<string name="local_translation__summary">Переводить посты на устройстве через Mozilla Bergamot или Gemini Nano</string>
 	<string name="translation_native_language">Родной язык</string>
 	<string name="translation_language_russian">Русский</string>
 	<string name="translation_language_english">Английский</string>
