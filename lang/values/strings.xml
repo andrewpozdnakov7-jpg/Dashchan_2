@@ -144,7 +144,7 @@
 	<string name="comment_is_too_short">Comment is too short</string>
 	<string name="experimental_features">Experimental features</string>
 	<string name="local_translation">Offline post translation</string>
-	<string name="local_translation__summary">Translate posts on-device with Mozilla Bergamot, Google ML Kit or Gemini Nano</string>
+	<string name="local_translation__summary">Translate posts on-device with Mozilla Bergamot or Gemini Nano</string>
 	<string name="translation_native_language">Your language</string>
 	<string name="translation_language_russian">Russian</string>
 	<string name="translation_language_english">English</string>
