@@ -195,6 +195,42 @@ jobs:
           ./gradlew --no-daemon --stacktrace "$BUILD_TASK" "${gradle_args[@]}" \
             2>&1 | tee build-main.log
 
+      - name: Verify update-channel distribution boundary
+        if: steps.validation.outputs.build_required == 'true'
+        run: |
+          set -euo pipefail
+          marker='andrewpozdnakov7-jpg/Dashchan_2_Update_Test'
+          mapfile -d '' apks < <(find build/outputs/apk -type f -name '*.apk' -print0 | sort -z)
+          if [ "${#apks[@]}" -eq 0 ]; then
+            echo 'No APK files were produced' >&2
+            exit 1
+          fi
+          scan_root="$(mktemp -d)"
+          trap 'rm -rf "$scan_root"' EXIT
+          beta_reference_found=false
+          for index in "${!apks[@]}"; do
+            apk="${apks[$index]}"
+            unpacked="$scan_root/$index"
+            mkdir -p "$unpacked"
+            unzip -qq "$apk" -d "$unpacked"
+            if grep -aR -F -q "$marker" "$unpacked"; then
+              beta_reference_found=true
+              echo "Beta update reference found in $apk"
+            fi
+          done
+          if [ "$BUILD_TASK" = 'assembleFdroidRelease' ]; then
+            if [ "$beta_reference_found" = true ]; then
+              echo '::error::F-Droid APK contains the GitHub beta update repository reference'
+              exit 1
+            fi
+            echo 'F-Droid APK contains no GitHub beta update repository reference'
+          elif [ "$beta_reference_found" != true ]; then
+            echo '::error::GitHub APK lost its configured beta update repository reference'
+            exit 1
+          else
+            echo 'GitHub APK retains its configured beta update repository reference'
+          fi
+
       - name: Create APK checksums
         if: steps.validation.outputs.build_required == 'true'
         run: |

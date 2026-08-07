@@ -281,9 +281,6 @@ android {
 				'andrewpozdnakov7-jpg/Dashchan_2/master/update/themes.json"'
 		buildConfigField 'String', 'GITHUB_URI_METADATA', '"//github.com/andrewpozdnakov7-jpg/Dashchan_2"'
 		buildConfigField 'String', 'GITHUB_PATH_METADATA', '"metadata"'
-		buildConfigField 'String', 'GITHUB_URI_METADATA_BETA',
-				'"//github.com/andrewpozdnakov7-jpg/Dashchan_2_Update_Test"'
-		buildConfigField 'String', 'GITHUB_PATH_METADATA_BETA', '"metadata"'
 		buildConfigField 'String', 'FILE_PROVIDER_AUTHORITY', '"' +
 				manifestPlaceholders.fileProviderAuthority + '"'
 		buildConfigField 'String', 'CHAN_EXTENSION_FEATURE_NAME', '"chan.extension"'
@@ -305,7 +302,11 @@ android {
 			buildConfigField 'boolean', 'ENABLE_LOCAL_TRANSLATION', 'true'
 			buildConfigField 'boolean', 'ALLOW_GMS_SECURITY_PROVIDER', 'true'
 			buildConfigField 'boolean', 'ALLOW_APPLICATION_SELF_UPDATE', 'true'
+			buildConfigField 'boolean', 'ALLOW_BETA_UPDATE_CHANNEL', 'true'
 			buildConfigField 'boolean', 'REQUIRE_EXTENSION_INSTALL_CONSENT', 'false'
+			buildConfigField 'String', 'GITHUB_URI_METADATA_BETA',
+					'"//github.com/andrewpozdnakov7-jpg/Dashchan_2_Update_Test"'
+			buildConfigField 'String', 'GITHUB_PATH_METADATA_BETA', '"metadata"'
 			buildConfigField 'String', 'URI_UPDATES', '"//raw.githubusercontent.com/' +
 					'andrewpozdnakov7-jpg/Dashchan_2/master/update/data.json"'
 			buildConfigField 'String', 'URI_UPDATES_BETA', '"//raw.githubusercontent.com/' +
@@ -324,7 +325,10 @@ android {
 			buildConfigField 'boolean', 'ENABLE_LOCAL_TRANSLATION', 'false'
 			buildConfigField 'boolean', 'ALLOW_GMS_SECURITY_PROVIDER', 'false'
 			buildConfigField 'boolean', 'ALLOW_APPLICATION_SELF_UPDATE', 'false'
+			buildConfigField 'boolean', 'ALLOW_BETA_UPDATE_CHANNEL', 'false'
 			buildConfigField 'boolean', 'REQUIRE_EXTENSION_INSTALL_CONSENT', 'true'
+			buildConfigField 'String', 'GITHUB_URI_METADATA_BETA', '""'
+			buildConfigField 'String', 'GITHUB_PATH_METADATA_BETA', '""'
 			buildConfigField 'String', 'URI_UPDATES', '""'
 			buildConfigField 'String', 'URI_UPDATES_BETA', '""'
 			buildConfigField 'String', 'UPDATE_MANIFEST_URL', '""'

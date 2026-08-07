@@ -652,6 +652,9 @@ public class Preferences {
 	public static final UpdateChannel DEFAULT_UPDATE_CHANNEL = UpdateChannel.STABLE;
 
 	public static UpdateChannel getUpdateChannel() {
+		if (!BuildConfig.ALLOW_BETA_UPDATE_CHANNEL) {
+			return UpdateChannel.STABLE;
+		}
 		String value = PREFERENCES.getString(KEY_UPDATE_CHANNEL, DEFAULT_UPDATE_CHANNEL.value);
 		for (UpdateChannel channel : UpdateChannel.values()) {
 			if (channel.value.equals(value)) {
