@@ -310,6 +310,10 @@ public final class SettingsSearchIndex {
 					R.string.local_translation__summary, Preferences.KEY_LOCAL_TRANSLATION);
 			add(context, entries, Screen.EXPERIMENTAL, R.string.translation_native_language, 0,
 					Preferences.KEY_TRANSLATION_NATIVE_LANGUAGE);
+			if (BuildConfig.ENABLE_GOOGLE_TRANSLATION || BuildConfig.ENABLE_GEMINI_NANO_TRANSLATION) {
+				add(context, entries, Screen.EXPERIMENTAL, R.string.translation_engine, 0,
+						Preferences.KEY_TRANSLATION_ENGINE);
+			}
 			add(context, entries, Screen.EXPERIMENTAL, R.string.translation_automatic,
 					R.string.translation_automatic__summary, Preferences.KEY_TRANSLATION_AUTO);
 			add(context, entries, Screen.EXPERIMENTAL, R.string.translation_language_package);

@@ -19,6 +19,7 @@ import chan.util.StringUtils;
 import com.mishiranu.dashchan.BuildConfig;
 import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
+import com.mishiranu.dashchan.content.translation.TranslationEngine;
 import com.mishiranu.dashchan.util.SharedPreferences;
 import com.mishiranu.dashchan.widget.ClickableToast;
 import java.io.File;
@@ -1793,6 +1794,8 @@ public class Preferences {
 	public static final String DEFAULT_TRANSLATION_NATIVE_LANGUAGE = "ru";
 	public static final String KEY_TRANSLATION_AUTO = "translation_auto";
 	public static final boolean DEFAULT_TRANSLATION_AUTO = true;
+	public static final String KEY_TRANSLATION_ENGINE = "translation_engine";
+	public static final String DEFAULT_TRANSLATION_ENGINE = "mozilla";
 	public static final String KEY_VIDEO_AUDIO_BOOST = "video_audio_boost";
 	public static final boolean DEFAULT_VIDEO_AUDIO_BOOST = false;
 	public static final String KEY_VIDEO_AUDIO_BOOST_DB = "video_audio_boost_db";
@@ -1826,6 +1829,12 @@ public class Preferences {
 
 	public static boolean isTranslationAutoEnabled() {
 		return PREFERENCES.getBoolean(KEY_TRANSLATION_AUTO, DEFAULT_TRANSLATION_AUTO);
+	}
+
+	public static TranslationEngine getTranslationEngine() {
+		TranslationEngine engine = TranslationEngine.fromValue(PREFERENCES.getString(KEY_TRANSLATION_ENGINE,
+				DEFAULT_TRANSLATION_ENGINE));
+		return engine.isAvailable() ? engine : TranslationEngine.MOZILLA;
 	}
 
 	public static boolean isVideoAudioBoost() {

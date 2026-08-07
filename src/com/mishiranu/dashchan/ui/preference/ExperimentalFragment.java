@@ -7,6 +7,10 @@ import androidx.annotation.NonNull;
 import com.mishiranu.dashchan.BuildConfig;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
+import com.mishiranu.dashchan.content.translation.GeminiNanoTranslationBridge;
+import com.mishiranu.dashchan.content.translation.GoogleTranslationBridge;
+import com.mishiranu.dashchan.content.translation.TranslationController;
+import com.mishiranu.dashchan.content.translation.TranslationEngine;
 import com.mishiranu.dashchan.content.translation.TranslationModel;
 import com.mishiranu.dashchan.content.translation.TranslationModelManager;
 import com.mishiranu.dashchan.media.VideoDiagnostics;
@@ -19,10 +23,12 @@ import com.mishiranu.dashchan.util.NavigationUtils;
 import com.mishiranu.dashchan.util.SharedPreferences;
 import com.mishiranu.dashchan.widget.ClickableToast;
 import java.io.File;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Locale;
 
-public class ExperimentalFragment extends PreferenceFragment implements TranslationModelManager.Listener {
+public class ExperimentalFragment extends PreferenceFragment implements TranslationModelManager.Listener,
+		GoogleTranslationBridge.Listener, GeminiNanoTranslationBridge.Listener {
 	@Override
 	protected SharedPreferences getPreferences() {
 		return Preferences.PREFERENCES;
@@ -91,45 +97,135 @@ public class ExperimentalFragment extends PreferenceFragment implements Translat
 				Preferences.DEFAULT_TRANSLATION_NATIVE_LANGUAGE, R.string.translation_native_language,
 				Arrays.asList(getText(R.string.translation_language_russian),
 						getText(R.string.translation_language_english)))
-				.setOnAfterChangeListener(p -> refreshPreferences());
+				.setOnAfterChangeListener(p -> {
+					TranslationController.getInstance().unload();
+					refreshPreferences();
+				});
+		if (BuildConfig.ENABLE_GOOGLE_TRANSLATION || BuildConfig.ENABLE_GEMINI_NANO_TRANSLATION) {
+			ArrayList<String> engineValues = new ArrayList<>();
+			ArrayList<CharSequence> engineTitles = new ArrayList<>();
+			engineValues.add(TranslationEngine.MOZILLA.value);
+			engineTitles.add(getText(R.string.translation_engine_mozilla));
+			if (BuildConfig.ENABLE_GOOGLE_TRANSLATION) {
+				engineValues.add(TranslationEngine.GOOGLE.value);
+				engineTitles.add(getText(R.string.translation_engine_google));
+			}
+			if (BuildConfig.ENABLE_GEMINI_NANO_TRANSLATION) {
+				engineValues.add(TranslationEngine.GEMINI_NANO.value);
+				engineTitles.add(getText(R.string.translation_engine_gemini_nano));
+			}
+			addList(Preferences.KEY_TRANSLATION_ENGINE, engineValues, Preferences.DEFAULT_TRANSLATION_ENGINE,
+					R.string.translation_engine, engineTitles)
+					.setOnAfterChangeListener(p -> {
+						TranslationController.getInstance().unload();
+						refreshPreferences();
+					});
+		}
 		addCheck(true, Preferences.KEY_TRANSLATION_AUTO, Preferences.DEFAULT_TRANSLATION_AUTO,
 				R.string.translation_automatic, R.string.translation_automatic__summary);
 
 		TranslationModel.Direction direction = TranslationModel.forNativeLanguage(
 				Preferences.getTranslationNativeLanguage());
-		TranslationModelManager manager = TranslationModelManager.getInstance();
-		TranslationModelManager.Snapshot snapshot = manager.getSnapshot(direction);
+		TranslationEngine engine = Preferences.getTranslationEngine();
 		String directionName = direction.getDisplayName(requireContext());
+		TranslationModelManager.State state;
+		int progress;
+		long downloadedBytes;
+		String error;
+		long packageSize;
+		GeminiNanoTranslationBridge.Snapshot geminiSnapshot = null;
+		if (engine == TranslationEngine.GOOGLE) {
+			GoogleTranslationBridge.Snapshot snapshot = GoogleTranslationBridge.getSnapshot(direction);
+			state = snapshot.state;
+			progress = snapshot.progress;
+			downloadedBytes = snapshot.downloadedBytes;
+			error = snapshot.error;
+			packageSize = GoogleTranslationBridge.APPROXIMATE_MODEL_SIZE;
+		} else if (engine == TranslationEngine.GEMINI_NANO) {
+			geminiSnapshot = GeminiNanoTranslationBridge.getSnapshot(direction);
+			state = geminiSnapshot.state;
+			progress = geminiSnapshot.progress;
+			downloadedBytes = geminiSnapshot.downloadedBytes;
+			error = geminiSnapshot.error;
+			packageSize = geminiSnapshot.totalBytes;
+		} else {
+			TranslationModelManager.Snapshot snapshot = TranslationModelManager.getInstance().getSnapshot(direction);
+			state = snapshot.state;
+			progress = snapshot.progress;
+			downloadedBytes = 0L;
+			error = snapshot.error;
+			packageSize = direction.compressedSize;
+		}
 		String summary;
-		switch (snapshot.state) {
+		switch (state) {
 			case INSTALLED: {
-				summary = getString(R.string.translation_package_installed__format, directionName,
-						formatSize(direction.uncompressedSize));
+				summary = engine == TranslationEngine.GEMINI_NANO
+						? getString(R.string.translation_package_gemini_installed)
+						: getString(R.string.translation_package_installed__format, directionName,
+								formatSize(engine == TranslationEngine.GOOGLE
+										? GoogleTranslationBridge.APPROXIMATE_MODEL_SIZE : direction.uncompressedSize));
+				break;
+			}
+			case CHECKING: {
+				summary = getString(R.string.translation_package_checking);
 				break;
 			}
 			case DOWNLOADING: {
-				summary = getString(R.string.translation_package_downloading__format, snapshot.progress);
+				if (engine == TranslationEngine.GEMINI_NANO) {
+					summary = packageSize > 0L
+							? getString(R.string.translation_package_downloading_bytes_total__format,
+									formatSize(downloadedBytes), formatSize(packageSize))
+							: getString(R.string.translation_package_downloading_bytes__format,
+									formatSize(downloadedBytes));
+				} else {
+					summary = engine == TranslationEngine.GOOGLE
+							? getString(R.string.translation_package_downloading_bytes__format,
+									formatSize(downloadedBytes))
+							: getString(R.string.translation_package_downloading__format, progress);
+				}
 				break;
 			}
 			case ERROR: {
-				summary = getString(R.string.translation_package_error__format, snapshot.error);
+				summary = engine == TranslationEngine.GEMINI_NANO && geminiSnapshot != null &&
+						!geminiSnapshot.supported
+						? getString(R.string.translation_package_gemini_unavailable)
+						: getString(R.string.translation_package_error__format, error);
 				break;
 			}
 			default: {
-				summary = getString(R.string.translation_package_not_installed__format, directionName,
-						formatSize(direction.compressedSize));
+				if (engine == TranslationEngine.GEMINI_NANO && geminiSnapshot != null) {
+					summary = geminiSnapshot.supported
+							? getString(R.string.translation_package_gemini_downloadable)
+							: getString(R.string.translation_package_gemini_unavailable);
+				} else {
+					summary = getString(R.string.translation_package_not_installed__format, directionName,
+							formatSize(packageSize));
+				}
 				break;
 			}
 		}
 		Preference<Void> packagePreference = addButton(getString(R.string.translation_language_package), summary);
-		packagePreference.setSelectable(snapshot.state != TranslationModelManager.State.DOWNLOADING);
+		packagePreference.setSelectable(state != TranslationModelManager.State.DOWNLOADING &&
+				state != TranslationModelManager.State.CHECKING &&
+				!(engine == TranslationEngine.GEMINI_NANO && state == TranslationModelManager.State.INSTALLED));
+		GeminiNanoTranslationBridge.Snapshot finalGeminiSnapshot = geminiSnapshot;
 		packagePreference.setOnClickListener(p -> {
-			if (snapshot.state == TranslationModelManager.State.INSTALLED) {
+			if (engine == TranslationEngine.GEMINI_NANO && finalGeminiSnapshot != null &&
+					!finalGeminiSnapshot.supported) {
+				GeminiNanoTranslationBridge.refresh();
+				return;
+			}
+			if (state == TranslationModelManager.State.INSTALLED) {
 				new AlertDialog.Builder(requireContext())
 						.setTitle(R.string.translation_package_delete)
 						.setMessage(R.string.translation_package_delete__message)
 						.setPositiveButton(R.string.delete, (dialog, which) -> {
-							if (manager.delete(direction)) {
+							if (engine == TranslationEngine.GOOGLE) {
+								GoogleTranslationBridge.delete(direction, () -> {
+									ClickableToast.show(R.string.translation_package_deleted);
+									refreshPreferences();
+								});
+							} else if (TranslationModelManager.getInstance().delete(direction)) {
 								ClickableToast.show(R.string.translation_package_deleted);
 								refreshPreferences();
 							}
@@ -139,9 +235,21 @@ public class ExperimentalFragment extends PreferenceFragment implements Translat
 			} else {
 				new AlertDialog.Builder(requireContext())
 						.setTitle(R.string.translation_package_download)
-						.setMessage(R.string.translation_package_download__message)
+						.setMessage(engine == TranslationEngine.GOOGLE
+								? R.string.translation_package_download_google__message
+								: engine == TranslationEngine.GEMINI_NANO
+										? R.string.translation_package_download_gemini__message
+										: R.string.translation_package_download__message)
 						.setPositiveButton(R.string.translation_package_download_action,
-								(dialog, which) -> manager.download(direction))
+								(dialog, which) -> {
+									if (engine == TranslationEngine.GOOGLE) {
+										GoogleTranslationBridge.download(direction);
+									} else if (engine == TranslationEngine.GEMINI_NANO) {
+										GeminiNanoTranslationBridge.download(direction);
+									} else {
+										TranslationModelManager.getInstance().download(direction);
+									}
+								})
 						.setNegativeButton(android.R.string.cancel, null)
 						.show();
 			}
@@ -215,6 +323,12 @@ public class ExperimentalFragment extends PreferenceFragment implements Translat
 		super.onResume();
 		if (BuildConfig.ENABLE_LOCAL_TRANSLATION) {
 			TranslationModelManager.getInstance().register(this);
+			if (BuildConfig.ENABLE_GOOGLE_TRANSLATION) {
+				GoogleTranslationBridge.register(this);
+			}
+			if (BuildConfig.ENABLE_GEMINI_NANO_TRANSLATION) {
+				GeminiNanoTranslationBridge.register(this);
+			}
 		}
 		refreshPreferences();
 	}
@@ -223,6 +337,12 @@ public class ExperimentalFragment extends PreferenceFragment implements Translat
 	public void onPause() {
 		if (BuildConfig.ENABLE_LOCAL_TRANSLATION) {
 			TranslationModelManager.getInstance().unregister(this);
+			if (BuildConfig.ENABLE_GOOGLE_TRANSLATION) {
+				GoogleTranslationBridge.unregister(this);
+			}
+			if (BuildConfig.ENABLE_GEMINI_NANO_TRANSLATION) {
+				GeminiNanoTranslationBridge.unregister(this);
+			}
 		}
 		super.onPause();
 	}
@@ -230,6 +350,16 @@ public class ExperimentalFragment extends PreferenceFragment implements Translat
 	@Override
 	public void onTranslationModelChanged(TranslationModel.Direction direction,
 			TranslationModelManager.Snapshot snapshot) {
+		refreshPreferences();
+	}
+
+	@Override
+	public void onGoogleTranslationModelChanged(GoogleTranslationBridge.Snapshot snapshot) {
+		refreshPreferences();
+	}
+
+	@Override
+	public void onGeminiNanoTranslationModelChanged(GeminiNanoTranslationBridge.Snapshot snapshot) {
 		refreshPreferences();
 	}
 

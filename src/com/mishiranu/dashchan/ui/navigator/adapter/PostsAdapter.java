@@ -176,7 +176,7 @@ public class PostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
 
 	public void setTranslationEnabled(boolean enabled) {
 		configurationSet.showTranslatedComments = enabled;
-		configurationSet.translationKey = enabled ? TranslationController.getCurrentDirection().id : null;
+		configurationSet.translationKey = enabled ? TranslationController.getCurrentCacheKey() : null;
 		notifyDataSetChanged();
 	}
 
@@ -188,7 +188,7 @@ public class PostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
 		if (firstPosition < 0 || lastPosition < firstPosition) {
 			return false;
 		}
-		String key = TranslationController.getCurrentDirection().id;
+		String key = TranslationController.getCurrentCacheKey();
 		int end = Math.min(lastPosition, getItemCount() - 1);
 		for (int position = firstPosition; position <= end; position++) {
 			if (ViewUnit.ViewType.values()[getItemViewType(position)] == ViewUnit.ViewType.POST &&

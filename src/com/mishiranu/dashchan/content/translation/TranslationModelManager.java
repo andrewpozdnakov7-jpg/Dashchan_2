@@ -28,7 +28,7 @@ import java.util.concurrent.Executors;
 import java.util.zip.GZIPInputStream;
 
 public final class TranslationModelManager {
-	public enum State { NOT_INSTALLED, DOWNLOADING, INSTALLED, ERROR }
+	public enum State { NOT_INSTALLED, CHECKING, DOWNLOADING, INSTALLED, ERROR }
 
 	public static final class Snapshot {
 		public final State state;
