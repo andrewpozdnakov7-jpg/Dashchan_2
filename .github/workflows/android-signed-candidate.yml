@@ -17,8 +17,9 @@ on:
         options:
           - stable
           - beta
+          - fdroid
       source_sha:
-        description: Exact beta commit SHA; leave empty for stable
+        description: Exact beta or F-Droid source commit SHA; leave empty for stable
         required: false
         type: string
       include_fdroid_splits:
@@ -37,12 +38,14 @@ concurrency:
 jobs:
   build:
     name: Build ${{ inputs.candidate }} candidate
-    if: github.ref == 'refs/heads/master'
+    if: >-
+      (github.ref == 'refs/heads/master' && inputs.candidate != 'fdroid') ||
+      (github.ref == 'refs/heads/fdroid/policy-license-audit' && inputs.candidate == 'fdroid')
     runs-on: ubuntu-latest
     timeout-minutes: 150
     env:
       CANDIDATE_CHANNEL: ${{ inputs.candidate }}
-      INCLUDE_FDROID_SPLITS: ${{ inputs.include_fdroid_splits }}
+      INCLUDE_FDROID_SPLITS: ${{ inputs.candidate == 'fdroid' || inputs.include_fdroid_splits }}
       GITHUB_NATIVE_ABIS: arm64-v8a,armeabi-v7a,x86
 
     steps:
@@ -57,7 +60,7 @@ jobs:
             exit 1
           fi
           if [ "$REF_PROTECTED" != 'true' ]; then
-            echo '::error::The master ref is not protected by a branch rule or ruleset'
+            echo '::error::The signing ref is not protected by a branch rule or ruleset'
             exit 1
           fi
           case "$CANDIDATE_CHANNEL" in
@@ -77,6 +80,16 @@ jobs:
                 exit 1
               fi
               ;;
+            fdroid)
+              if ! [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+                echo '::error::A full lowercase 40-character source_sha is required for F-Droid'
+                exit 1
+              fi
+              if [ "$INCLUDE_FDROID_SPLITS" != 'true' ]; then
+                echo '::error::F-Droid signing requires the three ABI-split candidates'
+                exit 1
+              fi
+              ;;
             *)
               echo "::error::Unexpected candidate channel: $CANDIDATE_CHANNEL"
               exit 1
@@ -86,7 +99,7 @@ jobs:
       - name: Check out sources
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
-          ref: ${{ inputs.candidate == 'beta' && inputs.source_sha || github.sha }}
+          ref: ${{ inputs.candidate != 'stable' && inputs.source_sha || github.sha }}
           fetch-depth: 0
 
       - name: Validate candidate source
@@ -121,6 +134,35 @@ jobs:
               fi
               if ! git merge-base --is-ancestor refs/remotes/origin/master "$actual_sha"; then
                 echo '::error::Beta source is not based on the current master branch'
+                exit 1
+              fi
+              ;;
+            fdroid)
+              if [ "$actual_sha" != "$SOURCE_SHA" ]; then
+                echo "::error::F-Droid source SHA mismatch: $actual_sha"
+                exit 1
+              fi
+              git fetch --no-tags origin \
+                refs/heads/master:refs/remotes/origin/master \
+                refs/heads/fdroid/policy-license-audit:refs/remotes/origin/fdroid/policy-license-audit
+              fdroid_head="$(git rev-parse refs/remotes/origin/fdroid/policy-license-audit)"
+              if [ "$fdroid_head" != "$WORKFLOW_SHA" ]; then
+                echo "::error::The workflow is not running from the current protected F-Droid branch head: $fdroid_head"
+                exit 1
+              fi
+              if ! git merge-base --is-ancestor "$SOURCE_SHA" "$WORKFLOW_SHA"; then
+                echo '::error::Requested source_sha does not belong to the protected F-Droid branch'
+                exit 1
+              fi
+              if ! git merge-base --is-ancestor refs/remotes/origin/master "$SOURCE_SHA"; then
+                echo '::error::F-Droid source is not based on the current master branch'
+                exit 1
+              fi
+              mapfile -t workflow_only_changes < <(git diff --name-only "$SOURCE_SHA" "$WORKFLOW_SHA")
+              if [ "${#workflow_only_changes[@]}" -ne 1 ] || \
+                  [ "${workflow_only_changes[0]}" != '.github/workflows/android-signed-candidate.yml' ]; then
+                echo '::error::Only the signed-candidate workflow may differ from the requested F-Droid source'
+                printf 'Unexpected path: %s\n' "${workflow_only_changes[@]}"
                 exit 1
               fi
               ;;
@@ -192,13 +234,13 @@ jobs:
           PY
           )
           case "$CANDIDATE_CHANNEL" in
-            stable)
+            stable|fdroid)
               if [ $((release_version_code % 10)) -ne 0 ]; then
                 echo "::error::Release versionCode must reserve its final digit: $release_version_code"
                 exit 1
               fi
               case "$release_version_name" in
-                *-beta*) echo "::error::Stable candidate has a beta version name: $release_version_name"; exit 1 ;;
+                *-beta*) echo "::error::$CANDIDATE_CHANNEL candidate has a beta version name: $release_version_name"; exit 1 ;;
               esac
               ;;
             beta)
@@ -218,16 +260,18 @@ jobs:
           rm -rf unsigned-candidates
           mkdir unsigned-candidates
 
-          ./gradlew --no-daemon --stacktrace assembleGithubNdebug \
-            -PnativePlayerFfmpegFlavor=ffmpeg8 \
-            -PnativeAbis="$GITHUB_NATIVE_ABIS"
-          mapfile -d '' github_apks < <(find build/outputs/apk/github/ndebug -maxdepth 1 \
-            -type f -name '*-unsigned.apk' -print0 | sort -z)
-          if [ "${#github_apks[@]}" -ne 1 ]; then
-            echo "::error::Expected exactly one unsigned GitHub APK, found ${#github_apks[@]}"
-            exit 1
+          if [ "$CANDIDATE_CHANNEL" != 'fdroid' ]; then
+            ./gradlew --no-daemon --stacktrace assembleGithubNdebug \
+              -PnativePlayerFfmpegFlavor=ffmpeg8 \
+              -PnativeAbis="$GITHUB_NATIVE_ABIS"
+            mapfile -d '' github_apks < <(find build/outputs/apk/github/ndebug -maxdepth 1 \
+              -type f -name '*-unsigned.apk' -print0 | sort -z)
+            if [ "${#github_apks[@]}" -ne 1 ]; then
+              echo "::error::Expected exactly one unsigned GitHub APK, found ${#github_apks[@]}"
+              exit 1
+            fi
+            cp "${github_apks[0]}" unsigned-candidates/github-all.apk
           fi
-          cp "${github_apks[0]}" unsigned-candidates/github-all.apk
 
           if [ "$INCLUDE_FDROID_SPLITS" = 'true' ]; then
             for candidate in \
@@ -263,7 +307,10 @@ jobs:
   sign:
     name: Sign and verify ${{ inputs.candidate }} candidate
     needs: build
-    if: needs.build.result == 'success' && github.ref == 'refs/heads/master'
+    if: >-
+      needs.build.result == 'success' &&
+      ((github.ref == 'refs/heads/master' && inputs.candidate != 'fdroid') ||
+      (github.ref == 'refs/heads/fdroid/policy-license-audit' && inputs.candidate == 'fdroid'))
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment:
@@ -271,7 +318,7 @@ jobs:
       deployment: false
     env:
       CANDIDATE_CHANNEL: ${{ inputs.candidate }}
-      INCLUDE_FDROID_SPLITS: ${{ inputs.include_fdroid_splits }}
+      INCLUDE_FDROID_SPLITS: ${{ inputs.candidate == 'fdroid' || inputs.include_fdroid_splits }}
       EXPECTED_CERT_SHA256: a9fbac6c498f7ad8e7c56849afe43881966bed2ed2bc1dd1c73d0ffe0b9ebeba
 
     steps:
@@ -330,7 +377,7 @@ jobs:
             fi
           done
 
-          if [ ! -f unsigned-candidates/github-all.apk ]; then
+          if [ "$CANDIDATE_CHANNEL" != 'fdroid' ] && [ ! -f unsigned-candidates/github-all.apk ]; then
             echo '::error::Unsigned GitHub candidate is missing'
             exit 1
           fi
@@ -448,8 +495,10 @@ jobs:
             printf -v "${distribution}_version_code" '%s' "$version_code"
           }
 
-          github_abis="$(printf '%s\n' arm64-v8a armeabi-v7a x86 | sort)"
-          sign_and_verify github unsigned-candidates/github-all.apk "$github_abis" all-abi
+          if [ "$CANDIDATE_CHANNEL" != 'fdroid' ]; then
+            github_abis="$(printf '%s\n' arm64-v8a armeabi-v7a x86 | sort)"
+            sign_and_verify github unsigned-candidates/github-all.apk "$github_abis" all-abi
+          fi
           if [ "$INCLUDE_FDROID_SPLITS" = 'true' ]; then
             sign_and_verify fdroid_armv7 unsigned-candidates/fdroid-armv7.apk armeabi-v7a armeabi-v7a
             sign_and_verify fdroid_arm64 unsigned-candidates/fdroid-arm64.apk arm64-v8a arm64-v8a
@@ -469,15 +518,29 @@ jobs:
                 *) echo "::error::Signed beta version name is invalid: $github_version_name"; exit 1 ;;
               esac
               ;;
+            fdroid)
+              fdroid_base_version_code=$((fdroid_armv7_version_code - 1))
+              if [ $((fdroid_base_version_code % 10)) -ne 0 ]; then
+                echo "::error::F-Droid base version code does not reserve its final digit: $fdroid_base_version_code"
+                exit 1
+              fi
+              candidate_version_name="$fdroid_armv7_version_name"
+              candidate_version_code="$fdroid_base_version_code"
+              ;;
           esac
+
+          if [ "$CANDIDATE_CHANNEL" != 'fdroid' ]; then
+            candidate_version_name="$github_version_name"
+            candidate_version_code="$github_version_code"
+          fi
 
           if [ "$INCLUDE_FDROID_SPLITS" = 'true' ]; then
             for candidate in 'fdroid_armv7:1' 'fdroid_arm64:2' 'fdroid_x86:3'; do
               IFS=: read -r distribution offset <<< "$candidate"
               version_name_variable="${distribution}_version_name"
               version_code_variable="${distribution}_version_code"
-              if [ "${!version_name_variable}" != "$github_version_name" ] || \
-                  [ "${!version_code_variable}" -ne $((github_version_code + offset)) ]; then
+              if [ "${!version_name_variable}" != "$candidate_version_name" ] || \
+                  [ "${!version_code_variable}" -ne $((candidate_version_code + offset)) ]; then
                 echo "::error::$distribution candidate version does not match the ABI version-code scheme"
                 exit 1
               fi
@@ -486,11 +549,13 @@ jobs:
 
           (cd signed-artifacts && sha256sum ./*.apk > SHA256SUMS.txt)
           {
-            echo "github_apk_name=$github_apk_name"
-            echo "github_apk_sha256=$github_apk_sha256"
-            echo "github_apk_bytes=$github_apk_bytes"
-            echo "version_name=$github_version_name"
-            echo "version_code=$github_version_code"
+            if [ "$CANDIDATE_CHANNEL" != 'fdroid' ]; then
+              echo "github_apk_name=$github_apk_name"
+              echo "github_apk_sha256=$github_apk_sha256"
+              echo "github_apk_bytes=$github_apk_bytes"
+            fi
+            echo "version_name=$candidate_version_name"
+            echo "version_code=$candidate_version_code"
             if [ "$INCLUDE_FDROID_SPLITS" = 'true' ]; then
               echo "fdroid_armv7_apk_name=$fdroid_armv7_apk_name"
               echo "fdroid_armv7_apk_sha256=$fdroid_armv7_apk_sha256"
@@ -525,9 +590,11 @@ jobs:
             echo "### Signed $CANDIDATE_CHANNEL Android candidate"
             echo
             echo "- Version: \`$VERSION_NAME ($VERSION_CODE)\`"
-            echo "- GitHub APK: \`$GITHUB_APK_NAME\`"
-            echo "  - SHA-256: \`$GITHUB_APK_SHA256\`"
-            echo "  - Bytes: \`$GITHUB_APK_BYTES\`"
+            if [ "$CANDIDATE_CHANNEL" != 'fdroid' ]; then
+              echo "- GitHub APK: \`$GITHUB_APK_NAME\`"
+              echo "  - SHA-256: \`$GITHUB_APK_SHA256\`"
+              echo "  - Bytes: \`$GITHUB_APK_BYTES\`"
+            fi
             if [ "$INCLUDE_FDROID_SPLITS" = 'true' ]; then
               echo "- F-Droid armeabi-v7a APK: \`$FDROID_ARMV7_APK_NAME\`"
               echo "  - SHA-256: \`$FDROID_ARMV7_APK_SHA256\`"
@@ -540,10 +607,14 @@ jobs:
               echo "  - Bytes: \`$FDROID_X86_APK_BYTES\`"
             fi
             echo "- Certificate SHA-256: \`$EXPECTED_CERT_SHA256\`"
-            echo '- GitHub ABI set: `arm64-v8a`, `armeabi-v7a`, `x86`'
-            if [ "$INCLUDE_FDROID_SPLITS" = 'true' ]; then
-              echo '- F-Droid APKs: one ABI per package'
+            if [ "$CANDIDATE_CHANNEL" = 'fdroid' ]; then
+              echo '- Output: three F-Droid split APKs; no universal GitHub APK'
             else
+              echo '- GitHub ABI set: `arm64-v8a`, `armeabi-v7a`, `x86`'
+            fi
+            if [ "$INCLUDE_FDROID_SPLITS" = 'true' ] && [ "$CANDIDATE_CHANNEL" != 'fdroid' ]; then
+              echo '- F-Droid APKs: one ABI per package'
+            elif [ "$INCLUDE_FDROID_SPLITS" != 'true' ]; then
               echo '- Output: one universal GitHub APK; no F-Droid packages'
             fi
             echo '- Signing tool: `apksigner` from Android Build Tools 34.0.0'
