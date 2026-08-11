@@ -7,6 +7,7 @@ import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.database.CommonDatabase;
 import com.mishiranu.dashchan.content.service.DownloadService;
 import com.mishiranu.dashchan.content.storage.AutohideStorage;
+import com.mishiranu.dashchan.content.storage.CombinedFeedStorage;
 import com.mishiranu.dashchan.content.storage.FavoritesStorage;
 import com.mishiranu.dashchan.content.storage.StatisticsStorage;
 import com.mishiranu.dashchan.content.storage.ThemesStorage;
@@ -134,6 +135,8 @@ public class BackupManager {
 				Arrays.asList(BACKUP_VERSION_0, BACKUP_VERSION_1)),
 		AUTOHIDE(R.string.autohide, AutohideStorage.getInstance().getFilesForBackup(),
 				Arrays.asList(BACKUP_VERSION_0, BACKUP_VERSION_1)),
+		COMBINED_FEEDS(R.string.combined_feeds, CombinedFeedStorage.getInstance().getFilesForBackup(),
+				Collections.singletonList(BACKUP_VERSION_1)),
 		STATISTICS(R.string.statistics, StatisticsStorage.getInstance().getFilesForBackup(),
 				Arrays.asList(BACKUP_VERSION_0, BACKUP_VERSION_1)),
 		THEMES(R.string.themes, ThemesStorage.getInstance().getFilesForBackup(),

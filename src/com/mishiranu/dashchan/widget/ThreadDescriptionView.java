@@ -67,6 +67,14 @@ public class ThreadDescriptionView extends View {
 		invalidate();
 	}
 
+	public void appendPreserveCase(String value) {
+		if (!StringUtils.isEmpty(value)) {
+			description.add(value);
+			shortDescription.clear();
+		}
+		invalidate();
+	}
+
 	private void prepareShortDescription() {
 		if (shortDescription.isEmpty()) {
 			StringBuilder builder = new StringBuilder();

@@ -1000,4 +1000,29 @@
 	<string name="vote_like">Нравится</string>
 	<string name="vote_dislike">Не нравится</string>
 	<string name="vote_already_submitted">Вы уже голосовали</string>
+	<string name="combined_feeds">Мои ленты</string>
+	<string name="combined_feeds__summary">Объединяйте несколько досок Двача в собственные ленты</string>
+	<string name="configure_combined_feeds">Настроить ленты</string>
+	<string name="configure_combined_feeds__summary">Создание и изменение собственных лент</string>
+	<string name="configure_combined_feed">Настроить ленту</string>
+	<string name="add_combined_feed">Добавить ленту</string>
+	<string name="edit_combined_feed">Изменить ленту</string>
+	<string name="combined_feed_name">Название ленты</string>
+	<string name="combined_feed_name_required">Введите название ленты</string>
+	<string name="combined_feed_minimum_boards">Выберите не менее двух досок</string>
+	<string name="show_sticky_threads">Показывать закреплённые треды</string>
+	<string name="combined_feeds_empty">Лент пока нет</string>
+	<string name="combined_feeds_add__summary">Выберите две или больше досок Двача</string>
+	<string name="combined_feeds_limit">Достигнут лимит лент</string>
+	<string name="combined_feeds_boards_unavailable">Список досок Двача недоступен</string>
+	<string name="combined_feed_not_found">Лента удалена или недоступна</string>
+	<string name="combined_feed_partial_failure__format">Не удалось обновить %1$d из %2$d досок</string>
+	<string name="combined_feed_failed__format">ошибок: %d</string>
+	<string name="delete_combined_feed_confirmation">Удалить эту ленту?</string>
+	<plurals name="number_boards__format">
+		<item quantity="one">%d доска</item>
+		<item quantity="few">%d доски</item>
+		<item quantity="many">%d досок</item>
+		<item quantity="other">%d доски</item>
+	</plurals>
 </resources>

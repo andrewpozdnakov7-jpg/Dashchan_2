@@ -20,6 +20,7 @@ import androidx.webkit.WebViewFeature;
 import chan.http.HttpClient;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.content.MainApplication;
+import com.mishiranu.dashchan.content.net.UserAgentProvider;
 import java.lang.reflect.Field;
 import java.util.Map;
 import java.util.concurrent.Executor;
@@ -32,6 +33,7 @@ public class WebViewUtils {
 		settings.setAllowFileAccessFromFileURLs(false);
 		settings.setAllowUniversalAccessFromFileURLs(false);
 		settings.setSafeBrowsingEnabled(true);
+		settings.setUserAgentString(UserAgentProvider.getInstance().getUserAgent());
 	}
 
 	@SuppressWarnings("deprecation")

@@ -241,6 +241,11 @@ public class ViewUnit {
 
 	public void bindThreadView(RecyclerView.ViewHolder viewHolder,
 			PostItem postItem, UiManager.ConfigurationSet configurationSet) {
+		bindThreadView(viewHolder, postItem, configurationSet, null);
+	}
+
+	public void bindThreadView(RecyclerView.ViewHolder viewHolder,
+			PostItem postItem, UiManager.ConfigurationSet configurationSet, String sourceLabel) {
 		Context context = uiManager.getContext();
 		ColorScheme colorScheme = ThemeEngine.getColorScheme(context);
 		ThreadViewHolder holder = (ThreadViewHolder) viewHolder;
@@ -275,6 +280,10 @@ public class ViewUnit {
 		holder.comment.setText(comment);
 		holder.comment.setVisibility(holder.comment.getText().length() > 0 ? View.VISIBLE : View.GONE);
 		holder.description.clear();
+		holder.description.setToEnd(StringUtils.isEmpty(sourceLabel) && holder.descriptionToEnd);
+		if (!StringUtils.isEmpty(sourceLabel)) {
+			holder.description.appendPreserveCase(sourceLabel);
+		}
 		postItem.formatThreadCardDescription(context.getResources(), false, holder.description::append);
 
 		List<AttachmentItem> attachmentItems = postItem.getAttachmentItems();
@@ -297,6 +306,12 @@ public class ViewUnit {
 
 	public void bindThreadCellView(RecyclerView.ViewHolder viewHolder,
 			PostItem postItem, UiManager.ConfigurationSet configurationSet, boolean small, int contentHeight) {
+		bindThreadCellView(viewHolder, postItem, configurationSet, small, contentHeight, null);
+	}
+
+	public void bindThreadCellView(RecyclerView.ViewHolder viewHolder,
+			PostItem postItem, UiManager.ConfigurationSet configurationSet, boolean small, int contentHeight,
+			String sourceLabel) {
 		Context context = uiManager.getContext();
 		ColorScheme colorScheme = ThemeEngine.getColorScheme(context);
 		ThreadViewHolder holder = (ThreadViewHolder) viewHolder;
@@ -336,6 +351,10 @@ public class ViewUnit {
 		holder.comment.setText(comment);
 		holder.comment.setVisibility(StringUtils.isEmpty(comment) ? View.GONE : View.VISIBLE);
 		holder.description.clear();
+		holder.description.setToEnd(StringUtils.isEmpty(sourceLabel) && holder.descriptionToEnd);
+		if (!StringUtils.isEmpty(sourceLabel)) {
+			holder.description.appendPreserveCase(sourceLabel);
+		}
 		postItem.formatThreadCardDescription(context.getResources(), true, holder.description::append);
 
 		if (attachmentItems != null && !hidden) {
@@ -1096,6 +1115,7 @@ public class ViewUnit {
 		public final TextView subject;
 		public final TextView comment;
 		public final ThreadDescriptionView description;
+		public final boolean descriptionToEnd;
 		public final ImageView[] stateImages;
 		public final View threadContent;
 		public final View showOriginalPost;
@@ -1140,11 +1160,12 @@ public class ViewUnit {
 			description.setTextColor(ThemeEngine.getTheme(description.getContext()).meta);
 			description.setTextSizeSp(11f * textScale);
 			description.setSpacing((int) (descriptionSpacingDp * density));
+			boolean descriptionToEnd;
 			if (threadViewType == ThreadViewType.CELL) {
 				thumbnail.setFitSquare(true);
 				ViewUtils.applyScaleSize(textScale, comment, subject);
 				stateImages = null;
-				description.setToEnd(true);
+				descriptionToEnd = true;
 			} else {
 				stateImages = new ImageView[PostState.THREAD_ITEM_STATES.size()];
 				fillStateImages(showOriginalPost, threadViewType == ThreadViewType.CARD ? 1 : 0,
@@ -1157,7 +1178,7 @@ public class ViewUnit {
 				ViewUtils.applyScaleSize(textScale, stateImages);
 				if (ResourceUtils.isTablet(itemView.getResources().getConfiguration()) &&
 						threadViewType == ThreadViewType.CARD) {
-					description.setToEnd(false);
+					descriptionToEnd = false;
 					int thumbnailSize = (int) (72f * density);
 					thumbnailLayoutParams.width = thumbnailSize;
 					thumbnailLayoutParams.height = thumbnailSize;
@@ -1167,7 +1188,7 @@ public class ViewUnit {
 							description.getPaddingRight(), description.getPaddingBottom());
 					comment.setMaxLines(8);
 				} else {
-					description.setToEnd(threadViewType != ThreadViewType.LIST);
+					descriptionToEnd = threadViewType != ThreadViewType.LIST;
 					comment.setMaxLines(6);
 				}
 				float thumbnailsScale = Preferences.getThumbnailsScale();
@@ -1176,6 +1197,8 @@ public class ViewUnit {
 					thumbnailLayoutParams.height = (int) (thumbnailLayoutParams.height * thumbnailsScale);
 				}
 			}
+			this.descriptionToEnd = descriptionToEnd;
+			description.setToEnd(descriptionToEnd);
 		}
 
 		@Override

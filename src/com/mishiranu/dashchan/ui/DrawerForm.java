@@ -47,6 +47,7 @@ import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.model.PostNumber;
 import com.mishiranu.dashchan.content.service.WatcherService;
+import com.mishiranu.dashchan.content.storage.CombinedFeedStorage;
 import com.mishiranu.dashchan.content.storage.FavoritesStorage;
 import com.mishiranu.dashchan.graphics.ChanIconDrawable;
 import com.mishiranu.dashchan.util.FlagUtils;
@@ -65,6 +66,7 @@ import com.mishiranu.dashchan.widget.SortableHelper;
 import com.mishiranu.dashchan.widget.ThemeEngine;
 import com.mishiranu.dashchan.widget.WatcherView;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -105,9 +107,12 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	private static final int PREWARM_ITEM_COUNT = 12;
 	private boolean drawerPrewarmScheduled;
 	private boolean drawerPrewarmed;
+	private int[] drawerPrewarmViewTypes;
+	private int drawerPrewarmViewTypeIndex;
 
 	private boolean mergeChans = false;
 	private boolean showHistory = false;
+	private boolean combinedFeedsEnabled = false;
 	private Preferences.PagesListMode pagesListMode = null;
 	private boolean chanSelectMode = false;
 	private boolean showRestartButton = false;
@@ -155,6 +160,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	public interface Callback {
 		void onSelectChan(String chanName);
 		void onSelectBoard(String chanName, String boardName, boolean fromCache);
+		void onSelectCombinedFeed(String feedId);
 		boolean onSelectThread(String chanName, String boardName, String threadNumber, PostNumber postNumber,
 				String threadTitle, boolean fromCache);
 		void onClosePage(String chanName, String boardName, String threadNumber);
@@ -435,11 +441,13 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	private boolean updatePreferencesWithoutConfiguration() {
 		boolean mergeChans = Preferences.isMergeChans();
 		boolean showHistory = Preferences.isRememberHistory();
+		boolean combinedFeedsEnabled = Preferences.isCombinedFeedsEnabled();
 		Preferences.PagesListMode pagesListMode = Preferences.getPagesListMode();
 		if (this.mergeChans != mergeChans || this.showHistory != showHistory ||
-				this.pagesListMode != pagesListMode) {
+				this.combinedFeedsEnabled != combinedFeedsEnabled || this.pagesListMode != pagesListMode) {
 			this.mergeChans = mergeChans;
 			this.showHistory = showHistory;
+			this.combinedFeedsEnabled = combinedFeedsEnabled;
 			this.pagesListMode = pagesListMode;
 			return true;
 		}
@@ -461,6 +469,10 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 			return;
 		}
 		switch (listItem.type) {
+			case COMBINED_FEED: {
+				callback.onSelectCombinedFeed(listItem.boardName);
+				break;
+			}
 			case PAGE:
 			case FAVORITE: {
 				boolean fromCache = listItem.type == ListItem.Type.PAGE;
@@ -947,6 +959,22 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	private void updateListPages() {
 		this.pages.clear();
 		boolean mergeChans = this.mergeChans;
+		ArrayList<CombinedFeedStorage.Feed> combinedFeeds = new ArrayList<>();
+		if (combinedFeedsEnabled) {
+			for (CombinedFeedStorage.Feed feed : CombinedFeedStorage.getInstance().getFeeds()) {
+				if (mergeChans || feed.containsChan(chanName)) {
+					combinedFeeds.add(feed);
+				}
+			}
+		}
+		if (!combinedFeeds.isEmpty()) {
+			this.pages.add(new ListItem(ListItem.Type.SECTION, null, null, null,
+					context.getString(R.string.combined_feeds)));
+			for (CombinedFeedStorage.Feed feed : combinedFeeds) {
+				this.pages.add(new ListItem(ListItem.Type.COMBINED_FEED, feed.getPrimaryChanName(),
+						feed.id, null, feed.title));
+			}
+		}
 		Collection<Page> allPages = callback.obtainDrawerPages();
 		ArrayList<Page> pages = new ArrayList<>();
 		for (Page page : allPages) {
@@ -1054,7 +1082,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	}
 
 	private static class ListItem {
-		public enum Type {HEADER, RESTART, SECTION, PAGE, FAVORITE, MENU, CHAN}
+		public enum Type {HEADER, RESTART, SECTION, COMBINED_FEED, PAGE, FAVORITE, MENU, CHAN}
 
 		public static final ListItem HEADER = new ListItem(Type.HEADER, null, null, null, null);
 		public static final ListItem RESTART = new ListItem(Type.RESTART, null, null, null, null);
@@ -1093,6 +1121,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 				String chanName, String boardName, String threadNumber, String title) {
 			long hash = appendIdHash(ID_HASH_OFFSET, type.ordinal());
 			switch (type) {
+				case COMBINED_FEED:
 				case PAGE:
 				case FAVORITE: {
 					hash = appendIdHash(hash, chanName);
@@ -1401,6 +1430,10 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 						? ViewType.SECTION_BUTTON : ViewType.SECTION;
 				break;
 			}
+			case COMBINED_FEED: {
+				viewType = ViewType.ITEM;
+				break;
+			}
 			case PAGE: {
 				viewType = mergeChans ? ViewType.CLOSEABLE_ICON : ViewType.CLOSEABLE;
 				break;
@@ -1514,42 +1547,55 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 			return;
 		}
 		drawerPrewarmScheduled = true;
-		// RecyclerView otherwise creates every visible drawer row during the first opening animation.
-		Looper.myQueue().addIdleHandler(() -> {
-			drawerPrewarmScheduled = false;
-			if (!drawerOpened && !drawerAlwaysVisible && drawerState == DrawerLayout.STATE_IDLE && !drawerPrewarmed) {
-				prewarmDrawerHolders();
-			}
-			return false;
-		});
+		drawerPrewarmViewTypes = null;
+		drawerPrewarmViewTypeIndex = 0;
+		// RecyclerView otherwise creates every visible drawer row during the first opening animation. Create
+		// only one holder per idle opportunity so prewarming itself cannot become a long UI-thread stall.
+		Looper.myQueue().addIdleHandler(this::prewarmNextDrawerHolder);
 	}
 
-	private void prewarmDrawerHolders() {
-		Trace.beginSection("DrawerForm#prewarmHolders");
-		try {
+	private boolean prewarmNextDrawerHolder() {
+		if (drawerOpened || drawerAlwaysVisible || drawerState != DrawerLayout.STATE_IDLE || drawerPrewarmed) {
+			drawerPrewarmScheduled = false;
+			drawerPrewarmViewTypes = null;
+			return false;
+		}
+		if (drawerPrewarmViewTypes == null) {
 			int count = Math.min(getItemCount(), PREWARM_ITEM_COUNT);
+			int[] viewTypes = new int[count];
+			int viewTypesCount = 0;
 			int[] typeCounts = new int[ViewType.values().length];
 			for (int position = 0; position < count; position++) {
 				int viewType = getItemViewType(position);
 				ViewType type = ViewType.values()[viewType];
 				if (type != ViewType.HEADER && type != ViewType.RESTART) {
+					viewTypes[viewTypesCount++] = viewType;
 					typeCounts[viewType]++;
 				}
 			}
+			drawerPrewarmViewTypes = Arrays.copyOf(viewTypes, viewTypesCount);
 			RecyclerView.RecycledViewPool pool = recyclerView.getRecycledViewPool();
 			for (int viewType = 0; viewType < typeCounts.length; viewType++) {
-				int typeCount = typeCounts[viewType];
-				if (typeCount > 0) {
-					pool.setMaxRecycledViews(viewType, Math.max(5, typeCount));
-					for (int i = 0; i < typeCount; i++) {
-						pool.putRecycledView(createViewHolder(recyclerView, viewType));
-					}
+				if (typeCounts[viewType] > 0) {
+					pool.setMaxRecycledViews(viewType, Math.max(5, typeCounts[viewType]));
 				}
 			}
+		}
+		if (drawerPrewarmViewTypeIndex >= drawerPrewarmViewTypes.length) {
 			drawerPrewarmed = true;
+			drawerPrewarmScheduled = false;
+			drawerPrewarmViewTypes = null;
+			return false;
+		}
+		Trace.beginSection("DrawerForm#prewarmHolder");
+		try {
+			RecyclerView.RecycledViewPool pool = recyclerView.getRecycledViewPool();
+			int viewType = drawerPrewarmViewTypes[drawerPrewarmViewTypeIndex++];
+			pool.putRecycledView(createViewHolder(recyclerView, viewType));
 		} finally {
 			Trace.endSection();
 		}
+		return true;
 	}
 
 	private int prepareCategoriesArray() {
@@ -1796,10 +1842,12 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 				// Do nothing
 				break;
 			}
+			case COMBINED_FEED:
 			case PAGE:
 			case FAVORITE: {
-				holder.text.setText(formatBoardThreadTitle(listItem.isThreadItem(),
-						listItem.boardName, listItem.threadNumber, listItem.title));
+				holder.text.setText(listItem.type == ListItem.Type.COMBINED_FEED ? listItem.title
+						: formatBoardThreadTitle(listItem.isThreadItem(),
+								listItem.boardName, listItem.threadNumber, listItem.title));
 				if (listItem.type == ListItem.Type.FAVORITE && listItem.isThreadItem() &&
 						watcherSupportSet.contains(listItem.chanName)) {
 					holder.watcher.setProgressAnimationEnabled(canApplyWatcherUpdates());

@@ -7,6 +7,7 @@ import chan.util.CommonUtils;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.ui.navigator.page.ArchivePage;
 import com.mishiranu.dashchan.ui.navigator.page.BoardsPage;
+import com.mishiranu.dashchan.ui.navigator.page.CombinedThreadsPage;
 import com.mishiranu.dashchan.ui.navigator.page.HistoryPage;
 import com.mishiranu.dashchan.ui.navigator.page.ListPage;
 import com.mishiranu.dashchan.ui.navigator.page.PostsPage;
@@ -17,6 +18,7 @@ import com.mishiranu.dashchan.ui.navigator.page.UserBoardsPage;
 public final class Page implements Parcelable {
 	public enum Content {
 		THREADS(ThreadsPage::new),
+		COMBINED_THREADS(CombinedThreadsPage::new),
 		POSTS(PostsPage::new),
 		SEARCH(SearchPage::new),
 		ARCHIVE(ArchivePage::new),
@@ -59,7 +61,8 @@ public final class Page implements Parcelable {
 	}
 
 	public boolean canDestroyIfNotInStack() {
-		return content == Content.SEARCH || content == Content.ARCHIVE || content == Content.BOARDS
+		return content == Content.COMBINED_THREADS || content == Content.SEARCH || content == Content.ARCHIVE
+				|| content == Content.BOARDS
 				|| content == Content.HISTORY;
 	}
 
@@ -68,12 +71,13 @@ public final class Page implements Parcelable {
 			String boardName = Preferences.getDefaultBoardName(Chan.get(chanName));
 			return boardName != null;
 		}
-		return content == Content.SEARCH || content == Content.ARCHIVE || content == Content.USER_BOARDS
+		return content == Content.COMBINED_THREADS || content == Content.SEARCH || content == Content.ARCHIVE
+				|| content == Content.USER_BOARDS
 				|| content == Content.HISTORY;
 	}
 
 	public boolean isMultiChanAllowed() {
-		return content == Content.HISTORY;
+		return content == Content.COMBINED_THREADS || content == Content.HISTORY;
 	}
 
 	public boolean isThreadsOrPosts(String chanName, String boardName, String threadNumber) {

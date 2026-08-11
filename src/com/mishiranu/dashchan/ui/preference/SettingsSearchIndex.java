@@ -41,6 +41,10 @@ public final class SettingsSearchIndex {
 			@Override
 			ContentFragment createFragment() { return new InterfaceFragment(); }
 		},
+		COMBINED_FEEDS(R.string.experimental_features, R.string.combined_feeds) {
+			@Override
+			ContentFragment createFragment() { return new CombinedFeedsFragment(); }
+		},
 		GESTURES(R.string.user_interface, R.string.gesture_controls) {
 			@Override
 			ContentFragment createFragment() { return new GestureSettingsFragment(); }
@@ -328,6 +332,10 @@ public final class SettingsSearchIndex {
 		}
 		add(context, entries, Screen.EXPERIMENTAL, R.string.video_diagnostics_start,
 				R.string.video_diagnostics_start__summary, null);
+		add(context, entries, Screen.EXPERIMENTAL, R.string.combined_feeds,
+				R.string.combined_feeds__summary, Preferences.KEY_COMBINED_FEEDS_ENABLED);
+		add(context, entries, Screen.COMBINED_FEEDS, R.string.configure_combined_feeds,
+				R.string.configure_combined_feeds__summary, null);
 
 		add(context, entries, Screen.INTERFACE, R.string.application_name, 0, Preferences.KEY_APPLICATION_NAME);
 		add(context, entries, Screen.INTERFACE, R.string.application_logo);

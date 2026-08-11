@@ -66,6 +66,15 @@ public class ExperimentalFragment extends PreferenceFragment implements Translat
 				Preferences.DEFAULT_OPEN_CONFIGURED_ATTACHMENT_FOLDER,
 				R.string.open_configured_attachment_folder,
 				R.string.open_configured_attachment_folder__summary);
+		CheckPreference combinedFeedsPreference = addCheck(true, Preferences.KEY_COMBINED_FEEDS_ENABLED,
+				Preferences.DEFAULT_COMBINED_FEEDS_ENABLED, R.string.combined_feeds,
+				R.string.combined_feeds__summary);
+		combinedFeedsPreference.setOnAfterChangeListener(p -> refreshPreferences());
+		if (combinedFeedsPreference.getValue()) {
+			addButton(R.string.configure_combined_feeds, R.string.configure_combined_feeds__summary)
+					.setOnClickListener(p -> ((FragmentHandler) requireActivity())
+							.pushFragment(new CombinedFeedsFragment()));
+		}
 		if (BuildConfig.ENABLE_LOCAL_TRANSLATION) {
 			addTranslationPreferences();
 		}

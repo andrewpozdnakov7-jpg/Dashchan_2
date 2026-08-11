@@ -60,6 +60,7 @@ import com.mishiranu.dashchan.content.service.DownloadService;
 import com.mishiranu.dashchan.content.service.PostingService;
 import com.mishiranu.dashchan.content.service.WatcherService;
 import com.mishiranu.dashchan.content.storage.FavoritesStorage;
+import com.mishiranu.dashchan.content.storage.CombinedFeedStorage;
 import com.mishiranu.dashchan.content.update.UpdateDialogHelper;
 import com.mishiranu.dashchan.ui.gallery.GalleryOverlay;
 import com.mishiranu.dashchan.ui.navigator.Page;
@@ -105,7 +106,7 @@ import java.util.List;
 import java.util.UUID;
 
 public class MainActivity extends StateActivity implements DrawerForm.Callback, ThemeDialog.Callback,
-		FavoritesStorage.Observer, WatcherService.Client.Callback,
+		FavoritesStorage.Observer, CombinedFeedStorage.Observer, WatcherService.Client.Callback,
 		UiManager.Callback, UiManager.LocalNavigator, FragmentHandler, PageFragment.Callback {
 	private static final String EXTRA_FRAGMENTS = "fragments";
 	private static final String EXTRA_STACK_PAGE_ITEMS = "stackPageItems";
@@ -140,6 +141,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	private CustomDrawerLayout drawerLayout;
 	private DrawerToggle drawerToggle;
 	private Runnable pendingDrawerNavigation;
+	private boolean performingDrawerNavigation;
 	private final HashSet<String> navigationAreaLockers = new HashSet<>();
 
 	private ExpandedScreen expandedScreen;
@@ -183,6 +185,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		ClickableToast.register(this);
 		ForegroundManager.getInstance().register(this);
 		FavoritesStorage.getInstance().getObservable().register(this);
+		CombinedFeedStorage.getInstance().getObservable().register(this);
 		Preferences.PREFERENCES.register(preferencesListener);
 		ChanManager.getInstance().observable.register(chanManagerCallback);
 		watcherServiceClient = WatcherService.getClient(this);
@@ -372,7 +375,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 				getSupportFragmentManager().beginTransaction()
 						.replace(R.id.content_fragment, currentFragmentFromSaved)
 						.commit();
-				updatePostFragmentConfiguration();
+				updatePostFragmentConfiguration(currentFragmentFromSaved);
 			}
 		} else {
 			ContentFragment currentFragment = getCurrentFragment();
@@ -382,7 +385,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 				currentPageItem = null;
 			}
 			if (currentFragment != null) {
-				updatePostFragmentConfiguration();
+				updatePostFragmentConfiguration(currentFragment);
 			}
 		}
 
@@ -1128,6 +1131,11 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 						new ListPage.InitRequest(!fromCache, null, null));
 				break;
 			}
+			case COMBINED_THREADS: {
+				pair = prepareAddPage(content, chanName, boardName, null, null,
+						new ListPage.InitRequest(!fromCache, null, null));
+				break;
+			}
 			case POSTS: {
 				pair = prepareAddPage(content, chanName, boardName, threadNumber, null,
 						new ListPage.InitRequest(!fromCache, postNumber, threadTitle));
@@ -1204,11 +1212,12 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 			pageItem.createdRealtime = SystemClock.elapsedRealtime();
 		}
 		currentPageItem = pageItem;
-		fragmentManager.beginTransaction()
-				.setTransition(FragmentTransaction.TRANSIT_FRAGMENT_OPEN)
-				.replace(R.id.content_fragment, fragment)
-				.commit();
-		updatePostFragmentConfiguration();
+		FragmentTransaction transaction = fragmentManager.beginTransaction();
+		transaction.setTransition(FragmentTransaction.TRANSIT_FRAGMENT_OPEN);
+		transaction.replace(R.id.content_fragment, fragment).commit();
+		// Don't call getCurrentFragment() here: it executes the pending transaction synchronously and used to
+		// inflate the destination screen in the same frame as drawer navigation.
+		updatePostFragmentConfiguration(fragment);
 
 		if (currentFragment instanceof PageFragment || fragment instanceof PageFragment) {
 			HashSet<String> retainIds = new HashSet<>(1 + stackPageItems.size() + preservedPageItems.size());
@@ -1240,11 +1249,13 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		}
 	}
 
-	private boolean deferNavigationUntilDrawerClosed(Runnable navigation) {
-		if (!wideMode && drawerLayout.isDrawerVisible(GravityCompat.START)) {
-			// Fragment creation can take several frames; don't run it concurrently with the drawer animation.
+	private boolean scheduleDrawerNavigation(Runnable navigation) {
+		if (!performingDrawerNavigation && !wideMode && drawerLayout.isDrawerVisible(GravityCompat.START)) {
+			// Start closing now, then navigate on the next frame. This keeps the drawer and fragment transitions
+			// visually concurrent without doing the navigation work in the click frame.
 			pendingDrawerNavigation = navigation;
 			drawerLayout.closeDrawer(GravityCompat.START);
+			drawerLayout.postOnAnimation(this::runPendingDrawerNavigation);
 			return true;
 		}
 		return false;
@@ -1254,19 +1265,22 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		Runnable navigation = pendingDrawerNavigation;
 		pendingDrawerNavigation = null;
 		if (navigation != null) {
-			drawerLayout.post(() -> {
-				Trace.beginSection("MainActivity#drawerNavigation");
-				try {
-					navigation.run();
-				} finally {
-					Trace.endSection();
-				}
-			});
+			Trace.beginSection("MainActivity#drawerNavigation");
+			performingDrawerNavigation = true;
+			try {
+				navigation.run();
+			} finally {
+				performingDrawerNavigation = false;
+				Trace.endSection();
+			}
 		}
 	}
 
 	private void updatePostFragmentConfiguration() {
-		ContentFragment currentFragment = getCurrentFragment();
+		updatePostFragmentConfiguration(getCurrentFragment());
+	}
+
+	private void updatePostFragmentConfiguration(ContentFragment currentFragment) {
 		String chanName;
 		if (currentFragment instanceof PageFragment) {
 			chanName = ((PageFragment) currentFragment).getPage().chanName;
@@ -1474,6 +1488,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		unbindService(downloadConnection);
 		watcherServiceClient.setCallback(null);
 		FavoritesStorage.getInstance().getObservable().unregister(this);
+		CombinedFeedStorage.getInstance().getObservable().unregister(this);
 		Preferences.PREFERENCES.unregister(preferencesListener);
 		ChanManager.getInstance().observable.unregister(chanManagerCallback);
 		for (Chan chan : ChanManager.getInstance().getAvailableChans()) {
@@ -1482,6 +1497,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		NotificationManager notificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
 		notificationManager.cancel(C.NOTIFICATION_ID_UPDATES);
 		FavoritesStorage.getInstance().await(true);
+		CombinedFeedStorage.getInstance().await(true);
 	}
 
 	@Override
@@ -1861,7 +1877,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	@Override
 	public void onSelectChan(String chanName) {
-		if (deferNavigationUntilDrawerClosed(() -> onSelectChan(chanName))) {
+		if (scheduleDrawerNavigation(() -> onSelectChan(chanName))) {
 			return;
 		}
 		ContentFragment currentFragment = getCurrentFragment();
@@ -1910,7 +1926,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	@Override
 	public void onSelectBoard(String chanName, String boardName, boolean fromCache) {
 		String requestedBoardName = boardName;
-		if (deferNavigationUntilDrawerClosed(() -> onSelectBoard(chanName, requestedBoardName, fromCache))) {
+		if (scheduleDrawerNavigation(() -> onSelectBoard(chanName, requestedBoardName, fromCache))) {
 			return;
 		}
 		ContentFragment currentFragment = getCurrentFragment();
@@ -1927,10 +1943,31 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	}
 
 	@Override
+	public void onSelectCombinedFeed(String feedId) {
+		if (scheduleDrawerNavigation(() -> onSelectCombinedFeed(feedId))) {
+			return;
+		}
+		CombinedFeedStorage.Feed feed = CombinedFeedStorage.getInstance().getFeed(feedId);
+		if (feed == null || feed.sources.size() < 2 || Chan.get(feed.getPrimaryChanName()).name == null) {
+			ClickableToast.show(R.string.combined_feed_not_found);
+			return;
+		}
+		navigatePage(Page.Content.COMBINED_THREADS, feed.getPrimaryChanName(), feed.id,
+				null, null, null, null, FLAG_PAGE_CLOSE_OVERLAYS | FLAG_PAGE_FROM_CACHE);
+	}
+
+	@Override
+	public void onCombinedFeedsChanged() {
+		if (drawerForm != null) {
+			drawerForm.updateItems(true, false);
+		}
+	}
+
+	@Override
 	public boolean onSelectThread(String chanName, String boardName, String threadNumber, PostNumber postNumber,
 			String threadTitle, boolean fromCache) {
 		String requestedBoardName = boardName;
-		if (deferNavigationUntilDrawerClosed(() -> onSelectThread(chanName, requestedBoardName, threadNumber,
+		if (scheduleDrawerNavigation(() -> onSelectThread(chanName, requestedBoardName, threadNumber,
 				postNumber, threadTitle, fromCache))) {
 			return true;
 		}
@@ -2084,7 +2121,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	@Override
 	public void onSelectDrawerMenuItem(int item) {
-		if (deferNavigationUntilDrawerClosed(() -> onSelectDrawerMenuItem(item))) {
+		if (scheduleDrawerNavigation(() -> onSelectDrawerMenuItem(item))) {
 			return;
 		}
 		Page.Content content = null;
