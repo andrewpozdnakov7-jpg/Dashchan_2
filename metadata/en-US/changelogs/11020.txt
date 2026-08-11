@@ -1,0 +1,4 @@
+Added experimental My Feeds: combine multiple 2ch boards into one feed and configure whether pinned threads are shown.
+Improved video seeking: playback now recovers faster after seeking and works more reliably across devices.
+Improved drawer performance and restored simultaneous drawer-closing and selected-thread opening animations.
+Improved embedded browser privacy: websites no longer receive the device model, firmware build number, or full Android version through the User-Agent.
