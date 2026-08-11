@@ -1788,6 +1788,8 @@ public class Preferences {
 	public static final boolean DEFAULT_IMAGE_EDITOR = true;
 	public static final String KEY_OPEN_CONFIGURED_ATTACHMENT_FOLDER = "open_configured_attachment_folder";
 	public static final boolean DEFAULT_OPEN_CONFIGURED_ATTACHMENT_FOLDER = false;
+	public static final String KEY_COMBINED_FEEDS_ENABLED = "combined_feeds_enabled";
+	public static final boolean DEFAULT_COMBINED_FEEDS_ENABLED = true;
 	public static final String KEY_LOCAL_TRANSLATION = "local_translation";
 	public static final boolean DEFAULT_LOCAL_TRANSLATION = false;
 	public static final String KEY_TRANSLATION_NATIVE_LANGUAGE = "translation_native_language";
@@ -1814,6 +1816,10 @@ public class Preferences {
 	public static boolean isOpenConfiguredAttachmentFolderEnabled() {
 		return PREFERENCES.getBoolean(KEY_OPEN_CONFIGURED_ATTACHMENT_FOLDER,
 				DEFAULT_OPEN_CONFIGURED_ATTACHMENT_FOLDER);
+	}
+
+	public static boolean isCombinedFeedsEnabled() {
+		return PREFERENCES.getBoolean(KEY_COMBINED_FEEDS_ENABLED, DEFAULT_COMBINED_FEEDS_ENABLED);
 	}
 
 	public static boolean isLocalTranslationEnabled() {

@@ -975,4 +975,27 @@
 	<string name="vote_like">Like</string>
 	<string name="vote_dislike">Dislike</string>
 	<string name="vote_already_submitted">You have already voted</string>
+	<string name="combined_feeds">My feeds</string>
+	<string name="combined_feeds__summary">Combine several Dvach boards into your own feeds</string>
+	<string name="configure_combined_feeds">Manage feeds</string>
+	<string name="configure_combined_feeds__summary">Create and edit your feeds</string>
+	<string name="configure_combined_feed">Configure feed</string>
+	<string name="add_combined_feed">Add feed</string>
+	<string name="edit_combined_feed">Edit feed</string>
+	<string name="combined_feed_name">Feed name</string>
+	<string name="combined_feed_name_required">Enter a feed name</string>
+	<string name="combined_feed_minimum_boards">Select at least two boards</string>
+	<string name="show_sticky_threads">Show sticky threads</string>
+	<string name="combined_feeds_empty">No feeds yet</string>
+	<string name="combined_feeds_add__summary">Select two or more Dvach boards</string>
+	<string name="combined_feeds_limit">Feed limit reached</string>
+	<string name="combined_feeds_boards_unavailable">Dvach board list is unavailable</string>
+	<string name="combined_feed_not_found">Feed was deleted or is unavailable</string>
+	<string name="combined_feed_partial_failure__format">Failed to update %1$d of %2$d boards</string>
+	<string name="combined_feed_failed__format">errors: %d</string>
+	<string name="delete_combined_feed_confirmation">Delete this feed?</string>
+	<plurals name="number_boards__format">
+		<item quantity="one">%d board</item>
+		<item quantity="other">%d boards</item>
+	</plurals>
 </resources>

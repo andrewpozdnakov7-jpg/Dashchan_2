@@ -11,6 +11,7 @@
 #include <stdint.h>
 
 #define SEEK_KEYFRAME_DISCOVERY_THRESHOLD_MS 3000
+#define SEEK_PRECISE_SCAN_MAX_DRIFT_MS 3000
 
 static int64_t getSeekTimestampUs(Player * player, int64_t position) {
 	AVRational msTimeBase = {1, 1000};
@@ -410,6 +411,8 @@ void playerSeekSetPosition(JNIEnv * env, Player * player, int64_t position) {
 			int64_t seekPosition = max64(position - step, 0);
 			int64_t maxPosition = max64(position - previousStep, 0);
 			seekFrame(player, seekPosition, AVSEEK_FLAG_BACKWARD | AVSEEK_FLAG_ANY, NULL, NULL);
+			int audioPassedMax = !HAS_STREAM(player, audio);
+			int videoPassedMax = !HAS_STREAM(player, video);
 			while (!isSeekCancelled(player)) {
 				if (av_read_frame(player->av.format, &packet) < 0) {
 					break;
@@ -425,15 +428,23 @@ void playerSeekSetPosition(JNIEnv * env, Player * player, int64_t position) {
 						AVRational timeBase = player->av.format->streams[packet.stream_index]->time_base;
 						int64_t timestamp = getTimestampPositionMs(player, packet.pts, timeBase);
 						if (timestamp > maxPosition) {
-							av_packet_unref(&packet);
-							break;
-						}
-						if (timestamp > *outPosition) {
+							if (packet.stream_index == player->av.audioStreamIndex) {
+								audioPassedMax = 1;
+							} else {
+								videoPassedMax = 1;
+							}
+						} else if (timestamp > *outPosition) {
 							*outPosition = timestamp;
 						}
 					}
 				}
 				av_packet_unref(&packet);
+				// Packets from different streams are interleaved but are not guaranteed
+				// to cross maxPosition in timestamp order. Stopping after the first one
+				// can leave the other stream at the demuxer's old indexed keyframe.
+				if (audioPassedMax && videoPassedMax) {
+					break;
+				}
 			}
 			if (seekPosition <= 0) {
 				break;
@@ -450,9 +461,17 @@ void playerSeekSetPosition(JNIEnv * env, Player * player, int64_t position) {
 		if (videoPosition == -1) {
 			videoPosition = position;
 		}
-		position = min64(audioPosition, videoPosition);
-		diagnosticsLog("player=%u seek_phase=precise_scan_finished resolved_ms=%" PRId64,
-				player->meta.diagnosticsId, (int64_t) position);
+		int64_t resolvedPosition = min64(audioPosition, videoPosition);
+		int rejected = requestedPosition - resolvedPosition > SEEK_PRECISE_SCAN_MAX_DRIFT_MS;
+		// A partial Matroska/WebM index may seek every probe to the same old cue.
+		// Never turn that stale packet timestamp into the playback target: final
+		// keyframe discovery can safely decode forward from the requested position.
+		position = rejected ? requestedPosition : resolvedPosition;
+		diagnosticsLog("player=%u seek_phase=precise_scan_finished target_ms=%" PRId64
+				" audio_ms=%" PRId64 " video_ms=%" PRId64
+				" resolved_ms=%" PRId64 " rejected=%d",
+				player->meta.diagnosticsId, requestedPosition, audioPosition, videoPosition,
+				(int64_t) position, rejected);
 	}
 
 	int seekStreamIndex;

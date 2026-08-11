@@ -30,6 +30,9 @@ import java.util.Locale;
 
 public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> implements GalleryItem.Provider {
 	public interface Callback extends ListViewUtils.SimpleCallback<PostItem> {}
+	public interface SourceLabelProvider {
+		String getSourceLabel(PostItem postItem);
+	}
 
 	private static final int LIST_PADDING = 12;
 	private static final int CARD_MIN_WIDTH_LARGE_DP = 120;
@@ -58,6 +61,7 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 	private final Context context;
 	private final UiManager uiManager;
 	private final UiManager.ConfigurationSet configurationSet;
+	private final SourceLabelProvider sourceLabelProvider;
 
 	private String filterText;
 	private Preferences.CatalogSort catalogSort = Preferences.CatalogSort.UNSORTED;
@@ -66,8 +70,15 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 
 	public ThreadsAdapter(Context context, Callback callback, String chanName, UiManager uiManager,
 			UiManager.PostStateProvider postStateProvider, FragmentManager fragmentManager) {
+		this(context, callback, chanName, uiManager, postStateProvider, fragmentManager, null);
+	}
+
+	public ThreadsAdapter(Context context, Callback callback, String chanName, UiManager uiManager,
+			UiManager.PostStateProvider postStateProvider, FragmentManager fragmentManager,
+			SourceLabelProvider sourceLabelProvider) {
 		this.context = context;
 		this.uiManager = uiManager;
+		this.sourceLabelProvider = sourceLabelProvider;
 		configurationSet = new UiManager.ConfigurationSet(chanName, null, null, postStateProvider,
 				this, fragmentManager, uiManager.dialog().createStackInstance(), null, callback,
 				false, false, false, false, false, null);
@@ -92,7 +103,8 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 			case THREAD:
 			case THREAD_CARD: {
 				if (payloads.isEmpty()) {
-					uiManager.view().bindThreadView(holder, postItem, configurationSet);
+					uiManager.view().bindThreadView(holder, postItem, configurationSet,
+							sourceLabelProvider != null ? sourceLabelProvider.getSourceLabel(postItem) : null);
 				} else {
 					for (Object object : payloads) {
 						if (object instanceof AttachmentItem) {
@@ -111,7 +123,8 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 			case THREAD_CARD_CELL: {
 				if (payloads.isEmpty()) {
 					uiManager.view().bindThreadCellView(holder, postItem, configurationSet,
-							gridMode.small, gridMode.gridItemContentHeight);
+							gridMode.small, gridMode.gridItemContentHeight,
+							sourceLabelProvider != null ? sourceLabelProvider.getSourceLabel(postItem) : null);
 				} else {
 					for (Object object : payloads) {
 						if (object instanceof AttachmentItem) {
@@ -340,7 +353,8 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 	public void reloadAttachment(AttachmentItem attachmentItem) {
 		for (int i = 0; i < getItemCount(); i++) {
 			PostItem postItem = getItem(i);
-			if (postItem.getPostNumber().equals(attachmentItem.getPostNumber())) {
+			List<AttachmentItem> attachmentItems = postItem.getAttachmentItems();
+			if (attachmentItems != null && attachmentItems.contains(attachmentItem)) {
 				notifyItemChanged(i, attachmentItem);
 			}
 		}

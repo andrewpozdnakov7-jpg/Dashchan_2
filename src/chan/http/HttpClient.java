@@ -411,7 +411,7 @@ public class HttpClient {
 					}
 					connection.setRequestProperty(header.first, header.second);
 					if ("User-Agent".equalsIgnoreCase(header.first)) {
-						userAgent = header.first;
+						userAgent = header.second;
 						userAgentSet = true;
 					}
 					if ("Accept-Encoding".equalsIgnoreCase(header.first)) {

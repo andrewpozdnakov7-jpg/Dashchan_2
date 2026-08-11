@@ -80,6 +80,7 @@ public class PostItem implements AttachmentItem.Master, ChanMarkup.MarkupExtra, 
 
 	private final Post post;
 	private final ThreadData threadData;
+	private final String chanName;
 	private final String boardName;
 	private final String threadNumber;
 	private final PostNumber originalPostNumber;
@@ -160,6 +161,7 @@ public class PostItem implements AttachmentItem.Master, ChanMarkup.MarkupExtra, 
 	private PostItem(Post post, ThreadData.Base threadDataBase, Chan chan,
 			String boardName, String threadNumber, PostNumber originalPostNumber) {
 		this.post = post;
+		this.chanName = chan.name;
 		this.boardName = boardName;
 		this.threadNumber = threadNumber;
 		this.originalPostNumber = originalPostNumber;
@@ -297,6 +299,10 @@ public class PostItem implements AttachmentItem.Master, ChanMarkup.MarkupExtra, 
 	@Override
 	public String getBoardName() {
 		return boardName;
+	}
+
+	public String getChanName() {
+		return chanName;
 	}
 
 	@Override
@@ -798,6 +804,16 @@ public class PostItem implements AttachmentItem.Master, ChanMarkup.MarkupExtra, 
 	@Override
 	public long getTimestamp() {
 		return post.timestamp;
+	}
+
+	public long getThreadLatestTimestamp() {
+		long timestamp = post.timestamp;
+		if (threadData != null && threadData.base.posts != null) {
+			for (Post threadPost : threadData.base.posts) {
+				timestamp = Math.max(timestamp, threadPost.timestamp);
+			}
+		}
+		return timestamp;
 	}
 
 	public String getDateTime(PostDateFormatter formatter) {
