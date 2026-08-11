@@ -19,6 +19,23 @@ explicit user command:
 - `FAST LOCAL TEST` -> `PUBLIC RELEASE`
 - `PUBLIC RELEASE` -> `GITHUB RELEASE`
 
+## Release PR completeness
+
+Any pull request that changes `versionCode` or `versionName` must also update
+the in-app "What's new" data in the same pull request:
+
+- add or update the matching entry in `metadata/versions.json` and set
+  `"changelog": true` for a user-facing release;
+- add both localized files
+  `metadata/ru/changelogs/<versionCode>.txt` and
+  `metadata/en-US/changelogs/<versionCode>.txt`;
+- verify that the Russian and English entries describe the actual PR diff and
+  do not include beta-only or unpublished functionality.
+
+A release PR is incomplete while any of these files are missing. Do not merge
+it or start a signed candidate build until this gate passes. Updating GitHub
+Release notes later does not replace the bundled in-app changelog files.
+
 ## 1. SOURCE PATCH ONLY
 
 Default mode for source and documentation tasks.
