@@ -116,7 +116,7 @@ public class CombinedThreadsPage extends ListPage implements ThreadsAdapter.Call
 				CombinedFeedStorage.Source source = new CombinedFeedStorage.Source(sourceValue);
 				String key = source.chanName + '\n' + source.boardName;
 				Chan chan = Chan.get(source.chanName);
-				if (chan.name == null) {
+				if (chan.name == null || !Preferences.isChanEnabled(source.chanName)) {
 					results.add(new SourceResult(source, null, null,
 							new ErrorItem(ErrorItem.Type.UNSUPPORTED_SERVICE)));
 					continue;

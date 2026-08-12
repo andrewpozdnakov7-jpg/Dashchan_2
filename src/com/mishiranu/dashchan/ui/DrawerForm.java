@@ -132,6 +132,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	public static final int MENU_ITEM_HISTORY = 3;
 	public static final int MENU_ITEM_LOCAL_ARCHIVES = 4;
 	public static final int MENU_ITEM_PREFERENCES = 5;
+	public static final int MENU_ITEM_COMBINED_FEEDS = 6;
 
 	private enum CategoriesOrder {PAGES_FIRST, FAVORITES_FIRST, HIDE_PAGES}
 
@@ -967,8 +968,9 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 				}
 			}
 		}
-		if (!combinedFeeds.isEmpty()) {
-			this.pages.add(new ListItem(ListItem.Type.SECTION, null, null, null,
+		if (combinedFeedsEnabled) {
+			this.pages.add(new ListItem(ListItem.Type.SECTION, SECTION_ACTION_COMBINED_FEEDS_SETTINGS,
+					ResourceUtils.getResourceId(context, R.attr.iconDrawerMenuPreferences, 0),
 					context.getString(R.string.combined_feeds)));
 			for (CombinedFeedStorage.Feed feed : combinedFeeds) {
 				this.pages.add(new ListItem(ListItem.Type.COMBINED_FEED, feed.getPrimaryChanName(),
@@ -1207,6 +1209,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 
 	private static final int SECTION_ACTION_CLOSE_ALL = 0;
 	private static final int SECTION_ACTION_FAVORITES_MENU = 1;
+	private static final int SECTION_ACTION_COMBINED_FEEDS_SETTINGS = 2;
 
 	private static final int FAVORITES_MENU_REFRESH = 1;
 	private static final int FAVORITES_MENU_CLEAR_DELETED = 2;
@@ -1222,7 +1225,11 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		public void onClick(View v) {
 			ListItem listItem = getItemFromChild(v);
 			if (listItem != null && listItem.type == ListItem.Type.SECTION) {
-				switch (listItem.data) {
+					switch (listItem.data) {
+					case SECTION_ACTION_COMBINED_FEEDS_SETTINGS: {
+						callback.onSelectDrawerMenuItem(MENU_ITEM_COMBINED_FEEDS);
+						break;
+					}
 					case SECTION_ACTION_CLOSE_ALL: {
 						callback.onCloseAllPages();
 						break;
@@ -1835,6 +1842,10 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		if (holder.watcher != null) {
 			holder.watcher.setEnabled(favoriteSelectionActionMode == null);
 			holder.watcher.setAlpha(favoriteSelectionActionMode == null ? 1f : 0.45f);
+		}
+		if (listItem.type == ListItem.Type.SECTION) {
+			holder.itemView.setOnClickListener(listItem.data == SECTION_ACTION_COMBINED_FEEDS_SETTINGS
+					? sectionButtonListener : null);
 		}
 		switch (listItem.type) {
 			case HEADER:

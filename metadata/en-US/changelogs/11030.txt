@@ -1,0 +1,4 @@
+The experimental My Feeds section has been renamed to My Boards. A single feed can now combine boards from different forums, such as 2ch /mobi/ and 4chan /g/.
+Added real-time board search and collapsible forum groups.
+Temporarily unavailable boards are no longer removed from saved feeds.
+Tapping the My Boards heading in the navigation drawer now opens its settings.
