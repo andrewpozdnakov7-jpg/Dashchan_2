@@ -54,6 +54,19 @@ does not fetch native sources.
 - Before submission, `fdroid scanner` and manual packager review must confirm that no undocumented third-party asset
   was introduced after this audit.
 
+## Review notes
+
+- `android:usesCleartextTraffic="true"` in `AndroidManifest.xml` is retained because Slooop supports imageboard
+  services and extension endpoints, some of which use HTTP.
+- In the F-Droid flavor, `REQUEST_INSTALL_PACKAGES` and `REQUEST_DELETE_PACKAGES` are used only for separately
+  packaged extension APKs. `UpdaterActivity.java` delegates installation to the Android package installer, while
+  `ChanFragment.java` delegates removal to the Android package uninstaller.
+- The `fdroid` product flavor in `build.gradle` sets `ALLOW_APPLICATION_SELF_UPDATE` to `false`, so Slooop cannot
+  download or install an update for the application itself.
+- The same flavor sets `REQUIRE_EXTENSION_INSTALL_CONSENT` to `true`. Before `UpdaterActivity` receives any extension
+  download request, `UpdateFragment.java` displays the warning defined in `lang/values/strings.xml`: the selected APKs
+  are not built or reviewed by F-Droid. The user can cancel the dialog before any download starts.
+
 ## Expected Anti-Features and content notice
 
 - `NonFreeNet` is expected because the built-in integrations depend on third-party imageboard services. The final
