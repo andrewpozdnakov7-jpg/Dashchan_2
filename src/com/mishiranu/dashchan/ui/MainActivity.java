@@ -72,6 +72,7 @@ import com.mishiranu.dashchan.ui.navigator.page.ListPage;
 import com.mishiranu.dashchan.ui.posting.PostingFragment;
 import com.mishiranu.dashchan.ui.posting.Replyable;
 import com.mishiranu.dashchan.ui.preference.CategoriesFragment;
+import com.mishiranu.dashchan.ui.preference.CombinedFeedsFragment;
 import com.mishiranu.dashchan.ui.preference.ThemesFragment;
 import com.mishiranu.dashchan.ui.preference.UpdateFragment;
 import com.mishiranu.dashchan.util.AndroidUtils;
@@ -1948,11 +1949,20 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 			return;
 		}
 		CombinedFeedStorage.Feed feed = CombinedFeedStorage.getInstance().getFeed(feedId);
-		if (feed == null || feed.sources.size() < 2 || Chan.get(feed.getPrimaryChanName()).name == null) {
+		String primaryChanName = null;
+		if (feed != null) {
+			for (CombinedFeedStorage.Source source : feed.sources) {
+				if (Chan.get(source.chanName).name != null && Preferences.isChanEnabled(source.chanName)) {
+					primaryChanName = source.chanName;
+					break;
+				}
+			}
+		}
+		if (feed == null || feed.sources.size() < 2 || primaryChanName == null) {
 			ClickableToast.show(R.string.combined_feed_not_found);
 			return;
 		}
-		navigatePage(Page.Content.COMBINED_THREADS, feed.getPrimaryChanName(), feed.id,
+		navigatePage(Page.Content.COMBINED_THREADS, primaryChanName, feed.id,
 				null, null, null, null, FLAG_PAGE_CLOSE_OVERLAYS | FLAG_PAGE_FROM_CACHE);
 	}
 
@@ -2150,6 +2160,10 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 					fragments.clear();
 					navigateFragment(new CategoriesFragment(), null, true);
 				}
+				break;
+			}
+			case DrawerForm.MENU_ITEM_COMBINED_FEEDS: {
+				pushFragment(new CombinedFeedsFragment());
 				break;
 			}
 		}
