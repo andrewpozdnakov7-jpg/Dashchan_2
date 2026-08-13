@@ -58,6 +58,11 @@ public final class HttpException extends Exception implements ErrorItem.Holder {
 		return socketException;
 	}
 
+	public boolean isRetryableReadException() {
+		if (!socketException) return false;
+		return errorItemType != ErrorItem.Type.SSL && errorItemType != ErrorItem.Type.INVALID_CERTIFICATE;
+	}
+
 	@NonNull
 	@Override
 	public ErrorItem getErrorItemAndHandle() {

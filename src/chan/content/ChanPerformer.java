@@ -4,6 +4,7 @@ import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Parcel;
 import android.os.Parcelable;
+import android.os.SystemClock;
 import android.util.Pair;
 import androidx.annotation.NonNull;
 import chan.annotation.Extendable;
@@ -29,6 +30,7 @@ import com.mishiranu.dashchan.content.model.FileHolder;
 import com.mishiranu.dashchan.content.model.PostNumber;
 import com.mishiranu.dashchan.ui.ForegroundManager;
 import com.mishiranu.dashchan.util.GraphicsUtils;
+import com.mishiranu.dashchan.util.Logger;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -1352,17 +1354,37 @@ public class ChanPerformer implements Chan.Linked {
 	}
 
 	public static final class Safe {
+		private static final int READ_MAX_ATTEMPTS = 20;
+
 		private final ChanPerformer performer;
 
 		private Safe(ChanPerformer performer) {
 			this.performer = performer;
 		}
 
+		private static boolean prepareReadRetry(HttpException exception, int failedAttempt) {
+			if (failedAttempt >= READ_MAX_ATTEMPTS || !exception.isRetryableReadException()) return false;
+			// Only complete read operations use this helper. Mutating operations must never be retried here.
+			int delay = Math.min(5000, ((failedAttempt - 1) / 3 + 1) * 1000);
+			Logger.write(Logger.Type.DEBUG, "ReadRetry", "attempt", failedAttempt + 1,
+					"of", READ_MAX_ATTEMPTS, "delay", delay);
+			SystemClock.sleep(delay);
+			return true;
+		}
+
 		public ReadThreadsResult onReadThreads(ReadThreadsData data) throws ExtensionException, HttpException,
 				InvalidResponseException, RedirectException {
 			PerformerContext context = performer.enterContext();
 			try {
-				return performer.onReadThreads(data);
+				int attempt = 1;
+				while (true) {
+					try {
+						return performer.onReadThreads(data);
+					} catch (HttpException e) {
+						if (!prepareReadRetry(e, attempt)) throw e;
+						attempt++;
+					}
+				}
 			} catch (LinkageError | RuntimeException e) {
 				throw new ExtensionException(e);
 			} finally {
@@ -1374,7 +1396,15 @@ public class ChanPerformer implements Chan.Linked {
 				InvalidResponseException, RedirectException, ThreadRedirectException {
 			PerformerContext context = performer.enterContext();
 			try {
-				return performer.onReadPosts(data);
+				int attempt = 1;
+				while (true) {
+					try {
+						return performer.onReadPosts(data);
+					} catch (HttpException e) {
+						if (!prepareReadRetry(e, attempt)) throw e;
+						attempt++;
+					}
+				}
 			} catch (LinkageError | RuntimeException e) {
 				throw new ExtensionException(e);
 			} finally {
@@ -1386,7 +1416,15 @@ public class ChanPerformer implements Chan.Linked {
 				InvalidResponseException {
 			PerformerContext context = performer.enterContext();
 			try {
-				return performer.onReadSinglePost(data);
+				int attempt = 1;
+				while (true) {
+					try {
+						return performer.onReadSinglePost(data);
+					} catch (HttpException e) {
+						if (!prepareReadRetry(e, attempt)) throw e;
+						attempt++;
+					}
+				}
 			} catch (LinkageError | RuntimeException e) {
 				throw new ExtensionException(e);
 			} finally {
@@ -1398,7 +1436,15 @@ public class ChanPerformer implements Chan.Linked {
 				HttpException, InvalidResponseException {
 			PerformerContext context = performer.enterContext();
 			try {
-				return performer.onReadSearchPosts(data);
+				int attempt = 1;
+				while (true) {
+					try {
+						return performer.onReadSearchPosts(data);
+					} catch (HttpException e) {
+						if (!prepareReadRetry(e, attempt)) throw e;
+						attempt++;
+					}
+				}
 			} catch (LinkageError | RuntimeException e) {
 				throw new ExtensionException(e);
 			} finally {
@@ -1410,7 +1456,15 @@ public class ChanPerformer implements Chan.Linked {
 				InvalidResponseException {
 			PerformerContext context = performer.enterContext();
 			try {
-				return performer.onReadBoards(data);
+				int attempt = 1;
+				while (true) {
+					try {
+						return performer.onReadBoards(data);
+					} catch (HttpException e) {
+						if (!prepareReadRetry(e, attempt)) throw e;
+						attempt++;
+					}
+				}
 			} catch (LinkageError | RuntimeException e) {
 				throw new ExtensionException(e);
 			} finally {
@@ -1422,7 +1476,15 @@ public class ChanPerformer implements Chan.Linked {
 				InvalidResponseException {
 			PerformerContext context = performer.enterContext();
 			try {
-				return performer.onReadUserBoards(data);
+				int attempt = 1;
+				while (true) {
+					try {
+						return performer.onReadUserBoards(data);
+					} catch (HttpException e) {
+						if (!prepareReadRetry(e, attempt)) throw e;
+						attempt++;
+					}
+				}
 			} catch (LinkageError | RuntimeException e) {
 				throw new ExtensionException(e);
 			} finally {
@@ -1434,7 +1496,15 @@ public class ChanPerformer implements Chan.Linked {
 				HttpException, InvalidResponseException {
 			PerformerContext context = performer.enterContext();
 			try {
-				return performer.onReadThreadSummaries(data);
+				int attempt = 1;
+				while (true) {
+					try {
+						return performer.onReadThreadSummaries(data);
+					} catch (HttpException e) {
+						if (!prepareReadRetry(e, attempt)) throw e;
+						attempt++;
+					}
+				}
 			} catch (LinkageError | RuntimeException e) {
 				throw new ExtensionException(e);
 			} finally {
@@ -1446,7 +1516,15 @@ public class ChanPerformer implements Chan.Linked {
 				InvalidResponseException {
 			PerformerContext context = performer.enterContext();
 			try {
-				return performer.onReadPostsCount(data);
+				int attempt = 1;
+				while (true) {
+					try {
+						return performer.onReadPostsCount(data);
+					} catch (HttpException e) {
+						if (!prepareReadRetry(e, attempt)) throw e;
+						attempt++;
+					}
+				}
 			} catch (LinkageError | RuntimeException e) {
 				throw new ExtensionException(e);
 			} finally {

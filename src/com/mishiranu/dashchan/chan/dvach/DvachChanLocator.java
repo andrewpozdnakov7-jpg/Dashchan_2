@@ -28,6 +28,7 @@ public class DvachChanLocator extends ChanLocator {
 		addConvertableChanHost("2ch.wf");
 		addConvertableChanHost("2ch.yt");
 		addConvertableChanHost("2-ch.so");
+		setAutomaticDomainHosts("2ch.su", "2ch.org");
 		setHttpsMode(HttpsMode.CONFIGURABLE);
 	}
 

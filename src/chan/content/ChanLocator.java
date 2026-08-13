@@ -8,6 +8,7 @@ import chan.annotation.Public;
 import chan.util.CommonUtils;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.C;
+import com.mishiranu.dashchan.content.NetworkObserver;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.model.PostNumber;
 import java.util.ArrayList;
@@ -26,6 +27,8 @@ public class ChanLocator implements Chan.Linked {
 
 	private final LinkedHashMap<String, Integer> hosts = new LinkedHashMap<>();
 	private HttpsMode httpsMode = HttpsMode.NO_HTTPS;
+	private String russianHost;
+	private String internationalHost;
 
 	@Public
 	public enum HttpsMode {
@@ -168,6 +171,11 @@ public class ChanLocator implements Chan.Linked {
 	@Public
 	public final void addSpecialChanHost(String host) {
 		hosts.put(host, HOST_TYPE_SPECIAL);
+	}
+
+	public final void setAutomaticDomainHosts(String russianHost, String internationalHost) {
+		this.russianHost = russianHost;
+		this.internationalHost = internationalHost;
 	}
 
 	@Public
@@ -439,7 +447,7 @@ public class ChanLocator implements Chan.Linked {
 		return StringUtils.getFileExtension(path);
 	}
 
-	public final String getPreferredHost() {
+	public final String getConfiguredHost() {
 		String host = Preferences.getDomainUnhandled(get());
 		if (StringUtils.isEmpty(host)) {
 			for (LinkedHashMap.Entry<String, Integer> entry : hosts.entrySet()) {
@@ -450,6 +458,21 @@ public class ChanLocator implements Chan.Linked {
 			}
 		}
 		return host;
+	}
+
+	public final String getPreferredHost() {
+		if (Preferences.isAutomaticDomainSelectionEnabled()
+				&& !StringUtils.isEmpty(russianHost) && !StringUtils.isEmpty(internationalHost)) {
+			NetworkObserver networkObserver = NetworkObserver.getInstance();
+			if (networkObserver.isVpnConnected()) {
+				return internationalHost;
+			}
+			String countryIso = networkObserver.getCountryIso();
+			if (!StringUtils.isEmpty(countryIso)) {
+				return "RU".equals(countryIso) ? russianHost : internationalHost;
+			}
+		}
+		return getConfiguredHost();
 	}
 
 	public final void setPreferredHost(String host) {

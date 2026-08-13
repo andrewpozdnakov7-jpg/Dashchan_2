@@ -133,7 +133,9 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 			ChanConfiguration.Authorization authorization = chan.configuration.safe().obtainCaptchaPass();
 			if (authorization != null && authorization.fieldsCount > 0) {
 				captchaPassPreference = addMultipleEdit(Preferences.KEY_CAPTCHA_PASS.bind(chanName),
-						R.string.captcha_pass, R.string.captcha_pass__summary,
+						"ejchan".equals(chanName) ? R.string.ejchan_epass : R.string.captcha_pass,
+						"ejchan".equals(chanName) ? R.string.ejchan_epass__summary
+								: R.string.captcha_pass__summary,
 						authorization.hints != null ? Arrays.asList(authorization.hints) : null,
 						createInputTypes(authorization.fieldsCount,
 								InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD),
@@ -207,7 +209,7 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 			addHeader(R.string.connection);
 		}
 		if (!localMode) {
-			anotherDomainMode = !domains.contains(chan.locator.getPreferredHost()) || domains.size() == 1 ||
+			anotherDomainMode = !domains.contains(chan.locator.getConfiguredHost()) || domains.size() == 1 ||
 					savedInstanceState != null && savedInstanceState.getBoolean(EXTRA_ANOTHER_DOMAIN_MODE);
 			if (anotherDomainMode) {
 				addAnotherDomainPreference(domains.get(0));

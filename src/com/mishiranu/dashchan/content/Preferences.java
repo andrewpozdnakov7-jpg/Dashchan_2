@@ -836,6 +836,13 @@ public class Preferences {
 	}
 
 	public static final ChanKey KEY_DOMAIN = new ChanKey("domain");
+	public static final String KEY_AUTOMATIC_DOMAIN_SELECTION = "automatic_domain_selection";
+	public static final boolean DEFAULT_AUTOMATIC_DOMAIN_SELECTION = true;
+
+	public static boolean isAutomaticDomainSelectionEnabled() {
+		return PREFERENCES.getBoolean(KEY_AUTOMATIC_DOMAIN_SELECTION,
+				DEFAULT_AUTOMATIC_DOMAIN_SELECTION);
+	}
 
 	public static String getDomainUnhandled(Chan chan) {
 		return PREFERENCES.getString(KEY_DOMAIN.bind(chan.name), "");
@@ -1790,6 +1797,14 @@ public class Preferences {
 	public static final boolean DEFAULT_OPEN_CONFIGURED_ATTACHMENT_FOLDER = false;
 	public static final String KEY_COMBINED_FEEDS_ENABLED = "combined_feeds_enabled";
 	public static final boolean DEFAULT_COMBINED_FEEDS_ENABLED = true;
+	public static final String KEY_WALLPAPER_ENABLED = "wallpaper_enabled";
+	public static final boolean DEFAULT_WALLPAPER_ENABLED = false;
+	public static final String KEY_WALLPAPER_ID = "wallpaper_id";
+	public static final String KEY_WALLPAPER_TITLE = "wallpaper_title";
+	public static final String KEY_WALLPAPER_DIM_AMOUNT = "wallpaper_dim_amount";
+	public static final int DEFAULT_WALLPAPER_DIM_AMOUNT = 35;
+	public static final String KEY_WALLPAPER_CARD_OPACITY = "wallpaper_card_opacity";
+	public static final int DEFAULT_WALLPAPER_CARD_OPACITY = 88;
 	public static final String KEY_LOCAL_TRANSLATION = "local_translation";
 	public static final boolean DEFAULT_LOCAL_TRANSLATION = false;
 	public static final String KEY_TRANSLATION_NATIVE_LANGUAGE = "translation_native_language";
@@ -1820,6 +1835,26 @@ public class Preferences {
 
 	public static boolean isCombinedFeedsEnabled() {
 		return PREFERENCES.getBoolean(KEY_COMBINED_FEEDS_ENABLED, DEFAULT_COMBINED_FEEDS_ENABLED);
+	}
+
+	public static boolean isWallpaperEnabled() {
+		return PREFERENCES.getBoolean(KEY_WALLPAPER_ENABLED, DEFAULT_WALLPAPER_ENABLED);
+	}
+
+	public static String getWallpaperId() {
+		return PREFERENCES.getString(KEY_WALLPAPER_ID, null);
+	}
+
+	public static String getWallpaperTitle() {
+		return PREFERENCES.getString(KEY_WALLPAPER_TITLE, null);
+	}
+
+	public static int getWallpaperDimAmount() {
+		return clamp(PREFERENCES.getInt(KEY_WALLPAPER_DIM_AMOUNT, DEFAULT_WALLPAPER_DIM_AMOUNT), 0, 80);
+	}
+
+	public static int getWallpaperCardOpacity() {
+		return clamp(PREFERENCES.getInt(KEY_WALLPAPER_CARD_OPACITY, DEFAULT_WALLPAPER_CARD_OPACITY), 50, 100);
 	}
 
 	public static boolean isLocalTranslationEnabled() {

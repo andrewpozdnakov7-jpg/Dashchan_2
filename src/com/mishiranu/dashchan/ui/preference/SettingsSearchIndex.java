@@ -177,6 +177,8 @@ public final class SettingsSearchIndex {
 		for (Chan chan : manager.getAvailableChans()) {
 			CharSequence chanTitle = "dvach".equals(chan.name) ? context.getText(R.string.forum_dvach)
 					: "fourchan".equals(chan.name) ? context.getText(R.string.forum_fourchan)
+					: "ejchan".equals(chan.name) ? context.getText(R.string.forum_ejchan)
+					: "arhivach".equals(chan.name) ? context.getText(R.string.forum_arhivach)
 					: chan.configuration.getTitle();
 			if (StringUtils.isEmpty(chanTitle)) {
 				chanTitle = chan.name;
@@ -272,6 +274,8 @@ public final class SettingsSearchIndex {
 
 		add(context, entries, Screen.GENERAL, R.string.general);
 		add(context, entries, Screen.FORUMS, R.string.forums);
+		add(context, entries, Screen.FORUMS, R.string.automatic_domain_selection,
+				R.string.automatic_domain_selection__summary, Preferences.KEY_AUTOMATIC_DOMAIN_SELECTION);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.experimental_features);
 		add(context, entries, Screen.INTERFACE, R.string.user_interface);
 		add(context, entries, Screen.CONTENTS, R.string.contents);
@@ -334,6 +338,8 @@ public final class SettingsSearchIndex {
 				R.string.video_diagnostics_start__summary, null);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.combined_feeds,
 				R.string.combined_feeds__summary, Preferences.KEY_COMBINED_FEEDS_ENABLED);
+		add(context, entries, Screen.EXPERIMENTAL, R.string.wallpaper_background,
+				R.string.wallpaper_background__summary, Preferences.KEY_WALLPAPER_ENABLED);
 		add(context, entries, Screen.COMBINED_FEEDS, R.string.configure_combined_feeds,
 				R.string.configure_combined_feeds__summary, null);
 
