@@ -44,6 +44,10 @@ public class ChansFragment extends PreferenceFragment implements FragmentHandler
 	}
 
 	private void updateList() {
+		addCheck(true, Preferences.KEY_AUTOMATIC_DOMAIN_SELECTION,
+				Preferences.DEFAULT_AUTOMATIC_DOMAIN_SELECTION, R.string.automatic_domain_selection,
+				R.string.automatic_domain_selection__summary);
+
 		ChanManager manager = ChanManager.getInstance();
 		LinkedHashMap<String, Chan> chans = new LinkedHashMap<>();
 		for (Chan chan : manager.getAllChans()) {
@@ -51,6 +55,8 @@ public class ChansFragment extends PreferenceFragment implements FragmentHandler
 		}
 		addChanPreference(chans.remove("dvach"));
 		addChanPreference(chans.remove("fourchan"));
+		addChanPreference(chans.remove("ejchan"));
+		addChanPreference(chans.remove("arhivach"));
 		for (Chan chan : chans.values()) {
 			addChanPreference(chan);
 		}
@@ -63,9 +69,12 @@ public class ChansFragment extends PreferenceFragment implements FragmentHandler
 			return;
 		}
 		int titleResId = "dvach".equals(chan.name) ? R.string.forum_dvach
-				: "fourchan".equals(chan.name) ? R.string.forum_fourchan : 0;
+				: "fourchan".equals(chan.name) ? R.string.forum_fourchan
+				: "ejchan".equals(chan.name) ? R.string.forum_ejchan
+				: "arhivach".equals(chan.name) ? R.string.forum_arhivach : 0;
 		CharSequence title = titleResId != 0 ? getString(titleResId) : chan.configuration.getTitle();
-		CharSequence summary = "fourchan".equals(chan.name) ? getString(R.string.read_only) : null;
+		CharSequence summary = "fourchan".equals(chan.name) || "arhivach".equals(chan.name)
+				? getString(R.string.read_only) : null;
 		addForumPreference(chan.name, title, summary, () -> ((FragmentHandler) requireActivity())
 				.pushFragment(new ChanFragment(chan.name)));
 	}

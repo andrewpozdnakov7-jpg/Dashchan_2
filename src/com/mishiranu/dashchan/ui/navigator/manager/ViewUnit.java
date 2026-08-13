@@ -32,6 +32,7 @@ import chan.util.StringUtils;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.ImageLoader;
 import com.mishiranu.dashchan.content.Preferences;
+import com.mishiranu.dashchan.content.WallpaperManager;
 import com.mishiranu.dashchan.content.model.AttachmentItem;
 import com.mishiranu.dashchan.content.model.Post;
 import com.mishiranu.dashchan.content.model.PostItem;
@@ -1015,7 +1016,7 @@ public class ViewUnit {
 	private static CardView createCardLayout(ViewGroup parent) {
 		ThemeEngine.Theme theme = ThemeEngine.getTheme(parent.getContext());
 		CardView cardView = new CardView(parent.getContext());
-		cardView.setBackgroundColor(theme.card);
+		cardView.setBackgroundColor(WallpaperManager.applyCardOpacity(theme.card));
 		FrameLayout content = new FrameLayout(cardView.getContext());
 		ViewUtils.setSelectableItemBackground(content);
 		cardView.addView(content, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);

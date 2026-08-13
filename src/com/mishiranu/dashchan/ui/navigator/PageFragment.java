@@ -14,6 +14,7 @@ import android.view.ViewGroup;
 import androidx.annotation.NonNull;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
+import com.mishiranu.dashchan.content.WallpaperManager;
 import com.mishiranu.dashchan.content.model.ErrorItem;
 import com.mishiranu.dashchan.content.model.PostNumber;
 import com.mishiranu.dashchan.ui.ContentFragment;
@@ -137,6 +138,7 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 		recyclerView = new PaddedRecyclerView(layout.getContext());
 		layout.addView(recyclerView, ExpandedLayout.LayoutParams.MATCH_PARENT,
 				ExpandedLayout.LayoutParams.MATCH_PARENT);
+		WallpaperManager.applyToPage(layout, recyclerView);
 		layout.setRecyclerView(recyclerView);
 		recyclerView.setMotionEventSplittingEnabled(false);
 		recyclerView.setVerticalScrollBarEnabled(true);

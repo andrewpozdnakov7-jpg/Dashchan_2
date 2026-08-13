@@ -244,8 +244,8 @@ android {
 
 	defaultConfig {
 		applicationId = 'io.dashchan2'
-		versionCode = 11030
-		versionName = '3.2.23'
+		versionCode = 11040
+		versionName = '3.2.24'
 		def releaseVersionCode = versionCode
 		def packageVersionCodeProperty = project.findProperty('packageVersionCode')
 		if (packageVersionCodeProperty != null) {
@@ -279,6 +279,8 @@ android {
 		buildConfigField 'String', 'VERSION_DATE', '"' + versions[0].date + '"'
 		buildConfigField 'String', 'URI_THEMES', '"//raw.githubusercontent.com/' +
 				'andrewpozdnakov7-jpg/Dashchan_2/master/update/themes.json"'
+		buildConfigField 'String', 'URI_WALLPAPERS', '"https://raw.githubusercontent.com/' +
+				'andrewpozdnakov7-jpg/Slooop_Addons/main/wallpapers.json"'
 		buildConfigField 'String', 'GITHUB_URI_METADATA', '"//github.com/andrewpozdnakov7-jpg/Dashchan_2"'
 		buildConfigField 'String', 'GITHUB_PATH_METADATA', '"metadata"'
 		buildConfigField 'String', 'FILE_PROVIDER_AUTHORITY', '"' +

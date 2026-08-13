@@ -590,13 +590,8 @@ public class HttpClient {
 			session.disconnectAndClear();
 			throw e.toHttp();
 		} catch (IOException e) {
-			if (isConnectionReset(e)) {
-				// Sometimes server closes the socket, but client is still trying to use it
-				if (session.nextAttempt()) {
-					e.printStackTrace();
-					throw new RetryException();
-				}
-			}
+			// Do not retransmit a request here. Read operations are retried as a whole by ChanPerformer.Safe,
+			// including body download and parsing; mutating operations must remain single-shot.
 			if (e.getCause() instanceof SSLProtocolException) {
 				String message = e.getMessage();
 				if (message != null && message.contains("routines:SSL23_GET_SERVER_HELLO:sslv3")) {
@@ -667,7 +662,8 @@ public class HttpClient {
 					}
 				}
 				success = true;
-				return new ClientInputStream(input, response.session);
+				// Fixed-length responses must not turn a premature EOF into apparently valid partial data.
+				return new ClientInputStream(input, response.session, response.session.getLength());
 			} finally {
 				response.session.closeInput = false;
 				if (!success) {
@@ -904,16 +900,32 @@ public class HttpClient {
 	private static class ClientInputStream extends InputStream {
 		private final InputStream input;
 		private final HttpSession session;
+		private final long expectedLength;
+		private long position;
 
-		public ClientInputStream(InputStream input, HttpSession session) {
+		public ClientInputStream(InputStream input, HttpSession session, long expectedLength) {
 			this.input = input;
 			this.session = session;
+			this.expectedLength = expectedLength;
+		}
+
+		private int checkResult(int result) throws EOFException {
+			if (result < 0) {
+				if (expectedLength >= 0 && position < expectedLength) {
+					throw new EOFException("Unexpected end of response body: " + position + " of "
+							+ expectedLength + " bytes received");
+				}
+			} else {
+				position += result;
+			}
+			return result;
 		}
 
 		@Override
 		public int read() throws IOException {
 			checkInterruptedAndClose(session, this);
-			return input.read();
+			int result = input.read();
+			return checkResult(result < 0 ? -1 : 1) < 0 ? -1 : result;
 		}
 
 		@Override
@@ -924,13 +936,15 @@ public class HttpClient {
 		@Override
 		public int read(@NonNull byte[] b, int off, int len) throws IOException {
 			checkInterruptedAndClose(session, this);
-			return input.read(b, off, len);
+			return checkResult(input.read(b, off, len));
 		}
 
 		@Override
 		public long skip(long n) throws IOException {
 			checkInterruptedAndClose(session, this);
-			return input.skip(n);
+			long skipped = input.skip(n);
+			position += skipped;
+			return skipped;
 		}
 
 		@Override

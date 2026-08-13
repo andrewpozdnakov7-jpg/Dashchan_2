@@ -75,6 +75,18 @@ public class ExperimentalFragment extends PreferenceFragment implements Translat
 					.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 							.pushFragment(new CombinedFeedsFragment()));
 		}
+		CheckPreference wallpaperPreference = addCheck(true, Preferences.KEY_WALLPAPER_ENABLED,
+				Preferences.DEFAULT_WALLPAPER_ENABLED, R.string.wallpaper_background,
+				R.string.wallpaper_background__summary);
+		wallpaperPreference.setOnAfterChangeListener(p -> {
+			refreshPreferences();
+			requireActivity().recreate();
+		});
+		if (wallpaperPreference.getValue()) {
+			addButton(R.string.configure_wallpaper, R.string.configure_wallpaper__summary)
+					.setOnClickListener(p -> ((FragmentHandler) requireActivity())
+							.pushFragment(new WallpaperFragment()));
+		}
 		if (BuildConfig.ENABLE_LOCAL_TRANSLATION) {
 			addTranslationPreferences();
 		}

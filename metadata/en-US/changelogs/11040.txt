@@ -1,0 +1,4 @@
+Added Ejchan and Arhivach. On Ejchan you can read threads and post messages; Arhivach works in read-only mode.
+Added automatic selection of a suitable forum domain depending on country and VPN. The feature can be disabled to select a domain manually.
+Improved behavior during temporary connection loss: read requests are retried automatically, and incomplete server responses are no longer accepted as valid.
+Added experimental background images. Choose a local image or install one from the add-on catalog, then adjust background dimming and post-card opacity. The feature is disabled by default.
