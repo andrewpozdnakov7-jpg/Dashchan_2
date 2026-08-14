@@ -37,9 +37,11 @@ import chan.util.StringUtils;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.HidePerformer;
 import com.mishiranu.dashchan.content.Preferences;
+import com.mishiranu.dashchan.content.PostsWindowCache;
 import com.mishiranu.dashchan.content.WatcherNotifications;
 import com.mishiranu.dashchan.content.async.CallbackProxy;
 import com.mishiranu.dashchan.content.async.ExtractPostsTask;
+import com.mishiranu.dashchan.content.async.ReadPostsWindowTask;
 import com.mishiranu.dashchan.content.async.TaskViewModel;
 import com.mishiranu.dashchan.content.database.CommonDatabase;
 import com.mishiranu.dashchan.content.database.PagesDatabase;
@@ -90,7 +92,8 @@ import java.util.Locale;
 import java.util.Set;
 
 public class PostsPage extends ListPage implements PostsAdapter.Callback, FavoritesStorage.Observer,
-		UiManager.Observer, ExtractPostsTask.Callback, WatcherService.Session.Callback {
+		UiManager.Observer, ExtractPostsTask.Callback, ReadPostsWindowTask.Callback,
+		PostsAdapter.WindowCallback, WatcherService.Session.Callback {
 	private static class RetainableExtra implements Retainable {
 		public static final ExtraFactory<RetainableExtra> FACTORY = RetainableExtra::new;
 
@@ -98,6 +101,7 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 		public PagesDatabase.Cache.State cacheState;
 		public boolean initialExtract = true;
 		public boolean eraseExtract;
+		public boolean windowedMode;
 		public final HashMap<PostNumber, PostItem> postItems = new HashMap<>();
 		public final PostItem.HideState.Map<PostNumber> hiddenPosts = new PostItem.HideState.Map<>();
 		public final HashSet<PostNumber> userPosts = new HashSet<>();
@@ -273,6 +277,12 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 	}
 
 	private SearchWorker searchWorker;
+	private boolean windowedMode;
+	private ReadPostsWindowTask postsWindowTask;
+	private int requestedWindowPosition = -1;
+	private PostNumber requestedWindowPostNumber;
+	private PostNumber pendingDialogPostNumber;
+	private ListPosition pendingWindowListPosition;
 
 	private Replyable replyable;
 	private HidePerformer hidePerformer;
@@ -355,6 +365,14 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 		hidePerformer = new HidePerformer(context);
 		RetainableExtra retainableExtra = getRetainableExtra(RetainableExtra.FACTORY);
 		ParcelableExtra parcelableExtra = getParcelableExtra(ParcelableExtra.FACTORY);
+		windowedMode = Preferences.isWindowedThreadLoadingEnabled();
+		if (retainableExtra.windowedMode != windowedMode) {
+			retainableExtra.cache = null;
+			retainableExtra.postItems.clear();
+			retainableExtra.searchPostNumbers = Collections.emptyList();
+			retainableExtra.searching = false;
+			retainableExtra.windowedMode = windowedMode;
+		}
 		replyable = (click, data) -> {
 			ChanConfiguration.Board board = getChan().configuration.safe().obtainBoard(page.boardName);
 			if (click && board.allowPosting) {
@@ -364,7 +382,8 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 			return board.allowPosting;
 		};
 		PostsAdapter adapter = new PostsAdapter(this, page.chanName, uiManager,
-				replyable, postStateProvider, getFragmentManager(), recyclerView, retainableExtra.postItems);
+				replyable, postStateProvider, getFragmentManager(), recyclerView, retainableExtra.postItems,
+				windowedMode ? this : null);
 		if (parcelableExtra.translationEnabled == null) {
 			parcelableExtra.translationEnabled = TranslationController.isReadyForChan(page.chanName) &&
 					Preferences.isTranslationAutoEnabled();
@@ -440,7 +459,37 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 		}
 		boolean hasNewPosts = consumeNewPostData();
 		boolean load = initRequest.shouldLoad || hasNewPosts;
-		if (initRequest.errorItem != null && !load) {
+		if (windowedMode) {
+			pendingWindowListPosition = takeListPosition();
+			if (initRequest.errorItem != null && !load) {
+				switchError(initRequest.errorItem);
+			} else {
+				int position = pendingWindowListPosition != null ? pendingWindowListPosition.position : -1;
+				PagesDatabase.ThreadKey threadKey = new PagesDatabase.ThreadKey(page.chanName,
+						page.boardName, page.threadNumber);
+				PostsWindowCache.Window cachedWindow = PostsWindowCache.getInstance().get(threadKey);
+				boolean cachedPosition = cachedWindow != null && (position >= 0
+						? cachedWindow.containsPosition(position) : parcelableExtra.scrollToPostNumber != null
+								? cachedWindow.postItems.containsKey(parcelableExtra.scrollToPostNumber) : true);
+				if (cachedPosition) {
+					adapter.setWindow(cachedWindow);
+					if (pendingWindowListPosition != null && pendingWindowListPosition.position >= 0) {
+						pendingWindowListPosition.apply(recyclerView);
+						pendingWindowListPosition = null;
+					}
+					recyclerView.getPullable().cancelBusyState();
+					switchList();
+				}
+				loadPostsWindow(parcelableExtra.scrollToPostNumber, position, false);
+				if (load && !readViewModel.hasTaskOrValue()) {
+					refreshPostsWithoutIndication(false);
+				}
+				if (!cachedPosition && adapter.getItemCount() == 0) {
+					recyclerView.getPullable().startBusyState(PullableWrapper.Side.BOTH);
+					switchProgress();
+				}
+			}
+		} else if (initRequest.errorItem != null && !load) {
 			switchError(initRequest.errorItem);
 		} else {
 			boolean extract = true;
@@ -515,9 +564,144 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 		}
 	}
 
+	private void loadPostsWindow(PostNumber postNumber, int position, boolean force) {
+		if (!windowedMode) {
+			return;
+		}
+		if (postsWindowTask != null) {
+			boolean samePost = postNumber != null && CommonUtils.equals(postNumber, requestedWindowPostNumber);
+			boolean nearbyPosition = postNumber == null && requestedWindowPostNumber == null && position >= 0 &&
+					requestedWindowPosition >= 0 && Math.abs(position - requestedWindowPosition) <
+					PostsWindowCache.WINDOW_SIZE / 2;
+			if (samePost || nearbyPosition) {
+				return;
+			}
+			postsWindowTask.cancel();
+		}
+		requestedWindowPosition = position;
+		requestedWindowPostNumber = postNumber;
+		Page page = getPage();
+		postsWindowTask = new ReadPostsWindowTask(this, getChan(), page.boardName,
+				page.threadNumber, postNumber, position, force);
+		postsWindowTask.execute(ConcurrentUtils.PARALLEL_EXECUTOR);
+	}
+
+	@Override
+	public void onRequestWindow(int position) {
+		PostsAdapter adapter = getAdapter();
+		if (position < adapter.getWindowStartPosition() || position >= adapter.getWindowEndPosition()) {
+			loadPostsWindow(null, position, false);
+		}
+	}
+
+	@Override
+	public void onRequestPost(PostNumber postNumber) {
+		pendingDialogPostNumber = postNumber;
+		loadPostsWindow(postNumber, -1, false);
+	}
+
+	@Override
+	public void onReadPostsWindowComplete(ReadPostsWindowTask task, ReadPostsWindowTask.Result result) {
+		if (task != postsWindowTask) {
+			return;
+		}
+		postsWindowTask = null;
+		if (result == null || result.window == null) {
+			requestedWindowPostNumber = null;
+			requestedWindowPosition = -1;
+			if (pendingDialogPostNumber != null) {
+				pendingDialogPostNumber = null;
+				ClickableToast.show(R.string.post_is_not_found);
+			}
+			if (getAdapter().getItemCount() == 0) {
+				switchError(new ErrorItem(ErrorItem.Type.UNKNOWN));
+			}
+			return;
+		}
+
+		RetainableExtra retainableExtra = getRetainableExtra(RetainableExtra.FACTORY);
+		if (result.flags != null) {
+			retainableExtra.hiddenPosts.clear();
+			retainableExtra.hiddenPosts.addAll(result.flags.hiddenPosts);
+			retainableExtra.userPosts.clear();
+			retainableExtra.userPosts.addAll(result.flags.userPosts);
+		}
+		Pair<PostNumber, Integer> storedPosition = null;
+		if (result.stateExtra != null) {
+			storedPosition = decodeThreadState(result.stateExtra.state);
+			retainableExtra.threadExtra = result.stateExtra.extra;
+			decodeThreadExtra();
+		}
+		retainableExtra.archivedThreadUri = result.archivedThreadUri;
+		retainableExtra.uniquePosters = result.uniquePosters;
+
+		PostNumber requestedPostNumber = requestedWindowPostNumber;
+		int requestedPosition = requestedWindowPosition;
+		requestedWindowPostNumber = null;
+		requestedWindowPosition = -1;
+		if (pendingWindowListPosition == null && requestedPostNumber == null && requestedPosition < 0 &&
+				storedPosition != null && !result.window.postItems.containsKey(storedPosition.first)) {
+			pendingWindowListPosition = new ListPosition(-1, storedPosition.second);
+			loadPostsWindow(storedPosition.first, -1, false);
+			return;
+		}
+
+		PostsAdapter adapter = getAdapter();
+		adapter.setWindow(result.window);
+		adapter.invalidateHidden();
+		if (pendingDialogPostNumber != null) {
+			PostItem postItem = adapter.findPostItem(pendingDialogPostNumber);
+			if (postItem != null) {
+				getUiManager().dialog().displaySingle(adapter.getConfigurationSet(), postItem);
+			} else {
+				ClickableToast.show(R.string.post_is_not_found);
+			}
+			pendingDialogPostNumber = null;
+		}
+		PaddedRecyclerView recyclerView = getRecyclerView();
+		if (pendingWindowListPosition != null) {
+			if (pendingWindowListPosition.position >= 0) {
+				pendingWindowListPosition.apply(recyclerView);
+			} else if (storedPosition != null) {
+				int position = adapter.positionOfPostNumber(storedPosition.first);
+				if (position >= 0) {
+					new ListPosition(position, pendingWindowListPosition.offset).apply(recyclerView);
+				}
+			}
+			pendingWindowListPosition = null;
+		} else if (requestedPostNumber != null) {
+			int position = adapter.positionOfPostNumber(requestedPostNumber);
+			if (position >= 0) {
+				((LinearLayoutManager) recyclerView.getLayoutManager()).scrollToPositionWithOffset(position, 0);
+			}
+		} else if (requestedPosition >= 0) {
+			((LinearLayoutManager) recyclerView.getLayoutManager()).scrollToPositionWithOffset(requestedPosition, 0);
+		} else if (storedPosition != null) {
+			int position = adapter.positionOfPostNumber(storedPosition.first);
+			if (position >= 0) {
+				new ListPosition(position, storedPosition.second).apply(recyclerView);
+			}
+		}
+
+		ParcelableExtra parcelableExtra = getParcelableExtra(ParcelableExtra.FACTORY);
+		if (!parcelableExtra.isAddedToHistory && !result.window.postNumbers.isEmpty()) {
+			parcelableExtra.isAddedToHistory = true;
+			Page page = getPage();
+			CommonDatabase.getInstance().getHistory().addHistoryAsync(page.chanName,
+					page.boardName, page.threadNumber, parcelableExtra.threadTitle);
+		}
+		recyclerView.getPullable().cancelBusyState();
+		switchList();
+		updateOptionsMenu();
+	}
+
 	@Override
 	protected void onDestroy() {
 		stopRefresh();
+		if (postsWindowTask != null) {
+			postsWindowTask.cancel();
+			postsWindowTask = null;
+		}
 		if (selectionMode != null) {
 			selectionMode.finish();
 			selectionMode = null;
@@ -556,6 +740,8 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 		if (position >= 0) {
 			getUiManager().dialog().closeDialogs(getAdapter().getConfigurationSet().stackInstance);
 			ListViewUtils.smoothScrollToPosition(getRecyclerView(), position);
+		} else if (windowedMode) {
+			loadPostsWindow(postNumber, -1, false);
 		}
 	}
 
@@ -671,6 +857,9 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 		PostsAdapter adapter = getAdapter();
 		RetainableExtra retainableExtra = getRetainableExtra(RetainableExtra.FACTORY);
 		menu.findItem(R.id.menu_add_post).setVisible(replyable != null && replyable.onRequestReply(false));
+		menu.findItem(R.id.menu_search).setVisible(!windowedMode);
+		menu.findItem(R.id.menu_gallery).setVisible(!windowedMode);
+		menu.findItem(R.id.menu_summary).setVisible(!windowedMode);
 		menu.findItem(R.id.menu_erase).setVisible(adapter.getItemCount() > 0);
 		menu.findItem(R.id.menu_clear_old).setVisible(adapter.hasOldPosts());
 		menu.findItem(R.id.menu_clear_deleted).setVisible(adapter.hasDeletedPosts());
@@ -698,7 +887,7 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 				.setVisible(Chan.getPreferred(null, retainableExtra.archivedThreadUri).name != null);
 		boolean canBeArchived = !ChanManager.getInstance().getArchiveChanNames(page.chanName).isEmpty() ||
 				!getChan().configuration.getOption(ChanConfiguration.OPTION_LOCAL_MODE);
-		menu.findItem(R.id.menu_archive).setVisible(canBeArchived);
+		menu.findItem(R.id.menu_archive).setVisible(canBeArchived && !windowedMode);
 	}
 
 	@Override
@@ -806,7 +995,9 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 					String boardName = chan.locator.safe(true).getBoardName(uri);
 					String threadNumber = chan.locator.safe(true).getThreadNumber(uri);
 					if (threadNumber != null) {
-						String threadTitle = adapter.getItem(0).getSubjectOrComment();
+						PostItem originalPost = adapter.getItem(0);
+						String threadTitle = originalPost != null ? originalPost.getSubjectOrComment()
+								: getParcelableExtra(ParcelableExtra.FACTORY).threadTitle;
 						getUiManager().navigator().navigatePosts(chan.name, boardName, threadNumber, null, threadTitle);
 					}
 				}
@@ -1006,7 +1197,9 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 				ArrayList<PostItem> postItems = adapter.getSelectedItems();
 				if (postItems.size() > 0) {
 					Page page = getPage();
-					String threadTitle = adapter.getItem(0).getSubjectOrComment();
+					PostItem originalPost = adapter.getItem(0);
+					String threadTitle = originalPost != null ? originalPost.getSubjectOrComment()
+							: getParcelableExtra(ParcelableExtra.FACTORY).threadTitle;
 					new ThreadshotPerformer(getFragmentManager(), page.chanName, page.boardName, page.threadNumber,
 							threadTitle, postItems, getRecyclerView().getWidth());
 				}
@@ -1108,7 +1301,8 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 			int listPosition = ((LinearLayoutManager) getRecyclerView().getLayoutManager())
 					.findFirstVisibleItemPosition();
 			clearSearchFocus();
-			PostNumber postNumber = listPosition >= 0 ? getAdapter().getItem(listPosition).getPostNumber() : null;
+			PostItem visibleItem = listPosition >= 0 ? getAdapter().getItem(listPosition) : null;
+			PostNumber postNumber = visibleItem != null ? visibleItem.getPostNumber() : null;
 			int index = 0;
 			if (postNumber != null) {
 				for (int i = 0; i < foundPostNumbers.size(); i++) {
@@ -1139,6 +1333,8 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 					.get(retainableExtra.searchLastIndex));
 			if (position >= 0) {
 				ListViewUtils.smoothScrollToPosition(getRecyclerView(), position);
+			} else if (windowedMode) {
+				loadPostsWindow(retainableExtra.searchPostNumbers.get(retainableExtra.searchLastIndex), -1, false);
 			}
 			updateSearchTitle();
 		}
@@ -1166,12 +1362,18 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 				if (position >= 0) {
 					ListViewUtils.smoothScrollToPosition(getRecyclerView(), position);
 					success = true;
+				} else if (windowedMode) {
+					loadPostsWindow(null, number - 1, false);
+					success = true;
 				}
 			}
 			if (!success) {
 				int position = adapter.positionOfPostNumber(new PostNumber(number, 0));
 				if (position >= 0) {
 					ListViewUtils.smoothScrollToPosition(getRecyclerView(), position);
+					success = true;
+				} else if (windowedMode) {
+					loadPostsWindow(new PostNumber(number, 0), -1, false);
 					success = true;
 				} else {
 					ClickableToast.show(R.string.post_is_not_found);
@@ -1215,6 +1417,11 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 					ListViewUtils.smoothScrollToPosition(recyclerView, position);
 				}
 				parcelableExtra.scrollToPostNumber = null;
+				return true;
+			} else if (windowedMode) {
+				PostNumber postNumber = parcelableExtra.scrollToPostNumber;
+				parcelableExtra.scrollToPostNumber = null;
+				loadPostsWindow(postNumber, -1, false);
 				return true;
 			}
 		}
@@ -1324,13 +1531,14 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 	private final Runnable storePositionRunnable = () -> {
 		ListPosition listPosition = ListPosition.obtain(getRecyclerView(), null);
 		byte[] state = null;
-		if (listPosition != null) {
+		PostItem positionItem = listPosition != null ? getAdapter().getItem(listPosition.position) : null;
+		if (listPosition != null && positionItem != null) {
 			try (JsonSerial.Writer writer = JsonSerial.writer()) {
 				writer.startObject();
 				writer.name("position");
 				writer.startObject();
 				writer.name("number");
-				writer.value(getAdapter().getItem(listPosition.position).getPostNumber().toString());
+				writer.value(positionItem.getPostNumber().toString());
 				writer.name("offset");
 				writer.value(listPosition.offset);
 				writer.endObject();
@@ -1350,12 +1558,29 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 		public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
 			ConcurrentUtils.HANDLER.removeCallbacks(storePositionRunnable);
 			ConcurrentUtils.HANDLER.postDelayed(storePositionRunnable, 2000L);
+			if (windowedMode && dy != 0) {
+				LinearLayoutManager layoutManager = (LinearLayoutManager) recyclerView.getLayoutManager();
+				PostsAdapter adapter = getAdapter();
+				if (dy > 0) {
+					int last = layoutManager.findLastVisibleItemPosition();
+					if (last >= adapter.getWindowEndPosition() - 10 &&
+							adapter.getWindowEndPosition() < adapter.getItemCount()) {
+						onRequestWindow(Math.min(adapter.getItemCount() - 1, last + 20));
+					}
+				} else {
+					int first = layoutManager.findFirstVisibleItemPosition();
+					if (first >= 0 && first <= adapter.getWindowStartPosition() + 10 &&
+							adapter.getWindowStartPosition() > 0) {
+						onRequestWindow(Math.max(0, first - 20));
+					}
+				}
+			}
 		}
 	};
 
 	private Pair<PostNumber, Integer> transformListPositionToPair(ListPosition listPosition) {
-		PostNumber postNumber = listPosition != null
-				? getAdapter().getItem(listPosition.position).getPostNumber() : null;
+		PostItem postItem = listPosition != null ? getAdapter().getItem(listPosition.position) : null;
+		PostNumber postNumber = postItem != null ? postItem.getPostNumber() : null;
 		return postNumber != null ? new Pair<>(postNumber, listPosition.offset) : null;
 	}
 
@@ -1528,6 +1753,12 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 	@Override
 	public void onExtractPostsComplete(ExtractPostsTask.Result result, boolean cancelled) {
 		Page page = getPage();
+		if (result == null) {
+			if (!cancelled) {
+				handleError(new ErrorItem(ErrorItem.Type.UNKNOWN));
+			}
+			return;
+		}
 		WatcherNotifications.cancelReplies(getContext(),
 				page.chanName, page.boardName, page.threadNumber, result.replyPosts);
 		if (cancelled) {
@@ -1535,6 +1766,21 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 		}
 
 		RetainableExtra retainableExtra = getRetainableExtra(RetainableExtra.FACTORY);
+		if (windowedMode) {
+			boolean erase = retainableExtra.eraseExtract;
+			retainableExtra.eraseExtract = false;
+			if (erase && result.cache.isEmpty()) {
+				FavoritesStorage.getInstance().remove(page.chanName, page.boardName, page.threadNumber);
+				closePage();
+				return;
+			}
+			PostsWindowCache.getInstance().invalidate(new PagesDatabase.ThreadKey(page.chanName,
+					page.boardName, page.threadNumber));
+			LinearLayoutManager layoutManager = (LinearLayoutManager) getRecyclerView().getLayoutManager();
+			int position = layoutManager.findFirstVisibleItemPosition();
+			loadPostsWindow(null, position >= 0 ? position : getAdapter().getWindowStartPosition(), true);
+			return;
+		}
 		ParcelableExtra parcelableExtra = getParcelableExtra(ParcelableExtra.FACTORY);
 		PaddedRecyclerView recyclerView = getRecyclerView();
 		PostsAdapter adapter = getAdapter();
@@ -1820,6 +2066,20 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 		ReadViewModel readViewModel = getViewModel(ReadViewModel.class);
 		RetainableExtra retainableExtra = getRetainableExtra(RetainableExtra.FACTORY);
 		retainableExtra.cacheState = cacheState;
+		if (windowedMode) {
+			consumeReplies.consume();
+			Page page = getPage();
+			PostsWindowCache.getInstance().invalidate(new PagesDatabase.ThreadKey(page.chanName,
+					page.boardName, page.threadNumber));
+			LinearLayoutManager layoutManager = (LinearLayoutManager) getRecyclerView().getLayoutManager();
+			int position = layoutManager.findFirstVisibleItemPosition();
+			if (position < 0) {
+				position = getAdapter().getWindowStartPosition();
+			}
+			loadPostsWindow(null, position, true);
+			queueNextRefresh(false);
+			return;
+		}
 		if ((readViewModel.visibleReadResult || getAutoRefreshInterval() > 0) &&
 				!hasExtractTask() && retainableExtra.shouldExtract()) {
 			consumeReplies.consume();

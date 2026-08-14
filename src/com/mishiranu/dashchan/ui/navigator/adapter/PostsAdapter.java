@@ -9,8 +9,11 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
 import android.os.SystemClock;
+import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.FrameLayout;
+import android.widget.ProgressBar;
 import androidx.annotation.NonNull;
 import androidx.fragment.app.FragmentManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -18,6 +21,7 @@ import chan.content.Chan;
 import chan.util.CommonUtils;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.HidePerformer;
+import com.mishiranu.dashchan.content.PostsWindowCache;
 import com.mishiranu.dashchan.content.model.AttachmentItem;
 import com.mishiranu.dashchan.content.model.GalleryItem;
 import com.mishiranu.dashchan.content.model.PostItem;
@@ -43,6 +47,11 @@ import java.util.Map;
 
 public class PostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
 		implements CommentTextView.LinkListener, UiManager.PostsProvider, HidePerformer.PostsProvider {
+	public interface WindowCallback {
+		void onRequestWindow(int position);
+		void onRequestPost(PostNumber postNumber);
+	}
+
 	public interface Callback extends ListViewUtils.ClickCallback<PostItem, RecyclerView.ViewHolder> {
 		void onItemClick(View view, PostItem postItem);
 		boolean onItemLongClick(PostItem postItem);
@@ -60,6 +69,7 @@ public class PostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
 	}
 
 	private static final String PAYLOAD_INVALIDATE_COMMENT = "invalidateComment";
+	private static final int VIEW_TYPE_LOADING = ViewUnit.ViewType.values().length;
 
 	private final UiManager uiManager;
 	private final UiManager.ConfigurationSet configurationSet;
@@ -70,6 +80,9 @@ public class PostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
 	private final ArrayList<PostNumber> postNumbers = new ArrayList<>();
 	private final Map<PostNumber, PostItem> postItemsMap;
 	private final HashSet<PostNumber> selected = new HashSet<>();
+	private final WindowCallback windowCallback;
+	private int windowStartPosition;
+	private int windowTotalCount;
 
 	private int bumpLimitOrdinalIndex = PostItem.ORDINAL_INDEX_NONE;
 	private boolean selection = false;
@@ -78,6 +91,13 @@ public class PostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
 	public PostsAdapter(Callback callback, String chanName, UiManager uiManager, Replyable replyable,
 			UiManager.PostStateProvider postStateProvider, FragmentManager fragmentManager, RecyclerView recyclerView,
 			Map<PostNumber, PostItem> postItemsMap) {
+		this(callback, chanName, uiManager, replyable, postStateProvider, fragmentManager,
+				recyclerView, postItemsMap, null);
+	}
+
+	public PostsAdapter(Callback callback, String chanName, UiManager uiManager, Replyable replyable,
+			UiManager.PostStateProvider postStateProvider, FragmentManager fragmentManager, RecyclerView recyclerView,
+			Map<PostNumber, PostItem> postItemsMap, WindowCallback windowCallback) {
 		this.uiManager = uiManager;
 		configurationSet = new UiManager.ConfigurationSet(chanName, replyable, this, postStateProvider,
 				gallerySet, fragmentManager, uiManager.dialog().createStackInstance(), this, callback,
@@ -85,8 +105,47 @@ public class PostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
 		recyclerKeeper = new CommentTextView.RecyclerKeeper(recyclerView);
 		super.registerAdapterDataObserver(recyclerKeeper);
 		this.postItemsMap = postItemsMap;
+		this.windowCallback = windowCallback;
 		rebuildPosts(false);
 		preloadPosts(0);
+	}
+
+	public boolean isWindowed() {
+		return windowCallback != null;
+	}
+
+	public void setWindow(PostsWindowCache.Window window) {
+		if (!isWindowed()) {
+			throw new IllegalStateException("Adapter is not windowed");
+		}
+		cancelPreloading();
+		postItemsMap.clear();
+		postItemsMap.putAll(window.postItems);
+		postNumbers.clear();
+		postNumbers.addAll(window.postNumbers);
+		windowStartPosition = window.startPosition;
+		windowTotalCount = window.totalCount;
+		gallerySet.clear();
+		for (PostNumber postNumber : postNumbers) {
+			PostItem postItem = postItemsMap.get(postNumber);
+			if (postItem != null) {
+				if (postItem.isOriginalPost()) {
+					gallerySet.setThreadTitle(postItem.getSubjectOrComment());
+				}
+				gallerySet.put(postNumber, postItem.getAttachmentItems());
+			}
+		}
+		selected.retainAll(postNumbers);
+		notifyDataSetChanged();
+		preloadPosts(windowStartPosition);
+	}
+
+	public int getWindowStartPosition() {
+		return windowStartPosition;
+	}
+
+	public int getWindowEndPosition() {
+		return windowStartPosition + postNumbers.size();
 	}
 
 	public RecyclerView.ItemDecoration createPostItemDecoration(Context context, int dividerPadding) {
@@ -104,12 +163,16 @@ public class PostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
 
 	@Override
 	public int getItemCount() {
-		return postNumbers.size();
+		return isWindowed() ? windowTotalCount : postNumbers.size();
 	}
 
 	@Override
 	public int getItemViewType(int position) {
 		PostItem postItem = getItem(position);
+		if (postItem == null) {
+			requestWindow(position);
+			return VIEW_TYPE_LOADING;
+		}
 		return (configurationSet.postStateProvider.isHiddenResolve(postItem)
 				? ViewUnit.ViewType.POST_HIDDEN : ViewUnit.ViewType.POST).ordinal();
 	}
@@ -117,6 +180,17 @@ public class PostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
 	@NonNull
 	@Override
 	public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+		if (viewType == VIEW_TYPE_LOADING) {
+			FrameLayout layout = new FrameLayout(parent.getContext());
+			int height = (int) (72f * ResourceUtils.obtainDensity(parent.getContext()));
+			layout.setMinimumHeight(height);
+			ProgressBar progressBar = new ProgressBar(parent.getContext(), null,
+					android.R.attr.progressBarStyleSmall);
+			FrameLayout.LayoutParams layoutParams = new FrameLayout.LayoutParams(
+					FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER);
+			layout.addView(progressBar, layoutParams);
+			return new SimpleViewHolder(layout);
+		}
 		return uiManager.view().createView(parent, ViewUnit.ViewType.values()[viewType]);
 	}
 
@@ -129,6 +203,10 @@ public class PostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
 	public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position,
 			@NonNull List<Object> payloads) {
 		PostItem postItem = getItem(position);
+		if (postItem == null) {
+			requestWindow(position);
+			return;
+		}
 		switch (ViewUnit.ViewType.values()[holder.getItemViewType()]) {
 			case POST: {
 				UiManager.DemandSet demandSet = this.demandSet;
@@ -191,8 +269,9 @@ public class PostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
 		String key = TranslationController.getCurrentCacheKey();
 		int end = Math.min(lastPosition, getItemCount() - 1);
 		for (int position = firstPosition; position <= end; position++) {
-			if (ViewUnit.ViewType.values()[getItemViewType(position)] == ViewUnit.ViewType.POST &&
-					!getItem(position).hasTranslatedComment(key)) {
+			PostItem postItem = getItem(position);
+			if (postItem != null && !configurationSet.postStateProvider.isHiddenResolve(postItem) &&
+					!postItem.hasTranslatedComment(key)) {
 				return true;
 			}
 		}
@@ -200,15 +279,20 @@ public class PostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
 	}
 
 	public PostItem getItem(int position) {
-		return postItemsMap.get(postNumbers.get(position));
+		int localPosition = isWindowed() ? position - windowStartPosition : position;
+		return localPosition >= 0 && localPosition < postNumbers.size()
+				? postItemsMap.get(postNumbers.get(localPosition)) : null;
 	}
 
 	public int positionOfPostNumber(PostNumber postNumber) {
-		return Collections.binarySearch(postNumbers, postNumber);
+		int position = Collections.binarySearch(postNumbers, postNumber);
+		return position >= 0 && isWindowed() ? windowStartPosition + position : position;
 	}
 
 	public int positionOfOrdinalIndex(int ordinalIndex) {
-		for (int i = 0; i < getItemCount(); i++) {
+		int start = isWindowed() ? windowStartPosition : 0;
+		int end = isWindowed() ? getWindowEndPosition() : getItemCount();
+		for (int i = start; i < end; i++) {
 			PostItem postItem = getItem(i);
 			if (postItem.getOrdinalIndex() == ordinalIndex) {
 				return i;
@@ -256,12 +340,23 @@ public class PostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
 		selected.retainAll(postNumbers);
 	}
 
+	private void requestWindow(int position) {
+		if (windowCallback != null && position >= 0 && position < windowTotalCount) {
+			windowCallback.onRequestWindow(position);
+		}
+	}
+
 	public boolean setRemoveHiddenPosts(boolean removeHiddenPosts) {
 		if (this.removeHiddenPosts == removeHiddenPosts) {
 			return false;
 		}
 		this.removeHiddenPosts = removeHiddenPosts;
 		cancelPreloading();
+		if (isWindowed()) {
+			notifyDataSetChanged();
+			preloadPosts(windowStartPosition);
+			return true;
+		}
 		rebuildPosts(true);
 		notifyDataSetChanged();
 		preloadPosts(0);
@@ -273,6 +368,11 @@ public class PostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
 			return false;
 		}
 		cancelPreloading();
+		if (isWindowed()) {
+			notifyDataSetChanged();
+			preloadPosts(windowStartPosition);
+			return true;
+		}
 		rebuildPosts(true);
 		preloadPosts(0);
 		return true;
@@ -280,7 +380,10 @@ public class PostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
 
 	@Override
 	public void onLinkClick(CommentTextView view, Uri uri, Extra extra, boolean confirmed) {
-		PostItem originalPostItem = getItem(0);
+		PostItem originalPostItem = postNumbers.isEmpty() ? null : postItemsMap.get(postNumbers.get(0));
+		if (originalPostItem == null) {
+			return;
+		}
 		Chan chan = Chan.get(extra.chanName);
 		String boardName = originalPostItem.getBoardName();
 		String threadNumber = originalPostItem.getThreadNumber();
@@ -289,7 +392,15 @@ public class PostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
 				&& CommonUtils.equals(threadNumber, chan.locator.safe(false).getThreadNumber(uri))) {
 			PostNumber postNumber = chan.locator.safe(false).getPostNumber(uri);
 			int position = postNumber == null ? 0 : positionOfPostNumber(postNumber);
+			if (postNumber == null && getItem(position) == null && windowCallback != null) {
+				windowCallback.onRequestWindow(0);
+				return;
+			}
 			if (position < 0) {
+				if (windowCallback != null && postNumber != null) {
+					windowCallback.onRequestPost(postNumber);
+					return;
+				}
 				ClickableToast.show(R.string.post_is_not_found);
 				return;
 			}
@@ -445,7 +556,9 @@ public class PostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
 			}
 		}
 		int position = positionOfPostNumber(postNumber);
-		notifyItemChanged(position, SimpleViewHolder.EMPTY_PAYLOAD);
+		if (position >= 0) {
+			notifyItemChanged(position, SimpleViewHolder.EMPTY_PAYLOAD);
+		}
 	}
 
 	public ArrayList<PostItem> getSelectedItems() {
@@ -611,13 +724,19 @@ public class PostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
 
 		private PostsIterator(boolean ascending, int from) {
 			this.ascending = ascending;
-			position = from;
+			if (isWindowed()) {
+				position = ascending ? Math.max(from, windowStartPosition)
+						: Math.min(from, getWindowEndPosition() - 1);
+			} else {
+				position = from;
+			}
 		}
 
 		@Override
 		public boolean hasNext() {
-			int count = getItemCount();
-			return ascending ? position < count : position >= 0;
+			int start = isWindowed() ? windowStartPosition : 0;
+			int end = isWindowed() ? getWindowEndPosition() : getItemCount();
+			return ascending ? position < end : position >= start;
 		}
 
 		private PostItem nextInternal() {

@@ -92,6 +92,14 @@ public class MainApplication extends Application {
 		}
 	}
 
+	@Override
+	public void onTrimMemory(int level) {
+		super.onTrimMemory(level);
+		if (isMainProcess()) {
+			PostsWindowCache.getInstance().onTrimMemory(level);
+		}
+	}
+
 	private void cleanupRemovedAutoBump() {
 		if (Preferences.PREFERENCES.getBoolean(KEY_REMOVED_AUTO_BUMP_CLEANUP, false)) {
 			return;

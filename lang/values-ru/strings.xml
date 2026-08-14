@@ -948,6 +948,8 @@
 	<string name="display_post_year">Отображать год в датах постов</string>
 	<string name="hide_thread_title">Скрывать заголовок треда в верхней панели</string>
 	<string name="hide_thread_title__summary">Не показывать название и адрес треда при его просмотре</string>
+	<string name="windowed_thread_loading">Быстрое открытие тредов</string>
+	<string name="windowed_thread_loading__summary">Загружает сообщения небольшими частями вокруг текущей позиции. Ускоряет открытие старых и больших тредов. Экспериментальная функция.</string>
 
 	<string name="boards_work_safe">Безопасные для просмотра</string>
 	<string name="boards_not_safe_for_work">Для взрослых</string>

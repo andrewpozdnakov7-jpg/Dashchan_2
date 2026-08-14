@@ -924,6 +924,8 @@
 	<string name="display_post_year">Show year in post dates</string>
 	<string name="hide_thread_title">Hide thread title in toolbar</string>
 	<string name="hide_thread_title__summary">Do not show the thread name or address while viewing it</string>
+	<string name="windowed_thread_loading">Fast thread opening</string>
+	<string name="windowed_thread_loading__summary">Loads messages in small sections around the current position to open old and large threads faster. Experimental feature.</string>
 
 	<string name="boards_work_safe">Work Safe</string>
 	<string name="boards_not_safe_for_work">Not Safe For Work</string>

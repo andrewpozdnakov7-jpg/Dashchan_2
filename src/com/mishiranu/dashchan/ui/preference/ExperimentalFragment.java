@@ -66,6 +66,10 @@ public class ExperimentalFragment extends PreferenceFragment implements Translat
 				Preferences.DEFAULT_OPEN_CONFIGURED_ATTACHMENT_FOLDER,
 				R.string.open_configured_attachment_folder,
 				R.string.open_configured_attachment_folder__summary);
+		addCheck(true, Preferences.KEY_WINDOWED_THREAD_LOADING,
+				Preferences.DEFAULT_WINDOWED_THREAD_LOADING,
+				R.string.windowed_thread_loading,
+				R.string.windowed_thread_loading__summary);
 		CheckPreference combinedFeedsPreference = addCheck(true, Preferences.KEY_COMBINED_FEEDS_ENABLED,
 				Preferences.DEFAULT_COMBINED_FEEDS_ENABLED, R.string.combined_feeds,
 				R.string.combined_feeds__summary);

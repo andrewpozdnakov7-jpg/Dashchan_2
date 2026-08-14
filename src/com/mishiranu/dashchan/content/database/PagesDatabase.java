@@ -317,6 +317,26 @@ public class PagesDatabase {
 		}
 	}
 
+	public static final class PostWindow {
+		public final int totalCount;
+		public final int startPosition;
+		public final int startOrdinalIndex;
+		public final PostNumber originalPostNumber;
+		public final List<Post> posts;
+		public final long estimatedMemoryBytes;
+
+		private PostWindow(int totalCount, int startPosition, int startOrdinalIndex,
+				PostNumber originalPostNumber,
+				List<Post> posts, long estimatedMemoryBytes) {
+			this.totalCount = totalCount;
+			this.startPosition = startPosition;
+			this.startOrdinalIndex = startOrdinalIndex;
+			this.originalPostNumber = originalPostNumber;
+			this.posts = posts;
+			this.estimatedMemoryBytes = estimatedMemoryBytes;
+		}
+	}
+
 	public static class InsertResult {
 		public static class Reply {
 			public final PostNumber postNumber;
@@ -652,6 +672,101 @@ public class PagesDatabase {
 			}
 		}
 		return postNumbers;
+	}
+
+	public PostWindow getPostWindow(@NonNull ThreadKey threadKey, PostNumber anchorPostNumber,
+			int requestedPosition, int windowSize, CancellationSignal signal)
+			throws ParseException, OperationCanceledException {
+		Objects.requireNonNull(threadKey);
+		if (windowSize <= 0) {
+			throw new IllegalArgumentException("Window size must be positive");
+		}
+		String where = Schema.Posts.Columns.CHAN_NAME + " = ? AND " +
+				Schema.Posts.Columns.BOARD_NAME + " = ? AND " +
+				Schema.Posts.Columns.THREAD_NUMBER + " = ?";
+		String[] threadArgs = {threadKey.chanName, threadKey.boardName, threadKey.threadNumber};
+		int totalCount = 0;
+		try (Cursor cursor = database.query(false, Schema.Posts.TABLE_NAME,
+				new String[] {"COUNT(*)"}, where, threadArgs, null, null, null, null, signal)) {
+			if (cursor.moveToFirst()) {
+				totalCount = cursor.getInt(0);
+			}
+		}
+		if (totalCount == 0) {
+			return new PostWindow(0, 0, 0, null, Collections.emptyList(), 0L);
+		}
+
+		int anchorPosition = requestedPosition;
+		if (anchorPosition < 0 && anchorPostNumber != null) {
+			String anchorWhere = where + " AND (" + Schema.Posts.Columns.POST_NUMBER_MAJOR + " < ? OR (" +
+					Schema.Posts.Columns.POST_NUMBER_MAJOR + " = ? AND " +
+					Schema.Posts.Columns.POST_NUMBER_MINOR + " < ?))";
+			String[] anchorArgs = {threadKey.chanName, threadKey.boardName, threadKey.threadNumber,
+					Integer.toString(anchorPostNumber.major), Integer.toString(anchorPostNumber.major),
+					Integer.toString(anchorPostNumber.minor)};
+			try (Cursor cursor = database.query(false, Schema.Posts.TABLE_NAME,
+					new String[] {"COUNT(*)"}, anchorWhere, anchorArgs,
+					null, null, null, null, signal)) {
+				if (cursor.moveToFirst()) {
+					anchorPosition = cursor.getInt(0);
+				}
+			}
+		}
+		if (anchorPosition < 0) {
+			anchorPosition = 0;
+		}
+		anchorPosition = Math.max(0, Math.min(anchorPosition, totalCount - 1));
+		int startPosition = Math.max(0, anchorPosition - windowSize / 2);
+		startPosition = Math.min(startPosition, Math.max(0, totalCount - windowSize));
+
+		PostNumber originalPostNumber = null;
+		try (Cursor cursor = database.query(false, Schema.Posts.TABLE_NAME,
+				new String[] {Schema.Posts.Columns.POST_NUMBER_MAJOR, Schema.Posts.Columns.POST_NUMBER_MINOR},
+				where, threadArgs, null, null, orderByPostNumber(false), "1", signal)) {
+			if (cursor.moveToFirst()) {
+				originalPostNumber = new PostNumber(cursor.getInt(0), cursor.getInt(1));
+			}
+		}
+
+		String[] projection = {Schema.Posts.Columns.POST_NUMBER_MAJOR,
+				Schema.Posts.Columns.POST_NUMBER_MINOR, Schema.Posts.Columns.FLAGS, Schema.Posts.Columns.DATA};
+		ArrayList<Post> posts = new ArrayList<>(Math.min(windowSize, totalCount));
+		long estimatedMemoryBytes = 0L;
+		String limit = windowSize + " OFFSET " + startPosition;
+		try (Cursor cursor = database.query(false, Schema.Posts.TABLE_NAME, projection,
+				where, threadArgs, null, null, orderByPostNumber(false), limit, signal)) {
+			while (cursor.moveToNext()) {
+				PostNumber postNumber = new PostNumber(cursor.getInt(0), cursor.getInt(1));
+				boolean deleted = FlagUtils.get(cursor.getInt(2), Schema.Posts.Flags.DELETED);
+				byte[] data = cursor.getBlob(3);
+				try (JsonSerial.Reader reader = JsonSerial.reader(data)) {
+					posts.add(Post.deserialize(postNumber, deleted, reader));
+				} catch (IOException e) {
+					throw new RuntimeException(e);
+				}
+				// Parsed strings, spans and collection nodes generally occupy several times the serialized blob.
+				estimatedMemoryBytes += Math.max(1024L, data.length * 4L + 512L);
+			}
+		}
+		int startOrdinalIndex = 0;
+		if (!posts.isEmpty()) {
+			PostNumber first = posts.get(0).number;
+			String ordinalWhere = where + " AND (" + Schema.Posts.Columns.FLAGS + " & " +
+					Schema.Posts.Flags.DELETED + ") = 0 AND (" + Schema.Posts.Columns.POST_NUMBER_MAJOR +
+					" < ? OR (" + Schema.Posts.Columns.POST_NUMBER_MAJOR + " = ? AND " +
+					Schema.Posts.Columns.POST_NUMBER_MINOR + " < ?))";
+			String[] ordinalArgs = {threadKey.chanName, threadKey.boardName, threadKey.threadNumber,
+					Integer.toString(first.major), Integer.toString(first.major), Integer.toString(first.minor)};
+			try (Cursor cursor = database.query(false, Schema.Posts.TABLE_NAME,
+					new String[] {"COUNT(*)"}, ordinalWhere, ordinalArgs,
+					null, null, null, null, signal)) {
+				if (cursor.moveToFirst()) {
+					startOrdinalIndex = cursor.getInt(0);
+				}
+			}
+		}
+		return new PostWindow(totalCount, startPosition, startOrdinalIndex, originalPostNumber,
+				Collections.unmodifiableList(posts), estimatedMemoryBytes);
 	}
 
 	public WatcherState getWatcherState(@NonNull ThreadKey threadKey) {
