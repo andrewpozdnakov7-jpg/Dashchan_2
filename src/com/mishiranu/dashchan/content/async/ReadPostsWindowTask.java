@@ -14,6 +14,7 @@ import com.mishiranu.dashchan.content.database.ThreadsDatabase;
 import com.mishiranu.dashchan.content.model.Post;
 import com.mishiranu.dashchan.content.model.PostItem;
 import com.mishiranu.dashchan.content.model.PostNumber;
+import com.mishiranu.dashchan.util.ThreadOpenDiagnostics;
 import java.util.ArrayList;
 import java.util.HashMap;
 
@@ -47,9 +48,11 @@ public class ReadPostsWindowTask extends ExecutorTask<Void, ReadPostsWindowTask.
 	private final int requestedPosition;
 	private final boolean force;
 	private final CancellationSignal signal = new CancellationSignal();
+	private final ThreadOpenDiagnostics.Operation diagnosticOperation;
+	private boolean cacheHit;
 
 	public ReadPostsWindowTask(Callback callback, Chan chan, String boardName, String threadNumber,
-			PostNumber anchorPostNumber, int requestedPosition, boolean force) {
+			PostNumber anchorPostNumber, int requestedPosition, boolean force, int diagnosticSessionId) {
 		this.callback = callback;
 		this.chan = chan;
 		this.boardName = boardName;
@@ -57,6 +60,7 @@ public class ReadPostsWindowTask extends ExecutorTask<Void, ReadPostsWindowTask.
 		this.anchorPostNumber = anchorPostNumber;
 		this.requestedPosition = requestedPosition;
 		this.force = force;
+		diagnosticOperation = ThreadOpenDiagnostics.beginOperation(diagnosticSessionId, "window_query");
 	}
 
 	@Override
@@ -68,6 +72,7 @@ public class ReadPostsWindowTask extends ExecutorTask<Void, ReadPostsWindowTask.
 			PostsWindowCache.Window cached = cache.get(threadKey);
 			if (cached != null && (requestedPosition >= 0 ? cached.containsPosition(requestedPosition)
 					: anchorPostNumber != null ? cached.postItems.containsKey(anchorPostNumber) : true)) {
+				cacheHit = true;
 				return buildResult(database, threadKey, cached);
 			}
 		}
@@ -121,12 +126,20 @@ public class ReadPostsWindowTask extends ExecutorTask<Void, ReadPostsWindowTask.
 
 	@Override
 	protected void onCancel(Result result) {
+		finishDiagnostics(result, "cancelled");
 		callback.onReadPostsWindowComplete(this, null);
 	}
 
 	@Override
 	protected void onComplete(Result result) {
+		finishDiagnostics(result, result != null ? cacheHit ? "cache" : "database" : "failed");
 		callback.onReadPostsWindowComplete(this, result);
+	}
+
+	private void finishDiagnostics(Result result, String status) {
+		PostsWindowCache.Window window = result != null ? result.window : null;
+		ThreadOpenDiagnostics.endOperation(diagnosticOperation, status,
+				window != null ? window.postNumbers.size() : -1, window != null ? window.totalCount : -1);
 	}
 
 	@Override

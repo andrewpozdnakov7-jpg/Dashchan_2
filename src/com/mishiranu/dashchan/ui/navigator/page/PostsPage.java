@@ -70,6 +70,7 @@ import com.mishiranu.dashchan.util.ConcurrentUtils;
 import com.mishiranu.dashchan.util.ListViewUtils;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.util.SearchHelper;
+import com.mishiranu.dashchan.util.ThreadOpenDiagnostics;
 import com.mishiranu.dashchan.util.ViewUtils;
 import com.mishiranu.dashchan.widget.ClickableToast;
 import com.mishiranu.dashchan.widget.DividerItemDecoration;
@@ -283,6 +284,9 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 	private PostNumber requestedWindowPostNumber;
 	private PostNumber pendingDialogPostNumber;
 	private ListPosition pendingWindowListPosition;
+	private int threadOpenDiagnosticSessionId;
+	private boolean threadOpenFirstWindowShown;
+	private ThreadOpenDiagnostics.Operation threadOpenFullPrepareOperation;
 
 	private Replyable replyable;
 	private HidePerformer hidePerformer;
@@ -374,6 +378,9 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 		}
 		retainableExtra.windowedMode = windowedEnabled;
 		windowedMode = windowedEnabled && (retainableExtra.cache == null || retainableExtra.postItems.isEmpty());
+		if (windowedMode) {
+			threadOpenDiagnosticSessionId = ThreadOpenDiagnostics.beginSession();
+		}
 		replyable = (click, data) -> {
 			ChanConfiguration.Board board = getChan().configuration.safe().obtainBoard(page.boardName);
 			if (click && board.allowPosting) {
@@ -480,6 +487,7 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 					}
 					recyclerView.getPullable().cancelBusyState();
 					switchList();
+					markThreadOpenFirstWindowShown(cachedWindow);
 				}
 				loadPostsWindow(parcelableExtra.scrollToPostNumber, position, false);
 				if (load && !readViewModel.hasTaskOrValue()) {
@@ -583,7 +591,7 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 		requestedWindowPostNumber = postNumber;
 		Page page = getPage();
 		postsWindowTask = new ReadPostsWindowTask(this, getChan(), page.boardName,
-				page.threadNumber, postNumber, position, force);
+				page.threadNumber, postNumber, position, force, threadOpenDiagnosticSessionId);
 		postsWindowTask.execute(ConcurrentUtils.PARALLEL_EXECUTOR);
 	}
 
@@ -696,6 +704,7 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 		}
 		recyclerView.getPullable().cancelBusyState();
 		switchList();
+		markThreadOpenFirstWindowShown(result.window);
 		updateOptionsMenu();
 		if (result.window.totalCount > 0) {
 			ExtractViewModel extractViewModel = getViewModel(ExtractViewModel.class);
@@ -705,12 +714,36 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 		}
 	}
 
+	private void markThreadOpenFirstWindowShown(PostsWindowCache.Window window) {
+		if (threadOpenDiagnosticSessionId <= 0 || threadOpenFirstWindowShown) {
+			return;
+		}
+		threadOpenFirstWindowShown = true;
+		int sessionId = threadOpenDiagnosticSessionId;
+		int posts = window.postNumbers.size();
+		int totalPosts = window.totalCount;
+		ThreadOpenDiagnostics.mark(sessionId, "first_window_applied", posts, totalPosts);
+		getRecyclerView().postOnAnimation(() -> {
+			if (threadOpenDiagnosticSessionId == sessionId && isRunning()) {
+				ThreadOpenDiagnostics.mark(sessionId, "first_window_frame", posts, totalPosts);
+			}
+		});
+	}
+
 	@Override
 	protected void onDestroy() {
 		stopRefresh();
 		if (postsWindowTask != null) {
 			postsWindowTask.cancel();
 			postsWindowTask = null;
+		}
+		if (threadOpenFullPrepareOperation != null) {
+			ThreadOpenDiagnostics.endOperation(threadOpenFullPrepareOperation, "destroyed", -1, -1);
+			threadOpenFullPrepareOperation = null;
+		}
+		if (threadOpenDiagnosticSessionId > 0) {
+			ThreadOpenDiagnostics.endSession(threadOpenDiagnosticSessionId, "destroyed");
+			threadOpenDiagnosticSessionId = 0;
 		}
 		if (selectionMode != null) {
 			selectionMode.finish();
@@ -1624,6 +1657,10 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 			readViewModel.notifyEraseStarted();
 		}
 		ExtractViewModel extractViewModel = getViewModel(ExtractViewModel.class);
+		if (windowedMode && threadOpenDiagnosticSessionId > 0 && threadOpenFullPrepareOperation == null) {
+			threadOpenFullPrepareOperation = ThreadOpenDiagnostics.beginOperation(
+					threadOpenDiagnosticSessionId, "full_prepare");
+		}
 		ExtractPostsTask task = new ExtractPostsTask(extractViewModel.callback, retainableExtra.cache,
 				getChan(), page.boardName, page.threadNumber, retainableExtra.initialExtract, cleanup);
 		task.execute(ConcurrentUtils.PARALLEL_EXECUTOR);
@@ -1763,6 +1800,13 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 	@Override
 	public void onExtractPostsComplete(ExtractPostsTask.Result result, boolean cancelled) {
 		Page page = getPage();
+		if (threadOpenFullPrepareOperation != null) {
+			ThreadOpenDiagnostics.endOperation(threadOpenFullPrepareOperation,
+					cancelled ? "cancelled" : result != null ? "ready" : "failed",
+					result != null ? result.postItems.size() : -1,
+					windowedMode ? getAdapter().getItemCount() : -1);
+			threadOpenFullPrepareOperation = null;
+		}
 		if (result == null) {
 			if (!cancelled) {
 				handleError(new ErrorItem(ErrorItem.Type.UNKNOWN));
@@ -1779,6 +1823,7 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 		PaddedRecyclerView recyclerView = getRecyclerView();
 		PostsAdapter adapter = getAdapter();
 		Pair<PostNumber, Integer> windowKeepPositionPair = null;
+		ThreadOpenDiagnostics.Operation threadOpenApplyOperation = null;
 		if (windowedMode) {
 			if (retainableExtra.eraseExtract && result.cache.isEmpty()) {
 				FavoritesStorage.getInstance().remove(page.chanName, page.boardName, page.threadNumber);
@@ -1793,6 +1838,8 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 				loadPostsWindow(null, position >= 0 ? position : adapter.getWindowStartPosition(), true);
 				return;
 			}
+			threadOpenApplyOperation = ThreadOpenDiagnostics.beginOperation(
+					threadOpenDiagnosticSessionId, "full_apply");
 			ListPosition listPosition = ListPosition.obtain(recyclerView, null);
 			windowKeepPositionPair = transformListPositionToPair(listPosition);
 			PostsWindowCache.getInstance().invalidate(new PagesDatabase.ThreadKey(page.chanName,
@@ -1972,6 +2019,18 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 		} else {
 			cancelProgressIfNecessary();
 			handleError(new ErrorItem(ErrorItem.Type.UNKNOWN));
+		}
+		if (threadOpenApplyOperation != null) {
+			int posts = adapter.getItemCount();
+			ThreadOpenDiagnostics.endOperation(threadOpenApplyOperation, "ready", posts, posts);
+			int sessionId = threadOpenDiagnosticSessionId;
+			recyclerView.postOnAnimation(() -> {
+				if (threadOpenDiagnosticSessionId == sessionId && isRunning()) {
+					ThreadOpenDiagnostics.mark(sessionId, "complete_thread_frame", posts, posts);
+					ThreadOpenDiagnostics.endSession(sessionId, "ready");
+					threadOpenDiagnosticSessionId = 0;
+				}
+			});
 		}
 	}
 
