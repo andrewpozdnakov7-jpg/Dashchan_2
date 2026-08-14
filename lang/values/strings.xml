@@ -272,6 +272,7 @@
 	<string name="hardware_video_acceleration__summary">Decode supported video with MediaCodec. The software decoder is used when hardware decoding is unavailable</string>
 	<string name="image_editor">Photo editor</string>
 	<string name="image_editor__summary">Show an editor for attached photos. Crop, rotate, flip, cover details, erase added marks, and add emoji stickers</string>
+	<string name="new_attachment_defaults">New attachment defaults</string>
 	<string name="open_configured_attachment_folder">Open the download folder for attachments</string>
 	<string name="open_configured_attachment_folder__summary">Open the system Android file picker in the download folder configured in Media settings. When disabled, Android chooses the initial location</string>
 	<string name="edit_image">Edit image</string>

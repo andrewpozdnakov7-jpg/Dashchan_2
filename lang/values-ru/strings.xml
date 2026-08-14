@@ -278,6 +278,7 @@
 	<string name="hardware_video_acceleration__summary">Декодировать поддерживаемое видео через MediaCodec. Если аппаратное декодирование недоступно, используется программный декодер</string>
 	<string name="image_editor">Редактор фото</string>
 	<string name="image_editor__summary">Показывать редактор для прикреплённых фотографий: обрезка, поворот, отражение, замазка, стирание добавленных мазков и эмодзи-стикеры</string>
+	<string name="new_attachment_defaults">Параметры новых вложений</string>
 	<string name="open_configured_attachment_folder">Открывать папку загрузок для вложений</string>
 	<string name="open_configured_attachment_folder__summary">Открывать системный выбор файлов Android в папке загрузок, указанной в разделе «Медиа». Если отключено, начальную папку выбирает Android</string>
 	<string name="edit_image">Редактировать изображение</string>

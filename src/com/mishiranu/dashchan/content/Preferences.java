@@ -1793,6 +1793,22 @@ public class Preferences {
 	public static final boolean DEFAULT_HARDWARE_VIDEO_ACCELERATION = true;
 	public static final String KEY_IMAGE_EDITOR = "image_editor";
 	public static final boolean DEFAULT_IMAGE_EDITOR = true;
+	private static final String KEY_IMAGE_EDITOR_ENABLED_FOR_ALL = "image_editor_enabled_for_all_v1";
+
+	static {
+		if (PREFERENCES != null && !PREFERENCES.getBoolean(KEY_IMAGE_EDITOR_ENABLED_FOR_ALL, false)) {
+			PREFERENCES.edit().put(KEY_IMAGE_EDITOR, true).put(KEY_IMAGE_EDITOR_ENABLED_FOR_ALL, true).close();
+		}
+	}
+
+	public static final String KEY_DEFAULT_ATTACHMENT_UNIQUE_HASH = "default_attachment_unique_hash";
+	public static final boolean DEFAULT_ATTACHMENT_UNIQUE_HASH = true;
+	public static final String KEY_DEFAULT_ATTACHMENT_REENCODING = "default_attachment_reencoding";
+	public static final boolean DEFAULT_ATTACHMENT_REENCODING = true;
+	public static final String KEY_DEFAULT_ATTACHMENT_REMOVE_FILE_NAME = "default_attachment_remove_file_name";
+	public static final boolean DEFAULT_ATTACHMENT_REMOVE_FILE_NAME = true;
+	public static final String KEY_DEFAULT_ATTACHMENT_REMOVE_METADATA = "default_attachment_remove_metadata";
+	public static final boolean DEFAULT_ATTACHMENT_REMOVE_METADATA = true;
 	public static final String KEY_OPEN_CONFIGURED_ATTACHMENT_FOLDER = "open_configured_attachment_folder";
 	public static final boolean DEFAULT_OPEN_CONFIGURED_ATTACHMENT_FOLDER = false;
 	public static final String KEY_WINDOWED_THREAD_LOADING = "windowed_thread_loading";
@@ -1828,6 +1844,24 @@ public class Preferences {
 
 	public static boolean isImageEditorEnabled() {
 		return PREFERENCES.getBoolean(KEY_IMAGE_EDITOR, DEFAULT_IMAGE_EDITOR);
+	}
+
+	public static boolean isDefaultAttachmentUniqueHash() {
+		return PREFERENCES.getBoolean(KEY_DEFAULT_ATTACHMENT_UNIQUE_HASH, DEFAULT_ATTACHMENT_UNIQUE_HASH);
+	}
+
+	public static boolean isDefaultAttachmentReencoding() {
+		return PREFERENCES.getBoolean(KEY_DEFAULT_ATTACHMENT_REENCODING, DEFAULT_ATTACHMENT_REENCODING);
+	}
+
+	public static boolean isDefaultAttachmentRemoveFileName() {
+		return PREFERENCES.getBoolean(KEY_DEFAULT_ATTACHMENT_REMOVE_FILE_NAME,
+				DEFAULT_ATTACHMENT_REMOVE_FILE_NAME);
+	}
+
+	public static boolean isDefaultAttachmentRemoveMetadata() {
+		return PREFERENCES.getBoolean(KEY_DEFAULT_ATTACHMENT_REMOVE_METADATA,
+				DEFAULT_ATTACHMENT_REMOVE_METADATA);
 	}
 
 	public static boolean isOpenConfiguredAttachmentFolderEnabled() {
