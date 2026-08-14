@@ -204,9 +204,7 @@ public class ImageEditorActivity extends Activity {
 		});
 		cropButton = addTool(R.drawable.ic_editor_crop, R.string.image_editor_crop, v -> {
 			if (editorView.isCropping()) {
-				editorView.applyCrop();
-				cropButton.setImageResource(R.drawable.ic_editor_crop);
-				cropButton.setContentDescription(getString(R.string.image_editor_crop));
+				applyCropMode();
 			} else {
 				editorView.setMode(EditorView.Mode.CROP);
 				cropButton.setImageResource(R.drawable.ic_editor_done);
@@ -372,6 +370,14 @@ public class ImageEditorActivity extends Activity {
 		}
 	}
 
+	private void applyCropMode() {
+		if (editorView != null && editorView.isCropping()) {
+			editorView.applyCrop();
+			cropButton.setImageResource(R.drawable.ic_editor_crop);
+			cropButton.setContentDescription(getString(R.string.image_editor_crop));
+		}
+	}
+
 	private void updateHistoryButtons() {
 		if (undoButton != null) {
 			undoButton.setEnabled(editorView.canUndo());
@@ -415,7 +421,8 @@ public class ImageEditorActivity extends Activity {
 
 	private void saveImage() {
 		if (editorView == null) return;
-		leaveCropMode();
+		applyCropMode();
+		updateHistoryButtons();
 		Bitmap bitmap = editorView.createResultBitmap();
 		if (bitmap == null) {
 			showFailure(R.string.image_editor_save_failed);
