@@ -2,10 +2,13 @@ package com.mishiranu.dashchan.content;
 
 import android.app.ActivityManager;
 import android.app.Application;
+import android.app.NotificationManager;
 import android.content.Context;
 import android.database.sqlite.SQLiteDatabase;
+import android.os.Build;
 import android.os.Process;
 import android.webkit.WebView;
+import androidx.work.WorkManager;
 import chan.content.ChanManager;
 import chan.http.HttpClient;
 import chan.util.CommonUtils;
@@ -14,7 +17,6 @@ import com.mishiranu.dashchan.content.database.ChanDatabase;
 import com.mishiranu.dashchan.content.database.CommonDatabase;
 import com.mishiranu.dashchan.content.database.PagesDatabase;
 import com.mishiranu.dashchan.content.net.UserAgentProvider;
-import com.mishiranu.dashchan.content.service.AutoBumpWorker;
 import com.mishiranu.dashchan.content.service.BackgroundWatcherWorker;
 import com.mishiranu.dashchan.util.IOUtils;
 import com.mishiranu.dashchan.util.Logger;
@@ -24,6 +26,7 @@ import java.util.List;
 public class MainApplication extends Application {
 	private static final String PROCESS_WEB_VIEW = "webview";
 	private static final String PROCESS_TRANSLATION = "translation";
+	private static final String KEY_REMOVED_AUTO_BUMP_CLEANUP = "removed_auto_bump_cleanup";
 
 	private static MainApplication instance;
 
@@ -83,9 +86,36 @@ public class MainApplication extends Application {
 			CacheManager.getInstance();
 			ChanManager.getInstance().loadLibraries();
 			BackgroundWatcherWorker.restoreSchedule(this);
-			AutoBumpWorker.restoreSchedule(this);
+			cleanupRemovedAutoBump();
 		} else if (checkProcess(PROCESS_WEB_VIEW) || checkProcess(PROCESS_TRANSLATION)) {
 			IOUtils.deleteRecursive(getIsolatedWebViewCacheDir());
+		}
+	}
+
+	@Override
+	public void onTrimMemory(int level) {
+		super.onTrimMemory(level);
+		if (isMainProcess()) {
+			PostsWindowCache.getInstance().onTrimMemory(level);
+		}
+	}
+
+	private void cleanupRemovedAutoBump() {
+		if (Preferences.PREFERENCES.getBoolean(KEY_REMOVED_AUTO_BUMP_CLEANUP, false)) {
+			return;
+		}
+		WorkManager.getInstance(this).cancelUniqueWork("auto-bump");
+		File storageDirectory = new File(getFilesDir(), "storage");
+		new File(storageDirectory, "auto_bump.json").delete();
+		new File(storageDirectory, "auto_bump.backup.json").delete();
+		new File(storageDirectory, "auto_bump.restore.json").delete();
+		Preferences.PREFERENCES.edit().remove("auto_bump_enabled")
+				.put(KEY_REMOVED_AUTO_BUMP_CLEANUP, true).close();
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+			NotificationManager notificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+			if (notificationManager != null) {
+				notificationManager.deleteNotificationChannel("autoBump");
+			}
 		}
 	}
 

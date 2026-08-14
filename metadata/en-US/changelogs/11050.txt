@@ -1,0 +1,4 @@
+Added an experimental fast-opening mode for large threads: posts appear sooner while the full thread is prepared in the background.
+Improved the image editor: cropping can now be applied while editing continues, while the close button discards all changes. The editor is enabled for all users.
+Added defaults for new attachments under Media settings: unique hash, re-encoding, filename removal, and metadata removal. They are enabled by default.
+Removed the auto-bump feature.

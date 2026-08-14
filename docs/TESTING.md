@@ -20,7 +20,6 @@ Automated tests do not cover the full Dashchan UI, Android firmware differences,
 - captcha and Passcode flows;
 - queued retry after a rate-limit response;
 - likes/dislikes on a board that supports them;
-- auto-bump task creation, countdown, activity reset, pause, and removal without unintended duplicate posts;
 - AI-post hiding and other autohide rules;
 - experimental 4chan read-only channel when the network permits access.
 

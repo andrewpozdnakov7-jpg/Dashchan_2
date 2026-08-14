@@ -1793,8 +1793,26 @@ public class Preferences {
 	public static final boolean DEFAULT_HARDWARE_VIDEO_ACCELERATION = true;
 	public static final String KEY_IMAGE_EDITOR = "image_editor";
 	public static final boolean DEFAULT_IMAGE_EDITOR = true;
+	private static final String KEY_IMAGE_EDITOR_ENABLED_FOR_ALL = "image_editor_enabled_for_all_v1";
+
+	static {
+		if (PREFERENCES != null && !PREFERENCES.getBoolean(KEY_IMAGE_EDITOR_ENABLED_FOR_ALL, false)) {
+			PREFERENCES.edit().put(KEY_IMAGE_EDITOR, true).put(KEY_IMAGE_EDITOR_ENABLED_FOR_ALL, true).close();
+		}
+	}
+
+	public static final String KEY_DEFAULT_ATTACHMENT_UNIQUE_HASH = "default_attachment_unique_hash";
+	public static final boolean DEFAULT_ATTACHMENT_UNIQUE_HASH = true;
+	public static final String KEY_DEFAULT_ATTACHMENT_REENCODING = "default_attachment_reencoding";
+	public static final boolean DEFAULT_ATTACHMENT_REENCODING = true;
+	public static final String KEY_DEFAULT_ATTACHMENT_REMOVE_FILE_NAME = "default_attachment_remove_file_name";
+	public static final boolean DEFAULT_ATTACHMENT_REMOVE_FILE_NAME = true;
+	public static final String KEY_DEFAULT_ATTACHMENT_REMOVE_METADATA = "default_attachment_remove_metadata";
+	public static final boolean DEFAULT_ATTACHMENT_REMOVE_METADATA = true;
 	public static final String KEY_OPEN_CONFIGURED_ATTACHMENT_FOLDER = "open_configured_attachment_folder";
 	public static final boolean DEFAULT_OPEN_CONFIGURED_ATTACHMENT_FOLDER = false;
+	public static final String KEY_WINDOWED_THREAD_LOADING = "windowed_thread_loading";
+	public static final boolean DEFAULT_WINDOWED_THREAD_LOADING = false;
 	public static final String KEY_COMBINED_FEEDS_ENABLED = "combined_feeds_enabled";
 	public static final boolean DEFAULT_COMBINED_FEEDS_ENABLED = true;
 	public static final String KEY_WALLPAPER_ENABLED = "wallpaper_enabled";
@@ -1828,9 +1846,31 @@ public class Preferences {
 		return PREFERENCES.getBoolean(KEY_IMAGE_EDITOR, DEFAULT_IMAGE_EDITOR);
 	}
 
+	public static boolean isDefaultAttachmentUniqueHash() {
+		return PREFERENCES.getBoolean(KEY_DEFAULT_ATTACHMENT_UNIQUE_HASH, DEFAULT_ATTACHMENT_UNIQUE_HASH);
+	}
+
+	public static boolean isDefaultAttachmentReencoding() {
+		return PREFERENCES.getBoolean(KEY_DEFAULT_ATTACHMENT_REENCODING, DEFAULT_ATTACHMENT_REENCODING);
+	}
+
+	public static boolean isDefaultAttachmentRemoveFileName() {
+		return PREFERENCES.getBoolean(KEY_DEFAULT_ATTACHMENT_REMOVE_FILE_NAME,
+				DEFAULT_ATTACHMENT_REMOVE_FILE_NAME);
+	}
+
+	public static boolean isDefaultAttachmentRemoveMetadata() {
+		return PREFERENCES.getBoolean(KEY_DEFAULT_ATTACHMENT_REMOVE_METADATA,
+				DEFAULT_ATTACHMENT_REMOVE_METADATA);
+	}
+
 	public static boolean isOpenConfiguredAttachmentFolderEnabled() {
 		return PREFERENCES.getBoolean(KEY_OPEN_CONFIGURED_ATTACHMENT_FOLDER,
 				DEFAULT_OPEN_CONFIGURED_ATTACHMENT_FOLDER);
+	}
+
+	public static boolean isWindowedThreadLoadingEnabled() {
+		return PREFERENCES.getBoolean(KEY_WINDOWED_THREAD_LOADING, DEFAULT_WINDOWED_THREAD_LOADING);
 	}
 
 	public static boolean isCombinedFeedsEnabled() {
@@ -2304,10 +2344,4 @@ public class Preferences {
 		return PREFERENCES.getBoolean(KEY_BACKGROUND_REPLY_CHECK, DEFAULT_BACKGROUND_REPLY_CHECK);
 	}
 
-	public static final String KEY_AUTO_BUMP_ENABLED = "auto_bump_enabled";
-	public static final boolean DEFAULT_AUTO_BUMP_ENABLED = false;
-
-	public static boolean isAutoBumpEnabled() {
-		return PREFERENCES.getBoolean(KEY_AUTO_BUMP_ENABLED, DEFAULT_AUTO_BUMP_ENABLED);
-	}
 }

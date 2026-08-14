@@ -34,7 +34,6 @@ import com.mishiranu.dashchan.content.model.ErrorItem;
 import com.mishiranu.dashchan.content.model.PendingUserPost;
 import com.mishiranu.dashchan.content.model.PostItem;
 import com.mishiranu.dashchan.content.model.PostNumber;
-import com.mishiranu.dashchan.content.storage.AutoBumpStorage;
 import com.mishiranu.dashchan.content.storage.DraftsStorage;
 import com.mishiranu.dashchan.content.storage.FavoritesStorage;
 import com.mishiranu.dashchan.content.storage.StatisticsStorage;
@@ -691,11 +690,6 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 				notificationManager.notify(tag, 0, builder.build());
 			}
 
-			if (targetThreadNumber != null && !data.optionSage && AutoBumpStorage.getInstance()
-					.updateAfterManualPost(chanName, data.boardName, targetThreadNumber,
-							postNumber != null ? postNumber.toString() : null, System.currentTimeMillis())) {
-				AutoBumpWorker.scheduleNext(this);
-			}
 			if (targetThreadNumber != null && Preferences.getFavoriteOnReply().isEnabled(data.optionSage)) {
 				// Add to favorites after processing the response to ensure watcher is not triggered too early
 				FavoritesStorage.getInstance().add(chanName, data.boardName, targetThreadNumber, null, true);

@@ -1537,8 +1537,9 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 						holder.hash = hash;
 						holder.name = name;
 						FileHolder fileHolder = DraftsStorage.getInstance().getAttachmentDraftFileHolder(hash);
-						holder.reencoding = fileHolder != null && GraphicsUtils.canReencode(fileHolder)
-								? new GraphicsUtils.Reencoding(GraphicsUtils.Reencoding.FORMAT_JPEG, 90, 1) : null;
+						if (fileHolder == null || !GraphicsUtils.canReencode(fileHolder)) {
+							holder.reencoding = null;
+						}
 						bindAttachmentFile(holder, fileHolder);
 						DraftsStorage.getInstance().store(obtainPostDraft());
 					}
@@ -1951,9 +1952,12 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 
 	private void addAttachment(String hash, String name) {
 		FileHolder fileHolder = DraftsStorage.getInstance().getAttachmentDraftFileHolder(hash);
-		GraphicsUtils.Reencoding reencoding = fileHolder != null && GraphicsUtils.canReencode(fileHolder)
+		GraphicsUtils.Reencoding reencoding = Preferences.isDefaultAttachmentReencoding()
+				&& fileHolder != null && GraphicsUtils.canReencode(fileHolder)
 				? new GraphicsUtils.Reencoding(GraphicsUtils.Reencoding.FORMAT_JPEG, 90, 1) : null;
-		addAttachment(hash, name, null, true, true, true, false, reencoding);
+		addAttachment(hash, name, null, Preferences.isDefaultAttachmentUniqueHash(),
+				Preferences.isDefaultAttachmentRemoveMetadata(), Preferences.isDefaultAttachmentRemoveFileName(),
+				false, reencoding);
 	}
 
 	private void addAttachment(String hash, String name, String rating, boolean optionUniqueHash,

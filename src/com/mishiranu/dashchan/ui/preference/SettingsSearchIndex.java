@@ -221,12 +221,6 @@ public final class SettingsSearchIndex {
 							Preferences.KEY_CAPTCHA_PASS.bind(chan.name));
 				}
 			}
-			if ("dvach".equals(chan.name)) {
-				addChan(context, entries, breadcrumb, chan.name, R.string.auto_bump, R.string.auto_bump__summary,
-						Preferences.KEY_AUTO_BUMP_ENABLED);
-				addChan(context, entries, breadcrumb, chan.name, R.string.manage_auto_bump,
-						R.string.manage_auto_bump__summary, null);
-			}
 			if (chan.configuration.getOption(ChanConfiguration.OPTION_ALLOW_USER_AUTHORIZATION)) {
 				ChanConfiguration.Authorization authorization = chan.configuration.safe().obtainUserAuthorization();
 				if (authorization != null && authorization.fieldsCount > 0) {
@@ -430,6 +424,14 @@ public final class SettingsSearchIndex {
 
 		add(context, entries, Screen.MEDIA, R.string.load_thumbnails, 0, Preferences.KEY_LOAD_THUMBNAILS);
 		add(context, entries, Screen.MEDIA, R.string.load_nearest_image, 0, Preferences.KEY_LOAD_NEAREST_IMAGE);
+		add(context, entries, Screen.MEDIA, R.string.unique_hash, 0,
+				Preferences.KEY_DEFAULT_ATTACHMENT_UNIQUE_HASH);
+		add(context, entries, Screen.MEDIA, R.string.reencode_image, 0,
+				Preferences.KEY_DEFAULT_ATTACHMENT_REENCODING);
+		add(context, entries, Screen.MEDIA, R.string.remove_file_name, 0,
+				Preferences.KEY_DEFAULT_ATTACHMENT_REMOVE_FILE_NAME);
+		add(context, entries, Screen.MEDIA, R.string.remove_metadata, 0,
+				Preferences.KEY_DEFAULT_ATTACHMENT_REMOVE_METADATA);
 		add(context, entries, Screen.MEDIA, R.string.detailed_file_name, R.string.detailed_file_name__summary,
 				Preferences.KEY_DOWNLOAD_DETAIL_NAME);
 		add(context, entries, Screen.MEDIA, R.string.original_file_name, R.string.original_file_name__summary,

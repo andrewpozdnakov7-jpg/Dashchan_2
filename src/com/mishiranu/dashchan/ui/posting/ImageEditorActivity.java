@@ -138,7 +138,7 @@ public class ImageEditorActivity extends Activity {
 		header.setBackgroundColor(0xff202124);
 		root.addView(header, ViewGroup.LayoutParams.MATCH_PARENT, (int) (56f * density));
 		ImageButton cancelButton = createIconButton(R.drawable.ic_editor_close, android.R.string.cancel);
-		cancelButton.setOnClickListener(v -> finish());
+		cancelButton.setOnClickListener(v -> cancelEditing());
 		header.addView(cancelButton, (int) (34f * density), ViewGroup.LayoutParams.MATCH_PARENT);
 		TextView title = new TextView(this);
 		title.setText(R.string.image_editor);
@@ -149,7 +149,7 @@ public class ImageEditorActivity extends Activity {
 		((LinearLayout.LayoutParams) title.getLayoutParams()).weight = 1f;
 		saveButton = createIconButton(R.drawable.ic_editor_done, android.R.string.ok);
 		saveButton.setEnabled(false);
-		saveButton.setOnClickListener(v -> saveImage());
+		saveButton.setOnClickListener(v -> onSaveButtonClicked());
 		header.addView(saveButton, (int) (34f * density), ViewGroup.LayoutParams.MATCH_PARENT);
 
 		content = new FrameLayout(this);
@@ -204,13 +204,12 @@ public class ImageEditorActivity extends Activity {
 		});
 		cropButton = addTool(R.drawable.ic_editor_crop, R.string.image_editor_crop, v -> {
 			if (editorView.isCropping()) {
-				editorView.applyCrop();
-				cropButton.setImageResource(R.drawable.ic_editor_crop);
-				cropButton.setContentDescription(getString(R.string.image_editor_crop));
+				applyCropMode();
 			} else {
 				editorView.setMode(EditorView.Mode.CROP);
 				cropButton.setImageResource(R.drawable.ic_editor_done);
 				cropButton.setContentDescription(getString(R.string.image_editor_apply_crop));
+				saveButton.setContentDescription(getString(R.string.image_editor_apply_crop));
 			}
 			updateHistoryButtons();
 		});
@@ -369,7 +368,37 @@ public class ImageEditorActivity extends Activity {
 			editorView.setMode(EditorView.Mode.NONE);
 			cropButton.setImageResource(R.drawable.ic_editor_crop);
 			cropButton.setContentDescription(getString(R.string.image_editor_crop));
+			saveButton.setContentDescription(getString(android.R.string.ok));
 		}
+	}
+
+	private void applyCropMode() {
+		if (editorView != null && editorView.isCropping()) {
+			editorView.applyCrop();
+			cropButton.setImageResource(R.drawable.ic_editor_crop);
+			cropButton.setContentDescription(getString(R.string.image_editor_crop));
+			saveButton.setContentDescription(getString(android.R.string.ok));
+		}
+	}
+
+	private void onSaveButtonClicked() {
+		if (editorView == null) return;
+		if (editorView.isCropping()) {
+			applyCropMode();
+			updateHistoryButtons();
+		} else {
+			saveImage();
+		}
+	}
+
+	private void cancelEditing() {
+		setResult(RESULT_CANCELED);
+		finish();
+	}
+
+	@Override
+	public void onBackPressed() {
+		cancelEditing();
 	}
 
 	private void updateHistoryButtons() {
@@ -415,7 +444,8 @@ public class ImageEditorActivity extends Activity {
 
 	private void saveImage() {
 		if (editorView == null) return;
-		leaveCropMode();
+		applyCropMode();
+		updateHistoryButtons();
 		Bitmap bitmap = editorView.createResultBitmap();
 		if (bitmap == null) {
 			showFailure(R.string.image_editor_save_failed);
