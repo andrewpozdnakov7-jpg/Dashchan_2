@@ -949,7 +949,7 @@
 	<string name="hide_thread_title">Скрывать заголовок треда в верхней панели</string>
 	<string name="hide_thread_title__summary">Не показывать название и адрес треда при его просмотре</string>
 	<string name="windowed_thread_loading">Быстрое открытие тредов</string>
-	<string name="windowed_thread_loading__summary">Загружает сообщения небольшими частями вокруг текущей позиции. Ускоряет открытие старых и больших тредов. Экспериментальная функция.</string>
+	<string name="windowed_thread_loading__summary">Сразу показывает небольшую часть треда вокруг текущей позиции, затем подготавливает весь тред в фоне. Экспериментальная функция.</string>
 
 	<string name="boards_work_safe">Безопасные для просмотра</string>
 	<string name="boards_not_safe_for_work">Для взрослых</string>

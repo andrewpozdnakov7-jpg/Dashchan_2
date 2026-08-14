@@ -81,6 +81,7 @@ public class PostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
 	private final Map<PostNumber, PostItem> postItemsMap;
 	private final HashSet<PostNumber> selected = new HashSet<>();
 	private final WindowCallback windowCallback;
+	private boolean windowedLoading;
 	private int windowStartPosition;
 	private int windowTotalCount;
 
@@ -106,12 +107,22 @@ public class PostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
 		super.registerAdapterDataObserver(recyclerKeeper);
 		this.postItemsMap = postItemsMap;
 		this.windowCallback = windowCallback;
+		windowedLoading = windowCallback != null;
 		rebuildPosts(false);
 		preloadPosts(0);
 	}
 
 	public boolean isWindowed() {
-		return windowCallback != null;
+		return windowedLoading;
+	}
+
+	public void completeWindowedLoading() {
+		if (!isWindowed()) {
+			throw new IllegalStateException("Adapter is not windowed");
+		}
+		windowedLoading = false;
+		windowStartPosition = 0;
+		windowTotalCount = postNumbers.size();
 	}
 
 	public void setWindow(PostsWindowCache.Window window) {
@@ -341,7 +352,7 @@ public class PostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
 	}
 
 	private void requestWindow(int position) {
-		if (windowCallback != null && position >= 0 && position < windowTotalCount) {
+		if (isWindowed() && position >= 0 && position < windowTotalCount) {
 			windowCallback.onRequestWindow(position);
 		}
 	}
@@ -392,12 +403,12 @@ public class PostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
 				&& CommonUtils.equals(threadNumber, chan.locator.safe(false).getThreadNumber(uri))) {
 			PostNumber postNumber = chan.locator.safe(false).getPostNumber(uri);
 			int position = postNumber == null ? 0 : positionOfPostNumber(postNumber);
-			if (postNumber == null && getItem(position) == null && windowCallback != null) {
+			if (postNumber == null && getItem(position) == null && isWindowed()) {
 				windowCallback.onRequestWindow(0);
 				return;
 			}
 			if (position < 0) {
-				if (windowCallback != null && postNumber != null) {
+				if (isWindowed() && postNumber != null) {
 					windowCallback.onRequestPost(postNumber);
 					return;
 				}
