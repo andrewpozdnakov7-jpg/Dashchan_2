@@ -2304,10 +2304,4 @@ public class Preferences {
 		return PREFERENCES.getBoolean(KEY_BACKGROUND_REPLY_CHECK, DEFAULT_BACKGROUND_REPLY_CHECK);
 	}
 
-	public static final String KEY_AUTO_BUMP_ENABLED = "auto_bump_enabled";
-	public static final boolean DEFAULT_AUTO_BUMP_ENABLED = false;
-
-	public static boolean isAutoBumpEnabled() {
-		return PREFERENCES.getBoolean(KEY_AUTO_BUMP_ENABLED, DEFAULT_AUTO_BUMP_ENABLED);
-	}
 }

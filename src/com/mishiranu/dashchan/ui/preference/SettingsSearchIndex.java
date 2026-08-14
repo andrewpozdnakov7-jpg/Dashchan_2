@@ -221,12 +221,6 @@ public final class SettingsSearchIndex {
 							Preferences.KEY_CAPTCHA_PASS.bind(chan.name));
 				}
 			}
-			if ("dvach".equals(chan.name)) {
-				addChan(context, entries, breadcrumb, chan.name, R.string.auto_bump, R.string.auto_bump__summary,
-						Preferences.KEY_AUTO_BUMP_ENABLED);
-				addChan(context, entries, breadcrumb, chan.name, R.string.manage_auto_bump,
-						R.string.manage_auto_bump__summary, null);
-			}
 			if (chan.configuration.getOption(ChanConfiguration.OPTION_ALLOW_USER_AUTHORIZATION)) {
 				ChanConfiguration.Authorization authorization = chan.configuration.safe().obtainUserAuthorization();
 				if (authorization != null && authorization.fieldsCount > 0) {

@@ -25,7 +25,7 @@ Slooop - пользовательское название неофициаль�
 ### Возможности
 
 - просмотр досок, тредов, изображений и видео, избранное и фоновые уведомления об ответах;
-- встроенный Двач с отправкой постов, Passcode, AI-фильтром, автобампом для владельцев Passcode и лайками/дизлайками на поддерживаемых досках;
+- встроенный Двач с отправкой постов, Passcode, AI-фильтром и лайками/дизлайками на поддерживаемых досках;
 - экспериментальный 4chan только для чтения, выключенный по умолчанию;
 - FFmpeg-плеер для WebM, MP4, fMP4, MOV, H.264, HEVC, VP8, VP9 и AV1;
 - скорость воспроизведения с сохранением тембра, перемотка двойным нажатием, отдельная громкость видео, настраиваемый жест громкости и режим «картинка в картинке»;
@@ -104,7 +104,7 @@ Stable APKs are published only through [GitHub Releases](https://github.com/andr
 ### Highlights
 
 - boards, threads, media gallery, favorites, thread watching, and background reply notifications;
-- built-in Dvach posting, Passcode support, AI filtering, Passcode-only auto-bump tasks, and votes on supported boards;
+- built-in Dvach posting, Passcode support, AI filtering, and votes on supported boards;
 - optional experimental read-only 4chan channel;
 - FFmpeg playback for WebM, MP4, fMP4, MOV, H.264, HEVC, VP8, VP9, and AV1;
 - pitch-preserving speed control, double-tap seeking, per-video volume, configurable volume gestures, and picture-in-picture;
