@@ -95,13 +95,22 @@ jobs:
           head_commit = workflow_value("SOURCE_HEAD_COMMIT")
           merge_commit = workflow_value("SOURCE_COMMIT")
 
+          for name, commit in {
+              "SOURCE_HEAD_COMMIT": head_commit,
+              "SOURCE_COMMIT": merge_commit,
+          }.items():
+              if not re.fullmatch(r"[0-9a-f]{40}", commit):
+                  raise SystemExit(f"Invalid protected signing workflow SHA: {name}")
+
           checkout = re.compile(
-              rf"repository:\s*{re.escape(repository)}\s+"
-              rf"ref:\s*{re.escape(merge_commit)}(?:\s|$)",
+              r"repository:\s*\$\{\{\s*env\.SOURCE_REPOSITORY\s*\}\}\s+"
+              r"ref:\s*\$\{\{\s*env\.SOURCE_COMMIT\s*\}\}(?:\s|$)",
               re.MULTILINE,
           )
           if not checkout.search(text):
-              raise SystemExit("Add-on checkout is not pinned to SOURCE_COMMIT")
+              raise SystemExit(
+                  "Add-on checkout must use SOURCE_REPOSITORY and SOURCE_COMMIT"
+              )
 
           headers = {
               "Accept": "application/vnd.github+json",
