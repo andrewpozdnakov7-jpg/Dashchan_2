@@ -1,0 +1,2 @@
+Added an optional Google ML Kit offline translator to the GitHub version. It is installed separately through Experimental features, so its approximately 50 MB is not included in the main Slooop APK. The language pack is downloaded separately as well.
+Added a Show board toggle to My Boards settings. Source board labels can be hidden for each feed; they remain visible by default.

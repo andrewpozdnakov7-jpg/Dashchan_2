@@ -321,6 +321,9 @@ public class CombinedThreadsPage extends ListPage implements ThreadsAdapter.Call
 	}
 
 	private String formatSourceLabel(PostItem postItem) {
+		if (feed == null || !feed.showBoard) {
+			return null;
+		}
 		Chan chan = Chan.get(postItem.getChanName());
 		String title;
 		if ("dvach".equals(postItem.getChanName())) {

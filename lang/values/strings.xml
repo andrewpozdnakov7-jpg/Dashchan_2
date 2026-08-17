@@ -104,6 +104,12 @@
 	<string name="translation_engine">Translation engine</string>
 	<string name="translation_engine_mozilla">Mozilla Bergamot</string>
 	<string name="translation_engine_google">Google ML Kit</string>
+	<string name="translation_google_addon">Google translation add-on</string>
+	<string name="translation_addon_not_installed__format">Not installed (approximately %1$s)</string>
+	<string name="translation_addon_error__format">Add-on error: %1$s</string>
+	<string name="translation_google_addon_install__message">Google ML Kit is distributed as a separate optional APK so that it does not increase the size of Slooop. Download and install the add-on signed with the same certificate as Slooop. Google terms and attribution requirements apply.</string>
+	<string name="translation_google_addon_download">Download add-on</string>
+	<string name="translation_google_addon_open_failed">Cannot start the add-on download</string>
 	<string name="translation_engine_gemini_nano">Gemini Nano (AICore)</string>
 	<string name="translation_automatic">Translate posts automatically</string>
 	<string name="translation_automatic__summary">Automatically show translations on 4chan for Russian users and on 2ch for English users</string>
@@ -952,6 +958,7 @@
 	<string name="combined_feed_name_required">Enter a feed name</string>
 	<string name="combined_feed_minimum_boards">Select at least two boards</string>
 	<string name="show_sticky_threads">Show sticky threads</string>
+	<string name="combined_feed_show_board">Show board</string>
 	<string name="combined_feeds_empty">No feeds yet</string>
 	<string name="combined_feeds_add__summary">Select two or more boards</string>
 	<string name="combined_feeds_limit">Feed limit reached</string>

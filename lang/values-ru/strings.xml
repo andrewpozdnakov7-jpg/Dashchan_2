@@ -107,6 +107,12 @@
 	<string name="translation_engine">Переводчик</string>
 	<string name="translation_engine_mozilla">Mozilla Bergamot</string>
 	<string name="translation_engine_google">Google ML Kit</string>
+	<string name="translation_google_addon">Дополнение Google-переводчика</string>
+	<string name="translation_addon_not_installed__format">Не установлено (примерно %1$s)</string>
+	<string name="translation_addon_error__format">Ошибка дополнения: %1$s</string>
+	<string name="translation_google_addon_install__message">Google ML Kit распространяется отдельным необязательным APK, чтобы не увеличивать размер Slooop. Скачайте и установите дополнение, подписанное тем же сертификатом, что и Slooop. Действуют условия Google и требования об указании сервиса перевода.</string>
+	<string name="translation_google_addon_download">Скачать дополнение</string>
+	<string name="translation_google_addon_open_failed">Не удалось начать загрузку дополнения</string>
 	<string name="translation_engine_gemini_nano">Gemini Nano (AICore)</string>
 	<string name="translation_automatic">Автоматически переводить посты</string>
 	<string name="translation_automatic__summary">Автоматически показывать перевод на 4chan для русскоязычных и на 2ch для англоязычных пользователей</string>
@@ -977,6 +983,7 @@
 	<string name="combined_feed_name_required">Введите название ленты</string>
 	<string name="combined_feed_minimum_boards">Выберите не менее двух досок</string>
 	<string name="show_sticky_threads">Показывать закреплённые треды</string>
+	<string name="combined_feed_show_board">Отображать доску</string>
 	<string name="combined_feeds_empty">Лент пока нет</string>
 	<string name="combined_feeds_add__summary">Выберите две или больше досок</string>
 	<string name="combined_feeds_limit">Достигнут лимит лент</string>

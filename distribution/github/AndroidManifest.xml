@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+	<uses-permission android:name="io.dashchan2.permission.BIND_GOOGLE_TRANSLATION_ADDON" />
+
+	<queries>
+		<package android:name="io.dashchan2.addon.googletranslate" />
+	</queries>
+</manifest>

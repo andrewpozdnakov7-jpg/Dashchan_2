@@ -187,6 +187,10 @@ public class CombinedFeedsFragment extends PreferenceFragment implements GetBoar
 		showSticky.setText(R.string.show_sticky_threads);
 		showSticky.setChecked(existing == null || existing.showSticky);
 		root.addView(showSticky, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+		CheckBox showBoard = new CheckBox(requireContext());
+		showBoard.setText(R.string.combined_feed_show_board);
+		showBoard.setChecked(existing == null || existing.showBoard);
+		root.addView(showBoard, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
 
 		HashSet<String> selected = new HashSet<>();
 		if (existing != null) {
@@ -336,6 +340,7 @@ public class CombinedFeedsFragment extends PreferenceFragment implements GetBoar
 				feed.id = existing != null ? existing.id : null;
 				feed.title = title;
 				feed.showSticky = showSticky.isChecked();
+				feed.showBoard = showBoard.isChecked();
 				for (Board board : dialogBoards) {
 					if (selected.contains(board.getKey())) {
 						feed.sources.add(new CombinedFeedStorage.Source(board.chanName, board.name));

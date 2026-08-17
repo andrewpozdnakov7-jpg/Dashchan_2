@@ -161,6 +161,21 @@ public class ExperimentalFragment extends PreferenceFragment implements Translat
 		GeminiNanoTranslationBridge.Snapshot geminiSnapshot = null;
 		if (engine == TranslationEngine.GOOGLE) {
 			GoogleTranslationBridge.Snapshot snapshot = GoogleTranslationBridge.getSnapshot(direction);
+			if (!snapshot.addonInstalled) {
+				String addonSummary = snapshot.error != null
+						? getString(R.string.translation_addon_error__format, snapshot.error)
+						: getString(R.string.translation_addon_not_installed__format,
+								formatSize(GoogleTranslationBridge.APPROXIMATE_ADDON_SIZE));
+				addButton(getString(R.string.translation_google_addon), addonSummary).setOnClickListener(p ->
+						new AlertDialog.Builder(requireContext())
+								.setTitle(R.string.translation_google_addon)
+								.setMessage(R.string.translation_google_addon_install__message)
+								.setPositiveButton(R.string.translation_google_addon_download,
+										(dialog, which) -> GoogleTranslationBridge.downloadAddon())
+								.setNegativeButton(android.R.string.cancel, null)
+								.show());
+				return;
+			}
 			state = snapshot.state;
 			progress = snapshot.progress;
 			downloadedBytes = snapshot.downloadedBytes;
@@ -350,6 +365,8 @@ public class ExperimentalFragment extends PreferenceFragment implements Translat
 			TranslationModelManager.getInstance().register(this);
 			if (BuildConfig.ENABLE_GOOGLE_TRANSLATION) {
 				GoogleTranslationBridge.register(this);
+				GoogleTranslationBridge.refresh(TranslationModel.forNativeLanguage(
+						Preferences.getTranslationNativeLanguage()));
 			}
 			if (BuildConfig.ENABLE_GEMINI_NANO_TRANSLATION) {
 				GeminiNanoTranslationBridge.register(this);
