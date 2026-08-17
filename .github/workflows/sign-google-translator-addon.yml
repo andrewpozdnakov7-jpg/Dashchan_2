@@ -19,11 +19,11 @@ concurrency:
 
 env:
   SOURCE_REPOSITORY: andrewpozdnakov7-jpg/Slooop_Addons
-  SOURCE_PR_NUMBER: '4'
+  SOURCE_PR_NUMBER: '5'
   SOURCE_BRANCH: main
-  SOURCE_HEAD_BRANCH: agent/fix-google-translator-r8-registrars
-  SOURCE_HEAD_COMMIT: c16c8ac429ea88a3ffa8591c362e30bbf5c39eef
-  SOURCE_COMMIT: 63398ac1788964ea43467c843464f03f92401e3c
+  SOURCE_HEAD_BRANCH: agent/fix-google-model-download-progress
+  SOURCE_HEAD_COMMIT: 5ee42145c6efa961c01dc3afdef819f08ea10785
+  SOURCE_COMMIT: 4a1bfe31602a57ba10ac8da894abaed2ee84fef8
   EXPECTED_CERT_SHA256: a9fbac6c498f7ad8e7c56849afe43881966bed2ed2bc1dd1c73d0ffe0b9ebeba
   EXPECTED_PACKAGE: io.dashchan2.addon.googletranslate
   EXPECTED_VERSION_NAME: 1.0.0
@@ -82,7 +82,7 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           repository: andrewpozdnakov7-jpg/Slooop_Addons
-          ref: 63398ac1788964ea43467c843464f03f92401e3c
+          ref: 4a1bfe31602a57ba10ac8da894abaed2ee84fef8
           path: source
           persist-credentials: false
 
