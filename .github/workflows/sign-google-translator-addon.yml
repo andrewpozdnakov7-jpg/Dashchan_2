@@ -1,6 +1,6 @@
 name: Build and Sign Google Translator Add-on
 
-run-name: Build and sign Google Translator Add-on from Slooop_Addons a691b748
+run-name: Build and sign Google Translator Add-on from Slooop_Addons c1f717c6
 
 on:
   workflow_dispatch:
@@ -19,11 +19,11 @@ concurrency:
 
 env:
   SOURCE_REPOSITORY: andrewpozdnakov7-jpg/Slooop_Addons
-  SOURCE_RUN_ID: '32027001364'
-  SOURCE_ARTIFACT_ID: '9287459596'
-  SOURCE_ARTIFACT_DIGEST: sha256:f1409f83aa038a941ca637323d859e6d7589e35f3a35e119915ce46dd43f1425
-  SOURCE_BRANCH: agent/fix-google-translator-mlkit-process
-  SOURCE_COMMIT: a691b748dc359cfb9622a907f10eed990913159f
+  SOURCE_PR_NUMBER: '2'
+  SOURCE_BRANCH: main
+  SOURCE_HEAD_BRANCH: agent/fix-google-translator-mlkit-process
+  SOURCE_HEAD_COMMIT: 76d7592df25356d83d26a6e8edb2b1f964c8ecd7
+  SOURCE_COMMIT: c1f717c6b01abca23f31430a033ee77f481f97b6
   EXPECTED_CERT_SHA256: a9fbac6c498f7ad8e7c56849afe43881966bed2ed2bc1dd1c73d0ffe0b9ebeba
   EXPECTED_PACKAGE: io.dashchan2.addon.googletranslate
   EXPECTED_VERSION_NAME: 1.0.0
@@ -51,41 +51,38 @@ jobs:
             exit 1
           fi
 
-      - name: Verify source workflow provenance
+      - name: Verify merged source provenance
         run: |
           set -euo pipefail
-          run_json="$(curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+          pr_json="$(curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
             -H 'Accept: application/vnd.github+json' \
             -H 'X-GitHub-Api-Version: 2022-11-28' \
-            "https://api.github.com/repos/$SOURCE_REPOSITORY/actions/runs/$SOURCE_RUN_ID")"
+            "https://api.github.com/repos/$SOURCE_REPOSITORY/pulls/$SOURCE_PR_NUMBER")"
           jq -e \
-            --argjson run_id "$SOURCE_RUN_ID" \
-            --arg source_commit "$SOURCE_COMMIT" \
             --arg source_branch "$SOURCE_BRANCH" \
-            '.id == $run_id and .head_sha == $source_commit and
-              .head_branch == $source_branch and .event == "workflow_dispatch" and
-              .status == "completed" and .conclusion == "success"' \
-            <<< "$run_json" >/dev/null
+            --arg source_head_branch "$SOURCE_HEAD_BRANCH" \
+            --arg source_head_commit "$SOURCE_HEAD_COMMIT" \
+            --arg source_merge_commit "$SOURCE_COMMIT" \
+            '.state == "closed" and .merged_at != null and
+              .base.ref == $source_branch and .head.ref == $source_head_branch and
+              .head.sha == $source_head_commit and
+              .merge_commit_sha == $source_merge_commit' \
+            <<< "$pr_json" >/dev/null
 
-          artifacts_json="$(curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+          commit_json="$(curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
             -H 'Accept: application/vnd.github+json' \
             -H 'X-GitHub-Api-Version: 2022-11-28' \
-            "https://api.github.com/repos/$SOURCE_REPOSITORY/actions/runs/$SOURCE_RUN_ID/artifacts")"
+            "https://api.github.com/repos/$SOURCE_REPOSITORY/commits/$SOURCE_COMMIT")"
           jq -e \
-            --argjson artifact_id "$SOURCE_ARTIFACT_ID" \
             --arg source_commit "$SOURCE_COMMIT" \
-            --arg artifact_digest "$SOURCE_ARTIFACT_DIGEST" \
-            '.artifacts[] | select(.id == $artifact_id) |
-              .name == "google-translator-universal-signed" and
-              .expired == false and .digest == $artifact_digest and
-              .workflow_run.head_sha == $source_commit' \
-            <<< "$artifacts_json" >/dev/null
+            '.sha == $source_commit and .commit.verification.verified == true' \
+            <<< "$commit_json" >/dev/null
 
       - name: Check out exact add-on source
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           repository: andrewpozdnakov7-jpg/Slooop_Addons
-          ref: a691b748dc359cfb9622a907f10eed990913159f
+          ref: c1f717c6b01abca23f31430a033ee77f481f97b6
           path: source
           persist-credentials: false
 
@@ -164,6 +161,14 @@ jobs:
           if-no-files-found: error
           retention-days: 1
           compression-level: 0
+
+      - name: Upload R8 mapping for diagnostics
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: google-translator-r8-mapping-${{ github.run_id }}
+          path: source/translator-google/app/build/outputs/mapping/release/mapping.txt
+          if-no-files-found: error
+          retention-days: 7
 
   sign:
     name: Sign isolated APK with Slooop release key
@@ -304,7 +309,7 @@ jobs:
             echo '## Google Translator Add-on signed artifact'
             echo
             echo "- Source repository: \`$SOURCE_REPOSITORY\`"
-            echo "- Source run: \`$SOURCE_RUN_ID\`"
+            echo "- Source PR: \`#$SOURCE_PR_NUMBER\`"
             echo "- Source commit: \`$SOURCE_COMMIT\`"
             echo "- Package: \`$EXPECTED_PACKAGE\`"
             echo "- Version: \`$EXPECTED_VERSION_NAME ($EXPECTED_VERSION_CODE)\`"
