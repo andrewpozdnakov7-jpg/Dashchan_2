@@ -60,7 +60,8 @@ jobs:
           echo "$bin_dir" >> "$GITHUB_PATH"
 
       - name: Validate GitHub Actions workflows
-        run: actionlint .github/workflows/*.yml
+        # SC2016 is a false positive for intentionally single-quoted Python heredocs.
+        run: actionlint -ignore 'SC2016' .github/workflows/*.yml
 
       - name: Verify protected add-on source provenance
         env:
