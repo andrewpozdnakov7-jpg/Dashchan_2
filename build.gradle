@@ -302,8 +302,13 @@ android {
 		github {
 			dimension = 'distribution'
 			buildConfigField 'boolean', 'ENABLE_LOCAL_TRANSLATION', 'true'
-			buildConfigField 'boolean', 'ENABLE_GOOGLE_TRANSLATION', 'false'
+			buildConfigField 'boolean', 'ENABLE_GOOGLE_TRANSLATION', 'true'
 			buildConfigField 'boolean', 'ENABLE_GEMINI_NANO_TRANSLATION', 'true'
+			buildConfigField 'String', 'GOOGLE_TRANSLATION_ADDON_DOWNLOAD_URL',
+					'"https://github.com/andrewpozdnakov7-jpg/Slooop_Addons/releases/download/' +
+					'google-translator-1.0.0-test/' +
+					'Slooop-Google-Translator-universal.apk"'
+			buildConfigField 'String', 'GOOGLE_TRANSLATION_ADDON_VERSION', '"1.0.0"'
 			buildConfigField 'boolean', 'ALLOW_GMS_SECURITY_PROVIDER', 'true'
 			buildConfigField 'boolean', 'ALLOW_APPLICATION_SELF_UPDATE', 'true'
 			buildConfigField 'boolean', 'ALLOW_BETA_UPDATE_CHANNEL', 'true'
@@ -357,6 +362,8 @@ android {
 		jniLibs.srcDirs = []
 	}
 	sourceSets.github.java.srcDir 'distribution/github/src'
+	sourceSets.github.aidl.srcDir 'distribution/github/aidl'
+	sourceSets.github.manifest.srcFile 'distribution/github/AndroidManifest.xml'
 	sourceSets.fdroid.java.srcDir 'distribution/fdroid/src'
 	sourceSets.test {
 		java.srcDirs = ['unitTests/src']
