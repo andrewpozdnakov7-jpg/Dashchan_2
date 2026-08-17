@@ -1,6 +1,6 @@
 name: Build and Sign Google Translator Add-on
 
-run-name: Build and sign Google Translator Add-on from Slooop_Addons c1f717c6
+run-name: Build and sign Google Translator Add-on from Slooop_Addons 63398ac1
 
 on:
   workflow_dispatch:
@@ -19,11 +19,11 @@ concurrency:
 
 env:
   SOURCE_REPOSITORY: andrewpozdnakov7-jpg/Slooop_Addons
-  SOURCE_PR_NUMBER: '2'
+  SOURCE_PR_NUMBER: '4'
   SOURCE_BRANCH: main
-  SOURCE_HEAD_BRANCH: agent/fix-google-translator-mlkit-process
-  SOURCE_HEAD_COMMIT: 76d7592df25356d83d26a6e8edb2b1f964c8ecd7
-  SOURCE_COMMIT: c1f717c6b01abca23f31430a033ee77f481f97b6
+  SOURCE_HEAD_BRANCH: agent/fix-google-translator-r8-registrars
+  SOURCE_HEAD_COMMIT: c16c8ac429ea88a3ffa8591c362e30bbf5c39eef
+  SOURCE_COMMIT: 63398ac1788964ea43467c843464f03f92401e3c
   EXPECTED_CERT_SHA256: a9fbac6c498f7ad8e7c56849afe43881966bed2ed2bc1dd1c73d0ffe0b9ebeba
   EXPECTED_PACKAGE: io.dashchan2.addon.googletranslate
   EXPECTED_VERSION_NAME: 1.0.0
@@ -82,7 +82,7 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           repository: andrewpozdnakov7-jpg/Slooop_Addons
-          ref: c1f717c6b01abca23f31430a033ee77f481f97b6
+          ref: 63398ac1788964ea43467c843464f03f92401e3c
           path: source
           persist-credentials: false
 
@@ -112,6 +112,45 @@ jobs:
       - name: Build unsigned universal APK
         working-directory: source/translator-google
         run: ./gradlew :app:assembleRelease -PaddonAbi=universal --console=plain
+
+      - name: Verify ML Kit registrar constructors survive R8
+        run: |
+          set -euo pipefail
+          mapping="source/translator-google/app/build/outputs/mapping/release/mapping.txt"
+          python3 - "$mapping" <<'PY'
+          import re
+          import sys
+
+          targets = {
+              "com.google.mlkit.common.internal.CommonComponentRegistrar",
+              "com.google.mlkit.nl.translate.NaturalLanguageTranslateRegistrar",
+          }
+          blocks = {}
+          current = None
+          with open(sys.argv[1], encoding="utf-8") as stream:
+              for line in stream:
+                  match = re.match(r"^([^ ].*?) -> .*:$", line.rstrip())
+                  if match:
+                      current = match.group(1)
+                      if current in targets:
+                          blocks[current] = []
+                      continue
+                  if current in blocks:
+                      blocks[current].append(line)
+
+          missing_classes = sorted(targets - blocks.keys())
+          missing_constructors = sorted(
+              name for name, lines in blocks.items()
+              if not any("void <init>()" in line for line in lines)
+          )
+          if missing_classes or missing_constructors:
+              raise SystemExit(
+                  "ML Kit registrar R8 verification failed: "
+                  f"missing_classes={missing_classes}, "
+                  f"missing_constructors={missing_constructors}"
+              )
+          print("Verified ML Kit registrar constructors:", ", ".join(sorted(targets)))
+          PY
 
       - name: Verify unsigned APK identity and process configuration
         env:
