@@ -4,14 +4,18 @@ import android.content.Context;
 
 public final class GoogleTranslationBridge {
 	public static final long APPROXIMATE_MODEL_SIZE = 30L * 1024L * 1024L;
+	public static final long APPROXIMATE_ADDON_SIZE = 50L * 1024L * 1024L;
 
 	public static final class Snapshot {
+		public final boolean addonInstalled;
 		public final TranslationModelManager.State state;
 		public final int progress;
 		public final long downloadedBytes;
 		public final String error;
 
-		private Snapshot(TranslationModelManager.State state, int progress, long downloadedBytes, String error) {
+		private Snapshot(boolean addonInstalled, TranslationModelManager.State state, int progress,
+				long downloadedBytes, String error) {
+			this.addonInstalled = addonInstalled;
 			this.state = state;
 			this.progress = progress;
 			this.downloadedBytes = downloadedBytes;
@@ -33,12 +37,16 @@ public final class GoogleTranslationBridge {
 	}
 
 	public static Snapshot getSnapshot(TranslationModel.Direction direction) {
-		return new Snapshot(TranslationModelManager.State.NOT_INSTALLED, 0, 0L, null);
+		return new Snapshot(false, TranslationModelManager.State.NOT_INSTALLED, 0, 0L, null);
 	}
+
+	public static void refresh(TranslationModel.Direction direction) {}
 
 	public static void register(Listener listener) {}
 
 	public static void unregister(Listener listener) {}
+
+	public static void downloadAddon() {}
 
 	public static void download(TranslationModel.Direction direction) {}
 
