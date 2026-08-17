@@ -983,6 +983,7 @@
 	<string name="combined_feed_name_required">Введите название ленты</string>
 	<string name="combined_feed_minimum_boards">Выберите не менее двух досок</string>
 	<string name="show_sticky_threads">Показывать закреплённые треды</string>
+	<string name="combined_feed_show_board">Отображать доску</string>
 	<string name="combined_feeds_empty">Лент пока нет</string>
 	<string name="combined_feeds_add__summary">Выберите две или больше досок</string>
 	<string name="combined_feeds_limit">Достигнут лимит лент</string>

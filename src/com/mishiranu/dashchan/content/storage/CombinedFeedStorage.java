@@ -46,6 +46,7 @@ public class CombinedFeedStorage extends StorageManager.JsonOrgStorage<List<Comb
 		public String id;
 		public String title;
 		public boolean showSticky = true;
+		public boolean showBoard = true;
 		public final ArrayList<Source> sources = new ArrayList<>();
 
 		public Feed() {}
@@ -54,6 +55,7 @@ public class CombinedFeedStorage extends StorageManager.JsonOrgStorage<List<Comb
 			id = feed.id;
 			title = feed.title;
 			showSticky = feed.showSticky;
+			showBoard = feed.showBoard;
 			for (Source source : feed.sources) {
 				sources.add(new Source(source));
 			}
@@ -78,7 +80,7 @@ public class CombinedFeedStorage extends StorageManager.JsonOrgStorage<List<Comb
 				array.put(source.serialize());
 			}
 			return new JSONObject().put("id", id).put("title", title)
-					.put("showSticky", showSticky).put("sources", array);
+					.put("showSticky", showSticky).put("showBoard", showBoard).put("sources", array);
 		}
 
 		private static Feed deserialize(JSONObject json) {
@@ -86,6 +88,7 @@ public class CombinedFeedStorage extends StorageManager.JsonOrgStorage<List<Comb
 			feed.id = json.optString("id");
 			feed.title = json.optString("title");
 			feed.showSticky = json.optBoolean("showSticky", true);
+			feed.showBoard = json.optBoolean("showBoard", true);
 			JSONArray array = json.optJSONArray("sources");
 			if (array != null) {
 				for (int i = 0; i < array.length(); i++) {

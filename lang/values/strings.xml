@@ -958,6 +958,7 @@
 	<string name="combined_feed_name_required">Enter a feed name</string>
 	<string name="combined_feed_minimum_boards">Select at least two boards</string>
 	<string name="show_sticky_threads">Show sticky threads</string>
+	<string name="combined_feed_show_board">Show board</string>
 	<string name="combined_feeds_empty">No feeds yet</string>
 	<string name="combined_feeds_add__summary">Select two or more boards</string>
 	<string name="combined_feeds_limit">Feed limit reached</string>
