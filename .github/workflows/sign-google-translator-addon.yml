@@ -1,12 +1,12 @@
-name: Build and Sign Google Translator Add-on
+name: Build, Sign and Publish Google Translator Add-on
 
-run-name: Build and sign Google Translator Add-on from Slooop_Addons a691b748
+run-name: Build, sign and publish Google Translator Add-on from Slooop_Addons a691b748
 
 on:
   workflow_dispatch:
     inputs:
       confirmation:
-        description: Type SIGN GOOGLE TRANSLATOR ADDON to continue
+        description: Type PUBLISH GOOGLE TRANSLATOR ADDON to continue
         required: true
         type: string
 
@@ -19,11 +19,11 @@ concurrency:
 
 env:
   SOURCE_REPOSITORY: andrewpozdnakov7-jpg/Slooop_Addons
-  SOURCE_RUN_ID: '32027001364'
-  SOURCE_ARTIFACT_ID: '9287459596'
-  SOURCE_ARTIFACT_DIGEST: sha256:f1409f83aa038a941ca637323d859e6d7589e35f3a35e119915ce46dd43f1425
+  SOURCE_PR_NUMBER: '2'
   SOURCE_BRANCH: agent/fix-google-translator-mlkit-process
   SOURCE_COMMIT: a691b748dc359cfb9622a907f10eed990913159f
+  ADDONS_RELEASE_TAG: google-translator-1.0.0-test
+  ADDONS_ASSET_NAME: Slooop-Google-Translator-universal.apk
   EXPECTED_CERT_SHA256: a9fbac6c498f7ad8e7c56849afe43881966bed2ed2bc1dd1c73d0ffe0b9ebeba
   EXPECTED_PACKAGE: io.dashchan2.addon.googletranslate
   EXPECTED_VERSION_NAME: 1.0.0
@@ -42,7 +42,7 @@ jobs:
           REF_PROTECTED: ${{ github.ref_protected }}
         run: |
           set -euo pipefail
-          if [ "$SIGNING_CONFIRMATION" != 'SIGN GOOGLE TRANSLATOR ADDON' ]; then
+          if [ "$SIGNING_CONFIRMATION" != 'PUBLISH GOOGLE TRANSLATOR ADDON' ]; then
             echo '::error::Signing confirmation does not match the required phrase'
             exit 1
           fi
@@ -51,35 +51,27 @@ jobs:
             exit 1
           fi
 
-      - name: Verify source workflow provenance
+      - name: Verify pinned public source provenance
         run: |
           set -euo pipefail
-          run_json="$(curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+          commit_json="$(curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
             -H 'Accept: application/vnd.github+json' \
             -H 'X-GitHub-Api-Version: 2022-11-28' \
-            "https://api.github.com/repos/$SOURCE_REPOSITORY/actions/runs/$SOURCE_RUN_ID")"
+            "https://api.github.com/repos/$SOURCE_REPOSITORY/commits/$SOURCE_COMMIT")"
           jq -e \
-            --argjson run_id "$SOURCE_RUN_ID" \
+            --arg source_commit "$SOURCE_COMMIT" \
+            '.sha == $source_commit' <<< "$commit_json" >/dev/null
+
+          pull_json="$(curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/$SOURCE_REPOSITORY/pulls/$SOURCE_PR_NUMBER")"
+          jq -e \
             --arg source_commit "$SOURCE_COMMIT" \
             --arg source_branch "$SOURCE_BRANCH" \
-            '.id == $run_id and .head_sha == $source_commit and
-              .head_branch == $source_branch and .event == "workflow_dispatch" and
-              .status == "completed" and .conclusion == "success"' \
-            <<< "$run_json" >/dev/null
-
-          artifacts_json="$(curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
-            -H 'Accept: application/vnd.github+json' \
-            -H 'X-GitHub-Api-Version: 2022-11-28' \
-            "https://api.github.com/repos/$SOURCE_REPOSITORY/actions/runs/$SOURCE_RUN_ID/artifacts")"
-          jq -e \
-            --argjson artifact_id "$SOURCE_ARTIFACT_ID" \
-            --arg source_commit "$SOURCE_COMMIT" \
-            --arg artifact_digest "$SOURCE_ARTIFACT_DIGEST" \
-            '.artifacts[] | select(.id == $artifact_id) |
-              .name == "google-translator-universal-signed" and
-              .expired == false and .digest == $artifact_digest and
-              .workflow_run.head_sha == $source_commit' \
-            <<< "$artifacts_json" >/dev/null
+            '.head.sha == $source_commit and .head.ref == $source_branch and
+              .base.ref == "main" and (.state == "open" or .merged == true)' \
+            <<< "$pull_json" >/dev/null
 
       - name: Check out exact add-on source
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
@@ -304,7 +296,7 @@ jobs:
             echo '## Google Translator Add-on signed artifact'
             echo
             echo "- Source repository: \`$SOURCE_REPOSITORY\`"
-            echo "- Source run: \`$SOURCE_RUN_ID\`"
+            echo "- Source PR: \`#$SOURCE_PR_NUMBER\`"
             echo "- Source commit: \`$SOURCE_COMMIT\`"
             echo "- Package: \`$EXPECTED_PACKAGE\`"
             echo "- Version: \`$EXPECTED_VERSION_NAME ($EXPECTED_VERSION_CODE)\`"
@@ -322,3 +314,82 @@ jobs:
           if-no-files-found: error
           retention-days: 7
           compression-level: 0
+
+      - name: Publish verified add-on to Slooop_Addons
+        env:
+          GH_TOKEN: ${{ secrets.ADDONS_RELEASE_TOKEN }}
+          SIGNED_APK: signed-artifacts/Slooop-Google-Translator-universal-release-signed.apk
+        run: |
+          set -euo pipefail
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo '::error::ADDONS_RELEASE_TOKEN is missing from the release-signing environment'
+            exit 1
+          fi
+
+          android_sdk="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          apksigner="$android_sdk/build-tools/34.0.0/apksigner"
+          aapt="$android_sdk/build-tools/36.0.0/aapt"
+          publish_dir="$RUNNER_TEMP/google-translator-publish"
+          public_apk="$publish_dir/$ADDONS_ASSET_NAME"
+          downloaded_apk="$RUNNER_TEMP/google-translator-public-check.apk"
+          public_url="https://github.com/$SOURCE_REPOSITORY/releases/download/$ADDONS_RELEASE_TAG/$ADDONS_ASSET_NAME"
+
+          mkdir -p "$publish_dir"
+          cp "$SIGNED_APK" "$public_apk"
+          expected_sha="$(sha256sum "$public_apk" | cut -d ' ' -f 1)"
+
+          gh release upload "$ADDONS_RELEASE_TAG" "$public_apk" \
+            --repo "$SOURCE_REPOSITORY" --clobber
+
+          assets_json="$(gh release view "$ADDONS_RELEASE_TAG" \
+            --repo "$SOURCE_REPOSITORY" --json assets)"
+          asset_digest="$(jq -r --arg name "$ADDONS_ASSET_NAME" \
+            '.assets[] | select(.name == $name) | .digest' <<< "$assets_json")"
+          if [ "$asset_digest" != "sha256:$expected_sha" ]; then
+            echo "::error::Published asset digest mismatch: ${asset_digest:-missing}"
+            exit 1
+          fi
+
+          public_sha=''
+          for attempt in $(seq 1 12); do
+            curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+              --location --output "$downloaded_apk" "$public_url"
+            public_sha="$(sha256sum "$downloaded_apk" | cut -d ' ' -f 1)"
+            if [ "$public_sha" = "$expected_sha" ]; then
+              break
+            fi
+            echo "Public CDN still serves a different asset (attempt $attempt/12)"
+            sleep 5
+          done
+          if [ "$public_sha" != "$expected_sha" ]; then
+            echo "::error::Anonymous public download hash mismatch: ${public_sha:-missing}"
+            exit 1
+          fi
+
+          verification="$("$apksigner" verify --verbose --print-certs "$downloaded_apk")"
+          public_cert="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' \
+            <<< "$verification" | tr -d ':' | tr '[:upper:]' '[:lower:]')"
+          if [ "$public_cert" != "$EXPECTED_CERT_SHA256" ]; then
+            echo "::error::Published certificate mismatch: ${public_cert:-missing}"
+            exit 1
+          fi
+
+          badging="$("$aapt" dump badging "$downloaded_apk")"
+          grep -F "package: name='$EXPECTED_PACKAGE' versionCode='$EXPECTED_VERSION_CODE' versionName='$EXPECTED_VERSION_NAME'" \
+            <<< "$badging" >/dev/null
+          grep -Fx "native-code: 'arm64-v8a' 'armeabi-v7a' 'x86'" <<< "$badging" >/dev/null
+          if grep -E 'application-debuggable|testOnly|profileable' <<< "$badging"; then
+            echo '::error::Published APK contains a debug or test-only marker'
+            exit 1
+          fi
+
+          {
+            echo
+            echo '## Published add-on asset'
+            echo
+            echo "- Release: \`$SOURCE_REPOSITORY@$ADDONS_RELEASE_TAG\`"
+            echo "- Asset: \`$ADDONS_ASSET_NAME\`"
+            echo "- SHA-256: \`$public_sha\`"
+            echo "- Certificate SHA-256: \`$public_cert\`"
+            echo "- Anonymous URL: $public_url"
+          } >> "$GITHUB_STEP_SUMMARY"
