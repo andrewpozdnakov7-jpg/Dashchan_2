@@ -82,7 +82,7 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           repository: andrewpozdnakov7-jpg/Slooop_Addons
-          ref: 63398ac1788964ea43467c843464f03f92401e3c
+          ref: 4a1bfe31602a57ba10ac8da894abaed2ee84fef8
           path: source
           persist-credentials: false
 
