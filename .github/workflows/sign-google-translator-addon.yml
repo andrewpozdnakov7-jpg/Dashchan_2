@@ -1,0 +1,276 @@
+name: Sign Google Translator Add-on
+
+run-name: Sign Google Translator Add-on from verified source run 32015828660
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type SIGN GOOGLE TRANSLATOR ADDON to continue
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sign-google-translator-addon
+  cancel-in-progress: false
+
+jobs:
+  sign:
+    name: Sign verified universal add-on
+    if: github.ref == 'refs/heads/master'
+    environment: release-signing
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SOURCE_REPOSITORY: andrewpozdnakov7-jpg/Slooop_Addons
+      SOURCE_RUN_ID: '32015828660'
+      SOURCE_ARTIFACT_ID: '9283500726'
+      SOURCE_COMMIT: 966d4ec729e86bb78b4dd337654ff3186a616ec9
+      SOURCE_SHA256: 37f51a80d60bd9f42ae96afe2c5d548a8bfbebfbcc9b2a1220054d88b346394d
+      SOURCE_CERT_SHA256: 80676a445f1783163693d921fb307c435e2452a63cb05a01c06389d42f94df0e
+      SOURCE_URL: https://github.com/andrewpozdnakov7-jpg/Slooop_Addons/releases/download/google-translator-1.0.0-test/Slooop-Google-Translator-universal.apk
+      EXPECTED_CERT_SHA256: a9fbac6c498f7ad8e7c56849afe43881966bed2ed2bc1dd1c73d0ffe0b9ebeba
+      EXPECTED_PACKAGE: io.dashchan2.addon.googletranslate
+      EXPECTED_VERSION_NAME: 1.0.0
+      EXPECTED_VERSION_CODE: '1'
+
+    steps:
+      - name: Confirm protected signing request
+        env:
+          SIGNING_CONFIRMATION: ${{ inputs.confirmation }}
+          REF_PROTECTED: ${{ github.ref_protected }}
+        run: |
+          set -euo pipefail
+          if [ "$SIGNING_CONFIRMATION" != 'SIGN GOOGLE TRANSLATOR ADDON' ]; then
+            echo '::error::Signing confirmation does not match the required phrase'
+            exit 1
+          fi
+          if [ "$REF_PROTECTED" != 'true' ]; then
+            echo '::error::The workflow must run from protected master'
+            exit 1
+          fi
+
+      - name: Verify source provenance and download exact APK
+        env:
+          SOURCE_APK: ${{ runner.temp }}/Slooop-Google-Translator-source.apk
+        run: |
+          set -euo pipefail
+
+          run_json="$(curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/$SOURCE_REPOSITORY/actions/runs/$SOURCE_RUN_ID")"
+          jq -e \
+            --argjson run_id "$SOURCE_RUN_ID" \
+            --arg source_commit "$SOURCE_COMMIT" \
+            '.id == $run_id and .head_sha == $source_commit and
+              .head_branch == "main" and .event == "workflow_dispatch" and
+              .status == "completed" and .conclusion == "success"' \
+            <<< "$run_json" >/dev/null
+
+          artifacts_json="$(curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/$SOURCE_REPOSITORY/actions/runs/$SOURCE_RUN_ID/artifacts")"
+          jq -e \
+            --argjson artifact_id "$SOURCE_ARTIFACT_ID" \
+            '.artifacts[] | select(.id == $artifact_id) |
+              .name == "google-translator-universal-signed" and
+              .expired == false and .workflow_run.head_sha == "966d4ec729e86bb78b4dd337654ff3186a616ec9"' \
+            <<< "$artifacts_json" >/dev/null
+
+          curl --proto '=https' --proto-redir '=https' --tlsv1.2 \
+            --fail --location --retry 3 --retry-all-errors \
+            --output "$SOURCE_APK" "$SOURCE_URL"
+          actual_sha256="$(sha256sum "$SOURCE_APK" | cut -d ' ' -f 1)"
+          if [ "$actual_sha256" != "$SOURCE_SHA256" ]; then
+            echo "::error::Source APK SHA-256 mismatch: $actual_sha256"
+            exit 1
+          fi
+
+      - name: Install Android signing tools
+        run: |
+          set -euo pipefail
+          android_sdk="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          sdkmanager="$android_sdk/cmdline-tools/latest/bin/sdkmanager"
+          if [ -z "$android_sdk" ] || [ ! -x "$sdkmanager" ]; then
+            echo "::error::sdkmanager not found at $sdkmanager"
+            exit 1
+          fi
+          "$sdkmanager" 'build-tools;34.0.0' 'build-tools;36.0.0'
+
+      - name: Verify source APK identity
+        env:
+          SOURCE_APK: ${{ runner.temp }}/Slooop-Google-Translator-source.apk
+        run: |
+          set -euo pipefail
+          android_sdk="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          apksigner="$android_sdk/build-tools/34.0.0/apksigner"
+          aapt="$android_sdk/build-tools/36.0.0/aapt"
+
+          verification="$("$apksigner" verify --verbose --print-certs "$SOURCE_APK")"
+          source_cert="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' \
+            <<< "$verification" | tr -d ':' | tr '[:upper:]' '[:lower:]')"
+          if [ "$source_cert" != "$SOURCE_CERT_SHA256" ]; then
+            echo "::error::Unexpected source signing certificate: ${source_cert:-missing}"
+            exit 1
+          fi
+          grep -Fx 'Number of signers: 1' <<< "$verification" >/dev/null
+
+          badging="$("$aapt" dump badging "$SOURCE_APK")"
+          grep -F "package: name='$EXPECTED_PACKAGE' versionCode='$EXPECTED_VERSION_CODE' versionName='$EXPECTED_VERSION_NAME'" \
+            <<< "$badging" >/dev/null
+          grep -Fx "native-code: 'arm64-v8a' 'armeabi-v7a' 'x86'" <<< "$badging" >/dev/null
+          if grep -E 'application-debuggable|testOnly|profileable' <<< "$badging"; then
+            echo '::error::Source APK contains a debug or test-only marker'
+            exit 1
+          fi
+
+      - name: Re-sign exact payload with Slooop release key
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          SOURCE_APK: ${{ runner.temp }}/Slooop-Google-Translator-source.apk
+          SIGNED_APK: signed-artifacts/Slooop-Google-Translator-universal-release-signed.apk
+        run: |
+          set -euo pipefail
+          umask 077
+
+          for variable in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD \
+              ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [ -z "${!variable:-}" ]; then
+              echo "::error::Required release-signing secret is missing: $variable"
+              exit 1
+            fi
+          done
+
+          android_sdk="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          zipalign="$android_sdk/build-tools/36.0.0/zipalign"
+          apksigner="$android_sdk/build-tools/34.0.0/apksigner"
+          unsigned_apk="$RUNNER_TEMP/google-translator-unsigned.apk"
+          aligned_apk="$RUNNER_TEMP/google-translator-aligned.apk"
+          keystore="$RUNNER_TEMP/slooop-release.jks"
+          cleanup() {
+            rm -f "$unsigned_apk" "$aligned_apk" "$keystore"
+          }
+          trap cleanup EXIT
+
+          cp "$SOURCE_APK" "$unsigned_apk"
+          zip -q -d "$unsigned_apk" \
+            'META-INF/*.SF' 'META-INF/*.RSA' 'META-INF/*.DSA' \
+            'META-INF/*.EC' 'META-INF/MANIFEST.MF' >/dev/null 2>&1 || true
+          if unzip -Z1 "$unsigned_apk" |
+              grep -Eiq '^META-INF/(MANIFEST\.MF|.*\.(SF|RSA|DSA|EC))$'; then
+            echo '::error::Previous APK signature metadata was not removed'
+            exit 1
+          fi
+          "$zipalign" -f -p 4 "$unsigned_apk" "$aligned_apk"
+
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$keystore"
+          chmod 600 "$keystore"
+          unset ANDROID_KEYSTORE_BASE64
+
+          mkdir -p "$(dirname "$SIGNED_APK")"
+          "$apksigner" sign \
+            --ks "$keystore" \
+            --ks-key-alias "$ANDROID_KEY_ALIAS" \
+            --ks-pass env:ANDROID_KEYSTORE_PASSWORD \
+            --key-pass env:ANDROID_KEY_PASSWORD \
+            --out "$SIGNED_APK" \
+            "$aligned_apk"
+
+      - name: Verify signed APK and unchanged payload
+        env:
+          SOURCE_APK: ${{ runner.temp }}/Slooop-Google-Translator-source.apk
+          SIGNED_APK: signed-artifacts/Slooop-Google-Translator-universal-release-signed.apk
+        run: |
+          set -euo pipefail
+          android_sdk="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          zipalign="$android_sdk/build-tools/36.0.0/zipalign"
+          apksigner="$android_sdk/build-tools/34.0.0/apksigner"
+          aapt="$android_sdk/build-tools/36.0.0/aapt"
+
+          "$zipalign" -c -p 4 "$SIGNED_APK"
+          verification="$("$apksigner" verify --verbose --print-certs "$SIGNED_APK")"
+          actual_cert="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' \
+            <<< "$verification" | tr -d ':' | tr '[:upper:]' '[:lower:]')"
+          if [ "$actual_cert" != "$EXPECTED_CERT_SHA256" ]; then
+            echo "::error::Release signing certificate mismatch: ${actual_cert:-missing}"
+            exit 1
+          fi
+          grep -Fx 'Number of signers: 1' <<< "$verification" >/dev/null
+          grep -Fx 'Verified using v3 scheme (APK Signature Scheme v3): true' \
+            <<< "$verification" >/dev/null
+
+          badging="$("$aapt" dump badging "$SIGNED_APK")"
+          grep -F "package: name='$EXPECTED_PACKAGE' versionCode='$EXPECTED_VERSION_CODE' versionName='$EXPECTED_VERSION_NAME'" \
+            <<< "$badging" >/dev/null
+          grep -Fx "native-code: 'arm64-v8a' 'armeabi-v7a' 'x86'" <<< "$badging" >/dev/null
+          if grep -E 'application-debuggable|testOnly|profileable' <<< "$badging"; then
+            echo '::error::Signed APK contains a debug or test-only marker'
+            exit 1
+          fi
+
+          python3 - "$SOURCE_APK" "$SIGNED_APK" <<'PY'
+          import hashlib
+          import sys
+          import zipfile
+
+          def payload(path):
+              with zipfile.ZipFile(path) as archive:
+                  return {
+                      info.filename: hashlib.sha256(archive.read(info)).hexdigest()
+                      for info in archive.infolist()
+                      if not info.is_dir() and not is_signature_entry(info.filename)
+                  }
+
+          def is_signature_entry(name):
+              upper = name.upper()
+              if upper == "META-INF/MANIFEST.MF":
+                  return True
+              return upper.startswith("META-INF/") and upper.endswith(
+                  (".SF", ".RSA", ".DSA", ".EC")
+              )
+
+          source = payload(sys.argv[1])
+          signed = payload(sys.argv[2])
+          if source != signed:
+              missing = sorted(source.keys() - signed.keys())
+              added = sorted(signed.keys() - source.keys())
+              changed = sorted(name for name in source.keys() & signed.keys()
+                               if source[name] != signed[name])
+              raise SystemExit(
+                  f"APK payload changed: missing={missing}, added={added}, changed={changed}"
+              )
+          print(f"Verified unchanged payload: {len(source)} entries")
+          PY
+
+          sha256="$(sha256sum "$SIGNED_APK" | cut -d ' ' -f 1)"
+          size="$(stat -c '%s' "$SIGNED_APK")"
+          {
+            echo '## Google Translator Add-on signed artifact'
+            echo
+            echo "- Source repository: \`$SOURCE_REPOSITORY\`"
+            echo "- Source run: \`$SOURCE_RUN_ID\`"
+            echo "- Source artifact: \`$SOURCE_ARTIFACT_ID\`"
+            echo "- Source commit: \`$SOURCE_COMMIT\`"
+            echo "- Package: \`$EXPECTED_PACKAGE\`"
+            echo "- Version: \`$EXPECTED_VERSION_NAME ($EXPECTED_VERSION_CODE)\`"
+            echo '- ABIs: `arm64-v8a`, `armeabi-v7a`, `x86`'
+            echo "- SHA-256: \`$sha256\`"
+            echo "- Bytes: \`$size\`"
+            echo "- Certificate SHA-256: \`$actual_cert\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload verified signed add-on
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: google-translator-universal-release-signed
+          path: signed-artifacts/Slooop-Google-Translator-universal-release-signed.apk
+          if-no-files-found: error
+          retention-days: 7
