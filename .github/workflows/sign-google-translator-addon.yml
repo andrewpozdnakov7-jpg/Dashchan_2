@@ -1,6 +1,6 @@
 name: Build and Sign Google Translator Add-on
 
-run-name: Build and sign Google Translator Add-on from Slooop_Addons 63398ac1
+run-name: Build and sign Google Translator Add-on
 
 on:
   workflow_dispatch:
@@ -81,8 +81,8 @@ jobs:
       - name: Check out exact add-on source
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
-          repository: andrewpozdnakov7-jpg/Slooop_Addons
-          ref: 4a1bfe31602a57ba10ac8da894abaed2ee84fef8
+          repository: ${{ env.SOURCE_REPOSITORY }}
+          ref: ${{ env.SOURCE_COMMIT }}
           path: source
           persist-credentials: false
 
