@@ -513,6 +513,7 @@ public class PagerUnit implements PagerInstance.Callback {
 				return true;
 			}
 			if (!Preferences.isVideoDoubleTapSeek()) {
+				videoUnit.togglePlayback();
 				return true;
 			}
 			float zoneWidth = photoView.getWidth() / 3f;

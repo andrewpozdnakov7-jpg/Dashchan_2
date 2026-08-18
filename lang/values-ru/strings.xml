@@ -557,8 +557,8 @@
 	<string name="video_volume_gesture_top__format">Отступ сверху: %1$d%%</string>
 	<string name="video_volume_gesture_bottom__format">Отступ снизу: %1$d%%</string>
 	<string name="restore_defaults">Вернуть по умолчанию</string>
-	<string name="video_double_tap_seek">Управление видео двойным нажатием</string>
-	<string name="video_double_tap_seek__summary">Слева и справа — перемотка, по центру — пауза или продолжение воспроизведения</string>
+	<string name="video_double_tap_seek">Перемотка видео двойным нажатием</string>
+	<string name="video_double_tap_seek__summary">Если включено: слева и справа — перемотка, по центру — пауза. Если выключено: двойное нажатие в любом месте ставит видео на паузу или продолжает воспроизведение</string>
 	<string name="video_picture_in_picture">Воспроизведение «картинка в картинке»</string>
 	<string name="video_picture_in_picture__summary">Показывать кнопку для продолжения текущего видео в плавающем системном окне</string>
 	<string name="video_picture_in_picture_auto">Автоматически включать PiP при сворачивании</string>

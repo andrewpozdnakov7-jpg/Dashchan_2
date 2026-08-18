@@ -91,29 +91,15 @@
 				<data android:scheme="https" />
 				<data android:host="2ch.su" />
 				<data android:host="2ch.org" />
-				<data android:host="2ch.life" />
-				<data android:host="2ch.hk" />
-				<data android:host="2ch.pm" />
-				<data android:host="2ch.cm" />
-				<data android:host="2ch.re" />
-				<data android:host="2ch.tf" />
-				<data android:host="2ch.wf" />
-				<data android:host="2ch.yt" />
-				<data android:host="2-ch.so" />
 				<data android:host="4chan.org" />
 				<data android:host="www.4chan.org" />
 				<data android:host="boards.4chan.org" />
-				<data android:host="sys.4chan.org" />
 				<data android:host="4channel.org" />
 				<data android:host="www.4channel.org" />
 				<data android:host="boards.4channel.org" />
-				<data android:host="sys.4channel.org" />
-				<data android:host="a.4cdn.org" />
-				<data android:host="i.4cdn.org" />
-				<data android:host="s.4cdn.org" />
-				<data android:host="is.4chan.org" />
-				<data android:host="is2.4chan.org" />
-				<data android:host="find.4chan.org" />
+				<data android:host="ejchan.site" />
+				<data android:host="ejchan.net" />
+				<data android:host="arhivach.vc" />
 			</intent-filter>
 
 		</activity>

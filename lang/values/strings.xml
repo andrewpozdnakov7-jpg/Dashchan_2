@@ -535,8 +535,8 @@
 	<string name="video_volume_gesture_top__format">Top inset: %1$d%%</string>
 	<string name="video_volume_gesture_bottom__format">Bottom inset: %1$d%%</string>
 	<string name="restore_defaults">Restore defaults</string>
-	<string name="video_double_tap_seek">Double-tap video controls</string>
-	<string name="video_double_tap_seek__summary">Double-tap the left or right side to seek, or the center to pause or resume playback</string>
+	<string name="video_double_tap_seek">Double-tap video seeking</string>
+	<string name="video_double_tap_seek__summary">When enabled, double-tap the left or right side to seek and the center to pause. When disabled, double-tap anywhere to pause or resume</string>
 	<string name="video_picture_in_picture">Picture-in-picture playback</string>
 	<string name="video_picture_in_picture__summary">Show a button that continues the current video in a floating system window</string>
 	<string name="video_picture_in_picture_auto">Automatically enter PiP when minimized</string>

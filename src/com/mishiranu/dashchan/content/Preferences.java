@@ -2129,7 +2129,7 @@ public class Preferences {
 	}
 
 	public static final String KEY_VIDEO_DOUBLE_TAP_SEEK = "video_double_tap_seek";
-	public static final boolean DEFAULT_VIDEO_DOUBLE_TAP_SEEK = true;
+	public static final boolean DEFAULT_VIDEO_DOUBLE_TAP_SEEK = false;
 
 	public static boolean isVideoDoubleTapSeek() {
 		return PREFERENCES.getBoolean(KEY_VIDEO_DOUBLE_TAP_SEEK, DEFAULT_VIDEO_DOUBLE_TAP_SEEK);
