@@ -49,12 +49,20 @@ public class ApachanChanPerformer extends ChanPerformer {
 				data.threadNumber);
 		LinkedHashMap<String, Post> posts = new LinkedHashMap<>();
 		appendPosts(posts, firstPage.posts);
-		for (int page = 2; page <= firstPage.pagesCount; page++) {
-			String html = new HttpRequest(locator.createThreadPageUri(data.threadNumber, page), data).perform().readString();
+		if (data.partialThreadLoading && firstPage.pagesCount > 1) {
+			String html = new HttpRequest(locator.createThreadPageUri(data.threadNumber, firstPage.pagesCount), data)
+					.perform().readString();
 			appendPosts(posts, ApachanHtmlParser.parsePosts(html, locator, data.threadNumber).posts);
+		} else {
+			for (int page = 2; page <= firstPage.pagesCount; page++) {
+				String html = new HttpRequest(locator.createThreadPageUri(data.threadNumber, page), data)
+						.perform().readString();
+				appendPosts(posts, ApachanHtmlParser.parsePosts(html, locator, data.threadNumber).posts);
+			}
 		}
 		if (posts.isEmpty()) throw new InvalidResponseException();
-		return new ReadPostsResult(new Posts(posts.values())).setValidator(response.getValidator()).setFullThread(true);
+		return new ReadPostsResult(new Posts(posts.values())).setValidator(response.getValidator())
+				.setFullThread(!data.partialThreadLoading || firstPage.pagesCount <= 1);
 	}
 
 	@Override

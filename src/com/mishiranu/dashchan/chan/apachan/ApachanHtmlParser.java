@@ -28,6 +28,8 @@ final class ApachanHtmlParser {
 			+ "(\\d{1,2}):(\\d{2})", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
 	private static final Pattern FILE_SIZE = Pattern.compile("(\\d+(?:[.,]\\d+)?)\\s*(B|KB|MB)",
 			Pattern.CASE_INSENSITIVE);
+	private static final Pattern REPLIES = Pattern.compile("(?:Ответов|Replies)\\s*:\\s*(\\d+)",
+			Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
 	private static final Pattern DIMENSIONS = Pattern.compile("(\\d+)px\\s*[x×]\\s*(\\d+)px",
 			Pattern.CASE_INSENSITIVE);
 	private static final Map<String, Integer> MONTHS = createMonths();
@@ -58,7 +60,7 @@ final class ApachanHtmlParser {
 		for (Element element : document.select("div.post[id^=c]")) {
 			Post post = parsePost(element, locator, null);
 			if (post == null) continue;
-			int replies = parseInteger(element.selectFirst("span.info span#ans"));
+			int replies = parseRepliesCount(element, post.getPostNumber());
 			threads.add(new Posts(post).addPostsCount(replies + 1));
 		}
 		boolean validBoardPage = document.selectFirst("form[action$=new_thread.php] input[name=sec]") != null;
@@ -164,8 +166,38 @@ final class ApachanHtmlParser {
 			String path = uriString.replaceFirst("^/+", "");
 			return locator.buildPath(path);
 		}
+		String encodedPath = uri.getEncodedPath();
+		if (!StringUtils.isEmpty(encodedPath)) {
+			String normalizedPath = encodedPath.replaceFirst("^/+", "/");
+			if (!encodedPath.equals(normalizedPath)) {
+				uri = uri.buildUpon().encodedPath(normalizedPath).build();
+			}
+		}
 		if ("http".equalsIgnoreCase(uri.getScheme())) uri = uri.buildUpon().scheme("https").build();
 		return locator.convert(uri);
+	}
+
+	private static int parseRepliesCount(Element postElement, String postNumber) {
+		Element info = directChild(postElement, "div", "info");
+		if (info == null) info = directChild(postElement, "span", "info");
+		if (info == null) return 0;
+		for (Element link : info.select("a[href]")) {
+			Uri uri = Uri.parse(link.attr("href"));
+			if (!postNumber.equals(uri.getQueryParameter("id"))) continue;
+			Matcher matcher = REPLIES.matcher(link.text());
+			if (matcher.find()) {
+				try {
+					return Integer.parseInt(matcher.group(1));
+				} catch (NumberFormatException ignored) {}
+			}
+			String fragment = uri.getFragment();
+			if (fragment != null && NUMBER.matcher(fragment).matches()) {
+				try {
+					return Integer.parseInt(fragment);
+				} catch (NumberFormatException ignored) {}
+			}
+		}
+		return 0;
 	}
 
 	private static void parseAttachmentMetadata(FileAttachment attachment, String title) {

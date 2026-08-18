@@ -41,6 +41,7 @@ import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.ImageLoader;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.async.ReadSinglePostTask;
+import com.mishiranu.dashchan.content.async.ReadThreadPreviewTask;
 import com.mishiranu.dashchan.content.async.SendLocalArchiveTask;
 import com.mishiranu.dashchan.content.async.SendMultifunctionalTask;
 import com.mishiranu.dashchan.content.async.TaskViewModel;
@@ -515,8 +516,13 @@ public class DialogUnit {
 
 	private static class ThreadDialogProvider extends DialogProvider<ThreadDialogProvider>
 			implements CommentTextView.LinkListener, UiManager.PostsProvider {
-		public static class Factory extends DialogProvider.Factory<ThreadDialogProvider> {
+		public static class Factory extends DialogProvider.Factory<ThreadDialogProvider>
+				implements ReadThreadPreviewTask.Callback {
+			private final WeakObservable<Runnable> observable = new WeakObservable<>();
 			public final PostItem postItem;
+			private List<PostItem> previewPostItems;
+			private ErrorItem errorItem;
+			private ReadThreadPreviewTask readTask;
 
 			public Factory(PostItem postItem) {
 				this.postItem = postItem;
@@ -525,8 +531,15 @@ public class DialogUnit {
 			@Override
 			public ThreadDialogProvider create(UiManager uiManager, UiManager.ConfigurationSet configurationSet) {
 				String chanName = configurationSet.chanName;
+				Chan chan = Chan.get(chanName);
+				if ("apachan".equals(chanName) && postItem.getThreadPosts(chan).isEmpty()
+						&& postItem.getThreadPostsCount() > 1 && previewPostItems == null
+						&& errorItem == null && readTask == null) {
+					readTask = new ReadThreadPreviewTask(this, chan,
+							postItem.getBoardName(), postItem.getThreadNumber());
+					readTask.execute(ConcurrentUtils.PARALLEL_EXECUTOR);
+				}
 				Replyable replyable = (click, data) -> {
-					Chan chan = Chan.get(chanName);
 					ChanConfiguration.Board board = chan.configuration.safe().obtainBoard(postItem.getBoardName());
 					if (click && board.allowPosting) {
 						uiManager.navigator().navigatePosting(chanName,
@@ -540,23 +553,73 @@ public class DialogUnit {
 						UiManager.PostStateProvider.DEFAULT, gallerySet, configurationSet.fragmentManager,
 						configurationSet.stackInstance, dialogProvider, dialogProvider,
 						false, true, false, false, false, null).copyDisplayStateFrom(configurationSet),
-						postItem, gallerySet);
+						this, postItem, gallerySet);
+			}
+
+			private void notifyObservers() {
+				ArrayList<Runnable> observers = null;
+				for (Runnable runnable : observable) {
+					if (observers == null) observers = new ArrayList<>(1);
+					observers.add(runnable);
+				}
+				if (observers != null) {
+					for (Runnable runnable : observers) runnable.run();
+				}
+			}
+
+			@Override
+			public void onReadThreadPreviewSuccess(List<PostItem> postItems) {
+				readTask = null;
+				previewPostItems = postItems;
+				notifyObservers();
+			}
+
+			@Override
+			public void onReadThreadPreviewFail(ErrorItem errorItem) {
+				readTask = null;
+				this.errorItem = errorItem;
+				notifyObservers();
+			}
+
+			@Override
+			public void destroy() {
+				if (readTask != null) {
+					readTask.cancel();
+					readTask = null;
+				}
 			}
 		}
 
 		private final ArrayList<PostItem> postItems = new ArrayList<>();
+		private final Factory factory;
+		private final GalleryItem.Set gallerySet;
 
 		private ThreadDialogProvider(UiManager uiManager,
 				ConfigurationSetProvider<ThreadDialogProvider> configurationSetProvider,
-				PostItem postItem, GalleryItem.Set gallerySet) {
+				Factory factory, PostItem postItem, GalleryItem.Set gallerySet) {
 			super(uiManager, configurationSetProvider);
+			this.factory = factory;
+			this.gallerySet = gallerySet;
 			if (!postItem.isThreadItem()) {
 				throw new RuntimeException("Not thread item");
 			}
+			updatePostItems();
+			if (factory.readTask != null) {
+				switchState(State.LOADING, null);
+				factory.observable.register(takeResult);
+			} else if (factory.errorItem != null) {
+				ConcurrentUtils.HANDLER.post(updateErrorItem);
+			}
+		}
+
+		private void updatePostItems() {
+			PostItem postItem = factory.postItem;
+			postItems.clear();
 			postItem.setOrdinalIndex(0);
 			postItem.clearReferencesFrom();
 			postItems.add(postItem);
-			List<PostItem> childPostItems = postItem.getThreadPosts(Chan.get(configurationSet.chanName));
+			List<PostItem> childPostItems = factory.previewPostItems != null ? factory.previewPostItems
+					: postItem.getThreadPosts(Chan.get(configurationSet.chanName));
 			if (!childPostItems.isEmpty()) {
 				for (int i = 0; i < childPostItems.size(); i++) {
 					PostItem childPostItem = childPostItems.get(i);
@@ -575,6 +638,33 @@ public class DialogUnit {
 			for (PostItem childPostItem : postItems) {
 				gallerySet.put(childPostItem.getPostNumber(), childPostItem.getAttachmentItems());
 			}
+		}
+
+		private void updateErrorItem() {
+			ErrorItem errorItem = factory.errorItem;
+			switchState(State.ERROR, () -> ClickableToast.show(errorItem.toString(), null,
+					new ClickableToast.Button(R.string.open_thread, false, () -> uiManager.navigator()
+							.navigatePosts(configurationSet.chanName, factory.postItem.getBoardName(),
+									factory.postItem.getThreadNumber(), null, null))));
+		}
+
+		private void takeResult() {
+			factory.observable.unregister(takeResult);
+			if (factory.previewPostItems != null) {
+				updatePostItems();
+				switchState(State.LIST, null);
+			} else {
+				updateErrorItem();
+			}
+		}
+
+		private final Runnable updateErrorItem = this::updateErrorItem;
+		private final Runnable takeResult = this::takeResult;
+
+		@Override
+		public void onCancel() {
+			ConcurrentUtils.HANDLER.removeCallbacks(updateErrorItem);
+			factory.observable.unregister(takeResult);
 		}
 
 		@Override
