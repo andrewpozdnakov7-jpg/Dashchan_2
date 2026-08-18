@@ -6,6 +6,7 @@ import android.database.CursorWrapper;
 import android.database.sqlite.SQLiteDatabase;
 import android.os.CancellationSignal;
 import android.os.OperationCanceledException;
+import android.os.Trace;
 import androidx.annotation.NonNull;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.content.Preferences;
@@ -225,7 +226,21 @@ public class HistoryDatabase implements CommonDatabase.Instance {
 		Expression.Filter filter = filterBuilder.build();
 		Cursor cursor = database.query(database -> database.query(false, Schema.History.TABLE_NAME, projection,
 				filter.value, filter.args, null, null, Schema.History.Columns.TIME + " DESC", null, signal));
-		return new HistoryCursor(cursor, count > 0, filtered);
+		try {
+			// SQLiteCursor is lazy: without this call RecyclerView#getItemCount performs the query and fills the
+			// first CursorWindow on the main thread during its initial layout. Materialize it on the task thread.
+			Trace.beginSection("History/materializeCursor");
+			try {
+				cursor.getCount();
+				signal.throwIfCanceled();
+			} finally {
+				Trace.endSection();
+			}
+			return new HistoryCursor(cursor, count > 0, filtered);
+		} catch (RuntimeException e) {
+			cursor.close();
+			throw e;
+		}
 	}
 
 	public void remove(@NonNull String chanName, String boardName, @NonNull String threadNumber) {

@@ -378,6 +378,7 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 		}
 		retainableExtra.windowedMode = windowedEnabled;
 		windowedMode = windowedEnabled && (retainableExtra.cache == null || retainableExtra.postItems.isEmpty());
+		ThreadOpenDiagnostics.markModeState(windowedEnabled, windowedMode, retainableExtra.postItems.size());
 		if (windowedMode) {
 			threadOpenDiagnosticSessionId = ThreadOpenDiagnostics.beginSession();
 		}
@@ -631,6 +632,22 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 			return;
 		}
 
+		PostNumber requestedPostNumber = requestedWindowPostNumber;
+		int requestedPosition = requestedWindowPosition;
+		requestedWindowPostNumber = null;
+		requestedWindowPosition = -1;
+		// The drawer already covers most of the destination while it closes. Apply the prepared small window
+		// immediately behind it instead of holding a ready result until onDrawerClosed. This preserves the
+		// concurrent transition and removes the fixed drawer-animation-length loading delay.
+		ThreadOpenDiagnostics.mark(threadOpenDiagnosticSessionId, "first_window_ready",
+				result.window.postNumbers.size(), result.window.totalCount);
+		applyReadPostsWindowResult(result, requestedPostNumber, requestedPosition);
+	}
+
+	private void applyReadPostsWindowResult(ReadPostsWindowTask.Result result,
+			PostNumber requestedPostNumber, int requestedPosition) {
+		ThreadOpenDiagnostics.Operation applyOperation = ThreadOpenDiagnostics.beginOperation(
+				threadOpenDiagnosticSessionId, "first_window_apply");
 		RetainableExtra retainableExtra = getRetainableExtra(RetainableExtra.FACTORY);
 		if (result.flags != null) {
 			retainableExtra.hiddenPosts.clear();
@@ -646,15 +663,11 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 		}
 		retainableExtra.archivedThreadUri = result.archivedThreadUri;
 		retainableExtra.uniquePosters = result.uniquePosters;
-
-		PostNumber requestedPostNumber = requestedWindowPostNumber;
-		int requestedPosition = requestedWindowPosition;
-		requestedWindowPostNumber = null;
-		requestedWindowPosition = -1;
 		if (pendingWindowListPosition == null && requestedPostNumber == null && requestedPosition < 0 &&
 				storedPosition != null && !result.window.postItems.containsKey(storedPosition.first)) {
 			pendingWindowListPosition = new ListPosition(-1, storedPosition.second);
 			loadPostsWindow(storedPosition.first, -1, false);
+			ThreadOpenDiagnostics.endOperation(applyOperation, "redirected", -1, result.window.totalCount);
 			return;
 		}
 
@@ -712,6 +725,8 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 				extractPostsWithoutIndication(PagesDatabase.Cleanup.NONE);
 			}
 		}
+		ThreadOpenDiagnostics.endOperation(applyOperation, "ready", result.window.postNumbers.size(),
+				result.window.totalCount);
 	}
 
 	private void markThreadOpenFirstWindowShown(PostsWindowCache.Window window) {
@@ -1813,11 +1828,25 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 			}
 			return;
 		}
-		WatcherNotifications.cancelReplies(getContext(),
-				page.chanName, page.boardName, page.threadNumber, result.replyPosts);
 		if (cancelled) {
 			return;
 		}
+		if (windowedMode) {
+			if (deferUiWorkUntilDrawerIdle(() -> {
+				if (isRunning() && windowedMode) {
+					onExtractPostsComplete(result, false);
+				} else {
+					ThreadOpenDiagnostics.mark(threadOpenDiagnosticSessionId,
+							"full_apply_discarded", -1, -1);
+				}
+			})) {
+				ThreadOpenDiagnostics.mark(threadOpenDiagnosticSessionId, "full_apply_deferred",
+						result.postItems.size(), result.postItems.size());
+				return;
+			}
+		}
+		WatcherNotifications.cancelReplies(getContext(),
+				page.chanName, page.boardName, page.threadNumber, result.replyPosts);
 
 		RetainableExtra retainableExtra = getRetainableExtra(RetainableExtra.FACTORY);
 		PaddedRecyclerView recyclerView = getRecyclerView();

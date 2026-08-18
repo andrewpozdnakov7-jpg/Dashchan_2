@@ -11,11 +11,13 @@ import android.content.res.TypedArray;
 import android.graphics.drawable.ColorDrawable;
 import android.net.Uri;
 import android.os.SystemClock;
+import android.os.Trace;
 import android.text.Layout;
 import android.text.SpannableString;
 import android.text.SpannableStringBuilder;
 import android.text.style.BackgroundColorSpan;
 import android.text.style.RelativeSizeSpan;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
@@ -24,6 +26,7 @@ import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.TextView;
+import androidx.annotation.NonNull;
 import androidx.core.view.ViewCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -172,6 +175,25 @@ public class ViewUnit {
 
 	private final ListViewUtils.UnlimitedRecycledViewPool threadsPostsViewPool =
 			new ListViewUtils.UnlimitedRecycledViewPool();
+	private static final int PREWARM_POST_VIEW_COUNT = 10;
+	private static final int PREWARM_HIDDEN_POST_VIEW_COUNT = 2;
+	private int postViewPrewarmGeneration;
+	private final RecyclerView.Adapter<RecyclerView.ViewHolder> postViewPrewarmAdapter =
+			new RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+		@Override
+		@NonNull
+		public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+			return createView(parent, ViewType.values()[viewType]);
+		}
+
+		@Override
+		public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {}
+
+		@Override
+		public int getItemCount() {
+			return 0;
+		}
+	};
 
 	private final RecyclerView.OnScrollListener commentSelectionScrollListener = new RecyclerView.OnScrollListener() {
 		@Override
@@ -187,6 +209,54 @@ public class ViewUnit {
 		((LinearLayoutManager) recyclerView.getLayoutManager()).setRecycleChildrenOnDetach(true);
 		recyclerView.removeOnScrollListener(commentSelectionScrollListener);
 		recyclerView.addOnScrollListener(commentSelectionScrollListener);
+	}
+
+	public void prewarmPostViews(ViewGroup parent) {
+		int generation = ++postViewPrewarmGeneration;
+		int postType = ViewType.POST.ordinal();
+		int hiddenPostType = ViewType.POST_HIDDEN.ordinal();
+		int postsReady = threadsPostsViewPool.getRecycledViewCount(postType);
+		int hiddenPostsReady = threadsPostsViewPool.getRecycledViewCount(hiddenPostType);
+		if (postsReady >= PREWARM_POST_VIEW_COUNT &&
+				hiddenPostsReady >= PREWARM_HIDDEN_POST_VIEW_COUNT) {
+			Log.d("DrawerNavPerf", "event=post_pool_ready posts=" + postsReady
+					+ " hidden_posts=" + hiddenPostsReady);
+			return;
+		}
+		Log.d("DrawerNavPerf", "event=post_pool_prewarm_start posts=" + postsReady
+				+ " hidden_posts=" + hiddenPostsReady);
+		parent.postOnAnimation(new Runnable() {
+			@Override
+			public void run() {
+				if (generation != postViewPrewarmGeneration || !parent.isAttachedToWindow()) {
+					return;
+				}
+				int viewType;
+				if (threadsPostsViewPool.getRecycledViewCount(postType) < PREWARM_POST_VIEW_COUNT) {
+					viewType = postType;
+				} else if (threadsPostsViewPool.getRecycledViewCount(hiddenPostType) <
+						PREWARM_HIDDEN_POST_VIEW_COUNT) {
+					viewType = hiddenPostType;
+				} else {
+					Log.d("DrawerNavPerf", "event=post_pool_prewarm_end posts="
+							+ threadsPostsViewPool.getRecycledViewCount(postType)
+							+ " hidden_posts=" + threadsPostsViewPool.getRecycledViewCount(hiddenPostType));
+					return;
+				}
+				Trace.beginSection("DrawerNavigation/prewarmPostHolder");
+				try {
+					RecyclerView.ViewHolder holder = postViewPrewarmAdapter.createViewHolder(parent, viewType);
+					threadsPostsViewPool.putRecycledView(holder);
+				} finally {
+					Trace.endSection();
+				}
+				parent.postOnAnimation(this);
+			}
+		});
+	}
+
+	public void cancelPostViewPrewarm() {
+		postViewPrewarmGeneration++;
 	}
 
 	private void stopCommentSelectionIfOutsideVisibleArea(RecyclerView recyclerView) {

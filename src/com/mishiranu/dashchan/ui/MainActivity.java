@@ -21,6 +21,7 @@ import android.os.SystemClock;
 import android.os.Trace;
 import android.provider.DocumentsContract;
 import android.util.AtomicFile;
+import android.util.Log;
 import android.util.Pair;
 import android.view.ActionMode;
 import android.view.KeyEvent;
@@ -144,6 +145,8 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	private DrawerToggle drawerToggle;
 	private Runnable pendingDrawerNavigation;
 	private boolean performingDrawerNavigation;
+	private boolean drawerNavigationTransitionRunning;
+	private final ArrayList<Runnable> deferredDrawerUiWork = new ArrayList<>();
 	private final HashSet<String> navigationAreaLockers = new HashSet<>();
 
 	private ExpandedScreen expandedScreen;
@@ -1258,11 +1261,16 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	private boolean scheduleDrawerNavigation(Runnable navigation) {
 		if (!performingDrawerNavigation && !wideMode && drawerLayout.isDrawerVisible(GravityCompat.START)) {
-			// Start closing now, then navigate on the next frame. This keeps the drawer and fragment transitions
-			// visually concurrent without doing the navigation work in the click frame.
+			// Start both transitions from the click event. Posting the navigation to the next animation frame puts
+			// fragment creation directly into the drawer frame and causes visible stalls on 120 Hz devices.
 			pendingDrawerNavigation = navigation;
+			drawerNavigationTransitionRunning = true;
+			uiManager.view().cancelPostViewPrewarm();
+			Trace.beginSection("DrawerNavigation/transition_start");
+			Trace.endSection();
+			Log.d("DrawerNavPerf", "event=transition_start");
 			drawerLayout.closeDrawer(GravityCompat.START);
-			drawerLayout.postOnAnimation(this::runPendingDrawerNavigation);
+			runPendingDrawerNavigation();
 			return true;
 		}
 		return false;
@@ -1273,14 +1281,56 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		pendingDrawerNavigation = null;
 		if (navigation != null) {
 			Trace.beginSection("MainActivity#drawerNavigation");
+			long start = SystemClock.elapsedRealtime();
 			performingDrawerNavigation = true;
 			try {
 				navigation.run();
 			} finally {
 				performingDrawerNavigation = false;
 				Trace.endSection();
+				Log.d("DrawerNavPerf", "event=navigation_end elapsed_ms="
+						+ (SystemClock.elapsedRealtime() - start));
 			}
 		}
+	}
+
+	@Override
+	public boolean deferUiWorkUntilDrawerIdle(Runnable runnable) {
+		if (!drawerNavigationTransitionRunning || wideMode) {
+			return false;
+		}
+		deferredDrawerUiWork.add(runnable);
+		Trace.beginSection("DrawerNavigation/work_deferred");
+		Trace.endSection();
+		Log.d("DrawerNavPerf", "event=work_deferred count=" + deferredDrawerUiWork.size());
+		return true;
+	}
+
+	private void finishDrawerNavigationTransition() {
+		drawerNavigationTransitionRunning = false;
+		if (deferredDrawerUiWork.isEmpty()) {
+			Log.d("DrawerNavPerf", "event=drawer_closed deferred_count=0");
+			return;
+		}
+		ArrayList<Runnable> work = new ArrayList<>(deferredDrawerUiWork);
+		deferredDrawerUiWork.clear();
+		Log.d("DrawerNavPerf", "event=drawer_closed deferred_count=" + work.size());
+		// Do not use postOnAnimation here: a Choreographer callback makes the deferred adapter update
+		// part of the first frame after the drawer closes. Run it as a regular main-loop message instead,
+		// so the final drawer frame is committed before heavier destination work begins.
+		drawerLayout.post(() -> {
+			Trace.beginSection("DrawerNavigation/deferred_work_after_close");
+			long start = SystemClock.elapsedRealtime();
+			try {
+				for (Runnable runnable : work) {
+					runnable.run();
+				}
+			} finally {
+				Trace.endSection();
+				Log.d("DrawerNavPerf", "event=deferred_work_end count=" + work.size()
+						+ " elapsed_ms=" + (SystemClock.elapsedRealtime() - start));
+			}
+		});
 	}
 
 	private void updatePostFragmentConfiguration() {
@@ -2550,18 +2600,36 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	private class DeferredDrawerNavigationListener implements CustomDrawerLayout.DrawerListener {
 		@Override
-		public void onDrawerSlide(@NonNull View drawerView, float slideOffset) {}
+		public void onDrawerSlide(@NonNull View drawerView, float slideOffset) {
+			if (drawerNavigationTransitionRunning) {
+				Trace.setCounter("DrawerNavigation/slide", Math.round(slideOffset * 1000f));
+			}
+		}
 
 		@Override
-		public void onDrawerOpened(@NonNull View drawerView) {}
+		public void onDrawerOpened(@NonNull View drawerView) {
+			// Populate the activity-wide post holder pool only after the opening animation has finished.
+			// One holder is created per frame while the drawer is idle, so a cold post layout does not have
+			// to inflate every visible row in the same frame as the next navigation transition.
+			uiManager.view().prewarmPostViews(drawerLayout);
+		}
 
 		@Override
 		public void onDrawerClosed(@NonNull View drawerView) {
 			runPendingDrawerNavigation();
+			finishDrawerNavigationTransition();
 		}
 
 		@Override
-		public void onDrawerStateChanged(int newState) {}
+		public void onDrawerStateChanged(int newState) {
+			if (newState != CustomDrawerLayout.STATE_IDLE) {
+				uiManager.view().cancelPostViewPrewarm();
+			}
+			if (drawerNavigationTransitionRunning) {
+				Trace.setCounter("DrawerNavigation/state", newState);
+				Log.d("DrawerNavPerf", "event=drawer_state state=" + newState);
+			}
+		}
 	}
 
 	private class ExpandedScreenDrawerLocker implements CustomDrawerLayout.DrawerListener {

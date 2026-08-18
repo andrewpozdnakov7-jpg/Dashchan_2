@@ -203,6 +203,10 @@ public abstract class ListPage implements LifecycleOwner, PullableWrapper.PullCa
 		return this.callback.startActionMode(callback);
 	}
 
+	protected final boolean deferUiWorkUntilDrawerIdle(Runnable runnable) {
+		return callback.deferUiWorkUntilDrawerIdle(runnable);
+	}
+
 	protected final void switchList() {
 		callback.switchList();
 	}
@@ -391,6 +395,7 @@ public abstract class ListPage implements LifecycleOwner, PullableWrapper.PullCa
 		void clearSearchFocus();
 		Context getToolbarContext();
 		ActionMode startActionMode(ActionMode.Callback callback);
+		boolean deferUiWorkUntilDrawerIdle(Runnable runnable);
 		void switchList();
 		void switchProgress();
 		void switchError(ErrorItem errorItem);
