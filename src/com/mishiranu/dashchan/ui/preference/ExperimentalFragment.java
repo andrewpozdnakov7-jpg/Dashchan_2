@@ -18,7 +18,6 @@ import com.mishiranu.dashchan.ui.FragmentHandler;
 import com.mishiranu.dashchan.ui.preference.core.CheckPreference;
 import com.mishiranu.dashchan.ui.preference.core.Preference;
 import com.mishiranu.dashchan.ui.preference.core.PreferenceFragment;
-import com.mishiranu.dashchan.ui.preference.core.SeekPreference;
 import com.mishiranu.dashchan.util.NavigationUtils;
 import com.mishiranu.dashchan.util.SharedPreferences;
 import com.mishiranu.dashchan.widget.ClickableToast;
@@ -60,8 +59,6 @@ public class ExperimentalFragment extends PreferenceFragment implements Translat
 		if (hardwareAccelerationPreference.getValue()) {
 			addVideoDiagnosticsPreferences();
 		}
-		addCheck(true, Preferences.KEY_IMAGE_EDITOR, Preferences.DEFAULT_IMAGE_EDITOR,
-				R.string.image_editor, R.string.image_editor__summary);
 		addCheck(true, Preferences.KEY_OPEN_CONFIGURED_ATTACHMENT_FOLDER,
 				Preferences.DEFAULT_OPEN_CONFIGURED_ATTACHMENT_FOLDER,
 				R.string.open_configured_attachment_folder,
@@ -70,15 +67,6 @@ public class ExperimentalFragment extends PreferenceFragment implements Translat
 				Preferences.DEFAULT_WINDOWED_THREAD_LOADING,
 				R.string.windowed_thread_loading,
 				R.string.windowed_thread_loading__summary);
-		CheckPreference combinedFeedsPreference = addCheck(true, Preferences.KEY_COMBINED_FEEDS_ENABLED,
-				Preferences.DEFAULT_COMBINED_FEEDS_ENABLED, R.string.combined_feeds,
-				R.string.combined_feeds__summary);
-		combinedFeedsPreference.setOnAfterChangeListener(p -> refreshPreferences());
-		if (combinedFeedsPreference.getValue()) {
-			addButton(R.string.configure_combined_feeds, R.string.configure_combined_feeds__summary)
-					.setOnClickListener(p -> ((FragmentHandler) requireActivity())
-							.pushFragment(new CombinedFeedsFragment()));
-		}
 		CheckPreference wallpaperPreference = addCheck(true, Preferences.KEY_WALLPAPER_ENABLED,
 				Preferences.DEFAULT_WALLPAPER_ENABLED, R.string.wallpaper_background,
 				R.string.wallpaper_background__summary);
@@ -94,15 +82,8 @@ public class ExperimentalFragment extends PreferenceFragment implements Translat
 		if (BuildConfig.ENABLE_LOCAL_TRANSLATION) {
 			addTranslationPreferences();
 		}
-		CheckPreference audioBoostPreference = addCheck(true, Preferences.KEY_VIDEO_AUDIO_BOOST,
-				Preferences.DEFAULT_VIDEO_AUDIO_BOOST, R.string.video_audio_boost,
-				R.string.video_audio_boost__summary);
-		SeekPreference audioBoostLevelPreference = addSeek(Preferences.KEY_VIDEO_AUDIO_BOOST_DB,
-				Preferences.DEFAULT_VIDEO_AUDIO_BOOST_DB, R.string.video_audio_boost_level,
-				R.string.video_audio_boost_level__format, null, Preferences.MIN_VIDEO_AUDIO_BOOST_DB,
-				Preferences.MAX_VIDEO_AUDIO_BOOST_DB, 3);
-		audioBoostLevelPreference.setEnabled(audioBoostPreference.getValue());
-		audioBoostPreference.setOnAfterChangeListener(p -> refreshPreferences());
+		addCheck(true, Preferences.KEY_VIDEO_ZOOM_GESTURES, Preferences.DEFAULT_VIDEO_ZOOM_GESTURES,
+				R.string.video_zoom_gestures, R.string.video_zoom_gestures__summary);
 		addHeader(R.string.additional);
 		if (BuildConfig.ALLOW_GMS_SECURITY_PROVIDER) {
 			addCheck(true, Preferences.KEY_USE_GMS_PROVIDER, Preferences.DEFAULT_USE_GMS_PROVIDER,

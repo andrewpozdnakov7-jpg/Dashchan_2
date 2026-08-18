@@ -41,7 +41,7 @@ public final class SettingsSearchIndex {
 			@Override
 			ContentFragment createFragment() { return new InterfaceFragment(); }
 		},
-		COMBINED_FEEDS(R.string.experimental_features, R.string.combined_feeds) {
+		COMBINED_FEEDS(R.string.forums, R.string.combined_feeds) {
 			@Override
 			ContentFragment createFragment() { return new CombinedFeedsFragment(); }
 		},
@@ -178,6 +178,7 @@ public final class SettingsSearchIndex {
 			CharSequence chanTitle = "dvach".equals(chan.name) ? context.getText(R.string.forum_dvach)
 					: "fourchan".equals(chan.name) ? context.getText(R.string.forum_fourchan)
 					: "ejchan".equals(chan.name) ? context.getText(R.string.forum_ejchan)
+					: "apachan".equals(chan.name) ? context.getText(R.string.forum_apachan)
 					: "arhivach".equals(chan.name) ? context.getText(R.string.forum_arhivach)
 					: chan.configuration.getTitle();
 			if (StringUtils.isEmpty(chanTitle)) {
@@ -270,6 +271,8 @@ public final class SettingsSearchIndex {
 		add(context, entries, Screen.FORUMS, R.string.forums);
 		add(context, entries, Screen.FORUMS, R.string.automatic_domain_selection,
 				R.string.automatic_domain_selection__summary, Preferences.KEY_AUTOMATIC_DOMAIN_SELECTION);
+		add(context, entries, Screen.FORUMS, R.string.combined_feeds,
+				R.string.combined_feeds__summary, Preferences.KEY_COMBINED_FEEDS_ENABLED);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.experimental_features);
 		add(context, entries, Screen.INTERFACE, R.string.user_interface);
 		add(context, entries, Screen.CONTENTS, R.string.contents);
@@ -302,8 +305,6 @@ public final class SettingsSearchIndex {
 				R.string.whats_new_preview__summary, null);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.hardware_video_acceleration,
 				R.string.hardware_video_acceleration__summary, Preferences.KEY_HARDWARE_VIDEO_ACCELERATION);
-		add(context, entries, Screen.EXPERIMENTAL, R.string.image_editor,
-				R.string.image_editor__summary, Preferences.KEY_IMAGE_EDITOR);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.open_configured_attachment_folder,
 				R.string.open_configured_attachment_folder__summary,
 				Preferences.KEY_OPEN_CONFIGURED_ATTACHMENT_FOLDER);
@@ -320,18 +321,14 @@ public final class SettingsSearchIndex {
 					R.string.translation_automatic__summary, Preferences.KEY_TRANSLATION_AUTO);
 			add(context, entries, Screen.EXPERIMENTAL, R.string.translation_language_package);
 		}
-		add(context, entries, Screen.EXPERIMENTAL, R.string.video_audio_boost,
-				R.string.video_audio_boost__summary, Preferences.KEY_VIDEO_AUDIO_BOOST);
-		add(context, entries, Screen.EXPERIMENTAL, R.string.video_audio_boost_level, 0,
-				Preferences.KEY_VIDEO_AUDIO_BOOST_DB);
+		add(context, entries, Screen.EXPERIMENTAL, R.string.video_zoom_gestures,
+				R.string.video_zoom_gestures__summary, Preferences.KEY_VIDEO_ZOOM_GESTURES);
 		if (BuildConfig.ALLOW_GMS_SECURITY_PROVIDER) {
 			add(context, entries, Screen.EXPERIMENTAL, R.string.use_gms_security_provider,
 					R.string.use_gms_security_provider__summary, Preferences.KEY_USE_GMS_PROVIDER);
 		}
 		add(context, entries, Screen.EXPERIMENTAL, R.string.video_diagnostics_start,
 				R.string.video_diagnostics_start__summary, null);
-		add(context, entries, Screen.EXPERIMENTAL, R.string.combined_feeds,
-				R.string.combined_feeds__summary, Preferences.KEY_COMBINED_FEEDS_ENABLED);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.wallpaper_background,
 				R.string.wallpaper_background__summary, Preferences.KEY_WALLPAPER_ENABLED);
 		add(context, entries, Screen.COMBINED_FEEDS, R.string.configure_combined_feeds,
@@ -424,6 +421,8 @@ public final class SettingsSearchIndex {
 
 		add(context, entries, Screen.MEDIA, R.string.load_thumbnails, 0, Preferences.KEY_LOAD_THUMBNAILS);
 		add(context, entries, Screen.MEDIA, R.string.load_nearest_image, 0, Preferences.KEY_LOAD_NEAREST_IMAGE);
+		add(context, entries, Screen.MEDIA, R.string.image_editor,
+				R.string.image_editor__summary, Preferences.KEY_IMAGE_EDITOR);
 		add(context, entries, Screen.MEDIA, R.string.unique_hash, 0,
 				Preferences.KEY_DEFAULT_ATTACHMENT_UNIQUE_HASH);
 		add(context, entries, Screen.MEDIA, R.string.reencode_image, 0,
@@ -446,6 +445,10 @@ public final class SettingsSearchIndex {
 				R.string.notify_when_download_is_completed__summary, Preferences.KEY_NOTIFY_DOWNLOAD_COMPLETE);
 		add(context, entries, Screen.MEDIA, R.string.use_built_in_video_player,
 				R.string.use_built_in_video_player__summary, Preferences.KEY_USE_VIDEO_PLAYER);
+		add(context, entries, Screen.MEDIA, R.string.video_audio_boost,
+				R.string.video_audio_boost__summary, Preferences.KEY_VIDEO_AUDIO_BOOST);
+		add(context, entries, Screen.MEDIA, R.string.video_audio_boost_level, 0,
+				Preferences.KEY_VIDEO_AUDIO_BOOST_DB);
 		add(context, entries, Screen.MEDIA, R.string.action_on_playback_completion, 0,
 				Preferences.KEY_VIDEO_COMPLETION);
 		add(context, entries, Screen.MEDIA, R.string.play_after_scroll, R.string.play_after_scroll__summary,
@@ -471,9 +474,11 @@ public final class SettingsSearchIndex {
 
 		add(context, entries, Screen.ACCESSIBILITY, R.string.application_font, 0,
 				Preferences.KEY_APPLICATION_FONT);
+		add(context, entries, Screen.ACCESSIBILITY, R.string.font_catalog,
+				R.string.font_catalog_open__summary, null);
 		add(context, entries, Screen.ACCESSIBILITY, R.string.install_custom_font,
 				R.string.install_custom_font__summary, null);
-		add(context, entries, Screen.ACCESSIBILITY, R.string.delete_custom_font);
+		add(context, entries, Screen.ACCESSIBILITY, R.string.delete_installed_font);
 		add(context, entries, Screen.ACCESSIBILITY, R.string.text_scale, 0, Preferences.KEY_TEXT_SCALE);
 		add(context, entries, Screen.ACCESSIBILITY, R.string.volume_buttons_text_scale,
 				R.string.volume_buttons_text_scale__summary, Preferences.KEY_VOLUME_BUTTONS_TEXT_SCALE);

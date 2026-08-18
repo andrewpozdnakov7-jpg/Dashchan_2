@@ -13,6 +13,7 @@ import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.ui.FragmentHandler;
 import com.mishiranu.dashchan.ui.preference.core.CheckPreference;
+import com.mishiranu.dashchan.ui.preference.core.Preference;
 import com.mishiranu.dashchan.ui.preference.core.PreferenceFragment;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.util.SharedPreferences;
@@ -47,6 +48,16 @@ public class ChansFragment extends PreferenceFragment implements FragmentHandler
 		addCheck(true, Preferences.KEY_AUTOMATIC_DOMAIN_SELECTION,
 				Preferences.DEFAULT_AUTOMATIC_DOMAIN_SELECTION, R.string.automatic_domain_selection,
 				R.string.automatic_domain_selection__summary);
+		CheckPreference combinedFeedsPreference = addCheck(true, Preferences.KEY_COMBINED_FEEDS_ENABLED,
+				Preferences.DEFAULT_COMBINED_FEEDS_ENABLED, R.string.combined_feeds,
+				R.string.combined_feeds__summary);
+		Preference<Void> configureCombinedFeedsPreference = addButton(R.string.configure_combined_feeds,
+				R.string.configure_combined_feeds__summary);
+		configureCombinedFeedsPreference.setEnabled(combinedFeedsPreference.getValue());
+		configureCombinedFeedsPreference.setOnClickListener(p -> ((FragmentHandler) requireActivity())
+				.pushFragment(new CombinedFeedsFragment()));
+		combinedFeedsPreference.setOnAfterChangeListener(p ->
+				configureCombinedFeedsPreference.setEnabled(p.getValue()));
 
 		ChanManager manager = ChanManager.getInstance();
 		LinkedHashMap<String, Chan> chans = new LinkedHashMap<>();
@@ -56,6 +67,7 @@ public class ChansFragment extends PreferenceFragment implements FragmentHandler
 		addChanPreference(chans.remove("dvach"));
 		addChanPreference(chans.remove("fourchan"));
 		addChanPreference(chans.remove("ejchan"));
+		addChanPreference(chans.remove("apachan"));
 		addChanPreference(chans.remove("arhivach"));
 		for (Chan chan : chans.values()) {
 			addChanPreference(chan);
@@ -71,6 +83,7 @@ public class ChansFragment extends PreferenceFragment implements FragmentHandler
 		int titleResId = "dvach".equals(chan.name) ? R.string.forum_dvach
 				: "fourchan".equals(chan.name) ? R.string.forum_fourchan
 				: "ejchan".equals(chan.name) ? R.string.forum_ejchan
+				: "apachan".equals(chan.name) ? R.string.forum_apachan
 				: "arhivach".equals(chan.name) ? R.string.forum_arhivach : 0;
 		CharSequence title = titleResId != 0 ? getString(titleResId) : chan.configuration.getTitle();
 		CharSequence summary = "fourchan".equals(chan.name) || "arhivach".equals(chan.name)

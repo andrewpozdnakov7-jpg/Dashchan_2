@@ -30,6 +30,7 @@ def knownChanExtensionPackages = [
 		'com.mishiranu.dashchan.chan.archiveforplebs',
 		'com.mishiranu.dashchan.chan.archiveofsins',
 		'com.mishiranu.dashchan.chan.archiverbt',
+		'com.mishiranu.dashchan.chan.apachan',
 		'com.mishiranu.dashchan.chan.arhivach',
 		'com.mishiranu.dashchan.chan.bunbunmaru',
 		'com.mishiranu.dashchan.chan.cirno',
@@ -244,8 +245,8 @@ android {
 
 	defaultConfig {
 		applicationId = 'io.dashchan2'
-		versionCode = 11060
-		versionName = '3.2.26'
+		versionCode = 11070
+		versionName = '3.2.27'
 		def releaseVersionCode = versionCode
 		def packageVersionCodeProperty = project.findProperty('packageVersionCode')
 		if (packageVersionCodeProperty != null) {
@@ -281,6 +282,8 @@ android {
 				'andrewpozdnakov7-jpg/Dashchan_2/master/update/themes.json"'
 		buildConfigField 'String', 'URI_WALLPAPERS', '"https://raw.githubusercontent.com/' +
 				'andrewpozdnakov7-jpg/Slooop_Addons/main/wallpapers.json"'
+		buildConfigField 'String', 'URI_FONTS', '"https://raw.githubusercontent.com/' +
+				'andrewpozdnakov7-jpg/Slooop_Addons/main/fonts.json"'
 		buildConfigField 'String', 'GITHUB_URI_METADATA', '"//github.com/andrewpozdnakov7-jpg/Dashchan_2"'
 		buildConfigField 'String', 'GITHUB_PATH_METADATA', '"metadata"'
 		buildConfigField 'String', 'FILE_PROVIDER_AUTHORITY', '"' +

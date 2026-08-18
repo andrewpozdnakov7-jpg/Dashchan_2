@@ -24,9 +24,11 @@ import com.mishiranu.dashchan.content.async.TaskViewModel;
 import com.mishiranu.dashchan.media.VideoPlayer;
 import com.mishiranu.dashchan.ui.FragmentHandler;
 import com.mishiranu.dashchan.ui.InstanceDialog;
+import com.mishiranu.dashchan.ui.preference.core.CheckPreference;
 import com.mishiranu.dashchan.ui.preference.core.EditPreference;
 import com.mishiranu.dashchan.ui.preference.core.Preference;
 import com.mishiranu.dashchan.ui.preference.core.PreferenceFragment;
+import com.mishiranu.dashchan.ui.preference.core.SeekPreference;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
 import com.mishiranu.dashchan.util.IOUtils;
 import com.mishiranu.dashchan.util.ResourceUtils;
@@ -65,6 +67,8 @@ public class MediaFragment extends PreferenceFragment implements FragmentHandler
 				enumResList(Preferences.NetworkMode.values(), v -> v.titleResId));
 
 		addHeader(R.string.new_attachment_defaults);
+		addCheck(true, Preferences.KEY_IMAGE_EDITOR, Preferences.DEFAULT_IMAGE_EDITOR,
+				R.string.image_editor, R.string.image_editor__summary);
 		addCheck(true, Preferences.KEY_DEFAULT_ATTACHMENT_UNIQUE_HASH,
 				Preferences.DEFAULT_ATTACHMENT_UNIQUE_HASH, R.string.unique_hash, 0);
 		addCheck(true, Preferences.KEY_DEFAULT_ATTACHMENT_REENCODING,
@@ -125,9 +129,25 @@ public class MediaFragment extends PreferenceFragment implements FragmentHandler
 				addButton(0, R.string.requires_decoding_libraries__sentence).setSelectable(false);
 			}
 		}
-		addCheck(true, Preferences.KEY_USE_VIDEO_PLAYER, Preferences.DEFAULT_USE_VIDEO_PLAYER,
-				R.string.use_built_in_video_player, R.string.use_built_in_video_player__summary)
-				.setEnabled(playerLoadResult.first);
+		CheckPreference videoPlayerPreference = addCheck(true, Preferences.KEY_USE_VIDEO_PLAYER,
+				Preferences.DEFAULT_USE_VIDEO_PLAYER, R.string.use_built_in_video_player,
+				R.string.use_built_in_video_player__summary);
+		videoPlayerPreference.setEnabled(playerLoadResult.first);
+		CheckPreference audioBoostPreference = addCheck(true, Preferences.KEY_VIDEO_AUDIO_BOOST,
+				Preferences.DEFAULT_VIDEO_AUDIO_BOOST, R.string.video_audio_boost,
+				R.string.video_audio_boost__summary);
+		SeekPreference audioBoostLevelPreference = addSeek(Preferences.KEY_VIDEO_AUDIO_BOOST_DB,
+				Preferences.DEFAULT_VIDEO_AUDIO_BOOST_DB, R.string.video_audio_boost_level,
+				R.string.video_audio_boost_level__format, null, Preferences.MIN_VIDEO_AUDIO_BOOST_DB,
+				Preferences.MAX_VIDEO_AUDIO_BOOST_DB, 3);
+		Runnable updateAudioBoostState = () -> {
+			boolean playerEnabled = playerLoadResult.first && videoPlayerPreference.getValue();
+			audioBoostPreference.setEnabled(playerEnabled);
+			audioBoostLevelPreference.setEnabled(playerEnabled && audioBoostPreference.getValue());
+		};
+		videoPlayerPreference.setOnAfterChangeListener(p -> updateAudioBoostState.run());
+		audioBoostPreference.setOnAfterChangeListener(p -> updateAudioBoostState.run());
+		updateAudioBoostState.run();
 		addList(Preferences.KEY_VIDEO_COMPLETION, enumList(Preferences.VideoCompletionMode.values(), o -> o.value),
 				Preferences.DEFAULT_VIDEO_COMPLETION.value, R.string.action_on_playback_completion,
 				enumResList(Preferences.VideoCompletionMode.values(), o -> o.titleResId))

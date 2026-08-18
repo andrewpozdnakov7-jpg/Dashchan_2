@@ -48,6 +48,7 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 		void storeRetainableExtra(String retainId, ListPage.Retainable extra);
 		void setPageTitle(String title, String subtitle, String threadTitle);
 		void invalidateHomeUpState();
+		boolean deferUiWorkUntilDrawerIdle(Runnable runnable);
 		void handleRedirect(String chanName, String boardName, String threadNumber, PostNumber postNumber);
 		void closeCurrentPage();
 	}
@@ -476,6 +477,11 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 	@Override
 	public ActionMode startActionMode(ActionMode.Callback callback) {
 		return requireActivity().startActionMode(callback);
+	}
+
+	@Override
+	public boolean deferUiWorkUntilDrawerIdle(Runnable runnable) {
+		return getCallback().deferUiWorkUntilDrawerIdle(runnable);
 	}
 
 	@Override

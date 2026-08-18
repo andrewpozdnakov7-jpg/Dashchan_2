@@ -509,7 +509,11 @@ public class PagerUnit implements PagerInstance.Callback {
 					|| !holder.galleryItem.isVideo(Chan.get(galleryInstance.chanName))) {
 				return false;
 			}
+			if (Preferences.isVideoZoomGesturesEnabled() && photoView.resetZoom(true)) {
+				return true;
+			}
 			if (!Preferences.isVideoDoubleTapSeek()) {
+				videoUnit.togglePlayback();
 				return true;
 			}
 			float zoneWidth = photoView.getWidth() / 3f;
@@ -529,6 +533,11 @@ public class PagerUnit implements PagerInstance.Callback {
 		@Override
 		public void onLongClick(PhotoView photoView, float x, float y) {
 			displayPopupMenu(galleryInstance.callback.getChildFragmentManager());
+		}
+
+		@Override
+		public void onTransformChanged(PhotoView photoView, float left, float top, float right, float bottom) {
+			videoUnit.applyVideoTransform(photoView, left, top, right, bottom);
 		}
 
 		private boolean swiping = false;

@@ -47,8 +47,10 @@ does not fetch native sources.
 
 ## Assets
 
-- Bundled fonts have per-family license files under `assets/fonts/licenses` and source references in
-  `assets/fonts/README.md`.
+- Optional fonts are not bundled in the APK. The application downloads a user-selected font from the public
+  Slooop add-ons catalog, verifies its declared size and SHA-256, and stores it in application-private data.
+  The catalog provides the upstream source and per-family license link for every font. Manual TTF/OTF import
+  remains available without network access.
 - Material Design icons are declared as Apache-2.0 in the in-app notices.
 - Project artwork and other project-authored resources are distributed under the repository GPL-3.0 license.
 - Before submission, `fdroid scanner` and manual packager review must confirm that no undocumented third-party asset

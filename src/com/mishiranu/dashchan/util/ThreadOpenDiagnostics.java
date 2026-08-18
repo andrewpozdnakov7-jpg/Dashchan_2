@@ -28,6 +28,13 @@ public final class ThreadOpenDiagnostics {
 
 	private ThreadOpenDiagnostics() {}
 
+	public static void markModeState(boolean enabled, boolean active, int retainedPosts) {
+		Log.d(TAG, "event=mode_state enabled=" + enabled + " active=" + active
+				+ " retained_posts=" + retainedPosts);
+		Trace.beginSection(TRACE_PREFIX + (active ? "mode_active" : enabled ? "mode_warm" : "mode_disabled"));
+		Trace.endSection();
+	}
+
 	private static int nextCookie() {
 		return NEXT_COOKIE.updateAndGet(value -> value == Integer.MAX_VALUE ? 1 : value + 1);
 	}
