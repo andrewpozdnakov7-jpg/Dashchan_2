@@ -178,6 +178,7 @@ public final class SettingsSearchIndex {
 			CharSequence chanTitle = "dvach".equals(chan.name) ? context.getText(R.string.forum_dvach)
 					: "fourchan".equals(chan.name) ? context.getText(R.string.forum_fourchan)
 					: "ejchan".equals(chan.name) ? context.getText(R.string.forum_ejchan)
+					: "apachan".equals(chan.name) ? context.getText(R.string.forum_apachan)
 					: "arhivach".equals(chan.name) ? context.getText(R.string.forum_arhivach)
 					: chan.configuration.getTitle();
 			if (StringUtils.isEmpty(chanTitle)) {

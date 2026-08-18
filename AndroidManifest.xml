@@ -23,6 +23,7 @@
 		<package android:name="com.mishiranu.dashchan.chan.archiveforplebs" />
 		<package android:name="com.mishiranu.dashchan.chan.archiveofsins" />
 		<package android:name="com.mishiranu.dashchan.chan.archiverbt" />
+		<package android:name="com.mishiranu.dashchan.chan.apachan" />
 		<package android:name="com.mishiranu.dashchan.chan.arhivach" />
 		<package android:name="com.mishiranu.dashchan.chan.bunbunmaru" />
 		<package android:name="com.mishiranu.dashchan.chan.cirno" />

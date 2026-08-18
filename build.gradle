@@ -30,6 +30,7 @@ def knownChanExtensionPackages = [
 		'com.mishiranu.dashchan.chan.archiveforplebs',
 		'com.mishiranu.dashchan.chan.archiveofsins',
 		'com.mishiranu.dashchan.chan.archiverbt',
+		'com.mishiranu.dashchan.chan.apachan',
 		'com.mishiranu.dashchan.chan.arhivach',
 		'com.mishiranu.dashchan.chan.bunbunmaru',
 		'com.mishiranu.dashchan.chan.cirno',

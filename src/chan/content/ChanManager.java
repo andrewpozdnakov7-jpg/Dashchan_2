@@ -86,11 +86,13 @@ public class ChanManager {
 	private static final String BUILTIN_DVACH_NAME = "dvach";
 	private static final String BUILTIN_FOURCHAN_NAME = "fourchan";
 	private static final String BUILTIN_EJCHAN_NAME = "ejchan";
+	private static final String BUILTIN_APACHAN_NAME = "apachan";
 	private static final String BUILTIN_ARHIVACH_NAME = "arhivach";
 	private static final String[] BUILTIN_REPLACED_PACKAGE_NAMES = {
 			"com.mishiranu.dashchan.chan.dvach", "io.dashchan2.chan.dvach",
 			"com.mishiranu.dashchan.chan.fourchan", "io.dashchan2.chan.fourchan",
 			"com.mishiranu.dashchan.chan.ejchan", "io.dashchan2.chan.ejchan",
+			"com.mishiranu.dashchan.chan.apachan", "io.dashchan2.chan.apachan",
 			"com.mishiranu.dashchan.chan.arhivach", "io.dashchan2.chan.arhivach"};
 
 	private static final int PACKAGE_MANAGER_SIGNATURE_FLAGS = PackageManager.GET_SIGNING_CERTIFICATES;
@@ -357,6 +359,20 @@ public class ChanManager {
 		return new Extension(extensionItem.changeLoadError(result.error), result.chan);
 	}
 
+	private static Extension loadBuiltinApachan(Fingerprints applicationFingerprints) {
+		MainApplication application = MainApplication.getInstance();
+		ExtensionItem extensionItem = new ExtensionItem(ExtensionItem.Type.CHAN, BUILTIN_APACHAN_NAME, "Apachan",
+				ExtensionItem.TrustState.TRUSTED, application.getPackageName(), BuildConfig.VERSION_NAME,
+				BuildConfig.VERSION_CODE, application.getApplicationInfo(), applicationFingerprints,
+				MAX_VERSION, true, R.drawable.ic_custom_apachan, null, null,
+				"com.mishiranu.dashchan.chan.apachan.ApachanChanConfiguration",
+				"com.mishiranu.dashchan.chan.apachan.ApachanChanPerformer",
+				"com.mishiranu.dashchan.chan.apachan.ApachanChanLocator",
+				"com.mishiranu.dashchan.chan.apachan.ApachanChanMarkup", true);
+		LoadChanResult result = loadChan(extensionItem, application.getPackageManager());
+		return new Extension(extensionItem.changeLoadError(result.error), result.chan);
+	}
+
 	private static Extension loadBuiltinArhivach(Fingerprints applicationFingerprints) {
 		MainApplication application = MainApplication.getInstance();
 		ExtensionItem extensionItem = new ExtensionItem(ExtensionItem.Type.CHAN, BUILTIN_ARHIVACH_NAME, "Arhivach",
@@ -407,6 +423,9 @@ public class ChanManager {
 			Extension builtInEjchan = loadBuiltinEjchan(applicationFingerprints);
 			extensions.add(builtInEjchan);
 			usedExtensionNames.add(builtInEjchan.item.name);
+			Extension builtInApachan = loadBuiltinApachan(applicationFingerprints);
+			extensions.add(builtInApachan);
+			usedExtensionNames.add(builtInApachan.item.name);
 			Extension builtInArhivach = loadBuiltinArhivach(applicationFingerprints);
 			extensions.add(builtInArhivach);
 			usedExtensionNames.add(builtInArhivach.item.name);
