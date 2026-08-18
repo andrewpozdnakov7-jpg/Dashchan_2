@@ -282,6 +282,8 @@ android {
 				'andrewpozdnakov7-jpg/Dashchan_2/master/update/themes.json"'
 		buildConfigField 'String', 'URI_WALLPAPERS', '"https://raw.githubusercontent.com/' +
 				'andrewpozdnakov7-jpg/Slooop_Addons/main/wallpapers.json"'
+		buildConfigField 'String', 'URI_FONTS', '"https://raw.githubusercontent.com/' +
+				'andrewpozdnakov7-jpg/Slooop_Addons/main/fonts.json"'
 		buildConfigField 'String', 'GITHUB_URI_METADATA', '"//github.com/andrewpozdnakov7-jpg/Dashchan_2"'
 		buildConfigField 'String', 'GITHUB_PATH_METADATA', '"metadata"'
 		buildConfigField 'String', 'FILE_PROVIDER_AUTHORITY', '"' +

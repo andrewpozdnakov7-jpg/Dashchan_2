@@ -1833,6 +1833,8 @@ public class Preferences {
 	public static final String DEFAULT_TRANSLATION_ENGINE = "mozilla";
 	public static final String KEY_VIDEO_AUDIO_BOOST = "video_audio_boost";
 	public static final boolean DEFAULT_VIDEO_AUDIO_BOOST = false;
+	public static final String KEY_VIDEO_ZOOM_GESTURES = "video_zoom_gestures";
+	public static final boolean DEFAULT_VIDEO_ZOOM_GESTURES = true;
 	public static final String KEY_VIDEO_AUDIO_BOOST_DB = "video_audio_boost_db";
 	public static final int DEFAULT_VIDEO_AUDIO_BOOST_DB = 6;
 	public static final int MIN_VIDEO_AUDIO_BOOST_DB = 3;
@@ -1920,6 +1922,10 @@ public class Preferences {
 
 	public static boolean isVideoAudioBoost() {
 		return PREFERENCES.getBoolean(KEY_VIDEO_AUDIO_BOOST, DEFAULT_VIDEO_AUDIO_BOOST);
+	}
+
+	public static boolean isVideoZoomGesturesEnabled() {
+		return PREFERENCES.getBoolean(KEY_VIDEO_ZOOM_GESTURES, DEFAULT_VIDEO_ZOOM_GESTURES);
 	}
 
 	public static int getVideoAudioBoostDb() {

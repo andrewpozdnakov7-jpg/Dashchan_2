@@ -13,6 +13,7 @@ import android.graphics.Paint;
 import android.graphics.PixelFormat;
 import android.graphics.Point;
 import android.graphics.Rect;
+import android.graphics.RectF;
 import android.media.AudioManager;
 import android.net.Uri;
 import android.view.ContextThemeWrapper;
@@ -88,6 +89,7 @@ public class VideoUnit {
 	private boolean localVolumeSupported = true;
 	private boolean volumeGestureLocal;
 	private int volumeGestureStart;
+	private final RectF videoTransformRect = new RectF();
 	private int volumeGestureCurrent;
 	private int volumeGestureMaximum;
 	private int volumeGestureSensitivity;
@@ -230,7 +232,51 @@ public class VideoUnit {
 
 	private void interruptHolder(PagerInstance.ViewHolder holder) {
 		if (holder != null) {
+			for (int i = 0; i < holder.surfaceParent.getChildCount(); i++) {
+				resetVideoTransform(holder.surfaceParent.getChildAt(i));
+			}
 			holder.surfaceParent.removeAllViews();
+		}
+	}
+
+	private static void resetVideoTransform(View videoView) {
+		videoView.setPivotX(0f);
+		videoView.setPivotY(0f);
+		videoView.setScaleX(1f);
+		videoView.setScaleY(1f);
+		videoView.setTranslationX(0f);
+		videoView.setTranslationY(0f);
+	}
+
+	public void applyVideoTransform(com.mishiranu.dashchan.widget.PhotoView photoView,
+			float left, float top, float right, float bottom) {
+		PagerInstance.ViewHolder holder = instance.currentHolder;
+		if (!initialized || !Preferences.isVideoZoomGesturesEnabled() || holder == null
+				|| holder.photoView != photoView || player == null) {
+			return;
+		}
+		videoTransformRect.set(left, top, right, bottom);
+		View videoView = player.getVideoView(instance.galleryInstance.context);
+		applyVideoTransform(videoView);
+	}
+
+	private void applyVideoTransform(View videoView) {
+		if (videoView.getWidth() <= 0 || videoView.getHeight() <= 0 || videoTransformRect.isEmpty()) {
+			return;
+		}
+		videoView.setPivotX(0f);
+		videoView.setPivotY(0f);
+		videoView.setScaleX(videoTransformRect.width() / videoView.getWidth());
+		videoView.setScaleY(videoTransformRect.height() / videoView.getHeight());
+		videoView.setTranslationX(videoTransformRect.left - videoView.getLeft());
+		videoView.setTranslationY(videoTransformRect.top - videoView.getTop());
+	}
+
+	private void captureAndApplyVideoTransform(PagerInstance.ViewHolder holder, View videoView) {
+		if (initialized && player != null && holder == instance.currentHolder && holder.photoView != null
+				&& videoView == player.getVideoView(instance.galleryInstance.context)
+				&& holder.photoView.getImageDisplayRect(videoTransformRect) != null) {
+			applyVideoTransform(videoView);
 		}
 	}
 
@@ -309,8 +355,10 @@ public class VideoUnit {
 		backgroundDrawable.width = dimensions.x;
 		backgroundDrawable.height = dimensions.y;
 		holder.recyclePhotoView();
-		holder.photoView.setImage(backgroundDrawable, false, true, false);
+		boolean zoomGestures = Preferences.isVideoZoomGesturesEnabled();
+		holder.photoView.setImage(backgroundDrawable, false, !zoomGestures, false, zoomGestures ? 10f : 0f);
 		View videoView = player.getVideoView(instance.galleryInstance.context);
+		resetVideoTransform(videoView);
 		holder.surfaceParent.setClickable(false);
 		holder.surfaceParent.setFocusable(false);
 		holder.surfaceParent.addView(videoView, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,
@@ -324,6 +372,9 @@ public class VideoUnit {
 		playPauseButton.setEnabled(true);
 		seekBar.setEnabled(true);
 		initialized = true;
+		if (zoomGestures) {
+			videoView.post(() -> captureAndApplyVideoTransform(holder, videoView));
+		}
 		setPlaybackSpeed(playbackSpeed);
 		pausedByTransientLossOfFocus = false;
 		if (hideSurfaceOnInit) {
@@ -781,9 +832,14 @@ public class VideoUnit {
 		transferredPlayer.releaseVideoView();
 		transferredPlayer.setListener(playerListener);
 		View videoView = transferredPlayer.getVideoView(instance.galleryInstance.context);
+		resetVideoTransform(videoView);
 		instance.currentHolder.surfaceParent.addView(videoView, new FrameLayout.LayoutParams(
 				FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT, Gravity.CENTER));
 		pictureInPictureTransferred = false;
+		if (Preferences.isVideoZoomGesturesEnabled()) {
+			PagerInstance.ViewHolder holder = instance.currentHolder;
+			videoView.post(() -> captureAndApplyVideoTransform(holder, videoView));
+		}
 		this.playbackSpeed = normalizePlaybackSpeed(playbackSpeed);
 		this.muted = muted;
 		transferredPlayer.setPlaybackSpeed(this.playbackSpeed);
@@ -1132,12 +1188,17 @@ public class VideoUnit {
 
 		@Override
 		public void onDimensionChange(VideoPlayer player) {
-			if (backgroundDrawable != null) {
+			if (backgroundDrawable != null && player == VideoUnit.this.player) {
 				backgroundDrawable.recycle();
 				Point dimensions = player.getDimensions();
 				backgroundDrawable.width = dimensions.x;
 				backgroundDrawable.height = dimensions.y;
-				instance.currentHolder.photoView.resetScale();
+				PagerInstance.ViewHolder holder = instance.currentHolder;
+				holder.photoView.resetScale();
+				if (Preferences.isVideoZoomGesturesEnabled()) {
+					View videoView = player.getVideoView(instance.galleryInstance.context);
+					videoView.post(() -> captureAndApplyVideoTransform(holder, videoView));
+				}
 			}
 		}
 	};

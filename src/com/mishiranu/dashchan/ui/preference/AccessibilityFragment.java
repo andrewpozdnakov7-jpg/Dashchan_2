@@ -38,14 +38,29 @@ public class AccessibilityFragment extends PreferenceFragment {
 		ArrayList<CharSequence> fontEntries = new ArrayList<>();
 		fontValues.add(FontManager.FONT_SYSTEM);
 		fontEntries.add(getString(R.string.system_font));
-		for (FontManager.FontOption option : FontManager.getBuiltInFonts()) {
+		List<FontManager.FontOption> installedFonts = new ArrayList<>();
+		List<FontManager.FontOption> catalogFonts = FontManager.getDownloadedCatalogFonts(requireContext());
+		installedFonts.addAll(catalogFonts);
+		for (FontManager.FontOption option : catalogFonts) {
 			fontValues.add(option.id);
-			fontEntries.add(option.name);
+			fontEntries.add(option.name + " (" + getString(R.string.downloaded_font) + ")");
 		}
 		List<FontManager.FontOption> customFonts = FontManager.getCustomFonts(requireContext());
+		installedFonts.addAll(customFonts);
 		for (FontManager.FontOption option : customFonts) {
 			fontValues.add(option.id);
 			fontEntries.add(option.name + " (" + getString(R.string.custom_font) + ")");
+		}
+		String missingCatalogId = FontManager.getSelectedMissingCatalogId(requireContext());
+		if (missingCatalogId != null) {
+			String missingPreferenceId = FontManager.getCatalogPreferenceId(missingCatalogId);
+			for (FontManager.FontOption option : FontManager.getKnownCatalogFonts()) {
+				if (option.id.equals(missingPreferenceId)) {
+					fontValues.add(option.id);
+					fontEntries.add(option.name + " (" + getString(R.string.font_catalog_restoring) + ")");
+					break;
+				}
+			}
 		}
 		ListPreference fontPreference = addList(Preferences.KEY_APPLICATION_FONT, fontValues,
 				FontManager.FONT_SYSTEM, R.string.application_font, fontEntries);
@@ -53,13 +68,16 @@ public class AccessibilityFragment extends PreferenceFragment {
 			FontManager.invalidate();
 			requireActivity().recreate();
 		});
+		addButton(R.string.font_catalog, R.string.font_catalog_open__summary)
+				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
+						.pushFragment(new FontCatalogFragment()));
 		addButton(R.string.install_custom_font, R.string.install_custom_font__summary)
 				.setOnClickListener(p -> selectCustomFont());
-		Preference<Void> deleteFont = addButton(getString(R.string.delete_custom_font),
-				customFonts.isEmpty() ? getString(R.string.no_custom_fonts)
-						: getString(R.string.custom_fonts_count__format, customFonts.size()));
-		deleteFont.setEnabled(!customFonts.isEmpty());
-		deleteFont.setOnClickListener(p -> showDeleteFontDialog(customFonts));
+		Preference<Void> deleteFont = addButton(getString(R.string.delete_installed_font),
+				installedFonts.isEmpty() ? getString(R.string.no_installed_fonts)
+						: getString(R.string.custom_fonts_count__format, installedFonts.size()));
+		deleteFont.setEnabled(!installedFonts.isEmpty());
+		deleteFont.setOnClickListener(p -> showDeleteFontDialog(installedFonts));
 
 		addHeader(R.string.appearance);
 		String warning = getString(R.string.large_text_layout_warning).replace("%", "%%");
@@ -122,19 +140,19 @@ public class AccessibilityFragment extends PreferenceFragment {
 		}
 	}
 
-	private void showDeleteFontDialog(List<FontManager.FontOption> customFonts) {
-		CharSequence[] entries = new CharSequence[customFonts.size()];
-		for (int i = 0; i < customFonts.size(); i++) {
-			entries[i] = customFonts.get(i).name;
+	private void showDeleteFontDialog(List<FontManager.FontOption> installedFonts) {
+		CharSequence[] entries = new CharSequence[installedFonts.size()];
+		for (int i = 0; i < installedFonts.size(); i++) {
+			entries[i] = installedFonts.get(i).name;
 		}
 		AlertDialog dialog = new AlertDialog.Builder(requireContext())
-				.setTitle(R.string.delete_custom_font)
+				.setTitle(R.string.delete_installed_font)
 				.setItems(entries, (listDialog, which) -> {
 					AlertDialog confirmationDialog = new AlertDialog.Builder(requireContext())
 						.setMessage(getString(R.string.delete_custom_font_confirmation__format, entries[which]))
 						.setNegativeButton(android.R.string.cancel, null)
 						.setPositiveButton(R.string.delete, (confirmation, confirmationWhich) -> {
-							if (FontManager.deleteCustomFont(requireContext(), customFonts.get(which).id)) {
+							if (FontManager.deleteCustomFont(requireContext(), installedFonts.get(which).id)) {
 								ClickableToast.show(R.string.custom_font_deleted);
 								requireActivity().recreate();
 							}

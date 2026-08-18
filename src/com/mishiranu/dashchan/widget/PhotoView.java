@@ -46,6 +46,7 @@ public class PhotoView extends View implements ScaleGestureDetector.OnScaleGestu
 
 	private float minimumScale;
 	private float maximumScale;
+	private float maximumScaleFactor;
 	private float doubleTapScale;
 	private float initialScale;
 
@@ -127,6 +128,7 @@ public class PhotoView extends View implements ScaleGestureDetector.OnScaleGestu
 		void onClick(PhotoView photoView, boolean image, float x, float y);
 		boolean onDoubleClick(PhotoView photoView, float x, float y);
 		void onLongClick(PhotoView photoView, float x, float y);
+		void onTransformChanged(PhotoView photoView, float left, float top, float right, float bottom);
 		void onVerticalSwipe(PhotoView photoView, boolean down, float value);
 		boolean onClose(PhotoView photoView, boolean down);
 	}
@@ -154,10 +156,16 @@ public class PhotoView extends View implements ScaleGestureDetector.OnScaleGestu
 	}
 
 	public void setImage(Drawable drawable, boolean hasAlpha, boolean fitScreen, boolean keepScale) {
+		setImage(drawable, hasAlpha, fitScreen, keepScale, 0f);
+	}
+
+	public void setImage(Drawable drawable, boolean hasAlpha, boolean fitScreen, boolean keepScale,
+			float maximumScaleFactor) {
 		recycle();
 		this.drawable = drawable;
 		this.hasAlpha = hasAlpha;
 		this.fitScreen = fitScreen;
+		this.maximumScaleFactor = maximumScaleFactor;
 		drawDim = false;
 		drawable.setCallback(this);
 		Point dimensions = getDimensions();
@@ -493,6 +501,23 @@ public class PhotoView extends View implements ScaleGestureDetector.OnScaleGestu
 		return hasImage() && scaleGestureDetector.isInProgress();
 	}
 
+	public boolean resetZoom(boolean animate) {
+		if (!hasImage() || Math.abs(getScale() - initialScale) < 0.001f) {
+			return false;
+		}
+		setScale(initialScale, animate);
+		return true;
+	}
+
+	public RectF getImageDisplayRect(RectF outRect) {
+		RectF rect = initDisplayMatrixAndRect();
+		if (rect == null) {
+			return null;
+		}
+		outRect.set(rect);
+		return outRect;
+	}
+
 	public void setScale(float scale) {
 		setScale(scale, false);
 	}
@@ -540,6 +565,19 @@ public class PhotoView extends View implements ScaleGestureDetector.OnScaleGestu
 
 	private void checkMatrixBoundsAndInvalidate() {
 		checkMatrixBounds();
+		notifyTransformChanged();
+		invalidate();
+	}
+
+	private void notifyTransformChanged() {
+		RectF rect = initDisplayMatrixAndRect();
+		if (rect != null && listener != null) {
+			listener.onTransformChanged(this, rect.left, rect.top, rect.right, rect.bottom);
+		}
+	}
+
+	private void notifyTransformChangedAndInvalidate() {
+		notifyTransformChanged();
 		invalidate();
 	}
 
@@ -645,14 +683,16 @@ public class PhotoView extends View implements ScaleGestureDetector.OnScaleGestu
 			setScale(postScale);
 		} else {
 			minimumScale = 1f;
-			maximumScale = 4f / scale;
-			initialScale = Math.min(postScale, maximumScale);
+			float defaultMaximumScale = 4f / scale;
+			initialScale = Math.min(postScale, defaultMaximumScale);
+			maximumScale = maximumScaleFactor > 1f
+					? initialScale * maximumScaleFactor : defaultMaximumScale;
 			doubleTapScale = postScale > 1f ? Math.min(postScale, maximumScale) : Math.min(1f / scale, 8f);
 			if (!keepScale && postScale > 1f) {
 				setScale(doubleTapScale);
 			}
 		}
-		invalidate();
+		notifyTransformChangedAndInvalidate();
 	}
 
 	private float lastVerticalSwipeDeltaY = 0f;
@@ -784,7 +824,7 @@ public class PhotoView extends View implements ScaleGestureDetector.OnScaleGestu
 			lastDeltaY = deltaY;
 			transformMatrix.postTranslate(0, dy);
 			if (post) {
-				invalidate();
+				notifyTransformChangedAndInvalidate();
 				postOnAnimation(this);
 				if (!finish) {
 					notifyVerticalSwipe(this.deltaY - deltaY, true);
@@ -846,7 +886,7 @@ public class PhotoView extends View implements ScaleGestureDetector.OnScaleGestu
 				int newX = scroller.getCurrX();
 				int newY = scroller.getCurrY();
 				transformMatrix.postTranslate(currentX - newX, currentY - newY);
-				invalidate();
+				notifyTransformChangedAndInvalidate();
 				currentX = newX;
 				currentY = newY;
 				postOnAnimation(this);
@@ -914,7 +954,7 @@ public class PhotoView extends View implements ScaleGestureDetector.OnScaleGestu
 					initialScaleClipRect.set((int) (targetX - scaledHalfSize - 0.5f), (int) (targetY - scaledHalfSize
 							- 0.5f), (int) (targetX + scaledHalfSize + 0.5f), (int) (targetY + scaledHalfSize + 0.5f));
 				}
-				invalidate();
+				notifyTransformChangedAndInvalidate();
 			} else {
 				initialScalingAnimator = null;
 				initialScaleClipRect = null;

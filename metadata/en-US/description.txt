@@ -4,4 +4,4 @@
 * FFmpeg video player with seeking, speed, gestures, and PiP
 * Local HTML/ZIP thread archives with built-in viewing
 * Bundled, downloadable, and custom themes
-* Configurable icons, shortcuts, bundled fonts, and custom TTF/OTF fonts
+* Configurable icons, shortcuts, a downloadable catalog of free fonts, and custom TTF/OTF fonts

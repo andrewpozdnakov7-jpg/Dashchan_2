@@ -94,6 +94,8 @@ public class ExperimentalFragment extends PreferenceFragment implements Translat
 		if (BuildConfig.ENABLE_LOCAL_TRANSLATION) {
 			addTranslationPreferences();
 		}
+		addCheck(true, Preferences.KEY_VIDEO_ZOOM_GESTURES, Preferences.DEFAULT_VIDEO_ZOOM_GESTURES,
+				R.string.video_zoom_gestures, R.string.video_zoom_gestures__summary);
 		CheckPreference audioBoostPreference = addCheck(true, Preferences.KEY_VIDEO_AUDIO_BOOST,
 				Preferences.DEFAULT_VIDEO_AUDIO_BOOST, R.string.video_audio_boost,
 				R.string.video_audio_boost__summary);

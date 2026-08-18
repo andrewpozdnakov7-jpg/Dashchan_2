@@ -321,6 +321,8 @@ public final class SettingsSearchIndex {
 					R.string.translation_automatic__summary, Preferences.KEY_TRANSLATION_AUTO);
 			add(context, entries, Screen.EXPERIMENTAL, R.string.translation_language_package);
 		}
+		add(context, entries, Screen.EXPERIMENTAL, R.string.video_zoom_gestures,
+				R.string.video_zoom_gestures__summary, Preferences.KEY_VIDEO_ZOOM_GESTURES);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.video_audio_boost,
 				R.string.video_audio_boost__summary, Preferences.KEY_VIDEO_AUDIO_BOOST);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.video_audio_boost_level, 0,
@@ -472,9 +474,11 @@ public final class SettingsSearchIndex {
 
 		add(context, entries, Screen.ACCESSIBILITY, R.string.application_font, 0,
 				Preferences.KEY_APPLICATION_FONT);
+		add(context, entries, Screen.ACCESSIBILITY, R.string.font_catalog,
+				R.string.font_catalog_open__summary, null);
 		add(context, entries, Screen.ACCESSIBILITY, R.string.install_custom_font,
 				R.string.install_custom_font__summary, null);
-		add(context, entries, Screen.ACCESSIBILITY, R.string.delete_custom_font);
+		add(context, entries, Screen.ACCESSIBILITY, R.string.delete_installed_font);
 		add(context, entries, Screen.ACCESSIBILITY, R.string.text_scale, 0, Preferences.KEY_TEXT_SCALE);
 		add(context, entries, Screen.ACCESSIBILITY, R.string.volume_buttons_text_scale,
 				R.string.volume_buttons_text_scale__summary, Preferences.KEY_VOLUME_BUTTONS_TEXT_SCALE);

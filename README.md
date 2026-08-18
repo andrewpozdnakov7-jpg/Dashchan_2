@@ -32,7 +32,7 @@ Slooop - пользовательское название неофициаль�
 - галерея с фильтрами, копирование и поиск по изображениям, а также фоновое сохранение медиа;
 - локальные архивы тредов в HTML и ZIP, встроенный просмотрщик и подключение дополнительных папок;
 - встроенные, загружаемые и пользовательские темы с автоматическим дневным и ночным режимом;
-- поиск по настройкам, Predictive Back на Android 13+, масштаб текста, встроенные шрифты, OpenDyslexic и импорт TTF/OTF;
+- поиск по настройкам, Predictive Back на Android 13+, масштаб текста, загружаемый каталог свободных шрифтов, OpenDyslexic и импорт TTF/OTF;
 - выбор имени и значка приложения, а также создание собственного ярлыка;
 - стабильный и добровольный beta-каналы обновлений с докачиванием APK.
 
@@ -110,7 +110,7 @@ Stable APKs are published only through [GitHub Releases](https://github.com/andr
 - pitch-preserving speed control, double-tap seeking, per-video volume, configurable volume gestures, and picture-in-picture;
 - gallery filters, clipboard image copying, reverse-image search, background media saving, and local HTML/ZIP thread archives;
 - bundled, downloadable, and user-imported themes with automatic day and night switching;
-- settings search, Predictive Back, text scaling, bundled fonts, OpenDyslexic, custom TTF/OTF fonts, and configurable app names and icons;
+- settings search, Predictive Back, text scaling, a downloadable catalog of free fonts, OpenDyslexic, custom TTF/OTF fonts, and configurable app names and icons;
 - stable and opt-in beta update channels with resumable APK downloads.
 
 ### Limitations
