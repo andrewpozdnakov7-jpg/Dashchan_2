@@ -1,0 +1,7 @@
+Added an optional Google ML Kit offline translator. The approximately 50 MB add-on is installed separately and does not increase the size of Slooop. The language pack is downloaded separately as well.
+Added Apachan support for browsing boards and threads, loading images, previewing replies, and posting messages. Handling of current forum links has also been updated.
+Added a Show board toggle to My Boards settings, allowing source board labels to be hidden separately for each feed.
+Moved optional fonts to the add-ons catalog, where they can be downloaded as needed. A font that is already selected remains active after updating.
+Added pinch-to-zoom for videos up to 10×. When double-tap seeking is disabled, double-tapping pauses or resumes playback. This behavior will be refined further in the next release.
+Partially reduced delays and stuttering in the navigation drawer on some devices. Opening large threads and switching to history are now faster, and duplicate drawer pages have been fixed.
+Moved the photo editor and video volume boost to Media, and My Boards to Forums.
