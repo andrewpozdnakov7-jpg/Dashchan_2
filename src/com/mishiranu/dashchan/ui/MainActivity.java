@@ -2212,9 +2212,10 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	public Collection<DrawerForm.Page> obtainDrawerPages() {
 		ArrayList<DrawerForm.Page> drawerPages = new ArrayList<>(1 +
 				stackPageItems.size() + preservedPageItems.size());
+		HashSet<Page> addedPages = new HashSet<>();
 		for (SavedPageItem savedPageItem : new ConcatIterable<>(preservedPageItems, stackPageItems)) {
 			Page page = getSavedPage(savedPageItem);
-			if (page.isThreadsOrPosts()) {
+			if (page.isThreadsOrPosts() && addedPages.add(page)) {
 				drawerPages.add(new DrawerForm.Page(page.chanName, page.boardName, page.threadNumber,
 						savedPageItem.threadTitle, savedPageItem.createdRealtime));
 			}
@@ -2222,7 +2223,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		ContentFragment currentFragment = getCurrentFragment();
 		if (currentFragment instanceof PageFragment) {
 			Page page = ((PageFragment) currentFragment).getPage();
-			if (page.isThreadsOrPosts()) {
+			if (page.isThreadsOrPosts() && addedPages.add(page)) {
 				drawerPages.add(new DrawerForm.Page(page.chanName, page.boardName, page.threadNumber,
 						currentPageItem.threadTitle, currentPageItem.createdRealtime));
 			}
