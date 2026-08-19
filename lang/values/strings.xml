@@ -1017,4 +1017,21 @@
 	<string name="wallpaper_downloading">Downloading background…</string>
 	<string name="wallpaper_installed">Background installed</string>
 	<string name="wallpaper_invalid_image">This file cannot be used as a background</string>
+	<string name="zchan_posting_identity">Zchan posting identity</string>
+	<string name="zchan_identity_profile">Anonymized client profile</string>
+	<string name="zchan_identity_profile__summary">Used for Zchan registration and posting. The server-issued ZID, Slooop name and build code cannot be edited here.</string>
+	<string name="zchan_identity_uuid">Installation UUID (version 4)</string>
+	<string name="zchan_identity_device_name">Device name</string>
+	<string name="zchan_identity_brand">Brand</string>
+	<string name="zchan_identity_model">Model</string>
+	<string name="zchan_identity_android_version">Android version</string>
+	<string name="zchan_identity_fingerprint">Fingerprint</string>
+	<string name="zchan_identity_timezone">Time zone</string>
+	<string name="zchan_identity_language">Language (for example, ru or en)</string>
+	<string name="zchan_identity_app_version">App version</string>
+	<string name="zchan_identity_source">Source</string>
+	<string name="zchan_identity_generate">Generate random profile</string>
+	<string name="zchan_identity_generate__summary">Creates a new random installation UUID and generic device data. The server-issued ZID is preserved.</string>
+	<string name="zchan_identity_reset">Restore anonymized defaults</string>
+	<string name="zchan_identity_reset__summary">Keeps the current UUID and ZID, and restores generic device data.</string>
 </resources>
