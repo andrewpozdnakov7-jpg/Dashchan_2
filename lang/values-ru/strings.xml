@@ -1044,4 +1044,21 @@
 	<string name="wallpaper_downloading">Загрузка фона…</string>
 	<string name="wallpaper_installed">Фон установлен</string>
 	<string name="wallpaper_invalid_image">Этот файл нельзя использовать как фон</string>
+	<string name="zchan_posting_identity">Идентификаторы постинга Zchan</string>
+	<string name="zchan_identity_profile">Обезличенный профиль клиента</string>
+	<string name="zchan_identity_profile__summary">Используется при регистрации и постинге на Zchan. Выданный сервером ZID, название Slooop и код сборки здесь не изменяются.</string>
+	<string name="zchan_identity_uuid">UUID установки (версия 4)</string>
+	<string name="zchan_identity_device_name">Имя устройства</string>
+	<string name="zchan_identity_brand">Бренд</string>
+	<string name="zchan_identity_model">Модель</string>
+	<string name="zchan_identity_android_version">Версия Android</string>
+	<string name="zchan_identity_fingerprint">Fingerprint</string>
+	<string name="zchan_identity_timezone">Часовой пояс</string>
+	<string name="zchan_identity_language">Язык (например, ru или en)</string>
+	<string name="zchan_identity_app_version">Версия программы</string>
+	<string name="zchan_identity_source">Источник</string>
+	<string name="zchan_identity_generate">Сгенерировать случайный профиль</string>
+	<string name="zchan_identity_generate__summary">Создаёт новый случайный UUID установки и обезличенные данные устройства. Выданный сервером ZID сохраняется.</string>
+	<string name="zchan_identity_reset">Вернуть обезличенные значения</string>
+	<string name="zchan_identity_reset__summary">Сохраняет текущие UUID и ZID и возвращает стандартные данные устройства.</string>
 </resources>

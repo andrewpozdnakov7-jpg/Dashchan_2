@@ -30,13 +30,16 @@ by an older build with read-only access may need to be added again before its ar
 3. Requested thumbnails and original files are downloaded to sibling resource directories.
    Selecting original files in the local archive dialog also selects thumbnails as a safe default. The user may
    explicitly clear the thumbnail option before starting the archive.
-4. When ZIP output is enabled, `ZipCoordinator` waits for the HTML, manifest, thumbnails, and original files.
-5. `PackLocalArchiveTask` calls `LocalArchiveManager.createZip`. Media is stored without recompression so that
-   packaging is fast and does not heat the device unnecessarily.
+4. Whenever ZIP output is enabled, an initial self-contained ZIP with the frozen HTML and manifest is prepared and
+   queued before the loose HTML and any media. The user therefore gets a valid ZIP without waiting for a long media
+   queue.
+5. When ZIP output includes media, `ArchiveCoordinator` then waits for the HTML, manifest, thumbnails, and original
+   files. `PackLocalArchiveTask` replaces the initial ZIP with the complete archive. Media is stored without
+   recompression so that packaging is fast and does not heat the device unnecessarily.
 6. Duplicate archive names are resolved before saving with `_1`, `_2`, and subsequent suffixes.
 
-An incomplete media download prevents creation of the ZIP copy. The loose HTML and successfully downloaded files
-remain available.
+An unavailable media item is omitted from the ZIP instead of preventing the archive from being created. The loose
+HTML and successfully downloaded files remain available as well.
 
 The archive list and viewer toolbar use the optional manifest `title` when it is present. The stable archive name
 remains visible in the list details and is the fallback for legacy or third-party archives without title metadata.

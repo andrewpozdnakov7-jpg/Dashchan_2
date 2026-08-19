@@ -20,6 +20,7 @@ import chan.http.HttpHolder;
 import chan.util.CommonUtils;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.R;
+import com.mishiranu.dashchan.chan.zchan.ZchanChanConfiguration;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.async.HttpHolderTask;
 import com.mishiranu.dashchan.content.async.TaskViewModel;
@@ -187,6 +188,9 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 				}
 			}
 		}
+		if (chan.configuration instanceof ZchanChanConfiguration) {
+			addZchanIdentityPreferences((ZchanChanConfiguration) chan.configuration);
+		}
 		cookiePreference = addButton(R.string.manage_cookies, 0);
 		cookiePreference.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 				.pushFragment(new CookiesFragment(chanName)));
@@ -264,6 +268,42 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 				}
 			});
 		}
+	}
+
+	private void addZchanIdentityPreferences(ZchanChanConfiguration configuration) {
+		addHeader(R.string.zchan_posting_identity);
+		MultipleEditPreference<List<String>> identityPreference = new MultipleEditPreference<>(requireContext(),
+				"zchan_identity_profile", getString(R.string.zchan_identity_profile),
+				p -> getString(R.string.zchan_identity_profile__summary),
+				Arrays.asList(getString(R.string.zchan_identity_uuid), getString(R.string.zchan_identity_device_name),
+						getString(R.string.zchan_identity_brand), getString(R.string.zchan_identity_model),
+						getString(R.string.zchan_identity_android_version),
+						getString(R.string.zchan_identity_fingerprint), getString(R.string.zchan_identity_timezone),
+						getString(R.string.zchan_identity_language), getString(R.string.zchan_identity_app_version),
+						getString(R.string.zchan_identity_source)),
+				createInputTypes(ZchanChanConfiguration.IDENTITY_FIELDS_COUNT,
+						InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD),
+				new MultipleEditPreference.ListValueCodec(ZchanChanConfiguration.IDENTITY_FIELDS_COUNT));
+		addPreference(identityPreference, false);
+		identityPreference.setValue(configuration.obtainIdentityProfile().toValues());
+		identityPreference.setOnClickListener(p -> new PreferenceDialog(p.key).show(getChildFragmentManager(),
+				PreferenceDialog.class.getName()));
+		identityPreference.setOnBeforeChangeListener((p, values) -> {
+			boolean valid = configuration.isValidIdentityValues(values);
+			if (!valid) ClickableToast.show(R.string.enter_valid_data);
+			return valid;
+		});
+		identityPreference.setOnAfterChangeListener(p -> configuration.storeIdentityValues(p.getValue()));
+		addButton(R.string.zchan_identity_generate, R.string.zchan_identity_generate__summary)
+				.setOnClickListener(p -> {
+					identityPreference.setValue(configuration.generateIdentityProfile().toValues());
+					ClickableToast.show(R.string.completed);
+				});
+		addButton(R.string.zchan_identity_reset, R.string.zchan_identity_reset__summary)
+				.setOnClickListener(p -> {
+					identityPreference.setValue(configuration.resetIdentityProfile().toValues());
+					ClickableToast.show(R.string.completed);
+				});
 	}
 
 	@Override

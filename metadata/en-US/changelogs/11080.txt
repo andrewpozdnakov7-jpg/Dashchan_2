@@ -1,0 +1,3 @@
+Added Zchan support for browsing boards and threads, loading images, previewing replies and recent posts, and posting messages.
+Zchan settings now allow the client profile data, including the app version and source, to be entered manually. The default source is google_play.
+Fixed local thread archives: the ZIP is created immediately, media files are added after downloading, and unavailable attachments no longer prevent the archive from being saved.
