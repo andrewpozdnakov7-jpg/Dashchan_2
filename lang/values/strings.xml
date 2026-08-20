@@ -951,6 +951,10 @@
 	<string name="hide_thread_title__summary">Do not show the thread name or address while viewing it</string>
 	<string name="windowed_thread_loading">Fast thread opening</string>
 	<string name="windowed_thread_loading__summary">Shows a small section around the current position immediately, then prepares the complete thread in the background. Experimental feature.</string>
+	<string name="collapse_long_open_threads">Collapse long open-thread lists</string>
+	<string name="collapse_long_open_threads__summary">Show the 12 most recent open threads in the drawer and place the rest in an expandable list.</string>
+	<string name="show_remaining_open_threads__format">Show remaining: %1$d</string>
+	<string name="collapse_open_threads">Collapse thread list</string>
 
 	<string name="boards_work_safe">Work Safe</string>
 	<string name="boards_not_safe_for_work">Not Safe For Work</string>

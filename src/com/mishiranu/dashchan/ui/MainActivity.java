@@ -2296,20 +2296,24 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		ArrayList<DrawerForm.Page> drawerPages = new ArrayList<>(1 +
 				stackPageItems.size() + preservedPageItems.size());
 		HashSet<DrawerPageKey> addedPages = new HashSet<>();
+		ContentFragment currentFragment = getCurrentFragment();
+		Page currentPage = currentFragment instanceof PageFragment
+				? ((PageFragment) currentFragment).getPage() : null;
+		DrawerPageKey currentPageKey = currentPage != null && currentPage.isThreadsOrPosts()
+				? new DrawerPageKey(currentPage) : null;
 		for (SavedPageItem savedPageItem : new ConcatIterable<>(preservedPageItems, stackPageItems)) {
 			Page page = getSavedPage(savedPageItem);
-			if (page.isThreadsOrPosts() && addedPages.add(new DrawerPageKey(page))) {
+			DrawerPageKey pageKey = new DrawerPageKey(page);
+			if (page.isThreadsOrPosts() && addedPages.add(pageKey)) {
 				drawerPages.add(new DrawerForm.Page(page.chanName, page.boardName, page.threadNumber,
-						savedPageItem.threadTitle, savedPageItem.createdRealtime));
+						savedPageItem.threadTitle, savedPageItem.createdRealtime,
+						pageKey.equals(currentPageKey)));
 			}
 		}
-		ContentFragment currentFragment = getCurrentFragment();
-		if (currentFragment instanceof PageFragment) {
-			Page page = ((PageFragment) currentFragment).getPage();
-			if (page.isThreadsOrPosts() && addedPages.add(new DrawerPageKey(page))) {
-				drawerPages.add(new DrawerForm.Page(page.chanName, page.boardName, page.threadNumber,
-						currentPageItem.threadTitle, currentPageItem.createdRealtime));
-			}
+		if (currentPageKey != null && addedPages.add(currentPageKey)) {
+			drawerPages.add(new DrawerForm.Page(currentPage.chanName, currentPage.boardName,
+					currentPage.threadNumber, currentPageItem.threadTitle,
+					currentPageItem.createdRealtime, true));
 		}
 		return drawerPages;
 	}

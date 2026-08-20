@@ -67,6 +67,10 @@ public class ExperimentalFragment extends PreferenceFragment implements Translat
 				Preferences.DEFAULT_WINDOWED_THREAD_LOADING,
 				R.string.windowed_thread_loading,
 				R.string.windowed_thread_loading__summary);
+		addCheck(true, Preferences.KEY_COLLAPSE_LONG_OPEN_THREADS,
+				Preferences.DEFAULT_COLLAPSE_LONG_OPEN_THREADS,
+				R.string.collapse_long_open_threads,
+				R.string.collapse_long_open_threads__summary);
 		CheckPreference wallpaperPreference = addCheck(true, Preferences.KEY_WALLPAPER_ENABLED,
 				Preferences.DEFAULT_WALLPAPER_ENABLED, R.string.wallpaper_background,
 				R.string.wallpaper_background__summary);

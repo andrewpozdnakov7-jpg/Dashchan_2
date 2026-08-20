@@ -1816,6 +1816,8 @@ public class Preferences {
 	public static final boolean DEFAULT_OPEN_CONFIGURED_ATTACHMENT_FOLDER = false;
 	public static final String KEY_WINDOWED_THREAD_LOADING = "windowed_thread_loading";
 	public static final boolean DEFAULT_WINDOWED_THREAD_LOADING = false;
+	public static final String KEY_COLLAPSE_LONG_OPEN_THREADS = "collapse_long_open_threads";
+	public static final boolean DEFAULT_COLLAPSE_LONG_OPEN_THREADS = true;
 	public static final String KEY_COMBINED_FEEDS_ENABLED = "combined_feeds_enabled";
 	public static final boolean DEFAULT_COMBINED_FEEDS_ENABLED = true;
 	public static final String KEY_WALLPAPER_ENABLED = "wallpaper_enabled";
@@ -1876,6 +1878,11 @@ public class Preferences {
 
 	public static boolean isWindowedThreadLoadingEnabled() {
 		return PREFERENCES.getBoolean(KEY_WINDOWED_THREAD_LOADING, DEFAULT_WINDOWED_THREAD_LOADING);
+	}
+
+	public static boolean isCollapseLongOpenThreadsEnabled() {
+		return PREFERENCES.getBoolean(KEY_COLLAPSE_LONG_OPEN_THREADS,
+				DEFAULT_COLLAPSE_LONG_OPEN_THREADS);
 	}
 
 	public static boolean isCombinedFeedsEnabled() {
