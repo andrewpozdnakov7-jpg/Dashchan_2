@@ -7,7 +7,8 @@ This directory contains the public metadata consumed by Dashchan_2.
 - `data.json`: stable update manifest loaded through `BuildConfig.URI_UPDATES`;
 - `themes.json`: downloadable theme catalog loaded through `BuildConfig.URI_THEMES`.
 
-The opt-in beta channel reads `update/data.json` from the separate public [`Dashchan_2_Update_Test`](https://github.com/andrewpozdnakov7-jpg/Dashchan_2_Update_Test) repository. Stable clients never use beta releases unless the user changes the update channel.
+The former opt-in beta update channel is discontinued. `data.json` is the only application update manifest and
+contains stable releases only.
 
 ## Stable Manifest
 

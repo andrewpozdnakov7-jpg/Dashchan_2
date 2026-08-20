@@ -5,6 +5,7 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
 import android.graphics.Color;
 import android.graphics.PixelFormat;
@@ -79,6 +80,12 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 	private static final String EXTRA_GALLERY_WINDOW = "galleryWindow";
 	private static final String EXTRA_GALLERY_MODE = "galleryMode";
 	private static final String EXTRA_SYSTEM_UI_VISIBILITY = "systemUiVisibility";
+	private static final String EXTRA_VIDEO_FULLSCREEN = "videoFullscreen";
+	private static final String EXTRA_VIDEO_FULLSCREEN_PREVIOUS_ORIENTATION = "videoFullscreenPreviousOrientation";
+	private static final String EXTRA_VIDEO_FULLSCREEN_PREVIOUS_SYSTEM_UI_FLAGS =
+			"videoFullscreenPreviousSystemUiFlags";
+	private static final String EXTRA_VIDEO_FULLSCREEN_REQUESTED_ORIENTATION =
+			"videoFullscreenRequestedOrientation";
 	private static final String FILTER_ALL = "all";
 	private static final String FILTER_PICTURES = "pictures";
 	private static final String FILTER_GIF = "gif";
@@ -109,6 +116,10 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 	private Pair<CharSequence, CharSequence> titleSubtitle;
 	private boolean screenOnFixed = false;
 	private int systemUiVisibilityFlags = GalleryInstance.Flags.LOCKED_USER;
+	private boolean videoFullscreen;
+	private int videoFullscreenPreviousOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED;
+	private int videoFullscreenPreviousSystemUiFlags = GalleryInstance.Flags.LOCKED_USER;
+	private boolean videoFullscreenRequestedOrientation;
 
 	private static final int ACTION_BAR_COLOR = 0xaa202020;
 	private static final int BACKGROUND_COLOR = 0xf0101010;
@@ -162,6 +173,15 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 	public void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		setRetainInstance(true);
+		if (savedInstanceState != null) {
+			videoFullscreen = savedInstanceState.getBoolean(EXTRA_VIDEO_FULLSCREEN);
+			videoFullscreenPreviousOrientation = savedInstanceState.getInt(
+					EXTRA_VIDEO_FULLSCREEN_PREVIOUS_ORIENTATION, ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+			videoFullscreenPreviousSystemUiFlags = savedInstanceState.getInt(
+					EXTRA_VIDEO_FULLSCREEN_PREVIOUS_SYSTEM_UI_FLAGS, GalleryInstance.Flags.LOCKED_USER);
+			videoFullscreenRequestedOrientation = savedInstanceState.getBoolean(
+					EXTRA_VIDEO_FULLSCREEN_REQUESTED_ORIENTATION);
+		}
 	}
 
 	@NonNull
@@ -375,6 +395,12 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 
 	@Override
 	public void onDestroy() {
+		if (videoFullscreen && getActivity() != null && !requireActivity().isChangingConfigurations()) {
+			if (videoFullscreenRequestedOrientation) {
+				requireActivity().setRequestedOrientation(videoFullscreenPreviousOrientation);
+			}
+			videoFullscreen = false;
+		}
 		super.onDestroy();
 
 		if (cornerAnimator != null) {
@@ -407,6 +433,9 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 	public boolean onBackPressed() {
 		if (destroyShowcase(true)) {
 			return true;
+		}
+		if (videoFullscreen) {
+			return false;
 		}
 		return returnToGallery();
 	}
@@ -584,6 +613,12 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 		outState.putBoolean(EXTRA_GALLERY_MODE, galleryMode);
 		outState.putBoolean(EXTRA_SYSTEM_UI_VISIBILITY,
 				FlagUtils.get(systemUiVisibilityFlags, GalleryInstance.Flags.LOCKED_USER));
+		outState.putBoolean(EXTRA_VIDEO_FULLSCREEN, videoFullscreen);
+		outState.putInt(EXTRA_VIDEO_FULLSCREEN_PREVIOUS_ORIENTATION, videoFullscreenPreviousOrientation);
+		outState.putInt(EXTRA_VIDEO_FULLSCREEN_PREVIOUS_SYSTEM_UI_FLAGS,
+				videoFullscreenPreviousSystemUiFlags);
+		outState.putBoolean(EXTRA_VIDEO_FULLSCREEN_REQUESTED_ORIENTATION,
+				videoFullscreenRequestedOrientation);
 	}
 
 	private static final int GALLERY_TRANSITION_DURATION = 150;
@@ -1111,6 +1146,40 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 	@Override
 	public void toggleSystemUIVisibility(int flag) {
 		modifySystemUiVisibility(flag, !FlagUtils.get(systemUiVisibilityFlags, flag));
+	}
+
+	@Override
+	public boolean isVideoFullscreen() {
+		return videoFullscreen;
+	}
+
+	@Override
+	public void setVideoFullscreen(boolean fullscreen, boolean landscape) {
+		if (videoFullscreen == fullscreen) {
+			return;
+		}
+		if (fullscreen) {
+			videoFullscreenPreviousOrientation = requireActivity().getRequestedOrientation();
+			videoFullscreenPreviousSystemUiFlags = systemUiVisibilityFlags;
+			videoFullscreen = true;
+			systemUiVisibilityFlags = 0;
+			boolean currentLandscape = getResources().getConfiguration().orientation
+					== Configuration.ORIENTATION_LANDSCAPE;
+			videoFullscreenRequestedOrientation = landscape != currentLandscape;
+			if (videoFullscreenRequestedOrientation) {
+				requireActivity().setRequestedOrientation(landscape
+						? ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+						: ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT);
+			}
+		} else {
+			videoFullscreen = false;
+			systemUiVisibilityFlags = videoFullscreenPreviousSystemUiFlags;
+			if (videoFullscreenRequestedOrientation) {
+				requireActivity().setRequestedOrientation(videoFullscreenPreviousOrientation);
+			}
+			videoFullscreenRequestedOrientation = false;
+		}
+		invalidateSystemUiVisibility();
 	}
 
 	private Runnable showcaseDestroy;

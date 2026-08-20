@@ -84,7 +84,7 @@ public class ApachanChanPerformer extends ChanPerformer {
 	public SendPostResult onSendPost(SendPostData data) throws HttpException, ApiException,
 			InvalidResponseException {
 		if (data.threadNumber != null && (data.attachments == null || data.attachments.length == 0)
-				&& StringUtils.isEmpty(data.comment)) {
+				&& StringUtils.isEmpty(data.userIcon) && StringUtils.isEmpty(data.comment)) {
 			throw new ApiException(ApiException.SEND_ERROR_EMPTY_COMMENT);
 		}
 
@@ -122,7 +122,7 @@ public class ApachanChanPerformer extends ChanPerformer {
 		entity.add("email", "");
 		entity.add("text", data.comment);
 		entity.add("www_file", "");
-		entity.add("userImage", "");
+		entity.add("userImage", StringUtils.emptyIfNull(data.userIcon));
 		if (data.attachments != null && data.attachments.length > 0) {
 			data.attachments[0].addToEntity(entity, "img");
 		}

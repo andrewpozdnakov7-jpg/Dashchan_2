@@ -2258,25 +2258,62 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		}
 	}
 
+	private static final class DrawerPageKey {
+		private final String chanName;
+		private final String boardName;
+		private final String threadNumber;
+
+		private DrawerPageKey(Page page) {
+			chanName = page.chanName;
+			boardName = page.boardName;
+			threadNumber = page.threadNumber;
+		}
+
+		@Override
+		public boolean equals(Object object) {
+			if (this == object) {
+				return true;
+			}
+			if (!(object instanceof DrawerPageKey)) {
+				return false;
+			}
+			DrawerPageKey key = (DrawerPageKey) object;
+			return CommonUtils.equals(chanName, key.chanName) &&
+					CommonUtils.equals(boardName, key.boardName) &&
+					CommonUtils.equals(threadNumber, key.threadNumber);
+		}
+
+		@Override
+		public int hashCode() {
+			int result = chanName != null ? chanName.hashCode() : 0;
+			result = 31 * result + (boardName != null ? boardName.hashCode() : 0);
+			return 31 * result + (threadNumber != null ? threadNumber.hashCode() : 0);
+		}
+	}
+
 	@Override
 	public Collection<DrawerForm.Page> obtainDrawerPages() {
 		ArrayList<DrawerForm.Page> drawerPages = new ArrayList<>(1 +
 				stackPageItems.size() + preservedPageItems.size());
-		HashSet<Page> addedPages = new HashSet<>();
+		HashSet<DrawerPageKey> addedPages = new HashSet<>();
+		ContentFragment currentFragment = getCurrentFragment();
+		Page currentPage = currentFragment instanceof PageFragment
+				? ((PageFragment) currentFragment).getPage() : null;
+		DrawerPageKey currentPageKey = currentPage != null && currentPage.isThreadsOrPosts()
+				? new DrawerPageKey(currentPage) : null;
 		for (SavedPageItem savedPageItem : new ConcatIterable<>(preservedPageItems, stackPageItems)) {
 			Page page = getSavedPage(savedPageItem);
-			if (page.isThreadsOrPosts() && addedPages.add(page)) {
+			DrawerPageKey pageKey = new DrawerPageKey(page);
+			if (page.isThreadsOrPosts() && addedPages.add(pageKey)) {
 				drawerPages.add(new DrawerForm.Page(page.chanName, page.boardName, page.threadNumber,
-						savedPageItem.threadTitle, savedPageItem.createdRealtime));
+						savedPageItem.threadTitle, savedPageItem.createdRealtime,
+						pageKey.equals(currentPageKey)));
 			}
 		}
-		ContentFragment currentFragment = getCurrentFragment();
-		if (currentFragment instanceof PageFragment) {
-			Page page = ((PageFragment) currentFragment).getPage();
-			if (page.isThreadsOrPosts() && addedPages.add(page)) {
-				drawerPages.add(new DrawerForm.Page(page.chanName, page.boardName, page.threadNumber,
-						currentPageItem.threadTitle, currentPageItem.createdRealtime));
-			}
+		if (currentPageKey != null && addedPages.add(currentPageKey)) {
+			drawerPages.add(new DrawerForm.Page(currentPage.chanName, currentPage.boardName,
+					currentPage.threadNumber, currentPageItem.threadTitle,
+					currentPageItem.createdRealtime, true));
 		}
 		return drawerPages;
 	}

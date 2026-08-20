@@ -570,6 +570,8 @@
 	<string name="video_screen_off_action_continue">Продолжать воспроизведение</string>
 	<string name="video_screen_off_action_continue__summary">Оставлять звук видео включённым при выключенном экране</string>
 	<string name="enter_picture_in_picture">Открыть картинку в картинке</string>
+	<string name="enter_fullscreen">Развернуть на весь экран</string>
+	<string name="exit_fullscreen">Выйти из полноэкранного режима</string>
 	<string name="video_double_tap_seek_interval">Шаг перемотки</string>
 	<string name="video_seek_seconds__format">%d сек</string>
 	<string name="video_seek_backward__format">‹‹ −%d сек</string>
@@ -973,6 +975,10 @@
 	<string name="hide_thread_title__summary">Не показывать название и адрес треда при его просмотре</string>
 	<string name="windowed_thread_loading">Быстрое открытие тредов</string>
 	<string name="windowed_thread_loading__summary">Сразу показывает небольшую часть треда вокруг текущей позиции, затем подготавливает весь тред в фоне. Экспериментальная функция.</string>
+	<string name="collapse_long_open_threads">Сворачивать длинный список тредов</string>
+	<string name="collapse_long_open_threads__summary">Показывает в шторке 12 последних открытых тредов, а остальные помещает в раскрывающийся список.</string>
+	<string name="show_remaining_open_threads__format">Показать остальные: %1$d</string>
+	<string name="collapse_open_threads">Свернуть список тредов</string>
 
 	<string name="boards_work_safe">Безопасные для просмотра</string>
 	<string name="boards_not_safe_for_work">Для взрослых</string>

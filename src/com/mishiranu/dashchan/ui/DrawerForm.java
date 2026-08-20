@@ -105,6 +105,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	private final ArrayList<ListItem> menu = new ArrayList<>();
 	private final HashMap<WatcherUpdateKey, WatcherService.Counter> pendingWatcherUpdates = new HashMap<>();
 	private static final int PREWARM_ITEM_COUNT = 12;
+	private static final int COLLAPSED_OPEN_THREAD_LIMIT = 12;
 	private boolean drawerPrewarmScheduled;
 	private boolean drawerPrewarmed;
 	private int[] drawerPrewarmViewTypes;
@@ -113,6 +114,8 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	private boolean mergeChans = false;
 	private boolean showHistory = false;
 	private boolean combinedFeedsEnabled = false;
+	private boolean collapseLongOpenThreadsEnabled;
+	private boolean pagesExpanded;
 	private Preferences.PagesListMode pagesListMode = null;
 	private boolean chanSelectMode = false;
 	private boolean showRestartButton = false;
@@ -142,14 +145,16 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		public final String threadNumber;
 		public final String threadTitle;
 		public final long createRealtime;
+		public final boolean current;
 
 		public Page(String chanName, String boardName, String threadNumber,
-				String threadTitle, long createRealtime) {
+				String threadTitle, long createRealtime, boolean current) {
 			this.chanName = chanName;
 			this.boardName = boardName;
 			this.threadNumber = threadNumber;
 			this.threadTitle = threadTitle;
 			this.createRealtime = createRealtime;
+			this.current = current;
 		}
 
 		@Override
@@ -443,12 +448,17 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		boolean mergeChans = Preferences.isMergeChans();
 		boolean showHistory = Preferences.isRememberHistory();
 		boolean combinedFeedsEnabled = Preferences.isCombinedFeedsEnabled();
+		boolean collapseLongOpenThreadsEnabled = Preferences.isCollapseLongOpenThreadsEnabled();
 		Preferences.PagesListMode pagesListMode = Preferences.getPagesListMode();
 		if (this.mergeChans != mergeChans || this.showHistory != showHistory ||
-				this.combinedFeedsEnabled != combinedFeedsEnabled || this.pagesListMode != pagesListMode) {
+				this.combinedFeedsEnabled != combinedFeedsEnabled ||
+				this.collapseLongOpenThreadsEnabled != collapseLongOpenThreadsEnabled ||
+				this.pagesListMode != pagesListMode) {
 			this.mergeChans = mergeChans;
 			this.showHistory = showHistory;
 			this.combinedFeedsEnabled = combinedFeedsEnabled;
+			this.collapseLongOpenThreadsEnabled = collapseLongOpenThreadsEnabled;
+			this.pagesExpanded = false;
 			this.pagesListMode = pagesListMode;
 			return true;
 		}
@@ -483,6 +493,11 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 					callback.onSelectThread(listItem.chanName, listItem.boardName, listItem.threadNumber, null,
 							listItem.title, fromCache);
 				}
+				break;
+			}
+			case PAGES_TOGGLE: {
+				pagesExpanded = !pagesExpanded;
+				updateItems(true, false);
 				break;
 			}
 			case MENU: {
@@ -676,6 +691,10 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		setWatcherProgressAnimationsEnabled(false);
 		hideKeyboard();
 		setChanSelectMode(false);
+		if (pagesExpanded && collapseLongOpenThreadsEnabled) {
+			pagesExpanded = false;
+			updateItems(true, false);
+		}
 	}
 
 	@Override
@@ -958,22 +977,20 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	}
 
 	private void updateListPages() {
-		this.pages.clear();
+		ArrayList<ListItem> newPages = new ArrayList<>();
 		boolean mergeChans = this.mergeChans;
 		ArrayList<CombinedFeedStorage.Feed> combinedFeeds = new ArrayList<>();
 		if (combinedFeedsEnabled) {
 			for (CombinedFeedStorage.Feed feed : CombinedFeedStorage.getInstance().getFeeds()) {
-				if (mergeChans || feed.containsChan(chanName)) {
-					combinedFeeds.add(feed);
-				}
+				combinedFeeds.add(feed);
 			}
 		}
 		if (combinedFeedsEnabled) {
-			this.pages.add(new ListItem(ListItem.Type.SECTION, SECTION_ACTION_COMBINED_FEEDS_SETTINGS,
+			newPages.add(new ListItem(ListItem.Type.SECTION, SECTION_ACTION_COMBINED_FEEDS_SETTINGS,
 					ResourceUtils.getResourceId(context, R.attr.iconDrawerMenuPreferences, 0),
 					context.getString(R.string.combined_feeds)));
 			for (CombinedFeedStorage.Feed feed : combinedFeeds) {
-				this.pages.add(new ListItem(ListItem.Type.COMBINED_FEED, feed.getPrimaryChanName(),
+				newPages.add(new ListItem(ListItem.Type.COMBINED_FEED, feed.getPrimaryChanName(),
 						feed.id, null, feed.title));
 			}
 		}
@@ -989,19 +1006,59 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		}
 		if (pages.size() > 0) {
 			Collections.sort(pages);
-			this.pages.add(new ListItem(ListItem.Type.SECTION, SECTION_ACTION_CLOSE_ALL,
+			newPages.add(new ListItem(ListItem.Type.SECTION, SECTION_ACTION_CLOSE_ALL,
 					ResourceUtils.getResourceId(context, R.attr.iconButtonCancel, 0),
 					context.getString(R.string.open_pages__noun)));
+			int threadCount = 0;
+			Page currentThread = null;
 			for (Page page : pages) {
 				if (page.threadNumber != null) {
-					this.pages.add(new ListItem(ListItem.Type.PAGE, 0, page.chanName, page.boardName,
+					threadCount++;
+					if (page.current) {
+						currentThread = page;
+					}
+				}
+			}
+			boolean collapsible = collapseLongOpenThreadsEnabled
+					&& threadCount > COLLAPSED_OPEN_THREAD_LIMIT;
+			HashSet<Page> visibleThreads = null;
+			if (collapsible && !pagesExpanded) {
+				visibleThreads = new HashSet<>(COLLAPSED_OPEN_THREAD_LIMIT);
+				if (currentThread != null) {
+					visibleThreads.add(currentThread);
+				}
+				for (Page page : pages) {
+					if (page.threadNumber != null && visibleThreads.size() < COLLAPSED_OPEN_THREAD_LIMIT) {
+						visibleThreads.add(page);
+					}
+				}
+			}
+			for (Page page : pages) {
+				if (page.threadNumber != null && visibleThreads != null && !visibleThreads.contains(page)) {
+					continue;
+				}
+				if (page.threadNumber != null) {
+					newPages.add(new ListItem(ListItem.Type.PAGE, 0, page.chanName, page.boardName,
 							page.threadNumber, page.threadTitle));
 				} else {
-					this.pages.add(new ListItem(ListItem.Type.PAGE, 0, page.chanName, page.boardName,
+					newPages.add(new ListItem(ListItem.Type.PAGE, 0, page.chanName, page.boardName,
 							null, Chan.get(page.chanName).configuration.getBoardTitle(page.boardName)));
 				}
 			}
+			if (collapsible) {
+				int hiddenCount = threadCount - COLLAPSED_OPEN_THREAD_LIMIT;
+				newPages.add(new ListItem(ListItem.Type.PAGES_TOGGLE, pagesExpanded ? 1 : 0,
+						R.drawable.ic_arrow_drop_down, pagesExpanded
+								? context.getString(R.string.collapse_open_threads)
+								: context.getString(R.string.show_remaining_open_threads__format, hiddenCount)));
+			} else {
+				pagesExpanded = false;
+			}
 		}
+		// Build the category off to the side and publish it in one step. Calls reached while page metadata is
+		// being resolved must never interleave writes into the adapter's live list and duplicate a section.
+		this.pages.clear();
+		this.pages.addAll(newPages);
 	}
 
 	private void updateListFavorites() {
@@ -1084,7 +1141,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	}
 
 	private static class ListItem {
-		public enum Type {HEADER, RESTART, SECTION, COMBINED_FEED, PAGE, FAVORITE, MENU, CHAN}
+		public enum Type {HEADER, RESTART, SECTION, COMBINED_FEED, PAGE, PAGES_TOGGLE, FAVORITE, MENU, CHAN}
 
 		public static final ListItem HEADER = new ListItem(Type.HEADER, null, null, null, null);
 		public static final ListItem RESTART = new ListItem(Type.RESTART, null, null, null, null);
@@ -1132,6 +1189,9 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 				}
 				case CHAN: {
 					return appendIdHash(hash, chanName);
+				}
+				case PAGES_TOGGLE: {
+					return hash;
 				}
 				case SECTION: {
 					hash = appendIdHash(hash, data);
@@ -1443,6 +1503,10 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 			}
 			case PAGE: {
 				viewType = mergeChans ? ViewType.CLOSEABLE_ICON : ViewType.CLOSEABLE;
+				break;
+			}
+			case PAGES_TOGGLE: {
+				viewType = ViewType.ITEM_ICON;
 				break;
 			}
 			case FAVORITE: {
@@ -1867,6 +1931,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 				break;
 			}
 			case SECTION:
+			case PAGES_TOGGLE:
 			case MENU:
 			case CHAN: {
 				holder.text.setText(listItem.title);
@@ -1874,6 +1939,8 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 			}
 		}
 		if (holder != null && holder.icon != null) {
+			holder.icon.setRotation(listItem.type == ListItem.Type.PAGES_TOGGLE && listItem.data != 0
+					? 180f : 0f);
 			if (listItem.iconChan) {
 				if (!chanIcons.containsKey(listItem.chanName)) {
 					ChanIconDrawable drawable = ChanManager.getInstance().getIcon(Chan.get(listItem.chanName));

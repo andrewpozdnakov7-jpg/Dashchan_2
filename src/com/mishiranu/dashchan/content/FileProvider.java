@@ -10,10 +10,10 @@ import android.net.Uri;
 import android.os.ParcelFileDescriptor;
 import android.provider.OpenableColumns;
 import androidx.annotation.NonNull;
-import chan.util.CommonUtils;
 import com.mishiranu.dashchan.BuildConfig;
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.util.Arrays;
 
 public class FileProvider extends ContentProvider {
 	private static final String AUTHORITY = BuildConfig.FILE_PROVIDER_AUTHORITY;
@@ -183,15 +183,6 @@ public class FileProvider extends ContentProvider {
 				if (projection == null) {
 					projection = PROJECTION;
 				}
-				OUTER: for (String column : projection) {
-					for (String allowedColumn : PROJECTION) {
-						if (CommonUtils.equals(column, allowedColumn)) {
-							continue OUTER;
-						}
-					}
-					throw new SQLiteException("No such column: " + column);
-				}
-				MatrixCursor cursor = new MatrixCursor(projection);
 				File file = null;
 				switch (matchResult) {
 					case URI_UPDATES: {
@@ -207,20 +198,27 @@ public class FileProvider extends ContentProvider {
 						break;
 					}
 				}
-				if (file != null) {
-					Object[] values = new Object[projection.length];
-					for (int i = 0; i < projection.length; i++) {
-						switch (projection[i]) {
-							case OpenableColumns.DISPLAY_NAME: {
-								values[i] = file.getName();
-								break;
-							}
-							case OpenableColumns.SIZE: {
-								values[i] = file.length();
-								break;
-							}
+				String[] columns = new String[projection.length];
+				Object[] values = new Object[projection.length];
+				int columnCount = 0;
+				for (String column : projection) {
+					switch (column) {
+						case OpenableColumns.DISPLAY_NAME: {
+							columns[columnCount] = OpenableColumns.DISPLAY_NAME;
+							values[columnCount++] = file != null ? file.getName() : null;
+							break;
+						}
+						case OpenableColumns.SIZE: {
+							columns[columnCount] = OpenableColumns.SIZE;
+							values[columnCount++] = file != null ? file.length() : null;
+							break;
 						}
 					}
+				}
+				columns = Arrays.copyOf(columns, columnCount);
+				values = Arrays.copyOf(values, columnCount);
+				MatrixCursor cursor = new MatrixCursor(columns, 1);
+				if (file != null) {
 					cursor.addRow(values);
 				}
 				return cursor;

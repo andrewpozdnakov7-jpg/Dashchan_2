@@ -63,5 +63,8 @@ public class GalleryInstance {
 		boolean isSystemUiVisible();
 		void modifySystemUiVisibility(int flag, boolean value);
 		void toggleSystemUIVisibility(int flag);
+
+		boolean isVideoFullscreen();
+		void setVideoFullscreen(boolean fullscreen, boolean landscape);
 	}
 }

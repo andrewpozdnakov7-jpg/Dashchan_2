@@ -245,8 +245,8 @@ android {
 
 	defaultConfig {
 		applicationId = 'io.dashchan2'
-		versionCode = 11080
-		versionName = '3.2.28'
+		versionCode = 11090
+		versionName = '3.2.29'
 		def releaseVersionCode = versionCode
 		def packageVersionCodeProperty = project.findProperty('packageVersionCode')
 		if (packageVersionCodeProperty != null) {
@@ -314,22 +314,19 @@ android {
 			buildConfigField 'String', 'GOOGLE_TRANSLATION_ADDON_VERSION', '"1.0.0"'
 			buildConfigField 'boolean', 'ALLOW_GMS_SECURITY_PROVIDER', 'true'
 			buildConfigField 'boolean', 'ALLOW_APPLICATION_SELF_UPDATE', 'true'
-			buildConfigField 'boolean', 'ALLOW_BETA_UPDATE_CHANNEL', 'true'
+			buildConfigField 'boolean', 'ALLOW_BETA_UPDATE_CHANNEL', 'false'
 			buildConfigField 'boolean', 'REQUIRE_EXTENSION_INSTALL_CONSENT', 'false'
-			buildConfigField 'String', 'GITHUB_URI_METADATA_BETA',
-					'"//github.com/andrewpozdnakov7-jpg/Dashchan_2_Update_Test"'
-			buildConfigField 'String', 'GITHUB_PATH_METADATA_BETA', '"metadata"'
+			buildConfigField 'String', 'GITHUB_URI_METADATA_BETA', '""'
+			buildConfigField 'String', 'GITHUB_PATH_METADATA_BETA', '""'
 			buildConfigField 'String', 'URI_UPDATES', '"//raw.githubusercontent.com/' +
 					'andrewpozdnakov7-jpg/Dashchan_2/master/update/data.json"'
-			buildConfigField 'String', 'URI_UPDATES_BETA', '"//raw.githubusercontent.com/' +
-					'andrewpozdnakov7-jpg/Dashchan_2_Update_Test/master/update/data.json"'
+			buildConfigField 'String', 'URI_UPDATES_BETA', '""'
 			buildConfigField 'String', 'UPDATE_MANIFEST_URL', '""'
 			buildConfigField 'String', 'UPDATE_MANIFEST_BETA_URL', '""'
 			buildConfigField 'String', 'UPDATE_GITHUB_RELEASES_URL',
 					'"https://api.github.com/repos/andrewpozdnakov7-jpg/Dashchan_2/releases"'
 			buildConfigField 'String', 'UPDATE_GITHUB_LATEST_RELEASE_URL', '""'
-			buildConfigField 'String', 'UPDATE_GITHUB_BETA_RELEASES_URL',
-					'"https://api.github.com/repos/andrewpozdnakov7-jpg/Dashchan_2_Update_Test/releases"'
+			buildConfigField 'String', 'UPDATE_GITHUB_BETA_RELEASES_URL', '""'
 			buildConfigField 'String', 'UPDATE_GITHUB_BETA_LATEST_RELEASE_URL', '""'
 		}
 		fdroid {

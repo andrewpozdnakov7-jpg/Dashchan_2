@@ -69,6 +69,7 @@ public class VideoUnit {
 	private TextView playbackSpeedButton;
 	private ImageButton muteButton;
 	private ImageButton pictureInPictureButton;
+	private ImageButton fullscreenButton;
 	private PopupMenu playbackSpeedPopupMenu;
 
 	private VideoPlayer player;
@@ -98,10 +99,12 @@ public class VideoUnit {
 	private ReadVideoCallback readVideoCallback;
 	private boolean playbackSpeedControl;
 	private boolean pictureInPictureControl;
+	private final View.OnLayoutChangeListener surfaceParentLayoutChangeListener;
 
 	public VideoUnit(PagerInstance instance, AudioManager audioManager) {
 		this.instance = instance;
 		this.audioManager = audioManager;
+		surfaceParentLayoutChangeListener = this::onSurfaceParentLayoutChanged;
 		if (audioManager != null) {
 			int volume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC);
 			if (volume > 0) {
@@ -166,8 +169,14 @@ public class VideoUnit {
 			return;
 		}
 		if (player != null && initialized) {
-			wasPlaying = player.isPlaying();
-			setPlaying(false, true);
+			long duration = player.getDuration();
+			if (finishedPlayback || duration > 0L && player.getPosition() >= duration) {
+				markPlaybackFinished();
+				preserveFinishedPlaybackFrame();
+			} else {
+				wasPlaying = player.isPlaying();
+				setPlaying(false, true);
+			}
 		} else {
 			wasPlaying = false;
 		}
@@ -232,11 +241,37 @@ public class VideoUnit {
 
 	private void interruptHolder(PagerInstance.ViewHolder holder) {
 		if (holder != null) {
+			holder.surfaceParent.removeOnLayoutChangeListener(surfaceParentLayoutChangeListener);
 			for (int i = 0; i < holder.surfaceParent.getChildCount(); i++) {
 				resetVideoTransform(holder.surfaceParent.getChildAt(i));
 			}
 			holder.surfaceParent.removeAllViews();
 		}
+	}
+
+	private void onSurfaceParentLayoutChanged(View view, int left, int top, int right, int bottom,
+			int oldLeft, int oldTop, int oldRight, int oldBottom) {
+		if (right - left == oldRight - oldLeft && bottom - top == oldBottom - oldTop) {
+			return;
+		}
+		PagerInstance.ViewHolder holder = instance.currentHolder;
+		if (!initialized || player == null || holder == null || holder.surfaceParent != view
+				|| holder.surfaceParent.getChildCount() != 1) {
+			return;
+		}
+		View videoView = holder.surfaceParent.getChildAt(0);
+		if (videoView != player.getVideoView(instance.galleryInstance.context)) {
+			return;
+		}
+		resetVideoTransform(videoView);
+		if (Preferences.isVideoZoomGesturesEnabled()) {
+			captureAndApplyVideoTransform(holder, videoView);
+		}
+	}
+
+	private void attachSurfaceParentLayoutListener(PagerInstance.ViewHolder holder) {
+		holder.surfaceParent.removeOnLayoutChangeListener(surfaceParentLayoutChangeListener);
+		holder.surfaceParent.addOnLayoutChangeListener(surfaceParentLayoutChangeListener);
 	}
 
 	private static void resetVideoTransform(View videoView) {
@@ -361,6 +396,7 @@ public class VideoUnit {
 		resetVideoTransform(videoView);
 		holder.surfaceParent.setClickable(false);
 		holder.surfaceParent.setFocusable(false);
+		attachSurfaceParentLayoutListener(holder);
 		holder.surfaceParent.addView(videoView, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,
 				FrameLayout.LayoutParams.MATCH_PARENT, Gravity.CENTER));
 		applyPlayerVolume(player);
@@ -409,6 +445,7 @@ public class VideoUnit {
 			playbackSpeedButton = null;
 			muteButton = null;
 			pictureInPictureButton = null;
+			fullscreenButton = null;
 
 			configurationView = new LinearLayout(context);
 			configurationView.setOrientation(LinearLayout.HORIZONTAL);
@@ -474,6 +511,10 @@ public class VideoUnit {
 				pictureInPictureButton.setContentDescription(context.getString(R.string.enter_picture_in_picture));
 				pictureInPictureButton.setOnClickListener(pictureInPictureClickListener);
 			}
+			fullscreenButton = new ImageButton(context, null, android.R.attr.borderlessButtonStyle);
+			fullscreenButton.setScaleType(ImageButton.ScaleType.CENTER);
+			fullscreenButton.setOnClickListener(fullscreenClickListener);
+			updateFullscreenButton();
 
 			if (longLayout) {
 				controls.setGravity(Gravity.CENTER_VERTICAL);
@@ -482,6 +523,8 @@ public class VideoUnit {
 						LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
 				controls.addView(playPauseButton, (int) (80f * density), LinearLayout.LayoutParams.WRAP_CONTENT);
 				controls.addView(totalTimeTextView, (int) (48f * density),
+						LinearLayout.LayoutParams.WRAP_CONTENT);
+				controls.addView(fullscreenButton, (int) (48f * density),
 						LinearLayout.LayoutParams.WRAP_CONTENT);
 			} else {
 				LinearLayout controls1 = new LinearLayout(context);
@@ -502,6 +545,8 @@ public class VideoUnit {
 				controls2.addView(playPauseButton, (int) (80f * density), LinearLayout.LayoutParams.WRAP_CONTENT);
 				controls2.addView(totalTimeTextView, new LinearLayout.LayoutParams(0,
 						LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+				controls2.addView(fullscreenButton, (int) (48f * density),
+						LinearLayout.LayoutParams.WRAP_CONTENT);
 			}
 			if (firstTimeLayout) {
 				AnimationUtils.measureDynamicHeight(controlsView);
@@ -833,6 +878,7 @@ public class VideoUnit {
 		transferredPlayer.setListener(playerListener);
 		View videoView = transferredPlayer.getVideoView(instance.galleryInstance.context);
 		resetVideoTransform(videoView);
+		attachSurfaceParentLayoutListener(instance.currentHolder);
 		instance.currentHolder.surfaceParent.addView(videoView, new FrameLayout.LayoutParams(
 				FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT, Gravity.CENTER));
 		pictureInPictureTransferred = false;
@@ -933,6 +979,7 @@ public class VideoUnit {
 		if (finishedPlayback) {
 			finishedPlayback = false;
 			player.setPosition(0);
+			restoreVideoViewAfterFinishedPlayback();
 			setPlaying(true, true);
 		} else {
 			boolean playing = !player.isPlaying();
@@ -943,6 +990,28 @@ public class VideoUnit {
 	}
 
 	private final View.OnClickListener playPauseClickListener = v -> togglePlayback();
+
+	private final View.OnClickListener fullscreenClickListener = v -> toggleFullscreen();
+
+	private void toggleFullscreen() {
+		boolean fullscreen = instance.galleryInstance.callback.isVideoFullscreen();
+		if (fullscreen) {
+			instance.galleryInstance.callback.setVideoFullscreen(false, false);
+		} else if (player != null) {
+			instance.galleryInstance.callback.setVideoFullscreen(true, true);
+		}
+		updateFullscreenButton();
+	}
+
+	private void updateFullscreenButton() {
+		if (fullscreenButton != null) {
+			boolean fullscreen = instance.galleryInstance.callback.isVideoFullscreen();
+			fullscreenButton.setImageResource(fullscreen
+					? R.drawable.ic_fullscreen_exit : R.drawable.ic_fullscreen);
+			fullscreenButton.setContentDescription(instance.galleryInstance.context.getString(fullscreen
+					? R.string.exit_fullscreen : R.string.enter_fullscreen));
+		}
+	}
 
 	public static class SeekResult {
 		public final long position;
@@ -969,6 +1038,7 @@ public class VideoUnit {
 		timeTextView.setText(formatVideoTime(nextPosition));
 		if (finishedPlayback && nextPosition < duration) {
 			finishedPlayback = false;
+			restoreVideoViewAfterFinishedPlayback();
 			updatePlayState();
 		}
 		return new SeekResult(nextPosition, duration);
@@ -1002,8 +1072,9 @@ public class VideoUnit {
 				seekBar.setProgress(nextSeekPosition);
 				player.setPosition(nextSeekPosition);
 				seekBar.postDelayed(progressRunnable, 250);
-				if (finishedPlayback) {
+				if (finishedPlayback && nextSeekPosition < player.getDuration()) {
 					finishedPlayback = false;
+					restoreVideoViewAfterFinishedPlayback();
 					updatePlayState();
 				}
 			} else {
@@ -1148,8 +1219,7 @@ public class VideoUnit {
 		public void onComplete(VideoPlayer player) {
 			switch (Preferences.getVideoCompletionMode()) {
 				case NOTHING: {
-					finishedPlayback = true;
-					updatePlayState();
+					markPlaybackFinished();
 					break;
 				}
 				case LOOP: {
@@ -1203,6 +1273,45 @@ public class VideoUnit {
 		}
 	};
 
+	private void markPlaybackFinished() {
+		finishedPlayback = true;
+		wasPlaying = false;
+		setPlaying(false, true);
+		updatePlayState();
+	}
+
+	private void preserveFinishedPlaybackFrame() {
+		if (backgroundDrawable == null || player == null) {
+			return;
+		}
+		View videoView = player.getVideoView(instance.galleryInstance.context);
+		if (videoView.getVisibility() != View.VISIBLE) {
+			return;
+		}
+		Bitmap frame = player.getCurrentFrame();
+		if (frame == null) {
+			return;
+		}
+		Point dimensions = player.getDimensions();
+		if (dimensions != null && dimensions.x > 0 && dimensions.y > 0
+				&& (frame.getWidth() > dimensions.x || frame.getHeight() > dimensions.y)) {
+			Bitmap scaledFrame = Bitmap.createScaledBitmap(frame, dimensions.x, dimensions.y, true);
+			if (scaledFrame != frame) {
+				frame.recycle();
+				frame = scaledFrame;
+			}
+		}
+		backgroundDrawable.setFrame(frame);
+		videoView.setVisibility(View.GONE);
+	}
+
+	private void restoreVideoViewAfterFinishedPlayback() {
+		if (backgroundDrawable != null && player != null) {
+			backgroundDrawable.recycle();
+			player.getVideoView(instance.galleryInstance.context).setVisibility(View.VISIBLE);
+		}
+	}
+
 	public void showHideVideoView(boolean show) {
 		if (initialized) {
 			View videoView = player.getVideoView(instance.galleryInstance.context);
@@ -1220,6 +1329,7 @@ public class VideoUnit {
 		if (initialized) {
 			playPauseButton.setEnabled(!swiping);
 			seekBar.setEnabled(!swiping);
+			fullscreenButton.setEnabled(!swiping);
 			if (swiping) {
 				wasPlaying = player.isPlaying();
 				setPlaying(false, true);

@@ -1,0 +1,5 @@
+- Long lists of open threads in the navigation drawer can now be collapsed: the 12 most recent threads are shown immediately, while the rest can be expanded with a separate row. The option is enabled by default and is available under Experimental features.
+- My boards feeds are now shown in every forum drawer instead of only in forums included in a particular feed.
+- Apachan now displays embedded MP4/WebM videos and lets you select a random server image or a specific image collection when posting.
+- Added a fullscreen button to the video player. Video rotation, returning to the thread, and playback completion behavior have been fixed.
+- Fixed duplicate Pages sections in the navigation drawer and sharing diagnostic logs through the Android share sheet.

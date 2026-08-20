@@ -103,10 +103,21 @@ final class ApachanHtmlParser {
 
 		Element subject = directChild(element, "h2");
 		if (subject != null) post.setSubject(StringUtils.nullIfEmpty(subject.text().trim()));
+		ArrayList<Uri> videoUris = new ArrayList<>();
 		Element comment = directChild(element, "p");
 		if (comment != null) {
 			Element clone = comment.clone();
 			clone.select("div.trash").remove();
+			for (Element video : clone.select("video")) {
+				String source = video.attr("src");
+				if (StringUtils.isEmpty(source)) {
+					Element sourceElement = video.selectFirst("source[src]");
+					if (sourceElement != null) source = sourceElement.attr("src");
+				}
+				Uri videoUri = normalizeUri(locator, source);
+				if (videoUri != null) videoUris.add(videoUri);
+				video.remove();
+			}
 			for (Element link : clone.select("a[href]")) {
 				if ("\u0414\u0430\u043b\u0435\u0435".equalsIgnoreCase(link.text().trim())) link.remove();
 			}
@@ -126,6 +137,12 @@ final class ApachanHtmlParser {
 				if (thumbnailUri != null) attachment.setThumbnailUri(locator, thumbnailUri);
 				parseAttachmentMetadata(attachment, image.attr("title"));
 			}
+			attachments.add(attachment);
+		}
+		for (Uri videoUri : videoUris) {
+			FileAttachment attachment = new FileAttachment().setFileUri(locator, videoUri);
+			String fileName = videoUri.getLastPathSegment();
+			if (!StringUtils.isEmpty(fileName)) attachment.setOriginalName(fileName);
 			attachments.add(attachment);
 		}
 		if (!attachments.isEmpty()) post.setAttachments(attachments);

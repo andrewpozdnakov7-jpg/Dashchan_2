@@ -45,4 +45,5 @@
 - [ ] Commit and push the manifest separately.
 - [ ] Read the published manifest from GitHub and confirm that the app discovers the update.
 
-Beta releases use the separate `Dashchan_2_Update_Test` repository and must never replace the stable manifest until promoted.
+The beta update channel is discontinued. Keep `ALLOW_BETA_UPDATE_CHANNEL` disabled and all beta metadata and
+release URLs empty in every distribution flavor.
