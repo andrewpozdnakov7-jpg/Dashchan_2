@@ -570,6 +570,8 @@
 	<string name="video_screen_off_action_continue">Продолжать воспроизведение</string>
 	<string name="video_screen_off_action_continue__summary">Оставлять звук видео включённым при выключенном экране</string>
 	<string name="enter_picture_in_picture">Открыть картинку в картинке</string>
+	<string name="enter_fullscreen">Развернуть на весь экран</string>
+	<string name="exit_fullscreen">Выйти из полноэкранного режима</string>
 	<string name="video_double_tap_seek_interval">Шаг перемотки</string>
 	<string name="video_seek_seconds__format">%d сек</string>
 	<string name="video_seek_backward__format">‹‹ −%d сек</string>

@@ -958,7 +958,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	}
 
 	private void updateListPages() {
-		this.pages.clear();
+		ArrayList<ListItem> newPages = new ArrayList<>();
 		boolean mergeChans = this.mergeChans;
 		ArrayList<CombinedFeedStorage.Feed> combinedFeeds = new ArrayList<>();
 		if (combinedFeedsEnabled) {
@@ -969,11 +969,11 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 			}
 		}
 		if (combinedFeedsEnabled) {
-			this.pages.add(new ListItem(ListItem.Type.SECTION, SECTION_ACTION_COMBINED_FEEDS_SETTINGS,
+			newPages.add(new ListItem(ListItem.Type.SECTION, SECTION_ACTION_COMBINED_FEEDS_SETTINGS,
 					ResourceUtils.getResourceId(context, R.attr.iconDrawerMenuPreferences, 0),
 					context.getString(R.string.combined_feeds)));
 			for (CombinedFeedStorage.Feed feed : combinedFeeds) {
-				this.pages.add(new ListItem(ListItem.Type.COMBINED_FEED, feed.getPrimaryChanName(),
+				newPages.add(new ListItem(ListItem.Type.COMBINED_FEED, feed.getPrimaryChanName(),
 						feed.id, null, feed.title));
 			}
 		}
@@ -989,19 +989,23 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		}
 		if (pages.size() > 0) {
 			Collections.sort(pages);
-			this.pages.add(new ListItem(ListItem.Type.SECTION, SECTION_ACTION_CLOSE_ALL,
+			newPages.add(new ListItem(ListItem.Type.SECTION, SECTION_ACTION_CLOSE_ALL,
 					ResourceUtils.getResourceId(context, R.attr.iconButtonCancel, 0),
 					context.getString(R.string.open_pages__noun)));
 			for (Page page : pages) {
 				if (page.threadNumber != null) {
-					this.pages.add(new ListItem(ListItem.Type.PAGE, 0, page.chanName, page.boardName,
+					newPages.add(new ListItem(ListItem.Type.PAGE, 0, page.chanName, page.boardName,
 							page.threadNumber, page.threadTitle));
 				} else {
-					this.pages.add(new ListItem(ListItem.Type.PAGE, 0, page.chanName, page.boardName,
+					newPages.add(new ListItem(ListItem.Type.PAGE, 0, page.chanName, page.boardName,
 							null, Chan.get(page.chanName).configuration.getBoardTitle(page.boardName)));
 				}
 			}
 		}
+		// Build the category off to the side and publish it in one step. Calls reached while page metadata is
+		// being resolved must never interleave writes into the adapter's live list and duplicate a section.
+		this.pages.clear();
+		this.pages.addAll(newPages);
 	}
 
 	private void updateListFavorites() {

@@ -320,7 +320,7 @@ jobs:
           ./gradlew --no-daemon --stacktrace "$BUILD_TASK" "${gradle_args[@]}" \
             2>&1 | tee build-main.log
 
-      - name: Verify update-channel distribution boundary
+      - name: Verify retired beta update channel is absent
         if: steps.validation.outputs.build_required == 'true'
         run: |
           set -euo pipefail
@@ -343,18 +343,11 @@ jobs:
               echo "Beta update reference found in $apk"
             fi
           done
-          if [ "$BUILD_TASK" = 'assembleFdroidRelease' ]; then
-            if [ "$beta_reference_found" = true ]; then
-              echo '::error::F-Droid APK contains the GitHub beta update repository reference'
-              exit 1
-            fi
-            echo 'F-Droid APK contains no GitHub beta update repository reference'
-          elif [ "$beta_reference_found" != true ]; then
-            echo '::error::GitHub APK lost its configured beta update repository reference'
+          if [ "$beta_reference_found" = true ]; then
+            echo '::error::APK contains the retired beta update repository reference'
             exit 1
-          else
-            echo 'GitHub APK retains its configured beta update repository reference'
           fi
+          echo 'APK contains no retired beta update repository reference'
 
       - name: Create APK checksums
         if: steps.validation.outputs.build_required == 'true'

@@ -236,9 +236,12 @@ public class NavigationUtils {
 			ClickableToast.show(R.string.cache_is_unavailable);
 			return;
 		}
-		context.startActivity(Intent.createChooser(new Intent(Intent.ACTION_SEND)
-				.setType(data.second).setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-				.putExtra(Intent.EXTRA_STREAM, data.first), null));
+		Intent shareIntent = new Intent(Intent.ACTION_SEND)
+				.setType(data.second)
+				.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+				.putExtra(Intent.EXTRA_STREAM, data.first);
+		shareIntent.setClipData(ClipData.newUri(context.getContentResolver(), fileName, data.first));
+		context.startActivity(Intent.createChooser(shareIntent, null));
 	}
 
 	public static boolean copyFileToClipboard(Context context, File file, String fileName) {

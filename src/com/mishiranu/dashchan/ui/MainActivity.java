@@ -2258,14 +2258,47 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		}
 	}
 
+	private static final class DrawerPageKey {
+		private final String chanName;
+		private final String boardName;
+		private final String threadNumber;
+
+		private DrawerPageKey(Page page) {
+			chanName = page.chanName;
+			boardName = page.boardName;
+			threadNumber = page.threadNumber;
+		}
+
+		@Override
+		public boolean equals(Object object) {
+			if (this == object) {
+				return true;
+			}
+			if (!(object instanceof DrawerPageKey)) {
+				return false;
+			}
+			DrawerPageKey key = (DrawerPageKey) object;
+			return CommonUtils.equals(chanName, key.chanName) &&
+					CommonUtils.equals(boardName, key.boardName) &&
+					CommonUtils.equals(threadNumber, key.threadNumber);
+		}
+
+		@Override
+		public int hashCode() {
+			int result = chanName != null ? chanName.hashCode() : 0;
+			result = 31 * result + (boardName != null ? boardName.hashCode() : 0);
+			return 31 * result + (threadNumber != null ? threadNumber.hashCode() : 0);
+		}
+	}
+
 	@Override
 	public Collection<DrawerForm.Page> obtainDrawerPages() {
 		ArrayList<DrawerForm.Page> drawerPages = new ArrayList<>(1 +
 				stackPageItems.size() + preservedPageItems.size());
-		HashSet<Page> addedPages = new HashSet<>();
+		HashSet<DrawerPageKey> addedPages = new HashSet<>();
 		for (SavedPageItem savedPageItem : new ConcatIterable<>(preservedPageItems, stackPageItems)) {
 			Page page = getSavedPage(savedPageItem);
-			if (page.isThreadsOrPosts() && addedPages.add(page)) {
+			if (page.isThreadsOrPosts() && addedPages.add(new DrawerPageKey(page))) {
 				drawerPages.add(new DrawerForm.Page(page.chanName, page.boardName, page.threadNumber,
 						savedPageItem.threadTitle, savedPageItem.createdRealtime));
 			}
@@ -2273,7 +2306,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		ContentFragment currentFragment = getCurrentFragment();
 		if (currentFragment instanceof PageFragment) {
 			Page page = ((PageFragment) currentFragment).getPage();
-			if (page.isThreadsOrPosts() && addedPages.add(page)) {
+			if (page.isThreadsOrPosts() && addedPages.add(new DrawerPageKey(page))) {
 				drawerPages.add(new DrawerForm.Page(page.chanName, page.boardName, page.threadNumber,
 						currentPageItem.threadTitle, currentPageItem.createdRealtime));
 			}
