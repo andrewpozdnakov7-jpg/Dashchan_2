@@ -22,6 +22,7 @@ import com.mishiranu.dashchan.content.model.PendingUserPost;
 import com.mishiranu.dashchan.content.model.Post;
 import com.mishiranu.dashchan.content.model.PostItem;
 import com.mishiranu.dashchan.content.model.PostNumber;
+import com.mishiranu.dashchan.content.storage.MyPostsStorage;
 import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.util.ArrayList;
@@ -106,6 +107,30 @@ public class ReadPostsTask extends HttpHolderTask<Void, ReadPostsTask.Result> {
 		this.pendingUserPosts = pendingUserPosts != null ? new HashSet<>(pendingUserPosts) : null;
 	}
 
+	private MyPostsStorage.ThreadKey getTrackedThreadKey() {
+		return new MyPostsStorage.ThreadKey(chan.name, boardName, threadNumber);
+	}
+
+	private void updateTrackedThread(List<Post> posts) {
+		if (Preferences.isTrackMyPostsEnabled()) {
+			MyPostsStorage storage = MyPostsStorage.getInstance();
+			MyPostsStorage.ThreadKey key = getTrackedThreadKey();
+			if (storage.hasThread(key)) {
+				storage.updateThread(key, posts);
+			}
+		}
+	}
+
+	private void markTrackedThreadDeleted() {
+		if (Preferences.isTrackMyPostsEnabled()) {
+			MyPostsStorage storage = MyPostsStorage.getInstance();
+			MyPostsStorage.ThreadKey key = getTrackedThreadKey();
+			if (storage.hasThread(key)) {
+				storage.setThreadDeleted(key, true);
+			}
+		}
+	}
+
 	@Override
 	protected Result run(HttpHolder holder) {
 		boolean temporary = chan.configuration.getOption(ChanConfiguration.OPTION_LOCAL_MODE);
@@ -138,6 +163,7 @@ public class ReadPostsTask extends HttpHolderTask<Void, ReadPostsTask.Result> {
 					throw HttpException.createNotFoundException();
 				}
 				updateMeta = new UpdateMeta(true, false);
+				markTrackedThreadDeleted();
 				return new Result.Redirect(target);
 			} catch (RedirectException e) {
 				RedirectException.Target target = e.obtainTarget(chan.name);
@@ -153,6 +179,7 @@ public class ReadPostsTask extends HttpHolderTask<Void, ReadPostsTask.Result> {
 					throw HttpException.createNotFoundException();
 				} else {
 					updateMeta = new UpdateMeta(true, false);
+					markTrackedThreadDeleted();
 					return new Result.Redirect(target);
 				}
 			}
@@ -206,9 +233,21 @@ public class ReadPostsTask extends HttpHolderTask<Void, ReadPostsTask.Result> {
 						removedPendingUserPosts.add(pendingUserPost);
 						CommonDatabase.getInstance().getPosts().setFlags(false, chan.name,
 								boardName, threadNumber, postNumber, PostItem.HideState.UNDEFINED, true);
+						if (Preferences.isTrackMyPostsEnabled()) {
+							Post ownPost = null;
+							for (Post post : posts) {
+								if (post.number.equals(postNumber)) {
+									ownPost = post;
+									break;
+								}
+							}
+							MyPostsStorage.getInstance().add(chan.name, boardName, threadNumber, postNumber,
+									ownPost != null ? ownPost.comment : null, System.currentTimeMillis());
+						}
 					}
 				}
 			}
+			updateTrackedThread(posts);
 
 			PagesDatabase.InsertResult insertResult;
 			boolean newThread = meta == null;
@@ -240,6 +279,7 @@ public class ReadPostsTask extends HttpHolderTask<Void, ReadPostsTask.Result> {
 			if (responseCode == HttpURLConnection.HTTP_NOT_FOUND ||
 					responseCode == HttpURLConnection.HTTP_GONE) {
 				PagesDatabase.getInstance().setMetaFlags(threadKey, true, false);
+				markTrackedThreadDeleted();
 				if (chan.configuration.getOption(ChanConfiguration.OPTION_READ_SINGLE_POST)) {
 					try {
 						// Check the post belongs to another thread

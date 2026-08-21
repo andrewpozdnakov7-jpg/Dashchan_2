@@ -143,6 +143,8 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 		recyclerView.getPullable().setPullSides(PullableWrapper.Side.BOTH);
 		uiManager.observable().register(this);
 		layoutManager.setSpanCount(adapter.setThreadsView(Preferences.getThreadsView()));
+		adapter.setThreadsSortingEnabled(getChan().configuration.safe().obtainBoard(page.boardName)
+				.allowThreadsSorting);
 		adapter.setCatalogSort(Preferences.getCatalogSort());
 		adapter.applyFilter(getInitSearch().currentQuery);
 		FavoritesStorage.getInstance().getObservable().register(this);
@@ -430,7 +432,9 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 		menu.findItem(R.id.menu_search).setTitle(board.allowSearch ? R.string.search : R.string.filter);
 		menu.findItem(R.id.menu_catalog).setVisible(board.allowCatalog && !isCatalogOpen);
 		menu.findItem(R.id.menu_pages).setVisible(board.allowCatalog && isCatalogOpen);
-		menu.findItem(R.id.menu_sorting).setVisible(board.allowCatalog && isCatalogOpen);
+		menu.findItem(R.id.menu_sorting).setVisible(board.allowThreadsSorting || board.allowCatalog && isCatalogOpen);
+		menu.findItem(R.id.menu_unsorted).setTitle(board.allowThreadsSorting && !isCatalogOpen
+				? R.string.last_bump : R.string.unsorted);
 		menu.findItem(Preferences.getCatalogSort().menuItemId).setChecked(true);
 		menu.findItem(R.id.menu_archive).setVisible(board.allowArchive);
 		menu.findItem(R.id.menu_new_thread).setVisible(board.allowPosting);

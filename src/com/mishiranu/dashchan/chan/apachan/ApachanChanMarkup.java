@@ -6,7 +6,8 @@ import chan.content.ChanMarkup;
 import chan.text.CommentEditor;
 
 public class ApachanChanMarkup extends ChanMarkup {
-	private static final int SUPPORTED_TAGS = TAG_BOLD | TAG_ITALIC | TAG_UNDERLINE | TAG_STRIKE | TAG_SPOILER;
+	private static final int SUPPORTED_TAGS = TAG_BOLD | TAG_ITALIC | TAG_UNDERLINE | TAG_STRIKE | TAG_SPOILER
+			| TAG_QUOTE;
 
 	public ApachanChanMarkup() {
 		addTag("b", TAG_BOLD);
@@ -23,7 +24,9 @@ public class ApachanChanMarkup extends ChanMarkup {
 
 	@Override
 	public CommentEditor obtainCommentEditor(String boardName) {
-		return new CommentEditor.BulletinBoardCodeCommentEditor();
+		CommentEditor editor = new CommentEditor.BulletinBoardCodeCommentEditor();
+		editor.addTag(TAG_QUOTE, "[quote]", "[/quote]");
+		return editor;
 	}
 
 	@Override

@@ -2,11 +2,13 @@ package com.mishiranu.dashchan.ui.preference;
 
 import android.app.AlertDialog;
 import android.os.Bundle;
+import android.text.InputType;
 import android.view.View;
 import androidx.annotation.NonNull;
 import com.mishiranu.dashchan.BuildConfig;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
+import com.mishiranu.dashchan.content.service.BackgroundWatcherWorker;
 import com.mishiranu.dashchan.content.translation.GeminiNanoTranslationBridge;
 import com.mishiranu.dashchan.content.translation.GoogleTranslationBridge;
 import com.mishiranu.dashchan.content.translation.TranslationController;
@@ -71,6 +73,31 @@ public class ExperimentalFragment extends PreferenceFragment implements Translat
 				Preferences.DEFAULT_COLLAPSE_LONG_OPEN_THREADS,
 				R.string.collapse_long_open_threads,
 				R.string.collapse_long_open_threads__summary);
+		CheckPreference trackRepliesPreference = addCheck(true, Preferences.KEY_TRACK_MY_POSTS,
+				Preferences.DEFAULT_TRACK_MY_POSTS, R.string.track_replies, R.string.track_replies__summary);
+		trackRepliesPreference.setOnAfterChangeListener(p -> {
+			BackgroundWatcherWorker.updateSchedule(requireContext());
+			refreshPreferences();
+		});
+		if (trackRepliesPreference.getValue()) {
+			Preference<String> refreshIntervalPreference = addEdit(
+					Preferences.KEY_TRACKED_REPLIES_REFRESH_INTERVAL,
+					Preferences.DEFAULT_TRACKED_REPLIES_REFRESH_INTERVAL,
+					R.string.tracked_replies_refresh_interval,
+					p -> getString(R.string.every_number_min__format,
+							Preferences.getTrackedRepliesRefreshIntervalMinutes()),
+					null, InputType.TYPE_CLASS_NUMBER);
+			refreshIntervalPreference.setOnAfterChangeListener(p -> {
+				String normalized = Integer.toString(Preferences.getTrackedRepliesRefreshIntervalMinutes());
+				if (!normalized.equals(p.getValue())) {
+					p.setValue(normalized);
+				}
+			});
+			addCheck(true, Preferences.KEY_TRACKED_REPLIES_NOTIFICATIONS,
+					Preferences.DEFAULT_TRACKED_REPLIES_NOTIFICATIONS,
+					R.string.tracked_replies_notifications,
+					R.string.tracked_replies_notifications__summary);
+		}
 		CheckPreference wallpaperPreference = addCheck(true, Preferences.KEY_WALLPAPER_ENABLED,
 				Preferences.DEFAULT_WALLPAPER_ENABLED, R.string.wallpaper_background,
 				R.string.wallpaper_background__summary);

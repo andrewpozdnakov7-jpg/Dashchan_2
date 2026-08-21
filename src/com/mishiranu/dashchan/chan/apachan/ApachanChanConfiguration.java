@@ -13,6 +13,8 @@ public class ApachanChanConfiguration extends ChanConfiguration {
 	public Board obtainBoardConfiguration(String boardName) {
 		Board board = new Board();
 		board.allowPosting = true;
+		board.allowEditing = true;
+		board.allowThreadsSorting = true;
 		return board;
 	}
 

@@ -102,8 +102,9 @@ public class InterfaceFragment extends PreferenceFragment {
 		addHeader(R.string.threads_list);
 		addCheck(true, Preferences.KEY_PAGE_BY_PAGE, Preferences.DEFAULT_PAGE_BY_PAGE,
 				R.string.paged_board_navigation, R.string.paged_board_navigation__summary);
-		addCheck(true, Preferences.KEY_DISPLAY_HIDDEN_THREADS,
-				Preferences.DEFAULT_DISPLAY_HIDDEN_THREADS, R.string.display_hidden_threads, 0);
+		addCheck(true, Preferences.KEY_REMOVE_HIDDEN_THREADS,
+				Preferences.DEFAULT_REMOVE_HIDDEN_THREADS, R.string.remove_hidden_threads,
+				R.string.remove_hidden_threads__summary);
 		addCheck(true, Preferences.KEY_HIDE_THREADS_WITH_SWIPE,
 				Preferences.DEFAULT_HIDE_THREADS_WITH_SWIPE, R.string.hide_threads_with_swipe, 0);
 

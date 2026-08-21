@@ -36,6 +36,7 @@ import com.mishiranu.dashchan.content.model.PostItem;
 import com.mishiranu.dashchan.content.model.PostNumber;
 import com.mishiranu.dashchan.content.storage.DraftsStorage;
 import com.mishiranu.dashchan.content.storage.FavoritesStorage;
+import com.mishiranu.dashchan.content.storage.MyPostsStorage;
 import com.mishiranu.dashchan.content.storage.StatisticsStorage;
 import com.mishiranu.dashchan.ui.MainActivity;
 import com.mishiranu.dashchan.util.AndroidUtils;
@@ -645,6 +646,10 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 				if (postNumber != null) {
 					CommonDatabase.getInstance().getPosts().setFlags(true, chanName, data.boardName,
 							targetThreadNumber, postNumber, PostItem.HideState.UNDEFINED, true);
+					if (Preferences.isTrackMyPostsEnabled()) {
+						MyPostsStorage.getInstance().add(chanName, data.boardName, targetThreadNumber,
+								postNumber, comment, System.currentTimeMillis());
+					}
 				} else if (newThread) {
 					pendingUserPost = PendingUserPost.NewThread.INSTANCE;
 				} else {

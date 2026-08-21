@@ -57,6 +57,7 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 	private ArrayList<PostItem> catalogSortedPostItems;
 	private ArrayList<PostItem> filteredPostItems;
 	private boolean catalog;
+	private boolean threadsSortingEnabled;
 
 	private final Context context;
 	private final UiManager uiManager;
@@ -303,10 +304,18 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 	public void setCatalogSort(Preferences.CatalogSort catalogSort) {
 		if (this.catalogSort != catalogSort) {
 			this.catalogSort = catalogSort;
-			if (catalog) {
+			if (catalog || threadsSortingEnabled) {
 				applyCurrentSortingAndFilter(true, false);
 				notifyDataSetChanged();
 			}
+		}
+	}
+
+	public void setThreadsSortingEnabled(boolean enabled) {
+		if (threadsSortingEnabled != enabled) {
+			threadsSortingEnabled = enabled;
+			applyCurrentSortingAndFilter(true, false);
+			notifyDataSetChanged();
 		}
 	}
 
@@ -314,7 +323,7 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 		if (sorting) {
 			Comparator<Preferences.CatalogSort.Comparable> comparator =
 					catalogSort != null ? catalogSort.comparator : null;
-			if (catalog && comparator != null) {
+			if ((catalog || threadsSortingEnabled) && comparator != null) {
 				if (catalogSortedPostItems == null) {
 					catalogSortedPostItems = new ArrayList<>(postItems);
 				} else {

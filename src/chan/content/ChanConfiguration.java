@@ -114,8 +114,10 @@ public class ChanConfiguration implements Chan.Linked {
 	public static final class Board {
 		@Public public boolean allowSearch;
 		@Public public boolean allowCatalog;
+		@Public public boolean allowThreadsSorting;
 		@Public public boolean allowArchive;
 		@Public public boolean allowPosting;
+		@Public public boolean allowEditing;
 		@Public public boolean allowDeleting;
 		@Public public boolean allowReporting;
 		@Public public boolean allowVotes;

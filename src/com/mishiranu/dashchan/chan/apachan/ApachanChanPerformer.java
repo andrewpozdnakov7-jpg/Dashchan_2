@@ -8,6 +8,7 @@ import chan.content.model.BoardCategory;
 import chan.content.model.Post;
 import chan.content.model.Posts;
 import chan.http.HttpException;
+import chan.http.HttpHolder;
 import chan.http.HttpRequest;
 import chan.http.HttpResponse;
 import chan.http.MultipartEntity;
@@ -18,6 +19,79 @@ import java.util.Locale;
 
 public class ApachanChanPerformer extends ChanPerformer {
 	private static final String COOKIE_POST_OWNER = "post_owner";
+
+	public static final class EditPostResult {
+		public final String subject;
+		public final String comment;
+		public final boolean originalPost;
+		public final boolean hasAttachment;
+		public final boolean showOriginalPoster;
+		public final int commentLimit;
+
+		private EditPostResult(ApachanHtmlParser.EditForm form) {
+			subject = form.subject;
+			comment = form.comment;
+			originalPost = form.originalPost;
+			hasAttachment = form.hasAttachment;
+			showOriginalPoster = form.showOriginalPoster;
+			commentLimit = form.commentLimit;
+		}
+	}
+
+	private static String getStoredCookieName(ApachanChanLocator locator) {
+		return COOKIE_POST_OWNER + "_" + locator.getPreferredHost().replace('.', '_');
+	}
+
+	private static String requirePostOwner(ApachanChanLocator locator, ApachanChanConfiguration configuration)
+			throws ApiException {
+		String postOwner = configuration.getCookie(getStoredCookieName(locator));
+		if (StringUtils.isEmpty(postOwner)) throw new ApiException(ApiException.SEND_ERROR_NO_ACCESS);
+		return postOwner;
+	}
+
+	public EditPostResult readEditPost(String postNumber, HttpHolder holder) throws HttpException, ApiException,
+			InvalidResponseException {
+		ApachanChanLocator locator = ApachanChanLocator.get(this);
+		String postOwner = requirePostOwner(locator, ApachanChanConfiguration.get(this));
+		HttpRequest.Preset preset = () -> holder;
+		String html = new HttpRequest(locator.createEditFormUri(postNumber), preset)
+				.addCookie(COOKIE_POST_OWNER, postOwner).perform().readString();
+		ApachanHtmlParser.EditForm form = ApachanHtmlParser.parseEditForm(html);
+		if (form == null) {
+			String error = ApachanHtmlParser.parseError(html);
+			throw !StringUtils.isEmpty(error) ? new ApiException(error)
+					: new ApiException(ApiException.SEND_ERROR_NO_ACCESS);
+		}
+		return new EditPostResult(form);
+	}
+
+	public void sendEditPost(String threadNumber, String postNumber, String subject, String comment,
+			boolean originalPost, boolean deleteAttachment, boolean showOriginalPoster, int commentLimit,
+			HttpHolder holder) throws HttpException, ApiException, InvalidResponseException {
+		ApachanChanLocator locator = ApachanChanLocator.get(this);
+		String postOwner = requirePostOwner(locator, ApachanChanConfiguration.get(this));
+		HttpRequest.Preset preset = () -> holder;
+		MultipartEntity entity = new MultipartEntity();
+		entity.add("id", postNumber);
+		entity.add("title", subject);
+		entity.add("text", comment);
+		entity.add("www_file", "");
+		if (originalPost) {
+			entity.add("comment_limit", Integer.toString(commentLimit));
+		} else {
+			if (deleteAttachment) entity.add("delete_img", "1");
+			if (showOriginalPoster) entity.add("show_op", "1");
+		}
+		Uri referer = locator.createThreadUri(ApachanChanLocator.DEFAULT_BOARD_NAME, threadNumber);
+		HttpResponse response = new HttpRequest(locator.createEditPostingUri(originalPost), preset)
+				.setPostMethod(entity).addCookie(COOKIE_POST_OWNER, postOwner)
+				.addHeader("Referer", referer.toString()).setRedirectHandler(HttpRequest.RedirectHandler.NONE)
+				.setSuccessOnly(false).perform();
+		if (response.getResponseCode() >= 300 && response.getResponseCode() < 400) return;
+		String error = ApachanHtmlParser.parseError(response.readString());
+		if (!StringUtils.isEmpty(error)) throw new ApiException(error);
+		throw new InvalidResponseException();
+	}
 
 	@Override
 	public ReadBoardsResult onReadBoards(ReadBoardsData data) throws HttpException, InvalidResponseException {
@@ -90,7 +164,7 @@ public class ApachanChanPerformer extends ChanPerformer {
 
 		ApachanChanLocator locator = ApachanChanLocator.get(this);
 		ApachanChanConfiguration configuration = ApachanChanConfiguration.get(this);
-		String storedCookieName = COOKIE_POST_OWNER + "_" + locator.getPreferredHost().replace('.', '_');
+		String storedCookieName = getStoredCookieName(locator);
 		boolean newThread = data.threadNumber == null;
 		String sectionId = null;
 		String pageCookie = null;

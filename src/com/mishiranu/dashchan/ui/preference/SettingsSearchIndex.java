@@ -323,6 +323,13 @@ public final class SettingsSearchIndex {
 		}
 		add(context, entries, Screen.EXPERIMENTAL, R.string.video_zoom_gestures,
 				R.string.video_zoom_gestures__summary, Preferences.KEY_VIDEO_ZOOM_GESTURES);
+		add(context, entries, Screen.EXPERIMENTAL, R.string.track_replies,
+				R.string.track_replies__summary, Preferences.KEY_TRACK_MY_POSTS);
+		add(context, entries, Screen.EXPERIMENTAL, R.string.tracked_replies_refresh_interval,
+				0, Preferences.KEY_TRACKED_REPLIES_REFRESH_INTERVAL);
+		add(context, entries, Screen.EXPERIMENTAL, R.string.tracked_replies_notifications,
+				R.string.tracked_replies_notifications__summary,
+				Preferences.KEY_TRACKED_REPLIES_NOTIFICATIONS);
 		if (BuildConfig.ALLOW_GMS_SECURITY_PROVIDER) {
 			add(context, entries, Screen.EXPERIMENTAL, R.string.use_gms_security_provider,
 					R.string.use_gms_security_provider__summary, Preferences.KEY_USE_GMS_PROVIDER);
@@ -354,8 +361,8 @@ public final class SettingsSearchIndex {
 		add(context, entries, Screen.INTERFACE, R.string.initial_position, 0, Preferences.KEY_DRAWER_INITIAL_POSITION);
 		add(context, entries, Screen.INTERFACE, R.string.paged_board_navigation,
 				R.string.paged_board_navigation__summary, Preferences.KEY_PAGE_BY_PAGE);
-		add(context, entries, Screen.INTERFACE, R.string.display_hidden_threads, 0,
-				Preferences.KEY_DISPLAY_HIDDEN_THREADS);
+		add(context, entries, Screen.INTERFACE, R.string.remove_hidden_threads,
+				R.string.remove_hidden_threads__summary, Preferences.KEY_REMOVE_HIDDEN_THREADS);
 		add(context, entries, Screen.INTERFACE, R.string.hide_threads_with_swipe, 0,
 				Preferences.KEY_HIDE_THREADS_WITH_SWIPE);
 		add(context, entries, Screen.INTERFACE, R.string.remove_hidden_posts, R.string.remove_hidden_posts__summary,

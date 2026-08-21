@@ -49,6 +49,7 @@ import com.mishiranu.dashchan.content.model.PostNumber;
 import com.mishiranu.dashchan.content.service.WatcherService;
 import com.mishiranu.dashchan.content.storage.CombinedFeedStorage;
 import com.mishiranu.dashchan.content.storage.FavoritesStorage;
+import com.mishiranu.dashchan.content.storage.MyPostsStorage;
 import com.mishiranu.dashchan.graphics.ChanIconDrawable;
 import com.mishiranu.dashchan.util.FlagUtils;
 import com.mishiranu.dashchan.util.GraphicsUtils;
@@ -114,6 +115,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	private boolean mergeChans = false;
 	private boolean showHistory = false;
 	private boolean combinedFeedsEnabled = false;
+	private boolean trackMyPostsEnabled;
 	private boolean collapseLongOpenThreadsEnabled;
 	private boolean pagesExpanded;
 	private Preferences.PagesListMode pagesListMode = null;
@@ -136,6 +138,9 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	public static final int MENU_ITEM_LOCAL_ARCHIVES = 4;
 	public static final int MENU_ITEM_PREFERENCES = 5;
 	public static final int MENU_ITEM_COMBINED_FEEDS = 6;
+	public static final int MENU_ITEM_MY_POSTS = 7;
+
+	private final Runnable myPostsObserver = () -> updateConfigurationInternal(chanName, true);
 
 	private enum CategoriesOrder {PAGES_FIRST, FAVORITES_FIRST, HIDE_PAGES}
 
@@ -332,6 +337,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 				LinearLayout.LayoutParams.WRAP_CONTENT);
 
 		inputMethodManager = (InputMethodManager) context.getSystemService(Context.INPUT_METHOD_SERVICE);
+		MyPostsStorage.getInstance().getObservable().register(myPostsObserver);
 		updatePreferencesWithoutConfiguration();
 		updateChansWithoutConfiguration();
 	}
@@ -365,6 +371,11 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 			if (chanName != null && Preferences.isRememberHistory()) {
 				menu.add(new ListItem(ListItem.Type.MENU, MENU_ITEM_HISTORY, typedArray.getResourceId(2, 0),
 						context.getString(R.string.history)));
+			}
+			if (trackMyPostsEnabled) {
+				int unreadCount = MyPostsStorage.getInstance().getUnreadCount();
+				menu.add(new ListItem(ListItem.Type.MENU, MENU_ITEM_MY_POSTS, R.drawable.ic_reply,
+						context.getString(R.string.replies), unreadCount));
 			}
 			menu.add(new ListItem(ListItem.Type.MENU, MENU_ITEM_LOCAL_ARCHIVES, typedArray.getResourceId(3, 0),
 					context.getString(R.string.local_archives)));
@@ -448,15 +459,18 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		boolean mergeChans = Preferences.isMergeChans();
 		boolean showHistory = Preferences.isRememberHistory();
 		boolean combinedFeedsEnabled = Preferences.isCombinedFeedsEnabled();
+		boolean trackMyPostsEnabled = Preferences.isTrackMyPostsEnabled();
 		boolean collapseLongOpenThreadsEnabled = Preferences.isCollapseLongOpenThreadsEnabled();
 		Preferences.PagesListMode pagesListMode = Preferences.getPagesListMode();
 		if (this.mergeChans != mergeChans || this.showHistory != showHistory ||
 				this.combinedFeedsEnabled != combinedFeedsEnabled ||
+				this.trackMyPostsEnabled != trackMyPostsEnabled ||
 				this.collapseLongOpenThreadsEnabled != collapseLongOpenThreadsEnabled ||
 				this.pagesListMode != pagesListMode) {
 			this.mergeChans = mergeChans;
 			this.showHistory = showHistory;
 			this.combinedFeedsEnabled = combinedFeedsEnabled;
+			this.trackMyPostsEnabled = trackMyPostsEnabled;
 			this.collapseLongOpenThreadsEnabled = collapseLongOpenThreadsEnabled;
 			this.pagesExpanded = false;
 			this.pagesListMode = pagesListMode;
@@ -1155,6 +1169,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		public final String boardName;
 		public final String threadNumber;
 		public final String title;
+		public final int badgeCount;
 
 		private static final long ID_HASH_OFFSET = 0xcbf29ce484222325L;
 		private static final long ID_HASH_PRIME = 0x100000001b3L;
@@ -1211,7 +1226,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		}
 
 		private ListItem(Type type, int data, boolean iconChan, int iconResId,
-				String chanName, String boardName, String threadNumber, String title) {
+				String chanName, String boardName, String threadNumber, String title, int badgeCount) {
 			id = calculateId(type, data, chanName, boardName, threadNumber, title);
 			this.type = type;
 			this.data = data;
@@ -1221,15 +1236,16 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 			this.boardName = boardName;
 			this.threadNumber = threadNumber;
 			this.title = title;
+			this.badgeCount = badgeCount;
 		}
 
 		public ListItem(Type type, int data, int iconResId,
 				String chanName, String boardName, String threadNumber, String title) {
-			this(type, data, false, iconResId, chanName, boardName, threadNumber, title);
+			this(type, data, false, iconResId, chanName, boardName, threadNumber, title, 0);
 		}
 
 		public ListItem(Type type, int data, String chanName, String boardName, String threadNumber, String title) {
-			this(type, data, true, 0, chanName, boardName, threadNumber, title);
+			this(type, data, true, 0, chanName, boardName, threadNumber, title, 0);
 		}
 
 		public ListItem(Type type, String chanName, String boardName, String threadNumber, String title) {
@@ -1237,7 +1253,11 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		}
 
 		public ListItem(Type type, int data, int iconResId, String title) {
-			this(type, data, false, iconResId, null, null, null, title);
+			this(type, data, false, iconResId, null, null, null, title, 0);
+		}
+
+		public ListItem(Type type, int data, int iconResId, String title, int badgeCount) {
+			this(type, data, false, iconResId, null, null, null, title, badgeCount);
 		}
 
 		public boolean isThreadItem() {
@@ -1248,7 +1268,8 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 			return other != null && type == other.type && data == other.data && iconChan == other.iconChan &&
 					iconResId == other.iconResId && CommonUtils.equals(chanName, other.chanName) &&
 					CommonUtils.equals(boardName, other.boardName) &&
-					CommonUtils.equals(threadNumber, other.threadNumber) && CommonUtils.equals(title, other.title);
+					CommonUtils.equals(threadNumber, other.threadNumber) && CommonUtils.equals(title, other.title)
+					&& badgeCount == other.badgeCount;
 		}
 
 		public boolean compare(String chanName, String boardName, String threadNumber) {
@@ -1786,6 +1807,11 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		}
 		TextView textView = makeCommonTextView(false);
 		linearLayout.addView(textView, new LinearLayout.LayoutParams(0, size, 1));
+		TextView badgeView = makeCommonTextView(false);
+		badgeView.setGravity(Gravity.CENTER);
+		badgeView.setVisibility(View.GONE);
+		badgeView.setPadding((int) (8f * density), 0, (int) (16f * density), 0);
+		linearLayout.addView(badgeView, LinearLayout.LayoutParams.WRAP_CONTENT, size);
 		WatcherView watcherView = null;
 		if (viewType.watcher) {
 			watcherView = new WatcherView(context, watcherViewColorSet);
@@ -1822,7 +1848,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		ViewUtils.setSelectableItemBackground(linearLayout);
 		linearLayout.setLayoutParams(new RecyclerView.LayoutParams(RecyclerView.LayoutParams.MATCH_PARENT,
 				RecyclerView.LayoutParams.WRAP_CONTENT));
-		return new ViewHolder(linearLayout, iconView, textView, watcherView, selectionView);
+		return new ViewHolder(linearLayout, iconView, textView, badgeView, watcherView, selectionView);
 	}
 
 	private ViewHolder createSection(ViewGroup parent, boolean button, float density) {
@@ -1852,7 +1878,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		}
 		linearLayout.setLayoutParams(new RecyclerView.LayoutParams(RecyclerView.LayoutParams.MATCH_PARENT,
 				RecyclerView.LayoutParams.WRAP_CONTENT));
-		return new ViewHolder(linearLayout, imageView, textView, null, null);
+		return new ViewHolder(linearLayout, imageView, textView, null, null, null);
 	}
 
 	private final ListViewUtils.ClickCallback<Void, ViewHolder> clickCallback = (holder, position, item, longClick) -> {
@@ -1871,10 +1897,10 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		ViewType enumViewType = ViewType.values()[viewType];
 		switch (enumViewType) {
 			case HEADER: {
-				return new ViewHolder(headerView, null, null, null, null);
+				return new ViewHolder(headerView, null, null, null, null, null);
 			}
 			case RESTART: {
-				return new ViewHolder(restartView, null, null, null, null);
+				return new ViewHolder(restartView, null, null, null, null, null);
 			}
 			case SECTION:
 			case SECTION_BUTTON: {
@@ -1897,6 +1923,10 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	@Override
 	public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
 		ListItem listItem = getItem(position);
+		if (holder.badge != null) {
+			holder.badge.setText(listItem.badgeCount > 0 ? Integer.toString(listItem.badgeCount) : null);
+			holder.badge.setVisibility(listItem.badgeCount > 0 ? View.VISIBLE : View.GONE);
+		}
 		boolean selectableFavorite = favoriteSelectionActionMode != null
 				&& listItem.type == ListItem.Type.FAVORITE && listItem.isThreadItem();
 		if (holder.selection != null) {
@@ -1959,14 +1989,17 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	public static class ViewHolder extends RecyclerView.ViewHolder implements View.OnTouchListener {
 		public final ImageView icon;
 		public final TextView text;
+		public final TextView badge;
 		public final WatcherView watcher;
 		public final CheckBox selection;
 
-		public ViewHolder(View itemView, ImageView icon, TextView text, WatcherView watcher, CheckBox selection) {
+		public ViewHolder(View itemView, ImageView icon, TextView text, TextView badge,
+				WatcherView watcher, CheckBox selection) {
 			super(itemView);
 
 			this.text = text;
 			this.icon = icon;
+			this.badge = badge;
 			this.watcher = watcher;
 			this.selection = selection;
 

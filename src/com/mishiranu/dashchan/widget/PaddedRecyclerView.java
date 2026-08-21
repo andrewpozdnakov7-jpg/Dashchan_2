@@ -256,13 +256,54 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 			result = fastScrollingStartOffset + (fastScrollingCurrentY - fastScrollingStartY) /
 					(height - thumbDrawable.getIntrinsicHeight());
 		} else {
-			result = (fastScrollingCurrentY - thumbDrawable.getIntrinsicHeight() / 2f) /
+			// A post mark denotes the top item on screen, so use the top edge of the thumb as the
+			// common anchor for track taps, dragging and marks. Centering the thumb on a tap used a
+			// different coordinate system and made the selected post miss its mark.
+			result = fastScrollingCurrentY /
 					(height - thumbDrawable.getIntrinsicHeight());
 		}
 		return Math.max(0, Math.min(result, 1));
 	}
 
+	private int getFastScrollerVisibleItemCount(LinearLayoutManager layoutManager) {
+		int first = layoutManager.findFirstVisibleItemPosition();
+		int last = layoutManager.findLastVisibleItemPosition();
+		if (first >= 0 && last >= first) {
+			return last - first + 1;
+		}
+		return Math.max(1, getChildCount());
+	}
+
+	private int getFastScrollerScrollableItemCount(LinearLayoutManager layoutManager) {
+		return Math.max(0, layoutManager.getItemCount() - getFastScrollerVisibleItemCount(layoutManager));
+	}
+
 	private float getCurrentOffset() {
+		LayoutManager layoutManager = getLayoutManager();
+		if (layoutManager instanceof LinearLayoutManager) {
+			LinearLayoutManager linearLayoutManager = (LinearLayoutManager) layoutManager;
+			if (!canScrollVertically(-1)) {
+				return 0f;
+			}
+			if (!canScrollVertically(1)) {
+				return 1f;
+			}
+			int range = getFastScrollerScrollableItemCount(linearLayoutManager);
+			int first = linearLayoutManager.findFirstVisibleItemPosition();
+			if (range > 0 && first >= 0) {
+				float itemOffset = 0f;
+				View firstView = linearLayoutManager.findViewByPosition(first);
+				if (firstView != null) {
+					int itemHeight = linearLayoutManager.getDecoratedMeasuredHeight(firstView);
+					if (itemHeight > 0) {
+						itemOffset = (linearLayoutManager.getPaddingTop() -
+								linearLayoutManager.getDecoratedTop(firstView)) / (float) itemHeight;
+						itemOffset = Math.max(0f, Math.min(itemOffset, 1f));
+					}
+				}
+				return Math.max(0f, Math.min((first + itemOffset) / range, 1f));
+			}
+		}
 		int offset = computeVerticalScrollOffset();
 		int range = computeVerticalScrollRange() - computeVerticalScrollExtent();
 		return Math.max(0, Math.min(range > 0 ? (float) offset / range : 0f, 1));
@@ -273,15 +314,7 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 		int count = layoutManager.getItemCount();
 		if (count > 0) {
 			if (offset < 1f) {
-				int first = layoutManager.findFirstCompletelyVisibleItemPosition();
-				int last = layoutManager.findLastCompletelyVisibleItemPosition();
-				int childCount;
-				if (first >= 0 && last >= first) {
-					childCount = last - first + 1;
-				} else {
-					childCount = getChildCount();
-				}
-				int position = (int) ((count - childCount) * offset + 0.5f);
+				int position = (int) (getFastScrollerScrollableItemCount(layoutManager) * offset + 0.5f);
 				layoutManager.scrollToPositionWithOffset(position, 0);
 			} else {
 				scrollToPosition(count - 1);
@@ -402,7 +435,10 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 			trackDrawable.draw(canvas);
 			if (importantPostsMarksFastScrollBarDecoration != null &&
 					importantPostsMarksFastScrollBarDecoration.hasMarks()) {
-				importantPostsMarksFastScrollBarDecoration.draw(trackLeft, trackTop, trackRight, trackBottom, canvas);
+				LinearLayoutManager layoutManager = (LinearLayoutManager) getLayoutManager();
+				int scrollableItemCount = getFastScrollerScrollableItemCount(layoutManager);
+				importantPostsMarksFastScrollBarDecoration.draw(trackLeft, top, trackRight,
+						top + height - thumbHeight, scrollableItemCount, canvas);
 			}
 			int thumbExtra = (maxWidth - thumbDrawable.getIntrinsicWidth()) / 2;
 			thumbDrawable.setState(fastScrolling ? STATE_PRESSED : STATE_NORMAL);

@@ -798,9 +798,18 @@ public class Preferences {
 
 	public static final String KEY_DISPLAY_HIDDEN_THREADS = "display_hidden_threads";
 	public static final boolean DEFAULT_DISPLAY_HIDDEN_THREADS = true;
+	public static final String KEY_REMOVE_HIDDEN_THREADS = "remove_hidden_threads";
+	public static final boolean DEFAULT_REMOVE_HIDDEN_THREADS = false;
 
 	public static boolean isDisplayHiddenThreads() {
-		return PREFERENCES.getBoolean(KEY_DISPLAY_HIDDEN_THREADS, DEFAULT_DISPLAY_HIDDEN_THREADS);
+		return !isRemoveHiddenThreads();
+	}
+
+	public static boolean isRemoveHiddenThreads() {
+		if (PREFERENCES.contains(KEY_REMOVE_HIDDEN_THREADS)) {
+			return PREFERENCES.getBoolean(KEY_REMOVE_HIDDEN_THREADS, DEFAULT_REMOVE_HIDDEN_THREADS);
+		}
+		return !PREFERENCES.getBoolean(KEY_DISPLAY_HIDDEN_THREADS, DEFAULT_DISPLAY_HIDDEN_THREADS);
 	}
 
 	public static final String KEY_REMOVE_HIDDEN_POSTS = "remove_hidden_posts";
@@ -2344,6 +2353,39 @@ public class Preferences {
 
 	public static boolean isWatcherWatchInitially() {
 		return PREFERENCES.getBoolean(KEY_WATCHER_WATCH_INITIALLY, DEFAULT_WATCHER_WATCH_INITIALLY);
+	}
+
+	public static final String KEY_TRACK_MY_POSTS = "track_my_posts";
+	public static final boolean DEFAULT_TRACK_MY_POSTS = false;
+	public static final String KEY_TRACKED_REPLIES_REFRESH_INTERVAL = "tracked_replies_refresh_interval";
+	public static final String DEFAULT_TRACKED_REPLIES_REFRESH_INTERVAL = "5";
+	public static final int MIN_TRACKED_REPLIES_REFRESH_INTERVAL = 1;
+	public static final int MAX_TRACKED_REPLIES_REFRESH_INTERVAL = 1440;
+	public static final String KEY_TRACKED_REPLIES_NOTIFICATIONS = "tracked_replies_notifications";
+	public static final boolean DEFAULT_TRACKED_REPLIES_NOTIFICATIONS = true;
+
+	public static boolean isTrackMyPostsEnabled() {
+		return PREFERENCES.getBoolean(KEY_TRACK_MY_POSTS, DEFAULT_TRACK_MY_POSTS);
+	}
+
+	public static int getTrackedRepliesRefreshIntervalMinutes() {
+		int value;
+		try {
+			value = Integer.parseInt(PREFERENCES.getString(KEY_TRACKED_REPLIES_REFRESH_INTERVAL,
+					DEFAULT_TRACKED_REPLIES_REFRESH_INTERVAL));
+		} catch (NumberFormatException e) {
+			value = Integer.parseInt(DEFAULT_TRACKED_REPLIES_REFRESH_INTERVAL);
+		}
+		return clamp(value, MIN_TRACKED_REPLIES_REFRESH_INTERVAL, MAX_TRACKED_REPLIES_REFRESH_INTERVAL);
+	}
+
+	public static int getTrackedRepliesRefreshInterval() {
+		return getTrackedRepliesRefreshIntervalMinutes() * 60 * 1000;
+	}
+
+	public static boolean isTrackedRepliesNotificationsEnabled() {
+		return PREFERENCES.getBoolean(KEY_TRACKED_REPLIES_NOTIFICATIONS,
+				DEFAULT_TRACKED_REPLIES_NOTIFICATIONS);
 	}
 
 	public static final String KEY_WATCHER_WIFI_ONLY = "watcher_wifi_only";
