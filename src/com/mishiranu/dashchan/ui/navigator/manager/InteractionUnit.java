@@ -20,6 +20,7 @@ import com.mishiranu.dashchan.content.model.PostItem;
 import com.mishiranu.dashchan.content.model.PostNumber;
 import com.mishiranu.dashchan.content.service.DownloadService;
 import com.mishiranu.dashchan.text.style.LinkSuffixSpan;
+import com.mishiranu.dashchan.ui.ApachanEditPostDialog;
 import com.mishiranu.dashchan.ui.DialogMenu;
 import com.mishiranu.dashchan.ui.InstanceDialog;
 import com.mishiranu.dashchan.ui.SearchImageDialog;
@@ -55,7 +56,8 @@ public class InteractionUnit {
 				String threadNumber = chan.locator.safe(false).getThreadNumber(uri);
 				PostNumber postNumber = chan.locator.safe(false).getPostNumber(uri);
 				if (threadNumber != null) {
-					if (sameChan && chan.configuration.getOption(ChanConfiguration.OPTION_READ_SINGLE_POST)) {
+					if (sameChan && (postNumber != null ||
+							chan.configuration.getOption(ChanConfiguration.OPTION_READ_SINGLE_POST))) {
 						uiManager.dialog().displayReplyAsync(configurationSet,
 								chan.name, boardName, threadNumber, postNumber);
 					} else {
@@ -348,6 +350,11 @@ public class InteractionUnit {
 					configurationSet.chanName, postItem, PostCopyShareAction.SHARE_LINK));
 		}
 		if (!postItem.isDeleted()) {
+			if (userPost && board.allowEditing) {
+				dialogMenu.add(R.string.edit_post, () -> ApachanEditPostDialog.show(
+						configurationSet.fragmentManager, chan.name, postItem.getBoardName(),
+						postItem.getThreadNumber(), postItem.getPostNumber().toString()));
+			}
 			ChanConfiguration.Voting voting = board.allowVotes
 					? chan.configuration.safe().obtainVoting(postItem.getBoardName()) : null;
 			if (voting != null && !postItem.hasSubmittedVote()) {

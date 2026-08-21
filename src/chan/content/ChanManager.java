@@ -89,13 +89,15 @@ public class ChanManager {
 	private static final String BUILTIN_APACHAN_NAME = "apachan";
 	private static final String BUILTIN_ARHIVACH_NAME = "arhivach";
 	private static final String BUILTIN_ZCHAN_NAME = "zchan";
+	private static final String BUILTIN_ENDCHAN_NAME = "endchan";
 	private static final String[] BUILTIN_REPLACED_PACKAGE_NAMES = {
 			"com.mishiranu.dashchan.chan.dvach", "io.dashchan2.chan.dvach",
 			"com.mishiranu.dashchan.chan.fourchan", "io.dashchan2.chan.fourchan",
 			"com.mishiranu.dashchan.chan.ejchan", "io.dashchan2.chan.ejchan",
 			"com.mishiranu.dashchan.chan.apachan", "io.dashchan2.chan.apachan",
 			"com.mishiranu.dashchan.chan.arhivach", "io.dashchan2.chan.arhivach",
-			"com.mishiranu.dashchan.chan.zchan", "io.dashchan2.chan.zchan"};
+			"com.mishiranu.dashchan.chan.zchan", "io.dashchan2.chan.zchan",
+			"com.mishiranu.dashchan.chan.endchan", "io.dashchan2.chan.endchan"};
 
 	private static final int PACKAGE_MANAGER_SIGNATURE_FLAGS = PackageManager.GET_SIGNING_CERTIFICATES;
 
@@ -403,6 +405,20 @@ public class ChanManager {
 		return new Extension(extensionItem.changeLoadError(result.error), result.chan);
 	}
 
+	private static Extension loadBuiltinEndchan(Fingerprints applicationFingerprints) {
+		MainApplication application = MainApplication.getInstance();
+		ExtensionItem extensionItem = new ExtensionItem(ExtensionItem.Type.CHAN, BUILTIN_ENDCHAN_NAME, "Endchan",
+				ExtensionItem.TrustState.TRUSTED, application.getPackageName(), BuildConfig.VERSION_NAME,
+				BuildConfig.VERSION_CODE, application.getApplicationInfo(), applicationFingerprints,
+				MAX_VERSION, true, R.drawable.ic_custom_endchan, null, null,
+				"com.mishiranu.dashchan.chan.endchan.EndchanChanConfiguration",
+				"com.mishiranu.dashchan.chan.endchan.EndchanChanPerformer",
+				"com.mishiranu.dashchan.chan.endchan.EndchanChanLocator",
+				"com.mishiranu.dashchan.chan.endchan.EndchanChanMarkup", true);
+		LoadChanResult result = loadChan(extensionItem, application.getPackageManager());
+		return new Extension(extensionItem.changeLoadError(result.error), result.chan);
+	}
+
 	@SuppressLint("PackageManagerGetSignatures")
 	private ChanManager() {
 		String packageName = MainApplication.getInstance().getPackageName();
@@ -448,6 +464,9 @@ public class ChanManager {
 			Extension builtInZchan = loadBuiltinZchan(applicationFingerprints);
 			extensions.add(builtInZchan);
 			usedExtensionNames.add(builtInZchan.item.name);
+			Extension builtInEndchan = loadBuiltinEndchan(applicationFingerprints);
+			extensions.add(builtInEndchan);
+			usedExtensionNames.add(builtInEndchan.item.name);
 			Collections.addAll(loadedPackageNames, BUILTIN_REPLACED_PACKAGE_NAMES);
 			for (String knownPackageName : BuildConfig.KNOWN_CHAN_EXTENSION_PACKAGES) {
 				loadKnownExtension(packageManager, knownPackageName, loadedPackageNames,

@@ -1159,6 +1159,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 			case ARCHIVE:
 			case BOARDS:
 			case USER_BOARDS:
+			case MY_POSTS:
 			case HISTORY: {
 				pair = prepareAddPage(content, chanName, boardName, null, null, null);
 				break;
@@ -1415,6 +1416,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 					}
 					case BOARDS:
 					case USER_BOARDS:
+					case MY_POSTS:
 					case HISTORY: {
 						displayUp = page.boardName != null || getPagesStackSize(page.chanName) > 1;
 						break;
@@ -2046,9 +2048,10 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 			if (page == null) {
 				return false;
 			} else {
-				switch (page.content) {
+					switch (page.content) {
 					case BOARDS:
 					case USER_BOARDS:
+					case MY_POSTS:
 					case HISTORY: {
 						return false;
 					}
@@ -2202,6 +2205,10 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 			}
 			case DrawerForm.MENU_ITEM_HISTORY: {
 				content = Page.Content.HISTORY;
+				break;
+			}
+			case DrawerForm.MENU_ITEM_MY_POSTS: {
+				content = Page.Content.MY_POSTS;
 				break;
 			}
 			case DrawerForm.MENU_ITEM_LOCAL_ARCHIVES: {

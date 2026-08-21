@@ -32,6 +32,7 @@
 	<item type="id" name="menu_list" />
 	<item type="id" name="menu_make_home_page" />
 	<item type="id" name="menu_make_threadshot" />
+	<item type="id" name="menu_mark_replies_read" />
 	<item type="id" name="menu_my_posts" />
 	<item type="id" name="menu_new_rule" />
 	<item type="id" name="menu_new_thread" />
@@ -41,6 +42,7 @@
 	<item type="id" name="menu_open_original_thread" />
 	<item type="id" name="menu_pages" />
 	<item type="id" name="menu_refresh" />
+	<item type="id" name="menu_reply_history" />
 	<item type="id" name="menu_reload" />
 	<item type="id" name="menu_replies" />
 	<item type="id" name="menu_reply" />

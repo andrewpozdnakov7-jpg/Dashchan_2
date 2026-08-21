@@ -10,6 +10,7 @@ import com.mishiranu.dashchan.ui.navigator.page.BoardsPage;
 import com.mishiranu.dashchan.ui.navigator.page.CombinedThreadsPage;
 import com.mishiranu.dashchan.ui.navigator.page.HistoryPage;
 import com.mishiranu.dashchan.ui.navigator.page.ListPage;
+import com.mishiranu.dashchan.ui.navigator.page.MyPostsPage;
 import com.mishiranu.dashchan.ui.navigator.page.PostsPage;
 import com.mishiranu.dashchan.ui.navigator.page.SearchPage;
 import com.mishiranu.dashchan.ui.navigator.page.ThreadsPage;
@@ -24,6 +25,7 @@ public final class Page implements Parcelable {
 		ARCHIVE(ArchivePage::new),
 		BOARDS(BoardsPage::new),
 		USER_BOARDS(UserBoardsPage::new),
+		MY_POSTS(MyPostsPage::new),
 		HISTORY(HistoryPage::new);
 
 		private interface PageFactory {
@@ -63,6 +65,7 @@ public final class Page implements Parcelable {
 	public boolean canDestroyIfNotInStack() {
 		return content == Content.COMBINED_THREADS || content == Content.SEARCH || content == Content.ARCHIVE
 				|| content == Content.BOARDS
+				|| content == Content.MY_POSTS
 				|| content == Content.HISTORY;
 	}
 
@@ -73,11 +76,12 @@ public final class Page implements Parcelable {
 		}
 		return content == Content.COMBINED_THREADS || content == Content.SEARCH || content == Content.ARCHIVE
 				|| content == Content.USER_BOARDS
+				|| content == Content.MY_POSTS
 				|| content == Content.HISTORY;
 	}
 
 	public boolean isMultiChanAllowed() {
-		return content == Content.COMBINED_THREADS || content == Content.HISTORY;
+		return content == Content.COMBINED_THREADS || content == Content.MY_POSTS || content == Content.HISTORY;
 	}
 
 	public boolean isThreadsOrPosts(String chanName, String boardName, String threadNumber) {
@@ -101,6 +105,7 @@ public final class Page implements Parcelable {
 			case SEARCH:
 			case BOARDS:
 			case USER_BOARDS:
+			case MY_POSTS:
 			case HISTORY: {
 				compareContentTypeOnlyThis = true;
 				break;
@@ -113,6 +118,7 @@ public final class Page implements Parcelable {
 			case SEARCH:
 			case BOARDS:
 			case USER_BOARDS:
+			case MY_POSTS:
 			case HISTORY: {
 				compareContentTypeOnlyCompared = true;
 				break;

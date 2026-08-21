@@ -22,11 +22,13 @@ import com.mishiranu.dashchan.content.database.PagesDatabase;
 import com.mishiranu.dashchan.content.model.ErrorItem;
 import com.mishiranu.dashchan.content.model.PendingUserPost;
 import com.mishiranu.dashchan.content.storage.FavoritesStorage;
+import com.mishiranu.dashchan.content.storage.MyPostsStorage;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
 import com.mishiranu.dashchan.widget.ThemeEngine;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
@@ -47,6 +49,31 @@ public class BackgroundWatcherWorker extends Worker {
 	private volatile CountDownLatch completionLatch;
 	private volatile boolean stoppedForForeground;
 
+	private static class CheckTarget {
+		public final String chanName;
+		public final String boardName;
+		public final String threadNumber;
+		public final FavoritesStorage.FavoriteItem favoriteItem;
+		public final boolean tracked;
+
+		public CheckTarget(String chanName, String boardName, String threadNumber,
+				FavoritesStorage.FavoriteItem favoriteItem, boolean tracked) {
+			this.chanName = chanName;
+			this.boardName = boardName;
+			this.threadNumber = threadNumber;
+			this.favoriteItem = favoriteItem;
+			this.tracked = tracked;
+		}
+	}
+
+	private static String makeTargetKey(String chanName, String boardName, String threadNumber) {
+		return chanName + "\n" + StringUtils.emptyIfNull(boardName) + "\n" + threadNumber;
+	}
+
+	private static boolean isAutomaticCheckEnabled() {
+		return Preferences.isBackgroundReplyCheckEnabled() || Preferences.isTrackMyPostsEnabled();
+	}
+
 	public BackgroundWatcherWorker(@NonNull Context context, @NonNull WorkerParameters workerParams) {
 		super(context, workerParams);
 	}
@@ -62,7 +89,7 @@ public class BackgroundWatcherWorker extends Worker {
 	private static void updateSchedule(Context context, ExistingPeriodicWorkPolicy policy) {
 		Context applicationContext = context.getApplicationContext();
 		WorkManager workManager = WorkManager.getInstance(applicationContext);
-		if (Preferences.isBackgroundReplyCheckEnabled()) {
+		if (isAutomaticCheckEnabled()) {
 			NetworkType networkType = Preferences.isWatcherWifiOnly()
 					? NetworkType.UNMETERED : NetworkType.CONNECTED;
 			Constraints constraints = new Constraints.Builder()
@@ -97,7 +124,7 @@ public class BackgroundWatcherWorker extends Worker {
 	}
 
 	private boolean beginRun() {
-		if (!Preferences.isBackgroundReplyCheckEnabled()) {
+		if (!isAutomaticCheckEnabled()) {
 			return false;
 		}
 		synchronized (RUN_LOCK) {
@@ -139,20 +166,30 @@ public class BackgroundWatcherWorker extends Worker {
 	}
 
 	private Result runCheck() {
-		List<FavoritesStorage.FavoriteItem> favorites = ConcurrentUtils.mainGet(() -> {
-			ArrayList<FavoritesStorage.FavoriteItem> result = new ArrayList<>();
+		List<CheckTarget> targets = ConcurrentUtils.mainGet(() -> {
+			LinkedHashMap<String, CheckTarget> result = new LinkedHashMap<>();
 			for (FavoritesStorage.FavoriteItem favoriteItem : FavoritesStorage.getInstance().getThreads(null)) {
 				if (favoriteItem.watcherEnabled) {
-					result.add(new FavoritesStorage.FavoriteItem(favoriteItem));
+					FavoritesStorage.FavoriteItem copy = new FavoritesStorage.FavoriteItem(favoriteItem);
+					result.put(makeTargetKey(copy.chanName, copy.boardName, copy.threadNumber),
+							new CheckTarget(copy.chanName, copy.boardName, copy.threadNumber, copy, false));
 				}
 			}
-			return result;
+			if (Preferences.isTrackMyPostsEnabled()) {
+				for (MyPostsStorage.ThreadKey key : MyPostsStorage.getInstance().getActiveThreadKeys()) {
+					String targetKey = makeTargetKey(key.chanName, key.boardName, key.threadNumber);
+					CheckTarget target = result.get(targetKey);
+					result.put(targetKey, new CheckTarget(key.chanName, key.boardName, key.threadNumber,
+							target != null ? target.favoriteItem : null, true));
+				}
+			}
+			return new ArrayList<>(result.values());
 		});
-		favorites.removeIf(favoriteItem -> {
-			Chan chan = Chan.get(favoriteItem.chanName);
+		targets.removeIf(target -> {
+			Chan chan = Chan.get(target.chanName);
 			return chan.name == null || chan.configuration.getOption(ChanConfiguration.OPTION_LOCAL_MODE);
 		});
-		if (favorites.isEmpty()) {
+		if (targets.isEmpty()) {
 			return Result.success();
 		}
 
@@ -160,24 +197,24 @@ public class BackgroundWatcherWorker extends Worker {
 		WatcherNotifications.configure(context);
 		int notificationColor = ConcurrentUtils.mainGet(() -> ThemeEngine.attachAndApply(context).accent);
 		Set<Preferences.NotificationFeature> notificationFeatures = Preferences.getWatcherNotifications();
-		CountDownLatch latch = new CountDownLatch(favorites.size());
+		CountDownLatch latch = new CountDownLatch(targets.size());
 		completionLatch = latch;
 		executor = ConcurrentUtils.newThreadPool(3, 3, 0, "BackgroundWatcher", null);
 
-		for (FavoritesStorage.FavoriteItem favoriteItem : favorites) {
+		for (CheckTarget target : targets) {
 			if (!acceptResults.get() || isApplicationVisible()) {
 				stopRun(true);
 				break;
 			}
 			Set<PendingUserPost> pendingUserPosts = ConcurrentUtils.mainGet(() -> {
-				Set<PendingUserPost> pending = PostingService.getPendingUserPosts(favoriteItem.chanName,
-						favoriteItem.boardName, favoriteItem.threadNumber);
+				Set<PendingUserPost> pending = PostingService.getPendingUserPosts(target.chanName,
+						target.boardName, target.threadNumber);
 				return pending != null ? new HashSet<>(pending) : null;
 			});
-			ReadPostsTask.Callback callback = new Callback(context, favoriteItem, notificationColor,
+			ReadPostsTask.Callback callback = new Callback(context, target, notificationColor,
 					notificationFeatures, latch, acceptResults);
-			ReadPostsTask task = new ReadPostsTask(callback, Chan.get(favoriteItem.chanName),
-					favoriteItem.boardName, favoriteItem.threadNumber, false, pendingUserPosts);
+			ReadPostsTask task = new ReadPostsTask(callback, Chan.get(target.chanName),
+					target.boardName, target.threadNumber, false, pendingUserPosts);
 			tasks.add(task);
 			try {
 				task.execute(executor);
@@ -246,18 +283,18 @@ public class BackgroundWatcherWorker extends Worker {
 
 	private static class Callback implements ReadPostsTask.Callback {
 		private final Context context;
-		private final FavoritesStorage.FavoriteItem favoriteItem;
+		private final CheckTarget target;
 		private final int notificationColor;
 		private final Set<Preferences.NotificationFeature> notificationFeatures;
 		private final CountDownLatch latch;
 		private final AtomicBoolean acceptResults;
 		private final AtomicBoolean finished = new AtomicBoolean();
 
-		public Callback(Context context, FavoritesStorage.FavoriteItem favoriteItem, int notificationColor,
+		public Callback(Context context, CheckTarget target, int notificationColor,
 				Set<Preferences.NotificationFeature> notificationFeatures, CountDownLatch latch,
 				AtomicBoolean acceptResults) {
 			this.context = context;
-			this.favoriteItem = favoriteItem;
+			this.target = target;
 			this.notificationColor = notificationColor;
 			this.notificationFeatures = notificationFeatures;
 			this.latch = latch;
@@ -267,46 +304,50 @@ public class BackgroundWatcherWorker extends Worker {
 		@Override
 		public void onPendingUserPostsConsumed(Set<PendingUserPost> pendingUserPosts) {
 			if (acceptResults.get() && pendingUserPosts != null && !pendingUserPosts.isEmpty()) {
-				PostingService.consumePendingUserPosts(favoriteItem.chanName, favoriteItem.boardName,
-						favoriteItem.threadNumber, pendingUserPosts);
+				PostingService.consumePendingUserPosts(target.chanName, target.boardName,
+						target.threadNumber, pendingUserPosts);
 			}
 		}
 
 		@Override
 		public void onReadPostsSuccess(PagesDatabase.Cache.State cacheState,
 				List<PagesDatabase.InsertResult.Reply> replies, Integer newCount) {
-			if (acceptResults.get() && !replies.isEmpty() &&
-					notificationFeatures.contains(Preferences.NotificationFeature.ENABLED)) {
-				String title = StringUtils.emptyIfNull(favoriteItem.title);
+			boolean notificationsEnabled = (target.favoriteItem != null
+					&& notificationFeatures.contains(Preferences.NotificationFeature.ENABLED))
+					|| (target.tracked && Preferences.isTrackedRepliesNotificationsEnabled());
+			if (acceptResults.get() && !replies.isEmpty() && notificationsEnabled) {
+				String title = target.favoriteItem != null
+						? StringUtils.emptyIfNull(target.favoriteItem.title) : "";
 				if (title.trim().isEmpty()) {
-					Chan chan = Chan.get(favoriteItem.chanName);
-					title = chan.configuration.getTitle() + " / " + favoriteItem.boardName
-							+ " / " + favoriteItem.threadNumber;
+					Chan chan = Chan.get(target.chanName);
+					title = chan.configuration.getTitle() + " / " + target.boardName
+							+ " / " + target.threadNumber;
 				}
 				WatcherNotifications.notifyReplies(context, notificationColor,
 						notificationFeatures.contains(Preferences.NotificationFeature.IMPORTANT),
 						notificationFeatures.contains(Preferences.NotificationFeature.SOUND),
 						notificationFeatures.contains(Preferences.NotificationFeature.VIBRATION),
-						title, favoriteItem.chanName, favoriteItem.boardName,
-						favoriteItem.threadNumber, replies);
+						title, target.chanName, target.boardName,
+						target.threadNumber, replies);
 			}
 			finish();
 		}
 
 		@Override
-		public void onReadPostsRedirect(RedirectException.Target target) {
-			if (acceptResults.get()) {
-				FavoritesStorage.getInstance().setWatcherEnabled(favoriteItem.chanName,
-						favoriteItem.boardName, favoriteItem.threadNumber, false);
+		public void onReadPostsRedirect(RedirectException.Target redirectTarget) {
+			if (acceptResults.get() && target.favoriteItem != null) {
+				FavoritesStorage.getInstance().setWatcherEnabled(target.chanName,
+						target.boardName, target.threadNumber, false);
 			}
 			finish();
 		}
 
 		@Override
 		public void onReadPostsFail(ErrorItem errorItem) {
-			if (acceptResults.get() && errorItem.type == ErrorItem.Type.THREAD_NOT_EXISTS) {
-				FavoritesStorage.getInstance().setWatcherEnabled(favoriteItem.chanName,
-						favoriteItem.boardName, favoriteItem.threadNumber, false);
+			if (acceptResults.get() && target.favoriteItem != null
+					&& errorItem.type == ErrorItem.Type.THREAD_NOT_EXISTS) {
+				FavoritesStorage.getInstance().setWatcherEnabled(target.chanName,
+						target.boardName, target.threadNumber, false);
 			}
 			finish();
 		}

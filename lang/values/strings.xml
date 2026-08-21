@@ -164,6 +164,7 @@
 	<string name="cyclical_threads_refresh_mode">Cyclical threads refresh mode</string>
 	<string name="database">Database</string>
 	<string name="date_created">Date created</string>
+	<string name="last_bump">Last bump</string>
 	<string name="ddos_protection_bypass_failed">DDoS-protection bypass failed</string>
 	<string name="default_name_cant_be_hidden">Default name can\'t be hidden</string>
 	<string name="default_starting_board">Default starting board</string>
@@ -176,6 +177,8 @@
 	<string name="details">Details</string>
 	<string name="disabled">Disabled</string>
 	<string name="display_hidden_threads">Display hidden threads</string>
+	<string name="remove_hidden_threads">Fully remove hidden threads</string>
+	<string name="remove_hidden_threads__summary">Do not show even collapsed rows for hidden threads. Applies to manual hiding and autohide rules.</string>
 	<string name="display_post_icons">Display post icons</string>
 	<string name="display_post_icons__summary">Post icons may be available on some boards</string>
 	<string name="do_nothing">Do nothing</string>
@@ -282,6 +285,10 @@
 	<string name="open_configured_attachment_folder">Open the download folder for attachments</string>
 	<string name="open_configured_attachment_folder__summary">Open the system Android file picker in the download folder configured in Media settings. When disabled, Android chooses the initial location</string>
 	<string name="edit_image">Edit image</string>
+	<string name="edit_post">Edit post</string>
+	<string name="delete_attachment">Delete attachment</string>
+	<string name="post_edited">Post updated</string>
+	<string name="comment_is_empty">Comment is empty</string>
 	<string name="image_editor_loading">Loading image…</string>
 	<string name="image_editor_saving">Saving edited copy…</string>
 	<string name="image_editor_load_failed">Could not open this image in the editor</string>
@@ -936,7 +943,7 @@
 	<string name="forum_ejchan">Ejchan</string>
 	<string name="forum_apachan">Apachan</string>
 	<string name="forum_arhivach">Arhivach</string>
-	<string name="forum_pikabu">Pikabu</string>
+	<string name="forum_pikabu">Kekabu</string>
 	<string name="ejchan_boards">Boards</string>
 	<string name="ejchan_captcha">Ejchan captcha</string>
 	<string name="ejchan_epass">E-pass</string>
@@ -945,7 +952,7 @@
 	<string name="ejchan_api_unavailable">Ejchan returned a web page instead of API data. Check the selected domain and VPN in Ejchan settings.</string>
 	<string name="automatic_domain_selection">Select domains automatically</string>
 	<string name="automatic_domain_selection__summary">Slooop selects a forum domain based on the country and VPN. When disabled, the domain selected in the forum settings is used.</string>
-	<string name="pikabu_extension_in_development">The Pikabu extension is in development.</string>
+	<string name="pikabu_extension_in_development">The Kekabu extension is in development.</string>
 	<string name="display_post_year">Show year in post dates</string>
 	<string name="hide_thread_title">Hide thread title in toolbar</string>
 	<string name="hide_thread_title__summary">Do not show the thread name or address while viewing it</string>
@@ -1040,4 +1047,29 @@
 	<string name="zchan_identity_generate__summary">Creates a new random installation UUID and generic device data. The server-issued ZID is preserved.</string>
 	<string name="zchan_identity_reset">Restore anonymized defaults</string>
 	<string name="zchan_identity_reset__summary">Keeps the current UUID and ZID, and restores generic device data.</string>
+	<string name="apachan_video_button">Insert an Apachan video link</string>
+	<string name="endchan_global_report">Global report</string>
+	<string name="endchan_ip_block_bypass_failed">Could not pass Endchan IP block verification</string>
+	<string name="replies_with_unread__format">Replies (%d)</string>
+	<string name="track_replies">Track replies</string>
+	<string name="track_replies__summary">Store messages sent through Slooop and automatically check for replies</string>
+	<string name="tracked_replies_refresh_interval">Reply check interval</string>
+	<string name="every_number_min__format">Every %d min.</string>
+	<string name="tracked_replies_notifications">Notify about new replies</string>
+	<string name="tracked_replies_notifications__summary">Show an Android system notification when a new reply is received</string>
+	<string name="check_replies">Check replies</string>
+	<string name="tracked_replies_is_empty">There are no tracked messages yet</string>
+	<string name="no_unread_replies">There are no unread replies</string>
+	<string name="reply_tracking_is_disabled">Reply tracking is disabled in Experimental features</string>
+	<string name="stop_tracking_replies">Stop tracking replies to this message</string>
+	<string name="reply_history">Reply history</string>
+	<string name="reply_history_is_empty">Reply history is empty</string>
+	<string name="mark_all_replies_read">Mark all replies as read</string>
+	<string name="tracked_post_number__format">Post #%s</string>
+	<string name="thread_is_deleted">Thread is deleted or unavailable</string>
+	<string name="replies_check_finished_with_errors__format">Check finished with errors: %d</string>
+	<plurals name="new_replies_count__format">
+		<item quantity="one">%d new reply</item>
+		<item quantity="other">%d new replies</item>
+	</plurals>
 </resources>

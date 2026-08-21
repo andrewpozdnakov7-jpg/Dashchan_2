@@ -85,6 +85,14 @@ public class ApachanChanLocator extends ChanLocator {
 		return buildPath("functions", newThread ? "new_thread.php" : "new_post.php");
 	}
 
+	public Uri createEditFormUri(String postNumber) {
+		return buildQuery("functions/edit.php", "id", postNumber);
+	}
+
+	public Uri createEditPostingUri(boolean originalPost) {
+		return buildPath("functions", originalPost ? "edit_thread.php" : "edit_post.php");
+	}
+
 	public Uri createCookieBootstrapUri() {
 		return buildPath("p.php");
 	}

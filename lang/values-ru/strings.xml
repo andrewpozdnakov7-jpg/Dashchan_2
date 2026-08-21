@@ -168,6 +168,7 @@
 	<string name="cyclical_threads_refresh_mode">Режим обновления цикличных тредов</string>
 	<string name="database">База данных</string>
 	<string name="date_created">Дата создания</string>
+	<string name="last_bump">Последний бамп</string>
 	<string name="ddos_protection_bypass_failed">Не удалось обойти DDoS-защиту</string>
 	<string name="default_name_cant_be_hidden">Нельзя скрыть имя по умолчанию</string>
 	<string name="default_starting_board">Раздел по умолчанию</string>
@@ -180,6 +181,8 @@
 	<string name="details">Подробнее</string>
 	<string name="disabled">Отключено</string>
 	<string name="display_hidden_threads">Выводить скрытые треды</string>
+	<string name="remove_hidden_threads">Полностью убирать скрытые треды</string>
+	<string name="remove_hidden_threads__summary">Не показывать даже свёрнутые строки скрытых тредов. Действует на ручное скрытие и правила автоскрытия.</string>
 	<string name="display_post_icons">Показывать иконки сообщений</string>
 	<string name="display_post_icons__summary">Иконки доступны в некоторых разделах</string>
 	<string name="do_nothing">Ничего не делать</string>
@@ -288,6 +291,10 @@
 	<string name="open_configured_attachment_folder">Открывать папку загрузок для вложений</string>
 	<string name="open_configured_attachment_folder__summary">Открывать системный выбор файлов Android в папке загрузок, указанной в разделе «Медиа». Если отключено, начальную папку выбирает Android</string>
 	<string name="edit_image">Редактировать изображение</string>
+	<string name="edit_post">Редактировать пост</string>
+	<string name="delete_attachment">Удалить вложение</string>
+	<string name="post_edited">Пост обновлён</string>
+	<string name="comment_is_empty">Текст поста пуст</string>
 	<string name="image_editor_loading">Загрузка изображения…</string>
 	<string name="image_editor_saving">Сохранение изменённой копии…</string>
 	<string name="image_editor_load_failed">Не удалось открыть изображение в редакторе</string>
@@ -960,7 +967,7 @@
 	<string name="forum_ejchan">Ежчан</string>
 	<string name="forum_apachan">Апачан</string>
 	<string name="forum_arhivach">Архивач</string>
-	<string name="forum_pikabu">Пикабу</string>
+	<string name="forum_pikabu">Кекабу</string>
 	<string name="ejchan_boards">Доски</string>
 	<string name="ejchan_captcha">Капча Ежчана</string>
 	<string name="ejchan_epass">Е-пропуск</string>
@@ -969,7 +976,7 @@
 	<string name="ejchan_api_unavailable">Ежчан вернул веб-страницу вместо данных API. Проверьте выбранный домен и VPN в настройках Ежчана.</string>
 	<string name="automatic_domain_selection">Автоматически подбирать домен</string>
 	<string name="automatic_domain_selection__summary">Slooop выбирает домен форума с учётом страны и VPN. При выключении используется домен, выбранный в настройках форума.</string>
-	<string name="pikabu_extension_in_development">Расширение Пикабу находится в разработке.</string>
+	<string name="pikabu_extension_in_development">Расширение Кекабу находится в разработке.</string>
 	<string name="display_post_year">Отображать год в датах постов</string>
 	<string name="hide_thread_title">Скрывать заголовок треда в верхней панели</string>
 	<string name="hide_thread_title__summary">Не показывать название и адрес треда при его просмотре</string>
@@ -1067,4 +1074,31 @@
 	<string name="zchan_identity_generate__summary">Создаёт новый случайный UUID установки и обезличенные данные устройства. Выданный сервером ZID сохраняется.</string>
 	<string name="zchan_identity_reset">Вернуть обезличенные значения</string>
 	<string name="zchan_identity_reset__summary">Сохраняет текущие UUID и ZID и возвращает стандартные данные устройства.</string>
+	<string name="apachan_video_button">Вставить ссылку на видео Апачана</string>
+	<string name="endchan_global_report">Глобальная жалоба</string>
+	<string name="endchan_ip_block_bypass_failed">Не удалось пройти проверку блокировки IP на Endchan</string>
+	<string name="replies_with_unread__format">Ответы (%d)</string>
+	<string name="track_replies">Отслеживать ответы</string>
+	<string name="track_replies__summary">Сохранять сообщения, отправленные через Slooop, и автоматически проверять ответы на них</string>
+	<string name="tracked_replies_refresh_interval">Интервал проверки ответов</string>
+	<string name="every_number_min__format">Каждые %d мин.</string>
+	<string name="tracked_replies_notifications">Уведомлять о новых ответах</string>
+	<string name="tracked_replies_notifications__summary">Показывать системное уведомление Android при получении нового ответа</string>
+	<string name="check_replies">Проверить ответы</string>
+	<string name="tracked_replies_is_empty">Отслеживаемых сообщений пока нет</string>
+	<string name="no_unread_replies">Непрочитанных ответов нет</string>
+	<string name="reply_tracking_is_disabled">Отслеживание ответов выключено в экспериментальных функциях</string>
+	<string name="stop_tracking_replies">Не отслеживать ответы на это сообщение</string>
+	<string name="reply_history">Журнал ответов</string>
+	<string name="reply_history_is_empty">Журнал ответов пуст</string>
+	<string name="mark_all_replies_read">Отметить все ответы прочитанными</string>
+	<string name="tracked_post_number__format">Пост №%s</string>
+	<string name="thread_is_deleted">Тред удалён или недоступен</string>
+	<string name="replies_check_finished_with_errors__format">Проверка завершена с ошибками: %d</string>
+	<plurals name="new_replies_count__format">
+		<item quantity="one">%d новый ответ</item>
+		<item quantity="few">%d новых ответа</item>
+		<item quantity="many">%d новых ответов</item>
+		<item quantity="other">%d нового ответа</item>
+	</plurals>
 </resources>

@@ -30,23 +30,26 @@ public class ImportantPostsMarksFastScrollBarDecoration {
 				(!data.userPostsPositions.isEmpty() || !data.repliesPositions.isEmpty());
 	}
 
-	public void draw(int scrollBarLeft, int scrollBarTop, int scrollBarRight, int scrollBarBottom, Canvas canvas) {
-		if (data == null || data.totalPostsCount <= 0) {
+	public void draw(int scrollBarLeft, int scrollBarTop, int scrollBarRight, int scrollBarBottom,
+			int scrollablePostsCount, Canvas canvas) {
+		if (data == null || data.totalPostsCount <= 0 || scrollablePostsCount <= 0) {
 			return;
 		}
 		int scrollBarHeight = scrollBarBottom - scrollBarTop;
 		if (scrollBarHeight <= 0) {
 			return;
 		}
-		float postMarkRealHeight = scrollBarHeight / (float) data.totalPostsCount;
+		// Use the same range as PaddedRecyclerView.scroll(): the number of item positions through
+		// which the top edge of the thumb can travel. This keeps a mark aligned with that edge.
+		float postMarkRealHeight = scrollBarHeight / (float) scrollablePostsCount;
 		drawPostMarks(data.userPostsPositions, userPostMarkPaint, postMarkRealHeight,
-				scrollBarLeft, scrollBarTop, scrollBarRight, canvas);
+				scrollBarLeft, scrollBarTop, scrollBarRight, scrollablePostsCount, canvas);
 		drawPostMarks(data.repliesPositions, replyMarkPaint, postMarkRealHeight,
-				scrollBarLeft, scrollBarTop, scrollBarRight, canvas);
+				scrollBarLeft, scrollBarTop, scrollBarRight, scrollablePostsCount, canvas);
 	}
 
 	private void drawPostMarks(List<Integer> postPositions, Paint postMarkPaint, float postMarkRealHeight,
-			int scrollBarLeft, int scrollBarTop, int scrollBarRight, Canvas canvas) {
+			int scrollBarLeft, int scrollBarTop, int scrollBarRight, int scrollablePostsCount, Canvas canvas) {
 		int postPositionIndex = 0;
 		while (postPositionIndex < postPositions.size()) {
 			int postPosition = postPositions.get(postPositionIndex++);
@@ -61,11 +64,12 @@ public class ImportantPostsMarksFastScrollBarDecoration {
 				}
 			}
 
-			float postMarkTop = scrollBarTop + postMarkRealHeight * postPosition;
-			float postMarkHeight = postMarkRealHeight * contiguousPostMarks;
+			int markPosition = Math.min(postPosition, scrollablePostsCount);
+			float postMarkTop = scrollBarTop + postMarkRealHeight * markPosition;
+			float postMarkHeight = postMarkRealHeight *
+					Math.min(contiguousPostMarks, Math.max(1, scrollablePostsCount - markPosition));
 			float postMarkMinHeight = postMarkMinSize * contiguousPostMarks;
 			if (postMarkHeight < postMarkMinHeight) {
-				postMarkTop -= (postMarkMinHeight - postMarkHeight) / 2f;
 				postMarkHeight = postMarkMinHeight;
 			}
 			canvas.drawRect(scrollBarLeft, postMarkTop,

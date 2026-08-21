@@ -117,7 +117,8 @@ public final class TranslationModel {
 	}
 
 	public static boolean isForeignChan(Direction direction, String chanName) {
-		return direction == Direction.EN_RU ? "fourchan".equals(chanName) : "dvach".equals(chanName);
+		return direction == Direction.EN_RU ? "fourchan".equals(chanName) || "endchan".equals(chanName)
+				: "dvach".equals(chanName);
 	}
 
 	public static File getRootDirectory(Context context) {

@@ -15,8 +15,11 @@ public class PostsLayoutManager extends LinearLayoutManager {
 	@Override
 	public boolean requestChildRectangleOnScreen(@NonNull RecyclerView parent, @NonNull View child,
 			@NonNull Rect rect, boolean immediate, boolean focusedChildVisible) {
-		// Don't scroll RecyclerView when text selection starts/ends
-		return child instanceof PostLinearLayout ||
-				super.requestChildRectangleOnScreen(parent, child, rect, immediate, focusedChildVisible);
+		// Text selection uses the regular, animated request and must not move the post list. Immediate
+		// requests are also used by Android scroll capture and must perform the requested pixel scroll.
+		if (child instanceof PostLinearLayout && !immediate) {
+			return true;
+		}
+		return super.requestChildRectangleOnScreen(parent, child, rect, immediate, focusedChildVisible);
 	}
 }

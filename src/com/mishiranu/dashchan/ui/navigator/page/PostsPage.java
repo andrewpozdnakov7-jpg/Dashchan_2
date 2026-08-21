@@ -54,8 +54,11 @@ import com.mishiranu.dashchan.content.model.PostNumber;
 import com.mishiranu.dashchan.content.service.PostingService;
 import com.mishiranu.dashchan.content.service.WatcherService;
 import com.mishiranu.dashchan.content.storage.FavoritesStorage;
+import com.mishiranu.dashchan.content.storage.MyPostsStorage;
+import com.mishiranu.dashchan.text.HtmlParser;
 import com.mishiranu.dashchan.content.storage.StatisticsStorage;
 import com.mishiranu.dashchan.content.translation.TranslationController;
+import com.mishiranu.dashchan.ui.ApachanEditPostDialog;
 import com.mishiranu.dashchan.ui.DrawerForm;
 import com.mishiranu.dashchan.ui.InstanceDialog;
 import com.mishiranu.dashchan.ui.gallery.GalleryOverlay;
@@ -362,6 +365,17 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 		PaddedRecyclerView recyclerView = getRecyclerView();
 		recyclerView.setLayoutManager(new PostsLayoutManager(recyclerView.getContext()));
 		Page page = getPage();
+		getFragmentManager().setFragmentResultListener(ApachanEditPostDialog.RESULT_KEY, this,
+				(requestKey, result) -> {
+					if (CommonUtils.equals(page.chanName,
+							result.getString(ApachanEditPostDialog.RESULT_CHAN_NAME))
+							&& CommonUtils.equals(page.boardName,
+									result.getString(ApachanEditPostDialog.RESULT_BOARD_NAME))
+							&& CommonUtils.equals(page.threadNumber,
+									result.getString(ApachanEditPostDialog.RESULT_THREAD_NUMBER))) {
+						refreshPosts(false);
+					}
+				});
 		UiManager uiManager = getUiManager();
 		uiManager.view().bindThreadsPostRecyclerView(recyclerView);
 		float density = ResourceUtils.obtainDensity(context);
@@ -863,6 +877,16 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 		CommonDatabase.getInstance().getPosts().setFlags(true, getPage().chanName, postItem.getBoardName(),
 				postItem.getThreadNumber(), postItem.getPostNumber(),
 				retainableExtra.hiddenPosts.get(postItem.getPostNumber()), userPost);
+		if (Preferences.isTrackMyPostsEnabled()) {
+			if (userPost) {
+				MyPostsStorage.getInstance().add(getPage().chanName, postItem.getBoardName(),
+						postItem.getThreadNumber(), postItem.getPostNumber(),
+						HtmlParser.clear(postItem.getPost().comment), postItem.getPost().timestamp);
+			} else {
+				MyPostsStorage.getInstance().remove(getPage().chanName, postItem.getBoardName(),
+						postItem.getThreadNumber(), postItem.getPostNumber());
+			}
+		}
 	}
 
 	private void setPostHideState(PostItem postItem, PostItem.HideState hideState) {
@@ -2071,6 +2095,7 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 		}
 		ParcelableExtra parcelableExtra = getParcelableExtra(ParcelableExtra.FACTORY);
 		Page page = getPage();
+		MyPostsStorage.getInstance().markThreadRead(page.chanName, page.boardName, page.threadNumber);
 
 		if (firstLayout && (parcelableExtra.scrollToPostNumber == null ||
 				!scrollToPostFromExtra(true)) && listPosition != null) {

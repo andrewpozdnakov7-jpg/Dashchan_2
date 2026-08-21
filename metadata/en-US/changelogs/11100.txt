@@ -1,0 +1,6 @@
+- Added Endchan support: browse boards and threads, load images, translate messages, and create posts.
+- Added the experimental “Replies” section. To enable it, turn on “Track replies” under “Experimental features”. Slooop remembers messages sent through the app, automatically checks for new replies, displays the unread count in the navigation drawer, and can show Android system notifications. The check interval is configurable, replies can be marked as read, and the latest 50 replies are kept in the reply history.
+- Added post editing and thread sorting by last bump, creation date, or post count on Apachan. Fixed quoting and text formatting on Apachan and Ejchan; referenced source posts can now be loaded without manually opening the thread.
+- Fixed long thread screenshots and the alignment of markers for the user’s posts and replies on the scroll bar.
+- Added the “Remove hidden threads completely” setting: threads hidden manually or by automatic hiding rules can now be removed from the list entirely.
+- Renamed the unfinished “Pikabu” section to “Kekabu”.

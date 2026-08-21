@@ -20,6 +20,7 @@ import com.mishiranu.dashchan.content.database.PagesDatabase;
 import com.mishiranu.dashchan.content.model.ErrorItem;
 import com.mishiranu.dashchan.content.model.PendingUserPost;
 import com.mishiranu.dashchan.content.storage.FavoritesStorage;
+import com.mishiranu.dashchan.content.storage.MyPostsStorage;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
 import com.mishiranu.dashchan.util.SharedPreferences;
 import com.mishiranu.dashchan.widget.ThemeEngine;
@@ -34,6 +35,8 @@ import java.util.Set;
 import java.util.concurrent.Executor;
 
 public class WatcherService extends BaseService {
+	private static final int BACKGROUND_REFRESH_INTERVAL = 10 * 60 * 1000;
+
 	public static class Counter {
 		public enum State {ENABLED, UNAVAILABLE, DISABLED}
 
@@ -618,7 +621,10 @@ public class WatcherService extends BaseService {
 			}
 			if (notify != null && notify[0] && !replies.isEmpty()) {
 				Set<Preferences.NotificationFeature> notificationFeatures = Preferences.getWatcherNotifications();
-				if (notificationFeatures.contains(Preferences.NotificationFeature.ENABLED)) {
+				boolean notificationsEnabled = (isFavoriteEnabled(threadKey)
+						&& notificationFeatures.contains(Preferences.NotificationFeature.ENABLED))
+						|| (isTracked(threadKey) && Preferences.isTrackedRepliesNotificationsEnabled());
+				if (notificationsEnabled) {
 					FavoritesStorage.FavoriteItem favoriteItem = FavoritesStorage.getInstance()
 							.getFavorite(threadKey.chanName, threadKey.boardName, threadKey.threadNumber);
 					String title = favoriteItem != null ? StringUtils.emptyIfNull(favoriteItem.title) : "";
@@ -677,6 +683,7 @@ public class WatcherService extends BaseService {
 	private final HashMap<ThreadKey, HashSet<InternalSession>> sessionsMap = new HashMap<>();
 	private final HashMap<ThreadKey, WatcherItem> watcherItems = new HashMap<>();
 	private final ArrayList<WatcherItem> enqueuedWatcherItems = new ArrayList<>();
+	private final HashSet<ThreadKey> trackedThreadKeys = new HashSet<>();
 
 	private final Iterable<ThreadKey> workWatcherKeys = new ConcurrentIterable<>(watcherItems::keySet);
 	private final Iterable<Client> workClients = new ConcurrentIterable<>(clients::keySet);
@@ -696,11 +703,13 @@ public class WatcherService extends BaseService {
 		addOnDestroyListener(ChanDatabase.getInstance().requireCookies());
 		Preferences.PREFERENCES.register(preferencesListener);
 		FavoritesStorage.getInstance().getObservable().register(favoritesObserver);
+		MyPostsStorage.getInstance().getObservable().register(myPostsObserver);
 		for (FavoritesStorage.FavoriteItem favoriteItem : FavoritesStorage.getInstance().getThreads(null)) {
 			ThreadKey threadKey = new ThreadKey(favoriteItem.chanName,
 					favoriteItem.boardName, favoriteItem.threadNumber);
 			addWatcherItem(threadKey, false);
 		}
+		syncTrackedThreads(false);
 		resolveWatcherItems();
 		refreshAll(null, false, true);
 	}
@@ -723,6 +732,7 @@ public class WatcherService extends BaseService {
 		}
 		Preferences.PREFERENCES.unregister(preferencesListener);
 		FavoritesStorage.getInstance().getObservable().unregister(favoritesObserver);
+		MyPostsStorage.getInstance().getObservable().unregister(myPostsObserver);
 		ConcurrentUtils.HANDLER.removeCallbacks(refreshAllRunnable);
 	}
 
@@ -764,6 +774,39 @@ public class WatcherService extends BaseService {
 			}
 		}
 	};
+
+	private final Runnable myPostsObserver = () -> syncTrackedThreads(true);
+
+	private void syncTrackedThreads(boolean refreshAdded) {
+		HashSet<ThreadKey> updatedKeys = new HashSet<>();
+		if (Preferences.isTrackMyPostsEnabled()) {
+			for (MyPostsStorage.ThreadKey key : MyPostsStorage.getInstance().getActiveThreadKeys()) {
+				updatedKeys.add(new ThreadKey(key.chanName, key.boardName, key.threadNumber));
+			}
+		}
+		if (trackedThreadKeys.equals(updatedKeys)) {
+			return;
+		}
+		HashSet<ThreadKey> previousKeys = new HashSet<>(trackedThreadKeys);
+		trackedThreadKeys.clear();
+		trackedThreadKeys.addAll(updatedKeys);
+		boolean added = false;
+		for (ThreadKey threadKey : updatedKeys) {
+			if (!previousKeys.remove(threadKey)) {
+				addWatcherItem(threadKey, false);
+				added = true;
+			}
+		}
+		for (ThreadKey threadKey : previousKeys) {
+			removeOrCancelWatcherItemIfNotNeeded(threadKey);
+		}
+		if (added) {
+			resolveWatcherItems();
+			if (refreshAdded) {
+				refreshAll(null, false, true);
+			}
+		}
+	}
 
 	private void resolveWatcherItems() {
 		if (resolveItemsTask == null) {
@@ -818,7 +861,7 @@ public class WatcherService extends BaseService {
 						Worker worker;
 						if (sessions != null && !sessions.isEmpty()) {
 							worker = WORKER_FOREGROUND;
-						} else if (isEnabled(watcherItem.threadKey)) {
+						} else if (isWorkEnabled(watcherItem.threadKey)) {
 							boolean priority = priorityChanNames.contains(watcherItem.threadKey.chanName);
 							worker = priority ? WORKER_PRIORITY : WORKER_BACKGROUND;
 						} else {
@@ -885,16 +928,27 @@ public class WatcherService extends BaseService {
 		return blocked;
 	}
 
-	private boolean isEnabled(ThreadKey threadKey) {
+	private boolean isFavoriteEnabled(ThreadKey threadKey) {
 		FavoritesStorage.FavoriteItem favoriteItem = FavoritesStorage.getInstance()
 				.getFavorite(threadKey.chanName, threadKey.boardName, threadKey.threadNumber);
 		return favoriteItem != null && favoriteItem.watcherEnabled;
+	}
+
+	private boolean isTracked(ThreadKey threadKey) {
+		return Preferences.isTrackMyPostsEnabled() && trackedThreadKeys.contains(threadKey);
+	}
+
+	private boolean isWorkEnabled(ThreadKey threadKey) {
+		return isFavoriteEnabled(threadKey) || isTracked(threadKey);
 	}
 
 	private boolean isNeeded(WatcherItem watcherItem, boolean enabledOnly) {
 		ThreadKey threadKey = watcherItem.threadKey;
 		HashSet<InternalSession> sessions = sessionsMap.get(threadKey);
 		if (sessions != null && !sessions.isEmpty()) {
+			return true;
+		}
+		if (isTracked(threadKey)) {
 			return true;
 		}
 		FavoritesStorage.FavoriteItem favoriteItem = FavoritesStorage.getInstance().getFavorite(threadKey.chanName,
@@ -978,14 +1032,14 @@ public class WatcherService extends BaseService {
 
 	private void refreshAll(String chanName, boolean forceNetwork, boolean forceNow) {
 		long now = SystemClock.elapsedRealtime();
-		int interval = getRefreshInterval(true);
 		boolean unavailable = !forceNetwork && Preferences.isWatcherWifiOnly() &&
 				!NetworkObserver.getInstance().isWifiConnected();
 		for (WatcherItem watcherItem : watcherItems.values()) {
 			if (chanName == null || chanName.equals(watcherItem.threadKey.chanName)) {
 				Chan chan = Chan.get(watcherItem.threadKey.chanName);
+				int interval = getRefreshInterval(watcherItem, true);
 				if (isWatcherSupported(chan) && !isBlocked(watcherItem.threadKey) &&
-						isEnabled(watcherItem.threadKey)) {
+						isWorkEnabled(watcherItem.threadKey) && (forceNow || interval > 0)) {
 					if (unavailable) {
 						if (watcherItem.state == WatcherState.IDLE) {
 							watcherItem.state = WatcherState.UNAVAILABLE;
@@ -1041,27 +1095,47 @@ public class WatcherService extends BaseService {
 
 	private Counter getCounter(WatcherItem watcherItem) {
 		ThreadKey threadKey = watcherItem.threadKey;
-		boolean enabled = isEnabled(threadKey);
+		boolean enabled = isFavoriteEnabled(threadKey);
 		Counter.State state = enabled ? watcherItem.state == WatcherState.UNAVAILABLE
 				? Counter.State.UNAVAILABLE : Counter.State.ENABLED : Counter.State.DISABLED;
 		return new Counter(state, watcherItem.task != null,
 				watcherItem.newCount, watcherItem.deleted, watcherItem.error);
 	}
 
-	private int getRefreshInterval(boolean foreground) {
-		int interval = Preferences.getWatcherRefreshInterval() * 1000;
-		if (!foreground) {
-			int backgroundInterval = 10 * 60 * 1000;
-			return Math.max(interval, backgroundInterval);
-		} else {
-			return interval;
+	private int getRefreshInterval(WatcherItem watcherItem, boolean foreground) {
+		int interval = 0;
+		if (isFavoriteEnabled(watcherItem.threadKey)) {
+			interval = Preferences.getWatcherRefreshInterval() * 1000;
+			if (!foreground && interval > 0) {
+				interval = Math.max(interval, BACKGROUND_REFRESH_INTERVAL);
+			}
 		}
+		if (isTracked(watcherItem.threadKey)) {
+			int trackedInterval = foreground ? Preferences.getTrackedRepliesRefreshInterval()
+					: BACKGROUND_REFRESH_INTERVAL;
+			interval = interval > 0 ? Math.min(interval, trackedInterval) : trackedInterval;
+		}
+		return interval;
+	}
+
+	private int getRefreshInterval(boolean foreground) {
+		int interval = 0;
+		for (WatcherItem watcherItem : watcherItems.values()) {
+			int itemInterval = getRefreshInterval(watcherItem, foreground);
+			if (itemInterval > 0) {
+				interval = interval > 0 ? Math.min(interval, itemInterval) : itemInterval;
+			}
+		}
+		return interval;
 	}
 
 	private final SharedPreferences.Listener preferencesListener = key -> {
-		if (Preferences.KEY_WATCHER_REFRESH_INTERVAL.equals(key)) {
+		if (Preferences.KEY_WATCHER_REFRESH_INTERVAL.equals(key)
+				|| Preferences.KEY_TRACKED_REPLIES_REFRESH_INTERVAL.equals(key)) {
 			ConcurrentUtils.HANDLER.removeCallbacks(refreshAllRunnable);
 			startNext();
+		} else if (Preferences.KEY_TRACK_MY_POSTS.equals(key)) {
+			syncTrackedThreads(true);
 		} else if (Preferences.KEY_THEME.equals(key) || Preferences.KEY_AUTOMATIC_DAY_NIGHT_THEME.equals(key)
 				|| Preferences.KEY_DAY_THEME.equals(key) || Preferences.KEY_NIGHT_THEME.equals(key)) {
 			updateNotificationColor();

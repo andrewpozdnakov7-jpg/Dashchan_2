@@ -36,6 +36,47 @@ final class ApachanHtmlParser {
 
 	private ApachanHtmlParser() {}
 
+	public static final class EditForm {
+		public final String subject;
+		public final String comment;
+		public final boolean originalPost;
+		public final boolean hasAttachment;
+		public final boolean showOriginalPoster;
+		public final int commentLimit;
+
+		private EditForm(String subject, String comment, boolean originalPost, boolean hasAttachment,
+				boolean showOriginalPoster, int commentLimit) {
+			this.subject = subject;
+			this.comment = comment;
+			this.originalPost = originalPost;
+			this.hasAttachment = hasAttachment;
+			this.showOriginalPoster = showOriginalPoster;
+			this.commentLimit = commentLimit;
+		}
+	}
+
+	public static EditForm parseEditForm(String html) {
+		Document document = Jsoup.parse(html);
+		Element form = document.selectFirst("form[action$=edit_post.php], form[action$=edit_thread.php]");
+		if (form == null) return null;
+		Element id = form.selectFirst("input[name=id]");
+		Element comment = form.selectFirst("textarea[name=text]");
+		if (id == null || comment == null || !NUMBER.matcher(id.val()).matches()) return null;
+		Element subject = form.selectFirst("input[name=title]");
+		Element commentLimit = form.selectFirst("select[name=comment_limit] option[selected], "
+				+ "input[name=comment_limit]");
+		int parsedCommentLimit = 10;
+		if (commentLimit != null) {
+			try {
+				parsedCommentLimit = Integer.parseInt(commentLimit.val());
+			} catch (NumberFormatException ignored) {}
+		}
+		String action = form.attr("action");
+		return new EditForm(subject != null ? subject.val() : "", comment.val(), action.endsWith("edit_thread.php"),
+				form.selectFirst("input[name=delete_img]") != null,
+				form.selectFirst("input[name=show_op][checked]") != null, parsedCommentLimit);
+	}
+
 	public static BoardCategory parseBoards(String html) {
 		Document document = Jsoup.parse(html);
 		LinkedHashMap<String, Board> boards = new LinkedHashMap<>();
@@ -119,7 +160,11 @@ final class ApachanHtmlParser {
 				video.remove();
 			}
 			for (Element link : clone.select("a[href]")) {
-				if ("\u0414\u0430\u043b\u0435\u0435".equalsIgnoreCase(link.text().trim())) link.remove();
+				if ("\u0414\u0430\u043b\u0435\u0435".equalsIgnoreCase(link.text().trim())) {
+					link.remove();
+				} else {
+					normalizePostLink(link, locator, threadNumber);
+				}
 			}
 			post.setComment(StringUtils.nullIfEmpty(clone.html().trim()));
 		}
@@ -150,6 +195,19 @@ final class ApachanHtmlParser {
 		Element info = directChild(element, "span", "info");
 		if (info != null) post.setTimestamp(parseTimestamp(info.text()));
 		return post;
+	}
+
+	private static void normalizePostLink(Element link, ApachanChanLocator locator, String threadNumber) {
+		if (StringUtils.isEmpty(threadNumber)) return;
+		Uri uri = Uri.parse(link.attr("href"));
+		String fragment = uri.getFragment();
+		if (StringUtils.isEmpty(fragment) || fragment.length() < 2 || fragment.charAt(0) != 'c'
+				|| !NUMBER.matcher(fragment.substring(1)).matches()
+				|| !StringUtils.isEmpty(uri.getQueryParameter("id"))) return;
+		String path = uri.getPath();
+		if (!StringUtils.isEmpty(path) && !path.endsWith("post.php")) return;
+		link.attr("href", locator.createPostUri(ApachanChanLocator.DEFAULT_BOARD_NAME,
+				threadNumber, fragment.substring(1)).toString());
 	}
 
 	private static Element directChild(Element parent, String tagName) {
