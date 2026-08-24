@@ -458,6 +458,29 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 		}
 	}
 
+	public synchronized boolean addReply(String chanName, String boardName, String threadNumber,
+			PostNumber trackedPostNumber, PostNumber replyPostNumber, String comment, long time) {
+		Objects.requireNonNull(chanName);
+		Objects.requireNonNull(threadNumber);
+		Objects.requireNonNull(trackedPostNumber);
+		Objects.requireNonNull(replyPostNumber);
+		TrackedPost trackedPost = postsMap.get(makeKey(chanName, boardName, threadNumber, trackedPostNumber));
+		if (trackedPost == null) {
+			return false;
+		}
+		for (Reply reply : trackedPost.replies) {
+			if (reply.postNumber.equals(replyPostNumber)) {
+				return false;
+			}
+		}
+		trackedPost.replies.add(new Reply(replyPostNumber, StringUtils.nullIfEmpty(comment),
+				time > 0L ? time : System.currentTimeMillis(), true));
+		Collections.sort(trackedPost.replies, Comparator.comparing(reply -> reply.postNumber));
+		serialize();
+		notifyChanged();
+		return true;
+	}
+
 	public synchronized void remove(String chanName, String boardName, String threadNumber,
 			PostNumber postNumber) {
 		TrackedPost post = postsMap.remove(makeKey(chanName, boardName, threadNumber, postNumber));

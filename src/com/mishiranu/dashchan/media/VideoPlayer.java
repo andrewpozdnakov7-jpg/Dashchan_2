@@ -594,6 +594,10 @@ public class VideoPlayer {
 		@Override
 		public void onSurfaceTextureUpdated(SurfaceTexture surface) {
 			surfaceUpdates++;
+			VideoPlayer player = this.player.get();
+			if (player != null) {
+				player.notifyVideoViewFrameUpdated();
+			}
 			if (surfaceUpdates == 1 || surfaceUpdates == 30 || surfaceUpdates % 120 == 0) {
 				VideoDiagnostics.recordUi("texture=" + diagnosticsId + " surface_updated"
 						+ " count=" + surfaceUpdates + " view_size=" + getWidth() + "x" + getHeight()
@@ -652,6 +656,19 @@ public class VideoPlayer {
 	}
 
 	private View videoView;
+	private Runnable videoViewFrameCallback;
+
+	public void setVideoViewFrameCallback(Runnable callback) {
+		videoViewFrameCallback = callback;
+	}
+
+	private void notifyVideoViewFrameUpdated() {
+		Runnable callback = videoViewFrameCallback;
+		if (callback != null) {
+			videoViewFrameCallback = null;
+			callback.run();
+		}
+	}
 
 	public View getVideoView(Context context) {
 		if (videoView == null) {

@@ -309,6 +309,14 @@ public class DialogUnit {
 				case POST_INVALIDATE_ALL_VIEWS: {
 					boolean notify = adapter.postItems.contains(postItem);
 					if (!notify) {
+						for (PostItem dialogPostItem : dialogProvider) {
+							if (dialogPostItem.getPostNumber().equals(postItem.getPostNumber())) {
+								notify = true;
+								break;
+							}
+						}
+					}
+					if (!notify) {
 						// Must notify adapter to update links to shown/hidden posts
 						for (PostNumber referenceFrom : postItem.getReferencesFrom()) {
 							if (adapter.postNumbers.contains(referenceFrom)) {
@@ -766,11 +774,21 @@ public class DialogUnit {
 			postItems.clear();
 			Set<PostNumber> referencesFrom = postItem.getReferencesFrom();
 			if (!referencesFrom.isEmpty()) {
-				for (PostItem postItem : configurationSet.postsProvider) {
-					if (referencesFrom.contains(postItem.getPostNumber())) {
-						postItems.add(postItem);
+				boolean removeHiddenPosts = Preferences.isRemoveHiddenPosts();
+				for (PostItem replyPostItem : configurationSet.postsProvider) {
+					if (referencesFrom.contains(replyPostItem.getPostNumber()) && (!removeHiddenPosts ||
+							!configurationSet.postStateProvider.isHiddenResolve(replyPostItem))) {
+						postItems.add(replyPostItem);
 					}
 				}
+			}
+		}
+
+		@Override
+		public void onPostItemMessage(PostItem postItem, UiManager.Message message) {
+			if (message == UiManager.Message.POST_INVALIDATE_ALL_VIEWS &&
+					this.postItem.getReferencesFrom().contains(postItem.getPostNumber())) {
+				onRequestUpdate();
 			}
 		}
 	}

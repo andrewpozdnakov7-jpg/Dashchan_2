@@ -7,6 +7,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.service.notification.StatusBarNotification;
 import androidx.core.app.NotificationCompat;
+import chan.content.Chan;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
@@ -41,6 +42,18 @@ public class WatcherNotifications {
 			List<PagesDatabase.InsertResult.Reply> replies) {
 		EXECUTOR.execute(new Task(context, color, important, title,
 				chanName, boardName, threadNumber, replies, Collections.emptyList()));
+	}
+
+	public static void notifyPushReply(Context context, String chanName, String boardName, String threadNumber,
+			PostNumber postNumber, String comment, long timestamp) {
+		configure(context);
+		Chan chan = Chan.get(chanName);
+		String title = chan.configuration.getTitle() + " / " + boardName + " / " + threadNumber;
+		String notificationComment = StringUtils.isEmptyOrWhitespace(comment)
+				? context.getString(R.string.reply_push_notification_text) : comment;
+		notifyReplies(context, 0, true, true, true, title, chanName, boardName, threadNumber,
+				Collections.singletonList(new PagesDatabase.InsertResult.Reply(postNumber,
+						notificationComment, timestamp)));
 	}
 
 	public static void cancelReplies(Context context,

@@ -9,6 +9,7 @@ import chan.util.StringUtils;
 import com.mishiranu.dashchan.BuildConfig;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
+import com.mishiranu.dashchan.content.push.ReplyPushManager;
 import com.mishiranu.dashchan.ui.ContentFragment;
 import com.mishiranu.dashchan.ui.preference.core.PreferenceFragment;
 import java.text.Normalizer;
@@ -330,6 +331,10 @@ public final class SettingsSearchIndex {
 		add(context, entries, Screen.EXPERIMENTAL, R.string.tracked_replies_notifications,
 				R.string.tracked_replies_notifications__summary,
 				Preferences.KEY_TRACKED_REPLIES_NOTIFICATIONS);
+		if (ReplyPushManager.isSupported()) {
+			add(context, entries, Screen.EXPERIMENTAL, R.string.reply_push,
+					R.string.reply_push__summary, Preferences.KEY_REPLY_PUSH_ENABLED);
+		}
 		if (BuildConfig.ALLOW_GMS_SECURITY_PROVIDER) {
 			add(context, entries, Screen.EXPERIMENTAL, R.string.use_gms_security_provider,
 					R.string.use_gms_security_provider__summary, Preferences.KEY_USE_GMS_PROVIDER);

@@ -15,6 +15,7 @@ import chan.http.HttpHolder;
 import chan.http.HttpValidator;
 import chan.util.CommonUtils;
 import com.mishiranu.dashchan.content.Preferences;
+import com.mishiranu.dashchan.content.MainApplication;
 import com.mishiranu.dashchan.content.database.CommonDatabase;
 import com.mishiranu.dashchan.content.database.PagesDatabase;
 import com.mishiranu.dashchan.content.model.ErrorItem;
@@ -22,6 +23,7 @@ import com.mishiranu.dashchan.content.model.PendingUserPost;
 import com.mishiranu.dashchan.content.model.Post;
 import com.mishiranu.dashchan.content.model.PostItem;
 import com.mishiranu.dashchan.content.model.PostNumber;
+import com.mishiranu.dashchan.content.push.ReplyPushManager;
 import com.mishiranu.dashchan.content.storage.MyPostsStorage;
 import java.io.IOException;
 import java.net.HttpURLConnection;
@@ -243,6 +245,8 @@ public class ReadPostsTask extends HttpHolderTask<Void, ReadPostsTask.Result> {
 							}
 							MyPostsStorage.getInstance().add(chan.name, boardName, threadNumber, postNumber,
 									ownPost != null ? ownPost.comment : null, System.currentTimeMillis());
+							ReplyPushManager.onPostTracked(MainApplication.getInstance(), chan.name,
+									boardName, threadNumber, postNumber);
 						}
 					}
 				}

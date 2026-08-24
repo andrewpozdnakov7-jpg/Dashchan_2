@@ -1,6 +1,7 @@
 package com.mishiranu.dashchan.content.async;
 
 import android.net.Uri;
+import android.os.SystemClock;
 import android.util.Pair;
 import chan.content.ApiException;
 import chan.content.Chan;
@@ -9,6 +10,7 @@ import chan.content.ExtensionException;
 import chan.content.InvalidResponseException;
 import chan.http.HttpException;
 import chan.http.HttpHolder;
+import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.model.ErrorItem;
 import com.mishiranu.dashchan.content.model.PostItem;
 import com.mishiranu.dashchan.content.model.PostNumber;
@@ -18,6 +20,8 @@ import java.util.Collections;
 import java.util.List;
 
 public class SendMultifunctionalTask extends HttpHolderTask<Void, Boolean> {
+	private static final int REPORT_MAX_CONNECTION_ATTEMPTS = 5;
+
 	private final State state;
 	private final String type;
 	private final String text;
@@ -97,6 +101,40 @@ public class SendMultifunctionalTask extends HttpHolderTask<Void, Boolean> {
 		return postNumbers;
 	}
 
+	private boolean sendReportWithSafeRetries(HttpHolder holder) throws ExtensionException, HttpException,
+			ApiException, InvalidResponseException {
+		for (int attempt = 1; attempt <= REPORT_MAX_CONNECTION_ATTEMPTS; attempt++) {
+			holder.resetRequestBodyStarted();
+			try {
+				chan.performer.safe().onSendReportPosts(new ChanPerformer.SendReportPostsData(state.boardName,
+						state.threadNumber, createPostNumberList(state.postNumbers), type, options, text, holder));
+				return true;
+			} catch (HttpException e) {
+				boolean requestBodyStarted = holder.hasRequestBodyStarted();
+				if (!requestBodyStarted && e.isRetryableReadException()) {
+					if (attempt < REPORT_MAX_CONNECTION_ATTEMPTS) {
+						SystemClock.sleep(Math.min(2000L, attempt * 500L));
+						continue;
+					}
+					errorItem = new ErrorItem(R.string.report_send_failed_connection);
+					return false;
+				}
+				if (requestBodyStarted && e.getResponseCode() == 0) {
+					errorItem = new ErrorItem(R.string.report_send_status_unknown);
+					return false;
+				}
+				throw e;
+			} catch (InvalidResponseException e) {
+				if (holder.hasRequestBodyStarted()) {
+					errorItem = new ErrorItem(R.string.report_send_status_unknown);
+					return false;
+				}
+				throw e;
+			}
+		}
+		throw new AssertionError();
+	}
+
 	@Override
 	protected Boolean run(HttpHolder holder) {
 		Chan chan = this.chan;
@@ -110,9 +148,7 @@ public class SendMultifunctionalTask extends HttpHolderTask<Void, Boolean> {
 					break;
 				}
 				case REPORT: {
-					chan.performer.safe().onSendReportPosts(new ChanPerformer
-							.SendReportPostsData(state.boardName, state.threadNumber,
-							createPostNumberList(state.postNumbers), type, options, text, holder));
+					if (!sendReportWithSafeRetries(holder)) return false;
 					break;
 				}
 				case VOTE: {

@@ -390,7 +390,7 @@ public class EjchanChanPerformer extends ChanPerformer {
 		UrlEncodedEntity entity = new UrlEncodedEntity("report", "1", "board", data.boardName,
 				"reason", StringUtils.emptyIfNull(data.comment), "json_response", "1");
 		for (String postNumber : data.postNumbers) entity.add("delete_" + postNumber, "1");
-		JSONObject object = postAction(data, entity);
+		JSONObject object = postAction(data, entity, HttpRequest.RedirectHandler.NONE);
 		if (object.optBoolean("success")) return new SendReportPostsResult();
 		String error = CommonUtils.optJsonString(object, "error");
 		if (!StringUtils.isEmpty(error)) throw new ApiException(StringUtils.clearHtml(error));
@@ -399,12 +399,17 @@ public class EjchanChanPerformer extends ChanPerformer {
 
 	private JSONObject postAction(HttpRequest.Preset preset, UrlEncodedEntity entity) throws HttpException,
 			InvalidResponseException {
+		return postAction(preset, entity, HttpRequest.RedirectHandler.STRICT);
+	}
+
+	private JSONObject postAction(HttpRequest.Preset preset, UrlEncodedEntity entity,
+			HttpRequest.RedirectHandler redirectHandler) throws HttpException, InvalidResponseException {
 		EjchanChanLocator locator = EjchanChanLocator.get(this);
 		try {
 			return new JSONObject(readJsonString(createJsonRequest(locator.createPostEndpointUri(), preset)
 					.setPostMethod(entity)
 					.addCookie(COOKIE_EPASS, EjchanChanConfiguration.get(this).getCookie(COOKIE_EPASS))
-					.setRedirectHandler(HttpRequest.RedirectHandler.STRICT).perform(), JSON_OBJECT));
+					.setRedirectHandler(redirectHandler).perform(), JSON_OBJECT));
 		} catch (JSONException e) {
 			throw new InvalidResponseException(e);
 		}
