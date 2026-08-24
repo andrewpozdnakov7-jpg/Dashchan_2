@@ -6,7 +6,7 @@
 
 ## Русский
 
-Slooop - пользовательское название неофициальной ветки Dashchan_2 для Android 11 и новее. Приложение устанавливается рядом с оригинальным Dashchan, использует пакет `io.dashchan2` и содержит встроенную поддержку Двача, Ежчана, Апачана, Архивача, экспериментальный режим чтения 4chan и собственный видеоплеер на FFmpeg.
+Slooop - пользовательское название неофициальной ветки Dashchan_2 для Android 11 и новее. Приложение устанавливается рядом с оригинальным Dashchan, использует пакет `io.dashchan2` и содержит встроенную поддержку Двача, Ежчана, Апачана, Архивача, Zchan и Endchan, экспериментальный режим чтения 4chan и собственный видеоплеер на FFmpeg.
 
 ### Скачать
 
@@ -14,35 +14,36 @@ Slooop - пользовательское название неофициаль�
 
 | Компонент | Значение |
 | --- | --- |
-| Текущая версия | `3.2.27`, code `11070` |
 | Android package | `io.dashchan2` |
 | Минимальная версия | API 30 / Android 11 |
 | ABI | `arm64-v8a`, `armeabi-v7a`, `x86` |
 | Видеоплеер | FFmpeg 8.1.2, dav1d 1.5.3 |
 
-Поддержка форумов и нативные библиотеки плеера встроены в основной APK. Отдельные дополнения Двача и WebM для нормальной работы больше не требуются. Старые отдельные дополнения можно удалить после проверки встроенных компонентов.
+Поддержка борд и нативные библиотеки плеера встроены в основной APK. Отдельные дополнения Двача и WebM для нормальной работы больше не требуются. Старые отдельные дополнения можно удалить после проверки встроенных компонентов.
 
 Офлайн-переводчик Google ML Kit для GitHub-версии устанавливается по желанию отдельным дополнением размером около 50 МБ и не увеличивает основной APK. Языковой пакет также загружается отдельно. Свободные шрифты и готовые фоновые изображения скачиваются из публичного каталога дополнений только по выбору пользователя.
 
 ### Возможности
 
-- просмотр досок, тредов, изображений и видео, избранное и фоновые уведомления об ответах;
+- просмотр досок, тредов, изображений и видео, избранное, слежение за тредами и фоновые уведомления;
 - встроенный Двач с отправкой постов, Passcode, AI-фильтром и лайками/дизлайками на поддерживаемых досках;
-- встроенные Ежчан и Апачан с чтением и отправкой сообщений, Архивач в режиме чтения и экспериментальный 4chan только для чтения;
-- «Мои доски» для объединения досок разных форумов в несколько собственных лент;
+- встроенные Ежчан, Апачан, Zchan и Endchan с чтением и отправкой сообщений, Архивач в режиме чтения и экспериментальный 4chan только для чтения;
+- редактирование постов и сортировка тредов на Апачане по последнему бампу, дате создания или количеству сообщений;
+- «Мои доски» для объединения досок разных имиджборд в несколько собственных лент;
+- экспериментальный раздел «Ответы», включаемый вручную в настройках: локальное запоминание отправленных через Slooop сообщений, автоматическая проверка ответов, счётчик непрочитанных, системные уведомления и журнал последних 50 ответов;
 - офлайн-перевод постов через Mozilla Bergamot, отдельное дополнение Google ML Kit или Gemini Nano на поддерживаемых устройствах;
 - FFmpeg-плеер для WebM, MP4, fMP4, MOV, H.264, HEVC, VP8, VP9 и AV1;
-- скорость воспроизведения с сохранением тембра, перемотка двойным нажатием, масштабирование видео до 10×, отдельная громкость, настраиваемый жест громкости и режим «картинка в картинке»;
+- скорость воспроизведения с сохранением тембра, перемотка двойным нажатием, масштабирование видео до 10×, отдельная громкость, настраиваемый жест громкости, полноэкранный режим и «картинка в картинке»;
 - галерея с фильтрами, редактор изображений, копирование и поиск по изображениям, а также фоновое сохранение медиа;
 - локальные архивы тредов в HTML и ZIP, встроенный просмотрщик и подключение дополнительных папок;
 - встроенные, загружаемые и пользовательские темы, фоновые изображения и автоматический дневной и ночной режим;
-- поиск по настройкам, Predictive Back на Android 13+, масштаб текста, загружаемый каталог свободных шрифтов, OpenDyslexic и импорт TTF/OTF;
+- поиск по настройкам, Predictive Back на Android 13+, масштаб текста, сворачивание длинного списка открытых тредов, загружаемый каталог свободных шрифтов, OpenDyslexic и импорт TTF/OTF;
 - выбор имени и значка приложения, а также создание собственного ярлыка;
 - проверка стабильных обновлений с докачиванием APK.
 
 ### Ограничения
 
-- 4chan и Архивач не поддерживают отправку постов; отдельные форумы могут быть недоступны в некоторых сетях;
+- 4chan и Архивач не поддерживают отправку постов; отдельные борды могут быть недоступны в некоторых сетях;
 - Google ML Kit доступен только как отдельное дополнение GitHub-версии, а Gemini Nano работает только на поддерживаемых устройствах;
 - Predictive Back и «картинка в картинке» включаются вручную;
 - `targetSdk` равен 37 для совместимости с Android 17; `minSdk` остаётся равен 30.
@@ -90,7 +91,7 @@ Dashchan_2 основан на исходном коде Dashchan. Отдель�
 
 ## English
 
-Slooop is the user-facing name of the unofficial Dashchan_2 branch for Android 11 and newer. It installs alongside the original Dashchan under the `io.dashchan2` package and bundles support for Dvach, Ejchan, Apachan, Arhivach, experimental read-only 4chan access, and an FFmpeg-based video player.
+Slooop is the user-facing name of the unofficial Dashchan_2 branch for Android 11 and newer. It installs alongside the original Dashchan under the `io.dashchan2` package and bundles support for Dvach, Ejchan, Apachan, Arhivach, Zchan, Endchan, experimental read-only 4chan access, and an FFmpeg-based video player.
 
 ### Download
 
@@ -98,7 +99,6 @@ Stable APKs are published only through [GitHub Releases](https://github.com/andr
 
 | Component | Value |
 | --- | --- |
-| Current version | `3.2.27`, code `11070` |
 | Android package | `io.dashchan2` |
 | Minimum Android | API 30 / Android 11 |
 | ABIs | `arm64-v8a`, `armeabi-v7a`, `x86` |
@@ -110,21 +110,23 @@ The Google ML Kit offline translator for the GitHub build is an optional separat
 
 ### Highlights
 
-- boards, threads, media gallery, favorites, thread watching, and background reply notifications;
+- boards, threads, media gallery, favorites, thread watching, and background notifications;
 - built-in Dvach posting, Passcode support, AI filtering, and votes on supported boards;
-- built-in Ejchan and Apachan reading and posting, read-only Arhivach, and experimental read-only 4chan access;
-- My Boards feeds that combine boards from different forums into several custom feeds;
+- built-in Ejchan, Apachan, Zchan, and Endchan reading and posting, read-only Arhivach, and experimental read-only 4chan access;
+- Apachan post editing and thread sorting by last bump, creation date, or post count;
+- My Boards feeds that combine boards from different imageboards into several custom feeds;
+- an opt-in experimental Replies section that locally remembers messages sent through Slooop, automatically checks for replies, shows an unread counter and Android notifications, and keeps the latest 50 replies in its history;
 - offline post translation through Mozilla Bergamot, the separate Google ML Kit add-on, or Gemini Nano on supported devices;
 - FFmpeg playback for WebM, MP4, fMP4, MOV, H.264, HEVC, VP8, VP9, and AV1;
-- pitch-preserving speed control, double-tap seeking, video zoom up to 10×, per-video volume, configurable volume gestures, and picture-in-picture;
+- pitch-preserving speed control, double-tap seeking, video zoom up to 10×, per-video volume, configurable volume gestures, fullscreen playback, and picture-in-picture;
 - gallery filters, an image editor, clipboard image copying, reverse-image search, background media saving, and local HTML/ZIP thread archives;
 - bundled, downloadable, and user-imported themes, optional wallpapers, and automatic day and night switching;
-- settings search, Predictive Back, text scaling, a downloadable catalog of free fonts, OpenDyslexic, custom TTF/OTF fonts, and configurable app names and icons;
+- settings search, Predictive Back, text scaling, collapsible long lists of open threads, a downloadable catalog of free fonts, OpenDyslexic, custom TTF/OTF fonts, and configurable app names and icons;
 - stable update checks with resumable APK downloads.
 
 ### Limitations
 
-- 4chan and Arhivach posting are not implemented; individual forums may be unreachable on some networks;
+- 4chan and Arhivach posting are not implemented; individual imageboards may be unreachable on some networks;
 - Google ML Kit is available only as a separate add-on for the GitHub build, while Gemini Nano requires a supported device;
 - Predictive Back and picture-in-picture are opt-in settings;
 - `targetSdk` is 37 for Android 17 compatibility; `minSdk` remains 30.
