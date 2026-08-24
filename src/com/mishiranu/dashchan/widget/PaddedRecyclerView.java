@@ -3,6 +3,8 @@ package com.mishiranu.dashchan.widget;
 import android.content.Context;
 import android.content.res.ColorStateList;
 import android.graphics.Canvas;
+import android.graphics.ColorFilter;
+import android.graphics.PixelFormat;
 import android.graphics.Rect;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
@@ -12,6 +14,8 @@ import android.util.Xml;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewConfiguration;
+import android.view.ViewGroup;
+import android.view.ViewParent;
 import androidx.annotation.NonNull;
 import androidx.core.view.ViewCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -35,6 +39,10 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 	private final Drawable trackDrawable;
 	private final int touchSlop;
 	private final int minTrackSize;
+	private final Drawable fastScrollerOverlayDrawable;
+	private ViewGroup fastScrollerOverlayHost;
+	private final int[] fastScrollerLocation = new int[2];
+	private final int[] fastScrollerOverlayHostLocation = new int[2];
 	private ImportantPostsMarksFastScrollBarDecoration importantPostsMarksFastScrollBarDecoration;
 
 	private boolean fastScrollerEnabled;
@@ -92,6 +100,34 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 		trackDrawable = ResourceUtils.getDrawable(getContext(), android.R.attr.fastScrollTrackDrawable, 0);
 		touchSlop = ViewConfiguration.get(getContext()).getScaledTouchSlop();
 		minTrackSize = (int) (16f * density);
+		fastScrollerOverlayDrawable = new Drawable() {
+			@Override
+			public void draw(@NonNull Canvas canvas) {
+				ViewGroup overlayHost = fastScrollerOverlayHost;
+				if (overlayHost == null || PaddedRecyclerView.this.getVisibility() != View.VISIBLE) {
+					return;
+				}
+				PaddedRecyclerView.this.getLocationInWindow(fastScrollerLocation);
+				overlayHost.getLocationInWindow(fastScrollerOverlayHostLocation);
+				int saveCount = canvas.save();
+				canvas.translate(fastScrollerLocation[0] - fastScrollerOverlayHostLocation[0],
+						fastScrollerLocation[1] - fastScrollerOverlayHostLocation[1]);
+				canvas.clipRect(0, 0, PaddedRecyclerView.this.getWidth(), PaddedRecyclerView.this.getHeight());
+				onDrawFastScroller(canvas);
+				canvas.restoreToCount(saveCount);
+			}
+
+			@Override
+			public void setAlpha(int alpha) {}
+
+			@Override
+			public void setColorFilter(ColorFilter colorFilter) {}
+
+			@Override
+			public int getOpacity() {
+				return PixelFormat.TRANSLUCENT;
+			}
+		};
 
 		setRecycledViewPool(new ListViewUtils.UnlimitedRecycledViewPool());
 		addOnScrollListener(new OnScrollListener() {
@@ -122,6 +158,33 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 				}
 			}
 		});
+	}
+
+	@Override
+	protected void onAttachedToWindow() {
+		super.onAttachedToWindow();
+		ViewParent parent = getParent();
+		if (parent instanceof ViewGroup) {
+			fastScrollerOverlayHost = (ViewGroup) parent;
+			updateFastScrollerOverlayBounds();
+			fastScrollerOverlayHost.getOverlay().add(fastScrollerOverlayDrawable);
+		}
+	}
+
+	@Override
+	protected void onDetachedFromWindow() {
+		if (fastScrollerOverlayHost != null) {
+			fastScrollerOverlayHost.getOverlay().remove(fastScrollerOverlayDrawable);
+			fastScrollerOverlayHost = null;
+		}
+		super.onDetachedFromWindow();
+	}
+
+	private void updateFastScrollerOverlayBounds() {
+		if (fastScrollerOverlayHost != null) {
+			fastScrollerOverlayDrawable.setBounds(0, 0,
+					fastScrollerOverlayHost.getWidth(), fastScrollerOverlayHost.getHeight());
+		}
 	}
 
 	public void setFastScrollerEnabled(boolean fastScrollerEnabled) {
@@ -173,6 +236,7 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 	@Override
 	protected void onLayout(boolean changed, int l, int t, int r, int b) {
 		super.onLayout(changed, l, t, r, b);
+		updateFastScrollerOverlayBounds();
 
 		int range = computeVerticalScrollRange();
 		int extent = computeVerticalScrollExtent();
@@ -501,10 +565,6 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 		} else {
 			super.draw(canvas);
 		}
-		// RecyclerView draws its EdgeEffect from super.draw(). Keeping the fast scroller outside that
-		// pass prevents Android's stretch overscroll from deforming the thumb and post marks when the
-		// list hits its top or bottom boundary.
-		onDrawFastScroller(canvas);
 	}
 
 	private final Rect bounds = new Rect();
