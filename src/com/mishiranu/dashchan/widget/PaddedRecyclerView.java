@@ -265,17 +265,10 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 		return Math.max(0, Math.min(result, 1));
 	}
 
-	private int getFastScrollerVisibleItemCount(LinearLayoutManager layoutManager) {
-		int first = layoutManager.findFirstVisibleItemPosition();
-		int last = layoutManager.findLastVisibleItemPosition();
-		if (first >= 0 && last >= first) {
-			return last - first + 1;
-		}
-		return Math.max(1, getChildCount());
-	}
-
-	private int getFastScrollerScrollableItemCount(LinearLayoutManager layoutManager) {
-		return Math.max(0, layoutManager.getItemCount() - getFastScrollerVisibleItemCount(layoutManager));
+	private int getFastScrollerPositionRange(LinearLayoutManager layoutManager) {
+		// Keep the range independent of currently visible children. Posts have different heights,
+		// so their visible count changes during a regular scroll and must not move the thumb marks.
+		return Math.max(0, layoutManager.getItemCount() - 1);
 	}
 
 	private float getCurrentOffset() {
@@ -288,7 +281,7 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 			if (!canScrollVertically(1)) {
 				return 1f;
 			}
-			int range = getFastScrollerScrollableItemCount(linearLayoutManager);
+			int range = getFastScrollerPositionRange(linearLayoutManager);
 			int first = linearLayoutManager.findFirstVisibleItemPosition();
 			if (range > 0 && first >= 0) {
 				float itemOffset = 0f;
@@ -314,7 +307,7 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 		int count = layoutManager.getItemCount();
 		if (count > 0) {
 			if (offset < 1f) {
-				int position = (int) (getFastScrollerScrollableItemCount(layoutManager) * offset + 0.5f);
+				int position = (int) (getFastScrollerPositionRange(layoutManager) * offset + 0.5f);
 				layoutManager.scrollToPositionWithOffset(position, 0);
 			} else {
 				scrollToPosition(count - 1);
@@ -436,9 +429,9 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 			if (importantPostsMarksFastScrollBarDecoration != null &&
 					importantPostsMarksFastScrollBarDecoration.hasMarks()) {
 				LinearLayoutManager layoutManager = (LinearLayoutManager) getLayoutManager();
-				int scrollableItemCount = getFastScrollerScrollableItemCount(layoutManager);
+				int positionRange = getFastScrollerPositionRange(layoutManager);
 				importantPostsMarksFastScrollBarDecoration.draw(trackLeft, top, trackRight,
-						top + height - thumbHeight, scrollableItemCount, canvas);
+						top + height - thumbHeight, positionRange, canvas);
 			}
 			int thumbExtra = (maxWidth - thumbDrawable.getIntrinsicWidth()) / 2;
 			thumbDrawable.setState(fastScrolling ? STATE_PRESSED : STATE_NORMAL);

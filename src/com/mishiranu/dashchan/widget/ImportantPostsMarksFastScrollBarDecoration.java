@@ -31,25 +31,26 @@ public class ImportantPostsMarksFastScrollBarDecoration {
 	}
 
 	public void draw(int scrollBarLeft, int scrollBarTop, int scrollBarRight, int scrollBarBottom,
-			int scrollablePostsCount, Canvas canvas) {
-		if (data == null || data.totalPostsCount <= 0 || scrollablePostsCount <= 0) {
+			int postPositionRange, Canvas canvas) {
+		if (data == null || data.totalPostsCount <= 0 || postPositionRange <= 0) {
 			return;
 		}
 		int scrollBarHeight = scrollBarBottom - scrollBarTop;
 		if (scrollBarHeight <= 0) {
 			return;
 		}
-		// Use the same range as PaddedRecyclerView.scroll(): the number of item positions through
-		// which the top edge of the thumb can travel. This keeps a mark aligned with that edge.
-		float postMarkRealHeight = scrollBarHeight / (float) scrollablePostsCount;
+		// Use the same stable adapter-position range as PaddedRecyclerView.scroll(). Deriving this
+		// range from visible children makes every mark jump when differently sized posts enter or
+		// leave the viewport.
+		float postMarkRealHeight = scrollBarHeight / (float) postPositionRange;
 		drawPostMarks(data.userPostsPositions, userPostMarkPaint, postMarkRealHeight,
-				scrollBarLeft, scrollBarTop, scrollBarRight, scrollablePostsCount, canvas);
+				scrollBarLeft, scrollBarTop, scrollBarRight, postPositionRange, canvas);
 		drawPostMarks(data.repliesPositions, replyMarkPaint, postMarkRealHeight,
-				scrollBarLeft, scrollBarTop, scrollBarRight, scrollablePostsCount, canvas);
+				scrollBarLeft, scrollBarTop, scrollBarRight, postPositionRange, canvas);
 	}
 
 	private void drawPostMarks(List<Integer> postPositions, Paint postMarkPaint, float postMarkRealHeight,
-			int scrollBarLeft, int scrollBarTop, int scrollBarRight, int scrollablePostsCount, Canvas canvas) {
+			int scrollBarLeft, int scrollBarTop, int scrollBarRight, int postPositionRange, Canvas canvas) {
 		int postPositionIndex = 0;
 		while (postPositionIndex < postPositions.size()) {
 			int postPosition = postPositions.get(postPositionIndex++);
@@ -64,10 +65,10 @@ public class ImportantPostsMarksFastScrollBarDecoration {
 				}
 			}
 
-			int markPosition = Math.min(postPosition, scrollablePostsCount);
+			int markPosition = Math.min(postPosition, postPositionRange);
 			float postMarkTop = scrollBarTop + postMarkRealHeight * markPosition;
 			float postMarkHeight = postMarkRealHeight *
-					Math.min(contiguousPostMarks, Math.max(1, scrollablePostsCount - markPosition));
+					Math.min(contiguousPostMarks, Math.max(1, postPositionRange - markPosition));
 			float postMarkMinHeight = postMarkMinSize * contiguousPostMarks;
 			if (postMarkHeight < postMarkMinHeight) {
 				postMarkHeight = postMarkMinHeight;
