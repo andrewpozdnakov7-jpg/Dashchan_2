@@ -1224,51 +1224,33 @@ public class DvachChanPerformer extends ChanPerformer {
 			InvalidResponseException {
 		DvachChanLocator locator = DvachChanLocator.get(this);
 		Uri uri = locator.buildPath("user/report");
-		StringBuilder postsBuilder = new StringBuilder();
-		for (String postNumber : data.postNumbers) {
-			postsBuilder.append(postNumber).append(", ");
-		}
 
 		MultipartEntity entity = new MultipartEntity();
 		entity.add("board", data.boardName);
 		entity.add("thread", data.threadNumber);
-		if (!data.postNumbers.isEmpty()) {
-			entity.add("post", data.postNumbers.get(0));
-		}
+		for (String postNumber : data.postNumbers) entity.add("post", postNumber);
 		entity.add("comment", data.comment);
 
 		String referer = locator.createThreadUri(data.boardName, data.threadNumber).toString();
 		JSONObject jsonObject;
 		try {
 			jsonObject = new JSONObject(new HttpRequest(uri, data).addCookie(buildCookiesWithCaptchaPass())
-					.setPostMethod(entity).setRedirectHandler(HttpRequest.RedirectHandler.STRICT).perform().readString());
+					.addHeader("Referer", referer).setPostMethod(entity)
+					.setRedirectHandler(HttpRequest.RedirectHandler.NONE).perform().readString());
 		} catch (JSONException e) {
 			throw new InvalidResponseException(e);
 		}
-		try {
-			String result = CommonUtils.getJsonString(jsonObject, "result");
-			String message = "";
-			if (!result.equals("1")) {
-				message = CommonUtils.getJsonString(jsonObject, "message");
-				if (StringUtils.isEmpty(message)) {
-					return null;
-				}
-				int errorType = 0;
-				if (message.contains("Вы уже отправляли жалобу")) {
-					errorType = ApiException.REPORT_ERROR_TOO_OFTEN;
-				} else if (message.contains("Вы ничего не написали в жалобе")) {
-					errorType = ApiException.REPORT_ERROR_EMPTY_COMMENT;
-				}
-				if (errorType != 0) {
-					throw new ApiException(errorType);
-				}
-			} else {
-				return null;
-			}
-			throw new ApiException(message);
-		} catch (JSONException e) {
-			throw new InvalidResponseException(e);
+		if ("1".equals(jsonObject.optString("result"))) return new SendReportPostsResult();
+		JSONObject error = jsonObject.optJSONObject("error");
+		String message = error != null ? CommonUtils.optJsonString(error, "message", null)
+				: CommonUtils.optJsonString(jsonObject, "message", null);
+		if (StringUtils.isEmpty(message)) throw new InvalidResponseException();
+		if (message.contains("Вы уже отправляли жалобу")) {
+			throw new ApiException(ApiException.REPORT_ERROR_TOO_OFTEN);
+		} else if (message.contains("Вы ничего не написали в жалобе")) {
+			throw new ApiException(ApiException.REPORT_ERROR_EMPTY_COMMENT);
 		}
+		throw new ApiException(message);
 	}
 
 	@Override

@@ -651,6 +651,8 @@
 	<string name="reply_notifications">Уведомления об ответах</string>
 	<string name="reply_notifications__format">Показывать уведомление при получении нового ответа</string>
 	<string name="report">Пожаловаться</string>
+	<string name="report_send_failed_connection">Не удалось отправить жалобу. Возможно, возникли проблемы со связью. Попробуйте ещё раз позже.</string>
+	<string name="report_send_status_unknown">Не удалось подтвердить отправку жалобы — сервер мог её принять. Возможно, возникли проблемы со связью. Автоматическая повторная отправка не выполнялась.</string>
 	<string name="request_has_been_sent_successfully">Запрос успешно отправлен</string>
 	<string name="requires_decoding_libraries__sentence">Для работы видеоплеера необходимо установить
 		библиотеки декодирования.</string>

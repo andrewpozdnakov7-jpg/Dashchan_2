@@ -23,6 +23,7 @@ public final class HttpHolder {
 	private Thread thread;
 	private HttpSession session;
 	private ArrayList<HttpSession> sessions;
+	private boolean requestBodyStarted;
 
 	final Chan chan;
 
@@ -62,6 +63,27 @@ public final class HttpHolder {
 				return this::releaseSession;
 			}
 		}
+	}
+
+	/**
+	 * Resets the conservative marker used by mutating operations to decide whether a failed request may be retried.
+	 */
+	public void resetRequestBodyStarted() {
+		checkThread();
+		requestBodyStarted = false;
+	}
+
+	void markRequestBodyStarted() {
+		checkThread();
+		requestBodyStarted = true;
+	}
+
+	/**
+	 * Returns whether an output stream was opened for a request body since the last reset.
+	 */
+	public boolean hasRequestBodyStarted() {
+		checkThread();
+		return requestBodyStarted;
 	}
 
 	HttpSession createSession(HttpClient client, Uri uri, Proxy proxy,

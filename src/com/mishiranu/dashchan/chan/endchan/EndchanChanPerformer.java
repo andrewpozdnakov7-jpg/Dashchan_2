@@ -303,12 +303,17 @@ public class EndchanChanPerformer extends ChanPerformer {
 
 	private static JSONObject performJsonPost(Uri uri, JSONObject object, HttpRequest.Preset preset)
 			throws HttpException, InvalidResponseException {
+		return performJsonPost(uri, object, preset, HttpRequest.RedirectHandler.STRICT);
+	}
+
+	private static JSONObject performJsonPost(Uri uri, JSONObject object, HttpRequest.Preset preset,
+			HttpRequest.RedirectHandler redirectHandler) throws HttpException, InvalidResponseException {
 		SimpleEntity entity = new SimpleEntity();
 		entity.setContentType("application/json; charset=utf-8");
 		entity.setData(object.toString());
 		try {
 			return new JSONObject(new HttpRequest(uri, preset).setPostMethod(entity)
-					.setRedirectHandler(HttpRequest.RedirectHandler.STRICT).perform().readString());
+					.setRedirectHandler(redirectHandler).perform().readString());
 		} catch (JSONException e) {
 			throw new InvalidResponseException(e);
 		}
@@ -382,14 +387,14 @@ public class EndchanChanPerformer extends ChanPerformer {
 		try {
 			request.put("parameters", parameters);
 			parameters.put("reason", StringUtils.emptyIfNull(data.comment));
-			if (data.options.contains("global")) parameters.put("global", true);
+			if (data.options != null && data.options.contains("global")) parameters.put("global", true);
 			fillDeleteReportPostings(parameters, data.boardName, data.threadNumber, data.postNumbers);
 		} catch (JSONException e) {
 			throw new InvalidResponseException(e);
 		}
-		boolean retry = false;
-		while (true) {
-			CaptchaData captchaData = requireUserCaptcha(REQUIRE_REPORT, data.boardName, data.threadNumber, retry);
+		for (int captchaAttempt = 1; captchaAttempt <= 5; captchaAttempt++) {
+			CaptchaData captchaData = requireUserCaptcha(REQUIRE_REPORT, data.boardName, data.threadNumber,
+					captchaAttempt > 1);
 			if (captchaData == null) throw new ApiException(ApiException.REPORT_ERROR_NO_ACCESS);
 			try {
 				request.put("captchaId", captchaData.get(CaptchaData.CHALLENGE));
@@ -397,15 +402,16 @@ public class EndchanChanPerformer extends ChanPerformer {
 			} catch (JSONException e) {
 				throw new InvalidResponseException(e);
 			}
-			retry = true;
 			JSONObject response = performJsonPost(EndchanChanLocator.get(this).buildPath(".api", "reportContent"),
-					request, data);
+					request, data, HttpRequest.RedirectHandler.NONE);
 			String status = response.optString("status");
 			if ("ok".equals(status)) return new SendReportPostsResult();
 			String message = response.optString("data");
-			if (message.contains("Wrong captcha") || message.contains("Expired captcha")) continue;
+			if ((message.contains("Wrong captcha") || message.contains("Expired captcha"))
+					&& captchaAttempt < 5) continue;
 			if (!StringUtils.isEmpty(message)) throw new ApiException(status + ": " + message);
 			throw new InvalidResponseException();
 		}
+		throw new AssertionError();
 	}
 }

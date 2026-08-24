@@ -468,8 +468,12 @@ public class HttpClient {
 				if (contentLength > 0) {
 					connection.setFixedLengthStreamingMode(contentLength);
 				}
-				try (ClientOutputStream output = new ClientOutputStream(new BufferedOutputStream(connection
-						.getOutputStream(), 1024), session, forceGet ? null : request.outputListener, contentLength)) {
+				OutputStream connectionOutput = connection.getOutputStream();
+				// From this point a failed mutating request has an ambiguous result: opening the stream may already
+				// have sent request headers, and a following write may be only partially acknowledged by the peer.
+				session.holder.markRequestBodyStarted();
+				try (ClientOutputStream output = new ClientOutputStream(new BufferedOutputStream(connectionOutput, 1024),
+						session, forceGet ? null : request.outputListener, contentLength)) {
 					entity.write(output);
 					output.flush();
 				}

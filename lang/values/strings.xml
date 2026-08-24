@@ -630,6 +630,8 @@
 	<string name="reply_notifications">Reply notifications</string>
 	<string name="reply_notifications__format">Notify when a new reply has been received</string>
 	<string name="report">Report</string>
+	<string name="report_send_failed_connection">Could not send the report. There may be a connection problem. Please try again later.</string>
+	<string name="report_send_status_unknown">Could not confirm that the report was sent—the server may have accepted it. There may be a connection problem. The report was not resent automatically.</string>
 	<string name="request_has_been_sent_successfully">The request has been sent successfully</string>
 	<string name="requires_decoding_libraries__sentence">Decoding libraries should be installed in order to enable
 		video player.</string>
