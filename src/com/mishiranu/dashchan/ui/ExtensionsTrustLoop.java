@@ -63,7 +63,7 @@ public class ExtensionsTrustLoop {
 				if (fingerprints.length() > 0) {
 					fingerprints.append(" /");
 				}
-				for (int i = 0; i < fingerprint.length() / 2; i++) {
+				for (int i = 0; i + 1 < fingerprint.length(); i += 2) {
 					if (fingerprints.length() > 0) {
 						fingerprints.append(' ');
 					}

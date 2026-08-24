@@ -466,7 +466,7 @@ public class ReadUpdateTask extends HttpHolderTask<Void, Pair<ErrorItem, ReadUpd
 			String name = uri.getLastPathSegment();
 			boolean directory = false;
 			for (DataVersion dataVersion : DataVersion.values()) {
-				if (name.equals(dataVersion.fileName)) {
+				if (dataVersion.fileName.equals(name)) {
 					directory = true;
 					break;
 				}
@@ -543,8 +543,9 @@ public class ReadUpdateTask extends HttpHolderTask<Void, Pair<ErrorItem, ReadUpd
 		Chan chan = Chan.getFallback();
 		LinkedHashMap<TargetUri, HashSet<String>> targets = new LinkedHashMap<>();
 		HashMap<TargetUri, String> requestedScheme = new HashMap<>();
-		{
-			Uri uri = Uri.parse(UpdateConfiguration.getLegacyManifestUrl());
+		String legacyManifestUrl = UpdateConfiguration.getLegacyManifestUrl();
+		if (!StringUtils.isEmpty(legacyManifestUrl)) {
+			Uri uri = Uri.parse(legacyManifestUrl);
 			TargetUri targetUri = new TargetUri(uri);
 			HashSet<String> extensionNames = new HashSet<>();
 			extensionNames.add(ChanManager.EXTENSION_NAME_CLIENT);
