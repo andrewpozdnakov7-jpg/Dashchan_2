@@ -171,23 +171,27 @@ jobs:
       - name: Check out sources
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
-          fetch-depth: 2
+          fetch-depth: 0
 
       - name: Select validation path
         id: validation
         env:
           EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
           build_required=true
-          if [ "$EVENT_NAME" != 'workflow_dispatch' ] &&
-              git rev-parse --verify HEAD^ >/dev/null 2>&1; then
-            mapfile -t changed_files < <(git diff --name-only HEAD^ HEAD)
+          if [ "$EVENT_NAME" = 'pull_request' ] &&
+              git rev-parse --verify "$PR_BASE_SHA^{commit}" >/dev/null 2>&1 &&
+              git rev-parse --verify "$PR_HEAD_SHA^{commit}" >/dev/null 2>&1; then
+            mapfile -t changed_files < <(git diff --name-only "$PR_BASE_SHA" "$PR_HEAD_SHA")
+            printf 'Changed file: %s\n' "${changed_files[@]}"
             if [ "${#changed_files[@]}" -gt 0 ]; then
               build_required=false
               for path in "${changed_files[@]}"; do
                 case "$path" in
-                  update/data.json|.github/workflows/sign-google-translator-addon.yml) ;;
+                  README.md|CONTRIBUTING.md|SECURITY.md|CODE_OF_CONDUCT.md|docs/*|.github/ISSUE_TEMPLATE/*|.github/PULL_REQUEST_TEMPLATE.md|update/data.json|.github/workflows/sign-google-translator-addon.yml) ;;
                   *) build_required=true; break ;;
                 esac
               done
@@ -226,7 +230,7 @@ jobs:
 
       - name: Record validation-only fast path
         if: steps.validation.outputs.build_required != 'true'
-        run: echo 'Only update metadata or the protected signing workflow changed; APK compilation is not required.'
+        run: echo 'Only documentation, update metadata, or the protected signing workflow changed; APK compilation is not required.'
 
       - name: Set up Java
         if: steps.validation.outputs.build_required == 'true'
