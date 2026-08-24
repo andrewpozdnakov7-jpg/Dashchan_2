@@ -849,9 +849,10 @@ public class VideoUnit {
 		}
 		boolean playing = player.isPlaying();
 		long position = player.getPosition();
+		Bitmap previewFrame = createPictureInPicturePreview();
 		VideoPlayer transferredPlayer = player;
 		Intent intent = VideoPipActivity.createIntent(context, sourceFile, position,
-				playbackSpeed, muted, playing, this, transferredPlayer);
+				playbackSpeed, muted, playing, this, transferredPlayer, previewFrame);
 		wasPlaying = false;
 		setPlaying(false, true);
 		transferredPlayer.releaseVideoView();
@@ -866,6 +867,26 @@ public class VideoUnit {
 			Toast.makeText(context, R.string.unknown_error, Toast.LENGTH_SHORT).show();
 			return false;
 		}
+	}
+
+	private Bitmap createPictureInPicturePreview() {
+		Bitmap frame = player != null ? player.getCurrentFrame() : null;
+		if (frame == null) {
+			return null;
+		}
+		int width = frame.getWidth();
+		int height = frame.getHeight();
+		int maximumSize = 720;
+		if (width <= maximumSize && height <= maximumSize) {
+			return frame;
+		}
+		float scale = (float) maximumSize / Math.max(width, height);
+		Bitmap scaled = Bitmap.createScaledBitmap(frame, Math.max(1, Math.round(width * scale)),
+				Math.max(1, Math.round(height * scale)), true);
+		if (scaled != frame) {
+			frame.recycle();
+		}
+		return scaled;
 	}
 
 	boolean restorePictureInPicturePlayer(VideoPlayer transferredPlayer, long position, int playbackSpeed,
