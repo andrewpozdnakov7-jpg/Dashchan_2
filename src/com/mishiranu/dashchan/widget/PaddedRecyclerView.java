@@ -122,12 +122,15 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 				}
 			}
 		});
-		addItemDecoration(new ItemDecoration() {
-			@Override
-			public void onDrawOver(@NonNull Canvas c, @NonNull RecyclerView parent, @NonNull State state) {
-				onDrawFastScroller(c);
-			}
-		});
+	}
+
+	@Override
+	public void draw(@NonNull Canvas canvas) {
+		// RecyclerView draws its EdgeEffect from super.draw(). Keeping the fast scroller outside that
+		// pass prevents Android's stretch overscroll from deforming the thumb and post marks when the
+		// list hits its top or bottom boundary.
+		super.draw(canvas);
+		onDrawFastScroller(canvas);
 	}
 
 	public void setFastScrollerEnabled(boolean fastScrollerEnabled) {
