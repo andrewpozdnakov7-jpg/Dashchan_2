@@ -125,7 +125,18 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 	private boolean receiverRegistered;
 	private boolean resumedAfterPictureInPictureExit;
 	private boolean pictureInPictureEntryScheduled;
+	private boolean previewFrameHideScheduled;
 	private final Handler handler = new Handler(Looper.getMainLooper());
+	private final Runnable hidePreviewFrameRunnable = () -> {
+		previewFrameHideScheduled = false;
+		ImageView previewView = this.previewView;
+		this.previewView = null;
+		this.previewFrame = null;
+		if (previewView != null) {
+			previewView.setVisibility(ImageView.INVISIBLE);
+			previewView.setImageDrawable(null);
+		}
+	};
 	private final Runnable finishDismissedPictureInPicture = () -> {
 		if (enteredPictureInPicture && exitedPictureInPicture && !returnedToGallery
 				&& !resumedAfterPictureInPictureExit && !isInPictureInPictureMode()
@@ -236,7 +247,7 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 
 		player.setListener(this);
 		player.releaseVideoView();
-		player.setVideoViewFrameCallback(this::removePreviewFrame);
+		player.setVideoViewFrameCallback(this::scheduleHidePreviewFrame);
 		rootView.addView(player.getVideoView(this), new FrameLayout.LayoutParams(
 				FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT, Gravity.CENTER));
 		if (previewFrame != null) {
@@ -274,16 +285,19 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 		});
 	}
 
-	private void removePreviewFrame() {
-		if (previewView != null) {
-			rootView.removeView(previewView);
-			previewView.setImageDrawable(null);
-			previewView = null;
+	private void scheduleHidePreviewFrame() {
+		if (!previewFrameHideScheduled) {
+			previewFrameHideScheduled = true;
+			// TextureView reports a new frame while the hierarchy may still be building its display list.
+			// Keep the overlay child attached for this activity's lifetime: some Android builds cannot safely
+			// remove a FrameLayout child around the PiP transition even from a later animation callback.
+			handler.post(hidePreviewFrameRunnable);
 		}
-		if (previewFrame != null && !previewFrame.isRecycled()) {
-			previewFrame.recycle();
-		}
-		previewFrame = null;
+	}
+
+	private void hidePreviewFrameImmediately() {
+		handler.removeCallbacks(hidePreviewFrameRunnable);
+		hidePreviewFrameRunnable.run();
 	}
 
 	private void enterPictureInPicture() {
@@ -413,7 +427,7 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 		long position = player.getPosition();
 		player.setPlaying(false);
 		player.setVideoViewFrameCallback(null);
-		removePreviewFrame();
+		hidePreviewFrameImmediately();
 		audioFocus.release();
 		player.releaseVideoView();
 		player.setListener(null);
@@ -517,7 +531,7 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 			this.player = null;
 			this.source = null;
 		}
-		removePreviewFrame();
+		hidePreviewFrameImmediately();
 		VideoDiagnostics.recordUi("pip activity_destroyed entered=" + enteredPictureInPicture
 				+ " exited=" + exitedPictureInPicture + " returned=" + returnedToGallery);
 		overridePendingTransition(0, 0);

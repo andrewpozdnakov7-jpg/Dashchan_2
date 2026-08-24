@@ -2363,6 +2363,10 @@ public class Preferences {
 	public static final int MAX_TRACKED_REPLIES_REFRESH_INTERVAL = 1440;
 	public static final String KEY_TRACKED_REPLIES_NOTIFICATIONS = "tracked_replies_notifications";
 	public static final boolean DEFAULT_TRACKED_REPLIES_NOTIFICATIONS = true;
+	public static final String KEY_REPLY_PUSH_ENABLED = "reply_push_enabled";
+	public static final boolean DEFAULT_REPLY_PUSH_ENABLED = false;
+	private static final String KEY_REPLY_PUSH_INSTALLATION_ID = "reply_push_installation_id";
+	private static final String KEY_REPLY_PUSH_HANDLED_EVENTS = "reply_push_handled_events";
 
 	public static boolean isTrackMyPostsEnabled() {
 		return PREFERENCES.getBoolean(KEY_TRACK_MY_POSTS, DEFAULT_TRACK_MY_POSTS);
@@ -2386,6 +2390,31 @@ public class Preferences {
 	public static boolean isTrackedRepliesNotificationsEnabled() {
 		return PREFERENCES.getBoolean(KEY_TRACKED_REPLIES_NOTIFICATIONS,
 				DEFAULT_TRACKED_REPLIES_NOTIFICATIONS);
+	}
+
+	public static boolean isReplyPushEnabled() {
+		return PREFERENCES.getBoolean(KEY_REPLY_PUSH_ENABLED, DEFAULT_REPLY_PUSH_ENABLED);
+	}
+
+	public static void setReplyPushEnabled(boolean enabled) {
+		PREFERENCES.edit().put(KEY_REPLY_PUSH_ENABLED, enabled).close();
+	}
+
+	public static String getReplyPushInstallationId() {
+		return PREFERENCES.getString(KEY_REPLY_PUSH_INSTALLATION_ID, null);
+	}
+
+	public static void setReplyPushInstallationId(String installationId) {
+		PREFERENCES.edit().put(KEY_REPLY_PUSH_INSTALLATION_ID, installationId).close();
+	}
+
+	public static Set<String> getReplyPushHandledEvents() {
+		Set<String> events = PREFERENCES.getStringSet(KEY_REPLY_PUSH_HANDLED_EVENTS, Collections.emptySet());
+		return new HashSet<>(events);
+	}
+
+	public static void setReplyPushHandledEvents(Set<String> events) {
+		PREFERENCES.edit().put(KEY_REPLY_PUSH_HANDLED_EVENTS, new HashSet<>(events)).close();
 	}
 
 	public static final String KEY_WATCHER_WIFI_ONLY = "watcher_wifi_only";

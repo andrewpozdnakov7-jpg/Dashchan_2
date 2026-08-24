@@ -34,6 +34,7 @@ import com.mishiranu.dashchan.content.model.ErrorItem;
 import com.mishiranu.dashchan.content.model.PendingUserPost;
 import com.mishiranu.dashchan.content.model.PostItem;
 import com.mishiranu.dashchan.content.model.PostNumber;
+import com.mishiranu.dashchan.content.push.ReplyPushManager;
 import com.mishiranu.dashchan.content.storage.DraftsStorage;
 import com.mishiranu.dashchan.content.storage.FavoritesStorage;
 import com.mishiranu.dashchan.content.storage.MyPostsStorage;
@@ -649,6 +650,8 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 					if (Preferences.isTrackMyPostsEnabled()) {
 						MyPostsStorage.getInstance().add(chanName, data.boardName, targetThreadNumber,
 								postNumber, comment, System.currentTimeMillis());
+						ReplyPushManager.onPostTracked(this, chanName, data.boardName,
+								targetThreadNumber, postNumber);
 					}
 				} else if (newThread) {
 					pendingUserPost = PendingUserPost.NewThread.INSTANCE;

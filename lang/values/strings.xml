@@ -1059,6 +1059,12 @@
 	<string name="every_number_min__format">Every %d min.</string>
 	<string name="tracked_replies_notifications">Notify about new replies</string>
 	<string name="tracked_replies_notifications__summary">Show an Android system notification when a new reply is received</string>
+	<string name="reply_push">Push notifications for replies</string>
+	<string name="reply_push__summary">Receive push notifications about new replies through the Slooop server. When enabled, a random installation ID and the numbers of tracked posts are sent to the server.</string>
+	<string name="reply_push_consent__message">To provide push notifications, Slooop will register a random installation ID and send the server an FCM token, along with the board, thread and post numbers that should be watched.\n\nThe server and Google may receive technical connection data. Device identifiers, accounts, email addresses and the contents of other messages are not sent.</string>
+	<string name="reply_push_waiting_for_configuration">Enabled locally. Server connection is waiting for configuration.</string>
+	<string name="reply_push_notification_text">New reply to your post</string>
+	<string name="enable">Enable</string>
 	<string name="check_replies">Check replies</string>
 	<string name="tracked_replies_is_empty">There are no tracked messages yet</string>
 	<string name="no_unread_replies">There are no unread replies</string>

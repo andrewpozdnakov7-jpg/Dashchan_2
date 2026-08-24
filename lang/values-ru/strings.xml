@@ -1086,6 +1086,12 @@
 	<string name="every_number_min__format">Каждые %d мин.</string>
 	<string name="tracked_replies_notifications">Уведомлять о новых ответах</string>
 	<string name="tracked_replies_notifications__summary">Показывать системное уведомление Android при получении нового ответа</string>
+	<string name="reply_push">Push-уведомления об ответах</string>
+	<string name="reply_push__summary">Получать push-уведомления о новых ответах через сервер Slooop. После включения серверу передаются случайный идентификатор установки и номера отслеживаемых постов.</string>
+	<string name="reply_push_consent__message">Для работы функции Slooop зарегистрирует случайный идентификатор установки и передаст серверу FCM-токен, а также номера доски, треда и ваших сообщений, за которыми нужно следить.\n\nСервер и Google смогут получить технические данные соединения. Идентификаторы устройства, аккаунты, адрес электронной почты и текст других сообщений не передаются.</string>
+	<string name="reply_push_waiting_for_configuration">Включено локально. Подключение к серверу ожидает настройки.</string>
+	<string name="reply_push_notification_text">Новый ответ на ваш пост</string>
+	<string name="enable">Включить</string>
 	<string name="check_replies">Проверить ответы</string>
 	<string name="tracked_replies_is_empty">Отслеживаемых сообщений пока нет</string>
 	<string name="no_unread_replies">Непрочитанных ответов нет</string>

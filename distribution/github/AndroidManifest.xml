@@ -5,4 +5,10 @@
 	<queries>
 		<package android:name="io.dashchan2.addon.googletranslate" />
 	</queries>
+
+	<application>
+		<!-- Keep Firebase completely dormant until the user explicitly accepts the experimental feature. -->
+		<meta-data android:name="firebase_messaging_auto_init_enabled" android:value="false" />
+		<meta-data android:name="firebase_analytics_collection_enabled" android:value="false" />
+	</application>
 </manifest>
