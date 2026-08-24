@@ -136,6 +136,13 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 				boolean regularScrolling = newState != RecyclerView.SCROLL_STATE_IDLE;
 				updateFastScroller(false, fastScrollerEnabled, fastScrollerAllowed, regularScrolling, fastScrolling);
 			}
+
+			@Override
+			public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
+				if (dy != 0) {
+					invalidateFastScroller();
+				}
+			}
 		});
 		addOnItemTouchListener(new OnItemTouchListener() {
 			@Override
@@ -187,6 +194,14 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 		}
 	}
 
+	private void invalidateFastScroller() {
+		if (fastScrollerOverlayHost != null) {
+			fastScrollerOverlayDrawable.invalidateSelf();
+		} else {
+			invalidate();
+		}
+	}
+
 	public void setFastScrollerEnabled(boolean fastScrollerEnabled) {
 		if (this.fastScrollerEnabled != fastScrollerEnabled) {
 			fastScrollingDown = false;
@@ -197,7 +212,7 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 	public void setImportantPostsMarksFastScrollBarDecoration
 			(ImportantPostsMarksFastScrollBarDecoration importantPostsMarksFastScrollBarDecoration) {
 		this.importantPostsMarksFastScrollBarDecoration = importantPostsMarksFastScrollBarDecoration;
-		invalidate();
+		invalidateFastScroller();
 	}
 
 	private boolean isFastScrollerAvailable() {
@@ -258,7 +273,7 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 		}
 	}
 
-	private final Runnable invalidateRunnable = this::invalidate;
+	private final Runnable invalidateRunnable = this::invalidateFastScroller;
 
 	private void updateFastScroller(boolean immediately, boolean fastScrollerEnabled, boolean fastScrollerAllowed,
 			boolean regularScrolling, boolean fastScrolling) {
@@ -298,11 +313,11 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 			}
 			showFastScrollingStart = start;
 			showFastScrolling = newShow;
-			invalidate();
+			invalidateFastScroller();
 		} else if (!isFastScrollerAvailable() && passed < FAST_SCROLLER_TRANSITION_OUT_DELAY) {
 			removeCallbacks(invalidateRunnable);
 			showFastScrollingStart = time - FAST_SCROLLER_TRANSITION_IN - FAST_SCROLLER_TRANSITION_OUT_DELAY;
-			invalidate();
+			invalidateFastScroller();
 		}
 	}
 
@@ -502,7 +517,7 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 		}
 
 		if (shouldInvalidate) {
-			invalidate();
+			invalidateFastScroller();
 		}
 	}
 
