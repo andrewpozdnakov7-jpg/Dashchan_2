@@ -1,0 +1,5 @@
+- Fixed Picture-in-Picture mode by eliminating a crash that could occur on certain firmware versions, possibly including some Samsung devices. Smooth transitions, playback, and audio are preserved.
+- Improved report submission with safe retries for connectivity problems and more accurate validation of server acknowledgements. An indeterminate result is no longer shown as a successful submission.
+- When “Completely remove hidden posts” is enabled, hidden posts no longer appear in reply lists.
+- Fixed external extension update checks in the F-Droid build. The extension trust dialog now displays the complete SHA-256 certificate fingerprint.
+- Work has begun on reply push notifications using Google Firebase Cloud Messaging servers. The feature is not yet available in this version, and no data is sent through it.
