@@ -31,10 +31,14 @@ public class ImportantPostsMarksFastScrollBarDecoration {
 	}
 
 	public void draw(int scrollBarLeft, int scrollBarTop, int scrollBarRight, int scrollBarBottom,
-			int postPositionRange, Canvas canvas) {
-		if (data == null || data.totalPostsCount <= 0 || postPositionRange <= 0) {
+			Canvas canvas) {
+		if (data == null || data.totalPostsCount <= 1) {
 			return;
 		}
+		// Positions and their range must come from the same immutable snapshot. The adapter item count
+		// can fluctuate while posts are preloaded, filtered, or replaced with window placeholders;
+		// reading it on every frame rescales the entire mark map and makes all marks jump while scrolling.
+		int postPositionRange = data.totalPostsCount - 1;
 		int scrollBarHeight = scrollBarBottom - scrollBarTop;
 		if (scrollBarHeight <= 0) {
 			return;

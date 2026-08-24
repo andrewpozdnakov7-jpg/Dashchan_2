@@ -428,10 +428,8 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 			trackDrawable.draw(canvas);
 			if (importantPostsMarksFastScrollBarDecoration != null &&
 					importantPostsMarksFastScrollBarDecoration.hasMarks()) {
-				LinearLayoutManager layoutManager = (LinearLayoutManager) getLayoutManager();
-				int positionRange = getFastScrollerPositionRange(layoutManager);
 				importantPostsMarksFastScrollBarDecoration.draw(trackLeft, top, trackRight,
-						top + height - thumbHeight, positionRange, canvas);
+						top + height - thumbHeight, canvas);
 			}
 			int thumbExtra = (maxWidth - thumbDrawable.getIntrinsicWidth()) / 2;
 			thumbDrawable.setState(fastScrolling ? STATE_PRESSED : STATE_NORMAL);
