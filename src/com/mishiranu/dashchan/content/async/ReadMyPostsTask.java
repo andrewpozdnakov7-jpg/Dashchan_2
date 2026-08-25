@@ -22,12 +22,12 @@ public class ReadMyPostsTask extends HttpHolderTask<Void, ReadMyPostsTask.Result
 	}
 
 	public static final class Result {
-		public final List<Post> posts;
+		public final boolean success;
 		public final ErrorItem errorItem;
 		public final boolean threadDeleted;
 
-		private Result(List<Post> posts, ErrorItem errorItem, boolean threadDeleted) {
-			this.posts = posts;
+		private Result(boolean success, ErrorItem errorItem, boolean threadDeleted) {
+			this.success = success;
 			this.errorItem = errorItem;
 			this.threadDeleted = threadDeleted;
 		}
@@ -52,18 +52,19 @@ public class ReadMyPostsTask extends HttpHolderTask<Void, ReadMyPostsTask.Result
 							null, false, false, holder, null));
 			List<Post> posts = result != null ? result.posts : Collections.emptyList();
 			if (posts.isEmpty()) {
-				return new Result(null, new ErrorItem(ErrorItem.Type.EMPTY_RESPONSE), false);
+				return new Result(false, new ErrorItem(ErrorItem.Type.EMPTY_RESPONSE), false);
 			}
-			return new Result(posts, null, false);
+			MyPostsStorage.getInstance().updateThread(key, posts);
+			return new Result(true, null, false);
 		} catch (HttpException e) {
 			ErrorItem errorItem = e.getErrorItemAndHandle();
 			boolean deleted = errorItem.httpResponseCode == HttpURLConnection.HTTP_NOT_FOUND
 					|| errorItem.httpResponseCode == HttpURLConnection.HTTP_GONE;
-			return new Result(null, errorItem, deleted);
+			return new Result(false, errorItem, deleted);
 		} catch (RedirectException | ThreadRedirectException e) {
-			return new Result(null, new ErrorItem(ErrorItem.Type.THREAD_NOT_EXISTS), true);
+			return new Result(false, new ErrorItem(ErrorItem.Type.THREAD_NOT_EXISTS), true);
 		} catch (ExtensionException | InvalidResponseException e) {
-			return new Result(null, e.getErrorItemAndHandle(), false);
+			return new Result(false, e.getErrorItemAndHandle(), false);
 		} finally {
 			chan.configuration.commit();
 		}

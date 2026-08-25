@@ -204,7 +204,7 @@ public class MyPostsPage extends ListPage implements MyPostsAdapter.Callback, Re
 			return;
 		}
 		checkQueue.clear();
-		checkQueue.addAll(MyPostsStorage.getInstance().getThreadKeys());
+		checkQueue.addAll(MyPostsStorage.getInstance().getActiveThreadKeys());
 		if (checkQueue.isEmpty()) {
 			updateList();
 			return;
@@ -233,9 +233,7 @@ public class MyPostsPage extends ListPage implements MyPostsAdapter.Callback, Re
 	@Override
 	public void onReadMyPostsComplete(MyPostsStorage.ThreadKey key, ReadMyPostsTask.Result result) {
 		task = null;
-		if (result.posts != null) {
-			MyPostsStorage.getInstance().updateThread(key, result.posts);
-		} else {
+		if (!result.success) {
 			checkErrors++;
 			if (result.threadDeleted) {
 				MyPostsStorage.getInstance().setThreadDeleted(key, true);

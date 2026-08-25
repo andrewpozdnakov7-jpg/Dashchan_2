@@ -1046,7 +1046,9 @@ public class DialogUnit {
 	}
 
 	public void displayReplies(UiManager.ConfigurationSet configurationSet, PostItem postItem) {
-		display(configurationSet, new RepliesDialogProvider.Factory(postItem));
+		if (configurationSet.getVisibleReplyCount(postItem) > 0) {
+			display(configurationSet, new RepliesDialogProvider.Factory(postItem));
+		}
 	}
 
 	public void displayList(UiManager.ConfigurationSet configurationSet, Collection<PostNumber> postNumbers) {

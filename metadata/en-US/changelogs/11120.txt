@@ -1,0 +1,5 @@
+- Added reply push notifications via Google Firebase. Server-side checks currently support only Dvach /mobi/ and can notify you about new replies even when Slooop is closed or put to sleep by Android. The feature is optional.
+- Reply and notification settings are now grouped on a dedicated screen. Local checks and Google Firebase can be enabled independently, with options for the check interval, system notifications, Do Not Disturb mode, and viewing or resetting the random installation ID.
+- Added a right-hand mode under Accessibility: video player buttons move to the right, while the volume gesture area moves to the left.
+- Fixed audio continuing to play after closing Picture-in-Picture mode.
+- When “Completely remove hidden posts” is enabled, hidden posts no longer appear in the Replies section.

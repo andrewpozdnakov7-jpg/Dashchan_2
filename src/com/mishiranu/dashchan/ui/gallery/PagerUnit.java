@@ -739,8 +739,10 @@ public class PagerUnit implements PagerInstance.Callback {
 					== Configuration.ORIENTATION_LANDSCAPE;
 			int widthPercent = Preferences.getVideoVolumeGestureWidth(landscape);
 			int[] insets = Preferences.getVideoVolumeGestureInsets(landscape);
+			boolean leftEdge = Preferences.isVideoRightHandControls();
 			if (!Preferences.isVideoVolumeGesture()
-					|| x < view.getWidth() * (100 - widthPercent) / 100f
+					|| (leftEdge && x > view.getWidth() * widthPercent / 100f)
+					|| (!leftEdge && x < view.getWidth() * (100 - widthPercent) / 100f)
 					|| y < view.getHeight() * insets[0] / 100f
 					|| y > view.getHeight() * (100 - insets[1]) / 100f
 					|| !videoUnit.isAudioPresent()) {

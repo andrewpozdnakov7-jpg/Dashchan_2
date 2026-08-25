@@ -245,8 +245,8 @@ android {
 
 	defaultConfig {
 		applicationId = 'io.dashchan2'
-		versionCode = 11110
-		versionName = '3.2.31'
+		versionCode = 11120
+		versionName = '3.2.32'
 		def releaseVersionCode = versionCode
 		def packageVersionCodeProperty = project.findProperty('packageVersionCode')
 		if (packageVersionCodeProperty != null) {
@@ -304,6 +304,8 @@ android {
 	productFlavors {
 		github {
 			dimension = 'distribution'
+			buildConfigField 'String', 'SLOOOP_PUSH_BASE_URL',
+					'"https://slooop-push-er3p3rs4cq-ew.a.run.app"'
 			buildConfigField 'boolean', 'ENABLE_LOCAL_TRANSLATION', 'true'
 			buildConfigField 'boolean', 'ENABLE_GOOGLE_TRANSLATION', 'true'
 			buildConfigField 'boolean', 'ENABLE_GEMINI_NANO_TRANSLATION', 'true'
@@ -363,7 +365,11 @@ android {
 	}
 	sourceSets.github.java.srcDir 'distribution/github/src'
 	sourceSets.github.aidl.srcDir 'distribution/github/aidl'
+	sourceSets.github.res.srcDir 'distribution/github/res'
 	sourceSets.github.manifest.srcFile 'distribution/github/AndroidManifest.xml'
+	def githubDebugSourceSet = sourceSets.maybeCreate('githubDebug')
+	githubDebugSourceSet.java.srcDir 'distribution/githubDebug/src'
+	githubDebugSourceSet.manifest.srcFile 'distribution/githubDebug/AndroidManifest.xml'
 	sourceSets.fdroid.java.srcDir 'distribution/fdroid/src'
 	sourceSets.test {
 		java.srcDirs = ['unitTests/src']
@@ -539,6 +545,8 @@ tasks.register('syncBuiltinWebmPlayerHeaders', Copy) {
 
 dependencies {
 	leakImplementation 'com.squareup.leakcanary:leakcanary-android:3.0-alpha-9'
+	githubImplementation platform('com.google.firebase:firebase-bom:34.18.0')
+	githubImplementation 'com.google.firebase:firebase-messaging'
 	githubImplementation 'com.google.mlkit:genai-prompt:1.0.0-beta2'
 	compileOnly 'org.ccil.cowan.tagsoup:tagsoup:1.2.1'
 	implementation 'com.fasterxml.jackson.core:jackson-core:2.22.1'

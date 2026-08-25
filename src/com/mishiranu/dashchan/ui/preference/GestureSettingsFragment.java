@@ -86,7 +86,9 @@ public class GestureSettingsFragment extends PreferenceFragment {
 	private CharSequence formatAreaSummary() {
 		int[] portraitInsets = Preferences.getVideoVolumeGestureInsets(false);
 		int[] landscapeInsets = Preferences.getVideoVolumeGestureInsets(true);
-		return getString(R.string.video_volume_gesture_area__summary_format,
+		return getString(Preferences.isVideoRightHandControls()
+				? R.string.video_volume_gesture_area__summary_format_left
+				: R.string.video_volume_gesture_area__summary_format,
 				Preferences.getVideoVolumeGestureWidth(false), portraitInsets[0], portraitInsets[1],
 				Preferences.getVideoVolumeGestureWidth(true), landscapeInsets[0], landscapeInsets[1]);
 	}
@@ -350,7 +352,9 @@ public class GestureSettingsFragment extends PreferenceFragment {
 			topSeekBar.setProgress(top / STEP);
 			bottomSeekBar.setProgress(bottom / STEP);
 			updatingControls = false;
-			widthLabel.setText(getString(R.string.video_volume_gesture_width__format, width));
+			widthLabel.setText(getString(Preferences.isVideoRightHandControls()
+					? R.string.video_volume_gesture_width__format_left
+					: R.string.video_volume_gesture_width__format, width));
 			topLabel.setText(getString(R.string.video_volume_gesture_top__format, top));
 			bottomLabel.setText(getString(R.string.video_volume_gesture_bottom__format, bottom));
 			previewContainer.post(this::updatePreview);
@@ -385,7 +389,8 @@ public class GestureSettingsFragment extends PreferenceFragment {
 			FrameLayout.LayoutParams areaParams = new FrameLayout.LayoutParams(
 					Math.max(1, Math.round(screenWidth * width / 100f)),
 					Math.max(1, Math.round(screenHeight * (100 - top - bottom) / 100f)));
-			areaParams.gravity = Gravity.TOP | Gravity.END;
+			areaParams.gravity = Gravity.TOP | (Preferences.isVideoRightHandControls()
+					? Gravity.START : Gravity.END);
 			areaParams.topMargin = Math.round(screenHeight * top / 100f);
 			activeAreaView.setLayoutParams(areaParams);
 		}

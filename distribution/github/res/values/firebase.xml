@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<!-- Public Firebase Android client configuration for io.dashchan2. -->
+	<string name="google_app_id" translatable="false">1:53967854769:android:9ee2b0b9dc09a25b4dd690</string>
+	<string name="gcm_defaultSenderId" translatable="false">53967854769</string>
+	<string name="project_id" translatable="false">project-6eb8febf-8cca-4921-872</string>
+	<string name="google_storage_bucket" translatable="false">project-6eb8febf-8cca-4921-872.firebasestorage.app</string>
+	<string name="google_api_key" translatable="false">AIzaSyDGqqk6z3Jra7v3N0fDJVk7pCCU1ZjlFDk</string>
+</resources>

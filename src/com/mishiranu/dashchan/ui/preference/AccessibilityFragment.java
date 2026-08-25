@@ -89,6 +89,9 @@ public class AccessibilityFragment extends PreferenceFragment {
 				.setOnAfterChangeListener(p -> requireActivity().recreate());
 		addCheck(true, Preferences.KEY_VOLUME_BUTTONS_TEXT_SCALE, Preferences.DEFAULT_VOLUME_BUTTONS_TEXT_SCALE,
 				R.string.volume_buttons_text_scale, R.string.volume_buttons_text_scale__summary);
+		addCheck(true, Preferences.KEY_VIDEO_RIGHT_HAND_CONTROLS,
+				Preferences.DEFAULT_VIDEO_RIGHT_HAND_CONTROLS, R.string.video_right_hand_controls,
+				R.string.video_right_hand_controls__summary);
 		addCheck(true, Preferences.KEY_ROUNDED_DIALOGS, Preferences.DEFAULT_ROUNDED_DIALOGS,
 				R.string.rounded_dialogs, R.string.rounded_dialogs__summary);
 		RoundedDialogsRadiusPreference roundedDialogsRadiusPreference =

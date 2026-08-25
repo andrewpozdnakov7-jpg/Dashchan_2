@@ -21,6 +21,7 @@ import com.mishiranu.dashchan.content.async.ReadPostsTask;
 import com.mishiranu.dashchan.content.database.PagesDatabase;
 import com.mishiranu.dashchan.content.model.ErrorItem;
 import com.mishiranu.dashchan.content.model.PendingUserPost;
+import com.mishiranu.dashchan.content.push.ReplyPushManager;
 import com.mishiranu.dashchan.content.storage.FavoritesStorage;
 import com.mishiranu.dashchan.content.storage.MyPostsStorage;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
@@ -71,7 +72,8 @@ public class BackgroundWatcherWorker extends Worker {
 	}
 
 	private static boolean isAutomaticCheckEnabled() {
-		return Preferences.isBackgroundReplyCheckEnabled() || Preferences.isTrackMyPostsEnabled();
+		return Preferences.isBackgroundReplyCheckEnabled() || Preferences.isTrackMyPostsEnabled()
+				&& Preferences.isTrackedRepliesLocalCheckEnabled();
 	}
 
 	public BackgroundWatcherWorker(@NonNull Context context, @NonNull WorkerParameters workerParams) {
@@ -175,7 +177,7 @@ public class BackgroundWatcherWorker extends Worker {
 							new CheckTarget(copy.chanName, copy.boardName, copy.threadNumber, copy, false));
 				}
 			}
-			if (Preferences.isTrackMyPostsEnabled()) {
+			if (Preferences.isTrackMyPostsEnabled() && Preferences.isTrackedRepliesLocalCheckEnabled()) {
 				for (MyPostsStorage.ThreadKey key : MyPostsStorage.getInstance().getActiveThreadKeys()) {
 					String targetKey = makeTargetKey(key.chanName, key.boardName, key.threadNumber);
 					CheckTarget target = result.get(targetKey);
@@ -312,9 +314,14 @@ public class BackgroundWatcherWorker extends Worker {
 		@Override
 		public void onReadPostsSuccess(PagesDatabase.Cache.State cacheState,
 				List<PagesDatabase.InsertResult.Reply> replies, Integer newCount) {
+			if (target.tracked) {
+				replies = ReplyPushManager.filterPushNotifiedReplies(target.chanName,
+						target.boardName, target.threadNumber, replies);
+			}
 			boolean notificationsEnabled = (target.favoriteItem != null
 					&& notificationFeatures.contains(Preferences.NotificationFeature.ENABLED))
 					|| (target.tracked && Preferences.isTrackedRepliesNotificationsEnabled());
+			notificationsEnabled &= !Preferences.isReplyPushQuietHoursActive();
 			if (acceptResults.get() && !replies.isEmpty() && notificationsEnabled) {
 				String title = target.favoriteItem != null
 						? StringUtils.emptyIfNull(target.favoriteItem.title) : "";

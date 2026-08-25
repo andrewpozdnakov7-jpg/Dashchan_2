@@ -8,6 +8,7 @@ import androidx.lifecycle.ViewModel;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.RecyclerView;
 import chan.content.ChanLocator;
+import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.model.AttachmentItem;
 import com.mishiranu.dashchan.content.model.GalleryItem;
 import com.mishiranu.dashchan.content.model.PostItem;
@@ -225,6 +226,24 @@ public class UiManager {
 			showTranslatedComments = source.showTranslatedComments;
 			translationKey = source.translationKey;
 			return this;
+		}
+
+		public int getVisibleReplyCount(PostItem postItem) {
+			Collection<PostNumber> referencesFrom = postItem.getReferencesFrom();
+			if (!Preferences.isRemoveHiddenPosts()) {
+				return referencesFrom.size();
+			}
+			if (postsProvider == null) {
+				return 0;
+			}
+			int replyCount = 0;
+			for (PostNumber postNumber : referencesFrom) {
+				PostItem replyPostItem = postsProvider.findPostItem(postNumber);
+				if (replyPostItem != null && !postStateProvider.isHiddenResolve(replyPostItem)) {
+					replyCount++;
+				}
+			}
+			return replyCount;
 		}
 	}
 

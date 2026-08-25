@@ -214,6 +214,7 @@ public class VolumeGestureSensitivityPreference extends DialogPreference<Integer
 		private final int activeWidthPercent;
 		private final int activeTopPercent;
 		private final int activeBottomPercent;
+		private final boolean leftEdge;
 		private int sensitivity = Preferences.DEFAULT_VIDEO_VOLUME_GESTURE_SENSITIVITY;
 		private int volume = 50;
 		private int startVolume;
@@ -226,6 +227,7 @@ public class VolumeGestureSensitivityPreference extends DialogPreference<Integer
 			boolean landscape = context.getResources().getConfiguration().orientation
 					== Configuration.ORIENTATION_LANDSCAPE;
 			activeWidthPercent = Preferences.getVideoVolumeGestureWidth(landscape);
+			leftEdge = Preferences.isVideoRightHandControls();
 			int[] insets = Preferences.getVideoVolumeGestureInsets(landscape);
 			activeTopPercent = insets[0];
 			activeBottomPercent = insets[1];
@@ -244,7 +246,8 @@ public class VolumeGestureSensitivityPreference extends DialogPreference<Integer
 			activeBackground.setColor((accent & 0x00ffffff) | 0x55000000);
 			activeAreaView.setBackground(activeBackground);
 			addView(activeAreaView, new FrameLayout.LayoutParams(1,
-					FrameLayout.LayoutParams.MATCH_PARENT, Gravity.TOP | Gravity.END));
+					FrameLayout.LayoutParams.MATCH_PARENT, Gravity.TOP | (leftEdge
+							? Gravity.START : Gravity.END)));
 
 			volumeView = new TextView(context);
 			ThemeEngine.applyStyle(volumeView);
@@ -276,7 +279,8 @@ public class VolumeGestureSensitivityPreference extends DialogPreference<Integer
 		public boolean onTouchEvent(MotionEvent event) {
 			switch (event.getActionMasked()) {
 				case MotionEvent.ACTION_DOWN: {
-					if (event.getX() < getWidth() * (100 - activeWidthPercent) / 100f
+					if ((leftEdge && event.getX() > getWidth() * activeWidthPercent / 100f)
+							|| (!leftEdge && event.getX() < getWidth() * (100 - activeWidthPercent) / 100f)
 							|| event.getY() < getHeight() * activeTopPercent / 100f
 							|| event.getY() > getHeight() * (100 - activeBottomPercent) / 100f) {
 						return false;
