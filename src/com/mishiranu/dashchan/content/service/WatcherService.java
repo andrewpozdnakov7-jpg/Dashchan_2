@@ -19,6 +19,7 @@ import com.mishiranu.dashchan.content.database.ChanDatabase;
 import com.mishiranu.dashchan.content.database.PagesDatabase;
 import com.mishiranu.dashchan.content.model.ErrorItem;
 import com.mishiranu.dashchan.content.model.PendingUserPost;
+import com.mishiranu.dashchan.content.push.ReplyPushManager;
 import com.mishiranu.dashchan.content.storage.FavoritesStorage;
 import com.mishiranu.dashchan.content.storage.MyPostsStorage;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
@@ -601,6 +602,10 @@ public class WatcherService extends BaseService {
 		@Override
 		public void onReadPostsSuccess(PagesDatabase.Cache.State cacheState,
 				List<PagesDatabase.InsertResult.Reply> replies, Integer newCount) {
+			if (isTracked(threadKey)) {
+				replies = ReplyPushManager.filterPushNotifiedReplies(threadKey.chanName,
+						threadKey.boardName, threadKey.threadNumber, replies);
+			}
 			if (newCount != null) {
 				resolved = true;
 				this.newCount = newCount;
@@ -624,6 +629,7 @@ public class WatcherService extends BaseService {
 				boolean notificationsEnabled = (isFavoriteEnabled(threadKey)
 						&& notificationFeatures.contains(Preferences.NotificationFeature.ENABLED))
 						|| (isTracked(threadKey) && Preferences.isTrackedRepliesNotificationsEnabled());
+				notificationsEnabled &= !Preferences.isReplyPushQuietHoursActive();
 				if (notificationsEnabled) {
 					FavoritesStorage.FavoriteItem favoriteItem = FavoritesStorage.getInstance()
 							.getFavorite(threadKey.chanName, threadKey.boardName, threadKey.threadNumber);
@@ -779,7 +785,7 @@ public class WatcherService extends BaseService {
 
 	private void syncTrackedThreads(boolean refreshAdded) {
 		HashSet<ThreadKey> updatedKeys = new HashSet<>();
-		if (Preferences.isTrackMyPostsEnabled()) {
+		if (Preferences.isTrackMyPostsEnabled() && Preferences.isTrackedRepliesLocalCheckEnabled()) {
 			for (MyPostsStorage.ThreadKey key : MyPostsStorage.getInstance().getActiveThreadKeys()) {
 				updatedKeys.add(new ThreadKey(key.chanName, key.boardName, key.threadNumber));
 			}
@@ -935,7 +941,8 @@ public class WatcherService extends BaseService {
 	}
 
 	private boolean isTracked(ThreadKey threadKey) {
-		return Preferences.isTrackMyPostsEnabled() && trackedThreadKeys.contains(threadKey);
+		return Preferences.isTrackMyPostsEnabled() && Preferences.isTrackedRepliesLocalCheckEnabled()
+				&& trackedThreadKeys.contains(threadKey);
 	}
 
 	private boolean isWorkEnabled(ThreadKey threadKey) {
@@ -1134,7 +1141,8 @@ public class WatcherService extends BaseService {
 				|| Preferences.KEY_TRACKED_REPLIES_REFRESH_INTERVAL.equals(key)) {
 			ConcurrentUtils.HANDLER.removeCallbacks(refreshAllRunnable);
 			startNext();
-		} else if (Preferences.KEY_TRACK_MY_POSTS.equals(key)) {
+		} else if (Preferences.KEY_TRACK_MY_POSTS.equals(key)
+				|| Preferences.KEY_TRACKED_REPLIES_LOCAL_CHECK.equals(key)) {
 			syncTrackedThreads(true);
 		} else if (Preferences.KEY_THEME.equals(key) || Preferences.KEY_AUTOMATIC_DAY_NIGHT_THEME.equals(key)
 				|| Preferences.KEY_DAY_THEME.equals(key) || Preferences.KEY_NIGHT_THEME.equals(key)) {

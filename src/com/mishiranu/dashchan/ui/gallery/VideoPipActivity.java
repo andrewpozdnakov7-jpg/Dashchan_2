@@ -124,6 +124,7 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 	private boolean returnedToGallery;
 	private boolean receiverRegistered;
 	private boolean resumedAfterPictureInPictureExit;
+	private boolean resumePlaybackAfterPictureInPictureExit;
 	private boolean pictureInPictureEntryScheduled;
 	private boolean previewFrameHideScheduled;
 	private final Handler handler = new Handler(Looper.getMainLooper());
@@ -423,7 +424,8 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 		}
 		returnedToGallery = true;
 		VideoDiagnostics.recordUi("pip return_to_gallery");
-		boolean playing = player.isPlaying();
+		boolean playing = exitedPictureInPicture
+				? resumePlaybackAfterPictureInPictureExit : player.isPlaying();
 		long position = player.getPosition();
 		player.setPlaying(false);
 		player.setVideoViewFrameCallback(null);
@@ -442,6 +444,22 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 			player.destroyAsync();
 		}
 		finish();
+	}
+
+	private void suspendPlaybackAfterPictureInPictureExit() {
+		VideoPlayer player = this.player;
+		resumePlaybackAfterPictureInPictureExit = player != null && player.isPlaying();
+		if (player != null) {
+			player.setPlaying(false);
+		}
+		if (audioFocus != null) {
+			audioFocus.release();
+		}
+		if (rootView != null) {
+			rootView.setKeepScreenOn(false);
+		}
+		VideoDiagnostics.recordUi("pip exit_playback_suspended resume="
+				+ resumePlaybackAfterPictureInPictureExit);
 	}
 
 	@Override
@@ -494,6 +512,7 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 			exitedPictureInPicture = true;
 			resumedAfterPictureInPictureExit = false;
 			VideoDiagnostics.recordUi("pip mode_changed=false");
+			suspendPlaybackAfterPictureInPictureExit();
 			scheduleDismissedPictureInPictureCheck();
 			handler.post(this::maybeReturnToGallery);
 		}

@@ -1,18 +1,13 @@
 package com.mishiranu.dashchan.ui.preference;
 
 import android.app.AlertDialog;
-import android.Manifest;
-import android.content.pm.PackageManager;
-import android.os.Build;
 import android.os.Bundle;
-import android.text.InputType;
 import android.view.View;
 import androidx.annotation.NonNull;
 import com.mishiranu.dashchan.BuildConfig;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.push.ReplyPushManager;
-import com.mishiranu.dashchan.content.service.BackgroundWatcherWorker;
 import com.mishiranu.dashchan.content.translation.GeminiNanoTranslationBridge;
 import com.mishiranu.dashchan.content.translation.GoogleTranslationBridge;
 import com.mishiranu.dashchan.content.translation.TranslationController;
@@ -77,38 +72,9 @@ public class ExperimentalFragment extends PreferenceFragment implements Translat
 				Preferences.DEFAULT_COLLAPSE_LONG_OPEN_THREADS,
 				R.string.collapse_long_open_threads,
 				R.string.collapse_long_open_threads__summary);
-		CheckPreference trackRepliesPreference = addCheck(true, Preferences.KEY_TRACK_MY_POSTS,
-				Preferences.DEFAULT_TRACK_MY_POSTS, R.string.track_replies, R.string.track_replies__summary);
-		trackRepliesPreference.setOnAfterChangeListener(p -> {
-			if (!p.getValue() && Preferences.isReplyPushEnabled()) {
-				Preferences.setReplyPushEnabled(false);
-				ReplyPushManager.disable(requireContext());
-			}
-			BackgroundWatcherWorker.updateSchedule(requireContext());
-			refreshPreferences();
-		});
-		if (trackRepliesPreference.getValue()) {
-			Preference<String> refreshIntervalPreference = addEdit(
-					Preferences.KEY_TRACKED_REPLIES_REFRESH_INTERVAL,
-					Preferences.DEFAULT_TRACKED_REPLIES_REFRESH_INTERVAL,
-					R.string.tracked_replies_refresh_interval,
-					p -> getString(R.string.every_number_min__format,
-							Preferences.getTrackedRepliesRefreshIntervalMinutes()),
-					null, InputType.TYPE_CLASS_NUMBER);
-			refreshIntervalPreference.setOnAfterChangeListener(p -> {
-				String normalized = Integer.toString(Preferences.getTrackedRepliesRefreshIntervalMinutes());
-				if (!normalized.equals(p.getValue())) {
-					p.setValue(normalized);
-				}
-			});
-			addCheck(true, Preferences.KEY_TRACKED_REPLIES_NOTIFICATIONS,
-					Preferences.DEFAULT_TRACKED_REPLIES_NOTIFICATIONS,
-					R.string.tracked_replies_notifications,
-					R.string.tracked_replies_notifications__summary);
-			if (ReplyPushManager.isSupported()) {
-				addReplyPushPreference();
-			}
-		}
+		addButton(getString(R.string.replies_and_notifications), getRepliesAndNotificationsSummary())
+				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
+						.pushFragment(new ReplyNotificationsFragment()));
 		CheckPreference wallpaperPreference = addCheck(true, Preferences.KEY_WALLPAPER_ENABLED,
 				Preferences.DEFAULT_WALLPAPER_ENABLED, R.string.wallpaper_background,
 				R.string.wallpaper_background__summary);
@@ -126,52 +92,22 @@ public class ExperimentalFragment extends PreferenceFragment implements Translat
 		}
 		addCheck(true, Preferences.KEY_VIDEO_ZOOM_GESTURES, Preferences.DEFAULT_VIDEO_ZOOM_GESTURES,
 				R.string.video_zoom_gestures, R.string.video_zoom_gestures__summary);
-		addHeader(R.string.additional);
-		if (BuildConfig.ALLOW_GMS_SECURITY_PROVIDER) {
-			addCheck(true, Preferences.KEY_USE_GMS_PROVIDER, Preferences.DEFAULT_USE_GMS_PROVIDER,
-					R.string.use_gms_security_provider, R.string.use_gms_security_provider__summary);
-		}
 	}
 
-	private void addReplyPushPreference() {
-		CharSequence summary = Preferences.isReplyPushEnabled() && !ReplyPushManager.isConfigured()
-				? getString(R.string.reply_push_waiting_for_configuration)
-				: getString(R.string.reply_push__summary);
-		CheckPreference preference = addCheck(true, Preferences.KEY_REPLY_PUSH_ENABLED,
-				Preferences.DEFAULT_REPLY_PUSH_ENABLED, getString(R.string.reply_push), summary);
-		preference.setOnBeforeChangeListener((p, value) -> {
-			if (!value) {
-				return true;
-			}
-			new AlertDialog.Builder(requireContext())
-					.setTitle(R.string.reply_push)
-					.setMessage(R.string.reply_push_consent__message)
-					.setPositiveButton(R.string.enable, (dialog, which) -> {
-						Preferences.setReplyPushEnabled(true);
-						ReplyPushManager.enable(requireContext());
-						requestNotificationPermission();
-						if (!ReplyPushManager.isConfigured()) {
-							ClickableToast.show(R.string.reply_push_waiting_for_configuration);
-						}
-						refreshPreferences();
-					})
-					.setNegativeButton(android.R.string.cancel, null)
-					.show();
-			return false;
-		});
-		preference.setOnAfterChangeListener(p -> {
-			if (!p.getValue()) {
-				ReplyPushManager.disable(requireContext());
-			}
-			refreshPreferences();
-		});
-	}
-
-	private void requestNotificationPermission() {
-		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && requireContext()
-				.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-			requestPermissions(new String[] {Manifest.permission.POST_NOTIFICATIONS}, 1);
+	private CharSequence getRepliesAndNotificationsSummary() {
+		if (!Preferences.isTrackMyPostsEnabled()) {
+			return getString(R.string.replies_and_notifications_disabled);
 		}
+		boolean local = Preferences.isTrackedRepliesLocalCheckEnabled();
+		boolean push = ReplyPushManager.isSupported() && Preferences.isReplyPushEnabled();
+		if (local && push) {
+			return getString(R.string.replies_and_notifications_local_and_google);
+		} else if (push) {
+			return getString(R.string.replies_and_notifications_google_only);
+		} else if (local) {
+			return getString(R.string.replies_and_notifications_local_only);
+		}
+		return getString(R.string.replies_and_notifications_manual_only);
 	}
 
 	private void addTranslationPreferences() {

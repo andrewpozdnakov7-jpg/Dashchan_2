@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+	<application>
+		<!-- Debug-only local UI/navigation test. It never calls a production mock endpoint. -->
+		<receiver
+			android:name=".content.push.ReplyPushMockReceiver"
+			android:exported="true">
+			<intent-filter>
+				<action android:name="io.dashchan2.DEBUG_MOCK_REPLY" />
+			</intent-filter>
+		</receiver>
+	</application>
+</manifest>

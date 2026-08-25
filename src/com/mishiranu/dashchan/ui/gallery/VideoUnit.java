@@ -61,6 +61,7 @@ public class VideoUnit {
 	private final AudioManager audioManager;
 
 	private int layoutConfiguration = -1;
+	private boolean rightHandControls;
 	private LinearLayout configurationView;
 	private TextView timeTextView;
 	private TextView totalTimeTextView;
@@ -155,6 +156,10 @@ public class VideoUnit {
 	public void onResume() {
 		if (pictureInPictureTransferred) {
 			return;
+		}
+		if (layoutConfiguration >= 0
+				&& rightHandControls != Preferences.isVideoRightHandControls()) {
+			recreateVideoControls();
 		}
 		if (player != null && initialized) {
 			setPlaying(wasPlaying, true);
@@ -429,12 +434,15 @@ public class VideoUnit {
 		boolean speedControl = Preferences.isVideoPlaybackSpeedControl();
 		boolean pictureInPictureControl = Preferences.isVideoPictureInPicture() && context.getPackageManager()
 				.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE);
+		boolean rightHandControls = Preferences.isVideoRightHandControls();
 		if (targetLayoutCounfiguration != layoutConfiguration || speedControl != playbackSpeedControl
-				|| pictureInPictureControl != this.pictureInPictureControl) {
+				|| pictureInPictureControl != this.pictureInPictureControl
+				|| rightHandControls != this.rightHandControls) {
 			boolean firstTimeLayout = layoutConfiguration < 0;
 			layoutConfiguration = targetLayoutCounfiguration;
 			playbackSpeedControl = speedControl;
 			this.pictureInPictureControl = pictureInPictureControl;
+			this.rightHandControls = rightHandControls;
 			boolean longLayout = targetLayoutCounfiguration == 1;
 
 			controlsView.removeAllViews();
@@ -556,15 +564,30 @@ public class VideoUnit {
 		}
 		if (player != null) {
 			configurationView.removeAllViews();
-			if (playbackSpeedButton != null) {
-				configurationView.addView(playbackSpeedButton, (int) (56f * density), (int) (48f * density));
-			}
-			if (pictureInPictureButton != null) {
-				configurationView.addView(pictureInPictureButton, (int) (48f * density), (int) (48f * density));
-			}
-			configurationView.addView(muteButton, (int) (48f * density), (int) (48f * density));
 			View spacer = new View(context);
-			configurationView.addView(spacer, new LinearLayout.LayoutParams(0, 1, 1f));
+			if (rightHandControls) {
+				configurationView.addView(spacer, new LinearLayout.LayoutParams(0, 1, 1f));
+				configurationView.addView(muteButton, (int) (48f * density), (int) (48f * density));
+				if (pictureInPictureButton != null) {
+					configurationView.addView(pictureInPictureButton, (int) (48f * density),
+							(int) (48f * density));
+				}
+				if (playbackSpeedButton != null) {
+					configurationView.addView(playbackSpeedButton, (int) (56f * density),
+							(int) (48f * density));
+				}
+			} else {
+				if (playbackSpeedButton != null) {
+					configurationView.addView(playbackSpeedButton, (int) (56f * density),
+							(int) (48f * density));
+				}
+				if (pictureInPictureButton != null) {
+					configurationView.addView(pictureInPictureButton, (int) (48f * density),
+							(int) (48f * density));
+				}
+				configurationView.addView(muteButton, (int) (48f * density), (int) (48f * density));
+				configurationView.addView(spacer, new LinearLayout.LayoutParams(0, 1, 1f));
+			}
 			updateMuteButton();
 			updatePictureInPictureButton();
 			updateDuration(player.getDuration());

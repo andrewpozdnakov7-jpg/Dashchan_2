@@ -584,8 +584,8 @@ public class ViewUnit {
 			holder.bottomBarExpand.setVisibility(View.GONE);
 			holder.bottomBarOpenThread.setVisibility(View.GONE);
 		} else {
-			int replyCount = postItem.getPostReplyCount();
-			if (postItem.getPostReplyCount() > 0) {
+			int replyCount = configurationSet.getVisibleReplyCount(postItem);
+			if (replyCount > 0) {
 				holder.bottomBarReplies.setText(holder.itemView.getResources().getQuantityString
 						(R.plurals.number_replies__format, replyCount, replyCount));
 				holder.bottomBarReplies.setVisibility(View.VISIBLE);

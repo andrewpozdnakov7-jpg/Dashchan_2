@@ -1,14 +1,35 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest
+	xmlns:android="http://schemas.android.com/apk/res/android"
+	xmlns:tools="http://schemas.android.com/tools">
 	<uses-permission android:name="io.dashchan2.permission.BIND_GOOGLE_TRANSLATION_ADDON" />
 
 	<queries>
 		<package android:name="io.dashchan2.addon.googletranslate" />
 	</queries>
 
-	<application>
+	<application
+		android:fullBackupContent="@xml/reply_push_backup_rules"
+		android:dataExtractionRules="@xml/reply_push_data_extraction_rules"
+		tools:replace="android:fullBackupContent,android:dataExtractionRules">
 		<!-- Keep Firebase completely dormant until the user explicitly accepts the experimental feature. -->
 		<meta-data android:name="firebase_messaging_auto_init_enabled" android:value="false" />
+		<meta-data android:name="firebase_messaging_installation_id_enabled" android:value="true" />
+		<meta-data android:name="firebase_messaging_notification_delegation_enabled" android:value="false" />
+		<meta-data android:name="delivery_metrics_exported_to_big_query_enabled" android:value="false" />
 		<meta-data android:name="firebase_analytics_collection_enabled" android:value="false" />
+
+		<!-- FirebaseApp is initialized explicitly only after opt-in. -->
+		<provider
+			android:name="com.google.firebase.provider.FirebaseInitProvider"
+			tools:node="remove" />
+
+		<service
+			android:name=".content.push.SlooopFirebaseMessagingService"
+			android:exported="false">
+			<intent-filter>
+				<action android:name="com.google.firebase.MESSAGING_EVENT" />
+			</intent-filter>
+		</service>
 	</application>
 </manifest>

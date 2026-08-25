@@ -38,6 +38,10 @@ public final class SettingsSearchIndex {
 			@Override
 			ContentFragment createFragment() { return new ExperimentalFragment(); }
 		},
+		REPLY_NOTIFICATIONS(R.string.experimental_features, R.string.replies_and_notifications) {
+			@Override
+			ContentFragment createFragment() { return new ReplyNotificationsFragment(); }
+		},
 		INTERFACE(R.string.user_interface) {
 			@Override
 			ContentFragment createFragment() { return new InterfaceFragment(); }
@@ -324,20 +328,30 @@ public final class SettingsSearchIndex {
 		}
 		add(context, entries, Screen.EXPERIMENTAL, R.string.video_zoom_gestures,
 				R.string.video_zoom_gestures__summary, Preferences.KEY_VIDEO_ZOOM_GESTURES);
-		add(context, entries, Screen.EXPERIMENTAL, R.string.track_replies,
+		add(context, entries, Screen.EXPERIMENTAL, R.string.replies_and_notifications, 0, null);
+		add(context, entries, Screen.REPLY_NOTIFICATIONS, R.string.track_replies,
 				R.string.track_replies__summary, Preferences.KEY_TRACK_MY_POSTS);
-		add(context, entries, Screen.EXPERIMENTAL, R.string.tracked_replies_refresh_interval,
+		add(context, entries, Screen.REPLY_NOTIFICATIONS, R.string.tracked_replies_local_check,
+				R.string.tracked_replies_local_check__summary, Preferences.KEY_TRACKED_REPLIES_LOCAL_CHECK);
+		add(context, entries, Screen.REPLY_NOTIFICATIONS, R.string.tracked_replies_refresh_interval,
 				0, Preferences.KEY_TRACKED_REPLIES_REFRESH_INTERVAL);
-		add(context, entries, Screen.EXPERIMENTAL, R.string.tracked_replies_notifications,
+		add(context, entries, Screen.REPLY_NOTIFICATIONS, R.string.tracked_replies_notifications,
 				R.string.tracked_replies_notifications__summary,
 				Preferences.KEY_TRACKED_REPLIES_NOTIFICATIONS);
+		add(context, entries, Screen.REPLY_NOTIFICATIONS, R.string.reply_push_quiet_hours,
+				R.string.reply_push_quiet_hours__summary,
+				Preferences.KEY_REPLY_PUSH_QUIET_HOURS_ENABLED);
+		add(context, entries, Screen.REPLY_NOTIFICATIONS, R.string.reply_push_quiet_hours_start,
+				0, Preferences.KEY_REPLY_PUSH_QUIET_HOURS_START);
+		add(context, entries, Screen.REPLY_NOTIFICATIONS, R.string.reply_push_quiet_hours_end,
+				0, Preferences.KEY_REPLY_PUSH_QUIET_HOURS_END);
 		if (ReplyPushManager.isSupported()) {
-			add(context, entries, Screen.EXPERIMENTAL, R.string.reply_push,
+			add(context, entries, Screen.REPLY_NOTIFICATIONS, R.string.reply_push,
 					R.string.reply_push__summary, Preferences.KEY_REPLY_PUSH_ENABLED);
-		}
-		if (BuildConfig.ALLOW_GMS_SECURITY_PROVIDER) {
-			add(context, entries, Screen.EXPERIMENTAL, R.string.use_gms_security_provider,
-					R.string.use_gms_security_provider__summary, Preferences.KEY_USE_GMS_PROVIDER);
+			add(context, entries, Screen.REPLY_NOTIFICATIONS, R.string.reply_push_installation_id,
+					0, null);
+			add(context, entries, Screen.REPLY_NOTIFICATIONS, R.string.reply_push_reset_identity,
+					R.string.reply_push_reset_identity__summary, null);
 		}
 		add(context, entries, Screen.EXPERIMENTAL, R.string.video_diagnostics_start,
 				R.string.video_diagnostics_start__summary, null);
@@ -494,6 +508,8 @@ public final class SettingsSearchIndex {
 		add(context, entries, Screen.ACCESSIBILITY, R.string.text_scale, 0, Preferences.KEY_TEXT_SCALE);
 		add(context, entries, Screen.ACCESSIBILITY, R.string.volume_buttons_text_scale,
 				R.string.volume_buttons_text_scale__summary, Preferences.KEY_VOLUME_BUTTONS_TEXT_SCALE);
+		add(context, entries, Screen.ACCESSIBILITY, R.string.video_right_hand_controls,
+				R.string.video_right_hand_controls__summary, Preferences.KEY_VIDEO_RIGHT_HAND_CONTROLS);
 		add(context, entries, Screen.ACCESSIBILITY, R.string.rounded_dialogs, R.string.rounded_dialogs__summary,
 				Preferences.KEY_ROUNDED_DIALOGS);
 		add(context, entries, Screen.ACCESSIBILITY, R.string.rounded_dialogs_radius, 0,

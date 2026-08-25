@@ -25,6 +25,7 @@ import com.mishiranu.dashchan.widget.ClickableToast;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Calendar;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -1638,6 +1639,13 @@ public class Preferences {
 		return PREFERENCES.getBoolean(KEY_VOLUME_BUTTONS_TEXT_SCALE, DEFAULT_VOLUME_BUTTONS_TEXT_SCALE);
 	}
 
+	public static final String KEY_VIDEO_RIGHT_HAND_CONTROLS = "video_right_hand_controls";
+	public static final boolean DEFAULT_VIDEO_RIGHT_HAND_CONTROLS = false;
+
+	public static boolean isVideoRightHandControls() {
+		return PREFERENCES.getBoolean(KEY_VIDEO_RIGHT_HAND_CONTROLS, DEFAULT_VIDEO_RIGHT_HAND_CONTROLS);
+	}
+
 	public static final String KEY_APPLICATION_FONT = "application_font";
 
 	public static String getApplicationFont() {
@@ -2356,7 +2364,9 @@ public class Preferences {
 	}
 
 	public static final String KEY_TRACK_MY_POSTS = "track_my_posts";
-	public static final boolean DEFAULT_TRACK_MY_POSTS = false;
+	public static final boolean DEFAULT_TRACK_MY_POSTS = true;
+	public static final String KEY_TRACKED_REPLIES_LOCAL_CHECK = "tracked_replies_local_check";
+	public static final boolean DEFAULT_TRACKED_REPLIES_LOCAL_CHECK = true;
 	public static final String KEY_TRACKED_REPLIES_REFRESH_INTERVAL = "tracked_replies_refresh_interval";
 	public static final String DEFAULT_TRACKED_REPLIES_REFRESH_INTERVAL = "5";
 	public static final int MIN_TRACKED_REPLIES_REFRESH_INTERVAL = 1;
@@ -2365,11 +2375,23 @@ public class Preferences {
 	public static final boolean DEFAULT_TRACKED_REPLIES_NOTIFICATIONS = true;
 	public static final String KEY_REPLY_PUSH_ENABLED = "reply_push_enabled";
 	public static final boolean DEFAULT_REPLY_PUSH_ENABLED = false;
+	public static final String KEY_REPLY_PUSH_QUIET_HOURS_ENABLED = "reply_push_quiet_hours_enabled";
+	public static final boolean DEFAULT_REPLY_PUSH_QUIET_HOURS_ENABLED = false;
+	public static final String KEY_REPLY_PUSH_QUIET_HOURS_START = "reply_push_quiet_hours_start";
+	public static final int DEFAULT_REPLY_PUSH_QUIET_HOURS_START = 2 * 60;
+	public static final String KEY_REPLY_PUSH_QUIET_HOURS_END = "reply_push_quiet_hours_end";
+	public static final int DEFAULT_REPLY_PUSH_QUIET_HOURS_END = 9 * 60;
 	private static final String KEY_REPLY_PUSH_INSTALLATION_ID = "reply_push_installation_id";
 	private static final String KEY_REPLY_PUSH_HANDLED_EVENTS = "reply_push_handled_events";
+	private static final String KEY_REPLY_PUSH_NOTIFIED_REPLIES = "reply_push_notified_replies";
 
 	public static boolean isTrackMyPostsEnabled() {
 		return PREFERENCES.getBoolean(KEY_TRACK_MY_POSTS, DEFAULT_TRACK_MY_POSTS);
+	}
+
+	public static boolean isTrackedRepliesLocalCheckEnabled() {
+		return PREFERENCES.getBoolean(KEY_TRACKED_REPLIES_LOCAL_CHECK,
+				DEFAULT_TRACKED_REPLIES_LOCAL_CHECK);
 	}
 
 	public static int getTrackedRepliesRefreshIntervalMinutes() {
@@ -2400,12 +2422,47 @@ public class Preferences {
 		PREFERENCES.edit().put(KEY_REPLY_PUSH_ENABLED, enabled).close();
 	}
 
-	public static String getReplyPushInstallationId() {
-		return PREFERENCES.getString(KEY_REPLY_PUSH_INSTALLATION_ID, null);
+	public static boolean isReplyPushQuietHoursEnabled() {
+		return PREFERENCES.getBoolean(KEY_REPLY_PUSH_QUIET_HOURS_ENABLED,
+				DEFAULT_REPLY_PUSH_QUIET_HOURS_ENABLED);
 	}
 
-	public static void setReplyPushInstallationId(String installationId) {
-		PREFERENCES.edit().put(KEY_REPLY_PUSH_INSTALLATION_ID, installationId).close();
+	public static int getReplyPushQuietHoursStart() {
+		return clamp(PREFERENCES.getInt(KEY_REPLY_PUSH_QUIET_HOURS_START,
+				DEFAULT_REPLY_PUSH_QUIET_HOURS_START), 0, 24 * 60 - 1);
+	}
+
+	public static void setReplyPushQuietHoursStart(int minutes) {
+		PREFERENCES.edit().put(KEY_REPLY_PUSH_QUIET_HOURS_START,
+				clamp(minutes, 0, 24 * 60 - 1)).close();
+	}
+
+	public static int getReplyPushQuietHoursEnd() {
+		return clamp(PREFERENCES.getInt(KEY_REPLY_PUSH_QUIET_HOURS_END,
+				DEFAULT_REPLY_PUSH_QUIET_HOURS_END), 0, 24 * 60 - 1);
+	}
+
+	public static void setReplyPushQuietHoursEnd(int minutes) {
+		PREFERENCES.edit().put(KEY_REPLY_PUSH_QUIET_HOURS_END,
+				clamp(minutes, 0, 24 * 60 - 1)).close();
+	}
+
+	public static boolean isReplyPushQuietHoursActive() {
+		if (!isTrackMyPostsEnabled() || !isReplyPushQuietHoursEnabled()) {
+			return false;
+		}
+		Calendar calendar = Calendar.getInstance();
+		int currentMinute = calendar.get(Calendar.HOUR_OF_DAY) * 60 + calendar.get(Calendar.MINUTE);
+		return com.mishiranu.dashchan.content.push.ReplyPushContract.isMinuteInQuietHours(currentMinute,
+				getReplyPushQuietHoursStart(), getReplyPushQuietHoursEnd());
+	}
+
+	public static String takeLegacyReplyPushInstallationId() {
+		String installationId = PREFERENCES.getString(KEY_REPLY_PUSH_INSTALLATION_ID, null);
+		if (installationId != null) {
+			PREFERENCES.edit().remove(KEY_REPLY_PUSH_INSTALLATION_ID).close();
+		}
+		return installationId;
 	}
 
 	public static Set<String> getReplyPushHandledEvents() {
@@ -2415,6 +2472,16 @@ public class Preferences {
 
 	public static void setReplyPushHandledEvents(Set<String> events) {
 		PREFERENCES.edit().put(KEY_REPLY_PUSH_HANDLED_EVENTS, new HashSet<>(events)).close();
+	}
+
+	public static Set<String> getReplyPushNotifiedReplies() {
+		Set<String> replies = PREFERENCES.getStringSet(KEY_REPLY_PUSH_NOTIFIED_REPLIES,
+				Collections.emptySet());
+		return new HashSet<>(replies);
+	}
+
+	public static void setReplyPushNotifiedReplies(Set<String> replies) {
+		PREFERENCES.edit().put(KEY_REPLY_PUSH_NOTIFIED_REPLIES, new HashSet<>(replies)).close();
 	}
 
 	public static final String KEY_WATCHER_WIFI_ONLY = "watcher_wifi_only";

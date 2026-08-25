@@ -1,6 +1,5 @@
 package com.mishiranu.dashchan.content.storage;
 
-import chan.content.Chan;
 import chan.text.JsonSerial;
 import chan.text.ParseException;
 import chan.util.StringUtils;
@@ -20,6 +19,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.TrackedPost>> {
 	private static final String KEY_DATA = "data";
@@ -31,6 +31,7 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 	private static final String KEY_TIME = "time";
 	private static final String KEY_LAST_CHECKED = "lastChecked";
 	private static final String KEY_THREAD_DELETED = "threadDeleted";
+	private static final String KEY_TRACKING_ACTIVE = "trackingActive";
 	private static final String KEY_REPLIES = "replies";
 	private static final String KEY_UNREAD = "unread";
 
@@ -74,7 +75,7 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 
 	public static final class Reply {
 		public final PostNumber postNumber;
-		public final String comment;
+		public String comment;
 		public final long time;
 		public boolean unread;
 
@@ -99,6 +100,7 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 		public final long time;
 		public long lastChecked;
 		public boolean threadDeleted;
+		public boolean trackingActive = true;
 		public final ArrayList<Reply> replies = new ArrayList<>();
 
 		private TrackedPost(String chanName, String boardName, String threadNumber, PostNumber postNumber,
@@ -116,6 +118,7 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 					trackedPost.postNumber, trackedPost.comment, trackedPost.time);
 			lastChecked = trackedPost.lastChecked;
 			threadDeleted = trackedPost.threadDeleted;
+			trackingActive = trackedPost.trackingActive;
 			for (Reply reply : trackedPost.replies) {
 				replies.add(new Reply(reply));
 			}
@@ -223,6 +226,7 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 					long time = 0L;
 					long lastChecked = 0L;
 					boolean threadDeleted = false;
+					boolean trackingActive = true;
 					ArrayList<Reply> replies = new ArrayList<>();
 					reader.startObject();
 					while (!reader.endStruct()) {
@@ -250,6 +254,9 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 								break;
 							case KEY_THREAD_DELETED:
 								threadDeleted = reader.nextBoolean();
+								break;
+							case KEY_TRACKING_ACTIVE:
+								trackingActive = reader.nextBoolean();
 								break;
 							case KEY_REPLIES:
 								reader.startArray();
@@ -294,6 +301,7 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 								postNumber, comment, time);
 						post.lastChecked = lastChecked;
 						post.threadDeleted = threadDeleted;
+						post.trackingActive = trackingActive;
 						post.replies.addAll(replies);
 						posts.add(post);
 						postsMap.put(makeKey(chanName, boardName, threadNumber, postNumber), post);
@@ -334,6 +342,8 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 			writer.value(post.lastChecked);
 			writer.name(KEY_THREAD_DELETED);
 			writer.value(post.threadDeleted);
+			writer.name(KEY_TRACKING_ACTIVE);
+			writer.value(post.trackingActive);
 			writer.name(KEY_REPLIES);
 			writer.startArray();
 			for (Reply reply : post.replies) {
@@ -407,7 +417,7 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 	private List<ThreadKey> getThreadKeys(boolean includeDeleted) {
 		HashSet<ThreadKey> keys = new HashSet<>();
 		for (TrackedPost post : posts) {
-			if (includeDeleted || !post.threadDeleted) {
+			if (post.trackingActive && (includeDeleted || !post.threadDeleted)) {
 				keys.add(post.getThreadKey());
 			}
 		}
@@ -416,7 +426,7 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 
 	public synchronized boolean hasThread(ThreadKey key) {
 		for (TrackedPost post : posts) {
-			if (post.getThreadKey().equals(key)) {
+			if (post.trackingActive && post.getThreadKey().equals(key)) {
 				return true;
 			}
 		}
@@ -465,7 +475,7 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 		Objects.requireNonNull(trackedPostNumber);
 		Objects.requireNonNull(replyPostNumber);
 		TrackedPost trackedPost = postsMap.get(makeKey(chanName, boardName, threadNumber, trackedPostNumber));
-		if (trackedPost == null) {
+		if (trackedPost == null || !trackedPost.trackingActive) {
 			return false;
 		}
 		for (Reply reply : trackedPost.replies) {
@@ -486,6 +496,30 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 		TrackedPost post = postsMap.remove(makeKey(chanName, boardName, threadNumber, postNumber));
 		if (post != null) {
 			posts.remove(post);
+			serialize();
+			notifyChanged();
+		}
+	}
+
+	public synchronized void deactivateTracking(String chanName, String boardName, String threadNumber,
+			PostNumber postNumber) {
+		TrackedPost post = postsMap.get(makeKey(chanName, boardName, threadNumber, postNumber));
+		if (post != null && post.trackingActive) {
+			post.trackingActive = false;
+			serialize();
+			notifyChanged();
+		}
+	}
+
+	public synchronized void deactivateAllTracking() {
+		boolean changed = false;
+		for (TrackedPost post : posts) {
+			if (post.trackingActive) {
+				post.trackingActive = false;
+				changed = true;
+			}
+		}
+		if (changed) {
 			serialize();
 			notifyChanged();
 		}
@@ -543,21 +577,22 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 
 	public synchronized void updateThread(ThreadKey key, List<Post> threadPosts) {
 		ArrayList<TrackedPost> tracked = new ArrayList<>();
+		HashMap<PostNumber, TrackedPost> trackedByNumber = new HashMap<>();
+		HashMap<TrackedPost, HashMap<PostNumber, Reply>> knownRepliesByTrackedPost = new HashMap<>();
 		for (TrackedPost post : posts) {
-			if (post.getThreadKey().equals(key)) {
+			if (post.trackingActive && post.getThreadKey().equals(key)) {
 				tracked.add(post);
+				trackedByNumber.put(post.postNumber, post);
+				HashMap<PostNumber, Reply> knownReplies = new HashMap<>();
+				for (Reply reply : post.replies) {
+					knownReplies.put(reply.postNumber, reply);
+				}
+				knownRepliesByTrackedPost.put(post, knownReplies);
 			}
 		}
 		if (tracked.isEmpty()) {
 			return;
 		}
-		PostNumber originalPostNumber = null;
-		for (Post post : threadPosts) {
-			if (originalPostNumber == null || post.number.compareTo(originalPostNumber) < 0) {
-				originalPostNumber = post.number;
-			}
-		}
-		Chan chan = Chan.get(key.chanName);
 		long now = System.currentTimeMillis();
 		boolean changed = false;
 		for (TrackedPost trackedPost : tracked) {
@@ -566,30 +601,48 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 				changed = true;
 			}
 			trackedPost.lastChecked = now;
-			HashSet<PostNumber> knownReplies = new HashSet<>();
-			for (Reply reply : trackedPost.replies) {
-				knownReplies.add(reply.postNumber);
-			}
-			for (Post post : threadPosts) {
-				if (post.number.equals(trackedPost.postNumber)) {
-					if (StringUtils.isEmpty(trackedPost.comment)) {
-						String comment = HtmlParser.clear(post.comment);
-						if (!StringUtils.isEmpty(comment)) {
-							trackedPost.comment = comment;
-							changed = true;
-						}
-					}
-					continue;
-				}
-				PostItem postItem = PostItem.createPost(post, chan, key.boardName,
-						key.threadNumber, originalPostNumber);
-				if (postItem.getReferencesTo().contains(trackedPost.postNumber)
-						&& knownReplies.add(post.number)) {
-					trackedPost.replies.add(new Reply(post.number, HtmlParser.clear(post.comment),
-							post.timestamp, true));
+		}
+		for (Post post : threadPosts) {
+			TrackedPost ownPost = trackedByNumber.get(post.number);
+			if (ownPost != null && StringUtils.isEmpty(ownPost.comment)) {
+				String comment = HtmlParser.clear(post.comment);
+				if (!StringUtils.isEmpty(comment)) {
+					ownPost.comment = comment;
 					changed = true;
 				}
 			}
+			Set<PostNumber> references = PostItem.collectReferences(null, post.comment);
+			if (references == null) {
+				continue;
+			}
+			String clearedComment = null;
+			for (PostNumber reference : references) {
+				TrackedPost trackedPost = trackedByNumber.get(reference);
+				if (trackedPost == null || post.number.equals(trackedPost.postNumber)) {
+					continue;
+				}
+				HashMap<PostNumber, Reply> knownReplies = knownRepliesByTrackedPost.get(trackedPost);
+				Reply knownReply = knownReplies.get(post.number);
+				if (knownReply == null) {
+					if (clearedComment == null) {
+						clearedComment = HtmlParser.clear(post.comment);
+					}
+					Reply reply = new Reply(post.number, clearedComment, post.timestamp, true);
+					trackedPost.replies.add(reply);
+					knownReplies.put(post.number, reply);
+					changed = true;
+				} else if (StringUtils.isEmpty(knownReply.comment)) {
+					if (clearedComment == null) {
+						clearedComment = HtmlParser.clear(post.comment);
+					}
+					if (!StringUtils.isEmpty(clearedComment)) {
+						knownReply.comment = clearedComment;
+						changed = true;
+					}
+				}
+			}
+		}
+		for (TrackedPost trackedPost : tracked) {
 			Collections.sort(trackedPost.replies,
 					Comparator.comparing(reply -> reply.postNumber));
 		}
