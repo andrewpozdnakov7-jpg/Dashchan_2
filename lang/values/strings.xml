@@ -898,6 +898,7 @@
 	<string name="application_logo_default">Default</string>
 	<string name="application_logo_old_school">Old school</string>
 	<string name="application_logo_material_you">Material You</string>
+	<string name="application_logo_change_failed">Could not change the application icon</string>
 	<string name="application_logo_2">Lightning</string>
 	<string name="application_logo_3">Portrait</string>
 	<string name="application_logo_4">Cat</string>

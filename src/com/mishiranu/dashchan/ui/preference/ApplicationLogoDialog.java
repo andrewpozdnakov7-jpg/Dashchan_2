@@ -149,8 +149,13 @@ public class ApplicationLogoDialog extends DialogFragment {
 				return;
 			}
 		}
+		if (!LauncherIconManager.apply(requireContext(), Preferences.getApplicationName(), option.value)) {
+			ClickableToast.show(R.string.application_logo_change_failed);
+			return;
+		}
+		// Persist only after PackageManager accepted the complete alias transition. This prevents a failed
+		// switch from being retried during every application startup.
 		Preferences.setApplicationLogo(option.value);
-		LauncherIconManager.apply(requireContext(), Preferences.getApplicationName(), option.value);
 		if (getParentFragment() instanceof InterfaceFragment) {
 			((InterfaceFragment) getParentFragment()).onApplicationLogoChanged();
 		}

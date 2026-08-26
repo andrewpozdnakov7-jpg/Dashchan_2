@@ -3,3 +3,5 @@
 - Added a right-hand mode under Accessibility: video player buttons move to the right, while the volume gesture area moves to the left.
 - Fixed audio continuing to play after closing Picture-in-Picture mode.
 - When “Completely remove hidden posts” is enabled, hidden posts no longer appear in the Replies section.
+- Updated the built-in app icons: every variant now has adaptive resources for modern launchers, with fixes for dark edges, scaling, and previews. The Material You icon supports system themed coloring.
+- Added built-in Material You Light and Material You Dark themes. On Android 12 and newer they use the system wallpaper palette; Android 11 uses built-in fallback colors.

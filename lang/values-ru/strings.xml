@@ -922,6 +922,7 @@
 	<string name="application_logo_default">По умолчанию</string>
 	<string name="application_logo_old_school">Олд скул</string>
 	<string name="application_logo_material_you">Material You</string>
+	<string name="application_logo_change_failed">Не удалось изменить значок приложения</string>
 	<string name="application_logo_2">Молния</string>
 	<string name="application_logo_3">Портрет</string>
 	<string name="application_logo_4">Кот</string>

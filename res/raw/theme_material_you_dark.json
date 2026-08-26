@@ -1,0 +1,16 @@
+{
+	"base": "dark",
+	"name": "Material You dark",
+	"materialYou": true,
+	"window": "#ff121318",
+	"primary": "#ff1e1f25",
+	"accent": "#ffb2c5ff",
+	"card": "#ff1e1f25",
+	"post": "#ffe3e2e9",
+	"meta": "#ffc5c6d0",
+	"spoiler": "#33b2c5ff",
+	"link": "@accent",
+	"quote": "#ffe1bbdc",
+	"tripcode": "#ffc6c5d0",
+	"capcode": "#ffc7d7ff"
+}
