@@ -60,7 +60,7 @@
 	<application
 		android:name=".content.MainApplication"
 		android:label="${appLabel}"
-		android:icon="@drawable/application_logo_default"
+		android:icon="@mipmap/ic_launcher_default"
 		android:logo="@drawable/application_logo_default"
 		android:theme="@style/Theme.Launcher"
 		android:largeHeap="true"
@@ -110,7 +110,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_default"
+			android:icon="@mipmap/ic_launcher_default"
 			android:label="Dashchan_2"
 			android:logo="@drawable/application_logo_default">
 			<intent-filter>
@@ -125,7 +125,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_default"
+			android:icon="@mipmap/ic_launcher_default"
 			android:label="Двач"
 			android:logo="@drawable/application_logo_default">
 			<intent-filter>
@@ -140,7 +140,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="true"
 			android:exported="true"
-			android:icon="@drawable/application_logo_default"
+			android:icon="@mipmap/ic_launcher_default"
 			android:label="Slooop"
 			android:logo="@drawable/application_logo_default">
 			<intent-filter>
@@ -200,7 +200,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_2"
+			android:icon="@mipmap/ic_launcher_logo_2"
 			android:label="Dashchan_2"
 			android:logo="@drawable/application_logo_2">
 			<intent-filter>
@@ -215,7 +215,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_2"
+			android:icon="@mipmap/ic_launcher_logo_2"
 			android:label="Двач"
 			android:logo="@drawable/application_logo_2">
 			<intent-filter>
@@ -230,7 +230,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_2"
+			android:icon="@mipmap/ic_launcher_logo_2"
 			android:label="@string/launcher_name_dvach"
 			android:logo="@drawable/application_logo_2">
 			<intent-filter>
@@ -245,7 +245,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_3"
+			android:icon="@mipmap/ic_launcher_logo_3"
 			android:label="Dashchan_2"
 			android:logo="@drawable/application_logo_3">
 			<intent-filter>
@@ -260,7 +260,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_3"
+			android:icon="@mipmap/ic_launcher_logo_3"
 			android:label="Двач"
 			android:logo="@drawable/application_logo_3">
 			<intent-filter>
@@ -275,7 +275,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_3"
+			android:icon="@mipmap/ic_launcher_logo_3"
 			android:label="@string/launcher_name_dvach"
 			android:logo="@drawable/application_logo_3">
 			<intent-filter>
@@ -290,7 +290,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_4"
+			android:icon="@mipmap/ic_launcher_logo_4"
 			android:label="Dashchan_2"
 			android:logo="@drawable/application_logo_4">
 			<intent-filter>
@@ -305,7 +305,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_4"
+			android:icon="@mipmap/ic_launcher_logo_4"
 			android:label="Двач"
 			android:logo="@drawable/application_logo_4">
 			<intent-filter>
@@ -320,7 +320,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_4"
+			android:icon="@mipmap/ic_launcher_logo_4"
 			android:label="@string/launcher_name_dvach"
 			android:logo="@drawable/application_logo_4">
 			<intent-filter>
@@ -335,7 +335,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_5"
+			android:icon="@mipmap/ic_launcher_logo_5"
 			android:label="Dashchan_2"
 			android:logo="@drawable/application_logo_5">
 			<intent-filter>
@@ -350,7 +350,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_5"
+			android:icon="@mipmap/ic_launcher_logo_5"
 			android:label="Двач"
 			android:logo="@drawable/application_logo_5">
 			<intent-filter>
@@ -365,7 +365,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_5"
+			android:icon="@mipmap/ic_launcher_logo_5"
 			android:label="@string/launcher_name_dvach"
 			android:logo="@drawable/application_logo_5">
 			<intent-filter>
@@ -380,7 +380,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_6"
+			android:icon="@mipmap/ic_launcher_logo_6"
 			android:label="Dashchan_2"
 			android:logo="@drawable/application_logo_6">
 			<intent-filter>
@@ -395,7 +395,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_6"
+			android:icon="@mipmap/ic_launcher_logo_6"
 			android:label="Двач"
 			android:logo="@drawable/application_logo_6">
 			<intent-filter>
@@ -410,7 +410,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_6"
+			android:icon="@mipmap/ic_launcher_logo_6"
 			android:label="@string/launcher_name_dvach"
 			android:logo="@drawable/application_logo_6">
 			<intent-filter>
@@ -425,7 +425,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_7"
+			android:icon="@mipmap/ic_launcher_logo_7"
 			android:label="Dashchan_2"
 			android:logo="@drawable/application_logo_7">
 			<intent-filter>
@@ -440,7 +440,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_7"
+			android:icon="@mipmap/ic_launcher_logo_7"
 			android:label="Двач"
 			android:logo="@drawable/application_logo_7">
 			<intent-filter>
@@ -455,7 +455,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_7"
+			android:icon="@mipmap/ic_launcher_logo_7"
 			android:label="@string/launcher_name_dvach"
 			android:logo="@drawable/application_logo_7">
 			<intent-filter>
@@ -470,7 +470,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_8"
+			android:icon="@mipmap/ic_launcher_logo_8"
 			android:label="Dashchan_2"
 			android:logo="@drawable/application_logo_8">
 			<intent-filter>
@@ -485,7 +485,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_8"
+			android:icon="@mipmap/ic_launcher_logo_8"
 			android:label="Двач"
 			android:logo="@drawable/application_logo_8">
 			<intent-filter>
@@ -500,7 +500,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_8"
+			android:icon="@mipmap/ic_launcher_logo_8"
 			android:label="@string/launcher_name_dvach"
 			android:logo="@drawable/application_logo_8">
 			<intent-filter>
@@ -515,7 +515,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_9"
+			android:icon="@mipmap/ic_launcher_logo_9"
 			android:label="Dashchan_2"
 			android:logo="@drawable/application_logo_9">
 			<intent-filter>
@@ -530,7 +530,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_9"
+			android:icon="@mipmap/ic_launcher_logo_9"
 			android:label="Двач"
 			android:logo="@drawable/application_logo_9">
 			<intent-filter>
@@ -545,7 +545,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_9"
+			android:icon="@mipmap/ic_launcher_logo_9"
 			android:label="@string/launcher_name_dvach"
 			android:logo="@drawable/application_logo_9">
 			<intent-filter>
@@ -560,7 +560,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_10"
+			android:icon="@mipmap/ic_launcher_logo_10"
 			android:label="Dashchan_2"
 			android:logo="@drawable/application_logo_10">
 			<intent-filter>
@@ -575,7 +575,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_10"
+			android:icon="@mipmap/ic_launcher_logo_10"
 			android:label="Двач"
 			android:logo="@drawable/application_logo_10">
 			<intent-filter>
@@ -590,7 +590,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_10"
+			android:icon="@mipmap/ic_launcher_logo_10"
 			android:label="@string/launcher_name_dvach"
 			android:logo="@drawable/application_logo_10">
 			<intent-filter>
@@ -605,7 +605,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_11"
+			android:icon="@mipmap/ic_launcher_logo_11"
 			android:label="Dashchan_2"
 			android:logo="@drawable/application_logo_11">
 			<intent-filter>
@@ -620,7 +620,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_11"
+			android:icon="@mipmap/ic_launcher_logo_11"
 			android:label="Двач"
 			android:logo="@drawable/application_logo_11">
 			<intent-filter>
@@ -635,7 +635,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_11"
+			android:icon="@mipmap/ic_launcher_logo_11"
 			android:label="@string/launcher_name_dvach"
 			android:logo="@drawable/application_logo_11">
 			<intent-filter>
@@ -652,7 +652,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_pass"
+			android:icon="@mipmap/ic_launcher_pass"
 			android:label="Dashchan_2"
 			android:logo="@drawable/application_logo_pass">
 			<intent-filter>
@@ -667,7 +667,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_pass"
+			android:icon="@mipmap/ic_launcher_pass"
 			android:label="Двач"
 			android:logo="@drawable/application_logo_pass">
 			<intent-filter>
@@ -682,7 +682,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_pass"
+			android:icon="@mipmap/ic_launcher_pass"
 			android:label="@string/launcher_name_dvach"
 			android:logo="@drawable/application_logo_pass">
 			<intent-filter>
@@ -697,7 +697,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_subscriber"
+			android:icon="@mipmap/ic_launcher_subscriber"
 			android:label="Dashchan_2"
 			android:logo="@drawable/application_logo_subscriber">
 			<intent-filter>
@@ -712,7 +712,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_subscriber"
+			android:icon="@mipmap/ic_launcher_subscriber"
 			android:label="Двач"
 			android:logo="@drawable/application_logo_subscriber">
 			<intent-filter>
@@ -727,7 +727,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_subscriber"
+			android:icon="@mipmap/ic_launcher_subscriber"
 			android:label="@string/launcher_name_dvach"
 			android:logo="@drawable/application_logo_subscriber">
 			<intent-filter>
@@ -787,7 +787,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_default"
+			android:icon="@mipmap/ic_launcher_default"
 			android:label="Sloop"
 			android:logo="@drawable/application_logo_default">
 			<intent-filter>
@@ -802,7 +802,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_default"
+			android:icon="@mipmap/ic_launcher_default"
 			android:label="Slopchan"
 			android:logo="@drawable/application_logo_default">
 			<intent-filter>
@@ -817,7 +817,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_default"
+			android:icon="@mipmap/ic_launcher_default"
 			android:label="Slopchan_1"
 			android:logo="@drawable/application_logo_default">
 			<intent-filter>
@@ -832,7 +832,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_default"
+			android:icon="@mipmap/ic_launcher_default"
 			android:label="Slopchan_2"
 			android:logo="@drawable/application_logo_default">
 			<intent-filter>
@@ -907,7 +907,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_2"
+			android:icon="@mipmap/ic_launcher_logo_2"
 			android:label="Sloop"
 			android:logo="@drawable/application_logo_2">
 			<intent-filter>
@@ -922,7 +922,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_2"
+			android:icon="@mipmap/ic_launcher_logo_2"
 			android:label="Slopchan"
 			android:logo="@drawable/application_logo_2">
 			<intent-filter>
@@ -937,7 +937,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_2"
+			android:icon="@mipmap/ic_launcher_logo_2"
 			android:label="Slopchan_1"
 			android:logo="@drawable/application_logo_2">
 			<intent-filter>
@@ -952,7 +952,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_2"
+			android:icon="@mipmap/ic_launcher_logo_2"
 			android:label="Slopchan_2"
 			android:logo="@drawable/application_logo_2">
 			<intent-filter>
@@ -967,7 +967,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_3"
+			android:icon="@mipmap/ic_launcher_logo_3"
 			android:label="Sloop"
 			android:logo="@drawable/application_logo_3">
 			<intent-filter>
@@ -982,7 +982,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_3"
+			android:icon="@mipmap/ic_launcher_logo_3"
 			android:label="Slopchan"
 			android:logo="@drawable/application_logo_3">
 			<intent-filter>
@@ -997,7 +997,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_3"
+			android:icon="@mipmap/ic_launcher_logo_3"
 			android:label="Slopchan_1"
 			android:logo="@drawable/application_logo_3">
 			<intent-filter>
@@ -1012,7 +1012,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_3"
+			android:icon="@mipmap/ic_launcher_logo_3"
 			android:label="Slopchan_2"
 			android:logo="@drawable/application_logo_3">
 			<intent-filter>
@@ -1027,7 +1027,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_4"
+			android:icon="@mipmap/ic_launcher_logo_4"
 			android:label="Sloop"
 			android:logo="@drawable/application_logo_4">
 			<intent-filter>
@@ -1042,7 +1042,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_4"
+			android:icon="@mipmap/ic_launcher_logo_4"
 			android:label="Slopchan"
 			android:logo="@drawable/application_logo_4">
 			<intent-filter>
@@ -1057,7 +1057,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_4"
+			android:icon="@mipmap/ic_launcher_logo_4"
 			android:label="Slopchan_1"
 			android:logo="@drawable/application_logo_4">
 			<intent-filter>
@@ -1072,7 +1072,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_4"
+			android:icon="@mipmap/ic_launcher_logo_4"
 			android:label="Slopchan_2"
 			android:logo="@drawable/application_logo_4">
 			<intent-filter>
@@ -1087,7 +1087,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_5"
+			android:icon="@mipmap/ic_launcher_logo_5"
 			android:label="Sloop"
 			android:logo="@drawable/application_logo_5">
 			<intent-filter>
@@ -1102,7 +1102,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_5"
+			android:icon="@mipmap/ic_launcher_logo_5"
 			android:label="Slopchan"
 			android:logo="@drawable/application_logo_5">
 			<intent-filter>
@@ -1117,7 +1117,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_5"
+			android:icon="@mipmap/ic_launcher_logo_5"
 			android:label="Slopchan_1"
 			android:logo="@drawable/application_logo_5">
 			<intent-filter>
@@ -1132,7 +1132,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_5"
+			android:icon="@mipmap/ic_launcher_logo_5"
 			android:label="Slopchan_2"
 			android:logo="@drawable/application_logo_5">
 			<intent-filter>
@@ -1147,7 +1147,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_6"
+			android:icon="@mipmap/ic_launcher_logo_6"
 			android:label="Sloop"
 			android:logo="@drawable/application_logo_6">
 			<intent-filter>
@@ -1162,7 +1162,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_6"
+			android:icon="@mipmap/ic_launcher_logo_6"
 			android:label="Slopchan"
 			android:logo="@drawable/application_logo_6">
 			<intent-filter>
@@ -1177,7 +1177,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_6"
+			android:icon="@mipmap/ic_launcher_logo_6"
 			android:label="Slopchan_1"
 			android:logo="@drawable/application_logo_6">
 			<intent-filter>
@@ -1192,7 +1192,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_6"
+			android:icon="@mipmap/ic_launcher_logo_6"
 			android:label="Slopchan_2"
 			android:logo="@drawable/application_logo_6">
 			<intent-filter>
@@ -1207,7 +1207,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_7"
+			android:icon="@mipmap/ic_launcher_logo_7"
 			android:label="Sloop"
 			android:logo="@drawable/application_logo_7">
 			<intent-filter>
@@ -1222,7 +1222,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_7"
+			android:icon="@mipmap/ic_launcher_logo_7"
 			android:label="Slopchan"
 			android:logo="@drawable/application_logo_7">
 			<intent-filter>
@@ -1237,7 +1237,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_7"
+			android:icon="@mipmap/ic_launcher_logo_7"
 			android:label="Slopchan_1"
 			android:logo="@drawable/application_logo_7">
 			<intent-filter>
@@ -1252,7 +1252,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_7"
+			android:icon="@mipmap/ic_launcher_logo_7"
 			android:label="Slopchan_2"
 			android:logo="@drawable/application_logo_7">
 			<intent-filter>
@@ -1267,7 +1267,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_8"
+			android:icon="@mipmap/ic_launcher_logo_8"
 			android:label="Sloop"
 			android:logo="@drawable/application_logo_8">
 			<intent-filter>
@@ -1282,7 +1282,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_8"
+			android:icon="@mipmap/ic_launcher_logo_8"
 			android:label="Slopchan"
 			android:logo="@drawable/application_logo_8">
 			<intent-filter>
@@ -1297,7 +1297,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_8"
+			android:icon="@mipmap/ic_launcher_logo_8"
 			android:label="Slopchan_1"
 			android:logo="@drawable/application_logo_8">
 			<intent-filter>
@@ -1312,7 +1312,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_8"
+			android:icon="@mipmap/ic_launcher_logo_8"
 			android:label="Slopchan_2"
 			android:logo="@drawable/application_logo_8">
 			<intent-filter>
@@ -1327,7 +1327,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_9"
+			android:icon="@mipmap/ic_launcher_logo_9"
 			android:label="Sloop"
 			android:logo="@drawable/application_logo_9">
 			<intent-filter>
@@ -1342,7 +1342,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_9"
+			android:icon="@mipmap/ic_launcher_logo_9"
 			android:label="Slopchan"
 			android:logo="@drawable/application_logo_9">
 			<intent-filter>
@@ -1357,7 +1357,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_9"
+			android:icon="@mipmap/ic_launcher_logo_9"
 			android:label="Slopchan_1"
 			android:logo="@drawable/application_logo_9">
 			<intent-filter>
@@ -1372,7 +1372,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_9"
+			android:icon="@mipmap/ic_launcher_logo_9"
 			android:label="Slopchan_2"
 			android:logo="@drawable/application_logo_9">
 			<intent-filter>
@@ -1387,7 +1387,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_10"
+			android:icon="@mipmap/ic_launcher_logo_10"
 			android:label="Sloop"
 			android:logo="@drawable/application_logo_10">
 			<intent-filter>
@@ -1402,7 +1402,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_10"
+			android:icon="@mipmap/ic_launcher_logo_10"
 			android:label="Slopchan"
 			android:logo="@drawable/application_logo_10">
 			<intent-filter>
@@ -1417,7 +1417,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_10"
+			android:icon="@mipmap/ic_launcher_logo_10"
 			android:label="Slopchan_1"
 			android:logo="@drawable/application_logo_10">
 			<intent-filter>
@@ -1432,7 +1432,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_10"
+			android:icon="@mipmap/ic_launcher_logo_10"
 			android:label="Slopchan_2"
 			android:logo="@drawable/application_logo_10">
 			<intent-filter>
@@ -1447,7 +1447,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_11"
+			android:icon="@mipmap/ic_launcher_logo_11"
 			android:label="Sloop"
 			android:logo="@drawable/application_logo_11">
 			<intent-filter>
@@ -1462,7 +1462,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_11"
+			android:icon="@mipmap/ic_launcher_logo_11"
 			android:label="Slopchan"
 			android:logo="@drawable/application_logo_11">
 			<intent-filter>
@@ -1477,7 +1477,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_11"
+			android:icon="@mipmap/ic_launcher_logo_11"
 			android:label="Slopchan_1"
 			android:logo="@drawable/application_logo_11">
 			<intent-filter>
@@ -1492,7 +1492,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_11"
+			android:icon="@mipmap/ic_launcher_logo_11"
 			android:label="Slopchan_2"
 			android:logo="@drawable/application_logo_11">
 			<intent-filter>
@@ -1507,7 +1507,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_pass"
+			android:icon="@mipmap/ic_launcher_pass"
 			android:label="Sloop"
 			android:logo="@drawable/application_logo_pass">
 			<intent-filter>
@@ -1522,7 +1522,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_pass"
+			android:icon="@mipmap/ic_launcher_pass"
 			android:label="Slopchan"
 			android:logo="@drawable/application_logo_pass">
 			<intent-filter>
@@ -1537,7 +1537,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_pass"
+			android:icon="@mipmap/ic_launcher_pass"
 			android:label="Slopchan_1"
 			android:logo="@drawable/application_logo_pass">
 			<intent-filter>
@@ -1552,7 +1552,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_pass"
+			android:icon="@mipmap/ic_launcher_pass"
 			android:label="Slopchan_2"
 			android:logo="@drawable/application_logo_pass">
 			<intent-filter>
@@ -1567,7 +1567,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_subscriber"
+			android:icon="@mipmap/ic_launcher_subscriber"
 			android:label="Sloop"
 			android:logo="@drawable/application_logo_subscriber">
 			<intent-filter>
@@ -1582,7 +1582,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_subscriber"
+			android:icon="@mipmap/ic_launcher_subscriber"
 			android:label="Slopchan"
 			android:logo="@drawable/application_logo_subscriber">
 			<intent-filter>
@@ -1597,7 +1597,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_subscriber"
+			android:icon="@mipmap/ic_launcher_subscriber"
 			android:label="Slopchan_1"
 			android:logo="@drawable/application_logo_subscriber">
 			<intent-filter>
@@ -1612,7 +1612,7 @@
 			android:targetActivity=".ui.MainActivity"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@drawable/application_logo_subscriber"
+			android:icon="@mipmap/ic_launcher_subscriber"
 			android:label="Slopchan_2"
 			android:logo="@drawable/application_logo_subscriber">
 			<intent-filter>

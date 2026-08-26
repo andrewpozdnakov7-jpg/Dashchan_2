@@ -1,0 +1,16 @@
+{
+	"base": "light",
+	"name": "Material You light",
+	"materialYou": true,
+	"window": "#fffaf8ff",
+	"primary": "#ff475d92",
+	"accent": "#ff3f5f90",
+	"card": "#fff2f0f7",
+	"post": "#ff1b1b1f",
+	"meta": "#ff5f5f69",
+	"spoiler": "#335b6590",
+	"link": "@accent",
+	"quote": "#ff79536f",
+	"tripcode": "#ff535f70",
+	"capcode": "#ff324f80"
+}

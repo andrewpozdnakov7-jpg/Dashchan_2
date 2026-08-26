@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+	<!-- Legacy fallbacks. Adaptive icon XML with the same names overrides these on Android 8.0+. -->
+	<item name="ic_launcher_default" type="mipmap">@drawable/application_logo_default</item>
+	<item name="ic_launcher_material" type="mipmap">@drawable/application_logo_default</item>
+	<item name="ic_launcher_logo_2" type="mipmap">@drawable/application_logo_2</item>
+	<item name="ic_launcher_logo_3" type="mipmap">@drawable/application_logo_3</item>
+	<item name="ic_launcher_logo_4" type="mipmap">@drawable/application_logo_4</item>
+	<item name="ic_launcher_logo_5" type="mipmap">@drawable/application_logo_5</item>
+	<item name="ic_launcher_logo_6" type="mipmap">@drawable/application_logo_6</item>
+	<item name="ic_launcher_logo_7" type="mipmap">@drawable/application_logo_7</item>
+	<item name="ic_launcher_logo_8" type="mipmap">@drawable/application_logo_8</item>
+	<item name="ic_launcher_logo_9" type="mipmap">@drawable/application_logo_9</item>
+	<item name="ic_launcher_logo_10" type="mipmap">@drawable/application_logo_10</item>
+	<item name="ic_launcher_logo_11" type="mipmap">@drawable/application_logo_11</item>
+	<item name="ic_launcher_pass" type="mipmap">@drawable/application_logo_pass</item>
+	<item name="ic_launcher_subscriber" type="mipmap">@drawable/application_logo_subscriber</item>
+
+</resources>

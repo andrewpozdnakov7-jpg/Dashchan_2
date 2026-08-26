@@ -2,6 +2,19 @@
 <resources>
 
 	<color name="color_icon_background">#ffdddddd</color>
+	<color name="color_launcher_background_default">#ffffffff</color>
+	<color name="color_launcher_background_logo_2">#fff7f7f7</color>
+	<color name="color_launcher_background_logo_3">#ff1d1d1d</color>
+	<color name="color_launcher_background_logo_4">#fff5a583</color>
+	<color name="color_launcher_background_logo_5">#ff000000</color>
+	<color name="color_launcher_background_logo_6">#ff17120e</color>
+	<color name="color_launcher_background_logo_7">#ffffffff</color>
+	<color name="color_launcher_background_logo_8">#ff0969e8</color>
+	<color name="color_launcher_background_logo_9">#ffffffff</color>
+	<color name="color_launcher_background_logo_10">#ff000000</color>
+	<color name="color_launcher_background_logo_11">#ff142330</color>
+	<color name="color_launcher_background_pass">#ff000000</color>
+	<color name="color_launcher_background_subscriber">#ff000000</color>
 	<color name="color_text_error">#ffcc0000</color>
 
 	<color name="background_popup_light">#ffffffff</color>

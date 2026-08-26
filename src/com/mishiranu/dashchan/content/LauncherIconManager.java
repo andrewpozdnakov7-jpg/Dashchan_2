@@ -8,16 +8,21 @@ import android.content.pm.ShortcutInfo;
 import android.content.pm.ShortcutManager;
 import android.graphics.Bitmap;
 import android.graphics.drawable.Icon;
+import android.os.Build;
+import android.util.Log;
 import androidx.annotation.DrawableRes;
 import androidx.annotation.StringRes;
 import chan.content.Chan;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.ui.MainActivity;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
 public final class LauncherIconManager {
+	private static final String TAG = "LauncherIconManager";
+
 	public static final String VALUE_DASHCHAN_2 = "dashchan_2";
 	public static final String VALUE_SLOPCHAN = "slopchan";
 	public static final String VALUE_DVACH = "dvach";
@@ -63,36 +68,36 @@ public final class LauncherIconManager {
 	}
 
 	private static final List<LogoOption> LOGO_OPTIONS = Collections.unmodifiableList(Arrays.asList(
-			new LogoOption(LOGO_DEFAULT, R.string.application_logo_default, R.drawable.application_logo_default,
+			new LogoOption(LOGO_DEFAULT, R.string.application_logo_default, R.mipmap.ic_launcher_default,
 					LogoAccess.PUBLIC, ""),
 			new LogoOption(LOGO_OLD_SCHOOL, R.string.application_logo_old_school, R.mipmap.ic_launcher,
 					LogoAccess.PUBLIC, "OldSchool"),
 			new LogoOption(LOGO_MATERIAL_YOU, R.string.application_logo_material_you,
 					R.mipmap.ic_launcher_material, LogoAccess.PUBLIC, "MaterialYou"),
-			new LogoOption(LOGO_2, R.string.application_logo_2, R.drawable.application_logo_2,
+			new LogoOption(LOGO_2, R.string.application_logo_2, R.mipmap.ic_launcher_logo_2,
 					LogoAccess.PUBLIC, "Logo2"),
-			new LogoOption(LOGO_7, R.string.application_logo_7, R.drawable.application_logo_7,
+			new LogoOption(LOGO_7, R.string.application_logo_7, R.mipmap.ic_launcher_logo_7,
 					LogoAccess.PUBLIC, "Logo7"),
-			new LogoOption(LOGO_3, R.string.application_logo_3, R.drawable.application_logo_3,
+			new LogoOption(LOGO_3, R.string.application_logo_3, R.mipmap.ic_launcher_logo_3,
 					LogoAccess.PUBLIC, "Logo3"),
-			new LogoOption(LOGO_4, R.string.application_logo_4, R.drawable.application_logo_4,
+			new LogoOption(LOGO_4, R.string.application_logo_4, R.mipmap.ic_launcher_logo_4,
 					LogoAccess.PUBLIC, "Logo4"),
-			new LogoOption(LOGO_5, R.string.application_logo_5, R.drawable.application_logo_5,
+			new LogoOption(LOGO_5, R.string.application_logo_5, R.mipmap.ic_launcher_logo_5,
 					LogoAccess.PUBLIC, "Logo5"),
-			new LogoOption(LOGO_6, R.string.application_logo_6, R.drawable.application_logo_6,
+			new LogoOption(LOGO_6, R.string.application_logo_6, R.mipmap.ic_launcher_logo_6,
 					LogoAccess.PUBLIC, "Logo6"),
-			new LogoOption(LOGO_8, R.string.application_logo_8, R.drawable.application_logo_8,
+			new LogoOption(LOGO_8, R.string.application_logo_8, R.mipmap.ic_launcher_logo_8,
 					LogoAccess.PUBLIC, "Logo8"),
-			new LogoOption(LOGO_9, R.string.application_logo_9, R.drawable.application_logo_9,
+			new LogoOption(LOGO_9, R.string.application_logo_9, R.mipmap.ic_launcher_logo_9,
 					LogoAccess.PUBLIC, "Logo9"),
-			new LogoOption(LOGO_10, R.string.application_logo_10, R.drawable.application_logo_10,
+			new LogoOption(LOGO_10, R.string.application_logo_10, R.mipmap.ic_launcher_logo_10,
 					LogoAccess.PUBLIC, "Logo10"),
-			new LogoOption(LOGO_11, R.string.application_logo_11, R.drawable.application_logo_11,
+			new LogoOption(LOGO_11, R.string.application_logo_11, R.mipmap.ic_launcher_logo_11,
 					LogoAccess.PUBLIC, "Logo11"),
 			new LogoOption(LOGO_DVACH_PASS, R.string.application_logo_dvach_pass,
-					R.drawable.application_logo_pass, LogoAccess.DVACH_PASS, "Pass"),
+					R.mipmap.ic_launcher_pass, LogoAccess.DVACH_PASS, "Pass"),
 			new LogoOption(LOGO_SUBSCRIBER, R.string.application_logo_subscriber,
-					R.drawable.application_logo_subscriber, LogoAccess.SUBSCRIBER, "Subscriber")));
+					R.mipmap.ic_launcher_subscriber, LogoAccess.SUBSCRIBER, "Subscriber")));
 
 	private static final String CLASS_DASHCHAN_2 = "com.mishiranu.dashchan.launcher.Dashchan2Alias";
 	private static final String CLASS_SLOPCHAN = "com.mishiranu.dashchan.launcher.SlopchanAlias";
@@ -146,15 +151,52 @@ public final class LauncherIconManager {
 		}
 	}
 
-	public static void apply(Context context, String value) {
-		apply(context, value, Preferences.getApplicationLogo());
+	public static boolean apply(Context context, String value) {
+		return apply(context, value, Preferences.getApplicationLogo());
 	}
 
-	public static void apply(Context context, String value, String logoValue) {
+	public static boolean apply(Context context, String value, String logoValue) {
 		String applicationName = isValidValue(value) ? value : VALUE_DVACH;
 		LogoOption selectedLogo = getLogoOption(logoValue);
 		String selectedClass = getClassName(applicationName, selectedLogo);
 		PackageManager packageManager = context.getPackageManager();
+		try {
+			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+				applyAtomic(packageManager, context, selectedClass);
+			} else {
+				applyLegacy(packageManager, context, selectedClass);
+			}
+			return true;
+		} catch (RuntimeException e) {
+			// A launcher or PackageManager implementation must not be able to put the app into a crash loop.
+			Log.e(TAG, "Unable to switch launcher icon", e);
+			return false;
+		}
+	}
+
+	private static void applyAtomic(PackageManager packageManager, Context context, String selectedClass) {
+		ArrayList<PackageManager.ComponentEnabledSetting> settings = new ArrayList<>();
+		for (LogoOption option : LOGO_OPTIONS) {
+			for (String name : APPLICATION_NAMES) {
+				String className = getClassName(name, option);
+				boolean enabled = className.equals(selectedClass);
+				ComponentName componentName = new ComponentName(context, className);
+				int currentState = packageManager.getComponentEnabledSetting(componentName);
+				if (needsUpdate(className, currentState, enabled)) {
+					settings.add(new PackageManager.ComponentEnabledSetting(componentName,
+							enabled ? PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+									: PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+							PackageManager.DONT_KILL_APP));
+				}
+			}
+		}
+		if (!settings.isEmpty()) {
+			packageManager.setComponentEnabledSettings(settings);
+		}
+	}
+
+	private static void applyLegacy(PackageManager packageManager, Context context, String selectedClass) {
+		// Keep a launchable component available throughout the non-atomic legacy transition.
 		setEnabled(packageManager, context, selectedClass, true);
 		for (LogoOption option : LOGO_OPTIONS) {
 			for (String name : APPLICATION_NAMES) {
@@ -182,15 +224,22 @@ public final class LauncherIconManager {
 			String className, boolean enabled) {
 		ComponentName componentName = new ComponentName(context, className);
 		int currentState = packageManager.getComponentEnabledSetting(componentName);
-		boolean defaultEnabled = CLASS_DVACH.equals(className);
-		if ((currentState == PackageManager.COMPONENT_ENABLED_STATE_DEFAULT && defaultEnabled == enabled) ||
-				(currentState == PackageManager.COMPONENT_ENABLED_STATE_ENABLED && enabled) ||
-				(currentState == PackageManager.COMPONENT_ENABLED_STATE_DISABLED && !enabled)) {
+		if (!needsUpdate(className, currentState, enabled)) {
 			return;
 		}
 		packageManager.setComponentEnabledSetting(componentName, enabled
 				? PackageManager.COMPONENT_ENABLED_STATE_ENABLED
 				: PackageManager.COMPONENT_ENABLED_STATE_DISABLED, PackageManager.DONT_KILL_APP);
+	}
+
+	private static boolean needsUpdate(String className, int currentState, boolean enabled) {
+		boolean defaultEnabled = CLASS_DVACH.equals(className);
+		if ((currentState == PackageManager.COMPONENT_ENABLED_STATE_DEFAULT && defaultEnabled == enabled) ||
+				(currentState == PackageManager.COMPONENT_ENABLED_STATE_ENABLED && enabled) ||
+				(currentState == PackageManager.COMPONENT_ENABLED_STATE_DISABLED && !enabled)) {
+			return false;
+		}
+		return true;
 	}
 
 	public static boolean requestCustomShortcut(Context context, String name) {

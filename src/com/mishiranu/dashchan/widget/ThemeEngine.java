@@ -11,6 +11,7 @@ import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.InsetDrawable;
+import android.os.Build;
 import android.util.AttributeSet;
 import android.view.ContextThemeWrapper;
 import android.view.LayoutInflater;
@@ -146,6 +147,7 @@ public class ThemeEngine {
 		public final Base base;
 		public final String name;
 		public final boolean builtIn;
+		public final boolean dynamic;
 		private final String json;
 
 		public final int window;
@@ -165,13 +167,14 @@ public class ThemeEngine {
 		public final int controlNormal21;
 		public final float disabledAlpha21;
 
-		public Theme(Base base, String name, boolean builtIn, String json,
+		public Theme(Base base, String name, boolean builtIn, boolean dynamic, String json,
 				int window, int primary, int accent, int card, int thread, int post, int meta,
 				int spoiler, int link, int quote, int tripcode, int capcode,
 				float colorGainFactor, int controlNormal21, float disabledAlpha21) {
 			this.base = base;
 			this.name = name;
 			this.builtIn = builtIn;
+			this.dynamic = dynamic;
 			this.json = json;
 			this.window = window;
 			this.primary = primary;
@@ -199,6 +202,13 @@ public class ThemeEngine {
 			int primary = this.primary == window ? this.accent : this.primary;
 			int accent = this.accent == primary ? this.link : this.accent;
 			return new ThemeChoiceDrawable(window, primary, accent);
+		}
+
+		private boolean hasSameColors(Theme theme) {
+			return window == theme.window && primary == theme.primary && accent == theme.accent &&
+					card == theme.card && thread == theme.thread && post == theme.post && meta == theme.meta &&
+					spoiler == theme.spoiler && link == theme.link && quote == theme.quote &&
+					tripcode == theme.tripcode && capcode == theme.capcode;
 		}
 
 		public JSONObject toJsonObject() {
@@ -608,6 +618,7 @@ public class ThemeEngine {
 				Preferences.setTheme(theme.name);
 			}
 		}
+		theme = refreshDynamicTheme(context, theme);
 		themeContext.theme = theme;
 		context.setTheme(theme.base.resId);
 		if (context instanceof Activity) {
@@ -657,6 +668,22 @@ public class ThemeEngine {
 		ThemeContext themeContext = requireThemeContext(context);
 		ensureTheme(themeContext);
 		return themeContext.theme;
+	}
+
+	public static boolean isDynamicThemeOutdated(Context context) {
+		Theme theme = getTheme(context);
+		return theme.dynamic && !theme.hasSameColors(refreshDynamicTheme(context, theme));
+	}
+
+	private static Theme refreshDynamicTheme(Context context, Theme theme) {
+		if (!theme.dynamic) {
+			return theme;
+		}
+		try {
+			return parseThemeInternal(context, new JSONObject(theme.json), true);
+		} catch (JSONException e) {
+			throw new RuntimeException(e);
+		}
 	}
 
 	public static ColorScheme getColorScheme(Context context) {
@@ -791,7 +818,8 @@ public class ThemeEngine {
 		decorView.setTag(R.id.tag_theme_engine, true);
 	}
 
-	private static final int[] DEFAULT_THEME_RESOURCES = {R.raw.theme_normie, R.raw.theme_tomorrow,
+	private static final int[] DEFAULT_THEME_RESOURCES = {R.raw.theme_normie,
+			R.raw.theme_material_you_light, R.raw.theme_material_you_dark, R.raw.theme_tomorrow,
 			R.raw.theme_amoled, R.raw.theme_burichan, R.raw.theme_hardon, R.raw.theme_neutron,
 			R.raw.theme_photon, R.raw.theme_yotsuba_a, R.raw.theme_teplo, R.raw.theme_monet_dark,
 			R.raw.theme_autumn, R.raw.theme_futaba, R.raw.theme_lipstick_q};
@@ -924,8 +952,57 @@ public class ThemeEngine {
 				entry.getValue().setter.setColor(builder, color);
 			}
 		}
-		return builder.create(base, name, builtIn, jsonObject.toString(),
+		boolean materialYou = builtIn && jsonObject.optBoolean("materialYou");
+		if (materialYou) {
+			applyMaterialYouPalette(context, base, builder);
+		}
+		return builder.create(base, name, builtIn, materialYou, jsonObject.toString(),
 				new ContextThemeWrapper(context, base.resId));
+	}
+
+	private static void applyMaterialYouPalette(Context context, Theme.Base base, ThemeBuilder builder) {
+		if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+			return;
+		}
+		if (base == Theme.Base.LIGHT) {
+			builder.window = getSystemPaletteColor(context, "system_neutral1_10", builder.window);
+			builder.primary = getSystemPaletteColor(context, "system_accent1_600", builder.primary);
+			builder.accent = getSystemPaletteColor(context, "system_accent1_600", builder.accent);
+			builder.card = getSystemPaletteColor(context, "system_neutral1_50", builder.card);
+			builder.post = getSystemPaletteColor(context, "system_neutral1_900", builder.post);
+			builder.meta = getSystemPaletteColor(context, "system_neutral2_600", builder.meta);
+			builder.spoiler = withAlpha(getSystemPaletteColor(context,
+					"system_accent2_500", builder.spoiler), 0x33);
+			builder.link = getSystemPaletteColor(context, "system_accent1_600", builder.link);
+			builder.quote = getSystemPaletteColor(context, "system_accent3_600", builder.quote);
+			builder.tripcode = getSystemPaletteColor(context, "system_accent2_700", builder.tripcode);
+			builder.capcode = getSystemPaletteColor(context, "system_accent1_700", builder.capcode);
+		} else {
+			builder.window = getSystemPaletteColor(context, "system_neutral1_900", builder.window);
+			builder.primary = getSystemPaletteColor(context, "system_neutral1_800", builder.primary);
+			builder.accent = getSystemPaletteColor(context, "system_accent1_200", builder.accent);
+			builder.card = getSystemPaletteColor(context, "system_neutral1_800", builder.card);
+			builder.post = getSystemPaletteColor(context, "system_neutral1_100", builder.post);
+			builder.meta = getSystemPaletteColor(context, "system_neutral2_400", builder.meta);
+			builder.spoiler = withAlpha(getSystemPaletteColor(context,
+					"system_accent2_200", builder.spoiler), 0x33);
+			builder.link = getSystemPaletteColor(context, "system_accent1_200", builder.link);
+			builder.quote = getSystemPaletteColor(context, "system_accent3_200", builder.quote);
+			builder.tripcode = getSystemPaletteColor(context, "system_accent2_200", builder.tripcode);
+			builder.capcode = getSystemPaletteColor(context, "system_accent1_300", builder.capcode);
+		}
+	}
+
+	private static int getSystemPaletteColor(Context context, String name, Integer fallback) {
+		int resourceId = context.getResources().getIdentifier(name, "color", "android");
+		if (resourceId != 0) {
+			return context.getColor(resourceId);
+		}
+		return fallback != null ? fallback : Color.TRANSPARENT;
+	}
+
+	private static int withAlpha(int color, int alpha) {
+		return (color & 0x00ffffff) | (alpha << 24);
 	}
 
 	private static Integer resolveColor(JSONObject jsonObject,
@@ -1035,6 +1112,11 @@ public class ThemeEngine {
 		Integer capcode;
 
 		public Theme create(Theme.Base base, String name, boolean builtIn, String json, Context context) {
+			return create(base, name, builtIn, false, json, context);
+		}
+
+		public Theme create(Theme.Base base, String name, boolean builtIn,
+				boolean dynamic, String json, Context context) {
 			while (true) {
 				boolean changed = false;
 				for (Value value : MAP.values()) {
@@ -1066,7 +1148,7 @@ public class ThemeEngine {
 			typedArray.recycle();
 			controlNormal21 = colorControlNormal.getColorForState(new int[] {android.R.attr.state_enabled},
 					colorControlNormal.getDefaultColor());
-			return new Theme(base, name, builtIn, json,
+			return new Theme(base, name, builtIn, dynamic, json,
 					window, primary, accent, card, thread, post, meta,
 					spoiler, link, quote, tripcode, capcode, colorGainFactor,
 					controlNormal21, disabledAlpha21);

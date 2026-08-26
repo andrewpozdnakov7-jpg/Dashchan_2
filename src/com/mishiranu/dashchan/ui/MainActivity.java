@@ -1483,6 +1483,10 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	@Override
 	protected void onResume() {
 		super.onResume();
+		if (ThemeEngine.isDynamicThemeOutdated(this)) {
+			recreate();
+			return;
+		}
 		updateSystemBackCallback();
 
 		drawerForm.updateRestartViewVisibility();
