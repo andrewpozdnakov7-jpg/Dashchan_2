@@ -45,6 +45,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Element;
 
 public class FourchanChanPerformer extends ChanPerformer {
 	private static final String RECAPTCHA_API_KEY = "6Ldp2bsSAAAAAAJ5uyx_lx34lJeEpTLVkP5k04qc";
@@ -403,26 +405,56 @@ public class FourchanChanPerformer extends ChanPerformer {
 			InvalidResponseException {
 		if (data.type == ReadThreadSummariesData.TYPE_ARCHIVED_THREADS) {
 			FourchanChanLocator locator = FourchanChanLocator.get(this);
-			Uri uri = locator.createApiUri(data.boardName, "archive.json");
-			HttpResponse response = new HttpRequest(uri, data)
-					.setRedirectHandler(unsafeRedirectHandler)
-					.perform();
+			Uri archiveUri = locator.createBoardUri(data.boardName, 0).buildUpon().appendPath("archive").build();
 			ArrayList<ThreadSummary> threadSummaries = new ArrayList<>();
-			try (InputStream input = response.open(); JsonSerial.Reader reader = JsonSerial.reader(input)) {
-				reader.startArray();
-				while (!reader.endStruct()) {
-					threadSummaries.add(new ThreadSummary(data.boardName,
-							Long.toString(reader.nextLong()), null));
+			try {
+				String responseText = new HttpRequest(archiveUri, data)
+						.setRedirectHandler(unsafeRedirectHandler)
+						.perform()
+						.readString();
+				for (Element row : Jsoup.parse(responseText, archiveUri.toString()).select("tr")) {
+					Element numberCell = row.selectFirst("td");
+					Element descriptionCell = row.selectFirst("td.teaser-col");
+					if (numberCell == null || descriptionCell == null) continue;
+					String number = numberCell.text().trim();
+					if (!isDigits(number)) continue;
+					String description = StringUtils.nullIfEmpty(descriptionCell.text().trim());
+					threadSummaries.add(new ThreadSummary(data.boardName, number, description));
 				}
-			} catch (ParseException e) {
-				throw new InvalidResponseException(e);
-			} catch (IOException e) {
-				throw response.fail(e);
+			} catch (HttpException e) {
+				// Fall back to the official numeric archive below.
+			}
+			if (threadSummaries.isEmpty()) {
+				Uri apiUri = locator.createApiUri(data.boardName, "archive.json");
+				HttpResponse response = new HttpRequest(apiUri, data)
+						.setRedirectHandler(unsafeRedirectHandler)
+						.perform();
+				try (InputStream input = response.open(); JsonSerial.Reader reader = JsonSerial.reader(input)) {
+					reader.startArray();
+					while (!reader.endStruct()) {
+						threadSummaries.add(new ThreadSummary(data.boardName,
+								Long.toString(reader.nextLong()), null));
+					}
+					Collections.reverse(threadSummaries);
+				} catch (ParseException e) {
+					throw new InvalidResponseException(e);
+				} catch (IOException e) {
+					throw response.fail(e);
+				}
 			}
 			return new ReadThreadSummariesResult(threadSummaries);
 		} else {
 			return super.onReadThreadSummaries(data);
 		}
+	}
+
+	private static boolean isDigits(String value) {
+		if (StringUtils.isEmpty(value)) return false;
+		for (int i = 0; i < value.length(); i++) {
+			char c = value.charAt(i);
+			if (c < '0' || c > '9') return false;
+		}
+		return true;
 	}
 
 	@Override

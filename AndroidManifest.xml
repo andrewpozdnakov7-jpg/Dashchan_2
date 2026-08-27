@@ -101,6 +101,8 @@
 				<data android:host="ejchan.net" />
 				<data android:host="arhivach.vc" />
 				<data android:host="apachan.space" />
+				<data android:host="pikabu.ru" />
+				<data android:host="www.pikabu.ru" />
 			</intent-filter>
 
 		</activity>
