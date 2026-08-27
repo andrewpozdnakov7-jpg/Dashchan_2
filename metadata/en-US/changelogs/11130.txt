@@ -1,0 +1,3 @@
+- Added the first read-only Kekabu integration for Pikabu's public Hot, Best, and New feeds. Stories, images, videos, and comments are supported; large discussions now load in full, and reply links work without manually opening the referenced comments. Signing in, posting, and voting are not available yet.
+- The 4chan archive now displays thread titles immediately, without requiring each thread to be opened first.
+- Updated the Yoba icon: restored its canonical thin black outline and fixed the adaptive icon variant.
