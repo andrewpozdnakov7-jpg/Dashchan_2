@@ -983,7 +983,6 @@
 	<string name="ejchan_api_unavailable">Ежчан вернул веб-страницу вместо данных API. Проверьте выбранный домен и VPN в настройках Ежчана.</string>
 	<string name="automatic_domain_selection">Автоматически подбирать домен</string>
 	<string name="automatic_domain_selection__summary">Slooop выбирает домен форума с учётом страны и VPN. При выключении используется домен, выбранный в настройках форума.</string>
-	<string name="pikabu_extension_in_development">Расширение Кекабу находится в разработке.</string>
 	<string name="display_post_year">Отображать год в датах постов</string>
 	<string name="hide_thread_title">Скрывать заголовок треда в верхней панели</string>
 	<string name="hide_thread_title__summary">Не показывать название и адрес треда при его просмотре</string>

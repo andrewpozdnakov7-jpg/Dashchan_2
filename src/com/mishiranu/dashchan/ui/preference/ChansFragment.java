@@ -1,6 +1,5 @@
 package com.mishiranu.dashchan.ui.preference;
 
-import android.app.AlertDialog;
 import android.content.Context;
 import android.os.Bundle;
 import android.view.View;
@@ -69,11 +68,10 @@ public class ChansFragment extends PreferenceFragment implements FragmentHandler
 		addChanPreference(chans.remove("ejchan"));
 		addChanPreference(chans.remove("apachan"));
 		addChanPreference(chans.remove("arhivach"));
+		addChanPreference(chans.remove("pikabu"));
 		for (Chan chan : chans.values()) {
 			addChanPreference(chan);
 		}
-		addForumPreference("pikabu", R.string.forum_pikabu, 0,
-				() -> showDevelopmentDialog(R.string.pikabu_extension_in_development));
 	}
 
 	private void addChanPreference(Chan chan) {
@@ -84,9 +82,11 @@ public class ChansFragment extends PreferenceFragment implements FragmentHandler
 				: "fourchan".equals(chan.name) ? R.string.forum_fourchan
 				: "ejchan".equals(chan.name) ? R.string.forum_ejchan
 				: "apachan".equals(chan.name) ? R.string.forum_apachan
-				: "arhivach".equals(chan.name) ? R.string.forum_arhivach : 0;
+				: "arhivach".equals(chan.name) ? R.string.forum_arhivach
+				: "pikabu".equals(chan.name) ? R.string.forum_pikabu : 0;
 		CharSequence title = titleResId != 0 ? getString(titleResId) : chan.configuration.getTitle();
 		CharSequence summary = "fourchan".equals(chan.name) || "arhivach".equals(chan.name)
+				|| "pikabu".equals(chan.name)
 				? getString(R.string.read_only) : null;
 		addForumPreference(chan.name, title, summary, () -> ((FragmentHandler) requireActivity())
 				.pushFragment(new ChanFragment(chan.name)));
@@ -107,17 +107,15 @@ public class ChansFragment extends PreferenceFragment implements FragmentHandler
 		});
 	}
 
-	private void showDevelopmentDialog(int messageResId) {
-		new AlertDialog.Builder(requireContext())
-				.setMessage(messageResId)
-				.setPositiveButton(android.R.string.ok, null)
-				.show();
-	}
-
 	private static class ForumPreference extends CheckPreference {
 		public ForumPreference(Context context, String key, boolean defaultValue,
 				CharSequence title, CharSequence summary) {
 			super(context, key, defaultValue, title, summary);
+		}
+
+		@Override
+		public ViewType getViewType() {
+			return ViewType.FORUM;
 		}
 
 		@Override
@@ -132,13 +130,15 @@ public class ChansFragment extends PreferenceFragment implements FragmentHandler
 			((LinearLayout) holder.view).addView(holder.check, 0, layoutParams);
 			holder.check.setClickable(true);
 			holder.check.setFocusable(false);
-			holder.check.setOnClickListener(v -> setValue(!getValue()));
 			return holder;
 		}
 
 		@Override
 		public void bindViewHolder(ViewHolder viewHolder) {
 			super.bindViewHolder(viewHolder);
+			if (viewHolder instanceof CheckViewHolder) {
+				((CheckViewHolder) viewHolder).check.setOnClickListener(v -> setValue(!getValue()));
+			}
 			viewHolder.title.setEnabled(getValue());
 			viewHolder.summary.setEnabled(getValue());
 		}
