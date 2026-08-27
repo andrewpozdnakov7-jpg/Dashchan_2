@@ -53,6 +53,13 @@ public class FourchanChanPerformer extends ChanPerformer {
 	private static final String CAPTCHA_DATA_KEY_PASS_COOKIE = "captchaPassCookie";
 
 	private static final String COOKIE_FOURCHAN_PASS = "4chan_pass";
+	private static final Pattern PATTERN_ARCHIVED_ROW = Pattern.compile("<tr\\b[^>]*>(.*?)</tr>",
+			Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+	private static final Pattern PATTERN_ARCHIVED_THREAD_NUMBER = Pattern.compile(
+			"<td\\b[^>]*>\\s*(\\d+)\\s*</td>", Pattern.CASE_INSENSITIVE);
+	private static final Pattern PATTERN_ARCHIVED_THREAD_DESCRIPTION = Pattern.compile(
+			"<td\\b[^>]*class\\s*=\\s*[\\\"'][^\\\"']*\\bteaser-col\\b[^\\\"']*[\\\"'][^>]*>(.*?)</td>",
+			Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
 
 	private final HashMap<String, Long> lastRulesUpdate = new HashMap<>();
 
@@ -403,21 +410,45 @@ public class FourchanChanPerformer extends ChanPerformer {
 			InvalidResponseException {
 		if (data.type == ReadThreadSummariesData.TYPE_ARCHIVED_THREADS) {
 			FourchanChanLocator locator = FourchanChanLocator.get(this);
-			Uri uri = locator.createApiUri(data.boardName, "archive.json");
-			HttpResponse response = new HttpRequest(uri, data)
-					.setRedirectHandler(unsafeRedirectHandler)
-					.perform();
+			Uri archiveUri = locator.createBoardUri(data.boardName, 0).buildUpon().appendPath("archive").build();
 			ArrayList<ThreadSummary> threadSummaries = new ArrayList<>();
-			try (InputStream input = response.open(); JsonSerial.Reader reader = JsonSerial.reader(input)) {
-				reader.startArray();
-				while (!reader.endStruct()) {
-					threadSummaries.add(new ThreadSummary(data.boardName,
-							Long.toString(reader.nextLong()), null));
+			try {
+				String responseText = new HttpRequest(archiveUri, data)
+						.setRedirectHandler(unsafeRedirectHandler)
+						.perform()
+						.readString();
+				Matcher rowMatcher = PATTERN_ARCHIVED_ROW.matcher(responseText);
+				while (rowMatcher.find()) {
+					String row = rowMatcher.group(1);
+					Matcher numberMatcher = PATTERN_ARCHIVED_THREAD_NUMBER.matcher(row);
+					Matcher descriptionMatcher = PATTERN_ARCHIVED_THREAD_DESCRIPTION.matcher(row);
+					if (numberMatcher.find() && descriptionMatcher.find()) {
+						String description = StringUtils.nullIfEmpty(
+								StringUtils.clearHtml(descriptionMatcher.group(1)).trim());
+						threadSummaries.add(new ThreadSummary(data.boardName,
+								numberMatcher.group(1), description));
+					}
 				}
-			} catch (ParseException e) {
-				throw new InvalidResponseException(e);
-			} catch (IOException e) {
-				throw response.fail(e);
+			} catch (HttpException e) {
+				// Fall back to the official numeric archive below.
+			}
+			if (threadSummaries.isEmpty()) {
+				Uri apiUri = locator.createApiUri(data.boardName, "archive.json");
+				HttpResponse response = new HttpRequest(apiUri, data)
+						.setRedirectHandler(unsafeRedirectHandler)
+						.perform();
+				try (InputStream input = response.open(); JsonSerial.Reader reader = JsonSerial.reader(input)) {
+					reader.startArray();
+					while (!reader.endStruct()) {
+						threadSummaries.add(new ThreadSummary(data.boardName,
+								Long.toString(reader.nextLong()), null));
+					}
+					Collections.reverse(threadSummaries);
+				} catch (ParseException e) {
+					throw new InvalidResponseException(e);
+				} catch (IOException e) {
+					throw response.fail(e);
+				}
 			}
 			return new ReadThreadSummariesResult(threadSummaries);
 		} else {
