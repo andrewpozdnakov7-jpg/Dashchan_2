@@ -45,6 +45,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Element;
 
 public class FourchanChanPerformer extends ChanPerformer {
 	private static final String RECAPTCHA_API_KEY = "6Ldp2bsSAAAAAAJ5uyx_lx34lJeEpTLVkP5k04qc";
@@ -53,13 +55,6 @@ public class FourchanChanPerformer extends ChanPerformer {
 	private static final String CAPTCHA_DATA_KEY_PASS_COOKIE = "captchaPassCookie";
 
 	private static final String COOKIE_FOURCHAN_PASS = "4chan_pass";
-	private static final Pattern PATTERN_ARCHIVED_ROW = Pattern.compile("<tr\\b[^>]*>(.*?)</tr>",
-			Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
-	private static final Pattern PATTERN_ARCHIVED_THREAD_NUMBER = Pattern.compile(
-			"<td\\b[^>]*>\\s*(\\d+)\\s*</td>", Pattern.CASE_INSENSITIVE);
-	private static final Pattern PATTERN_ARCHIVED_THREAD_DESCRIPTION = Pattern.compile(
-			"<td\\b[^>]*class\\s*=\\s*[\\\"'][^\\\"']*\\bteaser-col\\b[^\\\"']*[\\\"'][^>]*>(.*?)</td>",
-			Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
 
 	private final HashMap<String, Long> lastRulesUpdate = new HashMap<>();
 
@@ -417,17 +412,14 @@ public class FourchanChanPerformer extends ChanPerformer {
 						.setRedirectHandler(unsafeRedirectHandler)
 						.perform()
 						.readString();
-				Matcher rowMatcher = PATTERN_ARCHIVED_ROW.matcher(responseText);
-				while (rowMatcher.find()) {
-					String row = rowMatcher.group(1);
-					Matcher numberMatcher = PATTERN_ARCHIVED_THREAD_NUMBER.matcher(row);
-					Matcher descriptionMatcher = PATTERN_ARCHIVED_THREAD_DESCRIPTION.matcher(row);
-					if (numberMatcher.find() && descriptionMatcher.find()) {
-						String description = StringUtils.nullIfEmpty(
-								StringUtils.clearHtml(descriptionMatcher.group(1)).trim());
-						threadSummaries.add(new ThreadSummary(data.boardName,
-								numberMatcher.group(1), description));
-					}
+				for (Element row : Jsoup.parse(responseText, archiveUri.toString()).select("tr")) {
+					Element numberCell = row.selectFirst("td");
+					Element descriptionCell = row.selectFirst("td.teaser-col");
+					if (numberCell == null || descriptionCell == null) continue;
+					String number = numberCell.text().trim();
+					if (!isDigits(number)) continue;
+					String description = StringUtils.nullIfEmpty(descriptionCell.text().trim());
+					threadSummaries.add(new ThreadSummary(data.boardName, number, description));
 				}
 			} catch (HttpException e) {
 				// Fall back to the official numeric archive below.
@@ -454,6 +446,15 @@ public class FourchanChanPerformer extends ChanPerformer {
 		} else {
 			return super.onReadThreadSummaries(data);
 		}
+	}
+
+	private static boolean isDigits(String value) {
+		if (StringUtils.isEmpty(value)) return false;
+		for (int i = 0; i < value.length(); i++) {
+			char c = value.charAt(i);
+			if (c < '0' || c > '9') return false;
+		}
+		return true;
 	}
 
 	@Override
