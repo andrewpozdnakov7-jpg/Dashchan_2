@@ -472,8 +472,7 @@ public class ForegroundManager implements Handler.Callback {
 						height = width * dh / dw;
 					}
 				}
-				int maxHeightDp = getResources().getConfiguration().orientation
-						== Configuration.ORIENTATION_LANDSCAPE ? 160 : 120;
+				int maxHeightDp = 120;
 				height = Math.min(height, (int) (maxHeightDp * ResourceUtils.obtainDensity(this)));
 				setMeasuredDimension(width, height);
 			}
