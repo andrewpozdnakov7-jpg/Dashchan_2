@@ -750,7 +750,7 @@ public class ForegroundManager implements Handler.Callback {
 			int requestedColumns = requireArguments().getInt(EXTRA_COLUMNS);
 			boolean landscape = getResources().getConfiguration().orientation
 					== Configuration.ORIENTATION_LANDSCAPE;
-			int columns = landscape && images.length > 0 ? Math.min(images.length, 6) : requestedColumns;
+			int columns = landscape && images.length > 0 ? images.length : requestedColumns;
 			int rows = (images.length + columns - 1) / columns;
 			ensureArrays();
 			for (int i = 0; i < rows; i++) {
