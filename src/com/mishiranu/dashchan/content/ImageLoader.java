@@ -8,7 +8,6 @@ import android.os.SystemClock;
 import android.util.Base64;
 import android.view.View;
 import android.widget.ImageView;
-import androidx.core.view.ViewCompat;
 import chan.content.Chan;
 import chan.content.ChanConfiguration;
 import chan.content.ChanPerformer;
@@ -268,7 +267,7 @@ public class ImageLoader {
 
 		@Override
 		public void onStart() {
-			if (!ViewCompat.isAttachedToWindow(target)) {
+			if (!target.isAttachedToWindow()) {
 				onViewDetachedFromWindow(target);
 			}
 		}

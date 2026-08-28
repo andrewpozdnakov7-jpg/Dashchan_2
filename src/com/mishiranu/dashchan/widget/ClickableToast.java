@@ -23,7 +23,6 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import androidx.activity.ComponentActivity;
 import androidx.annotation.NonNull;
-import androidx.core.view.ViewCompat;
 import androidx.lifecycle.Lifecycle;
 import androidx.lifecycle.LifecycleObserver;
 import androidx.lifecycle.LifecycleOwner;
@@ -246,7 +245,7 @@ public class ClickableToast implements LifecycleObserver {
 		linearLayout.setBackground(partialClickDrawable);
 		linearLayout.setOnTouchListener(partialClickDrawable);
 		message1.setPadding(0, 0, 0, 0);
-		ViewCompat.setPaddingRelative(message2, innerPadding, 0, 0, 0);
+		message2.setPaddingRelative(innerPadding, 0, 0, 0);
 		message1.setSingleLine(true);
 		message2.setSingleLine(true);
 		message1.setEllipsize(TextUtils.TruncateAt.END);
@@ -509,7 +508,7 @@ public class ClickableToast implements LifecycleObserver {
 				drawable.setColorFilter(colorFilter);
 				canvas.save();
 				Rect bounds = getBounds();
-				if (ViewCompat.getLayoutDirection(button) == ViewCompat.LAYOUT_DIRECTION_RTL) {
+				if (button.getLayoutDirection() == View.LAYOUT_DIRECTION_RTL) {
 					int shift = button.getRight();
 					canvas.clipRect(bounds.left + shift, bounds.top, bounds.left + shift, bounds.bottom);
 				} else {

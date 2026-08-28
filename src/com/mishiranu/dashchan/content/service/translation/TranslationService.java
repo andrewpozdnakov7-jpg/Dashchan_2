@@ -184,7 +184,6 @@ public class TranslationService extends Service {
 		settings.setAllowFileAccess(false);
 		settings.setAllowContentAccess(false);
 		settings.setDomStorageEnabled(false);
-		settings.setDatabaseEnabled(false);
 		settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
 		settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
 		webView.addJavascriptInterface(new JavascriptBridge(currentGeneration), "SlooopTranslation");

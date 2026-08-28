@@ -19,7 +19,6 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
-import androidx.core.view.ViewCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import com.mishiranu.dashchan.graphics.BaseDrawable;
@@ -191,8 +190,8 @@ public class DialogMenu {
 						LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
 				float density = ResourceUtils.obtainDensity(view);
 				// Align to checkbox inner padding
-				int padding = ViewCompat.getPaddingEnd(view) - (int) (2f * density);
-				ViewCompat.setPaddingRelative(view, ViewCompat.getPaddingStart(view),
+				int padding = view.getPaddingEnd() - (int) (2f * density);
+				view.setPaddingRelative(view.getPaddingStart(),
 						view.getPaddingTop(), 0, view.getPaddingBottom());
 				int contentSize = (int) (24f * density);
 				FrameLayout contentLayout = new FrameLayout(parent.getContext());
@@ -249,7 +248,7 @@ public class DialogMenu {
 		public SubMenuArrowDrawable(View view) {
 			float density = ResourceUtils.obtainDensity(view);
 			color = ResourceUtils.getColorStateList(view.getContext(), android.R.attr.textColorSecondary);
-			rtl = ViewCompat.getLayoutDirection(view) == ViewCompat.LAYOUT_DIRECTION_RTL;
+			rtl = view.getLayoutDirection() == View.LAYOUT_DIRECTION_RTL;
 			size = (int) (SIZE_DP * density);
 		}
 
