@@ -143,8 +143,8 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 		recyclerView.getPullable().setPullSides(PullableWrapper.Side.BOTH);
 		uiManager.observable().register(this);
 		layoutManager.setSpanCount(adapter.setThreadsView(Preferences.getThreadsView()));
-		ChanConfiguration.Board board = getChan().configuration.safe().obtainBoard(page.boardName);
-		adapter.setThreadsSortingEnabled(board.allowThreadsSorting, board.allowRatingSorting);
+		ChanConfiguration.Board initialBoard = getChan().configuration.safe().obtainBoard(page.boardName);
+		adapter.setThreadsSortingEnabled(initialBoard.allowThreadsSorting, initialBoard.allowRatingSorting);
 		adapter.setCatalogSort(Preferences.getCatalogSort());
 		adapter.applyFilter(getInitSearch().currentQuery);
 		FavoritesStorage.getInstance().getObservable().register(this);
