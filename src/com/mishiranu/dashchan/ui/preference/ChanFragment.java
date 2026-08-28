@@ -12,6 +12,7 @@ import android.text.InputType;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
+import android.view.WindowManager;
 import android.webkit.CookieManager;
 import android.webkit.RenderProcessGoneDetail;
 import android.webkit.SslErrorHandler;
@@ -481,6 +482,12 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 
 			webView = new WebView(requireContext());
 			webView.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_YES);
+			webView.setFocusable(true);
+			webView.setFocusableInTouchMode(true);
+			webView.setOnTouchListener((view, event) -> {
+				if (!view.hasFocus()) view.requestFocus();
+				return false;
+			});
 			WebViewUtils.configureCommonSettings(webView.getSettings());
 			webView.getSettings().setJavaScriptEnabled(true);
 			webView.getSettings().setDomStorageEnabled(true);
@@ -515,6 +522,8 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 			Dialog dialog = getDialog();
 			Window window = dialog != null ? dialog.getWindow() : null;
 			if (window != null) {
+				window.clearFlags(WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM);
+				window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
 				window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
 			}
 		}
