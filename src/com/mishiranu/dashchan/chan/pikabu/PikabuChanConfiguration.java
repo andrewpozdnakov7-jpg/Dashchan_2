@@ -11,7 +11,8 @@ public class PikabuChanConfiguration extends ChanConfiguration {
 	}
 
 	public PikabuChanConfiguration() {
-		request(OPTION_BOARD_TITLE_ONLY | OPTION_ALLOW_USER_AUTHORIZATION);
+		request(OPTION_BOARD_TITLE_ONLY);
+		request(OPTION_ALLOW_USER_AUTHORIZATION);
 		setBoardTitle(PikabuChanLocator.BOARD_HOT, "Горячее");
 		setBoardDescription(PikabuChanLocator.BOARD_HOT, "Популярные истории");
 		setBoardTitle(PikabuChanLocator.BOARD_BEST, "Лучшее");
