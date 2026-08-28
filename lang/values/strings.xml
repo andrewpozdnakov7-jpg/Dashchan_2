@@ -1110,7 +1110,8 @@
 	<string name="replies_check_finished_with_errors__format">Check finished with errors: %d</string>
 	<string name="pikabu_sign_in">Sign in through Pikabu</string>
 	<string name="pikabu_authorization__summary">Open the official Pikabu website and sign in there. Slooop saves only the resulting session.</string>
-	<string name="pikabu_browser_authorization__summary">Sign in on the official Pikabu website. Android Autofill may offer credentials saved for pikabu.ru. Your password is not passed to Slooop.</string>
+	<string name="pikabu_authorization_warning">The official Pikabu website will open in an embedded browser window. Your login and password are entered directly on pikabu.ru: Slooop does not read or save them. After a successful sign-in, the app saves only the resulting session required for authenticated sections.</string>
+	<string name="pikabu_open_site">Open Pikabu</string>
 	<string name="pikabu_authorization_domain_blocked">The page is outside the allowed Pikabu sign-in domains</string>
 	<string name="pikabu_authorization_browser_failed">The browser used for Pikabu sign-in stopped unexpectedly</string>
 	<string name="pikabu_authorized">Signed in to Pikabu</string>

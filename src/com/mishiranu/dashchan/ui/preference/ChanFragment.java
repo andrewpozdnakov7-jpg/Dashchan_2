@@ -344,8 +344,8 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 		});
 		pikabuAuthorizationPreference.setEnabled(!configuration.isAuthorized());
 		pikabuAuthorizationPreference.setOnClickListener(p ->
-				new PikabuAuthorizationDialog().show(getChildFragmentManager(),
-						PikabuAuthorizationDialog.class.getName()));
+				new PikabuAuthorizationWarningDialog().show(getChildFragmentManager(),
+						PikabuAuthorizationWarningDialog.class.getName()));
 		pikabuLogoutPreference = addButton(R.string.pikabu_forget_session,
 				R.string.pikabu_forget_session__summary);
 		pikabuLogoutPreference.setEnabled(configuration.isAuthorized());
@@ -438,6 +438,27 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 		return preference;
 	}
 
+	public static class PikabuAuthorizationWarningDialog extends DialogFragment {
+		public PikabuAuthorizationWarningDialog() {}
+
+		@NonNull
+		@Override
+		public Dialog onCreateDialog(Bundle savedInstanceState) {
+			return new AlertDialog.Builder(requireContext())
+					.setTitle(R.string.pikabu_sign_in)
+					.setMessage(R.string.pikabu_authorization_warning)
+					.setNegativeButton(android.R.string.cancel, null)
+					.setPositiveButton(R.string.pikabu_open_site, (dialog, which) -> {
+						ChanFragment fragment = (ChanFragment) getParentFragment();
+						if (fragment != null) {
+							new PikabuAuthorizationDialog().show(fragment.getChildFragmentManager(),
+									PikabuAuthorizationDialog.class.getName());
+						}
+					})
+					.create();
+		}
+	}
+
 	public static class PikabuAuthorizationDialog extends DialogFragment {
 		private static final String PIKABU_URL = "https://pikabu.ru/";
 		private static final String READ_SESSION_SCRIPT = "(function(){var e=document.querySelector(" +
@@ -458,20 +479,14 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 			android.util.DisplayMetrics displayMetrics = getResources().getDisplayMetrics();
 			float density = displayMetrics.density;
 			int padding = (int) (16f * density + 0.5f);
-			int browserHeight = Math.max((int) (240f * density + 0.5f),
-					(int) (displayMetrics.heightPixels * 0.58f));
+			int browserHeight = Math.max((int) (280f * density + 0.5f),
+					(int) (displayMetrics.heightPixels * 0.72f));
 			LinearLayout layout = new LinearLayout(requireContext());
 			layout.setOrientation(LinearLayout.VERTICAL);
 
-			TextView explanationView = new TextView(requireContext());
-			explanationView.setText(R.string.pikabu_browser_authorization__summary);
-			explanationView.setPadding(padding, padding, padding, padding / 2);
-			layout.addView(explanationView, new LinearLayout.LayoutParams(
-					ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-
 			domainView = new TextView(requireContext());
 			domainView.setText(PIKABU_URL);
-			domainView.setPadding(padding, 0, padding, padding / 2);
+			domainView.setPadding(padding, padding / 2, padding, padding / 2);
 			layout.addView(domainView, new LinearLayout.LayoutParams(
 					ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
@@ -510,7 +525,6 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 			if (savedInstanceState != null) webView.restoreState(savedInstanceState);
 			else webView.loadUrl(PIKABU_URL);
 			return new AlertDialog.Builder(requireContext())
-					.setTitle(R.string.pikabu_sign_in)
 					.setView(layout)
 					.setNegativeButton(android.R.string.cancel, null)
 					.create();

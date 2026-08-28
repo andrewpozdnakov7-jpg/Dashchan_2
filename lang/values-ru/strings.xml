@@ -1137,7 +1137,8 @@
 	<string name="replies_check_finished_with_errors__format">Проверка завершена с ошибками: %d</string>
 	<string name="pikabu_sign_in">Войти через Пикабу</string>
 	<string name="pikabu_authorization__summary">Откройте официальный сайт Пикабу и войдите на нём. Slooop сохранит только готовую сессию.</string>
-	<string name="pikabu_browser_authorization__summary">Войдите на официальном сайте Пикабу. Автозаполнение Android может предложить данные, сохранённые для pikabu.ru. Пароль не передаётся Slooop.</string>
+	<string name="pikabu_authorization_warning">Откроется официальный сайт Пикабу во встроенном браузерном окне. Логин и пароль вводятся непосредственно на pikabu.ru: Slooop их не считывает и не сохраняет. После успешного входа приложение сохранит только готовую сессию, необходимую для работы авторизованных разделов.</string>
+	<string name="pikabu_open_site">Открыть Пикабу</string>
 	<string name="pikabu_authorization_domain_blocked">Страница находится вне разрешённых доменов авторизации Пикабу</string>
 	<string name="pikabu_authorization_browser_failed">Браузер авторизации Пикабу неожиданно остановился</string>
 	<string name="pikabu_authorized">Выполнен вход в Пикабу</string>
