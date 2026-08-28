@@ -122,6 +122,7 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 			@Override
 			public void setColorFilter(ColorFilter colorFilter) {}
 
+			@SuppressWarnings("deprecation")
 			@Override
 			public int getOpacity() {
 				return PixelFormat.TRANSLUCENT;

@@ -28,6 +28,7 @@ import android.widget.EdgeEffect;
 import android.widget.EditText;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import androidx.core.view.WindowCompat;
 import com.mishiranu.dashchan.R;
 import java.util.ArrayList;
 
@@ -247,7 +248,7 @@ public class ViewUtils {
 	}
 
 	private static void setDecorFitsSystemWindows(Window window, boolean decorFitsSystemWindows) {
-		window.setDecorFitsSystemWindows(decorFitsSystemWindows);
+		WindowCompat.setDecorFitsSystemWindows(window, decorFitsSystemWindows);
 	}
 
 	public static Point getWindowContentSize(Context context) {

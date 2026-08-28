@@ -30,10 +30,10 @@ import androidx.fragment.app.DialogFragment;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentActivity;
 import androidx.fragment.app.FragmentManager;
+import androidx.lifecycle.DefaultLifecycleObserver;
 import androidx.lifecycle.Lifecycle;
 import androidx.lifecycle.LifecycleObserver;
 import androidx.lifecycle.LifecycleOwner;
-import androidx.lifecycle.OnLifecycleEvent;
 import androidx.lifecycle.ViewModel;
 import androidx.lifecycle.ViewModelProvider;
 import chan.content.Chan;
@@ -106,16 +106,14 @@ public class ForegroundManager implements Handler.Callback {
 		}
 	}
 
-	private final LifecycleObserver lifecycleObserver = new LifecycleObserver() {
-		@SuppressWarnings("unused")
-		@OnLifecycleEvent(Lifecycle.Event.ON_START)
-		public void onStart(LifecycleOwner owner) {
+	private final DefaultLifecycleObserver lifecycleObserver = new DefaultLifecycleObserver() {
+		@Override
+		public void onStart(@NonNull LifecycleOwner owner) {
 			handleStartResume(owner);
 		}
 
-		@SuppressWarnings("unused")
-		@OnLifecycleEvent(Lifecycle.Event.ON_RESUME)
-		public void onResume(LifecycleOwner owner) {
+		@Override
+		public void onResume(@NonNull LifecycleOwner owner) {
 			handleStartResume(owner);
 		}
 
