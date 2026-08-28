@@ -454,8 +454,11 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 		@NonNull
 		@Override
 		public Dialog onCreateDialog(Bundle savedInstanceState) {
-			float density = getResources().getDisplayMetrics().density;
+			android.util.DisplayMetrics displayMetrics = getResources().getDisplayMetrics();
+			float density = displayMetrics.density;
 			int padding = (int) (16f * density + 0.5f);
+			int browserHeight = Math.max((int) (240f * density + 0.5f),
+					(int) (displayMetrics.heightPixels * 0.58f));
 			LinearLayout layout = new LinearLayout(requireContext());
 			layout.setOrientation(LinearLayout.VERTICAL);
 
@@ -495,7 +498,7 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 				}
 			});
 			layout.addView(webView, new LinearLayout.LayoutParams(
-					ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+					ViewGroup.LayoutParams.MATCH_PARENT, browserHeight));
 
 			if (savedInstanceState != null) webView.restoreState(savedInstanceState);
 			else webView.loadUrl(PIKABU_URL);
@@ -512,7 +515,7 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 			Dialog dialog = getDialog();
 			Window window = dialog != null ? dialog.getWindow() : null;
 			if (window != null) {
-				window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+				window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
 			}
 		}
 
