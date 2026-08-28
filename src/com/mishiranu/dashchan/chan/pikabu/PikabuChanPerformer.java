@@ -13,17 +13,11 @@ import chan.http.HttpRequest;
 import chan.http.HttpResponse;
 import chan.http.UrlEncodedEntity;
 import chan.util.StringUtils;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ThreadLocalRandom;
-import org.json.JSONException;
-import org.json.JSONObject;
 
 public class PikabuChanPerformer extends ChanPerformer {
 	private static final int COMMENTS_BATCH_SIZE = 300;
@@ -49,91 +43,6 @@ public class PikabuChanPerformer extends ChanPerformer {
 			}
 		}
 		return response;
-	}
-
-	@Override
-	public CheckAuthorizationResult onCheckAuthorization(CheckAuthorizationData data)
-			throws HttpException, InvalidResponseException {
-		if (data.type != CheckAuthorizationData.TYPE_USER_AUTHORIZATION || data.authorizationData == null
-				|| data.authorizationData.length < 2) {
-			return new CheckAuthorizationResult(false);
-		}
-		String userName = StringUtils.emptyIfNull(data.authorizationData[0]).trim();
-		String password = StringUtils.emptyIfNull(data.authorizationData[1]);
-		if (userName.isEmpty() || password.isEmpty()) return new CheckAuthorizationResult(false);
-
-		PikabuChanLocator locator = PikabuChanLocator.get(this);
-		LinkedHashMap<String, String> cookies = new LinkedHashMap<>();
-		HttpResponse homeResponse = new HttpRequest(locator.createBoardUri(PikabuChanLocator.BOARD_HOT, 0), data)
-				.addHeader("User-Agent", MOBILE_USER_AGENT)
-				.addHeader("Accept-Language", "ru-RU,ru;q=0.9,en;q=0.5").perform();
-		mergeCookies(cookies, homeResponse);
-		PikabuHtmlParser.SessionData initialSession = PikabuHtmlParser.parseSessionData(homeResponse.readString());
-		if (initialSession == null || StringUtils.isEmpty(initialSession.csrfToken)) {
-			throw new InvalidResponseException();
-		}
-
-		HttpResponse nonceResponse = new HttpRequest(locator.createAuthNonceUri(), data)
-				.addHeader("User-Agent", MOBILE_USER_AGENT)
-				.addHeader("Accept", "application/json")
-				.addHeader("X-Csrf-Token", initialSession.csrfToken)
-				.addCookie(buildCookies(cookies)).perform();
-		mergeCookies(cookies, nonceResponse);
-		String nonce = parseNonce(nonceResponse.readString());
-		if (StringUtils.isEmpty(nonce)) throw new InvalidResponseException();
-
-		String clientNonce = Double.toString(ThreadLocalRandom.current().nextDouble());
-		String hash = md5(nonce + clientNonce + password);
-		UrlEncodedEntity entity = new UrlEncodedEntity("mode", "login", "username", userName,
-				"password", password, "cnonce", clientNonce, "hash", hash);
-		HttpResponse authResponse = new HttpRequest(locator.createAuthUri(), data)
-				.addHeader("User-Agent", MOBILE_USER_AGENT)
-				.addHeader("Accept", "application/json")
-				.addHeader("X-Csrf-Token", initialSession.csrfToken)
-				.addHeader("Referer", locator.createBoardUri(PikabuChanLocator.BOARD_HOT, 0).toString())
-				.addCookie(buildCookies(cookies)).setPostMethod(entity).perform();
-		mergeCookies(cookies, authResponse);
-		if (!parseResult(authResponse.readString())) return new CheckAuthorizationResult(false);
-
-		HttpResponse verifyResponse = new HttpRequest(locator.createBoardUri(PikabuChanLocator.BOARD_HOT, 0), data)
-				.addHeader("User-Agent", MOBILE_USER_AGENT)
-				.addHeader("Accept-Language", "ru-RU,ru;q=0.9,en;q=0.5")
-				.addCookie(buildCookies(cookies)).perform();
-		mergeCookies(cookies, verifyResponse);
-		PikabuHtmlParser.SessionData verified = PikabuHtmlParser.parseSessionData(verifyResponse.readString());
-		if (verified == null || !verified.authorized) return new CheckAuthorizationResult(false);
-		String verifiedName = StringUtils.isEmpty(verified.userName) ? userName : verified.userName;
-		PikabuChanConfiguration.get(this).storeAuthorization(buildCookies(cookies).build(), verifiedName);
-		return new CheckAuthorizationResult(true);
-	}
-
-	private static String parseNonce(String json) {
-		try {
-			JSONObject object = new JSONObject(json);
-			JSONObject data = object.optJSONObject("data");
-			return object.optBoolean("result") && data != null ? data.optString("nonce") : null;
-		} catch (JSONException e) {
-			return null;
-		}
-	}
-
-	private static boolean parseResult(String json) {
-		try {
-			return new JSONObject(json).optBoolean("result");
-		} catch (JSONException e) {
-			return false;
-		}
-	}
-
-	private static String md5(String value) throws InvalidResponseException {
-		try {
-			byte[] digest = MessageDigest.getInstance("MD5").digest(value.getBytes(StandardCharsets.UTF_8));
-			StringBuilder builder = new StringBuilder(digest.length * 2);
-			for (byte b : digest) builder.append(String.format(java.util.Locale.US, "%02x", b & 0xff));
-			return builder.toString();
-		} catch (NoSuchAlgorithmException e) {
-			throw new InvalidResponseException();
-		}
 	}
 
 	private static CookieBuilder buildCookies(Map<String, String> cookies) {

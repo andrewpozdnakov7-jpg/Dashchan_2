@@ -54,14 +54,6 @@ public class PikabuChanConfiguration extends ChanConfiguration {
 	}
 
 	@Override
-	protected Authorization obtainUserAuthorizationConfiguration() {
-		Authorization authorization = new Authorization();
-		authorization.fieldsCount = 2;
-		authorization.hints = new String[] {"Pikabu login", "Pikabu password"};
-		return authorization;
-	}
-
-	@Override
 	protected String obtainBoardTitle(String boardName) {
 		return PikabuChanLocator.getDynamicBoardTitle(boardName);
 	}

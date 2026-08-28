@@ -1108,8 +1108,11 @@
 	<string name="tracked_post_number__format">Post #%s</string>
 	<string name="thread_is_deleted">Thread is deleted or unavailable</string>
 	<string name="replies_check_finished_with_errors__format">Check finished with errors: %d</string>
-	<string name="pikabu_login">Pikabu login</string>
-	<string name="pikabu_authorization__summary">Sign in to access sections that are unavailable to guests. The password is used only during sign-in and is not saved.</string>
+	<string name="pikabu_sign_in">Sign in through Pikabu</string>
+	<string name="pikabu_authorization__summary">Open the official Pikabu website and sign in there. Slooop saves only the resulting session.</string>
+	<string name="pikabu_browser_authorization__summary">Sign in on the official Pikabu website. Android Autofill may offer credentials saved for pikabu.ru. Your password is not passed to Slooop.</string>
+	<string name="pikabu_authorization_domain_blocked">The page is outside the allowed Pikabu sign-in domains</string>
+	<string name="pikabu_authorization_browser_failed">The browser used for Pikabu sign-in stopped unexpectedly</string>
 	<string name="pikabu_authorized">Signed in to Pikabu</string>
 	<string name="pikabu_authorized_as__format">Signed in to Pikabu as %s</string>
 	<string name="pikabu_forget_session">Sign out of Pikabu on this device</string>

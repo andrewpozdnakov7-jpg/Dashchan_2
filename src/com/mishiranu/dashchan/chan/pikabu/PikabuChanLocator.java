@@ -316,14 +316,6 @@ public class PikabuChanLocator extends ChanLocator {
 		return buildPath("ajax", "comments_actions.php");
 	}
 
-	public Uri createAuthNonceUri() {
-		return buildPath("ajax", "get_nonce.php");
-	}
-
-	public Uri createAuthUri() {
-		return buildPath("ajax", "auth.php");
-	}
-
 	@Override
 	public NavigationData handleUriClickSpecial(Uri uri) {
 		if (uri == null || !isChanHostOrRelative(uri)) return null;

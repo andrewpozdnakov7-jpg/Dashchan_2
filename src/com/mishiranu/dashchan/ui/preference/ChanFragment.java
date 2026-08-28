@@ -1,10 +1,27 @@
 package com.mishiranu.dashchan.ui.preference;
 
+import android.annotation.SuppressLint;
+import android.app.AlertDialog;
+import android.app.Dialog;
 import android.content.Intent;
+import android.graphics.Bitmap;
 import android.net.Uri;
+import android.net.http.SslError;
 import android.os.Bundle;
 import android.text.InputType;
 import android.view.View;
+import android.view.ViewGroup;
+import android.view.Window;
+import android.webkit.CookieManager;
+import android.webkit.RenderProcessGoneDetail;
+import android.webkit.SslErrorHandler;
+import android.webkit.WebChromeClient;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
+import android.widget.LinearLayout;
+import android.widget.ProgressBar;
+import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.fragment.app.DialogFragment;
 import androidx.lifecycle.ViewModelProvider;
@@ -34,6 +51,7 @@ import com.mishiranu.dashchan.ui.preference.core.Preference;
 import com.mishiranu.dashchan.ui.preference.core.PreferenceFragment;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
 import com.mishiranu.dashchan.util.SharedPreferences;
+import com.mishiranu.dashchan.util.WebViewUtils;
 import com.mishiranu.dashchan.widget.ClickableToast;
 import com.mishiranu.dashchan.widget.ProgressDialog;
 import java.util.ArrayList;
@@ -42,15 +60,18 @@ import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.json.JSONException;
+import org.json.JSONObject;
+import org.json.JSONTokener;
 
 public class ChanFragment extends PreferenceFragment implements FragmentHandler.Callback {
 	private static final String EXTRA_CHAN_NAME = "chanName";
 
 	private Preference<List<String>> captchaPassPreference;
 	private Preference<List<String>> userAuthorizationPreference;
+	private Preference<?> pikabuAuthorizationPreference;
 	private Preference<?> pikabuLogoutPreference;
 	private Preference<?> cookiePreference;
-	private boolean clearingPikabuCredentials;
 
 	private static final String VALUE_CUSTOM_DOMAIN = "custom_domain\n";
 	private static final String EXTRA_ANOTHER_DOMAIN_MODE = "anotherDomainMode";
@@ -313,38 +334,22 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 	}
 
 	private void addPikabuAuthorizationPreferences(PikabuChanConfiguration configuration) {
-		List<Integer> inputTypes = Arrays.asList(
-				InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD,
-				InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-		MultipleEditPreference<List<String>> preference = new MultipleEditPreference<>(requireContext(),
-				Preferences.KEY_USER_AUTHORIZATION.bind(getChanName()), getString(R.string.user_authorization), p -> {
+		pikabuAuthorizationPreference = addButton(getString(R.string.pikabu_sign_in), p -> {
 					String userName = configuration.getAuthorizedUserName();
 					return configuration.isAuthorized()
 							? StringUtils.isEmpty(userName) ? getString(R.string.pikabu_authorized)
 									: getString(R.string.pikabu_authorized_as__format, userName)
 							: getString(R.string.pikabu_authorization__summary);
-				}, Arrays.asList(getString(R.string.pikabu_login), getString(R.string.password)), inputTypes,
-				new MultipleEditPreference.ListValueCodec(2));
-		addPreference(preference, false);
-		userAuthorizationPreference = preference;
-		preference.setValue(Arrays.asList("", ""));
-		preference.setOnClickListener(p -> new PreferenceDialog(p.key).show(getChildFragmentManager(),
-				PreferenceDialog.class.getName()));
-		preference.setOnAfterChangeListener(p -> {
-			if (clearingPikabuCredentials) return;
-			List<String> values = new ArrayList<>(p.getValue());
-			clearingPikabuCredentials = true;
-			p.setValue(Arrays.asList("", ""));
-			clearingPikabuCredentials = false;
-			if (Preferences.checkHasMultipleValues(values)) {
-				new AuthorizationDialog(getChanName(), AuthorizationType.USER, values)
-						.show(getChildFragmentManager(), AuthorizationDialog.class.getName());
-			}
 		});
+		pikabuAuthorizationPreference.setEnabled(!configuration.isAuthorized());
+		pikabuAuthorizationPreference.setOnClickListener(p ->
+				new PikabuAuthorizationDialog().show(getChildFragmentManager(),
+						PikabuAuthorizationDialog.class.getName()));
 		pikabuLogoutPreference = addButton(R.string.pikabu_forget_session,
 				R.string.pikabu_forget_session__summary);
 		pikabuLogoutPreference.setEnabled(configuration.isAuthorized());
 		pikabuLogoutPreference.setOnClickListener(p -> {
+			PikabuAuthorizationDialog.clearPikabuCookies();
 			configuration.clearAuthorization();
 			configuration.commit();
 			updatePikabuAuthorizationPreferences();
@@ -353,10 +358,13 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 	}
 
 	private void updatePikabuAuthorizationPreferences() {
-		if (userAuthorizationPreference != null) userAuthorizationPreference.invalidate();
+		PikabuChanConfiguration configuration =
+				(PikabuChanConfiguration) Chan.get(getChanName()).configuration;
+		if (pikabuAuthorizationPreference != null) {
+			pikabuAuthorizationPreference.setEnabled(!configuration.isAuthorized());
+			pikabuAuthorizationPreference.invalidate();
+		}
 		if (pikabuLogoutPreference != null) {
-			PikabuChanConfiguration configuration =
-					(PikabuChanConfiguration) Chan.get(getChanName()).configuration;
 			pikabuLogoutPreference.setEnabled(configuration.isAuthorized());
 			pikabuLogoutPreference.invalidate();
 		}
@@ -368,6 +376,7 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 
 		captchaPassPreference = null;
 		userAuthorizationPreference = null;
+		pikabuAuthorizationPreference = null;
 		pikabuLogoutPreference = null;
 		cookiePreference = null;
 	}
@@ -426,6 +435,227 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 			return true;
 		});
 		return preference;
+	}
+
+	public static class PikabuAuthorizationDialog extends DialogFragment {
+		private static final String PIKABU_URL = "https://pikabu.ru/";
+		private static final String READ_SESSION_SCRIPT = "(function(){var e=document.querySelector(" +
+				"'script.app__config[data-entry=\\\"initParams\\\"]');return e?e.textContent:'';})()";
+
+		private WebView webView;
+		private ProgressBar progressBar;
+		private TextView domainView;
+		private boolean sessionCaptured;
+		private boolean sessionCheckPending;
+
+		public PikabuAuthorizationDialog() {}
+
+		@SuppressLint("SetJavaScriptEnabled")
+		@NonNull
+		@Override
+		public Dialog onCreateDialog(Bundle savedInstanceState) {
+			float density = getResources().getDisplayMetrics().density;
+			int padding = (int) (16f * density + 0.5f);
+			LinearLayout layout = new LinearLayout(requireContext());
+			layout.setOrientation(LinearLayout.VERTICAL);
+
+			TextView explanationView = new TextView(requireContext());
+			explanationView.setText(R.string.pikabu_browser_authorization__summary);
+			explanationView.setPadding(padding, padding, padding, padding / 2);
+			layout.addView(explanationView, new LinearLayout.LayoutParams(
+					ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+			domainView = new TextView(requireContext());
+			domainView.setText(PIKABU_URL);
+			domainView.setPadding(padding, 0, padding, padding / 2);
+			layout.addView(domainView, new LinearLayout.LayoutParams(
+					ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+			progressBar = new ProgressBar(requireContext(), null, android.R.attr.progressBarStyleHorizontal);
+			progressBar.setMax(100);
+			layout.addView(progressBar, new LinearLayout.LayoutParams(
+					ViewGroup.LayoutParams.MATCH_PARENT, (int) (3f * density + 0.5f)));
+
+			webView = new WebView(requireContext());
+			webView.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_YES);
+			WebViewUtils.configureCommonSettings(webView.getSettings());
+			webView.getSettings().setJavaScriptEnabled(true);
+			webView.getSettings().setDomStorageEnabled(true);
+			webView.getSettings().setMixedContentMode(android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW);
+			webView.getSettings().setSupportMultipleWindows(false);
+			webView.getSettings().setJavaScriptCanOpenWindowsAutomatically(false);
+			CookieManager cookieManager = CookieManager.getInstance();
+			cookieManager.setAcceptCookie(true);
+			cookieManager.setAcceptThirdPartyCookies(webView, true);
+			webView.setWebViewClient(new AuthorizationWebViewClient());
+			webView.setWebChromeClient(new WebChromeClient() {
+				@Override
+				public void onProgressChanged(WebView view, int newProgress) {
+					if (progressBar != null) progressBar.setProgress(newProgress);
+				}
+			});
+			layout.addView(webView, new LinearLayout.LayoutParams(
+					ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+
+			if (savedInstanceState != null) webView.restoreState(savedInstanceState);
+			else webView.loadUrl(PIKABU_URL);
+			return new AlertDialog.Builder(requireContext())
+					.setTitle(R.string.pikabu_sign_in)
+					.setView(layout)
+					.setNegativeButton(android.R.string.cancel, null)
+					.create();
+		}
+
+		@Override
+		public void onStart() {
+			super.onStart();
+			Dialog dialog = getDialog();
+			Window window = dialog != null ? dialog.getWindow() : null;
+			if (window != null) {
+				window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+			}
+		}
+
+		@Override
+		public void onSaveInstanceState(@NonNull Bundle outState) {
+			super.onSaveInstanceState(outState);
+			if (webView != null) webView.saveState(outState);
+		}
+
+		@Override
+		public void onDestroyView() {
+			if (webView != null) {
+				webView.stopLoading();
+				webView.setWebChromeClient(null);
+				webView.setWebViewClient(null);
+				webView.destroy();
+				webView = null;
+			}
+			progressBar = null;
+			domainView = null;
+			sessionCheckPending = false;
+			super.onDestroyView();
+		}
+
+		private static boolean isDomain(String host, String domain) {
+			return domain.equals(host) || host != null && host.endsWith("." + domain);
+		}
+
+		private static boolean isAllowedAuthorizationUri(Uri uri) {
+			if (uri == null || !"https".equalsIgnoreCase(uri.getScheme())) return false;
+			String host = uri.getHost();
+			return isDomain(host, "pikabu.ru") || isDomain(host, "yandex.ru")
+					|| isDomain(host, "yandex.com") || isDomain(host, "vk.com");
+		}
+
+		private static void clearPikabuCookies() {
+			CookieManager cookieManager = CookieManager.getInstance();
+			String cookies = cookieManager.getCookie(PIKABU_URL);
+			if (!StringUtils.isEmpty(cookies)) {
+				for (String part : cookies.split("; *")) {
+					int equals = part.indexOf('=');
+					if (equals <= 0) continue;
+					String name = part.substring(0, equals).trim();
+					if (name.isEmpty()) continue;
+					String expired = name + "=; Max-Age=0; Path=/; Secure";
+					cookieManager.setCookie(PIKABU_URL, expired);
+					cookieManager.setCookie(PIKABU_URL, expired + "; Domain=.pikabu.ru");
+				}
+				cookieManager.flush();
+			}
+		}
+
+		private void updateDomain(Uri uri) {
+			if (domainView != null && uri != null && uri.getHost() != null) {
+				domainView.setText("https://" + uri.getHost());
+			}
+		}
+
+		private void captureSession(WebView view, Uri uri) {
+			if (sessionCaptured || sessionCheckPending
+					|| !isDomain(uri != null ? uri.getHost() : null, "pikabu.ru")) return;
+			sessionCheckPending = true;
+			view.evaluateJavascript(READ_SESSION_SCRIPT, value -> {
+				sessionCheckPending = false;
+				if (sessionCaptured) return;
+				try {
+					if (StringUtils.isEmpty(value) || "null".equals(value)) return;
+					Object decoded = new JSONTokener(value).nextValue();
+					if (!(decoded instanceof String) || StringUtils.isEmpty((String) decoded)) return;
+					JSONObject object = new JSONObject((String) decoded);
+					if (object.optLong("userID", 0L) <= 0L || object.optBoolean("isDeleted", false)) return;
+					String cookies = CookieManager.getInstance().getCookie(PIKABU_URL);
+					if (StringUtils.isEmpty(cookies)) return;
+					sessionCaptured = true;
+					String userName = StringUtils.nullIfEmpty(object.optString("userName"));
+					if (userName == null) userName = StringUtils.nullIfEmpty(object.optString("username"));
+					PikabuChanConfiguration configuration =
+							(PikabuChanConfiguration) Chan.get("pikabu").configuration;
+					configuration.storeAuthorization(cookies, userName);
+					configuration.commit();
+					ChanFragment fragment = (ChanFragment) getParentFragment();
+					if (fragment != null) fragment.updatePikabuAuthorizationPreferences();
+					ClickableToast.show(R.string.validation_completed);
+					dismissAllowingStateLoss();
+				} catch (JSONException ignored) {
+					// The website may still be navigating between sign-in pages.
+				} finally {
+					if (!sessionCaptured && webView == view) {
+						view.postDelayed(() -> {
+							String url = view.getUrl();
+							if (webView == view && !StringUtils.isEmpty(url)) captureSession(view, Uri.parse(url));
+						}, 1000L);
+					}
+				}
+			});
+		}
+
+		private class AuthorizationWebViewClient extends WebViewClient {
+			@Override
+			public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+				return request.isForMainFrame() && handleUri(request.getUrl());
+			}
+
+			@SuppressWarnings("deprecation")
+			@Override
+			public boolean shouldOverrideUrlLoading(WebView view, String url) {
+				return handleUri(Uri.parse(url));
+			}
+
+			private boolean handleUri(Uri uri) {
+				if (isAllowedAuthorizationUri(uri)) return false;
+				ClickableToast.show(R.string.pikabu_authorization_domain_blocked);
+				return true;
+			}
+
+			@Override
+			public void onPageStarted(WebView view, String url, Bitmap favicon) {
+				updateDomain(Uri.parse(url));
+			}
+
+			@Override
+			public void onPageFinished(WebView view, String url) {
+				Uri uri = Uri.parse(url);
+				updateDomain(uri);
+				captureSession(view, uri);
+			}
+
+			@Override
+			public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
+				handler.cancel();
+				ClickableToast.show(R.string.invalid_certificate);
+			}
+
+			@Override
+			public boolean onRenderProcessGone(WebView view, RenderProcessGoneDetail detail) {
+				if (view.getParent() instanceof ViewGroup) ((ViewGroup) view.getParent()).removeView(view);
+				view.destroy();
+				if (webView == view) webView = null;
+				ClickableToast.show(R.string.pikabu_authorization_browser_failed);
+				dismissAllowingStateLoss();
+				return true;
+			}
+		}
 	}
 
 	private enum AuthorizationType {CAPTCHA_PASS, USER}
