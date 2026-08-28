@@ -779,8 +779,9 @@ public class ForegroundManager implements Handler.Callback {
 				protected void onLayout(boolean changed, int l, int t, int r, int b) {
 					super.onLayout(changed, l, t, r, b);
 
-					// Ensure at least count=columns rows can fit
-					int cellSize = (b - t - (columns - 1) * innerPadding - 2 * outerPadding) / columns;
+					// Fit the actual number of rows instead of shrinking the dialog by the column count.
+					int fitRows = Math.max(rows, 1);
+					int cellSize = (b - t - (fitRows - 1) * innerPadding - 2 * outerPadding) / fitRows;
 					int width = Math.min((int) (480 * density),
 							columns * cellSize + (columns - 1) * innerPadding + 2 * outerPadding);
 					if (r - l > width) {
