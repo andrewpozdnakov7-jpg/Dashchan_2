@@ -9,8 +9,11 @@ public class SlooopFirebaseMessagingService extends FirebaseMessagingService {
 	@Override
 	public void onRegistered(@NonNull String installationId) {
 		if (Preferences.isTrackMyPostsEnabled() && Preferences.isReplyPushEnabled()) {
+			String previousInstallationId = ReplyPushPrivateStore.getFirebaseRegistrationId(this);
 			ReplyPushPrivateStore.setFirebaseRegistrationId(this, installationId);
-			ReplyPushSyncWorker.enqueueSync(this);
+			if (!installationId.equals(previousInstallationId)) {
+				ReplyPushSyncWorker.enqueueSync(this);
+			}
 		} else {
 			ReplyPushPrivateStore.setFirebaseRegistrationId(this, null);
 		}
