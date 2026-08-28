@@ -6,7 +6,6 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
-import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 import android.os.Handler;
@@ -17,7 +16,6 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
-import android.view.WindowManager;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
@@ -709,10 +707,10 @@ public class ForegroundManager implements Handler.Callback {
 			Dialog dialog = getDialog();
 			Window window = dialog != null ? dialog.getWindow() : null;
 			if (window != null) {
-				Rect bounds = requireContext().getSystemService(WindowManager.class)
-						.getCurrentWindowMetrics().getBounds();
-				if (bounds.width() > bounds.height()) {
-					window.setLayout(bounds.width() * 2 / 3, ViewGroup.LayoutParams.WRAP_CONTENT);
+				int width = getResources().getDisplayMetrics().widthPixels;
+				int height = getResources().getDisplayMetrics().heightPixels;
+				if (width > height) {
+					window.setLayout(width * 3 / 4, ViewGroup.LayoutParams.WRAP_CONTENT);
 				}
 			}
 		}
@@ -729,6 +727,8 @@ public class ForegroundManager implements Handler.Callback {
 			final float density = ResourceUtils.obtainDensity(requireContext());
 			LinearLayout container = new LinearLayout(requireContext());
 			container.setOrientation(LinearLayout.VERTICAL);
+			boolean landscape = getResources().getConfiguration().orientation
+					== Configuration.ORIENTATION_LANDSCAPE;
 			Parcelable[] parcelables = AndroidUtils.getParcelableArray(requireArguments(), EXTRA_IMAGES,
 					Bitmap.class);
 			Bitmap[] images = new Bitmap[parcelables != null ? parcelables.length : 0];
@@ -740,16 +740,31 @@ public class ForegroundManager implements Handler.Callback {
 			Bitmap descriptionImage = AndroidUtils.getParcelable(requireArguments(), EXTRA_DESCRIPTION_IMAGE,
 					Bitmap.class);
 			int outerPadding = container.getResources().getDimensionPixelOffset(R.dimen.dialog_padding_text);
-			container.setPadding(outerPadding, outerPadding, outerPadding, outerPadding);
+			int verticalPadding = landscape ? (int) (8f * density) : outerPadding;
+			container.setPadding(outerPadding, verticalPadding, outerPadding, verticalPadding);
+			if (landscape && !StringUtils.isEmpty(descriptionText)) {
+				TextView titleView = new TextView(container.getContext());
+				titleView.setText(descriptionText);
+				titleView.setTextColor(ResourceUtils.getColor(titleView.getContext(),
+						android.R.attr.textColorPrimary));
+				titleView.setTypeface(ResourceUtils.TYPEFACE_MEDIUM);
+				ViewUtils.setTextSizeScaled(titleView, 16);
+				LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(
+						LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+				layoutParams.bottomMargin = (int) (4f * density);
+				container.addView(titleView, layoutParams);
+			}
 			int cornersRadius = (int) (2f * density);
 			if (descriptionImage != null) {
 				ImageView imageView = appendDescriptionImageView(container, descriptionImage);
-				((LinearLayout.LayoutParams) imageView.getLayoutParams()).setMargins(0, 0, 0, (int) (20f * density));
+				LinearLayout.LayoutParams layoutParams = (LinearLayout.LayoutParams) imageView.getLayoutParams();
+				if (landscape) {
+					layoutParams.width = LinearLayout.LayoutParams.MATCH_PARENT;
+				}
+				layoutParams.setMargins(0, 0, 0, (int) ((landscape ? 8f : 20f) * density));
 			}
 			int innerPadding = (int) (8f * density);
 			int requestedColumns = requireArguments().getInt(EXTRA_COLUMNS);
-			boolean landscape = getResources().getConfiguration().orientation
-					== Configuration.ORIENTATION_LANDSCAPE;
 			int columns = landscape && images.length > 0 ? images.length : requestedColumns;
 			int rows = (images.length + columns - 1) / columns;
 			ensureArrays();
@@ -795,10 +810,20 @@ public class ForegroundManager implements Handler.Callback {
 				}
 			}
 
-			ScrollView scrollView = new ScrollView(container.getContext());
-			scrollView.addView(container, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-			final AlertDialog alertDialog = new AlertDialog.Builder(requireContext())
-					.setTitle(descriptionText).setView(scrollView)
+			View contentView;
+			if (landscape) {
+				contentView = container;
+			} else {
+				ScrollView scrollView = new ScrollView(container.getContext());
+				scrollView.addView(container, ViewGroup.LayoutParams.MATCH_PARENT,
+						ViewGroup.LayoutParams.WRAP_CONTENT);
+				contentView = scrollView;
+			}
+			AlertDialog.Builder builder = new AlertDialog.Builder(requireContext());
+			if (!landscape) {
+				builder.setTitle(descriptionText);
+			}
+			final AlertDialog alertDialog = builder.setView(contentView)
 					.setPositiveButton(android.R.string.ok, this)
 					.setNegativeButton(android.R.string.cancel, this)
 					.create();
