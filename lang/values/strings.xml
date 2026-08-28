@@ -1108,6 +1108,12 @@
 	<string name="tracked_post_number__format">Post #%s</string>
 	<string name="thread_is_deleted">Thread is deleted or unavailable</string>
 	<string name="replies_check_finished_with_errors__format">Check finished with errors: %d</string>
+	<string name="pikabu_login">Pikabu login</string>
+	<string name="pikabu_authorization__summary">Sign in to access sections that are unavailable to guests. The password is used only during sign-in and is not saved.</string>
+	<string name="pikabu_authorized">Signed in to Pikabu</string>
+	<string name="pikabu_authorized_as__format">Signed in to Pikabu as %s</string>
+	<string name="pikabu_forget_session">Sign out of Pikabu on this device</string>
+	<string name="pikabu_forget_session__summary">Delete the locally stored Pikabu session</string>
 	<plurals name="new_replies_count__format">
 		<item quantity="one">%d new reply</item>
 		<item quantity="other">%d new replies</item>

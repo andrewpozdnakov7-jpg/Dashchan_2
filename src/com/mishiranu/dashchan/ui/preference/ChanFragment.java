@@ -20,6 +20,7 @@ import chan.http.HttpHolder;
 import chan.util.CommonUtils;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.R;
+import com.mishiranu.dashchan.chan.pikabu.PikabuChanConfiguration;
 import com.mishiranu.dashchan.chan.zchan.ZchanChanConfiguration;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.async.HttpHolderTask;
@@ -47,7 +48,9 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 
 	private Preference<List<String>> captchaPassPreference;
 	private Preference<List<String>> userAuthorizationPreference;
+	private Preference<?> pikabuLogoutPreference;
 	private Preference<?> cookiePreference;
+	private boolean clearingPikabuCredentials;
 
 	private static final String VALUE_CUSTOM_DOMAIN = "custom_domain\n";
 	private static final String EXTRA_ANOTHER_DOMAIN_MODE = "anotherDomainMode";
@@ -149,7 +152,8 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 				});
 			}
 		}
-		if (chan.configuration.getOption(ChanConfiguration.OPTION_ALLOW_USER_AUTHORIZATION)) {
+		if (chan.configuration.getOption(ChanConfiguration.OPTION_ALLOW_USER_AUTHORIZATION)
+				&& !(chan.configuration instanceof PikabuChanConfiguration)) {
 			ChanConfiguration.Authorization authorization = chan.configuration.safe().obtainUserAuthorization();
 			if (authorization != null && authorization.fieldsCount > 0) {
 				userAuthorizationPreference = addMultipleEdit(Preferences.KEY_USER_AUTHORIZATION.bind(chanName),
@@ -167,6 +171,9 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 					}
 				});
 			}
+		}
+		if (chan.configuration instanceof PikabuChanConfiguration) {
+			addPikabuAuthorizationPreferences((PikabuChanConfiguration) chan.configuration);
 		}
 		LinkedHashMap<String, Boolean> customPreferences = chan.configuration.getCustomPreferences();
 		if (customPreferences != null) {
@@ -305,12 +312,63 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 				});
 	}
 
+	private void addPikabuAuthorizationPreferences(PikabuChanConfiguration configuration) {
+		List<Integer> inputTypes = Arrays.asList(
+				InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD,
+				InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+		MultipleEditPreference<List<String>> preference = new MultipleEditPreference<>(requireContext(),
+				Preferences.KEY_USER_AUTHORIZATION.bind(getChanName()), getString(R.string.user_authorization), p -> {
+					String userName = configuration.getAuthorizedUserName();
+					return configuration.isAuthorized()
+							? StringUtils.isEmpty(userName) ? getString(R.string.pikabu_authorized)
+									: getString(R.string.pikabu_authorized_as__format, userName)
+							: getString(R.string.pikabu_authorization__summary);
+				}, Arrays.asList(getString(R.string.pikabu_login), getString(R.string.password)), inputTypes,
+				new MultipleEditPreference.ListValueCodec(2));
+		addPreference(preference, false);
+		userAuthorizationPreference = preference;
+		preference.setValue(Arrays.asList("", ""));
+		preference.setOnClickListener(p -> new PreferenceDialog(p.key).show(getChildFragmentManager(),
+				PreferenceDialog.class.getName()));
+		preference.setOnAfterChangeListener(p -> {
+			if (clearingPikabuCredentials) return;
+			List<String> values = new ArrayList<>(p.getValue());
+			clearingPikabuCredentials = true;
+			p.setValue(Arrays.asList("", ""));
+			clearingPikabuCredentials = false;
+			if (Preferences.checkHasMultipleValues(values)) {
+				new AuthorizationDialog(getChanName(), AuthorizationType.USER, values)
+						.show(getChildFragmentManager(), AuthorizationDialog.class.getName());
+			}
+		});
+		pikabuLogoutPreference = addButton(R.string.pikabu_forget_session,
+				R.string.pikabu_forget_session__summary);
+		pikabuLogoutPreference.setEnabled(configuration.isAuthorized());
+		pikabuLogoutPreference.setOnClickListener(p -> {
+			configuration.clearAuthorization();
+			configuration.commit();
+			updatePikabuAuthorizationPreferences();
+			ClickableToast.show(R.string.completed);
+		});
+	}
+
+	private void updatePikabuAuthorizationPreferences() {
+		if (userAuthorizationPreference != null) userAuthorizationPreference.invalidate();
+		if (pikabuLogoutPreference != null) {
+			PikabuChanConfiguration configuration =
+					(PikabuChanConfiguration) Chan.get(getChanName()).configuration;
+			pikabuLogoutPreference.setEnabled(configuration.isAuthorized());
+			pikabuLogoutPreference.invalidate();
+		}
+	}
+
 	@Override
 	public void onDestroyView() {
 		super.onDestroyView();
 
 		captchaPassPreference = null;
 		userAuthorizationPreference = null;
+		pikabuLogoutPreference = null;
 		cookiePreference = null;
 	}
 
@@ -415,6 +473,10 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 				dismiss();
 				if (result == CheckAuthorizationTask.SUCCESS) {
 					ClickableToast.show(R.string.validation_completed);
+					ChanFragment chanFragment = (ChanFragment) getParentFragment();
+					if (chanFragment != null && "pikabu".equals(requireArguments().getString(EXTRA_CHAN_NAME))) {
+						chanFragment.updatePikabuAuthorizationPreferences();
+					}
 				} else {
 					ClickableToast.show(result);
 					ChanFragment chanFragment = (ChanFragment) getParentFragment();

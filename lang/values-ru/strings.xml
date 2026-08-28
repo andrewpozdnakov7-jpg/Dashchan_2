@@ -1135,6 +1135,12 @@
 	<string name="tracked_post_number__format">Пост №%s</string>
 	<string name="thread_is_deleted">Тред удалён или недоступен</string>
 	<string name="replies_check_finished_with_errors__format">Проверка завершена с ошибками: %d</string>
+	<string name="pikabu_login">Логин Пикабу</string>
+	<string name="pikabu_authorization__summary">Войдите, чтобы открыть разделы, недоступные гостям. Пароль используется только во время входа и не сохраняется.</string>
+	<string name="pikabu_authorized">Выполнен вход в Пикабу</string>
+	<string name="pikabu_authorized_as__format">Выполнен вход в Пикабу: %s</string>
+	<string name="pikabu_forget_session">Выйти из Пикабу на этом устройстве</string>
+	<string name="pikabu_forget_session__summary">Удалить сохранённую на устройстве сессию Пикабу</string>
 	<plurals name="new_replies_count__format">
 		<item quantity="one">%d новый ответ</item>
 		<item quantity="few">%d новых ответа</item>

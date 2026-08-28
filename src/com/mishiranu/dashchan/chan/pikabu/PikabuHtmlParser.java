@@ -48,6 +48,35 @@ final class PikabuHtmlParser {
 
 	private PikabuHtmlParser() {}
 
+	public static SessionData parseSessionData(String html) {
+		Document document = Jsoup.parse(html, "https://pikabu.ru/");
+		Element element = document.selectFirst("script.app__config[data-entry=initParams]");
+		if (element == null) return null;
+		try {
+			JSONObject object = new JSONObject(element.data());
+			long userId = object.optLong("userID", 0L);
+			boolean deleted = object.optBoolean("isDeleted", false);
+			String userName = object.optString("userName");
+			if (StringUtils.isEmpty(userName)) userName = object.optString("username");
+			String csrfToken = object.optString("csrfToken");
+			return new SessionData(userId > 0L && !deleted, userName, csrfToken);
+		} catch (JSONException e) {
+			return null;
+		}
+	}
+
+	public static final class SessionData {
+		public final boolean authorized;
+		public final String userName;
+		public final String csrfToken;
+
+		private SessionData(boolean authorized, String userName, String csrfToken) {
+			this.authorized = authorized;
+			this.userName = userName;
+			this.csrfToken = csrfToken;
+		}
+	}
+
 	public static boolean isBoardName(String boardName) {
 		return PikabuChanLocator.isSupportedBoardName(boardName);
 	}
