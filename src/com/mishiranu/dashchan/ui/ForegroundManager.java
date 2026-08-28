@@ -4,7 +4,9 @@ import android.app.AlertDialog;
 import android.app.Dialog;
 import android.content.Context;
 import android.content.DialogInterface;
+import android.content.res.Configuration;
 import android.graphics.Bitmap;
+import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 import android.os.Handler;
@@ -14,7 +16,8 @@ import android.os.Parcelable;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.ViewParent;
+import android.view.Window;
+import android.view.WindowManager;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
@@ -471,7 +474,9 @@ public class ForegroundManager implements Handler.Callback {
 						height = width * dh / dw;
 					}
 				}
-				height = Math.min(height, (int) (120f * ResourceUtils.obtainDensity(this)));
+				int maxHeightDp = getResources().getConfiguration().orientation
+						== Configuration.ORIENTATION_LANDSCAPE ? 160 : 120;
+				height = Math.min(height, (int) (maxHeightDp * ResourceUtils.obtainDensity(this)));
 				setMeasuredDimension(width, height);
 			}
 		};
@@ -699,6 +704,20 @@ public class ForegroundManager implements Handler.Callback {
 		}
 
 		@Override
+		public void onStart() {
+			super.onStart();
+			Dialog dialog = getDialog();
+			Window window = dialog != null ? dialog.getWindow() : null;
+			if (window != null) {
+				Rect bounds = requireContext().getSystemService(WindowManager.class)
+						.getCurrentWindowMetrics().getBounds();
+				if (bounds.width() > bounds.height()) {
+					window.setLayout(bounds.width() * 2 / 3, ViewGroup.LayoutParams.WRAP_CONTENT);
+				}
+			}
+		}
+
+		@Override
 		public void onSaveInstanceState(@NonNull Bundle outState) {
 			super.onSaveInstanceState(outState);
 			outState.putBooleanArray(EXTRA_SELECTED, selected);
@@ -728,7 +747,10 @@ public class ForegroundManager implements Handler.Callback {
 				((LinearLayout.LayoutParams) imageView.getLayoutParams()).setMargins(0, 0, 0, (int) (20f * density));
 			}
 			int innerPadding = (int) (8f * density);
-			int columns = requireArguments().getInt(EXTRA_COLUMNS);
+			int requestedColumns = requireArguments().getInt(EXTRA_COLUMNS);
+			boolean landscape = getResources().getConfiguration().orientation
+					== Configuration.ORIENTATION_LANDSCAPE;
+			int columns = landscape && images.length > 0 ? Math.min(images.length, 6) : requestedColumns;
 			int rows = (images.length + columns - 1) / columns;
 			ensureArrays();
 			for (int i = 0; i < rows; i++) {
@@ -739,7 +761,6 @@ public class ForegroundManager implements Handler.Callback {
 				for (int j = 0; j < columns; j++) {
 					int index = columns * i + j;
 					FrameLayout frameLayout = new FrameLayout(inner.getContext());
-					selectionViews[index] = frameLayout;
 					LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(0,
 							LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
 					if (j < columns - 1) {
@@ -750,6 +771,7 @@ public class ForegroundManager implements Handler.Callback {
 					}
 					inner.addView(frameLayout, layoutParams);
 					if (index < images.length) {
+						selectionViews[index] = frameLayout;
 						ImageView imageView = new ImageView(frameLayout.getContext()) {
 							@Override
 							protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
@@ -773,46 +795,13 @@ public class ForegroundManager implements Handler.Callback {
 				}
 			}
 
-			AlertDialog[] futureAlertDialog = {null};
-			ScrollView scrollView = new ScrollView(container.getContext()) {
-				@Override
-				protected void onLayout(boolean changed, int l, int t, int r, int b) {
-					super.onLayout(changed, l, t, r, b);
-
-					// Fit the actual number of rows instead of shrinking the dialog by the column count.
-					int fitRows = Math.max(rows, 1);
-					int cellSize = (b - t - (fitRows - 1) * innerPadding - 2 * outerPadding) / fitRows;
-					int width = Math.min((int) (480 * density),
-							columns * cellSize + (columns - 1) * innerPadding + 2 * outerPadding);
-					if (r - l > width) {
-						int totalPadding = 0;
-						View root = this;
-						while (true) {
-							totalPadding += root.getPaddingLeft() + root.getPaddingRight();
-							ViewGroup.LayoutParams layoutParams = root.getLayoutParams();
-							if (layoutParams instanceof MarginLayoutParams) {
-								MarginLayoutParams marginLayoutParams = (MarginLayoutParams) layoutParams;
-								totalPadding += marginLayoutParams.leftMargin + marginLayoutParams.rightMargin;
-							}
-							ViewParent parent = root.getParent();
-							if (parent instanceof View) {
-								root = (View) parent;
-							} else {
-								break;
-							}
-						}
-						width += totalPadding;
-						futureAlertDialog[0].getWindow().setLayout(width, LayoutParams.WRAP_CONTENT);
-					}
-				}
-			};
+			ScrollView scrollView = new ScrollView(container.getContext());
 			scrollView.addView(container, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
 			final AlertDialog alertDialog = new AlertDialog.Builder(requireContext())
 					.setTitle(descriptionText).setView(scrollView)
 					.setPositiveButton(android.R.string.ok, this)
 					.setNegativeButton(android.R.string.cancel, this)
 					.create();
-			futureAlertDialog[0] = alertDialog;
 			return alertDialog;
 		}
 
