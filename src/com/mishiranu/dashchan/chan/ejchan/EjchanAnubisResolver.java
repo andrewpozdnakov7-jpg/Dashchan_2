@@ -10,6 +10,7 @@ import chan.util.StringUtils;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 
 /** Resolves the JavaScript proof-of-work page served by Anubis in front of the Ejchan API. */
 public class EjchanAnubisResolver extends FirewallResolver {
@@ -71,7 +72,7 @@ public class EjchanAnubisResolver extends FirewallResolver {
 
 		@Override
 		public boolean onLoad(Uri initialUri, Uri uri) {
-			if (initialUri == null || uri == null || !StringUtils.equals(initialUri.getHost(), uri.getHost())) {
+			if (initialUri == null || uri == null || !Objects.equals(initialUri.getHost(), uri.getHost())) {
 				return false;
 			}
 			String path = StringUtils.emptyIfNull(uri.getPath());

@@ -743,6 +743,11 @@ public class PostItem implements AttachmentItem.Master, ChanMarkup.MarkupExtra, 
 		return threadData.base.postsCount;
 	}
 
+	@Override
+	public int getThreadRating() {
+		return getLikes() - getDislikes();
+	}
+
 	public List<PostItem> getThreadPosts(Chan chan) {
 		if (threadData.postItems != null) {
 			return threadData.postItems;

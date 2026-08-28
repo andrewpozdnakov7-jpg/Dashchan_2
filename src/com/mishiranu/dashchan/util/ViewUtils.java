@@ -28,7 +28,7 @@ import android.widget.EdgeEffect;
 import android.widget.EditText;
 import android.widget.ScrollView;
 import android.widget.TextView;
-import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowCompat;
 import com.mishiranu.dashchan.R;
 import java.util.ArrayList;
 
@@ -212,7 +212,7 @@ public class ViewUtils {
 	}
 
 	public static void setNewMarginRelative(View view, Integer start, Integer top, Integer end, Integer bottom) {
-		if (ViewCompat.getLayoutDirection(view) == ViewCompat.LAYOUT_DIRECTION_RTL) {
+		if (view.getLayoutDirection() == View.LAYOUT_DIRECTION_RTL) {
 			setNewMargin(view, end, top, start, bottom);
 		} else {
 			setNewMargin(view, start, top, end, bottom);
@@ -248,7 +248,7 @@ public class ViewUtils {
 	}
 
 	private static void setDecorFitsSystemWindows(Window window, boolean decorFitsSystemWindows) {
-		window.setDecorFitsSystemWindows(decorFitsSystemWindows);
+		WindowCompat.setDecorFitsSystemWindows(window, decorFitsSystemWindows);
 	}
 
 	public static Point getWindowContentSize(Context context) {

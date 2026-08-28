@@ -4,6 +4,7 @@ import android.view.ViewGroup;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
+import chan.content.ChanConfiguration;
 import chan.util.CommonUtils;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.content.database.ChanDatabase;
@@ -17,10 +18,12 @@ public class BoardsAdapter extends CursorAdapter<ChanDatabase.BoardCursor, Recyc
 	public interface Callback extends ListViewUtils.SimpleCallback<ChanDatabase.BoardItem> {}
 
 	private final Callback callback;
+	private final ChanConfiguration configuration;
 	private final ChanDatabase.BoardItem boardItem = new ChanDatabase.BoardItem();
 
-	public BoardsAdapter(Callback callback) {
+	public BoardsAdapter(Callback callback, ChanConfiguration configuration) {
 		this.callback = callback;
+		this.configuration = configuration;
 	}
 
 	public boolean isRealEmpty() {
@@ -42,7 +45,7 @@ public class BoardsAdapter extends CursorAdapter<ChanDatabase.BoardCursor, Recyc
 	@Override
 	public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
 		ChanDatabase.BoardItem boardItem = this.boardItem.update(moveTo(position));
-		((TextView) holder.itemView).setText(StringUtils.formatBoardTitle("", boardItem.boardName, boardItem.extra1));
+		((TextView) holder.itemView).setText(configuration.formatBoardTitle(boardItem.boardName, boardItem.extra1));
 	}
 
 	public DividerItemDecoration.Configuration configureDivider

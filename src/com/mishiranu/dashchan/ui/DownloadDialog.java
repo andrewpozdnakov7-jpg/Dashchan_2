@@ -221,7 +221,7 @@ public class DownloadDialog {
 				editText.dismissDropDown();
 				refreshDropDownContents(editText);
 				if (inputMethodManager != null) {
-					inputMethodManager.showSoftInput(editText, InputMethodManager.SHOW_IMPLICIT);
+					inputMethodManager.showSoftInput(editText, 0);
 					editText.postDelayed(dropDownRunnable, 250);
 				} else {
 					dropDownRunnable.run();

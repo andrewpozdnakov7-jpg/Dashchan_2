@@ -72,7 +72,7 @@ public class MyPostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 		viewHolder.text1.setText(comment);
 		Chan chan = Chan.get(reply.chanName);
 		String boardTitle = chan.configuration.getBoardTitle(reply.boardName);
-		String location = StringUtils.formatBoardTitle(reply.chanName, reply.boardName, boardTitle);
+		String location = chan.configuration.formatBoardTitle(reply.boardName, boardTitle);
 		location = chan.configuration.getTitle() + " — " + location + " · >>" + reply.trackedPostNumber;
 		if (reply.threadDeleted) {
 			location += " · " + context.getString(R.string.thread_is_deleted);

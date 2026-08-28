@@ -9,6 +9,8 @@ import android.os.Bundle;
 import android.text.InputType;
 import android.text.format.DateFormat;
 import android.view.View;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.R;
@@ -26,6 +28,9 @@ import java.util.Calendar;
 import java.util.Objects;
 
 public class ReplyNotificationsFragment extends PreferenceFragment {
+	private final ActivityResultLauncher<String> notificationPermissionLauncher = registerForActivityResult(
+			new ActivityResultContracts.RequestPermission(), granted -> {});
+
 	private String lastInstallationId;
 	private boolean lastResetPending;
 
@@ -310,7 +315,7 @@ public class ReplyNotificationsFragment extends PreferenceFragment {
 	private void requestNotificationPermission() {
 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && requireContext()
 				.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-			requestPermissions(new String[] {Manifest.permission.POST_NOTIFICATIONS}, 1);
+			notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS);
 		}
 	}
 }

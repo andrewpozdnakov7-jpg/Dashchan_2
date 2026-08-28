@@ -50,7 +50,7 @@ public class BoardsPage extends ListPage implements BoardsAdapter.Callback,
 		PaddedRecyclerView recyclerView = getRecyclerView();
 		recyclerView.setLayoutManager(new LinearLayoutManager(recyclerView.getContext()));
 		searchQuery = getInitSearch().currentQuery;
-		BoardsAdapter adapter = new BoardsAdapter(this);
+		BoardsAdapter adapter = new BoardsAdapter(this, getChan().configuration);
 		recyclerView.setAdapter(adapter);
 		recyclerView.addItemDecoration(new DividerItemDecoration(recyclerView.getContext(),
 				adapter::configureDivider));

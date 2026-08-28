@@ -1168,8 +1168,8 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 			SummaryLayout layout = new SummaryLayout(dialog);
 			String boardName = page.boardName;
 			if (boardName != null) {
-				String title = Chan.get(page.chanName).configuration.getBoardTitle(boardName);
-				title = StringUtils.formatBoardTitle(page.chanName, boardName, title);
+				Chan chan = Chan.get(page.chanName);
+				String title = chan.configuration.formatBoardTitle(boardName);
 				layout.add(context.getString(R.string.board), title);
 			}
 			layout.add(context.getString(R.string.files__genitive), Integer.toString(files));

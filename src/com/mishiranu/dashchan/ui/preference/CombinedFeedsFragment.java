@@ -394,7 +394,7 @@ public class CombinedFeedsFragment extends PreferenceFragment implements GetBoar
 					do {
 						item.update(cursor);
 						loadedBoards.add(new Board(loadingChan.name, getChanTitle(loadingChan.name), item.boardName,
-								StringUtils.formatBoardTitle("", item.boardName, item.extra1), false));
+								loadingChan.configuration.formatBoardTitle(item.boardName, item.extra1), false));
 					} while (cursor.moveToNext());
 				}
 			} finally {

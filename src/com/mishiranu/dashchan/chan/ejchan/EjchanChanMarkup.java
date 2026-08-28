@@ -21,7 +21,7 @@ public class EjchanChanMarkup extends ChanMarkup {
 		addTag("span", "spoiler", TAG_SPOILER);
 		addTag("span", "quote", TAG_QUOTE);
 		addTag("code", TAG_CODE);
-		addPreformatted("pre");
+		addPreformatted("pre", true);
 		addTag("span", "heading", TAG_HEADING);
 		addColorable("span");
 	}

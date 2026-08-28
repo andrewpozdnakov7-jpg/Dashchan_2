@@ -122,7 +122,7 @@ public class CaptchaForm implements View.OnClickListener, View.OnLongClickListen
 			InputMethodManager inputMethodManager = (InputMethodManager) v.getContext()
 					.getSystemService(Context.INPUT_METHOD_SERVICE);
 			if (inputMethodManager != null) {
-				inputMethodManager.showSoftInput(inputView, InputMethodManager.SHOW_IMPLICIT);
+				inputMethodManager.showSoftInput(inputView, 0);
 			}
 		}
 	}

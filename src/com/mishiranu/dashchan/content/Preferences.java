@@ -529,13 +529,16 @@ public class Preferences {
 		CREATED("created", R.id.menu_date_created, R.string.date_created,
 				(lhs, rhs) -> Long.compare(rhs.getTimestamp(), lhs.getTimestamp())),
 		REPLIES("replies", R.id.menu_replies, R.string.replies_count,
-				(lhs, rhs) -> Integer.compare(rhs.getThreadPostsCount(), lhs.getThreadPostsCount()));
+				(lhs, rhs) -> Integer.compare(rhs.getThreadPostsCount(), lhs.getThreadPostsCount())),
+		RATING("rating", R.id.menu_rating, R.string.rating,
+				(lhs, rhs) -> Integer.compare(rhs.getThreadRating(), lhs.getThreadRating()));
 
 		private static final EnumValueProvider<CatalogSort> VALUE_PROVIDER = o -> o.value;
 
 		public interface Comparable {
 			long getTimestamp();
 			int getThreadPostsCount();
+			int getThreadRating();
 		}
 
 		private final String value;

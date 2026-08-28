@@ -4,6 +4,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
+import chan.content.ChanConfiguration;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.content.database.ChanDatabase;
 import com.mishiranu.dashchan.util.ListViewUtils;
@@ -15,10 +16,12 @@ public class UserBoardsAdapter extends CursorAdapter<ChanDatabase.BoardCursor, R
 	public interface Callback extends ListViewUtils.SimpleCallback<ChanDatabase.BoardItem> {}
 
 	private final Callback callback;
+	private final ChanConfiguration configuration;
 	private final ChanDatabase.BoardItem boardItem = new ChanDatabase.BoardItem();
 
-	public UserBoardsAdapter(Callback callback) {
+	public UserBoardsAdapter(Callback callback, ChanConfiguration configuration) {
 		this.callback = callback;
+		this.configuration = configuration;
 	}
 
 	private ChanDatabase.BoardItem copyItem(int position) {
@@ -36,7 +39,7 @@ public class UserBoardsAdapter extends CursorAdapter<ChanDatabase.BoardCursor, R
 	public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
 		ChanDatabase.BoardItem boardItem = this.boardItem.update(moveTo(position));
 		ViewFactory.TwoLinesViewHolder viewHolder = (ViewFactory.TwoLinesViewHolder) holder.itemView.getTag();
-		viewHolder.text1.setText(StringUtils.formatBoardTitle("", boardItem.boardName, boardItem.extra1));
+		viewHolder.text1.setText(configuration.formatBoardTitle(boardItem.boardName, boardItem.extra1));
 		if (!StringUtils.isEmpty(boardItem.extra2)) {
 			viewHolder.text2.setVisibility(View.VISIBLE);
 			viewHolder.text2.setText(boardItem.extra2);

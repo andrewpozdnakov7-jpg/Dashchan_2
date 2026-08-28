@@ -1,0 +1,7 @@
+- Expanded Kekabu support with Pikabu communities, tags, popular authors, additional content feeds, and search.
+- Added Kekabu sign-in through the official Pikabu website. Sign-in is working; Slooop does not read or save the login or password and stores only the resulting session on the device.
+- Added an option to open Pikabu settings and check the configured age and permission to display 18+ content. Displaying 18+ content is still not working correctly and will be fixed.
+- Improved the graphical captcha dialog in landscape orientation: the image and answer choices now fit more compactly on one screen.
+- Fixed unnecessary repeated synchronization of reply push notifications.
+
+Found a bug? Send us the logs!

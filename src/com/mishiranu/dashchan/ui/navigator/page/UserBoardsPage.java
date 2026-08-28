@@ -75,7 +75,7 @@ public class UserBoardsPage extends ListPage implements UserBoardsAdapter.Callba
 		PaddedRecyclerView recyclerView = getRecyclerView();
 		recyclerView.setLayoutManager(new LinearLayoutManager(recyclerView.getContext()));
 		searchQuery = getInitSearch().currentQuery;
-		UserBoardsAdapter adapter = new UserBoardsAdapter(this);
+		UserBoardsAdapter adapter = new UserBoardsAdapter(this, getChan().configuration);
 		recyclerView.setAdapter(adapter);
 		recyclerView.addItemDecoration(new DividerItemDecoration(recyclerView.getContext(),
 				(c, position) -> c.need(true)));
