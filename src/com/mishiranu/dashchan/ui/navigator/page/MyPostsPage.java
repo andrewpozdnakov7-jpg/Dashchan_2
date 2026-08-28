@@ -194,7 +194,7 @@ public class MyPostsPage extends ListPage implements MyPostsAdapter.Callback, Re
 		}
 		Chan chan = Chan.get(reply.chanName);
 		String boardTitle = chan.configuration.getBoardTitle(reply.boardName);
-		String location = StringUtils.formatBoardTitle(reply.chanName, reply.boardName, boardTitle);
+		String location = chan.configuration.formatBoardTitle(reply.boardName, boardTitle);
 		return (reply.unread ? "● " : "") + comment + " — " + chan.configuration.getTitle()
 				+ " " + location;
 	}

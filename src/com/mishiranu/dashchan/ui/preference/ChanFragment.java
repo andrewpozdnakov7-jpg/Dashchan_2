@@ -88,8 +88,7 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 						if (!StringUtils.isEmpty(text)) {
 							String boardName = StringUtils.validateBoardName(text);
 							if (boardName != null) {
-								text = StringUtils.formatBoardTitle(chanName, boardName,
-										Chan.get(chanName).configuration.getBoardTitle(boardName));
+								text = Chan.get(chanName).configuration.formatBoardTitle(boardName);
 							} else {
 								text = null;
 							}

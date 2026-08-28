@@ -78,6 +78,7 @@ public class ChanConfiguration implements Chan.Linked {
 	@Public public static final String OPTION_ALLOW_USER_AUTHORIZATION = "allow_user_authorization";
 	@Public public static final String OPTION_LOCAL_MODE = "local_mode";
 	@Public public static final String OPTION_AI_POSTING = "ai_posting";
+	@Public public static final String OPTION_BOARD_TITLE_ONLY = "board_title_only";
 
 	private static final String KEY_TITLE = "title";
 	private static final String KEY_DESCRIPTION = "description";
@@ -115,6 +116,7 @@ public class ChanConfiguration implements Chan.Linked {
 		@Public public boolean allowSearch;
 		@Public public boolean allowCatalog;
 		@Public public boolean allowThreadsSorting;
+		@Public public boolean allowRatingSorting;
 		@Public public boolean allowArchive;
 		@Public public boolean allowPosting;
 		@Public public boolean allowEditing;
@@ -421,7 +423,24 @@ public class ChanConfiguration implements Chan.Linked {
 
 	public final String getBoardTitle(String boardName) {
 		String title = titleFallbackProvider.getExtra(boardName);
-		return title != null ? title : get(boardName, KEY_TITLE, null);
+		if (title == null) title = get(boardName, KEY_TITLE, null);
+		if (title == null) {
+			try {
+				title = obtainBoardTitle(boardName);
+			} catch (LinkageError | RuntimeException e) {
+				ExtensionException.logException(e, false);
+			}
+		}
+		return title;
+	}
+
+	public final String formatBoardTitle(String boardName, String title) {
+		return getOption(OPTION_BOARD_TITLE_ONLY) && !StringUtils.isEmpty(title) ? title
+				: StringUtils.formatBoardTitle(get().name, boardName, title);
+	}
+
+	public final String formatBoardTitle(String boardName) {
+		return formatBoardTitle(boardName, getBoardTitle(boardName));
 	}
 
 	public final String getBoardDescription(String boardName) {
@@ -614,6 +633,11 @@ public class ChanConfiguration implements Chan.Linked {
 
 	public final LinkedHashMap<String, Boolean> getCustomPreferences() {
 		return customPreferences;
+	}
+
+	@Extendable
+	protected String obtainBoardTitle(String boardName) {
+		return null;
 	}
 
 	@Extendable

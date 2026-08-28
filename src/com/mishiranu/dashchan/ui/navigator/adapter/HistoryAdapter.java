@@ -89,7 +89,7 @@ public class HistoryAdapter extends CursorAdapter<HistoryDatabase.HistoryCursor,
 		Chan chan = Chan.get(historyItem.chanName);
 		String title = chan.configuration.getBoardTitle(historyItem.boardName);
 		title = StringUtils.isEmpty(historyItem.boardName) ? title
-				: StringUtils.formatBoardTitle(historyItem.chanName, historyItem.boardName, title);
+				: chan.configuration.formatBoardTitle(historyItem.boardName, title);
 		if (chanName == null) {
 			title = chan.configuration.getTitle() + " — " + title;
 		}

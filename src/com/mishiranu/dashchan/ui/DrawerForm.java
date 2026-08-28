@@ -1142,15 +1142,16 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 						favoriteItem.threadNumber).deleted;
 	}
 
-	private String formatBoardThreadTitle(boolean threadItem, String boardName, String threadNumber, String title) {
+	private String formatBoardThreadTitle(String itemChanName, boolean threadItem, String boardName,
+			String threadNumber, String title) {
 		if (threadItem) {
 			if (!StringUtils.isEmptyOrWhitespace(title)) {
 				return title;
 			} else {
-				return StringUtils.formatThreadTitle(chanName, boardName, threadNumber);
+				return StringUtils.formatThreadTitle(itemChanName, boardName, threadNumber);
 			}
 		} else {
-			return StringUtils.formatBoardTitle(chanName, boardName, title);
+			return Chan.get(itemChanName).configuration.formatBoardTitle(boardName, title);
 		}
 	}
 
@@ -1364,8 +1365,8 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 											.getString(R.string.threads_will_be_deleted__sentence));
 									builder.append("\n");
 									for (FavoritesStorage.FavoriteItem favoriteItem : deleteFavoriteItems) {
-										builder.append("\n\u2022 ").append(formatBoardThreadTitle(true,
-												favoriteItem.boardName, favoriteItem.threadNumber, favoriteItem.title));
+										builder.append("\n\u2022 ").append(formatBoardThreadTitle(favoriteItem.chanName,
+												true, favoriteItem.boardName, favoriteItem.threadNumber, favoriteItem.title));
 									}
 									showDeleteFavoritesDialog(fragmentManager, builder, deleteFavoriteItems);
 									return true;
@@ -1951,7 +1952,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 			case PAGE:
 			case FAVORITE: {
 				holder.text.setText(listItem.type == ListItem.Type.COMBINED_FEED ? listItem.title
-						: formatBoardThreadTitle(listItem.isThreadItem(),
+						: formatBoardThreadTitle(listItem.chanName, listItem.isThreadItem(),
 								listItem.boardName, listItem.threadNumber, listItem.title));
 				if (listItem.type == ListItem.Type.FAVORITE && listItem.isThreadItem() &&
 						watcherSupportSet.contains(listItem.chanName)) {

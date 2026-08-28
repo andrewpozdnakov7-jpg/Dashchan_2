@@ -91,7 +91,7 @@ public class ArchivePage extends ListPage implements ArchiveAdapter.Callback,
 	public String obtainTitle() {
 		Page page = getPage();
 		return getString(R.string.archive) + ": " +
-				StringUtils.formatBoardTitle(page.chanName, page.boardName, null);
+				getChan().configuration.formatBoardTitle(page.boardName);
 	}
 
 	@Override

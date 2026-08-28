@@ -143,8 +143,8 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 		recyclerView.getPullable().setPullSides(PullableWrapper.Side.BOTH);
 		uiManager.observable().register(this);
 		layoutManager.setSpanCount(adapter.setThreadsView(Preferences.getThreadsView()));
-		adapter.setThreadsSortingEnabled(getChan().configuration.safe().obtainBoard(page.boardName)
-				.allowThreadsSorting);
+		ChanConfiguration.Board board = getChan().configuration.safe().obtainBoard(page.boardName);
+		adapter.setThreadsSortingEnabled(board.allowThreadsSorting, board.allowRatingSorting);
 		adapter.setCatalogSort(Preferences.getCatalogSort());
 		adapter.applyFilter(getInitSearch().currentQuery);
 		FavoritesStorage.getInstance().getObservable().register(this);
@@ -294,8 +294,7 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 	public Pair<String, String> obtainTitleSubtitle() {
 		Page page = getPage();
 		RetainableExtra retainableExtra = getRetainableExtra(RetainableExtra.FACTORY);
-		String title = getChan().configuration.getBoardTitle(page.boardName);
-		title = StringUtils.formatBoardTitle(page.chanName, page.boardName, title);
+		String title = getChan().configuration.formatBoardTitle(page.boardName);
 		String subtitle = null;
 		if (retainableExtra.startPageNumber > 0) {
 			subtitle = getString(R.string.number_page__format, retainableExtra.startPageNumber);
@@ -433,9 +432,14 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 		menu.findItem(R.id.menu_catalog).setVisible(board.allowCatalog && !isCatalogOpen);
 		menu.findItem(R.id.menu_pages).setVisible(board.allowCatalog && isCatalogOpen);
 		menu.findItem(R.id.menu_sorting).setVisible(board.allowThreadsSorting || board.allowCatalog && isCatalogOpen);
+		menu.findItem(R.id.menu_rating).setVisible(board.allowRatingSorting);
 		menu.findItem(R.id.menu_unsorted).setTitle(board.allowThreadsSorting && !isCatalogOpen
 				? R.string.last_bump : R.string.unsorted);
-		menu.findItem(Preferences.getCatalogSort().menuItemId).setChecked(true);
+		Preferences.CatalogSort catalogSort = Preferences.getCatalogSort();
+		if (catalogSort == Preferences.CatalogSort.RATING && !board.allowRatingSorting) {
+			catalogSort = Preferences.CatalogSort.UNSORTED;
+		}
+		menu.findItem(catalogSort.menuItemId).setChecked(true);
 		menu.findItem(R.id.menu_archive).setVisible(board.allowArchive);
 		menu.findItem(R.id.menu_new_thread).setVisible(board.allowPosting);
 		menu.findItem(Preferences.getThreadsView().menuItemId).setChecked(true);
@@ -543,8 +547,7 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 					.create();
 			SummaryLayout layout = new SummaryLayout(dialog);
 			if (boardName != null) {
-				String title = chan.configuration.getBoardTitle(boardName);
-				title = StringUtils.formatBoardTitle(chanName, boardName, title);
+				String title = chan.configuration.formatBoardTitle(boardName);
 				layout.add(context.getString(R.string.board), title);
 				String description = chan.configuration.getBoardDescription(boardName);
 				if (!StringUtils.isEmpty(description)) {

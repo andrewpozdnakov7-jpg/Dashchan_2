@@ -11,6 +11,7 @@ import chan.http.HttpException;
 import chan.http.HttpRequest;
 import chan.http.HttpResponse;
 import chan.http.UrlEncodedEntity;
+import chan.util.StringUtils;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -38,10 +39,36 @@ public class PikabuChanPerformer extends ChanPerformer {
 		PikabuHtmlParser.ParsedThreads parsed = PikabuHtmlParser.parseThreads(response.readString(), locator,
 				data.boardName);
 		if (!parsed.validPage) throw new InvalidResponseException();
+		ChanConfiguration configuration = ChanConfiguration.get(this);
+		String dynamicTitle = PikabuChanLocator.getDynamicBoardTitle(data.boardName);
+		if (dynamicTitle != null) {
+			configuration.storeBoardTitle(data.boardName,
+					!StringUtils.isEmpty(parsed.title) ? parsed.title : dynamicTitle);
+			if (!StringUtils.isEmpty(parsed.description)) {
+				configuration.storeBoardDescription(data.boardName, parsed.description);
+			}
+		}
 		if (parsed.pagesCount > 0) {
-			ChanConfiguration.get(this).storePagesCount(data.boardName, parsed.pagesCount);
+			configuration.storePagesCount(data.boardName, parsed.pagesCount);
 		}
 		return new ReadThreadsResult(parsed.threads).setValidator(response.getValidator());
+	}
+
+	@Override
+	public ReadSearchPostsResult onReadSearchPosts(ReadSearchPostsData data)
+			throws HttpException, InvalidResponseException {
+		String query = data.searchQuery != null ? data.searchQuery.trim() : "";
+		if (query.isEmpty()) return new ReadSearchPostsResult();
+		PikabuChanLocator locator = PikabuChanLocator.get(this);
+		HttpResponse response = prepareRequest(locator.createSearchUri(query, data.pageNumber), data).perform();
+		PikabuHtmlParser.ParsedThreads parsed = PikabuHtmlParser.parseSearch(response.readString(), locator, query);
+		if (!parsed.validPage) throw new InvalidResponseException();
+		ArrayList<Post> posts = new ArrayList<>();
+		for (Posts thread : parsed.threads) {
+			Post[] threadPosts = thread.getPosts();
+			if (threadPosts != null && threadPosts.length > 0) posts.add(threadPosts[0]);
+		}
+		return new ReadSearchPostsResult(posts);
 	}
 
 	@Override
@@ -119,9 +146,47 @@ public class PikabuChanPerformer extends ChanPerformer {
 
 	@Override
 	public ReadBoardsResult onReadBoards(ReadBoardsData data) {
-		return new ReadBoardsResult(new BoardCategory("Pikabu", Arrays.asList(
+		PikabuChanLocator locator = PikabuChanLocator.get(this);
+		ArrayList<BoardCategory> categories = new ArrayList<>();
+		categories.add(new BoardCategory("Ленты", Arrays.asList(
 				new Board(PikabuChanLocator.BOARD_HOT, "Горячее", "Популярные истории"),
 				new Board(PikabuChanLocator.BOARD_BEST, "Лучшее", "Лучшие истории"),
 				new Board(PikabuChanLocator.BOARD_NEW, "Свежее", "Новые истории"))));
+		categories.add(new BoardCategory("Фильтры", Arrays.asList(
+				new Board(PikabuChanLocator.createBrowseBoardName(PikabuChanLocator.BROWSE_ORIGINAL),
+						"Авторские", "Истории с отметкой «моё»"),
+				new Board(PikabuChanLocator.createBrowseBoardName(PikabuChanLocator.BROWSE_TEXT),
+						"Текстовые", "Истории с текстом"),
+				new Board(PikabuChanLocator.createBrowseBoardName(PikabuChanLocator.BROWSE_IMAGES),
+						"Изображения", "Истории с изображениями"),
+				new Board(PikabuChanLocator.createBrowseBoardName(PikabuChanLocator.BROWSE_VIDEO),
+						"Видео", "Истории с видео"),
+				new Board(PikabuChanLocator.createBrowseBoardName(PikabuChanLocator.BROWSE_REPLIES),
+						"Ответы на истории", "Истории-ответы"),
+				new Board(PikabuChanLocator.createBrowseBoardName(PikabuChanLocator.BROWSE_SERIES),
+						"Серии", "Истории из серий"),
+				new Board(PikabuChanLocator.createBrowseBoardName(PikabuChanLocator.BROWSE_LONG),
+						"Длиннопосты", "Длинные истории"))));
+
+		String communitiesHtml = null;
+		try {
+			communitiesHtml = prepareRequest(locator.createCommunitiesUri(), data).perform().readString();
+			ArrayList<Board> communities = PikabuHtmlParser.parseCommunities(communitiesHtml);
+			if (!communities.isEmpty()) categories.add(new BoardCategory("Сообщества", communities));
+		} catch (HttpException e) {
+			// Keep the built-in feeds and filters available when the directory is temporarily unavailable.
+		}
+		try {
+			String tagsHtml = prepareRequest(locator.createTagsUri(), data).perform().readString();
+			ArrayList<Board> tags = PikabuHtmlParser.parseTags(tagsHtml);
+			if (!tags.isEmpty()) categories.add(new BoardCategory("Популярные теги", tags));
+		} catch (HttpException e) {
+			// Tags are optional navigation data; reading known feeds must continue to work.
+		}
+		if (communitiesHtml != null) {
+			ArrayList<Board> authors = PikabuHtmlParser.parsePopularAuthors(communitiesHtml);
+			if (!authors.isEmpty()) categories.add(new BoardCategory("Популярные авторы", authors));
+		}
+		return new ReadBoardsResult(categories);
 	}
 }

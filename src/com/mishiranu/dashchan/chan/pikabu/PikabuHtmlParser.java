@@ -3,6 +3,7 @@ package com.mishiranu.dashchan.chan.pikabu;
 import android.net.Uri;
 import android.util.Xml;
 import chan.content.model.Attachment;
+import chan.content.model.Board;
 import chan.content.model.FileAttachment;
 import chan.content.model.Post;
 import chan.content.model.Posts;
@@ -31,6 +32,10 @@ import org.xmlpull.v1.XmlPullParser;
 import org.xmlpull.v1.XmlPullParserException;
 
 final class PikabuHtmlParser {
+	private static final int MAX_COMMUNITIES = 200;
+	private static final int MAX_TAGS = 200;
+	private static final int MAX_AUTHORS = 50;
+	private static final int MAX_STORY_TAGS = 12;
 	private static final Pattern NUMBER = Pattern.compile("\\d+");
 	private static final Pattern META_VALUE = Pattern.compile("(?:^|;)([a-z]+)=([^;]*)");
 	private static final Pattern STORY_PATH = Pattern.compile("/story/(?:[^/?#]*_)?(\\d+)/?");
@@ -43,15 +48,22 @@ final class PikabuHtmlParser {
 	private PikabuHtmlParser() {}
 
 	public static boolean isBoardName(String boardName) {
-		return PikabuChanLocator.BOARD_HOT.equals(boardName) || PikabuChanLocator.BOARD_BEST.equals(boardName)
-				|| PikabuChanLocator.BOARD_NEW.equals(boardName);
+		return PikabuChanLocator.isSupportedBoardName(boardName);
 	}
 
 	public static ParsedThreads parseThreads(String html, PikabuChanLocator locator, String boardName) {
+		return parseFeed(html, locator, locator.getExpectedFeedMode(boardName));
+	}
+
+	public static ParsedThreads parseSearch(String html, PikabuChanLocator locator, String searchQuery) {
+		return parseFeed(html, locator, locator.getExpectedSearchFeedMode(searchQuery));
+	}
+
+	private static ParsedThreads parseFeed(String html, PikabuChanLocator locator, String expectedMode) {
 		Document document = Jsoup.parse(html, "https://pikabu.ru/");
 		Element feed = document.selectFirst("div.stories-feed[data-mode]");
 		ArrayList<Posts> threads = new ArrayList<>();
-		boolean validPage = feed != null && boardName.equals(feed.attr("data-mode"));
+		boolean validPage = feed != null && expectedMode.equals(feed.attr("data-mode"));
 		if (validPage) {
 			for (Element article : feed.select("div.stories-feed__container article.story[data-story-id]")) {
 				Post post = parseStory(article, locator);
@@ -63,7 +75,86 @@ final class PikabuHtmlParser {
 			}
 		}
 		int pagesCount = feed != null ? parseInteger(feed.attr("data-page-last"), 0) : 0;
-		return new ParsedThreads(threads, pagesCount, validPage);
+		String title = null;
+		String description = null;
+		if ("community".equals(expectedMode)) {
+			Element titleElement = document.selectFirst("div.community-header__title");
+			Element descriptionElement = document.selectFirst("div.community-header__description, "
+					+ "div.community-header__about");
+			title = titleElement != null ? StringUtils.nullIfEmpty(titleElement.text().trim()) : null;
+			description = descriptionElement != null
+					? StringUtils.nullIfEmpty(descriptionElement.text().trim()) : null;
+		} else if ("profile".equals(expectedMode)) {
+			Element titleElement = document.selectFirst("h1.profile__nick");
+			Element descriptionElement = document.selectFirst("span.profile__user-about-content");
+			title = titleElement != null ? StringUtils.nullIfEmpty(titleElement.text().trim()) : null;
+			description = descriptionElement != null
+					? StringUtils.nullIfEmpty(descriptionElement.text().trim()) : null;
+		}
+		return new ParsedThreads(threads, pagesCount, validPage, title, description);
+	}
+
+	public static ArrayList<Board> parseCommunities(String html) {
+		Document document = Jsoup.parse(html, "https://pikabu.ru/");
+		LinkedHashMap<String, Board> boards = new LinkedHashMap<>();
+		for (Element item : document.select("div.community__inner")) {
+			Element link = item.selectFirst("div.community__title a[href]");
+			if (link == null) continue;
+			Uri uri = resolvePageUri(link, link.attr("href"));
+			if (!isPikabuPageUri(uri)) continue;
+			List<String> segments = uri != null ? uri.getPathSegments() : null;
+			if (segments == null || segments.size() != 2 || !"community".equals(segments.get(0))) continue;
+			String boardName = PikabuChanLocator.createCommunityBoardName(segments.get(1));
+			String title = link.text().trim();
+			if (boardName == null || title.isEmpty()) continue;
+			Element information = item.selectFirst("div.community__information");
+			String description = information != null ? information.text().trim() : null;
+			boards.putIfAbsent(boardName, new Board(boardName, title, StringUtils.nullIfEmpty(description)));
+			if (boards.size() >= MAX_COMMUNITIES) break;
+		}
+		return new ArrayList<>(boards.values());
+	}
+
+	public static ArrayList<Board> parseTags(String html) {
+		Document document = Jsoup.parse(html, "https://pikabu.ru/");
+		LinkedHashMap<String, Board> boards = new LinkedHashMap<>();
+		for (Element link : document.select("a.tags__tag[href]")) {
+			Uri uri = resolvePageUri(link, link.attr("href"));
+			if (!isPikabuPageUri(uri)) continue;
+			List<String> segments = uri != null ? uri.getPathSegments() : null;
+			if (segments == null || segments.size() < 2 || !"tag".equals(segments.get(0))) continue;
+			String tag = segments.get(1).trim();
+			String boardName = PikabuChanLocator.createTagBoardName(tag);
+			Element copy = link.clone();
+			Element countElement = copy.selectFirst("span.tags__tag-count");
+			String count = countElement != null ? countElement.text().trim() : null;
+			if (countElement != null) countElement.remove();
+			String title = copy.text().trim();
+			if (boardName == null || title.isEmpty()) continue;
+			String description = !StringUtils.isEmpty(count) ? count + " историй" : null;
+			boards.putIfAbsent(boardName, new Board(boardName, title, description));
+			if (boards.size() >= MAX_TAGS) break;
+		}
+		return new ArrayList<>(boards.values());
+	}
+
+	public static ArrayList<Board> parsePopularAuthors(String html) {
+		Document document = Jsoup.parse(html, "https://pikabu.ru/");
+		LinkedHashMap<String, Board> boards = new LinkedHashMap<>();
+		for (Element link : document.select("a[href]")) {
+			Uri uri = resolvePageUri(link, link.attr("href"));
+			if (!isPikabuPageUri(uri)) continue;
+			List<String> segments = uri != null ? uri.getPathSegments() : null;
+			if (segments == null || segments.size() != 1 || !segments.get(0).startsWith("@")) continue;
+			String profile = segments.get(0).substring(1);
+			String boardName = PikabuChanLocator.createProfileBoardName(profile);
+			if (boardName == null) continue;
+			String title = link.text().trim();
+			if (title.isEmpty()) title = "@" + profile;
+			boards.putIfAbsent(boardName, new Board(boardName, title, "Публикации автора"));
+			if (boards.size() >= MAX_AUTHORS) break;
+		}
+		return new ArrayList<>(boards.values());
 	}
 
 	public static ParsedPosts parsePosts(String html, PikabuChanLocator locator, String threadNumber) {
@@ -218,11 +309,48 @@ final class PikabuHtmlParser {
 			ArrayList<Attachment> attachments = parseAttachments(clone, locator, storyNumber);
 			if (!attachments.isEmpty()) post.setAttachments(attachments);
 			cleanContent(clone, locator, storyNumber);
+			appendStoryNavigation(clone, article, locator, author);
 			post.setComment(StringUtils.nullIfEmpty(clone.html().trim()));
 		}
 		int rating = parseInteger(article.attr("data-rating"), 0);
 		post.setVote(Math.max(rating, 0), Math.max(-rating, 0));
 		return post;
+	}
+
+	private static void appendStoryNavigation(Element content, Element article, PikabuChanLocator locator,
+			String author) {
+		Element navigation = null;
+		if (!StringUtils.isEmpty(author)) {
+			String boardName = PikabuChanLocator.createProfileBoardName(author);
+			if (boardName != null) {
+				navigation = content.appendElement("p");
+				navigation.appendElement("a").attr("href", locator.createBoardUri(boardName, 0).toString())
+						.text("@" + author);
+			}
+		}
+		Element community = article.selectFirst("a.story__community-link[href]");
+		if (community != null) {
+			Uri uri = resolvePageUri(community, community.attr("href"));
+			if (isCommunityPageUri(uri) && !community.text().trim().isEmpty()) {
+				if (navigation == null) navigation = content.appendElement("p");
+				appendSeparator(navigation);
+				navigation.appendElement("a").attr("href", uri.toString()).text(community.text().trim());
+			}
+		}
+		int tags = 0;
+		for (Element tag : article.select("a.tags__tag[data-tag][href]")) {
+			String name = tag.attr("data-tag").trim();
+			Uri uri = resolvePageUri(tag, tag.attr("href"));
+			if (name.isEmpty() || !isTagPageUri(uri)) continue;
+			if (navigation == null) navigation = content.appendElement("p");
+			appendSeparator(navigation);
+			navigation.appendElement("a").attr("href", uri.toString()).text("#" + name);
+			if (++tags >= MAX_STORY_TAGS) break;
+		}
+	}
+
+	private static void appendSeparator(Element element) {
+		if (!element.childNodes().isEmpty()) element.appendText(" · ");
 	}
 
 	private static Post parseComment(Element element, PikabuChanLocator locator, String threadNumber) {
@@ -400,6 +528,41 @@ final class PikabuHtmlParser {
 		return uri;
 	}
 
+	private static Uri resolvePageUri(Element element, String value) {
+		if (StringUtils.isEmpty(value)) return null;
+		value = value.trim();
+		if (value.startsWith("//")) value = "https:" + value;
+		String absolute = element.absUrl("href");
+		Uri uri = Uri.parse(!StringUtils.isEmpty(absolute) ? absolute : value);
+		if (StringUtils.isEmpty(uri.getScheme())) {
+			try {
+				uri = Uri.parse(new java.net.URI(element.baseUri()).resolve(value).toString());
+			} catch (IllegalArgumentException | java.net.URISyntaxException e) {
+				return null;
+			}
+		}
+		if ("http".equalsIgnoreCase(uri.getScheme())) uri = uri.buildUpon().scheme("https").build();
+		return uri;
+	}
+
+	private static boolean isPikabuPageUri(Uri uri) {
+		if (uri == null || !"https".equalsIgnoreCase(uri.getScheme())) return false;
+		String host = uri.getHost();
+		return "pikabu.ru".equalsIgnoreCase(host) || "www.pikabu.ru".equalsIgnoreCase(host);
+	}
+
+	private static boolean isCommunityPageUri(Uri uri) {
+		if (!isPikabuPageUri(uri)) return false;
+		List<String> segments = uri.getPathSegments();
+		return segments.size() >= 2 && "community".equals(segments.get(0));
+	}
+
+	private static boolean isTagPageUri(Uri uri) {
+		if (!isPikabuPageUri(uri)) return false;
+		List<String> segments = uri.getPathSegments();
+		return segments.size() >= 2 && "tag".equals(segments.get(0));
+	}
+
 	private static String attributeForValue(Element element, String value) {
 		for (String attribute : new String[] {"data-large-image", "data-src", "src", "data-source",
 				"data-poster", "poster", "data-thumbnail-url"}) {
@@ -466,11 +629,16 @@ final class PikabuHtmlParser {
 		public final ArrayList<Posts> threads;
 		public final int pagesCount;
 		public final boolean validPage;
+		public final String title;
+		public final String description;
 
-		private ParsedThreads(ArrayList<Posts> threads, int pagesCount, boolean validPage) {
+		private ParsedThreads(ArrayList<Posts> threads, int pagesCount, boolean validPage, String title,
+				String description) {
 			this.threads = threads;
 			this.pagesCount = pagesCount;
 			this.validPage = validPage;
+			this.title = title;
+			this.description = description;
 		}
 	}
 
