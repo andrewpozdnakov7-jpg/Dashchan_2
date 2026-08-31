@@ -309,6 +309,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		}
 
 		ContentFragment currentFragmentFromSaved = null;
+		StackItem currentStackItemFromSaved = null;
 		boolean restoredPagesSession = false;
 		if (savedInstanceState == null) {
 			File file = getSavedPagesFile();
@@ -326,6 +327,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 				try {
 					StackItem stackItem = AndroidUtils.getParcelable(pagesState,
 							EXTRA_CURRENT_FRAGMENT, StackItem.class);
+					currentStackItemFromSaved = stackItem;
 					currentFragmentFromSaved = stackItem != null ? (ContentFragment) stackItem.create(null) : null;
 				} catch (RuntimeException e) {
 					currentFragmentFromSaved = null;
@@ -366,15 +368,25 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 			}
 		}
 		if (currentFragmentFromSaved != null) {
-			if (currentFragmentFromSaved instanceof PageFragment &&
-					Chan.get(((PageFragment) currentFragmentFromSaved).getPage().chanName).name == null) {
-				currentFragmentFromSaved = null;
-				currentPageItem = null;
+			if (currentFragmentFromSaved instanceof PageFragment) {
+				Page page = ((PageFragment) currentFragmentFromSaved).getPage();
+				if (!isPageEnabled(page)) {
+					if (Chan.get(page.chanName).name != null && currentPageItem != null
+							&& currentStackItemFromSaved != null) {
+						preservedPageItems.add(new SavedPageItem(currentStackItemFromSaved,
+								currentPageItem.createdRealtime, currentPageItem.threadTitle, currentPageItem.allowReturn));
+					}
+					currentFragmentFromSaved = null;
+					currentPageItem = null;
+				}
 			}
-			if (currentFragmentFromSaved == null && !stackPageItems.isEmpty()) {
-				Pair<PageFragment, PageItem> pair = stackPageItems.remove(stackPageItems.size() - 1).create();
-				currentFragmentFromSaved = pair.first;
-				currentPageItem = pair.second;
+			if (currentFragmentFromSaved == null) {
+				SavedPageItem savedPageItem = removeLastEnabledSavedPage();
+				Pair<PageFragment, PageItem> pair = savedPageItem != null ? savedPageItem.create() : null;
+				if (pair != null) {
+					currentFragmentFromSaved = pair.first;
+					currentPageItem = pair.second;
+				}
 			}
 			if (currentFragmentFromSaved != null) {
 				getSupportFragmentManager().beginTransaction()
@@ -922,32 +934,75 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		return REFERENCE_FRAGMENT.getPage();
 	}
 
+	private static boolean isPageEnabled(Page page) {
+		if (page.content == Page.Content.MY_POSTS) {
+			return true;
+		}
+		return Chan.get(page.chanName).name != null && Preferences.isChanEnabled(page.chanName);
+	}
+
+	private static Chan getAnyInstalledChan() {
+		Chan chan = ChanManager.getInstance().getDefaultChan();
+		if (chan == null) {
+			for (Chan installedChan : ChanManager.getInstance().getAllChans()) {
+				chan = installedChan;
+				break;
+			}
+		}
+		return chan;
+	}
+
+	private int findLastEnabledSavedPageIndex() {
+		boolean hasEnabledChan = ChanManager.getInstance().getDefaultChan() != null;
+		for (int i = stackPageItems.size() - 1; i >= 0; i--) {
+			Page page = getSavedPage(stackPageItems.get(i));
+			// Replies remain directly accessible without enabled forums, but must not become an
+			// automatic back-navigation or startup fallback in that state.
+			if (isPageEnabled(page) && (hasEnabledChan || page.content != Page.Content.MY_POSTS)) {
+				return i;
+			}
+		}
+		return -1;
+	}
+
+	private SavedPageItem getLastEnabledSavedPage() {
+		int index = findLastEnabledSavedPageIndex();
+		return index >= 0 ? stackPageItems.get(index) : null;
+	}
+
 	private int getPagesStackSize(String chanName) {
 		boolean mergeChans = Preferences.isMergeChans();
 		int size = 0;
 		ContentFragment currentFragment = getCurrentFragment();
-		if (currentFragment instanceof PageFragment && currentPageItem != null &&
-				(mergeChans || (((PageFragment) currentFragment).getPage().chanName.equals(chanName)))) {
-			size++;
+		if (currentFragment instanceof PageFragment && currentPageItem != null) {
+			Page page = ((PageFragment) currentFragment).getPage();
+			if (isPageEnabled(page) && (mergeChans || page.chanName.equals(chanName))) {
+				size++;
+			}
 		}
 		for (SavedPageItem savedPageItem : stackPageItems) {
-			if (mergeChans || getSavedPage(savedPageItem).chanName.equals(chanName)) {
+			Page page = getSavedPage(savedPageItem);
+			if (isPageEnabled(page) && (mergeChans || page.chanName.equals(chanName))) {
 				size++;
 			}
 		}
 		return size;
 	}
 
+	private SavedPageItem removeLastEnabledSavedPage() {
+		int index = findLastEnabledSavedPageIndex();
+		return index >= 0 ? stackPageItems.remove(index) : null;
+	}
+
 	private SavedPageItem prepareTargetPreviousPage(boolean allowForeignChan) {
-		if (allowForeignChan && currentPageItem.allowReturn && !stackPageItems.isEmpty()) {
-			return stackPageItems.remove(stackPageItems.size() - 1);
-		}
 		ContentFragment currentFragment = getCurrentFragment();
 		String chanName = ((PageFragment) currentFragment).getPage().chanName;
 		boolean mergeChans = Preferences.isMergeChans();
+		boolean allowAnyChan = currentPageItem != null && allowForeignChan && currentPageItem.allowReturn;
 		for (int i = stackPageItems.size() - 1; i >= 0; i--) {
 			SavedPageItem savedPageItem = stackPageItems.get(i);
-			if (mergeChans || getSavedPage(savedPageItem).chanName.equals(chanName)) {
+			Page page = getSavedPage(savedPageItem);
+			if (isPageEnabled(page) && (allowAnyChan || mergeChans || page.chanName.equals(chanName))) {
 				stackPageItems.remove(i);
 				return savedPageItem;
 			}
@@ -956,17 +1011,17 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	}
 
 	private boolean hasTargetPreviousPage(boolean allowForeignChan) {
-		if (currentPageItem != null && allowForeignChan && currentPageItem.allowReturn && !stackPageItems.isEmpty()) {
-			return true;
-		}
 		ContentFragment currentFragment = getCurrentFragment();
 		if (!(currentFragment instanceof PageFragment)) {
 			return false;
 		}
 		String chanName = ((PageFragment) currentFragment).getPage().chanName;
 		boolean mergeChans = Preferences.isMergeChans();
+		boolean allowAnyChan = currentPageItem != null && allowForeignChan && currentPageItem.allowReturn;
 		for (int i = stackPageItems.size() - 1; i >= 0; i--) {
-			if (mergeChans || getSavedPage(stackPageItems.get(i)).chanName.equals(chanName)) {
+			Page page = getSavedPage(stackPageItems.get(i));
+			if (isPageEnabled(page) &&
+					(allowAnyChan || mergeChans || page.chanName.equals(chanName))) {
 				return true;
 			}
 		}
@@ -982,7 +1037,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		while (iterator.hasNext()) {
 			SavedPageItem savedPageItem = iterator.next();
 			Page page = getSavedPage(savedPageItem);
-			if (mergeChans || page.chanName.equals(chanName)) {
+			if (page.chanName.equals(chanName) || mergeChans && isPageEnabled(page)) {
 				iterator.remove();
 				if (!(page.canDestroyIfNotInStack() || closeOnBack && page.isThreadsOrPosts())) {
 					preservedPageItems.add(savedPageItem);
@@ -1088,7 +1143,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		for (int i = stackPageItems.size() - 1; i >= 0; i--) {
 			SavedPageItem savedPageItem = stackPageItems.get(i);
 			Page savedPage = getSavedPage(savedPageItem);
-			if (mergeChans || savedPage.chanName.equals(chanName)) {
+			if (savedPage.chanName.equals(chanName) || mergeChans && isPageEnabled(savedPage)) {
 				if (depth++ >= 2 && savedPage.canRemoveFromStackIfDeep()) {
 					stackPageItems.remove(i);
 					if (!savedPage.canDestroyIfNotInStack()) {
@@ -1342,11 +1397,14 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		String chanName;
 		if (currentFragment instanceof PageFragment) {
 			chanName = ((PageFragment) currentFragment).getPage().chanName;
-		} else if (!stackPageItems.isEmpty()) {
-			chanName = getSavedPage(stackPageItems.get(stackPageItems.size() - 1)).chanName;
 		} else {
-			Chan chan = ChanManager.getInstance().getDefaultChan();
-			chanName = chan != null ? chan.name : null;
+			SavedPageItem savedPageItem = getLastEnabledSavedPage();
+			if (savedPageItem != null) {
+				chanName = getSavedPage(savedPageItem).chanName;
+			} else {
+				Chan chan = ChanManager.getInstance().getDefaultChan();
+				chanName = chan != null ? chan.name : null;
+			}
 		}
 		if (currentFragment instanceof PageFragment) {
 			expandedScreen.removeLocker(LOCKER_NON_PAGE);
@@ -1427,7 +1485,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 					}
 				}
 			} else {
-				displayUp = !stackPageItems.isEmpty() || !fragments.isEmpty();
+				displayUp = getLastEnabledSavedPage() != null || !fragments.isEmpty();
 			}
 			drawerToggle.setDrawerIndicatorMode(displayUp ? DrawerToggle.Mode.UP : wideMode
 					? DrawerToggle.Mode.DISABLED : DrawerToggle.Mode.DRAWER);
@@ -1597,7 +1655,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		if (currentFragment instanceof PageFragment) {
 			return hasTargetPreviousPage(true);
 		}
-		return !fragments.isEmpty() || !stackPageItems.isEmpty();
+		return !fragments.isEmpty() || getLastEnabledSavedPage() != null;
 	}
 
 	private void scheduleSystemBackCallbackUpdate() {
@@ -1704,9 +1762,12 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 				ContentFragment fragment = (ContentFragment) fragments.remove(fragments.size() - 1).create(null);
 				navigateFragment(fragment, null, true);
 				handled = true;
-			} else if (!stackPageItems.isEmpty()) {
-				navigateSavedPage(stackPageItems.remove(stackPageItems.size() - 1), true);
-				handled = true;
+			} else {
+				SavedPageItem savedPageItem = removeLastEnabledSavedPage();
+				if (savedPageItem != null) {
+					navigateSavedPage(savedPageItem, true);
+					handled = true;
+				}
 			}
 			if (!handled) {
 				if (allowTimeout && SystemClock.elapsedRealtime() - backPressed > 2000) {
@@ -1799,8 +1860,14 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 						newBoardName = Preferences.getDefaultBoardName(Chan.get(page.chanName));
 						if (Preferences.isMergeChans() && CommonUtils.equals(page.boardName, newBoardName)) {
 							Chan chan = ChanManager.getInstance().getDefaultChan();
-							newChanName = chan.name;
-							newBoardName = Preferences.getDefaultBoardName(chan);
+							if (chan != null) {
+								newChanName = chan.name;
+								newBoardName = Preferences.getDefaultBoardName(chan);
+							} else {
+								clearStackAndCurrent();
+								navigateInitial(true);
+								return true;
+							}
 						}
 					}
 					clearStackAndCurrent();
@@ -2129,8 +2196,9 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		ContentFragment currentFragment = getCurrentFragment();
 		Page page = currentFragment instanceof PageFragment ? ((PageFragment) currentFragment).getPage() : null;
 		String chanName = page != null ? page.chanName : null;
-		if (chanName == null && !stackPageItems.isEmpty()) {
-			chanName = getSavedPage(stackPageItems.get(stackPageItems.size() - 1)).chanName;
+		if (chanName == null) {
+			SavedPageItem savedPageItem = getLastEnabledSavedPage();
+			chanName = savedPageItem != null ? getSavedPage(savedPageItem).chanName : null;
 		}
 		if (chanName != null) {
 			Chan chan = Chan.get(chanName);
@@ -2145,7 +2213,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 			while (iterator.hasNext()) {
 				SavedPageItem savedPageItem = iterator.next();
 				Page savedPage = getSavedPage(savedPageItem);
-				if (mergeChans || savedPage.chanName.equals(chanName)) {
+				if (savedPage.chanName.equals(chanName) || mergeChans && isPageEnabled(savedPage)) {
 					cached |= isCloseAllTarget(savedPage, chanName, boardName, singleBoardMode, singleBoardName);
 					iterator.remove();
 					if (!(savedPage.isThreadsOrPosts() || savedPage.canDestroyIfNotInStack())) {
@@ -2239,15 +2307,19 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 			ContentFragment currentFragment = getCurrentFragment();
 			Page page = currentFragment instanceof PageFragment ? ((PageFragment) currentFragment).getPage() : null;
 			if (page == null || page.content != content) {
-				if (page == null && !stackPageItems.isEmpty()) {
-					page = getSavedPage(stackPageItems.get(stackPageItems.size() - 1));
+				if (page == null) {
+					SavedPageItem savedPageItem = getLastEnabledSavedPage();
+					page = savedPageItem != null ? getSavedPage(savedPageItem) : null;
 				}
 				String chanName = page != null ? page.chanName : null;
 				String boardName = page != null ? page.boardName : null;
 				if (chanName == null) {
-					Chan chan = ChanManager.getInstance().getDefaultChan();
-					chanName = chan.name;
-					boardName = Preferences.getDefaultBoardName(chan);
+					Chan chan = content == Page.Content.MY_POSTS
+							? getAnyInstalledChan() : ChanManager.getInstance().getDefaultChan();
+					if (chan != null) {
+						chanName = chan.name;
+						boardName = Preferences.getDefaultBoardName(chan);
+					}
 				}
 				if (chanName != null) {
 					navigatePage(content, chanName, boardName, null, null, null, null,
@@ -2310,12 +2382,12 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		ContentFragment currentFragment = getCurrentFragment();
 		Page currentPage = currentFragment instanceof PageFragment
 				? ((PageFragment) currentFragment).getPage() : null;
-		DrawerPageKey currentPageKey = currentPage != null && currentPage.isThreadsOrPosts()
-				? new DrawerPageKey(currentPage) : null;
+		DrawerPageKey currentPageKey = currentPage != null && isPageEnabled(currentPage)
+				&& currentPage.isThreadsOrPosts() ? new DrawerPageKey(currentPage) : null;
 		for (SavedPageItem savedPageItem : new ConcatIterable<>(preservedPageItems, stackPageItems)) {
 			Page page = getSavedPage(savedPageItem);
 			DrawerPageKey pageKey = new DrawerPageKey(page);
-			if (page.isThreadsOrPosts() && addedPages.add(pageKey)) {
+			if (isPageEnabled(page) && page.isThreadsOrPosts() && addedPages.add(pageKey)) {
 				drawerPages.add(new DrawerForm.Page(page.chanName, page.boardName, page.threadNumber,
 						savedPageItem.threadTitle, savedPageItem.createdRealtime,
 						pageKey.equals(currentPageKey)));
@@ -2342,18 +2414,30 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 				}
 			}
 		} else {
+			HashSet<String> unavailableChanNames = new HashSet<>();
+			for (String chanName : removedChanNames) {
+				if (Chan.get(chanName).name == null) {
+					unavailableChanNames.add(chanName);
+				}
+			}
 			Iterator<SavedPageItem> iterator = new ConcatIterable<>(preservedPageItems, stackPageItems).iterator();
 			while (iterator.hasNext()) {
-				if (removedChanNames.contains(getSavedPage(iterator.next()).chanName)) {
+				if (unavailableChanNames.contains(getSavedPage(iterator.next()).chanName)) {
 					iterator.remove();
 				}
 			}
 			ContentFragment currentFragment = getCurrentFragment();
-			if (currentFragment instanceof PageFragment &&
-					removedChanNames.contains(((PageFragment) currentFragment).getPage().chanName)) {
-				if (!stackPageItems.isEmpty()) {
-					currentPageItem = null;
-					navigateSavedPage(stackPageItems.remove(stackPageItems.size() - 1), true);
+			if (currentFragment instanceof PageFragment
+					&& ((PageFragment) currentFragment).getPage().content != Page.Content.MY_POSTS
+					&& removedChanNames.contains(((PageFragment) currentFragment).getPage().chanName)) {
+				PageFragment pageFragment = (PageFragment) currentFragment;
+				if (!unavailableChanNames.contains(pageFragment.getPage().chanName) && currentPageItem != null) {
+					preservedPageItems.add(currentPageItem.toSaved(getSupportFragmentManager(), pageFragment));
+				}
+				currentPageItem = null;
+				SavedPageItem savedPageItem = removeLastEnabledSavedPage();
+				if (savedPageItem != null) {
+					navigateSavedPage(savedPageItem, true);
 				} else {
 					navigateInitial(true);
 				}

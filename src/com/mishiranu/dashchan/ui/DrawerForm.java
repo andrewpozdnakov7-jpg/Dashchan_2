@@ -343,6 +343,9 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	}
 
 	private void updateConfigurationInternal(String chanName, boolean force) {
+		if (chanName != null && !Preferences.isChanEnabled(chanName)) {
+			chanName = null;
+		}
 		if (!CommonUtils.equals(chanName, this.chanName) || force || menu.isEmpty()) {
 			updateConfigurationInternal(chanName, force, createAdapterSnapshot());
 		}
@@ -350,6 +353,9 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 
 	private void updateConfigurationInternal(String chanName, boolean force,
 			ArrayList<AdapterItem> previousItems) {
+		if (chanName != null && !Preferences.isChanEnabled(chanName)) {
+			chanName = null;
+		}
 		if (!CommonUtils.equals(chanName, this.chanName) || force || menu.isEmpty()) {
 			this.chanName = chanName;
 			Chan chan = Chan.get(chanName);
@@ -1078,10 +1084,11 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	private void updateListFavorites() {
 		this.favorites.clear();
 		boolean mergeChans = this.mergeChans;
+		boolean showAllFavoriteThreads = mergeChans || chanName == null;
 		FavoritesStorage favoritesStorage = FavoritesStorage.getInstance();
 		ArrayList<FavoritesStorage.FavoriteItem> favoriteBoards = favoritesStorage.getBoards(mergeChans
 				? null : chanName);
-		ArrayList<FavoritesStorage.FavoriteItem> favoriteThreads = favoritesStorage.getThreads(mergeChans
+		ArrayList<FavoritesStorage.FavoriteItem> favoriteThreads = favoritesStorage.getThreads(showAllFavoriteThreads
 				? null : chanName);
 		boolean addSection = true;
 		for (int i = 0; i < favoriteThreads.size(); i++) {
@@ -1090,7 +1097,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 			if (chan.name == null) {
 				continue;
 			}
-			if (mergeChans || favoriteItem.chanName.equals(chanName)) {
+			if (showAllFavoriteThreads || favoriteItem.chanName.equals(chanName)) {
 				if (addSection) {
 					favorites.add(new ListItem(ListItem.Type.SECTION, SECTION_ACTION_FAVORITES_MENU,
 							ResourceUtils.getResourceId(context, R.attr.iconButtonMore, 0),
@@ -1108,7 +1115,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		for (int i = 0; i < favoriteBoards.size(); i++) {
 			FavoritesStorage.FavoriteItem favoriteItem = favoriteBoards.get(i);
 			Chan chan = Chan.get(favoriteItem.chanName);
-			if (chan.name == null) {
+			if (chan.name == null || !Preferences.isChanEnabled(favoriteItem.chanName)) {
 				continue;
 			}
 			if (mergeChans || favoriteItem.chanName.equals(chanName)) {

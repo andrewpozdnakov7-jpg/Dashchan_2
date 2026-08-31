@@ -573,6 +573,10 @@ public class CommentTextView extends TextView {
 
 		@Override
 		public boolean onCreateActionMode(ActionMode mode, Menu menu) {
+			CommentTextView textView = this.textView.get();
+			if (textView == null) {
+				return false;
+			}
 			SelectionMode selectionMode = new SelectionMode() {
 				@Override
 				public boolean isActive() {
@@ -586,7 +590,6 @@ public class CommentTextView extends TextView {
 					onPrepareActionMode(mode, menu);
 				}
 			};
-			CommentTextView textView = this.textView.get();
 			textView.setSelectionMode(selectionMode);
 			currentActionMode = mode;
 			boolean floating = mode.getType() == ActionMode.TYPE_FLOATING;
@@ -598,7 +601,10 @@ public class CommentTextView extends TextView {
 		@Override
 		public boolean onPrepareActionMode(ActionMode mode, Menu menu) {
 			if (currentActionMode == mode) {
-				textView.get().onPrepareSelectionMenu(menu);
+				CommentTextView textView = this.textView.get();
+				if (textView != null) {
+					textView.onPrepareSelectionMenu(menu);
+				}
 			}
 			return true;
 		}
@@ -607,13 +613,20 @@ public class CommentTextView extends TextView {
 		public void onDestroyActionMode(ActionMode mode) {
 			if (currentActionMode == mode) {
 				currentActionMode = null;
-				textView.get().setSelectionMode(null);
+				CommentTextView textView = this.textView.get();
+				if (textView != null) {
+					textView.setSelectionMode(null);
+				}
 			}
 		}
 
 		@Override
 		public boolean onActionItemClicked(ActionMode mode, MenuItem item) {
-			boolean result = textView.get().onSelectionItemClicked(item.getItemId());
+			CommentTextView textView = this.textView.get();
+			if (textView == null) {
+				return false;
+			}
+			boolean result = textView.onSelectionItemClicked(item.getItemId());
 			if (result) {
 				mode.finish();
 			}
