@@ -17,6 +17,20 @@
 	<uses-permission-sdk-23 android:name="android.permission.REQUEST_DELETE_PACKAGES" />
 
 	<queries>
+		<!-- Browser and deep-link handlers queried by NavigationUtils and BrowserFragment. -->
+		<intent>
+			<action android:name="android.intent.action.VIEW" />
+			<data android:scheme="http" />
+		</intent>
+		<intent>
+			<action android:name="android.intent.action.VIEW" />
+			<data android:scheme="https" />
+		</intent>
+		<intent>
+			<action android:name="android.intent.action.VIEW" />
+			<data android:scheme="tg" />
+		</intent>
+
 		<!-- Keep this list in sync with known extension packages in build.gradle. -->
 		<package android:name="com.mishiranu.dashchan.chan.archb4k" />
 		<package android:name="com.mishiranu.dashchan.chan.archivedmoe" />
