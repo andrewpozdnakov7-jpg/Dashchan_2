@@ -4,7 +4,6 @@ import android.graphics.Canvas;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.RecyclerView;
-import java.lang.ref.WeakReference;
 
 public class SortableHelper<VH extends RecyclerView.ViewHolder> extends ItemTouchHelper.Callback {
 	public interface Callback<VH extends RecyclerView.ViewHolder> {
@@ -82,7 +81,7 @@ public class SortableHelper<VH extends RecyclerView.ViewHolder> extends ItemTouc
 		return callback.onDragMove(cast(viewHolder), cast(target));
 	}
 
-	private WeakReference<VH> startViewHolder;
+	private VH startViewHolder;
 
 	@Override
 	public void onSelectedChanged(RecyclerView.ViewHolder viewHolder, int actionState) {
@@ -91,11 +90,16 @@ public class SortableHelper<VH extends RecyclerView.ViewHolder> extends ItemTouc
 		if (actionState == ItemTouchHelper.ACTION_STATE_DRAG) {
 			isDragging = true;
 			VH holder = cast(viewHolder);
-			startViewHolder = new WeakReference<>(holder);
+			startViewHolder = holder;
 			callback.onDragStart(holder);
 		} else if (actionState == ItemTouchHelper.ACTION_STATE_IDLE) {
 			boolean cancelled = !isDragging;
-			callback.onDragFinish(viewHolder != null ? cast(viewHolder) : startViewHolder.get(), cancelled);
+			VH holder = viewHolder != null ? cast(viewHolder) : startViewHolder;
+			isDragging = false;
+			startViewHolder = null;
+			if (holder != null) {
+				callback.onDragFinish(holder, cancelled);
+			}
 		}
 	}
 
