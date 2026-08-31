@@ -935,7 +935,21 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	}
 
 	private static boolean isPageEnabled(Page page) {
+		if (page.content == Page.Content.MY_POSTS) {
+			return true;
+		}
 		return Chan.get(page.chanName).name != null && Preferences.isChanEnabled(page.chanName);
+	}
+
+	private static Chan getAnyInstalledChan() {
+		Chan chan = ChanManager.getInstance().getDefaultChan();
+		if (chan == null) {
+			for (Chan installedChan : ChanManager.getInstance().getAllChans()) {
+				chan = installedChan;
+				break;
+			}
+		}
+		return chan;
 	}
 
 	private int findLastEnabledSavedPageIndex() {
@@ -2296,7 +2310,8 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 				String chanName = page != null ? page.chanName : null;
 				String boardName = page != null ? page.boardName : null;
 				if (chanName == null) {
-					Chan chan = ChanManager.getInstance().getDefaultChan();
+					Chan chan = content == Page.Content.MY_POSTS
+							? getAnyInstalledChan() : ChanManager.getInstance().getDefaultChan();
 					if (chan != null) {
 						chanName = chan.name;
 						boardName = Preferences.getDefaultBoardName(chan);
@@ -2408,8 +2423,9 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 				}
 			}
 			ContentFragment currentFragment = getCurrentFragment();
-			if (currentFragment instanceof PageFragment &&
-					removedChanNames.contains(((PageFragment) currentFragment).getPage().chanName)) {
+			if (currentFragment instanceof PageFragment
+					&& ((PageFragment) currentFragment).getPage().content != Page.Content.MY_POSTS
+					&& removedChanNames.contains(((PageFragment) currentFragment).getPage().chanName)) {
 				PageFragment pageFragment = (PageFragment) currentFragment;
 				if (!unavailableChanNames.contains(pageFragment.getPage().chanName) && currentPageItem != null) {
 					preservedPageItems.add(currentPageItem.toSaved(getSupportFragmentManager(), pageFragment));
