@@ -953,8 +953,12 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	}
 
 	private int findLastEnabledSavedPageIndex() {
+		boolean hasEnabledChan = ChanManager.getInstance().getDefaultChan() != null;
 		for (int i = stackPageItems.size() - 1; i >= 0; i--) {
-			if (isPageEnabled(getSavedPage(stackPageItems.get(i)))) {
+			Page page = getSavedPage(stackPageItems.get(i));
+			// Replies remain directly accessible without enabled forums, but must not become an
+			// automatic back-navigation or startup fallback in that state.
+			if (isPageEnabled(page) && (hasEnabledChan || page.content != Page.Content.MY_POSTS)) {
 				return i;
 			}
 		}
