@@ -319,7 +319,7 @@ public class PagerUnit implements PagerInstance.Callback {
 		seekGestureView.removeCallbacks(hideSeekGesture);
 		hideSeekGesture.run();
 		imageUnit.interrupt(force);
-		videoUnit.interrupt();
+		videoUnit.interrupt(force);
 	}
 
 	public void onFinish() {
@@ -341,6 +341,11 @@ public class PagerUnit implements PagerInstance.Callback {
 	}
 
 	private void loadImageVideo(final boolean reload, boolean mayShowThumbnailOnly, int waitBeforeVideo) {
+		// The active player belongs to VideoPipActivity until it is explicitly restored or closed.
+		// A background pager rebind must not replace it with a second player or invalidate its return target.
+		if (videoUnit.isPictureInPictureTransferred()) {
+			return;
+		}
 		PagerInstance.ViewHolder holder = pagerInstance.currentHolder;
 		if (holder == null) {
 			return;

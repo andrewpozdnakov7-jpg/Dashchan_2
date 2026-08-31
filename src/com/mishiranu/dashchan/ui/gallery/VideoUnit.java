@@ -219,8 +219,14 @@ public class VideoUnit {
 		return player != null;
 	}
 
-	public void interrupt() {
+	public void interrupt(boolean force) {
 		dismissPlaybackSpeedPopupMenu();
+		if (pictureInPictureTransferred && !force) {
+			// PagerUnit may be rebound while its dialog is hidden behind VideoPipActivity. The native player
+			// and this VideoUnit are still the two endpoints of the active transfer, so a soft interrupt must
+			// preserve the complete return target. PagerUnit also suppresses the competing media reload.
+			return;
+		}
 		if (readVideoCallback != null) {
 			readVideoCallback.cancel();
 			readVideoCallback = null;
@@ -956,6 +962,10 @@ public class VideoUnit {
 		setPlaying(playing, true);
 		updatePlayState();
 		return true;
+	}
+
+	boolean isPictureInPictureTransferred() {
+		return pictureInPictureTransferred;
 	}
 
 	boolean preparePictureInPicturePlayerRestore(VideoPlayer transferredPlayer) {
