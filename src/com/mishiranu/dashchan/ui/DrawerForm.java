@@ -1084,10 +1084,11 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	private void updateListFavorites() {
 		this.favorites.clear();
 		boolean mergeChans = this.mergeChans;
+		boolean showAllFavoriteThreads = mergeChans || chanName == null;
 		FavoritesStorage favoritesStorage = FavoritesStorage.getInstance();
 		ArrayList<FavoritesStorage.FavoriteItem> favoriteBoards = favoritesStorage.getBoards(mergeChans
 				? null : chanName);
-		ArrayList<FavoritesStorage.FavoriteItem> favoriteThreads = favoritesStorage.getThreads(mergeChans
+		ArrayList<FavoritesStorage.FavoriteItem> favoriteThreads = favoritesStorage.getThreads(showAllFavoriteThreads
 				? null : chanName);
 		boolean addSection = true;
 		for (int i = 0; i < favoriteThreads.size(); i++) {
@@ -1096,7 +1097,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 			if (chan.name == null) {
 				continue;
 			}
-			if (mergeChans || favoriteItem.chanName.equals(chanName)) {
+			if (showAllFavoriteThreads || favoriteItem.chanName.equals(chanName)) {
 				if (addSection) {
 					favorites.add(new ListItem(ListItem.Type.SECTION, SECTION_ACTION_FAVORITES_MENU,
 							ResourceUtils.getResourceId(context, R.attr.iconButtonMore, 0),
