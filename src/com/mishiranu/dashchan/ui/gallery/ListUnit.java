@@ -475,9 +475,18 @@ public class ListUnit implements ActionMode.Callback {
 		public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
 			GalleryItem galleryItem = getItem(position);
 			Chan chan = Chan.get(chanName);
-			holder.attachmentInfo.setText(StringUtils
-					.getFileExtension(galleryItem.getFileName(chan)).toUpperCase(Locale.getDefault()) +
-					(galleryItem.size > 0 ? " " + StringUtils.formatFileSize(galleryItem.size, true) : ""));
+			String extension = StringUtils.getFileExtension(galleryItem.getFileName(chan));
+			StringBuilder attachmentInfo = new StringBuilder();
+			if (!StringUtils.isEmpty(extension)) {
+				attachmentInfo.append(extension.toUpperCase(Locale.getDefault()));
+			}
+			if (galleryItem.size > 0) {
+				if (attachmentInfo.length() > 0) {
+					attachmentInfo.append(' ');
+				}
+				attachmentInfo.append(StringUtils.formatFileSize(galleryItem.size, true));
+			}
+			holder.attachmentInfo.setText(attachmentInfo);
 			Uri thumbnailUri = galleryItem.getThumbnailUri(chan);
 			if (thumbnailUri != null) {
 				CacheManager cacheManager = CacheManager.getInstance();

@@ -1842,8 +1842,14 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 						newBoardName = Preferences.getDefaultBoardName(Chan.get(page.chanName));
 						if (Preferences.isMergeChans() && CommonUtils.equals(page.boardName, newBoardName)) {
 							Chan chan = ChanManager.getInstance().getDefaultChan();
-							newChanName = chan.name;
-							newBoardName = Preferences.getDefaultBoardName(chan);
+							if (chan != null) {
+								newChanName = chan.name;
+								newBoardName = Preferences.getDefaultBoardName(chan);
+							} else {
+								clearStackAndCurrent();
+								navigateInitial(true);
+								return true;
+							}
 						}
 					}
 					clearStackAndCurrent();
