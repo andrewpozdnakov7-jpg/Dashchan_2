@@ -215,6 +215,7 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 	private boolean startPlaying;
 	private boolean enteredPictureInPicture;
 	private boolean exitedPictureInPicture;
+	private boolean stoppedWhileInPictureInPicture;
 	private boolean returnedToGallery;
 	private boolean receiverRegistered;
 	private boolean resumedAfterPictureInPictureExit;
@@ -702,7 +703,7 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 
 	private void suspendPlaybackAfterPictureInPictureExit() {
 		VideoPlayer player = this.player;
-		resumePlaybackAfterPictureInPictureExit = player != null && player.isPlaying();
+		resumePlaybackAfterPictureInPictureExit |= player != null && player.isPlaying();
 		if (player != null) {
 			player.setPlaying(false);
 		}
@@ -714,6 +715,14 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 		}
 		VideoDiagnostics.recordUi("pip exit_playback_suspended resume="
 				+ resumePlaybackAfterPictureInPictureExit);
+	}
+
+	@Override
+	protected void onStart() {
+		super.onStart();
+		if (isInPictureInPictureMode()) {
+			stoppedWhileInPictureInPicture = false;
+		}
 	}
 
 	@Override
@@ -739,12 +748,16 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 	@Override
 	protected void onStop() {
 		super.onStop();
+		if (enteredPictureInPicture && isInPictureInPictureMode()) {
+			stoppedWhileInPictureInPicture = true;
+		}
 		VideoDiagnostics.recordUi("pip on_stop in_pip=" + isInPictureInPictureMode()
 				+ " exited=" + exitedPictureInPicture + " resumed_after_exit="
 				+ resumedAfterPictureInPictureExit);
 		if (enteredPictureInPicture && exitedPictureInPicture && !isInPictureInPictureMode()
 				&& !resumedAfterPictureInPictureExit && !returnedToGallery
 				&& !isChangingConfigurations() && !isFinishing()) {
+			suspendPlaybackAfterPictureInPictureExit();
 			scheduleDismissedPictureInPictureCheck();
 		}
 	}
@@ -769,7 +782,9 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 			handler.removeCallbacks(returnToGalleryAfterExit);
 			enteredPictureInPicture = true;
 			exitedPictureInPicture = false;
+			stoppedWhileInPictureInPicture = false;
 			resumedAfterPictureInPictureExit = false;
+			resumePlaybackAfterPictureInPictureExit = false;
 			galleryRestorePrepared = false;
 			returnToGalleryScheduled = false;
 			standalonePlayback = false;
@@ -779,7 +794,13 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 			exitedPictureInPicture = true;
 			resumedAfterPictureInPictureExit = false;
 			VideoDiagnostics.recordUi("pip mode_changed=false");
-			suspendPlaybackAfterPictureInPictureExit();
+			resumePlaybackAfterPictureInPictureExit = player != null && player.isPlaying();
+			if (stoppedWhileInPictureInPicture) {
+				suspendPlaybackAfterPictureInPictureExit();
+			} else {
+				VideoDiagnostics.recordUi("pip exit_playback_continues resume="
+						+ resumePlaybackAfterPictureInPictureExit);
+			}
 			scheduleDismissedPictureInPictureCheck();
 			handler.post(this::maybeReturnToGallery);
 		}

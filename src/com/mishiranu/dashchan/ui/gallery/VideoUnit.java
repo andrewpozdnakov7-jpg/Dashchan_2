@@ -402,7 +402,6 @@ public class VideoUnit {
 		pictureInPictureTransferred = false;
 		player.releaseVideoView();
 		player.setListener(playerListener);
-		player.setPosition(position);
 		initializePlayer();
 		seekBar.setSecondaryProgress(seekBar.getMax());
 		seekBar.setProgress((int) Math.min(position, Integer.MAX_VALUE));
