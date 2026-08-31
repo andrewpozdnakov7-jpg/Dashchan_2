@@ -52,6 +52,14 @@ import java.util.Locale;
 import java.util.Map;
 
 public class VideoUnit {
+	enum PictureInPictureRestoreState {
+		READY,
+		TRANSFER_INACTIVE,
+		PLAYER_MISMATCH,
+		NOT_INITIALIZED,
+		HOLDER_UNAVAILABLE
+	}
+
 	private static final int[] PLAYBACK_SPEEDS = {800, 1000, 1250, 1500, 2000, 4000};
 	private static final String[] PLAYBACK_SPEED_LABELS = {"0.8x", "1x", "1.25x", "1.5x", "2x", "4x"};
 
@@ -914,8 +922,7 @@ public class VideoUnit {
 
 	boolean restorePictureInPicturePlayer(VideoPlayer transferredPlayer, long position, int playbackSpeed,
 			boolean muted, boolean playing) {
-		if (!pictureInPictureTransferred || player != transferredPlayer || !initialized
-				|| instance.currentHolder == null) {
+		if (getPictureInPictureRestoreState(transferredPlayer) != PictureInPictureRestoreState.READY) {
 			return false;
 		}
 		transferredPlayer.releaseVideoView();
@@ -948,6 +955,46 @@ public class VideoUnit {
 		wasPlaying = playing;
 		setPlaying(playing, true);
 		updatePlayState();
+		return true;
+	}
+
+	boolean preparePictureInPicturePlayerRestore(VideoPlayer transferredPlayer) {
+		PictureInPictureRestoreState state = getPictureInPictureRestoreState(transferredPlayer);
+		if (state != PictureInPictureRestoreState.READY
+				&& state != PictureInPictureRestoreState.HOLDER_UNAVAILABLE) {
+			return false;
+		}
+		instance.galleryInstance.callback.setGalleryVisibleForPictureInPicture(true);
+		return true;
+	}
+
+	PictureInPictureRestoreState getPictureInPictureRestoreState(VideoPlayer transferredPlayer) {
+		if (!pictureInPictureTransferred) {
+			return PictureInPictureRestoreState.TRANSFER_INACTIVE;
+		}
+		if (player != transferredPlayer) {
+			return PictureInPictureRestoreState.PLAYER_MISMATCH;
+		}
+		if (!initialized) {
+			return PictureInPictureRestoreState.NOT_INITIALIZED;
+		}
+		if (instance.currentHolder == null) {
+			return PictureInPictureRestoreState.HOLDER_UNAVAILABLE;
+		}
+		return PictureInPictureRestoreState.READY;
+	}
+
+	boolean detachPictureInPicturePlayer(VideoPlayer transferredPlayer) {
+		if (!pictureInPictureTransferred || player != transferredPlayer) {
+			return false;
+		}
+		pictureInPictureTransferred = false;
+		player = null;
+		initialized = false;
+		wasPlaying = false;
+		sourceFile = null;
+		audioFocus.release();
+		instance.galleryInstance.callback.closeGallery();
 		return true;
 	}
 
