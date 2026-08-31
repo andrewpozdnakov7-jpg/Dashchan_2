@@ -1,0 +1,7 @@
+- Fixed app behavior when no forums are enabled, including crashes and incorrect navigation. The Replies section can now be opened manually, but it is no longer opened automatically when pressing Back.
+- Open pages and favorite threads from disabled forums are preserved and reappear after the forum is enabled again.
+- Significantly improved picture-in-picture mode by fixing infinite loading, missing controls and video titles, and failures after repeatedly minimizing and expanding the player.
+- The player now returns from PiP correctly even if Android destroys the original gallery window. Video position, playback, and audio are preserved.
+- Fixed opening links with custom schemes, such as `tg://`, in installed applications.
+
+Found a bug? Send us the logs!
