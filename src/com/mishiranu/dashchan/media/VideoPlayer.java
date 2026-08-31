@@ -227,9 +227,16 @@ public class VideoPlayer {
 	private int playbackSpeed = 1000;
 	private long nextSurfaceGeneration;
 	private long latestSurfaceGeneration;
+	private long latestAppliedSurfaceGeneration;
+	private long latestRenderedSurfaceGeneration;
 	// Surface.release() invalidates the Java wrapper even if JNI still has a global reference.
 	// Keep each wrapper alive until the video thread confirms that its generation was handled.
 	private final ArrayList<SurfaceRequest> surfaceRequests = new ArrayList<>();
+	// TextureView destroys its SurfaceTexture as soon as the listener returns true. During a
+	// PiP hand-off MediaCodec can still own the matching native window while the replacement is
+	// being installed. While playing, keep detached textures alive until the new Surface renders
+	// an actual frame. A paused decoder can release them once the replacement is applied.
+	private final ArrayList<DeferredSurfaceTexture> deferredSurfaceTextures = new ArrayList<>();
 
 	private boolean lastSeeking = false;
 	private volatile boolean lastBuffering = false;
@@ -526,6 +533,8 @@ public class VideoPlayer {
 		private final WeakReference<VideoPlayer> player;
 		private final int diagnosticsId = System.identityHashCode(this);
 		private Surface playerSurface;
+		private SurfaceTexture playerSurfaceTexture;
+		private long playerSurfaceGeneration;
 		private int surfaceUpdates;
 
 		public PlayerTextureView(Context context, VideoPlayer player) {
@@ -563,22 +572,30 @@ public class VideoPlayer {
 			if (player == null) {
 				return;
 			}
-			releasePlayerSurface();
 			playerSurface = new Surface(surface);
+			playerSurfaceTexture = surface;
 			surfaceUpdates = 0;
 			VideoDiagnostics.recordUi("texture=" + diagnosticsId + " surface_available"
 					+ " surface_size=" + width + "x" + height
 					+ " view_size=" + getWidth() + "x" + getHeight()
 					+ " visibility=" + getVisibility() + " alpha=" + getAlpha());
-			player.setSurface(playerSurface, width, height);
+			playerSurfaceGeneration = player.setSurface(playerSurface, width, height);
+			if (playerSurfaceGeneration == 0L) {
+				playerSurface = null;
+				playerSurfaceTexture = null;
+			}
 		}
 
 		@Override
 		public boolean onSurfaceTextureDestroyed(SurfaceTexture surface) {
 			VideoDiagnostics.recordUi("texture=" + diagnosticsId + " surface_destroyed"
 					+ " updates=" + surfaceUpdates);
-			releasePlayerSurface();
-			return true;
+			boolean retained = releasePlayerSurface(surface);
+			VideoDiagnostics.recordUi("texture=" + diagnosticsId + " surface_destroyed"
+					+ " retained_until_replacement=" + retained);
+			// Returning false transfers SurfaceTexture ownership to VideoPlayer. It releases the
+			// texture only after the replacement is safe or the player is destroyed.
+			return !retained;
 		}
 
 		@Override
@@ -596,6 +613,9 @@ public class VideoPlayer {
 			surfaceUpdates++;
 			VideoPlayer player = this.player.get();
 			if (player != null) {
+				if (surfaceUpdates == 1 && playerSurfaceGeneration > 0L) {
+					player.onSurfaceFrameRendered(playerSurfaceGeneration);
+				}
 				player.notifyVideoViewFrameUpdated();
 			}
 			if (surfaceUpdates == 1 || surfaceUpdates == 30 || surfaceUpdates % 120 == 0) {
@@ -616,7 +636,6 @@ public class VideoPlayer {
 		protected void onDetachedFromWindow() {
 			VideoDiagnostics.recordUi("texture=" + diagnosticsId + " detached"
 					+ " updates=" + surfaceUpdates);
-			releasePlayerSurface();
 			super.onDetachedFromWindow();
 		}
 
@@ -629,12 +648,19 @@ public class VideoPlayer {
 			}
 		}
 
-		private void releasePlayerSurface() {
-			if (playerSurface != null) {
-				playerSurface = null;
-				VideoDiagnostics.recordUi("texture=" + diagnosticsId + " surface_handed_off"
-						+ " player_ownership_deferred=true");
+		private boolean releasePlayerSurface(SurfaceTexture surface) {
+			if (playerSurfaceTexture != surface || playerSurfaceGeneration == 0L) {
+				return false;
 			}
+			VideoPlayer player = this.player.get();
+			long generation = playerSurfaceGeneration;
+			playerSurface = null;
+			playerSurfaceTexture = null;
+			playerSurfaceGeneration = 0L;
+			boolean retained = player != null && player.deferSurfaceTextureRelease(generation, surface);
+			VideoDiagnostics.recordUi("texture=" + diagnosticsId + " surface_handed_off"
+					+ " generation=" + generation + " retained=" + retained);
+			return retained;
 		}
 
 		public Bitmap getCurrentFrame() {
@@ -680,9 +706,6 @@ public class VideoPlayer {
 	public void releaseVideoView() {
 		View videoView = this.videoView;
 		this.videoView = null;
-		if (videoView instanceof PlayerTextureView) {
-			((PlayerTextureView) videoView).releasePlayerSurface();
-		}
 		if (videoView != null && videoView.getParent() instanceof ViewGroup) {
 			((ViewGroup) videoView.getParent()).removeView(videoView);
 		}
@@ -699,7 +722,7 @@ public class VideoPlayer {
 		});
 	}
 
-	private void setSurface(Surface surface, int width, int height) {
+	private long setSurface(Surface surface, int width, int height) {
 		synchronized (this) {
 			if (isInitialized()) {
 				cancelSetPositionLocked(false);
@@ -709,8 +732,10 @@ public class VideoPlayer {
 				VideoDiagnostics.recordUi("surface_request generation=" + generation
 						+ " valid=" + surface.isValid() + " size=" + width + "x" + height);
 				holder.requestSurface(sessionData.pointer, surface, generation, width, height);
+				return generation;
 			} else {
 				surface.release();
+				return 0L;
 			}
 		}
 	}
@@ -726,6 +751,11 @@ public class VideoPlayer {
 	private void onSurfaceApplied(SurfaceApplied surfaceApplied) {
 		synchronized (this) {
 			releaseSurfaceRequestsLocked(surfaceApplied.generation);
+			latestAppliedSurfaceGeneration = Math.max(latestAppliedSurfaceGeneration,
+					surfaceApplied.generation);
+			if (!playing) {
+				releaseDeferredSurfaceTexturesLocked(surfaceApplied.generation, false);
+			}
 			if (!isInitialized() || surfaceApplied.generation != latestSurfaceGeneration) {
 				VideoDiagnostics.recordUi("surface_applied_stale generation=" + surfaceApplied.generation
 						+ " latest=" + latestSurfaceGeneration);
@@ -759,6 +789,56 @@ public class VideoPlayer {
 			request.surface.release();
 		}
 		surfaceRequests.clear();
+	}
+
+	private boolean deferSurfaceTextureRelease(long generation, SurfaceTexture surfaceTexture) {
+		synchronized (this) {
+			if (!isInitialized() || generation <= 0L) {
+				return false;
+			}
+			for (DeferredSurfaceTexture deferred : deferredSurfaceTextures) {
+				if (deferred.surfaceTexture == surfaceTexture) {
+					return true;
+				}
+			}
+			long safeReplacementGeneration = playing
+					? latestRenderedSurfaceGeneration : latestAppliedSurfaceGeneration;
+			if (generation < safeReplacementGeneration) {
+				surfaceTexture.release();
+				VideoDiagnostics.recordUi("surface_texture_released generation=" + generation
+						+ " reason=replacement_already_safe");
+				return true;
+			}
+			deferredSurfaceTextures.add(new DeferredSurfaceTexture(generation, surfaceTexture));
+			VideoDiagnostics.recordUi("surface_texture_deferred generation=" + generation
+					+ " latest_applied=" + latestAppliedSurfaceGeneration
+					+ " latest_rendered=" + latestRenderedSurfaceGeneration);
+			return true;
+		}
+	}
+
+	private void onSurfaceFrameRendered(long generation) {
+		synchronized (this) {
+			if (!isInitialized() || generation <= latestRenderedSurfaceGeneration) {
+				return;
+			}
+			latestRenderedSurfaceGeneration = generation;
+			releaseDeferredSurfaceTexturesLocked(generation, false);
+			VideoDiagnostics.recordUi("surface_first_frame generation=" + generation
+					+ " latest_applied=" + latestAppliedSurfaceGeneration);
+		}
+	}
+
+	private void releaseDeferredSurfaceTexturesLocked(long renderedGeneration, boolean releaseAll) {
+		for (int i = deferredSurfaceTextures.size() - 1; i >= 0; i--) {
+			DeferredSurfaceTexture deferred = deferredSurfaceTextures.get(i);
+			if (releaseAll || deferred.generation < renderedGeneration) {
+				deferred.surfaceTexture.release();
+				deferredSurfaceTextures.remove(i);
+				VideoDiagnostics.recordUi("surface_texture_released generation=" + deferred.generation
+						+ " reason=" + (releaseAll ? "player_destroyed" : "replacement_safe"));
+			}
+		}
 	}
 
 	public void setPlaying(boolean playing) {
@@ -923,6 +1003,7 @@ public class VideoPlayer {
 					}
 				} finally {
 					releaseAllSurfaceRequestsLocked();
+					releaseDeferredSurfaceTexturesLocked(Long.MAX_VALUE, true);
 				}
 			}
 		}
@@ -1048,6 +1129,16 @@ public class VideoPlayer {
 		public SurfaceRequest(long generation, Surface surface) {
 			this.generation = generation;
 			this.surface = surface;
+		}
+	}
+
+	private static class DeferredSurfaceTexture {
+		public final long generation;
+		public final SurfaceTexture surfaceTexture;
+
+		public DeferredSurfaceTexture(long generation, SurfaceTexture surfaceTexture) {
+			this.generation = generation;
+			this.surfaceTexture = surfaceTexture;
 		}
 	}
 
