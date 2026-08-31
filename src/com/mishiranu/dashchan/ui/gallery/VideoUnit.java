@@ -381,6 +381,40 @@ public class VideoUnit {
 		}
 	}
 
+	boolean adoptPictureInPicturePlayer(VideoPlayer player, File sourceFile, long position,
+			int playbackSpeed, boolean muted, boolean playing) {
+		PagerInstance.ViewHolder holder = instance.currentHolder;
+		if (this.player != null || holder == null || sourceFile == null) {
+			return false;
+		}
+		dismissPlaybackSpeedPopupMenu();
+		if (readVideoCallback != null) {
+			readVideoCallback.cancel();
+			readVideoCallback = null;
+		}
+		this.player = player;
+		this.sourceFile = sourceFile;
+		this.playbackSpeed = normalizePlaybackSpeed(playbackSpeed);
+		this.muted = muted;
+		wasPlaying = playing;
+		finishedPlayback = false;
+		hideSurfaceOnInit = false;
+		pictureInPictureTransferred = false;
+		player.releaseVideoView();
+		player.setListener(playerListener);
+		player.setPosition(position);
+		initializePlayer();
+		seekBar.setSecondaryProgress(seekBar.getMax());
+		seekBar.setProgress((int) Math.min(position, Integer.MAX_VALUE));
+		if (holder.mediaSummary.updateSize(sourceFile.length())) {
+			instance.galleryInstance.callback.updateTitle();
+		}
+		holder.loadState = PagerInstance.LoadState.COMPLETE;
+		updatePictureInPictureButton();
+		instance.galleryInstance.callback.invalidateOptionsMenu();
+		return true;
+	}
+
 	private boolean setPlaying(boolean playing, boolean resetFocus) {
 		if (player.isPlaying() != playing) {
 			if (resetFocus && player.isAudioPresent() && !muted) {
@@ -888,8 +922,10 @@ public class VideoUnit {
 		long position = player.getPosition();
 		Bitmap previewFrame = createPictureInPicturePreview();
 		VideoPlayer transferredPlayer = player;
+		VideoPipActivity.GalleryRestoreData galleryRestoreData =
+				instance.galleryInstance.callback.createPictureInPictureGalleryRestoreData();
 		Intent intent = VideoPipActivity.createIntent(context, sourceFile, position,
-				playbackSpeed, muted, playing, this, transferredPlayer, previewFrame);
+				playbackSpeed, muted, playing, this, transferredPlayer, previewFrame, galleryRestoreData);
 		wasPlaying = false;
 		setPlaying(false, true);
 		transferredPlayer.releaseVideoView();

@@ -65,6 +65,7 @@ import com.mishiranu.dashchan.content.storage.FavoritesStorage;
 import com.mishiranu.dashchan.content.storage.CombinedFeedStorage;
 import com.mishiranu.dashchan.content.update.UpdateDialogHelper;
 import com.mishiranu.dashchan.ui.gallery.GalleryOverlay;
+import com.mishiranu.dashchan.ui.gallery.VideoPipActivity;
 import com.mishiranu.dashchan.ui.navigator.Page;
 import com.mishiranu.dashchan.ui.navigator.PageFragment;
 import com.mishiranu.dashchan.ui.navigator.PageItem;
@@ -800,6 +801,10 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	private void navigateIntentUnchecked(Intent intent) {
 		if (C.ACTION_RETURN_FROM_PICTURE_IN_PICTURE.equals(intent.getAction())) {
+			GalleryOverlay galleryOverlay = VideoPipActivity.createPendingGalleryReturnOverlay();
+			if (galleryOverlay != null) {
+				navigateOrCloseGallery(galleryOverlay);
+			}
 			return;
 		}
 		ReadUpdateTask.UpdateDataMap updateDataMap = AndroidUtils.getParcelableExtra(intent,

@@ -21,14 +21,16 @@ public class GalleryInstance {
 
 	public final String chanName;
 	public final List<GalleryItem> galleryItems;
+	public final String pictureInPictureRestoreToken;
 
 	public GalleryInstance(Context context, Callback callback, int actionBarColor,
-			String chanName, List<GalleryItem> galleryItems) {
+			String chanName, List<GalleryItem> galleryItems, String pictureInPictureRestoreToken) {
 		this.context = context;
 		this.callback = callback;
 		this.actionBarColor = actionBarColor;
 		this.chanName = chanName;
 		this.galleryItems = galleryItems;
+		this.pictureInPictureRestoreToken = pictureInPictureRestoreToken;
 	}
 
 	public static Callback getCallback(InstanceDialog.Provider provider) {
@@ -46,6 +48,7 @@ public class GalleryInstance {
 		void updateTitle();
 
 		void navigateGalleryOrFinish(boolean enableGalleryMode);
+		VideoPipActivity.GalleryRestoreData createPictureInPictureGalleryRestoreData();
 		void setGalleryVisibleForPictureInPicture(boolean visible);
 		void bringGalleryToForeground(Context context);
 		void closeGallery();

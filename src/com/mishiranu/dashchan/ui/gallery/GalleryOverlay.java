@@ -97,6 +97,7 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 	private List<GalleryItem> queuedGalleryItems;
 	private List<GalleryItem> allGalleryItems;
 	private WeakReference<View> queuedFromView;
+	private String queuedPictureInPictureRestoreToken;
 
 	private InsetsLayout rootView;
 	private GalleryInstance instance;
@@ -130,13 +131,19 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 	}
 
 	public GalleryOverlay(Uri uri, String fileName) {
-		this(uri, fileName, null, null, 0, null, null, NavigatePostMode.DISABLED, false);
+		this(uri, fileName, null, null, 0, null, null, NavigatePostMode.DISABLED, false, null);
 	}
 
 	public GalleryOverlay(String chanName, List<GalleryItem> galleryItems, int imageIndex, String threadTitle,
 			View fromView, NavigatePostMode navigatePostMode, boolean initialGalleryMode) {
 		this(null, null, chanName, galleryItems, imageIndex, threadTitle, fromView,
-				navigatePostMode, initialGalleryMode);
+				navigatePostMode, initialGalleryMode, null);
+	}
+
+	static GalleryOverlay createForPictureInPictureRestore(VideoPipActivity.GalleryRestoreData data,
+			String restoreToken) {
+		return new GalleryOverlay(null, null, data.chanName, data.galleryItems, data.imageIndex,
+				data.threadTitle, null, data.navigatePostMode, false, restoreToken);
 	}
 
 	public String getChanName() {
@@ -145,7 +152,8 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 
 	private GalleryOverlay(Uri uri, String fileName, String chanName, List<GalleryItem> galleryItems, int imageIndex,
 			String threadTitle,
-			View fromView, NavigatePostMode navigatePostMode, boolean initialGalleryMode) {
+			View fromView, NavigatePostMode navigatePostMode, boolean initialGalleryMode,
+			String pictureInPictureRestoreToken) {
 		Bundle args = new Bundle();
 		args.putParcelable(EXTRA_URI, uri);
 		args.putString(EXTRA_FILE_NAME, fileName);
@@ -157,6 +165,7 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 		setArguments(args);
 		this.queuedGalleryItems = galleryItems;
 		this.queuedFromView = fromView != null ? new WeakReference<>(fromView) : null;
+		this.queuedPictureInPictureRestoreToken = pictureInPictureRestoreToken;
 	}
 
 	private NavigatePostMode getNavigatePostMode() {
@@ -301,7 +310,8 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 			}
 			allGalleryItems = new ArrayList<>(galleryItems != null ? galleryItems : Collections.emptyList());
 			instance = new GalleryInstance(rootView.getContext(), this, ACTION_BAR_COLOR, chan.name,
-					new ArrayList<>(allGalleryItems));
+					new ArrayList<>(allGalleryItems), queuedPictureInPictureRestoreToken);
+			queuedPictureInPictureRestoreToken = null;
 			if (!instance.galleryItems.isEmpty()) {
 				listUnit = new ListUnit(instance);
 				pagerUnit = new PagerUnit(instance);
@@ -989,6 +999,16 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 		if (!returnToGallery()) {
 			getWindow().getDecorView().post(this::dismiss);
 		}
+	}
+
+	@Override
+	public VideoPipActivity.GalleryRestoreData createPictureInPictureGalleryRestoreData() {
+		if (instance == null || pagerUnit == null || instance.galleryItems.isEmpty()) {
+			return null;
+		}
+		int imageIndex = Math.max(0, Math.min(pagerUnit.getCurrentIndex(), instance.galleryItems.size() - 1));
+		return new VideoPipActivity.GalleryRestoreData(instance.chanName,
+				new ArrayList<>(instance.galleryItems), imageIndex, getThreadTitle(), getNavigatePostMode());
 	}
 
 	@Override
