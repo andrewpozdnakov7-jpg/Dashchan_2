@@ -2246,8 +2246,10 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 				String boardName = page != null ? page.boardName : null;
 				if (chanName == null) {
 					Chan chan = ChanManager.getInstance().getDefaultChan();
-					chanName = chan.name;
-					boardName = Preferences.getDefaultBoardName(chan);
+					if (chan != null) {
+						chanName = chan.name;
+						boardName = Preferences.getDefaultBoardName(chan);
+					}
 				}
 				if (chanName != null) {
 					navigatePage(content, chanName, boardName, null, null, null, null,
