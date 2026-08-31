@@ -926,28 +926,42 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		boolean mergeChans = Preferences.isMergeChans();
 		int size = 0;
 		ContentFragment currentFragment = getCurrentFragment();
-		if (currentFragment instanceof PageFragment && currentPageItem != null &&
-				(mergeChans || (((PageFragment) currentFragment).getPage().chanName.equals(chanName)))) {
-			size++;
+		if (currentFragment instanceof PageFragment && currentPageItem != null) {
+			Page page = ((PageFragment) currentFragment).getPage();
+			if (Preferences.isChanEnabled(page.chanName) && (mergeChans || page.chanName.equals(chanName))) {
+				size++;
+			}
 		}
 		for (SavedPageItem savedPageItem : stackPageItems) {
-			if (mergeChans || getSavedPage(savedPageItem).chanName.equals(chanName)) {
+			Page page = getSavedPage(savedPageItem);
+			if (Preferences.isChanEnabled(page.chanName) && (mergeChans || page.chanName.equals(chanName))) {
 				size++;
 			}
 		}
 		return size;
 	}
 
-	private SavedPageItem prepareTargetPreviousPage(boolean allowForeignChan) {
-		if (allowForeignChan && currentPageItem.allowReturn && !stackPageItems.isEmpty()) {
-			return stackPageItems.remove(stackPageItems.size() - 1);
+	private SavedPageItem removeLastEnabledSavedPage() {
+		while (!stackPageItems.isEmpty()) {
+			SavedPageItem savedPageItem = stackPageItems.remove(stackPageItems.size() - 1);
+			if (Preferences.isChanEnabled(getSavedPage(savedPageItem).chanName)) {
+				return savedPageItem;
+			}
 		}
+		return null;
+	}
+
+	private SavedPageItem prepareTargetPreviousPage(boolean allowForeignChan) {
 		ContentFragment currentFragment = getCurrentFragment();
 		String chanName = ((PageFragment) currentFragment).getPage().chanName;
 		boolean mergeChans = Preferences.isMergeChans();
+		boolean allowAnyChan = currentPageItem != null && allowForeignChan && currentPageItem.allowReturn;
 		for (int i = stackPageItems.size() - 1; i >= 0; i--) {
 			SavedPageItem savedPageItem = stackPageItems.get(i);
-			if (mergeChans || getSavedPage(savedPageItem).chanName.equals(chanName)) {
+			Page page = getSavedPage(savedPageItem);
+			if (!Preferences.isChanEnabled(page.chanName)) {
+				stackPageItems.remove(i);
+			} else if (allowAnyChan || mergeChans || page.chanName.equals(chanName)) {
 				stackPageItems.remove(i);
 				return savedPageItem;
 			}
@@ -956,17 +970,17 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	}
 
 	private boolean hasTargetPreviousPage(boolean allowForeignChan) {
-		if (currentPageItem != null && allowForeignChan && currentPageItem.allowReturn && !stackPageItems.isEmpty()) {
-			return true;
-		}
 		ContentFragment currentFragment = getCurrentFragment();
 		if (!(currentFragment instanceof PageFragment)) {
 			return false;
 		}
 		String chanName = ((PageFragment) currentFragment).getPage().chanName;
 		boolean mergeChans = Preferences.isMergeChans();
+		boolean allowAnyChan = currentPageItem != null && allowForeignChan && currentPageItem.allowReturn;
 		for (int i = stackPageItems.size() - 1; i >= 0; i--) {
-			if (mergeChans || getSavedPage(stackPageItems.get(i)).chanName.equals(chanName)) {
+			Page page = getSavedPage(stackPageItems.get(i));
+			if (Preferences.isChanEnabled(page.chanName) &&
+					(allowAnyChan || mergeChans || page.chanName.equals(chanName))) {
 				return true;
 			}
 		}
@@ -1704,9 +1718,12 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 				ContentFragment fragment = (ContentFragment) fragments.remove(fragments.size() - 1).create(null);
 				navigateFragment(fragment, null, true);
 				handled = true;
-			} else if (!stackPageItems.isEmpty()) {
-				navigateSavedPage(stackPageItems.remove(stackPageItems.size() - 1), true);
-				handled = true;
+			} else {
+				SavedPageItem savedPageItem = removeLastEnabledSavedPage();
+				if (savedPageItem != null) {
+					navigateSavedPage(savedPageItem, true);
+					handled = true;
+				}
 			}
 			if (!handled) {
 				if (allowTimeout && SystemClock.elapsedRealtime() - backPressed > 2000) {

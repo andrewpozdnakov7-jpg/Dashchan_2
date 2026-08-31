@@ -343,6 +343,9 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	}
 
 	private void updateConfigurationInternal(String chanName, boolean force) {
+		if (chanName != null && !Preferences.isChanEnabled(chanName)) {
+			chanName = null;
+		}
 		if (!CommonUtils.equals(chanName, this.chanName) || force || menu.isEmpty()) {
 			updateConfigurationInternal(chanName, force, createAdapterSnapshot());
 		}
@@ -350,6 +353,9 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 
 	private void updateConfigurationInternal(String chanName, boolean force,
 			ArrayList<AdapterItem> previousItems) {
+		if (chanName != null && !Preferences.isChanEnabled(chanName)) {
+			chanName = null;
+		}
 		if (!CommonUtils.equals(chanName, this.chanName) || force || menu.isEmpty()) {
 			this.chanName = chanName;
 			Chan chan = Chan.get(chanName);
@@ -1108,7 +1114,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		for (int i = 0; i < favoriteBoards.size(); i++) {
 			FavoritesStorage.FavoriteItem favoriteItem = favoriteBoards.get(i);
 			Chan chan = Chan.get(favoriteItem.chanName);
-			if (chan.name == null) {
+			if (chan.name == null || !Preferences.isChanEnabled(favoriteItem.chanName)) {
 				continue;
 			}
 			if (mergeChans || favoriteItem.chanName.equals(chanName)) {
