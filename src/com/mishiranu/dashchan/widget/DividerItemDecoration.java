@@ -81,7 +81,7 @@ public class DividerItemDecoration extends RecyclerView.ItemDecoration {
 
 	private void drawDivider(Canvas canvas, int top, int left, int right, int height, View view, boolean translate) {
 		if (translate) {
-			top += view.getTranslationY();
+			top += Math.round(view.getTranslationY());
 		}
 		drawable.setBounds(left, top, right, top + height);
 		drawable.draw(canvas);

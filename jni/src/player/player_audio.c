@@ -428,8 +428,8 @@ static int drainTempoProcessor(Player * player, TempoProcessor * processor,
 		int64_t position = startPosition >= 0
 				? startPosition + av_rescale(*outputSamples, speed, sampleRate) : -1;
 		*outputSamples += samples;
-		int64_t divider = av_get_bytes_per_sample(AV_SAMPLE_FMT_S16) * channels *
-				(int64_t) getPlaybackSampleRateForSpeed(sampleRate, speed);
+		int64_t divider = (int64_t) av_get_bytes_per_sample(AV_SAMPLE_FMT_S16) * channels *
+				getPlaybackSampleRateForSpeed(sampleRate, speed);
 		int frameSize = av_get_bytes_per_sample(AV_SAMPLE_FMT_S16) * channels;
 		if (!queueDecodedAudio(player, buffer, size, frameSize,
 				position, divider, silentAudioLength)) {
@@ -629,8 +629,8 @@ void * playerAudioDecodeThread(void * data) {
 					tempoProcessorFree(&tempoProcessor);
 					tempoStartPosition = -1;
 					tempoOutputSamples = 0;
-					int64_t divider = av_get_bytes_per_sample(dstFormat) * dstChannels *
-							(int64_t) getPlaybackSampleRateForSpeed(dstSampleRate, playbackSpeed);
+					int64_t divider = (int64_t) av_get_bytes_per_sample(dstFormat) * dstChannels *
+							getPlaybackSampleRateForSpeed(dstSampleRate, playbackSpeed);
 					int frameSize = av_get_bytes_per_sample(dstFormat) * dstChannels;
 					if (queueDecodedAudio(player, dstData[0], size, frameSize,
 							position, divider, &silentAudioLength)) {
@@ -639,7 +639,7 @@ void * playerAudioDecodeThread(void * data) {
 					}
 				}
 #else
-				int64_t divider = av_get_bytes_per_sample(dstFormat) * dstChannels * (int64_t) dstSampleRate;
+				int64_t divider = (int64_t) av_get_bytes_per_sample(dstFormat) * dstChannels * dstSampleRate;
 				int frameSize = av_get_bytes_per_sample(dstFormat) * dstChannels;
 				if (queueDecodedAudio(player, dstData[0], size, frameSize,
 						position, divider, &silentAudioLength)) {

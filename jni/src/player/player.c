@@ -563,8 +563,7 @@ void setPlaybackSpeed(jlong pointer, jint speed) {
 	}
 }
 
-void setPlaying(jlong pointer, jboolean playing) {
-	Player * player = POINTER_CAST(pointer);
+void playerApplyPlaying(Player * player, int playing) {
 	playing = !!playing;
 	if (player->play.playing != playing) {
 		diagnosticsLog("player=%u playing=%d", player->meta.diagnosticsId, playing);
@@ -602,6 +601,10 @@ void setPlaying(jlong pointer, jboolean playing) {
 			pthread_mutex_unlock(&player->audio.sleepBufferMutex);
 		}
 	}
+}
+
+void playerSetPlaying(jlong pointer, jboolean playing) {
+	playerApplyPlaying(POINTER_CAST(pointer), playing);
 }
 
 static jstring newUtfStringSafe(JNIEnv * env, char * string) {

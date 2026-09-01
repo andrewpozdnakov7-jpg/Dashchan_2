@@ -31,6 +31,7 @@ import java.util.List;
 
 public class DraftsStorage extends StorageManager.Storage<Pair<List<DraftsStorage.PostDraft>,
 		List<DraftsStorage.AttachmentDraft>>> {
+	private static final int ATTACHMENT_HASH_LENGTH = 64;
 	private static final String KEY_POST_DRAFTS = "postDrafts";
 	private static final String KEY_FUTURE_ATTACHMENT_DRAFTS = "futureAttachmentDrafts";
 
@@ -204,8 +205,15 @@ public class DraftsStorage extends StorageManager.Storage<Pair<List<DraftsStorag
 	}
 
 	private static File resolveAttachmentDraftFile(String hash) {
+		if (!isAttachmentDraftHash(hash)) {
+			return null;
+		}
 		File directory = getAttachmentDraftsDirectory();
 		return directory != null ? new File(directory, hash) : null;
+	}
+
+	private static boolean isAttachmentDraftHash(String hash) {
+		return hash != null && hash.length() == ATTACHMENT_HASH_LENGTH && hash.matches("[0-9a-f]{64}");
 	}
 
 	public File getAttachmentDraftFile(String hash) {
@@ -823,7 +831,7 @@ public class DraftsStorage extends StorageManager.Storage<Pair<List<DraftsStorag
 					}
 				}
 			}
-			if (StringUtils.isEmpty(hash)) {
+			if (!isAttachmentDraftHash(hash)) {
 				return null;
 			}
 			return new AttachmentDraft(hash, name, rating, optionUniqueHash, optionRemoveMetadata,

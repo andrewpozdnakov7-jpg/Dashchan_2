@@ -72,7 +72,7 @@ void JCALL(stopAudio)(UNUSED JNIEnv * env, UNUSED jobject this, jlong pointer) {
 }
 
 void JCALL(setPlaying)(UNUSED JNIEnv * env, UNUSED jobject this, jlong pointer, jboolean playing) {
-	setPlaying(pointer, playing);
+	playerSetPlaying(pointer, playing);
 }
 
 void JCALL(requestSurface)(JNIEnv * env, UNUSED jobject this,

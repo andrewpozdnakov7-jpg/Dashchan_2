@@ -377,13 +377,17 @@ public abstract class FileHolder {
 			this.name = name;
 			if (calculateSize) {
 				try (InputStream input = openInputStream()) {
-					int newSize = 0;
+					long newSize = 0;
 					byte[] buffer = new byte[8192];
 					int count;
-					while ((count = input.read(buffer)) >= 0) {
+					while ((count = input.read(buffer)) != -1) {
 						newSize += count;
+						if (newSize > Integer.MAX_VALUE) {
+							newSize = -1;
+							break;
+						}
 					}
-					size = newSize;
+					size = (int) newSize;
 				} catch (IOException e) {
 					// Ignore
 				}
@@ -469,10 +473,10 @@ public abstract class FileHolder {
 
 	private static FileHolder obtain(Uri uri, boolean calculateSize) {
 		String scheme = uri.getScheme();
-		if ("file".equals(scheme)) {
-			String path = uri.getPath();
-			return new FileFileHolder(new File(path));
-		} else if ("content".equals(scheme)) {
+		// Uri instances accepted here originate outside the app (document picker,
+		// sharing or receive-content). Never turn an external file:// path into a
+		// File; internal files must use obtain(File), where the caller owns the path.
+		if ("content".equals(scheme)) {
 			try (Cursor cursor = MainApplication.getInstance()
 					.getContentResolver().query(uri, null, null, null, null)) {
 				if (cursor != null && cursor.moveToFirst()) {
@@ -480,7 +484,8 @@ public abstract class FileHolder {
 					int sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE);
 					if (nameIndex >= 0 && (sizeIndex >= 0 || !calculateSize)) {
 						String name = cursor.getString(nameIndex);
-						int size = sizeIndex >= 0 ? cursor.getInt(sizeIndex) : -1;
+						long longSize = sizeIndex >= 0 ? cursor.getLong(sizeIndex) : -1;
+						int size = longSize >= 0 && longSize <= Integer.MAX_VALUE ? (int) longSize : -1;
 						if (StringUtils.isEmpty(name)) {
 							@SuppressWarnings("deprecation")
 							String column = MediaStore.MediaColumns.DATA;

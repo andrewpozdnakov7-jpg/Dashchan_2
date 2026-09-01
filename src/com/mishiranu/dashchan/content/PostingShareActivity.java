@@ -35,8 +35,7 @@ public class PostingShareActivity extends Activity {
 	}
 
 	private static boolean isStreamUri(Uri uri) {
-		return uri != null && ("content".equalsIgnoreCase(uri.getScheme())
-				|| "file".equalsIgnoreCase(uri.getScheme()));
+		return uri != null && "content".equalsIgnoreCase(uri.getScheme());
 	}
 
 	private static ArrayList<Uri> collectStreamUris(Intent intent) {
@@ -120,7 +119,8 @@ public class PostingShareActivity extends Activity {
 		super.onCreate(savedInstanceState);
 		DraftsStorage draftsStorage = DraftsStorage.getInstance();
 		Intent intent = getIntent();
-		ArrayList<Uri> uris = collectStreamUris(intent);
+		ArrayList<Uri> uris = (intent.getFlags() & Intent.FLAG_GRANT_READ_URI_PERMISSION) != 0
+				? collectStreamUris(intent) : new ArrayList<>();
 		String sharedText = collectSharedText(intent);
 		Uri contentUri = findChanUri(sharedText);
 

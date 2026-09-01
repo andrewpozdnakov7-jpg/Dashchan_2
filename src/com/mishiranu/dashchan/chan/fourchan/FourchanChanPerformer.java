@@ -504,7 +504,18 @@ public class FourchanChanPerformer extends ChanPerformer {
 		return message;
 	}
 
-	private static final Pattern PATTERN_AUTH_MESSAGE = Pattern.compile("<h2.*?>(.*?)<(?:br|/h2)>");
+	private static String readHtmlElementText(String responseText, String selector, boolean stopAtBreak) {
+		if (StringUtils.isEmpty(responseText)) {
+			return null;
+		}
+		Element element = Jsoup.parse(responseText).selectFirst(selector);
+		if (element == null) return null;
+		if (!stopAtBreak) return element.text();
+		String html = element.html();
+		int breakIndex = html.toLowerCase(Locale.US).indexOf("<br");
+		if (breakIndex >= 0) html = html.substring(0, breakIndex);
+		return StringUtils.clearHtml(html);
+	}
 
 	@Override
 	public CheckAuthorizationResult onCheckAuthorization(CheckAuthorizationData data) throws HttpException,
@@ -532,9 +543,8 @@ public class FourchanChanPerformer extends ChanPerformer {
 				.setRedirectHandler(strictUnsafeRedirectHandler)
                 .perform();
 		String responseText = response.readString();
-		Matcher matcher = PATTERN_AUTH_MESSAGE.matcher(responseText);
-		if (matcher.find()) {
-			String message = StringUtils.clearHtml(matcher.group(1));
+		String message = readHtmlElementText(responseText, "h2", true);
+		if (message != null) {
 			if (message.startsWith("Error: ")) {
 				message = message.substring(7);
 			}
@@ -813,7 +823,6 @@ public class FourchanChanPerformer extends ChanPerformer {
 		return prefix + "_" + COOKIE_FOURCHAN_PASS;
 	}
 
-	private static final Pattern PATTERN_POST_ERROR = Pattern.compile("<span id=\"errmsg\".*?>(.*?)</span>");
 	private static final Pattern PATTERN_POST_SUCCESS = Pattern.compile("<!-- thread:(\\d+),no:(\\d+) -->");
 
 	private static final HashSet<String> FORBIDDEN_OPTIONS = new HashSet<>(Arrays.asList("nonoko", "nonokosage"));
@@ -880,43 +889,40 @@ public class FourchanChanPerformer extends ChanPerformer {
 			}
 			return new SendPostResult(threadNumber, postNumber);
 		}
-		matcher = PATTERN_POST_ERROR.matcher(responseText);
-		if (matcher.find()) {
-			String errorMessage = matcher.group(1);
-			if (errorMessage != null) {
-				int errorType = 0;
-				Object extra = null;
-				if (errorMessage.contains("CAPTCHA")) {
-					errorType = ApiException.SEND_ERROR_CAPTCHA;
-				} else if (errorMessage.contains("No text entered")) {
-					errorType = ApiException.SEND_ERROR_EMPTY_COMMENT;
-				} else if (errorMessage.contains("No file selected")) {
-					errorType = ApiException.SEND_ERROR_EMPTY_FILE;
-				} else if (errorMessage.contains("File too large")) {
-					errorType = ApiException.SEND_ERROR_FILE_TOO_BIG;
-				} else if (errorMessage.contains("Field too long")) {
-					errorType = ApiException.SEND_ERROR_FIELD_TOO_LONG;
-				} else if (errorMessage.contains("You cannot reply to this thread anymore")) {
-					errorType = ApiException.SEND_ERROR_CLOSED;
-				} else if (errorMessage.contains("This board doesn't exist")) {
-					errorType = ApiException.SEND_ERROR_NO_BOARD;
-				} else if (errorMessage.contains("Specified thread does not exist")) {
-					errorType = ApiException.SEND_ERROR_NO_THREAD;
-				} else if (errorMessage.contains("You must wait")) {
-					errorType = ApiException.SEND_ERROR_TOO_FAST;
-				} else if (errorMessage.contains("Corrupted file or unsupported file type")) {
-					errorType = ApiException.SEND_ERROR_FILE_NOT_SUPPORTED;
-				} else if (errorMessage.contains("Duplicate file exists")) {
-					errorType = ApiException.SEND_ERROR_FILE_EXISTS;
-				} else if (errorMessage.contains("has been blocked due to abuse") || errorMessage.contains("banned")) {
-					errorType = ApiException.SEND_ERROR_BANNED;
-					extra = readBanExtra(data, data.boardName);
-				} else if (errorMessage.contains("image replies has been reached")) {
-					errorType = ApiException.SEND_ERROR_FILES_LIMIT;
-				}
-				if (errorType != 0) {
-					throw new ApiException(errorType, extra);
-				}
+		String errorMessage = readHtmlElementText(responseText, "span#errmsg", false);
+		if (errorMessage != null) {
+			int errorType = 0;
+			Object extra = null;
+			if (errorMessage.contains("CAPTCHA")) {
+				errorType = ApiException.SEND_ERROR_CAPTCHA;
+			} else if (errorMessage.contains("No text entered")) {
+				errorType = ApiException.SEND_ERROR_EMPTY_COMMENT;
+			} else if (errorMessage.contains("No file selected")) {
+				errorType = ApiException.SEND_ERROR_EMPTY_FILE;
+			} else if (errorMessage.contains("File too large")) {
+				errorType = ApiException.SEND_ERROR_FILE_TOO_BIG;
+			} else if (errorMessage.contains("Field too long")) {
+				errorType = ApiException.SEND_ERROR_FIELD_TOO_LONG;
+			} else if (errorMessage.contains("You cannot reply to this thread anymore")) {
+				errorType = ApiException.SEND_ERROR_CLOSED;
+			} else if (errorMessage.contains("This board doesn't exist")) {
+				errorType = ApiException.SEND_ERROR_NO_BOARD;
+			} else if (errorMessage.contains("Specified thread does not exist")) {
+				errorType = ApiException.SEND_ERROR_NO_THREAD;
+			} else if (errorMessage.contains("You must wait")) {
+				errorType = ApiException.SEND_ERROR_TOO_FAST;
+			} else if (errorMessage.contains("Corrupted file or unsupported file type")) {
+				errorType = ApiException.SEND_ERROR_FILE_NOT_SUPPORTED;
+			} else if (errorMessage.contains("Duplicate file exists")) {
+				errorType = ApiException.SEND_ERROR_FILE_EXISTS;
+			} else if (errorMessage.contains("has been blocked due to abuse") || errorMessage.contains("banned")) {
+				errorType = ApiException.SEND_ERROR_BANNED;
+				extra = readBanExtra(data, data.boardName);
+			} else if (errorMessage.contains("image replies has been reached")) {
+				errorType = ApiException.SEND_ERROR_FILES_LIMIT;
+			}
+			if (errorType != 0) {
+				throw new ApiException(errorType, extra);
 			}
 			CommonUtils.writeLog("4chan send message", errorMessage);
 			throw new ApiException(errorMessage);
@@ -939,29 +945,26 @@ public class FourchanChanPerformer extends ChanPerformer {
 				.setRedirectHandler(strictUnsafeRedirectHandler)
                 .perform()
 				.readString();
-		Matcher matcher = PATTERN_POST_ERROR.matcher(responseText);
-		if (matcher.find()) {
-			String errorMessage = matcher.group(1);
-			if (errorMessage != null) {
-				int errorType = 0;
-				if (errorMessage.contains("Password incorrect")) {
-					errorType = ApiException.DELETE_ERROR_PASSWORD;
-				} else if (errorMessage.contains("You must wait longer before deleting this post")) {
-					errorType = ApiException.DELETE_ERROR_TOO_NEW;
-				} else if (errorMessage.contains("You cannot delete a post this old")) {
-					errorType = ApiException.DELETE_ERROR_TOO_OLD;
-				} else if (errorMessage.contains("Can't find the post")) {
-					errorType = ApiException.DELETE_ERROR_NOT_FOUND;
-				} else if (errorMessage.contains("You cannot delete posts this often")) {
-					errorType = ApiException.DELETE_ERROR_TOO_OFTEN;
-				}
-				if (errorType == ApiException.SEND_ERROR_CAPTCHA) {
-					lastCaptchaPassData = null;
-					lastCaptchaPassCookie = null;
-				}
-				if (errorType != 0) {
-					throw new ApiException(errorType);
-				}
+		String errorMessage = readHtmlElementText(responseText, "span#errmsg", false);
+		if (errorMessage != null) {
+			int errorType = 0;
+			if (errorMessage.contains("Password incorrect")) {
+				errorType = ApiException.DELETE_ERROR_PASSWORD;
+			} else if (errorMessage.contains("You must wait longer before deleting this post")) {
+				errorType = ApiException.DELETE_ERROR_TOO_NEW;
+			} else if (errorMessage.contains("You cannot delete a post this old")) {
+				errorType = ApiException.DELETE_ERROR_TOO_OLD;
+			} else if (errorMessage.contains("Can't find the post")) {
+				errorType = ApiException.DELETE_ERROR_NOT_FOUND;
+			} else if (errorMessage.contains("You cannot delete posts this often")) {
+				errorType = ApiException.DELETE_ERROR_TOO_OFTEN;
+			}
+			if (errorType == ApiException.SEND_ERROR_CAPTCHA) {
+				lastCaptchaPassData = null;
+				lastCaptchaPassCookie = null;
+			}
+			if (errorType != 0) {
+				throw new ApiException(errorType);
 			}
 			errorMessage = removeErrorFromMessage(errorMessage);
 			CommonUtils.writeLog("4chan delete message", errorMessage);
@@ -969,8 +972,6 @@ public class FourchanChanPerformer extends ChanPerformer {
 		}
 		return null;
 	}
-
-	private static final Pattern PATTERN_REPORT_MESSAGE = Pattern.compile("<font.*?>(.*?)<(?:br|/font)>");
 
 	@Override
 	public SendReportPostsResult onSendReportPosts(SendReportPostsData data) throws HttpException, ApiException,
@@ -1004,9 +1005,8 @@ public class FourchanChanPerformer extends ChanPerformer {
                     .perform();
 			handleFourchanPass(response, data.boardName);
 			String responseText = response.readString();
-			Matcher matcher = PATTERN_REPORT_MESSAGE.matcher(responseText);
-			if (matcher.find()) {
-				message = StringUtils.emptyIfNull(matcher.group(1));
+			message = readHtmlElementText(responseText, "font", true);
+			if (message != null) {
 				if (!message.contains("CAPTCHA")) {
 					break;
 				}

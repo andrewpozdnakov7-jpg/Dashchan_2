@@ -4,6 +4,7 @@
 #include <android/bitmap.h>
 #include <gif_lib.h>
 #include <jni.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/time.h>
@@ -34,8 +35,28 @@ struct ImageData {
 
 #define D_GIF_ERR_CUSTOM 1000
 
+static int getCanvasByteCount(const GifFileType * file, size_t * byteCount) {
+	if (!file || file->SWidth <= 0 || file->SHeight <= 0) {
+		return 0;
+	}
+	size_t width = (size_t) file->SWidth;
+	size_t height = (size_t) file->SHeight;
+	if (width > SIZE_MAX / height) {
+		return 0;
+	}
+	size_t pixels = width * height;
+	if (pixels > SIZE_MAX / sizeof(int)) {
+		return 0;
+	}
+	*byteCount = pixels * sizeof(int);
+	return 1;
+}
+
 jlong init(JNIEnv * env, jstring fileName) {
 	Decoder * decoder = malloc(sizeof(Decoder));
+	if (!decoder) {
+		return 0;
+	}
 	memset(decoder, 0, sizeof(Decoder));
 	decoder->lastIndex = -1;
 	int status = D_GIF_SUCCEEDED;
@@ -50,15 +71,26 @@ jlong init(JNIEnv * env, jstring fileName) {
 			if (status == D_GIF_SUCCEEDED) {
 				status = D_GIF_ERR_CUSTOM;
 			}
-		} else if (file->ImageCount == 0) {
+		} else if (file->ImageCount <= 0) {
 			status = D_GIF_ERR_CUSTOM;
 		} else {
-			status = D_GIF_SUCCEEDED;
+			size_t canvasByteCount;
+			status = getCanvasByteCount(file, &canvasByteCount)
+					? D_GIF_SUCCEEDED : D_GIF_ERR_CUSTOM;
+		}
+	}
+	int when = 0;
+	if (status == D_GIF_SUCCEEDED) {
+		if ((size_t) file->ImageCount > SIZE_MAX / sizeof(ImageData)) {
+			status = D_GIF_ERR_CUSTOM;
+		} else {
+			decoder->datas = malloc(sizeof(ImageData) * (size_t) file->ImageCount);
+			if (!decoder->datas) {
+				status = D_GIF_ERR_CUSTOM;
+			}
 		}
 	}
 	if (status == D_GIF_SUCCEEDED) {
-		int when = 0;
-		decoder->datas = malloc(sizeof(ImageData) * file->ImageCount);
 		for (int i = 0; i < file->ImageCount; i++) {
 			SavedImage * image = &file->SavedImages[i];
 			ImageData * data = &decoder->datas[i];
@@ -83,10 +115,14 @@ jlong init(JNIEnv * env, jstring fileName) {
 		decoder->duration = when;
 		if (!file->SColorMap) {
 			file->SColorMap = GifMakeMapObject(256, NULL);
-			for (int i = 0; i < 256; i++) {
-				file->SColorMap->Colors[i].Red = i;
-				file->SColorMap->Colors[i].Green = i;
-				file->SColorMap->Colors[i].Blue = i;
+			if (!file->SColorMap) {
+				status = D_GIF_ERR_CUSTOM;
+			} else {
+				for (int i = 0; i < 256; i++) {
+					file->SColorMap->Colors[i].Red = i;
+					file->SColorMap->Colors[i].Green = i;
+					file->SColorMap->Colors[i].Blue = i;
+				}
 			}
 		}
 	}
@@ -131,6 +167,10 @@ static int64_t getTime(void) {
 static void drawImage(Decoder * decoder, int index, int * colors) {
 	int width = decoder->file->SWidth;
 	int height = decoder->file->SHeight;
+	size_t canvasByteCount;
+	if (!getCanvasByteCount(decoder->file, &canvasByteCount)) {
+		return;
+	}
 	if (index > 0) {
 		ImageData * data = &decoder->datas[index - 1];
 		if (data->disposalMethod == 2) {
@@ -139,11 +179,17 @@ static void drawImage(Decoder * decoder, int index, int * colors) {
 			int iheight = image->ImageDesc.Height;
 			int ileft = image->ImageDesc.Left;
 			int itop = image->ImageDesc.Top;
-			for (int y = 0; y < iheight && itop + y < height; y++) {
-				memset(colors + width * (itop + y) + ileft, 0, 4 * (ileft + iwidth <= width ? iwidth : width - ileft));
+			if (iwidth > 0 && iheight > 0 && ileft >= 0 && ileft < width && itop >= 0 && itop < height) {
+				size_t clearWidth = (size_t) iwidth < (size_t) (width - ileft)
+						? (size_t) iwidth : (size_t) (width - ileft);
+				int rows = iheight < height - itop ? iheight : height - itop;
+				for (int y = 0; y < rows; y++) {
+					memset(colors + (size_t) width * (size_t) (itop + y) + (size_t) ileft, 0,
+							clearWidth * sizeof(*colors));
+				}
 			}
-		} else if (data->disposalMethod == 3) {
-			memcpy(colors, decoder->previousColors, 4 * width * height);
+		} else if (data->disposalMethod == 3 && decoder->previousColors) {
+			memcpy(colors, decoder->previousColors, canvasByteCount);
 		}
 	}
 	ImageData * data = &decoder->datas[index];
@@ -151,10 +197,12 @@ static void drawImage(Decoder * decoder, int index, int * colors) {
 	if (data->disposalMethod == 3) {
 		if (!decoder->hasPrevious) {
 			if (!decoder->previousColors) {
-				decoder->previousColors = malloc(4 * width * height);
+				decoder->previousColors = malloc(canvasByteCount);
 			}
-			memcpy(decoder->previousColors, colors, 4 * width * height);
-			decoder->hasPrevious = 1;
+			if (decoder->previousColors) {
+				memcpy(decoder->previousColors, colors, canvasByteCount);
+				decoder->hasPrevious = 1;
+			}
 		}
 	} else {
 		decoder->hasPrevious = 0;
@@ -170,14 +218,20 @@ static void drawImage(Decoder * decoder, int index, int * colors) {
 	int iheight = image->ImageDesc.Height;
 	int ileft = image->ImageDesc.Left;
 	int itop = image->ImageDesc.Top;
-	for (int y = 0; y < iheight && itop + y < height; y++) {
-		for (int x = 0; x < iwidth && ileft + x < width; x++) {
-			int colorIndex = source[y * iwidth + x];
+	if (iwidth <= 0 || iheight <= 0 || ileft < 0 || ileft >= width || itop < 0 || itop >= height) {
+		return;
+	}
+	int rows = iheight < height - itop ? iheight : height - itop;
+	int columns = iwidth < width - ileft ? iwidth : width - ileft;
+	for (int y = 0; y < rows; y++) {
+		for (int x = 0; x < columns; x++) {
+			int colorIndex = source[(size_t) y * (size_t) iwidth + (size_t) x];
 			if (colorIndex >= 0 && colorIndex < colorCount && colorIndex != data->transparentIndex) {
 				int red = colorTypes[colorIndex].Red & 0xff;
 				int green = colorTypes[colorIndex].Green & 0xff;
 				int blue = colorTypes[colorIndex].Blue & 0xff;
-				colors[(itop + y) * width + ileft + x] = 0xff000000 | (blue << 16) | (green << 8) | red;
+				colors[(size_t) (itop + y) * (size_t) width + (size_t) ileft + (size_t) x] =
+						0xff000000 | (blue << 16) | (green << 8) | red;
 			}
 		}
 	}
@@ -217,7 +271,12 @@ jint draw(JNIEnv * env, jlong pointer, jobject bitmap) {
 				}
 			} else {
 				decoder->hasPrevious = 0;
-				memset(colors, 0, 4 * decoder->file->SWidth * decoder->file->SHeight);
+				size_t canvasByteCount;
+				if (!getCanvasByteCount(decoder->file, &canvasByteCount)) {
+					AndroidBitmap_unlockPixels(env, bitmap);
+					return -1;
+				}
+				memset(colors, 0, canvasByteCount);
 				for (int i = 0; i <= index; i++) {
 					drawImage(decoder, i, colors);
 				}

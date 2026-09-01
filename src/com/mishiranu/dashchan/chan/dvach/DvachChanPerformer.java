@@ -28,13 +28,14 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.text.DateFormatSymbols;
+import java.text.ParsePosition;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Objects;
 import java.util.TimeZone;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -991,10 +992,68 @@ public class DvachChanPerformer extends ChanPerformer {
 	}
 
 	private static final Pattern PATTERN_TAG = Pattern.compile("(.*) /([^/]*)/");
-	private static final Pattern PATTERN_BAN = Pattern.compile("[^ ]*?: (\\d+)\\. .*: (.*(?=//![a-z]+\\.)|.*(?=[А-Я][а-я]{2} [А-Я][а-я]{2} \\d{2} (?:\\d{2}:?){3} \\d{4}$)|.*$)(?:.*?[а-я] )?([А-Я].*|)");
 
 	private static final ThreadLocal<SimpleDateFormat> DATE_FORMAT_BAN =
 			ThreadLocal.withInitial(DvachChanPerformer::createBanDateFormat);
+
+	private static class BanDetails {
+		public final String id;
+		public final String message;
+		public final long expireDate;
+
+		public BanDetails(String id, String message, long expireDate) {
+			this.id = id;
+			this.message = message;
+			this.expireDate = expireDate;
+		}
+	}
+
+	private static boolean isAsciiDigits(String value, int start, int end) {
+		if (start >= end) return false;
+		for (int i = start; i < end; i++) {
+			char c = value.charAt(i);
+			if (c < '0' || c > '9') return false;
+		}
+		return true;
+	}
+
+	private static BanDetails parseBanDetails(String reason) {
+		if (StringUtils.isEmpty(reason)) return null;
+		int idStart = reason.indexOf(": ");
+		if (idStart < 0) return null;
+		idStart += 2;
+		int idEnd = reason.indexOf(". ", idStart);
+		if (idEnd < 0 || !isAsciiDigits(reason, idStart, idEnd)) return null;
+		int messageStart = reason.indexOf(": ", idEnd + 2);
+		if (messageStart < 0) return null;
+		messageStart += 2;
+		String details = reason.substring(messageStart).trim();
+		int marker = details.indexOf("//!");
+		if (marker >= 0) {
+			int markerEnd = details.indexOf('.', marker + 3);
+			if (markerEnd > marker + 3) details = details.substring(0, marker).trim();
+		}
+		long expireDate = 0L;
+		int earliestDateStart = Math.max(0, details.length() - 32);
+		for (int start = earliestDateStart; start < details.length(); start++) {
+			String candidate = details.substring(start);
+			ParsePosition position = new ParsePosition(0);
+			Date date = DATE_FORMAT_BAN.get().parse(candidate, position);
+			if (date != null && position.getIndex() == candidate.length()) {
+				expireDate = date.getTime();
+				int messageEnd = start;
+				if (start >= 4 && details.charAt(start - 1) == ' ' &&
+						Character.isUpperCase(details.charAt(start - 4)) &&
+						Character.isLowerCase(details.charAt(start - 3)) &&
+						Character.isLowerCase(details.charAt(start - 2))) {
+					messageEnd = start - 4;
+				}
+				details = details.substring(0, messageEnd).trim();
+				break;
+			}
+		}
+		return new BanDetails(reason.substring(idStart, idEnd), details, expireDate);
+	}
 
 	@SuppressLint("SimpleDateFormat")
 	private static SimpleDateFormat createBanDateFormat() {
@@ -1174,23 +1233,12 @@ public class DvachChanPerformer extends ChanPerformer {
 		}
 		if (errorType == ApiException.SEND_ERROR_BANNED) {
 			ApiException.BanExtra banExtra = new ApiException.BanExtra();
-			Matcher matcher = PATTERN_BAN.matcher(reason);
-			if(matcher.find()) {
-				String banId = StringUtils.emptyIfNull(matcher.group(1));
-				banExtra.setId(banId);
-				String banMessage = StringUtils.emptyIfNull(matcher.group(2));
-				banExtra.setMessage(banMessage);
-				String banExpireDate = StringUtils.emptyIfNull(matcher.group(3));
-				if (!StringUtils.isEmpty(banExpireDate)) {
-					try {
-						long date = Objects.requireNonNull(DATE_FORMAT_BAN.get().parse(banExpireDate)).getTime();
-						banExtra.setExpireDate(date);
-					} catch (java.text.ParseException e) {
-						// Ignore exception
-					}
-				}
-			}
-			else {
+			BanDetails details = parseBanDetails(reason);
+			if (details != null) {
+				banExtra.setId(details.id);
+				banExtra.setMessage(details.message);
+				if (details.expireDate > 0L) banExtra.setExpireDate(details.expireDate);
+			} else {
 				banExtra.setMessage(reason);
 			}
 			extra = banExtra;
