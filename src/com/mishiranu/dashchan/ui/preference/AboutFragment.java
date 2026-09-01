@@ -61,6 +61,9 @@ public class AboutFragment extends PreferenceFragment implements FragmentHandler
 		addButton(R.string.changelog, 0)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 						.pushFragment(new TextFragment(TextFragment.Type.CHANGELOG)));
+		addButton(R.string.privacy_policy, 0)
+				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
+						.pushFragment(new TextFragment(TextFragment.Type.PRIVACY_POLICY)));
 		if (BuildConfig.ALLOW_APPLICATION_SELF_UPDATE) {
 			if (BuildConfig.ALLOW_BETA_UPDATE_CHANNEL) {
 				ListPreference updateChannelPreference = addList(Preferences.KEY_UPDATE_CHANNEL,

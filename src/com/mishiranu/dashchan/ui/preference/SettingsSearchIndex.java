@@ -311,6 +311,8 @@ public final class SettingsSearchIndex {
 		add(context, entries, Screen.EXPERIMENTAL, R.string.open_configured_attachment_folder,
 				R.string.open_configured_attachment_folder__summary,
 				Preferences.KEY_OPEN_CONFIGURED_ATTACHMENT_FOLDER);
+		add(context, entries, Screen.EXPERIMENTAL, R.string.swipe_reply,
+				R.string.swipe_reply__summary, Preferences.KEY_SWIPE_REPLY);
 		if (BuildConfig.ENABLE_LOCAL_TRANSLATION) {
 			add(context, entries, Screen.EXPERIMENTAL, R.string.local_translation,
 					R.string.local_translation__summary, Preferences.KEY_LOCAL_TRANSLATION);
@@ -516,6 +518,7 @@ public final class SettingsSearchIndex {
 		add(context, entries, Screen.ABOUT, R.string.statistics);
 		add(context, entries, Screen.ABOUT, R.string.backup_data, R.string.backup_data__summary, null);
 		add(context, entries, Screen.ABOUT, R.string.changelog);
+		add(context, entries, Screen.ABOUT, R.string.privacy_policy);
 		if (BuildConfig.ALLOW_APPLICATION_SELF_UPDATE) {
 			if (BuildConfig.ALLOW_BETA_UPDATE_CHANNEL) {
 				add(context, entries, Screen.ABOUT, R.string.update_channel, 0, Preferences.KEY_UPDATE_CHANNEL);

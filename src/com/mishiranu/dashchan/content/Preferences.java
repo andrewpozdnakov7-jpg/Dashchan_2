@@ -577,8 +577,12 @@ public class Preferences {
 				? key.substring(KEY_CHAN_ENABLED_PREFIX.length()) : null;
 	}
 
+	public static boolean isChanEnabledByDefault(String chanName) {
+		return "dvach".equals(chanName) || "pikabu".equals(chanName);
+	}
+
 	public static boolean isChanEnabled(String chanName) {
-		return PREFERENCES.getBoolean(getChanEnabledKey(chanName), "dvach".equals(chanName));
+		return PREFERENCES.getBoolean(getChanEnabledKey(chanName), isChanEnabledByDefault(chanName));
 	}
 
 	public static ArrayList<String> getChansOrder() {
@@ -1836,6 +1840,8 @@ public class Preferences {
 	public static final boolean DEFAULT_OPEN_CONFIGURED_ATTACHMENT_FOLDER = false;
 	public static final String KEY_WINDOWED_THREAD_LOADING = "windowed_thread_loading";
 	public static final boolean DEFAULT_WINDOWED_THREAD_LOADING = false;
+	public static final String KEY_SWIPE_REPLY = "swipe_reply";
+	public static final boolean DEFAULT_SWIPE_REPLY = true;
 	public static final String KEY_COLLAPSE_LONG_OPEN_THREADS = "collapse_long_open_threads";
 	public static final boolean DEFAULT_COLLAPSE_LONG_OPEN_THREADS = true;
 	public static final String KEY_COMBINED_FEEDS_ENABLED = "combined_feeds_enabled";
@@ -1898,6 +1904,10 @@ public class Preferences {
 
 	public static boolean isWindowedThreadLoadingEnabled() {
 		return PREFERENCES.getBoolean(KEY_WINDOWED_THREAD_LOADING, DEFAULT_WINDOWED_THREAD_LOADING);
+	}
+
+	public static boolean isSwipeReplyEnabled() {
+		return PREFERENCES.getBoolean(KEY_SWIPE_REPLY, DEFAULT_SWIPE_REPLY);
 	}
 
 	public static boolean isCollapseLongOpenThreadsEnabled() {

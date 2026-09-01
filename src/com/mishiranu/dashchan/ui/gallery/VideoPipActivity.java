@@ -18,6 +18,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Log;
 import android.util.Rational;
 import android.view.Gravity;
 import android.view.ViewTreeObserver;
@@ -27,16 +28,22 @@ import android.view.WindowInsetsController;
 import android.view.WindowManager;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
+import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
+import com.mishiranu.dashchan.content.model.GalleryItem;
 import com.mishiranu.dashchan.media.VideoPlayer;
 import com.mishiranu.dashchan.media.VideoDiagnostics;
+import com.mishiranu.dashchan.ui.MainActivity;
 import com.mishiranu.dashchan.util.AudioFocus;
 import com.mishiranu.dashchan.util.ViewUtils;
 import java.io.File;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.UUID;
 
 public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
+	private static final String TAG = "VideoPipActivity";
 	private static final String EXTRA_FILE_PATH = "filePath";
 	private static final String EXTRA_POSITION = "position";
 	private static final String EXTRA_PLAYBACK_SPEED = "playbackSpeed";
@@ -49,22 +56,46 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 	private static final int REQUEST_SEEK_BACKWARD = 2;
 	private static final int REQUEST_SEEK_FORWARD = 3;
 	private static final long PICTURE_IN_PICTURE_DISMISS_GRACE_PERIOD = 2000L;
+	private static final long PICTURE_IN_PICTURE_RETURN_INITIAL_DELAY = 250L;
+	private static final long PICTURE_IN_PICTURE_RETURN_RETRY_DELAY = 100L;
+	private static final int PICTURE_IN_PICTURE_RETURN_MAX_ATTEMPTS = 20;
 
 	private static final Object TRANSFER_LOCK = new Object();
 	// The PiP activity runs in the same process, so it can reuse the initialized native player.
 	private static PendingTransfer pendingTransfer;
+	private static PendingGalleryReturn pendingGalleryReturn;
+
+	public static class GalleryRestoreData {
+		final String chanName;
+		final ArrayList<GalleryItem> galleryItems;
+		final int imageIndex;
+		final String threadTitle;
+		final GalleryOverlay.NavigatePostMode navigatePostMode;
+
+		GalleryRestoreData(String chanName, ArrayList<GalleryItem> galleryItems, int imageIndex,
+				String threadTitle, GalleryOverlay.NavigatePostMode navigatePostMode) {
+			this.chanName = chanName;
+			this.galleryItems = galleryItems;
+			this.imageIndex = imageIndex;
+			this.threadTitle = threadTitle;
+			this.navigatePostMode = navigatePostMode;
+		}
+	}
 
 	private static class PendingTransfer {
 		public final VideoUnit source;
 		public final VideoPlayer player;
 		public final String filePath;
 		public final Bitmap previewFrame;
+		public final GalleryRestoreData galleryRestoreData;
 
-		private PendingTransfer(VideoUnit source, VideoPlayer player, String filePath, Bitmap previewFrame) {
+		private PendingTransfer(VideoUnit source, VideoPlayer player, String filePath, Bitmap previewFrame,
+				GalleryRestoreData galleryRestoreData) {
 			this.source = source;
 			this.player = player;
 			this.filePath = filePath;
 			this.previewFrame = previewFrame;
+			this.galleryRestoreData = galleryRestoreData;
 		}
 
 		private void recyclePreviewFrame() {
@@ -74,13 +105,44 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 		}
 	}
 
+	private static class PendingGalleryReturn {
+		final String token = UUID.randomUUID().toString();
+		final GalleryRestoreData data;
+		final VideoPlayer player;
+		final File sourceFile;
+		final long position;
+		final int playbackSpeed;
+		final boolean muted;
+		final boolean playing;
+		boolean overlayCreated;
+
+		PendingGalleryReturn(GalleryRestoreData data, VideoPlayer player, File sourceFile, long position,
+				int playbackSpeed, boolean muted, boolean playing) {
+			this.data = data;
+			this.player = player;
+			this.sourceFile = sourceFile;
+			this.position = position;
+			this.playbackSpeed = playbackSpeed;
+			this.muted = muted;
+			this.playing = playing;
+		}
+
+		void destroyPlayer() {
+			player.setListener(null);
+			player.setPlaying(false);
+			player.releaseVideoViewAndDestroyAsync();
+		}
+	}
+
 	static Intent createIntent(Context context, File file, long position, int playbackSpeed,
-			boolean muted, boolean playing, VideoUnit source, VideoPlayer player, Bitmap previewFrame) {
+			boolean muted, boolean playing, VideoUnit source, VideoPlayer player, Bitmap previewFrame,
+			GalleryRestoreData galleryRestoreData) {
 		synchronized (TRANSFER_LOCK) {
 			if (pendingTransfer != null) {
 				pendingTransfer.recyclePreviewFrame();
 			}
-			pendingTransfer = new PendingTransfer(source, player, file.getAbsolutePath(), previewFrame);
+			pendingTransfer = new PendingTransfer(source, player, file.getAbsolutePath(), previewFrame,
+					galleryRestoreData);
 		}
 		return new Intent(context, VideoPipActivity.class)
 				.putExtra(EXTRA_FILE_PATH, file.getAbsolutePath())
@@ -110,9 +172,41 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 		return null;
 	}
 
+	public static GalleryOverlay createPendingGalleryReturnOverlay() {
+		synchronized (TRANSFER_LOCK) {
+			PendingGalleryReturn pending = pendingGalleryReturn;
+			if (pending == null || pending.overlayCreated) {
+				return null;
+			}
+			pending.overlayCreated = true;
+			return GalleryOverlay.createForPictureInPictureRestore(pending.data, pending.token);
+		}
+	}
+
+	static boolean restorePendingGalleryPlayer(VideoUnit target, String token) {
+		if (token == null) {
+			return false;
+		}
+		PendingGalleryReturn pending;
+		synchronized (TRANSFER_LOCK) {
+			pending = pendingGalleryReturn;
+			if (pending == null || !pending.token.equals(token)) {
+				return false;
+			}
+			pendingGalleryReturn = null;
+		}
+		if (target.adoptPictureInPicturePlayer(pending.player, pending.sourceFile, pending.position,
+				pending.playbackSpeed, pending.muted, pending.playing)) {
+			return true;
+		}
+		pending.destroyPlayer();
+		return false;
+	}
+
 	private FrameLayout rootView;
 	private ImageView previewView;
 	private Bitmap previewFrame;
+	private GalleryRestoreData galleryRestoreData;
 	private VideoUnit source;
 	private VideoPlayer player;
 	private AudioFocus audioFocus;
@@ -121,12 +215,17 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 	private boolean startPlaying;
 	private boolean enteredPictureInPicture;
 	private boolean exitedPictureInPicture;
+	private boolean stoppedWhileInPictureInPicture;
 	private boolean returnedToGallery;
 	private boolean receiverRegistered;
 	private boolean resumedAfterPictureInPictureExit;
 	private boolean resumePlaybackAfterPictureInPictureExit;
 	private boolean pictureInPictureEntryScheduled;
 	private boolean previewFrameHideScheduled;
+	private boolean galleryRestorePrepared;
+	private boolean returnToGalleryScheduled;
+	private boolean standalonePlayback;
+	private int returnToGalleryAttempts;
 	private final Handler handler = new Handler(Looper.getMainLooper());
 	private final Runnable hidePreviewFrameRunnable = () -> {
 		previewFrameHideScheduled = false;
@@ -151,6 +250,40 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 				audioFocus.release();
 			}
 			finishAndRemoveTask();
+		}
+	};
+	private final Runnable returnToGalleryAfterExit = () -> {
+		returnToGalleryScheduled = false;
+		if (!canContinueReturnToGallery()) {
+			return;
+		}
+		VideoUnit source = this.source;
+		VideoPlayer player = this.player;
+		if (player == null) {
+			finish();
+			return;
+		}
+		if (source == null) {
+			restoreGalleryFromSnapshot("source_missing");
+			return;
+		}
+		if (!galleryRestorePrepared) {
+			if (!source.preparePictureInPicturePlayerRestore(player)) {
+				restoreGalleryFromSnapshot("source_"
+						+ source.getPictureInPictureRestoreState(player).name());
+				return;
+			}
+			galleryRestorePrepared = true;
+			scheduleReturnToGallery(PICTURE_IN_PICTURE_RETURN_RETRY_DELAY);
+			return;
+		}
+		VideoUnit.PictureInPictureRestoreState state = source.getPictureInPictureRestoreState(player);
+		if (state == VideoUnit.PictureInPictureRestoreState.READY) {
+			returnToGallery();
+		} else if (state == VideoUnit.PictureInPictureRestoreState.HOLDER_UNAVAILABLE) {
+			retryReturnToGallery();
+		} else {
+			restoreGalleryFromSnapshot("source_" + state.name());
 		}
 	};
 
@@ -195,6 +328,7 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 		source = transfer.source;
 		player = transfer.player;
 		previewFrame = transfer.previewFrame;
+		galleryRestoreData = transfer.galleryRestoreData;
 		playbackSpeed = intent.getIntExtra(EXTRA_PLAYBACK_SPEED, 1000);
 		muted = intent.getBooleanExtra(EXTRA_MUTED, false);
 		startPlaying = intent.getBooleanExtra(EXTRA_PLAYING, true);
@@ -206,6 +340,11 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 		window.setAttributes(attributes);
 		rootView = new FrameLayout(this);
 		rootView.setBackgroundColor(Color.BLACK);
+		rootView.setOnClickListener(v -> {
+			if (standalonePlayback) {
+				togglePlayback();
+			}
+		});
 		setContentView(rootView);
 		WindowInsetsController insetsController = window.getInsetsController();
 		if (insetsController != null) {
@@ -410,45 +549,161 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 		}
 	}
 
+	private boolean canReturnToGallery() {
+		return exitedPictureInPicture && enteredPictureInPicture && !isInPictureInPictureMode()
+				&& hasWindowFocus() && !returnedToGallery && !standalonePlayback && !isFinishing();
+	}
+
+	private boolean canContinueReturnToGallery() {
+		return exitedPictureInPicture && enteredPictureInPicture && !isInPictureInPictureMode()
+				&& (galleryRestorePrepared || hasWindowFocus()) && !returnedToGallery
+				&& !standalonePlayback && !isFinishing();
+	}
+
 	private void maybeReturnToGallery() {
-		if (exitedPictureInPicture && enteredPictureInPicture && !isInPictureInPictureMode()
-				&& hasWindowFocus() && !returnedToGallery) {
-			returnToGallery();
+		if (canReturnToGallery()) {
+			scheduleReturnToGallery(PICTURE_IN_PICTURE_RETURN_INITIAL_DELAY);
+		}
+	}
+
+	private void scheduleReturnToGallery(long delayMillis) {
+		if (!returnToGalleryScheduled && canContinueReturnToGallery()) {
+			returnToGalleryScheduled = true;
+			handler.postDelayed(returnToGalleryAfterExit, delayMillis);
+		}
+	}
+
+	private void retryReturnToGallery() {
+		returnToGalleryAttempts++;
+		if (returnToGalleryAttempts < PICTURE_IN_PICTURE_RETURN_MAX_ATTEMPTS) {
+			VideoDiagnostics.recordUi("pip return_to_gallery_wait attempt=" + returnToGalleryAttempts);
+			scheduleReturnToGallery(PICTURE_IN_PICTURE_RETURN_RETRY_DELAY);
+		} else {
+			restoreGalleryFromSnapshot("gallery_timeout");
 		}
 	}
 
 	private void returnToGallery() {
 		VideoPlayer player = this.player;
-		if (player == null || returnedToGallery) {
+		VideoUnit source = this.source;
+		if (player == null || source == null || returnedToGallery) {
 			return;
 		}
-		returnedToGallery = true;
-		VideoDiagnostics.recordUi("pip return_to_gallery");
 		boolean playing = exitedPictureInPicture
 				? resumePlaybackAfterPictureInPictureExit : player.isPlaying();
 		long position = player.getPosition();
 		player.setPlaying(false);
 		player.setVideoViewFrameCallback(null);
+		if (!source.restorePictureInPicturePlayer(player, position, playbackSpeed, muted, playing)) {
+			VideoUnit.PictureInPictureRestoreState state = source.getPictureInPictureRestoreState(player);
+			if (state == VideoUnit.PictureInPictureRestoreState.HOLDER_UNAVAILABLE) {
+				retryReturnToGallery();
+			} else {
+				restoreGalleryFromSnapshot("restore_" + state.name());
+			}
+			return;
+		}
+		returnedToGallery = true;
+		handler.removeCallbacks(returnToGalleryAfterExit);
+		returnToGalleryScheduled = false;
+		VideoDiagnostics.recordUi("pip return_to_gallery attempts=" + returnToGalleryAttempts);
 		hidePreviewFrameImmediately();
 		audioFocus.release();
-		player.releaseVideoView();
-		player.setListener(null);
-		VideoUnit source = this.source;
 		this.source = null;
 		this.player = null;
-		boolean restored = source != null && source.restorePictureInPicturePlayer(player, position,
-				playbackSpeed, muted, playing);
-		if (restored) {
-			source.bringGalleryToForeground(this);
-		} else {
-			player.destroyAsync();
-		}
+		source.bringGalleryToForeground(this);
 		finish();
+	}
+
+	private void restoreGalleryFromSnapshot(String reason) {
+		VideoPlayer player = this.player;
+		GalleryRestoreData data = galleryRestoreData;
+		String filePath = getIntent().getStringExtra(EXTRA_FILE_PATH);
+		if (player == null || returnedToGallery) {
+			return;
+		}
+		if (data == null || data.galleryItems.isEmpty() || filePath == null) {
+			continueStandalonePlayback("snapshot_missing_" + reason);
+			return;
+		}
+		handler.removeCallbacks(returnToGalleryAfterExit);
+		handler.removeCallbacks(finishDismissedPictureInPicture);
+		returnToGalleryScheduled = false;
+		boolean playing = exitedPictureInPicture
+				? resumePlaybackAfterPictureInPictureExit : player.isPlaying();
+		long position = player.getPosition();
+		player.setPlaying(false);
+		player.setVideoViewFrameCallback(null);
+		player.releaseVideoView();
+		player.setListener(null);
+		PendingGalleryReturn pending = new PendingGalleryReturn(data, player, new File(filePath), position,
+				playbackSpeed, muted, playing);
+		PendingGalleryReturn oldPending;
+		synchronized (TRANSFER_LOCK) {
+			oldPending = pendingGalleryReturn;
+			pendingGalleryReturn = pending;
+		}
+		if (oldPending != null) {
+			oldPending.destroyPlayer();
+		}
+		VideoUnit source = this.source;
+		if (source != null) {
+			source.detachPictureInPicturePlayer(player);
+		}
+		returnedToGallery = true;
+		this.source = null;
+		this.player = null;
+		audioFocus.release();
+		hidePreviewFrameImmediately();
+		VideoDiagnostics.recordUi("pip recreate_gallery reason=" + reason);
+		Intent intent = new Intent(this, MainActivity.class)
+				.setAction(C.ACTION_RETURN_FROM_PICTURE_IN_PICTURE)
+				.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP
+						| Intent.FLAG_ACTIVITY_SINGLE_TOP);
+		try {
+			startActivity(intent);
+			finish();
+		} catch (RuntimeException e) {
+			synchronized (TRANSFER_LOCK) {
+				if (pendingGalleryReturn == pending) {
+					pendingGalleryReturn = null;
+				}
+			}
+			pending.destroyPlayer();
+			finish();
+		}
+	}
+
+	private void continueStandalonePlayback(String reason) {
+		VideoPlayer player = this.player;
+		if (player == null || returnedToGallery || standalonePlayback) {
+			return;
+		}
+		handler.removeCallbacks(returnToGalleryAfterExit);
+		handler.removeCallbacks(finishDismissedPictureInPicture);
+		returnToGalleryScheduled = false;
+		galleryRestorePrepared = false;
+		standalonePlayback = true;
+		VideoDiagnostics.recordUi("pip standalone_playback reason=" + reason
+				+ " attempts=" + returnToGalleryAttempts);
+		Log.w(TAG, "Continuing standalone playback after PiP exit: " + reason);
+		VideoUnit source = this.source;
+		this.source = null;
+		if (source != null) {
+			source.detachPictureInPicturePlayer(player);
+		}
+		startPlaying = resumePlaybackAfterPictureInPictureExit;
+		if (startPlaying && !muted && player.isAudioPresent()) {
+			audioFocus.acquire();
+		}
+		player.setPlaying(startPlaying);
+		rootView.setKeepScreenOn(startPlaying);
+		updatePictureInPictureParams();
 	}
 
 	private void suspendPlaybackAfterPictureInPictureExit() {
 		VideoPlayer player = this.player;
-		resumePlaybackAfterPictureInPictureExit = player != null && player.isPlaying();
+		resumePlaybackAfterPictureInPictureExit |= player != null && player.isPlaying();
 		if (player != null) {
 			player.setPlaying(false);
 		}
@@ -460,6 +715,14 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 		}
 		VideoDiagnostics.recordUi("pip exit_playback_suspended resume="
 				+ resumePlaybackAfterPictureInPictureExit);
+	}
+
+	@Override
+	protected void onStart() {
+		super.onStart();
+		if (isInPictureInPictureMode()) {
+			stoppedWhileInPictureInPicture = false;
+		}
 	}
 
 	@Override
@@ -475,14 +738,26 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 	}
 
 	@Override
+	protected void onUserLeaveHint() {
+		super.onUserLeaveHint();
+		if (standalonePlayback && player != null && !isInPictureInPictureMode()) {
+			enterPictureInPicture();
+		}
+	}
+
+	@Override
 	protected void onStop() {
 		super.onStop();
+		if (enteredPictureInPicture && isInPictureInPictureMode()) {
+			stoppedWhileInPictureInPicture = true;
+		}
 		VideoDiagnostics.recordUi("pip on_stop in_pip=" + isInPictureInPictureMode()
 				+ " exited=" + exitedPictureInPicture + " resumed_after_exit="
 				+ resumedAfterPictureInPictureExit);
 		if (enteredPictureInPicture && exitedPictureInPicture && !isInPictureInPictureMode()
 				&& !resumedAfterPictureInPictureExit && !returnedToGallery
 				&& !isChangingConfigurations() && !isFinishing()) {
+			suspendPlaybackAfterPictureInPictureExit();
 			scheduleDismissedPictureInPictureCheck();
 		}
 	}
@@ -504,15 +779,28 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 		super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig);
 		if (isInPictureInPictureMode) {
 			handler.removeCallbacks(finishDismissedPictureInPicture);
+			handler.removeCallbacks(returnToGalleryAfterExit);
 			enteredPictureInPicture = true;
 			exitedPictureInPicture = false;
+			stoppedWhileInPictureInPicture = false;
 			resumedAfterPictureInPictureExit = false;
+			resumePlaybackAfterPictureInPictureExit = false;
+			galleryRestorePrepared = false;
+			returnToGalleryScheduled = false;
+			standalonePlayback = false;
+			returnToGalleryAttempts = 0;
 			VideoDiagnostics.recordUi("pip mode_changed=true");
 		} else if (enteredPictureInPicture) {
 			exitedPictureInPicture = true;
 			resumedAfterPictureInPictureExit = false;
 			VideoDiagnostics.recordUi("pip mode_changed=false");
-			suspendPlaybackAfterPictureInPictureExit();
+			resumePlaybackAfterPictureInPictureExit = player != null && player.isPlaying();
+			if (stoppedWhileInPictureInPicture) {
+				suspendPlaybackAfterPictureInPictureExit();
+			} else {
+				VideoDiagnostics.recordUi("pip exit_playback_continues resume="
+						+ resumePlaybackAfterPictureInPictureExit);
+			}
 			scheduleDismissedPictureInPictureCheck();
 			handler.post(this::maybeReturnToGallery);
 		}
@@ -521,6 +809,7 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 	@Override
 	protected void onDestroy() {
 		handler.removeCallbacks(finishDismissedPictureInPicture);
+		handler.removeCallbacks(returnToGalleryAfterExit);
 		if (receiverRegistered) {
 			unregisterReceiver(controlReceiver);
 			receiverRegistered = false;

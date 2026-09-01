@@ -6,7 +6,6 @@ import android.app.Dialog;
 import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.Intent;
-import android.content.pm.PackageManager;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
@@ -253,12 +252,14 @@ public class BrowserFragment extends ContentFragment implements DownloadListener
 			}
 			if (!chan.locator.isWebScheme(uri)) {
 				Intent intent = new Intent(Intent.ACTION_VIEW).setData(uri)
-						.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-				if (!requireContext().getPackageManager().queryIntentActivities(intent,
-						PackageManager.MATCH_DEFAULT_ONLY).isEmpty()) {
+						.addCategory(Intent.CATEGORY_BROWSABLE)
+						.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+				try {
 					requireContext().startActivity(intent);
-					return true;
+				} catch (ActivityNotFoundException | SecurityException e) {
+					ClickableToast.show(R.string.unknown_address);
 				}
+				return true;
 			}
 			view.loadUrl(uri.toString());
 			return true;

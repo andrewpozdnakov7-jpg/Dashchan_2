@@ -52,6 +52,14 @@ import java.util.Locale;
 import java.util.Map;
 
 public class VideoUnit {
+	enum PictureInPictureRestoreState {
+		READY,
+		TRANSFER_INACTIVE,
+		PLAYER_MISMATCH,
+		NOT_INITIALIZED,
+		HOLDER_UNAVAILABLE
+	}
+
 	private static final int[] PLAYBACK_SPEEDS = {800, 1000, 1250, 1500, 2000, 4000};
 	private static final String[] PLAYBACK_SPEED_LABELS = {"0.8x", "1x", "1.25x", "1.5x", "2x", "4x"};
 
@@ -211,8 +219,14 @@ public class VideoUnit {
 		return player != null;
 	}
 
-	public void interrupt() {
+	public void interrupt(boolean force) {
 		dismissPlaybackSpeedPopupMenu();
+		if (pictureInPictureTransferred && !force) {
+			// PagerUnit may be rebound while its dialog is hidden behind VideoPipActivity. The native player
+			// and this VideoUnit are still the two endpoints of the active transfer, so a soft interrupt must
+			// preserve the complete return target. PagerUnit also suppresses the competing media reload.
+			return;
+		}
 		if (readVideoCallback != null) {
 			readVideoCallback.cancel();
 			readVideoCallback = null;
@@ -365,6 +379,39 @@ public class VideoUnit {
 			readVideoCallback = new ReadVideoCallback(player, instance.currentHolder,
 					instance.galleryInstance.chanName, uri);
 		}
+	}
+
+	boolean adoptPictureInPicturePlayer(VideoPlayer player, File sourceFile, long position,
+			int playbackSpeed, boolean muted, boolean playing) {
+		PagerInstance.ViewHolder holder = instance.currentHolder;
+		if (this.player != null || holder == null || sourceFile == null) {
+			return false;
+		}
+		dismissPlaybackSpeedPopupMenu();
+		if (readVideoCallback != null) {
+			readVideoCallback.cancel();
+			readVideoCallback = null;
+		}
+		this.player = player;
+		this.sourceFile = sourceFile;
+		this.playbackSpeed = normalizePlaybackSpeed(playbackSpeed);
+		this.muted = muted;
+		wasPlaying = playing;
+		finishedPlayback = false;
+		hideSurfaceOnInit = false;
+		pictureInPictureTransferred = false;
+		player.releaseVideoView();
+		player.setListener(playerListener);
+		initializePlayer();
+		seekBar.setSecondaryProgress(seekBar.getMax());
+		seekBar.setProgress((int) Math.min(position, Integer.MAX_VALUE));
+		if (holder.mediaSummary.updateSize(sourceFile.length())) {
+			instance.galleryInstance.callback.updateTitle();
+		}
+		holder.loadState = PagerInstance.LoadState.COMPLETE;
+		updatePictureInPictureButton();
+		instance.galleryInstance.callback.invalidateOptionsMenu();
+		return true;
 	}
 
 	private boolean setPlaying(boolean playing, boolean resetFocus) {
@@ -874,8 +921,10 @@ public class VideoUnit {
 		long position = player.getPosition();
 		Bitmap previewFrame = createPictureInPicturePreview();
 		VideoPlayer transferredPlayer = player;
+		VideoPipActivity.GalleryRestoreData galleryRestoreData =
+				instance.galleryInstance.callback.createPictureInPictureGalleryRestoreData();
 		Intent intent = VideoPipActivity.createIntent(context, sourceFile, position,
-				playbackSpeed, muted, playing, this, transferredPlayer, previewFrame);
+				playbackSpeed, muted, playing, this, transferredPlayer, previewFrame, galleryRestoreData);
 		wasPlaying = false;
 		setPlaying(false, true);
 		transferredPlayer.releaseVideoView();
@@ -914,8 +963,7 @@ public class VideoUnit {
 
 	boolean restorePictureInPicturePlayer(VideoPlayer transferredPlayer, long position, int playbackSpeed,
 			boolean muted, boolean playing) {
-		if (!pictureInPictureTransferred || player != transferredPlayer || !initialized
-				|| instance.currentHolder == null) {
+		if (getPictureInPictureRestoreState(transferredPlayer) != PictureInPictureRestoreState.READY) {
 			return false;
 		}
 		transferredPlayer.releaseVideoView();
@@ -948,6 +996,50 @@ public class VideoUnit {
 		wasPlaying = playing;
 		setPlaying(playing, true);
 		updatePlayState();
+		return true;
+	}
+
+	boolean isPictureInPictureTransferred() {
+		return pictureInPictureTransferred;
+	}
+
+	boolean preparePictureInPicturePlayerRestore(VideoPlayer transferredPlayer) {
+		PictureInPictureRestoreState state = getPictureInPictureRestoreState(transferredPlayer);
+		if (state != PictureInPictureRestoreState.READY
+				&& state != PictureInPictureRestoreState.HOLDER_UNAVAILABLE) {
+			return false;
+		}
+		instance.galleryInstance.callback.setGalleryVisibleForPictureInPicture(true);
+		return true;
+	}
+
+	PictureInPictureRestoreState getPictureInPictureRestoreState(VideoPlayer transferredPlayer) {
+		if (!pictureInPictureTransferred) {
+			return PictureInPictureRestoreState.TRANSFER_INACTIVE;
+		}
+		if (player != transferredPlayer) {
+			return PictureInPictureRestoreState.PLAYER_MISMATCH;
+		}
+		if (!initialized) {
+			return PictureInPictureRestoreState.NOT_INITIALIZED;
+		}
+		if (instance.currentHolder == null) {
+			return PictureInPictureRestoreState.HOLDER_UNAVAILABLE;
+		}
+		return PictureInPictureRestoreState.READY;
+	}
+
+	boolean detachPictureInPicturePlayer(VideoPlayer transferredPlayer) {
+		if (!pictureInPictureTransferred || player != transferredPlayer) {
+			return false;
+		}
+		pictureInPictureTransferred = false;
+		player = null;
+		initialized = false;
+		wasPlaying = false;
+		sourceFile = null;
+		audioFocus.release();
+		instance.galleryInstance.callback.closeGallery();
 		return true;
 	}
 

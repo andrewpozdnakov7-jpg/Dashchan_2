@@ -1,0 +1,10 @@
+- Fixed app behavior when no forums are enabled, including crashes and incorrect navigation. The Replies section can now be opened manually, but is no longer opened automatically when pressing Back.
+- Open pages and favorite threads from disabled forums are preserved and reappear after the forum is enabled again.
+- Significantly improved picture-in-picture mode by fixing infinite loading, missing controls and video titles, and failures after repeatedly minimizing and expanding the player. Video position, playback, and audio are preserved.
+- Added swipe-to-reply with system haptic feedback. It is enabled by default and can be configured under Experimental features. Right-hand mode mirrors the gesture direction.
+- Improved Kekabu support: it is enabled by default for users without a saved forum selection, resulting sessions are synchronized more reliably, and 18+ images available to signed-in users now load correctly. Pikabu age restrictions are not bypassed.
+- Added the privacy policy to the About screen. The current document is loaded from GitHub, with a bundled offline copy used when the network is unavailable.
+- Fixed rare failures involving text selection and copying, links, and missing UI data.
+- Fixed opening links with custom schemes, such as `tg://`, in installed applications.
+
+Found a bug? Send us the logs!

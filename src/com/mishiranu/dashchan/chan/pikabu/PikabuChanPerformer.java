@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.chan.pikabu;
 
+import android.webkit.CookieManager;
 import chan.content.ChanConfiguration;
 import chan.content.ChanPerformer;
 import chan.content.InvalidResponseException;
@@ -13,6 +14,7 @@ import chan.http.HttpRequest;
 import chan.http.HttpResponse;
 import chan.http.UrlEncodedEntity;
 import chan.util.StringUtils;
+import com.mishiranu.dashchan.content.net.UserAgentProvider;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -21,23 +23,79 @@ import java.util.Map;
 
 public class PikabuChanPerformer extends ChanPerformer {
 	private static final int COMMENTS_BATCH_SIZE = 300;
-	private static final String MOBILE_USER_AGENT = "Mozilla/5.0 (Linux; Android 16) "
-			+ "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0 Mobile Safari/537.36";
+	private static final String PIKABU_REFERER = "https://pikabu.ru/";
+	private static final String HTML_ACCEPT = "text/html,application/xhtml+xml,application/xml;q=0.9," +
+			"image/avif,image/webp,image/apng,*/*;q=0.8";
+	private static final HttpRequest.RedirectHandler PIKABU_REDIRECT_HANDLER = response ->
+			isPikabuDomain(response.getRedirectedUri())
+					? HttpRequest.RedirectHandler.BROWSER.onRedirect(response)
+					: HttpRequest.RedirectHandler.Action.CANCEL;
+
+	private static boolean isPikabuDomain(android.net.Uri uri) {
+		if (uri == null || !"https".equalsIgnoreCase(uri.getScheme())) return false;
+		String host = uri.getHost();
+		return host != null && ("pikabu.ru".equalsIgnoreCase(host)
+				|| host.toLowerCase(java.util.Locale.US).endsWith(".pikabu.ru"));
+	}
 
 	private HttpRequest prepareRequest(android.net.Uri uri, HttpRequest.Preset preset) {
+		String userAgent = UserAgentProvider.getInstance().getUserAgent();
 		HttpRequest request = new HttpRequest(uri, preset)
-				.addHeader("User-Agent", MOBILE_USER_AGENT)
+				.addHeader("User-Agent", userAgent)
 				.addHeader("Accept-Language", "ru-RU,ru;q=0.9,en;q=0.5");
-		String cookies = PikabuChanConfiguration.get(this).getAuthorizationCookies();
+		PikabuChanConfiguration configuration = PikabuChanConfiguration.get(this);
+		String cookies = isPikabuDomain(uri) ? configuration.getAuthorizationCookies() : null;
+		if (!StringUtils.isEmpty(cookies)) {
+			String webViewCookies = getWebViewCookies(uri);
+			if (!StringUtils.isEmpty(webViewCookies)) {
+				String mergedCookies = mergeCookies(cookies, webViewCookies);
+				if (!cookies.equals(mergedCookies)) {
+					configuration.storeAuthorization(mergedCookies, configuration.getAuthorizedUserName());
+				}
+				cookies = mergedCookies;
+			}
+		}
+		if (isPikabuDomain(uri)) request.setRedirectHandler(PIKABU_REDIRECT_HANDLER);
 		return StringUtils.isEmpty(cookies) ? request : request.addCookie(cookies);
 	}
 
-	private HttpResponse perform(HttpRequest request) throws HttpException {
+	private HttpRequest preparePageRequest(android.net.Uri uri, HttpRequest.Preset preset) {
+		return prepareRequest(uri, preset).addHeader("Accept", HTML_ACCEPT);
+	}
+
+	private static String getWebViewCookies(android.net.Uri uri) {
+		try {
+			return CookieManager.getInstance().getCookie(uri.toString());
+		} catch (RuntimeException e) {
+			return null;
+		}
+	}
+
+	private static void syncResponseCookies(android.net.Uri uri, HttpResponse response) {
+		if (!isPikabuDomain(uri)) return;
+		boolean changed = false;
+		try {
+			CookieManager cookieManager = CookieManager.getInstance();
+			for (Map.Entry<String, List<String>> header : response.getHeaderFields().entrySet()) {
+				if (header.getKey() == null || !"Set-Cookie".equalsIgnoreCase(header.getKey())) continue;
+				for (String value : header.getValue()) {
+					cookieManager.setCookie(uri.toString(), value);
+					changed = true;
+				}
+			}
+			if (changed) cookieManager.flush();
+		} catch (RuntimeException e) {
+			// The stored HTTP session remains authoritative when WebView cookies are unavailable.
+		}
+	}
+
+	private HttpResponse perform(android.net.Uri uri, HttpRequest request) throws HttpException {
 		HttpResponse response = request.perform();
 		PikabuChanConfiguration configuration = PikabuChanConfiguration.get(this);
 		String current = configuration.getAuthorizationCookies();
 		if (!StringUtils.isEmpty(current)) {
 			String updated = mergeCookies(current, response);
+			syncResponseCookies(uri, response);
 			if (!current.equals(updated)) {
 				configuration.storeAuthorization(updated, configuration.getAuthorizedUserName());
 			}
@@ -51,13 +109,25 @@ public class PikabuChanPerformer extends ChanPerformer {
 		return builder;
 	}
 
-	private static String mergeCookies(String current, HttpResponse response) {
+	private static String mergeCookies(String current, String updated) {
 		LinkedHashMap<String, String> cookies = new LinkedHashMap<>();
-		CookieBuilder parsed = new CookieBuilder().append(current);
+		mergeCookies(cookies, current);
+		mergeCookies(cookies, updated);
+		return buildCookies(cookies).build();
+	}
+
+	private static void mergeCookies(LinkedHashMap<String, String> cookies, String source) {
+		if (StringUtils.isEmpty(source)) return;
+		CookieBuilder parsed = new CookieBuilder().append(source);
 		for (String key : parsed.getKeys()) {
-			String value = extractCookieValue(current, key);
+			String value = extractCookieValue(source, key);
 			if (value != null) cookies.put(key, value);
 		}
+	}
+
+	private static String mergeCookies(String current, HttpResponse response) {
+		LinkedHashMap<String, String> cookies = new LinkedHashMap<>();
+		mergeCookies(cookies, current);
 		mergeCookies(cookies, response);
 		return buildCookies(cookies).build();
 	}
@@ -104,9 +174,11 @@ public class PikabuChanPerformer extends ChanPerformer {
 		if (!PikabuHtmlParser.isBoardName(data.boardName) || data.isCatalog()) {
 			throw new InvalidResponseException();
 		}
-		HttpResponse response = perform(prepareRequest(locator.createBoardUri(data.boardName, data.pageNumber), data)
+		android.net.Uri uri = locator.createBoardUri(data.boardName, data.pageNumber);
+		HttpResponse response = perform(uri, preparePageRequest(uri, data)
 				.setValidator(data.validator));
-		PikabuHtmlParser.ParsedThreads parsed = PikabuHtmlParser.parseThreads(response.readString(), locator,
+		String html = response.readString();
+		PikabuHtmlParser.ParsedThreads parsed = PikabuHtmlParser.parseThreads(html, locator,
 				data.boardName);
 		if (!parsed.validPage) throw new InvalidResponseException();
 		ChanConfiguration configuration = ChanConfiguration.get(this);
@@ -130,8 +202,10 @@ public class PikabuChanPerformer extends ChanPerformer {
 		String query = data.searchQuery != null ? data.searchQuery.trim() : "";
 		if (query.isEmpty()) return new ReadSearchPostsResult();
 		PikabuChanLocator locator = PikabuChanLocator.get(this);
-		HttpResponse response = perform(prepareRequest(locator.createSearchUri(query, data.pageNumber), data));
-		PikabuHtmlParser.ParsedThreads parsed = PikabuHtmlParser.parseSearch(response.readString(), locator, query);
+		android.net.Uri uri = locator.createSearchUri(query, data.pageNumber);
+		HttpResponse response = perform(uri, preparePageRequest(uri, data));
+		String html = response.readString();
+		PikabuHtmlParser.ParsedThreads parsed = PikabuHtmlParser.parseSearch(html, locator, query);
 		if (!parsed.validPage) throw new InvalidResponseException();
 		ArrayList<Post> posts = new ArrayList<>();
 		for (Posts thread : parsed.threads) {
@@ -144,9 +218,11 @@ public class PikabuChanPerformer extends ChanPerformer {
 	@Override
 	public ReadPostsResult onReadPosts(ReadPostsData data) throws HttpException, InvalidResponseException {
 		PikabuChanLocator locator = PikabuChanLocator.get(this);
-		HttpResponse response = perform(prepareRequest(locator.createThreadUri(data.boardName, data.threadNumber), data)
+		android.net.Uri uri = locator.createThreadUri(data.boardName, data.threadNumber);
+		HttpResponse response = perform(uri, preparePageRequest(uri, data)
 				.setValidator(data.validator));
-		PikabuHtmlParser.ParsedPosts parsed = PikabuHtmlParser.parsePosts(response.readString(), locator,
+		String html = response.readString();
+		PikabuHtmlParser.ParsedPosts parsed = PikabuHtmlParser.parsePosts(html, locator,
 				data.threadNumber);
 		if (!parsed.validPage || parsed.posts.length() == 0) throw new InvalidResponseException();
 		Posts posts = parsed.posts;
@@ -167,8 +243,9 @@ public class PikabuChanPerformer extends ChanPerformer {
 		}
 		if (!fullThread) {
 			try {
-				ArrayList<Post> comments = PikabuHtmlParser.parseCommentsXml(perform(prepareRequest(
-						locator.createThreadCommentsUri(data.threadNumber), data)).readString(), locator,
+				android.net.Uri commentsUri = locator.createThreadCommentsUri(data.threadNumber);
+				ArrayList<Post> comments = PikabuHtmlParser.parseCommentsXml(perform(commentsUri,
+						prepareRequest(commentsUri, data)).readString(), locator,
 						data.threadNumber);
 				if (parsed.expectedComments >= 0 && comments != null
 						&& comments.size() >= parsed.expectedComments) {
@@ -183,6 +260,33 @@ public class PikabuChanPerformer extends ChanPerformer {
 		return new ReadPostsResult(posts).setValidator(response.getValidator()).setFullThread(fullThread);
 	}
 
+	@Override
+	protected ReadContentResult onReadContent(ReadContentData data)
+			throws HttpException, InvalidResponseException {
+		int scramblerOffset = PikabuImageScrambler.getOffset(data.uri);
+		android.net.Uri requestUri = PikabuImageScrambler.getRequestUri(data.uri);
+		HttpRequest request = prepareRequest(requestUri, scramblerOffset >= 0 ? data : data.direct);
+		if (isPikabuDomain(requestUri)) {
+			request.addHeader("Referer", PIKABU_REFERER);
+			HttpResponse response = perform(requestUri, request);
+			if (scramblerOffset >= 0) {
+				byte[] source;
+				try {
+					source = response.readBytes();
+				} finally {
+					response.cleanupAndDisconnect();
+				}
+				byte[] decoded = PikabuImageScrambler.decode(source, scramblerOffset);
+				if (decoded == null) {
+					throw new InvalidResponseException();
+				}
+				return new ReadContentResult(new HttpResponse(decoded));
+			}
+			return new ReadContentResult(response);
+		}
+		return new ReadContentResult(request.perform());
+	}
+
 	private ArrayList<Post> readCommentsByIds(PikabuChanLocator locator, HttpRequest.Preset preset,
 			String threadNumber, List<String> commentIds) throws HttpException {
 		ArrayList<Post> comments = new ArrayList<>();
@@ -195,7 +299,8 @@ public class PikabuChanPerformer extends ChanPerformer {
 			}
 			UrlEncodedEntity entity = new UrlEncodedEntity("action", "get_comments_by_ids",
 					"ids", ids.toString());
-			String json = perform(prepareRequest(locator.createCommentsActionsUri(), preset)
+			android.net.Uri commentsActionsUri = locator.createCommentsActionsUri();
+			String json = perform(commentsActionsUri, prepareRequest(commentsActionsUri, preset)
 					.addHeader("Accept", "application/json")
 					.addHeader("Referer", locator.createThreadUri(PikabuChanLocator.BOARD_HOT,
 							threadNumber).toString())
@@ -212,6 +317,26 @@ public class PikabuChanPerformer extends ChanPerformer {
 		for (Post post : current.getPosts()) allPosts.put(post.getPostNumber(), post);
 		for (Post post : comments) allPosts.putIfAbsent(post.getPostNumber(), post);
 		return allPosts;
+	}
+
+	@Override
+	public CheckAuthorizationResult onCheckAuthorization(CheckAuthorizationData data)
+			throws HttpException, InvalidResponseException {
+		if (data.type != CheckAuthorizationData.TYPE_USER_AUTHORIZATION) {
+			throw new InvalidResponseException();
+		}
+		PikabuChanConfiguration configuration = PikabuChanConfiguration.get(this);
+		android.net.Uri uri = android.net.Uri.parse(PIKABU_REFERER);
+		HttpResponse response = perform(uri, preparePageRequest(uri, data));
+		String html = response.readString();
+		PikabuHtmlParser.SessionData sessionData = PikabuHtmlParser.parseSessionData(html);
+		if (sessionData == null) throw new InvalidResponseException();
+		if (sessionData.authorized) {
+			configuration.storeAuthorization(configuration.getAuthorizationCookies(), sessionData.userName);
+		} else {
+			configuration.clearAuthorization();
+		}
+		return new CheckAuthorizationResult(sessionData.authorized);
 	}
 
 	@Override
@@ -240,14 +365,16 @@ public class PikabuChanPerformer extends ChanPerformer {
 
 		String communitiesHtml = null;
 		try {
-			communitiesHtml = perform(prepareRequest(locator.createCommunitiesUri(), data)).readString();
+			android.net.Uri communitiesUri = locator.createCommunitiesUri();
+			communitiesHtml = perform(communitiesUri, preparePageRequest(communitiesUri, data)).readString();
 			ArrayList<Board> communities = PikabuHtmlParser.parseCommunities(communitiesHtml);
 			if (!communities.isEmpty()) categories.add(new BoardCategory("Сообщества", communities));
 		} catch (HttpException e) {
 			// Keep the built-in feeds and filters available when the directory is temporarily unavailable.
 		}
 		try {
-			String tagsHtml = perform(prepareRequest(locator.createTagsUri(), data)).readString();
+			android.net.Uri tagsUri = locator.createTagsUri();
+			String tagsHtml = perform(tagsUri, preparePageRequest(tagsUri, data)).readString();
 			ArrayList<Board> tags = PikabuHtmlParser.parseTags(tagsHtml);
 			if (!tags.isEmpty()) categories.add(new BoardCategory("Популярные теги", tags));
 		} catch (HttpException e) {
