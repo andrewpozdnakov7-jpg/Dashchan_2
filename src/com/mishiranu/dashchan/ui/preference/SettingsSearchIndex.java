@@ -516,6 +516,7 @@ public final class SettingsSearchIndex {
 		add(context, entries, Screen.ABOUT, R.string.statistics);
 		add(context, entries, Screen.ABOUT, R.string.backup_data, R.string.backup_data__summary, null);
 		add(context, entries, Screen.ABOUT, R.string.changelog);
+		add(context, entries, Screen.ABOUT, R.string.privacy_policy);
 		if (BuildConfig.ALLOW_APPLICATION_SELF_UPDATE) {
 			if (BuildConfig.ALLOW_BETA_UPDATE_CHANNEL) {
 				add(context, entries, Screen.ABOUT, R.string.update_channel, 0, Preferences.KEY_UPDATE_CHANNEL);

@@ -22,6 +22,7 @@ import chan.util.StringUtils;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.LocaleManager;
 import com.mishiranu.dashchan.content.async.ReadChangelogTask;
+import com.mishiranu.dashchan.content.async.ReadPrivacyPolicyTask;
 import com.mishiranu.dashchan.content.async.TaskViewModel;
 import com.mishiranu.dashchan.content.model.ErrorItem;
 import com.mishiranu.dashchan.graphics.ColorScheme;
@@ -54,13 +55,17 @@ public class TextFragment extends BaseListFragment {
 
 	private static final String EXTRA_CHANGELOG_ENTRIES = "changelogEntries";
 	private static final String EXTRA_CHANGELOG_LOCAL_FALLBACK = "changelogLocalFallback";
+	private static final String EXTRA_PRIVACY_POLICY_TEXT = "privacyPolicyText";
+	private static final String EXTRA_PRIVACY_POLICY_LOCAL_FALLBACK = "privacyPolicyLocalFallback";
 	private static final String EXTRA_ERROR_ITEM = "errorItem";
 
-	public enum Type {LICENSES, CHANGELOG}
+	public enum Type {LICENSES, CHANGELOG, PRIVACY_POLICY}
 
 	private List<ReadChangelogTask.Entry> changelogEntries;
+	private String privacyPolicyText;
 	private ErrorItem errorItem;
 	private boolean changelogLocalFallback;
+	private boolean privacyPolicyLocalFallback;
 
 	private View progressView;
 
@@ -142,6 +147,46 @@ public class TextFragment extends BaseListFragment {
 				}
 				break;
 			}
+			case PRIVACY_POLICY: {
+				((FragmentHandler) requireActivity()).setTitleSubtitle(getString(R.string.privacy_policy), null);
+				privacyPolicyText = savedInstanceState != null
+						? savedInstanceState.getString(EXTRA_PRIVACY_POLICY_TEXT) : null;
+				privacyPolicyLocalFallback = savedInstanceState != null &&
+						savedInstanceState.getBoolean(EXTRA_PRIVACY_POLICY_LOCAL_FALLBACK);
+				errorItem = savedInstanceState != null
+						? AndroidUtils.getParcelable(savedInstanceState, EXTRA_ERROR_ITEM, ErrorItem.class) : null;
+				if (errorItem != null) {
+					recyclerView.setVisibility(View.GONE);
+					setErrorText(errorItem.toString());
+				} else if (privacyPolicyText != null) {
+					adapter.setItems(context, formatPrivacyPolicy(context, privacyPolicyText,
+							privacyPolicyLocalFallback));
+				} else {
+					recyclerView.setVisibility(View.GONE);
+					progressView.setVisibility(View.VISIBLE);
+					PrivacyPolicyViewModel viewModel = new ViewModelProvider(this)
+							.get(PrivacyPolicyViewModel.class);
+					if (!viewModel.hasTaskOrValue()) {
+						ReadPrivacyPolicyTask task = new ReadPrivacyPolicyTask(viewModel.callback);
+						task.execute(ConcurrentUtils.PARALLEL_EXECUTOR);
+						viewModel.attach(task);
+					}
+					viewModel.observe(getViewLifecycleOwner(), (text, errorItem, localFallback) -> {
+						privacyPolicyText = text;
+						this.errorItem = errorItem;
+						privacyPolicyLocalFallback = localFallback;
+						progressView.setVisibility(View.GONE);
+						if (text != null) {
+							recyclerView.setVisibility(View.VISIBLE);
+							adapter.setItems(context, formatPrivacyPolicy(context, text, localFallback));
+						} else {
+							errorItem = errorItem != null ? errorItem : new ErrorItem(ErrorItem.Type.UNKNOWN);
+							setErrorText(errorItem.toString());
+						}
+					});
+				}
+				break;
+			}
 		}
 	}
 
@@ -158,6 +203,12 @@ public class TextFragment extends BaseListFragment {
 				}
 				break;
 			}
+			case PRIVACY_POLICY: {
+				outState.putParcelable(EXTRA_ERROR_ITEM, errorItem);
+				outState.putString(EXTRA_PRIVACY_POLICY_TEXT, privacyPolicyText);
+				outState.putBoolean(EXTRA_PRIVACY_POLICY_LOCAL_FALLBACK, privacyPolicyLocalFallback);
+				break;
+			}
 		}
 	}
 
@@ -165,9 +216,19 @@ public class TextFragment extends BaseListFragment {
 		markup.addTag("h1", ChanMarkup.TAG_HEADING);
 		markup.addTag("pre", ChanMarkup.TAG_CODE);
 	});
+	private static final ChanMarkup.MarkupBuilder PRIVACY_POLICY_BUILDER =
+			new ChanMarkup.MarkupBuilder(markup -> {
+				markup.addTag("h1", ChanMarkup.TAG_HEADING);
+				markup.addTag("b", ChanMarkup.TAG_BOLD);
+				markup.addTag("code", ChanMarkup.TAG_CODE);
+			});
 
 	private static List<CharSequence> formatText(String html) {
-		CharSequence text = BUILDER.fromHtmlReduced(html);
+		return formatText(BUILDER, html);
+	}
+
+	private static List<CharSequence> formatText(ChanMarkup.MarkupBuilder markupBuilder, String html) {
+		CharSequence text = markupBuilder.fromHtmlReduced(html);
 		SpannableStringBuilder builder = new SpannableStringBuilder(text);
 		HeadingSpan[] spans = builder.getSpans(0, builder.length(), HeadingSpan.class);
 		if (spans != null && spans.length > 1) {
@@ -280,6 +341,118 @@ public class TextFragment extends BaseListFragment {
 		return items;
 	}
 
+	private static List<CharSequence> formatPrivacyPolicy(Context context, String markdown,
+			boolean localFallback) {
+		ArrayList<CharSequence> items = new ArrayList<>();
+		if (localFallback) {
+			items.add(context.getString(R.string.privacy_policy_loaded_from_local_copy__sentence));
+		}
+		items.addAll(formatText(PRIVACY_POLICY_BUILDER, markdownToHtml(markdown)));
+		return items;
+	}
+
+	private static String markdownToHtml(String markdown) {
+		StringBuilder html = new StringBuilder(markdown.length() + markdown.length() / 4);
+		for (String sourceLine : markdown.replace("\r", "").split("\n", -1)) {
+			String line = sourceLine;
+			int headingLength = 0;
+			while (headingLength < line.length() && headingLength < 6 && line.charAt(headingLength) == '#') {
+				headingLength++;
+			}
+			if (headingLength > 0 && headingLength < line.length() && line.charAt(headingLength) == ' ') {
+				html.append("<h1>");
+				appendInlineMarkdown(html, line.substring(headingLength + 1));
+				html.append("</h1>");
+			} else if (line.equals("---")) {
+				html.append("<br>");
+			} else {
+				if (line.startsWith("- ")) {
+					html.append("&#8226; ");
+					line = line.substring(2);
+				}
+				appendInlineMarkdown(html, line);
+				html.append("<br>");
+			}
+		}
+		return html.toString();
+	}
+
+	private static void appendInlineMarkdown(StringBuilder html, String text) {
+		for (int i = 0; i < text.length();) {
+			if (i + 2 <= text.length() && text.startsWith("**", i)) {
+				int end = text.indexOf("**", i + 2);
+				if (end >= 0) {
+					html.append("<b>");
+					appendHtmlEscaped(html, text, i + 2, end);
+					html.append("</b>");
+					i = end + 2;
+					continue;
+				}
+			}
+			if (text.charAt(i) == '`') {
+				int end = text.indexOf('`', i + 1);
+				if (end >= 0) {
+					html.append("<code>");
+					appendHtmlEscaped(html, text, i + 1, end);
+					html.append("</code>");
+					i = end + 1;
+					continue;
+				}
+			}
+			if (text.charAt(i) == '[') {
+				int labelEnd = text.indexOf(']', i + 1);
+				int targetStart = labelEnd >= 0 && labelEnd + 1 < text.length() &&
+						text.charAt(labelEnd + 1) == '(' ? labelEnd + 2 : -1;
+				int targetEnd = targetStart >= 0 ? text.indexOf(')', targetStart) : -1;
+				if (targetEnd >= 0) {
+					String target = resolvePolicyLink(text.substring(targetStart, targetEnd));
+					if (target != null) {
+						html.append("<a href=\"");
+						appendHtmlEscaped(html, target, 0, target.length());
+						html.append("\">");
+						appendHtmlEscaped(html, text, i + 1, labelEnd);
+						html.append("</a>");
+					} else {
+						appendHtmlEscaped(html, text, i + 1, labelEnd);
+					}
+					i = targetEnd + 1;
+					continue;
+				}
+			}
+			appendHtmlEscaped(html, text, i, i + 1);
+			i++;
+		}
+	}
+
+	private static String resolvePolicyLink(String target) {
+		if (target.startsWith("https://")) {
+			return target;
+		}
+		if (target.startsWith("#")) {
+			return null;
+		}
+		for (int i = 0; i < target.length(); i++) {
+			char c = target.charAt(i);
+			if (!(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' ||
+					c == '_' || c == '-' || c == '.' || c == '/')) {
+				return null;
+			}
+		}
+		return "https://github.com/andrewpozdnakov7-jpg/Dashchan_2/blob/master/" + target;
+	}
+
+	private static void appendHtmlEscaped(StringBuilder html, String text, int start, int end) {
+		for (int i = start; i < end; i++) {
+			switch (text.charAt(i)) {
+				case '&': html.append("&amp;"); break;
+				case '<': html.append("&lt;"); break;
+				case '>': html.append("&gt;"); break;
+				case '"': html.append("&quot;"); break;
+				default: html.append(text.charAt(i)); break;
+			}
+		}
+	}
+
 	private static int getPadding(Resources resources) {
 		float density = ResourceUtils.obtainDensity(resources);
 		return (int) (16f * density);
@@ -379,6 +552,8 @@ public class TextFragment extends BaseListFragment {
 	}
 
 	public static class ChangelogViewModel extends TaskViewModel.Proxy<ReadChangelogTask, ReadChangelogTask.Callback> {}
+	public static class PrivacyPolicyViewModel extends
+			TaskViewModel.Proxy<ReadPrivacyPolicyTask, ReadPrivacyPolicyTask.Callback> {}
 
 	private static class PrefixSpan extends ReplacementSpan implements ColorScheme.Span {
 		private final Paint.FontMetricsInt fontMetrics = new Paint.FontMetricsInt();

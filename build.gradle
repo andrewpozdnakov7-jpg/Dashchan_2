@@ -213,6 +213,26 @@ abstract class PrepareBergamotRuntimeTask extends org.gradle.api.DefaultTask {
 	}
 }
 
+abstract class PreparePrivacyPolicyAssetTask extends org.gradle.api.DefaultTask {
+	@org.gradle.api.tasks.InputFile
+	@org.gradle.api.tasks.PathSensitive(org.gradle.api.tasks.PathSensitivity.RELATIVE)
+	abstract org.gradle.api.file.RegularFileProperty getPolicyFile()
+
+	@org.gradle.api.tasks.OutputDirectory
+	abstract org.gradle.api.file.DirectoryProperty getOutputDirectory()
+
+	@org.gradle.api.tasks.TaskAction
+	void prepare() {
+		File directory = outputDirectory.get().asFile
+		if (!directory.mkdirs() && !directory.isDirectory()) {
+			throw new GradleException('Cannot create privacy policy asset directory')
+		}
+		java.nio.file.Files.copy(policyFile.get().asFile.toPath(),
+				new File(directory, 'privacy_policy.md').toPath(),
+				java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+	}
+}
+
 def bergamotRuntimeFiles = [
 		[
 				name: 'bergamot-translator.js',
@@ -235,6 +255,11 @@ def prepareBergamotRuntime = tasks.register('prepareBergamotRuntime', PrepareBer
 	runtimeFilesJson.set(groovy.json.JsonOutput.toJson(bergamotRuntimeFiles))
 	outputDirectory.set(layout.buildDirectory.dir('generated/bergamot/assets'))
 	cacheDirectory.set(new File(gradle.gradleUserHomeDir, 'caches/dashchan2/bergamot/v0.6.0'))
+}
+def preparePrivacyPolicyAsset = tasks.register('preparePrivacyPolicyAsset', PreparePrivacyPolicyAssetTask) {
+	description = 'Bundles the repository privacy policy for offline viewing.'
+	policyFile.set(layout.projectDirectory.file('PRIVACY.md'))
+	outputDirectory.set(layout.buildDirectory.dir('generated/privacy-policy/assets'))
 }
 
 android {
@@ -286,6 +311,8 @@ android {
 				'andrewpozdnakov7-jpg/Slooop_Addons/main/fonts.json"'
 		buildConfigField 'String', 'GITHUB_URI_METADATA', '"//github.com/andrewpozdnakov7-jpg/Dashchan_2"'
 		buildConfigField 'String', 'GITHUB_PATH_METADATA', '"metadata"'
+		buildConfigField 'String', 'PRIVACY_POLICY_URL', '"https://raw.githubusercontent.com/' +
+				'andrewpozdnakov7-jpg/Dashchan_2/master/PRIVACY.md"'
 		buildConfigField 'String', 'FILE_PROVIDER_AUTHORITY', '"' +
 				manifestPlaceholders.fileProviderAuthority + '"'
 		buildConfigField 'String', 'CHAN_EXTENSION_FEATURE_NAME', '"chan.extension"'
@@ -465,9 +492,14 @@ androidComponents {
 		boolean github = variant.productFlavors.any { flavor ->
 			flavor.first == 'distribution' && flavor.second == 'github'
 		}
-		if (github && variant.sources.assets != null) {
-			variant.sources.assets.addGeneratedSourceDirectory(prepareBergamotRuntime) { task ->
+		if (variant.sources.assets != null) {
+			variant.sources.assets.addGeneratedSourceDirectory(preparePrivacyPolicyAsset) { task ->
 				task.outputDirectory
+			}
+			if (github) {
+				variant.sources.assets.addGeneratedSourceDirectory(prepareBergamotRuntime) { task ->
+					task.outputDirectory
+				}
 			}
 		}
 	}
