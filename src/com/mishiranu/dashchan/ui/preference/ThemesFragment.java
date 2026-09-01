@@ -208,6 +208,11 @@ public class ThemesFragment extends BaseListFragment {
 		if (!ContentResolver.SCHEME_CONTENT.equals(uri.getScheme())) {
 			return new byte[0];
 		}
+		String path = uri.getPath();
+		if (StringUtils.isEmpty(uri.getAuthority()) || path == null || path.contains("..")
+				|| path.startsWith("/data")) {
+			return new byte[0];
+		}
 		try (InputStream input = resolver.openInputStream(uri)) {
 			if (input == null) {
 				throw new IOException("Input stream is empty");
