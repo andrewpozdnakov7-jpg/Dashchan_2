@@ -407,9 +407,15 @@ public abstract class FileHolder {
 
 		@Override
 		public InputStream openInputStream() throws IOException {
+			Uri uri = toUri();
+			String path = uri.getPath();
+			if (!"content".equals(uri.getScheme()) || StringUtils.isEmpty(uri.getAuthority())
+					|| path == null || path.contains("..") || path.startsWith("/data")) {
+				throw new IOException("Unsafe content URI");
+			}
 			try {
 				InputStream inputStream = MainApplication.getInstance()
-						.getContentResolver().openInputStream(toUri());
+						.getContentResolver().openInputStream(uri);
 				if (inputStream == null) {
 					throw new IOException("InputStream is empty");
 				}
@@ -424,9 +430,15 @@ public abstract class FileHolder {
 
 		@Override
 		public ParcelFileDescriptor openFileDescriptor() throws IOException {
+			Uri uri = toUri();
+			String path = uri.getPath();
+			if (!"content".equals(uri.getScheme()) || StringUtils.isEmpty(uri.getAuthority())
+					|| path == null || path.contains("..") || path.startsWith("/data")) {
+				throw new IOException("Unsafe content URI");
+			}
 			try {
 				ParcelFileDescriptor descriptor = MainApplication.getInstance()
-						.getContentResolver().openFileDescriptor(toUri(), "r");
+						.getContentResolver().openFileDescriptor(uri, "r");
 				if (descriptor == null) {
 					throw new FileNotFoundException("File descriptor is null");
 				}
@@ -476,7 +488,9 @@ public abstract class FileHolder {
 		// Uri instances accepted here originate outside the app (document picker,
 		// sharing or receive-content). Never turn an external file:// path into a
 		// File; internal files must use obtain(File), where the caller owns the path.
-		if ("content".equals(scheme)) {
+		String path = uri.getPath();
+		if ("content".equals(scheme) && !StringUtils.isEmpty(uri.getAuthority())
+				&& path != null && !path.contains("..") && !path.startsWith("/data")) {
 			try (Cursor cursor = MainApplication.getInstance()
 					.getContentResolver().query(uri, null, null, null, null)) {
 				if (cursor != null && cursor.moveToFirst()) {
