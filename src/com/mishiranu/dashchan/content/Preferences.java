@@ -23,6 +23,7 @@ import com.mishiranu.dashchan.content.translation.TranslationEngine;
 import com.mishiranu.dashchan.util.SharedPreferences;
 import com.mishiranu.dashchan.widget.ClickableToast;
 import java.io.File;
+import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
@@ -33,7 +34,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
 import java.util.Set;
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -1365,12 +1365,12 @@ public class Preferences {
 	}
 
 	public static final ChanKey KEY_PASSWORD = new ChanKey("password");
+	private static final SecureRandom PASSWORD_RANDOM = new SecureRandom();
 
 	private static String generatePassword() {
 		StringBuilder password = new StringBuilder();
-		Random random = new Random(System.currentTimeMillis());
-		for (int i = 0, count = 10 + random.nextInt(6); i < count; i++) {
-			int value = random.nextInt(26 + 26 + 10);
+		for (int i = 0, count = 10 + PASSWORD_RANDOM.nextInt(6); i < count; i++) {
+			int value = PASSWORD_RANDOM.nextInt(26 + 26 + 10);
 			if (value < 26) {
 				value = 0x41 + value;
 			} else if (value < 26 + 26) {
@@ -1985,11 +1985,10 @@ public class Preferences {
 		}
 	}
 
-	public static final String KEY_VERIFY_CERTIFICATE = "verify_certificate";
-	public static final boolean DEFAULT_VERIFY_CERTIFICATE = true;
-
 	public static boolean isVerifyCertificate() {
-		return PREFERENCES.getBoolean(KEY_VERIFY_CERTIFICATE, DEFAULT_VERIFY_CERTIFICATE);
+		// Certificate and hostname verification is mandatory. The former opt-out
+		// exposed all HTTPS traffic to active interception.
+		return true;
 	}
 
 	public enum VideoCompletionMode {

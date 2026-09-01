@@ -82,8 +82,6 @@ public class GeneralFragment extends PreferenceFragment implements FragmentHandl
 		addButton(0, R.string.specific_to_internal_services__sentence).setSelectable(false);
 		addCheck(true, Preferences.KEY_USE_HTTPS_GENERAL, Preferences.DEFAULT_USE_HTTPS,
 				R.string.secure_connection, R.string.secure_connection__summary);
-		addCheck(true, Preferences.KEY_VERIFY_CERTIFICATE, Preferences.DEFAULT_VERIFY_CERTIFICATE,
-				R.string.verify_certificate, R.string.verify_certificate__summary);
 	}
 
 	@Override

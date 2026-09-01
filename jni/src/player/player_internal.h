@@ -300,6 +300,7 @@ struct ScaleHolder {
 JavaVM * playerGetJavaVM(void);
 int playerGetSkipFlag(int * flag);
 void playerSetSkipFlag(int * flag, int value);
+void playerApplyPlaying(Player * player, int playing);
 void playerSetDiagnosticsAudioStage(Player * player, int stage);
 void playerSetDiagnosticsMediaCodecStage(Player * player, int stage, int64_t framePosition);
 Bridge * playerObtainBridge(Player * player, JNIEnv * env);

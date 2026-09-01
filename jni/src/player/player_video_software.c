@@ -229,10 +229,11 @@ static void drawWindow(Player * player, uint8_t * buffer, int width, int height,
 				} else {
 					int bytesPerPixel = getBytesPerPixel(player->video.format);
 					if (bytesPerPixel > 0) {
+						size_t rowBytes = (size_t) bytesPerPixel * (size_t) width;
 						for (int i = 0; i < height; i++) {
-							memcpy(to, buffer, bytesPerPixel * width);
-							to += bytesPerPixel * canvas.stride;
-							buffer += bytesPerPixel * width;
+							memcpy(to, buffer, rowBytes);
+							to += (size_t) bytesPerPixel * (size_t) canvas.stride;
+							buffer += rowBytes;
 						}
 					}
 				}
@@ -396,9 +397,10 @@ static void extendScaleHolder(ScaleHolder * scaleHolder, int bufferSize, int wid
 		}
 		scaleHolder->scaleBuffer = av_malloc(bufferSize);
 	}
+	size_t lumaSize = (size_t) width * (size_t) height;
 	scaleHolder->scaleData[0] = scaleHolder->scaleBuffer;
-	scaleHolder->scaleData[1] = isYUV ? scaleHolder->scaleBuffer + width * height + width * height / 4 : NULL;
-	scaleHolder->scaleData[2] = isYUV ? scaleHolder->scaleBuffer + width * height : NULL;
+	scaleHolder->scaleData[1] = isYUV ? scaleHolder->scaleBuffer + lumaSize + lumaSize / 4 : NULL;
+	scaleHolder->scaleData[2] = isYUV ? scaleHolder->scaleBuffer + lumaSize : NULL;
 	scaleHolder->scaleData[3] = NULL;
 	scaleHolder->scaleLinesize[0] = bytesPerPixel * width;
 	scaleHolder->scaleLinesize[1] = isYUV ? width / 2 : 0;
@@ -762,18 +764,20 @@ int playerVideoSoftwarePrepareOutputLocked(Player * player) {
 		player->video.lastBuffer.height = height;
 		if (videoFormat == AV_PIX_FMT_RGBA) {
 			// RGBA_8888 "black" buffer
-			int count = 4 * width * height;
+			int count = videoBufferSize;
 			memset(player->video.lastBuffer.data, 0x00, count);
 			for (int i = 3; i < count; i += 4) {
 				player->video.lastBuffer.data[i] = 0xff;
 			}
 		} else if (videoFormat == AV_PIX_FMT_RGB565LE) {
 			// RGB_565 "black" buffer
-			memset(player->video.lastBuffer.data, 0x00, 2 * width * height);
+			memset(player->video.lastBuffer.data, 0x00, (size_t) videoBufferSize);
 		} else if (videoFormat == AV_PIX_FMT_YUV420P) {
 			// YV12 "black" buffer
-			memset(player->video.lastBuffer.data, 0, width * height);
-			memset(player->video.lastBuffer.data + width * height, 0x7f, width * height / 2);
+			size_t lumaSize = (size_t) width * (size_t) height;
+			memset(player->video.lastBuffer.data, 0, lumaSize);
+			memset(player->video.lastBuffer.data + lumaSize, 0x7f,
+					(size_t) videoBufferSize - lumaSize);
 		}
 		pthread_cond_broadcast(&player->video.sleepCond);
 		diagnosticsLog("player=%u software_output source=%dx%d surface=%dx%d"

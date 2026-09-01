@@ -76,9 +76,61 @@ public final class EndchanModelMapper {
 		return attachment;
 	}
 
-	private static final Pattern PATTERN_BROKEN_LINK = Pattern.compile("(<a [^>]*?href=\"/[^/]+/res/)"
-			+ "(\\d+)(\\.html#\\2\")");
 	private static final Pattern PATTERN_COLORED_TEXT = Pattern.compile("<span class=\"(\\w+)Text\">");
+
+	private static boolean isAsciiDigits(String value, int start, int end) {
+		if (start >= end) return false;
+		for (int i = start; i < end; i++) {
+			char c = value.charAt(i);
+			if (c < '0' || c > '9') return false;
+		}
+		return true;
+	}
+
+	private static String fixQuoteLinks(String comment, String threadNumber) {
+		StringBuilder result = null;
+		int copyFrom = 0;
+		int searchFrom = 0;
+		while (true) {
+			int tagStart = comment.indexOf("<a ", searchFrom);
+			if (tagStart < 0) break;
+			int tagEnd = comment.indexOf('>', tagStart + 3);
+			if (tagEnd < 0) break;
+			int afterTag = tagEnd + 1;
+			if (comment.startsWith("<a class=\"quoteLink\"", tagStart) &&
+					comment.startsWith("&gt&gt", afterTag)) {
+				if (result == null) result = new StringBuilder(comment.length() + 2);
+				result.append(comment, copyFrom, afterTag).append("&gt;&gt;");
+				copyFrom = afterTag + 6;
+				searchFrom = copyFrom;
+				continue;
+			}
+			if (threadNumber != null) {
+				int hrefStart = comment.indexOf("href=\"", tagStart + 3);
+				if (hrefStart >= 0 && hrefStart < tagEnd) {
+					hrefStart += 6;
+					int hrefEnd = comment.indexOf('\"', hrefStart);
+					int res = comment.indexOf("/res/", hrefStart);
+					if (hrefEnd >= 0 && hrefEnd <= tagEnd && res > hrefStart && res < hrefEnd &&
+							comment.charAt(hrefStart) == '/' && comment.indexOf('/', hrefStart + 1) == res) {
+						int numberStart = res + 5;
+						int separator = comment.indexOf(".html#", numberStart);
+						if (separator > numberStart && separator < hrefEnd &&
+								isAsciiDigits(comment, numberStart, separator) &&
+								comment.regionMatches(separator + 6, comment, numberStart, separator - numberStart) &&
+								separator + 6 + separator - numberStart == hrefEnd) {
+							if (result == null) result = new StringBuilder(comment.length());
+							result.append(comment, copyFrom, numberStart).append(threadNumber);
+							copyFrom = separator;
+						}
+					}
+				}
+			}
+			searchFrom = tagEnd + 1;
+		}
+		if (result == null) return comment;
+		return result.append(comment, copyFrom, comment.length()).toString();
+	}
 
 	private static long parseTimestamp(String value) throws JSONException {
 		try {
@@ -147,11 +199,7 @@ public final class EndchanModelMapper {
 		}
 		String comment = CommonUtils.getJsonString(jsonObject, "markdown");
 		if (!StringUtils.isEmpty(comment)) {
-			comment = comment.replaceAll("(<a class=\"quoteLink\".*?>)&gt&gt", "$1&gt;&gt;");
-			String fixedThreadNumber = threadNumber;
-			comment = StringUtils.replaceAll(comment, PATTERN_BROKEN_LINK,
-					matcher -> matcher.group(1) + (fixedThreadNumber != null ? fixedThreadNumber : matcher.group(2))
-							+ matcher.group(3));
+			comment = fixQuoteLinks(comment, threadNumber);
 			comment = StringUtils.replaceAll(comment, PATTERN_COLORED_TEXT, matcher -> {
 				String color = matcher.group(1);
 				switch (color) {

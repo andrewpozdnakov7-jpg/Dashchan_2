@@ -4,6 +4,8 @@
 [![Android 11+](https://img.shields.io/badge/Android-11%2B-3DDC84)](https://developer.android.com/about/versions/11)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)](COPYING)
 
+[Политика конфиденциальности / Privacy Policy](PRIVACY.md)
+
 ## Русский
 
 Slooop - пользовательское название неофициальной ветки Dashchan_2 для Android 11 и новее. Приложение устанавливается рядом с оригинальным Dashchan, использует пакет `io.dashchan2` и содержит встроенную поддержку Двача, Ежчана, Апачана, Архивача, Zchan и Endchan, экспериментальный режим чтения 4chan и собственный видеоплеер на FFmpeg.

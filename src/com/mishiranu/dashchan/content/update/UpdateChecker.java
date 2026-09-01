@@ -6,7 +6,6 @@ import com.mishiranu.dashchan.BuildConfig;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.async.ExecutorTask;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
-import com.mishiranu.dashchan.util.IOUtils;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -17,6 +16,7 @@ import org.json.JSONException;
 
 public class UpdateChecker {
 	private static final int TIMEOUT_MS = 10_000;
+	private static final int MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 	private static final String USER_AGENT = "Dashchan_2 UpdateChecker";
 
 	public interface Callback {
@@ -147,7 +147,14 @@ public class UpdateChecker {
 			}
 			try (InputStream input = rawConnection.getInputStream();
 					ByteArrayOutputStream output = new ByteArrayOutputStream()) {
-				IOUtils.copyStream(input, output);
+				byte[] buffer = new byte[8192];
+				int total = 0;
+				int count;
+				while ((count = input.read(buffer)) != -1) {
+					total += count;
+					if (total > MAX_RESPONSE_BYTES) throw new IOException("Update response is too large");
+					output.write(buffer, 0, count);
+				}
 				return output.toString("UTF-8");
 			}
 		} finally {

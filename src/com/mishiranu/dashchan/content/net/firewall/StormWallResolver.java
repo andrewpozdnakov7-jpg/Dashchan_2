@@ -11,8 +11,6 @@ import chan.util.StringUtils;
 import com.mishiranu.dashchan.content.Preferences;
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 public class StormWallResolver extends FirewallResolver {
 	private static final String COOKIE_STORMWALL = "swp_token";
@@ -60,8 +58,42 @@ public class StormWallResolver extends FirewallResolver {
 		}
 	}
 
-	private static final Pattern PATTERN_CE = Pattern.compile(" cE ?= ?(['\"])(.*?)\\1");
-	private static final Pattern PATTERN_CK = Pattern.compile(" cK ?= ?(?:(['\"])|)(.*?)(?:\\1|;)");
+	private static String findAssignment(String source, String name, boolean quotedOnly) {
+		String marker = " " + name;
+		int fromIndex = 0;
+		while (true) {
+			int start = source.indexOf(marker, fromIndex);
+			if (start < 0) {
+				return null;
+			}
+			int index = start + marker.length();
+			while (index < source.length() && source.charAt(index) == ' ') {
+				index++;
+			}
+			if (index >= source.length() || source.charAt(index) != '=') {
+				fromIndex = start + marker.length();
+				continue;
+			}
+			index++;
+			while (index < source.length() && source.charAt(index) == ' ') {
+				index++;
+			}
+			if (index >= source.length()) {
+				return null;
+			}
+			char quote = source.charAt(index);
+			if (quote == '\'' || quote == '\"') {
+				int end = source.indexOf(quote, index + 1);
+				return end >= 0 ? source.substring(index + 1, end) : null;
+			}
+			if (quotedOnly) {
+				fromIndex = index + 1;
+				continue;
+			}
+			int end = source.indexOf(';', index);
+			return source.substring(index, end >= 0 ? end : source.length()).trim();
+		}
+	}
 
 	private static String calculateCookie(String ce, int ck) {
 		StringBuilder result = new StringBuilder();
@@ -84,11 +116,9 @@ public class StormWallResolver extends FirewallResolver {
 
 		@Override
 		public boolean resolve(Session session, Key key) throws CancelException, HttpException, InterruptedException {
-			Matcher ceMatcher = PATTERN_CE.matcher(responseText);
-			Matcher ckMatcher = PATTERN_CK.matcher(responseText);
-			if (ceMatcher.find() && ckMatcher.find()) {
-				String ce = StringUtils.emptyIfNull(ceMatcher.group(2));
-				String ckString = StringUtils.emptyIfNull(ckMatcher.group(2));
+			String ce = StringUtils.emptyIfNull(findAssignment(responseText, "cE", true));
+			String ckString = StringUtils.emptyIfNull(findAssignment(responseText, "cK", false));
+			if (!ce.isEmpty() && !ckString.isEmpty()) {
 				Integer ck = null;
 				try {
 					ck = Integer.parseInt(ckString);

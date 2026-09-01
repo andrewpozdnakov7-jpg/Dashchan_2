@@ -30,8 +30,33 @@ public class DvachModelMapper {
 	private static final Pattern PATTERN_BADGE = Pattern.compile("<img.+?src=\"(.+?)\".+?(?:title=\"(.+?)\")?.+?/?>");
 	private static final Pattern PATTERN_CODE = Pattern.compile("\\[code(?:\\s+lang=.+?)?](?:<br ?/?>)*(.+?)" +
 			"(?:<br ?/?>)*\\[/code]", Pattern.CASE_INSENSITIVE);
-	private static final Pattern PATTERN_HASHLINK = Pattern.compile("<a [^<>]*class=\"hashlink\"[^<>]*>");
-	private static final Pattern PATTERN_HASHLINK_TITLE = Pattern.compile("title=\"(.*?)\"");
+
+	private static String replaceHashLinks(String comment, DvachChanLocator locator, String boardName) {
+		StringBuilder result = null;
+		int copyFrom = 0;
+		int searchFrom = 0;
+		while (true) {
+			int tagStart = comment.indexOf("<a ", searchFrom);
+			if (tagStart < 0) break;
+			int tagEnd = comment.indexOf('>', tagStart + 3);
+			if (tagEnd < 0) break;
+			String tag = comment.substring(tagStart, tagEnd + 1);
+			Element link = Jsoup.parseBodyFragment(tag + "</a>").selectFirst("a.hashlink[title]");
+			if (link != null) {
+				String title = link.attr("title");
+				if (!title.isEmpty()) {
+					Uri uri = locator.createCatalogSearchUri(boardName, title);
+					String encodedUri = uri.toString().replace("&", "&amp;").replace("\"", "&quot;");
+					if (result == null) result = new StringBuilder(comment.length());
+					result.append(comment, copyFrom, tagStart).append("<a href=\"").append(encodedUri).append("\">");
+					copyFrom = tagEnd + 1;
+				}
+			}
+			searchFrom = tagEnd + 1;
+		}
+		if (result == null) return comment;
+		return result.append(comment, copyFrom, comment.length()).toString();
+	}
 
 	public static class Extra {
 		public String tags;
@@ -293,20 +318,7 @@ public class DvachModelMapper {
 						comment = comment.replace("&#47;", "/");
 					}
 					if (comment.contains("\"hashlink\"")) {
-						comment = StringUtils.replaceAll(comment, PATTERN_HASHLINK, matcher -> {
-							String title = null;
-							Matcher matcher2 = PATTERN_HASHLINK_TITLE.matcher(matcher.group());
-							if (matcher2.find()) {
-								title = matcher2.group(1);
-							}
-							if (title != null) {
-								Uri uri = locator.createCatalogSearchUri(boardName, title);
-								String encodedUri = uri.toString().replace("&", "&amp;").replace("\"", "&quot;");
-								return "<a href=\"" + encodedUri + "\">";
-							} else {
-								return matcher.group();
-							}
-						});
+						comment = replaceHashLinks(comment, locator, boardName);
 					}
 					if ("pr".equals(boardName) && comment.contains("[code")) {
 						comment = PATTERN_CODE.matcher(comment).replaceAll("<fakecode>$1</fakecode>");
