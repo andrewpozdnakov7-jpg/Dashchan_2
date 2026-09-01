@@ -454,10 +454,14 @@ final class PikabuHtmlParser {
 		LinkedHashMap<String, Attachment> attachments = new LinkedHashMap<>();
 		int index = 0;
 		for (Element image : content.select("img")) {
+			if (isRestrictedMediaPlaceholder(image)) continue;
 			String full = firstNotEmpty(image.attr("data-large-image"), image.attr("data-src"), image.attr("src"));
 			Uri fileUri = resolveUri(image, full, locator);
 			if (fileUri == null || isInlineData(fileUri)) continue;
 			Uri thumbnailUri = resolveUri(image, firstNotEmpty(image.attr("data-src"), image.attr("src")), locator);
+			String scramblerOffset = image.attr("data-scrambler-offset");
+			fileUri = PikabuImageScrambler.mark(fileUri, scramblerOffset);
+			thumbnailUri = PikabuImageScrambler.mark(thumbnailUri, scramblerOffset);
 			FileAttachment attachment = new FileAttachment().setFileUri(locator, fileUri);
 			if (thumbnailUri != null && !isInlineData(thumbnailUri)) attachment.setThumbnailUri(locator, thumbnailUri);
 			attachment.setOriginalName(makeFileName(fileUri, fallbackName, ++index, "jpg"));
@@ -466,6 +470,7 @@ final class PikabuHtmlParser {
 			attachments.putIfAbsent(fileUri.toString(), attachment);
 		}
 		for (Element video : content.select("video, div.vue-video-player[data-source]")) {
+			if (isRestrictedMediaPlaceholder(video)) continue;
 			String source = firstNotEmpty(video.attr("data-source"), video.attr("src"));
 			if (StringUtils.isEmpty(source)) {
 				Element sourceElement = video.selectFirst("source[src]");
@@ -491,6 +496,14 @@ final class PikabuHtmlParser {
 			attachments.putIfAbsent(fileUri.toString(), attachment);
 		}
 		return new ArrayList<>(attachments.values());
+	}
+
+	private static boolean isRestrictedMediaPlaceholder(Element element) {
+		for (Element current = element; current != null; current = current.parent()) {
+			if (current.hasClass("story-block_type_stub") || current.hasClass("story__nsfw-stub")
+					|| current.hasClass("story__adult-overlay")) return true;
+		}
+		return false;
 	}
 
 	private static void cleanContent(Element content, PikabuChanLocator locator, String threadNumber) {

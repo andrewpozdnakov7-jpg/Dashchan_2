@@ -311,6 +311,8 @@ public final class SettingsSearchIndex {
 		add(context, entries, Screen.EXPERIMENTAL, R.string.open_configured_attachment_folder,
 				R.string.open_configured_attachment_folder__summary,
 				Preferences.KEY_OPEN_CONFIGURED_ATTACHMENT_FOLDER);
+		add(context, entries, Screen.EXPERIMENTAL, R.string.swipe_reply,
+				R.string.swipe_reply__summary, Preferences.KEY_SWIPE_REPLY);
 		if (BuildConfig.ENABLE_LOCAL_TRANSLATION) {
 			add(context, entries, Screen.EXPERIMENTAL, R.string.local_translation,
 					R.string.local_translation__summary, Preferences.KEY_LOCAL_TRANSLATION);

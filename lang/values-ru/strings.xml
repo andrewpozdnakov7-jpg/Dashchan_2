@@ -778,7 +778,7 @@
 	<string name="volume_buttons_text_scale">Изменять размер текста кнопками громкости</string>
 	<string name="volume_buttons_text_scale__summary">Когда медиа не воспроизводится, кнопки громкости изменяют масштаб текста</string>
 	<string name="video_right_hand_controls">Режим для правой руки</string>
-	<string name="video_right_hand_controls__summary">Зеркально меняет расположение кнопок видеоплеера и переносит область жеста громкости влево для тех, кто держит телефон правой рукой</string>
+	<string name="video_right_hand_controls__summary">Зеркально меняет жест ответа на пост и расположение кнопок видеоплеера, а область жеста громкости переносит влево для тех, кто держит телефон правой рукой</string>
 	<string name="large_text_layout_warning">При масштабе выше 300% некоторые элементы интерфейса могут отображаться некорректно.</string>
 	<string name="font">Шрифт</string>
 	<string name="application_font">Шрифт приложения</string>
@@ -990,6 +990,8 @@
 	<string name="hide_thread_title__summary">Не показывать название и адрес треда при его просмотре</string>
 	<string name="windowed_thread_loading">Быстрое открытие тредов</string>
 	<string name="windowed_thread_loading__summary">Сразу показывает небольшую часть треда вокруг текущей позиции, затем подготавливает весь тред в фоне. Экспериментальная функция.</string>
+	<string name="swipe_reply">Ответ свайпом</string>
+	<string name="swipe_reply__summary">Смахните пост, чтобы открыть форму ответа. По умолчанию включено; режим для правой руки зеркально меняет направление жеста.</string>
 	<string name="collapse_long_open_threads">Сворачивать длинный список тредов</string>
 	<string name="collapse_long_open_threads__summary">Показывает в шторке 12 последних открытых тредов, а остальные помещает в раскрывающийся список.</string>
 	<string name="show_remaining_open_threads__format">Показать остальные: %1$d</string>
@@ -1142,9 +1144,14 @@
 	<string name="pikabu_authorization_warning">Откроется официальный сайт Пикабу во встроенном браузерном окне. Логин и пароль вводятся непосредственно на pikabu.ru: Slooop их не считывает и не сохраняет. После входа нажмите «Проверить 18+» и убедитесь, что в настройках Пикабу указан возраст не младше 18 лет и разрешён показ контента 18+. Затем нажмите «Готово». Slooop сохранит только готовую сессию.</string>
 	<string name="pikabu_open_site">Открыть Пикабу</string>
 	<string name="pikabu_check_adult_settings">Проверить 18+</string>
+	<string name="pikabu_adult_settings_instruction">После ввода возраста нажмите кнопку подтверждения ввода на экранной клавиатуре — «Готово», Enter или значок галочки. Затем включите «Показывать 18+ контент» и дождитесь уведомления «Настройки Пикабу сохранены». Только после этого нажмите «Готово» в окне Slooop.</string>
+	<string name="pikabu_i_understand">Я понял</string>
 	<string name="pikabu_finish_sign_in">Готово</string>
 	<string name="pikabu_authorized_check_adult_settings">Вход выполнен. Нажмите «Проверить 18+», затем «Готово»</string>
 	<string name="pikabu_sign_in_required">Сначала выполните вход в Пикабу</string>
+	<string name="pikabu_settings_saved">Настройки Пикабу сохранены. Теперь можно нажать «Готово».</string>
+	<string name="pikabu_settings_save_failed">Пикабу не удалось сохранить настройки. Попробуйте ещё раз.</string>
+	<string name="pikabu_wait_for_settings_save">Подождите, пока Пикабу закончит сохранять настройки</string>
 	<string name="pikabu_authorization_domain_blocked">Страница находится вне разрешённых доменов авторизации Пикабу</string>
 	<string name="pikabu_authorization_browser_failed">Браузер авторизации Пикабу неожиданно остановился</string>
 	<string name="pikabu_authorized">Выполнен вход в Пикабу</string>

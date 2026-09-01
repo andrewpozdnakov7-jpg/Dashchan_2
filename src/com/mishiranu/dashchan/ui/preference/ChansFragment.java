@@ -98,7 +98,7 @@ public class ChansFragment extends PreferenceFragment implements FragmentHandler
 
 	private void addForumPreference(String name, CharSequence title, CharSequence summary, Runnable onOpen) {
 		ForumPreference preference = new ForumPreference(requireContext(), Preferences.getChanEnabledKey(name),
-				"dvach".equals(name), title, summary);
+				Preferences.isChanEnabledByDefault(name), title, summary);
 		addPreference(preference, true);
 		preference.setOnClickListener(p -> {
 			if (p.getValue()) {

@@ -3,13 +3,19 @@ package com.mishiranu.dashchan.ui.navigator.page;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.res.ColorStateList;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Parcel;
 import android.os.Parcelable;
 import android.os.SystemClock;
 import android.util.Pair;
+import android.util.TypedValue;
 import android.view.ActionMode;
 import android.view.Gravity;
+import android.view.HapticFeedbackConstants;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.SubMenu;
@@ -24,6 +30,7 @@ import androidx.fragment.app.FragmentManager;
 import androidx.lifecycle.LifecycleOwner;
 import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.ViewModel;
+import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import chan.content.Chan;
@@ -70,12 +77,14 @@ import com.mishiranu.dashchan.ui.navigator.manager.UiManager;
 import com.mishiranu.dashchan.ui.posting.Replyable;
 import com.mishiranu.dashchan.util.AndroidUtils;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
+import com.mishiranu.dashchan.util.GraphicsUtils;
 import com.mishiranu.dashchan.util.ListViewUtils;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.util.SearchHelper;
 import com.mishiranu.dashchan.util.ThreadOpenDiagnostics;
 import com.mishiranu.dashchan.util.ViewUtils;
 import com.mishiranu.dashchan.widget.ClickableToast;
+import com.mishiranu.dashchan.widget.CommentTextView;
 import com.mishiranu.dashchan.widget.DividerItemDecoration;
 import com.mishiranu.dashchan.widget.ImportantPostsMarksFastScrollBarDecoration;
 import com.mishiranu.dashchan.widget.ListPosition;
@@ -359,6 +368,164 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 		return (PostsAdapter) getRecyclerView().getAdapter();
 	}
 
+	private void setupReplyWithSwipe(RecyclerView recyclerView, PostsAdapter adapter) {
+		Context context = recyclerView.getContext();
+		float density = ResourceUtils.obtainDensity(context);
+		float triggerDistance = 45f * density;
+		float maxRevealDistance = 56f * density;
+		float actionCircleSize = 32f * density;
+		int iconSize = Math.round(20f * density);
+		float iconTextGap = 3f * density;
+		Paint actionPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+		int actionColor = ResourceUtils.getColor(context, R.attr.colorAccentSupport);
+		actionPaint.setColor(actionColor);
+		int foregroundColor = GraphicsUtils.isLight(actionColor) ? Color.BLACK : Color.WHITE;
+		Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+		textPaint.setColor(actionColor);
+		textPaint.setTextSize(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 10f,
+				context.getResources().getDisplayMetrics()));
+		String replyText = context.getString(R.string.reply);
+		float textWidth = textPaint.measureText(replyText);
+		Drawable replyIcon = ResourceUtils.getDrawable(context, R.drawable.ic_swipe_reply).mutate();
+		replyIcon.setTint(foregroundColor);
+
+		ItemTouchHelper.Callback callback = new ItemTouchHelper.SimpleCallback
+				(0, ItemTouchHelper.LEFT | ItemTouchHelper.RIGHT) {
+			private RecyclerView.ViewHolder activeHolder;
+			private boolean thresholdReached;
+
+			private boolean isRightHandMode() {
+				return Preferences.isVideoRightHandControls();
+			}
+
+			@Override
+			public int getSwipeDirs(@NonNull RecyclerView recyclerView,
+					@NonNull RecyclerView.ViewHolder viewHolder) {
+				if (!Preferences.isSwipeReplyEnabled()) return 0;
+				int position = viewHolder.getAdapterPosition();
+				if (position == RecyclerView.NO_POSITION || position >= adapter.getItemCount()
+						|| !(viewHolder instanceof UiManager.Holder)
+						|| !(viewHolder instanceof CommentTextView.RecyclerKeeper.Holder)) {
+					return 0;
+				}
+				CommentTextView comment = ((CommentTextView.RecyclerKeeper.Holder) viewHolder)
+						.getCommentTextView();
+				PostItem postItem = adapter.getItem(position);
+				if (comment.isSelectionMode() || postItem == null || replyable == null
+						|| !replyable.onRequestReply(false)) {
+					return 0;
+				}
+				return isRightHandMode() ? ItemTouchHelper.RIGHT : ItemTouchHelper.LEFT;
+			}
+
+			@Override
+			public float getSwipeThreshold(@NonNull RecyclerView.ViewHolder viewHolder) {
+				return Math.min(0.95f, triggerDistance / Math.max(1f, viewHolder.itemView.getWidth()));
+			}
+
+			@Override
+			public float getSwipeEscapeVelocity(float defaultValue) {
+				// A short fling must not bypass the physical-distance threshold.
+				return Float.MAX_VALUE;
+			}
+
+			@Override
+			public boolean onMove(@NonNull RecyclerView recyclerView,
+					@NonNull RecyclerView.ViewHolder viewHolder,
+					@NonNull RecyclerView.ViewHolder target) {
+				return false;
+			}
+
+			@Override
+			public void onSwiped(@NonNull RecyclerView.ViewHolder viewHolder, int direction) {
+				int position = viewHolder.getAdapterPosition();
+				PostItem postItem = position != RecyclerView.NO_POSITION && position < adapter.getItemCount()
+						? adapter.getItem(position) : null;
+				viewHolder.itemView.setTranslationX(0f);
+				if (position != RecyclerView.NO_POSITION && position < adapter.getItemCount()) {
+					adapter.notifyItemChanged(position);
+				}
+				if (postItem != null && replyable != null && replyable.onRequestReply(false)) {
+					replyable.onRequestReply(true,
+							new Replyable.ReplyData(postItem.getPostNumber(), null));
+				}
+			}
+
+			@Override
+			public void onChildDraw(@NonNull Canvas canvas, @NonNull RecyclerView recyclerView,
+					@NonNull RecyclerView.ViewHolder viewHolder, float dX, float dY,
+					int actionState, boolean isCurrentlyActive) {
+				boolean rightHandMode = isRightHandMode();
+				float limitedDx = rightHandMode ? Math.max(0f, Math.min(maxRevealDistance, dX))
+						: Math.min(0f, Math.max(-maxRevealDistance, dX));
+				float reveal = Math.abs(limitedDx);
+				if (actionState == ItemTouchHelper.ACTION_STATE_SWIPE && reveal > 0f) {
+					View itemView = viewHolder.itemView;
+					float left = rightHandMode ? itemView.getLeft() : itemView.getRight() - reveal;
+					float right = rightHandMode ? itemView.getLeft() + reveal : itemView.getRight();
+					canvas.save();
+					canvas.clipRect(left, itemView.getTop(), right, itemView.getBottom());
+
+					int alpha = Math.round(255f * Math.min(1f, reveal / triggerDistance));
+					actionPaint.setAlpha(alpha);
+					textPaint.setAlpha(alpha);
+					replyIcon.setAlpha(alpha);
+					float centerX = rightHandMode ? itemView.getLeft() + maxRevealDistance / 2f
+							: itemView.getRight() - maxRevealDistance / 2f;
+					float centerY = (itemView.getTop() + itemView.getBottom()) / 2f;
+					Paint.FontMetrics fontMetrics = textPaint.getFontMetrics();
+					float textHeight = fontMetrics.descent - fontMetrics.ascent;
+					float contentHeight = actionCircleSize + iconTextGap + textHeight;
+					float circleCenterY = centerY - contentHeight / 2f + actionCircleSize / 2f;
+					float scale = 0.82f + 0.18f * Math.min(1f, reveal / triggerDistance);
+					float circleRadius = actionCircleSize * scale / 2f;
+					canvas.drawCircle(centerX, circleCenterY, circleRadius, actionPaint);
+					int iconLeft = Math.round(centerX - iconSize / 2f);
+					int iconTop = Math.round(circleCenterY - iconSize / 2f);
+					replyIcon.setBounds(iconLeft, iconTop, iconLeft + iconSize, iconTop + iconSize);
+					if (rightHandMode) {
+						canvas.save();
+						canvas.scale(-1f, 1f, centerX, circleCenterY);
+						replyIcon.draw(canvas);
+						canvas.restore();
+					} else {
+						replyIcon.draw(canvas);
+					}
+					float textBaseline = circleCenterY + actionCircleSize / 2f + iconTextGap
+							- fontMetrics.ascent;
+					canvas.drawText(replyText, centerX - textWidth / 2f, textBaseline, textPaint);
+					canvas.restore();
+
+					if (isCurrentlyActive) {
+						if (activeHolder != viewHolder) {
+							activeHolder = viewHolder;
+							thresholdReached = false;
+						}
+						boolean reached = reveal >= triggerDistance;
+						if (reached && !thresholdReached) {
+							itemView.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
+						}
+						thresholdReached = reached;
+					}
+				}
+				super.onChildDraw(canvas, recyclerView, viewHolder, limitedDx, dY,
+						actionState, isCurrentlyActive);
+			}
+
+			@Override
+			public void clearView(@NonNull RecyclerView recyclerView,
+					@NonNull RecyclerView.ViewHolder viewHolder) {
+				super.clearView(recyclerView, viewHolder);
+				viewHolder.itemView.setTranslationX(0f);
+				if (activeHolder == viewHolder) {
+					activeHolder = null;
+					thresholdReached = false;
+				}
+			}
+		};
+		new ItemTouchHelper(callback).attachToRecyclerView(recyclerView);
+	}
+
 	@Override
 	protected void onCreate() {
 		Context context = getContext();
@@ -413,6 +580,7 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 		}
 		adapter.setTranslationEnabled(Boolean.TRUE.equals(parcelableExtra.translationEnabled));
 		recyclerView.setAdapter(adapter);
+		setupReplyWithSwipe(recyclerView, adapter);
 		recyclerView.addItemDecoration(new DividerItemDecoration(recyclerView.getContext(),
 				(c, position) -> adapter.configureDivider(c, position).horizontal(dividerPadding, dividerPadding)));
 		recyclerView.addItemDecoration(adapter.createPostItemDecoration(context, dividerPadding));

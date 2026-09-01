@@ -466,12 +466,36 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 		private static final String EXTRA_AUTHORIZED_USER_NAME = "authorizedUserName";
 		private static final String READ_SESSION_SCRIPT = "(function(){var e=document.querySelector(" +
 				"'script.app__config[data-entry=\\\"initParams\\\"]');return e?e.textContent:'';})()";
+		private static final String READ_SETTINGS_SAVE_STATE_SCRIPT = "(function(){" +
+				"var key='__slooopPikabuSettingsState',state=window[key];" +
+				"var text=function(){return document.body?document.body.innerText:'';};" +
+				"var success=function(value){return value.indexOf('Настройки сохранены')>=0||" +
+				"value.indexOf('Settings saved')>=0;};" +
+				"if(!state){state={value:'ready',successVisible:success(text())};window[key]=state;" +
+				"var changed=function(event){var target=event&&event.target;if(!target)return;" +
+				"if(event.type!='click'||target.closest('[role=\\\"checkbox\\\"],[role=\\\"switch\\\"]')){" +
+				"state.value='pending';state.successVisible=success(text());}};" +
+				"document.addEventListener('input',changed,true);" +
+				"document.addEventListener('change',changed,true);" +
+				"document.addEventListener('click',changed,true);}" +
+				"var value=text(),successVisible=success(value);" +
+				"if(value.indexOf('Ошибка при обновлении')>=0||value.indexOf('Update failed')>=0){" +
+				"state.value='error';}else if(value.indexOf('Скоро всё сохраним')>=0||" +
+				"value.indexOf('Saving')>=0){state.value='pending';}" +
+				"else if(state.value=='pending'&&successVisible&&!state.successVisible){" +
+				"state.value='saved';}" +
+				"state.successVisible=successVisible;return state.value;})()";
 
 		private WebView webView;
 		private ProgressBar progressBar;
 		private TextView domainView;
 		private boolean signedIn;
 		private boolean sessionCheckPending;
+		private boolean settingsPageActive;
+		private boolean settingsStateCheckPending;
+		private boolean finishingAuthorization;
+		private String settingsSaveState;
+		private String reportedSettingsSaveState;
 		private String authorizedUserName;
 
 		public PikabuAuthorizationDialog() {}
@@ -552,12 +576,11 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 			}
 			AlertDialog alertDialog = (AlertDialog) getDialog();
 			if (alertDialog != null) {
-				alertDialog.getButton(AlertDialog.BUTTON_NEUTRAL).setEnabled(signedIn);
 				alertDialog.getButton(AlertDialog.BUTTON_NEUTRAL)
 						.setOnClickListener(view -> openPikabuAdultSettings());
-				alertDialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(signedIn);
 				alertDialog.getButton(AlertDialog.BUTTON_POSITIVE)
 						.setOnClickListener(view -> finishAuthorization());
+				updateActionButtons();
 			}
 		}
 
@@ -581,6 +604,8 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 			progressBar = null;
 			domainView = null;
 			sessionCheckPending = false;
+			settingsPageActive = false;
+			settingsStateCheckPending = false;
 			super.onDestroyView();
 		}
 
@@ -618,6 +643,73 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 			}
 		}
 
+		private static boolean isPikabuSettingsUri(Uri uri) {
+			if (uri == null || !"https".equalsIgnoreCase(uri.getScheme())
+					|| !isDomain(uri.getHost(), "pikabu.ru")) return false;
+			String path = uri.getPath();
+			return "/settings".equals(path) || path != null && path.startsWith("/settings/");
+		}
+
+		private void updateActionButtons() {
+			AlertDialog dialog = (AlertDialog) getDialog();
+			if (dialog == null) return;
+			View neutralButton = dialog.getButton(AlertDialog.BUTTON_NEUTRAL);
+			View positiveButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+			if (neutralButton == null || positiveButton == null) return;
+			neutralButton.setEnabled(signedIn);
+			boolean settingsReady = !"pending".equals(settingsSaveState)
+					&& !"error".equals(settingsSaveState)
+					&& (!settingsPageActive || settingsSaveState != null);
+			positiveButton.setEnabled(signedIn && settingsReady && !finishingAuthorization);
+		}
+
+		private void updateSettingsPage(Uri uri) {
+			boolean active = isPikabuSettingsUri(uri);
+			if (settingsPageActive != active) {
+				settingsPageActive = active;
+				if (active) {
+					settingsSaveState = null;
+					reportedSettingsSaveState = null;
+				}
+			}
+			updateActionButtons();
+		}
+
+		private void checkSettingsSaveState(WebView view) {
+			if (webView != view || !settingsPageActive || settingsStateCheckPending) return;
+			settingsStateCheckPending = true;
+			view.evaluateJavascript(READ_SETTINGS_SAVE_STATE_SCRIPT, value -> {
+				settingsStateCheckPending = false;
+				if (webView != view || !settingsPageActive) return;
+				try {
+					Object decoded = new JSONTokener(value).nextValue();
+					if (decoded instanceof String) {
+						String state = (String) decoded;
+						if ("ready".equals(state) || "pending".equals(state)
+								|| "saved".equals(state) || "error".equals(state)) {
+							settingsSaveState = state;
+							updateActionButtons();
+							if (!state.equals(reportedSettingsSaveState)) {
+								reportedSettingsSaveState = state;
+								if ("saved".equals(state)) {
+									CookieManager.getInstance().flush();
+									ClickableToast.show(R.string.pikabu_settings_saved);
+								} else if ("error".equals(state)) {
+									ClickableToast.show(R.string.pikabu_settings_save_failed);
+								}
+							}
+						}
+					}
+				} catch (JSONException ignored) {
+					// The settings page may still be rebuilding its document.
+				} finally {
+					if (webView == view && settingsPageActive) {
+						view.postDelayed(() -> checkSettingsSaveState(view), 350L);
+					}
+				}
+			});
+		}
+
 		private void captureSession(WebView view, Uri uri) {
 			if (signedIn || sessionCheckPending
 					|| !isDomain(uri != null ? uri.getHost() : null, "pikabu.ru")) return;
@@ -636,11 +728,7 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 					String userName = StringUtils.nullIfEmpty(object.optString("userName"));
 					if (userName == null) userName = StringUtils.nullIfEmpty(object.optString("username"));
 					authorizedUserName = userName;
-					AlertDialog dialog = (AlertDialog) getDialog();
-					if (dialog != null) {
-						dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setEnabled(true);
-						dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(true);
-					}
+					updateActionButtons();
 					ClickableToast.show(R.string.pikabu_authorized_check_adult_settings);
 				} catch (JSONException ignored) {
 					// The website may still be navigating between sign-in pages.
@@ -656,13 +744,83 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 		}
 
 		private void openPikabuAdultSettings() {
-			if (signedIn && webView != null) webView.loadUrl(PIKABU_SETTINGS_URL);
+			if (!signedIn || webView == null) return;
+			String tag = PikabuAdultSettingsInstructionDialog.class.getName();
+			if (getChildFragmentManager().findFragmentByTag(tag) == null) {
+				new PikabuAdultSettingsInstructionDialog().show(getChildFragmentManager(), tag);
+			}
+		}
+
+		private void loadPikabuAdultSettings() {
+			if (!signedIn || webView == null) return;
+			settingsPageActive = true;
+			settingsSaveState = null;
+			reportedSettingsSaveState = null;
+			updateActionButtons();
+			webView.loadUrl(PIKABU_SETTINGS_URL);
+		}
+
+		public static class PikabuAdultSettingsInstructionDialog extends DialogFragment {
+			public PikabuAdultSettingsInstructionDialog() {}
+
+			@NonNull
+			@Override
+			public Dialog onCreateDialog(Bundle savedInstanceState) {
+				setCancelable(false);
+				AlertDialog dialog = new AlertDialog.Builder(requireContext())
+						.setTitle(R.string.pikabu_check_adult_settings)
+						.setMessage(R.string.pikabu_adult_settings_instruction)
+						.setPositiveButton(R.string.pikabu_i_understand, (currentDialog, which) -> {
+							PikabuAuthorizationDialog parent = (PikabuAuthorizationDialog) getParentFragment();
+							if (parent != null) parent.loadPikabuAdultSettings();
+						})
+						.create();
+				dialog.setCanceledOnTouchOutside(false);
+				return dialog;
+			}
 		}
 
 		private void finishAuthorization() {
 			if (!signedIn) {
 				ClickableToast.show(R.string.pikabu_sign_in_required);
 				return;
+			}
+			if ("pending".equals(settingsSaveState) || "error".equals(settingsSaveState)
+					|| settingsPageActive && settingsSaveState == null) {
+				ClickableToast.show(R.string.pikabu_wait_for_settings_save);
+				return;
+			}
+			if (finishingAuthorization || webView == null) return;
+			finishingAuthorization = true;
+			updateActionButtons();
+			WebView currentWebView = webView;
+			currentWebView.evaluateJavascript(READ_SESSION_SCRIPT,
+					value -> finishAuthorization(currentWebView, value));
+		}
+
+		private void finishAuthorization(WebView currentWebView, String value) {
+			if (webView != currentWebView) return;
+			try {
+				if (StringUtils.isEmpty(value) || "null".equals(value)) throw new JSONException("Missing session");
+				Object decoded = new JSONTokener(value).nextValue();
+				if (!(decoded instanceof String) || StringUtils.isEmpty((String) decoded)) {
+					throw new JSONException("Missing session");
+				}
+				JSONObject object = new JSONObject((String) decoded);
+				if (object.optLong("userID", 0L) <= 0L || object.optBoolean("isDeleted", false)) {
+					ClickableToast.show(R.string.pikabu_sign_in_required);
+					return;
+				}
+				if (!object.optBoolean("isAdultVisible", false)) {
+					ClickableToast.show(R.string.pikabu_authorized_check_adult_settings);
+					return;
+				}
+			} catch (JSONException e) {
+				ClickableToast.show(R.string.pikabu_authorization_browser_failed);
+				return;
+			} finally {
+				finishingAuthorization = false;
+				updateActionButtons();
 			}
 			CookieManager cookieManager = CookieManager.getInstance();
 			cookieManager.flush();
@@ -676,9 +834,11 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 			configuration.storeAuthorization(cookies, authorizedUserName);
 			configuration.commit();
 			ChanFragment fragment = (ChanFragment) getParentFragment();
-			if (fragment != null) fragment.updatePikabuAuthorizationPreferences();
-			ClickableToast.show(R.string.validation_completed);
 			dismissAllowingStateLoss();
+			if (fragment != null && fragment.isAdded()) {
+				new AuthorizationDialog("pikabu", AuthorizationType.USER, null)
+						.show(fragment.getChildFragmentManager(), AuthorizationDialog.class.getName());
+			}
 		}
 
 		private class AuthorizationWebViewClient extends WebViewClient {
@@ -701,14 +861,18 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 
 			@Override
 			public void onPageStarted(WebView view, String url, Bitmap favicon) {
-				updateDomain(Uri.parse(url));
+				Uri uri = Uri.parse(url);
+				updateDomain(uri);
+				updateSettingsPage(uri);
 			}
 
 			@Override
 			public void onPageFinished(WebView view, String url) {
 				Uri uri = Uri.parse(url);
 				updateDomain(uri);
+				updateSettingsPage(uri);
 				captureSession(view, uri);
+				if (settingsPageActive) checkSettingsSaveState(view);
 			}
 
 			@Override
@@ -772,23 +936,22 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 			}
 			viewModel.observe(this, result -> {
 				dismiss();
+				ChanFragment chanFragment = (ChanFragment) getParentFragment();
+				boolean pikabu = "pikabu".equals(requireArguments().getString(EXTRA_CHAN_NAME));
+				if (chanFragment != null && pikabu) chanFragment.updatePikabuAuthorizationPreferences();
 				if (result == CheckAuthorizationTask.SUCCESS) {
 					ClickableToast.show(R.string.validation_completed);
-					ChanFragment chanFragment = (ChanFragment) getParentFragment();
-					if (chanFragment != null && "pikabu".equals(requireArguments().getString(EXTRA_CHAN_NAME))) {
-						chanFragment.updatePikabuAuthorizationPreferences();
-					}
 				} else {
 					ClickableToast.show(result);
-					ChanFragment chanFragment = (ChanFragment) getParentFragment();
 					Preference<?> preference = null;
-					switch (AuthorizationType.valueOf(requireArguments().getString(EXTRA_AUTHORIZATION_TYPE))) {
+					if (chanFragment != null) switch (AuthorizationType.valueOf(
+							requireArguments().getString(EXTRA_AUTHORIZATION_TYPE))) {
 						case CAPTCHA_PASS: {
 							preference = chanFragment.captchaPassPreference;
 							break;
 						}
 						case USER: {
-							preference = chanFragment.userAuthorizationPreference;
+							if (!pikabu) preference = chanFragment.userAuthorizationPreference;
 							break;
 						}
 					}

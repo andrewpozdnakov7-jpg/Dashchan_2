@@ -90,6 +90,9 @@ public class ViewUnit {
 				.asList(new CommentTextView.ExtraButton(context.getString(R.string.quote__verb),
 						R.attr.iconActionPaste, (view, text, click) -> {
 					PostViewHolder holder = ListViewUtils.getViewHolder(view, PostViewHolder.class);
+					if (holder == null) {
+						return false;
+					}
 					UiManager.ConfigurationSet configurationSet = holder.getConfigurationSet();
 					if (configurationSet.replyable != null && configurationSet.replyable.onRequestReply(false)) {
 						if (click) {
@@ -103,8 +106,11 @@ public class ViewUnit {
 						R.attr.iconActionForward, (view, text, click) -> {
 					Uri uri = extractUri(text.toString());
 					if (uri != null) {
+						PostViewHolder holder = ListViewUtils.getViewHolder(view, PostViewHolder.class);
+						if (holder == null) {
+							return false;
+						}
 						if (click) {
-							PostViewHolder holder = ListViewUtils.getViewHolder(view, PostViewHolder.class);
 							UiManager.ConfigurationSet configurationSet = holder.getConfigurationSet();
 							CommentTextView.LinkListener linkListener = configurationSet.linkListener != null
 									? configurationSet.linkListener : defaultLinkListener;
@@ -150,13 +156,17 @@ public class ViewUnit {
 		@Override
 		public void onLinkClick(CommentTextView view, Uri uri, Extra extra, boolean confirmed) {
 			UiManager.Holder holder = ListViewUtils.getViewHolder(view, UiManager.Holder.class);
-			uiManager.interaction().handleLinkClick(holder.getConfigurationSet(), uri, extra, confirmed);
+			if (holder != null) {
+				uiManager.interaction().handleLinkClick(holder.getConfigurationSet(), uri, extra, confirmed);
+			}
 		}
 
 		@Override
 		public void onLinkLongClick(CommentTextView view, Uri uri, Extra extra) {
 			UiManager.Holder holder = ListViewUtils.getViewHolder(view, UiManager.Holder.class);
-			uiManager.interaction().handleLinkLongClick(holder.getConfigurationSet(), uri);
+			if (holder != null) {
+				uiManager.interaction().handleLinkLongClick(holder.getConfigurationSet(), uri);
+			}
 		}
 	};
 

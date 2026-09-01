@@ -68,6 +68,8 @@ public class ExperimentalFragment extends PreferenceFragment implements Translat
 				Preferences.DEFAULT_WINDOWED_THREAD_LOADING,
 				R.string.windowed_thread_loading,
 				R.string.windowed_thread_loading__summary);
+		addCheck(true, Preferences.KEY_SWIPE_REPLY, Preferences.DEFAULT_SWIPE_REPLY,
+				R.string.swipe_reply, R.string.swipe_reply__summary);
 		addCheck(true, Preferences.KEY_COLLAPSE_LONG_OPEN_THREADS,
 				Preferences.DEFAULT_COLLAPSE_LONG_OPEN_THREADS,
 				R.string.collapse_long_open_threads,

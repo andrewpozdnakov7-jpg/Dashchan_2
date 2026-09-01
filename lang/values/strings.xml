@@ -752,7 +752,7 @@
 	<string name="volume_buttons_text_scale">Change text size with volume buttons</string>
 	<string name="volume_buttons_text_scale__summary">When media is not playing, use the volume buttons to adjust text scale</string>
 	<string name="video_right_hand_controls">Right-hand mode</string>
-	<string name="video_right_hand_controls__summary">Mirrors the video player button layout and moves the volume gesture area to the left for users who hold the phone in their right hand</string>
+	<string name="video_right_hand_controls__summary">Mirrors the post reply swipe and video player button layout, and moves the volume gesture area to the left for users who hold the phone in their right hand</string>
 	<string name="large_text_layout_warning">At scales above 300%, some interface elements may be displayed incorrectly.</string>
 	<string name="font">Font</string>
 	<string name="application_font">Application font</string>
@@ -966,6 +966,8 @@
 	<string name="hide_thread_title__summary">Do not show the thread name or address while viewing it</string>
 	<string name="windowed_thread_loading">Fast thread opening</string>
 	<string name="windowed_thread_loading__summary">Shows a small section around the current position immediately, then prepares the complete thread in the background. Experimental feature.</string>
+	<string name="swipe_reply">Swipe to reply</string>
+	<string name="swipe_reply__summary">Swipe a post to open the reply form. Enabled by default; right-hand mode mirrors the gesture.</string>
 	<string name="collapse_long_open_threads">Collapse long open-thread lists</string>
 	<string name="collapse_long_open_threads__summary">Show the 12 most recent open threads in the drawer and place the rest in an expandable list.</string>
 	<string name="show_remaining_open_threads__format">Show remaining: %1$d</string>
@@ -1115,9 +1117,14 @@
 	<string name="pikabu_authorization_warning">The official Pikabu website will open in an embedded browser window. Your login and password are entered directly on pikabu.ru: Slooop does not read or save them. After signing in, tap Check 18+ and make sure your Pikabu settings show that you are at least 18 and allow 18+ content. Then tap Done. Slooop saves only the resulting session.</string>
 	<string name="pikabu_open_site">Open Pikabu</string>
 	<string name="pikabu_check_adult_settings">Check 18+</string>
+	<string name="pikabu_adult_settings_instruction">After entering your age, press the input confirmation key on the on-screen keyboard: Done, Enter, or the checkmark icon. Then enable “Show 18+ content” and wait for the “Pikabu settings have been saved” notification. Only after that, tap Done in the Slooop window.</string>
+	<string name="pikabu_i_understand">I understand</string>
 	<string name="pikabu_finish_sign_in">Done</string>
 	<string name="pikabu_authorized_check_adult_settings">Signed in. Tap Check 18+, then tap Done</string>
 	<string name="pikabu_sign_in_required">Sign in to Pikabu first</string>
+	<string name="pikabu_settings_saved">Pikabu settings have been saved. You can now tap Done.</string>
+	<string name="pikabu_settings_save_failed">Pikabu could not save the settings. Try again.</string>
+	<string name="pikabu_wait_for_settings_save">Wait until Pikabu finishes saving the settings</string>
 	<string name="pikabu_authorization_domain_blocked">The page is outside the allowed Pikabu sign-in domains</string>
 	<string name="pikabu_authorization_browser_failed">The browser used for Pikabu sign-in stopped unexpectedly</string>
 	<string name="pikabu_authorized">Signed in to Pikabu</string>
