@@ -2,6 +2,7 @@ package com.mishiranu.dashchan.ui.preference;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
@@ -36,7 +37,6 @@ import com.mishiranu.dashchan.ui.DialogMenu;
 import com.mishiranu.dashchan.ui.FragmentHandler;
 import com.mishiranu.dashchan.ui.preference.core.Preference;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
-import com.mishiranu.dashchan.util.IOUtils;
 import com.mishiranu.dashchan.util.ListViewUtils;
 import com.mishiranu.dashchan.util.ViewUtils;
 import com.mishiranu.dashchan.widget.ClickableToast;
@@ -59,6 +59,7 @@ import org.json.JSONObject;
 
 public class ThemesFragment extends BaseListFragment {
 	private static final String EXTRA_AVAILABLE_THEMES = "availableThemes";
+	private static final int MAX_IMPORTED_THEME_BYTES = 1024 * 1024;
 	private static final String URI_TRIXI_THEMES = "//raw.githubusercontent.com/" +
 			"TrixiEther/Dashchan-Meta/master/update/themes.json";
 
@@ -165,23 +166,21 @@ public class ThemesFragment extends BaseListFragment {
 		if (resultCode == Activity.RESULT_OK && data != null) {
 			switch (requestCode) {
 				case C.REQUEST_CODE_ATTACH: {
+					if ((data.getFlags() & Intent.FLAG_GRANT_READ_URI_PERMISSION) == 0) {
+						ClickableToast.show(R.string.no_access_to_memory);
+						break;
+					}
 					Uri uri = data.getData();
 					if (uri != null) {
-						ByteArrayOutputStream output = new ByteArrayOutputStream();
-						boolean success;
-						try (InputStream input = requireContext().getContentResolver().openInputStream(uri)) {
-							if (input == null) {
-								throw new IOException("Input stream is empty");
-							}
-							IOUtils.copyStream(input, output);
-							success = true;
+						byte[] array;
+						try {
+							array = readImportedTheme(requireContext().getContentResolver(), uri);
 						} catch (IOException | SecurityException e) {
 							e.printStackTrace();
-							success = false;
+							array = null;
 							ClickableToast.show(R.string.no_access_to_memory);
 						}
-						byte[] array = output.toByteArray();
-						if (success && array.length > 0) {
+						if (array != null && array.length > 0) {
 							JSONObject jsonObject;
 							try {
 								jsonObject = new JSONObject(new String(array, StandardCharsets.UTF_8));
@@ -195,13 +194,34 @@ public class ThemesFragment extends BaseListFragment {
 							} else {
 								ClickableToast.show(R.string.invalid_data_format);
 							}
-						} else if (success) {
+						} else if (array != null) {
 							ClickableToast.show(R.string.invalid_data_format);
 						}
 					}
 					break;
 				}
 			}
+		}
+	}
+
+	private static byte[] readImportedTheme(ContentResolver resolver, Uri uri) throws IOException {
+		if (!ContentResolver.SCHEME_CONTENT.equals(uri.getScheme())) {
+			return new byte[0];
+		}
+		try (InputStream input = resolver.openInputStream(uri)) {
+			if (input == null) {
+				throw new IOException("Input stream is empty");
+			}
+			ByteArrayOutputStream output = new ByteArrayOutputStream();
+			byte[] buffer = new byte[8192];
+			int count;
+			while ((count = input.read(buffer)) != -1) {
+				if (count > MAX_IMPORTED_THEME_BYTES - output.size()) {
+					return new byte[0];
+				}
+				output.write(buffer, 0, count);
+			}
+			return output.toByteArray();
 		}
 	}
 

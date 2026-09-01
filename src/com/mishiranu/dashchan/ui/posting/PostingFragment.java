@@ -1524,6 +1524,10 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 					if (data == null) {
 						break;
 					}
+					if ((data.getFlags() & Intent.FLAG_GRANT_READ_URI_PERMISSION) == 0) {
+						ClickableToast.show(R.string.no_access_to_memory);
+						break;
+					}
 					LinkedHashSet<Uri> uris = new LinkedHashSet<>();
 					Uri dataUri = data.getData();
 					if (dataUri != null) {
@@ -2128,13 +2132,13 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		String selectedText = text.substring(selectionStart, selectionEnd);
 		String oneSymbolBefore = text.substring(Math.max(selectionStart - 1, 0), selectionStart);
 		if (selectedText.startsWith(">")) {
-			String unQuotedText = selectedText.replaceFirst("> ?", "").replaceAll("(\n+)> ?", "$1");
+			String unQuotedText = removeQuoteMarkers(selectedText);
 			int diff = selectedText.length() - unQuotedText.length();
 			editable.replace(selectionStart, selectionEnd, unQuotedText);
 			commentView.setSelection(selectionStart, selectionEnd - diff);
 		} else {
 			String firstSymbol = oneSymbolBefore.length() == 0 || oneSymbolBefore.equals("\n") ? "" : "\n";
-			String quotedText = firstSymbol + "> " + selectedText.replaceAll("(\n+)", "$1> ");
+			String quotedText = firstSymbol + "> " + addQuoteMarkers(selectedText);
 			int diff = quotedText.length() - selectedText.length();
 			editable.replace(selectionStart, selectionEnd, quotedText);
 			int newStart = selectionStart + firstSymbol.length();
@@ -2144,6 +2148,34 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 			}
 			commentView.setSelection(newStart, newEnd);
 		}
+	}
+
+	private static String addQuoteMarkers(String text) {
+		StringBuilder builder = new StringBuilder(text.length());
+		for (int i = 0; i < text.length(); i++) {
+			char c = text.charAt(i);
+			builder.append(c);
+			if (c == '\n' && (i + 1 == text.length() || text.charAt(i + 1) != '\n')) builder.append("> ");
+		}
+		return builder.toString();
+	}
+
+	private static String removeQuoteMarkers(String text) {
+		StringBuilder builder = new StringBuilder(text.length());
+		boolean lineStart = true;
+		for (int i = 0; i < text.length(); i++) {
+			char c = text.charAt(i);
+			if (lineStart && c == '>') {
+				if (i + 1 < text.length() && text.charAt(i + 1) == ' ') {
+					i++;
+				}
+				lineStart = false;
+				continue;
+			}
+			builder.append(c);
+			lineStart = c == '\n';
+		}
+		return builder.toString();
 	}
 
 	private void resizeComment(boolean post) {

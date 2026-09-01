@@ -1,6 +1,5 @@
 package chan.http;
 
-import android.annotation.SuppressLint;
 import android.content.Context;
 import android.net.Uri;
 import android.os.SystemClock;
@@ -40,7 +39,6 @@ import java.net.URI;
 import java.net.URL;
 import java.nio.charset.Charset;
 import java.nio.charset.UnsupportedCharsetException;
-import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -56,32 +54,14 @@ import java.util.zip.InflaterInputStream;
 import java.util.zip.ZipException;
 import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.HttpsURLConnection;
-import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLException;
 import javax.net.ssl.SSLProtocolException;
 import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
-import javax.net.ssl.X509TrustManager;
 import org.brotli.dec.BrotliInputStream;
 
 public class HttpClient {
 	private static final HashMap<String, String> SHORT_RESPONSE_MESSAGES = new HashMap<>();
-
-	private static final HostnameVerifier UNSAFE_HOSTNAME_VERIFIER = (hostname, session) -> true;
-
-	@SuppressLint("TrustAllX509TrustManager")
-	private static final X509TrustManager UNSAFE_TRUST_MANAGER = new X509TrustManager() {
-		@Override
-		public void checkClientTrusted(X509Certificate[] chain, String authType) {}
-
-		@Override
-		public void checkServerTrusted(X509Certificate[] chain, String authType) {}
-
-		@Override
-		public X509Certificate[] getAcceptedIssuers() {
-			return null;
-		}
-	};
 
 	static final int HTTP_TEMPORARY_REDIRECT = 307;
 
@@ -231,7 +211,6 @@ public class HttpClient {
 
 	private boolean ssl3Disabled = false;
 	private SSLSocketFactory sslSocketFactory;
-	private SSLSocketFactory unsafeSslSocketFactory;
 
 	static final class InterruptedHttpException extends IOException {
 		public HttpException toHttp() {
@@ -280,24 +259,12 @@ public class HttpClient {
 				sslSocketFactory = new SSLSocketFactoryWrapper(sslSocketFactory,
 						socket -> new HandshakeSSLSocket(socket, handshakeSessions.get()));
 			}
-			if (verifyCertificate) {
-				return sslSocketFactory;
-			}
-			if (unsafeSslSocketFactory == null) {
-				try {
-					SSLContext sslContext = SSLContext.getInstance("TLS");
-					sslContext.init(null, new X509TrustManager[] {UNSAFE_TRUST_MANAGER}, null);
-					unsafeSslSocketFactory = sslContext.getSocketFactory();
-				} catch (Exception e) {
-					unsafeSslSocketFactory = sslSocketFactory;
-				}
-			}
-			return unsafeSslSocketFactory;
+			return sslSocketFactory;
 		}
 	}
 
 	HostnameVerifier getHostnameVerifier(boolean verifyCertificate) {
-		return verifyCertificate ? HttpsURLConnection.getDefaultHostnameVerifier() : UNSAFE_HOSTNAME_VERIFIER;
+		return HttpsURLConnection.getDefaultHostnameVerifier();
 	}
 
 	HttpResponse execute(HttpSession session, HttpRequest request) throws HttpException {
@@ -604,7 +571,6 @@ public class HttpClient {
 							ssl3Disabled = true;
 							// Fix https://code.google.com/p/android/issues/detail?id=78187
 							sslSocketFactory = new SSLSocketFactoryWrapper(sslSocketFactory, NoSSLv3SSLSocket::new);
-							unsafeSslSocketFactory = null;
 						}
 					}
 					if (session.nextAttempt()) {

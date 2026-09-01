@@ -48,8 +48,9 @@ import com.mishiranu.dashchan.util.ViewUtils;
 import com.mishiranu.dashchan.util.WebViewUtils;
 import com.mishiranu.dashchan.widget.ScaledWebView;
 import java.util.Arrays;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
 
 public class RecaptchaReader {
 	private static final float EXTRA_SCALE_FOR_SYSTEM_PADDING = 0.8f;
@@ -63,11 +64,6 @@ public class RecaptchaReader {
 	private RecaptchaReader() {}
 
 	private final Object accessLock = new Object();
-
-	private static final Pattern RECAPTCHA_FALLBACK_PATTERN = Pattern.compile("(?:(?:<div " +
-			"class=\"(?:rc-imageselect-desc(?:-no-canonical)?|fbc-imageselect-message-error)\">)(.*?)" +
-			"</div>.*?)?value=\"(.{20,}?)\"");
-	private static final Pattern RECAPTCHA_RESULT_PATTERN = Pattern.compile("<textarea.*?>(.*?)</textarea>");
 
 	public static class ChallengeExtra {
 		private interface ForegroundSolver {
@@ -106,10 +102,22 @@ public class RecaptchaReader {
 	}
 
 	private static Pair<String, String> parseResponse2(String responseText) {
-		Matcher matcher = RECAPTCHA_FALLBACK_PATTERN.matcher(responseText);
-		if (matcher.find()) {
-			String imageSelectorDescription = matcher.group(1);
-			String challenge = matcher.group(2);
+		if (StringUtils.isEmpty(responseText)) {
+			return null;
+		}
+		Document document = Jsoup.parse(responseText);
+		Element description = document.selectFirst(".rc-imageselect-desc, .rc-imageselect-desc-no-canonical, " +
+				".fbc-imageselect-message-error");
+		Element challengeInput = document.selectFirst("input[name=c][value]");
+		if (challengeInput == null) {
+			challengeInput = document.selectFirst("input[value]");
+		}
+		if (challengeInput != null) {
+			String challenge = challengeInput.attr("value");
+			if (challenge.length() < 20) {
+				return null;
+			}
+			String imageSelectorDescription = description != null ? description.html() : null;
 			return new Pair<>(imageSelectorDescription, challenge);
 		}
 		return null;
@@ -208,9 +216,10 @@ public class RecaptchaReader {
 									.addHeader("Accept-Language", acceptLanguage)
 									.addHeader("Referer", referer)
 									.perform().readString();
-							Matcher matcher = RECAPTCHA_RESULT_PATTERN.matcher(responseText);
-							if (matcher.find()) {
-								return matcher.group(1);
+							Element resultElement = !StringUtils.isEmpty(responseText)
+									? Jsoup.parse(responseText).selectFirst("textarea") : null;
+							if (resultElement != null) {
+								return resultElement.text();
 							}
 							response = parseResponse2(responseText);
 							continue;

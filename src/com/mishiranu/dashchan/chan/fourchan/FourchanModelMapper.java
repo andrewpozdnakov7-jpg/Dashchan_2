@@ -12,10 +12,44 @@ import chan.util.StringUtils;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Locale;
-import java.util.regex.Pattern;
 
 public class FourchanModelMapper {
-	private static final Pattern PATTERN_MATH = Pattern.compile("\\[(math|eqn)](.*?)\\[/\\1]");
+	private static String replaceMathTags(String comment, FourchanChanLocator locator) {
+		StringBuilder result = null;
+		int copyFrom = 0;
+		int searchFrom = 0;
+		while (true) {
+			int mathStart = comment.indexOf("[math]", searchFrom);
+			int eqnStart = comment.indexOf("[eqn]", searchFrom);
+			int start;
+			String closingTag;
+			if (mathStart >= 0 && (eqnStart < 0 || mathStart < eqnStart)) {
+				start = mathStart;
+				closingTag = "[/math]";
+			} else if (eqnStart >= 0) {
+				start = eqnStart;
+				closingTag = "[/eqn]";
+			} else {
+				break;
+			}
+			int contentStart = start + 6;
+			int end = comment.indexOf(closingTag, contentStart);
+			if (end < 0) {
+				searchFrom = contentStart;
+				continue;
+			}
+			String formula = StringUtils.clearHtml(comment.substring(contentStart, end));
+			String encodedFormula = formula.replace("<", "&lt;").replace(">", "&gt;");
+			String encodedUri = locator.buildMathUri(formula).toString().replace("\"", "&quot;");
+			if (result == null) result = new StringBuilder(comment.length());
+			result.append(comment, copyFrom, start).append("<a href=\"").append(encodedUri).append("\">")
+					.append(encodedFormula).append("</a>");
+			copyFrom = end + closingTag.length();
+			searchFrom = copyFrom;
+		}
+		if (result == null) return comment;
+		return result.append(comment, copyFrom, comment.length()).toString();
+	}
 
 	public static class Extra {
 		public int uniquePosters;
@@ -118,10 +152,7 @@ public class FourchanModelMapper {
 					}
 					String com = StringUtils.linkify(builder.toString());
 					if (handleMathTags && (com.contains("[math]") || com.contains("[eqn]"))) {
-						com = StringUtils.replaceAll(com, PATTERN_MATH, matcher -> "<a href=\"" +
-								locator.buildMathUri(StringUtils.clearHtml(matcher.group(2))).toString()
-										.replaceAll("\"", "&quot;") + "\">" + StringUtils.clearHtml(matcher.group(2))
-								.replaceAll("<", "&lt;").replaceAll(">", "&gt;") + "</a>");
+						com = replaceMathTags(com, locator);
 					}
 					post.setComment(com);
 					break;

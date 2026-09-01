@@ -303,8 +303,6 @@ public final class SettingsSearchIndex {
 				Preferences.KEY_CAPTCHA_SOLVING);
 		add(context, entries, Screen.GENERAL, R.string.secure_connection, R.string.secure_connection__summary,
 				Preferences.KEY_USE_HTTPS_GENERAL);
-		add(context, entries, Screen.GENERAL, R.string.verify_certificate, R.string.verify_certificate__summary,
-				Preferences.KEY_VERIFY_CERTIFICATE);
 
 		add(context, entries, Screen.EXPERIMENTAL, R.string.whats_new_preview,
 				R.string.whats_new_preview__summary, null);

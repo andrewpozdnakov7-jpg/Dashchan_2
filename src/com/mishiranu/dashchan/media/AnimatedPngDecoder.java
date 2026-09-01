@@ -317,15 +317,13 @@ public class AnimatedPngDecoder implements Runnable {
 
 		@Override
 		public long skip(long byteCount) {
-			int totalCount = getTotalCount();
-			int left = totalCount - position;
-			if (left < byteCount) {
-				position = totalCount;
-				return left;
-			} else {
-				position += byteCount;
-				return byteCount;
+			if (byteCount <= 0) {
+				return 0;
 			}
+			int left = Math.max(getTotalCount() - position, 0);
+			int count = (int) Math.min((long) left, byteCount);
+			position += count;
+			return count;
 		}
 
 		@Override

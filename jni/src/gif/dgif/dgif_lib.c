@@ -1099,11 +1099,13 @@ DGifSlurp(GifFileType *GifFile)
 
               sp = &GifFile->SavedImages[GifFile->ImageCount - 1];
               /* Allocate memory for the image */
-              if (sp->ImageDesc.Width < 0 && sp->ImageDesc.Height < 0 &&
-                      sp->ImageDesc.Width > (INT_MAX / sp->ImageDesc.Height)) {
+              if (sp->ImageDesc.Width <= 0 || sp->ImageDesc.Height <= 0 ||
+                      (size_t)sp->ImageDesc.Width >
+                      (size_t)INT_MAX / (size_t)sp->ImageDesc.Height) {
                   return GIF_ERROR;
               }
-              ImageSize = sp->ImageDesc.Width * sp->ImageDesc.Height;
+              ImageSize = (size_t)sp->ImageDesc.Width *
+                      (size_t)sp->ImageDesc.Height;
 
               if (ImageSize > (SIZE_MAX / sizeof(GifPixelType))) {
                   return GIF_ERROR;

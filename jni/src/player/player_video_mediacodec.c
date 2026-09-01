@@ -554,7 +554,7 @@ void playerVideoApplyPendingSurface(Player * player, JNIEnv * env) {
 	int64_t startedAt = getTime();
 	int wasPlaying = player->play.playing;
 	if (wasPlaying) {
-		setPlaying((jlong) (long) player, 0);
+		playerSetPlaying((jlong) (long) player, 0);
 	}
 	int64_t position = getPosition((jlong) (long) player);
 	diagnosticsLog("player=%u surface_apply_started generation=%" PRId64

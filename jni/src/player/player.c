@@ -563,7 +563,7 @@ void setPlaybackSpeed(jlong pointer, jint speed) {
 	}
 }
 
-void setPlaying(jlong pointer, jboolean playing) {
+void playerSetPlaying(jlong pointer, jboolean playing) {
 	Player * player = POINTER_CAST(pointer);
 	playing = !!playing;
 	if (player->play.playing != playing) {
