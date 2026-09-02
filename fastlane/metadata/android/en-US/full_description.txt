@@ -4,6 +4,7 @@ Features include:
 
 <ul>
 <li>Built-in support for Dvach, including reading and posting</li>
+<li>Built-in Kekabu access to Pikabu communities, feeds, search, official-site sign-in and user-initiated voting</li>
 <li>Experimental read-only 4chan support</li>
 <li>A native FFmpeg-based player for WebM, MP4, MOV, H.264, HEVC, VP8, VP9 and AV1 media</li>
 <li>Image and video gallery, reverse image search and background media saving</li>
