@@ -1,0 +1,6 @@
+- Added voting for Kekabu stories and comments: after signing in, you can upvote, downvote, and change your vote. When signed out, the app explains that voting requires authorization.
+- Fixed loading of 18+ images available to signed-in users and refreshing previously cached placeholders after sign-in. Pikabu age restrictions are not bypassed.
+- Rating-only changes no longer trigger a false edited-post notification when refreshing a discussion.
+- The video player now displays updated frames while seeking on pause without resuming playback or audio. Frequent slider movements are safely coalesced, while Seek any frame provides increased accuracy.
+
+Found a bug? Send us the logs!
