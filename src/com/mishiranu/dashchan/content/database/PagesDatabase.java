@@ -895,7 +895,19 @@ public class PagesDatabase {
 					} else {
 						flags = FlagUtils.set(flags, Schema.Posts.Flags.DELETED |
 								Schema.Posts.Flags.MARK_DELETED, false);
-						flags = FlagUtils.set(flags, Schema.Posts.Flags.MARK_EDITED, true);
+						boolean contentChanged = true;
+						byte[] oldData = getPostData(id);
+						if (oldData != null) {
+							try (JsonSerial.Reader reader = JsonSerial.reader(oldData)) {
+								Post oldPost = Post.deserialize(postNumber, false, reader);
+								contentChanged = !serialized.post.isContentEqual(oldPost);
+							} catch (IOException | ParseException e) {
+								// Preserve the previous behavior if an old cached post cannot be decoded.
+							}
+						}
+						if (contentChanged) {
+							flags = FlagUtils.set(flags, Schema.Posts.Flags.MARK_EDITED, true);
+						}
 						serialized.flags = flags;
 					}
 				} else if (!partial && !FlagUtils.get(flags, Schema.Posts.Flags.DELETED)) {
@@ -978,6 +990,14 @@ public class PagesDatabase {
 			cacheStates.put(threadKey, state);
 		}
 		return new InsertResult(state, replies, newCount);
+	}
+
+	private byte[] getPostData(long rowId) {
+		String[] projection = {Schema.Posts.Columns.DATA};
+		try (Cursor cursor = database.query(Schema.Posts.TABLE_NAME, projection,
+				"rowid = ?", new String[] {Long.toString(rowId)}, null, null, null, "1")) {
+			return cursor.moveToFirst() ? cursor.getBlob(0) : null;
+		}
 	}
 
 	private final Expression.KeyLock<ThreadKey> collectLocks = new Expression.KeyLock<>();

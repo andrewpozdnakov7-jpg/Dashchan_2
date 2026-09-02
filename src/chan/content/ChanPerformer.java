@@ -1192,20 +1192,33 @@ public class ChanPerformer implements Chan.Linked {
 
 	@Public
 	public static class SendVotePostData implements HttpRequest.Preset {
+		@Public public static final int VOTE_DOWN = -1;
+		@Public public static final int VOTE_NONE = 0;
+		@Public public static final int VOTE_UP = 1;
+
 		@Public public final String boardName;
 		@Public public final String threadNumber;
 		@Public public final String postNumber;
+		@Public public final int vote;
 		@Public public final boolean isLike;
 		@Public public final boolean isDislike;
 		public final HttpHolder holder;
 
 		public SendVotePostData(String boardName, String threadNumber, String postNumber, boolean isLike,
 				HttpHolder holder) {
+			this(boardName, threadNumber, postNumber, isLike ? VOTE_UP : VOTE_DOWN, holder);
+		}
+
+		@Public
+		public SendVotePostData(String boardName, String threadNumber, String postNumber, int vote,
+				HttpHolder holder) {
+			if (vote < VOTE_DOWN || vote > VOTE_UP) throw new IllegalArgumentException("Invalid vote");
 			this.boardName = boardName;
 			this.threadNumber = threadNumber;
 			this.postNumber = postNumber;
-			this.isLike = isLike;
-			this.isDislike = !isLike;
+			this.vote = vote;
+			this.isLike = vote == VOTE_UP;
+			this.isDislike = vote == VOTE_DOWN;
 			this.holder = holder;
 		}
 

@@ -7,6 +7,7 @@ import chan.util.StringUtils;
 import com.mishiranu.dashchan.util.FlagUtils;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -152,14 +153,20 @@ public final class Post implements Comparable<Post> {
 	public static final class Vote {
 		public final int likes;
 		public final int dislikes;
+		public final int userVote;
 
-		private Vote(int likes, int dislikes) {
+		private Vote(int likes, int dislikes, int userVote) {
 			this.likes = Math.max(0, likes);
 			this.dislikes = Math.max(0, dislikes);
+			this.userVote = Math.max(-1, Math.min(1, userVote));
 		}
 
 		public static Vote createExternal(int likes, int dislikes) {
-			return new Vote(likes, dislikes);
+			return new Vote(likes, dislikes, 0);
+		}
+
+		public static Vote createExternal(int likes, int dislikes, int userVote) {
+			return new Vote(likes, dislikes, userVote);
 		}
 	}
 
@@ -238,6 +245,20 @@ public final class Post implements Comparable<Post> {
 	}
 
 	public void serialize(JsonSerial.Writer writer) throws IOException {
+		serialize(writer, true);
+	}
+
+	public boolean isContentEqual(Post another) throws IOException {
+		if (another == null) return false;
+		try (JsonSerial.Writer writer = JsonSerial.writer();
+				JsonSerial.Writer anotherWriter = JsonSerial.writer()) {
+			serialize(writer, false);
+			another.serialize(anotherWriter, false);
+			return Arrays.equals(writer.build(), anotherWriter.build());
+		}
+	}
+
+	private void serialize(JsonSerial.Writer writer, boolean includeVote) throws IOException {
 		writer.startObject();
 		writer.name("flags");
 		writer.value(flags);
@@ -354,13 +375,17 @@ public final class Post implements Comparable<Post> {
 			}
 			writer.endArray();
 		}
-		if (vote != null) {
+		if (includeVote && vote != null) {
 			writer.name("vote");
 			writer.startObject();
 			writer.name("likes");
 			writer.value(vote.likes);
 			writer.name("dislikes");
 			writer.value(vote.dislikes);
+			if (vote.userVote != 0) {
+				writer.name("userVote");
+				writer.value(vote.userVote);
+			}
 			writer.endObject();
 		}
 		writer.endObject();
@@ -542,6 +567,7 @@ public final class Post implements Comparable<Post> {
 				case "vote": {
 					int likes = 0;
 					int dislikes = 0;
+					int userVote = 0;
 					reader.startObject();
 					while (!reader.endStruct()) {
 						switch (reader.nextName()) {
@@ -553,13 +579,17 @@ public final class Post implements Comparable<Post> {
 								dislikes = reader.nextInt();
 								break;
 							}
+							case "userVote": {
+								userVote = reader.nextInt();
+								break;
+							}
 							default: {
 								reader.skip();
 								break;
 							}
 						}
 					}
-					vote = new Vote(likes, dislikes);
+					vote = new Vote(likes, dislikes, userVote);
 					break;
 				}
 				default: {

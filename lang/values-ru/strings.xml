@@ -1149,6 +1149,7 @@
 	<string name="pikabu_finish_sign_in">Готово</string>
 	<string name="pikabu_authorized_check_adult_settings">Вход выполнен. Нажмите «Проверить 18+», затем «Готово»</string>
 	<string name="pikabu_sign_in_required">Сначала выполните вход в Пикабу</string>
+	<string name="sign_in_to_vote">Чтобы голосовать, выполните вход</string>
 	<string name="pikabu_settings_saved">Настройки Пикабу сохранены. Теперь можно нажать «Готово».</string>
 	<string name="pikabu_settings_save_failed">Пикабу не удалось сохранить настройки. Попробуйте ещё раз.</string>
 	<string name="pikabu_wait_for_settings_save">Подождите, пока Пикабу закончит сохранять настройки</string>

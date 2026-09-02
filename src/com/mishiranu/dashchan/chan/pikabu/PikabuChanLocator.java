@@ -316,6 +316,14 @@ public class PikabuChanLocator extends ChanLocator {
 		return buildPath("ajax", "comments_actions.php");
 	}
 
+	public Uri createStoryVoteUri() {
+		return buildPath("ajax", "vote_story.php");
+	}
+
+	public Uri createCommentVoteUri() {
+		return buildPath("ajax", "vote_comment.php");
+	}
+
 	@Override
 	public NavigationData handleUriClickSpecial(Uri uri) {
 		if (uri == null || !isChanHostOrRelative(uri)) return null;

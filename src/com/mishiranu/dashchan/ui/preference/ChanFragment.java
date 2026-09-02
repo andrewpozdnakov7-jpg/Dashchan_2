@@ -511,10 +511,10 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 			android.util.DisplayMetrics displayMetrics = getResources().getDisplayMetrics();
 			float density = displayMetrics.density;
 			int padding = (int) (16f * density + 0.5f);
-			int browserHeight = Math.max((int) (280f * density + 0.5f),
-					(int) (displayMetrics.heightPixels * 0.72f));
 			LinearLayout layout = new LinearLayout(requireContext());
 			layout.setOrientation(LinearLayout.VERTICAL);
+			layout.setMinimumHeight(Math.max((int) (360f * density + 0.5f),
+					(int) (displayMetrics.heightPixels * 0.82f)));
 
 			domainView = new TextView(requireContext());
 			domainView.setText(PIKABU_URL);
@@ -552,7 +552,7 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 				}
 			});
 			layout.addView(webView, new LinearLayout.LayoutParams(
-					ViewGroup.LayoutParams.MATCH_PARENT, browserHeight));
+					ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
 
 			if (savedInstanceState != null) webView.restoreState(savedInstanceState);
 			else webView.loadUrl(PIKABU_URL);
@@ -572,7 +572,7 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 			if (window != null) {
 				window.clearFlags(WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM);
 				window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
-				window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+				window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
 			}
 			AlertDialog alertDialog = (AlertDialog) getDialog();
 			if (alertDialog != null) {

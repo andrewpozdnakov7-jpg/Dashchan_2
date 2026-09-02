@@ -1,6 +1,7 @@
 package com.mishiranu.dashchan.chan.pikabu;
 
 import android.webkit.CookieManager;
+import chan.content.ApiException;
 import chan.content.ChanConfiguration;
 import chan.content.ChanPerformer;
 import chan.content.InvalidResponseException;
@@ -20,6 +21,9 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TimeZone;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 public class PikabuChanPerformer extends ChanPerformer {
 	private static final int COMMENTS_BATCH_SIZE = 300;
@@ -263,7 +267,7 @@ public class PikabuChanPerformer extends ChanPerformer {
 	@Override
 	protected ReadContentResult onReadContent(ReadContentData data)
 			throws HttpException, InvalidResponseException {
-		int scramblerOffset = PikabuImageScrambler.getOffset(data.uri);
+		long scramblerOffset = PikabuImageScrambler.getOffset(data.uri);
 		android.net.Uri requestUri = PikabuImageScrambler.getRequestUri(data.uri);
 		HttpRequest request = prepareRequest(requestUri, scramblerOffset >= 0 ? data : data.direct);
 		if (isPikabuDomain(requestUri)) {
@@ -337,6 +341,55 @@ public class PikabuChanPerformer extends ChanPerformer {
 			configuration.clearAuthorization();
 		}
 		return new CheckAuthorizationResult(sessionData.authorized);
+	}
+
+	@Override
+	public SendVotePostResult onSendVotePost(SendVotePostData data) throws HttpException, ApiException,
+			InvalidResponseException {
+		PikabuChanConfiguration configuration = PikabuChanConfiguration.get(this);
+		if (!configuration.isAuthorized()) {
+			throw new ApiException("Для голосования войдите в аккаунт Пикабу в настройках «Кекабу».");
+		}
+		if (data.vote < SendVotePostData.VOTE_DOWN || data.vote > SendVotePostData.VOTE_UP) {
+			throw new InvalidResponseException();
+		}
+		PikabuChanLocator locator = PikabuChanLocator.get(this);
+		android.net.Uri threadUri = locator.createThreadUri(data.boardName, data.threadNumber);
+		String html = perform(threadUri, preparePageRequest(threadUri, data)).readString();
+		PikabuHtmlParser.SessionData sessionData = PikabuHtmlParser.parseSessionData(html);
+		if (sessionData == null || StringUtils.isEmpty(sessionData.csrfToken)) {
+			throw new InvalidResponseException();
+		}
+		if (!sessionData.authorized) {
+			configuration.clearAuthorization();
+			throw new ApiException("Сессия Пикабу завершена. Войдите в аккаунт заново.");
+		}
+
+		boolean story = data.postNumber.equals(data.threadNumber);
+		android.net.Uri voteUri = story ? locator.createStoryVoteUri() : locator.createCommentVoteUri();
+		UrlEncodedEntity entity = new UrlEncodedEntity(story ? "story_id" : "comment_id", data.postNumber,
+				"vote", Integer.toString(data.vote));
+		int timezoneOffsetMinutes = TimeZone.getDefault().getOffset(System.currentTimeMillis()) / 60_000;
+		String response = perform(voteUri, prepareRequest(voteUri, data)
+				.addHeader("Accept", "application/json")
+				.addHeader("Referer", threadUri.toString())
+				.addHeader("X-Csrf-Token", sessionData.csrfToken)
+				.addHeader("X-Timezone-Offset", Integer.toString(timezoneOffsetMinutes))
+				.setPostMethod(entity)).readString();
+		try {
+			JSONObject object = new JSONObject(response);
+			Object result = object.opt("result");
+			if (Boolean.TRUE.equals(result) || result instanceof Number && ((Number) result).intValue() == 1
+					|| "1".equals(String.valueOf(result)) || "true".equalsIgnoreCase(String.valueOf(result))) {
+				return new SendVotePostResult();
+			}
+			String message = object.optString("message", null);
+			if (StringUtils.isEmpty(message)) message = object.optString("error", null);
+			if (!StringUtils.isEmpty(message)) throw new ApiException(message);
+			throw new InvalidResponseException();
+		} catch (JSONException e) {
+			throw new InvalidResponseException(e);
+		}
 	}
 
 	@Override

@@ -55,6 +55,8 @@ public class SendMultifunctionalTask extends HttpHolderTask<Void, Boolean> {
 
 		public boolean commentField;
 		public boolean like;
+		public int vote;
+		public boolean singleScoreVote;
 		public PostItem votePostItem;
 
 		public List<PostNumber> postNumbers;
@@ -153,7 +155,7 @@ public class SendMultifunctionalTask extends HttpHolderTask<Void, Boolean> {
 				}
 				case VOTE: {
 					chan.performer.safe().onSendVotePost(new ChanPerformer.SendVotePostData(state.boardName,
-							state.threadNumber, state.postNumbers.get(0).toString(), state.like, holder));
+							state.threadNumber, state.postNumbers.get(0).toString(), state.vote, holder));
 					break;
 				}
 				case ARCHIVE: {

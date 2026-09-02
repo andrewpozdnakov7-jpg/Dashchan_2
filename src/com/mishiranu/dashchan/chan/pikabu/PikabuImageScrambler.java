@@ -6,7 +6,7 @@ import java.util.Arrays;
 import java.util.Locale;
 
 final class PikabuImageScrambler {
-	private static final String URI_FRAGMENT_PREFIX = "slooop-pikabu-scrambler-";
+	private static final String URI_FRAGMENT_PREFIX = "slooop-cache-pikabu-scrambler-v2-";
 	private static final byte[] DATA_SEPARATOR = new byte[] {
 			0, 0, 0, 0, 's', 'c', 'r', 'a', 'm', 'b', 'l', 'e', ':'
 	};
@@ -20,20 +20,21 @@ final class PikabuImageScrambler {
 		String path = uri.getPath();
 		if (path == null || !path.toLowerCase(Locale.US).endsWith(".gif")) return uri;
 		try {
-			int offset = Integer.parseInt(offsetValue.trim());
-			if (offset < 0 || offset > 255) return uri;
+			// Pikabu supplies the story or comment identifier here, not an unsigned byte.
+			long offset = Long.parseLong(offsetValue.trim());
+			if (offset < 0) return uri;
 			return uri.buildUpon().fragment(URI_FRAGMENT_PREFIX + offset).build();
 		} catch (NumberFormatException e) {
 			return uri;
 		}
 	}
 
-	public static int getOffset(Uri uri) {
+	public static long getOffset(Uri uri) {
 		String fragment = uri != null ? uri.getFragment() : null;
 		if (fragment == null || !fragment.startsWith(URI_FRAGMENT_PREFIX)) return -1;
 		try {
-			int offset = Integer.parseInt(fragment.substring(URI_FRAGMENT_PREFIX.length()));
-			return offset >= 0 && offset <= 255 ? offset : -1;
+			long offset = Long.parseLong(fragment.substring(URI_FRAGMENT_PREFIX.length()));
+			return offset >= 0 ? offset : -1;
 		} catch (NumberFormatException e) {
 			return -1;
 		}
@@ -43,8 +44,8 @@ final class PikabuImageScrambler {
 		return getOffset(uri) >= 0 ? uri.buildUpon().fragment(null).build() : uri;
 	}
 
-	public static byte[] decode(byte[] source, int offset) {
-		if (source == null || offset < 0 || offset > 255) return null;
+	public static byte[] decode(byte[] source, long offset) {
+		if (source == null || offset < 0) return null;
 		int separator = findSeparator(source);
 		int header = separator >= 0 ? separator + DATA_SEPARATOR.length : -1;
 		if (header < 0 || header + MIME_LENGTH + 1 > source.length) return null;
@@ -57,7 +58,10 @@ final class PikabuImageScrambler {
 		int mode = source[header + MIME_LENGTH] & 0xff;
 		byte[] decoded = Arrays.copyOfRange(source, header + MIME_LENGTH + 1, source.length);
 		if (mode == 1) {
-			for (int i = 0; i < decoded.length; i++) decoded[i] = (byte) ((decoded[i] & 0xff) - offset);
+			// Match the browser decoder's modulo-256 subtraction for the complete identifier.
+			for (int i = 0; i < decoded.length; i++) {
+				decoded[i] = (byte) (((decoded[i] & 0xffL) - offset) & 0xffL);
+			}
 		} else if (mode != 0) {
 			return null;
 		}

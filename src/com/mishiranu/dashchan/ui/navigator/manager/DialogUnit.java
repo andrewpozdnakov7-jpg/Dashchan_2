@@ -35,6 +35,7 @@ import chan.content.Chan;
 import chan.content.ChanConfiguration;
 import chan.content.ChanLocator;
 import chan.content.ChanManager;
+import chan.content.ChanPerformer;
 import chan.util.CommonUtils;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.R;
@@ -1512,14 +1513,24 @@ public class DialogUnit {
 			boolean like) {
 		Chan chan = Chan.get(chanName);
 		ChanConfiguration.Voting voting = chan.configuration.safe().obtainVoting(postItem.getBoardName());
-		if (voting == null || postItem.hasSubmittedVote()
+		if (voting == null || postItem.hasSubmittedVote() && !voting.allowVoteChange
 				|| like && !voting.allowLike || !like && !voting.allowDislike) {
 			return;
 		}
+		if (voting.authorizationRequired && !voting.authorized) {
+			ClickableToast.show(R.string.sign_in_to_vote);
+			return;
+		}
+		int requestedVote = like ? ChanPerformer.SendVotePostData.VOTE_UP
+				: ChanPerformer.SendVotePostData.VOTE_DOWN;
+		int vote = voting.allowVoteChange && postItem.getSubmittedVote() == requestedVote
+				? ChanPerformer.SendVotePostData.VOTE_NONE : requestedVote;
 		SendMultifunctionalTask.State state = new SendMultifunctionalTask.State(SendMultifunctionalTask
 				.Operation.VOTE, chanName, postItem.getBoardName(), postItem.getThreadNumber(), null, null, false);
 		state.postNumbers = Collections.singletonList(postItem.getPostNumber());
 		state.like = like;
+		state.vote = vote;
+		state.singleScoreVote = voting.singleScore;
 		state.votePostItem = postItem;
 		startMultifunctionalProcess(fragmentManager, state, null, null, null);
 	}
@@ -1808,7 +1819,7 @@ public class DialogUnit {
 						}
 						case VOTE: {
 							if (state.votePostItem != null) {
-								state.votePostItem.applyVote(state.like);
+								state.votePostItem.applyVote(state.vote, state.singleScoreVote);
 								UiManager.extract(provider).sendPostItemMessage(state.votePostItem,
 										UiManager.Message.POST_INVALIDATE_ALL_VIEWS);
 							}

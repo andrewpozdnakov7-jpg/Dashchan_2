@@ -206,6 +206,10 @@ public class ChanConfiguration implements Chan.Linked {
 	public static final class Voting {
 		@Public public boolean allowLike;
 		@Public public boolean allowDislike;
+		@Public public boolean allowVoteChange;
+		@Public public boolean singleScore;
+		@Public public boolean authorizationRequired;
+		@Public public boolean authorized = true;
 
 		@Public
 		public Voting() {}

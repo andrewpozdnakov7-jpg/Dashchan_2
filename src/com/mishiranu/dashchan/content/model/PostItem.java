@@ -114,7 +114,7 @@ public class PostItem implements AttachmentItem.Master, ChanMarkup.MarkupExtra, 
 	private String hideReason;
 	private int localLikeOffset;
 	private int localDislikeOffset;
-	private Boolean submittedVoteLike;
+	private int submittedVote;
 
 	private static class ThreadData {
 		public static class Base {
@@ -165,6 +165,7 @@ public class PostItem implements AttachmentItem.Master, ChanMarkup.MarkupExtra, 
 		this.boardName = boardName;
 		this.threadNumber = threadNumber;
 		this.originalPostNumber = originalPostNumber;
+		submittedVote = post.vote != null ? post.vote.userVote : 0;
 		attachmentItems = AttachmentItem.obtain(this, post, chan.locator);
 		if (threadDataBase != null) {
 			CharSequence commentShort = obtainThreadComment(post.comment, chan.markup, this);
@@ -201,22 +202,35 @@ public class PostItem implements AttachmentItem.Master, ChanMarkup.MarkupExtra, 
 	}
 
 	public boolean hasSubmittedVote() {
-		return submittedVoteLike != null;
+		return submittedVote != 0;
 	}
 
 	public boolean isSubmittedVoteLike() {
-		return Boolean.TRUE.equals(submittedVoteLike);
+		return submittedVote > 0;
+	}
+
+	public int getSubmittedVote() {
+		return submittedVote;
 	}
 
 	public void applyVote(boolean like) {
-		if (submittedVoteLike == null) {
-			submittedVoteLike = like;
-			if (like) {
-				localLikeOffset++;
-			} else {
-				localDislikeOffset++;
-			}
+		applyVote(like ? 1 : -1, false);
+	}
+
+	public void applyVote(int vote, boolean singleScore) {
+		vote = Math.max(-1, Math.min(1, vote));
+		if (vote == submittedVote) return;
+		if (singleScore) {
+			int rating = getLikes() - getDislikes() + vote - submittedVote;
+			localLikeOffset = Math.max(rating, 0) - (post.vote != null ? post.vote.likes : 0);
+			localDislikeOffset = Math.max(-rating, 0) - (post.vote != null ? post.vote.dislikes : 0);
+		} else {
+			if (submittedVote > 0) localLikeOffset--;
+			else if (submittedVote < 0) localDislikeOffset--;
+			if (vote > 0) localLikeOffset++;
+			else if (vote < 0) localDislikeOffset++;
 		}
+		submittedVote = vote;
 	}
 
 	public static Set<PostNumber> collectReferences(Set<PostNumber> references, String comment) {

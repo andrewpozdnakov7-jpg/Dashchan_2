@@ -30,6 +30,7 @@ import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import chan.content.Chan;
+import chan.content.ChanConfiguration;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.ImageLoader;
@@ -619,7 +620,10 @@ public class ViewUnit {
 		holder.invalidateBottomBar();
 
 		boolean viewsEnabled = demandSet.selection == UiManager.Selection.DISABLED;
-		boolean voteEnabled = viewsEnabled && !postItem.isDeleted() && !postItem.hasSubmittedVote();
+		ChanConfiguration.Voting voting = Chan.get(configurationSet.chanName).configuration.safe()
+				.obtainVoting(postItem.getBoardName());
+		boolean voteEnabled = viewsEnabled && !postItem.isDeleted() && voting != null
+				&& (!postItem.hasSubmittedVote() || voting.allowVoteChange);
 		holder.voteLike.setEnabled(voteEnabled);
 		holder.voteDislike.setEnabled(voteEnabled);
 		int inactiveVoteIconColor = ThemeEngine.getTheme(holder.itemView.getContext()).base
