@@ -154,6 +154,7 @@ static int renderMediaCodecFrame(Player * player, JNIEnv * env, AVStream * strea
 	}
 	if (finishSeeking && render && renderResult >= 0) {
 		player->sync.videoPositionNotSync = 0;
+		playerVideoCompletePausedSeekFrame(player);
 		diagnosticsLog("player=%u seek_first_frame_rendered position_ms=%" PRId64 " hardware=1",
 				player->meta.diagnosticsId, framePosition);
 		Bridge * bridge = playerObtainBridge(player, env);
@@ -213,7 +214,8 @@ void playerVideoDecodeMediaCodec(Player * player, JNIEnv * env, AVStream * strea
 			break;
 		}
 		pthread_mutex_lock(&player->play.finishMutex);
-		while (!player->meta.interrupt && !player->play.playing && !playerVideoHasPendingSurface(player)) {
+		while (!player->meta.interrupt && !playerVideoCanDecode(player)
+				&& !playerVideoHasPendingSurface(player)) {
 			pthread_cond_wait(&player->play.finishCond, &player->play.finishMutex);
 		}
 		pthread_mutex_unlock(&player->play.finishMutex);
@@ -248,6 +250,9 @@ void playerVideoDecodeMediaCodec(Player * player, JNIEnv * env, AVStream * strea
 			}
 			pthread_mutex_unlock(&player->decode.video.frameMutex);
 			playerSetDiagnosticsMediaCodecStage(player, DIAGNOSTICS_MEDIACODEC_STAGE_IDLE, -1);
+			if (!playerVideoCanDecode(player)) {
+				break;
+			}
 			if (decodeResult <= 0 || renderResult <= 0) {
 				break;
 			}

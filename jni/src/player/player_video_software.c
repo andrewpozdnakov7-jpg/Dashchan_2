@@ -270,7 +270,7 @@ void * playerVideoDrawThread(void * data) {
 		}
 
 		pthread_mutex_lock(&player->play.finishMutex);
-		while (!player->meta.interrupt && !player->play.playing) {
+		while (!player->meta.interrupt && !playerVideoCanPresent(player)) {
 			pthread_cond_wait(&player->play.finishCond, &player->play.finishMutex);
 		}
 		pthread_mutex_unlock(&player->play.finishMutex);
@@ -363,6 +363,7 @@ void * playerVideoDrawThread(void * data) {
 		}
 		if (finishSeeking && rendered) {
 			player->sync.videoPositionNotSync = 0;
+			playerVideoCompletePausedSeekFrame(player);
 			diagnosticsLog("player=%u seek_first_frame_rendered position_ms=%" PRId64 " hardware=0",
 					player->meta.diagnosticsId, extra->position);
 			Bridge * bridge = playerObtainBridge(player, env);
@@ -487,7 +488,8 @@ void * playerVideoDecodeThread(void * data) {
 		}
 
 		pthread_mutex_lock(&player->play.finishMutex);
-		while (!player->meta.interrupt && !player->play.playing && !playerVideoHasPendingSurface(player)) {
+		while (!player->meta.interrupt && !playerVideoCanDecode(player)
+				&& !playerVideoHasPendingSurface(player)) {
 			pthread_cond_wait(&player->play.finishCond, &player->play.finishMutex);
 		}
 		pthread_mutex_unlock(&player->play.finishMutex);
@@ -504,6 +506,7 @@ void * playerVideoDecodeThread(void * data) {
 		int packetSent = 0;
 		while (1) {
 			int success = 0;
+			int pausedSeekFrameQueued = 0;
 			VideoFrameExtra * extra = NULL;
 			int64_t decodedFramePosition = -1;
 			if (playerGetSkipFlag(&player->sync.skip.videoWorkFrame)) {
@@ -684,6 +687,9 @@ void * playerVideoDecodeThread(void * data) {
 				}
 				if (bufferItem) {
 					int forcePresent = extra->forcePresent;
+					if (decodedFramePosition >= 0 && player->sync.videoPositionNotSync) {
+						pausedSeekFrameQueued = playerVideoMarkPausedSeekFrameQueued(player);
+					}
 					memcpy(bufferItem->buffer, scaleHolder.scaleBuffer, outputBufferSize);
 					bufferItem->dataSize = outputBufferSize;
 					bufferItem->extra = extra;
@@ -707,6 +713,11 @@ void * playerVideoDecodeThread(void * data) {
 				free(extra);
 			}
 			if (!success) {
+				break;
+			}
+			if (pausedSeekFrameQueued) {
+				diagnosticsLog("player=%u paused_seek_preview frame_queued position_ms=%" PRId64,
+						player->meta.diagnosticsId, decodedFramePosition);
 				break;
 			}
 		}

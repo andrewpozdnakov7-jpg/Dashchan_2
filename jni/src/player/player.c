@@ -575,6 +575,9 @@ void playerApplyPlaying(Player * player, int playing) {
 			player->sync.pausedPosition = calculatePosition(player, 1);
 		}
 		player->play.playing = playing;
+		if (playing) {
+			__atomic_store_n(&player->play.pausedSeekState, PAUSED_SEEK_NONE, __ATOMIC_RELEASE);
+		}
 		pthread_cond_broadcast(&player->play.finishCond);
 		pthread_mutex_unlock(&player->play.finishMutex);
 		if (!playing && HAS_STREAM(player, video) && !player->video.hardwareDecoderActive) {
@@ -599,6 +602,40 @@ void playerApplyPlaying(Player * player, int playing) {
 				playerAudioEnqueueBuffer(player);
 			}
 			pthread_mutex_unlock(&player->audio.sleepBufferMutex);
+		}
+	}
+}
+
+int playerVideoCanDecode(Player * player) {
+	return player->play.playing || __atomic_load_n(&player->play.pausedSeekState,
+			__ATOMIC_ACQUIRE) == PAUSED_SEEK_DECODING;
+}
+
+int playerVideoCanPresent(Player * player) {
+	return player->play.playing || __atomic_load_n(&player->play.pausedSeekState,
+			__ATOMIC_ACQUIRE) != PAUSED_SEEK_NONE;
+}
+
+void playerVideoSetPausedSeekPending(Player * player, int pending) {
+	__atomic_store_n(&player->play.pausedSeekState,
+			pending ? PAUSED_SEEK_DECODING : PAUSED_SEEK_NONE, __ATOMIC_RELEASE);
+}
+
+int playerVideoMarkPausedSeekFrameQueued(Player * player) {
+	if (player->play.playing) {
+		return 0;
+	}
+	int expected = PAUSED_SEEK_DECODING;
+	return __atomic_compare_exchange_n(&player->play.pausedSeekState, &expected,
+			PAUSED_SEEK_FRAME_QUEUED, 0, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE);
+}
+
+void playerVideoCompletePausedSeekFrame(Player * player) {
+	if (!player->play.playing) {
+		int previous = __atomic_exchange_n(&player->play.pausedSeekState,
+				PAUSED_SEEK_NONE, __ATOMIC_ACQ_REL);
+		if (previous != PAUSED_SEEK_NONE) {
+			diagnosticsLog("player=%u paused_seek_preview rendered", player->meta.diagnosticsId);
 		}
 	}
 }

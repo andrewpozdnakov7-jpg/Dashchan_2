@@ -62,6 +62,7 @@ public class VideoUnit {
 
 	private static final int[] PLAYBACK_SPEEDS = {800, 1000, 1250, 1500, 2000, 4000};
 	private static final String[] PLAYBACK_SPEED_LABELS = {"0.8x", "1x", "1.25x", "1.5x", "2x", "4x"};
+	private static final long PAUSED_SEEK_PREVIEW_DELAY = 100L;
 
 	private final PagerInstance instance;
 	private final LinearLayout controlsView;
@@ -91,6 +92,7 @@ public class VideoUnit {
 	private boolean pausedByTransientLossOfFocus;
 	private boolean finishedPlayback;
 	private boolean trackingNow;
+	private int nextSeekPosition = -1;
 	private boolean hideSurfaceOnInit;
 	private boolean pictureInPictureTransferred;
 	private int lastNonZeroSystemVolume;
@@ -495,6 +497,7 @@ public class VideoUnit {
 			controlsView.removeAllViews();
 			if (seekBar != null) {
 				seekBar.removeCallbacks(progressRunnable);
+				seekBar.removeCallbacks(pausedSeekPreviewRunnable);
 			}
 			trackingNow = false;
 			playbackSpeedButton = null;
@@ -1197,13 +1200,18 @@ public class VideoUnit {
 		}
 	};
 
-	private final SeekBar.OnSeekBarChangeListener seekBarListener = new SeekBar.OnSeekBarChangeListener() {
-		private int nextSeekPosition;
+	private final Runnable pausedSeekPreviewRunnable = () -> {
+		if (initialized && trackingNow && player != null && !player.isPlaying() && nextSeekPosition >= 0) {
+			player.setPosition(nextSeekPosition);
+		}
+	};
 
+	private final SeekBar.OnSeekBarChangeListener seekBarListener = new SeekBar.OnSeekBarChangeListener() {
 		@Override
 		public void onStopTrackingTouch(SeekBar seekBar) {
 			trackingNow = false;
 			seekBar.removeCallbacks(progressRunnable);
+			seekBar.removeCallbacks(pausedSeekPreviewRunnable);
 			if (nextSeekPosition != -1) {
 				seekBar.setProgress(nextSeekPosition);
 				player.setPosition(nextSeekPosition);
@@ -1222,6 +1230,7 @@ public class VideoUnit {
 		public void onStartTrackingTouch(SeekBar seekBar) {
 			trackingNow = true;
 			seekBar.removeCallbacks(progressRunnable);
+			seekBar.removeCallbacks(pausedSeekPreviewRunnable);
 			nextSeekPosition = -1;
 		}
 
@@ -1229,6 +1238,10 @@ public class VideoUnit {
 		public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
 			if (fromUser) {
 				nextSeekPosition = progress;
+				if (initialized && player != null && !player.isPlaying()) {
+					seekBar.removeCallbacks(pausedSeekPreviewRunnable);
+					seekBar.postDelayed(pausedSeekPreviewRunnable, PAUSED_SEEK_PREVIEW_DELAY);
+				}
 			}
 		}
 	};

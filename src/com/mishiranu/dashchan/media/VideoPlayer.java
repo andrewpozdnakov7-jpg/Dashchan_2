@@ -497,14 +497,12 @@ public class VideoPlayer {
 			if (isInitialized()) {
 				long duration = holder.getDuration(sessionData.pointer);
 				position = Math.max(0L, duration > 0L ? Math.min(position, duration) : position);
-				if (playing) {
-					cancelSetPositionLocked(false);
-				}
+				cancelSetPositionLocked(false);
 				synchronized (seekerThread) {
 					long requestId = ++nextSeekRequestId;
-					seekToPosition = new SeekToPosition(requestId, position, playing);
+					seekToPosition = new SeekToPosition(requestId, position);
 					VideoDiagnostics.recordUi("seek_request id=" + requestId + " position=" + position
-							+ " allowed=" + playing);
+							+ " playing=" + playing);
 					seekerThread.notifyAll();
 				}
 			}
@@ -847,16 +845,11 @@ public class VideoPlayer {
 				SeekToPosition seekToPosition = this.seekToPosition;
 				cancelSetPositionLocked(false);
 				this.playing = playing;
-				if (playing) {
-					holder.setPlaying(sessionData.pointer, true);
-					if (seekToPosition != null) {
-						setPosition(seekToPosition.position);
-					}
-				} else {
-					holder.setPlaying(sessionData.pointer, false);
-					// Restore value after cancelSetPosition
-					this.seekToPosition = seekToPosition != null
-							? new SeekToPosition(seekToPosition.requestId, seekToPosition.position, false) : null;
+				holder.setPlaying(sessionData.pointer, playing);
+				if (seekToPosition != null) {
+					// Reissue a seek cancelled by the playback-state transition. When pausing,
+					// the native player decodes exactly one preview frame without resuming audio.
+					setPosition(seekToPosition.position);
 				}
 			}
 		}
@@ -1101,12 +1094,10 @@ public class VideoPlayer {
 	private static class SeekToPosition {
 		public final long requestId;
 		public final long position;
-		public final boolean allow;
 
-		public SeekToPosition(long requestId, long position, boolean allow) {
+		public SeekToPosition(long requestId, long position) {
 			this.requestId = requestId;
 			this.position = position;
-			this.allow = allow;
 		}
 	}
 
@@ -1154,7 +1145,7 @@ public class VideoPlayer {
 			synchronized (seekerThread) {
 				while (true) {
 					workSeekToPosition = seekToPosition;
-					if ((workSeekToPosition == null || !workSeekToPosition.allow) && !consumed) {
+					if (workSeekToPosition == null && !consumed) {
 						try {
 							seekerThread.wait();
 						} catch (InterruptedException e) {
