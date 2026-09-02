@@ -21,6 +21,9 @@ Automated tests do not cover the full Dashchan UI, Android firmware differences,
 - queued retry after a rate-limit response;
 - likes/dislikes on a board that supports them;
 - AI-post hiding and other autohide rules;
+- Kekabu communities, tags, popular authors, topical feeds, search, public links, stories, and comments;
+- Pikabu sign-in through the official website, signed-out voting feedback, and user-initiated story and comment votes;
+- account-available 18+ media after enabling it in Pikabu settings, including refreshing cached placeholders without bypassing age restrictions;
 - experimental 4chan read-only channel when the network permits access.
 
 Never use production testing to spam a board. Remove test posts when the service allows it.

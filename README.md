@@ -8,7 +8,7 @@
 
 ## Русский
 
-Slooop - пользовательское название неофициальной ветки Dashchan_2 для Android 11 и новее. Приложение устанавливается рядом с оригинальным Dashchan, использует пакет `io.dashchan2` и содержит встроенную поддержку Двача, Ежчана, Апачана, Архивача, Zchan и Endchan, экспериментальный режим чтения 4chan и собственный видеоплеер на FFmpeg.
+Slooop - пользовательское название неофициальной ветки Dashchan_2 для Android 11 и новее. Приложение устанавливается рядом с оригинальным Dashchan, использует пакет `io.dashchan2` и содержит встроенную поддержку Двача, «Кекабу» (Pikabu), Ежчана, Апачана, Архивача, Zchan и Endchan, экспериментальный режим чтения 4chan и собственный видеоплеер на FFmpeg.
 
 ### Скачать
 
@@ -29,6 +29,7 @@ Slooop - пользовательское название неофициаль�
 
 - просмотр досок, тредов, изображений и видео, избранное, слежение за тредами и фоновые уведомления;
 - встроенный Двач с отправкой постов, Passcode, AI-фильтром и лайками/дизлайками на поддерживаемых досках;
+- встроенный «Кекабу» для чтения Пикабу: сообщества, теги, популярные авторы, тематические ленты, поиск, вход через официальный сайт, доступные аккаунту материалы 18+ и оценки историй и комментариев;
 - встроенные Ежчан, Апачан, Zchan и Endchan с чтением и отправкой сообщений, Архивач в режиме чтения и экспериментальный 4chan только для чтения;
 - редактирование постов и сортировка тредов на Апачане по последнему бампу, дате создания или количеству сообщений;
 - «Мои доски» для объединения досок разных имиджборд в несколько собственных лент;
@@ -45,7 +46,7 @@ Slooop - пользовательское название неофициаль�
 
 ### Ограничения
 
-- 4chan и Архивач не поддерживают отправку постов; отдельные борды могут быть недоступны в некоторых сетях;
+- 4chan и Архивач не поддерживают отправку постов; «Кекабу» не публикует истории и комментарии и не обходит возрастные ограничения Пикабу; отдельные сайты могут быть недоступны в некоторых сетях;
 - Google ML Kit доступен только как отдельное дополнение GitHub-версии, а Gemini Nano работает только на поддерживаемых устройствах;
 - Predictive Back и «картинка в картинке» включаются вручную;
 - `targetSdk` равен 37 для совместимости с Android 17; `minSdk` остаётся равен 30.
@@ -93,7 +94,7 @@ Dashchan_2 основан на исходном коде Dashchan. Отдель�
 
 ## English
 
-Slooop is the user-facing name of the unofficial Dashchan_2 branch for Android 11 and newer. It installs alongside the original Dashchan under the `io.dashchan2` package and bundles support for Dvach, Ejchan, Apachan, Arhivach, Zchan, Endchan, experimental read-only 4chan access, and an FFmpeg-based video player.
+Slooop is the user-facing name of the unofficial Dashchan_2 branch for Android 11 and newer. It installs alongside the original Dashchan under the `io.dashchan2` package and bundles support for Dvach, Kekabu (Pikabu), Ejchan, Apachan, Arhivach, Zchan, Endchan, experimental read-only 4chan access, and an FFmpeg-based video player.
 
 ### Download
 
@@ -114,6 +115,7 @@ The Google ML Kit offline translator for the GitHub build is an optional separat
 
 - boards, threads, media gallery, favorites, thread watching, and background notifications;
 - built-in Dvach posting, Passcode support, AI filtering, and votes on supported boards;
+- built-in Kekabu access to Pikabu communities, tags, popular authors, topical feeds, search, official-site sign-in, account-available 18+ media, and user-initiated story and comment votes;
 - built-in Ejchan, Apachan, Zchan, and Endchan reading and posting, read-only Arhivach, and experimental read-only 4chan access;
 - Apachan post editing and thread sorting by last bump, creation date, or post count;
 - My Boards feeds that combine boards from different imageboards into several custom feeds;
@@ -128,7 +130,7 @@ The Google ML Kit offline translator for the GitHub build is an optional separat
 
 ### Limitations
 
-- 4chan and Arhivach posting are not implemented; individual imageboards may be unreachable on some networks;
+- 4chan and Arhivach posting are not implemented; Kekabu does not publish stories or comments or bypass Pikabu age restrictions; individual sites may be unreachable on some networks;
 - Google ML Kit is available only as a separate add-on for the GitHub build, while Gemini Nano requires a supported device;
 - Predictive Back and picture-in-picture are opt-in settings;
 - `targetSdk` is 37 for Android 17 compatibility; `minSdk` remains 30.

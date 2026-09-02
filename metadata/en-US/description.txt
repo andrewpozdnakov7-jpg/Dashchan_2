@@ -1,4 +1,5 @@
-* Built-in Dvach and experimental read-only 4chan support
+* Built-in Dvach, Kekabu (Pikabu), and experimental read-only 4chan support
+* Pikabu communities, tags, feeds, search, official-site sign-in, and user-initiated voting
 * Threads, favorites, optional background reply notifications, and automatic hiding
 * Filterable gallery with background file saving
 * FFmpeg video player with seeking, speed, gestures, and PiP
