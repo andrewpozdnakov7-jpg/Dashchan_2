@@ -433,6 +433,7 @@ public class CacheManager implements Runnable {
 				Chan chan = Chan.getPreferred(null, uri);
 				String path = uri.getPath();
 				String query = uri.getQuery();
+				String fragment = uri.getFragment();
 				StringBuilder dataBuilder = new StringBuilder();
 				if (chan.name != null) {
 					dataBuilder.append(chan.name);
@@ -440,6 +441,11 @@ public class CacheManager implements Runnable {
 				dataBuilder.append(path);
 				if (query != null) {
 					dataBuilder.append('?').append(query);
+				}
+				// HTTP fragments normally do not identify different downloaded files. Internal fragments with this
+				// prefix carry a cache revision for content that must be transformed before it is displayed.
+				if (fragment != null && fragment.startsWith("slooop-cache-")) {
+					dataBuilder.append('#').append(fragment);
 				}
 				data = dataBuilder.toString();
 			}

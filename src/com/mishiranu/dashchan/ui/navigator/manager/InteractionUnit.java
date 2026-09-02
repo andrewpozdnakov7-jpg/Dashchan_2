@@ -357,7 +357,7 @@ public class InteractionUnit {
 			}
 			ChanConfiguration.Voting voting = board.allowVotes
 					? chan.configuration.safe().obtainVoting(postItem.getBoardName()) : null;
-			if (voting != null && !postItem.hasSubmittedVote()) {
+			if (voting != null && (!postItem.hasSubmittedVote() || voting.allowVoteChange)) {
 				if (voting.allowLike) {
 					dialogMenu.add(R.string.vote_like, () -> uiManager.dialog().performSendVotePost(
 							configurationSet.fragmentManager, chan.name, postItem, true));

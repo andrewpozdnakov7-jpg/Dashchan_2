@@ -33,6 +33,10 @@
 #define PACKET_HOLDER_END_OF_STREAM 1
 #define PACKET_HOLDER_SURFACE_REQUEST 2
 
+#define PAUSED_SEEK_NONE 0
+#define PAUSED_SEEK_DECODING 1
+#define PAUSED_SEEK_FRAME_QUEUED 2
+
 #define PLAYER_SEND_MESSAGE(env, p, b, what) \
 	(*(env))->CallVoidMethod((env), (p)->bridge.native, (b)->methodOnMessage, (what))
 
@@ -149,6 +153,7 @@ struct Player {
 	// Playback completion and pause state are serialized by finishMutex.
 	struct PlayerPlaybackState {
 		int playing;
+		int pausedSeekState;
 		pthread_cond_t finishCond;
 		pthread_mutex_t finishMutex;
 	} play;
@@ -301,6 +306,11 @@ JavaVM * playerGetJavaVM(void);
 int playerGetSkipFlag(int * flag);
 void playerSetSkipFlag(int * flag, int value);
 void playerApplyPlaying(Player * player, int playing);
+int playerVideoCanDecode(Player * player);
+int playerVideoCanPresent(Player * player);
+void playerVideoSetPausedSeekPending(Player * player, int pending);
+int playerVideoMarkPausedSeekFrameQueued(Player * player);
+void playerVideoCompletePausedSeekFrame(Player * player);
 void playerSetDiagnosticsAudioStage(Player * player, int stage);
 void playerSetDiagnosticsMediaCodecStage(Player * player, int stage, int64_t framePosition);
 Bridge * playerObtainBridge(Player * player, JNIEnv * env);

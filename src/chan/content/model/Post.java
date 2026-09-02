@@ -341,6 +341,12 @@ public final class Post implements Comparable<Post> {
 	}
 
 	@Public
+	public Post setVote(int likes, int dislikes, int userVote) {
+		builder.vote = new Vote(likes, dislikes, userVote);
+		return this;
+	}
+
+	@Public
 	public int getLikes() {
 		return builder.vote != null ? builder.vote.getLikes() : 0;
 	}
@@ -423,7 +429,7 @@ public final class Post implements Comparable<Post> {
 		}
 		if (builder.vote != null) {
 			builder.builder.vote = com.mishiranu.dashchan.content.model.Post.Vote.createExternal(
-					builder.vote.getLikes(), builder.vote.getDislikes());
+					builder.vote.getLikes(), builder.vote.getDislikes(), builder.vote.getUserVote());
 		}
 		return builder.builder.build(false);
 	}

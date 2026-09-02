@@ -315,6 +315,7 @@ void playerSeekSetPosition(JNIEnv * env, Player * player, int64_t position) {
 	diagnosticsLogSeekLock(player, "prepare", "packets.flow", "waiting");
 	pthread_mutex_lock(&player->decode.packets.flowMutex);
 	diagnosticsLogSeekLock(player, "prepare", "packets.flow", "acquired");
+	playerVideoSetPausedSeekPending(player, 0);
 	uint64_t packetGeneration = __atomic_add_fetch(&player->decode.packets.generation, 1,
 			__ATOMIC_ACQ_REL);
 	diagnosticsLog("player=%u seek_packet_generation=%" PRIu64,
@@ -527,6 +528,11 @@ void playerSeekSetPosition(JNIEnv * env, Player * player, int64_t position) {
 	player->sync.seekFirstVideoPacketPending = HAS_STREAM(player, video);
 	player->sync.seekDiscardBeforeTarget = player->meta.seekAnyFrame || recoveredFromNonKey;
 	player->sync.seekTargetPosition = requestedPosition;
+	playerVideoSetPausedSeekPending(player, HAS_STREAM(player, video) && !player->play.playing);
+	if (!player->play.playing && HAS_STREAM(player, video)) {
+		diagnosticsLog("player=%u paused_seek_preview requested position_ms=%" PRId64,
+				player->meta.diagnosticsId, requestedPosition);
+	}
 	if (HAS_STREAM(player, video) && seekResult >= 0 && recoveredFromNonKey &&
 			!player->video.hardwareDecoderActive) {
 		playerVideoSoftwareStartSeekFastLocked(player, GET_CONTEXT(player, video),

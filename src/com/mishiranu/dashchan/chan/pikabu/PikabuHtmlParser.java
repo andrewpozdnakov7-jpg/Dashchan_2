@@ -343,7 +343,8 @@ final class PikabuHtmlParser {
 			post.setComment(StringUtils.nullIfEmpty(clone.html().trim()));
 		}
 		int rating = parseInteger(article.attr("data-rating"), 0);
-		post.setVote(Math.max(rating, 0), Math.max(-rating, 0));
+		int userVote = normalizeVote(parseInteger(article.attr("data-vote"), 0));
+		post.setVote(Math.max(rating, 0), Math.max(-rating, 0), userVote);
 		return post;
 	}
 
@@ -414,8 +415,16 @@ final class PikabuHtmlParser {
 		}
 		Element ratingElement = element.selectFirst("div.comment__rating-count");
 		int rating = ratingElement != null ? parseInteger(ratingElement.text(), 0) : parseInteger(meta.get("r"), 0);
-		post.setVote(Math.max(rating, 0), Math.max(-rating, 0));
+		Element ratingBlock = element.selectFirst("div.comment__rating");
+		int userVote = ratingBlock != null ? normalizeVote(parseInteger(ratingBlock.attr("data-vote"), 0)) : 0;
+		if (element.selectFirst(".comment__rating-up_active") != null) userVote = 1;
+		else if (element.selectFirst(".comment__rating-down_active") != null) userVote = -1;
+		post.setVote(Math.max(rating, 0), Math.max(-rating, 0), userVote);
 		return post;
+	}
+
+	private static int normalizeVote(int vote) {
+		return vote > 0 ? 1 : vote < 0 ? -1 : 0;
 	}
 
 	private static Post parseXmlComment(String postNumber, String parent, String author, String date,

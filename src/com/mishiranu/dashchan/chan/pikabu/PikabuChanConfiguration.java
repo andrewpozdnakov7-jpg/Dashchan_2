@@ -70,8 +70,20 @@ public class PikabuChanConfiguration extends ChanConfiguration {
 		board.allowEditing = false;
 		board.allowDeleting = false;
 		board.allowReporting = false;
-		board.allowVotes = false;
+		board.allowVotes = true;
 		return board;
+	}
+
+	@Override
+	protected Voting obtainVotingConfiguration(String boardName) {
+		Voting voting = new Voting();
+		voting.allowLike = true;
+		voting.allowDislike = true;
+		voting.allowVoteChange = true;
+		voting.singleScore = true;
+		voting.authorizationRequired = true;
+		voting.authorized = isAuthorized();
+		return voting;
 	}
 
 	@Override
