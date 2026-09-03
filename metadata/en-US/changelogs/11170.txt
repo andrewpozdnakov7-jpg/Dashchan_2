@@ -1,0 +1,7 @@
+- Kekabu is no longer limited to reading: after signing in to Pikabu, users can post comments and replies. Quoting and basic text formatting are supported, and users can delete their own comments.
+- Added advanced video playback speed settings. A separate screen provides the existing presets or an exact speed from 1% to 1000%. Default player behavior remains unchanged.
+- Added an experimental Reddit reading mode. Reddit can be enabled in the forum list, after which users can choose the home page or a popular community and read the official website inside the app with compact Slooop styling.
+- Reddit is limited to reading public pages: the app does not use the Reddit API, perform automated actions, or load more replies without a user action.
+- Cleaned up harmless resource and build configuration warnings without changing application behavior.
+
+Found a bug? Send us the logs!
