@@ -576,7 +576,7 @@
 	<string name="video_volume_gesture_sensitivity__search_summary">Настройка длины свайпа и проверка жеста громкости</string>
 	<string name="video_volume_gesture_sensitivity_range__format">От %1$d до %2$d</string>
 	<string name="video_volume_gesture_configure_and_test">Настройка и проверка жеста</string>
-	<string name="video_volume_gesture_test_hint">Проведите вверх или вниз в выделенной области. При 50% нужны две высоты экрана, при 100% — вся высота, при 300% — треть. Тест не изменяет настоящую громкость.</string>
+	<string name="video_volume_gesture_test_hint" formatted="false">Проведите вверх или вниз в выделенной области. При 50% нужны две высоты экрана, при 100% — вся высота, при 300% — треть. Тест не изменяет настоящую громкость.</string>
 	<string name="video_volume_gesture_test_area">Область проверки жеста громкости</string>
 	<string name="video_volume_gesture_test_reset">Вернуть тестовую громкость к 50%</string>
 	<string name="gesture_controls">Управление жестами</string>

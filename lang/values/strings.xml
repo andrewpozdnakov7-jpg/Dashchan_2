@@ -554,7 +554,7 @@
 	<string name="video_volume_gesture_sensitivity__search_summary">Configure the swipe distance and test the volume gesture</string>
 	<string name="video_volume_gesture_sensitivity_range__format">From %1$d to %2$d</string>
 	<string name="video_volume_gesture_configure_and_test">Configure and test gesture</string>
-	<string name="video_volume_gesture_test_hint">Swipe up or down in the highlighted area. 50% requires twice the screen height, 100% requires the full height, and 300% requires one third. The test does not change the actual volume.</string>
+	<string name="video_volume_gesture_test_hint" formatted="false">Swipe up or down in the highlighted area. 50% requires twice the screen height, 100% requires the full height, and 300% requires one third. The test does not change the actual volume.</string>
 	<string name="video_volume_gesture_test_area">Volume gesture test area</string>
 	<string name="video_volume_gesture_test_reset">Reset test volume to 50%</string>
 	<string name="gesture_controls">Gesture controls</string>
