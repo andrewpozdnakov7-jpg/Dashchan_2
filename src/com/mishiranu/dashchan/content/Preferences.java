@@ -1846,6 +1846,10 @@ public class Preferences {
 	public static final boolean DEFAULT_COLLAPSE_LONG_OPEN_THREADS = true;
 	public static final String KEY_COMBINED_FEEDS_ENABLED = "combined_feeds_enabled";
 	public static final boolean DEFAULT_COMBINED_FEEDS_ENABLED = true;
+	public static final String KEY_REDDIT_WEB_READER_ENABLED = "reddit_web_reader_enabled";
+	public static final boolean DEFAULT_REDDIT_WEB_READER_ENABLED = false;
+	public static final String KEY_REDDIT_WEB_READER_STYLE = "reddit_web_reader_style";
+	public static final boolean DEFAULT_REDDIT_WEB_READER_STYLE = true;
 	public static final String KEY_WALLPAPER_ENABLED = "wallpaper_enabled";
 	public static final boolean DEFAULT_WALLPAPER_ENABLED = false;
 	public static final String KEY_WALLPAPER_ID = "wallpaper_id";
@@ -1917,6 +1921,14 @@ public class Preferences {
 
 	public static boolean isCombinedFeedsEnabled() {
 		return PREFERENCES.getBoolean(KEY_COMBINED_FEEDS_ENABLED, DEFAULT_COMBINED_FEEDS_ENABLED);
+	}
+
+	public static boolean isRedditWebReaderEnabled() {
+		return PREFERENCES.getBoolean(KEY_REDDIT_WEB_READER_ENABLED, DEFAULT_REDDIT_WEB_READER_ENABLED);
+	}
+
+	public static boolean isRedditWebReaderStyleEnabled() {
+		return PREFERENCES.getBoolean(KEY_REDDIT_WEB_READER_STYLE, DEFAULT_REDDIT_WEB_READER_STYLE);
 	}
 
 	public static boolean isWallpaperEnabled() {

@@ -115,6 +115,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	private boolean mergeChans = false;
 	private boolean showHistory = false;
 	private boolean combinedFeedsEnabled = false;
+	private boolean redditWebReaderEnabled = false;
 	private boolean trackMyPostsEnabled;
 	private boolean collapseLongOpenThreadsEnabled;
 	private boolean pagesExpanded;
@@ -139,6 +140,10 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	public static final int MENU_ITEM_PREFERENCES = 5;
 	public static final int MENU_ITEM_COMBINED_FEEDS = 6;
 	public static final int MENU_ITEM_MY_POSTS = 7;
+	public static final int MENU_ITEM_REDDIT_SECTIONS = 8;
+	public static final int MENU_ITEM_REDDIT_OFFICIAL_APP = 9;
+
+	public static final String CHAN_REDDIT = "reddit-web-reader";
 
 	private final Runnable myPostsObserver = () -> updateConfigurationInternal(chanName, true);
 
@@ -343,8 +348,12 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	}
 
 	private void updateConfigurationInternal(String chanName, boolean force) {
-		if (chanName != null && !Preferences.isChanEnabled(chanName)) {
+		if (chanName != null && !isSelectableChanEnabled(chanName)) {
 			chanName = null;
+		}
+		if (chanName == null && Preferences.isRedditWebReaderEnabled() &&
+				ChanManager.getInstance().getDefaultChan() == null) {
+			chanName = CHAN_REDDIT;
 		}
 		if (!CommonUtils.equals(chanName, this.chanName) || force || menu.isEmpty()) {
 			updateConfigurationInternal(chanName, force, createAdapterSnapshot());
@@ -353,11 +362,33 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 
 	private void updateConfigurationInternal(String chanName, boolean force,
 			ArrayList<AdapterItem> previousItems) {
-		if (chanName != null && !Preferences.isChanEnabled(chanName)) {
+		if (chanName != null && !isSelectableChanEnabled(chanName)) {
 			chanName = null;
+		}
+		if (chanName == null && Preferences.isRedditWebReaderEnabled() &&
+				ChanManager.getInstance().getDefaultChan() == null) {
+			chanName = CHAN_REDDIT;
 		}
 		if (!CommonUtils.equals(chanName, this.chanName) || force || menu.isEmpty()) {
 			this.chanName = chanName;
+			if (CHAN_REDDIT.equals(chanName)) {
+				Context context = this.context;
+				chanNameView.setText(R.string.forum_reddit);
+				menu.clear();
+				TypedArray typedArray = context.obtainStyledAttributes(new int[] {
+						R.attr.iconDrawerMenuBoards, R.attr.iconDrawerMenuPreferences});
+				int sectionIcon = typedArray.getResourceId(0, 0);
+				int preferencesIcon = typedArray.getResourceId(1, 0);
+				menu.add(new ListItem(ListItem.Type.MENU, MENU_ITEM_REDDIT_SECTIONS, sectionIcon,
+						context.getString(R.string.reddit_sections)));
+				menu.add(new ListItem(ListItem.Type.MENU, MENU_ITEM_REDDIT_OFFICIAL_APP, R.drawable.ic_reddit,
+						context.getString(R.string.reddit_official_app)));
+				menu.add(new ListItem(ListItem.Type.MENU, MENU_ITEM_PREFERENCES, preferencesIcon,
+						context.getString(R.string.preferences)));
+				typedArray.recycle();
+				updateItems(true, true, previousItems);
+				return;
+			}
 			Chan chan = Chan.get(chanName);
 			chanNameView.setText(chan.configuration.getTitle());
 			menu.clear();
@@ -419,6 +450,10 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		return chanSelectMode;
 	}
 
+	public boolean hasMultipleChans() {
+		return chans.size() >= 2;
+	}
+
 	public void updateRestartViewVisibility() {
 		boolean showRestartButton = !chanSelectMode && ChanManager.getInstance().isRestartRequired();
 		if (this.showRestartButton != showRestartButton) {
@@ -447,6 +482,11 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 			}
 			chans.add(new ListItem(ListItem.Type.CHAN, 0, chan.name, null, null, chan.configuration.getTitle()));
 		}
+		if (Preferences.isRedditWebReaderEnabled()) {
+			availableChansCount++;
+			chans.add(new ListItem(ListItem.Type.CHAN, 0, R.drawable.ic_reddit,
+					CHAN_REDDIT, null, null, context.getString(R.string.forum_reddit)));
+		}
 		selectorContainer.setVisibility(availableChansCount >= 2 ? View.VISIBLE : View.GONE);
 		if (chanSelectMode && availableChansCount <= 1) {
 			chanSelectMode = false;
@@ -456,7 +496,11 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 
 	public void updatePreferences() {
 		ArrayList<AdapterItem> previousItems = createAdapterSnapshot();
+		boolean redditWebReaderEnabledChanged = redditWebReaderEnabled != Preferences.isRedditWebReaderEnabled();
 		if (updatePreferencesWithoutConfiguration()) {
+			if (redditWebReaderEnabledChanged) {
+				updateChansWithoutConfiguration();
+			}
 			updateConfigurationInternal(chanName, true, previousItems);
 		}
 	}
@@ -465,17 +509,20 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		boolean mergeChans = Preferences.isMergeChans();
 		boolean showHistory = Preferences.isRememberHistory();
 		boolean combinedFeedsEnabled = Preferences.isCombinedFeedsEnabled();
+		boolean redditWebReaderEnabled = Preferences.isRedditWebReaderEnabled();
 		boolean trackMyPostsEnabled = Preferences.isTrackMyPostsEnabled();
 		boolean collapseLongOpenThreadsEnabled = Preferences.isCollapseLongOpenThreadsEnabled();
 		Preferences.PagesListMode pagesListMode = Preferences.getPagesListMode();
 		if (this.mergeChans != mergeChans || this.showHistory != showHistory ||
 				this.combinedFeedsEnabled != combinedFeedsEnabled ||
+				this.redditWebReaderEnabled != redditWebReaderEnabled ||
 				this.trackMyPostsEnabled != trackMyPostsEnabled ||
 				this.collapseLongOpenThreadsEnabled != collapseLongOpenThreadsEnabled ||
 				this.pagesListMode != pagesListMode) {
 			this.mergeChans = mergeChans;
 			this.showHistory = showHistory;
 			this.combinedFeedsEnabled = combinedFeedsEnabled;
+			this.redditWebReaderEnabled = redditWebReaderEnabled;
 			this.trackMyPostsEnabled = trackMyPostsEnabled;
 			this.collapseLongOpenThreadsEnabled = collapseLongOpenThreadsEnabled;
 			this.pagesExpanded = false;
@@ -483,6 +530,11 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 			return true;
 		}
 		return false;
+	}
+
+	private static boolean isSelectableChanEnabled(String chanName) {
+		return CHAN_REDDIT.equals(chanName) ? Preferences.isRedditWebReaderEnabled()
+				: Preferences.isChanEnabled(chanName);
 	}
 
 	@Override

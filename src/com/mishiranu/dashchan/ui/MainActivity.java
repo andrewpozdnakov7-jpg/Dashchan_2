@@ -276,7 +276,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		});
 		bindService(new Intent(this, PostingService.class), postingConnection, BIND_AUTO_CREATE);
 		bindService(new Intent(this, DownloadService.class), downloadConnection, BIND_AUTO_CREATE);
-		boolean allowSelectChan = ChanManager.getInstance().hasMultipleAvailableChans();
+		boolean allowSelectChan = drawerForm.hasMultipleChans();
 		if (savedInstanceState == null) {
 			Preferences.DrawerInitialPosition drawerInitialPosition = Preferences.getDrawerInitialPosition();
 			if (drawerInitialPosition != Preferences.DrawerInitialPosition.CLOSED) {
@@ -1066,6 +1066,9 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 			navigateData(chan.name, Preferences.getDefaultBoardName(chan),
 					null, null, null, null, closeOverlays ? FLAG_DATA_CLOSE_OVERLAYS : 0);
 			return true;
+		} else if (Preferences.isRedditWebReaderEnabled()) {
+			navigateFragment(new RedditSectionsFragment(), null, closeOverlays);
+			return true;
 		} else {
 			navigateFragment(new CategoriesFragment(), null, closeOverlays);
 			return false;
@@ -1400,8 +1403,15 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	private void updatePostFragmentConfiguration(ContentFragment currentFragment) {
 		String chanName;
+		String drawerChanName;
 		if (currentFragment instanceof PageFragment) {
 			chanName = ((PageFragment) currentFragment).getPage().chanName;
+			drawerChanName = chanName;
+		} else if ((currentFragment instanceof RedditSectionsFragment ||
+				currentFragment instanceof RedditWebReaderFragment) &&
+				Preferences.isRedditWebReaderEnabled()) {
+			chanName = null;
+			drawerChanName = DrawerForm.CHAN_REDDIT;
 		} else {
 			SavedPageItem savedPageItem = getLastEnabledSavedPage();
 			if (savedPageItem != null) {
@@ -1410,6 +1420,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 				Chan chan = ChanManager.getInstance().getDefaultChan();
 				chanName = chan != null ? chan.name : null;
 			}
+			drawerChanName = chanName;
 		}
 		if (currentFragment instanceof PageFragment) {
 			expandedScreen.removeLocker(LOCKER_NON_PAGE);
@@ -1417,7 +1428,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 			expandedScreen.addLocker(LOCKER_NON_PAGE);
 		}
 		watcherServiceClient.updateConfiguration(chanName);
-		drawerForm.updateConfiguration(chanName);
+		drawerForm.updateConfiguration(drawerChanName);
 		invalidateHomeUpState();
 	}
 
@@ -2015,6 +2026,16 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		if (scheduleDrawerNavigation(() -> onSelectChan(chanName))) {
 			return;
 		}
+		if (DrawerForm.CHAN_REDDIT.equals(chanName)) {
+			if (!(getCurrentFragment() instanceof RedditSectionsFragment)) {
+				fragments.clear();
+				navigateFragment(new RedditSectionsFragment(), null, true);
+			} else {
+				closeOverlaysForNavigation();
+			}
+			drawerForm.updateConfiguration(DrawerForm.CHAN_REDDIT);
+			return;
+		}
 		ContentFragment currentFragment = getCurrentFragment();
 		Page page = currentFragment instanceof PageFragment ? ((PageFragment) currentFragment).getPage() : null;
 		if (page == null || !page.chanName.equals(chanName)) {
@@ -2270,6 +2291,9 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		if (scheduleDrawerNavigation(() -> onSelectDrawerMenuItem(item))) {
 			return;
 		}
+		if (openRedditSection(item)) {
+			return;
+		}
 		Page.Content content = null;
 		switch (item) {
 			case DrawerForm.MENU_ITEM_BOARDS: {
@@ -2335,6 +2359,43 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		}
 		if (!success) {
 			closeOverlaysForNavigation();
+		}
+	}
+
+	private boolean openRedditSection(int item) {
+		switch (item) {
+			case DrawerForm.MENU_ITEM_REDDIT_SECTIONS:
+				if (!(getCurrentFragment() instanceof RedditSectionsFragment)) {
+					fragments.clear();
+					navigateFragment(new RedditSectionsFragment(), null, true);
+				} else {
+					closeOverlaysForNavigation();
+				}
+				return true;
+			case DrawerForm.MENU_ITEM_REDDIT_OFFICIAL_APP:
+				openOfficialRedditApp();
+				return true;
+			default:
+				return false;
+		}
+	}
+
+	private void openOfficialRedditApp() {
+		Intent appIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(RedditWebReaderFragment.HOME_URL))
+				.addCategory(Intent.CATEGORY_BROWSABLE).setPackage("com.reddit.frontpage");
+		try {
+			startActivity(appIntent);
+			return;
+		} catch (ActivityNotFoundException | SecurityException e) {
+			// The official application is not available. Offer its public store page instead.
+		}
+		Intent storeIntent = new Intent(Intent.ACTION_VIEW,
+				Uri.parse("https://play.google.com/store/apps/details?id=com.reddit.frontpage"))
+				.addCategory(Intent.CATEGORY_BROWSABLE);
+		try {
+			startActivity(storeIntent);
+		} catch (ActivityNotFoundException | SecurityException e) {
+			ClickableToast.show(R.string.unknown_address);
 		}
 	}
 

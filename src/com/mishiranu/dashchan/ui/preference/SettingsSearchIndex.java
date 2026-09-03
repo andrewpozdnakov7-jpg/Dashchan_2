@@ -34,6 +34,10 @@ public final class SettingsSearchIndex {
 			@Override
 			ContentFragment createFragment() { return new ChansFragment(); }
 		},
+		REDDIT(R.string.forums, R.string.forum_reddit) {
+			@Override
+			ContentFragment createFragment() { return new RedditFragment(); }
+		},
 		EXPERIMENTAL(R.string.experimental_features) {
 			@Override
 			ContentFragment createFragment() { return new ExperimentalFragment(); }
@@ -310,6 +314,12 @@ public final class SettingsSearchIndex {
 
 		add(context, entries, Screen.EXPERIMENTAL, R.string.whats_new_preview,
 				R.string.whats_new_preview__summary, null);
+		add(context, entries, Screen.FORUMS, R.string.forum_reddit, R.string.read_only,
+				Preferences.KEY_REDDIT_WEB_READER_ENABLED);
+		add(context, entries, Screen.REDDIT, R.string.open_reddit_web_reader,
+				R.string.reddit_public_web_reader__summary, null);
+		add(context, entries, Screen.REDDIT, R.string.reddit_slooop_style,
+				R.string.reddit_slooop_style__summary, Preferences.KEY_REDDIT_WEB_READER_STYLE);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.hardware_video_acceleration,
 				R.string.hardware_video_acceleration__summary, Preferences.KEY_HARDWARE_VIDEO_ACCELERATION);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.open_configured_attachment_folder,
