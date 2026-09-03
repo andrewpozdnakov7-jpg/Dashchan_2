@@ -39,6 +39,7 @@ import com.mishiranu.dashchan.graphics.BaseDrawable;
 import com.mishiranu.dashchan.media.VideoPlayer;
 import com.mishiranu.dashchan.media.VolumeGestureUtils;
 import com.mishiranu.dashchan.ui.InstanceDialog;
+import com.mishiranu.dashchan.ui.preference.PlaybackSpeedDialog;
 import com.mishiranu.dashchan.util.AnimationUtils;
 import com.mishiranu.dashchan.util.AudioFocus;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
@@ -61,7 +62,8 @@ public class VideoUnit {
 	}
 
 	private static final int[] PLAYBACK_SPEEDS = {800, 1000, 1250, 1500, 2000, 4000};
-	private static final String[] PLAYBACK_SPEED_LABELS = {"0.8x", "1x", "1.25x", "1.5x", "2x", "4x"};
+	private static final int PLAYBACK_SPEED_MIN = 10;
+	private static final int PLAYBACK_SPEED_MAX = 10000;
 	private static final long PAUSED_SEEK_PREVIEW_DELAY = 100L;
 
 	private final PagerInstance instance;
@@ -125,6 +127,9 @@ public class VideoUnit {
 		localVolume = Preferences.getVideoLocalVolume();
 		lastNonZeroLocalVolume = localVolume > 0 ? localVolume
 				: Preferences.DEFAULT_VIDEO_LOCAL_VOLUME_LEVEL;
+		if (Preferences.isVideoCustomPlaybackSpeed()) {
+			playbackSpeed = normalizePlaybackSpeed(Preferences.getVideoCustomPlaybackSpeedValue());
+		}
 		if (Preferences.isRememberVideoPlaybackSpeed() && Preferences.isPersistVideoPlaybackSpeed()) {
 			playbackSpeed = normalizePlaybackSpeed(Preferences.getSavedVideoPlaybackSpeed());
 		}
@@ -348,9 +353,11 @@ public class VideoUnit {
 		wasPlaying = true;
 		finishedPlayback = false;
 		hideSurfaceOnInit = false;
-		if (!Preferences.isVideoPlaybackSpeedControl() ||
-				(!reload && !Preferences.isRememberVideoPlaybackSpeed())) {
+		if (!Preferences.isVideoPlaybackSpeedControl()) {
 			playbackSpeed = 1000;
+		} else if (!reload && !Preferences.isRememberVideoPlaybackSpeed()) {
+			playbackSpeed = Preferences.isVideoCustomPlaybackSpeed()
+					? normalizePlaybackSpeed(Preferences.getVideoCustomPlaybackSpeedValue()) : 1000;
 		}
 		dismissPlaybackSpeedPopupMenu();
 		boolean seekAnyFrame = Preferences.isVideoSeekAnyFrame();
@@ -666,15 +673,19 @@ public class VideoUnit {
 	}
 
 	private static String formatPlaybackSpeed(int speed) {
-		for (int i = 0; i < PLAYBACK_SPEEDS.length; i++) {
-			if (PLAYBACK_SPEEDS[i] == speed) {
-				return PLAYBACK_SPEED_LABELS[i];
-			}
+		if (speed % 1000 == 0) {
+			return String.format(Locale.US, "%dx", speed / 1000);
+		} else if (speed % 100 == 0) {
+			return String.format(Locale.US, "%.1fx", speed / 1000f);
 		}
-		return "1x";
+		return String.format(Locale.US, "%.2fx", speed / 1000f);
 	}
 
 	private static int normalizePlaybackSpeed(int speed) {
+		if (Preferences.isVideoCustomPlaybackSpeed()) {
+			speed = Math.round(speed / 10f) * 10;
+			return Math.max(PLAYBACK_SPEED_MIN, Math.min(speed, PLAYBACK_SPEED_MAX));
+		}
 		for (int playbackSpeed : PLAYBACK_SPEEDS) {
 			if (playbackSpeed == speed) {
 				return speed;
@@ -690,10 +701,10 @@ public class VideoUnit {
 	}
 
 	private void setPlaybackSpeed(int playbackSpeed) {
-		this.playbackSpeed = playbackSpeed;
+		this.playbackSpeed = normalizePlaybackSpeed(playbackSpeed);
 		updatePlaybackSpeedButton();
 		if (player != null && initialized) {
-			player.setPlaybackSpeed(playbackSpeed);
+			player.setPlaybackSpeed(this.playbackSpeed);
 		}
 	}
 
@@ -721,13 +732,35 @@ public class VideoUnit {
 			PopupMenu popupMenu = new PopupMenu(popupContext, v, Gravity.START, 0,
 					R.style.Widget_OverlapPopupMenu);
 			popupMenu.getMenu().setGroupCheckable(0, true, true);
+			boolean presetSelected = false;
 			for (int i = 0; i < PLAYBACK_SPEEDS.length; i++) {
-				popupMenu.getMenu().add(0, i, i, PLAYBACK_SPEED_LABELS[i])
-						.setCheckable(true).setChecked(PLAYBACK_SPEEDS[i] == playbackSpeed);
+				boolean selected = PLAYBACK_SPEEDS[i] == playbackSpeed;
+				presetSelected |= selected;
+				popupMenu.getMenu().add(0, i, i, formatPlaybackSpeed(PLAYBACK_SPEEDS[i]))
+						.setCheckable(true).setChecked(selected);
+			}
+			if (Preferences.isVideoCustomPlaybackSpeed()) {
+				popupMenu.getMenu().add(0, PLAYBACK_SPEEDS.length, PLAYBACK_SPEEDS.length,
+						R.string.custom_playback_speed).setCheckable(true).setChecked(!presetSelected);
 			}
 			popupMenu.setOnMenuItemClickListener(item -> {
-				int playbackSpeed = PLAYBACK_SPEEDS[item.getItemId()];
-				setPlaybackSpeed(playbackSpeed);
+				int itemId = item.getItemId();
+				if (itemId == PLAYBACK_SPEEDS.length) {
+					PlaybackSpeedDialog.show(instance.galleryInstance.callback.getChildFragmentManager(),
+							Preferences.getVideoCustomPlaybackSpeedValue(), selectedPlaybackSpeed -> {
+								Preferences.setVideoCustomPlaybackSpeedValue(selectedPlaybackSpeed);
+								setPlaybackSpeed(selectedPlaybackSpeed);
+								if (Preferences.isRememberVideoPlaybackSpeed()
+										&& Preferences.isPersistVideoPlaybackSpeed()) {
+									Preferences.setSavedVideoPlaybackSpeed(playbackSpeed);
+								}
+							});
+					return true;
+				}
+				if (itemId < 0 || itemId >= PLAYBACK_SPEEDS.length) {
+					return false;
+				}
+				setPlaybackSpeed(PLAYBACK_SPEEDS[itemId]);
 				if (Preferences.isRememberVideoPlaybackSpeed() &&
 						Preferences.isPersistVideoPlaybackSpeed()) {
 					Preferences.setSavedVideoPlaybackSpeed(playbackSpeed);

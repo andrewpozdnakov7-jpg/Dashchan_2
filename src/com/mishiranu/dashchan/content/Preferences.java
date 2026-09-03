@@ -2241,6 +2241,27 @@ public class Preferences {
 		return PREFERENCES.getBoolean(KEY_VIDEO_PLAYBACK_SPEED_CONTROL, DEFAULT_VIDEO_PLAYBACK_SPEED_CONTROL);
 	}
 
+	public static final String KEY_VIDEO_CUSTOM_PLAYBACK_SPEED = "video_custom_playback_speed";
+	public static final boolean DEFAULT_VIDEO_CUSTOM_PLAYBACK_SPEED = false;
+	private static final String KEY_VIDEO_CUSTOM_PLAYBACK_SPEED_VALUE = "video_custom_playback_speed_value";
+	public static final int DEFAULT_VIDEO_CUSTOM_PLAYBACK_SPEED_VALUE = 1000;
+
+	public static boolean isVideoCustomPlaybackSpeed() {
+		return PREFERENCES.getBoolean(KEY_VIDEO_CUSTOM_PLAYBACK_SPEED, DEFAULT_VIDEO_CUSTOM_PLAYBACK_SPEED);
+	}
+
+	public static int getVideoCustomPlaybackSpeedValue() {
+		int value = PREFERENCES.getInt(KEY_VIDEO_CUSTOM_PLAYBACK_SPEED_VALUE,
+				DEFAULT_VIDEO_CUSTOM_PLAYBACK_SPEED_VALUE);
+		return Math.max(10, Math.min(value, 10000));
+	}
+
+	public static void setVideoCustomPlaybackSpeedValue(int playbackSpeed) {
+		playbackSpeed = Math.round(playbackSpeed / 10f) * 10;
+		PREFERENCES.edit().put(KEY_VIDEO_CUSTOM_PLAYBACK_SPEED_VALUE,
+				Math.max(10, Math.min(playbackSpeed, 10000))).close();
+	}
+
 	public static final String KEY_REMEMBER_VIDEO_PLAYBACK_SPEED = "remember_video_playback_speed";
 	public static final boolean DEFAULT_REMEMBER_VIDEO_PLAYBACK_SPEED = true;
 

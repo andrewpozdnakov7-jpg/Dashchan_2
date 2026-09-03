@@ -527,8 +527,16 @@
 	<string name="play_again">Воспроизвести снова</string>
 	<string name="playback_error">Ошибка воспроизведения</string>
 	<string name="playback_speed">Скорость воспроизведения</string>
+	<string name="playback_speed_settings__summary">Пресеты, точная настройка и сохранение скорости</string>
 	<string name="enable_video_playback_speed_control">Выбор скорости воспроизведения</string>
 	<string name="enable_video_playback_speed_control__summary">Показывать пресеты скорости во встроенном видеоплеере</string>
+	<string name="custom_video_playback_speed">Точная настройка скорости</string>
+	<string name="custom_video_playback_speed__summary">Разрешить произвольную скорость воспроизведения от 1% до 1000%</string>
+	<string name="custom_video_playback_speed_value">Точная скорость воспроизведения</string>
+	<string name="custom_playback_speed">Другая скорость…</string>
+	<string name="playback_speed_percent">Скорость в процентах (1–1000)</string>
+	<string name="playback_speed_percent__format">%1$d%% · %2$s</string>
+	<string name="playback_speed_extreme_warning">Крайние значения могут повысить нагрузку и исказить звук</string>
 	<string name="remember_video_playback_speed">Сохранять скорость воспроизведения между видео</string>
 	<string name="remember_video_playback_speed__summary">Использовать выбранную скорость при открытии следующего видео</string>
 	<string name="persist_video_playback_speed">Запоминать скорость после закрытия приложения</string>

@@ -66,6 +66,10 @@ public final class SettingsSearchIndex {
 			@Override
 			ContentFragment createFragment() { return new MediaFragment(); }
 		},
+		PLAYBACK_SPEED(R.string.media, R.string.playback_speed) {
+			@Override
+			ContentFragment createFragment() { return new PlaybackSpeedFragment(); }
+		},
 		AUTOHIDE(R.string.autohide) {
 			@Override
 			ContentFragment createFragment() { return new AutohideFragment(); }
@@ -487,11 +491,13 @@ public final class SettingsSearchIndex {
 				R.string.video_picture_in_picture_auto__summary, Preferences.KEY_VIDEO_PICTURE_IN_PICTURE_AUTO);
 		add(context, entries, Screen.MEDIA, R.string.video_screen_off_action,
 				R.string.video_screen_off_action__summary, Preferences.KEY_VIDEO_SCREEN_OFF_ACTION);
-		add(context, entries, Screen.MEDIA, R.string.enable_video_playback_speed_control,
+		add(context, entries, Screen.PLAYBACK_SPEED, R.string.enable_video_playback_speed_control,
 				R.string.enable_video_playback_speed_control__summary, Preferences.KEY_VIDEO_PLAYBACK_SPEED_CONTROL);
-		add(context, entries, Screen.MEDIA, R.string.remember_video_playback_speed,
+		add(context, entries, Screen.PLAYBACK_SPEED, R.string.custom_video_playback_speed,
+				R.string.custom_video_playback_speed__summary, Preferences.KEY_VIDEO_CUSTOM_PLAYBACK_SPEED);
+		add(context, entries, Screen.PLAYBACK_SPEED, R.string.remember_video_playback_speed,
 				R.string.remember_video_playback_speed__summary, Preferences.KEY_REMEMBER_VIDEO_PLAYBACK_SPEED);
-		add(context, entries, Screen.MEDIA, R.string.persist_video_playback_speed,
+		add(context, entries, Screen.PLAYBACK_SPEED, R.string.persist_video_playback_speed,
 				R.string.persist_video_playback_speed__summary, Preferences.KEY_PERSIST_VIDEO_PLAYBACK_SPEED);
 		add(context, entries, Screen.MEDIA, R.string.attachment_video_preview,
 				R.string.attachment_video_preview__summary, Preferences.KEY_ATTACHMENT_VIDEO_PREVIEW);

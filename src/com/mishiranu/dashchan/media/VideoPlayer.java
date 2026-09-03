@@ -865,10 +865,10 @@ public class VideoPlayer {
 	}
 
 	public void setPlaybackSpeed(int speed) {
-		if (speed < 100) {
-			speed = 100;
-		} else if (speed > 4000) {
-			speed = 4000;
+		if (speed < 10) {
+			speed = 10;
+		} else if (speed > 10000) {
+			speed = 10000;
 		}
 		synchronized (this) {
 			playbackSpeed = speed;
