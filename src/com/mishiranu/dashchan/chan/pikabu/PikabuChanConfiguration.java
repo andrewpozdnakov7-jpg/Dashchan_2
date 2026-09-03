@@ -66,12 +66,24 @@ public class PikabuChanConfiguration extends ChanConfiguration {
 		board.allowThreadsSorting = true;
 		board.allowRatingSorting = true;
 		board.allowArchive = false;
-		board.allowPosting = false;
+		board.allowPosting = true;
 		board.allowEditing = false;
-		board.allowDeleting = false;
+		board.allowDeleting = isAuthorized();
+		board.allowDeletingPerPost = true;
 		board.allowReporting = false;
 		board.allowVotes = true;
 		return board;
+	}
+
+	@Override
+	protected Deleting obtainDeletingConfiguration(String boardName) {
+		return isAuthorized() ? new Deleting() : null;
+	}
+
+	@Override
+	protected Posting obtainPostingConfiguration(String boardName, boolean newThread) {
+		if (newThread) return null;
+		return new Posting();
 	}
 
 	@Override

@@ -2499,6 +2499,10 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 				ListViewUtils.smoothScrollToPosition(recyclerView, position);
 				break;
 			}
+			case PERFORM_REFRESH_AFTER_DELETE: {
+				refreshPosts(false);
+				break;
+			}
 		}
 	}
 

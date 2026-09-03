@@ -1131,6 +1131,8 @@
 	<string name="pikabu_authorized_check_adult_settings">Signed in. Tap Check 18+, then tap Done</string>
 	<string name="pikabu_sign_in_required">Sign in to Pikabu first</string>
 	<string name="sign_in_to_vote">Sign in to vote</string>
+	<string name="pikabu_sign_in_to_post">Sign in to Pikabu to post comments</string>
+	<string name="pikabu_comment_requires_review">Pikabu requires this comment to be reviewed on the official website</string>
 	<string name="pikabu_settings_saved">Pikabu settings have been saved. You can now tap Done.</string>
 	<string name="pikabu_settings_save_failed">Pikabu could not save the settings. Try again.</string>
 	<string name="pikabu_wait_for_settings_save">Wait until Pikabu finishes saving the settings</string>

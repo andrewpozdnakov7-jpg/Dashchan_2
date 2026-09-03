@@ -121,6 +121,7 @@ public class ChanConfiguration implements Chan.Linked {
 		@Public public boolean allowPosting;
 		@Public public boolean allowEditing;
 		@Public public boolean allowDeleting;
+		@Public public boolean allowDeletingPerPost;
 		@Public public boolean allowReporting;
 		@Public public boolean allowVotes;
 

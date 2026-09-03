@@ -441,7 +441,8 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 		}
 		menu.findItem(catalogSort.menuItemId).setChecked(true);
 		menu.findItem(R.id.menu_archive).setVisible(board.allowArchive);
-		menu.findItem(R.id.menu_new_thread).setVisible(board.allowPosting);
+		menu.findItem(R.id.menu_new_thread).setVisible(board.allowPosting
+				&& chan.configuration.safe().obtainPosting(page.boardName, true) != null);
 		menu.findItem(Preferences.getThreadsView().menuItemId).setChecked(true);
 		boolean singleBoardMode = chan.configuration.getOption(ChanConfiguration.OPTION_SINGLE_BOARD_MODE);
 		boolean isFavorite = FavoritesStorage.getInstance().hasFavorite(page.chanName, page.boardName, null);

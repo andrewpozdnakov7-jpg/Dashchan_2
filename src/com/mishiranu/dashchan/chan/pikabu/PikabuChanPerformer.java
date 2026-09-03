@@ -15,19 +15,38 @@ import chan.http.HttpRequest;
 import chan.http.HttpResponse;
 import chan.http.UrlEncodedEntity;
 import chan.util.StringUtils;
+import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.net.UserAgentProvider;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TimeZone;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.jsoup.Jsoup;
 
 public class PikabuChanPerformer extends ChanPerformer {
 	private static final int COMMENTS_BATCH_SIZE = 300;
 	private static final String PIKABU_REFERER = "https://pikabu.ru/";
+	private static final Pattern REPLY_PREFIX = Pattern.compile(
+			"\\A[\\t ]*>>(\\d+)[\\t ]*(?:\\r?\\n|\\z)");
+	private static final String[] COMMENT_MARKUP_OPEN = {
+			"[b]", "[i]", "[s]"
+	};
+	private static final String[] COMMENT_MARKUP_CLOSE = {
+			"[/b]", "[/i]", "[/s]"
+	};
+	private static final String[] COMMENT_HTML_OPEN = {
+			"<b>", "<i>", "<strike>"
+	};
+	private static final String[] COMMENT_HTML_CLOSE = {
+			"</b>", "</i>", "</strike>"
+	};
 	private static final String HTML_ACCEPT = "text/html,application/xhtml+xml,application/xml;q=0.9," +
 			"image/avif,image/webp,image/apng,*/*;q=0.8";
 	private static final HttpRequest.RedirectHandler PIKABU_REDIRECT_HANDLER = response ->
@@ -323,6 +342,206 @@ public class PikabuChanPerformer extends ChanPerformer {
 		return allPosts;
 	}
 
+	private static final class PreparedComment {
+		public final String text;
+		public final String html;
+		public final String parentId;
+
+		private PreparedComment(String text, String html, String parentId) {
+			this.text = text;
+			this.html = html;
+			this.parentId = parentId;
+		}
+	}
+
+	private static int findMarkupTag(String text, int index, String[] tags) {
+		for (int i = 0; i < tags.length; i++) {
+			if (text.regionMatches(true, index, tags[i], 0, tags[i].length())) return i;
+		}
+		return -1;
+	}
+
+	private static void appendEscapedCharacter(StringBuilder builder, char character) {
+		switch (character) {
+			case '&': builder.append("&amp;"); break;
+			case '<': builder.append("&lt;"); break;
+			case '>': builder.append("&gt;"); break;
+			default: builder.append(character); break;
+		}
+	}
+
+	private static String renderInlineMarkup(String text) {
+		StringBuilder builder = new StringBuilder(text.length() + 32);
+		ArrayDeque<Integer> openedTags = new ArrayDeque<>();
+		for (int index = 0; index < text.length();) {
+			int closeTag = findMarkupTag(text, index, COMMENT_MARKUP_CLOSE);
+			if (closeTag >= 0 && !openedTags.isEmpty() && openedTags.peek() == closeTag) {
+				builder.append(COMMENT_HTML_CLOSE[closeTag]);
+				openedTags.pop();
+				index += COMMENT_MARKUP_CLOSE[closeTag].length();
+				continue;
+			}
+			int openTag = findMarkupTag(text, index, COMMENT_MARKUP_OPEN);
+			if (openTag >= 0) {
+				builder.append(COMMENT_HTML_OPEN[openTag]);
+				openedTags.push(openTag);
+				index += COMMENT_MARKUP_OPEN[openTag].length();
+				continue;
+			}
+			appendEscapedCharacter(builder, text.charAt(index++));
+		}
+		while (!openedTags.isEmpty()) builder.append(COMMENT_HTML_CLOSE[openedTags.pop()]);
+		return builder.toString();
+	}
+
+	private static String renderCommentHtml(String text) {
+		StringBuilder builder = new StringBuilder(text.length() + 64);
+		boolean blockquote = false;
+		for (String sourceLine : text.split("\\n", -1)) {
+			boolean quoted = sourceLine.equals(">") || sourceLine.startsWith("> ");
+			String line = quoted ? sourceLine.substring(sourceLine.length() == 1 ? 1 : 2) : sourceLine;
+			if (quoted != blockquote) {
+				builder.append(quoted ? "<blockquote>" : "</blockquote>");
+				blockquote = quoted;
+			}
+			builder.append("<p>");
+			if (line.isEmpty()) builder.append("<br>");
+			else builder.append(renderInlineMarkup(line));
+			builder.append("</p>");
+		}
+		if (blockquote) builder.append("</blockquote>");
+		return builder.toString();
+	}
+
+	private static PreparedComment prepareComment(String threadNumber, String comment) throws ApiException {
+		String text = StringUtils.emptyIfNull(comment).replace("\r\n", "\n").replace('\r', '\n');
+		String parentId = null;
+		Matcher matcher = REPLY_PREFIX.matcher(text);
+		if (matcher.find()) {
+			String replyTo = matcher.group(1);
+			if (!replyTo.equals(threadNumber)) parentId = replyTo;
+			text = text.substring(matcher.end());
+		}
+		if (text.trim().isEmpty()) throw new ApiException(ApiException.SEND_ERROR_EMPTY_COMMENT);
+
+		String commentHtml = renderCommentHtml(text);
+		String plainText = Jsoup.parseBodyFragment(commentHtml, PIKABU_REFERER).text();
+		if (plainText.trim().isEmpty()) throw new ApiException(ApiException.SEND_ERROR_EMPTY_COMMENT);
+		return new PreparedComment(plainText, commentHtml, parentId);
+	}
+
+	private static boolean isSuccessfulResult(Object result) {
+		return Boolean.TRUE.equals(result) || result instanceof Number && ((Number) result).intValue() == 1
+				|| "1".equals(String.valueOf(result)) || "true".equalsIgnoreCase(String.valueOf(result));
+	}
+
+	private JSONObject performCommentAction(PikabuChanLocator locator, HttpRequest.Preset preset,
+			android.net.Uri threadUri, String csrfToken, UrlEncodedEntity entity)
+			throws HttpException, ApiException, InvalidResponseException {
+		android.net.Uri uri = locator.createCommentsActionsUri();
+		int timezoneOffsetMinutes = TimeZone.getDefault().getOffset(System.currentTimeMillis()) / 60_000;
+		String response = perform(uri, prepareRequest(uri, preset)
+				.addHeader("Accept", "application/json, text/javascript, */*; q=0.01")
+				.addHeader("Origin", PIKABU_REFERER.substring(0, PIKABU_REFERER.length() - 1))
+				.addHeader("Referer", threadUri.toString())
+				.addHeader("X-Csrf-Token", csrfToken)
+				.addHeader("X-Requested-With", "XMLHttpRequest")
+				.addHeader("X-Timezone-Offset", Integer.toString(timezoneOffsetMinutes))
+				.setPostMethod(entity)).readString();
+		try {
+			JSONObject object = new JSONObject(response);
+			if (!isSuccessfulResult(object.opt("result"))) {
+				String message = object.optString("message", null);
+				if (!StringUtils.isEmpty(message)) throw new ApiException(message);
+				throw new InvalidResponseException();
+			}
+			return object;
+		} catch (JSONException e) {
+			throw new InvalidResponseException(e);
+		}
+	}
+
+	@Override
+	protected SendPostResult onSendPost(SendPostData data) throws HttpException, ApiException,
+			InvalidResponseException {
+		if (StringUtils.isEmpty(data.threadNumber)) {
+			throw new ApiException(ApiException.SEND_ERROR_NO_THREAD);
+		}
+		if (data.attachments != null && data.attachments.length > 0) {
+			throw new ApiException(ApiException.SEND_ERROR_FILE_NOT_SUPPORTED);
+		}
+		PikabuChanConfiguration configuration = PikabuChanConfiguration.get(this);
+		if (!configuration.isAuthorized()) {
+			throw new ApiException(configuration.getResources().getString(R.string.pikabu_sign_in_to_post));
+		}
+
+		PreparedComment comment = prepareComment(data.threadNumber, data.comment);
+		PikabuChanLocator locator = PikabuChanLocator.get(this);
+		android.net.Uri threadUri = locator.createThreadUri(data.boardName, data.threadNumber);
+		String html = perform(threadUri, preparePageRequest(threadUri, data)).readString();
+		PikabuHtmlParser.SessionData sessionData = PikabuHtmlParser.parseSessionData(html);
+		if (sessionData == null || StringUtils.isEmpty(sessionData.csrfToken)) {
+			throw new InvalidResponseException();
+		}
+		if (!sessionData.authorized) {
+			configuration.clearAuthorization();
+			throw new ApiException(configuration.getResources().getString(R.string.pikabu_sign_in_to_post));
+		}
+
+		JSONObject offensive = performCommentAction(locator, data, threadUri, sessionData.csrfToken,
+				new UrlEncodedEntity("action", "is_offensive", "text", comment.text,
+						"story_id", data.threadNumber, "parent_id", StringUtils.emptyIfNull(comment.parentId)));
+		JSONObject offensiveData = offensive.optJSONObject("data");
+		if (offensiveData != null && offensiveData.optBoolean("result", false)) {
+			throw new ApiException(configuration.getResources()
+					.getString(R.string.pikabu_comment_requires_review));
+		}
+
+		JSONObject result = performCommentAction(locator, data, threadUri, sessionData.csrfToken,
+				new UrlEncodedEntity("action", "create", "images", "[]", "desc", comment.html,
+						"parent_id", StringUtils.emptyIfNull(comment.parentId),
+						"parents", StringUtils.emptyIfNull(comment.parentId), "story_id", data.threadNumber,
+						"is_official", "false", "by_moderator", "false", "ad_caption", "",
+						"by_anonymous", "false"));
+		JSONObject resultData = result.optJSONObject("data");
+		String commentId = resultData != null ? resultData.optString("comment_id", null) : null;
+		if (StringUtils.isEmpty(commentId) || !commentId.matches("\\d+")) {
+			throw new InvalidResponseException();
+		}
+		return new SendPostResult(data.threadNumber, commentId);
+	}
+
+	@Override
+	protected SendDeletePostsResult onSendDeletePosts(SendDeletePostsData data) throws HttpException, ApiException,
+			InvalidResponseException {
+		PikabuChanConfiguration configuration = PikabuChanConfiguration.get(this);
+		if (!configuration.isAuthorized()) {
+			throw new ApiException(configuration.getResources().getString(R.string.pikabu_sign_in_to_post));
+		}
+		if (data.postNumbers == null || data.postNumbers.size() != 1) throw new InvalidResponseException();
+		String commentId = data.postNumbers.get(0);
+		if (StringUtils.isEmpty(commentId) || !commentId.matches("\\d+")
+				|| commentId.equals(data.threadNumber)) {
+			throw new InvalidResponseException();
+		}
+
+		PikabuChanLocator locator = PikabuChanLocator.get(this);
+		android.net.Uri threadUri = locator.createThreadUri(data.boardName, data.threadNumber);
+		String html = perform(threadUri, preparePageRequest(threadUri, data)).readString();
+		PikabuHtmlParser.SessionData sessionData = PikabuHtmlParser.parseSessionData(html);
+		if (sessionData == null || StringUtils.isEmpty(sessionData.csrfToken)) {
+			throw new InvalidResponseException();
+		}
+		if (!sessionData.authorized) {
+			configuration.clearAuthorization();
+			throw new ApiException(configuration.getResources().getString(R.string.pikabu_sign_in_to_post));
+		}
+
+		performCommentAction(locator, data, threadUri, sessionData.csrfToken,
+				new UrlEncodedEntity("action", "delete", "id", commentId));
+		return new SendDeletePostsResult();
+	}
+
 	@Override
 	public CheckAuthorizationResult onCheckAuthorization(CheckAuthorizationData data)
 			throws HttpException, InvalidResponseException {
@@ -379,8 +598,7 @@ public class PikabuChanPerformer extends ChanPerformer {
 		try {
 			JSONObject object = new JSONObject(response);
 			Object result = object.opt("result");
-			if (Boolean.TRUE.equals(result) || result instanceof Number && ((Number) result).intValue() == 1
-					|| "1".equals(String.valueOf(result)) || "true".equalsIgnoreCase(String.valueOf(result))) {
+			if (isSuccessfulResult(result)) {
 				return new SendVotePostResult();
 			}
 			String message = object.optString("message", null);
