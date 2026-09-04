@@ -70,7 +70,7 @@ public class ChansFragment extends PreferenceFragment implements FragmentHandler
 		addChanPreference(chans.remove("pikabu"));
 		addForumPreference(Preferences.KEY_REDDIT_WEB_READER_ENABLED,
 				Preferences.DEFAULT_REDDIT_WEB_READER_ENABLED, getString(R.string.forum_reddit),
-				getString(R.string.read_only), () -> ((FragmentHandler) requireActivity())
+				null, () -> ((FragmentHandler) requireActivity())
 						.pushFragment(new RedditFragment()));
 		for (Chan chan : chans.values()) {
 			addChanPreference(chan);

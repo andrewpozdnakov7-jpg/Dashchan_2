@@ -50,6 +50,7 @@ import com.mishiranu.dashchan.content.service.WatcherService;
 import com.mishiranu.dashchan.content.storage.CombinedFeedStorage;
 import com.mishiranu.dashchan.content.storage.FavoritesStorage;
 import com.mishiranu.dashchan.content.storage.MyPostsStorage;
+import com.mishiranu.dashchan.content.storage.RedditPageStorage;
 import com.mishiranu.dashchan.graphics.ChanIconDrawable;
 import com.mishiranu.dashchan.util.FlagUtils;
 import com.mishiranu.dashchan.util.GraphicsUtils;
@@ -181,6 +182,9 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 				String threadTitle, boolean fromCache);
 		void onClosePage(String chanName, String boardName, String threadNumber);
 		void onCloseAllPages();
+		void onSelectRedditPage(String url);
+		void onCloseRedditPage(String url);
+		void onCloseAllRedditPages();
 		int onEnterNumber(int number);
 		void onSelectDrawerMenuItem(int item);
 		void onDraggingStateChanged(boolean dragging);
@@ -565,6 +569,10 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 					callback.onSelectThread(listItem.chanName, listItem.boardName, listItem.threadNumber, null,
 							listItem.title, fromCache);
 				}
+				break;
+			}
+			case REDDIT_PAGE: {
+				callback.onSelectRedditPage(listItem.boardName);
 				break;
 			}
 			case PAGES_TOGGLE: {
@@ -1050,6 +1058,21 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 
 	private void updateListPages() {
 		ArrayList<ListItem> newPages = new ArrayList<>();
+		if (CHAN_REDDIT.equals(chanName)) {
+			List<RedditPageStorage.Entry> redditPages = RedditPageStorage.getInstance().getPages();
+			if (!redditPages.isEmpty()) {
+				newPages.add(new ListItem(ListItem.Type.SECTION, SECTION_ACTION_CLOSE_ALL_REDDIT,
+						ResourceUtils.getResourceId(context, R.attr.iconButtonCancel, 0),
+						context.getString(R.string.open_pages__noun)));
+				for (RedditPageStorage.Entry page : redditPages) {
+					newPages.add(new ListItem(ListItem.Type.REDDIT_PAGE, 0, CHAN_REDDIT,
+							page.url, page.threadId, page.title));
+				}
+			}
+			this.pages.clear();
+			this.pages.addAll(newPages);
+			return;
+		}
 		boolean mergeChans = this.mergeChans;
 		ArrayList<CombinedFeedStorage.Feed> combinedFeeds = new ArrayList<>();
 		if (combinedFeedsEnabled) {
@@ -1215,7 +1238,8 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	}
 
 	private static class ListItem {
-		public enum Type {HEADER, RESTART, SECTION, COMBINED_FEED, PAGE, PAGES_TOGGLE, FAVORITE, MENU, CHAN}
+		public enum Type {HEADER, RESTART, SECTION, COMBINED_FEED, PAGE, REDDIT_PAGE,
+			PAGES_TOGGLE, FAVORITE, MENU, CHAN}
 
 		public static final ListItem HEADER = new ListItem(Type.HEADER, null, null, null, null);
 		public static final ListItem RESTART = new ListItem(Type.RESTART, null, null, null, null);
@@ -1257,6 +1281,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 			switch (type) {
 				case COMBINED_FEED:
 				case PAGE:
+				case REDDIT_PAGE:
 				case FAVORITE: {
 					hash = appendIdHash(hash, chanName);
 					hash = appendIdHash(hash, boardName);
@@ -1342,8 +1367,12 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		@Override
 		public void onClick(View v) {
 			ListItem listItem = getItemFromChild(v);
-			if (listItem != null && listItem.type == ListItem.Type.PAGE) {
-				callback.onClosePage(listItem.chanName, listItem.boardName, listItem.threadNumber);
+			if (listItem != null) {
+				if (listItem.type == ListItem.Type.PAGE) {
+					callback.onClosePage(listItem.chanName, listItem.boardName, listItem.threadNumber);
+				} else if (listItem.type == ListItem.Type.REDDIT_PAGE) {
+					callback.onCloseRedditPage(listItem.boardName);
+				}
 			}
 		}
 	};
@@ -1351,6 +1380,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	private static final int SECTION_ACTION_CLOSE_ALL = 0;
 	private static final int SECTION_ACTION_FAVORITES_MENU = 1;
 	private static final int SECTION_ACTION_COMBINED_FEEDS_SETTINGS = 2;
+	private static final int SECTION_ACTION_CLOSE_ALL_REDDIT = 3;
 
 	private static final int FAVORITES_MENU_REFRESH = 1;
 	private static final int FAVORITES_MENU_CLEAR_DELETED = 2;
@@ -1373,6 +1403,10 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 					}
 					case SECTION_ACTION_CLOSE_ALL: {
 						callback.onCloseAllPages();
+						break;
+					}
+					case SECTION_ACTION_CLOSE_ALL_REDDIT: {
+						callback.onCloseAllRedditPages();
 						break;
 					}
 					case SECTION_ACTION_FAVORITES_MENU: {
@@ -1584,6 +1618,10 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 			}
 			case PAGE: {
 				viewType = mergeChans ? ViewType.CLOSEABLE_ICON : ViewType.CLOSEABLE;
+				break;
+			}
+			case REDDIT_PAGE: {
+				viewType = ViewType.CLOSEABLE;
 				break;
 			}
 			case PAGES_TOGGLE: {
@@ -2018,6 +2056,10 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 					holder.watcher.setProgressAnimationEnabled(canApplyWatcherUpdates());
 					holder.watcher.update(getCounter(listItem));
 				}
+				break;
+			}
+			case REDDIT_PAGE: {
+				holder.text.setText(listItem.title);
 				break;
 			}
 			case SECTION:

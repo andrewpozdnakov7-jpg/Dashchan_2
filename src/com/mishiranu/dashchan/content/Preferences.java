@@ -1850,6 +1850,7 @@ public class Preferences {
 	public static final boolean DEFAULT_REDDIT_WEB_READER_ENABLED = false;
 	public static final String KEY_REDDIT_WEB_READER_STYLE = "reddit_web_reader_style";
 	public static final boolean DEFAULT_REDDIT_WEB_READER_STYLE = true;
+	private static final String KEY_REDDIT_SIGNED_IN = "reddit_signed_in";
 	public static final String KEY_WALLPAPER_ENABLED = "wallpaper_enabled";
 	public static final boolean DEFAULT_WALLPAPER_ENABLED = false;
 	public static final String KEY_WALLPAPER_ID = "wallpaper_id";
@@ -1929,6 +1930,16 @@ public class Preferences {
 
 	public static boolean isRedditWebReaderStyleEnabled() {
 		return PREFERENCES.getBoolean(KEY_REDDIT_WEB_READER_STYLE, DEFAULT_REDDIT_WEB_READER_STYLE);
+	}
+
+	public static boolean isRedditSignedIn() {
+		return PREFERENCES.getBoolean(KEY_REDDIT_SIGNED_IN, false);
+	}
+
+	public static void setRedditSignedIn(boolean signedIn) {
+		if (isRedditSignedIn() != signedIn) {
+			PREFERENCES.edit().put(KEY_REDDIT_SIGNED_IN, signedIn).close();
+		}
 	}
 
 	public static boolean isWallpaperEnabled() {

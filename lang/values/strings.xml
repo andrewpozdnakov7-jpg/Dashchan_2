@@ -98,10 +98,16 @@
 	<string name="comment_is_too_short">Comment is too short</string>
 	<string name="experimental_features">Experimental features</string>
 	<string name="reddit_public_web_reader">Reddit web reader</string>
-	<string name="reddit_public_web_reader__summary">Experimental public, read-only Reddit view with compact Slooop styling. Pages and more replies load only through the visible website and your actions.</string>
+	<string name="reddit_public_web_reader__summary">Experimental user-driven Reddit web view with compact Slooop styling. Pages, replies, and account actions are handled by Reddit\'s visible website.</string>
 	<string name="reddit_public_web_reader_external_link">This link is outside Reddit and will open in another application.</string>
 	<string name="open_reddit_link">Open Reddit link</string>
 	<string name="open_reddit_web_reader">Open Reddit</string>
+	<string name="reddit_sign_in">Sign in to Reddit</string>
+	<string name="reddit_sign_in__summary">Opens Reddit\'s official sign-in page. Slooop does not read your credentials. Google sign-in opens outside Slooop and does not transfer that browser session.</string>
+	<string name="reddit_signed_in">Signed in to Reddit</string>
+	<string name="reddit_sign_in_done">Done</string>
+	<string name="reddit_sign_out">Sign out of Reddit</string>
+	<string name="reddit_sign_out__summary">Deletes only the local Reddit session stored in Slooop</string>
 	<string name="reddit_slooop_style">Slooop styling</string>
 	<string name="reddit_slooop_style__summary">Display posts and comments in a more compact style matching the application</string>
 	<string name="reddit_sections">Sections</string>

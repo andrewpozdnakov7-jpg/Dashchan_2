@@ -63,6 +63,7 @@ import com.mishiranu.dashchan.content.service.PostingService;
 import com.mishiranu.dashchan.content.service.WatcherService;
 import com.mishiranu.dashchan.content.storage.FavoritesStorage;
 import com.mishiranu.dashchan.content.storage.CombinedFeedStorage;
+import com.mishiranu.dashchan.content.storage.RedditPageStorage;
 import com.mishiranu.dashchan.content.update.UpdateDialogHelper;
 import com.mishiranu.dashchan.ui.gallery.GalleryOverlay;
 import com.mishiranu.dashchan.ui.gallery.VideoPipActivity;
@@ -110,7 +111,7 @@ import java.util.List;
 import java.util.UUID;
 
 public class MainActivity extends StateActivity implements DrawerForm.Callback, ThemeDialog.Callback,
-		FavoritesStorage.Observer, CombinedFeedStorage.Observer, WatcherService.Client.Callback,
+		FavoritesStorage.Observer, CombinedFeedStorage.Observer, RedditPageStorage.Observer, WatcherService.Client.Callback,
 		UiManager.Callback, UiManager.LocalNavigator, FragmentHandler, PageFragment.Callback {
 	private static final String EXTRA_FRAGMENTS = "fragments";
 	private static final String EXTRA_STACK_PAGE_ITEMS = "stackPageItems";
@@ -192,6 +193,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		ForegroundManager.getInstance().register(this);
 		FavoritesStorage.getInstance().getObservable().register(this);
 		CombinedFeedStorage.getInstance().getObservable().register(this);
+		RedditPageStorage.getInstance().getObservable().register(this);
 		Preferences.PREFERENCES.register(preferencesListener);
 		ChanManager.getInstance().observable.register(chanManagerCallback);
 		watcherServiceClient = WatcherService.getClient(this);
@@ -1626,6 +1628,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		watcherServiceClient.setCallback(null);
 		FavoritesStorage.getInstance().getObservable().unregister(this);
 		CombinedFeedStorage.getInstance().getObservable().unregister(this);
+		RedditPageStorage.getInstance().getObservable().unregister(this);
 		Preferences.PREFERENCES.unregister(preferencesListener);
 		ChanManager.getInstance().observable.unregister(chanManagerCallback);
 		for (Chan chan : ChanManager.getInstance().getAvailableChans()) {
@@ -1635,6 +1638,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		notificationManager.cancel(C.NOTIFICATION_ID_UPDATES);
 		FavoritesStorage.getInstance().await(true);
 		CombinedFeedStorage.getInstance().await(true);
+		RedditPageStorage.getInstance().await(true);
 	}
 
 	@Override
@@ -1897,7 +1901,8 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 					navigateData(newChanName, newBoardName, null, null, null, null,
 							FLAG_DATA_CLOSE_OVERLAYS | (fromCache ? FLAG_DATA_FROM_CACHE : 0));
 				} else {
-					fragments.clear();
+					// Keep toolbar Up consistent with system Back for nested non-page screens.
+					// removeFragment() pops one saved fragment and falls back to the last page only at the root.
 					removeFragment();
 				}
 				return true;
@@ -2129,6 +2134,13 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	}
 
 	@Override
+	public void onRedditPagesChanged() {
+		if (drawerForm != null) {
+			drawerForm.updateItems(true, false);
+		}
+	}
+
+	@Override
 	public boolean onSelectThread(String chanName, String boardName, String threadNumber, PostNumber postNumber,
 			String threadTitle, boolean fromCache) {
 		String requestedBoardName = boardName;
@@ -2274,6 +2286,54 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	}
 
 	@Override
+	public void onSelectRedditPage(String url) {
+		String normalized = RedditPageStorage.normalizeUrl(url);
+		if (normalized == null) {
+			return;
+		}
+		if (scheduleDrawerNavigation(() -> onSelectRedditPage(normalized))) {
+			return;
+		}
+		ContentFragment currentFragment = getCurrentFragment();
+		if (currentFragment instanceof RedditWebReaderFragment
+				&& ((RedditWebReaderFragment) currentFragment).openStoredPage(normalized)) {
+			closeOverlaysForNavigation();
+		} else {
+			fragments.clear();
+			navigateFragment(RedditWebReaderFragment.newInstance(normalized), null, true);
+		}
+		drawerForm.updateConfiguration(DrawerForm.CHAN_REDDIT);
+	}
+
+	@Override
+	public void onCloseRedditPage(String url) {
+		String normalized = RedditPageStorage.normalizeUrl(url);
+		if (normalized == null) {
+			return;
+		}
+		ContentFragment currentFragment = getCurrentFragment();
+		boolean closeCurrent = currentFragment instanceof RedditWebReaderFragment
+				&& normalized.equals(RedditPageStorage.normalizeUrl(
+						((RedditWebReaderFragment) currentFragment).getCurrentPageUrl()));
+		RedditPageStorage.getInstance().remove(normalized);
+		if (closeCurrent) {
+			RedditPageStorage.Entry next = RedditPageStorage.getInstance().getFirstPage();
+			fragments.clear();
+			navigateFragment(next != null ? RedditWebReaderFragment.newInstance(next.url)
+					: new RedditSectionsFragment(), null, true);
+		}
+	}
+
+	@Override
+	public void onCloseAllRedditPages() {
+		RedditPageStorage.getInstance().clear();
+		if (getCurrentFragment() instanceof RedditWebReaderFragment) {
+			fragments.clear();
+			navigateFragment(new RedditSectionsFragment(), null, true);
+		}
+	}
+
+	@Override
 	public int onEnterNumber(int number) {
 		int result = 0;
 		ContentFragment currentFragment = getCurrentFragment();
@@ -2314,15 +2374,13 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 			}
 			case DrawerForm.MENU_ITEM_LOCAL_ARCHIVES: {
 				if (!(getCurrentFragment() instanceof LocalArchivesFragment)) {
-					fragments.clear();
-					navigateFragment(new LocalArchivesFragment(), null, true);
+					navigateDrawerUtility(new LocalArchivesFragment());
 				}
 				break;
 			}
 			case DrawerForm.MENU_ITEM_PREFERENCES: {
 				if (!(getCurrentFragment() instanceof CategoriesFragment)) {
-					fragments.clear();
-					navigateFragment(new CategoriesFragment(), null, true);
+					navigateDrawerUtility(new CategoriesFragment());
 				}
 				break;
 			}
@@ -2359,6 +2417,16 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		}
 		if (!success) {
 			closeOverlaysForNavigation();
+		}
+	}
+
+	private void navigateDrawerUtility(ContentFragment fragment) {
+		ContentFragment currentFragment = getCurrentFragment();
+		if (currentFragment != null && currentFragment.isPrimaryNavigationContent()) {
+			pushFragment(fragment);
+		} else {
+			fragments.clear();
+			navigateFragment(fragment, null, true);
 		}
 	}
 

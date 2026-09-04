@@ -70,6 +70,11 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 		return requireArguments().getString(EXTRA_RETAIN_ID);
 	}
 
+	@Override
+	public boolean isPrimaryNavigationContent() {
+		return true;
+	}
+
 	private Callback getCallback() {
 		return (Callback) requireActivity();
 	}

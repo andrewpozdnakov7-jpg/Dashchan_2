@@ -43,6 +43,11 @@ public class RedditSectionsFragment extends BaseListFragment {
 	};
 
 	@Override
+	public boolean isPrimaryNavigationContent() {
+		return true;
+	}
+
+	@Override
 	public void onViewCreated(@NonNull View view, Bundle savedInstanceState) {
 		super.onViewCreated(view, savedInstanceState);
 

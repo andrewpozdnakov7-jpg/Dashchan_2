@@ -51,6 +51,14 @@ public abstract class ContentFragment extends Fragment {
 		return false;
 	}
 
+	/**
+	 * Returns whether this fragment represents the user's current forum destination rather than a temporary
+	 * utility or settings screen. Drawer utilities preserve such destinations so Back returns to the same forum.
+	 */
+	public boolean isPrimaryNavigationContent() {
+		return false;
+	}
+
 	protected final void notifyBackNavigationChanged() {
 		FragmentActivity activity = getActivity();
 		if (activity instanceof StateActivity) {

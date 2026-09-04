@@ -293,7 +293,7 @@ android {
 		]
 
 		// noinspection UnnecessaryQualifiedReference
-		def versionsData = new groovy.json.JsonSlurper().parse(new File('metadata/versions.json'))
+		def versionsData = new groovy.json.JsonSlurper().parse(rootProject.file('metadata/versions.json'))
 		def versions = versionsData.versions.findAll {
 			it.code == releaseVersionCode && it.name == versionName
 		}

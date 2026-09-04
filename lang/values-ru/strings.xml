@@ -101,10 +101,16 @@
 	<string name="comment_is_too_short">Комментарий слишком короткий</string>
 	<string name="experimental_features">Экспериментальные функции</string>
 	<string name="reddit_public_web_reader">Reddit — веб-режим</string>
-	<string name="reddit_public_web_reader__summary">Экспериментальный режим только для чтения публичного Reddit с компактным оформлением Slooop. Страницы и дополнительные ответы загружаются видимым сайтом только по вашим действиям.</string>
+	<string name="reddit_public_web_reader__summary">Экспериментальный управляемый пользователем веб-режим Reddit с компактным оформлением Slooop. Страницы, ответы и действия с аккаунтом выполняются видимым сайтом Reddit.</string>
 	<string name="reddit_public_web_reader_external_link">Это внешняя ссылка. Она будет открыта в другом приложении.</string>
 	<string name="open_reddit_link">Открыть ссылку Reddit</string>
 	<string name="open_reddit_web_reader">Открыть Reddit</string>
+	<string name="reddit_sign_in">Войти в Reddit</string>
+	<string name="reddit_sign_in__summary">Открывает официальную страницу входа Reddit. Slooop не читает введённые данные. Вход через Google открывается вне Slooop и не переносит браузерную сессию.</string>
+	<string name="reddit_signed_in">Вход в Reddit выполнен</string>
+	<string name="reddit_sign_in_done">Готово</string>
+	<string name="reddit_sign_out">Выйти из Reddit</string>
+	<string name="reddit_sign_out__summary">Удаляет только локальную сессию Reddit, сохранённую в Slooop</string>
 	<string name="reddit_slooop_style">Оформление Slooop</string>
 	<string name="reddit_slooop_style__summary">Показывать посты и комментарии компактнее, в стиле приложения</string>
 	<string name="reddit_sections">Разделы</string>

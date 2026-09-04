@@ -314,8 +314,10 @@ public final class SettingsSearchIndex {
 
 		add(context, entries, Screen.EXPERIMENTAL, R.string.whats_new_preview,
 				R.string.whats_new_preview__summary, null);
-		add(context, entries, Screen.FORUMS, R.string.forum_reddit, R.string.read_only,
+		add(context, entries, Screen.FORUMS, R.string.forum_reddit, R.string.reddit_public_web_reader__summary,
 				Preferences.KEY_REDDIT_WEB_READER_ENABLED);
+		add(context, entries, Screen.REDDIT, R.string.reddit_sign_in,
+				R.string.reddit_sign_in__summary, null);
 		add(context, entries, Screen.REDDIT, R.string.open_reddit_web_reader,
 				R.string.reddit_public_web_reader__summary, null);
 		add(context, entries, Screen.REDDIT, R.string.reddit_slooop_style,
