@@ -1,0 +1,9 @@
+- Kekabu is no longer limited to reading: after signing in to Pikabu, users can post comments and replies. Quoting and basic text formatting are supported, and users can delete their own comments.
+- Added advanced video playback speed settings. A separate screen provides the existing presets or an exact speed from 1% to 1000%. Default player behavior remains unchanged.
+- Added an experimental Reddit web mode. Reddit can be enabled in the forum list, after which users can choose the home page or a popular community and use the official website inside the app with compact Slooop styling.
+- Added Reddit sign-in and sign-out plus local history for visited communities and discussions. Back navigation now returns to Reddit, and site menus are displayed above comment cards.
+- Reddit pages and account actions remain under the user's direct control on the visible official website. Slooop does not use the Reddit API or perform automated actions.
+- Important: Reddit mode is experimental and at an early stage. It still has many bugs, and some pages or controls may not work correctly or may change when the Reddit website changes.
+- Cleaned up harmless resource and build configuration warnings without changing application behavior.
+
+Found a bug? Send us the logs!

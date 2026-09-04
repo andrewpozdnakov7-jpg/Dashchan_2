@@ -1846,6 +1846,11 @@ public class Preferences {
 	public static final boolean DEFAULT_COLLAPSE_LONG_OPEN_THREADS = true;
 	public static final String KEY_COMBINED_FEEDS_ENABLED = "combined_feeds_enabled";
 	public static final boolean DEFAULT_COMBINED_FEEDS_ENABLED = true;
+	public static final String KEY_REDDIT_WEB_READER_ENABLED = "reddit_web_reader_enabled";
+	public static final boolean DEFAULT_REDDIT_WEB_READER_ENABLED = false;
+	public static final String KEY_REDDIT_WEB_READER_STYLE = "reddit_web_reader_style";
+	public static final boolean DEFAULT_REDDIT_WEB_READER_STYLE = true;
+	private static final String KEY_REDDIT_SIGNED_IN = "reddit_signed_in";
 	public static final String KEY_WALLPAPER_ENABLED = "wallpaper_enabled";
 	public static final boolean DEFAULT_WALLPAPER_ENABLED = false;
 	public static final String KEY_WALLPAPER_ID = "wallpaper_id";
@@ -1917,6 +1922,24 @@ public class Preferences {
 
 	public static boolean isCombinedFeedsEnabled() {
 		return PREFERENCES.getBoolean(KEY_COMBINED_FEEDS_ENABLED, DEFAULT_COMBINED_FEEDS_ENABLED);
+	}
+
+	public static boolean isRedditWebReaderEnabled() {
+		return PREFERENCES.getBoolean(KEY_REDDIT_WEB_READER_ENABLED, DEFAULT_REDDIT_WEB_READER_ENABLED);
+	}
+
+	public static boolean isRedditWebReaderStyleEnabled() {
+		return PREFERENCES.getBoolean(KEY_REDDIT_WEB_READER_STYLE, DEFAULT_REDDIT_WEB_READER_STYLE);
+	}
+
+	public static boolean isRedditSignedIn() {
+		return PREFERENCES.getBoolean(KEY_REDDIT_SIGNED_IN, false);
+	}
+
+	public static void setRedditSignedIn(boolean signedIn) {
+		if (isRedditSignedIn() != signedIn) {
+			PREFERENCES.edit().put(KEY_REDDIT_SIGNED_IN, signedIn).close();
+		}
 	}
 
 	public static boolean isWallpaperEnabled() {
@@ -2239,6 +2262,27 @@ public class Preferences {
 
 	public static boolean isVideoPlaybackSpeedControl() {
 		return PREFERENCES.getBoolean(KEY_VIDEO_PLAYBACK_SPEED_CONTROL, DEFAULT_VIDEO_PLAYBACK_SPEED_CONTROL);
+	}
+
+	public static final String KEY_VIDEO_CUSTOM_PLAYBACK_SPEED = "video_custom_playback_speed";
+	public static final boolean DEFAULT_VIDEO_CUSTOM_PLAYBACK_SPEED = false;
+	private static final String KEY_VIDEO_CUSTOM_PLAYBACK_SPEED_VALUE = "video_custom_playback_speed_value";
+	public static final int DEFAULT_VIDEO_CUSTOM_PLAYBACK_SPEED_VALUE = 1000;
+
+	public static boolean isVideoCustomPlaybackSpeed() {
+		return PREFERENCES.getBoolean(KEY_VIDEO_CUSTOM_PLAYBACK_SPEED, DEFAULT_VIDEO_CUSTOM_PLAYBACK_SPEED);
+	}
+
+	public static int getVideoCustomPlaybackSpeedValue() {
+		int value = PREFERENCES.getInt(KEY_VIDEO_CUSTOM_PLAYBACK_SPEED_VALUE,
+				DEFAULT_VIDEO_CUSTOM_PLAYBACK_SPEED_VALUE);
+		return Math.max(10, Math.min(value, 10000));
+	}
+
+	public static void setVideoCustomPlaybackSpeedValue(int playbackSpeed) {
+		playbackSpeed = Math.round(playbackSpeed / 10f) * 10;
+		PREFERENCES.edit().put(KEY_VIDEO_CUSTOM_PLAYBACK_SPEED_VALUE,
+				Math.max(10, Math.min(playbackSpeed, 10000))).close();
 	}
 
 	public static final String KEY_REMEMBER_VIDEO_PLAYBACK_SPEED = "remember_video_playback_speed";

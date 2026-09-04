@@ -38,7 +38,7 @@ final class PikabuHtmlParser {
 	private static final int MAX_AUTHORS = 50;
 	private static final int MAX_STORY_TAGS = 12;
 	private static final Pattern NUMBER = Pattern.compile("\\d+");
-	private static final Pattern META_VALUE = Pattern.compile("(?:^|;)([a-z]+)=([^;]*)");
+	private static final Pattern META_VALUE = Pattern.compile("(?:^|;)([a-z]+)(?:=([^;]*))?");
 	private static final Pattern STORY_PATH = Pattern.compile("/story/(?:[^/?#]*_)?(\\d+)/?");
 	private static final Pattern FILE_EXTENSION = Pattern.compile("(?i)\\.(?:jpe?g|png|gif|webp|bmp|svg|"
 			+ "mp4|webm|mkv|mov|m4v|mp3|ogg|wav|flac)(?:$|[?#])");
@@ -393,7 +393,8 @@ final class PikabuHtmlParser {
 			parent = threadNumber;
 		}
 		Post post = new Post().setThreadNumber(threadNumber).setPostNumber(postNumber)
-				.setParentPostNumber(parent);
+				.setParentPostNumber(parent)
+				.setDeletable(meta.containsKey("ua") && meta.containsKey("e"));
 		Element author = element.selectFirst("a.comment__user[data-name], a.comment__user .user__nick");
 		if (author != null) post.setName(author.hasAttr("data-name")
 				? author.attr("data-name").trim() : author.text().trim());

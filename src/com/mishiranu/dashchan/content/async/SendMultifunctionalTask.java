@@ -58,6 +58,7 @@ public class SendMultifunctionalTask extends HttpHolderTask<Void, Boolean> {
 		public int vote;
 		public boolean singleScoreVote;
 		public PostItem votePostItem;
+		public PostItem deletedPostItem;
 
 		public List<PostNumber> postNumbers;
 		public String archiveThreadTitle;

@@ -1477,6 +1477,12 @@ public class DialogUnit {
 
 	public void performSendDeletePosts(FragmentManager fragmentManager,
 			String chanName, String boardName, String threadNumber, List<PostNumber> postNumbers) {
+		performSendDeletePosts(fragmentManager, chanName, boardName, threadNumber, postNumbers, null);
+	}
+
+	public void performSendDeletePosts(FragmentManager fragmentManager,
+			String chanName, String boardName, String threadNumber, List<PostNumber> postNumbers,
+			PostItem deletedPostItem) {
 		Chan chan = Chan.get(chanName);
 		ChanConfiguration.Deleting deleting = chan.configuration.safe().obtainDeleting(boardName);
 		if (deleting == null) {
@@ -1492,6 +1498,7 @@ public class DialogUnit {
 		SendMultifunctionalTask.State state = new SendMultifunctionalTask.State(SendMultifunctionalTask
 				.Operation.DELETE, chanName, boardName, threadNumber, null, options, deleting.password);
 		state.postNumbers = postNumbers;
+		state.deletedPostItem = deletedPostItem;
 		showPerformSendDialog(fragmentManager, state, null, Preferences.getPassword(chan), null, null, true);
 	}
 
@@ -1814,6 +1821,11 @@ public class DialogUnit {
 					switch (state.operation) {
 					case DELETE:
 						case REPORT: {
+							if (state.operation == SendMultifunctionalTask.Operation.DELETE
+									&& state.deletedPostItem != null) {
+								UiManager.extract(provider).sendPostItemMessage(state.deletedPostItem,
+										UiManager.Message.PERFORM_REFRESH_AFTER_DELETE);
+							}
 							ClickableToast.show(R.string.request_has_been_sent_successfully);
 							break;
 						}

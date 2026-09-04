@@ -6,6 +6,7 @@ public class PikabuChanConfiguration extends ChanConfiguration {
 	private static final String COOKIE_AUTH_SESSION = "pikabu_auth_session";
 	private static final String COOKIE_AUTH_USER = "pikabu_auth_user";
 
+	@SuppressWarnings("unchecked")
 	public static PikabuChanConfiguration get(Object object) {
 		return ChanConfiguration.get(object);
 	}
@@ -66,12 +67,24 @@ public class PikabuChanConfiguration extends ChanConfiguration {
 		board.allowThreadsSorting = true;
 		board.allowRatingSorting = true;
 		board.allowArchive = false;
-		board.allowPosting = false;
+		board.allowPosting = true;
 		board.allowEditing = false;
-		board.allowDeleting = false;
+		board.allowDeleting = isAuthorized();
+		board.allowDeletingPerPost = true;
 		board.allowReporting = false;
 		board.allowVotes = true;
 		return board;
+	}
+
+	@Override
+	protected Deleting obtainDeletingConfiguration(String boardName) {
+		return isAuthorized() ? new Deleting() : null;
+	}
+
+	@Override
+	protected Posting obtainPostingConfiguration(String boardName, boolean newThread) {
+		if (newThread) return null;
+		return new Posting();
 	}
 
 	@Override

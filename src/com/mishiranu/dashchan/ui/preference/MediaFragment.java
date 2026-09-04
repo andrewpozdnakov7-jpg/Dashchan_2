@@ -140,14 +140,6 @@ public class MediaFragment extends PreferenceFragment implements FragmentHandler
 				Preferences.DEFAULT_VIDEO_AUDIO_BOOST_DB, R.string.video_audio_boost_level,
 				R.string.video_audio_boost_level__format, null, Preferences.MIN_VIDEO_AUDIO_BOOST_DB,
 				Preferences.MAX_VIDEO_AUDIO_BOOST_DB, 3);
-		Runnable updateAudioBoostState = () -> {
-			boolean playerEnabled = playerLoadResult.first && videoPlayerPreference.getValue();
-			audioBoostPreference.setEnabled(playerEnabled);
-			audioBoostLevelPreference.setEnabled(playerEnabled && audioBoostPreference.getValue());
-		};
-		videoPlayerPreference.setOnAfterChangeListener(p -> updateAudioBoostState.run());
-		audioBoostPreference.setOnAfterChangeListener(p -> updateAudioBoostState.run());
-		updateAudioBoostState.run();
 		addList(Preferences.KEY_VIDEO_COMPLETION, enumList(Preferences.VideoCompletionMode.values(), o -> o.value),
 				Preferences.DEFAULT_VIDEO_COMPLETION.value, R.string.action_on_playback_completion,
 				enumResList(Preferences.VideoCompletionMode.values(), o -> o.titleResId))
@@ -170,18 +162,10 @@ public class MediaFragment extends PreferenceFragment implements FragmentHandler
 				enumResList(Preferences.VideoScreenOffAction.values(), value -> value.titleResId),
 				enumResList(Preferences.VideoScreenOffAction.values(), value -> value.summaryResId))
 				.setEnabled(playerLoadResult.first);
-		addCheck(true, Preferences.KEY_VIDEO_PLAYBACK_SPEED_CONTROL,
-				Preferences.DEFAULT_VIDEO_PLAYBACK_SPEED_CONTROL,
-				R.string.enable_video_playback_speed_control,
-				R.string.enable_video_playback_speed_control__summary).setEnabled(playerLoadResult.first);
-		addCheck(true, Preferences.KEY_REMEMBER_VIDEO_PLAYBACK_SPEED,
-				Preferences.DEFAULT_REMEMBER_VIDEO_PLAYBACK_SPEED,
-				R.string.remember_video_playback_speed,
-				R.string.remember_video_playback_speed__summary).setEnabled(playerLoadResult.first);
-		addCheck(true, Preferences.KEY_PERSIST_VIDEO_PLAYBACK_SPEED,
-				Preferences.DEFAULT_PERSIST_VIDEO_PLAYBACK_SPEED,
-				R.string.persist_video_playback_speed,
-				R.string.persist_video_playback_speed__summary).setEnabled(playerLoadResult.first);
+		Preference<Void> playbackSpeedPreference = addButton(R.string.playback_speed,
+				R.string.playback_speed_settings__summary);
+		playbackSpeedPreference.setOnClickListener(p -> ((FragmentHandler) requireActivity())
+				.pushFragment(new PlaybackSpeedFragment()));
 		addCheck(true, Preferences.KEY_ATTACHMENT_VIDEO_PREVIEW,
 				Preferences.DEFAULT_ATTACHMENT_VIDEO_PREVIEW,
 				R.string.attachment_video_preview,
@@ -195,13 +179,17 @@ public class MediaFragment extends PreferenceFragment implements FragmentHandler
 					Preferences.KEY_VIDEO_PICTURE_IN_PICTURE, true);
 			addDependency(Preferences.KEY_VIDEO_SCREEN_OFF_ACTION,
 					Preferences.KEY_VIDEO_PICTURE_IN_PICTURE, true);
-			addDependency(Preferences.KEY_VIDEO_PLAYBACK_SPEED_CONTROL, Preferences.KEY_USE_VIDEO_PLAYER, true);
-			addDependency(Preferences.KEY_REMEMBER_VIDEO_PLAYBACK_SPEED,
-					Preferences.KEY_VIDEO_PLAYBACK_SPEED_CONTROL, true);
-			addDependency(Preferences.KEY_PERSIST_VIDEO_PLAYBACK_SPEED,
-					Preferences.KEY_REMEMBER_VIDEO_PLAYBACK_SPEED, true);
 			addDependency(Preferences.KEY_ATTACHMENT_VIDEO_PREVIEW, Preferences.KEY_USE_VIDEO_PLAYER, true);
 		}
+		Runnable updatePlayerState = () -> {
+			boolean playerEnabled = playerLoadResult.first && videoPlayerPreference.getValue();
+			audioBoostPreference.setEnabled(playerEnabled);
+			audioBoostLevelPreference.setEnabled(playerEnabled && audioBoostPreference.getValue());
+			playbackSpeedPreference.setEnabled(playerEnabled);
+		};
+		videoPlayerPreference.setOnAfterChangeListener(p -> updatePlayerState.run());
+		audioBoostPreference.setOnAfterChangeListener(p -> updatePlayerState.run());
+		updatePlayerState.run();
 
 		addHeader(R.string.additional);
 		addSeek(Preferences.KEY_CACHE_SIZE, Preferences.DEFAULT_CACHE_SIZE, getString(R.string.cache_size), "%d MB",

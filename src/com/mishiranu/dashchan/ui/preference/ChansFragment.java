@@ -57,7 +57,6 @@ public class ChansFragment extends PreferenceFragment implements FragmentHandler
 				.pushFragment(new CombinedFeedsFragment()));
 		combinedFeedsPreference.setOnAfterChangeListener(p ->
 				configureCombinedFeedsPreference.setEnabled(p.getValue()));
-
 		ChanManager manager = ChanManager.getInstance();
 		LinkedHashMap<String, Chan> chans = new LinkedHashMap<>();
 		for (Chan chan : manager.getAllChans()) {
@@ -69,6 +68,10 @@ public class ChansFragment extends PreferenceFragment implements FragmentHandler
 		addChanPreference(chans.remove("apachan"));
 		addChanPreference(chans.remove("arhivach"));
 		addChanPreference(chans.remove("pikabu"));
+		addForumPreference(Preferences.KEY_REDDIT_WEB_READER_ENABLED,
+				Preferences.DEFAULT_REDDIT_WEB_READER_ENABLED, getString(R.string.forum_reddit),
+				null, () -> ((FragmentHandler) requireActivity())
+						.pushFragment(new RedditFragment()));
 		for (Chan chan : chans.values()) {
 			addChanPreference(chan);
 		}
@@ -86,7 +89,6 @@ public class ChansFragment extends PreferenceFragment implements FragmentHandler
 				: "pikabu".equals(chan.name) ? R.string.forum_pikabu : 0;
 		CharSequence title = titleResId != 0 ? getString(titleResId) : chan.configuration.getTitle();
 		CharSequence summary = "fourchan".equals(chan.name) || "arhivach".equals(chan.name)
-				|| "pikabu".equals(chan.name)
 				? getString(R.string.read_only) : null;
 		addForumPreference(chan.name, title, summary, () -> ((FragmentHandler) requireActivity())
 				.pushFragment(new ChanFragment(chan.name)));
@@ -97,8 +99,13 @@ public class ChansFragment extends PreferenceFragment implements FragmentHandler
 	}
 
 	private void addForumPreference(String name, CharSequence title, CharSequence summary, Runnable onOpen) {
-		ForumPreference preference = new ForumPreference(requireContext(), Preferences.getChanEnabledKey(name),
-				Preferences.isChanEnabledByDefault(name), title, summary);
+		addForumPreference(Preferences.getChanEnabledKey(name), Preferences.isChanEnabledByDefault(name),
+				title, summary, onOpen);
+	}
+
+	private void addForumPreference(String key, boolean defaultValue, CharSequence title, CharSequence summary,
+			Runnable onOpen) {
+		ForumPreference preference = new ForumPreference(requireContext(), key, defaultValue, title, summary);
 		addPreference(preference, true);
 		preference.setOnClickListener(p -> {
 			if (p.getValue()) {

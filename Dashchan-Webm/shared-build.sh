@@ -124,7 +124,6 @@ ffmpeg_options=(
 	'--enable-decoder=h263i'
 	'--enable-decoder=h263p'
 	'--enable-decoder=vvc'
-	'--enable-decoder=8bps'
 	'--enable-decoder=qdraw'
 	'--enable-decoder=qtrle'
 	'--enable-decoder=rpza'

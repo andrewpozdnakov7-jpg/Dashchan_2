@@ -349,6 +349,7 @@ public class InteractionUnit {
 			dialogMenu.add(R.string.share_link, () -> handlePostContextMenuCopy(context,
 					configurationSet.chanName, postItem, PostCopyShareAction.SHARE_LINK));
 		}
+		boolean deletePost = false;
 		if (!postItem.isDeleted()) {
 			if (userPost && board.allowEditing) {
 				dialogMenu.add(R.string.edit_post, () -> ApachanEditPostDialog.show(
@@ -372,11 +373,7 @@ public class InteractionUnit {
 						.performSendReportPosts(configurationSet.fragmentManager, chan.name, postItem.getBoardName(),
 								postItem.getThreadNumber(), Collections.singletonList(postItem.getPostNumber())));
 			}
-			if (board.allowDeleting) {
-				dialogMenu.add(R.string.delete, () -> uiManager.dialog()
-						.performSendDeletePosts(configurationSet.fragmentManager, chan.name, postItem.getBoardName(),
-								postItem.getThreadNumber(), Collections.singletonList(postItem.getPostNumber())));
-			}
+			deletePost = board.allowDeleting && (!board.allowDeletingPerPost || postItem.isDeletable());
 		}
 		if (configurationSet.allowMyMarkEdit) {
 			dialogMenu.addCheck(R.string.my_post, userPost, () -> uiManager
@@ -389,6 +386,11 @@ public class InteractionUnit {
 		if (configurationSet.allowHiding && !postItem.getHideState().hidden) {
 			dialogMenu.addMore(R.string.hide,
 					() -> showPostHideDialog(configurationSet.fragmentManager, postItem));
+		}
+		if (deletePost) {
+			dialogMenu.add(R.string.delete, () -> uiManager.dialog()
+					.performSendDeletePosts(configurationSet.fragmentManager, chan.name, postItem.getBoardName(),
+							postItem.getThreadNumber(), Collections.singletonList(postItem.getPostNumber()), postItem));
 		}
 		AlertDialog dialog = dialogMenu.create();
 		uiManager.dialog().handlePostContextMenu(configurationSet, postItem.getPostNumber(), true, dialog);

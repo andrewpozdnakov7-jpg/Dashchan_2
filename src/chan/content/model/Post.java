@@ -378,6 +378,17 @@ public final class Post implements Comparable<Post> {
 	}
 
 	@Public
+	public boolean isDeletable() {
+		return builder.builder.isDeletable();
+	}
+
+	@Public
+	public Post setDeletable(boolean deletable) {
+		builder.builder.setDeletable(deletable);
+		return this;
+	}
+
+	@Public
 	@Override
 	public int compareTo(Post another) {
 		return builder.builder.number.compareTo(another.builder.builder.number);

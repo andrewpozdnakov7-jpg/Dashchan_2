@@ -11,7 +11,7 @@
 	<application
 		android:fullBackupContent="@xml/reply_push_backup_rules"
 		android:dataExtractionRules="@xml/reply_push_data_extraction_rules"
-		tools:replace="android:fullBackupContent,android:dataExtractionRules">
+		tools:replace="android:fullBackupContent">
 		<!-- Keep Firebase completely dormant until the user explicitly accepts the experimental feature. -->
 		<meta-data android:name="firebase_messaging_auto_init_enabled" android:value="false" />
 		<meta-data android:name="firebase_messaging_installation_id_enabled" android:value="true" />

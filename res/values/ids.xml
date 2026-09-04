@@ -40,6 +40,7 @@
 	<item type="id" name="autohide_scope_original_post" />
 	<item type="id" name="autohide_scope_replies" />
 	<item type="id" name="menu_open_original_thread" />
+	<item type="id" name="menu_open_reddit_link" />
 	<item type="id" name="menu_pages" />
 	<item type="id" name="menu_refresh" />
 	<item type="id" name="menu_rating" />

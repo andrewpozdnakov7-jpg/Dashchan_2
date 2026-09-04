@@ -132,6 +132,7 @@ public final class Post implements Comparable<Post> {
 		int DEFAULT_NAME = 0x00000100;
 		int BUMP_LIMIT_REACHED = 0x00000200;
 		int AI_GENERATED = 0x00000400;
+		int DELETABLE = 0x00000800;
 	}
 
 	public final PostNumber number;
@@ -239,6 +240,10 @@ public final class Post implements Comparable<Post> {
 		return isAIGenerated();
 	}
 
+	public boolean isDeletable() {
+		return FlagUtils.get(flags, Flags.DELETABLE);
+	}
+
 	@Override
 	public int compareTo(Post another) {
 		return number.compareTo(another.number);
@@ -261,7 +266,7 @@ public final class Post implements Comparable<Post> {
 	private void serialize(JsonSerial.Writer writer, boolean includeVote) throws IOException {
 		writer.startObject();
 		writer.name("flags");
-		writer.value(flags);
+		writer.value(includeVote ? flags : FlagUtils.set(flags, Flags.DELETABLE, false));
 		writer.name("timestamp");
 		writer.value(timestamp);
 		if (!subject.isEmpty()) {
@@ -704,6 +709,14 @@ public final class Post implements Comparable<Post> {
 
 		public void setAIGenerated(boolean aiGenerated) {
 			flags = FlagUtils.set(flags, Flags.AI_GENERATED, aiGenerated);
+		}
+
+		public boolean isDeletable() {
+			return FlagUtils.get(flags, Flags.DELETABLE);
+		}
+
+		public void setDeletable(boolean deletable) {
+			flags = FlagUtils.set(flags, Flags.DELETABLE, deletable);
 		}
 
 		public Post build(boolean deleted) {

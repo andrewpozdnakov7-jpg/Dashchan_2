@@ -480,6 +480,10 @@ public class PostItem implements AttachmentItem.Master, ChanMarkup.MarkupExtra, 
 		return post.deleted;
 	}
 
+	public boolean isDeletable() {
+		return post.isDeletable();
+	}
+
 	@NonNull
 	public String getSubjectOrComment() {
 		String subject = getSubject();
