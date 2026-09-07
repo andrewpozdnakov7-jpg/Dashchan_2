@@ -75,7 +75,6 @@ import com.mishiranu.dashchan.ui.navigator.manager.DialogUnit;
 import com.mishiranu.dashchan.ui.navigator.manager.ThreadshotPerformer;
 import com.mishiranu.dashchan.ui.navigator.manager.UiManager;
 import com.mishiranu.dashchan.ui.posting.Replyable;
-import com.mishiranu.dashchan.util.AndroidUtils;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
 import com.mishiranu.dashchan.util.GraphicsUtils;
 import com.mishiranu.dashchan.util.ListViewUtils;
@@ -954,10 +953,8 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 			searchWorker = null;
 		}
 		getRecyclerView().removeOnScrollListener(scrollListener);
-		if (AndroidUtils.hasCallbacks(ConcurrentUtils.HANDLER, storePositionRunnable)) {
-			ConcurrentUtils.HANDLER.removeCallbacks(storePositionRunnable);
-			storePositionRunnable.run();
-		}
+		ConcurrentUtils.HANDLER.removeCallbacks(storePositionRunnable);
+		storePositionRunnable.run();
 		FavoritesStorage.getInstance().getObservable().unregister(this);
 		setCustomSearchView(null);
 	}
@@ -1780,26 +1777,29 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 
 	private final Runnable storePositionRunnable = () -> {
 		ListPosition listPosition = ListPosition.obtain(getRecyclerView(), null);
-		byte[] state = null;
 		PostItem positionItem = listPosition != null ? getAdapter().getItem(listPosition.position) : null;
-		if (listPosition != null && positionItem != null) {
-			try (JsonSerial.Writer writer = JsonSerial.writer()) {
-				writer.startObject();
-				writer.name("position");
-				writer.startObject();
-				writer.name("number");
-				writer.value(positionItem.getPostNumber().toString());
-				writer.name("offset");
-				writer.value(listPosition.offset);
-				writer.endObject();
-				writer.endObject();
-				state = writer.build();
-			} catch (IOException e) {
-				throw new RuntimeException(e);
-			}
+		if (listPosition == null || positionItem == null) {
+			return;
+		}
+		byte[] state;
+		try (JsonSerial.Writer writer = JsonSerial.writer()) {
+			writer.startObject();
+			writer.name("position");
+			writer.startObject();
+			writer.name("number");
+			writer.value(positionItem.getPostNumber().toString());
+			writer.name("offset");
+			writer.value(listPosition.offset);
+			writer.endObject();
+			writer.endObject();
+			state = writer.build();
+		} catch (IOException e) {
+			throw new RuntimeException(e);
 		}
 		Page page = getPage();
-		CommonDatabase.getInstance().getThreads().setStateExtra(true,
+		// This runs only after scrolling has been idle for a while and once more when the page is destroyed.
+		// Store synchronously so reopening a just-closed favorite cannot observe an older queued position.
+		CommonDatabase.getInstance().getThreads().setStateExtra(false,
 				page.chanName, page.boardName, page.threadNumber, true, state, false, null);
 	};
 

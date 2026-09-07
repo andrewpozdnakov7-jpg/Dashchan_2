@@ -181,6 +181,15 @@ public class CommonDatabase {
 
 	public void readBackup(InputStream input) throws IOException {
 		File restoreFile = MainApplication.getInstance().getDatabasePath(Helper.DATABASE_RESTORE_NAME);
+		clearRestoreBackup();
+		restoreFile.getParentFile().mkdirs();
+		try (FileOutputStream output = new FileOutputStream(restoreFile)) {
+			IOUtils.copyStream(input, output);
+		}
+	}
+
+	public void clearRestoreBackup() {
+		File restoreFile = MainApplication.getInstance().getDatabasePath(Helper.DATABASE_RESTORE_NAME);
 		File[] files = restoreFile.getParentFile().listFiles();
 		if (files != null) {
 			for (File file : files) {
@@ -188,10 +197,6 @@ public class CommonDatabase {
 					file.delete();
 				}
 			}
-		}
-		restoreFile.getParentFile().mkdirs();
-		try (FileOutputStream output = new FileOutputStream(restoreFile)) {
-			IOUtils.copyStream(input, output);
 		}
 	}
 

@@ -63,6 +63,9 @@ public class GeneralFragment extends PreferenceFragment implements FragmentHandl
 		}
 		addCheck(true, Preferences.KEY_INTERNAL_BROWSER, Preferences.DEFAULT_INTERNAL_BROWSER,
 				R.string.internal_browser, R.string.internal_browser__sumamry);
+		addCheck(true, Preferences.KEY_PRIVATE_BROWSER, Preferences.DEFAULT_PRIVATE_BROWSER,
+				R.string.private_browser, R.string.private_browser__summary);
+		addDependency(Preferences.KEY_PRIVATE_BROWSER, Preferences.KEY_INTERNAL_BROWSER, true);
 
 		addHeader(R.string.services);
 		addCheck(true, Preferences.KEY_RECAPTCHA_JAVASCRIPT, Preferences.DEFAULT_RECAPTCHA_JAVASCRIPT,

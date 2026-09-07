@@ -92,7 +92,7 @@
 	<string name="close">Закрыть</string>
 	<string name="close_all">Закрыть всё</string>
 	<string name="close_pages">Закрытие страниц</string>
-	<string name="close_pages__summary">Закрывать страницы нажатием кнопки \"Назад\"</string>
+	<string name="close_pages__summary">Не оставлять закрытые доски и треды в разделе «Страницы»</string>
 	<string name="restore_pages">Восстанавливать открытые страницы</string>
 	<string name="restore_pages__summary">Восстанавливать открытые доски и треды после перезапуска. Список хранится только на этом устройстве</string>
 	<string name="closed">Закрыто</string>
@@ -128,6 +128,16 @@
 	<string name="reddit_section_today_i_learned">Today I Learned</string>
 	<string name="reddit_section_science">Наука</string>
 	<string name="reddit_section_movies">Кино</string>
+	<string name="reddit_category_discussions">Обсуждения и истории</string>
+	<string name="reddit_category_news">Новости и мир</string>
+	<string name="reddit_category_technology">Технологии</string>
+	<string name="reddit_category_science">Наука и обучение</string>
+	<string name="reddit_category_entertainment">Развлечения и культура</string>
+	<string name="reddit_category_humor">Юмор и медиа</string>
+	<string name="reddit_category_sports">Спорт</string>
+	<string name="reddit_category_lifestyle">Жизнь и увлечения</string>
+	<string name="expand_reddit_category__format">Развернуть: %s</string>
+	<string name="collapse_reddit_category__format">Свернуть: %s</string>
 	<string name="reddit_official_app">Официальное приложение Reddit</string>
 	<string name="local_translation">Офлайн-перевод постов</string>
 	<string name="local_translation__summary">Переводить посты на устройстве через Mozilla Bergamot или Gemini Nano</string>
@@ -396,6 +406,8 @@
 	<string name="insufficient_device_space">Недостаточно места на утройстве</string>
 	<string name="internal_browser">Встроенный браузер</string>
 	<string name="internal_browser__sumamry">Открывать внешние ссылки во встроенном браузере</string>
+	<string name="private_browser">Приватный режим</string>
+	<string name="private_browser__summary">Использовать отдельное временное хранилище. Cookies, история, кэш и данные сайтов удаляются после закрытия встроенного браузера. Сайты по-прежнему видят ваш IP-адрес и сведения о браузере.</string>
 	<string name="if_file_already_exists">Если файл уже существует</string>
 	<string name="invalid_authorization_data">Некорректные данные авторизации</string>
 	<string name="invalid_certificate">Недостоверный сертификат</string>

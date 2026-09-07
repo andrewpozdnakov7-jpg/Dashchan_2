@@ -1,0 +1,10 @@
+- Expanded the experimental Reddit reader with 50 popular subreddits in collapsible categories, improved navigation, and translation for posts and comments.
+- Improved Reddit rendering by reducing ad blocks, suppressing obstructive banners, and fixing action-menu layering. Reddit support remains experimental and may still contain bugs.
+- Fixed external-link handling when the built-in browser is disabled. Added an optional private mode that clears temporary site data after closing.
+- Improved Replies so push-delivered replies are stored more reliably and shown without waiting for slow or unavailable forums.
+- Fixed saved-thread position restoration and clarified the closed-pages setting.
+- Improved safe streaming processing of Kekabu images.
+- Moved backup creation, restore, and attachment import off the UI thread, with checks for damaged, oversized, or suspiciously compressed archives.
+- Fixed rare failures involving database restore, link handling, and background notifications.
+
+Found a bug? Send us the logs!

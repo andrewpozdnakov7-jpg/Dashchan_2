@@ -27,6 +27,7 @@ import java.util.List;
 public class MainApplication extends Application {
 	private static final String PROCESS_WEB_VIEW = "webview";
 	private static final String PROCESS_TRANSLATION = "translation";
+	private static final String PROCESS_PRIVATE_BROWSER = "private_browser";
 	private static final String KEY_REMOVED_AUTO_BUMP_CLEANUP = "removed_auto_bump_cleanup";
 
 	private static MainApplication instance;
@@ -41,6 +42,10 @@ public class MainApplication extends Application {
 
 	public boolean isMainProcess() {
 		return checkProcess(null);
+	}
+
+	public boolean isPrivateBrowserProcess() {
+		return checkProcess(PROCESS_PRIVATE_BROWSER);
 	}
 
 	private String processSuffix;
@@ -70,7 +75,7 @@ public class MainApplication extends Application {
 				processSuffix = StringUtils.nullIfEmpty(processName.substring(index + 1));
 			}
 		}
-		if (checkProcess(PROCESS_WEB_VIEW) || checkProcess(PROCESS_TRANSLATION)) {
+		if (isIsolatedWebViewProcess()) {
 			WebView.setDataDirectorySuffix(processSuffix);
 		}
 
@@ -89,8 +94,11 @@ public class MainApplication extends Application {
 			BackgroundWatcherWorker.restoreSchedule(this);
 			ReplyPushManager.restore(this);
 			cleanupRemovedAutoBump();
-		} else if (checkProcess(PROCESS_WEB_VIEW) || checkProcess(PROCESS_TRANSLATION)) {
+		} else if (isIsolatedWebViewProcess()) {
 			IOUtils.deleteRecursive(getIsolatedWebViewCacheDir());
+			if (isPrivateBrowserProcess()) {
+				UserAgentProvider.initialize(this);
+			}
 		}
 	}
 
@@ -134,17 +142,22 @@ public class MainApplication extends Application {
 		return activityManager != null && activityManager.isLowRamDevice();
 	}
 
+	private boolean isIsolatedWebViewProcess() {
+		return checkProcess(PROCESS_WEB_VIEW) || checkProcess(PROCESS_TRANSLATION)
+				|| checkProcess(PROCESS_PRIVATE_BROWSER);
+	}
+
 	public File getSharedPrefsDir() {
 		return new File(getCacheDir().getParentFile(), "shared_prefs");
 	}
 
 	private File getIsolatedWebViewCacheDir() {
-		return new File(super.getCacheDir(), checkProcess(PROCESS_TRANSLATION) ? "translation" : "webview");
+		return new File(super.getCacheDir(), processSuffix != null ? processSuffix : "webview");
 	}
 
 	@Override
 	public File getCacheDir() {
-		if (checkProcess(PROCESS_WEB_VIEW) || checkProcess(PROCESS_TRANSLATION)) {
+		if (isIsolatedWebViewProcess()) {
 			File dir = new File(getIsolatedWebViewCacheDir(), "cache");
 			dir.mkdirs();
 			return dir;
@@ -154,7 +167,7 @@ public class MainApplication extends Application {
 
 	@Override
 	public File getDir(String name, int mode) {
-		if (checkProcess(PROCESS_WEB_VIEW) || checkProcess(PROCESS_TRANSLATION)) {
+		if (isIsolatedWebViewProcess()) {
 			File dir = new File(getIsolatedWebViewCacheDir(), name);
 			dir.mkdirs();
 			return dir;

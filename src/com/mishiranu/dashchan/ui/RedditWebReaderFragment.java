@@ -9,6 +9,8 @@ import android.graphics.Color;
 import android.net.Uri;
 import android.net.http.SslError;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.InputType;
 import android.view.LayoutInflater;
 import android.view.Menu;
@@ -30,6 +32,8 @@ import chan.util.StringUtils;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.storage.RedditPageStorage;
+import com.mishiranu.dashchan.content.translation.TranslationController;
+import com.mishiranu.dashchan.content.translation.TranslationModel;
 import com.mishiranu.dashchan.util.NavigationUtils;
 import com.mishiranu.dashchan.util.ViewUtils;
 import com.mishiranu.dashchan.util.WebViewUtils;
@@ -38,6 +42,9 @@ import com.mishiranu.dashchan.widget.ExpandedLayout;
 import com.mishiranu.dashchan.widget.ThemeEngine;
 import java.util.Locale;
 import java.util.UUID;
+import org.json.JSONException;
+import org.json.JSONObject;
+import org.json.JSONTokener;
 
 /**
  * A visible, user-driven browser for Reddit pages.
@@ -49,7 +56,8 @@ import java.util.UUID;
  * native code receives only Reddit's boolean signed-in marker so the settings screen can report session state.
  * Outside that screen, local presentation scripts apply the reader theme and suppress Reddit's blocking
  * app-install prompt. Reddit's own scripts may load content after a user action in the same way as they do in a
- * regular browser.</p>
+ * regular browser. When the user explicitly enables translation, only the visible post title/body and comment
+ * markup is passed to the translator selected in Slooop's translation settings.</p>
  */
 public class RedditWebReaderFragment extends ContentFragment {
 	public static final String HOME_URL = "https://www.reddit.com/";
@@ -70,6 +78,9 @@ public class RedditWebReaderFragment extends ContentFragment {
 	};
 	private static final String EXTRA_START_URL = "startUrl";
 	private static final String EXTRA_AUTHORIZATION_MODE = "authorizationMode";
+	private static final String STATE_CLEAR_HISTORY_URL = "clearHistoryUrl";
+	private static final String STATE_TRANSLATION_ENABLED = "translationEnabled";
+	private static final long TRANSLATION_RESCAN_DELAY = 2500L;
 	private static final String READ_SIGNED_IN_STATE_SCRIPT = "(function(){var app=" +
 			"document.querySelector('shreddit-app');if(!app)return null;return " +
 			"app.getAttribute('user-logged-in')==='true'||!!document.querySelector('[is-user-logged-in]');})()";
@@ -82,6 +93,13 @@ public class RedditWebReaderFragment extends ContentFragment {
 	private MenuItem finishAuthorizationMenuItem;
 	private int pageLoadGeneration;
 	private String lastRecordedPageUrl;
+	private String clearHistoryUrl;
+	private boolean translationEnabled;
+	private boolean translationRequestPending;
+	private int translationRequestGeneration = -1;
+	private int translationFailureGeneration = -1;
+	private final Handler handler = new Handler(Looper.getMainLooper());
+	private final Runnable translationRescanRunnable = this::requestRedditTranslation;
 
 	public static RedditWebReaderFragment newInstance(String url) {
 		RedditWebReaderFragment fragment = new RedditWebReaderFragment();
@@ -197,6 +215,8 @@ public class RedditWebReaderFragment extends ContentFragment {
 		});
 		if (savedInstanceState != null) {
 			webView.restoreState(savedInstanceState);
+			clearHistoryUrl = savedInstanceState.getString(STATE_CLEAR_HISTORY_URL);
+			translationEnabled = savedInstanceState.getBoolean(STATE_TRANSLATION_ENABLED);
 		}
 	}
 
@@ -218,10 +238,12 @@ public class RedditWebReaderFragment extends ContentFragment {
 	public void onResume() {
 		super.onResume();
 		webView.onResume();
+		scheduleTranslationScan(0L);
 	}
 
 	@Override
 	public void onPause() {
+		handler.removeCallbacks(translationRescanRunnable);
 		CookieManager.getInstance().flush();
 		webView.onPause();
 		super.onPause();
@@ -233,10 +255,16 @@ public class RedditWebReaderFragment extends ContentFragment {
 		if (webView != null) {
 			webView.saveState(outState);
 		}
+		outState.putString(STATE_CLEAR_HISTORY_URL, clearHistoryUrl);
+		outState.putBoolean(STATE_TRANSLATION_ENABLED, translationEnabled);
 	}
 
 	@Override
 	public void onDestroyView() {
+		handler.removeCallbacks(translationRescanRunnable);
+		pageLoadGeneration++;
+		translationRequestPending = false;
+		translationRequestGeneration = -1;
 		((FragmentHandler) requireActivity()).setNavigationAreaLocked(navigationDrawerLocker, false);
 		if (webView != null) {
 			webView.stopLoading();
@@ -258,6 +286,9 @@ public class RedditWebReaderFragment extends ContentFragment {
 		menu.add(0, R.id.menu_reload, 0, R.string.reload)
 				.setIcon(((FragmentHandler) requireActivity()).getActionBarIcon(R.attr.iconActionRefresh))
 				.setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM);
+		menu.add(0, R.id.menu_translate, 0, R.string.translate_posts)
+				.setIcon(((FragmentHandler) requireActivity()).getActionBarIcon(R.attr.iconActionTranslate))
+				.setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM);
 		if (authorizationMode) {
 			finishAuthorizationMenuItem = menu.add(R.string.reddit_sign_in_done);
 			finishAuthorizationMenuItem.setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
@@ -265,6 +296,19 @@ public class RedditWebReaderFragment extends ContentFragment {
 		menu.add(0, R.id.menu_open_reddit_link, 0, R.string.open_reddit_link);
 		menu.add(0, R.id.menu_copy_link, 0, R.string.copy_link);
 		menu.add(0, R.id.menu_share_link, 0, R.string.share_link);
+	}
+
+	@Override
+	public void onPrepareOptionsMenu(Menu menu, boolean primary) {
+		MenuItem translate = menu.findItem(R.id.menu_translate);
+		boolean available = !authorizationMode && TranslationController.isEnabledForDirection(
+				TranslationModel.Direction.EN_RU);
+		translate.setVisible(available);
+		if (available) {
+			translate.setTitle(translationEnabled ? R.string.show_original_posts : R.string.translate_posts);
+		} else if (translationEnabled) {
+			setTranslationEnabled(false);
+		}
 	}
 
 	@Override
@@ -288,6 +332,19 @@ public class RedditWebReaderFragment extends ContentFragment {
 			}
 			case R.id.menu_reload: {
 				webView.reload();
+				return true;
+			}
+			case R.id.menu_translate: {
+				if (!translationEnabled && !TranslationController.isReadyForDirection(
+						TranslationModel.Direction.EN_RU)) {
+					ClickableToast.show(R.string.translation_package_unavailable);
+					return true;
+				}
+				setTranslationEnabled(!translationEnabled);
+				if (translationEnabled) {
+					ClickableToast.show(R.string.translation_initializing);
+				}
+				invalidateOptionsMenu();
 				return true;
 			}
 			case R.id.menu_copy_link: {
@@ -335,13 +392,29 @@ public class RedditWebReaderFragment extends ContentFragment {
 
 	@Override
 	public boolean onHomePressed() {
-		return false;
+		return navigateBack();
 	}
 
 	@Override
 	public boolean onBackPressed() {
-		if (webView != null && webView.canGoBack()) {
+		return navigateBack();
+	}
+
+	private boolean navigateBack() {
+		if (webView == null) {
+			return false;
+		}
+		if (webView.canGoBack()) {
 			webView.goBack();
+			return true;
+		}
+		String parentUrl = getThreadParentUrl(webView.getUrl());
+		if (parentUrl != null) {
+			// Reddit may replace its browser history while navigating from a subreddit feed to a discussion.
+			// Restore the logical parent explicitly, then clear the synthetic thread -> parent history entry so
+			// the following Back returns to Slooop's Reddit sections instead of reopening the discussion.
+			clearHistoryUrl = parentUrl;
+			webView.loadUrl(parentUrl);
 			return true;
 		}
 		return false;
@@ -349,7 +422,7 @@ public class RedditWebReaderFragment extends ContentFragment {
 
 	@Override
 	public boolean canHandleBack() {
-		return webView != null && webView.canGoBack();
+		return webView != null && (webView.canGoBack() || getThreadParentUrl(webView.getUrl()) != null);
 	}
 
 	@Override
@@ -400,11 +473,17 @@ public class RedditWebReaderFragment extends ContentFragment {
 		return host.equals("reddit.com") || host.endsWith(".reddit.com");
 	}
 
+	private static String getThreadParentUrl(String url) {
+		RedditPageStorage.Entry entry = RedditPageStorage.parse(url, null);
+		return entry != null && entry.type == RedditPageStorage.Type.THREAD
+				? "https://www.reddit.com/r/" + entry.subreddit + "/" : null;
+	}
+
 	private static String buildAppPromoSuppressionScript() {
 		// Reddit can inject this dialog long after the initial page load. Inspect only mutation targets and newly
 		// attached shadow roots synchronously, before the browser paints them; rescanning the entire feed would stall it.
 		return "(function(){if(window.__slooopRedditPromoGuard)return;" +
-				"var activeMenuHost=null,activeMenuOwners=[];" +
+				"var activeMenuHost=null,readerSuspended=false,syncScheduled=false;" +
 				"var promoKnown='shreddit-app-selector,shreddit-app-selector-banner,shreddit-app-selector-modal," +
 				"xpromo-app-selector,shreddit-async-loader[bundlename*=\"app-selector\"]," +
 				"[data-testid*=\"app-selector\"],[data-testid*=\"app-promo\"],.XPromoPopupRpl.m-active," +
@@ -423,20 +502,22 @@ public class RedditWebReaderFragment extends ContentFragment {
 				"for(var i=0;i<found.length;i++)out.push(found[i]);return out;}" +
 				"function menuHost(n){for(var i=0;n&&i<32;i++,n=parent(n))if(n.matches&&" +
 				"n.matches('shreddit-overflow-menu'))return n;return null;}" +
-				"function clearMenuLayer(){if(activeMenuHost)activeMenuHost.classList.remove(" +
-				"'slooop-reddit-menu-open');for(var i=0;i<activeMenuOwners.length;i++)" +
-				"activeMenuOwners[i].classList.remove('slooop-reddit-menu-owner');" +
-				"activeMenuHost=null;activeMenuOwners=[];}" +
-				"function setMenuLayer(host){if(!host)return;if(activeMenuHost!==host)clearMenuLayer();" +
-				"activeMenuHost=host;host.classList.add('slooop-reddit-menu-open');" +
-				"for(var n=host;n;n=parent(n))if(n.matches&&n.matches('shreddit-comment,shreddit-post')){" +
-				"n.classList.add('slooop-reddit-menu-owner');activeMenuOwners.push(n);}}" +
-				"function syncMenuLayer(){if(!activeMenuHost)return;var rs=[];roots(activeMenuHost,rs),visible=false;" +
-				"for(var x=0;x<rs.length&&!visible;x++){var layers=query(rs[x]," +
-				"'[role=dialog],[role=menu],faceplate-bottom-sheet');for(var j=0;j<layers.length;j++){" +
-				"var r=layers[j].getBoundingClientRect(),s=getComputedStyle(layers[j]);if(s.display!=='none'&&" +
-				"s.visibility!=='hidden'&&r.width>0&&r.height>0&&r.bottom>0&&r.top<innerHeight){visible=true;break;}}}" +
-				"if(!visible)clearMenuLayer();}" +
+				"function suspendReader(){if(!readerSuspended&&document.documentElement.classList.contains(" +
+				"'slooop-reddit-reader')){document.documentElement.classList.remove('slooop-reddit-reader');" +
+				"readerSuspended=true;}}" +
+				"function restoreReader(){if(readerSuspended){document.documentElement.classList.add(" +
+				"'slooop-reddit-reader');readerSuspended=false;}}" +
+				"function isVisibleMenuLayer(layer){var r=layer.getBoundingClientRect(),s=getComputedStyle(layer);" +
+				"return s.display!=='none'&&s.visibility!=='hidden'&&r.width>0&&r.height>0&&" +
+				"r.bottom>0&&r.top<innerHeight;}" +
+				"function setMenuActive(host){if(!host)return;activeMenuHost=host;suspendReader();}" +
+				"function syncMenuState(clearIfMissing){if(!activeMenuHost)return;var visible=false,rs=[];" +
+				"roots(activeMenuHost,rs);for(var x=0;x<rs.length&&!visible;x++){var layers=query(rs[x]," +
+				"'dialog,[role=dialog],[role=menu],rpl-dialog,rpl-dialog-sheet,faceplate-bottom-sheet');" +
+				"for(var j=0;j<layers.length;j++)if(isVisibleMenuLayer(layers[j])){visible=true;break;}}" +
+				"if(!visible&&clearIfMissing){activeMenuHost=null;restoreReader();}}" +
+				"function scheduleMenuSync(){if(syncScheduled)return;syncScheduled=true;setTimeout(function(){" +
+				"syncScheduled=false;syncMenuState(true);},0);}" +
 				"function promoText(t){t=(t||'').toLowerCase();return (t.indexOf('reddit')>=0||" +
 				"t.indexOf('прилож')>=0)&&/(open|download|get|install|откры|скач|загруз|установ)/.test(t);}" +
 				"function appAction(n){var h=((n.href||n.getAttribute&&n.getAttribute('href')||'')+'').toLowerCase();" +
@@ -470,8 +551,9 @@ public class RedditWebReaderFragment extends ContentFragment {
 				"n.style.setProperty('touch-action','auto','important');n.setAttribute('data-slooop-promo-unlocked','');" +
 				"if(s.position==='fixed'){n.style.removeProperty('position');n.style.removeProperty('top');}});" +
 				"if(top<0)setTimeout(function(){scrollTo(0,-top);},0);}" +
-				"function roots(root,out){out.push(root);if(root!==document)try{observer.observe(root,options);}" +
-				"catch(ignored){}var all=root.querySelectorAll?root.querySelectorAll('*'):[];" +
+				"function roots(root,out){out.push(root);if(root!==document){try{observer.observe(root,options);}" +
+				"catch(ignored){}}" +
+				"var all=root.querySelectorAll?root.querySelectorAll('*'):[];" +
 				"for(var i=0;i<all.length;i++)if(all[i].shadowRoot)roots(all[i].shadowRoot,out);}" +
 				"function scan(root){var rs=[];roots(root||document,rs),hidden=false,legitimateDialog=false;" +
 				"for(var x=0;x<rs.length;x++){" +
@@ -484,7 +566,7 @@ public class RedditWebReaderFragment extends ContentFragment {
 				"if(text.length<1600&&promoText(text))hidden=hide(dialog)||hidden;else{" +
 				"var rect=dialog.getBoundingClientRect(),display=getComputedStyle(dialog).display;" +
 				"if(display!=='none'&&rect.width>0&&rect.height>0){legitimateDialog=true;" +
-				"var host=menuHost(dialog);if(host)setMenuLayer(host);}}}" +
+				"var host=menuHost(dialog);if(host)setMenuActive(host);}}}" +
 				"var actions=query(rs[x],'a,button,[role=button],faceplate-tracker,[tabindex]');" +
 				"for(var a=0;a<actions.length;a++)if(appAction(actions[a]))" +
 				"hidden=hide(dialogFor(actions[a]))||hidden;}" +
@@ -492,12 +574,14 @@ public class RedditWebReaderFragment extends ContentFragment {
 				"setTimeout(unlock,400);}return hidden;}" +
 				"document.addEventListener('pointerdown',function(event){var path=event.composedPath?" +
 				"event.composedPath():[],host=null;for(var i=0;i<path.length;i++){var n=path[i];" +
-				"host=menuHost(n);if(host)break;}if(host){setMenuLayer(host);clearUnlock();}" +
-				"setTimeout(syncMenuLayer,120);setTimeout(syncMenuLayer,700);},true);" +
+				"host=menuHost(n);if(host)break;}if(host){setMenuActive(host);clearUnlock();}" +
+				"setTimeout(function(){syncMenuState(false);},120);" +
+				"setTimeout(function(){syncMenuState(true);},700);},true);" +
 				"var options={childList:true,subtree:true},observer=new MutationObserver(function(changes){" +
-				"var targets=[];for(var i=0;i<changes.length;i++)if(changes[i].addedNodes.length&&" +
-				"targets.indexOf(changes[i].target)<0)targets.push(changes[i].target);" +
-				"for(var i=0;i<targets.length;i++)scan(targets[i]);});" +
+				"var targets=[];" +
+				"for(var i=0;i<changes.length;i++)if(targets.indexOf(changes[i].target)<0)" +
+				"targets.push(changes[i].target);for(var i=0;i<targets.length;i++)scan(targets[i]);" +
+				"if(activeMenuHost)scheduleMenuSync();});" +
 				"observer.observe(document.documentElement,options);window.__slooopRedditPromoGuard=observer;" +
 				"scan(document);})();";
 	}
@@ -563,10 +647,6 @@ public class RedditWebReaderFragment extends ContentFragment {
 				"html.slooop-reddit-reader shreddit-post [slot=\"text-body\"] p{color:" +
 				color(textPrimary) + "!important;line-height:1.45!important}" +
 				"html.slooop-reddit-reader shreddit-comment{color:" + color(textPrimary) + "!important}" +
-				"html.slooop-reddit-reader :is(shreddit-comment,shreddit-post).slooop-reddit-menu-owner{" +
-				"contain:none!important;position:relative!important;z-index:2147483000!important}" +
-				"html.slooop-reddit-reader shreddit-overflow-menu.slooop-reddit-menu-open{" +
-				"position:relative!important;z-index:2147483001!important}" +
 				"html.slooop-reddit-reader shreddit-comment>details{box-sizing:border-box!important;background:" +
 				color(theme.card) + "!important;color:" + color(textPrimary) +
 				"!important;border-inline-start:2px solid " + colorWithAlpha(theme.accent, 0x78) +
@@ -611,6 +691,124 @@ public class RedditWebReaderFragment extends ContentFragment {
 				Color.blue(color), alpha / 255f);
 	}
 
+	private void setTranslationEnabled(boolean enabled) {
+		translationEnabled = enabled;
+		handler.removeCallbacks(translationRescanRunnable);
+		if (webView == null) {
+			return;
+		}
+		String property = enabled ? "e.__slooopTranslatedHtml" : "e.__slooopOriginalHtml";
+		String script = "(function(){window.__slooopRedditTranslationEnabled=" + enabled + ";" +
+				"var n=document.querySelectorAll('[data-slooop-translation-id]');" +
+				"for(var i=0;i<n.length;i++){var e=n[i],h=" + property + ";" +
+				(enabled ? "e.__slooopTranslationFailed=false;" : "") +
+				"if(h!=null)e.innerHTML=h;}})();";
+		webView.evaluateJavascript(script, ignored -> {
+			if (translationEnabled) {
+				scheduleTranslationScan(0L);
+			}
+		});
+	}
+
+	private void scheduleTranslationScan(long delay) {
+		handler.removeCallbacks(translationRescanRunnable);
+		if (translationEnabled && !authorizationMode && webView != null && isResumed()) {
+			handler.postDelayed(translationRescanRunnable, delay);
+		}
+	}
+
+	private void requestRedditTranslation() {
+		WebView view = webView;
+		if (!translationEnabled || translationRequestPending || view == null || !isResumed() ||
+				!TranslationController.isReadyForDirection(TranslationModel.Direction.EN_RU)) {
+			return;
+		}
+		int generation = pageLoadGeneration;
+		String script = "(function(){window.__slooopRedditTranslationEnabled=true;" +
+				"var q='shreddit-post [slot=title],shreddit-post [slot=text-body]," +
+				"shreddit-comment [slot=comment]',n=document.querySelectorAll(q);" +
+				"window.__slooopRedditTranslationCounter=window.__slooopRedditTranslationCounter||0;" +
+				"for(var i=0;i<n.length;i++){var e=n[i];if(e.__slooopTranslatedHtml!=null){" +
+				"e.innerHTML=e.__slooopTranslatedHtml;continue;}if(e.__slooopTranslationPending||" +
+				"e.__slooopTranslationFailed)continue;" +
+				"var text=(e.innerText||e.textContent||'').trim();if(!text)continue;" +
+				"if(e.__slooopOriginalHtml==null)e.__slooopOriginalHtml=e.innerHTML;" +
+				"var id=e.getAttribute('data-slooop-translation-id');if(!id){id='t'+" +
+				"(++window.__slooopRedditTranslationCounter);e.setAttribute('data-slooop-translation-id',id);}" +
+				"e.__slooopTranslationPending=true;return JSON.stringify({id:id,html:e.__slooopOriginalHtml});}" +
+				"return null;})()";
+		translationRequestPending = true;
+		translationRequestGeneration = generation;
+		view.evaluateJavascript(script, value -> {
+			if (!isCurrentPageLoad(view, generation) || !translationEnabled) {
+				finishTranslationRequest(generation);
+				return;
+			}
+			JSONObject item = decodeJavascriptObject(value);
+			if (item == null) {
+				finishTranslationRequest(generation);
+				scheduleTranslationScan(TRANSLATION_RESCAN_DELAY);
+				return;
+			}
+			String id = item.optString("id", null);
+			String html = item.optString("html", null);
+			if (StringUtils.isEmpty(id) || html == null) {
+				finishTranslationRequest(generation);
+				scheduleTranslationScan(TRANSLATION_RESCAN_DELAY);
+				return;
+			}
+			TranslationController.getInstance().requestTranslation(TranslationModel.Direction.EN_RU, "", html,
+					(translatedSubject, translatedHtml, error) -> applyRedditTranslation(view, generation,
+							id, translatedHtml));
+		});
+	}
+
+	private void applyRedditTranslation(WebView view, int generation, String id, String translatedHtml) {
+		if (!isCurrentPageLoad(view, generation)) {
+			finishTranslationRequest(generation);
+			return;
+		}
+		String selector = "[data-slooop-translation-id=" + JSONObject.quote(id) + "]";
+		String script;
+		if (translatedHtml != null) {
+			script = "(function(){var e=document.querySelector(" + JSONObject.quote(selector) + ");" +
+					"if(!e)return;e.__slooopTranslationPending=false;e.__slooopTranslatedHtml=" +
+					JSONObject.quote(translatedHtml) + ";if(window.__slooopRedditTranslationEnabled)" +
+					"e.innerHTML=e.__slooopTranslatedHtml;})();";
+		} else {
+			script = "(function(){var e=document.querySelector(" + JSONObject.quote(selector) + ");" +
+					"if(e){e.__slooopTranslationPending=false;e.__slooopTranslationFailed=true;}})();";
+		}
+		view.evaluateJavascript(script, ignored -> {
+			finishTranslationRequest(generation);
+			if (translatedHtml == null) {
+				if (translationEnabled && translationFailureGeneration != generation) {
+					translationFailureGeneration = generation;
+					ClickableToast.show(R.string.translation_failed);
+				}
+				scheduleTranslationScan(TRANSLATION_RESCAN_DELAY);
+			} else {
+				scheduleTranslationScan(0L);
+			}
+		});
+	}
+
+	private void finishTranslationRequest(int generation) {
+		if (translationRequestGeneration == generation) {
+			translationRequestPending = false;
+			translationRequestGeneration = -1;
+		}
+	}
+
+	private static JSONObject decodeJavascriptObject(String value) {
+		try {
+			Object decoded = new JSONTokener(value).nextValue();
+			return decoded instanceof String ? new JSONObject((String) decoded) : null;
+		} catch (JSONException | RuntimeException e) {
+			return null;
+		}
+	}
+
 	private boolean isCurrentPageLoad(WebView view, int generation) {
 		return webView == view && pageLoadGeneration == generation;
 	}
@@ -635,9 +833,13 @@ public class RedditWebReaderFragment extends ContentFragment {
 				return;
 			}
 			if (readerStyleScript != null) {
-				view.evaluateJavascript(readerStyleScript, ignored -> revealPage(view, generation));
+				view.evaluateJavascript(readerStyleScript, ignored -> {
+					revealPage(view, generation);
+					scheduleTranslationScan(0L);
+				});
 			} else {
 				revealPage(view, generation);
+				scheduleTranslationScan(0L);
 			}
 		});
 	}
@@ -665,6 +867,10 @@ public class RedditWebReaderFragment extends ContentFragment {
 		@Override
 		public void onPageStarted(WebView view, String url, Bitmap favicon) {
 			pageLoadGeneration++;
+			translationRequestPending = false;
+			translationRequestGeneration = -1;
+			translationFailureGeneration = -1;
+			handler.removeCallbacks(translationRescanRunnable);
 			view.setVisibility(View.INVISIBLE);
 		}
 
@@ -678,6 +884,11 @@ public class RedditWebReaderFragment extends ContentFragment {
 
 		@Override
 		public void onPageFinished(WebView view, String url) {
+			String clearHistoryUrl = RedditWebReaderFragment.this.clearHistoryUrl;
+			if (clearHistoryUrl != null && clearHistoryUrl.equals(RedditPageStorage.normalizeUrl(url))) {
+				view.clearHistory();
+				RedditWebReaderFragment.this.clearHistoryUrl = null;
+			}
 			String currentUrl = view.getUrl();
 			if (view.getVisibility() != View.VISIBLE && url != null && url.equals(currentUrl)) {
 				applyPagePresentation(view, url, pageLoadGeneration);

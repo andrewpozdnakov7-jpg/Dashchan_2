@@ -135,9 +135,20 @@ public final class ReplyPushManager {
 		if (message == null || isHandled(message.eventId)) {
 			return false;
 		}
-		boolean added = MyPostsStorage.getInstance().addReply(message.chanName, message.boardName,
+		MyPostsStorage storage = MyPostsStorage.getInstance();
+		MyPostsStorage.AddReplyResult result = storage.addReply(message.chanName, message.boardName,
 				message.threadNumber, message.trackedPostNumber, message.replyPostNumber,
 				message.comment, message.timestamp);
+		if (result == MyPostsStorage.AddReplyResult.NOT_TRACKED) {
+			// Keep the event retryable when the local and server watch lists are temporarily out of sync.
+			return false;
+		}
+		boolean added = result == MyPostsStorage.AddReplyResult.ADDED;
+		if (added) {
+			// Firebase may finish this service callback with no other application component alive.
+			// Persist the reply before acknowledging the event or posting a durable notification.
+			storage.await(false);
+		}
 		markHandled(message.eventId);
 		if (added) {
 			markPushNotified(message.chanName, message.boardName, message.threadNumber,

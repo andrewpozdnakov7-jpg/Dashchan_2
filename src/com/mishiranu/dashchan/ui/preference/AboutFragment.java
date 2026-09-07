@@ -1,6 +1,7 @@
 package com.mishiranu.dashchan.ui.preference;
 
 import android.app.AlertDialog;
+import android.content.Context;
 import android.content.DialogInterface;
 import android.net.Uri;
 import android.os.Bundle;
@@ -8,6 +9,7 @@ import android.text.format.DateFormat;
 import android.view.View;
 import androidx.annotation.NonNull;
 import androidx.fragment.app.DialogFragment;
+import androidx.lifecycle.ViewModelProvider;
 import chan.util.CommonUtils;
 import chan.util.DataFile;
 import chan.util.StringUtils;
@@ -15,6 +17,8 @@ import com.mishiranu.dashchan.BuildConfig;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.BackupManager;
 import com.mishiranu.dashchan.content.Preferences;
+import com.mishiranu.dashchan.content.async.ExecutorTask;
+import com.mishiranu.dashchan.content.async.TaskViewModel;
 import com.mishiranu.dashchan.content.service.DownloadService;
 import com.mishiranu.dashchan.ui.FragmentHandler;
 import com.mishiranu.dashchan.ui.preference.core.CheckPreference;
@@ -22,9 +26,13 @@ import com.mishiranu.dashchan.ui.preference.core.ListPreference;
 import com.mishiranu.dashchan.ui.preference.core.Preference;
 import com.mishiranu.dashchan.ui.preference.core.PreferenceFragment;
 import com.mishiranu.dashchan.util.NavigationUtils;
+import com.mishiranu.dashchan.util.ConcurrentUtils;
+import com.mishiranu.dashchan.util.IOUtils;
 import com.mishiranu.dashchan.util.SharedPreferences;
 import com.mishiranu.dashchan.util.WebViewUtils;
 import com.mishiranu.dashchan.widget.ClickableToast;
+import com.mishiranu.dashchan.widget.ProgressDialog;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -175,10 +183,8 @@ public class AboutFragment extends PreferenceFragment implements FragmentHandler
 		@Override
 		public void onClick(DialogInterface dialog, int which) {
 			if (which == 0) {
-				DownloadService.Binder binder = ((FragmentHandler) requireActivity()).getDownloadBinder();
-				if (binder != null) {
-					BackupManager.makeBackup(binder, requireContext());
-				}
+				new BackupTaskDialog(BackupTaskDialog.Mode.CREATE, null, null)
+						.show(getParentFragmentManager(), BackupTaskDialog.class.getName());
 			} else if (which == 1) {
 				((AboutFragment) getParentFragment()).restoreBackup();
 			}
@@ -213,14 +219,8 @@ public class AboutFragment extends PreferenceFragment implements FragmentHandler
 					.setTitle(R.string.restore_data)
 					.setItems(items, (d, which) -> {
 						String path = requireArguments().getStringArrayList(EXTRA_FILES).get(which);
-						DataFile file = DataFile.obtain(DataFile.Target.DOWNLOADS, path);
-						List<BackupManager.Entry> entries = BackupManager.readBackupEntries(file);
-						if (entries.isEmpty()) {
-							ClickableToast.show(R.string.invalid_data_format);
-						} else {
-							RestoreEntriesDialog dialog = new RestoreEntriesDialog(file, entries);
-							dialog.show(getParentFragmentManager(), RestoreEntriesDialog.class.getName());
-						}
+						new BackupTaskDialog(BackupTaskDialog.Mode.READ, path, null)
+								.show(getParentFragmentManager(), BackupTaskDialog.class.getName());
 					})
 					.setNegativeButton(android.R.string.cancel, null)
 					.create();
@@ -294,13 +294,176 @@ public class AboutFragment extends PreferenceFragment implements FragmentHandler
 			}
 			if (!checked.isEmpty()) {
 				String path = requireArguments().getString(EXTRA_FILE);
-				DataFile file = DataFile.obtain(DataFile.Target.DOWNLOADS, path);
-				if (BackupManager.loadBackup(file, checked)) {
-					NavigationUtils.restartApplication(requireContext());
-				} else {
-					ClickableToast.show(R.string.unknown_error);
+				new BackupTaskDialog(BackupTaskDialog.Mode.RESTORE, path, checked)
+						.show(getParentFragmentManager(), BackupTaskDialog.class.getName());
+			}
+		}
+	}
+
+	public static class BackupTaskDialog extends DialogFragment {
+		private static final String EXTRA_MODE = "mode";
+		private static final String EXTRA_FILE = "file";
+		private static final String EXTRA_ENTRIES = "entries";
+
+		public enum Mode {CREATE, READ, RESTORE}
+
+		public BackupTaskDialog() {}
+
+		public BackupTaskDialog(Mode mode, String path, Iterable<BackupManager.Entry> entries) {
+			Bundle args = new Bundle();
+			args.putString(EXTRA_MODE, mode.name());
+			args.putString(EXTRA_FILE, path);
+			if (entries != null) {
+				ArrayList<String> names = new ArrayList<>();
+				for (BackupManager.Entry entry : entries) names.add(entry.name());
+				args.putStringArrayList(EXTRA_ENTRIES, names);
+			}
+			setArguments(args);
+		}
+
+		@NonNull
+		@Override
+		public ProgressDialog onCreateDialog(Bundle savedInstanceState) {
+			ProgressDialog dialog = new ProgressDialog(requireContext(), null);
+			dialog.setMessage(getString(R.string.processing_data__ellipsis));
+			dialog.setButton(DialogInterface.BUTTON_NEGATIVE, getString(android.R.string.cancel),
+					(d, which) -> dismiss());
+			return dialog;
+		}
+
+		@Override
+		public void onCreate(Bundle savedInstanceState) {
+			super.onCreate(savedInstanceState);
+			Bundle args = requireArguments();
+			Mode mode = Mode.valueOf(args.getString(EXTRA_MODE));
+			String path = args.getString(EXTRA_FILE);
+			HashSet<BackupManager.Entry> entries = new HashSet<>();
+			ArrayList<String> names = args.getStringArrayList(EXTRA_ENTRIES);
+			if (names != null) {
+				for (String name : names) entries.add(BackupManager.Entry.valueOf(name));
+			}
+			BackupViewModel viewModel = new ViewModelProvider(this).get(BackupViewModel.class);
+			if (!viewModel.hasTaskOrValue()) {
+				BackupTask task = new BackupTask(viewModel, requireContext().getApplicationContext(),
+						mode, path, entries);
+				task.execute(ConcurrentUtils.PARALLEL_EXECUTOR);
+				viewModel.attach(task);
+			}
+			viewModel.observe(this, result -> {
+				dismissAllowingStateLoss();
+				switch (mode) {
+					case CREATE: {
+						DownloadService.Binder binder = ((FragmentHandler) requireActivity()).getDownloadBinder();
+						if (result.input != null && binder != null) {
+							BackupManager.saveBackup(binder, result.input);
+						} else {
+							IOUtils.close(result.input);
+							ClickableToast.show(R.string.no_access);
+						}
+						break;
+					}
+					case READ: {
+						if (result.entries == null || result.entries.isEmpty()) {
+							ClickableToast.show(R.string.invalid_data_format);
+						} else {
+							DataFile file = DataFile.obtain(DataFile.Target.DOWNLOADS, path);
+							new RestoreEntriesDialog(file, result.entries).show(getParentFragmentManager(),
+									RestoreEntriesDialog.class.getName());
+						}
+						break;
+					}
+					case RESTORE: {
+						if (result.success) {
+							NavigationUtils.restartApplication(requireContext());
+						} else {
+							ClickableToast.show(R.string.unknown_error);
+						}
+						break;
+					}
+				}
+				viewModel.markHandled();
+			});
+		}
+	}
+
+	private static class BackupResult {
+		public final InputStream input;
+		public final List<BackupManager.Entry> entries;
+		public final boolean success;
+
+		public BackupResult(InputStream input, List<BackupManager.Entry> entries, boolean success) {
+			this.input = input;
+			this.entries = entries;
+			this.success = success;
+		}
+	}
+
+	private static class BackupTask extends ExecutorTask<Void, BackupResult> {
+		private final BackupViewModel viewModel;
+		private final Context context;
+		private final BackupTaskDialog.Mode mode;
+		private final String path;
+		private final HashSet<BackupManager.Entry> entries;
+
+		public BackupTask(BackupViewModel viewModel, Context context, BackupTaskDialog.Mode mode,
+				String path, HashSet<BackupManager.Entry> entries) {
+			this.viewModel = viewModel;
+			this.context = context;
+			this.mode = mode;
+			this.path = path;
+			this.entries = entries;
+		}
+
+		@Override
+		protected BackupResult run() {
+			switch (mode) {
+				case CREATE: {
+					InputStream input = BackupManager.makeBackup(context);
+					return new BackupResult(input, null, input != null);
+				}
+				case READ: {
+					DataFile file = DataFile.obtain(DataFile.Target.DOWNLOADS, path);
+					return new BackupResult(null, BackupManager.readBackupEntries(file), false);
+				}
+				case RESTORE: {
+					DataFile file = DataFile.obtain(DataFile.Target.DOWNLOADS, path);
+					return new BackupResult(null, null, BackupManager.loadBackup(file, entries));
+				}
+				default: {
+					throw new IllegalStateException();
 				}
 			}
+		}
+
+		@Override
+		protected void onCancel(BackupResult result) {
+			if (result != null) IOUtils.close(result.input);
+		}
+
+		@Override
+		protected void onComplete(BackupResult result) {
+			viewModel.handleResult(result);
+		}
+	}
+
+	public static class BackupViewModel extends TaskViewModel<BackupTask, BackupResult> {
+		private BackupResult pending;
+
+		@Override
+		public void handleResult(BackupResult result) {
+			pending = result;
+			super.handleResult(result);
+		}
+
+		public void markHandled() {
+			pending = null;
+		}
+
+		@Override
+		protected void onCleared() {
+			super.onCleared();
+			if (pending != null) IOUtils.close(pending.input);
+			pending = null;
 		}
 	}
 }

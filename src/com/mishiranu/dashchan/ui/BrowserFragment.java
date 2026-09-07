@@ -50,9 +50,20 @@ public class BrowserFragment extends ContentFragment implements DownloadListener
 	public BrowserFragment() {}
 
 	public BrowserFragment(Uri uri) {
+		if (!isSupportedUri(uri)) {
+			throw new IllegalArgumentException("Unsupported browser URI");
+		}
 		Bundle args = new Bundle();
 		args.putParcelable(EXTRA_URI, uri);
 		setArguments(args);
+	}
+
+	public static boolean isSupportedUri(Uri uri) {
+		if (uri == null) {
+			return false;
+		}
+		String scheme = uri.getScheme();
+		return "http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme);
 	}
 
 	private WebView webView;
@@ -130,9 +141,15 @@ public class BrowserFragment extends ContentFragment implements DownloadListener
 		super.onActivityCreated(savedInstanceState);
 
 		((FragmentHandler) requireActivity()).setTitleSubtitle(getString(R.string.web_browser), null);
-		if (savedInstanceState == null) {
-			WebViewUtils.clearAll(webView);
-			webView.loadUrl(AndroidUtils.getParcelable(requireArguments(), EXTRA_URI, Uri.class).toString());
+		Bundle args = getArguments();
+		Uri uri = args != null ? AndroidUtils.getParcelable(args, EXTRA_URI, Uri.class) : null;
+		if (isSupportedUri(uri)) {
+			if (savedInstanceState == null) {
+				webView.loadUrl(uri.toString());
+			}
+		} else {
+			ClickableToast.show(R.string.unknown_address);
+			((FragmentHandler) requireActivity()).removeFragment();
 		}
 	}
 

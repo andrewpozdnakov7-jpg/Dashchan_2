@@ -12,13 +12,15 @@ import com.mishiranu.dashchan.content.storage.FavoritesStorage;
 import com.mishiranu.dashchan.content.storage.StatisticsStorage;
 import com.mishiranu.dashchan.content.storage.ThemesStorage;
 import com.mishiranu.dashchan.util.IOUtils;
-import com.mishiranu.dashchan.widget.ClickableToast;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.FilterOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InterruptedIOException;
 import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.text.DateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -38,6 +40,10 @@ public class BackupManager {
 
 	private static final String BACKUP_VERSION_0 = "dashchan:0";
 	private static final String BACKUP_VERSION_1 = "dashchan:1";
+	private static final int MAX_ARCHIVE_ENTRIES = 64;
+	private static final long MAX_ENTRY_SIZE = 512L * 1024L * 1024L;
+	private static final long MAX_TOTAL_SIZE = 1024L * 1024L * 1024L;
+	private static final long MAX_COMPRESSION_RATIO = 200L;
 
 	public static class BackupFile implements Comparable<BackupFile> {
 		public final DataFile file;
@@ -67,12 +73,108 @@ public class BackupManager {
 		}
 	}
 
+	private static class ArchiveLimits {
+		public long total;
+	}
+
+	private static void checkInterrupted() throws InterruptedIOException {
+		if (Thread.currentThread().isInterrupted()) throw new InterruptedIOException("Backup operation cancelled");
+	}
+
+	private static class LimitedEntryInputStream extends InputStream {
+		private final ZipInputStream input;
+		private final ArchiveLimits limits;
+		private long entry;
+
+		public LimitedEntryInputStream(ZipInputStream input, ArchiveLimits limits) {
+			this.input = input;
+			this.limits = limits;
+		}
+
+		private void checkAvailable() throws IOException {
+			checkInterrupted();
+			if (entry >= MAX_ENTRY_SIZE || limits.total >= MAX_TOTAL_SIZE) {
+				if (input.read() < 0) return;
+				throw new IOException("Backup archive is too large");
+			}
+		}
+
+		@Override
+		public int read() throws IOException {
+			checkAvailable();
+			if (entry >= MAX_ENTRY_SIZE || limits.total >= MAX_TOTAL_SIZE) return -1;
+			int value = input.read();
+			if (value >= 0) {
+				entry++;
+				limits.total++;
+			}
+			return value;
+		}
+
+		@Override
+		public int read(byte[] buffer, int offset, int length) throws IOException {
+			if (length == 0) return 0;
+			checkAvailable();
+			long remaining = Math.min(MAX_ENTRY_SIZE - entry, MAX_TOTAL_SIZE - limits.total);
+			if (remaining <= 0) return -1;
+			int count = input.read(buffer, offset, (int) Math.min(length, remaining));
+			if (count > 0) {
+				entry += count;
+				limits.total += count;
+			}
+			return count;
+		}
+
+		@Override
+		public void close() {
+			// The owning ZipInputStream advances and closes entries explicitly.
+		}
+
+		public long getEntrySize() {
+			return entry;
+		}
+	}
+
+	private static class InterruptibleOutputStream extends FilterOutputStream {
+		public InterruptibleOutputStream(OutputStream output) {
+			super(output);
+		}
+
+		@Override
+		public void write(int value) throws IOException {
+			checkInterrupted();
+			super.write(value);
+		}
+
+		@Override
+		public void write(byte[] buffer, int offset, int length) throws IOException {
+			checkInterrupted();
+			out.write(buffer, offset, length);
+		}
+	}
+
 	private interface Writer {
 		void write(OutputStream output) throws IOException;
 	}
 
 	private interface Reader {
 		void read(Restore restore) throws IOException;
+
+		default void cleanup() {}
+	}
+
+	private static void checkCompressionRatio(ZipEntry entry, LimitedEntryInputStream input)
+			throws IOException {
+		long compressed = entry.getCompressedSize();
+		if (compressed > 0L && input.getEntrySize() / compressed > MAX_COMPRESSION_RATIO) {
+			throw new IOException("Backup entry compression ratio is too high");
+		}
+	}
+
+	private static boolean hasExcessiveDeclaredCompressionRatio(ZipEntry entry) {
+		long size = entry.getSize();
+		long compressed = entry.getCompressedSize();
+		return size > 0L && compressed > 0L && size / compressed > MAX_COMPRESSION_RATIO;
 	}
 
 	private static class FileWriter implements Writer {
@@ -108,25 +210,43 @@ public class BackupManager {
 				}
 			}
 		}
+
+		@Override
+		public void cleanup() {
+			file.delete();
+		}
+	}
+
+	private static class DatabaseReader implements Reader {
+		@Override
+		public void read(Restore restore) throws IOException {
+			if (!restore.test) CommonDatabase.getInstance().readBackup(restore.input);
+		}
+
+		@Override
+		public void cleanup() {
+			CommonDatabase.getInstance().clearRestoreBackup();
+		}
 	}
 
 	public enum Entry {
 		VERSION(0, "version", Collections.emptyList(),
-				output -> output.write((BACKUP_VERSION_1 + "\n").getBytes()), restore -> {
+				output -> output.write((BACKUP_VERSION_1 + "\n").getBytes(StandardCharsets.UTF_8)), restore -> {
 			restore.version = null;
 			byte[] data = new byte[1024];
-			int count = restore.input.read(data);
+			int count = 0;
+			while (count < data.length) {
+				int read = restore.input.read(data, count, data.length - count);
+				if (read < 0) break;
+				count += read;
+			}
 			if (count <= 0 || count == data.length) {
 				throw new IOException("Invalid version file");
 			}
-			restore.version = new String(data).trim();
+			restore.version = new String(data, 0, count, StandardCharsets.UTF_8).trim();
 		}),
 		DATABASE(R.string.database, "common.db", Collections.singletonList(BACKUP_VERSION_1),
-				CommonDatabase.getInstance()::writeBackup, restore -> {
-			if (!restore.test) {
-				CommonDatabase.getInstance().readBackup(restore.input);
-			}
-		}),
+				CommonDatabase.getInstance()::writeBackup, new DatabaseReader()),
 		PREFERENCES_0(R.string.preferences, "com.mishiranu.dashchan_preferences.xml",
 				Preferences.getFileForRestore(), Collections.singletonList(BACKUP_VERSION_0)),
 		PREFERENCES_1(R.string.preferences, Preferences.getFilesForBackup(),
@@ -203,16 +323,17 @@ public class BackupManager {
 		return backupFiles;
 	}
 
-	public static void makeBackup(DownloadService.Binder binder, Context context) {
+	public static InputStream makeBackup(Context context) {
 		File backupFile = new File(context.getCacheDir(), "backup-" + UUID.randomUUID());
 		boolean success = false;
 		try (ZipOutputStream zip = new ZipOutputStream(new FileOutputStream(backupFile))) {
+			OutputStream output = new InterruptibleOutputStream(zip);
 			boolean hasEntries = false;
 			for (Entry entry : Entry.values()) {
 				if (entry.writer != null) {
 					zip.putNextEntry(new ZipEntry(entry.name));
 					try {
-						entry.writer.write(zip);
+						entry.writer.write(output);
 					} finally {
 						zip.closeEntry();
 					}
@@ -220,7 +341,7 @@ public class BackupManager {
 				}
 			}
 			success = hasEntries;
-		} catch (IOException e) {
+		} catch (IOException | RuntimeException e) {
 			e.printStackTrace();
 		} finally {
 			if (!success) {
@@ -237,34 +358,49 @@ public class BackupManager {
 		}
 		// FileInputStream holds a file descriptor
 		backupFile.delete();
-		if (success) {
-			binder.downloadStorage(input, null, null, null, null,
-					FILE_NAME_PREFIX + System.currentTimeMillis() + FILE_NAME_SUFFIX, false, false);
-		} else {
-			ClickableToast.show(R.string.no_access);
-		}
+		return success ? input : null;
+	}
+
+	public static void saveBackup(DownloadService.Binder binder, InputStream input) {
+		binder.downloadStorage(input, null, null, null, null,
+				FILE_NAME_PREFIX + System.currentTimeMillis() + FILE_NAME_SUFFIX, false, false);
 	}
 
 	public static List<Entry> readBackupEntries(DataFile file) {
 		String version = BACKUP_VERSION_0;
 		HashSet<Entry> entries = new HashSet<>();
+		HashSet<String> names = new HashSet<>();
+		ArchiveLimits limits = new ArchiveLimits();
 		try (ZipInputStream zip = new ZipInputStream(file.openInputStream())) {
 			ZipEntry zipEntry;
+			int count = 0;
 			while ((zipEntry = zip.getNextEntry()) != null) {
+				boolean consumed = false;
 				try {
+					if (++count > MAX_ARCHIVE_ENTRIES || !names.add(zipEntry.getName())
+							|| zipEntry.getSize() > MAX_ENTRY_SIZE
+							|| hasExcessiveDeclaredCompressionRatio(zipEntry)) {
+						throw new IOException("Invalid backup archive");
+					}
+					LimitedEntryInputStream input = new LimitedEntryInputStream(zip, limits);
 					Entry entry = Entry.find(zipEntry.getName());
 					if (entry != null) {
-						Restore restore = new Restore(true, zip);
+						Restore restore = new Restore(true, input);
 						restore.version = version;
 						entry.reader.read(restore);
 						version = restore.version;
 						entries.add(entry);
 					}
+					while (input.read() >= 0) {
+						// Validate and consume the complete uncompressed entry.
+					}
+					checkCompressionRatio(zipEntry, input);
+					consumed = true;
 				} finally {
-					zip.closeEntry();
+					if (consumed) zip.closeEntry();
 				}
 			}
-		} catch (IOException e) {
+		} catch (IOException | RuntimeException e) {
 			e.printStackTrace();
 			entries.clear();
 		}
@@ -280,23 +416,45 @@ public class BackupManager {
 	}
 
 	public static boolean loadBackup(DataFile file, Collection<Entry> entries) {
+		List<Entry> available = readBackupEntries(file);
+		if (entries.isEmpty() || !available.containsAll(entries)) return false;
 		boolean success = false;
+		HashSet<Entry> restored = new HashSet<>();
+		HashSet<String> names = new HashSet<>();
+		ArchiveLimits limits = new ArchiveLimits();
 		try (ZipInputStream zip = new ZipInputStream(file.openInputStream())) {
 			ZipEntry zipEntry;
+			int count = 0;
 			while ((zipEntry = zip.getNextEntry()) != null) {
+				boolean consumed = false;
 				try {
+					if (++count > MAX_ARCHIVE_ENTRIES || !names.add(zipEntry.getName())
+							|| zipEntry.getSize() > MAX_ENTRY_SIZE
+							|| hasExcessiveDeclaredCompressionRatio(zipEntry)) {
+						throw new IOException("Invalid backup archive");
+					}
+					LimitedEntryInputStream input = new LimitedEntryInputStream(zip, limits);
 					Entry entry = Entry.find(zipEntry.getName());
 					if (entry != null && entries.contains(entry)) {
-						entry.reader.read(new Restore(false, zip));
-						success = true;
+						entry.reader.read(new Restore(false, input));
+						restored.add(entry);
 					}
+					while (input.read() >= 0) {
+						// Validate and consume the complete uncompressed entry.
+					}
+					checkCompressionRatio(zipEntry, input);
+					consumed = true;
 				} finally {
-					zip.closeEntry();
+					if (consumed) zip.closeEntry();
 				}
 			}
-		} catch (IOException e) {
+			success = restored.containsAll(entries);
+		} catch (IOException | RuntimeException e) {
 			e.printStackTrace();
 			success = false;
+		}
+		if (!success) {
+			for (Entry entry : entries) entry.reader.cleanup();
 		}
 		return success;
 	}

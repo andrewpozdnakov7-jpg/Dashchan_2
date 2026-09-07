@@ -26,7 +26,7 @@ public final class TranslationController {
 	private static final long REQUEST_TIMEOUT_MS = 180000L;
 	private static final long IDLE_DISCONNECT_DELAY_MS = 120000L;
 
-	private interface ResultCallback {
+	public interface ResultCallback {
 		void onResult(String translatedSubject, String translatedHtml, String error);
 	}
 
@@ -73,9 +73,21 @@ public final class TranslationController {
 				TranslationModel.isForeignChan(getCurrentDirection(), chanName);
 	}
 
+	public static boolean isEnabledForDirection(TranslationModel.Direction direction) {
+		return BuildConfig.ENABLE_LOCAL_TRANSLATION && Preferences.isLocalTranslationEnabled() &&
+				getCurrentDirection() == direction;
+	}
+
 	public static boolean isReadyForChan(String chanName) {
 		TranslationModel.Direction direction = getCurrentDirection();
 		if (!isEnabledForChan(chanName)) {
+			return false;
+		}
+		return isReadyForDirection(direction);
+	}
+
+	public static boolean isReadyForDirection(TranslationModel.Direction direction) {
+		if (!isEnabledForDirection(direction)) {
 			return false;
 		}
 		TranslationEngine engine = getCurrentEngine();
@@ -167,6 +179,15 @@ public final class TranslationController {
 				onTranslated.run();
 			}
 		});
+	}
+
+	public void requestTranslation(TranslationModel.Direction direction, String subject, String html,
+			ResultCallback resultCallback) {
+		if (!isReadyForDirection(direction)) {
+			resultCallback.onResult(null, null, "Translation package is unavailable");
+			return;
+		}
+		translate(getCurrentEngine(), direction, subject, html, resultCallback);
 	}
 
 	public void unload() {

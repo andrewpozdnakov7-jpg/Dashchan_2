@@ -121,6 +121,13 @@
 
 		</activity>
 
+		<activity
+			android:name=".ui.PrivateBrowserActivity"
+			android:enableOnBackInvokedCallback="true"
+			android:exported="false"
+			android:launchMode="singleTask"
+			android:process=":private_browser" />
+
 		<activity-alias
 			android:name=".launcher.Dashchan2Alias"
 			android:targetActivity=".ui.MainActivity"

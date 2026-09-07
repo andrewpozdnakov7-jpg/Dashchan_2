@@ -293,17 +293,7 @@ public class PikabuChanPerformer extends ChanPerformer {
 			request.addHeader("Referer", PIKABU_REFERER);
 			HttpResponse response = perform(requestUri, request);
 			if (scramblerOffset >= 0) {
-				byte[] source;
-				try {
-					source = response.readBytes();
-				} finally {
-					response.cleanupAndDisconnect();
-				}
-				byte[] decoded = PikabuImageScrambler.decode(source, scramblerOffset);
-				if (decoded == null) {
-					throw new InvalidResponseException();
-				}
-				return new ReadContentResult(new HttpResponse(decoded));
+				return new ReadContentResult(PikabuImageScrambler.decode(response, scramblerOffset));
 			}
 			return new ReadContentResult(response);
 		}

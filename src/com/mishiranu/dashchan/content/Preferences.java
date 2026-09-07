@@ -67,6 +67,10 @@ public class Preferences {
 				restoreFile.renameTo(newFile);
 			}
 			PREFERENCES = new SharedPreferences(application, PREFERENCES_NAME);
+		} else if (application.isPrivateBrowserProcess()) {
+			// The private browser has no settings controls. It only needs a fresh snapshot for locale, theme,
+			// certificate verification, and other presentation choices during its short-lived process.
+			PREFERENCES = new SharedPreferences(application, PREFERENCES_NAME);
 		} else {
 			PREFERENCES = null;
 		}
@@ -1253,6 +1257,13 @@ public class Preferences {
 
 	public static boolean isUseInternalBrowser() {
 		return PREFERENCES.getBoolean(KEY_INTERNAL_BROWSER, DEFAULT_INTERNAL_BROWSER);
+	}
+
+	public static final String KEY_PRIVATE_BROWSER = "private_browser";
+	public static final boolean DEFAULT_PRIVATE_BROWSER = false;
+
+	public static boolean isUsePrivateBrowser() {
+		return PREFERENCES.getBoolean(KEY_PRIVATE_BROWSER, DEFAULT_PRIVATE_BROWSER);
 	}
 
 	public static final String KEY_LAST_UPDATE_CHECK = "last_update_check";

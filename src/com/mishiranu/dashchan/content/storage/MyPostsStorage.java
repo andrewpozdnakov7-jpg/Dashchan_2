@@ -17,6 +17,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -166,6 +167,8 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 			threadDeleted = trackedPost.threadDeleted;
 		}
 	}
+
+	public enum AddReplyResult {ADDED, ALREADY_EXISTS, NOT_TRACKED}
 
 	private final HashMap<String, TrackedPost> postsMap = new HashMap<>();
 	private final ArrayList<TrackedPost> posts = new ArrayList<>();
@@ -415,7 +418,7 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 	}
 
 	private List<ThreadKey> getThreadKeys(boolean includeDeleted) {
-		HashSet<ThreadKey> keys = new HashSet<>();
+		LinkedHashSet<ThreadKey> keys = new LinkedHashSet<>();
 		for (TrackedPost post : posts) {
 			if (post.trackingActive && (includeDeleted || !post.threadDeleted)) {
 				keys.add(post.getThreadKey());
@@ -468,7 +471,7 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 		}
 	}
 
-	public synchronized boolean addReply(String chanName, String boardName, String threadNumber,
+	public synchronized AddReplyResult addReply(String chanName, String boardName, String threadNumber,
 			PostNumber trackedPostNumber, PostNumber replyPostNumber, String comment, long time) {
 		Objects.requireNonNull(chanName);
 		Objects.requireNonNull(threadNumber);
@@ -476,11 +479,11 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 		Objects.requireNonNull(replyPostNumber);
 		TrackedPost trackedPost = postsMap.get(makeKey(chanName, boardName, threadNumber, trackedPostNumber));
 		if (trackedPost == null || !trackedPost.trackingActive) {
-			return false;
+			return AddReplyResult.NOT_TRACKED;
 		}
 		for (Reply reply : trackedPost.replies) {
 			if (reply.postNumber.equals(replyPostNumber)) {
-				return false;
+				return AddReplyResult.ALREADY_EXISTS;
 			}
 		}
 		trackedPost.replies.add(new Reply(replyPostNumber, StringUtils.nullIfEmpty(comment),
@@ -488,7 +491,7 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 		Collections.sort(trackedPost.replies, Comparator.comparing(reply -> reply.postNumber));
 		serialize();
 		notifyChanged();
-		return true;
+		return AddReplyResult.ADDED;
 	}
 
 	public synchronized void remove(String chanName, String boardName, String threadNumber,
