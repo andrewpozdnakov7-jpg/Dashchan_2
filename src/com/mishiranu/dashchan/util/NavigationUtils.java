@@ -32,6 +32,7 @@ import com.mishiranu.dashchan.content.RestartActivity;
 import com.mishiranu.dashchan.content.service.AudioPlayerService;
 import com.mishiranu.dashchan.media.VideoPlayer;
 import com.mishiranu.dashchan.ui.MainActivity;
+import com.mishiranu.dashchan.ui.PrivateBrowserActivity;
 import com.mishiranu.dashchan.widget.ThemeEngine;
 import com.mishiranu.dashchan.widget.ClickableToast;
 import java.io.File;
@@ -92,10 +93,18 @@ public class NavigationUtils {
 			internalBrowser = names.size() == 0;
 		}
 		if (internalBrowser) {
-			intent = new Intent(context, MainActivity.class).setAction(C.ACTION_BROWSER).setData(uri);
+			if (Preferences.isUsePrivateBrowser()) {
+				intent = PrivateBrowserActivity.createIntent(context, uri);
+			} else if (openCustomTab(context, uri)) {
+				return;
+			} else {
+				// Keep an in-app fallback for devices without a Custom Tabs provider.
+				intent = new Intent(context, MainActivity.class).setAction(C.ACTION_BROWSER).setData(uri);
+			}
 		} else {
 			boolean attachmentUri = chanName != null && Chan.get(chanName).locator.safe(false).isAttachmentUri(uri);
-			if (isWeb && !attachmentUri && openCustomTab(context, uri)) {
+			boolean allowCustomTab = browserType != BrowserType.AUTO || Preferences.isUseInternalBrowser();
+			if (isWeb && !attachmentUri && allowCustomTab && openCustomTab(context, uri)) {
 				return;
 			}
 			intent = new Intent(Intent.ACTION_VIEW, uri);

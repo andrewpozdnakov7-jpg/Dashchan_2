@@ -21,20 +21,24 @@ import com.mishiranu.dashchan.widget.PaddedRecyclerView;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
 public class MyPostsPage extends ListPage implements MyPostsAdapter.Callback, ReadMyPostsTask.Callback {
 	private static final int REPLY_HISTORY_LIMIT = 50;
 	private static final int REPLY_HISTORY_COMMENT_LIMIT = 100;
+	private static final int MAX_CONCURRENT_CHECKS = 3;
 
 	private final ArrayDeque<MyPostsStorage.ThreadKey> checkQueue = new ArrayDeque<>();
+	private final HashMap<MyPostsStorage.ThreadKey, ReadMyPostsTask> tasks = new HashMap<>();
+	private final HashSet<String> activeChanNames = new HashSet<>();
 	private final Runnable storageObserver = () -> {
 		updateList();
 		updateOptionsMenu();
 	};
 
-	private ReadMyPostsTask task;
 	private int checkErrors;
 
 	private MyPostsAdapter getAdapter() {
@@ -51,17 +55,28 @@ public class MyPostsPage extends ListPage implements MyPostsAdapter.Callback, Re
 				adapter::configureDivider));
 		recyclerView.setItemAnimator(null);
 		MyPostsStorage.getInstance().getObservable().register(storageObserver);
+	}
+
+	@Override
+	protected void onResume() {
+		// onCreate runs while ListPage is INITIALIZED, so isRunning() is false there.
+		// Populate the page after the lifecycle reaches STARTED/RESUMED.
 		updateList();
 	}
 
 	@Override
 	protected void onDestroy() {
 		MyPostsStorage.getInstance().getObservable().unregister(storageObserver);
-		if (task != null) {
+		for (ReadMyPostsTask task : tasks.values()) {
 			task.cancel();
-			task = null;
 		}
+		tasks.clear();
+		activeChanNames.clear();
 		checkQueue.clear();
+	}
+
+	private boolean isChecking() {
+		return !tasks.isEmpty() || !checkQueue.isEmpty();
 	}
 
 	@Override
@@ -77,9 +92,14 @@ public class MyPostsPage extends ListPage implements MyPostsAdapter.Callback, Re
 		List<MyPostsStorage.ReplyItem> replies = storage.getUnreadReplies();
 		getAdapter().setReplies(replies);
 		if (replies.isEmpty()) {
-			int message = !Preferences.isTrackMyPostsEnabled() ? R.string.reply_tracking_is_disabled
-					: storage.getPosts().isEmpty() ? R.string.tracked_replies_is_empty : R.string.no_unread_replies;
-			switchError(message);
+			if (isChecking()) {
+				switchProgress();
+			} else {
+				int message = !Preferences.isTrackMyPostsEnabled() ? R.string.reply_tracking_is_disabled
+						: storage.getPosts().isEmpty() ? R.string.tracked_replies_is_empty
+						: R.string.no_unread_replies;
+				switchError(message);
+			}
 		} else {
 			switchList();
 		}
@@ -120,7 +140,7 @@ public class MyPostsPage extends ListPage implements MyPostsAdapter.Callback, Re
 	public void onPrepareOptionsMenu(Menu menu) {
 		MenuItem refresh = menu.findItem(R.id.menu_refresh);
 		if (refresh != null) {
-			refresh.setEnabled(task == null && Preferences.isTrackMyPostsEnabled());
+			refresh.setEnabled(!isChecking() && Preferences.isTrackMyPostsEnabled());
 		}
 		MenuItem history = menu.findItem(R.id.menu_reply_history);
 		if (history != null) {
@@ -200,7 +220,7 @@ public class MyPostsPage extends ListPage implements MyPostsAdapter.Callback, Re
 	}
 
 	private void startCheck() {
-		if (task != null || !Preferences.isTrackMyPostsEnabled()) {
+		if (isChecking() || !Preferences.isTrackMyPostsEnabled()) {
 			return;
 		}
 		checkQueue.clear();
@@ -210,35 +230,55 @@ public class MyPostsPage extends ListPage implements MyPostsAdapter.Callback, Re
 			return;
 		}
 		checkErrors = 0;
-		switchProgress();
+		updateList();
 		updateOptionsMenu();
-		startNextCheck();
+		startNextChecks();
 	}
 
-	private void startNextCheck() {
-		MyPostsStorage.ThreadKey key = checkQueue.pollFirst();
-		if (key == null) {
-			task = null;
+	private void startNextChecks() {
+		while (tasks.size() < MAX_CONCURRENT_CHECKS) {
+			MyPostsStorage.ThreadKey key = null;
+			Iterator<MyPostsStorage.ThreadKey> iterator = checkQueue.iterator();
+			while (iterator.hasNext()) {
+				MyPostsStorage.ThreadKey candidate = iterator.next();
+				if (!activeChanNames.contains(candidate.chanName)) {
+					key = candidate;
+					iterator.remove();
+					break;
+				}
+			}
+			if (key == null) {
+				break;
+			}
+			ReadMyPostsTask task = new ReadMyPostsTask(this, key);
+			tasks.put(key, task);
+			activeChanNames.add(key.chanName);
+			task.execute(ConcurrentUtils.PARALLEL_EXECUTOR);
+		}
+		if (tasks.isEmpty() && checkQueue.isEmpty()) {
 			updateOptionsMenu();
 			updateList();
 			if (checkErrors > 0) {
 				ClickableToast.show(getString(R.string.replies_check_finished_with_errors__format, checkErrors));
 			}
-			return;
 		}
-		task = new ReadMyPostsTask(this, key);
-		task.execute(ConcurrentUtils.PARALLEL_EXECUTOR);
 	}
 
 	@Override
 	public void onReadMyPostsComplete(MyPostsStorage.ThreadKey key, ReadMyPostsTask.Result result) {
-		task = null;
+		if (tasks.remove(key) == null) {
+			return;
+		}
+		activeChanNames.remove(key.chanName);
 		if (!result.success) {
 			checkErrors++;
 			if (result.threadDeleted) {
 				MyPostsStorage.getInstance().setThreadDeleted(key, true);
 			}
 		}
-		startNextCheck();
+		// Publish partial results immediately; slow or unavailable forums must not hide replies
+		// already obtained from other forums.
+		updateList();
+		startNextChecks();
 	}
 }

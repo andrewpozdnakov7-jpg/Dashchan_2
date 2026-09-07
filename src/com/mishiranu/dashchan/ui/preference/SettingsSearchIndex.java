@@ -305,6 +305,8 @@ public final class SettingsSearchIndex {
 				Preferences.KEY_MERGE_CHANS);
 		add(context, entries, Screen.GENERAL, R.string.internal_browser, R.string.internal_browser__sumamry,
 				Preferences.KEY_INTERNAL_BROWSER);
+		add(context, entries, Screen.GENERAL, R.string.private_browser, R.string.private_browser__summary,
+				Preferences.KEY_PRIVATE_BROWSER);
 		add(context, entries, Screen.GENERAL, R.string.use_javascript_for_recaptcha,
 				R.string.use_javascript_for_recaptcha__summary, Preferences.KEY_RECAPTCHA_JAVASCRIPT);
 		add(context, entries, Screen.GENERAL, R.string.captcha_solving, R.string.captcha_solving__summary,

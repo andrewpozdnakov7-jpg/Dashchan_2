@@ -89,7 +89,7 @@
 	<string name="close">Close</string>
 	<string name="close_all">Close all</string>
 	<string name="close_pages">Close pages</string>
-	<string name="close_pages__summary">Close pages by clicking the \"Back\" button</string>
+	<string name="close_pages__summary">Do not keep closed boards and threads in the Pages section</string>
 	<string name="restore_pages">Restore open pages</string>
 	<string name="restore_pages__summary">Restore open boards and threads after restarting the app. The list is stored only on this device</string>
 	<string name="closed">Closed</string>
@@ -125,6 +125,16 @@
 	<string name="reddit_section_today_i_learned">Today I Learned</string>
 	<string name="reddit_section_science">Science</string>
 	<string name="reddit_section_movies">Movies</string>
+	<string name="reddit_category_discussions">Discussions and stories</string>
+	<string name="reddit_category_news">News and world</string>
+	<string name="reddit_category_technology">Technology</string>
+	<string name="reddit_category_science">Science and learning</string>
+	<string name="reddit_category_entertainment">Entertainment and culture</string>
+	<string name="reddit_category_humor">Humor and media</string>
+	<string name="reddit_category_sports">Sports</string>
+	<string name="reddit_category_lifestyle">Lifestyle and hobbies</string>
+	<string name="expand_reddit_category__format">Expand %s</string>
+	<string name="collapse_reddit_category__format">Collapse %s</string>
 	<string name="reddit_official_app">Official Reddit app</string>
 	<string name="local_translation">Offline post translation</string>
 	<string name="local_translation__summary">Translate posts on-device with Mozilla Bergamot or Gemini Nano</string>
@@ -393,6 +403,8 @@
 	<string name="insufficient_device_space">Insufficient device space</string>
 	<string name="internal_browser">Internal browser</string>
 	<string name="internal_browser__sumamry">Open external links in internal browser</string>
+	<string name="private_browser">Private mode</string>
+	<string name="private_browser__summary">Use separate temporary storage. Cookies, history, cache, and site data are cleared when the internal browser closes. Websites can still see your IP address and browser information.</string>
 	<string name="if_file_already_exists">If a file already exists</string>
 	<string name="invalid_authorization_data">Invalid authorization data</string>
 	<string name="invalid_certificate">Invalid certificate</string>

@@ -1,25 +1,33 @@
 package com.mishiranu.dashchan.content;
 
-import android.app.Activity;
 import android.content.ClipData;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
+import android.view.Gravity;
+import android.view.ViewGroup;
+import android.widget.FrameLayout;
+import android.widget.ProgressBar;
 import android.widget.Toast;
+import androidx.activity.ComponentActivity;
+import androidx.lifecycle.ViewModelProvider;
 import chan.content.Chan;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
+import com.mishiranu.dashchan.content.async.ExecutorTask;
+import com.mishiranu.dashchan.content.async.TaskViewModel;
 import com.mishiranu.dashchan.content.model.FileHolder;
 import com.mishiranu.dashchan.content.storage.DraftsStorage;
 import com.mishiranu.dashchan.ui.MainActivity;
 import com.mishiranu.dashchan.util.AndroidUtils;
+import com.mishiranu.dashchan.util.ConcurrentUtils;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class PostingShareActivity extends Activity {
+public class PostingShareActivity extends ComponentActivity {
 	private static final Pattern PATTERN_HREF = Pattern.compile("<a\\s+[^>]*href=([\"'])(.*?)\\1[^>]*>");
 
 	private static void addTextPart(LinkedHashSet<String> parts, CharSequence text) {
@@ -117,23 +125,33 @@ public class PostingShareActivity extends Activity {
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
-		DraftsStorage draftsStorage = DraftsStorage.getInstance();
+		FrameLayout layout = new FrameLayout(this);
+		ProgressBar progressBar = new ProgressBar(this);
+		layout.addView(progressBar, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
+				ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER));
+		setContentView(layout);
+
 		Intent intent = getIntent();
 		ArrayList<Uri> uris = (intent.getFlags() & Intent.FLAG_GRANT_READ_URI_PERMISSION) != 0
 				? collectStreamUris(intent) : new ArrayList<>();
 		String sharedText = collectSharedText(intent);
 		Uri contentUri = findChanUri(sharedText);
 
-		int success = 0;
 		if (!uris.isEmpty()) {
-			for (Uri uri : uris) {
-				FileHolder fileHolder = FileHolder.obtain(uri);
-				if (fileHolder != null && draftsStorage.storeFuture(fileHolder)) {
-					success++;
-				}
+			ImportViewModel viewModel = new ViewModelProvider(this).get(ImportViewModel.class);
+			viewModel.observe(this, result -> completeShare(result.success, result.uris,
+					result.sharedText, result.contentUri));
+			if (!viewModel.hasTaskOrValue()) {
+				ImportTask task = new ImportTask(viewModel, uris, sharedText, contentUri);
+				task.execute(ConcurrentUtils.PARALLEL_EXECUTOR);
+				viewModel.attach(task);
 			}
+		} else {
+			completeShare(0, uris, sharedText, contentUri);
 		}
+	}
 
+	private void completeShare(int success, ArrayList<Uri> uris, String sharedText, Uri contentUri) {
 		if (success > 0) {
 			// Browsers commonly attach the source URL as EXTRA_TEXT when sharing an image.
 			// It describes the attachment rather than a message the user entered. Keep
@@ -150,4 +168,65 @@ public class PostingShareActivity extends Activity {
 		}
 		finish();
 	}
+
+	private static class ImportResult {
+		public final int success;
+		public final ArrayList<Uri> uris;
+		public final String sharedText;
+		public final Uri contentUri;
+
+		public ImportResult(int success, ArrayList<Uri> uris, String sharedText, Uri contentUri) {
+			this.success = success;
+			this.uris = uris;
+			this.sharedText = sharedText;
+			this.contentUri = contentUri;
+		}
+	}
+
+	private static class ImportTask extends ExecutorTask<Void, ArrayList<DraftsStorage.AttachmentDraft>> {
+		private final ImportViewModel viewModel;
+		private final ArrayList<Uri> uris;
+		private final String sharedText;
+		private final Uri contentUri;
+
+		public ImportTask(ImportViewModel viewModel, ArrayList<Uri> uris, String sharedText, Uri contentUri) {
+			this.viewModel = viewModel;
+			this.uris = uris;
+			this.sharedText = sharedText;
+			this.contentUri = contentUri;
+		}
+
+		@Override
+		protected ArrayList<DraftsStorage.AttachmentDraft> run() {
+			DraftsStorage draftsStorage = DraftsStorage.getInstance();
+			ArrayList<DraftsStorage.AttachmentDraft> attachmentDrafts = new ArrayList<>();
+			for (Uri uri : uris) {
+				if (isCancelled()) break;
+				FileHolder fileHolder = FileHolder.obtainForStreaming(uri);
+				if (fileHolder != null) {
+					DraftsStorage.AttachmentDraft attachmentDraft =
+							draftsStorage.prepareFutureAttachmentDraft(fileHolder);
+					if (attachmentDraft != null) attachmentDrafts.add(attachmentDraft);
+				}
+			}
+			return attachmentDrafts;
+		}
+
+		@Override
+		protected void onComplete(ArrayList<DraftsStorage.AttachmentDraft> attachmentDrafts) {
+			if (!attachmentDrafts.isEmpty()) {
+				DraftsStorage.getInstance().storeFutureAttachmentDrafts(attachmentDrafts);
+			}
+			viewModel.handleResult(new ImportResult(attachmentDrafts.size(), uris, sharedText, contentUri));
+		}
+
+		@Override
+		protected void onCancel(ArrayList<DraftsStorage.AttachmentDraft> attachmentDrafts) {
+			if (attachmentDrafts != null && !attachmentDrafts.isEmpty()) {
+				DraftsStorage.getInstance().discardPreparedAttachmentDrafts(attachmentDrafts);
+			}
+		}
+	}
+
+	public static class ImportViewModel extends TaskViewModel<ImportTask, ImportResult> {}
 }

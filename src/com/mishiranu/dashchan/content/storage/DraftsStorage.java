@@ -25,6 +25,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -318,15 +319,27 @@ public class DraftsStorage extends StorageManager.Storage<Pair<List<DraftsStorag
 	}
 
 	public boolean storeFuture(FileHolder fileHolder) {
-		String hash = store(fileHolder);
-		if (hash != null) {
-			AttachmentDraft attachmentDraft = new AttachmentDraft(hash, fileHolder.getName(),
-					null, false, false, false, false, null);
-			futureAttachmentDrafts.add(attachmentDraft);
+		AttachmentDraft attachmentDraft = prepareFutureAttachmentDraft(fileHolder);
+		if (attachmentDraft == null) return false;
+		storeFutureAttachmentDrafts(Collections.singletonList(attachmentDraft));
+		return true;
+	}
+
+	public AttachmentDraft prepareFutureAttachmentDraft(FileHolder fileHolder) {
+		String hash = storeAttachmentFile(fileHolder, false);
+		return hash != null ? new AttachmentDraft(hash, fileHolder.getName(),
+				null, false, false, false, false, null) : null;
+	}
+
+	public void storeFutureAttachmentDrafts(Collection<AttachmentDraft> attachmentDrafts) {
+		if (!attachmentDrafts.isEmpty()) {
+			futureAttachmentDrafts.addAll(attachmentDrafts);
 			serialize();
-			return true;
 		}
-		return false;
+	}
+
+	public void discardPreparedAttachmentDrafts(Collection<AttachmentDraft> attachmentDrafts) {
+		handleRemoveAttachmentDrafts(new ArrayList<>(attachmentDrafts));
 	}
 
 	public ArrayList<AttachmentDraft> getFutureAttachmentDrafts() {

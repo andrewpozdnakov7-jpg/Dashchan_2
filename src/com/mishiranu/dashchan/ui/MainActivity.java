@@ -866,11 +866,16 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 				new AudioPlayerDialog().show(fragmentManager, tag);
 			}
 		} else if (C.ACTION_BROWSER.equals(intent.getAction())) {
-			BrowserFragment browserFragment = new BrowserFragment(intent.getData());
-			if (getCurrentFragment() instanceof BrowserFragment) {
-				navigateFragment(browserFragment, null, true);
+			Uri uri = intent.getData();
+			if (BrowserFragment.isSupportedUri(uri)) {
+				BrowserFragment browserFragment = new BrowserFragment(uri);
+				if (getCurrentFragment() instanceof BrowserFragment) {
+					navigateFragment(browserFragment, null, true);
+				} else {
+					pushFragment(browserFragment);
+				}
 			} else {
-				pushFragment(browserFragment);
+				ClickableToast.show(R.string.unknown_address);
 			}
 		} else {
 			Uri uri = intent.getData();
