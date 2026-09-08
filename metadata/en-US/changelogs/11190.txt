@@ -1,0 +1,4 @@
+- Improved Reddit presentation and added an experimental reading mode for discussions styled to match Slooop.
+- Fixed comments and reply threads, and added automatic loading of more replies. Reddit support is still evolving, so some issues may remain.
+
+Found a bug? Send us the logs!
