@@ -148,6 +148,10 @@ public class MediaFragment extends PreferenceFragment implements FragmentHandler
 				R.string.play_after_scroll, R.string.play_after_scroll__summary).setEnabled(playerLoadResult.first);
 		addCheck(true, Preferences.KEY_VIDEO_SEEK_ANY_FRAME, Preferences.DEFAULT_VIDEO_SEEK_ANY_FRAME,
 				R.string.seek_any_frame, R.string.seek_any_frame__summary).setEnabled(playerLoadResult.first);
+		addList(Preferences.KEY_YOUTUBE_OPEN_MODE,
+				enumList(Preferences.YouTubeOpenMode.values(), value -> value.value),
+				Preferences.DEFAULT_YOUTUBE_OPEN_MODE.value, R.string.youtube_open_mode,
+				enumResList(Preferences.YouTubeOpenMode.values(), value -> value.titleResId));
 		addCheck(true, Preferences.KEY_VIDEO_PICTURE_IN_PICTURE,
 				Preferences.DEFAULT_VIDEO_PICTURE_IN_PICTURE,
 				R.string.video_picture_in_picture,

@@ -565,7 +565,11 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 			return null;
 		}
 		Bundle state = new Bundle();
-		if (!pagesOnly || currentFragment instanceof PageFragment && currentPageItem != null) {
+		boolean restorableCurrentPage = currentFragment instanceof PageFragment && currentPageItem != null;
+		boolean restorableRedditPage = currentFragment instanceof RedditSectionsFragment ||
+				currentFragment instanceof RedditWebReaderFragment &&
+						!((RedditWebReaderFragment) currentFragment).isAuthorizationMode();
+		if (!pagesOnly || restorableCurrentPage || restorableRedditPage) {
 			writePagesState(state);
 			state.putParcelable(EXTRA_CURRENT_FRAGMENT,
 					new StackItem(getSupportFragmentManager(), currentFragment, null));
@@ -658,6 +662,11 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	@Override
 	public void setTitleSubtitle(CharSequence title, CharSequence subtitle) {
 		toolbarHolder.update(title, subtitle);
+	}
+
+	@Override
+	public void setCompactToolbarTitle(boolean compact) {
+		toolbarHolder.setCompactTitle(compact);
 	}
 
 	@Override

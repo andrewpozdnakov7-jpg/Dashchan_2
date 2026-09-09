@@ -324,6 +324,8 @@ public final class SettingsSearchIndex {
 				R.string.reddit_public_web_reader__summary, null);
 		add(context, entries, Screen.REDDIT, R.string.reddit_slooop_style,
 				R.string.reddit_slooop_style__summary, Preferences.KEY_REDDIT_WEB_READER_STYLE);
+		add(context, entries, Screen.REDDIT, R.string.reddit_board_style,
+				R.string.reddit_board_style__summary, Preferences.KEY_REDDIT_BOARD_STYLE);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.hardware_video_acceleration,
 				R.string.hardware_video_acceleration__summary, Preferences.KEY_HARDWARE_VIDEO_ACCELERATION);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.open_configured_attachment_folder,
@@ -499,6 +501,8 @@ public final class SettingsSearchIndex {
 				Preferences.KEY_VIDEO_PLAY_AFTER_SCROLL);
 		add(context, entries, Screen.MEDIA, R.string.seek_any_frame, R.string.seek_any_frame__summary,
 				Preferences.KEY_VIDEO_SEEK_ANY_FRAME);
+		add(context, entries, Screen.MEDIA, R.string.youtube_open_mode, 0,
+				Preferences.KEY_YOUTUBE_OPEN_MODE);
 		add(context, entries, Screen.MEDIA, R.string.video_picture_in_picture,
 				R.string.video_picture_in_picture__summary, Preferences.KEY_VIDEO_PICTURE_IN_PICTURE);
 		add(context, entries, Screen.MEDIA, R.string.video_picture_in_picture_auto,

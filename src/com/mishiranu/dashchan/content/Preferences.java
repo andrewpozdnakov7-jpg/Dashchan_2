@@ -1860,7 +1860,9 @@ public class Preferences {
 	public static final String KEY_REDDIT_WEB_READER_ENABLED = "reddit_web_reader_enabled";
 	public static final boolean DEFAULT_REDDIT_WEB_READER_ENABLED = false;
 	public static final String KEY_REDDIT_WEB_READER_STYLE = "reddit_web_reader_style";
-	public static final boolean DEFAULT_REDDIT_WEB_READER_STYLE = true;
+	public static final boolean DEFAULT_REDDIT_WEB_READER_STYLE = false;
+	public static final String KEY_REDDIT_BOARD_STYLE = "reddit_board_style";
+	public static final boolean DEFAULT_REDDIT_BOARD_STYLE = false;
 	private static final String KEY_REDDIT_SIGNED_IN = "reddit_signed_in";
 	public static final String KEY_WALLPAPER_ENABLED = "wallpaper_enabled";
 	public static final boolean DEFAULT_WALLPAPER_ENABLED = false;
@@ -1941,6 +1943,10 @@ public class Preferences {
 
 	public static boolean isRedditWebReaderStyleEnabled() {
 		return PREFERENCES.getBoolean(KEY_REDDIT_WEB_READER_STYLE, DEFAULT_REDDIT_WEB_READER_STYLE);
+	}
+
+	public static boolean isRedditBoardStyleEnabled() {
+		return PREFERENCES.getBoolean(KEY_REDDIT_BOARD_STYLE, DEFAULT_REDDIT_BOARD_STYLE);
 	}
 
 	public static boolean isRedditSignedIn() {
@@ -2206,6 +2212,29 @@ public class Preferences {
 
 	public static boolean isVideoDoubleTapSeek() {
 		return PREFERENCES.getBoolean(KEY_VIDEO_DOUBLE_TAP_SEEK, DEFAULT_VIDEO_DOUBLE_TAP_SEEK);
+	}
+
+	public enum YouTubeOpenMode {
+		EXTERNAL("external", R.string.youtube_open_mode_external),
+		SLOOOP("slooop", R.string.youtube_open_mode_slooop);
+
+		private static final EnumValueProvider<YouTubeOpenMode> VALUE_PROVIDER = o -> o.value;
+
+		public final String value;
+		public final int titleResId;
+
+		YouTubeOpenMode(String value, int titleResId) {
+			this.value = value;
+			this.titleResId = titleResId;
+		}
+	}
+
+	public static final String KEY_YOUTUBE_OPEN_MODE = "youtube_open_mode";
+	public static final YouTubeOpenMode DEFAULT_YOUTUBE_OPEN_MODE = YouTubeOpenMode.EXTERNAL;
+
+	public static YouTubeOpenMode getYouTubeOpenMode() {
+		return getEnumValue(KEY_YOUTUBE_OPEN_MODE, YouTubeOpenMode.values(),
+				DEFAULT_YOUTUBE_OPEN_MODE, YouTubeOpenMode.VALUE_PROVIDER);
 	}
 
 	public static final String KEY_VIDEO_PICTURE_IN_PICTURE = "video_picture_in_picture";

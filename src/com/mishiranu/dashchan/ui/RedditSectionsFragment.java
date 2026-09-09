@@ -32,29 +32,68 @@ public class RedditSectionsFragment extends BaseListFragment {
 	private static final Category[] CATEGORIES = {
 			new Category(R.string.reddit_category_discussions, new String[] {
 					"AskReddit", "NoStupidQuestions", "CasualConversation", "AmItheAsshole",
-					"BestofRedditorUpdates", "todayilearned", "explainlikeimfive", "LifeProTips"
+					"BestofRedditorUpdates", "todayilearned", "explainlikeimfive", "LifeProTips",
+					"OutOfTheLoop", "TooAfraidToAsk", "AskMen", "AskWomen", "relationships",
+					"relationship_advice", "confession", "tifu", "TrueOffMyChest", "YouShouldKnow"
 			}),
 			new Category(R.string.reddit_category_news, new String[] {
-					"worldnews", "news", "europe", "geopolitics", "UpliftingNews", "OutOfTheLoop"
+					"worldnews", "news", "europe", "geopolitics", "UpliftingNews", "politics",
+					"PoliticalDiscussion", "NeutralPolitics", "inthenews", "Economics", "environment",
+					"climate", "canada", "unitedkingdom"
 			}),
 			new Category(R.string.reddit_category_technology, new String[] {
 					"technology", "Android", "programming", "gadgets", "hardware", "software",
-					"privacy", "StableDiffusion"
+					"privacy", "StableDiffusion", "linux", "windows", "apple", "iphone", "cybersecurity",
+					"MachineLearning", "LocalLLaMA", "homelab"
 			}),
 			new Category(R.string.reddit_category_science, new String[] {
-					"science", "space", "askscience", "dataisbeautiful", "history", "Documentaries"
+					"science", "space", "askscience", "dataisbeautiful", "history", "Documentaries",
+					"AskHistorians", "math", "Physics", "chemistry", "biology", "astronomy", "geography",
+					"languagelearning", "educationalgifs", "MapPorn"
+			}),
+			new Category(R.string.reddit_category_gaming, new String[] {
+					"gaming", "Games", "pcgaming", "NintendoSwitch", "PS5", "Xbox", "Steam",
+					"patientgamers", "GameDeals", "truegaming", "Minecraft", "FortNiteBR",
+					"leagueoflegends", "DotA2", "GlobalOffensive", "Eldenring"
 			}),
 			new Category(R.string.reddit_category_entertainment, new String[] {
-					"gaming", "movies", "television", "Music", "anime", "books", "popculturechat"
+					"movies", "television", "Music", "anime", "books", "popculturechat", "moviesuggestions",
+					"MovieDetails", "boxoffice", "NetflixBestOf", "marvelstudios", "StarWars", "harrypotter",
+					"DC_Cinematic", "anime_irl", "manga", "podcasts", "Fauxmoi"
 			}),
 			new Category(R.string.reddit_category_humor, new String[] {
-					"mildlyinfuriating", "funny", "pics", "videos", "memes", "Unexpected"
+					"mildlyinfuriating", "funny", "pics", "videos", "memes", "Unexpected", "meirl",
+					"dankmemes", "wholesomememes", "facepalm", "MadeMeSmile", "interestingasfuck",
+					"Damnthatsinteresting", "nextfuckinglevel", "oddlysatisfying", "PublicFreakout",
+					"ContagiousLaughter", "therewasanattempt"
 			}),
 			new Category(R.string.reddit_category_sports, new String[] {
-					"sports", "soccer", "nfl", "nba", "formula1"
+					"sports", "soccer", "nfl", "nba", "formula1", "baseball", "hockey", "CFB",
+					"CollegeBasketball", "tennis", "golf", "MMA", "boxing", "Cricket", "rugbyunion", "olympics"
 			}),
 			new Category(R.string.reddit_category_lifestyle, new String[] {
-					"food", "Cooking", "DIY", "travel"
+					"fitness", "loseit", "running", "bodyweightfitness", "Meditation", "selfimprovement",
+					"socialskills", "dating_advice", "Parenting", "weddingplanning", "fashion",
+					"malefashionadvice", "femalefashionadvice", "SkincareAddiction"
+			}),
+			new Category(R.string.reddit_category_food_home, new String[] {
+					"food", "Cooking", "recipes", "Baking", "EatCheapAndHealthy", "MealPrepSunday",
+					"cocktails", "Coffee", "tea", "DIY", "HomeImprovement", "gardening", "houseplants",
+					"DesignMyRoom"
+			}),
+			new Category(R.string.reddit_category_creative, new String[] {
+					"Art", "drawing", "crafts", "woodworking", "photography", "itookapicture",
+					"photoshopbattles", "graphic_design", "writing", "WritingPrompts", "Poetry",
+					"musicproduction", "WeAreTheMusicMakers", "3Dprinting"
+			}),
+			new Category(R.string.reddit_category_nature, new String[] {
+					"aww", "cats", "dogs", "AnimalsBeingDerps", "NatureIsFuckingLit", "EarthPorn", "camping",
+					"hiking", "backpacking", "Outdoors", "whatsthisplant", "birding", "Aquariums", "reptiles"
+			}),
+			new Category(R.string.reddit_category_finance_career, new String[] {
+					"personalfinance", "financialindependence", "investing", "stocks", "wallstreetbets",
+					"CryptoCurrency", "Entrepreneur", "smallbusiness", "careerguidance", "jobs", "resumes",
+					"productivity"
 			})
 	};
 

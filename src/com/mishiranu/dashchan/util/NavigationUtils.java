@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.util;
 
+import android.app.Activity;
 import android.app.PendingIntent;
 import android.content.ActivityNotFoundException;
 import android.content.ClipData;
@@ -33,6 +34,7 @@ import com.mishiranu.dashchan.content.service.AudioPlayerService;
 import com.mishiranu.dashchan.media.VideoPlayer;
 import com.mishiranu.dashchan.ui.MainActivity;
 import com.mishiranu.dashchan.ui.PrivateBrowserActivity;
+import com.mishiranu.dashchan.ui.YouTubePlayerActivity;
 import com.mishiranu.dashchan.widget.ThemeEngine;
 import com.mishiranu.dashchan.widget.ClickableToast;
 import java.io.File;
@@ -66,6 +68,9 @@ public class NavigationUtils {
 	public static void handleUri(Context context, String chanName, Uri uri, BrowserType browserType) {
 		if (chanName != null) {
 			uri = Chan.get(chanName).locator.convert(uri);
+		}
+		if (handleYouTubeUri(context, uri)) {
+			return;
 		}
 		boolean isWeb = Chan.getFallback().locator.isWebScheme(uri);
 		Intent intent;
@@ -136,6 +141,40 @@ public class NavigationUtils {
 			ClickableToast.show(R.string.unknown_address);
 		} catch (Exception e) {
 			ClickableToast.show(e.getMessage());
+		}
+	}
+
+	public static boolean handleYouTubeUri(Context context, Uri uri) {
+		if (!YouTubePlayerActivity.isYouTubeUri(uri)) {
+			return false;
+		}
+		if (Preferences.getYouTubeOpenMode() == Preferences.YouTubeOpenMode.SLOOOP) {
+			try {
+				Intent intent = YouTubePlayerActivity.createIntent(context, uri);
+				if (!(context instanceof Activity)) {
+					intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+				}
+				context.startActivity(intent);
+			} catch (ActivityNotFoundException | SecurityException | IllegalStateException e) {
+				openYouTubeExternal(context, uri);
+			}
+		} else {
+			openYouTubeExternal(context, uri);
+		}
+		return true;
+	}
+
+	private static void openYouTubeExternal(Context context, Uri uri) {
+		try {
+			context.startActivity(YouTubePlayerActivity.createExternalPlayerIntent(uri)
+					.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+		} catch (ActivityNotFoundException | SecurityException e) {
+			try {
+				context.startActivity(new Intent(Intent.ACTION_VIEW, uri).addCategory(Intent.CATEGORY_BROWSABLE)
+						.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+			} catch (ActivityNotFoundException | SecurityException exception) {
+				ClickableToast.show(R.string.unknown_address);
+			}
 		}
 	}
 

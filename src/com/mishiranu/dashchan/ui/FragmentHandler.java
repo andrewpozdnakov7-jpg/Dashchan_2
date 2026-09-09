@@ -17,6 +17,7 @@ public interface FragmentHandler {
 	}
 
 	void setTitleSubtitle(CharSequence title, CharSequence subtitle);
+	default void setCompactToolbarTitle(boolean compact) {}
 	ViewGroup getToolbarView();
 	FrameLayout getToolbarExtra();
 	Context getToolbarContext();

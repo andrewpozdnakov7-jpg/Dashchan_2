@@ -1764,6 +1764,15 @@
 			android:supportsPictureInPicture="true"
 			android:theme="@style/Theme.VideoPip" />
 
+		<activity
+			android:name=".ui.YouTubePlayerActivity"
+			android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"
+			android:excludeFromRecents="true"
+			android:exported="false"
+			android:resizeableActivity="true"
+			android:supportsPictureInPicture="true"
+			android:theme="@style/Theme.VideoPip" />
+
 		<service
 			android:name=".content.service.PostingService"
 			android:exported="false"
