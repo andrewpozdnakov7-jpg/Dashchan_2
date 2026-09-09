@@ -191,12 +191,16 @@ public class ViewFactory {
 		public final View layout;
 		private final TextView title;
 		private final TextView subtitle;
+		private final float titleTextSize;
+		private final int contentInsetStartWithNavigation;
 
 		private ToolbarHolder(Toolbar toolbar, View layout, TextView title, TextView subtitle) {
 			this.toolbar = toolbar;
 			this.layout = layout;
 			this.title = title;
 			this.subtitle = subtitle;
+			titleTextSize = title.getTextSize();
+			contentInsetStartWithNavigation = toolbar.getContentInsetStartWithNavigation();
 		}
 
 		public void update(CharSequence title, CharSequence subtitle) {
@@ -207,6 +211,14 @@ public class ViewFactory {
 
 		public Toolbar getToolbar() {
 			return (Toolbar) toolbar;
+		}
+
+		public void setCompactTitle(boolean compact) {
+			getToolbar().setContentInsetStartWithNavigation(compact ? 0 : contentInsetStartWithNavigation);
+			title.setSingleLine(!compact);
+			title.setMaxLines(compact ? 2 : 1);
+			title.setEllipsize(TextUtils.TruncateAt.END);
+			title.setTextSize(TypedValue.COMPLEX_UNIT_PX, compact ? titleTextSize * 0.84f : titleTextSize);
 		}
 	}
 

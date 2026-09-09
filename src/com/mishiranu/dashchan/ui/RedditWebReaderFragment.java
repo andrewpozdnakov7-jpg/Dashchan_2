@@ -111,6 +111,7 @@ public class RedditWebReaderFragment extends ContentFragment {
 	private WebView webView;
 	private View progressView;
 	private String navigationDrawerLocker;
+	private String boardStyleScript;
 	private String readerStyleScript;
 	private String hybridReaderScript;
 	private boolean authorizationMode;
@@ -140,6 +141,11 @@ public class RedditWebReaderFragment extends ContentFragment {
 		arguments.putBoolean(EXTRA_AUTHORIZATION_MODE, true);
 		fragment.setArguments(arguments);
 		return fragment;
+	}
+
+	public boolean isAuthorizationMode() {
+		Bundle arguments = getArguments();
+		return arguments != null && arguments.getBoolean(EXTRA_AUTHORIZATION_MODE);
 	}
 
 	public static void clearRedditSession() {
@@ -206,8 +212,10 @@ public class RedditWebReaderFragment extends ContentFragment {
 
 		navigationDrawerLocker = "reddit-web-reader-" + UUID.randomUUID();
 		((FragmentHandler) requireActivity()).setNavigationAreaLocked(navigationDrawerLocker, true);
-		Bundle arguments = getArguments();
-		authorizationMode = arguments != null && arguments.getBoolean(EXTRA_AUTHORIZATION_MODE);
+		authorizationMode = isAuthorizationMode();
+		((FragmentHandler) requireActivity()).setCompactToolbarTitle(!authorizationMode);
+		boardStyleScript = !authorizationMode && Preferences.isRedditBoardStyleEnabled()
+				? buildBoardStyleScript() : null;
 		readerStyleScript = !authorizationMode && Preferences.isRedditWebReaderStyleEnabled()
 				? buildReaderStyleScript() : null;
 		hybridReaderScript = readerStyleScript != null ? buildHybridReaderScript() : null;
@@ -229,7 +237,8 @@ public class RedditWebReaderFragment extends ContentFragment {
 		PackageInfo webViewPackage = WebView.getCurrentWebViewPackage();
 		logDiagnostic("event=webview_created provider=" + (webViewPackage != null
 				? webViewPackage.packageName + "/" + webViewPackage.versionName : "unknown")
-				+ " auth=" + authorizationMode + " reader=" + (readerStyleScript != null));
+				+ " auth=" + authorizationMode + " board=" + (boardStyleScript != null)
+				+ " reader=" + (readerStyleScript != null));
 		webView.setWebViewClient(new RedditWebViewClient());
 		webView.setWebChromeClient(new WebChromeClient() {
 			@Override
@@ -311,6 +320,7 @@ public class RedditWebReaderFragment extends ContentFragment {
 		translationRequestPending = false;
 		translationRequestGeneration = -1;
 		((FragmentHandler) requireActivity()).setNavigationAreaLocked(navigationDrawerLocker, false);
+		((FragmentHandler) requireActivity()).setCompactToolbarTitle(false);
 		if (webView != null) {
 			webView.stopLoading();
 			webView.setOnTouchListener(null);
@@ -321,6 +331,7 @@ public class RedditWebReaderFragment extends ContentFragment {
 			webView = null;
 		}
 		progressView = null;
+		boardStyleScript = null;
 		readerStyleScript = null;
 		hybridReaderScript = null;
 		finishAuthorizationMenuItem = null;
@@ -329,12 +340,12 @@ public class RedditWebReaderFragment extends ContentFragment {
 
 	@Override
 	public void onCreateOptionsMenu(Menu menu, boolean primary) {
-		menu.add(0, R.id.menu_reload, 0, R.string.reload)
-				.setIcon(((FragmentHandler) requireActivity()).getActionBarIcon(R.attr.iconActionRefresh))
-				.setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM);
 		menu.add(0, R.id.menu_translate, 0, R.string.translate_posts)
 				.setIcon(((FragmentHandler) requireActivity()).getActionBarIcon(R.attr.iconActionTranslate))
-				.setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM);
+				.setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
+		menu.add(0, R.id.menu_reload, 1, R.string.reload)
+				.setIcon(((FragmentHandler) requireActivity()).getActionBarIcon(R.attr.iconActionRefresh))
+				.setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
 		if (authorizationMode) {
 			finishAuthorizationMenuItem = menu.add(R.string.reddit_sign_in_done);
 			finishAuthorizationMenuItem.setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
@@ -497,6 +508,9 @@ public class RedditWebReaderFragment extends ContentFragment {
 	}
 
 	private boolean openExternal(Uri uri) {
+		if (NavigationUtils.handleYouTubeUri(requireContext(), uri)) {
+			return true;
+		}
 		ClickableToast.show(R.string.reddit_public_web_reader_external_link);
 		Intent intent = new Intent(Intent.ACTION_VIEW, uri).addCategory(Intent.CATEGORY_BROWSABLE);
 		try {
@@ -546,9 +560,19 @@ public class RedditWebReaderFragment extends ContentFragment {
 				"[data-testid*=\"app-selector\"],[data-testid*=\"app-promo\"],.XPromoPopupRpl.m-active," +
 				"[paint-group=\"xpromo\"],#xpromo-bottom-sheet';" +
 				"var headerKnown='reddit-header-large,reddit-header-small';" +
+				"var communityHeaderKnown='community-header,shreddit-subreddit-header,subreddit-header," +
+				"[data-testid=\"subreddit-header\"]';" +
+				"var communityBannerKnown='shreddit-community-banner,community-banner," +
+				"[data-testid*=\"subreddit-banner\" i],[data-testid*=\"community-banner\" i]," +
+				"[class*=\"subreddit-banner\" i],[class*=\"community-banner\" i]," +
+				"[slot=\"banner\"],[part*=\"banner\" i]';" +
 				"var style=document.createElement('style');style.textContent=promoKnown+'{display:none!important}'+" +
 				"'.slooop-reddit-app-promo{display:none!important}'+" +
 				"headerKnown+'{display:none!important;visibility:hidden!important;height:0!important;min-height:0!important}'+" +
+				"communityHeaderKnown+'{background-image:none!important}'+" +
+				"communityHeaderKnown+' [style*=\"background-image\"]{background-image:none!important}'+" +
+				"communityBannerKnown+'{display:none!important;height:0!important;min-height:0!important;" +
+				"margin:0!important;padding:0!important;border:0!important;overflow:hidden!important}'+" +
 				"'shreddit-app{--shreddit-header-height:0px!important;" +
 				"--shreddit-header-large-height:0px!important;}';" +
 				"(document.head||document.documentElement).appendChild(style);" +
@@ -584,6 +608,16 @@ public class RedditWebReaderFragment extends ContentFragment {
 				"function hide(n){if(!n||n.classList&&n.classList.contains('slooop-reddit-app-promo'))" +
 				"return false;if(n.classList)n.classList.add('slooop-reddit-app-promo');" +
 				"if(n.style)n.style.setProperty('display','none','important');return true;}" +
+				"function hideCommunityBanners(root){var changed=false,headers=query(root,communityHeaderKnown);" +
+				"if(root&&root.host&&root.host.matches&&root.host.matches(communityHeaderKnown))headers.push(root.host);" +
+				"for(var h=0;h<headers.length;h++){var header=headers[h];" +
+				"header.style.setProperty('background-image','none','important');" +
+				"var scope=header.shadowRoot||header,banners=query(scope,communityBannerKnown);" +
+				"for(var b=0;b<banners.length;b++)changed=hide(banners[b])||changed;" +
+				"var media=query(scope,'img,picture,faceplate-img');" +
+				"for(var m=0;m<media.length;m++){var rect=media[m].getBoundingClientRect();" +
+				"if(rect.width>=innerWidth*.7&&rect.height>=32&&rect.height<=innerHeight*.35&&" +
+				"rect.width/Math.max(rect.height,1)>=2.2)changed=hide(media[m])||changed;}}return changed;}" +
 				"function clearUnlock(){var b=document.body,e=document.documentElement;[e,b].forEach(function(n){" +
 				"if(!n||!n.hasAttribute('data-slooop-promo-unlocked'))return;" +
 				"if(n.style.getPropertyValue('overflow-y')==='auto')n.style.removeProperty('overflow-y');" +
@@ -604,6 +638,7 @@ public class RedditWebReaderFragment extends ContentFragment {
 				"function scan(root){var rs=[];roots(root||document,rs),hidden=false,legitimateDialog=false;" +
 				"for(var x=0;x<rs.length;x++){" +
 				"compactEdited(rs[x]);" +
+				"hidden=hideCommunityBanners(rs[x])||hidden;" +
 				"var headers=query(rs[x],headerKnown);" +
 				"for(var h=0;h<headers.length;h++){headers[h].style.setProperty('display','none','important');" +
 				"headers[h].style.setProperty('visibility','hidden','important');}" +
@@ -626,10 +661,107 @@ public class RedditWebReaderFragment extends ContentFragment {
 				"scan(document);})();";
 	}
 
+	private String buildBoardStyleScript() {
+		ThemeEngine.Theme theme = ThemeEngine.getTheme(requireContext());
+		int scorePositive = theme.base == ThemeEngine.Theme.Base.DARK ? 0x81c784 : 0x2e7d32;
+		int scoreNegative = theme.base == ThemeEngine.Theme.Base.DARK ? 0xef9a9a : 0xc62828;
+		String css = "html.slooop-reddit-board{" +
+				"--shreddit-content-background:" + color(theme.card) + "!important;" +
+				"--color-neutral-background:" + color(theme.window) + "!important;" +
+				"--color-neutral-background-weak:" + color(theme.card) + "!important;" +
+				"--color-neutral-background-medium:" + color(theme.card) + "!important;" +
+				"--color-neutral-background-container:" + color(theme.card) + "!important;" +
+				"--color-neutral-content:" + color(theme.post) + "!important;" +
+				"--color-neutral-content-weak:" + color(theme.meta) + "!important;" +
+				"--color-neutral-content-strong:" + color(theme.post) + "!important;" +
+				"--color-primary:" + color(theme.link) + "!important;" +
+				"color-scheme:" + (theme.base == ThemeEngine.Theme.Base.DARK ? "dark" : "light") + "}" +
+				"html.slooop-reddit-board body{background:" + color(theme.window) +
+				"!important;color:" + color(theme.post) + "!important;overflow-wrap:anywhere}" +
+				"html.slooop-reddit-board reddit-header-large{display:none!important}" +
+				"html.slooop-reddit-board :is(#main-content,main,[data-testid=main-content]){" +
+				"box-sizing:border-box!important;max-width:none!important;width:100%!important;" +
+				"padding-inline:4px!important;background:" + color(theme.window) + "!important}" +
+				"html.slooop-reddit-board shreddit-feed{display:block!important;max-width:none!important}" +
+				"html.slooop-reddit-board shreddit-post{display:block!important;box-sizing:border-box!important;" +
+				"background:" + color(theme.card) + "!important;color:" + color(theme.post) +
+				"!important;border:0!important;border-inline-start:3px solid " + color(theme.accent) +
+				"!important;border-radius:8px!important;margin:6px 2px 8px!important;" +
+				"padding:0 9px 7px!important;box-shadow:none!important}" +
+				"html.slooop-reddit-board shreddit-post [slot=credit-bar]{color:" + color(theme.meta) +
+				"!important;padding:6px 0 2px!important;font-size:12px!important}" +
+				"html.slooop-reddit-board shreddit-post [slot=title]{color:" + color(theme.post) +
+				"!important;font-size:16px!important;line-height:1.32!important;margin:3px 0 6px!important;" +
+				"padding:0!important}" +
+				"html.slooop-reddit-board shreddit-post [slot=text-body]," +
+				"html.slooop-reddit-board shreddit-post [slot=text-body] p{color:" + color(theme.post) +
+				"!important;font-size:14px!important;line-height:1.4!important;margin-block:3px!important}" +
+				"html.slooop-reddit-board shreddit-post [slot=text-body]{display:-webkit-box!important;" +
+				"-webkit-box-orient:vertical!important;-webkit-line-clamp:6!important;overflow:hidden!important}" +
+				"html.slooop-reddit-board shreddit-post :is([slot=post-media-container]," +
+				"[data-post-click-location=media],[data-testid=post-media]){box-sizing:border-box!important;" +
+				"max-height:112px!important;min-height:0!important;overflow:hidden!important;" +
+				"margin:5px 0!important;border-radius:7px!important}" +
+				"html.slooop-reddit-board shreddit-post :is([slot=post-media-container]," +
+				"[data-post-click-location=media],[data-testid=post-media]) :is(img,video){" +
+				"width:100%!important;max-height:112px!important;object-fit:cover!important}" +
+				"html.slooop-reddit-board shreddit-post [slot=action-row]{min-height:30px!important;" +
+				"color:" + color(theme.meta) + "!important;margin-top:2px!important}" +
+				"html.slooop-reddit-board shreddit-post [slot=action-row] button{" +
+				"min-height:28px!important;padding-block:2px!important;color:" + color(theme.meta) + "!important}" +
+				"html.slooop-reddit-board shreddit-post[data-slooop-score-sign=positive] " +
+				":is([score],faceplate-number){color:" + color(scorePositive) + "!important;font-weight:700!important}" +
+				"html.slooop-reddit-board shreddit-post[data-slooop-score-sign=negative] " +
+				":is([score],faceplate-number){color:" + color(scoreNegative) + "!important;font-weight:700!important}" +
+				"html.slooop-reddit-board shreddit-post hr{display:none!important}" +
+				"html.slooop-reddit-board :is(shreddit-ad-post,shreddit-post[is-promoted]," +
+				"shreddit-post[promoted],shreddit-post[is-sponsored],shreddit-post[sponsored]) [slot=title]{" +
+				"display:-webkit-box!important;-webkit-box-orient:vertical!important;-webkit-line-clamp:2!important;" +
+				"overflow:hidden!important;font-size:10px!important;line-height:1.2!important}" +
+				"html.slooop-reddit-board :is(shreddit-ad-post,shreddit-post[is-promoted]," +
+				"shreddit-post[promoted],shreddit-post[is-sponsored],shreddit-post[sponsored]) " +
+				":is([slot=post-media-container],[data-post-click-location=media],[data-testid=post-media]," +
+				"reddit-video,shreddit-player,shreddit-gallery,gallery-carousel,picture,figure){" +
+				"box-sizing:border-box!important;height:56px!important;max-height:56px!important;" +
+				"min-height:0!important;overflow:hidden!important;margin:3px 0!important;border-radius:7px!important}" +
+				"html.slooop-reddit-board :is(shreddit-ad-post,shreddit-post[is-promoted]," +
+				"shreddit-post[promoted],shreddit-post[is-sponsored],shreddit-post[sponsored]) " +
+				":is([slot=post-media-container],[data-post-click-location=media],[data-testid=post-media]," +
+				"reddit-video,shreddit-player,shreddit-gallery,gallery-carousel,picture,figure) :is(img,video){" +
+				"width:100%!important;height:56px!important;max-height:56px!important;object-fit:cover!important}";
+		String escapedCss = css.replace("\\", "\\\\").replace("'", "\\'");
+		return "(function(){var previous=window.__slooopRedditBoardStyle;" +
+				"if(previous){if(previous.observer)previous.observer.disconnect();" +
+				"if(previous.onPop)removeEventListener('popstate',previous.onPop);" +
+				"if(previous.onClick)document.removeEventListener('click',previous.onClick,true);}" +
+				"var i='slooop-reddit-board-style',s=document.getElementById(i);" +
+				"if(!s){s=document.createElement('style');s.id=i;document.head.appendChild(s);}" +
+				"s.textContent='" + escapedCss + "';" +
+				"function boardPage(){var p=location.pathname;return p==='/'||" +
+				"/^\\/(?:best|hot|new|top|rising)\\/?$/.test(p)||" +
+				"/^\\/r\\/[^/]+(?:\\/(?:hot|new|top|rising))?\\/?$/.test(p);}" +
+				"function scoreSign(value){if(!value)return'neutral';var s=String(value).trim().toLowerCase()," +
+				"m=s.replace(/,/g,'').match(/-?\\d+(?:\\.\\d+)?/);if(!m)return'neutral';" +
+				"var n=parseFloat(m[0]);if(/k$/.test(s))n*=1000;else if(/m$/.test(s))n*=1000000;" +
+				"return n>0?'positive':n<0?'negative':'neutral';}" +
+				"function decorate(){var posts=document.querySelectorAll('shreddit-post');" +
+				"for(var i=0;i<posts.length;i++)posts[i].setAttribute('data-slooop-score-sign'," +
+				"scoreSign(posts[i].getAttribute('score')));}" +
+				"function sync(){var enabled=boardPage();document.documentElement.classList.toggle(" +
+				"'slooop-reddit-board',enabled);if(enabled)decorate();}" +
+				"var observer=new MutationObserver(sync),onPop=function(){setTimeout(sync,0);}," +
+				"onClick=function(){setTimeout(sync,0);setTimeout(sync,350);};" +
+				"observer.observe(document.documentElement,{childList:true,subtree:true});" +
+				"addEventListener('popstate',onPop);document.addEventListener('click',onClick,true);" +
+				"window.__slooopRedditBoardStyle={observer:observer,onPop:onPop,onClick:onClick};sync();})();";
+	}
+
 	private String buildReaderStyleScript() {
 		ThemeEngine.Theme theme = ThemeEngine.getTheme(requireContext());
 		int textPrimary = theme.post;
 		int textSecondary = theme.meta;
+		int scorePositive = theme.base == ThemeEngine.Theme.Base.DARK ? 0x81c784 : 0x2e7d32;
+		int scoreNegative = theme.base == ThemeEngine.Theme.Base.DARK ? 0xef9a9a : 0xc62828;
 		String css = "html.slooop-reddit-reader{" +
 				"--shreddit-content-background:" + color(theme.card) + "!important;" +
 				"--color-neutral-background:" + color(theme.window) + "!important;" +
@@ -730,6 +862,14 @@ public class RedditWebReaderFragment extends ContentFragment {
 				"color:" + color(textSecondary) + "!important;min-height:28px!important}" +
 				"html.slooop-reddit-reader shreddit-comment [slot=\"actionRow\"] button{" +
 				"color:" + color(textSecondary) + "!important}" +
+				"html.slooop-reddit-reader shreddit-post[data-slooop-score-sign=\"positive\"] " +
+				":is([score],faceplate-number)," +
+				"html.slooop-reddit-reader shreddit-comment[data-slooop-score-sign=\"positive\"] " +
+				":is([score],faceplate-number){color:" + color(scorePositive) + "!important}" +
+				"html.slooop-reddit-reader shreddit-post[data-slooop-score-sign=\"negative\"] " +
+				":is([score],faceplate-number)," +
+				"html.slooop-reddit-reader shreddit-comment[data-slooop-score-sign=\"negative\"] " +
+				":is([score],faceplate-number){color:" + color(scoreNegative) + "!important}" +
 				"html.slooop-reddit-reader faceplate-partial[slot=\"children\"]," +
 				"html.slooop-reddit-reader a[slot=\"more-comments-permalink\"]{display:inline-flex!important;" +
 				"color:" + color(theme.link) + "!important;background:" + color(theme.card) +
@@ -740,16 +880,28 @@ public class RedditWebReaderFragment extends ContentFragment {
 				"html.slooop-reddit-reader a[slot=\"more-comments-permalink\"] button{" +
 				"color:" + color(theme.link) + "!important}";
 		String escapedCss = css.replace("\\", "\\\\").replace("'", "\\'");
-		return "(function(){var i='slooop-reddit-reader-style',s=document.getElementById(i);" +
+		return "(function(){var previous=window.__slooopRedditReaderStyle;" +
+				"if(previous){if(previous.observer)previous.observer.disconnect();" +
+				"if(previous.onPop)removeEventListener('popstate',previous.onPop);" +
+				"if(previous.onClick)document.removeEventListener('click',previous.onClick,true);}" +
+				"var i='slooop-reddit-reader-style',s=document.getElementById(i);" +
 				"if(!s){s=document.createElement('style');s.id=i;document.head.appendChild(s);}" +
 				"s.textContent='" + escapedCss + "';" +
-				"document.documentElement.classList.add('slooop-reddit-reader');})();";
+				"function sync(){document.documentElement.classList.toggle('slooop-reddit-reader'," +
+				"/\\/comments\\//.test(location.pathname));}" +
+				"var observer=new MutationObserver(sync),onPop=function(){setTimeout(sync,0);}," +
+				"onClick=function(){setTimeout(sync,0);setTimeout(sync,350);};" +
+				"observer.observe(document.documentElement,{childList:true,subtree:true});" +
+				"addEventListener('popstate',onPop);document.addEventListener('click',onClick,true);" +
+				"window.__slooopRedditReaderStyle={observer:observer,onPop:onPop,onClick:onClick};sync();})();";
 	}
 
 	private String buildHybridReaderScript() {
 		ThemeEngine.Theme theme = ThemeEngine.getTheme(requireContext());
 		boolean russian = "ru".equals(requireContext().getResources().getConfiguration()
 				.getLocales().get(0).getLanguage());
+		int scorePositive = theme.base == ThemeEngine.Theme.Base.DARK ? 0x81c784 : 0x2e7d32;
+		int scoreNegative = theme.base == ThemeEngine.Theme.Base.DARK ? 0xef9a9a : 0xc62828;
 		String css = ":host{display:block;box-sizing:border-box;min-height:100vh;background:" +
 				color(theme.window) + ";color:" + color(theme.post) +
 				";font:14px/1.45 sans-serif;-webkit-text-size-adjust:100%;overflow-wrap:anywhere}" +
@@ -771,7 +923,10 @@ public class RedditWebReaderFragment extends ContentFragment {
 				".notice{margin:6px 2px 10px;color:" + color(theme.meta) + ";font-size:12px}" +
 				".post{margin:0 0 12px;padding:10px;border-radius:8px;background:" + color(theme.card) +
 				";border-left:3px solid " + color(theme.accent) + "}" +
-				".post-meta,.comment-meta{color:" + color(theme.meta) + ";font-size:12px}" +
+				".post-meta,.comment-meta{display:flex;gap:5px;align-items:baseline;color:" +
+				color(theme.meta) + ";font-size:12px;white-space:nowrap;overflow:hidden}" +
+				".score-positive{color:" + color(scorePositive) + ";font-weight:700}" +
+				".score-negative{color:" + color(scoreNegative) + ";font-weight:700}" +
 				".post-title{margin:5px 0 8px;font-size:17px;line-height:1.35;font-weight:700}" +
 				".post-link{display:block;margin:7px 0;padding:7px;border-radius:6px;background:" +
 				colorWithAlpha(theme.link, 0x16) + ";white-space:nowrap;overflow:hidden;text-overflow:ellipsis}" +
@@ -783,7 +938,6 @@ public class RedditWebReaderFragment extends ContentFragment {
 				".comments-title{margin:10px 3px 5px;font-weight:700}" +
 				".comment{position:relative;margin-top:4px;padding:6px 6px 6px 8px;border-radius:0 7px 7px 0;" +
 				"border-left:2px solid " + colorWithAlpha(theme.accent, 0x92) + ";background:" + color(theme.card) + "}" +
-				".comment-meta{display:flex;gap:5px;align-items:baseline;white-space:nowrap;overflow:hidden}" +
 				".author{min-width:0;overflow:hidden;text-overflow:ellipsis;color:" + color(theme.post) +
 				";font-weight:700}.time,.score{flex:0 0 auto}.comment-body{margin-top:3px}" +
 				".comment-actions{display:flex;justify-content:flex-end;margin-top:3px}" +
@@ -801,21 +955,35 @@ public class RedditWebReaderFragment extends ContentFragment {
 				color(theme.meta) + "}";
 		String quotedCss = JSONObject.quote(css);
 		return "(function(){" +
-				"var VERSION=4,existing=window.__slooopRedditHybridReader;if(existing&&existing.version===VERSION){" +
+				"var VERSION=11,existing=window.__slooopRedditHybridReader;if(existing&&existing.version===VERSION){" +
 				"existing.scan();return;}if(existing){try{existing.observer.disconnect();}catch(e){}" +
 				"try{if(existing.moreObserver)existing.moreObserver.disconnect();}catch(e){}" +
+				"try{if(existing.cancelAutoLoad)existing.cancelAutoLoad();}catch(e){}" +
 				"try{document.removeEventListener('click',existing.navigationIntent,true);}catch(e){}" +
 				"try{window.removeEventListener('popstate',existing.historyNavigation);}catch(e){}" +
+				"try{window.removeEventListener('scroll',existing.readerScroll);}catch(e){}" +
+				"try{document.removeEventListener('scroll',existing.readerScroll,true);}catch(e){}" +
+				"try{if(existing.originalPushState)history.pushState=existing.originalPushState;" +
+				"if(existing.originalReplaceState)history.replaceState=existing.originalReplaceState;}catch(e){}" +
 				"document.documentElement.classList.remove('slooop-hybrid-reader-active');" +
 				"var staleHost=document.getElementById('slooop-hybrid-reader-host');if(staleHost)staleHost.remove();" +
 				"var staleStyle=document.getElementById('slooop-hybrid-reader-style');if(staleStyle)staleStyle.remove();" +
 				"delete window.__slooopRedditHybridReader;}" +
-				"var HOST='slooop-hybrid-reader-host',ACTIVE='slooop-hybrid-reader-active';" +
-				"var state={active:false,initialized:false,userOriginal:false,timer:0,key:'',path:''," +
-				"readerY:0,originalY:0,action:null,pendingSince:0,pendingReason:'',moreLoading:false,moreTarget:null};" +
+				"var HOST='slooop-hybrid-reader-host',ACTIVE='slooop-hybrid-reader-active'," +
+				"RESUME='slooop-reddit-reader-resume';var resumeReader=false;try{" +
+				"var rawResume=sessionStorage.getItem(RESUME),savedResume=rawResume?JSON.parse(rawResume):null;" +
+				"if(savedResume&&savedResume.until>Date.now()&&savedResume.host===location.host)resumeReader=true;" +
+				"else if(rawResume)sessionStorage.removeItem(RESUME);}catch(e){try{sessionStorage.removeItem(RESUME);}catch(ignored){}}" +
+				"var state={active:false,initialized:false,userOriginal:!resumeReader,timer:0,key:'',path:''," +
+				"readerY:0,originalY:0,action:null,pendingSince:0,pendingReason:'',moreLoading:false," +
+				"moreKey:'',moreTargets:[],collapsed:{},autoTimer:0,resumeNavigation:false};" +
 				"function log(name,detail){console.log('" + JS_LOG_PREFIX +
 				"event=hybrid_'+name+(detail?' '+detail:''));}" +
 				"function text(value){return(value||'').replace(/\\s+/g,' ').trim();}" +
+				"function scoreSign(value){var n=parseFloat(text(value).replace(',','.'));" +
+				"return n>0?'positive':n<0?'negative':'neutral';}" +
+				"function scoreClass(value){var sign=scoreSign(value);" +
+				"return sign==='positive'?'score-positive':sign==='negative'?'score-negative':'';}" +
 				"function safeUrl(value){try{var u=new URL(value,location.href);" +
 				"return u.protocol==='https:'?u.href:null;}catch(e){return null;}}" +
 				"function digest(value){var hash=2166136261;for(var i=0;i<value.length;i++){hash^=value.charCodeAt(i);" +
@@ -844,7 +1012,7 @@ public class RedditWebReaderFragment extends ContentFragment {
 				"'<main class=\"reader\"><header class=\"toolbar\"><div class=\"toolbar-title\"></div>' +" +
 				"'<button class=\"button original\" type=\"button\"></button></header><div class=\"notice\"></div>' +" +
 				"'<article class=\"post\"></article><div class=\"comments-title\"></div>' +" +
-				"'<section class=\"comments\"></section><button class=\"button more\" type=\"button\"></button></main>' +" +
+				"'<section class=\"comments\"></section></main>' +" +
 				"'<div class=\"action-overlay\" hidden><section class=\"action-sheet\"><div class=\"action-title\"></div>' +" +
 				"'<button type=\"button\" data-command=\"copy-text\"></button><button type=\"button\" data-command=\"copy-link\"></button>' +" +
 				"'<button type=\"button\" data-command=\"collapse\"></button><button type=\"button\" data-command=\"original-actions\"></button>' +" +
@@ -866,7 +1034,7 @@ public class RedditWebReaderFragment extends ContentFragment {
 				"collapse:'Collapse thread',expand:'Expand thread',originalActions:'Actions on original page',cancel:'Cancel'};" +
 				"shadow.querySelector('.toolbar-title').textContent=labels.title;shadow.querySelector('.original').textContent=labels.original;" +
 				"shadow.querySelector('.reader-return').textContent=labels.reader;shadow.querySelector('.notice').textContent=labels.notice;" +
-				"shadow.querySelector('.comments-title').textContent=labels.comments;shadow.querySelector('.more').textContent=labels.more;" +
+				"shadow.querySelector('.comments-title').textContent=labels.comments;" +
 				"shadow.querySelector('[data-command=copy-text]').textContent=labels.copyText;" +
 				"shadow.querySelector('[data-command=copy-link]').textContent=labels.copyLink;" +
 				"shadow.querySelector('[data-command=original-actions]').textContent=labels.originalActions;" +
@@ -887,9 +1055,23 @@ public class RedditWebReaderFragment extends ContentFragment {
 				"function(){fallback();});}else fallback();function fallback(){var area=document.createElement('textarea');" +
 				"area.value=value;area.setAttribute('readonly','');area.style.position='fixed';area.style.opacity='0';" +
 				"shadow.appendChild(area);area.select();var ok=false;try{ok=document.execCommand('copy');}catch(e){}area.remove();done(ok);}}" +
-				"function setCollapsed(card,collapsed){var depth=parseInt(card.dataset.depth||'0',10),next=card.nextElementSibling;" +
-				"while(next){var nextDepth=parseInt(next.dataset.depth||'0',10);if(nextDepth<=depth)break;next.hidden=collapsed;next=next.nextElementSibling;}" +
-				"card.dataset.collapsed=collapsed?'true':'false';}" +
+				"function refreshCollapsed(list){var stack=[];for(var node=list.firstElementChild;node;node=node.nextElementSibling){" +
+				"var depth=Math.max(0,parseInt(node.dataset.depth||'0',10)||0);stack.length=Math.min(stack.length,depth);" +
+				"node.hidden=stack.indexOf(true)>=0;if(node.classList.contains('comment')){" +
+				"var collapsed=!!state.collapsed[node.dataset.commentKey];node.dataset.collapsed=collapsed?'true':'false';" +
+				"stack[depth]=collapsed;stack.length=depth+1;}}}" +
+				"function setCollapsed(card,collapsed){var key=card.dataset.commentKey;if(key)state.collapsed[key]=collapsed;" +
+				"refreshCollapsed(card.parentElement);}" +
+				"function captureAnchor(list){if(!state.active||state.userOriginal)return null;" +
+				"var toolbar=shadow.querySelector('.toolbar'),top=toolbar?toolbar.getBoundingClientRect().bottom:0;" +
+				"var cards=list.querySelectorAll('.comment[data-comment-key]');for(var i=0;i<cards.length;i++){" +
+				"var rect=cards[i].getBoundingClientRect();if(rect.bottom>top+1&&rect.top<innerHeight)" +
+				"return{key:cards[i].dataset.commentKey,top:rect.top};}return null;}" +
+				"function restoreAnchor(anchor,list){if(!anchor||!state.active||state.userOriginal)return;" +
+				"requestAnimationFrame(function(){var cards=list.querySelectorAll('.comment[data-comment-key]');" +
+				"for(var i=0;i<cards.length;i++)if(cards[i].dataset.commentKey===anchor.key){" +
+				"var delta=cards[i].getBoundingClientRect().top-anchor.top;if(Math.abs(delta)>.5)scrollBy(0,delta);" +
+				"log('anchor_restore','delta='+Math.round(delta));break;}});}" +
 				"function openActions(comment,card,bodyText,permalink){state.action={comment:comment,card:card,body:bodyText,link:permalink};" +
 				"shadow.querySelector('.action-title').textContent='u/'+text(comment.getAttribute('author'));" +
 				"var collapse=shadow.querySelector('[data-command=collapse]'),next=card.nextElementSibling;" +
@@ -897,7 +1079,8 @@ public class RedditWebReaderFragment extends ContentFragment {
 				"collapse.textContent=card.dataset.collapsed==='true'?labels.expand:labels.collapse;actionOverlay.hidden=false;" +
 				"log('actions_open','comment='+text(comment.getAttribute('thingid')));}" +
 				"shadow.querySelector('.original').onclick=function(){showOriginal(null);};" +
-				"shadow.querySelector('.reader-return').onclick=showReader;" +
+				"shadow.querySelector('.reader-return').onclick=function(){state.userOriginal=false;state.key='';" +
+				"if(state.initialized)showReader();else showPending('user_request');scan(0);};" +
 				"actionOverlay.onclick=function(event){if(event.target===actionOverlay)closeActions();};" +
 				"shadow.querySelector('[data-command=cancel]').onclick=closeActions;" +
 				"shadow.querySelector('[data-command=copy-text]').onclick=function(){if(state.action)copyValue(state.action.body,this);};" +
@@ -906,40 +1089,91 @@ public class RedditWebReaderFragment extends ContentFragment {
 				"var collapsed=state.action.card.dataset.collapsed!=='true';setCollapsed(state.action.card,collapsed);closeActions();" +
 				"log('branch_toggle','collapsed='+collapsed);};" +
 				"shadow.querySelector('[data-command=original-actions]').onclick=function(){if(state.action)showOriginal(state.action.comment);};" +
-				"function findMoreButton(target){var buttons=target?target.querySelectorAll('button'):[];" +
-				"for(var i=0;i<buttons.length;i++){var candidate=buttons[i];if(candidate.getAttribute('aria-hidden')!=='true'&&" +
-				"candidate.getAttribute('aria-label')!=='Loading'&&!candidate.disabled)return candidate;}return null;}" +
-				"function findMoreTarget(tree){var targets=tree.querySelectorAll('faceplate-partial[slot=children]');" +
-				"for(var i=0;i<targets.length;i++)if(findMoreButton(targets[i]))return targets[i];return null;}" +
+				"function findMoreButton(target){if(!target)return null;var candidates=[];" +
+				"if(target.matches&&target.matches('button,[role=button]:not(a[href])'))candidates.push(target);" +
+				"var nested=target.querySelectorAll?target.querySelectorAll('button,[role=button]:not(a[href])'):[];" +
+				"for(var i=0;i<nested.length;i++)candidates.push(nested[i]);for(var i=0;i<candidates.length;i++){" +
+				"var candidate=candidates[i],label=(candidate.getAttribute('aria-label')||'').toLowerCase();" +
+				"if(candidate.getAttribute('aria-hidden')!=='true'&&label!=='loading'&&!candidate.disabled)return candidate;}" +
+				"return null;}" +
+				"function commentDepth(comment){return Math.max(0,parseInt(comment.getAttribute('depth')||'0',10)||0);}" +
+				"function collectMoreTargets(tree,comments){var nodes=Array.prototype.slice.call(" +
+				"tree.querySelectorAll('faceplate-partial[slot=children]'));" +
+				"var fullLinks=document.querySelectorAll('a[slot=more-comments-permalink][href]');" +
+				"for(var l=0;l<fullLinks.length;l++)nodes.push(fullLinks[l]);var result=[];" +
+				"for(var i=0;i<nodes.length;i++){var target=nodes[i],navigation=target.matches&&target.matches('a[href]');" +
+				"var clickable=navigation?target:findMoreButton(target);if(!clickable)continue;" +
+				"var owner=target.closest?target.closest('shreddit-comment'):null,ownerIndex=owner?comments.indexOf(owner):-1;" +
+				"var after=comments.length-1,depth=0,ownerKey='root';if(ownerIndex>=0){var ownerDepth=commentDepth(owner);" +
+				"after=ownerIndex;depth=Math.min(9,ownerDepth+1);for(var j=ownerIndex+1;j<comments.length;j++){" +
+				"if(commentDepth(comments[j])<=ownerDepth)break;after=j;}ownerKey=text(owner.getAttribute('thingid'))||" +
+				"safeUrl(owner.getAttribute('permalink'))||('comment-'+ownerIndex);}" +
+				"result.push({target:target,after:after,depth:depth,key:ownerKey+'|'+i,navigation:navigation});}" +
+				"return result;}" +
 				"function loadMore(target,button){if(!target||!target.isConnected||button.disabled||state.moreLoading)return;" +
-				"var clickable=findMoreButton(target);" +
+				"var navigation=target.matches&&target.matches('a[href]'),clickable=navigation?target:findMoreButton(target);" +
 				"if(!clickable||typeof clickable.click!=='function'){log('more_failed','reason=no_action');return;}" +
-				"state.moreLoading=true;button.disabled=true;button.textContent=labels.loading;" +
+				"state.moreLoading=true;state.moreKey=button.dataset.moreKey||'';var all=shadow.querySelectorAll('.more');" +
+				"for(var i=0;i<all.length;i++)all[i].disabled=true;button.textContent=labels.loading;" +
 				"state.active=true;state.userOriginal=false;host.hidden=false;host.removeAttribute('data-mode');" +
+				"if(navigation){var href=safeUrl(clickable.href);if(!href){state.moreLoading=false;button.disabled=false;" +
+				"button.textContent=labels.more;log('more_failed','reason=unsafe_navigation');return;}" +
+				"try{var nextUrl=new URL(href),currentUrl=new URL(location.href);nextUrl.hash='';currentUrl.hash='';" +
+				"if(nextUrl.href===currentUrl.href){state.moreLoading=false;button.disabled=false;button.textContent=labels.more;" +
+				"log('more_failed','reason=same_navigation');return;}}catch(e){}" +
+				"state.resumeNavigation=true;try{sessionStorage.setItem(RESUME,JSON.stringify({" +
+				"until:Date.now()+45000,host:location.host}));}catch(e){}log('more_navigation','host='+location.host);" +
+				"location.assign(href);return;}" +
 				"document.documentElement.classList.add(ACTIVE);try{clickable.click();}catch(e){state.moreLoading=false;" +
-				"button.disabled=false;button.textContent=labels.more;log('more_failed','reason=click_exception');return;}" +
+				"state.moreKey='';button.disabled=false;button.textContent=labels.more;log('more_failed','reason=click_exception');return;}" +
 				"log('more_requested','tag='+target.tagName);setTimeout(function(){state.moreLoading=false;" +
-				"button.disabled=false;button.textContent=labels.more;scan(0);},3000);}" +
-				"var moreButton=shadow.querySelector('.more'),moreObserver=null;" +
+				"state.moreKey='';state.key='';scan(0);scheduleAutoLoad('settled');},3000);}" +
+				"var moreObserver=null;" +
+				"var autoFrame=0;function cancelAutoLoad(){clearTimeout(state.autoTimer);state.autoTimer=0;" +
+				"if(autoFrame){cancelAnimationFrame(autoFrame);autoFrame=0;}}" +
+				"function maybeAutoLoadMore(reason){if(autoFrame)return;" +
+				"autoFrame=requestAnimationFrame(function(){autoFrame=0;if(!state.active||state.userOriginal||" +
+				"state.moreLoading)return;var buttons=shadow.querySelectorAll('.more[data-more-key]');" +
+				"var threshold=Math.max(360,Math.min(900,innerHeight*.8));for(var i=0;i<buttons.length;i++){" +
+				"var button=buttons[i];if(button.dataset.navigation==='true')continue;" +
+				"var rect=button.getBoundingClientRect();if(!button.hidden&&rect.top<=innerHeight+threshold&&" +
+				"rect.bottom>=-threshold&&button.__slooopTarget){log('more_auto','source='+reason+' distance='+" +
+				"Math.round(rect.top-innerHeight));loadMore(button.__slooopTarget,button);break;}}});}" +
+				"function scheduleAutoLoad(reason){clearTimeout(state.autoTimer);state.autoTimer=setTimeout(function(){" +
+				"state.autoTimer=0;maybeAutoLoadMore(reason);},250);}" +
+				"function readerScroll(){scheduleAutoLoad('scroll_end');}" +
 				"if(typeof IntersectionObserver==='function'){moreObserver=new IntersectionObserver(function(entries){" +
 				"for(var i=0;i<entries.length;i++)if(entries[i].isIntersecting&&state.active&&!state.userOriginal&&" +
-				"state.moreTarget&&!state.moreLoading){log('more_auto','margin=900px');loadMore(state.moreTarget,moreButton);break;}" +
-				"},{root:null,rootMargin:'900px 0px',threshold:0});moreObserver.observe(moreButton);}" +
+				"!state.moreLoading){scheduleAutoLoad('intersection');break;}" +
+				"},{root:null,rootMargin:'900px 0px',threshold:0});}" +
+				"function appendMoreMarkers(list,after){for(var i=0;i<state.moreTargets.length;i++){" +
+				"var item=state.moreTargets[i];if(item.after!==after)continue;var button=element('button','button more'," +
+				"state.moreLoading&&state.moreKey===item.key?labels.loading:labels.more);button.type='button';" +
+				"button.dataset.moreKey=item.key;button.dataset.depth=item.depth;button.disabled=state.moreLoading;" +
+				"button.dataset.navigation=item.navigation?'true':'false';" +
+				"button.__slooopTarget=item.target;(function(target,current){current.onclick=function(){loadMore(target,current);};}" +
+				")(item.target,button);list.appendChild(button);if(moreObserver&&!item.navigation)moreObserver.observe(button);}}" +
+				"window.addEventListener('scroll',readerScroll,{passive:true});" +
+				"document.addEventListener('scroll',readerScroll,true);" +
 				"function showPending(reason){if(state.userOriginal)return;var postBox=shadow.querySelector('.post')," +
 				"titleBox=shadow.querySelector('.comments-title'),list=shadow.querySelector('.comments');postBox.hidden=true;" +
-				"titleBox.hidden=true;shadow.querySelector('.more').hidden=true;list.replaceChildren(element('div','empty',labels.loading));" +
+				"titleBox.hidden=true;list.replaceChildren(element('div','empty',labels.loading));" +
 				"host.hidden=false;state.initialized=true;if(!state.active)showReader();if(state.pendingReason!==reason){" +
 				"state.pendingReason=reason;log('pending','reason='+reason);}}" +
 				"function render(){try{var path=location.pathname,isThread=/\\/comments\\//.test(path);" +
-				"if(state.path!==path){state.path=path;state.key='';state.pendingSince=Date.now();state.userOriginal=false;" +
-				"state.initialized=false;state.pendingReason='';state.moreLoading=false;state.moreTarget=null;}" +
+				"if(state.path!==path){var keepReader=state.resumeNavigation;state.resumeNavigation=false;state.path=path;" +
+				"state.key='';state.pendingSince=Date.now();state.userOriginal=!keepReader;" +
+				"state.active=false;state.initialized=false;state.pendingReason='';state.moreLoading=false;state.moreKey='';" +
+				"state.moreTargets=[];state.collapsed={};document.documentElement.classList.remove(ACTIVE);" +
+				"if(keepReader){host.hidden=false;host.removeAttribute('data-mode');}" +
+				"else host.setAttribute('data-mode','original');}" +
 				"var post=isThread?document.querySelector('shreddit-post'):null,tree=document.querySelector('#comment-tree');" +
 				"if(!tree&&document.querySelector('shreddit-comment'))tree=document;" +
 				"if(!isThread){if(state.initialized||state.active){document.documentElement.classList.remove(ACTIVE);host.hidden=true;" +
 				"state.initialized=false;state.active=false;state.key='';log('fallback','reason=not_thread');}return;}" +
-				"if(!post||!tree){if(document.readyState==='complete'&&Date.now()-state.pendingSince>12000){" +
-				"document.documentElement.classList.remove(ACTIVE);host.hidden=true;state.active=false;state.userOriginal=true;" +
-				"log('fallback','reason=missing_structure');}else{showPending(!post?'missing_post':'missing_tree');scan(300);}return;}" +
+				"if(!post||!tree){var missing=!post?'missing_post':'missing_tree';showPending(missing);" +
+				"if(document.readyState==='complete'&&Date.now()-state.pendingSince>12000)" +
+				"log('waiting','reason='+missing);scan(800);return;}" +
 				"var titleSource=post.querySelector('[slot=title]');" +
 				"var title=text(titleSource?titleSource.textContent:post.getAttribute('post-title'));" +
 				"if(!title){showPending('missing_title');scan(300);return;}" +
@@ -949,43 +1183,56 @@ public class RedditWebReaderFragment extends ContentFragment {
 				"var contentKey=title;for(var n=0;n<comments.length;n++){var body=own(comments[n],'[slot=comment]');" +
 				"contentKey+='|'+comments[n].getAttribute('thingid')+'|'+comments[n].getAttribute('score')+'|'+" +
 				"(body?text(body.textContent):'');}" +
-				"var moreTarget=findMoreTarget(tree);state.moreTarget=moreTarget;" +
-				"var key=location.pathname+'|'+post.getAttribute('id')+'|'+comments.length+'|'+digest(contentKey)+'|'+!!moreTarget+" +
+				"var moreTargets=collectMoreTargets(tree,comments);state.moreTargets=moreTargets;" +
+				"var moreKey='';for(var m=0;m<moreTargets.length;m++)moreKey+='|'+moreTargets[m].key;" +
+				"var key=location.pathname+'|'+post.getAttribute('id')+'|'+comments.length+'|'+digest(contentKey)+'|'+digest(moreKey)+" +
 				"'|'+!!window.__slooopRedditTranslationEnabled;if(key===state.key)return;state.key=key;" +
 				"var postBox=shadow.querySelector('.post');postBox.hidden=false;postBox.replaceChildren();" +
-				"shadow.querySelector('.comments-title').hidden=false;" +
-				"var postMeta=element('div','post-meta',text(post.getAttribute('subreddit-prefixed-name'))+' · u/'+" +
-				"text(post.getAttribute('author'))+' · '+text((post.querySelector('[slot=credit-bar] time')||{}).textContent)+" +
-				"' · '+text(post.getAttribute('score')));postBox.appendChild(postMeta);" +
+				"var commentsTitle=shadow.querySelector('.comments-title');commentsTitle.hidden=false;" +
+				"commentsTitle.textContent=labels.comments+' · '+comments.length+(expected?' / '+expected:'');" +
+				"var postScore=text(post.getAttribute('score')),postSign=scoreSign(postScore);" +
+				"post.setAttribute('data-slooop-score-sign',postSign);var postMeta=element('div','post-meta');" +
+				"postMeta.appendChild(element('span','',text(post.getAttribute('subreddit-prefixed-name'))));" +
+				"postMeta.appendChild(element('span','','· u/'+text(post.getAttribute('author'))));" +
+				"var postTime=text((post.querySelector('[slot=credit-bar] time')||{}).textContent);" +
+				"if(postTime)postMeta.appendChild(element('span','','· '+postTime));" +
+				"if(postScore)postMeta.appendChild(element('span',scoreClass(postScore),'· '+postScore));" +
+				"postBox.appendChild(postMeta);" +
 				"postBox.appendChild(element('h1','post-title',title));var bodySource=post.querySelector('[slot=text-body]');" +
 				"if(bodySource)postBox.appendChild(cleanContent(bodySource));var contentHref=safeUrl(post.getAttribute('content-href'));" +
 				"if(contentHref){var link=element('a','post-link',contentHref);link.href=contentHref;link.rel='noopener noreferrer';postBox.appendChild(link);}" +
-				"var list=shadow.querySelector('.comments');list.replaceChildren();var rendered=0;" +
+				"var list=shadow.querySelector('.comments'),anchor=captureAnchor(list);" +
+				"if(state.action)closeActions();list.replaceChildren();appendMoreMarkers(list,-1);var rendered=0;" +
 				"for(var i=0;i<comments.length&&i<500;i++){var comment=comments[i],source=own(comment,'[slot=comment]');" +
-				"var author=text(comment.getAttribute('author')),bodyText=source?text(source.textContent):'';if(!author&&!bodyText)continue;" +
+				"var author=text(comment.getAttribute('author')),bodyText=source?text(source.textContent):'';" +
+				"if(!author&&!bodyText){appendMoreMarkers(list,i);continue;}" +
 				"var card=element('article','comment');var depth=Math.max(0,Math.min(8,parseInt(comment.getAttribute('depth')||'0',10)||0));" +
+				"var permalink=safeUrl(comment.getAttribute('permalink'));" +
+				"card.dataset.commentKey=text(comment.getAttribute('thingid'))||permalink||digest(author+'|'+bodyText);" +
 				"card.dataset.depth=depth;card.style.marginInlineStart=(depth*8)+'px';var meta=element('div','comment-meta');" +
 				"meta.appendChild(element('span','author',author?'u/'+author:'[deleted]'));var metaSource=own(comment,'[slot=commentMeta]');" +
 				"var time=metaSource?metaSource.querySelector('time'):null;if(time)meta.appendChild(element('span','time','· '+text(time.textContent)));" +
-				"var score=text(comment.getAttribute('score'));if(score)meta.appendChild(element('span','score','· '+score));card.appendChild(meta);" +
+				"var score=text(comment.getAttribute('score')),sign=scoreSign(score);" +
+				"comment.setAttribute('data-slooop-score-sign',sign);if(score)meta.appendChild(" +
+				"element('span','score '+scoreClass(score),'· '+score));card.appendChild(meta);" +
 				"if(source){var clean=cleanContent(source);clean.className='content comment-body';card.appendChild(clean);}" +
 				"var actions=element('div','comment-actions'),button=element('button','',labels.actions);button.type='button';" +
-				"var permalink=safeUrl(comment.getAttribute('permalink'))||location.href;" +
 				"(function(target,targetCard,targetBody,targetLink){button.onclick=function(){" +
-				"openActions(target,targetCard,targetBody,targetLink);};})(comment,card,bodyText,permalink);" +
+				"openActions(target,targetCard,targetBody,targetLink);};})(comment,card,bodyText,permalink||location.href);" +
 				"actions.appendChild(button);card.appendChild(actions);" +
-				"list.appendChild(card);rendered++;}" +
-				"if(!rendered)list.appendChild(element('div','empty',labels.empty));var more=shadow.querySelector('.more');" +
-				"more.hidden=!moreTarget;more.disabled=state.moreLoading;" +
-				"more.textContent=state.moreLoading?labels.loading:labels.more;" +
-				"more.onclick=function(){loadMore(moreTarget,more);};" +
+				"list.appendChild(card);rendered++;appendMoreMarkers(list,i);}" +
+				"if(!rendered&&!moreTargets.length)list.appendChild(element('div','empty',labels.empty));" +
+				"refreshCollapsed(list);restoreAnchor(anchor,list);" +
 				"host.hidden=false;state.pendingSince=0;state.pendingReason='';" +
-				"if(!state.initialized){state.initialized=true;if(!state.userOriginal)showReader();}" +
+				"if(!state.userOriginal){try{sessionStorage.removeItem(RESUME);}catch(e){}resumeReader=false;}" +
+				"if(!state.initialized){state.initialized=true;if(!state.userOriginal)showReader();" +
+				"else{document.documentElement.classList.remove(ACTIVE);host.setAttribute('data-mode','original');}}" +
 				"else if(state.active){" +
 				"document.documentElement.classList.add(ACTIVE);host.removeAttribute('data-mode');}" +
-				"log('render','comments='+rendered+' expected='+expected+' more='+!!moreTarget);" +
-				"}catch(e){document.documentElement.classList.remove(ACTIVE);host.hidden=true;state.active=false;" +
-				"log('fallback','reason=exception name='+(e&&e.name?e.name:'unknown'));}}" +
+				"scheduleAutoLoad('render');" +
+				"log('render','comments='+rendered+' expected='+expected+' more='+moreTargets.length);" +
+				"}catch(e){showPending('render_exception');scan(1000);" +
+				"log('waiting','reason=exception name='+(e&&e.name?e.name:'unknown'));}}" +
 				"function scan(delay){clearTimeout(state.timer);state.timer=setTimeout(render,delay==null?120:delay);}" +
 				"var observer=new MutationObserver(function(changes){for(var i=0;i<changes.length;i++){" +
 				"var target=changes[i].target;if(target!==host&&!host.contains(target)){scan();return;}}});" +
@@ -996,16 +1243,23 @@ public class RedditWebReaderFragment extends ContentFragment {
 				"anchor=path[i];break;}if(!anchor&&event.target&&event.target.closest)anchor=event.target.closest('a[href]');" +
 				"if(!anchor)return;try{var url=new URL(anchor.href,location.href),hostName=url.hostname.toLowerCase();" +
 				"if((hostName==='reddit.com'||hostName.endsWith('.reddit.com'))&&/\\/comments\\//.test(url.pathname)){" +
-				"state.path=url.pathname;state.key='';state.pendingSince=Date.now();state.userOriginal=false;" +
-				"state.initialized=false;showPending('navigation');}}catch(e){}}" +
-				"function historyNavigation(){state.path='';state.key='';state.pendingSince=Date.now();" +
+				"state.key='';state.pendingSince=Date.now();state.initialized=false;showOriginal(null);}}catch(e){}}" +
+				"function historyNavigation(){if(location.pathname!==state.path){state.path='';state.pendingSince=Date.now();}" +
+				"state.key='';" +
 				"setTimeout(render,0);}" +
+				"var originalPushState=history.pushState,originalReplaceState=history.replaceState;" +
+				"history.pushState=function(){var result=originalPushState.apply(this,arguments);historyNavigation();return result;};" +
+				"history.replaceState=function(){var result=originalReplaceState.apply(this,arguments);historyNavigation();return result;};" +
 				"document.addEventListener('click',navigationIntent,true);window.addEventListener('popstate',historyNavigation);" +
 				"window.__slooopRedditHybridReader={version:VERSION,scan:scan,showReader:showReader,showOriginal:showOriginal,observer:observer," +
 				"moreObserver:moreObserver," +
-				"navigationIntent:navigationIntent,historyNavigation:historyNavigation};" +
+				"navigationIntent:navigationIntent,historyNavigation:historyNavigation,readerScroll:readerScroll," +
+				"cancelAutoLoad:cancelAutoLoad," +
+				"originalPushState:originalPushState,originalReplaceState:originalReplaceState};" +
 				"log('installed','version='+VERSION);if(/\\/comments\\//.test(location.pathname)){state.path=location.pathname;" +
-				"state.pendingSince=Date.now();showPending('initial');}render();})();";
+				"state.pendingSince=Date.now();host.hidden=false;if(resumeReader){state.active=false;" +
+				"state.userOriginal=false;showPending('resume_navigation');}else host.setAttribute('data-mode','original');}" +
+				"render();})();";
 	}
 
 	private static String color(int color) {
@@ -1158,23 +1412,38 @@ public class RedditWebReaderFragment extends ContentFragment {
 			if (!isCurrentPageLoad(view, generation)) {
 				return;
 			}
-			if (readerStyleScript != null) {
-				view.evaluateJavascript(readerStyleScript, ignored -> {
-					if (hybridReaderScript != null) {
-						view.evaluateJavascript(hybridReaderScript, hybridIgnored -> {
-							revealPage(view, generation);
-							scheduleTranslationScan(0L);
-						});
-					} else {
-						revealPage(view, generation);
-						scheduleTranslationScan(0L);
-					}
-				});
+			if (boardStyleScript != null) {
+				view.evaluateJavascript(boardStyleScript,
+						ignored -> applyDiscussionPresentation(view, generation));
 			} else {
-				revealPage(view, generation);
-				scheduleTranslationScan(0L);
+				applyDiscussionPresentation(view, generation);
 			}
 		});
+	}
+
+	private void applyDiscussionPresentation(WebView view, int generation) {
+		if (!isCurrentPageLoad(view, generation)) {
+			return;
+		}
+		if (readerStyleScript != null) {
+			view.evaluateJavascript(readerStyleScript, ignored -> {
+				if (!isCurrentPageLoad(view, generation)) {
+					return;
+				}
+				if (hybridReaderScript != null) {
+					view.evaluateJavascript(hybridReaderScript, hybridIgnored -> {
+						revealPage(view, generation);
+						scheduleTranslationScan(0L);
+					});
+				} else {
+					revealPage(view, generation);
+					scheduleTranslationScan(0L);
+				}
+			});
+		} else {
+			revealPage(view, generation);
+			scheduleTranslationScan(0L);
+		}
 	}
 
 	private class RedditWebViewClient extends WebViewClient {

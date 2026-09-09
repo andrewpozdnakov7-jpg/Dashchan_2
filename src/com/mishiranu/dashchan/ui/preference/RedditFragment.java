@@ -42,6 +42,8 @@ public class RedditFragment extends PreferenceFragment {
 						.pushFragment(new RedditSectionsFragment()));
 		addCheck(true, Preferences.KEY_REDDIT_WEB_READER_STYLE, Preferences.DEFAULT_REDDIT_WEB_READER_STYLE,
 				R.string.reddit_slooop_style, R.string.reddit_slooop_style__summary);
+		addCheck(true, Preferences.KEY_REDDIT_BOARD_STYLE, Preferences.DEFAULT_REDDIT_BOARD_STYLE,
+				R.string.reddit_board_style, R.string.reddit_board_style__summary);
 	}
 
 	@Override

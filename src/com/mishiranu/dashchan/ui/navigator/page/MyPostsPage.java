@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui.navigator.page;
 
+import android.app.AlertDialog;
 import android.view.Menu;
 import android.view.MenuItem;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -134,6 +135,7 @@ public class MyPostsPage extends ListPage implements MyPostsAdapter.Callback, Re
 				.setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM);
 		menu.add(0, R.id.menu_reply_history, 1, R.string.reply_history);
 		menu.add(0, R.id.menu_mark_replies_read, 2, R.string.mark_all_replies_read);
+		menu.add(0, R.id.menu_clear, 3, R.string.clear_reply_history);
 	}
 
 	@Override
@@ -150,6 +152,10 @@ public class MyPostsPage extends ListPage implements MyPostsAdapter.Callback, Re
 		if (markRead != null) {
 			markRead.setEnabled(MyPostsStorage.getInstance().getUnreadCount() > 0);
 		}
+		MenuItem clear = menu.findItem(R.id.menu_clear);
+		if (clear != null) {
+			clear.setEnabled(!MyPostsStorage.getInstance().getRecentReplies(1).isEmpty());
+		}
 	}
 
 	@Override
@@ -163,8 +169,40 @@ public class MyPostsPage extends ListPage implements MyPostsAdapter.Callback, Re
 		} else if (item.getItemId() == R.id.menu_mark_replies_read) {
 			markAllRepliesRead();
 			return true;
+		} else if (item.getItemId() == R.id.menu_clear) {
+			showClearReplyHistoryDialog();
+			return true;
 		}
 		return false;
+	}
+
+	private void showClearReplyHistoryDialog() {
+		new InstanceDialog(getFragmentManager(), null, provider -> new AlertDialog.Builder(provider.getContext())
+				.setMessage(R.string.clear_reply_history__sentence)
+				.setNegativeButton(android.R.string.cancel, null)
+				.setPositiveButton(android.R.string.ok, (dialog, which) -> clearReplyHistory())
+				.create());
+	}
+
+	private void clearReplyHistory() {
+		MyPostsStorage storage = MyPostsStorage.getInstance();
+		HashMap<MyPostsStorage.ThreadKey, ArrayList<PostNumber>> repliesByThread = new HashMap<>();
+		for (MyPostsStorage.ReplyItem reply : storage.getUnreadReplies()) {
+			MyPostsStorage.ThreadKey key = new MyPostsStorage.ThreadKey(reply.chanName,
+					reply.boardName, reply.threadNumber);
+			ArrayList<PostNumber> postNumbers = repliesByThread.get(key);
+			if (postNumbers == null) {
+				postNumbers = new ArrayList<>();
+				repliesByThread.put(key, postNumbers);
+			}
+			postNumbers.add(reply.postNumber);
+		}
+		storage.clearReplyHistory();
+		for (Map.Entry<MyPostsStorage.ThreadKey, ArrayList<PostNumber>> entry : repliesByThread.entrySet()) {
+			MyPostsStorage.ThreadKey key = entry.getKey();
+			WatcherNotifications.cancelReplies(getContext(), key.chanName, key.boardName,
+					key.threadNumber, entry.getValue());
+		}
 	}
 
 	private void showReplyHistory() {

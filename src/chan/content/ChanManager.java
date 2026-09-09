@@ -91,6 +91,7 @@ public class ChanManager {
 	private static final String BUILTIN_ZCHAN_NAME = "zchan";
 	private static final String BUILTIN_ENDCHAN_NAME = "endchan";
 	private static final String BUILTIN_PIKABU_NAME = "pikabu";
+	private static final String BUILTIN_D3_NAME = "d3ru";
 	private static final String[] BUILTIN_REPLACED_PACKAGE_NAMES = {
 			"com.mishiranu.dashchan.chan.dvach", "io.dashchan2.chan.dvach",
 			"com.mishiranu.dashchan.chan.fourchan", "io.dashchan2.chan.fourchan",
@@ -99,7 +100,8 @@ public class ChanManager {
 			"com.mishiranu.dashchan.chan.arhivach", "io.dashchan2.chan.arhivach",
 			"com.mishiranu.dashchan.chan.zchan", "io.dashchan2.chan.zchan",
 			"com.mishiranu.dashchan.chan.endchan", "io.dashchan2.chan.endchan",
-			"com.mishiranu.dashchan.chan.pikabu", "io.dashchan2.chan.pikabu"};
+			"com.mishiranu.dashchan.chan.pikabu", "io.dashchan2.chan.pikabu",
+			"com.mishiranu.dashchan.chan.d3ru", "io.dashchan2.chan.d3ru"};
 
 	private static final int PACKAGE_MANAGER_SIGNATURE_FLAGS = PackageManager.GET_SIGNING_CERTIFICATES;
 
@@ -435,6 +437,20 @@ public class ChanManager {
 		return new Extension(extensionItem.changeLoadError(result.error), result.chan);
 	}
 
+	private static Extension loadBuiltinD3(Fingerprints applicationFingerprints) {
+		MainApplication application = MainApplication.getInstance();
+		ExtensionItem extensionItem = new ExtensionItem(ExtensionItem.Type.CHAN, BUILTIN_D3_NAME, "d3.ru",
+				ExtensionItem.TrustState.TRUSTED, application.getPackageName(), BuildConfig.VERSION_NAME,
+				BuildConfig.VERSION_CODE, application.getApplicationInfo(), applicationFingerprints,
+				MAX_VERSION, true, R.drawable.ic_custom_d3, null, null,
+				"com.mishiranu.dashchan.chan.d3ru.D3ChanConfiguration",
+				"com.mishiranu.dashchan.chan.d3ru.D3ChanPerformer",
+				"com.mishiranu.dashchan.chan.d3ru.D3ChanLocator",
+				"com.mishiranu.dashchan.chan.d3ru.D3ChanMarkup", true);
+		LoadChanResult result = loadChan(extensionItem, application.getPackageManager());
+		return new Extension(extensionItem.changeLoadError(result.error), result.chan);
+	}
+
 	@SuppressLint("PackageManagerGetSignatures")
 	private ChanManager() {
 		String packageName = MainApplication.getInstance().getPackageName();
@@ -486,6 +502,9 @@ public class ChanManager {
 			Extension builtInPikabu = loadBuiltinPikabu(applicationFingerprints);
 			extensions.add(builtInPikabu);
 			usedExtensionNames.add(builtInPikabu.item.name);
+			Extension builtInD3 = loadBuiltinD3(applicationFingerprints);
+			extensions.add(builtInD3);
+			usedExtensionNames.add(builtInD3.item.name);
 			Collections.addAll(loadedPackageNames, BUILTIN_REPLACED_PACKAGE_NAMES);
 			for (String knownPackageName : BuildConfig.KNOWN_CHAN_EXTENSION_PACKAGES) {
 				loadKnownExtension(packageManager, knownPackageName, loadedPackageNames,

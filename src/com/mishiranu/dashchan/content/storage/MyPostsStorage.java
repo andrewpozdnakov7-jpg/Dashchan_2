@@ -34,6 +34,7 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 	private static final String KEY_THREAD_DELETED = "threadDeleted";
 	private static final String KEY_TRACKING_ACTIVE = "trackingActive";
 	private static final String KEY_REPLIES = "replies";
+	private static final String KEY_REPLIES_CLEARED_THROUGH = "repliesClearedThrough";
 	private static final String KEY_UNREAD = "unread";
 
 	private static final MyPostsStorage INSTANCE = new MyPostsStorage();
@@ -102,6 +103,7 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 		public long lastChecked;
 		public boolean threadDeleted;
 		public boolean trackingActive = true;
+		public PostNumber repliesClearedThrough;
 		public final ArrayList<Reply> replies = new ArrayList<>();
 
 		private TrackedPost(String chanName, String boardName, String threadNumber, PostNumber postNumber,
@@ -120,6 +122,7 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 			lastChecked = trackedPost.lastChecked;
 			threadDeleted = trackedPost.threadDeleted;
 			trackingActive = trackedPost.trackingActive;
+			repliesClearedThrough = trackedPost.repliesClearedThrough;
 			for (Reply reply : trackedPost.replies) {
 				replies.add(new Reply(reply));
 			}
@@ -230,6 +233,7 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 					long lastChecked = 0L;
 					boolean threadDeleted = false;
 					boolean trackingActive = true;
+					PostNumber repliesClearedThrough = null;
 					ArrayList<Reply> replies = new ArrayList<>();
 					reader.startObject();
 					while (!reader.endStruct()) {
@@ -260,6 +264,9 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 								break;
 							case KEY_TRACKING_ACTIVE:
 								trackingActive = reader.nextBoolean();
+								break;
+							case KEY_REPLIES_CLEARED_THROUGH:
+								repliesClearedThrough = PostNumber.parseNullable(reader.nextString());
 								break;
 							case KEY_REPLIES:
 								reader.startArray();
@@ -305,6 +312,7 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 						post.lastChecked = lastChecked;
 						post.threadDeleted = threadDeleted;
 						post.trackingActive = trackingActive;
+						post.repliesClearedThrough = repliesClearedThrough;
 						post.replies.addAll(replies);
 						posts.add(post);
 						postsMap.put(makeKey(chanName, boardName, threadNumber, postNumber), post);
@@ -347,6 +355,10 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 			writer.value(post.threadDeleted);
 			writer.name(KEY_TRACKING_ACTIVE);
 			writer.value(post.trackingActive);
+			if (post.repliesClearedThrough != null) {
+				writer.name(KEY_REPLIES_CLEARED_THROUGH);
+				writer.value(post.repliesClearedThrough.toString());
+			}
 			writer.name(KEY_REPLIES);
 			writer.startArray();
 			for (Reply reply : post.replies) {
@@ -481,6 +493,10 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 		if (trackedPost == null || !trackedPost.trackingActive) {
 			return AddReplyResult.NOT_TRACKED;
 		}
+		if (trackedPost.repliesClearedThrough != null
+				&& replyPostNumber.compareTo(trackedPost.repliesClearedThrough) <= 0) {
+			return AddReplyResult.ALREADY_EXISTS;
+		}
 		for (Reply reply : trackedPost.replies) {
 			if (reply.postNumber.equals(replyPostNumber)) {
 				return AddReplyResult.ALREADY_EXISTS;
@@ -563,6 +579,26 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 		}
 	}
 
+	public synchronized void clearReplyHistory() {
+		boolean changed = false;
+		for (TrackedPost post : posts) {
+			for (Reply reply : post.replies) {
+				if (post.repliesClearedThrough == null
+						|| reply.postNumber.compareTo(post.repliesClearedThrough) > 0) {
+					post.repliesClearedThrough = reply.postNumber;
+				}
+			}
+			if (!post.replies.isEmpty()) {
+				post.replies.clear();
+				changed = true;
+			}
+		}
+		if (changed) {
+			serialize();
+			notifyChanged();
+		}
+	}
+
 	public synchronized void setThreadDeleted(ThreadKey key, boolean deleted) {
 		boolean changed = false;
 		for (TrackedPost post : posts) {
@@ -622,6 +658,10 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 			for (PostNumber reference : references) {
 				TrackedPost trackedPost = trackedByNumber.get(reference);
 				if (trackedPost == null || post.number.equals(trackedPost.postNumber)) {
+					continue;
+				}
+				if (trackedPost.repliesClearedThrough != null
+						&& post.number.compareTo(trackedPost.repliesClearedThrough) <= 0) {
 					continue;
 				}
 				HashMap<PostNumber, Reply> knownReplies = knownRepliesByTrackedPost.get(trackedPost);
