@@ -1,0 +1,7 @@
+- Added built-in read support for d3.ru, including sections, posts, and discussions in the common Slooop interface.
+- Improved Reddit with a catalog of 200 popular communities organized into thematic categories. Separate experimental board and discussion reader modes were added and are disabled by default.
+- Added an option to clear saved reply history. New replies will continue to be tracked after clearing it.
+- The Old school icon now displays correctly on modern devices, matching the icon from the original Dashchan.
+- Added a video-player setting for opening YouTube links either in an external application or in the experimental Slooop player with PiP. The external option remains the default; internal playback may not work on some devices or networks yet.
+
+Found a bug? Send us the logs!
