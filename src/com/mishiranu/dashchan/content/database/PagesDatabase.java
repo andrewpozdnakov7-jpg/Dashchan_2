@@ -659,6 +659,29 @@ public class PagesDatabase {
 		return null;
 	}
 
+	public Post getLastExistingPost(@NonNull ThreadKey threadKey) {
+		Objects.requireNonNull(threadKey);
+		String[] projection = {Schema.Posts.Columns.POST_NUMBER_MAJOR,
+				Schema.Posts.Columns.POST_NUMBER_MINOR, Schema.Posts.Columns.DATA};
+		Expression.Filter filter = threadKey.filterPosts()
+				.raw("NOT (" + Schema.Posts.Columns.FLAGS + " & " + Schema.Posts.Flags.DELETED + ")")
+				.build();
+		try (Cursor cursor = database.query(Schema.Posts.TABLE_NAME, projection,
+				filter.value, filter.args, null, null, orderByPostNumber(true), "1")) {
+			if (cursor.moveToFirst()) {
+				PostNumber postNumber = new PostNumber(cursor.getInt(0), cursor.getInt(1));
+				try (JsonSerial.Reader reader = JsonSerial.reader(cursor.getBlob(2))) {
+					return Post.deserialize(postNumber, false, reader);
+				} catch (IOException e) {
+					throw new RuntimeException(e);
+				} catch (ParseException e) {
+					// Ignore malformed cached data and keep the thread on the frequent schedule.
+				}
+			}
+		}
+		return null;
+	}
+
 	public List<PostNumber> getPostNumbers(@NonNull ThreadKey threadKey) {
 		Objects.requireNonNull(threadKey);
 		String[] projection = {Schema.Posts.Columns.POST_NUMBER_MAJOR, Schema.Posts.Columns.POST_NUMBER_MINOR};

@@ -639,9 +639,14 @@ public class WatcherService extends BaseService {
 						title = chan.configuration.getTitle() + " / " +
 								threadKey.boardName + " / " + threadKey.threadNumber;
 					}
-					boolean important = notificationFeatures.contains(Preferences.NotificationFeature.IMPORTANT);
-					boolean sound = notificationFeatures.contains(Preferences.NotificationFeature.SOUND);
-					boolean vibration = notificationFeatures.contains(Preferences.NotificationFeature.VIBRATION);
+					boolean trackedNotification = isTracked(threadKey)
+							&& Preferences.isTrackedRepliesNotificationsEnabled();
+					boolean important = trackedNotification
+							|| notificationFeatures.contains(Preferences.NotificationFeature.IMPORTANT);
+					boolean sound = trackedNotification
+							|| notificationFeatures.contains(Preferences.NotificationFeature.SOUND);
+					boolean vibration = trackedNotification
+							|| notificationFeatures.contains(Preferences.NotificationFeature.VIBRATION);
 					WatcherNotifications.notifyReplies(WatcherService.this,
 							notificationColor, important, sound, vibration,
 							title, threadKey.chanName, threadKey.boardName, threadKey.threadNumber, replies);

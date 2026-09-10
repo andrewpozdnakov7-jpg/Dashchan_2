@@ -1822,6 +1822,231 @@
 		<meta-data android:name="com.sec.android.multiwindow.MINIMUM_SIZE_W" android:value="632dp" />
 		<meta-data android:name="com.sec.android.multiwindow.MINIMUM_SIZE_H" android:value="598dp" />
 
++		<activity-alias
+			android:name=".launcher.TogdachAlias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@mipmap/ic_launcher_default"
+			android:label="@string/launcher_name_togdach"
+			android:logo="@drawable/application_logo_default">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.TogdachOldSchoolAlias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@mipmap/ic_launcher"
+			android:label="@string/launcher_name_togdach"
+			android:logo="@mipmap/ic_logo">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.TogdachMaterialYouAlias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@mipmap/ic_launcher_material"
+			android:label="@string/launcher_name_togdach"
+			android:logo="@mipmap/ic_logo">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.TogdachLogo2Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@mipmap/ic_launcher_logo_2"
+			android:label="@string/launcher_name_togdach"
+			android:logo="@drawable/application_logo_2">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.TogdachLogo3Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@mipmap/ic_launcher_logo_3"
+			android:label="@string/launcher_name_togdach"
+			android:logo="@drawable/application_logo_3">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.TogdachLogo4Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@mipmap/ic_launcher_logo_4"
+			android:label="@string/launcher_name_togdach"
+			android:logo="@drawable/application_logo_4">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.TogdachLogo5Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@mipmap/ic_launcher_logo_5"
+			android:label="@string/launcher_name_togdach"
+			android:logo="@drawable/application_logo_5">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.TogdachLogo6Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@mipmap/ic_launcher_logo_6"
+			android:label="@string/launcher_name_togdach"
+			android:logo="@drawable/application_logo_6">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.TogdachLogo7Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@mipmap/ic_launcher_logo_7"
+			android:label="@string/launcher_name_togdach"
+			android:logo="@drawable/application_logo_7">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.TogdachLogo8Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@mipmap/ic_launcher_logo_8"
+			android:label="@string/launcher_name_togdach"
+			android:logo="@drawable/application_logo_8">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.TogdachLogo9Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@mipmap/ic_launcher_logo_9"
+			android:label="@string/launcher_name_togdach"
+			android:logo="@drawable/application_logo_9">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.TogdachLogo10Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@mipmap/ic_launcher_logo_10"
+			android:label="@string/launcher_name_togdach"
+			android:logo="@drawable/application_logo_10">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.TogdachLogo11Alias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@mipmap/ic_launcher_logo_11"
+			android:label="@string/launcher_name_togdach"
+			android:logo="@drawable/application_logo_11">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.TogdachPassAlias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@mipmap/ic_launcher_pass"
+			android:label="@string/launcher_name_togdach"
+			android:logo="@drawable/application_logo_pass">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
+		<activity-alias
+			android:name=".launcher.TogdachSubscriberAlias"
+			android:targetActivity=".ui.MainActivity"
+			android:enabled="false"
+			android:exported="true"
+			android:icon="@mipmap/ic_launcher_subscriber"
+			android:label="@string/launcher_name_togdach"
+			android:logo="@drawable/application_logo_subscriber">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+		</activity-alias>
+
 	</application>
 
 </manifest>

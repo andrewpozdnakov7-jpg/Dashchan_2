@@ -107,15 +107,21 @@ public class WatcherView extends FrameLayout {
 	}
 
 	public void update(WatcherService.Counter counter) {
-		if (state == counter.state && running == counter.running && newCount == counter.newCount &&
-				deleted == counter.deleted && error == counter.error) {
+		// A thread may still be refreshed for another reason, such as tracking replies to the user's posts.
+		// Do not present that shared activity or its post count as an enabled favorites watcher.
+		boolean watcherEnabled = counter.state != WatcherService.Counter.State.DISABLED;
+		boolean running = watcherEnabled && counter.running;
+		int newCount = watcherEnabled ? counter.newCount : 0;
+		boolean error = watcherEnabled && counter.error;
+		if (state == counter.state && this.running == running && this.newCount == newCount &&
+				deleted == counter.deleted && this.error == error) {
 			return;
 		}
 		state = counter.state;
-		running = counter.running;
-		newCount = counter.newCount;
+		this.running = running;
+		this.newCount = newCount;
 		deleted = counter.deleted;
-		error = counter.error;
+		this.error = error;
 		progressBar.setVisibility(running && progressAnimationEnabled ? View.VISIBLE : View.INVISIBLE);
 		switch (counter.state) {
 			case ENABLED: {
@@ -135,13 +141,13 @@ public class WatcherView extends FrameLayout {
 			}
 		}
 		String text;
-		if (counter.newCount <= 0 && counter.deleted) {
+		if (newCount <= 0 && counter.deleted) {
 			text = "X";
 		} else {
-			if (Math.abs(counter.newCount) >= 1000) {
-				text = (counter.newCount / 1000) + "K+";
+			if (Math.abs(newCount) >= 1000) {
+				text = (newCount / 1000) + "K+";
 			} else {
-				text = Integer.toString(counter.newCount);
+				text = Integer.toString(newCount);
 			}
 			if (counter.deleted) {
 				text += "X";
@@ -150,7 +156,7 @@ public class WatcherView extends FrameLayout {
 			}
 		}
 		this.text = text;
-		this.hasNew = counter.newCount > 0;
+		this.hasNew = newCount > 0;
 		invalidate();
 	}
 }

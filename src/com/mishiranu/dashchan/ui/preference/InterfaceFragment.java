@@ -39,7 +39,8 @@ public class InterfaceFragment extends PreferenceFragment {
 		addHeader(R.string.application_shortcut);
 		addList(Preferences.KEY_APPLICATION_NAME, LauncherIconManager.getApplicationNames(),
 				Preferences.DEFAULT_APPLICATION_NAME, R.string.application_name,
-				Arrays.asList("Sloop", "Dashchan_2", "Двач", "Slooop", "Slopchan", "Slopchan_1", "Slopchan_2"))
+				Arrays.asList("Sloop", "Dashchan_2", "Двач", "Slooop", "ТОГДАЧ", "Slopchan", "Slopchan_1",
+						"Slopchan_2"))
 				.setOnAfterChangeListener(p -> LauncherIconManager.apply(requireContext(), p.getValue()));
 		if (LauncherIconManager.arePresetLogosReady()) {
 			Preference<Void> logoPreference = addButton(getString(R.string.application_logo), preference ->

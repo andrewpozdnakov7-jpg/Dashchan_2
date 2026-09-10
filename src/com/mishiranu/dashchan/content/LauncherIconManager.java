@@ -26,6 +26,7 @@ public final class LauncherIconManager {
 	public static final String VALUE_DASHCHAN_2 = "dashchan_2";
 	public static final String VALUE_SLOPCHAN = "slopchan";
 	public static final String VALUE_DVACH = "dvach";
+	public static final String VALUE_TOGDACH = "togdach";
 	public static final String VALUE_SLOOP = "sloop";
 	public static final String VALUE_SLOPCHAN_PLAIN = "slopchan_plain";
 	public static final String VALUE_SLOPCHAN_1 = "slopchan_1";
@@ -103,7 +104,7 @@ public final class LauncherIconManager {
 	private static final String CLASS_SLOPCHAN = "com.mishiranu.dashchan.launcher.SlopchanAlias";
 	private static final String CLASS_DVACH = "com.mishiranu.dashchan.launcher.DvachAlias";
 	private static final List<String> APPLICATION_NAMES = Collections.unmodifiableList(Arrays.asList(VALUE_SLOOP,
-			VALUE_DASHCHAN_2, VALUE_SLOPCHAN, VALUE_DVACH, VALUE_SLOPCHAN_PLAIN, VALUE_SLOPCHAN_1,
+			VALUE_DASHCHAN_2, VALUE_SLOPCHAN, VALUE_DVACH, VALUE_TOGDACH, VALUE_SLOPCHAN_PLAIN, VALUE_SLOPCHAN_1,
 			VALUE_SLOPCHAN_2));
 	private LauncherIconManager() {}
 
@@ -208,10 +209,11 @@ public final class LauncherIconManager {
 
 	private static String getClassName(String value, LogoOption option) {
 		String prefix;
-		switch (value) {
+			switch (value) {
 			case VALUE_SLOOP: prefix = "Sloop"; break;
 			case VALUE_DASHCHAN_2: prefix = "Dashchan2"; break;
 			case VALUE_SLOPCHAN: prefix = "Slopchan"; break;
+			case VALUE_TOGDACH: prefix = "Togdach"; break;
 			case VALUE_SLOPCHAN_PLAIN: prefix = "SlopchanPlain"; break;
 			case VALUE_SLOPCHAN_1: prefix = "Slopchan1"; break;
 			case VALUE_SLOPCHAN_2: prefix = "Slopchan2"; break;

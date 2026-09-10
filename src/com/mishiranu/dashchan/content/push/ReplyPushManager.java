@@ -7,6 +7,7 @@ import com.mishiranu.dashchan.content.WatcherNotifications;
 import com.mishiranu.dashchan.content.database.PagesDatabase;
 import com.mishiranu.dashchan.content.model.PostNumber;
 import com.mishiranu.dashchan.content.storage.MyPostsStorage;
+import com.mishiranu.dashchan.util.Logger;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -16,6 +17,7 @@ import java.util.Map;
 import java.util.Set;
 
 public final class ReplyPushManager {
+	private static final String LOG_TAG = "ReplyPush";
 	private static final int MAX_HANDLED_EVENTS = 256;
 	private static final int MAX_NOTIFIED_REPLIES = 256;
 	private static final Object EVENTS_LOCK = new Object();
@@ -128,11 +130,21 @@ public final class ReplyPushManager {
 	}
 
 	public static boolean handleData(Context context, Map<String, String> data) {
-		if (!Preferences.isTrackMyPostsEnabled() || !Preferences.isReplyPushEnabled()) {
+		boolean trackingEnabled = Preferences.isTrackMyPostsEnabled();
+		boolean pushEnabled = Preferences.isReplyPushEnabled();
+		Logger.write(Logger.Type.DEBUG, LOG_TAG, "message_received", "fields", data.size(),
+				"trackingEnabled", trackingEnabled, "pushEnabled", pushEnabled);
+		if (!trackingEnabled || !pushEnabled) {
+			Logger.write(Logger.Type.DEBUG, LOG_TAG, "message_ignored", "reason", "disabled");
 			return false;
 		}
 		ReplyPushMessage message = ReplyPushMessage.parse(data);
-		if (message == null || isHandled(message.eventId)) {
+		if (message == null) {
+			Logger.write(Logger.Type.DEBUG, LOG_TAG, "message_ignored", "reason", "invalid");
+			return false;
+		}
+		if (isHandled(message.eventId)) {
+			Logger.write(Logger.Type.DEBUG, LOG_TAG, "message_ignored", "reason", "duplicate");
 			return false;
 		}
 		MyPostsStorage storage = MyPostsStorage.getInstance();
@@ -141,6 +153,7 @@ public final class ReplyPushManager {
 				message.comment, message.timestamp);
 		if (result == MyPostsStorage.AddReplyResult.NOT_TRACKED) {
 			// Keep the event retryable when the local and server watch lists are temporarily out of sync.
+			Logger.write(Logger.Type.DEBUG, LOG_TAG, "message_ignored", "reason", "not_tracked");
 			return false;
 		}
 		boolean added = result == MyPostsStorage.AddReplyResult.ADDED;
@@ -154,8 +167,13 @@ public final class ReplyPushManager {
 			markPushNotified(message.chanName, message.boardName, message.threadNumber,
 					message.replyPostNumber);
 		}
-		if (added && Preferences.isTrackedRepliesNotificationsEnabled()
-				&& !Preferences.isReplyPushQuietHoursActive()) {
+		boolean notificationsEnabled = Preferences.isTrackedRepliesNotificationsEnabled();
+		boolean quietHours = Preferences.isReplyPushQuietHoursActive();
+		boolean notificationQueued = added && notificationsEnabled && !quietHours;
+		Logger.write(Logger.Type.DEBUG, LOG_TAG, "message_stored", "added", added,
+				"notificationsEnabled", notificationsEnabled, "quietHours", quietHours,
+				"notificationQueued", notificationQueued);
+		if (notificationQueued) {
 			WatcherNotifications.notifyPushReply(context, message.chanName, message.boardName,
 					message.threadNumber, message.replyPostNumber, message.comment, message.timestamp);
 		}

@@ -54,7 +54,6 @@ public class TextFragment extends BaseListFragment {
 	private static final String EXTRA_TYPE = "type";
 
 	private static final String EXTRA_CHANGELOG_ENTRIES = "changelogEntries";
-	private static final String EXTRA_CHANGELOG_LOCAL_FALLBACK = "changelogLocalFallback";
 	private static final String EXTRA_PRIVACY_POLICY_TEXT = "privacyPolicyText";
 	private static final String EXTRA_PRIVACY_POLICY_LOCAL_FALLBACK = "privacyPolicyLocalFallback";
 	private static final String EXTRA_ERROR_ITEM = "errorItem";
@@ -64,7 +63,6 @@ public class TextFragment extends BaseListFragment {
 	private List<ReadChangelogTask.Entry> changelogEntries;
 	private String privacyPolicyText;
 	private ErrorItem errorItem;
-	private boolean changelogLocalFallback;
 	private boolean privacyPolicyLocalFallback;
 
 	private View progressView;
@@ -111,34 +109,33 @@ public class TextFragment extends BaseListFragment {
 				((FragmentHandler) requireActivity()).setTitleSubtitle(getString(R.string.changelog), null);
 				changelogEntries = savedInstanceState != null ? AndroidUtils.getParcelableArrayList
 						(savedInstanceState, EXTRA_CHANGELOG_ENTRIES, ReadChangelogTask.Entry.class) : null;
-				changelogLocalFallback = savedInstanceState != null &&
-						savedInstanceState.getBoolean(EXTRA_CHANGELOG_LOCAL_FALLBACK);
 				errorItem = savedInstanceState != null
 						? AndroidUtils.getParcelable(savedInstanceState, EXTRA_ERROR_ITEM, ErrorItem.class) : null;
 				if (errorItem != null) {
 					recyclerView.setVisibility(View.GONE);
 					setErrorText(errorItem.toString());
 				} else if (changelogEntries != null) {
-					adapter.setItems(context, formatChangelogEntries(context, changelogEntries,
-							changelogLocalFallback));
+					adapter.setItems(context, formatChangelogEntries(context, changelogEntries));
+					startChangelogRefresh(context, recyclerView, adapter);
 				} else {
 					recyclerView.setVisibility(View.GONE);
 					progressView.setVisibility(View.VISIBLE);
 					ChangelogViewModel viewModel = new ViewModelProvider(this).get(ChangelogViewModel.class);
 					if (!viewModel.hasTaskOrValue()) {
 						ReadChangelogTask task = new ReadChangelogTask(viewModel.callback,
-								LocaleManager.getInstance().getLocales(getResources().getConfiguration()));
+								LocaleManager.getInstance().getLocales(getResources().getConfiguration()),
+								ReadChangelogTask.Mode.LOCAL);
 						task.execute(ConcurrentUtils.PARALLEL_EXECUTOR);
 						viewModel.attach(task);
 					}
-					viewModel.observe(getViewLifecycleOwner(), (entries, errorItem, localFallback) -> {
+					viewModel.observe(getViewLifecycleOwner(), (entries, errorItem) -> {
 						changelogEntries = entries;
 						this.errorItem = errorItem;
-						changelogLocalFallback = localFallback;
 						progressView.setVisibility(View.GONE);
 						if (entries != null) {
 							recyclerView.setVisibility(View.VISIBLE);
-							adapter.setItems(context, formatChangelogEntries(context, entries, localFallback));
+							adapter.setItems(context, formatChangelogEntries(context, entries));
+							startChangelogRefresh(context, recyclerView, adapter);
 						} else {
 							errorItem = errorItem != null ? errorItem : new ErrorItem(ErrorItem.Type.UNKNOWN);
 							setErrorText(errorItem.toString());
@@ -190,6 +187,26 @@ public class TextFragment extends BaseListFragment {
 		}
 	}
 
+	private void startChangelogRefresh(Context context, RecyclerView recyclerView, TextAdapter adapter) {
+		ChangelogRefreshViewModel viewModel = new ViewModelProvider(this).get(ChangelogRefreshViewModel.class);
+		viewModel.observe(getViewLifecycleOwner(), (entries, errorItem) -> {
+			if (entries != null) {
+				changelogEntries = entries;
+				this.errorItem = null;
+				recyclerView.setVisibility(View.VISIBLE);
+				adapter.setItems(context, formatChangelogEntries(context, entries));
+			}
+		});
+		if (!viewModel.started) {
+			viewModel.started = true;
+			ReadChangelogTask task = new ReadChangelogTask(viewModel.callback,
+					LocaleManager.getInstance().getLocales(getResources().getConfiguration()),
+					ReadChangelogTask.Mode.REFRESH);
+			task.execute(ConcurrentUtils.PARALLEL_EXECUTOR);
+			viewModel.attach(task);
+		}
+	}
+
 	@Override
 	public void onSaveInstanceState(@NonNull Bundle outState) {
 		super.onSaveInstanceState(outState);
@@ -197,7 +214,6 @@ public class TextFragment extends BaseListFragment {
 		switch (Type.valueOf(requireArguments().getString(EXTRA_TYPE))) {
 			case CHANGELOG: {
 				outState.putParcelable(EXTRA_ERROR_ITEM, errorItem);
-				outState.putBoolean(EXTRA_CHANGELOG_LOCAL_FALLBACK, changelogLocalFallback);
 				if (changelogEntries != null) {
 					outState.putParcelableArrayList(EXTRA_CHANGELOG_ENTRIES, new ArrayList<>(changelogEntries));
 				}
@@ -264,12 +280,9 @@ public class TextFragment extends BaseListFragment {
 	}
 
 	private static List<CharSequence> formatChangelogEntries(Context context,
-			List<ReadChangelogTask.Entry> changelogEntries, boolean localFallback) {
+			List<ReadChangelogTask.Entry> changelogEntries) {
 		DateFormat dateFormat = android.text.format.DateFormat.getDateFormat(context);
 		ArrayList<CharSequence> items = new ArrayList<>();
-		if (localFallback) {
-			items.add(context.getString(R.string.changelog_loaded_from_local_copy__sentence));
-		}
 		String versionText = context.getString(R.string.version);
 		for (ReadChangelogTask.Entry entry : changelogEntries) {
 			SpannableStringBuilder builder = new SpannableStringBuilder();
@@ -552,6 +565,10 @@ public class TextFragment extends BaseListFragment {
 	}
 
 	public static class ChangelogViewModel extends TaskViewModel.Proxy<ReadChangelogTask, ReadChangelogTask.Callback> {}
+	public static class ChangelogRefreshViewModel extends
+			TaskViewModel.Proxy<ReadChangelogTask, ReadChangelogTask.Callback> {
+		private boolean started;
+	}
 	public static class PrivacyPolicyViewModel extends
 			TaskViewModel.Proxy<ReadPrivacyPolicyTask, ReadPrivacyPolicyTask.Callback> {}
 

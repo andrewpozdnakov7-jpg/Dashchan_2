@@ -15,6 +15,7 @@ import android.media.AudioManager;
 import android.net.Uri;
 import android.os.SystemClock;
 import android.view.Gravity;
+import android.view.HapticFeedbackConstants;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -65,13 +66,31 @@ public class PagerUnit implements PagerInstance.Callback {
 	private int seekGestureDirection;
 	private int seekGestureSeconds;
 	private long lastSeekGestureTime;
+	private boolean tikTokMode;
+	private float tikTokGestureDistance;
+	private boolean tikTokGestureThresholdReached;
+	private View tikTokTransitionView;
+	private int tikTokTransitionIndex = -1;
+	private boolean tikTokTransitionNext;
+	private boolean tikTokTransitionRunning;
+	private int tikTokTransitionGeneration;
 
 	public PagerUnit(GalleryInstance instance) {
 		galleryInstance = instance;
 		pagerInstance = new PagerInstance(instance, this);
 		imageUnit = new ImageUnit(pagerInstance);
 		AudioManager audioManager = (AudioManager) instance.context.getSystemService(Context.AUDIO_SERVICE);
-		videoUnit = new VideoUnit(pagerInstance, audioManager);
+		videoUnit = new VideoUnit(pagerInstance, audioManager, new VideoUnit.TikTokModeCallback() {
+			@Override
+			public boolean isEnabled() {
+				return tikTokMode;
+			}
+
+			@Override
+			public void setEnabled(boolean enabled) {
+				setTikTokMode(enabled);
+			}
+		});
 		float density = ResourceUtils.obtainDensity(instance.context);
 		viewPagerParent = new FrameLayout(instance.context);
 		pagerAdapter = new PagerAdapter(instance.galleryItems);
@@ -161,6 +180,7 @@ public class PagerUnit implements PagerInstance.Callback {
 
 	public void onPause() {
 		resumed = false;
+		cancelTikTokTransitionImmediately();
 		volumeGestureView.removeCallbacks(hideVolumeGesture);
 		volumeGestureView.setVisibility(View.GONE);
 		seekGestureView.removeCallbacks(hideSeekGesture);
@@ -181,10 +201,140 @@ public class PagerUnit implements PagerInstance.Callback {
 		return holder != null ? holder.galleryItem : null;
 	}
 
+	private void setTikTokMode(boolean enabled) {
+		if (tikTokMode == enabled) {
+			return;
+		}
+		tikTokMode = enabled;
+		cancelTikTokTransitionImmediately();
+		tikTokGestureDistance = 0f;
+		tikTokGestureThresholdReached = false;
+		viewPager.setVerticalPagingMode(enabled);
+		PagerInstance.ViewHolder holder = pagerInstance.currentHolder;
+		if (holder != null && holder.photoView != null) {
+			holder.photoView.resetScale();
+		}
+		volumeGestureView.removeCallbacks(hideVolumeGesture);
+		volumeGestureView.setVisibility(View.GONE);
+		seekGestureView.removeCallbacks(hideSeekGesture);
+		hideSeekGesture.run();
+		videoUnit.onTikTokModeChanged();
+	}
+
+	private float getTikTokGestureThreshold(PhotoViewPager view) {
+		return Math.max(64f * ResourceUtils.obtainDensity(view), view.getHeight() * 0.12f);
+	}
+
+	private int findTikTokVideo(boolean next) {
+		Chan chan = Chan.get(galleryInstance.chanName);
+		int step = next ? 1 : -1;
+		for (int index = viewPager.getCurrentIndex() + step;
+				index >= 0 && index < galleryInstance.galleryItems.size(); index += step) {
+			GalleryItem item = galleryInstance.galleryItems.get(index);
+			if (item.isVideo(chan) && item.isOpenableVideo(chan)) {
+				return index;
+			}
+		}
+		return -1;
+	}
+
+	private void removeTikTokTransitionView() {
+		if (tikTokTransitionView != null) {
+			tikTokTransitionView.animate().cancel();
+			pagerAdapter.recycleTikTokTransitionView(tikTokTransitionView);
+			viewPagerParent.removeView(tikTokTransitionView);
+			tikTokTransitionView = null;
+		}
+		tikTokTransitionIndex = -1;
+	}
+
+	private void cancelTikTokTransitionImmediately() {
+		tikTokTransitionGeneration++;
+		viewPager.animate().cancel();
+		viewPager.setTranslationY(0f);
+		viewPager.setActive(true);
+		removeTikTokTransitionView();
+		tikTokTransitionRunning = false;
+	}
+
+	private void prepareTikTokTransition(boolean next) {
+		int targetIndex = findTikTokVideo(next);
+		if (tikTokTransitionView != null && tikTokTransitionNext == next
+				&& tikTokTransitionIndex == targetIndex) {
+			return;
+		}
+		removeTikTokTransitionView();
+		tikTokTransitionNext = next;
+		tikTokTransitionIndex = targetIndex;
+		if (targetIndex >= 0) {
+			tikTokTransitionView = pagerAdapter.createTikTokTransitionView(targetIndex);
+			viewPagerParent.addView(tikTokTransitionView, 1, new FrameLayout.LayoutParams(
+					FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+		}
+	}
+
+	private void updateTikTokTransition(PhotoViewPager view, float distance) {
+		if (tikTokTransitionRunning || distance == 0f) {
+			return;
+		}
+		boolean next = distance > 0f;
+		prepareTikTokTransition(next);
+		float height = Math.max(1f, view.getHeight());
+		float clampedDistance = Math.max(-height, Math.min(height, distance));
+		float translation = -clampedDistance;
+		if (tikTokTransitionView == null) {
+			translation *= 0.18f;
+		}
+		view.setTranslationY(translation);
+		if (tikTokTransitionView != null) {
+			tikTokTransitionView.setTranslationY((next ? height : -height) + translation);
+		}
+	}
+
+	private void finishTikTokTransition(PhotoViewPager view, boolean complete) {
+		int generation = ++tikTokTransitionGeneration;
+		View transitionView = tikTokTransitionView;
+		int targetIndex = tikTokTransitionIndex;
+		boolean next = tikTokTransitionNext;
+		float height = Math.max(1f, view.getHeight());
+		tikTokTransitionRunning = true;
+		view.setActive(false);
+		if (complete && transitionView != null && targetIndex >= 0) {
+			transitionView.animate().translationY(0f).setDuration(220L)
+					.setInterpolator(AnimationUtils.DECELERATE_INTERPOLATOR).start();
+			view.animate().translationY(next ? -height : height).setDuration(220L)
+					.setInterpolator(AnimationUtils.DECELERATE_INTERPOLATOR).withEndAction(() -> {
+						if (tikTokTransitionGeneration != generation) {
+							return;
+						}
+						view.setTranslationY(0f);
+						view.setCurrentIndex(targetIndex);
+						removeTikTokTransitionView();
+						view.setActive(true);
+						tikTokTransitionRunning = false;
+					}).start();
+		} else {
+			if (transitionView != null) {
+				transitionView.animate().translationY(next ? height : -height).setDuration(180L)
+						.setInterpolator(AnimationUtils.DECELERATE_INTERPOLATOR).start();
+			}
+			view.animate().translationY(0f).setDuration(180L)
+					.setInterpolator(AnimationUtils.DECELERATE_INTERPOLATOR).withEndAction(() -> {
+						if (tikTokTransitionGeneration != generation) {
+							return;
+						}
+						removeTikTokTransitionView();
+						view.setActive(true);
+						tikTokTransitionRunning = false;
+					}).start();
+		}
+	}
+
 	public void onGalleryItemsChanged(int position) {
 		if (galleryInstance.galleryItems.isEmpty()) {
 			return;
 		}
+		cancelTikTokTransitionImmediately();
 		interrupt(true);
 		pagerAdapter.recycleAll();
 		viewPager.setCount(galleryInstance.galleryItems.size());
@@ -513,6 +663,9 @@ public class PagerUnit implements PagerInstance.Callback {
 
 		@Override
 		public boolean onDoubleClick(PhotoView photoView, float x, float y) {
+			if (tikTokMode) {
+				return true;
+			}
 			PagerInstance.ViewHolder holder = pagerInstance.currentHolder;
 			if (holder == null || holder.galleryItem == null
 					|| !holder.galleryItem.isVideo(Chan.get(galleryInstance.chanName))) {
@@ -541,18 +694,25 @@ public class PagerUnit implements PagerInstance.Callback {
 
 		@Override
 		public void onLongClick(PhotoView photoView, float x, float y) {
-			displayPopupMenu(galleryInstance.callback.getChildFragmentManager());
+			if (!tikTokMode) {
+				displayPopupMenu(galleryInstance.callback.getChildFragmentManager());
+			}
 		}
 
 		@Override
 		public void onTransformChanged(PhotoView photoView, float left, float top, float right, float bottom) {
-			videoUnit.applyVideoTransform(photoView, left, top, right, bottom);
+			if (!tikTokMode) {
+				videoUnit.applyVideoTransform(photoView, left, top, right, bottom);
+			}
 		}
 
 		private boolean swiping = false;
 
 		@Override
 		public void onVerticalSwipe(PhotoView photoView, boolean down, float value) {
+			if (tikTokMode) {
+				return;
+			}
 			boolean swiping = value != 0f;
 			if (this.swiping != swiping) {
 				this.swiping = swiping;
@@ -744,6 +904,20 @@ public class PagerUnit implements PagerInstance.Callback {
 
 		@Override
 		public boolean onVerticalGestureStart(PhotoViewPager view, float x, float y) {
+			if (tikTokMode) {
+				if (tikTokTransitionRunning) {
+					return false;
+				}
+				PagerInstance.ViewHolder holder = pagerInstance.currentHolder;
+				if (holder == null || holder.galleryItem == null
+						|| !holder.galleryItem.isVideo(Chan.get(galleryInstance.chanName))
+						|| !holder.galleryItem.isOpenableVideo(Chan.get(galleryInstance.chanName))) {
+					return false;
+				}
+				tikTokGestureDistance = 0f;
+				tikTokGestureThresholdReached = false;
+				return true;
+			}
 			boolean landscape = galleryInstance.context.getResources().getConfiguration().orientation
 					== Configuration.ORIENTATION_LANDSCAPE;
 			int widthPercent = Preferences.getVideoVolumeGestureWidth(landscape);
@@ -774,12 +948,36 @@ public class PagerUnit implements PagerInstance.Callback {
 
 		@Override
 		public void onVerticalGestureProgress(PhotoViewPager view, float distance) {
+			if (tikTokMode) {
+				tikTokGestureDistance = distance;
+				updateTikTokTransition(view, distance);
+				boolean thresholdReached = tikTokTransitionIndex >= 0
+						&& Math.abs(distance) >= getTikTokGestureThreshold(view);
+				if (thresholdReached && !tikTokGestureThresholdReached) {
+					view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
+				}
+				tikTokGestureThresholdReached = thresholdReached;
+				return;
+			}
 			int percent = videoUnit.onVolumeGestureProgress(distance / Math.max(1f, view.getHeight()));
 			updateVolumeGestureText(percent);
 		}
 
 		@Override
 		public void onVerticalGestureEnd(PhotoViewPager view) {
+			if (tikTokMode) {
+				boolean complete = tikTokTransitionIndex >= 0
+						&& Math.abs(tikTokGestureDistance) >= getTikTokGestureThreshold(view);
+				if (tikTokTransitionIndex < 0
+						&& Math.abs(tikTokGestureDistance) >= getTikTokGestureThreshold(view)) {
+					ClickableToast.show(tikTokGestureDistance > 0f ? R.string.video_tiktok_no_next_video
+							: R.string.video_tiktok_no_previous_video);
+				}
+				finishTikTokTransition(view, complete);
+				tikTokGestureDistance = 0f;
+				tikTokGestureThresholdReached = false;
+				return;
+			}
 			videoUnit.onVolumeGestureEnd();
 			volumeGestureView.removeCallbacks(hideVolumeGesture);
 			volumeGestureView.postDelayed(hideVolumeGesture, 600);
@@ -791,6 +989,23 @@ public class PagerUnit implements PagerInstance.Callback {
 				holder.recyclePhotoView();
 				holder.loadState = PagerInstance.LoadState.PREVIEW_OR_LOADING;
 			}
+		}
+
+		public View createTikTokTransitionView(int index) {
+			View view = onCreateView(viewPagerParent);
+			view.setBackgroundColor(Color.BLACK);
+			PagerInstance.ViewHolder holder = (PagerInstance.ViewHolder) view.getTag();
+			applySideViewData(holder, index, false);
+			return view;
+		}
+
+		public void recycleTikTokTransitionView(View view) {
+			PagerInstance.ViewHolder holder = (PagerInstance.ViewHolder) view.getTag();
+			if (holder.thumbnailTarget != null) {
+				ImageLoader.getInstance().cancel(holder.thumbnailTarget);
+			}
+			holder.recyclePhotoView();
+			holder.surfaceParent.removeAllViews();
 		}
 	}
 

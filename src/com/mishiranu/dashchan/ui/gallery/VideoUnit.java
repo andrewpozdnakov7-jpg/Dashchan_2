@@ -53,6 +53,11 @@ import java.util.Locale;
 import java.util.Map;
 
 public class VideoUnit {
+	interface TikTokModeCallback {
+		boolean isEnabled();
+		void setEnabled(boolean enabled);
+	}
+
 	enum PictureInPictureRestoreState {
 		READY,
 		TRANSFER_INACTIVE,
@@ -70,6 +75,7 @@ public class VideoUnit {
 	private final LinearLayout controlsView;
 	private final AudioFocus audioFocus;
 	private final AudioManager audioManager;
+	private final TikTokModeCallback tikTokModeCallback;
 
 	private int layoutConfiguration = -1;
 	private boolean rightHandControls;
@@ -81,6 +87,7 @@ public class VideoUnit {
 	private TextView playbackSpeedButton;
 	private ImageButton muteButton;
 	private ImageButton pictureInPictureButton;
+	private ImageButton tikTokModeButton;
 	private ImageButton fullscreenButton;
 	private PopupMenu playbackSpeedPopupMenu;
 
@@ -114,9 +121,10 @@ public class VideoUnit {
 	private boolean pictureInPictureControl;
 	private final View.OnLayoutChangeListener surfaceParentLayoutChangeListener;
 
-	public VideoUnit(PagerInstance instance, AudioManager audioManager) {
+	public VideoUnit(PagerInstance instance, AudioManager audioManager, TikTokModeCallback tikTokModeCallback) {
 		this.instance = instance;
 		this.audioManager = audioManager;
+		this.tikTokModeCallback = tikTokModeCallback;
 		surfaceParentLayoutChangeListener = this::onSurfaceParentLayoutChanged;
 		if (audioManager != null) {
 			int volume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC);
@@ -290,7 +298,7 @@ public class VideoUnit {
 			return;
 		}
 		resetVideoTransform(videoView);
-		if (Preferences.isVideoZoomGesturesEnabled()) {
+		if (Preferences.isVideoZoomGesturesEnabled() && !tikTokModeCallback.isEnabled()) {
 			captureAndApplyVideoTransform(holder, videoView);
 		}
 	}
@@ -312,7 +320,8 @@ public class VideoUnit {
 	public void applyVideoTransform(com.mishiranu.dashchan.widget.PhotoView photoView,
 			float left, float top, float right, float bottom) {
 		PagerInstance.ViewHolder holder = instance.currentHolder;
-		if (!initialized || !Preferences.isVideoZoomGesturesEnabled() || holder == null
+		if (!initialized || !Preferences.isVideoZoomGesturesEnabled() || tikTokModeCallback.isEnabled()
+				|| holder == null
 				|| holder.photoView != photoView || player == null) {
 			return;
 		}
@@ -469,7 +478,7 @@ public class VideoUnit {
 		playPauseButton.setEnabled(true);
 		seekBar.setEnabled(true);
 		initialized = true;
-		if (zoomGestures) {
+		if (zoomGestures && !tikTokModeCallback.isEnabled()) {
 			videoView.post(() -> captureAndApplyVideoTransform(holder, videoView));
 		}
 		setPlaybackSpeed(playbackSpeed);
@@ -510,6 +519,7 @@ public class VideoUnit {
 			playbackSpeedButton = null;
 			muteButton = null;
 			pictureInPictureButton = null;
+			tikTokModeButton = null;
 			fullscreenButton = null;
 
 			configurationView = new LinearLayout(context);
@@ -576,6 +586,12 @@ public class VideoUnit {
 				pictureInPictureButton.setContentDescription(context.getString(R.string.enter_picture_in_picture));
 				pictureInPictureButton.setOnClickListener(pictureInPictureClickListener);
 			}
+			tikTokModeButton = new ImageButton(context, null, android.R.attr.borderlessButtonStyle);
+			tikTokModeButton.setScaleType(ImageButton.ScaleType.CENTER);
+			tikTokModeButton.setImageResource(R.drawable.ic_tiktok_mode);
+			tikTokModeButton.setContentDescription(context.getString(R.string.video_tiktok_mode));
+			tikTokModeButton.setOnClickListener(tikTokModeClickListener);
+			updateTikTokModeButton();
 			fullscreenButton = new ImageButton(context, null, android.R.attr.borderlessButtonStyle);
 			fullscreenButton.setScaleType(ImageButton.ScaleType.CENTER);
 			fullscreenButton.setOnClickListener(fullscreenClickListener);
@@ -625,6 +641,7 @@ public class VideoUnit {
 			if (rightHandControls) {
 				configurationView.addView(spacer, new LinearLayout.LayoutParams(0, 1, 1f));
 				configurationView.addView(muteButton, (int) (48f * density), (int) (48f * density));
+				configurationView.addView(tikTokModeButton, (int) (48f * density), (int) (48f * density));
 				if (pictureInPictureButton != null) {
 					configurationView.addView(pictureInPictureButton, (int) (48f * density),
 							(int) (48f * density));
@@ -642,6 +659,7 @@ public class VideoUnit {
 					configurationView.addView(pictureInPictureButton, (int) (48f * density),
 							(int) (48f * density));
 				}
+				configurationView.addView(tikTokModeButton, (int) (48f * density), (int) (48f * density));
 				configurationView.addView(muteButton, (int) (48f * density), (int) (48f * density));
 				configurationView.addView(spacer, new LinearLayout.LayoutParams(0, 1, 1f));
 			}
@@ -937,6 +955,38 @@ public class VideoUnit {
 
 	private final View.OnClickListener pictureInPictureClickListener = this::handlePictureInPictureClick;
 
+	private final View.OnClickListener tikTokModeClickListener = this::handleTikTokModeClick;
+
+	private void handleTikTokModeClick(View view) {
+		boolean enabled = !tikTokModeCallback.isEnabled();
+		tikTokModeCallback.setEnabled(enabled);
+		updateTikTokModeButton();
+		if (enabled && Preferences.shouldShowVideoTikTokModeHint()) {
+			Preferences.markVideoTikTokModeHintShown();
+			Toast.makeText(view.getContext(), R.string.video_tiktok_mode_hint, Toast.LENGTH_LONG).show();
+		}
+	}
+
+	void updateTikTokModeButton() {
+		if (tikTokModeButton != null) {
+			boolean enabled = tikTokModeCallback.isEnabled();
+			tikTokModeButton.setActivated(enabled);
+			tikTokModeButton.setAlpha(enabled ? 1f : 0.65f);
+			tikTokModeButton.setImageTintList(ColorStateList.valueOf(enabled
+					? ResourceUtils.getColor(tikTokModeButton.getContext(), R.attr.colorAccentSupport) : Color.WHITE));
+			tikTokModeButton.setContentDescription(tikTokModeButton.getContext().getString(enabled
+					? R.string.disable_video_tiktok_mode : R.string.enable_video_tiktok_mode));
+		}
+	}
+
+	void onTikTokModeChanged() {
+		if (tikTokModeCallback.isEnabled() && initialized && player != null) {
+			videoTransformRect.setEmpty();
+			resetVideoTransform(player.getVideoView(instance.galleryInstance.context));
+		}
+		updateTikTokModeButton();
+	}
+
 	private void handlePictureInPictureClick(View v) {
 		enterPictureInPicture(v.getContext(), false);
 	}
@@ -1010,7 +1060,7 @@ public class VideoUnit {
 		instance.currentHolder.surfaceParent.addView(videoView, new FrameLayout.LayoutParams(
 				FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT, Gravity.CENTER));
 		pictureInPictureTransferred = false;
-		if (Preferences.isVideoZoomGesturesEnabled()) {
+		if (Preferences.isVideoZoomGesturesEnabled() && !tikTokModeCallback.isEnabled()) {
 			PagerInstance.ViewHolder holder = instance.currentHolder;
 			videoView.post(() -> captureAndApplyVideoTransform(holder, videoView));
 		}
@@ -1447,7 +1497,7 @@ public class VideoUnit {
 				backgroundDrawable.height = dimensions.y;
 				PagerInstance.ViewHolder holder = instance.currentHolder;
 				holder.photoView.resetScale();
-				if (Preferences.isVideoZoomGesturesEnabled()) {
+				if (Preferences.isVideoZoomGesturesEnabled() && !tikTokModeCallback.isEnabled()) {
 					View videoView = player.getVideoView(instance.galleryInstance.context);
 					videoView.post(() -> captureAndApplyVideoTransform(holder, videoView));
 				}

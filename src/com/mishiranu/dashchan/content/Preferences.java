@@ -186,6 +186,7 @@ public class Preferences {
 	}
 
 	public static final String KEY_APPLICATION_NAME = "application_name";
+	private static final String KEY_TOGDACH_NAME_PROMPTED = "togdach_name_prompted";
 	private static final String KEY_LOCAL_ARCHIVE_URI_TREES = "local_archive_uri_trees";
 
 	public static List<String> getLocalArchiveUriTrees() {
@@ -213,6 +214,20 @@ public class Preferences {
 	public static String getApplicationName() {
 		String value = PREFERENCES.getString(KEY_APPLICATION_NAME, DEFAULT_APPLICATION_NAME);
 		return LauncherIconManager.isValidValue(value) ? value : DEFAULT_APPLICATION_NAME;
+	}
+
+	public static void setApplicationName(String value) {
+		if (LauncherIconManager.isValidValue(value)) {
+			PREFERENCES.edit().put(KEY_APPLICATION_NAME, value).close();
+		}
+	}
+
+	public static boolean isTogdachNamePrompted() {
+		return PREFERENCES.getBoolean(KEY_TOGDACH_NAME_PROMPTED, false);
+	}
+
+	public static void setTogdachNamePrompted() {
+		PREFERENCES.edit().put(KEY_TOGDACH_NAME_PROMPTED, true).close();
 	}
 
 	public static String getApplicationLogo() {
@@ -2347,6 +2362,20 @@ public class Preferences {
 
 	public static void setSavedVideoPlaybackSpeed(int playbackSpeed) {
 		PREFERENCES.edit().put(KEY_SAVED_VIDEO_PLAYBACK_SPEED, playbackSpeed).close();
+	}
+
+	private static final String KEY_VIDEO_TIKTOK_MODE_HINT_COUNT = "video_tiktok_mode_hint_count";
+	private static final int MAX_VIDEO_TIKTOK_MODE_HINT_COUNT = 3;
+
+	public static boolean shouldShowVideoTikTokModeHint() {
+		return PREFERENCES.getInt(KEY_VIDEO_TIKTOK_MODE_HINT_COUNT, 0) < MAX_VIDEO_TIKTOK_MODE_HINT_COUNT;
+	}
+
+	public static void markVideoTikTokModeHintShown() {
+		int count = PREFERENCES.getInt(KEY_VIDEO_TIKTOK_MODE_HINT_COUNT, 0);
+		if (count < MAX_VIDEO_TIKTOK_MODE_HINT_COUNT) {
+			PREFERENCES.edit().put(KEY_VIDEO_TIKTOK_MODE_HINT_COUNT, count + 1).close();
+		}
 	}
 
 	public static final String KEY_ATTACHMENT_VIDEO_PREVIEW = "attachment_video_preview";

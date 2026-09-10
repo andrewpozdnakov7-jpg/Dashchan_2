@@ -78,6 +78,7 @@ import com.mishiranu.dashchan.ui.posting.Replyable;
 import com.mishiranu.dashchan.ui.preference.CategoriesFragment;
 import com.mishiranu.dashchan.ui.preference.CombinedFeedsFragment;
 import com.mishiranu.dashchan.ui.preference.ThemesFragment;
+import com.mishiranu.dashchan.ui.preference.TogdachNameDialog;
 import com.mishiranu.dashchan.ui.preference.UpdateFragment;
 import com.mishiranu.dashchan.util.AndroidUtils;
 import com.mishiranu.dashchan.util.ConcatIterable;
@@ -444,6 +445,9 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 				recreate();
 			}
 		});
+		if (storageRequestState == StorageRequestState.NONE) {
+			drawerLayout.post(() -> TogdachNameDialog.showIfNeeded(this, getSupportFragmentManager()));
+		}
 	}
 
 	private void requestNotificationPermissionIfNeeded() {

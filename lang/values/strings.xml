@@ -610,6 +610,12 @@
 	<string name="video_picture_in_picture__summary">Show a button that continues the current video in a floating system window</string>
 	<string name="video_picture_in_picture_auto">Automatically enter PiP when minimized</string>
 	<string name="video_picture_in_picture_auto__summary">Continue a playing video in a floating window when switching to the Home screen or another app</string>
+	<string name="video_tiktok_mode">TikTok mode</string>
+	<string name="enable_video_tiktok_mode">Enable TikTok mode</string>
+	<string name="disable_video_tiktok_mode">Disable TikTok mode</string>
+	<string name="video_tiktok_mode_hint">Quickly browse videos in this thread: swipe up for the next video or down for the previous one. Other player gestures are disabled while this mode is active; on-screen controls still work.</string>
+	<string name="video_tiktok_no_next_video">There are no more videos in this thread</string>
+	<string name="video_tiktok_no_previous_video">There are no previous videos in this thread</string>
 	<string name="video_screen_off_action">When the screen turns off</string>
 	<string name="video_screen_off_action__summary">Choose whether PiP video pauses or continues playing with the screen off</string>
 	<string name="video_screen_off_action_pause">Pause video</string>
@@ -955,6 +961,13 @@
 	<string name="application_shortcut">Application shortcut</string>
 	<string name="application_name">Application name</string>
 	<string name="launcher_name_dvach">Slooop</string>
+	<string name="launcher_name_togdach" translatable="false">ТОГДАЧ</string>
+	<string name="togdach_name_prompt_title">ТОГДАЧ and nothing else</string>
+	<string name="togdach_name_prompt_message">A quadruple in post #336454444 chose the community name “ТОГДАЧ” 😺\n\nChoose how the application should be named on this device. You can change it later under Interface settings.</string>
+	<string name="togdach_name_proof_description">Post #336454444 saying “ТОГДАЧ and nothing else”</string>
+	<string name="use_togdach_name">Use “ТОГДАЧ”</string>
+	<string name="keep_current_name">Keep current name</string>
+	<string name="application_name_change_failed">Could not change the application name</string>
 	<string name="application_logo">Application icon</string>
 	<string name="application_logo_default">Default</string>
 	<string name="application_logo_old_school">Old school</string>

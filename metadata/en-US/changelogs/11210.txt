@@ -1,0 +1,8 @@
+- Added a TikTok mode for quickly browsing videos in a thread: swipe up for the next video or down for the previous one. Video changes use a smooth vertical transition, and the regular player mode can be restored with one button.
+- Improved background reply checks and notification delivery, including while the screen is off. Repeated events should no longer create duplicate notifications.
+- Reduced battery and network usage by checking recent threads more frequently and gradually checking inactive threads less often.
+- Fixed the new-post counter appearing for threads whose watcher is disabled.
+- The changelog now opens immediately from a local copy and then loads only newer entries in the background.
+- And most importantly, a quadruple chose the name “ТОГДАЧ” 😺 After updating, the app will offer the community name while still allowing users to keep the familiar one. The choice can always be changed under Interface settings.
+
+Found a bug? Send us the logs!
