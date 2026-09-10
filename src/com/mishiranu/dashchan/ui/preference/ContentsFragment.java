@@ -90,8 +90,14 @@ public class ContentsFragment extends PreferenceFragment {
 		replyNotifications = addCheck(false, "reply_notifications", false,
 				R.string.reply_notifications, R.string.reply_notifications__format);
 		replyNotifications.setOnClickListener(p -> {
-			Preferences.setWatcherNotifications(p.getValue() ? Collections.emptySet()
-					: Collections.singleton(Preferences.NotificationFeature.ENABLED));
+			Set<Preferences.NotificationFeature> notificationFeatures;
+			if (p.getValue()) {
+				notificationFeatures = Collections.emptySet();
+			} else {
+				notificationFeatures = new HashSet<>(Preferences.DEFAULT_WATCHER_NOTIFICATIONS);
+				notificationFeatures.add(Preferences.NotificationFeature.ENABLED);
+			}
+			Preferences.setWatcherNotifications(notificationFeatures);
 			invalidateReplyNotifications();
 		});
 		invalidateReplyNotifications();

@@ -15,8 +15,13 @@ import com.mishiranu.dashchan.content.model.ErrorItem;
 import com.mishiranu.dashchan.content.update.UpdateConfiguration;
 import com.mishiranu.dashchan.util.IOUtils;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStreamWriter;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -25,26 +30,29 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.TreeMap;
+import java.util.TreeSet;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
 public class ReadChangelogTask extends ExecutorTask<Void, ReadChangelogTask.Result> {
 	private static final long NETWORK_FALLBACK_TIMEOUT_MS = 20 * 1000L;
+	private static final int MAX_CACHE_SIZE = 2 * 1024 * 1024;
+	private static final String CACHE_DIRECTORY = "changelog";
+
+	public enum Mode {LOCAL, REFRESH}
 
 	public interface Callback {
-		void onReadChangelogComplete(List<Entry> entries, ErrorItem errorItem, boolean localFallback);
+		void onReadChangelogComplete(List<Entry> entries, ErrorItem errorItem);
 	}
 
 	public static class Result {
 		public final ErrorItem errorItem;
 		public final List<Entry> entries;
-		public final boolean localFallback;
 
-		public Result(ErrorItem errorItem, List<Entry> entries, boolean localFallback) {
+		public Result(ErrorItem errorItem, List<Entry> entries) {
 			this.errorItem = errorItem;
 			this.entries = entries;
-			this.localFallback = localFallback;
 		}
 	}
 
@@ -117,6 +125,7 @@ public class ReadChangelogTask extends ExecutorTask<Void, ReadChangelogTask.Resu
 
 	private final Callback callback;
 	private final List<Locale> locales;
+	private final Mode mode;
 
 	private interface ChangelogReader {
 		String read(String... pathSegments) throws HttpException;
@@ -130,9 +139,10 @@ public class ReadChangelogTask extends ExecutorTask<Void, ReadChangelogTask.Resu
 		public JSONException jsonException;
 	}
 
-	public ReadChangelogTask(Callback callback, List<Locale> locales) {
+	public ReadChangelogTask(Callback callback, List<Locale> locales, Mode mode) {
 		this.callback = callback;
 		this.locales = locales;
+		this.mode = mode;
 	}
 
 	private static void appendPathSegments(Uri.Builder builder, String path) {
@@ -233,6 +243,123 @@ public class ReadChangelogTask extends ExecutorTask<Void, ReadChangelogTask.Resu
 		}
 	}
 
+	private File getCacheFile() {
+		StringBuilder key = new StringBuilder(UpdateConfiguration.isBetaChannel() ? "beta" : "stable");
+		for (String locale : collectDownloadLocales(locales)) {
+			key.append('-').append(locale);
+		}
+		String fileName = Integer.toHexString(key.toString().hashCode()) + ".json";
+		return new File(new File(MainApplication.getInstance().getFilesDir(), CACHE_DIRECTORY), fileName);
+	}
+
+	private List<Entry> readCachedEntries() {
+		File file = getCacheFile();
+		if (!file.isFile() || file.length() <= 0 || file.length() > MAX_CACHE_SIZE) {
+			return null;
+		}
+		try (FileInputStream input = new FileInputStream(file);
+				ByteArrayOutputStream output = new ByteArrayOutputStream((int) file.length())) {
+			IOUtils.copyStream(input, output);
+			JSONArray entriesArray = new JSONObject(output.toString("UTF-8")).getJSONArray("entries");
+			ArrayList<Entry> entries = new ArrayList<>(entriesArray.length());
+			for (int i = 0; i < entriesArray.length(); i++) {
+				JSONObject entryObject = entriesArray.getJSONObject(i);
+				JSONArray versionsArray = entryObject.getJSONArray("versions");
+				ArrayList<Entry.Version> versions = new ArrayList<>(versionsArray.length());
+				for (int j = 0; j < versionsArray.length(); j++) {
+					JSONObject versionObject = versionsArray.getJSONObject(j);
+					versions.add(new Entry.Version(versionObject.getInt("code"),
+							versionObject.getString("name"), versionObject.getString("date")));
+				}
+				JSONArray textsArray = entryObject.getJSONArray("texts");
+				ArrayList<String> texts = new ArrayList<>(textsArray.length());
+				for (int j = 0; j < textsArray.length(); j++) {
+					texts.add(textsArray.getString(j));
+				}
+				if (!versions.isEmpty() && !texts.isEmpty()) {
+					entries.add(new Entry(versions, texts));
+				}
+			}
+			return entries;
+		} catch (IOException | JSONException e) {
+			return null;
+		}
+	}
+
+	private void writeCachedEntries(List<Entry> entries) {
+		File file = getCacheFile();
+		File directory = file.getParentFile();
+		if ((!directory.isDirectory() && !directory.mkdirs()) || entries == null) {
+			return;
+		}
+		File temporary = new File(directory, file.getName() + ".tmp");
+		try {
+			JSONArray entriesArray = new JSONArray();
+			for (Entry entry : entries) {
+				JSONObject entryObject = new JSONObject();
+				JSONArray versionsArray = new JSONArray();
+				for (Entry.Version version : entry.versions) {
+					versionsArray.put(new JSONObject().put("code", version.code)
+							.put("name", version.name).put("date", version.date));
+				}
+				JSONArray textsArray = new JSONArray();
+				for (String text : entry.texts) {
+					textsArray.put(text);
+				}
+				entryObject.put("versions", versionsArray).put("texts", textsArray);
+				entriesArray.put(entryObject);
+			}
+			String json = new JSONObject().put("entries", entriesArray).toString();
+			byte[] data = json.getBytes(StandardCharsets.UTF_8);
+			if (data.length > MAX_CACHE_SIZE) {
+				return;
+			}
+			try (FileOutputStream output = new FileOutputStream(temporary);
+					OutputStreamWriter writer = new OutputStreamWriter(output, StandardCharsets.UTF_8)) {
+				writer.write(json);
+			}
+			if (!temporary.renameTo(file)) {
+				try (FileInputStream input = new FileInputStream(temporary);
+						FileOutputStream output = new FileOutputStream(file)) {
+					IOUtils.copyStream(input, output);
+				}
+			}
+		} catch (IOException | JSONException e) {
+			// A failed cache write must not prevent the bundled changelog from being shown.
+		} finally {
+			if (temporary.isFile()) {
+				//noinspection ResultOfMethodCallIgnored
+				temporary.delete();
+			}
+		}
+	}
+
+	private static int getNewestCode(List<Entry> entries) {
+		int newestCode = 0;
+		if (entries != null) {
+			for (Entry entry : entries) {
+				for (Entry.Version version : entry.versions) {
+					newestCode = Math.max(newestCode, version.code);
+				}
+			}
+		}
+		return newestCode;
+	}
+
+	private static List<Entry> mergeDistinctEntries(List<Entry> first, List<Entry> second) {
+		TreeMap<Integer, Entry> entriesMap = new TreeMap<>(Collections.reverseOrder());
+		for (List<Entry> entries : Arrays.asList(first, second)) {
+			if (entries != null) {
+				for (Entry entry : entries) {
+					if (!entry.versions.isEmpty()) {
+						entriesMap.putIfAbsent(entry.versions.get(0).code, entry);
+					}
+				}
+			}
+		}
+		return new ArrayList<>(entriesMap.values());
+	}
+
 	private List<Entry> readEntries(ChangelogReader reader) throws HttpException, JSONException, InterruptedException {
 		String versionsFile = reader.read("versions.json");
 		if (versionsFile == null) {
@@ -309,20 +436,78 @@ public class ReadChangelogTask extends ExecutorTask<Void, ReadChangelogTask.Resu
 		return entries;
 	}
 
-	private List<Entry> readNetworkEntriesWithTimeout(Uri githubUri, String metadataPath) throws InterruptedException,
-			HttpException, JSONException {
+	private List<Entry> readNewEntries(ChangelogReader reader, int newestKnownCode)
+			throws HttpException, JSONException, InterruptedException {
+		String versionsFile = reader.read("versions.json");
+		if (versionsFile == null || isCancelled()) {
+			return null;
+		}
+		JSONArray versionsArray = new JSONObject(versionsFile).getJSONArray("versions");
+		ArrayList<String> downloadLocales = collectDownloadLocales(locales);
+		if (downloadLocales.isEmpty()) {
+			throw new JSONException("No locales");
+		}
+
+		TreeSet<Long> newCodes = new TreeSet<>(Collections.reverseOrder());
+		for (int i = 0; i < versionsArray.length(); i++) {
+			JSONObject jsonObject = versionsArray.getJSONObject(i);
+			long code = jsonObject.getLong("code");
+			if (code > newestKnownCode && jsonObject.optBoolean("changelog")) {
+				newCodes.add(code);
+			}
+		}
+		if (newCodes.isEmpty()) {
+			return Collections.emptyList();
+		}
+
+		HashMap<Long, String> changelogs = new HashMap<>();
+		for (long code : newCodes) {
+			for (String localeDir : downloadLocales) {
+				String changelog = reader.read(localeDir, "changelogs", code + ".txt");
+				if (isCancelled()) {
+					return null;
+				}
+				if (changelog != null) {
+					changelogs.put(code, changelog);
+					break;
+				}
+			}
+		}
+
+		TreeMap<Long, Entry> entriesMap = new TreeMap<>(Collections.reverseOrder());
+		for (int i = 0; i < versionsArray.length(); i++) {
+			JSONObject jsonObject = versionsArray.getJSONObject(i);
+			long code = jsonObject.getLong("code");
+			String changelog = changelogs.get(code);
+			if (changelog == null) {
+				continue;
+			}
+			Entry entry = entriesMap.get(code);
+			if (entry == null) {
+				entry = new Entry(new ArrayList<>(), new ArrayList<>());
+				entry.texts.add(changelog);
+				entriesMap.put(code, entry);
+			}
+			entry.versions.add(new Entry.Version(jsonObject.getInt("code"), jsonObject.getString("name"),
+					jsonObject.getString("date")));
+		}
+		return new ArrayList<>(entriesMap.values());
+	}
+
+	private List<Entry> readNetworkEntriesWithTimeout(Uri githubUri, String metadataPath, int newestKnownCode)
+			throws InterruptedException, HttpException, JSONException {
 		HttpHolder holder = new HttpHolder(Chan.getFallback());
 		NetworkResult result = new NetworkResult();
 		Thread thread = new Thread(() -> {
 			try {
-				result.entries = readEntries(pathSegments ->
-						downloadStringOrNull(holder, githubUri, metadataPath, pathSegments));
+				result.entries = readNewEntries(pathSegments ->
+						downloadStringOrNull(holder, githubUri, metadataPath, pathSegments), newestKnownCode);
 				if (UpdateConfiguration.isBetaChannel()) {
 					try {
 						Uri betaGithubUri = Chan.getFallback().locator.setSchemeIfEmpty(
 								Uri.parse(UpdateConfiguration.getBetaMetadataUri()), null);
-						List<Entry> betaEntries = readEntries(pathSegments -> downloadStringOrNull(holder,
-								betaGithubUri, UpdateConfiguration.getBetaMetadataPath(), pathSegments));
+						List<Entry> betaEntries = readNewEntries(pathSegments -> downloadStringOrNull(holder,
+								betaGithubUri, UpdateConfiguration.getBetaMetadataPath(), pathSegments), newestKnownCode);
 						result.entries = mergeEntries(result.entries, betaEntries);
 					} catch (HttpException | JSONException e) {
 						// Stable changelog remains available when beta metadata is temporarily unavailable.
@@ -385,36 +570,40 @@ public class ReadChangelogTask extends ExecutorTask<Void, ReadChangelogTask.Resu
 
 	@Override
 	protected Result run() throws InterruptedException {
-		Uri githubUri = Chan.getFallback().locator.setSchemeIfEmpty(Uri.parse(BuildConfig.GITHUB_URI_METADATA), null);
-		String metadataPath = BuildConfig.GITHUB_PATH_METADATA;
 		try {
-			List<Entry> entries = null;
-			boolean localFallback = false;
-			try {
-				entries = readNetworkEntriesWithTimeout(githubUri, metadataPath);
-			} catch (HttpException | JSONException e) {
-				// Use bundled metadata when GitHub is unavailable or returns invalid data.
-			}
-			if (entries == null) {
-				entries = readEntries(ReadChangelogTask::readBundledStringOrNull);
-				localFallback = entries != null;
+			List<Entry> bundledEntries = readEntries(ReadChangelogTask::readBundledStringOrNull);
+			List<Entry> cachedEntries = readCachedEntries();
+			List<Entry> localEntries = mergeDistinctEntries(bundledEntries, cachedEntries);
+			if (mode == Mode.LOCAL) {
+				return !localEntries.isEmpty() ? new Result(null, localEntries) :
+						new Result(new ErrorItem(ErrorItem.Type.EMPTY_RESPONSE), null);
 			}
 
-			if (entries != null) {
-				return new Result(null, entries, localFallback);
-			} else {
-				throw HttpException.createNotFoundException();
+			Uri githubUri = Chan.getFallback().locator.setSchemeIfEmpty(
+					Uri.parse(BuildConfig.GITHUB_URI_METADATA), null);
+			List<Entry> newEntries;
+			try {
+				newEntries = readNetworkEntriesWithTimeout(githubUri, BuildConfig.GITHUB_PATH_METADATA,
+						getNewestCode(localEntries));
+			} catch (HttpException | JSONException e) {
+				return new Result(null, null);
 			}
+			if (newEntries == null || newEntries.isEmpty()) {
+				return new Result(null, null);
+			}
+			List<Entry> updatedCache = mergeDistinctEntries(newEntries, cachedEntries);
+			writeCachedEntries(updatedCache);
+			return new Result(null, mergeDistinctEntries(newEntries, localEntries));
 		} catch (HttpException e) {
-			return new Result(e.getErrorItemAndHandle(), null, false);
+			return new Result(e.getErrorItemAndHandle(), null);
 		} catch (JSONException e) {
 			e.printStackTrace();
-			return new Result(new ErrorItem(ErrorItem.Type.INVALID_RESPONSE), null, false);
+			return new Result(new ErrorItem(ErrorItem.Type.INVALID_RESPONSE), null);
 		}
 	}
 
 	@Override
 	protected void onComplete(Result result) {
-		callback.onReadChangelogComplete(result.entries, result.errorItem, result.localFallback);
+		callback.onReadChangelogComplete(result.entries, result.errorItem);
 	}
 }

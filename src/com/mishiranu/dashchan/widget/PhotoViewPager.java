@@ -30,6 +30,7 @@ public class PhotoViewPager extends ViewGroup {
 	private final ArrayList<PhotoView> photoViews = new ArrayList<>(3);
 
 	private boolean active = true;
+	private boolean verticalPagingMode;
 	private int innerPadding;
 
 	public PhotoViewPager(Context context, Adapter adapter) {
@@ -100,6 +101,13 @@ public class PhotoViewPager extends ViewGroup {
 
 	public void setActive(boolean active) {
 		this.active = active;
+	}
+
+	public void setVerticalPagingMode(boolean verticalPagingMode) {
+		if (this.verticalPagingMode != verticalPagingMode) {
+			this.verticalPagingMode = verticalPagingMode;
+			updateCurrentScrollIndex(false);
+		}
 	}
 
 	public void setInnerPadding(int padding) {
@@ -196,10 +204,12 @@ public class PhotoViewPager extends ViewGroup {
 		int action = event.getActionMasked();
 		switch (action) {
 			case MotionEvent.ACTION_DOWN: {
-				photoView.dispatchSpecialTouchEvent(event);
+				if (!verticalPagingMode) {
+					photoView.dispatchSpecialTouchEvent(event);
+				}
 				allowMove = false;
 				verticalGesture = false;
-				lastEventToPhotoView = true;
+				lastEventToPhotoView = !verticalPagingMode;
 				updateCurrentScrollIndex(false);
 				startX = lastX = event.getX();
 				startY = event.getY();
@@ -207,7 +217,9 @@ public class PhotoViewPager extends ViewGroup {
 				longTapConfirmed = false;
 				velocityTracker = VelocityTracker.obtain();
 				velocityTracker.addMovement(event);
-				postDelayed(longTapRunnable, ViewConfiguration.getDoubleTapTimeout());
+				if (!verticalPagingMode) {
+					postDelayed(longTapRunnable, ViewConfiguration.getDoubleTapTimeout());
+				}
 				return true;
 			}
 			case MotionEvent.ACTION_MOVE: {
@@ -242,15 +254,22 @@ public class PhotoViewPager extends ViewGroup {
 					if (singlePointer && distanceY > distanceX
 							&& adapter.onVerticalGestureStart(this, startX, startY)) {
 						verticalGesture = true;
-						MotionEvent cancelEvent = MotionEvent.obtain(event);
-						cancelEvent.setAction(MotionEvent.ACTION_CANCEL);
-						photoView.dispatchSpecialTouchEvent(cancelEvent);
-						cancelEvent.recycle();
+						if (lastEventToPhotoView) {
+							MotionEvent cancelEvent = MotionEvent.obtain(event);
+							cancelEvent.setAction(MotionEvent.ACTION_CANCEL);
+							photoView.dispatchSpecialTouchEvent(cancelEvent);
+							cancelEvent.recycle();
+						}
 						lastEventToPhotoView = false;
 						notifySwiping(false);
 						adapter.onVerticalGestureProgress(this, startY - y);
 						return true;
 					}
+				}
+				if (verticalPagingMode) {
+					lastEventToPhotoView = false;
+					lastX = x;
+					return true;
 				}
 				boolean sendToPhotoView = count == 1 || photoView.isScaling();
 				int currentScrollX = getScrollX();
@@ -329,9 +348,9 @@ public class PhotoViewPager extends ViewGroup {
 					edgeEffect.onRelease();
 					return true;
 				}
-				if (lastEventToPhotoView || action == MotionEvent.ACTION_CANCEL) {
+				if (!verticalPagingMode && (lastEventToPhotoView || action == MotionEvent.ACTION_CANCEL)) {
 					photoView.dispatchSpecialTouchEvent(event);
-				} else {
+				} else if (!verticalPagingMode) {
 					MotionEvent fakeEvent = MotionEvent.obtain(event);
 					fakeEvent.setAction(MotionEvent.ACTION_CANCEL);
 					photoView.dispatchSpecialTouchEvent(fakeEvent);
@@ -343,9 +362,15 @@ public class PhotoViewPager extends ViewGroup {
 					int deltaX = (int) (startX - event.getX());
 					velocityTracker.computeCurrentVelocity(1000, maximumVelocity);
 					velocity = (int) velocityTracker.getXVelocity(0);
-					index = determineTargetIndex(velocity, deltaX);
+					if (!verticalPagingMode) {
+						index = determineTargetIndex(velocity, deltaX);
+					}
 					if (!allowMove && !longTapConfirmed) {
-						photoView.dispatchSimpleClick(false, event.getX(), event.getY());
+						if (verticalPagingMode) {
+							photoView.dispatchDirectClick(event.getX(), event.getY());
+						} else {
+							photoView.dispatchSimpleClick(false, event.getX(), event.getY());
+						}
 					}
 				}
 				velocityTracker.recycle();
@@ -357,6 +382,9 @@ public class PhotoViewPager extends ViewGroup {
 				return true;
 			}
 			case MotionEvent.ACTION_POINTER_UP: {
+				if (verticalPagingMode) {
+					return true;
+				}
 				// Replace active pointer
 				if (event.getActionIndex() == 0) {
 					float deltaX = event.getX(1) - event.getX(0);
@@ -367,7 +395,9 @@ public class PhotoViewPager extends ViewGroup {
 				}
 			}
 			default: {
-				photoView.dispatchSpecialTouchEvent(event);
+				if (!verticalPagingMode) {
+					photoView.dispatchSpecialTouchEvent(event);
+				}
 				return true;
 			}
 		}

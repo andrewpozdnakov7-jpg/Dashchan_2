@@ -632,6 +632,12 @@
 	<string name="video_picture_in_picture__summary">Показывать кнопку для продолжения текущего видео в плавающем системном окне</string>
 	<string name="video_picture_in_picture_auto">Автоматически включать PiP при сворачивании</string>
 	<string name="video_picture_in_picture_auto__summary">Продолжать играющее видео в плавающем окне при переходе на рабочий стол или к другому приложению</string>
+	<string name="video_tiktok_mode">Режим TikTok</string>
+	<string name="enable_video_tiktok_mode">Включить режим TikTok</string>
+	<string name="disable_video_tiktok_mode">Выключить режим TikTok</string>
+	<string name="video_tiktok_mode_hint">Быстрый просмотр видео в этом треде: смахните вверх для следующего видео или вниз для предыдущего. Пока режим включён, остальные жесты плеера отключены, но экранные кнопки продолжают работать.</string>
+	<string name="video_tiktok_no_next_video">Следующих видео в этом треде больше нет</string>
+	<string name="video_tiktok_no_previous_video">Предыдущих видео в этом треде больше нет</string>
 	<string name="video_screen_off_action">При выключении экрана</string>
 	<string name="video_screen_off_action__summary">Выберите, ставить ли видео PiP на паузу или продолжать воспроизведение с выключенным экраном</string>
 	<string name="video_screen_off_action_pause">Ставить видео на паузу</string>
@@ -979,6 +985,12 @@
 	<string name="application_shortcut">Ярлык приложения</string>
 	<string name="application_name">Название приложения</string>
 	<string name="launcher_name_dvach">Slooop</string>
+	<string name="togdach_name_prompt_title">ТОГДАЧ и никак иначе</string>
+	<string name="togdach_name_prompt_message">Так решил квадрипл в сообщении #336454444 😺\n\nВыберите, как приложение должно называться на этом устройстве. Позже выбор можно изменить в настройках интерфейса.</string>
+	<string name="togdach_name_proof_description">Сообщение #336454444 с текстом «ТОГДАЧ и никак иначе»</string>
+	<string name="use_togdach_name">Поставить «ТОГДАЧ»</string>
+	<string name="keep_current_name">Оставить текущее название</string>
+	<string name="application_name_change_failed">Не удалось изменить название приложения</string>
 	<string name="application_logo">Значок приложения</string>
 	<string name="application_logo_default">По умолчанию</string>
 	<string name="application_logo_old_school">Олд скул</string>
