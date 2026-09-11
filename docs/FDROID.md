@@ -1,6 +1,6 @@
 # F-Droid Build Preparation
 
-Slooop uses `io.dashchan2` as its application ID and is licensed under GPL-3.0-or-later. The normal GitHub distribution and the future F-Droid distribution are built from the same repository and release tags.
+Slooop uses `io.dashchan2` as its application ID and is licensed under GPL-3.0-or-later. The GitHub and F-Droid distributions are built from the same repository and versioned source. The official F-Droid package is available at [f-droid.org/packages/io.dashchan2](https://f-droid.org/packages/io.dashchan2/); a new version may reach the catalog after the corresponding GitHub release because F-Droid rebuilds and verifies it independently.
 
 ## Native source policy
 
@@ -24,11 +24,11 @@ build type shares the production manifest and extension compatibility configurat
 build. Gradle leaves this APK unsigned. The protected upstream workflow signs the matching reference APK with the
 established developer key and `apksigner` from Android Build Tools 34.0.0.
 
-F-Droid independently rebuilds the unsigned APK from the tagged source and recipe. Publication with the upstream
-developer signature is enabled only after F-Droid can copy the signature from the signed reference APK to its
-rebuild and verify the result. The final fdroiddata metadata then uses a versioned `Binaries` URL and
-`AllowedAPKSigningKeys`. Both fields remain absent from the disabled draft until the exact tag, release asset, and
-reproducibility result exist.
+F-Droid independently rebuilds the unsigned APK from the versioned source and recipe. Published GitHub reference
+APKs are used only for reproducibility and signature verification. Publication with the upstream developer
+signature is enabled only after F-Droid can copy the signature from the matching reference APK to its rebuild and
+verify the result. The fdroiddata metadata uses versioned `Binaries` URLs and `AllowedAPKSigningKeys` for accepted
+builds after the exact source, reference assets, and reproducibility result are available.
 
 ## Distribution profiles
 
@@ -58,8 +58,9 @@ The native build disables GNU build IDs for the app-owned JNI libraries and exte
 the last known environment-dependent byte difference between independent GitHub and fdroidserver APKs. A final
 comparison is still required for every release; source-level configuration alone is not proof of reproducibility.
 
-The normal GitHub APK and the F-Droid reference APK keep the same application ID and developer certificate, so a
-tested F-Droid package can replace the GitHub package in place without deleting application data.
+The GitHub universal APK and the F-Droid ABI-specific APKs keep the same application ID and established developer
+certificate, so a verified F-Droid package can replace the GitHub package in place without deleting application
+data. The reference APKs are verification inputs rather than a separate end-user distribution channel.
 
 See [FDROID_COMPLIANCE_AUDIT.md](FDROID_COMPLIANCE_AUDIT.md) for the current dependency, asset, Anti-Feature, and
 privacy review. That audit is preparation material and is not a substitute for `fdroid scanner` or packager review.
