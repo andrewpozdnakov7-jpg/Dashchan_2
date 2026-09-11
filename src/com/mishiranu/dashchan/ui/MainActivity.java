@@ -977,6 +977,17 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		return chan;
 	}
 
+	private static Chan getLastVisitedEnabledChan() {
+		String chanName = Preferences.getLastVisitedForum();
+		if (chanName != null && !DrawerForm.CHAN_REDDIT.equals(chanName)) {
+			Chan chan = Chan.get(chanName);
+			if (chan.name != null && Preferences.isChanEnabled(chan.name)) {
+				return chan;
+			}
+		}
+		return ChanManager.getInstance().getDefaultChan();
+	}
+
 	private int findLastEnabledSavedPageIndex() {
 		boolean hasEnabledChan = ChanManager.getInstance().getDefaultChan() != null;
 		for (int i = stackPageItems.size() - 1; i >= 0; i--) {
@@ -1081,7 +1092,12 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	private boolean navigateInitial(boolean closeOverlays) {
 		currentPageItem = null;
-		Chan chan = ChanManager.getInstance().getDefaultChan();
+		String lastVisitedForum = Preferences.getLastVisitedForum();
+		if (DrawerForm.CHAN_REDDIT.equals(lastVisitedForum) && Preferences.isRedditWebReaderEnabled()) {
+			navigateFragment(new RedditSectionsFragment(), null, closeOverlays);
+			return true;
+		}
+		Chan chan = getLastVisitedEnabledChan();
 		if (chan != null) {
 			navigateData(chan.name, Preferences.getDefaultBoardName(chan),
 					null, null, null, null, closeOverlays ? FLAG_DATA_CLOSE_OVERLAYS : 0);
@@ -1427,20 +1443,27 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		if (currentFragment instanceof PageFragment) {
 			chanName = ((PageFragment) currentFragment).getPage().chanName;
 			drawerChanName = chanName;
+			Preferences.setLastVisitedForum(chanName);
 		} else if ((currentFragment instanceof RedditSectionsFragment ||
 				currentFragment instanceof RedditWebReaderFragment) &&
 				Preferences.isRedditWebReaderEnabled()) {
 			chanName = null;
 			drawerChanName = DrawerForm.CHAN_REDDIT;
+			Preferences.setLastVisitedForum(DrawerForm.CHAN_REDDIT);
 		} else {
 			SavedPageItem savedPageItem = getLastEnabledSavedPage();
 			if (savedPageItem != null) {
 				chanName = getSavedPage(savedPageItem).chanName;
+				drawerChanName = chanName;
+			} else if (DrawerForm.CHAN_REDDIT.equals(Preferences.getLastVisitedForum()) &&
+					Preferences.isRedditWebReaderEnabled()) {
+				chanName = null;
+				drawerChanName = DrawerForm.CHAN_REDDIT;
 			} else {
-				Chan chan = ChanManager.getInstance().getDefaultChan();
+				Chan chan = getLastVisitedEnabledChan();
 				chanName = chan != null ? chan.name : null;
+				drawerChanName = chanName;
 			}
-			drawerChanName = chanName;
 		}
 		if (currentFragment instanceof PageFragment) {
 			expandedScreen.removeLocker(LOCKER_NON_PAGE);
@@ -1897,7 +1920,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 						// Up button must navigate to main page in threads list
 						newBoardName = Preferences.getDefaultBoardName(Chan.get(page.chanName));
 						if (Preferences.isMergeChans() && CommonUtils.equals(page.boardName, newBoardName)) {
-							Chan chan = ChanManager.getInstance().getDefaultChan();
+							Chan chan = getLastVisitedEnabledChan();
 							if (chan != null) {
 								newChanName = chan.name;
 								newBoardName = Preferences.getDefaultBoardName(chan);
@@ -2420,7 +2443,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 				String boardName = page != null ? page.boardName : null;
 				if (chanName == null) {
 					Chan chan = content == Page.Content.MY_POSTS
-							? getAnyInstalledChan() : ChanManager.getInstance().getDefaultChan();
+							? getAnyInstalledChan() : getLastVisitedEnabledChan();
 					if (chan != null) {
 						chanName = chan.name;
 						boardName = Preferences.getDefaultBoardName(chan);

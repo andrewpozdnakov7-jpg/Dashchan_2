@@ -66,7 +66,6 @@ public class VideoUnit {
 		HOLDER_UNAVAILABLE
 	}
 
-	private static final int[] PLAYBACK_SPEEDS = {800, 1000, 1250, 1500, 2000, 4000};
 	private static final int PLAYBACK_SPEED_MIN = 10;
 	private static final int PLAYBACK_SPEED_MAX = 10000;
 	private static final long PAUSED_SEEK_PREVIEW_DELAY = 100L;
@@ -704,7 +703,7 @@ public class VideoUnit {
 			speed = Math.round(speed / 10f) * 10;
 			return Math.max(PLAYBACK_SPEED_MIN, Math.min(speed, PLAYBACK_SPEED_MAX));
 		}
-		for (int playbackSpeed : PLAYBACK_SPEEDS) {
+		for (int playbackSpeed : Preferences.getVideoPlaybackSpeedPresets()) {
 			if (playbackSpeed == speed) {
 				return speed;
 			}
@@ -751,19 +750,20 @@ public class VideoUnit {
 					R.style.Widget_OverlapPopupMenu);
 			popupMenu.getMenu().setGroupCheckable(0, true, true);
 			boolean presetSelected = false;
-			for (int i = 0; i < PLAYBACK_SPEEDS.length; i++) {
-				boolean selected = PLAYBACK_SPEEDS[i] == playbackSpeed;
+			int[] playbackSpeeds = Preferences.getVideoPlaybackSpeedPresets();
+			for (int i = 0; i < playbackSpeeds.length; i++) {
+				boolean selected = playbackSpeeds[i] == playbackSpeed;
 				presetSelected |= selected;
-				popupMenu.getMenu().add(0, i, i, formatPlaybackSpeed(PLAYBACK_SPEEDS[i]))
+				popupMenu.getMenu().add(0, i, i, formatPlaybackSpeed(playbackSpeeds[i]))
 						.setCheckable(true).setChecked(selected);
 			}
 			if (Preferences.isVideoCustomPlaybackSpeed()) {
-				popupMenu.getMenu().add(0, PLAYBACK_SPEEDS.length, PLAYBACK_SPEEDS.length,
+				popupMenu.getMenu().add(0, playbackSpeeds.length, playbackSpeeds.length,
 						R.string.custom_playback_speed).setCheckable(true).setChecked(!presetSelected);
 			}
 			popupMenu.setOnMenuItemClickListener(item -> {
 				int itemId = item.getItemId();
-				if (itemId == PLAYBACK_SPEEDS.length) {
+				if (itemId == playbackSpeeds.length && Preferences.isVideoCustomPlaybackSpeed()) {
 					PlaybackSpeedDialog.show(instance.galleryInstance.callback.getChildFragmentManager(),
 							Preferences.getVideoCustomPlaybackSpeedValue(), selectedPlaybackSpeed -> {
 								Preferences.setVideoCustomPlaybackSpeedValue(selectedPlaybackSpeed);
@@ -775,10 +775,10 @@ public class VideoUnit {
 							});
 					return true;
 				}
-				if (itemId < 0 || itemId >= PLAYBACK_SPEEDS.length) {
+				if (itemId < 0 || itemId >= playbackSpeeds.length) {
 					return false;
 				}
-				setPlaybackSpeed(PLAYBACK_SPEEDS[itemId]);
+				setPlaybackSpeed(playbackSpeeds[itemId]);
 				if (Preferences.isRememberVideoPlaybackSpeed() &&
 						Preferences.isPersistVideoPlaybackSpeed()) {
 					Preferences.setSavedVideoPlaybackSpeed(playbackSpeed);

@@ -29,6 +29,7 @@ import android.widget.FrameLayout;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.util.WebViewUtils;
 import com.mishiranu.dashchan.widget.ClickableToast;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 
@@ -134,8 +135,9 @@ public class YouTubePlayerActivity extends Activity {
 		webView.setWebChromeClient(new PlayerWebChromeClient());
 
 		updatePictureInPictureParams();
+		String applicationIdentity = "https://" + getPackageName();
 		webView.loadUrl("https://www.youtube-nocookie.com/embed/" + videoId +
-				"?autoplay=1&playsinline=1&rel=0");
+				"?autoplay=1&playsinline=1&rel=0", Collections.singletonMap("Referer", applicationIdentity));
 	}
 
 	private void updatePictureInPictureParams() {
@@ -148,16 +150,17 @@ public class YouTubePlayerActivity extends Activity {
 		setPictureInPictureParams(builder.build());
 	}
 
-	private void enterPictureInPicture() {
+	private boolean enterPictureInPicture() {
 		if (isFinishing() || isInPictureInPictureMode() || !getPackageManager()
 				.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) {
-			return;
+			return false;
 		}
 		try {
-			enterPictureInPictureMode(new PictureInPictureParams.Builder()
+			return enterPictureInPictureMode(new PictureInPictureParams.Builder()
 					.setAspectRatio(new Rational(16, 9)).build());
 		} catch (IllegalArgumentException | IllegalStateException ignored) {
 			// The user may have disabled PiP for Slooop in Android settings.
+			return false;
 		}
 	}
 
@@ -195,7 +198,7 @@ public class YouTubePlayerActivity extends Activity {
 	public void onBackPressed() {
 		if (customView != null) {
 			hideCustomView();
-		} else {
+		} else if (!enterPictureInPicture()) {
 			finish();
 		}
 	}

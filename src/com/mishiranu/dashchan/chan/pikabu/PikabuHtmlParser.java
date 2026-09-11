@@ -124,10 +124,22 @@ final class PikabuHtmlParser {
 		return new ParsedThreads(threads, pagesCount, validPage, title, description);
 	}
 
-	public static ArrayList<Board> parseCommunities(String html) {
+	public static final class Community {
+		public final Board board;
+		public final List<String> tags;
+		public final boolean adult;
+
+		private Community(Board board, List<String> tags, boolean adult) {
+			this.board = board;
+			this.tags = tags;
+			this.adult = adult;
+		}
+	}
+
+	public static ArrayList<Community> parseCommunityDirectory(String html) {
 		Document document = Jsoup.parse(html, "https://pikabu.ru/");
-		LinkedHashMap<String, Board> boards = new LinkedHashMap<>();
-		for (Element item : document.select("div.community__inner")) {
+		LinkedHashMap<String, Community> communities = new LinkedHashMap<>();
+		for (Element item : document.select("div.community, div.community__inner")) {
 			Element link = item.selectFirst("div.community__title a[href]");
 			if (link == null) continue;
 			Uri uri = resolvePageUri(link, link.attr("href"));
@@ -139,10 +151,31 @@ final class PikabuHtmlParser {
 			if (boardName == null || title.isEmpty()) continue;
 			Element information = item.selectFirst("div.community__information");
 			String description = information != null ? information.text().trim() : null;
-			boards.putIfAbsent(boardName, new Board(boardName, title, StringUtils.nullIfEmpty(description)));
-			if (boards.size() >= MAX_COMMUNITIES) break;
+			ArrayList<String> tags = new ArrayList<>();
+			boolean adult = false;
+			for (Element tag : item.select("div.community__tags a.tags__tag")) {
+				String value = StringUtils.nullIfEmpty(tag.text().trim());
+				if (value != null && !tags.contains(value)) {
+					tags.add(value);
+					String lower = value.toLowerCase(Locale.ROOT);
+					adult |= "18+".equals(value) || "nsfw".equals(lower) || "эротика".equals(lower)
+							|| "сексуальность".equals(lower) || lower.startsWith("порно")
+							|| "голые".equals(lower);
+				}
+			}
+			adult |= item.hasAttr("data-nsfw") && !"0".equals(item.attr("data-nsfw"));
+			adult |= title.contains("18+") || title.toLowerCase(Locale.US).contains("nsfw");
+			Board board = new Board(boardName, title, StringUtils.nullIfEmpty(description));
+			communities.putIfAbsent(boardName, new Community(board, tags, adult));
+			if (communities.size() >= MAX_COMMUNITIES) break;
 		}
-		return new ArrayList<>(boards.values());
+		return new ArrayList<>(communities.values());
+	}
+
+	public static ArrayList<Board> parseCommunities(String html) {
+		ArrayList<Board> boards = new ArrayList<>();
+		for (Community community : parseCommunityDirectory(html)) boards.add(community.board);
+		return boards;
 	}
 
 	public static ArrayList<Board> parseTags(String html) {

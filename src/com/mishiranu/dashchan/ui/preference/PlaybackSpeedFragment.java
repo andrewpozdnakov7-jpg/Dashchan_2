@@ -25,6 +25,13 @@ public class PlaybackSpeedFragment extends PreferenceFragment {
 				Preferences.DEFAULT_VIDEO_PLAYBACK_SPEED_CONTROL,
 				R.string.enable_video_playback_speed_control,
 				R.string.enable_video_playback_speed_control__summary);
+		Preference<Void> speedPresetsPreference = addButton(getString(R.string.playback_speed_presets), p ->
+				PlaybackSpeedDialog.formatPlaybackSpeedPresets(Preferences.getVideoPlaybackSpeedPresets()));
+		speedPresetsPreference.setOnClickListener(p -> PlaybackSpeedDialog.showPresets(getChildFragmentManager(),
+				Preferences.getVideoPlaybackSpeedPresets(), playbackSpeeds -> {
+					Preferences.setVideoPlaybackSpeedPresets(playbackSpeeds);
+					p.invalidate();
+				}));
 		CheckPreference customSpeedPreference = addCheck(true, Preferences.KEY_VIDEO_CUSTOM_PLAYBACK_SPEED,
 				Preferences.DEFAULT_VIDEO_CUSTOM_PLAYBACK_SPEED,
 				R.string.custom_video_playback_speed,
@@ -59,9 +66,13 @@ public class PlaybackSpeedFragment extends PreferenceFragment {
 				Preferences.KEY_REMEMBER_VIDEO_PLAYBACK_SPEED, true);
 		Runnable updateCustomSpeedValueState = () -> customSpeedValuePreference
 				.setEnabled(speedControlPreference.getValue() && customSpeedPreference.getValue());
-		speedControlPreference.setOnAfterChangeListener(p -> updateCustomSpeedValueState.run());
+		Runnable updateSpeedControlsState = () -> {
+			speedPresetsPreference.setEnabled(speedControlPreference.getValue());
+			updateCustomSpeedValueState.run();
+		};
+		speedControlPreference.setOnAfterChangeListener(p -> updateSpeedControlsState.run());
 		customSpeedPreference.setOnAfterChangeListener(p -> updateCustomSpeedValueState.run());
-		updateCustomSpeedValueState.run();
+		updateSpeedControlsState.run();
 	}
 
 	@Override

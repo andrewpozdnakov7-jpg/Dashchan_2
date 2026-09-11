@@ -39,6 +39,7 @@ import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.storage.RedditPageStorage;
 import com.mishiranu.dashchan.content.translation.TranslationController;
+import com.mishiranu.dashchan.content.translation.TranslationDiagnostics;
 import com.mishiranu.dashchan.content.translation.TranslationModel;
 import com.mishiranu.dashchan.util.NavigationUtils;
 import com.mishiranu.dashchan.util.ViewUtils;
@@ -1274,6 +1275,8 @@ public class RedditWebReaderFragment extends ContentFragment {
 	private void setTranslationEnabled(boolean enabled) {
 		translationEnabled = enabled;
 		handler.removeCallbacks(translationRescanRunnable);
+		TranslationDiagnostics.log("reddit", "toggle", "enabled", enabled,
+				"generation", pageLoadGeneration, "has_view", webView != null);
 		if (webView == null) {
 			return;
 		}
@@ -1293,73 +1296,122 @@ public class RedditWebReaderFragment extends ContentFragment {
 	private void scheduleTranslationScan(long delay) {
 		handler.removeCallbacks(translationRescanRunnable);
 		if (translationEnabled && !authorizationMode && webView != null && isResumed()) {
+			TranslationDiagnostics.log("reddit", "scan_scheduled", "delay_ms", delay,
+					"generation", pageLoadGeneration, "pending", translationRequestPending);
 			handler.postDelayed(translationRescanRunnable, delay);
 		}
 	}
 
 	private void requestRedditTranslation() {
 		WebView view = webView;
-		if (!translationEnabled || translationRequestPending || view == null || !isResumed() ||
-				!TranslationController.isReadyForDirection(TranslationModel.Direction.EN_RU)) {
+		if (!translationEnabled) {
+			TranslationDiagnostics.log("reddit", "scan_skipped", "reason", "disabled");
+			return;
+		}
+		if (translationRequestPending) {
+			TranslationDiagnostics.log("reddit", "scan_skipped", "reason", "pending",
+					"generation", translationRequestGeneration);
+			return;
+		}
+		if (view == null) {
+			TranslationDiagnostics.log("reddit", "scan_skipped", "reason", "missing_view");
+			return;
+		}
+		if (!isResumed()) {
+			TranslationDiagnostics.log("reddit", "scan_skipped", "reason", "not_resumed");
+			return;
+		}
+		if (!TranslationController.isReadyForDirection(TranslationModel.Direction.EN_RU)) {
+			TranslationDiagnostics.log("reddit", "scan_skipped", "reason", "engine_not_ready");
 			return;
 		}
 		int generation = pageLoadGeneration;
+		TranslationDiagnostics.log("reddit", "dom_scan_start", "generation", generation);
 		String script = "(function(){window.__slooopRedditTranslationEnabled=true;" +
 				"var q='shreddit-post [slot=title],shreddit-post [slot=text-body]," +
 				"shreddit-comment [slot=comment]',n=document.querySelectorAll(q);" +
+				"var r={total:n.length,cached:0,pending:0,failed:0,empty:0};" +
 				"window.__slooopRedditTranslationCounter=window.__slooopRedditTranslationCounter||0;" +
 				"for(var i=0;i<n.length;i++){var e=n[i];if(e.__slooopTranslatedHtml!=null){" +
-				"e.innerHTML=e.__slooopTranslatedHtml;continue;}if(e.__slooopTranslationPending||" +
-				"e.__slooopTranslationFailed)continue;" +
-				"var text=(e.innerText||e.textContent||'').trim();if(!text)continue;" +
+				"r.cached++;e.innerHTML=e.__slooopTranslatedHtml;continue;}if(e.__slooopTranslationPending){" +
+				"r.pending++;continue;}if(e.__slooopTranslationFailed){r.failed++;continue;}" +
+				"var text=(e.innerText||e.textContent||'').trim();if(!text){r.empty++;continue;}" +
 				"if(e.__slooopOriginalHtml==null)e.__slooopOriginalHtml=e.innerHTML;" +
 				"var id=e.getAttribute('data-slooop-translation-id');if(!id){id='t'+" +
 				"(++window.__slooopRedditTranslationCounter);e.setAttribute('data-slooop-translation-id',id);}" +
-				"e.__slooopTranslationPending=true;return JSON.stringify({id:id,html:e.__slooopOriginalHtml});}" +
-				"return null;})()";
+				"e.__slooopTranslationPending=true;r.id=id;r.html=e.__slooopOriginalHtml;" +
+				"return JSON.stringify(r);}return JSON.stringify(r);})()";
 		translationRequestPending = true;
 		translationRequestGeneration = generation;
 		view.evaluateJavascript(script, value -> {
 			if (!isCurrentPageLoad(view, generation) || !translationEnabled) {
+				TranslationDiagnostics.log("reddit", "dom_scan_stale", "generation", generation,
+						"current_generation", pageLoadGeneration, "enabled", translationEnabled);
 				finishTranslationRequest(generation);
 				return;
 			}
 			JSONObject item = decodeJavascriptObject(value);
 			if (item == null) {
+				TranslationDiagnostics.error("reddit", "dom_scan_invalid", "generation", generation,
+						"result_chars", TranslationDiagnostics.length(value));
 				finishTranslationRequest(generation);
 				scheduleTranslationScan(TRANSLATION_RESCAN_DELAY);
 				return;
 			}
+			TranslationDiagnostics.log("reddit", "dom_scan_result", "generation", generation,
+					"total", item.optInt("total", -1), "cached", item.optInt("cached", -1),
+					"pending", item.optInt("pending", -1), "failed", item.optInt("failed", -1),
+					"empty", item.optInt("empty", -1));
 			String id = item.optString("id", null);
 			String html = item.optString("html", null);
-			if (StringUtils.isEmpty(id) || html == null) {
+			if (StringUtils.isEmpty(id)) {
+				TranslationDiagnostics.log("reddit", "dom_queue_empty", "generation", generation);
 				finishTranslationRequest(generation);
 				scheduleTranslationScan(TRANSLATION_RESCAN_DELAY);
 				return;
 			}
+			if (html == null) {
+				TranslationDiagnostics.error("reddit", "dom_item_invalid", "generation", generation,
+						"has_id", true, "html_chars", TranslationDiagnostics.length(html));
+				finishTranslationRequest(generation);
+				scheduleTranslationScan(TRANSLATION_RESCAN_DELAY);
+				return;
+			}
+			TranslationDiagnostics.log("reddit", "request_start", "generation", generation,
+					"dom_id", id, "html_chars", html.length());
 			TranslationController.getInstance().requestTranslation(TranslationModel.Direction.EN_RU, "", html,
 					(translatedSubject, translatedHtml, error) -> applyRedditTranslation(view, generation,
-							id, translatedHtml));
+							id, translatedHtml, error));
 		});
 	}
 
-	private void applyRedditTranslation(WebView view, int generation, String id, String translatedHtml) {
+	private void applyRedditTranslation(WebView view, int generation, String id, String translatedHtml,
+			String error) {
 		if (!isCurrentPageLoad(view, generation)) {
+			TranslationDiagnostics.log("reddit", "result_stale", "generation", generation,
+					"current_generation", pageLoadGeneration, "dom_id", id);
 			finishTranslationRequest(generation);
 			return;
 		}
+		TranslationDiagnostics.log("reddit", "result_received", "generation", generation, "dom_id", id,
+				"success", translatedHtml != null, "html_chars", TranslationDiagnostics.length(translatedHtml),
+				"error", TranslationDiagnostics.safeError(error));
 		String selector = "[data-slooop-translation-id=" + JSONObject.quote(id) + "]";
 		String script;
 		if (translatedHtml != null) {
 			script = "(function(){var e=document.querySelector(" + JSONObject.quote(selector) + ");" +
-					"if(!e)return;e.__slooopTranslationPending=false;e.__slooopTranslatedHtml=" +
+					"if(!e)return 'missing';e.__slooopTranslationPending=false;e.__slooopTranslatedHtml=" +
 					JSONObject.quote(translatedHtml) + ";if(window.__slooopRedditTranslationEnabled)" +
-					"e.innerHTML=e.__slooopTranslatedHtml;})();";
+					"e.innerHTML=e.__slooopTranslatedHtml;return window.__slooopRedditTranslationEnabled?" +
+					"'applied':'cached';})();";
 		} else {
 			script = "(function(){var e=document.querySelector(" + JSONObject.quote(selector) + ");" +
-					"if(e){e.__slooopTranslationPending=false;e.__slooopTranslationFailed=true;}})();";
+					"if(!e)return 'missing';e.__slooopTranslationPending=false;" +
+					"e.__slooopTranslationFailed=true;return 'failed';})();";
 		}
-		view.evaluateJavascript(script, ignored -> {
+		view.evaluateJavascript(script, applyResult -> {
+			TranslationDiagnostics.log("reddit", "dom_result", "generation", generation, "dom_id", id,
+					"status", TranslationDiagnostics.safeError(applyResult));
 			finishTranslationRequest(generation);
 			if (translatedHtml == null) {
 				if (translationEnabled && translationFailureGeneration != generation) {
@@ -1377,6 +1429,10 @@ public class RedditWebReaderFragment extends ContentFragment {
 		if (translationRequestGeneration == generation) {
 			translationRequestPending = false;
 			translationRequestGeneration = -1;
+			TranslationDiagnostics.log("reddit", "request_finished", "generation", generation);
+		} else {
+			TranslationDiagnostics.log("reddit", "finish_ignored", "generation", generation,
+					"pending_generation", translationRequestGeneration);
 		}
 	}
 

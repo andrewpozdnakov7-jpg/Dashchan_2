@@ -5,6 +5,7 @@
 
 	<item type="id" name="menu_add_post" />
 	<item type="id" name="menu_add_theme" />
+	<item type="id" name="menu_add_pikabu_community" />
 	<item type="id" name="menu_appearance" />
 	<item type="id" name="menu_archive" />
 	<item type="id" name="menu_attach" />

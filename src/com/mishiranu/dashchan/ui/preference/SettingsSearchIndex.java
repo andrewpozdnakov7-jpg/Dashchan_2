@@ -511,6 +511,8 @@ public final class SettingsSearchIndex {
 				R.string.video_screen_off_action__summary, Preferences.KEY_VIDEO_SCREEN_OFF_ACTION);
 		add(context, entries, Screen.PLAYBACK_SPEED, R.string.enable_video_playback_speed_control,
 				R.string.enable_video_playback_speed_control__summary, Preferences.KEY_VIDEO_PLAYBACK_SPEED_CONTROL);
+		add(context, entries, Screen.PLAYBACK_SPEED, R.string.playback_speed_presets,
+				R.string.playback_speed_presets__summary, Preferences.KEY_VIDEO_PLAYBACK_SPEED_PRESETS);
 		add(context, entries, Screen.PLAYBACK_SPEED, R.string.custom_video_playback_speed,
 				R.string.custom_video_playback_speed__summary, Preferences.KEY_VIDEO_CUSTOM_PLAYBACK_SPEED);
 		add(context, entries, Screen.PLAYBACK_SPEED, R.string.remember_video_playback_speed,

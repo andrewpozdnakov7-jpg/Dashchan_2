@@ -182,6 +182,26 @@ public class DvachModelMapper {
 				}
 			}
 		}
+
+		public boolean handleBoardObject(JsonSerial.Reader reader, String name) throws IOException, ParseException {
+			switch (name) {
+				case "name": {
+					title = reader.nextString();
+					return true;
+				}
+				case "info_outer": {
+					description = reader.nextString();
+					return true;
+				}
+				case "max_pages": {
+					pagesCount = reader.nextInt();
+					return true;
+				}
+				default: {
+					return handle(reader, name);
+				}
+			}
+		}
 	}
 
 	private static String fixAttachmentPath(String boardName, String path) {

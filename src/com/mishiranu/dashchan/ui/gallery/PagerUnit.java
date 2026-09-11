@@ -222,7 +222,8 @@ public class PagerUnit implements PagerInstance.Callback {
 	}
 
 	private float getTikTokGestureThreshold(PhotoViewPager view) {
-		return Math.max(64f * ResourceUtils.obtainDensity(view), view.getHeight() * 0.12f);
+		// Keep the same device-relative threshold, but require 40% less finger travel.
+		return Math.max(64f * ResourceUtils.obtainDensity(view), view.getHeight() * 0.12f) * 0.6f;
 	}
 
 	private int findTikTokVideo(boolean next) {

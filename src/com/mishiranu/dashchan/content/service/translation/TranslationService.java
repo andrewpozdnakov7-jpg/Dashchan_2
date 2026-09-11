@@ -18,6 +18,7 @@ import android.webkit.WebViewClient;
 import androidx.annotation.Nullable;
 import com.mishiranu.dashchan.content.translation.GeminiNanoTranslationBridge;
 import com.mishiranu.dashchan.content.translation.GoogleTranslationBridge;
+import com.mishiranu.dashchan.content.translation.TranslationDiagnostics;
 import com.mishiranu.dashchan.content.translation.TranslationEngine;
 import com.mishiranu.dashchan.content.translation.TranslationModel;
 import java.io.ByteArrayInputStream;
@@ -91,18 +92,21 @@ public class TranslationService extends Service {
 	public IBinder onBind(Intent intent) {
 		bound = true;
 		handler.removeCallbacks(idleShutdownRunnable);
+		TranslationDiagnostics.log("service", "bound", "pending", requests.size(), "generation", generation);
 		return binder;
 	}
 
 	@Override
 	public boolean onUnbind(Intent intent) {
 		bound = false;
+		TranslationDiagnostics.log("service", "unbound", "pending", requests.size(), "generation", generation);
 		scheduleIdleShutdown();
 		return false;
 	}
 
 	@Override
 	public void onDestroy() {
+		TranslationDiagnostics.log("service", "destroy", "pending", requests.size(), "generation", generation);
 		handler.removeCallbacks(idleShutdownRunnable);
 		resetEngine("Translator stopped");
 		super.onDestroy();
@@ -113,31 +117,53 @@ public class TranslationService extends Service {
 			ITranslationCallback callback) {
 		TranslationEngine requestedEngine = TranslationEngine.fromValue(engineValue);
 		TranslationModel.Direction requestedDirection = obtainDirection(sourceLanguage, targetLanguage);
+		TranslationDiagnostics.log("service", "enqueue", "request_id", requestId, "engine", engineValue,
+				"source", sourceLanguage, "target", targetLanguage,
+				"subject_chars", TranslationDiagnostics.length(subject),
+				"html_chars", TranslationDiagnostics.length(html), "generation", generation);
 		if (!requestedEngine.isAvailable() || requestedDirection == null || subject == null || html == null) {
+			TranslationDiagnostics.error("service", "enqueue_rejected", "request_id", requestId,
+					"reason", "unsupported");
 			reportError(callback, requestId, "Unsupported translation direction");
 			return;
 		}
 		if (requestedEngine == TranslationEngine.MOZILLA && !TranslationModel.isInstalled(this, requestedDirection)) {
+			TranslationDiagnostics.error("service", "enqueue_rejected", "request_id", requestId,
+					"reason", "model_missing");
 			reportError(callback, requestId, "Language package is not installed");
 			return;
 		}
 		if (engine != requestedEngine || direction != requestedDirection) {
+			TranslationDiagnostics.log("service", "engine_change", "request_id", requestId,
+					"from_engine", engine != null ? engine.value : "none", "to_engine", requestedEngine.value,
+					"from_direction", direction != null ? direction.name() : "none",
+					"to_direction", requestedDirection.name());
 			resetEngine("Translation direction changed");
 			engine = requestedEngine;
 			direction = requestedDirection;
 		}
 		requests.put(requestId, new Request(requestId, subject, html, callback));
+		TranslationDiagnostics.log("service", "queued", "request_id", requestId, "pending", requests.size(),
+				"generation", generation);
 		if (engine == TranslationEngine.GOOGLE) {
 			final int currentGeneration = generation;
+			TranslationDiagnostics.log("service", "google_start", "request_id", requestId,
+					"generation", currentGeneration);
 			googleBridge.translate(this, direction, subject, html, new GoogleTranslationBridge.Callback() {
 				@Override
 				public void onSuccess(String translatedSubject, String translatedHtml) {
+					TranslationDiagnostics.log("service", "google_success", "request_id", requestId,
+							"generation", currentGeneration,
+							"html_chars", TranslationDiagnostics.length(translatedHtml));
 					handler.post(() -> onResult(currentGeneration, Long.toString(requestId), translatedSubject,
 							translatedHtml, null));
 				}
 
 				@Override
 				public void onError(String message) {
+					TranslationDiagnostics.error("service", "google_error", "request_id", requestId,
+							"generation", currentGeneration,
+							"error", TranslationDiagnostics.safeError(message));
 					handler.post(() -> onResult(currentGeneration, Long.toString(requestId), null, null,
 							message != null ? message : "Translation failed"));
 				}
@@ -176,6 +202,8 @@ public class TranslationService extends Service {
 	@SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
 	private void createEngine() {
 		final int currentGeneration = ++generation;
+		TranslationDiagnostics.log("service", "mozilla_create", "generation", currentGeneration,
+				"pending", requests.size());
 		ready = false;
 		initializationStarted = false;
 		webView = new WebView(this);
@@ -208,8 +236,12 @@ public class TranslationService extends Service {
 
 	private void sendRequest(Request request) {
 		if (request == null || webView == null || !ready) {
+			TranslationDiagnostics.log("service", "mozilla_dispatch_skipped", "has_request", request != null,
+					"has_view", webView != null, "ready", ready, "generation", generation);
 			return;
 		}
+		TranslationDiagnostics.log("service", "mozilla_dispatch", "request_id", request.id,
+				"generation", generation, "html_chars", request.html.length());
 		String script = "window.SlooopBergamot.translate(" + request.id + "," +
 				JSONObject.quote(request.subject) + "," + JSONObject.quote(request.html) + ");";
 		webView.evaluateJavascript(script, null);
@@ -217,9 +249,13 @@ public class TranslationService extends Service {
 
 	private void onReady(int currentGeneration) {
 		if (currentGeneration != generation || webView == null) {
+			TranslationDiagnostics.log("service", "mozilla_ready_stale", "generation", currentGeneration,
+					"current_generation", generation, "has_view", webView != null);
 			return;
 		}
 		ready = true;
+		TranslationDiagnostics.log("service", "mozilla_ready", "generation", currentGeneration,
+				"pending", requests.size());
 		for (Request request : new ArrayList<>(requests.values())) {
 			sendRequest(request);
 		}
@@ -228,6 +264,8 @@ public class TranslationService extends Service {
 	private void onResult(int currentGeneration, String requestId, String translatedSubject,
 			String translatedHtml, String error) {
 		if (currentGeneration != generation) {
+			TranslationDiagnostics.log("service", "result_stale", "request_id", requestId,
+					"generation", currentGeneration, "current_generation", generation);
 			return;
 		}
 		long id;
@@ -238,8 +276,13 @@ public class TranslationService extends Service {
 		}
 		Request request = requests.remove(id);
 		if (request == null) {
+			TranslationDiagnostics.log("service", "result_unknown", "request_id", id,
+					"generation", currentGeneration);
 			return;
 		}
+		TranslationDiagnostics.log("service", "result", "request_id", id, "success", error == null,
+				"html_chars", TranslationDiagnostics.length(translatedHtml),
+				"error", TranslationDiagnostics.safeError(error), "remaining", requests.size());
 		try {
 			if (error == null) {
 				request.callback.onSuccess(id, translatedSubject, translatedHtml);
@@ -253,6 +296,8 @@ public class TranslationService extends Service {
 	}
 
 	private void resetEngine(String message) {
+		TranslationDiagnostics.log("service", "reset", "reason", TranslationDiagnostics.safeError(message),
+				"generation", generation, "pending", requests.size());
 		handler.removeCallbacks(idleShutdownRunnable);
 		generation++;
 		ready = false;
