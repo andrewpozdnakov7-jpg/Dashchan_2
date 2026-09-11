@@ -188,6 +188,10 @@ public class Preferences {
 	public static final String KEY_APPLICATION_NAME = "application_name";
 	private static final String KEY_TOGDACH_NAME_PROMPTED = "togdach_name_prompted";
 	private static final String KEY_LOCAL_ARCHIVE_URI_TREES = "local_archive_uri_trees";
+	private static final String KEY_EXPANDED_BOARD_CATEGORIES = "expanded_board_categories_";
+	private static final String KEY_PIKABU_CUSTOM_COMMUNITIES = "pikabu_custom_communities";
+	private static final String KEY_PIKABU_COMMUNITY_CATALOG_VERSION = "pikabu_community_catalog_version";
+	private static final int PIKABU_COMMUNITY_CATALOG_VERSION = 1;
 
 	public static List<String> getLocalArchiveUriTrees() {
 		Set<String> values = PREFERENCES.getStringSet(KEY_LOCAL_ARCHIVE_URI_TREES, Collections.emptySet());
@@ -585,6 +589,7 @@ public class Preferences {
 	}
 
 	public static final String KEY_CHANS_ORDER = "chans_order";
+	private static final String KEY_LAST_VISITED_FORUM = "last_visited_forum";
 	private static final String KEY_CHAN_ENABLED_PREFIX = "chan_enabled_";
 
 	public static String getChanEnabledKey(String chanName) {
@@ -602,6 +607,17 @@ public class Preferences {
 
 	public static boolean isChanEnabled(String chanName) {
 		return PREFERENCES.getBoolean(getChanEnabledKey(chanName), isChanEnabledByDefault(chanName));
+	}
+
+	public static String getLastVisitedForum() {
+		return PREFERENCES.getString(KEY_LAST_VISITED_FORUM, null);
+	}
+
+	public static void setLastVisitedForum(String forumName) {
+		String previousForumName = getLastVisitedForum();
+		if (forumName == null ? previousForumName != null : !forumName.equals(previousForumName)) {
+			PREFERENCES.edit().put(KEY_LAST_VISITED_FORUM, forumName).close();
+		}
 	}
 
 	public static ArrayList<String> getChansOrder() {
@@ -2314,9 +2330,115 @@ public class Preferences {
 
 	public static final String KEY_VIDEO_PLAYBACK_SPEED_CONTROL = "video_playback_speed_control";
 	public static final boolean DEFAULT_VIDEO_PLAYBACK_SPEED_CONTROL = true;
+	public static final String KEY_VIDEO_PLAYBACK_SPEED_PRESETS = "video_playback_speed_presets";
+	private static final String DEFAULT_VIDEO_PLAYBACK_SPEED_PRESETS = "800,1000,1250,1500,2000,4000";
+	private static final int[] DEFAULT_VIDEO_PLAYBACK_SPEED_PRESET_VALUES = {800, 1000, 1250, 1500, 2000, 4000};
 
 	public static boolean isVideoPlaybackSpeedControl() {
 		return PREFERENCES.getBoolean(KEY_VIDEO_PLAYBACK_SPEED_CONTROL, DEFAULT_VIDEO_PLAYBACK_SPEED_CONTROL);
+	}
+
+	public static Set<String> getExpandedBoardCategories(String chanName) {
+		return new HashSet<>(PREFERENCES.getStringSet(KEY_EXPANDED_BOARD_CATEGORIES + chanName,
+				Collections.emptySet()));
+	}
+
+	public static void setExpandedBoardCategories(String chanName, Set<String> categories) {
+		PREFERENCES.edit().put(KEY_EXPANDED_BOARD_CATEGORIES + chanName, new HashSet<>(categories)).close();
+	}
+
+	public static synchronized List<String> getPikabuCustomCommunities() {
+		ArrayList<String> communities = new ArrayList<>();
+		String value = PREFERENCES.getString(KEY_PIKABU_CUSTOM_COMMUNITIES, null);
+		if (!StringUtils.isEmpty(value)) {
+			try {
+				JSONArray array = new JSONArray(value);
+				for (int i = 0; i < array.length(); i++) {
+					String boardName = StringUtils.nullIfEmpty(array.optString(i, null));
+					if (boardName != null && !communities.contains(boardName)) communities.add(boardName);
+				}
+			} catch (JSONException e) {
+				// Ignore damaged optional navigation data.
+			}
+		}
+		return communities;
+	}
+
+	public static synchronized boolean addPikabuCustomCommunity(String boardName) {
+		ArrayList<String> communities = new ArrayList<>(getPikabuCustomCommunities());
+		if (communities.contains(boardName)) return false;
+		communities.add(boardName);
+		setPikabuCustomCommunities(communities);
+		return true;
+	}
+
+	public static synchronized boolean removePikabuCustomCommunity(String boardName) {
+		ArrayList<String> communities = new ArrayList<>(getPikabuCustomCommunities());
+		if (!communities.remove(boardName)) return false;
+		setPikabuCustomCommunities(communities);
+		return true;
+	}
+
+	private static void setPikabuCustomCommunities(List<String> communities) {
+		JSONArray array = new JSONArray();
+		for (String community : communities) array.put(community);
+		PREFERENCES.edit().put(KEY_PIKABU_CUSTOM_COMMUNITIES,
+				array.length() > 0 ? array.toString() : null).close();
+	}
+
+	public static boolean isPikabuCommunityCatalogCurrent() {
+		return PREFERENCES.getInt(KEY_PIKABU_COMMUNITY_CATALOG_VERSION, 0)
+				>= PIKABU_COMMUNITY_CATALOG_VERSION;
+	}
+
+	public static void setPikabuCommunityCatalogCurrent() {
+		PREFERENCES.edit().put(KEY_PIKABU_COMMUNITY_CATALOG_VERSION,
+				PIKABU_COMMUNITY_CATALOG_VERSION).close();
+	}
+
+	public static int[] getVideoPlaybackSpeedPresets() {
+		String value = PREFERENCES.getString(KEY_VIDEO_PLAYBACK_SPEED_PRESETS,
+				DEFAULT_VIDEO_PLAYBACK_SPEED_PRESETS);
+		String[] split = value.split(",");
+		ArrayList<Integer> presets = new ArrayList<>();
+		for (String item : split) {
+			try {
+				int playbackSpeed = Integer.parseInt(item.trim());
+				if (playbackSpeed >= 10 && playbackSpeed <= 10000 && !presets.contains(playbackSpeed)) {
+					presets.add(playbackSpeed);
+				}
+			} catch (NumberFormatException e) {
+				// Ignore invalid stored values and fall back to defaults when none remain.
+			}
+		}
+		if (presets.isEmpty()) {
+			return DEFAULT_VIDEO_PLAYBACK_SPEED_PRESET_VALUES.clone();
+		}
+		int[] result = new int[presets.size()];
+		for (int i = 0; i < presets.size(); i++) {
+			result[i] = presets.get(i);
+		}
+		return result;
+	}
+
+	public static void setVideoPlaybackSpeedPresets(int[] presets) {
+		StringBuilder builder = new StringBuilder();
+		for (int playbackSpeed : presets) {
+			playbackSpeed = Math.round(playbackSpeed / 10f) * 10;
+			if (playbackSpeed < 10 || playbackSpeed > 10000) {
+				continue;
+			}
+			if (builder.length() > 0) {
+				builder.append(',');
+			}
+			builder.append(playbackSpeed);
+		}
+		PREFERENCES.edit().put(KEY_VIDEO_PLAYBACK_SPEED_PRESETS,
+				builder.length() > 0 ? builder.toString() : DEFAULT_VIDEO_PLAYBACK_SPEED_PRESETS).close();
+	}
+
+	public static int[] getDefaultVideoPlaybackSpeedPresets() {
+		return DEFAULT_VIDEO_PLAYBACK_SPEED_PRESET_VALUES.clone();
 	}
 
 	public static final String KEY_VIDEO_CUSTOM_PLAYBACK_SPEED = "video_custom_playback_speed";

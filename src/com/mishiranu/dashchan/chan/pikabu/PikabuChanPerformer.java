@@ -16,22 +16,29 @@ import chan.http.HttpResponse;
 import chan.http.UrlEncodedEntity;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.R;
+import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.net.UserAgentProvider;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.TimeZone;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.json.JSONException;
+import org.json.JSONArray;
 import org.json.JSONObject;
 import org.jsoup.Jsoup;
 
 public class PikabuChanPerformer extends ChanPerformer {
 	private static final int COMMENTS_BATCH_SIZE = 300;
+	private static final int COMMUNITIES_PAGE_SIZE = 50;
+	private static final int MAX_COMMUNITIES = 200;
 	private static final String PIKABU_REFERER = "https://pikabu.ru/";
 	private static final Pattern REPLY_PREFIX = Pattern.compile(
 			"\\A[\\t ]*>>(\\d+)[\\t ]*(?:\\r?\\n|\\z)");
@@ -600,15 +607,136 @@ public class PikabuChanPerformer extends ChanPerformer {
 		}
 	}
 
+	private static final int[] COMMUNITY_CATEGORY_TITLES = {
+		R.string.pikabu_category_humor, R.string.pikabu_category_technology,
+		R.string.pikabu_category_science, R.string.pikabu_category_gaming,
+		R.string.pikabu_category_entertainment, R.string.pikabu_category_news,
+		R.string.pikabu_category_business, R.string.pikabu_category_home,
+		R.string.pikabu_category_food, R.string.pikabu_category_nature,
+		R.string.pikabu_category_lifestyle, R.string.pikabu_category_sports,
+		R.string.pikabu_category_adult, R.string.pikabu_category_other
+	};
+
+	private static final String[][] COMMUNITY_CATEGORY_KEYWORDS = {
+		{"юмор", "мем", "смеш", "прикол", "комикс", "анекдот", "ирони"},
+		{"технолог", "айти", "программ", "компьютер", "гаджет", "интернет", "android", "linux",
+				"windows", "искусственный интеллект", "нейросет"},
+		{"наука", "образован", "обучен", "истори", "космос", "физик", "хими", "биолог", "медицин"},
+		{"игр", "gaming", "steam", "playstation", "xbox", "nintendo", "настольн"},
+		{"кино", "фильм", "сериал", "музык", "книг", "литератур", "аниме", "театр", "искусств"},
+		{"новост", "политик", "общество", "происшеств", "мир", "страна", "город"},
+		{"бизнес", "работ", "финанс", "эконом", "деньг", "карьер", "маркетплейс", "торговл"},
+		{"дом", "ремонт", "строитель", "сделай сам", "diy", "рукодел", "инструмент", "авто"},
+		{"еда", "рецепт", "кулинар", "напит", "кофе", "чай", "выпеч"},
+		{"животн", "кот", "кош", "собак", "природ", "растен", "путешеств", "туризм"},
+		{"отношен", "семья", "дет", "здоров", "психолог", "жизн", "мужчин", "женщин"},
+		{"спорт", "футбол", "хоккей", "баскетбол", "фитнес", "бокс", "единоборств"},
+		{}, {}
+	};
+
+	private static int chooseCommunityCategory(PikabuHtmlParser.Community community) {
+		int adultIndex = COMMUNITY_CATEGORY_TITLES.length - 2;
+		if (community.adult) return adultIndex;
+		StringBuilder builder = new StringBuilder(community.board.getTitle().toLowerCase(Locale.ROOT));
+		for (String tag : community.tags) builder.append('\n').append(tag.toLowerCase(Locale.ROOT));
+		String text = builder.toString();
+		int bestIndex = COMMUNITY_CATEGORY_TITLES.length - 1;
+		int bestScore = 0;
+		for (int i = 0; i < adultIndex; i++) {
+			int score = 0;
+			for (String keyword : COMMUNITY_CATEGORY_KEYWORDS[i]) if (text.contains(keyword)) score++;
+			if (score > bestScore) {
+				bestScore = score;
+				bestIndex = i;
+			}
+		}
+		return bestIndex;
+	}
+
+	private String loadCommunityDirectory(PikabuChanLocator locator, ReadBoardsData data,
+			String firstPageHtml) {
+		StringBuilder html = new StringBuilder(firstPageHtml);
+		int loaded = PikabuHtmlParser.parseCommunityDirectory(firstPageHtml).size();
+		for (int page = 2; loaded < MAX_COMMUNITIES; page++) {
+			android.net.Uri uri = locator.createCommunitiesActionsUri();
+			UrlEncodedEntity entity = new UrlEncodedEntity("action", "get_communities", "text", "",
+					"filterType", "", "sort", "actual", "type", "all", "tag", "",
+					"page", Integer.toString(page));
+			String response;
+			try {
+				response = perform(uri, prepareRequest(uri, data)
+						.addHeader("Accept", "application/json")
+						.addHeader("X-Requested-With", "XMLHttpRequest")
+						.addHeader("Referer", locator.createCommunitiesUri().toString())
+						.setPostMethod(entity)).readString();
+			} catch (HttpException e) {
+				break;
+			}
+			try {
+				JSONObject root = new JSONObject(response);
+				JSONObject result = root.optJSONObject("data");
+				JSONArray list = result != null ? result.optJSONArray("list") : null;
+				if (!root.optBoolean("result") || list == null || list.length() == 0) break;
+				for (int i = 0; i < list.length() && loaded < MAX_COMMUNITIES; i++) {
+					String item = list.optString(i, null);
+					if (!StringUtils.isEmpty(item)) {
+						html.append(item);
+						loaded++;
+					}
+				}
+				if (!result.optBoolean("has_more", false) || list.length() < COMMUNITIES_PAGE_SIZE) break;
+			} catch (JSONException e) {
+				break;
+			}
+		}
+		return html.toString();
+	}
+
+	private void appendCommunityCategories(ArrayList<BoardCategory> categories,
+			List<PikabuHtmlParser.Community> communities, List<String> customBoardNames) {
+		Set<String> customSet = new LinkedHashSet<>(customBoardNames);
+		LinkedHashMap<String, Board> knownBoards = new LinkedHashMap<>();
+		for (PikabuHtmlParser.Community community : communities) {
+			knownBoards.put(community.board.getBoardName(), community.board);
+		}
+		if (!customBoardNames.isEmpty()) {
+			ArrayList<Board> customBoards = new ArrayList<>();
+			for (String boardName : customBoardNames) {
+				if (!PikabuChanLocator.isCommunityBoardName(boardName)) continue;
+				Board board = knownBoards.get(boardName);
+				if (board == null) board = new Board(boardName, PikabuChanLocator.getDynamicBoardTitle(boardName));
+				customBoards.add(board);
+			}
+			if (!customBoards.isEmpty()) categories.add(1, new BoardCategory(
+					PikabuChanConfiguration.get(this).getResources().getString(
+							R.string.pikabu_category_my_communities), customBoards));
+		}
+		@SuppressWarnings("unchecked")
+		ArrayList<Board>[] grouped = new ArrayList[COMMUNITY_CATEGORY_TITLES.length];
+		for (PikabuHtmlParser.Community community : communities) {
+			if (customSet.contains(community.board.getBoardName())) continue;
+			int index = chooseCommunityCategory(community);
+			if (grouped[index] == null) grouped[index] = new ArrayList<>();
+			grouped[index].add(community.board);
+		}
+		for (int i = 0; i < grouped.length; i++) {
+			if (grouped[i] != null && !grouped[i].isEmpty()) {
+				categories.add(new BoardCategory(PikabuChanConfiguration.get(this).getResources()
+						.getString(COMMUNITY_CATEGORY_TITLES[i]), grouped[i]));
+			}
+		}
+	}
+
 	@Override
 	public ReadBoardsResult onReadBoards(ReadBoardsData data) {
 		PikabuChanLocator locator = PikabuChanLocator.get(this);
+		PikabuChanConfiguration configuration = PikabuChanConfiguration.get(this);
 		ArrayList<BoardCategory> categories = new ArrayList<>();
-		categories.add(new BoardCategory("Ленты", Arrays.asList(
+		categories.add(new BoardCategory(configuration.getResources().getString(R.string.pikabu_category_feeds), Arrays.asList(
 				new Board(PikabuChanLocator.BOARD_HOT, "Горячее", "Популярные истории"),
 				new Board(PikabuChanLocator.BOARD_BEST, "Лучшее", "Лучшие истории"),
 				new Board(PikabuChanLocator.BOARD_NEW, "Свежее", "Новые истории"))));
-		categories.add(new BoardCategory("Фильтры", Arrays.asList(
+		categories.add(new BoardCategory(configuration.getResources().getString(R.string.pikabu_category_filters), Arrays.asList(
 				new Board(PikabuChanLocator.createBrowseBoardName(PikabuChanLocator.BROWSE_ORIGINAL),
 						"Авторские", "Истории с отметкой «моё»"),
 				new Board(PikabuChanLocator.createBrowseBoardName(PikabuChanLocator.BROWSE_TEXT),
@@ -625,25 +753,30 @@ public class PikabuChanPerformer extends ChanPerformer {
 						"Длиннопосты", "Длинные истории"))));
 
 		String communitiesHtml = null;
+		ArrayList<PikabuHtmlParser.Community> communities = new ArrayList<>();
 		try {
 			android.net.Uri communitiesUri = locator.createCommunitiesUri();
 			communitiesHtml = perform(communitiesUri, preparePageRequest(communitiesUri, data)).readString();
-			ArrayList<Board> communities = PikabuHtmlParser.parseCommunities(communitiesHtml);
-			if (!communities.isEmpty()) categories.add(new BoardCategory("Сообщества", communities));
+			communitiesHtml = loadCommunityDirectory(locator, data, communitiesHtml);
+			communities = PikabuHtmlParser.parseCommunityDirectory(communitiesHtml);
+			if (communities.size() >= MAX_COMMUNITIES) Preferences.setPikabuCommunityCatalogCurrent();
 		} catch (HttpException e) {
 			// Keep the built-in feeds and filters available when the directory is temporarily unavailable.
 		}
+		appendCommunityCategories(categories, communities, Preferences.getPikabuCustomCommunities());
 		try {
 			android.net.Uri tagsUri = locator.createTagsUri();
 			String tagsHtml = perform(tagsUri, preparePageRequest(tagsUri, data)).readString();
 			ArrayList<Board> tags = PikabuHtmlParser.parseTags(tagsHtml);
-			if (!tags.isEmpty()) categories.add(new BoardCategory("Популярные теги", tags));
+			if (!tags.isEmpty()) categories.add(new BoardCategory(configuration.getResources()
+					.getString(R.string.pikabu_category_popular_tags), tags));
 		} catch (HttpException e) {
 			// Tags are optional navigation data; reading known feeds must continue to work.
 		}
 		if (communitiesHtml != null) {
 			ArrayList<Board> authors = PikabuHtmlParser.parsePopularAuthors(communitiesHtml);
-			if (!authors.isEmpty()) categories.add(new BoardCategory("Популярные авторы", authors));
+			if (!authors.isEmpty()) categories.add(new BoardCategory(configuration.getResources()
+					.getString(R.string.pikabu_category_popular_authors), authors));
 		}
 		return new ReadBoardsResult(categories);
 	}

@@ -8,7 +8,7 @@ public abstract class CursorAdapter<C extends Cursor, VH extends RecyclerView.Vi
 	private C cursor;
 
 	@Override
-	public final int getItemCount() {
+	public int getItemCount() {
 		return cursor != null ? cursor.getCount() : 0;
 	}
 

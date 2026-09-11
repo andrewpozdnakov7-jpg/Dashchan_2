@@ -1,0 +1,7 @@
+- Added a catalog of up to 200 popular Kekabu communities with categories, collapsible sections, search, and support for adding custom communities. Community links are now opened more reliably.
+- The app remembers the last visited forum instead of returning to Dvach on the next launch. Kekabu is enabled by default until the user saves a custom forum selection.
+- Video player speed presets can now be edited. TikTok mode requires a noticeably shorter swipe to switch videos.
+- Improved experimental YouTube playback inside Slooop and PiP entry. Availability still depends on YouTube, WebView, and device settings, so it may not work everywhere.
+- Fixed board titles in favorites, wrapping of long report text, and a rare issue where a Back button or gesture closed two windows.
+
+Found a bug? Send us the logs!

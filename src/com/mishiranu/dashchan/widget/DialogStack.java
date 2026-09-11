@@ -127,7 +127,7 @@ public class DialogStack<T extends DialogStack.ViewFactory<T>> implements Iterab
 		public boolean onBackKey(KeyEvent event, boolean allowPop) {
 			if (event.getAction() == KeyEvent.ACTION_UP) {
 				if (!event.isLongPress() && allowPop) {
-					popInternal();
+					handleBackInvocation();
 				}
 				return true;
 			} else if (event.getAction() == KeyEvent.ACTION_DOWN) {
@@ -143,6 +143,7 @@ public class DialogStack<T extends DialogStack.ViewFactory<T>> implements Iterab
 	private final LinkedList<Pair<T, DialogView>> visibleViews = new LinkedList<>();
 	private Dialog dialog;
 	private Object predictiveBackCallback;
+	private boolean backInvocationHandled;
 
 	@SuppressWarnings("FieldCanBeLocal")
 	private final ThemeEngine.OnOverlayFocusListener overlayFocusListener = stack -> {
@@ -284,6 +285,16 @@ public class DialogStack<T extends DialogStack.ViewFactory<T>> implements Iterab
 		}
 	}
 
+	private void handleBackInvocation() {
+		if (!backInvocationHandled && !visibleViews.isEmpty()) {
+			// Keep both platform and legacy Back paths for OEM compatibility, but allow only one
+			// stack mutation per rendered frame when a device dispatches the same action through both.
+			backInvocationHandled = true;
+			ViewCompat.postOnAnimation(contentView, () -> backInvocationHandled = false);
+			popInternal();
+		}
+	}
+
 	private T popInternal() {
 		if (hiddenViews.size() > 0) {
 			int index = rootView.indexOfChild(visibleViews.getFirst().second.getContainer());
@@ -308,11 +319,7 @@ public class DialogStack<T extends DialogStack.ViewFactory<T>> implements Iterab
 
 	private void registerPredictiveBackCallback(Dialog dialog) {
 		if (predictiveBackCallback == null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-			predictiveBackCallback = Api33Impl.register(dialog, () -> {
-				if (!visibleViews.isEmpty()) {
-					popInternal();
-				}
-			});
+			predictiveBackCallback = Api33Impl.register(dialog, this::handleBackInvocation);
 		}
 	}
 

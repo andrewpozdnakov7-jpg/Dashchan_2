@@ -128,6 +128,13 @@ public class PikabuChanLocator extends ChanLocator {
 	}
 
 	@Override
+	protected String normalizeUserBoardName(String boardName) {
+		if (isSupportedBoardName(boardName)) return boardName;
+		String communityBoardName = createCommunityBoardName(boardName);
+		return communityBoardName != null ? communityBoardName : boardName;
+	}
+
+	@Override
 	public Uri createBoardUri(String boardName, int pageNumber) {
 		Uri uri;
 		if (isCommunityBoardName(boardName)) {
@@ -156,6 +163,10 @@ public class PikabuChanLocator extends ChanLocator {
 
 	public Uri createCommunitiesUri() {
 		return buildPath("communities");
+	}
+
+	public Uri createCommunitiesActionsUri() {
+		return buildPath("ajax", "communities_actions.php");
 	}
 
 	public Uri createTagsUri() {
@@ -212,6 +223,34 @@ public class PikabuChanLocator extends ChanLocator {
 
 	public static String createCommunityBoardName(String community) {
 		return isCommunityName(community) ? BOARD_COMMUNITY_PREFIX + encodeBoardValue(community) : null;
+	}
+
+	public static String normalizeCommunityInput(String value) {
+		value = StringUtils.nullIfEmpty(value != null ? value.trim() : null);
+		if (value == null) return null;
+		if (isCommunityBoardName(value)) return value;
+		String lowerValue = value.toLowerCase(java.util.Locale.US);
+		String uriValue;
+		if (value.contains("://")) {
+			uriValue = value;
+		} else if (lowerValue.startsWith("pikabu.ru/") || lowerValue.startsWith("www.pikabu.ru/")) {
+			uriValue = "https://" + value;
+		} else {
+			uriValue = "https://pikabu.ru/" + (value.startsWith("/") ? value.substring(1) : value);
+		}
+		Uri uri = Uri.parse(uriValue);
+		String host = uri.getHost();
+		if (host == null || !("pikabu.ru".equalsIgnoreCase(host) || "www.pikabu.ru".equalsIgnoreCase(host))) {
+			return null;
+		}
+		List<String> segments = uri.getPathSegments();
+		String community = segments.size() == 1 ? segments.get(0) : null;
+		if (segments.size() >= 2 && "community".equals(segments.get(0))
+				&& (segments.size() == 2 || segments.size() == 3
+				&& ("hot".equals(segments.get(2)) || "best".equals(segments.get(2))))) {
+			community = segments.get(1);
+		}
+		return createCommunityBoardName(community);
 	}
 
 	public static String createTagBoardName(String tag) {

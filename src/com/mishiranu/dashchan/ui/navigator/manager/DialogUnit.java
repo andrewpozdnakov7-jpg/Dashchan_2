@@ -1642,16 +1642,23 @@ public class DialogUnit {
 		final EditText editText;
 		if (state.commentField) {
 			editText = new SafePasteEditText(context);
-			editText.setSingleLine(true);
 			editText.setText(defaultText);
 			if (defaultText != null) {
 				editText.setSelection(defaultText.length());
 			}
 			if (state.operation == SendMultifunctionalTask.Operation.DELETE) {
+				editText.setSingleLine(true);
 				editText.setHint(R.string.password);
 				editText.setInputType(InputType.TYPE_CLASS_TEXT);
 				ViewUtils.applyMonospaceTypeface(editText);
 			} else if (state.operation == SendMultifunctionalTask.Operation.REPORT) {
+				editText.setSingleLine(false);
+				editText.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+						| InputType.TYPE_TEXT_FLAG_MULTI_LINE);
+				editText.setHorizontallyScrolling(false);
+				editText.setMinLines(2);
+				editText.setMaxLines(4);
+				editText.setGravity(Gravity.TOP | Gravity.START);
 				editText.setHint(R.string.reason);
 			}
 		} else {

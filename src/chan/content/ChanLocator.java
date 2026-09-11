@@ -364,6 +364,11 @@ public class ChanLocator implements Chan.Linked {
 	}
 
 	@Extendable
+	protected String normalizeUserBoardName(String boardName) {
+		return boardName;
+	}
+
+	@Extendable
 	protected Uri createBoardUri(String boardName, int pageNumber) {
 		throw new UnsupportedOperationException();
 	}
@@ -642,6 +647,16 @@ public class ChanLocator implements Chan.Linked {
 			} catch (LinkageError | RuntimeException e) {
 				ExtensionException.logException(e, showToastOnError);
 				return null;
+			}
+		}
+
+		public String normalizeUserBoardName(String boardName) {
+			try {
+				String normalized = locator.normalizeUserBoardName(boardName);
+				return normalized != null ? normalized : boardName;
+			} catch (LinkageError | RuntimeException e) {
+				ExtensionException.logException(e, showToastOnError);
+				return boardName;
 			}
 		}
 

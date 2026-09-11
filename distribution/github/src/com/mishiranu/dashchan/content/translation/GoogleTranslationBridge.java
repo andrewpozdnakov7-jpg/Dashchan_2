@@ -200,7 +200,11 @@ public final class GoogleTranslationBridge {
 
 	public void translate(Context context, TranslationModel.Direction direction, String subject, String html,
 			Callback callback) {
+		TranslationDiagnostics.log("google_bridge", "translate_start", "generation", generation,
+				"direction", direction.name(), "subject_chars", TranslationDiagnostics.length(subject),
+				"html_chars", TranslationDiagnostics.length(html));
 		if (!isAddonInstalled()) {
+			TranslationDiagnostics.error("google_bridge", "translate_rejected", "reason", "addon_missing");
 			callback.onError("Google translation add-on is not installed");
 			return;
 		}
@@ -213,6 +217,8 @@ public final class GoogleTranslationBridge {
 			segments.add(subjectSegment);
 		}
 		collectSegments(document.body(), segments);
+		TranslationDiagnostics.log("google_bridge", "segments_ready", "generation", currentGeneration,
+				"count", segments.size());
 		if (segments.isEmpty()) {
 			callback.onSuccess(subject, html);
 			return;
@@ -224,6 +230,8 @@ public final class GoogleTranslationBridge {
 		withService(new ServiceOperation() {
 			@Override
 			public void run(IGoogleTranslationService service) throws RemoteException {
+				TranslationDiagnostics.log("google_bridge", "addon_request", "generation", currentGeneration,
+						"segments", texts.size());
 				service.translate(direction.sourceLanguage, direction.targetLanguage, texts,
 						new IGoogleTranslationCallback.Stub() {
 							@Override
@@ -233,12 +241,21 @@ public final class GoogleTranslationBridge {
 							public void onTranslation(List<String> translations) {
 								MAIN_HANDLER.post(() -> {
 									if (currentGeneration != generation) {
+										TranslationDiagnostics.log("google_bridge", "addon_result_stale",
+												"generation", currentGeneration, "current_generation", generation);
 										return;
 									}
 									if (translations == null || translations.size() != segments.size()) {
+										TranslationDiagnostics.error("google_bridge", "addon_result_invalid",
+												"expected", segments.size(), "actual",
+												translations != null ? translations.size() : -1);
 										callback.onError("Invalid response from Google translation add-on");
 										return;
 									}
+									TranslationDiagnostics.log("google_bridge", "addon_result",
+											"generation", currentGeneration, "segments", translations.size(),
+											"changed", countChangedSegments(segments, translations),
+											"translated_chars", countCharacters(translations));
 									String translatedSubject = subject;
 									for (int i = 0; i < segments.size(); i++) {
 										Segment segment = segments.get(i);
@@ -257,6 +274,9 @@ public final class GoogleTranslationBridge {
 							public void onError(String message) {
 								MAIN_HANDLER.post(() -> {
 									if (currentGeneration == generation) {
+										TranslationDiagnostics.error("google_bridge", "addon_error",
+												"generation", currentGeneration,
+												"error", TranslationDiagnostics.safeError(message));
 										callback.onError(message != null ? message : "Google translation failed");
 									}
 								});
@@ -266,12 +286,37 @@ public final class GoogleTranslationBridge {
 
 			@Override
 			public void onError(String message) {
+				TranslationDiagnostics.error("google_bridge", "service_operation_error",
+						"generation", currentGeneration, "error", TranslationDiagnostics.safeError(message));
 				callback.onError(message);
 			}
 		});
 	}
 
+	private static int countChangedSegments(ArrayList<Segment> segments, List<String> translations) {
+		int changed = 0;
+		for (int i = 0; i < segments.size(); i++) {
+			String translation = translations.get(i);
+			if (translation != null && !translation.equals(segments.get(i).text)) {
+				changed++;
+			}
+		}
+		return changed;
+	}
+
+	private static int countCharacters(List<String> values) {
+		int count = 0;
+		for (String value : values) {
+			if (value != null) {
+				count += value.length();
+			}
+		}
+		return count;
+	}
+
 	public void unload() {
+		TranslationDiagnostics.log("google_bridge", "unload", "generation", generation,
+				"next_generation", generation + 1);
 		generation++;
 	}
 
@@ -327,6 +372,8 @@ public final class GoogleTranslationBridge {
 	private static void withService(ServiceOperation operation) {
 		MAIN_HANDLER.post(() -> {
 			if (service != null) {
+				TranslationDiagnostics.log("google_bridge", "service_reused",
+						"pending_operations", PENDING_OPERATIONS.size());
 				try {
 					operation.run(service);
 				} catch (RemoteException | RuntimeException e) {
@@ -335,6 +382,8 @@ public final class GoogleTranslationBridge {
 				return;
 			}
 			PENDING_OPERATIONS.add(operation);
+			TranslationDiagnostics.log("google_bridge", "operation_pending", "pending_operations",
+					PENDING_OPERATIONS.size(), "binding", binding);
 			if (binding) {
 				return;
 			}
@@ -345,11 +394,14 @@ public final class GoogleTranslationBridge {
 				return;
 			}
 			binding = true;
+			TranslationDiagnostics.log("google_bridge", "service_bind_start", "pending_operations",
+					PENDING_OPERATIONS.size());
 			Context context = MainApplication.getInstance();
 			Intent intent = new Intent().setComponent(new ComponentName(ADDON_PACKAGE, ADDON_SERVICE));
 			try {
 				if (!context.bindService(intent, SERVICE_CONNECTION, Context.BIND_AUTO_CREATE)) {
 					binding = false;
+					TranslationDiagnostics.error("google_bridge", "service_bind_failed");
 					failPending("Cannot connect to Google translation add-on");
 				}
 			} catch (RuntimeException e) {
@@ -364,6 +416,8 @@ public final class GoogleTranslationBridge {
 		public void onServiceConnected(ComponentName name, IBinder binder) {
 			MAIN_HANDLER.post(() -> {
 				binding = false;
+				TranslationDiagnostics.log("google_bridge", "service_connected", "pending_operations",
+						PENDING_OPERATIONS.size());
 				IGoogleTranslationService candidate = IGoogleTranslationService.Stub.asInterface(binder);
 				try {
 					if (candidate == null || candidate.getProtocolVersion() != PROTOCOL_VERSION) {
@@ -389,6 +443,8 @@ public final class GoogleTranslationBridge {
 		@Override
 		public void onServiceDisconnected(ComponentName name) {
 			MAIN_HANDLER.post(() -> {
+				TranslationDiagnostics.error("google_bridge", "service_disconnected",
+						"pending_operations", PENDING_OPERATIONS.size());
 				service = null;
 				binding = false;
 				failPending("Google translation add-on disconnected");
@@ -397,6 +453,8 @@ public final class GoogleTranslationBridge {
 	};
 
 	private static void failPending(String message) {
+		TranslationDiagnostics.error("google_bridge", "pending_failed", "pending_operations",
+				PENDING_OPERATIONS.size(), "error", TranslationDiagnostics.safeError(message));
 		ArrayList<ServiceOperation> operations = new ArrayList<>(PENDING_OPERATIONS);
 		PENDING_OPERATIONS.clear();
 		for (ServiceOperation operation : operations) {

@@ -873,6 +873,12 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 				if (boardName != null || threadNumber != null) {
 					boolean success;
 					if (threadNumber == null) {
+						if (chanName != null) {
+							Chan selectedChan = Chan.get(chanName);
+							if (selectedChan.name != null) {
+								boardName = selectedChan.locator.safe(false).normalizeUserBoardName(boardName);
+							}
+						}
 						callback.onSelectBoard(chanName, boardName, false);
 						success = true;
 					} else {

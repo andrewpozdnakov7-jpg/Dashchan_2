@@ -137,6 +137,7 @@ public final class TranslationController {
 		public void onServiceConnected(ComponentName name, IBinder binder) {
 			service = ITranslationService.Stub.asInterface(binder);
 			binding = false;
+			TranslationDiagnostics.log("controller", "service_connected", "pending", calls.size());
 			dispatchPending();
 			if (calls.isEmpty()) {
 				scheduleIdleDisconnect();
@@ -148,6 +149,7 @@ public final class TranslationController {
 			handler.removeCallbacks(idleDisconnectRunnable);
 			service = null;
 			binding = false;
+			TranslationDiagnostics.error("controller", "service_disconnected", "pending", calls.size());
 			failAll("Translation service disconnected");
 		}
 	};
@@ -184,6 +186,8 @@ public final class TranslationController {
 	public void requestTranslation(TranslationModel.Direction direction, String subject, String html,
 			ResultCallback resultCallback) {
 		if (!isReadyForDirection(direction)) {
+			TranslationDiagnostics.error("controller", "request_rejected", "reason", "engine_not_ready",
+					"engine", getCurrentEngine().value, "direction", direction.name());
 			resultCallback.onResult(null, null, "Translation package is unavailable");
 			return;
 		}
@@ -201,12 +205,23 @@ public final class TranslationController {
 		long id = nextRequestId.getAndIncrement();
 		calls.put(id, new PendingCall(id, engine, direction, subject != null ? subject : "",
 				html != null ? html : "", resultCallback));
-		handler.postDelayed(() -> finish(id, null, null, "Translation timed out"), REQUEST_TIMEOUT_MS);
+		TranslationDiagnostics.log("controller", "request_enqueued", "request_id", id, "engine", engine.value,
+				"direction", direction.name(), "subject_chars", TranslationDiagnostics.length(subject),
+				"html_chars", TranslationDiagnostics.length(html), "pending", calls.size());
+		handler.postDelayed(() -> {
+			if (calls.containsKey(id)) {
+				TranslationDiagnostics.error("controller", "request_timeout", "request_id", id,
+						"pending", calls.size());
+			}
+			finish(id, null, null, "Translation timed out");
+		}, REQUEST_TIMEOUT_MS);
 		if (service != null) {
 			dispatch(calls.get(id));
 		} else if (!binding) {
+			TranslationDiagnostics.log("controller", "service_bind_start", "request_id", id);
 			binding = application.bindService(new Intent(application, TranslationService.class), connection,
 					Context.BIND_AUTO_CREATE);
+			TranslationDiagnostics.log("controller", "service_bind_result", "success", binding);
 			if (!binding) {
 				failAll("Cannot start translation service");
 			}
@@ -221,12 +236,18 @@ public final class TranslationController {
 
 	private void dispatch(PendingCall call) {
 		if (service == null || call == null) {
+			TranslationDiagnostics.log("controller", "dispatch_skipped", "has_service", service != null,
+					"has_call", call != null);
 			return;
 		}
 		try {
+			TranslationDiagnostics.log("controller", "dispatch", "request_id", call.id,
+					"html_chars", call.html.length());
 			service.translate(call.id, call.engine.value, call.direction.sourceLanguage, call.direction.targetLanguage,
 					call.subject, call.html, callback);
 		} catch (RemoteException e) {
+			TranslationDiagnostics.error("controller", "dispatch_error", "request_id", call.id,
+					"error", e.getClass().getSimpleName());
 			finish(call.id, null, null, "Translation service failed");
 		}
 	}
@@ -234,14 +255,24 @@ public final class TranslationController {
 	private void finish(long requestId, String translatedSubject, String translatedHtml, String error) {
 		PendingCall call = calls.remove(requestId);
 		if (call != null) {
+			TranslationDiagnostics.log("controller", "request_result", "request_id", requestId,
+					"success", error == null && translatedHtml != null,
+					"subject_chars", TranslationDiagnostics.length(translatedSubject),
+					"html_chars", TranslationDiagnostics.length(translatedHtml),
+					"error", TranslationDiagnostics.safeError(error), "remaining", calls.size());
 			call.callback.onResult(translatedSubject, translatedHtml, error);
 			if (calls.isEmpty()) {
 				scheduleIdleDisconnect();
 			}
+		} else {
+			TranslationDiagnostics.log("controller", "late_result_ignored", "request_id", requestId,
+					"error", TranslationDiagnostics.safeError(error));
 		}
 	}
 
 	private void failAll(String message) {
+		TranslationDiagnostics.error("controller", "fail_all", "pending", calls.size(),
+				"error", TranslationDiagnostics.safeError(message));
 		for (PendingCall call : new ArrayList<>(calls.values())) {
 			finish(call.id, null, null, message);
 		}
@@ -254,6 +285,8 @@ public final class TranslationController {
 
 	private void disconnect() {
 		handler.removeCallbacks(idleDisconnectRunnable);
+		TranslationDiagnostics.log("controller", "disconnect", "has_service", service != null,
+				"binding", binding, "pending", calls.size());
 		if (service != null) {
 			try {
 				service.unload();
