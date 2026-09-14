@@ -42,7 +42,6 @@ import com.mishiranu.dashchan.ui.navigator.adapter.ThreadsAdapter;
 import com.mishiranu.dashchan.ui.navigator.manager.DialogUnit;
 import com.mishiranu.dashchan.ui.navigator.manager.UiManager;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
-import com.mishiranu.dashchan.util.ListViewUtils;
 import com.mishiranu.dashchan.util.NavigationUtils;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.widget.ClickableToast;
@@ -52,21 +51,31 @@ import com.mishiranu.dashchan.widget.PaddedRecyclerView;
 import com.mishiranu.dashchan.widget.PullableWrapper;
 import com.mishiranu.dashchan.widget.SummaryLayout;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 
 public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 		FavoritesStorage.Observer, UiManager.Observer, ReadThreadsTask.Callback {
+	private static final int MIN_VISIBLE_THREADS = 10;
+	private static final int MAX_UNKNOWN_PAGES_AUTO_FILL = 10;
+
 	private static class RetainableExtra implements Retainable {
 		public static final ExtraFactory<RetainableExtra> FACTORY = RetainableExtra::new;
 
 		public final ArrayList<List<PostItem>> cachedPostItems = new ArrayList<>();
+		public final ArrayList<List<PostItem>> publishedPostItems = new ArrayList<>();
 		public final PostItem.HideState.Map<String> hiddenThreads = new PostItem.HideState.Map<>();
 		public int startPageNumber;
 		public int boardSpeed;
 		public HttpValidator validator;
 		public Boolean translationEnabled;
+		public int visibleThreadsTarget;
+		public int autoFillPages;
+		public int autoFillPageNumber = Integer.MIN_VALUE;
+		public boolean autoFillRequested;
+		public boolean noMoreThreadsShown;
+		public boolean pendingThreadsUpdate;
+		public boolean pendingThreadsReset;
 
 		public DialogUnit.StackInstance.State dialogsState;
 
@@ -122,12 +131,19 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 		uiManager.view().bindThreadsPostRecyclerView(recyclerView);
 		ThreadsAdapter adapter = new ThreadsAdapter(context, this, page.chanName, uiManager,
 				postStateProvider, getFragmentManager());
+		adapter.setSecretAbuBoardName(page.boardName);
 		if (retainableExtra.translationEnabled == null) {
 			retainableExtra.translationEnabled = TranslationController.isReadyForChan(page.chanName) &&
 					Preferences.isTranslationAutoEnabled();
 		}
 		adapter.setTranslationEnabled(Boolean.TRUE.equals(retainableExtra.translationEnabled));
 		recyclerView.setAdapter(adapter);
+		layoutManager.setSpanSizeLookup(new GridLayoutManager.SpanSizeLookup() {
+			@Override
+			public int getSpanSize(int position) {
+				return adapter.isSecretAbuPosition(position) ? layoutManager.getSpanCount() : 1;
+			}
+		});
 		if (Preferences.isHideThreadsWithSwipe()) {
 			setupHideThreadsWithSwipe(recyclerView);
 		}
@@ -152,14 +168,18 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 		InitRequest initRequest = getInitRequest();
 		ReadViewModel readViewModel = getViewModel(ReadViewModel.class);
 		ListPosition listPosition = takeListPosition();
+		boolean restoredCachedItems = false;
 		if (initRequest.errorItem != null) {
 			switchError(initRequest.errorItem);
 		} else {
 			boolean load = true;
 			if (!initRequest.shouldLoad && !retainableExtra.cachedPostItems.isEmpty()) {
 				load = false;
-				adapter.setItems(retainableExtra.cachedPostItems,
+				restoredCachedItems = true;
+				adapter.setItems(retainableExtra.pendingThreadsUpdate
+						? retainableExtra.publishedPostItems : retainableExtra.cachedPostItems,
 						retainableExtra.startPageNumber == PAGE_NUMBER_CATALOG);
+				ensureVisibleThreadsTarget(retainableExtra);
 				if (listPosition != null) {
 					listPosition.apply(recyclerView);
 				}
@@ -173,7 +193,7 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 				if (getAdapter().isRealEmpty()) {
 					recyclerView.getPullable().startBusyState(PullableWrapper.Side.BOTH);
 					switchProgress();
-				} else {
+				} else if (retainableExtra.autoFillPageNumber == Integer.MIN_VALUE) {
 					ReadThreadsTask task = readViewModel.getTask();
 					boolean bottom = task != null && task.getPageNumber() > retainableExtra.startPageNumber;
 					recyclerView.getPullable().startBusyState(bottom
@@ -188,6 +208,10 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 			}
 		}
 		readViewModel.observe(this, this);
+		if (restoredCachedItems && !readViewModel.hasTaskOrValue() && hasRemovedHiddenThreads(retainableExtra)) {
+			requestHiddenThreadsAutoFill(false);
+		}
+		if (restoredCachedItems && initRequest.errorItem == null) updateSecretAbuThread();
 	}
 
 	private void setupHideThreadsWithSwipe(RecyclerView recyclerView) {
@@ -198,7 +222,8 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 					@NonNull RecyclerView.ViewHolder viewHolder) {
 				int position = viewHolder.getAdapterPosition();
 				ThreadsAdapter adapter = getAdapter();
-				if (position == RecyclerView.NO_POSITION || position >= adapter.getItemCount()) {
+				if (position == RecyclerView.NO_POSITION || position >= adapter.getItemCount()
+						|| adapter.isSecretAbuPosition(position)) {
 					return 0;
 				}
 				PostItem postItem = adapter.getThread(position);
@@ -215,11 +240,10 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 			public void onSwiped(@NonNull RecyclerView.ViewHolder viewHolder, int direction) {
 				int position = viewHolder.getAdapterPosition();
 				ThreadsAdapter adapter = getAdapter();
-				if (position != RecyclerView.NO_POSITION && position < adapter.getItemCount()) {
+				if (position != RecyclerView.NO_POSITION && position < adapter.getItemCount()
+						&& !adapter.isSecretAbuPosition(position)) {
 					PostItem postItem = adapter.getThread(position);
-					setThreadHideState(postItem, PostItem.HideState.HIDDEN);
-					adapter.notifyThreadHidden(postItem);
-					ClickableToast.show(R.string.thread_hidden);
+					hideThread(postItem, true);
 				} else {
 					adapter.notifyDataSetChanged();
 				}
@@ -313,6 +337,7 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 			Page page = getPage();
 			if (postItem.getHideState().hidden) {
 				setThreadHideState(postItem, PostItem.HideState.SHOWN);
+				updateSecretAbuThread();
 				getAdapter().notifyDataSetChanged();
 			} else {
 				getUiManager().navigator().navigatePosts(page.chanName, page.boardName,
@@ -353,8 +378,7 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 			});
 			if (!postItem.getHideState().hidden) {
 				dialogMenu.add(R.string.hide, () -> {
-					threadsPage.setThreadHideState(postItem, PostItem.HideState.HIDDEN);
-					threadsPage.getAdapter().notifyDataSetChanged();
+					threadsPage.hideThread(postItem, false);
 				});
 			}
 			return dialogMenu.create();
@@ -367,6 +391,15 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 		CommonDatabase.getInstance().getThreads().setFlagsAsync(getPage().chanName,
 				postItem.getBoardName(), postItem.getThreadNumber(), hideState);
 		postItem.setHidden(hideState, null);
+	}
+
+	private void hideThread(PostItem postItem, boolean showConfirmation) {
+		setThreadHideState(postItem, PostItem.HideState.HIDDEN);
+		getAdapter().notifyThreadHidden(postItem);
+		if (showConfirmation) {
+			ClickableToast.show(R.string.thread_hidden);
+		}
+		requestHiddenThreadsAutoFill(true);
 	}
 
 	private boolean allowSearch = false;
@@ -676,6 +709,7 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 	}
 
 	private void refreshThreads(RefreshPage refreshPage, boolean showPull) {
+		cancelHiddenThreadsAutoFill();
 		int pageNumber;
 		boolean append = false;
 		RetainableExtra retainableExtra = getRetainableExtra(RetainableExtra.FACTORY);
@@ -701,14 +735,15 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 				}
 			}
 		}
-		loadThreadsPage(pageNumber, append, showPull);
+		loadThreadsPage(pageNumber, append, showPull, false);
 	}
 
 	private boolean loadThreadsPage(int pageNumber, boolean append) {
-		return loadThreadsPage(pageNumber, append, !getAdapter().isRealEmpty());
+		cancelHiddenThreadsAutoFill();
+		return loadThreadsPage(pageNumber, append, !getAdapter().isRealEmpty(), false);
 	}
 
-	private boolean loadThreadsPage(int pageNumber, boolean append, boolean showPull) {
+	private boolean loadThreadsPage(int pageNumber, boolean append, boolean showPull, boolean autoFill) {
 		Page page = getPage();
 		Chan chan = getChan();
 		ReadViewModel readViewModel = getViewModel(ReadViewModel.class);
@@ -716,19 +751,31 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 		if (pageNumber < PAGE_NUMBER_CATALOG || pageNumber >=
 				Math.max(chan.configuration.getPagesCount(page.boardName), 1)) {
 			recyclerView.getPullable().cancelBusyState();
-			ClickableToast.show(getString(R.string.number_page_doesnt_exist__format, pageNumber));
+			if (autoFill) {
+				finishHiddenThreadsAutoFill(true);
+			} else {
+				ClickableToast.show(getString(R.string.number_page_doesnt_exist__format, pageNumber));
+			}
 			readViewModel.attach(null);
 			return false;
 		} else {
 			RetainableExtra retainableExtra = getRetainableExtra(RetainableExtra.FACTORY);
+			getAdapter().setSecretAbuAllowed(false);
+			if (autoFill) {
+				retainableExtra.autoFillPageNumber = pageNumber;
+			}
 			HttpValidator validator = !append && retainableExtra.cachedPostItems.size() == 1
 					&& retainableExtra.startPageNumber == pageNumber ? retainableExtra.validator : null;
 			ReadThreadsTask task = new ReadThreadsTask(readViewModel.callback,
 					chan, page.boardName, pageNumber, validator, append);
 			task.execute(ConcurrentUtils.PARALLEL_EXECUTOR);
 			readViewModel.attach(task);
-			if (showPull) {
-				recyclerView.getPullable().startBusyState(PullableWrapper.Side.TOP);
+			if (autoFill) {
+				// Keep an existing initial/manual loading indicator, but never start a new one
+				// for each page fetched to replace hidden threads.
+			} else if (showPull) {
+				recyclerView.getPullable().startBusyState(append
+						? PullableWrapper.Side.BOTTOM : PullableWrapper.Side.TOP);
 				switchList();
 			} else {
 				recyclerView.getPullable().startBusyState(PullableWrapper.Side.BOTH);
@@ -738,14 +785,159 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 		}
 	}
 
+	private void ensureVisibleThreadsTarget(RetainableExtra retainableExtra) {
+		if (retainableExtra.visibleThreadsTarget == 0 && retainableExtra.startPageNumber >= 0 &&
+				!retainableExtra.cachedPostItems.isEmpty()) {
+			retainableExtra.visibleThreadsTarget = Math.max(MIN_VISIBLE_THREADS,
+					retainableExtra.cachedPostItems.get(0).size());
+		}
+	}
+
+	private boolean hasRemovedHiddenThreads(RetainableExtra retainableExtra) {
+		if (Preferences.isDisplayHiddenThreads()) {
+			return false;
+		}
+		int cachedThreadsCount = 0;
+		for (List<PostItem> postItems : retainableExtra.cachedPostItems) {
+			cachedThreadsCount += postItems.size();
+		}
+		return countVisibleCachedThreads(retainableExtra) < cachedThreadsCount;
+	}
+
+	private int countVisibleCachedThreads(RetainableExtra extra) {
+		int count = 0;
+		for (List<PostItem> page : extra.cachedPostItems) {
+			for (PostItem postItem : page) {
+				if (Preferences.isDisplayHiddenThreads() || !postStateProvider.isHiddenResolve(postItem)) count++;
+			}
+		}
+		return count;
+	}
+
+	private void requestHiddenThreadsAutoFill(boolean restart) {
+		RetainableExtra retainableExtra = getRetainableExtra(RetainableExtra.FACTORY);
+		ensureVisibleThreadsTarget(retainableExtra);
+		if (restart) {
+			retainableExtra.autoFillPages = 0;
+			retainableExtra.noMoreThreadsShown = false;
+		}
+		retainableExtra.autoFillRequested = true;
+		continueHiddenThreadsAutoFill();
+	}
+
+	private void continueHiddenThreadsAutoFill() {
+		RetainableExtra retainableExtra = getRetainableExtra(RetainableExtra.FACTORY);
+		if (!retainableExtra.autoFillRequested || Preferences.isDisplayHiddenThreads() ||
+				Preferences.isPageByPage() || retainableExtra.startPageNumber < 0 ||
+				retainableExtra.visibleThreadsTarget <= 0) {
+			finishHiddenThreadsAutoFill(false);
+			return;
+		}
+		if (countVisibleCachedThreads(retainableExtra) >= retainableExtra.visibleThreadsTarget) {
+			finishHiddenThreadsAutoFill(false);
+			return;
+		}
+		ReadViewModel readViewModel = getViewModel(ReadViewModel.class);
+		if (readViewModel.getTask() != null || retainableExtra.autoFillPageNumber != Integer.MIN_VALUE) {
+			return;
+		}
+		Page page = getPage();
+		int nextPageNumber = retainableExtra.startPageNumber + retainableExtra.cachedPostItems.size();
+		int pagesCount = getChan().configuration.getPagesCount(page.boardName);
+		if (pagesCount != ChanConfiguration.PAGES_COUNT_INVALID && nextPageNumber >= pagesCount) {
+			finishHiddenThreadsAutoFill(true);
+			return;
+		}
+		if (pagesCount == ChanConfiguration.PAGES_COUNT_INVALID &&
+				retainableExtra.autoFillPages >= MAX_UNKNOWN_PAGES_AUTO_FILL) {
+			finishHiddenThreadsAutoFill(false);
+			return;
+		}
+		retainableExtra.autoFillPages++;
+		loadThreadsPage(nextPageNumber, true, true, true);
+	}
+
+	private void cancelHiddenThreadsAutoFill() {
+		RetainableExtra retainableExtra = getRetainableExtra(RetainableExtra.FACTORY);
+		retainableExtra.autoFillRequested = false;
+		retainableExtra.autoFillPages = 0;
+		retainableExtra.autoFillPageNumber = Integer.MIN_VALUE;
+		retainableExtra.noMoreThreadsShown = false;
+		publishPendingThreads();
+	}
+
+	private void finishHiddenThreadsAutoFill(boolean noMoreThreads) {
+		RetainableExtra retainableExtra = getRetainableExtra(RetainableExtra.FACTORY);
+		retainableExtra.autoFillRequested = false;
+		retainableExtra.autoFillPages = 0;
+		retainableExtra.autoFillPageNumber = Integer.MIN_VALUE;
+		publishPendingThreads();
+		getRecyclerView().getPullable().cancelBusyState();
+		switchList();
+		if (noMoreThreads && !retainableExtra.noMoreThreadsShown) {
+			retainableExtra.noMoreThreadsShown = true;
+			ClickableToast.show(R.string.no_more_threads);
+		}
+		updateSecretAbuThread();
+	}
+
+	private void publishPendingThreads() {
+		RetainableExtra extra = getRetainableExtra(RetainableExtra.FACTORY);
+		if (!extra.pendingThreadsUpdate) return;
+		PaddedRecyclerView recyclerView = getRecyclerView();
+		ThreadsAdapter adapter = getAdapter();
+		ListPosition position = extra.pendingThreadsReset ? null : ListPosition.obtain(recyclerView,
+				index -> index < adapter.getItemCount() && !adapter.isSecretAbuPosition(index));
+		PostItem anchor = position != null ? adapter.getThread(position.position) : null;
+		boolean initiallyEmpty = adapter.isRealEmpty();
+		adapter.setItems(extra.cachedPostItems, extra.startPageNumber == PAGE_NUMBER_CATALOG);
+		extra.publishedPostItems.clear();
+		extra.publishedPostItems.addAll(extra.cachedPostItems);
+		if (extra.pendingThreadsReset) {
+			recyclerView.scrollToPosition(0);
+		} else if (anchor != null) {
+			int index = adapter.findThreadPosition(anchor.getThreadNumber());
+			if (index >= 0) new ListPosition(index, position.offset).apply(recyclerView);
+		}
+		extra.pendingThreadsUpdate = false;
+		extra.pendingThreadsReset = false;
+		notifyTitleChanged();
+		updateOptionsMenu();
+		if (initiallyEmpty && !adapter.isRealEmpty()) showScaleAnimation();
+	}
+
+	private void updateSecretAbuThread() {
+		RetainableExtra extra = getRetainableExtra(RetainableExtra.FACTORY);
+		ThreadsAdapter adapter = getAdapter();
+		boolean show = "dvach".equals(getPage().chanName) && !extra.autoFillRequested
+				&& extra.autoFillPageNumber == Integer.MIN_VALUE
+				&& getViewModel(ReadViewModel.class).getTask() == null
+				&& areAllLoadedThreadsHidden(extra);
+		adapter.setSecretAbuAllowed(show);
+		if (adapter.isSecretAbuVisible()) switchList();
+	}
+
+	private boolean areAllLoadedThreadsHidden(RetainableExtra extra) {
+		boolean hasThreads = false;
+		for (List<PostItem> page : extra.cachedPostItems) {
+			for (PostItem postItem : page) {
+				hasThreads = true;
+				if (!postStateProvider.isHiddenResolve(postItem)) return false;
+			}
+		}
+		return hasThreads;
+	}
+
 	@Override
 	public void onReadThreadsSuccess(List<PostItem> postItems, int pageNumber,
 			int boardSpeed, boolean append, boolean checkModified, HttpValidator validator,
 			PostItem.HideState.Map<String> hiddenThreads) {
 		PaddedRecyclerView recyclerView = getRecyclerView();
-		recyclerView.getPullable().cancelBusyState();
-		switchList();
 		RetainableExtra retainableExtra = getRetainableExtra(RetainableExtra.FACTORY);
+		boolean autoFill = pageNumber == retainableExtra.autoFillPageNumber;
+		if (autoFill) {
+			retainableExtra.autoFillPageNumber = Integer.MIN_VALUE;
+		}
 		if (postItems != null && postItems.isEmpty()) {
 			postItems = null;
 		}
@@ -776,51 +968,58 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 				}
 			}
 		}
+		if (autoFill && (postItems == null || postItems.isEmpty())) {
+			finishHiddenThreadsAutoFill(true);
+			return;
+		}
 		ThreadsAdapter adapter = getAdapter();
 		if (postItems != null && !postItems.isEmpty()) {
-			int oldCount = adapter.getItemCount();
-			boolean needScroll = false;
-			int childCount = recyclerView.getChildCount();
-			if (childCount > 0) {
-				View child = recyclerView.getChildAt(childCount - 1);
-				int position = recyclerView.getChildViewHolder(child).getAdapterPosition();
-				needScroll = position + 1 == oldCount &&
-						recyclerView.getHeight() - recyclerView.getPaddingBottom() - child.getBottom() >= 0;
-			}
-			if (append) {
-				adapter.appendItems(postItems);
-			} else {
-				adapter.setItems(Collections.singleton(postItems), pageNumber == PAGE_NUMBER_CATALOG);
-			}
-			if (!append) {
-				recyclerView.scrollToPosition(0);
-			} else if (needScroll) {
-				ListViewUtils.smoothScrollToPosition(recyclerView, oldCount);
-			}
 			retainableExtra.validator = validator;
 			if (!append) {
 				retainableExtra.cachedPostItems.clear();
 				retainableExtra.startPageNumber = pageNumber;
 				retainableExtra.boardSpeed = boardSpeed;
+				retainableExtra.visibleThreadsTarget = pageNumber >= 0
+						? Math.max(MIN_VISIBLE_THREADS, postItems.size()) : 0;
+				retainableExtra.autoFillPages = 0;
+				retainableExtra.noMoreThreadsShown = false;
+				retainableExtra.pendingThreadsReset = true;
+			} else if (!autoFill) {
+				// Each manually requested page should contribute a full portion of visible threads.
+				retainableExtra.visibleThreadsTarget = countVisibleCachedThreads(retainableExtra)
+						+ Math.max(MIN_VISIBLE_THREADS, postItems.size());
 			}
 			retainableExtra.cachedPostItems.add(postItems);
-			notifyTitleChanged();
-			updateOptionsMenu();
-			if (oldCount == 0 && !adapter.isRealEmpty()) {
-				showScaleAnimation();
+			retainableExtra.pendingThreadsUpdate = true;
+			if (autoFill) {
+				continueHiddenThreadsAutoFill();
+			} else if (hasRemovedHiddenThreads(retainableExtra) &&
+					countVisibleCachedThreads(retainableExtra) < retainableExtra.visibleThreadsTarget) {
+				requestHiddenThreadsAutoFill(false);
+			} else {
+				publishPendingThreads();
+				recyclerView.getPullable().cancelBusyState();
+				switchList();
 			}
-		} else if (checkModified && postItems == null) {
-			adapter.notifyNotModified();
-			recyclerView.scrollToPosition(0);
-		} else if (adapter.isRealEmpty()) {
-			switchError(R.string.empty_response);
 		} else {
-			ClickableToast.show(R.string.empty_response);
+			recyclerView.getPullable().cancelBusyState();
+			switchList();
+			if (checkModified && postItems == null) {
+				adapter.notifyNotModified();
+				recyclerView.scrollToPosition(0);
+			} else if (adapter.isRealEmpty()) {
+				switchError(R.string.empty_response);
+			} else {
+				ClickableToast.show(R.string.empty_response);
+			}
 		}
+		updateSecretAbuThread();
 	}
 
 	@Override
 	public void onReadThreadsRedirect(RedirectException.Target target) {
+		finishHiddenThreadsAutoFill(false);
+		getAdapter().setSecretAbuAllowed(false);
 		getRecyclerView().getPullable().cancelBusyState();
 		if (!CommonUtils.equals(target.chanName, getPage().chanName)) {
 			if (getAdapter().isRealEmpty()) {
@@ -835,8 +1034,19 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 	@Override
 	public void onReadThreadsFail(ErrorItem errorItem, int pageNumber) {
 		getRecyclerView().getPullable().cancelBusyState();
+		RetainableExtra retainableExtra = getRetainableExtra(RetainableExtra.FACTORY);
+		boolean autoFill = pageNumber == retainableExtra.autoFillPageNumber;
+		if (autoFill) {
+			retainableExtra.autoFillPageNumber = Integer.MIN_VALUE;
+			if (errorItem.type == ErrorItem.Type.BOARD_NOT_EXISTS) {
+				finishHiddenThreadsAutoFill(true);
+				return;
+			}
+			finishHiddenThreadsAutoFill(false);
+		}
 		String message = errorItem.type == ErrorItem.Type.BOARD_NOT_EXISTS && pageNumber >= 1
 				? getString(R.string.number_page_doesnt_exist__format, pageNumber) : errorItem.toString();
+		getAdapter().setSecretAbuAllowed(false);
 		if (getAdapter().isRealEmpty()) {
 			switchError(message);
 		} else {

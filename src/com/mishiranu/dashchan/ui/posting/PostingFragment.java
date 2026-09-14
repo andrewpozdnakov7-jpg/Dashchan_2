@@ -27,6 +27,7 @@ import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewOutlineProvider;
@@ -41,6 +42,8 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 import androidx.core.widget.TextViewCompat;
 import androidx.lifecycle.ViewModelProvider;
 import chan.content.Chan;
@@ -116,6 +119,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 	private static final int SERVER_COMMAND_BUTTON_ART_MONKEY = 1 << 1;
 	private static final int SERVER_COMMAND_BUTTON_APACHAN_VIDEO = 1 << 2;
 	private static final int SERVER_COMMAND_BUTTON_WIDTH_DP = 40;
+	private static final int COMMENT_MIN_LINES = 4;
 
 	private static final String EXTRA_CAPTCHA_DRAFT = "captchaDraft";
 
@@ -294,6 +298,34 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		commentEditWatcher = new CommentEditWatcher(postingConfiguration, commentView, remainingCharacters,
 				() -> resizeComment(true), () -> DraftsStorage.getInstance().store(obtainPostDraft()));
 		commentView.setOnFocusChangeListener((v, hasFocus) -> updateFocusButtons(hasFocus));
+		commentView.setOnTouchListener(new View.OnTouchListener() {
+			private float previousY;
+
+			@Override
+			public boolean onTouch(View view, MotionEvent event) {
+				switch (event.getActionMasked()) {
+					case MotionEvent.ACTION_DOWN: {
+						previousY = event.getY();
+						scrollView.requestDisallowInterceptTouchEvent(true);
+						break;
+					}
+					case MotionEvent.ACTION_MOVE: {
+						float y = event.getY();
+						int direction = y < previousY ? 1 : y > previousY ? -1 : 0;
+						previousY = y;
+						boolean scrollComment = direction != 0 && commentView.canScrollVertically(direction);
+						scrollView.requestDisallowInterceptTouchEvent(scrollComment);
+						break;
+					}
+					case MotionEvent.ACTION_UP:
+					case MotionEvent.ACTION_CANCEL: {
+						scrollView.requestDisallowInterceptTouchEvent(false);
+						break;
+					}
+				}
+				return false;
+			}
+		});
 		commentView.addTextChangedListener(commentEditWatcher);
 		commentView.addTextChangedListener(new QuoteEditWatcher(requireContext()));
 		commentView.setCallback(this, buildMimeTypeList(postingConfiguration.attachmentMimeTypes));
@@ -2190,14 +2222,27 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 	private final Runnable resizeComment = () -> {
 		if (scrollView != null) {
 			View postMain = scrollView.getChildAt(0);
-			commentView.setMinLines(4);
+			// Measure the complete editor first so its current height can be removed from the form height.
+			// The final fixed viewport keeps long messages scrollable without pushing the rest of the form
+			// behind the keyboard.
+			commentView.setMinLines(COMMENT_MIN_LINES);
+			commentView.setMaxLines(Integer.MAX_VALUE);
 			int widthMeasureSpec = View.MeasureSpec.makeMeasureSpec(postMain.getWidth(), View.MeasureSpec.EXACTLY);
 			int heightMeasureSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
 			postMain.measure(widthMeasureSpec, heightMeasureSpec);
-			int delta = scrollView.getHeight() - postMain.getMeasuredHeight();
-			if (delta > 0) {
-				commentView.setMinHeight(commentView.getMeasuredHeight() + delta);
+			int otherHeight = postMain.getMeasuredHeight() - commentView.getMeasuredHeight();
+			int minimumHeight = commentView.getCompoundPaddingTop() + commentView.getCompoundPaddingBottom()
+					+ commentView.getLineHeight() * COMMENT_MIN_LINES;
+			int viewportHeight = scrollView.getHeight();
+			WindowInsetsCompat windowInsets = ViewCompat.getRootWindowInsets(scrollView);
+			if (windowInsets != null && windowInsets.isVisible(WindowInsetsCompat.Type.ime())) {
+				int imeBottom = windowInsets.getInsets(WindowInsetsCompat.Type.ime()).bottom;
+				int systemBottom = windowInsets.getInsetsIgnoringVisibility(WindowInsetsCompat.Type.systemBars()).bottom;
+				viewportHeight += Math.max(0, imeBottom - systemBottom);
 			}
+			int height = Math.max(minimumHeight, viewportHeight - otherHeight);
+			commentView.setMinHeight(height);
+			commentView.setMaxHeight(height);
 		}
 	};
 

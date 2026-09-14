@@ -1,6 +1,7 @@
 package com.mishiranu.dashchan.widget;
 
 import android.annotation.SuppressLint;
+import android.app.AlertDialog;
 import android.content.Context;
 import android.content.res.Resources;
 import android.graphics.Canvas;
@@ -11,13 +12,13 @@ import android.graphics.PixelFormat;
 import android.graphics.Rect;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
-import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
+import android.view.accessibility.AccessibilityManager;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -60,6 +61,7 @@ public class ClickableToast implements DefaultLifecycleObserver {
 	private final TextView button;
 
 	private ViewGroup currentContainer;
+	private AlertDialog overflowDialog;
 	private Runnable onClickListener;
 	private String showing;
 	private boolean clickable;
@@ -141,7 +143,7 @@ public class ClickableToast implements DefaultLifecycleObserver {
 				return null;
 			}
 		} else {
-			return ConcurrentUtils.mainGet(() -> show(message, updateId, null));
+			return ConcurrentUtils.mainGet(() -> show(message, updateId, button));
 		}
 	}
 
@@ -226,8 +228,22 @@ public class ClickableToast implements DefaultLifecycleObserver {
 
 		ViewUtils.removeFromParent(message1);
 		ViewUtils.removeFromParent(message2);
-		LinearLayout linearLayout = new LinearLayout(activity);
+		LinearLayout linearLayout = new LinearLayout(activity) {
+			@Override
+			protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+				// Keep wrapping inside the current window, including narrow multi-window layouts.
+				int width = Math.max(1, ViewUtils.getWindowContentSize(activity).x - (int) (32f * density));
+				if (MeasureSpec.getMode(widthMeasureSpec) != MeasureSpec.UNSPECIFIED) {
+					width = Math.min(width, MeasureSpec.getSize(widthMeasureSpec));
+				}
+				int contentWidth = Math.max(1, width - getPaddingLeft() - getPaddingRight());
+				// A long translated action label must leave room for the actual message.
+				message2.setMaxWidth(Math.max(1, contentWidth / 3));
+				super.onMeasure(MeasureSpec.makeMeasureSpec(width, MeasureSpec.AT_MOST), heightMeasureSpec);
+			}
+		};
 		linearLayout.setOrientation(LinearLayout.HORIZONTAL);
+		linearLayout.setGravity(Gravity.CENTER_VERTICAL);
 		linearLayout.setDividerDrawable(new ToastDividerDrawable(message1.getTextColors().getDefaultColor(),
 				(int) (density + 0.5f)));
 		linearLayout.setShowDividers(LinearLayout.SHOW_DIVIDER_MIDDLE);
@@ -245,10 +261,13 @@ public class ClickableToast implements DefaultLifecycleObserver {
 		linearLayout.setOnTouchListener(partialClickDrawable);
 		message1.setPadding(0, 0, 0, 0);
 		message2.setPaddingRelative(innerPadding, 0, 0, 0);
-		message1.setSingleLine(true);
-		message2.setSingleLine(true);
-		message1.setEllipsize(TextUtils.TruncateAt.END);
-		message2.setEllipsize(TextUtils.TruncateAt.END);
+		// Reset limits inherited from the system/OEM toast template for both labels.
+		message1.setSingleLine(false);
+		message2.setSingleLine(false);
+		message1.setMaxLines(Integer.MAX_VALUE);
+		message2.setMaxLines(Integer.MAX_VALUE);
+		message1.setEllipsize(null);
+		message2.setEllipsize(null);
 		container = linearLayout;
 		message = message1;
 		button = message2;
@@ -304,14 +323,57 @@ public class ClickableToast implements DefaultLifecycleObserver {
 		partialClickDrawable.invalidateSelf();
 		clickableOnlyWhenRoot = button == null || button.clickableOnlyWhenRoot;
 		updateLayout();
+		// A transient popup cannot display an arbitrarily large message. Keep the full text in a
+		// scrollable standard dialog when it would take up more than half of the available window.
+		int availableHeight = Math.max(1, ViewUtils.getWindowContentSize(activity).y - Y_OFFSET);
+		container.measure(View.MeasureSpec.makeMeasureSpec(ViewUtils.getWindowContentSize(activity).x,
+				View.MeasureSpec.AT_MOST), View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+		if (overflowDialog != null || container.getMeasuredHeight() > availableHeight / 2) {
+			removeCurrentContainer();
+			if (overflowDialog != null) {
+				overflowDialog.setOnDismissListener(null);
+				overflowDialog.dismiss();
+			}
+			String id = update ? updateId : UUID.randomUUID().toString();
+			AlertDialog.Builder builder = new AlertDialog.Builder(activity)
+					.setMessage(message).setPositiveButton(android.R.string.ok, null);
+			if (realClickable && button != null) {
+				Runnable callback = button.callback;
+				builder.setNeutralButton(button.titleResId, (dialog, which) -> {
+					if (callback != null) callback.run();
+				});
+			}
+			AlertDialog dialog = builder.create();
+			overflowDialog = dialog;
+			showing = id;
+			dialog.setOnDismissListener(dismissed -> {
+				if (overflowDialog == dialog) {
+					overflowDialog = null;
+					cancelInternal();
+				}
+			});
+			try {
+				dialog.show();
+				return id;
+			} catch (WindowManager.BadTokenException e) {
+				cancelInternal();
+				return null;
+			}
+		}
+		int timeout = Math.max(TIMEOUT, Math.min(10000, this.message.length() * 50));
+		AccessibilityManager accessibilityManager = activity.getSystemService(AccessibilityManager.class);
+		if (accessibilityManager != null) {
+			timeout = accessibilityManager.getRecommendedTimeoutMillis(timeout, AccessibilityManager.FLAG_CONTENT_TEXT
+					| (realClickable ? AccessibilityManager.FLAG_CONTENT_CONTROLS : 0));
+		}
 		if (update) {
 			applyLayout();
-			ConcurrentUtils.HANDLER.postDelayed(cancelRunnable, TIMEOUT);
+			ConcurrentUtils.HANDLER.postDelayed(cancelRunnable, timeout);
 			return updateId;
 		} else if (addContainerToWindowManager()) {
 			String id = UUID.randomUUID().toString();
 			showing = id;
-			ConcurrentUtils.HANDLER.postDelayed(cancelRunnable, TIMEOUT);
+			ConcurrentUtils.HANDLER.postDelayed(cancelRunnable, timeout);
 			return id;
 		} else {
 			return null;
@@ -404,6 +466,11 @@ public class ClickableToast implements DefaultLifecycleObserver {
 		}
 		onClickListener = null;
 		showing = null;
+		if (overflowDialog != null) {
+			overflowDialog.setOnDismissListener(null);
+			overflowDialog.dismiss();
+			overflowDialog = null;
+		}
 		clickable = false;
 		realClickable = false;
 		removeCurrentContainer();

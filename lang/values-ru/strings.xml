@@ -259,6 +259,7 @@
 		уведомлений с кнопкой, обеспечения надёжного перезапуска приложения и возможности запустить приложение при
 		неудачной отправке сообщения</string>
 	<string name="empty_response">Пустой ответ сервера</string>
+	<string name="no_more_threads">Больше тредов нет</string>
 	<string name="enabled">Включено</string>
 	<string name="enable_predictive_back">Активировать Predictive Back (экспериментально)</string>
 	<string name="enable_predictive_back__summary">Использовать Predictive Back на Android 13+. Для работы должна быть включена системная навигация жестами. При выходе работает системная анимация; на Android 14+ внутренние страницы и галерея следуют за жестом. Функция экспериментальная: при проблемах прошивки используйте стрелку в верхней панели. На Android 11–12 поведение не изменяется.</string>
@@ -575,6 +576,8 @@
 	<string name="play">Воспроизведение</string>
 	<string name="play_after_scroll">Воспроизвести после прокрутки</string>
 	<string name="play_after_scroll__summary">Не показывать кнопку воспроизведения перед просмотром видео</string>
+	<string name="start_videos_muted">Запускать видео без звука</string>
+	<string name="start_videos_muted__summary">Все новые видео во встроенном плеере будут начинать воспроизведение без звука</string>
 	<string name="play_again">Воспроизвести снова</string>
 	<string name="playback_error">Ошибка воспроизведения</string>
 	<string name="playback_speed">Скорость воспроизведения</string>
@@ -1210,6 +1213,7 @@
 	<string name="check_replies">Проверить ответы</string>
 	<string name="tracked_replies_is_empty">Отслеживаемых сообщений пока нет</string>
 	<string name="no_unread_replies">Непрочитанных ответов нет</string>
+	<string name="no_replies_yet">Ответов пока нет</string>
 	<string name="reply_tracking_is_disabled">Отслеживание ответов выключено в экспериментальных функциях</string>
 	<string name="stop_tracking_replies">Не отслеживать ответы на это сообщение</string>
 	<string name="reply_history">Журнал ответов</string>
@@ -1274,4 +1278,15 @@
 		<item quantity="many">%d новых ответов</item>
 		<item quantity="other">%d нового ответа</item>
 	</plurals>
+	<string name="secret_abu_preview">Секретный тред Абу</string>
+	<string name="secret_abu_preview__summary">Открыть выдуманную доску /abu/ с секретным тредом. Без сети и изменения скрытых тредов</string>
+	<string name="secret_abu_board_title">/abu/ — Секретная доска</string>
+	<string name="secret_abu_board_subtitle">Локальный предпросмотр • 1 тред</string>
+	<string name="secret_abu_title">Секретный тред Абу</string>
+	<string name="secret_abu_body">Слушай, я всё понимаю — скрыжа полезная штука. Но ты скрыл ВСЁ. Буквально всё. Тут уже нечего показывать. Давай так: верни хотя бы пару тредов, и я сделаю вид, что ничего не заметил. — Абу</string>
+	<string name="secret_abu_footer">Секретный тред • виден только когда всё скрыто</string>
+	<string name="secret_abu_busy">Абу занят, попробуй позже.</string>
+	<string name="secret_abu_stop_tapping">Хватит тыкать. Абу всё видит.</string>
+	<string name="secret_abu_cannot_hide">Этот тред скрыть нельзя. Это Абу.</string>
+	<string name="secret_abu_hide_again">Ты серьёзно пытаешься скрыть Абу? Уважение, конечно, но нет.</string>
 </resources>

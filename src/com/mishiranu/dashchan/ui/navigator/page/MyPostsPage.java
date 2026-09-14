@@ -4,8 +4,6 @@ import android.app.AlertDialog;
 import android.view.Menu;
 import android.view.MenuItem;
 import androidx.recyclerview.widget.LinearLayoutManager;
-import chan.content.Chan;
-import chan.util.StringUtils;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.WatcherNotifications;
@@ -28,9 +26,12 @@ import java.util.List;
 import java.util.Map;
 
 public class MyPostsPage extends ListPage implements MyPostsAdapter.Callback, ReadMyPostsTask.Callback {
-	private static final int REPLY_HISTORY_LIMIT = 50;
-	private static final int REPLY_HISTORY_COMMENT_LIMIT = 100;
 	private static final int MAX_CONCURRENT_CHECKS = 3;
+	private static final ExtraFactory<RetainableExtra> RETAINABLE_EXTRA_FACTORY = RetainableExtra::new;
+
+	private static final class RetainableExtra implements Retainable {
+		public MyPostsAdapter.Mode mode = MyPostsAdapter.Mode.REPLIES;
+	}
 
 	private final ArrayDeque<MyPostsStorage.ThreadKey> checkQueue = new ArrayDeque<>();
 	private final HashMap<MyPostsStorage.ThreadKey, ReadMyPostsTask> tasks = new HashMap<>();
@@ -41,6 +42,7 @@ public class MyPostsPage extends ListPage implements MyPostsAdapter.Callback, Re
 	};
 
 	private int checkErrors;
+	private MyPostsAdapter.Mode mode = MyPostsAdapter.Mode.REPLIES;
 
 	private MyPostsAdapter getAdapter() {
 		return (MyPostsAdapter) getRecyclerView().getAdapter();
@@ -48,6 +50,7 @@ public class MyPostsPage extends ListPage implements MyPostsAdapter.Callback, Re
 
 	@Override
 	protected void onCreate() {
+		mode = getRetainableExtra(RETAINABLE_EXTRA_FACTORY).mode;
 		PaddedRecyclerView recyclerView = getRecyclerView();
 		recyclerView.setLayoutManager(new LinearLayoutManager(recyclerView.getContext()));
 		MyPostsAdapter adapter = new MyPostsAdapter(getContext(), this);
@@ -90,33 +93,53 @@ public class MyPostsPage extends ListPage implements MyPostsAdapter.Callback, Re
 			return;
 		}
 		MyPostsStorage storage = MyPostsStorage.getInstance();
-		List<MyPostsStorage.ReplyItem> replies = storage.getUnreadReplies();
-		getAdapter().setReplies(replies);
-		if (replies.isEmpty()) {
-			if (isChecking()) {
-				switchProgress();
-			} else {
-				int message = !Preferences.isTrackMyPostsEnabled() ? R.string.reply_tracking_is_disabled
-						: storage.getPosts().isEmpty() ? R.string.tracked_replies_is_empty
-						: R.string.no_unread_replies;
-				switchError(message);
-			}
+		MyPostsAdapter adapter = getAdapter();
+		adapter.setMode(mode);
+		if (mode == MyPostsAdapter.Mode.REPLIES) {
+			List<MyPostsStorage.ReplyItem> replies = storage.getRecentReplies(0);
+			int message = isChecking() ? R.string.loading__ellipsis
+					: !Preferences.isTrackMyPostsEnabled() ? R.string.reply_tracking_is_disabled
+					: storage.getPosts().isEmpty() ? R.string.tracked_replies_is_empty
+					: R.string.no_replies_yet;
+			adapter.setReplies(replies, getString(message));
 		} else {
-			switchList();
+			adapter.setPosts(storage.getPosts(), getString(R.string.tracked_replies_is_empty));
+		}
+		switchList();
+	}
+
+	@Override
+	public void onModeSelected(MyPostsAdapter.Mode mode) {
+		if (this.mode != mode) {
+			this.mode = mode;
+			getRetainableExtra(RETAINABLE_EXTRA_FACTORY).mode = mode;
+			updateList();
+			getRecyclerView().scrollToPosition(0);
+			updateOptionsMenu();
 		}
 	}
 
 	@Override
-	public void onItemClick(MyPostsStorage.ReplyItem reply) {
-		openReply(reply);
+	public void onItemClick(MyPostsAdapter.Item item) {
+		if (item.reply != null) {
+			openReply(item.reply);
+		} else {
+			openPost(item.post);
+		}
 	}
 
 	@Override
-	public boolean onItemLongClick(MyPostsStorage.ReplyItem reply) {
+	public boolean onItemLongClick(MyPostsAdapter.Item item) {
+		MyPostsStorage.ReplyItem reply = item.reply;
+		MyPostsStorage.TrackedPost post = item.post;
 		new InstanceDialog(getFragmentManager(), null, provider -> {
+			String chanName = reply != null ? reply.chanName : post.chanName;
+			String boardName = reply != null ? reply.boardName : post.boardName;
+			String threadNumber = reply != null ? reply.threadNumber : post.threadNumber;
+			PostNumber postNumber = reply != null ? reply.trackedPostNumber : post.postNumber;
 			DialogMenu dialogMenu = new DialogMenu(provider.getContext());
 			dialogMenu.add(R.string.stop_tracking_replies, () -> MyPostsStorage.getInstance()
-					.remove(reply.chanName, reply.boardName, reply.threadNumber, reply.trackedPostNumber));
+					.remove(chanName, boardName, threadNumber, postNumber));
 			return dialogMenu.create();
 		});
 		return true;
@@ -128,14 +151,18 @@ public class MyPostsPage extends ListPage implements MyPostsAdapter.Callback, Re
 				reply.threadNumber, reply.postNumber, null);
 	}
 
+	private void openPost(MyPostsStorage.TrackedPost post) {
+		getUiManager().navigator().navigatePosts(post.chanName, post.boardName,
+				post.threadNumber, post.postNumber, null);
+	}
+
 	@Override
 	public void onCreateOptionsMenu(Menu menu) {
 		menu.add(0, R.id.menu_refresh, 0, R.string.check_replies)
 				.setIcon(getActionBarIcon(R.attr.iconActionRefresh))
 				.setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM);
-		menu.add(0, R.id.menu_reply_history, 1, R.string.reply_history);
-		menu.add(0, R.id.menu_mark_replies_read, 2, R.string.mark_all_replies_read);
-		menu.add(0, R.id.menu_clear, 3, R.string.clear_reply_history);
+		menu.add(0, R.id.menu_mark_replies_read, 1, R.string.mark_all_replies_read);
+		menu.add(0, R.id.menu_clear, 2, R.string.clear_reply_history);
 	}
 
 	@Override
@@ -144,16 +171,14 @@ public class MyPostsPage extends ListPage implements MyPostsAdapter.Callback, Re
 		if (refresh != null) {
 			refresh.setEnabled(!isChecking() && Preferences.isTrackMyPostsEnabled());
 		}
-		MenuItem history = menu.findItem(R.id.menu_reply_history);
-		if (history != null) {
-			history.setEnabled(!MyPostsStorage.getInstance().getRecentReplies(1).isEmpty());
-		}
 		MenuItem markRead = menu.findItem(R.id.menu_mark_replies_read);
 		if (markRead != null) {
+			markRead.setVisible(mode == MyPostsAdapter.Mode.REPLIES);
 			markRead.setEnabled(MyPostsStorage.getInstance().getUnreadCount() > 0);
 		}
 		MenuItem clear = menu.findItem(R.id.menu_clear);
 		if (clear != null) {
+			clear.setVisible(mode == MyPostsAdapter.Mode.REPLIES);
 			clear.setEnabled(!MyPostsStorage.getInstance().getRecentReplies(1).isEmpty());
 		}
 	}
@@ -162,9 +187,6 @@ public class MyPostsPage extends ListPage implements MyPostsAdapter.Callback, Re
 	public boolean onOptionsItemSelected(MenuItem item) {
 		if (item.getItemId() == R.id.menu_refresh) {
 			startCheck();
-			return true;
-		} else if (item.getItemId() == R.id.menu_reply_history) {
-			showReplyHistory();
 			return true;
 		} else if (item.getItemId() == R.id.menu_mark_replies_read) {
 			markAllRepliesRead();
@@ -205,23 +227,6 @@ public class MyPostsPage extends ListPage implements MyPostsAdapter.Callback, Re
 		}
 	}
 
-	private void showReplyHistory() {
-		List<MyPostsStorage.ReplyItem> replies = MyPostsStorage.getInstance()
-				.getRecentReplies(REPLY_HISTORY_LIMIT);
-		if (replies.isEmpty()) {
-			ClickableToast.show(R.string.reply_history_is_empty);
-			return;
-		}
-		new InstanceDialog(getFragmentManager(), null, provider -> {
-			DialogMenu dialogMenu = new DialogMenu(provider.getContext())
-					.setTitle(getString(R.string.reply_history));
-			for (MyPostsStorage.ReplyItem reply : replies) {
-				dialogMenu.add(formatHistoryItem(reply), () -> openReply(reply));
-			}
-			return dialogMenu.create();
-		});
-	}
-
 	private void markAllRepliesRead() {
 		MyPostsStorage storage = MyPostsStorage.getInstance();
 		HashMap<MyPostsStorage.ThreadKey, ArrayList<PostNumber>> repliesByThread = new HashMap<>();
@@ -241,20 +246,6 @@ public class MyPostsPage extends ListPage implements MyPostsAdapter.Callback, Re
 			WatcherNotifications.cancelReplies(getContext(), key.chanName, key.boardName,
 					key.threadNumber, entry.getValue());
 		}
-	}
-
-	private String formatHistoryItem(MyPostsStorage.ReplyItem reply) {
-		String comment = StringUtils.isEmptyOrWhitespace(reply.comment)
-				? getString(R.string.tracked_post_number__format, reply.postNumber)
-				: reply.comment.replace('\n', ' ').trim();
-		if (comment.length() > REPLY_HISTORY_COMMENT_LIMIT) {
-			comment = comment.substring(0, REPLY_HISTORY_COMMENT_LIMIT).trim() + "…";
-		}
-		Chan chan = Chan.get(reply.chanName);
-		String boardTitle = chan.configuration.getBoardTitle(reply.boardName);
-		String location = chan.configuration.formatBoardTitle(reply.boardName, boardTitle);
-		return (reply.unread ? "● " : "") + comment + " — " + chan.configuration.getTitle()
-				+ " " + location;
 	}
 
 	private void startCheck() {

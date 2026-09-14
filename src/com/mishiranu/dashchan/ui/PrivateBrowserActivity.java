@@ -39,6 +39,7 @@ import com.mishiranu.dashchan.util.AndroidUtils;
 import com.mishiranu.dashchan.util.NavigationUtils;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.util.WebViewUtils;
+import com.mishiranu.dashchan.widget.ClickableToast;
 import com.mishiranu.dashchan.widget.ThemeEngine;
 import com.mishiranu.dashchan.widget.ViewFactory;
 
@@ -77,6 +78,7 @@ public class PrivateBrowserActivity extends StateActivity implements DownloadLis
 		super.onCreate(savedInstanceState);
 
 		createLayout();
+		ClickableToast.register(this);
 		WebSettings settings = webView.getSettings();
 		WebViewUtils.configureCommonSettings(settings);
 		settings.setBuiltInZoomControls(true);
@@ -292,7 +294,7 @@ public class PrivateBrowserActivity extends StateActivity implements DownloadLis
 		try {
 			startActivity(intent);
 		} catch (ActivityNotFoundException | SecurityException e) {
-			Toast.makeText(this, R.string.unknown_address, Toast.LENGTH_SHORT).show();
+			ClickableToast.show(R.string.unknown_address);
 		}
 	}
 
@@ -329,7 +331,7 @@ public class PrivateBrowserActivity extends StateActivity implements DownloadLis
 		@Override
 		public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
 			if (Preferences.isVerifyCertificate()) {
-				Toast.makeText(PrivateBrowserActivity.this, R.string.invalid_certificate, Toast.LENGTH_SHORT).show();
+				ClickableToast.show(R.string.invalid_certificate);
 				super.onReceivedSslError(view, handler, error);
 			} else {
 				handler.proceed();

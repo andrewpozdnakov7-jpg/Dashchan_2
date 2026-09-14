@@ -255,6 +255,7 @@
 	<string name="draw_over_other_applications__summary">This permission is needed to enable all features of clickable
 		toasts, ensure reliable application restarts, and allow to launch application when posting fails</string>
 	<string name="empty_response">Empty response</string>
+	<string name="no_more_threads">There are no more threads</string>
 	<string name="enabled">Enabled</string>
 	<string name="enable_predictive_back">Enable Predictive Back (experimental)</string>
 	<string name="enable_predictive_back__summary">Use Predictive Back on Android 13+. System gesture navigation must be enabled. Leaving the app uses the system animation; on Android 14+ internal pages and the gallery follow the gesture. Experimental: use the toolbar arrow if your firmware behaves unexpectedly. Behavior is unchanged on Android 11–12.</string>
@@ -553,6 +554,8 @@
 	<string name="play">Play</string>
 	<string name="play_after_scroll">Play after scroll</string>
 	<string name="play_after_scroll__summary">Hide play button before playing video</string>
+	<string name="start_videos_muted">Start videos muted</string>
+	<string name="start_videos_muted__summary">All new videos in the built-in player will start without sound</string>
 	<string name="play_again">Play again</string>
 	<string name="playback_error">Playback error</string>
 	<string name="playback_speed">Playback speed</string>
@@ -1184,6 +1187,7 @@
 	<string name="check_replies">Check replies</string>
 	<string name="tracked_replies_is_empty">There are no tracked messages yet</string>
 	<string name="no_unread_replies">There are no unread replies</string>
+	<string name="no_replies_yet">There are no replies yet</string>
 	<string name="reply_tracking_is_disabled">Reply tracking is disabled in Experimental features</string>
 	<string name="stop_tracking_replies">Stop tracking replies to this message</string>
 	<string name="reply_history">Reply history</string>
@@ -1246,4 +1250,15 @@
 		<item quantity="one">%d new reply</item>
 		<item quantity="other">%d new replies</item>
 	</plurals>
+	<string name="secret_abu_preview">Abu’s secret thread</string>
+	<string name="secret_abu_preview__summary">Open a fictional /abu/ board with the secret thread. No network access or changes to hidden threads</string>
+	<string name="secret_abu_board_title">/abu/ — Secret board</string>
+	<string name="secret_abu_board_subtitle">Local preview • 1 thread</string>
+	<string name="secret_abu_title">Abu’s secret thread</string>
+	<string name="secret_abu_body">Listen, I get it — hiding threads is useful. But you hid EVERYTHING. Literally everything. There is nothing left to show. Bring back a couple of threads, and I will pretend I never noticed. — Abu</string>
+	<string name="secret_abu_footer">Secret thread • visible only when everything is hidden</string>
+	<string name="secret_abu_busy">Abu is busy. Try again later.</string>
+	<string name="secret_abu_stop_tapping">Stop poking. Abu sees everything.</string>
+	<string name="secret_abu_cannot_hide">You cannot hide this thread. It is Abu.</string>
+	<string name="secret_abu_hide_again">Seriously trying to hide Abu? Respect, but no.</string>
 </resources>
