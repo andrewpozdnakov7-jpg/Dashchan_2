@@ -14,6 +14,7 @@ import com.mishiranu.dashchan.content.model.AttachmentItem;
 import com.mishiranu.dashchan.content.model.GalleryItem;
 import com.mishiranu.dashchan.content.model.PostItem;
 import com.mishiranu.dashchan.content.translation.TranslationController;
+import com.mishiranu.dashchan.ui.SecretAbuThread;
 import com.mishiranu.dashchan.ui.navigator.manager.UiManager;
 import com.mishiranu.dashchan.ui.navigator.manager.ViewUnit;
 import com.mishiranu.dashchan.util.AnimationUtils;
@@ -35,6 +36,14 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 	}
 
 	private static final int LIST_PADDING = 12;
+	private static final int VIEW_SECRET_ABU = -100;
+	private boolean secretAbuAllowed;
+	private final SecretAbuThread.State secretAbuState = new SecretAbuThread.State();
+	private String secretAbuBoardName = "abu";
+
+	public void setSecretAbuBoardName(String boardName) {
+		secretAbuBoardName = !StringUtils.isEmpty(boardName) ? boardName : "abu";
+	}
 	private static final int CARD_MIN_WIDTH_LARGE_DP = 120;
 	private static final int CARD_MIN_WIDTH_SMALL_DP = 90;
 	private static final int CARD_PADDING_OUT_DP = 8;
@@ -89,6 +98,10 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 	@NonNull
 	@Override
 	public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+		if (viewType == VIEW_SECRET_ABU) {
+			return SecretAbuThread.createCatalogViewHolder(parent, secretAbuState, uiManager,
+					configurationSet.fragmentManager, cardsMode, secretAbuBoardName);
+		}
 		return uiManager.view().createView(parent, ViewUnit.ViewType.values()[viewType]);
 	}
 
@@ -100,6 +113,10 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 	@Override
 	public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder,
 			int position, @NonNull List<Object> payloads) {
+		if (holder.getItemViewType() == VIEW_SECRET_ABU) {
+			SecretAbuThread.bindViewHolder(holder, uiManager);
+			return;
+		}
 		PostItem postItem = getItem(position);
 		switch (ViewUnit.ViewType.values()[holder.getItemViewType()]) {
 			case THREAD:
@@ -147,7 +164,7 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 					Chan.get(configurationSet.chanName), () -> {
 				int position = getPostItems().indexOf(postItem);
 				if (position >= 0) {
-					notifyItemChanged(position);
+					notifyItemChanged(position + getSecretAbuOffset());
 				}
 			});
 		}
@@ -170,6 +187,7 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 		String key = TranslationController.getCurrentCacheKey();
 		int end = Math.min(lastPosition, getItemCount() - 1);
 		for (int position = firstPosition; position <= end; position++) {
+			if (isSecretAbuPosition(position)) continue;
 			ViewUnit.ViewType viewType = ViewUnit.ViewType.values()[getItemViewType(position)];
 			if (viewType != ViewUnit.ViewType.THREAD_HIDDEN && viewType != ViewUnit.ViewType.THREAD_CARD_HIDDEN &&
 					!getItem(position).hasTranslatedComment(key)) {
@@ -192,8 +210,31 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 		return postItems.isEmpty();
 	}
 
+	public int getLoadedThreadsCount() {
+		return postItems.size();
+	}
+
+	public boolean isSecretAbuVisible() {
+		return secretAbuAllowed && StringUtils.isEmpty(filterText);
+	}
+
+	public boolean isSecretAbuPosition(int position) {
+		return position == 0 && isSecretAbuVisible();
+	}
+
+	private int getSecretAbuOffset() {
+		return isSecretAbuVisible() ? 1 : 0;
+	}
+
+	public void setSecretAbuAllowed(boolean allowed) {
+		boolean wasVisible = isSecretAbuVisible();
+		secretAbuAllowed = allowed;
+		if (wasVisible != isSecretAbuVisible()) notifyDataSetChanged();
+	}
+
 	@Override
 	public int getItemViewType(int position) {
+		if (isSecretAbuPosition(position)) return VIEW_SECRET_ABU;
 		PostItem postItem = getItem(position);
 		return (gridMode != null ? ViewUnit.ViewType.THREAD_CARD_CELL
 				: configurationSet.postStateProvider.isHiddenResolve(postItem)
@@ -207,16 +248,20 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 	}
 
 	private PostItem getItem(int position) {
-		return getPostItems().get(position);
+		return getPostItems().get(position - getSecretAbuOffset());
 	}
 
 	@Override
 	public int getItemCount() {
-		return getPostItems().size();
+		return getPostItems().size() + getSecretAbuOffset();
 	}
 
 	public void applyItemPadding(View view, int position, int column, Rect rect) {
 		float density = ResourceUtils.obtainDensity(view);
+		if (isSecretAbuPosition(position)) {
+			rect.set(0, 0, 0, 0);
+			return;
+		}
 		int paddingOut = (int) (CARD_PADDING_OUT_DP * density);
 		int paddingIn = (int) (CARD_PADDING_IN_DP * density);
 		if (!cardsMode) {
@@ -235,7 +280,7 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 				left = paddingOut;
 				right = paddingOut;
 			}
-			boolean firstRow = position - column == 0;
+			boolean firstRow = position - getSecretAbuOffset() - column == 0;
 			boolean lastRow = position + columns - column >= getItemCount();
 			rect.set(left, firstRow ? paddingOut : paddingIn, right, lastRow ? paddingOut : 0);
 		}
@@ -243,6 +288,7 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 
 	public DividerItemDecoration.Configuration configureDivider
 			(DividerItemDecoration.Configuration configuration, int position) {
+		if (isSecretAbuPosition(position)) return configuration.need(false);
 		if (cardsMode) {
 			return configuration.need(false);
 		} else {
@@ -364,11 +410,11 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 	}
 
 	public void reloadAttachment(AttachmentItem attachmentItem) {
-		for (int i = 0; i < getItemCount(); i++) {
-			PostItem postItem = getItem(i);
+		for (int i = 0; i < getPostItems().size(); i++) {
+			PostItem postItem = getPostItems().get(i);
 			List<AttachmentItem> attachmentItems = postItem.getAttachmentItems();
 			if (attachmentItems != null && attachmentItems.contains(attachmentItem)) {
-				notifyItemChanged(i, attachmentItem);
+				notifyItemChanged(i + getSecretAbuOffset(), attachmentItem);
 			}
 		}
 	}
@@ -407,7 +453,15 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 	}
 
 	public PostItem getThread(int position) {
-		return getItem(position);
+		return isSecretAbuPosition(position) ? null : getItem(position);
+	}
+
+	public int findThreadPosition(String threadNumber) {
+		List<PostItem> items = getPostItems();
+		for (int i = 0; i < items.size(); i++) {
+			if (items.get(i).getThreadNumber().equals(threadNumber)) return i + getSecretAbuOffset();
+		}
+		return -1;
 	}
 
 	public void notifyThreadHidden(PostItem postItem) {
@@ -416,6 +470,7 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 			notifyDataSetChanged();
 			return;
 		}
+		position += getSecretAbuOffset();
 		if (Preferences.isDisplayHiddenThreads()) {
 			notifyItemChanged(position);
 		} else {

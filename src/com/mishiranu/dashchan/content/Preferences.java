@@ -1858,6 +1858,13 @@ public class Preferences {
 		return PREFERENCES.getBoolean(KEY_USE_VIDEO_PLAYER, DEFAULT_USE_VIDEO_PLAYER);
 	}
 
+	public static final String KEY_VIDEO_START_MUTED = "video_start_muted";
+	public static final boolean DEFAULT_VIDEO_START_MUTED = false;
+
+	public static boolean isVideoStartMuted() {
+		return PREFERENCES.getBoolean(KEY_VIDEO_START_MUTED, DEFAULT_VIDEO_START_MUTED);
+	}
+
 	public static final String KEY_HARDWARE_VIDEO_ACCELERATION = "hardware_video_acceleration";
 	public static final boolean DEFAULT_HARDWARE_VIDEO_ACCELERATION = true;
 	public static final String KEY_IMAGE_EDITOR = "image_editor";

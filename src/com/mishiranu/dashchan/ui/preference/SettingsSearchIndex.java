@@ -316,6 +316,8 @@ public final class SettingsSearchIndex {
 
 		add(context, entries, Screen.EXPERIMENTAL, R.string.whats_new_preview,
 				R.string.whats_new_preview__summary, null);
+		add(context, entries, Screen.EXPERIMENTAL, R.string.secret_abu_preview,
+				R.string.secret_abu_preview__summary, null);
 		add(context, entries, Screen.FORUMS, R.string.forum_reddit, R.string.reddit_public_web_reader__summary,
 				Preferences.KEY_REDDIT_WEB_READER_ENABLED);
 		add(context, entries, Screen.REDDIT, R.string.reddit_sign_in,
@@ -491,6 +493,8 @@ public final class SettingsSearchIndex {
 				R.string.notify_when_download_is_completed__summary, Preferences.KEY_NOTIFY_DOWNLOAD_COMPLETE);
 		add(context, entries, Screen.MEDIA, R.string.use_built_in_video_player,
 				R.string.use_built_in_video_player__summary, Preferences.KEY_USE_VIDEO_PLAYER);
+		add(context, entries, Screen.MEDIA, R.string.start_videos_muted,
+				R.string.start_videos_muted__summary, Preferences.KEY_VIDEO_START_MUTED);
 		add(context, entries, Screen.MEDIA, R.string.video_audio_boost,
 				R.string.video_audio_boost__summary, Preferences.KEY_VIDEO_AUDIO_BOOST);
 		add(context, entries, Screen.MEDIA, R.string.video_audio_boost_level, 0,

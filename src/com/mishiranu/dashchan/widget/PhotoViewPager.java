@@ -177,6 +177,7 @@ public class PhotoViewPager extends ViewGroup {
 
 	private float startX;
 	private float startY;
+	private float startRawY;
 	private float lastX;
 	private int startScrollX;
 	private boolean longTapConfirmed;
@@ -213,6 +214,7 @@ public class PhotoViewPager extends ViewGroup {
 				updateCurrentScrollIndex(false);
 				startX = lastX = event.getX();
 				startY = event.getY();
+				startRawY = event.getRawY();
 				startScrollX = getScrollX();
 				longTapConfirmed = false;
 				velocityTracker = VelocityTracker.obtain();
@@ -225,8 +227,11 @@ public class PhotoViewPager extends ViewGroup {
 			case MotionEvent.ACTION_MOVE: {
 				float x = event.getX();
 				float y = event.getY();
+				// Vertical paging translates this view; local coordinates would feed that
+				// translation back into the next swipe update and make the video oscillate.
+				float verticalDistance = verticalPagingMode ? startRawY - event.getRawY() : startY - y;
 				if (verticalGesture) {
-					adapter.onVerticalGestureProgress(this, startY - y);
+					adapter.onVerticalGestureProgress(this, verticalDistance);
 					return true;
 				}
 				float previousX = x;
@@ -262,7 +267,7 @@ public class PhotoViewPager extends ViewGroup {
 						}
 						lastEventToPhotoView = false;
 						notifySwiping(false);
-						adapter.onVerticalGestureProgress(this, startY - y);
+						adapter.onVerticalGestureProgress(this, verticalDistance);
 						return true;
 					}
 				}

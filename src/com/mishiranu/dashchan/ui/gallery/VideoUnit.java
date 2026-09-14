@@ -25,7 +25,6 @@ import android.widget.LinearLayout;
 import android.widget.PopupMenu;
 import android.widget.SeekBar;
 import android.widget.TextView;
-import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.fragment.app.FragmentManager;
 import chan.content.Chan;
@@ -45,6 +44,7 @@ import com.mishiranu.dashchan.util.AudioFocus;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.util.ViewUtils;
+import com.mishiranu.dashchan.widget.ClickableToast;
 import com.mishiranu.dashchan.widget.SummaryLayout;
 import com.mishiranu.dashchan.widget.ThemeEngine;
 import java.io.File;
@@ -361,6 +361,9 @@ public class VideoUnit {
 		wasPlaying = true;
 		finishedPlayback = false;
 		hideSurfaceOnInit = false;
+		if (!reload && Preferences.isVideoStartMuted()) {
+			muted = true;
+		}
 		if (!Preferences.isVideoPlaybackSpeedControl()) {
 			playbackSpeed = 1000;
 		} else if (!reload && !Preferences.isRememberVideoPlaybackSpeed()) {
@@ -963,7 +966,7 @@ public class VideoUnit {
 		updateTikTokModeButton();
 		if (enabled && Preferences.shouldShowVideoTikTokModeHint()) {
 			Preferences.markVideoTikTokModeHintShown();
-			Toast.makeText(view.getContext(), R.string.video_tiktok_mode_hint, Toast.LENGTH_LONG).show();
+			ClickableToast.show(R.string.video_tiktok_mode_hint);
 		}
 	}
 
@@ -971,9 +974,8 @@ public class VideoUnit {
 		if (tikTokModeButton != null) {
 			boolean enabled = tikTokModeCallback.isEnabled();
 			tikTokModeButton.setActivated(enabled);
-			tikTokModeButton.setAlpha(enabled ? 1f : 0.65f);
-			tikTokModeButton.setImageTintList(ColorStateList.valueOf(enabled
-					? ResourceUtils.getColor(tikTokModeButton.getContext(), R.attr.colorAccentSupport) : Color.WHITE));
+			tikTokModeButton.setAlpha(enabled ? 1f : 0.45f);
+			tikTokModeButton.setImageTintList(ColorStateList.valueOf(Color.WHITE));
 			tikTokModeButton.setContentDescription(tikTokModeButton.getContext().getString(enabled
 					? R.string.disable_video_tiktok_mode : R.string.enable_video_tiktok_mode));
 		}
@@ -1022,7 +1024,7 @@ public class VideoUnit {
 		} catch (RuntimeException e) {
 			VideoPipActivity.cancelPendingTransfer(this, transferredPlayer);
 			restorePictureInPicturePlayer(transferredPlayer, position, playbackSpeed, muted, playing);
-			Toast.makeText(context, R.string.unknown_error, Toast.LENGTH_SHORT).show();
+			ClickableToast.show(R.string.unknown_error);
 			return false;
 		}
 	}

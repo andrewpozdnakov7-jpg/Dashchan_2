@@ -8,6 +8,8 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Path;
+import android.graphics.Rect;
+import android.graphics.RectF;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.ShapeDrawable;
 import android.graphics.drawable.shapes.Shape;
@@ -72,6 +74,7 @@ public class PagerUnit implements PagerInstance.Callback {
 	private View tikTokTransitionView;
 	private int tikTokTransitionIndex = -1;
 	private boolean tikTokTransitionNext;
+	private float tikTokTransitionOffset;
 	private boolean tikTokTransitionRunning;
 	private int tikTokTransitionGeneration;
 
@@ -240,6 +243,7 @@ public class PagerUnit implements PagerInstance.Callback {
 	}
 
 	private void removeTikTokTransitionView() {
+		viewPager.setClipBounds(null);
 		if (tikTokTransitionView != null) {
 			tikTokTransitionView.animate().cancel();
 			pagerAdapter.recycleTikTokTransitionView(tikTokTransitionView);
@@ -247,6 +251,39 @@ public class PagerUnit implements PagerInstance.Callback {
 			tikTokTransitionView = null;
 		}
 		tikTokTransitionIndex = -1;
+		tikTokTransitionOffset = 0f;
+	}
+
+	private Rect getTikTokContentBounds(PagerInstance.ViewHolder holder, int width, int height) {
+		RectF bounds = new RectF();
+		boolean resolved = false;
+		if (holder != null) {
+			// The actual video may have more accurate dimensions than its thumbnail.
+			if (holder.surfaceParent.getChildCount() == 1) {
+				View video = holder.surfaceParent.getChildAt(0);
+				if (video.getWidth() > 0 && video.getHeight() > 0) {
+					bounds.set(video.getLeft(), video.getTop(), video.getRight(), video.getBottom());
+					bounds.offset(holder.surfaceParent.getLeft(), holder.surfaceParent.getTop());
+					resolved = true;
+				}
+			}
+			if (!resolved && holder.photoView.getImageDisplayRect(bounds) != null) {
+				bounds.offset(holder.photoView.getLeft(), holder.photoView.getTop());
+				resolved = !bounds.isEmpty();
+			}
+			if (!resolved && holder.mediaSummary != null && holder.mediaSummary.width > 0
+					&& holder.mediaSummary.height > 0) {
+				float contentHeight = Math.min(height,
+						(float) width * holder.mediaSummary.height / holder.mediaSummary.width);
+				bounds.set(0f, (height - contentHeight) / 2f, width, (height + contentHeight) / 2f);
+				resolved = true;
+			}
+		}
+		if (!resolved || !bounds.intersect(0f, 0f, width, height)) {
+			return new Rect(0, 0, width, height);
+		}
+		// Keep the full width; only the vertical letterboxing separates adjacent clips.
+		return new Rect(0, (int) Math.floor(bounds.top), width, (int) Math.ceil(bounds.bottom));
 	}
 
 	private void cancelTikTokTransitionImmediately() {
@@ -271,24 +308,43 @@ public class PagerUnit implements PagerInstance.Callback {
 			tikTokTransitionView = pagerAdapter.createTikTokTransitionView(targetIndex);
 			viewPagerParent.addView(tikTokTransitionView, 1, new FrameLayout.LayoutParams(
 					FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+			int width = Math.max(1, viewPager.getWidth());
+			int height = Math.max(1, viewPager.getHeight());
+			// Resolve the preview's fit before its first draw, not halfway through the gesture.
+			tikTokTransitionView.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+					View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY));
+			tikTokTransitionView.layout(0, 0, width, height);
+			Rect currentBounds = getTikTokContentBounds(pagerInstance.currentHolder, width, height);
+			Rect targetBounds = getTikTokContentBounds(
+					(PagerInstance.ViewHolder) tikTokTransitionView.getTag(), width, height);
+			tikTokTransitionOffset = next ? currentBounds.bottom - targetBounds.top
+					: currentBounds.top - targetBounds.bottom;
+			viewPager.setClipBounds(currentBounds);
+			tikTokTransitionView.setClipBounds(targetBounds);
 		}
 	}
 
 	private void updateTikTokTransition(PhotoViewPager view, float distance) {
-		if (tikTokTransitionRunning || distance == 0f) {
+		if (tikTokTransitionRunning) {
+			return;
+		}
+		if (distance == 0f) {
+			view.setTranslationY(0f);
+			removeTikTokTransitionView();
 			return;
 		}
 		boolean next = distance > 0f;
 		prepareTikTokTransition(next);
-		float height = Math.max(1f, view.getHeight());
-		float clampedDistance = Math.max(-height, Math.min(height, distance));
+		float travel = tikTokTransitionView != null ? Math.max(1f, Math.abs(tikTokTransitionOffset))
+				: Math.max(1f, view.getHeight());
+		float clampedDistance = Math.max(-travel, Math.min(travel, distance));
 		float translation = -clampedDistance;
 		if (tikTokTransitionView == null) {
 			translation *= 0.18f;
 		}
 		view.setTranslationY(translation);
 		if (tikTokTransitionView != null) {
-			tikTokTransitionView.setTranslationY((next ? height : -height) + translation);
+			tikTokTransitionView.setTranslationY(tikTokTransitionOffset + translation);
 		}
 	}
 
@@ -296,14 +352,13 @@ public class PagerUnit implements PagerInstance.Callback {
 		int generation = ++tikTokTransitionGeneration;
 		View transitionView = tikTokTransitionView;
 		int targetIndex = tikTokTransitionIndex;
-		boolean next = tikTokTransitionNext;
-		float height = Math.max(1f, view.getHeight());
+		float offset = tikTokTransitionOffset;
 		tikTokTransitionRunning = true;
 		view.setActive(false);
 		if (complete && transitionView != null && targetIndex >= 0) {
 			transitionView.animate().translationY(0f).setDuration(220L)
 					.setInterpolator(AnimationUtils.DECELERATE_INTERPOLATOR).start();
-			view.animate().translationY(next ? -height : height).setDuration(220L)
+			view.animate().translationY(-offset).setDuration(220L)
 					.setInterpolator(AnimationUtils.DECELERATE_INTERPOLATOR).withEndAction(() -> {
 						if (tikTokTransitionGeneration != generation) {
 							return;
@@ -316,7 +371,7 @@ public class PagerUnit implements PagerInstance.Callback {
 					}).start();
 		} else {
 			if (transitionView != null) {
-				transitionView.animate().translationY(next ? height : -height).setDuration(180L)
+				transitionView.animate().translationY(offset).setDuration(180L)
 						.setInterpolator(AnimationUtils.DECELERATE_INTERPOLATOR).start();
 			}
 			view.animate().translationY(0f).setDuration(180L)

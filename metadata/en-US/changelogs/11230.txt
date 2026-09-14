@@ -1,0 +1,11 @@
+- Redesigned Replies: read and unread replies now share one list, with unread items in bold. Added a separate tab for your posts, expanded previews to five lines, and removed excessive spacing and duplicate post numbers.
+- Improved thread hiding: additional threads are fetched in the background and displayed as one batch, without repeated loading animations or unexpected scrolling.
+- Improved the post editor: long messages are easier to edit, and opening the keyboard no longer shrinks the editor window.
+- Refined TikTok mode: fixed shaking while swiping, reduced empty gaps between videos, and made the mode button consistent with the player controls.
+- Added the Start videos muted setting. Default behavior remains unchanged.
+- Long informational messages now wrap onto multiple lines. Especially large messages open in a scrollable dialog.
+- Added a little Easter egg for those who like hiding absolutely everything. Abu sees everything 😼
+
+Thanks to everyone sending bug reports, videos, and details — you are helping make the app better! 🐾
+
+Found a bug? Send us the logs!

@@ -133,6 +133,9 @@ public class MediaFragment extends PreferenceFragment implements FragmentHandler
 				Preferences.DEFAULT_USE_VIDEO_PLAYER, R.string.use_built_in_video_player,
 				R.string.use_built_in_video_player__summary);
 		videoPlayerPreference.setEnabled(playerLoadResult.first);
+		addCheck(true, Preferences.KEY_VIDEO_START_MUTED, Preferences.DEFAULT_VIDEO_START_MUTED,
+				R.string.start_videos_muted, R.string.start_videos_muted__summary)
+				.setEnabled(playerLoadResult.first);
 		CheckPreference audioBoostPreference = addCheck(true, Preferences.KEY_VIDEO_AUDIO_BOOST,
 				Preferences.DEFAULT_VIDEO_AUDIO_BOOST, R.string.video_audio_boost,
 				R.string.video_audio_boost__summary);
@@ -175,6 +178,7 @@ public class MediaFragment extends PreferenceFragment implements FragmentHandler
 				R.string.attachment_video_preview,
 				R.string.attachment_video_preview__summary).setEnabled(playerLoadResult.first);
 		if (playerLoadResult.first) {
+			addDependency(Preferences.KEY_VIDEO_START_MUTED, Preferences.KEY_USE_VIDEO_PLAYER, true);
 			addDependency(Preferences.KEY_VIDEO_COMPLETION, Preferences.KEY_USE_VIDEO_PLAYER, true);
 			addDependency(Preferences.KEY_VIDEO_PLAY_AFTER_SCROLL, Preferences.KEY_USE_VIDEO_PLAYER, true);
 			addDependency(Preferences.KEY_VIDEO_SEEK_ANY_FRAME, Preferences.KEY_USE_VIDEO_PLAYER, true);
