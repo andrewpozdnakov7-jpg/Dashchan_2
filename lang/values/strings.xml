@@ -1251,8 +1251,6 @@
 		<item quantity="one">%d new reply</item>
 		<item quantity="other">%d new replies</item>
 	</plurals>
-	<string name="secret_abu_preview">Abu’s secret thread</string>
-	<string name="secret_abu_preview__summary">Open a fictional /abu/ board with the secret thread. No network access or changes to hidden threads</string>
 	<string name="secret_abu_board_title">/abu/ — Secret board</string>
 	<string name="secret_abu_board_subtitle">Local preview • 1 thread</string>
 	<string name="secret_abu_title">Abu’s secret thread</string>

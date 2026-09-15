@@ -1279,8 +1279,6 @@
 		<item quantity="many">%d новых ответов</item>
 		<item quantity="other">%d нового ответа</item>
 	</plurals>
-	<string name="secret_abu_preview">Секретный тред Абу</string>
-	<string name="secret_abu_preview__summary">Открыть выдуманную доску /abu/ с секретным тредом. Без сети и изменения скрытых тредов</string>
 	<string name="secret_abu_board_title">/abu/ — Секретная доска</string>
 	<string name="secret_abu_board_subtitle">Локальный предпросмотр • 1 тред</string>
 	<string name="secret_abu_title">Секретный тред Абу</string>

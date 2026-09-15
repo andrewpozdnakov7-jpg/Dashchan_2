@@ -316,8 +316,6 @@ public final class SettingsSearchIndex {
 
 		add(context, entries, Screen.EXPERIMENTAL, R.string.whats_new_preview,
 				R.string.whats_new_preview__summary, null);
-		add(context, entries, Screen.EXPERIMENTAL, R.string.secret_abu_preview,
-				R.string.secret_abu_preview__summary, null);
 		add(context, entries, Screen.FORUMS, R.string.forum_reddit, R.string.reddit_public_web_reader__summary,
 				Preferences.KEY_REDDIT_WEB_READER_ENABLED);
 		add(context, entries, Screen.REDDIT, R.string.reddit_sign_in,

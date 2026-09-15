@@ -16,7 +16,6 @@ import com.mishiranu.dashchan.content.translation.TranslationModel;
 import com.mishiranu.dashchan.content.translation.TranslationModelManager;
 import com.mishiranu.dashchan.media.VideoDiagnostics;
 import com.mishiranu.dashchan.ui.FragmentHandler;
-import com.mishiranu.dashchan.ui.SecretAbuThread;
 import com.mishiranu.dashchan.ui.preference.core.CheckPreference;
 import com.mishiranu.dashchan.ui.preference.core.Preference;
 import com.mishiranu.dashchan.ui.preference.core.PreferenceFragment;
@@ -48,9 +47,6 @@ public class ExperimentalFragment extends PreferenceFragment implements Translat
 		removeAllPreferences();
 		addButton(R.string.whats_new_preview, R.string.whats_new_preview__summary)
 				.setOnClickListener(p -> WhatsNewDialog.show(getChildFragmentManager()));
-		addButton(R.string.secret_abu_preview, R.string.secret_abu_preview__summary)
-				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
-						.pushFragment(new SecretAbuThread.PreviewBoardFragment()));
 		CheckPreference hardwareAccelerationPreference = addCheck(true,
 				Preferences.KEY_HARDWARE_VIDEO_ACCELERATION,
 				Preferences.DEFAULT_HARDWARE_VIDEO_ACCELERATION,
