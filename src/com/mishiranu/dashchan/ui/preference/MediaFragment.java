@@ -37,6 +37,7 @@ import com.mishiranu.dashchan.widget.ProgressDialog;
 
 public class MediaFragment extends PreferenceFragment implements FragmentHandler.Callback {
 	private static final String EXTRA_IN_STORAGE_REQUEST = "inStorageRequest";
+	private static final String RESULT_CACHE_SIZE_CHANGED = "mediaCacheSizeChanged";
 
 	private Preference<?> downloadUriTreePreference;
 	private Preference<?> clearCachePreference;
@@ -209,6 +210,8 @@ public class MediaFragment extends PreferenceFragment implements FragmentHandler
 			dialog.show(getChildFragmentManager(), ClearCacheDialog.class.getName());
 		});
 		clearCachePreference.invalidate();
+		getParentFragmentManager().setFragmentResultListener(RESULT_CACHE_SIZE_CHANGED,
+				getViewLifecycleOwner(), (requestKey, result) -> clearCachePreference.invalidate());
 
 		addDependency(Preferences.KEY_SUBDIR_PATTERN, Preferences.KEY_DOWNLOAD_SUBDIR, false,
 				Preferences.DownloadSubdirMode.DISABLED.value);
@@ -275,7 +278,6 @@ public class MediaFragment extends PreferenceFragment implements FragmentHandler
 					.setMultiChoiceItems(items, checkedItems, (d, which, isChecked) -> checkedItems[which] = isChecked)
 					.setPositiveButton(android.R.string.ok, (d, w) -> {
 						ClearingDialog clearingDialog = new ClearingDialog(checkedItems[0], checkedItems[1]);
-						clearingDialog.setTargetFragment(getParentFragment(), 0);
 						clearingDialog.show(getParentFragment().getParentFragmentManager(),
 								ClearingDialog.class.getName());
 					})
@@ -293,6 +295,7 @@ public class MediaFragment extends PreferenceFragment implements FragmentHandler
 	public static class ClearingDialog extends DialogFragment {
 		private static final String EXTRA_THUMBNAILS = "thumbnails";
 		private static final String EXTRA_MEDIA = "media";
+		private boolean taskInitialized;
 
 		public ClearingDialog() {}
 
@@ -312,8 +315,13 @@ public class MediaFragment extends PreferenceFragment implements FragmentHandler
 		}
 
 		@Override
-		public void onActivityCreated(Bundle savedInstanceState) {
-			super.onActivityCreated(savedInstanceState);
+		public void onStart() {
+			super.onStart();
+			// Do not add another observer or restart a completed task when returning to the dialog.
+			if (taskInitialized) {
+				return;
+			}
+			taskInitialized = true;
 
 			ClearCacheViewModel viewModel = new ViewModelProvider(this).get(ClearCacheViewModel.class);
 			if (!viewModel.hasTaskOrValue()) {
@@ -331,7 +339,7 @@ public class MediaFragment extends PreferenceFragment implements FragmentHandler
 		}
 
 		private void sendUpdateCacheSize() {
-			((MediaFragment) getTargetFragment()).clearCachePreference.invalidate();
+			getParentFragmentManager().setFragmentResult(RESULT_CACHE_SIZE_CHANGED, new Bundle());
 		}
 
 		@Override

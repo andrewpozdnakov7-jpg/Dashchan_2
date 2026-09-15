@@ -185,21 +185,14 @@ public class BrowserFragment extends ContentFragment implements DownloadListener
 
 	@Override
 	public boolean onOptionsItemSelected(MenuItem item) {
-		switch (item.getItemId()) {
-			case R.id.menu_reload: {
-				webView.reload();
-				break;
-			}
-			case R.id.menu_copy_link: {
-				StringUtils.copyToClipboard(requireContext(), webView.getUrl());
-				break;
-			}
-			case R.id.menu_share_link: {
-				String uriString = webView.getUrl();
-				if (!StringUtils.isEmpty(uriString)) {
-					NavigationUtils.shareLink(requireContext(), null, Uri.parse(uriString));
-				}
-				break;
+		if (item.getItemId() == R.id.menu_reload) {
+			webView.reload();
+		} else if (item.getItemId() == R.id.menu_copy_link) {
+			StringUtils.copyToClipboard(requireContext(), webView.getUrl());
+		} else if (item.getItemId() == R.id.menu_share_link) {
+			String uriString = webView.getUrl();
+			if (!StringUtils.isEmpty(uriString)) {
+				NavigationUtils.shareLink(requireContext(), null, Uri.parse(uriString));
 			}
 		}
 		return true;

@@ -78,7 +78,6 @@ import com.mishiranu.dashchan.ui.posting.Replyable;
 import com.mishiranu.dashchan.ui.preference.CategoriesFragment;
 import com.mishiranu.dashchan.ui.preference.CombinedFeedsFragment;
 import com.mishiranu.dashchan.ui.preference.ThemesFragment;
-import com.mishiranu.dashchan.ui.preference.TogdachNameDialog;
 import com.mishiranu.dashchan.ui.preference.UpdateFragment;
 import com.mishiranu.dashchan.util.AndroidUtils;
 import com.mishiranu.dashchan.util.ConcatIterable;
@@ -445,9 +444,6 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 				recreate();
 			}
 		});
-		if (storageRequestState == StorageRequestState.NONE) {
-			drawerLayout.post(() -> TogdachNameDialog.showIfNeeded(this, getSupportFragmentManager()));
-		}
 	}
 
 	private void requestNotificationPermissionIfNeeded() {
@@ -1906,87 +1902,74 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 			return true;
 		}
 		ContentFragment currentFragment = getCurrentFragment();
-		switch (item.getItemId()) {
-			case android.R.id.home: {
-				if (currentFragment.onHomePressed()) {
-					return true;
-				}
-				drawerLayout.closeDrawers();
-				if (currentFragment instanceof PageFragment) {
-					Page page = ((PageFragment) currentFragment).getPage();
-					String newChanName = page.chanName;
-					String newBoardName = page.boardName;
-					if (page.content == Page.Content.THREADS) {
-						// Up button must navigate to main page in threads list
-						newBoardName = Preferences.getDefaultBoardName(Chan.get(page.chanName));
-						if (Preferences.isMergeChans() && CommonUtils.equals(page.boardName, newBoardName)) {
-							Chan chan = getLastVisitedEnabledChan();
-							if (chan != null) {
-								newChanName = chan.name;
-								newBoardName = Preferences.getDefaultBoardName(chan);
-							} else {
-								clearStackAndCurrent();
-								navigateInitial(true);
-								return true;
-							}
-						}
-					}
-					clearStackAndCurrent();
-					boolean fromCache = false;
-					for (SavedPageItem savedPageItem : new ConcatIterable<>(preservedPageItems, stackPageItems)) {
-						if (getSavedPage(savedPageItem).is(Page.Content.THREADS, newChanName, newBoardName, null)) {
-							fromCache = true;
-							break;
-						}
-					}
-					navigateData(newChanName, newBoardName, null, null, null, null,
-							FLAG_DATA_CLOSE_OVERLAYS | (fromCache ? FLAG_DATA_FROM_CACHE : 0));
-				} else {
-					// Keep toolbar Up consistent with system Back for nested non-page screens.
-					// removeFragment() pops one saved fragment and falls back to the last page only at the root.
-					removeFragment();
-				}
+		if (item.getItemId() == android.R.id.home) {
+			if (currentFragment.onHomePressed()) {
 				return true;
 			}
-			case R.id.menu_change_theme:
-			case R.id.menu_expanded_screen:
-			case R.id.menu_spoilers:
-			case R.id.menu_my_posts:
-			case R.id.menu_drawer:
-			case R.id.menu_sfw_mode: {
-				try {
-					switch (item.getItemId()) {
-						case R.id.menu_change_theme: {
-							new ThemeDialog().show(getSupportFragmentManager(), ThemeDialog.class.getName());
-							return true;
-						}
-						case R.id.menu_expanded_screen: {
-							Preferences.setExpandedScreen(!item.isChecked());
-							recreate();
-							return true;
-						}
-						case R.id.menu_spoilers: {
-							Preferences.setShowSpoilers(!item.isChecked());
-							return true;
-						}
-						case R.id.menu_my_posts: {
-							Preferences.setShowMyPosts(!item.isChecked());
-							return true;
-						}
-						case R.id.menu_drawer: {
-							Preferences.setDrawerLocked(!item.isChecked());
-							updateWideConfiguration(false);
-							return true;
-						}
-						case R.id.menu_sfw_mode: {
-							Preferences.setSfwMode(!item.isChecked());
+			drawerLayout.closeDrawers();
+			if (currentFragment instanceof PageFragment) {
+				Page page = ((PageFragment) currentFragment).getPage();
+				String newChanName = page.chanName;
+				String newBoardName = page.boardName;
+				if (page.content == Page.Content.THREADS) {
+					// Up button must navigate to main page in threads list
+					newBoardName = Preferences.getDefaultBoardName(Chan.get(page.chanName));
+					if (Preferences.isMergeChans() && CommonUtils.equals(page.boardName, newBoardName)) {
+						Chan chan = getLastVisitedEnabledChan();
+						if (chan != null) {
+							newChanName = chan.name;
+							newBoardName = Preferences.getDefaultBoardName(chan);
+						} else {
+							clearStackAndCurrent();
+							navigateInitial(true);
 							return true;
 						}
 					}
-				} finally {
-					if (currentFragment instanceof PageFragment) {
-						((PageFragment) currentFragment).onAppearanceOptionChanged(item.getItemId());
+				}
+				clearStackAndCurrent();
+				boolean fromCache = false;
+				for (SavedPageItem savedPageItem : new ConcatIterable<>(preservedPageItems, stackPageItems)) {
+					if (getSavedPage(savedPageItem).is(Page.Content.THREADS, newChanName, newBoardName, null)) {
+						fromCache = true;
+						break;
 					}
+				}
+				navigateData(newChanName, newBoardName, null, null, null, null,
+						FLAG_DATA_CLOSE_OVERLAYS | (fromCache ? FLAG_DATA_FROM_CACHE : 0));
+			} else {
+				// Keep toolbar Up consistent with system Back for nested non-page screens.
+				// removeFragment() pops one saved fragment and falls back to the last page only at the root.
+				removeFragment();
+			}
+			return true;
+		} else if (item.getItemId() == R.id.menu_change_theme || item.getItemId() == R.id.menu_expanded_screen ||
+				item.getItemId() == R.id.menu_spoilers || item.getItemId() == R.id.menu_my_posts ||
+				item.getItemId() == R.id.menu_drawer || item.getItemId() == R.id.menu_sfw_mode) {
+			try {
+				if (item.getItemId() == R.id.menu_change_theme) {
+					new ThemeDialog().show(getSupportFragmentManager(), ThemeDialog.class.getName());
+					return true;
+				} else if (item.getItemId() == R.id.menu_expanded_screen) {
+					Preferences.setExpandedScreen(!item.isChecked());
+					recreate();
+					return true;
+				} else if (item.getItemId() == R.id.menu_spoilers) {
+					Preferences.setShowSpoilers(!item.isChecked());
+					return true;
+				} else if (item.getItemId() == R.id.menu_my_posts) {
+					Preferences.setShowMyPosts(!item.isChecked());
+					return true;
+				} else if (item.getItemId() == R.id.menu_drawer) {
+					Preferences.setDrawerLocked(!item.isChecked());
+					updateWideConfiguration(false);
+					return true;
+				} else if (item.getItemId() == R.id.menu_sfw_mode) {
+					Preferences.setSfwMode(!item.isChecked());
+					return true;
+				}
+			} finally {
+				if (currentFragment instanceof PageFragment) {
+					((PageFragment) currentFragment).onAppearanceOptionChanged(item.getItemId());
 				}
 			}
 		}
@@ -2257,6 +2240,32 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 			drawerForm.updateItems(true, false);
 			invalidateHomeUpState();
 		}
+	}
+
+	@Override
+	public void onCloseCollapsedPages(List<DrawerForm.Page> targets) {
+		ContentFragment currentFragment = getCurrentFragment();
+		Page currentPage = currentFragment instanceof PageFragment ? ((PageFragment) currentFragment).getPage() : null;
+		Iterator<SavedPageItem> iterator = new ConcatIterable<>(preservedPageItems, stackPageItems).iterator();
+		while (iterator.hasNext()) {
+			SavedPageItem item = iterator.next();
+			Page page = getSavedPage(item);
+			if (page.content != Page.Content.POSTS || currentPage != null
+					&& currentPage.isThreadsOrPosts(page.chanName, page.boardName, page.threadNumber)) {
+				continue;
+			}
+			for (DrawerForm.Page target : targets) {
+				if (target.threadNumber != null && !target.current
+						&& item.createdRealtime == target.createRealtime
+						&& page.is(Page.Content.POSTS, target.chanName, target.boardName, target.threadNumber)) {
+					iterator.remove();
+					break;
+				}
+			}
+		}
+		// Publish one update after the batch, without navigating or touching favorites/history.
+		drawerForm.updateItems(true, false);
+		invalidateHomeUpState();
 	}
 
 	private boolean isCloseAllTarget(Page page, String chanName, String boardName,

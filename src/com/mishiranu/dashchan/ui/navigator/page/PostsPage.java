@@ -1141,128 +1141,110 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 	public boolean onOptionsItemSelected(MenuItem item) {
 		Page page = getPage();
 		PostsAdapter adapter = getAdapter();
-		switch (item.getItemId()) {
-			case R.id.menu_add_post: {
-				getUiManager().navigator().navigatePosting(page.chanName, page.boardName,
-						page.threadNumber);
-				return true;
-			}
-			case R.id.menu_gallery: {
-				int imageIndex = -1;
-				PaddedRecyclerView recyclerView = getRecyclerView();
-				View child = recyclerView.getChildAt(0);
-				GalleryItem.Set gallerySet = adapter.getGallerySet();
-				if (child != null) {
-					int position = recyclerView.getChildAdapterPosition(child);
-					OUTER: for (int v = 0; v <= 1; v++) {
-						for (PostItem postItem : adapter.iterate(v == 0, position)) {
-							imageIndex = gallerySet.findIndex(postItem);
-							if (imageIndex >= 0) {
-								break OUTER;
-							}
+		if (item.getItemId() == R.id.menu_add_post) {
+			getUiManager().navigator().navigatePosting(page.chanName, page.boardName,
+					page.threadNumber);
+			return true;
+		} else if (item.getItemId() == R.id.menu_gallery) {
+			int imageIndex = -1;
+			PaddedRecyclerView recyclerView = getRecyclerView();
+			View child = recyclerView.getChildAt(0);
+			GalleryItem.Set gallerySet = adapter.getGallerySet();
+			if (child != null) {
+				int position = recyclerView.getChildAdapterPosition(child);
+				OUTER: for (int v = 0; v <= 1; v++) {
+					for (PostItem postItem : adapter.iterate(v == 0, position)) {
+						imageIndex = gallerySet.findIndex(postItem);
+						if (imageIndex >= 0) {
+							break OUTER;
 						}
 					}
 				}
-				getUiManager().navigator().navigateGallery(page.chanName, gallerySet, imageIndex,
-						null, GalleryOverlay.NavigatePostMode.ENABLED, true);
+			}
+			getUiManager().navigator().navigateGallery(page.chanName, gallerySet, imageIndex,
+					null, GalleryOverlay.NavigatePostMode.ENABLED, true);
+			return true;
+		} else if (item.getItemId() == R.id.menu_select) {
+			selectionMode = startActionMode(new SelectionCallback(this));
+			return true;
+		} else if (item.getItemId() == R.id.menu_refresh) {
+			refreshPosts(false);
+			return true;
+		} else if (item.getItemId() == R.id.menu_translate) {
+			if (!TranslationController.isReadyForChan(page.chanName)) {
+				ClickableToast.show(R.string.translation_package_unavailable);
 				return true;
 			}
-			case R.id.menu_select: {
-				selectionMode = startActionMode(new SelectionCallback(this));
-				return true;
+			boolean enabled = !adapter.isTranslationEnabled();
+			boolean initializing = false;
+			if (enabled) {
+				LinearLayoutManager layoutManager = (LinearLayoutManager) getRecyclerView().getLayoutManager();
+				initializing = adapter.hasUntranslatedPosts(layoutManager.findFirstVisibleItemPosition(),
+						layoutManager.findLastVisibleItemPosition());
 			}
-			case R.id.menu_refresh: {
-				refreshPosts(false);
-				return true;
+			getParcelableExtra(ParcelableExtra.FACTORY).translationEnabled = enabled;
+			adapter.setTranslationEnabled(enabled);
+			if (initializing) {
+				ClickableToast.show(R.string.translation_initializing);
 			}
-			case R.id.menu_translate: {
-				if (!TranslationController.isReadyForChan(page.chanName)) {
-					ClickableToast.show(R.string.translation_package_unavailable);
-					return true;
+			updateOptionsMenu();
+			return true;
+		} else if (item.getItemId() == R.id.menu_reload) {
+			refreshPosts(true);
+			return true;
+		} else if (item.getItemId() == R.id.menu_erase) {
+			showEraseDialog(getFragmentManager());
+			return true;
+		} else if (item.getItemId() == R.id.menu_clear_old) {
+			extractPosts(PagesDatabase.Cleanup.OLD);
+			return true;
+		} else if (item.getItemId() == R.id.menu_clear_deleted) {
+			showClearDeletedDialog(getFragmentManager());
+			return true;
+		} else if (item.getItemId() == R.id.menu_summary) {
+			showSummaryDialog(getFragmentManager());
+			return true;
+		} else if (item.getItemId() == R.id.menu_hidden_posts) {
+			List<String> localFilters = hidePerformer.getReadableLocalFilters(getContext());
+			showHiddenPostsDialog(getFragmentManager(), localFilters);
+			return true;
+		} else if (item.getItemId() == R.id.menu_star_text || item.getItemId() == R.id.menu_star_icon) {
+			ParcelableExtra parcelableExtra = getParcelableExtra(ParcelableExtra.FACTORY);
+			FavoritesStorage.getInstance().add(page.chanName, page.boardName, page.threadNumber,
+					parcelableExtra.threadTitle, true);
+			updateOptionsMenu();
+			return true;
+		} else if (item.getItemId() == R.id.menu_unstar_text || item.getItemId() == R.id.menu_unstar_icon) {
+			FavoritesStorage.getInstance().remove(page.chanName, page.boardName, page.threadNumber);
+			updateOptionsMenu();
+			return true;
+		} else if (item.getItemId() == R.id.menu_open_original_thread) {
+			RetainableExtra retainableExtra = getRetainableExtra(RetainableExtra.FACTORY);
+			Chan chan = Chan.getPreferred(null, retainableExtra.archivedThreadUri);
+			if (chan.name != null) {
+				Uri uri = retainableExtra.archivedThreadUri;
+				String boardName = chan.locator.safe(true).getBoardName(uri);
+				String threadNumber = chan.locator.safe(true).getThreadNumber(uri);
+				if (threadNumber != null) {
+					PostItem originalPost = adapter.getItem(0);
+					String threadTitle = originalPost != null ? originalPost.getSubjectOrComment()
+							: getParcelableExtra(ParcelableExtra.FACTORY).threadTitle;
+					getUiManager().navigator().navigatePosts(chan.name, boardName, threadNumber, null, threadTitle);
 				}
-				boolean enabled = !adapter.isTranslationEnabled();
-				boolean initializing = false;
-				if (enabled) {
-					LinearLayoutManager layoutManager = (LinearLayoutManager) getRecyclerView().getLayoutManager();
-					initializing = adapter.hasUntranslatedPosts(layoutManager.findFirstVisibleItemPosition(),
-							layoutManager.findLastVisibleItemPosition());
+			}
+			return true;
+		} else if (item.getItemId() == R.id.menu_archive) {
+			String threadTitle = null;
+			ArrayList<Post> posts = new ArrayList<>();
+			for (PostItem postItem : adapter) {
+				if (threadTitle == null) {
+					threadTitle = StringUtils.emptyIfNull(postItem.getSubjectOrComment());
 				}
-				getParcelableExtra(ParcelableExtra.FACTORY).translationEnabled = enabled;
-				adapter.setTranslationEnabled(enabled);
-				if (initializing) {
-					ClickableToast.show(R.string.translation_initializing);
-				}
-				updateOptionsMenu();
-				return true;
+				posts.add(postItem.getPost());
 			}
-			case R.id.menu_reload: {
-				refreshPosts(true);
-				return true;
-			}
-			case R.id.menu_erase: {
-				showEraseDialog(getFragmentManager());
-				return true;
-			}
-			case R.id.menu_clear_old: {
-				extractPosts(PagesDatabase.Cleanup.OLD);
-				return true;
-			}
-			case R.id.menu_clear_deleted: {
-				showClearDeletedDialog(getFragmentManager());
-				return true;
-			}
-			case R.id.menu_summary: {
-				showSummaryDialog(getFragmentManager());
-				return true;
-			}
-			case R.id.menu_hidden_posts: {
-				List<String> localFilters = hidePerformer.getReadableLocalFilters(getContext());
-				showHiddenPostsDialog(getFragmentManager(), localFilters);
-				return true;
-			}
-			case R.id.menu_star_text:
-			case R.id.menu_star_icon: {
-				ParcelableExtra parcelableExtra = getParcelableExtra(ParcelableExtra.FACTORY);
-				FavoritesStorage.getInstance().add(page.chanName, page.boardName, page.threadNumber,
-						parcelableExtra.threadTitle, true);
-				updateOptionsMenu();
-				return true;
-			}
-			case R.id.menu_unstar_text:
-			case R.id.menu_unstar_icon: {
-				FavoritesStorage.getInstance().remove(page.chanName, page.boardName, page.threadNumber);
-				updateOptionsMenu();
-				return true;
-			}
-			case R.id.menu_open_original_thread: {
-				RetainableExtra retainableExtra = getRetainableExtra(RetainableExtra.FACTORY);
-				Chan chan = Chan.getPreferred(null, retainableExtra.archivedThreadUri);
-				if (chan.name != null) {
-					Uri uri = retainableExtra.archivedThreadUri;
-					String boardName = chan.locator.safe(true).getBoardName(uri);
-					String threadNumber = chan.locator.safe(true).getThreadNumber(uri);
-					if (threadNumber != null) {
-						PostItem originalPost = adapter.getItem(0);
-						String threadTitle = originalPost != null ? originalPost.getSubjectOrComment()
-								: getParcelableExtra(ParcelableExtra.FACTORY).threadTitle;
-						getUiManager().navigator().navigatePosts(chan.name, boardName, threadNumber, null, threadTitle);
-					}
-				}
-				return true;
-			}
-			case R.id.menu_archive: {
-				String threadTitle = null;
-				ArrayList<Post> posts = new ArrayList<>();
-				for (PostItem postItem : adapter) {
-					if (threadTitle == null) {
-						threadTitle = StringUtils.emptyIfNull(postItem.getSubjectOrComment());
-					}
-					posts.add(postItem.getPost());
-				}
-				getUiManager().dialog().performSendArchiveThread(getFragmentManager(),
-						page.chanName, page.boardName, page.threadNumber, threadTitle, posts);
-				return true;
-			}
+			getUiManager().dialog().performSendArchiveThread(getFragmentManager(),
+					page.chanName, page.boardName, page.threadNumber, threadTitle, posts);
+			return true;
 		}
 		return false;
 	}
@@ -1393,13 +1375,8 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 
 	@Override
 	public void onAppearanceOptionChanged(int what) {
-		switch (what) {
-			case R.id.menu_spoilers:
-			case R.id.menu_my_posts:
-			case R.id.menu_sfw_mode: {
-				notifyAllAdaptersChanged();
-				break;
-			}
+		if (what == R.id.menu_spoilers || what == R.id.menu_my_posts || what == R.id.menu_sfw_mode) {
+			notifyAllAdaptersChanged();
 		}
 	}
 
@@ -1439,63 +1416,58 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 
 	private boolean onSelectionItemSelected(ActionMode mode, MenuItem item) {
 		PostsAdapter adapter = getAdapter();
-		switch (item.getItemId()) {
-			case R.id.menu_make_threadshot: {
-				ArrayList<PostItem> postItems = adapter.getSelectedItems();
-				if (postItems.size() > 0) {
-					Page page = getPage();
-					PostItem originalPost = adapter.getItem(0);
-					String threadTitle = originalPost != null ? originalPost.getSubjectOrComment()
-							: getParcelableExtra(ParcelableExtra.FACTORY).threadTitle;
-					new ThreadshotPerformer(getFragmentManager(), page.chanName, page.boardName, page.threadNumber,
-							threadTitle, postItems, getRecyclerView().getWidth());
-				}
-				mode.finish();
-				return true;
+		if (item.getItemId() == R.id.menu_make_threadshot) {
+			ArrayList<PostItem> postItems = adapter.getSelectedItems();
+			if (postItems.size() > 0) {
+				Page page = getPage();
+				PostItem originalPost = adapter.getItem(0);
+				String threadTitle = originalPost != null ? originalPost.getSubjectOrComment()
+						: getParcelableExtra(ParcelableExtra.FACTORY).threadTitle;
+				new ThreadshotPerformer(getFragmentManager(), page.chanName, page.boardName, page.threadNumber,
+						threadTitle, postItems, getRecyclerView().getWidth());
 			}
-			case R.id.menu_reply: {
-				ArrayList<Replyable.ReplyData> data = new ArrayList<>();
-				for (PostItem postItem : adapter.getSelectedItems()) {
-					data.add(new Replyable.ReplyData(postItem.getPostNumber(), null));
-				}
-				if (data.size() > 0) {
-					replyable.onRequestReply(true, CommonUtils.toArray(data, Replyable.ReplyData.class));
-				}
-				mode.finish();
-				return true;
+			mode.finish();
+			return true;
+		} else if (item.getItemId() == R.id.menu_reply) {
+			ArrayList<Replyable.ReplyData> data = new ArrayList<>();
+			for (PostItem postItem : adapter.getSelectedItems()) {
+				data.add(new Replyable.ReplyData(postItem.getPostNumber(), null));
 			}
-			case R.id.menu_delete: {
-				ArrayList<PostItem> postItems = adapter.getSelectedItems();
-				ArrayList<PostNumber> postNumbers = new ArrayList<>();
-				for (PostItem postItem : postItems) {
-					if (!postItem.isDeleted()) {
-						postNumbers.add(postItem.getPostNumber());
-					}
-				}
-				if (postNumbers.size() > 0) {
-					Page page = getPage();
-					getUiManager().dialog().performSendDeletePosts(getFragmentManager(),
-							page.chanName, page.boardName, page.threadNumber, postNumbers);
-				}
-				mode.finish();
-				return true;
+			if (data.size() > 0) {
+				replyable.onRequestReply(true, CommonUtils.toArray(data, Replyable.ReplyData.class));
 			}
-			case R.id.menu_report: {
-				ArrayList<PostItem> postItems = adapter.getSelectedItems();
-				ArrayList<PostNumber> postNumbers = new ArrayList<>();
-				for (PostItem postItem : postItems) {
-					if (!postItem.isDeleted()) {
-						postNumbers.add(postItem.getPostNumber());
-					}
+			mode.finish();
+			return true;
+		} else if (item.getItemId() == R.id.menu_delete) {
+			ArrayList<PostItem> postItems = adapter.getSelectedItems();
+			ArrayList<PostNumber> postNumbers = new ArrayList<>();
+			for (PostItem postItem : postItems) {
+				if (!postItem.isDeleted()) {
+					postNumbers.add(postItem.getPostNumber());
 				}
-				if (postNumbers.size() > 0) {
-					Page page = getPage();
-					getUiManager().dialog().performSendReportPosts(getFragmentManager(),
-							page.chanName, page.boardName, page.threadNumber, postNumbers);
-				}
-				mode.finish();
-				return true;
 			}
+			if (postNumbers.size() > 0) {
+				Page page = getPage();
+				getUiManager().dialog().performSendDeletePosts(getFragmentManager(),
+						page.chanName, page.boardName, page.threadNumber, postNumbers);
+			}
+			mode.finish();
+			return true;
+		} else if (item.getItemId() == R.id.menu_report) {
+			ArrayList<PostItem> postItems = adapter.getSelectedItems();
+			ArrayList<PostNumber> postNumbers = new ArrayList<>();
+			for (PostItem postItem : postItems) {
+				if (!postItem.isDeleted()) {
+					postNumbers.add(postItem.getPostNumber());
+				}
+			}
+			if (postNumbers.size() > 0) {
+				Page page = getPage();
+				getUiManager().dialog().performSendReportPosts(getFragmentManager(),
+						page.chanName, page.boardName, page.threadNumber, postNumbers);
+			}
+			mode.finish();
+			return true;
 		}
 		return false;
 	}

@@ -22,6 +22,7 @@ import chan.http.HttpResponse;
 import chan.http.SimpleEntity;
 import chan.text.JsonSerial;
 import chan.text.ParseException;
+import com.mishiranu.dashchan.ui.ForegroundManager;
 
 /**
  * Separate class which contains logic for solving emoji_captcha type on 2ch.hk.
@@ -30,6 +31,59 @@ import chan.text.ParseException;
  * user input.
  */
 class DvachEmojiCaptchaProvider {
+
+    private Bitmap[] previousKeyboard;
+
+    private static final class KeyboardLayout {
+        final Bitmap[] images;
+        final int[] serverIndices;
+
+        KeyboardLayout(int size) {
+            images = new Bitmap[size];
+            serverIndices = new int[size];
+            java.util.Arrays.fill(serverIndices, -1);
+        }
+    }
+
+    private KeyboardLayout stabilizeKeyboard(Bitmap[] incoming) {
+        int size = Math.max(9, (incoming.length + 2) / 3 * 3);
+        if (previousKeyboard != null) {
+            size = Math.max(size, previousKeyboard.length);
+        }
+        KeyboardLayout layout = new KeyboardLayout(size);
+        boolean[] used = new boolean[incoming.length];
+        if (previousKeyboard != null) {
+            for (int slot = 0; slot < previousKeyboard.length; slot++) {
+                Bitmap previous = previousKeyboard[slot];
+                if (previous != null) {
+                    for (int server = 0; server < incoming.length; server++) {
+                        if (!used[server] && previous.sameAs(incoming[server])) {
+                            layout.images[slot] = incoming[server];
+                            layout.serverIndices[slot] = server;
+                            used[server] = true;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        int slot = 0;
+        for (int server = 0; server < incoming.length; server++) {
+            if (!used[server]) {
+                while (layout.images[slot] != null) {
+                    slot++;
+                }
+                layout.images[slot] = incoming[server];
+                layout.serverIndices[slot] = server;
+            }
+        }
+        previousKeyboard = layout.images;
+        return layout;
+    }
+
+    static final class RefreshRequestedException extends Exception {
+        private static final long serialVersionUID = 1L;
+    }
 
     private final DvachChanLocator locator;
     private final String captchaId;
@@ -61,7 +115,7 @@ class DvachEmojiCaptchaProvider {
      * @return final captcha result.
      * @throws HttpException if some request was failed
      */
-    ChanPerformer.ReadCaptchaResult loadEmojiCaptcha() throws HttpException {
+    ChanPerformer.ReadCaptchaResult loadEmojiCaptcha() throws HttpException, RefreshRequestedException {
         // First, we request initial captcha state
         Uri uri = locator.buildPath("api", "captcha", "emoji", "show").buildUpon()
                 .appendQueryParameter("id", captchaId).build();
@@ -85,7 +139,7 @@ class DvachEmojiCaptchaProvider {
     private ChanPerformer.ReadCaptchaResult solveEmojiCaptchaLoop(
             EmojiCaptchaResponse parsedResponse,
             SelectedEmojis selected
-    ) throws HttpException {
+    ) throws HttpException, RefreshRequestedException {
         // If we received new captcha content, then we show it to user, so that he chooses emoji from keyboard
         if (parsedResponse instanceof EmojiCaptchaResponse.Content) {
             EmojiCaptchaResponse.Content content = (EmojiCaptchaResponse.Content) parsedResponse;
@@ -110,15 +164,22 @@ class DvachEmojiCaptchaProvider {
             }
 
             // send task image and keyboard, receive user input
-            Integer answer = answerRetriever.getAnswer(comboBitmap, keyboardImages);
+            KeyboardLayout keyboard = stabilizeKeyboard(keyboardImages);
+            Integer answer = answerRetriever.getAnswer(comboBitmap, keyboard.images);
+
+            if (answer != null && answer == ForegroundManager.IMAGE_CHOICE_REFRESH) {
+                // Ask the performer for a fresh ID, not another keyboard for the old challenge.
+                throw new RefreshRequestedException();
+            }
 
             // if user skipped answer, or made improper input, then we stopping captcha solving
-            if (answer == null || answer == -1 || answer >= keyboardImages.length) {
+            if (answer == null || answer < 0 || answer >= keyboard.images.length
+                    || keyboard.serverIndices[answer] < 0) {
                 return new ChanPerformer.ReadCaptchaResult(ChanPerformer.CaptchaState.NEED_LOAD, null);
             } else {
                 // if user made a valid selection, we process it
                 // add selected emoji to list of selected
-                Bitmap selectedBitmap = keyboardImages[answer];
+                Bitmap selectedBitmap = keyboard.images[answer];
                 selected.bitmaps.add(Bitmap.createScaledBitmap(selectedBitmap,
                         selectedBitmap.getWidth() * SelectedEmojis.SIZE / selectedBitmap.getHeight(),
                         SelectedEmojis.SIZE, true));
@@ -131,7 +192,7 @@ class DvachEmojiCaptchaProvider {
                     entity.setContentType("application/json; charset=utf-8");
                     JSONObject jsonObject = new JSONObject();
                     jsonObject.put("captchaTokenID", captchaId);
-                    jsonObject.put("emojiNumber", answer);
+                    jsonObject.put("emojiNumber", keyboard.serverIndices[answer]);
                     entity.setData(jsonObject.toString());
                     HttpResponse response = new HttpRequest(uri, data)
                             .setPostMethod(entity).perform();

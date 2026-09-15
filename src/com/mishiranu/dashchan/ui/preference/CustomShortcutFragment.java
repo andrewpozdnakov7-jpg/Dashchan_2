@@ -26,10 +26,11 @@ import android.widget.RadioButton;
 import android.widget.RadioGroup;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import chan.util.StringUtils;
-import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.LauncherIconManager;
 import com.mishiranu.dashchan.ui.ContentFragment;
@@ -43,6 +44,10 @@ import com.mishiranu.dashchan.widget.ViewFactory;
 import java.io.IOException;
 
 public class CustomShortcutFragment extends ContentFragment {
+	private final ActivityResultLauncher<Intent> imagePicker = registerForActivityResult(
+			new ActivityResultContracts.StartActivityForResult(),
+			result -> onImageSelected(result.getResultCode(), result.getData()));
+
 	private static final String EXTRA_URI = "uri";
 	private static final String EXTRA_NAME = "name";
 	private static final String EXTRA_FIT = "fit";
@@ -193,13 +198,11 @@ public class CustomShortcutFragment extends ContentFragment {
 				.addCategory(Intent.CATEGORY_OPENABLE)
 				.setType("image/*")
 				.putExtra("android.content.extra.SHOW_ADVANCED", true);
-		startActivityForResult(intent, C.REQUEST_CODE_ATTACH);
+		imagePicker.launch(intent);
 	}
 
-	@Override
-	public void onActivityResult(int requestCode, int resultCode, Intent data) {
-		super.onActivityResult(requestCode, resultCode, data);
-		if (requestCode == C.REQUEST_CODE_ATTACH && resultCode == Activity.RESULT_OK && data != null) {
+	private void onImageSelected(int resultCode, Intent data) {
+		if (resultCode == Activity.RESULT_OK && data != null) {
 			Uri uri = data.getData();
 			if (uri != null) {
 				selectedUri = uri;

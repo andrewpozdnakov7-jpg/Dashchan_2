@@ -285,29 +285,26 @@ public class ListUnit implements ActionMode.Callback {
 
 	@Override
 	public boolean onActionItemClicked(ActionMode mode, MenuItem item) {
-		switch (item.getItemId()) {
-			case R.id.menu_select_all: {
-				int count = getAdapter().getItemCount();
-				for (int i = 0; i < count; i++) {
-					selected.put(i, i);
-				}
-				selectionMode.setTitle(ResourceUtils.getColonString(instance.context.getResources(),
-						R.string.selected, count));
-				updateAllGalleryItemsChecked();
-				return true;
+		if (item.getItemId() == R.id.menu_select_all) {
+			int count = getAdapter().getItemCount();
+			for (int i = 0; i < count; i++) {
+				selected.put(i, i);
 			}
-			case R.id.menu_download: {
-				ArrayList<GalleryItem> galleryItems = new ArrayList<>();
-				GridAdapter adapter = getAdapter();
-				for (int i = 0; i < adapter.getItemCount(); i++) {
-					if (callback.isItemChecked(i)) {
-						galleryItems.add(adapter.getItem(i));
-					}
+			selectionMode.setTitle(ResourceUtils.getColonString(instance.context.getResources(),
+					R.string.selected, count));
+			updateAllGalleryItemsChecked();
+			return true;
+		} else if (item.getItemId() == R.id.menu_download) {
+			ArrayList<GalleryItem> galleryItems = new ArrayList<>();
+			GridAdapter adapter = getAdapter();
+			for (int i = 0; i < adapter.getItemCount(); i++) {
+				if (callback.isItemChecked(i)) {
+					galleryItems.add(adapter.getItem(i));
 				}
-				instance.callback.downloadGalleryItems(galleryItems);
-				mode.finish();
-				return true;
 			}
+			instance.callback.downloadGalleryItems(galleryItems);
+			mode.finish();
+			return true;
 		}
 		return false;
 	}

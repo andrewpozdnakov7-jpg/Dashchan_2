@@ -1094,18 +1094,15 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 
 	@Override
 	public boolean onOptionsItemSelected(MenuItem item) {
-		switch (item.getItemId()) {
-			case R.id.menu_attach: {
-				if (attachmentImportInProgress) {
-					ClickableToast.show(R.string.processing_data__ellipsis);
-					return true;
-				}
-				if (Preferences.isOpenConfiguredAttachmentFolderEnabled()) {
-					openConfiguredAttachmentFolder();
-				} else {
-					openSystemAttachmentPicker();
-				}
-				break;
+		if (item.getItemId() == R.id.menu_attach) {
+			if (attachmentImportInProgress) {
+				ClickableToast.show(R.string.processing_data__ellipsis);
+				return true;
+			}
+			if (Preferences.isOpenConfiguredAttachmentFolderEnabled()) {
+				openConfiguredAttachmentFolder();
+			} else {
+				openSystemAttachmentPicker();
 			}
 		}
 		return true;

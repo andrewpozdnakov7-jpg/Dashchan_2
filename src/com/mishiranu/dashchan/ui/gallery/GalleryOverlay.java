@@ -539,27 +539,16 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 	@Override
 	public boolean onOptionsItemSelected(@NonNull MenuItem item) {
 		PagerInstance.ViewHolder holder = pagerUnit != null ? pagerUnit.getCurrentHolder() : null;
-		switch (item.getItemId()) {
-			case android.R.id.home: {
-				dismiss();
-				break;
-			}
-			case R.id.menu_save: {
-				downloadGalleryItem(holder.galleryItem);
-				break;
-			}
-			case R.id.menu_refresh: {
-				pagerUnit.refreshCurrent();
-				break;
-			}
-			case R.id.menu_filter: {
-				showGalleryFilterDialog();
-				break;
-			}
-			case R.id.menu_select: {
-				listUnit.startSelectionMode(null);
-				break;
-			}
+		if (item.getItemId() == android.R.id.home) {
+			dismiss();
+		} else if (item.getItemId() == R.id.menu_save) {
+			downloadGalleryItem(holder.galleryItem);
+		} else if (item.getItemId() == R.id.menu_refresh) {
+			pagerUnit.refreshCurrent();
+		} else if (item.getItemId() == R.id.menu_filter) {
+			showGalleryFilterDialog();
+		} else if (item.getItemId() == R.id.menu_select) {
+			listUnit.startSelectionMode(null);
 		}
 		return true;
 	}
@@ -574,7 +563,12 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 	public void downloadGalleryItem(GalleryItem galleryItem) {
 		DownloadService.Binder binder = ((FragmentHandler) requireActivity()).getDownloadBinder();
 		if (binder != null) {
-			galleryItem.downloadStorage(binder, Chan.get(instance.chanName), getThreadTitle());
+			Chan chan = Chan.get(instance.chanName);
+			Window window = getWindow();
+			View feedbackView = galleryItem.isImage(chan) && window != null ? window.getDecorView() : null;
+			binder.downloadStorage(new DownloadService.RequestItem(galleryItem.getFileUri(chan),
+					galleryItem.getFileName(chan), galleryItem.originalName, feedbackView),
+					chan.name, galleryItem.boardName, galleryItem.threadNumber, getThreadTitle());
 		}
 	}
 

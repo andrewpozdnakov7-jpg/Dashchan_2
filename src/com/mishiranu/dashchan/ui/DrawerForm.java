@@ -103,7 +103,9 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 
 	private final ArrayList<ListItem> chans = new ArrayList<>();
 	private final ArrayList<ListItem> pages = new ArrayList<>();
+	private final ArrayList<Page> collapsedPages = new ArrayList<>();
 	private final ArrayList<ListItem> favorites = new ArrayList<>();
+	private final ArrayList<ListItem> displayedFavorites = new ArrayList<>();
 	private final ArrayList<ListItem> menu = new ArrayList<>();
 	private final HashMap<WatcherUpdateKey, WatcherService.Counter> pendingWatcherUpdates = new HashMap<>();
 	private static final int PREWARM_ITEM_COUNT = 12;
@@ -181,6 +183,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		boolean onSelectThread(String chanName, String boardName, String threadNumber, PostNumber postNumber,
 				String threadTitle, boolean fromCache);
 		void onClosePage(String chanName, String boardName, String threadNumber);
+		void onCloseCollapsedPages(List<Page> pages);
 		void onCloseAllPages();
 		void onSelectRedditPage(String url);
 		void onCloseRedditPage(String url);
@@ -1064,6 +1067,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 
 	private void updateListPages() {
 		ArrayList<ListItem> newPages = new ArrayList<>();
+		ArrayList<Page> newCollapsedPages = new ArrayList<>();
 		if (CHAN_REDDIT.equals(chanName)) {
 			List<RedditPageStorage.Entry> redditPages = RedditPageStorage.getInstance().getPages();
 			if (!redditPages.isEmpty()) {
@@ -1077,6 +1081,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 			}
 			this.pages.clear();
 			this.pages.addAll(newPages);
+			collapsedPages.clear();
 			return;
 		}
 		boolean mergeChans = this.mergeChans;
@@ -1136,6 +1141,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 			}
 			for (Page page : pages) {
 				if (page.threadNumber != null && visibleThreads != null && !visibleThreads.contains(page)) {
+					newCollapsedPages.add(page);
 					continue;
 				}
 				if (page.threadNumber != null) {
@@ -1160,6 +1166,8 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		// being resolved must never interleave writes into the adapter's live list and duplicate a section.
 		this.pages.clear();
 		this.pages.addAll(newPages);
+		collapsedPages.clear();
+		collapsedPages.addAll(newCollapsedPages);
 	}
 
 	private void updateListFavorites() {
@@ -1209,6 +1217,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 						null, chan.configuration.getBoardTitle(favoriteItem.boardName)));
 			}
 		}
+		updateDisplayedFavorites();
 		if (favoriteSelectionActionMode != null) {
 			HashSet<Long> visibleIds = new HashSet<>();
 			for (ListItem listItem : this.favorites) {
@@ -1221,10 +1230,22 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		}
 	}
 
-	private boolean isFavoriteThreadHidden(FavoritesStorage.FavoriteItem favoriteItem) {
-		if (Preferences.isFavoritesHidedAll()) {
-			return true;
+	private void updateDisplayedFavorites() {
+		boolean collapsed = Preferences.isFavoriteThreadsCollapsed();
+		int threadCount = getVisibleFavoriteThreadCount();
+		displayedFavorites.clear();
+		for (ListItem item : favorites) {
+			if (item.type == ListItem.Type.SECTION && item.data == SECTION_ACTION_FAVORITES_MENU) {
+				displayedFavorites.add(new ListItem(item.type, item.data, false, item.iconResId,
+						null, null, null, context.getString(R.string.favorite_threads_count__format, threadCount),
+						0, !collapsed));
+			} else if (!collapsed || item.type != ListItem.Type.FAVORITE || !item.isThreadItem()) {
+				displayedFavorites.add(item);
+			}
 		}
+	}
+
+	private boolean isFavoriteThreadHidden(FavoritesStorage.FavoriteItem favoriteItem) {
 		return Preferences.isFavoritesHidedDeleted() &&
 				watcherServiceClient.getCounter(favoriteItem.chanName, favoriteItem.boardName,
 						favoriteItem.threadNumber).deleted;
@@ -1260,6 +1281,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		public final String threadNumber;
 		public final String title;
 		public final int badgeCount;
+		public final boolean expanded;
 
 		private static final long ID_HASH_OFFSET = 0xcbf29ce484222325L;
 		private static final long ID_HASH_PRIME = 0x100000001b3L;
@@ -1301,6 +1323,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 				}
 				case SECTION: {
 					hash = appendIdHash(hash, data);
+					if (data == SECTION_ACTION_FAVORITES_MENU) return hash;
 					return appendIdHash(hash, title);
 				}
 				case MENU: {
@@ -1318,6 +1341,11 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 
 		private ListItem(Type type, int data, boolean iconChan, int iconResId,
 				String chanName, String boardName, String threadNumber, String title, int badgeCount) {
+			this(type, data, iconChan, iconResId, chanName, boardName, threadNumber, title, badgeCount, true);
+		}
+
+		private ListItem(Type type, int data, boolean iconChan, int iconResId,
+				String chanName, String boardName, String threadNumber, String title, int badgeCount, boolean expanded) {
 			id = calculateId(type, data, chanName, boardName, threadNumber, title);
 			this.type = type;
 			this.data = data;
@@ -1328,6 +1356,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 			this.threadNumber = threadNumber;
 			this.title = title;
 			this.badgeCount = badgeCount;
+			this.expanded = expanded;
 		}
 
 		public ListItem(Type type, int data, int iconResId,
@@ -1360,7 +1389,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 					iconResId == other.iconResId && CommonUtils.equals(chanName, other.chanName) &&
 					CommonUtils.equals(boardName, other.boardName) &&
 					CommonUtils.equals(threadNumber, other.threadNumber) && CommonUtils.equals(title, other.title)
-					&& badgeCount == other.badgeCount;
+					&& badgeCount == other.badgeCount && expanded == other.expanded;
 		}
 
 		public boolean compare(String chanName, String boardName, String threadNumber) {
@@ -1378,6 +1407,18 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 					callback.onClosePage(listItem.chanName, listItem.boardName, listItem.threadNumber);
 				} else if (listItem.type == ListItem.Type.REDDIT_PAGE) {
 					callback.onCloseRedditPage(listItem.boardName);
+				} else if (listItem.type == ListItem.Type.PAGES_TOGGLE && listItem.data == 0
+						&& !collapsedPages.isEmpty()) {
+					// Freeze the exact hidden set; never close newly opened or visible pages.
+					ArrayList<Page> targets = new ArrayList<>(collapsedPages);
+					new InstanceDialog(fragmentManager, null, provider -> new AlertDialog.Builder(provider.getContext())
+							.setTitle(R.string.close_remaining_threads)
+							.setMessage(provider.getContext().getString(
+									R.string.close_remaining_threads_confirmation__format, targets.size()))
+							.setNegativeButton(android.R.string.cancel, null)
+							.setPositiveButton(R.string.close_threads, (dialog, which) ->
+									callback.onCloseCollapsedPages(targets))
+							.create());
 				}
 			}
 		}
@@ -1391,10 +1432,15 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	private static final int FAVORITES_MENU_REFRESH = 1;
 	private static final int FAVORITES_MENU_CLEAR_DELETED = 2;
 	private static final int FAVORITES_MENU_HIDE_DELETED = 3;
-	private static final int FAVORITES_MENU_HIDE_ALL = 4;
 	private static final int FAVORITES_MENU_SELECT = 5;
 	private static final int FAVORITE_SELECTION_SELECT_ALL = 1;
 	private static final int FAVORITE_SELECTION_DELETE = 2;
+
+	private void setFavoriteThreadsCollapsed(boolean collapsed) {
+		if (favoriteSelectionActionMode != null) favoriteSelectionActionMode.finish();
+		Preferences.setFavoriteThreadsCollapsed(collapsed);
+		updateItems(false, true);
+	}
 
 	private final View.OnClickListener sectionButtonListener = new View.OnClickListener() {
 		@SuppressLint("NewApi")
@@ -1442,11 +1488,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 								.setEnabled(!deleteFavoriteItems.isEmpty());
 						popupMenu.getMenu().add(0, FAVORITES_MENU_HIDE_DELETED, 0,
 								Preferences.isFavoritesHidedDeleted()
-										? R.string.favorites_show_deleted : R.string.favorites_hide_deleted)
-								.setEnabled(!Preferences.isFavoritesHidedAll());
-						popupMenu.getMenu().add(0, FAVORITES_MENU_HIDE_ALL, 0,
-								Preferences.isFavoritesHidedAll()
-										? R.string.favorites_show_all : R.string.favorites_hide_all);
+										? R.string.favorites_show_deleted : R.string.favorites_hide_deleted);
 						popupMenu.getMenu().add(0, FAVORITES_MENU_SELECT, 0, R.string.select_threads)
 								.setEnabled(getVisibleFavoriteThreadCount() > 0);
 						popupMenu.setOnMenuItemClickListener(item -> {
@@ -1475,16 +1517,8 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 									updateItems(false, true);
 									return true;
 								}
-								case FAVORITES_MENU_HIDE_ALL: {
-									boolean hideAll = !Preferences.isFavoritesHidedAll();
-									if (!hideAll) {
-										Preferences.setFavoritesHideDeleted(false);
-									}
-									Preferences.setFavoritesHideAll(hideAll);
-									updateItems(false, true);
-									return true;
-								}
 								case FAVORITES_MENU_SELECT: {
+									if (Preferences.isFavoriteThreadsCollapsed()) setFavoriteThreadsCollapsed(false);
 									startFavoriteSelection();
 									return true;
 								}
@@ -1631,7 +1665,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 				break;
 			}
 			case PAGES_TOGGLE: {
-				viewType = ViewType.ITEM_ICON;
+				viewType = listItem.data == 0 ? ViewType.CLOSEABLE_ICON : ViewType.ITEM_ICON;
 				break;
 			}
 			case FAVORITE: {
@@ -1798,16 +1832,16 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		switch (categoriesOrder) {
 			case PAGES_FIRST: {
 				categoriesArray[0] = pages;
-				categoriesArray[1] = favorites;
+				categoriesArray[1] = displayedFavorites;
 				return 2;
 			}
 			case FAVORITES_FIRST: {
-				categoriesArray[0] = favorites;
+				categoriesArray[0] = displayedFavorites;
 				categoriesArray[1] = pages;
 				return 2;
 			}
 			case HIDE_PAGES: {
-				categoriesArray[0] = favorites;
+				categoriesArray[0] = displayedFavorites;
 				return 1;
 			}
 			default: {
@@ -1932,6 +1966,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 					android.R.attr.borderlessButtonStyle, android.R.attr.background, 0));
 			linearLayout.addView(closeView, size, size);
 			closeView.setOnClickListener(closeButtonListener);
+			closeView.setContentDescription(context.getString(R.string.close));
 		}
 		int layoutLeftDp = 0;
 		int layoutRightDp = 0;
@@ -1982,7 +2017,19 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		}
 		linearLayout.setLayoutParams(new RecyclerView.LayoutParams(RecyclerView.LayoutParams.MATCH_PARENT,
 				RecyclerView.LayoutParams.WRAP_CONTENT));
-		return new ViewHolder(linearLayout, imageView, textView, null, null, null);
+		ViewHolder holder = new ViewHolder(linearLayout, imageView, textView, null, null, null);
+		ImageView arrow = new ImageView(context);
+		arrow.setImageResource(R.drawable.ic_arrow_drop_down);
+		arrow.setImageTintList(textView.getTextColors());
+		arrow.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+		arrow.setVisibility(View.GONE);
+		arrow.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+		LinearLayout.LayoutParams arrowParams = new LinearLayout.LayoutParams((int) (24f * density),
+				(int) (48f * density));
+		arrowParams.leftMargin = (int) (16f * density);
+		linearLayout2.addView(arrow, 0, arrowParams);
+		holder.sectionArrow = arrow;
+		return holder;
 	}
 
 	private final ListViewUtils.ClickCallback<Void, ViewHolder> clickCallback = (holder, position, item, longClick) -> {
@@ -2027,6 +2074,12 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	@Override
 	public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
 		ListItem listItem = getItem(position);
+		if (holder.text != null) {
+			boolean multiline = listItem.type == ListItem.Type.PAGES_TOGGLE ||
+					listItem.type == ListItem.Type.SECTION && listItem.data == SECTION_ACTION_FAVORITES_MENU;
+			holder.text.setSingleLine(!multiline);
+			holder.text.setMaxLines(multiline ? 2 : 1);
+		}
 		if (holder.badge != null) {
 			holder.badge.setText(listItem.badgeCount > 0 ? Integer.toString(listItem.badgeCount) : null);
 			holder.badge.setVisibility(listItem.badgeCount > 0 ? View.VISIBLE : View.GONE);
@@ -2042,8 +2095,14 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 			holder.watcher.setAlpha(favoriteSelectionActionMode == null ? 1f : 0.45f);
 		}
 		if (listItem.type == ListItem.Type.SECTION) {
-			holder.itemView.setOnClickListener(listItem.data == SECTION_ACTION_COMBINED_FEEDS_SETTINGS
-					? sectionButtonListener : null);
+			boolean favoriteSection = listItem.data == SECTION_ACTION_FAVORITES_MENU;
+			holder.itemView.setOnClickListener(favoriteSection
+					? v -> setFavoriteThreadsCollapsed(!Preferences.isFavoriteThreadsCollapsed())
+					: listItem.data == SECTION_ACTION_COMBINED_FEEDS_SETTINGS ? sectionButtonListener : null);
+			if (holder.sectionArrow != null) {
+				holder.sectionArrow.setVisibility(favoriteSection ? View.VISIBLE : View.GONE);
+				holder.sectionArrow.setRotation(listItem.expanded ? 0f : -90f);
+			}
 		}
 		switch (listItem.type) {
 			case HEADER:
@@ -2100,6 +2159,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		public final TextView badge;
 		public final WatcherView watcher;
 		public final CheckBox selection;
+		private ImageView sectionArrow;
 
 		public ViewHolder(View itemView, ImageView icon, TextView text, TextView badge,
 				WatcherView watcher, CheckBox selection) {
@@ -2229,6 +2289,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 				removed = true;
 			}
 		}
+		if (removed) updateDisplayedFavorites();
 		return removed;
 	}
 
@@ -2277,7 +2338,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	}
 
 	private void updateVisibleWatcher(WatcherUpdateKey key, WatcherService.Counter counter) {
-		if (!Preferences.isFavoritesHidedAll() && (mergeChans || key.chanName.equals(chanName))) {
+		if (mergeChans || key.chanName.equals(chanName)) {
 			long id = ListItem.calculateId(ListItem.Type.FAVORITE, 0,
 					key.chanName, key.boardName, key.threadNumber, null);
 			RecyclerView.ViewHolder holder = recyclerView.findViewHolderForItemId(id);
@@ -2413,6 +2474,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		}
 		if (workList != null && dragState != null) {
 			workList.add(workTo, workList.remove(workFrom));
+			if (workList == favorites) updateDisplayedFavorites();
 			notifyItemMoved(fromIndex, toIndex);
 			dragState.set(workFrom, workTo);
 			return true;

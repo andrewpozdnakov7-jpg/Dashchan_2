@@ -106,6 +106,7 @@ public class SearchImageDialog extends DialogFragment {
 	public static class YandexSearchDialog extends DialogFragment {
 		private static final String EXTRA_URI = "uri";
 		private static final String EXTRA_PREVIEW_URI = "previewUri";
+		private boolean taskInitialized;
 
 		public YandexSearchDialog() {}
 
@@ -125,8 +126,13 @@ public class SearchImageDialog extends DialogFragment {
 		}
 
 		@Override
-		public void onActivityCreated(Bundle savedInstanceState) {
-			super.onActivityCreated(savedInstanceState);
+		public void onStart() {
+			super.onStart();
+			// Keep a single task observer across repeated starts of the same dialog.
+			if (taskInitialized) {
+				return;
+			}
+			taskInitialized = true;
 			YandexSearchViewModel viewModel = new ViewModelProvider(this).get(YandexSearchViewModel.class);
 			if (!viewModel.hasTaskOrValue()) {
 				Bundle args = requireArguments();

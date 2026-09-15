@@ -277,9 +277,7 @@
 	<string name="favorite_threads_order">Сортировка избранных тредов</string>
 	<string name="favorites">Избранное</string>
 	<string name="favorites_first">Сначала избранное</string>
-	<string name="favorites_hide_all">Скрыть все</string>
 	<string name="favorites_hide_deleted">Скрыть удалённые</string>
-	<string name="favorites_show_all">Показать все</string>
 	<string name="select_threads">Выбрать треды</string>
 	<plurals name="favorites_remove_selected_confirmation__format">
 		<item quantity="one">Удалить %d выбранный тред из избранного?</item>
@@ -990,16 +988,11 @@
 	<string name="monkey_command_button">Манки — вставить команду текстовой нейросети</string>
 	<string name="artmonkey_command_button">Артманки — вставить команду генерации изображения</string>
 	<string name="emoji_captcha_input">Выберите все символы на картинке (в любом порядке)</string>
+	<string name="refresh_captcha">Обновить капчу</string>
 	<string name="posting_file_not_supported">Сервер Двача отклонил файл: его формат или внутренний кодек не поддерживается сайтом. Для видео попробуйте MP4 (H.264/AAC) или WebM.</string>
 	<string name="application_shortcut">Ярлык приложения</string>
 	<string name="application_name">Название приложения</string>
 	<string name="launcher_name_dvach">Slooop</string>
-	<string name="togdach_name_prompt_title">ТОГДАЧ и никак иначе</string>
-	<string name="togdach_name_prompt_message">Так решил квадрипл в сообщении #336454444 😺\n\nВыберите, как приложение должно называться на этом устройстве. Позже выбор можно изменить в настройках интерфейса.</string>
-	<string name="togdach_name_proof_description">Сообщение #336454444 с текстом «ТОГДАЧ и никак иначе»</string>
-	<string name="use_togdach_name">Поставить «ТОГДАЧ»</string>
-	<string name="keep_current_name">Оставить текущее название</string>
-	<string name="application_name_change_failed">Не удалось изменить название приложения</string>
 	<string name="application_logo">Значок приложения</string>
 	<string name="application_logo_default">По умолчанию</string>
 	<string name="application_logo_old_school">Олд скул</string>
@@ -1078,6 +1071,10 @@
 	<string name="collapse_long_open_threads__summary">Показывает в шторке 12 последних открытых тредов, а остальные помещает в раскрывающийся список.</string>
 	<string name="show_remaining_open_threads__format">Показать остальные: %1$d</string>
 	<string name="collapse_open_threads">Свернуть список тредов</string>
+	<string name="close_remaining_threads">Закрыть остальные треды?</string>
+	<string name="favorite_threads_count__format">Избранные треды · %1$d</string>
+	<string name="close_threads">Закрыть треды</string>
+	<string name="close_remaining_threads_confirmation__format">Будут закрыты треды из свёрнутого списка: %1$d. Видимые треды и доски останутся открытыми.</string>
 
 	<string name="boards_work_safe">Безопасные для просмотра</string>
 	<string name="boards_not_safe_for_work">Для взрослых</string>
@@ -1219,6 +1216,10 @@
 	<string name="reply_history">Журнал ответов</string>
 	<string name="reply_history_is_empty">Журнал ответов пуст</string>
 	<string name="clear_reply_history">Очистить историю ответов</string>
+	<string name="clear_my_posts_list">Очистить список моих сообщений</string>
+	<string name="clear_my_posts_list__sentence">Очистить только список «Мои сообщения»? Сообщения на форумах, сохранённые ответы и их отслеживание останутся. Новые сообщения будут появляться в списке.</string>
+	<string name="my_posts_list_is_empty">Список моих сообщений пуст</string>
+	<string name="my_posts_show_more">Показать ещё сообщения</string>
 	<string name="clear_reply_history__sentence">Очистить сохранённую историю ответов? Отслеживание новых ответов останется включённым.</string>
 	<string name="mark_all_replies_read">Отметить все ответы прочитанными</string>
 	<string name="tracked_post_number__format">Пост №%s</string>

@@ -1,7 +1,6 @@
 package com.mishiranu.dashchan.ui;
 
 import android.annotation.SuppressLint;
-import android.app.Activity;
 import android.app.PictureInPictureParams;
 import android.content.ActivityNotFoundException;
 import android.content.Context;
@@ -26,6 +25,13 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
+import androidx.activity.ComponentActivity;
+import androidx.activity.EdgeToEdge;
+import androidx.activity.OnBackPressedCallback;
+import androidx.activity.SystemBarStyle;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.util.WebViewUtils;
 import com.mishiranu.dashchan.widget.ClickableToast;
@@ -34,7 +40,7 @@ import java.util.List;
 import java.util.Locale;
 
 /** Displays an official YouTube embed without resolving or downloading YouTube media streams. */
-public class YouTubePlayerActivity extends Activity {
+public class YouTubePlayerActivity extends ComponentActivity {
 	private static final String EXTRA_VIDEO_ID = "videoId";
 	private static final String EXTRA_ORIGINAL_URI = "originalUri";
 
@@ -106,11 +112,23 @@ public class YouTubePlayerActivity extends Activity {
 			return;
 		}
 
-		getWindow().setStatusBarColor(Color.BLACK);
-		getWindow().setNavigationBarColor(Color.BLACK);
+		EdgeToEdge.enable(this, SystemBarStyle.dark(Color.BLACK), SystemBarStyle.dark(Color.BLACK));
 		rootView = new FrameLayout(this);
 		rootView.setBackgroundColor(Color.BLACK);
+		ViewCompat.setOnApplyWindowInsetsListener(rootView, (view, windowInsets) -> {
+			Insets insets = isInPictureInPictureMode() ? Insets.NONE : windowInsets.getInsets(
+					WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout());
+			view.setPadding(insets.left, insets.top, insets.right, insets.bottom);
+			return windowInsets;
+		});
 		setContentView(rootView);
+		ViewCompat.requestApplyInsets(rootView);
+		getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+			@Override
+			public void handleOnBackPressed() {
+				handlePlayerBack();
+			}
+		});
 
 		webView = new WebView(this);
 		webView.setBackgroundColor(Color.BLACK);
@@ -189,13 +207,15 @@ public class YouTubePlayerActivity extends Activity {
 	@Override
 	public void onPictureInPictureModeChanged(boolean inPictureInPictureMode, Configuration newConfig) {
 		super.onPictureInPictureModeChanged(inPictureInPictureMode, newConfig);
+		if (rootView != null) {
+			ViewCompat.requestApplyInsets(rootView);
+		}
 		if (!inPictureInPictureMode && webView != null) {
 			webView.onResume();
 		}
 	}
 
-	@Override
-	public void onBackPressed() {
+	private void handlePlayerBack() {
 		if (customView != null) {
 			hideCustomView();
 		} else if (!enterPictureInPicture()) {

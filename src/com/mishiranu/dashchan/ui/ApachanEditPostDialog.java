@@ -70,6 +70,8 @@ public final class ApachanEditPostDialog {
 			ReadApachanEditPostTask.Result> {}
 
 	public static class LoadDialog extends DialogFragment {
+		private boolean taskInitialized;
+
 		public LoadDialog() {}
 
 		private LoadDialog(String chanName, String boardName, String threadNumber, String postNumber) {
@@ -85,8 +87,12 @@ public final class ApachanEditPostDialog {
 		}
 
 		@Override
-		public void onActivityCreated(Bundle savedInstanceState) {
-			super.onActivityCreated(savedInstanceState);
+		public void onStart() {
+			super.onStart();
+			if (taskInitialized) {
+				return;
+			}
+			taskInitialized = true;
 			Bundle args = requireArguments();
 			LoadViewModel viewModel = new ViewModelProvider(this).get(LoadViewModel.class);
 			if (!viewModel.hasTaskOrValue()) {
@@ -211,6 +217,8 @@ public final class ApachanEditPostDialog {
 			SendApachanEditPostTask.Result> {}
 
 	public static class SendDialog extends DialogFragment {
+		private boolean taskInitialized;
+
 		public SendDialog() {}
 
 		private SendDialog(Bundle args) {
@@ -226,8 +234,13 @@ public final class ApachanEditPostDialog {
 		}
 
 		@Override
-		public void onActivityCreated(Bundle savedInstanceState) {
-			super.onActivityCreated(savedInstanceState);
+		public void onStart() {
+			super.onStart();
+			// Keep one observer per instance; the ViewModel retains the running send across rotation.
+			if (taskInitialized) {
+				return;
+			}
+			taskInitialized = true;
 			Bundle args = requireArguments();
 			SendViewModel viewModel = new ViewModelProvider(this).get(SendViewModel.class);
 			if (!viewModel.hasTaskOrValue()) {

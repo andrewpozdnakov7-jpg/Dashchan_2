@@ -491,66 +491,53 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 	@Override
 	public boolean onOptionsItemSelected(MenuItem item) {
 		Page page = getPage();
-		switch (item.getItemId()) {
-			case R.id.menu_refresh: {
-				refreshThreads(RefreshPage.CURRENT);
+		if (item.getItemId() == R.id.menu_refresh) {
+			refreshThreads(RefreshPage.CURRENT);
+			return true;
+		} else if (item.getItemId() == R.id.menu_translate) {
+			if (!TranslationController.isReadyForChan(page.chanName)) {
+				ClickableToast.show(R.string.translation_package_unavailable);
 				return true;
 			}
-			case R.id.menu_translate: {
-				if (!TranslationController.isReadyForChan(page.chanName)) {
-					ClickableToast.show(R.string.translation_package_unavailable);
-					return true;
-				}
-				boolean enabled = !getAdapter().isTranslationEnabled();
-				boolean initializing = false;
-				if (enabled) {
-					GridLayoutManager layoutManager = (GridLayoutManager) getRecyclerView().getLayoutManager();
-					initializing = getAdapter().hasUntranslatedThreads(layoutManager.findFirstVisibleItemPosition(),
-							layoutManager.findLastVisibleItemPosition());
-				}
-				getRetainableExtra(RetainableExtra.FACTORY).translationEnabled = enabled;
-				getAdapter().setTranslationEnabled(enabled);
-				if (initializing) {
-					ClickableToast.show(R.string.translation_initializing);
-				}
-				updateOptionsMenu();
-				return true;
+			boolean enabled = !getAdapter().isTranslationEnabled();
+			boolean initializing = false;
+			if (enabled) {
+				GridLayoutManager layoutManager = (GridLayoutManager) getRecyclerView().getLayoutManager();
+				initializing = getAdapter().hasUntranslatedThreads(layoutManager.findFirstVisibleItemPosition(),
+						layoutManager.findLastVisibleItemPosition());
 			}
-			case R.id.menu_catalog: {
-				loadThreadsPage(PAGE_NUMBER_CATALOG, false);
-				return true;
+			getRetainableExtra(RetainableExtra.FACTORY).translationEnabled = enabled;
+			getAdapter().setTranslationEnabled(enabled);
+			if (initializing) {
+				ClickableToast.show(R.string.translation_initializing);
 			}
-			case R.id.menu_pages: {
-				loadThreadsPage(0, false);
-				return true;
-			}
-			case R.id.menu_archive: {
-				getUiManager().navigator().navigateArchive(page.chanName, page.boardName);
-				return true;
-			}
-			case R.id.menu_new_thread: {
-				getUiManager().navigator().navigatePosting(page.chanName, page.boardName, null);
-				return true;
-			}
-			case R.id.menu_summary: {
-				showSummaryDialog(getFragmentManager(), page.chanName, page.boardName);
-				return true;
-			}
-			case R.id.menu_star_text:
-			case R.id.menu_star_icon: {
-				FavoritesStorage.getInstance().add(page.chanName, page.boardName);
-				return true;
-			}
-			case R.id.menu_unstar_text:
-			case R.id.menu_unstar_icon: {
-				FavoritesStorage.getInstance().remove(page.chanName, page.boardName, null);
-				return true;
-			}
-			case R.id.menu_make_home_page: {
-				Preferences.setDefaultBoardName(page.chanName, page.boardName);
-				item.setVisible(false);
-				return true;
-			}
+			updateOptionsMenu();
+			return true;
+		} else if (item.getItemId() == R.id.menu_catalog) {
+			loadThreadsPage(PAGE_NUMBER_CATALOG, false);
+			return true;
+		} else if (item.getItemId() == R.id.menu_pages) {
+			loadThreadsPage(0, false);
+			return true;
+		} else if (item.getItemId() == R.id.menu_archive) {
+			getUiManager().navigator().navigateArchive(page.chanName, page.boardName);
+			return true;
+		} else if (item.getItemId() == R.id.menu_new_thread) {
+			getUiManager().navigator().navigatePosting(page.chanName, page.boardName, null);
+			return true;
+		} else if (item.getItemId() == R.id.menu_summary) {
+			showSummaryDialog(getFragmentManager(), page.chanName, page.boardName);
+			return true;
+		} else if (item.getItemId() == R.id.menu_star_text || item.getItemId() == R.id.menu_star_icon) {
+			FavoritesStorage.getInstance().add(page.chanName, page.boardName);
+			return true;
+		} else if (item.getItemId() == R.id.menu_unstar_text || item.getItemId() == R.id.menu_unstar_icon) {
+			FavoritesStorage.getInstance().remove(page.chanName, page.boardName, null);
+			return true;
+		} else if (item.getItemId() == R.id.menu_make_home_page) {
+			Preferences.setDefaultBoardName(page.chanName, page.boardName);
+			item.setVisible(false);
+			return true;
 		}
 		for (Preferences.CatalogSort catalogSort : Preferences.CatalogSort.values()) {
 			if (item.getItemId() == catalogSort.menuItemId) {
@@ -652,12 +639,8 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 
 	@Override
 	public void onAppearanceOptionChanged(int what) {
-		switch (what) {
-			case R.id.menu_spoilers:
-			case R.id.menu_sfw_mode: {
-				notifyAllAdaptersChanged();
-				break;
-			}
+		if (what == R.id.menu_spoilers || what == R.id.menu_sfw_mode) {
+			notifyAllAdaptersChanged();
 		}
 	}
 

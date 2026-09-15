@@ -30,6 +30,7 @@ public class MyPostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 	private static final int VIEW_TYPE_TABS = 0;
 	private static final int VIEW_TYPE_ITEM = 1;
 	private static final int VIEW_TYPE_EMPTY = 2;
+	private static final int VIEW_TYPE_MORE = 3;
 
 	public enum Mode {REPLIES, MY_POSTS}
 
@@ -53,6 +54,7 @@ public class MyPostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 
 	public interface Callback extends ListViewUtils.SimpleCallback<Item> {
 		void onModeSelected(Mode mode);
+		void onLoadMorePosts();
 	}
 
 	private final Context context;
@@ -61,6 +63,7 @@ public class MyPostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 	private final ArrayList<Item> items = new ArrayList<>();
 	private Mode mode = Mode.REPLIES;
 	private String emptyText;
+	private boolean hasMorePosts;
 
 	public MyPostsAdapter(Context context, Callback callback) {
 		this.context = context;
@@ -77,6 +80,7 @@ public class MyPostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 	}
 
 	public void setReplies(List<MyPostsStorage.ReplyItem> replies, String emptyText) {
+		hasMorePosts = false;
 		items.clear();
 		for (MyPostsStorage.ReplyItem reply : replies) {
 			items.add(Item.reply(reply));
@@ -85,7 +89,8 @@ public class MyPostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 		notifyDataSetChanged();
 	}
 
-	public void setPosts(List<MyPostsStorage.TrackedPost> posts, String emptyText) {
+	public void setPosts(List<MyPostsStorage.TrackedPost> posts, String emptyText, boolean hasMorePosts) {
+		this.hasMorePosts = hasMorePosts && !posts.isEmpty();
 		items.clear();
 		for (MyPostsStorage.TrackedPost post : posts) {
 			items.add(Item.post(post));
@@ -98,13 +103,38 @@ public class MyPostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 		return items.get(position - 1);
 	}
 
+	public int getPostCount() {
+		return mode == Mode.MY_POSTS ? items.size() : 0;
+	}
+
+	public void appendPosts(List<MyPostsStorage.TrackedPost> posts, boolean hasMore) {
+		if (mode != Mode.MY_POSTS || !hasMorePosts) {
+			return;
+		}
+		int position = items.size() + 1;
+		for (MyPostsStorage.TrackedPost post : posts) {
+			items.add(Item.post(post));
+		}
+		hasMorePosts = hasMore;
+		// Insert before the existing footer; leave all previously bound rows untouched.
+		if (!posts.isEmpty()) {
+			notifyItemRangeInserted(position, posts.size());
+		}
+		if (!hasMore) {
+			notifyItemRemoved(position + posts.size());
+		}
+	}
+
 	@Override
 	public int getItemCount() {
-		return Math.max(items.size(), 1) + 1;
+		return Math.max(items.size(), 1) + 1 + (hasMorePosts ? 1 : 0);
 	}
 
 	@Override
 	public int getItemViewType(int position) {
+		if (hasMorePosts && position == getItemCount() - 1) {
+			return VIEW_TYPE_MORE;
+		}
 		return position == 0 ? VIEW_TYPE_TABS : items.isEmpty() ? VIEW_TYPE_EMPTY : VIEW_TYPE_ITEM;
 	}
 
@@ -112,6 +142,9 @@ public class MyPostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 	public long getItemId(int position) {
 		if (position == 0) {
 			return Long.MIN_VALUE;
+		}
+		if (getItemViewType(position) == VIEW_TYPE_MORE) {
+			return Long.MIN_VALUE + 2L;
 		}
 		if (items.isEmpty()) {
 			return Long.MIN_VALUE + 1L;
@@ -149,6 +182,13 @@ public class MyPostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 	public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
 		if (viewType == VIEW_TYPE_TABS) {
 			return makeTabsViewHolder(parent);
+		}
+		if (viewType == VIEW_TYPE_MORE) {
+			TextView textView = (TextView) ViewFactory.makeSingleLineListItem(parent);
+			textView.setGravity(Gravity.CENTER);
+			textView.setText(R.string.my_posts_show_more);
+			textView.setOnClickListener(v -> callback.onLoadMorePosts());
+			return new SimpleViewHolder(textView);
 		}
 		if (viewType == VIEW_TYPE_EMPTY) {
 			TextView textView = (TextView) ViewFactory.makeSingleLineListItem(parent);
@@ -202,6 +242,9 @@ public class MyPostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 
 	@Override
 	public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
+		if (getItemViewType(position) == VIEW_TYPE_MORE) {
+			return;
+		}
 		if (holder instanceof TabsViewHolder) {
 			TabsViewHolder tabs = (TabsViewHolder) holder;
 			bindTab(tabs.replies, mode == Mode.REPLIES);

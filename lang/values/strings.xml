@@ -273,9 +273,7 @@
 	<string name="favorite_threads_order">Favorite threads order</string>
 	<string name="favorites">Favorites</string>
 	<string name="favorites_first">Favorites first</string>
-	<string name="favorites_hide_all">Hide all</string>
 	<string name="favorites_hide_deleted">Hide deleted</string>
-	<string name="favorites_show_all">Show all</string>
 	<string name="select_threads">Select threads</string>
 	<plurals name="favorites_remove_selected_confirmation__format">
 		<item quantity="one">Remove %d selected thread from favorites?</item>
@@ -966,17 +964,12 @@
 	<string name="monkey_command_button">Monkey — insert the text AI command</string>
 	<string name="artmonkey_command_button">ArtMonkey — insert the image generation command</string>
 	<string name="emoji_captcha_input">Select all icons from the picture (any order)</string>
+	<string name="refresh_captcha">Refresh captcha</string>
 	<string name="posting_file_not_supported">The 2ch server rejected the file: its format or internal codec is not supported by the site. For video, try MP4 (H.264/AAC) or WebM.</string>
 	<string name="application_shortcut">Application shortcut</string>
 	<string name="application_name">Application name</string>
 	<string name="launcher_name_dvach">Slooop</string>
 	<string name="launcher_name_togdach" translatable="false">ТОГДАЧ</string>
-	<string name="togdach_name_prompt_title">ТОГДАЧ and nothing else</string>
-	<string name="togdach_name_prompt_message">A quadruple in post #336454444 chose the community name “ТОГДАЧ” 😺\n\nChoose how the application should be named on this device. You can change it later under Interface settings.</string>
-	<string name="togdach_name_proof_description">Post #336454444 saying “ТОГДАЧ and nothing else”</string>
-	<string name="use_togdach_name">Use “ТОГДАЧ”</string>
-	<string name="keep_current_name">Keep current name</string>
-	<string name="application_name_change_failed">Could not change the application name</string>
 	<string name="application_logo">Application icon</string>
 	<string name="application_logo_default">Default</string>
 	<string name="application_logo_old_school">Old school</string>
@@ -1055,6 +1048,10 @@
 	<string name="collapse_long_open_threads__summary">Show the 12 most recent open threads in the drawer and place the rest in an expandable list.</string>
 	<string name="show_remaining_open_threads__format">Show remaining: %1$d</string>
 	<string name="collapse_open_threads">Collapse thread list</string>
+	<string name="close_remaining_threads">Close remaining threads?</string>
+	<string name="favorite_threads_count__format">Favorite threads · %1$d</string>
+	<string name="close_threads">Close threads</string>
+	<string name="close_remaining_threads_confirmation__format">Threads to close from the collapsed list: %1$d. Visible threads and boards will remain open.</string>
 
 	<string name="boards_work_safe">Work Safe</string>
 	<string name="boards_not_safe_for_work">Not Safe For Work</string>
@@ -1193,6 +1190,10 @@
 	<string name="reply_history">Reply history</string>
 	<string name="reply_history_is_empty">Reply history is empty</string>
 	<string name="clear_reply_history">Clear reply history</string>
+	<string name="clear_my_posts_list">Clear my posts list</string>
+	<string name="clear_my_posts_list__sentence">Clear only the My posts list? Posts on forums, saved replies and reply tracking will not be affected. New posts will appear in the list.</string>
+	<string name="my_posts_list_is_empty">Your posts list is empty</string>
+	<string name="my_posts_show_more">Show more posts</string>
 	<string name="clear_reply_history__sentence">Clear saved reply history? Reply tracking will stay enabled.</string>
 	<string name="mark_all_replies_read">Mark all replies as read</string>
 	<string name="tracked_post_number__format">Post #%s</string>

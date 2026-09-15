@@ -20,6 +20,7 @@ import com.mishiranu.dashchan.content.model.Post;
 import com.mishiranu.dashchan.content.model.PostItem;
 import com.mishiranu.dashchan.content.model.PostNumber;
 import com.mishiranu.dashchan.content.storage.FavoritesStorage;
+import com.mishiranu.dashchan.content.storage.MyPostsStorage;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
 import com.mishiranu.dashchan.util.FlagUtils;
 import com.mishiranu.dashchan.util.Hasher;
@@ -429,6 +430,7 @@ public class PagesDatabase {
 				excludeThreads.add(new ThreadKey(favoriteItem.chanName,
 						StringUtils.emptyIfNull(favoriteItem.boardName), favoriteItem.threadNumber));
 			}
+			addTrackedThreads(excludeThreads);
 			new Thread(() -> cleanup(excludeThreads, false)).start();
 		}
 	}
@@ -545,6 +547,13 @@ public class PagesDatabase {
 		}
 	}
 
+	private static void addTrackedThreads(Set<ThreadKey> excludeThreads) {
+		// Reply tracking needs its comparison baseline even when the thread is closed and not a favorite.
+		for (MyPostsStorage.ThreadKey key : MyPostsStorage.getInstance().getActiveThreadKeys()) {
+			excludeThreads.add(new ThreadKey(key.chanName, StringUtils.emptyIfNull(key.boardName), key.threadNumber));
+		}
+	}
+
 	public void erase(Collection<ThreadKey> keepThreads) {
 		HashSet<ThreadKey> mainExcludeThreads = ConcurrentUtils.mainGet(() -> {
 			HashSet<ThreadKey> excludeThreads = new HashSet<>();
@@ -552,6 +561,7 @@ public class PagesDatabase {
 				excludeThreads.add(new ThreadKey(favoriteItem.chanName,
 						StringUtils.emptyIfNull(favoriteItem.boardName), favoriteItem.threadNumber));
 			}
+			addTrackedThreads(excludeThreads);
 			return excludeThreads;
 		});
 		if (keepThreads != null) {
@@ -627,10 +637,19 @@ public class PagesDatabase {
 	}
 
 	public PostNumber getLastExistingPostNumber(@NonNull ThreadKey threadKey) {
+		return getLastPostNumber(threadKey, false);
+	}
+
+	public PostNumber getLastKnownPostNumber(@NonNull ThreadKey threadKey) {
+		// Include deleted posts: restoring the cache must not announce them as newly received replies.
+		return getLastPostNumber(threadKey, true);
+	}
+
+	private PostNumber getLastPostNumber(@NonNull ThreadKey threadKey, boolean includeDeleted) {
 		Objects.requireNonNull(threadKey);
 		String[] projection = {Schema.Posts.Columns.POST_NUMBER_MAJOR, Schema.Posts.Columns.POST_NUMBER_MINOR};
 		Expression.Filter filter = threadKey.filterPosts()
-				.raw("NOT (" + Schema.Posts.Columns.FLAGS + " & " + Schema.Posts.Flags.DELETED + ")")
+				.raw(includeDeleted ? "1" : "NOT (" + Schema.Posts.Columns.FLAGS + " & " + Schema.Posts.Flags.DELETED + ")")
 				.build();
 		try (Cursor cursor = database.query(Schema.Posts.TABLE_NAME, projection, filter.value,
 				filter.args, null, null, orderByPostNumber(true), "1")) {
@@ -863,7 +882,7 @@ public class PagesDatabase {
 	private final Expression.KeyLock<ThreadKey> insertLocks = new Expression.KeyLock<>();
 
 	public InsertResult insertNewPosts(@NonNull ThreadKey threadKey, @NonNull List<Post> posts, @NonNull Meta meta,
-			boolean temporary, boolean newThread, boolean partial) throws IOException {
+			boolean temporary, boolean newThread, boolean partial, PostNumber lastKnownPostNumber) throws IOException {
 		Objects.requireNonNull(threadKey);
 		Objects.requireNonNull(posts);
 		Objects.requireNonNull(meta);
@@ -884,13 +903,28 @@ public class PagesDatabase {
 		}
 		Set<PostNumber> userPosts = CommonDatabase.getInstance().getPosts()
 				.getFlags(threadKey.chanName, threadKey.boardName, threadKey.threadNumber).userPosts;
-		return insertLocks.lock(threadKey, () -> insertNewPostsLocked(threadKey,
-				meta, temporary, newThread, partial, serializedMap, userPosts));
+		return insertLocks.lock(threadKey, () -> {
+			// Comparison and insertion must see one snapshot; cache cleanup cannot run between them.
+			InsertResult result;
+			database.beginTransaction();
+			try {
+				result = insertNewPostsLocked(threadKey, meta, temporary, newThread, partial,
+						serializedMap, userPosts, lastKnownPostNumber);
+				database.setTransactionSuccessful();
+			} finally {
+				database.endTransaction();
+			}
+			synchronized (cacheStates) {
+				cacheStates.put(threadKey, result.cacheState);
+			}
+			return result;
+		});
 	}
 
 	private InsertResult insertNewPostsLocked(ThreadKey threadKey,
 			Meta meta, boolean temporary, boolean newThread, boolean partial,
-			HashMap<PostNumber, Serialized> serializedMap, Set<PostNumber> userPosts) throws IOException {
+			HashMap<PostNumber, Serialized> serializedMap, Set<PostNumber> userPosts,
+			PostNumber lastKnownPostNumber) throws IOException {
 		LongSparseArray<Void> deleted = null;
 		LongSparseArray<Void> restored = null;
 		int newCount = 0;
@@ -899,6 +933,17 @@ public class PagesDatabase {
 		Expression.Filter filter = threadKey.filterPosts().build();
 		try (Cursor cursor = database.query(Schema.Posts.TABLE_NAME,
 				projection, filter.value, filter.args, null, null, null)) {
+			if (!newThread) {
+				// Cleanup (or a partial refill after cleanup) must not turn known history into new posts.
+				// Existing rows below still restore their original flags, including unread replies.
+				boolean missingBaseline = cursor.getCount() == 0 && lastKnownPostNumber == null;
+				for (Serialized serialized : serializedMap.values()) {
+					if (missingBaseline || lastKnownPostNumber != null
+							&& serialized.post.number.compareTo(lastKnownPostNumber) <= 0) {
+						serialized.flags = 0;
+					}
+				}
+			}
 			while (cursor.moveToNext()) {
 				long id = cursor.getLong(0);
 				PostNumber postNumber = new PostNumber(cursor.getInt(1), cursor.getInt(2));
@@ -951,67 +996,58 @@ public class PagesDatabase {
 		}
 
 		ArrayList<InsertResult.Reply> replies = new ArrayList<>();
-		database.beginTransaction();
-		try {
-			upsertMeta(threadKey, temporary ? 0 : System.currentTimeMillis(), meta);
-			if (deleted != null) {
-				updateFlags(threadKey, Expression.LongIterator.create(deleted), "| " +
-						(Schema.Posts.Flags.DELETED | Schema.Posts.Flags.MARK_DELETED));
-			}
-			if (restored != null) {
-				updateFlags(threadKey, Expression.LongIterator.create(restored), "& " +
-						~(Schema.Posts.Flags.DELETED | Schema.Posts.Flags.MARK_DELETED) + " | " +
-						Schema.Posts.Flags.MARK_EDITED);
-			}
-			if (!serializedMap.isEmpty()) {
-				Iterator<Serialized> iterator = serializedMap.values().iterator();
-				HashSet<PostNumber> referencesTo = userPosts.isEmpty() ? null : new HashSet<>();
-				Expression.batchInsert(serializedMap.size(), 10, 8,
-						values -> database.compileStatement("INSERT OR REPLACE " +
-								"INTO " + Schema.Posts.TABLE_NAME + " (" +
-								Schema.Posts.Columns.CHAN_NAME + ", " +
-								Schema.Posts.Columns.BOARD_NAME + ", " +
-								Schema.Posts.Columns.THREAD_NUMBER + ", " +
-								Schema.Posts.Columns.POST_NUMBER_MAJOR + ", " +
-								Schema.Posts.Columns.POST_NUMBER_MINOR + ", " +
-								Schema.Posts.Columns.FLAGS + ", " +
-								Schema.Posts.Columns.DATA + ", " +
-								Schema.Posts.Columns.HASH + ") " +
-								"VALUES " + values),
-						(statement, start) -> {
-							Serialized serialized = iterator.next();
-							int flags = serialized.flags;
-							if (referencesTo != null && FlagUtils.get(flags, Schema.Posts.Flags.MARK_NEW)) {
-								referencesTo.clear();
-								PostItem.collectReferences(referencesTo, serialized.post.comment);
-								for (PostNumber reference : referencesTo) {
-									if (userPosts.contains(reference)) {
-										flags |= Schema.Posts.Flags.MARK_REPLY;
-										replies.add(new InsertResult.Reply(serialized.post.number,
-												serialized.post.comment, serialized.post.timestamp));
-										break;
-									}
+		upsertMeta(threadKey, temporary ? 0 : System.currentTimeMillis(), meta);
+		if (deleted != null) {
+			updateFlags(threadKey, Expression.LongIterator.create(deleted), "| " +
+					(Schema.Posts.Flags.DELETED | Schema.Posts.Flags.MARK_DELETED));
+		}
+		if (restored != null) {
+			updateFlags(threadKey, Expression.LongIterator.create(restored), "& " +
+					~(Schema.Posts.Flags.DELETED | Schema.Posts.Flags.MARK_DELETED) + " | " +
+					Schema.Posts.Flags.MARK_EDITED);
+		}
+		if (!serializedMap.isEmpty()) {
+			Iterator<Serialized> iterator = serializedMap.values().iterator();
+			HashSet<PostNumber> referencesTo = userPosts.isEmpty() ? null : new HashSet<>();
+			Expression.batchInsert(serializedMap.size(), 10, 8,
+					values -> database.compileStatement("INSERT OR REPLACE " +
+							"INTO " + Schema.Posts.TABLE_NAME + " (" +
+							Schema.Posts.Columns.CHAN_NAME + ", " +
+							Schema.Posts.Columns.BOARD_NAME + ", " +
+							Schema.Posts.Columns.THREAD_NUMBER + ", " +
+							Schema.Posts.Columns.POST_NUMBER_MAJOR + ", " +
+							Schema.Posts.Columns.POST_NUMBER_MINOR + ", " +
+							Schema.Posts.Columns.FLAGS + ", " +
+							Schema.Posts.Columns.DATA + ", " +
+							Schema.Posts.Columns.HASH + ") " +
+							"VALUES " + values),
+					(statement, start) -> {
+						Serialized serialized = iterator.next();
+						int flags = serialized.flags;
+						if (referencesTo != null && FlagUtils.get(flags, Schema.Posts.Flags.MARK_NEW)) {
+							referencesTo.clear();
+							PostItem.collectReferences(referencesTo, serialized.post.comment);
+							for (PostNumber reference : referencesTo) {
+								if (userPosts.contains(reference)) {
+									flags |= Schema.Posts.Flags.MARK_REPLY;
+									replies.add(new InsertResult.Reply(serialized.post.number,
+											serialized.post.comment, serialized.post.timestamp));
+									break;
 								}
 							}
-							statement.bindString(start + 1, threadKey.chanName);
-							statement.bindString(start + 2, threadKey.boardName);
-							statement.bindString(start + 3, threadKey.threadNumber);
-							statement.bindLong(start + 4, serialized.post.number.major);
-							statement.bindLong(start + 5, serialized.post.number.minor);
-							statement.bindLong(start + 6, flags);
-							statement.bindBlob(start + 7, serialized.data);
-							statement.bindBlob(start + 8, serialized.hash);
-						});
-			}
-			database.setTransactionSuccessful();
-		} finally {
-			database.endTransaction();
+						}
+						statement.bindString(start + 1, threadKey.chanName);
+						statement.bindString(start + 2, threadKey.boardName);
+						statement.bindString(start + 3, threadKey.threadNumber);
+						statement.bindLong(start + 4, serialized.post.number.major);
+						statement.bindLong(start + 5, serialized.post.number.minor);
+						statement.bindLong(start + 6, flags);
+						statement.bindBlob(start + 7, serialized.data);
+						statement.bindBlob(start + 8, serialized.hash);
+					});
 		}
 
 		Cache.State state = new Cache.State(UUID.randomUUID(), newThread);
-		synchronized (cacheStates) {
-			cacheStates.put(threadKey, state);
-		}
 		return new InsertResult(state, replies, newCount);
 	}
 

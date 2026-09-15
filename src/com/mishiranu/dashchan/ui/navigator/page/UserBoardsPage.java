@@ -163,12 +163,10 @@ public class UserBoardsPage extends ListPage implements UserBoardsAdapter.Callba
 
 	@Override
 	public boolean onOptionsItemSelected(MenuItem item) {
-		switch (item.getItemId()) {
-			case R.id.menu_refresh: {
-				ParcelableExtra parcelableExtra = getParcelableExtra(ParcelableExtra.FACTORY);
-				refreshBoards(!parcelableExtra.boardNames.isEmpty());
-				return true;
-			}
+		if (item.getItemId() == R.id.menu_refresh) {
+			ParcelableExtra parcelableExtra = getParcelableExtra(ParcelableExtra.FACTORY);
+			refreshBoards(!parcelableExtra.boardNames.isEmpty());
+			return true;
 		}
 		return false;
 	}

@@ -140,11 +140,9 @@ public class ArchivePage extends ListPage implements ArchiveAdapter.Callback,
 
 	@Override
 	public boolean onOptionsItemSelected(MenuItem item) {
-		switch (item.getItemId()) {
-			case R.id.menu_refresh: {
-				refreshThreads(!getAdapter().isRealEmpty(), false);
-				return true;
-			}
+		if (item.getItemId() == R.id.menu_refresh) {
+			refreshThreads(!getAdapter().isRealEmpty(), false);
+			return true;
 		}
 		return false;
 	}

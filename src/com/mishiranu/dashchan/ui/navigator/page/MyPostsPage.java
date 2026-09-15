@@ -4,6 +4,7 @@ import android.app.AlertDialog;
 import android.view.Menu;
 import android.view.MenuItem;
 import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.WatcherNotifications;
@@ -24,13 +25,18 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
 
 public class MyPostsPage extends ListPage implements MyPostsAdapter.Callback, ReadMyPostsTask.Callback {
 	private static final int MAX_CONCURRENT_CHECKS = 3;
+	private static final int MY_POSTS_PAGE_SIZE = 50;
+	private static final int MY_POSTS_PREFETCH_DELAY_MS = 750;
 	private static final ExtraFactory<RetainableExtra> RETAINABLE_EXTRA_FACTORY = RetainableExtra::new;
 
 	private static final class RetainableExtra implements Retainable {
 		public MyPostsAdapter.Mode mode = MyPostsAdapter.Mode.REPLIES;
+		public int visiblePostsLimit = MY_POSTS_PAGE_SIZE;
 	}
 
 	private final ArrayDeque<MyPostsStorage.ThreadKey> checkQueue = new ArrayDeque<>();
@@ -43,6 +49,17 @@ public class MyPostsPage extends ListPage implements MyPostsAdapter.Callback, Re
 
 	private int checkErrors;
 	private MyPostsAdapter.Mode mode = MyPostsAdapter.Mode.REPLIES;
+	// ConcurrentUtils assigns THREAD_PRIORITY_BACKGROUND to this dedicated, expiring worker.
+	private final ExecutorService postsExecutor = ConcurrentUtils.newSingleThreadPool(3000,
+			"MyPostsPreview", null);
+	private final Runnable prefetchPosts = this::loadNextPostPage;
+	private final Runnable applyPostPage = this::applyPendingPostPage;
+	private Future<?> postsFuture;
+	private MyPostsStorage.PostPreviewPage pendingPostPage;
+	private long postsRevision;
+	private int postsGeneration;
+	private boolean hasMorePosts;
+	private boolean pageResumed;
 
 	private MyPostsAdapter getAdapter() {
 		return (MyPostsAdapter) getRecyclerView().getAdapter();
@@ -65,11 +82,21 @@ public class MyPostsPage extends ListPage implements MyPostsAdapter.Callback, Re
 	protected void onResume() {
 		// onCreate runs while ListPage is INITIALIZED, so isRunning() is false there.
 		// Populate the page after the lifecycle reaches STARTED/RESUMED.
+		pageResumed = true;
 		updateList();
 	}
 
 	@Override
+	protected void onPause() {
+		pageResumed = false;
+		stopPostPrefetch();
+	}
+
+	@Override
 	protected void onDestroy() {
+		pageResumed = false;
+		stopPostPrefetch();
+		postsExecutor.shutdownNow();
 		MyPostsStorage.getInstance().getObservable().unregister(storageObserver);
 		for (ReadMyPostsTask task : tasks.values()) {
 			task.cancel();
@@ -89,9 +116,10 @@ public class MyPostsPage extends ListPage implements MyPostsAdapter.Callback, Re
 	}
 
 	private void updateList() {
-		if (!isRunning()) {
+		if (!pageResumed || !isRunning()) {
 			return;
 		}
+		stopPostPrefetch();
 		MyPostsStorage storage = MyPostsStorage.getInstance();
 		MyPostsAdapter adapter = getAdapter();
 		adapter.setMode(mode);
@@ -99,11 +127,16 @@ public class MyPostsPage extends ListPage implements MyPostsAdapter.Callback, Re
 			List<MyPostsStorage.ReplyItem> replies = storage.getRecentReplies(0);
 			int message = isChecking() ? R.string.loading__ellipsis
 					: !Preferences.isTrackMyPostsEnabled() ? R.string.reply_tracking_is_disabled
-					: storage.getPosts().isEmpty() ? R.string.tracked_replies_is_empty
+					: !storage.hasPosts() ? R.string.tracked_replies_is_empty
 					: R.string.no_replies_yet;
 			adapter.setReplies(replies, getString(message));
 		} else {
-			adapter.setPosts(storage.getPosts(), getString(R.string.tracked_replies_is_empty));
+			int limit = getRetainableExtra(RETAINABLE_EXTRA_FACTORY).visiblePostsLimit;
+			MyPostsStorage.PostPreviewPage page = storage.getVisiblePostPreviews(0, limit);
+			postsRevision = page.revision;
+			hasMorePosts = page.hasMore;
+			adapter.setPosts(page.posts, getString(R.string.my_posts_list_is_empty), hasMorePosts);
+			schedulePostPrefetch();
 		}
 		switchList();
 	}
@@ -117,6 +150,87 @@ public class MyPostsPage extends ListPage implements MyPostsAdapter.Callback, Re
 			getRecyclerView().scrollToPosition(0);
 			updateOptionsMenu();
 		}
+	}
+
+	@Override
+	public void onLoadMorePosts() {
+		ConcurrentUtils.HANDLER.removeCallbacks(prefetchPosts);
+		loadNextPostPage();
+	}
+
+	private boolean canPrefetchPosts() {
+		return pageResumed && isRunning() && mode == MyPostsAdapter.Mode.MY_POSTS && hasMorePosts;
+	}
+
+	private boolean isPostListBusy() {
+		RecyclerView recyclerView = getRecyclerView();
+		return recyclerView.getScrollState() != RecyclerView.SCROLL_STATE_IDLE || recyclerView.isComputingLayout();
+	}
+
+	private void stopPostPrefetch() {
+		postsGeneration++;
+		ConcurrentUtils.HANDLER.removeCallbacks(prefetchPosts);
+		ConcurrentUtils.HANDLER.removeCallbacks(applyPostPage);
+		if (postsFuture != null) {
+			postsFuture.cancel(true);
+			postsFuture = null;
+		}
+		pendingPostPage = null;
+		hasMorePosts = false;
+	}
+
+	private void schedulePostPrefetch() {
+		ConcurrentUtils.HANDLER.removeCallbacks(prefetchPosts);
+		if (canPrefetchPosts() && postsFuture == null) {
+			ConcurrentUtils.HANDLER.postDelayed(prefetchPosts, MY_POSTS_PREFETCH_DELAY_MS);
+		}
+	}
+
+	private void loadNextPostPage() {
+		if (!canPrefetchPosts() || postsFuture != null) {
+			return;
+		}
+		if (isPostListBusy()) {
+			schedulePostPrefetch();
+			return;
+		}
+		int generation = postsGeneration;
+		int offset = getAdapter().getPostCount();
+		postsFuture = postsExecutor.submit(() -> {
+			MyPostsStorage.PostPreviewPage page = MyPostsStorage.getInstance()
+					.getVisiblePostPreviews(offset, MY_POSTS_PAGE_SIZE);
+			if (!Thread.currentThread().isInterrupted()) {
+				ConcurrentUtils.HANDLER.post(() -> {
+					if (generation == postsGeneration && canPrefetchPosts()) {
+						pendingPostPage = page;
+						applyPendingPostPage();
+					}
+				});
+			}
+		});
+	}
+
+	private void applyPendingPostPage() {
+		if (!canPrefetchPosts() || pendingPostPage == null) {
+			return;
+		}
+		if (isPostListBusy()) {
+			ConcurrentUtils.HANDLER.postDelayed(applyPostPage, MY_POSTS_PREFETCH_DELAY_MS);
+			return;
+		}
+		MyPostsStorage.PostPreviewPage page = pendingPostPage;
+		// A clear, new post or retention change invalidates the offset. Never append an old page.
+		if (page.revision != postsRevision || !MyPostsStorage.getInstance().isPostPreviewCurrent(page.revision)) {
+			updateList();
+			return;
+		}
+		pendingPostPage = null;
+		postsFuture = null;
+		hasMorePosts = page.hasMore;
+		getAdapter().appendPosts(page.posts, hasMorePosts);
+		getRetainableExtra(RETAINABLE_EXTRA_FACTORY).visiblePostsLimit = Math.max(MY_POSTS_PAGE_SIZE,
+				getAdapter().getPostCount());
+		schedulePostPrefetch();
 	}
 
 	@Override
@@ -178,8 +292,10 @@ public class MyPostsPage extends ListPage implements MyPostsAdapter.Callback, Re
 		}
 		MenuItem clear = menu.findItem(R.id.menu_clear);
 		if (clear != null) {
-			clear.setVisible(mode == MyPostsAdapter.Mode.REPLIES);
-			clear.setEnabled(!MyPostsStorage.getInstance().getRecentReplies(1).isEmpty());
+			boolean myPosts = mode == MyPostsAdapter.Mode.MY_POSTS;
+			clear.setTitle(myPosts ? R.string.clear_my_posts_list : R.string.clear_reply_history);
+			clear.setEnabled(myPosts ? MyPostsStorage.getInstance().hasVisiblePosts()
+					: !MyPostsStorage.getInstance().getRecentReplies(1).isEmpty());
 		}
 	}
 
@@ -192,10 +308,25 @@ public class MyPostsPage extends ListPage implements MyPostsAdapter.Callback, Re
 			markAllRepliesRead();
 			return true;
 		} else if (item.getItemId() == R.id.menu_clear) {
-			showClearReplyHistoryDialog();
+			if (mode == MyPostsAdapter.Mode.MY_POSTS) {
+				showClearMyPostsListDialog();
+			} else {
+				showClearReplyHistoryDialog();
+			}
 			return true;
 		}
 		return false;
+	}
+
+	private void showClearMyPostsListDialog() {
+		new InstanceDialog(getFragmentManager(), null, provider -> new AlertDialog.Builder(provider.getContext())
+				.setMessage(R.string.clear_my_posts_list__sentence)
+				.setNegativeButton(android.R.string.cancel, null)
+				.setPositiveButton(android.R.string.ok, (dialog, which) -> {
+					MyPostsStorage.getInstance().clearMyPostsList();
+					getRetainableExtra(RETAINABLE_EXTRA_FACTORY).visiblePostsLimit = MY_POSTS_PAGE_SIZE;
+				})
+				.create());
 	}
 
 	private void showClearReplyHistoryDialog() {
