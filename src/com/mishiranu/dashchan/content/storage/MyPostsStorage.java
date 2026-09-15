@@ -23,6 +23,7 @@ import java.util.Objects;
 import java.util.Set;
 
 public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.TrackedPost>> {
+	private static final int MAX_STORED_POSTS = 1000;
 	private static final String KEY_DATA = "data";
 	private static final String KEY_CHAN_NAME = "chanName";
 	private static final String KEY_BOARD_NAME = "boardName";
@@ -33,6 +34,7 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 	private static final String KEY_LAST_CHECKED = "lastChecked";
 	private static final String KEY_THREAD_DELETED = "threadDeleted";
 	private static final String KEY_TRACKING_ACTIVE = "trackingActive";
+	private static final String KEY_HIDDEN_FROM_MY_POSTS = "hiddenFromMyPosts";
 	private static final String KEY_REPLIES = "replies";
 	private static final String KEY_REPLIES_CLEARED_THROUGH = "repliesClearedThrough";
 	private static final String KEY_UNREAD = "unread";
@@ -103,6 +105,7 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 		public long lastChecked;
 		public boolean threadDeleted;
 		public boolean trackingActive = true;
+		private boolean hiddenFromMyPosts;
 		public PostNumber repliesClearedThrough;
 		public final ArrayList<Reply> replies = new ArrayList<>();
 
@@ -117,14 +120,21 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 		}
 
 		private TrackedPost(TrackedPost trackedPost) {
+			this(trackedPost, true);
+		}
+
+		private TrackedPost(TrackedPost trackedPost, boolean includeReplies) {
 			this(trackedPost.chanName, trackedPost.boardName, trackedPost.threadNumber,
 					trackedPost.postNumber, trackedPost.comment, trackedPost.time);
 			lastChecked = trackedPost.lastChecked;
 			threadDeleted = trackedPost.threadDeleted;
 			trackingActive = trackedPost.trackingActive;
+			hiddenFromMyPosts = trackedPost.hiddenFromMyPosts;
 			repliesClearedThrough = trackedPost.repliesClearedThrough;
-			for (Reply reply : trackedPost.replies) {
-				replies.add(new Reply(reply));
+			if (includeReplies) {
+				for (Reply reply : trackedPost.replies) {
+					replies.add(new Reply(reply));
+				}
 			}
 		}
 
@@ -176,10 +186,14 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 	private final HashMap<String, TrackedPost> postsMap = new HashMap<>();
 	private final ArrayList<TrackedPost> posts = new ArrayList<>();
 	private final WeakObservable<Runnable> observable = new WeakObservable<>();
+	private long revision;
 
 	private MyPostsStorage() {
 		super("my-posts", 1000, 5000);
 		startRead();
+		if (pruneInactivePosts()) {
+			serialize();
+		}
 	}
 
 	private static String makeKey(String chanName, String boardName, String threadNumber,
@@ -192,6 +206,7 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 	}
 
 	private void notifyChanged() {
+		revision++;
 		ConcurrentUtils.HANDLER.post(() -> {
 			for (Runnable runnable : observable) {
 				runnable.run();
@@ -201,6 +216,21 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 
 	private void sort() {
 		Collections.sort(posts, Comparator.comparingLong((TrackedPost post) -> post.time).reversed());
+	}
+
+	// Soft retention limit: active tracking and unread replies always take precedence.
+	// Call under the storage monitor, outside any iteration over posts.
+	private boolean pruneInactivePosts() {
+		boolean changed = false;
+		for (int i = posts.size() - 1; i >= 0 && posts.size() > MAX_STORED_POSTS; i--) {
+			TrackedPost post = posts.get(i);
+			if (!post.trackingActive && post.getUnreadCount() == 0) {
+				posts.remove(i);
+				postsMap.remove(makeKey(post.chanName, post.boardName, post.threadNumber, post.postNumber));
+				changed = true;
+			}
+		}
+		return changed;
 	}
 
 	@Override
@@ -233,6 +263,7 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 					long lastChecked = 0L;
 					boolean threadDeleted = false;
 					boolean trackingActive = true;
+					boolean hiddenFromMyPosts = false;
 					PostNumber repliesClearedThrough = null;
 					ArrayList<Reply> replies = new ArrayList<>();
 					reader.startObject();
@@ -264,6 +295,9 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 								break;
 							case KEY_TRACKING_ACTIVE:
 								trackingActive = reader.nextBoolean();
+								break;
+							case KEY_HIDDEN_FROM_MY_POSTS:
+								hiddenFromMyPosts = reader.nextBoolean();
 								break;
 							case KEY_REPLIES_CLEARED_THROUGH:
 								repliesClearedThrough = PostNumber.parseNullable(reader.nextString());
@@ -312,6 +346,7 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 						post.lastChecked = lastChecked;
 						post.threadDeleted = threadDeleted;
 						post.trackingActive = trackingActive;
+						post.hiddenFromMyPosts = hiddenFromMyPosts;
 						post.repliesClearedThrough = repliesClearedThrough;
 						post.replies.addAll(replies);
 						posts.add(post);
@@ -355,6 +390,8 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 			writer.value(post.threadDeleted);
 			writer.name(KEY_TRACKING_ACTIVE);
 			writer.value(post.trackingActive);
+			writer.name(KEY_HIDDEN_FROM_MY_POSTS);
+			writer.value(post.hiddenFromMyPosts);
 			if (post.repliesClearedThrough != null) {
 				writer.name(KEY_REPLIES_CLEARED_THROUGH);
 				writer.value(post.repliesClearedThrough.toString());
@@ -385,6 +422,71 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 
 	public synchronized List<TrackedPost> getPosts() {
 		return onClone();
+	}
+
+	public synchronized boolean hasPosts() {
+		return !posts.isEmpty();
+	}
+
+	public synchronized boolean hasVisiblePosts() {
+		for (TrackedPost post : posts) {
+			if (!post.hiddenFromMyPosts) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	public static final class PostPreviewPage {
+		public final List<TrackedPost> posts;
+		public final boolean hasMore;
+		public final long revision;
+
+		private PostPreviewPage(List<TrackedPost> posts, boolean hasMore, long revision) {
+			this.posts = posts;
+			this.hasMore = hasMore;
+			this.revision = revision;
+		}
+	}
+
+	public synchronized boolean isPostPreviewCurrent(long revision) {
+		return this.revision == revision;
+	}
+
+	/** One local UI page only: do not copy replies or the already displayed prefix. */
+	public synchronized PostPreviewPage getVisiblePostPreviews(int offset, int limit) {
+		if (offset < 0 || limit <= 0) {
+			throw new IllegalArgumentException();
+		}
+		ArrayList<TrackedPost> result = new ArrayList<>();
+		for (TrackedPost post : posts) {
+			if (!post.hiddenFromMyPosts) {
+				if (offset > 0) {
+					offset--;
+					continue;
+				}
+				if (result.size() == limit) {
+					return new PostPreviewPage(result, true, revision);
+				}
+				result.add(new TrackedPost(post, false));
+			}
+		}
+		return new PostPreviewPage(result, false, revision);
+	}
+
+	public synchronized void clearMyPostsList() {
+		boolean changed = false;
+		for (TrackedPost post : posts) {
+			if (!post.hiddenFromMyPosts) {
+				post.hiddenFromMyPosts = true;
+				changed = true;
+			}
+		}
+		// Clearing this view must not change tracking, replies or notification state.
+		if (changed) {
+			serialize();
+			notifyChanged();
+		}
 	}
 
 	public synchronized List<ReplyItem> getUnreadReplies() {
@@ -474,6 +576,7 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 			postsMap.put(key, post);
 			posts.add(post);
 			sort();
+			pruneInactivePosts();
 			serialize();
 			notifyChanged();
 		} else if (StringUtils.isEmpty(existing.comment) && !StringUtils.isEmpty(comment)) {
@@ -525,6 +628,7 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 		TrackedPost post = postsMap.get(makeKey(chanName, boardName, threadNumber, postNumber));
 		if (post != null && post.trackingActive) {
 			post.trackingActive = false;
+			pruneInactivePosts();
 			serialize();
 			notifyChanged();
 		}
@@ -539,6 +643,7 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 			}
 		}
 		if (changed) {
+			pruneInactivePosts();
 			serialize();
 			notifyChanged();
 		}
@@ -558,6 +663,7 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 			}
 		}
 		if (changed) {
+			pruneInactivePosts();
 			serialize();
 			notifyChanged();
 		}
@@ -574,6 +680,7 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 			}
 		}
 		if (changed) {
+			pruneInactivePosts();
 			serialize();
 			notifyChanged();
 		}
@@ -594,6 +701,7 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 			}
 		}
 		if (changed) {
+			pruneInactivePosts();
 			serialize();
 			notifyChanged();
 		}

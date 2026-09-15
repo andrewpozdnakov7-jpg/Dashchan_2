@@ -1,0 +1,11 @@
+- Added a clear-list action to My posts without deleting posts from forums or disabling reply tracking. Large lists load progressively, and loading stops when you leave the page.
+- Favorite threads can now be collapsed and expanded by tapping the section header. Removed the redundant Hide all and Show all commands.
+- Added a confirmation-protected action to close only the threads hidden behind Show the rest. Visible threads and boards remain open.
+- Added a captcha refresh button. Dvach captcha images no longer jump or swap positions when selected.
+- Added brief system haptic feedback after successfully saving a single image manually from the gallery.
+- Fixed duplicate notifications about old replies after clearing the thread cache.
+- Updated file pickers, cache-clearing dialogs, the Apachan editor, and the YouTube player. Removed some deprecated code while preserving existing settings.
+
+Thank you to everyone testing the app and sending detailed bug reports — together we are making Slooop better! 😺🐾
+
+Found a bug? Send us the logs!

@@ -20,6 +20,8 @@ import android.os.SystemClock;
 import android.service.notification.StatusBarNotification;
 import android.util.DisplayMetrics;
 import android.util.Pair;
+import android.view.HapticFeedbackConstants;
+import android.view.View;
 import androidx.core.app.NotificationCompat;
 import chan.content.Chan;
 import chan.content.ChanManager;
@@ -53,6 +55,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -389,7 +392,7 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 							enqueue(new TaskData(downloadItem.chanName, directRequest.overwrite, downloadItem.uri,
 									downloadItem.checkSha256, downloadItem.checkFingerprints, directRequest.target,
 									directRequest.path, downloadItem.name, directRequest.allowWrite,
-									directRequest.localArchiveId));
+									directRequest.localArchiveId).withSuccessHaptic(downloadItem.successHapticView));
 						}
 					}
 				}
@@ -563,8 +566,10 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 				} while (children.contains(name.toLowerCase(Locale.getDefault())) ||
 						keys.contains(key) || activeKeys.contains(key));
 				keys.add(key);
-				finalItems.add(new DownloadItem(downloadItem.chanName, downloadItem.uri, name,
-						downloadItem.checkSha256, downloadItem.checkFingerprints));
+				DownloadItem renamed = new DownloadItem(downloadItem.chanName, downloadItem.uri, name,
+						downloadItem.checkSha256, downloadItem.checkFingerprints);
+				renamed.successHapticView = downloadItem.successHapticView;
+				finalItems.add(renamed);
 			}
 			if (Thread.interrupted()) {
 				throw new InterruptedException();
@@ -934,6 +939,14 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 	};
 
 	private static class TaskData implements Parcelable {
+		// Ephemeral UI feedback: do not retain the gallery or persist it for background retries.
+		private WeakReference<View> successHapticView;
+
+		private TaskData withSuccessHaptic(WeakReference<View> view) {
+			successHapticView = view;
+			return this;
+		}
+
 		public final String chanName;
 		public final boolean finishedFromCache;
 		public final boolean overwrite;
@@ -981,7 +994,7 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 		public TaskData newFinishedFromCache(boolean finishedFromCache) {
 			return this.finishedFromCache == finishedFromCache ? this : new TaskData(chanName, finishedFromCache,
 					overwrite, input, uri, checkSha256, checkFingerprints, target, path, name, allowWrite,
-					localArchiveId);
+					localArchiveId).withSuccessHaptic(successHapticView);
 		}
 
 		public String getKey() {
@@ -1296,6 +1309,14 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 	}
 
 	private void onFinishDownloadingInternal(boolean success, TaskData taskData, DataFile taskDataFile) {
+		WeakReference<View> hapticView = taskData.successHapticView;
+		taskData.successHapticView = null;
+		if (success && hapticView != null) {
+			View view = hapticView.get();
+			if (view != null && view.isAttachedToWindow() && view.isShown() && view.hasWindowFocus()) {
+				view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
+			}
+		}
 		if (success) {
 			File file = taskDataFile != null ? taskDataFile.getFileOrUri().first : null;
 			if (file != null) {
@@ -1505,9 +1526,11 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 		public DirectRequest complete(String path, boolean detailName, boolean originalName) {
 			List<DownloadItem> downloadItems = new ArrayList<>(items.size());
 			for (RequestItem requestItem : items) {
-				downloadItems.add(new DownloadItem(chanName, requestItem.uri, getDesiredFileName(requestItem.uri,
+				DownloadItem downloadItem = new DownloadItem(chanName, requestItem.uri, getDesiredFileName(requestItem.uri,
 						requestItem.fileName, originalName ? requestItem.originalName : null, detailName,
-						chanName, boardName, threadNumber), null, null));
+						chanName, boardName, threadNumber), null, null);
+				downloadItem.successHapticView = items.size() == 1 ? requestItem.successHapticView : null;
+				downloadItems.add(downloadItem);
 			}
 			return new DirectRequest(DataFile.Target.DOWNLOADS, path, true, downloadItems, null, allowWrite, null);
 		}
@@ -1552,18 +1575,25 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 	}
 
 	public static class RequestItem {
+		private final WeakReference<View> successHapticView;
 		public final Uri uri;
 		public final String fileName;
 		public final String originalName;
 
 		public RequestItem(Uri uri, String fileName, String originalName) {
+			this(uri, fileName, originalName, null);
+		}
+
+		public RequestItem(Uri uri, String fileName, String originalName, View successHapticView) {
 			this.uri = uri;
 			this.fileName = fileName;
 			this.originalName = originalName;
+			this.successHapticView = successHapticView != null ? new WeakReference<>(successHapticView) : null;
 		}
 	}
 
 	public static class DownloadItem implements Parcelable {
+		private WeakReference<View> successHapticView;
 		public final String chanName;
 		public final Uri uri;
 		public final String name;

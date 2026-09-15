@@ -169,26 +169,22 @@ public class AutohideFragment extends BaseListFragment {
 
 	@Override
 	public boolean onOptionsItemSelected(MenuItem item) {
-		switch (item.getItemId()) {
-			case R.id.menu_new_rule: {
-				editRule(null, -1);
+		if (item.getItemId() == R.id.menu_new_rule) {
+			editRule(null, -1);
+			return true;
+		} else if (item.getItemId() == R.id.menu_quick_filter) {
+			editQuickRule(null, -1);
+			return true;
+		} else if (item.getItemId() == R.id.menu_search) {
+			if (item == searchMenuItem) {
+				searchFocused = true;
+				return false;
+			} else if (searchMenuItem != null) {
+				searchFocused = true;
+				searchMenuItem.expandActionView();
 				return true;
-			}
-			case R.id.menu_quick_filter: {
-				editQuickRule(null, -1);
+			} else {
 				return true;
-			}
-			case R.id.menu_search: {
-				if (item == searchMenuItem) {
-					searchFocused = true;
-					return false;
-				} else if (searchMenuItem != null) {
-					searchFocused = true;
-					searchMenuItem.expandActionView();
-					return true;
-				} else {
-					return true;
-				}
 			}
 		}
 		return super.onOptionsItemSelected(item);

@@ -14,6 +14,8 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.MimeTypeMap;
 import android.widget.TextView;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.fragment.app.DialogFragment;
 import androidx.lifecycle.ViewModelProvider;
@@ -25,7 +27,6 @@ import chan.http.HttpRequest;
 import chan.util.CommonUtils;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.BuildConfig;
-import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.async.HttpHolderTask;
@@ -58,6 +59,10 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 public class ThemesFragment extends BaseListFragment {
+	private final ActivityResultLauncher<Intent> themePicker = registerForActivityResult(
+			new ActivityResultContracts.StartActivityForResult(),
+			result -> onThemeSelected(result.getResultCode(), result.getData()));
+
 	private static final String EXTRA_AVAILABLE_THEMES = "availableThemes";
 	private static final int MAX_IMPORTED_THEME_BYTES = 1024 * 1024;
 	private static final String URI_TRIXI_THEMES = "//raw.githubusercontent.com/" +
@@ -142,63 +147,54 @@ public class ThemesFragment extends BaseListFragment {
 
 	@Override
 	public boolean onOptionsItemSelected(@NonNull MenuItem item) {
-		switch (item.getItemId()) {
-			case R.id.menu_add_theme: {
-				// Check Android supports "application/json" MIME-type
-				String mimeType = MimeTypeMap.getSingleton().getMimeTypeFromExtension("json");
-				if (StringUtils.isEmpty(mimeType) || "application/octet-stream".equals(mimeType)) {
-					mimeType = "*/*";
-				}
-				// SHOW_ADVANCED to show folder navigation
-				Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
-						.setType(mimeType).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-						.putExtra("android.content.extra.SHOW_ADVANCED", true);
-				startActivityForResult(intent, C.REQUEST_CODE_ATTACH);
-				return true;
+		if (item.getItemId() == R.id.menu_add_theme) {
+			// Check Android supports "application/json" MIME-type
+			String mimeType = MimeTypeMap.getSingleton().getMimeTypeFromExtension("json");
+			if (StringUtils.isEmpty(mimeType) || "application/octet-stream".equals(mimeType)) {
+				mimeType = "*/*";
 			}
+			// SHOW_ADVANCED to show folder navigation
+			Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
+					.setType(mimeType).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+					.putExtra("android.content.extra.SHOW_ADVANCED", true);
+			themePicker.launch(intent);
+			return true;
 		}
 		return super.onOptionsItemSelected(item);
 	}
 
-	@Override
-	public void onActivityResult(int requestCode, int resultCode, Intent data) {
-		super.onActivityResult(requestCode, resultCode, data);
+	private void onThemeSelected(int resultCode, Intent data) {
 		if (resultCode == Activity.RESULT_OK && data != null) {
-			switch (requestCode) {
-				case C.REQUEST_CODE_ATTACH: {
-					if ((data.getFlags() & Intent.FLAG_GRANT_READ_URI_PERMISSION) == 0) {
-						ClickableToast.show(R.string.no_access_to_memory);
-						break;
+			if ((data.getFlags() & Intent.FLAG_GRANT_READ_URI_PERMISSION) == 0) {
+				ClickableToast.show(R.string.no_access_to_memory);
+				return;
+			}
+			Uri uri = data.getData();
+			if (uri != null) {
+				byte[] array;
+				try {
+					array = readImportedTheme(requireContext().getContentResolver(), uri);
+				} catch (IOException | SecurityException e) {
+					e.printStackTrace();
+					array = null;
+					ClickableToast.show(R.string.no_access_to_memory);
+				}
+				if (array != null && array.length > 0) {
+					JSONObject jsonObject;
+					try {
+						jsonObject = new JSONObject(new String(array, StandardCharsets.UTF_8));
+					} catch (JSONException e) {
+						jsonObject = null;
 					}
-					Uri uri = data.getData();
-					if (uri != null) {
-						byte[] array;
-						try {
-							array = readImportedTheme(requireContext().getContentResolver(), uri);
-						} catch (IOException | SecurityException e) {
-							e.printStackTrace();
-							array = null;
-							ClickableToast.show(R.string.no_access_to_memory);
-						}
-						if (array != null && array.length > 0) {
-							JSONObject jsonObject;
-							try {
-								jsonObject = new JSONObject(new String(array, StandardCharsets.UTF_8));
-							} catch (JSONException e) {
-								jsonObject = null;
-							}
-							ThemeEngine.Theme theme = jsonObject != null
-									? prepareImportedTheme(jsonObject) : null;
-							if (theme != null) {
-								installTheme(theme, false);
-							} else {
-								ClickableToast.show(R.string.invalid_data_format);
-							}
-						} else if (array != null) {
-							ClickableToast.show(R.string.invalid_data_format);
-						}
+					ThemeEngine.Theme theme = jsonObject != null
+							? prepareImportedTheme(jsonObject) : null;
+					if (theme != null) {
+						installTheme(theme, false);
+					} else {
+						ClickableToast.show(R.string.invalid_data_format);
 					}
-					break;
+				} else if (array != null) {
+					ClickableToast.show(R.string.invalid_data_format);
 				}
 			}
 		}

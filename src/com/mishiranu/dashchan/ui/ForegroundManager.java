@@ -650,14 +650,78 @@ public class ForegroundManager implements Handler.Callback {
 		private static final String EXTRA_DESCRIPTION_TEXT = "descriptionText";
 		private static final String EXTRA_DESCRIPTION_IMAGE = "descriptionImage";
 		private static final String EXTRA_MULTIPLE = "multiple";
+		private static final String EXTRA_ALLOW_REFRESH = "allowRefresh";
+		private static final String EXTRA_KEEP_OPEN = "keepOpen";
 
 		private FrameLayout[] selectionViews;
 		private boolean[] selected;
+		private ImageView taskImageView;
+		private boolean waiting;
+
+		private boolean keepOpen() {
+			return requireArguments().getBoolean(EXTRA_KEEP_OPEN);
+		}
+
+		private void setWaiting(boolean waiting) {
+			this.waiting = waiting;
+			Parcelable[] images = AndroidUtils.getParcelableArray(requireArguments(), EXTRA_IMAGES, Bitmap.class);
+			if (selectionViews != null) {
+				for (int i = 0; i < selectionViews.length; i++) {
+					FrameLayout cell = selectionViews[i];
+					if (cell != null) {
+						boolean available = images != null && i < images.length && images[i] != null;
+						cell.getChildAt(1).setEnabled(!waiting && available);
+						cell.setAlpha(waiting ? 0.65f : 1f);
+					}
+				}
+			}
+			if (getDialog() instanceof AlertDialog) {
+				AlertDialog dialog = (AlertDialog) getDialog();
+				Button refresh = dialog.getButton(AlertDialog.BUTTON_NEUTRAL);
+				Button confirm = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+				if (refresh != null) refresh.setEnabled(!waiting);
+				if (confirm != null) confirm.setEnabled(!waiting);
+			}
+		}
+
+		private void updateImages(ChoiceHandlerData data) {
+			requireArguments().putParcelableArray(EXTRA_IMAGES, data.images);
+			requireArguments().putParcelable(EXTRA_DESCRIPTION_IMAGE, data.descriptionImage);
+			requireArguments().putBooleanArray(EXTRA_SELECTED, null);
+			if (taskImageView == null || selectionViews == null) {
+				return; // A restored dialog will use the updated arguments when creating its views.
+			}
+			if (data.images.length != selected.length) {
+				publishResult(false);
+				dismiss();
+				return;
+			}
+			taskImageView.setImageBitmap(data.descriptionImage);
+			for (int i = 0; i < selected.length; i++) {
+				selected[i] = false;
+				((ImageView) selectionViews[i].getChildAt(0)).setImageBitmap(data.images[i]);
+				updateSelection(i);
+			}
+			setWaiting(false);
+		}
+
+		@Override
+		public void onDestroyView() {
+			super.onDestroyView();
+			taskImageView = null;
+			selectionViews = null;
+			selected = null;
+		}
 
 		public ImageChoiceDialog() {}
 
 		public ImageChoiceDialog(String pendingDataId, int columns, boolean[] selected, Bitmap[] images,
 				String descriptionText, Bitmap descriptionImage, boolean multiple) {
+			this(pendingDataId, columns, selected, images, descriptionText, descriptionImage, multiple, false);
+		}
+
+		public ImageChoiceDialog(String pendingDataId, int columns, boolean[] selected, Bitmap[] images,
+				String descriptionText, Bitmap descriptionImage, boolean multiple, boolean allowRefresh) {
 			Bundle args = new Bundle();
 			fillArguments(args, pendingDataId);
 			args.putInt(EXTRA_COLUMNS, columns);
@@ -666,6 +730,7 @@ public class ForegroundManager implements Handler.Callback {
 			args.putString(EXTRA_DESCRIPTION_TEXT, descriptionText);
 			args.putParcelable(EXTRA_DESCRIPTION_IMAGE, descriptionImage);
 			args.putBoolean(EXTRA_MULTIPLE, multiple);
+			args.putBoolean(EXTRA_ALLOW_REFRESH, allowRefresh);
 			setArguments(args);
 		}
 
@@ -704,6 +769,43 @@ public class ForegroundManager implements Handler.Callback {
 		public void onStart() {
 			super.onStart();
 			Dialog dialog = getDialog();
+			if (dialog instanceof AlertDialog && requireArguments().getBoolean(EXTRA_ALLOW_REFRESH)) {
+				Button refresh = ((AlertDialog) dialog).getButton(AlertDialog.BUTTON_NEUTRAL);
+				Drawable icon = ResourceUtils.getDrawable(refresh.getContext(), R.attr.iconActionRefresh, 0);
+				if (icon != null) {
+					float density = ResourceUtils.obtainDensity(refresh);
+					int size = (int) (24f * density + 0.5f);
+					icon = icon.mutate();
+					icon.setTintList(refresh.getTextColors());
+					icon.setBounds(0, 0, size, size);
+					refresh.setText("");
+					refresh.setCompoundDrawablesRelative(icon, null, null, null);
+					refresh.setCompoundDrawablePadding(0);
+					int padding = (int) (12f * density + 0.5f);
+					refresh.setPaddingRelative(padding, 0, padding, 0);
+					int touchSize = (int) (48f * density + 0.5f);
+					refresh.setMinWidth(touchSize);
+					refresh.setMinimumWidth(touchSize);
+					refresh.setMinHeight(touchSize);
+					refresh.getLayoutParams().width = touchSize;
+					refresh.requestLayout();
+				}
+				refresh.setContentDescription(getString(R.string.refresh_captcha));
+				refresh.setTooltipText(getString(R.string.refresh_captcha));
+			}
+			if (keepOpen() && dialog instanceof AlertDialog) {
+				AlertDialog alert = (AlertDialog) dialog;
+				alert.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v ->
+						onClick(alert, AlertDialog.BUTTON_NEUTRAL));
+				alert.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v ->
+						onClick(alert, AlertDialog.BUTTON_POSITIVE));
+				ChoicePendingData data = getPendingData();
+				if (data != null) {
+					synchronized (data) {
+						setWaiting(data.ready);
+					}
+				}
+			}
 			Window window = dialog != null ? dialog.getWindow() : null;
 			if (window != null) {
 				int width = getResources().getDisplayMetrics().widthPixels;
@@ -755,7 +857,17 @@ public class ForegroundManager implements Handler.Callback {
 			}
 			int cornersRadius = (int) (2f * density);
 			if (descriptionImage != null) {
-				ImageView imageView = appendDescriptionImageView(container, descriptionImage);
+				ImageView imageView;
+				if (keepOpen()) {
+					imageView = new ImageView(container.getContext());
+					imageView.setScaleType(ImageView.ScaleType.FIT_CENTER);
+					imageView.setImageBitmap(descriptionImage);
+					container.addView(imageView, new LinearLayout.LayoutParams(
+							ViewGroup.LayoutParams.MATCH_PARENT, (int) (120f * density)));
+				} else {
+					imageView = appendDescriptionImageView(container, descriptionImage);
+				}
+				taskImageView = imageView;
 				LinearLayout.LayoutParams layoutParams = (LinearLayout.LayoutParams) imageView.getLayoutParams();
 				if (landscape) {
 					layoutParams.width = LinearLayout.LayoutParams.MATCH_PARENT;
@@ -794,6 +906,9 @@ public class ForegroundManager implements Handler.Callback {
 							}
 						};
 						imageView.setScaleType(ImageView.ScaleType.CENTER_CROP);
+						if (keepOpen()) {
+							imageView.setScaleType(ImageView.ScaleType.FIT_CENTER);
+						}
 						imageView.setImageBitmap(images[index]);
 						ViewUtils.makeRoundedCorners(imageView, cornersRadius, false);
 						frameLayout.addView(imageView, FrameLayout.LayoutParams.MATCH_PARENT,
@@ -826,11 +941,17 @@ public class ForegroundManager implements Handler.Callback {
 					.setPositiveButton(android.R.string.ok, this)
 					.setNegativeButton(android.R.string.cancel, this)
 					.create();
+			if (requireArguments().getBoolean(EXTRA_ALLOW_REFRESH)) {
+				alertDialog.setButton(AlertDialog.BUTTON_NEUTRAL, getString(R.string.refresh_captcha), this);
+			}
 			return alertDialog;
 		}
 
 		@Override
 		public void onClick(View v) {
+			if (keepOpen() && waiting) {
+				return;
+			}
 			int index = (int) v.getTag();
 			if (requireArguments().getBoolean(EXTRA_MULTIPLE)) {
 				selected[index] = !selected[index];
@@ -839,7 +960,11 @@ public class ForegroundManager implements Handler.Callback {
 				for (int i = 0; i < selected.length; i++) {
 					selected[i] = i == index;
 				}
-				dismiss();
+				if (keepOpen()) {
+					setWaiting(true);
+				} else {
+					dismiss();
+				}
 				publishResult(true);
 			}
 		}
@@ -851,7 +976,18 @@ public class ForegroundManager implements Handler.Callback {
 
 		@Override
 		public void onClick(DialogInterface dialog, int which) {
-			publishResult(which == AlertDialog.BUTTON_POSITIVE);
+			if (keepOpen() && which != AlertDialog.BUTTON_NEGATIVE) {
+				if (waiting) {
+					return;
+				}
+				setWaiting(true);
+			}
+			if (which == AlertDialog.BUTTON_NEUTRAL && requireArguments().getBoolean(EXTRA_ALLOW_REFRESH)) {
+				((AlertDialog) dialog).getButton(which).setEnabled(false);
+				notifyResult(pendingData -> pendingData.result = REFRESH_IMAGE_CHOICE_RESULT);
+			} else {
+				publishResult(which == AlertDialog.BUTTON_POSITIVE);
+			}
 		}
 
 		@Override
@@ -861,7 +997,12 @@ public class ForegroundManager implements Handler.Callback {
 		}
 
 		private void publishResult(boolean success) {
-			notifyResult(pendingData -> pendingData.result = success ? selected : null);
+			notifyResult(pendingData -> {
+				pendingData.result = success ? selected.clone() : null;
+				if (keepOpen() && !success) {
+					pendingData.cancelled = true;
+				}
+			});
 		}
 	}
 
@@ -911,6 +1052,13 @@ public class ForegroundManager implements Handler.Callback {
 				if (pendingData == null) {
 					return true;
 				}
+				if (pendingData instanceof ChoicePendingData) {
+					synchronized (pendingData) {
+						if (((ChoicePendingData) pendingData).cancelled) {
+							return true;
+						}
+					}
+				}
 				if (activity == null) {
 					synchronized (pendingData) {
 						pendingData.ready = true;
@@ -931,10 +1079,18 @@ public class ForegroundManager implements Handler.Callback {
 						case MESSAGE_REQUIRE_USER_CHOICE: {
 							ChoiceHandlerData choiceHandlerData = (ChoiceHandlerData) handlerData;
 							if (choiceHandlerData.images != null) {
-								new ImageChoiceDialog(handlerData.pendingDataId, choiceHandlerData.columns,
+								Fragment existing = activity.getSupportFragmentManager()
+										.findFragmentByTag(handlerData.pendingDataId);
+								if (choiceHandlerData.keepOpen && existing instanceof ImageChoiceDialog) {
+									((ImageChoiceDialog) existing).updateImages(choiceHandlerData);
+									break;
+								}
+								ImageChoiceDialog dialog = new ImageChoiceDialog(handlerData.pendingDataId, choiceHandlerData.columns,
 										choiceHandlerData.selected, choiceHandlerData.images,
 										choiceHandlerData.descriptionText, choiceHandlerData.descriptionImage,
-										choiceHandlerData.multiple).show(activity);
+										choiceHandlerData.multiple, choiceHandlerData.allowRefresh);
+								dialog.requireArguments().putBoolean(ImageChoiceDialog.EXTRA_KEEP_OPEN, choiceHandlerData.keepOpen);
+								dialog.show(activity);
 							} else {
 								new ItemChoiceDialog(handlerData.pendingDataId, choiceHandlerData.selected,
 										choiceHandlerData.items, choiceHandlerData.descriptionText,
@@ -997,9 +1153,12 @@ public class ForegroundManager implements Handler.Callback {
 		public final String descriptionText;
 		public final Bitmap descriptionImage;
 		public final boolean multiple;
+		public final boolean allowRefresh;
+		public boolean keepOpen;
 
 		public ChoiceHandlerData(String pendingDataId, int columns, boolean[] selected, Bitmap[] images,
-				CharSequence[] items, String descriptionText, Bitmap descriptionImage, boolean multiple) {
+				CharSequence[] items, String descriptionText, Bitmap descriptionImage, boolean multiple,
+				boolean allowRefresh) {
 			super(pendingDataId);
 			this.columns = columns;
 			this.selected = selected;
@@ -1008,6 +1167,7 @@ public class ForegroundManager implements Handler.Callback {
 			this.descriptionText = descriptionText;
 			this.descriptionImage = descriptionImage;
 			this.multiple = multiple;
+			this.allowRefresh = allowRefresh;
 		}
 	}
 
@@ -1058,8 +1218,72 @@ public class ForegroundManager implements Handler.Callback {
 		}
 	}
 
+	public static final int IMAGE_CHOICE_REFRESH = -2;
+	private static final boolean[] REFRESH_IMAGE_CHOICE_RESULT = new boolean[0];
+
 	private static class ChoicePendingData extends PendingData {
 		public boolean[] result;
+		public boolean cancelled;
+	}
+
+	/** One manually operated captcha window across successive server keyboard responses. */
+	public final class ImageChoiceSession implements AutoCloseable {
+		private final ChoicePendingData pending = new ChoicePendingData();
+		private final String id = putPendingData(pending);
+		private ChoiceHandlerData lastRequest;
+
+		public boolean isCancelled() {
+			synchronized (pending) {
+				return pending.cancelled;
+			}
+		}
+
+		public Integer require(Bitmap[] images, String description, Bitmap task) throws InterruptedException {
+			ChoiceHandlerData request = new ChoiceHandlerData(id, 3, null, images, null, description, task,
+					false, true);
+			request.keepOpen = true;
+			synchronized (pending) {
+				if (pending.cancelled || Thread.currentThread().isInterrupted()) {
+					return null;
+				}
+				pending.ready = false;
+				pending.result = null;
+				lastRequest = request;
+			}
+			handler.obtainMessage(MESSAGE_REQUIRE_USER_CHOICE, request).sendToTarget();
+			pending.await(handler, request);
+			synchronized (pending) {
+				if (pending.cancelled || pending.result == null) {
+					return null;
+				}
+				if (pending.result == REFRESH_IMAGE_CHOICE_RESULT) {
+					return IMAGE_CHOICE_REFRESH;
+				}
+				for (int i = 0; i < pending.result.length; i++) {
+					if (pending.result[i]) {
+						return i;
+					}
+				}
+				return -1;
+			}
+		}
+
+		@Override
+		public void close() {
+			synchronized (pending) {
+				pending.cancelled = true;
+				pending.ready = true;
+				pending.notifyAll();
+			}
+			removePendingData(id);
+			if (lastRequest != null) {
+				handler.obtainMessage(MESSAGE_INTERRUPT, lastRequest).sendToTarget();
+			}
+		}
+	}
+
+	public ImageChoiceSession createImageChoiceSession() {
+		return new ImageChoiceSession();
 	}
 
 	private static class RecaptchaV2PendingData extends PendingData {
@@ -1135,6 +1359,12 @@ public class ForegroundManager implements Handler.Callback {
 		return requireUserSingleChoice(columns, selected, null, images, descriptionText, descriptionImage, true);
 	}
 
+	public Integer requireUserImageSingleChoice(int columns, int selected, Bitmap[] images,
+			String descriptionText, Bitmap descriptionImage, boolean allowRefresh) throws InterruptedException {
+		return requireUserSingleChoice(columns, selected, null, images, descriptionText, descriptionImage,
+				true, allowRefresh);
+	}
+
 	public boolean[] requireUserImageMultipleChoice(int columns, boolean[] selected, Bitmap[] images,
 			String descriptionText, Bitmap descriptionImage) throws InterruptedException {
 		return requireUserChoice(columns, selected, null, images, descriptionText, descriptionImage, true, true);
@@ -1142,6 +1372,13 @@ public class ForegroundManager implements Handler.Callback {
 
 	private Integer requireUserSingleChoice(int columns, int selected, CharSequence[] items, Bitmap[] images,
 			String descriptionText, Bitmap descriptionImage, boolean imageChoice) throws InterruptedException {
+		return requireUserSingleChoice(columns, selected, items, images, descriptionText, descriptionImage,
+				imageChoice, false);
+	}
+
+	private Integer requireUserSingleChoice(int columns, int selected, CharSequence[] items, Bitmap[] images,
+			String descriptionText, Bitmap descriptionImage, boolean imageChoice, boolean allowRefresh)
+			throws InterruptedException {
 		boolean[] selectedArray = null;
 		int length = items != null ? items.length : images != null ? images.length : 0;
 		if (selected >= 0 && selected < length) {
@@ -1149,7 +1386,10 @@ public class ForegroundManager implements Handler.Callback {
 			selectedArray[selected] = true;
 		}
 		boolean[] result = requireUserChoice(columns, selectedArray, items, images, descriptionText, descriptionImage,
-				false, imageChoice);
+				false, imageChoice, allowRefresh);
+		if (allowRefresh && result == REFRESH_IMAGE_CHOICE_RESULT) {
+			return IMAGE_CHOICE_REFRESH;
+		}
 		if (result != null) {
 			for (int i = 0; i < result.length; i++) {
 				if (result[i]) {
@@ -1164,6 +1404,13 @@ public class ForegroundManager implements Handler.Callback {
 	private boolean[] requireUserChoice(int columns, boolean[] selected, CharSequence[] items, Bitmap[] images,
 			String descriptionText, Bitmap descriptionImage, boolean multiple, boolean imageChoice)
 			throws InterruptedException {
+		return requireUserChoice(columns, selected, items, images, descriptionText, descriptionImage,
+				multiple, imageChoice, false);
+	}
+
+	private boolean[] requireUserChoice(int columns, boolean[] selected, CharSequence[] items, Bitmap[] images,
+			String descriptionText, Bitmap descriptionImage, boolean multiple, boolean imageChoice,
+			boolean allowRefresh) throws InterruptedException {
 		if (imageChoice && images == null) {
 			throw new NullPointerException("Images array is null");
 		}
@@ -1174,7 +1421,7 @@ public class ForegroundManager implements Handler.Callback {
 		String pendingDataId = putPendingData(pendingData);
 		try {
 			ChoiceHandlerData handlerData = new ChoiceHandlerData(pendingDataId, columns, selected, images, items,
-					descriptionText, descriptionImage, multiple);
+					descriptionText, descriptionImage, multiple, allowRefresh);
 			handler.obtainMessage(MESSAGE_REQUIRE_USER_CHOICE, handlerData).sendToTarget();
 			return pendingData.await(handler, handlerData) ? pendingData.result : null;
 		} finally {

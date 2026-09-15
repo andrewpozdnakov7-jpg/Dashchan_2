@@ -186,7 +186,6 @@ public class Preferences {
 	}
 
 	public static final String KEY_APPLICATION_NAME = "application_name";
-	private static final String KEY_TOGDACH_NAME_PROMPTED = "togdach_name_prompted";
 	private static final String KEY_LOCAL_ARCHIVE_URI_TREES = "local_archive_uri_trees";
 	private static final String KEY_EXPANDED_BOARD_CATEGORIES = "expanded_board_categories_";
 	private static final String KEY_PIKABU_CUSTOM_COMMUNITIES = "pikabu_custom_communities";
@@ -224,14 +223,6 @@ public class Preferences {
 		if (LauncherIconManager.isValidValue(value)) {
 			PREFERENCES.edit().put(KEY_APPLICATION_NAME, value).close();
 		}
-	}
-
-	public static boolean isTogdachNamePrompted() {
-		return PREFERENCES.getBoolean(KEY_TOGDACH_NAME_PROMPTED, false);
-	}
-
-	public static void setTogdachNamePrompted() {
-		PREFERENCES.edit().put(KEY_TOGDACH_NAME_PROMPTED, true).close();
 	}
 
 	public static String getApplicationLogo() {
@@ -1223,16 +1214,7 @@ public class Preferences {
 				DEFAULT_FAVORITES_ORDER, FavoritesOrder.VALUE_PROVIDER);
 	}
 
-	public static final String KEY_FAVORITES_HIDED_ALL = "favorites_hided_all";
-	public static final boolean DEFAULT_FAVORITES_HIDED_ALL = false;
-
-	public static boolean isFavoritesHidedAll() {
-		return PREFERENCES.getBoolean(KEY_FAVORITES_HIDED_ALL, DEFAULT_FAVORITES_HIDED_ALL);
-	}
-
-	public static void setFavoritesHideAll(boolean flag) {
-		PREFERENCES.edit().put(KEY_FAVORITES_HIDED_ALL, flag).close();
-	}
+	private static final String KEY_LEGACY_FAVORITES_HIDED_ALL = "favorites_hided_all";
 
 	public static final String KEY_FAVORITES_HIDED_DELETED = "favorites_hided_deleted";
 	public static final boolean DEFAULT_FAVORITES_HIDED_DELETED = false;
@@ -1335,6 +1317,24 @@ public class Preferences {
 	}
 
 	public static final String KEY_LOCK_DRAWER = "lock_drawer";
+	private static final String KEY_FAVORITE_THREADS_COLLAPSED = "favorite_threads_collapsed";
+
+	public static boolean isFavoriteThreadsCollapsed() {
+		boolean collapsed = PREFERENCES.getBoolean(KEY_FAVORITE_THREADS_COLLAPSED, false);
+		if (PREFERENCES.contains(KEY_LEGACY_FAVORITES_HIDED_ALL)) {
+			// Preserve either old way of hiding the list, then keep only the disclosure state.
+			collapsed |= PREFERENCES.getBoolean(KEY_LEGACY_FAVORITES_HIDED_ALL, false);
+			PREFERENCES.edit().put(KEY_FAVORITE_THREADS_COLLAPSED, collapsed)
+					.remove(KEY_LEGACY_FAVORITES_HIDED_ALL).close();
+		}
+		return collapsed;
+	}
+
+	public static void setFavoriteThreadsCollapsed(boolean collapsed) {
+		PREFERENCES.edit().put(KEY_FAVORITE_THREADS_COLLAPSED, collapsed)
+				.remove(KEY_LEGACY_FAVORITES_HIDED_ALL).close();
+	}
+
 	public static final boolean DEFAULT_LOCK_DRAWER = false;
 
 	public static boolean isDrawerLocked() {

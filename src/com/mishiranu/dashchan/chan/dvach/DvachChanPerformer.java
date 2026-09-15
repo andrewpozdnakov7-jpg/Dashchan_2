@@ -24,6 +24,7 @@ import chan.text.ParseException;
 import chan.util.CommonUtils;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.R;
+import com.mishiranu.dashchan.ui.ForegroundManager;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
@@ -888,7 +889,22 @@ public class DvachChanPerformer extends ChanPerformer {
 
 	@Override
 	public ReadCaptchaResult onReadCaptcha(ReadCaptchaData data) throws HttpException, InvalidResponseException {
-		return onReadCaptcha(data, data.captchaPass != null ? data.captchaPass[0] : null, true);
+		try (ForegroundManager.ImageChoiceSession session = ForegroundManager.getInstance().createImageChoiceSession()) {
+			while (!session.isCancelled()) {
+				try {
+					ReadCaptchaResult result = onReadCaptcha(data,
+							data.captchaPass != null ? data.captchaPass[0] : null, true, session);
+					return session.isCancelled() ? new ReadCaptchaResult(CaptchaState.NEED_LOAD, null) : result;
+				} catch (DvachEmojiCaptchaProvider.RefreshRequestedException e) {
+					// Only an explicit refresh restarts this loop, without growing the call stack.
+					if (Thread.currentThread().isInterrupted()) {
+						throw new HttpException(com.mishiranu.dashchan.content.model.ErrorItem.Type.UNKNOWN,
+								false, false, e);
+					}
+				}
+			}
+			return new ReadCaptchaResult(CaptchaState.NEED_LOAD, null);
+		}
 	}
 
 	private static ReadCaptchaResult makeCaptchaPassResult(String captchaPassCookie) {
@@ -904,7 +920,9 @@ public class DvachChanPerformer extends ChanPerformer {
 	}
 
 	private ReadCaptchaResult onReadCaptcha(ReadCaptchaData data, String captchaPassData,
-			boolean mayUseLastCaptchaPassCookie) throws HttpException, InvalidResponseException {
+			boolean mayUseLastCaptchaPassCookie, ForegroundManager.ImageChoiceSession session)
+			throws HttpException, InvalidResponseException,
+			DvachEmojiCaptchaProvider.RefreshRequestedException {
 		DvachChanLocator locator = DvachChanLocator.get(this);
 		DvachChanConfiguration configuration = DvachChanConfiguration.get(this);
 		String captchaPassCookie = null;
@@ -958,7 +976,7 @@ public class DvachChanPerformer extends ChanPerformer {
 			return makeCaptchaPassResult(captchaPassCookie);
 		} else {
 			if (mayRelogin) {
-				return onReadCaptcha(data, captchaPassData, false);
+				return onReadCaptcha(data, captchaPassData, false, session);
 			}
 			configuration.setMaxFilesCountEnabled(false);
 			String id = jsonObject != null ? CommonUtils.optJsonString(jsonObject, "id") : null;
@@ -969,10 +987,11 @@ public class DvachChanPerformer extends ChanPerformer {
 				DvachEmojiCaptchaProvider.DvachEmojiCaptchaAnswerRetriever retriever =
 						(Bitmap task, Bitmap[] keyboardImages) -> {
 							try {
-								return requireUserImageSingleChoice(-1, keyboardImages,
+								return session.require(keyboardImages,
 										configuration.getResources().getString(R.string.emoji_captcha_input),
 										task);
-							} catch (HttpException e) {
+							} catch (InterruptedException e) {
+								Thread.currentThread().interrupt();
 								return -1;
 							}
 						};

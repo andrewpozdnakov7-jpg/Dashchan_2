@@ -477,36 +477,34 @@ public class UpdateFragment extends BaseListFragment {
 
 	@Override
 	public boolean onOptionsItemSelected(MenuItem item) {
-		switch (item.getItemId()) {
-			case R.id.menu_download: {
-				ArrayList<UpdaterActivity.Request> requests = new ArrayList<>();
-				if (updateDataMap != null) {
-					Adapter adapter = (Adapter) getRecyclerView().getAdapter();
-					for (ListItem listItem : adapter.listItems) {
-						if (listItem.willBeInstalled()) {
-							ReadUpdateTask.PackageItem packageItem = updateDataMap
-									.get(listItem.extensionName, listItem.installed)
-									.packageItems.get(listItem.targetIndex);
-							if (packageItem.source != null) {
-								requests.add(new UpdaterActivity.Request(listItem.extensionName,
-										packageItem.versionName, packageItem.source,
-										packageItem.sha256sum, packageItem.fingerprints));
-							}
+		if (item.getItemId() == R.id.menu_download) {
+			ArrayList<UpdaterActivity.Request> requests = new ArrayList<>();
+			if (updateDataMap != null) {
+				Adapter adapter = (Adapter) getRecyclerView().getAdapter();
+				for (ListItem listItem : adapter.listItems) {
+					if (listItem.willBeInstalled()) {
+						ReadUpdateTask.PackageItem packageItem = updateDataMap
+								.get(listItem.extensionName, listItem.installed)
+								.packageItems.get(listItem.targetIndex);
+						if (packageItem.source != null) {
+							requests.add(new UpdaterActivity.Request(listItem.extensionName,
+									packageItem.versionName, packageItem.source,
+									packageItem.sha256sum, packageItem.fingerprints));
 						}
 					}
 				}
-				if (!requests.isEmpty()) {
-					if (BuildConfig.REQUIRE_EXTENSION_INSTALL_CONSENT) {
-						displayExtensionInstallConsentDialog(getChildFragmentManager(), requests);
-					} else {
-						displayUpdateReminderDialog(getChildFragmentManager());
-						UpdaterActivity.startUpdater(requests);
-					}
-				} else {
-					ClickableToast.show(R.string.no_available_updates);
-				}
-				return true;
 			}
+			if (!requests.isEmpty()) {
+				if (BuildConfig.REQUIRE_EXTENSION_INSTALL_CONSENT) {
+					displayExtensionInstallConsentDialog(getChildFragmentManager(), requests);
+				} else {
+					displayUpdateReminderDialog(getChildFragmentManager());
+					UpdaterActivity.startUpdater(requests);
+				}
+			} else {
+				ClickableToast.show(R.string.no_available_updates);
+			}
+			return true;
 		}
 		return false;
 	}

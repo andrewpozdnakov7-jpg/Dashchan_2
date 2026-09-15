@@ -6,8 +6,9 @@ import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
 import android.view.View;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
-import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.FontManager;
 import com.mishiranu.dashchan.content.Preferences;
@@ -24,6 +25,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class AccessibilityFragment extends PreferenceFragment {
+	private final ActivityResultLauncher<Intent> fontPicker = registerForActivityResult(
+			new ActivityResultContracts.StartActivityForResult(),
+			result -> onFontSelected(result.getResultCode(), result.getData()));
+
 	@Override
 	protected SharedPreferences getPreferences() {
 		return Preferences.PREFERENCES;
@@ -108,13 +113,11 @@ public class AccessibilityFragment extends PreferenceFragment {
 						"application/x-font-ttf", "application/x-font-opentype"})
 				.putExtra("android.content.extra.SHOW_ADVANCED", true)
 				.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-		startActivityForResult(intent, C.REQUEST_CODE_FONT);
+		fontPicker.launch(intent);
 	}
 
-	@Override
-	public void onActivityResult(int requestCode, int resultCode, Intent data) {
-		super.onActivityResult(requestCode, resultCode, data);
-		if (requestCode == C.REQUEST_CODE_FONT && resultCode == Activity.RESULT_OK && data != null) {
+	private void onFontSelected(int resultCode, Intent data) {
+		if (resultCode == Activity.RESULT_OK && data != null) {
 			Uri uri = data.getData();
 			if (uri != null) {
 				android.content.Context context = requireContext().getApplicationContext();

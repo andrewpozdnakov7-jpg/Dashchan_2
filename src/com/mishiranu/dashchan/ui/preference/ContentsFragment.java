@@ -31,6 +31,8 @@ import java.util.HashSet;
 import java.util.Set;
 
 public class ContentsFragment extends PreferenceFragment {
+	private static final String RESULT_CACHE_SIZE_CHANGED = "contentsCacheSizeChanged";
+
 	private CheckPreference replyNotifications;
 	private Preference<?> clearCachePreference;
 
@@ -110,6 +112,8 @@ public class ContentsFragment extends PreferenceFragment {
 			dialog.show(getChildFragmentManager(), ClearCacheDialog.class.getName());
 		});
 		clearCachePreference.invalidate();
+		getParentFragmentManager().setFragmentResultListener(RESULT_CACHE_SIZE_CHANGED,
+				getViewLifecycleOwner(), (requestKey, result) -> clearCachePreference.invalidate());
 	}
 
 	@Override
@@ -144,7 +148,6 @@ public class ContentsFragment extends PreferenceFragment {
 					.setSingleChoiceItems(items, checkedIndex, (d, which) -> checkedIndex = which)
 					.setPositiveButton(android.R.string.ok, (d, w) -> {
 						ClearingDialog clearingDialog = new ClearingDialog(checkedIndex == 1);
-						clearingDialog.setTargetFragment(getParentFragment(), 0);
 						clearingDialog.show(getParentFragment().getParentFragmentManager(),
 								ClearingDialog.class.getName());
 					})
@@ -161,6 +164,7 @@ public class ContentsFragment extends PreferenceFragment {
 
 	public static class ClearingDialog extends DialogFragment {
 		private static final String EXTRA_ALL_PAGES = "allPages";
+		private boolean taskInitialized;
 
 		public ClearingDialog() {}
 
@@ -179,8 +183,13 @@ public class ContentsFragment extends PreferenceFragment {
 		}
 
 		@Override
-		public void onActivityCreated(Bundle savedInstanceState) {
-			super.onActivityCreated(savedInstanceState);
+		public void onStart() {
+			super.onStart();
+			// Wait for the activity's restored pages, but initialize only once per dialog instance.
+			if (taskInitialized) {
+				return;
+			}
+			taskInitialized = true;
 
 			ClearCacheViewModel viewModel = new ViewModelProvider(this).get(ClearCacheViewModel.class);
 			if (!viewModel.hasTaskOrValue()) {
@@ -209,7 +218,7 @@ public class ContentsFragment extends PreferenceFragment {
 		}
 
 		private void sendUpdateCacheSize() {
-			((ContentsFragment) getTargetFragment()).clearCachePreference.invalidate();
+			getParentFragmentManager().setFragmentResult(RESULT_CACHE_SIZE_CHANGED, new Bundle());
 		}
 
 		@Override

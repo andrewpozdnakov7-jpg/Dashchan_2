@@ -1343,10 +1343,16 @@ public class ChanPerformer implements Chan.Linked {
 	@Public
 	public final Integer requireUserImageSingleChoice(int selected, Bitmap[] images, String descriptionText,
 			Bitmap descriptionImage) throws HttpException {
+		return requireUserImageSingleChoice(selected, images, descriptionText, descriptionImage, false);
+	}
+
+	/** Internal opt-in for captcha dialogs. Refresh returns ForegroundManager.IMAGE_CHOICE_REFRESH. */
+	protected final Integer requireUserImageSingleChoice(int selected, Bitmap[] images, String descriptionText,
+			Bitmap descriptionImage, boolean allowRefresh) throws HttpException {
 		checkPerformerRequireCall();
 		try {
 			return ForegroundManager.getInstance().requireUserImageSingleChoice(3, selected, images,
-					descriptionText, descriptionImage);
+					descriptionText, descriptionImage, allowRefresh);
 		} catch (InterruptedException e) {
 			Thread.currentThread().interrupt();
 			throw new HttpException(ErrorItem.Type.UNKNOWN, false, false, e);

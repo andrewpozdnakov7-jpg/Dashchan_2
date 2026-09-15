@@ -383,39 +383,33 @@ public class RedditWebReaderFragment extends ContentFragment {
 			});
 			return true;
 		}
-		switch (item.getItemId()) {
-			case R.id.menu_open_reddit_link: {
-				showOpenLinkDialog();
+		if (item.getItemId() == R.id.menu_open_reddit_link) {
+			showOpenLinkDialog();
+			return true;
+		} else if (item.getItemId() == R.id.menu_reload) {
+			webView.reload();
+			return true;
+		} else if (item.getItemId() == R.id.menu_translate) {
+			if (!translationEnabled && !TranslationController.isReadyForDirection(
+					TranslationModel.Direction.EN_RU)) {
+				ClickableToast.show(R.string.translation_package_unavailable);
 				return true;
 			}
-			case R.id.menu_reload: {
-				webView.reload();
-				return true;
+			setTranslationEnabled(!translationEnabled);
+			if (translationEnabled) {
+				ClickableToast.show(R.string.translation_initializing);
 			}
-			case R.id.menu_translate: {
-				if (!translationEnabled && !TranslationController.isReadyForDirection(
-						TranslationModel.Direction.EN_RU)) {
-					ClickableToast.show(R.string.translation_package_unavailable);
-					return true;
-				}
-				setTranslationEnabled(!translationEnabled);
-				if (translationEnabled) {
-					ClickableToast.show(R.string.translation_initializing);
-				}
-				invalidateOptionsMenu();
-				return true;
+			invalidateOptionsMenu();
+			return true;
+		} else if (item.getItemId() == R.id.menu_copy_link) {
+			StringUtils.copyToClipboard(requireContext(), webView.getUrl());
+			return true;
+		} else if (item.getItemId() == R.id.menu_share_link) {
+			String url = webView.getUrl();
+			if (!StringUtils.isEmpty(url)) {
+				NavigationUtils.shareLink(requireContext(), null, Uri.parse(url));
 			}
-			case R.id.menu_copy_link: {
-				StringUtils.copyToClipboard(requireContext(), webView.getUrl());
-				return true;
-			}
-			case R.id.menu_share_link: {
-				String url = webView.getUrl();
-				if (!StringUtils.isEmpty(url)) {
-					NavigationUtils.shareLink(requireContext(), null, Uri.parse(url));
-				}
-				return true;
-			}
+			return true;
 		}
 		return false;
 	}

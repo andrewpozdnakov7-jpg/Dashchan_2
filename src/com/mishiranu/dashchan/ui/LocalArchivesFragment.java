@@ -18,10 +18,11 @@ import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
-import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.LocalArchiveManager;
 import com.mishiranu.dashchan.content.Preferences;
@@ -37,6 +38,10 @@ import java.util.HashSet;
 import java.util.List;
 
 public class LocalArchivesFragment extends ContentFragment {
+	private final ActivityResultLauncher<Intent> archiveFolderPicker = registerForActivityResult(
+			new ActivityResultContracts.StartActivityForResult(),
+			result -> onArchiveFolderSelected(result.getResultCode(), result.getData()));
+
 	private static final int MENU_ADD_FOLDER = 0x6201;
 	private static final int MENU_MANAGE_FOLDERS = 0x6202;
 	private static final int MENU_SELECT = 0x6203;
@@ -150,7 +155,7 @@ public class LocalArchivesFragment extends ContentFragment {
 							| Intent.FLAG_GRANT_WRITE_URI_PERMISSION
 							| Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
 					.putExtra("android.content.extra.SHOW_ADVANCED", true);
-			startActivityForResult(intent, C.REQUEST_CODE_LOCAL_ARCHIVE_TREE);
+			archiveFolderPicker.launch(intent);
 			return true;
 		} else if (item.getItemId() == MENU_MANAGE_FOLDERS) {
 			showFolderManager();
@@ -159,10 +164,8 @@ public class LocalArchivesFragment extends ContentFragment {
 		return false;
 	}
 
-	@Override
-	public void onActivityResult(int requestCode, int resultCode, Intent data) {
-		super.onActivityResult(requestCode, resultCode, data);
-		if (requestCode == C.REQUEST_CODE_LOCAL_ARCHIVE_TREE && resultCode == Activity.RESULT_OK
+	private void onArchiveFolderSelected(int resultCode, Intent data) {
+		if (resultCode == Activity.RESULT_OK
 				&& data != null && data.getData() != null) {
 			Uri uri = data.getData();
 			try {

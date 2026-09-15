@@ -290,7 +290,7 @@ public class DialogStack<T extends DialogStack.ViewFactory<T>> implements Iterab
 			// Keep both platform and legacy Back paths for OEM compatibility, but allow only one
 			// stack mutation per rendered frame when a device dispatches the same action through both.
 			backInvocationHandled = true;
-			ViewCompat.postOnAnimation(contentView, () -> backInvocationHandled = false);
+			contentView.postOnAnimation(() -> backInvocationHandled = false);
 			popInternal();
 		}
 	}

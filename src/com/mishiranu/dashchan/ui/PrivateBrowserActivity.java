@@ -89,7 +89,7 @@ public class PrivateBrowserActivity extends StateActivity implements DownloadLis
 		settings.setJavaScriptCanOpenWindowsAutomatically(false);
 		settings.setSupportMultipleWindows(false);
 		settings.setDomStorageEnabled(true);
-		settings.setSaveFormData(false);
+		// On supported Android versions, form filling is controlled by the Autofill framework.
 		webView.setImportantForAutofill(WebView.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS);
 		webView.setWebViewClient(new PrivateWebViewClient());
 		webView.setWebChromeClient(new PrivateWebChromeClient());
@@ -272,7 +272,6 @@ public class PrivateBrowserActivity extends StateActivity implements DownloadLis
 		}
 		WebStorage.getInstance().deleteAllData();
 		WebViewDatabase database = WebViewDatabase.getInstance(this);
-		database.clearFormData();
 		database.clearHttpAuthUsernamePassword();
 		cookieManager.removeAllCookies(removed -> {
 			cookieManager.flush();

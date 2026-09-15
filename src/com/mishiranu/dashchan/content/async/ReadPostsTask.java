@@ -138,6 +138,7 @@ public class ReadPostsTask extends HttpHolderTask<Void, ReadPostsTask.Result> {
 		boolean temporary = chan.configuration.getOption(ChanConfiguration.OPTION_LOCAL_MODE);
 		PagesDatabase.ThreadKey threadKey = new PagesDatabase.ThreadKey(chan.name, boardName, threadNumber);
 		PagesDatabase.Meta meta = PagesDatabase.getInstance().getMeta(threadKey, temporary);
+		PostNumber lastKnownPostNumber = PagesDatabase.getInstance().getLastKnownPostNumber(threadKey);
 		PostNumber lastExistingPostNumber = PagesDatabase.getInstance().getLastExistingPostNumber(threadKey);
 		UpdateMeta updateMeta = null;
 		PostNumber originalPostNumber;
@@ -266,7 +267,7 @@ public class ReadPostsTask extends HttpHolderTask<Void, ReadPostsTask.Result> {
 				}
 				meta = new PagesDatabase.Meta(validator, archivedThreadUri, uniquePosters, false, false);
 				insertResult = PagesDatabase.getInstance().insertNewPosts(threadKey,
-						posts, meta, temporary, newThread, partial);
+						posts, meta, temporary, newThread, partial, lastKnownPostNumber);
 			} catch (IOException e) {
 				updateMeta = new UpdateMeta(false, true);
 				return new Result.Fail(new ErrorItem(ErrorItem.Type.NO_ACCESS_TO_MEMORY));

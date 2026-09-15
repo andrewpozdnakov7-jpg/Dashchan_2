@@ -6,9 +6,10 @@ import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
 import android.view.View;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import chan.util.StringUtils;
-import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.WallpaperManager;
@@ -20,6 +21,10 @@ import com.mishiranu.dashchan.widget.ClickableToast;
 import java.io.IOException;
 
 public class WallpaperFragment extends PreferenceFragment {
+	private final ActivityResultLauncher<Intent> wallpaperPicker = registerForActivityResult(
+			new ActivityResultContracts.StartActivityForResult(),
+			result -> onWallpaperSelected(result.getResultCode(), result.getData()));
+
 	@Override
 	protected SharedPreferences getPreferences() {
 		return Preferences.PREFERENCES;
@@ -73,13 +78,11 @@ public class WallpaperFragment extends PreferenceFragment {
 				.setType("image/*")
 				.putExtra("android.content.extra.SHOW_ADVANCED", true)
 				.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-		startActivityForResult(intent, C.REQUEST_CODE_ATTACH);
+		wallpaperPicker.launch(intent);
 	}
 
-	@Override
-	public void onActivityResult(int requestCode, int resultCode, Intent data) {
-		super.onActivityResult(requestCode, resultCode, data);
-		if (requestCode == C.REQUEST_CODE_ATTACH && resultCode == Activity.RESULT_OK && data != null) {
+	private void onWallpaperSelected(int resultCode, Intent data) {
+		if (resultCode == Activity.RESULT_OK && data != null) {
 			Uri uri = data.getData();
 			if (uri != null) {
 				android.content.Context context = requireContext().getApplicationContext();

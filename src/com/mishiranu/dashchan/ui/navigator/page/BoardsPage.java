@@ -163,23 +163,19 @@ public class BoardsPage extends ListPage implements BoardsAdapter.Callback,
 
 	@Override
 	public boolean onOptionsItemSelected(MenuItem item) {
-		switch (item.getItemId()) {
-			case R.id.menu_refresh: {
-				RetainableExtra retainableExtra = getRetainableExtra(RetainableExtra.FACTORY);
-				if (!retainableExtra.firstLoad) {
-					refreshBoards(!getAdapter().isRealEmpty());
-				}
-				return true;
+		if (item.getItemId() == R.id.menu_refresh) {
+			RetainableExtra retainableExtra = getRetainableExtra(RetainableExtra.FACTORY);
+			if (!retainableExtra.firstLoad) {
+				refreshBoards(!getAdapter().isRealEmpty());
 			}
-			case R.id.menu_make_home_page: {
-				Preferences.setDefaultBoardName(getPage().chanName, null);
-				item.setVisible(false);
-				return true;
-			}
-			case R.id.menu_add_pikabu_community: {
-				showAddPikabuCommunityDialog();
-				return true;
-			}
+			return true;
+		} else if (item.getItemId() == R.id.menu_make_home_page) {
+			Preferences.setDefaultBoardName(getPage().chanName, null);
+			item.setVisible(false);
+			return true;
+		} else if (item.getItemId() == R.id.menu_add_pikabu_community) {
+			showAddPikabuCommunityDialog();
+			return true;
 		}
 		return false;
 	}
