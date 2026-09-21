@@ -1,0 +1,9 @@
+- Added video preloading. Once the current video has finished downloading, the app downloads upcoming videos in advance for regular playback and TikTok mode. By default, it preloads the next two videos, up to 20 MB each, over Wi-Fi and mobile data. Network, video count, and size limit can be adjusted in the player settings.
+- Reworked the message editor. Its size adapts to the available space and keyboard, and long text scrolls inside the field. Fixed the positioning of the text field, captcha, and send button.
+- Fixed scrolling when loading the next board page. After a manual request, the list smoothly moves to the first new visible thread, including when extra pages are needed because threads are hidden.
+- Text-selection handles no longer remain over the side drawer when it opens. Removed unnecessary empty space from the report-reason field.
+- Improved video player diagnostics. Standard logs now include playback speed, and Experimental settings offer an Extended log for investigating stalls. Recording is started manually; nothing is uploaded automatically.
+
+Thanks to everyone testing the app and sending logs — your help really makes Slooop better! 😺🐾
+
+Found a bug? Send us the logs!
