@@ -506,7 +506,7 @@ void * playerAudioDecodeThread(void * data) {
 				UNLOCK_AND_GOTO(&player->decode.audio.frameMutex, SKIP_AUDIO_FRAME);
 			}
 			playerSetDiagnosticsAudioStage(player, DIAGNOSTICS_AUDIO_STAGE_DECODE_FRAME);
-			int ready = playerDecodeFrame(context, packetHolder->packet, frame, &packetSent);
+			int ready = playerDecodeFrame(player, 0, context, packetHolder->packet, frame, &packetSent);
 			pthread_mutex_unlock(&player->decode.audio.frameMutex);
 			playerSetDiagnosticsAudioStage(player, DIAGNOSTICS_AUDIO_STAGE_IDLE);
 			if (!ready) {

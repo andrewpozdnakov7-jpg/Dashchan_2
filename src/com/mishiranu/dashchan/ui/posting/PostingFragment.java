@@ -11,6 +11,7 @@ import android.content.res.ColorStateList;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.Outline;
+import android.graphics.Paint;
 import android.graphics.Rect;
 import android.net.Uri;
 import android.os.Bundle;
@@ -18,6 +19,7 @@ import android.os.IBinder;
 import android.os.SystemClock;
 import android.provider.DocumentsContract;
 import android.text.Editable;
+import android.text.Layout;
 import android.text.SpannableStringBuilder;
 import android.text.TextUtils;
 import android.util.DisplayMetrics;
@@ -31,6 +33,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewOutlineProvider;
+import android.view.ViewTreeObserver;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.CheckBox;
@@ -120,6 +123,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 	private static final int SERVER_COMMAND_BUTTON_APACHAN_VIDEO = 1 << 2;
 	private static final int SERVER_COMMAND_BUTTON_WIDTH_DP = 40;
 	private static final int COMMENT_MIN_LINES = 4;
+	private static final int COMMENT_MAX_LINES = 9;
 
 	private static final String EXTRA_CAPTCHA_DRAFT = "captchaDraft";
 
@@ -254,8 +258,10 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		int screenWidthDp = ViewUtils.getWindowContentWidthDp(requireContext());
 		boolean hugeCaptcha = Preferences.isHugeCaptcha();
 		boolean longLayout = screenWidthDp >= 480;
+		boolean longFooter = longLayout && !hugeCaptcha;
 
 		scrollView = view.findViewById(R.id.scroll_view);
+		scrollView.getViewTreeObserver().addOnPreDrawListener(showCommentAfterLayout);
 		ViewGroup postingLayout = view.findViewById(R.id.posting_layout);
 		LinearLayout commentParent = view.findViewById(R.id.comment_parent);
 		commentView = view.findViewById(R.id.comment);
@@ -272,20 +278,22 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		attachmentContainer = view.findViewById(R.id.attachment_container);
 		attachmentContainer.setOnDragListener(attachmentContainerDragListener);
 		FrameLayout footerContainer = view.findViewById(R.id.footer_container);
-		int[] oldScrollViewHeight = {-1};
+		int[] oldScrollViewSize = {-1, -1};
 		scrollView.addOnLayoutChangeListener((v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
 			if (scrollView != null) {
+				int scrollViewWidth = scrollView.getWidth();
 				int scrollViewHeight = scrollView.getHeight();
-				if (scrollViewHeight != oldScrollViewHeight[0]) {
-					oldScrollViewHeight[0] = scrollViewHeight;
+				if (scrollViewWidth != oldScrollViewSize[0] || scrollViewHeight != oldScrollViewSize[1]) {
+					oldScrollViewSize[0] = scrollViewWidth;
+					oldScrollViewSize[1] = scrollViewHeight;
 					resizeComment(false);
+					scheduleCommentCursorVisibility();
 				}
 			}
 		});
 		postingLayout.setPadding((int) (8f * density), 0, (int) (8f * density), 0);
 		addHeader(personalDataBlock, 0, R.string.personal_data);
 		addHeader(postingLayout, postingLayout.indexOfChild(subjectView), R.string.message_data);
-		addHeader(postingLayout, postingLayout.indexOfChild(footerContainer), R.string.confirmation);
 		TextView tripcodeWarning = view.findViewById(R.id.personal_tripcode_warning);
 		TextView remainingCharacters = view.findViewById(R.id.remaining_characters);
 		ViewUtils.setTextSizeScaled(tripcodeWarning, 12);
@@ -297,7 +305,20 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		ViewUtils.applyMonospaceTypeface(passwordView);
 		commentEditWatcher = new CommentEditWatcher(postingConfiguration, commentView, remainingCharacters,
 				() -> resizeComment(true), () -> DraftsStorage.getInstance().store(obtainPostDraft()));
-		commentView.setOnFocusChangeListener((v, hasFocus) -> updateFocusButtons(hasFocus));
+		commentView.setOnFocusChangeListener((v, hasFocus) -> {
+			updateFocusButtons(hasFocus);
+			if (hasFocus) {
+				scheduleCommentCursorVisibility();
+			}
+		});
+		commentView.setMinLines(COMMENT_MIN_LINES);
+		commentView.setMaxLines(COMMENT_MAX_LINES);
+		commentView.addOnLayoutChangeListener((v, left, top, right, bottom,
+				oldLeft, oldTop, oldRight, oldBottom) -> {
+			if (right - left != oldRight - oldLeft || bottom - top != oldBottom - oldTop) {
+				scheduleCommentCursorVisibility();
+			}
+		});
 		commentView.setOnTouchListener(new View.OnTouchListener() {
 			private float previousY;
 
@@ -305,6 +326,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 			public boolean onTouch(View view, MotionEvent event) {
 				switch (event.getActionMasked()) {
 					case MotionEvent.ACTION_DOWN: {
+						revealCommentAfterLayout = false;
 						previousY = event.getY();
 						scrollView.requestDisallowInterceptTouchEvent(true);
 						break;
@@ -352,7 +374,8 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		updatePostingConfiguration(true, false, false);
 		new MarkupButtonsBuilder(addPaddingToRoot, ViewUtils.getWindowContentSize(requireContext()).x);
 
-		boolean longFooter = longLayout && !hugeCaptcha;
+		// The complete captcha and send block lives in the fixed bottom panel. Its measured
+		// height reduces the scroll viewport, so loading a larger captcha also resizes the editor.
 		int resId = longFooter ? R.layout.activity_posting_footer_long : R.layout.activity_posting_footer_common;
 		getLayoutInflater().inflate(resId, footerContainer);
 		LinearLayout captchaInputParentView = footerContainer.findViewById(R.id.captcha_input_parent);
@@ -619,6 +642,9 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		dismissSendPost();
 		saveDraft();
 		ViewUtils.removeFromParent(textFormatView);
+		scrollView.removeCallbacks(resizeComment);
+		scrollView.getViewTreeObserver().removeOnPreDrawListener(showCommentAfterLayout);
+		revealCommentAfterLayout = false;
 		scrollView = null;
 		commentView = null;
 		sageCheckBox = null;
@@ -2217,30 +2243,102 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 	}
 
 	private final Runnable resizeComment = () -> {
-		if (scrollView != null) {
-			View postMain = scrollView.getChildAt(0);
-			// Measure the complete editor first so its current height can be removed from the form height.
-			// The final fixed viewport keeps long messages scrollable without pushing the rest of the form
-			// behind the keyboard.
-			commentView.setMinLines(COMMENT_MIN_LINES);
-			commentView.setMaxLines(Integer.MAX_VALUE);
-			int widthMeasureSpec = View.MeasureSpec.makeMeasureSpec(postMain.getWidth(), View.MeasureSpec.EXACTLY);
-			int heightMeasureSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
-			postMain.measure(widthMeasureSpec, heightMeasureSpec);
-			int otherHeight = postMain.getMeasuredHeight() - commentView.getMeasuredHeight();
-			int minimumHeight = commentView.getCompoundPaddingTop() + commentView.getCompoundPaddingBottom()
-					+ commentView.getLineHeight() * COMMENT_MIN_LINES;
-			int viewportHeight = scrollView.getHeight();
-			WindowInsetsCompat windowInsets = ViewCompat.getRootWindowInsets(scrollView);
-			if (windowInsets != null && windowInsets.isVisible(WindowInsetsCompat.Type.ime())) {
-				int imeBottom = windowInsets.getInsets(WindowInsetsCompat.Type.ime()).bottom;
-				int systemBottom = windowInsets.getInsetsIgnoringVisibility(WindowInsetsCompat.Type.systemBars()).bottom;
-				viewportHeight += Math.max(0, imeBottom - systemBottom);
+		if (scrollView != null && commentView != null && scrollView.getWidth() > 0) {
+			int availableHeight = scrollView.getHeight() - scrollView.getPaddingTop() - scrollView.getPaddingBottom();
+			if (availableHeight <= 0) {
+				return;
 			}
-			int height = Math.max(minimumHeight, viewportHeight - otherHeight);
-			commentView.setMinHeight(height);
-			commentView.setMaxHeight(height);
+			int padding = commentView.getCompoundPaddingTop() + commentView.getCompoundPaddingBottom();
+			if (commentView.getIncludeFontPadding()) {
+				Paint.FontMetricsInt metrics = commentView.getPaint().getFontMetricsInt();
+				padding += metrics.ascent - metrics.top + metrics.bottom - metrics.descent;
+			}
+			int lineHeight = Math.max(1, commentView.getLineHeight());
+			if (!isCommentKeyboardVisible()) {
+				// Measure the natural form height, excluding the current editor height. This
+				// accounts for visible fields and attachments without depending on text length.
+				View form = scrollView.getChildAt(0);
+				int width = scrollView.getWidth() - scrollView.getPaddingLeft() - scrollView.getPaddingRight();
+				form.measure(View.MeasureSpec.makeMeasureSpec(Math.max(0, width), View.MeasureSpec.EXACTLY),
+						View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+				int otherHeight = form.getMeasuredHeight() - commentView.getMeasuredHeight();
+				int height = Math.min(availableHeight, Math.max(padding + COMMENT_MIN_LINES * lineHeight,
+						availableHeight - otherHeight));
+				// Fixed pixel bounds follow available space, not the number of typed lines.
+				// Overflow remains scrollable; avoid requesting another layout if bounds are unchanged.
+				if (commentView.getMinHeight() != height || commentView.getMaxHeight() != height) {
+					commentView.setHeight(height);
+				}
+				return;
+			}
+			// Normally grow from four to nine lines. In a short window, even the minimum
+			// must fit above the keyboard and the separate send panel.
+			int visibleLines = Math.max(1, Math.min(COMMENT_MAX_LINES, (availableHeight - padding) / lineHeight));
+			int minLines = Math.min(COMMENT_MIN_LINES, visibleLines);
+			if (commentView.getMinLines() != minLines) {
+				commentView.setMinLines(minLines);
+			}
+			if (commentView.getMaxLines() != visibleLines) {
+				commentView.setMaxLines(visibleLines);
+			}
 		}
+	};
+
+	private boolean isCommentKeyboardVisible() {
+		WindowInsetsCompat insets = scrollView != null ? ViewCompat.getRootWindowInsets(scrollView) : null;
+		return insets != null && insets.isVisible(WindowInsetsCompat.Type.ime());
+	}
+
+	private boolean revealCommentAfterLayout;
+
+	private void scheduleCommentCursorVisibility() {
+		if (scrollView != null && commentView != null) {
+			revealCommentAfterLayout = true;
+			scrollView.invalidate();
+		}
+	}
+
+	private final ViewTreeObserver.OnPreDrawListener showCommentAfterLayout = () -> {
+		if (revealCommentAfterLayout) {
+			revealCommentAfterLayout = false;
+			if (scrollView != null && commentView != null && commentView.hasFocus() && isCommentKeyboardVisible()) {
+				int selection = commentView.getSelectionEnd();
+				// Revealing only the caret can leave the rest of the editor below the viewport.
+				// Use the final laid-out bounds, including the background underline and padding.
+				int availableHeight = scrollView.getHeight() - scrollView.getPaddingTop()
+						- scrollView.getPaddingBottom();
+				if (commentView.getHeight() > 0 && commentView.getHeight() <= availableHeight) {
+					// Reveal the caret inside the editor without starting a second, competing
+					// parent scroll animation through bringPointIntoView().
+					Layout textLayout = commentView.getLayout();
+					int textHeight = commentView.getHeight() - commentView.getCompoundPaddingTop()
+							- commentView.getCompoundPaddingBottom();
+					if (selection >= 0 && textLayout != null && textHeight > 0) {
+						int line = textLayout.getLineForOffset(selection);
+						int textY = Math.max(commentView.getScrollY(), textLayout.getLineBottom(line) - textHeight);
+						textY = Math.min(textY, textLayout.getLineTop(line));
+						int maxTextY = Math.max(0, textLayout.getHeight() - textHeight);
+						commentView.scrollTo(commentView.getScrollX(), Math.max(0, Math.min(textY, maxTextY)));
+					}
+					Rect bounds = new Rect();
+					commentView.getDrawingRect(bounds);
+					scrollView.offsetDescendantRectToMyCoords(commentView, bounds);
+					int targetY = scrollView.getScrollY();
+					int visibleBottom = targetY + scrollView.getHeight() - scrollView.getPaddingBottom();
+					if (bounds.bottom > visibleBottom) {
+						targetY += bounds.bottom - visibleBottom;
+					}
+					if (bounds.top < targetY + scrollView.getPaddingTop()) {
+						targetY = bounds.top - scrollView.getPaddingTop();
+					}
+					scrollView.scrollTo(scrollView.getScrollX(), Math.max(0, targetY));
+				} else if (selection >= 0) {
+					// If the window cannot fit even the editor, prioritize the insertion point.
+					commentView.bringPointIntoView(selection);
+				}
+			}
+		}
+		return true;
 	};
 
 	private class MarkupButtonsBuilder implements View.OnLayoutChangeListener, Runnable {

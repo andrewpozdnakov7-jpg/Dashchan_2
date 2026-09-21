@@ -30,6 +30,11 @@ void setSurfaceSize(jlong, jint, jint);
 jintArray getCurrentFrame(JNIEnv *, jlong, jintArray);
 jobjectArray getMetadata(JNIEnv *, jlong);
 void startPlayerDiagnostics(void);
+void startExtendedPlayerDiagnostics(void);
+void releasePlayerDiagnostics(void);
+void samplePlayerDiagnostics(void);
+jint finishPlayerDiagnostics(void);
+jbyteArray readPlayerDiagnosticsChunk(JNIEnv *, jint, jint);
 jstring stopPlayerDiagnostics(JNIEnv *);
 
 void initLibs(JavaVM * javaVM);

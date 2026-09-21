@@ -28,6 +28,14 @@ enum {
 };
 
 unsigned int diagnosticsNextPlayerId(void);
+void diagnosticsRegisterPlayer(Player * player);
+void diagnosticsUnregisterPlayer(Player * player);
+void samplePlayerDiagnostics(void);
+// Operation: video send/receive = 0/1, audio send/receive = 2/3.
+int64_t diagnosticsCodecBegin(Player * player, int operation);
+void diagnosticsCodecEnd(Player * player, int operation, int64_t startedUs, int result);
+void diagnosticsPresentation(Player * player, int64_t position, int action);
+void diagnosticsRangeWait(Player * player, int waiting);
 const char * diagnosticsGetMediaCodecStageName(int stage);
 void diagnosticsLog(const char * format, ...);
 void diagnosticsIncrement(enum PlayerDiagnosticsCounter counter);

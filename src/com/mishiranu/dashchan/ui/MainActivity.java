@@ -29,10 +29,12 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewParent;
 import android.view.Window;
 import android.view.WindowManager;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.FrameLayout;
+import android.widget.TextView;
 import android.widget.Toolbar;
 import androidx.activity.BackEventCompat;
 import androidx.annotation.NonNull;
@@ -233,6 +235,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		drawerWide.setElevation(4f * density);
 		drawerLayout.addDrawerListener(drawerToggle);
 		drawerLayout.addDrawerListener(drawerForm);
+		drawerLayout.addDrawerListener(new DrawerActionModeListener());
 		drawerLayout.addDrawerListener(new DeferredDrawerNavigationListener());
 		drawerLayout.addDrawerListener(new PredictiveBackDrawerListener());
 		if (toolbarHolder == null) {
@@ -2912,6 +2915,57 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 			navigationAreaLockers.remove(locker);
 		}
 		drawerLayout.setExpandableFromAnyPoint(navigationAreaLockers.isEmpty());
+	}
+
+	private class DrawerActionModeListener implements CustomDrawerLayout.DrawerListener {
+		private boolean visible;
+
+		private void updateVisible(View drawerView, boolean visible) {
+			boolean opening = visible && !this.visible;
+			this.visible = visible;
+			if (opening) {
+				View focusedView = getCurrentFocus();
+				View ancestor = focusedView;
+				while (ancestor != null) {
+					if (ancestor == drawerView) {
+						return;
+					}
+					ViewParent parent = ancestor.getParent();
+					ancestor = parent instanceof View ? (View) parent : null;
+				}
+				// Selection handles and the floating toolbar belong to a separate window and
+				// are not covered by the drawer. End their mode as soon as the drawer appears.
+				// Do this once per opening, so selection in the drawer's own input still works.
+				ActionMode mode = currentActionMode != null ? currentActionMode.get() : null;
+				if (mode != null) {
+					mode.finish();
+				}
+				// The single insertion handle can be visible without an ActionMode.
+				// Losing focus also dismisses that editor controller, without changing text.
+				if (focusedView instanceof TextView) {
+					focusedView.clearFocus();
+				}
+			}
+		}
+
+		@Override
+		public void onDrawerSlide(@NonNull View drawerView, float slideOffset) {
+			updateVisible(drawerView, slideOffset > 0f);
+		}
+
+		@Override
+		public void onDrawerOpened(@NonNull View drawerView) {
+			// Also handle opening without an animation / slide callback.
+			updateVisible(drawerView, true);
+		}
+
+		@Override
+		public void onDrawerClosed(@NonNull View drawerView) {
+			updateVisible(drawerView, false);
+		}
+
+		@Override
+		public void onDrawerStateChanged(int newState) {}
 	}
 
 	private class DeferredDrawerNavigationListener implements CustomDrawerLayout.DrawerListener {

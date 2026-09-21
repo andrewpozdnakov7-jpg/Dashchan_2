@@ -1656,7 +1656,7 @@ public class DialogUnit {
 				editText.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
 						| InputType.TYPE_TEXT_FLAG_MULTI_LINE);
 				editText.setHorizontallyScrolling(false);
-				editText.setMinLines(2);
+				editText.setMinLines(1);
 				editText.setMaxLines(4);
 				editText.setGravity(Gravity.TOP | Gravity.START);
 				editText.setHint(R.string.reason);

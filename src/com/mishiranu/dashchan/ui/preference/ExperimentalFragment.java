@@ -52,14 +52,9 @@ public class ExperimentalFragment extends PreferenceFragment implements Translat
 				Preferences.DEFAULT_HARDWARE_VIDEO_ACCELERATION,
 				R.string.hardware_video_acceleration, R.string.hardware_video_acceleration__summary);
 		hardwareAccelerationPreference.setOnAfterChangeListener(p -> {
-			if (!p.getValue() && VideoDiagnostics.isRecording()) {
-				VideoDiagnostics.stop();
-			}
 			refreshPreferences();
 		});
-		if (hardwareAccelerationPreference.getValue()) {
-			addVideoDiagnosticsPreferences();
-		}
+		addVideoDiagnosticsPreferences();
 		addCheck(true, Preferences.KEY_OPEN_CONFIGURED_ATTACHMENT_FOLDER,
 				Preferences.DEFAULT_OPEN_CONFIGURED_ATTACHMENT_FOLDER,
 				R.string.open_configured_attachment_folder,
@@ -304,30 +299,39 @@ public class ExperimentalFragment extends PreferenceFragment implements Translat
 
 	private void addVideoDiagnosticsPreferences() {
 		boolean recording = VideoDiagnostics.isRecording();
-		Preference<Void> capturePreference = addButton(recording
+		boolean saving = VideoDiagnostics.isSaving();
+		CheckPreference extendedPreference = addCheck(true, Preferences.KEY_EXTENDED_VIDEO_DIAGNOSTICS,
+				false, R.string.video_diagnostics_extended, R.string.video_diagnostics_extended__summary);
+		extendedPreference.setEnabled(!recording && !saving);
+		Preference<Void> capturePreference = addButton(saving ? getString(R.string.video_diagnostics_saving) : recording
 						? getString(R.string.video_diagnostics_stop)
 						: getString(R.string.video_diagnostics_start),
 				recording ? getString(R.string.video_diagnostics_stop__summary)
 						: getString(R.string.video_diagnostics_start__summary));
+		capturePreference.setEnabled(!saving);
 		capturePreference.setOnClickListener(p -> {
 			if (VideoDiagnostics.isRecording()) {
-				File file = VideoDiagnostics.stop();
+				VideoDiagnostics.stopAsync(file -> {
+					if (!isAdded() || getView() == null) return;
+					refreshPreferences();
+					if (file != null) {
+						new AlertDialog.Builder(requireContext())
+								.setTitle(R.string.video_diagnostics_saved)
+								.setMessage(R.string.video_diagnostics_saved__message)
+								.setPositiveButton(R.string.share, (dialog, which) ->
+										NavigationUtils.shareFile(requireContext(), file, file.getName()))
+								.setNegativeButton(android.R.string.ok, null)
+								.show();
+					} else {
+						ClickableToast.show(R.string.video_diagnostics_save_failed);
+					}
+				});
 				refreshPreferences();
-				if (file != null) {
-					new AlertDialog.Builder(requireContext())
-							.setTitle(R.string.video_diagnostics_saved)
-							.setMessage(R.string.video_diagnostics_saved__message)
-							.setPositiveButton(R.string.share, (dialog, which) ->
-									NavigationUtils.shareFile(requireContext(), file, file.getName()))
-							.setNegativeButton(android.R.string.ok, null)
-							.show();
-				} else {
-					ClickableToast.show(R.string.video_diagnostics_save_failed);
-				}
 			} else {
 				new AlertDialog.Builder(requireContext())
 						.setTitle(R.string.video_diagnostics_start)
-						.setMessage(R.string.video_diagnostics_privacy_notice)
+						.setMessage(getString(R.string.video_diagnostics_privacy_notice)
+								+ "\n\n" + getString(R.string.video_diagnostics_memory_notice))
 						.setPositiveButton(R.string.video_diagnostics_start, (dialog, which) -> {
 							VideoDiagnostics.start();
 							refreshPreferences();
@@ -336,7 +340,7 @@ public class ExperimentalFragment extends PreferenceFragment implements Translat
 						.show();
 			}
 		});
-		if (!recording) {
+		if (!recording && !saving) {
 			File lastFile = VideoDiagnostics.getLastFile();
 			if (lastFile != null) {
 				addButton(R.string.video_diagnostics_share, R.string.video_diagnostics_share__summary)

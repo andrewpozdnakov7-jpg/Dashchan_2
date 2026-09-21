@@ -167,9 +167,10 @@ public class VideoPlayer {
 		synchronized (VideoPlayer.class) {
 			if (holder != null) {
 				try {
-					holder.startDiagnostics();
+					if (VideoDiagnostics.isExtendedRecording()) holder.startExtendedDiagnostics();
+					else holder.startDiagnostics();
 				} catch (RuntimeException | LinkageError ignored) {
-					// Diagnostics are unavailable with an older external native player.
+					try { holder.startDiagnostics(); } catch (RuntimeException | LinkageError unavailable) {}
 				}
 			}
 		}
@@ -185,6 +186,36 @@ public class VideoPlayer {
 				}
 			}
 			return null;
+		}
+	}
+
+	static boolean sampleDiagnosticCapture() {
+		synchronized (VideoPlayer.class) {
+			if (holder == null) return true;
+			try { holder.sampleDiagnostics(); return true; }
+			catch (RuntimeException | LinkageError ignored) { return false; }
+		}
+	}
+
+	static int finishDiagnosticCapture() {
+		synchronized (VideoPlayer.class) {
+			if (holder == null) return 0;
+			try { return holder.finishDiagnostics(); }
+			catch (RuntimeException | LinkageError ignored) { return -1; }
+		}
+	}
+
+	static byte[] readDiagnosticChunk(int offset, int length) {
+		synchronized (VideoPlayer.class) {
+			return holder != null ? holder.readDiagnosticsChunk(offset, length) : null;
+		}
+	}
+
+	static void releaseDiagnosticCapture() {
+		synchronized (VideoPlayer.class) {
+			if (holder != null) {
+				try { holder.releaseDiagnostics(); } catch (RuntimeException | LinkageError ignored) {}
+			}
 		}
 	}
 
@@ -573,6 +604,7 @@ public class VideoPlayer {
 			playerSurface = new Surface(surface);
 			playerSurfaceTexture = surface;
 			surfaceUpdates = 0;
+			VideoDiagnostics.surfaceAvailable(diagnosticsId);
 			VideoDiagnostics.recordUi("texture=" + diagnosticsId + " surface_available"
 					+ " surface_size=" + width + "x" + height
 					+ " view_size=" + getWidth() + "x" + getHeight()
@@ -586,6 +618,7 @@ public class VideoPlayer {
 
 		@Override
 		public boolean onSurfaceTextureDestroyed(SurfaceTexture surface) {
+			VideoDiagnostics.surfaceDestroyed(diagnosticsId);
 			VideoDiagnostics.recordUi("texture=" + diagnosticsId + " surface_destroyed"
 					+ " updates=" + surfaceUpdates);
 			boolean retained = releasePlayerSurface(surface);
@@ -609,6 +642,7 @@ public class VideoPlayer {
 		@Override
 		public void onSurfaceTextureUpdated(SurfaceTexture surface) {
 			surfaceUpdates++;
+			VideoDiagnostics.surfaceUpdated(diagnosticsId);
 			VideoPlayer player = this.player.get();
 			if (player != null) {
 				if (surfaceUpdates == 1 && playerSurfaceGeneration > 0L) {
@@ -871,6 +905,8 @@ public class VideoPlayer {
 			speed = 10000;
 		}
 		synchronized (this) {
+			VideoDiagnostics.recordUi("playback_speed_requested previous_milli=" + playbackSpeed
+					+ " speed_milli=" + speed + " initialized=" + isInitialized());
 			playbackSpeed = speed;
 			applyPlaybackSpeedLocked();
 		}
@@ -907,8 +943,10 @@ public class VideoPlayer {
 		if (isInitialized() && playbackSpeedSupported) {
 			try {
 				holder.setPlaybackSpeed(sessionData.pointer, playbackSpeed);
+				VideoDiagnostics.recordUi("playback_speed_applied speed_milli=" + playbackSpeed);
 			} catch (RuntimeException | LinkageError e) {
 				playbackSpeedSupported = false;
+				VideoDiagnostics.recordUi("playback_speed_unavailable requested_milli=" + playbackSpeed);
 			}
 		}
 	}
@@ -1292,6 +1330,11 @@ public class VideoPlayer {
 		String[] getMetadata(long pointer);
 		void startDiagnostics();
 		String stopDiagnostics();
+		void startExtendedDiagnostics();
+		void sampleDiagnostics();
+		int finishDiagnostics();
+		byte[] readDiagnosticsChunk(int offset, int length);
+		void releaseDiagnostics();
 	}
 
 	private static class Holder implements HolderInterface, InvocationHandler {
@@ -1346,6 +1389,11 @@ public class VideoPlayer {
 		@Override public native String[] getMetadata(long pointer);
 		@Override public native void startDiagnostics();
 		@Override public native String stopDiagnostics();
+		@Override public native void startExtendedDiagnostics();
+		@Override public native void sampleDiagnostics();
+		@Override public native int finishDiagnostics();
+		@Override public native byte[] readDiagnosticsChunk(int offset, int length);
+		@Override public native void releaseDiagnostics();
 
 		static {
 			try {

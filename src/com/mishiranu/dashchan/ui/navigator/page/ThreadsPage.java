@@ -10,6 +10,7 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.SubMenu;
 import android.view.View;
+import android.view.ViewTreeObserver;
 import androidx.annotation.NonNull;
 import androidx.fragment.app.FragmentManager;
 import androidx.recyclerview.widget.GridLayoutManager;
@@ -42,6 +43,7 @@ import com.mishiranu.dashchan.ui.navigator.adapter.ThreadsAdapter;
 import com.mishiranu.dashchan.ui.navigator.manager.DialogUnit;
 import com.mishiranu.dashchan.ui.navigator.manager.UiManager;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
+import com.mishiranu.dashchan.util.ListViewUtils;
 import com.mishiranu.dashchan.util.NavigationUtils;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.widget.ClickableToast;
@@ -91,6 +93,44 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 	public static class ReadViewModel extends TaskViewModel.Proxy<ReadThreadsTask, ReadThreadsTask.Callback> {}
 
 	private HidePerformer hidePerformer;
+	// A manual append may include several hidden-thread refill requests. Keep its intent
+	// until the batch is published, but never retain it when leaving this screen.
+	private HashSet<String> appendScrollPreviousThreads;
+	private String appendScrollTarget;
+
+	private void cancelAppendScroll() {
+		appendScrollPreviousThreads = null;
+		appendScrollTarget = null;
+	}
+
+	private final RecyclerView.OnScrollListener appendScrollListener = new RecyclerView.OnScrollListener() {
+		@Override
+		public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
+			if (dy < 0) cancelAppendScroll();
+		}
+
+		@Override
+		public void onScrollStateChanged(@NonNull RecyclerView recyclerView, int newState) {
+			// A new drag after requesting the page takes precedence over automatic navigation.
+			if (newState == RecyclerView.SCROLL_STATE_DRAGGING) cancelAppendScroll();
+		}
+	};
+
+	private final ViewTreeObserver.OnPreDrawListener appendScrollAfterLayout = this::revealAppendedThreads;
+
+	private boolean revealAppendedThreads() {
+		if (appendScrollTarget != null) {
+			String threadNumber = appendScrollTarget;
+			cancelAppendScroll();
+			ThreadsAdapter adapter = getAdapter();
+			int index = adapter.findThreadPosition(threadNumber);
+			if (index >= 0 && !postStateProvider.isHiddenResolve(adapter.getThread(index))) {
+				// Wait until anchor restoration and the new adapter layout have completed.
+				ListViewUtils.smoothScrollToPosition(getRecyclerView(), index);
+			}
+		}
+		return true;
+	}
 
 	private final UiManager.PostStateProvider postStateProvider = new UiManager.PostStateProvider() {
 		@Override
@@ -138,6 +178,8 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 		}
 		adapter.setTranslationEnabled(Boolean.TRUE.equals(retainableExtra.translationEnabled));
 		recyclerView.setAdapter(adapter);
+		recyclerView.addOnScrollListener(appendScrollListener);
+		recyclerView.getViewTreeObserver().addOnPreDrawListener(appendScrollAfterLayout);
 		layoutManager.setSpanSizeLookup(new GridLayoutManager.SpanSizeLookup() {
 			@Override
 			public int getSpanSize(int position) {
@@ -282,7 +324,16 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 	}
 
 	@Override
+	protected void onPause() {
+		cancelAppendScroll();
+		super.onPause();
+	}
+
+	@Override
 	protected void onDestroy() {
+		cancelAppendScroll();
+		getRecyclerView().removeOnScrollListener(appendScrollListener);
+		getRecyclerView().getViewTreeObserver().removeOnPreDrawListener(appendScrollAfterLayout);
 		getUiManager().dialog().closeDialogs(getAdapter().getConfigurationSet().stackInstance);
 		getUiManager().observable().unregister(this);
 		FavoritesStorage.getInstance().getObservable().unregister(this);
@@ -386,6 +437,7 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 	}
 
 	private void setThreadHideState(PostItem postItem, PostItem.HideState hideState) {
+		cancelAppendScroll();
 		RetainableExtra retainableExtra = getRetainableExtra(RetainableExtra.FACTORY);
 		retainableExtra.hiddenThreads.set(postItem.getThreadNumber(), hideState);
 		CommonDatabase.getInstance().getThreads().setFlagsAsync(getPage().chanName,
@@ -490,6 +542,7 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 
 	@Override
 	public boolean onOptionsItemSelected(MenuItem item) {
+		cancelAppendScroll();
 		Page page = getPage();
 		if (item.getItemId() == R.id.menu_refresh) {
 			refreshThreads(RefreshPage.CURRENT);
@@ -672,6 +725,7 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 
 	@Override
 	public void onSearchQueryChange(String query) {
+		cancelAppendScroll();
 		getAdapter().applyFilter(query);
 	}
 
@@ -744,6 +798,15 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 		} else {
 			RetainableExtra retainableExtra = getRetainableExtra(RetainableExtra.FACTORY);
 			getAdapter().setSecretAbuAllowed(false);
+			if (!autoFill) {
+				cancelAppendScroll();
+				if (append && !getAdapter().isRealEmpty() && !recyclerView.canScrollVertically(1)) {
+					appendScrollPreviousThreads = new HashSet<>();
+					for (List<PostItem> items : retainableExtra.cachedPostItems) {
+						for (PostItem item : items) appendScrollPreviousThreads.add(item.getThreadNumber());
+					}
+				}
+			}
 			if (autoFill) {
 				retainableExtra.autoFillPageNumber = pageNumber;
 			}
@@ -841,6 +904,7 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 	}
 
 	private void cancelHiddenThreadsAutoFill() {
+		cancelAppendScroll();
 		RetainableExtra retainableExtra = getRetainableExtra(RetainableExtra.FACTORY);
 		retainableExtra.autoFillRequested = false;
 		retainableExtra.autoFillPages = 0;
@@ -873,6 +937,8 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 				index -> index < adapter.getItemCount() && !adapter.isSecretAbuPosition(index));
 		PostItem anchor = position != null ? adapter.getThread(position.position) : null;
 		boolean initiallyEmpty = adapter.isRealEmpty();
+		boolean scrollToNewThreads = appendScrollPreviousThreads != null && !extra.pendingThreadsReset
+				&& !recyclerView.canScrollVertically(1);
 		adapter.setItems(extra.cachedPostItems, extra.startPageNumber == PAGE_NUMBER_CATALOG);
 		extra.publishedPostItems.clear();
 		extra.publishedPostItems.addAll(extra.cachedPostItems);
@@ -881,6 +947,20 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 		} else if (anchor != null) {
 			int index = adapter.findThreadPosition(anchor.getThreadNumber());
 			if (index >= 0) new ListPosition(index, position.offset).apply(recyclerView);
+		}
+		if (scrollToNewThreads) {
+			// Resolve against the final filtered/sorted adapter, not raw page offsets.
+			for (int i = 0; i < adapter.getItemCount(); i++) {
+				PostItem item = adapter.getThread(i);
+				if (item != null && !appendScrollPreviousThreads.contains(item.getThreadNumber())
+						&& !postStateProvider.isHiddenResolve(item)) {
+					appendScrollTarget = item.getThreadNumber();
+					break;
+				}
+			}
+			appendScrollPreviousThreads = null;
+		} else {
+			cancelAppendScroll();
 		}
 		extra.pendingThreadsUpdate = false;
 		extra.pendingThreadsReset = false;
@@ -987,6 +1067,7 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 		} else {
 			recyclerView.getPullable().cancelBusyState();
 			switchList();
+			cancelAppendScroll();
 			if (checkModified && postItems == null) {
 				adapter.notifyNotModified();
 				recyclerView.scrollToPosition(0);
@@ -1001,6 +1082,7 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 
 	@Override
 	public void onReadThreadsRedirect(RedirectException.Target target) {
+		cancelAppendScroll();
 		finishHiddenThreadsAutoFill(false);
 		getAdapter().setSecretAbuAllowed(false);
 		getRecyclerView().getPullable().cancelBusyState();
@@ -1025,8 +1107,10 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 				finishHiddenThreadsAutoFill(true);
 				return;
 			}
+			cancelAppendScroll();
 			finishHiddenThreadsAutoFill(false);
 		}
+		cancelAppendScroll();
 		String message = errorItem.type == ErrorItem.Type.BOARD_NOT_EXISTS && pageNumber >= 1
 				? getString(R.string.number_page_doesnt_exist__format, pageNumber) : errorItem.toString();
 		getAdapter().setSecretAbuAllowed(false);

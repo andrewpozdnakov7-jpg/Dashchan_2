@@ -174,6 +174,9 @@ public class MediaFragment extends PreferenceFragment implements FragmentHandler
 				R.string.playback_speed_settings__summary);
 		playbackSpeedPreference.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 				.pushFragment(new PlaybackSpeedFragment()));
+		Preference<Void> preloadPreference = addButton(R.string.video_preload, R.string.video_preload_summary);
+		preloadPreference.setOnClickListener(p -> ((FragmentHandler) requireActivity())
+				.pushFragment(new VideoPreloadFragment()));
 		addCheck(true, Preferences.KEY_ATTACHMENT_VIDEO_PREVIEW,
 				Preferences.DEFAULT_ATTACHMENT_VIDEO_PREVIEW,
 				R.string.attachment_video_preview,
@@ -195,6 +198,7 @@ public class MediaFragment extends PreferenceFragment implements FragmentHandler
 			audioBoostPreference.setEnabled(playerEnabled);
 			audioBoostLevelPreference.setEnabled(playerEnabled && audioBoostPreference.getValue());
 			playbackSpeedPreference.setEnabled(playerEnabled);
+			preloadPreference.setEnabled(playerEnabled);
 		};
 		videoPlayerPreference.setOnAfterChangeListener(p -> updatePlayerState.run());
 		audioBoostPreference.setOnAfterChangeListener(p -> updatePlayerState.run());

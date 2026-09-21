@@ -32,7 +32,9 @@ static int decodeMediaCodecFrame(Player * player, AVCodecContext * context, AVPa
 		AVFrame * frame, int * packetSent) {
 	if (!*packetSent) {
 		playerSetDiagnosticsMediaCodecStage(player, DIAGNOSTICS_MEDIACODEC_STAGE_SEND_PACKET, -1);
+		int64_t callStarted = diagnosticsCodecBegin(player, 0);
 		int result = avcodec_send_packet(context, packet);
+		diagnosticsCodecEnd(player, 0, callStarted, result);
 		if (result == 0) {
 			*packetSent = 1;
 			if (packet) {
@@ -45,7 +47,9 @@ static int decodeMediaCodecFrame(Player * player, AVCodecContext * context, AVPa
 		}
 	}
 	playerSetDiagnosticsMediaCodecStage(player, DIAGNOSTICS_MEDIACODEC_STAGE_RECEIVE_FRAME, -1);
+	int64_t callStarted = diagnosticsCodecBegin(player, 1);
 	int result = avcodec_receive_frame(context, frame);
+	diagnosticsCodecEnd(player, 1, callStarted, result);
 	if (result == 0) {
 		return 1;
 	}

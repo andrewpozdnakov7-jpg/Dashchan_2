@@ -2,6 +2,7 @@ package com.mishiranu.dashchan.content.async;
 
 import android.net.Uri;
 import android.os.SystemClock;
+import android.util.Log;
 import android.util.Pair;
 import chan.content.ApiException;
 import chan.content.Chan;
@@ -106,32 +107,62 @@ public class SendMultifunctionalTask extends HttpHolderTask<Void, Boolean> {
 
 	private boolean sendReportWithSafeRetries(HttpHolder holder) throws ExtensionException, HttpException,
 			ApiException, InvalidResponseException {
+		String diagnostic = "request=" + Integer.toHexString(System.identityHashCode(holder));
+		Log.i("ReportDiag", diagnostic + " event=start provider=" + ("dvach".equals(state.chanName) ? "dvach" : "other")
+				+ " posts=" + state.postNumbers.size() + " comment_present=" + !android.text.TextUtils.isEmpty(text));
 		for (int attempt = 1; attempt <= REPORT_MAX_CONNECTION_ATTEMPTS; attempt++) {
 			holder.resetRequestBodyStarted();
+			long started = SystemClock.elapsedRealtime();
+			String diagnosticAttempt = diagnostic + " attempt=" + attempt;
+			Log.i("ReportDiag", diagnosticAttempt + " event=attempt_start");
 			try {
 				chan.performer.safe().onSendReportPosts(new ChanPerformer.SendReportPostsData(state.boardName,
 						state.threadNumber, createPostNumberList(state.postNumbers), type, options, text, holder));
+				Log.i("ReportDiag", diagnosticAttempt + " event=success elapsed_ms=" + (SystemClock.elapsedRealtime() - started));
 				return true;
 			} catch (HttpException e) {
 				boolean requestBodyStarted = holder.hasRequestBodyStarted();
+				// Never log exception messages: they can contain URLs or response data.
+				StringBuilder causes = new StringBuilder();
+				Throwable cause = e;
+				for (int depth = 0; cause != null && depth < 4; depth++, cause = cause.getCause()) {
+					if (depth > 0) causes.append('/');
+					causes.append(cause.getClass().getSimpleName());
+				}
+				Log.w("ReportDiag", diagnosticAttempt + " event=http_failure status=" + e.getResponseCode()
+						+ " body_started=" + requestBodyStarted + " retryable=" + e.isRetryableReadException()
+						+ " causes=" + causes + " elapsed_ms=" + (SystemClock.elapsedRealtime() - started));
 				if (!requestBodyStarted && e.isRetryableReadException()) {
 					if (attempt < REPORT_MAX_CONNECTION_ATTEMPTS) {
+						Log.i("ReportDiag", diagnosticAttempt + " event=retry_before_body");
 						SystemClock.sleep(Math.min(2000L, attempt * 500L));
 						continue;
 					}
 					errorItem = new ErrorItem(R.string.report_send_failed_connection);
+					Log.w("ReportDiag", diagnosticAttempt + " event=stop reason=connection_attempts_exhausted");
 					return false;
 				}
 				if (requestBodyStarted && e.getResponseCode() == 0) {
+					Log.w("ReportDiag", diagnosticAttempt + " event=stop reason=delivery_unknown retry=false");
 					errorItem = new ErrorItem(R.string.report_send_status_unknown);
 					return false;
 				}
 				throw e;
 			} catch (InvalidResponseException e) {
+				Log.w("ReportDiag", diagnosticAttempt + " event=invalid_response body_started=" + holder.hasRequestBodyStarted()
+						+ " retry=false elapsed_ms=" + (SystemClock.elapsedRealtime() - started));
 				if (holder.hasRequestBodyStarted()) {
 					errorItem = new ErrorItem(R.string.report_send_status_unknown);
 					return false;
 				}
+				throw e;
+			} catch (ApiException e) {
+				Log.w("ReportDiag", diagnosticAttempt + " event=api_rejected error_type=" + e.getErrorType()
+						+ " retry=false elapsed_ms=" + (SystemClock.elapsedRealtime() - started));
+				throw e;
+			} catch (ExtensionException e) {
+				Log.w("ReportDiag", diagnosticAttempt + " event=extension_failure retry=false elapsed_ms="
+						+ (SystemClock.elapsedRealtime() - started));
 				throw e;
 			}
 		}
