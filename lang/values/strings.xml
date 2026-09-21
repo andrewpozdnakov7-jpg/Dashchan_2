@@ -361,6 +361,10 @@
 	<string name="video_audio_boost_level">Maximum video audio boost</string>
 	<string name="video_audio_boost_level__format">+%d dB</string>
 	<string name="video_diagnostics_start">Record video diagnostics</string>
+	<string name="video_diagnostics_extended">Extended log</string>
+	<string name="video_diagnostics_saving">Saving diagnostics…</string>
+	<string name="video_diagnostics_memory_notice">Both modes include playback speed. Extended logging also includes periodic technical snapshots. Until saved, the log exists only in RAM and is lost if Android terminates the app or the phone restarts.</string>
+	<string name="video_diagnostics_extended__summary">Adds one-second snapshots of frames, playback speed, audio/video clocks, queues, data waits and decoder timings. Kept in RAM and written to disk only when saved. When disabled, records the standard log including playback speed. Select before starting a recording.</string>
 	<string name="video_diagnostics_start__summary">Start a limited technical log, reproduce the video problem, then stop the recording here</string>
 	<string name="video_diagnostics_stop">Stop and save diagnostics</string>
 	<string name="video_diagnostics_stop__summary">Recording is active. Reproduce the problem, including seeking; after a stall wait 5–10 seconds and return here</string>
@@ -1260,4 +1264,15 @@
 	<string name="secret_abu_stop_tapping">Stop poking. Abu sees everything.</string>
 	<string name="secret_abu_cannot_hide">You cannot hide this thread. It is Abu.</string>
 	<string name="secret_abu_hide_again">Seriously trying to hide Abu? Respect, but no.</string>
+	<string name="video_preload">Video preloading</string>
+	<string name="video_preload_summary">Download upcoming videos in advance: network, count and size limit</string>
+	<string name="video_preload_enable">Preload next videos</string>
+	<string name="video_preload_description">After the current video finishes downloading, cache the next videos in this gallery one at a time. Uses data and disk space. Videos exceeding the limit or with an unknown download size are skipped, not replaced with later videos. Preloading stops when you leave the player. Does not apply to YouTube or web players.</string>
+	<string name="video_preload_network">Network for preloading</string>
+	<string name="video_preload_all_networks">Wi-Fi and mobile data</string>
+	<string name="video_preload_count">Number of next videos</string>
+	<string name="video_preload_size">Maximum size per video</string>
+	<string name="video_preload_size_format">%d MB</string>
+	<string name="video_preload_size_description">Videos larger than this limit are not preloaded. They still download normally when opened manually.</string>
+	<string name="video_preload_size_input">Enter a size from 1 to 500 MB</string>
 </resources>

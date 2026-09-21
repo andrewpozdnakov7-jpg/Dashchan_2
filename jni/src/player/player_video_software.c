@@ -352,6 +352,7 @@ void * playerVideoDrawThread(void * data) {
 					lastWidth, lastHeight);
 			rendered = 1;
 			diagnosticsIncrement(PLAYER_DIAGNOSTICS_SOFTWARE_RENDERED);
+			diagnosticsPresentation(player, extra->position, DIAGNOSTICS_OUTPUT_IMMEDIATE);
 			lastWidth = extra->width;
 			lastHeight = extra->height;
 			player->sync.lastDrawTimes[1] = player->sync.lastDrawTimes[0];
@@ -520,7 +521,7 @@ void * playerVideoDecodeThread(void * data) {
 				updateSoftwareSeekFastDecodeForPacketLocked(player, context, stream,
 						packetHolder->packet);
 			}
-			int ready = playerDecodeFrame(context, packetHolder->packet, frame, &packetSent);
+			int ready = playerDecodeFrame(player, 1, context, packetHolder->packet, frame, &packetSent);
 			if (ready) {
 				decodedFramePosition = getFramePositionMs(player, frame, stream);
 				if (player->video.softwareSeekFastActive) {

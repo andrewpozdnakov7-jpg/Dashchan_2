@@ -70,6 +70,10 @@ public final class SettingsSearchIndex {
 			@Override
 			ContentFragment createFragment() { return new MediaFragment(); }
 		},
+		VIDEO_PRELOAD(R.string.media, R.string.video_preload) {
+			@Override
+			ContentFragment createFragment() { return new VideoPreloadFragment(); }
+		},
 		PLAYBACK_SPEED(R.string.media, R.string.playback_speed) {
 			@Override
 			ContentFragment createFragment() { return new PlaybackSpeedFragment(); }
@@ -328,6 +332,8 @@ public final class SettingsSearchIndex {
 				R.string.reddit_board_style__summary, Preferences.KEY_REDDIT_BOARD_STYLE);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.hardware_video_acceleration,
 				R.string.hardware_video_acceleration__summary, Preferences.KEY_HARDWARE_VIDEO_ACCELERATION);
+		add(context, entries, Screen.EXPERIMENTAL, R.string.video_diagnostics_extended,
+				R.string.video_diagnostics_extended__summary, Preferences.KEY_EXTENDED_VIDEO_DIAGNOSTICS);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.open_configured_attachment_folder,
 				R.string.open_configured_attachment_folder__summary,
 				Preferences.KEY_OPEN_CONFIGURED_ATTACHMENT_FOLDER);
@@ -511,6 +517,14 @@ public final class SettingsSearchIndex {
 				R.string.video_picture_in_picture_auto__summary, Preferences.KEY_VIDEO_PICTURE_IN_PICTURE_AUTO);
 		add(context, entries, Screen.MEDIA, R.string.video_screen_off_action,
 				R.string.video_screen_off_action__summary, Preferences.KEY_VIDEO_SCREEN_OFF_ACTION);
+		add(context, entries, Screen.VIDEO_PRELOAD, R.string.video_preload_enable,
+				R.string.video_preload_description, Preferences.KEY_VIDEO_PRELOAD);
+		add(context, entries, Screen.VIDEO_PRELOAD, R.string.video_preload_network, 0,
+				Preferences.KEY_VIDEO_PRELOAD_NETWORK);
+		add(context, entries, Screen.VIDEO_PRELOAD, R.string.video_preload_count, 0,
+				Preferences.KEY_VIDEO_PRELOAD_COUNT);
+		add(context, entries, Screen.VIDEO_PRELOAD, R.string.video_preload_size, 0,
+				Preferences.KEY_VIDEO_PRELOAD_SIZE_MB);
 		add(context, entries, Screen.PLAYBACK_SPEED, R.string.enable_video_playback_speed_control,
 				R.string.enable_video_playback_speed_control__summary, Preferences.KEY_VIDEO_PLAYBACK_SPEED_CONTROL);
 		add(context, entries, Screen.PLAYBACK_SPEED, R.string.playback_speed_presets,

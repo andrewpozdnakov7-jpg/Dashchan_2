@@ -101,6 +101,26 @@ jstring JCALL(stopDiagnostics)(JNIEnv * env, UNUSED jobject this) {
 	return stopPlayerDiagnostics(env);
 }
 
+void JCALL(sampleDiagnostics)(UNUSED JNIEnv * env, UNUSED jobject this) {
+	samplePlayerDiagnostics();
+}
+
+void JCALL(startExtendedDiagnostics)(UNUSED JNIEnv * env, UNUSED jobject this) {
+	startExtendedPlayerDiagnostics();
+}
+
+void JCALL(releaseDiagnostics)(UNUSED JNIEnv * env, UNUSED jobject this) {
+	releasePlayerDiagnostics();
+}
+
+jint JCALL(finishDiagnostics)(UNUSED JNIEnv * env, UNUSED jobject this) {
+	return finishPlayerDiagnostics();
+}
+
+jbyteArray JCALL(readDiagnosticsChunk)(JNIEnv * env, UNUSED jobject this, jint offset, jint length) {
+	return readPlayerDiagnosticsChunk(env, offset, length);
+}
+
 jint JNI_OnLoad(JavaVM * javaVM, UNUSED void * reserved) {
 	initLibs(javaVM);
 	return JNI_VERSION_1_6;

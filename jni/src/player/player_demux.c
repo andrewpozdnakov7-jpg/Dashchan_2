@@ -221,6 +221,7 @@ int playerDemuxRead(void * opaque, uint8_t * buf, int bufSize) {
 			if (request) {
 				request = 0;
 				waitedForRange = 1;
+				diagnosticsRangeWait(player, 1);
 				diagnosticsLog("player=%u range_wait_started offset=%" PRId64
 						" available=[%ld-%ld/%ld]", player->meta.diagnosticsId, offset,
 						player->file.start, player->file.end, player->file.total);
@@ -234,6 +235,7 @@ int playerDemuxRead(void * opaque, uint8_t * buf, int bufSize) {
 			pthread_cond_wait(&player->file.controlCond, &player->file.controlMutex);
 		}
 		if (waitedForRange) {
+			diagnosticsRangeWait(player, 0);
 			diagnosticsLog("player=%u range_wait_finished offset=%" PRId64
 					" cancelled=%d interrupt=%d available=[%ld-%ld/%ld]", player->meta.diagnosticsId,
 					offset, player->file.cancelSeek, player->meta.interrupt,

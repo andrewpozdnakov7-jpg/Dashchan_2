@@ -71,6 +71,8 @@ public class VideoUnit {
 	private static final long PAUSED_SEEK_PREVIEW_DELAY = 100L;
 
 	private final PagerInstance instance;
+	private final VideoPreloader videoPreloader;
+	private boolean preloadResumed;
 	private final LinearLayout controlsView;
 	private final AudioFocus audioFocus;
 	private final AudioManager audioManager;
@@ -122,6 +124,7 @@ public class VideoUnit {
 
 	public VideoUnit(PagerInstance instance, AudioManager audioManager, TikTokModeCallback tikTokModeCallback) {
 		this.instance = instance;
+		videoPreloader = new VideoPreloader(instance.galleryInstance);
 		this.audioManager = audioManager;
 		this.tikTokModeCallback = tikTokModeCallback;
 		surfaceParentLayoutChangeListener = this::onSurfaceParentLayoutChanged;
@@ -176,6 +179,8 @@ public class VideoUnit {
 	}
 
 	public void onResume() {
+		preloadResumed = true;
+		startVideoPreload();
 		if (pictureInPictureTransferred) {
 			return;
 		}
@@ -192,6 +197,8 @@ public class VideoUnit {
 	}
 
 	public void onPause() {
+		preloadResumed = false;
+		videoPreloader.stop();
 		if (pictureInPictureTransferred) {
 			return;
 		}
@@ -234,6 +241,7 @@ public class VideoUnit {
 	}
 
 	public void interrupt(boolean force) {
+		videoPreloader.stop();
 		dismissPlaybackSpeedPopupMenu();
 		if (pictureInPictureTransferred && !force) {
 			// PagerUnit may be rebound while its dialog is hidden behind VideoPipActivity. The native player
@@ -356,7 +364,16 @@ public class VideoUnit {
 		}
 	}
 
+	private void startVideoPreload() {
+		if (preloadResumed && !pictureInPictureTransferred && player != null && sourceFile != null
+				&& sourceFile.isFile() && instance.currentHolder != null
+				&& (readVideoCallback == null || readVideoCallback.downloadTask == null)) {
+			videoPreloader.start(instance.currentHolder.galleryItem);
+		}
+	}
+
 	public void applyVideo(Uri uri, File file, boolean reload) {
+		videoPreloader.stop();
 		sourceFile = file;
 		wasPlaying = true;
 		finishedPlayback = false;
@@ -386,6 +403,7 @@ public class VideoUnit {
 		this.player = player;
 		if (loadedFromFile) {
 			initializePlayer();
+			startVideoPreload();
 			seekBar.setSecondaryProgress(seekBar.getMax());
 			if (instance.currentHolder.mediaSummary.updateSize(file.length())) {
 				instance.galleryInstance.callback.updateTitle();
@@ -1017,6 +1035,7 @@ public class VideoUnit {
 		setPlaying(false, true);
 		transferredPlayer.releaseVideoView();
 		pictureInPictureTransferred = true;
+		videoPreloader.stop();
 		instance.galleryInstance.callback.setGalleryVisibleForPictureInPicture(false);
 		try {
 			instance.galleryInstance.callback.getWindow().getContext().startActivity(intent);
@@ -1695,6 +1714,7 @@ public class VideoUnit {
 				} else {
 					downloadTask = null;
 					long length = file.length();
+					startVideoPreload();
 					workPlayer.setDownloadRange(length, length);
 					if (instance.currentHolder.mediaSummary.updateSize(length)) {
 						instance.galleryInstance.callback.updateTitle();

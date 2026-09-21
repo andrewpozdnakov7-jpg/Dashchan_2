@@ -318,7 +318,7 @@ void playerCloseAndFreeCodecContext(AVCodecContext ** context);
 void playerCloseAndFreeVideoCodecContext(Player * player, AVCodecContext ** context);
 void playerPacketQueueFreeCallback(void * data);
 void playerMarkStreamFinished(Player * player, int video);
-int playerDecodeFrame(AVCodecContext * context, AVPacket * packet, AVFrame * frame,
+int playerDecodeFrame(Player * player, int video, AVCodecContext * context, AVPacket * packet, AVFrame * frame,
 		int * packetSent);
 PacketHolder * playerCreateSurfaceRequestPacketHolder(void);
 void playerLogDestroyStage(Player * player, const char * stage);

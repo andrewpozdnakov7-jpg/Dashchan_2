@@ -367,6 +367,10 @@
 	<string name="video_audio_boost_level">Максимальное усиление звука видео</string>
 	<string name="video_audio_boost_level__format">+%d дБ</string>
 	<string name="video_diagnostics_start">Записать диагностику видео</string>
+	<string name="video_diagnostics_extended">Расширенный лог</string>
+	<string name="video_diagnostics_saving">Сохранение диагностики…</string>
+	<string name="video_diagnostics_memory_notice">Скорость воспроизведения записывается в обоих режимах. Расширенный лог также содержит периодические технические сводки. До сохранения лог находится только в оперативной памяти: при завершении процесса Android или перезагрузке телефона он пропадёт.</string>
+	<string name="video_diagnostics_extended__summary">Добавляет сводки раз в секунду: кадры, скорость, часы аудио и видео, очереди, ожидание данных и время работы декодера. Хранится в оперативной памяти, записывается на диск только при сохранении. Без галочки записывается обычный лог со скоростью воспроизведения. Выберите режим до начала записи.</string>
 	<string name="video_diagnostics_start__summary">Начать ограниченную запись технических событий, воспроизвести проблему и остановить запись здесь</string>
 	<string name="video_diagnostics_stop">Остановить и сохранить диагностику</string>
 	<string name="video_diagnostics_stop__summary">Запись активна. Воспроизведите проблему, включая перемотки; после зависания подождите 5–10 секунд и вернитесь сюда</string>
@@ -1288,4 +1292,15 @@
 	<string name="secret_abu_stop_tapping">Хватит тыкать. Абу всё видит.</string>
 	<string name="secret_abu_cannot_hide">Этот тред скрыть нельзя. Это Абу.</string>
 	<string name="secret_abu_hide_again">Ты серьёзно пытаешься скрыть Абу? Уважение, конечно, но нет.</string>
+	<string name="video_preload">Предзагрузка видео</string>
+	<string name="video_preload_summary">Загрузка следующих роликов заранее: сеть, количество и ограничение размера</string>
+	<string name="video_preload_enable">Загружать следующие видео заранее</string>
+	<string name="video_preload_description">После полной загрузки текущего ролика следующие видео этой галереи по одному загружаются в кэш. Расходует трафик и место на диске. Ролики больше лимита или с неизвестным размером загрузки пропускаются без замены более дальними. При выходе из плеера предзагрузка прекращается. Не применяется к YouTube и веб-плеерам.</string>
+	<string name="video_preload_network">Сеть для предзагрузки</string>
+	<string name="video_preload_all_networks">Wi-Fi и мобильная сеть</string>
+	<string name="video_preload_count">Количество следующих видео</string>
+	<string name="video_preload_size">Максимальный размер одного видео</string>
+	<string name="video_preload_size_format">%d МБ</string>
+	<string name="video_preload_size_description">Видео больше указанного размера не загружаются заранее. При открытии вручную они загружаются как обычно.</string>
+	<string name="video_preload_size_input">Введите размер от 1 до 500 МБ</string>
 </resources>

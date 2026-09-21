@@ -1,13 +1,17 @@
 #include "player.h"
 #include "player_diagnostics.h"
+#include "player_timing.h"
 #include "util.h"
 
 #include <inttypes.h>
+#include <errno.h>
 #include <limits.h>
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include <libavutil/ffversion.h>
 #include <libavutil/pixdesc.h>
@@ -16,8 +20,33 @@
 #define DASHCHAN_FFMPEG_FLAVOR "ffmpeg"
 #endif
 
-#define DIAGNOSTICS_BUFFER_SIZE (512 * 1024)
+#define DIAGNOSTICS_BUFFER_SIZE (96 * 1024 * 1024)
 #define DIAGNOSTICS_SUMMARY_RESERVE (4 * 1024)
+#define DIAGNOSTICS_CHUNK_SIZE (64 * 1024)
+#define DIAGNOSTICS_MAX_PLAYERS 16
+
+typedef struct DiagnosticsChunk {
+	struct DiagnosticsChunk * next;
+	size_t length;
+	char data[DIAGNOSTICS_CHUNK_SIZE];
+} DiagnosticsChunk;
+
+typedef struct {
+	Player * player;
+	int64_t sampledUs, lastDecodedUs, lastPresentedUs, lastAudioPosition, lastAudioUs, presentedPosition;
+	int64_t rangeStartedUs, rangeTotalUs, lastStallUs;
+	uint64_t decoded, presented, dropped, consecutiveLate;
+	struct {
+		int64_t startedUs, totalUs, maxUs;
+		uint64_t calls, errors;
+	} codec[4];
+} DiagnosticsPlayer;
+
+static int64_t diagnosticsNowUs(void) {
+	struct timespec value;
+	clock_gettime(CLOCK_MONOTONIC, &value);
+	return (int64_t) value.tv_sec * 1000000 + value.tv_nsec / 1000;
+}
 
 typedef struct {
 	uint64_t videoPackets;
@@ -59,10 +88,16 @@ typedef struct {
 static struct {
 	pthread_mutex_t mutex;
 	int active;
+	int extended;
 	int truncated;
 	int64_t startedAt;
 	size_t length;
-	char buffer[DIAGNOSTICS_BUFFER_SIZE];
+	DiagnosticsChunk * first;
+	DiagnosticsChunk * last;
+	size_t chunks;
+	int finalized;
+	unsigned int skippedSamples;
+	DiagnosticsPlayer players[DIAGNOSTICS_MAX_PLAYERS];
 	DiagnosticsStats stats;
 } diagnostics = {
 	.mutex = PTHREAD_MUTEX_INITIALIZER
@@ -74,35 +109,44 @@ static int diagnosticsActive(void) {
 }
 
 static void diagnosticsAppendVLineLocked(size_t limit, const char * format, va_list arguments) {
-	if (diagnostics.length >= limit - 1) {
-		diagnostics.truncated = 1;
-		return;
-	}
-	int64_t elapsed = diagnostics.startedAt > 0 ? getTime() - diagnostics.startedAt : 0;
-	int prefix = snprintf(diagnostics.buffer + diagnostics.length, limit - diagnostics.length,
-			"[+%" PRId64 "ms] ", elapsed);
-	if (prefix < 0 || (size_t) prefix >= limit - diagnostics.length) {
-		diagnostics.length = limit - 1;
-		diagnostics.buffer[diagnostics.length] = '\0';
-		diagnostics.truncated = 1;
-		return;
-	}
-	diagnostics.length += (size_t) prefix;
-	int written = vsnprintf(diagnostics.buffer + diagnostics.length, limit - diagnostics.length,
-			format, arguments);
-	if (written < 0 || (size_t) written >= limit - diagnostics.length) {
-		diagnostics.length = limit - 1;
-		diagnostics.buffer[diagnostics.length] = '\0';
-		diagnostics.truncated = 1;
-		return;
-	}
-	diagnostics.length += (size_t) written;
-	if (diagnostics.length + 1 < limit) {
-		diagnostics.buffer[diagnostics.length++] = '\n';
-		diagnostics.buffer[diagnostics.length] = '\0';
-	} else {
+	(void) limit; // Chunk budget includes summary lines; no contiguous 100 MiB allocation.
+	char line[4096];
+	int64_t elapsed = diagnostics.startedAt > 0 ? diagnosticsNowUs() / 1000 - diagnostics.startedAt : 0;
+	int prefix = snprintf(line, sizeof(line), "[+%" PRId64 "ms] ", elapsed);
+	if (prefix < 0 || (size_t) prefix >= sizeof(line) - 1) return;
+	int written = vsnprintf(line + prefix, sizeof(line) - prefix - 1, format, arguments);
+	if (written < 0) return;
+	size_t length = (size_t) prefix + (size_t) written;
+	if (length >= sizeof(line) - 1) {
+		length = sizeof(line) - 2;
 		diagnostics.truncated = 1;
 	}
+	line[length++] = '\n';
+	if (!diagnostics.last || diagnostics.last->length + length > DIAGNOSTICS_CHUNK_SIZE) {
+		DiagnosticsChunk * chunk = NULL;
+		size_t budget = diagnostics.extended ? DIAGNOSTICS_BUFFER_SIZE : 512 * 1024;
+		if (diagnostics.chunks < budget / sizeof(DiagnosticsChunk)) {
+			chunk = malloc(sizeof(DiagnosticsChunk));
+			if (chunk) diagnostics.chunks++;
+		}
+		if (!chunk && diagnostics.first && diagnostics.first->next) {
+			// Keep initial context, recycle the oldest subsequent chunk without copying the journal.
+			chunk = diagnostics.first->next;
+			diagnostics.first->next = chunk->next;
+			if (diagnostics.last == chunk) diagnostics.last = diagnostics.first;
+			diagnostics.length -= chunk->length;
+			diagnostics.truncated = 1;
+		}
+		if (!chunk) { diagnostics.truncated = 1; return; }
+		chunk->next = NULL;
+		chunk->length = 0;
+		if (diagnostics.last) diagnostics.last->next = chunk;
+		else diagnostics.first = chunk;
+		diagnostics.last = chunk;
+	}
+	memcpy(diagnostics.last->data + diagnostics.last->length, line, length);
+	diagnostics.last->length += length;
+	diagnostics.length += length;
 }
 
 static void diagnosticsAppendLineLocked(size_t limit, const char * format, ...) {
@@ -127,25 +171,42 @@ void diagnosticsLog(const char * format, ...) {
 	pthread_mutex_unlock(&diagnostics.mutex);
 }
 
-void startPlayerDiagnostics(void) {
+static void startPlayerDiagnosticsMode(int extended) {
 	if (diagnosticsActive()) {
 		return;
 	}
 	pthread_mutex_lock(&diagnostics.mutex);
 	if (!diagnosticsActive()) {
+		__atomic_store_n(&diagnostics.extended, extended, __ATOMIC_RELAXED);
 		memset(&diagnostics.stats, 0, sizeof(diagnostics.stats));
 		diagnostics.stats.firstOutputElapsedMs = -1;
 		diagnostics.stats.minWaitMs = INT64_MAX;
 		diagnostics.stats.maxWaitMs = INT64_MIN;
 		diagnostics.truncated = 0;
-		diagnostics.length = 0;
-		diagnostics.buffer[0] = '\0';
-		diagnostics.startedAt = getTime();
+		while (diagnostics.first) {
+			DiagnosticsChunk * next = diagnostics.first->next;
+			free(diagnostics.first);
+			diagnostics.first = next;
+		}
+		diagnostics.last = NULL;
+		diagnostics.chunks = diagnostics.length = 0;
+		diagnostics.finalized = 0;
+		__atomic_store_n(&diagnostics.skippedSamples, 0, __ATOMIC_RELAXED);
+		for (int i = 0; i < DIAGNOSTICS_MAX_PLAYERS; i++) {
+			Player * player = diagnostics.players[i].player;
+			memset(&diagnostics.players[i], 0, sizeof(DiagnosticsPlayer));
+			diagnostics.players[i].player = player;
+		}
+		diagnostics.startedAt = diagnosticsNowUs() / 1000;
 		__atomic_store_n(&diagnostics.active, 1, __ATOMIC_RELAXED);
 		diagnosticsAppendLineLocked(DIAGNOSTICS_BUFFER_SIZE - DIAGNOSTICS_SUMMARY_RESERVE,
 				"capture_started=true");
+		diagnosticsAppendLineLocked(DIAGNOSTICS_BUFFER_SIZE,
+				"mode=%s periodic_sample_ms=%d native_budget_kib=%d",
+				extended ? "extended" : "standard", extended ? 1000 : 0, extended ? 96 * 1024 : 512);
 		diagnosticsAppendLineLocked(DIAGNOSTICS_BUFFER_SIZE - DIAGNOSTICS_SUMMARY_RESERVE,
-				"diagnostics_schema=11 native_seek_locks=1 mediacodec_stages=1"
+				"diagnostics_schema=13 chunk_kib=64"
+				" monotonic_clock=1 nonblocking_samples=1 playback_speed=1 speed_scale=1000 native_seek_locks=1 mediacodec_stages=1"
 				" seek_worker_stop=1 surface_queue=1 duration_probe=1 packet_generation=1"
 				" software_output_scaling=1 software_late_drop=1 software_decode_governor=1"
 				" software_governor_recovery=2 software_late_anchor_ms=200"
@@ -156,9 +217,32 @@ void startPlayerDiagnostics(void) {
 	pthread_mutex_unlock(&diagnostics.mutex);
 }
 
-jstring stopPlayerDiagnostics(JNIEnv * env) {
+void startPlayerDiagnostics(void) { startPlayerDiagnosticsMode(0); }
+void startExtendedPlayerDiagnostics(void) { startPlayerDiagnosticsMode(1); }
+
+void releasePlayerDiagnostics(void) {
+	pthread_mutex_lock(&diagnostics.mutex);
+	if (!diagnosticsActive()) {
+		while (diagnostics.first) {
+			DiagnosticsChunk * next = diagnostics.first->next;
+			free(diagnostics.first);
+			diagnostics.first = next;
+		}
+		diagnostics.last = NULL;
+		diagnostics.chunks = diagnostics.length = 0;
+	}
+	pthread_mutex_unlock(&diagnostics.mutex);
+}
+
+jint finishPlayerDiagnostics(void) {
 	__atomic_store_n(&diagnostics.active, 0, __ATOMIC_RELAXED);
 	pthread_mutex_lock(&diagnostics.mutex);
+	if (diagnostics.finalized) {
+		jint length = (jint) diagnostics.length;
+		pthread_mutex_unlock(&diagnostics.mutex);
+		return length;
+	}
+	diagnostics.finalized = 1;
 	diagnosticsAppendLineLocked(DIAGNOSTICS_BUFFER_SIZE, "capture_stopped=true");
 	diagnosticsAppendLineLocked(DIAGNOSTICS_BUFFER_SIZE,
 			"summary video_packets=%" PRIu64 " key_packets=%" PRIu64
@@ -220,13 +304,255 @@ jstring stopPlayerDiagnostics(JNIEnv * env) {
 	}
 	diagnosticsAppendLineLocked(DIAGNOSTICS_BUFFER_SIZE,
 			"summary truncated=%s", diagnostics.truncated ? "true" : "false");
-	jstring result = (*env)->NewStringUTF(env, diagnostics.buffer);
+	jint result = (jint) diagnostics.length;
+	pthread_mutex_unlock(&diagnostics.mutex);
+	return result;
+}
+
+jbyteArray readPlayerDiagnosticsChunk(JNIEnv * env, jint offset, jint length) {
+	if (offset < 0 || length <= 0 || length > DIAGNOSTICS_CHUNK_SIZE) return NULL;
+	pthread_mutex_lock(&diagnostics.mutex);
+	if (!diagnostics.finalized || (size_t) offset >= diagnostics.length) {
+		pthread_mutex_unlock(&diagnostics.mutex);
+		return NULL;
+	}
+	size_t count = diagnostics.length - offset;
+	if (count > (size_t) length) count = (size_t) length;
+	jbyteArray result = (*env)->NewByteArray(env, (jsize) count);
+	if (result) {
+		size_t remaining = count, skip = (size_t) offset;
+		for (DiagnosticsChunk * chunk = diagnostics.first; chunk && remaining; chunk = chunk->next) {
+			if (skip >= chunk->length) { skip -= chunk->length; continue; }
+			size_t take = chunk->length - skip;
+			if (take > remaining) take = remaining;
+			(*env)->SetByteArrayRegion(env, result, (jsize) (count - remaining), (jsize) take,
+					(const jbyte *) (chunk->data + skip));
+			remaining -= take;
+			skip = 0;
+		}
+	}
+	pthread_mutex_unlock(&diagnostics.mutex);
+	return result;
+}
+
+// Kept for older Java clients. The current client streams byte chunks instead.
+jstring stopPlayerDiagnostics(JNIEnv * env) {
+	finishPlayerDiagnostics();
+	pthread_mutex_lock(&diagnostics.mutex);
+	char * buffer = malloc(diagnostics.length + 1);
+	jstring result = NULL;
+	if (buffer) {
+		size_t offset = 0;
+		for (DiagnosticsChunk * chunk = diagnostics.first; chunk; chunk = chunk->next) {
+			memcpy(buffer + offset, chunk->data, chunk->length);
+			offset += chunk->length;
+		}
+		buffer[offset] = '\0';
+		result = (*env)->NewStringUTF(env, buffer);
+		free(buffer);
+	}
 	pthread_mutex_unlock(&diagnostics.mutex);
 	return result;
 }
 
 unsigned int diagnosticsNextPlayerId(void) {
 	return __atomic_add_fetch(&nextDiagnosticsPlayerId, 1, __ATOMIC_RELAXED);
+}
+
+static DiagnosticsPlayer * diagnosticsFindPlayerLocked(Player * player) {
+	for (int i = 0; i < DIAGNOSTICS_MAX_PLAYERS; i++) {
+		if (diagnostics.players[i].player == player) return &diagnostics.players[i];
+	}
+	return NULL;
+}
+
+void diagnosticsRegisterPlayer(Player * player) {
+	pthread_mutex_lock(&diagnostics.mutex);
+	for (int i = 0; i < DIAGNOSTICS_MAX_PLAYERS; i++) {
+		if (!diagnostics.players[i].player) {
+			memset(&diagnostics.players[i], 0, sizeof(DiagnosticsPlayer));
+			diagnostics.players[i].player = player;
+			break;
+		}
+	}
+	pthread_mutex_unlock(&diagnostics.mutex);
+}
+
+void diagnosticsUnregisterPlayer(Player * player) {
+	pthread_mutex_lock(&diagnostics.mutex);
+	DiagnosticsPlayer * entry = diagnosticsFindPlayerLocked(player);
+	if (entry) entry->player = NULL;
+	pthread_mutex_unlock(&diagnostics.mutex);
+}
+
+static int diagnosticsTrySampleLock(void) {
+	if (!diagnosticsActive() || !__atomic_load_n(&diagnostics.extended, __ATOMIC_RELAXED)) return 0;
+	if (pthread_mutex_trylock(&diagnostics.mutex)) {
+		__atomic_add_fetch(&diagnostics.skippedSamples, 1, __ATOMIC_RELAXED);
+		return 0;
+	}
+	if (!diagnosticsActive()) { pthread_mutex_unlock(&diagnostics.mutex); return 0; }
+	return 1;
+}
+
+int64_t diagnosticsCodecBegin(Player * player, int operation) {
+	if (operation < 0 || operation >= 4 || !diagnosticsTrySampleLock()) return 0;
+	DiagnosticsPlayer * entry = diagnosticsFindPlayerLocked(player);
+	int64_t now = diagnosticsNowUs();
+	if (entry) entry->codec[operation].startedUs = now;
+	pthread_mutex_unlock(&diagnostics.mutex);
+	return entry ? now : 0;
+}
+
+void diagnosticsCodecEnd(Player * player, int operation, int64_t startedUs, int result) {
+	if (!startedUs || operation < 0 || operation >= 4 || !diagnosticsActive()) return;
+	// Completion must clear the in-flight marker even when a periodic snapshot is running.
+	pthread_mutex_lock(&diagnostics.mutex);
+	DiagnosticsPlayer * entry = diagnosticsFindPlayerLocked(player);
+	if (diagnosticsActive() && entry && entry->codec[operation].startedUs == startedUs) {
+		int64_t now = diagnosticsNowUs(), elapsed = now - startedUs;
+		entry->codec[operation].startedUs = 0;
+		entry->codec[operation].calls++;
+		entry->codec[operation].totalUs += elapsed;
+		if (elapsed > entry->codec[operation].maxUs) entry->codec[operation].maxUs = elapsed;
+		if (result < 0 && result != AVERROR(EAGAIN) && result != AVERROR_EOF) entry->codec[operation].errors++;
+		if (operation == 1 && result >= 0) { entry->decoded++; entry->lastDecodedUs = now; }
+	}
+	pthread_mutex_unlock(&diagnostics.mutex);
+}
+
+void diagnosticsPresentation(Player * player, int64_t position, int action) {
+	if (!diagnosticsTrySampleLock()) return;
+	DiagnosticsPlayer * entry = diagnosticsFindPlayerLocked(player);
+	if (entry) {
+		if (action == DIAGNOSTICS_OUTPUT_IMMEDIATE || action == DIAGNOSTICS_OUTPUT_SCHEDULED) {
+			entry->presented++;
+			entry->lastPresentedUs = diagnosticsNowUs();
+			entry->presentedPosition = position;
+			entry->consecutiveLate = 0;
+		} else {
+			entry->dropped++;
+			if (action == DIAGNOSTICS_OUTPUT_DROPPED_LATE) entry->consecutiveLate++;
+			else entry->consecutiveLate = 0;
+		}
+	}
+	pthread_mutex_unlock(&diagnostics.mutex);
+}
+
+void diagnosticsRangeWait(Player * player, int waiting) {
+	if (!diagnosticsActive() || !__atomic_load_n(&diagnostics.extended, __ATOMIC_RELAXED)) return;
+	pthread_mutex_lock(&diagnostics.mutex);
+	DiagnosticsPlayer * entry = diagnosticsFindPlayerLocked(player);
+	if (diagnosticsActive() && entry) {
+		int64_t now = diagnosticsNowUs();
+		if (waiting) { if (!entry->rangeStartedUs) entry->rangeStartedUs = now; }
+		else if (entry->rangeStartedUs) {
+			entry->rangeTotalUs += now - entry->rangeStartedUs;
+			entry->rangeStartedUs = 0;
+		}
+	}
+	pthread_mutex_unlock(&diagnostics.mutex);
+}
+
+static int diagnosticsQueueDepth(BlockingQueue * queue) {
+	if (pthread_mutex_trylock(&queue->mutex)) return -1;
+	int count = queue->queue.count;
+	pthread_mutex_unlock(&queue->mutex);
+	return count;
+}
+
+void samplePlayerDiagnostics(void) {
+	if (!diagnosticsTrySampleLock()) return;
+	int64_t now = diagnosticsNowUs();
+	for (int i = 0; i < DIAGNOSTICS_MAX_PLAYERS; i++) {
+		DiagnosticsPlayer * entry = &diagnostics.players[i];
+		Player * player = entry->player;
+		if (!player) continue;
+		// Never wait for a core lock while holding the diagnostics registry lock. Destroy unregisters
+		// the player before destroying these locks. A busy field is explicitly unavailable (-1).
+		int playing = -1, seeking = -1, speed = -1, audioDepth = -1;
+		int64_t audioPosition = -1, audioAdvance = -1, audioElapsed = -1;
+		if (!pthread_mutex_trylock(&player->play.finishMutex)) {
+			playing = player->play.playing;
+			seeking = player->play.pausedSeekState;
+			pthread_mutex_unlock(&player->play.finishMutex);
+		}
+		if (!pthread_mutex_trylock(&player->audio.sleepBufferMutex)) {
+			speed = getPlaybackSpeed(player);
+			audioPosition = player->sync.audioPosition;
+			audioDepth = player->audio.outputChunkCount;
+			pthread_mutex_unlock(&player->audio.sleepBufferMutex);
+			if (entry->lastAudioUs) {
+				audioAdvance = audioPosition - entry->lastAudioPosition;
+				audioElapsed = (now - entry->lastAudioUs) / 1000;
+			}
+			entry->lastAudioUs = now;
+			entry->lastAudioPosition = audioPosition;
+		}
+		long rangeStart = -1, rangeEnd = -1, rangeTotal = -1;
+		if (!pthread_mutex_trylock(&player->file.controlMutex)) {
+			rangeStart = player->file.start; rangeEnd = player->file.end; rangeTotal = player->file.total;
+			pthread_mutex_unlock(&player->file.controlMutex);
+		}
+		int videoQueue = -1;
+		// Output creation owns sleepDrawMutex; buffer enqueue/dequeue owns queueMutex.
+		if (!pthread_mutex_trylock(&player->video.sleepDrawMutex)) {
+			if (!pthread_mutex_trylock(&player->video.queueMutex)) {
+				videoQueue = player->video.bufferQueue ? bufferQueueCount(player->video.bufferQueue) : 0;
+				pthread_mutex_unlock(&player->video.queueMutex);
+			}
+			pthread_mutex_unlock(&player->video.sleepDrawMutex);
+		}
+		int64_t interval = entry->sampledUs ? (now - entry->sampledUs) / 1000 : 0;
+		int64_t decodedAge = entry->lastDecodedUs ? (now - entry->lastDecodedUs) / 1000 : -1;
+		int64_t presentedAge = entry->lastPresentedUs ? (now - entry->lastPresentedUs) / 1000 : -1;
+		diagnosticsAppendLineLocked(DIAGNOSTICS_BUFFER_SIZE,
+				"player=%u sample interval_ms=%" PRId64 " playing=%d paused_seek_state=%d speed_milli=%d"
+				" decoded=%" PRIu64 " presented=%" PRIu64 " dropped=%" PRIu64 " consecutive_late=%" PRIu64
+				" decoded_age_ms=%" PRId64 " presented_age_ms=%" PRId64,
+				player->meta.diagnosticsId, interval, playing, seeking, speed, entry->decoded,
+				entry->presented, entry->dropped, entry->consecutiveLate, decodedAge, presentedAge);
+		diagnosticsAppendLineLocked(DIAGNOSTICS_BUFFER_SIZE,
+				"player=%u clocks audio_ms=%" PRId64 " presented_video_ms=%" PRId64
+				" audio_minus_video_ms=%" PRId64 " audio_advance_ms=%" PRId64 " audio_interval_ms=%" PRId64
+				" video_packets=%d audio_packets=%d video_buffers=%d audio_buffers=%d audio_output_depth=%d"
+				" video_stage=%d audio_stage=%d samples_skipped=%u",
+				player->meta.diagnosticsId, audioPosition, entry->lastPresentedUs ? entry->presentedPosition : -1,
+				audioPosition >= 0 && entry->lastPresentedUs ? audioPosition - entry->presentedPosition : -1,
+				audioAdvance, audioElapsed, diagnosticsQueueDepth(&player->video.packetQueue),
+				diagnosticsQueueDepth(&player->audio.packetQueue), videoQueue,
+				diagnosticsQueueDepth(&player->audio.bufferQueue), audioDepth,
+				__atomic_load_n(&player->decode.video.diagnosticsStage, __ATOMIC_RELAXED),
+				__atomic_load_n(&player->decode.audio.diagnosticsStage, __ATOMIC_RELAXED),
+				__atomic_load_n(&diagnostics.skippedSamples, __ATOMIC_RELAXED));
+		diagnosticsAppendLineLocked(DIAGNOSTICS_BUFFER_SIZE,
+				"player=%u range start=%ld end=%ld total=%ld waiting=%d wait_age_ms=%" PRId64
+				" completed_wait_ms=%" PRId64, player->meta.diagnosticsId, rangeStart, rangeEnd, rangeTotal,
+				entry->rangeStartedUs != 0, entry->rangeStartedUs ? (now - entry->rangeStartedUs) / 1000 : 0,
+				entry->rangeTotalUs / 1000);
+		for (int op = 0; op < 4; op++) {
+			uint64_t calls = entry->codec[op].calls;
+			diagnosticsAppendLineLocked(DIAGNOSTICS_BUFFER_SIZE,
+					"player=%u codec_timing op=%d calls=%" PRIu64 " avg_us=%" PRId64 " max_us=%" PRId64
+					" inflight_ms=%" PRId64 " errors=%" PRIu64, player->meta.diagnosticsId, op, calls,
+					calls ? entry->codec[op].totalUs / (int64_t) calls : 0, entry->codec[op].maxUs,
+					entry->codec[op].startedUs ? (now - entry->codec[op].startedUs) / 1000 : 0,
+					entry->codec[op].errors);
+			entry->codec[op].calls = entry->codec[op].errors = 0;
+			entry->codec[op].totalUs = entry->codec[op].maxUs = 0;
+		}
+		// A hint, not a diagnosis: paused/seeking/finished video may legitimately have no frames.
+		if (playing == 1 && seeking == PAUSED_SEEK_NONE && audioAdvance > 0 && presentedAge > 2000
+				&& now - entry->lastStallUs > 5000000) {
+			diagnosticsAppendLineLocked(DIAGNOSTICS_BUFFER_SIZE,
+					"player=%u stall_suspected=1 reason=audio_advances_without_presented_frame",
+					player->meta.diagnosticsId);
+			entry->lastStallUs = now;
+		}
+		entry->sampledUs = now;
+		entry->decoded = entry->presented = entry->dropped = 0;
+	}
+	pthread_mutex_unlock(&diagnostics.mutex);
 }
 
 void diagnosticsIncrement(enum PlayerDiagnosticsCounter counter) {
@@ -349,6 +675,7 @@ void diagnosticsRecordAudioMasterResumed(Player * player, int64_t position) {
 
 void diagnosticsRecordSoftwareDrop(Player * player, int decodeStage,
 		int64_t framePosition, int64_t playbackPosition, int64_t lateness) {
+	diagnosticsPresentation(player, framePosition, DIAGNOSTICS_OUTPUT_DROPPED_LATE);
 	if (!diagnosticsActive()) {
 		return;
 	}
@@ -403,9 +730,9 @@ void diagnosticsRecordVideoPacket(Player * player, AVPacket * packet) {
 		if (count <= 12 || key || count % 120 == 0) {
 			diagnosticsAppendLineLocked(DIAGNOSTICS_BUFFER_SIZE - DIAGNOSTICS_SUMMARY_RESERVE,
 					"player=%u video_packet count=%" PRIu64 " pts=%" PRId64
-					" dts=%" PRId64 " duration=%" PRId64 " size=%d key=%d",
+					" dts=%" PRId64 " duration=%" PRId64 " size=%d key=%d speed_milli=%d",
 					player->meta.diagnosticsId, count, packet->pts, packet->dts,
-					packet->duration, packet->size, key);
+					packet->duration, packet->size, key, getPlaybackSpeed(player));
 		}
 	}
 	pthread_mutex_unlock(&diagnostics.mutex);
@@ -439,6 +766,7 @@ void diagnosticsRecordDecoderError(Player * player, const char * stage, int erro
 
 void diagnosticsRecordOutput(Player * player, AVFrame * frame, int64_t framePosition,
 		int64_t waitTime, int action, int result) {
+	diagnosticsPresentation(player, framePosition, result >= 0 ? action : DIAGNOSTICS_OUTPUT_NO_BUFFER);
 	if (!diagnosticsActive()) {
 		return;
 	}
@@ -447,7 +775,7 @@ void diagnosticsRecordOutput(Player * player, AVFrame * frame, int64_t framePosi
 	if (diagnosticsActive()) {
 		uint64_t count = ++diagnostics.stats.outputFrames;
 		if (diagnostics.stats.firstOutputElapsedMs < 0) {
-			diagnostics.stats.firstOutputElapsedMs = getTime() - diagnostics.startedAt;
+			diagnostics.stats.firstOutputElapsedMs = diagnosticsNowUs() / 1000 - diagnostics.startedAt;
 		}
 		if (waitTime < diagnostics.stats.minWaitMs) {
 			diagnostics.stats.minWaitMs = waitTime;
@@ -488,10 +816,10 @@ void diagnosticsRecordOutput(Player * player, AVFrame * frame, int64_t framePosi
 			diagnosticsAppendLineLocked(DIAGNOSTICS_BUFFER_SIZE - DIAGNOSTICS_SUMMARY_RESERVE,
 					"player=%u video_output count=%" PRIu64 " pts=%" PRId64
 					" best=%" PRId64 " pos_ms=%" PRId64 " wait_ms=%" PRId64
-					" width=%d height=%d format=%d action=%s release_result=%d",
+					" width=%d height=%d format=%d action=%s release_result=%d speed_milli=%d",
 					player->meta.diagnosticsId, count, frame->pts, frame->best_effort_timestamp,
 					framePosition, waitTime, frame->width, frame->height, frame->format,
-					actionName, result);
+					actionName, result, getPlaybackSpeed(player));
 		}
 	}
 	pthread_mutex_unlock(&diagnostics.mutex);
@@ -509,6 +837,8 @@ void diagnosticsRecordMediaInfo(Player * player) {
 			? av_get_pix_fmt_name(parameters->format) : NULL;
 	diagnosticsLog("player=%u native_build ffmpeg=%s flavor=%s",
 			player->meta.diagnosticsId, FFMPEG_VERSION, DASHCHAN_FFMPEG_FLAVOR);
+	diagnosticsLog("player=%u playback_speed_initial speed_milli=%d speed_percent=%d",
+			player->meta.diagnosticsId, getPlaybackSpeed(player), getPlaybackSpeed(player) / 10);
 	diagnosticsLog("player=%u media format=%s duration_us=%" PRId64
 			" start_us=%" PRId64 " streams=%u", player->meta.diagnosticsId,
 			format->iformat && format->iformat->name ? format->iformat->name : "unknown",

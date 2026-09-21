@@ -1858,6 +1858,32 @@ public class Preferences {
 		return PREFERENCES.getBoolean(KEY_USE_VIDEO_PLAYER, DEFAULT_USE_VIDEO_PLAYER);
 	}
 
+	public static final String KEY_VIDEO_PRELOAD = "video_preload";
+	public static final boolean DEFAULT_VIDEO_PRELOAD = true;
+	public static final String KEY_VIDEO_PRELOAD_NETWORK = "video_preload_network";
+	public static final String DEFAULT_VIDEO_PRELOAD_NETWORK = "all";
+	public static final String KEY_VIDEO_PRELOAD_COUNT = "video_preload_count";
+	public static final int DEFAULT_VIDEO_PRELOAD_COUNT = 2;
+	public static final String KEY_VIDEO_PRELOAD_SIZE_MB = "video_preload_size_mb";
+	public static final int DEFAULT_VIDEO_PRELOAD_SIZE_MB = 20;
+
+	public static boolean isVideoPreload() {
+		return PREFERENCES.getBoolean(KEY_VIDEO_PRELOAD, DEFAULT_VIDEO_PRELOAD);
+	}
+
+	public static boolean isVideoPreloadWifiOnly() {
+		return !"all".equals(PREFERENCES.getString(KEY_VIDEO_PRELOAD_NETWORK, DEFAULT_VIDEO_PRELOAD_NETWORK));
+	}
+
+	public static int getVideoPreloadCount() {
+		return clamp(PREFERENCES.getInt(KEY_VIDEO_PRELOAD_COUNT, DEFAULT_VIDEO_PRELOAD_COUNT), 1, 5);
+	}
+
+	public static long getVideoPreloadMaxBytes() {
+		return clamp(PREFERENCES.getInt(KEY_VIDEO_PRELOAD_SIZE_MB, DEFAULT_VIDEO_PRELOAD_SIZE_MB), 1, 500)
+				* 1024L * 1024L;
+	}
+
 	public static final String KEY_VIDEO_START_MUTED = "video_start_muted";
 	public static final boolean DEFAULT_VIDEO_START_MUTED = false;
 
@@ -1866,6 +1892,7 @@ public class Preferences {
 	}
 
 	public static final String KEY_HARDWARE_VIDEO_ACCELERATION = "hardware_video_acceleration";
+	public static final String KEY_EXTENDED_VIDEO_DIAGNOSTICS = "extended_video_diagnostics";
 	public static final boolean DEFAULT_HARDWARE_VIDEO_ACCELERATION = true;
 	public static final String KEY_IMAGE_EDITOR = "image_editor";
 	public static final boolean DEFAULT_IMAGE_EDITOR = true;

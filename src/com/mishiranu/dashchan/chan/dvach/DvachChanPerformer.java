@@ -3,6 +3,7 @@ package com.mishiranu.dashchan.chan.dvach;
 import android.annotation.SuppressLint;
 import android.graphics.Bitmap;
 import android.net.Uri;
+import android.util.Log;
 
 import chan.content.ApiException;
 import chan.content.ChanPerformer;
@@ -37,6 +38,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 import java.util.TimeZone;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -1299,18 +1301,41 @@ public class DvachChanPerformer extends ChanPerformer {
 		entity.add("comment", data.comment);
 
 		String referer = locator.createThreadUri(data.boardName, data.threadNumber).toString();
+		String diagnostic = "request=" + Integer.toHexString(System.identityHashCode(data.holder));
 		JSONObject jsonObject;
 		try {
-			jsonObject = new JSONObject(new HttpRequest(uri, data).addCookie(buildCookiesWithCaptchaPass())
+			HttpResponse response = new HttpRequest(uri, data).addCookie(buildCookiesWithCaptchaPass())
 					.addHeader("Referer", referer).setPostMethod(entity)
-					.setRedirectHandler(HttpRequest.RedirectHandler.NONE).perform().readString());
+					.setRedirectHandler(HttpRequest.RedirectHandler.NONE).perform();
+			Log.i("ReportDiag", diagnostic + " event=dvach_response status=" + response.getResponseCode());
+			String body = response.readString();
+			String trimmed = body.trim();
+			Log.i("ReportDiag", diagnostic + " event=dvach_body chars=" + body.length()
+					+ " shape=" + (trimmed.startsWith("{") ? "object" : trimmed.startsWith("<") ? "html" : "other"));
+			jsonObject = new JSONObject(body);
 		} catch (JSONException e) {
+			Log.w("ReportDiag", diagnostic + " event=dvach_invalid_json");
 			throw new InvalidResponseException(e);
 		}
-		if ("1".equals(jsonObject.optString("result"))) return new SendReportPostsResult();
+		if ("1".equals(jsonObject.optString("result"))) {
+			Log.i("ReportDiag", diagnostic + " event=dvach_accepted");
+			return new SendReportPostsResult();
+		}
 		JSONObject error = jsonObject.optJSONObject("error");
 		String message = error != null ? CommonUtils.optJsonString(error, "message", null)
 				: CommonUtils.optJsonString(jsonObject, "message", null);
+		// Classify known rejection messages without exposing arbitrary server text or user data.
+		String lowerMessage = message != null ? message.toLowerCase(Locale.ROOT) : "";
+		String reason = StringUtils.isEmpty(message) ? "missing_message"
+				: lowerMessage.contains("уже отправляли жалобу") ? "already_reported"
+				: lowerMessage.contains("быстро") || lowerMessage.contains("часто")
+						|| lowerMessage.contains("too fast") || lowerMessage.contains("too many") ? "rate_limit"
+				: lowerMessage.contains("ничего не написали") ? "empty_comment"
+				: lowerMessage.contains("заблокирован") || lowerMessage.contains("запрещ")
+						|| lowerMessage.contains("banned") ? "access_denied" : "other";
+		Log.w("ReportDiag", diagnostic + " event=dvach_rejected reason=" + reason
+				+ " error_object=" + (error != null) + " error_code=" + (error != null ? error.optInt("code", 0) : 0)
+				+ " result_present=" + jsonObject.has("result"));
 		if (StringUtils.isEmpty(message)) throw new InvalidResponseException();
 		if (message.contains("Вы уже отправляли жалобу")) {
 			throw new ApiException(ApiException.REPORT_ERROR_TOO_OFTEN);

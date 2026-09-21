@@ -144,9 +144,12 @@ void playerMarkStreamFinished(Player * player, int video) {
 	}
 }
 
-int playerDecodeFrame(AVCodecContext * context, AVPacket * packet, AVFrame * frame, int * packetSent) {
+int playerDecodeFrame(Player * player, int video, AVCodecContext * context, AVPacket * packet,
+		AVFrame * frame, int * packetSent) {
 	if (!*packetSent) {
+		int64_t callStarted = diagnosticsCodecBegin(player, video ? 0 : 2);
 		int result = avcodec_send_packet(context, packet);
+		diagnosticsCodecEnd(player, video ? 0 : 2, callStarted, result);
 		if (result == 0) {
 			*packetSent = 1;
 		} else if (result != AVERROR(EAGAIN)) {
@@ -157,7 +160,9 @@ int playerDecodeFrame(AVCodecContext * context, AVPacket * packet, AVFrame * fra
 		}
 	}
 
+	int64_t callStarted = diagnosticsCodecBegin(player, video ? 1 : 3);
 	int result = avcodec_receive_frame(context, frame);
+	diagnosticsCodecEnd(player, video ? 1 : 3, callStarted, result);
 	if (result == 0) {
 		return 1;
 	}
@@ -212,6 +217,7 @@ static Player * createPlayer(void) {
 	blockingQueueInit(&player->audio.packetQueue);
 	blockingQueueInit(&player->video.packetQueue);
 	blockingQueueInit(&player->audio.bufferQueue);
+	diagnosticsRegisterPlayer(player);
 	return player;
 }
 
@@ -435,6 +441,7 @@ void destroy(JNIEnv * env, jlong pointer, jboolean initOnly) {
 	playerAudioClearOutputLocked(player, 0);
 	pthread_mutex_unlock(&player->audio.sleepBufferMutex);
 	playerLogDestroyStage(player, "synchronization_cleanup_started");
+	diagnosticsUnregisterPlayer(player);
 	pthread_mutex_destroy(&player->decode.packets.readMutex);
 	pthread_mutex_destroy(&player->decode.packets.flowMutex);
 	pthread_mutex_destroy(&player->decode.audio.frameMutex);
@@ -540,6 +547,7 @@ void setCancelSeek(jlong pointer, jboolean cancelSeek) {
 void setPlaybackSpeed(jlong pointer, jint speed) {
 	Player * player = POINTER_CAST(pointer);
 	speed = clampPlaybackSpeed(speed);
+	int previousSpeed = getPlaybackSpeed(player);
 	if (player->sync.playbackSpeed != speed) {
 		pthread_mutex_lock(&player->play.finishMutex);
 		pthread_mutex_lock(&player->audio.sleepBufferMutex);
@@ -561,6 +569,8 @@ void setPlaybackSpeed(jlong pointer, jint speed) {
 		pthread_mutex_unlock(&player->audio.sleepBufferMutex);
 		pthread_mutex_unlock(&player->play.finishMutex);
 	}
+	diagnosticsLog("player=%u playback_speed previous_milli=%d speed_milli=%d speed_percent=%d",
+			player->meta.diagnosticsId, previousSpeed, getPlaybackSpeed(player), getPlaybackSpeed(player) / 10);
 }
 
 void playerApplyPlaying(Player * player, int playing) {
