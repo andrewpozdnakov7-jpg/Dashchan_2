@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<!-- Compact actions only in portrait; the w600dp variant overrides this on wide windows. -->
+	<style name="Theme.CompactToolbar" parent="">
+		<item name="android:actionButtonStyle">@style/Widget.CompactToolbar.ActionButton</item>
+		<item name="android:actionOverflowButtonStyle">@style/Widget.CompactToolbar.OverflowButton</item>
+	</style>
+</resources>

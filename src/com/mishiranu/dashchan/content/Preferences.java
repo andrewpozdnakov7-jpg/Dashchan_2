@@ -1917,6 +1917,70 @@ public class Preferences {
 	public static final String KEY_WINDOWED_THREAD_LOADING = "windowed_thread_loading";
 	public static final boolean DEFAULT_WINDOWED_THREAD_LOADING = false;
 	public static final String KEY_SWIPE_REPLY = "swipe_reply";
+	public static final String KEY_TOOLBAR_TITLE_SIZE = "toolbar_title_size";
+	public static final String KEY_THREAD_GALLERY_BUTTON = "thread_gallery_button";
+	public static final boolean DEFAULT_THREAD_GALLERY_BUTTON = false;
+
+	public static boolean isThreadGalleryButtonEnabled() {
+		return PREFERENCES.getBoolean(KEY_THREAD_GALLERY_BUTTON, DEFAULT_THREAD_GALLERY_BUTTON);
+	}
+
+	public static final String KEY_TOOLBAR_TITLE_CUSTOMIZATION = "toolbar_title_customization";
+	public static final boolean DEFAULT_TOOLBAR_TITLE_CUSTOMIZATION = false;
+	public static final String KEY_TOOLBAR_COMPACT_TITLE_SIZE = "toolbar_compact_title_size";
+	public static final String KEY_TOOLBAR_ADAPTIVE_TITLE = "toolbar_adaptive_title";
+	public static final String KEY_TOOLBAR_TITLE_HYPHENATION = "toolbar_title_hyphenation";
+	public static final String KEY_TOOLBAR_MIN_TITLE_SIZE = "toolbar_min_title_size";
+	public static final String KEY_TOOLBAR_TITLE_SIZE_STEP = "toolbar_title_size_step";
+	public static final int MIN_TOOLBAR_TITLE_SIZE = 10;
+	public static final int MAX_TOOLBAR_TITLE_SIZE = 32;
+
+	public static float getToolbarTitleSize(boolean compact) {
+		float fallback = compact ? 18f : 20f;
+		float value = PREFERENCES.getFloat(compact ? KEY_TOOLBAR_COMPACT_TITLE_SIZE : KEY_TOOLBAR_TITLE_SIZE, fallback);
+		return value >= MIN_TOOLBAR_TITLE_SIZE && value <= MAX_TOOLBAR_TITLE_SIZE ? value : fallback;
+	}
+
+	public static boolean isToolbarTitleCustomizationEnabled() {
+		return PREFERENCES.getBoolean(KEY_TOOLBAR_TITLE_CUSTOMIZATION, DEFAULT_TOOLBAR_TITLE_CUSTOMIZATION);
+	}
+
+	public static boolean isToolbarTitleAdaptive() {
+		return PREFERENCES.getBoolean(KEY_TOOLBAR_ADAPTIVE_TITLE, true);
+	}
+
+	public static boolean isToolbarTitleHyphenationEnabled() {
+		return PREFERENCES.getBoolean(KEY_TOOLBAR_TITLE_HYPHENATION, false);
+	}
+
+	public static float getToolbarMinTitleSize() {
+		float value = PREFERENCES.getFloat(KEY_TOOLBAR_MIN_TITLE_SIZE, 14f);
+		return Math.min(getToolbarTitleSize(false),
+				value >= MIN_TOOLBAR_TITLE_SIZE && value <= MAX_TOOLBAR_TITLE_SIZE ? value : 14f);
+	}
+
+	public static float getToolbarTitleSizeStep() {
+		float value = PREFERENCES.getFloat(KEY_TOOLBAR_TITLE_SIZE_STEP, 2f);
+		return value >= 1f && value <= 10f ? value : 2f;
+	}
+
+	public static void setToolbarTitleSizes(float normal, float compact, boolean adaptive, float minimum, float step) {
+		if (!(normal >= MIN_TOOLBAR_TITLE_SIZE && normal <= MAX_TOOLBAR_TITLE_SIZE
+				&& compact >= MIN_TOOLBAR_TITLE_SIZE && compact <= normal
+				&& minimum >= MIN_TOOLBAR_TITLE_SIZE && minimum <= normal && step >= 1f && step <= 10f)) {
+			throw new IllegalArgumentException("Invalid toolbar title sizes");
+		}
+		PREFERENCES.edit().put(KEY_TOOLBAR_TITLE_SIZE, normal)
+				.put(KEY_TOOLBAR_COMPACT_TITLE_SIZE, compact).put(KEY_TOOLBAR_ADAPTIVE_TITLE, adaptive)
+				.put(KEY_TOOLBAR_MIN_TITLE_SIZE, minimum).put(KEY_TOOLBAR_TITLE_SIZE_STEP, step).close();
+	}
+
+	public static void resetToolbarTitleSizes() {
+		PREFERENCES.edit().remove(KEY_TOOLBAR_TITLE_SIZE).remove(KEY_TOOLBAR_COMPACT_TITLE_SIZE)
+				.remove(KEY_TOOLBAR_ADAPTIVE_TITLE).remove(KEY_TOOLBAR_MIN_TITLE_SIZE)
+				.remove(KEY_TOOLBAR_TITLE_SIZE_STEP).remove(KEY_TOOLBAR_TITLE_HYPHENATION).close();
+	}
+
 	public static final boolean DEFAULT_SWIPE_REPLY = true;
 	public static final String KEY_COLLAPSE_LONG_OPEN_THREADS = "collapse_long_open_threads";
 	public static final boolean DEFAULT_COLLAPSE_LONG_OPEN_THREADS = true;

@@ -45,6 +45,13 @@ public class ExperimentalFragment extends PreferenceFragment implements Translat
 			return;
 		}
 		removeAllPreferences();
+		addButton(R.string.toast_diagnostics_test, R.string.toast_diagnostics_test__summary)
+				.setOnClickListener(p -> ClickableToast.showDiagnosticTest());
+		addButton(R.string.toolbar_title_sizes, R.string.toolbar_title_sizes__summary)
+				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
+						.pushFragment(new ToolbarTitleSettingsFragment()));
+		addCheck(true, Preferences.KEY_THREAD_GALLERY_BUTTON, Preferences.DEFAULT_THREAD_GALLERY_BUTTON,
+				R.string.thread_gallery_button, R.string.thread_gallery_button__summary);
 		addButton(R.string.whats_new_preview, R.string.whats_new_preview__summary)
 				.setOnClickListener(p -> WhatsNewDialog.show(getChildFragmentManager()));
 		CheckPreference hardwareAccelerationPreference = addCheck(true,
@@ -55,16 +62,10 @@ public class ExperimentalFragment extends PreferenceFragment implements Translat
 			refreshPreferences();
 		});
 		addVideoDiagnosticsPreferences();
-		addCheck(true, Preferences.KEY_OPEN_CONFIGURED_ATTACHMENT_FOLDER,
-				Preferences.DEFAULT_OPEN_CONFIGURED_ATTACHMENT_FOLDER,
-				R.string.open_configured_attachment_folder,
-				R.string.open_configured_attachment_folder__summary);
 		addCheck(true, Preferences.KEY_WINDOWED_THREAD_LOADING,
 				Preferences.DEFAULT_WINDOWED_THREAD_LOADING,
 				R.string.windowed_thread_loading,
 				R.string.windowed_thread_loading__summary);
-		addCheck(true, Preferences.KEY_SWIPE_REPLY, Preferences.DEFAULT_SWIPE_REPLY,
-				R.string.swipe_reply, R.string.swipe_reply__summary);
 		addCheck(true, Preferences.KEY_COLLAPSE_LONG_OPEN_THREADS,
 				Preferences.DEFAULT_COLLAPSE_LONG_OPEN_THREADS,
 				R.string.collapse_long_open_threads,
@@ -87,8 +88,6 @@ public class ExperimentalFragment extends PreferenceFragment implements Translat
 		if (BuildConfig.ENABLE_LOCAL_TRANSLATION) {
 			addTranslationPreferences();
 		}
-		addCheck(true, Preferences.KEY_VIDEO_ZOOM_GESTURES, Preferences.DEFAULT_VIDEO_ZOOM_GESTURES,
-				R.string.video_zoom_gestures, R.string.video_zoom_gestures__summary);
 	}
 
 	private CharSequence getRepliesAndNotificationsSummary() {

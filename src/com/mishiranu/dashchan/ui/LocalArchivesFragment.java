@@ -458,8 +458,7 @@ public class LocalArchivesFragment extends ContentFragment {
 			int selectionSize = (int) (48f * density + 0.5f);
 			((LinearLayout) holder.view).addView(selection, 0, new LinearLayout.LayoutParams(
 					selectionSize, LinearLayout.LayoutParams.MATCH_PARENT));
-			holder.view.setPaddingRelative(0, holder.view.getPaddingTop(), holder.view.getPaddingEnd(),
-					holder.view.getPaddingBottom());
+			// Keep the standard list insets even when the selection checkbox is hidden.
 			ViewHolder viewHolder = new ViewHolder(holder, selection);
 			viewHolder.itemView.setOnClickListener(view -> {
 				int position = viewHolder.getAdapterPosition();

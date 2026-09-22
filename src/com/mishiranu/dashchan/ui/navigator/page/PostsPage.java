@@ -745,6 +745,8 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 
 	@Override
 	protected void onResume() {
+		// Experimental toolbar preferences can change while this thread remains on the back stack.
+		updateOptionsMenu();
 		if (getAdapter().setRemoveHiddenPosts(Preferences.isRemoveHiddenPosts())) {
 			updateImportantPostsFastScrollBarDecorationData();
 		}
@@ -1071,6 +1073,12 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 		menu.add(0, R.id.menu_search, 0, R.string.search)
 				.setShowAsAction(MenuItem.SHOW_AS_ACTION_COLLAPSE_ACTION_VIEW);
 		menu.add(0, R.id.menu_gallery, 0, R.string.gallery);
+		android.graphics.drawable.Drawable galleryIcon = getToolbarContext()
+				.getDrawable(R.drawable.ic_photo_library).mutate();
+		galleryIcon.setTint(ResourceUtils.getColor(getToolbarContext(), android.R.attr.textColorPrimary));
+		// Keep the shortcut next to overflow, even on narrow portrait screens.
+		menu.add(0, R.id.menu_gallery_toolbar, 1000, R.string.gallery).setIcon(galleryIcon)
+				.setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
 		menu.add(0, R.id.menu_select, 0, R.string.select);
 		SubMenu contentsMenu = menu.addSubMenu(0, R.id.menu_contents, 0, R.string.contents);
 		contentsMenu.getItem().setIcon(getActionBarIcon(R.attr.iconActionSync))
@@ -1105,7 +1113,15 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 		RetainableExtra retainableExtra = getRetainableExtra(RetainableExtra.FACTORY);
 		menu.findItem(R.id.menu_add_post).setVisible(replyable != null && replyable.onRequestReply(false));
 		menu.findItem(R.id.menu_search).setVisible(!windowedMode);
-		menu.findItem(R.id.menu_gallery).setVisible(!windowedMode);
+		boolean galleryButton = Preferences.isThreadGalleryButtonEnabled();
+		menu.findItem(R.id.menu_gallery).setVisible(!windowedMode && !galleryButton);
+		menu.findItem(R.id.menu_gallery_toolbar).setVisible(!windowedMode && galleryButton);
+		// Pin the existing primary actions too: otherwise the required gallery shortcut consumes
+		// an action slot and pushes refresh (or reply) into overflow on compact screens.
+		int primaryActionMode = galleryButton && !windowedMode
+				? MenuItem.SHOW_AS_ACTION_ALWAYS : MenuItem.SHOW_AS_ACTION_IF_ROOM;
+		menu.findItem(R.id.menu_add_post).setShowAsAction(primaryActionMode);
+		menu.findItem(R.id.menu_contents).setShowAsAction(primaryActionMode);
 		menu.findItem(R.id.menu_summary).setVisible(!windowedMode);
 		menu.findItem(R.id.menu_erase).setVisible(adapter.getItemCount() > 0);
 		menu.findItem(R.id.menu_clear_old).setVisible(adapter.hasOldPosts());
@@ -1145,7 +1161,7 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 			getUiManager().navigator().navigatePosting(page.chanName, page.boardName,
 					page.threadNumber);
 			return true;
-		} else if (item.getItemId() == R.id.menu_gallery) {
+		} else if (item.getItemId() == R.id.menu_gallery || item.getItemId() == R.id.menu_gallery_toolbar) {
 			int imageIndex = -1;
 			PaddedRecyclerView recyclerView = getRecyclerView();
 			View child = recyclerView.getChildAt(0);

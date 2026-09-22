@@ -27,6 +27,7 @@
 	<item type="id" name="menu_expanded_screen" />
 	<item type="id" name="menu_filter" />
 	<item type="id" name="menu_gallery" />
+	<item type="id" name="menu_gallery_toolbar" />
 	<item type="id" name="menu_group" />
 	<item type="id" name="menu_hidden_posts" />
 	<item type="id" name="menu_large_grid" />

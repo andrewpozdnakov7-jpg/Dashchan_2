@@ -68,6 +68,10 @@ public class MediaFragment extends PreferenceFragment implements FragmentHandler
 				enumResList(Preferences.NetworkMode.values(), v -> v.titleResId));
 
 		addHeader(R.string.new_attachment_defaults);
+		addCheck(true, Preferences.KEY_OPEN_CONFIGURED_ATTACHMENT_FOLDER,
+				Preferences.DEFAULT_OPEN_CONFIGURED_ATTACHMENT_FOLDER,
+				R.string.open_configured_attachment_folder,
+				R.string.open_configured_attachment_folder__summary);
 		addCheck(true, Preferences.KEY_IMAGE_EDITOR, Preferences.DEFAULT_IMAGE_EDITOR,
 				R.string.image_editor, R.string.image_editor__summary);
 		addCheck(true, Preferences.KEY_DEFAULT_ATTACHMENT_UNIQUE_HASH,
@@ -152,6 +156,8 @@ public class MediaFragment extends PreferenceFragment implements FragmentHandler
 				R.string.play_after_scroll, R.string.play_after_scroll__summary).setEnabled(playerLoadResult.first);
 		addCheck(true, Preferences.KEY_VIDEO_SEEK_ANY_FRAME, Preferences.DEFAULT_VIDEO_SEEK_ANY_FRAME,
 				R.string.seek_any_frame, R.string.seek_any_frame__summary).setEnabled(playerLoadResult.first);
+		addCheck(true, Preferences.KEY_VIDEO_ZOOM_GESTURES, Preferences.DEFAULT_VIDEO_ZOOM_GESTURES,
+				R.string.video_zoom_gestures, R.string.video_zoom_gestures__summary).setEnabled(playerLoadResult.first);
 		addList(Preferences.KEY_YOUTUBE_OPEN_MODE,
 				enumList(Preferences.YouTubeOpenMode.values(), value -> value.value),
 				Preferences.DEFAULT_YOUTUBE_OPEN_MODE.value, R.string.youtube_open_mode,

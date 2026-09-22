@@ -74,6 +74,10 @@ public final class SettingsSearchIndex {
 			@Override
 			ContentFragment createFragment() { return new VideoPreloadFragment(); }
 		},
+		TOOLBAR_TITLE(R.string.experimental_features, R.string.toolbar_title_sizes) {
+			@Override
+			ContentFragment createFragment() { return new ToolbarTitleSettingsFragment(); }
+		},
 		PLAYBACK_SPEED(R.string.media, R.string.playback_speed) {
 			@Override
 			ContentFragment createFragment() { return new PlaybackSpeedFragment(); }
@@ -318,6 +322,22 @@ public final class SettingsSearchIndex {
 		add(context, entries, Screen.GENERAL, R.string.secure_connection, R.string.secure_connection__summary,
 				Preferences.KEY_USE_HTTPS_GENERAL);
 
+		add(context, entries, Screen.EXPERIMENTAL, R.string.toast_diagnostics_test,
+				R.string.toast_diagnostics_test__summary, null);
+		add(context, entries, Screen.EXPERIMENTAL, R.string.toolbar_title_sizes,
+				R.string.toolbar_title_sizes__summary, null);
+		add(context, entries, Screen.EXPERIMENTAL, R.string.thread_gallery_button,
+				R.string.thread_gallery_button__summary, Preferences.KEY_THREAD_GALLERY_BUTTON);
+		add(context, entries, Screen.TOOLBAR_TITLE, R.string.toolbar_title_customization,
+				R.string.toolbar_title_customization__summary, Preferences.KEY_TOOLBAR_TITLE_CUSTOMIZATION);
+		add(context, entries, Screen.TOOLBAR_TITLE, R.string.toolbar_title_adaptive,
+				R.string.toolbar_title_sizes_description, Preferences.KEY_TOOLBAR_ADAPTIVE_TITLE);
+		add(context, entries, Screen.TOOLBAR_TITLE, R.string.toolbar_title_hyphenation,
+				R.string.toolbar_title_hyphenation__summary, Preferences.KEY_TOOLBAR_TITLE_HYPHENATION);
+		add(context, entries, Screen.TOOLBAR_TITLE, R.string.toolbar_title_size_normal);
+		add(context, entries, Screen.TOOLBAR_TITLE, R.string.toolbar_title_size_minimum);
+		add(context, entries, Screen.TOOLBAR_TITLE, R.string.toolbar_title_size_step);
+		add(context, entries, Screen.TOOLBAR_TITLE, R.string.toolbar_title_size_compact);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.whats_new_preview,
 				R.string.whats_new_preview__summary, null);
 		add(context, entries, Screen.FORUMS, R.string.forum_reddit, R.string.reddit_public_web_reader__summary,
@@ -334,10 +354,10 @@ public final class SettingsSearchIndex {
 				R.string.hardware_video_acceleration__summary, Preferences.KEY_HARDWARE_VIDEO_ACCELERATION);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.video_diagnostics_extended,
 				R.string.video_diagnostics_extended__summary, Preferences.KEY_EXTENDED_VIDEO_DIAGNOSTICS);
-		add(context, entries, Screen.EXPERIMENTAL, R.string.open_configured_attachment_folder,
+		add(context, entries, Screen.MEDIA, R.string.open_configured_attachment_folder,
 				R.string.open_configured_attachment_folder__summary,
 				Preferences.KEY_OPEN_CONFIGURED_ATTACHMENT_FOLDER);
-		add(context, entries, Screen.EXPERIMENTAL, R.string.swipe_reply,
+		add(context, entries, Screen.INTERFACE, R.string.swipe_reply,
 				R.string.swipe_reply__summary, Preferences.KEY_SWIPE_REPLY);
 		if (BuildConfig.ENABLE_LOCAL_TRANSLATION) {
 			add(context, entries, Screen.EXPERIMENTAL, R.string.local_translation,
@@ -352,7 +372,7 @@ public final class SettingsSearchIndex {
 					R.string.translation_automatic__summary, Preferences.KEY_TRANSLATION_AUTO);
 			add(context, entries, Screen.EXPERIMENTAL, R.string.translation_language_package);
 		}
-		add(context, entries, Screen.EXPERIMENTAL, R.string.video_zoom_gestures,
+		add(context, entries, Screen.MEDIA, R.string.video_zoom_gestures,
 				R.string.video_zoom_gestures__summary, Preferences.KEY_VIDEO_ZOOM_GESTURES);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.replies_and_notifications, 0, null);
 		add(context, entries, Screen.REPLY_NOTIFICATIONS, R.string.track_replies,

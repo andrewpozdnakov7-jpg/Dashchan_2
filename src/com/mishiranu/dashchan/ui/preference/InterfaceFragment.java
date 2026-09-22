@@ -110,6 +110,8 @@ public class InterfaceFragment extends PreferenceFragment {
 				Preferences.DEFAULT_HIDE_THREADS_WITH_SWIPE, R.string.hide_threads_with_swipe, 0);
 
 		addHeader(R.string.posts_list);
+		addCheck(true, Preferences.KEY_SWIPE_REPLY, Preferences.DEFAULT_SWIPE_REPLY,
+				R.string.swipe_reply, R.string.swipe_reply__summary);
 		addCheck(true, Preferences.KEY_REMOVE_HIDDEN_POSTS, Preferences.DEFAULT_REMOVE_HIDDEN_POSTS,
 				R.string.remove_hidden_posts, R.string.remove_hidden_posts__summary);
 		addCheck(true, Preferences.KEY_DISPLAY_POST_YEAR, Preferences.DEFAULT_DISPLAY_POST_YEAR,
