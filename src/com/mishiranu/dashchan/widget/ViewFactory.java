@@ -3,6 +3,9 @@ package com.mishiranu.dashchan.widget;
 import android.content.Context;
 import android.content.res.Configuration;
 import android.content.res.TypedArray;
+import android.text.Layout;
+import android.text.StaticLayout;
+import android.text.TextPaint;
 import android.text.TextUtils;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -20,6 +23,8 @@ import android.widget.Toolbar;
 import androidx.core.widget.TextViewCompat;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.R;
+import com.mishiranu.dashchan.content.Preferences;
+import com.mishiranu.dashchan.util.SharedPreferences;
 import com.mishiranu.dashchan.util.FlagUtils;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.util.ViewUtils;
@@ -186,12 +191,162 @@ public class ViewFactory {
 		}
 	}
 
+	/** Chooses wrapping during measurement, before a frame is drawn. */
+	private static class ToolbarTitleView extends TextView {
+		private static final int MAX_TITLE_LINES = 3;
+		private final TextPaint normalPaint = new TextPaint();
+		private float defaultTextSize;
+		private int defaultBreakStrategy;
+		private int defaultHyphenationFrequency;
+		private int availableHeight = Integer.MAX_VALUE;
+		private final SharedPreferences.Listener sizeListener = key -> {
+			if (Preferences.KEY_TOOLBAR_TITLE_CUSTOMIZATION.equals(key)
+					|| Preferences.KEY_TOOLBAR_TITLE_SIZE.equals(key)
+					|| Preferences.KEY_TOOLBAR_COMPACT_TITLE_SIZE.equals(key)
+					|| Preferences.KEY_TOOLBAR_ADAPTIVE_TITLE.equals(key)
+					|| Preferences.KEY_TOOLBAR_TITLE_HYPHENATION.equals(key)
+					|| Preferences.KEY_TOOLBAR_MIN_TITLE_SIZE.equals(key)
+					|| Preferences.KEY_TOOLBAR_TITLE_SIZE_STEP.equals(key)) {
+				requestLayout();
+			}
+		};
+
+		public ToolbarTitleView(Context context) {
+			super(context);
+		}
+
+		public void initializeSize() {
+			defaultTextSize = getTextSize();
+			defaultBreakStrategy = getBreakStrategy();
+			defaultHyphenationFrequency = getHyphenationFrequency();
+			normalPaint.set(getPaint());
+		}
+
+		@Override
+		protected void onAttachedToWindow() {
+			super.onAttachedToWindow();
+			Preferences.PREFERENCES.register(sizeListener);
+			requestLayout();
+		}
+
+		@Override
+		protected void onDetachedFromWindow() {
+			Preferences.PREFERENCES.unregister(sizeListener);
+			super.onDetachedFromWindow();
+		}
+
+		@Override
+		protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+			boolean hyphenate = Preferences.isToolbarTitleCustomizationEnabled()
+					&& Preferences.isToolbarTitleHyphenationEnabled();
+			int breakStrategy = hyphenate ? Layout.BREAK_STRATEGY_HIGH_QUALITY : defaultBreakStrategy;
+			int hyphenation = hyphenate ? Layout.HYPHENATION_FREQUENCY_FULL : defaultHyphenationFrequency;
+			// Apply before probing, so adaptive sizing and the displayed text use identical wrapping rules.
+			if (getBreakStrategy() != breakStrategy) setBreakStrategy(breakStrategy);
+			if (getHyphenationFrequency() != hyphenation) setHyphenationFrequency(hyphenation);
+			if (!Preferences.isToolbarTitleCustomizationEnabled()) {
+				setTextSize(TypedValue.COMPLEX_UNIT_PX, defaultTextSize);
+				if (getMaxLines() != 1) {
+					setSingleLine(true);
+					setMaxLines(1);
+				}
+				super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+				return;
+			}
+			int width = MeasureSpec.getSize(widthMeasureSpec) - getCompoundPaddingLeft()
+					- getCompoundPaddingRight();
+			// Always compare with the ORIGINAL size, not the result of the previous measurement.
+			// This also restores short titles after navigation, rotation or menu changes.
+			float configuredNormal = Preferences.getToolbarTitleSize(false);
+			float selectedSize = configuredNormal;
+			normalPaint.setTextSize(toPixels(selectedSize));
+			boolean overflow = MeasureSpec.getMode(widthMeasureSpec) != MeasureSpec.UNSPECIFIED
+					&& width > 0 && (Layout.getDesiredWidth(getText(), normalPaint) > width
+							|| TextUtils.indexOf(getText(), '\n') >= 0);
+			int visibleLines = 1;
+			if (overflow) {
+				StaticLayout probe;
+				if (Preferences.isToolbarTitleAdaptive()) {
+					float minimum = Preferences.getToolbarMinTitleSize();
+					float step = Preferences.getToolbarTitleSizeStep();
+					// First try up to three lines WITHOUT shrinking. Stop at the largest size that fits.
+					while (true) {
+						probe = measureTitle(width, selectedSize);
+						if (fitsTitle(probe) || selectedSize <= minimum) break;
+						selectedSize = Math.max(minimum, selectedSize - step);
+					}
+				} else {
+					selectedSize = Math.min(configuredNormal, Preferences.getToolbarTitleSize(true));
+					probe = measureTitle(width, selectedSize);
+				}
+				// At the minimum, use an ellipsis, never shrink below the user's limit.
+				visibleLines = Math.min(MAX_TITLE_LINES, probe.getLineCount());
+				while (visibleLines > 1) {
+					int height = probe.getLineBottom(visibleLines - 1) + getCompoundPaddingTop()
+							+ getCompoundPaddingBottom();
+					if (probe.getLineCount() > visibleLines) height += Math.max(0, probe.getBottomPadding());
+					if (height <= availableHeight) break;
+					visibleLines--;
+				}
+			}
+			setTextSize(TypedValue.COMPLEX_UNIT_PX, toPixels(selectedSize));
+			if (getMaxLines() != visibleLines) {
+				setSingleLine(visibleLines == 1);
+				setMaxLines(visibleLines);
+			}
+			super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+		}
+
+		private float toPixels(float size) {
+			return TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, size,
+					getResources().getDisplayMetrics());
+		}
+
+		private StaticLayout measureTitle(int width, float size) {
+			normalPaint.setTextSize(toPixels(size));
+			CharSequence text = getText();
+			return StaticLayout.Builder.obtain(text, 0, text.length(), normalPaint, width)
+					.setMaxLines(MAX_TITLE_LINES + 1).setIncludePad(getIncludeFontPadding())
+					.setLineSpacing(getLineSpacingExtra(), getLineSpacingMultiplier())
+					.setBreakStrategy(getBreakStrategy()).setHyphenationFrequency(getHyphenationFrequency())
+					.setTextDirection(getTextDirectionHeuristic()).build();
+		}
+
+		private boolean fitsTitle(StaticLayout probe) {
+			return probe.getLineCount() <= MAX_TITLE_LINES && probe.getLineEnd(probe.getLineCount() - 1) == length()
+					&& probe.getHeight() + getCompoundPaddingTop() + getCompoundPaddingBottom() <= availableHeight;
+		}
+	}
+
+	private static class ToolbarTitleLayout extends LinearLayout {
+		public ToolbarTitleLayout(Context context) {
+			super(context);
+			setOrientation(VERTICAL);
+		}
+
+		@Override
+		protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+			ToolbarTitleView title = (ToolbarTitleView) getChildAt(0);
+			View subtitle = getChildAt(1);
+			int available = Integer.MAX_VALUE;
+			if (MeasureSpec.getMode(heightMeasureSpec) != MeasureSpec.UNSPECIFIED) {
+				available = MeasureSpec.getSize(heightMeasureSpec) - getPaddingTop() - getPaddingBottom();
+				if (subtitle.getVisibility() != GONE) {
+					measureChildWithMargins(subtitle, widthMeasureSpec, 0, heightMeasureSpec, 0);
+					LayoutParams params = (LayoutParams) subtitle.getLayoutParams();
+					available -= subtitle.getMeasuredHeight() + params.topMargin + params.bottomMargin;
+				}
+			}
+			title.availableHeight = Math.max(0, available);
+			super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+		}
+	}
+
 	public static class ToolbarHolder {
 		public final ViewGroup toolbar;
 		public final View layout;
 		private final TextView title;
 		private final TextView subtitle;
-		private final float titleTextSize;
 		private final int contentInsetStartWithNavigation;
 
 		private ToolbarHolder(Toolbar toolbar, View layout, TextView title, TextView subtitle) {
@@ -199,7 +354,6 @@ public class ViewFactory {
 			this.layout = layout;
 			this.title = title;
 			this.subtitle = subtitle;
-			titleTextSize = title.getTextSize();
 			contentInsetStartWithNavigation = toolbar.getContentInsetStartWithNavigation();
 		}
 
@@ -215,21 +369,18 @@ public class ViewFactory {
 
 		public void setCompactTitle(boolean compact) {
 			getToolbar().setContentInsetStartWithNavigation(compact ? 0 : contentInsetStartWithNavigation);
-			title.setSingleLine(!compact);
-			title.setMaxLines(compact ? 2 : 1);
-			title.setEllipsize(TextUtils.TruncateAt.END);
-			title.setTextSize(TypedValue.COMPLEX_UNIT_PX, compact ? titleTextSize * 0.84f : titleTextSize);
+			// All forums now share measured title fitting; Reddit only needs its inset override.
 		}
 	}
 
 	public static ToolbarHolder addToolbarTitle(Toolbar toolbar) {
-		LinearLayout layout = new LinearLayout(toolbar.getContext());
-		layout.setOrientation(LinearLayout.VERTICAL);
+		LinearLayout layout = new ToolbarTitleLayout(toolbar.getContext());
 		toolbar.addView(layout, Toolbar.LayoutParams.WRAP_CONTENT, Toolbar.LayoutParams.WRAP_CONTENT);
-		TextView title = new TextView(layout.getContext());
+		ToolbarTitleView title = new ToolbarTitleView(layout.getContext());
 		layout.addView(title, LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
 		TextViewCompat.setTextAppearance(title, android.R.style.TextAppearance_Material_Widget_Toolbar_Title);
 		ThemeEngine.applyStyle(title);
+		title.initializeSize();
 		title.setSingleLine(true);
 		title.setEllipsize(TextUtils.TruncateAt.END);
 		TextView subtitle = new TextView(layout.getContext());

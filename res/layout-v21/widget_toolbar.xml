@@ -10,10 +10,17 @@
 	android:tag="theme.background=primary"
 	android:elevation="4dp">
 
-	<Toolbar
+	<com.mishiranu.dashchan.widget.CompactToolbar
 		android:id="@+id/toolbar"
 		android:layout_width="match_parent"
 		android:layout_height="?android:attr/actionBarSize"
+		android:paddingStart="0dp"
+		android:paddingEnd="0dp"
+		android:contentInsetStart="16dp"
+		android:contentInsetStartWithNavigation="0dp"
+		android:contentInsetEnd="0dp"
+		android:contentInsetEndWithActions="0dp"
+		android:theme="@style/Theme.CompactToolbar"
 		style="?android:attr/actionBarStyle"
 		android:popupTheme="?android:attr/popupTheme"
 		android:tag="theme.background=primary" />

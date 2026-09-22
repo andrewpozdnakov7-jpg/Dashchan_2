@@ -7,11 +7,13 @@ import android.content.res.Resources;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.ColorFilter;
-import android.graphics.ColorMatrixColorFilter;
 import android.graphics.PixelFormat;
+import android.graphics.PorterDuff;
+import android.graphics.PorterDuffColorFilter;
 import android.graphics.Rect;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
+import android.graphics.drawable.GradientDrawable;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
@@ -24,6 +26,8 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import androidx.activity.ComponentActivity;
 import androidx.annotation.NonNull;
+import androidx.core.graphics.ColorUtils;
+import androidx.core.widget.TextViewCompat;
 import androidx.lifecycle.DefaultLifecycleObserver;
 import androidx.lifecycle.Lifecycle;
 import androidx.lifecycle.LifecycleOwner;
@@ -69,6 +73,8 @@ public class ClickableToast implements DefaultLifecycleObserver {
 	private boolean clickableOnlyWhenRoot;
 
 	private boolean resumed;
+	private int diagnosticId;
+	private boolean diagnosticHardwareCanvas;
 
 	private static WeakReference<ComponentActivity> currentActivity;
 
@@ -138,12 +144,27 @@ public class ClickableToast implements DefaultLifecycleObserver {
 		if (ConcurrentUtils.isMain()) {
 			ClickableToast toast = getCurrentToast();
 			if (toast != null) {
-				return toast.showInternal(message, updateId, button);
+				return toast.showInternal(message, updateId, button, false);
 			} else {
 				return null;
 			}
 		} else {
 			return ConcurrentUtils.mainGet(() -> show(message, updateId, button));
+		}
+	}
+
+	public static void showDiagnosticTest() {
+		if (!ConcurrentUtils.isMain()) {
+			ConcurrentUtils.HANDLER.post(ClickableToast::showDiagnosticTest);
+			return;
+		}
+		ClickableToast toast = getCurrentToast();
+		if (toast != null) {
+			ToastDiagnostics.start(toast.activity, LAYOUT_ID);
+			toast.showInternal(toast.activity.getResources().getQuantityString(
+					R.plurals.number_new_posts__format, 1, 1), null,
+					new Button(R.string.show, true, () -> ToastDiagnostics.event(toast.diagnosticId,
+							"test_action_clicked navigation=false")), true);
 		}
 	}
 
@@ -173,6 +194,11 @@ public class ClickableToast implements DefaultLifecycleObserver {
 		View toast2 = inflater.inflate(LAYOUT_ID, null);
 		TextView message1 = toast1.findViewById(android.R.id.message);
 		TextView message2 = toast2.findViewById(android.R.id.message);
+		// Keep the OEM shape, but resolve both foreground and background from the same app theme.
+		TextViewCompat.setTextAppearance(message1, R.style.ClickableToastTextAppearance);
+		TextViewCompat.setTextAppearance(message2, R.style.ClickableToastTextAppearance);
+		message1.setShadowLayer(0f, 0f, 0f, 0);
+		message2.setShadowLayer(0f, 0f, 0f, 0);
 		Drawable backgroundDrawable = toast1.getBackground();
 		View backgroundView = toast1;
 		if (backgroundDrawable == null) {
@@ -243,6 +269,8 @@ public class ClickableToast implements DefaultLifecycleObserver {
 			}
 		};
 		linearLayout.setOrientation(LinearLayout.HORIZONTAL);
+		// The palette already follows the app theme; do not let system night mode invert it again.
+		linearLayout.setForceDarkAllowed(false);
 		linearLayout.setGravity(Gravity.CENTER_VERTICAL);
 		linearLayout.setDividerDrawable(new ToastDividerDrawable(message1.getTextColors().getDefaultColor(),
 				(int) (density + 0.5f)));
@@ -254,7 +282,14 @@ public class ClickableToast implements DefaultLifecycleObserver {
 		((LinearLayout.LayoutParams) message1.getLayoutParams()).weight = 1f;
 		linearLayout.setPadding(horizontalPadding, totalPadding.top, horizontalPadding, totalPadding.bottom);
 
-		partialClickDrawable = new PartialClickDrawable(activity, backgroundDrawable);
+		int backgroundColor = ResourceUtils.getColor(activity, R.attr.colorClickableToastBackground);
+		if (backgroundDrawable == null) {
+			GradientDrawable fallback = new GradientDrawable();
+			fallback.setColor(backgroundColor);
+			fallback.setCornerRadius(8f * density);
+			backgroundDrawable = fallback;
+		}
+		partialClickDrawable = new PartialClickDrawable(backgroundDrawable.mutate(), backgroundColor);
 		message1.setBackground(null);
 		message2.setBackground(null);
 		linearLayout.setBackground(partialClickDrawable);
@@ -306,13 +341,19 @@ public class ClickableToast implements DefaultLifecycleObserver {
 
 	private final View.OnFocusChangeListener windowFocusListener = (v, hasFocus) -> updateAndApplyLayoutChecked();
 
-	private String showInternal(CharSequence message, String updateId, Button button) {
+	private String showInternal(CharSequence message, String updateId, Button button, boolean diagnosticTest) {
 		boolean update = updateId != null && updateId.equals(showing);
 		if (update) {
 			ConcurrentUtils.HANDLER.removeCallbacks(cancelRunnable);
 		} else {
 			cancelInternal();
 		}
+		diagnosticId = ToastDiagnostics.next();
+		ToastDiagnostics.source(diagnosticId);
+		diagnosticHardwareCanvas = false;
+		ToastDiagnostics.event(diagnosticId, "show_requested source=" + (diagnosticTest ? "test" : "application")
+				+ " update=" + update + " action=" + (button != null)
+				+ " system_layout=" + Integer.toHexString(LAYOUT_ID) + " y_offset=" + Y_OFFSET);
 		clickable = button != null;
 		this.message.setText(message);
 		if (button != null) {
@@ -328,6 +369,7 @@ public class ClickableToast implements DefaultLifecycleObserver {
 		int availableHeight = Math.max(1, ViewUtils.getWindowContentSize(activity).y - Y_OFFSET);
 		container.measure(View.MeasureSpec.makeMeasureSpec(ViewUtils.getWindowContentSize(activity).x,
 				View.MeasureSpec.AT_MOST), View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+		diagnosticSnapshot("before_show");
 		if (overflowDialog != null || container.getMeasuredHeight() > availableHeight / 2) {
 			removeCurrentContainer();
 			if (overflowDialog != null) {
@@ -354,8 +396,10 @@ public class ClickableToast implements DefaultLifecycleObserver {
 			});
 			try {
 				dialog.show();
+				ToastDiagnostics.event(diagnosticId, "shown_as_overflow_dialog");
 				return id;
 			} catch (WindowManager.BadTokenException e) {
+				ToastDiagnostics.event(diagnosticId, "dialog_bad_token");
 				cancelInternal();
 				return null;
 			}
@@ -366,17 +410,38 @@ public class ClickableToast implements DefaultLifecycleObserver {
 			timeout = accessibilityManager.getRecommendedTimeoutMillis(timeout, AccessibilityManager.FLAG_CONTENT_TEXT
 					| (realClickable ? AccessibilityManager.FLAG_CONTENT_CONTROLS : 0));
 		}
+		ToastDiagnostics.event(diagnosticId, "timeout_ms=" + timeout + " resumed=" + resumed
+				+ " action_visible=" + realClickable + " root_only=" + clickableOnlyWhenRoot);
 		if (update) {
 			applyLayout();
+			diagnosticAfterShow();
 			ConcurrentUtils.HANDLER.postDelayed(cancelRunnable, timeout);
 			return updateId;
 		} else if (addContainerToWindowManager()) {
 			String id = UUID.randomUUID().toString();
 			showing = id;
+			diagnosticAfterShow();
 			ConcurrentUtils.HANDLER.postDelayed(cancelRunnable, timeout);
 			return id;
 		} else {
 			return null;
+		}
+	}
+
+	private void diagnosticSnapshot(String phase) {
+		ToastDiagnostics.snapshot(diagnosticId, phase, activity, container, message, button,
+				currentContainer, partialClickDrawable.drawable, diagnosticHardwareCanvas);
+	}
+
+	private void diagnosticAfterShow() {
+		if (diagnosticId == 0) return;
+		int id = diagnosticId;
+		for (long delay : new long[] {250L, 1000L}) {
+			ConcurrentUtils.HANDLER.postDelayed(() -> {
+				if (diagnosticId == id && showing != null && currentContainer != null) {
+					diagnosticSnapshot("after_show_" + delay + "ms");
+				}
+			}, delay);
 		}
 	}
 
@@ -390,11 +455,14 @@ public class ClickableToast implements DefaultLifecycleObserver {
 		boolean success = false;
 		try {
 			currentContainer = new FrameLayout(activity);
+			currentContainer.setForceDarkAllowed(false);
 			currentContainer.addView(container, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT,
 					FrameLayout.LayoutParams.WRAP_CONTENT));
 			windowManager.addView(currentContainer, createLayoutParams(type));
+			ToastDiagnostics.event(diagnosticId, "window_added type=" + type);
 			success = true;
 		} catch (WindowManager.BadTokenException e) {
+			ToastDiagnostics.event(diagnosticId, "window_bad_token");
 			String errorMessage = e.getMessage();
 			if (errorMessage == null || !(errorMessage.contains("permission denied") ||
 					errorMessage.contains("has already been added"))) {
@@ -441,6 +509,8 @@ public class ClickableToast implements DefaultLifecycleObserver {
 		if (showing != null && clickable) {
 			updateLayout();
 			applyLayout();
+			ToastDiagnostics.event(diagnosticId, "focus_or_lifecycle_changed resumed=" + resumed
+					+ " action_visible=" + realClickable);
 		}
 	}
 
@@ -461,6 +531,8 @@ public class ClickableToast implements DefaultLifecycleObserver {
 
 	private void cancelInternal() {
 		ConcurrentUtils.HANDLER.removeCallbacks(cancelRunnable);
+		ToastDiagnostics.event(diagnosticId, "cancel");
+		diagnosticId = 0;
 		if (showing == null) {
 			return;
 		}
@@ -490,23 +562,19 @@ public class ClickableToast implements DefaultLifecycleObserver {
 
 	private class PartialClickDrawable extends BaseDrawable implements View.OnTouchListener, Drawable.Callback {
 		private final Drawable drawable;
+		private final ColorFilter normalColorFilter;
 		private final ColorFilter colorFilter;
 
 		private boolean clicked = false;
 
-		public PartialClickDrawable(Context context, Drawable drawable) {
+		public PartialClickDrawable(Drawable drawable, int color) {
 			this.drawable = drawable;
-			int color = GraphicsUtils.getDrawableColor(context, drawable, Gravity.CENTER);
 			boolean isLight = GraphicsUtils.isLight(color);
-			float source = (Color.red(color) + Color.green(color) + Color.blue(color)) / 3f / 0xff;
-			float target = source + (isLight ? -0.15f : 0.2f);
-			float multiplier = target / source;
-			float[] matrix = new float[20];
-			for (int i = 0; i < 3; i++) {
-				matrix[6 * i] = multiplier;
-			}
-			matrix[18] = 1f;
-			colorFilter = new ColorMatrixColorFilter(matrix);
+			normalColorFilter = new PorterDuffColorFilter(color, PorterDuff.Mode.SRC_IN);
+			int pressedColor = ColorUtils.blendARGB(color, isLight ? Color.BLACK : Color.WHITE,
+					isLight ? 0.15f : 0.2f);
+			colorFilter = new PorterDuffColorFilter(pressedColor, PorterDuff.Mode.SRC_IN);
+			drawable.setColorFilter(normalColorFilter);
 			drawable.setCallback(this);
 		}
 
@@ -517,6 +585,10 @@ public class ClickableToast implements DefaultLifecycleObserver {
 		@SuppressLint("ClickableViewAccessibility")
 		@Override
 		public boolean onTouch(View v, MotionEvent event) {
+			if (event.getActionMasked() != MotionEvent.ACTION_MOVE) {
+				ToastDiagnostics.event(diagnosticId, "touch action=" + event.getActionMasked()
+						+ " enabled=" + realClickable + " pressed=" + clicked);
+			}
 			if (!realClickable) {
 				return false;
 			}
@@ -566,21 +638,26 @@ public class ClickableToast implements DefaultLifecycleObserver {
 
 		@Override
 		public void draw(@NonNull Canvas canvas) {
+			diagnosticHardwareCanvas = canvas.isHardwareAccelerated();
 			drawable.draw(canvas);
 			if (clicked) {
 				drawable.setColorFilter(colorFilter);
-				canvas.save();
-				Rect bounds = getBounds();
-				if (button.getLayoutDirection() == View.LAYOUT_DIRECTION_RTL) {
-					int shift = button.getRight();
-					canvas.clipRect(bounds.left + shift, bounds.top, bounds.left + shift, bounds.bottom);
-				} else {
-					int shift = button.getLeft();
-					canvas.clipRect(bounds.left + shift, bounds.top, bounds.right, bounds.bottom);
+				int saveCount = canvas.save();
+				try {
+					Rect bounds = getBounds();
+					if (button.getLayoutDirection() == View.LAYOUT_DIRECTION_RTL) {
+						int shift = button.getRight();
+						canvas.clipRect(bounds.left, bounds.top, bounds.left + shift, bounds.bottom);
+					} else {
+						int shift = button.getLeft();
+						canvas.clipRect(bounds.left + shift, bounds.top, bounds.right, bounds.bottom);
+					}
+					drawable.draw(canvas);
+				} finally {
+					canvas.restoreToCount(saveCount);
+					// Clearing the filter would restore the mismatched OEM background after a press.
+					drawable.setColorFilter(normalColorFilter);
 				}
-				drawable.draw(canvas);
-				canvas.restore();
-				drawable.setColorFilter(null);
 			}
 		}
 

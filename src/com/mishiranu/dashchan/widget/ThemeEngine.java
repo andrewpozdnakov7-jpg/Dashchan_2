@@ -547,12 +547,10 @@ public class ThemeEngine {
 		protected View onCreateView(String name, AttributeSet attrs) throws ClassNotFoundException {
 			View view = createViewInternal(name, attrs);
 			if (view instanceof Toolbar) {
-				LayoutInflater layoutInflater = LayoutInflater.from(view.getContext());
-				if (layoutInflater instanceof ThemeLayoutInflater) {
-					((ThemeLayoutInflater) layoutInflater).toolbar = true;
-				}
+				applyToolbarStyle((Toolbar) view);
+			} else {
+				applyStyle(view);
 			}
-			applyStyle(view);
 			if (attachListener != null && !attachListener.isProcessed()) {
 				view.addOnAttachStateChangeListener(attachListener);
 			}
@@ -569,6 +567,15 @@ public class ThemeEngine {
 			}
 			return super.onCreateView(name, attrs);
 		}
+	}
+
+	public static void applyToolbarStyle(Toolbar toolbar) {
+		// Fully qualified custom views bypass ThemeLayoutInflater.onCreateView.
+		LayoutInflater inflater = LayoutInflater.from(toolbar.getContext());
+		if (inflater instanceof ThemeLayoutInflater) {
+			((ThemeLayoutInflater) inflater).toolbar = true;
+		}
+		applyStyle(toolbar);
 	}
 
 	private static ThemeContext obtainThemeContext(Context context) {

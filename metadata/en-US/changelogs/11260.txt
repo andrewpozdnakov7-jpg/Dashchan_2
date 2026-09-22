@@ -1,0 +1,8 @@
+- Fixed unreadable popup messages on some devices. Backgrounds, text and buttons now use consistent contrasting colors.
+- Made the top toolbar more compact on narrow portrait screens, leaving more room for thread titles.
+- Added an experimental header font setting with adaptive sizing, up to three lines and word hyphenation. Disabled by default.
+- Added an optional gallery button in the thread header. Enable it in experimental settings to replace the gallery menu entry.
+- Fixed text insets in the local archive list.
+- Moved settings to appropriate sections: video zoom and attachment folder selection are now under Media, and swipe replies are under Interface.
+
+Found a bug? Send us the logs!

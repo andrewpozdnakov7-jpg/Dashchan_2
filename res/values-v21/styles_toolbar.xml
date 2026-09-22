@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<!-- Normal windows inherit the system action-button styles without overrides. -->
+	<style name="Theme.CompactToolbar" parent="" />
+
+	<style name="Widget.CompactToolbar.ActionButton" parent="@android:style/Widget.Material.ActionButton">
+		<item name="android:minWidth">30dp</item>
+		<item name="android:minHeight">48dp</item>
+		<item name="android:paddingStart">0dp</item>
+		<item name="android:paddingEnd">0dp</item>
+	</style>
+
+	<style name="Widget.CompactToolbar.OverflowButton" parent="@android:style/Widget.Material.ActionButton.Overflow">
+		<item name="android:minWidth">30dp</item>
+		<item name="android:minHeight">48dp</item>
+		<item name="android:paddingStart">0dp</item>
+		<item name="android:paddingEnd">0dp</item>
+	</style>
+</resources>

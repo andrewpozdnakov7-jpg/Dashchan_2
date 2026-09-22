@@ -18,6 +18,8 @@
 	<color name="color_text_error">#ffcc0000</color>
 
 	<color name="background_popup_light">#ffffffff</color>
+	<color name="background_clickable_toast_light">@color/background_popup_dark</color>
+	<color name="color_text_clickable_toast_light">#ffffffff</color>
 	<color name="background_window_light">#ffeeeeee</color>
 	<color name="background_block_light">#ccffffff</color>
 	<color name="background_attachment_light">#ff888888</color>
@@ -37,6 +39,8 @@
 	<color name="color_post_mark_reply_light">#E41A0C</color>
 
 	<color name="background_popup_dark">#ff303030</color>
+	<color name="background_clickable_toast_dark">@color/background_popup_light</color>
+	<color name="color_text_clickable_toast_dark">#ff000000</color>
 	<color name="background_window_dark">#ff181818</color>
 	<color name="background_block_dark">#aa000000</color>
 	<color name="background_attachment_dark">#ff111111</color>

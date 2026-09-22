@@ -134,6 +134,8 @@
 		<item name="colorAttachmentBackground">@color/background_attachment_light</item>
 		<item name="colorSpoilerBackground">@color/background_spoiler_light</item>
 		<item name="colorCardBackground">@color/background_card_light</item>
+		<item name="colorClickableToastBackground">@color/background_clickable_toast_light</item>
+		<item name="colorTextClickableToast">@color/color_text_clickable_toast_light</item>
 
 		<item name="colorPrimarySupport">@color/color_primary_light</item>
 		<item name="colorAccentSupport">@color/color_accent_light</item>
@@ -164,6 +166,8 @@
 		<item name="colorAttachmentBackground">@color/background_attachment_dark</item>
 		<item name="colorSpoilerBackground">@color/background_spoiler_dark</item>
 		<item name="colorCardBackground">@color/background_card_dark</item>
+		<item name="colorClickableToastBackground">@color/background_clickable_toast_dark</item>
+		<item name="colorTextClickableToast">@color/color_text_clickable_toast_dark</item>
 
 		<item name="colorPrimarySupport">@color/color_primary_dark</item>
 		<item name="colorAccentSupport">@color/color_accent_dark</item>
@@ -182,6 +186,11 @@
 
 		<item name="colorGainFactor">1.25</item>
 
+	</style>
+
+	<style name="ClickableToastTextAppearance" parent="">
+		<item name="android:textSize">14sp</item>
+		<item name="android:textColor">?colorTextClickableToast</item>
 	</style>
 
 	<style name="Widget.Gallery.ActionBar" parent="@android:style/Widget.Holo.ActionBar">

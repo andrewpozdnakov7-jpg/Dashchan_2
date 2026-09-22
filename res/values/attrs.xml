@@ -10,6 +10,8 @@
 	<attr name="colorAttachmentBackground" format="color|reference" />
 	<attr name="colorSpoilerBackground" format="color|reference" />
 	<attr name="colorCardBackground" format="color|reference" />
+	<attr name="colorClickableToastBackground" format="color|reference" />
+	<attr name="colorTextClickableToast" format="color|reference" />
 
 	<attr name="colorTextThread" format="color|reference" />
 	<attr name="colorTextPost" format="color|reference" />
