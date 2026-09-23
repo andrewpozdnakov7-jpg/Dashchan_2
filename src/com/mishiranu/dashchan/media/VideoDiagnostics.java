@@ -1,11 +1,18 @@
 package com.mishiranu.dashchan.media;
 
+import android.graphics.Matrix;
+import android.graphics.Rect;
+import android.graphics.RectF;
 import android.media.MediaCodecInfo;
 import android.media.MediaCodecList;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
+import android.view.TextureView;
+import android.view.View;
+import android.view.ViewGroup;
+import android.view.ViewParent;
 import com.mishiranu.dashchan.BuildConfig;
 import com.mishiranu.dashchan.content.MainApplication;
 import com.mishiranu.dashchan.content.Preferences;
@@ -188,6 +195,74 @@ public final class VideoDiagnostics {
 			if (recording) {
 				appendUiReportLocked(message);
 			}
+		}
+	}
+
+	// Permanent extended-video diagnostics. Read geometry only; never mutate layout or retain Views.
+	// Call on the UI thread at lifecycle/layout boundaries, not for every decoded frame.
+	public static void recordViewGeometry(String event, View target) {
+		if (!isExtendedRecording() || target == null || Looper.myLooper() != Looper.getMainLooper()) return;
+		try {
+			View view = target;
+			for (int depth = 0; view != null && depth < 6; depth++) {
+				int[] screen = new int[2];
+				int[] window = new int[2];
+				view.getLocationOnScreen(screen);
+				view.getLocationInWindow(window);
+				Rect global = new Rect();
+				Rect local = new Rect();
+				Rect visibleFrame = new Rect();
+				boolean globalVisible = view.getGlobalVisibleRect(global);
+				boolean localVisible = view.getLocalVisibleRect(local);
+				view.getWindowVisibleDisplayFrame(visibleFrame);
+				float[] matrix = new float[9];
+				view.getMatrix().getValues(matrix);
+				StringBuilder line = new StringBuilder("view_geometry schema=1 event=").append(event)
+						.append(" target=").append(System.identityHashCode(target))
+						.append(" depth=").append(depth).append(" view=").append(System.identityHashCode(view))
+						.append(" class=").append(view.getClass().getSimpleName())
+						.append(" bounds=").append(view.getLeft()).append(',').append(view.getTop())
+						.append(',').append(view.getRight()).append(',').append(view.getBottom())
+						.append(" measured=").append(view.getMeasuredWidth()).append('x').append(view.getMeasuredHeight())
+						.append(" screen=").append(Arrays.toString(screen)).append(" window=").append(Arrays.toString(window))
+						.append(" translation=").append(view.getTranslationX()).append(',').append(view.getTranslationY())
+						.append(" scale=").append(view.getScaleX()).append(',').append(view.getScaleY())
+						.append(" pivot=").append(view.getPivotX()).append(',').append(view.getPivotY())
+						.append(" rotation=").append(view.getRotation()).append(',').append(view.getRotationX())
+						.append(',').append(view.getRotationY()).append(" z=").append(view.getZ())
+						.append(" matrix=").append(Arrays.toString(matrix))
+						.append(" scroll=").append(view.getScrollX()).append(',').append(view.getScrollY())
+						.append(" clip=").append(view.getClipBounds()).append(" clipOutline=").append(view.getClipToOutline())
+						.append(" globalVisible=").append(globalVisible).append(':').append(global.toShortString())
+						.append(" localVisible=").append(localVisible).append(':').append(local.toShortString())
+						.append(" windowFrame=").append(visibleFrame.toShortString())
+						.append(" visibility=").append(view.getVisibility()).append(" windowVisibility=").append(view.getWindowVisibility())
+						.append(" shown=").append(view.isShown()).append(" alpha=").append(view.getAlpha())
+						.append(" attached=").append(view.isAttachedToWindow()).append(" layoutRequested=").append(view.isLayoutRequested())
+						.append(" hardware=").append(view.isHardwareAccelerated()).append(" layer=").append(view.getLayerType())
+						.append(" displayRotation=").append(view.getDisplay() != null ? view.getDisplay().getRotation() : -1);
+				ViewGroup.LayoutParams params = view.getLayoutParams();
+				if (params != null) line.append(" layoutSize=").append(params.width).append('x').append(params.height);
+				if (view instanceof ViewGroup) {
+					ViewGroup group = (ViewGroup) view;
+					line.append(" clipChildren=").append(group.getClipChildren())
+							.append(" clipPadding=").append(group.getClipToPadding()).append(" children=").append(group.getChildCount());
+				}
+				if (view instanceof TextureView) {
+					TextureView texture = (TextureView) view;
+					Matrix transform = texture.getTransform(new Matrix());
+					transform.getValues(matrix);
+					RectF mapped = new RectF(0, 0, view.getWidth(), view.getHeight());
+					transform.mapRect(mapped);
+					line.append(" textureAvailable=").append(texture.isAvailable()).append(" opaque=").append(texture.isOpaque())
+							.append(" textureTransform=").append(Arrays.toString(matrix)).append(" textureMapped=").append(mapped);
+				}
+				recordUi(line.toString());
+				ViewParent parent = view.getParent();
+				view = parent instanceof View ? (View) parent : null;
+			}
+		} catch (RuntimeException e) {
+			recordUi("view_geometry failed=" + e.getClass().getSimpleName());
 		}
 	}
 

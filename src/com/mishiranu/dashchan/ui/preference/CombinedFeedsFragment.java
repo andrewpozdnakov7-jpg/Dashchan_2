@@ -463,8 +463,8 @@ public class CombinedFeedsFragment extends PreferenceFragment implements GetBoar
 	}
 
 	@Override
-	public void onActivityCreated(Bundle savedInstanceState) {
-		super.onActivityCreated(savedInstanceState);
+	public void onViewStateRestored(Bundle savedInstanceState) {
+		super.onViewStateRestored(savedInstanceState);
 		((FragmentHandler) requireActivity()).setTitleSubtitle(getString(R.string.combined_feeds), null);
 	}
 }

@@ -107,11 +107,7 @@ public class LocalArchiveViewerFragment extends ContentFragment implements Posts
 		settings.setJavaScriptEnabled(false);
 		webView.setWebViewClient(new ArchiveWebViewClient());
 		recyclerView.setLayoutManager(new LinearLayoutManager(recyclerView.getContext()));
-	}
 
-	@Override
-	public void onActivityCreated(Bundle savedInstanceState) {
-		super.onActivityCreated(savedInstanceState);
 		((FragmentHandler) requireActivity()).setTitleSubtitle(getString(R.string.local_archives), null);
 		Integer restoredMode = null;
 		if (savedInstanceState != null) {

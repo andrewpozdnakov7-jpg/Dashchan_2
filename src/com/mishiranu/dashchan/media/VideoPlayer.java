@@ -227,6 +227,8 @@ public class VideoPlayer {
 	}
 
 	public interface RangeCallback {
+		// Called from the initialization thread once download ranges can be applied.
+		default void onReadReady() {}
 		void requestPartFromPosition(long start);
 	}
 
@@ -372,6 +374,7 @@ public class VideoPlayer {
 				}
 			}
 			if (initData != null) {
+				if (rangeCallback != null) rangeCallback.onReadReady();
 				holder.init(initData.pointer, new NativeBridge(this), seekAnyFrame);
 				synchronized (this) {
 					this.initData = null;
@@ -565,6 +568,8 @@ public class VideoPlayer {
 		private SurfaceTexture playerSurfaceTexture;
 		private long playerSurfaceGeneration;
 		private int surfaceUpdates;
+		private final Runnable recordSettledGeometry = () ->
+				VideoDiagnostics.recordViewGeometry("texture_layout_settled", this);
 
 		public PlayerTextureView(Context context, VideoPlayer player) {
 			super(context);
@@ -572,6 +577,13 @@ public class VideoPlayer {
 			setSurfaceTextureListener(this);
 			setClickable(false);
 			setFocusable(false);
+			addOnLayoutChangeListener((v, l, t, r, b, oldL, oldT, oldR, oldB) -> {
+				if (VideoDiagnostics.isExtendedRecording() && (l != oldL || t != oldT || r != oldR || b != oldB)) {
+					VideoDiagnostics.recordViewGeometry("texture_layout", this);
+					removeCallbacks(recordSettledGeometry);
+					postDelayed(recordSettledGeometry, 350L);
+				}
+			});
 			VideoDiagnostics.recordUi("texture=" + diagnosticsId + " created");
 		}
 
@@ -610,6 +622,7 @@ public class VideoPlayer {
 					+ " view_size=" + getWidth() + "x" + getHeight()
 					+ " visibility=" + getVisibility() + " alpha=" + getAlpha());
 			playerSurfaceGeneration = player.setSurface(playerSurface, width, height);
+			VideoDiagnostics.recordViewGeometry("texture_available", this);
 			if (playerSurfaceGeneration == 0L) {
 				playerSurface = null;
 				playerSurfaceTexture = null;
@@ -636,6 +649,7 @@ public class VideoPlayer {
 				VideoDiagnostics.recordUi("texture=" + diagnosticsId + " surface_size_changed"
 						+ " surface_size=" + width + "x" + height);
 				player.setSurfaceSize(width, height);
+				VideoDiagnostics.recordViewGeometry("texture_size_changed", this);
 			}
 		}
 
@@ -651,6 +665,7 @@ public class VideoPlayer {
 				player.notifyVideoViewFrameUpdated();
 			}
 			if (surfaceUpdates == 1 || surfaceUpdates == 30 || surfaceUpdates % 120 == 0) {
+				VideoDiagnostics.recordViewGeometry("texture_frame", this);
 				VideoDiagnostics.recordUi("texture=" + diagnosticsId + " surface_updated"
 						+ " count=" + surfaceUpdates + " view_size=" + getWidth() + "x" + getHeight()
 						+ " visibility=" + getVisibility() + " alpha=" + getAlpha());
@@ -666,6 +681,7 @@ public class VideoPlayer {
 
 		@Override
 		protected void onDetachedFromWindow() {
+			removeCallbacks(recordSettledGeometry);
 			VideoDiagnostics.recordUi("texture=" + diagnosticsId + " detached"
 					+ " updates=" + surfaceUpdates);
 			super.onDetachedFromWindow();
@@ -733,6 +749,11 @@ public class VideoPlayer {
 			videoView = new PlayerTextureView(context, this);
 		}
 		return videoView;
+	}
+
+	// Identity check without creating a view or changing its owner during a transfer.
+	public boolean isVideoView(View view) {
+		return view != null && view == videoView;
 	}
 
 	public void releaseVideoView() {

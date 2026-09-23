@@ -573,6 +573,7 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 		PostsAdapter adapter = new PostsAdapter(this, page.chanName, uiManager,
 				replyable, postStateProvider, getFragmentManager(), recyclerView, retainableExtra.postItems,
 				windowedMode ? this : null);
+		adapter.getConfigurationSet().openedThreadTitle = this::obtainTitle;
 		if (parcelableExtra.translationEnabled == null) {
 			parcelableExtra.translationEnabled = TranslationController.isReadyForChan(page.chanName) &&
 					Preferences.isTranslationAutoEnabled();

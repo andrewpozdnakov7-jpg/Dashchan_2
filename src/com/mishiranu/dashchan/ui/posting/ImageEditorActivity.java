@@ -1,6 +1,5 @@
 package com.mishiranu.dashchan.ui.posting;
 
-import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.Intent;
@@ -31,6 +30,8 @@ import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.SeekBar;
 import android.widget.TextView;
+import androidx.activity.ComponentActivity;
+import androidx.activity.OnBackPressedCallback;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.LocaleManager;
 import com.mishiranu.dashchan.content.model.FileHolder;
@@ -47,7 +48,7 @@ import java.util.ArrayList;
  * A deliberately self-contained editor for posting attachments. It never overwrites the source draft:
  * the rendered result is encoded without metadata and stored as a new attachment draft.
  */
-public class ImageEditorActivity extends Activity {
+public class ImageEditorActivity extends ComponentActivity {
 	private static final String EXTRA_SOURCE_HASH = "sourceHash";
 	private static final String EXTRA_SOURCE_NAME = "sourceName";
 	private static final String EXTRA_ATTACHMENT_INDEX = "attachmentIndex";
@@ -92,6 +93,12 @@ public class ImageEditorActivity extends Activity {
 		requestWindowFeature(Window.FEATURE_NO_TITLE);
 		ThemeEngine.applyTheme(this);
 		super.onCreate(savedInstanceState);
+		getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+			@Override
+			public void handleOnBackPressed() {
+				cancelEditing();
+			}
+		});
 		sourceHash = getIntent().getStringExtra(EXTRA_SOURCE_HASH);
 		sourceName = getIntent().getStringExtra(EXTRA_SOURCE_NAME);
 		attachmentIndex = getIntent().getIntExtra(EXTRA_ATTACHMENT_INDEX, -1);
@@ -394,11 +401,6 @@ public class ImageEditorActivity extends Activity {
 	private void cancelEditing() {
 		setResult(RESULT_CANCELED);
 		finish();
-	}
-
-	@Override
-	public void onBackPressed() {
-		cancelEditing();
 	}
 
 	private void updateHistoryButtons() {

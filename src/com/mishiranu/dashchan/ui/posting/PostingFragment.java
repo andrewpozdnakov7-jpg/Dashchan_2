@@ -627,6 +627,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		if (!captchaRestoreSuccess) {
 			refreshCaptcha(false, true, false);
 		}
+		bindPostingState();
 	}
 
 	@Override
@@ -671,10 +672,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		attachments.clear();
 	}
 
-	@Override
-	public void onActivityCreated(Bundle savedInstanceState) {
-		super.onActivityCreated(savedInstanceState);
-
+	private void bindPostingState() {
 		((FragmentHandler) requireActivity()).setTitleSubtitle(getString(StringUtils.isEmpty(getThreadNumber())
 				? R.string.new_thread : R.string.new_post), null);
 		requireActivity().bindService(new Intent(requireContext(), PostingService.class),

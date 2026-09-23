@@ -88,8 +88,8 @@ public class PostMarksColorsFragment extends PreferenceFragment {
 	}
 
 	@Override
-	public void onActivityCreated(Bundle savedInstanceState) {
-		super.onActivityCreated(savedInstanceState);
+	public void onViewStateRestored(Bundle savedInstanceState) {
+		super.onViewStateRestored(savedInstanceState);
 		((FragmentHandler) requireActivity()).setTitleSubtitle(getString(R.string.post_marks_colors), null);
 	}
 
@@ -107,11 +107,11 @@ public class PostMarksColorsFragment extends PreferenceFragment {
 		}
 	}
 
-	private interface ColorProvider {
+	interface ColorProvider {
 		int getColor();
 	}
 
-	private static class ColorPreference extends Preference.Runtime<Void> {
+	static class ColorPreference extends Preference.Runtime<Void> {
 		private final ColorProvider colorProvider;
 
 		private static class ColorViewHolder extends ViewHolder {

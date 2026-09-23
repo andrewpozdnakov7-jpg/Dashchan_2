@@ -99,8 +99,8 @@ public class GeneralFragment extends PreferenceFragment implements FragmentHandl
 	}
 
 	@Override
-	public void onActivityCreated(Bundle savedInstanceState) {
-		super.onActivityCreated(savedInstanceState);
+	public void onViewStateRestored(Bundle savedInstanceState) {
+		super.onViewStateRestored(savedInstanceState);
 
 		((FragmentHandler) requireActivity()).setTitleSubtitle(getString(R.string.general), null);
 		CheckViewModel viewModel = new ViewModelProvider(this).get(CheckViewModel.class);

@@ -438,6 +438,18 @@ public class PhotoView extends View implements ScaleGestureDetector.OnScaleGestu
 		}
 	}
 
+	public void dispatchDirectDoubleClick(float x, float y) {
+		if (listener != null && isAttachedToWindow()) {
+			listener.onDoubleClick(this, x, y);
+		}
+	}
+
+	public void dispatchDirectLongClick(float x, float y) {
+		if (listener != null && isAttachedToWindow()) {
+			listener.onLongClick(this, x, y);
+		}
+	}
+
 	public void dispatchSpecialTouchEvent(MotionEvent event) {
 		if (hasImage()) {
 			int action = event.getActionMasked();

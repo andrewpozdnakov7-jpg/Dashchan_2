@@ -183,8 +183,8 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 	}
 
 	@Override
-	public void onActivityCreated(Bundle savedInstanceState) {
-		super.onActivityCreated(savedInstanceState);
+	public void onViewCreated(@NonNull View view, Bundle savedInstanceState) {
+		super.onViewCreated(view, savedInstanceState);
 
 		ErrorItem initErrorItem = this.initErrorItem;
 		this.initErrorItem = null;

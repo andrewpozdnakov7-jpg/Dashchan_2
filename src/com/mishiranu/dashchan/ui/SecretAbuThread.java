@@ -201,8 +201,8 @@ public final class SecretAbuThread {
 		}
 
 		@Override
-		public void onActivityCreated(Bundle savedInstanceState) {
-			super.onActivityCreated(savedInstanceState);
+		public void onViewCreated(@NonNull View view, Bundle savedInstanceState) {
+			super.onViewCreated(view, savedInstanceState);
 			Bundle saved = savedInstanceState != null ? savedInstanceState : getArguments();
 			if (saved != null) {
 				state.taps = saved.getInt("abuTaps");

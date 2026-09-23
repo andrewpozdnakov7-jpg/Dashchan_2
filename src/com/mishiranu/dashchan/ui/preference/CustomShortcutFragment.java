@@ -188,8 +188,8 @@ public class CustomShortcutFragment extends ContentFragment {
 	}
 
 	@Override
-	public void onActivityCreated(Bundle savedInstanceState) {
-		super.onActivityCreated(savedInstanceState);
+	public void onViewCreated(@NonNull View view, Bundle savedInstanceState) {
+		super.onViewCreated(view, savedInstanceState);
 		((FragmentHandler) requireActivity()).setTitleSubtitle(getString(R.string.custom_application_shortcut), null);
 	}
 

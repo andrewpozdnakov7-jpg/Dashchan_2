@@ -31,6 +31,7 @@ import com.mishiranu.dashchan.content.CacheManager;
 import com.mishiranu.dashchan.content.ImageLoader;
 import com.mishiranu.dashchan.content.model.GalleryItem;
 import com.mishiranu.dashchan.graphics.SelectorCheckDrawable;
+import com.mishiranu.dashchan.media.VideoDiagnostics;
 import com.mishiranu.dashchan.ui.DialogMenu;
 import com.mishiranu.dashchan.ui.InstanceDialog;
 import com.mishiranu.dashchan.ui.SearchImageDialog;
@@ -53,6 +54,7 @@ public class ListUnit implements ActionMode.Callback {
 	private final GalleryInstance instance;
 
 	private final PaddedRecyclerView recyclerView;
+	private final Runnable updateGridMetricsRunnable;
 	private final SparseIntArray selected = new SparseIntArray();
 
 	private ActionMode selectionMode;
@@ -62,6 +64,7 @@ public class ListUnit implements ActionMode.Callback {
 		float density = ResourceUtils.obtainDensity(instance.context);
 		int spacing = (int) (GRID_SPACING_DP * density);
 		recyclerView = new GalleryRecyclerView(instance.context, spacing);
+		updateGridMetricsRunnable = () -> updateGridMetrics(recyclerView.getResources().getConfiguration());
 		recyclerView.setId(android.R.id.list);
 		recyclerView.setMotionEventSplittingEnabled(false);
 		recyclerView.setClipToPadding(false);
@@ -69,6 +72,13 @@ public class ListUnit implements ActionMode.Callback {
 		recyclerView.addItemDecoration(new SpacingItemDecoration(spacing));
 		GridAdapter adapter = new GridAdapter(callback, instance.chanName, instance.galleryItems);
 		recyclerView.setAdapter(adapter);
+		recyclerView.addOnLayoutChangeListener((view, left, top, right, bottom,
+				oldLeft, oldTop, oldRight, oldBottom) -> {
+			if (right - left != oldRight - oldLeft) {
+				// Recalculate after layout, outside RecyclerView's layout/scroll dispatch.
+				scheduleGridMetricsUpdate();
+			}
+		});
 		updateGridMetrics(instance.context.getResources().getConfiguration());
 	}
 
@@ -325,14 +335,34 @@ public class ListUnit implements ActionMode.Callback {
 		}
 	}
 
+	private void scheduleGridMetricsUpdate() {
+		recyclerView.removeCallbacks(updateGridMetricsRunnable);
+		recyclerView.post(updateGridMetricsRunnable);
+	}
+
 	private void updateGridMetrics(Configuration configuration) {
+		// A restored gallery can coexist with a narrow PiP window. WindowManager metrics
+		// need not describe this list, so keep the initial single column until it is laid out.
+		int width = recyclerView.getWidth() - recyclerView.getPaddingLeft() - recyclerView.getPaddingRight();
+		if (width <= 0) {
+			return;
+		}
+		if (recyclerView.isComputingLayout()) {
+			scheduleGridMetricsUpdate();
+			return;
+		}
 		// Items count in row must fit to this inequality: (widthDp - (i + 1) * GRID_SPACING_DP) / i >= SIZE
 		// Where SIZE - size of item in grid, i - items count in row, unknown quantity
-		// The solution is: i <= (widthDp + GRID_SPACING_DP) / (SIZE + GRID_SPACING_DP)
-		int widthDp = ViewUtils.getWindowContentWidthDp(instance.context);
+		// The solution is: i <= (widthDp - GRID_SPACING_DP) / (SIZE + GRID_SPACING_DP)
+		int widthDp = (int) (width / ResourceUtils.obtainDensity(recyclerView));
 		int size = ResourceUtils.isTablet(configuration) ? 160 : 100;
-		int spanCount = (widthDp - GRID_SPACING_DP) / (size + GRID_SPACING_DP);
-		((GridLayoutManager) recyclerView.getLayoutManager()).setSpanCount(spanCount);
+		int spanCount = Math.max(1, (widthDp - GRID_SPACING_DP) / (size + GRID_SPACING_DP));
+		GridLayoutManager layoutManager = (GridLayoutManager) recyclerView.getLayoutManager();
+		VideoDiagnostics.recordUi("gallery_grid widthPx=" + width + " widthDp=" + widthDp
+				+ " columns=" + spanCount + " previousColumns=" + layoutManager.getSpanCount());
+		if (layoutManager.getSpanCount() != spanCount) {
+			layoutManager.setSpanCount(spanCount);
+		}
 	}
 
 	private static class GalleryRecyclerView extends PaddedRecyclerView {

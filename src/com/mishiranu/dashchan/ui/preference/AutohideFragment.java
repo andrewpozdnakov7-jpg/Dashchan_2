@@ -80,12 +80,6 @@ public class AutohideFragment extends BaseListFragment {
 				searchQuery = query;
 			}
 		});
-	}
-
-	@Override
-	public void onActivityCreated(Bundle savedInstanceState) {
-		super.onActivityCreated(savedInstanceState);
-
 		((FragmentHandler) requireActivity()).setTitleSubtitle(getString(R.string.autohide), null);
 		items.addAll(AutohideStorage.getInstance().getItems());
 		if (items.isEmpty()) {
