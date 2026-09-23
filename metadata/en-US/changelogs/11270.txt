@@ -1,0 +1,10 @@
+- Added popup color settings: match the theme, use contrasting colors, match the toolbar, or choose custom colors with a palette. Matching the theme is the default.
+- Removed the duplicate title from the opening post of an open thread. You can restore it in Experimental features.
+- Fixed a black screen in Picture-in-Picture after rotating the phone and broken player controls after returning from PiP. Improved the transition into the floating window; it can now open before the entire video has downloaded, once playback is available.
+- Restored double-tap pause/resume and long-press in the center of the screen to open the menu in TikTok mode.
+- Fixed clipped buttons in several informational dialogs: long text scrolls separately while the buttons remain accessible.
+- Fixed a gallery crash when resizing the window. Expanded video player diagnostics.
+- Updated parts of the code that used deprecated APIs and switched the Java compilation level to 11. The minimum Android version is unchanged.
+
+Thank you for testing and reporting bugs! 🐱
+Found a bug? Send us the logs!
