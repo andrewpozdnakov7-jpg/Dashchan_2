@@ -71,8 +71,8 @@ public class ThemesFragment extends BaseListFragment {
 	private List<JSONObject> availableJsonThemes;
 
 	@Override
-	public void onActivityCreated(Bundle savedInstanceState) {
-		super.onActivityCreated(savedInstanceState);
+	public void onViewCreated(@NonNull View view, Bundle savedInstanceState) {
+		super.onViewCreated(view, savedInstanceState);
 
 		((FragmentHandler) requireActivity()).setTitleSubtitle(getString(R.string.themes), null);
 		RecyclerView recyclerView = getRecyclerView();

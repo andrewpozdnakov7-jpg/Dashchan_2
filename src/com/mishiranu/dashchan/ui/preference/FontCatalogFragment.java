@@ -35,8 +35,8 @@ import org.json.JSONException;
 
 public class FontCatalogFragment extends BaseListFragment {
 	@Override
-	public void onActivityCreated(Bundle savedInstanceState) {
-		super.onActivityCreated(savedInstanceState);
+	public void onViewCreated(@NonNull View view, Bundle savedInstanceState) {
+		super.onViewCreated(view, savedInstanceState);
 		((FragmentHandler) requireActivity()).setTitleSubtitle(getString(R.string.font_catalog), null);
 		RecyclerView recyclerView = getRecyclerView();
 		Adapter adapter = new Adapter(recyclerView.getContext(), this::handleFontClick);

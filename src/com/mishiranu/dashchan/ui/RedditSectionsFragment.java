@@ -120,11 +120,6 @@ public class RedditSectionsFragment extends BaseListFragment {
 		getRecyclerView().setAdapter(adapter);
 		getRecyclerView().addItemDecoration(new HeaderItemDecoration(adapter::getItemHeader));
 		getRecyclerView().setItemAnimator(null);
-	}
-
-	@Override
-	public void onActivityCreated(Bundle savedInstanceState) {
-		super.onActivityCreated(savedInstanceState);
 		((FragmentHandler) requireActivity()).setTitleSubtitle(getString(R.string.reddit_sections), null);
 	}
 

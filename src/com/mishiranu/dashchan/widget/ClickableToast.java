@@ -341,6 +341,14 @@ public class ClickableToast implements DefaultLifecycleObserver {
 
 	private final View.OnFocusChangeListener windowFocusListener = (v, hasFocus) -> updateAndApplyLayoutChecked();
 
+	private void applyPalette() {
+		PopupColors colors = PopupColors.obtain(activity);
+		message.setTextColor(colors.foreground);
+		button.setTextColor(colors.foreground);
+		((ColorDrawable) ((LinearLayout) container).getDividerDrawable()).setColor(colors.foreground);
+		partialClickDrawable.setColor(colors.background);
+	}
+
 	private String showInternal(CharSequence message, String updateId, Button button, boolean diagnosticTest) {
 		boolean update = updateId != null && updateId.equals(showing);
 		if (update) {
@@ -354,6 +362,7 @@ public class ClickableToast implements DefaultLifecycleObserver {
 		ToastDiagnostics.event(diagnosticId, "show_requested source=" + (diagnosticTest ? "test" : "application")
 				+ " update=" + update + " action=" + (button != null)
 				+ " system_layout=" + Integer.toHexString(LAYOUT_ID) + " y_offset=" + Y_OFFSET);
+		applyPalette();
 		clickable = button != null;
 		this.message.setText(message);
 		if (button != null) {
@@ -562,20 +571,25 @@ public class ClickableToast implements DefaultLifecycleObserver {
 
 	private class PartialClickDrawable extends BaseDrawable implements View.OnTouchListener, Drawable.Callback {
 		private final Drawable drawable;
-		private final ColorFilter normalColorFilter;
-		private final ColorFilter colorFilter;
+		private ColorFilter normalColorFilter;
+		private ColorFilter colorFilter;
 
 		private boolean clicked = false;
 
 		public PartialClickDrawable(Drawable drawable, int color) {
 			this.drawable = drawable;
+			setColor(color);
+			drawable.setCallback(this);
+		}
+
+		public void setColor(int color) {
 			boolean isLight = GraphicsUtils.isLight(color);
 			normalColorFilter = new PorterDuffColorFilter(color, PorterDuff.Mode.SRC_IN);
 			int pressedColor = ColorUtils.blendARGB(color, isLight ? Color.BLACK : Color.WHITE,
 					isLight ? 0.15f : 0.2f);
 			colorFilter = new PorterDuffColorFilter(pressedColor, PorterDuff.Mode.SRC_IN);
 			drawable.setColorFilter(normalColorFilter);
-			drawable.setCallback(this);
+			invalidateSelf();
 		}
 
 		private View getView() {

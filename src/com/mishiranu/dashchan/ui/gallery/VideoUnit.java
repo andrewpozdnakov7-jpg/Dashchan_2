@@ -30,18 +30,16 @@ import androidx.fragment.app.FragmentManager;
 import chan.content.Chan;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.R;
-import com.mishiranu.dashchan.content.AdvancedPreferences;
 import com.mishiranu.dashchan.content.Preferences;
-import com.mishiranu.dashchan.content.async.ReadVideoTask;
 import com.mishiranu.dashchan.content.model.ErrorItem;
 import com.mishiranu.dashchan.graphics.BaseDrawable;
 import com.mishiranu.dashchan.media.VideoPlayer;
+import com.mishiranu.dashchan.media.VideoDiagnostics;
 import com.mishiranu.dashchan.media.VolumeGestureUtils;
 import com.mishiranu.dashchan.ui.InstanceDialog;
 import com.mishiranu.dashchan.ui.preference.PlaybackSpeedDialog;
 import com.mishiranu.dashchan.util.AnimationUtils;
 import com.mishiranu.dashchan.util.AudioFocus;
-import com.mishiranu.dashchan.util.ConcurrentUtils;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.util.ViewUtils;
 import com.mishiranu.dashchan.widget.ClickableToast;
@@ -117,7 +115,7 @@ public class VideoUnit {
 	private int volumeGestureSensitivity;
 	private File sourceFile;
 
-	private ReadVideoCallback readVideoCallback;
+	private VideoDownloadSession downloadSession;
 	private boolean playbackSpeedControl;
 	private boolean pictureInPictureControl;
 	private final View.OnLayoutChangeListener surfaceParentLayoutChangeListener;
@@ -176,6 +174,15 @@ public class VideoUnit {
 	public void addViews(FrameLayout frameLayout) {
 		frameLayout.addView(controlsView, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,
 				FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM));
+		// A retained gallery may miss configuration updates while its PiP window is active.
+		// Reconcile against the actual gallery viewport once it has been laid out again.
+		frameLayout.addOnLayoutChangeListener((view, left, top, right, bottom,
+				oldLeft, oldTop, oldRight, oldBottom) -> {
+			if (!pictureInPictureTransferred && layoutConfiguration >= 0
+					&& layoutConfiguration != getVideoControlsLayout()) {
+				recreateVideoControls();
+			}
+		});
 	}
 
 	public void onResume() {
@@ -184,8 +191,7 @@ public class VideoUnit {
 		if (pictureInPictureTransferred) {
 			return;
 		}
-		if (layoutConfiguration >= 0
-				&& rightHandControls != Preferences.isVideoRightHandControls()) {
+		if (layoutConfiguration >= 0) {
 			recreateVideoControls();
 		}
 		if (player != null && initialized) {
@@ -218,8 +224,8 @@ public class VideoUnit {
 
 	public void onConfigurationChanged(Configuration newConfig) {
 		if (newConfig.orientation != Configuration.ORIENTATION_UNDEFINED) {
-			if (layoutConfiguration != -1) {
-				recreateVideoControls();
+			if (!pictureInPictureTransferred && layoutConfiguration != -1) {
+				recreateVideoControls(ResourceUtils.isTabletOrLandscape(newConfig) ? 1 : 0);
 			}
 		}
 	}
@@ -249,9 +255,9 @@ public class VideoUnit {
 			// preserve the complete return target. PagerUnit also suppresses the competing media reload.
 			return;
 		}
-		if (readVideoCallback != null) {
-			readVideoCallback.cancel();
-			readVideoCallback = null;
+		if (downloadSession != null) {
+			downloadSession.cancel();
+			downloadSession = null;
 		}
 		if (initialized && !pictureInPictureTransferred) {
 			audioFocus.release();
@@ -296,12 +302,11 @@ public class VideoUnit {
 			return;
 		}
 		PagerInstance.ViewHolder holder = instance.currentHolder;
-		if (!initialized || player == null || holder == null || holder.surfaceParent != view
-				|| holder.surfaceParent.getChildCount() != 1) {
+		if (holder == null || holder.surfaceParent != view) {
 			return;
 		}
-		View videoView = holder.surfaceParent.getChildAt(0);
-		if (videoView != player.getVideoView(instance.galleryInstance.context)) {
+		View videoView = getOwnedVideoView(holder);
+		if (videoView == null) {
 			return;
 		}
 		resetVideoTransform(videoView);
@@ -313,6 +318,17 @@ public class VideoUnit {
 	private void attachSurfaceParentLayoutListener(PagerInstance.ViewHolder holder) {
 		holder.surfaceParent.removeOnLayoutChangeListener(surfaceParentLayoutChangeListener);
 		holder.surfaceParent.addOnLayoutChangeListener(surfaceParentLayoutChangeListener);
+	}
+
+	// The player survives a PiP transfer, but its current view then belongs to another window.
+	// Gallery callbacks (including queued ones) must never obtain/create and mutate that view.
+	private View getOwnedVideoView(PagerInstance.ViewHolder holder) {
+		if (!initialized || pictureInPictureTransferred || player == null || holder == null
+				|| holder != instance.currentHolder || holder.surfaceParent.getChildCount() != 1) {
+			return null;
+		}
+		View view = holder.surfaceParent.getChildAt(0);
+		return view.getParent() == holder.surfaceParent && player.isVideoView(view) ? view : null;
 	}
 
 	private static void resetVideoTransform(View videoView) {
@@ -327,18 +343,21 @@ public class VideoUnit {
 	public void applyVideoTransform(com.mishiranu.dashchan.widget.PhotoView photoView,
 			float left, float top, float right, float bottom) {
 		PagerInstance.ViewHolder holder = instance.currentHolder;
-		if (!initialized || !Preferences.isVideoZoomGesturesEnabled() || tikTokModeCallback.isEnabled()
-				|| holder == null
-				|| holder.photoView != photoView || player == null) {
+		if (!Preferences.isVideoZoomGesturesEnabled() || tikTokModeCallback.isEnabled()
+				|| holder == null || holder.photoView != photoView) {
+			return;
+		}
+		View videoView = getOwnedVideoView(holder);
+		if (videoView == null) {
 			return;
 		}
 		videoTransformRect.set(left, top, right, bottom);
-		View videoView = player.getVideoView(instance.galleryInstance.context);
 		applyVideoTransform(videoView);
 	}
 
 	private void applyVideoTransform(View videoView) {
-		if (videoView.getWidth() <= 0 || videoView.getHeight() <= 0 || videoTransformRect.isEmpty()) {
+		if (videoView == null || videoView != getOwnedVideoView(instance.currentHolder)
+				|| videoView.getWidth() <= 0 || videoView.getHeight() <= 0 || videoTransformRect.isEmpty()) {
 			return;
 		}
 		videoView.setPivotX(0f);
@@ -350,8 +369,8 @@ public class VideoUnit {
 	}
 
 	private void captureAndApplyVideoTransform(PagerInstance.ViewHolder holder, View videoView) {
-		if (initialized && player != null && holder == instance.currentHolder && holder.photoView != null
-				&& videoView == player.getVideoView(instance.galleryInstance.context)
+		if (videoView != null && videoView == getOwnedVideoView(holder) && holder.photoView != null
+				&& Preferences.isVideoZoomGesturesEnabled() && !tikTokModeCallback.isEnabled()
 				&& holder.photoView.getImageDisplayRect(videoTransformRect) != null) {
 			applyVideoTransform(videoView);
 		}
@@ -367,7 +386,7 @@ public class VideoUnit {
 	private void startVideoPreload() {
 		if (preloadResumed && !pictureInPictureTransferred && player != null && sourceFile != null
 				&& sourceFile.isFile() && instance.currentHolder != null
-				&& (readVideoCallback == null || readVideoCallback.downloadTask == null)) {
+				&& (downloadSession == null || downloadSession.isComplete())) {
 			videoPreloader.start(instance.currentHolder.galleryItem);
 		}
 	}
@@ -414,22 +433,23 @@ public class VideoUnit {
 		} else {
 			instance.currentHolder.progressBar.setIndeterminate(true);
 			instance.currentHolder.progressBar.setVisible(true, false);
-			readVideoCallback = new ReadVideoCallback(player, instance.currentHolder,
-					instance.galleryInstance.chanName, uri);
+			downloadSession = new VideoDownloadSession(player, instance.galleryInstance.chanName, uri, file);
+			downloadSession.start(downloadListener);
 		}
 	}
 
 	boolean adoptPictureInPicturePlayer(VideoPlayer player, File sourceFile, long position,
-			int playbackSpeed, boolean muted, boolean playing) {
+			int playbackSpeed, boolean muted, boolean playing, VideoDownloadSession session) {
 		PagerInstance.ViewHolder holder = instance.currentHolder;
 		if (this.player != null || holder == null || sourceFile == null) {
 			return false;
 		}
 		dismissPlaybackSpeedPopupMenu();
-		if (readVideoCallback != null) {
-			readVideoCallback.cancel();
-			readVideoCallback = null;
+		if (downloadSession != null) {
+			downloadSession.cancel();
 		}
+		downloadSession = session;
+		if (session != null) session.setListener(downloadListener);
 		this.player = player;
 		this.sourceFile = sourceFile;
 		this.playbackSpeed = normalizePlaybackSpeed(playbackSpeed);
@@ -441,13 +461,8 @@ public class VideoUnit {
 		player.releaseVideoView();
 		player.setListener(playerListener);
 		initializePlayer();
-		seekBar.setSecondaryProgress(seekBar.getMax());
 		seekBar.setProgress((int) Math.min(position, Integer.MAX_VALUE));
-		if (holder.mediaSummary.updateSize(sourceFile.length())) {
-			instance.galleryInstance.callback.updateTitle();
-		}
-		holder.loadState = PagerInstance.LoadState.COMPLETE;
-		updatePictureInPictureButton();
+		updateDownloadState();
 		instance.galleryInstance.callback.invalidateOptionsMenu();
 		return true;
 	}
@@ -511,24 +526,40 @@ public class VideoUnit {
 		updatePlayState();
 	}
 
+	private int getVideoControlsLayout() {
+		if (controlsView.getParent() instanceof View) {
+			View viewport = (View) controlsView.getParent();
+			int width = viewport.getWidth();
+			int height = viewport.getHeight();
+			if (width > 0 && height > 0) {
+				float density = ResourceUtils.obtainDensity(viewport.getContext());
+				return width > height || Math.min(width, height) / density >= 600f ? 1 : 0;
+			}
+		}
+		return ResourceUtils.isTabletOrLandscape(instance.galleryInstance.callback.getWindow()
+				.getContext().getResources().getConfiguration()) ? 1 : 0;
+	}
+
 	private void recreateVideoControls() {
+		recreateVideoControls(getVideoControlsLayout());
+	}
+
+	private void recreateVideoControls(int targetLayoutConfiguration) {
 		Context context = instance.galleryInstance.context;
 		float density = ResourceUtils.obtainDensity(context);
-		int targetLayoutCounfiguration = ResourceUtils.isTabletOrLandscape(context.getResources()
-				.getConfiguration()) ? 1 : 0;
 		boolean speedControl = Preferences.isVideoPlaybackSpeedControl();
 		boolean pictureInPictureControl = Preferences.isVideoPictureInPicture() && context.getPackageManager()
 				.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE);
 		boolean rightHandControls = Preferences.isVideoRightHandControls();
-		if (targetLayoutCounfiguration != layoutConfiguration || speedControl != playbackSpeedControl
+		if (targetLayoutConfiguration != layoutConfiguration || speedControl != playbackSpeedControl
 				|| pictureInPictureControl != this.pictureInPictureControl
 				|| rightHandControls != this.rightHandControls) {
 			boolean firstTimeLayout = layoutConfiguration < 0;
-			layoutConfiguration = targetLayoutCounfiguration;
+			layoutConfiguration = targetLayoutConfiguration;
 			playbackSpeedControl = speedControl;
 			this.pictureInPictureControl = pictureInPictureControl;
 			this.rightHandControls = rightHandControls;
-			boolean longLayout = targetLayoutCounfiguration == 1;
+			boolean longLayout = targetLayoutConfiguration == 1;
 
 			controlsView.removeAllViews();
 			if (seekBar != null) {
@@ -573,16 +604,22 @@ public class VideoUnit {
 			totalTimeTextView.setGravity(Gravity.CENTER_HORIZONTAL);
 			totalTimeTextView.setTypeface(ResourceUtils.TYPEFACE_MEDIUM);
 
-			int oldSecondaryProgress = seekBar != null ? seekBar.getSecondaryProgress() : -1;
+			int oldMaximum = seekBar != null ? seekBar.getMax() : 100;
+			int oldProgress = seekBar != null ? seekBar.getProgress() : 0;
+			int oldSecondaryProgress = seekBar != null ? seekBar.getSecondaryProgress() : 0;
+			boolean seekingEnabled = seekBar == null || seekBar.isEnabled();
+			boolean playbackEnabled = playPauseButton == null || playPauseButton.isEnabled();
 			seekBar = new SeekBar(context);
+			seekBar.setMax(oldMaximum);
+			seekBar.setProgress(oldProgress);
+			seekBar.setSecondaryProgress(oldSecondaryProgress);
+			seekBar.setEnabled(seekingEnabled);
 			seekBar.setOnSeekBarChangeListener(seekBarListener);
-			if (oldSecondaryProgress >= 0) {
-				seekBar.setSecondaryProgress(oldSecondaryProgress);
-			}
 
 			playPauseButton = new ImageButton(context, null, android.R.attr.borderlessButtonStyle);
 			playPauseButton.setScaleType(ImageButton.ScaleType.CENTER);
 			playPauseButton.setOnClickListener(playPauseClickListener);
+			playPauseButton.setEnabled(playbackEnabled);
 
 			if (playbackSpeedControl) {
 				playbackSpeedButton = new TextView(context, null, android.R.attr.textAppearanceListItem);
@@ -966,12 +1003,16 @@ public class VideoUnit {
 
 	private void updatePictureInPictureButton() {
 		if (pictureInPictureButton != null) {
-			boolean enabled = initialized && player != null && sourceFile != null && sourceFile.isFile()
-					&& instance.currentHolder != null
-					&& instance.currentHolder.loadState == PagerInstance.LoadState.COMPLETE;
+			boolean enabled = canEnterPictureInPicture();
 			pictureInPictureButton.setEnabled(enabled);
 			pictureInPictureButton.setAlpha(enabled ? 1f : 0.45f);
 		}
+	}
+
+	private boolean canEnterPictureInPicture() {
+		return !pictureInPictureTransferred && initialized && player != null && sourceFile != null
+				&& instance.currentHolder != null && (downloadSession != null
+				? downloadSession.isReady() : sourceFile.isFile());
 	}
 
 	private final View.OnClickListener pictureInPictureClickListener = this::handlePictureInPictureClick;
@@ -1000,9 +1041,10 @@ public class VideoUnit {
 	}
 
 	void onTikTokModeChanged() {
-		if (tikTokModeCallback.isEnabled() && initialized && player != null) {
+		View videoView = getOwnedVideoView(instance.currentHolder);
+		if (tikTokModeCallback.isEnabled() && videoView != null) {
 			videoTransformRect.setEmpty();
-			resetVideoTransform(player.getVideoView(instance.galleryInstance.context));
+			resetVideoTransform(videoView);
 		}
 		updateTikTokModeButton();
 	}
@@ -1017,24 +1059,29 @@ public class VideoUnit {
 	}
 
 	private boolean enterPictureInPicture(Context context, boolean requirePlaying) {
-		if (pictureInPictureTransferred || player == null || !initialized || sourceFile == null
-				|| !sourceFile.isFile() || instance.currentHolder == null
-				|| instance.currentHolder.loadState != PagerInstance.LoadState.COMPLETE
-				|| requirePlaying && !player.isPlaying()) {
+		if (!canEnterPictureInPicture() || requirePlaying && !player.isPlaying()) {
 			return false;
 		}
 		boolean playing = player.isPlaying();
 		long position = player.getPosition();
 		Bitmap previewFrame = createPictureInPicturePreview();
 		VideoPlayer transferredPlayer = player;
+		VideoDownloadSession transferredSession = downloadSession;
 		VideoPipActivity.GalleryRestoreData galleryRestoreData =
 				instance.galleryInstance.callback.createPictureInPictureGalleryRestoreData();
 		Intent intent = VideoPipActivity.createIntent(context, sourceFile, position,
-				playbackSpeed, muted, playing, this, transferredPlayer, previewFrame, galleryRestoreData);
+				playbackSpeed, muted, playing, this, transferredPlayer, previewFrame, galleryRestoreData,
+				transferredSession);
+		if (transferredSession != null) transferredSession.setListener(null);
+		downloadSession = null;
+		VideoDiagnostics.recordUi("pip transfer download_complete="
+				+ (transferredSession == null || transferredSession.isComplete()));
 		wasPlaying = false;
 		setPlaying(false, true);
-		transferredPlayer.releaseVideoView();
 		pictureInPictureTransferred = true;
+		videoTransformRect.setEmpty();
+		instance.currentHolder.surfaceParent.removeOnLayoutChangeListener(surfaceParentLayoutChangeListener);
+		transferredPlayer.releaseVideoView();
 		videoPreloader.stop();
 		instance.galleryInstance.callback.setGalleryVisibleForPictureInPicture(false);
 		try {
@@ -1042,7 +1089,8 @@ public class VideoUnit {
 			return true;
 		} catch (RuntimeException e) {
 			VideoPipActivity.cancelPendingTransfer(this, transferredPlayer);
-			restorePictureInPicturePlayer(transferredPlayer, position, playbackSpeed, muted, playing);
+			restorePictureInPicturePlayer(transferredPlayer, position, playbackSpeed, muted, playing,
+					transferredSession);
 			ClickableToast.show(R.string.unknown_error);
 			return false;
 		}
@@ -1069,7 +1117,7 @@ public class VideoUnit {
 	}
 
 	boolean restorePictureInPicturePlayer(VideoPlayer transferredPlayer, long position, int playbackSpeed,
-			boolean muted, boolean playing) {
+			boolean muted, boolean playing, VideoDownloadSession session) {
 		if (getPictureInPictureRestoreState(transferredPlayer) != PictureInPictureRestoreState.READY) {
 			return false;
 		}
@@ -1081,6 +1129,8 @@ public class VideoUnit {
 		instance.currentHolder.surfaceParent.addView(videoView, new FrameLayout.LayoutParams(
 				FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT, Gravity.CENTER));
 		pictureInPictureTransferred = false;
+		downloadSession = session;
+		if (session != null) session.setListener(downloadListener);
 		if (Preferences.isVideoZoomGesturesEnabled() && !tikTokModeCallback.isEnabled()) {
 			PagerInstance.ViewHolder holder = instance.currentHolder;
 			videoView.post(() -> captureAndApplyVideoTransform(holder, videoView));
@@ -1091,6 +1141,7 @@ public class VideoUnit {
 		applyPlayerVolume(transferredPlayer);
 		muteSupported = !transferredPlayer.isAudioPresent() || transferredPlayer.setMuted(muted);
 		instance.galleryInstance.callback.setGalleryVisibleForPictureInPicture(true);
+		recreateVideoControls();
 		if (seekBar != null) {
 			seekBar.setProgress((int) position);
 		}
@@ -1103,6 +1154,7 @@ public class VideoUnit {
 		wasPlaying = playing;
 		setPlaying(playing, true);
 		updatePlayState();
+		updateDownloadState();
 		return true;
 	}
 
@@ -1511,7 +1563,7 @@ public class VideoUnit {
 
 		@Override
 		public void onDimensionChange(VideoPlayer player) {
-			if (backgroundDrawable != null && player == VideoUnit.this.player) {
+			if (!pictureInPictureTransferred && backgroundDrawable != null && player == VideoUnit.this.player) {
 				backgroundDrawable.recycle();
 				Point dimensions = player.getDimensions();
 				backgroundDrawable.width = dimensions.x;
@@ -1534,10 +1586,10 @@ public class VideoUnit {
 	}
 
 	private void preserveFinishedPlaybackFrame() {
-		if (backgroundDrawable == null || player == null) {
+		View videoView = getOwnedVideoView(instance.currentHolder);
+		if (backgroundDrawable == null || videoView == null) {
 			return;
 		}
-		View videoView = player.getVideoView(instance.galleryInstance.context);
 		if (videoView.getVisibility() != View.VISIBLE) {
 			return;
 		}
@@ -1559,15 +1611,16 @@ public class VideoUnit {
 	}
 
 	private void restoreVideoViewAfterFinishedPlayback() {
-		if (backgroundDrawable != null && player != null) {
+		View videoView = getOwnedVideoView(instance.currentHolder);
+		if (backgroundDrawable != null && videoView != null) {
 			backgroundDrawable.recycle();
-			player.getVideoView(instance.galleryInstance.context).setVisibility(View.VISIBLE);
+			videoView.setVisibility(View.VISIBLE);
 		}
 	}
 
 	public void showHideVideoView(boolean show) {
-		if (initialized) {
-			View videoView = player.getVideoView(instance.galleryInstance.context);
+		View videoView = getOwnedVideoView(instance.currentHolder);
+		if (videoView != null) {
 			if (show) {
 				backgroundDrawable.recycle();
 				videoView.setVisibility(View.VISIBLE);
@@ -1579,7 +1632,7 @@ public class VideoUnit {
 	}
 
 	public void handleSwipingContent(boolean swiping, boolean hideSurface) {
-		if (initialized) {
+		if (getOwnedVideoView(instance.currentHolder) != null) {
 			playPauseButton.setEnabled(!swiping);
 			seekBar.setEnabled(!swiping);
 			fullscreenButton.setEnabled(!swiping);
@@ -1602,159 +1655,55 @@ public class VideoUnit {
 		}
 	}
 
-	private class ReadVideoCallback implements ReadVideoTask.Callback, VideoPlayer.RangeCallback {
-		private final VideoPlayer workPlayer;
-		private final PagerInstance.ViewHolder holder;
-		private final String chanName;
-		private final Uri uri;
-
-		private ReadVideoTask downloadTask;
-		private ReadVideoTask rangeTask;
-		private boolean allowRangeRequests;
-
-		public ReadVideoCallback(VideoPlayer player, PagerInstance.ViewHolder holder, String chanName, Uri uri) {
-			this.workPlayer = player;
-			this.holder = holder;
-			this.chanName = chanName;
-			this.uri = uri;
-			allowRangeRequests = !AdvancedPreferences.isSingleConnection(chanName);
-			Chan chan = Chan.getPreferred(chanName, uri);
-			downloadTask = new ReadVideoTask(this, chan, uri, 0);
-			downloadTask.execute(ConcurrentUtils.PARALLEL_EXECUTOR);
-		}
-
-		public void cancel() {
-			if (downloadTask != null) {
-				downloadTask.cancel();
-				downloadTask = null;
-			}
-			if (rangeTask != null) {
-				rangeTask.cancel();
-				rangeTask = null;
-			}
+	private final VideoDownloadSession.Listener downloadListener = new VideoDownloadSession.Listener() {
+		@Override
+		public void onInitialized(VideoDownloadSession session) {
+			if (downloadSession != session || player == null || pictureInPictureTransferred) return;
+			initializePlayer();
+			updateDownloadState();
+			instance.galleryInstance.callback.invalidateOptionsMenu();
 		}
 
 		@Override
-		public void onReadVideoInit(File partialFile) {
-			if (workPlayer == player) {
-				new Thread(() -> {
-					boolean success;
-					try {
-						workPlayer.init(partialFile, ReadVideoCallback.this);
-						success = true;
-					} catch (VideoPlayer.InitializationException e) {
-						e.printStackTrace();
-						success = false;
-					} catch (IOException e) {
-						success = false;
-					}
-					boolean successFinal = success;
-					ConcurrentUtils.HANDLER.post(() -> {
-						if (workPlayer == player) {
-							holder.progressBar.setVisible(false, false);
-							if (successFinal) {
-								initializePlayer();
-								if (downloadTask == null) {
-									seekBar.setSecondaryProgress(seekBar.getMax());
-									holder.loadState = PagerInstance.LoadState.COMPLETE;
-									updatePictureInPictureButton();
-								}
-								instance.galleryInstance.callback.invalidateOptionsMenu();
-							} else {
-								if (downloadTask != null) {
-									if (!downloadTask.isError()) {
-										downloadTask.cancel();
-										downloadTask = null;
-									} else {
-										return;
-									}
-								}
-								if (rangeTask != null) {
-									rangeTask.cancel();
-									rangeTask = null;
-								}
-								instance.callback.showError(holder, instance.galleryInstance.context
-										.getString(R.string.playback_error));
-							}
-						}
-					});
-				}).start();
-			}
+		public void onDownloadChanged(VideoDownloadSession session) {
+			if (downloadSession == session) updateDownloadState();
 		}
 
 		@Override
-		public void onReadVideoProgressUpdate(long progress, long progressMax) {
-			if (workPlayer == player) {
-				workPlayer.setDownloadRange(progress, progressMax);
-				if (instance.currentHolder.mediaSummary.updateSize(progressMax)) {
-					instance.galleryInstance.callback.updateTitle();
-				}
-				if (initialized) {
-					int max = seekBar.getMax();
-					if (max > 0 && progressMax > 0) {
-						int newProgress = (int) (max * progress / progressMax);
-						seekBar.setSecondaryProgress(newProgress);
-					}
-				}
+		public void onDownloadError(VideoDownloadSession session, ErrorItem error) {
+			if (downloadSession != session || pictureInPictureTransferred) return;
+			PagerInstance.ViewHolder holder = instance.currentHolder;
+			if (holder != null) {
+				holder.progressBar.setVisible(false, false);
+				instance.callback.showError(holder, error.toString());
 			}
 		}
+	};
 
-		@Override
-		public void onReadVideoRangeUpdate(long start, long end) {
-			if (workPlayer == player) {
-				workPlayer.setPartRange(start, end);
-			}
+	private void updateDownloadState() {
+		PagerInstance.ViewHolder holder = instance.currentHolder;
+		if (player == null || pictureInPictureTransferred || holder == null) return;
+		VideoDownloadSession session = downloadSession;
+		if (session != null && session.getError() != null) {
+			downloadListener.onDownloadError(session, session.getError());
+			return;
 		}
-
-		@Override
-		public void onReadVideoSuccess(boolean partial, File file) {
-			if (workPlayer == player) {
-				if (partial) {
-					rangeTask = null;
-				} else {
-					downloadTask = null;
-					long length = file.length();
-					startVideoPreload();
-					workPlayer.setDownloadRange(length, length);
-					if (instance.currentHolder.mediaSummary.updateSize(length)) {
-						instance.galleryInstance.callback.updateTitle();
-					}
-					if (initialized) {
-						seekBar.setSecondaryProgress(seekBar.getMax());
-						holder.loadState = PagerInstance.LoadState.COMPLETE;
-						updatePictureInPictureButton();
-						instance.galleryInstance.callback.invalidateOptionsMenu();
-					}
-				}
-			}
+		boolean complete = session == null || session.isComplete();
+		long total = session != null ? session.getTotal() : sourceFile != null ? sourceFile.length() : 0L;
+		if (total > 0L && holder.mediaSummary.updateSize(total)) {
+			instance.galleryInstance.callback.updateTitle();
 		}
-
-		@Override
-		public void onReadVideoFail(boolean partial, ErrorItem errorItem, boolean disallowRangeRequests) {
-			if (workPlayer == player) {
-				if (partial) {
-					rangeTask = null;
-					if (disallowRangeRequests) {
-						allowRangeRequests = false;
-					}
-				} else {
-					holder.progressBar.setVisible(false, false);
-					instance.callback.showError(holder, errorItem.toString());
-				}
-			}
-		}
-
-		@Override
-		public void requestPartFromPosition(long start) {
-			if (rangeTask != null) {
-				rangeTask.cancel();
-				rangeTask = null;
-			}
-			if (allowRangeRequests && start > 0) {
-				Chan chan = Chan.getPreferred(chanName, uri);
-				rangeTask = new ReadVideoTask(this, chan, uri, start);
-				rangeTask.execute(ConcurrentUtils.PARALLEL_EXECUTOR);
-			}
+		if (initialized) {
+			int max = seekBar.getMax();
+			seekBar.setSecondaryProgress(complete ? max : total > 0L
+					? (int) (max * (double) session.getProgress() / total) : 0);
+			PagerInstance.LoadState state = complete ? PagerInstance.LoadState.COMPLETE
+					: PagerInstance.LoadState.PREVIEW_OR_LOADING;
+			boolean changed = holder.loadState != state;
+			holder.loadState = state;
+			updatePictureInPictureButton();
+			if (changed) instance.galleryInstance.callback.invalidateOptionsMenu();
+			if (complete) startVideoPreload();
 		}
 	}
 

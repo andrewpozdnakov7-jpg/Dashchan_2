@@ -63,6 +63,9 @@ public class InterfaceFragment extends PreferenceFragment {
 				R.string.scroll_thread_when_scrolling_gallery, 0);
 		addButton(R.string.themes, 0).setOnClickListener(p -> ((FragmentHandler) requireActivity())
 				.pushFragment(new ThemesFragment()));
+		addButton(R.string.popup_appearance, R.string.popup_appearance__summary)
+				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
+						.pushFragment(new PopupAppearanceFragment()));
 		List<String> lightThemeValues = new ArrayList<>();
 		List<CharSequence> lightThemeEntries = new ArrayList<>();
 		List<String> darkThemeValues = new ArrayList<>();
@@ -160,8 +163,8 @@ public class InterfaceFragment extends PreferenceFragment {
 	}
 
 	@Override
-	public void onActivityCreated(Bundle savedInstanceState) {
-		super.onActivityCreated(savedInstanceState);
+	public void onViewStateRestored(Bundle savedInstanceState) {
+		super.onViewStateRestored(savedInstanceState);
 		((FragmentHandler) requireActivity()).setTitleSubtitle(getString(R.string.user_interface), null);
 	}
 

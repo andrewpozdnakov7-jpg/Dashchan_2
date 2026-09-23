@@ -28,8 +28,8 @@ import java.util.List;
 
 public class StatisticsFragment extends BaseListFragment {
 	@Override
-	public void onActivityCreated(Bundle savedInstanceState) {
-		super.onActivityCreated(savedInstanceState);
+	public void onViewCreated(@NonNull View view, Bundle savedInstanceState) {
+		super.onViewCreated(view, savedInstanceState);
 
 		long startTime = StatisticsStorage.getInstance().getStartTime();
 		((FragmentHandler) requireActivity()).setTitleSubtitle(getString(R.string.statistics),

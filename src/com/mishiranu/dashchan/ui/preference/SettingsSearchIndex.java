@@ -62,6 +62,10 @@ public final class SettingsSearchIndex {
 			@Override
 			ContentFragment createFragment() { return new PostMarksColorsFragment(); }
 		},
+		POPUP_APPEARANCE(R.string.user_interface, R.string.popup_appearance) {
+			@Override
+			ContentFragment createFragment() { return new PopupAppearanceFragment(); }
+		},
 		CONTENTS(R.string.contents) {
 			@Override
 			ContentFragment createFragment() { return new ContentsFragment(); }
@@ -295,6 +299,8 @@ public final class SettingsSearchIndex {
 		add(context, entries, Screen.FORUMS, R.string.combined_feeds,
 				R.string.combined_feeds__summary, Preferences.KEY_COMBINED_FEEDS_ENABLED);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.experimental_features);
+		add(context, entries, Screen.EXPERIMENTAL, R.string.show_original_post_title,
+				R.string.show_original_post_title__summary, Preferences.KEY_SHOW_ORIGINAL_POST_TITLE);
 		add(context, entries, Screen.INTERFACE, R.string.user_interface);
 		add(context, entries, Screen.CONTENTS, R.string.contents);
 		add(context, entries, Screen.MEDIA, R.string.media);
@@ -322,8 +328,6 @@ public final class SettingsSearchIndex {
 		add(context, entries, Screen.GENERAL, R.string.secure_connection, R.string.secure_connection__summary,
 				Preferences.KEY_USE_HTTPS_GENERAL);
 
-		add(context, entries, Screen.EXPERIMENTAL, R.string.toast_diagnostics_test,
-				R.string.toast_diagnostics_test__summary, null);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.toolbar_title_sizes,
 				R.string.toolbar_title_sizes__summary, null);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.thread_gallery_button,
@@ -338,8 +342,6 @@ public final class SettingsSearchIndex {
 		add(context, entries, Screen.TOOLBAR_TITLE, R.string.toolbar_title_size_minimum);
 		add(context, entries, Screen.TOOLBAR_TITLE, R.string.toolbar_title_size_step);
 		add(context, entries, Screen.TOOLBAR_TITLE, R.string.toolbar_title_size_compact);
-		add(context, entries, Screen.EXPERIMENTAL, R.string.whats_new_preview,
-				R.string.whats_new_preview__summary, null);
 		add(context, entries, Screen.FORUMS, R.string.forum_reddit, R.string.reddit_public_web_reader__summary,
 				Preferences.KEY_REDDIT_WEB_READER_ENABLED);
 		add(context, entries, Screen.REDDIT, R.string.reddit_sign_in,
@@ -443,6 +445,15 @@ public final class SettingsSearchIndex {
 				Preferences.KEY_HIGHLIGHT_UNREAD);
 		add(context, entries, Screen.INTERFACE, R.string.highlight_my_posts, 0, Preferences.KEY_SHOW_MY_POSTS);
 		add(context, entries, Screen.POST_MARKS, R.string.post_marks_colors);
+		add(context, entries, Screen.POPUP_APPEARANCE, R.string.popup_appearance,
+				R.string.popup_appearance__summary, null);
+		add(context, entries, Screen.POPUP_APPEARANCE, R.string.popup_color_style, 0,
+				Preferences.KEY_POPUP_COLOR_MODE);
+		add(context, entries, Screen.POPUP_APPEARANCE, R.string.popup_background_color, 0,
+				Preferences.KEY_POPUP_BACKGROUND);
+		add(context, entries, Screen.POPUP_APPEARANCE, R.string.popup_text_color, 0,
+				Preferences.KEY_POPUP_FOREGROUND);
+		add(context, entries, Screen.POPUP_APPEARANCE, R.string.popup_preview);
 		add(context, entries, Screen.INTERFACE, R.string.advanced_search, R.string.advanced_search__summary,
 				Preferences.KEY_ADVANCED_SEARCH);
 		add(context, entries, Screen.INTERFACE, R.string.display_post_icons, R.string.display_post_icons__summary,

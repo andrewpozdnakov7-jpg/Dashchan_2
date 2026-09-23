@@ -51,8 +51,8 @@ public class WallpaperCatalogFragment extends BaseListFragment {
 	private static final int MAX_CATALOG_ITEMS = 100;
 
 	@Override
-	public void onActivityCreated(Bundle savedInstanceState) {
-		super.onActivityCreated(savedInstanceState);
+	public void onViewCreated(@NonNull View view, Bundle savedInstanceState) {
+		super.onViewCreated(view, savedInstanceState);
 		((FragmentHandler) requireActivity()).setTitleSubtitle(getString(R.string.wallpaper_catalog), null);
 		RecyclerView recyclerView = getRecyclerView();
 		recyclerView.setLayoutManager(new GridLayoutManager(recyclerView.getContext(), 2));

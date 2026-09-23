@@ -120,6 +120,7 @@ public class BrowserFragment extends ContentFragment implements DownloadListener
 		if (savedInstanceState != null) {
 			webView.restoreState(savedInstanceState);
 		}
+		loadInitialPage(savedInstanceState);
 	}
 
 	@Override
@@ -136,10 +137,7 @@ public class BrowserFragment extends ContentFragment implements DownloadListener
 		progressView = null;
 	}
 
-	@Override
-	public void onActivityCreated(Bundle savedInstanceState) {
-		super.onActivityCreated(savedInstanceState);
-
+	private void loadInitialPage(Bundle savedInstanceState) {
 		((FragmentHandler) requireActivity()).setTitleSubtitle(getString(R.string.web_browser), null);
 		Bundle args = getArguments();
 		Uri uri = args != null ? AndroidUtils.getParcelable(args, EXTRA_URI, Uri.class) : null;

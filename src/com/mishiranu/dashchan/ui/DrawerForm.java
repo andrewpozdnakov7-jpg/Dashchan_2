@@ -60,6 +60,7 @@ import com.mishiranu.dashchan.util.NavigationUtils;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.util.ViewUtils;
 import com.mishiranu.dashchan.widget.ClickableToast;
+import com.mishiranu.dashchan.widget.MessageDialog;
 import com.mishiranu.dashchan.widget.DividerItemDecoration;
 import com.mishiranu.dashchan.widget.EdgeEffectHandler;
 import com.mishiranu.dashchan.widget.PaddedRecyclerView;
@@ -1016,7 +1017,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 					.replace("__REPLACE_BOARD_NAME__", searchHelpFormat.boardName)
 					.replace("__REPLACE_THREAD_NUMBER__", searchHelpFormat.threadNumber)
 					.replace("__REPLACE_THREAD_URL__", searchHelpFormat.threadUrl);
-			return new AlertDialog.Builder(context)
+			return new MessageDialog.Builder(context)
 					.setTitle(R.string.code_number_address)
 					.setMessage(BUILDER_SEARCH_HELP.fromHtmlReduced(html))
 					.setPositiveButton(android.R.string.ok, null)
@@ -1411,7 +1412,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 						&& !collapsedPages.isEmpty()) {
 					// Freeze the exact hidden set; never close newly opened or visible pages.
 					ArrayList<Page> targets = new ArrayList<>(collapsedPages);
-					new InstanceDialog(fragmentManager, null, provider -> new AlertDialog.Builder(provider.getContext())
+					new InstanceDialog(fragmentManager, null, provider -> new MessageDialog.Builder(provider.getContext())
 							.setTitle(R.string.close_remaining_threads)
 							.setMessage(provider.getContext().getString(
 									R.string.close_remaining_threads_confirmation__format, targets.size()))
@@ -1587,7 +1588,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 
 	private void showDeleteSelectedFavoritesDialog(ActionMode actionMode,
 			ArrayList<FavoritesStorage.FavoriteItem> selected) {
-		new InstanceDialog(fragmentManager, null, provider -> new AlertDialog.Builder(provider.getContext())
+		new InstanceDialog(fragmentManager, null, provider -> new MessageDialog.Builder(provider.getContext())
 				.setMessage(provider.getContext().getResources().getQuantityString(
 						R.plurals.favorites_remove_selected_confirmation__format,
 						selected.size(), selected.size()))
@@ -1601,7 +1602,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 
 	private static void showDeleteFavoritesDialog(FragmentManager fragmentManager,
 			CharSequence message, List<FavoritesStorage.FavoriteItem> deleteFavoriteItems) {
-		new InstanceDialog(fragmentManager, null, provider -> new AlertDialog
+		new InstanceDialog(fragmentManager, null, provider -> new MessageDialog
 				.Builder(provider.getContext())
 				.setMessage(message)
 				.setNegativeButton(android.R.string.cancel, null)

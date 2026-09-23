@@ -3,6 +3,8 @@ package com.mishiranu.dashchan.widget;
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.graphics.Canvas;
+import android.os.SystemClock;
+import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.VelocityTracker;
 import android.view.View;
@@ -25,6 +27,10 @@ public class PhotoViewPager extends ViewGroup {
 
 	private final OverScroller scroller;
 	private final EdgeEffect edgeEffect;
+	private final GestureDetector verticalTapDetector;
+	private int verticalTapIndex = -1;
+	private float verticalTapRawX;
+	private float verticalTapRawY;
 
 	private final Adapter adapter;
 	private final ArrayList<PhotoView> photoViews = new ArrayList<>(3);
@@ -45,6 +51,35 @@ public class PhotoViewPager extends ViewGroup {
 		scroller = new OverScroller(context);
 		edgeEffect = new EdgeEffect(context);
 		this.adapter = adapter;
+		// Recognize taps without forwarding events to PhotoView's scale/close gestures.
+		verticalTapDetector = new GestureDetector(context, new GestureDetector.SimpleOnGestureListener() {
+			@Override
+			public boolean onDown(MotionEvent event) { return true; }
+
+			@Override
+			public boolean onSingleTapConfirmed(MotionEvent event) {
+				if (canDispatchVerticalTap()) {
+					photoViews.get(currentIndex % 3).dispatchDirectClick(event.getX(), event.getY());
+				}
+				return true;
+			}
+
+			@Override
+			public boolean onDoubleTapEvent(MotionEvent event) {
+				if (event.getActionMasked() == MotionEvent.ACTION_UP && canDispatchVerticalTap()) {
+					photoViews.get(currentIndex % 3).dispatchDirectDoubleClick(event.getX(), event.getY());
+				}
+				return true;
+			}
+
+			@Override
+			public void onLongPress(MotionEvent event) {
+				if (canDispatchVerticalTap()) {
+					longTapConfirmed = true;
+					photoViews.get(currentIndex % 3).dispatchDirectLongClick(event.getX(), event.getY());
+				}
+			}
+		});
 		for (int i = 0; i < 3; i++) {
 			View view = adapter.onCreateView(this);
 			super.addView(view, -1, generateDefaultLayoutParams());
@@ -101,10 +136,12 @@ public class PhotoViewPager extends ViewGroup {
 
 	public void setActive(boolean active) {
 		this.active = active;
+		if (!active) cancelVerticalTapGesture();
 	}
 
 	public void setVerticalPagingMode(boolean verticalPagingMode) {
 		if (this.verticalPagingMode != verticalPagingMode) {
+			cancelVerticalTapGesture();
 			this.verticalPagingMode = verticalPagingMode;
 			updateCurrentScrollIndex(false);
 		}
@@ -131,6 +168,7 @@ public class PhotoViewPager extends ViewGroup {
 
 	public void setCurrentIndex(int index) {
 		if (index >= 0 && index < count) {
+			cancelVerticalTapGesture();
 			currentIndex = index;
 			updateCurrentScrollIndex(true);
 		}
@@ -190,6 +228,43 @@ public class PhotoViewPager extends ViewGroup {
 		photoView.dispatchSimpleClick(true, startX, startY);
 	};
 
+	private boolean canDispatchVerticalTap() {
+		return active && verticalPagingMode && isAttachedToWindow() && verticalTapIndex == currentIndex
+				&& !verticalGesture;
+	}
+
+	private void cancelVerticalTapGesture() {
+		verticalTapIndex = -1;
+		long now = SystemClock.uptimeMillis();
+		MotionEvent cancel = MotionEvent.obtain(now, now, MotionEvent.ACTION_CANCEL, 0f, 0f, 0);
+		verticalTapDetector.onTouchEvent(cancel);
+		cancel.recycle();
+	}
+
+	private void dispatchVerticalTapEvent(MotionEvent event) {
+		int action = event.getActionMasked();
+		if (action == MotionEvent.ACTION_DOWN) {
+			verticalTapIndex = currentIndex;
+			verticalTapRawX = event.getRawX();
+			verticalTapRawY = event.getRawY();
+		}
+		if (verticalTapIndex < 0) return;
+		if (action == MotionEvent.ACTION_CANCEL || event.getPointerCount() > 1
+				|| Math.abs(event.getRawX() - verticalTapRawX) > touchSlop
+				|| Math.abs(event.getRawY() - verticalTapRawY) > touchSlop) {
+			cancelVerticalTapGesture();
+		} else {
+			verticalTapDetector.onTouchEvent(event);
+		}
+	}
+
+	@Override
+	protected void onDetachedFromWindow() {
+		cancelVerticalTapGesture();
+		removeCallbacks(longTapRunnable);
+		super.onDetachedFromWindow();
+	}
+
 	@Override
 	public boolean onInterceptTouchEvent(MotionEvent ev) {
 		return true;
@@ -203,6 +278,7 @@ public class PhotoViewPager extends ViewGroup {
 		}
 		PhotoView photoView = photoViews.get(currentIndex % 3);
 		int action = event.getActionMasked();
+		if (verticalPagingMode) dispatchVerticalTapEvent(event);
 		switch (action) {
 			case MotionEvent.ACTION_DOWN: {
 				if (!verticalPagingMode) {
@@ -371,9 +447,7 @@ public class PhotoViewPager extends ViewGroup {
 						index = determineTargetIndex(velocity, deltaX);
 					}
 					if (!allowMove && !longTapConfirmed) {
-						if (verticalPagingMode) {
-							photoView.dispatchDirectClick(event.getX(), event.getY());
-						} else {
+						if (!verticalPagingMode) {
 							photoView.dispatchSimpleClick(false, event.getX(), event.getY());
 						}
 					}

@@ -13,14 +13,17 @@ import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.Point;
+import android.graphics.Rect;
 import android.graphics.drawable.Icon;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.util.Log;
 import android.util.Rational;
 import android.view.Gravity;
+import android.view.View;
 import android.view.ViewTreeObserver;
 import android.view.Window;
 import android.view.WindowInsets;
@@ -32,11 +35,13 @@ import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.model.GalleryItem;
+import com.mishiranu.dashchan.content.model.ErrorItem;
 import com.mishiranu.dashchan.media.VideoPlayer;
 import com.mishiranu.dashchan.media.VideoDiagnostics;
 import com.mishiranu.dashchan.ui.MainActivity;
 import com.mishiranu.dashchan.util.AudioFocus;
 import com.mishiranu.dashchan.util.ViewUtils;
+import com.mishiranu.dashchan.widget.ClickableToast;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -88,14 +93,16 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 		public final String filePath;
 		public final Bitmap previewFrame;
 		public final GalleryRestoreData galleryRestoreData;
+		public final VideoDownloadSession downloadSession;
 
 		private PendingTransfer(VideoUnit source, VideoPlayer player, String filePath, Bitmap previewFrame,
-				GalleryRestoreData galleryRestoreData) {
+				GalleryRestoreData galleryRestoreData, VideoDownloadSession downloadSession) {
 			this.source = source;
 			this.player = player;
 			this.filePath = filePath;
 			this.previewFrame = previewFrame;
 			this.galleryRestoreData = galleryRestoreData;
+			this.downloadSession = downloadSession;
 		}
 
 		private void recyclePreviewFrame() {
@@ -110,6 +117,7 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 		final GalleryRestoreData data;
 		final VideoPlayer player;
 		final File sourceFile;
+		final VideoDownloadSession downloadSession;
 		final long position;
 		final int playbackSpeed;
 		final boolean muted;
@@ -117,10 +125,11 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 		boolean overlayCreated;
 
 		PendingGalleryReturn(GalleryRestoreData data, VideoPlayer player, File sourceFile, long position,
-				int playbackSpeed, boolean muted, boolean playing) {
+				int playbackSpeed, boolean muted, boolean playing, VideoDownloadSession downloadSession) {
 			this.data = data;
 			this.player = player;
 			this.sourceFile = sourceFile;
+			this.downloadSession = downloadSession;
 			this.position = position;
 			this.playbackSpeed = playbackSpeed;
 			this.muted = muted;
@@ -128,6 +137,7 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 		}
 
 		void destroyPlayer() {
+			if (downloadSession != null) downloadSession.cancel();
 			player.setListener(null);
 			player.setPlaying(false);
 			player.releaseVideoViewAndDestroyAsync();
@@ -136,13 +146,13 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 
 	static Intent createIntent(Context context, File file, long position, int playbackSpeed,
 			boolean muted, boolean playing, VideoUnit source, VideoPlayer player, Bitmap previewFrame,
-			GalleryRestoreData galleryRestoreData) {
+			GalleryRestoreData galleryRestoreData, VideoDownloadSession downloadSession) {
 		synchronized (TRANSFER_LOCK) {
 			if (pendingTransfer != null) {
 				pendingTransfer.recyclePreviewFrame();
 			}
 			pendingTransfer = new PendingTransfer(source, player, file.getAbsolutePath(), previewFrame,
-					galleryRestoreData);
+					galleryRestoreData, downloadSession);
 		}
 		return new Intent(context, VideoPipActivity.class)
 				.putExtra(EXTRA_FILE_PATH, file.getAbsolutePath())
@@ -196,7 +206,7 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 			pendingGalleryReturn = null;
 		}
 		if (target.adoptPictureInPicturePlayer(pending.player, pending.sourceFile, pending.position,
-				pending.playbackSpeed, pending.muted, pending.playing)) {
+				pending.playbackSpeed, pending.muted, pending.playing, pending.downloadSession)) {
 			return true;
 		}
 		pending.destroyPlayer();
@@ -204,11 +214,17 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 	}
 
 	private FrameLayout rootView;
+	private View pipVideoView;
+	private final Rect lastSourceRectHint = new Rect();
+	private long activityCreatedElapsedMs;
+	private long entryRequestedElapsedMs = -1L;
+	private boolean firstVideoFrameReceived;
 	private ImageView previewView;
 	private Bitmap previewFrame;
 	private GalleryRestoreData galleryRestoreData;
 	private VideoUnit source;
 	private VideoPlayer player;
+	private VideoDownloadSession downloadSession;
 	private AudioFocus audioFocus;
 	private int playbackSpeed;
 	private boolean muted;
@@ -227,12 +243,59 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 	private boolean standalonePlayback;
 	private int returnToGalleryAttempts;
 	private final Handler handler = new Handler(Looper.getMainLooper());
+	private final Runnable recordSettledPipGeometry = () -> recordPipGeometry("settled");
+
+	private void recordPipGeometry(String event) {
+		if (!VideoDiagnostics.isExtendedRecording() || rootView == null) return;
+		try {
+			recordPipGeometrySnapshot(event);
+		} catch (RuntimeException e) {
+			VideoDiagnostics.recordUi("pip_geometry failed=" + e.getClass().getSimpleName());
+		}
+	}
+
+	private void recordPipGeometrySnapshot(String event) {
+		Configuration config = getResources().getConfiguration();
+		Window window = getWindow();
+		WindowInsets insets = rootView.getRootWindowInsets();
+		VideoDiagnostics.recordUi("pip_geometry schema=1 event=" + event
+				+ " in_pip=" + isInPictureInPictureMode() + " orientation=" + config.orientation
+				+ " screen_dp=" + config.screenWidthDp + "x" + config.screenHeightDp
+				+ " density_dpi=" + config.densityDpi
+				+ " window_bounds=" + getWindowManager().getCurrentWindowMetrics().getBounds().toShortString()
+				+ " window_size=" + window.getAttributes().width + "x" + window.getAttributes().height
+				+ " window_gravity=" + window.getAttributes().gravity + " flags=" + window.getAttributes().flags
+				+ " system_insets=" + (insets != null ? insets.getInsets(WindowInsets.Type.systemBars()) : null)
+				+ " cutout_insets=" + (insets != null ? insets.getInsets(WindowInsets.Type.displayCutout()) : null));
+		VideoDiagnostics.recordViewGeometry("pip_" + event, rootView);
+		for (int i = 0; i < rootView.getChildCount(); i++) {
+			View child = rootView.getChildAt(i);
+			VideoDiagnostics.recordViewGeometry("pip_child_" + event, child);
+		}
+	}
+
+	private void schedulePipGeometry() {
+		if (VideoDiagnostics.isExtendedRecording()) {
+			handler.removeCallbacks(recordSettledPipGeometry);
+			handler.postDelayed(recordSettledPipGeometry, 350L);
+		}
+	}
+
+	@Override
+	public void onConfigurationChanged(Configuration newConfig) {
+		recordPipGeometry("configuration_before");
+		super.onConfigurationChanged(newConfig);
+		recordPipGeometry("configuration_after");
+		schedulePipGeometry();
+	}
+
 	private final Runnable hidePreviewFrameRunnable = () -> {
 		previewFrameHideScheduled = false;
 		ImageView previewView = this.previewView;
 		this.previewView = null;
 		this.previewFrame = null;
 		if (previewView != null) {
+			VideoDiagnostics.recordUi("pip preview_hidden first_frame=" + firstVideoFrameReceived);
 			previewView.setVisibility(ImageView.INVISIBLE);
 			previewView.setImageDrawable(null);
 		}
@@ -310,7 +373,14 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
-		overridePendingTransition(0, 0);
+		activityCreatedElapsedMs = SystemClock.elapsedRealtime();
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+			// Register both transitions before entry/finish; onDestroy is too late to configure closing.
+			overrideActivityTransition(OVERRIDE_TRANSITION_OPEN, 0, 0);
+			overrideActivityTransition(OVERRIDE_TRANSITION_CLOSE, 0, 0);
+		} else {
+			disableLegacyActivityTransition();
+		}
 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
 			getSplashScreen().setOnExitAnimationListener(splashScreenView -> splashScreenView.remove());
 		}
@@ -327,6 +397,7 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 		}
 		source = transfer.source;
 		player = transfer.player;
+		downloadSession = transfer.downloadSession;
 		previewFrame = transfer.previewFrame;
 		galleryRestoreData = transfer.galleryRestoreData;
 		playbackSpeed = intent.getIntExtra(EXTRA_PLAYBACK_SPEED, 1000);
@@ -339,6 +410,9 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 		attributes.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS;
 		window.setAttributes(attributes);
 		rootView = new FrameLayout(this);
+		rootView.addOnLayoutChangeListener((v, l, t, r, b, oldL, oldT, oldR, oldB) -> {
+			if (l != oldL || t != oldT || r != oldR || b != oldB) schedulePipGeometry();
+		});
 		rootView.setBackgroundColor(Color.BLACK);
 		rootView.setOnClickListener(v -> {
 			if (standalonePlayback) {
@@ -388,7 +462,15 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 		player.setListener(this);
 		player.releaseVideoView();
 		player.setVideoViewFrameCallback(this::scheduleHidePreviewFrame);
-		rootView.addView(player.getVideoView(this), new FrameLayout.LayoutParams(
+		pipVideoView = player.getVideoView(this);
+		pipVideoView.addOnLayoutChangeListener((view, left, top, right, bottom,
+				oldLeft, oldTop, oldRight, oldBottom) -> {
+			if (left != oldLeft || top != oldTop || right != oldRight || bottom != oldBottom) {
+				// Publish the laid-out video bounds before the system animates entry or exit.
+				updatePictureInPictureParams();
+			}
+		});
+		rootView.addView(pipVideoView, new FrameLayout.LayoutParams(
 				FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT, Gravity.CENTER));
 		if (previewFrame != null) {
 			previewView = new ImageView(this);
@@ -405,6 +487,14 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 		player.setPlaying(startPlaying);
 		rootView.setKeepScreenOn(startPlaying);
 		VideoDiagnostics.recordUi("pip activity_created preview=" + (previewFrame != null));
+		if (downloadSession != null) {
+			downloadSession.setListener(downloadListener);
+			if (downloadSession.getError() != null) {
+				downloadListener.onDownloadError(downloadSession, downloadSession.getError());
+				return;
+			}
+		}
+		recordPipGeometry("created");
 		schedulePictureInPictureAfterFirstDraw();
 	}
 
@@ -426,7 +516,13 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 	}
 
 	private void scheduleHidePreviewFrame() {
-		if (!previewFrameHideScheduled) {
+		if (!firstVideoFrameReceived) {
+			firstVideoFrameReceived = true;
+			long now = SystemClock.elapsedRealtime();
+			VideoDiagnostics.recordUi("pip first_video_frame activity_age_ms=" + (now - activityCreatedElapsedMs)
+					+ " entry_age_ms=" + (entryRequestedElapsedMs >= 0L ? now - entryRequestedElapsedMs : -1L));
+		}
+		if (previewView != null && !previewFrameHideScheduled) {
 			previewFrameHideScheduled = true;
 			// TextureView reports a new frame while the hierarchy may still be building its display list.
 			// Keep the overlay child attached for this activity's lifetime: some Android builds cannot safely
@@ -446,8 +542,12 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 			return;
 		}
 		PictureInPictureParams params = createPictureInPictureParams(player.getDimensions());
-		setPictureInPictureParams(params);
 		try {
+			setPictureInPictureParams(params);
+			entryRequestedElapsedMs = SystemClock.elapsedRealtime();
+			VideoDiagnostics.recordUi("pip entry_requested source_rect="
+					+ (lastSourceRectHint.isEmpty() ? "none" : lastSourceRectHint.toShortString())
+					+ " first_frame=" + firstVideoFrameReceived + " preview=" + (previewView != null));
 			if (!enterPictureInPictureMode(params)) {
 				VideoDiagnostics.recordUi("pip entry_rejected");
 				finish();
@@ -460,6 +560,19 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 
 	private PictureInPictureParams createPictureInPictureParams(Point dimensions) {
 		PictureInPictureParams.Builder builder = new PictureInPictureParams.Builder();
+		// Crop to the actual video, not the full portrait activity including its black bars.
+		// Missing source bounds lets Android cover the PiP transition with a content overlay.
+		Rect sourceRect = new Rect();
+		if (ownsVideoView() && pipVideoView.getGlobalVisibleRect(sourceRect) && !sourceRect.isEmpty()) {
+			builder.setSourceRectHint(sourceRect);
+			if (!lastSourceRectHint.equals(sourceRect)) {
+				lastSourceRectHint.set(sourceRect);
+				VideoDiagnostics.recordUi("pip source_rect=" + sourceRect.toShortString()
+						+ " in_pip=" + isInPictureInPictureMode());
+			}
+		} else {
+			lastSourceRectHint.setEmpty();
+		}
 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
 			builder.setSeamlessResizeEnabled(true);
 		}
@@ -497,9 +610,14 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 		return new RemoteAction(Icon.createWithResource(this, iconResource), title, title, pendingIntent);
 	}
 
+	private boolean ownsVideoView() {
+		return player != null && pipVideoView != null && pipVideoView.getParent() == rootView
+				&& player.isVideoView(pipVideoView);
+	}
+
 	private void updatePictureInPictureParams() {
 		VideoPlayer player = this.player;
-		if (player != null) {
+		if (player != null && ownsVideoView() && !isFinishing() && !isDestroyed()) {
 			rootView.setKeepScreenOn(player.isPlaying());
 			setPictureInPictureParams(createPictureInPictureParams(player.getDimensions()));
 		}
@@ -594,7 +712,8 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 		long position = player.getPosition();
 		player.setPlaying(false);
 		player.setVideoViewFrameCallback(null);
-		if (!source.restorePictureInPicturePlayer(player, position, playbackSpeed, muted, playing)) {
+		if (!source.restorePictureInPicturePlayer(player, position, playbackSpeed, muted, playing,
+				downloadSession)) {
 			VideoUnit.PictureInPictureRestoreState state = source.getPictureInPictureRestoreState(player);
 			if (state == VideoUnit.PictureInPictureRestoreState.HOLDER_UNAVAILABLE) {
 				retryReturnToGallery();
@@ -604,6 +723,7 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 			return;
 		}
 		returnedToGallery = true;
+		downloadSession = null; // Ownership returned with the player.
 		handler.removeCallbacks(returnToGalleryAfterExit);
 		returnToGalleryScheduled = false;
 		VideoDiagnostics.recordUi("pip return_to_gallery attempts=" + returnToGalleryAttempts);
@@ -636,8 +756,10 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 		player.setVideoViewFrameCallback(null);
 		player.releaseVideoView();
 		player.setListener(null);
+		if (downloadSession != null) downloadSession.setListener(null);
 		PendingGalleryReturn pending = new PendingGalleryReturn(data, player, new File(filePath), position,
-				playbackSpeed, muted, playing);
+				playbackSpeed, muted, playing, downloadSession);
+		downloadSession = null; // The pending return now owns the download, even if the old gallery is destroyed.
 		PendingGalleryReturn oldPending;
 		synchronized (TRANSFER_LOCK) {
 			oldPending = pendingGalleryReturn;
@@ -777,6 +899,8 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 	@Override
 	public void onPictureInPictureModeChanged(boolean isInPictureInPictureMode, Configuration newConfig) {
 		super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig);
+		recordPipGeometry("mode_changed");
+		schedulePipGeometry();
 		if (isInPictureInPictureMode) {
 			handler.removeCallbacks(finishDismissedPictureInPicture);
 			handler.removeCallbacks(returnToGalleryAfterExit);
@@ -789,7 +913,8 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 			returnToGalleryScheduled = false;
 			standalonePlayback = false;
 			returnToGalleryAttempts = 0;
-			VideoDiagnostics.recordUi("pip mode_changed=true");
+			VideoDiagnostics.recordUi("pip mode_changed=true entry_age_ms=" + (entryRequestedElapsedMs >= 0L
+					? SystemClock.elapsedRealtime() - entryRequestedElapsedMs : -1L));
 		} else if (enteredPictureInPicture) {
 			exitedPictureInPicture = true;
 			resumedAfterPictureInPictureExit = false;
@@ -808,6 +933,7 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 
 	@Override
 	protected void onDestroy() {
+		handler.removeCallbacks(recordSettledPipGeometry);
 		handler.removeCallbacks(finishDismissedPictureInPicture);
 		handler.removeCallbacks(returnToGalleryAfterExit);
 		if (receiverRegistered) {
@@ -829,7 +955,8 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 			boolean handled;
 			if (!enteredPictureInPicture) {
 				handled = source != null && source.restorePictureInPicturePlayer(player, position,
-						playbackSpeed, muted, playing);
+						playbackSpeed, muted, playing, downloadSession);
+				if (handled) downloadSession = null;
 			} else {
 				handled = source != null && source.closePictureInPicturePlayer(player);
 			}
@@ -839,11 +966,23 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 			this.player = null;
 			this.source = null;
 		}
+		if (downloadSession != null) {
+			downloadSession.cancel();
+			downloadSession = null;
+		}
 		hidePreviewFrameImmediately();
 		VideoDiagnostics.recordUi("pip activity_destroyed entered=" + enteredPictureInPicture
 				+ " exited=" + exitedPictureInPicture + " returned=" + returnedToGallery);
-		overridePendingTransition(0, 0);
+		if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+			disableLegacyActivityTransition();
+		}
 		super.onDestroy();
+	}
+
+	@SuppressWarnings("deprecation")
+	private void disableLegacyActivityTransition() {
+		// Compatibility only: overrideActivityTransition is unavailable on Android 11-13.
+		overridePendingTransition(0, 0);
 	}
 
 	@Override
@@ -865,7 +1004,32 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 	}
 
 	@Override
-	public void onBusyStateChange(VideoPlayer player, boolean busy) {}
+	public void onBusyStateChange(VideoPlayer player, boolean busy) {
+		if (this.player == player) {
+			VideoDiagnostics.recordUi("pip buffering_or_seeking=" + busy + " download_complete="
+					+ (downloadSession == null || downloadSession.isComplete()));
+		}
+	}
+
+	private final VideoDownloadSession.Listener downloadListener = new VideoDownloadSession.Listener() {
+		@Override
+		public void onInitialized(VideoDownloadSession session) {}
+
+		@Override
+		public void onDownloadChanged(VideoDownloadSession session) {
+			if (downloadSession == session && session.isComplete()) {
+				VideoDiagnostics.recordUi("pip download_complete bytes=" + session.getTotal());
+			}
+		}
+
+		@Override
+		public void onDownloadError(VideoDownloadSession session, ErrorItem error) {
+			if (downloadSession != session || isFinishing()) return;
+			VideoDiagnostics.recordUi("pip download_failed type=" + error.type);
+			ClickableToast.show(error.toString());
+			finish();
+		}
+	};
 
 	@Override
 	public void onDimensionChange(VideoPlayer player) {

@@ -564,6 +564,15 @@ public class ViewUnit {
 		}
 		holder.comment.setSpoilersEnabled(!Preferences.isShowSpoilers());
 		holder.comment.setAIGeneratedStyleEnabled(Preferences.isClassicMonkeyResponses(chan));
+		// Suppress only the duplicate OP heading on the full thread page, never the source data.
+		// Translated/different headings and standalone previews or threadshots retain their context.
+		if (postItem.isOriginalPost() && !configurationSet.isDialog
+				&& demandSet.selection != UiManager.Selection.THREADSHOT
+				&& !Preferences.isShowOriginalPostTitle() && !Preferences.isHideThreadTitle()
+				&& configurationSet.openedThreadTitle != null
+				&& !StringUtils.isEmpty(subject) && subject.equals(configurationSet.openedThreadTitle.get())) {
+			subject = "";
+		}
 		holder.comment.setSubjectAndComment(makeHighlightedText(demandSet.highlightText, subject),
 				makeHighlightedText(demandSet.highlightText, comment));
 		holder.comment.setVisibility(subject.length() > 0 || comment.length() > 0 ? View.VISIBLE : View.GONE);

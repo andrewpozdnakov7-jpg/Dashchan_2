@@ -1,6 +1,5 @@
 package com.mishiranu.dashchan.ui.preference;
 
-import android.app.AlertDialog;
 import android.os.Bundle;
 import android.view.View;
 import androidx.annotation.NonNull;
@@ -22,6 +21,7 @@ import com.mishiranu.dashchan.ui.preference.core.PreferenceFragment;
 import com.mishiranu.dashchan.util.NavigationUtils;
 import com.mishiranu.dashchan.util.SharedPreferences;
 import com.mishiranu.dashchan.widget.ClickableToast;
+import com.mishiranu.dashchan.widget.MessageDialog;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -45,15 +45,14 @@ public class ExperimentalFragment extends PreferenceFragment implements Translat
 			return;
 		}
 		removeAllPreferences();
-		addButton(R.string.toast_diagnostics_test, R.string.toast_diagnostics_test__summary)
-				.setOnClickListener(p -> ClickableToast.showDiagnosticTest());
 		addButton(R.string.toolbar_title_sizes, R.string.toolbar_title_sizes__summary)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 						.pushFragment(new ToolbarTitleSettingsFragment()));
 		addCheck(true, Preferences.KEY_THREAD_GALLERY_BUTTON, Preferences.DEFAULT_THREAD_GALLERY_BUTTON,
 				R.string.thread_gallery_button, R.string.thread_gallery_button__summary);
-		addButton(R.string.whats_new_preview, R.string.whats_new_preview__summary)
-				.setOnClickListener(p -> WhatsNewDialog.show(getChildFragmentManager()));
+		addCheck(true, Preferences.KEY_SHOW_ORIGINAL_POST_TITLE, Preferences.DEFAULT_SHOW_ORIGINAL_POST_TITLE,
+				R.string.show_original_post_title, R.string.show_original_post_title__summary)
+				.setOnAfterChangeListener(p -> requireActivity().recreate());
 		CheckPreference hardwareAccelerationPreference = addCheck(true,
 				Preferences.KEY_HARDWARE_VIDEO_ACCELERATION,
 				Preferences.DEFAULT_HARDWARE_VIDEO_ACCELERATION,
@@ -163,7 +162,7 @@ public class ExperimentalFragment extends PreferenceFragment implements Translat
 						: getString(R.string.translation_addon_not_installed__format,
 								formatSize(GoogleTranslationBridge.APPROXIMATE_ADDON_SIZE));
 				addButton(getString(R.string.translation_google_addon), addonSummary).setOnClickListener(p ->
-						new AlertDialog.Builder(requireContext())
+						new MessageDialog.Builder(requireContext())
 								.setTitle(R.string.translation_google_addon)
 								.setMessage(R.string.translation_google_addon_install__message)
 								.setPositiveButton(R.string.translation_google_addon_download,
@@ -252,7 +251,7 @@ public class ExperimentalFragment extends PreferenceFragment implements Translat
 				return;
 			}
 			if (state == TranslationModelManager.State.INSTALLED) {
-				new AlertDialog.Builder(requireContext())
+				new MessageDialog.Builder(requireContext())
 						.setTitle(R.string.translation_package_delete)
 						.setMessage(R.string.translation_package_delete__message)
 						.setPositiveButton(R.string.delete, (dialog, which) -> {
@@ -269,7 +268,7 @@ public class ExperimentalFragment extends PreferenceFragment implements Translat
 						.setNegativeButton(android.R.string.cancel, null)
 						.show();
 			} else {
-				new AlertDialog.Builder(requireContext())
+				new MessageDialog.Builder(requireContext())
 						.setTitle(R.string.translation_package_download)
 						.setMessage(engine == TranslationEngine.GOOGLE
 								? R.string.translation_package_download_google__message
@@ -314,7 +313,7 @@ public class ExperimentalFragment extends PreferenceFragment implements Translat
 					if (!isAdded() || getView() == null) return;
 					refreshPreferences();
 					if (file != null) {
-						new AlertDialog.Builder(requireContext())
+						new MessageDialog.Builder(requireContext())
 								.setTitle(R.string.video_diagnostics_saved)
 								.setMessage(R.string.video_diagnostics_saved__message)
 								.setPositiveButton(R.string.share, (dialog, which) ->
@@ -327,11 +326,11 @@ public class ExperimentalFragment extends PreferenceFragment implements Translat
 				});
 				refreshPreferences();
 			} else {
-				new AlertDialog.Builder(requireContext())
+				new MessageDialog.Builder(requireContext())
 						.setTitle(R.string.video_diagnostics_start)
 						.setMessage(getString(R.string.video_diagnostics_privacy_notice)
 								+ "\n\n" + getString(R.string.video_diagnostics_memory_notice))
-						.setPositiveButton(R.string.video_diagnostics_start, (dialog, which) -> {
+						.setPositiveButton(R.string.video_diagnostics_begin, (dialog, which) -> {
 							VideoDiagnostics.start();
 							refreshPreferences();
 						})
@@ -358,8 +357,8 @@ public class ExperimentalFragment extends PreferenceFragment implements Translat
 	}
 
 	@Override
-	public void onActivityCreated(Bundle savedInstanceState) {
-		super.onActivityCreated(savedInstanceState);
+	public void onViewStateRestored(Bundle savedInstanceState) {
+		super.onViewStateRestored(savedInstanceState);
 		((FragmentHandler) requireActivity()).setTitleSubtitle(getString(R.string.experimental_features), null);
 	}
 

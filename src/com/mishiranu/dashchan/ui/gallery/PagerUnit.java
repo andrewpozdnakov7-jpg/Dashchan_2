@@ -687,9 +687,17 @@ public class PagerUnit implements PagerInstance.Callback {
 		}
 	}
 
+	private boolean canHandleTikTokTap(PhotoView photoView) {
+		PagerInstance.ViewHolder holder = pagerInstance.currentHolder;
+		return resumed && !tikTokTransitionRunning && tikTokGestureDistance == 0f
+				&& !videoUnit.isPictureInPictureTransferred() && holder != null && holder.photoView == photoView
+				&& holder.galleryItem != null && holder.galleryItem.isVideo(Chan.get(galleryInstance.chanName));
+	}
+
 	private final PhotoView.Listener photoViewListener = new PhotoView.Listener() {
 		@Override
 		public void onClick(PhotoView photoView, boolean image, float x, float y) {
+			if (tikTokMode && !canHandleTikTokTap(photoView)) return;
 			GalleryItem galleryItem = pagerInstance.currentHolder.galleryItem;
 			Chan chan = Chan.get(galleryInstance.chanName);
 			View playButton = pagerInstance.currentHolder.playButton;
@@ -720,6 +728,7 @@ public class PagerUnit implements PagerInstance.Callback {
 		@Override
 		public boolean onDoubleClick(PhotoView photoView, float x, float y) {
 			if (tikTokMode) {
+				if (canHandleTikTokTap(photoView)) videoUnit.togglePlayback();
 				return true;
 			}
 			PagerInstance.ViewHolder holder = pagerInstance.currentHolder;
@@ -750,7 +759,8 @@ public class PagerUnit implements PagerInstance.Callback {
 
 		@Override
 		public void onLongClick(PhotoView photoView, float x, float y) {
-			if (!tikTokMode) {
+			float centerLeft = photoView.getWidth() / 3f;
+			if (!tikTokMode || canHandleTikTokTap(photoView) && x >= centerLeft && x < centerLeft * 2f) {
 				displayPopupMenu(galleryInstance.callback.getChildFragmentManager());
 			}
 		}

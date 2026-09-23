@@ -313,6 +313,43 @@ public class Preferences {
 		return PREFERENCES.getBoolean(KEY_ACTIVE_SCROLLBAR, DEFAULT_ACTIVE_SCROLLBAR);
 	}
 
+	public enum PopupColorMode {
+		CONTRAST("contrast", R.string.popup_colors_contrast),
+		THEME("theme", R.string.popup_colors_theme),
+		TOOLBAR("toolbar", R.string.popup_colors_toolbar),
+		CUSTOM("custom", R.string.popup_colors_custom);
+
+		public final String value;
+		public final int titleResId;
+
+		PopupColorMode(String value, int titleResId) {
+			this.value = value;
+			this.titleResId = titleResId;
+		}
+	}
+
+	public static final String KEY_POPUP_COLOR_MODE = "popup_color_mode";
+	public static final PopupColorMode DEFAULT_POPUP_COLOR_MODE = PopupColorMode.THEME;
+	public static final String KEY_POPUP_BACKGROUND = "popup_background";
+	public static final String KEY_POPUP_FOREGROUND = "popup_foreground";
+
+	public static PopupColorMode getPopupColorMode() {
+		return getEnumValue(KEY_POPUP_COLOR_MODE, PopupColorMode.values(), DEFAULT_POPUP_COLOR_MODE, o -> o.value);
+	}
+
+	public static int getPopupBackground() {
+		return PREFERENCES.getInt(KEY_POPUP_BACKGROUND, 0xff303030) | 0xff000000;
+	}
+
+	public static int getPopupForeground() {
+		return PREFERENCES.getInt(KEY_POPUP_FOREGROUND, 0xffffffff) | 0xff000000;
+	}
+
+	public static void resetPopupColors() {
+		PREFERENCES.edit().remove(KEY_POPUP_COLOR_MODE).remove(KEY_POPUP_BACKGROUND)
+				.remove(KEY_POPUP_FOREGROUND).close();
+	}
+
 	public enum PostMarksColorMode {
 		DEFAULT("default", R.string.post_marks_colors_default),
 		THEME("theme", R.string.post_marks_colors_theme),
@@ -879,6 +916,13 @@ public class Preferences {
 
 	public static boolean isHideThreadTitle() {
 		return PREFERENCES.getBoolean(KEY_HIDE_THREAD_TITLE, DEFAULT_HIDE_THREAD_TITLE);
+	}
+
+	public static final String KEY_SHOW_ORIGINAL_POST_TITLE = "show_original_post_title";
+	public static final boolean DEFAULT_SHOW_ORIGINAL_POST_TITLE = false;
+
+	public static boolean isShowOriginalPostTitle() {
+		return PREFERENCES.getBoolean(KEY_SHOW_ORIGINAL_POST_TITLE, DEFAULT_SHOW_ORIGINAL_POST_TITLE);
 	}
 
 	public static final ChanKey KEY_DOMAIN = new ChanKey("domain");

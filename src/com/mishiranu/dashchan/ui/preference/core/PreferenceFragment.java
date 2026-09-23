@@ -122,9 +122,11 @@ public abstract class PreferenceFragment extends ContentFragment {
 	}
 
 	@Override
-	public void onActivityCreated(Bundle savedInstanceState) {
-		super.onActivityCreated(savedInstanceState);
+	public void onViewStateRestored(Bundle savedInstanceState) {
+		super.onViewStateRestored(savedInstanceState);
 
+		// Reveal the search result only after subclasses have populated their preferences
+		// and the framework has restored the list's previous scroll position.
 		Bundle arguments = getArguments();
 		if (arguments != null && arguments.containsKey(EXTRA_SEARCH_TARGET_TITLE)) {
 			String key = arguments.getString(EXTRA_SEARCH_TARGET_KEY);

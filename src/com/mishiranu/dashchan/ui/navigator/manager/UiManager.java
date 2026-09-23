@@ -26,6 +26,7 @@ import java.lang.ref.WeakReference;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
+import java.util.function.Supplier;
 
 public class UiManager {
 	private final Context context;
@@ -189,6 +190,8 @@ public class UiManager {
 		public final PostNumber repliesToPost;
 		public boolean showTranslatedComments;
 		public String translationKey;
+		// Only the full thread page supplies its toolbar title. Do not copy this into previews.
+		public Supplier<String> openedThreadTitle;
 
 		public ConfigurationSet(String chanName, Replyable replyable,
 				PostsProvider postsProvider, PostStateProvider postStateProvider,

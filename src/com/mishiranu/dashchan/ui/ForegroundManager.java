@@ -545,8 +545,8 @@ public class ForegroundManager implements Handler.Callback {
 		}
 
 		@Override
-		public void onActivityCreated(Bundle savedInstanceState) {
-			super.onActivityCreated(savedInstanceState);
+		public void onStart() {
+			super.onStart();
 			getPendingDataOrDismiss();
 		}
 
@@ -746,28 +746,11 @@ public class ForegroundManager implements Handler.Callback {
 		}
 
 		@Override
-		public void onActivityCreated(Bundle savedInstanceState) {
-			super.onActivityCreated(savedInstanceState);
-			PendingData pendingData = getPendingDataOrDismiss();
-			if (pendingData == null) {
-				return;
-			}
-			ensureArrays();
-			boolean[] selected = savedInstanceState != null ? savedInstanceState.getBooleanArray(EXTRA_SELECTED) : null;
-			if (selected == null) {
-				selected = requireArguments().getBooleanArray(EXTRA_SELECTED);
-			}
-			if (selected != null && selected.length == this.selected.length) {
-				System.arraycopy(selected, 0, this.selected, 0, selected.length);
-			}
-			for (int i = 0; i < this.selected.length; i++) {
-				updateSelection(i);
-			}
-		}
-
-		@Override
 		public void onStart() {
 			super.onStart();
+			if (getPendingDataOrDismiss() == null) {
+				return;
+			}
 			Dialog dialog = getDialog();
 			if (dialog instanceof AlertDialog && requireArguments().getBoolean(EXTRA_ALLOW_REFRESH)) {
 				Button refresh = ((AlertDialog) dialog).getButton(AlertDialog.BUTTON_NEUTRAL);
@@ -943,6 +926,17 @@ public class ForegroundManager implements Handler.Callback {
 					.create();
 			if (requireArguments().getBoolean(EXTRA_ALLOW_REFRESH)) {
 				alertDialog.setButton(AlertDialog.BUTTON_NEUTRAL, getString(R.string.refresh_captcha), this);
+			}
+			// Restore once per dialog creation, not on every return from the background.
+			boolean[] selected = savedInstanceState != null ? savedInstanceState.getBooleanArray(EXTRA_SELECTED) : null;
+			if (selected == null) {
+				selected = requireArguments().getBooleanArray(EXTRA_SELECTED);
+			}
+			if (selected != null && selected.length == this.selected.length) {
+				System.arraycopy(selected, 0, this.selected, 0, selected.length);
+			}
+			for (int i = 0; i < this.selected.length; i++) {
+				updateSelection(i);
 			}
 			return alertDialog;
 		}

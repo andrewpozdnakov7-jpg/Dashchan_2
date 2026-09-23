@@ -94,8 +94,6 @@
 	<string name="toolbar_title_sizes_error">Введите размер от 10 до 32. Минимальный размер и размер многострочного заголовка не должны превышать обычный.</string>
 	<string name="toast_diagnostics_test">Проверить всплывающее сообщение</string>
 	<string name="toast_diagnostics_test__summary">Показать тестовую всплывашку и записать её цвета, тему и разметку в Logcat (ToastDiag). Диагностика работает 10 минут, до 80 всплывашек. Текст постов и данные аккаунтов не записываются</string>
-	<string name="whats_new_preview">Показать окно «Что нового»</string>
-	<string name="whats_new_preview__summary">Предпросмотр изменений текущей версии. Автоматически окно не показывается</string>
 	<string name="whats_new_unavailable">Для этой версии в приложение не добавлен список изменений.</string>
 	<string name="check_for_updates">Проверить наличие обновлений</string>
 	<string name="check_on_startup">Проверять при запуске</string>
@@ -385,9 +383,10 @@
 	<string name="video_audio_boost_level">Максимальное усиление звука видео</string>
 	<string name="video_audio_boost_level__format">+%d дБ</string>
 	<string name="video_diagnostics_start">Записать диагностику видео</string>
+	<string name="video_diagnostics_begin">Начать</string>
 	<string name="video_diagnostics_extended">Расширенный лог</string>
 	<string name="video_diagnostics_saving">Сохранение диагностики…</string>
-	<string name="video_diagnostics_memory_notice">Скорость воспроизведения записывается в обоих режимах. Расширенный лог также содержит периодические технические сводки. До сохранения лог находится только в оперативной памяти: при завершении процесса Android или перезагрузке телефона он пропадёт.</string>
+	<string name="video_diagnostics_memory_notice">До сохранения лог хранится в памяти и пропадёт при завершении процесса приложения или перезагрузке телефона.</string>
 	<string name="video_diagnostics_extended__summary">Добавляет сводки раз в секунду: кадры, скорость, часы аудио и видео, очереди, ожидание данных и время работы декодера. Хранится в оперативной памяти, записывается на диск только при сохранении. Без галочки записывается обычный лог со скоростью воспроизведения. Выберите режим до начала записи.</string>
 	<string name="video_diagnostics_start__summary">Начать ограниченную запись технических событий, воспроизвести проблему и остановить запись здесь</string>
 	<string name="video_diagnostics_stop">Остановить и сохранить диагностику</string>
@@ -399,7 +398,7 @@
 	<string name="video_diagnostics_saved">Диагностический лог сохранён</string>
 	<string name="video_diagnostics_saved__message">Лог сохранён в кэше приложения. Его можно отправить сейчас или позже с этого экрана.</string>
 	<string name="video_diagnostics_save_failed">Не удалось сохранить диагностический лог</string>
-	<string name="video_diagnostics_privacy_notice">После запуска откройте проблемное видео, воспроизведите проблему, включая перемотки, затем вернитесь сюда и остановите запись. Если плеер завис, подождите 5–10 секунд перед остановкой.\n\nВ лог попадут версии приложения и Android, производитель и модель устройства, названия доступных видеодекодеров, параметры видеоформата, временные метки, счётчики кадров, ошибки декодера, состояние Surface, этапы перемотки и состояния синхронизации нативных потоков.\n\nВ лог не попадают адреса, текст постов, содержимое медиафайлов, имена файлов, аккаунты, паскоды, cookie, IP-адреса, Android ID и серийные номера. Ничего не отправляется автоматически.</string>
+	<string name="video_diagnostics_privacy_notice">Откройте видео и повторите проблему. При зависании подождите 5–10 секунд, затем вернитесь сюда и остановите запись.\n\nЛог содержит модель устройства, версии приложения и Android, скорость воспроизведения и технические события плеера. Расширенный режим добавляет подробные сводки.\n\nАдреса, содержимое постов и файлов, данные аккаунтов и идентификаторы устройства не записываются. Ничего не отправляется автоматически.</string>
 	<string name="gallery_description__sentence">Смахните изображение вниз для доступа к галерее изображений.</string>
 	<string name="gallery_is_empty">Галерея пуста</string>
 	<string name="general">Общие</string>
@@ -664,7 +663,7 @@
 	<string name="video_tiktok_mode">Режим TikTok</string>
 	<string name="enable_video_tiktok_mode">Включить режим TikTok</string>
 	<string name="disable_video_tiktok_mode">Выключить режим TikTok</string>
-	<string name="video_tiktok_mode_hint">Быстрый просмотр видео в этом треде: смахните вверх для следующего видео или вниз для предыдущего. Пока режим включён, остальные жесты плеера отключены, но экранные кнопки продолжают работать.</string>
+	<string name="video_tiktok_mode_hint">Смахните вверх для следующего видео или вниз для предыдущего. Двойное нажатие ставит видео на паузу или продолжает воспроизведение. Удерживайте палец по центру экрана, чтобы открыть меню. Остальные жесты отключены; экранные кнопки работают.</string>
 	<string name="video_tiktok_no_next_video">Следующих видео в этом треде больше нет</string>
 	<string name="video_tiktok_no_previous_video">Предыдущих видео в этом треде больше нет</string>
 	<string name="video_screen_off_action">При выключении экрана</string>
@@ -1321,4 +1320,25 @@
 	<string name="video_preload_size_format">%d МБ</string>
 	<string name="video_preload_size_description">Видео больше указанного размера не загружаются заранее. При открытии вручную они загружаются как обычно.</string>
 	<string name="video_preload_size_input">Введите размер от 1 до 500 МБ</string>
+	<string name="popup_appearance">Всплывающие сообщения</string>
+	<string name="popup_appearance__summary">Оформление, свои цвета и предпросмотр</string>
+	<string name="popup_color_style">Оформление</string>
+	<string name="popup_colors_contrast">Контрастные</string>
+	<string name="popup_colors_theme">В цвет темы</string>
+	<string name="popup_colors_toolbar">В цвет шапки</string>
+	<string name="popup_colors_custom">Свои цвета</string>
+	<string name="popup_colors_description">Оформление сообщений внутри приложения</string>
+	<string name="popup_background_color">Цвет фона</string>
+	<string name="popup_text_color">Цвет текста и кнопки</string>
+	<string name="popup_low_contrast">Низкая контрастность текста</string>
+	<string name="popup_low_contrast__summary">С такими цветами сообщение может быть трудно прочитать. Выберите более светлый текст или более тёмный фон — либо наоборот. Выбранные цвета не изменяются автоматически.</string>
+	<string name="popup_preview">Показать пример</string>
+	<string name="popup_preview_message">Так будут выглядеть всплывающие сообщения</string>
+	<string name="popup_reset">Сбросить</string>
+	<string name="popup_reset__summary">Вернуть оформление в цвет темы и сбросить свои цвета</string>
+	<string name="show_original_post_title">Показывать заголовок в первом посте</string>
+	<string name="show_original_post_title__summary">Повторять название треда над первым сообщением, даже если оно уже есть в верхней панели. В списке тредов, предпросмотре и при скрытом названии в верхней панели заголовок сохраняется.</string>
+	<string name="popup_color_hue">Оттенок</string>
+	<string name="popup_color_field">Выберите насыщенность и яркость</string>
+	<string name="popup_color_code">Ввести код цвета HEX</string>
 </resources>

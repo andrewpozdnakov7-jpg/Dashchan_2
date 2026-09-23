@@ -91,8 +91,6 @@
 	<string name="toolbar_title_sizes_error">Enter a size from 10 to 32. The minimum and multiline sizes must not exceed the normal size.</string>
 	<string name="toast_diagnostics_test">Test popup message</string>
 	<string name="toast_diagnostics_test__summary">Show a test popup and log its colors, theme and layout to Logcat (ToastDiag). Diagnostics run for 10 minutes, up to 80 popups. Post text and account data are not recorded</string>
-	<string name="whats_new_preview">Show “What’s new” window</string>
-	<string name="whats_new_preview__summary">Preview the current release notes. The window is not shown automatically</string>
 	<string name="whats_new_unavailable">No release notes are bundled for this version.</string>
 	<string name="check_for_updates">Check for updates</string>
 	<string name="check_on_startup">Check on startup</string>
@@ -379,9 +377,10 @@
 	<string name="video_audio_boost_level">Maximum video audio boost</string>
 	<string name="video_audio_boost_level__format">+%d dB</string>
 	<string name="video_diagnostics_start">Record video diagnostics</string>
+	<string name="video_diagnostics_begin">Start</string>
 	<string name="video_diagnostics_extended">Extended log</string>
 	<string name="video_diagnostics_saving">Saving diagnostics…</string>
-	<string name="video_diagnostics_memory_notice">Both modes include playback speed. Extended logging also includes periodic technical snapshots. Until saved, the log exists only in RAM and is lost if Android terminates the app or the phone restarts.</string>
+	<string name="video_diagnostics_memory_notice">Until saved, the log stays in memory and is lost if the app process ends or the phone restarts.</string>
 	<string name="video_diagnostics_extended__summary">Adds one-second snapshots of frames, playback speed, audio/video clocks, queues, data waits and decoder timings. Kept in RAM and written to disk only when saved. When disabled, records the standard log including playback speed. Select before starting a recording.</string>
 	<string name="video_diagnostics_start__summary">Start a limited technical log, reproduce the video problem, then stop the recording here</string>
 	<string name="video_diagnostics_stop">Stop and save diagnostics</string>
@@ -393,7 +392,7 @@
 	<string name="video_diagnostics_saved">Diagnostic log saved</string>
 	<string name="video_diagnostics_saved__message">The log was saved in the application cache. You can share it now or later from this screen.</string>
 	<string name="video_diagnostics_save_failed">Could not save the diagnostic log</string>
-	<string name="video_diagnostics_privacy_notice">After starting, open a problematic video, reproduce the problem including seeking, then return here and stop the recording. If the player stalls, wait 5–10 seconds before stopping.\n\nThe log contains the application and Android versions, device manufacturer and model, available video decoder names, video format parameters, timestamps, frame counters, decoder errors, Surface state, seek stages, and native thread synchronization states.\n\nIt does not contain URLs, post text, media bytes, file names, accounts, passcodes, cookies, IP addresses, Android ID, or serial numbers. Nothing is uploaded automatically.</string>
+	<string name="video_diagnostics_privacy_notice">Open a video and reproduce the problem. If playback stalls, wait 5–10 seconds, then return here and stop recording.\n\nThe log contains the device model, app and Android versions, playback speed, and technical player events. Extended mode adds detailed snapshots.\n\nURLs, post and file contents, account data, and device identifiers are not recorded. Nothing is uploaded automatically.</string>
 	<string name="gallery_description__sentence">Swipe image down to open the images gallery.</string>
 	<string name="gallery_is_empty">Gallery is empty</string>
 	<string name="general">General</string>
@@ -642,7 +641,7 @@
 	<string name="video_tiktok_mode">TikTok mode</string>
 	<string name="enable_video_tiktok_mode">Enable TikTok mode</string>
 	<string name="disable_video_tiktok_mode">Disable TikTok mode</string>
-	<string name="video_tiktok_mode_hint">Quickly browse videos in this thread: swipe up for the next video or down for the previous one. Other player gestures are disabled while this mode is active; on-screen controls still work.</string>
+	<string name="video_tiktok_mode_hint">Swipe up for the next video or down for the previous one. Double-tap to pause or resume playback. Touch and hold the center of the screen to open the menu. Other gestures are disabled; on-screen controls still work.</string>
 	<string name="video_tiktok_no_next_video">There are no more videos in this thread</string>
 	<string name="video_tiktok_no_previous_video">There are no previous videos in this thread</string>
 	<string name="video_screen_off_action">When the screen turns off</string>
@@ -1293,4 +1292,25 @@
 	<string name="video_preload_size_format">%d MB</string>
 	<string name="video_preload_size_description">Videos larger than this limit are not preloaded. They still download normally when opened manually.</string>
 	<string name="video_preload_size_input">Enter a size from 1 to 500 MB</string>
+	<string name="popup_appearance">Popup messages</string>
+	<string name="popup_appearance__summary">Appearance, custom colors and preview</string>
+	<string name="popup_color_style">Appearance</string>
+	<string name="popup_colors_contrast">Contrasting</string>
+	<string name="popup_colors_theme">Match theme</string>
+	<string name="popup_colors_toolbar">Match toolbar</string>
+	<string name="popup_colors_custom">Custom colors</string>
+	<string name="popup_colors_description">Appearance of messages inside the app</string>
+	<string name="popup_background_color">Background color</string>
+	<string name="popup_text_color">Text and action color</string>
+	<string name="popup_low_contrast">Low text contrast</string>
+	<string name="popup_low_contrast__summary">These colors may make the message hard to read. Choose a lighter text color or a darker background, or vice versa. Your colors are kept unchanged.</string>
+	<string name="popup_preview">Preview message</string>
+	<string name="popup_preview_message">This is how popup messages will look</string>
+	<string name="popup_reset">Reset</string>
+	<string name="popup_reset__summary">Restore messages matching the app theme and reset custom colors</string>
+	<string name="show_original_post_title">Show title in the first post</string>
+	<string name="show_original_post_title__summary">Repeat the thread title above the first post even when it is already shown in the top bar. Titles remain visible in thread lists and previews, and when the top bar title is hidden.</string>
+	<string name="popup_color_hue">Hue</string>
+	<string name="popup_color_field">Choose saturation and brightness</string>
+	<string name="popup_color_code">Enter HEX color code</string>
 </resources>

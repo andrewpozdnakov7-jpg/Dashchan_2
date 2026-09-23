@@ -383,8 +383,8 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 	}
 
 	@Override
-	public void onActivityCreated(Bundle savedInstanceState) {
-		super.onActivityCreated(savedInstanceState);
+	public void onViewStateRestored(Bundle savedInstanceState) {
+		super.onViewStateRestored(savedInstanceState);
 
 		Chan chan = Chan.get(getChanName());
 		((FragmentHandler) requireActivity()).setTitleSubtitle(chan.configuration.getTitle(), null);

@@ -273,11 +273,7 @@ public class RedditWebReaderFragment extends ContentFragment {
 			clearHistoryUrl = savedInstanceState.getString(STATE_CLEAR_HISTORY_URL);
 			translationEnabled = savedInstanceState.getBoolean(STATE_TRANSLATION_ENABLED);
 		}
-	}
 
-	@Override
-	public void onActivityCreated(Bundle savedInstanceState) {
-		super.onActivityCreated(savedInstanceState);
 		Bundle arguments = getArguments();
 		String startUrl = arguments != null ? arguments.getString(EXTRA_START_URL) : null;
 		if (StringUtils.isEmptyOrWhitespace(startUrl) || !isAllowedRedditPage(Uri.parse(startUrl))) {

@@ -31,6 +31,7 @@ import com.mishiranu.dashchan.util.IOUtils;
 import com.mishiranu.dashchan.util.SharedPreferences;
 import com.mishiranu.dashchan.util.WebViewUtils;
 import com.mishiranu.dashchan.widget.ClickableToast;
+import com.mishiranu.dashchan.widget.MessageDialog;
 import com.mishiranu.dashchan.widget.ProgressDialog;
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -81,7 +82,7 @@ public class AboutFragment extends PreferenceFragment implements FragmentHandler
 				updateChannelPreference.setOnBeforeChangeListener((preference, value) -> {
 					if (!confirmingBetaChannel && Preferences.UpdateChannel.BETA.value.equals(value) &&
 							!Preferences.UpdateChannel.BETA.value.equals(preference.getValue())) {
-						new AlertDialog.Builder(requireContext())
+						new MessageDialog.Builder(requireContext())
 								.setTitle(R.string.update_channel_beta)
 								.setMessage(R.string.beta_update_channel_warning__sentence)
 								.setNegativeButton(android.R.string.cancel, null)
@@ -132,8 +133,8 @@ public class AboutFragment extends PreferenceFragment implements FragmentHandler
 	}
 
 	@Override
-	public void onActivityCreated(Bundle savedInstanceState) {
-		super.onActivityCreated(savedInstanceState);
+	public void onViewStateRestored(Bundle savedInstanceState) {
+		super.onViewStateRestored(savedInstanceState);
 		((FragmentHandler) requireActivity()).setTitleSubtitle(getString(R.string.about), null);
 	}
 
