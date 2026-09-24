@@ -21,6 +21,9 @@ public final class ReplyPushManager {
 	private static final int MAX_HANDLED_EVENTS = 256;
 	private static final int MAX_NOTIFIED_REPLIES = 256;
 	private static final Object EVENTS_LOCK = new Object();
+	private static final Object DELIVERY_LOCK = new Object();
+
+	public enum DeliveryResult { HANDLED, IGNORED, RETRY }
 
 	private ReplyPushManager() {}
 
@@ -130,54 +133,84 @@ public final class ReplyPushManager {
 	}
 
 	public static boolean handleData(Context context, Map<String, String> data) {
+		return processData(context, data) == DeliveryResult.HANDLED;
+	}
+
+	public static DeliveryResult processData(Context context, Map<String, String> data) {
+		synchronized (DELIVERY_LOCK) {
+			return processDataLocked(context, data);
+		}
+	}
+
+	private static DeliveryResult processDataLocked(Context context, Map<String, String> data) {
+		ReplyPushMessage message = ReplyPushMessage.parse(data);
+		if (message == null) {
+			Logger.write(Logger.Type.DEBUG, LOG_TAG, "message_ignored", "reason", "invalid");
+			return DeliveryResult.IGNORED;
+		}
 		boolean trackingEnabled = Preferences.isTrackMyPostsEnabled();
 		boolean pushEnabled = Preferences.isReplyPushEnabled();
 		Logger.write(Logger.Type.DEBUG, LOG_TAG, "message_received", "fields", data.size(),
 				"trackingEnabled", trackingEnabled, "pushEnabled", pushEnabled);
 		if (!trackingEnabled || !pushEnabled) {
 			Logger.write(Logger.Type.DEBUG, LOG_TAG, "message_ignored", "reason", "disabled");
-			return false;
-		}
-		ReplyPushMessage message = ReplyPushMessage.parse(data);
-		if (message == null) {
-			Logger.write(Logger.Type.DEBUG, LOG_TAG, "message_ignored", "reason", "invalid");
-			return false;
+			MyPostsStorage storage = MyPostsStorage.getInstance();
+			storage.completePushReply(message.chanName, message.boardName, message.threadNumber,
+					message.trackedPostNumber, message.replyPostNumber);
+			return storage.awaitSaved() ? DeliveryResult.IGNORED : DeliveryResult.RETRY;
 		}
 		if (isHandled(message.eventId)) {
 			Logger.write(Logger.Type.DEBUG, LOG_TAG, "message_ignored", "reason", "duplicate");
-			return false;
+			return DeliveryResult.IGNORED;
 		}
 		MyPostsStorage storage = MyPostsStorage.getInstance();
 		MyPostsStorage.AddReplyResult result = storage.addReply(message.chanName, message.boardName,
 				message.threadNumber, message.trackedPostNumber, message.replyPostNumber,
-				message.comment, message.timestamp);
+				message.comment, message.timestamp, true);
 		if (result == MyPostsStorage.AddReplyResult.NOT_TRACKED) {
 			// Keep the event retryable when the local and server watch lists are temporarily out of sync.
 			Logger.write(Logger.Type.DEBUG, LOG_TAG, "message_ignored", "reason", "not_tracked");
-			return false;
+			return DeliveryResult.IGNORED;
 		}
 		boolean added = result == MyPostsStorage.AddReplyResult.ADDED;
-		if (added) {
-			// Firebase may finish this service callback with no other application component alive.
-			// Persist the reply before acknowledging the event or posting a durable notification.
-			storage.await(false);
-		}
-		markHandled(message.eventId);
-		if (added) {
-			markPushNotified(message.chanName, message.boardName, message.threadNumber,
-					message.replyPostNumber);
-		}
-		boolean notificationsEnabled = Preferences.isTrackedRepliesNotificationsEnabled();
-		boolean quietHours = Preferences.isReplyPushQuietHoursActive();
-		boolean notificationQueued = added && notificationsEnabled && !quietHours;
-		Logger.write(Logger.Type.DEBUG, LOG_TAG, "message_stored", "added", added,
-				"notificationsEnabled", notificationsEnabled, "quietHours", quietHours,
-				"notificationQueued", notificationQueued);
-		if (notificationQueued) {
-			WatcherNotifications.notifyPushReply(context, message.chanName, message.boardName,
-					message.threadNumber, message.replyPostNumber, message.comment, message.timestamp);
-		}
-		return added;
+		// Also flush ALREADY_EXISTS: a previous delivery may only exist in memory after an I/O failure.
+		// This is an application-level handled marker, not an acknowledgement/retry contract with FCM.
+		boolean[] recovered = {false};
+		boolean success = ReplyDelivery.finish(new ReplyDelivery.Steps() {
+			@Override
+			public boolean persist() {
+				boolean saved = storage.awaitSaved();
+				if (!saved) Logger.write(Logger.Type.ERROR, LOG_TAG, "message_save_failed", "handled", false);
+				return saved;
+			}
+
+			@Override
+			public boolean deliverPending() {
+				MyPostsStorage.Reply pending = storage.getPendingPushReply(message.chanName, message.boardName,
+						message.threadNumber, message.trackedPostNumber, message.replyPostNumber);
+				recovered[0] = pending != null;
+				if (pending != null) markPushNotified(message.chanName, message.boardName,
+						message.threadNumber, message.replyPostNumber);
+				boolean enabled = Preferences.isTrackedRepliesNotificationsEnabled();
+				boolean quiet = Preferences.isReplyPushQuietHoursActive();
+				Logger.write(Logger.Type.DEBUG, LOG_TAG, "message_stored", "added", added,
+						"pending", pending != null, "notificationsEnabled", enabled, "quietHours", quiet);
+				return pending == null || !enabled || quiet || WatcherNotifications.notifyPushReplyAndWait(context,
+						message.chanName, message.boardName, message.threadNumber, message.replyPostNumber,
+						pending.comment, pending.time);
+			}
+
+			@Override
+			public void complete() {
+				storage.completePushReply(message.chanName, message.boardName, message.threadNumber,
+						message.trackedPostNumber, message.replyPostNumber);
+			}
+
+			@Override
+			public void markHandled() { ReplyPushManager.markHandled(message.eventId); }
+		});
+		return !success ? DeliveryResult.RETRY
+				: added || recovered[0] ? DeliveryResult.HANDLED : DeliveryResult.IGNORED;
 	}
 
 	public static List<PagesDatabase.InsertResult.Reply> filterPushNotifiedReplies(String chanName,
@@ -191,7 +224,8 @@ public final class ReplyPushManager {
 			ArrayList<PagesDatabase.InsertResult.Reply> filtered = null;
 			for (int i = 0; i < replies.size(); i++) {
 				PagesDatabase.InsertResult.Reply reply = replies.get(i);
-				if (notified.remove(makeReplyKey(chanName, boardName, threadNumber, reply.postNumber))) {
+				if (notified.remove(makeReplyKey(chanName, boardName, threadNumber, reply.postNumber))
+						|| MyPostsStorage.getInstance().isPushPending(chanName, boardName, threadNumber, reply.postNumber)) {
 					if (filtered == null) {
 						filtered = new ArrayList<>(replies.subList(0, i));
 					}

@@ -285,7 +285,7 @@ jobs:
             echo "ORG_GRADLE_PROJECT_dashchanLibyuvSourceDir=$source_root/yuv"
           } >> "$GITHUB_ENV"
 
-      - name: Build APK
+      - name: Build APK and run GitHub unit tests
         if: steps.validation.outputs.build_required == 'true'
         run: |
           set -euo pipefail
@@ -321,7 +321,20 @@ jobs:
             gradle_args+=("-PpackageVersionCode=$package_version_code")
             echo "F-Droid package versionCode: $package_version_code"
           fi
-          ./gradlew --no-daemon --stacktrace "$BUILD_TASK" "${gradle_args[@]}" \
+          gradle_tasks=("$BUILD_TASK")
+          if [ "$BUILD_TASK" = 'assembleGithubNdebug' ]; then
+            gradle_tasks+=(testGithubDebugUnitTest lintGithubNdebug)
+          elif [ "$BUILD_TASK" = 'assembleFdroidRelease' ]; then
+            gradle_tasks+=(testFdroidDebugUnitTest lintFdroidRelease)
+          fi
+          # Check actual variant task availability without compiling before running the gates.
+          ./gradlew --no-daemon --console=plain tasks --all "${gradle_args[@]}" > build-tasks.log
+          for task in "${gradle_tasks[@]}"; do
+            if ! grep -Eq "^${task}([[:space:]]|$)" build-tasks.log; then
+              echo "::error::Required Gradle task is missing: $task"; exit 1
+            fi
+          done
+          ./gradlew --no-daemon --stacktrace "${gradle_tasks[@]}" "${gradle_args[@]}" \
             2>&1 | tee build-main.log
 
       - name: Verify retired beta update channel is absent
@@ -376,4 +389,6 @@ jobs:
             build/outputs/apk/**/*.apk
             SHA256SUMS.txt
             build-main.log
+            build-tasks.log
             build/reports/**
+            build/test-results/**

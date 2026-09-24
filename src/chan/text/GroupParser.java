@@ -466,6 +466,9 @@ public final class GroupParser {
 
 			if (index >= 0) {
 				index += attribute.length() + 1;
+				if (index == html.length()) {
+					return null;
+				}
 				char c = html.charAt(index);
 				if (c == '\'' || c == '"') {
 					for (int i = index + 1; i < html.length(); i++) {

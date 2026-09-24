@@ -52,6 +52,8 @@ import java.util.regex.Pattern;
  * TextView with LinkSpan feedback ability without conflict with selection MovementMethod.
  * This class has method to start text selection directly.
  */
+// Native widget styling is supplied by ThemeEngine rather than AppCompat.
+@SuppressLint("AppCompatCustomView")
 public class CommentTextView extends TextView {
 	private final int[][] deltaAttempts;
 	private final int touchSlop;

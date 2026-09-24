@@ -8,6 +8,8 @@ import android.widget.TextView;
 import com.mishiranu.dashchan.text.style.OverlineSpan;
 
 // Allows to cut lines that don't fit to view's height.
+// Native widget styling is supplied by ThemeEngine rather than AppCompat.
+@android.annotation.SuppressLint("AppCompatCustomView")
 public class CutTextView extends TextView {
 	public CutTextView(Context context, AttributeSet attrs) {
 		super(context, attrs);

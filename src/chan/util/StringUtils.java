@@ -104,20 +104,22 @@ public class StringUtils {
 	}
 
 	public static int indexOf(CharSequence string, int fromIndex, CharSequence what) {
-		int target = what.length();
-		if (target == 0) {
-			return fromIndex;
+		if (string instanceof String && what instanceof String) {
+			return ((String) string).indexOf((String) what, fromIndex);
 		}
 		int length = string.length();
-		int count = 0;
-		for (int i = fromIndex; i < length; i++) {
-			char c = string.charAt(i);
-			if (c == what.charAt(count)) {
-				if (++count == target) {
-					return i - target + 1;
-				}
-			} else {
-				count = 0;
+		fromIndex = Math.max(0, fromIndex);
+		int target = what.length();
+		if (target == 0) {
+			return Math.min(fromIndex, length);
+		}
+		for (int i = fromIndex; i <= length - target; i++) {
+			int count = 0;
+			while (count < target && string.charAt(i + count) == what.charAt(count)) {
+				count++;
+			}
+			if (count == target) {
+				return i;
 			}
 		}
 		return -1;

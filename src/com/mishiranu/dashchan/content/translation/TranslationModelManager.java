@@ -17,10 +17,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.EnumMap;
-import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.ExecutorService;
@@ -124,22 +121,11 @@ public final class TranslationModelManager {
 				File compressed = new File(staging, file.outputName + ".gz.part");
 				downloadFile(direction, file, compressed, downloaded);
 				downloaded += file.compressedSize;
-				if (!file.compressedSha256.equals(calculateSha256(compressed))) {
-					throw new IOException("Compressed package checksum mismatch");
-				}
 				File output = new File(staging, file.outputName + ".part");
 				try (InputStream input = new GZIPInputStream(new BufferedInputStream(new FileInputStream(compressed)));
 						BufferedOutputStream outputStream = new BufferedOutputStream(new FileOutputStream(output))) {
-					byte[] buffer = new byte[65536];
-					for (int count; (count = input.read(buffer)) >= 0;) {
-						if (count > 0) {
-							outputStream.write(buffer, 0, count);
-						}
-					}
-				}
-				if (output.length() != file.uncompressedSize ||
-						!file.uncompressedSha256.equals(calculateSha256(output))) {
-					throw new IOException("Language package checksum mismatch");
+					VerifiedModelCopy.copy(input, outputStream, file.uncompressedSize,
+							file.uncompressedSha256, null);
 				}
 				move(output, new File(staging, file.outputName), true);
 				if (!compressed.delete()) {
@@ -179,22 +165,17 @@ public final class TranslationModelManager {
 			if (!"https".equalsIgnoreCase(connection.getURL().getProtocol())) {
 				throw new IOException("Refusing an insecure package redirect");
 			}
-			long current = 0L;
+			long contentLength = connection.getContentLengthLong();
+			if (contentLength >= 0 && contentLength != file.compressedSize) {
+				throw new IOException("Unexpected language package size");
+			}
 			try (InputStream input = new BufferedInputStream(connection.getInputStream());
 					BufferedOutputStream output = new BufferedOutputStream(new FileOutputStream(destination))) {
-				byte[] buffer = new byte[65536];
-				for (int count; (count = input.read(buffer)) >= 0;) {
-					if (count > 0) {
-						output.write(buffer, 0, count);
-						current += count;
-						int progress = (int) Math.min(99L,
-								(alreadyDownloaded + current) * 100L / direction.compressedSize);
-						updateProgress(direction, progress);
-					}
-				}
-			}
-			if (destination.length() != file.compressedSize) {
-				throw new IOException("Unexpected language package size");
+				VerifiedModelCopy.copy(input, output, file.compressedSize, file.compressedSha256, current -> {
+					int progress = (int) Math.min(99L,
+							(alreadyDownloaded + current) * 100L / direction.compressedSize);
+					updateProgress(direction, progress);
+				});
 			}
 		} finally {
 			connection.disconnect();
@@ -243,20 +224,4 @@ public final class TranslationModelManager {
 		});
 	}
 
-	private static String calculateSha256(File file) throws IOException, NoSuchAlgorithmException {
-		MessageDigest digest = MessageDigest.getInstance("SHA-256");
-		try (InputStream input = new BufferedInputStream(new FileInputStream(file))) {
-			byte[] buffer = new byte[65536];
-			for (int count; (count = input.read(buffer)) >= 0;) {
-				if (count > 0) {
-					digest.update(buffer, 0, count);
-				}
-			}
-		}
-		StringBuilder builder = new StringBuilder(64);
-		for (byte value : digest.digest()) {
-			builder.append(String.format(Locale.US, "%02x", value & 0xff));
-		}
-		return builder.toString();
-	}
 }

@@ -207,7 +207,8 @@ public class AutohideStorage extends StorageManager.JsonOrgStorage<List<Autohide
 
 		@SuppressWarnings("CopyConstructorMissesField")
 		public AutohideItem(AutohideItem autohideItem) {
-			this(autohideItem.chanNames, autohideItem.boardName, autohideItem.threadNumber,
+			this(autohideItem.chanNames != null ? new HashSet<>(autohideItem.chanNames) : null,
+					autohideItem.boardName, autohideItem.threadNumber,
 					autohideItem.optionOriginalPost, autohideItem.optionReplies, autohideItem.optionSage,
 					autohideItem.optionSubject, autohideItem.optionComment, autohideItem.optionName,
 					autohideItem.optionFileName, autohideItem.matchMode, autohideItem.value);

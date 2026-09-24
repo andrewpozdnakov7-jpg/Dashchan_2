@@ -35,6 +35,7 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.fragment.app.DialogFragment;
+import androidx.fragment.app.FragmentManager;
 import chan.content.Chan;
 import chan.util.CommonUtils;
 import chan.util.StringUtils;
@@ -45,6 +46,7 @@ import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.model.GalleryItem;
 import com.mishiranu.dashchan.content.service.DownloadService;
 import com.mishiranu.dashchan.graphics.GalleryBackgroundDrawable;
+import com.mishiranu.dashchan.media.VideoDiagnostics;
 import com.mishiranu.dashchan.ui.FragmentHandler;
 import com.mishiranu.dashchan.util.AndroidUtils;
 import com.mishiranu.dashchan.util.AnimationUtils;
@@ -1036,12 +1038,33 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 		boolean wasHiddenForPictureInPicture = hiddenForPictureInPicture;
 		hiddenForPictureInPicture = false;
 		if (wasHiddenForPictureInPicture) {
-			dismiss();
+			dismissAfterPlayerClose();
 			return;
 		}
 		Window window = getWindow();
-		if (window != null) {
-			window.getDecorView().post(this::dismiss);
+		if (window == null || !window.getDecorView().post(this::dismissAfterPlayerClose)) {
+			dismissAfterPlayerClose();
+		}
+	}
+
+	private void dismissAfterPlayerClose() {
+		// A PiP player can finish after its source activity saved state or was destroyed.
+		// Check at execution time as this method may also run from a posted callback.
+		if (!isAdded() || isRemoving()) {
+			VideoDiagnostics.recordUi("gallery player_close skipped=detached_or_removing");
+			return;
+		}
+		FragmentManager fragmentManager = getParentFragmentManager();
+		if (fragmentManager.isDestroyed()) {
+			VideoDiagnostics.recordUi("gallery player_close skipped=manager_destroyed");
+			return;
+		}
+		boolean stateSaved = fragmentManager.isStateSaved();
+		VideoDiagnostics.recordUi("gallery player_close state_saved=" + stateSaved);
+		if (stateSaved) {
+			// Only a transient gallery is removed; do not interrupt player teardown to
+			// preserve a fragment transaction after the host's state was already saved.
+			dismissAllowingStateLoss();
 		} else {
 			dismiss();
 		}

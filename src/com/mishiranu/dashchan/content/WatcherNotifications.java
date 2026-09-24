@@ -14,6 +14,7 @@ import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.database.PagesDatabase;
 import com.mishiranu.dashchan.content.model.PostNumber;
+import com.mishiranu.dashchan.content.storage.MyPostsStorage;
 import com.mishiranu.dashchan.ui.MainActivity;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
 import com.mishiranu.dashchan.util.Hasher;
@@ -24,6 +25,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.FutureTask;
 
 public class WatcherNotifications {
 	private static final String LOG_TAG = "WatcherNotifications";
@@ -74,6 +77,38 @@ public class WatcherNotifications {
 		enqueueReplies(context, SOURCE_PUSH, 0, true, true, true, title, chanName, boardName,
 				threadNumber, Collections.singletonList(new PagesDatabase.InsertResult.Reply(postNumber,
 						notificationComment, timestamp)));
+	}
+
+	/** Background delivery worker only: do not commit completion before the notification task finishes. */
+	public static boolean notifyPushReplyAndWait(Context context, String chanName, String boardName,
+			String threadNumber, PostNumber postNumber, String comment, long timestamp) {
+		try {
+			configure(context);
+			String title = Chan.get(chanName).configuration.getTitle() + " / " + boardName + " / " + threadNumber;
+			String text = StringUtils.isEmptyOrWhitespace(comment)
+					? context.getString(R.string.reply_push_notification_text) : comment;
+			Task notification = new Task(context, SOURCE_PUSH, 0, true, true, true,
+					title, chanName, boardName, threadNumber,
+					Collections.singletonList(new PagesDatabase.InsertResult.Reply(postNumber, text, timestamp)),
+					Collections.emptyList());
+			FutureTask<Void> task = new FutureTask<>(() -> {
+				// The reader may clear/read this reply while the task waits in the notification queue.
+				if (MyPostsStorage.getInstance().isPushPending(chanName, boardName, threadNumber, postNumber)
+						&& Preferences.isTrackMyPostsEnabled() && Preferences.isReplyPushEnabled()
+						&& Preferences.isTrackedRepliesNotificationsEnabled() && !Preferences.isReplyPushQuietHoursActive()) {
+					notification.run();
+				}
+			}, null);
+			EXECUTOR.execute(task);
+			task.get();
+			return true;
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			return false;
+		} catch (ExecutionException | RuntimeException e) {
+			Logger.write(Logger.Type.ERROR, LOG_TAG, "push_delivery_failed", e.getClass().getSimpleName());
+			return false;
+		}
 	}
 
 	public static void cancelReplies(Context context,
@@ -224,39 +259,92 @@ public class WatcherNotifications {
 		}
 
 		private void notifyReplies(NotificationManager notificationManager) {
+			ReplyNotificationDelivery.deliver(replies, SOURCE_PUSH.equals(source),
+					new ReplyNotificationDelivery.Sink<PagesDatabase.InsertResult.Reply>() {
+				@Override
+				public Set<String> activeChildTags() {
+					Set<String> tags = new HashSet<>();
+					StatusBarNotification[] active = notificationManager.getActiveNotifications();
+					if (active != null) {
+						for (StatusBarNotification notification : active) {
+							if (notification.getId() == C.NOTIFICATION_ID_REPLIES && notification.getTag() != null) {
+								tags.add(notification.getTag());
+							}
+						}
+					}
+					return tags;
+				}
+
+				@Override
+				public boolean hasSummary() {
+					StatusBarNotification[] active = notificationManager.getActiveNotifications();
+					if (active != null) {
+						for (StatusBarNotification notification : active) {
+							if (notification.getId() == C.NOTIFICATION_ID_REPLIES && notification.getTag() == null) {
+								return true;
+							}
+						}
+					}
+					return false;
+				}
+
+				@Override
+				public String tag(PagesDatabase.InsertResult.Reply reply) {
+					return makeTag(chanName, boardName, threadNumber, reply.postNumber);
+				}
+
+				@Override
+				public void postChild(PagesDatabase.InsertResult.Reply reply) {
+					notifyChild(notificationManager, reply);
+				}
+
+				@Override
+				public void postSummary(List<PagesDatabase.InsertResult.Reply> group, boolean alert) {
+					notifySummary(notificationManager, group, alert);
+				}
+			});
+		}
+
+		private void notifyChild(NotificationManager notificationManager, PagesDatabase.InsertResult.Reply reply) {
+			String title = context.getString(R.string.reply_in_thread__format, this.title);
+			NotificationCompat.Builder builder = new NotificationCompat
+					.Builder(context, C.NOTIFICATION_CHANNEL_REPLIES);
+			String comment = StringUtils.clearHtml(reply.comment);
+			String text = comment.replace('\n', ' ').replaceAll(" {2,}", " ");
+			builder.setContentTitle(title);
+			builder.setContentText(text);
+			if (important) builder.setTicker((title + "\n" + text).trim());
+			builder.setStyle(new NotificationCompat.BigTextStyle().bigText(buildLongComment(comment)));
+			builder.setWhen(reply.timestamp);
+			configureNotification(builder, false);
+			String tag = makeTag(chanName, boardName, threadNumber, reply.postNumber);
+			builder.setContentIntent(createContentIntent(tag, reply.postNumber));
+			notificationManager.notify(tag, C.NOTIFICATION_ID_REPLIES, builder.build());
+		}
+
+		private void notifySummary(NotificationManager notificationManager,
+				List<PagesDatabase.InsertResult.Reply> group, boolean alert) {
 			String title = context.getString(R.string.reply_in_thread__format, this.title);
 			NotificationCompat.InboxStyle summaryStyle = new NotificationCompat.InboxStyle();
 			PendingIntent summaryIntent = null;
 			long newestTimestamp = 0L;
-			for (PagesDatabase.InsertResult.Reply reply : replies) {
-				NotificationCompat.Builder builder = new NotificationCompat
-						.Builder(context, C.NOTIFICATION_CHANNEL_REPLIES);
+			for (PagesDatabase.InsertResult.Reply reply : group) {
 				String comment = StringUtils.clearHtml(reply.comment);
 				String text = comment.replace('\n', ' ').replaceAll(" {2,}", " ");
-				builder.setContentTitle(title);
-				builder.setContentText(text);
-				if (important) {
-					builder.setTicker((title + "\n" + text).trim());
-				}
-				builder.setStyle(new NotificationCompat.BigTextStyle().bigText(buildLongComment(comment)));
-				builder.setWhen(reply.timestamp);
-				configureNotification(builder, false);
-				String tag = makeTag(chanName, boardName, threadNumber, reply.postNumber);
-				PendingIntent contentIntent = createContentIntent(tag, reply.postNumber);
-				builder.setContentIntent(contentIntent);
-				notificationManager.notify(tag, C.NOTIFICATION_ID_REPLIES, builder.build());
 				if (summaryIntent == null) {
-					summaryIntent = contentIntent;
+					summaryIntent = createContentIntent(makeTag(chanName, boardName, threadNumber, reply.postNumber),
+							reply.postNumber);
 				}
 				newestTimestamp = Math.max(newestTimestamp, reply.timestamp);
 				summaryStyle.addLine(text);
 			}
-			int activeReplies = Math.max(replies.size(), countActiveReplies(notificationManager));
+			int activeReplies = Math.max(group.size(), countActiveReplies(notificationManager));
 			String summaryTitle = context.getResources().getQuantityString(
 					R.plurals.new_replies_count__format, activeReplies, activeReplies);
 			NotificationCompat.Builder builder = new NotificationCompat
 					.Builder(context, C.NOTIFICATION_CHANNEL_REPLIES);
-			configureNotification(builder, true);
+			configureNotification(builder, alert);
+			if (!alert) builder.setSilent(true);
 			builder.setContentTitle(summaryTitle);
 			builder.setContentText(title);
 			builder.setStyle(summaryStyle.setBigContentTitle(summaryTitle));

@@ -37,6 +37,9 @@ import android.widget.FrameLayout;
 import android.widget.TextView;
 import android.widget.Toolbar;
 import androidx.activity.BackEventCompat;
+import androidx.activity.result.ActivityResult;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.core.view.GravityCompat;
 import androidx.fragment.app.FragmentManager;
@@ -132,6 +135,9 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	private enum StorageRequestState {NONE, INITIAL_INSTRUCTIONS, INSTRUCTIONS, PICKER}
 
+	private final ActivityResultLauncher<Intent> storageDirectoryPicker = registerForActivityResult(
+			new ActivityResultContracts.StartActivityForResult(), this::onStorageDirectoryResult);
+
 	private final ArrayList<StackItem> fragments = new ArrayList<>();
 	private final ArrayList<SavedPageItem> stackPageItems = new ArrayList<>();
 	private final ArrayList<SavedPageItem> preservedPageItems = new ArrayList<>();
@@ -215,19 +221,19 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		drawerLayout.setSaveEnabled(false);
 		FrameLayout drawerInterlayer = findViewById(R.id.drawer_interlayer);
 		getLayoutInflater().inflate(R.layout.widget_toolbar, drawerInterlayer);
-		Toolbar toolbar = findViewById(R.id.toolbar);
+		Toolbar toolbar = drawerInterlayer.findViewById(R.id.toolbar);
 		setActionBar(toolbar);
 		setTitle(null);
 		// Allow CustomSearchView to ignore content inset
 		toolbar.setClipChildren(false);
 		toolbarHolder = ViewFactory.addToolbarTitle(toolbar);
-		toolbarExtra = findViewById(R.id.toolbar_extra);
+		toolbarExtra = drawerInterlayer.findViewById(R.id.toolbar_extra);
 		LayoutTransition layoutTransition = new LayoutTransition();
 		layoutTransition.setStartDelay(LayoutTransition.APPEARING, 0);
 		layoutTransition.setStartDelay(LayoutTransition.CHANGE_DISAPPEARING, 0);
 		layoutTransition.setDuration(100);
 		toolbarExtra.setLayoutTransition(layoutTransition);
-		View toolbarLayout = findViewById(R.id.toolbar_layout);
+		View toolbarLayout = drawerInterlayer.findViewById(R.id.toolbar_layout);
 
 		drawerToggle = new DrawerToggle(this, toolbarHolder != null
 				? toolbarHolder.toolbar.getContext() : null, drawerLayout);
@@ -462,6 +468,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	@Override
 	protected void onNewIntent(Intent intent) {
+		super.onNewIntent(intent);
 		navigateIntent(intent, true);
 	}
 
@@ -637,19 +644,15 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		}
 	}
 
-	@Override
-	protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-		super.onActivityResult(requestCode, resultCode, data);
-
-		if (requestCode == C.REQUEST_CODE_OPEN_URI_TREE) {
-			boolean cancel = resultCode != RESULT_OK;
-			storageRequestState = StorageRequestState.NONE;
-			if (!cancel && data != null) {
-				Preferences.setDownloadUriTree(this, data.getData(), data.getFlags());
-			}
-			handleStorageRequestResult(cancel);
-			requestNotificationPermissionIfNeeded();
+	private void onStorageDirectoryResult(ActivityResult result) {
+		Intent data = result.getData();
+		boolean cancel = result.getResultCode() != RESULT_OK;
+		storageRequestState = StorageRequestState.NONE;
+		if (!cancel && data != null) {
+			Preferences.setDownloadUriTree(this, data.getData(), data.getFlags());
 		}
+		handleStorageRequestResult(cancel);
+		requestNotificationPermissionIfNeeded();
 	}
 
 	private ContentFragment getCurrentFragment() {
@@ -1980,6 +1983,8 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	}
 
 	@Override
+	// Unhandled platform key events must still reach the Activity superclass.
+	@android.annotation.SuppressLint("RestrictedApi")
 	public boolean dispatchKeyEvent(KeyEvent event) {
 		ContentFragment fragment = getCurrentFragment();
 		return fragment.dispatchKeyEvent(event) || handleTextScaleVolumeKey(event) || super.dispatchKeyEvent(event);
@@ -2805,7 +2810,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, DocumentsContract
 				.buildRootUri("com.android.externalstorage.documents", "primary"));
 		try {
-			startActivityForResult(intent, C.REQUEST_CODE_OPEN_URI_TREE);
+			storageDirectoryPicker.launch(intent);
 		} catch (ActivityNotFoundException e) {
 			ClickableToast.show(R.string.unknown_address);
 			storageRequestState = StorageRequestState.NONE;

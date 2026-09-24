@@ -846,7 +846,7 @@
 	<string name="volume_buttons_text_scale__summary">When media is not playing, use the volume buttons to adjust text scale</string>
 	<string name="video_right_hand_controls">Right-hand mode</string>
 	<string name="video_right_hand_controls__summary">Mirrors the post reply swipe and video player button layout, and moves the volume gesture area to the left for users who hold the phone in their right hand</string>
-	<string name="large_text_layout_warning">At scales above 300%, some interface elements may be displayed incorrectly.</string>
+	<string name="large_text_layout_warning" formatted="false">At scales above 300%, some interface elements may be displayed incorrectly.</string>
 	<string name="font">Font</string>
 	<string name="application_font">Application font</string>
 	<string name="system_font">System font</string>
@@ -1307,10 +1307,20 @@
 	<string name="popup_preview">Preview message</string>
 	<string name="popup_preview_message">This is how popup messages will look</string>
 	<string name="popup_reset">Reset</string>
-	<string name="popup_reset__summary">Restore messages matching the app theme and reset custom colors</string>
+	<string name="popup_reset__summary">Restore messages matching the toolbar color and reset custom colors</string>
 	<string name="show_original_post_title">Show title in the first post</string>
 	<string name="show_original_post_title__summary">Repeat the thread title above the first post even when it is already shown in the top bar. Titles remain visible in thread lists and previews, and when the top bar title is hidden.</string>
 	<string name="popup_color_hue">Hue</string>
 	<string name="popup_color_field">Choose saturation and brightness</string>
 	<string name="popup_color_code">Enter HEX color code</string>
+	<string name="kohlchan_access_title">Kohlchan: access verification</string>
+	<string name="kohlchan_access_summary">Complete the site verification before posting</string>
+	<string name="kohlchan_access_instructions">Enter the CAPTCHA on kohlchan.net and complete any activation requested by the site. Then tap Check access below. The app does not submit your post automatically after verification: return to the form and tap Send.</string>
+	<string name="kohlchan_access_check">Check access</string>
+	<string name="kohlchan_access_not_ready">The permission is not active yet. Complete the CAPTCHA and activation on the site, then check again.</string>
+	<string name="kohlchan_access_network_error">Could not verify access. Check your connection and try again.</string>
+	<string name="kohlchan_access_retry">Access verified. Return to the form, refresh the CAPTCHA if needed, and repeat your action. Nothing was automatically resubmitted.</string>
+	<string name="kohlchan_access_cancelled">Access verification cancelled. Nothing was automatically resubmitted.</string>
+	<string name="kohlchan_delete_partial">Only some selected posts were deleted. Refresh the thread and check the deletion password for the remaining posts.</string>
+	<string name="kohlchan_request_failed">Kohlchan rejected the request. Check the board rules and try again later.</string>
 </resources>

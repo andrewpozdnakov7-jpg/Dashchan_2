@@ -164,6 +164,8 @@ public class LocalArchivesFragment extends ContentFragment {
 		return false;
 	}
 
+	// The returned flags are explicitly masked to the two persistable access modes below.
+	@android.annotation.SuppressLint("WrongConstant")
 	private void onArchiveFolderSelected(int resultCode, Intent data) {
 		if (resultCode == Activity.RESULT_OK
 				&& data != null && data.getData() != null) {

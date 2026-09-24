@@ -175,6 +175,7 @@ public final class LauncherIconManager {
 		}
 	}
 
+	@androidx.annotation.RequiresApi(Build.VERSION_CODES.TIRAMISU)
 	private static void applyAtomic(PackageManager packageManager, Context context, String selectedClass) {
 		ArrayList<PackageManager.ComponentEnabledSetting> settings = new ArrayList<>();
 		for (LogoOption option : LOGO_OPTIONS) {

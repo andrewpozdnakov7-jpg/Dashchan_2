@@ -77,6 +77,7 @@ public class ForegroundManager implements Handler.Callback {
 	private static final int MESSAGE_REQUIRE_USER_CHOICE = 3;
 	private static final int MESSAGE_REQUIRE_USER_RECAPTCHA_V2 = 4;
 	private static final int MESSAGE_SHOW_CAPTCHA_INVALID = 5;
+	private static final int MESSAGE_REQUIRE_KOHLCHAN_ACCESS = 6;
 
 	private static class DelayedMessage {
 		public final int what;
@@ -265,9 +266,14 @@ public class ForegroundManager implements Handler.Callback {
 		}
 
 		@Override
-		public void onActivityCreated(Bundle savedInstanceState) {
-			super.onActivityCreated(savedInstanceState);
+		public void onCreate(Bundle savedInstanceState) {
+			super.onCreate(savedInstanceState);
+			// Observe once per fragment. Results are delivered at STARTED, after the dialog exists.
+			CaptchaViewModel viewModel = new ViewModelProvider(this).get(CaptchaViewModel.class);
+			viewModel.observe(this, this);
+		}
 
+		private void initializeCaptcha(Bundle savedInstanceState) {
 			CaptchaPendingData pendingData = getPendingDataOrDismiss();
 			if (pendingData == null) {
 				return;
@@ -291,9 +297,6 @@ public class ForegroundManager implements Handler.Callback {
 			if (needLoad) {
 				reloadCaptcha(pendingData, false, true, false);
 			}
-
-			CaptchaViewModel viewModel = new ViewModelProvider(this).get(CaptchaViewModel.class);
-			viewModel.observe(this, this);
 		}
 
 		@Override
@@ -412,6 +415,8 @@ public class ForegroundManager implements Handler.Callback {
 				positiveButton = alertDialog.getButton(AlertDialog.BUTTON_POSITIVE);
 				updatePositiveButtonState();
 			});
+			// This dialog creates its own content, so onViewCreated is not called for the form.
+			initializeCaptcha(savedInstanceState);
 			return alertDialog;
 		}
 
@@ -419,6 +424,7 @@ public class ForegroundManager implements Handler.Callback {
 		public void onDestroyView() {
 			super.onDestroyView();
 			captchaForm = null;
+			positiveButton = null;
 		}
 
 		@Override
@@ -458,6 +464,8 @@ public class ForegroundManager implements Handler.Callback {
 		}
 	}
 
+	// Native widgets are intentional in the platform-themed dialogs.
+	@android.annotation.SuppressLint("AppCompatCustomView")
 	private static ImageView appendDescriptionImageView(ViewGroup viewGroup, Bitmap descriptionImage) {
 		ImageView imageView = new ImageView(viewGroup.getContext()) {
 			@Override
@@ -807,6 +815,8 @@ public class ForegroundManager implements Handler.Callback {
 
 		@NonNull
 		@Override
+		// Preserve native ImageView measurement and ThemeEngine styling.
+		@android.annotation.SuppressLint("AppCompatCustomView")
 		public Dialog onCreateDialog(Bundle savedInstanceState) {
 			final float density = ResourceUtils.obtainDensity(requireContext());
 			LinearLayout container = new LinearLayout(requireContext());
@@ -1000,6 +1010,28 @@ public class ForegroundManager implements Handler.Callback {
 		}
 	}
 
+	public static class KohlchanPermissionDialog extends KohlchanAccessDialog
+			implements PendingDataDialog<ChoicePendingData> {
+		public KohlchanPermissionDialog() {}
+
+		public KohlchanPermissionDialog(String pendingDataId) {
+			Bundle args = new Bundle();
+			fillArguments(args, pendingDataId);
+			setArguments(args);
+		}
+
+		@Override
+		public void onStart() {
+			super.onStart();
+			getPendingDataOrDismiss();
+		}
+
+		@Override
+		protected void publishResult(boolean success) {
+			notifyResult(data -> data.result = new boolean[] {success});
+		}
+	}
+
 	public static class RecaptchaV2Dialog extends RecaptchaReader.V2Dialog
 			implements PendingDataDialog<RecaptchaV2PendingData> {
 		public RecaptchaV2Dialog() {}
@@ -1039,6 +1071,7 @@ public class ForegroundManager implements Handler.Callback {
 			}
 			case MESSAGE_REQUIRE_USER_CAPTCHA:
 			case MESSAGE_REQUIRE_USER_CHOICE:
+			case MESSAGE_REQUIRE_KOHLCHAN_ACCESS:
 			case MESSAGE_REQUIRE_USER_RECAPTCHA_V2: {
 				HandlerData handlerData = (HandlerData) msg.obj;
 				FragmentActivity activity = getActivity();
@@ -1062,6 +1095,10 @@ public class ForegroundManager implements Handler.Callback {
 					delayedMessages.add(new DelayedMessage(msg.what, handlerData));
 				} else {
 					switch (msg.what) {
+						case MESSAGE_REQUIRE_KOHLCHAN_ACCESS: {
+							new KohlchanPermissionDialog(handlerData.pendingDataId).show(activity);
+							break;
+						}
 						case MESSAGE_REQUIRE_USER_CAPTCHA: {
 							CaptchaHandlerData captchaHandlerData = (CaptchaHandlerData) handlerData;
 							new CaptchaDialog(handlerData.pendingDataId, captchaHandlerData.chanName,
@@ -1335,6 +1372,19 @@ public class ForegroundManager implements Handler.Callback {
 			return captchaData;
 		} finally {
 			removePendingData(pendingDataId);
+		}
+	}
+
+	public boolean requireKohlchanAccess() throws InterruptedException {
+		if (Looper.myLooper() == Looper.getMainLooper()) throw new IllegalStateException("Worker thread required");
+		ChoicePendingData pending = new ChoicePendingData();
+		String id = putPendingData(pending);
+		try {
+			HandlerData data = new HandlerData(id) {};
+			handler.obtainMessage(MESSAGE_REQUIRE_KOHLCHAN_ACCESS, data).sendToTarget();
+			return pending.await(handler, data) && pending.result != null && pending.result[0];
+		} finally {
+			removePendingData(id);
 		}
 	}
 

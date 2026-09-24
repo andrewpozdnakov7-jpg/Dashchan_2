@@ -1,0 +1,10 @@
+- Added Kohlchan support: browsing boards, threads and attachments, posting, and deleting your own posts. Support is experimental: CAPTCHA and access verification may still be troublesome.
+- Improved data persistence and backups. Fixed cases where recent changes or received replies could be lost after the app process ended.
+- Improved push reply handling with retries after failures, reply persistence and notification recovery.
+- Fixed replaying a finished video in Picture-in-Picture. Also corrected app removal from Recents while PiP is active.
+- Improved the image cache, sharing files with other apps, and translation model downloads.
+- Popup messages now use the header color by default. This option will also be applied to existing users on the first launch after updating; you can change it again in settings.
+- Switched source and target compatibility to Java 17, addressed some warnings and added automated tests. The minimum Android version is unchanged: Android 11.
+
+Thank you for testing, sending logs and helping us find bugs! 😺
+Found a bug? Send us the logs!

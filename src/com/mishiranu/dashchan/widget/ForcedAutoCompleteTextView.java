@@ -20,6 +20,8 @@ import android.content.Context;
 import android.util.AttributeSet;
 import android.widget.AutoCompleteTextView;
 
+// Native widget styling is supplied by ThemeEngine rather than AppCompat.
+@android.annotation.SuppressLint("AppCompatCustomView")
 public class ForcedAutoCompleteTextView extends AutoCompleteTextView {
 	public ForcedAutoCompleteTextView(Context context) {
 		super(context);

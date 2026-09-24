@@ -26,7 +26,15 @@ public class ThemesStorage extends StorageManager.JsonOrgStorage<List<JSONObject
 
 	@Override
 	public List<JSONObject> onClone() {
-		return new ArrayList<>(themes.values());
+		ArrayList<JSONObject> result = new ArrayList<>(themes.size());
+		for (JSONObject theme : themes.values()) {
+			try {
+				result.add(new JSONObject(theme.toString()));
+			} catch (JSONException e) {
+				throw new IllegalStateException("Cannot snapshot theme", e);
+			}
+		}
+		return result;
 	}
 
 	@Override

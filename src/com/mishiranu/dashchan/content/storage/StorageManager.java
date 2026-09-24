@@ -5,7 +5,6 @@ import android.os.Looper;
 import android.os.Message;
 import android.os.SystemClock;
 import android.util.Pair;
-import android.util.SparseArray;
 import com.mishiranu.dashchan.content.MainApplication;
 import com.mishiranu.dashchan.util.IOUtils;
 import com.mishiranu.dashchan.util.Logger;
@@ -13,86 +12,41 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.Charset;
-import java.util.concurrent.LinkedBlockingQueue;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-public class StorageManager implements Handler.Callback, Runnable {
+public class StorageManager implements Handler.Callback {
 	private static final StorageManager INSTANCE = new StorageManager();
 
 	public static StorageManager getInstance() {
 		return INSTANCE;
 	}
 
-	private StorageManager() {
-		new Thread(this, "StorageManagerWorker").start();
-	}
+	private StorageManager() {}
 
 	private final Handler handler = new Handler(Looper.getMainLooper(), this);
-	private final LinkedBlockingQueue<Enqueued<?>> queue = new LinkedBlockingQueue<>();
+	private final StorageWriteQueue writer = new StorageWriteQueue(e ->
+			Logger.write(Logger.Type.ERROR, "StorageManager", "write_failed", e.getClass().getSimpleName()));
+	private static final int MESSAGE_SERIALIZE = 1;
 
-	private int nextIdentifier = 1;
-
-	@Override
-	public void run() {
-		while (true) {
-			Enqueued<?> enqueued;
-			try {
-				enqueued = queue.take();
-			} catch (InterruptedException e) {
-				return;
-			}
-			performSerialize(enqueued);
+	private <Data> void performSerialize(Storage<Data> storage, Data data) throws IOException {
+		// The writer only uses the cloned data and the file lock, never the model monitor.
+		synchronized (storage.lock) {
+			StorageFile.write(getFile(storage), getBackupFile(storage), output -> storage.onWrite(data, output));
 		}
 	}
 
-	private <Data> void performSerialize(Enqueued<Data> enqueued) {
-		synchronized (enqueued.storage.lock) {
-			File file = getFile(enqueued.storage);
-			File backupFile = getBackupFile(enqueued.storage);
-			if (file.exists()) {
-				if (!backupFile.exists()) {
-					if (!file.renameTo(backupFile)) {
-						Logger.write(Logger.Type.ERROR, "Can't create backup of", file);
-						return;
-					}
-				} else {
-					file.delete();
-				}
-			}
-			boolean success = false;
-			FileOutputStream output = null;
-			try {
-				output = new FileOutputStream(file);
-				enqueued.storage.onWrite(enqueued.data, output);
-				output.flush();
-				output.getFD().sync();
-				success = true;
-			} catch (IOException e) {
-				e.printStackTrace();
-			} finally {
-				success &= IOUtils.close(output);
-				if (success) {
-					backupFile.delete();
-				} else if (file.exists() && !file.delete()) {
-					Logger.write(Logger.Type.ERROR, "Can't delete partially written", file);
-				}
-			}
-		}
-	}
+	private static final class PendingSerialize {
+		final Storage<?> storage;
+		final long firstScheduled;
 
-	private static class Enqueued<Data> {
-		public final Storage<Data> storage;
-		public final Data data;
-
-		public Enqueued(Storage<Data> storage) {
+		PendingSerialize(Storage<?> storage, long firstScheduled) {
 			this.storage = storage;
-			data = storage.onClone();
+			this.firstScheduled = firstScheduled;
 		}
 	}
 
@@ -101,8 +55,10 @@ public class StorageManager implements Handler.Callback, Runnable {
 		private final int timeout;
 		private final int maxTimeout;
 
-		private int identifier = 0;
 		private final Object lock = new Object();
+		// Guarded by this storage's monitor, also used by synchronized model mutators/onClone.
+		private PendingSerialize pending;
+		private StorageWriteQueue.Ticket lastWrite;
 
 		public Storage(String name, int timeout, int maxTimeout) {
 			this.name = name;
@@ -132,6 +88,17 @@ public class StorageManager implements Handler.Callback, Runnable {
 
 		public final void await(boolean async) {
 			INSTANCE.await(this, async);
+		}
+
+		/** Capture on the model/UI thread; serialize the detached snapshot on the backup worker. */
+		public final synchronized BackupSnapshot snapshotForBackup() {
+			Data data = onClone();
+			return output -> onWrite(data, output);
+		}
+
+		/** Background callers only: wait for the current snapshot and report actual write success. */
+		public final boolean awaitSaved() {
+			return INSTANCE.awaitSaved(this);
 		}
 
 		public abstract Data onClone();
@@ -198,62 +165,80 @@ public class StorageManager implements Handler.Callback, Runnable {
 	}
 
 	private InputStream open(Storage<?> storage) throws IOException {
-		File file = getFile(storage);
-		File backupFile = getBackupFile(storage);
-		if (backupFile.exists()) {
-			backupFile.renameTo(file);
+		synchronized (storage.lock) {
+			File file = getFile(storage);
+			StorageFile.restore(getBackupFile(storage), file);
+			StorageFile.restore(getRestoreFile(storage), file);
+			return new FileInputStream(file);
 		}
-		File restoreFile = getRestoreFile(storage);
-		if (restoreFile.exists()) {
-			restoreFile.renameTo(file);
-		}
-		return new FileInputStream(file);
 	}
 
-	private final SparseArray<Long> serializeTimes = new SparseArray<>();
+	public interface BackupSnapshot {
+		void write(OutputStream output) throws IOException;
+	}
 
 	private void serialize(Storage<?> storage) {
-		if (storage.identifier == 0) {
-			storage.identifier = nextIdentifier++;
-		}
-		Long timeObject = serializeTimes.get(storage.identifier);
-		long timeout;
-		if (timeObject == null) {
-			serializeTimes.put(storage.identifier, SystemClock.elapsedRealtime());
-			timeout = storage.timeout;
-		} else {
-			timeout = Math.min(storage.timeout, timeObject + storage.maxTimeout - SystemClock.elapsedRealtime());
-		}
-		handler.removeMessages(storage.identifier);
-		if (timeout <= 0) {
-			enqueueSerialize(storage);
-			serializeTimes.remove(storage.identifier);
-		} else {
-			handler.sendMessageDelayed(handler.obtainMessage(storage.identifier, storage), timeout);
-		}
-	}
-
-	public void await(Storage<?> storage, boolean async) {
-		if (handler.hasMessages(storage.identifier)) {
-			serializeTimes.remove(storage.identifier);
-			handler.removeMessages(storage.identifier);
-			if (async) {
+		synchronized (storage) {
+			long now = SystemClock.elapsedRealtime();
+			long firstScheduled = storage.pending != null ? storage.pending.firstScheduled : now;
+			cancelPending(storage);
+			PendingSerialize pending = new PendingSerialize(storage, firstScheduled);
+			storage.pending = pending;
+			long timeout = Math.min(storage.timeout, firstScheduled + storage.maxTimeout - now);
+			if (timeout <= 0 || !handler.sendMessageDelayed(
+					handler.obtainMessage(MESSAGE_SERIALIZE, pending), timeout)) {
 				enqueueSerialize(storage);
-			} else {
-				performSerialize(new Enqueued<>(storage));
 			}
 		}
 	}
 
-	private void enqueueSerialize(Storage<?> storage) {
-		queue.add(new Enqueued<>(storage));
+	public void await(Storage<?> storage, boolean async) {
+		StorageWriteQueue.Ticket ticket = flush(storage);
+		if (!async && ticket != null) {
+			ticket.await();
+		}
+	}
+
+	private boolean awaitSaved(Storage<?> storage) {
+		StorageWriteQueue.Ticket ticket = flush(storage);
+		return ticket == null || ticket.await();
+	}
+
+	private StorageWriteQueue.Ticket flush(Storage<?> storage) {
+		synchronized (storage) {
+			if (storage.pending != null || storage.lastWrite != null && storage.lastWrite.isFailed()) {
+				enqueueSerialize(storage);
+			}
+			return storage.lastWrite;
+		}
+	}
+
+	// Called only under the storage monitor. Clone and enqueue are one ordered operation.
+	private <Data> void enqueueSerialize(Storage<Data> storage) {
+		Data data = storage.onClone();
+		storage.lastWrite = writer.enqueue(() -> performSerialize(storage, data));
+		cancelPending(storage);
+	}
+
+	private void cancelPending(Storage<?> storage) {
+		if (storage.pending != null) {
+			handler.removeMessages(MESSAGE_SERIALIZE, storage.pending);
+			storage.pending = null;
+		}
 	}
 
 	@Override
 	public boolean handleMessage(Message msg) {
-		Storage<?> storage = (Storage<?>) msg.obj;
-		serializeTimes.remove(storage.identifier);
-		enqueueSerialize(storage);
+		if (msg.what != MESSAGE_SERIALIZE || !(msg.obj instanceof PendingSerialize)) {
+			return false;
+		}
+		PendingSerialize pending = (PendingSerialize) msg.obj;
+		synchronized (pending.storage) {
+			// A removed message may already have been dispatched before flush/reschedule.
+			if (pending.storage.pending == pending) {
+				enqueueSerialize(pending.storage);
+			}
+		}
 		return true;
 	}
 }

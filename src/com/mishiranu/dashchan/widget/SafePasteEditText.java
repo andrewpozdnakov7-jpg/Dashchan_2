@@ -10,6 +10,8 @@ import android.util.AttributeSet;
 import android.widget.EditText;
 
 // Removes spans on paste event.
+// Native widget styling is supplied by ThemeEngine rather than AppCompat.
+@android.annotation.SuppressLint("AppCompatCustomView")
 public class SafePasteEditText extends EditText {
 	public SafePasteEditText(Context context) {
 		super(context);
