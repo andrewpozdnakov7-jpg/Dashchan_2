@@ -190,18 +190,18 @@ public class WebViewService extends Service {
 		}
 
 		@Override
-		public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
+		public void onReceivedSslError(WebView view, SslErrorHandler sslHandler, SslError error) {
 			CookieRequest cookieRequest = WebViewService.this.cookieRequest;
 			if (cookieRequest != null) {
 				if (cookieRequest.verifyCertificate) {
-					handler.cancel();
+					sslHandler.cancel();
 					handler.removeMessages(MESSAGE_HANDLE_FINISH);
 					handler.sendEmptyMessage(MESSAGE_HANDLE_FINISH);
 				} else {
-					handler.proceed();
+					sslHandler.proceed();
 				}
 			} else {
-				super.onReceivedSslError(view, handler, error);
+				super.onReceivedSslError(view, sslHandler, error);
 			}
 		}
 

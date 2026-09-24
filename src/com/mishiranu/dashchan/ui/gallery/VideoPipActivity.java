@@ -229,6 +229,7 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 	private int playbackSpeed;
 	private boolean muted;
 	private boolean startPlaying;
+	private boolean finishedPlayback;
 	private boolean enteredPictureInPicture;
 	private boolean exitedPictureInPicture;
 	private boolean stoppedWhileInPictureInPicture;
@@ -381,9 +382,10 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 		} else {
 			disableLegacyActivityTransition();
 		}
-		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-			getSplashScreen().setOnExitAnimationListener(splashScreenView -> splashScreenView.remove());
-		}
+		// Leave splash ownership with the system. A custom exit listener transfers the
+		// splash to this activity and can trigger system-server cleanup of a detached
+		// PiP task when the app process is killed from Recents.
+		VideoDiagnostics.recordUi("pip splash_handling=system");
 		if (!getPackageManager().hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) {
 			finish();
 			return;
@@ -635,6 +637,12 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 		if (!playing) {
 			audioFocus.release();
 		}
+		if (playing && finishedPlayback) {
+			// Resuming at EOF cannot produce frames: explicit Play starts a new pass.
+			finishedPlayback = false;
+			VideoDiagnostics.recordUi("pip replay_after_complete position=" + player.getPosition());
+			player.setPosition(0L);
+		}
 		startPlaying = playing;
 		player.setPlaying(playing);
 		updatePictureInPictureParams();
@@ -651,7 +659,11 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 		if (duration > 0L) {
 			position = Math.min(position, duration);
 		}
-		player.setPosition(Math.max(position, 0L));
+		position = Math.max(position, 0L);
+		// A manual seek away from EOF must resume at the chosen position, not at zero.
+		finishedPlayback = duration > 0L && position >= duration;
+		VideoDiagnostics.recordUi("pip seek position=" + position + " at_end=" + finishedPlayback);
+		player.setPosition(position);
 	}
 
 	private void handleScreenOff() {
@@ -989,7 +1001,11 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 	public void onComplete(VideoPlayer player) {
 		runOnUiThread(() -> {
 			if (this.player == player) {
-				if (Preferences.getVideoCompletionMode() == Preferences.VideoCompletionMode.LOOP) {
+				boolean loop = Preferences.getVideoCompletionMode() == Preferences.VideoCompletionMode.LOOP;
+				finishedPlayback = !loop;
+				VideoDiagnostics.recordUi("pip complete loop=" + loop + " position=" + player.getPosition()
+						+ " duration=" + player.getDuration());
+				if (loop) {
 					startPlaying = true;
 					player.setPosition(0L);
 					player.setPlaying(true);

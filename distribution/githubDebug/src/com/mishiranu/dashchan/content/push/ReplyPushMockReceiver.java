@@ -17,8 +17,17 @@ public class ReplyPushMockReceiver extends BroadcastReceiver {
 				intent.getStringExtra("watched_post_id"));
 		PostNumber replyPostNumber = PostNumber.parseNullable(intent.getStringExtra("reply_post_id"));
 		if (watchedPostNumber != null && replyPostNumber != null) {
-			ReplyPushManager.handleMockReply(context, boardName, threadNumber,
-					watchedPostNumber, replyPostNumber, intent.getBooleanExtra("repeat", false));
+			boolean repeat = intent.getBooleanExtra("repeat", false);
+			Context applicationContext = context.getApplicationContext();
+			PendingResult pendingResult = goAsync();
+			new Thread(() -> {
+				try {
+					ReplyPushManager.handleMockReply(applicationContext, boardName, threadNumber,
+							watchedPostNumber, replyPostNumber, repeat);
+				} finally {
+					pendingResult.finish();
+				}
+			}, "ReplyPushMock").start();
 		}
 	}
 }

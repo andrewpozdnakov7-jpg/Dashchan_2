@@ -26,6 +26,6 @@ public class SlooopFirebaseMessagingService extends FirebaseMessagingService {
 
 	@Override
 	public void onMessageReceived(@NonNull RemoteMessage remoteMessage) {
-		ReplyPushManager.handleData(this, remoteMessage.getData());
+		ReplyPushDeliveryWorker.enqueue(this, remoteMessage.getData());
 	}
 }

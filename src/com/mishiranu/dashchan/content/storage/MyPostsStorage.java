@@ -38,6 +38,7 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 	private static final String KEY_REPLIES = "replies";
 	private static final String KEY_REPLIES_CLEARED_THROUGH = "repliesClearedThrough";
 	private static final String KEY_UNREAD = "unread";
+	private static final String KEY_PUSH_PENDING = "pushPending";
 
 	private static final MyPostsStorage INSTANCE = new MyPostsStorage();
 
@@ -82,6 +83,7 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 		public String comment;
 		public final long time;
 		public boolean unread;
+		private boolean pushPending;
 
 		private Reply(PostNumber postNumber, String comment, long time, boolean unread) {
 			this.postNumber = postNumber;
@@ -92,6 +94,7 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 
 		private Reply(Reply reply) {
 			this(reply.postNumber, reply.comment, reply.time, reply.unread);
+			pushPending = reply.pushPending;
 		}
 	}
 
@@ -309,6 +312,7 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 									String replyComment = null;
 									long replyTime = 0L;
 									boolean unread = false;
+									boolean pushPending = false;
 									reader.startObject();
 									while (!reader.endStruct()) {
 										switch (reader.nextName()) {
@@ -324,13 +328,18 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 											case KEY_UNREAD:
 												unread = reader.nextBoolean();
 												break;
+											case KEY_PUSH_PENDING:
+												pushPending = reader.nextBoolean();
+												break;
 											default:
 												reader.skip();
 												break;
 										}
 									}
 									if (replyNumber != null) {
-										replies.add(new Reply(replyNumber, replyComment, replyTime, unread));
+										Reply reply = new Reply(replyNumber, replyComment, replyTime, unread);
+										reply.pushPending = pushPending;
+										replies.add(reply);
 									}
 								}
 								break;
@@ -410,6 +419,10 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 				writer.value(reply.time);
 				writer.name(KEY_UNREAD);
 				writer.value(reply.unread);
+				if (reply.pushPending) {
+					writer.name(KEY_PUSH_PENDING);
+					writer.value(true);
+				}
 				writer.endObject();
 			}
 			writer.endArray();
@@ -588,6 +601,11 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 
 	public synchronized AddReplyResult addReply(String chanName, String boardName, String threadNumber,
 			PostNumber trackedPostNumber, PostNumber replyPostNumber, String comment, long time) {
+		return addReply(chanName, boardName, threadNumber, trackedPostNumber, replyPostNumber, comment, time, false);
+	}
+
+	public synchronized AddReplyResult addReply(String chanName, String boardName, String threadNumber,
+			PostNumber trackedPostNumber, PostNumber replyPostNumber, String comment, long time, boolean fromPush) {
 		Objects.requireNonNull(chanName);
 		Objects.requireNonNull(threadNumber);
 		Objects.requireNonNull(trackedPostNumber);
@@ -605,12 +623,54 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 				return AddReplyResult.ALREADY_EXISTS;
 			}
 		}
-		trackedPost.replies.add(new Reply(replyPostNumber, StringUtils.nullIfEmpty(comment),
-				time > 0L ? time : System.currentTimeMillis(), true));
+		Reply newReply = new Reply(replyPostNumber, StringUtils.nullIfEmpty(comment),
+				time > 0L ? time : System.currentTimeMillis(), true);
+		newReply.pushPending = fromPush;
+		trackedPost.replies.add(newReply);
 		Collections.sort(trackedPost.replies, Comparator.comparing(reply -> reply.postNumber));
 		serialize();
 		notifyChanged();
 		return AddReplyResult.ADDED;
+	}
+
+	public synchronized Reply getPendingPushReply(String chanName, String boardName, String threadNumber,
+			PostNumber trackedPostNumber, PostNumber replyPostNumber) {
+		TrackedPost post = postsMap.get(makeKey(chanName, boardName, threadNumber, trackedPostNumber));
+		if (post != null && post.trackingActive && (post.repliesClearedThrough == null
+				|| replyPostNumber.compareTo(post.repliesClearedThrough) > 0)) {
+			for (Reply reply : post.replies) {
+				if (reply.postNumber.equals(replyPostNumber) && reply.pushPending && reply.unread) {
+					return new Reply(reply);
+				}
+			}
+		}
+		return null;
+	}
+
+	public synchronized boolean isPushPending(String chanName, String boardName, String threadNumber,
+			PostNumber replyPostNumber) {
+		for (TrackedPost post : posts) {
+			if (post.chanName.equals(chanName) && post.boardName.equals(StringUtils.emptyIfNull(boardName))
+					&& post.threadNumber.equals(threadNumber)
+					&& getPendingPushReply(chanName, boardName, threadNumber, post.postNumber, replyPostNumber) != null) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	public synchronized void completePushReply(String chanName, String boardName, String threadNumber,
+			PostNumber trackedPostNumber, PostNumber replyPostNumber) {
+		TrackedPost post = postsMap.get(makeKey(chanName, boardName, threadNumber, trackedPostNumber));
+		if (post != null) {
+			for (Reply reply : post.replies) {
+				if (reply.postNumber.equals(replyPostNumber) && reply.pushPending) {
+					reply.pushPending = false;
+					serialize();
+					return;
+				}
+			}
+		}
 	}
 
 	public synchronized void remove(String chanName, String boardName, String threadNumber,

@@ -35,6 +35,28 @@ public class StringUtilsTest {
 	}
 
 	@Test
+	public void indexOfFindsOverlappingPrefixes() {
+		assertEquals(1, StringUtils.indexOf(new StringBuilder("aab"), 0, "ab"));
+		assertEquals(1, StringUtils.indexOf("aaab", 0, new StringBuilder("aab")));
+		assertEquals(2, StringUtils.indexOf(new StringBuilder("ababac"), 0, new StringBuilder("abac")));
+	}
+
+	@Test
+	public void indexOfMatchesStringForShortInputsAndStartBoundaries() {
+		String[] strings = {"", "a", "b", "aa", "ab", "aab", "aaab", "ababac", "aaaaab", "\u0430\u0430\u0431"};
+		for (String string : strings) {
+			for (String target : strings) {
+				for (int start = -2; start <= string.length() + 2; start++) {
+					int expected = string.indexOf(target, start);
+					assertEquals(expected, StringUtils.indexOf(string, start, target));
+					assertEquals(expected, StringUtils.indexOf(new StringBuilder(string), start, target));
+					assertEquals(expected, StringUtils.indexOf(string, start, new StringBuilder(target)));
+				}
+			}
+		}
+	}
+
+	@Test
 	public void formatHexUsesLowercaseAndLeadingZeroes() {
 		assertEquals("000fff", StringUtils.formatHex(new byte[] {0x00, 0x0f, (byte) 0xff}));
 		assertNull(StringUtils.formatHex(null));

@@ -34,7 +34,18 @@ public class StatisticsStorage extends StorageManager.Storage<Map<String, Statis
 
 	@Override
 	public Map<String, StatisticsItem> onClone() {
-		return new HashMap<>(statisticsItems);
+		Snapshot result = new Snapshot(startTime);
+		for (Map.Entry<String, StatisticsItem> entry : statisticsItems.entrySet()) {
+			StatisticsItem item = entry.getValue();
+			result.put(entry.getKey(), new StatisticsItem(item.threadsViewed, item.postsSent, item.threadsCreated));
+		}
+		return result;
+	}
+
+	private static final class Snapshot extends HashMap<String, StatisticsItem> {
+		private static final long serialVersionUID = 1L;
+		final long startTime;
+		Snapshot(long startTime) { this.startTime = startTime; }
 	}
 
 	@Override
@@ -117,7 +128,7 @@ public class StatisticsStorage extends StorageManager.Storage<Map<String, Statis
 		}
 		writer.endArray();
 		writer.name(KEY_START_TIME);
-		writer.value(startTime);
+		writer.value(((Snapshot) statisticsItems).startTime);
 		writer.endObject();
 		writer.flush();
 	}

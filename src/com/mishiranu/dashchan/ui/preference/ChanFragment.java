@@ -46,6 +46,7 @@ import com.mishiranu.dashchan.content.async.TaskViewModel;
 import com.mishiranu.dashchan.content.database.ChanDatabase;
 import com.mishiranu.dashchan.content.model.ErrorItem;
 import com.mishiranu.dashchan.ui.FragmentHandler;
+import com.mishiranu.dashchan.ui.KohlchanAccessDialog;
 import com.mishiranu.dashchan.ui.preference.core.CheckPreference;
 import com.mishiranu.dashchan.ui.preference.core.MultipleEditPreference;
 import com.mishiranu.dashchan.ui.preference.core.Preference;
@@ -196,6 +197,10 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 		}
 		if (chan.configuration instanceof PikabuChanConfiguration) {
 			addPikabuAuthorizationPreferences((PikabuChanConfiguration) chan.configuration);
+		}
+		if ("kohlchan".equals(chanName)) {
+			addButton(R.string.kohlchan_access_title, R.string.kohlchan_access_summary).setOnClickListener(
+					p -> new KohlchanAccessDialog().show(getChildFragmentManager(), "kohlchanAccess"));
 		}
 		LinkedHashMap<String, Boolean> customPreferences = chan.configuration.getCustomPreferences();
 		if (customPreferences != null) {
@@ -564,6 +569,9 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 					.create();
 		}
 
+		// Keep the existing dialog resize behavior for the login WebView and keyboard.
+		// Replacing it requires a separate, device-tested IME insets migration.
+		@SuppressWarnings("deprecation")
 		@Override
 		public void onStart() {
 			super.onStart();
@@ -921,8 +929,8 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 		}
 
 		@Override
-		public void onActivityCreated(Bundle savedInstanceState) {
-			super.onActivityCreated(savedInstanceState);
+		public void onCreate(Bundle savedInstanceState) {
+			super.onCreate(savedInstanceState);
 
 			CheckAuthorizationViewModel viewModel = new ViewModelProvider(this).get(CheckAuthorizationViewModel.class);
 			if (!viewModel.hasTaskOrValue()) {

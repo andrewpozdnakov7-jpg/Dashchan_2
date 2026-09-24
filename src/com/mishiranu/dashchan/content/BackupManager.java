@@ -10,8 +10,10 @@ import com.mishiranu.dashchan.content.storage.AutohideStorage;
 import com.mishiranu.dashchan.content.storage.CombinedFeedStorage;
 import com.mishiranu.dashchan.content.storage.FavoritesStorage;
 import com.mishiranu.dashchan.content.storage.StatisticsStorage;
+import com.mishiranu.dashchan.content.storage.StorageManager;
 import com.mishiranu.dashchan.content.storage.ThemesStorage;
 import com.mishiranu.dashchan.util.IOUtils;
+import com.mishiranu.dashchan.util.ConcurrentUtils;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -26,13 +28,13 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
-import java.util.zip.ZipOutputStream;
 
 public class BackupManager {
 	private static final String FILE_NAME_PREFIX = "backup-";
@@ -73,7 +75,7 @@ public class BackupManager {
 		}
 	}
 
-	private static class ArchiveLimits {
+	static class ArchiveLimits {
 		public long total;
 	}
 
@@ -81,7 +83,7 @@ public class BackupManager {
 		if (Thread.currentThread().isInterrupted()) throw new InterruptedIOException("Backup operation cancelled");
 	}
 
-	private static class LimitedEntryInputStream extends InputStream {
+	static class LimitedEntryInputStream extends InputStream {
 		private final ZipInputStream input;
 		private final ArchiveLimits limits;
 		private long entry;
@@ -132,6 +134,13 @@ public class BackupManager {
 
 		public long getEntrySize() {
 			return entry;
+		}
+	}
+
+	static void drainEntry(LimitedEntryInputStream input) throws IOException {
+		byte[] buffer = new byte[8192];
+		while (input.read(buffer) >= 0) {
+			// Keep all reads through the limiter, including EOF/CRC and cancellation checks.
 		}
 	}
 
@@ -186,10 +195,8 @@ public class BackupManager {
 
 		@Override
 		public void write(OutputStream output) throws IOException {
-			if (file.exists()) {
-				try (FileInputStream input = new FileInputStream(file)) {
-					IOUtils.copyStream(input, output);
-				}
+			try (FileInputStream input = new FileInputStream(file)) {
+				IOUtils.copyStream(input, output);
 			}
 		}
 	}
@@ -251,15 +258,15 @@ public class BackupManager {
 				Preferences.getFileForRestore(), Collections.singletonList(BACKUP_VERSION_0)),
 		PREFERENCES_1(R.string.preferences, Preferences.getFilesForBackup(),
 				Collections.singletonList(BACKUP_VERSION_1)),
-		FAVORITES(R.string.favorites, FavoritesStorage.getInstance().getFilesForBackup(),
+		FAVORITES(R.string.favorites, FavoritesStorage.getInstance(),
 				Arrays.asList(BACKUP_VERSION_0, BACKUP_VERSION_1)),
-		AUTOHIDE(R.string.autohide, AutohideStorage.getInstance().getFilesForBackup(),
+		AUTOHIDE(R.string.autohide, AutohideStorage.getInstance(),
 				Arrays.asList(BACKUP_VERSION_0, BACKUP_VERSION_1)),
-		COMBINED_FEEDS(R.string.combined_feeds, CombinedFeedStorage.getInstance().getFilesForBackup(),
+		COMBINED_FEEDS(R.string.combined_feeds, CombinedFeedStorage.getInstance(),
 				Collections.singletonList(BACKUP_VERSION_1)),
-		STATISTICS(R.string.statistics, StatisticsStorage.getInstance().getFilesForBackup(),
+		STATISTICS(R.string.statistics, StatisticsStorage.getInstance(),
 				Arrays.asList(BACKUP_VERSION_0, BACKUP_VERSION_1)),
-		THEMES(R.string.themes, ThemesStorage.getInstance().getFilesForBackup(),
+		THEMES(R.string.themes, ThemesStorage.getInstance(),
 				Arrays.asList(BACKUP_VERSION_0, BACKUP_VERSION_1));
 
 		public final int titleResId;
@@ -267,6 +274,12 @@ public class BackupManager {
 		private final Writer writer;
 		private final Reader reader;
 		private final Set<String> versions;
+		private StorageManager.Storage<?> storage;
+
+		Entry(int titleResId, StorageManager.Storage<?> storage, Collection<String> versions) {
+			this(titleResId, storage.getFilesForBackup(), versions);
+			this.storage = storage;
+		}
 
 		Entry(int titleResId, Pair<File, File> backupFiles, Collection<String> versions) {
 			this(titleResId, backupFiles.first.getName(), versions,
@@ -326,21 +339,34 @@ public class BackupManager {
 	public static InputStream makeBackup(Context context) {
 		File backupFile = new File(context.getCacheDir(), "backup-" + UUID.randomUUID());
 		boolean success = false;
-		try (ZipOutputStream zip = new ZipOutputStream(new FileOutputStream(backupFile))) {
-			OutputStream output = new InterruptibleOutputStream(zip);
-			boolean hasEntries = false;
-			for (Entry entry : Entry.values()) {
-				if (entry.writer != null) {
-					zip.putNextEntry(new ZipEntry(entry.name));
-					try {
-						entry.writer.write(output);
-					} finally {
-						zip.closeEntry();
-					}
-					hasEntries = true;
+		try {
+			// UI-owned collections are cloned together without disk I/O or waiting for the writer.
+			EnumMap<Entry, StorageManager.BackupSnapshot> snapshots = ConcurrentUtils.mainGet(() -> {
+				EnumMap<Entry, StorageManager.BackupSnapshot> result = new EnumMap<>(Entry.class);
+				for (Entry entry : Entry.values()) {
+					if (entry.storage != null) result.put(entry, entry.storage.snapshotForBackup());
 				}
-			}
-			success = hasEntries;
+				PreferencesBackup preferences = new PreferencesBackup(Preferences.PREFERENCES.getAll());
+				result.put(Entry.PREFERENCES_1, preferences::write);
+				return result;
+			});
+			BackupArchive.write(new FileOutputStream(backupFile), zip -> {
+				OutputStream output = new InterruptibleOutputStream(zip);
+				for (Entry entry : Entry.values()) {
+					if (entry.writer != null) {
+						zip.putNextEntry(new ZipEntry(entry.name));
+						try {
+							StorageManager.BackupSnapshot snapshot = snapshots.get(entry);
+							if (snapshot != null) snapshot.write(output);
+							else entry.writer.write(output);
+						} finally {
+							zip.closeEntry();
+						}
+					}
+				}
+			});
+			// Only a successfully closed ZIP is eligible for export.
+			success = true;
 		} catch (IOException | RuntimeException e) {
 			e.printStackTrace();
 		} finally {
@@ -391,9 +417,7 @@ public class BackupManager {
 						version = restore.version;
 						entries.add(entry);
 					}
-					while (input.read() >= 0) {
-						// Validate and consume the complete uncompressed entry.
-					}
+					drainEntry(input);
 					checkCompressionRatio(zipEntry, input);
 					consumed = true;
 				} finally {
@@ -439,9 +463,7 @@ public class BackupManager {
 						entry.reader.read(new Restore(false, input));
 						restored.add(entry);
 					}
-					while (input.read() >= 0) {
-						// Validate and consume the complete uncompressed entry.
-					}
+					drainEntry(input);
 					checkCompressionRatio(zipEntry, input);
 					consumed = true;
 				} finally {

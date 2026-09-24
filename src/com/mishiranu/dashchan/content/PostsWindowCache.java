@@ -97,6 +97,9 @@ public final class PostsWindowCache {
 		removeLocked(threadKey);
 	}
 
+	// Android 14+ no longer sends the legacy COMPLETE/RUNNING_LOW levels.
+	// Keep handling them on supported Android 11-13 devices; cache limits apply on every API.
+	@SuppressWarnings("deprecation")
 	public synchronized void onTrimMemory(int level) {
 		if (level >= ComponentCallbacks2.TRIM_MEMORY_COMPLETE) {
 			windows.clear();

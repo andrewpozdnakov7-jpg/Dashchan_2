@@ -16,6 +16,7 @@ import androidx.work.WorkerParameters;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.storage.MyPostsStorage;
+import com.mishiranu.dashchan.util.Logger;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -305,8 +306,12 @@ public class ReplyPushSyncWorker extends Worker {
 		Context context = getApplicationContext();
 		MyPostsStorage storage = MyPostsStorage.getInstance();
 		storage.deactivateAllTracking();
-		storage.await(false);
 		String installationId = getInputData().getString(KEY_INSTALLATION_ID);
+		if (!storage.awaitSaved()) {
+			Logger.write(Logger.Type.ERROR, "ReplyPush", "identity_reset_save_failed");
+			// Do not delete server state/rotate identity until local tracking changes are durable.
+			return retryIdentityReset(installationId, 0);
+		}
 		String secret = ReplyPushPrivateStore.getSecret(context, installationId);
 		if (!ReplyPushContract.isInstallationId(installationId) || StringUtils.isEmpty(secret)) {
 			ReplyPushPrivateStore.markIdentityResetFailed(context);

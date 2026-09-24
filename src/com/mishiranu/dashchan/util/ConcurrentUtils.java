@@ -9,7 +9,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.RejectedExecutionHandler;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -31,44 +30,8 @@ public class ConcurrentUtils {
 	public static ExecutorService newThreadPool(int from, int to, long lifeTimeMs,
 			String componentName, String componentPart) {
 		if (to > from && to >= 2) {
-			ThreadLocal<Boolean> executeState = new ThreadLocal<Boolean>() {
-				@Override
-				protected Boolean initialValue() {
-					return false;
-				}
-			};
-			LinkedBlockingQueue<Runnable> queue = new LinkedBlockingQueue<Runnable>() {
-				@Override
-				public boolean offer(Runnable runnable) {
-					return !executeState.get() && super.offer(runnable);
-				}
-			};
-			return new ThreadPoolExecutor(from, to, lifeTimeMs, TimeUnit.MILLISECONDS, queue,
-					new ComponentThreadFactory(componentName, componentPart)) {
-				/* init */ {
-					super.setRejectedExecutionHandler((runnable, executor) -> {
-						executeState.set(false);
-						if (!queue.offer(runnable)) {
-							throw new RuntimeException();
-						}
-					});
-				}
-
-				@Override
-				public void setRejectedExecutionHandler(RejectedExecutionHandler handler) {
-					throw new UnsupportedOperationException();
-				}
-
-				@Override
-				public void execute(Runnable command) {
-					try {
-						executeState.set(true);
-						super.execute(command);
-					} finally {
-						executeState.set(false);
-					}
-				}
-			};
+			return new ScalingThreadPoolExecutor(from, to, lifeTimeMs,
+					new ComponentThreadFactory(componentName, componentPart));
 		} else {
 			return new ThreadPoolExecutor(from, to, lifeTimeMs, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(),
 					new ComponentThreadFactory(componentName, componentPart));

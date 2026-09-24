@@ -44,6 +44,8 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
@@ -126,6 +128,14 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 	private static final int COMMENT_MAX_LINES = 9;
 
 	private static final String EXTRA_CAPTCHA_DRAFT = "captchaDraft";
+
+	// Register in a fixed order for every instance, including restoration while a picker is open.
+	private final ActivityResultLauncher<Intent> attachmentPicker = registerForActivityResult(
+			new ActivityResultContracts.StartActivityForResult(), result -> handlePostingActivityResult(
+					C.REQUEST_CODE_ATTACH, result.getResultCode(), result.getData()));
+	private final ActivityResultLauncher<Intent> imageEditor = registerForActivityResult(
+			new ActivityResultContracts.StartActivityForResult(), result -> handlePostingActivityResult(
+					C.REQUEST_CODE_IMAGE_EDITOR, result.getResultCode(), result.getData()));
 
 	public PostingFragment() {}
 
@@ -1170,7 +1180,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		}
 		intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
 		try {
-			startActivityForResult(intent, C.REQUEST_CODE_ATTACH);
+			attachmentPicker.launch(intent);
 		} catch (ActivityNotFoundException e) {
 			if (initialUri != null) {
 				openSystemAttachmentPicker();
@@ -1569,14 +1579,10 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		updateSendButtonState();
 	}
 
-	@Override
-	public void onActivityResult(int requestCode, int resultCode, Intent data) {
-		if (resultCode == Activity.RESULT_OK) {
+	private void handlePostingActivityResult(int requestCode, int resultCode, Intent data) {
+		if (resultCode == Activity.RESULT_OK && data != null) {
 			switch (requestCode) {
 				case C.REQUEST_CODE_ATTACH: {
-					if (data == null) {
-						break;
-					}
 					if ((data.getFlags() & Intent.FLAG_GRANT_READ_URI_PERMISSION) == 0) {
 						ClickableToast.show(R.string.no_access_to_memory);
 						break;
@@ -1701,8 +1707,8 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		AttachmentHolder holder = (AttachmentHolder) v.getTag();
 		int attachmentIndex = attachments.indexOf(holder);
 		if (attachmentIndex >= 0 && Preferences.isImageEditorEnabled()) {
-			startActivityForResult(ImageEditorActivity.createIntent(requireContext(), holder.hash, holder.name,
-					attachmentIndex), C.REQUEST_CODE_IMAGE_EDITOR);
+			imageEditor.launch(ImageEditorActivity.createIntent(requireContext(), holder.hash, holder.name,
+					attachmentIndex));
 		}
 	};
 

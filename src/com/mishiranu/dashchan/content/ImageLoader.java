@@ -42,7 +42,8 @@ public class ImageLoader {
 	private ImageLoader() {}
 
 	private final HashMap<String, LoaderTask> loaderTasks = new HashMap<>();
-	private final HashMap<String, Long> notFoundMap = new HashMap<>();
+	private final MissingImageCache notFoundMap =
+			new MissingImageCache(1024, 5 * 60 * 1000L, SystemClock::elapsedRealtime);
 
 	private final HashMap<String, Executor> executors = new HashMap<>();
 
@@ -192,9 +193,10 @@ public class ImageLoader {
 			// so targets could be extracted later.
 			finished = true;
 			if (notFound && !LocalArchiveManager.RESOURCE_SCHEME.equals(uri.getScheme())) {
-				notFoundMap.put(key, SystemClock.elapsedRealtime());
+				notFoundMap.put(key);
 			}
 			if (bitmap != null) {
+				notFoundMap.remove(key);
 				bitmapCache.put(key, bitmap);
 			}
 			for (TaskCallback callback : callbacks) {
@@ -372,8 +374,7 @@ public class ImageLoader {
 			return false;
 		}
 		// Check "not found" images once per 5 minutes
-		Long value = notFoundMap.get(key);
-		if (value != null && SystemClock.elapsedRealtime() - value < 5 * 60 * 1000) {
+		if (notFoundMap.contains(key)) {
 			target.onResult(key, null, !fromCacheOnly, true);
 			return false;
 		}

@@ -1335,10 +1335,20 @@
 	<string name="popup_preview">Показать пример</string>
 	<string name="popup_preview_message">Так будут выглядеть всплывающие сообщения</string>
 	<string name="popup_reset">Сбросить</string>
-	<string name="popup_reset__summary">Вернуть оформление в цвет темы и сбросить свои цвета</string>
+	<string name="popup_reset__summary">Вернуть оформление в цвет шапки и сбросить свои цвета</string>
 	<string name="show_original_post_title">Показывать заголовок в первом посте</string>
 	<string name="show_original_post_title__summary">Повторять название треда над первым сообщением, даже если оно уже есть в верхней панели. В списке тредов, предпросмотре и при скрытом названии в верхней панели заголовок сохраняется.</string>
 	<string name="popup_color_hue">Оттенок</string>
 	<string name="popup_color_field">Выберите насыщенность и яркость</string>
 	<string name="popup_color_code">Ввести код цвета HEX</string>
+	<string name="kohlchan_access_title">Kohlchan: проверка доступа</string>
+	<string name="kohlchan_access_summary">Пройти проверку сайта перед отправкой сообщений</string>
+	<string name="kohlchan_access_instructions">Введите капчу на kohlchan.net и завершите активацию, если её предложит сайт. Затем нажмите «Проверить доступ» внизу. После проверки приложение не отправляет ваш пост автоматически: вернитесь к форме и нажмите «Отправить».</string>
+	<string name="kohlchan_access_check">Проверить доступ</string>
+	<string name="kohlchan_access_not_ready">Разрешение пока не активно. Завершите ввод капчи и активацию на сайте, затем проверьте снова.</string>
+	<string name="kohlchan_access_network_error">Не удалось проверить доступ. Проверьте подключение и повторите попытку.</string>
+	<string name="kohlchan_access_retry">Доступ подтверждён. Вернитесь в форму, при необходимости обновите капчу и повторите действие. Автоматической повторной отправки не было.</string>
+	<string name="kohlchan_access_cancelled">Проверка доступа отменена. Автоматической повторной отправки не было.</string>
+	<string name="kohlchan_delete_partial">Удалена только часть выбранных сообщений. Обновите тред и проверьте пароль удаления оставшихся сообщений.</string>
+	<string name="kohlchan_request_failed">Kohlchan отклонил запрос. Проверьте правила доски и попробуйте позже.</string>
 </resources>

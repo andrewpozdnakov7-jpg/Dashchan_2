@@ -37,6 +37,9 @@ import android.widget.FrameLayout;
 import android.widget.TextView;
 import android.widget.Toolbar;
 import androidx.activity.BackEventCompat;
+import androidx.activity.result.ActivityResult;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.core.view.GravityCompat;
 import androidx.fragment.app.FragmentManager;
@@ -131,6 +134,9 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	private static final PageFragment REFERENCE_FRAGMENT = new PageFragment();
 
 	private enum StorageRequestState {NONE, INITIAL_INSTRUCTIONS, INSTRUCTIONS, PICKER}
+
+	private final ActivityResultLauncher<Intent> storageDirectoryPicker = registerForActivityResult(
+			new ActivityResultContracts.StartActivityForResult(), this::onStorageDirectoryResult);
 
 	private final ArrayList<StackItem> fragments = new ArrayList<>();
 	private final ArrayList<SavedPageItem> stackPageItems = new ArrayList<>();
@@ -637,19 +643,15 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		}
 	}
 
-	@Override
-	protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-		super.onActivityResult(requestCode, resultCode, data);
-
-		if (requestCode == C.REQUEST_CODE_OPEN_URI_TREE) {
-			boolean cancel = resultCode != RESULT_OK;
-			storageRequestState = StorageRequestState.NONE;
-			if (!cancel && data != null) {
-				Preferences.setDownloadUriTree(this, data.getData(), data.getFlags());
-			}
-			handleStorageRequestResult(cancel);
-			requestNotificationPermissionIfNeeded();
+	private void onStorageDirectoryResult(ActivityResult result) {
+		Intent data = result.getData();
+		boolean cancel = result.getResultCode() != RESULT_OK;
+		storageRequestState = StorageRequestState.NONE;
+		if (!cancel && data != null) {
+			Preferences.setDownloadUriTree(this, data.getData(), data.getFlags());
 		}
+		handleStorageRequestResult(cancel);
+		requestNotificationPermissionIfNeeded();
 	}
 
 	private ContentFragment getCurrentFragment() {
@@ -2805,7 +2807,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, DocumentsContract
 				.buildRootUri("com.android.externalstorage.documents", "primary"));
 		try {
-			startActivityForResult(intent, C.REQUEST_CODE_OPEN_URI_TREE);
+			storageDirectoryPicker.launch(intent);
 		} catch (ActivityNotFoundException e) {
 			ClickableToast.show(R.string.unknown_address);
 			storageRequestState = StorageRequestState.NONE;

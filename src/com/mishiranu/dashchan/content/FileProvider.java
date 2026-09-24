@@ -2,7 +2,6 @@ package com.mishiranu.dashchan.content;
 
 import android.content.ContentProvider;
 import android.content.ContentValues;
-import android.content.UriMatcher;
 import android.database.Cursor;
 import android.database.MatrixCursor;
 import android.database.sqlite.SQLiteException;
@@ -10,29 +9,21 @@ import android.net.Uri;
 import android.os.ParcelFileDescriptor;
 import android.provider.OpenableColumns;
 import androidx.annotation.NonNull;
+import chan.util.StringUtils;
 import com.mishiranu.dashchan.BuildConfig;
+import com.mishiranu.dashchan.util.MimeTypes;
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.util.Arrays;
+import java.util.List;
 
 public class FileProvider extends ContentProvider {
 	private static final String AUTHORITY = BuildConfig.FILE_PROVIDER_AUTHORITY;
 	private static final String PATH_UPDATES = "updates";
 	private static final String PATH_DOWNLOADS = "downloads";
 	private static final String PATH_SHARE = "share";
-
-	private static final int URI_UPDATES = 1;
-	private static final int URI_DOWNLOADS = 2;
-	private static final int URI_SHARE = 3;
-
-	private static final UriMatcher URI_MATCHER;
-
-	static {
-		URI_MATCHER = new UriMatcher(UriMatcher.NO_MATCH);
-		URI_MATCHER.addURI(AUTHORITY, PATH_UPDATES + "/*", URI_UPDATES);
-		URI_MATCHER.addURI(AUTHORITY, PATH_DOWNLOADS + "/*", URI_DOWNLOADS);
-		URI_MATCHER.addURI(AUTHORITY, PATH_SHARE + "/*", URI_SHARE);
-	}
+	static final String GALLERY_SHARE_FILE_NAME_START = "gallery-share-";
 
 	@Override
 	public boolean onCreate() {
@@ -50,124 +41,123 @@ public class FileProvider extends ContentProvider {
 	}
 
 	public static File getUpdatesFile(String name) {
-		File directory = getUpdatesDirectory();
-		if (directory != null) {
-			File file = new File(directory, name);
-			if (file.exists()) {
-				return file;
-			}
+		try {
+			return name != null && name.indexOf('/') < 0
+					? ProviderFileResolver.resolve(getUpdatesDirectory(), name) : null;
+		} catch (IOException e) {
+			return null;
 		}
-		return null;
 	}
 
 	public static Uri convertUpdatesUri(Uri uri) {
-		if ("file".equals(uri.getScheme())) {
-			File fileParent = new File(uri.getPath()).getParentFile();
-			File directory = getUpdatesDirectory();
-			if (fileParent != null && fileParent.equals(directory)) {
-				return new Uri.Builder().scheme("content").authority(AUTHORITY)
-						.appendPath(PATH_UPDATES).appendPath(uri.getLastPathSegment()).build();
+		if ("file".equals(uri.getScheme()) && uri.getPath() != null) {
+			File file = new File(uri.getPath());
+			try {
+				String path = ProviderFileResolver.relativePath(getUpdatesDirectory(), file);
+				if (path.indexOf('/') < 0) {
+					return buildUri(PATH_UPDATES, path, null);
+				}
+			} catch (IOException e) {
+				// Leave unsupported locations to the caller, as before.
 			}
 		}
 		return uri;
 	}
 
-	private static class InternalFile {
-		public final File file;
-		public final String type;
-		public final Uri uri;
-
-		public InternalFile(File file, String type, Uri uri) {
-			this.file = file;
-			this.uri = uri;
-			this.type = type;
+	private static Uri buildUri(String providerPath, String relativePath, String type) {
+		Uri.Builder builder = new Uri.Builder().scheme("content").authority(AUTHORITY).appendPath(providerPath);
+		for (String part : relativePath.split("/")) {
+			// Encode each filename component, including spaces, #, % and non-ASCII text.
+			builder.appendPath(part);
 		}
-	}
-
-	private static InternalFile downloadsFile;
-	private static InternalFile shareFile;
-
-	private static InternalFile convertFile(File directory, File file, String type, String providerPath) {
-		String filePath = file.getAbsolutePath();
-		String directoryPath = directory.getAbsolutePath();
-		if (filePath.startsWith(directoryPath)) {
-			filePath = filePath.substring(directoryPath.length());
-			if (filePath.startsWith("/")) {
-				filePath = filePath.substring(1);
-			}
-			Uri uri = new Uri.Builder().scheme("content").authority(AUTHORITY)
-					.appendPath(providerPath).appendEncodedPath(filePath).build();
-			return new InternalFile(file, type, uri);
+		if (!StringUtils.isEmpty(type)) {
+			builder.appendQueryParameter("type", type);
 		}
-		return null;
+		return builder.build();
 	}
 
 	public static Uri convertDownloadsLegacyFile(File file, String type) {
-		InternalFile internalFile = convertFile(Preferences.getDownloadDirectoryLegacy(), file, type, PATH_DOWNLOADS);
-		if (internalFile != null) {
-			downloadsFile = internalFile;
-			return internalFile.uri;
+		try {
+			return buildUri(PATH_DOWNLOADS,
+					ProviderFileResolver.relativePath(Preferences.getDownloadDirectoryLegacy(), file), type);
+		} catch (IOException e) {
+			return Uri.fromFile(file);
+		}
+	}
+
+	public static Uri convertShareFile(File directory, File file, String type) {
+		try {
+			File root = MainApplication.getInstance().getExternalCacheDir();
+			if (root != null && directory != null && root.getCanonicalFile().equals(directory.getCanonicalFile())) {
+				String path = ProviderFileResolver.relativePath(root, file);
+				if (path.indexOf('/') < 0 && path.startsWith(GALLERY_SHARE_FILE_NAME_START)) {
+					return buildUri(PATH_SHARE, path, type);
+				}
+			}
+		} catch (IOException e) {
+			// No arbitrary caller-supplied directory is exposed by the provider.
 		}
 		return Uri.fromFile(file);
 	}
 
-	public static Uri convertShareFile(File directory, File file, String type) {
-		InternalFile internalFile = convertFile(directory, file, type, PATH_SHARE);
-		if (internalFile != null) {
-			shareFile = internalFile;
-			return internalFile.uri;
+	private static List<String> getSegments(Uri uri) {
+		if (!"content".equals(uri.getScheme()) || !AUTHORITY.equals(uri.getAuthority())) {
+			throw new IllegalArgumentException("Unknown provider URI");
 		}
-		return Uri.fromFile(file);
+		List<String> segments = uri.getPathSegments();
+		if (segments.size() < 2) {
+			throw new IllegalArgumentException("Missing provider path");
+		}
+		return segments;
+	}
+
+	private static File resolveFile(Uri uri) {
+		List<String> segments = getSegments(uri);
+		String path = String.join("/", segments.subList(1, segments.size()));
+		try {
+			switch (segments.get(0)) {
+				case PATH_UPDATES: {
+					return segments.size() == 2 ? getUpdatesFile(path) : null;
+				}
+				case PATH_DOWNLOADS: {
+					return ProviderFileResolver.resolve(Preferences.getDownloadDirectoryLegacy(), path);
+				}
+				case PATH_SHARE: {
+					return segments.size() == 2 && path.indexOf('/') < 0
+							&& path.startsWith(GALLERY_SHARE_FILE_NAME_START)
+							? ProviderFileResolver.resolve(MainApplication.getInstance().getExternalCacheDir(), path) : null;
+				}
+				default: throw new IllegalArgumentException("Unknown provider path");
+			}
+		} catch (IOException e) {
+			return null;
+		}
 	}
 
 	@Override
 	public String getType(@NonNull Uri uri) {
-		switch (URI_MATCHER.match(uri)) {
-			case URI_UPDATES: {
-				return "application/vnd.android.package-archive";
-			}
-			case URI_DOWNLOADS: {
-				if (downloadsFile != null) {
-					return downloadsFile.type;
-				}
-			}
-			case URI_SHARE: {
-				if (shareFile != null) {
-					return shareFile.type;
-				}
-			}
-			default: {
-				throw new IllegalArgumentException("Unknown URI: " + uri);
-			}
+		File file = resolveFile(uri);
+		if (file == null) {
+			return null;
 		}
+		if (PATH_UPDATES.equals(getSegments(uri).get(0))) {
+			return "application/vnd.android.package-archive";
+		}
+		String type = uri.getQueryParameter("type");
+		return !StringUtils.isEmpty(type) ? type
+				: MimeTypes.forExtension(StringUtils.getFileExtension(file.getName()), "application/octet-stream");
 	}
 
 	@Override
 	public ParcelFileDescriptor openFile(@NonNull Uri uri, @NonNull String mode) throws FileNotFoundException {
-		switch (URI_MATCHER.match(uri)) {
-			case URI_UPDATES: {
-				if (!"r".equals(mode)) {
-					throw new FileNotFoundException();
-				}
-				File file = getUpdatesFile(uri.getLastPathSegment());
-				if (file != null) {
-					return ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY);
-				}
-			}
-			case URI_DOWNLOADS: {
-				if (downloadsFile != null && uri.equals(downloadsFile.uri)) {
-					return ParcelFileDescriptor.open(downloadsFile.file, ParcelFileDescriptor.MODE_READ_ONLY);
-				}
-			}
-			case URI_SHARE: {
-				if (shareFile != null && uri.equals(shareFile.uri)) {
-					return ParcelFileDescriptor.open(shareFile.file, ParcelFileDescriptor.MODE_READ_ONLY);
-				}
-			}
-			default: {
-				throw new FileNotFoundException();
-			}
+		if (!"r".equals(mode)) {
+			throw new FileNotFoundException("Provider is read-only");
 		}
+		File file = resolveFile(uri);
+		if (file == null) {
+			throw new FileNotFoundException("Provider file is unavailable");
+		}
+		return ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY);
 	}
 
 	private static final String[] PROJECTION = {OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE};
@@ -175,58 +165,32 @@ public class FileProvider extends ContentProvider {
 	@Override
 	public Cursor query(@NonNull Uri uri, String[] projection,
 			String selection, String[] selectionArgs, String sortOrder) {
-		int matchResult = URI_MATCHER.match(uri);
-		switch (URI_MATCHER.match(uri)) {
-			case URI_UPDATES:
-			case URI_DOWNLOADS:
-			case URI_SHARE: {
-				if (projection == null) {
-					projection = PROJECTION;
+		File file = resolveFile(uri);
+		if (projection == null) {
+			projection = PROJECTION;
+		}
+		String[] columns = new String[projection.length];
+		Object[] values = new Object[projection.length];
+		int columnCount = 0;
+		for (String column : projection) {
+			switch (column) {
+				case OpenableColumns.DISPLAY_NAME: {
+					columns[columnCount] = OpenableColumns.DISPLAY_NAME;
+					values[columnCount++] = file != null ? file.getName() : null;
+					break;
 				}
-				File file = null;
-				switch (matchResult) {
-					case URI_UPDATES: {
-						file = getUpdatesFile(uri.getLastPathSegment());
-						break;
-					}
-					case URI_DOWNLOADS: {
-						file = downloadsFile != null ? downloadsFile.file : null;
-						break;
-					}
-					case URI_SHARE: {
-						file = shareFile != null ? shareFile.file : null;
-						break;
-					}
+				case OpenableColumns.SIZE: {
+					columns[columnCount] = OpenableColumns.SIZE;
+					values[columnCount++] = file != null ? file.length() : null;
+					break;
 				}
-				String[] columns = new String[projection.length];
-				Object[] values = new Object[projection.length];
-				int columnCount = 0;
-				for (String column : projection) {
-					switch (column) {
-						case OpenableColumns.DISPLAY_NAME: {
-							columns[columnCount] = OpenableColumns.DISPLAY_NAME;
-							values[columnCount++] = file != null ? file.getName() : null;
-							break;
-						}
-						case OpenableColumns.SIZE: {
-							columns[columnCount] = OpenableColumns.SIZE;
-							values[columnCount++] = file != null ? file.length() : null;
-							break;
-						}
-					}
-				}
-				columns = Arrays.copyOf(columns, columnCount);
-				values = Arrays.copyOf(values, columnCount);
-				MatrixCursor cursor = new MatrixCursor(columns, 1);
-				if (file != null) {
-					cursor.addRow(values);
-				}
-				return cursor;
-			}
-			default: {
-				throw new IllegalArgumentException("Unknown URI: " + uri);
 			}
 		}
+		MatrixCursor cursor = new MatrixCursor(Arrays.copyOf(columns, columnCount), 1);
+		if (file != null) {
+			cursor.addRow(Arrays.copyOf(values, columnCount));
+		}
+		return cursor;
 	}
 
 	@Override

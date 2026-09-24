@@ -329,9 +329,22 @@ public class Preferences {
 	}
 
 	public static final String KEY_POPUP_COLOR_MODE = "popup_color_mode";
-	public static final PopupColorMode DEFAULT_POPUP_COLOR_MODE = PopupColorMode.THEME;
+	public static final PopupColorMode DEFAULT_POPUP_COLOR_MODE = PopupColorMode.TOOLBAR;
 	public static final String KEY_POPUP_BACKGROUND = "popup_background";
 	public static final String KEY_POPUP_FOREGROUND = "popup_foreground";
+	private static final String KEY_POPUP_TOOLBAR_DEFAULT_MIGRATED = "popup_toolbar_default_migrated";
+
+	static {
+		// Apply the new default once, including explicitly selected old modes.
+		// Preserve custom color values and all choices made after this migration.
+		if (PREFERENCES != null && MainApplication.getInstance().isMainProcess()
+				&& !PREFERENCES.getBoolean(KEY_POPUP_TOOLBAR_DEFAULT_MIGRATED, false)) {
+			try (SharedPreferences.Editor editor = PREFERENCES.edit()) {
+				editor.put(KEY_POPUP_COLOR_MODE, DEFAULT_POPUP_COLOR_MODE.value);
+				editor.put(KEY_POPUP_TOOLBAR_DEFAULT_MIGRATED, true);
+			}
+		}
+	}
 
 	public static PopupColorMode getPopupColorMode() {
 		return getEnumValue(KEY_POPUP_COLOR_MODE, PopupColorMode.values(), DEFAULT_POPUP_COLOR_MODE, o -> o.value);

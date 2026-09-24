@@ -12,7 +12,6 @@ import chan.content.Chan;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.util.AndroidUtils;
 import com.mishiranu.dashchan.util.Hasher;
-import com.mishiranu.dashchan.util.IOUtils;
 import com.mishiranu.dashchan.util.LruCache;
 import com.mishiranu.dashchan.util.MimeTypes;
 import java.io.File;
@@ -576,7 +575,7 @@ public class CacheManager implements Runnable {
 		return null;
 	}
 
-	private static final String GALLERY_SHARE_FILE_NAME_START = "gallery-share-";
+	private static final String GALLERY_SHARE_FILE_NAME_START = FileProvider.GALLERY_SHARE_FILE_NAME_START;
 
 	private void handleGalleryShareFiles() {
 		File tempDirectory = getExternalTempDirectory();
@@ -609,9 +608,11 @@ public class CacheManager implements Runnable {
 			extension = "jpg";
 		}
 		handleGalleryShareFiles();
-		fileName = GALLERY_SHARE_FILE_NAME_START + System.currentTimeMillis() + "." + extension;
+		fileName = GALLERY_SHARE_FILE_NAME_START + java.util.UUID.randomUUID() + "." + extension;
 		File shareFile = new File(tempDirectory, fileName);
-		IOUtils.copyInternalFile(file, shareFile);
+		if (!ShareFileCopy.copy(file, shareFile)) {
+			return null;
+		}
 		Uri uri = FileProvider.convertShareFile(tempDirectory, shareFile, mimeType);
 		return new Pair<>(uri, mimeType);
 	}
