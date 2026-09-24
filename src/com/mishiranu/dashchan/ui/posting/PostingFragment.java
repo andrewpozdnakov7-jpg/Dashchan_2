@@ -247,6 +247,8 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 	}
 
 	@Override
+	// Keep the native send button and its custom measurement under ThemeEngine.
+	@android.annotation.SuppressLint("AppCompatCustomView")
 	public void onViewCreated(@NonNull View view, Bundle savedInstanceState) {
 		super.onViewCreated(view, savedInstanceState);
 

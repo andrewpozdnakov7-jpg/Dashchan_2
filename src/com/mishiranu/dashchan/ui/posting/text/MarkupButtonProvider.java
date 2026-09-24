@@ -38,6 +38,8 @@ public class MarkupButtonProvider {
 		this.span = span;
 	}
 
+	// Native button styling is supplied by the posting form's platform theme.
+	@android.annotation.SuppressLint("AppCompatCustomView")
 	public Button createButton(Context context, int defStyleAttr) {
 		Button button = new Button(context, null, defStyleAttr) {
 			@Override

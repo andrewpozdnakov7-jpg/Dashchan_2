@@ -846,7 +846,7 @@
 	<string name="volume_buttons_text_scale__summary">When media is not playing, use the volume buttons to adjust text scale</string>
 	<string name="video_right_hand_controls">Right-hand mode</string>
 	<string name="video_right_hand_controls__summary">Mirrors the post reply swipe and video player button layout, and moves the volume gesture area to the left for users who hold the phone in their right hand</string>
-	<string name="large_text_layout_warning">At scales above 300%, some interface elements may be displayed incorrectly.</string>
+	<string name="large_text_layout_warning" formatted="false">At scales above 300%, some interface elements may be displayed incorrectly.</string>
 	<string name="font">Font</string>
 	<string name="application_font">Application font</string>
 	<string name="system_font">System font</string>

@@ -221,19 +221,19 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		drawerLayout.setSaveEnabled(false);
 		FrameLayout drawerInterlayer = findViewById(R.id.drawer_interlayer);
 		getLayoutInflater().inflate(R.layout.widget_toolbar, drawerInterlayer);
-		Toolbar toolbar = findViewById(R.id.toolbar);
+		Toolbar toolbar = drawerInterlayer.findViewById(R.id.toolbar);
 		setActionBar(toolbar);
 		setTitle(null);
 		// Allow CustomSearchView to ignore content inset
 		toolbar.setClipChildren(false);
 		toolbarHolder = ViewFactory.addToolbarTitle(toolbar);
-		toolbarExtra = findViewById(R.id.toolbar_extra);
+		toolbarExtra = drawerInterlayer.findViewById(R.id.toolbar_extra);
 		LayoutTransition layoutTransition = new LayoutTransition();
 		layoutTransition.setStartDelay(LayoutTransition.APPEARING, 0);
 		layoutTransition.setStartDelay(LayoutTransition.CHANGE_DISAPPEARING, 0);
 		layoutTransition.setDuration(100);
 		toolbarExtra.setLayoutTransition(layoutTransition);
-		View toolbarLayout = findViewById(R.id.toolbar_layout);
+		View toolbarLayout = drawerInterlayer.findViewById(R.id.toolbar_layout);
 
 		drawerToggle = new DrawerToggle(this, toolbarHolder != null
 				? toolbarHolder.toolbar.getContext() : null, drawerLayout);
@@ -468,6 +468,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	@Override
 	protected void onNewIntent(Intent intent) {
+		super.onNewIntent(intent);
 		navigateIntent(intent, true);
 	}
 
@@ -1982,6 +1983,8 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	}
 
 	@Override
+	// Unhandled platform key events must still reach the Activity superclass.
+	@android.annotation.SuppressLint("RestrictedApi")
 	public boolean dispatchKeyEvent(KeyEvent event) {
 		ContentFragment fragment = getCurrentFragment();
 		return fragment.dispatchKeyEvent(event) || handleTextScaleVolumeKey(event) || super.dispatchKeyEvent(event);

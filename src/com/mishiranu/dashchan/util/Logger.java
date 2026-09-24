@@ -303,7 +303,7 @@ public class Logger {
 			int length = builder.length();
 			for (int i = 0; i < length; i += buffer.length) {
 				int end = Math.min(i + buffer.length, length);
-				builder.getChars(i, end, buffer, 0);
+				android.text.TextUtils.getChars(builder, i, end, buffer, 0);
 				writer.write(buffer, 0, end - i);
 			}
 			return length > 0;

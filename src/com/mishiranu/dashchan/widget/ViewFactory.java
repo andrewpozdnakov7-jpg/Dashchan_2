@@ -192,6 +192,8 @@ public class ViewFactory {
 	}
 
 	/** Chooses wrapping during measurement, before a frame is drawn. */
+	// Native widgets are intentional: ThemeEngine supplies the platform theme, not AppCompat.
+	@android.annotation.SuppressLint("AppCompatCustomView")
 	private static class ToolbarTitleView extends TextView {
 		private static final int MAX_TITLE_LINES = 3;
 		private final TextPaint normalPaint = new TextPaint();
@@ -236,6 +238,8 @@ public class ViewFactory {
 		}
 
 		@Override
+		// Values come exclusively from platform getters and Layout constants.
+		@android.annotation.SuppressLint("WrongConstant")
 		protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
 			boolean hyphenate = Preferences.isToolbarTitleCustomizationEnabled()
 					&& Preferences.isToolbarTitleHyphenationEnabled();

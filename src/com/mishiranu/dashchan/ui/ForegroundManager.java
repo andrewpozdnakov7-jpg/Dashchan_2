@@ -464,6 +464,8 @@ public class ForegroundManager implements Handler.Callback {
 		}
 	}
 
+	// Native widgets are intentional in the platform-themed dialogs.
+	@android.annotation.SuppressLint("AppCompatCustomView")
 	private static ImageView appendDescriptionImageView(ViewGroup viewGroup, Bitmap descriptionImage) {
 		ImageView imageView = new ImageView(viewGroup.getContext()) {
 			@Override
@@ -813,6 +815,8 @@ public class ForegroundManager implements Handler.Callback {
 
 		@NonNull
 		@Override
+		// Preserve native ImageView measurement and ThemeEngine styling.
+		@android.annotation.SuppressLint("AppCompatCustomView")
 		public Dialog onCreateDialog(Bundle savedInstanceState) {
 			final float density = ResourceUtils.obtainDensity(requireContext());
 			LinearLayout container = new LinearLayout(requireContext());
