@@ -67,17 +67,20 @@ final class ContextDialogProvider extends DialogUnit.DialogProvider<ContextDialo
 	private int generation;
 	private boolean closed, loading, failed, cacheErased, updatesAvailable, selectedAnchor = true;
 	private ContextGraph.Result displayedResult;
-	private final Runnable invalidateCache = () -> {
+	private final Runnable invalidateCache;
+
+	private void onCacheInvalidated() {
 		if (closed) return;
 		cancelWork(); cacheErased = true; snapshot = null; displayedResult = null;
 		factory.cacheErased = true;
 		visible.clear(); placeholders.clear(); captions.clear(); retained.clear(); revealed.clear();
 		failed = true; updateStatus(); switchState(DialogUnit.State.LIST, null);
-	};
+	}
 
 	private ContextDialogProvider(UiManager ui, UiManager.ConfigurationSet source, Factory factory) {
 		super(ui, p -> configuration(source, p));
 		this.source = source; this.factory = factory;
+		invalidateCache = this::onCacheInvalidated;
 		cacheErased = factory.cacheErased || factory.cacheEpoch != PagesDatabase.getInstance().getContextEpoch();
 		PagesDatabase.getInstance().registerContextInvalidation(invalidateCache);
 		selectedAnchor = factory.anchor == null;
