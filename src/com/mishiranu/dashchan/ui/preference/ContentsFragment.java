@@ -14,6 +14,7 @@ import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.async.ExecutorTask;
 import com.mishiranu.dashchan.content.async.TaskViewModel;
 import com.mishiranu.dashchan.content.database.PagesDatabase;
+import com.mishiranu.dashchan.content.translation.TranslationController;
 import com.mishiranu.dashchan.content.storage.FavoritesStorage;
 import com.mishiranu.dashchan.content.service.BackgroundWatcherWorker;
 import com.mishiranu.dashchan.ui.DrawerForm;
@@ -46,6 +47,8 @@ public class ContentsFragment extends PreferenceFragment {
 		super.onViewCreated(view, savedInstanceState);
 
 		addHeader(R.string.threads);
+		addButton(R.string.outbox_title, R.string.outbox_summary).setOnClickListener(p ->
+				((FragmentHandler) requireActivity()).pushFragment(new OutboxFragment()));
 		addSeek(Preferences.KEY_AUTO_REFRESH_INTERVAL, Preferences.DEFAULT_AUTO_REFRESH_INTERVAL,
 				R.string.refresh_open_thread, R.string.every_number_sec__format,
 				new Pair<>(Preferences.DISABLED_AUTO_REFRESH_INTERVAL, R.string.disabled),
@@ -244,10 +247,19 @@ public class ContentsFragment extends PreferenceFragment {
 
 		@Override
 		protected Void run() {
+			// Clear derived translations with the thread cache; pending translations cannot repopulate it.
+			java.util.concurrent.CountDownLatch translationsCleared = new java.util.concurrent.CountDownLatch(1);
+			ConcurrentUtils.HANDLER.post(() -> TranslationController.getInstance()
+					.clearPersistentCache(success -> translationsCleared.countDown()));
 			if (allPages) {
 				PagesDatabase.getInstance().eraseAll();
 			} else {
 				PagesDatabase.getInstance().erase(openThreads);
+			}
+			try {
+				translationsCleared.await();
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
 			}
 			return null;
 		}

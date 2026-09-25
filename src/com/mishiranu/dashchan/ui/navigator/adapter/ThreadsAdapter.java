@@ -10,6 +10,8 @@ import androidx.recyclerview.widget.RecyclerView;
 import chan.content.Chan;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.content.Preferences;
+import com.mishiranu.dashchan.content.async.AsyncCatalogSearch;
+import com.mishiranu.dashchan.content.async.CatalogSearch;
 import com.mishiranu.dashchan.content.model.AttachmentItem;
 import com.mishiranu.dashchan.content.model.GalleryItem;
 import com.mishiranu.dashchan.content.model.PostItem;
@@ -27,7 +29,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Locale;
 
 public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> implements GalleryItem.Provider {
 	public interface Callback extends ListViewUtils.SimpleCallback<PostItem> {}
@@ -75,6 +76,8 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 	private final SourceLabelProvider sourceLabelProvider;
 
 	private String filterText;
+	private final AsyncCatalogSearch<PostItem> catalogSearch;
+	private boolean searchActive;
 	private Preferences.CatalogSort catalogSort = Preferences.CatalogSort.UNSORTED;
 	private boolean cardsMode;
 	private GridMode gridMode;
@@ -93,6 +96,11 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 		configurationSet = new UiManager.ConfigurationSet(chanName, null, null, postStateProvider,
 				this, fragmentManager, uiManager.dialog().createStackInstance(), null, callback,
 				false, false, false, false, false, null);
+		catalogSearch = new AsyncCatalogSearch<>(postItem -> new CatalogSearch.Document(postItem.getSubject(),
+				postItem.getComment(Chan.get(configurationSet.chanName)).toString()), result -> {
+			filteredPostItems = new ArrayList<>(result);
+			notifyDataSetChanged();
+		});
 	}
 
 	@NonNull
@@ -312,6 +320,7 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 			appendItemsInternal(postItems);
 		}
 		this.catalog = catalog;
+		catalogSearch.retainItems(postItems);
 		applyCurrentSortingAndFilter(true, true);
 		notifyDataSetChanged();
 	}
@@ -320,6 +329,26 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 		appendItemsInternal(postItems);
 		applyCurrentSortingAndFilter(true, true);
 		notifyDataSetChanged();
+	}
+
+	public void setSearchActive(boolean active) {
+		if (searchActive != active) {
+			searchActive = active;
+			if (active) {
+				if (!StringUtils.isEmpty(filterText)) {
+					// Resume the same query without clearing its existing rows/scroll position.
+					catalogSearch.submit(catalogSortedPostItems != null ? catalogSortedPostItems : postItems,
+							filterText);
+				}
+			} else {
+				catalogSearch.cancel();
+			}
+		}
+	}
+
+	public void disposeSearch() {
+		searchActive = false;
+		catalogSearch.clear();
 	}
 
 	public void notifyNotModified() {
@@ -386,22 +415,13 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 			}
 		}
 		if (sorting || filter) {
+			catalogSearch.cancel();
 			String text = filterText;
 			if (!StringUtils.isEmpty(text)) {
-				if (filteredPostItems == null) {
-					filteredPostItems = new ArrayList<>();
-				} else {
-					filteredPostItems.clear();
-				}
-				text = text.toLowerCase(Locale.getDefault());
-				Chan chan = Chan.get(configurationSet.chanName);
-				Locale locale = Locale.getDefault();
-				for (PostItem postItem : (catalogSortedPostItems != null ? catalogSortedPostItems : postItems)) {
-					boolean add = postItem.getSubject().toLowerCase(locale).contains(text) ||
-							postItem.getComment(chan).toString().toLowerCase(locale).contains(text);
-					if (add) {
-						filteredPostItems.add(postItem);
-					}
+				// Do not show results belonging to the previous query or dataset while work is pending.
+				filteredPostItems = new ArrayList<>();
+				if (searchActive) {
+					catalogSearch.submit(catalogSortedPostItems != null ? catalogSortedPostItems : postItems, text);
 				}
 			} else {
 				filteredPostItems = null;
@@ -466,13 +486,9 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 
 	public void notifyThreadHidden(PostItem postItem) {
 		int position = getPostItems().indexOf(postItem);
-		if (position < 0) {
-			notifyDataSetChanged();
-			return;
-		}
-		position += getSecretAbuOffset();
+		if (position >= 0) position += getSecretAbuOffset();
 		if (Preferences.isDisplayHiddenThreads()) {
-			notifyItemChanged(position);
+			if (position >= 0) notifyItemChanged(position);
 		} else {
 			postItems.remove(postItem);
 			if (catalogSortedPostItems != null) {
@@ -481,7 +497,13 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 			if (filteredPostItems != null) {
 				filteredPostItems.remove(postItem);
 			}
-			notifyItemRemoved(position);
+			if (position >= 0) notifyItemRemoved(position);
+			catalogSearch.retainItems(postItems);
+			// A pending snapshot must not resurrect the hidden thread.
+			catalogSearch.cancel();
+			if (searchActive && !StringUtils.isEmpty(filterText)) {
+				catalogSearch.submit(catalogSortedPostItems != null ? catalogSortedPostItems : postItems, filterText);
+			}
 		}
 	}
 }

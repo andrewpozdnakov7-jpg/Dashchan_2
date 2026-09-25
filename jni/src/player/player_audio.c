@@ -15,6 +15,7 @@
 #include <math.h>
 #include <stdint.h>
 #include <string.h>
+#include <time.h>
 #define AUDIO_MAX_BOOST_DB 12
 #define AUDIO_TARGET_CHUNK_MS 40
 #define AUDIO_MIN_ENQUEUE_SIZE 256
@@ -82,6 +83,9 @@ void playerAudioClearOutputLocked(Player * player, int clearDecodedBuffers) {
 		(*player->audio.sl.queue)->Clear(player->audio.sl.queue);
 	}
 	player->audio.outputRestartPending = 0;
+	player->audio.outputProgressTime = 0;
+	player->audio.outputRecoveryAttempts = 0;
+	player->audio.outputRecoveryFailed = 0;
 	if (clearDecodedBuffers) {
 		blockingQueueClear(&player->audio.bufferQueue, playerAudioBufferQueueFreeCallback);
 	}
@@ -208,6 +212,8 @@ static int64_t completeAudioChunkLocked(Player * player) {
 	player->audio.outputChunks[index].size = 0;
 	player->audio.outputChunkHead = (index + 1) % AUDIO_OUTPUT_QUEUE_CAPACITY;
 	player->audio.outputChunkCount--;
+	player->audio.outputProgressTime = 0;
+	player->audio.outputRecoveryAttempts = 0;
 	int64_t endPosition = -1;
 	if (audioBuffer) {
 		audioBuffer->pendingChunks--;
@@ -225,10 +231,94 @@ static int64_t completeAudioChunkLocked(Player * player) {
 	return endPosition;
 }
 
+// The queue, not the number of callbacks delivered, owns PCM completion.
+// Multiple chunks may finish while our mutex is busy. Reconcile them all before
+// submitting replacements, otherwise phantom chunks can keep the queue full.
+static int64_t reconcileAudioOutputLocked(Player * player, SLuint32 nativeCount) {
+	int64_t endPosition = -1;
+	while (player->audio.outputChunkCount > (int) nativeCount) {
+		endPosition = completeAudioChunkLocked(player);
+	}
+	return endPosition;
+}
+
+// Runs on the decode worker with sleepBufferMutex held, never from an OpenSL
+// callback. It is only polled while decoded PCM is back-pressured.
+static void checkAudioOutputProgressLocked(Player * player) {
+	if (player->audio.outputRecoveryFailed) return;
+	if (!player->play.playing || player->meta.interrupt ||
+			playerGetSkipFlag(&player->sync.skip.audioWorkFrame) ||
+			!player->audio.sl.queue || !player->audio.sl.play) {
+		player->audio.outputProgressTime = 0;
+		return;
+	}
+	SLAndroidSimpleBufferQueueState state = {0};
+	SLuint32 playState = SL_PLAYSTATE_STOPPED;
+	SLmillisecond position = 0;
+	SLresult queueResult = (*player->audio.sl.queue)->GetState(player->audio.sl.queue, &state);
+	SLresult playResult = (*player->audio.sl.play)->GetPlayState(player->audio.sl.play, &playState);
+	SLresult positionResult = (*player->audio.sl.play)->GetPosition(player->audio.sl.play, &position);
+	if (queueResult != SL_RESULT_SUCCESS) return;
+	int before = player->audio.outputChunkCount;
+	reconcileAudioOutputLocked(player, state.count);
+	if (player->audio.outputChunkCount < before) {
+		diagnosticsLog("player=%u audio_output reconcile tracked=%d native=%u",
+				player->meta.diagnosticsId, before, (unsigned int) state.count);
+		playerAudioEnqueueBuffer(player);
+		pthread_cond_broadcast(&player->audio.bufferCond);
+		return;
+	}
+	if (!player->audio.outputChunkCount) {
+		playerAudioEnqueueBuffer(player);
+		return;
+	}
+	struct timespec now;
+	clock_gettime(CLOCK_MONOTONIC, &now);
+	int64_t nowMs = (int64_t) now.tv_sec * 1000 + now.tv_nsec / 1000000;
+	if (!player->audio.outputProgressTime || player->audio.outputPlayIndex != state.index ||
+			(positionResult == SL_RESULT_SUCCESS && player->audio.outputPlayPosition != position)) {
+		player->audio.outputProgressTime = nowMs;
+		player->audio.outputPlayPosition = position;
+		player->audio.outputPlayIndex = state.index;
+		return;
+	}
+	if (nowMs - player->audio.outputProgressTime < 1500 || player->audio.outputRecoveryAttempts >= 2) return;
+	player->audio.outputRecoveryAttempts++;
+	player->audio.outputProgressTime = nowMs;
+	// Keep all PCM owners alive and replay only the outstanding chunks. Unlike a
+	// seek, this must not discard already decoded audio or advance the clock.
+	SLresult stopResult = (*player->audio.sl.play)->SetPlayState(player->audio.sl.play, SL_PLAYSTATE_STOPPED);
+	SLresult clearResult = stopResult == SL_RESULT_SUCCESS
+			? (*player->audio.sl.queue)->Clear(player->audio.sl.queue) : stopResult;
+	SLresult enqueueResult = clearResult;
+	if (clearResult == SL_RESULT_SUCCESS) {
+		for (int i = 0; i < player->audio.outputChunkCount; i++) {
+			int index = (player->audio.outputChunkHead + i) % AUDIO_OUTPUT_QUEUE_CAPACITY;
+			AudioBuffer * buffer = player->audio.outputChunks[index].buffer;
+			enqueueResult = (*player->audio.sl.queue)->Enqueue(player->audio.sl.queue,
+					buffer->buffer + player->audio.outputChunks[index].offset,
+					player->audio.outputChunks[index].size);
+			if (enqueueResult != SL_RESULT_SUCCESS) break;
+		}
+	}
+	SLresult resumeResult = (*player->audio.sl.play)->SetPlayState(player->audio.sl.play, SL_PLAYSTATE_PLAYING);
+	diagnosticsLog("player=%u audio_output stalled_recovery attempt=%d state=%u state_result=%d"
+			" position_ms=%u position_result=%d depth=%u stop=%d clear=%d enqueue=%d resume=%d",
+			player->meta.diagnosticsId, player->audio.outputRecoveryAttempts, (unsigned int) playState,
+			(int) playResult, (unsigned int) position, (int) positionResult, (unsigned int) state.count,
+			(int) stopResult, (int) clearResult, (int) enqueueResult, (int) resumeResult);
+	if (enqueueResult != SL_RESULT_SUCCESS || resumeResult != SL_RESULT_SUCCESS) {
+		// Do not retry indefinitely or free memory that OpenSL may still reference.
+		player->audio.outputRecoveryAttempts = 2;
+		player->audio.outputRecoveryFailed = 1;
+	}
+}
+
 // Fill both OpenSL slots whenever possible. Decoded buffers and every submitted
 // PCM owner stay alive until their completion callbacks, avoiding the one tiny
 // 256-byte buffer cadence that could repeatedly starve AudioTrack under load.
 int playerAudioEnqueueBuffer(Player * player) {
+	if (player->audio.outputRecoveryFailed) return 0;
 	if (!player->play.playing || !player->audio.sl.queue) {
 		player->audio.bufferNeedEnqueueAfterDecode = 1;
 		return 0;
@@ -302,15 +392,15 @@ static void audioPlayerCallback(SLAndroidSimpleBufferQueueItf slQueue, void * co
 	}
 	LOG("audio callback");
 	pthread_mutex_lock(&player->audio.sleepBufferMutex);
-	if (playerGetSkipFlag(&player->sync.skip.audioWorkFrame)) {
+	if (playerGetSkipFlag(&player->sync.skip.audioWorkFrame) || player->audio.outputRecoveryFailed) {
 		pthread_mutex_unlock(&player->audio.sleepBufferMutex);
 		return;
 	}
 	SLAndroidSimpleBufferQueueState queueState = {0};
 	SLresult stateResult = (*slQueue)->GetState(slQueue, &queueState);
-	int completedChunk = stateResult != SL_RESULT_SUCCESS ||
+	int completedChunk = stateResult == SL_RESULT_SUCCESS &&
 			queueState.count < (SLuint32) player->audio.outputChunkCount;
-	int64_t endAudioPosition = completedChunk ? completeAudioChunkLocked(player) : -1;
+	int64_t endAudioPosition = completedChunk ? reconcileAudioOutputLocked(player, queueState.count) : -1;
 	if (!completedChunk) {
 		// STOPPED and Clear() are both allowed to trigger a callback. If fresh
 		// buffers won the mutex race, GetState still reports all tracked chunks;
@@ -353,7 +443,13 @@ static int queueDecodedAudio(Player * player, uint8_t * buffer, int size,
 	}
 	while (!player->meta.interrupt && !playerGetSkipFlag(&player->sync.skip.audioWorkFrame) &&
 			blockingQueueCount(&player->audio.bufferQueue) >= 5) {
-		pthread_cond_wait(&player->audio.bufferCond, &player->audio.sleepBufferMutex);
+		if (player->play.playing) {
+			condSleepUntilMs(&player->audio.bufferCond, &player->audio.sleepBufferMutex, getTime() + 250);
+			checkAudioOutputProgressLocked(player);
+		} else {
+			player->audio.outputProgressTime = 0;
+			pthread_cond_wait(&player->audio.bufferCond, &player->audio.sleepBufferMutex);
+		}
 	}
 	if (player->meta.interrupt || playerGetSkipFlag(&player->sync.skip.audioWorkFrame)) {
 		pthread_mutex_unlock(&player->audio.sleepBufferMutex);

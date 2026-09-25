@@ -39,7 +39,7 @@ public class InterfaceFragment extends PreferenceFragment {
 		addHeader(R.string.application_shortcut);
 		addList(Preferences.KEY_APPLICATION_NAME, LauncherIconManager.getApplicationNames(),
 				Preferences.DEFAULT_APPLICATION_NAME, R.string.application_name,
-				Arrays.asList("Sloop", "Dashchan_2", "Двач", "Slooop", "ТОГДАЧ", "Slopchan", "Slopchan_1",
+				Arrays.asList("Sloop", "Dashchan_2", "Двач", "Slooop", "Slopchan", "Slopchan_1",
 						"Slopchan_2"))
 				.setOnAfterChangeListener(p -> LauncherIconManager.apply(requireContext(), p.getValue()));
 		if (LauncherIconManager.arePresetLogosReady()) {
@@ -113,6 +113,9 @@ public class InterfaceFragment extends PreferenceFragment {
 				Preferences.DEFAULT_HIDE_THREADS_WITH_SWIPE, R.string.hide_threads_with_swipe, 0);
 
 		addHeader(R.string.posts_list);
+		addButton(R.string.thread_quick_navigation, 0)
+				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
+						.pushFragment(new ThreadQuickNavigationFragment()));
 		addCheck(true, Preferences.KEY_SWIPE_REPLY, Preferences.DEFAULT_SWIPE_REPLY,
 				R.string.swipe_reply, R.string.swipe_reply__summary);
 		addCheck(true, Preferences.KEY_REMOVE_HIDDEN_POSTS, Preferences.DEFAULT_REMOVE_HIDDEN_POSTS,

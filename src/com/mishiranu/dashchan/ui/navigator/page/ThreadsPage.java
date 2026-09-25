@@ -316,6 +316,7 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 	@Override
 	protected void onResume() {
 		super.onResume();
+		getAdapter().setSearchActive(true);
 		RetainableExtra retainableExtra = getRetainableExtra(RetainableExtra.FACTORY);
 		if (retainableExtra.dialogsState != null) {
 			retainableExtra.dialogsState.dropState();
@@ -325,12 +326,14 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 
 	@Override
 	protected void onPause() {
+		getAdapter().setSearchActive(false);
 		cancelAppendScroll();
 		super.onPause();
 	}
 
 	@Override
 	protected void onDestroy() {
+		getAdapter().disposeSearch();
 		cancelAppendScroll();
 		getRecyclerView().removeOnScrollListener(appendScrollListener);
 		getRecyclerView().getViewTreeObserver().removeOnPreDrawListener(appendScrollAfterLayout);

@@ -216,6 +216,10 @@ public class Preferences {
 
 	public static String getApplicationName() {
 		String value = PREFERENCES.getString(KEY_APPLICATION_NAME, DEFAULT_APPLICATION_NAME);
+		if (LauncherIconManager.VALUE_TOGDACH.equals(value)) {
+			value = DEFAULT_APPLICATION_NAME;
+			PREFERENCES.edit().put(KEY_APPLICATION_NAME, value).close();
+		}
 		return LauncherIconManager.isValidValue(value) ? value : DEFAULT_APPLICATION_NAME;
 	}
 
@@ -307,6 +311,20 @@ public class Preferences {
 	}
 
 	public static final String KEY_ACTIVE_SCROLLBAR = "active_scrollbar";
+	public static final String KEY_THREAD_QUICK_NAVIGATION = "thread_quick_navigation";
+	public static final String DEFAULT_THREAD_QUICK_NAVIGATION = "right";
+	public static final String KEY_THREAD_QUICK_NAVIGATION_TRANSPARENCY = "thread_quick_navigation_transparency";
+	public static final int DEFAULT_THREAD_QUICK_NAVIGATION_TRANSPARENCY = 90;
+
+	public static int getThreadQuickNavigationTransparency() {
+		return Math.max(0, Math.min(100, PREFERENCES.getInt(KEY_THREAD_QUICK_NAVIGATION_TRANSPARENCY,
+				DEFAULT_THREAD_QUICK_NAVIGATION_TRANSPARENCY)));
+	}
+
+	public static String getThreadQuickNavigation() {
+		return PREFERENCES.getString(KEY_THREAD_QUICK_NAVIGATION, DEFAULT_THREAD_QUICK_NAVIGATION);
+	}
+
 	public static final boolean DEFAULT_ACTIVE_SCROLLBAR = true;
 
 	public static boolean isActiveScrollbar() {
@@ -2639,6 +2657,16 @@ public class Preferences {
 
 	public static void setSavedVideoPlaybackSpeed(int playbackSpeed) {
 		PREFERENCES.edit().put(KEY_SAVED_VIDEO_PLAYBACK_SPEED, playbackSpeed).close();
+	}
+
+	private static final String KEY_VIDEO_TIKTOK_MODE = "video_tiktok_mode";
+
+	public static boolean isVideoTikTokMode() {
+		return PREFERENCES.getBoolean(KEY_VIDEO_TIKTOK_MODE, false);
+	}
+
+	public static void setVideoTikTokMode(boolean enabled) {
+		PREFERENCES.edit().put(KEY_VIDEO_TIKTOK_MODE, enabled).close();
 	}
 
 	private static final String KEY_VIDEO_TIKTOK_MODE_HINT_COUNT = "video_tiktok_mode_hint_count";

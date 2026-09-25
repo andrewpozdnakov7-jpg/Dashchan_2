@@ -107,6 +107,7 @@ public class MainApplication extends Application {
 		super.onTrimMemory(level);
 		if (isMainProcess()) {
 			PostsWindowCache.getInstance().onTrimMemory(level);
+			ImageLoader.getInstance().onTrimMemory(level);
 		}
 	}
 

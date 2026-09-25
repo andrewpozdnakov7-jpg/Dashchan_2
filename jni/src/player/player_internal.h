@@ -185,6 +185,11 @@ struct Player {
 		int outputChunkHead;
 		int outputChunkCount;
 		int outputRestartPending;
+		int64_t outputProgressTime;
+		SLmillisecond outputPlayPosition;
+		SLuint32 outputPlayIndex;
+		int outputRecoveryAttempts;
+		int outputRecoveryFailed;
 		pthread_cond_t sleepCond;
 		pthread_cond_t bufferCond;
 		pthread_mutex_t sleepBufferMutex;

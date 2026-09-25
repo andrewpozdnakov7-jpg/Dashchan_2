@@ -611,6 +611,8 @@ void playerApplyPlaying(Player * player, int playing) {
 				// Queue count checked to free from obligation to handle audio finish flag
 				playerAudioEnqueueBuffer(player);
 			}
+			player->audio.outputProgressTime = 0;
+			pthread_cond_broadcast(&player->audio.bufferCond);
 			pthread_mutex_unlock(&player->audio.sleepBufferMutex);
 		}
 	}

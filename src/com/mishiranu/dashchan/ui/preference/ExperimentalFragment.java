@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui.preference;
 
+import android.app.AlertDialog;
 import android.os.Bundle;
 import android.view.View;
 import androidx.annotation.NonNull;
@@ -109,7 +110,18 @@ public class ExperimentalFragment extends PreferenceFragment implements Translat
 		CheckPreference translationPreference = addCheck(true, Preferences.KEY_LOCAL_TRANSLATION,
 				Preferences.DEFAULT_LOCAL_TRANSLATION, R.string.local_translation,
 				R.string.local_translation__summary);
-		translationPreference.setOnAfterChangeListener(p -> refreshPreferences());
+		translationPreference.setOnAfterChangeListener(p -> {
+			TranslationController.getInstance().unload();
+			refreshPreferences();
+		});
+		addButton(R.string.clear_translation_cache, R.string.clear_translation_cache_summary).setOnClickListener(p ->
+				new AlertDialog.Builder(requireContext()).setTitle(R.string.clear_translation_cache)
+						.setMessage(R.string.clear_translation_cache_summary)
+						.setNegativeButton(android.R.string.cancel, null)
+						.setPositiveButton(android.R.string.ok, (dialog, which) ->
+								TranslationController.getInstance().clearPersistentCache(success ->
+										ClickableToast.show(success ? R.string.translation_cache_cleared : R.string.translation_cache_failed)))
+						.show());
 		if (!translationPreference.getValue()) {
 			return;
 		}

@@ -3,7 +3,6 @@ package com.mishiranu.dashchan.content;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Environment;
 import android.util.Pair;
@@ -496,6 +495,11 @@ public class CacheManager implements Runnable {
 	}
 
 	public Bitmap loadThumbnailExternal(String thumbnailKey) {
+		return loadThumbnailExternal(thumbnailKey,
+				ThumbnailDecoder.targetSize(MainApplication.getInstance().getResources()));
+	}
+
+	public Bitmap loadThumbnailExternal(String thumbnailKey, int targetSize) {
 		if (!isCacheAvailable()) {
 			return null;
 		}
@@ -507,15 +511,15 @@ public class CacheManager implements Runnable {
 			return null;
 		}
 		Bitmap bitmap;
-		try (FileInputStream input = new FileInputStream(file)) {
-			bitmap = BitmapFactory.decodeStream(input);
+		try {
+			bitmap = ThumbnailDecoder.decode(file, targetSize);
 			if (bitmap == null) {
-				file.delete();
+				if (!Thread.currentThread().isInterrupted()) file.delete();
 				return null;
 			}
 			updateCachedFileLastModified(file, thumbnailKey, CacheItem.Type.THUMBNAILS);
 			return bitmap;
-		} catch (IOException e) {
+		} catch (RuntimeException | OutOfMemoryError e) {
 			return null;
 		}
 	}

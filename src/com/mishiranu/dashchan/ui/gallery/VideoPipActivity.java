@@ -43,6 +43,7 @@ import com.mishiranu.dashchan.util.AudioFocus;
 import com.mishiranu.dashchan.util.ViewUtils;
 import com.mishiranu.dashchan.widget.ClickableToast;
 import java.io.File;
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.UUID;
@@ -69,6 +70,22 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 	// The PiP activity runs in the same process, so it can reuse the initialized native player.
 	private static PendingTransfer pendingTransfer;
 	private static PendingGalleryReturn pendingGalleryReturn;
+	private static WeakReference<VideoPipActivity> activePictureInPicture = new WeakReference<>(null);
+
+	// Called on the UI thread after the gallery has handed off its new player.
+	// Replacing content inside the existing pinned task preserves the system's
+	// user-resized bounds. Starting another activity would create a fresh PiP task.
+	static boolean reusePictureInPicture(Intent intent) {
+		VideoPipActivity activity = activePictureInPicture.get();
+		if (activity == null || activity.isFinishing() || activity.isDestroyed()
+				|| !activity.isInPictureInPictureMode() || activity.exitedPictureInPicture
+				|| activity.returnedToGallery) return false;
+		String path = intent.getStringExtra(EXTRA_FILE_PATH);
+		PendingTransfer transfer = path != null ? takePendingTransfer(path) : null;
+		if (transfer == null) return false;
+		activity.replacePictureInPictureContent(intent, transfer);
+		return true;
+	}
 
 	public static class GalleryRestoreData {
 		final String chanName;
@@ -88,14 +105,14 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 	}
 
 	private static class PendingTransfer {
-		public final VideoUnit source;
+		public final VideoUnit.PictureInPictureSource source;
 		public final VideoPlayer player;
 		public final String filePath;
 		public final Bitmap previewFrame;
 		public final GalleryRestoreData galleryRestoreData;
 		public final VideoDownloadSession downloadSession;
 
-		private PendingTransfer(VideoUnit source, VideoPlayer player, String filePath, Bitmap previewFrame,
+		private PendingTransfer(VideoUnit.PictureInPictureSource source, VideoPlayer player, String filePath, Bitmap previewFrame,
 				GalleryRestoreData galleryRestoreData, VideoDownloadSession downloadSession) {
 			this.source = source;
 			this.player = player;
@@ -123,9 +140,12 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 		final boolean muted;
 		final boolean playing;
 		boolean overlayCreated;
+		final Bitmap previewFrame;
 
 		PendingGalleryReturn(GalleryRestoreData data, VideoPlayer player, File sourceFile, long position,
-				int playbackSpeed, boolean muted, boolean playing, VideoDownloadSession downloadSession) {
+				int playbackSpeed, boolean muted, boolean playing, VideoDownloadSession downloadSession,
+				Bitmap previewFrame) {
+			this.previewFrame = previewFrame;
 			this.data = data;
 			this.player = player;
 			this.sourceFile = sourceFile;
@@ -145,7 +165,7 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 	}
 
 	static Intent createIntent(Context context, File file, long position, int playbackSpeed,
-			boolean muted, boolean playing, VideoUnit source, VideoPlayer player, Bitmap previewFrame,
+			boolean muted, boolean playing, VideoUnit.PictureInPictureSource source, VideoPlayer player, Bitmap previewFrame,
 			GalleryRestoreData galleryRestoreData, VideoDownloadSession downloadSession) {
 		synchronized (TRANSFER_LOCK) {
 			if (pendingTransfer != null) {
@@ -162,7 +182,7 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 				.putExtra(EXTRA_PLAYING, playing);
 	}
 
-	static void cancelPendingTransfer(VideoUnit source, VideoPlayer player) {
+	static void cancelPendingTransfer(VideoUnit.PictureInPictureSource source, VideoPlayer player) {
 		synchronized (TRANSFER_LOCK) {
 			if (pendingTransfer != null && pendingTransfer.source == source && pendingTransfer.player == player) {
 				pendingTransfer.recyclePreviewFrame();
@@ -206,7 +226,7 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 			pendingGalleryReturn = null;
 		}
 		if (target.adoptPictureInPicturePlayer(pending.player, pending.sourceFile, pending.position,
-				pending.playbackSpeed, pending.muted, pending.playing, pending.downloadSession)) {
+				pending.playbackSpeed, pending.muted, pending.playing, pending.downloadSession, pending.previewFrame)) {
 			return true;
 		}
 		pending.destroyPlayer();
@@ -222,7 +242,19 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 	private ImageView previewView;
 	private Bitmap previewFrame;
 	private GalleryRestoreData galleryRestoreData;
-	private VideoUnit source;
+	private VideoUnit.PictureInPictureSource source;
+
+	private VideoUnit getSource() {
+		return source != null ? source.get() : null;
+	}
+
+	private void clearSource() {
+		if (source != null) {
+			source.active = false;
+			source.attach(null);
+			source = null;
+		}
+	}
 	private VideoPlayer player;
 	private VideoDownloadSession downloadSession;
 	private AudioFocus audioFocus;
@@ -239,11 +271,40 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 	private boolean resumePlaybackAfterPictureInPictureExit;
 	private boolean pictureInPictureEntryScheduled;
 	private boolean previewFrameHideScheduled;
+	private boolean holdPreviewForGalleryReturn;
 	private boolean galleryRestorePrepared;
 	private boolean returnToGalleryScheduled;
 	private boolean standalonePlayback;
+	private boolean activityResumed;
+	private boolean pictureInPictureEntryRequested;
+	private boolean pictureInPictureFirstDraw;
+	private int transitionSequence;
 	private int returnToGalleryAttempts;
 	private final Handler handler = new Handler(Looper.getMainLooper());
+	private final Runnable enterPictureInPictureAfterDraw = this::enterPictureInPicture;
+
+	private void recordTransition(String event) {
+		VideoUnit source = getSource();
+		VideoDiagnostics.recordUi("pip_transition activity=" + Integer.toHexString(System.identityHashCode(this))
+				+ " task=" + getTaskId() + " sequence=" + transitionSequence + " event=" + event
+				+ " resumed=" + activityResumed + " focus=" + hasWindowFocus()
+				+ " gallery_focus=" + (source != null && source.hasPictureInPictureGalleryFocus())
+				+ " entry_requested=" + pictureInPictureEntryRequested
+				+ " in_pip=" + isInPictureInPictureMode() + " entered=" + enteredPictureInPicture
+				+ " exited=" + exitedPictureInPicture + " prepared=" + galleryRestorePrepared
+				+ " scheduled=" + returnToGalleryScheduled + " returned=" + returnedToGallery);
+	}
+
+	private void cancelGalleryReturn(String reason) {
+		handler.removeCallbacks(returnToGalleryAfterExit);
+		returnToGalleryScheduled = false;
+		VideoUnit source = getSource();
+		if (galleryRestorePrepared && source != null) source.cancelPictureInPictureGalleryPreparation();
+		galleryRestorePrepared = false;
+		returnToGalleryAttempts = 0;
+		transitionSequence++;
+		recordTransition("cancel_" + reason);
+	}
 	private final Runnable recordSettledPipGeometry = () -> recordPipGeometry("settled");
 
 	private void recordPipGeometry(String event) {
@@ -319,16 +380,24 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 	private final Runnable returnToGalleryAfterExit = () -> {
 		returnToGalleryScheduled = false;
 		if (!canContinueReturnToGallery()) {
+			cancelGalleryReturn("not_foreground");
 			return;
 		}
-		VideoUnit source = this.source;
+		VideoUnit source = getSource();
 		VideoPlayer player = this.player;
 		if (player == null) {
 			finish();
 			return;
 		}
 		if (source == null) {
-			restoreGalleryFromSnapshot("source_missing");
+			// The host may be between destroying its old views and attaching the new ones.
+			// A removed gallery cannot reattach; only wait for a temporary view recreation.
+			if (this.source != null && this.source.active && !this.source.galleryClosed) {
+				retryReturnToGallery();
+			} else {
+				restoreGalleryFromSnapshot(this.source != null && this.source.galleryClosed
+						? "source_closed" : "source_missing");
+			}
 			return;
 		}
 		if (!galleryRestorePrepared) {
@@ -462,6 +531,14 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 		});
 
 		player.setListener(this);
+		attachPlayerView();
+		VideoDiagnostics.recordUi("pip activity_created preview=" + (previewFrame != null));
+		activePictureInPicture = new WeakReference<>(this);
+		recordPipGeometry("created");
+		schedulePictureInPictureAfterFirstDraw();
+	}
+
+	private void attachPlayerView() {
 		player.releaseVideoView();
 		player.setVideoViewFrameCallback(this::scheduleHidePreviewFrame);
 		pipVideoView = player.getVideoView(this);
@@ -474,13 +551,15 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 		});
 		rootView.addView(pipVideoView, new FrameLayout.LayoutParams(
 				FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT, Gravity.CENTER));
-		if (previewFrame != null) {
+		if (previewView == null) {
 			previewView = new ImageView(this);
 			previewView.setScaleType(ImageView.ScaleType.FIT_CENTER);
-			previewView.setImageBitmap(previewFrame);
 			rootView.addView(previewView, new FrameLayout.LayoutParams(
 					FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
 		}
+		previewView.bringToFront();
+		previewView.setImageBitmap(previewFrame);
+		previewView.setVisibility(previewFrame != null ? View.VISIBLE : View.INVISIBLE);
 		player.setPlaybackSpeed(playbackSpeed);
 		player.setMuted(muted);
 		if (startPlaying && !muted && player.isAudioPresent()) {
@@ -488,7 +567,6 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 		}
 		player.setPlaying(startPlaying);
 		rootView.setKeepScreenOn(startPlaying);
-		VideoDiagnostics.recordUi("pip activity_created preview=" + (previewFrame != null));
 		if (downloadSession != null) {
 			downloadSession.setListener(downloadListener);
 			if (downloadSession.getError() != null) {
@@ -496,8 +574,46 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 				return;
 			}
 		}
-		recordPipGeometry("created");
-		schedulePictureInPictureAfterFirstDraw();
+	}
+
+	private void replacePictureInPictureContent(Intent intent, PendingTransfer transfer) {
+		cancelGalleryReturn("replace_content");
+		handler.removeCallbacks(finishDismissedPictureInPicture);
+		handler.removeCallbacks(hidePreviewFrameRunnable);
+		VideoPlayer previous = player;
+		VideoUnit previousSource = getSource();
+		if (downloadSession != null) {
+			downloadSession.setListener(null);
+			downloadSession.cancel();
+		}
+		if (previous != null) {
+			previous.setListener(null);
+			previous.setVideoViewFrameCallback(null);
+			if (previousSource == null || !previousSource.closePictureInPicturePlayer(previous)) {
+				previous.releaseVideoViewAndDestroyAsync();
+			}
+		}
+		clearSource();
+		audioFocus.release();
+		setIntent(intent);
+		source = transfer.source;
+		if (source != null) source.enteredPictureInPicture = isInPictureInPictureMode();
+		player = transfer.player;
+		downloadSession = transfer.downloadSession;
+		galleryRestoreData = transfer.galleryRestoreData;
+		previewFrame = transfer.previewFrame;
+		playbackSpeed = intent.getIntExtra(EXTRA_PLAYBACK_SPEED, 1000);
+		muted = intent.getBooleanExtra(EXTRA_MUTED, false);
+		startPlaying = intent.getBooleanExtra(EXTRA_PLAYING, true);
+		finishedPlayback = false;
+		firstVideoFrameReceived = false;
+		previewFrameHideScheduled = false;
+		holdPreviewForGalleryReturn = false;
+		player.setListener(this);
+		attachPlayerView();
+		updatePictureInPictureParams();
+		recordTransition("content_replaced_same_window");
+		recordPipGeometry("content_replaced");
 	}
 
 	private void schedulePictureInPictureAfterFirstDraw() {
@@ -511,7 +627,8 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 				if (rootView.getViewTreeObserver().isAlive()) {
 					rootView.getViewTreeObserver().removeOnPreDrawListener(this);
 				}
-				rootView.post(VideoPipActivity.this::enterPictureInPicture);
+				pictureInPictureFirstDraw = true;
+				handler.post(enterPictureInPictureAfterDraw);
 				return true;
 			}
 		});
@@ -524,7 +641,7 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 			VideoDiagnostics.recordUi("pip first_video_frame activity_age_ms=" + (now - activityCreatedElapsedMs)
 					+ " entry_age_ms=" + (entryRequestedElapsedMs >= 0L ? now - entryRequestedElapsedMs : -1L));
 		}
-		if (previewView != null && !previewFrameHideScheduled) {
+		if (previewView != null && !previewFrameHideScheduled && !holdPreviewForGalleryReturn) {
 			previewFrameHideScheduled = true;
 			// TextureView reports a new frame while the hierarchy may still be building its display list.
 			// Keep the overlay child attached for this activity's lifetime: some Android builds cannot safely
@@ -538,11 +655,28 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 		hidePreviewFrameRunnable.run();
 	}
 
+	private void holdReturnPreview() {
+		if (player == null || previewView == null) return;
+		Bitmap frame = player.getCurrentFrame();
+		if (frame == null) return;
+		handler.removeCallbacks(hidePreviewFrameRunnable);
+		holdPreviewForGalleryReturn = true;
+		previewFrame = frame;
+		previewView.setImageBitmap(frame);
+		previewView.setVisibility(View.VISIBLE);
+		VideoDiagnostics.recordUi("pip return_preview_held");
+	}
+
 	private void enterPictureInPicture() {
 		VideoPlayer player = this.player;
-		if (player == null || isFinishing()) {
+		if (player == null || isFinishing() || isDestroyed() || !activityResumed
+				|| !pictureInPictureFirstDraw || pictureInPictureEntryRequested
+				|| isInPictureInPictureMode() || returnedToGallery) {
 			return;
 		}
+		cancelGalleryReturn("enter");
+		pictureInPictureEntryRequested = true;
+		recordTransition("entry_request");
 		PictureInPictureParams params = createPictureInPictureParams(player.getDimensions());
 		try {
 			setPictureInPictureParams(params);
@@ -681,13 +815,19 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 
 	private boolean canReturnToGallery() {
 		return exitedPictureInPicture && enteredPictureInPicture && !isInPictureInPictureMode()
-				&& hasWindowFocus() && !returnedToGallery && !standalonePlayback && !isFinishing();
+				&& activityResumed && hasWindowFocus() && !returnedToGallery
+				&& !standalonePlayback && !isFinishing() && !isDestroyed() && !isChangingConfigurations();
 	}
 
 	private boolean canContinueReturnToGallery() {
+		VideoUnit source = getSource();
+		// Preparing the gallery may move focus to its dialog. Only that actual focus,
+		// not the preparation flag alone, permits completing the handoff in this case.
+		boolean foreground = activityResumed && hasWindowFocus()
+				|| galleryRestorePrepared && source != null && source.hasPictureInPictureGalleryFocus();
 		return exitedPictureInPicture && enteredPictureInPicture && !isInPictureInPictureMode()
-				&& (galleryRestorePrepared || hasWindowFocus()) && !returnedToGallery
-				&& !standalonePlayback && !isFinishing();
+				&& foreground && !returnedToGallery && !standalonePlayback
+				&& !isFinishing() && !isDestroyed() && !isChangingConfigurations();
 	}
 
 	private void maybeReturnToGallery() {
@@ -699,6 +839,7 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 	private void scheduleReturnToGallery(long delayMillis) {
 		if (!returnToGalleryScheduled && canContinueReturnToGallery()) {
 			returnToGalleryScheduled = true;
+			recordTransition("return_scheduled");
 			handler.postDelayed(returnToGalleryAfterExit, delayMillis);
 		}
 	}
@@ -714,8 +855,12 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 	}
 
 	private void returnToGallery() {
+		if (!canContinueReturnToGallery()) {
+			cancelGalleryReturn("handoff_not_foreground");
+			return;
+		}
 		VideoPlayer player = this.player;
-		VideoUnit source = this.source;
+		VideoUnit source = getSource();
 		if (player == null || source == null || returnedToGallery) {
 			return;
 		}
@@ -739,15 +884,21 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 		handler.removeCallbacks(returnToGalleryAfterExit);
 		returnToGalleryScheduled = false;
 		VideoDiagnostics.recordUi("pip return_to_gallery attempts=" + returnToGalleryAttempts);
-		hidePreviewFrameImmediately();
+		// Keep the preview visible until this window actually stops/destroys.
+		// Its TextureView has already moved to the gallery by this point.
 		audioFocus.release();
-		this.source = null;
+		clearSource();
 		this.player = null;
-		source.bringGalleryToForeground(this);
+		// Do not launch the host again when its gallery already owns the foreground.
+		if (!source.hasPictureInPictureGalleryFocus()) source.bringGalleryToForeground(this);
 		finish();
 	}
 
 	private void restoreGalleryFromSnapshot(String reason) {
+		if (!canReturnToGallery()) {
+			cancelGalleryReturn("snapshot_not_foreground");
+			return;
+		}
 		VideoPlayer player = this.player;
 		GalleryRestoreData data = galleryRestoreData;
 		String filePath = getIntent().getStringExtra(EXTRA_FILE_PATH);
@@ -766,11 +917,12 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 		long position = player.getPosition();
 		player.setPlaying(false);
 		player.setVideoViewFrameCallback(null);
+		Bitmap returnPreview = player.getCurrentFrame();
 		player.releaseVideoView();
 		player.setListener(null);
 		if (downloadSession != null) downloadSession.setListener(null);
 		PendingGalleryReturn pending = new PendingGalleryReturn(data, player, new File(filePath), position,
-				playbackSpeed, muted, playing, downloadSession);
+				playbackSpeed, muted, playing, downloadSession, returnPreview);
 		downloadSession = null; // The pending return now owns the download, even if the old gallery is destroyed.
 		PendingGalleryReturn oldPending;
 		synchronized (TRANSFER_LOCK) {
@@ -780,15 +932,14 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 		if (oldPending != null) {
 			oldPending.destroyPlayer();
 		}
-		VideoUnit source = this.source;
+		VideoUnit source = getSource();
 		if (source != null) {
 			source.detachPictureInPicturePlayer(player);
 		}
 		returnedToGallery = true;
-		this.source = null;
+		clearSource();
 		this.player = null;
 		audioFocus.release();
-		hidePreviewFrameImmediately();
 		VideoDiagnostics.recordUi("pip recreate_gallery reason=" + reason);
 		Intent intent = new Intent(this, MainActivity.class)
 				.setAction(C.ACTION_RETURN_FROM_PICTURE_IN_PICTURE)
@@ -818,11 +969,13 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 		returnToGalleryScheduled = false;
 		galleryRestorePrepared = false;
 		standalonePlayback = true;
+		holdPreviewForGalleryReturn = false;
+		hidePreviewFrameImmediately();
 		VideoDiagnostics.recordUi("pip standalone_playback reason=" + reason
 				+ " attempts=" + returnToGalleryAttempts);
 		Log.w(TAG, "Continuing standalone playback after PiP exit: " + reason);
-		VideoUnit source = this.source;
-		this.source = null;
+		VideoUnit source = getSource();
+		clearSource();
 		if (source != null) {
 			source.detachPictureInPicturePlayer(player);
 		}
@@ -862,6 +1015,12 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 	@Override
 	protected void onResume() {
 		super.onResume();
+		activityResumed = true;
+		recordTransition("resume");
+		if (!enteredPictureInPicture && pictureInPictureFirstDraw) {
+			handler.removeCallbacks(enterPictureInPictureAfterDraw);
+			handler.post(enterPictureInPictureAfterDraw);
+		}
 		if (enteredPictureInPicture && exitedPictureInPicture && !isInPictureInPictureMode()) {
 			resumedAfterPictureInPictureExit = true;
 		}
@@ -872,8 +1031,19 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 	}
 
 	@Override
+	protected void onPause() {
+		activityResumed = false;
+		handler.removeCallbacks(enterPictureInPictureAfterDraw);
+		// A prepared gallery may be receiving focus; the queued handoff must verify it.
+		if (!galleryRestorePrepared) cancelGalleryReturn("pause");
+		recordTransition("pause");
+		super.onPause();
+	}
+
+	@Override
 	protected void onUserLeaveHint() {
 		super.onUserLeaveHint();
+		cancelGalleryReturn("user_leave");
 		if (standalonePlayback && player != null && !isInPictureInPictureMode()) {
 			enterPictureInPicture();
 		}
@@ -882,6 +1052,12 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 	@Override
 	protected void onStop() {
 		super.onStop();
+		handler.removeCallbacks(enterPictureInPictureAfterDraw);
+		VideoUnit source = getSource();
+		if (!galleryRestorePrepared || source == null || !source.hasPictureInPictureGalleryFocus()) {
+			cancelGalleryReturn("stop");
+		}
+		recordTransition("stop");
 		if (enteredPictureInPicture && isInPictureInPictureMode()) {
 			stoppedWhileInPictureInPicture = true;
 		}
@@ -899,6 +1075,8 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 	@Override
 	public void onWindowFocusChanged(boolean hasFocus) {
 		super.onWindowFocusChanged(hasFocus);
+		recordTransition(hasFocus ? "focus_gained" : "focus_lost");
+		if (!hasFocus && !galleryRestorePrepared) cancelGalleryReturn("focus_lost");
 		if (hasFocus) {
 			if (enteredPictureInPicture && exitedPictureInPicture && !isInPictureInPictureMode()) {
 				resumedAfterPictureInPictureExit = true;
@@ -911,12 +1089,18 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 	@Override
 	public void onPictureInPictureModeChanged(boolean isInPictureInPictureMode, Configuration newConfig) {
 		super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig);
+		pictureInPictureEntryRequested = false;
+		transitionSequence++;
+		recordTransition(isInPictureInPictureMode ? "mode_enter" : "mode_exit");
 		recordPipGeometry("mode_changed");
 		schedulePipGeometry();
 		if (isInPictureInPictureMode) {
+			holdPreviewForGalleryReturn = false;
+			if (firstVideoFrameReceived) hidePreviewFrameImmediately();
 			handler.removeCallbacks(finishDismissedPictureInPicture);
 			handler.removeCallbacks(returnToGalleryAfterExit);
 			enteredPictureInPicture = true;
+			if (source != null) source.enteredPictureInPicture = true;
 			exitedPictureInPicture = false;
 			stoppedWhileInPictureInPicture = false;
 			resumedAfterPictureInPictureExit = false;
@@ -928,6 +1112,7 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 			VideoDiagnostics.recordUi("pip mode_changed=true entry_age_ms=" + (entryRequestedElapsedMs >= 0L
 					? SystemClock.elapsedRealtime() - entryRequestedElapsedMs : -1L));
 		} else if (enteredPictureInPicture) {
+			holdReturnPreview();
 			exitedPictureInPicture = true;
 			resumedAfterPictureInPictureExit = false;
 			VideoDiagnostics.recordUi("pip mode_changed=false");
@@ -945,6 +1130,10 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 
 	@Override
 	protected void onDestroy() {
+		if (activePictureInPicture.get() == this) activePictureInPicture.clear();
+		activityResumed = false;
+		handler.removeCallbacks(enterPictureInPictureAfterDraw);
+		recordTransition("destroy");
 		handler.removeCallbacks(recordSettledPipGeometry);
 		handler.removeCallbacks(finishDismissedPictureInPicture);
 		handler.removeCallbacks(returnToGalleryAfterExit);
@@ -963,7 +1152,7 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 			player.setPlaying(false);
 			player.releaseVideoView();
 			player.setListener(null);
-			VideoUnit source = this.source;
+			VideoUnit source = getSource();
 			boolean handled;
 			if (!enteredPictureInPicture) {
 				handled = source != null && source.restorePictureInPicturePlayer(player, position,
@@ -976,7 +1165,7 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 				player.destroyAsync();
 			}
 			this.player = null;
-			this.source = null;
+			clearSource();
 		}
 		if (downloadSession != null) {
 			downloadSession.cancel();

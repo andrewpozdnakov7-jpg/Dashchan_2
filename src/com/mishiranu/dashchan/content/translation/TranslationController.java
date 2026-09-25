@@ -16,11 +16,14 @@ import com.mishiranu.dashchan.content.model.PostItem;
 import com.mishiranu.dashchan.content.service.translation.ITranslationCallback;
 import com.mishiranu.dashchan.content.service.translation.ITranslationService;
 import com.mishiranu.dashchan.content.service.translation.TranslationService;
+import com.mishiranu.dashchan.util.ConcurrentUtils;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.ExecutorService;
+import java.util.function.Consumer;
 
 public final class TranslationController {
 	private static final long REQUEST_TIMEOUT_MS = 180000L;
@@ -112,6 +115,10 @@ public final class TranslationController {
 	private final AtomicLong nextRequestId = new AtomicLong(1L);
 	private final Map<Long, PendingCall> calls = new HashMap<>();
 	private final Map<PostItem, String> pendingPosts = new IdentityHashMap<>();
+	private final ExecutorService cacheExecutor = ConcurrentUtils.newSingleThreadPool(3000, "TranslationCache", null);
+	private final TranslationCache persistentCache = new TranslationCache();
+	private final AtomicLong cacheGeneration = new AtomicLong();
+	private final Map<String, ArrayList<ResultCallback>> sharedTranslations = new HashMap<>();
 	private ITranslationService service;
 	private boolean binding;
 	private final Runnable idleDisconnectRunnable = () -> {
@@ -160,23 +167,23 @@ public final class TranslationController {
 		TranslationEngine engine = getCurrentEngine();
 		TranslationModel.Direction direction = getCurrentDirection();
 		String key = engine.getCacheKey(direction);
+		String pendingKey = cacheGeneration.get() + ":" + key;
 		if (!isReadyForChan(chan.name) || postItem.hasTranslatedComment(key)) {
 			return;
 		}
 		synchronized (pendingPosts) {
-			if (key.equals(pendingPosts.get(postItem))) {
+			if (pendingKey.equals(pendingPosts.get(postItem))) {
 				return;
 			}
-			pendingPosts.put(postItem, key);
+			pendingPosts.put(postItem, pendingKey);
 		}
-		translate(engine, direction, postItem.getSubject(), postItem.getCommentHtmlForTranslation(),
+		translateCached("post:" + chan.name, engine, direction, postItem.getSubject(), postItem.getCommentHtmlForTranslation(),
 				(translatedSubject, translatedHtml, error) -> {
 			synchronized (pendingPosts) {
-				if (key.equals(pendingPosts.get(postItem))) {
-					pendingPosts.remove(postItem);
-				}
+				if (!pendingKey.equals(pendingPosts.get(postItem))) return;
+				pendingPosts.remove(postItem);
 			}
-			if (translatedHtml != null) {
+			if (translatedHtml != null && key.equals(getCurrentCacheKey()) && isEnabledForChan(chan.name)) {
 				postItem.setTranslatedPost(key, translatedSubject, translatedHtml, chan);
 				onTranslated.run();
 			}
@@ -191,12 +198,79 @@ public final class TranslationController {
 			resultCallback.onResult(null, null, "Translation package is unavailable");
 			return;
 		}
-		translate(getCurrentEngine(), direction, subject, html, resultCallback);
+		translateCached("reddit-web", getCurrentEngine(), direction, subject, html, resultCallback);
 	}
 
 	public void unload() {
+		cacheGeneration.incrementAndGet();
 		disconnect();
 		failAll("Translator unloaded");
+	}
+
+	public void clearPersistentCache(Consumer<Boolean> callback) {
+		unload();
+		cacheExecutor.execute(() -> {
+			boolean success = persistentCache.clear();
+			if (callback != null) handler.post(() -> callback.accept(success));
+		});
+	}
+
+	private void translateCached(String scope, TranslationEngine engine, TranslationModel.Direction direction,
+			String subject, String html, ResultCallback callback) {
+		long generation = cacheGeneration.get();
+		cacheExecutor.execute(() -> {
+			if (generation != cacheGeneration.get()) {
+				handler.post(() -> callback.onResult(null, null, "Translator unloaded"));
+				return;
+			}
+			String cacheKey;
+			try {
+				cacheKey = persistentCache.key(scope, engine, direction, subject, html);
+			} catch (RuntimeException e) {
+				TranslationDiagnostics.error("cache", "key_failed", "type", e.getClass().getSimpleName());
+				handler.post(() -> {
+					if (generation == cacheGeneration.get()) translate(engine, direction, subject, html, callback);
+					else callback.onResult(null, null, "Translator unloaded");
+				});
+				return;
+			}
+			String key = cacheKey;
+			TranslationCache.Result cached = persistentCache.get(key);
+			handler.post(() -> {
+				if (generation != cacheGeneration.get()) {
+					callback.onResult(null, null, "Translator unloaded");
+					return;
+				}
+				if (cached != null) {
+					TranslationDiagnostics.log("cache", "hit", "engine", engine.value);
+					callback.onResult(cached.subject, cached.html, null);
+					return;
+				}
+				ArrayList<ResultCallback> waiting = sharedTranslations.get(key);
+				if (waiting != null) {
+					waiting.add(callback);
+					return;
+				}
+				waiting = new ArrayList<>();
+				waiting.add(callback);
+				sharedTranslations.put(key, waiting);
+				translate(engine, direction, subject, html, (translatedSubject, translatedHtml, error) -> {
+					ArrayList<ResultCallback> callbacks = sharedTranslations.remove(key);
+					boolean current = generation == cacheGeneration.get();
+					if (current && error == null && translatedHtml != null) {
+						cacheExecutor.execute(() -> {
+							if (generation == cacheGeneration.get()) persistentCache.put(key, translatedSubject, translatedHtml);
+						});
+					}
+					if (callbacks != null) {
+						for (ResultCallback resultCallback : callbacks) {
+							resultCallback.onResult(current ? translatedSubject : null, current ? translatedHtml : null,
+									current ? error : "Translator unloaded");
+						}
+					}
+				});
+			});
+		});
 	}
 
 	private void translate(TranslationEngine engine, TranslationModel.Direction direction, String subject, String html,

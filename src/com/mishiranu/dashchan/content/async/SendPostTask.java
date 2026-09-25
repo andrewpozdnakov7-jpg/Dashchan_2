@@ -14,6 +14,7 @@ import chan.text.CommentEditor;
 import com.mishiranu.dashchan.content.model.ErrorItem;
 import com.mishiranu.dashchan.content.model.Post;
 import com.mishiranu.dashchan.content.model.PostNumber;
+import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.text.HtmlParser;
 import com.mishiranu.dashchan.text.SimilarTextEstimator;
 import java.util.ArrayList;
@@ -27,6 +28,14 @@ public class SendPostTask<Key> extends ExecutorTask<long[], Boolean> {
 	private final Callback<Key> callback;
 	private final Chan chan;
 	private final ChanPerformer.SendPostData data;
+	private final Journal journal;
+	private boolean serverAccepted;
+
+	public interface Journal {
+		void prepare() throws Exception;
+		void beforeSend() throws Exception;
+		void accepted(String threadNumber, PostNumber postNumber);
+	}
 
 	private final boolean progressMode;
 
@@ -75,11 +84,16 @@ public class SendPostTask<Key> extends ExecutorTask<long[], Boolean> {
 	}
 
 	public SendPostTask(Key key, Callback<Key> callback, Chan chan, ChanPerformer.SendPostData data) {
+		this(key, callback, chan, data, null);
+	}
+
+	public SendPostTask(Key key, Callback<Key> callback, Chan chan, ChanPerformer.SendPostData data, Journal journal) {
 		chanHolder = new HttpHolder(chan);
 		this.key = key;
 		this.callback = callback;
 		this.chan = chan;
 		this.data = data;
+		this.journal = journal;
 		progressMode = data.attachments != null;
 		if (progressMode) {
 			for (ChanPerformer.SendPostData.Attachment attachment : data.attachments) {
@@ -119,6 +133,17 @@ public class SendPostTask<Key> extends ExecutorTask<long[], Boolean> {
 
 	@Override
 	protected Boolean run() {
+		if (journal != null) {
+			try {
+				journal.prepare();
+			} catch (Exception e) {
+				if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+				Throwable cause = e.getCause() != null ? e.getCause() : e;
+				android.util.Log.w("Outbox", "Preparation failed: " + cause.getClass().getSimpleName());
+				errorItem = new ErrorItem(R.string.outbox_prepare_failed);
+				return false;
+			}
+		}
 		try (HttpHolder.Use ignore1 = chanHolder.use()) {
 			ChanPerformer.SendPostData data = this.data;
 			if (data.captchaNeedLoad) {
@@ -153,7 +178,23 @@ public class SendPostTask<Key> extends ExecutorTask<long[], Boolean> {
 			}
 			data.holder = chanHolder;
 			data.listener = progressHandler;
+			if (journal != null) {
+				try {
+					journal.beforeSend();
+				} catch (Exception e) {
+					if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+					Throwable cause = e.getCause() != null ? e.getCause() : e;
+					android.util.Log.w("Outbox", "Sending transition failed: " + cause.getClass().getSimpleName());
+					errorItem = new ErrorItem(R.string.outbox_prepare_failed);
+					return false;
+				}
+			}
+			if (isCancelled()) return false;
 			ChanPerformer.SendPostResult result = chan.performer.safe().onSendPost(data);
+			serverAccepted = true;
+			this.result = result;
+			if (journal != null) journal.accepted(data.threadNumber != null ? data.threadNumber
+					: result != null ? result.threadNumber : null, result != null ? result.postNumber : null);
 			if (data.threadNumber == null && (result == null || result.threadNumber == null)) {
 				// New thread created with undefined number
 				ChanPerformer.ReadThreadsResult readThreadsResult;
@@ -180,6 +221,7 @@ public class SendPostTask<Key> extends ExecutorTask<long[], Boolean> {
 						if (estimator.checkSimiliar(wordsData1, wordsData2)
 								|| wordsData1 == null && wordsData2 == null) {
 							result = new ChanPerformer.SendPostResult(thread.threadNumber, null);
+							if (journal != null) journal.accepted(result.threadNumber, result.postNumber);
 							break;
 						}
 					}
@@ -188,9 +230,12 @@ public class SendPostTask<Key> extends ExecutorTask<long[], Boolean> {
 			this.result = result;
 			return true;
 		} catch (ExtensionException | HttpException | InvalidResponseException e) {
+			// A follow-up read failing after acceptance must not suggest sending the post again.
+			if (serverAccepted) return true;
 			errorItem = e.getErrorItemAndHandle();
 			return false;
 		} catch (ApiException e) {
+			if (serverAccepted) return true;
 			errorItem = e.getErrorItem();
 			extra = e.getExtra();
 			int errorType = e.getErrorType();

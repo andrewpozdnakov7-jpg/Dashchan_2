@@ -27,6 +27,7 @@ import com.mishiranu.dashchan.widget.ExpandedLayout;
 import com.mishiranu.dashchan.widget.ListPosition;
 import com.mishiranu.dashchan.widget.MenuExpandListener;
 import com.mishiranu.dashchan.widget.PaddedRecyclerView;
+import com.mishiranu.dashchan.widget.ThreadQuickNavigation;
 import com.mishiranu.dashchan.widget.ViewFactory;
 import java.util.Collection;
 import java.util.UUID;
@@ -83,6 +84,7 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 	private View progressView;
 	private ViewFactory.ErrorHolder errorHolder;
 	private PaddedRecyclerView recyclerView;
+	private ThreadQuickNavigation quickNavigation;
 
 	private CustomSearchView searchView;
 	private MenuItem searchMenuItem;
@@ -154,6 +156,11 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 		errorHolder = ViewFactory.createErrorLayout(layout);
 		errorHolder.layout.setVisibility(View.GONE);
 		layout.addView(errorHolder.layout);
+		if (getPage().content == Page.Content.POSTS) {
+			quickNavigation = new ThreadQuickNavigation(recyclerView);
+			layout.addView(quickNavigation, ExpandedLayout.LayoutParams.MATCH_PARENT,
+					ExpandedLayout.LayoutParams.MATCH_PARENT);
+		}
 
 		allowShowScale = true;
 		listPage = getPage().content.newPage();
@@ -178,6 +185,7 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 		progressView = null;
 		errorHolder = null;
 		recyclerView = null;
+		quickNavigation = null;
 		searchView = null;
 		searchMenuItem = null;
 	}
@@ -204,6 +212,7 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 		super.onResume();
 
 		listPage.resume();
+		if (quickNavigation != null) quickNavigation.refreshPreferences();
 		Runnable doOnResume = this.doOnResume;
 		this.doOnResume = null;
 		if (doOnResume != null) {
@@ -491,6 +500,7 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 
 	@Override
 	public void switchList() {
+		if (quickNavigation != null) quickNavigation.setContentVisible(true);
 		initErrorItem = null;
 		progressView.setVisibility(View.GONE);
 		errorHolder.layout.setVisibility(View.GONE);
@@ -498,6 +508,7 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 
 	@Override
 	public void switchProgress() {
+		if (quickNavigation != null) quickNavigation.setContentVisible(false);
 		initErrorItem = null;
 		progressView.setVisibility(View.VISIBLE);
 		errorHolder.layout.setVisibility(View.GONE);
@@ -505,6 +516,7 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 
 	@Override
 	public void switchError(ErrorItem errorItem) {
+		if (quickNavigation != null) quickNavigation.setContentVisible(false);
 		if (errorItem == null) {
 			errorItem = new ErrorItem(ErrorItem.Type.UNKNOWN);
 		}

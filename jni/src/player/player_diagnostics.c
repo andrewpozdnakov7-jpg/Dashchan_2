@@ -212,7 +212,8 @@ static void startPlayerDiagnosticsMode(int extended) {
 				" software_governor_recovery=2 software_late_anchor_ms=200"
 				" software_seek_fast_decode=1 audio_master_clock=1 audio_output_seek_restart=1"
 				" audio_output_queue_state=1"
-				" audio_output_prefill=2 audio_chunk_target_ms=40");
+				" audio_output_prefill=2 audio_chunk_target_ms=40 audio_output_reconcile=1"
+				" audio_output_stall_recovery=1");
 	}
 	pthread_mutex_unlock(&diagnostics.mutex);
 }

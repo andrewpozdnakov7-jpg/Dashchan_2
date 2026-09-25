@@ -641,7 +641,7 @@
 	<string name="video_tiktok_mode">TikTok mode</string>
 	<string name="enable_video_tiktok_mode">Enable TikTok mode</string>
 	<string name="disable_video_tiktok_mode">Disable TikTok mode</string>
-	<string name="video_tiktok_mode_hint">Swipe up for the next video or down for the previous one. Double-tap to pause or resume playback. Touch and hold the center of the screen to open the menu. Other gestures are disabled; on-screen controls still work.</string>
+	<string name="video_tiktok_mode_hint">Swipe up for the next video or down for the previous one. Double-tap to pause or resume playback. Touch and hold the center of the screen to open the menu. The volume gesture works in its configured side area when enabled. Other gestures are disabled; on-screen controls still work. Your selected mode is remembered.</string>
 	<string name="video_tiktok_no_next_video">There are no more videos in this thread</string>
 	<string name="video_tiktok_no_previous_video">There are no previous videos in this thread</string>
 	<string name="video_screen_off_action">When the screen turns off</string>
@@ -990,7 +990,7 @@
 	<string name="application_shortcut">Application shortcut</string>
 	<string name="application_name">Application name</string>
 	<string name="launcher_name_dvach">Slooop</string>
-	<string name="launcher_name_togdach" translatable="false">ТОГДАЧ</string>
+	<string name="launcher_name_togdach" translatable="false">Slooop</string>
 	<string name="application_logo">Application icon</string>
 	<string name="application_logo_default">Default</string>
 	<string name="application_logo_old_school">Old school</string>
@@ -1109,6 +1109,9 @@
 	<string name="combined_feed_not_found">Feed was deleted or is unavailable</string>
 	<string name="combined_feed_partial_failure__format">Failed to update %1$d of %2$d boards</string>
 	<string name="combined_feed_failed__format">errors: %d</string>
+	<string name="combined_feed_progress__format">loaded %1$d of %2$d</string>
+	<string name="combined_feed_retry_failed">Retry failed boards</string>
+	<string name="combined_feed_errors">Board loading errors</string>
 	<string name="delete_combined_feed_confirmation">Delete this feed?</string>
 	<plurals name="number_boards__format">
 		<item quantity="one">%d board</item>
@@ -1323,4 +1326,42 @@
 	<string name="kohlchan_access_cancelled">Access verification cancelled. Nothing was automatically resubmitted.</string>
 	<string name="kohlchan_delete_partial">Only some selected posts were deleted. Refresh the thread and check the deletion password for the remaining posts.</string>
 	<string name="kohlchan_request_failed">Kohlchan rejected the request. Check the board rules and try again later.</string>
+	<string name="thread_quick_navigation">Quick thread navigation</string>
+	<string name="thread_quick_navigation_transparency">Thread arrow transparency (0% — opaque)</string>
+	<string name="thread_arrow_transparency_range">Enter a percentage from 0 to 100</string>
+	<string name="thread_quick_navigation__search_summary">Scroll arrows on the left or right: jump up to the first post or down to the last loaded post.</string>
+	<string name="thread_quick_navigation_disabled">Disabled</string>
+	<string name="thread_quick_navigation_right">Arrows on the right</string>
+	<string name="thread_quick_navigation_left">Arrows on the left</string>
+	<string name="thread_quick_navigation_top">First post</string>
+	<string name="thread_quick_navigation_bottom">Last loaded post</string>
+	<string name="clear_translation_cache">Clear saved translations</string>
+	<string name="clear_translation_cache_summary">Delete translations saved on this device. Downloaded language models will remain.</string>
+	<string name="translation_cache_cleared">Saved translations cleared</string>
+	<string name="translation_cache_failed">Could not clear saved translations</string>
+	<string name="outbox_title">Outgoing journal</string>
+	<string name="outbox_summary">Local sending status and recovery of interrupted drafts. Nothing is automatically resent after restarting.</string>
+	<string name="outbox_empty">No outgoing messages recorded yet</string>
+	<string name="outbox_refresh">Refresh journal</string>
+	<string name="outbox_more">Show 50 more</string>
+	<string name="outbox_preparing">Saving message and attachments</string>
+	<string name="outbox_ready">Queued</string>
+	<string name="outbox_sending">Sending — awaiting acknowledgement</string>
+	<string name="outbox_waiting">Waiting after server rate limit</string>
+	<string name="outbox_sent">Accepted by the server</string>
+	<string name="outbox_captcha">CAPTCHA required</string>
+	<string name="outbox_login">Sign-in required</string>
+	<string name="outbox_failed">Not sent — action required</string>
+	<string name="outbox_interrupted">Interrupted or cancelled — draft retained</string>
+	<string name="outbox_unknown">Sending result unknown</string>
+	<string name="outbox_unknown_summary">The server may have accepted this message. Check the discussion before sending it again to avoid a duplicate.</string>
+	<string name="outbox_restore">Restore draft</string>
+	<string name="outbox_restore_text">Restore text without attachments?</string>
+	<string name="outbox_restore_text_summary">Some attachments could not be recovered. You can restore the text and attach files again. The original journal entry will remain unchanged. Nothing will be sent automatically.</string>
+	<string name="outbox_restore_summary">First check whether the message already appeared in the discussion. This will replace the current draft for this discussion and open the posting form, without sending. Sign-in and CAPTCHA may be required again. Passwords and CAPTCHA tokens are not restored.</string>
+	<string name="outbox_open_thread">Open discussion</string>
+	<string name="outbox_delete">Delete local entry</string>
+	<string name="outbox_delete_summary">Delete this journal entry and its retained attachments? This does not delete any message from the forum.</string>
+	<string name="outbox_prepare_failed">Could not save the outgoing message or attachments. Nothing was sent. Check free space and the outgoing journal.</string>
+	<string name="outbox_operation_failed">Could not complete the journal operation. Check free space and retained attachments.</string>
 </resources>
