@@ -63,6 +63,7 @@ final class TranslationCache {
 					"key=?", new String[] {key}, null, null, null)) {
 				if (!cursor.moveToFirst()) return null;
 				if (now - cursor.getLong(2) > MAX_AGE) {
+					TranslationDiagnostics.log("cache", "expired");
 					db.delete("translations", "key=?", new String[] {key});
 					return null;
 				}
@@ -82,7 +83,10 @@ final class TranslationCache {
 		if (html == null) return;
 		subject = subject != null ? subject : "";
 		long bytes = (long) subject.getBytes(StandardCharsets.UTF_8).length + html.getBytes(StandardCharsets.UTF_8).length;
-		if (bytes > MAX_ENTRY_BYTES) return;
+		if (bytes > MAX_ENTRY_BYTES) {
+			TranslationDiagnostics.log("cache", "write_skipped", "reason", "entry_too_large", "bytes", bytes);
+			return;
+		}
 		try {
 			SQLiteDatabase db = database();
 			long now = System.currentTimeMillis();
@@ -95,7 +99,9 @@ final class TranslationCache {
 				values.put("bytes", bytes);
 				values.put("used", now);
 				values.put("created", now);
-				db.insertWithOnConflict("translations", null, values, SQLiteDatabase.CONFLICT_REPLACE);
+				if (db.insertWithOnConflict("translations", null, values, SQLiteDatabase.CONFLICT_REPLACE) == -1L) {
+					throw new IllegalStateException("Translation cache insert failed");
+				}
 				db.delete("translations", "created<?", new String[] {Long.toString(now - MAX_AGE)});
 				db.execSQL("DELETE FROM translations WHERE key IN (SELECT key FROM translations ORDER BY used DESC LIMIT -1 OFFSET 10000)");
 				long total = DatabaseUtils.longForQuery(db, "SELECT COALESCE(SUM(bytes),0) FROM translations", null);
@@ -111,6 +117,7 @@ final class TranslationCache {
 			} finally {
 				db.endTransaction();
 			}
+			TranslationDiagnostics.log("cache", "write_ok", "bytes", bytes);
 		} catch (RuntimeException e) {
 			TranslationDiagnostics.error("cache", "write_failed", "type", e.getClass().getSimpleName());
 		}
@@ -122,6 +129,7 @@ final class TranslationCache {
 			db.execSQL("PRAGMA secure_delete=ON");
 			db.delete("translations", null, null);
 			db.execSQL("VACUUM");
+			TranslationDiagnostics.log("cache", "cleared");
 			return true;
 		} catch (RuntimeException e) {
 			TranslationDiagnostics.error("cache", "clear_failed", "type", e.getClass().getSimpleName());

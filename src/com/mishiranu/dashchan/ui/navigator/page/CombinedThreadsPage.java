@@ -284,10 +284,12 @@ public class CombinedThreadsPage extends ListPage implements ThreadsAdapter.Call
 			getViewModel(ReadViewModel.class).cancel();
 		}
 		if (retainableExtra.translationEnabled == null) {
-			retainableExtra.translationEnabled = TranslationController.isReadyForChan(getPage().chanName)
+			retainableExtra.translationEnabled = TranslationController.isEnabledForChan(getPage().chanName)
 					&& Preferences.isTranslationAutoEnabled();
 		}
 		adapter.setTranslationEnabled(Boolean.TRUE.equals(retainableExtra.translationEnabled));
+		com.mishiranu.dashchan.content.translation.TranslationDiagnostics.log("display", "page_init",
+				"kind", "combined", "enabled", adapter.isTranslationEnabled(), "auto", Preferences.isTranslationAutoEnabled());
 		recyclerView.setAdapter(adapter);
 		recyclerView.addItemDecoration(new RecyclerView.ItemDecoration() {
 			@Override
@@ -717,7 +719,7 @@ public class CombinedThreadsPage extends ListPage implements ThreadsAdapter.Call
 			return true;
 		}
 		if (item.getItemId() == R.id.menu_translate) {
-			if (!TranslationController.isReadyForChan(getPage().chanName)) {
+			if (!TranslationController.isEnabledForChan(getPage().chanName)) {
 				ClickableToast.show(R.string.translation_package_unavailable);
 				return true;
 			}

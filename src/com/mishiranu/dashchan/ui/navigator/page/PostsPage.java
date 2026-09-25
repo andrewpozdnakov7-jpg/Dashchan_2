@@ -575,10 +575,12 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 				windowedMode ? this : null);
 		adapter.getConfigurationSet().openedThreadTitle = this::obtainTitle;
 		if (parcelableExtra.translationEnabled == null) {
-			parcelableExtra.translationEnabled = TranslationController.isReadyForChan(page.chanName) &&
+			parcelableExtra.translationEnabled = TranslationController.isEnabledForChan(page.chanName) &&
 					Preferences.isTranslationAutoEnabled();
 		}
 		adapter.setTranslationEnabled(Boolean.TRUE.equals(parcelableExtra.translationEnabled));
+		com.mishiranu.dashchan.content.translation.TranslationDiagnostics.log("display", "page_init",
+				"kind", "posts", "enabled", adapter.isTranslationEnabled(), "auto", Preferences.isTranslationAutoEnabled());
 		recyclerView.setAdapter(adapter);
 		setupReplyWithSwipe(recyclerView, adapter);
 		recyclerView.addItemDecoration(new DividerItemDecoration(recyclerView.getContext(),
@@ -1130,7 +1132,7 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 		menu.findItem(R.id.menu_hidden_posts).setVisible(hidePerformer.hasLocalFilters());
 		MenuItem translateItem = menu.findItem(R.id.menu_translate);
 		boolean showTranslation = TranslationController.isEnabledForChan(page.chanName);
-		if ((!showTranslation || !TranslationController.isReadyForChan(page.chanName)) &&
+		if (!showTranslation &&
 				adapter.isTranslationEnabled()) {
 			getParcelableExtra(ParcelableExtra.FACTORY).translationEnabled = false;
 			adapter.setTranslationEnabled(false);
@@ -1188,7 +1190,7 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 			refreshPosts(false);
 			return true;
 		} else if (item.getItemId() == R.id.menu_translate) {
-			if (!TranslationController.isReadyForChan(page.chanName)) {
+			if (!TranslationController.isEnabledForChan(page.chanName)) {
 				ClickableToast.show(R.string.translation_package_unavailable);
 				return true;
 			}

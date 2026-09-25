@@ -173,10 +173,12 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 				postStateProvider, getFragmentManager());
 		adapter.setSecretAbuBoardName(page.boardName);
 		if (retainableExtra.translationEnabled == null) {
-			retainableExtra.translationEnabled = TranslationController.isReadyForChan(page.chanName) &&
+			retainableExtra.translationEnabled = TranslationController.isEnabledForChan(page.chanName) &&
 					Preferences.isTranslationAutoEnabled();
 		}
 		adapter.setTranslationEnabled(Boolean.TRUE.equals(retainableExtra.translationEnabled));
+		com.mishiranu.dashchan.content.translation.TranslationDiagnostics.log("display", "page_init",
+				"kind", "threads", "enabled", adapter.isTranslationEnabled(), "auto", Preferences.isTranslationAutoEnabled());
 		recyclerView.setAdapter(adapter);
 		recyclerView.addOnScrollListener(appendScrollListener);
 		recyclerView.getViewTreeObserver().addOnPreDrawListener(appendScrollAfterLayout);
@@ -506,7 +508,7 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 		boolean isCatalogOpen = retainableExtra.startPageNumber == PAGE_NUMBER_CATALOG;
 		MenuItem translateItem = menu.findItem(R.id.menu_translate);
 		boolean showTranslation = TranslationController.isEnabledForChan(page.chanName);
-		if ((!showTranslation || !TranslationController.isReadyForChan(page.chanName)) &&
+		if (!showTranslation &&
 				getAdapter().isTranslationEnabled()) {
 			retainableExtra.translationEnabled = false;
 			getAdapter().setTranslationEnabled(false);
@@ -551,7 +553,7 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 			refreshThreads(RefreshPage.CURRENT);
 			return true;
 		} else if (item.getItemId() == R.id.menu_translate) {
-			if (!TranslationController.isReadyForChan(page.chanName)) {
+			if (!TranslationController.isEnabledForChan(page.chanName)) {
 				ClickableToast.show(R.string.translation_package_unavailable);
 				return true;
 			}
