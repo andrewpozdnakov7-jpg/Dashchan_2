@@ -62,6 +62,8 @@ public class ExperimentalFragment extends PreferenceFragment implements Translat
 			refreshPreferences();
 		});
 		addVideoDiagnosticsPreferences();
+		addCheck(true, Preferences.KEY_OUTBOX_JOURNAL, Preferences.DEFAULT_OUTBOX_JOURNAL,
+				R.string.outbox_title, R.string.outbox_experimental_summary);
 		addCheck(true, Preferences.KEY_WINDOWED_THREAD_LOADING,
 				Preferences.DEFAULT_WINDOWED_THREAD_LOADING,
 				R.string.windowed_thread_loading,
@@ -111,6 +113,12 @@ public class ExperimentalFragment extends PreferenceFragment implements Translat
 				Preferences.DEFAULT_LOCAL_TRANSLATION, R.string.local_translation,
 				R.string.local_translation__summary);
 		translationPreference.setOnAfterChangeListener(p -> {
+			TranslationController.getInstance().unload();
+			refreshPreferences();
+		});
+		addCheck(true, Preferences.KEY_PERSISTENT_TRANSLATION_CACHE,
+				Preferences.DEFAULT_PERSISTENT_TRANSLATION_CACHE, R.string.persistent_translation_cache,
+				R.string.persistent_translation_cache_summary).setOnAfterChangeListener(p -> {
 			TranslationController.getInstance().unload();
 			refreshPreferences();
 		});

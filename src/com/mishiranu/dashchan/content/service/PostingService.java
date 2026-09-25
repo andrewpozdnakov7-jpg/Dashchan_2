@@ -123,7 +123,8 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 	}
 
 	private static class QueueItem {
-		public final String outboxId = UUID.randomUUID().toString();
+		// Capture opt-in per send: changing settings cannot strand an already-journaled request.
+		public final String outboxId = Preferences.isOutboxJournalEnabled() ? UUID.randomUUID().toString() : null;
 		public Future<Void> journalReady;
 		public final Key key;
 		public final String chanName;
@@ -407,12 +408,14 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 			}
 			QueueItem queueItem = new QueueItem(chanName, data, postDraft, attachmentHashes, allowFloodRetry);
 			DraftsStorage.getInstance().retainAttachmentDrafts(queueItem.attachmentHashes);
-			HashMap<String, File> journalAttachments = new HashMap<>();
-			for (String hash : queueItem.attachmentHashes) {
-				journalAttachments.put(hash, DraftsStorage.getInstance().getAttachmentDraftFile(hash));
+			if (queueItem.outboxId != null) {
+				HashMap<String, File> journalAttachments = new HashMap<>();
+				for (String hash : queueItem.attachmentHashes) {
+					journalAttachments.put(hash, DraftsStorage.getInstance().getAttachmentDraftFile(hash));
+				}
+				queueItem.journalReady = OutboxStorage.getInstance().enqueue(queueItem.outboxId,
+						OutboxStorage.snapshot(postDraft), journalAttachments);
 			}
-			queueItem.journalReady = OutboxStorage.getInstance().enqueue(queueItem.outboxId,
-					OutboxStorage.snapshot(postDraft), journalAttachments);
 			markPostDraftQueued(queueItem);
 			boolean start = postQueue.isEmpty();
 			postQueue.addLast(queueItem);
@@ -489,7 +492,8 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 			return;
 		}
 		Chan chan = Chan.get(queueItem.chanName);
-		SendPostTask<Key> task = new SendPostTask<>(queueItem.key, this, chan, queueItem.data, new SendPostTask.Journal() {
+		SendPostTask<Key> task = new SendPostTask<>(queueItem.key, this, chan, queueItem.data,
+				queueItem.outboxId == null ? null : new SendPostTask.Journal() {
 			@Override
 			public void prepare() throws Exception {
 				queueItem.journalReady.get();
@@ -593,7 +597,7 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 			postQueue.clear();
 			postingInProgress = false;
 			for (QueueItem queueItem : cancelledItems) {
-				OutboxStorage.getInstance().finish(queueItem.outboxId, null);
+				if (queueItem.outboxId != null) OutboxStorage.getInstance().finish(queueItem.outboxId, null);
 				if (queueItem.allowFloodRetry) {
 					storeFailedPost(queueItem);
 				} else {
@@ -772,7 +776,7 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 				&& taskState.key.equals(key) && currentItem.allowFloodRetry && tooFast
 				&& currentItem.floodRetryCount < MAX_FLOOD_RETRIES) {
 			currentItem.floodRetryCount++;
-			OutboxStorage.getInstance().finish(currentItem.outboxId, OutboxState.WAITING);
+			if (currentItem.outboxId != null) OutboxStorage.getInstance().finish(currentItem.outboxId, OutboxState.WAITING);
 			taskState.waitingForRetry = true;
 			refreshNotification(NotificationData.Type.UPDATE, taskState);
 			retryRunnable = () -> {
@@ -793,7 +797,7 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 					? OutboxState.NEEDS_CAPTCHA : errorItem.type == ErrorItem.Type.INVALID_AUTHORIZATION_DATA
 					? OutboxState.NEEDS_LOGIN : errorItem.type == ErrorItem.Type.API
 					|| errorItem.resId == R.string.outbox_prepare_failed ? OutboxState.FAILED : OutboxState.UNKNOWN_RESULT;
-			OutboxStorage.getInstance().finish(queueItem.outboxId, state);
+			if (queueItem.outboxId != null) OutboxStorage.getInstance().finish(queueItem.outboxId, state);
 			if (queueItem.allowFloodRetry) {
 				storeFailedPost(queueItem);
 				showPostFailedNotification(queueItem, failResult);

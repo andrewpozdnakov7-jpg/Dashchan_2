@@ -366,6 +366,8 @@ public final class SettingsSearchIndex {
 		add(context, entries, Screen.INTERFACE, R.string.swipe_reply,
 				R.string.swipe_reply__summary, Preferences.KEY_SWIPE_REPLY);
 		if (BuildConfig.ENABLE_LOCAL_TRANSLATION) {
+			add(context, entries, Screen.EXPERIMENTAL, R.string.persistent_translation_cache,
+					R.string.persistent_translation_cache_summary, Preferences.KEY_PERSISTENT_TRANSLATION_CACHE);
 			add(context, entries, Screen.EXPERIMENTAL, R.string.local_translation,
 					R.string.local_translation__summary, Preferences.KEY_LOCAL_TRANSLATION);
 			add(context, entries, Screen.EXPERIMENTAL, R.string.translation_native_language, 0,
@@ -510,7 +512,11 @@ public final class SettingsSearchIndex {
 		add(context, entries, Screen.CONTENTS, R.string.wifi_only, 0, Preferences.KEY_WATCHER_WIFI_ONLY);
 		add(context, entries, Screen.CONTENTS, R.string.reply_notifications, 0, "reply_notifications");
 		add(context, entries, Screen.CONTENTS, R.string.clear_cache);
-		add(context, entries, Screen.CONTENTS, R.string.outbox_title, R.string.outbox_summary, null);
+		add(context, entries, Screen.EXPERIMENTAL, R.string.outbox_title,
+				R.string.outbox_experimental_summary, Preferences.KEY_OUTBOX_JOURNAL);
+		if (Preferences.isOutboxJournalEnabled()) {
+			add(context, entries, Screen.CONTENTS, R.string.outbox_title, R.string.outbox_summary, null);
+		}
 
 		add(context, entries, Screen.MEDIA, R.string.load_thumbnails, 0, Preferences.KEY_LOAD_THUMBNAILS);
 		add(context, entries, Screen.MEDIA, R.string.load_nearest_image, 0, Preferences.KEY_LOAD_NEAREST_IMAGE);

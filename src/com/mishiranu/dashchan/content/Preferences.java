@@ -2078,6 +2078,10 @@ public class Preferences {
 	public static final int DEFAULT_WALLPAPER_CARD_OPACITY = 88;
 	public static final String KEY_LOCAL_TRANSLATION = "local_translation";
 	public static final boolean DEFAULT_LOCAL_TRANSLATION = false;
+	public static final String KEY_PERSISTENT_TRANSLATION_CACHE = "experimental_translation_cache";
+	public static final boolean DEFAULT_PERSISTENT_TRANSLATION_CACHE = false;
+	public static final String KEY_OUTBOX_JOURNAL = "experimental_outbox_journal";
+	public static final boolean DEFAULT_OUTBOX_JOURNAL = false;
 	public static final String KEY_TRANSLATION_NATIVE_LANGUAGE = "translation_native_language";
 	public static final String DEFAULT_TRANSLATION_NATIVE_LANGUAGE = "ru";
 	public static final String KEY_TRANSLATION_AUTO = "translation_auto";
@@ -2186,6 +2190,15 @@ public class Preferences {
 	public static boolean isLocalTranslationEnabled() {
 		return BuildConfig.ENABLE_LOCAL_TRANSLATION &&
 				PREFERENCES.getBoolean(KEY_LOCAL_TRANSLATION, DEFAULT_LOCAL_TRANSLATION);
+	}
+
+	public static boolean isPersistentTranslationCacheEnabled() {
+		return BuildConfig.ENABLE_LOCAL_TRANSLATION && PREFERENCES.getBoolean(
+				KEY_PERSISTENT_TRANSLATION_CACHE, DEFAULT_PERSISTENT_TRANSLATION_CACHE);
+	}
+
+	public static boolean isOutboxJournalEnabled() {
+		return PREFERENCES.getBoolean(KEY_OUTBOX_JOURNAL, DEFAULT_OUTBOX_JOURNAL);
 	}
 
 	public static String getTranslationNativeLanguage() {

@@ -124,9 +124,11 @@ final class TranslationCache {
 	}
 
 	boolean clear() {
+		if (database == null && !new File(MainApplication.getInstance().getNoBackupFilesDir(),
+				"translation-cache-v1.db").isFile()) return true;
 		try {
 			SQLiteDatabase db = database();
-			db.execSQL("PRAGMA secure_delete=ON");
+			DatabaseUtils.longForQuery(db, "PRAGMA secure_delete=ON", null);
 			db.delete("translations", null, null);
 			db.execSQL("VACUUM");
 			TranslationDiagnostics.log("cache", "cleared");

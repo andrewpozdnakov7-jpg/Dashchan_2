@@ -32,6 +32,23 @@ public final class OutboxStorage {
 	private SQLiteDatabase database;
 	private File root;
 
+	/** Do not log exception messages: SQLite errors may include draft values or local paths. */
+	public static void logFailure(String stage, Throwable error) {
+		for (int i = 0; i < 8 && error.getCause() != null && error.getCause() != error; i++) {
+			error = error.getCause();
+		}
+		StringBuilder trace = new StringBuilder();
+		int count = 0;
+		for (StackTraceElement frame : error.getStackTrace()) {
+			if (frame.getClassName().startsWith("com.mishiranu.dashchan.")) {
+				trace.append(' ').append(frame.getClassName()).append('#').append(frame.getMethodName())
+						.append(':').append(frame.getLineNumber());
+				if (++count == 6) break;
+			}
+		}
+		Log.w("Outbox", "failure stage=" + stage + " type=" + error.getClass().getSimpleName() + trace);
+	}
+
 	public static final class AttachmentRecoveryException extends IOException {
 		private static final long serialVersionUID = 1L;
 		AttachmentRecoveryException() { super("Cannot restore outgoing attachment"); }
@@ -57,11 +74,16 @@ public final class OutboxStorage {
 			root = new File(MainApplication.getInstance().getNoBackupFilesDir(), "outbox-v1");
 			if (!root.isDirectory() && !root.mkdirs()) throw new IllegalStateException("Outbox directory unavailable");
 			SQLiteDatabase db = SQLiteDatabase.openOrCreateDatabase(new File(root, "journal.db"), null);
+			String stage = "schema";
 			try {
 				db.execSQL("CREATE TABLE IF NOT EXISTS outgoing (id TEXT PRIMARY KEY, chan TEXT NOT NULL, board TEXT, " +
 						"thread TEXT, post TEXT, state TEXT NOT NULL, updated INTEGER NOT NULL, draft BLOB)");
+				stage = "configure_sync";
 				db.execSQL("PRAGMA synchronous=FULL");
-				db.execSQL("PRAGMA secure_delete=ON");
+				stage = "configure_secure_delete";
+				// This assignment RETURNS a row; execSQL rejects row-returning statements on Android.
+				DatabaseUtils.longForQuery(db, "PRAGMA secure_delete=ON", null);
+				stage = "recover_states";
 				db.beginTransaction();
 				try {
 					for (OutboxState state : OutboxState.values()) {
@@ -74,11 +96,15 @@ public final class OutboxStorage {
 					db.setTransactionSuccessful();
 				} finally { db.endTransaction(); }
 				database = db;
+				stage = "cleanup_sent_attachments";
 				// Finish cleanup if the previous process stopped after committing the acknowledgement.
 				try (Cursor cursor = db.query("outgoing", new String[] {"id"}, "state=?",
 						new String[] {OutboxState.SENT.name()}, null, null, null)) {
 					while (cursor.moveToNext()) deleteAttachments(cursor.getString(0));
 				}
+			} catch (RuntimeException e) {
+				logFailure(stage, e);
+				throw e;
 			} finally { if (database != db) db.close(); }
 		}
 		return database;
@@ -191,7 +217,7 @@ public final class OutboxStorage {
 		} catch (Exception e) {
 			if (e instanceof InterruptedException) Thread.currentThread().interrupt();
 			// Never turn an acknowledged post into a retryable failure because local storage failed.
-			Log.w("Outbox", "Could not persist acknowledgement: " + e.getClass().getSimpleName());
+			logFailure("persist_acknowledgement", e);
 		}
 	}
 
@@ -270,7 +296,7 @@ public final class OutboxStorage {
 				T result = operation.call();
 				if (callback != null) ConcurrentUtils.HANDLER.post(() -> callback.accept(result));
 			} catch (Exception e) {
-				Log.w("Outbox", "Journal operation failed: " + e.getClass().getSimpleName());
+				logFailure("journal_operation", e);
 				if (failure != null) ConcurrentUtils.HANDLER.post(() -> failure.accept(e));
 			}
 		});

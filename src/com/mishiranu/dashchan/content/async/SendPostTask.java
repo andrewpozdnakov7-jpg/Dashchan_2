@@ -138,8 +138,7 @@ public class SendPostTask<Key> extends ExecutorTask<long[], Boolean> {
 				journal.prepare();
 			} catch (Exception e) {
 				if (e instanceof InterruptedException) Thread.currentThread().interrupt();
-				Throwable cause = e.getCause() != null ? e.getCause() : e;
-				android.util.Log.w("Outbox", "Preparation failed: " + cause.getClass().getSimpleName());
+				com.mishiranu.dashchan.content.storage.OutboxStorage.logFailure("prepare", e);
 				errorItem = new ErrorItem(R.string.outbox_prepare_failed);
 				return false;
 			}
@@ -183,8 +182,7 @@ public class SendPostTask<Key> extends ExecutorTask<long[], Boolean> {
 					journal.beforeSend();
 				} catch (Exception e) {
 					if (e instanceof InterruptedException) Thread.currentThread().interrupt();
-					Throwable cause = e.getCause() != null ? e.getCause() : e;
-					android.util.Log.w("Outbox", "Sending transition failed: " + cause.getClass().getSimpleName());
+					com.mishiranu.dashchan.content.storage.OutboxStorage.logFailure("before_send", e);
 					errorItem = new ErrorItem(R.string.outbox_prepare_failed);
 					return false;
 				}

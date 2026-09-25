@@ -46,6 +46,11 @@ public class OutboxFragment extends PreferenceFragment {
 
 	private void refresh() {
 		int current = ++generation;
+		if (!Preferences.isOutboxJournalEnabled()) {
+			removeAllPreferences();
+			addButton(R.string.outbox_disabled, 0).setSelectable(false);
+			return;
+		}
 		OutboxStorage.getInstance().list(entries -> {
 			if (getView() == null || current != generation) return;
 			removeAllPreferences();

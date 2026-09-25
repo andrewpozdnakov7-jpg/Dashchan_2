@@ -220,6 +220,11 @@ public final class TranslationController {
 	private void translateCached(String scope, TranslationEngine engine, TranslationModel.Direction direction,
 			String subject, String html, ResultCallback callback) {
 		long generation = cacheGeneration.get();
+		if (!Preferences.isPersistentTranslationCacheEnabled()) {
+			translateWhenReady(engine, direction, subject, html, callback,
+					generation, SystemClock.elapsedRealtime() + 15000L, false);
+			return;
+		}
 		cacheExecutor.execute(() -> {
 			if (generation != cacheGeneration.get()) {
 				handler.post(() -> callback.onResult(null, null, "Translator unloaded"));
@@ -270,9 +275,12 @@ public final class TranslationController {
 									current ? error : "Translator unloaded");
 						}
 					};
-					if (generation == cacheGeneration.get() && error == null && translatedHtml != null) {
+					if (generation == cacheGeneration.get() && Preferences.isPersistentTranslationCacheEnabled()
+							&& error == null && translatedHtml != null) {
 						cacheExecutor.execute(() -> {
-							if (generation == cacheGeneration.get()) persistentCache.put(key, translatedSubject, translatedHtml);
+							if (generation == cacheGeneration.get() && Preferences.isPersistentTranslationCacheEnabled()) {
+								persistentCache.put(key, translatedSubject, translatedHtml);
+							}
 							handler.post(deliver);
 						});
 					} else deliver.run();
