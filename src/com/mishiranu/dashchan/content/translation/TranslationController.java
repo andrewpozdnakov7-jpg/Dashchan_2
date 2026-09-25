@@ -8,6 +8,7 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
 import android.os.RemoteException;
+import android.os.SystemClock;
 import chan.content.Chan;
 import com.mishiranu.dashchan.BuildConfig;
 import com.mishiranu.dashchan.content.MainApplication;
@@ -16,11 +17,14 @@ import com.mishiranu.dashchan.content.model.PostItem;
 import com.mishiranu.dashchan.content.service.translation.ITranslationCallback;
 import com.mishiranu.dashchan.content.service.translation.ITranslationService;
 import com.mishiranu.dashchan.content.service.translation.TranslationService;
+import com.mishiranu.dashchan.util.ConcurrentUtils;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.ExecutorService;
+import java.util.function.Consumer;
 
 public final class TranslationController {
 	private static final long REQUEST_TIMEOUT_MS = 180000L;
@@ -90,19 +94,20 @@ public final class TranslationController {
 		if (!isEnabledForDirection(direction)) {
 			return false;
 		}
-		TranslationEngine engine = getCurrentEngine();
+		return getEngineState(getCurrentEngine(), direction) == TranslationModelManager.State.INSTALLED;
+	}
+
+	private static TranslationModelManager.State getEngineState(TranslationEngine engine,
+			TranslationModel.Direction direction) {
 		switch (engine) {
 			case GOOGLE: {
-				return GoogleTranslationBridge.getSnapshot(direction).state ==
-						TranslationModelManager.State.INSTALLED;
+				return GoogleTranslationBridge.getSnapshot(direction).state;
 			}
 			case GEMINI_NANO: {
-				return GeminiNanoTranslationBridge.getSnapshot(direction).state ==
-						TranslationModelManager.State.INSTALLED;
+				return GeminiNanoTranslationBridge.getSnapshot(direction).state;
 			}
 			default: {
-				return TranslationModelManager.getInstance().getSnapshot(direction).state ==
-						TranslationModelManager.State.INSTALLED;
+				return TranslationModelManager.getInstance().getSnapshot(direction).state;
 			}
 		}
 	}
@@ -112,6 +117,10 @@ public final class TranslationController {
 	private final AtomicLong nextRequestId = new AtomicLong(1L);
 	private final Map<Long, PendingCall> calls = new HashMap<>();
 	private final Map<PostItem, String> pendingPosts = new IdentityHashMap<>();
+	private final ExecutorService cacheExecutor = ConcurrentUtils.newSingleThreadPool(3000, "TranslationCache", null);
+	private final TranslationCache persistentCache = new TranslationCache();
+	private final AtomicLong cacheGeneration = new AtomicLong();
+	private final Map<String, ArrayList<ResultCallback>> sharedTranslations = new HashMap<>();
 	private ITranslationService service;
 	private boolean binding;
 	private final Runnable idleDisconnectRunnable = () -> {
@@ -160,23 +169,23 @@ public final class TranslationController {
 		TranslationEngine engine = getCurrentEngine();
 		TranslationModel.Direction direction = getCurrentDirection();
 		String key = engine.getCacheKey(direction);
-		if (!isReadyForChan(chan.name) || postItem.hasTranslatedComment(key)) {
+		String pendingKey = cacheGeneration.get() + ":" + key;
+		if (!isEnabledForChan(chan.name) || postItem.hasTranslatedComment(key)) {
 			return;
 		}
 		synchronized (pendingPosts) {
-			if (key.equals(pendingPosts.get(postItem))) {
+			if (pendingKey.equals(pendingPosts.get(postItem))) {
 				return;
 			}
-			pendingPosts.put(postItem, key);
+			pendingPosts.put(postItem, pendingKey);
 		}
-		translate(engine, direction, postItem.getSubject(), postItem.getCommentHtmlForTranslation(),
+		translateCached("post:" + chan.name, engine, direction, postItem.getSubject(), postItem.getCommentHtmlForTranslation(),
 				(translatedSubject, translatedHtml, error) -> {
 			synchronized (pendingPosts) {
-				if (key.equals(pendingPosts.get(postItem))) {
-					pendingPosts.remove(postItem);
-				}
+				if (!pendingKey.equals(pendingPosts.get(postItem))) return;
+				pendingPosts.remove(postItem);
 			}
-			if (translatedHtml != null) {
+			if (translatedHtml != null && key.equals(getCurrentCacheKey()) && isEnabledForChan(chan.name)) {
 				postItem.setTranslatedPost(key, translatedSubject, translatedHtml, chan);
 				onTranslated.run();
 			}
@@ -185,18 +194,119 @@ public final class TranslationController {
 
 	public void requestTranslation(TranslationModel.Direction direction, String subject, String html,
 			ResultCallback resultCallback) {
-		if (!isReadyForDirection(direction)) {
+		if (!isEnabledForDirection(direction)) {
 			TranslationDiagnostics.error("controller", "request_rejected", "reason", "engine_not_ready",
 					"engine", getCurrentEngine().value, "direction", direction.name());
 			resultCallback.onResult(null, null, "Translation package is unavailable");
 			return;
 		}
-		translate(getCurrentEngine(), direction, subject, html, resultCallback);
+		translateCached("reddit-web", getCurrentEngine(), direction, subject, html, resultCallback);
 	}
 
 	public void unload() {
+		cacheGeneration.incrementAndGet();
 		disconnect();
 		failAll("Translator unloaded");
+	}
+
+	public void clearPersistentCache(Consumer<Boolean> callback) {
+		unload();
+		cacheExecutor.execute(() -> {
+			boolean success = persistentCache.clear();
+			if (callback != null) handler.post(() -> callback.accept(success));
+		});
+	}
+
+	private void translateCached(String scope, TranslationEngine engine, TranslationModel.Direction direction,
+			String subject, String html, ResultCallback callback) {
+		long generation = cacheGeneration.get();
+		if (!Preferences.isPersistentTranslationCacheEnabled()) {
+			translateWhenReady(engine, direction, subject, html, callback,
+					generation, SystemClock.elapsedRealtime() + 15000L, false);
+			return;
+		}
+		cacheExecutor.execute(() -> {
+			if (generation != cacheGeneration.get()) {
+				handler.post(() -> callback.onResult(null, null, "Translator unloaded"));
+				return;
+			}
+			String cacheKey;
+			try {
+				cacheKey = persistentCache.key(scope, engine, direction, subject, html);
+			} catch (RuntimeException e) {
+				TranslationDiagnostics.error("cache", "key_failed", "type", e.getClass().getSimpleName());
+				handler.post(() -> {
+					if (generation == cacheGeneration.get()) translateWhenReady(engine, direction, subject, html,
+							callback, generation, SystemClock.elapsedRealtime() + 15000L, false);
+					else callback.onResult(null, null, "Translator unloaded");
+				});
+				return;
+			}
+			String key = cacheKey;
+			String sharedKey = generation + ":" + key;
+			TranslationCache.Result cached = persistentCache.get(key);
+			handler.post(() -> {
+				if (generation != cacheGeneration.get()) {
+					callback.onResult(null, null, "Translator unloaded");
+					return;
+				}
+				if (cached != null) {
+					TranslationDiagnostics.log("cache", "hit", "engine", engine.value);
+					callback.onResult(cached.subject, cached.html, null);
+					return;
+				}
+				TranslationDiagnostics.log("cache", "miss", "engine", engine.value, "generation", generation);
+				ArrayList<ResultCallback> waiting = sharedTranslations.get(sharedKey);
+				if (waiting != null) {
+					waiting.add(callback);
+					return;
+				}
+				waiting = new ArrayList<>();
+				waiting.add(callback);
+				sharedTranslations.put(sharedKey, waiting);
+				translateWhenReady(engine, direction, subject, html, (translatedSubject, translatedHtml, error) -> {
+					ArrayList<ResultCallback> callbacks = sharedTranslations.remove(sharedKey);
+					// Commit before showing a freshly translated result. Closing immediately after display
+					// must not kill a still-queued cache write. A cache error still permits displaying the result.
+					Runnable deliver = () -> {
+						boolean current = generation == cacheGeneration.get();
+						if (callbacks != null) for (ResultCallback resultCallback : callbacks) {
+							resultCallback.onResult(current ? translatedSubject : null, current ? translatedHtml : null,
+									current ? error : "Translator unloaded");
+						}
+					};
+					if (generation == cacheGeneration.get() && Preferences.isPersistentTranslationCacheEnabled()
+							&& error == null && translatedHtml != null) {
+						cacheExecutor.execute(() -> {
+							if (generation == cacheGeneration.get() && Preferences.isPersistentTranslationCacheEnabled()) {
+								persistentCache.put(key, translatedSubject, translatedHtml);
+							}
+							handler.post(deliver);
+						});
+					} else deliver.run();
+				}, generation, SystemClock.elapsedRealtime() + 15000L, false);
+			});
+		});
+	}
+
+	private void translateWhenReady(TranslationEngine engine, TranslationModel.Direction direction,
+			String subject, String html, ResultCallback callback, long generation, long deadline, boolean waited) {
+		if (generation != cacheGeneration.get() || engine != getCurrentEngine() || !isEnabledForDirection(direction)) {
+			callback.onResult(null, null, "Translator unloaded");
+			return;
+		}
+		TranslationModelManager.State state = getEngineState(engine, direction);
+		if (state == TranslationModelManager.State.CHECKING && SystemClock.elapsedRealtime() < deadline) {
+			if (!waited) TranslationDiagnostics.log("cold_start", "waiting", "engine", engine.value);
+			handler.postDelayed(() -> translateWhenReady(engine, direction, subject, html, callback,
+					generation, deadline, true), 250L);
+		} else if (state == TranslationModelManager.State.INSTALLED) {
+			TranslationDiagnostics.log("cold_start", "ready", "engine", engine.value, "waited", waited);
+			translate(engine, direction, subject, html, callback);
+		} else {
+			TranslationDiagnostics.error("cold_start", "unavailable", "engine", engine.value, "state", state.name());
+			callback.onResult(null, null, "Translation package is unavailable");
+		}
 	}
 
 	private void translate(TranslationEngine engine, TranslationModel.Direction direction, String subject, String html,

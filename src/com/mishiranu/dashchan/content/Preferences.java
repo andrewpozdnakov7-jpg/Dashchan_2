@@ -216,6 +216,10 @@ public class Preferences {
 
 	public static String getApplicationName() {
 		String value = PREFERENCES.getString(KEY_APPLICATION_NAME, DEFAULT_APPLICATION_NAME);
+		if (LauncherIconManager.VALUE_TOGDACH.equals(value)) {
+			value = DEFAULT_APPLICATION_NAME;
+			PREFERENCES.edit().put(KEY_APPLICATION_NAME, value).close();
+		}
 		return LauncherIconManager.isValidValue(value) ? value : DEFAULT_APPLICATION_NAME;
 	}
 
@@ -307,6 +311,20 @@ public class Preferences {
 	}
 
 	public static final String KEY_ACTIVE_SCROLLBAR = "active_scrollbar";
+	public static final String KEY_THREAD_QUICK_NAVIGATION = "thread_quick_navigation";
+	public static final String DEFAULT_THREAD_QUICK_NAVIGATION = "right";
+	public static final String KEY_THREAD_QUICK_NAVIGATION_TRANSPARENCY = "thread_quick_navigation_transparency";
+	public static final int DEFAULT_THREAD_QUICK_NAVIGATION_TRANSPARENCY = 90;
+
+	public static int getThreadQuickNavigationTransparency() {
+		return Math.max(0, Math.min(100, PREFERENCES.getInt(KEY_THREAD_QUICK_NAVIGATION_TRANSPARENCY,
+				DEFAULT_THREAD_QUICK_NAVIGATION_TRANSPARENCY)));
+	}
+
+	public static String getThreadQuickNavigation() {
+		return PREFERENCES.getString(KEY_THREAD_QUICK_NAVIGATION, DEFAULT_THREAD_QUICK_NAVIGATION);
+	}
+
 	public static final boolean DEFAULT_ACTIVE_SCROLLBAR = true;
 
 	public static boolean isActiveScrollbar() {
@@ -2060,6 +2078,12 @@ public class Preferences {
 	public static final int DEFAULT_WALLPAPER_CARD_OPACITY = 88;
 	public static final String KEY_LOCAL_TRANSLATION = "local_translation";
 	public static final boolean DEFAULT_LOCAL_TRANSLATION = false;
+	public static final String KEY_PERSISTENT_TRANSLATION_CACHE = "experimental_translation_cache";
+	public static final boolean DEFAULT_PERSISTENT_TRANSLATION_CACHE = false;
+	public static final String KEY_OUTBOX_JOURNAL = "experimental_outbox_journal";
+	public static final boolean DEFAULT_OUTBOX_JOURNAL = false;
+	public static final String KEY_DISCUSSION_CONTEXT = "experimental_discussion_context";
+	public static final boolean DEFAULT_DISCUSSION_CONTEXT = false;
 	public static final String KEY_TRANSLATION_NATIVE_LANGUAGE = "translation_native_language";
 	public static final String DEFAULT_TRANSLATION_NATIVE_LANGUAGE = "ru";
 	public static final String KEY_TRANSLATION_AUTO = "translation_auto";
@@ -2168,6 +2192,19 @@ public class Preferences {
 	public static boolean isLocalTranslationEnabled() {
 		return BuildConfig.ENABLE_LOCAL_TRANSLATION &&
 				PREFERENCES.getBoolean(KEY_LOCAL_TRANSLATION, DEFAULT_LOCAL_TRANSLATION);
+	}
+
+	public static boolean isPersistentTranslationCacheEnabled() {
+		return BuildConfig.ENABLE_LOCAL_TRANSLATION && PREFERENCES.getBoolean(
+				KEY_PERSISTENT_TRANSLATION_CACHE, DEFAULT_PERSISTENT_TRANSLATION_CACHE);
+	}
+
+	public static boolean isOutboxJournalEnabled() {
+		return PREFERENCES.getBoolean(KEY_OUTBOX_JOURNAL, DEFAULT_OUTBOX_JOURNAL);
+	}
+
+	public static boolean isDiscussionContextEnabled() {
+		return PREFERENCES.getBoolean(KEY_DISCUSSION_CONTEXT, DEFAULT_DISCUSSION_CONTEXT);
 	}
 
 	public static String getTranslationNativeLanguage() {
@@ -2639,6 +2676,16 @@ public class Preferences {
 
 	public static void setSavedVideoPlaybackSpeed(int playbackSpeed) {
 		PREFERENCES.edit().put(KEY_SAVED_VIDEO_PLAYBACK_SPEED, playbackSpeed).close();
+	}
+
+	private static final String KEY_VIDEO_TIKTOK_MODE = "video_tiktok_mode";
+
+	public static boolean isVideoTikTokMode() {
+		return PREFERENCES.getBoolean(KEY_VIDEO_TIKTOK_MODE, false);
+	}
+
+	public static void setVideoTikTokMode(boolean enabled) {
+		PREFERENCES.edit().put(KEY_VIDEO_TIKTOK_MODE, enabled).close();
 	}
 
 	private static final String KEY_VIDEO_TIKTOK_MODE_HINT_COUNT = "video_tiktok_mode_hint_count";

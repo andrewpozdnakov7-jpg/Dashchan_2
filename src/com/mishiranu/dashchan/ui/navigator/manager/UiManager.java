@@ -165,6 +165,7 @@ public class UiManager {
 	public enum Selection {DISABLED, NOT_SELECTED, SELECTED, THREADSHOT}
 
 	public static class DemandSet {
+		public CharSequence contextCaption;
 		public boolean lastInList = false;
 		public Selection selection = Selection.DISABLED;
 		public boolean showOpenThreadButton = false;
@@ -190,6 +191,9 @@ public class UiManager {
 		public final PostNumber repliesToPost;
 		public boolean showTranslatedComments;
 		public String translationKey;
+		public boolean contextCacheOnly;
+		public java.util.function.Consumer<PostItem> contextSelect;
+		public java.util.function.Consumer<PostItem> contextExpand;
 		// Only the full thread page supplies its toolbar title. Do not copy this into previews.
 		public Supplier<String> openedThreadTitle;
 
@@ -227,6 +231,9 @@ public class UiManager {
 		}
 
 		ConfigurationSet copyDisplayStateFrom(ConfigurationSet source) {
+			contextCacheOnly = source.contextCacheOnly;
+			contextSelect = source.contextSelect;
+			contextExpand = source.contextExpand;
 			showTranslatedComments = source.showTranslatedComments;
 			translationKey = source.translationKey;
 			return this;

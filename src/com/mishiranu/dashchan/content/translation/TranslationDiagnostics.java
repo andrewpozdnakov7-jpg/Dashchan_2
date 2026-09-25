@@ -64,7 +64,9 @@ public final class TranslationDiagnostics {
 	}
 
 	private static void write(Logger.Type type, String component, String event, Object... details) {
-		if (!ENABLED) {
+		// These components log only lifecycle/state/counts, never text, URLs or cache keys.
+		if (!ENABLED && !"cache".equals(component) && !"cold_start".equals(component)
+				&& !"display".equals(component)) {
 			return;
 		}
 		int detailsLength = details != null ? details.length : 0;

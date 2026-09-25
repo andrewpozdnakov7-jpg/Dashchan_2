@@ -50,7 +50,8 @@ public abstract class StateActivity extends FragmentActivity {
 		InstanceFragment fragment = (InstanceFragment) fragmentManager.findFragmentByTag(tag);
 		if (fragment == null) {
 			fragment = new InstanceFragment();
-			fragment.setRetainInstance(true);
+			// This fragment holds no state. A regular fragment also detaches on recreation,
+			// which is exactly when the old activity must release its subscriptions.
 			fragmentManager.beginTransaction().add(fragment, tag).commit();
 		}
 	}

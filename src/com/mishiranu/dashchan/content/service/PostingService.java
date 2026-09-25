@@ -28,6 +28,12 @@ import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.LocaleManager;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.async.SendPostTask;
+import com.mishiranu.dashchan.content.storage.OutboxStorage;
+import com.mishiranu.dashchan.content.storage.OutboxState;
+import com.mishiranu.dashchan.content.model.FileHolder;
+import java.io.File;
+import java.util.UUID;
+import java.util.concurrent.Future;
 import com.mishiranu.dashchan.content.database.ChanDatabase;
 import com.mishiranu.dashchan.content.database.CommonDatabase;
 import com.mishiranu.dashchan.content.model.ErrorItem;
@@ -117,6 +123,9 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 	}
 
 	private static class QueueItem {
+		// Capture opt-in per send: changing settings cannot strand an already-journaled request.
+		public final String outboxId = Preferences.isOutboxJournalEnabled() ? UUID.randomUUID().toString() : null;
+		public Future<Void> journalReady;
 		public final Key key;
 		public final String chanName;
 		public final ChanPerformer.SendPostData data;
@@ -399,6 +408,14 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 			}
 			QueueItem queueItem = new QueueItem(chanName, data, postDraft, attachmentHashes, allowFloodRetry);
 			DraftsStorage.getInstance().retainAttachmentDrafts(queueItem.attachmentHashes);
+			if (queueItem.outboxId != null) {
+				HashMap<String, File> journalAttachments = new HashMap<>();
+				for (String hash : queueItem.attachmentHashes) {
+					journalAttachments.put(hash, DraftsStorage.getInstance().getAttachmentDraftFile(hash));
+				}
+				queueItem.journalReady = OutboxStorage.getInstance().enqueue(queueItem.outboxId,
+						OutboxStorage.snapshot(postDraft), journalAttachments);
+			}
 			markPostDraftQueued(queueItem);
 			boolean start = postQueue.isEmpty();
 			postQueue.addLast(queueItem);
@@ -475,7 +492,36 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 			return;
 		}
 		Chan chan = Chan.get(queueItem.chanName);
-		SendPostTask<Key> task = new SendPostTask<>(queueItem.key, this, chan, queueItem.data);
+		SendPostTask<Key> task = new SendPostTask<>(queueItem.key, this, chan, queueItem.data,
+				queueItem.outboxId == null ? null : new SendPostTask.Journal() {
+			@Override
+			public void prepare() throws Exception {
+				queueItem.journalReady.get();
+				if (queueItem.data.attachments != null) {
+					for (int i = 0; i < queueItem.data.attachments.length; i++) {
+						ChanPerformer.SendPostData.Attachment old = queueItem.data.attachments[i];
+						File file = OutboxStorage.getInstance().attachmentFile(queueItem.outboxId, queueItem.attachmentHashes.get(i));
+						if (!file.isFile()) throw new java.io.IOException("Outgoing attachment missing");
+						ChanPerformer.SendPostData.Attachment attachment = new ChanPerformer.SendPostData.Attachment(
+								FileHolder.obtain(file), old.fileName, old.rating, old.optionUniqueHash,
+								old.optionRemoveMetadata, old.optionRemoveFileName, old.optionSpoiler, old.reencoding);
+						attachment.listener = old.listener;
+						queueItem.data.attachments[i] = attachment;
+					}
+				}
+			}
+
+			@Override
+			public void beforeSend() throws Exception {
+				OutboxStorage.getInstance().beginSend(queueItem.outboxId);
+			}
+
+			@Override
+			public void accepted(String threadNumber, PostNumber postNumber) {
+				OutboxStorage.getInstance().accepted(queueItem.outboxId, threadNumber,
+						postNumber != null ? postNumber.toString() : null);
+			}
+		});
 		TaskState taskState = this.taskState;
 		if (taskState == null || taskState.queueItem != queueItem) {
 			taskState = new TaskState(queueItem, task, this, chan);
@@ -551,6 +597,7 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 			postQueue.clear();
 			postingInProgress = false;
 			for (QueueItem queueItem : cancelledItems) {
+				if (queueItem.outboxId != null) OutboxStorage.getInstance().finish(queueItem.outboxId, null);
 				if (queueItem.allowFloodRetry) {
 					storeFailedPost(queueItem);
 				} else {
@@ -729,6 +776,7 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 				&& taskState.key.equals(key) && currentItem.allowFloodRetry && tooFast
 				&& currentItem.floodRetryCount < MAX_FLOOD_RETRIES) {
 			currentItem.floodRetryCount++;
+			if (currentItem.outboxId != null) OutboxStorage.getInstance().finish(currentItem.outboxId, OutboxState.WAITING);
 			taskState.waitingForRetry = true;
 			refreshNotification(NotificationData.Type.UPDATE, taskState);
 			retryRunnable = () -> {
@@ -744,6 +792,12 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 		QueueItem queueItem = takeCurrentPost(key);
 		if (queueItem != null) {
 			FailResult failResult = new FailResult(errorItem, extra, captchaError, keepCaptcha);
+			OutboxState state = captchaError || errorItem.type == ErrorItem.Type.CAPTCHA_EXPIRED ||
+					errorItem.type == ErrorItem.Type.API && errorItem.specialType == ApiException.SEND_ERROR_CAPTCHA
+					? OutboxState.NEEDS_CAPTCHA : errorItem.type == ErrorItem.Type.INVALID_AUTHORIZATION_DATA
+					? OutboxState.NEEDS_LOGIN : errorItem.type == ErrorItem.Type.API
+					|| errorItem.resId == R.string.outbox_prepare_failed ? OutboxState.FAILED : OutboxState.UNKNOWN_RESULT;
+			if (queueItem.outboxId != null) OutboxStorage.getInstance().finish(queueItem.outboxId, state);
 			if (queueItem.allowFloodRetry) {
 				storeFailedPost(queueItem);
 				showPostFailedNotification(queueItem, failResult);

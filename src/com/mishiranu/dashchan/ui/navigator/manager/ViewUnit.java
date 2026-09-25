@@ -485,6 +485,17 @@ public class ViewUnit {
 		holder.resetAnimations();
 		holder.configure(postItem, configurationSet);
 		holder.selection = demandSet.selection;
+		if (demandSet.contextCaption != null && holder.contextCaption == null) {
+			holder.contextCaption = new TextView(holder.itemView.getContext());
+			int padding = (int) (10 * ResourceUtils.obtainDensity(holder.itemView));
+			holder.contextCaption.setPadding(padding, padding, padding, 0);
+			holder.contextCaption.setTypeface(ResourceUtils.TYPEFACE_MEDIUM);
+			holder.layout.addView(holder.contextCaption, 0);
+		}
+		if (holder.contextCaption != null) {
+			holder.contextCaption.setText(demandSet.contextCaption);
+			holder.contextCaption.setVisibility(demandSet.contextCaption != null ? View.VISIBLE : View.GONE);
+		}
 
 		PostNumber postNumber = postItem.getPostNumber();
 		boolean bumpLimitReached = false;
@@ -755,7 +766,7 @@ public class ViewUnit {
 				for (int i = 0; i < size; i++) {
 					AttachmentHolder attachmentHolder = attachmentHolders.get(i);
 					AttachmentItem attachmentItem = attachmentItems.get(i);
-					attachmentItem.configureAndLoad(attachmentHolder.thumbnail, chan, false, false);
+					attachmentItem.configureAndLoad(attachmentHolder.thumbnail, chan, false, false, configurationSet.contextCacheOnly);
 					attachmentHolder.thumbnailClickListener.update(i, false, configurationSet.isDialog
 							? GalleryOverlay.NavigatePostMode.MANUALLY : GalleryOverlay.NavigatePostMode.ENABLED);
 					attachmentHolder.thumbnailLongClickListener.update(attachmentItem);
@@ -774,7 +785,7 @@ public class ViewUnit {
 				holder.attachmentViewCount = size;
 			} else {
 				AttachmentItem attachmentItem = attachmentItems.get(0);
-				attachmentItem.configureAndLoad(holder.thumbnail, chan, size > 1, false);
+				attachmentItem.configureAndLoad(holder.thumbnail, chan, size > 1, false, configurationSet.contextCacheOnly);
 				holder.thumbnailClickListener.update(0, true, configurationSet.isDialog
 						? GalleryOverlay.NavigatePostMode.MANUALLY : GalleryOverlay.NavigatePostMode.ENABLED);
 				holder.thumbnailLongClickListener.update(attachmentItem);
@@ -831,7 +842,7 @@ public class ViewUnit {
 					Uri uri = icons.get(i).uri;
 					if (uri != null) {
 						uri = uri.isRelative() ? chan.locator.convert(uri) : uri;
-						ImageLoader.getInstance().loadImage(chan, uri, false, imageView);
+						ImageLoader.getInstance().loadImage(chan, uri, configurationSet.contextCacheOnly, imageView);
 					} else {
 						ImageLoader.getInstance().cancel(imageView);
 						imageView.setTag(null);
@@ -1379,6 +1390,7 @@ public class ViewUnit {
 		public final TextView voteLike;
 		public final TextView voteDislike;
 		public final View textSelectionPadding;
+		public TextView contextCaption;
 		public final View textBarPadding;
 		public final View bottomBar;
 		public final TextView bottomBarReplies;

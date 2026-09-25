@@ -394,6 +394,11 @@ public abstract class AttachmentItem {
 	}
 
 	public void configureAndLoad(AttachmentView view, Chan chan, boolean needShowMultipleIcon, boolean force) {
+		configureAndLoad(view, chan, needShowMultipleIcon, force, false);
+	}
+
+	public void configureAndLoad(AttachmentView view, Chan chan, boolean needShowMultipleIcon, boolean force,
+			boolean cacheOnly) {
 		view.setCropEnabled(Preferences.isCutThumbnails());
 		Type type = getType();
 		String key = getThumbnailKey(chan);
@@ -427,7 +432,10 @@ public abstract class AttachmentItem {
 			}
 		}
 		view.resetImage(key, overlay);
-		startLoad(view, chan, key, force);
+		if (cacheOnly) {
+			if (key != null) ImageLoader.getInstance().loadImage(chan, getThumbnailUri(chan), key, true, view);
+			else ImageLoader.getInstance().cancel(view);
+		} else startLoad(view, chan, key, force);
 	}
 
 	public void startLoad(AttachmentView view, Chan chan, boolean force) {

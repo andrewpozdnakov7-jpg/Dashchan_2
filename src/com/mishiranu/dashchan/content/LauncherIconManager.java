@@ -26,6 +26,7 @@ public final class LauncherIconManager {
 	public static final String VALUE_DASHCHAN_2 = "dashchan_2";
 	public static final String VALUE_SLOPCHAN = "slopchan";
 	public static final String VALUE_DVACH = "dvach";
+	// Kept only to migrate existing launcher components and saved preferences.
 	public static final String VALUE_TOGDACH = "togdach";
 	public static final String VALUE_SLOOP = "sloop";
 	public static final String VALUE_SLOPCHAN_PLAIN = "slopchan_plain";
@@ -104,8 +105,14 @@ public final class LauncherIconManager {
 	private static final String CLASS_SLOPCHAN = "com.mishiranu.dashchan.launcher.SlopchanAlias";
 	private static final String CLASS_DVACH = "com.mishiranu.dashchan.launcher.DvachAlias";
 	private static final List<String> APPLICATION_NAMES = Collections.unmodifiableList(Arrays.asList(VALUE_SLOOP,
-			VALUE_DASHCHAN_2, VALUE_SLOPCHAN, VALUE_DVACH, VALUE_TOGDACH, VALUE_SLOPCHAN_PLAIN, VALUE_SLOPCHAN_1,
+			VALUE_DASHCHAN_2, VALUE_SLOPCHAN, VALUE_DVACH, VALUE_SLOPCHAN_PLAIN, VALUE_SLOPCHAN_1,
 			VALUE_SLOPCHAN_2));
+	private static final List<String> COMPONENT_NAMES;
+	static {
+		ArrayList<String> names = new ArrayList<>(APPLICATION_NAMES);
+		names.add(VALUE_TOGDACH);
+		COMPONENT_NAMES = Collections.unmodifiableList(names);
+	}
 	private LauncherIconManager() {}
 
 	public static boolean isValidValue(String value) {
@@ -179,7 +186,7 @@ public final class LauncherIconManager {
 	private static void applyAtomic(PackageManager packageManager, Context context, String selectedClass) {
 		ArrayList<PackageManager.ComponentEnabledSetting> settings = new ArrayList<>();
 		for (LogoOption option : LOGO_OPTIONS) {
-			for (String name : APPLICATION_NAMES) {
+			for (String name : COMPONENT_NAMES) {
 				String className = getClassName(name, option);
 				boolean enabled = className.equals(selectedClass);
 				ComponentName componentName = new ComponentName(context, className);
@@ -201,7 +208,7 @@ public final class LauncherIconManager {
 		// Keep a launchable component available throughout the non-atomic legacy transition.
 		setEnabled(packageManager, context, selectedClass, true);
 		for (LogoOption option : LOGO_OPTIONS) {
-			for (String name : APPLICATION_NAMES) {
+			for (String name : COMPONENT_NAMES) {
 				String className = getClassName(name, option);
 				setEnabled(packageManager, context, className, className.equals(selectedClass));
 			}

@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui.preference;
 
+import android.app.AlertDialog;
 import android.os.Bundle;
 import android.view.View;
 import androidx.annotation.NonNull;
@@ -61,6 +62,15 @@ public class ExperimentalFragment extends PreferenceFragment implements Translat
 			refreshPreferences();
 		});
 		addVideoDiagnosticsPreferences();
+		addCheck(true, Preferences.KEY_DISCUSSION_CONTEXT, Preferences.DEFAULT_DISCUSSION_CONTEXT,
+				R.string.discussion_context, R.string.discussion_context_summary);
+		addCheck(true, Preferences.KEY_OUTBOX_JOURNAL, Preferences.DEFAULT_OUTBOX_JOURNAL,
+				R.string.outbox_title, R.string.outbox_experimental_summary)
+				.setOnAfterChangeListener(p -> refreshPreferences());
+		if (Preferences.isOutboxJournalEnabled()) {
+			addButton(R.string.outbox_open, R.string.outbox_summary).setOnClickListener(p ->
+					((FragmentHandler) requireActivity()).pushFragment(new OutboxFragment()));
+		}
 		addCheck(true, Preferences.KEY_WINDOWED_THREAD_LOADING,
 				Preferences.DEFAULT_WINDOWED_THREAD_LOADING,
 				R.string.windowed_thread_loading,
@@ -109,7 +119,24 @@ public class ExperimentalFragment extends PreferenceFragment implements Translat
 		CheckPreference translationPreference = addCheck(true, Preferences.KEY_LOCAL_TRANSLATION,
 				Preferences.DEFAULT_LOCAL_TRANSLATION, R.string.local_translation,
 				R.string.local_translation__summary);
-		translationPreference.setOnAfterChangeListener(p -> refreshPreferences());
+		translationPreference.setOnAfterChangeListener(p -> {
+			TranslationController.getInstance().unload();
+			refreshPreferences();
+		});
+		addCheck(true, Preferences.KEY_PERSISTENT_TRANSLATION_CACHE,
+				Preferences.DEFAULT_PERSISTENT_TRANSLATION_CACHE, R.string.persistent_translation_cache,
+				R.string.persistent_translation_cache_summary).setOnAfterChangeListener(p -> {
+			TranslationController.getInstance().unload();
+			refreshPreferences();
+		});
+		addButton(R.string.clear_translation_cache, R.string.clear_translation_cache_summary).setOnClickListener(p ->
+				new AlertDialog.Builder(requireContext()).setTitle(R.string.clear_translation_cache)
+						.setMessage(R.string.clear_translation_cache_summary)
+						.setNegativeButton(android.R.string.cancel, null)
+						.setPositiveButton(android.R.string.ok, (dialog, which) ->
+								TranslationController.getInstance().clearPersistentCache(success ->
+										ClickableToast.show(success ? R.string.translation_cache_cleared : R.string.translation_cache_failed)))
+						.show());
 		if (!translationPreference.getValue()) {
 			return;
 		}

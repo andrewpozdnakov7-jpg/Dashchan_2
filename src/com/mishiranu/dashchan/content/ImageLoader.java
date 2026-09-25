@@ -1,7 +1,7 @@
 package com.mishiranu.dashchan.content;
 
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
+import android.content.ComponentCallbacks2;
 import android.net.Uri;
 import android.os.Process;
 import android.os.SystemClock;
@@ -19,12 +19,12 @@ import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.async.HttpHolderTask;
 import com.mishiranu.dashchan.content.model.ErrorItem;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
-import com.mishiranu.dashchan.util.GraphicsUtils;
-import com.mishiranu.dashchan.util.LruCache;
+import com.mishiranu.dashchan.util.WeightedLruCache;
 import com.mishiranu.dashchan.widget.AttachmentView;
-import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.concurrent.Executor;
@@ -64,35 +64,32 @@ public class ImageLoader {
 		public final Uri uri;
 		public final Chan chan;
 		public final String key;
+		public final String memoryKey;
+		public final int targetSize;
 		public final boolean fromCacheOnly;
 
 		public final HashSet<TaskCallback> callbacks = new HashSet<>();
-		private final long created = SystemClock.elapsedRealtime();
+		private final Runnable startRunnable = this::start;
+
+		private void start() {
+			if (!isCancelled()) execute(getExecutor(chan.name));
+		}
 
 		private boolean notFound;
-		private boolean finished;
 
-		public LoaderTask(Uri uri, Chan chan, String key, boolean fromCacheOnly) {
+		public LoaderTask(Uri uri, Chan chan, String key, String memoryKey, int targetSize, boolean fromCacheOnly) {
 			super(chan);
 			this.uri = uri;
 			this.chan = chan;
 			this.key = key;
+			this.memoryKey = memoryKey;
+			this.targetSize = targetSize;
 			this.fromCacheOnly = fromCacheOnly;
 		}
 
 		@Override
 		protected Bitmap run(HttpHolder holder) {
 			Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND);
-			// Debounce image requests, taking into account that
-			// a task can be executed much later than created.
-			long sleep = 500 + created - SystemClock.elapsedRealtime();
-			if (sleep > 0) {
-				try {
-					Thread.sleep(sleep);
-				} catch (InterruptedException e) {
-					return null;
-				}
-			}
 			String scheme = uri.getScheme();
 			boolean chanScheme = ChanConfiguration.SCHEME_CHAN.equals(scheme);
 			boolean dataScheme = "data".equals(scheme);
@@ -100,32 +97,35 @@ public class ImageLoader {
 			boolean storeExternal = !chanScheme && !dataScheme;
 			Bitmap bitmap = null;
 			try {
-				bitmap = storeExternal ? CacheManager.getInstance().loadThumbnailExternal(key) : null;
+				bitmap = storeExternal ? CacheManager.getInstance().loadThumbnailExternal(key, targetSize) : null;
 				if (isCancelled()) {
+					if (bitmap != null) bitmap.recycle();
 					return null;
 				}
 				if (bitmap == null && (!fromCacheOnly || localArchiveScheme)) {
 					if (chanScheme) {
-						ByteArrayOutputStream output = new ByteArrayOutputStream();
+						ThumbnailDecoder.LimitedOutput output = new ThumbnailDecoder.LimitedOutput();
 						if (!chan.configuration.readResourceUri(uri, output)) {
 							throw HttpException.createNotFoundException();
 						}
-						byte[] bytes = output.toByteArray();
-						bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
+						bitmap = output.decode(targetSize);
 					} else if (dataScheme) {
 						String data = uri.toString();
 						int index = data.indexOf("base64,");
 						if (index >= 0) {
+							if ((long) data.length() - index - 7 > ThumbnailDecoder.MAX_INPUT_BYTES * 4L / 3 + 4) {
+								throw new IOException("Thumbnail data URI exceeds size limit");
+							}
 							data = data.substring(index + 7);
 							byte[] bytes = Base64.decode(data, Base64.DEFAULT);
 							if (bytes != null) {
-								bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
+								bitmap = ThumbnailDecoder.decode(bytes, bytes.length, targetSize);
 							}
 						}
 					} else if (localArchiveScheme) {
 						try (InputStream input = LocalArchiveManager.openResource(uri)) {
 							if (input != null) {
-								bitmap = BitmapFactory.decodeStream(input);
+								bitmap = ThumbnailDecoder.decode(input, targetSize);
 							}
 						}
 						if (bitmap == null) {
@@ -141,7 +141,11 @@ public class ImageLoader {
 												CONNECT_TIMEOUT, READ_TIMEOUT, holder, -1, -1));
 								response = result != null ? result.response : null;
 								if (response != null) {
-									bitmap = response.readBitmap();
+									try (InputStream input = response.open()) {
+										bitmap = ThumbnailDecoder.decode(input, targetSize);
+									} catch (IOException e) {
+										throw response.fail(e);
+									}
 								}
 							} catch (ExtensionException e) {
 								e.getErrorItemAndHandle();
@@ -168,10 +172,10 @@ public class ImageLoader {
 						}
 					}
 					if (isCancelled()) {
+						if (bitmap != null) bitmap.recycle();
 						return null;
 					}
-					bitmap = GraphicsUtils.reduceThumbnailSize(MainApplication.getInstance().getResources(), bitmap);
-					if (storeExternal) {
+					if (storeExternal && bitmap != null) {
 						CacheManager.getInstance().storeThumbnailExternal(key, bitmap);
 					}
 				}
@@ -189,27 +193,55 @@ public class ImageLoader {
 
 		@Override
 		protected void onComplete(Bitmap bitmap) {
-			// Don't remove task but instead mark it as finished,
-			// so targets could be extracted later.
-			finished = true;
+			// FutureTask holds its result: retaining completed tasks would bypass the bitmap cache budget.
+			if (loaderTasks.get(memoryKey) == this) loaderTasks.remove(memoryKey);
 			if (notFound && !LocalArchiveManager.RESOURCE_SCHEME.equals(uri.getScheme())) {
-				notFoundMap.put(key);
+				notFoundMap.put(memoryKey);
 			}
 			if (bitmap != null) {
-				notFoundMap.remove(key);
-				bitmapCache.put(key, bitmap);
+				notFoundMap.remove(memoryKey);
+				bitmapCache.put(memoryKey, bitmap);
 			}
-			for (TaskCallback callback : callbacks) {
+			ArrayList<TaskCallback> completedCallbacks = new ArrayList<>(callbacks);
+			callbacks.clear();
+			for (TaskCallback callback : completedCallbacks) {
 				callback.onTaskFinished(key, bitmap, !fromCacheOnly);
 			}
 		}
+
+		@Override
+		public void cancel() {
+			ConcurrentUtils.HANDLER.removeCallbacks(startRunnable);
+			super.cancel();
+		}
+
+		@Override
+		protected void onCancel(Bitmap bitmap) {
+			if (bitmap != null) bitmap.recycle(); // Never published to cache or a View.
+			callbacks.clear();
+		}
 	}
 
-	private final LruCache<String, Bitmap> bitmapCache =
-			new LruCache<>(MainApplication.getInstance().isLowRam() ? 50 : 200);
+	// Upper bound only: entries are allocated on demand and trimmed under memory pressure.
+	private final long bitmapCacheBytes = 200L * 1024 * 1024;
+	private final WeightedLruCache<String, Bitmap> bitmapCache = new WeightedLruCache<>(bitmapCacheBytes, 512,
+			bitmap -> Math.max(1L, bitmap.getAllocationByteCount()));
+
+	// Legacy pressure levels remain useful on Android 11-13; newer Android reports UI_HIDDEN.
+	@SuppressWarnings("deprecation")
+	public void onTrimMemory(int level) {
+		if (level >= ComponentCallbacks2.TRIM_MEMORY_BACKGROUND ||
+				level == ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL) {
+			bitmapCache.trimToWeight(0);
+		} else if (level >= ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN ||
+				level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) {
+			bitmapCache.trimToWeight(bitmapCacheBytes / 2);
+		}
+	}
 
 	public static abstract class Target {
 		public String currentKey;
+		private String currentTaskKey;
 
 		private final TaskCallback taskCallback = (key, bitmap, error) -> {
 			if (key.equals(currentKey)) {
@@ -309,15 +341,16 @@ public class ImageLoader {
 	public boolean hasRunningTask(View view) {
 		WrapperTarget<?> wrapperTarget = getWrapperTarget(view, null);
 		if (wrapperTarget != null && wrapperTarget.currentKey != null) {
-			LoaderTask loaderTask = loaderTasks.get(wrapperTarget.currentKey);
-			return loaderTask != null && !loaderTask.finished;
+			LoaderTask loaderTask = loaderTasks.get(((Target) wrapperTarget).currentTaskKey);
+			return loaderTask != null;
 		}
 		return false;
 	}
 
 	public void cancel(Target target) {
-		String key = target.currentKey;
+		String key = target.currentTaskKey;
 		target.currentKey = null;
+		target.currentTaskKey = null;
 		if (key != null) {
 			LoaderTask loaderTask = loaderTasks.get(key);
 			if (loaderTask != null) {
@@ -354,16 +387,18 @@ public class ImageLoader {
 		if (key == null) {
 			return false;
 		}
+		int targetSize = ThumbnailDecoder.targetSize(MainApplication.getInstance().getResources());
+		// Keep the public attachment/disk key unchanged (also used by reverse image search).
+		String memoryKey = chan.name + "\n" + targetSize + "\n" + key;
 		boolean mainThread = ConcurrentUtils.isMain();
 		if (mainThread) {
 			cancel(target);
 		}
 		Bitmap memoryCachedBitmap;
 		if (mainThread) {
-			memoryCachedBitmap = bitmapCache.get(key);
+			memoryCachedBitmap = bitmapCache.get(memoryKey);
 		} else {
-			String finalKey = key;
-			memoryCachedBitmap = ConcurrentUtils.mainGet(() -> bitmapCache.get(finalKey));
+			memoryCachedBitmap = ConcurrentUtils.mainGet(() -> bitmapCache.get(memoryKey));
 		}
 		if (memoryCachedBitmap != null) {
 			target.onResult(key, memoryCachedBitmap, false, true);
@@ -374,25 +409,27 @@ public class ImageLoader {
 			return false;
 		}
 		// Check "not found" images once per 5 minutes
-		if (notFoundMap.contains(key)) {
+		if (notFoundMap.contains(memoryKey)) {
 			target.onResult(key, null, !fromCacheOnly, true);
 			return false;
 		}
 		target.currentKey = key;
+		target.currentTaskKey = memoryKey;
 		target.onStart();
-		LoaderTask currentLoaderTask = loaderTasks.get(key);
-		boolean startTask = currentLoaderTask == null || currentLoaderTask.finished ||
+		LoaderTask currentLoaderTask = loaderTasks.get(memoryKey);
+		boolean startTask = currentLoaderTask == null ||
 				currentLoaderTask.fromCacheOnly && !fromCacheOnly;
 		LoaderTask registerLoaderTask = currentLoaderTask;
 		if (startTask) {
-			LoaderTask loaderTask = new LoaderTask(uri, chan, key, fromCacheOnly);
+			LoaderTask loaderTask = new LoaderTask(uri, chan, key, memoryKey, targetSize, fromCacheOnly);
 			registerLoaderTask = loaderTask;
 			if (currentLoaderTask != null) {
 				currentLoaderTask.cancel();
 				loaderTask.callbacks.addAll(currentLoaderTask.callbacks);
 			}
-			loaderTasks.put(key, loaderTask);
-			loaderTask.execute(getExecutor(chan.name));
+			loaderTasks.put(memoryKey, loaderTask);
+			// Debounce without occupying a worker thread. Cache-only work does not need a network delay.
+			ConcurrentUtils.HANDLER.postDelayed(loaderTask.startRunnable, fromCacheOnly ? 0L : 500L);
 		}
 		registerLoaderTask.callbacks.add(target.taskCallback);
 		return false;

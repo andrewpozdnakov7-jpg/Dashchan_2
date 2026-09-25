@@ -21,6 +21,7 @@ import android.view.Gravity;
 import android.view.View;
 import android.widget.FrameLayout;
 import android.widget.ImageButton;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.PopupMenu;
 import android.widget.SeekBar;
@@ -32,6 +33,7 @@ import chan.util.StringUtils;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.model.ErrorItem;
+import com.mishiranu.dashchan.content.model.GalleryItem;
 import com.mishiranu.dashchan.graphics.BaseDrawable;
 import com.mishiranu.dashchan.media.VideoPlayer;
 import com.mishiranu.dashchan.media.VideoDiagnostics;
@@ -103,6 +105,40 @@ public class VideoUnit {
 	private int nextSeekPosition = -1;
 	private boolean hideSurfaceOnInit;
 	private boolean pictureInPictureTransferred;
+	private ImageView pictureInPictureReturnPreview;
+
+	private void hidePictureInPictureReturnPreview() {
+		if (pictureInPictureReturnPreview != null) {
+			// Keep the child attached during frame delivery; removal during drawing
+			// has caused platform rendering crashes on some devices.
+			pictureInPictureReturnPreview.setVisibility(View.INVISIBLE);
+			pictureInPictureReturnPreview.setImageDrawable(null);
+		}
+	}
+
+	private void showPictureInPictureReturnPreview(VideoPlayer owner, Bitmap frame) {
+		if (frame == null || instance.currentHolder == null) return;
+		hidePictureInPictureReturnPreview();
+		ImageView preview = pictureInPictureReturnPreview != null
+				&& pictureInPictureReturnPreview.getParent() == instance.currentHolder.surfaceParent
+				? pictureInPictureReturnPreview : new ImageView(instance.galleryInstance.context);
+		preview.setScaleType(ImageView.ScaleType.FIT_CENTER);
+		preview.setImageBitmap(frame);
+		preview.setVisibility(View.VISIBLE);
+		pictureInPictureReturnPreview = preview;
+		if (preview.getParent() == null) {
+			instance.currentHolder.surfaceParent.addView(preview, new FrameLayout.LayoutParams(
+					FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT, Gravity.CENTER));
+		}
+		preview.bringToFront();
+		owner.setVideoViewFrameCallback(() -> preview.post(() -> {
+			if (pictureInPictureReturnPreview == preview && player == owner) {
+				hidePictureInPictureReturnPreview();
+				VideoDiagnostics.recordUi("gallery return_preview_first_frame");
+			}
+		}));
+		VideoDiagnostics.recordUi("gallery return_preview_shown");
+	}
 	private int lastNonZeroSystemVolume;
 	private int localVolume;
 	private int lastNonZeroLocalVolume;
@@ -116,6 +152,148 @@ public class VideoUnit {
 	private File sourceFile;
 
 	private VideoDownloadSession downloadSession;
+	private LifecycleState pendingLifecycleState;
+	private PictureInPictureSource pictureInPictureSource;
+
+	// PiP keeps a stable return address, not the destroyed gallery's view hierarchy.
+	static final class PictureInPictureSource {
+		private java.lang.ref.WeakReference<VideoUnit> target;
+		boolean active = true;
+		boolean galleryClosed;
+		boolean snapshotAvailable;
+		boolean enteredPictureInPicture;
+
+		void attach(VideoUnit unit) {
+			target = unit != null ? new java.lang.ref.WeakReference<>(unit) : null;
+		}
+
+		void closeGallery() {
+			galleryClosed = true;
+			attach(null);
+			VideoDiagnostics.recordUi("gallery pip_return_target closed");
+		}
+
+		VideoUnit get() { return target != null ? target.get() : null; }
+	}
+
+	static final class LifecycleState {
+		VideoPlayer player;
+		VideoDownloadSession download;
+		File file;
+		GalleryItem item;
+		int speed;
+		boolean muted;
+		boolean playing;
+		boolean finished;
+		PictureInPictureSource pipSource;
+		java.lang.ref.WeakReference<VideoPlayer> pipPlayer;
+
+		void dispose() {
+			if (download != null) download.cancel();
+			if (player != null) {
+				player.setListener(null);
+				player.releaseVideoViewAndDestroyAsync();
+			}
+			// PiP owns its player and download until it explicitly returns or closes.
+			if (pipSource != null) pipSource.closeGallery();
+			player = null;
+			download = null;
+		}
+	}
+
+	void setPendingLifecycleState(LifecycleState state) {
+		pendingLifecycleState = state;
+		// A hidden dialog has no bound pager holder yet. Publish the return target
+		// now, so PiP can show the dialog before waiting for that holder.
+		if (state != null && state.pipSource != null && state.pipSource.active) {
+			state.pipSource.attach(this);
+		}
+	}
+
+	LifecycleState detachLifecycleState() {
+		hidePictureInPictureReturnPreview();
+		if (pendingLifecycleState != null) {
+			LifecycleState state = pendingLifecycleState;
+			pendingLifecycleState = null;
+			if (state.pipSource != null && state.pipSource.get() == this) state.pipSource.attach(null);
+			return state;
+		}
+		if (player == null || instance.currentHolder == null) return null;
+		LifecycleState state = new LifecycleState();
+		state.file = sourceFile;
+		state.item = instance.currentHolder.galleryItem;
+		state.speed = playbackSpeed;
+		state.muted = muted;
+		state.playing = wasPlaying;
+		state.finished = finishedPlayback;
+		if (pictureInPictureTransferred) {
+			state.pipSource = pictureInPictureSource;
+			state.pipPlayer = new java.lang.ref.WeakReference<>(player);
+			if (pictureInPictureSource != null) pictureInPictureSource.attach(null);
+		} else {
+			state.player = player;
+			state.download = downloadSession;
+			if (downloadSession != null) downloadSession.setListener(null);
+			player.setListener(null);
+			player.setVideoViewFrameCallback(null);
+			player.setPlaying(false);
+			audioFocus.release();
+			player.releaseVideoView();
+		}
+		player = null;
+		downloadSession = null;
+		initialized = false;
+		pictureInPictureTransferred = false;
+		pictureInPictureSource = null;
+		VideoDiagnostics.recordUi("gallery detach_player pip=" + (state.pipSource != null)
+				+ " speed=" + state.speed + " playing=" + state.playing + " muted=" + state.muted);
+		return state;
+	}
+
+	boolean restoreLifecycleState() {
+		LifecycleState state = pendingLifecycleState;
+		if (state == null || instance.currentHolder == null) return false;
+		pendingLifecycleState = null;
+		if (state.item != instance.currentHolder.galleryItem) {
+			state.dispose();
+			return false;
+		}
+		playbackSpeed = state.speed;
+		muted = state.muted;
+		wasPlaying = state.playing;
+		finishedPlayback = state.finished;
+		sourceFile = state.file;
+		if (state.pipSource != null) {
+			player = state.pipPlayer.get();
+			if (!state.pipSource.active || player == null) {
+				state.dispose();
+				player = null;
+				instance.galleryInstance.callback.closeGallery();
+				return true;
+			}
+			pictureInPictureSource = state.pipSource;
+			pictureInPictureSource.attach(this);
+			pictureInPictureTransferred = true;
+			initialized = true; // Decoder ready; the new surface is created only on PiP return.
+		} else {
+			player = state.player;
+			downloadSession = state.download;
+			state.player = null;
+			state.download = null;
+			player.setListener(playerListener);
+			if (downloadSession != null) downloadSession.setListener(downloadListener);
+			if (downloadSession == null || downloadSession.isReady()) {
+				initializePlayer();
+			} else {
+				instance.currentHolder.progressBar.setIndeterminate(true);
+				instance.currentHolder.progressBar.setVisible(true, false);
+			}
+			updateDownloadState();
+		}
+		VideoDiagnostics.recordUi("gallery restore_player pip=" + pictureInPictureTransferred
+				+ " speed=" + playbackSpeed + " playing=" + wasPlaying);
+		return true;
+	}
 	private boolean playbackSpeedControl;
 	private boolean pictureInPictureControl;
 	private final View.OnLayoutChangeListener surfaceParentLayoutChangeListener;
@@ -247,8 +425,17 @@ public class VideoUnit {
 	}
 
 	public void interrupt(boolean force) {
+		hidePictureInPictureReturnPreview();
 		videoPreloader.stop();
 		dismissPlaybackSpeedPopupMenu();
+		if (force && pendingLifecycleState != null) {
+			pendingLifecycleState.dispose();
+			pendingLifecycleState = null;
+		}
+		if (seekBar != null) {
+			seekBar.removeCallbacks(progressRunnable);
+			seekBar.removeCallbacks(pausedSeekPreviewRunnable);
+		}
 		if (pictureInPictureTransferred && !force) {
 			// PagerUnit may be rebound while its dialog is hidden behind VideoPipActivity. The native player
 			// and this VideoUnit are still the two endpoints of the active transfer, so a soft interrupt must
@@ -272,6 +459,8 @@ public class VideoUnit {
 			instance.currentHolder.progressBar.setVisible(false, false);
 		}
 		if (pictureInPictureTransferred) {
+			if (pictureInPictureSource != null) pictureInPictureSource.attach(null);
+			pictureInPictureSource = null;
 			pictureInPictureTransferred = false;
 			player = null;
 			initialized = false;
@@ -400,6 +589,9 @@ public class VideoUnit {
 		if (!reload && Preferences.isVideoStartMuted()) {
 			muted = true;
 		}
+		VideoDiagnostics.recordUi("gallery video_open tiktok=" + tikTokModeCallback.isEnabled()
+				+ " muted=" + muted + " start_muted=" + Preferences.isVideoStartMuted()
+				+ " local_volume=" + localVolume + " reload=" + reload);
 		if (!Preferences.isVideoPlaybackSpeedControl()) {
 			playbackSpeed = 1000;
 		} else if (!reload && !Preferences.isRememberVideoPlaybackSpeed()) {
@@ -439,7 +631,7 @@ public class VideoUnit {
 	}
 
 	boolean adoptPictureInPicturePlayer(VideoPlayer player, File sourceFile, long position,
-			int playbackSpeed, boolean muted, boolean playing, VideoDownloadSession session) {
+			int playbackSpeed, boolean muted, boolean playing, VideoDownloadSession session, Bitmap previewFrame) {
 		PagerInstance.ViewHolder holder = instance.currentHolder;
 		if (this.player != null || holder == null || sourceFile == null) {
 			return false;
@@ -461,6 +653,7 @@ public class VideoUnit {
 		player.releaseVideoView();
 		player.setListener(playerListener);
 		initializePlayer();
+		showPictureInPictureReturnPreview(player, previewFrame);
 		seekBar.setProgress((int) Math.min(position, Integer.MAX_VALUE));
 		updateDownloadState();
 		instance.galleryInstance.callback.invalidateOptionsMenu();
@@ -522,7 +715,7 @@ public class VideoUnit {
 			showHideVideoView(false);
 		}
 		invalidateControlsVisibility();
-		setPlaying(wasPlaying, true);
+		setPlaying(preloadResumed && wasPlaying, true);
 		updatePlayState();
 	}
 
@@ -987,6 +1180,7 @@ public class VideoUnit {
 		}
 		if (player.setMuted(muted)) {
 			this.muted = muted;
+			VideoDiagnostics.recordUi("gallery mute_applied muted=" + muted);
 			if (muted) {
 				audioFocus.release();
 			}
@@ -1069,8 +1263,11 @@ public class VideoUnit {
 		VideoDownloadSession transferredSession = downloadSession;
 		VideoPipActivity.GalleryRestoreData galleryRestoreData =
 				instance.galleryInstance.callback.createPictureInPictureGalleryRestoreData();
+		pictureInPictureSource = new PictureInPictureSource();
+		pictureInPictureSource.snapshotAvailable = galleryRestoreData != null && sourceFile != null;
+		pictureInPictureSource.attach(this);
 		Intent intent = VideoPipActivity.createIntent(context, sourceFile, position,
-				playbackSpeed, muted, playing, this, transferredPlayer, previewFrame, galleryRestoreData,
+				playbackSpeed, muted, playing, pictureInPictureSource, transferredPlayer, previewFrame, galleryRestoreData,
 				transferredSession);
 		if (transferredSession != null) transferredSession.setListener(null);
 		downloadSession = null;
@@ -1085,10 +1282,11 @@ public class VideoUnit {
 		videoPreloader.stop();
 		instance.galleryInstance.callback.setGalleryVisibleForPictureInPicture(false);
 		try {
+			if (VideoPipActivity.reusePictureInPicture(intent)) return true;
 			instance.galleryInstance.callback.getWindow().getContext().startActivity(intent);
 			return true;
 		} catch (RuntimeException e) {
-			VideoPipActivity.cancelPendingTransfer(this, transferredPlayer);
+			VideoPipActivity.cancelPendingTransfer(pictureInPictureSource, transferredPlayer);
 			restorePictureInPicturePlayer(transferredPlayer, position, playbackSpeed, muted, playing,
 					transferredSession);
 			ClickableToast.show(R.string.unknown_error);
@@ -1121,6 +1319,18 @@ public class VideoUnit {
 		if (getPictureInPictureRestoreState(transferredPlayer) != PictureInPictureRestoreState.READY) {
 			return false;
 		}
+		if (pictureInPictureSource != null) pictureInPictureSource.active = false;
+		pictureInPictureSource = null;
+		Bitmap previewFrame = transferredPlayer.getCurrentFrame();
+		if (backgroundDrawable == null) {
+			// A recreated gallery has a new holder and no controls/surface yet.
+			player = null;
+			initialized = false;
+			boolean restored = adoptPictureInPicturePlayer(transferredPlayer, sourceFile, position,
+					playbackSpeed, muted, playing, session, previewFrame);
+			if (restored) instance.galleryInstance.callback.setGalleryVisibleForPictureInPicture(true);
+			return restored;
+		}
 		transferredPlayer.releaseVideoView();
 		transferredPlayer.setListener(playerListener);
 		View videoView = transferredPlayer.getVideoView(instance.galleryInstance.context);
@@ -1128,6 +1338,7 @@ public class VideoUnit {
 		attachSurfaceParentLayoutListener(instance.currentHolder);
 		instance.currentHolder.surfaceParent.addView(videoView, new FrameLayout.LayoutParams(
 				FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT, Gravity.CENTER));
+		showPictureInPictureReturnPreview(transferredPlayer, previewFrame);
 		pictureInPictureTransferred = false;
 		downloadSession = session;
 		if (session != null) session.setListener(downloadListener);
@@ -1172,7 +1383,25 @@ public class VideoUnit {
 		return true;
 	}
 
+	boolean hasPictureInPictureGalleryFocus() {
+		android.view.Window window = instance.galleryInstance.callback.getWindow();
+		return window != null && window.getDecorView().isShown()
+				&& window.getDecorView().hasWindowFocus();
+	}
+
+	void cancelPictureInPictureGalleryPreparation() {
+		if ((pictureInPictureTransferred || pendingLifecycleState != null
+				&& pendingLifecycleState.pipSource != null) && !hasPictureInPictureGalleryFocus()) {
+			instance.galleryInstance.callback.setGalleryVisibleForPictureInPicture(false);
+		}
+	}
+
 	PictureInPictureRestoreState getPictureInPictureRestoreState(VideoPlayer transferredPlayer) {
+		LifecycleState pending = pendingLifecycleState;
+		if (pending != null && pending.pipSource != null && pending.pipSource.active
+				&& pending.pipPlayer != null && pending.pipPlayer.get() == transferredPlayer) {
+			return PictureInPictureRestoreState.HOLDER_UNAVAILABLE;
+		}
 		if (!pictureInPictureTransferred) {
 			return PictureInPictureRestoreState.TRANSFER_INACTIVE;
 		}

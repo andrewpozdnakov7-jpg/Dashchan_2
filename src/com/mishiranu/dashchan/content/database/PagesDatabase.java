@@ -45,6 +45,16 @@ import java.util.Set;
 import java.util.UUID;
 
 public class PagesDatabase {
+	private final com.mishiranu.dashchan.util.WeakObservable<Runnable> contextInvalidation =
+			new com.mishiranu.dashchan.util.WeakObservable<>();
+	private final java.util.concurrent.atomic.AtomicLong contextEpoch = new java.util.concurrent.atomic.AtomicLong();
+	public long getContextEpoch() { return contextEpoch.get(); }
+	public void registerContextInvalidation(Runnable listener) { contextInvalidation.register(listener); }
+	public void unregisterContextInvalidation(Runnable listener) { contextInvalidation.unregister(listener); }
+	private void invalidateContextSnapshots() {
+		contextEpoch.incrementAndGet();
+		ConcurrentUtils.HANDLER.post(() -> { for (Runnable listener : contextInvalidation) listener.run(); });
+	}
 	private interface Schema {
 		interface Meta {
 			String TABLE_NAME = "meta";
@@ -533,6 +543,7 @@ public class PagesDatabase {
 			}
 		}
 		if (removeThreads != null && !removeThreads.isEmpty() && shouldRemove) {
+			invalidateContextSnapshots();
 			database.beginTransaction();
 			try {
 				for (ThreadKey threadKey : removeThreads) {
@@ -571,6 +582,7 @@ public class PagesDatabase {
 	}
 
 	public void eraseAll() {
+		invalidateContextSnapshots();
 		database.delete(Schema.Meta.TABLE_NAME, null, null);
 		checkpoint();
 	}
@@ -699,6 +711,43 @@ public class PagesDatabase {
 			}
 		}
 		return null;
+	}
+
+	public record ContextPage(List<Post> posts, PostNumber last, int scanned, int bytes, boolean skipped) {}
+
+	/** Read-only, keyset-paged context lookup. Oversized blobs never enter the CursorWindow. */
+	public ContextPage readContextPage(ThreadKey key, PostNumber after, PostNumber exact, CancellationSignal signal) {
+		String major = Schema.Posts.Columns.POST_NUMBER_MAJOR, minor = Schema.Posts.Columns.POST_NUMBER_MINOR;
+		Expression.Filter filter = key.filterPosts().build();
+		String where = filter.value;
+		ArrayList<String> args = new ArrayList<>(java.util.Arrays.asList(filter.args));
+		if (exact != null) {
+			where += " AND " + major + "=? AND " + minor + "=?";
+			args.add(Integer.toString(exact.major)); args.add(Integer.toString(exact.minor));
+		} else if (after != null) {
+			where += " AND (" + major + ">? OR (" + major + "=? AND " + minor + ">?))";
+			args.add(Integer.toString(after.major)); args.add(Integer.toString(after.major)); args.add(Integer.toString(after.minor));
+		}
+		String data = Schema.Posts.Columns.DATA;
+		String[] projection = {major, minor, Schema.Posts.Columns.FLAGS,
+				"CASE WHEN length(" + data + ") <= 262144 THEN " + data + " ELSE NULL END"};
+		ArrayList<Post> posts = new ArrayList<>();
+		PostNumber last = after;
+		int scanned = 0, bytes = 0;
+		boolean skipped = false;
+		try (Cursor cursor = database.query(false, Schema.Posts.TABLE_NAME, projection, where,
+				args.toArray(new String[0]), null, null, orderByPostNumber(false), exact != null ? "1" : "16", signal)) {
+			while (cursor.moveToNext()) {
+				signal.throwIfCanceled();
+				last = new PostNumber(cursor.getInt(0), cursor.getInt(1)); scanned++;
+				if (cursor.isNull(3)) { skipped = true; continue; }
+				byte[] blob = cursor.getBlob(3); bytes += blob.length;
+				try (JsonSerial.Reader reader = JsonSerial.reader(blob)) {
+					posts.add(Post.deserialize(last, FlagUtils.get(cursor.getInt(2), Schema.Posts.Flags.DELETED), reader));
+				} catch (IOException | ParseException e) { skipped = true; }
+			}
+		}
+		return new ContextPage(Collections.unmodifiableList(posts), last, scanned, bytes, skipped);
 	}
 
 	public List<PostNumber> getPostNumbers(@NonNull ThreadKey threadKey) {
@@ -1081,6 +1130,7 @@ public class PagesDatabase {
 			case ERASE: {
 				Expression.Filter filter = threadKey.filterMeta().build();
 				database.delete(Schema.Meta.TABLE_NAME, filter.value, filter.args);
+				invalidateContextSnapshots();
 				break;
 			}
 			case OLD: {
@@ -1108,6 +1158,7 @@ public class PagesDatabase {
 								.raw(Schema.Posts.Columns.FLAGS + " & " + Schema.Posts.Flags.DELETED)
 								.build();
 						database.delete(Schema.Posts.TABLE_NAME, filter.value, filter.args);
+						invalidateContextSnapshots();
 					}
 				}
 				break;
@@ -1117,6 +1168,7 @@ public class PagesDatabase {
 						.raw(Schema.Posts.Columns.FLAGS + " & " + Schema.Posts.Flags.DELETED)
 						.build();
 				database.delete(Schema.Posts.TABLE_NAME, filter.value, filter.args);
+				invalidateContextSnapshots();
 				break;
 			}
 			default: {

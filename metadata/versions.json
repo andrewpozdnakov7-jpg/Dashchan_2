@@ -503,6 +503,12 @@
 			"name": "3.2.48",
 			"date": "24.09.2026",
 			"changelog": true
+		},
+		{
+			"code": 11290,
+			"name": "3.2.49",
+			"date": "25.09.2026",
+			"changelog": true
 		}
 	]
 }

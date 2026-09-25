@@ -58,6 +58,10 @@ public final class SettingsSearchIndex {
 			@Override
 			ContentFragment createFragment() { return new GestureSettingsFragment(); }
 		},
+		THREAD_NAVIGATION(R.string.user_interface, R.string.thread_quick_navigation) {
+			@Override
+			ContentFragment createFragment() { return new ThreadQuickNavigationFragment(); }
+		},
 		POST_MARKS(R.string.user_interface, R.string.post_marks_colors) {
 			@Override
 			ContentFragment createFragment() { return new PostMarksColorsFragment(); }
@@ -362,6 +366,8 @@ public final class SettingsSearchIndex {
 		add(context, entries, Screen.INTERFACE, R.string.swipe_reply,
 				R.string.swipe_reply__summary, Preferences.KEY_SWIPE_REPLY);
 		if (BuildConfig.ENABLE_LOCAL_TRANSLATION) {
+			add(context, entries, Screen.EXPERIMENTAL, R.string.persistent_translation_cache,
+					R.string.persistent_translation_cache_summary, Preferences.KEY_PERSISTENT_TRANSLATION_CACHE);
 			add(context, entries, Screen.EXPERIMENTAL, R.string.local_translation,
 					R.string.local_translation__summary, Preferences.KEY_LOCAL_TRANSLATION);
 			add(context, entries, Screen.EXPERIMENTAL, R.string.translation_native_language, 0,
@@ -373,6 +379,7 @@ public final class SettingsSearchIndex {
 			add(context, entries, Screen.EXPERIMENTAL, R.string.translation_automatic,
 					R.string.translation_automatic__summary, Preferences.KEY_TRANSLATION_AUTO);
 			add(context, entries, Screen.EXPERIMENTAL, R.string.translation_language_package);
+			add(context, entries, Screen.EXPERIMENTAL, R.string.clear_translation_cache);
 		}
 		add(context, entries, Screen.MEDIA, R.string.video_zoom_gestures,
 				R.string.video_zoom_gestures__summary, Preferences.KEY_VIDEO_ZOOM_GESTURES);
@@ -432,6 +439,10 @@ public final class SettingsSearchIndex {
 				R.string.remove_hidden_threads__summary, Preferences.KEY_REMOVE_HIDDEN_THREADS);
 		add(context, entries, Screen.INTERFACE, R.string.hide_threads_with_swipe, 0,
 				Preferences.KEY_HIDE_THREADS_WITH_SWIPE);
+		add(context, entries, Screen.THREAD_NAVIGATION, R.string.thread_quick_navigation,
+				R.string.thread_quick_navigation__search_summary, Preferences.KEY_THREAD_QUICK_NAVIGATION);
+		add(context, entries, Screen.THREAD_NAVIGATION, R.string.thread_quick_navigation_transparency,
+				0, Preferences.KEY_THREAD_QUICK_NAVIGATION_TRANSPARENCY);
 		add(context, entries, Screen.INTERFACE, R.string.remove_hidden_posts, R.string.remove_hidden_posts__summary,
 				Preferences.KEY_REMOVE_HIDDEN_POSTS);
 		add(context, entries, Screen.INTERFACE, R.string.display_post_year, 0, Preferences.KEY_DISPLAY_POST_YEAR);
@@ -501,6 +512,10 @@ public final class SettingsSearchIndex {
 		add(context, entries, Screen.CONTENTS, R.string.wifi_only, 0, Preferences.KEY_WATCHER_WIFI_ONLY);
 		add(context, entries, Screen.CONTENTS, R.string.reply_notifications, 0, "reply_notifications");
 		add(context, entries, Screen.CONTENTS, R.string.clear_cache);
+		add(context, entries, Screen.EXPERIMENTAL, R.string.outbox_title,
+				R.string.outbox_experimental_summary, Preferences.KEY_OUTBOX_JOURNAL);
+		add(context, entries, Screen.EXPERIMENTAL, R.string.discussion_context,
+				R.string.discussion_context_summary, Preferences.KEY_DISCUSSION_CONTEXT);
 
 		add(context, entries, Screen.MEDIA, R.string.load_thumbnails, 0, Preferences.KEY_LOAD_THUMBNAILS);
 		add(context, entries, Screen.MEDIA, R.string.load_nearest_image, 0, Preferences.KEY_LOAD_NEAREST_IMAGE);
