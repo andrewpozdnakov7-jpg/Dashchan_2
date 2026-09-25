@@ -1344,6 +1344,7 @@
 	<string name="outbox_experimental_summary">Experimental. Keep local sending status and recover interrupted drafts. Applies to new sends; nothing is automatically resent. Turning this off does not delete existing entries.</string>
 	<string name="outbox_disabled">Enable the outgoing journal in experimental settings to view saved entries.</string>
 	<string name="outbox_title">Outgoing journal</string>
+	<string name="outbox_open">Open outgoing journal</string>
 	<string name="outbox_summary">Local sending status and recovery of interrupted drafts. Nothing is automatically resent after restarting.</string>
 	<string name="outbox_empty">No outgoing messages recorded yet</string>
 	<string name="outbox_refresh">Refresh journal</string>

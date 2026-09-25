@@ -80,7 +80,6 @@ import com.mishiranu.dashchan.media.VideoPlayer;
 import com.mishiranu.dashchan.ui.CaptchaForm;
 import com.mishiranu.dashchan.ui.ContentFragment;
 import com.mishiranu.dashchan.ui.FragmentHandler;
-import com.mishiranu.dashchan.ui.preference.OutboxFragment;
 import com.mishiranu.dashchan.ui.gallery.GalleryOverlay;
 import com.mishiranu.dashchan.ui.posting.dialog.AttachmentOptionsDialog;
 import com.mishiranu.dashchan.ui.posting.dialog.AttachmentRatingDialog;
@@ -945,7 +944,6 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 
 	@Override
 	public void onCreateOptionsMenu(Menu menu, boolean primary) {
-		menu.add(0, R.id.menu_outbox, 1, R.string.outbox_title);
 		menu.add(0, R.id.menu_attach, 0, R.string.attach)
 				.setIcon(((FragmentHandler) requireActivity()).getActionBarIcon(R.attr.iconActionAttach))
 				.setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
@@ -953,7 +951,6 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 
 	@Override
 	public void onPrepareOptionsMenu(Menu menu, boolean primary) {
-		menu.findItem(R.id.menu_outbox).setVisible(Preferences.isOutboxJournalEnabled());
 		menu.findItem(R.id.menu_attach).setVisible(!attachmentImportInProgress &&
 				attachments.size() < postingConfiguration.attachmentCount);
 	}
@@ -1133,10 +1130,6 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 
 	@Override
 	public boolean onOptionsItemSelected(MenuItem item) {
-		if (item.getItemId() == R.id.menu_outbox) {
-			((FragmentHandler) requireActivity()).pushFragment(new OutboxFragment());
-			return true;
-		}
 		if (item.getItemId() == R.id.menu_attach) {
 			if (attachmentImportInProgress) {
 				ClickableToast.show(R.string.processing_data__ellipsis);

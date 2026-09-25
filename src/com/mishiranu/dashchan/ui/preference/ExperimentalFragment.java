@@ -63,7 +63,12 @@ public class ExperimentalFragment extends PreferenceFragment implements Translat
 		});
 		addVideoDiagnosticsPreferences();
 		addCheck(true, Preferences.KEY_OUTBOX_JOURNAL, Preferences.DEFAULT_OUTBOX_JOURNAL,
-				R.string.outbox_title, R.string.outbox_experimental_summary);
+				R.string.outbox_title, R.string.outbox_experimental_summary)
+				.setOnAfterChangeListener(p -> refreshPreferences());
+		if (Preferences.isOutboxJournalEnabled()) {
+			addButton(R.string.outbox_open, R.string.outbox_summary).setOnClickListener(p ->
+					((FragmentHandler) requireActivity()).pushFragment(new OutboxFragment()));
+		}
 		addCheck(true, Preferences.KEY_WINDOWED_THREAD_LOADING,
 				Preferences.DEFAULT_WINDOWED_THREAD_LOADING,
 				R.string.windowed_thread_loading,

@@ -514,9 +514,6 @@ public final class SettingsSearchIndex {
 		add(context, entries, Screen.CONTENTS, R.string.clear_cache);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.outbox_title,
 				R.string.outbox_experimental_summary, Preferences.KEY_OUTBOX_JOURNAL);
-		if (Preferences.isOutboxJournalEnabled()) {
-			add(context, entries, Screen.CONTENTS, R.string.outbox_title, R.string.outbox_summary, null);
-		}
 
 		add(context, entries, Screen.MEDIA, R.string.load_thumbnails, 0, Preferences.KEY_LOAD_THUMBNAILS);
 		add(context, entries, Screen.MEDIA, R.string.load_nearest_image, 0, Preferences.KEY_LOAD_NEAREST_IMAGE);

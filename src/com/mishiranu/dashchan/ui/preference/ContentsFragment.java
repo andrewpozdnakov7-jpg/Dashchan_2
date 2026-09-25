@@ -47,10 +47,6 @@ public class ContentsFragment extends PreferenceFragment {
 		super.onViewCreated(view, savedInstanceState);
 
 		addHeader(R.string.threads);
-		if (Preferences.isOutboxJournalEnabled()) {
-			addButton(R.string.outbox_title, R.string.outbox_summary).setOnClickListener(p ->
-					((FragmentHandler) requireActivity()).pushFragment(new OutboxFragment()));
-		}
 		addSeek(Preferences.KEY_AUTO_REFRESH_INTERVAL, Preferences.DEFAULT_AUTO_REFRESH_INTERVAL,
 				R.string.refresh_open_thread, R.string.every_number_sec__format,
 				new Pair<>(Preferences.DISABLED_AUTO_REFRESH_INTERVAL, R.string.disabled),
