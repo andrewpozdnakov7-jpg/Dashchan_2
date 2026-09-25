@@ -1,0 +1,6 @@
+Quick thread navigation: arrows smoothly jump to the first or last loaded post. Choose the screen side and transparency.
+Improved Picture-in-Picture: fixed issues during rotation, app switching and returning to the gallery.
+TikTok mode is remembered between player sessions and supports the volume gesture.
+My Boards displays results as each source loads, supports retrying failed boards and starts at the first thread.
+Optimized thumbnail handling and background catalog search. Original images are not reduced.
+New experimental features are unstable and disabled by default: a translation cache, an outgoing message journal and local discussion context. Errors and incomplete data are possible. The journal never automatically resends messages. Translator availability depends on the app distribution.
