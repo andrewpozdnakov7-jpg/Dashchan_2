@@ -62,6 +62,8 @@ public class ExperimentalFragment extends PreferenceFragment implements Translat
 			refreshPreferences();
 		});
 		addVideoDiagnosticsPreferences();
+		addCheck(true, Preferences.KEY_DISCUSSION_CONTEXT, Preferences.DEFAULT_DISCUSSION_CONTEXT,
+				R.string.discussion_context, R.string.discussion_context_summary);
 		addCheck(true, Preferences.KEY_OUTBOX_JOURNAL, Preferences.DEFAULT_OUTBOX_JOURNAL,
 				R.string.outbox_title, R.string.outbox_experimental_summary)
 				.setOnAfterChangeListener(p -> refreshPreferences());

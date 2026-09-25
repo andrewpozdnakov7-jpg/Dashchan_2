@@ -326,6 +326,16 @@ public class InteractionUnit {
 		boolean shareText = !postEmpty;
 		boolean userPost = configurationSet.postStateProvider.isUserPost(postItem.getPostNumber());
 		DialogMenu dialogMenu = new DialogMenu(context);
+		if (Preferences.isDiscussionContextEnabled() && configurationSet.postsProvider != null
+				&& !postItem.isThreadItem() && (configurationSet.openedThreadTitle != null || configurationSet.isDialog)) {
+			dialogMenu.add(R.string.discussion_context, () -> {
+				if (configurationSet.contextSelect != null) configurationSet.contextSelect.accept(postItem);
+				else uiManager.dialog().displayContext(configurationSet, postItem);
+			});
+			if (configurationSet.contextExpand != null) {
+				dialogMenu.add(R.string.context_more_replies, () -> configurationSet.contextExpand.accept(postItem));
+			}
+		}
 		if (configurationSet.replyable != null && configurationSet.replyable.onRequestReply(false)) {
 			dialogMenu.add(R.string.reply, () -> configurationSet.replyable
 					.onRequestReply(true, new Replyable.ReplyData(postItem.getPostNumber(), null)));

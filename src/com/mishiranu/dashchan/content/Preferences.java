@@ -2082,6 +2082,8 @@ public class Preferences {
 	public static final boolean DEFAULT_PERSISTENT_TRANSLATION_CACHE = false;
 	public static final String KEY_OUTBOX_JOURNAL = "experimental_outbox_journal";
 	public static final boolean DEFAULT_OUTBOX_JOURNAL = false;
+	public static final String KEY_DISCUSSION_CONTEXT = "experimental_discussion_context";
+	public static final boolean DEFAULT_DISCUSSION_CONTEXT = false;
 	public static final String KEY_TRANSLATION_NATIVE_LANGUAGE = "translation_native_language";
 	public static final String DEFAULT_TRANSLATION_NATIVE_LANGUAGE = "ru";
 	public static final String KEY_TRANSLATION_AUTO = "translation_auto";
@@ -2199,6 +2201,10 @@ public class Preferences {
 
 	public static boolean isOutboxJournalEnabled() {
 		return PREFERENCES.getBoolean(KEY_OUTBOX_JOURNAL, DEFAULT_OUTBOX_JOURNAL);
+	}
+
+	public static boolean isDiscussionContextEnabled() {
+		return PREFERENCES.getBoolean(KEY_DISCUSSION_CONTEXT, DEFAULT_DISCUSSION_CONTEXT);
 	}
 
 	public static String getTranslationNativeLanguage() {

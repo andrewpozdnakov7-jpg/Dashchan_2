@@ -291,6 +291,7 @@ public class DialogStack<T extends DialogStack.ViewFactory<T>> implements Iterab
 			// stack mutation per rendered frame when a device dispatches the same action through both.
 			backInvocationHandled = true;
 			contentView.postOnAnimation(() -> backInvocationHandled = false);
+			if (!visibleViews.isEmpty() && visibleViews.getLast().first.onBackPressed()) return;
 			popInternal();
 		}
 	}
@@ -880,6 +881,7 @@ public class DialogStack<T extends DialogStack.ViewFactory<T>> implements Iterab
 	}
 
 	public interface ViewFactory<T extends ViewFactory<T>> {
+		default boolean onBackPressed() { return false; }
 		View createView(DialogStack<T> dialogStack);
 		default void destroyView(View view, boolean remove) {}
 

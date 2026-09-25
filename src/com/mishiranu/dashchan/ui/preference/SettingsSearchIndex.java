@@ -514,6 +514,8 @@ public final class SettingsSearchIndex {
 		add(context, entries, Screen.CONTENTS, R.string.clear_cache);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.outbox_title,
 				R.string.outbox_experimental_summary, Preferences.KEY_OUTBOX_JOURNAL);
+		add(context, entries, Screen.EXPERIMENTAL, R.string.discussion_context,
+				R.string.discussion_context_summary, Preferences.KEY_DISCUSSION_CONTEXT);
 
 		add(context, entries, Screen.MEDIA, R.string.load_thumbnails, 0, Preferences.KEY_LOAD_THUMBNAILS);
 		add(context, entries, Screen.MEDIA, R.string.load_nearest_image, 0, Preferences.KEY_LOAD_NEAREST_IMAGE);

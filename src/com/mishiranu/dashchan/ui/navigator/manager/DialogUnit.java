@@ -173,6 +173,8 @@ public class DialogUnit {
 			delegate.destroyView(view, remove);
 		}
 
+		@Override public boolean onBackPressed() { return delegate.provider.onBackPressed(); }
+
 		@Override
 		public boolean isScrolledToTop(View view) {
 			return delegate.isScrolledToTop(view);
@@ -204,6 +206,15 @@ public class DialogUnit {
 			PaddedRecyclerView recyclerView = new PaddedRecyclerView(context);
 			content.addView(recyclerView, FrameLayout.LayoutParams.MATCH_PARENT,
 					FrameLayout.LayoutParams.WRAP_CONTENT);
+			View controls = provider.createControls(recyclerView);
+			if (controls != null) {
+				content.removeView(recyclerView);
+				LinearLayout column = new LinearLayout(context);
+				column.setOrientation(LinearLayout.VERTICAL);
+				column.addView(controls, new LinearLayout.LayoutParams(-1, -2));
+				column.addView(recyclerView, new LinearLayout.LayoutParams(-1, -2));
+				content.addView(column, new FrameLayout.LayoutParams(-1, -2));
+			}
 			recyclerView.setMotionEventSplittingEnabled(false);
 			recyclerView.setVerticalScrollBarEnabled(true);
 			recyclerView.setClipToPadding(false);
@@ -395,13 +406,13 @@ public class DialogUnit {
 		}
 	}
 
-	private enum State {LIST, LOADING, ERROR}
+	enum State {LIST, LOADING, ERROR}
 
 	private interface StateListener {
 		boolean onStateChanged(State state);
 	}
 
-	private static abstract class DialogProvider<T> implements UiManager.Observer, Iterable<PostItem>,
+	static abstract class DialogProvider<T> implements UiManager.Observer, Iterable<PostItem>,
 			ListViewUtils.ClickCallback<PostItem, RecyclerView.ViewHolder> {
 		public interface ConfigurationSetProvider<T> {
 			UiManager.ConfigurationSet create(T dialogProvider);
@@ -441,6 +452,10 @@ public class DialogUnit {
 		protected abstract T getThis();
 
 		public void onRequestUpdateDemandSet(UiManager.DemandSet demandSet, int index) {}
+		public View createControls(RecyclerView recyclerView) { return null; }
+		public CharSequence placeholder(PostItem postItem) { return null; }
+		public void onPlaceholderClick(PostItem postItem) {}
+		public boolean onBackPressed() { return false; }
 
 		public void onRequestUpdate() {}
 
@@ -1042,6 +1057,12 @@ public class DialogUnit {
 		display(configurationSet, new SingleDialogProvider.Factory(postItem));
 	}
 
+	public void displayContext(UiManager.ConfigurationSet configurationSet, PostItem postItem) {
+		if (Preferences.isDiscussionContextEnabled() && configurationSet.postsProvider != null) {
+			display(configurationSet, new ContextDialogProvider.Factory(configurationSet.chanName, postItem));
+		}
+	}
+
 	public void displayThread(UiManager.ConfigurationSet configurationSet, PostItem postItem) {
 		display(configurationSet, new ThreadDialogProvider.Factory(postItem));
 	}
@@ -1092,6 +1113,7 @@ public class DialogUnit {
 
 	private static class DialogPostsAdapter<T> extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
 		private static final String PAYLOAD_INVALIDATE_COMMENT = "invalidateComment";
+		private static final int CONTEXT_PLACEHOLDER = 1000;
 
 		private final UiManager uiManager;
 		private final DialogProvider<T> dialogProvider;
@@ -1142,6 +1164,7 @@ public class DialogUnit {
 		@Override
 		public int getItemViewType(int position) {
 			PostItem postItem = getItem(position);
+			if (dialogProvider.placeholder(postItem) != null) return CONTEXT_PLACEHOLDER;
 			return (dialogProvider.configurationSet.postStateProvider.isHiddenResolve(postItem)
 					? ViewUnit.ViewType.POST_HIDDEN : ViewUnit.ViewType.POST).ordinal();
 		}
@@ -1153,6 +1176,13 @@ public class DialogUnit {
 		@NonNull
 		@Override
 		public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+			if (viewType == CONTEXT_PLACEHOLDER) {
+				TextView text = new TextView(parent.getContext());
+				int padding = (int) (12 * ResourceUtils.obtainDensity(parent));
+				text.setPadding(padding, padding, padding, padding);
+				text.setLayoutParams(new RecyclerView.LayoutParams(-1, -2));
+				return new RecyclerView.ViewHolder(text) {};
+			}
 			return uiManager.view().createView(parent, ViewUnit.ViewType.values()[viewType]);
 		}
 
@@ -1165,6 +1195,11 @@ public class DialogUnit {
 		public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position,
 				@NonNull List<Object> payloads) {
 			PostItem postItem = getItem(position);
+			if (holder.getItemViewType() == CONTEXT_PLACEHOLDER) {
+				((TextView) holder.itemView).setText(dialogProvider.placeholder(postItem));
+				holder.itemView.setOnClickListener(v -> dialogProvider.onPlaceholderClick(postItem));
+				return;
+			}
 			switch (ViewUnit.ViewType.values()[holder.getItemViewType()]) {
 				case POST: {
 					if (payloads.isEmpty()) {
@@ -1198,6 +1233,15 @@ public class DialogUnit {
 					break;
 				}
 			}
+		}
+
+		@Override
+		public void onViewRecycled(@NonNull RecyclerView.ViewHolder holder) {
+			if (holder.getItemViewType() == CONTEXT_PLACEHOLDER) {
+				holder.itemView.setOnClickListener(null);
+				((TextView) holder.itemView).setText(null);
+			}
+			super.onViewRecycled(holder);
 		}
 
 		public void invalidateComment(int position) {
