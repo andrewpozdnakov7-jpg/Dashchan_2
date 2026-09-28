@@ -661,6 +661,15 @@
 	<string name="video_picture_in_picture_auto">Автоматически включать PiP при сворачивании</string>
 	<string name="video_picture_in_picture_auto__summary">Продолжать играющее видео в плавающем окне при переходе на рабочий стол или к другому приложению</string>
 	<string name="video_tiktok_mode">Режим TikTok</string>
+	<string name="tiktok_filter">Режим TikTok: что показывать</string>
+	<string name="tiktok_filter_all">Всё — фото и видео</string>
+	<string name="tiktok_filter_video">Только видео</string>
+	<string name="tiktok_filter_image">Только фото</string>
+	<string name="tiktok_filter_empty">Нет вложений, подходящих под этот фильтр</string>
+	<string name="tiktok_filter_first">Дальше нет подходящих вложений. Перейти к первому?</string>
+	<string name="tiktok_no_next_item">Следующих вложений с этим фильтром больше нет</string>
+	<string name="tiktok_no_previous_item">Предыдущих вложений с этим фильтром больше нет</string>
+	<string name="tiktok_filter_hint">Теперь в TikTok-режиме можно листать и фото! Удерживайте кнопку TikTok, чтобы выбрать: всё, только видео или только фото. Фильтр также доступен через меню «⋮».</string>
 	<string name="enable_video_tiktok_mode">Включить режим TikTok</string>
 	<string name="disable_video_tiktok_mode">Выключить режим TikTok</string>
 	<string name="video_tiktok_mode_hint">Смахните вверх для следующего видео или вниз для предыдущего. Двойное нажатие ставит видео на паузу или продолжает воспроизведение. Удерживайте палец по центру экрана, чтобы открыть меню. Жест громкости работает в настроенной боковой зоне, если включён. Остальные жесты отключены; экранные кнопки работают. Выбранный режим запоминается.</string>
@@ -1313,9 +1322,16 @@
 	<string name="secret_abu_cannot_hide">Этот тред скрыть нельзя. Это Абу.</string>
 	<string name="secret_abu_hide_again">Ты серьёзно пытаешься скрыть Абу? Уважение, конечно, но нет.</string>
 	<string name="video_preload">Предзагрузка видео</string>
+	<string name="media_preload">Предзагрузка фото и видео</string>
+	<string name="media_preload_summary">Отдельные настройки сети, количества и размера следующих фото и видео</string>
+	<string name="image_preload_enable">Загружать следующие фото заранее</string>
+	<string name="image_preload_description">После полной загрузки открытого вложения следующие фото этой галереи загружаются в кэш. Фото и видео используют одну очередь фоновой загрузки. Расходует трафик и место на диске. Файлы больше лимита или с неизвестным размером загрузки пропускаются без замены более дальними. При сворачивании приложения или выходе из просмотра предзагрузка прекращается.</string>
+	<string name="image_preload_count">Количество следующих фото</string>
+	<string name="image_preload_size">Максимальный размер одного фото</string>
+	<string name="image_preload_size_description">Фото больше указанного размера не загружаются заранее. При открытии вручную они загружаются полностью. В кэше хранятся файлы, а не развёрнутые полноразмерные изображения в оперативной памяти.</string>
 	<string name="video_preload_summary">Загрузка следующих роликов заранее: сеть, количество и ограничение размера</string>
 	<string name="video_preload_enable">Загружать следующие видео заранее</string>
-	<string name="video_preload_description">После полной загрузки текущего ролика следующие видео этой галереи по одному загружаются в кэш. Расходует трафик и место на диске. Ролики больше лимита или с неизвестным размером загрузки пропускаются без замены более дальними. При выходе из плеера предзагрузка прекращается. Не применяется к YouTube и веб-плеерам.</string>
+	<string name="video_preload_description">После полной загрузки открытого вложения следующие видео этой галереи по одному загружаются в кэш, в общей очереди с фото. Расходует трафик и место на диске. Ролики больше лимита или с неизвестным размером загрузки пропускаются без замены более дальними. При сворачивании приложения или выходе из просмотра предзагрузка прекращается. Не применяется к YouTube и веб-плеерам.</string>
 	<string name="video_preload_network">Сеть для предзагрузки</string>
 	<string name="video_preload_all_networks">Wi-Fi и мобильная сеть</string>
 	<string name="video_preload_count">Количество следующих видео</string>
@@ -1420,4 +1436,11 @@
 	<string name="outbox_delete_summary">Удалить запись журнала и сохранённые для неё вложения? Сообщение на форуме не удаляется.</string>
 	<string name="outbox_prepare_failed">Не удалось сохранить исходящее сообщение или вложения. Ничего не отправлено. Проверьте свободное место и журнал исходящих.</string>
 	<string name="outbox_operation_failed">Не удалось выполнить действие с журналом. Проверьте свободное место и сохранённые вложения.</string>
+	<string name="form_diagnostics_start">Записать диагностику формы</string>
+	<string name="form_diagnostics_stop">Остановить и сохранить диагностику формы</string>
+	<string name="form_diagnostics_summary">Проверка перекрытия клавиатурой и прокрутки поля ввода</string>
+	<string name="form_diagnostics_notice">Начните запись, откройте форму сообщения и повторите проблему. Затем вернитесь сюда, остановите запись и поделитесь отчётом. Не закрывайте приложение до сохранения. Записываются только размеры окна, состояние клавиатуры, положение курсора и длина текста. Содержимое полей и скриншоты не собираются.</string>
+	<string name="form_diagnostics_saved">Диагностика формы сохранена</string>
+	<string name="form_diagnostics_saved_summary">Отправьте отчёт разработчику. Он содержит события разметки и клавиатуры, но не текст сообщения.</string>
+	<string name="form_diagnostics_share">Поделиться диагностикой формы</string>
 </resources>

@@ -1941,6 +1941,38 @@ public class Preferences {
 	public static final int DEFAULT_VIDEO_PRELOAD_COUNT = 2;
 	public static final String KEY_VIDEO_PRELOAD_SIZE_MB = "video_preload_size_mb";
 	public static final int DEFAULT_VIDEO_PRELOAD_SIZE_MB = 20;
+	public static final String KEY_IMAGE_PRELOAD = "image_preload";
+	public static final String KEY_IMAGE_PRELOAD_NETWORK = "image_preload_network";
+	public static final String KEY_IMAGE_PRELOAD_COUNT = "image_preload_count";
+	public static final int DEFAULT_IMAGE_PRELOAD_COUNT = 3;
+	public static final String KEY_IMAGE_PRELOAD_SIZE_MB = "image_preload_size_mb";
+	public static final int DEFAULT_IMAGE_PRELOAD_SIZE_MB = 3;
+
+	public static boolean isImagePreload() {
+		boolean defaultValue = !PREFERENCES.contains(KEY_LOAD_NEAREST_IMAGE)
+				|| getLoadNearestImage() != NetworkMode.NEVER;
+		return PREFERENCES.getBoolean(KEY_IMAGE_PRELOAD, defaultValue);
+	}
+
+	public static String getImagePreloadNetwork() {
+		String defaultValue = "all";
+		if (PREFERENCES.contains(KEY_LOAD_NEAREST_IMAGE)) {
+			NetworkMode oldMode = getLoadNearestImage();
+			if (oldMode == NetworkMode.WIFI) defaultValue = "wifi";
+			else if (oldMode == NetworkMode.WIFI_3G) defaultValue = "wifi_3g";
+		}
+		String value = PREFERENCES.getString(KEY_IMAGE_PRELOAD_NETWORK, defaultValue);
+		return "all".equals(value) || "wifi_3g".equals(value) ? value : "wifi";
+	}
+
+	public static int getImagePreloadCount() {
+		return clamp(PREFERENCES.getInt(KEY_IMAGE_PRELOAD_COUNT, DEFAULT_IMAGE_PRELOAD_COUNT), 1, 5);
+	}
+
+	public static long getImagePreloadMaxBytes() {
+		return clamp(PREFERENCES.getInt(KEY_IMAGE_PRELOAD_SIZE_MB, DEFAULT_IMAGE_PRELOAD_SIZE_MB), 1, 500)
+				* 1024L * 1024L;
+	}
 
 	public static boolean isVideoPreload() {
 		return PREFERENCES.getBoolean(KEY_VIDEO_PRELOAD, DEFAULT_VIDEO_PRELOAD);
@@ -2689,7 +2721,31 @@ public class Preferences {
 	}
 
 	private static final String KEY_VIDEO_TIKTOK_MODE_HINT_COUNT = "video_tiktok_mode_hint_count";
+	public static final int TIKTOK_FILTER_ALL = 0;
+	public static final int TIKTOK_FILTER_VIDEO = 1;
+	public static final int TIKTOK_FILTER_IMAGE = 2;
+	private static final String KEY_TIKTOK_MEDIA_FILTER = "tiktok_media_filter";
+
+	public static int getTikTokMediaFilter() {
+		int filter = PREFERENCES.getInt(KEY_TIKTOK_MEDIA_FILTER, TIKTOK_FILTER_VIDEO);
+		return filter >= TIKTOK_FILTER_ALL && filter <= TIKTOK_FILTER_IMAGE ? filter : TIKTOK_FILTER_VIDEO;
+	}
+
+	public static void setTikTokMediaFilter(int filter) {
+		if (filter >= TIKTOK_FILTER_ALL && filter <= TIKTOK_FILTER_IMAGE) {
+			PREFERENCES.edit().put(KEY_TIKTOK_MEDIA_FILTER, filter).close();
+		}
+	}
+
 	private static final int MAX_VIDEO_TIKTOK_MODE_HINT_COUNT = 3;
+	private static final String KEY_TIKTOK_FILTER_HINT_COUNT = "tiktok_filter_hint_count";
+
+	public static boolean consumeTikTokFilterHint() {
+		int count = PREFERENCES.getInt(KEY_TIKTOK_FILTER_HINT_COUNT, 0);
+		if (count >= 3) return false;
+		PREFERENCES.edit().put(KEY_TIKTOK_FILTER_HINT_COUNT, count + 1).close();
+		return true;
+	}
 
 	public static boolean shouldShowVideoTikTokModeHint() {
 		return PREFERENCES.getInt(KEY_VIDEO_TIKTOK_MODE_HINT_COUNT, 0) < MAX_VIDEO_TIKTOK_MODE_HINT_COUNT;

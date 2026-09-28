@@ -11,45 +11,53 @@ import chan.http.HttpException;
 import chan.http.HttpHolder;
 import chan.http.HttpResponse;
 import com.mishiranu.dashchan.content.CacheManager;
+import com.mishiranu.dashchan.content.NetworkObserver;
+import com.mishiranu.dashchan.util.ConcurrentUtils;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 
 /** Optional, bounded download. Never uses the foreground player's shared .part file. */
-public final class PreloadVideoTask extends HttpHolderTask<Void, File> {
+public final class PreloadMediaTask extends HttpHolderTask<Void, File> {
 	private final Chan chan;
 	private final Uri uri;
 	private final long maxBytes;
 	private final ConnectivityManager connectivity;
-	private final boolean wifiOnly;
+	private final String networkMode;
 	private final Runnable callback;
 
-	public PreloadVideoTask(Chan chan, Uri uri, long maxBytes, ConnectivityManager connectivity,
-			boolean wifiOnly, Runnable callback) {
+	public PreloadMediaTask(Chan chan, Uri uri, long maxBytes, ConnectivityManager connectivity,
+			String networkMode, Runnable callback) {
 		super(chan);
 		this.chan = chan;
 		this.uri = uri;
 		this.maxBytes = maxBytes;
 		this.connectivity = connectivity;
-		this.wifiOnly = wifiOnly;
+		this.networkMode = networkMode;
 		this.callback = callback;
 	}
 
-	public static boolean isNetworkAllowed(ConnectivityManager connectivity, boolean wifiOnly) {
+	public static boolean isNetworkAllowed(ConnectivityManager connectivity, String networkMode) {
 		if (connectivity == null) return false;
 		try {
 			NetworkCapabilities capabilities = connectivity.getNetworkCapabilities(connectivity.getActiveNetwork());
-			return capabilities != null && capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-					&& (!wifiOnly || capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
-							&& !capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR));
+			if (capabilities == null || !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) {
+				return false;
+			}
+			if ("all".equals(networkMode)) return true;
+			if ("wifi_3g".equals(networkMode)) {
+				return ConcurrentUtils.mainGet(() -> NetworkObserver.getInstance().isMobile3GConnected());
+			}
+			return capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+					&& !capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR);
 		} catch (SecurityException e) {
 			return false;
 		}
 	}
 
 	private boolean allowed() {
-		return !isCancelled() && isNetworkAllowed(connectivity, wifiOnly);
+		return !isCancelled() && isNetworkAllowed(connectivity, networkMode);
 	}
 
 	@Override
@@ -69,7 +77,7 @@ public final class PreloadVideoTask extends HttpHolderTask<Void, File> {
 			long length = response.getLength();
 			// Check actual response headers before opening/reading the body, not just post metadata.
 			if (length <= 0 || length > maxBytes || !allowed()) return null;
-			temporary = File.createTempFile("video-preload-", ".part", destination.getParentFile());
+			temporary = File.createTempFile("media-preload-", ".part", destination.getParentFile());
 			try (InputStream input = response.open(); FileOutputStream output = new FileOutputStream(temporary)) {
 				byte[] buffer = new byte[8192];
 				long received = 0;

@@ -639,6 +639,15 @@
 	<string name="video_picture_in_picture_auto">Automatically enter PiP when minimized</string>
 	<string name="video_picture_in_picture_auto__summary">Continue a playing video in a floating window when switching to the Home screen or another app</string>
 	<string name="video_tiktok_mode">TikTok mode</string>
+	<string name="tiktok_filter">TikTok mode: show</string>
+	<string name="tiktok_filter_all">Photos and videos</string>
+	<string name="tiktok_filter_video">Videos only</string>
+	<string name="tiktok_filter_image">Photos only</string>
+	<string name="tiktok_filter_empty">No attachments match this filter</string>
+	<string name="tiktok_filter_first">No matching attachments ahead. Go to the first one?</string>
+	<string name="tiktok_no_next_item">No more attachments matching this filter</string>
+	<string name="tiktok_no_previous_item">No previous attachments matching this filter</string>
+	<string name="tiktok_filter_hint">You can now swipe through photos in TikTok mode too! Hold the TikTok button to choose everything, videos only or photos only. The filter is also available in the ⋮ menu.</string>
 	<string name="enable_video_tiktok_mode">Enable TikTok mode</string>
 	<string name="disable_video_tiktok_mode">Disable TikTok mode</string>
 	<string name="video_tiktok_mode_hint">Swipe up for the next video or down for the previous one. Double-tap to pause or resume playback. Touch and hold the center of the screen to open the menu. The volume gesture works in its configured side area when enabled. Other gestures are disabled; on-screen controls still work. Your selected mode is remembered.</string>
@@ -1285,9 +1294,16 @@
 	<string name="secret_abu_cannot_hide">You cannot hide this thread. It is Abu.</string>
 	<string name="secret_abu_hide_again">Seriously trying to hide Abu? Respect, but no.</string>
 	<string name="video_preload">Video preloading</string>
+	<string name="media_preload">Photo and video preloading</string>
+	<string name="media_preload_summary">Separate network, count and size limits for upcoming photos and videos</string>
+	<string name="image_preload_enable">Preload next photos</string>
+	<string name="image_preload_description">After the current attachment finishes downloading, cache the next photos in this gallery. Photos and videos share a single background download queue. Uses data and disk space. Files exceeding the limit or with an unknown download size are skipped without replacement. Preloading stops when the app is backgrounded or you leave the viewer.</string>
+	<string name="image_preload_count">Number of next photos</string>
+	<string name="image_preload_size">Maximum size per photo</string>
+	<string name="image_preload_size_description">Photos larger than this limit are not preloaded. They still download in full when opened manually. Only files are cached, not full-size decoded images in memory.</string>
 	<string name="video_preload_summary">Download upcoming videos in advance: network, count and size limit</string>
 	<string name="video_preload_enable">Preload next videos</string>
-	<string name="video_preload_description">After the current video finishes downloading, cache the next videos in this gallery one at a time. Uses data and disk space. Videos exceeding the limit or with an unknown download size are skipped, not replaced with later videos. Preloading stops when you leave the player. Does not apply to YouTube or web players.</string>
+	<string name="video_preload_description">After the current attachment finishes downloading, cache the next videos in this gallery one at a time, sharing the queue with photos. Uses data and disk space. Videos exceeding the limit or with an unknown download size are skipped without replacement. Preloading stops when the app is backgrounded or you leave the viewer. Does not apply to YouTube or web players.</string>
 	<string name="video_preload_network">Network for preloading</string>
 	<string name="video_preload_all_networks">Wi-Fi and mobile data</string>
 	<string name="video_preload_count">Number of next videos</string>
@@ -1392,4 +1408,11 @@
 	<string name="outbox_delete_summary">Delete this journal entry and its retained attachments? This does not delete any message from the forum.</string>
 	<string name="outbox_prepare_failed">Could not save the outgoing message or attachments. Nothing was sent. Check free space and the outgoing journal.</string>
 	<string name="outbox_operation_failed">Could not complete the journal operation. Check free space and retained attachments.</string>
+	<string name="form_diagnostics_start">Record posting form diagnostics</string>
+	<string name="form_diagnostics_stop">Stop and save form diagnostics</string>
+	<string name="form_diagnostics_summary">Investigate keyboard overlap and editor scrolling</string>
+	<string name="form_diagnostics_notice">Start recording, open the posting form and reproduce the problem. Then return here to stop and share the report. Keep the app running until you save it. Only window sizes, keyboard visibility, cursor positions and text length are recorded; field contents and screenshots are not collected.</string>
+	<string name="form_diagnostics_saved">Form diagnostics saved</string>
+	<string name="form_diagnostics_saved_summary">Share the report with the developer. It contains layout and keyboard events, not the message text.</string>
+	<string name="form_diagnostics_share">Share form diagnostics</string>
 </resources>

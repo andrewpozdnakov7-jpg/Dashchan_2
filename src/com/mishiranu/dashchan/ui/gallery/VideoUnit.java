@@ -16,9 +16,11 @@ import android.graphics.Rect;
 import android.graphics.RectF;
 import android.media.AudioManager;
 import android.net.Uri;
+import android.os.SystemClock;
 import android.view.ContextThemeWrapper;
 import android.view.Gravity;
 import android.view.View;
+import android.view.ViewTreeObserver;
 import android.widget.FrameLayout;
 import android.widget.ImageButton;
 import android.widget.ImageView;
@@ -56,6 +58,7 @@ public class VideoUnit {
 	interface TikTokModeCallback {
 		boolean isEnabled();
 		void setEnabled(boolean enabled);
+		void showFilter();
 	}
 
 	enum PictureInPictureRestoreState {
@@ -71,10 +74,10 @@ public class VideoUnit {
 	private static final long PAUSED_SEEK_PREVIEW_DELAY = 100L;
 
 	private final PagerInstance instance;
-	private final VideoPreloader videoPreloader;
 	private boolean preloadResumed;
 	private final LinearLayout controlsView;
 	private final AudioFocus audioFocus;
+	private VideoPlaybackHandoff playbackHandoff;
 	private final AudioManager audioManager;
 	private final TikTokModeCallback tikTokModeCallback;
 
@@ -106,8 +109,110 @@ public class VideoUnit {
 	private boolean hideSurfaceOnInit;
 	private boolean pictureInPictureTransferred;
 	private ImageView pictureInPictureReturnPreview;
+	private ViewTreeObserver returnPreviewObserver;
+	private ViewTreeObserver.OnPreDrawListener returnPreviewDrawListener;
+	private long returnPreviewGeneration;
+	private PendingPictureInPictureRestore pendingPictureInPictureRestore;
+
+	// Binding a pager item is earlier than laying out its window. Moving a TextureView
+	// at bind time gives it transient geometry and leaves the old window empty meanwhile.
+	private final class PendingPictureInPictureRestore implements ViewTreeObserver.OnPreDrawListener,
+			View.OnAttachStateChangeListener {
+		final String token;
+		final PagerInstance.ViewHolder holder;
+		final ViewTreeObserver observer;
+
+		PendingPictureInPictureRestore(String token, PagerInstance.ViewHolder holder) {
+			this.token = token;
+			this.holder = holder;
+			observer = holder.surfaceParent.getViewTreeObserver();
+			observer.addOnPreDrawListener(this);
+			holder.surfaceParent.addOnAttachStateChangeListener(this);
+			holder.surfaceParent.invalidate();
+		}
+
+		void clear() {
+			if (observer.isAlive()) observer.removeOnPreDrawListener(this);
+			else holder.surfaceParent.getViewTreeObserver().removeOnPreDrawListener(this);
+			holder.surfaceParent.removeOnAttachStateChangeListener(this);
+			if (pendingPictureInPictureRestore == this) pendingPictureInPictureRestore = null;
+		}
+
+		@Override
+		public boolean onPreDraw() {
+			if (instance.currentHolder != holder || player != null) {
+				clear();
+				VideoPipActivity.cancelPendingGalleryReturn(token, "holder_changed");
+				return true;
+			}
+			if (!preloadResumed || !holder.surfaceParent.isAttachedToWindow()
+					|| !holder.surfaceParent.isShown() || holder.surfaceParent.getWidth() <= 0
+					|| holder.surfaceParent.getHeight() <= 0) return true;
+			clear();
+			VideoDiagnostics.recordUi("pip_return target_layout size=" + holder.surfaceParent.getWidth()
+					+ "x" + holder.surfaceParent.getHeight());
+			boolean restored = VideoPipActivity.completePendingGalleryPlayer(VideoUnit.this, token);
+			if (restored) {
+				// Adoption adds the texture and controls. Measure them before the first visible draw.
+				holder.surfaceParent.requestLayout();
+			}
+			return !restored;
+		}
+
+		@Override
+		public void onViewAttachedToWindow(View view) {}
+
+		@Override
+		public void onViewDetachedFromWindow(View view) {
+			clear();
+			VideoPipActivity.cancelPendingGalleryReturn(token, "target_detached");
+		}
+	}
+
+	boolean preparePendingPictureInPictureRestore(String token) {
+		if (player != null || instance.currentHolder == null) return false;
+		if (pendingPictureInPictureRestore != null) pendingPictureInPictureRestore.clear();
+		pendingPictureInPictureRestore = new PendingPictureInPictureRestore(token, instance.currentHolder);
+		return true;
+	}
+
+	void clearPendingPictureInPictureRestore(String token) {
+		if (pendingPictureInPictureRestore != null && pendingPictureInPictureRestore.token.equals(token)) {
+			pendingPictureInPictureRestore.clear();
+		}
+	}
+
+	void showPendingPictureInPictureRestoreError(String token) {
+		PendingPictureInPictureRestore pending = pendingPictureInPictureRestore;
+		if (pending != null && pending.token.equals(token)) {
+			pending.clear();
+			if (instance.currentHolder == pending.holder && player == null) {
+				pending.holder.progressBar.setVisible(false, false);
+				instance.callback.showError(pending.holder, new ErrorItem(ErrorItem.Type.UNKNOWN).toString());
+			}
+		}
+	}
+
+	private void cancelPendingPictureInPictureRestore(String reason) {
+		PendingPictureInPictureRestore pending = pendingPictureInPictureRestore;
+		if (pending != null) {
+			pending.clear();
+			VideoPipActivity.cancelPendingGalleryReturn(pending.token, reason);
+		}
+	}
 
 	private void hidePictureInPictureReturnPreview() {
+		returnPreviewGeneration++;
+		if (returnPreviewDrawListener != null) {
+			if (returnPreviewObserver != null && returnPreviewObserver.isAlive()) {
+				returnPreviewObserver.removeOnPreDrawListener(returnPreviewDrawListener);
+			} else if (pictureInPictureReturnPreview != null) {
+				pictureInPictureReturnPreview.getViewTreeObserver()
+						.removeOnPreDrawListener(returnPreviewDrawListener);
+			}
+			returnPreviewObserver = null;
+			returnPreviewDrawListener = null;
+		}
 		if (pictureInPictureReturnPreview != null) {
 			// Keep the child attached during frame delivery; removal during drawing
 			// has caused platform rendering crashes on some devices.
@@ -131,12 +236,33 @@ public class VideoUnit {
 					FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT, Gravity.CENTER));
 		}
 		preview.bringToFront();
-		owner.setVideoViewFrameCallback(() -> preview.post(() -> {
-			if (pictureInPictureReturnPreview == preview && player == owner) {
-				hidePictureInPictureReturnPreview();
-				VideoDiagnostics.recordUi("gallery return_preview_first_frame");
-			}
-		}));
+		long generation = returnPreviewGeneration;
+		long started = SystemClock.elapsedRealtime();
+		owner.setVideoViewFrameCallback(() -> {
+			if (returnPreviewGeneration != generation || pictureInPictureReturnPreview != preview
+					|| player != owner) return;
+			VideoDiagnostics.recordUi("gallery return_preview_texture_ready elapsed_ms="
+					+ (SystemClock.elapsedRealtime() - started));
+			// Change visibility before drawing, not through an unbounded queue after the
+			// TextureView callback. Keep the child attached to avoid renderer teardown races.
+			returnPreviewObserver = preview.getViewTreeObserver();
+			returnPreviewDrawListener = () -> {
+				if (returnPreviewGeneration == generation && pictureInPictureReturnPreview == preview
+						&& player == owner) {
+					hidePictureInPictureReturnPreview();
+					VideoDiagnostics.recordUi("gallery return_preview_first_frame elapsed_ms="
+							+ (SystemClock.elapsedRealtime() - started));
+					if (VideoDiagnostics.isExtendedRecording() && preview.isHardwareAccelerated()) {
+						preview.getViewTreeObserver().registerFrameCommitCallback(() ->
+								VideoDiagnostics.recordUi("gallery return_preview_frame_committed elapsed_ms="
+										+ (SystemClock.elapsedRealtime() - started)));
+					}
+				}
+				return true;
+			};
+			returnPreviewObserver.addOnPreDrawListener(returnPreviewDrawListener);
+			preview.invalidate();
+		});
 		VideoDiagnostics.recordUi("gallery return_preview_shown");
 	}
 	private int lastNonZeroSystemVolume;
@@ -178,6 +304,7 @@ public class VideoUnit {
 
 	static final class LifecycleState {
 		VideoPlayer player;
+		VideoPlaybackHandoff handoff;
 		VideoDownloadSession download;
 		File file;
 		GalleryItem item;
@@ -189,6 +316,8 @@ public class VideoUnit {
 		java.lang.ref.WeakReference<VideoPlayer> pipPlayer;
 
 		void dispose() {
+			if (handoff != null) handoff.stop("state_disposed");
+			handoff = null;
 			if (download != null) download.cancel();
 			if (player != null) {
 				player.setListener(null);
@@ -236,9 +365,13 @@ public class VideoUnit {
 			if (downloadSession != null) downloadSession.setListener(null);
 			player.setListener(null);
 			player.setVideoViewFrameCallback(null);
-			player.setPlaying(false);
-			audioFocus.release();
-			player.releaseVideoView();
+			state.handoff = playbackHandoff;
+			playbackHandoff = null;
+			if (state.handoff == null) {
+				player.setPlaying(false);
+				audioFocus.release();
+			}
+			player.releaseVideoViewForTransfer();
 		}
 		player = null;
 		downloadSession = null;
@@ -278,6 +411,12 @@ public class VideoUnit {
 		} else {
 			player = state.player;
 			downloadSession = state.download;
+			playbackHandoff = state.handoff;
+			state.handoff = null;
+			if (playbackHandoff != null) {
+				playbackHandoff.adopt(audioFocus);
+				wasPlaying = playbackHandoff.isPlaying();
+			}
 			state.player = null;
 			state.download = null;
 			player.setListener(playerListener);
@@ -300,7 +439,6 @@ public class VideoUnit {
 
 	public VideoUnit(PagerInstance instance, AudioManager audioManager, TikTokModeCallback tikTokModeCallback) {
 		this.instance = instance;
-		videoPreloader = new VideoPreloader(instance.galleryInstance);
 		this.audioManager = audioManager;
 		this.tikTokModeCallback = tikTokModeCallback;
 		surfaceParentLayoutChangeListener = this::onSurfaceParentLayoutChanged;
@@ -323,6 +461,7 @@ public class VideoUnit {
 		controlsView.setOrientation(LinearLayout.VERTICAL);
 		controlsView.setVisibility(View.GONE);
 		audioFocus = new AudioFocus(instance.galleryInstance.context, change -> {
+			if (player == null || pictureInPictureTransferred) return;
 			switch (change) {
 				case LOSS: {
 					setPlaying(false, false);
@@ -365,6 +504,12 @@ public class VideoUnit {
 
 	public void onResume() {
 		preloadResumed = true;
+		if (player == null && instance.currentHolder != null && pendingPictureInPictureRestore == null) {
+			VideoPipActivity.restorePendingGalleryPlayer(this, instance.galleryInstance.pictureInPictureRestoreToken);
+		}
+		if (pendingPictureInPictureRestore != null) {
+			pendingPictureInPictureRestore.holder.surfaceParent.invalidate();
+		}
 		startVideoPreload();
 		if (pictureInPictureTransferred) {
 			return;
@@ -373,6 +518,7 @@ public class VideoUnit {
 			recreateVideoControls();
 		}
 		if (player != null && initialized) {
+			finishPlaybackHandoff();
 			setPlaying(wasPlaying, true);
 			updatePlayState();
 		} else {
@@ -380,12 +526,23 @@ public class VideoUnit {
 		}
 	}
 
-	public void onPause() {
+	public void onPause(boolean changingConfigurations) {
 		preloadResumed = false;
-		videoPreloader.stop();
+		if (pendingPictureInPictureRestore != null) {
+			VideoPipActivity.releasePendingGalleryTarget(this,
+					pendingPictureInPictureRestore.token, changingConfigurations);
+		}
+		instance.mediaPreloader.stop();
 		if (pictureInPictureTransferred) {
 			return;
 		}
+		if (changingConfigurations && player != null && initialized && !finishedPlayback) {
+			wasPlaying = player.isPlaying();
+			if (playbackHandoff == null) playbackHandoff = new VideoPlaybackHandoff(
+					instance.galleryInstance.context, player, audioFocus, "configuration");
+			return;
+		}
+		stopPlaybackHandoff("gallery_paused");
 		if (player != null && initialized) {
 			long duration = player.getDuration();
 			if (finishedPlayback || duration > 0L && player.getPosition() >= duration) {
@@ -425,8 +582,10 @@ public class VideoUnit {
 	}
 
 	public void interrupt(boolean force) {
+		cancelPendingPictureInPictureRestore("target_interrupted");
+		stopPlaybackHandoff("gallery_interrupted");
 		hidePictureInPictureReturnPreview();
-		videoPreloader.stop();
+		instance.mediaPreloader.stop();
 		dismissPlaybackSpeedPopupMenu();
 		if (force && pendingLifecycleState != null) {
 			pendingLifecycleState.dispose();
@@ -576,12 +735,12 @@ public class VideoUnit {
 		if (preloadResumed && !pictureInPictureTransferred && player != null && sourceFile != null
 				&& sourceFile.isFile() && instance.currentHolder != null
 				&& (downloadSession == null || downloadSession.isComplete())) {
-			videoPreloader.start(instance.currentHolder.galleryItem);
+			instance.mediaPreloader.start(instance.currentHolder.galleryItem);
 		}
 	}
 
 	public void applyVideo(Uri uri, File file, boolean reload) {
-		videoPreloader.stop();
+		instance.mediaPreloader.stop();
 		sourceFile = file;
 		wasPlaying = true;
 		finishedPlayback = false;
@@ -632,6 +791,13 @@ public class VideoUnit {
 
 	boolean adoptPictureInPicturePlayer(VideoPlayer player, File sourceFile, long position,
 			int playbackSpeed, boolean muted, boolean playing, VideoDownloadSession session, Bitmap previewFrame) {
+		return adoptPictureInPicturePlayer(player, sourceFile, position, playbackSpeed, muted, playing,
+				session, previewFrame, null);
+	}
+
+	boolean adoptPictureInPicturePlayer(VideoPlayer player, File sourceFile, long position,
+			int playbackSpeed, boolean muted, boolean playing, VideoDownloadSession session, Bitmap previewFrame,
+			VideoPlaybackHandoff handoff) {
 		PagerInstance.ViewHolder holder = instance.currentHolder;
 		if (this.player != null || holder == null || sourceFile == null) {
 			return false;
@@ -643,6 +809,11 @@ public class VideoUnit {
 		downloadSession = session;
 		if (session != null) session.setListener(downloadListener);
 		this.player = player;
+		playbackHandoff = handoff;
+		if (handoff != null) {
+			handoff.adopt(audioFocus);
+			playing = handoff.isPlaying();
+		}
 		this.sourceFile = sourceFile;
 		this.playbackSpeed = normalizePlaybackSpeed(playbackSpeed);
 		this.muted = muted;
@@ -650,7 +821,7 @@ public class VideoUnit {
 		finishedPlayback = false;
 		hideSurfaceOnInit = false;
 		pictureInPictureTransferred = false;
-		player.releaseVideoView();
+		player.releaseVideoViewForTransfer();
 		player.setListener(playerListener);
 		initializePlayer();
 		showPictureInPictureReturnPreview(player, previewFrame);
@@ -715,8 +886,25 @@ public class VideoUnit {
 			showHideVideoView(false);
 		}
 		invalidateControlsVisibility();
-		setPlaying(preloadResumed && wasPlaying, true);
+		if (playbackHandoff != null) wasPlaying = playbackHandoff.isPlaying();
+		setPlaying((preloadResumed || playbackHandoff != null && playbackHandoff.isPlaying()) && wasPlaying, true);
+		if (preloadResumed) finishPlaybackHandoff();
 		updatePlayState();
+	}
+
+	private void finishPlaybackHandoff() {
+		if (playbackHandoff != null) {
+			wasPlaying = playbackHandoff.isPlaying();
+			playbackHandoff.finish();
+			playbackHandoff = null;
+		}
+	}
+
+	private void stopPlaybackHandoff(String reason) {
+		if (playbackHandoff != null) {
+			playbackHandoff.stop(reason);
+			playbackHandoff = null;
+		}
 	}
 
 	private int getVideoControlsLayout() {
@@ -841,6 +1029,10 @@ public class VideoUnit {
 			tikTokModeButton.setImageResource(R.drawable.ic_tiktok_mode);
 			tikTokModeButton.setContentDescription(context.getString(R.string.video_tiktok_mode));
 			tikTokModeButton.setOnClickListener(tikTokModeClickListener);
+			tikTokModeButton.setOnLongClickListener(v -> {
+				tikTokModeCallback.showFilter();
+				return true;
+			});
 			updateTikTokModeButton();
 			fullscreenButton = new ImageButton(context, null, android.R.attr.borderlessButtonStyle);
 			fullscreenButton.setScaleType(ImageButton.ScaleType.CENTER);
@@ -1217,10 +1409,6 @@ public class VideoUnit {
 		boolean enabled = !tikTokModeCallback.isEnabled();
 		tikTokModeCallback.setEnabled(enabled);
 		updateTikTokModeButton();
-		if (enabled && Preferences.shouldShowVideoTikTokModeHint()) {
-			Preferences.markVideoTikTokModeHintShown();
-			ClickableToast.show(R.string.video_tiktok_mode_hint);
-		}
 	}
 
 	void updateTikTokModeButton() {
@@ -1279,7 +1467,7 @@ public class VideoUnit {
 		videoTransformRect.setEmpty();
 		instance.currentHolder.surfaceParent.removeOnLayoutChangeListener(surfaceParentLayoutChangeListener);
 		transferredPlayer.releaseVideoView();
-		videoPreloader.stop();
+		instance.mediaPreloader.stop();
 		instance.galleryInstance.callback.setGalleryVisibleForPictureInPicture(false);
 		try {
 			if (VideoPipActivity.reusePictureInPicture(intent)) return true;
@@ -1316,9 +1504,16 @@ public class VideoUnit {
 
 	boolean restorePictureInPicturePlayer(VideoPlayer transferredPlayer, long position, int playbackSpeed,
 			boolean muted, boolean playing, VideoDownloadSession session) {
+		return restorePictureInPicturePlayer(transferredPlayer, position, playbackSpeed, muted, playing, session, null);
+	}
+
+	boolean restorePictureInPicturePlayer(VideoPlayer transferredPlayer, long position, int playbackSpeed,
+			boolean muted, boolean playing, VideoDownloadSession session, AudioFocus sourceFocus) {
 		if (getPictureInPictureRestoreState(transferredPlayer) != PictureInPictureRestoreState.READY) {
 			return false;
 		}
+		VideoPlaybackHandoff handoff = sourceFocus != null ? new VideoPlaybackHandoff(
+				instance.galleryInstance.context, transferredPlayer, sourceFocus, "pip_direct_return") : null;
 		if (pictureInPictureSource != null) pictureInPictureSource.active = false;
 		pictureInPictureSource = null;
 		Bitmap previewFrame = transferredPlayer.getCurrentFrame();
@@ -1327,11 +1522,17 @@ public class VideoUnit {
 			player = null;
 			initialized = false;
 			boolean restored = adoptPictureInPicturePlayer(transferredPlayer, sourceFile, position,
-					playbackSpeed, muted, playing, session, previewFrame);
+					playbackSpeed, muted, playing, session, previewFrame, handoff);
+			if (!restored && handoff != null) handoff.stop("adoption_failed");
 			if (restored) instance.galleryInstance.callback.setGalleryVisibleForPictureInPicture(true);
 			return restored;
 		}
-		transferredPlayer.releaseVideoView();
+		playbackHandoff = handoff;
+		if (handoff != null) {
+			handoff.adopt(audioFocus);
+			playing = handoff.isPlaying();
+		}
+		transferredPlayer.releaseVideoViewForTransfer();
 		transferredPlayer.setListener(playerListener);
 		View videoView = transferredPlayer.getVideoView(instance.galleryInstance.context);
 		resetVideoTransform(videoView);
@@ -1364,6 +1565,7 @@ public class VideoUnit {
 		finishedPlayback = false;
 		wasPlaying = playing;
 		setPlaying(playing, true);
+		if (preloadResumed) finishPlaybackHandoff();
 		updatePlayState();
 		updateDownloadState();
 		return true;

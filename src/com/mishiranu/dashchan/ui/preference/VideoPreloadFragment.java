@@ -29,6 +29,21 @@ public class VideoPreloadFragment extends PreferenceFragment {
 	@Override
 	public void onViewCreated(@NonNull View view, Bundle savedInstanceState) {
 		super.onViewCreated(view, savedInstanceState);
+		addHeader(R.string.images);
+		addCheck(true, Preferences.KEY_IMAGE_PRELOAD, Preferences.isImagePreload(),
+				R.string.image_preload_enable, R.string.image_preload_description);
+		addList(Preferences.KEY_IMAGE_PRELOAD_NETWORK, Arrays.asList("wifi", "all", "wifi_3g"),
+				Preferences.getImagePreloadNetwork(), R.string.video_preload_network,
+				Arrays.<CharSequence>asList(getString(R.string.wifi_only), getString(R.string.video_preload_all_networks),
+						getString(R.string.wifi_or_3g_plus)));
+		addSeek(Preferences.KEY_IMAGE_PRELOAD_COUNT, Preferences.DEFAULT_IMAGE_PRELOAD_COUNT,
+				getString(R.string.image_preload_count), "%d", null, 1, 5, 1);
+		addDialogPreference(new SizePreference(requireContext(), true));
+		addDependency(Preferences.KEY_IMAGE_PRELOAD_NETWORK, Preferences.KEY_IMAGE_PRELOAD, true);
+		addDependency(Preferences.KEY_IMAGE_PRELOAD_COUNT, Preferences.KEY_IMAGE_PRELOAD, true);
+		addDependency(Preferences.KEY_IMAGE_PRELOAD_SIZE_MB, Preferences.KEY_IMAGE_PRELOAD, true);
+
+		addHeader(R.string.video_preload);
 		addCheck(true, Preferences.KEY_VIDEO_PRELOAD, Preferences.DEFAULT_VIDEO_PRELOAD,
 				R.string.video_preload_enable, R.string.video_preload_description);
 		addList(Preferences.KEY_VIDEO_PRELOAD_NETWORK, Arrays.asList("wifi", "all"),
@@ -36,7 +51,7 @@ public class VideoPreloadFragment extends PreferenceFragment {
 				Arrays.<CharSequence>asList(getString(R.string.wifi_only), getString(R.string.video_preload_all_networks)));
 		addSeek(Preferences.KEY_VIDEO_PRELOAD_COUNT, Preferences.DEFAULT_VIDEO_PRELOAD_COUNT,
 				getString(R.string.video_preload_count), "%d", null, 1, 5, 1);
-		addDialogPreference(new SizePreference(requireContext()));
+		addDialogPreference(new SizePreference(requireContext(), false));
 		addDependency(Preferences.KEY_VIDEO_PRELOAD_NETWORK, Preferences.KEY_VIDEO_PRELOAD, true);
 		addDependency(Preferences.KEY_VIDEO_PRELOAD_COUNT, Preferences.KEY_VIDEO_PRELOAD, true);
 		addDependency(Preferences.KEY_VIDEO_PRELOAD_SIZE_MB, Preferences.KEY_VIDEO_PRELOAD, true);
@@ -45,18 +60,21 @@ public class VideoPreloadFragment extends PreferenceFragment {
 	@Override
 	public void onViewStateRestored(Bundle savedInstanceState) {
 		super.onViewStateRestored(savedInstanceState);
-		((FragmentHandler) requireActivity()).setTitleSubtitle(getString(R.string.video_preload), null);
+		((FragmentHandler) requireActivity()).setTitleSubtitle(getString(R.string.media_preload), null);
 	}
 
 	private static final class SizePreference extends DialogPreference<Integer> {
 		private static final String STATE_INPUT = "size_input";
 
-		SizePreference(Context context) {
-			super(context, Preferences.KEY_VIDEO_PRELOAD_SIZE_MB, Preferences.DEFAULT_VIDEO_PRELOAD_SIZE_MB,
-					context.getString(R.string.video_preload_size), p -> context.getString(
+		SizePreference(Context context, boolean image) {
+			super(context, image ? Preferences.KEY_IMAGE_PRELOAD_SIZE_MB : Preferences.KEY_VIDEO_PRELOAD_SIZE_MB,
+					image ? Preferences.DEFAULT_IMAGE_PRELOAD_SIZE_MB : Preferences.DEFAULT_VIDEO_PRELOAD_SIZE_MB,
+					context.getString(image ? R.string.image_preload_size : R.string.video_preload_size), p -> context.getString(
 							R.string.video_preload_size_format, p.getValue()) + "\n"
-							+ context.getString(R.string.video_preload_size_description));
-			setDescription(context.getString(R.string.video_preload_size_description));
+							+ context.getString(image ? R.string.image_preload_size_description
+									: R.string.video_preload_size_description));
+			setDescription(context.getString(image ? R.string.image_preload_size_description
+					: R.string.video_preload_size_description));
 		}
 
 		@Override

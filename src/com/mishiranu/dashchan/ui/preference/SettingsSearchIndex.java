@@ -78,7 +78,7 @@ public final class SettingsSearchIndex {
 			@Override
 			ContentFragment createFragment() { return new MediaFragment(); }
 		},
-		VIDEO_PRELOAD(R.string.media, R.string.video_preload) {
+		VIDEO_PRELOAD(R.string.media, R.string.media_preload) {
 			@Override
 			ContentFragment createFragment() { return new VideoPreloadFragment(); }
 		},
@@ -408,6 +408,8 @@ public final class SettingsSearchIndex {
 			add(context, entries, Screen.REPLY_NOTIFICATIONS, R.string.reply_push_reset_identity,
 					R.string.reply_push_reset_identity__summary, null);
 		}
+		add(context, entries, Screen.EXPERIMENTAL, R.string.form_diagnostics_start,
+				R.string.form_diagnostics_summary, null);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.video_diagnostics_start,
 				R.string.video_diagnostics_start__summary, null);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.wallpaper_background,
@@ -518,7 +520,7 @@ public final class SettingsSearchIndex {
 				R.string.discussion_context_summary, Preferences.KEY_DISCUSSION_CONTEXT);
 
 		add(context, entries, Screen.MEDIA, R.string.load_thumbnails, 0, Preferences.KEY_LOAD_THUMBNAILS);
-		add(context, entries, Screen.MEDIA, R.string.load_nearest_image, 0, Preferences.KEY_LOAD_NEAREST_IMAGE);
+		add(context, entries, Screen.VIDEO_PRELOAD, R.string.load_nearest_image, 0, Preferences.KEY_IMAGE_PRELOAD);
 		add(context, entries, Screen.MEDIA, R.string.image_editor,
 				R.string.image_editor__summary, Preferences.KEY_IMAGE_EDITOR);
 		add(context, entries, Screen.MEDIA, R.string.unique_hash, 0,
@@ -565,6 +567,14 @@ public final class SettingsSearchIndex {
 				R.string.video_screen_off_action__summary, Preferences.KEY_VIDEO_SCREEN_OFF_ACTION);
 		add(context, entries, Screen.VIDEO_PRELOAD, R.string.video_preload_enable,
 				R.string.video_preload_description, Preferences.KEY_VIDEO_PRELOAD);
+		add(context, entries, Screen.VIDEO_PRELOAD, R.string.image_preload_enable,
+				R.string.image_preload_description, Preferences.KEY_IMAGE_PRELOAD);
+		add(context, entries, Screen.VIDEO_PRELOAD, R.string.video_preload_network, 0,
+				Preferences.KEY_IMAGE_PRELOAD_NETWORK);
+		add(context, entries, Screen.VIDEO_PRELOAD, R.string.image_preload_count, 0,
+				Preferences.KEY_IMAGE_PRELOAD_COUNT);
+		add(context, entries, Screen.VIDEO_PRELOAD, R.string.image_preload_size, 0,
+				Preferences.KEY_IMAGE_PRELOAD_SIZE_MB);
 		add(context, entries, Screen.VIDEO_PRELOAD, R.string.video_preload_network, 0,
 				Preferences.KEY_VIDEO_PRELOAD_NETWORK);
 		add(context, entries, Screen.VIDEO_PRELOAD, R.string.video_preload_count, 0,

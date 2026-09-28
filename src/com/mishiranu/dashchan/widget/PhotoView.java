@@ -518,6 +518,16 @@ public class PhotoView extends View implements ScaleGestureDetector.OnScaleGestu
 		return hasImage() && scaleGestureDetector.isInProgress();
 	}
 
+	public boolean isZoomed() {
+		return hasImage() && getScale() > initialScale + 0.001f;
+	}
+
+	private boolean swipeToCloseEnabled = true;
+
+	public void setSwipeToCloseEnabled(boolean enabled) {
+		swipeToCloseEnabled = enabled;
+	}
+
 	public boolean resetZoom(boolean animate) {
 		if (!hasImage() || Math.abs(getScale() - initialScale) < 0.001f) {
 			return false;
@@ -1050,7 +1060,7 @@ public class PhotoView extends View implements ScaleGestureDetector.OnScaleGestu
 						boolean allowClosing = scrollEdgeY == ScrollEdge.BOTH ||
 								scrollEdgeY == ScrollEdge.START && dy > 0 || scrollEdgeY == ScrollEdge.END && dy < 0;
 						boolean closing = false;
-						if (allowClosing) {
+						if (allowClosing && swipeToCloseEnabled) {
 							float angle = (float) (Math.acos(Math.abs(dx / length)) * 180f / Math.PI);
 							closing = angle >= 60;
 						}

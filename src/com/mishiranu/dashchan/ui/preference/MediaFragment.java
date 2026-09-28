@@ -59,12 +59,13 @@ public class MediaFragment extends PreferenceFragment implements FragmentHandler
 	public void onViewCreated(@NonNull View view, Bundle savedInstanceState) {
 		super.onViewCreated(view, savedInstanceState);
 
+		Preference<Void> preloadPreference = addButton(R.string.media_preload, R.string.media_preload_summary);
+		preloadPreference.setOnClickListener(p -> ((FragmentHandler) requireActivity())
+				.pushFragment(new VideoPreloadFragment()));
+
 		addHeader(R.string.images);
 		addList(Preferences.KEY_LOAD_THUMBNAILS, enumList(Preferences.NetworkMode.values(), v -> v.value),
 				Preferences.DEFAULT_LOAD_THUMBNAILS.value, R.string.load_thumbnails,
-				enumResList(Preferences.NetworkMode.values(), v -> v.titleResId));
-		addList(Preferences.KEY_LOAD_NEAREST_IMAGE, enumList(Preferences.NetworkMode.values(), v -> v.value),
-				Preferences.DEFAULT_LOAD_NEAREST_IMAGE.value, R.string.load_nearest_image,
 				enumResList(Preferences.NetworkMode.values(), v -> v.titleResId));
 
 		addHeader(R.string.new_attachment_defaults);
@@ -180,9 +181,6 @@ public class MediaFragment extends PreferenceFragment implements FragmentHandler
 				R.string.playback_speed_settings__summary);
 		playbackSpeedPreference.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 				.pushFragment(new PlaybackSpeedFragment()));
-		Preference<Void> preloadPreference = addButton(R.string.video_preload, R.string.video_preload_summary);
-		preloadPreference.setOnClickListener(p -> ((FragmentHandler) requireActivity())
-				.pushFragment(new VideoPreloadFragment()));
 		addCheck(true, Preferences.KEY_ATTACHMENT_VIDEO_PREVIEW,
 				Preferences.DEFAULT_ATTACHMENT_VIDEO_PREVIEW,
 				R.string.attachment_video_preview,
@@ -204,7 +202,6 @@ public class MediaFragment extends PreferenceFragment implements FragmentHandler
 			audioBoostPreference.setEnabled(playerEnabled);
 			audioBoostLevelPreference.setEnabled(playerEnabled && audioBoostPreference.getValue());
 			playbackSpeedPreference.setEnabled(playerEnabled);
-			preloadPreference.setEnabled(playerEnabled);
 		};
 		videoPlayerPreference.setOnAfterChangeListener(p -> updatePlayerState.run());
 		audioBoostPreference.setOnAfterChangeListener(p -> updatePlayerState.run());

@@ -1,0 +1,6 @@
+TikTok mode now supports photos. Hold the TikTok button to show everything, videos only or images only. Fixed gestures when switching modes.
+Added photo preloading with separate network, file count and size settings. Defaults: 3 upcoming images, up to 3 MB each.
+Fixed reported crashes, flickering and player restoration issues after PiP and screen rotation.
+Fixed navigation to the current image in the gallery and restored My Boards scroll position when returning from a thread.
+Moved Replies higher in the side menu, before Pages.
+Updated libraries and expanded player, gallery and posting form diagnostics.

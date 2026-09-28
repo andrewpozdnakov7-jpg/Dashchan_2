@@ -1,6 +1,7 @@
 package com.mishiranu.dashchan.ui.gallery;
 
 import android.content.Context;
+import android.util.Log;
 import android.view.Window;
 import androidx.fragment.app.FragmentManager;
 import androidx.lifecycle.ViewModelStoreOwner;
@@ -22,6 +23,13 @@ public class GalleryInstance {
 	public final String chanName;
 	public final List<GalleryItem> galleryItems;
 	public final String pictureInPictureRestoreToken;
+
+	// Permanent event-only diagnostics: keep these events after navigation bugs are fixed.
+	// Log indices/geometry only, never URLs, filenames or post contents.
+	void logNavigation(String message) {
+		Log.i("GalleryNavigation", "session=" + Integer.toHexString(System.identityHashCode(this))
+				+ " " + message);
+	}
 
 	public GalleryInstance(Context context, Callback callback, int actionBarColor,
 			String chanName, List<GalleryItem> galleryItems, String pictureInPictureRestoreToken) {

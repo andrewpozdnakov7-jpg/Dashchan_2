@@ -11,6 +11,8 @@ import android.content.Intent;
 import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
+import android.graphics.Bitmap;
+import android.graphics.Color;
 import android.media.AudioManager;
 import android.net.Uri;
 import android.os.Build;
@@ -34,6 +36,7 @@ import android.view.Window;
 import android.view.WindowManager;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toolbar;
 import androidx.activity.BackEventCompat;
@@ -70,6 +73,7 @@ import com.mishiranu.dashchan.content.storage.FavoritesStorage;
 import com.mishiranu.dashchan.content.storage.CombinedFeedStorage;
 import com.mishiranu.dashchan.content.storage.RedditPageStorage;
 import com.mishiranu.dashchan.content.update.UpdateDialogHelper;
+import com.mishiranu.dashchan.media.VideoDiagnostics;
 import com.mishiranu.dashchan.ui.gallery.GalleryOverlay;
 import com.mishiranu.dashchan.ui.gallery.VideoPipActivity;
 import com.mishiranu.dashchan.ui.navigator.Page;
@@ -168,6 +172,10 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	private boolean wideMode;
 
 	private Intent navigateIntentOnResume;
+	private ImageView pictureInPictureReturnCover;
+	private String pictureInPictureReturnCoverToken;
+	private final Runnable pictureInPictureReturnCoverTimeout =
+			() -> clearPictureInPictureReturnCover("timeout");
 	private StorageRequestState storageRequestState;
 
 	private static final String LOCKER_DRAWER = "drawer";
@@ -194,6 +202,9 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		ThemeEngine.applyTheme(this);
 		ExpandedScreen.Init expandedScreenInit = expandedScreenPreThemeInit.initAfterTheme();
 		super.onCreate(savedInstanceState);
+		if (VideoPipActivity.getPendingGalleryReturnToken() != null) {
+			VideoDiagnostics.recordUi("pip_return host_create saved=" + (savedInstanceState != null));
+		}
 		getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING);
 		float density = ResourceUtils.obtainDensity(this);
 		setContentView(R.layout.activity_main);
@@ -469,6 +480,9 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	@Override
 	protected void onNewIntent(Intent intent) {
 		super.onNewIntent(intent);
+		if (C.ACTION_RETURN_FROM_PICTURE_IN_PICTURE.equals(intent.getAction())) {
+			VideoDiagnostics.recordUi("pip_return host_new_intent changing=" + isChangingConfigurations());
+		}
 		navigateIntent(intent, true);
 	}
 
@@ -818,10 +832,11 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	private void navigateIntentUnchecked(Intent intent) {
 		if (C.ACTION_RETURN_FROM_PICTURE_IN_PICTURE.equals(intent.getAction())) {
-			GalleryOverlay galleryOverlay = VideoPipActivity.createPendingGalleryReturnOverlay();
-			if (galleryOverlay != null) {
-				navigateOrCloseGallery(galleryOverlay);
-			}
+			// The pending transfer, not this one-shot intent, owns the return request.
+			// Deliver after FragmentActivity has resumed its fragments, including when
+			// a configuration change replaces the activity before it consumes the intent.
+			VideoDiagnostics.recordUi("pip_return host_intent_deferred pending="
+					+ (VideoPipActivity.getPendingGalleryReturnToken() != null));
 			return;
 		}
 		ReadUpdateTask.UpdateDataMap updateDataMap = AndroidUtils.getParcelableExtra(intent,
@@ -1627,6 +1642,75 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	}
 
 	@Override
+	protected void onPostResume() {
+		super.onPostResume();
+		String token = VideoPipActivity.getPendingGalleryReturnToken();
+		if (token == null) return;
+		FragmentManager manager = getSupportFragmentManager();
+		VideoDiagnostics.recordUi("pip_return host_post_resume saved=" + manager.isStateSaved()
+				+ " changing=" + isChangingConfigurations() + " finishing=" + isFinishing());
+		if (isFinishing() || isDestroyed() || isChangingConfigurations() || manager.isStateSaved()) return;
+		String tag = GalleryOverlay.class.getName();
+		GalleryOverlay current = (GalleryOverlay) manager.findFragmentByTag(tag);
+		if (current != null && current.isPictureInPictureRestore(token)) {
+			VideoDiagnostics.recordUi("pip_return host_target_already_present removing=" + current.isRemoving());
+			return;
+		}
+		GalleryOverlay restored = VideoPipActivity.createPendingGalleryReturnOverlay();
+		if (restored == null) return;
+		showPictureInPictureReturnCover(token);
+		// Synchronous installation avoids marking the request delivered while its
+		// asynchronous fragment transaction can still be lost during recreation.
+		if (current != null) current.dismissNow();
+		restored.showNow(manager, tag);
+		VideoDiagnostics.recordUi("pip_return host_target_installed");
+	}
+
+	private void showPictureInPictureReturnCover(String token) {
+		clearPictureInPictureReturnCover("replaced");
+		Bitmap frame = VideoPipActivity.getPendingGalleryReturnPreview(token);
+		ImageView cover = new ImageView(this);
+		cover.setBackgroundColor(Color.BLACK);
+		cover.setScaleType(ImageView.ScaleType.FIT_CENTER);
+		cover.setImageBitmap(frame);
+		cover.setClickable(true);
+		cover.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+		// The dialog is a separate window. Cover the thread before installing it,
+		// and keep this snapshot until the dialog has submitted its first frame.
+		ViewGroup decor = (ViewGroup) getWindow().getDecorView();
+		decor.addView(cover, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+				ViewGroup.LayoutParams.MATCH_PARENT));
+		pictureInPictureReturnCover = cover;
+		pictureInPictureReturnCoverToken = token;
+		ConcurrentUtils.HANDLER.postDelayed(pictureInPictureReturnCoverTimeout, 5000L);
+		VideoDiagnostics.recordUi("pip_return host_cover_shown snapshot=" + (frame != null));
+	}
+
+	public void onPictureInPictureGalleryDrawn(String token) {
+		if (token != null && token.equals(pictureInPictureReturnCoverToken)) {
+			clearPictureInPictureReturnCover("gallery_frame");
+		}
+	}
+
+	public void onPictureInPictureGalleryClosed(String token) {
+		if (token != null && token.equals(pictureInPictureReturnCoverToken)) {
+			clearPictureInPictureReturnCover("gallery_closed");
+		}
+	}
+
+	private void clearPictureInPictureReturnCover(String reason) {
+		ConcurrentUtils.HANDLER.removeCallbacks(pictureInPictureReturnCoverTimeout);
+		if (pictureInPictureReturnCover != null) {
+			ViewUtils.removeFromParent(pictureInPictureReturnCover);
+			// The same bitmap belongs to the gallery preview: do not recycle it here.
+			pictureInPictureReturnCover.setImageDrawable(null);
+			pictureInPictureReturnCover = null;
+			VideoDiagnostics.recordUi("pip_return host_cover_removed reason=" + reason);
+		}
+		pictureInPictureReturnCoverToken = null;
+	}
+
+	@Override
 	protected void onPause() {
 		savePagesSession();
 		super.onPause();
@@ -1647,7 +1731,12 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	@Override
 	protected void onStop() {
 		resetPredictiveBackView(false);
+		clearPictureInPictureReturnCover("host_stop");
 		super.onStop();
+		if (VideoPipActivity.getPendingGalleryReturnToken() != null) {
+			VideoDiagnostics.recordUi("pip_return host_stop changing=" + isChangingConfigurations()
+					+ " deferred_intent=" + (navigateIntentOnResume != null));
+		}
 
 		// Intent is valid only for onNewIntent -> onResume behavior
 		navigateIntentOnResume = null;
@@ -1655,6 +1744,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	@Override
 	protected void onFinish() {
+		clearPictureInPictureReturnCover("host_finish");
 		ConcurrentUtils.HANDLER.removeCallbacks(applyTextScaleChanges);
 		super.onFinish();
 

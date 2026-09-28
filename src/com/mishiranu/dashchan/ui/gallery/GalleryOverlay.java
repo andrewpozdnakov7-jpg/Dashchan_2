@@ -22,6 +22,7 @@ import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewTreeObserver;
 import android.view.Window;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
@@ -49,6 +50,7 @@ import com.mishiranu.dashchan.content.service.DownloadService;
 import com.mishiranu.dashchan.graphics.GalleryBackgroundDrawable;
 import com.mishiranu.dashchan.media.VideoDiagnostics;
 import com.mishiranu.dashchan.ui.FragmentHandler;
+import com.mishiranu.dashchan.ui.MainActivity;
 import com.mishiranu.dashchan.util.AndroidUtils;
 import com.mishiranu.dashchan.util.AnimationUtils;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
@@ -77,6 +79,7 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 	private static final String EXTRA_THREAD_TITLE = "threadTitle";
 	private static final String EXTRA_NAVIGATE_POST_MODE = "navigatePostMode";
 	private static final String EXTRA_INITIAL_GALLERY_MODE = "initialGalleryMode";
+	private static final String EXTRA_PIP_RESTORE_TOKEN = "pipRestoreToken";
 
 	private static final String EXTRA_POSITION = "position";
 	private static final String EXTRA_SELECTED = "selected";
@@ -102,6 +105,7 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 	private List<GalleryItem> allGalleryItems;
 	private WeakReference<View> queuedFromView;
 	private String queuedPictureInPictureRestoreToken;
+	private VideoPipActivity.GalleryRestoreData queuedPictureInPictureRestoreData;
 
 	private InsetsLayout rootView;
 	private GalleryInstance instance;
@@ -110,6 +114,8 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 	private ListUnit listUnit;
 	private Bundle pendingDialogState;
 	private GalleryDialog initializedDialog;
+	private ViewTreeObserver restoreDrawObserver;
+	private ViewTreeObserver.OnPreDrawListener restoreDrawListener;
 	private View windowFocusView;
 	private View.OnFocusChangeListener windowFocusListener;
 	private Runnable pendingSystemUiFlags;
@@ -155,11 +161,16 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 			String restoreToken) {
 		GalleryOverlay overlay = new GalleryOverlay(null, null, data.chanName, data.galleryItems, data.imageIndex,
 				data.threadTitle, null, data.navigatePostMode, false, restoreToken);
+		overlay.queuedPictureInPictureRestoreData = data;
 		return overlay;
 	}
 
 	public String getChanName() {
 		return requireArguments().getString(EXTRA_CHAN_NAME);
+	}
+
+	public boolean isPictureInPictureRestore(String token) {
+		return token != null && token.equals(requireArguments().getString(EXTRA_PIP_RESTORE_TOKEN));
 	}
 
 	private GalleryOverlay(Uri uri, String fileName, String chanName, List<GalleryItem> galleryItems, int imageIndex,
@@ -174,6 +185,7 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 		args.putString(EXTRA_THREAD_TITLE, threadTitle);
 		args.putString(EXTRA_NAVIGATE_POST_MODE, navigatePostMode.name());
 		args.putBoolean(EXTRA_INITIAL_GALLERY_MODE, initialGalleryMode);
+		args.putString(EXTRA_PIP_RESTORE_TOKEN, pictureInPictureRestoreToken);
 		setArguments(args);
 		this.queuedGalleryItems = galleryItems;
 		this.queuedFromView = fromView != null ? new WeakReference<>(fromView) : null;
@@ -193,6 +205,19 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 	public void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		galleryState = new ViewModelProvider(this).get(GalleryStateViewModel.class);
+		if (queuedPictureInPictureRestoreToken == null) {
+			queuedPictureInPictureRestoreToken = requireArguments().getString(EXTRA_PIP_RESTORE_TOKEN);
+		}
+		if (queuedPictureInPictureRestoreData != null) {
+			VideoPipActivity.GalleryRestoreData data = queuedPictureInPictureRestoreData;
+			queuedPictureInPictureRestoreData = null;
+			galleryState.allItems = new ArrayList<>(data.allGalleryItems);
+			galleryState.visibleItems = new ArrayList<>(data.galleryItems);
+			galleryState.dialogState = new Bundle(data.dialogState);
+			galleryState.gridState = data.gridState;
+			galleryState.filter = data.filter;
+			galleryState.sort = data.sort;
+		}
 		VideoUnit.LifecycleState video = galleryState.video;
 		VideoUnit.PictureInPictureSource pipSource = video != null ? video.pipSource : null;
 		retirePictureInPictureGallery = (savedInstanceState != null
@@ -247,6 +272,11 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 
 	@Override
 	public void onDestroyView() {
+		disableAnimationForWindowRecreation();
+		if (getActivity() instanceof MainActivity) {
+			((MainActivity) getActivity()).onPictureInPictureGalleryClosed(
+					requireArguments().getString(EXTRA_PIP_RESTORE_TOKEN));
+		}
 		clearDialogCallbacks();
 		if (cornerAnimator != null) {
 			cornerAnimator.cancel();
@@ -254,6 +284,8 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 		}
 		if (rootView != null) rootView.removeCallbacks(returnToGalleryRunnable);
 		if (instance != null) {
+			instance.logNavigation("destroy_view gridMode=" + galleryMode + " index="
+					+ (pagerUnit != null ? pagerUnit.getCurrentIndex() : -1));
 			galleryState.dialogState = new Bundle();
 			saveGalleryState(galleryState.dialogState);
 			galleryState.allItems = new ArrayList<>(allGalleryItems);
@@ -304,6 +336,7 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 		if (initialize) {
 			initializeGalleryWindow(dialog, pendingDialogState, imageViewPosition);
 			initializedDialog = dialog;
+			observePictureInPictureRestoreFrame(dialog);
 			pendingDialogState = null;
 			// Android may have restored the menu before the gallery units existed.
 			// Rebuild it now that all callbacks can use the new window's state.
@@ -324,9 +357,14 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 			imageViewPosition = new int[] {location[0], location[1],
 					queuedFromView.getWidth(), queuedFromView.getHeight()};
 		}
+		boolean restoring = pendingDialogState != null || galleryState.video != null
+				|| requireArguments().getString(EXTRA_PIP_RESTORE_TOKEN) != null;
+		if (restoring) imageViewPosition = null;
 		WindowManager.LayoutParams attributes = dialog.getWindow().getAttributes();
-		attributes.windowAnimations = imageViewPosition == null
+		attributes.windowAnimations = restoring ? R.style.Animation_Gallery_Restore : imageViewPosition == null
 				? R.style.Animation_Gallery_Full : R.style.Animation_Gallery_Partial;
+		VideoDiagnostics.recordUi("gallery window_prepare restoring=" + restoring
+				+ " enter_animation=" + !restoring);
 		attributes.layoutInDisplayCutoutMode = WindowManager.LayoutParams
 				.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
 
@@ -426,6 +464,10 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 			instance = new GalleryInstance(rootView.getContext(), this, ACTION_BAR_COLOR, chan.name,
 					new ArrayList<>(galleryState.visibleItems != null ? galleryState.visibleItems : allGalleryItems),
 					galleryState.pendingPictureInPictureToken);
+			instance.logNavigation("open argumentIndex=" + requireArguments().getInt(EXTRA_IMAGE_INDEX)
+					+ " effectiveIndex=" + imagePosition + " savedState=" + (savedInstanceState != null)
+					+ " gridState=" + (galleryState.gridState != null) + " count=" + instance.galleryItems.size()
+					+ " initialGrid=" + requireArguments().getBoolean(EXTRA_INITIAL_GALLERY_MODE));
 			queuedPictureInPictureRestoreToken = null;
 			if (!instance.galleryItems.isEmpty()) {
 				listUnit = new ListUnit(instance);
@@ -471,7 +513,9 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 			listUnit.startSelectionMode(selected);
 		}
 		if (listUnit != null && galleryState.gridState != null) {
+			listUnit.logPosition("restore_grid_state_before");
 			listUnit.getRecyclerView().getLayoutManager().onRestoreInstanceState(galleryState.gridState);
+			listUnit.logPosition("restore_grid_state_submitted");
 			galleryState.gridState = null;
 		}
 
@@ -499,6 +543,7 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 	}
 
 	private void clearDialogCallbacks() {
+		clearRestoreDrawListener();
 		if (windowFocusView != null && windowFocusListener != null) {
 			ViewUtils.removeWindowFocusListener(windowFocusView, windowFocusListener);
 		}
@@ -508,6 +553,42 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 			ConcurrentUtils.HANDLER.removeCallbacks(pendingSystemUiFlags);
 			pendingSystemUiFlags = null;
 		}
+	}
+
+	private void clearRestoreDrawListener() {
+		if (restoreDrawObserver != null && restoreDrawObserver.isAlive() && restoreDrawListener != null) {
+			restoreDrawObserver.removeOnPreDrawListener(restoreDrawListener);
+		}
+		restoreDrawObserver = null;
+		restoreDrawListener = null;
+	}
+
+	private void observePictureInPictureRestoreFrame(GalleryDialog dialog) {
+		String token = requireArguments().getString(EXTRA_PIP_RESTORE_TOKEN);
+		if (token == null || rootView == null) return;
+		View root = rootView;
+		restoreDrawObserver = root.getViewTreeObserver();
+		restoreDrawListener = () -> {
+			if (!root.isShown() || root.getWidth() == 0 || root.getHeight() == 0) return true;
+			clearRestoreDrawListener();
+			boolean hardware = root.isHardwareAccelerated();
+			Runnable drawn = () -> ConcurrentUtils.HANDLER.post(() -> {
+				if (rootView != root || initializedDialog != dialog || !dialog.isShowing()) return;
+				VideoDiagnostics.recordUi("pip_return gallery_window_frame hardware=" + hardware);
+				Activity activity = getActivity();
+				if (activity instanceof MainActivity) {
+					((MainActivity) activity).onPictureInPictureGalleryDrawn(token);
+				}
+			});
+			if (hardware) {
+				root.getViewTreeObserver().registerFrameCommitCallback(drawn);
+			} else {
+				// Frame commit callbacks are not delivered by software rendering.
+				root.post(drawn);
+			}
+			return true;
+		};
+		restoreDrawObserver.addOnPreDrawListener(restoreDrawListener);
 	}
 
 	@Override
@@ -527,15 +608,27 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 
 	@Override
 	public void onPause() {
+		disableAnimationForWindowRecreation();
 		super.onPause();
 
 		if (pagerUnit != null) {
-			pagerUnit.onPause();
+			pagerUnit.onPause(getActivity() != null && requireActivity().isChangingConfigurations());
+		}
+	}
+
+	private void disableAnimationForWindowRecreation() {
+		if (getActivity() != null && requireActivity().isChangingConfigurations() && getDialog() != null) {
+			// Recreating an existing gallery is not a user close/open animation.
+			getDialog().getWindow().setWindowAnimations(0);
 		}
 	}
 
 	@Override
 	public void onDestroy() {
+		if (isRemoving() && (getActivity() == null || !requireActivity().isChangingConfigurations())) {
+			VideoPipActivity.cancelPendingGalleryReturn(
+					requireArguments().getString(EXTRA_PIP_RESTORE_TOKEN), "gallery_removed");
+		}
 		if (videoFullscreen && getActivity() != null && !requireActivity().isChangingConfigurations()) {
 			if (videoFullscreenRequestedOrientation) {
 				requireActivity().setRequestedOrientation(videoFullscreenPreviousOrientation);
@@ -553,6 +646,7 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 	}
 
 	private void invalidateListPosition() {
+		instance.logNavigation("sync_grid_to_pager index=" + pagerUnit.getCurrentIndex());
 		listUnit.scrollListToPosition(pagerUnit.getCurrentIndex(), true);
 	}
 
@@ -562,6 +656,8 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 	};
 
 	private boolean returnToGallery() {
+		if (instance != null) instance.logNavigation("return_to_grid window=" + galleryWindow
+				+ " gridMode=" + galleryMode + " index=" + (pagerUnit != null ? pagerUnit.getCurrentIndex() : -1));
 		if (galleryWindow && !galleryMode) {
 			pagerUnit.onBackToGallery();
 			rootView.post(returnToGalleryRunnable);
@@ -645,6 +741,8 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 		menu.add(0, R.id.menu_select, 0, R.string.select)
 				.setIcon(ResourceUtils.getActionBarIcon(context, R.attr.iconActionSelect))
 				.setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
+		menu.add(0, R.id.menu_tiktok_filter, 0, R.string.tiktok_filter)
+				.setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER);
 	}
 
 	private boolean isGalleryMenuReady() {
@@ -661,6 +759,7 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 			return;
 		}
 		if (!galleryMode) {
+			menu.findItem(R.id.menu_tiktok_filter).setVisible(pagerUnit.getCurrentGalleryItem() != null);
 			PagerUnit.OptionsMenuCapabilities capabilities = pagerUnit != null
 					? pagerUnit.obtainOptionsMenuCapabilities() : null;
 			if (capabilities != null && capabilities.available) {
@@ -700,6 +799,8 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 			pagerUnit.refreshCurrent();
 		} else if (item.getItemId() == R.id.menu_filter) {
 			showGalleryFilterDialog();
+		} else if (item.getItemId() == R.id.menu_tiktok_filter) {
+			pagerUnit.showTikTokFilterDialog();
 		} else if (item.getItemId() == R.id.menu_select) {
 			listUnit.startSelectionMode(null);
 		}
@@ -784,6 +885,8 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 	private static final int GALLERY_TRANSITION_DURATION = 150;
 
 	private void switchMode(boolean galleryMode, boolean animated) {
+		instance.logNavigation("mode_change fromGrid=" + this.galleryMode + " toGrid=" + galleryMode
+				+ " index=" + pagerUnit.getCurrentIndex() + " animated=" + animated);
 		int duration = animated ? GALLERY_TRANSITION_DURATION : 0;
 		pagerUnit.switchMode(galleryMode, duration);
 		listUnit.switchMode(galleryMode, duration);
@@ -1158,8 +1261,21 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 			return null;
 		}
 		int imageIndex = Math.max(0, Math.min(pagerUnit.getCurrentIndex(), instance.galleryItems.size() - 1));
+		// Keep navigation state, but not the old window/player lifecycle. The return
+		// always opens the selected video in a freshly prepared destination window.
+		Bundle dialogState = new Bundle();
+		dialogState.putInt(EXTRA_POSITION, imageIndex);
+		dialogState.putBoolean(EXTRA_GALLERY_WINDOW, galleryWindow);
+		dialogState.putBoolean(EXTRA_GALLERY_MODE, false);
+		dialogState.putBoolean(EXTRA_SYSTEM_UI_VISIBILITY,
+				FlagUtils.get(systemUiVisibilityFlags, GalleryInstance.Flags.LOCKED_USER));
+		android.os.Parcelable gridState = listUnit != null
+				&& listUnit.getRecyclerView().getLayoutManager() != null
+				? listUnit.getRecyclerView().getLayoutManager().onSaveInstanceState() : null;
 		return new VideoPipActivity.GalleryRestoreData(instance.chanName,
-				new ArrayList<>(instance.galleryItems), imageIndex, getThreadTitle(), getNavigatePostMode());
+				new ArrayList<>(instance.galleryItems), imageIndex, getThreadTitle(), getNavigatePostMode(),
+				new ArrayList<>(allGalleryItems != null ? allGalleryItems : instance.galleryItems),
+				dialogState, gridState, galleryFilter, gallerySort.name());
 	}
 
 	@Override

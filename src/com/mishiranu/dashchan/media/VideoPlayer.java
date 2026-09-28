@@ -11,6 +11,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.ParcelFileDescriptor;
 import android.os.Process;
+import android.os.SystemClock;
 import android.util.Pair;
 import android.view.Surface;
 import android.view.TextureView;
@@ -270,6 +271,10 @@ public class VideoPlayer {
 	// being installed. While playing, keep detached textures alive until the new Surface renders
 	// an actual frame. A paused decoder can release them once the replacement is applied.
 	private final ArrayList<DeferredSurfaceTexture> deferredSurfaceTextures = new ArrayList<>();
+	// Only explicit transfers of this player may reuse a detached, already-rendered surface.
+	// Deferred surfaces remain player-owned until the new TextureView actually attaches.
+	private long transferableSurfaceGeneration;
+	private long surfaceTransferStartedMs;
 
 	private boolean lastSeeking = false;
 	private volatile boolean lastBuffering = false;
@@ -568,6 +573,7 @@ public class VideoPlayer {
 		private SurfaceTexture playerSurfaceTexture;
 		private long playerSurfaceGeneration;
 		private int surfaceUpdates;
+		private long transferredSurfaceStartedMs = -1L;
 		private final Runnable recordSettledGeometry = () ->
 				VideoDiagnostics.recordViewGeometry("texture_layout_settled", this);
 
@@ -613,6 +619,9 @@ public class VideoPlayer {
 			if (player == null) {
 				return;
 			}
+			if (player.restoreTransferredSurface(this, width, height)) {
+				return;
+			}
 			playerSurface = new Surface(surface);
 			playerSurfaceTexture = surface;
 			surfaceUpdates = 0;
@@ -656,6 +665,10 @@ public class VideoPlayer {
 		@Override
 		public void onSurfaceTextureUpdated(SurfaceTexture surface) {
 			surfaceUpdates++;
+			if (surfaceUpdates == 1 && transferredSurfaceStartedMs >= 0L) {
+				VideoDiagnostics.recordUi("surface_transfer_first_update generation=" + playerSurfaceGeneration
+						+ " elapsed_ms=" + (SystemClock.elapsedRealtime() - transferredSurfaceStartedMs));
+			}
 			VideoDiagnostics.surfaceUpdated(diagnosticsId);
 			VideoPlayer player = this.player.get();
 			if (player != null) {
@@ -761,6 +774,71 @@ public class VideoPlayer {
 		this.videoView = null;
 		if (videoView != null && videoView.getParent() instanceof ViewGroup) {
 			((ViewGroup) videoView.getParent()).removeView(videoView);
+		}
+	}
+
+	/** Reserve the current output for a window transfer without detaching the visible view yet. */
+	public void prepareVideoViewForTransfer() {
+		synchronized (this) {
+			if (videoView instanceof PlayerTextureView) {
+				PlayerTextureView texture = (PlayerTextureView) videoView;
+				long generation = texture.playerSurfaceGeneration;
+				// Android may have detached the old window while the destination was being laid out.
+				// Keep its already-reserved generation; its texture is now in deferredSurfaceTextures.
+				if (generation == 0L && transferableSurfaceGeneration != 0L) return;
+				surfaceTransferStartedMs = SystemClock.elapsedRealtime();
+				transferableSurfaceGeneration = isInitialized() && generation > 0L
+						&& generation == latestSurfaceGeneration
+						&& generation == latestAppliedSurfaceGeneration
+						&& generation == latestRenderedSurfaceGeneration ? generation : 0L;
+				VideoDiagnostics.recordUi("surface_transfer_prepare generation=" + generation
+						+ " reusable=" + (transferableSurfaceGeneration != 0L));
+			}
+		}
+	}
+
+	/** Detach for a same-player window transfer, without requiring a new decoder output. */
+	public void releaseVideoViewForTransfer() {
+		prepareVideoViewForTransfer();
+		// onSurfaceTextureDestroyed retains the texture using the existing deferred ownership.
+		releaseVideoView();
+	}
+
+	private boolean restoreTransferredSurface(PlayerTextureView target, int width, int height) {
+		synchronized (this) {
+			long generation = transferableSurfaceGeneration;
+			transferableSurfaceGeneration = 0L;
+			if (!isInitialized() || generation == 0L || generation != latestSurfaceGeneration
+					|| generation != latestAppliedSurfaceGeneration) {
+				return false;
+			}
+			for (int i = 0; i < deferredSurfaceTextures.size(); i++) {
+				DeferredSurfaceTexture deferred = deferredSurfaceTextures.get(i);
+				if (deferred.generation != generation || deferred.surfaceTexture.isReleased()) continue;
+				try {
+					// The old TextureView has detached from its GL context. This replaces only
+					// the new view's unused texture, not MediaCodec's existing output surface.
+					// setSurfaceTexture does not invoke onSurfaceTextureAvailable for it.
+					target.setSurfaceTexture(deferred.surfaceTexture);
+				} catch (RuntimeException e) {
+					VideoDiagnostics.recordUi("surface_transfer_fallback generation=" + generation
+							+ " error=" + e.getClass().getSimpleName());
+					return false;
+				}
+				deferredSurfaceTextures.remove(i); // Ownership now belongs to the attached view.
+				target.playerSurfaceTexture = deferred.surfaceTexture;
+				target.playerSurfaceGeneration = generation;
+				target.surfaceUpdates = 0;
+				target.transferredSurfaceStartedMs = surfaceTransferStartedMs;
+				setSurfaceSize(width, height);
+				VideoDiagnostics.surfaceAvailable(target.diagnosticsId);
+				VideoDiagnostics.recordUi("surface_transfer_reused generation=" + generation
+						+ " texture=" + target.diagnosticsId + " size=" + width + "x" + height);
+				return true;
+			}
+			VideoDiagnostics.recordUi("surface_transfer_fallback generation=" + generation
+					+ " reason=texture_not_retained");
+			return false;
 		}
 	}
 
@@ -1054,6 +1132,7 @@ public class VideoPlayer {
 						holder.destroy(sessionData.pointer, false);
 					}
 				} finally {
+					transferableSurfaceGeneration = 0L;
 					releaseAllSurfaceRequestsLocked();
 					releaseDeferredSurfaceTexturesLocked(Long.MAX_VALUE, true);
 				}

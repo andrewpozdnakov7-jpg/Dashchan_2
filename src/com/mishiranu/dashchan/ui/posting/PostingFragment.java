@@ -188,6 +188,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 	private boolean captchaLarge;
 	private boolean captchaBlackAndWhite;
 	private long captchaLoadTime;
+	private PostingFormDiagnostics.Observer formDiagnostics;
 
 	private ScrollView scrollView;
 	private UriPasteEditText commentView;
@@ -640,10 +641,16 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 			refreshCaptcha(false, true, false);
 		}
 		bindPostingState();
+		formDiagnostics = new PostingFormDiagnostics.Observer(requireActivity(), view, scrollView,
+				commentView, footerContainer);
 	}
 
 	@Override
 	public void onDestroyView() {
+		if (formDiagnostics != null) {
+			formDiagnostics.close();
+			formDiagnostics = null;
+		}
 		super.onDestroyView();
 
 		if (postingBinder != null) {
@@ -2252,6 +2259,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		if (scrollView != null && commentView != null && scrollView.getWidth() > 0) {
 			int availableHeight = scrollView.getHeight() - scrollView.getPaddingTop() - scrollView.getPaddingBottom();
 			if (availableHeight <= 0) {
+				if (formDiagnostics != null) formDiagnostics.decision("resize_skipped available=" + availableHeight);
 				return;
 			}
 			int padding = commentView.getCompoundPaddingTop() + commentView.getCompoundPaddingBottom();
@@ -2270,6 +2278,8 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 				int otherHeight = form.getMeasuredHeight() - commentView.getMeasuredHeight();
 				int height = Math.min(availableHeight, Math.max(padding + COMMENT_MIN_LINES * lineHeight,
 						availableHeight - otherHeight));
+				if (formDiagnostics != null) formDiagnostics.decision("resize ime=false available=" + availableHeight
+						+ " other=" + otherHeight + " targetHeight=" + height + " lineHeight=" + lineHeight);
 				// Fixed pixel bounds follow available space, not the number of typed lines.
 				// Overflow remains scrollable; avoid requesting another layout if bounds are unchanged.
 				if (commentView.getMinHeight() != height || commentView.getMaxHeight() != height) {
@@ -2281,6 +2291,8 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 			// must fit above the keyboard and the separate send panel.
 			int visibleLines = Math.max(1, Math.min(COMMENT_MAX_LINES, (availableHeight - padding) / lineHeight));
 			int minLines = Math.min(COMMENT_MIN_LINES, visibleLines);
+			if (formDiagnostics != null) formDiagnostics.decision("resize ime=true available=" + availableHeight
+					+ " minLines=" + minLines + " maxLines=" + visibleLines + " lineHeight=" + lineHeight);
 			if (commentView.getMinLines() != minLines) {
 				commentView.setMinLines(minLines);
 			}
@@ -2307,6 +2319,8 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 	private final ViewTreeObserver.OnPreDrawListener showCommentAfterLayout = () -> {
 		if (revealCommentAfterLayout) {
 			revealCommentAfterLayout = false;
+			if (formDiagnostics != null) formDiagnostics.decision("reveal_requested ime=" + isCommentKeyboardVisible()
+					+ " editorFocus=" + (commentView != null && commentView.hasFocus()));
 			if (scrollView != null && commentView != null && commentView.hasFocus() && isCommentKeyboardVisible()) {
 				int selection = commentView.getSelectionEnd();
 				// Revealing only the caret can leave the rest of the editor below the viewport.
@@ -2337,10 +2351,13 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 					if (bounds.top < targetY + scrollView.getPaddingTop()) {
 						targetY = bounds.top - scrollView.getPaddingTop();
 					}
+					if (formDiagnostics != null) formDiagnostics.decision("reveal_apply viewportScroll="
+							+ scrollView.getScrollY() + " target=" + Math.max(0, targetY));
 					scrollView.scrollTo(scrollView.getScrollX(), Math.max(0, targetY));
 				} else if (selection >= 0) {
 					// If the window cannot fit even the editor, prioritize the insertion point.
 					commentView.bringPointIntoView(selection);
+					if (formDiagnostics != null) formDiagnostics.decision("reveal_caret_fallback selection=" + selection);
 				}
 			}
 		}
