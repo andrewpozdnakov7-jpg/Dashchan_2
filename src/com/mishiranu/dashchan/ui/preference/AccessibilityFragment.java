@@ -17,7 +17,6 @@ import com.mishiranu.dashchan.ui.preference.core.ListPreference;
 import com.mishiranu.dashchan.ui.preference.core.Preference;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
 import com.mishiranu.dashchan.ui.preference.core.PreferenceFragment;
-import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.util.SharedPreferences;
 import com.mishiranu.dashchan.widget.ClickableToast;
 import java.io.IOException;
@@ -85,13 +84,9 @@ public class AccessibilityFragment extends PreferenceFragment {
 		deleteFont.setOnClickListener(p -> showDeleteFontDialog(installedFonts));
 
 		addHeader(R.string.appearance);
-		String warning = getString(R.string.large_text_layout_warning).replace("%", "%%");
-		String scaleFormat = ResourceUtils.getColonString(getResources(), R.string.scale, "%d%%")
-				+ "\n" + warning;
-		addSeek(Preferences.KEY_TEXT_SCALE, Preferences.DEFAULT_TEXT_SCALE,
-				getString(R.string.text_scale), scaleFormat, null,
-				Preferences.MIN_TEXT_SCALE, Preferences.MAX_TEXT_SCALE, Preferences.STEP_TEXT_SCALE)
-				.setOnAfterChangeListener(p -> requireActivity().recreate());
+		addButton(R.string.post_text_sizes, R.string.post_text_sizes_summary)
+				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
+						.pushFragment(new PostTextSizesFragment()));
 		addCheck(true, Preferences.KEY_VOLUME_BUTTONS_TEXT_SCALE, Preferences.DEFAULT_VOLUME_BUTTONS_TEXT_SCALE,
 				R.string.volume_buttons_text_scale, R.string.volume_buttons_text_scale__summary);
 		addCheck(true, Preferences.KEY_VIDEO_RIGHT_HAND_CONTROLS,

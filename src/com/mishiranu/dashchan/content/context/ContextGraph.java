@@ -15,7 +15,7 @@ import java.util.function.BooleanSupplier;
 
 /** Pure, thread-scoped graph. No Android, I/O, rendering or read-state writes. */
 public final class ContextGraph {
-	public static final int INITIAL = 20, PAGE = 20, MAX_CARDS = 200, MAX_DEPTH = 12;
+	public static final int MAX_CARDS = 30, MAX_DEPTH = 12;
 	public static final int MAX_POSTS = 5000, MAX_EDGES = 20000, MAX_TEXT = 4_000_000;
 	public static final int MAX_POST_TEXT = 128_000;
 	public record Key(String source, String board, String thread, int major, int minor) implements Comparable<Key> {
@@ -55,6 +55,10 @@ public final class ContextGraph {
 		parents.put(key, normalized);
 	}
 	public Set<Key> parents(Key key) { return Collections.unmodifiableSet(parents.getOrDefault(key, Collections.emptySet())); }
+	/** Three levels of earlier quotes and automatic reply traversal, capped including the selected post. */
+	public Result buildContext(Key target, Collection<Key> retained, BooleanSupplier cancelled) {
+		return build(target, 3, null, MAX_CARDS, retained, cancelled);
+	}
 	public Result build(Key target, int beforeDepth, Set<Key> expanded, int limit,
 			Collection<Key> retained, BooleanSupplier cancelled) {
 		limit = Math.max(1, Math.min(MAX_CARDS, limit));

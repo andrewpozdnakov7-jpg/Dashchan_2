@@ -40,6 +40,73 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 public class Preferences {
+	public static final String KEY_DRAWER_CUSTOM_ORDER = "drawer_custom_order";
+	private static final String KEY_DRAWER_SECTION_ORDER = "drawer_section_order";
+
+	public enum DrawerSection {
+		MY_BOARDS("my_boards", R.string.combined_feeds),
+		PAGES("pages", R.string.open_pages__noun),
+		FAVORITE_THREADS("favorite_threads", R.string.favorite_threads),
+		FAVORITE_BOARDS("favorite_boards", R.string.favorite_boards),
+		BOARDS("boards", R.string.boards),
+		USER_BOARDS("user_boards", R.string.user_boards),
+		REPLIES("replies", R.string.replies),
+		HISTORY("history", R.string.history),
+		ARCHIVES("archives", R.string.local_archives),
+		REDDIT_APP("reddit_app", R.string.reddit_official_app),
+		SETTINGS("settings", R.string.preferences);
+
+		public final String key;
+		public final int titleResId;
+
+		DrawerSection(String key, int titleResId) {
+			this.key = key;
+			this.titleResId = titleResId;
+		}
+	}
+
+	public static boolean isDrawerCustomOrderEnabled() {
+		return PREFERENCES.getBoolean(KEY_DRAWER_CUSTOM_ORDER, false);
+	}
+
+	public static List<DrawerSection> getDefaultDrawerSectionOrder() {
+		ArrayList<DrawerSection> result = new ArrayList<>(Arrays.asList(DrawerSection.values()));
+		if (getPagesListMode() == PagesListMode.FAVORITES_FIRST) {
+			result.remove(DrawerSection.FAVORITE_THREADS);
+			result.remove(DrawerSection.FAVORITE_BOARDS);
+			result.add(0, DrawerSection.FAVORITE_BOARDS);
+			result.add(0, DrawerSection.FAVORITE_THREADS);
+		}
+		return result;
+	}
+
+	public static List<DrawerSection> getDrawerSectionOrder() {
+		ArrayList<DrawerSection> result = new ArrayList<>();
+		String saved = PREFERENCES.getString(KEY_DRAWER_SECTION_ORDER, "");
+		for (String key : saved.split(",")) {
+			for (DrawerSection section : DrawerSection.values()) {
+				if (section.key.equals(key) && !result.contains(section)) result.add(section);
+			}
+		}
+		// Recover incomplete/old settings without duplicates or losing newly added sections.
+		for (DrawerSection section : getDefaultDrawerSectionOrder()) {
+			if (!result.contains(section)) result.add(section);
+		}
+		return result;
+	}
+
+	public static void setDrawerSectionOrder(List<DrawerSection> sections) {
+		ArrayList<String> keys = new ArrayList<>();
+		for (DrawerSection section : sections) {
+			if (!keys.contains(section.key)) keys.add(section.key);
+		}
+		PREFERENCES.edit().put(KEY_DRAWER_SECTION_ORDER, String.join(",", keys)).close();
+	}
+
+	public static void resetDrawerSectionOrder() {
+		PREFERENCES.edit().remove(KEY_DRAWER_SECTION_ORDER).close();
+	}
+
 	public static final SharedPreferences PREFERENCES;
 
 	private static final String PREFERENCES_NAME = "preferences";
@@ -308,6 +375,19 @@ public class Preferences {
 		} else {
 			return false;
 		}
+	}
+
+	public static final String KEY_TOUCH_FEEDBACK = "touch_feedback";
+	public static final String DEFAULT_TOUCH_FEEDBACK = "normal";
+	public static final String KEY_TOUCH_FEEDBACK_INTENSITY = "touch_feedback_intensity";
+	public static final int DEFAULT_TOUCH_FEEDBACK_INTENSITY = 30;
+
+	public static int getTouchFeedbackIntensity() {
+		String mode = PREFERENCES.getString(KEY_TOUCH_FEEDBACK, DEFAULT_TOUCH_FEEDBACK);
+		if ("off".equals(mode)) return 0;
+		if (!"dimmed".equals(mode)) return 100;
+		return Math.max(0, Math.min(100, PREFERENCES.getInt(KEY_TOUCH_FEEDBACK_INTENSITY,
+				DEFAULT_TOUCH_FEEDBACK_INTENSITY)));
 	}
 
 	public static final String KEY_ACTIVE_SCROLLBAR = "active_scrollbar";
@@ -1698,6 +1778,8 @@ public class Preferences {
 	}
 
 	public static final String KEY_TEXT_SCALE = "text_scale";
+	public static final String KEY_SUBJECT_TEXT_SCALE = "subject_text_scale";
+	public static final String KEY_METADATA_TEXT_SCALE = "metadata_text_scale";
 	public static final int MIN_TEXT_SCALE = 30;
 	public static final int MAX_TEXT_SCALE = 500;
 	public static final int STEP_TEXT_SCALE = 5;
@@ -1713,7 +1795,44 @@ public class Preferences {
 	}
 
 	public static void setTextScalePercent(int value) {
-		PREFERENCES.edit().put(KEY_TEXT_SCALE, Math.max(MIN_TEXT_SCALE, Math.min(value, MAX_TEXT_SCALE))).close();
+		setPostTextScalePercent(KEY_TEXT_SCALE, value);
+	}
+
+	public static int getPostTextScalePercent(String key) {
+		checkPostTextScaleKey(key);
+		// Until the first adjustment, inherit the old common scale without changing appearance.
+		return Math.max(MIN_TEXT_SCALE, Math.min(PREFERENCES.getInt(key, getTextScalePercent()), MAX_TEXT_SCALE));
+	}
+
+	public static float getSubjectTextScale() {
+		return getPostTextScalePercent(KEY_SUBJECT_TEXT_SCALE) / 100f;
+	}
+
+	public static float getMetadataTextScale() {
+		return getPostTextScalePercent(KEY_METADATA_TEXT_SCALE) / 100f;
+	}
+
+	public static void setPostTextScalePercent(String key, int value) {
+		checkPostTextScaleKey(key);
+		// Snapshot all roles atomically before changing one, including changes via volume keys.
+		int subject = getPostTextScalePercent(KEY_SUBJECT_TEXT_SCALE);
+		int metadata = getPostTextScalePercent(KEY_METADATA_TEXT_SCALE);
+		try (SharedPreferences.Editor editor = PREFERENCES.edit()) {
+			editor.put(KEY_SUBJECT_TEXT_SCALE, subject).put(KEY_METADATA_TEXT_SCALE, metadata)
+					.put(key, Math.max(MIN_TEXT_SCALE, Math.min(value, MAX_TEXT_SCALE)));
+		}
+	}
+
+	public static void resetPostTextScales() {
+		try (SharedPreferences.Editor editor = PREFERENCES.edit()) {
+			editor.put(KEY_TEXT_SCALE, DEFAULT_TEXT_SCALE).put(KEY_SUBJECT_TEXT_SCALE, DEFAULT_TEXT_SCALE)
+					.put(KEY_METADATA_TEXT_SCALE, DEFAULT_TEXT_SCALE);
+		}
+	}
+
+	private static void checkPostTextScaleKey(String key) {
+		if (!KEY_TEXT_SCALE.equals(key) && !KEY_SUBJECT_TEXT_SCALE.equals(key) &&
+				!KEY_METADATA_TEXT_SCALE.equals(key)) throw new IllegalArgumentException("Unknown text scale key");
 	}
 
 	public static int getNextVolumeButtonTextScalePercent(int currentValue, int direction) {

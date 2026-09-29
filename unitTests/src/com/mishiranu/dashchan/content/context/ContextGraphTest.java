@@ -9,6 +9,13 @@ import java.util.Set;
 import org.junit.Test;
 
 public class ContextGraphTest {
+	@Test public void editedReplyDoesNotKeepOldParentLinks() {
+		ContextGraph graph = new ContextGraph();
+		graph.add(k(3), List.of(k(1)));
+		graph.add(k(3), List.of(k(2)));
+		assertEquals(List.of(k(1)), keys(graph.buildContext(k(1), List.of(), () -> false)));
+		assertEquals(List.of(k(2), k(3)), keys(graph.buildContext(k(3), List.of(), () -> false)));
+	}
 	private static ContextGraph.Key k(int n) { return new ContextGraph.Key("test", "b", "100", n, 0); }
 	private static List<ContextGraph.Key> keys(ContextGraph.Result result) {
 		List<ContextGraph.Key> keys = new ArrayList<>();
@@ -56,8 +63,22 @@ public class ContextGraphTest {
 		ContextGraph.Result first = build(g, 1, Set.of());
 		assertEquals(20, first.entries().size()); assertTrue(first.limited());
 		ContextGraph.Result next = g.build(k(1), 3, Set.of(), 40, keys(first), () -> false);
-		assertTrue(keys(next).containsAll(keys(first))); assertEquals(40, next.entries().size());
-		assertEquals(200, g.build(k(1), 99, Set.of(), 9000, List.of(), () -> false).entries().size());
+		assertTrue(keys(next).containsAll(keys(first))); assertEquals(30, next.entries().size());
+		assertEquals(30, g.build(k(1), 99, Set.of(), 9000, List.of(), () -> false).entries().size());
+	}
+	@Test public void automaticContextIncludesNestedRepliesWithoutActions() {
+		ContextGraph g = new ContextGraph();
+		for (int i = 2; i <= 9; i++) g.add(k(i), List.of(k(i - 1)));
+		assertEquals(List.of(k(2), k(3), k(4), k(5), k(6), k(7), k(8), k(9)),
+				keys(g.buildContext(k(5), List.of(), () -> false)));
+	}
+	@Test public void automaticContextCapsThirtyIncludingSelectedPost() {
+		ContextGraph g = new ContextGraph();
+		for (int i = 2; i <= 100; i++) g.add(k(i), List.of(k(1)));
+		ContextGraph.Result result = g.buildContext(k(1), List.of(), () -> false);
+		assertEquals(30, result.entries().size());
+		assertEquals(k(1), result.entries().get(0).key());
+		assertTrue(result.limited());
 	}
 	@Test public void orderIsIndependentOfInsertion() {
 		ContextGraph a = new ContextGraph(), b = new ContextGraph();

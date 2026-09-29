@@ -24,6 +24,7 @@ import androidx.annotation.NonNull;
 import androidx.fragment.app.FragmentManager;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.recyclerview.widget.DiffUtil;
 import chan.content.Chan;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.R;
@@ -45,6 +46,7 @@ import com.mishiranu.dashchan.widget.EdgeEffectHandler;
 import com.mishiranu.dashchan.widget.InsetsLayout;
 import com.mishiranu.dashchan.widget.ListPosition;
 import com.mishiranu.dashchan.widget.PaddedRecyclerView;
+import com.mishiranu.dashchan.widget.PullableWrapper;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -77,6 +79,9 @@ public class ListUnit implements ActionMode.Callback {
 		recyclerView.addItemDecoration(new SpacingItemDecoration(spacing));
 		GridAdapter adapter = new GridAdapter(callback, instance.chanName, instance.galleryItems);
 		recyclerView.setAdapter(adapter);
+		recyclerView.getPullable().setPullSides(instance.callback.canRefreshGallery()
+				? PullableWrapper.Side.BOTH : PullableWrapper.Side.NONE);
+		recyclerView.getPullable().setOnPullListener((wrapper, side) -> instance.callback.refreshGallery());
 		recyclerView.addOnScrollListener(new RecyclerView.OnScrollListener() {
 			@Override
 			public void onScrollStateChanged(@NonNull RecyclerView view, int newState) {
@@ -108,6 +113,10 @@ public class ListUnit implements ActionMode.Callback {
 			}
 		});
 		updateGridMetrics(instance.context.getResources().getConfiguration());
+	}
+
+	public void setRefreshColor(int color) {
+		recyclerView.getPullable().setColor(color);
 	}
 
 	private final GridAdapter.Callback callback = new GridAdapter.Callback() {
@@ -209,6 +218,41 @@ public class ListUnit implements ActionMode.Callback {
 			selected.clear();
 		}
 		getAdapter().notifyDataSetChanged();
+	}
+
+	public void setRefreshBusy(boolean busy) {
+		if (busy) recyclerView.getPullable().startBusyState(PullableWrapper.Side.TOP);
+		else recyclerView.getPullable().cancelBusyState();
+	}
+
+	public void onGalleryItemsRefreshed(List<GalleryItem> oldItems) {
+		ListPosition anchor = ListPosition.obtain(recyclerView, null);
+		ArrayList<GalleryItem> selectedItems = new ArrayList<>();
+		for (int i = 0; i < selected.size(); i++) {
+			int position = selected.keyAt(i);
+			if (position < oldItems.size()) selectedItems.add(oldItems.get(position));
+		}
+		selected.clear();
+		for (GalleryItem item : selectedItems) {
+			int index = instance.galleryItems.indexOf(item);
+			if (index >= 0) selected.put(index, index);
+		}
+		DiffUtil.calculateDiff(new DiffUtil.Callback() {
+			@Override public int getOldListSize() { return oldItems.size(); }
+			@Override public int getNewListSize() { return instance.galleryItems.size(); }
+			@Override public boolean areItemsTheSame(int oldPosition, int newPosition) {
+				return oldItems.get(oldPosition) == instance.galleryItems.get(newPosition);
+			}
+			@Override public boolean areContentsTheSame(int oldPosition, int newPosition) { return true; }
+		}).dispatchUpdatesTo(getAdapter());
+		if (anchor != null && anchor.position < oldItems.size()) {
+			int index = instance.galleryItems.indexOf(oldItems.get(anchor.position));
+			if (index >= 0) {
+				pendingListPosition = new ListPosition(index, anchor.offset);
+				pendingListPosition.apply(recyclerView);
+			}
+		}
+		updateAllGalleryItemsChecked();
 	}
 
 	public void startSelectionMode(int[] selected) {

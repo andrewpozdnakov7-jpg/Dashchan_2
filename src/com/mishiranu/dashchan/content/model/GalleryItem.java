@@ -29,9 +29,14 @@ public class GalleryItem {
 
 	public GalleryItem(Uri fileUri, Uri thumbnailUri, String boardName, String threadNumber, PostNumber postNumber,
 			String originalName, int width, int height, int size) {
+		this(fileUri, thumbnailUri, null, boardName, threadNumber, postNumber, originalName, width, height, size);
+	}
+
+	private GalleryItem(Uri fileUri, Uri thumbnailUri, String fileName, String boardName, String threadNumber,
+			PostNumber postNumber, String originalName, int width, int height, int size) {
 		fileUriString = fileUri != null ? fileUri.toString() : null;
 		thumbnailUriString = thumbnailUri != null ? thumbnailUri.toString() : null;
-		fileNameOverride = null;
+		fileNameOverride = fileName;
 		this.boardName = boardName;
 		this.threadNumber = threadNumber;
 		this.postNumber = postNumber;
@@ -39,6 +44,12 @@ public class GalleryItem {
 		this.width = width;
 		this.height = height;
 		this.size = size;
+	}
+
+	public static GalleryItem fromRestoreDescriptor(String uri, String thumbnail, String fileName,
+			String board, String thread, PostNumber post, String originalName, int width, int height, int size) {
+		return new GalleryItem(Uri.parse(uri), thumbnail != null ? Uri.parse(thumbnail) : null,
+				fileName, board, thread, post, originalName, width, height, size);
 	}
 
 	public GalleryItem(Uri fileUri, String boardName, String threadNumber) {

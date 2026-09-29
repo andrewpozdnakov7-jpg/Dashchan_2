@@ -32,6 +32,7 @@ public class ExtractPostsTask extends ExecutorTask<Void, ExtractPostsTask.Result
 
 		public final PagesDatabase.Cache cache;
 		public final boolean cacheChanged;
+		public final long contextEpoch;
 		public final Map<PostNumber, PostItem> postItems;
 		public final Collection<PostNumber> removedPosts;
 
@@ -44,13 +45,14 @@ public class ExtractPostsTask extends ExecutorTask<Void, ExtractPostsTask.Result
 		public Result(Set<PostNumber> newPosts, Set<PostNumber> deletedPosts, Set<PostNumber> editedPosts,
 				Set<PostNumber> replyPosts, PagesDatabase.Cache cache, boolean cacheChanged,
 				Map<PostNumber, PostItem> postItems, Collection<PostNumber> removedPosts, PostsDatabase.Flags flags,
-				ThreadsDatabase.StateExtra stateExtra, Uri archivedThreadUri, int uniquePosters) {
+				ThreadsDatabase.StateExtra stateExtra, Uri archivedThreadUri, int uniquePosters, long contextEpoch) {
 			this.newPosts = newPosts;
 			this.deletedPosts = deletedPosts;
 			this.editedPosts = editedPosts;
 			this.replyPosts = replyPosts;
 			this.cache = cache;
 			this.cacheChanged = cacheChanged;
+			this.contextEpoch = contextEpoch;
 			this.postItems = postItems;
 			this.removedPosts = removedPosts;
 			this.flags = flags;
@@ -82,6 +84,7 @@ public class ExtractPostsTask extends ExecutorTask<Void, ExtractPostsTask.Result
 
 	@Override
 	protected Result run() {
+		long contextEpoch = PagesDatabase.getInstance().getContextEpoch();
 		PagesDatabase.Diff diff;
 		PagesDatabase.ThreadKey threadKey = new PagesDatabase.ThreadKey(chan.name, boardName, threadNumber);
 		try {
@@ -117,7 +120,7 @@ public class ExtractPostsTask extends ExecutorTask<Void, ExtractPostsTask.Result
 		}
 		return new Result(diff.newPosts, diff.deletedPosts, diff.editedPosts, diff.replyPosts,
 				diff.cache, cacheChanged, postItems, removedPosts, flags, stateExtra,
-				meta != null ? meta.archivedThreadUri : null, meta != null ? meta.uniquePosters : 0);
+				meta != null ? meta.archivedThreadUri : null, meta != null ? meta.uniquePosters : 0, contextEpoch);
 	}
 
 	@Override

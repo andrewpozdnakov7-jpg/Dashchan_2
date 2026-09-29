@@ -48,6 +48,9 @@ public class ExperimentalFragment extends PreferenceFragment implements Translat
 		}
 		removeAllPreferences();
 		addFormDiagnosticsPreferences();
+		addButton(R.string.drawer_section_order, R.string.drawer_section_order_entry_summary)
+				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
+						.pushFragment(new DrawerOrderFragment()));
 		addButton(R.string.toolbar_title_sizes, R.string.toolbar_title_sizes__summary)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 						.pushFragment(new ToolbarTitleSettingsFragment()));

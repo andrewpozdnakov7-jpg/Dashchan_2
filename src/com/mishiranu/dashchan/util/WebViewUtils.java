@@ -26,6 +26,19 @@ import java.util.Map;
 import java.util.concurrent.Executor;
 
 public class WebViewUtils {
+	/** Only call for the specific renderer-dead view. Never log page URLs or cookies. */
+	public static void destroyAfterRendererGone(WebView view, android.webkit.RenderProcessGoneDetail detail,
+			String owner) {
+		android.util.Log.w("WebViewRecovery", "renderer_gone owner=" + owner
+				+ " crashed=" + detail.didCrash() + " priority=" + detail.rendererPriorityAtExit());
+		view.setOnLongClickListener(null);
+		view.setDownloadListener(null);
+		view.setWebChromeClient(null);
+		view.setWebViewClient(null);
+		ViewUtils.removeFromParent(view);
+		view.destroy();
+	}
+
 	@SuppressWarnings("deprecation")
 	public static void configureCommonSettings(WebSettings settings) {
 		settings.setAllowFileAccess(false);

@@ -13,6 +13,9 @@ public final class ContextLinks {
 	public static Links read(String html, BooleanSupplier cancelled) {
 		checkCancelled(cancelled);
 		if (html.length() > ContextGraph.MAX_POST_TEXT) return new Links(Collections.emptyList(), true);
+		// A real anchor must begin with literal <a or <A; escaped markup is just text.
+		// This is only a negative fast path. All candidate markup still uses the HTML parser.
+		if (html.indexOf("<a") < 0 && html.indexOf("<A") < 0) return new Links(Collections.emptyList(), false);
 		List<String> hrefs = new ArrayList<>();
 		// The existing bundled parser also works in JVM tests. Parsing a string performs no I/O.
 		for (Element link : Jsoup.parseBodyFragment(html).select("a[href]")) {

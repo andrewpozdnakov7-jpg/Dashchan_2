@@ -137,6 +137,20 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	private static final PageFragment REFERENCE_FRAGMENT = new PageFragment();
 
+	public PageFragment getGalleryRefreshSource(String chanName, String boardName, String threadNumber) {
+		ContentFragment fragment = getCurrentFragment();
+		if (fragment instanceof PageFragment) {
+			PageFragment pageFragment = (PageFragment) fragment;
+			Page page = pageFragment.getPage();
+			if (java.util.Objects.equals(page.chanName, chanName) &&
+					java.util.Objects.equals(page.boardName, boardName) &&
+					java.util.Objects.equals(page.threadNumber, threadNumber) && pageFragment.canRefreshGallery()) {
+				return pageFragment;
+			}
+		}
+		return null;
+	}
+
 	private enum StorageRequestState {NONE, INITIAL_INSTRUCTIONS, INSTRUCTIONS, PICKER}
 
 	private final ActivityResultLauncher<Intent> storageDirectoryPicker = registerForActivityResult(

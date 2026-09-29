@@ -10,10 +10,12 @@ import java.util.List;
 public class GalleryStateViewModel extends ViewModel {
 	List<GalleryItem> allItems;
 	List<GalleryItem> visibleItems;
+	java.util.Set<com.mishiranu.dashchan.content.model.PostNumber> refreshKnownPosts;
 	Bundle dialogState;
 	Parcelable gridState;
 	String filter;
 	String sort;
+	String restoreToken;
 	String pendingPictureInPictureToken;
 	VideoUnit.LifecycleState video;
 	boolean cleared;
@@ -27,6 +29,7 @@ public class GalleryStateViewModel extends ViewModel {
 		}
 		allItems = null;
 		visibleItems = null;
+		refreshKnownPosts = null;
 		dialogState = null;
 		gridState = null;
 	}

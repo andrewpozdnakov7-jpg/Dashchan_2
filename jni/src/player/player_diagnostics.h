@@ -24,6 +24,8 @@ enum {
 	DIAGNOSTICS_OUTPUT_DROPPED_LATE,
 	DIAGNOSTICS_OUTPUT_DROPPED_SEEK,
 	DIAGNOSTICS_OUTPUT_DROPPED_STATE,
+	DIAGNOSTICS_OUTPUT_DROPPED_CADENCE,
+	DIAGNOSTICS_OUTPUT_DROPPED_SUPERSEDED,
 	DIAGNOSTICS_OUTPUT_NO_BUFFER
 };
 
@@ -52,6 +54,8 @@ void diagnosticsRecordVideoPacket(Player * player, AVPacket * packet);
 void diagnosticsRecordMediaInfo(Player * player);
 
 #ifdef DASHCHAN_HAS_MEDIACODEC
+void diagnosticsRecordHardwareLateAnchor(Player * player, int64_t framePosition,
+		int64_t lateness, int64_t gapMs);
 void diagnosticsRecordPacketSubmitted(void);
 void diagnosticsRecordDecoderError(Player * player, const char * stage, int error);
 void diagnosticsRecordOutput(Player * player, AVFrame * frame, int64_t framePosition,

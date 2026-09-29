@@ -64,6 +64,7 @@ public class CommentTextView extends TextView {
 	private float lastX, lastY;
 	private long lastXYSet;
 	private int linesLimit;
+	private float subjectTextSize;
 	private int linesLimitAdditionalHeight;
 	private View selectionPaddingView;
 	private boolean useAdditionalPadding;
@@ -261,6 +262,11 @@ public class CommentTextView extends TextView {
 		return linkListener != null ? linkListener : DEFAULT_LINK_LISTENER;
 	}
 
+	/** Absolute subject size in pixels, independent of the message text size. Set before binding text. */
+	public void setSubjectTextSize(float sizePx) {
+		subjectTextSize = sizePx;
+	}
+
 	public void setSubjectAndComment(CharSequence subject, CharSequence comment) {
 		boolean hasSubject = !StringUtils.isEmpty(subject);
 		boolean hasComment = !StringUtils.isEmpty(comment);
@@ -286,7 +292,9 @@ public class CommentTextView extends TextView {
 			spannable.append(subject);
 			int length = spannable.length();
 			spannable.setSpan(new LightSpan(), 0, length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
-			spannable.setSpan(new RelativeSizeSpan(4f / 3f), 0, length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+			// Use the actual (pixel-rounded) message size, not its nominal preference multiplier.
+			float subjectScale = subjectTextSize > 0f ? subjectTextSize / getTextSize() : 4f / 3f;
+			spannable.setSpan(new RelativeSizeSpan(subjectScale), 0, length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
 			if (hasComment) {
 				spannable.append("\n\n");
 				spannable.setSpan(new RelativeSizeSpan(0.75f), length, length + 2, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);

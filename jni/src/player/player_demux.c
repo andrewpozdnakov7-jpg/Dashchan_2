@@ -2,13 +2,122 @@
 #include "player_audio.h"
 #include "player_diagnostics.h"
 #include "player_duration.h"
+#include "player_timing.h"
 #include "player_video_software.h"
 
 #include <libavformat/avformat.h>
+#include <libavutil/mathematics.h>
 
 #include <inttypes.h>
+#include <limits.h>
 #include <stdint.h>
 #include <unistd.h>
+
+#define REBUFFER_VIEWING_MS 3000
+// Bound compressed packets, not decoded pictures. Malformed/missing timestamps or
+// extremely uneven interleaving must not grow the queues without limit.
+#define REBUFFER_MAX_BYTES (32LL * 1024 * 1024)
+#define REBUFFER_MAX_PACKETS 8192
+
+typedef struct {
+	int64_t spanMs;
+	int64_t bytes;
+	int count;
+} BufferedPackets;
+
+static BufferedPackets measureBufferedPackets(BlockingQueue * queue, AVStream * stream) {
+	BufferedPackets result = {0};
+	int64_t first = AV_NOPTS_VALUE;
+	int64_t end = AV_NOPTS_VALUE;
+	pthread_mutex_lock(&queue->mutex);
+	for (QueueItem * item = queue->queue.first; item; item = item->next) {
+		PacketHolder * holder = item->data;
+		if (!holder || !holder->packet) continue;
+		AVPacket * packet = holder->packet;
+		result.count++;
+		result.bytes += max64(packet->size, 0);
+		int64_t timestamp = packet->dts != AV_NOPTS_VALUE ? packet->dts : packet->pts;
+		if (timestamp != AV_NOPTS_VALUE) {
+			if (first == AV_NOPTS_VALUE) first = timestamp;
+			// DTS measures contiguous decode order, without mistaking reordered B-frame
+			// presentation timestamps for additional buffered time.
+			int64_t duration = max64(packet->duration, 0);
+			end = timestamp <= INT64_MAX - duration ? timestamp + duration : timestamp;
+		}
+	}
+	pthread_mutex_unlock(&queue->mutex);
+	if (first != AV_NOPTS_VALUE && end != AV_NOPTS_VALUE && end > first
+			&& (first >= 0 || end <= INT64_MAX + first)) {
+		result.spanMs = av_rescale_q(end - first, stream->time_base, (AVRational) {1, 1000});
+	}
+	return result;
+}
+
+// Called only by playback demux (under readMutex or flowMutex), or by a seek
+// holding BOTH locks. The callback only posts to Java; never pauses OpenSL or
+// takes playback/decoder locks while demux/file locks are held.
+static void setNetworkBuffering(Player * player, Bridge * bridge, int buffering, const char * reason) {
+	if (player->decode.packets.buffering == buffering) return;
+	player->decode.packets.buffering = buffering;
+	uint64_t serial = ++player->decode.packets.bufferingSerial;
+	player->decode.packets.bufferingReportTime = 0;
+	diagnosticsLog("player=%u network_buffering state=%d serial=%" PRIu64
+			" reason=%s target_viewing_ms=%d speed_milli=%d",
+			player->meta.diagnosticsId, buffering, serial, reason,
+			REBUFFER_VIEWING_MS, getPlaybackSpeed(player));
+	(*bridge->env)->CallVoidMethod(bridge->env, player->bridge.native,
+			bridge->methodOnNetworkBuffering, (jlong) serial, (jboolean) !!buffering);
+}
+
+void playerDemuxResetBuffering(Player * player, Bridge * bridge) {
+	setNetworkBuffering(player, bridge, 0, "seek_reset");
+}
+
+static int isFileComplete(Player * player) {
+	pthread_mutex_lock(&player->file.controlMutex);
+	int complete = player->file.total > 0 && player->file.start == 0
+			&& player->file.end >= player->file.total;
+	pthread_mutex_unlock(&player->file.controlMutex);
+	return complete;
+}
+
+static int packetReserveLow(Player * player) {
+	int64_t lowWater = (int64_t) 250 * getPlaybackSpeed(player) / PLAYBACK_SPEED_DEFAULT;
+	return (HAS_STREAM(player, video) && measureBufferedPackets(&player->video.packetQueue,
+			GET_STREAM(player, video)).spanMs < lowWater)
+			|| (HAS_STREAM(player, audio) && measureBufferedPackets(&player->audio.packetQueue,
+			GET_STREAM(player, audio)).spanMs < lowWater);
+}
+
+static void checkNetworkBuffering(Player * player, Bridge * bridge, int complete, int eof) {
+	if (!player->decode.packets.buffering) return;
+	BufferedPackets video = {0}, audio = {0};
+	if (HAS_STREAM(player, video)) {
+		video = measureBufferedPackets(&player->video.packetQueue, GET_STREAM(player, video));
+	}
+	if (HAS_STREAM(player, audio)) {
+		audio = measureBufferedPackets(&player->audio.packetQueue, GET_STREAM(player, audio));
+	}
+	int speed = getPlaybackSpeed(player);
+	int64_t target = (int64_t) REBUFFER_VIEWING_MS * speed / PLAYBACK_SPEED_DEFAULT;
+	int ready = (!HAS_STREAM(player, video) || video.spanMs >= target)
+			&& (!HAS_STREAM(player, audio) || audio.spanMs >= target);
+	int bounded = video.bytes + audio.bytes >= REBUFFER_MAX_BYTES
+			|| video.count + audio.count >= REBUFFER_MAX_PACKETS;
+	int64_t now = getTime();
+	if (ready || complete || eof || bounded || now - player->decode.packets.bufferingReportTime >= 1000) {
+		player->decode.packets.bufferingReportTime = now;
+		diagnosticsLog("player=%u network_buffering_progress target_media_ms=%" PRId64
+				" video_ms=%" PRId64 " audio_ms=%" PRId64 " bytes=%" PRId64
+				" packets=%d speed_milli=%d complete=%d eof=%d safety_limit=%d",
+				player->meta.diagnosticsId, target, video.spanMs, audio.spanMs,
+				video.bytes + audio.bytes, video.count + audio.count, speed, complete, eof, bounded);
+	}
+	if (ready || complete || eof || bounded) {
+		setNetworkBuffering(player, bridge, 0, complete ? "file_complete"
+				: eof ? "eof" : ready ? "three_seconds_ready" : "packet_safety_limit");
+	}
+}
 
 void playerDemuxRequestSeekWorkersStop(Player * player) {
 	// The caller holds packets.flowMutex. Once the current decode iteration observes
@@ -60,6 +169,7 @@ PacketHolder * playerDemuxCreatePacketHolder(int allocPacket) {
 	PacketHolder * packetHolder = malloc(sizeof(PacketHolder));
 	packetHolder->packet = allocPacket ? av_packet_alloc() : NULL;
 	packetHolder->type = allocPacket ? PACKET_HOLDER_MEDIA : PACKET_HOLDER_END_OF_STREAM;
+	packetHolder->generation = 0;
 	return packetHolder;
 }
 
@@ -85,7 +195,9 @@ void * playerDemuxRun(void * data) {
 			// the seek keeps the old generation and is discarded below.
 			uint64_t packetGeneration = __atomic_load_n(&player->decode.packets.generation,
 					__ATOMIC_ACQUIRE);
+			player->decode.packets.readingForPlayback = 1;
 			int success = av_read_frame(player->av.format, &packet) >= 0;
+			player->decode.packets.readingForPlayback = 0;
 			pthread_mutex_unlock(&player->decode.packets.readMutex);
 			endGeneration = packetGeneration;
 			if (!success) {
@@ -102,7 +214,7 @@ void * playerDemuxRun(void * data) {
 						packet.stream_index, packet.pts);
 				goto SKIP_FRAME;
 			}
-			while (!player->meta.interrupt &&
+			while (!player->meta.interrupt && !player->decode.packets.buffering &&
 					(!HAS_STREAM(player, video) || blockingQueueCount(&player->video.packetQueue) >= 10) &&
 					(!HAS_STREAM(player, audio) || blockingQueueCount(&player->audio.packetQueue) >= 20)) {
 				pthread_cond_wait(&player->decode.packets.flowCond, &player->decode.packets.flowMutex);
@@ -121,6 +233,7 @@ void * playerDemuxRun(void * data) {
 			int isVideo = packet.stream_index == player->av.videoStreamIndex;
 			if (isAudio || isVideo) {
 				PacketHolder * packetHolder = playerDemuxCreatePacketHolder(1);
+				packetHolder->generation = packetGeneration;
 				av_packet_ref(packetHolder->packet, &packet);
 				if (isAudio) {
 					blockingQueueAdd(&player->audio.packetQueue, packetHolder);
@@ -141,6 +254,9 @@ void * playerDemuxRun(void * data) {
 					LOG("enqueue video %" PRId64, packet.pts);
 				}
 			}
+			if (player->decode.packets.buffering) {
+				checkNetworkBuffering(player, bridge, isFileComplete(player), 0);
+			}
 			SKIP_FRAME:
 			av_packet_unref(&packet);
 			pthread_mutex_unlock(&player->decode.packets.flowMutex);
@@ -153,12 +269,15 @@ void * playerDemuxRun(void * data) {
 				__ATOMIC_ACQUIRE);
 		int staleEnd = endGeneration != currentGeneration;
 		if (!staleEnd) {
+			checkNetworkBuffering(player, bridge, 0, 1);
 			if (HAS_STREAM(player, audio)) {
 				blockingQueueAdd(&player->audio.packetQueue, playerDemuxCreatePacketHolder(0));
 				player->audio.finished = 0;
 			}
 			if (HAS_STREAM(player, video)) {
-				blockingQueueAdd(&player->video.packetQueue, playerDemuxCreatePacketHolder(0));
+				PacketHolder * end = playerDemuxCreatePacketHolder(0);
+				end->generation = currentGeneration;
+				blockingQueueAdd(&player->video.packetQueue, end);
 				player->video.finished = 0;
 			}
 		}
@@ -232,7 +351,19 @@ int playerDemuxRead(void * opaque, uint8_t * buf, int bufSize) {
 				}
 			}
 			LOG("read data wait");
-			pthread_cond_wait(&player->file.controlCond, &player->file.controlMutex);
+			// Recheck the speed-dependent target even when the connection stops sending
+			// bytes. The already queued media may suffice after a speed decrease.
+			if (player->decode.packets.readingForPlayback) {
+				Bridge * bridge = sparseArrayGet(&player->bridge.array, (int) pthread_self());
+				if (!player->decode.packets.buffering && packetReserveLow(player)) {
+					setNetworkBuffering(player, bridge, 1, "range_starved");
+				}
+				checkNetworkBuffering(player, bridge, player->file.total > 0
+						&& player->file.start == 0 && player->file.end >= player->file.total, 0);
+				condSleepUntilMs(&player->file.controlCond, &player->file.controlMutex, getTime() + 100);
+			} else {
+				pthread_cond_wait(&player->file.controlCond, &player->file.controlMutex);
+			}
 		}
 		if (waitedForRange) {
 			diagnosticsRangeWait(player, 0);

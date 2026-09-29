@@ -5,6 +5,16 @@ import java.util.List;
 import org.junit.Test;
 
 public class ContextLinksTest {
+	@Test public void plainTextAndEscapedMarkupHaveNoLinks() {
+		ContextLinks.Links links = ContextLinks.read("Text >>42 &lt;a href='#42'&gt;quote&lt;/a&gt;", () -> false);
+		assertTrue(links.hrefs().isEmpty()); assertFalse(links.incomplete());
+	}
+	@Test public void uppercaseMarkupStillUsesHtmlParser() {
+		assertEquals(List.of("#42"), ContextLinks.read("<A HREF='#42'>quote</A>", () -> false).hrefs());
+	}
+	@Test public void formattingWithoutAnchorsDoesNotCreateLinks() {
+		assertTrue(ContextLinks.read("<b>Text</b><br>&gt;&gt;42", () -> false).hrefs().isEmpty());
+	}
 	@Test public void destinationComesFromHrefNotDisplayedNumber() {
 		assertEquals(List.of("/b/res/200.html#100"), ContextLinks.read(
 				"<a href='/b/res/200.html#100'>&gt;&gt;999</a>", () -> false).hrefs());

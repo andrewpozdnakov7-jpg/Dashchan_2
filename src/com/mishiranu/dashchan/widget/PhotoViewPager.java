@@ -62,7 +62,7 @@ public class PhotoViewPager extends ViewGroup {
 			@Override
 			public boolean onSingleTapConfirmed(MotionEvent event) {
 				if (canDispatchVerticalTap()) {
-					photoViews.get(currentIndex % 3).dispatchDirectClick(event.getX(), event.getY());
+					photoViews.get(slot(currentIndex)).dispatchDirectClick(event.getX(), event.getY());
 				}
 				return true;
 			}
@@ -70,7 +70,7 @@ public class PhotoViewPager extends ViewGroup {
 			@Override
 			public boolean onDoubleTapEvent(MotionEvent event) {
 				if (event.getActionMasked() == MotionEvent.ACTION_UP && canDispatchVerticalTap()) {
-					photoViews.get(currentIndex % 3).dispatchDirectDoubleClick(event.getX(), event.getY());
+					photoViews.get(slot(currentIndex)).dispatchDirectDoubleClick(event.getX(), event.getY());
 				}
 				return true;
 			}
@@ -79,7 +79,7 @@ public class PhotoViewPager extends ViewGroup {
 			public void onLongPress(MotionEvent event) {
 				if (canDispatchVerticalTap()) {
 					longTapConfirmed = true;
-					photoViews.get(currentIndex % 3).dispatchDirectLongClick(event.getX(), event.getY());
+					photoViews.get(slot(currentIndex)).dispatchDirectLongClick(event.getX(), event.getY());
 				}
 			}
 		});
@@ -132,7 +132,7 @@ public class PhotoViewPager extends ViewGroup {
 		int current = (int) ((start + width / 2f) / (width + innerPadding));
 		int left = (current - 1) * (width + innerPadding);
 		for (int i = current - 1; i < current + 2; i++) {
-			getChildAt((i + 3) % 3).layout(left, 0, left + width, height);
+			getChildAt(slot(i)).layout(left, 0, left + width, height);
 			left += width + innerPadding;
 		}
 	}
@@ -191,7 +191,28 @@ public class PhotoViewPager extends ViewGroup {
 	}
 
 	public View getCurrentView() {
-		return getChildAt(currentIndex % 3);
+		return getChildAt(slot(currentIndex));
+	}
+
+	private int slotOffset;
+
+	private int slot(int index) { return Math.floorMod(index + slotOffset, 3); }
+
+	public View getPageView(int index) {
+		return index >= 0 && index < count ? getChildAt(slot(index)) : null;
+	}
+
+	/** Remap indices after insertion without detaching the current video surface. */
+	public void rebaseCurrentIndex(int count, int index) {
+		if (count <= 0 || index < 0 || index >= count) return;
+		cancelVerticalTapGesture();
+		scroller.abortAnimation();
+		queueScrollFinish = false;
+		slotOffset = Math.floorMod(slot(currentIndex) - index, 3);
+		this.count = count;
+		currentIndex = index;
+		previousIndex = index;
+		requestLayout();
 	}
 
 	private void updateCurrentScrollIndex(boolean manually) {
@@ -204,9 +225,9 @@ public class PhotoViewPager extends ViewGroup {
 		requestLayout();
 		notifySwiping(false);
 		if (previousIndex != currentIndex || manually) {
-			int centerIndex = currentIndex % 3;
-			int leftIndex = (currentIndex + 2) % 3;
-			int rightIndex = (currentIndex + 1) % 3;
+			int centerIndex = slot(currentIndex);
+			int leftIndex = slot(currentIndex - 1);
+			int rightIndex = slot(currentIndex + 1);
 			boolean hasLeft = currentIndex > 0;
 			boolean hasRight = currentIndex < count - 1;
 			View centerView = getChildAt(centerIndex);
@@ -236,7 +257,7 @@ public class PhotoViewPager extends ViewGroup {
 
 	private final Runnable longTapRunnable = () -> {
 		longTapConfirmed = true;
-		PhotoView photoView = photoViews.get(currentIndex % 3);
+		PhotoView photoView = photoViews.get(slot(currentIndex));
 		photoView.dispatchSimpleClick(true, startX, startY);
 	};
 
@@ -291,7 +312,7 @@ public class PhotoViewPager extends ViewGroup {
 		int action = event.getActionMasked();
 		// Finish a pending page selection before routing the first touch to its media type.
 		if (action == MotionEvent.ACTION_DOWN) updateCurrentScrollIndex(false);
-		PhotoView photoView = photoViews.get(currentIndex % 3);
+		PhotoView photoView = photoViews.get(slot(currentIndex));
 		boolean photoTouch = !verticalPagingMode || verticalPhotoGestures;
 		if (verticalPagingMode && !verticalPhotoGestures) dispatchVerticalTapEvent(event);
 		if (verticalPhotoGestures && event.getPointerCount() > 1) {

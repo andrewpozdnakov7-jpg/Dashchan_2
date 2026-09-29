@@ -17,8 +17,10 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
@@ -96,18 +98,30 @@ public final class OutboxStorage {
 					db.setTransactionSuccessful();
 				} finally { db.endTransaction(); }
 				database = db;
-				stage = "cleanup_sent_attachments";
-				// Finish cleanup if the previous process stopped after committing the acknowledgement.
-				try (Cursor cursor = db.query("outgoing", new String[] {"id"}, "state=?",
-						new String[] {OutboxState.SENT.name()}, null, null, null)) {
-					while (cursor.moveToNext()) deleteAttachments(cursor.getString(0));
-				}
+				cleanupUnusedAttachments(db);
 			} catch (RuntimeException e) {
 				logFailure(stage, e);
 				throw e;
 			} finally { if (database != db) db.close(); }
 		}
 		return database;
+	}
+
+	private void cleanupUnusedAttachments(SQLiteDatabase db) {
+		try {
+			Set<String> retained = new HashSet<>();
+			try (Cursor cursor = db.query("outgoing", new String[] {"id"}, "state<>?",
+					new String[] {OutboxState.SENT.name()}, null, null, null)) {
+				while (cursor.moveToNext()) retained.add(cursor.getString(0));
+			}
+			// Also recovers deletion interrupted AFTER the row was removed, including old versions.
+			// All enqueue/send/delete/cleanup work is serialized by executor.
+			OutboxAttachmentCleanup.cleanupUnused(root, retained,
+					error -> logFailure("cleanup_attachments", error));
+		} catch (IOException | RuntimeException e) {
+			// A failed DB snapshot must never be treated as an empty journal.
+			logFailure("cleanup_attachments", e);
+		}
 	}
 
 	public static DraftsStorage.PostDraft snapshot(DraftsStorage.PostDraft draft) {
@@ -119,6 +133,7 @@ public final class OutboxStorage {
 
 	public Future<Void> enqueue(String id, DraftsStorage.PostDraft draft, Map<String, File> attachments) {
 		return executor.submit(() -> {
+			if (!OutboxAttachmentCleanup.isEntryId(id)) throw new IOException("Invalid outgoing identity");
 			SQLiteDatabase db = database();
 			// Completed metadata can expire; never silently evict an unresolved outgoing message.
 			db.execSQL("DELETE FROM outgoing WHERE state='SENT' AND id NOT IN " +
@@ -213,6 +228,7 @@ public final class OutboxStorage {
 					throw new IllegalStateException("Outgoing entry missing");
 				}
 				deleteAttachments(id);
+				return null;
 			}).get();
 		} catch (Exception e) {
 			if (e instanceof InterruptedException) Thread.currentThread().interrupt();
@@ -234,6 +250,7 @@ public final class OutboxStorage {
 
 	public void list(Consumer<List<Entry>> callback, Consumer<Exception> failure) {
 		run(() -> {
+			cleanupUnusedAttachments(database());
 			ArrayList<Entry> result = new ArrayList<>();
 			try (Cursor cursor = database().query("outgoing", new String[] {"id", "chan", "board", "thread", "post", "state", "updated"},
 					null, null, null, null, "updated DESC")) {
@@ -274,6 +291,7 @@ public final class OutboxStorage {
 
 	public void delete(String id, Runnable callback, Consumer<Exception> failure) {
 		run(() -> {
+			if (!OutboxAttachmentCleanup.isEntryId(id)) throw new IOException("Invalid outgoing identity");
 			OutboxState state = state(id);
 			if (state != null && state.isActive()) throw new IOException("Outgoing entry is active");
 			database().delete("outgoing", "id=?", new String[] {id});
@@ -282,12 +300,8 @@ public final class OutboxStorage {
 		}, ignored -> callback.run(), failure);
 	}
 
-	private void deleteAttachments(String id) {
-		if (!id.matches("[0-9a-f-]{36}")) throw new IllegalArgumentException();
-		File directory = new File(root, id);
-		File[] files = directory.listFiles();
-		if (files != null) for (File file : files) if (file.isFile()) file.delete();
-		directory.delete();
+	private void deleteAttachments(String id) throws IOException {
+		OutboxAttachmentCleanup.delete(root, id);
 	}
 
 	private <T> void run(Callable<T> operation, Consumer<T> callback, Consumer<Exception> failure) {

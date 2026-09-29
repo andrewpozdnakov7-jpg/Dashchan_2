@@ -6,6 +6,7 @@
 int playerVideoHasPendingSurface(Player * player);
 void playerVideoApplyPendingSurface(Player * player, JNIEnv * env);
 void playerVideoReleaseSurface(Player * player);
+void playerVideoResetHardwareOutputLocked(Player * player);
 #ifdef DASHCHAN_HAS_MEDIACODEC
 void playerVideoDecodeMediaCodec(Player * player, JNIEnv * env, AVStream * stream);
 int playerVideoFallbackMediaCodecToSoftware(Player * player);

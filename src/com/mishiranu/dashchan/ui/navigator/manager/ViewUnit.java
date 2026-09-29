@@ -485,17 +485,6 @@ public class ViewUnit {
 		holder.resetAnimations();
 		holder.configure(postItem, configurationSet);
 		holder.selection = demandSet.selection;
-		if (demandSet.contextCaption != null && holder.contextCaption == null) {
-			holder.contextCaption = new TextView(holder.itemView.getContext());
-			int padding = (int) (10 * ResourceUtils.obtainDensity(holder.itemView));
-			holder.contextCaption.setPadding(padding, padding, padding, 0);
-			holder.contextCaption.setTypeface(ResourceUtils.TYPEFACE_MEDIUM);
-			holder.layout.addView(holder.contextCaption, 0);
-		}
-		if (holder.contextCaption != null) {
-			holder.contextCaption.setText(demandSet.contextCaption);
-			holder.contextCaption.setVisibility(demandSet.contextCaption != null ? View.VISIBLE : View.GONE);
-		}
 
 		PostNumber postNumber = postItem.getPostNumber();
 		boolean bumpLimitReached = false;
@@ -734,7 +723,7 @@ public class ViewUnit {
 				if (holders < size) {
 					int postBackgroundColor = getPostBackgroundColor(uiManager.getContext(), configurationSet);
 					float thumbnailsScale = Preferences.getThumbnailsScale();
-					float textScale = Preferences.getTextScale();
+					float textScale = Preferences.getMetadataTextScale();
 					for (int i = holders; i < size; i++) {
 						View view = LayoutInflater.from(context).inflate(R.layout.list_item_post_attachment, null);
 						AttachmentHolder attachmentHolder = new AttachmentHolder();
@@ -825,7 +814,7 @@ public class ViewUnit {
 				int anchorIndex = holder.head.indexOfChild(anchorView) + 1;
 				float density = ResourceUtils.obtainDensity(context);
 				int size = (int) (12f * density);
-				float textScale = Preferences.getTextScale();
+				float textScale = Preferences.getMetadataTextScale();
 				for (int i = 0; i < add; i++) {
 					ImageView imageView = new ImageView(context);
 					holder.head.addView(imageView, anchorIndex + i, new ViewGroup.LayoutParams(size, size));
@@ -1258,7 +1247,9 @@ public class ViewUnit {
 			thumbnailLongClickListener = uiManager.interaction().createThumbnailLongClickListener();
 
 			float density = ResourceUtils.obtainDensity(itemView);
-			float textScale = Preferences.getTextScale();
+			float textScale = Preferences.getMetadataTextScale();
+			ViewUtils.applyScaleSize(Preferences.getTextScale(), comment);
+			ViewUtils.applyScaleSize(Preferences.getSubjectTextScale(), subject);
 			int descriptionSpacingDp = 8;
 			thumbnail.setDrawTouching(true);
 			description.setTextColor(ThemeEngine.getTheme(description.getContext()).meta);
@@ -1267,7 +1258,6 @@ public class ViewUnit {
 			boolean descriptionToEnd;
 			if (threadViewType == ThreadViewType.CELL) {
 				thumbnail.setFitSquare(true);
-				ViewUtils.applyScaleSize(textScale, comment, subject);
 				stateImages = null;
 				descriptionToEnd = true;
 			} else {
@@ -1278,7 +1268,6 @@ public class ViewUnit {
 						threadViewType == ThreadViewType.CARD ? 0 : descriptionSpacingDp);
 				ViewGroup.MarginLayoutParams thumbnailLayoutParams =
 						(ViewGroup.MarginLayoutParams) thumbnail.getLayoutParams();
-				ViewUtils.applyScaleSize(textScale, comment, subject);
 				ViewUtils.applyScaleSize(textScale, stateImages);
 				if (ResourceUtils.isTablet(itemView.getResources().getConfiguration()) &&
 						threadViewType == ThreadViewType.CARD) {
@@ -1390,7 +1379,6 @@ public class ViewUnit {
 		public final TextView voteLike;
 		public final TextView voteDislike;
 		public final View textSelectionPadding;
-		public TextView contextCaption;
 		public final View textBarPadding;
 		public final View bottomBar;
 		public final TextView bottomBarReplies;
@@ -1464,9 +1452,11 @@ public class ViewUnit {
 			bottomBarReplies.setTypeface(ResourceUtils.TYPEFACE_MEDIUM);
 			bottomBarExpand.setTypeface(ResourceUtils.TYPEFACE_MEDIUM);
 			bottomBarOpenThread.setTypeface(ResourceUtils.TYPEFACE_MEDIUM);
-			float textScale = Preferences.getTextScale();
+			comment.setSubjectTextSize(Math.round(comment.getTextSize() * Preferences.getSubjectTextScale()) * (4f / 3f));
+			ViewUtils.applyScaleSize(Preferences.getTextScale(), comment);
+			float textScale = Preferences.getMetadataTextScale();
 			if (textScale != 1f) {
-				ViewUtils.applyScaleSize(textScale, number, name, index, date, comment, attachmentInfo,
+				ViewUtils.applyScaleSize(textScale, number, name, index, date, attachmentInfo,
 						voteLike, voteDislike, bottomBarReplies, bottomBarExpand, bottomBarOpenThread);
 				ViewUtils.applyScaleSize(textScale, stateImages);
 				head.setHorizontalSpacing((int) (head.getHorizontalSpacing() * textScale));
@@ -1705,9 +1695,11 @@ public class ViewUnit {
 			comment = itemView.findViewById(R.id.comment);
 			itemView.findViewById(R.id.head).setAlpha(ALPHA_HIDDEN_POST);
 
-			float textScale = Preferences.getTextScale();
-			ViewUtils.applyScaleSize(textScale, index, number, comment);
-			ViewUtils.applyScaleMarginLR(textScale, index, number, comment);
+			float textScale = Preferences.getMetadataTextScale();
+			ViewUtils.applyScaleSize(textScale, index, number);
+			ViewUtils.applyScaleMarginLR(textScale, index, number);
+			ViewUtils.applyScaleSize(Preferences.getTextScale(), comment);
+			ViewUtils.applyScaleMarginLR(Preferences.getTextScale(), comment);
 			index.setTypeface(ResourceUtils.TYPEFACE_MEDIUM);
 			if (thread) {
 				index.setVisibility(View.GONE);

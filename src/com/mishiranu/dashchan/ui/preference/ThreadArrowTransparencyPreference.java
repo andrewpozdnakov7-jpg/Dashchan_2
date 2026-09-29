@@ -27,9 +27,14 @@ public class ThreadArrowTransparencyPreference extends DialogPreference<Integer>
 	private static final int SLIDER_STEP = 10;
 
 	public ThreadArrowTransparencyPreference(Context context) {
-		super(context, Preferences.KEY_THREAD_QUICK_NAVIGATION_TRANSPARENCY,
+		this(context, Preferences.KEY_THREAD_QUICK_NAVIGATION_TRANSPARENCY,
 				Preferences.DEFAULT_THREAD_QUICK_NAVIGATION_TRANSPARENCY,
-				context.getString(R.string.thread_quick_navigation_transparency), p -> p.getValue() + "%");
+				R.string.thread_quick_navigation_transparency);
+	}
+
+	// Shared percentage editor: slider and exact numeric input, with rotation-safe state.
+	public ThreadArrowTransparencyPreference(Context context, String key, int defaultValue, int titleResId) {
+		super(context, key, defaultValue, context.getString(titleResId), p -> p.getValue() + "%");
 	}
 
 	@Override

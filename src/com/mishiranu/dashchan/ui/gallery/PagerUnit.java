@@ -563,6 +563,21 @@ public class PagerUnit implements PagerInstance.Callback {
 		viewPager.setCurrentIndex(Math.max(0, Math.min(position, galleryInstance.galleryItems.size() - 1)));
 	}
 
+	public void onGalleryItemsRefreshed(int position) {
+		// Retain the current media object and surface: no interrupt, recycle or load.
+		if (tikTokTransitionRunning || tikTokTransitionView != null) cancelTikTokTransitionImmediately();
+		viewPager.rebaseCurrentIndex(galleryInstance.galleryItems.size(), position);
+		pagerAdapter.previousIndex = position;
+		updateActive();
+		if (galleryMode || pagerInstance.currentHolder == null) return;
+		View left = viewPager.getPageView(position - 1);
+		View right = viewPager.getPageView(position + 1);
+		pagerInstance.leftHolder = left != null ? (PagerInstance.ViewHolder) left.getTag() : null;
+		pagerInstance.rightHolder = right != null ? (PagerInstance.ViewHolder) right.getTag() : null;
+		if (pagerInstance.leftHolder != null) pagerAdapter.applySideViewData(pagerInstance.leftHolder, position - 1, false);
+		if (pagerInstance.rightHolder != null) pagerAdapter.applySideViewData(pagerInstance.rightHolder, position + 1, false);
+	}
+
 	public void onApplyWindowInsets(InsetsLayout.Insets insets) {
 		videoUnit.onApplyWindowInsets(insets.left, insets.right, insets.bottom);
 		int padding = (int) (16f * ResourceUtils.obtainDensity(imageTikTokButton));

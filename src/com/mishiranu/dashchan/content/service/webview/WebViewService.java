@@ -45,8 +45,8 @@ public class WebViewService extends Service {
 		public final WebViewExtra extra;
 		public final IRequestCallback requestCallback;
 
-		public boolean ready;
-		public boolean finished;
+		public volatile boolean ready;
+		public volatile boolean finished;
 
 		public String recaptchaV2ApiKey;
 		public String recaptchaV2Result;
@@ -66,9 +66,10 @@ public class WebViewService extends Service {
 
 	private final LinkedList<CookieRequest> cookieRequests = new LinkedList<>();
 
-	private WebView webView;
-	private CookieRequest cookieRequest;
+	private volatile WebView webView;
+	private volatile CookieRequest cookieRequest;
 	private Thread captchaThread;
+	private volatile boolean destroyed;
 
 	private static boolean captureImageFileInit;
 	private static File captureImageFile;
@@ -82,7 +83,7 @@ public class WebViewService extends Service {
 	private static final int MESSAGE_DRAW_TO_FILE = 5;
 
 	private final Handler handler = new Handler(Looper.getMainLooper(), message -> {
-		if (webView == null) {
+		if (destroyed) {
 			return false;
 		}
 		switch (message.what) {
@@ -147,6 +148,25 @@ public class WebViewService extends Service {
 
 	private class ServiceClient extends WebViewClient {
 		@Override
+		public boolean onRenderProcessGone(WebView view, android.webkit.RenderProcessGoneDetail detail) {
+			boolean current = webView == view;
+			if (current) {
+				webView = null;
+				handler.removeCallbacksAndMessages(null);
+				synchronized (WebViewService.this) {
+					if (captchaThread != null) captchaThread.interrupt();
+					captchaThread = null;
+				}
+				completeFailedRequest(cookieRequest);
+				cookieRequest = null;
+			}
+			WebViewUtils.destroyAfterRendererGone(view, detail, "cookie_service");
+			// The failed request is NOT replayed. A new view is created only for
+			// subsequent requests, after this renderer's callbacks have unwound.
+			if (current && !destroyed) handler.sendEmptyMessage(MESSAGE_HANDLE_NEXT);
+			return true;
+		}
+		@Override
 		public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
 			return false;
 		}
@@ -159,6 +179,7 @@ public class WebViewService extends Service {
 
 		@Override
 		public void onPageFinished(WebView view, String url) {
+			if (view != webView || destroyed) return;
 			super.onPageFinished(view, url);
 
 			CookieRequest cookieRequest = WebViewService.this.cookieRequest;
@@ -191,6 +212,7 @@ public class WebViewService extends Service {
 
 		@Override
 		public void onReceivedSslError(WebView view, SslErrorHandler sslHandler, SslError error) {
+			if (view != webView || destroyed) { sslHandler.cancel(); return; }
 			CookieRequest cookieRequest = WebViewService.this.cookieRequest;
 			if (cookieRequest != null) {
 				if (cookieRequest.verifyCertificate) {
@@ -207,6 +229,7 @@ public class WebViewService extends Service {
 
 		@Override
 		public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+			if (view != webView || destroyed) return;
 			super.onReceivedError(view, request, error);
 
 			if (request == null || request.isForMainFrame()) {
@@ -217,6 +240,7 @@ public class WebViewService extends Service {
 		@SuppressWarnings("deprecation")
 		@Override
 		public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
+			if (view != webView || destroyed) return;
 			super.onReceivedError(view, errorCode, description, failingUrl);
 
 			handleReceivedError();
@@ -236,12 +260,14 @@ public class WebViewService extends Service {
 
 		@Override
 		public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+			if (view != webView || destroyed) return new WebResourceResponse("text/plain", "UTF-8", null);
 			return handleInterceptRequest(request.getUrl().toString());
 		}
 
 		@SuppressWarnings("deprecation")
 		@Override
 		public WebResourceResponse shouldInterceptRequest(WebView view, String url) {
+			if (view != webView || destroyed) return new WebResourceResponse("text/plain", "UTF-8", null);
 			return handleInterceptRequest(url);
 		}
 
@@ -275,21 +301,6 @@ public class WebViewService extends Service {
 		}
 	}
 
-	@SuppressWarnings("unused")
-	private final Object javascriptInterface = new Object() {
-		@JavascriptInterface
-		public void onRequestRecaptcha(String apiKey) {
-			CookieRequest cookieRequest = WebViewService.this.cookieRequest;
-			if (cookieRequest != null) {
-				if (apiKey != null) {
-					cookieRequest.recaptchaV2ApiKey = apiKey;
-				}
-				handler.removeMessages(MESSAGE_HANDLE_FINISH);
-				startCaptchaThread(cookieRequest);
-			}
-		}
-	};
-
 	private void startCaptchaThread(CookieRequest cookieRequest) {
 		synchronized (this) {
 			if (captchaThread != null) {
@@ -314,6 +325,7 @@ public class WebViewService extends Service {
 	}
 
 	private void handleNextCookieRequest() {
+		if (destroyed) return;
 		if (cookieRequest == null) {
 			synchronized (cookieRequests) {
 				while (!cookieRequests.isEmpty()) {
@@ -322,6 +334,21 @@ public class WebViewService extends Service {
 					if (!cookieRequest.ready) {
 						break;
 					}
+					cookieRequest = null;
+				}
+			}
+			if (webView == null) {
+				if (cookieRequest == null) return;
+				try {
+					createWebView();
+				} catch (RuntimeException e) {
+					android.util.Log.w("WebViewRecovery", "service_create_failed type=" + e.getClass().getSimpleName());
+					if (webView != null) webView.destroy();
+					webView = null;
+					completeFailedRequest(cookieRequest);
+					cookieRequest = null;
+					failQueuedRequests();
+					return;
 				}
 			}
 			handler.removeMessages(MESSAGE_DRAW_TO_FILE);
@@ -369,6 +396,7 @@ public class WebViewService extends Service {
 				}
 				try {
 					synchronized (cookieRequests) {
+						if (destroyed) return false;
 						cookieRequests.add(cookieRequest);
 					}
 					synchronized (cookieRequest) {
@@ -422,16 +450,35 @@ public class WebViewService extends Service {
 			}
 		}
 
+		createWebView();
+	}
+
+	@SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
+	private void createWebView() {
 		webView = new WebView(this);
+		WebView createdView = webView;
 		WebSettings settings = webView.getSettings();
 		WebViewUtils.configureCommonSettings(settings);
 		settings.setJavaScriptEnabled(true);
 		settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
-		webView.addJavascriptInterface(javascriptInterface, "jsi");
+		webView.addJavascriptInterface(new Object() {
+			@SuppressWarnings("unused")
+			@JavascriptInterface
+			public void onRequestRecaptcha(String apiKey) {
+				CookieRequest request = cookieRequest;
+				handler.post(() -> {
+					if (webView != createdView || destroyed || request == null || request != cookieRequest) return;
+					if (apiKey != null) request.recaptchaV2ApiKey = apiKey;
+					handler.removeMessages(MESSAGE_HANDLE_FINISH);
+					startCaptchaThread(request);
+				});
+			}
+		}, "jsi");
 		webView.setWebViewClient(new ServiceClient());
 		webView.setWebChromeClient(new WebChromeClient() {
 			@Override
 			public boolean onConsoleMessage(ConsoleMessage consoleMessage) {
+				if (webView != createdView || destroyed) return false;
 				String text = consoleMessage.message();
 				if (text != null && text.contains("SyntaxError")) {
 					handler.removeMessages(MESSAGE_HANDLE_FINISH);
@@ -458,8 +505,31 @@ public class WebViewService extends Service {
 	@Override
 	public void onDestroy() {
 		super.onDestroy();
-
-		webView.destroy();
+		synchronized (cookieRequests) { destroyed = true; }
+		handler.removeCallbacksAndMessages(null);
+		synchronized (this) {
+			if (captchaThread != null) captchaThread.interrupt();
+			captchaThread = null;
+		}
+		completeFailedRequest(cookieRequest);
+		cookieRequest = null;
+		failQueuedRequests();
+		if (webView != null) webView.destroy();
 		webView = null;
+	}
+
+	private static void completeFailedRequest(CookieRequest request) {
+		if (request != null) synchronized (request) {
+			request.finished = false;
+			request.ready = true;
+			request.notifyAll();
+		}
+	}
+
+	private void failQueuedRequests() {
+		synchronized (cookieRequests) {
+			for (CookieRequest request : cookieRequests) completeFailedRequest(request);
+			cookieRequests.clear();
+		}
 	}
 }

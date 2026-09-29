@@ -82,6 +82,10 @@ public final class SettingsSearchIndex {
 			@Override
 			ContentFragment createFragment() { return new VideoPreloadFragment(); }
 		},
+		DRAWER_ORDER(R.string.experimental_features, R.string.drawer_section_order) {
+			@Override
+			ContentFragment createFragment() { return new DrawerOrderFragment(); }
+		},
 		TOOLBAR_TITLE(R.string.experimental_features, R.string.toolbar_title_sizes) {
 			@Override
 			ContentFragment createFragment() { return new ToolbarTitleSettingsFragment(); }
@@ -105,6 +109,10 @@ public final class SettingsSearchIndex {
 		ACCESSIBILITY(R.string.accessibility) {
 			@Override
 			ContentFragment createFragment() { return new AccessibilityFragment(); }
+		},
+		POST_TEXT_SIZES(R.string.accessibility, R.string.post_text_sizes) {
+			@Override
+			ContentFragment createFragment() { return new PostTextSizesFragment(); }
 		};
 
 		private final int[] breadcrumbResIds;
@@ -303,6 +311,10 @@ public final class SettingsSearchIndex {
 		add(context, entries, Screen.FORUMS, R.string.combined_feeds,
 				R.string.combined_feeds__summary, Preferences.KEY_COMBINED_FEEDS_ENABLED);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.experimental_features);
+		add(context, entries, Screen.EXPERIMENTAL, R.string.drawer_section_order,
+				R.string.drawer_section_order_entry_summary, null);
+		add(context, entries, Screen.DRAWER_ORDER, R.string.drawer_custom_order,
+				R.string.drawer_section_order_summary, Preferences.KEY_DRAWER_CUSTOM_ORDER);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.show_original_post_title,
 				R.string.show_original_post_title__summary, Preferences.KEY_SHOW_ORIGINAL_POST_TITLE);
 		add(context, entries, Screen.INTERFACE, R.string.user_interface);
@@ -458,6 +470,8 @@ public final class SettingsSearchIndex {
 				Preferences.KEY_HIGHLIGHT_UNREAD);
 		add(context, entries, Screen.INTERFACE, R.string.highlight_my_posts, 0, Preferences.KEY_SHOW_MY_POSTS);
 		add(context, entries, Screen.POST_MARKS, R.string.post_marks_colors);
+		add(context, entries, Screen.INTERFACE, R.string.touch_feedback,
+				R.string.touch_feedback_intensity, Preferences.KEY_TOUCH_FEEDBACK);
 		add(context, entries, Screen.POPUP_APPEARANCE, R.string.popup_appearance,
 				R.string.popup_appearance__summary, null);
 		add(context, entries, Screen.POPUP_APPEARANCE, R.string.popup_color_style, 0,
@@ -603,7 +617,10 @@ public final class SettingsSearchIndex {
 		add(context, entries, Screen.ACCESSIBILITY, R.string.install_custom_font,
 				R.string.install_custom_font__summary, null);
 		add(context, entries, Screen.ACCESSIBILITY, R.string.delete_installed_font);
-		add(context, entries, Screen.ACCESSIBILITY, R.string.text_scale, 0, Preferences.KEY_TEXT_SCALE);
+		add(context, entries, Screen.ACCESSIBILITY, R.string.post_text_sizes, R.string.post_text_sizes_summary, null);
+		add(context, entries, Screen.POST_TEXT_SIZES, R.string.post_subject_text_size, 0, Preferences.KEY_SUBJECT_TEXT_SCALE);
+		add(context, entries, Screen.POST_TEXT_SIZES, R.string.post_body_text_size, 0, Preferences.KEY_TEXT_SCALE);
+		add(context, entries, Screen.POST_TEXT_SIZES, R.string.post_metadata_text_size, 0, Preferences.KEY_METADATA_TEXT_SCALE);
 		add(context, entries, Screen.ACCESSIBILITY, R.string.volume_buttons_text_scale,
 				R.string.volume_buttons_text_scale__summary, Preferences.KEY_VOLUME_BUTTONS_TEXT_SCALE);
 		add(context, entries, Screen.ACCESSIBILITY, R.string.video_right_hand_controls,

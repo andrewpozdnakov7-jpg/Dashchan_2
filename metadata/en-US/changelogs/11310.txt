@@ -1,0 +1,10 @@
+TikTok mode now supports photos. Hold its button to choose all attachments, videos only or images only.
+Photo preloading has separate settings; defaults are 3 images up to 3 MB each.
+Refresh the gallery of an open online thread by pulling down at the beginning or up at the end.
+Fixed reported PiP, rotation and gallery restoration issues. Improved buffering on slow connections and reworked frame handling at increased playback speeds.
+Touch feedback can be dimmed with adjustable intensity or disabled.
+Thread subjects, message bodies and metadata have separate text size settings.
+Experimental settings now allow rearranging sidebar sections.
+Simplified and optimized discussion context: up to 30 messages, swipe to dismiss, fewer labels and buttons.
+Fixed gallery positioning, returning to My Boards and quick navigation arrows, including local archives.
+Updated libraries and expanded diagnostics. Experimental features may be unstable.

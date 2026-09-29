@@ -54,6 +54,8 @@ public class GalleryInstance {
 
 		void modifyVerticalSwipeState(boolean ignoreIfGallery, float value);
 		void updateTitle();
+		boolean canRefreshGallery();
+		void refreshGallery();
 
 		void navigateGalleryOrFinish(boolean enableGalleryMode);
 		VideoPipActivity.GalleryRestoreData createPictureInPictureGalleryRestoreData();
