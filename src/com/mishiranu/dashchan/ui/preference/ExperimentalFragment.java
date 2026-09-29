@@ -16,6 +16,7 @@ import com.mishiranu.dashchan.content.translation.TranslationModel;
 import com.mishiranu.dashchan.content.translation.TranslationModelManager;
 import com.mishiranu.dashchan.media.VideoDiagnostics;
 import com.mishiranu.dashchan.ui.FragmentHandler;
+import com.mishiranu.dashchan.ui.posting.PostingFormDiagnostics;
 import com.mishiranu.dashchan.ui.preference.core.CheckPreference;
 import com.mishiranu.dashchan.ui.preference.core.Preference;
 import com.mishiranu.dashchan.ui.preference.core.PreferenceFragment;
@@ -46,6 +47,7 @@ public class ExperimentalFragment extends PreferenceFragment implements Translat
 			return;
 		}
 		removeAllPreferences();
+		addFormDiagnosticsPreferences();
 		addButton(R.string.toolbar_title_sizes, R.string.toolbar_title_sizes__summary)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 						.pushFragment(new ToolbarTitleSettingsFragment()));
@@ -320,6 +322,44 @@ public class ExperimentalFragment extends PreferenceFragment implements Translat
 
 	private static String formatSize(long bytes) {
 		return String.format(Locale.getDefault(), "%.1f MB", bytes / 1024f / 1024f);
+	}
+
+	private void addFormDiagnosticsPreferences() {
+		boolean recording = PostingFormDiagnostics.isRecording();
+		boolean saving = PostingFormDiagnostics.isSaving();
+		boolean retry = PostingFormDiagnostics.hasPendingExport();
+		Preference<Void> capture = addButton(saving ? R.string.video_diagnostics_saving
+				: recording || retry ? R.string.form_diagnostics_stop : R.string.form_diagnostics_start,
+				R.string.form_diagnostics_summary);
+		capture.setEnabled(!saving);
+		capture.setOnClickListener(p -> {
+			if (PostingFormDiagnostics.isRecording() || PostingFormDiagnostics.hasPendingExport()) {
+				PostingFormDiagnostics.stopAndSave(requireContext(), file -> {
+					if (!isAdded() || getView() == null) return;
+					refreshPreferences();
+					if (file != null) {
+						new MessageDialog.Builder(requireContext()).setTitle(R.string.form_diagnostics_saved)
+								.setMessage(R.string.form_diagnostics_saved_summary)
+								.setPositiveButton(R.string.share, (dialog, which) ->
+										NavigationUtils.shareFile(requireContext(), file, file.getName()))
+								.setNegativeButton(android.R.string.ok, null).show();
+					} else ClickableToast.show(R.string.video_diagnostics_save_failed);
+				});
+				refreshPreferences();
+			} else {
+				new MessageDialog.Builder(requireContext()).setTitle(R.string.form_diagnostics_start)
+						.setMessage(R.string.form_diagnostics_notice)
+						.setPositiveButton(R.string.video_diagnostics_begin, (dialog, which) -> {
+							PostingFormDiagnostics.start(requireContext());
+							refreshPreferences();
+						}).setNegativeButton(android.R.string.cancel, null).show();
+			}
+		});
+		File report = PostingFormDiagnostics.getLastFile(requireContext());
+		if (!recording && !saving && !retry && report != null) {
+			addButton(R.string.form_diagnostics_share, 0).setOnClickListener(p ->
+					NavigationUtils.shareFile(requireContext(), report, report.getName()));
+		}
 	}
 
 	private void addVideoDiagnosticsPreferences() {

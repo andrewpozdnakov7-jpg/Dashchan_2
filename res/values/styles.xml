@@ -284,4 +284,10 @@
 
 	</style>
 
+	<style name="Animation.Gallery.Restore" parent="@style/Animation.Gallery.Partial">
+
+		<item name="android:windowEnterAnimation">@null</item>
+
+	</style>
+
 </resources>

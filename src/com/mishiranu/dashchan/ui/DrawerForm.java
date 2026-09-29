@@ -104,6 +104,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 
 	private final ArrayList<ListItem> chans = new ArrayList<>();
 	private final ArrayList<ListItem> pages = new ArrayList<>();
+	private final ArrayList<ListItem> pageNavigation = new ArrayList<>();
 	private final ArrayList<Page> collapsedPages = new ArrayList<>();
 	private final ArrayList<ListItem> favorites = new ArrayList<>();
 	private final ArrayList<ListItem> displayedFavorites = new ArrayList<>();
@@ -416,11 +417,6 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 			if (chanName != null && Preferences.isRememberHistory()) {
 				menu.add(new ListItem(ListItem.Type.MENU, MENU_ITEM_HISTORY, typedArray.getResourceId(2, 0),
 						context.getString(R.string.history)));
-			}
-			if (trackMyPostsEnabled) {
-				int unreadCount = MyPostsStorage.getInstance().getUnreadCount();
-				menu.add(new ListItem(ListItem.Type.MENU, MENU_ITEM_MY_POSTS, R.drawable.ic_reply,
-						context.getString(R.string.replies), unreadCount));
 			}
 			menu.add(new ListItem(ListItem.Type.MENU, MENU_ITEM_LOCAL_ARCHIVES, typedArray.getResourceId(3, 0),
 					context.getString(R.string.local_archives)));
@@ -1036,6 +1032,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	}
 
 	private void updateItems(boolean pages, boolean favorites, ArrayList<AdapterItem> previousItems) {
+		updatePageNavigation();
 		if (pages && pagesListMode != Preferences.PagesListMode.HIDE_PAGES) {
 			updateListPages();
 		}
@@ -1066,6 +1063,25 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		dispatchAdapterDiff(previousItems);
 	}
 
+	private void updatePageNavigation() {
+		pageNavigation.clear();
+		// Keep the existing forum scope: Reddit has its own drawer menu.
+		if (CHAN_REDDIT.equals(chanName)) return;
+		if (combinedFeedsEnabled && pagesListMode != Preferences.PagesListMode.HIDE_PAGES) {
+			pageNavigation.add(new ListItem(ListItem.Type.SECTION, SECTION_ACTION_COMBINED_FEEDS_SETTINGS,
+					ResourceUtils.getResourceId(context, R.attr.iconDrawerMenuPreferences, 0),
+					context.getString(R.string.combined_feeds)));
+			for (CombinedFeedStorage.Feed feed : CombinedFeedStorage.getInstance().getFeeds()) {
+				pageNavigation.add(new ListItem(ListItem.Type.COMBINED_FEED, feed.getPrimaryChanName(),
+						feed.id, null, feed.title));
+			}
+		}
+		if (trackMyPostsEnabled) {
+			pageNavigation.add(new ListItem(ListItem.Type.MENU, MENU_ITEM_MY_POSTS, R.drawable.ic_reply,
+					context.getString(R.string.replies), MyPostsStorage.getInstance().getUnreadCount()));
+		}
+	}
+
 	private void updateListPages() {
 		ArrayList<ListItem> newPages = new ArrayList<>();
 		ArrayList<Page> newCollapsedPages = new ArrayList<>();
@@ -1086,21 +1102,6 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 			return;
 		}
 		boolean mergeChans = this.mergeChans;
-		ArrayList<CombinedFeedStorage.Feed> combinedFeeds = new ArrayList<>();
-		if (combinedFeedsEnabled) {
-			for (CombinedFeedStorage.Feed feed : CombinedFeedStorage.getInstance().getFeeds()) {
-				combinedFeeds.add(feed);
-			}
-		}
-		if (combinedFeedsEnabled) {
-			newPages.add(new ListItem(ListItem.Type.SECTION, SECTION_ACTION_COMBINED_FEEDS_SETTINGS,
-					ResourceUtils.getResourceId(context, R.attr.iconDrawerMenuPreferences, 0),
-					context.getString(R.string.combined_feeds)));
-			for (CombinedFeedStorage.Feed feed : combinedFeeds) {
-				newPages.add(new ListItem(ListItem.Type.COMBINED_FEED, feed.getPrimaryChanName(),
-						feed.id, null, feed.title));
-			}
-		}
 		Collection<Page> allPages = callback.obtainDrawerPages();
 		ArrayList<Page> pages = new ArrayList<>();
 		for (Page page : allPages) {
@@ -1698,7 +1699,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	}
 
 	@SuppressWarnings("unchecked")
-	private final List<ListItem>[] categoriesArray = new List[2];
+	private final List<ListItem>[] categoriesArray = new List[3];
 
 	private static class AdapterItem {
 		public final ListItem listItem;
@@ -1832,18 +1833,21 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	private int prepareCategoriesArray() {
 		switch (categoriesOrder) {
 			case PAGES_FIRST: {
-				categoriesArray[0] = pages;
-				categoriesArray[1] = displayedFavorites;
-				return 2;
+				categoriesArray[0] = pageNavigation;
+				categoriesArray[1] = pages;
+				categoriesArray[2] = displayedFavorites;
+				return 3;
 			}
 			case FAVORITES_FIRST: {
 				categoriesArray[0] = displayedFavorites;
-				categoriesArray[1] = pages;
-				return 2;
+				categoriesArray[1] = pageNavigation;
+				categoriesArray[2] = pages;
+				return 3;
 			}
 			case HIDE_PAGES: {
-				categoriesArray[0] = displayedFavorites;
-				return 1;
+				categoriesArray[0] = pageNavigation;
+				categoriesArray[1] = displayedFavorites;
+				return 2;
 			}
 			default: {
 				return 0;

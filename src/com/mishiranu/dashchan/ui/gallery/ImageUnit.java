@@ -12,8 +12,6 @@ import androidx.fragment.app.FragmentManager;
 import chan.content.Chan;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.CacheManager;
-import com.mishiranu.dashchan.content.NetworkObserver;
-import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.async.ExecutorTask;
 import com.mishiranu.dashchan.content.async.ReadFileTask;
 import com.mishiranu.dashchan.content.model.ErrorItem;
@@ -44,7 +42,8 @@ public class ImageUnit {
 	}
 
 	public void interrupt(boolean force) {
-		if (force && readFileTask != null) {
+		if (readFileTask != null && (force || readBitmapCallback == null
+				|| !readBitmapCallback.isHolder(instance.currentHolder))) {
 			readFileTask.cancel();
 			readFileTask = null;
 			readBitmapCallback = null;
@@ -79,6 +78,12 @@ public class ImageUnit {
 		if (attachReadBitmapCallback(holder)) {
 			return;
 		}
+		// A previously opened image must not compete with this image's preload queue.
+		if (readFileTask != null) {
+			readFileTask.cancel();
+			readFileTask = null;
+			readBitmapCallback = null;
+		}
 		if (holder.mediaSummary.updateSize(file.length())) {
 			instance.galleryInstance.callback.updateTitle();
 		}
@@ -90,19 +95,6 @@ public class ImageUnit {
 		DecodeBitmapTask decodeBitmapTask = new DecodeBitmapTask(file, fileHolder);
 		decodeBitmapTask.execute(EXECUTOR);
 		holder.decodeBitmapTask = decodeBitmapTask;
-		PagerInstance.ViewHolder nextHolder = instance.scrollingLeft ? instance.leftHolder : instance.rightHolder;
-		if (nextHolder != null && Preferences.getLoadNearestImage()
-				.isNetworkAvailable(NetworkObserver.getInstance())) {
-			GalleryItem nextGalleryItem = nextHolder.galleryItem;
-			Chan chan = Chan.get(instance.galleryInstance.chanName);
-			if (nextGalleryItem.isImage(chan)) {
-				Uri nextUri = nextGalleryItem.getFileUri(chan);
-				File nextCachedFile = CacheManager.getInstance().getMediaFile(nextUri, true);
-				if (nextCachedFile != null && !nextCachedFile.exists()) {
-					loadImage(nextUri, nextCachedFile, nextHolder);
-				}
-			}
-		}
 	}
 
 	private void loadImage(Uri uri, File cachedFile, PagerInstance.ViewHolder holder) {
@@ -345,6 +337,7 @@ public class ImageUnit {
 					instance.galleryInstance.callback.updateTitle();
 				}
 				holder.loadState = PagerInstance.LoadState.COMPLETE;
+				instance.mediaPreloader.start(holder.galleryItem);
 				instance.galleryInstance.callback.invalidateOptionsMenu();
 			} else {
 				instance.callback.showError(holder, instance.galleryInstance.context.getString(errorMessageId));

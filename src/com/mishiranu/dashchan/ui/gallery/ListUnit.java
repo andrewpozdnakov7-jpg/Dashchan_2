@@ -43,6 +43,7 @@ import com.mishiranu.dashchan.util.ViewUtils;
 import com.mishiranu.dashchan.widget.AttachmentView;
 import com.mishiranu.dashchan.widget.EdgeEffectHandler;
 import com.mishiranu.dashchan.widget.InsetsLayout;
+import com.mishiranu.dashchan.widget.ListPosition;
 import com.mishiranu.dashchan.widget.PaddedRecyclerView;
 import java.util.ArrayList;
 import java.util.List;
@@ -58,6 +59,10 @@ public class ListUnit implements ActionMode.Callback {
 	private final SparseIntArray selected = new SparseIntArray();
 
 	private ActionMode selectionMode;
+	private boolean diagnosticLayoutPending;
+	private int diagnosticTarget = RecyclerView.NO_POSITION;
+	private ListPosition pendingListPosition;
+	private int gridMetricsWidth;
 
 	public ListUnit(GalleryInstance instance) {
 		this.instance = instance;
@@ -72,6 +77,29 @@ public class ListUnit implements ActionMode.Callback {
 		recyclerView.addItemDecoration(new SpacingItemDecoration(spacing));
 		GridAdapter adapter = new GridAdapter(callback, instance.chanName, instance.galleryItems);
 		recyclerView.setAdapter(adapter);
+		recyclerView.addOnScrollListener(new RecyclerView.OnScrollListener() {
+			@Override
+			public void onScrollStateChanged(@NonNull RecyclerView view, int newState) {
+				if (newState == RecyclerView.SCROLL_STATE_DRAGGING) {
+					// A user's scroll takes priority over a previous navigation request.
+					pendingListPosition = null;
+				}
+				logPosition("scroll_state=" + newState);
+			}
+		});
+		recyclerView.getViewTreeObserver().addOnPreDrawListener(() -> {
+			if (pendingListPosition != null && recyclerView.isShown() &&
+					gridMetricsWidth == getGridWidth() && !recyclerView.isLayoutRequested() &&
+					!recyclerView.hasPendingAdapterUpdates()) {
+				logPosition("scroll_settled index=" + pendingListPosition.position);
+				pendingListPosition = null;
+			}
+			if (diagnosticLayoutPending && recyclerView.isShown()) {
+				diagnosticLayoutPending = false;
+				logPosition("grid_pre_draw");
+			}
+			return true;
+		});
 		recyclerView.addOnLayoutChangeListener((view, left, top, right, bottom,
 				oldLeft, oldTop, oldRight, oldBottom) -> {
 			if (right - left != oldRight - oldLeft) {
@@ -126,14 +154,47 @@ public class ListUnit implements ActionMode.Callback {
 	}
 
 	public void scrollListToPosition(int position, boolean checkVisibility) {
+		diagnosticTarget = position;
+		diagnosticLayoutPending = true;
+		logPosition("scroll_request checkVisibility=" + checkVisibility);
+		if (position < 0 || position >= instance.galleryItems.size()) {
+			logPosition("scroll_rejected_invalid_index");
+			return;
+		}
+		recyclerView.stopScroll();
+		updateGridMetrics(recyclerView.getResources().getConfiguration());
 		GridLayoutManager layoutManager = (GridLayoutManager) recyclerView.getLayoutManager();
-		if (checkVisibility) {
+		if (checkVisibility && !recyclerView.isLayoutRequested() &&
+				!recyclerView.hasPendingAdapterUpdates() && gridMetricsWidth == getGridWidth()) {
 			if (position >= layoutManager.findFirstCompletelyVisibleItemPosition() &&
 					position <= layoutManager.findLastCompletelyVisibleItemPosition()) {
+				logPosition("scroll_skipped_already_visible");
+				pendingListPosition = null;
 				return;
 			}
 		}
-		layoutManager.scrollToPositionWithOffset(position, 0);
+		// Keep the explicit target through the initial one-column layout and the later
+		// measured grid layout. GridLayoutManager's implicit anchor can change between them.
+		pendingListPosition = new ListPosition(position, 0);
+		pendingListPosition.apply(recyclerView);
+		logPosition("scroll_submitted");
+	}
+
+	void logPosition(String event) {
+		GridLayoutManager manager = (GridLayoutManager) recyclerView.getLayoutManager();
+		int first = manager.findFirstVisibleItemPosition();
+		View firstView = first >= 0 ? manager.findViewByPosition(first) : null;
+		instance.logNavigation(event + " target=" + diagnosticTarget + " count=" + getAdapter().getItemCount()
+				+ " first=" + first + " last=" + manager.findLastVisibleItemPosition()
+				+ " fullFirst=" + manager.findFirstCompletelyVisibleItemPosition()
+				+ " fullLast=" + manager.findLastCompletelyVisibleItemPosition()
+				+ " firstTop=" + (firstView != null ? manager.getDecoratedTop(firstView) : "none")
+				+ " paddingTop=" + recyclerView.getPaddingTop() + " columns=" + manager.getSpanCount()
+				+ " size=" + recyclerView.getWidth() + "x" + recyclerView.getHeight()
+				+ " children=" + recyclerView.getChildCount() + " shown=" + recyclerView.isShown()
+				+ " layoutRequested=" + recyclerView.isLayoutRequested()
+				+ " pendingUpdates=" + recyclerView.hasPendingAdapterUpdates()
+				+ " computingLayout=" + recyclerView.isComputingLayout());
 	}
 
 	public boolean areItemsSelectable() {
@@ -141,6 +202,7 @@ public class ListUnit implements ActionMode.Callback {
 	}
 
 	public void onGalleryItemsChanged() {
+		pendingListPosition = null;
 		if (selectionMode != null) {
 			selectionMode.finish();
 		} else {
@@ -177,6 +239,8 @@ public class ListUnit implements ActionMode.Callback {
 	private static final float GRID_SCALE = 1.1f;
 
 	public void switchMode(boolean galleryMode, int duration) {
+		diagnosticLayoutPending = true;
+		logPosition("grid_switch visible=" + galleryMode + " duration=" + duration);
 		if (galleryMode) {
 			recyclerView.setVisibility(View.VISIBLE);
 			getAdapter().activate();
@@ -200,6 +264,7 @@ public class ListUnit implements ActionMode.Callback {
 	}
 
 	private void onItemClick(View view, int position) {
+		instance.logNavigation("grid_click index=" + position + " selection=" + (selectionMode != null));
 		if (selectionMode != null) {
 			int index = selected.indexOfKey(position);
 			if (index >= 0) {
@@ -340,10 +405,14 @@ public class ListUnit implements ActionMode.Callback {
 		recyclerView.post(updateGridMetricsRunnable);
 	}
 
+	private int getGridWidth() {
+		return recyclerView.getWidth() - recyclerView.getPaddingLeft() - recyclerView.getPaddingRight();
+	}
+
 	private void updateGridMetrics(Configuration configuration) {
 		// A restored gallery can coexist with a narrow PiP window. WindowManager metrics
 		// need not describe this list, so keep the initial single column until it is laid out.
-		int width = recyclerView.getWidth() - recyclerView.getPaddingLeft() - recyclerView.getPaddingRight();
+		int width = getGridWidth();
 		if (width <= 0) {
 			return;
 		}
@@ -357,11 +426,28 @@ public class ListUnit implements ActionMode.Callback {
 		int widthDp = (int) (width / ResourceUtils.obtainDensity(recyclerView));
 		int size = ResourceUtils.isTablet(configuration) ? 160 : 100;
 		int spanCount = Math.max(1, (widthDp - GRID_SPACING_DP) / (size + GRID_SPACING_DP));
+		gridMetricsWidth = width;
 		GridLayoutManager layoutManager = (GridLayoutManager) recyclerView.getLayoutManager();
 		VideoDiagnostics.recordUi("gallery_grid widthPx=" + width + " widthDp=" + widthDp
 				+ " columns=" + spanCount + " previousColumns=" + layoutManager.getSpanCount());
 		if (layoutManager.getSpanCount() != spanCount) {
+			ListPosition anchor = pendingListPosition;
+			if (anchor == null) {
+				anchor = ListPosition.obtain(recyclerView, null);
+				if (anchor != null) {
+					// Old pixel offsets may exceed the height of a row in the new grid.
+					// Keep the current first visible item, not an obsolete navigation target.
+					anchor = new ListPosition(anchor.position, 0);
+				}
+			}
+			diagnosticLayoutPending = true;
+			logPosition("grid_columns_change next=" + spanCount);
 			layoutManager.setSpanCount(spanCount);
+			if (anchor != null && anchor.position >= 0 && anchor.position < instance.galleryItems.size()) {
+				pendingListPosition = anchor;
+				anchor.apply(recyclerView);
+				logPosition("grid_anchor_reapplied index=" + anchor.position + " offset=" + anchor.offset);
+			}
 		}
 	}
 

@@ -306,11 +306,20 @@ public class CombinedThreadsPage extends ListPage implements ThreadsAdapter.Call
 		uiManager.observable().register(this);
 		CombinedFeedStorage.getInstance().getObservable().register(this);
 
-		// Opening a combined feed always starts at its first row, not a saved reading position.
-		takeListPosition();
+		// A fresh feed starts at the top; returning from a thread restores its reading position.
+		ListPosition listPosition = takeListPosition();
 		if (!retainableExtra.cachedPostItems.isEmpty()) {
 			adapter.setItems(Collections.singleton(retainableExtra.cachedPostItems), false);
-			new ListPosition(0, 0).apply(recyclerView);
+			if (listPosition != null && listPosition.position >= 0 && adapter.getItemCount() > 0) {
+				keepStartPosition = false;
+				pendingAnchorPosition = new ListPosition(
+						Math.min(listPosition.position, adapter.getItemCount() - 1), listPosition.offset);
+				PostItem anchor = adapter.getThread(pendingAnchorPosition.position);
+				pendingAnchorKey = anchor != null ? makeThreadKey(anchor) : null;
+				pendingAnchorPosition.apply(recyclerView);
+			} else {
+				new ListPosition(0, 0).apply(recyclerView);
+			}
 			if (retainableExtra.dialogsState != null) {
 				uiManager.dialog().restoreState(adapter.getConfigurationSet(), retainableExtra.dialogsState);
 				retainableExtra.dialogsState.dropState();
@@ -555,13 +564,16 @@ public class CombinedThreadsPage extends ListPage implements ThreadsAdapter.Call
 
 	private void captureScrollAnchor() {
 		PaddedRecyclerView recyclerView = getRecyclerView();
+		// Before the restored/updated list is laid out, canScrollVertically may still report
+		// the top and child positions may describe the old snapshot. Keep the known anchor.
+		if (!keepStartPosition && pendingAnchorPosition != null &&
+				(recyclerView.hasPendingAdapterUpdates() || recyclerView.isLayoutRequested() ||
+						recyclerView.getChildCount() == 0)) return;
 		if (keepStartPosition || !recyclerView.canScrollVertically(-1)) {
 			pendingAnchorKey = null;
 			pendingAnchorPosition = new ListPosition(0, 0);
 			return;
 		}
-		// Several sources may finish before RecyclerView lays out the previous snapshot.
-		if (recyclerView.hasPendingAdapterUpdates() && pendingAnchorPosition != null) return;
 		pendingAnchorPosition = ListPosition.obtain(recyclerView,
 				position -> position < getAdapter().getItemCount() && getAdapter().getThread(position) != null);
 		pendingAnchorKey = pendingAnchorPosition != null
@@ -571,14 +583,15 @@ public class CombinedThreadsPage extends ListPage implements ThreadsAdapter.Call
 	private void restoreScrollAnchor() {
 		if (pendingAnchorPosition == null) return;
 		if (pendingAnchorKey == null) {
-			new ListPosition(0, 0).apply(getRecyclerView());
+			pendingAnchorPosition.apply(getRecyclerView());
 			return;
 		}
 		ThreadsAdapter adapter = getAdapter();
 		for (int i = 0; i < adapter.getItemCount(); i++) {
 			PostItem postItem = adapter.getThread(i);
 			if (postItem != null && makeThreadKey(postItem).equals(pendingAnchorKey)) {
-				new ListPosition(i, pendingAnchorPosition.offset).apply(getRecyclerView());
+				pendingAnchorPosition = new ListPosition(i, pendingAnchorPosition.offset);
+				pendingAnchorPosition.apply(getRecyclerView());
 				return;
 			}
 		}

@@ -51,6 +51,7 @@ public class PagerInstance {
 
 	public final GalleryInstance galleryInstance;
 	public final Callback callback;
+	final MediaPreloader mediaPreloader;
 
 	public boolean scrollingLeft;
 
@@ -61,6 +62,7 @@ public class PagerInstance {
 	public PagerInstance(GalleryInstance galleryInstance, Callback callback) {
 		this.galleryInstance = galleryInstance;
 		this.callback = callback;
+		mediaPreloader = new MediaPreloader(galleryInstance);
 	}
 
 	public static class ViewHolder {
