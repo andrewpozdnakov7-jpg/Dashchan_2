@@ -52,7 +52,7 @@ int clampPlaybackSpeed(int speed) {
 }
 
 int getPlaybackSpeed(Player * player) {
-	int speed = player->sync.playbackSpeed;
+	int speed = __atomic_load_n(&player->sync.playbackSpeed, __ATOMIC_ACQUIRE);
 	return speed > 0 ? speed : PLAYBACK_SPEED_DEFAULT;
 }
 

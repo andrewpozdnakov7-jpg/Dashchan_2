@@ -9,6 +9,8 @@ import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.RecyclerView;
 import chan.content.ChanLocator;
 import com.mishiranu.dashchan.content.Preferences;
+import com.mishiranu.dashchan.content.context.ContextGraph;
+import com.mishiranu.dashchan.content.context.ContextSource;
 import com.mishiranu.dashchan.content.model.AttachmentItem;
 import com.mishiranu.dashchan.content.model.GalleryItem;
 import com.mishiranu.dashchan.content.model.PostItem;
@@ -116,6 +118,9 @@ public class UiManager {
 
 	public interface PostsProvider extends Iterable<PostItem> {
 		PostItem findPostItem(PostNumber postNumber);
+		default ContextSource.Seed getContextSeed(ContextGraph.Key target) { return null; }
+		default ContextSource.Snapshot getContextSnapshot() { return null; }
+		default void setContextSnapshot(ContextSource.Snapshot snapshot) {}
 	}
 
 	public interface PostStateProvider {
@@ -165,7 +170,6 @@ public class UiManager {
 	public enum Selection {DISABLED, NOT_SELECTED, SELECTED, THREADSHOT}
 
 	public static class DemandSet {
-		public CharSequence contextCaption;
 		public boolean lastInList = false;
 		public Selection selection = Selection.DISABLED;
 		public boolean showOpenThreadButton = false;
@@ -193,7 +197,6 @@ public class UiManager {
 		public String translationKey;
 		public boolean contextCacheOnly;
 		public java.util.function.Consumer<PostItem> contextSelect;
-		public java.util.function.Consumer<PostItem> contextExpand;
 		// Only the full thread page supplies its toolbar title. Do not copy this into previews.
 		public Supplier<String> openedThreadTitle;
 
@@ -233,7 +236,6 @@ public class UiManager {
 		ConfigurationSet copyDisplayStateFrom(ConfigurationSet source) {
 			contextCacheOnly = source.contextCacheOnly;
 			contextSelect = source.contextSelect;
-			contextExpand = source.contextExpand;
 			showTranslatedComments = source.showTranslatedComments;
 			translationKey = source.translationKey;
 			return this;

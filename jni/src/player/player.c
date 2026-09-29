@@ -79,6 +79,8 @@ Bridge * playerObtainBridge(Player * player, JNIEnv * env) {
 		bridge->env = env;
 		bridge->methodOnSeek = (*env)->GetMethodID(env, class, "onSeek", "(J)V");
 		bridge->methodOnMessage = (*env)->GetMethodID(env, class, "onMessage", "(I)V");
+		bridge->methodOnNetworkBuffering = (*env)->GetMethodID(env, class,
+				"onNetworkBuffering", "(JZ)V");
 		bridge->methodOnDurationChanged = (*env)->GetMethodID(env, class,
 				"onDurationChanged", "(J)V");
 		bridge->methodOnSurfaceApplied = (*env)->GetMethodID(env, class,
@@ -114,7 +116,7 @@ void playerCloseAndFreeVideoCodecContext(Player * player, AVCodecContext ** cont
 	if (!context || !*context) {
 		return;
 	}
-	(void) player;
+	playerVideoResetHardwareOutputLocked(player);
 	playerCloseAndFreeCodecContext(context);
 }
 
@@ -548,12 +550,12 @@ void setPlaybackSpeed(jlong pointer, jint speed) {
 	Player * player = POINTER_CAST(pointer);
 	speed = clampPlaybackSpeed(speed);
 	int previousSpeed = getPlaybackSpeed(player);
-	if (player->sync.playbackSpeed != speed) {
+	if (getPlaybackSpeed(player) != speed) {
 		pthread_mutex_lock(&player->play.finishMutex);
 		pthread_mutex_lock(&player->audio.sleepBufferMutex);
 		pthread_mutex_lock(&player->video.sleepDrawMutex);
 		int64_t position = calculatePosition(player, 1);
-		player->sync.playbackSpeed = speed;
+		__atomic_store_n(&player->sync.playbackSpeed, speed, __ATOMIC_RELEASE);
 		player->sync.audioPosition = position;
 		player->sync.pausedPosition = position;
 		updateAudioPositionSurrogate(player, position, 1);
@@ -615,6 +617,7 @@ void playerApplyPlaying(Player * player, int playing) {
 			pthread_cond_broadcast(&player->audio.bufferCond);
 			pthread_mutex_unlock(&player->audio.sleepBufferMutex);
 		}
+		condBroadcastLocked(&player->video.sleepCond, &player->video.sleepDrawMutex);
 	}
 }
 

@@ -218,6 +218,16 @@ public abstract class PreferenceFragment extends ContentFragment {
 		recyclerView.getAdapter().notifyItemInserted(index);
 	}
 
+	protected Preference<?> getPreferenceAt(int position) {
+		return position >= 0 && position < preferences.size() ? preferences.get(position) : null;
+	}
+
+	/** Move an existing row without recreating it while ItemTouchHelper owns its view. */
+	protected void movePreferenceAt(int from, int to) {
+		preferences.add(to, preferences.remove(from));
+		recyclerView.getAdapter().notifyItemMoved(from, to);
+	}
+
 	public <T> void addDialogPreference(Preference<T> preference) {
 		addPreference(preference, true);
 		preference.setOnClickListener(p -> new PreferenceDialog(p.key).show(getChildFragmentManager(),

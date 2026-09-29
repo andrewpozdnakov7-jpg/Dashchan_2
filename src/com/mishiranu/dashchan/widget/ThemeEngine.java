@@ -56,6 +56,7 @@ import java.util.List;
 import java.util.Map;
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.xmlpull.v1.XmlPullParser;
 
 public class ThemeEngine {
 	private static final ThemeEngine INSTANCE = new ThemeEngine();
@@ -567,6 +568,15 @@ public class ThemeEngine {
 			}
 			return super.onCreateView(name, attrs);
 		}
+
+		@Override
+		public View inflate(XmlPullParser parser, ViewGroup root, boolean attachToRoot) {
+			View result = super.inflate(parser, root, attachToRoot);
+			// Also cover fully qualified custom views and children created by constructors.
+			// This is an inflation-time pass, not a per-frame or scrolling observer.
+			TouchFeedback.applyTree(result);
+			return result;
+		}
 	}
 
 	public static void applyToolbarStyle(Toolbar toolbar) {
@@ -576,7 +586,13 @@ public class ThemeEngine {
 			((ThemeLayoutInflater) inflater).toolbar = true;
 		}
 		applyStyle(toolbar);
+		// Toolbar creates navigation/action buttons programmatically, outside the inflater.
+		toolbar.removeOnLayoutChangeListener(TOUCH_FEEDBACK_LAYOUT_LISTENER);
+		toolbar.addOnLayoutChangeListener(TOUCH_FEEDBACK_LAYOUT_LISTENER);
 	}
+
+	private static final View.OnLayoutChangeListener TOUCH_FEEDBACK_LAYOUT_LISTENER =
+			(view, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> TouchFeedback.applyTree(view);
 
 	private static ThemeContext obtainThemeContext(Context context) {
 		while (true) {
@@ -712,6 +728,7 @@ public class ThemeEngine {
 	}
 
 	public static void applyStyle(View view) {
+		TouchFeedback.apply(view);
 		// Stateful tints are buggy on Android 5.0, so some changes are applied to 5.1+ only
 		// ThemeLayoutInflater sends every inflated view through this method. Programmatically
 		// created text widgets use the same entry point so font application is deterministic.

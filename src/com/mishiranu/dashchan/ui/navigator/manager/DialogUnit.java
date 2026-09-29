@@ -279,7 +279,8 @@ public class DialogUnit {
 		public boolean isScrolledToTop(View view) {
 			DialogHolder<?> holder = (DialogHolder<?>) view.getTag();
 			if (holder.recyclerView.getVisibility() == View.VISIBLE) {
-				return holder.recyclerView.computeVerticalScrollOffset() == 0;
+				// Post heights vary widely; scrollbar estimates are not reliable gesture boundaries.
+				return holder.recyclerView.isScrolledToTop();
 			}
 			return true;
 		}
@@ -287,9 +288,7 @@ public class DialogUnit {
 		public boolean isScrolledToBottom(View view) {
 			DialogHolder<?> holder = (DialogHolder<?>) view.getTag();
 			if (holder.recyclerView.getVisibility() == View.VISIBLE) {
-				return holder.recyclerView.computeVerticalScrollOffset() +
-						holder.recyclerView.computeVerticalScrollExtent() >=
-						holder.recyclerView.computeVerticalScrollRange();
+				return holder.recyclerView.isScrolledToBottom();
 			}
 			return true;
 		}
@@ -299,11 +298,11 @@ public class DialogUnit {
 		public final DialogPostsAdapter<T> adapter;
 		public final DialogProvider<T> dialogProvider;
 
-		public final RecyclerView recyclerView;
+		public final PaddedRecyclerView recyclerView;
 		public final View progress;
 
 		public DialogHolder(DialogPostsAdapter<T> adapter, DialogProvider<T> dialogProvider,
-				RecyclerView recyclerView, View progress) {
+				PaddedRecyclerView recyclerView, View progress) {
 			this.adapter = adapter;
 			this.dialogProvider = dialogProvider;
 			this.recyclerView = recyclerView;

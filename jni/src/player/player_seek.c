@@ -4,6 +4,7 @@
 #include "player_diagnostics.h"
 #include "player_timing.h"
 #include "player_video_software.h"
+#include "player_video_mediacodec.h"
 
 #include <libavformat/avformat.h>
 
@@ -315,6 +316,7 @@ void playerSeekSetPosition(JNIEnv * env, Player * player, int64_t position) {
 	diagnosticsLogSeekLock(player, "prepare", "packets.flow", "waiting");
 	pthread_mutex_lock(&player->decode.packets.flowMutex);
 	diagnosticsLogSeekLock(player, "prepare", "packets.flow", "acquired");
+	playerDemuxResetBuffering(player, bridge);
 	playerVideoSetPausedSeekPending(player, 0);
 	uint64_t packetGeneration = __atomic_add_fetch(&player->decode.packets.generation, 1,
 			__ATOMIC_ACQ_REL);
@@ -378,6 +380,7 @@ void playerSeekSetPosition(JNIEnv * env, Player * player, int64_t position) {
 	if (HAS_STREAM(player, video)) {
 		diagnosticsLog("player=%u seek_phase=video_flush_started hardware=%d",
 				player->meta.diagnosticsId, player->video.hardwareDecoderActive);
+		playerVideoResetHardwareOutputLocked(player);
 		if (!player->video.hardwareDecoderActive) {
 			playerVideoSoftwareRestoreSeekFastLocked(player, GET_CONTEXT(player, video),
 					"seek_prepare", -1);
@@ -545,6 +548,8 @@ void playerSeekSetPosition(JNIEnv * env, Player * player, int64_t position) {
 	player->sync.lastDrawTimes[1] = 0;
 	if (primedVideoPacket) {
 		PacketHolder * packetHolder = playerDemuxCreatePacketHolder(0);
+		packetHolder->type = PACKET_HOLDER_MEDIA;
+		packetHolder->generation = __atomic_load_n(&player->decode.packets.generation, __ATOMIC_ACQUIRE);
 		packetHolder->packet = primedVideoPacket;
 		primedVideoPacket = NULL;
 		blockingQueueAdd(&player->video.packetQueue, packetHolder);

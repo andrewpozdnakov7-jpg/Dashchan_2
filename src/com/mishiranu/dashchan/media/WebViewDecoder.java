@@ -37,6 +37,11 @@ public class WebViewDecoder extends WebViewClient {
 	private volatile Bitmap bitmap;
 
 	private WebView webView;
+	private boolean finished;
+	private final Runnable timeout = () -> {
+		android.util.Log.w("WebViewRecovery", "decoder_timeout");
+		countDownAndDestroy(webView);
+	};
 
 	private WebViewDecoder(FileHolder fileHolder, BitmapFactory.Options options) throws IOException {
 		this.fileHolder = fileHolder;
@@ -48,6 +53,7 @@ public class WebViewDecoder extends WebViewClient {
 		try {
 			latch.await();
 		} catch (InterruptedException e) {
+			HANDLER.post(() -> countDownAndDestroy(webView));
 			Thread.currentThread().interrupt();
 			throw new InterruptedIOException();
 		}
@@ -86,6 +92,7 @@ public class WebViewDecoder extends WebViewClient {
 
 	@Override
 	public void onPageFinished(WebView view, String url) {
+		if (finished || view != webView) return;
 		super.onPageFinished(view, url);
 		pageFinished = true;
 		notifyExtract(view);
@@ -99,14 +106,15 @@ public class WebViewDecoder extends WebViewClient {
 	};
 
 	private void notifyExtract(WebView view) {
-		HANDLER.removeMessages(MESSAGE_MEASURE_PICTURE);
-		HANDLER.sendMessageDelayed(HANDLER.obtainMessage(MESSAGE_MEASURE_PICTURE, new Object[] {this, view}), 1000);
+		if (finished || view != webView) return;
+		HANDLER.removeMessages(MESSAGE_MEASURE_PICTURE, this);
+		HANDLER.sendMessageDelayed(HANDLER.obtainMessage(MESSAGE_MEASURE_PICTURE, this), 1000);
 	}
 
 	private boolean measured = false;
 
 	private void measurePicture(WebView view) {
-		if (!measured) {
+		if (!finished && view != null && !measured) {
 			measured = true;
 			webView = view;
 			view.loadUrl("javascript:calculateSize();");
@@ -114,11 +122,30 @@ public class WebViewDecoder extends WebViewClient {
 	}
 
 	private void countDownAndDestroy(WebView view) {
-		latch.countDown();
-		view.destroy();
+		if (finished) return;
+		finished = true;
+		webView = null;
+		HANDLER.removeCallbacks(timeout);
+		HANDLER.removeMessages(MESSAGE_MEASURE_PICTURE, this);
+		try {
+			if (view != null) view.destroy();
+		} finally {
+			latch.countDown();
+		}
+	}
+
+	@Override
+	public boolean onRenderProcessGone(WebView view, android.webkit.RenderProcessGoneDetail detail) {
+		if (view == webView) {
+			webView = null;
+			countDownAndDestroy(null);
+		}
+		WebViewUtils.destroyAfterRendererGone(view, detail, "image_decoder");
+		return true;
 	}
 
 	private void checkPictureSize(int width, int height) {
+		if (finished || webView == null) return;
 		if (width > 0 && height > 0) {
 			if (webView.getWidth() <= 0 || webView.getHeight() <= 0) {
 				measured = false;
@@ -141,7 +168,6 @@ public class WebViewDecoder extends WebViewClient {
 		} else {
 			countDownAndDestroy(webView);
 		}
-		webView = null;
 	}
 
 	private static class Callback implements Handler.Callback {
@@ -152,6 +178,7 @@ public class WebViewDecoder extends WebViewClient {
 			switch (msg.what) {
 				case MESSAGE_INIT_WEB_VIEW: {
 					WebViewDecoder decoder = (WebViewDecoder) msg.obj;
+					if (decoder.finished) return true;
 					int width = decoder.fileHolder.getImageWidth();
 					int height = decoder.fileHolder.getImageHeight();
 					int rotation = decoder.fileHolder.getImageRotation();
@@ -159,6 +186,8 @@ public class WebViewDecoder extends WebViewClient {
 					width /= decoder.sampleSize;
 					height /= decoder.sampleSize;
 					WebView webView = new WebView(MainApplication.getInstance());
+					decoder.webView = webView;
+					HANDLER.postDelayed(decoder.timeout, 20000);
 					WebSettings settings = webView.getSettings();
 					WebViewUtils.configureCommonSettings(settings);
 					settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
@@ -179,10 +208,8 @@ public class WebViewDecoder extends WebViewClient {
 					return true;
 				}
 				case MESSAGE_MEASURE_PICTURE: {
-					Object[] data = (Object[]) msg.obj;
-					WebViewDecoder decoder = (WebViewDecoder) data[0];
-					WebView webView = (WebView) data[1];
-					decoder.measurePicture(webView);
+					WebViewDecoder decoder = (WebViewDecoder) msg.obj;
+					decoder.measurePicture(decoder.webView);
 					return true;
 				}
 				case MESSAGE_CHECK_PICTURE_SIZE: {

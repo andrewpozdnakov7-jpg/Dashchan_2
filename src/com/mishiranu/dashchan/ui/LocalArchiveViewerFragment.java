@@ -36,6 +36,7 @@ import com.mishiranu.dashchan.widget.ClickableToast;
 import com.mishiranu.dashchan.widget.DividerItemDecoration;
 import com.mishiranu.dashchan.widget.PaddedRecyclerView;
 import com.mishiranu.dashchan.widget.ThemeEngine;
+import com.mishiranu.dashchan.widget.ThreadQuickNavigation;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -60,7 +61,9 @@ public class LocalArchiveViewerFragment extends ContentFragment implements Posts
 	private static final int VIEW_ADAPTIVE = 1;
 	private static final int VIEW_NATIVE = 2;
 
-	private WebView webView;
+	private ArchiveWebView webView;
+	private ThreadQuickNavigation quickNavigation;
+	private boolean redditArchive;
 	private PaddedRecyclerView recyclerView;
 	private PostsAdapter postsAdapter;
 	private LocalArchiveManager.Item archiveItem;
@@ -82,13 +85,22 @@ public class LocalArchiveViewerFragment extends ContentFragment implements Posts
 	@Override
 	public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
 		FrameLayout root = new FrameLayout(container.getContext());
-		webView = new WebView(container.getContext().getApplicationContext());
+		webView = new ArchiveWebView(container.getContext().getApplicationContext());
 		recyclerView = new PaddedRecyclerView(container.getContext());
 		root.addView(webView, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
 				ViewGroup.LayoutParams.MATCH_PARENT));
 		root.addView(recyclerView, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
 				ViewGroup.LayoutParams.MATCH_PARENT));
 		recyclerView.setVisibility(View.GONE);
+		quickNavigation = new ThreadQuickNavigation(root, () -> !redditArchive && rawHtml != null
+				&& (viewMode == VIEW_NATIVE ? recyclerView != null && recyclerView.isShown()
+						&& postsAdapter != null && postsAdapter.getItemCount() > 0
+						: webView != null && webView.isShown() && webView.getContentHeight() > 0), bottom -> {
+			if (viewMode == VIEW_NATIVE && recyclerView != null) ThreadQuickNavigation.scroll(recyclerView, bottom);
+			else if (webView != null) webView.jump(bottom);
+		});
+		root.addView(quickNavigation, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+				ViewGroup.LayoutParams.MATCH_PARENT));
 		return root;
 	}
 
@@ -199,11 +211,13 @@ public class LocalArchiveViewerFragment extends ContentFragment implements Posts
 			String adaptiveHtml = null;
 			int preferredViewMode = VIEW_ADAPTIVE;
 			NativeArchive nativeArchive = null;
+			boolean redditArchive = false;
 			if (found != null) {
 				try {
 					sourceHtml = new String(LocalArchiveManager.readHtml(found), StandardCharsets.UTF_8);
 					String htmlText = sourceHtml.toLowerCase(Locale.ROOT);
 					JSONObject manifest = LocalArchiveManager.readManifest(found);
+					redditArchive = manifest != null && DrawerForm.CHAN_REDDIT.equals(manifest.optString("chan"));
 					boolean slooopArchive = (manifest != null && LocalArchiveManager.MANIFEST_SCHEMA.equals(
 							manifest.optString("schema"))) || htmlText.contains("name=\"slooop-local-archive\"");
 					String preferredView = manifest != null ? manifest.optString("view") : null;
@@ -229,12 +243,15 @@ public class LocalArchiveViewerFragment extends ContentFragment implements Posts
 			String finalAdaptiveHtml = adaptiveHtml;
 			int finalPreferredViewMode = preferredViewMode;
 			NativeArchive finalNativeArchive = nativeArchive;
+			boolean finalRedditArchive = redditArchive || nativeArchive != null
+					&& DrawerForm.CHAN_REDDIT.equals(nativeArchive.chanName);
 			ConcurrentUtils.HANDLER.post(() -> {
 				if (loadGeneration != generation || webView == null || !isAdded()) {
 					return;
 				}
 				if (finalFound != null && finalSourceHtml != null) {
 					archiveItem = finalFound;
+					this.redditArchive = finalRedditArchive;
 					rawHtml = finalSourceHtml;
 					this.adaptiveHtml = finalAdaptiveHtml;
 					viewMode = restoredMode != null ? restoredMode : finalPreferredViewMode;
@@ -276,8 +293,11 @@ public class LocalArchiveViewerFragment extends ContentFragment implements Posts
 			return;
 		}
 		boolean nativeView = viewMode == VIEW_NATIVE && postsAdapter != null;
+		webView.cancelJump();
+		recyclerView.stopScroll();
 		webView.setVisibility(nativeView ? View.GONE : View.VISIBLE);
 		recyclerView.setVisibility(nativeView ? View.VISIBLE : View.GONE);
+		if (quickNavigation != null) quickNavigation.setContentVisible(true);
 		if (nativeView) {
 			return;
 		}
@@ -297,6 +317,30 @@ public class LocalArchiveViewerFragment extends ContentFragment implements Posts
 			this.chanName = chanName;
 			this.postItems = postItems;
 		}
+	}
+
+	/** Pixel-range scrolling works at every HTML zoom level, without enabling JavaScript. */
+	private static class ArchiveWebView extends WebView {
+		private android.animation.ValueAnimator jumpAnimator;
+		ArchiveWebView(android.content.Context context) { super(context); }
+		void cancelJump() {
+			if (jumpAnimator != null) { jumpAnimator.cancel(); jumpAnimator = null; }
+		}
+		void jump(boolean bottom) {
+			cancelJump();
+			int end = bottom ? Math.max(0, computeVerticalScrollRange() - computeVerticalScrollExtent()) : 0;
+			jumpAnimator = android.animation.ValueAnimator.ofInt(getScrollY(), end);
+			jumpAnimator.setDuration(300);
+			jumpAnimator.setInterpolator(new android.view.animation.DecelerateInterpolator());
+			jumpAnimator.addUpdateListener(animation -> scrollTo(getScrollX(), (Integer) animation.getAnimatedValue()));
+			jumpAnimator.start();
+		}
+		@Override public boolean onTouchEvent(android.view.MotionEvent event) {
+			if (event.getActionMasked() == android.view.MotionEvent.ACTION_DOWN) cancelJump();
+			return super.onTouchEvent(event);
+		}
+		@Override public void destroy() { cancelJump(); super.destroy(); }
+		@Override protected void onDetachedFromWindow() { cancelJump(); super.onDetachedFromWindow(); }
 	}
 
 	private static class ArchivePostSource {
@@ -650,6 +694,8 @@ public class LocalArchiveViewerFragment extends ContentFragment implements Posts
 		rawHtml = null;
 		adaptiveHtml = null;
 		viewModeInitialized = false;
+		quickNavigation = null;
+		redditArchive = false;
 		super.onDestroyView();
 	}
 
@@ -657,6 +703,7 @@ public class LocalArchiveViewerFragment extends ContentFragment implements Posts
 	public void onPause() {
 		super.onPause();
 		if (webView != null) {
+			webView.cancelJump();
 			webView.onPause();
 		}
 	}
@@ -664,6 +711,7 @@ public class LocalArchiveViewerFragment extends ContentFragment implements Posts
 	@Override
 	public void onResume() {
 		super.onResume();
+		if (quickNavigation != null) quickNavigation.refreshPreferences();
 		if (webView != null) {
 			webView.onResume();
 		}
@@ -684,6 +732,27 @@ public class LocalArchiveViewerFragment extends ContentFragment implements Posts
 	}
 
 	private class ArchiveWebViewClient extends WebViewClient {
+		@Override public void onPageFinished(WebView view, String url) {
+			if (webView == view && quickNavigation != null) quickNavigation.setContentVisible(true);
+		}
+		@Override
+		public boolean onRenderProcessGone(WebView view, android.webkit.RenderProcessGoneDetail detail) {
+			boolean current = webView == view;
+			ViewGroup parent = view.getParent() instanceof ViewGroup ? (ViewGroup) view.getParent() : null;
+			if (current) {
+				if (quickNavigation != null) quickNavigation.setContentVisible(false);
+				webView.cancelJump(); webView = null; loadGeneration++;
+			}
+			WebViewUtils.destroyAfterRendererGone(view, detail, "local_archive");
+			if (current && parent != null) {
+				if (recyclerView != null) recyclerView.setVisibility(View.GONE);
+				com.mishiranu.dashchan.widget.ViewFactory.ErrorHolder error =
+						com.mishiranu.dashchan.widget.ViewFactory.createErrorLayout(parent);
+				error.text.setText(R.string.webview_renderer_gone);
+				parent.addView(error.layout);
+			}
+			return true;
+		}
 		@Override
 		public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
 			Uri uri = request.getUrl();

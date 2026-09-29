@@ -278,6 +278,8 @@ public class VideoPlayer {
 
 	private boolean lastSeeking = false;
 	private volatile boolean lastBuffering = false;
+	// Distinct from seek buffering and from the user's play/pause choice.
+	private final NetworkBufferingState networkBuffering = new NetworkBufferingState();
 
 	public VideoPlayer(Listener listener, boolean seekAnyFrame) {
 		this(listener, seekAnyFrame, true);
@@ -291,6 +293,9 @@ public class VideoPlayer {
 
 	public void setListener(Listener listener) {
 		this.listener = listener;
+		handler.post(() -> {
+			if (this.listener == listener) notifyBusyState();
+		});
 	}
 
 	public static Bitmap createThumbnail(File file) throws IOException, InterruptedException {
@@ -900,7 +905,7 @@ public class VideoPlayer {
 				setPosition(surfaceApplied.position);
 			}
 			if (playing) {
-				holder.setPlaying(sessionData.pointer, true);
+				holder.setPlaying(sessionData.pointer, networkBuffering.shouldPlay(playing));
 			}
 		}
 	}
@@ -978,12 +983,13 @@ public class VideoPlayer {
 				SeekToPosition seekToPosition = this.seekToPosition;
 				cancelSetPositionLocked(false);
 				this.playing = playing;
-				holder.setPlaying(sessionData.pointer, playing);
+				holder.setPlaying(sessionData.pointer, networkBuffering.shouldPlay(playing));
 				if (seekToPosition != null) {
 					// Reissue a seek cancelled by the playback-state transition. When pausing,
 					// the native player decodes exactly one preview frame without resuming audio.
 					setPosition(seekToPosition.position);
 				}
+				handler.post(this::notifyBusyState);
 			}
 		}
 	}
@@ -1156,17 +1162,42 @@ public class VideoPlayer {
 		if (bufferingChange && lastSeeking) {
 			return;
 		}
-		Listener listener = this.listener;
+		notifyBusyState();
+	}
+
+	private void notifyBusyState() {
+		Listener listener;
+		boolean busy;
+		synchronized (this) {
+			listener = this.listener;
+			busy = lastSeeking || lastBuffering || networkBuffering.shouldShowProgress(playing);
+		}
 		if (listener != null && !consumed) {
-			listener.onBusyStateChange(this, lastSeeking || lastBuffering);
+			listener.onBusyStateChange(this, busy);
 		}
 	}
 
 	private enum Message {PLAYBACK_COMPLETE, SIZE_CHANGED, START_SEEKING, END_SEEKING, START_BUFFERING, END_BUFFERING,
-		REPORT_STALLED_SEEK, SURFACE_APPLIED, REQUEST_RANGE, DURATION_CHANGED}
+		REPORT_STALLED_SEEK, SURFACE_APPLIED, REQUEST_RANGE, DURATION_CHANGED, NETWORK_BUFFERING}
 
 	private final Handler handler = new Handler(Looper.getMainLooper(), msg -> {
 		switch (Message.values()[msg.what]) {
+			case NETWORK_BUFFERING: {
+				long serial = (long) msg.obj;
+				synchronized (this) {
+					boolean buffering = msg.arg1 != 0;
+					if (consumed || !networkBuffering.apply(serial, buffering)) return true;
+					VideoDiagnostics.recordUi("network_buffering state=" + buffering
+							+ " serial=" + serial + " user_playing=" + playing
+							+ " speed_milli=" + playbackSpeed + " target_viewing_ms=3000");
+					if (isInitialized()) {
+						// Buffering must neither overwrite user intent nor cancel/reissue a seek.
+						holder.setPlaying(sessionData.pointer, networkBuffering.shouldPlay(playing));
+					}
+				}
+				notifyBusyState();
+				return true;
+			}
 			case PLAYBACK_COMPLETE: {
 				onComplete();
 				return true;
@@ -1353,6 +1384,14 @@ public class VideoPlayer {
 			VideoPlayer player = this.player.get();
 			if (player != null) {
 				player.handler.obtainMessage(Message.DURATION_CHANGED.ordinal(), duration).sendToTarget();
+			}
+		}
+
+		public void onNetworkBuffering(long serial, boolean buffering) {
+			VideoPlayer player = this.player.get();
+			if (player != null) {
+				player.handler.obtainMessage(Message.NETWORK_BUFFERING.ordinal(),
+						buffering ? 1 : 0, 0, Long.valueOf(serial)).sendToTarget();
 			}
 		}
 

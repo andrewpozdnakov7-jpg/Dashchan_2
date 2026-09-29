@@ -519,6 +519,21 @@ public class RecaptchaReader {
 
 		private final WebViewClient client = new WebViewClient() {
 			@Override
+			public boolean onRenderProcessGone(WebView view, android.webkit.RenderProcessGoneDetail detail) {
+				boolean current = webView == view;
+				if (current) webView = null;
+				WebViewUtils.destroyAfterRendererGone(view, detail, "captcha");
+				if (current) {
+					loaded = false;
+					cancel = false;
+					response = null;
+					HttpException failure = new HttpException(ErrorItem.Type.DOWNLOAD, false, false);
+					if (callback != null) callback.onError(failure);
+					else exception = failure;
+				}
+				return true;
+			}
+			@Override
 			public void onScaleChanged(WebView view, float oldScale, float newScale) {
 				if (webView != null) {
 					webView.notifyClientScaleChanged(newScale);

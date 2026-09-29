@@ -1,5 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+	<string name="webview_renderer_gone">The web page stopped working. Please open it again.</string>
+	<string name="gallery_restore_unavailable">Could not restore the gallery from local data. Open it again from the thread or archive.</string>
+	<string name="gallery_refresh">Refresh gallery</string>
+	<string name="gallery_refresh_result">New media files: %1$d · posts: %2$d</string>
+	<string name="gallery_refresh_failed">Could not refresh the gallery. Please try again.</string>
+	<string name="gallery_refresh_unavailable">Refresh is available in the gallery of an open online thread.</string>
+	<string name="touch_feedback">Touch highlight</string>
+	<string name="touch_feedback_normal">Normal</string>
+	<string name="touch_feedback_dimmed">Dimmed</string>
+	<string name="touch_feedback_off">Off</string>
+	<string name="touch_feedback_intensity" formatted="false">Highlight intensity (% of normal)</string>
 
 	<string name="__colon_format">%1$s: %2$s</string>
 	<string name="__enumeration_format">%1$s, %2$s</string>
@@ -852,7 +863,7 @@
 	<string name="test_string">Test string</string>
 	<string name="text_scale">Text scale</string>
 	<string name="volume_buttons_text_scale">Change text size with volume buttons</string>
-	<string name="volume_buttons_text_scale__summary">When media is not playing, use the volume buttons to adjust text scale</string>
+	<string name="volume_buttons_text_scale__summary">When media is not playing, adjust message text size without changing titles or post information</string>
 	<string name="video_right_hand_controls">Right-hand mode</string>
 	<string name="video_right_hand_controls__summary">Mirrors the post reply swipe and video player button layout, and moves the volume gesture area to the left for users who hold the phone in their right hand</string>
 	<string name="large_text_layout_warning" formatted="false">At scales above 300%, some interface elements may be displayed incorrectly.</string>
@@ -1367,10 +1378,9 @@
 	<string name="context_before">Earlier quotes</string>
 	<string name="context_replies">Replies</string>
 	<string name="context_local">Based on available local data; some posts and links may be missing.</string>
-	<string name="context_updates">The thread changed. Refresh the local context to update its contents.</string>
+	<string name="context_updates">The thread changed. Reopen the context to update its contents.</string>
 	<string name="context_cache_cleared">The local cache was cleared. Refresh to read any remaining saved posts.</string>
-	<string name="context_loading">Reading saved discussion…</string>
-	<string name="context_read_error">Could not read a consistent local snapshot. Available posts remain; you can retry.</string>
+	<string name="context_read_error">Could not read the saved thread. Try reopening the context.</string>
 	<string name="context_actions">Context actions</string>
 	<string name="context_stop">Stop reading</string>
 	<string name="context_local_scan">Find replies in saved thread</string>
@@ -1415,4 +1425,18 @@
 	<string name="form_diagnostics_saved">Form diagnostics saved</string>
 	<string name="form_diagnostics_saved_summary">Share the report with the developer. It contains layout and keyboard events, not the message text.</string>
 	<string name="form_diagnostics_share">Share form diagnostics</string>
+	<string name="drawer_section_order">Sidebar section order</string>
+	<string name="drawer_section_order_entry_summary">Arrange sidebar sections and navigation buttons</string>
+	<string name="drawer_custom_order">Custom section order</string>
+	<string name="drawer_section_order_summary">Drag sections by their handles, or tap to choose a position. The order applies to all forums. Sections are only shown where available; moving a section does not enable it. Turning this off restores the standard order without erasing your choices.</string>
+	<string name="post_text_sizes">Text sizes</string>
+	<string name="post_text_sizes_summary">Separate sizes for thread titles, messages and post information</string>
+	<string name="post_subject_text_size">Thread title size</string>
+	<string name="post_body_text_size">Message text size</string>
+	<string name="post_metadata_text_size">Post information size</string>
+	<string name="post_text_size_preview">Preview</string>
+	<string name="post_text_size_sample_subject">An example thread title</string>
+	<string name="post_text_size_sample_body">Message text. Change its size independently of the title and post information.</string>
+	<string name="post_text_size_sample_metadata">Anonymous · #12345 · 12:30 · PNG 640×480</string>
+	<string name="post_text_scale_range" formatted="false">Enter a value from 30 to 500%</string>
 </resources>

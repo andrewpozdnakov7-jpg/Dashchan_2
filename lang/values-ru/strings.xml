@@ -1,5 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+	<string name="webview_renderer_gone">Веб-страница перестала работать. Откройте её заново.</string>
+	<string name="gallery_restore_unavailable">Не удалось восстановить галерею из локальных данных. Откройте её заново из треда или архива.</string>
+	<string name="gallery_refresh">Обновить галерею</string>
+	<string name="gallery_refresh_result">Новых медиафайлов: %1$d · сообщений: %2$d</string>
+	<string name="gallery_refresh_failed">Не удалось обновить галерею. Попробуйте ещё раз.</string>
+	<string name="gallery_refresh_unavailable">Обновление доступно в галерее открытого сетевого треда.</string>
+	<string name="touch_feedback">Подсветка при нажатии</string>
+	<string name="touch_feedback_normal">Обычная</string>
+	<string name="touch_feedback_dimmed">Приглушённая</string>
+	<string name="touch_feedback_off">Выключена</string>
+	<string name="touch_feedback_intensity" formatted="false">Интенсивность подсветки (% от обычной)</string>
 
 	<string name="ai_generated_post">AI-сгенерированный пост</string>
 	<string name="ai_settings">Настройки AI-агентов</string>
@@ -878,7 +889,7 @@
 	<string name="test_string">Тестовая строка</string>
 	<string name="text_scale">Масштаб текста</string>
 	<string name="volume_buttons_text_scale">Изменять размер текста кнопками громкости</string>
-	<string name="volume_buttons_text_scale__summary">Когда медиа не воспроизводится, кнопки громкости изменяют масштаб текста</string>
+	<string name="volume_buttons_text_scale__summary">Когда медиа не воспроизводится, изменяют размер текста сообщений, не затрагивая заголовки и служебную информацию</string>
 	<string name="video_right_hand_controls">Режим для правой руки</string>
 	<string name="video_right_hand_controls__summary">Зеркально меняет жест ответа на пост и расположение кнопок видеоплеера, а область жеста громкости переносит влево для тех, кто держит телефон правой рукой</string>
 	<string name="large_text_layout_warning">При масштабе выше 300% некоторые элементы интерфейса могут отображаться некорректно.</string>
@@ -1395,10 +1406,9 @@
 	<string name="context_before">Предыстория</string>
 	<string name="context_replies">Ответы</string>
 	<string name="context_local">По доступным локальным данным; часть постов и связей может отсутствовать.</string>
-	<string name="context_updates">Тред изменился. Обновите локальный контекст, чтобы перечитать содержимое.</string>
+	<string name="context_updates">Тред изменился. Откройте контекст заново, чтобы перечитать содержимое.</string>
 	<string name="context_cache_cleared">Локальный кэш очищен. Обновите контекст, чтобы прочитать оставшиеся сохранённые посты.</string>
-	<string name="context_loading">Проверяем сохранённое обсуждение…</string>
-	<string name="context_read_error">Не удалось прочитать согласованный локальный снимок. Доступные посты остаются; можно повторить.</string>
+	<string name="context_read_error">Не удалось прочитать сохранённый тред. Попробуйте открыть контекст заново.</string>
 	<string name="context_actions">Действия с контекстом</string>
 	<string name="context_stop">Остановить чтение</string>
 	<string name="context_local_scan">Найти ответы в сохранённом треде</string>
@@ -1443,4 +1453,18 @@
 	<string name="form_diagnostics_saved">Диагностика формы сохранена</string>
 	<string name="form_diagnostics_saved_summary">Отправьте отчёт разработчику. Он содержит события разметки и клавиатуры, но не текст сообщения.</string>
 	<string name="form_diagnostics_share">Поделиться диагностикой формы</string>
+	<string name="drawer_section_order">Порядок разделов бокового меню</string>
+	<string name="drawer_section_order_entry_summary">Расположение разделов и кнопок в боковом меню</string>
+	<string name="drawer_custom_order">Свой порядок разделов</string>
+	<string name="drawer_section_order_summary">Перетаскивайте разделы за значок справа или нажмите на раздел, чтобы выбрать место. Порядок общий для всех форумов. Недоступные разделы не показываются в меню; перемещение не включает их. При выключении возвращается обычный порядок, а ваши настройки сохраняются.</string>
+	<string name="post_text_sizes">Размеры текста</string>
+	<string name="post_text_sizes_summary">Отдельные размеры заголовков тредов, сообщений и служебной информации</string>
+	<string name="post_subject_text_size">Размер заголовков тредов</string>
+	<string name="post_body_text_size">Размер текста сообщений</string>
+	<string name="post_metadata_text_size">Размер служебной информации</string>
+	<string name="post_text_size_preview">Предпросмотр</string>
+	<string name="post_text_size_sample_subject">Пример заголовка обсуждения</string>
+	<string name="post_text_size_sample_body">Текст сообщения. Его размер можно менять независимо от заголовка и служебной информации.</string>
+	<string name="post_text_size_sample_metadata">Аноним · №12345 · 12:30 · PNG 640×480</string>
+	<string name="post_text_scale_range" formatted="false">Введите значение от 30 до 500%</string>
 </resources>

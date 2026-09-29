@@ -128,11 +128,13 @@ public class BrowserFragment extends ContentFragment implements DownloadListener
 		super.onDestroyView();
 
 		((FragmentHandler) requireActivity()).setNavigationAreaLocked(navigationDrawerLocker, false);
-		webView.stopLoading();
-		webView.destroy();
-		// Remove references to fragment and parent view since WebView bugs may cause memory leaks
-		webView.setOnLongClickListener(null);
-		ViewUtils.removeFromParent(webView);
+		if (webView != null) {
+			webView.stopLoading();
+			// Remove references to fragment and parent view since WebView bugs may cause memory leaks
+			webView.setOnLongClickListener(null);
+			ViewUtils.removeFromParent(webView);
+			webView.destroy();
+		}
 		webView = null;
 		progressView = null;
 	}
@@ -154,13 +156,13 @@ public class BrowserFragment extends ContentFragment implements DownloadListener
 	@Override
 	public void onPause() {
 		super.onPause();
-		webView.onPause();
+		if (webView != null) webView.onPause();
 	}
 
 	@Override
 	public void onResume() {
 		super.onResume();
-		webView.onResume();
+		if (webView != null) webView.onResume();
 	}
 
 	@Override
@@ -183,6 +185,7 @@ public class BrowserFragment extends ContentFragment implements DownloadListener
 
 	@Override
 	public boolean onOptionsItemSelected(MenuItem item) {
+		if (webView == null) return true;
 		if (item.getItemId() == R.id.menu_reload) {
 			webView.reload();
 		} else if (item.getItemId() == R.id.menu_copy_link) {
@@ -203,7 +206,7 @@ public class BrowserFragment extends ContentFragment implements DownloadListener
 
 	@Override
 	public boolean onBackPressed() {
-		if (webView.canGoBack()) {
+		if (webView != null && webView.canGoBack()) {
 			webView.goBack();
 			return true;
 		}
@@ -227,6 +230,24 @@ public class BrowserFragment extends ContentFragment implements DownloadListener
 	}
 
 	private class CustomWebViewClient extends WebViewClient {
+		@Override
+		public boolean onRenderProcessGone(WebView view, android.webkit.RenderProcessGoneDetail detail) {
+			boolean current = webView == view;
+			ViewGroup parent = view.getParent() instanceof ViewGroup ? (ViewGroup) view.getParent() : null;
+			if (current) webView = null;
+			WebViewUtils.destroyAfterRendererGone(view, detail, "browser");
+			if (current) {
+				if (progressView != null) progressView.setProgress(100);
+				notifyBackNavigationChanged();
+				if (parent != null) {
+					com.mishiranu.dashchan.widget.ViewFactory.ErrorHolder error =
+							com.mishiranu.dashchan.widget.ViewFactory.createErrorLayout(parent);
+					error.text.setText(R.string.webview_renderer_gone);
+					parent.addView(error.layout);
+				}
+			}
+			return true;
+		}
 		@Override
 		public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
 			return request.isForMainFrame() && handleUrlLoading(view, request.getUrl());
@@ -275,6 +296,7 @@ public class BrowserFragment extends ContentFragment implements DownloadListener
 
 		@Override
 		public void onPageFinished(WebView view, String url) {
+			if (view != webView || !isAdded()) return;
 			String title = view.getTitle();
 			((FragmentHandler) requireActivity()).setTitleSubtitle(StringUtils.isEmptyOrWhitespace(title)
 					? getString(R.string.web_browser) : title, null);
@@ -323,7 +345,7 @@ public class BrowserFragment extends ContentFragment implements DownloadListener
 	private class CustomWebChromeClient extends WebChromeClient {
 		@Override
 		public void onProgressChanged(WebView view, int newProgress) {
-			progressView.setProgress(newProgress);
+			if (view == webView && progressView != null) progressView.setProgress(newProgress);
 		}
 	}
 

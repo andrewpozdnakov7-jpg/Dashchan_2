@@ -111,6 +111,7 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 
 		public PagesDatabase.Cache cache;
 		public PagesDatabase.Cache.State cacheState;
+		public long contextEpoch = -1;
 		public boolean initialExtract = true;
 		public boolean eraseExtract;
 		public boolean windowedMode;
@@ -289,6 +290,48 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 	}
 
 	private SearchWorker searchWorker;
+	private com.mishiranu.dashchan.ui.gallery.GalleryRefreshCallback galleryRefreshCallback;
+	private Set<PostNumber> galleryRefreshKnownPosts;
+	private boolean galleryRefreshReadComplete;
+
+	public boolean canRefreshGallery() {
+		return isRunning() && !windowedMode && !getChan().configuration
+				.getOption(ChanConfiguration.OPTION_LOCAL_MODE);
+	}
+
+	public Set<PostNumber> getGalleryPostNumbers() { return getAdapter().copyPostNumbers(); }
+
+	public Runnable refreshGallery(com.mishiranu.dashchan.ui.gallery.GalleryRefreshCallback callback,
+			Set<PostNumber> knownPosts) {
+		if (!canRefreshGallery() || galleryRefreshCallback != null) return null;
+		galleryRefreshKnownPosts = knownPosts != null ? new HashSet<>(knownPosts) : getGalleryPostNumbers();
+		galleryRefreshReadComplete = false;
+		galleryRefreshCallback = callback;
+		// WatcherService coalesces requests for this thread, including an already running read.
+		refreshPostsWithoutIndication(false);
+		return () -> {
+			if (galleryRefreshCallback == callback) {
+				galleryRefreshCallback = null;
+				galleryRefreshKnownPosts = null;
+			}
+		};
+	}
+
+	private void finishGalleryRefresh(ErrorItem error) {
+		if (galleryRefreshCallback == null) return;
+		if (error == null && (!galleryRefreshReadComplete || hasReadTask() || hasExtractTask())) return;
+		com.mishiranu.dashchan.ui.gallery.GalleryRefreshCallback callback = galleryRefreshCallback;
+		int newPosts = 0;
+		if (error == null) {
+			for (PostNumber number : getGalleryPostNumbers()) {
+				PostItem item = getAdapter().findPostItem(number);
+				if (!item.isDeleted() && !galleryRefreshKnownPosts.contains(item.getPostNumber())) newPosts++;
+			}
+		}
+		galleryRefreshCallback = null;
+		galleryRefreshKnownPosts = null;
+		callback.onComplete(error == null ? getAdapter().getGallerySet().createList() : null, newPosts, error);
+	}
 	private boolean windowedMode;
 	private ReadPostsWindowTask postsWindowTask;
 	private int requestedWindowPosition = -1;
@@ -574,6 +617,9 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 				replyable, postStateProvider, getFragmentManager(), recyclerView, retainableExtra.postItems,
 				windowedMode ? this : null);
 		adapter.getConfigurationSet().openedThreadTitle = this::obtainTitle;
+		if (!windowedMode && retainableExtra.cache != null) {
+			adapter.setContextRevision(retainableExtra.cache.state, retainableExtra.contextEpoch);
+		}
 		if (parcelableExtra.translationEnabled == null) {
 			parcelableExtra.translationEnabled = TranslationController.isEnabledForChan(page.chanName) &&
 					Preferences.isTranslationAutoEnabled();
@@ -933,6 +979,7 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 
 	@Override
 	protected void onDestroy() {
+		finishGalleryRefresh(new ErrorItem(ErrorItem.Type.UNKNOWN));
 		stopRefresh();
 		if (postsWindowTask != null) {
 			postsWindowTask.cancel();
@@ -1932,6 +1979,7 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 
 	private void cancelProgressIfNecessary() {
 		if (!hasExtractTask() && !hasReadTask()) {
+			finishGalleryRefresh(null);
 			PaddedRecyclerView recyclerView = getRecyclerView();
 			recyclerView.getPullable().cancelBusyState();
 			switchList();
@@ -1951,6 +1999,11 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 	}
 
 	private void handleError(ErrorItem errorItem) {
+		if (galleryRefreshCallback != null) {
+			finishGalleryRefresh(errorItem);
+			getRecyclerView().getPullable().cancelBusyState();
+			return;
+		}
 		RetainableExtra retainableExtra = getRetainableExtra(RetainableExtra.FACTORY);
 		retainableExtra.errorItem = errorItem;
 		if (!hasExtractTask() && !hasReadTask()) {
@@ -1997,6 +2050,7 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 
 	@Override
 	public void onExtractPostsComplete(ExtractPostsTask.Result result, boolean cancelled) {
+		if (cancelled) finishGalleryRefresh(new ErrorItem(ErrorItem.Type.UNKNOWN));
 		Page page = getPage();
 		if (threadOpenFullPrepareOperation != null) {
 			ThreadOpenDiagnostics.endOperation(threadOpenFullPrepareOperation,
@@ -2111,6 +2165,8 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 				adapter.insertItems(result.postItems, result.removedPosts);
 				updateAdapters = true;
 			}
+			retainableExtra.contextEpoch = result.contextEpoch;
+			adapter.setContextRevision(result.cache.state, result.contextEpoch);
 			boolean hiddenRulesChanged = false;
 			if (result.flags != null) {
 				retainableExtra.hiddenPosts.clear();
@@ -2160,7 +2216,7 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 					message = getString(R.string.some_posts_have_been_edited);
 				}
 
-				if (lastToast.newCount > 0) {
+				if (galleryRefreshCallback == null && lastToast.newCount > 0) {
 					PostNumber showPostNumber;
 					if (toastVisible && lastToast.postNumber != null) {
 						showPostNumber = lastToast.postNumber;
@@ -2178,7 +2234,7 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 									}
 								}
 							}));
-				} else {
+				} else if (galleryRefreshCallback == null) {
 					lastToast.id = ClickableToast.show(message, lastToast.id, null);
 				}
 
@@ -2359,6 +2415,7 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 
 	@Override
 	public void onReadPostsSuccess(PagesDatabase.Cache.State cacheState, ConsumeReplies consumeReplies) {
+		galleryRefreshReadComplete = true;
 		ReadViewModel readViewModel = getViewModel(ReadViewModel.class);
 		RetainableExtra retainableExtra = getRetainableExtra(RetainableExtra.FACTORY);
 		retainableExtra.cacheState = cacheState;
@@ -2376,7 +2433,7 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 			queueNextRefresh(false);
 			return;
 		}
-		if ((readViewModel.visibleReadResult || getAutoRefreshInterval() > 0) &&
+		if ((galleryRefreshCallback != null || readViewModel.visibleReadResult || getAutoRefreshInterval() > 0) &&
 				!hasExtractTask() && retainableExtra.shouldExtract()) {
 			consumeReplies.consume();
 			if (!readViewModel.visibleReadResult) {
@@ -2391,6 +2448,7 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 
 	@Override
 	public void onReadPostsRedirect(RedirectException.Target target) {
+		finishGalleryRefresh(new ErrorItem(ErrorItem.Type.THREAD_NOT_EXISTS));
 		cancelProgressIfNecessary();
 		queueNextRefresh(false);
 		handleRedirect(target.chanName, target.boardName, target.threadNumber, target.postNumber);

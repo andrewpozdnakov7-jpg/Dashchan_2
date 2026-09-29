@@ -55,9 +55,12 @@ typedef struct {
 	uint64_t outputFrames;
 	uint64_t renderedScheduled;
 	uint64_t renderedImmediate;
+	uint64_t hardwareLateAnchorsRendered;
 	uint64_t droppedLate;
 	uint64_t droppedSeek;
 	uint64_t droppedState;
+	uint64_t droppedCadence;
+	uint64_t droppedSuperseded;
 	uint64_t outputWithoutBuffer;
 	uint64_t releaseErrors;
 	uint64_t decoderErrors;
@@ -205,11 +208,13 @@ static void startPlayerDiagnosticsMode(int extended) {
 				"mode=%s periodic_sample_ms=%d native_budget_kib=%d",
 				extended ? "extended" : "standard", extended ? 1000 : 0, extended ? 96 * 1024 : 512);
 		diagnosticsAppendLineLocked(DIAGNOSTICS_BUFFER_SIZE - DIAGNOSTICS_SUMMARY_RESERVE,
-				"diagnostics_schema=13 chunk_kib=64"
+				"diagnostics_schema=16 chunk_kib=64"
 				" monotonic_clock=1 nonblocking_samples=1 playback_speed=1 speed_scale=1000 native_seek_locks=1 mediacodec_stages=1"
 				" seek_worker_stop=1 surface_queue=1 duration_probe=1 packet_generation=1"
 				" software_output_scaling=1 software_late_drop=1 software_decode_governor=1"
 				" software_governor_recovery=2 software_late_anchor_ms=200"
+				" hardware_pump=1 hardware_output_capacity=2 hardware_accelerated_output_fps=60 hardware_key_catchup=1"
+				" network_buffer_viewing_ms=3000"
 				" software_seek_fast_decode=1 audio_master_clock=1 audio_output_seek_restart=1"
 				" audio_output_queue_state=1"
 				" audio_output_prefill=2 audio_chunk_target_ms=40 audio_output_reconcile=1"
@@ -256,6 +261,12 @@ jint finishPlayerDiagnostics(void) {
 			diagnostics.stats.renderedScheduled, diagnostics.stats.renderedImmediate,
 			diagnostics.stats.droppedLate, diagnostics.stats.droppedSeek,
 			diagnostics.stats.droppedState);
+	diagnosticsAppendLineLocked(DIAGNOSTICS_BUFFER_SIZE,
+			"summary hardware_late_anchor_rendered=%" PRIu64,
+			diagnostics.stats.hardwareLateAnchorsRendered);
+	diagnosticsAppendLineLocked(DIAGNOSTICS_BUFFER_SIZE,
+			"summary dropped_cadence=%" PRIu64 " dropped_superseded=%" PRIu64,
+			diagnostics.stats.droppedCadence, diagnostics.stats.droppedSuperseded);
 	diagnosticsAppendLineLocked(DIAGNOSTICS_BUFFER_SIZE,
 			"summary no_output_buffer=%" PRIu64 " release_errors=%" PRIu64
 			" decoder_errors=%" PRIu64,
@@ -740,6 +751,20 @@ void diagnosticsRecordVideoPacket(Player * player, AVPacket * packet) {
 }
 
 #ifdef DASHCHAN_HAS_MEDIACODEC
+void diagnosticsRecordHardwareLateAnchor(Player * player, int64_t framePosition,
+		int64_t lateness, int64_t gapMs) {
+	if (!diagnosticsActive()) return;
+	pthread_mutex_lock(&diagnostics.mutex);
+	if (diagnosticsActive()) {
+		uint64_t count = ++diagnostics.stats.hardwareLateAnchorsRendered;
+		diagnosticsAppendLineLocked(DIAGNOSTICS_BUFFER_SIZE - DIAGNOSTICS_SUMMARY_RESERVE,
+				"player=%u hardware_late_anchor count=%" PRIu64 " position_ms=%" PRId64
+				" late_ms=%" PRId64 " since_last_present_ms=%" PRId64 " speed_milli=%d",
+				player->meta.diagnosticsId, count, framePosition, lateness, gapMs, getPlaybackSpeed(player));
+	}
+	pthread_mutex_unlock(&diagnostics.mutex);
+}
+
 void diagnosticsRecordPacketSubmitted(void) {
 	if (!diagnosticsActive()) {
 		return;
@@ -804,6 +829,14 @@ void diagnosticsRecordOutput(Player * player, AVFrame * frame, int64_t framePosi
 			case DIAGNOSTICS_OUTPUT_DROPPED_STATE:
 				diagnostics.stats.droppedState++;
 				actionName = "drop_state";
+				break;
+			case DIAGNOSTICS_OUTPUT_DROPPED_CADENCE:
+				diagnostics.stats.droppedCadence++;
+				actionName = "drop_cadence";
+				break;
+			case DIAGNOSTICS_OUTPUT_DROPPED_SUPERSEDED:
+				diagnostics.stats.droppedSuperseded++;
+				actionName = "drop_superseded";
 				break;
 			default:
 				diagnostics.stats.outputWithoutBuffer++;

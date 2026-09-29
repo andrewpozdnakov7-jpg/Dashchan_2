@@ -717,6 +717,11 @@ public class PagesDatabase {
 
 	/** Read-only, keyset-paged context lookup. Oversized blobs never enter the CursorWindow. */
 	public ContextPage readContextPage(ThreadKey key, PostNumber after, PostNumber exact, CancellationSignal signal) {
+		return readContextPage(key, after, exact, Collections.emptySet(), signal);
+	}
+
+	public ContextPage readContextPage(ThreadKey key, PostNumber after, PostNumber exact,
+			Set<PostNumber> loaded, CancellationSignal signal) {
 		String major = Schema.Posts.Columns.POST_NUMBER_MAJOR, minor = Schema.Posts.Columns.POST_NUMBER_MINOR;
 		Expression.Filter filter = key.filterPosts().build();
 		String where = filter.value;
@@ -736,10 +741,12 @@ public class PagesDatabase {
 		int scanned = 0, bytes = 0;
 		boolean skipped = false;
 		try (Cursor cursor = database.query(false, Schema.Posts.TABLE_NAME, projection, where,
-				args.toArray(new String[0]), null, null, orderByPostNumber(false), exact != null ? "1" : "16", signal)) {
-			while (cursor.moveToNext()) {
+				args.toArray(new String[0]), null, null, orderByPostNumber(false), exact != null ? "1" : "128", signal)) {
+			// Bound materialized data independently of row count. A single row is already capped above.
+			while (bytes < 1024 * 1024 && cursor.moveToNext()) {
 				signal.throwIfCanceled();
 				last = new PostNumber(cursor.getInt(0), cursor.getInt(1)); scanned++;
+				if (loaded.contains(last)) continue;
 				if (cursor.isNull(3)) { skipped = true; continue; }
 				byte[] blob = cursor.getBlob(3); bytes += blob.length;
 				try (JsonSerial.Reader reader = JsonSerial.reader(blob)) {

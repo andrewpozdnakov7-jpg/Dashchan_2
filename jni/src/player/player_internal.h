@@ -2,6 +2,7 @@
 #define PLAYER_INTERNAL_H
 
 #include "util.h"
+#include "player_video_policy.h"
 
 #include <jni.h>
 #include <pthread.h>
@@ -131,6 +132,11 @@ struct Player {
 			pthread_cond_t flowCond;
 			pthread_mutex_t flowMutex;
 			uint64_t generation __attribute__((aligned(8)));
+			// readMutex distinguishes playback demux from initialization and seek probing.
+			int readingForPlayback;
+			int buffering;
+			uint64_t bufferingSerial;
+			int64_t bufferingReportTime;
 		} packets;
 
 		struct {
@@ -204,6 +210,26 @@ struct Player {
 		int hardwareDecoderFailed;
 		int hardwareSurfaceInitialized;
 		int hardwareDecodeErrors;
+		// Decoder thread, protected by sleepDrawMutex; independent of diagnostic capture.
+		int64_t hardwareLastFramePresentedAt;
+		// Owned by the video worker under frameMutex. Returned BEFORE flush/codec replacement.
+		AVFrame * hardwareOutput[HARDWARE_OUTPUT_CAPACITY];
+		int hardwareOutputCount;
+		int hardwareDraining;
+		int hardwareDecoderEof;
+		int64_t hardwareOutputSlot;
+		int hardwareOutputSpeed;
+		int64_t hardwareDecodedPosition;
+		int64_t hardwareLateSince;
+		int64_t hardwareLastCatchup;
+		int64_t hardwareCatchupScanAt;
+		int64_t hardwareCatchupTarget;
+		int hardwareCatchingUp;
+		int64_t hardwarePumpReportAt;
+		uint64_t hardwareCadenceDrops;
+		uint64_t hardwareSupersededDrops;
+		uint64_t hardwareCatchups;
+		uint64_t hardwarePacketsSkipped;
 		jobject activeSurface;
 		jobject pendingSurface;
 		int64_t pendingSurfaceGeneration __attribute__((aligned(8)));
@@ -273,6 +299,7 @@ struct Bridge {
 	JNIEnv * env;
 	jmethodID methodOnSeek;
 	jmethodID methodOnMessage;
+	jmethodID methodOnNetworkBuffering;
 	jmethodID methodOnDurationChanged;
 	jmethodID methodOnSurfaceApplied;
 	jmethodID methodFindHardwareVideoDecoder;
@@ -281,6 +308,7 @@ struct Bridge {
 struct PacketHolder {
 	AVPacket * packet;
 	int type;
+	uint64_t generation;
 };
 
 struct AudioBuffer {

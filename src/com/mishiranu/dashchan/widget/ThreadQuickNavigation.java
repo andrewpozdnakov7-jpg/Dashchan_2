@@ -15,18 +15,30 @@ import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.util.ListViewUtils;
 import com.mishiranu.dashchan.util.ResourceUtils;
+import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 
 /** Non-modal overlay: only the two buttons consume touches. */
 public final class ThreadQuickNavigation extends FrameLayout {
-	private final RecyclerView recyclerView;
+	private final View content;
+	private final BooleanSupplier hasContent;
+	private final Consumer<Boolean> scroll;
 	private final FrameLayout buttons;
 	private final ViewTreeObserver.OnGlobalLayoutListener visibilityListener = this::updateVisibility;
 	private boolean enabled;
 	private boolean contentVisible;
 
 	public ThreadQuickNavigation(RecyclerView recyclerView) {
-		super(recyclerView.getContext());
-		this.recyclerView = recyclerView;
+		this(recyclerView, () -> recyclerView.getAdapter() != null
+				&& recyclerView.getAdapter().getItemCount() > 0, bottom -> scroll(recyclerView, bottom));
+	}
+
+	/** Shared controls for native threads and HTML/native local archives. */
+	public ThreadQuickNavigation(View content, BooleanSupplier hasContent, Consumer<Boolean> scroll) {
+		super(content.getContext());
+		this.content = content;
+		this.hasContent = hasContent;
+		this.scroll = scroll;
 		buttons = new FrameLayout(getContext());
 		float density = ResourceUtils.obtainDensity(getContext());
 		// A 48 dp drawable viewport (previously 24 dp), with 8 dp touch padding.
@@ -48,7 +60,9 @@ public final class ThreadQuickNavigation extends FrameLayout {
 			button.setBackground(background);
 			button.setContentDescription(getContext().getString(bottom
 					? R.string.thread_quick_navigation_bottom : R.string.thread_quick_navigation_top));
-			button.setOnClickListener(v -> jump(bottom));
+			button.setOnClickListener(v -> {
+				if (contentVisible && hasContent.getAsBoolean()) this.scroll.accept(bottom);
+			});
 			LayoutParams params = new LayoutParams(size, size, Gravity.RIGHT | (bottom ? Gravity.BOTTOM : Gravity.TOP));
 			buttons.addView(button, params);
 		}
@@ -83,14 +97,13 @@ public final class ThreadQuickNavigation extends FrameLayout {
 
 	private void updateVisibility() {
 		WindowInsets insets = getRootWindowInsets();
-		RecyclerView.Adapter<?> adapter = recyclerView.getAdapter();
-		boolean visible = enabled && contentVisible && recyclerView.isShown() && adapter != null && adapter.getItemCount() > 0
+		boolean visible = enabled && contentVisible && content.isShown() && hasContent.getAsBoolean()
 				&& (insets == null || !insets.isVisible(WindowInsets.Type.ime()));
 		// Keep the full-size container in layout so inset updates remain available.
 		buttons.setVisibility(visible ? View.VISIBLE : View.INVISIBLE);
 	}
 
-	private void jump(boolean bottom) {
+	public static void scroll(RecyclerView recyclerView, boolean bottom) {
 		RecyclerView.Adapter<?> adapter = recyclerView.getAdapter();
 		if (adapter == null || adapter.getItemCount() == 0) return;
 		recyclerView.stopScroll();

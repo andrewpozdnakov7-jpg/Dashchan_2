@@ -42,6 +42,7 @@ import com.mishiranu.dashchan.ui.MainActivity;
 import com.mishiranu.dashchan.util.AudioFocus;
 import com.mishiranu.dashchan.util.ViewUtils;
 import com.mishiranu.dashchan.widget.ClickableToast;
+import com.mishiranu.dashchan.widget.CircularProgressBar;
 import java.io.File;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
@@ -345,6 +346,7 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 	}
 
 	private FrameLayout rootView;
+	private CircularProgressBar bufferingProgress;
 	private View pipVideoView;
 	private final Rect lastSourceRectHint = new Rect();
 	private long activityCreatedElapsedMs;
@@ -679,6 +681,14 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 		previewView.bringToFront();
 		previewView.setImageBitmap(previewFrame);
 		previewView.setVisibility(previewFrame != null ? View.VISIBLE : View.INVISIBLE);
+		if (bufferingProgress == null) {
+			bufferingProgress = new CircularProgressBar(this);
+			bufferingProgress.setIndeterminate(true);
+			rootView.addView(bufferingProgress, new FrameLayout.LayoutParams(
+					FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER));
+		}
+		bufferingProgress.setVisible(false, true);
+		bufferingProgress.bringToFront();
 		player.setPlaybackSpeed(playbackSpeed);
 		player.setMuted(muted);
 		if (startPlaying && !muted && player.isAudioPresent()) {
@@ -1334,6 +1344,10 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 	@Override
 	public void onBusyStateChange(VideoPlayer player, boolean busy) {
 		if (this.player == player) {
+			if (bufferingProgress != null) {
+				bufferingProgress.setVisible(busy, true);
+				if (!busy) bufferingProgress.cancelVisibilityTransient();
+			}
 			VideoDiagnostics.recordUi("pip buffering_or_seeking=" + busy + " download_complete="
 					+ (downloadSession == null || downloadSession.isComplete()));
 		}

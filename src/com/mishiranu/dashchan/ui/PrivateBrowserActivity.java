@@ -181,6 +181,7 @@ public class PrivateBrowserActivity extends StateActivity implements DownloadLis
 
 	@Override
 	public boolean onOptionsItemSelected(@NonNull MenuItem item) {
+		if (webView == null && item.getItemId() != android.R.id.home) return true;
 		if (item.getItemId() == android.R.id.home) {
 			finish();
 			return true;
@@ -298,6 +299,23 @@ public class PrivateBrowserActivity extends StateActivity implements DownloadLis
 	}
 
 	private class PrivateWebViewClient extends WebViewClient {
+		@Override
+		public boolean onRenderProcessGone(WebView view, android.webkit.RenderProcessGoneDetail detail) {
+			boolean current = webView == view;
+			if (current) {
+				webView = null;
+				sessionReady = false;
+				sessionGeneration++;
+			}
+			WebViewUtils.destroyAfterRendererGone(view, detail, "private_browser");
+			if (current) {
+				// Stay in the isolated process; never clear the main forum cookie store.
+				clearBrowsingData(null, null);
+				ClickableToast.show(R.string.webview_renderer_gone);
+				finish();
+			}
+			return true;
+		}
 		@Override
 		public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
 			return request.isForMainFrame() && handleUrlLoading(view, request.getUrl());

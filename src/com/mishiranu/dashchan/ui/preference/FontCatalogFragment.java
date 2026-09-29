@@ -132,8 +132,7 @@ public class FontCatalogFragment extends BaseListFragment {
 			layout.setPadding(horizontal, vertical, horizontal, vertical);
 			layout.setClickable(true);
 			layout.setFocusable(true);
-			layout.setBackground(ResourceUtils.getDrawable(parent.getContext(),
-					android.R.attr.selectableItemBackground, 0));
+			com.mishiranu.dashchan.util.ViewUtils.setSelectableItemBackground(layout);
 
 			TextView title = new TextView(parent.getContext());
 			title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f);

@@ -81,6 +81,22 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 	}
 
 	private ListPage listPage;
+
+	public boolean canRefreshGallery() {
+		return listPage instanceof com.mishiranu.dashchan.ui.navigator.page.PostsPage &&
+				((com.mishiranu.dashchan.ui.navigator.page.PostsPage) listPage).canRefreshGallery();
+	}
+
+	public java.util.Set<PostNumber> getGalleryPostNumbers() {
+		return canRefreshGallery() ? ((com.mishiranu.dashchan.ui.navigator.page.PostsPage) listPage)
+				.getGalleryPostNumbers() : null;
+	}
+
+	public Runnable refreshGallery(com.mishiranu.dashchan.ui.gallery.GalleryRefreshCallback callback,
+			java.util.Set<PostNumber> knownPosts) {
+		return canRefreshGallery() ? ((com.mishiranu.dashchan.ui.navigator.page.PostsPage) listPage)
+				.refreshGallery(callback, knownPosts) : null;
+	}
 	private View progressView;
 	private ViewFactory.ErrorHolder errorHolder;
 	private PaddedRecyclerView recyclerView;
@@ -156,7 +172,8 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 		errorHolder = ViewFactory.createErrorLayout(layout);
 		errorHolder.layout.setVisibility(View.GONE);
 		layout.addView(errorHolder.layout);
-		if (getPage().content == Page.Content.POSTS) {
+		if (getPage().content == Page.Content.POSTS
+				&& !com.mishiranu.dashchan.ui.DrawerForm.CHAN_REDDIT.equals(getPage().chanName)) {
 			quickNavigation = new ThreadQuickNavigation(recyclerView);
 			layout.addView(quickNavigation, ExpandedLayout.LayoutParams.MATCH_PARENT,
 					ExpandedLayout.LayoutParams.MATCH_PARENT);

@@ -161,6 +161,7 @@ public class ViewUtils {
 	public static void setSelectableItemBackground(View view) {
 		setBackgroundPreservePadding(view, ResourceUtils
 				.getDrawable(view.getContext(), android.R.attr.selectableItemBackground, 0));
+		com.mishiranu.dashchan.widget.TouchFeedback.apply(view);
 	}
 
 	public static void setBackgroundPreservePadding(View view, Drawable drawable) {

@@ -18,7 +18,17 @@ import java.util.TreeMap;
 /** Worker-owned snapshot, strictly local. Does not create PostItems or touch Android views. */
 public final class ContextSource {
 	public record Snapshot(ContextGraph graph, Map<ContextGraph.Key, Post> posts,
-			boolean incomplete, boolean changed, PagesDatabase.Cache.State revision, long epoch) {}
+			boolean incomplete, boolean changed, PagesDatabase.Cache.State revision, long epoch, ContextGraph.Key target) {}
+	/** Revision belongs to the applied extraction result, never sampled from DB beside arbitrary UI objects. */
+	public record Seed(PagesDatabase.Cache.State revision, long epoch, List<Post> posts) {
+		public Seed { posts = List.copyOf(posts); }
+	}
+	public static boolean reusable(Snapshot snapshot, ContextGraph.Key target,
+			PagesDatabase.Cache.State revision, long epoch) {
+		return snapshot != null && !snapshot.changed() && snapshot.target().sameThread(target)
+				&& ContextSnapshotGuard.isCurrent(snapshot.revision(), snapshot.epoch(), revision, epoch)
+				&& snapshot.posts().containsKey(target) && (!snapshot.incomplete() || snapshot.target().equals(target));
+	}
 	public static ContextGraph.Key key(String chan, String board, String thread, PostNumber number) {
 		return new ContextGraph.Key(chan, board, thread, number.major, number.minor);
 	}
@@ -38,48 +48,73 @@ public final class ContextSource {
 			return origin.sameThread(result) ? result : null;
 		} catch (java.net.URISyntaxException | IllegalArgumentException e) { return null; }
 	}
-	public static Snapshot load(Chan chan, ContextGraph.Key target, List<Post> seed,
-			boolean scan, CancellationSignal signal) {
+	public static Snapshot load(Chan chan, ContextGraph.Key target, Seed seed, CancellationSignal signal) {
+		long started = android.os.SystemClock.elapsedRealtime();
 		PagesDatabase db = PagesDatabase.getInstance();
 		PagesDatabase.ThreadKey thread = new PagesDatabase.ThreadKey(target.source(), target.board(), target.thread());
 		PagesDatabase.Cache.State revision = db.getCacheState(thread);
 		long epoch = db.getContextEpoch();
 		ContextGraph graph = new ContextGraph();
 		Map<ContextGraph.Key, Post> posts = new TreeMap<>();
-		int[] text = {0, 0}; boolean[] incomplete = {true};
-		for (Post post : seed) add(chan, target, post, graph, posts, text, incomplete, signal);
-		// Exact local lookups: selected post and missing predecessors, bounded independently of scans.
+		int[] text = {0, 0}; boolean[] incomplete = {false};
+		int queries = 0, bytes = 0;
+		int[] lookup = {0, 0};
+		boolean useSeed = seed != null && ContextSnapshotGuard.isCurrent(seed.revision(), seed.epoch(), revision, epoch);
+		if (useSeed) {
+			Map<PostNumber, Post> indexed = new TreeMap<>();
+			for (Post post : seed.posts()) { signal.throwIfCanceled(); indexed.put(post.number, post); }
+			// Selected card gets first claim on the budgets, even near the end of a long thread.
+			addPredecessors(chan, target, indexed, thread, graph, posts, text, incomplete, lookup, signal);
+			for (Post post : indexed.values()) add(chan, target, post, graph, posts, text, incomplete, signal);
+		} else {
+			addPredecessors(chan, target, null, thread, graph, posts, text, incomplete, lookup, signal);
+			Set<PostNumber> loaded = new HashSet<>();
+			for (ContextGraph.Key key : posts.keySet()) loaded.add(number(key));
+			PostNumber after = null; int count = 0; boolean exhausted = false;
+			while (count < ContextGraph.MAX_POSTS && bytes < 12 * 1024 * 1024 && text[0] < ContextGraph.MAX_TEXT) {
+				signal.throwIfCanceled();
+				PagesDatabase.ContextPage page = db.readContextPage(thread, after, null, loaded, signal);
+				queries++; count += page.scanned(); bytes += page.bytes(); incomplete[0] |= page.skipped();
+				if (page.scanned() == 0) { exhausted = true; break; }
+				after = page.last();
+				for (Post post : page.posts()) add(chan, target, post, graph, posts, text, incomplete, signal);
+			}
+			incomplete[0] |= !exhausted;
+		}
+		signal.throwIfCanceled();
+		boolean changed = !ContextSnapshotGuard.isCurrent(revision, epoch, db.getCacheState(thread), db.getContextEpoch());
+		android.util.Log.d("DiscussionContext", "snapshot source=" + (useSeed ? "loaded_posts" : "local_db")
+				+ " posts=" + posts.size() + " queries=" + (queries + lookup[0]) + " bytes=" + (bytes + lookup[1])
+				+ " incomplete=" + incomplete[0] + " changed=" + changed
+				+ " elapsedMs=" + (android.os.SystemClock.elapsedRealtime() - started));
+		return new Snapshot(graph, Collections.unmodifiableMap(posts), incomplete[0], changed, revision, epoch, target);
+	}
+
+	private static void addPredecessors(Chan chan, ContextGraph.Key target, Map<PostNumber, Post> seed,
+			PagesDatabase.ThreadKey thread, ContextGraph graph, Map<ContextGraph.Key, Post> posts,
+			int[] text, boolean[] incomplete, int[] lookup, CancellationSignal signal) {
+		// Preserve the selected post and ancestors before spending the scan budget on unrelated posts.
 		Set<ContextGraph.Key> attempted = new HashSet<>();
 		Set<ContextGraph.Key> frontier = new java.util.TreeSet<>(); frontier.add(target);
-		int lookupBytes = 0;
 		for (int round = 0; round < ContextGraph.MAX_DEPTH; round++) {
 			Set<ContextGraph.Key> next = new java.util.TreeSet<>();
 			for (ContextGraph.Key key : frontier) {
 				signal.throwIfCanceled();
-				if (!posts.containsKey(key) && attempted.size() < 200 && lookupBytes <= 16 * 1024 * 1024 - 262144 && attempted.add(key)) {
-					PagesDatabase.ContextPage page = db.readContextPage(thread, null, number(key), signal);
-					lookupBytes += page.bytes();
-					for (Post post : page.posts()) add(chan, target, post, graph, posts, text, incomplete, signal);
+				if (!posts.containsKey(key) && attempted.size() < 200 && lookup[1] <= 16 * 1024 * 1024 - 262144 && attempted.add(key)) {
+					if (seed != null) {
+						Post post = seed.get(number(key));
+						if (post != null) add(chan, target, post, graph, posts, text, incomplete, signal);
+					} else {
+						PagesDatabase.ContextPage page = PagesDatabase.getInstance().readContextPage(thread, null, number(key), signal);
+						lookup[0]++; lookup[1] += page.bytes(); incomplete[0] |= page.skipped();
+						for (Post post : page.posts()) add(chan, target, post, graph, posts, text, incomplete, signal);
+					}
 				}
 				next.addAll(graph.parents(key));
 			}
 			frontier = next;
 			if (frontier.isEmpty()) break;
 		}
-		if (scan) {
-			PostNumber after = null; int count = 0, bytes = 0;
-			while (count <= ContextGraph.MAX_POSTS - 16 && bytes <= 12 * 1024 * 1024 && text[0] < ContextGraph.MAX_TEXT) {
-				signal.throwIfCanceled();
-				PagesDatabase.ContextPage page = db.readContextPage(thread, after, null, signal);
-				if (page.scanned() == 0) break;
-				count += page.scanned(); bytes += page.bytes(); after = page.last();
-				for (Post post : page.posts()) if (!posts.containsKey(key(target.source(), target.board(), target.thread(), post.number))) {
-					add(chan, target, post, graph, posts, text, incomplete, signal);
-				}
-			}
-		}
-		return new Snapshot(graph, Collections.unmodifiableMap(posts), incomplete[0],
-				!revision.equals(db.getCacheState(thread)) || epoch != db.getContextEpoch(), revision, epoch);
 	}
 	private static boolean add(Chan chan, ContextGraph.Key scope, Post post, ContextGraph graph,
 			Map<ContextGraph.Key, Post> posts, int[] text, boolean[] incomplete, CancellationSignal signal) {

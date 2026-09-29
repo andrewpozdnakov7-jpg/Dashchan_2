@@ -22,8 +22,12 @@ import chan.util.CommonUtils;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.HidePerformer;
 import com.mishiranu.dashchan.content.PostsWindowCache;
+import com.mishiranu.dashchan.content.context.ContextGraph;
+import com.mishiranu.dashchan.content.context.ContextSource;
+import com.mishiranu.dashchan.content.database.PagesDatabase;
 import com.mishiranu.dashchan.content.model.AttachmentItem;
 import com.mishiranu.dashchan.content.model.GalleryItem;
+import com.mishiranu.dashchan.content.model.Post;
 import com.mishiranu.dashchan.content.model.PostItem;
 import com.mishiranu.dashchan.content.model.PostNumber;
 import com.mishiranu.dashchan.content.translation.TranslationController;
@@ -37,10 +41,12 @@ import com.mishiranu.dashchan.widget.ClickableToast;
 import com.mishiranu.dashchan.widget.CommentTextView;
 import com.mishiranu.dashchan.widget.DividerItemDecoration;
 import com.mishiranu.dashchan.widget.SimpleViewHolder;
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Set;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -84,6 +90,36 @@ public class PostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
 	private boolean windowedLoading;
 	private int windowStartPosition;
 	private int windowTotalCount;
+	private PagesDatabase.Cache.State contextRevision;
+	private long contextEpoch = -1;
+	private WeakReference<ContextSource.Snapshot> contextSnapshot = new WeakReference<>(null);
+
+	public void setContextRevision(PagesDatabase.Cache.State revision, long epoch) {
+		if (!java.util.Objects.equals(contextRevision, revision) || contextEpoch != epoch) contextSnapshot.clear();
+		contextRevision = revision;
+		contextEpoch = epoch;
+	}
+
+	@Override public ContextSource.Seed getContextSeed(ContextGraph.Key target) {
+		if (isWindowed() || contextRevision == null || postItemsMap.isEmpty()
+				|| postItemsMap.size() > ContextGraph.MAX_POSTS) return null;
+		List<Post> posts = new ArrayList<>(postItemsMap.size());
+		for (PostItem post : postItemsMap.values()) {
+			if (!target.sameThread(ContextSource.key(
+					configurationSet.chanName, post.getBoardName(), post.getThreadNumber(), post.getPostNumber()))) return null;
+			posts.add(post.getPost());
+		}
+		return new ContextSource.Seed(contextRevision, contextEpoch, posts);
+	}
+
+	@Override public ContextSource.Snapshot getContextSnapshot() {
+		return contextSnapshot.get();
+	}
+
+	@Override public void setContextSnapshot(ContextSource.Snapshot snapshot) {
+		// Do not retain another entire thread solely for an optional closed dialog.
+		contextSnapshot = new WeakReference<>(snapshot);
+	}
 
 	private int bumpLimitOrdinalIndex = PostItem.ORDINAL_INDEX_NONE;
 	private boolean selection = false;
@@ -126,6 +162,7 @@ public class PostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
 	}
 
 	public void setWindow(PostsWindowCache.Window window) {
+		contextRevision = null;
 		if (!isWindowed()) {
 			throw new IllegalStateException("Adapter is not windowed");
 		}
@@ -261,6 +298,10 @@ public class PostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
 			postItems.add(postItemsMap.get(postNumber));
 		}
 		return postItems;
+	}
+
+	public Set<PostNumber> copyPostNumbers() {
+		return new HashSet<>(postItemsMap.keySet());
 	}
 
 	public void setTranslationEnabled(boolean enabled) {
@@ -442,6 +483,7 @@ public class PostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
 	}
 
 	public void insertItems(Map<PostNumber, PostItem> changed, Collection<PostNumber> removed) {
+		contextRevision = null;
 		cancelPreloading();
 
 		removeOldReferences(changed.keySet());

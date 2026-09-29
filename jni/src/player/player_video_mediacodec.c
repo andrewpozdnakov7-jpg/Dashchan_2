@@ -14,7 +14,6 @@
 #endif
 #include <android/native_window_jni.h>
 #include <inttypes.h>
-#define GAINING_THRESHOLD 100
 #define MEDIACODEC_MAX_SCHEDULE_AHEAD_MS 50
 
 int playerVideoHasPendingSurface(Player * player) {
@@ -27,38 +26,25 @@ void playerVideoReleaseSurface(Player * player) {
 	}
 }
 
+void playerVideoResetHardwareOutputLocked(Player * player) {
+	for (int i = 0; i < HARDWARE_OUTPUT_CAPACITY; i++) av_frame_free(&player->video.hardwareOutput[i]);
+	player->video.hardwareOutputCount = 0;
+	player->video.hardwareDraining = 0;
+	player->video.hardwareDecoderEof = 0;
+	player->video.hardwareOutputSpeed = 0;
+	player->video.hardwareOutputSlot = -1;
+	player->video.hardwareDecodedPosition = -1;
+	player->video.hardwareLateSince = 0;
+	player->video.hardwareCatchingUp = 0;
+}
+
 #ifdef DASHCHAN_HAS_MEDIACODEC
-static int decodeMediaCodecFrame(Player * player, AVCodecContext * context, AVPacket * packet,
-		AVFrame * frame, int * packetSent) {
-	if (!*packetSent) {
-		playerSetDiagnosticsMediaCodecStage(player, DIAGNOSTICS_MEDIACODEC_STAGE_SEND_PACKET, -1);
-		int64_t callStarted = diagnosticsCodecBegin(player, 0);
-		int result = avcodec_send_packet(context, packet);
-		diagnosticsCodecEnd(player, 0, callStarted, result);
-		if (result == 0) {
-			*packetSent = 1;
-			if (packet) {
-				diagnosticsRecordPacketSubmitted();
-			}
-		} else if (result != AVERROR(EAGAIN) && result != AVERROR_EOF) {
-			LOGP("MediaCodec packet submission failed: %d", result);
-			diagnosticsRecordDecoderError(player, "send_packet", result);
-			return -1;
-		}
-	}
+static int receiveMediaCodecFrame(Player * player, AVCodecContext * context, AVFrame * frame) {
 	playerSetDiagnosticsMediaCodecStage(player, DIAGNOSTICS_MEDIACODEC_STAGE_RECEIVE_FRAME, -1);
 	int64_t callStarted = diagnosticsCodecBegin(player, 1);
 	int result = avcodec_receive_frame(context, frame);
 	diagnosticsCodecEnd(player, 1, callStarted, result);
-	if (result == 0) {
-		return 1;
-	}
-	if (result == AVERROR(EAGAIN) || result == AVERROR_EOF) {
-		return 0;
-	}
-	LOGP("MediaCodec frame receive failed: %d", result);
-	diagnosticsRecordDecoderError(player, "receive_frame", result);
-	return -1;
+	return result;
 }
 
 static int renderMediaCodecFrame(Player * player, JNIEnv * env, AVStream * stream, AVFrame * frame) {
@@ -88,6 +74,12 @@ static int renderMediaCodecFrame(Player * player, JNIEnv * env, AVStream * strea
 	pthread_mutex_lock(&player->video.sleepDrawMutex);
 	playerSetDiagnosticsMediaCodecStage(player, DIAGNOSTICS_MEDIACODEC_STAGE_RENDER_FRAME,
 			framePosition);
+	while (!player->meta.interrupt && !playerGetSkipFlag(&player->sync.skip.videoWorkFrame)
+			&& !playerVideoCanPresent(player)) {
+		// Surface requests intentionally signal without taking decoder locks. A
+		// bounded wait also observes their skip flag if that signal races this wait.
+		condSleepUntilMs(&player->video.sleepCond, &player->video.sleepDrawMutex, getTime() + 100);
+	}
 	if (player->meta.interrupt || playerGetSkipFlag(&player->sync.skip.videoWorkFrame)) {
 		render = 0;
 		outputAction = DIAGNOSTICS_OUTPUT_DROPPED_STATE;
@@ -116,14 +108,28 @@ static int renderMediaCodecFrame(Player * player, JNIEnv * env, AVStream * strea
 			waitTime = 0;
 		}
 	}
-	if (waitTime < -GAINING_THRESHOLD && HAS_STREAM(player, audio)) {
+	// Playback rate changes the media time per display slot, not the display rate.
+	// Never turn persistent lateness into a 5 FPS gate. Superseded frames are removed
+	// by the pump; decoder overload is recovered separately at a known key packet.
+	int speed = getPlaybackSpeed(player);
+	int64_t slot = hardwareOutputSlot(framePosition, speed);
+	if (!finishSeeking && speed > PLAYBACK_SPEED_DEFAULT && slot >= 0 && player->video.hardwareOutputSpeed == speed
+			&& slot == player->video.hardwareOutputSlot) {
 		render = 0;
-		outputAction = DIAGNOSTICS_OUTPUT_DROPPED_LATE;
-	} else if (!HAS_STREAM(player, audio) && -waitTime > GAINING_THRESHOLD) {
-		player->sync.startTime -= waitTime;
-		waitTime = 0;
+		outputAction = DIAGNOSTICS_OUTPUT_DROPPED_CADENCE;
+		player->video.hardwareCadenceDrops++;
 	}
 	while (render && waitTime > 0) {
+		while (!player->meta.interrupt && !playerGetSkipFlag(&player->sync.skip.videoWorkFrame)
+				&& !playerVideoCanPresent(player)) {
+			condSleepUntilMs(&player->video.sleepCond, &player->video.sleepDrawMutex, getTime() + 100);
+			waitTime = framePosition - calculatePosition(player, 1);
+		}
+		if (player->meta.interrupt || playerGetSkipFlag(&player->sync.skip.videoWorkFrame)) {
+			render = 0;
+			outputAction = DIAGNOSTICS_OUTPUT_DROPPED_STATE;
+			break;
+		}
 		int64_t scaledWaitTime = unscalePlaybackPosition(player, waitTime);
 		if (scaledWaitTime <= MEDIACODEC_MAX_SCHEDULE_AHEAD_MS) {
 			int64_t renderTimeNs = getMonotonicTimeNs() + scaledWaitTime * 1000000LL;
@@ -156,6 +162,11 @@ static int renderMediaCodecFrame(Player * player, JNIEnv * env, AVStream * strea
 	if (renderResult < 0) {
 		LOGP("MediaCodec output buffer release failed: %d", renderResult);
 	}
+	if (render && renderResult >= 0) {
+		player->video.hardwareLastFramePresentedAt = getMonotonicTimeNs() / 1000000LL;
+		player->video.hardwareOutputSlot = hardwareOutputSlot(framePosition, getPlaybackSpeed(player));
+		player->video.hardwareOutputSpeed = getPlaybackSpeed(player);
+	}
 	if (finishSeeking && render && renderResult >= 0) {
 		player->sync.videoPositionNotSync = 0;
 		playerVideoCompletePausedSeekFrame(player);
@@ -185,93 +196,222 @@ static int renderMediaCodecFrame(Player * player, JNIEnv * env, AVStream * strea
 	return 1;
 }
 
+static void popHardwareOutput(Player * player) {
+	AVFrame * first = player->video.hardwareOutput[0];
+	av_frame_unref(first);
+	for (int i = 1; i < player->video.hardwareOutputCount; i++) {
+		player->video.hardwareOutput[i - 1] = player->video.hardwareOutput[i];
+	}
+	player->video.hardwareOutput[--player->video.hardwareOutputCount] = first;
+}
+
+static void discardHardwareOutput(Player * player, AVStream * stream, int action) {
+	AVFrame * frame = player->video.hardwareOutput[0];
+	int64_t position = getFramePositionMs(player, frame, stream);
+	AVMediaCodecBuffer * buffer = (AVMediaCodecBuffer *) frame->data[3];
+	int result = frame->format == AV_PIX_FMT_MEDIACODEC && buffer
+			? av_mediacodec_release_buffer(buffer, 0) : 0;
+	diagnosticsRecordOutput(player, frame, position, position - calculatePosition(player, 1), action, result);
+	popHardwareOutput(player);
+}
+
+// Called under video.frameMutex. Do not take flowMutex here: seek takes flow -> frame.
+static void catchUpHardwareDecoder(Player * player, AVStream * stream, PacketHolder ** pending) {
+	if (!player->play.playing || player->sync.videoPositionNotSync || player->video.hardwareDraining
+			|| playerVideoHasPendingSurface(player) || playerGetSkipFlag(&player->sync.skip.videoWorkFrame)
+			|| player->video.hardwareDecoderEof || player->video.hardwareCatchingUp
+			|| player->video.hardwareDecodedPosition < 0
+			|| (*pending && ((*pending)->type != PACKET_HOLDER_MEDIA || !(*pending)->packet))) return;
+	int64_t now = getTime();
+	int speed = getPlaybackSpeed(player);
+	int64_t clock = calculatePosition(player, 1);
+	int64_t late = clock - player->video.hardwareDecodedPosition;
+	if (late <= (int64_t) HARDWARE_CATCHUP_LATE_MS * speed / PLAYBACK_SPEED_DEFAULT) {
+		player->video.hardwareLateSince = 0;
+		return;
+	}
+	if (!player->video.hardwareLateSince) player->video.hardwareLateSince = now;
+	if (!hardwareCatchupDue(late, speed, player->video.hardwareLateSince,
+			player->video.hardwareLastCatchup, now) || now - player->video.hardwareCatchupScanAt < 100) return;
+	player->video.hardwareCatchupScanAt = now;
+	uint64_t generation = __atomic_load_n(&player->decode.packets.generation, __ATOMIC_ACQUIRE);
+	BlockingQueue * queue = &player->video.packetQueue;
+	QueueItem * best = NULL;
+	int64_t keyPosition = -1;
+	int scanned = 0, dropped = 0;
+	pthread_mutex_lock(&queue->mutex);
+	for (QueueItem * item = queue->queue.first; item && scanned++ < 4096; item = item->next) {
+		PacketHolder * holder = item->data;
+		if (!holder || holder->type != PACKET_HOLDER_MEDIA || holder->generation != generation) break;
+		AVPacket * packet = holder->packet;
+		if (packet && (packet->flags & AV_PKT_FLAG_KEY)) {
+			int64_t position = getTimestampPositionMs(player,
+					packet->pts != AV_NOPTS_VALUE ? packet->pts : packet->dts, stream->time_base);
+			if (position > keyPosition && hardwareCatchupKeyEligible(position,
+					player->video.hardwareDecodedPosition, clock, speed)) { best = item; keyPosition = position; }
+		}
+	}
+	if (best) while (queue->queue.first != best) {
+		playerPacketQueueFreeCallback(queueGet(&queue->queue)); dropped++;
+	}
+	pthread_mutex_unlock(&queue->mutex);
+	if (!best) {
+		// No future keyframe gamble, no arbitrary compressed-packet dropping.
+		if (now - player->video.hardwarePumpReportAt >= 1000) {
+			diagnosticsLog("player=%u hardware_catchup_wait reason=no_eligible_keyframe"
+					" scanned=%d late_media_ms=%" PRId64 " speed_milli=%d",
+					player->meta.diagnosticsId, scanned, late, speed);
+		}
+		return;
+	}
+	if (*pending) { playerPacketQueueFreeCallback(*pending); *pending = NULL; dropped++; }
+	// Return all Surface buffers before flushing; otherwise some codecs defer flush indefinitely.
+	playerVideoResetHardwareOutputLocked(player);
+	avcodec_flush_buffers(GET_CONTEXT(player, video));
+	player->video.hardwareLastCatchup = now;
+	player->video.hardwareCatchupTarget = clock;
+	player->video.hardwareCatchingUp = 1;
+	player->video.hardwareCatchups++;
+	player->video.hardwarePacketsSkipped += dropped;
+	diagnosticsLog("player=%u hardware_catchup key_ms=%" PRId64 " clock_ms=%" PRId64
+			" late_media_ms=%" PRId64 " skipped_packets=%d speed_milli=%d generation=%" PRIu64,
+			player->meta.diagnosticsId, keyPosition, clock, late, dropped, speed, generation);
+}
+
+static void reportHardwarePump(Player * player) {
+	int64_t now = getTime();
+	if (now - player->video.hardwarePumpReportAt < 1000) return;
+	player->video.hardwarePumpReportAt = now;
+	diagnosticsLog("player=%u hardware_pump ready=%d capacity=%d decoded_ms=%" PRId64
+			" clock_ms=%" PRId64 " cadence_drops=%" PRIu64 " superseded_drops=%" PRIu64
+			" catchups=%" PRIu64 " skipped_packets=%" PRIu64 " draining=%d eof=%d speed_milli=%d",
+			player->meta.diagnosticsId, player->video.hardwareOutputCount, HARDWARE_OUTPUT_CAPACITY,
+			player->video.hardwareDecodedPosition, calculatePosition(player, 1),
+			player->video.hardwareCadenceDrops, player->video.hardwareSupersededDrops,
+			player->video.hardwareCatchups, player->video.hardwarePacketsSkipped,
+			player->video.hardwareDraining, player->video.hardwareDecoderEof, getPlaybackSpeed(player));
+}
+
 void playerVideoDecodeMediaCodec(Player * player, JNIEnv * env, AVStream * stream) {
-	AVFrame * frame = av_frame_alloc();
-	PacketHolder * packetHolder = NULL;
+	PacketHolder * pending = NULL;
 	while (!player->meta.interrupt && player->video.hardwareDecoderActive) {
 		if (playerVideoHasPendingSurface(player)) {
+			if (pending) { playerPacketQueueFreeCallback(pending); pending = NULL; }
 			playerVideoApplyPendingSurface(player, env);
 			continue;
 		}
-		packetHolder = (PacketHolder *) blockingQueueGet(&player->video.packetQueue, 1);
-		if (packetHolder && packetHolder->type == PACKET_HOLDER_SURFACE_REQUEST) {
-			playerPacketQueueFreeCallback(packetHolder);
-			packetHolder = NULL;
-			playerVideoApplyPendingSurface(player, env);
-			continue;
+		pthread_mutex_lock(&player->play.finishMutex);
+		while (!player->meta.interrupt && !playerVideoCanDecode(player) && !playerVideoHasPendingSurface(player)) {
+			condSleepUntilMs(&player->play.finishCond, &player->play.finishMutex, getTime() + 100);
 		}
-		if (!player->video.hardwareDecoderActive) {
-			if (packetHolder) {
-				playerPacketQueueFreeCallback(packetHolder);
-				packetHolder = NULL;
-			}
-			break;
+		pthread_mutex_unlock(&player->play.finishMutex);
+		if (player->meta.interrupt) break;
+		if (playerVideoHasPendingSurface(player)) continue;
+		int progress = 0, decoderError = 0, end = 0;
+		playerSetDiagnosticsMediaCodecStage(player, DIAGNOSTICS_MEDIACODEC_STAGE_WAIT_FRAME_MUTEX, -1);
+		pthread_mutex_lock(&player->decode.video.frameMutex);
+		uint64_t generation = __atomic_load_n(&player->decode.packets.generation, __ATOMIC_ACQUIRE);
+		if (pending && pending->generation != generation) {
+			playerPacketQueueFreeCallback(pending); pending = NULL;
 		}
 		if (playerGetSkipFlag(&player->sync.skip.videoWorkFrame)) {
 			playerSetSkipFlag(&player->sync.skip.videoWorkFrame, 0);
 		}
-		if (!packetHolder || player->meta.interrupt) {
-			break;
-		}
-		condBroadcastLocked(&player->decode.packets.flowCond, &player->decode.packets.flowMutex);
-		if (player->meta.interrupt) {
-			break;
-		}
-		pthread_mutex_lock(&player->play.finishMutex);
-		while (!player->meta.interrupt && !playerVideoCanDecode(player)
-				&& !playerVideoHasPendingSurface(player)) {
-			pthread_cond_wait(&player->play.finishCond, &player->play.finishMutex);
-		}
-		pthread_mutex_unlock(&player->play.finishMutex);
-		if (player->meta.interrupt) {
-			break;
-		}
-		if (playerVideoHasPendingSurface(player)) {
-			playerPacketQueueFreeCallback(packetHolder);
-			packetHolder = NULL;
-			playerVideoApplyPendingSurface(player, env);
-			continue;
-		}
-		int packetSent = 0;
-		while (!player->meta.interrupt && !playerGetSkipFlag(&player->sync.skip.videoWorkFrame)) {
-			playerSetDiagnosticsMediaCodecStage(player, DIAGNOSTICS_MEDIACODEC_STAGE_WAIT_FRAME_MUTEX, -1);
-			pthread_mutex_lock(&player->decode.video.frameMutex);
-			if (player->meta.interrupt || playerGetSkipFlag(&player->sync.skip.videoWorkFrame)) {
-				pthread_mutex_unlock(&player->decode.video.frameMutex);
-				playerSetDiagnosticsMediaCodecStage(player, DIAGNOSTICS_MEDIACODEC_STAGE_IDLE, -1);
-				break;
+		catchUpHardwareDecoder(player, stream, &pending);
+		// Bounded pump: fill the two-frame lookahead before waiting for presentation.
+		// A packet stays owned here until send_packet ACCEPTS it (EAGAIN is not consumption).
+		for (int steps = 0; steps < 16 && !player->meta.interrupt
+				&& !playerGetSkipFlag(&player->sync.skip.videoWorkFrame)
+				&& !playerVideoHasPendingSurface(player) && playerVideoCanDecode(player)
+				&& player->video.hardwareOutputCount < HARDWARE_OUTPUT_CAPACITY; steps++) {
+			if (!pending && !player->video.hardwareDraining && !player->video.hardwareDecoderEof) {
+				pending = blockingQueueGet(&player->video.packetQueue, 0);
+				if (pending && pending->type == PACKET_HOLDER_SURFACE_REQUEST) {
+					playerPacketQueueFreeCallback(pending); pending = NULL; progress = 1; break;
+				}
+				if (pending && pending->generation != generation) {
+					playerPacketQueueFreeCallback(pending); pending = NULL; progress = 1; continue;
+				}
 			}
-			__atomic_add_fetch(&player->decode.video.diagnosticsFrameSerial, 1, __ATOMIC_RELAXED);
 			AVCodecContext * context = GET_CONTEXT(player, video);
-			int decodeResult = decodeMediaCodecFrame(player, context, packetHolder->packet, frame, &packetSent);
-			int renderResult = decodeResult > 0
-					? renderMediaCodecFrame(player, env, stream, frame) : 0;
-			if (decodeResult > 0 && renderResult > 0) {
-				player->video.hardwareDecodeErrors = 0;
-			} else if ((decodeResult < 0 || renderResult < 0) &&
-					++player->video.hardwareDecodeErrors >= 3) {
-				playerVideoFallbackMediaCodecToSoftware(player);
+			if (pending) {
+				playerSetDiagnosticsMediaCodecStage(player, DIAGNOSTICS_MEDIACODEC_STAGE_SEND_PACKET, -1);
+				int64_t started = diagnosticsCodecBegin(player, 0);
+				int result = avcodec_send_packet(context, pending->packet);
+				diagnosticsCodecEnd(player, 0, started, result);
+				if (result == 0) {
+					if (pending->packet) diagnosticsRecordPacketSubmitted();
+					else player->video.hardwareDraining = 1;
+					playerPacketQueueFreeCallback(pending); pending = NULL; progress = 1;
+				} else if (result != AVERROR(EAGAIN)) {
+					if (result == AVERROR_EOF) player->video.hardwareDecoderEof = 1;
+					else { diagnosticsRecordDecoderError(player, "send_packet", result); decoderError = 1; }
+					playerPacketQueueFreeCallback(pending); pending = NULL;
+					break;
+				}
 			}
-			pthread_mutex_unlock(&player->decode.video.frameMutex);
-			playerSetDiagnosticsMediaCodecStage(player, DIAGNOSTICS_MEDIACODEC_STAGE_IDLE, -1);
-			if (!playerVideoCanDecode(player)) {
+			if (player->video.hardwareDecoderEof) break;
+			AVFrame ** frame = &player->video.hardwareOutput[player->video.hardwareOutputCount];
+			if (!*frame) *frame = av_frame_alloc();
+			if (!*frame) { decoderError = 1; break; }
+			__atomic_add_fetch(&player->decode.video.diagnosticsFrameSerial, 1, __ATOMIC_RELAXED);
+			int result = receiveMediaCodecFrame(player, context, *frame);
+			if (result == 0) {
+				int64_t position = getFramePositionMs(player, *frame, stream);
+				if (position >= 0) player->video.hardwareDecodedPosition = position;
+				player->video.hardwareOutputCount++; progress = 1;
+			} else if (result == AVERROR_EOF) {
+				player->video.hardwareDecoderEof = 1; break;
+			} else if (result == AVERROR(EAGAIN)) {
+				if (!pending && !player->video.hardwareDraining && blockingQueueCount(&player->video.packetQueue) > 0) continue;
 				break;
-			}
-			if (decodeResult <= 0 || renderResult <= 0) {
-				break;
-			}
+			} else { diagnosticsRecordDecoderError(player, "receive_frame", result); decoderError = 1; break; }
 		}
-		if (!packetHolder->packet) {
+		while (player->video.hardwareOutputCount > 0 && playerVideoCanPresent(player)) {
+			int64_t first = getFramePositionMs(player, player->video.hardwareOutput[0], stream);
+			if (player->video.hardwareCatchingUp && first >= 0 && first < player->video.hardwareCatchupTarget) {
+				discardHardwareOutput(player, stream, DIAGNOSTICS_OUTPUT_DROPPED_LATE); progress = 1; continue;
+			}
+			player->video.hardwareCatchingUp = 0;
+			if (player->video.hardwareOutputCount > 1 && !player->sync.videoPositionNotSync) {
+				int64_t next = getFramePositionMs(player, player->video.hardwareOutput[1], stream);
+				if (first >= 0 && next >= first && next <= calculatePosition(player, 1)) {
+					discardHardwareOutput(player, stream, DIAGNOSTICS_OUTPUT_DROPPED_SUPERSEDED);
+					player->video.hardwareSupersededDrops++; progress = 1; continue;
+				}
+			}
+			if (renderMediaCodecFrame(player, env, stream, player->video.hardwareOutput[0]) < 0) decoderError = 1;
+			popHardwareOutput(player); progress = 1;
+			break; // Refill before waiting for the next presentation deadline.
+		}
+		if (decoderError) {
+			if (++player->video.hardwareDecodeErrors >= 3) playerVideoFallbackMediaCodecToSoftware(player);
+		} else if (progress) player->video.hardwareDecodeErrors = 0;
+		end = player->video.hardwareDecoderEof && player->video.hardwareOutputCount == 0;
+		reportHardwarePump(player);
+		pthread_mutex_unlock(&player->decode.video.frameMutex);
+		playerSetDiagnosticsMediaCodecStage(player, DIAGNOSTICS_MEDIACODEC_STAGE_IDLE, -1);
+		condBroadcastLocked(&player->decode.packets.flowCond, &player->decode.packets.flowMutex);
+		if (end) {
 			playerMarkStreamFinished(player, 1);
+			// Wait for a seek/surface request or stop; EOF is not a reason to terminate the worker.
+			pthread_mutex_lock(&player->play.finishMutex);
+			if (!player->meta.interrupt && !playerVideoHasPendingSurface(player)) {
+				condSleepUntilMs(&player->play.finishCond, &player->play.finishMutex, getTime() + 100);
+			}
+			pthread_mutex_unlock(&player->play.finishMutex);
+		} else if (!progress) {
+			// No busy spin, no wait for network packets while holding a codec/Surface lock.
+			pthread_mutex_lock(&player->video.sleepDrawMutex);
+			if (!player->meta.interrupt) condSleepUntilMs(&player->video.sleepCond,
+					&player->video.sleepDrawMutex, getTime() + 2);
+			pthread_mutex_unlock(&player->video.sleepDrawMutex);
 		}
-		playerPacketQueueFreeCallback(packetHolder);
-		packetHolder = NULL;
 	}
-	if (packetHolder) {
-		playerPacketQueueFreeCallback(packetHolder);
-	}
-	playerSetDiagnosticsMediaCodecStage(player, DIAGNOSTICS_MEDIACODEC_STAGE_IDLE, -1);
-	av_frame_free(&frame);
+	if (pending) playerPacketQueueFreeCallback(pending);
+	pthread_mutex_lock(&player->decode.video.frameMutex);
+	playerVideoResetHardwareOutputLocked(player);
+	pthread_mutex_unlock(&player->decode.video.frameMutex);
 }
 #endif
 
@@ -513,6 +653,7 @@ int playerVideoFallbackMediaCodecToSoftware(Player * player) {
 #endif
 static int setPlayerSurfaceLocked(JNIEnv * env, Player * player, jobject surface) {
 	int decoderReset = 0;
+	player->video.hardwareLastFramePresentedAt = 0;
 	if (surface) {
 		player->video.window = ANativeWindow_fromSurface(env, surface);
 		if ((*env)->ExceptionCheck(env)) {

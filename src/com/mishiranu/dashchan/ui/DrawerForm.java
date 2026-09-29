@@ -105,6 +105,8 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	private final ArrayList<ListItem> chans = new ArrayList<>();
 	private final ArrayList<ListItem> pages = new ArrayList<>();
 	private final ArrayList<ListItem> pageNavigation = new ArrayList<>();
+	private final ArrayList<ListItem> orderedDrawerItems = new ArrayList<>();
+	private List<Preferences.DrawerSection> drawerSectionOrder;
 	private final ArrayList<Page> collapsedPages = new ArrayList<>();
 	private final ArrayList<ListItem> favorites = new ArrayList<>();
 	private final ArrayList<ListItem> displayedFavorites = new ArrayList<>();
@@ -303,8 +305,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 
 		LinearLayout selectorContainer = new LinearLayout(context);
 		this.selectorContainer = selectorContainer;
-		selectorContainer.setBackgroundResource(ResourceUtils.getResourceId(context,
-				android.R.attr.selectableItemBackground, 0));
+		ViewUtils.setSelectableItemBackground(selectorContainer);
 		selectorContainer.setOrientation(LinearLayout.HORIZONTAL);
 		selectorContainer.setGravity(Gravity.CENTER_VERTICAL);
 		selectorContainer.setOnClickListener(v -> {
@@ -517,12 +518,16 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		boolean trackMyPostsEnabled = Preferences.isTrackMyPostsEnabled();
 		boolean collapseLongOpenThreadsEnabled = Preferences.isCollapseLongOpenThreadsEnabled();
 		Preferences.PagesListMode pagesListMode = Preferences.getPagesListMode();
+		List<Preferences.DrawerSection> drawerSectionOrder = Preferences.isDrawerCustomOrderEnabled()
+				? Preferences.getDrawerSectionOrder() : null;
 		if (this.mergeChans != mergeChans || this.showHistory != showHistory ||
 				this.combinedFeedsEnabled != combinedFeedsEnabled ||
 				this.redditWebReaderEnabled != redditWebReaderEnabled ||
 				this.trackMyPostsEnabled != trackMyPostsEnabled ||
 				this.collapseLongOpenThreadsEnabled != collapseLongOpenThreadsEnabled ||
-				this.pagesListMode != pagesListMode) {
+				this.pagesListMode != pagesListMode ||
+				!CommonUtils.equals(this.drawerSectionOrder, drawerSectionOrder)) {
+			this.drawerSectionOrder = drawerSectionOrder;
 			this.mergeChans = mergeChans;
 			this.showHistory = showHistory;
 			this.combinedFeedsEnabled = combinedFeedsEnabled;
@@ -1065,6 +1070,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 
 	private void updatePageNavigation() {
 		pageNavigation.clear();
+		menu.removeIf(item -> item.type == ListItem.Type.MENU && item.data == MENU_ITEM_MY_POSTS);
 		// Keep the existing forum scope: Reddit has its own drawer menu.
 		if (CHAN_REDDIT.equals(chanName)) return;
 		if (combinedFeedsEnabled && pagesListMode != Preferences.PagesListMode.HIDE_PAGES) {
@@ -1077,7 +1083,10 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 			}
 		}
 		if (trackMyPostsEnabled) {
-			pageNavigation.add(new ListItem(ListItem.Type.MENU, MENU_ITEM_MY_POSTS, R.drawable.ic_reply,
+			int repliesPosition = 0;
+			while (repliesPosition < menu.size() && (menu.get(repliesPosition).data == MENU_ITEM_BOARDS ||
+					menu.get(repliesPosition).data == MENU_ITEM_USER_BOARDS)) repliesPosition++;
+			menu.add(repliesPosition, new ListItem(ListItem.Type.MENU, MENU_ITEM_MY_POSTS, R.drawable.ic_reply,
 					context.getString(R.string.replies), MyPostsStorage.getInstance().getUnreadCount()));
 		}
 	}
@@ -1698,9 +1707,6 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		return viewType.ordinal();
 	}
 
-	@SuppressWarnings("unchecked")
-	private final List<ListItem>[] categoriesArray = new List[3];
-
 	private static class AdapterItem {
 		public final ListItem listItem;
 		public final int viewType;
@@ -1733,6 +1739,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	}
 
 	private void dispatchAdapterDiff(ArrayList<AdapterItem> previousItems) {
+		rebuildOrderedDrawerItems();
 		if (previousItems == null) {
 			notifyDataSetChanged();
 			scheduleDrawerPrewarm();
@@ -1830,28 +1837,48 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		return true;
 	}
 
-	private int prepareCategoriesArray() {
-		switch (categoriesOrder) {
-			case PAGES_FIRST: {
-				categoriesArray[0] = pageNavigation;
-				categoriesArray[1] = pages;
-				categoriesArray[2] = displayedFavorites;
-				return 3;
+	private void rebuildOrderedDrawerItems() {
+		orderedDrawerItems.clear();
+		if (drawerSectionOrder == null) {
+			if (categoriesOrder == CategoriesOrder.FAVORITES_FIRST) orderedDrawerItems.addAll(displayedFavorites);
+			orderedDrawerItems.addAll(pageNavigation);
+			if (categoriesOrder != CategoriesOrder.HIDE_PAGES) orderedDrawerItems.addAll(pages);
+			if (categoriesOrder != CategoriesOrder.FAVORITES_FIRST) orderedDrawerItems.addAll(displayedFavorites);
+			orderedDrawerItems.addAll(menu);
+			return;
+		}
+		// Split only at real section boundaries; keep headers, collapsed state and rows together.
+		java.util.EnumMap<Preferences.DrawerSection, List<ListItem>> blocks =
+				new java.util.EnumMap<>(Preferences.DrawerSection.class);
+		blocks.put(Preferences.DrawerSection.MY_BOARDS, pageNavigation);
+		if (categoriesOrder != CategoriesOrder.HIDE_PAGES) blocks.put(Preferences.DrawerSection.PAGES, pages);
+		Preferences.DrawerSection favoriteSection = Preferences.DrawerSection.FAVORITE_THREADS;
+		for (ListItem item : displayedFavorites) {
+			if (item.type == ListItem.Type.SECTION) {
+				favoriteSection = item.data == SECTION_ACTION_FAVORITES_MENU
+						? Preferences.DrawerSection.FAVORITE_THREADS : Preferences.DrawerSection.FAVORITE_BOARDS;
 			}
-			case FAVORITES_FIRST: {
-				categoriesArray[0] = displayedFavorites;
-				categoriesArray[1] = pageNavigation;
-				categoriesArray[2] = pages;
-				return 3;
+			blocks.computeIfAbsent(favoriteSection, key -> new ArrayList<>()).add(item);
+		}
+		for (ListItem item : menu) {
+			Preferences.DrawerSection section;
+			switch (item.data) {
+				case MENU_ITEM_COMBINED_FEEDS: section = Preferences.DrawerSection.MY_BOARDS; break;
+				case MENU_ITEM_BOARDS:
+				case MENU_ITEM_REDDIT_SECTIONS: section = Preferences.DrawerSection.BOARDS; break;
+				case MENU_ITEM_USER_BOARDS: section = Preferences.DrawerSection.USER_BOARDS; break;
+				case MENU_ITEM_MY_POSTS: section = Preferences.DrawerSection.REPLIES; break;
+				case MENU_ITEM_HISTORY: section = Preferences.DrawerSection.HISTORY; break;
+				case MENU_ITEM_LOCAL_ARCHIVES: section = Preferences.DrawerSection.ARCHIVES; break;
+				case MENU_ITEM_REDDIT_OFFICIAL_APP: section = Preferences.DrawerSection.REDDIT_APP; break;
+				case MENU_ITEM_PREFERENCES: section = Preferences.DrawerSection.SETTINGS; break;
+				default: throw new IllegalStateException("Unknown drawer menu item: " + item.data);
 			}
-			case HIDE_PAGES: {
-				categoriesArray[0] = pageNavigation;
-				categoriesArray[1] = displayedFavorites;
-				return 2;
-			}
-			default: {
-				return 0;
-			}
+			blocks.computeIfAbsent(section, key -> new ArrayList<>()).add(item);
+		}
+		for (Preferences.DrawerSection section : drawerSectionOrder) {
+			List<ListItem> block = blocks.get(section);
+			if (block != null) orderedDrawerItems.addAll(block);
 		}
 	}
 
@@ -1861,12 +1888,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		if (chanSelectMode) {
 			count += chans.size();
 		} else {
-			int arraySize = prepareCategoriesArray();
-			List<ListItem>[] categoriesArray = this.categoriesArray;
-			for (int i = 0; i < arraySize; i++) {
-				count += categoriesArray[i].size();
-			}
-			count += menu.size();
+			count += orderedDrawerItems.size();
 		}
 		return count;
 	}
@@ -1888,20 +1910,8 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 					return chans.get(position);
 				}
 			} else {
-				int arraySize = prepareCategoriesArray();
-				List<ListItem>[] categoriesArray = this.categoriesArray;
-				for (int i = 0; i < arraySize; i++) {
-					List<ListItem> listItems = categoriesArray[i];
-					if (position < listItems.size()) {
-						return listItems.get(position);
-					}
-					position -= listItems.size();
-					if (position < 0) {
-						throw new IndexOutOfBoundsException();
-					}
-				}
-				if (position < menu.size()) {
-					return menu.get(position);
+				if (position < orderedDrawerItems.size()) {
+					return orderedDrawerItems.get(position);
 				}
 			}
 		}
@@ -2480,6 +2490,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		if (workList != null && dragState != null) {
 			workList.add(workTo, workList.remove(workFrom));
 			if (workList == favorites) updateDisplayedFavorites();
+			rebuildOrderedDrawerItems();
 			notifyItemMoved(fromIndex, toIndex);
 			dragState.set(workFrom, workTo);
 			return true;

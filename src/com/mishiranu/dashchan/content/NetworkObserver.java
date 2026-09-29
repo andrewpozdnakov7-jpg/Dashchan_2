@@ -111,10 +111,11 @@ public class NetworkObserver {
 	private void update3GConnected28() {
 		boolean is3GAvailable = false;
 		Pair<Network, NetworkCapabilities> pair = getNetwork28();
-		if (pair.second != null && pair.second.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) {
+		if (pair != null && pair.second.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) {
 			// Is there a non-deprecated way to get network subtype without READ_PHONE_STATE permission?
 			android.net.NetworkInfo networkInfo = connectivityManager.getNetworkInfo(pair.first);
-			is3GAvailable = isNetworkType3G(networkInfo.getSubtype());
+			// Connectivity can disappear between the capabilities and subtype queries.
+			is3GAvailable = networkInfo != null && isNetworkType3G(networkInfo.getSubtype());
 		}
 		last3GAvailable = is3GAvailable;
 	}

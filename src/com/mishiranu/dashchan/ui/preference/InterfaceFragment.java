@@ -50,6 +50,19 @@ public class InterfaceFragment extends PreferenceFragment {
 					ApplicationLogoDialog.show(getChildFragmentManager()));
 		}
 		addHeader(R.string.appearance);
+		addList(Preferences.KEY_TOUCH_FEEDBACK, Arrays.asList("normal", "dimmed", "off"),
+				Preferences.DEFAULT_TOUCH_FEEDBACK, R.string.touch_feedback,
+				Arrays.asList(getString(R.string.touch_feedback_normal),
+						getString(R.string.touch_feedback_dimmed), getString(R.string.touch_feedback_off)))
+				.setOnAfterChangeListener(p -> requireActivity().recreate());
+		if ("dimmed".equals(Preferences.PREFERENCES.getString(Preferences.KEY_TOUCH_FEEDBACK,
+				Preferences.DEFAULT_TOUCH_FEEDBACK))) {
+			ThreadArrowTransparencyPreference intensity = new ThreadArrowTransparencyPreference(requireContext(),
+					Preferences.KEY_TOUCH_FEEDBACK_INTENSITY, Preferences.DEFAULT_TOUCH_FEEDBACK_INTENSITY,
+					R.string.touch_feedback_intensity);
+			addDialogPreference(intensity);
+			intensity.setOnAfterChangeListener(p -> requireActivity().recreate());
+		}
 		String scaleFormat = ResourceUtils.getColonString(getResources(), R.string.scale, "%d%%");
 		addSeek(Preferences.KEY_THUMBNAILS_SCALE, Preferences.DEFAULT_THUMBNAILS_SCALE,
 				getString(R.string.thumbnail_scale), scaleFormat, null,

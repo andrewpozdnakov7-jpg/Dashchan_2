@@ -285,6 +285,14 @@ jobs:
             echo "ORG_GRADLE_PROJECT_dashchanLibyuvSourceDir=$source_root/yuv"
           } >> "$GITHUB_ENV"
 
+      - name: Test native video scheduling policy
+        if: steps.validation.outputs.build_required == 'true'
+        run: |
+          set -euo pipefail
+          cc -std=c99 -Wall -Wextra -Wpedantic -Werror \
+            jni/tests/player_video_policy_test.c -o "$RUNNER_TEMP/player-video-policy-test"
+          "$RUNNER_TEMP/player-video-policy-test"
+
       - name: Build APK and run GitHub unit tests
         if: steps.validation.outputs.build_required == 'true'
         run: |

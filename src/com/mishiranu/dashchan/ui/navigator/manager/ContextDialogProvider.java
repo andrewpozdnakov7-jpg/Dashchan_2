@@ -2,8 +2,6 @@ package com.mishiranu.dashchan.ui.navigator.manager;
 
 import android.os.CancellationSignal;
 import android.view.View;
-import android.widget.Button;
-import android.widget.LinearLayout;
 import android.widget.TextView;
 import androidx.recyclerview.widget.RecyclerView;
 import chan.content.Chan;
@@ -35,10 +33,7 @@ final class ContextDialogProvider extends DialogUnit.DialogProvider<ContextDialo
 		implements UiManager.PostsProvider {
 	static final class Factory extends DialogUnit.DialogProvider.Factory<ContextDialogProvider> {
 		ContextGraph.Key target;
-		final Set<ContextGraph.Key> expanded = new HashSet<>();
 		final ArrayDeque<ContextGraph.Key> history = new ArrayDeque<>();
-		int before = 3, limit = ContextGraph.INITIAL;
-		boolean scan;
 		long cacheEpoch = PagesDatabase.getInstance().getContextEpoch();
 		boolean cacheErased;
 		PostNumber anchor;
@@ -56,15 +51,15 @@ final class ContextDialogProvider extends DialogUnit.DialogProvider<ContextDialo
 	private final Factory factory;
 	private ExecutorService worker = ConcurrentUtils.newSingleThreadPool(3000, "DiscussionContext", null);
 	private final List<PostItem> visible = new ArrayList<>();
-	private final Map<PostNumber, CharSequence> placeholders = new HashMap<>(), captions = new HashMap<>();
+	private final Map<PostNumber, CharSequence> placeholders = new HashMap<>();
 	private final Set<ContextGraph.Key> revealed = new HashSet<>();
 	private final List<ContextGraph.Key> retained = new ArrayList<>();
 	private CancellationSignal signal;
 	private ContextSource.Snapshot snapshot;
 	private RecyclerView list;
 	private TextView status;
-	private Button options;
 	private int generation;
+	private long loadStarted;
 	private boolean closed, loading, failed, cacheErased, updatesAvailable, selectedAnchor = true;
 	private ContextGraph.Result displayedResult;
 	private final Runnable invalidateCache;
@@ -73,7 +68,7 @@ final class ContextDialogProvider extends DialogUnit.DialogProvider<ContextDialo
 		if (closed) return;
 		cancelWork(); cacheErased = true; snapshot = null; displayedResult = null;
 		factory.cacheErased = true;
-		visible.clear(); placeholders.clear(); captions.clear(); retained.clear(); revealed.clear();
+		visible.clear(); placeholders.clear(); retained.clear(); revealed.clear();
 		failed = true; updateStatus(); switchState(DialogUnit.State.LIST, null);
 	}
 
@@ -84,14 +79,7 @@ final class ContextDialogProvider extends DialogUnit.DialogProvider<ContextDialo
 		cacheErased = factory.cacheErased || factory.cacheEpoch != PagesDatabase.getInstance().getContextEpoch();
 		PagesDatabase.getInstance().registerContextInvalidation(invalidateCache);
 		selectedAnchor = factory.anchor == null;
-		PostItem selected = source.postsProvider.findPostItem(ContextSource.number(factory.target));
-		if (!cacheErased && selected != null && matches(selected) && !source.postStateProvider.isHiddenResolve(selected)) {
-			try {
-				visible.add(PostItem.createPost(selected.getPost(), Chan.get(source.chanName), selected.getBoardName(),
-						selected.getThreadNumber(), factory.original));
-				captions.put(selected.getPostNumber(), ui.getContext().getText(R.string.context_selected));
-			} catch (RuntimeException ignored) {}
-		}
+		// Do not briefly render a potentially stale UI post before the local snapshot arrives.
 		load();
 	}
 	private static UiManager.ConfigurationSet configuration(UiManager.ConfigurationSet source, ContextDialogProvider p) {
@@ -112,7 +100,6 @@ final class ContextDialogProvider extends DialogUnit.DialogProvider<ContextDialo
 		// Opening local context must not schedule translations or model downloads for newly read cards.
 		result.showTranslatedComments = false;
 		result.contextSelect = p::select;
-		result.contextExpand = p::expand;
 		return result;
 	}
 	private ContextGraph.Key key(PostItem post) {
@@ -138,7 +125,6 @@ final class ContextDialogProvider extends DialogUnit.DialogProvider<ContextDialo
 		factory.target = factory.history.removeLast(); resetSelection(); load(); return true;
 	}
 	@Override public void onRequestUpdateDemandSet(UiManager.DemandSet demand, int index) {
-		demand.contextCaption = captions.get(visible.get(index).getPostNumber());
 		demand.lastInList = index == visible.size() - 1;
 	}
 	@Override public View createControls(RecyclerView recycler) {
@@ -152,36 +138,24 @@ final class ContextDialogProvider extends DialogUnit.DialogProvider<ContextDialo
 			selectedAnchor = factory.anchor == null;
 		}
 		list = recycler;
-		LinearLayout header = new LinearLayout(uiManager.getContext());
-		header.setOrientation(LinearLayout.VERTICAL);
-		int pad = (int) (12 * ResourceUtils.obtainDensity(header)); header.setPadding(pad, pad, pad, 0);
-		status = new TextView(header.getContext());
-		header.addView(status, new LinearLayout.LayoutParams(-1, -2));
-		options = new Button(header.getContext()); options.setText(R.string.context_actions);
-		options.setOnClickListener(v -> {
-			DialogMenu menu = new DialogMenu(uiManager.getContext());
-			if (loading) menu.add(R.string.context_stop, () -> { cancelWork(); updateStatus(); });
-			else {
-				menu.add(R.string.context_local_scan, () -> { factory.scan = true; load(); });
-				if (factory.before < ContextGraph.MAX_DEPTH) menu.add(R.string.context_more_before,
-						() -> { factory.before = Math.min(ContextGraph.MAX_DEPTH, factory.before + 3); rebuild(); });
-				if (factory.limit < ContextGraph.MAX_CARDS) menu.add(R.string.context_more,
-						() -> { factory.limit = Math.min(ContextGraph.MAX_CARDS, factory.limit + ContextGraph.PAGE); rebuild(); });
-				menu.add(R.string.context_refresh, this::load);
-			}
-			if (!factory.history.isEmpty()) menu.add(R.string.context_previous, this::onBackPressed);
-			menu.create().show();
-		});
-		header.addView(options, new LinearLayout.LayoutParams(-1, -2));
+		status = new TextView(uiManager.getContext());
+		int pad = (int) (12 * ResourceUtils.obtainDensity(status));
+		status.setPadding(pad, pad, pad, 0);
 		if (resume) load();
-		updateStatus(); return header;
+		updateStatus(); return status;
 	}
 	private void updateStatus() {
 		if (status == null) return;
-		int message = loading ? R.string.context_loading : cacheErased ? R.string.context_cache_cleared
-				: failed ? R.string.context_read_error : updatesAvailable ? R.string.context_updates : R.string.context_local;
-		status.setText(uiManager.getContext().getString(R.string.discussion_context) + "\n"
-				+ uiManager.getContext().getString(message));
+		int message = cacheErased ? R.string.context_cache_cleared
+				: failed ? R.string.context_read_error : updatesAvailable ? R.string.context_updates : 0;
+		status.setText(message != 0 ? uiManager.getContext().getText(message) : "");
+		status.setVisibility(message != 0 ? View.VISIBLE : View.GONE);
+	}
+	private void appendStatus(int message) {
+		if (status == null) return;
+		if (status.length() > 0) status.append("\n");
+		status.append(uiManager.getContext().getText(message));
+		status.setVisibility(View.VISIBLE);
 	}
 	private void cancelWork() {
 		generation++;
@@ -190,26 +164,28 @@ final class ContextDialogProvider extends DialogUnit.DialogProvider<ContextDialo
 	}
 	private void load() {
 		if (closed) return;
+		loadStarted = android.os.SystemClock.elapsedRealtime();
 		cancelWork(); failed = false; loading = true; updateStatus();
 		int current = generation;
 		signal = new CancellationSignal(); CancellationSignal token = signal;
 		ContextGraph.Key target = factory.target;
-		boolean scan = factory.scan;
 		PagesDatabase db = PagesDatabase.getInstance();
 		PagesDatabase.ThreadKey thread = new PagesDatabase.ThreadKey(target.source(), target.board(), target.thread());
 		PagesDatabase.Cache.State seedRevision = db.getCacheState(thread);
 		long seedEpoch = db.getContextEpoch();
-		// Copy immutable raw posts, not live PostItem caches, sets or Android spans.
-		List<Post> seeds = new ArrayList<>(); int chars = 0;
-		PostItem selected = source.postsProvider.findPostItem(ContextSource.number(target));
-		if (!cacheErased && selected != null && matches(selected)) { seeds.add(selected.getPost()); chars += selected.getPost().comment.length(); }
-		if (!cacheErased) for (PostItem post : source.postsProvider) {
-			if (seeds.size() >= 500 || chars >= ContextGraph.MAX_TEXT) break;
-			if (matches(post) && post != selected) { seeds.add(post.getPost()); chars += post.getPost().comment.length(); }
+		if (cacheErased) { loading = false; updateStatus(); return; }
+		ContextSource.Snapshot cached = snapshot != null ? snapshot : source.postsProvider.getContextSnapshot();
+		if (ContextSource.reusable(cached, target, seedRevision, seedEpoch)) {
+			snapshot = cached;
+			android.util.Log.d("DiscussionContext", "snapshot source=reused_graph posts=" + cached.posts().size());
+			rebuild(); return;
 		}
+		snapshot = null;
+		ContextSource.Seed seeds = source.postsProvider.getContextSeed(target);
 		worker.execute(() -> {
 			try {
-				ContextSource.Snapshot loaded = ContextSource.load(Chan.get(target.source()), target, seeds, scan, token);
+				// Bounded local-cache scan runs on the worker, never a network request.
+				ContextSource.Snapshot loaded = ContextSource.load(Chan.get(target.source()), target, seeds, token);
 				ConcurrentUtils.HANDLER.post(() -> {
 					if (closed || current != generation || token.isCanceled()) return;
 					loading = false;
@@ -217,6 +193,7 @@ final class ContextDialogProvider extends DialogUnit.DialogProvider<ContextDialo
 					if (loaded.changed() || !seedRevision.equals(loaded.revision())
 							|| !loaded.revision().equals(db.getCacheState(thread))) { failed = true; updateStatus(); return; }
 					updatesAvailable = false; failed = false;
+					source.postsProvider.setContextSnapshot(loaded);
 					snapshot = loaded; rebuild();
 				});
 			} catch (RuntimeException e) {
@@ -234,12 +211,13 @@ final class ContextDialogProvider extends DialogUnit.DialogProvider<ContextDialo
 		int current = generation; signal = new CancellationSignal(); CancellationSignal token = signal;
 		ContextSource.Snapshot data = snapshot;
 		ContextGraph.Key target = factory.target;
-		Set<ContextGraph.Key> expanded = new HashSet<>(factory.expanded);
 		List<ContextGraph.Key> keep = new ArrayList<>(retained);
-		int before = factory.before, limit = factory.limit;
 		worker.execute(() -> {
 			try {
-				ContextGraph.Result result = data.graph().build(target, before, expanded, limit, keep, token::isCanceled);
+				long started = android.os.SystemClock.elapsedRealtime();
+				ContextGraph.Result result = data.graph().buildContext(target, keep, token::isCanceled);
+				android.util.Log.d("DiscussionContext", "traversal cards=" + result.entries().size()
+						+ " elapsedMs=" + (android.os.SystemClock.elapsedRealtime() - started));
 				ConcurrentUtils.HANDLER.post(() -> {
 					if (!closed && current == generation && !token.isCanceled()) apply(data, result);
 				});
@@ -253,14 +231,19 @@ final class ContextDialogProvider extends DialogUnit.DialogProvider<ContextDialo
 		});
 	}
 	private void apply(ContextSource.Snapshot data, ContextGraph.Result result) {
+		long started = android.os.SystemClock.elapsedRealtime();
 		if (data.epoch() != PagesDatabase.getInstance().getContextEpoch()) { invalidateCache.run(); return; }
+		if (!data.revision().equals(PagesDatabase.getInstance().getCacheState(new PagesDatabase.ThreadKey(
+				factory.target.source(), factory.target.board(), factory.target.thread())))) {
+			loading = false; failed = true; updateStatus(); return;
+		}
 		displayedResult = result;
 		ListPosition anchor = list != null ? ListPosition.obtain(list, null) : null;
 		PostNumber anchorNumber = factory.anchor != null ? factory.anchor : anchor != null && anchor.position < visible.size()
 				? visible.get(anchor.position).getPostNumber() : null;
 		int anchorOffset = factory.anchor != null ? factory.anchorOffset : anchor != null ? anchor.offset : 0;
 		factory.anchor = null;
-		visible.clear(); placeholders.clear(); captions.clear(); retained.clear();
+		visible.clear(); placeholders.clear(); retained.clear();
 		Chan chan = Chan.get(factory.target.source());
 		boolean hiddenGap = false;
 		for (ContextGraph.Entry entry : result.entries()) {
@@ -269,8 +252,6 @@ final class ContextDialogProvider extends DialogUnit.DialogProvider<ContextDialo
 			PostItem post = null;
 			try { if (raw != null) post = PostItem.createPost(raw, chan, key.board(), key.thread(), factory.original); }
 			catch (RuntimeException ignored) { /* Corrupt reference markup must not crash the reader. */ }
-			CharSequence caption = uiManager.getContext().getText(entry.role() == ContextGraph.Role.SELECTED
-					? R.string.context_selected : entry.role() == ContextGraph.Role.BEFORE ? R.string.context_before : R.string.context_replies);
 			if (post != null && configurationSet.postStateProvider.isHiddenResolve(post)) {
 				hiddenGap = true;
 				if (Preferences.isRemoveHiddenPosts()) continue;
@@ -278,23 +259,14 @@ final class ContextDialogProvider extends DialogUnit.DialogProvider<ContextDialo
 			} else if (post == null) {
 				Post.Builder builder = new Post.Builder(); builder.number = ContextSource.number(key);
 				post = PostItem.createPost(builder.build(false), chan, key.board(), key.thread(), factory.original);
-				placeholders.put(post.getPostNumber(), caption + "\n" + uiManager.getContext().getString(R.string.context_unavailable, key.number()));
+				placeholders.put(post.getPostNumber(), uiManager.getContext().getString(R.string.context_unavailable, key.number()));
 			}
-			captions.put(post.getPostNumber(), caption); visible.add(post);
-		}
-		for (PostItem post : visible) if (!placeholders.containsKey(post.getPostNumber())) {
-			List<String> parents = new ArrayList<>();
-			for (ContextGraph.Key parent : data.graph().parents(key(post))) {
-				PostItem parentPost = findPostItem(ContextSource.number(parent));
-				if (parentPost != null && !configurationSet.postStateProvider.isHiddenResolve(parentPost) && parents.size() < 6) parents.add(parent.number());
-			}
-			if (!parents.isEmpty()) captions.put(post.getPostNumber(), captions.get(post.getPostNumber()) + " · "
-					+ uiManager.getContext().getString(R.string.context_reply_to, android.text.TextUtils.join(", ", parents)));
+			visible.add(post);
 		}
 		loading = false; updateStatus();
-		if (hiddenGap && status != null) status.append("\n" + uiManager.getContext().getString(R.string.context_hidden));
-		if ((result.limited() || factory.before >= ContextGraph.MAX_DEPTH || factory.limit >= ContextGraph.MAX_CARDS) && status != null) {
-			status.append("\n" + uiManager.getContext().getString(R.string.context_limited));
+		if (hiddenGap) appendStatus(R.string.context_hidden);
+		if (result.limited()) {
+			appendStatus(R.string.context_limited);
 		}
 		switchState(DialogUnit.State.LIST, () -> {
 			if (list == null) return;
@@ -304,22 +276,19 @@ final class ContextDialogProvider extends DialogUnit.DialogProvider<ContextDialo
 			}
 			selectedAnchor = false;
 		});
+		android.util.Log.d("DiscussionContext", "display cards=" + visible.size() + " bindMs="
+				+ (android.os.SystemClock.elapsedRealtime() - started) + " totalMs="
+				+ (android.os.SystemClock.elapsedRealtime() - loadStarted));
 	}
 	private void resetSelection() {
-		factory.anchor = null; factory.expanded.clear(); retained.clear(); revealed.clear();
-		factory.limit = ContextGraph.INITIAL; factory.before = 3; selectedAnchor = true;
-		snapshot = null; displayedResult = null; visible.clear(); captions.clear(); placeholders.clear();
+		factory.anchor = null; retained.clear(); revealed.clear(); selectedAnchor = true;
+		displayedResult = null; visible.clear(); placeholders.clear();
 		switchState(DialogUnit.State.LIST, null);
 	}
 	private void select(PostItem post) {
 		if (closed || !matches(post) || placeholders.containsKey(post.getPostNumber())) return;
 		if (factory.history.size() == 5) factory.history.removeFirst();
 		factory.history.addLast(factory.target); factory.target = key(post); resetSelection(); load();
-	}
-	private void expand(PostItem post) {
-		if (!closed && matches(post) && factory.expanded.size() < ContextGraph.MAX_CARDS) {
-			factory.expanded.add(key(post)); factory.limit = Math.min(ContextGraph.MAX_CARDS, factory.limit + 20); rebuild();
-		}
 	}
 	@Override public boolean onItemClick(RecyclerView.ViewHolder holder, int position, PostItem post, boolean longClick) {
 		if (placeholders.containsKey(post.getPostNumber())) return true;
@@ -339,7 +308,7 @@ final class ContextDialogProvider extends DialogUnit.DialogProvider<ContextDialo
 			cancelWork();
 			updatesAvailable = true;
 			if (snapshot != null && displayedResult != null) apply(snapshot, displayedResult);
-			else { visible.clear(); placeholders.clear(); captions.clear(); switchState(DialogUnit.State.LIST, null); }
+			else { visible.clear(); placeholders.clear(); switchState(DialogUnit.State.LIST, null); }
 			updateStatus();
 		}
 	}
@@ -352,6 +321,6 @@ final class ContextDialogProvider extends DialogUnit.DialogProvider<ContextDialo
 		}
 		closed = true; cancelWork(); worker.shutdownNow(); snapshot = null; displayedResult = null;
 		stateListener = null;
-		visible.clear(); captions.clear(); placeholders.clear(); list = null; status = null; options = null;
+		visible.clear(); placeholders.clear(); list = null; status = null;
 	}
 }

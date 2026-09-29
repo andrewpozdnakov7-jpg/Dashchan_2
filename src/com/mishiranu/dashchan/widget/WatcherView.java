@@ -46,7 +46,7 @@ public class WatcherView extends FrameLayout {
 	public WatcherView(Context context, ColorSet colorSet) {
 		super(context);
 
-		setBackgroundResource(ResourceUtils.getResourceId(context, android.R.attr.selectableItemBackground, 0));
+		com.mishiranu.dashchan.util.ViewUtils.setSelectableItemBackground(this);
 		progressBar = new ProgressBar(context, null, android.R.attr.progressBarStyleSmall);
 		progressBar.setIndeterminateTintList(ColorStateList.valueOf(Color.WHITE));
 		addView(progressBar, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT,
