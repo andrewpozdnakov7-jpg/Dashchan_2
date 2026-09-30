@@ -15,9 +15,6 @@ import android.text.TextUtils;
 import android.view.ContextThemeWrapper;
 import android.view.Gravity;
 import android.view.KeyEvent;
-import android.view.ActionMode;
-import android.view.Menu;
-import android.view.MenuItem;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewConfiguration;
@@ -26,6 +23,7 @@ import android.view.WindowManager;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
+import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -92,6 +90,10 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	private final InputMethodManager inputMethodManager;
 
 	private final PaddedRecyclerView recyclerView;
+	private final LinearLayout contentView;
+	private final LinearLayout favoriteSelectionPanel;
+	private final TextView favoriteSelectionCount;
+	private final Button favoriteSelectionDelete;
 	private final EditText searchEdit;
 	private final View selectorContainer;
 	private final View headerView;
@@ -134,7 +136,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	private int drawerState = DrawerLayout.STATE_IDLE;
 	private boolean drawerOpened;
 	private boolean drawerAlwaysVisible;
-	private ActionMode favoriteSelectionActionMode;
+	private boolean favoriteSelectionActive;
 	private final HashSet<Long> selectedFavoriteIds = new HashSet<>();
 
 	public static final int RESULT_REMOVE_ERROR_MESSAGE = 0x00000001;
@@ -267,6 +269,43 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		drawerIconColor = ResourceUtils.getColor(context, android.R.attr.textColorSecondary);
 
 		float density = ResourceUtils.obtainDensity(context);
+		// Keep selection controls in the drawer, not in the Activity's obscured ActionMode.
+		contentView = new LinearLayout(context);
+		contentView.setOrientation(LinearLayout.VERTICAL);
+		contentView.addView(recyclerView, new LinearLayout.LayoutParams(
+				ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+		favoriteSelectionPanel = new LinearLayout(context);
+		favoriteSelectionPanel.setOrientation(LinearLayout.VERTICAL);
+		favoriteSelectionPanel.setBackgroundColor(theme.card);
+		favoriteSelectionPanel.setPadding((int) (8f * density), 0, (int) (8f * density), 0);
+		favoriteSelectionPanel.setVisibility(View.GONE);
+		contentView.addView(favoriteSelectionPanel, new LinearLayout.LayoutParams(
+				ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+		LinearLayout selectionHeader = new LinearLayout(context);
+		selectionHeader.setGravity(Gravity.CENTER_VERTICAL);
+		favoriteSelectionPanel.addView(selectionHeader);
+		favoriteSelectionCount = new TextView(context);
+		favoriteSelectionCount.setTextColor(ResourceUtils.getColor(context, android.R.attr.textColorPrimary));
+		favoriteSelectionCount.setTextSize(16);
+		selectionHeader.addView(favoriteSelectionCount, new LinearLayout.LayoutParams(0,
+				ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+		Button cancelSelection = createFavoriteSelectionButton(android.R.string.cancel);
+		selectionHeader.addView(cancelSelection, new LinearLayout.LayoutParams(0,
+				ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+		cancelSelection.setOnClickListener(v -> finishFavoriteSelection());
+		LinearLayout selectionActions = new LinearLayout(context);
+		favoriteSelectionPanel.addView(selectionActions);
+		Button selectAll = createFavoriteSelectionButton(R.string.select_all);
+		selectionActions.addView(selectAll, new LinearLayout.LayoutParams(0,
+				ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+		selectAll.setOnClickListener(v -> selectAllFavoriteThreads());
+		favoriteSelectionDelete = createFavoriteSelectionButton(R.string.delete);
+		selectionActions.addView(favoriteSelectionDelete, new LinearLayout.LayoutParams(0,
+				ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+		favoriteSelectionDelete.setOnClickListener(v -> {
+			ArrayList<FavoritesStorage.FavoriteItem> selected = collectSelectedFavoriteThreads();
+			if (favoriteSelectionActive && !selected.isEmpty()) showDeleteSelectedFavoritesDialog(selected);
+		});
 
 		LinearLayout headerView = new LinearLayout(context);
 		headerView.setOrientation(LinearLayout.VERTICAL);
@@ -433,7 +472,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	}
 
 	public View getContentView() {
-		return recyclerView;
+		return contentView;
 	}
 
 	public View getHeaderView() {
@@ -554,7 +593,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 
 	private void onItemClick(int position) {
 		ListItem listItem = getItem(position);
-		if (favoriteSelectionActionMode != null) {
+		if (favoriteSelectionActive) {
 			if (listItem.type == ListItem.Type.FAVORITE && listItem.isThreadItem()) {
 				toggleFavoriteSelection(listItem);
 			}
@@ -600,18 +639,21 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	}
 
 	private boolean onItemLongClick(ViewHolder holder) {
-		if (favoriteSelectionActionMode != null) {
-			ListItem listItem = getItem(holder.getAdapterPosition());
+		int position = holder.getBindingAdapterPosition();
+		if (position == RecyclerView.NO_POSITION || position >= getItemCount()) {
+			return false;
+		}
+		ListItem listItem = getItem(position);
+		if (favoriteSelectionActive) {
 			if (listItem.type == ListItem.Type.FAVORITE && listItem.isThreadItem()) {
 				toggleFavoriteSelection(listItem);
-				return true;
 			}
+			return true;
 		}
 		if (chanSelectMode) {
 			sortableHelper.start(holder);
 			return true;
 		}
-		ListItem listItem = getItem(holder.getAdapterPosition());
 		if (listItem.type == ListItem.Type.FAVORITE && listItem.threadNumber != null &&
 				FavoritesStorage.getInstance().canSortManually() && holder.isMultipleFingers()) {
 			sortableHelper.start(holder);
@@ -629,14 +671,34 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	}
 
 	private void startFavoriteSelection() {
-		if (favoriteSelectionActionMode == null && getVisibleFavoriteThreadCount() > 0) {
+		if (!favoriteSelectionActive && getVisibleFavoriteThreadCount() > 0) {
 			ArrayList<AdapterItem> previousItems = createAdapterSnapshot();
-			ActionMode actionMode = recyclerView.startActionMode(favoriteSelectionCallback);
-			favoriteSelectionActionMode = actionMode;
-			if (actionMode != null) {
-				dispatchAdapterDiff(previousItems);
-				updateFavoriteSelectionActionMode();
-			}
+			favoriteSelectionActive = true;
+			selectedFavoriteIds.clear();
+			hideKeyboard();
+			favoriteSelectionPanel.setVisibility(View.VISIBLE);
+			dispatchAdapterDiff(previousItems);
+			updateFavoriteSelectionPanel();
+		}
+	}
+
+	private Button createFavoriteSelectionButton(int textResId) {
+		Button button = new Button(context, null, android.R.attr.borderlessButtonStyle);
+		button.setText(textResId);
+		button.setAllCaps(false);
+		button.setMinWidth(0);
+		button.setMinimumWidth(0);
+		button.setMinHeight((int) (48f * ResourceUtils.obtainDensity(context)));
+		return button;
+	}
+
+	private void finishFavoriteSelection() {
+		if (favoriteSelectionActive) {
+			ArrayList<AdapterItem> previousItems = createAdapterSnapshot();
+			favoriteSelectionActive = false;
+			selectedFavoriteIds.clear();
+			favoriteSelectionPanel.setVisibility(View.GONE);
+			dispatchAdapterDiff(previousItems);
 		}
 	}
 
@@ -652,7 +714,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		if (!selectedFavoriteIds.add(listItem.id)) selectedFavoriteIds.remove(listItem.id);
 		int position = findAdapterPosition(listItem.id);
 		if (position != RecyclerView.NO_POSITION) notifyItemChanged(position);
-		updateFavoriteSelectionActionMode();
+		updateFavoriteSelectionPanel();
 	}
 
 	private int findAdapterPosition(long id) {
@@ -662,12 +724,11 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		return RecyclerView.NO_POSITION;
 	}
 
-	private void updateFavoriteSelectionActionMode() {
-		if (favoriteSelectionActionMode != null) {
-			favoriteSelectionActionMode.setTitle(context.getString(R.string.selected) + ": "
+	private void updateFavoriteSelectionPanel() {
+		if (favoriteSelectionActive) {
+			favoriteSelectionCount.setText(context.getString(R.string.selected) + ": "
 					+ selectedFavoriteIds.size());
-			MenuItem delete = favoriteSelectionActionMode.getMenu().findItem(FAVORITE_SELECTION_DELETE);
-			if (delete != null) delete.setEnabled(!selectedFavoriteIds.isEmpty());
+			favoriteSelectionDelete.setEnabled(!selectedFavoriteIds.isEmpty());
 		}
 	}
 
@@ -772,7 +833,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	@Override
 	public void onDrawerClosed(@NonNull View drawerView) {
 		drawerOpened = false;
-		if (favoriteSelectionActionMode != null) favoriteSelectionActionMode.finish();
+		finishFavoriteSelection();
 		setWatcherProgressAnimationsEnabled(false);
 		hideKeyboard();
 		setChanSelectMode(false);
@@ -1229,7 +1290,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 			}
 		}
 		updateDisplayedFavorites();
-		if (favoriteSelectionActionMode != null) {
+		if (favoriteSelectionActive) {
 			HashSet<Long> visibleIds = new HashSet<>();
 			for (ListItem listItem : this.favorites) {
 				if (listItem.type == ListItem.Type.FAVORITE && listItem.isThreadItem()) {
@@ -1237,7 +1298,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 				}
 			}
 			selectedFavoriteIds.retainAll(visibleIds);
-			updateFavoriteSelectionActionMode();
+			updateFavoriteSelectionPanel();
 		}
 	}
 
@@ -1444,11 +1505,9 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	private static final int FAVORITES_MENU_CLEAR_DELETED = 2;
 	private static final int FAVORITES_MENU_HIDE_DELETED = 3;
 	private static final int FAVORITES_MENU_SELECT = 5;
-	private static final int FAVORITE_SELECTION_SELECT_ALL = 1;
-	private static final int FAVORITE_SELECTION_DELETE = 2;
 
 	private void setFavoriteThreadsCollapsed(boolean collapsed) {
-		if (favoriteSelectionActionMode != null) favoriteSelectionActionMode.finish();
+		finishFavoriteSelection();
 		Preferences.setFavoriteThreadsCollapsed(collapsed);
 		updateItems(false, true);
 	}
@@ -1544,68 +1603,29 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		}
 	};
 
-	private final ActionMode.Callback favoriteSelectionCallback = new ActionMode.Callback() {
-		@Override
-		public boolean onCreateActionMode(ActionMode mode, Menu menu) {
-			mode.setTitle(context.getString(R.string.selected) + ": 0");
-			menu.add(0, FAVORITE_SELECTION_SELECT_ALL, 0, R.string.select_all)
-					.setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM);
-			menu.add(0, FAVORITE_SELECTION_DELETE, 1, R.string.delete)
-					.setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM);
-			menu.findItem(FAVORITE_SELECTION_DELETE).setEnabled(false);
-			return true;
-		}
-
-		@Override
-		public boolean onPrepareActionMode(ActionMode mode, Menu menu) {
-			MenuItem delete = menu.findItem(FAVORITE_SELECTION_DELETE);
-			if (delete != null) delete.setEnabled(!selectedFavoriteIds.isEmpty());
-			return true;
-		}
-
-		@Override
-		public boolean onActionItemClicked(ActionMode mode, MenuItem item) {
-			switch (item.getItemId()) {
-				case FAVORITE_SELECTION_SELECT_ALL: {
-					ArrayList<AdapterItem> previousItems = createAdapterSnapshot();
-					selectedFavoriteIds.clear();
-					for (ListItem listItem : favorites) {
-						if (listItem.type == ListItem.Type.FAVORITE && listItem.isThreadItem()) {
-							selectedFavoriteIds.add(listItem.id);
-						}
-					}
-					dispatchAdapterDiff(previousItems);
-					updateFavoriteSelectionActionMode();
-					return true;
-				}
-				case FAVORITE_SELECTION_DELETE: {
-					ArrayList<FavoritesStorage.FavoriteItem> selected = collectSelectedFavoriteThreads();
-					if (!selected.isEmpty()) showDeleteSelectedFavoritesDialog(mode, selected);
-					return true;
-				}
+	private void selectAllFavoriteThreads() {
+		if (!favoriteSelectionActive) return;
+		ArrayList<AdapterItem> previousItems = createAdapterSnapshot();
+		selectedFavoriteIds.clear();
+		for (ListItem listItem : favorites) {
+			if (listItem.type == ListItem.Type.FAVORITE && listItem.isThreadItem()) {
+				selectedFavoriteIds.add(listItem.id);
 			}
-			return false;
 		}
+		dispatchAdapterDiff(previousItems);
+		updateFavoriteSelectionPanel();
+	}
 
-		@Override
-		public void onDestroyActionMode(ActionMode mode) {
-			ArrayList<AdapterItem> previousItems = createAdapterSnapshot();
-			favoriteSelectionActionMode = null;
-			selectedFavoriteIds.clear();
-			dispatchAdapterDiff(previousItems);
-		}
-	};
-
-	private void showDeleteSelectedFavoritesDialog(ActionMode actionMode,
-			ArrayList<FavoritesStorage.FavoriteItem> selected) {
+	private void showDeleteSelectedFavoritesDialog(ArrayList<FavoritesStorage.FavoriteItem> selected) {
 		new InstanceDialog(fragmentManager, null, provider -> new MessageDialog.Builder(provider.getContext())
 				.setMessage(provider.getContext().getResources().getQuantityString(
 						R.plurals.favorites_remove_selected_confirmation__format,
 						selected.size(), selected.size()))
 				.setNegativeButton(android.R.string.cancel, null)
 				.setPositiveButton(R.string.delete, (dialog, which) -> {
+					// Finish first so synchronous storage observers see normal, unselected rows.
+					finishFavoriteSelection();
 					FavoritesStorage.getInstance().remove(selected);
-					actionMode.finish();
 				})
 				.create());
 	}
@@ -1711,15 +1731,18 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		public final ListItem listItem;
 		public final int viewType;
 		public final boolean selected;
+		public final boolean selectionActive;
 
-		public AdapterItem(ListItem listItem, int viewType, boolean selected) {
+		public AdapterItem(ListItem listItem, int viewType, boolean selected, boolean selectionActive) {
 			this.listItem = listItem;
 			this.viewType = viewType;
 			this.selected = selected;
+			this.selectionActive = selectionActive;
 		}
 
 		public boolean contentEquals(AdapterItem other) {
 			return other != null && viewType == other.viewType && selected == other.selected &&
+					selectionActive == other.selectionActive &&
 					listItem.contentEquals(other.listItem);
 		}
 	}
@@ -1732,8 +1755,9 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		ArrayList<AdapterItem> items = new ArrayList<>(count);
 		for (int position = 0; position < count; position++) {
 			ListItem listItem = getItem(position);
-			boolean selected = favoriteSelectionActionMode != null && selectedFavoriteIds.contains(listItem.id);
-			items.add(new AdapterItem(listItem, getItemViewType(position), selected));
+			boolean selected = favoriteSelectionActive && selectedFavoriteIds.contains(listItem.id);
+			// Unchecked rows also change appearance and interaction when selection starts or ends.
+			items.add(new AdapterItem(listItem, getItemViewType(position), selected, favoriteSelectionActive));
 		}
 		return items;
 	}
@@ -2099,15 +2123,15 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 			holder.badge.setText(listItem.badgeCount > 0 ? Integer.toString(listItem.badgeCount) : null);
 			holder.badge.setVisibility(listItem.badgeCount > 0 ? View.VISIBLE : View.GONE);
 		}
-		boolean selectableFavorite = favoriteSelectionActionMode != null
+		boolean selectableFavorite = favoriteSelectionActive
 				&& listItem.type == ListItem.Type.FAVORITE && listItem.isThreadItem();
 		if (holder.selection != null) {
 			holder.selection.setVisibility(selectableFavorite ? View.VISIBLE : View.GONE);
 			holder.selection.setChecked(selectableFavorite && selectedFavoriteIds.contains(listItem.id));
 		}
 		if (holder.watcher != null) {
-			holder.watcher.setEnabled(favoriteSelectionActionMode == null);
-			holder.watcher.setAlpha(favoriteSelectionActionMode == null ? 1f : 0.45f);
+			holder.watcher.setEnabled(!favoriteSelectionActive);
+			holder.watcher.setAlpha(!favoriteSelectionActive ? 1f : 0.45f);
 		}
 		if (listItem.type == ListItem.Type.SECTION) {
 			boolean favoriteSection = listItem.data == SECTION_ACTION_FAVORITES_MENU;
@@ -2260,8 +2284,8 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	private ListItem getItemFromChild(View child) {
 		View view = ListViewUtils.getRootViewInList(child);
 		ViewHolder holder = ListViewUtils.getViewHolder(view, ViewHolder.class);
-		int position = holder.getAdapterPosition();
-		return position >= 0 ? getItem(position) : null;
+		int position = holder != null ? holder.getBindingAdapterPosition() : RecyclerView.NO_POSITION;
+		return position >= 0 && position < getItemCount() ? getItem(position) : null;
 	}
 
 	private boolean needDivider(ListItem current, ListItem next) {
@@ -2455,8 +2479,14 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 
 	@Override
 	public boolean onDragCanMove(ViewHolder fromHolder, ViewHolder toHolder) {
-		DrawerForm.ListItem from = getItem(fromHolder.getAdapterPosition());
-		DrawerForm.ListItem to = getItem(toHolder.getAdapterPosition());
+		int fromIndex = fromHolder.getBindingAdapterPosition();
+		int toIndex = toHolder.getBindingAdapterPosition();
+		if (fromIndex == RecyclerView.NO_POSITION || toIndex == RecyclerView.NO_POSITION
+				|| fromIndex >= getItemCount() || toIndex >= getItemCount()) {
+			return false;
+		}
+		DrawerForm.ListItem from = getItem(fromIndex);
+		DrawerForm.ListItem to = getItem(toIndex);
 		return from.type == to.type && (from.type == DrawerForm.ListItem.Type.CHAN ||
 				from.type == DrawerForm.ListItem.Type.FAVORITE && CommonUtils.equals(from.chanName, to.chanName) &&
 						(from.threadNumber == null) == (to.threadNumber == null));
@@ -2464,8 +2494,12 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 
 	@Override
 	public boolean onDragMove(ViewHolder fromHolder, ViewHolder toHolder) {
-		int fromIndex = fromHolder.getAdapterPosition();
-		int toIndex = toHolder.getAdapterPosition();
+		int fromIndex = fromHolder.getBindingAdapterPosition();
+		int toIndex = toHolder.getBindingAdapterPosition();
+		if (fromIndex == RecyclerView.NO_POSITION || toIndex == RecyclerView.NO_POSITION
+				|| fromIndex >= getItemCount() || toIndex >= getItemCount()) {
+			return false;
+		}
 		DrawerForm.ListItem from = getItem(fromIndex);
 		DrawerForm.ListItem to = getItem(toIndex);
 		int chansFrom = chans.indexOf(from);

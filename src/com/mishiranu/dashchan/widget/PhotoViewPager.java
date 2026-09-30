@@ -12,6 +12,7 @@ import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.widget.EdgeEffect;
 import android.widget.OverScroller;
+import com.mishiranu.dashchan.media.VideoDiagnostics;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import java.util.ArrayList;
 
@@ -374,6 +375,15 @@ public class PhotoViewPager extends ViewGroup {
 					}
 					removeCallbacks(longTapRunnable);
 					allowMove = true;
+					// Once per gesture, never per MOVE: explain rejection before the adapter is called.
+					if (verticalPagingMode && VideoDiagnostics.isExtendedRecording()
+							&& (!singlePointer || photoGestureClaimed || distanceY <= distanceX)) {
+						VideoDiagnostics.recordUi("gallery vertical_gesture route_reject index=" + currentIndex
+								+ " reason=" + (!singlePointer ? "multiple_pointers"
+										: photoGestureClaimed ? "photo_pan_or_pinch" : "horizontal")
+								+ " pointers=" + event.getPointerCount() + " dx=" + distanceX + " dy=" + distanceY
+								+ " " + photoView.getGestureDiagnosticState());
+					}
 					if (singlePointer && !photoGestureClaimed && distanceY > distanceX
 							&& adapter.onVerticalGestureStart(this, startX, startY)) {
 						verticalGesture = true;

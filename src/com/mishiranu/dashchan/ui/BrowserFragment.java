@@ -184,7 +184,7 @@ public class BrowserFragment extends ContentFragment implements DownloadListener
 	}
 
 	@Override
-	public boolean onOptionsItemSelected(MenuItem item) {
+	public boolean onMenuItemSelected(MenuItem item) {
 		if (webView == null) return true;
 		if (item.getItemId() == R.id.menu_reload) {
 			webView.reload();

@@ -96,6 +96,7 @@ import com.mishiranu.dashchan.util.FlagUtils;
 import com.mishiranu.dashchan.util.IOUtils;
 import com.mishiranu.dashchan.util.NavigationUtils;
 import com.mishiranu.dashchan.util.ResourceUtils;
+import com.mishiranu.dashchan.util.PerformanceDiagnostics;
 import com.mishiranu.dashchan.util.SharedPreferences;
 import com.mishiranu.dashchan.util.ViewUtils;
 import com.mishiranu.dashchan.widget.ClickableToast;
@@ -215,6 +216,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 				.PreThemeInit(this, Preferences.isExpandedScreen());
 		ThemeEngine.applyTheme(this);
 		ExpandedScreen.Init expandedScreenInit = expandedScreenPreThemeInit.initAfterTheme();
+		UiLifecycleDiagnostics.install(this);
 		super.onCreate(savedInstanceState);
 		if (VideoPipActivity.getPendingGalleryReturnToken() != null) {
 			VideoDiagnostics.recordUi("pip_return host_create saved=" + (savedInstanceState != null));
@@ -310,6 +312,11 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 				expandedScreen.removeContentView(child);
 			}
 		});
+		// FragmentContainerView may already contain a restored fragment after inflation.
+		// Register existing children too; the listener covers subsequent transactions.
+		for (int i = 0; i < contentFragment.getChildCount(); i++) {
+			expandedScreen.addContentView(contentFragment.getChildAt(i));
+		}
 		bindService(new Intent(this, PostingService.class), postingConnection, BIND_AUTO_CREATE);
 		bindService(new Intent(this, DownloadService.class), downloadConnection, BIND_AUTO_CREATE);
 		boolean allowSelectChan = drawerForm.hasMultipleChans();
@@ -1778,14 +1785,16 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		RedditPageStorage.getInstance().getObservable().unregister(this);
 		Preferences.PREFERENCES.unregister(preferencesListener);
 		ChanManager.getInstance().observable.unregister(chanManagerCallback);
-		for (Chan chan : ChanManager.getInstance().getAvailableChans()) {
-			chan.configuration.commit();
-		}
+		PerformanceDiagnostics.run("finish.chanConfiguration", () -> {
+			for (Chan chan : ChanManager.getInstance().getAvailableChans()) {
+				chan.configuration.commit();
+			}
+		});
 		NotificationManager notificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
 		notificationManager.cancel(C.NOTIFICATION_ID_UPDATES);
-		FavoritesStorage.getInstance().await(true);
-		CombinedFeedStorage.getInstance().await(true);
-		RedditPageStorage.getInstance().await(true);
+		PerformanceDiagnostics.run("finish.favorites", () -> FavoritesStorage.getInstance().await(true));
+		PerformanceDiagnostics.run("finish.combinedFeed", () -> CombinedFeedStorage.getInstance().await(true));
+		PerformanceDiagnostics.run("finish.redditPages", () -> RedditPageStorage.getInstance().await(true));
 	}
 
 	@Override

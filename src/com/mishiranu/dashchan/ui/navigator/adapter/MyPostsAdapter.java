@@ -64,18 +64,22 @@ public class MyPostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 	private Mode mode = Mode.REPLIES;
 	private String emptyText;
 	private boolean hasMorePosts;
+	// Detached display values: TrackedPost itself is mutable.
+	private List<AdapterListUpdate.Row> displayedRows;
 
 	public MyPostsAdapter(Context context, Callback callback) {
 		this.context = context;
 		this.callback = callback;
 		postDateFormatter = new PostDateFormatter(context);
 		setHasStableIds(true);
+		displayedRows = captureRows();
 	}
 
 	public void setMode(Mode mode) {
 		if (this.mode != mode) {
 			this.mode = mode;
 			notifyItemChanged(0);
+			displayedRows = captureRows();
 		}
 	}
 
@@ -86,7 +90,7 @@ public class MyPostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 			items.add(Item.reply(reply));
 		}
 		this.emptyText = emptyText;
-		notifyDataSetChanged();
+		dispatchRows();
 	}
 
 	public void setPosts(List<MyPostsStorage.TrackedPost> posts, String emptyText, boolean hasMorePosts) {
@@ -96,7 +100,36 @@ public class MyPostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 			items.add(Item.post(post));
 		}
 		this.emptyText = emptyText;
-		notifyDataSetChanged();
+		dispatchRows();
+	}
+
+	private List<AdapterListUpdate.Row> captureRows() {
+		ArrayList<AdapterListUpdate.Row> rows = new ArrayList<>();
+		rows.add(new AdapterListUpdate.Row("tabs", mode));
+		if (items.isEmpty()) rows.add(new AdapterListUpdate.Row("empty", emptyText));
+		for (Item item : items) {
+			if (item.reply != null) {
+				MyPostsStorage.ReplyItem reply = item.reply;
+				// Storage deduplicates a reply referencing multiple own posts. The target is content, not identity.
+				rows.add(new AdapterListUpdate.Row(AdapterListUpdate.values("reply", reply.chanName,
+						reply.boardName, reply.threadNumber, reply.postNumber),
+						AdapterListUpdate.values(reply.comment, reply.trackedPostNumber, reply.time,
+								reply.unread, reply.threadDeleted)));
+			} else {
+				MyPostsStorage.TrackedPost post = item.post;
+				rows.add(new AdapterListUpdate.Row(AdapterListUpdate.values("post", post.chanName,
+						post.boardName, post.threadNumber, post.postNumber),
+						AdapterListUpdate.values(post.comment, post.time, post.trackingActive, post.threadDeleted)));
+			}
+		}
+		if (hasMorePosts) rows.add(new AdapterListUpdate.Row("more", null));
+		return rows;
+	}
+
+	private void dispatchRows() {
+		List<AdapterListUpdate.Row> before = displayedRows;
+		displayedRows = captureRows();
+		AdapterListUpdate.dispatch(this, before, displayedRows, false);
 	}
 
 	private Item getItem(int position) {
@@ -123,6 +156,7 @@ public class MyPostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 		if (!hasMore) {
 			notifyItemRemoved(position + posts.size());
 		}
+		displayedRows = captureRows();
 	}
 
 	@Override

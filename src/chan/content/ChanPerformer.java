@@ -4,7 +4,6 @@ import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Parcel;
 import android.os.Parcelable;
-import android.os.SystemClock;
 import android.util.Pair;
 import androidx.annotation.NonNull;
 import chan.annotation.Extendable;
@@ -30,6 +29,7 @@ import com.mishiranu.dashchan.content.model.FileHolder;
 import com.mishiranu.dashchan.content.model.PostNumber;
 import com.mishiranu.dashchan.ui.ForegroundManager;
 import com.mishiranu.dashchan.util.GraphicsUtils;
+import com.mishiranu.dashchan.util.CancellableSleep;
 import com.mishiranu.dashchan.util.Logger;
 import java.io.IOException;
 import java.io.InputStream;
@@ -1381,14 +1381,15 @@ public class ChanPerformer implements Chan.Linked {
 			this.performer = performer;
 		}
 
-		private static boolean prepareReadRetry(HttpException exception, int failedAttempt) {
+		private static boolean prepareReadRetry(HttpException exception, int failedAttempt, HttpHolder holder) {
 			if (failedAttempt >= READ_MAX_ATTEMPTS || !exception.isRetryableReadException()) return false;
 			// Only complete read operations use this helper. Mutating operations must never be retried here.
 			int delay = Math.min(5000, ((failedAttempt - 1) / 3 + 1) * 1000);
 			Logger.write(Logger.Type.DEBUG, "ReadRetry", "attempt", failedAttempt + 1,
 					"of", READ_MAX_ATTEMPTS, "delay", delay);
-			SystemClock.sleep(delay);
-			return true;
+			boolean proceed = CancellableSleep.await(delay, () -> holder != null && holder.isInterrupted());
+			if (!proceed) Logger.write(Logger.Type.DEBUG, "ReadRetry", "backoff_cancelled");
+			return proceed;
 		}
 
 		public ReadThreadsResult onReadThreads(ReadThreadsData data) throws ExtensionException, HttpException,
@@ -1400,7 +1401,7 @@ public class ChanPerformer implements Chan.Linked {
 					try {
 						return performer.onReadThreads(data);
 					} catch (HttpException e) {
-						if (!prepareReadRetry(e, attempt)) throw e;
+						if (!prepareReadRetry(e, attempt, data.holder)) throw e;
 						attempt++;
 					}
 				}
@@ -1420,7 +1421,7 @@ public class ChanPerformer implements Chan.Linked {
 					try {
 						return performer.onReadPosts(data);
 					} catch (HttpException e) {
-						if (!prepareReadRetry(e, attempt)) throw e;
+						if (!prepareReadRetry(e, attempt, data.holder)) throw e;
 						attempt++;
 					}
 				}
@@ -1440,7 +1441,7 @@ public class ChanPerformer implements Chan.Linked {
 					try {
 						return performer.onReadSinglePost(data);
 					} catch (HttpException e) {
-						if (!prepareReadRetry(e, attempt)) throw e;
+						if (!prepareReadRetry(e, attempt, data.holder)) throw e;
 						attempt++;
 					}
 				}
@@ -1460,7 +1461,7 @@ public class ChanPerformer implements Chan.Linked {
 					try {
 						return performer.onReadSearchPosts(data);
 					} catch (HttpException e) {
-						if (!prepareReadRetry(e, attempt)) throw e;
+						if (!prepareReadRetry(e, attempt, data.holder)) throw e;
 						attempt++;
 					}
 				}
@@ -1480,7 +1481,7 @@ public class ChanPerformer implements Chan.Linked {
 					try {
 						return performer.onReadBoards(data);
 					} catch (HttpException e) {
-						if (!prepareReadRetry(e, attempt)) throw e;
+						if (!prepareReadRetry(e, attempt, data.holder)) throw e;
 						attempt++;
 					}
 				}
@@ -1500,7 +1501,7 @@ public class ChanPerformer implements Chan.Linked {
 					try {
 						return performer.onReadUserBoards(data);
 					} catch (HttpException e) {
-						if (!prepareReadRetry(e, attempt)) throw e;
+						if (!prepareReadRetry(e, attempt, data.holder)) throw e;
 						attempt++;
 					}
 				}
@@ -1520,7 +1521,7 @@ public class ChanPerformer implements Chan.Linked {
 					try {
 						return performer.onReadThreadSummaries(data);
 					} catch (HttpException e) {
-						if (!prepareReadRetry(e, attempt)) throw e;
+						if (!prepareReadRetry(e, attempt, data.holder)) throw e;
 						attempt++;
 					}
 				}
@@ -1540,7 +1541,7 @@ public class ChanPerformer implements Chan.Linked {
 					try {
 						return performer.onReadPostsCount(data);
 					} catch (HttpException e) {
-						if (!prepareReadRetry(e, attempt)) throw e;
+						if (!prepareReadRetry(e, attempt, data.holder)) throw e;
 						attempt++;
 					}
 				}

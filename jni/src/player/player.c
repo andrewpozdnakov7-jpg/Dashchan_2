@@ -79,6 +79,7 @@ Bridge * playerObtainBridge(Player * player, JNIEnv * env) {
 		bridge->env = env;
 		bridge->methodOnSeek = (*env)->GetMethodID(env, class, "onSeek", "(J)V");
 		bridge->methodOnMessage = (*env)->GetMethodID(env, class, "onMessage", "(I)V");
+		bridge->methodOnPlaybackComplete = (*env)->GetMethodID(env, class, "onPlaybackComplete", "(J)V");
 		bridge->methodOnNetworkBuffering = (*env)->GetMethodID(env, class,
 				"onNetworkBuffering", "(JZ)V");
 		bridge->methodOnDurationChanged = (*env)->GetMethodID(env, class,
@@ -146,12 +147,14 @@ void playerMarkStreamFinished(Player * player, int video) {
 	}
 }
 
-int playerDecodeFrame(Player * player, int video, AVCodecContext * context, AVPacket * packet,
+int playerDecodeFrame(Player * player, int video, AVCodecContext * context, const PacketHolder * holder,
 		AVFrame * frame, int * packetSent) {
+	AVPacket * packet = holder ? holder->packet : NULL;
 	if (!*packetSent) {
 		int64_t callStarted = diagnosticsCodecBegin(player, video ? 0 : 2);
 		int result = avcodec_send_packet(context, packet);
 		diagnosticsCodecEnd(player, video ? 0 : 2, callStarted, result);
+		diagnosticsCodecResult(player, video ? 0 : 2, context, holder, NULL, result == 0, result);
 		if (result == 0) {
 			*packetSent = 1;
 		} else if (result != AVERROR(EAGAIN)) {
@@ -165,6 +168,7 @@ int playerDecodeFrame(Player * player, int video, AVCodecContext * context, AVPa
 	int64_t callStarted = diagnosticsCodecBegin(player, video ? 1 : 3);
 	int result = avcodec_receive_frame(context, frame);
 	diagnosticsCodecEnd(player, video ? 1 : 3, callStarted, result);
+	diagnosticsCodecResult(player, video ? 1 : 3, context, holder, frame, *packetSent, result);
 	if (result == 0) {
 		return 1;
 	}
@@ -328,6 +332,7 @@ void init(JNIEnv * env, jlong pointer, jobject nativeBridge, jboolean seekAnyFra
 			return;
 		}
 		videoContext->pkt_timebase = videoStream->time_base;
+		playerVideoSoftwareConfigureThreads(videoContext, videoCodec);
 		if (avcodec_open2(videoContext, videoCodec, NULL) < 0) {
 			avcodec_free_context(&videoContext);
 			player->meta.errorCode = ERROR_OPEN_CODEC;
@@ -556,6 +561,9 @@ void setPlaybackSpeed(jlong pointer, jint speed) {
 		pthread_mutex_lock(&player->video.sleepDrawMutex);
 		int64_t position = calculatePosition(player, 1);
 		__atomic_store_n(&player->sync.playbackSpeed, speed, __ATOMIC_RELEASE);
+		// The decode thread consumes this revision under its own mutex. Do not
+		// acquire frameMutex here: seek uses frame -> sleepDraw lock ordering.
+		__atomic_add_fetch(&player->video.softwareRateRevision, 1, __ATOMIC_RELEASE);
 		player->sync.audioPosition = position;
 		player->sync.pausedPosition = position;
 		updateAudioPositionSurrogate(player, position, 1);
@@ -619,6 +627,11 @@ void playerApplyPlaying(Player * player, int playing) {
 		}
 		condBroadcastLocked(&player->video.sleepCond, &player->video.sleepDrawMutex);
 	}
+}
+
+jlong getPlaybackGeneration(jlong pointer) {
+	Player * player = POINTER_CAST(pointer);
+	return (jlong) __atomic_load_n(&player->decode.packets.generation, __ATOMIC_ACQUIRE);
 }
 
 int playerVideoCanDecode(Player * player) {

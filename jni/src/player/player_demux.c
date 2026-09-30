@@ -189,7 +189,20 @@ void * playerDemuxRun(void * data) {
 		uint64_t endGeneration = __atomic_load_n(&player->decode.packets.generation,
 				__ATOMIC_ACQUIRE);
 		while (!player->meta.interrupt) {
+			// Never hold readMutex while waiting: the replacement seek needs it.
+			pthread_mutex_lock(&player->decode.packets.flowMutex);
+			while (!player->meta.interrupt &&
+					__atomic_load_n(&player->decode.packets.seekPending, __ATOMIC_ACQUIRE)) {
+				pthread_cond_wait(&player->decode.packets.flowCond, &player->decode.packets.flowMutex);
+			}
+			pthread_mutex_unlock(&player->decode.packets.flowMutex);
+			if (player->meta.interrupt) break;
 			pthread_mutex_lock(&player->decode.packets.readMutex);
+			// A seek may have started between the gate and acquiring readMutex.
+			if (__atomic_load_n(&player->decode.packets.seekPending, __ATOMIC_ACQUIRE)) {
+				pthread_mutex_unlock(&player->decode.packets.readMutex);
+				continue;
+			}
 			// Capture the generation only after obtaining readMutex. A reader blocked
 			// behind a seek belongs to the new generation, while a packet read before
 			// the seek keeps the old generation and is discarded below.
@@ -267,7 +280,8 @@ void * playerDemuxRun(void * data) {
 		pthread_mutex_lock(&player->decode.packets.flowMutex);
 		uint64_t currentGeneration = __atomic_load_n(&player->decode.packets.generation,
 				__ATOMIC_ACQUIRE);
-		int staleEnd = endGeneration != currentGeneration;
+		int staleEnd = endGeneration != currentGeneration ||
+				__atomic_load_n(&player->decode.packets.seekPending, __ATOMIC_ACQUIRE);
 		if (!staleEnd) {
 			checkNetworkBuffering(player, bridge, 0, 1);
 			if (HAS_STREAM(player, audio)) {
@@ -291,18 +305,24 @@ void * playerDemuxRun(void * data) {
 		pthread_mutex_lock(&player->play.finishMutex);
 		currentGeneration = __atomic_load_n(&player->decode.packets.generation,
 				__ATOMIC_ACQUIRE);
-		if (endGeneration != currentGeneration) {
+		if (endGeneration != currentGeneration ||
+				__atomic_load_n(&player->decode.packets.seekPending, __ATOMIC_ACQUIRE)) {
 			pthread_mutex_unlock(&player->play.finishMutex);
 			continue;
 		}
 		player->decode.packets.finished = 1;
 		int needSendFinishMessage = 1;
 		while (!player->meta.interrupt && player->decode.packets.finished) {
+			if (endGeneration != __atomic_load_n(&player->decode.packets.generation, __ATOMIC_ACQUIRE) ||
+					__atomic_load_n(&player->decode.packets.seekPending, __ATOMIC_ACQUIRE)) break;
 			if (needSendFinishMessage &&
 					(player->audio.finished || !HAS_STREAM(player, audio)) &&
 					(player->video.finished || !HAS_STREAM(player, video))) {
 				needSendFinishMessage = 0;
-				PLAYER_SEND_MESSAGE(env, player, bridge, BRIDGE_MESSAGE_PLAYBACK_COMPLETE);
+				diagnosticsLog("player=%u playback_complete emitted generation=%" PRIu64,
+						player->meta.diagnosticsId, endGeneration);
+				(*env)->CallVoidMethod(env, player->bridge.native,
+						bridge->methodOnPlaybackComplete, (jlong) endGeneration);
 			}
 			pthread_cond_wait(&player->play.finishCond, &player->play.finishMutex);
 		}

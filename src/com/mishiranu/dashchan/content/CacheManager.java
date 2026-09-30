@@ -72,11 +72,24 @@ public class CacheManager implements Runnable {
 					break;
 				}
 			}
-			file.delete();
+			LinkedHashMap<String, CacheItem> items = getCacheItems(cacheItem.type);
+			synchronized (items) {
+				// An eviction queued before a replacement/scan must not delete the replacement.
+				boolean exists = file.exists();
+				if (exists && (file.length() != cacheItem.length
+						|| file.lastModified() != cacheItem.lastModified)) continue;
+				if (!exists || file.delete()) {
+					CacheItem removed = items.remove(cacheItem.nameLc);
+					if (removed != null) modifyCacheSize(cacheItem.type, -removed.length);
+					getCacheScan(cacheItem.type).record(cacheItem.nameLc, null);
+				}
+			}
 		}
 	}
 
 	private volatile CountDownLatch cacheBuildingLatch;
+	private volatile boolean cacheScanFailed;
+	private final Object scanLock = new Object();
 
 	private static class CacheItem {
 		public enum Type {THUMBNAILS, MEDIA}
@@ -128,21 +141,23 @@ public class CacheManager implements Runnable {
 
 	private final LinkedHashMap<String, CacheItem> thumbnailsCache = new LinkedHashMap<>();
 	private final LinkedHashMap<String, CacheItem> mediaCache = new LinkedHashMap<>();
+	private final CacheScanChanges<CacheItem> thumbnailsScan = new CacheScanChanges<>();
+	private final CacheScanChanges<CacheItem> mediaScan = new CacheScanChanges<>();
 
-	private long thumbnailsCacheSize;
-	private long mediaCacheSize;
+	private volatile long thumbnailsCacheSize;
+	private volatile long mediaCacheSize;
 
-	private long fillCache(LinkedHashMap<String, CacheItem> cacheItems, File directory, CacheItem.Type type) {
+	private long fillCache(LinkedHashMap<String, CacheItem> cacheItems, File directory, CacheItem.Type type)
+			throws IOException {
 		cacheItems.clear();
 		if (directory == null) {
-			return 0L;
+			throw new IOException("Cache directory unavailable");
 		}
 		ArrayList<CacheItem> cacheItemsList = new ArrayList<>();
 		File[] files = directory.listFiles();
-		if (files != null) {
-			for (File file : files) {
-				cacheItemsList.add(new CacheItem(file, type));
-			}
+		if (files == null) throw new IOException("Cache directory scan failed");
+		for (File file : files) {
+			cacheItemsList.add(new CacheItem(file, type));
 		}
 		Collections.sort(cacheItemsList, SORT_BY_DATE_COMPARATOR);
 		long size = 0L;
@@ -155,21 +170,59 @@ public class CacheManager implements Runnable {
 
 	private void syncCache() {
 		final CountDownLatch latch = new CountDownLatch(1);
-		cacheBuildingLatch = latch;
+		final long thumbnailsToken;
+		final long mediaToken;
+		synchronized (scanLock) {
+			cacheBuildingLatch = latch;
+			cacheScanFailed = false;
+			synchronized (thumbnailsCache) { thumbnailsToken = thumbnailsScan.begin(); }
+			synchronized (mediaCache) { mediaToken = mediaScan.begin(); }
+		}
 		new Thread(() -> {
+			boolean success = false;
 			try {
-				synchronized (thumbnailsCache) {
-					thumbnailsCacheSize = fillCache(thumbnailsCache, getThumbnailsDirectory(),
-							CacheItem.Type.THUMBNAILS);
+				// No shared index lock during directory traversal, stat calls or sorting.
+				LinkedHashMap<String, CacheItem> thumbnails = new LinkedHashMap<>();
+				LinkedHashMap<String, CacheItem> media = new LinkedHashMap<>();
+				fillCache(thumbnails, getThumbnailsDirectory(), CacheItem.Type.THUMBNAILS);
+				fillCache(media, getMediaDirectory(), CacheItem.Type.MEDIA);
+				synchronized (scanLock) {
+					if (cacheBuildingLatch == latch) {
+						synchronized (thumbnailsCache) {
+							thumbnailsScan.merge(thumbnailsToken, thumbnails);
+							thumbnailsCache.clear();
+							thumbnailsCache.putAll(thumbnails);
+							thumbnailsCacheSize = sumCacheSize(thumbnailsCache);
+						}
+						synchronized (mediaCache) {
+							mediaScan.merge(mediaToken, media);
+							mediaCache.clear();
+							mediaCache.putAll(media);
+							mediaCacheSize = sumCacheSize(mediaCache);
+						}
+						success = true;
+					}
 				}
-				synchronized (mediaCache) {
-					mediaCacheSize = fillCache(mediaCache, getMediaDirectory(), CacheItem.Type.MEDIA);
-				}
-				cleanupAsync(true, true);
+			} catch (IOException | RuntimeException e) {
+				android.util.Log.w("CacheManager", "cache_index_failed " + e.getClass().getSimpleName());
 			} finally {
-				latch.countDown();
+				synchronized (scanLock) {
+					if (cacheBuildingLatch == latch && !success) {
+						cacheScanFailed = true;
+						synchronized (thumbnailsCache) { thumbnailsScan.fail(thumbnailsToken); }
+						synchronized (mediaCache) { mediaScan.fail(mediaToken); }
+					}
+					latch.countDown();
+				}
 			}
-		}).start();
+			if (success) cleanupAsync(true, true);
+		}, "CacheIndexScan").start();
+	}
+
+	private static long sumCacheSize(LinkedHashMap<String, CacheItem> items) {
+		long size = 0;
+		for (CacheItem item : items.values()) size += item.length;
+		return size;
 	}
 
 	private void cleanupAsync(boolean thumbnails, boolean media) {
@@ -179,7 +232,7 @@ public class CacheManager implements Runnable {
 		if (thumbnails) {
 			synchronized (thumbnailsCache) {
 				long maxSize = MAX_THUMBNAILS_PART * maxCacheSize / maxCache;
-				if (thumbnailsCacheSize > maxSize) {
+				if (!thumbnailsScan.isBuilding() && !cacheScanFailed && thumbnailsCacheSize > maxSize) {
 					if (cleanupCacheItems == null) {
 						cleanupCacheItems = new ArrayList<>();
 					}
@@ -191,7 +244,7 @@ public class CacheManager implements Runnable {
 		if (media) {
 			synchronized (mediaCache) {
 				long maxSize = MAX_MEDIA_PART * maxCacheSize / maxCache;
-				if (mediaCacheSize > maxSize) {
+				if (!mediaScan.isBuilding() && !cacheScanFailed && mediaCacheSize > maxSize) {
 					if (cleanupCacheItems == null) {
 						cleanupCacheItems = new ArrayList<>();
 					}
@@ -227,17 +280,20 @@ public class CacheManager implements Runnable {
 		boolean allowDeleteCacheItem(CacheItem cacheItem);
 	}
 
-	private boolean waitCacheSync() {
-		CountDownLatch latch = cacheBuildingLatch;
-		if (latch != null) {
-			try {
-				latch.await();
-			} catch (InterruptedException e) {
-				Thread.currentThread().interrupt();
-				return true;
-			}
+	// Only the explicit background cache-clearing task may wait for a complete index.
+	private void awaitCacheScanForErase() throws InterruptedException {
+		if (com.mishiranu.dashchan.util.ConcurrentUtils.isMain()) {
+			throw new IllegalStateException("Cache clearing must run off the UI thread");
 		}
-		return false;
+		while (true) {
+			CountDownLatch latch = cacheBuildingLatch;
+			if (latch != null) latch.await();
+			if (latch == cacheBuildingLatch) return;
+		}
+	}
+
+	private CacheScanChanges<CacheItem> getCacheScan(CacheItem.Type type) {
+		return type == CacheItem.Type.THUMBNAILS ? thumbnailsScan : mediaScan;
 	}
 
 	private LinkedHashMap<String, CacheItem> getCacheItems(CacheItem.Type type) {
@@ -266,11 +322,10 @@ public class CacheManager implements Runnable {
 	}
 
 	private boolean isFileExistsInCache(File file, String fileName, CacheItem.Type type) {
-		if (waitCacheSync()) {
-			return false;
-		}
 		LinkedHashMap<String, CacheItem> cacheItems = getCacheItems(type);
 		synchronized (cacheItems) {
+			// A known file must remain readable even before the full index is ready.
+			if (getCacheScan(type).isBuilding() || cacheScanFailed) return file.isFile();
 			CacheItem cacheItem = cacheItems.get(fileName.toLowerCase(Locale.US));
 			if (cacheItem != null && !file.exists()) {
 				cacheItems.remove(cacheItem.nameLc);
@@ -282,32 +337,34 @@ public class CacheManager implements Runnable {
 	}
 
 	private void updateCachedFileLastModified(File file, String fileName, CacheItem.Type type) {
-		if (waitCacheSync()) {
-			return;
-		}
 		LinkedHashMap<String, CacheItem> cacheItems = getCacheItems(type);
 		synchronized (cacheItems) {
 			String fileNameLc = fileName.toLowerCase(Locale.US);
 			CacheItem cacheItem = cacheItems.remove(fileNameLc);
+			if (cacheItem == null && (getCacheScan(type).isBuilding() || cacheScanFailed) && file.isFile()) {
+				cacheItem = new CacheItem(file, type);
+				modifyCacheSize(type, cacheItem.length);
+			}
 			if (cacheItem != null) {
 				if (file.exists()) {
 					long lastModified = System.currentTimeMillis();
 					file.setLastModified(lastModified);
 					cacheItem.lastModified = lastModified;
 					cacheItems.put(fileNameLc, cacheItem);
+					getCacheScan(type).record(fileNameLc, cacheItem);
 				} else {
 					modifyCacheSize(type, -cacheItem.length);
+					getCacheScan(type).record(fileNameLc, null);
 				}
 			}
+			if (!cacheItems.containsKey(fileNameLc)) getCacheScan(type).record(fileNameLc, null);
 		}
 	}
 
 	private void validateNewCachedFile(File file, String fileName, CacheItem.Type type, boolean success) {
-		if (waitCacheSync()) {
-			return;
-		}
 		LinkedHashMap<String, CacheItem> cacheItems = getCacheItems(type);
 		synchronized (cacheItems) {
+			success &= file.isFile();
 			long lengthDelta = 0L;
 			CacheItem cacheItem = cacheItems.remove(fileName.toLowerCase(Locale.US));
 			if (cacheItem != null) {
@@ -318,6 +375,7 @@ public class CacheManager implements Runnable {
 				cacheItems.put(cacheItem.nameLc, cacheItem);
 				lengthDelta += cacheItem.length;
 			}
+			getCacheScan(type).record(fileName.toLowerCase(Locale.US), success ? cacheItem : null);
 			modifyCacheSize(type, lengthDelta);
 			if (success) {
 				cleanupAsync(type == CacheItem.Type.THUMBNAILS, type == CacheItem.Type.MEDIA);
@@ -329,10 +387,11 @@ public class CacheManager implements Runnable {
 		return Environment.MEDIA_MOUNTED.equals(Environment.getExternalStorageState());
 	}
 
+	/** Non-blocking snapshot: -1 while scanning, -2 if the index could not be built. */
 	public long getCacheSize() {
-		if (waitCacheSync()) {
-			return 0L;
-		}
+		CountDownLatch latch = cacheBuildingLatch;
+		if (latch != null && latch.getCount() > 0) return -1L;
+		if (cacheScanFailed) return -2L;
 		return thumbnailsCacheSize + mediaCacheSize;
 	}
 
@@ -376,38 +435,52 @@ public class CacheManager implements Runnable {
 		return getMediaFile(getCachedFileKey(uri) + ".part", false);
 	}
 
-	private long eraseCache(LinkedHashMap<String, CacheItem> cacheItems, File directory,
-			DeleteCondition deleteCondition) throws InterruptedException {
-		if (directory == null) {
-			return 0L;
+	private void eraseCache(LinkedHashMap<String, CacheItem> cacheItems, File directory,
+			CacheItem.Type type) throws InterruptedException {
+		// This explicit operation runs on the clearing worker. Rescan its directory
+		// so a failed/startup index never silently leaves unindexed files behind.
+		LinkedHashMap<String, CacheItem> snapshot = new LinkedHashMap<>();
+		try {
+			fillCache(snapshot, directory, type);
+		} catch (IOException e) {
+			cacheScanFailed = true;
+			return;
 		}
-		long deleted = 0L;
+		cacheItems.clear();
+		cacheItems.putAll(snapshot);
 		Iterator<CacheItem> iterator = cacheItems.values().iterator();
 		while (iterator.hasNext()) {
-			if (Thread.interrupted()) {
-				throw new InterruptedException();
-			}
+			if (Thread.interrupted()) throw new InterruptedException();
 			CacheItem cacheItem = iterator.next();
-			if (deleteCondition == null || deleteCondition.allowDeleteCacheItem(cacheItem)) {
-				deleted += cacheItem.length;
-				new File(directory, cacheItem.name).delete();
+			File file = new File(directory, cacheItem.name);
+			if (file.delete() || !file.exists()) {
 				iterator.remove();
+				getCacheScan(type).record(cacheItem.nameLc, null);
+			} else {
+				getCacheScan(type).record(cacheItem.nameLc, cacheItem);
 			}
 		}
-		return deleted;
 	}
 
 	public void eraseThumbnailsCache() throws InterruptedException {
+		awaitCacheScanForErase();
 		synchronized (thumbnailsCache) {
-			eraseCache(thumbnailsCache, getThumbnailsDirectory(), null);
-			thumbnailsCacheSize = 0L;
+			try {
+				eraseCache(thumbnailsCache, getThumbnailsDirectory(), CacheItem.Type.THUMBNAILS);
+			} finally {
+				thumbnailsCacheSize = sumCacheSize(thumbnailsCache);
+			}
 		}
 	}
 
 	public void eraseMediaCache() throws InterruptedException {
+		awaitCacheScanForErase();
 		synchronized (mediaCache) {
-			eraseCache(mediaCache, getMediaDirectory(), null);
-			mediaCacheSize = 0L;
+			try {
+				eraseCache(mediaCache, getMediaDirectory(), CacheItem.Type.MEDIA);
+			} finally {
+				mediaCacheSize = sumCacheSize(mediaCache);
+			}
 		}
 	}
 
@@ -466,6 +539,7 @@ public class CacheManager implements Runnable {
 	public boolean cancelCachedMediaBusy(File file) {
 		if (cacheItemsToDelete.remove(new CacheItem(file, CacheItem.Type.MEDIA))) {
 			file.delete();
+			validateNewCachedFile(file, file.getName(), CacheItem.Type.MEDIA, false);
 			return true;
 		}
 		return false;
@@ -514,7 +588,10 @@ public class CacheManager implements Runnable {
 		try {
 			bitmap = ThumbnailDecoder.decode(file, targetSize);
 			if (bitmap == null) {
-				if (!Thread.currentThread().isInterrupted()) file.delete();
+				if (!Thread.currentThread().isInterrupted()) {
+					file.delete();
+					validateNewCachedFile(file, thumbnailKey, CacheItem.Type.THUMBNAILS, false);
+				}
 				return null;
 			}
 			updateCachedFileLastModified(file, thumbnailKey, CacheItem.Type.THUMBNAILS);

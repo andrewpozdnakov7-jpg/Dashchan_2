@@ -628,7 +628,15 @@ public class ViewUnit {
 		holder.bottomBarExpand.setVisibility(View.GONE);
 		holder.invalidateBottomBar();
 
-		boolean viewsEnabled = demandSet.selection == UiManager.Selection.DISABLED;
+		bindPostViewSelection(viewHolder, postItem, configurationSet, demandSet.selection);
+	}
+
+	/** Selection changes must not restart attachments or replace the comment/its text selection. */
+	public void bindPostViewSelection(RecyclerView.ViewHolder viewHolder, PostItem postItem,
+			UiManager.ConfigurationSet configurationSet, UiManager.Selection selection) {
+		PostViewHolder holder = (PostViewHolder) viewHolder;
+		holder.selection = selection;
+		boolean viewsEnabled = selection == UiManager.Selection.DISABLED;
 		ChanConfiguration.Voting voting = Chan.get(configurationSet.chanName).configuration.safe()
 				.obtainVoting(postItem.getBoardName());
 		boolean voteEnabled = viewsEnabled && !postItem.isDeleted() && voting != null

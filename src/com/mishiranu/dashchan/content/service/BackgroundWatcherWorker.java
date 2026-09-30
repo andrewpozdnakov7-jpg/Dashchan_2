@@ -258,6 +258,7 @@ public class BackgroundWatcherWorker extends Worker {
 	@Override
 	public Result doWork() {
 		long startedAt = SystemClock.elapsedRealtime();
+		WorkerDiagnostics.sampleQueue(getApplicationContext(), UNIQUE_WORK_NAME);
 		log("run_start", "attempt", getRunAttemptCount(), "stopped", isStopped());
 		logRuntimeState();
 		if (!beginRun()) {
@@ -428,6 +429,7 @@ public class BackgroundWatcherWorker extends Worker {
 	@Override
 	public void onStopped() {
 		super.onStopped();
+		WorkerDiagnostics.event(this, "stopped", 0L);
 		log("stop", "reason", "work_manager", "tasks", tasks.size());
 		stopRun(false);
 	}

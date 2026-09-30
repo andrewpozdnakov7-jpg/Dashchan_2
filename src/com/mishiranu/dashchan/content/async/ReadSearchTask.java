@@ -9,7 +9,6 @@ import chan.http.HttpException;
 import chan.http.HttpHolder;
 import com.mishiranu.dashchan.content.model.ErrorItem;
 import com.mishiranu.dashchan.content.model.PostItem;
-import com.mishiranu.dashchan.util.ConcurrentUtils;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -62,8 +61,8 @@ public class ReadSearchTask extends HttpHolderTask<Void, List<PostItem>> {
 					PostItem postItem = PostItem.createPost(post.post, chan,
 							boardName, post.threadNumber, post.originalPostNumber);
 					postItem.setOrdinalIndex(i);
-					// Preload
-					ConcurrentUtils.mainGet(() -> postItem.getComment(chan));
+					// ViewUnit builds and caches styled text when this row is bound on the UI thread.
+					// Do not block the worker on a UI round trip for every offscreen search result.
 					postItems.add(postItem);
 				}
 				return postItems;

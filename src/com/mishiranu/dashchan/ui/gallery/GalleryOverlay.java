@@ -35,6 +35,7 @@ import android.widget.RadioGroup;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
+import androidx.core.view.MenuProvider;
 import androidx.fragment.app.DialogFragment;
 import androidx.fragment.app.FragmentManager;
 import androidx.lifecycle.ViewModelProvider;
@@ -70,7 +71,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-public class GalleryOverlay extends DialogFragment implements GalleryDialog.Callback, GalleryInstance.Callback {
+public class GalleryOverlay extends DialogFragment implements GalleryDialog.Callback, GalleryInstance.Callback,
+		MenuProvider {
 	private static final String EXTRA_PIP_WINDOW_RETIRED = "pipWindowRetired";
 	public enum NavigatePostMode {DISABLED, MANUALLY, ENABLED}
 
@@ -897,7 +899,7 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 	}
 
 	@Override
-	public void onCreateOptionsMenu(@NonNull Menu menu, @NonNull MenuInflater inflater) {
+	public void onCreateMenu(@NonNull Menu menu, @NonNull MenuInflater inflater) {
 		// Dialog.onRestoreInstanceState can create the menu before Fragment.onStart.
 		// Its static structure depends on the dialog theme, not on GalleryInstance.
 		GalleryDialog dialog = getDialog();
@@ -925,7 +927,7 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 	}
 
 	@Override
-	public void onPrepareOptionsMenu(@NonNull Menu menu) {
+	public void onPrepareMenu(@NonNull Menu menu) {
 		for (int i = 0; i < menu.size(); i++) {
 			menu.getItem(i).setVisible(false);
 		}
@@ -958,7 +960,7 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 	}
 
 	@Override
-	public boolean onOptionsItemSelected(@NonNull MenuItem item) {
+	public boolean onMenuItemSelected(@NonNull MenuItem item) {
 		if (item.getItemId() == android.R.id.home) {
 			dismiss();
 			return true;

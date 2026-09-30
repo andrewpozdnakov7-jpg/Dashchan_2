@@ -132,6 +132,8 @@ struct Player {
 			pthread_cond_t flowCond;
 			pthread_mutex_t flowMutex;
 			uint64_t generation __attribute__((aligned(8)));
+			// Atomic: a flushed demux/decoder transaction must commit before playback reads resume.
+			int seekPending;
 			// readMutex distinguishes playback demux from initialization and seek probing.
 			int readingForPlayback;
 			int buffering;
@@ -250,12 +252,14 @@ struct Player {
 		int useLibyuv;
 		int format;
 		int softwareOutputLevel;
-		int softwareConsecutiveLateFrames;
-		int softwareConsecutiveRecoveryFrames;
+		// Controller fields are owned by video.frameMutex; epochs are atomic.
+		VideoLoadControl softwareLoad;
+		unsigned int softwareRateRevision;
+		unsigned int softwareObservedRateRevision;
+		unsigned int softwareOutputEpoch;
 		int softwareSlowConversions;
 		int softwareDecoderDiscardActive;
 		int64_t softwareDecoderDiscardStartedAt __attribute__((aligned(8)));
-		int64_t softwareLastFrameQueuedAt __attribute__((aligned(8)));
 		int softwareSeekFastActive;
 		int softwareSeekFastPackets;
 		int softwareSeekFastFrames;
@@ -299,6 +303,7 @@ struct Bridge {
 	JNIEnv * env;
 	jmethodID methodOnSeek;
 	jmethodID methodOnMessage;
+	jmethodID methodOnPlaybackComplete;
 	jmethodID methodOnNetworkBuffering;
 	jmethodID methodOnDurationChanged;
 	jmethodID methodOnSurfaceApplied;
@@ -322,10 +327,10 @@ struct AudioBuffer {
 };
 
 struct VideoFrameExtra {
+	unsigned int outputEpoch;
 	int width;
 	int height;
 	int64_t position;
-	int forcePresent;
 };
 
 struct ScaleHolder {
@@ -351,7 +356,7 @@ void playerCloseAndFreeCodecContext(AVCodecContext ** context);
 void playerCloseAndFreeVideoCodecContext(Player * player, AVCodecContext ** context);
 void playerPacketQueueFreeCallback(void * data);
 void playerMarkStreamFinished(Player * player, int video);
-int playerDecodeFrame(Player * player, int video, AVCodecContext * context, AVPacket * packet, AVFrame * frame,
+int playerDecodeFrame(Player * player, int video, AVCodecContext * context, const PacketHolder * holder, AVFrame * frame,
 		int * packetSent);
 PacketHolder * playerCreateSurfaceRequestPacketHolder(void);
 void playerLogDestroyStage(Player * player, const char * stage);

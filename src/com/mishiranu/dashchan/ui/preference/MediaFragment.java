@@ -41,6 +41,20 @@ public class MediaFragment extends PreferenceFragment implements FragmentHandler
 
 	private Preference<?> downloadUriTreePreference;
 	private Preference<?> clearCachePreference;
+	private long lastCacheSize = Long.MIN_VALUE;
+	private final Runnable refreshCacheSize = new Runnable() {
+		@Override
+		public void run() {
+			if (clearCachePreference == null) return;
+			long size = CacheManager.getInstance().getCacheSize();
+			if (lastCacheSize != size) {
+				lastCacheSize = size;
+				clearCachePreference.invalidate();
+			}
+			// Observe only while this screen is started; also catches a later remount/rescan.
+			ConcurrentUtils.HANDLER.postDelayed(this, 500);
+		}
+	};
 
 	private boolean inStorageRequest;
 
@@ -211,7 +225,12 @@ public class MediaFragment extends PreferenceFragment implements FragmentHandler
 		addSeek(Preferences.KEY_CACHE_SIZE, Preferences.DEFAULT_CACHE_SIZE, getString(R.string.cache_size), "%d MB",
 				null, Preferences.MIN_CACHE_SIZE, Preferences.MAX_CACHE_SIZE, Preferences.STEP_CACHE_SIZE);
 		clearCachePreference = addButton(getString(R.string.clear_cache),
-				p -> StringUtils.formatFileSizeMegabytes(CacheManager.getInstance().getCacheSize()));
+				p -> {
+					long size = CacheManager.getInstance().getCacheSize();
+					return size == -1L ? getString(R.string.cache_size_calculating)
+							: size < 0 ? getString(R.string.cache_size_unavailable)
+							: StringUtils.formatFileSizeMegabytes(size);
+				});
 		clearCachePreference.setOnClickListener(p -> {
 			ClearCacheDialog dialog = new ClearCacheDialog();
 			dialog.show(getChildFragmentManager(), ClearCacheDialog.class.getName());
@@ -225,7 +244,22 @@ public class MediaFragment extends PreferenceFragment implements FragmentHandler
 	}
 
 	@Override
+	public void onStart() {
+		super.onStart();
+		ConcurrentUtils.HANDLER.removeCallbacks(refreshCacheSize);
+		lastCacheSize = Long.MIN_VALUE;
+		refreshCacheSize.run();
+	}
+
+	@Override
+	public void onStop() {
+		ConcurrentUtils.HANDLER.removeCallbacks(refreshCacheSize);
+		super.onStop();
+	}
+
+	@Override
 	public void onDestroyView() {
+		ConcurrentUtils.HANDLER.removeCallbacks(refreshCacheSize);
 		super.onDestroyView();
 
 		downloadUriTreePreference = null;

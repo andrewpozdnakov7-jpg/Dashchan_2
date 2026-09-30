@@ -366,7 +366,7 @@ public class RedditWebReaderFragment extends ContentFragment {
 	}
 
 	@Override
-	public boolean onOptionsItemSelected(MenuItem item) {
+	public boolean onMenuItemSelected(MenuItem item) {
 		if (webView == null) {
 			return false;
 		}

@@ -12,6 +12,7 @@ void getSummary(JNIEnv *, jlong, jintArray);
 
 jlong getDuration(jlong);
 jlong getPosition(jlong);
+jlong getPlaybackGeneration(jlong);
 void setPosition(JNIEnv *, jlong, jlong);
 
 void setRange(jlong, jlong, jlong, jlong);

@@ -146,7 +146,7 @@ public class ThemesFragment extends BaseListFragment {
 	}
 
 	@Override
-	public boolean onOptionsItemSelected(@NonNull MenuItem item) {
+	public boolean onMenuItemSelected(@NonNull MenuItem item) {
 		if (item.getItemId() == R.id.menu_add_theme) {
 			// Check Android supports "application/json" MIME-type
 			String mimeType = MimeTypeMap.getSingleton().getMimeTypeFromExtension("json");
@@ -160,7 +160,7 @@ public class ThemesFragment extends BaseListFragment {
 			themePicker.launch(intent);
 			return true;
 		}
-		return super.onOptionsItemSelected(item);
+		return super.onMenuItemSelected(item);
 	}
 
 	private void onThemeSelected(int resultCode, Intent data) {

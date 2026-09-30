@@ -31,6 +31,10 @@ jlong JCALL(getPosition)(UNUSED JNIEnv * env, UNUSED jobject this, jlong pointer
 	return getPosition(pointer);
 }
 
+jlong JCALL(getPlaybackGeneration)(UNUSED JNIEnv * env, UNUSED jobject this, jlong pointer) {
+	return getPlaybackGeneration(pointer);
+}
+
 void JCALL(setPosition)(JNIEnv * env, UNUSED jobject this, jlong pointer, jlong position) {
 	setPosition(env, pointer, position);
 }

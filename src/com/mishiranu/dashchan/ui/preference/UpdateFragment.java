@@ -476,7 +476,7 @@ public class UpdateFragment extends BaseListFragment {
 	}
 
 	@Override
-	public boolean onOptionsItemSelected(MenuItem item) {
+	public boolean onMenuItemSelected(MenuItem item) {
 		if (item.getItemId() == R.id.menu_download) {
 			ArrayList<UpdaterActivity.Request> requests = new ArrayList<>();
 			if (updateDataMap != null) {

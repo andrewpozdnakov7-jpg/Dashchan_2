@@ -55,6 +55,8 @@ public class ImageEditorActivity extends ComponentActivity {
 	public static final String EXTRA_RESULT_HASH = "resultHash";
 	public static final String EXTRA_RESULT_NAME = "resultName";
 	public static final String EXTRA_RESULT_ATTACHMENT_INDEX = "resultAttachmentIndex";
+	public static final String EXTRA_RESULT_SOURCE_HASH = "resultSourceHash";
+	public static final String EXTRA_RESULT_SOURCE_NAME = "resultSourceName";
 
 	private static final int MAX_IMAGE_SIZE = 2048;
 	private static final String[] STICKERS = {"😀", "😂", "❤️", "👍", "🔥", "💩", "🤡", "🚫"};
@@ -488,6 +490,8 @@ public class ImageEditorActivity extends ComponentActivity {
 				setResult(RESULT_OK, new Intent()
 						.putExtra(EXTRA_RESULT_HASH, resultHash)
 						.putExtra(EXTRA_RESULT_NAME, resultName)
+						.putExtra(EXTRA_RESULT_SOURCE_HASH, sourceHash)
+						.putExtra(EXTRA_RESULT_SOURCE_NAME, sourceName)
 						.putExtra(EXTRA_RESULT_ATTACHMENT_INDEX, attachmentIndex));
 				finish();
 			});

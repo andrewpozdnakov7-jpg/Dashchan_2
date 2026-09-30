@@ -532,6 +532,8 @@ public final class SettingsSearchIndex {
 				R.string.outbox_experimental_summary, Preferences.KEY_OUTBOX_JOURNAL);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.discussion_context,
 				R.string.discussion_context_summary, Preferences.KEY_DISCUSSION_CONTEXT);
+		add(context, entries, Screen.EXPERIMENTAL, R.string.thread_page_preload,
+				R.string.thread_page_preload__summary, Preferences.KEY_THREAD_PAGE_PRELOAD);
 
 		add(context, entries, Screen.MEDIA, R.string.load_thumbnails, 0, Preferences.KEY_LOAD_THUMBNAILS);
 		add(context, entries, Screen.VIDEO_PRELOAD, R.string.load_nearest_image, 0, Preferences.KEY_IMAGE_PRELOAD);

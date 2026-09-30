@@ -369,6 +369,7 @@
 	<string name="image_editor_saving">Saving edited copy…</string>
 	<string name="image_editor_load_failed">Could not open this image in the editor</string>
 	<string name="image_editor_save_failed">Could not save the edited image</string>
+	<string name="image_editor_attachment_changed">The original attachment has changed or was removed. Open the editor again.</string>
 	<string name="image_editor_crop">Crop</string>
 	<string name="image_editor_apply_crop">Apply crop</string>
 	<string name="image_editor_rotate">Rotate</string>
@@ -466,6 +467,8 @@
 	<string name="load_nearest_image">Load nearest image</string>
 	<string name="load_thumbnails">Load thumbnails</string>
 	<string name="loading__ellipsis">Loading…</string>
+	<string name="cache_size_calculating">Calculating…</string>
+	<string name="cache_size_unavailable">Cache size unavailable</string>
 	<string name="loading_themes__ellipsis">Loading downloadable themes…</string>
 	<string name="local_archive">Local archive</string>
 	<string name="lock_navigation">Lock navigation</string>
@@ -1081,6 +1084,9 @@
 	<string name="display_post_year">Show year in post dates</string>
 	<string name="hide_thread_title">Hide thread title in toolbar</string>
 	<string name="hide_thread_title__summary">Do not show the thread name or address while viewing it</string>
+	<string name="thread_page_preload">Auto-load board pages</string>
+	<string name="thread_page_preload__summary">Load the next page in advance while scrolling board threads, and load more in My Boards when reaching the end. Regular boards require continuous pages, not the catalog or single-page mode. May use more data.</string>
+	<string name="thread_page_preload_failed__format">Could not load the next page: %s\nSwipe up at the bottom to retry.</string>
 	<string name="windowed_thread_loading">Fast thread opening</string>
 	<string name="windowed_thread_loading__summary">Shows a small section around the current position immediately, then prepares the complete thread in the background. Experimental feature.</string>
 	<string name="swipe_reply">Swipe to reply</string>
@@ -1356,12 +1362,12 @@
 	<string name="thread_quick_navigation">Quick thread navigation</string>
 	<string name="thread_quick_navigation_transparency">Thread arrow transparency (0% — opaque)</string>
 	<string name="thread_arrow_transparency_range">Enter a percentage from 0 to 100</string>
-	<string name="thread_quick_navigation__search_summary">Scroll arrows on the left or right: jump up to the first post or down to the last loaded post.</string>
+	<string name="thread_quick_navigation__search_summary">Arrows on the left or right: jump to the start or end of loaded content in threads, board thread lists and My Boards.</string>
 	<string name="thread_quick_navigation_disabled">Disabled</string>
 	<string name="thread_quick_navigation_right">Arrows on the right</string>
 	<string name="thread_quick_navigation_left">Arrows on the left</string>
-	<string name="thread_quick_navigation_top">First post</string>
-	<string name="thread_quick_navigation_bottom">Last loaded post</string>
+	<string name="thread_quick_navigation_top">Start of list</string>
+	<string name="thread_quick_navigation_bottom">End of loaded list</string>
 	<string name="clear_translation_cache">Clear saved translations</string>
 	<string name="clear_translation_cache_summary">Delete translations saved on this device. Downloaded language models will remain.</string>
 	<string name="translation_cache_cleared">Saved translations cleared</string>

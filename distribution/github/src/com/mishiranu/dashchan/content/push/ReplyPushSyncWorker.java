@@ -1,6 +1,7 @@
 package com.mishiranu.dashchan.content.push;
 
 import android.content.Context;
+import android.os.SystemClock;
 import androidx.annotation.NonNull;
 import androidx.work.BackoffPolicy;
 import androidx.work.Constraints;
@@ -15,6 +16,7 @@ import androidx.work.Worker;
 import androidx.work.WorkerParameters;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.content.Preferences;
+import com.mishiranu.dashchan.content.service.WorkerDiagnostics;
 import com.mishiranu.dashchan.content.storage.MyPostsStorage;
 import com.mishiranu.dashchan.util.Logger;
 import java.util.ArrayList;
@@ -59,6 +61,7 @@ public class ReplyPushSyncWorker extends Worker {
 		workManager.cancelUniqueWork(UNIQUE_DELAYED_SYNC);
 		workManager.enqueueUniqueWork(UNIQUE_SYNC, ExistingWorkPolicy.APPEND_OR_REPLACE,
 				newSyncRequest(0L, 0));
+		WorkerDiagnostics.sampleQueue(context, UNIQUE_SYNC);
 	}
 
 	public static void updatePeriodicSchedule(Context context, boolean enabled) {
@@ -129,16 +132,29 @@ public class ReplyPushSyncWorker extends Worker {
 	@NonNull
 	@Override
 	public Result doWork() {
-		synchronized (RUN_LOCK) {
-			String mode = getInputData().getString(KEY_MODE);
-			if (MODE_DELETE.equals(mode)) {
-				return delete();
+		long startedAt = SystemClock.elapsedRealtime();
+		WorkerDiagnostics.event(this, "start", 0L);
+		for (String name : new String[] {UNIQUE_SYNC, UNIQUE_DELAYED_SYNC, UNIQUE_DELETE,
+				UNIQUE_RESET, UNIQUE_PERIODIC}) WorkerDiagnostics.sampleQueue(getApplicationContext(), name);
+		try {
+			synchronized (RUN_LOCK) {
+				WorkerDiagnostics.event(this, "lock_acquired", SystemClock.elapsedRealtime() - startedAt);
+				String mode = getInputData().getString(KEY_MODE);
+				Result result = MODE_DELETE.equals(mode) ? delete()
+						: MODE_RESET.equals(mode) ? resetIdentity() : sync();
+				WorkerDiagnostics.event(this, result.getClass().getSimpleName(),
+						SystemClock.elapsedRealtime() - startedAt);
+				return result;
 			}
-			if (MODE_RESET.equals(mode)) {
-				return resetIdentity();
-			}
-			return sync();
+		} finally {
+			WorkerDiagnostics.event(this, "finish", SystemClock.elapsedRealtime() - startedAt);
 		}
+	}
+
+	@Override
+	public void onStopped() {
+		super.onStopped();
+		WorkerDiagnostics.event(this, "stopped", 0L);
 	}
 
 	private Result sync() {

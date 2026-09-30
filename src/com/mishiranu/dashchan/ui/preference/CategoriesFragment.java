@@ -198,7 +198,7 @@ public class CategoriesFragment extends PreferenceFragment {
 	}
 
 	@Override
-	public boolean onOptionsItemSelected(MenuItem item) {
+	public boolean onMenuItemSelected(MenuItem item) {
 		if (item.getItemId() == R.id.menu_search) {
 			if (item == searchMenuItem) {
 				searchFocused = true;
@@ -209,6 +209,6 @@ public class CategoriesFragment extends PreferenceFragment {
 			}
 			return true;
 		}
-		return super.onOptionsItemSelected(item);
+		return super.onMenuItemSelected(item);
 	}
 }

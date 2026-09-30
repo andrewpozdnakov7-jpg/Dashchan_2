@@ -375,6 +375,7 @@
 	<string name="image_editor_saving">Сохранение изменённой копии…</string>
 	<string name="image_editor_load_failed">Не удалось открыть изображение в редакторе</string>
 	<string name="image_editor_save_failed">Не удалось сохранить изменённое изображение</string>
+	<string name="image_editor_attachment_changed">Исходное вложение изменилось или было удалено. Откройте редактор заново.</string>
 	<string name="image_editor_crop">Обрезать</string>
 	<string name="image_editor_apply_crop">Применить обрезку</string>
 	<string name="image_editor_rotate">Повернуть</string>
@@ -469,6 +470,8 @@
 	<string name="load_nearest_image">Загружать ближайшее изображение</string>
 	<string name="load_thumbnails">Загружать миниатюры</string>
 	<string name="loading__ellipsis">Загрузка…</string>
+	<string name="cache_size_calculating">Подсчёт…</string>
+	<string name="cache_size_unavailable">Размер кэша недоступен</string>
 	<string name="loading_themes__ellipsis">Загрузка доступных тем…</string>
 	<string name="local_archive">Локальный архив</string>
 	<string name="lock_navigation">Фиксир. панель</string>
@@ -1104,6 +1107,9 @@
 	<string name="display_post_year">Отображать год в датах постов</string>
 	<string name="hide_thread_title">Скрывать заголовок треда в верхней панели</string>
 	<string name="hide_thread_title__summary">Не показывать название и адрес треда при его просмотре</string>
+	<string name="thread_page_preload">Автоподгрузка страниц</string>
+	<string name="thread_page_preload__summary">Заранее загружать следующую страницу при прокрутке списка тредов, а в «Моих досках» — догружать треды при достижении конца списка. Для обычных досок работает при непрерывной прокрутке страниц, но не в каталоге и не в режиме отдельных страниц. Может увеличить расход трафика.</string>
+	<string name="thread_page_preload_failed__format">Не удалось загрузить следующую страницу: %s\nДля повтора проведите снизу вверх в конце списка.</string>
 	<string name="windowed_thread_loading">Быстрое открытие тредов</string>
 	<string name="windowed_thread_loading__summary">Сразу показывает небольшую часть треда вокруг текущей позиции, затем подготавливает весь тред в фоне. Экспериментальная функция.</string>
 	<string name="swipe_reply">Ответ свайпом</string>
@@ -1384,12 +1390,12 @@
 	<string name="thread_quick_navigation">Быстрый переход по треду</string>
 	<string name="thread_quick_navigation_transparency">Прозрачность стрелок (0% — непрозрачные)</string>
 	<string name="thread_arrow_transparency_range">Введите процент от 0 до 100</string>
-	<string name="thread_quick_navigation__search_summary">Стрелки слева или справа: быстрая прокрутка и перемотка вверх в начало треда или вниз к последнему загруженному сообщению.</string>
+	<string name="thread_quick_navigation__search_summary">Стрелки слева или справа: переход в начало или конец загруженной части треда, списка тредов доски или «Моих досок».</string>
 	<string name="thread_quick_navigation_disabled">Выключено</string>
 	<string name="thread_quick_navigation_right">Стрелки справа</string>
 	<string name="thread_quick_navigation_left">Стрелки слева</string>
-	<string name="thread_quick_navigation_top">Первый пост</string>
-	<string name="thread_quick_navigation_bottom">Последний загруженный пост</string>
+	<string name="thread_quick_navigation_top">В начало списка</string>
+	<string name="thread_quick_navigation_bottom">В конец загруженного списка</string>
 	<string name="clear_translation_cache">Очистить сохранённые переводы</string>
 	<string name="clear_translation_cache_summary">Удалить сохранённые на устройстве переводы. Скачанные языковые модели останутся.</string>
 	<string name="translation_cache_cleared">Сохранённые переводы очищены</string>

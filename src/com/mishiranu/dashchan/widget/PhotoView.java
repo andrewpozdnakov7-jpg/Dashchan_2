@@ -21,6 +21,7 @@ import android.view.ViewConfiguration;
 import android.widget.Scroller;
 import androidx.annotation.NonNull;
 import com.mishiranu.dashchan.graphics.TransparentTileDrawable;
+import com.mishiranu.dashchan.media.VideoDiagnostics;
 import com.mishiranu.dashchan.util.AnimationUtils;
 
 public class PhotoView extends View implements ScaleGestureDetector.OnScaleGestureListener {
@@ -519,7 +520,17 @@ public class PhotoView extends View implements ScaleGestureDetector.OnScaleGestu
 	}
 
 	public boolean isZoomed() {
-		return hasImage() && getScale() > initialScale + 0.001f;
+		return hasImage() && PhotoViewScale.isZoomed(getScale(), initialScale);
+	}
+
+	/** Geometry only: no media names, URLs or user content. Called at gesture/layout boundaries. */
+	public String getGestureDiagnosticState() {
+		Point dimensions = getDimensions();
+		return "view=" + getWidth() + "x" + getHeight()
+				+ " media=" + (dimensions != null ? dimensions.x + "x" + dimensions.y : "none")
+				+ " scale=" + getScale() + " initial=" + initialScale
+				+ " min=" + minimumScale + " max=" + maximumScale + " double_tap=" + doubleTapScale
+				+ " fit=" + fitScreen + " scaling=" + isScaling() + " zoomed=" + isZoomed();
 	}
 
 	private boolean swipeToCloseEnabled = true;
@@ -702,22 +713,17 @@ public class PhotoView extends View implements ScaleGestureDetector.OnScaleGestu
 			transformMatrix.reset();
 			checkMatrixBounds();
 		}
-		if (fitScreen) {
-			minimumScale = postScale;
-			maximumScale = postScale;
-			initialScale = postScale;
-			doubleTapScale = postScale;
-			setScale(postScale);
-		} else {
-			minimumScale = 1f;
-			float defaultMaximumScale = 4f / scale;
-			initialScale = Math.min(postScale, defaultMaximumScale);
-			maximumScale = maximumScaleFactor > 1f
-					? initialScale * maximumScaleFactor : defaultMaximumScale;
-			doubleTapScale = postScale > 1f ? Math.min(postScale, maximumScale) : Math.min(1f / scale, 8f);
-			if (!keepScale && postScale > 1f) {
-				setScale(doubleTapScale);
-			}
+		PhotoViewScale scales = new PhotoViewScale(scale, postScale, fitScreen, maximumScaleFactor);
+		minimumScale = scales.minimum;
+		maximumScale = scales.maximum;
+		initialScale = scales.initial;
+		doubleTapScale = scales.doubleTap;
+		if (fitScreen || !keepScale && postScale > 1f) {
+			setScale(initialScale);
+		}
+		if (VideoDiagnostics.isExtendedRecording()) {
+			VideoDiagnostics.recordUi("gallery scale_init keep=" + keepScale + " base=" + scale
+					+ " post=" + postScale + " " + getGestureDiagnosticState());
 		}
 		notifyTransformChangedAndInvalidate();
 	}

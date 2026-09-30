@@ -89,12 +89,12 @@ public class StatisticsFragment extends BaseListFragment {
 	}
 
 	@Override
-	public boolean onOptionsItemSelected(MenuItem item) {
+	public boolean onMenuItemSelected(MenuItem item) {
 		if (item.getItemId() == R.id.menu_clear) {
 			StatisticsStorage.getInstance().clear();
 			((FragmentHandler) requireActivity()).removeFragment();
 		}
-		return super.onOptionsItemSelected(item);
+		return super.onMenuItemSelected(item);
 	}
 
 	private static class Adapter extends RecyclerView.Adapter<Adapter.ViewHolder> {

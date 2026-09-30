@@ -6,6 +6,7 @@
 #include "util.h"
 #include <libswscale/swscale.h>
 #include <libavutil/imgutils.h>
+#include <libavutil/cpu.h>
 #ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wstrict-prototypes"
@@ -18,15 +19,8 @@
 #include <inttypes.h>
 #include <string.h>
 #define GAINING_THRESHOLD 100
-#define SOFTWARE_LATE_DROP_THRESHOLD_MS 100
-#define SOFTWARE_GOVERNOR_LATE_THRESHOLD_MS 250
-#define SOFTWARE_GOVERNOR_LATE_FRAMES 8
-#define SOFTWARE_GOVERNOR_RECOVERY_THRESHOLD_MS 80
-#define SOFTWARE_GOVERNOR_RECOVERY_FRAMES 6
-#define SOFTWARE_GOVERNOR_MIN_DISCARD_MS 500
 #define SOFTWARE_GOVERNOR_SLOW_CONVERSION_US 25000
 #define SOFTWARE_GOVERNOR_SLOW_CONVERSIONS 6
-#define SOFTWARE_LATE_ANCHOR_INTERVAL_MS 200
 #define SOFTWARE_SEEK_FAST_MIN_GAP_MS 600
 #define SOFTWARE_SEEK_FAST_RESTORE_MARGIN_MS 500
 #define MAX_FPS 60
@@ -38,91 +32,140 @@ static enum AVDiscard getSoftwareFrameDiscardBaseline(Player * player) {
 	return player->video.softwareDecoderDiscardActive ? AVDISCARD_NONREF : AVDISCARD_DEFAULT;
 }
 
-// Callers hold decode.video.frameMutex. Non-reference discard is a temporary
-// catch-up mode, not a permanent quality setting. Keep seek acceleration and
-// the normal playback governor independent so either one can restore its own
-// state without accidentally disabling the other.
-static void setSoftwareDecoderDiscardLocked(Player * player, AVCodecContext * context,
-		int active, const char * reason, int64_t lateness) {
-	active = !!active;
-	if (player->video.softwareDecoderDiscardActive == active) {
-		return;
-	}
-	if (active) {
-		player->video.softwareDecoderDiscardActive = 1;
-		player->video.softwareDecoderDiscardStartedAt = getTime();
-		player->video.softwareConsecutiveLateFrames = 0;
-		player->video.softwareConsecutiveRecoveryFrames = 0;
-		context->skip_frame = AVDISCARD_NONREF;
-		diagnosticsIncrement(PLAYER_DIAGNOSTICS_SOFTWARE_DECODER_DISCARD_ENABLED);
-		diagnosticsLog("player=%u software_governor decoder_discard=nonref"
-				" reason=%s late_ms=%" PRId64,
-				player->meta.diagnosticsId, reason, lateness);
-	} else {
-		int64_t activeTime = player->video.softwareDecoderDiscardStartedAt > 0
-				? getTime() - player->video.softwareDecoderDiscardStartedAt : 0;
-		player->video.softwareDecoderDiscardActive = 0;
-		player->video.softwareDecoderDiscardStartedAt = 0;
-		player->video.softwareConsecutiveLateFrames = 0;
-		player->video.softwareConsecutiveRecoveryFrames = 0;
-		context->skip_frame = player->video.softwareSeekFastActive
-				? AVDISCARD_NONREF : AVDISCARD_DEFAULT;
-		diagnosticsIncrement(PLAYER_DIAGNOSTICS_SOFTWARE_DECODER_DISCARD_RESTORED);
-		diagnosticsLog("player=%u software_governor decoder_discard=default"
-				" reason=%s late_ms=%" PRId64 " active_ms=%" PRId64
-				" seek_fast=%d", player->meta.diagnosticsId, reason, lateness,
-				activeTime, player->video.softwareSeekFastActive);
-	}
+// libdav1d consumes skip_frame at open, not as a live overload control.
+// Only use FFmpeg's live skip control for the native decoders we support here.
+static int supportsLiveDiscard(const AVCodecContext * context) {
+	const char * name = context->codec ? context->codec->name : "";
+	return !strcmp(name, "h264") || !strcmp(name, "hevc") || !strcmp(name, "vp8")
+			|| !strcmp(name, "vp9") || !strcmp(name, "mpeg2video");
 }
 
-// Callers hold decode.video.frameMutex.
+void playerVideoSoftwareConfigureThreads(AVCodecContext * context, const AVCodec * codec) {
+	int parallel = codec && ((codec->capabilities &
+			(AV_CODEC_CAP_FRAME_THREADS | AV_CODEC_CAP_SLICE_THREADS)) || !strcmp(codec->name, "libdav1d"));
+	context->thread_count = parallel ? videoSoftwareThreadCount(av_cpu_count()) : 1;
+	context->thread_type = FF_THREAD_FRAME | FF_THREAD_SLICE;
+}
+
+// Callers hold video.frameMutex. No clock/PCM reset: recovery must preserve A/V time.
 void playerVideoSoftwareResetGovernorLocked(Player * player, AVCodecContext * context,
 		const char * reason) {
-	player->video.softwareConsecutiveLateFrames = 0;
-	player->video.softwareConsecutiveRecoveryFrames = 0;
-	__atomic_store_n(&player->video.softwareLastFrameQueuedAt, 0, __ATOMIC_RELEASE);
-	if (player->video.softwareDecoderDiscardActive) {
-		setSoftwareDecoderDiscardLocked(player, context, 0, reason, 0);
-	} else if (!player->video.softwareSeekFastActive) {
-		context->skip_frame = AVDISCARD_DEFAULT;
-	}
+	VideoLoadControl * c = &player->video.softwareLoad;
+	int oldState = c->state;
+	videoLoadReset(c, getPlaybackSpeed(player));
+	player->video.softwareObservedRateRevision =
+			__atomic_load_n(&player->video.softwareRateRevision, __ATOMIC_ACQUIRE);
+	player->video.softwareDecoderDiscardActive = 0;
+	player->video.softwareDecoderDiscardStartedAt = 0;
+	if (!player->video.softwareSeekFastActive) context->skip_frame = AVDISCARD_DEFAULT;
+	diagnosticsLog("player=%u software_load reset=%s previous_state=%d speed_milli=%d"
+			" threads=%d live_discard_supported=%d audio_reset=0",
+			player->meta.diagnosticsId, reason, oldState, c->speed,
+			context->thread_count, supportsLiveDiscard(context));
 }
 
-static void updateSoftwareDecoderGovernor(Player * player, AVCodecContext * context,
-		int synchronized, int64_t lateness) {
+static void updateSoftwareLoadController(Player * player,
+		int synchronized, int64_t framePosition, int64_t lateness) {
 	pthread_mutex_lock(&player->decode.video.frameMutex);
-	if (!synchronized || !player->play.playing) {
-		player->video.softwareConsecutiveLateFrames = 0;
-		player->video.softwareConsecutiveRecoveryFrames = 0;
-		pthread_mutex_unlock(&player->decode.video.frameMutex);
-		return;
-	}
-	if (!player->video.softwareDecoderDiscardActive) {
-		if (lateness > SOFTWARE_GOVERNOR_LATE_THRESHOLD_MS) {
-			player->video.softwareConsecutiveLateFrames++;
-		} else {
-			player->video.softwareConsecutiveLateFrames = 0;
-		}
-		if (player->video.softwareConsecutiveLateFrames >= SOFTWARE_GOVERNOR_LATE_FRAMES) {
-			setSoftwareDecoderDiscardLocked(player, context, 1, "sustained_lateness", lateness);
+	VideoLoadControl * c = &player->video.softwareLoad;
+	int oldState = c->state;
+	if (synchronized && player->play.playing) {
+		int64_t now = getTime();
+		videoLoadObserve(c, getPlaybackSpeed(player), lateness, now);
+		c->decodedPosition = framePosition;
+		if (oldState != c->state) {
+			diagnosticsLog(
+				"player=%u software_load transition=%d->%d late_media_ms=%" PRId64
+				" late_wall_ms=%" PRId64 " speed_milli=%d pts_ms=%" PRId64 " previous_state_ms=%" PRId64,
+				player->meta.diagnosticsId, oldState, c->state, lateness,
+				c->lateWallMs, c->speed, framePosition, c->stateSince ? now - c->stateSince : 0);
+			c->stateSince = now;
 		}
 	} else {
-		if (lateness <= SOFTWARE_GOVERNOR_RECOVERY_THRESHOLD_MS) {
-			player->video.softwareConsecutiveRecoveryFrames++;
-		} else {
-			player->video.softwareConsecutiveRecoveryFrames = 0;
-		}
-		int64_t activeTime = player->video.softwareDecoderDiscardStartedAt > 0
-				? getTime() - player->video.softwareDecoderDiscardStartedAt : 0;
-		int caughtUp = player->video.softwareConsecutiveRecoveryFrames >=
-				SOFTWARE_GOVERNOR_RECOVERY_FRAMES;
-		if (activeTime >= SOFTWARE_GOVERNOR_MIN_DISCARD_MS && caughtUp) {
-			setSoftwareDecoderDiscardLocked(player, context, 0, "caught_up", lateness);
-		}
+		c->lateSince = c->stableSince = 0;
 	}
 	pthread_mutex_unlock(&player->decode.video.frameMutex);
 }
 
+// video.frameMutex -> packet queue. Never acquire flowMutex from this function.
+// Only discard a contiguous old-generation-consistent prefix when a later,
+// already-buffered keyframe is known. No seeking the demuxer or touching audio.
+static void catchUpSoftwareDecoderLocked(Player * player, AVCodecContext * context,
+		AVStream * stream, PacketHolder ** pending, AVFrame * frame) {
+	VideoLoadControl * c = &player->video.softwareLoad;
+	int64_t now = getTime();
+	int speed = getPlaybackSpeed(player);
+	int64_t clock = calculatePosition(player, 1);
+	int64_t late = clock - c->decodedPosition;
+	if (c->state != VIDEO_LOAD_CATCHUP || c->decodedPosition < 0 ||
+			!player->play.playing || !HAS_STREAM(player, audio) || player->sync.audioPositionNotSync ||
+			player->sync.videoPositionNotSync || player->video.softwareSeekFastActive ||
+			playerVideoHasPendingSurface(player) || playerGetSkipFlag(&player->sync.skip.videoWorkFrame) ||
+			!(*pending) || (*pending)->type != PACKET_HOLDER_MEDIA || !(*pending)->packet ||
+			!hardwareCatchupDue(late, speed, c->lateSince, c->lastCatchup, now) ||
+			now - c->scanAt < 100) return;
+	c->scanAt = now;
+	uint64_t generation = __atomic_load_n(&player->decode.packets.generation, __ATOMIC_ACQUIRE);
+	if ((*pending)->generation != generation) return;
+	BlockingQueue * queue = &player->video.packetQueue;
+	QueueItem * best = NULL;
+	int64_t keyPosition = -1;
+	int scanned = 0, dropped = 0;
+	pthread_mutex_lock(&queue->mutex);
+	for (QueueItem * item = queue->queue.first; item && scanned++ < 4096; item = item->next) {
+		PacketHolder * holder = item->data;
+		if (!holder || holder->type != PACKET_HOLDER_MEDIA || holder->generation != generation) break;
+		AVPacket * packet = holder->packet;
+		if (packet && (packet->flags & AV_PKT_FLAG_KEY)) {
+			int64_t position = getTimestampPositionMs(player,
+					packet->pts != AV_NOPTS_VALUE ? packet->pts : packet->dts, stream->time_base);
+			if (position > keyPosition && hardwareCatchupKeyEligible(position, c->decodedPosition, clock, speed)) {
+				best = item; keyPosition = position;
+			}
+		}
+	}
+	PacketHolder * replacement = NULL;
+	if (best && generation == __atomic_load_n(&player->decode.packets.generation, __ATOMIC_ACQUIRE)) {
+		while (queue->queue.first != best) {
+			playerPacketQueueFreeCallback(queueGet(&queue->queue)); dropped++;
+		}
+		replacement = queueGet(&queue->queue);
+	}
+	pthread_mutex_unlock(&queue->mutex);
+	if (!replacement) {
+		c->keyWaits++;
+		if (!c->reportAt || now - c->reportAt >= 1000) {
+			c->reportAt = now;
+			diagnosticsLog(
+				"player=%u software_catchup_wait reason=no_eligible_keyframe scanned=%d"
+				" late_media_ms=%" PRId64 " speed_milli=%d", player->meta.diagnosticsId, scanned, late, speed);
+		}
+		return;
+	}
+	playerPacketQueueFreeCallback(*pending);
+	*pending = replacement;
+	av_frame_unref(frame);
+	avcodec_flush_buffers(context);
+	context->skip_frame = AVDISCARD_DEFAULT;
+	// Already-converted old frames, including the draw thread's held frame,
+	// must not reappear after this jump. Do not free a seized output buffer.
+	pthread_mutex_lock(&player->video.sleepDrawMutex);
+	__atomic_add_fetch(&player->video.softwareOutputEpoch, 1, __ATOMIC_RELEASE);
+	pthread_cond_broadcast(&player->video.sleepCond);
+	pthread_mutex_unlock(&player->video.sleepDrawMutex);
+	c->lastCatchup = now;
+	c->catchups++;
+	c->skippedPackets += dropped + 1;
+	c->decodedPosition = keyPosition;
+	c->outputSlot = -1;
+	c->lateSince = c->stableSince = 0;
+	c->state = VIDEO_LOAD_RECOVERING;
+	c->stateSince = now;
+	diagnosticsLog("player=%u software_catchup key_ms=%" PRId64 " clock_ms=%" PRId64
+			" skipped_packets=%d scanned=%d epoch=%u audio_reset=0",
+			player->meta.diagnosticsId, keyPosition, clock, dropped + 1, scanned,
+			__atomic_load_n(&player->video.softwareOutputEpoch, __ATOMIC_ACQUIRE));
+}
 void playerVideoSoftwareRestoreSeekFastLocked(Player * player, AVCodecContext * context,
 		const char * reason, int64_t packetPosition) {
 	if (!player->video.softwareSeekFastActive) {
@@ -147,13 +190,13 @@ void playerVideoSoftwareStartSeekFastLocked(Player * player, AVCodecContext * co
 	player->video.softwareSeekFastPackets = 0;
 	player->video.softwareSeekFastFrames = 0;
 	int64_t gap = targetPosition - keyframePosition;
-	if (player->video.hardwareDecoderActive || player->video.softwareDecoderDiscardActive ||
+	if (!supportsLiveDiscard(context) || player->video.hardwareDecoderActive || player->video.softwareDecoderDiscardActive ||
 			gap < SOFTWARE_SEEK_FAST_MIN_GAP_MS) {
 		diagnosticsLog("player=%u software_seek_fast skipped keyframe_ms=%" PRId64
-				" target_ms=%" PRId64 " gap_ms=%" PRId64 " hardware=%d baseline=%s",
+				" target_ms=%" PRId64 " gap_ms=%" PRId64 " hardware=%d baseline=%s live_discard_supported=%d",
 				player->meta.diagnosticsId, keyframePosition, targetPosition, gap,
 				player->video.hardwareDecoderActive,
-				player->video.softwareDecoderDiscardActive ? "nonref" : "default");
+				player->video.softwareDecoderDiscardActive ? "nonref" : "default", supportsLiveDiscard(context));
 		return;
 	}
 	player->video.softwareSeekFastActive = 1;
@@ -202,7 +245,11 @@ static void drawWindow(Player * player, uint8_t * buffer, int width, int height,
 					ANativeWindow_getFormat(player->video.window));
 		}
 		ANativeWindow_Buffer canvas;
-		if (ANativeWindow_lock(player->video.window, &canvas, NULL) == 0) {
+		DiagnosticsWorkStamp windowStamp = diagnosticsWorkBegin();
+		int lockResult = ANativeWindow_lock(player->video.window, &canvas, NULL);
+		diagnosticsWorkEnd(player, DIAGNOSTICS_WORK_WINDOW_LOCK, windowStamp, lockResult);
+		if (lockResult == 0) {
+			windowStamp = diagnosticsWorkBegin();
 			if (canvas.width >= width && canvas.height >= height) {
 				// Width and height can be smaller in the moment of surface changing and before it was handled
 				uint8_t * to = canvas.bits;
@@ -238,7 +285,11 @@ static void drawWindow(Player * player, uint8_t * buffer, int width, int height,
 					}
 				}
 			}
-			ANativeWindow_unlockAndPost(player->video.window);
+			diagnosticsWorkEnd(player, DIAGNOSTICS_WORK_WINDOW_COPY, windowStamp,
+					canvas.width >= width && canvas.height >= height ? 0 : -1);
+			windowStamp = diagnosticsWorkBegin();
+			int postResult = ANativeWindow_unlockAndPost(player->video.window);
+			diagnosticsWorkEnd(player, DIAGNOSTICS_WORK_WINDOW_POST, windowStamp, postResult);
 		}
 	}
 }
@@ -254,6 +305,7 @@ void * playerVideoDrawThread(void * data) {
 			? player->video.lastBuffer.height : context->height;
 	while (!player->meta.interrupt) {
 		BufferItem * bufferItem = NULL;
+		DiagnosticsWorkStamp drawWaitStamp = diagnosticsWorkBegin();
 		pthread_mutex_lock(&player->video.queueMutex);
 		while (!player->meta.interrupt && !bufferItem) {
 			if (player->video.bufferQueue) {
@@ -265,6 +317,7 @@ void * playerVideoDrawThread(void * data) {
 		}
 		playerSetSkipFlag(&player->sync.skip.drawWorkFrame, 0);
 		pthread_mutex_unlock(&player->video.queueMutex);
+		diagnosticsWorkEnd(player, DIAGNOSTICS_WORK_DRAW_WAIT, drawWaitStamp, 0);
 		if (player->meta.interrupt) {
 			goto SKIP_DRAW_FRAME;
 		}
@@ -278,11 +331,17 @@ void * playerVideoDrawThread(void * data) {
 			goto SKIP_DRAW_FRAME;
 		}
 
+		DiagnosticsWorkStamp drawLockStamp = diagnosticsWorkBegin();
 		pthread_mutex_lock(&player->video.sleepDrawMutex);
+		diagnosticsWorkEnd(player, DIAGNOSTICS_WORK_DRAW_LOCK, drawLockStamp, 0);
 		if (playerGetSkipFlag(&player->sync.skip.drawWorkFrame)) {
 			UNLOCK_AND_GOTO(&player->video.sleepDrawMutex, SKIP_DRAW_FRAME);
 		}
 		VideoFrameExtra * extra = bufferItem->extra;
+		if (extra->outputEpoch != __atomic_load_n(&player->video.softwareOutputEpoch, __ATOMIC_ACQUIRE)) {
+			diagnosticsPresentation(player, extra->position, DIAGNOSTICS_OUTPUT_DROPPED_STATE);
+			UNLOCK_AND_GOTO(&player->video.sleepDrawMutex, SKIP_DRAW_FRAME);
+		}
 		int64_t position = calculatePosition(player, 1);
 		int64_t waitTime = 0;
 		int finishSeeking = 0;
@@ -302,22 +361,44 @@ void * playerVideoDrawThread(void * data) {
 			}
 		}
 		if (waitTime > 0) {
+			DiagnosticsWorkStamp scheduleStamp = diagnosticsWorkBegin();
 			LOG("sleep video %" PRId64 " %" PRId64 " %" PRId64, waitTime, player->sync.videoPosition, position);
-			int64_t time = calculateFrameTime(player, waitTime);
+			unsigned int revision = __atomic_load_n(&player->video.softwareRateRevision, __ATOMIC_ACQUIRE);
+			int64_t deadline = calculateFrameTime(player, waitTime);
 			while (!player->meta.interrupt && !playerGetSkipFlag(&player->sync.skip.drawWorkFrame)) {
-				if (condSleepUntilMs(&player->video.sleepCond, &player->video.sleepDrawMutex, time)) {
-					break;
+				if (extra->outputEpoch != __atomic_load_n(&player->video.softwareOutputEpoch, __ATOMIC_ACQUIRE)) break;
+				unsigned int currentRevision = __atomic_load_n(&player->video.softwareRateRevision, __ATOMIC_ACQUIRE);
+				if (revision != currentRevision) {
+					revision = currentRevision;
+					waitTime = extra->position - calculatePosition(player, 1);
+					if (waitTime <= 0) break;
+					deadline = calculateFrameTime(player, waitTime);
 				}
+				// Keep the established scheduling margin for the chunked audio clock.
+				// Only a rate revision changes this deadline, not a spurious wake.
+				if (condSleepUntilMs(&player->video.sleepCond, &player->video.sleepDrawMutex, deadline)) break;
 			}
 			position = calculatePosition(player, 1);
+			diagnosticsWorkEnd(player, DIAGNOSTICS_WORK_SCHEDULE_WAIT, scheduleStamp, 0);
 			waitTime = extra->position >= 0 ? extra->position - position : 0;
 		}
 		if (playerGetSkipFlag(&player->sync.skip.drawWorkFrame)) {
 			UNLOCK_AND_GOTO(&player->video.sleepDrawMutex, SKIP_DRAW_FRAME);
 		}
-		if (!finishSeeking && !extra->forcePresent && HAS_STREAM(player, audio) &&
-				!player->sync.audioPositionNotSync &&
-				waitTime < -SOFTWARE_LATE_DROP_THRESHOLD_MS) {
+		if (extra->outputEpoch != __atomic_load_n(&player->video.softwareOutputEpoch, __ATOMIC_ACQUIRE)) {
+			diagnosticsPresentation(player, extra->position, DIAGNOSTICS_OUTPUT_DROPPED_STATE);
+			UNLOCK_AND_GOTO(&player->video.sleepDrawMutex, SKIP_DRAW_FRAME);
+		}
+		// Drop an old output only when a newer, already-due output is available.
+		// Lateness alone must never turn an overloaded decoder into a 5 FPS gate.
+		int superseded = 0;
+		pthread_mutex_lock(&player->video.queueMutex);
+		QueueItem * next = player->video.bufferQueue ? player->video.bufferQueue->busyQueue.first : NULL;
+		VideoFrameExtra * newer = next ? ((BufferItem *) next->data)->extra : NULL;
+		if (newer && newer->outputEpoch == extra->outputEpoch && extra->position >= 0 &&
+				newer->position > extra->position && newer->position <= position) superseded = 1;
+		pthread_mutex_unlock(&player->video.queueMutex);
+		if (!finishSeeking && superseded) {
 			diagnosticsRecordSoftwareDrop(player, 0, extra->position, position, -waitTime);
 			UNLOCK_AND_GOTO(&player->video.sleepDrawMutex, SKIP_DRAW_FRAME);
 		}
@@ -334,19 +415,19 @@ void * playerVideoDrawThread(void * data) {
 		if (bufferSize <= 0 || bufferSize > bufferItem->bufferSize) {
 			UNLOCK_AND_GOTO(&player->video.sleepDrawMutex, SKIP_DRAW_FRAME);
 		}
+		DiagnosticsWorkStamp lastCopyStamp = diagnosticsWorkBegin();
 		if (bufferSize > player->video.lastBuffer.size) {
 			player->video.lastBuffer.data = realloc(player->video.lastBuffer.data, bufferSize);
 			player->video.lastBuffer.size = bufferSize;
 		}
 		memcpy(player->video.lastBuffer.data, bufferItem->buffer, bufferSize);
+		diagnosticsWorkEnd(player, DIAGNOSTICS_WORK_LAST_FRAME_COPY, lastCopyStamp, 0);
 		player->video.lastBuffer.dataSize = bufferSize;
 		player->video.lastBuffer.width = extra->width;
 		player->video.lastBuffer.height = extra->height;
 		player->video.lastBuffer.frameGeneration++;
 		int rendered = 0;
-		if (extra->forcePresent ||
-				(player->sync.lastDrawTimes[0] - player->sync.lastDrawTimes[1]) * MAX_FPS >= 1000
-				|| (getTime() - player->sync.lastDrawTimes[0]) * MAX_FPS >= 1000) {
+		if (finishSeeking || getTime() * MAX_FPS / 1000 > player->sync.lastDrawTimes[0] * MAX_FPS / 1000) {
 			// Avoid FPS > MAX_FPS
 			drawWindow(player, bufferItem->buffer, extra->width, extra->height,
 					lastWidth, lastHeight);
@@ -357,11 +438,8 @@ void * playerVideoDrawThread(void * data) {
 			lastHeight = extra->height;
 			player->sync.lastDrawTimes[1] = player->sync.lastDrawTimes[0];
 			player->sync.lastDrawTimes[0] = getTime();
-			if (extra->forcePresent) {
-				diagnosticsRecordSoftwareLateAnchor(player, 1, extra->position,
-						position, position - extra->position);
-			}
 		}
+		if (!rendered) diagnosticsPresentation(player, extra->position, DIAGNOSTICS_OUTPUT_DROPPED_CADENCE);
 		if (finishSeeking && rendered) {
 			player->sync.videoPositionNotSync = 0;
 			playerVideoCompletePausedSeekFrame(player);
@@ -443,6 +521,13 @@ void * playerVideoDecodeThread(void * data) {
 
 	AVCodecContext * context = GET_CONTEXT(player, video);
 	int bytesPerPixel = getBytesPerPixel(player->video.format);
+	pthread_mutex_lock(&player->decode.video.frameMutex);
+	playerVideoSoftwareResetGovernorLocked(player, context, "decoder_start");
+	pthread_mutex_unlock(&player->decode.video.frameMutex);
+	diagnosticsLog("player=%u software_policy controller=1 budgets=wall_clock max_output_fps=%d"
+			" enter_ms=%d persist_ms=%d recover_ms=%d stable_ms=%d fixed_late_gate=0",
+			player->meta.diagnosticsId, MAX_FPS, VIDEO_LOAD_ENTER_MS, VIDEO_LOAD_ENTER_PERSIST_MS,
+			VIDEO_LOAD_RECOVER_MS, VIDEO_LOAD_STABLE_MS);
 	int isYUV = player->video.format == AV_PIX_FMT_YUV420P;
 	AVFrame * frame = av_frame_alloc();
 	ScaleHolder scaleHolder;
@@ -470,7 +555,9 @@ void * playerVideoDecodeThread(void * data) {
 			playerVideoApplyPendingSurface(player, env);
 			continue;
 		}
+		DiagnosticsWorkStamp packetStamp = diagnosticsWorkBegin();
 		packetHolder = (PacketHolder *) blockingQueueGet(&player->video.packetQueue, 1);
+		diagnosticsWorkEnd(player, DIAGNOSTICS_WORK_PACKET_WAIT, packetStamp, 0);
 		if (packetHolder && packetHolder->type == PACKET_HOLDER_SURFACE_REQUEST) {
 			playerPacketQueueFreeCallback(packetHolder);
 			packetHolder = NULL;
@@ -510,19 +597,33 @@ void * playerVideoDecodeThread(void * data) {
 			int pausedSeekFrameQueued = 0;
 			VideoFrameExtra * extra = NULL;
 			int64_t decodedFramePosition = -1;
+			unsigned int outputEpoch = 0;
 			if (playerGetSkipFlag(&player->sync.skip.videoWorkFrame)) {
 				goto SKIP_VIDEO_FRAME;
 			}
+			DiagnosticsWorkStamp decodeLockStamp = diagnosticsWorkBegin();
 			pthread_mutex_lock(&player->decode.video.frameMutex);
+			diagnosticsWorkEnd(player, DIAGNOSTICS_WORK_DECODE_LOCK, decodeLockStamp, 0);
 			if (playerGetSkipFlag(&player->sync.skip.videoWorkFrame)) {
 				UNLOCK_AND_GOTO(&player->decode.video.frameMutex, SKIP_VIDEO_FRAME);
 			}
+			if (packetHolder->generation != __atomic_load_n(&player->decode.packets.generation, __ATOMIC_ACQUIRE)) {
+				UNLOCK_AND_GOTO(&player->decode.video.frameMutex, SKIP_VIDEO_FRAME);
+			}
+			if (player->video.softwareObservedRateRevision !=
+					__atomic_load_n(&player->video.softwareRateRevision, __ATOMIC_ACQUIRE)) {
+				playerVideoSoftwareResetGovernorLocked(player, context, "playback_speed");
+			}
 			if (!packetSent) {
+				catchUpSoftwareDecoderLocked(player, context, stream, &packetHolder, frame);
 				updateSoftwareSeekFastDecodeForPacketLocked(player, context, stream,
 						packetHolder->packet);
 			}
-			int ready = playerDecodeFrame(player, 1, context, packetHolder->packet, frame, &packetSent);
+			DiagnosticsWorkStamp decodeStamp = diagnosticsWorkBegin();
+			int ready = playerDecodeFrame(player, 1, context, packetHolder, frame, &packetSent);
+			diagnosticsWorkEnd(player, DIAGNOSTICS_WORK_DECODE, decodeStamp, 0);
 			if (ready) {
+				outputEpoch = __atomic_load_n(&player->video.softwareOutputEpoch, __ATOMIC_ACQUIRE);
 				decodedFramePosition = getFramePositionMs(player, frame, stream);
 				if (player->video.softwareSeekFastActive) {
 					player->video.softwareSeekFastFrames++;
@@ -539,8 +640,8 @@ void * playerVideoDecodeThread(void * data) {
 
 			if (ready) {
 				extra = malloc(sizeof(VideoFrameExtra));
+				extra->outputEpoch = outputEpoch;
 				extra->position = decodedFramePosition;
-				extra->forcePresent = 0;
 				diagnosticsIncrement(PLAYER_DIAGNOSTICS_SOFTWARE_DECODED);
 				LOG("video frame pts=%" PRId64 " best=%" PRId64 " pkt_dts=%" PRId64
 						" pos=%" PRId64 " tb=%d/%d", frame->pts, frame->best_effort_timestamp,
@@ -559,19 +660,20 @@ void * playerVideoDecodeThread(void * data) {
 				int64_t lateness = extra->position >= 0 ? playbackPosition - extra->position : 0;
 				int canDropLate = extra->position >= 0 && HAS_STREAM(player, audio) &&
 						!player->sync.audioPositionNotSync && !player->sync.videoPositionNotSync;
-				updateSoftwareDecoderGovernor(player, context, canDropLate, lateness);
-				if (canDropLate && lateness > SOFTWARE_LATE_DROP_THRESHOLD_MS) {
-					int64_t now = getTime();
-					int64_t lastQueuedAt = __atomic_load_n(
-							&player->video.softwareLastFrameQueuedAt, __ATOMIC_ACQUIRE);
-					if (lastQueuedAt <= 0 || now - lastQueuedAt >= SOFTWARE_LATE_ANCHOR_INTERVAL_MS) {
-						extra->forcePresent = 1;
-					} else {
-						diagnosticsRecordSoftwareDrop(player, 1, extra->position,
-								playbackPosition, lateness);
-						success = 1;
-						goto SKIP_VIDEO_FRAME;
-					}
+				diagnosticsSoftwareFrame(player, extra->position, lateness, canDropLate,
+						frame->width, frame->height, 0, 0, 0, player->video.softwareOutputLevel);
+				updateSoftwareLoadController(player, canDropLate, extra->position, lateness);
+				pthread_mutex_lock(&player->decode.video.frameMutex);
+				VideoLoadControl * control = &player->video.softwareLoad;
+				int64_t slot = hardwareOutputSlot(extra->position, getPlaybackSpeed(player));
+				int cadenceDrop = canDropLate && slot >= 0 && slot == control->outputSlot;
+				if (cadenceDrop) control->cadenceDrops++;
+				else control->outputSlot = slot;
+				pthread_mutex_unlock(&player->decode.video.frameMutex);
+				if (cadenceDrop) {
+					diagnosticsPresentation(player, extra->position, DIAGNOSTICS_OUTPUT_DROPPED_CADENCE);
+					success = 1;
+					goto SKIP_VIDEO_FRAME;
 				}
 
 				int outputWidth;
@@ -612,6 +714,7 @@ void * playerVideoDecodeThread(void * data) {
 				int useLibyuv = frame->format == AV_PIX_FMT_YUV420P &&
 						player->video.format == AV_PIX_FMT_RGBA && frame->width == outputWidth &&
 						frame->height == outputHeight;
+				DiagnosticsWorkStamp convertStamp = diagnosticsWorkBegin();
 				uint64_t conversionStartedAt = getTimeUs();
 				uint64_t measurementStartedAt = 0;
 				if (useLibyuv) {
@@ -626,8 +729,9 @@ void * playerVideoDecodeThread(void * data) {
 						}
 					}
 				}
+				int conversionResult;
 				if (useLibyuv) {
-					I420ToABGR(frame->data[0], frame->linesize[0], frame->data[1], frame->linesize[1],
+					conversionResult = I420ToABGR(frame->data[0], frame->linesize[0], frame->data[1], frame->linesize[1],
 							frame->data[2], frame->linesize[2], scaleHolder.scaleBuffer, 4 * outputWidth,
 							outputWidth, outputHeight);
 				} else {
@@ -636,9 +740,10 @@ void * playerVideoDecodeThread(void * data) {
 							outputWidth, outputHeight, player->video.format,
 							SWS_FAST_BILINEAR, NULL, NULL, NULL);
 					if (!scaleContext) {
+						diagnosticsWorkEnd(player, DIAGNOSTICS_WORK_CONVERT, convertStamp, -1);
 						goto SKIP_VIDEO_FRAME;
 					}
-					sws_scale(scaleContext, (uint8_t const * const *) frame->data, frame->linesize,
+					conversionResult = sws_scale(scaleContext, (uint8_t const * const *) frame->data, frame->linesize,
 							0, frame->height, scaleHolder.scaleData, scaleHolder.scaleLinesize);
 				}
 				int64_t conversionTime = getTimeUs() - conversionStartedAt;
@@ -658,6 +763,11 @@ void * playerVideoDecodeThread(void * data) {
 						}
 					}
 				}
+				// Do not include diagnostic bookkeeping in the existing converter-selection benchmark.
+				diagnosticsWorkEnd(player, DIAGNOSTICS_WORK_CONVERT, convertStamp, conversionResult);
+				diagnosticsSoftwareFrame(player, extra->position, lateness, canDropLate,
+						frame->width, frame->height, outputWidth, outputHeight, useLibyuv,
+						player->video.softwareOutputLevel);
 				if (conversionTime >= SOFTWARE_GOVERNOR_SLOW_CONVERSION_US) {
 					player->video.softwareSlowConversions++;
 				} else if (player->video.softwareSlowConversions > 0) {
@@ -673,8 +783,10 @@ void * playerVideoDecodeThread(void * data) {
 							player->video.softwareSlowConversions);
 				}
 
+				DiagnosticsWorkStamp queueStamp = diagnosticsWorkBegin();
 				pthread_mutex_lock(&player->video.queueMutex);
 				if (playerGetSkipFlag(&player->sync.skip.videoWorkFrame)) {
+					diagnosticsWorkEnd(player, DIAGNOSTICS_WORK_QUEUE_WAIT, queueStamp, 0);
 					UNLOCK_AND_GOTO(&player->video.queueMutex, SKIP_VIDEO_FRAME);
 				}
 				bufferQueueExtend(player->video.bufferQueue, outputBufferSize);
@@ -686,23 +798,18 @@ void * playerVideoDecodeThread(void * data) {
 						pthread_cond_wait(&player->video.queueCond, &player->video.queueMutex);
 					}
 				}
+				diagnosticsWorkEnd(player, DIAGNOSTICS_WORK_QUEUE_WAIT, queueStamp, 0);
 				if (bufferItem) {
-					int forcePresent = extra->forcePresent;
 					if (decodedFramePosition >= 0 && player->sync.videoPositionNotSync) {
 						pausedSeekFrameQueued = playerVideoMarkPausedSeekFrameQueued(player);
 					}
+					DiagnosticsWorkStamp copyStamp = diagnosticsWorkBegin();
 					memcpy(bufferItem->buffer, scaleHolder.scaleBuffer, outputBufferSize);
+					diagnosticsWorkEnd(player, DIAGNOSTICS_WORK_QUEUE_COPY, copyStamp, 0);
 					bufferItem->dataSize = outputBufferSize;
 					bufferItem->extra = extra;
 					extra = NULL;
 					bufferQueueAdd(player->video.bufferQueue, bufferItem);
-					__atomic_store_n(&player->video.softwareLastFrameQueuedAt,
-							getTime(), __ATOMIC_RELEASE);
-					if (forcePresent) {
-						diagnosticsRecordSoftwareLateAnchor(player, 0,
-								((VideoFrameExtra *) bufferItem->extra)->position,
-								playbackPosition, lateness);
-					}
 					pthread_cond_broadcast(&player->video.queueCond);
 					success = 1;
 				}
@@ -826,6 +933,7 @@ AVCodecContext * playerVideoSoftwareCreateCodecContext(Player * player) {
 		return NULL;
 	}
 	context->pkt_timebase = stream->time_base;
+	playerVideoSoftwareConfigureThreads(context, codec);
 	if (avcodec_open2(context, codec, NULL) < 0) {
 		playerCloseAndFreeCodecContext(&context);
 		return NULL;

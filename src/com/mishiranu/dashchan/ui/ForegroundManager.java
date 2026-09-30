@@ -184,6 +184,7 @@ public class ForegroundManager implements Handler.Callback {
 		@NonNull Bundle requireArguments();
 		@NonNull FragmentManager requireFragmentManager();
 		void dismiss();
+		void dismissAllowingStateLoss();
 
 		default void fillArguments(Bundle args, String pendingDataId) {
 			args.putString(EXTRA_PENDING_DATA_ID, pendingDataId);
@@ -201,8 +202,11 @@ public class ForegroundManager implements Handler.Callback {
 
 		default T getPendingDataOrDismiss() {
 			T pendingData = getPendingData();
-			if (pendingData == null && !requireFragmentManager().isStateSaved()) {
-				dismiss();
+			if (pendingData == null) {
+				// DISMISS policy: the worker/request died with the process. Keeping its
+				// dialog cannot restore it and must not launch a replacement operation.
+				UiLifecycleDiagnostics.event(this, "pending_request_lost");
+				dismissAllowingStateLoss();
 			}
 			return pendingData;
 		}
@@ -1035,6 +1039,12 @@ public class ForegroundManager implements Handler.Callback {
 	public static class RecaptchaV2Dialog extends RecaptchaReader.V2Dialog
 			implements PendingDataDialog<RecaptchaV2PendingData> {
 		public RecaptchaV2Dialog() {}
+
+		@Override
+		public void onStart() {
+			super.onStart();
+			getPendingDataOrDismiss();
+		}
 
 		public RecaptchaV2Dialog(String pendingDataId, String referer, String apiKey,
 				boolean invisible, boolean hcaptcha, RecaptchaReader.ChallengeExtra challengeExtra) {

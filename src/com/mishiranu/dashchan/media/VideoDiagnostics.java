@@ -6,8 +6,11 @@ import android.graphics.RectF;
 import android.media.MediaCodecInfo;
 import android.media.MediaCodecList;
 import android.os.Build;
+import android.os.Debug;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.PowerManager;
+import android.os.Process;
 import android.os.SystemClock;
 import android.view.TextureView;
 import android.view.View;
@@ -56,6 +59,8 @@ public final class VideoDiagnostics {
 	private static ScheduledFuture<?> sampler;
 	private static long startedAt;
 	private static long startedElapsedRealtime;
+	private static long lastResourceSampleElapsed;
+	private static long lastProcessCpuMs;
 	private static StringBuilder uiReport = new StringBuilder();
 	private static boolean uiReportTruncated;
 	private static File lastFile;
@@ -90,6 +95,8 @@ public final class VideoDiagnostics {
 			samplingUnavailable = false;
 			startedAt = System.currentTimeMillis();
 			startedElapsedRealtime = SystemClock.elapsedRealtime();
+			lastResourceSampleElapsed = startedElapsedRealtime;
+			lastProcessCpuMs = Process.getElapsedCpuTime();
 			uiReport.setLength(0);
 			uiReportTruncated = false;
 			appendUiReportLocked("capture_started=true");
@@ -172,11 +179,35 @@ public final class VideoDiagnostics {
 	private static void sample() {
 		if (!isExtendedRecording()) return;
 		boolean available = VideoPlayer.sampleDiagnosticCapture();
+		int thermalStatus = -1;
+		boolean powerSave = false;
+		boolean powerStateAvailable = false;
+		try {
+			PowerManager power = MainApplication.getInstance().getSystemService(PowerManager.class);
+			if (power != null) {
+				thermalStatus = power.getCurrentThermalStatus();
+				powerSave = power.isPowerSaveMode();
+				powerStateAvailable = true;
+			}
+		} catch (RuntimeException e) {
+			// Some vendor services fail during transitions; diagnostics must never stop playback.
+		}
 		synchronized (LOCK) {
 			if (!recording || !extended) return;
 			if (!available && !samplingUnavailable) appendUiReportLocked("extended_native_sampling_unavailable=true");
 			samplingUnavailable = !available;
 			long now = SystemClock.elapsedRealtime();
+			long cpuMs = Process.getElapsedCpuTime();
+			long interval = now - lastResourceSampleElapsed;
+			long cpuDelta = Math.max(0, cpuMs - lastProcessCpuMs);
+			appendUiReportLocked("process_sample interval_ms=" + interval + " cpu_ms=" + cpuDelta
+					+ " cpu_percent_one_core=" + (interval > 0 ? 100L * cpuDelta / interval : -1)
+					+ " available_processors=" + Runtime.getRuntime().availableProcessors()
+					+ " native_heap_bytes=" + Debug.getNativeHeapAllocatedSize()
+					+ " thermal_status=" + thermalStatus + " power_save=" + powerSave
+					+ " power_state_available=" + powerStateAvailable);
+			lastResourceSampleElapsed = now;
+			lastProcessCpuMs = cpuMs;
 			for (Map.Entry<Integer, SurfaceStats> entry : surfaces.entrySet()) {
 				SurfaceStats surface = entry.getValue();
 				appendUiReportLocked("texture=" + entry.getKey() + " sample updates="
@@ -327,7 +358,7 @@ public final class VideoDiagnostics {
 		try (FileOutputStream output = new FileOutputStream(file);
 				BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(output, StandardCharsets.UTF_8))) {
 			writer.write("Dashchan video diagnostics\n");
-			writer.write("schema=3\n");
+			writer.write("schema=4\n");
 			writer.write("mode=" + (extended ? "extended" : "standard") + "\n");
 			writer.write("started_utc=" + formatTime(startedAt, "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'") + "\n");
 			writer.write("stopped_utc=" + formatTime(stoppedAt, "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'") + "\n");

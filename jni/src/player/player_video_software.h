@@ -8,6 +8,7 @@ void * playerVideoDecodeThread(void * data);
 void playerVideoBufferQueueFreeCallback(BufferItem * bufferItem);
 int playerVideoSoftwareGetFormat(int windowFormat);
 int playerVideoSoftwarePrepareOutputLocked(Player * player);
+void playerVideoSoftwareConfigureThreads(AVCodecContext * context, const AVCodec * codec);
 #ifdef DASHCHAN_HAS_MEDIACODEC
 AVCodecContext * playerVideoSoftwareCreateCodecContext(Player * player);
 #endif

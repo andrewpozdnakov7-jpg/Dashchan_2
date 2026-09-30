@@ -1202,24 +1202,47 @@ public class PagerUnit implements PagerInstance.Callback {
 		public boolean onVerticalGestureStart(PhotoViewPager view, float x, float y) {
 			endVolumeGesture();
 			verticalGesture = VerticalGesture.NONE;
-			if (!resumed || finished || tikTokTransitionRunning) return false;
+			if (!resumed || finished || tikTokTransitionRunning) {
+				recordVerticalGesture(view, "reject", !resumed ? "not_resumed"
+						: finished ? "finished" : "transition");
+				return false;
+			}
 			// Claim the configured volume edge before considering video paging. The
 			// selected gesture stays fixed until release, even if the finger moves away.
 			if (tryStartVolumeGesture(view, x, y)) {
 				verticalGesture = VerticalGesture.VOLUME;
 				VideoDiagnostics.recordUi("gallery volume_gesture start tiktok=" + tikTokMode
 						+ " local=" + videoUnit.isVolumeGestureLocal());
+				recordVerticalGesture(view, "start", "volume_edge");
 				return true;
 			}
 			if (tikTokPagingActive) {
 				PagerInstance.ViewHolder holder = pagerInstance.currentHolder;
-				if (holder == null || holder.photoView.isScaling() || holder.photoView.isZoomed()) return false;
+				if (holder == null || holder.photoView.isScaling() || holder.photoView.isZoomed()) {
+					recordVerticalGesture(view, "reject", holder == null ? "no_holder"
+							: holder.photoView.isScaling() ? "scaling" : "zoomed");
+					return false;
+				}
 				tikTokGestureDistance = 0f;
 				tikTokGestureThresholdReached = false;
 				verticalGesture = VerticalGesture.TIKTOK;
+				recordVerticalGesture(view, "start", "paging");
 				return true;
 			}
+			recordVerticalGesture(view, "reject", "paging_inactive");
 			return false;
+		}
+
+		private void recordVerticalGesture(PhotoViewPager view, String event, String reason) {
+			if (!VideoDiagnostics.isExtendedRecording()) return;
+			PagerInstance.ViewHolder holder = pagerInstance.currentHolder;
+			VideoDiagnostics.recordUi("gallery vertical_gesture " + event + " reason=" + reason
+					+ " index=" + view.getCurrentIndex() + " tiktok=" + tikTokMode
+					+ " active=" + tikTokPagingActive + " filter=" + tikTokFilter
+					+ " resumed=" + resumed + " finished=" + finished + " transition=" + tikTokTransitionRunning
+					+ " video=" + (holder != null && holder.galleryItem != null
+							&& holder.galleryItem.isVideo(Chan.get(galleryInstance.chanName)))
+					+ (holder != null ? " " + holder.photoView.getGestureDiagnosticState() : " holder=none"));
 		}
 
 		private boolean tryStartVolumeGesture(PhotoViewPager view, float x, float y) {
@@ -1276,6 +1299,12 @@ public class PagerUnit implements PagerInstance.Callback {
 				verticalGesture = VerticalGesture.NONE;
 				boolean complete = !cancelled && tikTokTransitionIndex >= 0
 						&& Math.abs(tikTokGestureDistance) >= getTikTokGestureThreshold(view);
+				if (VideoDiagnostics.isExtendedRecording()) {
+					VideoDiagnostics.recordUi("gallery vertical_gesture end index=" + view.getCurrentIndex()
+							+ " target=" + tikTokTransitionIndex + " distance=" + tikTokGestureDistance
+							+ " threshold=" + getTikTokGestureThreshold(view) + " cancelled=" + cancelled
+							+ " complete=" + complete);
+				}
 				if (!cancelled && tikTokTransitionIndex < 0
 						&& Math.abs(tikTokGestureDistance) >= getTikTokGestureThreshold(view)) {
 					ClickableToast.show(tikTokGestureDistance > 0f ? R.string.tiktok_no_next_item

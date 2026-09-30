@@ -170,7 +170,7 @@ public class BoardsAdapter extends CursorAdapter<ChanDatabase.BoardCursor, Recyc
 	}
 
 	private void toggleCategory(CategoryViewHolder holder) {
-		int position = holder.getAdapterPosition();
+		int position = holder.getBindingAdapterPosition();
 		if (position == RecyclerView.NO_POSITION) return;
 		Row row = rows.get(position);
 		boolean expanded;
