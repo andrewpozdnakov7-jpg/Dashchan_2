@@ -316,6 +316,9 @@ void playerSeekSetPosition(JNIEnv * env, Player * player, int64_t position) {
 	diagnosticsLogSeekLock(player, "prepare", "packets.flow", "waiting");
 	pthread_mutex_lock(&player->decode.packets.flowMutex);
 	diagnosticsLogSeekLock(player, "prepare", "packets.flow", "acquired");
+	// Cancellation after flush does not restore the old decoder reference frames.
+	// Keep playback demux gated until the replacement seek commits (or destruction).
+	__atomic_store_n(&player->decode.packets.seekPending, 1, __ATOMIC_RELEASE);
 	playerDemuxResetBuffering(player, bridge);
 	playerVideoSetPausedSeekPending(player, 0);
 	uint64_t packetGeneration = __atomic_add_fetch(&player->decode.packets.generation, 1,
@@ -564,6 +567,9 @@ void playerSeekSetPosition(JNIEnv * env, Player * player, int64_t position) {
 	if (HAS_STREAM(player, video)) {
 		PLAYER_SEND_MESSAGE(env, player, bridge, BRIDGE_MESSAGE_START_SEEKING);
 	}
+	__atomic_store_n(&player->decode.packets.seekPending, 0, __ATOMIC_RELEASE);
+	diagnosticsLog("player=%u seek_demux_resumed generation=%" PRIu64,
+			player->meta.diagnosticsId, packetGeneration);
 	pthread_cond_broadcast(&player->play.finishCond);
 	pthread_cond_broadcast(&player->decode.packets.flowCond);
 	pthread_cond_broadcast(&player->audio.sleepCond);

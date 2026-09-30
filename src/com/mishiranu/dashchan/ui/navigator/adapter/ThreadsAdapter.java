@@ -28,6 +28,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.IdentityHashMap;
 import java.util.List;
 
 public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> implements GalleryItem.Provider {
@@ -98,8 +99,9 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 				false, false, false, false, false, null);
 		catalogSearch = new AsyncCatalogSearch<>(postItem -> new CatalogSearch.Document(postItem.getSubject(),
 				postItem.getComment(Chan.get(configurationSet.chanName)).toString()), result -> {
+			List<AdapterListUpdate.Row> before = captureRows();
 			filteredPostItems = new ArrayList<>(result);
-			notifyDataSetChanged();
+			dispatchRows(before, false);
 		});
 	}
 
@@ -181,7 +183,7 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 	public void setTranslationEnabled(boolean enabled) {
 		configurationSet.showTranslatedComments = enabled;
 		configurationSet.translationKey = enabled ? TranslationController.getCurrentCacheKey() : null;
-		notifyDataSetChanged();
+		notifyItemRangeChanged(getSecretAbuOffset(), getPostItems().size());
 	}
 
 	public boolean isTranslationEnabled() {
@@ -237,7 +239,10 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 	public void setSecretAbuAllowed(boolean allowed) {
 		boolean wasVisible = isSecretAbuVisible();
 		secretAbuAllowed = allowed;
-		if (wasVisible != isSecretAbuVisible()) notifyDataSetChanged();
+		if (wasVisible != isSecretAbuVisible()) {
+			if (wasVisible) notifyItemRemoved(0);
+			else notifyItemInserted(0);
+		}
 	}
 
 	@Override
@@ -315,6 +320,11 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 	}
 
 	public void setItems(Collection<List<PostItem>> postItemsCollection, boolean catalog) {
+		setItems(postItemsCollection, catalog, true);
+	}
+
+	public void setItems(Collection<List<PostItem>> postItemsCollection, boolean catalog, boolean refreshRetained) {
+		List<AdapterListUpdate.Row> before = captureRows();
 		postItems.clear();
 		for (List<PostItem> postItems : postItemsCollection) {
 			appendItemsInternal(postItems);
@@ -322,13 +332,30 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 		this.catalog = catalog;
 		catalogSearch.retainItems(postItems);
 		applyCurrentSortingAndFilter(true, true);
-		notifyDataSetChanged();
+		// Refresh may also change mutable hide/vote/state-provider data on retained objects.
+		dispatchRows(before, refreshRetained);
 	}
 
 	public void appendItems(List<PostItem> postItems) {
+		List<AdapterListUpdate.Row> before = captureRows();
 		appendItemsInternal(postItems);
 		applyCurrentSortingAndFilter(true, true);
-		notifyDataSetChanged();
+		dispatchRows(before, false);
+	}
+
+	private List<AdapterListUpdate.Row> captureRows() {
+		ArrayList<AdapterListUpdate.Row> rows = new ArrayList<>();
+		if (isSecretAbuVisible()) rows.add(new AdapterListUpdate.Row("secret", cardsMode));
+		for (PostItem postItem : getPostItems()) {
+			// Thread numbers are not globally unique, particularly on My Boards.
+			rows.add(new AdapterListUpdate.Row(AdapterListUpdate.values(postItem.getChanName(),
+					postItem.getBoardName(), postItem.getThreadNumber()), postItem));
+		}
+		return rows;
+	}
+
+	private void dispatchRows(List<AdapterListUpdate.Row> before, boolean refresh) {
+		AdapterListUpdate.dispatch(this, before, captureRows(), refresh);
 	}
 
 	public void setSearchActive(boolean active) {
@@ -371,9 +398,10 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 
 	public void applyFilter(String text) {
 		if (!StringUtils.emptyIfNull(filterText).equals(StringUtils.emptyIfNull(text))) {
+			List<AdapterListUpdate.Row> before = captureRows();
 			filterText = text;
 			applyCurrentSortingAndFilter(false, true);
-			notifyDataSetChanged();
+			dispatchRows(before, false);
 		}
 	}
 
@@ -381,18 +409,20 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 		if (this.catalogSort != catalogSort) {
 			this.catalogSort = catalogSort;
 			if (catalog || threadsSortingEnabled) {
+				List<AdapterListUpdate.Row> before = captureRows();
 				applyCurrentSortingAndFilter(true, false);
-				notifyDataSetChanged();
+				dispatchRows(before, false);
 			}
 		}
 	}
 
 	public void setThreadsSortingEnabled(boolean enabled, boolean ratingEnabled) {
 		if (threadsSortingEnabled != enabled || ratingSortingEnabled != ratingEnabled) {
+			List<AdapterListUpdate.Row> before = captureRows();
 			threadsSortingEnabled = enabled;
 			ratingSortingEnabled = ratingEnabled;
 			applyCurrentSortingAndFilter(true, false);
-			notifyDataSetChanged();
+			dispatchRows(before, false);
 		}
 	}
 
@@ -418,10 +448,17 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 			catalogSearch.cancel();
 			String text = filterText;
 			if (!StringUtils.isEmpty(text)) {
-				// Do not show results belonging to the previous query or dataset while work is pending.
+				// A changed query clears old results. For the same query, retain only identical
+				// content revisions still in this dataset, in its new order. Never resurrect removed rows.
+				IdentityHashMap<PostItem, Boolean> retained = new IdentityHashMap<>();
+				if (sorting && filteredPostItems != null) {
+					for (PostItem item : filteredPostItems) retained.put(item, Boolean.TRUE);
+				}
+				List<PostItem> source = catalogSortedPostItems != null ? catalogSortedPostItems : postItems;
 				filteredPostItems = new ArrayList<>();
+				for (PostItem item : source) if (retained.containsKey(item)) filteredPostItems.add(item);
 				if (searchActive) {
-					catalogSearch.submit(catalogSortedPostItems != null ? catalogSortedPostItems : postItems, text);
+					catalogSearch.submit(source, text);
 				}
 			} else {
 				filteredPostItems = null;
@@ -505,5 +542,10 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 				catalogSearch.submit(catalogSortedPostItems != null ? catalogSortedPostItems : postItems, filterText);
 			}
 		}
+	}
+
+	public void notifyThreadChanged(PostItem postItem) {
+		int position = getPostItems().indexOf(postItem);
+		if (position >= 0) notifyItemChanged(position + getSecretAbuOffset());
 	}
 }

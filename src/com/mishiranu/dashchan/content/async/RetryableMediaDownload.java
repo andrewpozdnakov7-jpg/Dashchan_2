@@ -9,6 +9,7 @@ import chan.http.HttpException;
 import chan.http.HttpHolder;
 import chan.http.HttpResponse;
 import com.mishiranu.dashchan.content.model.ErrorItem;
+import com.mishiranu.dashchan.util.CancellableSleep;
 import java.io.EOFException;
 import java.io.File;
 import java.io.IOException;
@@ -259,12 +260,6 @@ final class RetryableMediaDownload {
 	}
 
 	private static boolean waitBeforeRetry(RetryState retryState, Callback callback) {
-		try {
-			Thread.sleep(retryState.getDelay());
-			return !callback.isCancelled();
-		} catch (InterruptedException e) {
-			Thread.currentThread().interrupt();
-			return false;
-		}
+		return CancellableSleep.await(retryState.getDelay(), callback::isCancelled);
 	}
 }

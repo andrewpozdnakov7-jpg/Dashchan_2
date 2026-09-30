@@ -12,6 +12,7 @@ import androidx.lifecycle.LifecycleOwner;
 import androidx.lifecycle.ViewModel;
 import androidx.lifecycle.ViewModelProvider;
 
+/** Retain the factory across rotation; DISMISS if process recreation lost the factory. */
 public class InstanceDialog extends DialogFragment {
 	public interface Provider {
 		Context getContext();
@@ -70,7 +71,9 @@ public class InstanceDialog extends DialogFragment {
 	public void onStart() {
 		super.onStart();
 		if (getDialog() instanceof DismissDialog) {
-			dismiss();
+			UiLifecycleDiagnostics.event(this, "runtime_dialog_dismissed");
+			// Losing this empty shell from saved state cannot lose a user operation.
+			dismissAllowingStateLoss();
 		}
 	}
 

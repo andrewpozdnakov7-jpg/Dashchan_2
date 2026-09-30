@@ -6,6 +6,7 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 import chan.content.ChanConfiguration;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.async.ReadSearchTask;
@@ -322,8 +323,8 @@ public class SearchPage extends ListPage implements SearchAdapter.Callback,
 					int childCount = recyclerView.getChildCount();
 					if (childCount > 0) {
 						View child = recyclerView.getChildAt(childCount - 1);
-						int position = recyclerView.getChildViewHolder(child).getAdapterPosition();
-						needScroll = position + 1 == oldCount &&
+						int position = recyclerView.getChildViewHolder(child).getAbsoluteAdapterPosition();
+						needScroll = position != RecyclerView.NO_POSITION && position + 1 == oldCount &&
 								recyclerView.getHeight() - recyclerView.getPaddingBottom() - child.getBottom() >= 0;
 					}
 					adapter.setItems(retainableExtra.postItems);

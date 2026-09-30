@@ -270,7 +270,7 @@ public class RedditSectionsFragment extends BaseListFragment {
 		}
 
 		private void onItemClick(RecyclerView.ViewHolder holder) {
-			int position = holder.getAdapterPosition();
+			int position = holder.getBindingAdapterPosition();
 			if (position == RecyclerView.NO_POSITION) {
 				return;
 			}

@@ -12,10 +12,12 @@ public class SharedPreferences {
 	public static class Editor implements Closeable {
 		private final SharedPreferences preferences;
 		private final android.content.SharedPreferences.Editor editor;
+		private final boolean asynchronous;
 
 		@SuppressLint("CommitPrefEdits")
-		private Editor(SharedPreferences preferences) {
+		private Editor(SharedPreferences preferences, boolean asynchronous) {
 			this.preferences = preferences;
+			this.asynchronous = asynchronous;
 			editor = preferences.shared.edit();
 		}
 
@@ -63,11 +65,22 @@ public class SharedPreferences {
 		}
 
 		private boolean commitInternal() {
+			long started = PerformanceDiagnostics.now();
+			boolean success = false;
 			try {
 				preferences.shouldUpdateMap = true;
-				return editor.commit();
+				if (asynchronous) {
+					// Android updates memory/listeners before returning; only disk persistence is deferred.
+					editor.apply();
+					success = true;
+				} else {
+					success = editor.commit();
+				}
+				return success;
 			} finally {
 				preferences.updateMapIfNeeded();
+				PerformanceDiagnostics.finish(asynchronous ? "preferences.apply" : "preferences.commit",
+						started, success, true);
 			}
 		}
 
@@ -143,7 +156,12 @@ public class SharedPreferences {
 	}
 
 	public Editor edit() {
-		return new Editor(this);
+		return new Editor(this, false);
+	}
+
+	/** Opt-in for visual preferences only. close() publishes memory now, but does not await disk durability. */
+	public Editor editAsync() {
+		return new Editor(this, true);
 	}
 
 	private final Map<Listener, android.content.SharedPreferences

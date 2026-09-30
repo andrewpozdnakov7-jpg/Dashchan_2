@@ -115,7 +115,7 @@ public final class HttpHolder {
 		interrupted = true;
 	}
 
-	boolean isInterrupted() {
+	public boolean isInterrupted() {
 		return interrupted;
 	}
 

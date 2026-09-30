@@ -167,7 +167,16 @@ public class CustomSearchView extends FrameLayout implements CollapsibleActionVi
 
 	@Override
 	public void onActionViewCollapsed() {
-		searchView.onActionViewCollapsed();
+		// Toolbar also collapses this view when rebuilding its menu. That is not a user edit:
+		// keep the owner's saved query intact so the replacement action view can restore it.
+		// Explicit cancellation is handled by MenuExpandListener before this callback.
+		boolean suppressChange = this.suppressChange;
+		this.suppressChange = true;
+		try {
+			searchView.onActionViewCollapsed();
+		} finally {
+			this.suppressChange = suppressChange;
+		}
 	}
 
 	@Override

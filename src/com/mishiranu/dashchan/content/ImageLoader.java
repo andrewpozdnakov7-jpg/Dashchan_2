@@ -19,6 +19,7 @@ import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.async.HttpHolderTask;
 import com.mishiranu.dashchan.content.model.ErrorItem;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
+import com.mishiranu.dashchan.util.CancellableSleep;
 import com.mishiranu.dashchan.util.WeightedLruCache;
 import com.mishiranu.dashchan.widget.AttachmentView;
 import java.io.IOException;
@@ -50,7 +51,8 @@ public class ImageLoader {
 	private Executor getExecutor(String chanName) {
 		Executor executor = executors.get(chanName);
 		if (executor == null) {
-			executor = ConcurrentUtils.newThreadPool(3, 3, 0, "ImageLoader", chanName);
+			// Keep three independent workers per chan; reclaim them only after a minute of idle time.
+			executor = ConcurrentUtils.newIdleThreadPool(3, 60000, "ImageLoader", chanName);
 			executors.put(chanName, executor);
 		}
 		return executor;
@@ -161,7 +163,7 @@ public class ImageLoader {
 								}
 							}
 							if (bitmap == null && lastException != null) {
-								SystemClock.sleep(250L);
+								if (!CancellableSleep.await(250L, () -> isCancelled() || holder.isInterrupted())) return null;
 							}
 						}
 						if (bitmap == null) {

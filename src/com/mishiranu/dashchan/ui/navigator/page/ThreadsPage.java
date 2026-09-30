@@ -78,6 +78,9 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 		public boolean noMoreThreadsShown;
 		public boolean pendingThreadsUpdate;
 		public boolean pendingThreadsReset;
+		public final ThreadPagePrefetch prefetch = new ThreadPagePrefetch();
+		public String prefetchError;
+		public boolean prefetchErrorShown;
 
 		public DialogUnit.StackInstance.State dialogsState;
 
@@ -97,6 +100,139 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 	// until the batch is published, but never retain it when leaving this screen.
 	private HashSet<String> appendScrollPreviousThreads;
 	private String appendScrollTarget;
+	private boolean pageActive;
+	private boolean prefetchBusy;
+	private boolean prefetchScrollForward;
+	private String currentFilter;
+
+	private final Runnable checkPrefetch = () -> {
+		boolean allowStart = prefetchScrollForward;
+		prefetchScrollForward = false;
+		checkPagePrefetch(allowStart);
+	};
+
+	private void schedulePrefetchCheck(boolean forward) {
+		if (!pageActive || !Preferences.isThreadPagePreloadEnabled()) return;
+		prefetchScrollForward |= forward;
+		// Never mutate the adapter or start a request from inside RecyclerView layout/scroll dispatch.
+		getRecyclerView().removeCallbacks(checkPrefetch);
+		getRecyclerView().post(checkPrefetch);
+	}
+
+	private boolean supportsPagePrefetch() {
+		RetainableExtra extra = getRetainableExtra(RetainableExtra.FACTORY);
+		return pageActive && Preferences.isThreadPagePreloadEnabled() && !Preferences.isPageByPage()
+				&& extra.startPageNumber >= 0 && StringUtils.isEmpty(currentFilter)
+				&& !extra.cachedPostItems.isEmpty() && !getAdapter().isRealEmpty();
+	}
+
+	private int nextThreadsPage() {
+		RetainableExtra extra = getRetainableExtra(RetainableExtra.FACTORY);
+		return extra.startPageNumber + extra.cachedPostItems.size();
+	}
+
+	private boolean hasThreadsPage(int number) {
+		return number >= 0 && number < Math.max(1, getChan().configuration.getPagesCount(getPage().boardName));
+	}
+
+	private void checkPagePrefetch(boolean allowStart) {
+		if (!supportsPagePrefetch()) return;
+		RetainableExtra extra = getRetainableExtra(RetainableExtra.FACTORY);
+		PaddedRecyclerView recycler = getRecyclerView();
+		boolean atEnd = !recycler.canScrollVertically(1);
+		if (extra.prefetch.isLoading()) {
+			if (atEnd && !prefetchBusy) {
+				prefetchBusy = true;
+				recycler.getPullable().startBusyState(PullableWrapper.Side.BOTTOM);
+			} else if (!atEnd && prefetchBusy) {
+				prefetchBusy = false;
+				recycler.getPullable().cancelBusyState();
+			}
+			return;
+		}
+		if (atEnd && extra.prefetchError != null && !extra.prefetchErrorShown) {
+			extra.prefetchErrorShown = true;
+			ClickableToast.show(getString(R.string.thread_page_preload_failed__format, extra.prefetchError));
+		}
+		if (!allowStart || extra.autoFillRequested || extra.pendingThreadsUpdate
+				|| getViewModel(ReadViewModel.class).hasTaskOrValue()) return;
+		int nextPage = nextThreadsPage();
+		int lastVisible = ((GridLayoutManager) recycler.getLayoutManager()).findLastVisibleItemPosition();
+		if (hasThreadsPage(nextPage) && extra.prefetch.canStart(nextPage, lastVisible)) {
+			cancelAppendScroll();
+			extra.prefetchError = null;
+			extra.prefetchErrorShown = false;
+			extra.prefetch.begin(nextPage, getAdapter().getItemCount());
+			loadThreadsPage(nextPage, true, false, false, true);
+			checkPagePrefetch(false);
+		}
+	}
+
+	private void cancelPagePrefetch(boolean reset) {
+		getRecyclerView().removeCallbacks(checkPrefetch);
+		prefetchScrollForward = false;
+		RetainableExtra extra = getRetainableExtra(RetainableExtra.FACTORY);
+		if (extra.prefetch.isLoading()) {
+			// attach(null) also drops an already completed result waiting for lifecycle delivery.
+			getViewModel(ReadViewModel.class).attach(null);
+			extra.prefetch.cancel();
+			getRecyclerView().getPullable().cancelBusyState();
+		}
+		prefetchBusy = false;
+		if (reset) {
+			extra.prefetch.resetWindow(0, getAdapter().getItemCount());
+			extra.prefetchError = null;
+			extra.prefetchErrorShown = false;
+		}
+	}
+
+	private void onPrefetchedThreads(List<PostItem> items, PostItem.HideState.Map<String> hiddenThreads) {
+		RetainableExtra extra = getRetainableExtra(RetainableExtra.FACTORY);
+		if (!supportsPagePrefetch()) {
+			cancelPagePrefetch(false);
+			return;
+		}
+		boolean endReached = items == null || items.isEmpty();
+		if (!endReached) {
+			if (hiddenThreads != null) extra.hiddenThreads.addAll(hiddenThreads);
+			HashSet<String> known = new HashSet<>();
+			for (List<PostItem> page : extra.cachedPostItems) {
+				for (PostItem item : page) known.add(item.getThreadNumber());
+			}
+			ArrayList<PostItem> unique = new ArrayList<>();
+			for (PostItem item : items) {
+				if (known.add(item.getThreadNumber())) unique.add(item);
+			}
+			// Even an all-duplicate page advances the page cursor; an empty server response does not.
+			extra.cachedPostItems.add(unique);
+			extra.pendingThreadsUpdate = true;
+			cancelAppendScroll();
+			publishPendingThreads();
+			extra.visibleThreadsTarget = Math.max(extra.visibleThreadsTarget, countVisibleCachedThreads(extra));
+			endReached = !hasThreadsPage(nextThreadsPage());
+			if (!endReached && extra.prefetch.continueHiddenPage(nextThreadsPage(), getAdapter().getItemCount())) {
+				loadThreadsPage(nextThreadsPage(), true, false, false, true);
+				schedulePrefetchCheck(false);
+				return;
+			}
+		}
+		extra.prefetch.finish(nextThreadsPage(), getAdapter().getItemCount(), endReached);
+		prefetchBusy = false;
+		getRecyclerView().getPullable().cancelBusyState();
+		updateSecretAbuThread();
+		// Do not start the next page from a layout callback caused by this publication.
+		prefetchScrollForward = false;
+	}
+
+	private void failPagePrefetch(String message) {
+		RetainableExtra extra = getRetainableExtra(RetainableExtra.FACTORY);
+		extra.prefetch.fail();
+		extra.prefetchError = message;
+		extra.prefetchErrorShown = false;
+		prefetchBusy = false;
+		getRecyclerView().getPullable().cancelBusyState();
+		checkPagePrefetch(false);
+	}
 
 	private void cancelAppendScroll() {
 		appendScrollPreviousThreads = null;
@@ -107,6 +243,7 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 		@Override
 		public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
 			if (dy < 0) cancelAppendScroll();
+			schedulePrefetchCheck(dy > 0);
 		}
 
 		@Override
@@ -206,7 +343,8 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 		ChanConfiguration.Board initialBoard = getChan().configuration.safe().obtainBoard(page.boardName);
 		adapter.setThreadsSortingEnabled(initialBoard.allowThreadsSorting, initialBoard.allowRatingSorting);
 		adapter.setCatalogSort(Preferences.getCatalogSort());
-		adapter.applyFilter(getInitSearch().currentQuery);
+		currentFilter = getInitSearch().currentQuery;
+		adapter.applyFilter(currentFilter);
 		FavoritesStorage.getInstance().getObservable().register(this);
 
 		InitRequest initRequest = getInitRequest();
@@ -264,7 +402,7 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 			@Override
 			public int getSwipeDirs(@NonNull RecyclerView recyclerView,
 					@NonNull RecyclerView.ViewHolder viewHolder) {
-				int position = viewHolder.getAdapterPosition();
+				int position = viewHolder.getBindingAdapterPosition();
 				ThreadsAdapter adapter = getAdapter();
 				if (position == RecyclerView.NO_POSITION || position >= adapter.getItemCount()
 						|| adapter.isSecretAbuPosition(position)) {
@@ -282,7 +420,7 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 
 			@Override
 			public void onSwiped(@NonNull RecyclerView.ViewHolder viewHolder, int direction) {
-				int position = viewHolder.getAdapterPosition();
+				int position = viewHolder.getBindingAdapterPosition();
 				ThreadsAdapter adapter = getAdapter();
 				if (position != RecyclerView.NO_POSITION && position < adapter.getItemCount()
 						&& !adapter.isSecretAbuPosition(position)) {
@@ -318,6 +456,7 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 	@Override
 	protected void onResume() {
 		super.onResume();
+		pageActive = true;
 		getAdapter().setSearchActive(true);
 		RetainableExtra retainableExtra = getRetainableExtra(RetainableExtra.FACTORY);
 		if (retainableExtra.dialogsState != null) {
@@ -328,6 +467,8 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 
 	@Override
 	protected void onPause() {
+		pageActive = false;
+		cancelPagePrefetch(false);
 		getAdapter().setSearchActive(false);
 		cancelAppendScroll();
 		super.onPause();
@@ -335,6 +476,8 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 
 	@Override
 	protected void onDestroy() {
+		pageActive = false;
+		cancelPagePrefetch(false);
 		getAdapter().disposeSearch();
 		cancelAppendScroll();
 		getRecyclerView().removeOnScrollListener(appendScrollListener);
@@ -730,6 +873,8 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 
 	@Override
 	public void onSearchQueryChange(String query) {
+		cancelPagePrefetch(false);
+		currentFilter = query;
 		cancelAppendScroll();
 		getAdapter().applyFilter(query);
 	}
@@ -737,6 +882,11 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 	@Override
 	public void onListPulled(PullableWrapper wrapper, PullableWrapper.Side side) {
 		RetainableExtra retainableExtra = getRetainableExtra(RetainableExtra.FACTORY);
+		if (side == PullableWrapper.Side.BOTTOM && retainableExtra.prefetch.isLoading()) {
+			// A foreground pull adopts the running request instead of cancelling/restarting it.
+			prefetchBusy = true;
+			return;
+		}
 		refreshThreads(getAdapter().isRealEmpty() || retainableExtra.startPageNumber == PAGE_NUMBER_CATALOG
 				? RefreshPage.CURRENT : side == PullableWrapper.Side.BOTTOM
 				? RefreshPage.NEXT : RefreshPage.PREVIOUS, true);
@@ -751,6 +901,7 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 	}
 
 	private void refreshThreads(RefreshPage refreshPage, boolean showPull) {
+		cancelPagePrefetch(true);
 		cancelHiddenThreadsAutoFill();
 		int pageNumber;
 		boolean append = false;
@@ -781,11 +932,17 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 	}
 
 	private boolean loadThreadsPage(int pageNumber, boolean append) {
+		cancelPagePrefetch(true);
 		cancelHiddenThreadsAutoFill();
 		return loadThreadsPage(pageNumber, append, !getAdapter().isRealEmpty(), false);
 	}
 
 	private boolean loadThreadsPage(int pageNumber, boolean append, boolean showPull, boolean autoFill) {
+		return loadThreadsPage(pageNumber, append, showPull, autoFill, false);
+	}
+
+	private boolean loadThreadsPage(int pageNumber, boolean append, boolean showPull,
+			boolean autoFill, boolean prefetch) {
 		Page page = getPage();
 		Chan chan = getChan();
 		ReadViewModel readViewModel = getViewModel(ReadViewModel.class);
@@ -793,7 +950,11 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 		if (pageNumber < PAGE_NUMBER_CATALOG || pageNumber >=
 				Math.max(chan.configuration.getPagesCount(page.boardName), 1)) {
 			recyclerView.getPullable().cancelBusyState();
-			if (autoFill) {
+			if (prefetch) {
+				getRetainableExtra(RetainableExtra.FACTORY).prefetch
+						.finish(pageNumber, getAdapter().getItemCount(), true);
+				prefetchBusy = false;
+			} else if (autoFill) {
 				finishHiddenThreadsAutoFill(true);
 			} else {
 				ClickableToast.show(getString(R.string.number_page_doesnt_exist__format, pageNumber));
@@ -803,7 +964,7 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 		} else {
 			RetainableExtra retainableExtra = getRetainableExtra(RetainableExtra.FACTORY);
 			getAdapter().setSecretAbuAllowed(false);
-			if (!autoFill) {
+			if (!autoFill && !prefetch) {
 				cancelAppendScroll();
 				if (append && !getAdapter().isRealEmpty() && !recyclerView.canScrollVertically(1)) {
 					appendScrollPreviousThreads = new HashSet<>();
@@ -821,7 +982,7 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 					chan, page.boardName, pageNumber, validator, append);
 			task.execute(ConcurrentUtils.PARALLEL_EXECUTOR);
 			readViewModel.attach(task);
-			if (autoFill) {
+			if (autoFill || prefetch) {
 				// Keep an existing initial/manual loading indicator, but never start a new one
 				// for each page fetched to replace hidden threads.
 			} else if (showPull) {
@@ -866,6 +1027,7 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 	}
 
 	private void requestHiddenThreadsAutoFill(boolean restart) {
+		cancelPagePrefetch(false);
 		RetainableExtra retainableExtra = getRetainableExtra(RetainableExtra.FACTORY);
 		ensureVisibleThreadsTarget(retainableExtra);
 		if (restart) {
@@ -942,16 +1104,27 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 				index -> index < adapter.getItemCount() && !adapter.isSecretAbuPosition(index));
 		PostItem anchor = position != null ? adapter.getThread(position.position) : null;
 		boolean initiallyEmpty = adapter.isRealEmpty();
+		int previousCount = adapter.getItemCount();
 		boolean scrollToNewThreads = appendScrollPreviousThreads != null && !extra.pendingThreadsReset
 				&& !recyclerView.canScrollVertically(1);
-		adapter.setItems(extra.cachedPostItems, extra.startPageNumber == PAGE_NUMBER_CATALOG);
+		adapter.setItems(extra.cachedPostItems, extra.startPageNumber == PAGE_NUMBER_CATALOG,
+				!extra.prefetch.isLoading());
+		if (!extra.prefetch.isLoading()) {
+			extra.prefetch.resetWindow(extra.pendingThreadsReset ? 0 : previousCount, adapter.getItemCount());
+			extra.prefetchError = null;
+			extra.prefetchErrorShown = false;
+		}
 		extra.publishedPostItems.clear();
 		extra.publishedPostItems.addAll(extra.cachedPostItems);
 		if (extra.pendingThreadsReset) {
 			recyclerView.scrollToPosition(0);
 		} else if (anchor != null) {
 			int index = adapter.findThreadPosition(anchor.getThreadNumber());
-			if (index >= 0) new ListPosition(index, position.offset).apply(recyclerView);
+			if (index >= 0 && (!extra.prefetch.isLoading() || index != position.position)) {
+				// Simple background append needs no scroll command: RecyclerView retains the visible rows
+				// and an ongoing fling. Restore explicitly only if sorting moved the anchor.
+				new ListPosition(index, position.offset).apply(recyclerView);
+			}
 		}
 		if (scrollToNewThreads) {
 			// Resolve against the final filtered/sorted adapter, not raw page offsets.
@@ -1002,6 +1175,10 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 			PostItem.HideState.Map<String> hiddenThreads) {
 		PaddedRecyclerView recyclerView = getRecyclerView();
 		RetainableExtra retainableExtra = getRetainableExtra(RetainableExtra.FACTORY);
+		if (retainableExtra.prefetch.isLoading(pageNumber)) {
+			onPrefetchedThreads(postItems, hiddenThreads);
+			return;
+		}
 		boolean autoFill = pageNumber == retainableExtra.autoFillPageNumber;
 		if (autoFill) {
 			retainableExtra.autoFillPageNumber = Integer.MIN_VALUE;
@@ -1087,6 +1264,11 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 
 	@Override
 	public void onReadThreadsRedirect(RedirectException.Target target) {
+		if (getRetainableExtra(RetainableExtra.FACTORY).prefetch.isLoading()) {
+			// Speculation must not navigate away from the board the user is reading.
+			failPagePrefetch(getString(R.string.board_doesnt_exist));
+			return;
+		}
 		cancelAppendScroll();
 		finishHiddenThreadsAutoFill(false);
 		getAdapter().setSecretAbuAllowed(false);
@@ -1103,6 +1285,10 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 
 	@Override
 	public void onReadThreadsFail(ErrorItem errorItem, int pageNumber) {
+		if (getRetainableExtra(RetainableExtra.FACTORY).prefetch.isLoading(pageNumber)) {
+			failPagePrefetch(errorItem.toString());
+			return;
+		}
 		getRecyclerView().getPullable().cancelBusyState();
 		RetainableExtra retainableExtra = getRetainableExtra(RetainableExtra.FACTORY);
 		boolean autoFill = pageNumber == retainableExtra.autoFillPageNumber;

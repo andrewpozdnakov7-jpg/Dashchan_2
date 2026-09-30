@@ -694,7 +694,7 @@ public class RecaptchaReader {
 
 		@Override
 		protected void onCleared() {
-			holder.destroy();
+			if (holder != null) holder.destroy();
 			if (destroyCallback != null) {
 				destroyCallback.run();
 			}
@@ -725,6 +725,7 @@ public class RecaptchaReader {
 
 		private boolean started = false;
 		private boolean shown = false;
+		private boolean lostChallenge;
 
 		private final WebViewHolder.Callback callback = new WebViewHolder.Callback() {
 			@Override
@@ -757,6 +758,14 @@ public class RecaptchaReader {
 		public Dialog onCreateDialog(Bundle savedInstanceState) {
 			webView = new ViewModelProvider(this).get(WebViewViewModel.class);
 			if (webView.holder == null) {
+				// A challenge belongs to a live waiting request. After process death there
+				// is no request to resume; do not create a new WebView or replay the captcha.
+				if (challengeExtra == null) {
+					lostChallenge = true;
+					webView = null;
+					com.mishiranu.dashchan.ui.UiLifecycleDiagnostics.event(this, "captcha_request_lost");
+					return new Dialog(requireContext());
+				}
 				webView.initHolder(challengeExtra.holder);
 				if (challengeExtra != null) {
 					challengeExtra.holder = null;
@@ -784,6 +793,11 @@ public class RecaptchaReader {
 		@Override
 		public void onStart() {
 			super.onStart();
+			if (lostChallenge) {
+				// Ephemeral UI only: there is no pending operation/state left to save.
+				dismissAllowingStateLoss();
+				return;
+			}
 
 			started = true;
 			Dialog dialog = getDialog();
@@ -834,7 +848,8 @@ public class RecaptchaReader {
 				webView.clicked = true;
 				if (!requireArguments().getBoolean(EXTRA_INVISIBLE)) {
 					ConcurrentUtils.HANDLER.postDelayed(() -> {
-						if (webView != null) {
+						if (started && webView != null && webView.holder != null
+								&& webView.holder.webView != null) {
 							int x = (int) (webView.holder.getTotalScale() * (Math.random() * 100 + 10));
 							int y = (int) (webView.holder.getTotalScale() * (Math.random() * 30 + 20));
 							MotionEvent motionEvent;

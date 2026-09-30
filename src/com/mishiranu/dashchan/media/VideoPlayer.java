@@ -544,6 +544,7 @@ public class VideoPlayer {
 				cancelSetPositionLocked(false);
 				synchronized (seekerThread) {
 					long requestId = ++nextSeekRequestId;
+					handler.removeMessages(Message.PLAYBACK_COMPLETE.ordinal());
 					seekToPosition = new SeekToPosition(requestId, position);
 					VideoDiagnostics.recordUi("seek_request id=" + requestId + " position=" + position
 							+ " playing=" + playing);
@@ -557,6 +558,20 @@ public class VideoPlayer {
 		Listener listener = this.listener;
 		if (listener != null && !consumed) {
 			listener.onComplete(this);
+		}
+	}
+
+	private void handlePlaybackComplete(PlaybackCompletion completion) {
+		synchronized (this) {
+			if (!isInitialized() || consumed) return;
+			long generation = holder.getPlaybackGeneration(sessionData.pointer);
+			boolean current = completion != null && completion.isCurrent(generation,
+					nextSeekRequestId, seekToPosition != null);
+			VideoDiagnostics.recordUi("playback_complete " + (current ? "accepted" : "discarded")
+					+ " event_generation=" + (completion != null ? completion.generation : -1)
+					+ " generation=" + generation + " request=" + nextSeekRequestId
+					+ " seek_pending=" + (seekToPosition != null));
+			if (current) onComplete();
 		}
 	}
 
@@ -861,6 +876,7 @@ public class VideoPlayer {
 	private long setSurface(Surface surface, int width, int height) {
 		synchronized (this) {
 			if (isInitialized()) {
+				SeekToPosition pendingSeek = seekToPosition;
 				cancelSetPositionLocked(false);
 				long generation = ++nextSurfaceGeneration;
 				latestSurfaceGeneration = generation;
@@ -868,6 +884,9 @@ public class VideoPlayer {
 				VideoDiagnostics.recordUi("surface_request generation=" + generation
 						+ " valid=" + surface.isValid() + " size=" + width + "x" + height);
 				holder.requestSurface(sessionData.pointer, surface, generation, width, height);
+				// Surface-only changes may not reset the codec or trigger a recovery seek.
+				// Never abandon a cancelled transaction after its decoder was flushed.
+				if (pendingSeek != null) setPosition(pendingSeek.position);
 				return generation;
 			} else {
 				surface.release();
@@ -981,10 +1000,15 @@ public class VideoPlayer {
 		synchronized (this) {
 			if (isInitialized() && this.playing != playing) {
 				SeekToPosition seekToPosition = this.seekToPosition;
-				cancelSetPositionLocked(false);
+				// Resuming an in-flight seek is safe: native commit reads the current
+				// play intent. Cancelling here used to turn every Replay into two seeks.
+				// A pause still reissues the target to guarantee a paused preview frame.
+				if (!playing) cancelSetPositionLocked(false);
+				VideoDiagnostics.recordUi("playback_intent playing=" + playing
+						+ " seek_pending=" + (seekToPosition != null) + " request=" + nextSeekRequestId);
 				this.playing = playing;
 				holder.setPlaying(sessionData.pointer, networkBuffering.shouldPlay(playing));
-				if (seekToPosition != null) {
+				if (!playing && seekToPosition != null) {
 					// Reissue a seek cancelled by the playback-state transition. When pausing,
 					// the native player decodes exactly one preview frame without resuming audio.
 					setPosition(seekToPosition.position);
@@ -1199,7 +1223,7 @@ public class VideoPlayer {
 				return true;
 			}
 			case PLAYBACK_COMPLETE: {
-				onComplete();
+				handlePlaybackComplete((PlaybackCompletion) msg.obj);
 				return true;
 			}
 			case SIZE_CHANGED: {
@@ -1303,7 +1327,7 @@ public class VideoPlayer {
 	}
 
 	private volatile SeekToPosition seekToPosition = null;
-	private long nextSeekRequestId;
+	private volatile long nextSeekRequestId;
 	private final Semaphore seekerMutex = new Semaphore(1);
 	private final Thread seekerThread = new Thread(this::seekerThread);
 
@@ -1372,6 +1396,19 @@ public class VideoPlayer {
 			this.player = new WeakReference<>(player);
 		}
 
+		public void onPlaybackComplete(long generation) {
+			VideoPlayer player = this.player.get();
+			if (player != null) {
+				// Do not acquire the player monitor from a native callback: native EOF
+				// holds finishMutex, while UI play/pause may hold that monitor.
+				PlaybackCompletion completion = new PlaybackCompletion(generation, player.nextSeekRequestId);
+				VideoDiagnostics.recordUi("playback_complete queued generation=" + generation
+						+ " request=" + completion.requestId);
+				player.handler.sendMessageDelayed(player.handler.obtainMessage
+						(Message.PLAYBACK_COMPLETE.ordinal(), completion), 200);
+			}
+		}
+
 		public void onSeek(long position) {
 			VideoPlayer player = this.player.get();
 			if (player != null) {
@@ -1414,7 +1451,8 @@ public class VideoPlayer {
 			if (player != null) {
 				switch (what) {
 					case BRIDGE_MESSAGE_PLAYBACK_COMPLETE: {
-						player.handler.sendEmptyMessageDelayed(Message.PLAYBACK_COMPLETE.ordinal(), 200);
+						// Current bundled engines deliver a generation through onPlaybackComplete.
+						VideoDiagnostics.recordUi("playback_complete discarded reason=missing_generation");
 						break;
 					}
 					case BRIDGE_MESSAGE_SIZE_CHANGED: {
@@ -1450,6 +1488,7 @@ public class VideoPlayer {
 
 		long getDuration(long pointer);
 		long getPosition(long pointer);
+		long getPlaybackGeneration(long pointer);
 		void setPosition(long pointer, long position);
 
 		void setRange(long pointer, long start, long end, long total);
@@ -1508,6 +1547,7 @@ public class VideoPlayer {
 
 		@Override public native long getDuration(long pointer);
 		@Override public native long getPosition(long pointer);
+		@Override public native long getPlaybackGeneration(long pointer);
 		@Override public native void setPosition(long pointer, long position);
 
 		@Override public native void setRange(long pointer, long start, long end, long total);

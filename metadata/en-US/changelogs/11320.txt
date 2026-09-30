@@ -1,0 +1,7 @@
+Added automatic loading of subsequent pages for boards and My Boards. Enabled by default and available in experimental settings.
+Quick-navigation arrows now also work in thread lists.
+Fixed batch selection and removal of favorite threads.
+Fixed cases where video-switching gestures stopped working in TikTok mode.
+Improved software decoding with multithreading and reworked overload handling during accelerated playback.
+Fixed replay after the end of a video. Expanded player diagnostics.
+Reworked background operations and cache handling, and fixed screen lifecycle issues and build warnings.

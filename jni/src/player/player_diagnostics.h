@@ -36,6 +36,9 @@ void samplePlayerDiagnostics(void);
 // Operation: video send/receive = 0/1, audio send/receive = 2/3.
 int64_t diagnosticsCodecBegin(Player * player, int operation);
 void diagnosticsCodecEnd(Player * player, int operation, int64_t startedUs, int result);
+// Called with the corresponding decoder's frameMutex held. No media bytes/URLs.
+void diagnosticsCodecResult(Player * player, int operation, AVCodecContext * context,
+		const PacketHolder * holder, const AVFrame * frame, int packetAccepted, int result);
 void diagnosticsPresentation(Player * player, int64_t position, int action);
 void diagnosticsRangeWait(Player * player, int waiting);
 const char * diagnosticsGetMediaCodecStageName(int stage);
@@ -52,6 +55,31 @@ void diagnosticsRecordSoftwareLateAnchor(Player * player, int rendered,
 		int64_t framePosition, int64_t playbackPosition, int64_t lateness);
 void diagnosticsRecordVideoPacket(Player * player, AVPacket * packet);
 void diagnosticsRecordMediaInfo(Player * player);
+
+// Extended-only aggregate timings. These never wait for the diagnostics mutex.
+enum DiagnosticsWork {
+	DIAGNOSTICS_WORK_PACKET_WAIT,
+	DIAGNOSTICS_WORK_DECODE_LOCK,
+	DIAGNOSTICS_WORK_DECODE,
+	DIAGNOSTICS_WORK_CONVERT,
+	DIAGNOSTICS_WORK_QUEUE_WAIT,
+	DIAGNOSTICS_WORK_QUEUE_COPY,
+	DIAGNOSTICS_WORK_DRAW_WAIT,
+	DIAGNOSTICS_WORK_DRAW_LOCK,
+	DIAGNOSTICS_WORK_SCHEDULE_WAIT,
+	DIAGNOSTICS_WORK_LAST_FRAME_COPY,
+	DIAGNOSTICS_WORK_WINDOW_LOCK,
+	DIAGNOSTICS_WORK_WINDOW_COPY,
+	DIAGNOSTICS_WORK_WINDOW_POST,
+	DIAGNOSTICS_WORK_COUNT
+};
+typedef struct { int64_t wallUs, cpuUs; } DiagnosticsWorkStamp;
+DiagnosticsWorkStamp diagnosticsWorkBegin(void);
+void diagnosticsWorkEnd(Player * player, int operation, DiagnosticsWorkStamp stamp, int result);
+void diagnosticsSoftwareFrame(Player * player, int64_t position, int64_t lateness, int canDrop,
+		int width, int height, int outputWidth, int outputHeight, int useLibyuv, int outputLevel);
+void diagnosticsSoftwarePolicy(Player * player, int lateMs, int anchorMs, int maxFps,
+		int governorLateMs, int governorFrames, int recoveryMs, int recoveryFrames, int conversionUs);
 
 #ifdef DASHCHAN_HAS_MEDIACODEC
 void diagnosticsRecordHardwareLateAnchor(Player * player, int64_t framePosition,

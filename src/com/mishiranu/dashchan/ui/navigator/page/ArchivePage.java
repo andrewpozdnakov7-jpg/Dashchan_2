@@ -6,6 +6,7 @@ import android.view.MenuItem;
 import android.view.View;
 import androidx.fragment.app.FragmentManager;
 import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 import chan.content.Chan;
 import chan.content.ChanPerformer;
 import chan.content.model.ThreadSummary;
@@ -213,8 +214,8 @@ public class ArchivePage extends ListPage implements ArchiveAdapter.Callback,
 					int childCount = recyclerView.getChildCount();
 					if (childCount > 0) {
 						View child = recyclerView.getChildAt(childCount - 1);
-						int position = recyclerView.getChildViewHolder(child).getAdapterPosition();
-						needScroll = position + 1 == oldCount &&
+						int position = recyclerView.getChildViewHolder(child).getAbsoluteAdapterPosition();
+						needScroll = position != RecyclerView.NO_POSITION && position + 1 == oldCount &&
 								recyclerView.getHeight() - recyclerView.getPaddingBottom() - child.getBottom() >= 0;
 					}
 					adapter.setItems(threadSummaries);

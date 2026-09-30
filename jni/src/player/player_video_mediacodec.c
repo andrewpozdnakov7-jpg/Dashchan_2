@@ -44,6 +44,7 @@ static int receiveMediaCodecFrame(Player * player, AVCodecContext * context, AVF
 	int64_t callStarted = diagnosticsCodecBegin(player, 1);
 	int result = avcodec_receive_frame(context, frame);
 	diagnosticsCodecEnd(player, 1, callStarted, result);
+	diagnosticsCodecResult(player, 1, context, NULL, frame, -1, result);
 	return result;
 }
 
@@ -339,6 +340,7 @@ void playerVideoDecodeMediaCodec(Player * player, JNIEnv * env, AVStream * strea
 				int64_t started = diagnosticsCodecBegin(player, 0);
 				int result = avcodec_send_packet(context, pending->packet);
 				diagnosticsCodecEnd(player, 0, started, result);
+				diagnosticsCodecResult(player, 0, context, pending, NULL, result == 0, result);
 				if (result == 0) {
 					if (pending->packet) diagnosticsRecordPacketSubmitted();
 					else player->video.hardwareDraining = 1;

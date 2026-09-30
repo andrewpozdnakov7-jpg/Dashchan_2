@@ -145,7 +145,7 @@ public class AutohideFragment extends BaseListFragment {
 					searchQuery = null;
 				}
 				((Adapter) getRecyclerView().getAdapter()).setSearchQuery(searchQuery);
-				onPrepareOptionsMenu(menu);
+				invalidateOptionsMenu();
 				requireView().post(this::notifyBackNavigationChanged);
 				return true;
 			}));
@@ -162,7 +162,7 @@ public class AutohideFragment extends BaseListFragment {
 	}
 
 	@Override
-	public boolean onOptionsItemSelected(MenuItem item) {
+	public boolean onMenuItemSelected(MenuItem item) {
 		if (item.getItemId() == R.id.menu_new_rule) {
 			editRule(null, -1);
 			return true;
@@ -181,7 +181,7 @@ public class AutohideFragment extends BaseListFragment {
 				return true;
 			}
 		}
-		return super.onOptionsItemSelected(item);
+		return super.onMenuItemSelected(item);
 	}
 
 	private void editRule(AutohideStorage.AutohideItem autohideItem, int index) {
@@ -418,7 +418,7 @@ public class AutohideFragment extends BaseListFragment {
 
 		private void setScope(RuleViewHolder holder, AutohideStorage.AutohideItem.Scope scope,
 				boolean enabled) {
-			int position = holder.getAdapterPosition();
+			int position = holder.getBindingAdapterPosition();
 			if (position > 0) {
 				AutohideStorage.AutohideItem autohideItem = getItem(position);
 				int index = items.indexOf(autohideItem);

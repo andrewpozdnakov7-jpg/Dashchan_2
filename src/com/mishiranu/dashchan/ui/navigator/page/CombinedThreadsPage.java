@@ -65,10 +65,13 @@ public class CombinedThreadsPage extends ListPage implements ThreadsAdapter.Call
 		public LoadResult notifiedResult;
 		public String sourceSignature;
 		public Boolean translationEnabled;
+		public int lastAutoAppendCount = -1;
+		public final HashMap<String, SourcePageCursor> pageCursors = new HashMap<>();
 		public DialogUnit.StackInstance.State dialogsState;
 
 		@Override
 		public void clear() {
+			pageCursors.clear();
 			appliedResults.clear();
 			notifiedResult = null;
 			if (dialogsState != null) {
@@ -83,13 +86,17 @@ public class CombinedThreadsPage extends ListPage implements ThreadsAdapter.Call
 		public final List<PostItem> postItems;
 		public final PostItem.HideState.Map<String> hiddenThreads;
 		public final ErrorItem errorItem;
+		public final int pageNumber;
+		public final boolean append;
 
 		private SourceResult(CombinedFeedStorage.Source source, List<PostItem> postItems,
-				PostItem.HideState.Map<String> hiddenThreads, ErrorItem errorItem) {
+				PostItem.HideState.Map<String> hiddenThreads, ErrorItem errorItem, int pageNumber, boolean append) {
 			this.source = source;
 			this.postItems = postItems;
 			this.hiddenThreads = hiddenThreads;
 			this.errorItem = errorItem;
+			this.pageNumber = pageNumber;
+			this.append = append;
 		}
 	}
 
@@ -98,12 +105,14 @@ public class CombinedThreadsPage extends ListPage implements ThreadsAdapter.Call
 		public final String signature;
 		public final int pending;
 		public final int total;
+		public final boolean append;
 
-		private LoadResult(ArrayList<SourceResult> results, String signature, int pending, int total) {
+		private LoadResult(ArrayList<SourceResult> results, String signature, int pending, int total, boolean append) {
 			this.results = results;
 			this.signature = signature;
 			this.pending = pending;
 			this.total = total;
+			this.append = append;
 		}
 	}
 
@@ -112,6 +121,25 @@ public class CombinedThreadsPage extends ListPage implements ThreadsAdapter.Call
 		private final ProgressiveLoadState<SourceResult> state = new ProgressiveLoadState<>();
 		private final MutableLiveData<LoadResult> result = new MutableLiveData<>();
 		private String signature;
+		private HashMap<String, SourcePageCursor> cursors = new HashMap<>();
+		private boolean append;
+
+		public void restorePagination(String signature, HashMap<String, SourcePageCursor> cursors) {
+			if (!isLoading()) {
+				this.signature = signature;
+				this.cursors = cursors;
+			}
+		}
+
+		public boolean isAppending() { return append; }
+
+		public void cancelAppend() {
+			if (append && isLoading()) {
+				state.cancel();
+				cancelTasks();
+				result.setValue(null);
+			}
+		}
 
 		public boolean isLoading() {
 			return state.pendingCount() > 0;
@@ -121,16 +149,34 @@ public class CombinedThreadsPage extends ListPage implements ThreadsAdapter.Call
 			state.cancel();
 			cancelTasks();
 			result.setValue(null);
+			cursors.clear();
+			append = false;
 		}
 
 		public void load(CombinedFeedStorage.Feed feed, boolean failedOnly) {
+			load(feed, failedOnly, false);
+		}
+
+		public boolean loadNext(CombinedFeedStorage.Feed feed, boolean failedOnly) {
+			if (isLoading() || !makeSourceSignature(feed).equals(signature)) return false;
+			return load(feed, failedOnly, true);
+		}
+
+		private boolean load(CombinedFeedStorage.Feed feed, boolean failedOnly, boolean append) {
 			String signature = makeSourceSignature(feed);
 			failedOnly &= signature.equals(this.signature) && !isLoading();
+			if (!append && !failedOnly) cursors.clear();
 			this.signature = signature;
 			Set<String> sources = new HashSet<>();
 			for (CombinedFeedStorage.Source source : feed.sources) {
-				sources.add(makeSourceKey(source.chanName, source.boardName));
+				String key = makeSourceKey(source.chanName, source.boardName);
+				Chan chan = Chan.get(source.chanName);
+				SourcePageCursor cursor = cursors.computeIfAbsent(key, unused -> new SourcePageCursor());
+				if (!append || chan.name != null && Preferences.isChanEnabled(source.chanName)
+						&& cursor.canLoad(chan.configuration.getPagesCount(source.boardName))) sources.add(key);
 			}
+			if (append && sources.isEmpty()) return false;
+			this.append = append;
 			boolean retainSuccessful = failedOnly;
 			int generation = state.begin(sources, value -> retainSuccessful && value.errorItem == null);
 			cancelTasks();
@@ -140,17 +186,18 @@ public class CombinedThreadsPage extends ListPage implements ThreadsAdapter.Call
 				String key = makeSourceKey(source.chanName, source.boardName);
 				if (!sources.add(key)) continue;
 				if (!state.isPending(key)) continue;
+				int requestedPage = append ? cursors.get(key).nextPage() : 0;
 				Chan chan = Chan.get(source.chanName);
 				if (chan.name == null || !Preferences.isChanEnabled(source.chanName)) {
 					state.complete(generation, key, new SourceResult(source, null, null,
-							new ErrorItem(ErrorItem.Type.UNSUPPORTED_SERVICE)));
+							new ErrorItem(ErrorItem.Type.UNSUPPORTED_SERVICE), requestedPage, append));
 					continue;
 				}
 				ReadThreadsTask.Callback callback = new ReadThreadsTask.Callback() {
 					private void finish(List<PostItem> postItems,
 							PostItem.HideState.Map<String> hiddenThreads, ErrorItem errorItem) {
 						finishSource(generation, key,
-								new SourceResult(source, postItems, hiddenThreads, errorItem));
+								new SourceResult(source, postItems, hiddenThreads, errorItem, requestedPage, append));
 					}
 
 					@Override
@@ -167,19 +214,22 @@ public class CombinedThreadsPage extends ListPage implements ThreadsAdapter.Call
 
 					@Override
 					public void onReadThreadsFail(ErrorItem errorItem, int pageNumber) {
-						finish(null, null, errorItem);
+						if (append && requestedPage > 0 && errorItem.type == ErrorItem.Type.BOARD_NOT_EXISTS) {
+							finish(Collections.emptyList(), null, null);
+						} else finish(null, null, errorItem);
 					}
 				};
-				ReadThreadsTask task = new ReadThreadsTask(callback, chan, source.boardName, 0, null, false);
+				ReadThreadsTask task = new ReadThreadsTask(callback, chan, source.boardName, requestedPage, null, append);
 				tasks.put(key, task);
 				task.execute(ConcurrentUtils.PARALLEL_EXECUTOR);
 			}
 			publish();
+			return true;
 		}
 
 		private void publish() {
 			result.setValue(new LoadResult(new ArrayList<>(state.snapshot().values()), signature,
-					state.pendingCount(), state.totalCount()));
+					state.pendingCount(), state.totalCount(), append));
 		}
 
 		public boolean hasResult(String signature) {
@@ -191,6 +241,10 @@ public class CombinedThreadsPage extends ListPage implements ThreadsAdapter.Call
 				return;
 			}
 			tasks.remove(key);
+			if (sourceResult.errorItem == null) {
+				cursors.get(key).success(sourceResult.pageNumber,
+						sourceResult.postItems == null || sourceResult.postItems.isEmpty());
+			}
 			publish();
 		}
 
@@ -223,13 +277,81 @@ public class CombinedThreadsPage extends ListPage implements ThreadsAdapter.Call
 	private String pendingAnchorKey;
 	private ListPosition pendingAnchorPosition;
 	private boolean keepStartPosition = true;
+	private boolean pageActive;
+	private String currentFilter;
+	private int appendRounds;
+	private int appendStartCount;
+	private boolean appendWhenIdle;
+	private final Runnable autoAppend = () -> {
+		if (!pageActive || feed == null || getRecyclerView().getAdapter() == null
+				|| !Preferences.isThreadPagePreloadEnabled() || !StringUtils.isEmpty(currentFilter)
+				|| getAdapter().isRealEmpty() || getRecyclerView().canScrollVertically(1)) return;
+		ReadViewModel model = getViewModel(ReadViewModel.class);
+		if (model.isLoading()) {
+			appendWhenIdle = true;
+			return;
+		}
+		appendWhenIdle = false;
+		RetainableExtra extra = getRetainableExtra(RetainableExtra.FACTORY);
+		int count = getAdapter().getItemCount();
+		if (count == extra.lastAutoAppendCount) return;
+		extra.lastAutoAppendCount = count;
+		appendNext(false, false);
+	};
+
+	private void scheduleAutoAppend() {
+		if (!pageActive || !Preferences.isThreadPagePreloadEnabled()) return;
+		getRecyclerView().removeCallbacks(autoAppend);
+		getRecyclerView().post(autoAppend);
+	}
+
+	private void cancelAppendLoading() {
+		getRecyclerView().removeCallbacks(autoAppend);
+		appendWhenIdle = false;
+		appendRounds = 0;
+		ReadViewModel model = getViewModel(ReadViewModel.class);
+		if (model.isAppending() && model.isLoading()) {
+			model.cancelAppend();
+			RetainableExtra extra = getRetainableExtra(RetainableExtra.FACTORY);
+			extra.pendingSources = 0;
+			extra.lastAutoAppendCount = -1;
+			getRecyclerView().getPullable().cancelBusyState();
+		}
+	}
+
+	private boolean appendNext(boolean failedOnly, boolean continuation) {
+		if (!pageActive || feed == null || getRecyclerView().getAdapter() == null) return false;
+		ReadViewModel model = getViewModel(ReadViewModel.class);
+		if (model.isLoading()) return false;
+		if (!continuation) {
+			appendRounds = 1;
+			appendStartCount = getAdapter().getItemCount();
+		}
+		getRecyclerView().getPullable().startBusyState(PullableWrapper.Side.BOTTOM);
+		boolean started = model.loadNext(feed, failedOnly);
+		if (!started) getRecyclerView().getPullable().cancelBusyState();
+		return started;
+	}
+
+	private final Runnable continueEmptyAppend = () -> {
+		if (pageActive && Preferences.isThreadPagePreloadEnabled() && StringUtils.isEmpty(currentFilter)) {
+			appendNext(false, true);
+		}
+	};
+
 	private final RecyclerView.OnScrollListener readingScrollListener = new RecyclerView.OnScrollListener() {
+		@Override
+		public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
+			if (dy > 0) scheduleAutoAppend();
+		}
+
 		@Override
 		public void onScrollStateChanged(@NonNull RecyclerView recyclerView, int newState) {
 			if (newState == RecyclerView.SCROLL_STATE_DRAGGING) {
 				keepStartPosition = false;
 				pendingAnchorKey = null;
 				pendingAnchorPosition = null;
+				scheduleAutoAppend();
 			}
 		}
 	};
@@ -277,6 +399,8 @@ public class CombinedThreadsPage extends ListPage implements ThreadsAdapter.Call
 		if (!sourceSignature.equals(retainableExtra.sourceSignature)) {
 			retainableExtra.sourceSignature = sourceSignature;
 			retainableExtra.cachedPostItems.clear();
+			retainableExtra.pageCursors.clear();
+			retainableExtra.lastAutoAppendCount = -1;
 			retainableExtra.hiddenThreads.clear();
 			retainableExtra.failedSources = 0;
 			retainableExtra.appliedResults.clear();
@@ -300,9 +424,11 @@ public class CombinedThreadsPage extends ListPage implements ThreadsAdapter.Call
 			}
 		});
 		recyclerView.addItemDecoration(new DividerItemDecoration(context, adapter::configureDivider));
-		recyclerView.getPullable().setPullSides(PullableWrapper.Side.TOP);
+		recyclerView.getPullable().setPullSides(Preferences.isThreadPagePreloadEnabled()
+				? PullableWrapper.Side.BOTH : PullableWrapper.Side.TOP);
 		layoutManager.setSpanCount(adapter.setThreadsView(Preferences.getThreadsView()));
-		adapter.applyFilter(getInitSearch().currentQuery);
+		currentFilter = getInitSearch().currentQuery;
+		adapter.applyFilter(currentFilter);
 		uiManager.observable().register(this);
 		CombinedFeedStorage.getInstance().getObservable().register(this);
 
@@ -327,6 +453,7 @@ public class CombinedThreadsPage extends ListPage implements ThreadsAdapter.Call
 			}
 		}
 		ReadViewModel readViewModel = getViewModel(ReadViewModel.class);
+		readViewModel.restorePagination(sourceSignature, retainableExtra.pageCursors);
 		if (readViewModel.isLoading()) {
 			if (adapter.isRealEmpty()) {
 				recyclerView.getPullable().startBusyState(PullableWrapper.Side.TOP);
@@ -340,6 +467,9 @@ public class CombinedThreadsPage extends ListPage implements ThreadsAdapter.Call
 
 	@Override
 	protected void onResume() {
+		pageActive = true;
+		getRecyclerView().getPullable().setPullSides(Preferences.isThreadPagePreloadEnabled()
+				? PullableWrapper.Side.BOTH : PullableWrapper.Side.TOP);
 		if (getRecyclerView().getAdapter() != null) getAdapter().setSearchActive(true);
 		if (feed != null && getRecyclerView().getAdapter() != null &&
 				!makeSourceSignature(feed).equals(getRetainableExtra(RetainableExtra.FACTORY).sourceSignature)) {
@@ -349,12 +479,18 @@ public class CombinedThreadsPage extends ListPage implements ThreadsAdapter.Call
 
 	@Override
 	protected void onPause() {
+		pageActive = false;
+		cancelAppendLoading();
+		getRecyclerView().removeCallbacks(continueEmptyAppend);
 		if (getRecyclerView().getAdapter() != null) getAdapter().setSearchActive(false);
 		super.onPause();
 	}
 
 	@Override
 	protected void onDestroy() {
+		pageActive = false;
+		cancelAppendLoading();
+		getRecyclerView().removeCallbacks(continueEmptyAppend);
 		getRecyclerView().removeOnScrollListener(readingScrollListener);
 		if (getRecyclerView().getAdapter() != null) {
 			getAdapter().disposeSearch();
@@ -449,6 +585,11 @@ public class CombinedThreadsPage extends ListPage implements ThreadsAdapter.Call
 			return;
 		}
 		ReadViewModel viewModel = getViewModel(ReadViewModel.class);
+		getRecyclerView().removeCallbacks(autoAppend);
+		getRecyclerView().removeCallbacks(continueEmptyAppend);
+		appendRounds = 0;
+		appendWhenIdle = false;
+		getRetainableExtra(RetainableExtra.FACTORY).lastAutoAppendCount = -1;
 		getRetainableExtra(RetainableExtra.FACTORY).sourceSignature = makeSourceSignature(feed);
 		PaddedRecyclerView recyclerView = getRecyclerView();
 		recyclerView.getPullable().startBusyState(showPull ? PullableWrapper.Side.TOP : PullableWrapper.Side.BOTH);
@@ -497,15 +638,16 @@ public class CombinedThreadsPage extends ListPage implements ThreadsAdapter.Call
 				}
 			} else if (result.postItems != null && activeSources.contains(sourceKey) &&
 					extra.appliedResults.get(sourceKey) != result) {
-				// A successful empty response also replaces that source's old content.
-				merged.values().removeIf(postItem -> sourceKey.equals(
+				// Refresh replaces a source; pagination retains its already displayed pages.
+				if (!result.append) merged.values().removeIf(postItem -> sourceKey.equals(
 						makeSourceKey(postItem.getChanName(), postItem.getBoardName())));
 				extra.appliedResults.put(sourceKey, result);
 				for (PostItem postItem : result.postItems) {
 					if (!feed.showSticky && postItem.isSticky()) {
 						continue;
 					}
-					merged.put(makeThreadKey(postItem), postItem);
+					if (result.append) merged.putIfAbsent(makeThreadKey(postItem), postItem);
+					else merged.put(makeThreadKey(postItem), postItem);
 					if (result.hiddenThreads != null) {
 						PostItem.HideState state = result.hiddenThreads.get(postItem.getThreadNumber());
 						if (state != PostItem.HideState.UNDEFINED) {
@@ -516,7 +658,7 @@ public class CombinedThreadsPage extends ListPage implements ThreadsAdapter.Call
 			}
 		}
 		ArrayList<PostItem> postItems = new ArrayList<>(merged.values());
-		if (hasLoadedSource || !postItems.isEmpty()) {
+		if (!loadResult.append && (hasLoadedSource || !postItems.isEmpty())) {
 			// Remaining boards update silently; their progress is available in the subtitle.
 			recyclerView.getPullable().cancelBusyState();
 		}
@@ -528,7 +670,8 @@ public class CombinedThreadsPage extends ListPage implements ThreadsAdapter.Call
 		}
 		extra.hiddenThreads.clear();
 		extra.hiddenThreads.addAll(retainedHidden);
-		postItems.sort((first, second) -> {
+		// New pages are appended, not globally re-sorted through the text currently being read.
+		if (!loadResult.append) postItems.sort((first, second) -> {
 			int compare = Long.compare(second.getThreadLatestTimestamp(), first.getThreadLatestTimestamp());
 			return compare != 0 ? compare : makeThreadKey(first).compareTo(makeThreadKey(second));
 		});
@@ -537,11 +680,11 @@ public class CombinedThreadsPage extends ListPage implements ThreadsAdapter.Call
 		extra.totalSources = loadResult.total;
 		boolean changed = !extra.cachedPostItems.equals(postItems);
 		if (changed) {
-			captureScrollAnchor();
+			if (!loadResult.append) captureScrollAnchor();
 			extra.cachedPostItems.clear();
 			extra.cachedPostItems.addAll(postItems);
-			getAdapter().setItems(Collections.singleton(postItems), false);
-			restoreScrollAnchor();
+			getAdapter().setItems(Collections.singleton(postItems), false, !loadResult.append);
+			if (!loadResult.append) restoreScrollAnchor();
 		}
 		if (!postItems.isEmpty()) {
 			switchList();
@@ -560,6 +703,18 @@ public class CombinedThreadsPage extends ListPage implements ThreadsAdapter.Call
 		}
 		notifyTitleChanged();
 		updateOptionsMenu();
+		if (loadResult.append && loadResult.pending == 0) {
+			extra.lastAutoAppendCount = failed > 0 || getAdapter().getItemCount() <= appendStartCount
+					? getAdapter().getItemCount() : appendStartCount;
+			// Skip a small bounded number of all-hidden/duplicate pages, never an entire board.
+			if (pageActive && failed == 0 && appendRounds > 0 && appendRounds < 3
+					&& getAdapter().getItemCount() <= appendStartCount) {
+				appendRounds++;
+				getRecyclerView().removeCallbacks(continueEmptyAppend);
+				getRecyclerView().post(continueEmptyAppend);
+			} else appendRounds = 0;
+		}
+		if (loadResult.pending == 0 && appendWhenIdle) scheduleAutoAppend();
 	}
 
 	private void captureScrollAnchor() {
@@ -608,7 +763,7 @@ public class CombinedThreadsPage extends ListPage implements ThreadsAdapter.Call
 		}
 		if (postItem.getHideState().hidden) {
 			setThreadHideState(postItem, PostItem.HideState.SHOWN);
-			getAdapter().notifyDataSetChanged();
+			getAdapter().notifyThreadChanged(postItem);
 		} else {
 			getUiManager().navigator().navigatePosts(postItem.getChanName(), postItem.getBoardName(),
 					postItem.getThreadNumber(), null, postItem.getSubjectOrComment());
@@ -709,7 +864,8 @@ public class CombinedThreadsPage extends ListPage implements ThreadsAdapter.Call
 			return true;
 		}
 		if (item.getItemId() == MENU_RETRY_FAILED) {
-			refresh(true, true);
+			if (getViewModel(ReadViewModel.class).isAppending()) appendNext(true, false);
+			else refresh(true, true);
 			return true;
 		}
 		if (item.getItemId() == MENU_SOURCE_ERRORS) {
@@ -763,6 +919,9 @@ public class CombinedThreadsPage extends ListPage implements ThreadsAdapter.Call
 
 	@Override
 	public void onSearchQueryChange(String query) {
+		cancelAppendLoading();
+		getRecyclerView().removeCallbacks(continueEmptyAppend);
+		currentFilter = query;
 		if (getRecyclerView().getAdapter() != null) {
 			getAdapter().applyFilter(query);
 		}
@@ -770,7 +929,9 @@ public class CombinedThreadsPage extends ListPage implements ThreadsAdapter.Call
 
 	@Override
 	public void onListPulled(PullableWrapper wrapper, PullableWrapper.Side side) {
-		refresh(true);
+		if (side == PullableWrapper.Side.BOTTOM && Preferences.isThreadPagePreloadEnabled()) {
+			if (!getViewModel(ReadViewModel.class).isLoading()) appendNext(false, false);
+		} else refresh(true);
 	}
 
 	@Override

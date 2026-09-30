@@ -77,7 +77,7 @@ public abstract class ListPage implements LifecycleOwner, PullableWrapper.PullCa
 	private Page page;
 	private Callback callback;
 	private Fragment fragment;
-	private LifecycleRegistry lifecycle;
+	private PageLifecycle lifecycle;
 	private PaddedRecyclerView recyclerView;
 	private ListPosition listPosition;
 	private UiManager uiManager;
@@ -90,7 +90,7 @@ public abstract class ListPage implements LifecycleOwner, PullableWrapper.PullCa
 			ListPosition listPosition, UiManager uiManager, Retainable retainableExtra, Parcelable parcelableExtra,
 			InitRequest initRequest, InitSearch initSearch) {
 		if (lifecycle == null) {
-			lifecycle = new LifecycleRegistry(this);
+			lifecycle = new PageLifecycle(new LifecycleRegistry(this));
 			this.callback = callback;
 			this.fragment = fragment;
 			this.page = page;
@@ -102,16 +102,15 @@ public abstract class ListPage implements LifecycleOwner, PullableWrapper.PullCa
 			this.initRequest = initRequest;
 			this.initSearch = initSearch;
 			getViewModel(fragment).update(this);
-			lifecycle.setCurrentState(Lifecycle.State.INITIALIZED);
 			onCreate();
-			lifecycle.setCurrentState(Lifecycle.State.STARTED);
+			lifecycle.start();
 			this.initRequest = null;
 			this.initSearch = null;
 		}
 	}
 
 	private Lifecycle.State getState() {
-		return lifecycle != null ? lifecycle.getCurrentState() : null;
+		return lifecycle != null ? lifecycle.registry.getCurrentState() : null;
 	}
 
 	protected final Context getContext() {
@@ -308,38 +307,29 @@ public abstract class ListPage implements LifecycleOwner, PullableWrapper.PullCa
 	public void updatePageConfiguration(PostNumber postNumber) {}
 
 	public final boolean isRunning() {
-		Lifecycle.State state = getState();
-		return state == Lifecycle.State.STARTED || state == Lifecycle.State.RESUMED;
+		return lifecycle != null && lifecycle.isRunning();
 	}
 
 	private void performResume() {
 		onResume();
-		onHandleNewPostDataList();
+		if (getState() == Lifecycle.State.RESUMED) onHandleNewPostDataList();
 	}
 
 	public final void resume() {
-		if (getState() == Lifecycle.State.STARTED) {
-			lifecycle.setCurrentState(Lifecycle.State.RESUMED);
-			performResume();
-		}
+		if (lifecycle != null) lifecycle.resume(this::performResume);
 	}
 
 	public final void pause() {
-		if (getState() == Lifecycle.State.RESUMED) {
-			lifecycle.setCurrentState(Lifecycle.State.STARTED);
-			onPause();
-		}
+		if (lifecycle != null) lifecycle.pause(this::onPause);
 	}
 
 	public final void destroy() {
-		if (isRunning()) {
-			if (getState() == Lifecycle.State.RESUMED) {
-				lifecycle.setCurrentState(Lifecycle.State.STARTED);
-				onPause();
-			}
-			lifecycle.setCurrentState(Lifecycle.State.DESTROYED);
+		if (lifecycle != null) lifecycle.destroy(this::onPause, () -> {
+			// A restored dialog must not acquire a page whose view has already been destroyed.
+			PageViewModel model = getViewModel(fragment);
+			if (model.listPage != null && model.listPage.get() == this) model.update(null);
 			onDestroy();
-		}
+		});
 	}
 
 	public final void handleNewPostDataListNow() {
@@ -366,7 +356,7 @@ public abstract class ListPage implements LifecycleOwner, PullableWrapper.PullCa
 	@NonNull
 	@Override
 	public final Lifecycle getLifecycle() {
-		return Objects.requireNonNull(lifecycle);
+		return Objects.requireNonNull(lifecycle).registry;
 	}
 
 	public static class PageViewModel extends ViewModel {

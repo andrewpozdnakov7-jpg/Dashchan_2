@@ -121,8 +121,10 @@ public abstract class StateActivity extends FragmentActivity {
 
 	private void callOnFinish(boolean force) {
 		if (!onFinishCalled && (isFinishing() || force)) {
-			onFinish();
+			// Claim before callbacks: cleanup may itself trigger lifecycle/navigation.
 			onFinishCalled = true;
+			UiLifecycleDiagnostics.event(this, "finish_cleanup forced=" + force);
+			onFinish();
 		}
 	}
 

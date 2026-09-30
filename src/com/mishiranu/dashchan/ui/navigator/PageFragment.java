@@ -172,7 +172,8 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 		errorHolder = ViewFactory.createErrorLayout(layout);
 		errorHolder.layout.setVisibility(View.GONE);
 		layout.addView(errorHolder.layout);
-		if (getPage().content == Page.Content.POSTS
+		if ((getPage().content == Page.Content.POSTS || getPage().content == Page.Content.THREADS
+				|| getPage().content == Page.Content.COMBINED_THREADS)
 				&& !com.mishiranu.dashchan.ui.DrawerForm.CHAN_REDDIT.equals(getPage().chanName)) {
 			quickNavigation = new ThreadQuickNavigation(recyclerView);
 			layout.addView(quickNavigation, ExpandedLayout.LayoutParams.MATCH_PARENT,
@@ -189,6 +190,7 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 
 	@Override
 	public void onDestroyView() {
+		doOnResume = null;
 		super.onDestroyView();
 
 		FragmentHandler fragmentHandler = (FragmentHandler) requireActivity();
@@ -228,11 +230,12 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 	public void onResume() {
 		super.onResume();
 
+		if (listPage == null) return;
 		listPage.resume();
 		if (quickNavigation != null) quickNavigation.refreshPreferences();
 		Runnable doOnResume = this.doOnResume;
 		this.doOnResume = null;
-		if (doOnResume != null) {
+		if (doOnResume != null && listPage != null && listPage.isRunning()) {
 			doOnResume.run();
 		}
 	}
@@ -276,6 +279,7 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 
 	@Override
 	public void onTerminate() {
+		doOnResume = null;
 		super.onTerminate();
 
 		if (listPage != null) {
@@ -437,7 +441,7 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 	}
 
 	@Override
-	public boolean onOptionsItemSelected(@NonNull MenuItem item) {
+	public boolean onMenuItemSelected(@NonNull MenuItem item) {
 		if (item.getItemId() == R.id.menu_search) {
 			if (item == searchMenuItem) {
 				searchFocused = true;
@@ -453,7 +457,7 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 		if (listPage.onOptionsItemSelected(item)) {
 			return true;
 		}
-		return super.onOptionsItemSelected(item);
+		return super.onMenuItemSelected(item);
 	}
 
 	@Override

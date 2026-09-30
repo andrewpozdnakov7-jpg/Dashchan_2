@@ -21,6 +21,7 @@ import com.mishiranu.dashchan.content.push.ReplyPushManager;
 import com.mishiranu.dashchan.content.service.BackgroundWatcherWorker;
 import com.mishiranu.dashchan.util.IOUtils;
 import com.mishiranu.dashchan.util.Logger;
+import com.mishiranu.dashchan.util.PerformanceDiagnostics;
 import java.io.File;
 import java.util.List;
 
@@ -84,13 +85,13 @@ public class MainApplication extends Application {
 			FontManager.register(this);
 			LauncherIconManager.apply(this, Preferences.getApplicationName());
 			UserAgentProvider.initialize(this);
-			ChanManager.getInstance();
-			HttpClient.getInstance();
-			CommonDatabase.getInstance();
-			PagesDatabase.getInstance();
-			ChanDatabase.getInstance();
-			CacheManager.getInstance();
-			ChanManager.getInstance().loadLibraries();
+			PerformanceDiagnostics.run("startup.ChanManager", () -> ChanManager.getInstance());
+			PerformanceDiagnostics.run("startup.HttpClient", () -> HttpClient.getInstance());
+			PerformanceDiagnostics.run("startup.CommonDatabase", () -> CommonDatabase.getInstance());
+			PerformanceDiagnostics.run("startup.PagesDatabase", () -> PagesDatabase.getInstance());
+			PerformanceDiagnostics.run("startup.ChanDatabase", () -> ChanDatabase.getInstance());
+			PerformanceDiagnostics.run("startup.CacheManager", () -> CacheManager.getInstance());
+			PerformanceDiagnostics.run("startup.loadLibraries", () -> ChanManager.getInstance().loadLibraries());
 			BackgroundWatcherWorker.restoreSchedule(this);
 			ReplyPushManager.restore(this);
 			cleanupRemovedAutoBump();

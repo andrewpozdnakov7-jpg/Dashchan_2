@@ -1,6 +1,7 @@
 package com.mishiranu.dashchan.content.push;
 
 import android.content.Context;
+import android.os.SystemClock;
 import androidx.annotation.NonNull;
 import androidx.work.BackoffPolicy;
 import androidx.work.Data;
@@ -10,6 +11,7 @@ import androidx.work.WorkManager;
 import androidx.work.Worker;
 import androidx.work.WorkerParameters;
 import com.mishiranu.dashchan.content.Preferences;
+import com.mishiranu.dashchan.content.service.WorkerDiagnostics;
 import com.mishiranu.dashchan.util.Logger;
 import java.util.HashMap;
 import java.util.Map;
@@ -46,6 +48,25 @@ public final class ReplyPushDeliveryWorker extends Worker {
 	@NonNull
 	@Override
 	public Result doWork() {
+		long startedAt = SystemClock.elapsedRealtime();
+		WorkerDiagnostics.event(this, "start", 0L);
+		try {
+			Result result = deliver();
+			WorkerDiagnostics.event(this, result.getClass().getSimpleName(),
+					SystemClock.elapsedRealtime() - startedAt);
+			return result;
+		} finally {
+			WorkerDiagnostics.event(this, "finish", SystemClock.elapsedRealtime() - startedAt);
+		}
+	}
+
+	@Override
+	public void onStopped() {
+		super.onStopped();
+		WorkerDiagnostics.event(this, "stopped", 0L);
+	}
+
+	private Result deliver() {
 		Map<String, String> values = new HashMap<>();
 		for (Map.Entry<String, Object> entry : getInputData().getKeyValueMap().entrySet()) {
 			if (!(entry.getValue() instanceof String)) return Result.failure();

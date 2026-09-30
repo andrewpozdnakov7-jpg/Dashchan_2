@@ -16,7 +16,6 @@ import android.view.WindowManager;
 import android.widget.Toolbar;
 import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
-import androidx.fragment.app.Fragment;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.util.ViewUtils;
@@ -32,7 +31,7 @@ public class GalleryDialog extends Dialog {
 		void onCreateActionContextBarView();
 	}
 
-	private final Fragment fragment;
+	private final GalleryOverlay fragment;
 	private final MenuInflater menuInflater;
 
 	private ViewFactory.ToolbarHolder toolbarHolder;
@@ -40,7 +39,7 @@ public class GalleryDialog extends Dialog {
 	private View actionContextBar;
 	private Object predictiveBackCallback;
 
-	public GalleryDialog(Fragment fragment) {
+	public GalleryDialog(GalleryOverlay fragment) {
 		super(fragment.requireContext(), R.style.Theme_Gallery);
 		this.fragment = fragment;
 		this.menuInflater = fragment.requireActivity().getMenuInflater();
@@ -247,7 +246,8 @@ public class GalleryDialog extends Dialog {
 	@Override
 	public boolean onCreateOptionsMenu(@NonNull Menu menu) {
 		if (fragment.isAdded()) {
-			fragment.onCreateOptionsMenu(menu, menuInflater);
+			// The dialog owns this menu, independently of the activity's MenuHost.
+			fragment.onCreateMenu(menu, menuInflater);
 		}
 		return true;
 	}
@@ -255,7 +255,7 @@ public class GalleryDialog extends Dialog {
 	@Override
 	public boolean onPrepareOptionsMenu(@NonNull Menu menu) {
 		if (fragment.isAdded()) {
-			fragment.onPrepareOptionsMenu(menu);
+			fragment.onPrepareMenu(menu);
 		}
 		return true;
 	}
@@ -271,7 +271,7 @@ public class GalleryDialog extends Dialog {
 
 	@Override
 	public boolean onOptionsItemSelected(@NonNull MenuItem item) {
-		return fragment.isAdded() && fragment.onOptionsItemSelected(item);
+		return fragment.isAdded() && fragment.onMenuItemSelected(item);
 	}
 
 	@Override

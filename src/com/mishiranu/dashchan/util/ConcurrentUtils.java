@@ -27,6 +27,12 @@ public class ConcurrentUtils {
 		return newThreadPool(lifeTimeMs > 0 ? 0 : 1, 1, lifeTimeMs, componentName, componentPart);
 	}
 
+	public static ExecutorService newIdleThreadPool(int threads, long idleTimeMs,
+			String componentName, String componentPart) {
+		return new IdleThreadPoolExecutor(threads, idleTimeMs,
+				new ComponentThreadFactory(componentName, componentPart));
+	}
+
 	public static ExecutorService newThreadPool(int from, int to, long lifeTimeMs,
 			String componentName, String componentPart) {
 		if (to > from && to >= 2) {

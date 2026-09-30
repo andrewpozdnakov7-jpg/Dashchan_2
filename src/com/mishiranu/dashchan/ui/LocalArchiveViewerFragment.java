@@ -153,7 +153,7 @@ public class LocalArchiveViewerFragment extends ContentFragment implements Posts
 	}
 
 	@Override
-	public boolean onOptionsItemSelected(MenuItem item) {
+	public boolean onMenuItemSelected(MenuItem item) {
 		if (item.getItemId() == MENU_VIEW_MODE) {
 			showViewModeDialog();
 			return true;

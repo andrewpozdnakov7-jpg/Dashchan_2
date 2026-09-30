@@ -100,11 +100,11 @@ public class Preferences {
 		for (DrawerSection section : sections) {
 			if (!keys.contains(section.key)) keys.add(section.key);
 		}
-		PREFERENCES.edit().put(KEY_DRAWER_SECTION_ORDER, String.join(",", keys)).close();
+		PREFERENCES.editAsync().put(KEY_DRAWER_SECTION_ORDER, String.join(",", keys)).close();
 	}
 
 	public static void resetDrawerSectionOrder() {
-		PREFERENCES.edit().remove(KEY_DRAWER_SECTION_ORDER).close();
+		PREFERENCES.editAsync().remove(KEY_DRAWER_SECTION_ORDER).close();
 	}
 
 	public static final SharedPreferences PREFERENCES;
@@ -1817,14 +1817,14 @@ public class Preferences {
 		// Snapshot all roles atomically before changing one, including changes via volume keys.
 		int subject = getPostTextScalePercent(KEY_SUBJECT_TEXT_SCALE);
 		int metadata = getPostTextScalePercent(KEY_METADATA_TEXT_SCALE);
-		try (SharedPreferences.Editor editor = PREFERENCES.edit()) {
+		try (SharedPreferences.Editor editor = PREFERENCES.editAsync()) {
 			editor.put(KEY_SUBJECT_TEXT_SCALE, subject).put(KEY_METADATA_TEXT_SCALE, metadata)
 					.put(key, Math.max(MIN_TEXT_SCALE, Math.min(value, MAX_TEXT_SCALE)));
 		}
 	}
 
 	public static void resetPostTextScales() {
-		try (SharedPreferences.Editor editor = PREFERENCES.edit()) {
+		try (SharedPreferences.Editor editor = PREFERENCES.editAsync()) {
 			editor.put(KEY_TEXT_SCALE, DEFAULT_TEXT_SCALE).put(KEY_SUBJECT_TEXT_SCALE, DEFAULT_TEXT_SCALE)
 					.put(KEY_METADATA_TEXT_SCALE, DEFAULT_TEXT_SCALE);
 		}
@@ -1926,11 +1926,11 @@ public class Preferences {
 	}
 
 	public static void setTheme(String value) {
-		PREFERENCES.edit().put(KEY_THEME, value).close();
+		PREFERENCES.editAsync().put(KEY_THEME, value).close();
 	}
 
 	public static void setThemeForCurrentMode(Context context, String value) {
-		SharedPreferences.Editor editor = PREFERENCES.edit().put(KEY_THEME, value);
+		SharedPreferences.Editor editor = PREFERENCES.editAsync().put(KEY_THEME, value);
 		if (isAutomaticDayNightTheme()) {
 			editor.put(isNightMode(context) ? KEY_NIGHT_THEME : KEY_DAY_THEME, value);
 		}
@@ -1964,7 +1964,7 @@ public class Preferences {
 	}
 
 	public static void setThreadsView(ThreadsView threadsView) {
-		PREFERENCES.edit().put(KEY_THREADS_VIEW, threadsView != null ? threadsView.value : null).close();
+		PREFERENCES.editAsync().put(KEY_THREADS_VIEW, threadsView != null ? threadsView.value : null).close();
 	}
 
 	static {
@@ -2141,6 +2141,13 @@ public class Preferences {
 	public static final String KEY_OPEN_CONFIGURED_ATTACHMENT_FOLDER = "open_configured_attachment_folder";
 	public static final boolean DEFAULT_OPEN_CONFIGURED_ATTACHMENT_FOLDER = false;
 	public static final String KEY_WINDOWED_THREAD_LOADING = "windowed_thread_loading";
+	public static final String KEY_THREAD_PAGE_PRELOAD = "experimental_thread_page_preload";
+	public static final boolean DEFAULT_THREAD_PAGE_PRELOAD = true;
+
+	public static boolean isThreadPagePreloadEnabled() {
+		return PREFERENCES.getBoolean(KEY_THREAD_PAGE_PRELOAD, DEFAULT_THREAD_PAGE_PRELOAD);
+	}
+
 	public static final boolean DEFAULT_WINDOWED_THREAD_LOADING = false;
 	public static final String KEY_SWIPE_REPLY = "swipe_reply";
 	public static final String KEY_TOOLBAR_TITLE_SIZE = "toolbar_title_size";

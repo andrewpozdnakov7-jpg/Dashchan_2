@@ -1136,7 +1136,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 	}
 
 	@Override
-	public boolean onOptionsItemSelected(MenuItem item) {
+	public boolean onMenuItemSelected(MenuItem item) {
 		if (item.getItemId() == R.id.menu_attach) {
 			if (attachmentImportInProgress) {
 				ClickableToast.show(R.string.processing_data__ellipsis);
@@ -1189,6 +1189,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		}
 		intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
 		try {
+			DraftsStorage.getInstance().store(obtainPostDraft());
 			attachmentPicker.launch(intent);
 		} catch (ActivityNotFoundException e) {
 			if (initialUri != null) {
@@ -1589,6 +1590,9 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 	}
 
 	private void handlePostingActivityResult(int requestCode, int resultCode, Intent data) {
+		com.mishiranu.dashchan.ui.UiLifecycleDiagnostics.event(this,
+				"activity_result request=" + requestCode + " ok=" + (resultCode == Activity.RESULT_OK)
+						+ " view=" + (getView() != null));
 		if (resultCode == Activity.RESULT_OK && data != null) {
 			switch (requestCode) {
 				case C.REQUEST_CODE_ATTACH: {
@@ -1629,7 +1633,14 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 					String hash = data.getStringExtra(ImageEditorActivity.EXTRA_RESULT_HASH);
 					String name = data.getStringExtra(ImageEditorActivity.EXTRA_RESULT_NAME);
 					AttachmentHolder holder = getAttachmentHolder(index);
-					if (holder != null && hash != null && name != null) {
+					if (holder == null || !AttachmentResultGuard.matches(
+							data.getStringExtra(ImageEditorActivity.EXTRA_RESULT_SOURCE_HASH),
+							data.getStringExtra(ImageEditorActivity.EXTRA_RESULT_SOURCE_NAME), holder.hash, holder.name)) {
+						com.mishiranu.dashchan.ui.UiLifecycleDiagnostics.event(this, "editor_result_stale");
+						ClickableToast.show(R.string.image_editor_attachment_changed);
+						break;
+					}
+					if (hash != null && name != null) {
 						holder.hash = hash;
 						holder.name = name;
 						FileHolder fileHolder = DraftsStorage.getInstance().getAttachmentDraftFileHolder(hash);
@@ -1716,6 +1727,8 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		AttachmentHolder holder = (AttachmentHolder) v.getTag();
 		int attachmentIndex = attachments.indexOf(holder);
 		if (attachmentIndex >= 0 && Preferences.isImageEditorEnabled()) {
+			// Persist the exact source list before leaving for an external Activity.
+			DraftsStorage.getInstance().store(obtainPostDraft());
 			imageEditor.launch(ImageEditorActivity.createIntent(requireContext(), holder.hash, holder.name,
 					attachmentIndex));
 		}

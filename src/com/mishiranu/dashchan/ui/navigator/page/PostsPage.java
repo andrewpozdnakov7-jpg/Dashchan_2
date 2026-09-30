@@ -444,7 +444,7 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 			public int getSwipeDirs(@NonNull RecyclerView recyclerView,
 					@NonNull RecyclerView.ViewHolder viewHolder) {
 				if (!Preferences.isSwipeReplyEnabled()) return 0;
-				int position = viewHolder.getAdapterPosition();
+				int position = viewHolder.getBindingAdapterPosition();
 				if (position == RecyclerView.NO_POSITION || position >= adapter.getItemCount()
 						|| !(viewHolder instanceof UiManager.Holder)
 						|| !(viewHolder instanceof CommentTextView.RecyclerKeeper.Holder)) {
@@ -480,7 +480,7 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 
 			@Override
 			public void onSwiped(@NonNull RecyclerView.ViewHolder viewHolder, int direction) {
-				int position = viewHolder.getAdapterPosition();
+				int position = viewHolder.getBindingAdapterPosition();
 				PostItem postItem = position != RecyclerView.NO_POSITION && position < adapter.getItemCount()
 						? adapter.getItem(position) : null;
 				viewHolder.itemView.setTranslationX(0f);

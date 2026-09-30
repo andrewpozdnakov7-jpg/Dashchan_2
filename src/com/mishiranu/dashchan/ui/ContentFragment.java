@@ -13,23 +13,29 @@ import android.view.View;
 import android.view.animation.DecelerateInterpolator;
 import android.widget.Toolbar;
 import androidx.annotation.NonNull;
+import androidx.core.view.MenuProvider;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentActivity;
 import androidx.fragment.app.FragmentManager;
 import androidx.fragment.app.FragmentTransaction;
+import androidx.lifecycle.Lifecycle;
 import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.util.ViewUtils;
 import com.mishiranu.dashchan.widget.CustomSearchView;
 import java.lang.ref.WeakReference;
+import java.util.ArrayList;
 import java.util.WeakHashMap;
 
-public abstract class ContentFragment extends Fragment {
+public abstract class ContentFragment extends Fragment implements MenuProvider {
 	private static class MenuState {
 		public boolean created;
+		public final ArrayList<WeakReference<MenuItem>> actionItems = new ArrayList<>();
 	}
 
 	private final WeakHashMap<Menu, MenuState> menuStates = new WeakHashMap<>();
+	private boolean menuTerminated;
+	private boolean dispatchingMenu;
 
 	public boolean isSearchMode() {
 		return false;
@@ -68,16 +74,14 @@ public abstract class ContentFragment extends Fragment {
 
 	private void clearOptionMenus() {
 		for (WeakHashMap.Entry<Menu, MenuState> entry : menuStates.entrySet()) {
-			if (entry.getValue().created) {
-				Menu menu = entry.getKey();
-				int size = menu.size();
-				for (int i = 0; i < size; i++) {
-					MenuItem menuItem = menu.getItem(i);
-					if (menuItem.getActionView() != null) {
-						menuItem.setOnActionExpandListener(null);
-						if (menuItem.isActionViewExpanded()) {
-							menuItem.collapseActionView();
-						}
+			Menu menu = entry.getKey();
+			for (WeakReference<MenuItem> reference : entry.getValue().actionItems) {
+				MenuItem menuItem = reference.get();
+				if (menuItem != null) {
+					menuItem.setOnActionExpandListener(null);
+					// A shared toolbar can already belong to another screen. Clean up only our item.
+					if (menu.findItem(menuItem.getItemId()) == menuItem && menuItem.isActionViewExpanded()) {
+						menuItem.collapseActionView();
 					}
 				}
 			}
@@ -86,11 +90,16 @@ public abstract class ContentFragment extends Fragment {
 	}
 
 	public void onTerminate() {
+		menuTerminated = true;
+		if (isAdded()) {
+			requireActivity().removeMenuProvider(this);
+		}
 		clearOptionMenus();
 	}
 
 	@Override
 	public void onDestroyView() {
+		menuTerminated = true;
 		super.onDestroyView();
 
 		clearOptionMenus();
@@ -153,21 +162,19 @@ public abstract class ContentFragment extends Fragment {
 	}
 
 	@Override
-	public void onCreate(Bundle savedInstanceState) {
-		super.onCreate(savedInstanceState);
-		super.setHasOptionsMenu(true);
+	public void onViewCreated(@NonNull View view, Bundle savedInstanceState) {
+		super.onViewCreated(view, savedInstanceState);
+		menuTerminated = false;
+		// Activate only after view initialization; unregister automatically when its view is destroyed.
+		requireActivity().addMenuProvider(this, getViewLifecycleOwner(), Lifecycle.State.STARTED);
 	}
 
 	@Override
 	public void onResume() {
 		super.onResume();
-		// Menu can be requested too early on some Android 4.x
-		invalidateMenuInternal(true);
-	}
-
-	@Override
-	public void setHasOptionsMenu(boolean hasMenu) {
-		throw new UnsupportedOperationException();
+		// Request a fresh host-owned menu after resume, never prepare a cached Menu directly.
+		// The host may have cleared that same object while this provider was stopped.
+		invalidateOptionsMenu();
 	}
 
 	private MenuState obtainMenuState(Menu menu) {
@@ -180,29 +187,65 @@ public abstract class ContentFragment extends Fragment {
 	}
 
 	@Override
-	public final void onCreateOptionsMenu(@NonNull Menu menu, @NonNull MenuInflater inflater) {
+	public final void onCreateMenu(@NonNull Menu menu, @NonNull MenuInflater inflater) {
+		if (dispatchingMenu) {
+			return;
+		}
 		MenuState menuState = obtainMenuState(menu);
-		if (isAdded() && isValidOptionsMenuState()) {
-			menuState.created = true;
-			onCreateOptionsMenu(menu, isPrimaryMenu(menu));
+		// A new host creation invalidates the old contents, even if this screen is not ready yet.
+		menuState.created = false;
+		menuState.actionItems.clear();
+		if (canUseOptionsMenu()) {
+			dispatchingMenu = true;
+			try {
+				onCreateOptionsMenu(menu, isPrimaryMenu(menu));
+				for (int i = 0; i < menu.size(); i++) {
+					MenuItem item = menu.getItem(i);
+					if (item.getActionView() != null) {
+						menuState.actionItems.add(new WeakReference<>(item));
+					}
+				}
+				menuState.created = true;
+			} finally {
+				dispatchingMenu = false;
+			}
 		}
 	}
 
 	@Override
-	public final void onPrepareOptionsMenu(@NonNull Menu menu) {
-		if (isAdded() && isValidOptionsMenuState()) {
-			boolean primary = isPrimaryMenu(menu);
-			MenuState menuState = obtainMenuState(menu);
-			if (!menuState.created) {
-				// onPrepareOptionsMenu can be called when onCreateOptionsMenu was called in
-				// invalid state (when isValidOptionsMenuState returned false) or wasn't called at all
-				// (this is the case for devices with hardware menu button which have 2 Menu instances)
-				menuState.created = true;
-				menu.clear();
-				onCreateOptionsMenu(menu, primary);
-			}
-			onPrepareOptionsMenu(menu, primary);
+	public final void onPrepareMenu(@NonNull Menu menu) {
+		if (dispatchingMenu || !canUseOptionsMenu()) {
+			return;
 		}
+		MenuState menuState = menuStates.get(menu);
+		if (menuState == null || !menuState.created) {
+			// If creation was skipped, ask the host to run its complete create/prepare cycle.
+			// Do not clear or populate a shared toolbar menu from a preparation callback.
+			invalidateOptionsMenu();
+			return;
+		}
+		dispatchingMenu = true;
+		try {
+			onPrepareOptionsMenu(menu, isPrimaryMenu(menu));
+		} finally {
+			dispatchingMenu = false;
+		}
+	}
+
+	private boolean canUseOptionsMenu() {
+		return !menuTerminated && isAdded() && !isHidden() && getView() != null
+				&& getViewLifecycleOwner().getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.STARTED)
+				&& isValidOptionsMenuState();
+	}
+
+	@Override
+	public void onStop() {
+		// Keep action views for cleanup/search-state restoration, but forget readiness.
+		// MenuHost removes the provider on stop and can clear the menu without notifying us.
+		for (MenuState state : menuStates.values()) {
+			state.created = false;
+		}
+		super.onStop();
 	}
 
 	public boolean isValidOptionsMenuState() {
@@ -213,15 +256,16 @@ public abstract class ContentFragment extends Fragment {
 
 	public void onPrepareOptionsMenu(Menu menu, boolean primary) {}
 
-	public void invalidateOptionsMenu() {
-		invalidateMenuInternal(false);
+	@Override
+	public boolean onMenuItemSelected(@NonNull MenuItem item) {
+		return false;
 	}
 
-	private void invalidateMenuInternal(boolean prepareOnly) {
-		for (WeakHashMap.Entry<Menu, MenuState> entry : menuStates.entrySet()) {
-			if (!prepareOnly || !entry.getValue().created) {
-				onPrepareOptionsMenu(entry.getKey());
-			}
+	public void invalidateOptionsMenu() {
+		// Restoring an expanded search view may request an update from onCreateMenu.
+		// The host will prepare that menu immediately afterwards; rebuilding again would loop.
+		if (!dispatchingMenu && canUseOptionsMenu()) {
+			requireActivity().invalidateMenu();
 		}
 	}
 

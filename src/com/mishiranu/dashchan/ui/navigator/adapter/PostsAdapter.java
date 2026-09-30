@@ -75,6 +75,7 @@ public class PostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
 	}
 
 	private static final String PAYLOAD_INVALIDATE_COMMENT = "invalidateComment";
+	private static final String PAYLOAD_SELECTION = "selection";
 	private static final int VIEW_TYPE_LOADING = ViewUnit.ViewType.values().length;
 
 	private final UiManager uiManager;
@@ -264,6 +265,9 @@ public class PostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
 				if (payloads.isEmpty() || payloads.contains(SimpleViewHolder.EMPTY_PAYLOAD)) {
 					uiManager.view().bindPostView(holder, postItem, configurationSet, demandSet);
 				} else {
+					if (payloads.contains(PAYLOAD_SELECTION)) {
+						uiManager.view().bindPostViewSelection(holder, postItem, configurationSet, demandSet.selection);
+					}
 					if (payloads.contains(PAYLOAD_INVALIDATE_COMMENT)) {
 						uiManager.view().bindPostViewInvalidateComment(holder);
 					}
@@ -307,7 +311,7 @@ public class PostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
 	public void setTranslationEnabled(boolean enabled) {
 		configurationSet.showTranslatedComments = enabled;
 		configurationSet.translationKey = enabled ? TranslationController.getCurrentCacheKey() : null;
-		notifyDataSetChanged();
+		notifyItemRangeChanged(0, getItemCount(), SimpleViewHolder.EMPTY_PAYLOAD);
 	}
 
 	public boolean isTranslationEnabled() {
@@ -592,11 +596,12 @@ public class PostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
 	}
 
 	public void setSelectionModeEnabled(boolean enabled) {
+		if (selection == enabled) return;
 		selection = enabled;
 		if (!enabled) {
 			selected.clear();
 		}
-		notifyDataSetChanged();
+		notifyItemRangeChanged(0, getItemCount(), PAYLOAD_SELECTION);
 	}
 
 	public void toggleItemSelected(PostItem postItem) {
@@ -610,7 +615,7 @@ public class PostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
 		}
 		int position = positionOfPostNumber(postNumber);
 		if (position >= 0) {
-			notifyItemChanged(position, SimpleViewHolder.EMPTY_PAYLOAD);
+			notifyItemChanged(position, PAYLOAD_SELECTION);
 		}
 	}
 
@@ -715,7 +720,8 @@ public class PostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
 
 	public void setHighlightText(Collection<String> highlightText) {
 		demandSet.highlightText = highlightText;
-		notifyDataSetChanged();
+		// Text can change height and spans; retain the complete row binding, but not a structural invalidation.
+		notifyItemRangeChanged(0, getItemCount(), SimpleViewHolder.EMPTY_PAYLOAD);
 	}
 
 	public Iterable<PostItem> iterate(final boolean ascending, final int from) {

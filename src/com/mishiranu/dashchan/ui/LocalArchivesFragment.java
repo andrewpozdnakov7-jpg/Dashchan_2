@@ -142,7 +142,7 @@ public class LocalArchivesFragment extends ContentFragment {
 	}
 
 	@Override
-	public boolean onOptionsItemSelected(MenuItem item) {
+	public boolean onMenuItemSelected(MenuItem item) {
 		if (item.getItemId() == R.id.menu_reload) {
 			loadArchives();
 			return true;
@@ -463,13 +463,13 @@ public class LocalArchivesFragment extends ContentFragment {
 			// Keep the standard list insets even when the selection checkbox is hidden.
 			ViewHolder viewHolder = new ViewHolder(holder, selection);
 			viewHolder.itemView.setOnClickListener(view -> {
-				int position = viewHolder.getAdapterPosition();
+				int position = viewHolder.getBindingAdapterPosition();
 				if (position != RecyclerView.NO_POSITION) {
 					callback.onClick(items.get(position));
 				}
 			});
 			viewHolder.itemView.setOnLongClickListener(view -> {
-				int position = viewHolder.getAdapterPosition();
+				int position = viewHolder.getBindingAdapterPosition();
 				if (position != RecyclerView.NO_POSITION) {
 					callback.onLongClick(items.get(position));
 					return true;
