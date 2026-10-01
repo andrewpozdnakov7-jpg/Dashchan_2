@@ -44,6 +44,7 @@ jobs:
       CANDIDATE_CHANNEL: ${{ inputs.candidate }}
       INCLUDE_FDROID_SPLITS: ${{ inputs.include_fdroid_splits }}
       GITHUB_NATIVE_ABIS: arm64-v8a,armeabi-v7a,x86
+      NATIVE_ABIS: arm64-v8a,armeabi-v7a,x86
 
     steps:
       - name: Confirm signing request
@@ -170,12 +171,40 @@ jobs:
           source_root="$RUNNER_TEMP/fdroid-native-sources"
           bash Dashchan-Webm/shared-prepare.sh "$source_root"
           {
+            echo "CI_NATIVE_SOURCES=$source_root"
             echo "ORG_GRADLE_PROJECT_dashchanDav1dSourceDir=$source_root/dav1d"
             echo "ORG_GRADLE_PROJECT_dashchanFfmpegSourceDir=$source_root/ffmpeg"
             echo "ORG_GRADLE_PROJECT_dashchanLibyuvSourceDir=$source_root/yuv"
           } >> "$GITHUB_ENV"
 
+      - name: Test native cache validation
+        if: inputs.candidate == 'stable'
+        run: python3 -m unittest discover -s .github/scripts -p 'native_cache_test.py' -v
+
+      - name: Compute stable native cache key
+        if: inputs.candidate == 'stable'
+        id: native-key
+        run: python3 .github/scripts/native_cache.py key
+
+      # Never consume ordinary-CI / PR / beta cache entries for signing.
+      # This namespace is populated only by stable builds on protected master.
+      - name: Restore stable native library cache
+        if: inputs.candidate == 'stable'
+        id: native-cache
+        continue-on-error: true
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0 (Node 24)
+        with:
+          path: ${{ runner.temp }}/slooop-native-cache
+          key: signed-stable-v1-${{ steps.native-key.outputs.key }}
+
+      - name: Verify stable native cache
+        if: inputs.candidate == 'stable'
+        id: native-verified
+        run: python3 .github/scripts/native_cache.py restore
+
       - name: Build unsigned candidate APKs
+        env:
+          NATIVE_CACHE_VERIFIED: ${{ steps.native-verified.outputs.hit }}
         run: |
           set -euo pipefail
           chmod +x gradlew Dashchan-Webm/*.sh
@@ -218,9 +247,13 @@ jobs:
           rm -rf unsigned-candidates
           mkdir unsigned-candidates
 
+          native_cache_args=()
+          if [ "$CANDIDATE_CHANNEL" = 'stable' ] && [ "$NATIVE_CACHE_VERIFIED" = 'true' ]; then
+            native_cache_args=(-x buildBuiltinWebmLibraries)
+          fi
           ./gradlew --no-daemon --stacktrace assembleGithubNdebug \
             -PnativePlayerFfmpegFlavor=ffmpeg8 \
-            -PnativeAbis="$GITHUB_NATIVE_ABIS"
+            -PnativeAbis="$GITHUB_NATIVE_ABIS" "${native_cache_args[@]}"
           mapfile -d '' github_apks < <(find build/outputs/apk/github/ndebug -maxdepth 1 \
             -type f -name '*-unsigned.apk' -print0 | sort -z)
           if [ "${#github_apks[@]}" -ne 1 ]; then
@@ -229,6 +262,11 @@ jobs:
           fi
           cp "${github_apks[0]}" unsigned-candidates/github-all.apk
 
+          # Freeze the complete, validated universal native set before split builds.
+          # Only third-party native libraries are shared; JNI/APKs still rebuild.
+          if [ "$CANDIDATE_CHANNEL" = 'stable' ]; then
+            python3 .github/scripts/native_cache.py pack
+          fi
           if [ "$INCLUDE_FDROID_SPLITS" = 'true' ]; then
             for candidate in \
                 'armv7:armeabi-v7a:1' \
@@ -237,10 +275,14 @@ jobs:
               IFS=: read -r label abi offset <<< "$candidate"
               package_version_code=$((release_version_code + offset))
               rm -rf build/outputs/apk/fdroid/release
+              # Explicit universal-to-split reuse, validated again for every APK.
+              # ndk.abiFilters selects the requested ABI; signing verifies the APK set.
+              python3 .github/scripts/native_cache.py restore-required
               ./gradlew --no-daemon --stacktrace assembleFdroidRelease \
                 -PnativePlayerFfmpegFlavor=ffmpeg8 \
                 -PnativeAbis="$abi" \
-                -PpackageVersionCode="$package_version_code"
+                -PpackageVersionCode="$package_version_code" \
+                -x buildBuiltinWebmLibraries
               mapfile -d '' fdroid_apks < <(find build/outputs/apk/fdroid/release -maxdepth 1 \
                 -type f -name '*-unsigned.apk' -print0 | sort -z)
               if [ "${#fdroid_apks[@]}" -ne 1 ]; then
@@ -250,6 +292,14 @@ jobs:
               cp "${fdroid_apks[0]}" "unsigned-candidates/fdroid-$label.apk"
             done
           fi
+
+      - name: Save stable native library cache
+        if: success() && inputs.candidate == 'stable' && steps.native-cache.outputs.cache-hit != 'true'
+        continue-on-error: true
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0 (Node 24)
+        with:
+          path: ${{ runner.temp }}/slooop-native-cache
+          key: signed-stable-v1-${{ steps.native-key.outputs.key }}
 
       - name: Upload unsigned candidate
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0

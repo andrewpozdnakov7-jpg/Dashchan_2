@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
 
 import native_cache as cache
 
@@ -39,7 +40,8 @@ class NativeCacheTest(unittest.TestCase):
             target = cache.output_locations(self.repo)[category] / relative
             data = b"header/symbol"
             if name.endswith(".so"):
-                data = b"\x7fELF\x02\x01" + b"\x00" * 12 + (183).to_bytes(2, "little")
+                machine = cache.MACHINES[name.split('/')[2]]
+                data = b"\x7fELF\x02\x01" + b"\x00" * 12 + machine.to_bytes(2, "little")
             self.write(target, data)
 
     def test_path_independent(self):
@@ -88,6 +90,35 @@ class NativeCacheTest(unittest.TestCase):
         self.outputs()
         cache.pack(self.repo, self.entry, self.key(), self.abis)
         self.assertFalse(cache.restore(self.repo, self.entry, "different", self.abis))
+
+    def test_universal_outputs_can_be_restored_between_split_builds(self):
+        self.abis = sorted(cache.MACHINES)
+        self.outputs()
+        key = self.key()
+        cache.pack(self.repo, self.entry, key, self.abis)
+        for abi in self.abis:
+            # A split's JNI build must never change the frozen universal payload.
+            library = cache.output_locations(self.repo)["libraries"] / f"ffmpeg/{abi}/libavcodec.so"
+            expected = library.read_bytes()
+            library.write_bytes(b"changed during build")
+            self.assertTrue(cache.restore(self.repo, self.entry, key, self.abis))
+            self.assertEqual(expected, library.read_bytes())
+
+    def test_universal_cache_is_not_silently_a_single_abi_entry(self):
+        self.abis = sorted(cache.MACHINES)
+        self.outputs()
+        key = self.key()
+        cache.pack(self.repo, self.entry, key, self.abis)
+        self.assertFalse(cache.restore(self.repo, self.entry, key, ["arm64-v8a"]))
+
+    def test_required_restore_fails_closed(self):
+        with mock.patch('sys.argv', ['native_cache.py', 'restore-required']), \
+                mock.patch.dict('os.environ', {'NATIVE_ABIS': 'arm64-v8a',
+                    'CI_NATIVE_SOURCES': str(self.sources), 'RUNNER_TEMP': str(self.root)}), \
+                mock.patch.object(cache, 'environment', return_value={}), \
+                mock.patch.object(cache, 'fingerprint', return_value='test-key'):
+            with self.assertRaisesRegex(SystemExit, 'Validated native outputs required'):
+                cache.main()
 
     def test_damaged_library_is_miss(self):
         self.outputs()
