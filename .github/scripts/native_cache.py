@@ -8,7 +8,6 @@ import platform
 import re
 import shutil
 import subprocess
-import sys
 
 
 SCHEMA = 1
@@ -75,6 +74,7 @@ def required_files(abis):
     required = []
     for abi in abis:
         required += [f"libraries/dav1d/{abi}/libdav1d.so", f"libraries/yuv/{abi}/libyuv.so",
+                     f"libraries/dav1d/{abi}/include/dav1d/dav1d.h",
                      f"external/ffmpeg/include/{abi}/libavcodec/avcodec.h",
                      f"external/yuv/include/libyuv.h", f"external/yuv/symbols/{abi}/libyuv.c"]
         for lib in ("avcodec", "avformat", "avfilter", "avutil", "swresample", "swscale"):
@@ -93,8 +93,12 @@ def payload_inventory(payload, abis):
     for name in files:
         if name.startswith("libraries/"):
             parts = name.split("/")
+            # dav1d installs its public headers beside the library, not in external/.
+            if (len(parts) > 4 and parts[1] == "dav1d" and parts[2] in abis
+                    and parts[3] == "include" and name.endswith(".h")):
+                continue
             if len(parts) != 4 or parts[2] not in abis or not name.endswith(".so"):
-                raise ValueError("Unexpected native ABI/output")
+                raise ValueError(f"Unexpected native ABI/output: {name}")
             with (payload / name).open("rb") as stream:
                 header = stream.read(20)
             if len(header) != 20 or header[:4] != b"\x7fELF" or header[5] != 1:
