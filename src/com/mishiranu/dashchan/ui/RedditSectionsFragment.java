@@ -1,6 +1,7 @@
 package com.mishiranu.dashchan.ui;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 
 import android.content.Context;
 import android.os.Bundle;
@@ -13,7 +14,9 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 import com.mishiranu.dashchan.R;
+import com.mishiranu.dashchan.content.storage.RedditCommunities;
 import com.mishiranu.dashchan.ui.preference.BaseListFragment;
+import com.mishiranu.dashchan.ui.preference.RedditCommunitiesFragment;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.util.ViewUtils;
 import com.mishiranu.dashchan.widget.DividerItemDecoration;
@@ -21,7 +24,7 @@ import com.mishiranu.dashchan.widget.HeaderItemDecoration;
 import com.mishiranu.dashchan.widget.ViewFactory;
 
 public class RedditSectionsFragment extends BaseListFragment {
-	private static final String EXTRA_EXPANDED_CATEGORIES = "expandedCategories";
+	private static final String EXTRA_EXPANDED_CATEGORIES = "expandedCategoryIds";
 
 	private static final Section[] NAVIGATION = {
 			new Section(R.string.reddit_section_home, RedditWebReaderFragment.HOME_URL),
@@ -97,7 +100,7 @@ public class RedditSectionsFragment extends BaseListFragment {
 			})
 	};
 
-	private final boolean[] expandedCategories = new boolean[CATEGORIES.length];
+	private final HashSet<String> expandedCategories = new HashSet<>();
 	private SectionsAdapter adapter;
 
 	@Override
@@ -110,13 +113,12 @@ public class RedditSectionsFragment extends BaseListFragment {
 		super.onViewCreated(view, savedInstanceState);
 
 		if (savedInstanceState != null) {
-			boolean[] expanded = savedInstanceState.getBooleanArray(EXTRA_EXPANDED_CATEGORIES);
-			if (expanded != null && expanded.length == expandedCategories.length) {
-				System.arraycopy(expanded, 0, expandedCategories, 0, expanded.length);
-			}
+			ArrayList<String> expanded = savedInstanceState.getStringArrayList(EXTRA_EXPANDED_CATEGORIES);
+			if (expanded != null) expandedCategories.addAll(expanded);
 		}
 		adapter = new SectionsAdapter(expandedCategories, section -> ((FragmentHandler) requireActivity())
-				.pushFragment(RedditWebReaderFragment.newInstance(section.url)));
+				.pushFragment(RedditWebReaderFragment.newInstance(section.url)), () ->
+				((FragmentHandler) requireActivity()).pushFragment(new RedditCommunitiesFragment()));
 		getRecyclerView().setAdapter(adapter);
 		getRecyclerView().addItemDecoration(new HeaderItemDecoration(adapter::getItemHeader));
 		getRecyclerView().setItemAnimator(null);
@@ -126,7 +128,22 @@ public class RedditSectionsFragment extends BaseListFragment {
 	@Override
 	public void onSaveInstanceState(@NonNull Bundle outState) {
 		super.onSaveInstanceState(outState);
-		outState.putBooleanArray(EXTRA_EXPANDED_CATEGORIES, expandedCategories);
+		outState.putStringArrayList(EXTRA_EXPANDED_CATEGORIES, new ArrayList<>(expandedCategories));
+	}
+
+	@Override
+	public void onResume() {
+		super.onResume();
+		if (adapter != null) {
+			adapter.reloadCategories();
+			adapter.notifyDataSetChanged();
+		}
+	}
+
+	@Override
+	public void onDestroyView() {
+		adapter = null;
+		super.onDestroyView();
 	}
 
 	@Override
@@ -156,20 +173,38 @@ public class RedditSectionsFragment extends BaseListFragment {
 	private static class Category {
 		public final int titleResId;
 		public final Section[] sections;
+		public final String key;
+		public final String title;
+		public final boolean custom;
 
 		public Category(int titleResId, String[] subreddits) {
 			this.titleResId = titleResId;
+			key = "popular:" + titleResId;
+			title = null;
+			custom = false;
 			sections = new Section[subreddits.length];
 			for (int i = 0; i < subreddits.length; i++) {
 				sections[i] = new Section(subreddits[i]);
 			}
 		}
+
+		public Category(RedditCommunities.Category source) {
+			titleResId = RedditCommunities.UNGROUPED.equals(source.id) ? R.string.reddit_ungrouped : 0;
+			title = source.title;
+			key = "custom:" + source.id;
+			custom = true;
+			sections = new Section[source.communities.size()];
+			for (int i = 0; i < sections.length; i++) sections[i] = new Section(source.communities.get(i));
+		}
+
+		public String title(Context context) { return titleResId != 0 ? context.getString(titleResId) : title; }
 	}
 
 	private static class Row {
 		public static final int TYPE_NAVIGATION = 0;
 		public static final int TYPE_CATEGORY = 1;
 		public static final int TYPE_COMMUNITY = 2;
+		public static final int TYPE_MANAGE = 3;
 
 		public final int type;
 		public final int categoryIndex;
@@ -208,12 +243,26 @@ public class RedditSectionsFragment extends BaseListFragment {
 		}
 
 		private final ArrayList<Row> rows = new ArrayList<>();
-		private final boolean[] expandedCategories;
+		private final HashSet<String> expandedCategories;
+		private final ArrayList<Category> categories = new ArrayList<>();
 		private final Callback callback;
+		private final Runnable manage;
 
-		public SectionsAdapter(boolean[] expandedCategories, Callback callback) {
+		public SectionsAdapter(HashSet<String> expandedCategories, Callback callback, Runnable manage) {
 			this.expandedCategories = expandedCategories;
 			this.callback = callback;
+			this.manage = manage;
+			reloadCategories();
+		}
+
+		private void reloadCategories() {
+			categories.clear();
+			for (RedditCommunities.Category category : RedditCommunities.load()) {
+				if (!category.communities.isEmpty() || !RedditCommunities.UNGROUPED.equals(category.id)) {
+					categories.add(new Category(category));
+				}
+			}
+			java.util.Collections.addAll(categories, CATEGORIES);
 			rebuildRows();
 		}
 
@@ -222,10 +271,12 @@ public class RedditSectionsFragment extends BaseListFragment {
 			for (Section section : NAVIGATION) {
 				rows.add(new Row(Row.TYPE_NAVIGATION, -1, section));
 			}
-			for (int i = 0; i < CATEGORIES.length; i++) {
+			rows.add(new Row(Row.TYPE_MANAGE, -1, null));
+			for (int i = 0; i < categories.size(); i++) {
+				Category category = categories.get(i);
 				rows.add(new Row(Row.TYPE_CATEGORY, i, null));
-				if (expandedCategories[i]) {
-					for (Section section : CATEGORIES[i].sections) {
+				if (expandedCategories.contains(category.key)) {
+					for (Section section : category.sections) {
 						rows.add(new Row(Row.TYPE_COMMUNITY, i, section));
 					}
 				}
@@ -276,9 +327,12 @@ public class RedditSectionsFragment extends BaseListFragment {
 			}
 			Row row = rows.get(position);
 			if (row.type == Row.TYPE_CATEGORY) {
-				expandedCategories[row.categoryIndex] = !expandedCategories[row.categoryIndex];
+				String key = categories.get(row.categoryIndex).key;
+				if (!expandedCategories.remove(key)) expandedCategories.add(key);
 				rebuildRows();
 				notifyDataSetChanged();
+			} else if (row.type == Row.TYPE_MANAGE) {
+				manage.run();
 			} else {
 				callback.onSectionClick(row.section);
 			}
@@ -288,15 +342,17 @@ public class RedditSectionsFragment extends BaseListFragment {
 		public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
 			Row row = rows.get(position);
 			if (row.type == Row.TYPE_CATEGORY) {
-				Category category = CATEGORIES[row.categoryIndex];
-				boolean expanded = expandedCategories[row.categoryIndex];
+				Category category = categories.get(row.categoryIndex);
+				boolean expanded = expandedCategories.contains(category.key);
 				CategoryViewHolder categoryHolder = (CategoryViewHolder) holder;
-				categoryHolder.textView.setText(category.titleResId);
+				categoryHolder.textView.setText(category.title(holder.itemView.getContext()));
 				categoryHolder.iconView.setRotation(expanded ? 0f
 						: holder.itemView.getLayoutDirection() == View.LAYOUT_DIRECTION_RTL ? 90f : -90f);
-				String title = holder.itemView.getContext().getString(category.titleResId);
+				String title = category.title(holder.itemView.getContext());
 				categoryHolder.itemView.setContentDescription(holder.itemView.getContext().getString(expanded
 						? R.string.collapse_reddit_category__format : R.string.expand_reddit_category__format, title));
+			} else if (row.type == Row.TYPE_MANAGE) {
+				((SectionViewHolder) holder).textView.setText(R.string.reddit_manage_communities);
 			} else {
 				Section section = row.section;
 				SectionViewHolder sectionHolder = (SectionViewHolder) holder;
@@ -328,7 +384,9 @@ public class RedditSectionsFragment extends BaseListFragment {
 				return context.getString(R.string.reddit_navigation);
 			}
 			Row row = rows.get(position);
-			return row.type == Row.TYPE_CATEGORY && row.categoryIndex == 0
+			if (row.type == Row.TYPE_MANAGE) return context.getString(R.string.reddit_my_communities);
+			return row.type == Row.TYPE_CATEGORY && !categories.get(row.categoryIndex).custom
+					&& (row.categoryIndex == 0 || categories.get(row.categoryIndex - 1).custom)
 					? context.getString(R.string.reddit_popular_communities) : null;
 		}
 	}

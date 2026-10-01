@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui.navigator.adapter;
 
+import com.mishiranu.dashchan.util.AuditDiagnostics;
 import android.content.Context;
 import android.graphics.Color;
 import android.text.TextUtils;
@@ -90,7 +91,7 @@ public class MyPostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 			items.add(Item.reply(reply));
 		}
 		this.emptyText = emptyText;
-		dispatchRows();
+		dispatchRows("replies_replace");
 	}
 
 	public void setPosts(List<MyPostsStorage.TrackedPost> posts, String emptyText, boolean hasMorePosts) {
@@ -100,36 +101,40 @@ public class MyPostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 			items.add(Item.post(post));
 		}
 		this.emptyText = emptyText;
-		dispatchRows();
+		dispatchRows("posts_replace");
 	}
 
 	private List<AdapterListUpdate.Row> captureRows() {
-		ArrayList<AdapterListUpdate.Row> rows = new ArrayList<>();
-		rows.add(new AdapterListUpdate.Row("tabs", mode));
-		if (items.isEmpty()) rows.add(new AdapterListUpdate.Row("empty", emptyText));
-		for (Item item : items) {
-			if (item.reply != null) {
-				MyPostsStorage.ReplyItem reply = item.reply;
-				// Storage deduplicates a reply referencing multiple own posts. The target is content, not identity.
-				rows.add(new AdapterListUpdate.Row(AdapterListUpdate.values("reply", reply.chanName,
-						reply.boardName, reply.threadNumber, reply.postNumber),
-						AdapterListUpdate.values(reply.comment, reply.trackedPostNumber, reply.time,
-								reply.unread, reply.threadDeleted)));
-			} else {
-				MyPostsStorage.TrackedPost post = item.post;
-				rows.add(new AdapterListUpdate.Row(AdapterListUpdate.values("post", post.chanName,
-						post.boardName, post.threadNumber, post.postNumber),
-						AdapterListUpdate.values(post.comment, post.time, post.trackingActive, post.threadDeleted)));
+		try (AuditDiagnostics.Scope scope = AuditDiagnostics.begin("Audit/Diff/myPosts/snapshot")) {
+			ArrayList<AdapterListUpdate.Row> rows = new ArrayList<>();
+			rows.add(new AdapterListUpdate.Row("tabs", mode));
+			if (items.isEmpty()) rows.add(new AdapterListUpdate.Row("empty", emptyText));
+			for (Item item : items) {
+				if (item.reply != null) {
+					MyPostsStorage.ReplyItem reply = item.reply;
+					// Storage deduplicates a reply referencing multiple own posts. The target is content, not identity.
+					rows.add(new AdapterListUpdate.Row(AdapterListUpdate.values("reply", reply.chanName,
+							reply.boardName, reply.threadNumber, reply.postNumber),
+							AdapterListUpdate.values(reply.comment, reply.trackedPostNumber, reply.time,
+									reply.unread, reply.threadDeleted)));
+				} else {
+					MyPostsStorage.TrackedPost post = item.post;
+					rows.add(new AdapterListUpdate.Row(AdapterListUpdate.values("post", post.chanName,
+							post.boardName, post.threadNumber, post.postNumber),
+							AdapterListUpdate.values(post.comment, post.time, post.trackingActive, post.threadDeleted)));
+				}
 			}
+			if (hasMorePosts) rows.add(new AdapterListUpdate.Row("more", null));
+			scope.count(rows.size());
+			scope.result("ok");
+			return rows;
 		}
-		if (hasMorePosts) rows.add(new AdapterListUpdate.Row("more", null));
-		return rows;
 	}
 
-	private void dispatchRows() {
+	private void dispatchRows(String reason) {
 		List<AdapterListUpdate.Row> before = displayedRows;
 		displayedRows = captureRows();
-		AdapterListUpdate.dispatch(this, before, displayedRows, false);
+		AdapterListUpdate.dispatch(this, before, displayedRows, false, reason);
 	}
 
 	private Item getItem(int position) {

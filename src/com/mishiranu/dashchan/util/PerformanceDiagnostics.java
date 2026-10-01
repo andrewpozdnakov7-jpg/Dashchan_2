@@ -17,9 +17,10 @@ public final class PerformanceDiagnostics {
 		long started = now();
 		boolean success = false;
 		Trace.beginSection(operation);
-		try {
+		try (AuditDiagnostics.Scope scope = AuditDiagnostics.begin("Audit/" + operation)) {
 			action.run();
 			success = true;
+			scope.result("ok");
 		} finally {
 			Trace.endSection();
 			finish(operation, started, success, false);

@@ -161,6 +161,27 @@ public final class RedditPageStorage extends StorageManager.JsonOrgStorage<List<
 		}
 	}
 
+	/** Closes only the confirmed thread snapshot, preserving the current or subsequently reopened page. */
+	public synchronized void removeThreads(List<Entry> targets, String currentUrl) {
+		boolean changed = false;
+		for (Iterator<Entry> iterator = entries.iterator(); iterator.hasNext();) {
+			Entry entry = iterator.next();
+			if (entry.type != Type.THREAD || entry.url.equals(currentUrl)) continue;
+			for (Entry target : targets) {
+				if (target.type == Type.THREAD && entry.url.equals(target.url)
+						&& entry.timestamp == target.timestamp) {
+					iterator.remove();
+					changed = true;
+					break;
+				}
+			}
+		}
+		if (changed) {
+			serialize();
+			notifyChanged();
+		}
+	}
+
 	public synchronized void clear() {
 		if (!entries.isEmpty()) {
 			entries.clear();

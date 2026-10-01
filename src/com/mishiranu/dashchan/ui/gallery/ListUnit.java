@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui.gallery;
 
+import com.mishiranu.dashchan.util.AuditDiagnostics;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.res.Configuration;
@@ -237,14 +238,24 @@ public class ListUnit implements ActionMode.Callback {
 			int index = instance.galleryItems.indexOf(item);
 			if (index >= 0) selected.put(index, index);
 		}
-		DiffUtil.calculateDiff(new DiffUtil.Callback() {
-			@Override public int getOldListSize() { return oldItems.size(); }
-			@Override public int getNewListSize() { return instance.galleryItems.size(); }
-			@Override public boolean areItemsTheSame(int oldPosition, int newPosition) {
-				return oldItems.get(oldPosition) == instance.galleryItems.get(newPosition);
-			}
-			@Override public boolean areContentsTheSame(int oldPosition, int newPosition) { return true; }
-		}).dispatchUpdatesTo(getAdapter());
+		DiffUtil.DiffResult diff;
+		try (AuditDiagnostics.Scope scope = AuditDiagnostics.begin("Audit/Diff/gallery/calculate")
+				.reason("refresh").sizes(oldItems.size(), instance.galleryItems.size())) {
+			diff = DiffUtil.calculateDiff(new DiffUtil.Callback() {
+				@Override public int getOldListSize() { return oldItems.size(); }
+				@Override public int getNewListSize() { return instance.galleryItems.size(); }
+				@Override public boolean areItemsTheSame(int oldPosition, int newPosition) {
+					return oldItems.get(oldPosition) == instance.galleryItems.get(newPosition);
+				}
+				@Override public boolean areContentsTheSame(int oldPosition, int newPosition) { return true; }
+			});
+			scope.result("ok");
+		}
+		try (AuditDiagnostics.Scope scope = AuditDiagnostics.begin("Audit/Diff/gallery/dispatch")
+				.reason("refresh").sizes(oldItems.size(), instance.galleryItems.size())) {
+			diff.dispatchUpdatesTo(getAdapter());
+			scope.result("ok");
+		}
 		if (anchor != null && anchor.position < oldItems.size()) {
 			int index = instance.galleryItems.indexOf(oldItems.get(anchor.position));
 			if (index >= 0) {

@@ -47,6 +47,7 @@ import com.mishiranu.dashchan.util.WebViewUtils;
 import com.mishiranu.dashchan.widget.ClickableToast;
 import com.mishiranu.dashchan.widget.ExpandedLayout;
 import com.mishiranu.dashchan.widget.ThemeEngine;
+import com.mishiranu.dashchan.widget.ThreadQuickNavigation;
 import java.util.Locale;
 import java.util.UUID;
 import org.json.JSONException;
@@ -67,6 +68,7 @@ import org.json.JSONTokener;
  * markup is passed to the translator selected in Slooop's translation settings.</p>
  */
 public class RedditWebReaderFragment extends ContentFragment {
+	private ThreadQuickNavigation quickNavigation;
 	private static final String LOG_TAG = "SlooopRedditWeb";
 	private static final String JS_LOG_PREFIX = "SLOOOP_REDDIT ";
 	// Diagnostic test builds only. Disable before committing or publishing a release build.
@@ -203,6 +205,17 @@ public class RedditWebReaderFragment extends ContentFragment {
 		progressView.setBackgroundColor(0xff808080);
 		layout.addView(progressView, FrameLayout.LayoutParams.MATCH_PARENT,
 				Math.max(1, (int) (3f * getResources().getDisplayMetrics().density + 0.5f)));
+		quickNavigation = new ThreadQuickNavigation(webView,
+				() -> !isAuthorizationMode() && webView != null && webView.isShown()
+						&& webView.getContentHeight() > 0, bottom -> {
+			if (webView == null) return;
+			// Snapshot the loaded document height once: do not chase an infinite feed.
+			webView.evaluateJavascript("(function(){var e=document.scrollingElement||document.documentElement;"
+					+ "var y=" + (bottom ? "Math.max(0,e.scrollHeight-window.innerHeight)" : "0") + ";"
+					+ "window.scrollTo({top:y,behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches"
+					+ "?'auto':'smooth'});})()", null);
+		});
+		layout.addView(quickNavigation, FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT);
 		return layout;
 	}
 
@@ -289,6 +302,7 @@ public class RedditWebReaderFragment extends ContentFragment {
 	public void onResume() {
 		super.onResume();
 		webView.onResume();
+		if (quickNavigation != null) quickNavigation.refreshPreferences();
 		scheduleTranslationScan(0L);
 	}
 
@@ -312,6 +326,7 @@ public class RedditWebReaderFragment extends ContentFragment {
 
 	@Override
 	public void onDestroyView() {
+		quickNavigation = null;
 		handler.removeCallbacks(translationRescanRunnable);
 		pageLoadGeneration++;
 		translationRequestPending = false;
@@ -1442,6 +1457,7 @@ public class RedditWebReaderFragment extends ContentFragment {
 	private void revealPage(WebView view, int generation) {
 		if (isCurrentPageLoad(view, generation)) {
 			view.setVisibility(View.VISIBLE);
+			if (quickNavigation != null) quickNavigation.setContentVisible(true);
 		}
 	}
 

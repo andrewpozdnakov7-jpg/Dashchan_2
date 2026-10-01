@@ -1,0 +1,9 @@
+Added My Communities for Reddit: add your own subreddits, create categories and arrange their order.
+Added a + button in the Reddit drawer for quick access to community settings.
+Open Reddit threads now collapse under Show remaining, as on other forums.
+Added quick navigation arrows to jump to the top or bottom in Reddit.
+Fixed board and My Boards refresh animations: old cards no longer disappear into a blank gap before new cards appear.
+Reworked screen navigation to reduce unnecessary synchronous work during transitions.
+Expanded diagnostics for interface performance and gallery restoration.
+
+Thanks to everyone who reports bugs, sends logs and helps test!

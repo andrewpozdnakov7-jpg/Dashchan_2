@@ -388,6 +388,8 @@ public class CombinedThreadsPage extends ListPage implements ThreadsAdapter.Call
 		PaddedRecyclerView recyclerView = getRecyclerView();
 		GridLayoutManager layoutManager = new GridLayoutManager(context, 1);
 		recyclerView.setLayoutManager(layoutManager);
+		// Match regular boards: incremental updates must not fade cards out before replacements appear.
+		recyclerView.setItemAnimator(null);
 		recyclerView.addOnScrollListener(readingScrollListener);
 		hidePerformer = new HidePerformer(context);
 		UiManager uiManager = getUiManager();
@@ -436,6 +438,8 @@ public class CombinedThreadsPage extends ListPage implements ThreadsAdapter.Call
 		ListPosition listPosition = takeListPosition();
 		if (!retainableExtra.cachedPostItems.isEmpty()) {
 			adapter.setItems(Collections.singleton(retainableExtra.cachedPostItems), false);
+			// Restored content must enable the same overlays as a completed load.
+			switchList();
 			if (listPosition != null && listPosition.position >= 0 && adapter.getItemCount() > 0) {
 				keepStartPosition = false;
 				pendingAnchorPosition = new ListPosition(

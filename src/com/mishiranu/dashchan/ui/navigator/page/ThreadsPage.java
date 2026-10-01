@@ -300,6 +300,9 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 		PaddedRecyclerView recyclerView = getRecyclerView();
 		GridLayoutManager layoutManager = new GridLayoutManager(recyclerView.getContext(), 1);
 		recyclerView.setLayoutManager(layoutManager);
+		// Publish card replacements together: the default remove/change/add sequence leaves a blank gap.
+		// Diff updates, pull-to-refresh and smooth scrolling remain independent of item animations.
+		recyclerView.setItemAnimator(null);
 		Page page = getPage();
 		Chan chan = getChan();
 		hidePerformer = new HidePerformer(context);
@@ -362,6 +365,9 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 						? retainableExtra.publishedPostItems : retainableExtra.cachedPostItems,
 						retainableExtra.startPageNumber == PAGE_NUMBER_CATALOG);
 				ensureVisibleThreadsTarget(retainableExtra);
+				// Restored content must enable the same overlays as a completed load.
+				// Keep the saved scroll position; restoring navigation needs no network refresh.
+				switchList();
 				if (listPosition != null) {
 					listPosition.apply(recyclerView);
 				}

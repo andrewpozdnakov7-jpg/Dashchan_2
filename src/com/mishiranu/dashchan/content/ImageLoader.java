@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.content;
 
+import com.mishiranu.dashchan.util.AuditDiagnostics;
 import android.graphics.Bitmap;
 import android.content.ComponentCallbacks2;
 import android.net.Uri;
@@ -400,7 +401,16 @@ public class ImageLoader {
 		if (mainThread) {
 			memoryCachedBitmap = bitmapCache.get(memoryKey);
 		} else {
-			memoryCachedBitmap = ConcurrentUtils.mainGet(() -> bitmapCache.get(memoryKey));
+			try (AuditDiagnostics.Scope scope = AuditDiagnostics.begin("Audit/ImageLoader/workerMainRoundTrip")) {
+				memoryCachedBitmap = ConcurrentUtils.mainGet(() -> {
+					try (AuditDiagnostics.Scope lookup = AuditDiagnostics.begin("Audit/ImageLoader/mainLookup")) {
+						Bitmap bitmap = bitmapCache.get(memoryKey);
+						lookup.result(bitmap != null ? "hit" : "miss");
+						return bitmap;
+					}
+				});
+				scope.result(memoryCachedBitmap != null ? "hit" : "miss");
+			}
 		}
 		if (memoryCachedBitmap != null) {
 			target.onResult(key, memoryCachedBitmap, false, true);

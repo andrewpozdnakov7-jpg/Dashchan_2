@@ -92,7 +92,7 @@ public class LocalArchiveViewerFragment extends ContentFragment implements Posts
 		root.addView(recyclerView, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
 				ViewGroup.LayoutParams.MATCH_PARENT));
 		recyclerView.setVisibility(View.GONE);
-		quickNavigation = new ThreadQuickNavigation(root, () -> !redditArchive && rawHtml != null
+		quickNavigation = new ThreadQuickNavigation(root, () -> rawHtml != null
 				&& (viewMode == VIEW_NATIVE ? recyclerView != null && recyclerView.isShown()
 						&& postsAdapter != null && postsAdapter.getItemCount() > 0
 						: webView != null && webView.isShown() && webView.getContentHeight() > 0), bottom -> {

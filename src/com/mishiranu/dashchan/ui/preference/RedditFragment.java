@@ -37,6 +37,9 @@ public class RedditFragment extends PreferenceFragment {
 			ClickableToast.show(R.string.completed);
 		});
 		updateAuthorizationPreferences();
+		addButton(R.string.reddit_my_communities, R.string.reddit_my_communities_summary)
+				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
+						.pushFragment(new RedditCommunitiesFragment()));
 		addButton(R.string.open_reddit_web_reader, R.string.reddit_public_web_reader__summary)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 						.pushFragment(new RedditSectionsFragment()));

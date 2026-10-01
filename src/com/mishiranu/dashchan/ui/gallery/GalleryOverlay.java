@@ -1047,6 +1047,7 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 
 	private void saveGalleryState(Bundle outState) {
 		if (instance == null && restorationState != null) outState.putAll(restorationState);
+		GalleryRestoreDiagnostics.observe("Audit/Gallery/tokenInSavedState", galleryState.restoreToken);
 		outState.putString(EXTRA_RESTORE, galleryState.restoreToken);
 		outState.putString(EXTRA_FILTER, galleryFilter);
 		outState.putString(EXTRA_SORT, gallerySort.name());
