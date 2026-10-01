@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui.navigator.adapter;
 
+import com.mishiranu.dashchan.util.AuditDiagnostics;
 import androidx.recyclerview.widget.DiffUtil;
 import androidx.recyclerview.widget.RecyclerView;
 import java.util.Arrays;
@@ -48,9 +49,20 @@ final class AdapterListUpdate {
 
 	/** The adapter must already expose 'after' when observers receive these notifications. */
 	static void dispatch(RecyclerView.Adapter<?> adapter, List<Row> before, List<Row> after,
-			boolean rebindRetained) {
-		DiffUtil.DiffResult result = calculate(before, after, rebindRetained);
-		if (result != null) result.dispatchUpdatesTo(adapter);
-		else adapter.notifyDataSetChanged();
+			boolean rebindRetained, String reason) {
+		String kind = adapter instanceof ThreadsAdapter ? "threads" : "myPosts";
+		DiffUtil.DiffResult result;
+		try (AuditDiagnostics.Scope scope = AuditDiagnostics.begin("Audit/Diff/" + kind + "/calculate")
+				.reason(reason).sizes(before.size(), after.size()).count(rebindRetained ? 1 : 0)) {
+			result = calculate(before, after, rebindRetained);
+			scope.result(result != null ? "diff" : before.size() > MAX_DIFF_ROWS || after.size() > MAX_DIFF_ROWS
+					? "fallback_size" : "fallback_duplicate");
+		}
+		try (AuditDiagnostics.Scope scope = AuditDiagnostics.begin("Audit/Diff/" + kind + "/dispatch")
+				.reason(reason).sizes(before.size(), after.size())) {
+			if (result != null) result.dispatchUpdatesTo(adapter);
+			else adapter.notifyDataSetChanged();
+			scope.result(result != null ? "diff" : "full_refresh");
+		}
 	}
 }

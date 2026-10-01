@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.content.database;
 
+import com.mishiranu.dashchan.util.AuditDiagnostics;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
@@ -213,7 +214,7 @@ public class CommonDatabase {
 			super(MainApplication.getInstance(), DATABASE_NAME, null, DATABASE_VERSION);
 			setWriteAheadLoggingEnabled(false);
 			this.instances = instances;
-			database = getWritableDatabase();
+			database = AuditDiagnostics.get("Audit/Database/Common/open", this::getWritableDatabase);
 		}
 
 		@Override
@@ -252,24 +253,31 @@ public class CommonDatabase {
 
 		@Override
 		public void onCreate(SQLiteDatabase db) {
-			for (Instance instance : instances) {
-				instance.create(db);
+			try (AuditDiagnostics.Scope scope = AuditDiagnostics.begin("Audit/Database/Common/create")) {
+				for (Instance instance : instances) {
+					instance.create(db);
+				}
+				scope.result("ok");
 			}
 		}
 
 		@Override
 		public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-			if (oldVersion <= 7) {
-				dropAllTables(db);
-				onCreate(db);
-			} else {
-				switch (oldVersion) {
-					case 8: {
-						for (Instance instance : instances) {
-							instance.upgrade(db, Migration.FROM_8_TO_9);
+			try (AuditDiagnostics.Scope scope = AuditDiagnostics.begin("Audit/Database/Common/upgrade")
+					.sizes(oldVersion, newVersion)) {
+				if (oldVersion <= 7) {
+					dropAllTables(db);
+					onCreate(db);
+				} else {
+					switch (oldVersion) {
+						case 8: {
+							for (Instance instance : instances) {
+								instance.upgrade(db, Migration.FROM_8_TO_9);
+							}
 						}
 					}
 				}
+				scope.result("ok");
 			}
 		}
 

@@ -362,6 +362,8 @@ public final class SettingsSearchIndex {
 				Preferences.KEY_REDDIT_WEB_READER_ENABLED);
 		add(context, entries, Screen.REDDIT, R.string.reddit_sign_in,
 				R.string.reddit_sign_in__summary, null);
+		add(context, entries, Screen.REDDIT, R.string.reddit_my_communities,
+				R.string.reddit_my_communities_summary, null);
 		add(context, entries, Screen.REDDIT, R.string.open_reddit_web_reader,
 				R.string.reddit_public_web_reader__summary, null);
 		add(context, entries, Screen.REDDIT, R.string.reddit_slooop_style,

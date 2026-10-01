@@ -300,6 +300,9 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 		PaddedRecyclerView recyclerView = getRecyclerView();
 		GridLayoutManager layoutManager = new GridLayoutManager(recyclerView.getContext(), 1);
 		recyclerView.setLayoutManager(layoutManager);
+		// Publish card replacements together: the default remove/change/add sequence leaves a blank gap.
+		// Diff updates, pull-to-refresh and smooth scrolling remain independent of item animations.
+		recyclerView.setItemAnimator(null);
 		Page page = getPage();
 		Chan chan = getChan();
 		hidePerformer = new HidePerformer(context);

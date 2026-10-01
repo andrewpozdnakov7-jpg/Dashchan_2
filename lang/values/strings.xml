@@ -1445,4 +1445,22 @@
 	<string name="post_text_size_sample_body">Message text. Change its size independently of the title and post information.</string>
 	<string name="post_text_size_sample_metadata">Anonymous · #12345 · 12:30 · PNG 640×480</string>
 	<string name="post_text_scale_range" formatted="false">Enter a value from 30 to 500%</string>
+	<string name="reddit_my_communities">My communities</string>
+	<string name="reddit_my_communities_summary">Add subreddits, create categories and change their order. Stored locally, not synced with Reddit subscriptions.</string>
+	<string name="reddit_manage_communities">Add and manage communities</string>
+	<string name="reddit_add_community">Add community</string>
+	<string name="reddit_edit_community">Edit or move</string>
+	<string name="reddit_add_category">Add category</string>
+	<string name="reddit_rename_category">Rename category</string>
+	<string name="reddit_category_name">Category name</string>
+	<string name="reddit_ungrouped">Uncategorized</string>
+	<string name="reddit_community_hint">Name, r/name or Reddit community link</string>
+	<string name="reddit_invalid_community">Enter a subreddit name or its community link, not a post link.</string>
+	<string name="reddit_duplicate">Already in your list</string>
+	<string name="reddit_move_up">Move up</string>
+	<string name="reddit_move_down">Move down</string>
+	<string name="reddit_remove_community">Remove from my communities</string>
+	<string name="reddit_remove_category">Delete category</string>
+	<string name="reddit_remove_category_confirm">Delete this category? Its communities will be moved to Uncategorized.</string>
+	<string name="reddit_remove_community_confirm">Remove this community from your local list? Your Reddit subscriptions will not change.</string>
 </resources>

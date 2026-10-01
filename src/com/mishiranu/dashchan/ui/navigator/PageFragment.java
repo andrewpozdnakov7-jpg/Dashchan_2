@@ -172,9 +172,8 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 		errorHolder = ViewFactory.createErrorLayout(layout);
 		errorHolder.layout.setVisibility(View.GONE);
 		layout.addView(errorHolder.layout);
-		if ((getPage().content == Page.Content.POSTS || getPage().content == Page.Content.THREADS
-				|| getPage().content == Page.Content.COMBINED_THREADS)
-				&& !com.mishiranu.dashchan.ui.DrawerForm.CHAN_REDDIT.equals(getPage().chanName)) {
+		if (getPage().content == Page.Content.POSTS || getPage().content == Page.Content.THREADS
+				|| getPage().content == Page.Content.COMBINED_THREADS) {
 			quickNavigation = new ThreadQuickNavigation(recyclerView);
 			layout.addView(quickNavigation, ExpandedLayout.LayoutParams.MATCH_PARENT,
 					ExpandedLayout.LayoutParams.MATCH_PARENT);

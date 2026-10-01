@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui.navigator.adapter;
 
+import com.mishiranu.dashchan.util.AuditDiagnostics;
 import android.content.Context;
 import android.graphics.Rect;
 import android.view.View;
@@ -101,7 +102,7 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 				postItem.getComment(Chan.get(configurationSet.chanName)).toString()), result -> {
 			List<AdapterListUpdate.Row> before = captureRows();
 			filteredPostItems = new ArrayList<>(result);
-			dispatchRows(before, false);
+			dispatchRows(before, false, "search_result");
 		});
 	}
 
@@ -333,29 +334,33 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 		catalogSearch.retainItems(postItems);
 		applyCurrentSortingAndFilter(true, true);
 		// Refresh may also change mutable hide/vote/state-provider data on retained objects.
-		dispatchRows(before, refreshRetained);
+		dispatchRows(before, refreshRetained, "replace");
 	}
 
 	public void appendItems(List<PostItem> postItems) {
 		List<AdapterListUpdate.Row> before = captureRows();
 		appendItemsInternal(postItems);
 		applyCurrentSortingAndFilter(true, true);
-		dispatchRows(before, false);
+		dispatchRows(before, false, "append");
 	}
 
 	private List<AdapterListUpdate.Row> captureRows() {
-		ArrayList<AdapterListUpdate.Row> rows = new ArrayList<>();
-		if (isSecretAbuVisible()) rows.add(new AdapterListUpdate.Row("secret", cardsMode));
-		for (PostItem postItem : getPostItems()) {
-			// Thread numbers are not globally unique, particularly on My Boards.
-			rows.add(new AdapterListUpdate.Row(AdapterListUpdate.values(postItem.getChanName(),
-					postItem.getBoardName(), postItem.getThreadNumber()), postItem));
+		try (AuditDiagnostics.Scope scope = AuditDiagnostics.begin("Audit/Diff/threads/snapshot")) {
+			ArrayList<AdapterListUpdate.Row> rows = new ArrayList<>();
+			if (isSecretAbuVisible()) rows.add(new AdapterListUpdate.Row("secret", cardsMode));
+			for (PostItem postItem : getPostItems()) {
+				// Thread numbers are not globally unique, particularly on My Boards.
+				rows.add(new AdapterListUpdate.Row(AdapterListUpdate.values(postItem.getChanName(),
+						postItem.getBoardName(), postItem.getThreadNumber()), postItem));
+			}
+			scope.count(rows.size());
+			scope.result("ok");
+			return rows;
 		}
-		return rows;
 	}
 
-	private void dispatchRows(List<AdapterListUpdate.Row> before, boolean refresh) {
-		AdapterListUpdate.dispatch(this, before, captureRows(), refresh);
+	private void dispatchRows(List<AdapterListUpdate.Row> before, boolean refresh, String reason) {
+		AdapterListUpdate.dispatch(this, before, captureRows(), refresh, reason);
 	}
 
 	public void setSearchActive(boolean active) {
@@ -401,7 +406,7 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 			List<AdapterListUpdate.Row> before = captureRows();
 			filterText = text;
 			applyCurrentSortingAndFilter(false, true);
-			dispatchRows(before, false);
+			dispatchRows(before, false, "filter");
 		}
 	}
 
@@ -411,7 +416,7 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 			if (catalog || threadsSortingEnabled) {
 				List<AdapterListUpdate.Row> before = captureRows();
 				applyCurrentSortingAndFilter(true, false);
-				dispatchRows(before, false);
+				dispatchRows(before, false, "sort");
 			}
 		}
 	}
@@ -422,7 +427,7 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 			threadsSortingEnabled = enabled;
 			ratingSortingEnabled = ratingEnabled;
 			applyCurrentSortingAndFilter(true, false);
-			dispatchRows(before, false);
+			dispatchRows(before, false, "sorting_mode");
 		}
 	}
 

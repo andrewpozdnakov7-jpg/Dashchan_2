@@ -1,9 +1,11 @@
 package com.mishiranu.dashchan.ui;
 
+import com.mishiranu.dashchan.util.AuditDiagnostics;
 import android.annotation.SuppressLint;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.res.ColorStateList;
+import android.content.res.Configuration;
 import android.content.res.TypedArray;
 import android.graphics.Rect;
 import android.net.Uri;
@@ -110,6 +112,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	private final ArrayList<ListItem> orderedDrawerItems = new ArrayList<>();
 	private List<Preferences.DrawerSection> drawerSectionOrder;
 	private final ArrayList<Page> collapsedPages = new ArrayList<>();
+	private final ArrayList<RedditPageStorage.Entry> collapsedRedditPages = new ArrayList<>();
 	private final ArrayList<ListItem> favorites = new ArrayList<>();
 	private final ArrayList<ListItem> displayedFavorites = new ArrayList<>();
 	private final ArrayList<ListItem> menu = new ArrayList<>();
@@ -151,6 +154,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	public static final int MENU_ITEM_MY_POSTS = 7;
 	public static final int MENU_ITEM_REDDIT_SECTIONS = 8;
 	public static final int MENU_ITEM_REDDIT_OFFICIAL_APP = 9;
+	public static final int MENU_ITEM_REDDIT_COMMUNITIES = 10;
 
 	public static final String CHAN_REDDIT = "reddit-web-reader";
 
@@ -194,6 +198,8 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		void onSelectRedditPage(String url);
 		void onCloseRedditPage(String url);
 		void onCloseAllRedditPages();
+		String getCurrentRedditPageUrl();
+		void onCloseCollapsedRedditPages(List<RedditPageStorage.Entry> pages);
 		int onEnterNumber(int number);
 		void onSelectDrawerMenuItem(int item);
 		void onDraggingStateChanged(boolean dragging);
@@ -1155,16 +1161,50 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	private void updateListPages() {
 		ArrayList<ListItem> newPages = new ArrayList<>();
 		ArrayList<Page> newCollapsedPages = new ArrayList<>();
+		collapsedRedditPages.clear();
 		if (CHAN_REDDIT.equals(chanName)) {
 			List<RedditPageStorage.Entry> redditPages = RedditPageStorage.getInstance().getPages();
-			if (!redditPages.isEmpty()) {
-				newPages.add(new ListItem(ListItem.Type.SECTION, SECTION_ACTION_CLOSE_ALL_REDDIT,
-						ResourceUtils.getResourceId(context, R.attr.iconButtonCancel, 0),
-						context.getString(R.string.open_pages__noun)));
+			// Keep the header available even with no pages, so communities can always be added.
+			newPages.add(new ListItem(ListItem.Type.SECTION, SECTION_ACTION_CLOSE_ALL_REDDIT,
+					ResourceUtils.getResourceId(context, R.attr.iconButtonCancel, 0),
+					context.getString(R.string.open_pages__noun), redditPages.size()));
+			String currentUrl = callback.getCurrentRedditPageUrl();
+			int threadCount = 0;
+			RedditPageStorage.Entry currentThread = null;
+			for (RedditPageStorage.Entry page : redditPages) {
+				if (page.type == RedditPageStorage.Type.THREAD) {
+					threadCount++;
+					if (page.url.equals(currentUrl)) currentThread = page;
+				}
+			}
+			boolean collapsible = collapseLongOpenThreadsEnabled && threadCount > COLLAPSED_OPEN_THREAD_LIMIT;
+			HashSet<RedditPageStorage.Entry> visibleThreads = null;
+			if (collapsible && !pagesExpanded) {
+				visibleThreads = new HashSet<>(COLLAPSED_OPEN_THREAD_LIMIT);
+				if (currentThread != null) visibleThreads.add(currentThread);
+				// Storage is ordered most recently visited first, including restored pages.
 				for (RedditPageStorage.Entry page : redditPages) {
+					if (page.type == RedditPageStorage.Type.THREAD && visibleThreads.size() < COLLAPSED_OPEN_THREAD_LIMIT) {
+						visibleThreads.add(page);
+					}
+				}
+			}
+			for (RedditPageStorage.Entry page : redditPages) {
+				if (page.type == RedditPageStorage.Type.THREAD && visibleThreads != null && !visibleThreads.contains(page)) {
+					collapsedRedditPages.add(page);
+				} else {
 					newPages.add(new ListItem(ListItem.Type.REDDIT_PAGE, 0, CHAN_REDDIT,
 							page.url, page.threadId, page.title));
 				}
+			}
+			if (collapsible) {
+				newPages.add(new ListItem(ListItem.Type.PAGES_TOGGLE, pagesExpanded ? 1 : 0,
+						R.drawable.ic_arrow_drop_down, pagesExpanded
+								? context.getString(R.string.collapse_open_threads)
+								: context.getString(R.string.show_remaining_open_threads__format,
+										threadCount - COLLAPSED_OPEN_THREAD_LIMIT)));
+			} else {
+				pagesExpanded = false;
 			}
 			this.pages.clear();
 			this.pages.addAll(newPages);
@@ -1480,16 +1520,20 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 				} else if (listItem.type == ListItem.Type.REDDIT_PAGE) {
 					callback.onCloseRedditPage(listItem.boardName);
 				} else if (listItem.type == ListItem.Type.PAGES_TOGGLE && listItem.data == 0
-						&& !collapsedPages.isEmpty()) {
+						&& (!collapsedPages.isEmpty() || !collapsedRedditPages.isEmpty())) {
 					// Freeze the exact hidden set; never close newly opened or visible pages.
 					ArrayList<Page> targets = new ArrayList<>(collapsedPages);
+					ArrayList<RedditPageStorage.Entry> redditTargets = new ArrayList<>(collapsedRedditPages);
 					new InstanceDialog(fragmentManager, null, provider -> new MessageDialog.Builder(provider.getContext())
 							.setTitle(R.string.close_remaining_threads)
 							.setMessage(provider.getContext().getString(
-									R.string.close_remaining_threads_confirmation__format, targets.size()))
+									R.string.close_remaining_threads_confirmation__format,
+									targets.size() + redditTargets.size()))
 							.setNegativeButton(android.R.string.cancel, null)
-							.setPositiveButton(R.string.close_threads, (dialog, which) ->
-									callback.onCloseCollapsedPages(targets))
+							.setPositiveButton(R.string.close_threads, (dialog, which) -> {
+								if (!redditTargets.isEmpty()) callback.onCloseCollapsedRedditPages(redditTargets);
+								else callback.onCloseCollapsedPages(targets);
+							})
 							.create());
 				}
 			}
@@ -1777,28 +1821,38 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		}
 		Trace.beginSection("DrawerForm#calculateDiff");
 		try {
-			DiffUtil.calculateDiff(new DiffUtil.Callback() {
-				@Override
-				public int getOldListSize() {
-					return previousItems.size();
-				}
+			DiffUtil.DiffResult result;
+			try (AuditDiagnostics.Scope scope = AuditDiagnostics.begin("Audit/Diff/drawer/calculate")
+					.sizes(previousItems.size(), currentItems.size())) {
+				result = DiffUtil.calculateDiff(new DiffUtil.Callback() {
+					@Override
+					public int getOldListSize() {
+						return previousItems.size();
+					}
 
-				@Override
-				public int getNewListSize() {
-					return currentItems.size();
-				}
+					@Override
+					public int getNewListSize() {
+						return currentItems.size();
+					}
 
-				@Override
-				public boolean areItemsTheSame(int oldItemPosition, int newItemPosition) {
-					return previousItems.get(oldItemPosition).listItem.id ==
-							currentItems.get(newItemPosition).listItem.id;
-				}
+					@Override
+					public boolean areItemsTheSame(int oldItemPosition, int newItemPosition) {
+						return previousItems.get(oldItemPosition).listItem.id ==
+								currentItems.get(newItemPosition).listItem.id;
+					}
 
-				@Override
-				public boolean areContentsTheSame(int oldItemPosition, int newItemPosition) {
-					return previousItems.get(oldItemPosition).contentEquals(currentItems.get(newItemPosition));
-				}
-			}, false).dispatchUpdatesTo(this);
+					@Override
+					public boolean areContentsTheSame(int oldItemPosition, int newItemPosition) {
+						return previousItems.get(oldItemPosition).contentEquals(currentItems.get(newItemPosition));
+					}
+				}, false);
+				scope.result("ok");
+			}
+			try (AuditDiagnostics.Scope scope = AuditDiagnostics.begin("Audit/Diff/drawer/dispatch")
+					.sizes(previousItems.size(), currentItems.size())) {
+				result.dispatchUpdatesTo(this);
+				scope.result("ok");
+			}
 		} finally {
 			Trace.endSection();
 		}
@@ -2068,6 +2122,26 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		arrowParams.leftMargin = (int) (16f * density);
 		linearLayout2.addView(arrow, 0, arrowParams);
 		holder.sectionArrow = arrow;
+		if (button) {
+			ImageView add = new ImageView(context);
+			add.setImageResource(R.drawable.ic_add);
+			add.setScaleType(ImageView.ScaleType.CENTER);
+			add.setImageTintList(textView.getTextColors());
+			add.setBackgroundResource(ResourceUtils.getResourceId(context,
+					android.R.attr.borderlessButtonStyle, android.R.attr.background, 0));
+			add.setContentDescription(context.getString(R.string.reddit_my_communities));
+			add.setVisibility(View.GONE);
+			add.setOnClickListener(v -> {
+				ListItem item = getItemFromChild(v);
+				if (item != null && item.type == ListItem.Type.SECTION
+						&& item.data == SECTION_ACTION_CLOSE_ALL_REDDIT && CHAN_REDDIT.equals(chanName)) {
+					callback.onSelectDrawerMenuItem(MENU_ITEM_REDDIT_COMMUNITIES);
+				}
+			});
+			LinearLayout.LayoutParams addParams = new LinearLayout.LayoutParams((int) (48f * density), (int) (48f * density));
+			linearLayout2.addView(add, linearLayout2.indexOfChild(imageView), addParams);
+			holder.sectionAdd = add;
+		}
 		return holder;
 	}
 
@@ -2134,6 +2208,35 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 			holder.watcher.setAlpha(!favoriteSelectionActive ? 1f : 0.45f);
 		}
 		if (listItem.type == ListItem.Type.SECTION) {
+			boolean redditSection = listItem.data == SECTION_ACTION_CLOSE_ALL_REDDIT;
+			Configuration configuration = context.getResources().getConfiguration();
+			// Match the compact toolbar's portrait / below-w600dp action spacing.
+			boolean compactActions = redditSection && configuration.orientation == Configuration.ORIENTATION_PORTRAIT
+					&& configuration.screenWidthDp < 600;
+			float density = ResourceUtils.obtainDensity(context);
+			int regularActionWidth = (int) (48f * density);
+			int actionWidth = compactActions ? (int) (30f * density) : regularActionWidth;
+			if (holder.sectionAdd != null) {
+				holder.sectionAdd.setVisibility(redditSection ? View.VISIBLE : View.GONE);
+				ViewGroup.LayoutParams params = holder.sectionAdd.getLayoutParams();
+				if (params.width != actionWidth) {
+					params.width = actionWidth;
+					holder.sectionAdd.setLayoutParams(params);
+				}
+			}
+			if (holder.icon != null) {
+				LinearLayout.LayoutParams params = (LinearLayout.LayoutParams) holder.icon.getLayoutParams();
+				// Keep the close icon centered over the 48dp close buttons in the page rows.
+				// Moving the pair's outer edge preserves the compact spacing to the plus button.
+				int rightMargin = (int) (4f * density) + (regularActionWidth - actionWidth) / 2;
+				if (params.width != actionWidth || params.rightMargin != rightMargin) {
+					params.width = actionWidth;
+					params.rightMargin = rightMargin;
+					holder.icon.setLayoutParams(params);
+				}
+				holder.icon.setEnabled(!redditSection || listItem.badgeCount > 0);
+				holder.icon.setAlpha(holder.icon.isEnabled() ? 1f : 0.4f);
+			}
 			boolean favoriteSection = listItem.data == SECTION_ACTION_FAVORITES_MENU;
 			holder.itemView.setOnClickListener(favoriteSection
 					? v -> setFavoriteThreadsCollapsed(!Preferences.isFavoriteThreadsCollapsed())
@@ -2199,6 +2302,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		public final WatcherView watcher;
 		public final CheckBox selection;
 		private ImageView sectionArrow;
+		private ImageView sectionAdd;
 
 		public ViewHolder(View itemView, ImageView icon, TextView text, TextView badge,
 				WatcherView watcher, CheckBox selection) {

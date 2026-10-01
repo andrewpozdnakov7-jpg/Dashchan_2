@@ -1473,4 +1473,22 @@
 	<string name="post_text_size_sample_body">Текст сообщения. Его размер можно менять независимо от заголовка и служебной информации.</string>
 	<string name="post_text_size_sample_metadata">Аноним · №12345 · 12:30 · PNG 640×480</string>
 	<string name="post_text_scale_range" formatted="false">Введите значение от 30 до 500%</string>
+	<string name="reddit_my_communities">Мои сообщества</string>
+	<string name="reddit_my_communities_summary">Добавление сабреддитов, своих категорий и настройка порядка. Список хранится в приложении и не меняет подписки Reddit.</string>
+	<string name="reddit_manage_communities">Добавить и настроить сообщества</string>
+	<string name="reddit_add_community">Добавить сообщество</string>
+	<string name="reddit_edit_community">Изменить или переместить</string>
+	<string name="reddit_add_category">Добавить категорию</string>
+	<string name="reddit_rename_category">Переименовать категорию</string>
+	<string name="reddit_category_name">Название категории</string>
+	<string name="reddit_ungrouped">Без категории</string>
+	<string name="reddit_community_hint">Название, r/name или ссылка на сообщество Reddit</string>
+	<string name="reddit_invalid_community">Укажите название сабреддита или ссылку на сообщество, а не на отдельный пост.</string>
+	<string name="reddit_duplicate">Уже есть в вашем списке</string>
+	<string name="reddit_move_up">Переместить выше</string>
+	<string name="reddit_move_down">Переместить ниже</string>
+	<string name="reddit_remove_community">Убрать из моих сообществ</string>
+	<string name="reddit_remove_category">Удалить категорию</string>
+	<string name="reddit_remove_category_confirm">Удалить категорию? Сообщества из неё переместятся в «Без категории».</string>
+	<string name="reddit_remove_community_confirm">Убрать сообщество из вашего локального списка? Подписки в Reddit не изменятся.</string>
 </resources>

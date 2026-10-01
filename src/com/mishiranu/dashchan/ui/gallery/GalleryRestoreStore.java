@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui.gallery;
 
+import com.mishiranu.dashchan.util.AuditDiagnostics;
 import android.net.Uri;
 import android.os.CancellationSignal;
 import android.util.AtomicFile;
@@ -42,58 +43,103 @@ final class GalleryRestoreStore {
 	static String save(String chanName, List<GalleryItem> source) {
 		if (source.isEmpty() || source.size() > GalleryRestoreCodec.MAX_ITEMS) return null;
 		String token = UUID.randomUUID().toString();
-		List<GalleryItem> items = new ArrayList<>(source);
-		WORKER.execute(() -> {
-			AtomicFile file = null;
-			FileOutputStream output = null;
-			try {
-				Chan chan = Chan.get(chanName);
-				List<GalleryRestoreCodec.Item> descriptors = new ArrayList<>(items.size());
-				for (GalleryItem item : items) descriptors.add(describe(item, chan));
-				File directory = directory();
-				file = new AtomicFile(new File(directory, token));
-				output = file.startWrite();
-				GalleryRestoreCodec.write(output, new GalleryRestoreCodec.Snapshot(chanName, descriptors));
-				file.finishWrite(output);
-				output = null;
-				prune(directory, token);
-				Log.d("GalleryRestore", "snapshot_saved count=" + items.size());
-			} catch (IOException | RuntimeException e) {
-				if (file != null && output != null) file.failWrite(output);
-				Log.w("GalleryRestore", "save_failed type=" + e.getClass().getSimpleName());
-			}
-		});
+		List<GalleryItem> items;
+		try (AuditDiagnostics.Scope copy = AuditDiagnostics.begin("Audit/Gallery/snapshotCopy").count(source.size())) {
+			items = new ArrayList<>(source);
+			copy.result("ok");
+		}
+		GalleryRestoreDiagnostics.Save audit = GalleryRestoreDiagnostics.register(token, items.size());
+		try {
+			WORKER.execute(() -> {
+				audit.start();
+				AtomicFile file = null;
+				FileOutputStream output = null;
+				try (AuditDiagnostics.Scope write = AuditDiagnostics.begin("Audit/Gallery/writeSnapshot").count(items.size())) {
+					Chan chan = Chan.get(chanName);
+					List<GalleryRestoreCodec.Item> descriptors = new ArrayList<>(items.size());
+					try (AuditDiagnostics.Scope describe = AuditDiagnostics.begin("Audit/Gallery/descriptors").count(items.size())) {
+						for (GalleryItem item : items) descriptors.add(describe(item, chan));
+						describe.result("ok");
+					}
+					File directory = directory();
+					file = new AtomicFile(new File(directory, token));
+					output = file.startWrite();
+					try (AuditDiagnostics.Scope encode = AuditDiagnostics.begin("Audit/Gallery/encode").count(items.size())) {
+						GalleryRestoreCodec.write(output, new GalleryRestoreCodec.Snapshot(chanName, descriptors));
+						encode.result("ok");
+					}
+					try (AuditDiagnostics.Scope sync = AuditDiagnostics.begin("Audit/Gallery/finishWrite")) {
+						file.finishWrite(output);
+						sync.result("ok");
+					}
+					output = null;
+					audit.written();
+					try (AuditDiagnostics.Scope prune = AuditDiagnostics.begin("Audit/Gallery/prune")) {
+						prune(directory, token);
+						prune.result("ok");
+					}
+					write.result("ok");
+					Log.d("GalleryRestore", "snapshot_saved count=" + items.size());
+				} catch (IOException | RuntimeException e) {
+					if (file != null && output != null) file.failWrite(output);
+					Log.w("GalleryRestore", "save_failed type=" + e.getClass().getSimpleName());
+				} finally {
+					audit.finish();
+				}
+			});
+		} catch (RuntimeException | Error e) {
+			audit.finish();
+			throw e;
+		}
+		GalleryRestoreDiagnostics.observe("Audit/Gallery/tokenReturned", token);
 		return token;
 	}
 	static void load(String token, String chanName, CancellationSignal signal, Consumer<List<GalleryItem>> callback) {
-		WORKER.execute(() -> {
-			List<GalleryItem> items = new ArrayList<>();
-			try {
-				signal.throwIfCanceled();
-				if (!GalleryRestoreCodec.validToken(token)) throw new IOException("Invalid snapshot key");
-				File file = new File(directory(), token);
-				if (!file.isFile() || file.length() > GalleryRestoreCodec.MAX_BYTES) throw new IOException("Cache unavailable");
-				GalleryRestoreCodec.Snapshot snapshot;
-				try (FileInputStream input = new FileInputStream(file)) {
-					snapshot = GalleryRestoreCodec.read(input, signal::isCanceled);
-				}
-				if (!Objects.equals(chanName, snapshot.chan())) throw new IOException("Wrong source");
-				for (GalleryRestoreCodec.Item item : snapshot.items()) {
+		GalleryRestoreDiagnostics.observe("Audit/Gallery/loadRequested", token);
+		AuditDiagnostics.Scope queue = AuditDiagnostics.beginAsync("Audit/Gallery/loadQueue");
+		try {
+			WORKER.execute(() -> {
+				queue.result("started"); queue.close();
+				List<GalleryItem> items = new ArrayList<>();
+				AuditDiagnostics.Scope load = AuditDiagnostics.begin("Audit/Gallery/loadSnapshot");
+				try {
 					signal.throwIfCanceled();
-					items.add(GalleryItem.fromRestoreDescriptor(item.uri(), item.thumbnail(), item.fileName(),
-							item.board(), item.thread(), item.post() != null ? PostNumber.parseOrThrow(item.post()) : null,
-							item.originalName(), item.width(), item.height(), item.size()));
+					if (!GalleryRestoreCodec.validToken(token)) throw new IOException("Invalid snapshot key");
+					File file = new File(directory(), token);
+					if (!file.isFile()) { load.result("missing"); throw new IOException("Cache unavailable"); }
+					if (file.length() > GalleryRestoreCodec.MAX_BYTES) { load.result("oversize"); throw new IOException("Cache unavailable"); }
+					GalleryRestoreCodec.Snapshot snapshot;
+					try (FileInputStream input = new FileInputStream(file)) {
+						snapshot = GalleryRestoreCodec.read(input, signal::isCanceled);
+					}
+					if (!Objects.equals(chanName, snapshot.chan())) throw new IOException("Wrong source");
+					for (GalleryRestoreCodec.Item item : snapshot.items()) {
+						signal.throwIfCanceled();
+						items.add(GalleryItem.fromRestoreDescriptor(item.uri(), item.thumbnail(), item.fileName(),
+								item.board(), item.thread(), item.post() != null ? PostNumber.parseOrThrow(item.post()) : null,
+								item.originalName(), item.width(), item.height(), item.size()));
+					}
+					load.count(items.size());
+					load.result("ok");
+				} catch (IOException | RuntimeException e) {
+					if (signal.isCanceled()) load.result("cancelled");
+					items.clear();
+					if (!signal.isCanceled()) Log.w("GalleryRestore", "load_failed type=" + e.getClass().getSimpleName());
+				} finally {
+					load.close();
 				}
-			} catch (IOException | RuntimeException e) {
-				items.clear();
-				if (!signal.isCanceled()) Log.w("GalleryRestore", "load_failed type=" + e.getClass().getSimpleName());
-			}
-			if (signal.isCanceled()) return;
-			List<GalleryItem> result = items;
-			ConcurrentUtils.HANDLER.post(() -> {
-				if (!signal.isCanceled()) callback.accept(result);
+				if (signal.isCanceled()) return;
+				List<GalleryItem> result = items;
+				AuditDiagnostics.Scope delivery = AuditDiagnostics.beginAsync("Audit/Gallery/loadCallbackQueue");
+				ConcurrentUtils.HANDLER.post(() -> {
+					delivery.result(signal.isCanceled() ? "cancelled" : "delivered"); delivery.close();
+					if (!signal.isCanceled()) callback.accept(result);
+				});
 			});
-		});
+		} catch (RuntimeException | Error e) {
+			queue.result("failed"); queue.close();
+			throw e;
+		}
 	}
 	private static void prune(File directory, String keep) {
 		File[] files = directory.listFiles(file -> {

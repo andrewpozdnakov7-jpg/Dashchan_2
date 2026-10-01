@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.content.database;
 
+import com.mishiranu.dashchan.util.AuditDiagnostics;
 import android.content.ContentValues;
 import android.database.Cursor;
 import android.database.CursorWrapper;
@@ -222,7 +223,7 @@ public class ChanDatabase {
 	}
 
 	private final Helper helper = new Helper();
-	private final SQLiteDatabase database = helper.getWritableDatabase();
+	private final SQLiteDatabase database = AuditDiagnostics.get("Audit/Database/Chan/open", helper::getWritableDatabase);
 	private final boolean supportsCte;
 
 	private ChanDatabase() {
@@ -312,28 +313,31 @@ public class ChanDatabase {
 
 		@Override
 		public void onCreate(SQLiteDatabase db) {
-			db.execSQL("CREATE TABLE " + Schema.Boards.TABLE_NAME + " (" +
-					Schema.Boards.Columns.CHAN_NAME + " TEXT NOT NULL, " +
-					Schema.Boards.Columns.BOARD_NAME + " TEXT NOT NULL, " +
-					Schema.Boards.Columns.CATEGORY + " TEXT NOT NULL, " +
-					"PRIMARY KEY (" + Schema.Boards.Columns.CHAN_NAME + ", " +
-					Schema.Boards.Columns.BOARD_NAME + "))");
-			db.execSQL("CREATE TABLE " + Schema.Data.TABLE_NAME + " (" +
-					Schema.Data.Columns.CHAN_NAME + " TEXT NOT NULL, " +
-					Schema.Data.Columns.BOARD_NAME + " TEXT NOT NULL, " +
-					Schema.Data.Columns.NAME + " TEXT NOT NULL, " +
-					Schema.Data.Columns.VALUE + " TEXT, " +
-					"PRIMARY KEY (" + Schema.Data.Columns.CHAN_NAME + ", " +
-					Schema.Data.Columns.BOARD_NAME + ", " +
-					Schema.Data.Columns.NAME + "))");
-			db.execSQL("CREATE TABLE " + Schema.Cookies.TABLE_NAME + " (" +
-					Schema.Cookies.Columns.CHAN_NAME + " TEXT NOT NULL, " +
-					Schema.Cookies.Columns.NAME + " TEXT NOT NULL, " +
-					Schema.Cookies.Columns.VALUE + " TEXT NOT NULL, " +
-					Schema.Cookies.Columns.TITLE + " TEXT NOT NULL, " +
-					Schema.Cookies.Columns.FLAGS + " INTEGER NOT NULL DEFAULT 0, " +
-					"PRIMARY KEY (" + Schema.Cookies.Columns.CHAN_NAME + ", " +
-					Schema.Cookies.Columns.NAME + "))");
+			try (AuditDiagnostics.Scope scope = AuditDiagnostics.begin("Audit/Database/Chan/create")) {
+				db.execSQL("CREATE TABLE " + Schema.Boards.TABLE_NAME + " (" +
+						Schema.Boards.Columns.CHAN_NAME + " TEXT NOT NULL, " +
+						Schema.Boards.Columns.BOARD_NAME + " TEXT NOT NULL, " +
+						Schema.Boards.Columns.CATEGORY + " TEXT NOT NULL, " +
+						"PRIMARY KEY (" + Schema.Boards.Columns.CHAN_NAME + ", " +
+						Schema.Boards.Columns.BOARD_NAME + "))");
+				db.execSQL("CREATE TABLE " + Schema.Data.TABLE_NAME + " (" +
+						Schema.Data.Columns.CHAN_NAME + " TEXT NOT NULL, " +
+						Schema.Data.Columns.BOARD_NAME + " TEXT NOT NULL, " +
+						Schema.Data.Columns.NAME + " TEXT NOT NULL, " +
+						Schema.Data.Columns.VALUE + " TEXT, " +
+						"PRIMARY KEY (" + Schema.Data.Columns.CHAN_NAME + ", " +
+						Schema.Data.Columns.BOARD_NAME + ", " +
+						Schema.Data.Columns.NAME + "))");
+				db.execSQL("CREATE TABLE " + Schema.Cookies.TABLE_NAME + " (" +
+						Schema.Cookies.Columns.CHAN_NAME + " TEXT NOT NULL, " +
+						Schema.Cookies.Columns.NAME + " TEXT NOT NULL, " +
+						Schema.Cookies.Columns.VALUE + " TEXT NOT NULL, " +
+						Schema.Cookies.Columns.TITLE + " TEXT NOT NULL, " +
+						Schema.Cookies.Columns.FLAGS + " INTEGER NOT NULL DEFAULT 0, " +
+						"PRIMARY KEY (" + Schema.Cookies.Columns.CHAN_NAME + ", " +
+						Schema.Cookies.Columns.NAME + "))");
+				scope.result("ok");
+			}
 		}
 
 		@Override

@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui;
 
+import com.mishiranu.dashchan.util.AuditDiagnostics;
 import android.animation.Animator;
 import android.animation.AnimatorSet;
 import android.animation.ObjectAnimator;
@@ -153,11 +154,20 @@ public abstract class ContentFragment extends Fragment implements MenuProvider {
 	}
 
 	public static void prepare(FragmentActivity activity) {
-		FragmentManager fragmentManager = activity.getSupportFragmentManager();
-		ViewHolderFragment viewHolder = (ViewHolderFragment) fragmentManager.findFragmentByTag(ViewHolderFragment.TAG);
-		if (viewHolder == null) {
-			viewHolder = new ViewHolderFragment();
-			fragmentManager.beginTransaction().add(viewHolder, ViewHolderFragment.TAG).commitNow();
+		try (AuditDiagnostics.Scope scope = AuditDiagnostics.begin("Audit/ContentFragment/prepare")) {
+			FragmentManager fragmentManager = activity.getSupportFragmentManager();
+			ViewHolderFragment viewHolder = (ViewHolderFragment) fragmentManager.findFragmentByTag(ViewHolderFragment.TAG);
+			if (viewHolder == null) {
+				viewHolder = new ViewHolderFragment();
+				try (AuditDiagnostics.Scope commit = AuditDiagnostics.begin("Audit/ContentFragment/commitNow")
+						.count(fragmentManager.isStateSaved() ? 1 : 0)) {
+					fragmentManager.beginTransaction().add(viewHolder, ViewHolderFragment.TAG).commitNow();
+					commit.result("ok");
+				}
+				scope.result("created");
+			} else {
+				scope.result("reused");
+			}
 		}
 	}
 

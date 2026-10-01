@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.content.database;
 
+import com.mishiranu.dashchan.util.AuditDiagnostics;
 import android.content.ContentValues;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
@@ -406,7 +407,7 @@ public class PagesDatabase {
 	}
 
 	private final Helper helper = new Helper();
-	private final SQLiteDatabase database = helper.getWritableDatabase();
+	private final SQLiteDatabase database = AuditDiagnostics.get("Audit/Database/Pages/open", helper::getWritableDatabase);
 
 	private PagesDatabase() {
 		File directory = getLegacyCacheDirectory();
@@ -461,41 +462,44 @@ public class PagesDatabase {
 
 		@Override
 		public void onCreate(SQLiteDatabase db) {
-			db.execSQL("CREATE TABLE " + Schema.Meta.TABLE_NAME + " (" +
-					Schema.Meta.Columns.CHAN_NAME + " TEXT NOT NULL, " +
-					Schema.Meta.Columns.BOARD_NAME + " TEXT NOT NULL, " +
-					Schema.Meta.Columns.THREAD_NUMBER + " TEXT NOT NULL, " +
-					Schema.Meta.Columns.TIME + " INTEGER NOT NULL, " +
-					Schema.Meta.Columns.FLAGS + " INTEGER NOT NULL DEFAULT 0, " +
-					Schema.Meta.Columns.DATA + " BLOB NOT NULL, " +
-					"PRIMARY KEY (" + Schema.Meta.Columns.CHAN_NAME + ", " +
-					Schema.Meta.Columns.BOARD_NAME + ", " +
-					Schema.Meta.Columns.THREAD_NUMBER + "))");
-			db.execSQL("CREATE INDEX " + Schema.Meta.TABLE_NAME + "_order " +
-					"ON " + Schema.Meta.TABLE_NAME + " (" +
-					Schema.Meta.Columns.TIME + ")");
-			db.execSQL("CREATE TABLE " + Schema.Posts.TABLE_NAME + " (" +
-					Schema.Posts.Columns.CHAN_NAME + " TEXT NOT NULL, " +
-					Schema.Posts.Columns.BOARD_NAME + " TEXT NOT NULL, " +
-					Schema.Posts.Columns.THREAD_NUMBER + " TEXT NOT NULL, " +
-					Schema.Posts.Columns.POST_NUMBER_MAJOR + " INTEGER NOT NULL, " +
-					Schema.Posts.Columns.POST_NUMBER_MINOR + " INTEGER NOT NULL, " +
-					Schema.Posts.Columns.FLAGS + " INTEGER NOT NULL DEFAULT 0, " +
-					Schema.Posts.Columns.DATA + " BLOB NOT NULL, " +
-					Schema.Posts.Columns.HASH + " BLOB NOT NULL, " +
-					"PRIMARY KEY (" + Schema.Posts.Columns.CHAN_NAME + ", " +
-					Schema.Posts.Columns.BOARD_NAME + ", " +
-					Schema.Posts.Columns.THREAD_NUMBER + ", " +
-					Schema.Posts.Columns.POST_NUMBER_MAJOR + ", " +
-					Schema.Posts.Columns.POST_NUMBER_MINOR + "), " +
-					"FOREIGN KEY (" + Schema.Posts.Columns.CHAN_NAME + ", " +
-					Schema.Posts.Columns.BOARD_NAME + ", " +
-					Schema.Posts.Columns.THREAD_NUMBER + ") " +
-					"REFERENCES " + Schema.Meta.TABLE_NAME + " (" +
-					Schema.Meta.Columns.CHAN_NAME + ", " +
-					Schema.Meta.Columns.BOARD_NAME + ", " +
-					Schema.Meta.Columns.THREAD_NUMBER + ") " +
-					"ON DELETE CASCADE ON UPDATE CASCADE)");
+			try (AuditDiagnostics.Scope scope = AuditDiagnostics.begin("Audit/Database/Pages/create")) {
+				db.execSQL("CREATE TABLE " + Schema.Meta.TABLE_NAME + " (" +
+						Schema.Meta.Columns.CHAN_NAME + " TEXT NOT NULL, " +
+						Schema.Meta.Columns.BOARD_NAME + " TEXT NOT NULL, " +
+						Schema.Meta.Columns.THREAD_NUMBER + " TEXT NOT NULL, " +
+						Schema.Meta.Columns.TIME + " INTEGER NOT NULL, " +
+						Schema.Meta.Columns.FLAGS + " INTEGER NOT NULL DEFAULT 0, " +
+						Schema.Meta.Columns.DATA + " BLOB NOT NULL, " +
+						"PRIMARY KEY (" + Schema.Meta.Columns.CHAN_NAME + ", " +
+						Schema.Meta.Columns.BOARD_NAME + ", " +
+						Schema.Meta.Columns.THREAD_NUMBER + "))");
+				db.execSQL("CREATE INDEX " + Schema.Meta.TABLE_NAME + "_order " +
+						"ON " + Schema.Meta.TABLE_NAME + " (" +
+						Schema.Meta.Columns.TIME + ")");
+				db.execSQL("CREATE TABLE " + Schema.Posts.TABLE_NAME + " (" +
+						Schema.Posts.Columns.CHAN_NAME + " TEXT NOT NULL, " +
+						Schema.Posts.Columns.BOARD_NAME + " TEXT NOT NULL, " +
+						Schema.Posts.Columns.THREAD_NUMBER + " TEXT NOT NULL, " +
+						Schema.Posts.Columns.POST_NUMBER_MAJOR + " INTEGER NOT NULL, " +
+						Schema.Posts.Columns.POST_NUMBER_MINOR + " INTEGER NOT NULL, " +
+						Schema.Posts.Columns.FLAGS + " INTEGER NOT NULL DEFAULT 0, " +
+						Schema.Posts.Columns.DATA + " BLOB NOT NULL, " +
+						Schema.Posts.Columns.HASH + " BLOB NOT NULL, " +
+						"PRIMARY KEY (" + Schema.Posts.Columns.CHAN_NAME + ", " +
+						Schema.Posts.Columns.BOARD_NAME + ", " +
+						Schema.Posts.Columns.THREAD_NUMBER + ", " +
+						Schema.Posts.Columns.POST_NUMBER_MAJOR + ", " +
+						Schema.Posts.Columns.POST_NUMBER_MINOR + "), " +
+						"FOREIGN KEY (" + Schema.Posts.Columns.CHAN_NAME + ", " +
+						Schema.Posts.Columns.BOARD_NAME + ", " +
+						Schema.Posts.Columns.THREAD_NUMBER + ") " +
+						"REFERENCES " + Schema.Meta.TABLE_NAME + " (" +
+						Schema.Meta.Columns.CHAN_NAME + ", " +
+						Schema.Meta.Columns.BOARD_NAME + ", " +
+						Schema.Meta.Columns.THREAD_NUMBER + ") " +
+						"ON DELETE CASCADE ON UPDATE CASCADE)");
+				scope.result("ok");
+			}
 		}
 
 		@Override

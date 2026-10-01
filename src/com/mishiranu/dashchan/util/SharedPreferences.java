@@ -13,6 +13,14 @@ public class SharedPreferences {
 		private final SharedPreferences preferences;
 		private final android.content.SharedPreferences.Editor editor;
 		private final boolean asynchronous;
+		private int auditEdits;
+		private String auditReason = "empty";
+
+		private void auditEdit(String key) {
+			String label = AuditPreferenceKeys.label(key);
+			if (auditEdits++ == 0) auditReason = label;
+			else if (!auditReason.equals(label)) auditReason = "multiple";
+		}
 
 		@SuppressLint("CommitPrefEdits")
 		private Editor(SharedPreferences preferences, boolean asynchronous) {
@@ -22,6 +30,7 @@ public class SharedPreferences {
 		}
 
 		public Editor put(String key, String value) {
+			auditEdit(key);
 			if (value != null) {
 				editor.putString(key, value);
 			} else {
@@ -31,6 +40,7 @@ public class SharedPreferences {
 		}
 
 		public Editor put(String key, Set<String> values) {
+			auditEdit(key);
 			if (values != null) {
 				editor.putStringSet(key, values);
 			} else {
@@ -40,26 +50,31 @@ public class SharedPreferences {
 		}
 
 		public Editor put(String key, int value) {
+			auditEdit(key);
 			editor.putInt(key, value);
 			return this;
 		}
 
 		public Editor put(String key, long value) {
+			auditEdit(key);
 			editor.putLong(key, value);
 			return this;
 		}
 
 		public Editor put(String key, float value) {
+			auditEdit(key);
 			editor.putFloat(key, value);
 			return this;
 		}
 
 		public Editor put(String key, boolean value) {
+			auditEdit(key);
 			editor.putBoolean(key, value);
 			return this;
 		}
 
 		public Editor remove(String key) {
+			auditEdit(key);
 			editor.remove(key);
 			return this;
 		}
@@ -67,7 +82,8 @@ public class SharedPreferences {
 		private boolean commitInternal() {
 			long started = PerformanceDiagnostics.now();
 			boolean success = false;
-			try {
+			try (AuditDiagnostics.Scope scope = AuditDiagnostics.begin(asynchronous
+					? "Audit/Preferences/apply" : "Audit/Preferences/commit").reason(auditReason).count(auditEdits)) {
 				preferences.shouldUpdateMap = true;
 				if (asynchronous) {
 					// Android updates memory/listeners before returning; only disk persistence is deferred.
@@ -76,9 +92,13 @@ public class SharedPreferences {
 				} else {
 					success = editor.commit();
 				}
+				scope.result(success ? "ok" : "failed");
 				return success;
 			} finally {
-				preferences.updateMapIfNeeded();
+				try (AuditDiagnostics.Scope scope = AuditDiagnostics.begin("Audit/Preferences/updateMap").reason(auditReason)) {
+					preferences.updateMapIfNeeded();
+					scope.result("ok");
+				}
 				PerformanceDiagnostics.finish(asynchronous ? "preferences.apply" : "preferences.commit",
 						started, success, true);
 			}
@@ -90,7 +110,11 @@ public class SharedPreferences {
 				commitInternal();
 			} else {
 				// Uninterruptible process
-				ConcurrentUtils.mainGet(this::commitInternal);
+				try (AuditDiagnostics.Scope scope = AuditDiagnostics.begin("Audit/Preferences/workerMainRoundTrip")
+						.reason(auditReason).count(auditEdits)) {
+					ConcurrentUtils.mainGet(this::commitInternal);
+					scope.result("ok");
+				}
 			}
 		}
 	}

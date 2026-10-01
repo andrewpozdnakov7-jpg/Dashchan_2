@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui.preference.core;
 
+import com.mishiranu.dashchan.util.AuditDiagnostics;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.res.ColorStateList;
@@ -458,11 +459,19 @@ public abstract class PreferenceFragment extends ContentFragment {
 	}
 
 	public AlertDialog getDialog(Preference<?> preference) {
-		getChildFragmentManager().executePendingTransactions();
-		PreferenceDialog preferenceDialog = (PreferenceDialog) getChildFragmentManager()
-				.findFragmentByTag(PreferenceDialog.class.getName());
-		return preferenceDialog != null && preferenceDialog.getPreference() == preference
-				? (AlertDialog) preferenceDialog.getDialog() : null;
+		try (AuditDiagnostics.Scope scope = AuditDiagnostics.begin("Audit/PreferenceDialog/get")) {
+			try (AuditDiagnostics.Scope flush = AuditDiagnostics.begin("Audit/PreferenceDialog/flush")
+					.count(getChildFragmentManager().isStateSaved() ? 1 : 0)) {
+				boolean executed = getChildFragmentManager().executePendingTransactions();
+				flush.result(executed ? "executed" : "empty");
+			}
+			PreferenceDialog preferenceDialog = (PreferenceDialog) getChildFragmentManager()
+					.findFragmentByTag(PreferenceDialog.class.getName());
+			AlertDialog dialog = preferenceDialog != null && preferenceDialog.getPreference() == preference
+					? (AlertDialog) preferenceDialog.getDialog() : null;
+			scope.result(dialog != null ? "found" : "missing");
+			return dialog;
+		}
 	}
 
 	private class Adapter extends RecyclerView.Adapter<Adapter.ViewHolder> {

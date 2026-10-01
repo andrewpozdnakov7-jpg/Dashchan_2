@@ -388,6 +388,8 @@ public class CombinedThreadsPage extends ListPage implements ThreadsAdapter.Call
 		PaddedRecyclerView recyclerView = getRecyclerView();
 		GridLayoutManager layoutManager = new GridLayoutManager(context, 1);
 		recyclerView.setLayoutManager(layoutManager);
+		// Match regular boards: incremental updates must not fade cards out before replacements appear.
+		recyclerView.setItemAnimator(null);
 		recyclerView.addOnScrollListener(readingScrollListener);
 		hidePerformer = new HidePerformer(context);
 		UiManager uiManager = getUiManager();

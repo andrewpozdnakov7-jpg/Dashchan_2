@@ -1,5 +1,6 @@
 package chan.content;
 
+import com.mishiranu.dashchan.util.AuditDiagnostics;
 import android.content.Context;
 import android.content.res.Resources;
 import android.net.Uri;
@@ -255,11 +256,26 @@ public class ChanConfiguration implements Chan.Linked {
 	}
 
 	public final void commit() {
-		if (editData != null) {
-			synchronized (editData) {
-				ChanDatabase.getInstance().setData(get().name, editData);
-				editData.clear();
+		try (AuditDiagnostics.Scope total = AuditDiagnostics.begin("Audit/ChanConfiguration/commit")) {
+			if (editData != null) {
+				AuditDiagnostics.Scope lock = AuditDiagnostics.begin("Audit/ChanConfiguration/lockWait");
+				try {
+					synchronized (editData) {
+						lock.result("acquired");
+						lock.close();
+						total.count(editData.size());
+						try (AuditDiagnostics.Scope write = AuditDiagnostics.begin("Audit/ChanConfiguration/setData")
+								.count(editData.size())) {
+							ChanDatabase.getInstance().setData(get().name, editData);
+							write.result("ok");
+						}
+						editData.clear();
+					}
+				} finally {
+					lock.close();
+				}
 			}
+			total.result("ok");
 		}
 	}
 
