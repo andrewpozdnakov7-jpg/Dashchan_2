@@ -1,4 +1,4 @@
-"""Optional ordinary-CI cache. Signing and local builds do not invoke this helper."""
+"""Validated native outputs; callers must isolate caches by producer trust level."""
 import argparse
 import hashlib
 import json
@@ -156,7 +156,7 @@ def restore(repo, cache, key, abis):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("operation", choices=("key", "pack", "restore"))
+    parser.add_argument("operation", choices=("key", "pack", "restore", "restore-required"))
     args = parser.parse_args()
     repo = Path.cwd()
     abis = sorted(set(os.environ["NATIVE_ABIS"].split(",")))
@@ -167,8 +167,11 @@ def main():
     if args.operation == "key":
         print(f"Native cache input SHA-256: {key}")
         result = f"key=slooop-native-v{SCHEMA}-{key}\n"
-    elif args.operation == "restore":
-        result = f"hit={str(restore(repo, cache, key, abis)).lower()}\n"
+    elif args.operation in ("restore", "restore-required"):
+        hit = restore(repo, cache, key, abis)
+        if args.operation == "restore-required" and not hit:
+            raise SystemExit("Validated native outputs required before skipping compilation")
+        result = f"hit={str(hit).lower()}\n"
     else:
         pack(repo, cache, key, abis)
         print("Native cache packed after successful build and checks")
