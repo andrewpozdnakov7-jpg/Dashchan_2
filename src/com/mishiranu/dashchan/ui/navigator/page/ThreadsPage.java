@@ -362,6 +362,9 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 						? retainableExtra.publishedPostItems : retainableExtra.cachedPostItems,
 						retainableExtra.startPageNumber == PAGE_NUMBER_CATALOG);
 				ensureVisibleThreadsTarget(retainableExtra);
+				// Restored content must enable the same overlays as a completed load.
+				// Keep the saved scroll position; restoring navigation needs no network refresh.
+				switchList();
 				if (listPosition != null) {
 					listPosition.apply(recyclerView);
 				}

@@ -436,6 +436,8 @@ public class CombinedThreadsPage extends ListPage implements ThreadsAdapter.Call
 		ListPosition listPosition = takeListPosition();
 		if (!retainableExtra.cachedPostItems.isEmpty()) {
 			adapter.setItems(Collections.singleton(retainableExtra.cachedPostItems), false);
+			// Restored content must enable the same overlays as a completed load.
+			switchList();
 			if (listPosition != null && listPosition.position >= 0 && adapter.getItemCount() > 0) {
 				keepStartPosition = false;
 				pendingAnchorPosition = new ListPosition(

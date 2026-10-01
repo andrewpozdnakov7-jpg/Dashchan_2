@@ -1,6 +1,15 @@
 name: Android CI
 
 on:
+  push:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/android-ci.yml'
+      - '.github/scripts/native_cache*'
+      - 'Dashchan-Webm/**'
+      - 'build.gradle'
+      - 'gradle.properties'
   pull_request:
     branches:
       - master
@@ -269,8 +278,12 @@ jobs:
             'build-tools;36.0.0' \
             'ndk;29.0.14206865'
 
-      - name: Prepare F-Droid native source inputs
-        if: steps.validation.outputs.build_required == 'true' && env.BUILD_TASK == 'assembleFdroidRelease'
+      - name: Test native cache validation
+        if: steps.validation.outputs.build_required == 'true'
+        run: python3 -m unittest discover -s .github/scripts -p 'native_cache_test.py' -v
+
+      - name: Prepare pinned native source inputs
+        if: steps.validation.outputs.build_required == 'true'
         env:
           DAV1D_VERSION: '1.5.3'
           FFMPEG_VERSION: '8.1.2'
@@ -280,10 +293,30 @@ jobs:
           source_root="$RUNNER_TEMP/fdroid-native-sources"
           bash Dashchan-Webm/shared-prepare.sh "$source_root"
           {
+            echo "CI_NATIVE_SOURCES=$source_root"
             echo "ORG_GRADLE_PROJECT_dashchanDav1dSourceDir=$source_root/dav1d"
             echo "ORG_GRADLE_PROJECT_dashchanFfmpegSourceDir=$source_root/ffmpeg"
             echo "ORG_GRADLE_PROJECT_dashchanLibyuvSourceDir=$source_root/yuv"
           } >> "$GITHUB_ENV"
+
+      - name: Compute exact native cache key
+        if: steps.validation.outputs.build_required == 'true'
+        id: native-key
+        run: python3 .github/scripts/native_cache.py key
+
+      - name: Restore native library cache
+        if: steps.validation.outputs.build_required == 'true'
+        id: native-cache
+        continue-on-error: true
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0 (Node 24)
+        with:
+          path: ${{ runner.temp }}/slooop-native-cache
+          key: ${{ steps.native-key.outputs.key }}
+
+      - name: Verify and install cached native outputs
+        if: steps.validation.outputs.build_required == 'true'
+        id: native-verified
+        run: python3 .github/scripts/native_cache.py restore
 
       - name: Test native video scheduling policy
         if: steps.validation.outputs.build_required == 'true'
@@ -295,6 +328,8 @@ jobs:
 
       - name: Build APK and run GitHub unit tests
         if: steps.validation.outputs.build_required == 'true'
+        env:
+          NATIVE_CACHE_VERIFIED: ${{ steps.native-verified.outputs.hit }}
         run: |
           set -euo pipefail
           set -o pipefail
@@ -303,6 +338,11 @@ jobs:
             -PnativePlayerFfmpegFlavor=ffmpeg8
             -PnativeAbis="$NATIVE_ABIS"
           )
+          # Only this library task may be reused, after content/ABI verification above.
+          # JNI/player compilation, unit tests, lint and APK checks still run normally.
+          if [ "$NATIVE_CACHE_VERIFIED" = 'true' ]; then
+            gradle_args+=(-x buildBuiltinWebmLibraries)
+          fi
           if [ "$BUILD_TASK" = 'assembleFdroidRelease' ] && [ "$BUILD_SCOPE" != 'all' ]; then
             release_version_code="$(python3 - <<'PY'
           import re
@@ -400,3 +440,15 @@ jobs:
             build-tasks.log
             build/reports/**
             build/test-results/**
+
+      - name: Package checked native outputs for reuse
+        if: success() && steps.validation.outputs.build_required == 'true' && steps.native-verified.outputs.hit != 'true'
+        run: python3 .github/scripts/native_cache.py pack
+
+      - name: Save native library cache
+        if: success() && steps.validation.outputs.build_required == 'true' && steps.native-cache.outputs.cache-hit != 'true'
+        continue-on-error: true
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0 (Node 24)
+        with:
+          path: ${{ runner.temp }}/slooop-native-cache
+          key: ${{ steps.native-key.outputs.key }}
