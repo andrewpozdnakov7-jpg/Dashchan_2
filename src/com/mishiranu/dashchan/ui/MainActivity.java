@@ -1122,14 +1122,25 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	}
 
 	private static Chan getLastVisitedEnabledChan() {
-		String chanName = Preferences.getLastVisitedForum();
-		if (chanName != null && !DrawerForm.CHAN_REDDIT.equals(chanName)) {
-			Chan chan = Chan.get(chanName);
-			if (chan.name != null && Preferences.isChanEnabled(chan.name)) {
-				return chan;
-			}
+		String forumName = getLastVisitedEnabledForum();
+		if (forumName != null && !DrawerForm.CHAN_REDDIT.equals(forumName)) {
+			return Chan.get(forumName);
 		}
 		return ChanManager.getInstance().getDefaultChan();
+	}
+
+	private static String getLastVisitedEnabledForum() {
+		String forumName = Preferences.getLastVisitedForum();
+		if (DrawerForm.CHAN_REDDIT.equals(forumName)) {
+			return Preferences.isRedditWebReaderEnabled() ? forumName : null;
+		}
+		if (forumName != null) {
+			Chan chan = Chan.get(forumName);
+			if (chan.name != null && Preferences.isChanEnabled(chan.name)) {
+				return chan.name;
+			}
+		}
+		return null;
 	}
 
 	private int findLastEnabledSavedPageIndex() {
@@ -1598,18 +1609,21 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 			drawerChanName = DrawerForm.CHAN_REDDIT;
 			Preferences.setLastVisitedForum(DrawerForm.CHAN_REDDIT);
 		} else {
-			SavedPageItem savedPageItem = getLastEnabledSavedPage();
-			if (savedPageItem != null) {
-				chanName = getSavedPage(savedPageItem).chanName;
-				drawerChanName = chanName;
-			} else if (DrawerForm.CHAN_REDDIT.equals(Preferences.getLastVisitedForum()) &&
-					Preferences.isRedditWebReaderEnabled()) {
-				chanName = null;
-				drawerChanName = DrawerForm.CHAN_REDDIT;
+			// Utility screens retain the selected forum, regardless of background saved pages.
+			String selectedForum = getLastVisitedEnabledForum();
+			if (selectedForum != null) {
+				chanName = DrawerForm.CHAN_REDDIT.equals(selectedForum) ? null : selectedForum;
+				drawerChanName = selectedForum;
 			} else {
-				Chan chan = getLastVisitedEnabledChan();
-				chanName = chan != null ? chan.name : null;
-				drawerChanName = chanName;
+				SavedPageItem savedPageItem = getLastEnabledSavedPage();
+				if (savedPageItem != null) {
+					chanName = getSavedPage(savedPageItem).chanName;
+					drawerChanName = chanName;
+				} else {
+					Chan chan = getLastVisitedEnabledChan();
+					chanName = chan != null ? chan.name : null;
+					drawerChanName = chanName;
+				}
 			}
 		}
 		if (currentFragment instanceof PageFragment) {

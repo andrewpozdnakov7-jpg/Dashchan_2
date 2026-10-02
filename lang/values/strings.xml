@@ -1454,7 +1454,7 @@
 	<string name="reddit_rename_category">Rename category</string>
 	<string name="reddit_category_name">Category name</string>
 	<string name="reddit_ungrouped">Uncategorized</string>
-	<string name="reddit_community_hint">Name, r/name or Reddit community link</string>
+	<string name="reddit_community_hint">Enter a name: fossdroid, r/fossdroid or a subreddit link</string>
 	<string name="reddit_invalid_community">Enter a subreddit name or its community link, not a post link.</string>
 	<string name="reddit_duplicate">Already in your list</string>
 	<string name="reddit_move_up">Move up</string>

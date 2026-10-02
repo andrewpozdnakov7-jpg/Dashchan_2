@@ -1482,7 +1482,7 @@
 	<string name="reddit_rename_category">Переименовать категорию</string>
 	<string name="reddit_category_name">Название категории</string>
 	<string name="reddit_ungrouped">Без категории</string>
-	<string name="reddit_community_hint">Название, r/name или ссылка на сообщество Reddit</string>
+	<string name="reddit_community_hint">Введите название: fossdroid, r/fossdroid или ссылку на сабреддит</string>
 	<string name="reddit_invalid_community">Укажите название сабреддита или ссылку на сообщество, а не на отдельный пост.</string>
 	<string name="reddit_duplicate">Уже есть в вашем списке</string>
 	<string name="reddit_move_up">Переместить выше</string>
