@@ -3,6 +3,7 @@ package com.mishiranu.dashchan.ui.preference;
 import android.app.AlertDialog;
 import android.os.Bundle;
 import android.text.InputFilter;
+import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
@@ -139,8 +140,11 @@ public class RedditCommunitiesFragment extends BaseListFragment {
 	private void editCommunity(Category source, String original) {
 		LinearLayout form = form();
 		EditText text = new EditText(requireContext());
-		text.setSingleLine(true);
-		text.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI);
+		text.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI
+				| android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE);
+		text.setMinLines(1);
+		text.setMaxLines(3);
+		text.setGravity(Gravity.TOP | Gravity.START);
 		text.setFilters(new InputFilter[] {new InputFilter.LengthFilter(2048)});
 		text.setHint(R.string.reddit_community_hint);
 		if (original != null) text.setText(original);

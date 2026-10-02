@@ -3,6 +3,12 @@
 -keep class com.mishiranu.dashchan.** { *; }
 -keep class chan.** { *; }
 
+# Google's pure-Java Brotli decoder loads its built-in dictionary by class name.
+# Preserve the class and its static data in optimized builds; otherwise Brotli
+# responses that use dictionary words fail with "brotli dictionary is not set".
+-keep class org.brotli.dec.DictionaryData { *; }
+-keepnames class org.brotli.dec.Dictionary
+
 # ML Kit discovers Firebase component registrars by the class names stored in
 # AndroidManifest.xml and creates them through their no-argument constructors.
 # Keep both the registrar classes and constructors available for reflection in

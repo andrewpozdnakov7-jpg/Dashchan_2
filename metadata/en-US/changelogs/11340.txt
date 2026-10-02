@@ -1,0 +1,4 @@
+The drawer now retains the selected Reddit forum after opening My Communities.
+The subreddit input and hint better accommodate long links.
+HTML post parsing now uses jsoup instead of TagSoup.
+Updated the Java Brotli decoder for compressed site responses.

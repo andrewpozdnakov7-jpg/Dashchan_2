@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.jsoup.nodes.Entities;
 
 @Public
 public class StringUtils {
@@ -560,10 +561,9 @@ public class StringUtils {
 						// Not a number, ignore exception
 					}
 				} else {
-					value = HtmlParser.SCHEMA.getEntity(entity);
-					if (value == 0) {
-						value = -1;
-					}
+					String decoded = Entities.getByName(entity);
+					// The old decoder emitted one UTF-16 character per named entity.
+					value = decoded.length() == 1 ? decoded.charAt(0) : -1;
 				}
 				if (value >= 0) {
 					builder.append((char) value);

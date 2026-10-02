@@ -3,22 +3,23 @@ package com.mishiranu.dashchan.text;
 import android.graphics.Color;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.content.model.PostNumber;
-import java.io.StringReader;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import org.ccil.cowan.tagsoup.HTMLSchema;
-import org.ccil.cowan.tagsoup.Parser;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Attribute;
+import org.jsoup.nodes.DataNode;
+import org.jsoup.nodes.Element;
+import org.jsoup.nodes.Node;
+import org.jsoup.nodes.TextNode;
+import org.jsoup.select.NodeTraversor;
+import org.jsoup.select.NodeVisitor;
 import org.xml.sax.Attributes;
-import org.xml.sax.ContentHandler;
-import org.xml.sax.InputSource;
-import org.xml.sax.Locator;
-import org.xml.sax.SAXNotRecognizedException;
-import org.xml.sax.SAXNotSupportedException;
+import org.xml.sax.helpers.AttributesImpl;
 
-public class HtmlParser<E, D, S extends HtmlParser.SpanProvider<E>> implements ContentHandler {
+public class HtmlParser<E, D, S extends HtmlParser.SpanProvider<E>> {
 	public static <E, D, S extends SpanProvider<E>> CharSequence spanify(String source,
 			Markup<E, D, S> markup, String threadNumber, PostNumber originalPostNumber, E extra) {
 		return parse(source, markup, Mode.SPANIFY, threadNumber, originalPostNumber, extra);
@@ -100,23 +101,10 @@ public class HtmlParser<E, D, S extends HtmlParser.SpanProvider<E>> implements C
 		spanProvider = isSpanifyMode() || isUnmarkMode() ? markup.initSpanProvider(this) : null;
 	}
 
-	public static final HTMLSchema SCHEMA = new HTMLSchema();
-
-	public CharSequence convert() {
-		Parser parser = new Parser();
-		try {
-			parser.setProperty(Parser.schemaProperty, SCHEMA);
-		} catch (SAXNotRecognizedException | SAXNotSupportedException e) {
-			throw new RuntimeException(e);
-		}
-		parser.setContentHandler(this);
-		StringBuilder builder = this.builder;
-		try {
-			parser.parse(new InputSource(new StringReader(source)));
-		} catch (Exception e) {
-			throw new RuntimeException(e);
-		}
+	private CharSequence convert() {
+		parseWithJsoup();
 		removeBlockLastWhitespaces();
+		StringBuilder builder = this.builder;
 		int start = 0;
 		int end = 0;
 		boolean substring = false;
@@ -159,6 +147,67 @@ public class HtmlParser<E, D, S extends HtmlParser.SpanProvider<E>> implements C
 		return substring ? builder.substring(start, end) : builder;
 	}
 
+	private void parseWithJsoup() {
+		Element body = Jsoup.parseBodyFragment(source).body();
+		Element html = body.parent();
+		boolean skipImplicitTbody = !EXPLICIT_TBODY_PATTERN.matcher(source).find();
+		// Preserve document-wrapper callbacks expected by Markup implementations.
+		startJsoupElement(html);
+		startJsoupElement(body);
+		NodeTraversor.traverse(new NodeVisitor() {
+			@Override
+			public void head(Node node, int depth) {
+				if (depth == 0) {
+					return; // The body is a fragment container, not a source tag.
+				}
+				if (node instanceof Element) {
+					Element element = (Element) node;
+					if (!skipImplicitTbody || !"tbody".equals(element.normalName())) {
+						startJsoupElement(element);
+					}
+				} else if (node instanceof TextNode) {
+					appendText(((TextNode) node).getWholeText());
+				} else if (node instanceof DataNode) {
+					appendText(((DataNode) node).getWholeData());
+				}
+			}
+
+			@Override
+			public void tail(Node node, int depth) {
+				if (depth > 0 && node instanceof Element) {
+					Element element = (Element) node;
+					if (!skipImplicitTbody || !"tbody".equals(element.normalName())) {
+						endJsoupElement(element);
+					}
+				}
+			}
+		}, body);
+		endJsoupElement(body);
+		endJsoupElement(html);
+	}
+
+	private void startJsoupElement(Element element) {
+		String tagName = element.normalName();
+		AttributesImpl attributes = new AttributesImpl();
+		for (Attribute attribute : element.attributes()) {
+			String name = attribute.getKey();
+			attributes.addAttribute("", name, name, "CDATA", attribute.getValue());
+		}
+		startElement("", tagName, tagName, attributes);
+	}
+
+	private void endJsoupElement(Element element) {
+		String tagName = element.normalName();
+		endElement("", tagName, tagName);
+	}
+
+	private void appendText(String text) {
+		if (!text.isEmpty()) {
+			char[] characters = text.toCharArray();
+			characters(characters, 0, characters.length);
+		}
+	}
+
 	public boolean isSpanifyMode() {
 		return parsingMode == Mode.SPANIFY;
 	}
@@ -190,21 +239,6 @@ public class HtmlParser<E, D, S extends HtmlParser.SpanProvider<E>> implements C
 	public S getSpanProvider() {
 		return spanProvider;
 	}
-
-	@Override
-	public void setDocumentLocator(Locator locator) {}
-
-	@Override
-	public void startDocument() {}
-
-	@Override
-	public void endDocument() {}
-
-	@Override
-	public void startPrefixMapping(String prefix, String uri) {}
-
-	@Override
-	public void endPrefixMapping(String prefix) {}
 
 	private static class PositiveStateStack {
 		private boolean[] state = null;
@@ -355,8 +389,7 @@ public class HtmlParser<E, D, S extends HtmlParser.SpanProvider<E>> implements C
 
 	private boolean hidden = false;
 
-	@Override
-	public void startElement(String uri, String tagName, String qName, Attributes attributes) {
+	private void startElement(String uri, String tagName, String qName, Attributes attributes) {
 		if (HIDDEN_TAGS.contains(tagName)) {
 			hidden = true;
 			return;
@@ -408,8 +441,7 @@ public class HtmlParser<E, D, S extends HtmlParser.SpanProvider<E>> implements C
 		}
 	}
 
-	@Override
-	public void endElement(String uri, String tagName, String qName) {
+	private void endElement(String uri, String tagName, String qName) {
 		if (hidden) {
 			if (HIDDEN_TAGS.contains(tagName)) {
 				hidden = false;
@@ -439,8 +471,7 @@ public class HtmlParser<E, D, S extends HtmlParser.SpanProvider<E>> implements C
 		lastBlock = blockTag ? spacedTag ? LAST_BLOCK_SPACED : LAST_BLOCK_COMMON : LAST_BLOCK_NONE;
 	}
 
-	@Override
-	public void characters(char[] ch, int start, int length) {
+	private void characters(char[] ch, int start, int length) {
 		if (hidden) {
 			return;
 		}
@@ -493,17 +524,10 @@ public class HtmlParser<E, D, S extends HtmlParser.SpanProvider<E>> implements C
 		}
 	}
 
-	@Override
-	public void ignorableWhitespace(char[] ch, int start, int length) {}
-
-	@Override
-	public void processingInstruction(String target, String data) {}
-
-	@Override
-	public void skippedEntity(String name) {}
-
 	private static final Pattern COLOR_PATTERN = Pattern.compile("color: ?(?:rgba?\\((\\d+), ?(\\d+)," +
 			" ?(\\d+)(?:, ?\\d+)?\\)|(#[0-9A-Fa-f]+|[A-Za-z]+))");
+	private static final Pattern EXPLICIT_TBODY_PATTERN = Pattern.compile("<\\s*tbody(?=[\\s/>])",
+			Pattern.CASE_INSENSITIVE);
 
 	public Integer getColorAttribute(Attributes attributes) {
 		String style = attributes.getValue("", "style");
