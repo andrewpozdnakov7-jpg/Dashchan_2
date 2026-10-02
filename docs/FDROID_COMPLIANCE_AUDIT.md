@@ -16,13 +16,13 @@ filesystem paths, workstation identifiers, signing data, credentials, or private
 - Imageboard extensions remain separate APKs and require an explicit F-Droid-specific warning and confirmation
   before any download starts.
 
-## Declared Java dependencies
+## Java dependencies and bundled sources
 
 | Dependency | Scope in the F-Droid APK | License |
 | --- | --- | --- |
 | AndroidX Activity, Core, Fragment, RecyclerView, DrawerLayout, WebKit, Browser, WorkManager | Runtime | Apache-2.0 |
 | Jackson Core 2.22.1 | Runtime | Apache-2.0 |
-| Brotli decoder 0.1.2 | Runtime | MIT |
+| Google Brotli Java decoder v1.2.0 (vendored source) | Runtime | MIT |
 | jsoup 1.23.2 | Runtime | MIT |
 | LeakCanary 3.0 alpha 9 | `leak` build only; absent from `fdroidNdebug` | Apache-2.0 |
 | JUnit 4.13.2 | Tests only; absent from `fdroidNdebug` | EPL-1.0 |
