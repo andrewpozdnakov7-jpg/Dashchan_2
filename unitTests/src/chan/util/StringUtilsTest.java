@@ -92,4 +92,15 @@ public class StringUtilsTest {
 		assertEquals("<a href=\"https://example.com\">https://example.com</a>",
 				StringUtils.linkify("<a href=\"https://example.com\">https://example.com</a>"));
 	}
+
+	@Test
+	public void unescapeHtmlKeepsNamedNumericAndUnknownEntitiesCompatible() {
+		assertEquals("A & B", StringUtils.unescapeHtml("A &amp; B"));
+		assertEquals("AA", StringUtils.unescapeHtml("&#65;&#x41;"));
+		assertEquals("\u00a0", StringUtils.unescapeHtml("&nbsp;"));
+		assertEquals("&notAnEntity;", StringUtils.unescapeHtml("&notAnEntity;"));
+		assertEquals("&NotEqualTilde;", StringUtils.unescapeHtml("&NotEqualTilde;"));
+		assertEquals("&<>\"\u00a0\u00a9",
+				StringUtils.unescapeHtml("&amp;&lt;&gt;&quot;&nbsp;&copy;"));
+	}
 }

@@ -23,8 +23,7 @@ filesystem paths, workstation identifiers, signing data, credentials, or private
 | AndroidX Activity, Core, Fragment, RecyclerView, DrawerLayout, WebKit, Browser, WorkManager | Runtime | Apache-2.0 |
 | Jackson Core 2.22.1 | Runtime | Apache-2.0 |
 | Brotli decoder 0.1.2 | Runtime | MIT |
-| jsoup 1.15.2 | Runtime | MIT |
-| TagSoup 1.2.1 | Compile-only / Android platform implementation | Apache-2.0 |
+| jsoup 1.23.2 | Runtime | MIT |
 | LeakCanary 3.0 alpha 9 | `leak` build only; absent from `fdroidNdebug` | Apache-2.0 |
 | JUnit 4.13.2 | Tests only; absent from `fdroidNdebug` | EPL-1.0 |
 

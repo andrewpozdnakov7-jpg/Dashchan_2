@@ -580,7 +580,6 @@ dependencies {
 	githubImplementation platform('com.google.firebase:firebase-bom:34.18.0')
 	githubImplementation 'com.google.firebase:firebase-messaging'
 	githubImplementation 'com.google.mlkit:genai-prompt:1.0.0-beta2'
-	compileOnly 'org.ccil.cowan.tagsoup:tagsoup:1.2.1'
 	implementation 'com.fasterxml.jackson.core:jackson-core:2.22.3'
 	implementation 'androidx.activity:activity:1.13.0'
 	implementation 'androidx.core:core:1.19.1'
