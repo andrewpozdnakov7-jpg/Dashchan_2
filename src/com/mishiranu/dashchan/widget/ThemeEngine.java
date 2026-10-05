@@ -529,14 +529,12 @@ public class ThemeEngine {
 					: popup ? POPUP_ATTACH_LISTENER : null;
 		}
 
-		private static final int[] CLONE_ATTRS = {android.R.attr.windowIsFloating, R.attr.isOverlay, R.attr.isPopup};
-
 		@Override
 		public LayoutInflater cloneInContext(Context newContext) {
-			TypedArray typedArray = newContext.obtainStyledAttributes(CLONE_ATTRS);
-			boolean dialog = typedArray.getBoolean(0, false);
-			boolean overlay = typedArray.getBoolean(1, false);
-			boolean popup = typedArray.getBoolean(2, false);
+			TypedArray typedArray = newContext.obtainStyledAttributes(R.styleable.ThemeContextAppearance);
+			boolean dialog = typedArray.getBoolean(R.styleable.ThemeContextAppearance_android_windowIsFloating, false);
+			boolean overlay = typedArray.getBoolean(R.styleable.ThemeContextAppearance_isOverlay, false);
+			boolean popup = typedArray.getBoolean(R.styleable.ThemeContextAppearance_isPopup, false);
 			typedArray.recycle();
 			boolean inheritDirect = dialog || popup;
 			boolean forceDirect = newContext instanceof Activity;
@@ -1171,10 +1169,10 @@ public class ThemeEngine {
 			int thread = GraphicsUtils.applyAlpha(post, postToThreadAlpha);
 			int controlNormal21 = 0;
 			float disabledAlpha21 = 1f;
-			int[] attrs = {android.R.attr.colorControlNormal, android.R.attr.disabledAlpha};
-			typedArray = context.obtainStyledAttributes(attrs);
-			ColorStateList colorControlNormal = typedArray.getColorStateList(0);
-			disabledAlpha21 = typedArray.getFloat(1, 1f);
+			typedArray = context.obtainStyledAttributes(R.styleable.ThemeControlAppearance);
+			ColorStateList colorControlNormal = typedArray.getColorStateList(
+					R.styleable.ThemeControlAppearance_android_colorControlNormal);
+			disabledAlpha21 = typedArray.getFloat(R.styleable.ThemeControlAppearance_android_disabledAlpha, 1f);
 			typedArray.recycle();
 			controlNormal21 = colorControlNormal.getColorForState(new int[] {android.R.attr.state_enabled},
 					colorControlNormal.getDefaultColor());

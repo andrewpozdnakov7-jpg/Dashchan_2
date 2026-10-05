@@ -21,6 +21,7 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.graphics.BaseDrawable;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
 import com.mishiranu.dashchan.util.ListViewUtils;
@@ -199,11 +200,10 @@ public class DialogMenu {
 						LinearLayout.LayoutParams.MATCH_PARENT);
 				if (viewType == ViewType.MORE) {
 					Drawable drawable = null;
-					int[] attrs = {android.R.attr.subMenuArrow};
 					TypedArray typedArray = parent.getContext().obtainStyledAttributes(null,
-							attrs, android.R.attr.listMenuViewStyle, 0);
+							R.styleable.DialogMenuAppearance, android.R.attr.listMenuViewStyle, 0);
 					try {
-						drawable = typedArray.getDrawable(0);
+						drawable = typedArray.getDrawable(R.styleable.DialogMenuAppearance_android_subMenuArrow);
 					} finally {
 						typedArray.recycle();
 					}

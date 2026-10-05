@@ -1,6 +1,42 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
+	<declare-styleable name="DialogMenuAppearance">
+		<attr name="android:subMenuArrow" />
+	</declare-styleable>
+	<declare-styleable name="DialogStackAppearance">
+		<attr name="android:windowAnimationStyle" />
+		<attr name="android:backgroundDimAmount" />
+		<attr name="android:windowBackground" />
+		<attr name="android:windowElevation" />
+	</declare-styleable>
+	<declare-styleable name="ExpandedScreenAppearance">
+		<attr name="android:actionBarSize" />
+	</declare-styleable>
+	<declare-styleable name="ThemeContextAppearance">
+		<attr name="android:windowIsFloating" />
+		<attr name="isOverlay" />
+		<attr name="isPopup" />
+	</declare-styleable>
+	<declare-styleable name="ThemeControlAppearance">
+		<attr name="android:colorControlNormal" />
+		<attr name="android:disabledAlpha" />
+	</declare-styleable>
+	<declare-styleable name="ToastDiagnosticsAppearance">
+		<attr name="android:textColorPrimary" />
+		<attr name="android:textColorSecondary" />
+		<attr name="android:textColorPrimaryInverse" />
+		<attr name="android:colorBackground" />
+		<attr name="android:colorForeground" />
+		<attr name="android:forceDarkAllowed" />
+	</declare-styleable>
+	<declare-styleable name="TwoLineListItemAppearance">
+		<attr name="android:listPreferredItemHeightSmall" />
+		<attr name="android:textAppearanceListItem" />
+		<attr name="android:textAppearanceListItemSecondary" />
+		<attr name="android:textColorSecondary" />
+	</declare-styleable>
+
 	<attr name="isOverlay" format="boolean" />
 	<attr name="isPopup" format="boolean" />
 	<attr name="overlayTheme" format="reference" />

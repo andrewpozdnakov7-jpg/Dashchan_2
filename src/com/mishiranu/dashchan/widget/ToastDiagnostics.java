@@ -24,6 +24,7 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import androidx.core.graphics.ColorUtils;
 import com.mishiranu.dashchan.BuildConfig;
+import com.mishiranu.dashchan.R;
 import java.util.Arrays;
 import java.util.Locale;
 
@@ -118,18 +119,20 @@ final class ToastDiagnostics {
 	}
 
 	private static void attributes(int id, Context context, String name) {
-		int[] attrs = {android.R.attr.textColorPrimary, android.R.attr.textColorSecondary,
-				android.R.attr.textColorPrimaryInverse, android.R.attr.colorBackground,
-				android.R.attr.colorForeground, android.R.attr.forceDarkAllowed};
+		int[] attrs = R.styleable.ToastDiagnosticsAppearance;
 		TypedArray array = context.obtainStyledAttributes(attrs);
 		try {
 			StringBuilder values = new StringBuilder("attributes context=").append(name);
-			for (int i = 0; i < attrs.length - 1; i++) {
+			for (int i = 0; i < attrs.length; i++) {
+				if (i == R.styleable.ToastDiagnosticsAppearance_android_forceDarkAllowed) {
+					continue;
+				}
 				ColorStateList colors = array.getColorStateList(i);
 				values.append(' ').append(context.getResources().getResourceEntryName(attrs[i]))
 						.append('=').append(colors != null ? hex(colors.getDefaultColor()) : "unset");
 			}
-			log(id, values + " forceDarkAllowed=" + array.getBoolean(attrs.length - 1, true));
+			log(id, values + " forceDarkAllowed=" + array.getBoolean(
+					R.styleable.ToastDiagnosticsAppearance_android_forceDarkAllowed, true));
 		} finally {
 			array.recycle();
 		}

@@ -88,14 +88,13 @@ public class DialogStack<T extends DialogStack.ViewFactory<T>> implements Iterab
 				popInternal();
 			}
 		});
-		int[] attrs = {android.R.attr.windowAnimationStyle, android.R.attr.backgroundDimAmount,
-				android.R.attr.windowBackground, android.R.attr.windowElevation};
-		TypedArray typedArray = styledContext.obtainStyledAttributes(attrs);
+		TypedArray typedArray = styledContext.obtainStyledAttributes(R.styleable.DialogStackAppearance);
 		try {
-			dialogAnimations = typedArray.getResourceId(0, 0);
-			dialogDimAmount = typedArray.getFloat(1, 0.6f);
-			dialogBackgroundResId = typedArray.getResourceId(2, 0);
-			dialogElevation = typedArray.getDimension(3, 0f);
+			dialogAnimations = typedArray.getResourceId(
+					R.styleable.DialogStackAppearance_android_windowAnimationStyle, 0);
+			dialogDimAmount = typedArray.getFloat(R.styleable.DialogStackAppearance_android_backgroundDimAmount, 0.6f);
+			dialogBackgroundResId = typedArray.getResourceId(R.styleable.DialogStackAppearance_android_windowBackground, 0);
+			dialogElevation = typedArray.getDimension(R.styleable.DialogStackAppearance_android_windowElevation, 0f);
 		} finally {
 			typedArray.recycle();
 		}
