@@ -14,6 +14,10 @@ to satisfy `git diff --check`, and `DGifSlurp` casts both validated image
 dimensions to `size_t` before multiplying them. The existing positive-size
 and `INT_MAX` overflow guards are unchanged. This avoids a CodeQL integer
 multiplication warning without increasing the accepted image size.
+`DGifGetImageHeader` also multiplies dimensions as `unsigned long`, matching
+`PixelCount`, instead of signed `long`. GIF dimensions are unsigned 16-bit
+values, so their product fits even the 32-bit unsigned type; this avoids
+signed overflow on armeabi-v7a/x86 before `DGifSlurp` rejects oversized frames.
 The upstream `COPYING` license is included here.
 Only the decoder sources needed by the app are
 compiled by `Android.mk`; upstream encoder and command-line utilities are not
