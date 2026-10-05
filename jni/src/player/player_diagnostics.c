@@ -67,7 +67,7 @@ typedef struct {
 	} work[DIAGNOSTICS_WORK_COUNT];
 	int64_t framePosition, lateness, maxLateness, totalLateness;
 	uint64_t frameSamples, late100, late250, late500, late1000, cadenceDrops;
-	uint64_t converted, libyuv, swscale;
+	uint64_t converted, swscale;
 	int sourceWidth, sourceHeight, outputWidth, outputHeight, outputLevel, canDrop;
 } DiagnosticsPlayer;
 
@@ -545,13 +545,13 @@ void diagnosticsWorkEnd(Player * player, int operation, DiagnosticsWorkStamp sta
 }
 
 void diagnosticsSoftwareFrame(Player * player, int64_t position, int64_t lateness, int canDrop,
-		int width, int height, int outputWidth, int outputHeight, int useLibyuv, int outputLevel) {
+		int width, int height, int outputWidth, int outputHeight, int outputLevel) {
 	if (!diagnosticsTrySampleLock()) return;
 	DiagnosticsPlayer * entry = diagnosticsFindPlayerLocked(player);
 	if (entry) {
 		if (outputWidth > 0) {
 			entry->converted++;
-			if (useLibyuv) entry->libyuv++; else entry->swscale++;
+			entry->swscale++;
 			entry->outputWidth = outputWidth; entry->outputHeight = outputHeight;
 			entry->outputLevel = outputLevel;
 		} else {
@@ -896,17 +896,17 @@ void samplePlayerDiagnostics(void) {
 				" last_late_media_ms=%" PRId64 " max_late_media_ms=%" PRId64 " avg_late_media_ms=%" PRId64
 				" late_wall_ms=%" PRId64 " late100=%" PRIu64 " late250=%" PRIu64 " late500=%" PRIu64
 				" late1000=%" PRIu64 " can_drop=%d cadence_drops=%" PRIu64
-				" converted=%" PRIu64 " libyuv=%" PRIu64 " swscale=%" PRIu64
+				" converted=%" PRIu64 " swscale=%" PRIu64
 				" source=%dx%d output=%dx%d output_level=%d",
 				player->meta.diagnosticsId, entry->frameSamples, entry->framePosition, entry->lateness,
 				entry->maxLateness, entry->frameSamples ? entry->totalLateness / (int64_t) entry->frameSamples : 0,
 				speed > 0 ? entry->lateness * 1000 / speed : -1, entry->late100, entry->late250,
 				entry->late500, entry->late1000, entry->canDrop, entry->cadenceDrops,
-				entry->converted, entry->libyuv, entry->swscale, entry->sourceWidth, entry->sourceHeight,
+				entry->converted, entry->swscale, entry->sourceWidth, entry->sourceHeight,
 				entry->outputWidth, entry->outputHeight, entry->outputLevel);
 		memset(entry->work, 0, sizeof(entry->work));
 		entry->frameSamples = entry->late100 = entry->late250 = entry->late500 = entry->late1000 = 0;
-		entry->converted = entry->libyuv = entry->swscale = entry->cadenceDrops = 0;
+		entry->converted = entry->swscale = entry->cadenceDrops = 0;
 		entry->totalLateness = entry->maxLateness = 0;
 		// A hint, not a diagnosis: paused/seeking/finished video may legitimately have no frames.
 		if (playing == 1 && seeking == PAUSED_SEEK_NONE && audioAdvance > 0 && presentedAge > 2000

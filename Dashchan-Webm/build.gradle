@@ -7,8 +7,7 @@ file('../gradle.properties').withInputStream { nativeVersions.load(it) }
 def androidNdkVersion = nativeVersions.getProperty('androidNdkVersion')
 def nativeDav1dVersion = nativeVersions.getProperty('nativeDav1dVersion')
 def nativeFfmpegVersion = nativeVersions.getProperty('nativeFfmpegVersion')
-def nativeLibyuvRevision = nativeVersions.getProperty('nativeLibyuvRevision')
-if ([androidNdkVersion, nativeDav1dVersion, nativeFfmpegVersion, nativeLibyuvRevision].any { !it }) {
+if ([androidNdkVersion, nativeDav1dVersion, nativeFfmpegVersion].any { !it }) {
 	throw new GradleException('Missing native version in ../gradle.properties')
 }
 def nativeAbis = providers.gradleProperty('nativeAbis')
@@ -140,7 +139,7 @@ task sharedPrepare(type: ShellTask) {
 	environment = [
 			DAV1D_VERSION: nativeDav1dVersion,
 			FFMPEG_VERSION: nativeFfmpegVersion,
-			YUV_VERSION: nativeLibyuvRevision,
+			WEBM_ARCHIVE_CACHE_DIR: providers.environmentVariable('WEBM_ARCHIVE_CACHE_DIR').orElse('').get(),
 	]
 	output = files(sharedSources)
 }
@@ -160,8 +159,7 @@ task sharedBuild(type: ShellTask) {
 
 android.sourceSets.main.jniLibs.srcDirs = [
 		new File(sharedLibraries, 'dav1d'),
-		new File(sharedLibraries, 'ffmpeg'),
-		new File(sharedLibraries, 'yuv')
+		new File(sharedLibraries, 'ffmpeg')
 ]
 
 afterEvaluate {

@@ -192,6 +192,13 @@ public class ReplyNotificationsFragment extends PreferenceFragment {
 		}
 		preference.setOnBeforeChangeListener(null);
 		preference.setValue(false);
+		preference.setOnBeforeChangeListener((p, value) -> {
+			if (!value) {
+				showDisableTrackingDialog(p);
+				return false;
+			}
+			return true;
+		});
 		if (deleteHistory) {
 			storage.clearAllHistory(success -> ClickableToast.show(success
 					? R.string.reply_history_deleted : R.string.reply_history_delete_failed));

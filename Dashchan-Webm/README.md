@@ -8,7 +8,6 @@ This directory contains the reproducible native-library build used by the Dashch
 | --- | --- |
 | FFmpeg | `nativeFfmpegVersion` in root `gradle.properties` |
 | dav1d | `nativeDav1dVersion` in root `gradle.properties` |
-| libyuv | `nativeLibyuvRevision` in root `gradle.properties` |
 | Android NDK | `androidNdkVersion` in root `gradle.properties` |
 | Android Build Tools | 36.0.0 |
 | Native ABIs | `arm64-v8a`, `armeabi-v7a`, `x86` |
@@ -36,12 +35,11 @@ Linux x86_64 or WSL is required. The generated sources and libraries are stored 
 
 ## Pre-provided Native Sources
 
-Build environments that acquire and audit source code before the Gradle build, such as F-Droid, can bypass all network access in `shared-prepare.sh`. Set all three variables to clean source trees at the pinned revisions:
+Build environments that acquire and audit source code before the Gradle build, such as F-Droid, can bypass all network access in `shared-prepare.sh`. Set both variables to clean source trees at the pinned revisions:
 
 ```sh
 export DASHCHAN_DAV1D_SOURCE_DIR=/sources/dav1d-1.5.3
 export DASHCHAN_FFMPEG_SOURCE_DIR=/sources/ffmpeg-8.1.2
-export DASHCHAN_LIBYUV_SOURCE_DIR=/sources/libyuv-6afd9becdf58822b1da6770598d8597c583ccfad
 ```
 
 The preparation step copies these trees into its private build directory without VCS metadata. An invalid or missing directory aborts the build. When a variable is unset, the existing pinned download-and-verification path remains in use; ordinary local and GitHub Actions builds therefore keep their current behavior.

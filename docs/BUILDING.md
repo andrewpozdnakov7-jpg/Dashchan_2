@@ -25,7 +25,7 @@ Use the checked-in Gradle Wrapper:
   -PnativeAbis=arm64-v8a,armeabi-v7a,x86
 ```
 
-The first run executes `prepareBuiltinWebmSources` and `buildBuiltinWebmLibraries`. These tasks download and build the FFmpeg, dav1d, and libyuv revisions pinned in `gradle.properties`.
+The first run executes `prepareBuiltinWebmSources` and `buildBuiltinWebmLibraries`. These tasks download and build the FFmpeg and dav1d revisions pinned in `gradle.properties`.
 
 GitHub-flavor builds also run `prepareBergamotRuntime`. It downloads the pinned MPL-2.0 Mozilla Bergamot JavaScript
 and WebAssembly runtime, verifies both files by SHA-256, and places them in generated assets. Language models are not

@@ -11,7 +11,6 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wstrict-prototypes"
 #endif
-#include <libyuv.h>
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif
@@ -546,10 +545,6 @@ void * playerVideoDecodeThread(void * data) {
 	struct SwsContext * scaleContext = NULL;
 	PacketHolder * packetHolder = NULL;
 
-	int totalMeasurements = 10;
-	int currentMeasurement = 0;
-	int measurements[2 * totalMeasurements];
-
 	while (!player->meta.interrupt) {
 		if (playerVideoHasPendingSurface(player)) {
 			playerVideoApplyPendingSurface(player, env);
@@ -661,7 +656,7 @@ void * playerVideoDecodeThread(void * data) {
 				int canDropLate = extra->position >= 0 && HAS_STREAM(player, audio) &&
 						!player->sync.audioPositionNotSync && !player->sync.videoPositionNotSync;
 				diagnosticsSoftwareFrame(player, extra->position, lateness, canDropLate,
-						frame->width, frame->height, 0, 0, 0, player->video.softwareOutputLevel);
+						frame->width, frame->height, 0, 0, player->video.softwareOutputLevel);
 				updateSoftwareLoadController(player, canDropLate, extra->position, lateness);
 				pthread_mutex_lock(&player->decode.video.frameMutex);
 				VideoLoadControl * control = &player->video.softwareLoad;
@@ -711,62 +706,22 @@ void * playerVideoDecodeThread(void * data) {
 						PLAYER_SEND_MESSAGE(env, player, bridge, BRIDGE_MESSAGE_SIZE_CHANGED);
 					}
 				}
-				int useLibyuv = frame->format == AV_PIX_FMT_YUV420P &&
-						player->video.format == AV_PIX_FMT_RGBA && frame->width == outputWidth &&
-						frame->height == outputHeight;
 				DiagnosticsWorkStamp convertStamp = diagnosticsWorkBegin();
 				uint64_t conversionStartedAt = getTimeUs();
-				uint64_t measurementStartedAt = 0;
-				if (useLibyuv) {
-					if (player->video.useLibyuv >= 0) {
-						useLibyuv = player->video.useLibyuv;
-					} else {
-						if (currentMeasurement < totalMeasurements) {
-							useLibyuv = 0;
-						}
-						if (currentMeasurement < 2 * totalMeasurements) {
-							measurementStartedAt = getTimeUs();
-						}
-					}
+				scaleContext = sws_getCachedContext(scaleContext,
+						frame->width, frame->height, frame->format,
+						outputWidth, outputHeight, player->video.format,
+						SWS_FAST_BILINEAR, NULL, NULL, NULL);
+				if (!scaleContext) {
+					diagnosticsWorkEnd(player, DIAGNOSTICS_WORK_CONVERT, convertStamp, -1);
+					goto SKIP_VIDEO_FRAME;
 				}
-				int conversionResult;
-				if (useLibyuv) {
-					conversionResult = I420ToABGR(frame->data[0], frame->linesize[0], frame->data[1], frame->linesize[1],
-							frame->data[2], frame->linesize[2], scaleHolder.scaleBuffer, 4 * outputWidth,
-							outputWidth, outputHeight);
-				} else {
-					scaleContext = sws_getCachedContext(scaleContext,
-							frame->width, frame->height, frame->format,
-							outputWidth, outputHeight, player->video.format,
-							SWS_FAST_BILINEAR, NULL, NULL, NULL);
-					if (!scaleContext) {
-						diagnosticsWorkEnd(player, DIAGNOSTICS_WORK_CONVERT, convertStamp, -1);
-						goto SKIP_VIDEO_FRAME;
-					}
-					conversionResult = sws_scale(scaleContext, (uint8_t const * const *) frame->data, frame->linesize,
-							0, frame->height, scaleHolder.scaleData, scaleHolder.scaleLinesize);
-				}
+				int conversionResult = sws_scale(scaleContext, (uint8_t const * const *) frame->data, frame->linesize,
+						0, frame->height, scaleHolder.scaleData, scaleHolder.scaleLinesize);
 				int64_t conversionTime = getTimeUs() - conversionStartedAt;
-				if (measurementStartedAt != 0) {
-					if (currentMeasurement < 2 * totalMeasurements) {
-						measurements[currentMeasurement++] = (int) (getTimeUs() - measurementStartedAt);
-						if (currentMeasurement == 2 * totalMeasurements) {
-							int avg1 = 0;
-							int avg2 = 0;
-							for (int i = 0; i < totalMeasurements; i++) {
-								avg1 += measurements[i];
-							}
-							for (int i = totalMeasurements; i < 2 * totalMeasurements; i++) {
-								avg2 += measurements[i];
-							}
-							player->video.useLibyuv = avg2 <= avg1 ? 1 : 0;
-						}
-					}
-				}
-				// Do not include diagnostic bookkeeping in the existing converter-selection benchmark.
 				diagnosticsWorkEnd(player, DIAGNOSTICS_WORK_CONVERT, convertStamp, conversionResult);
 				diagnosticsSoftwareFrame(player, extra->position, lateness, canDropLate,
-						frame->width, frame->height, outputWidth, outputHeight, useLibyuv,
+						frame->width, frame->height, outputWidth, outputHeight,
 						player->video.softwareOutputLevel);
 				if (conversionTime >= SOFTWARE_GOVERNOR_SLOW_CONVERSION_US) {
 					player->video.softwareSlowConversions++;

@@ -10,9 +10,9 @@ import shutil
 import subprocess
 
 
-SCHEMA = 1
+SCHEMA = 2
 MACHINES = {"armeabi-v7a": 40, "arm64-v8a": 183, "x86": 3}
-ROOTS = ("libraries/dav1d", "libraries/ffmpeg", "libraries/yuv", "external")
+ROOTS = ("libraries/dav1d", "libraries/ffmpeg", "external/ffmpeg")
 
 
 def digest(path):
@@ -48,7 +48,7 @@ def fingerprint(repo, sources, abis, environment):
         "scripts": {name: digest(repo / name) for name in (
             "Dashchan-Webm/shared-build.sh", "Dashchan-Webm/shared-prepare.sh",
             ".github/scripts/native_cache.py")},
-        "sources": {name: inventory(sources / name) for name in ("dav1d", "ffmpeg", "yuv")},
+        "sources": {name: inventory(sources / name) for name in ("dav1d", "ffmpeg")},
     }
     return hashlib.sha256(json.dumps(inputs, sort_keys=True).encode()).hexdigest()
 
@@ -73,10 +73,9 @@ def environment(repo):
 def required_files(abis):
     required = []
     for abi in abis:
-        required += [f"libraries/dav1d/{abi}/libdav1d.so", f"libraries/yuv/{abi}/libyuv.so",
+        required += [f"libraries/dav1d/{abi}/libdav1d.so",
                      f"libraries/dav1d/{abi}/include/dav1d/dav1d.h",
-                     f"external/ffmpeg/include/{abi}/libavcodec/avcodec.h",
-                     f"external/yuv/include/libyuv.h", f"external/yuv/symbols/{abi}/libyuv.c"]
+                     f"external/ffmpeg/include/{abi}/libavcodec/avcodec.h"]
         for lib in ("avcodec", "avformat", "avfilter", "avutil", "swresample", "swscale"):
             required += [f"libraries/ffmpeg/{abi}/lib{lib}.so",
                          f"external/ffmpeg/symbols/{abi}/lib{lib}.c"]

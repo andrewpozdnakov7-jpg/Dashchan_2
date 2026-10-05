@@ -19,6 +19,6 @@ If a task fails only while configuration cache is enabled, retry once:
 ./gradlew TASK_NAME --no-configuration-cache
 ```
 
-Record the exact task, Gradle version, stack trace, and generated problems report. Do not permanently disable the cache merely to hide a task bug. Native build failures inside FFmpeg, dav1d, libyuv, or NDK tools are usually unrelated to configuration cache.
+Record the exact task, Gradle version, stack trace, and generated problems report. Do not permanently disable the cache merely to hide a task bug. Native build failures inside FFmpeg, dav1d, or NDK tools are usually unrelated to configuration cache.
 
 After editing Gradle scripts, use `--configuration-cache-problems=warn` only for investigation; release builds should not silently accept new cache problems.

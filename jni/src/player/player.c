@@ -196,7 +196,6 @@ static Player * createPlayer(void) {
 	player->meta.audioEnabled = 1;
 	player->av.audioStreamIndex = INDEX_NO_STREAM;
 	player->av.videoStreamIndex = INDEX_NO_STREAM;
-	player->video.useLibyuv = -1;
 	player->video.lastBuffer.width = -1;
 	player->video.lastBuffer.height = -1;
 	__atomic_store_n(&player->decode.video.diagnosticsFramePosition, -1, __ATOMIC_RELAXED);
@@ -760,9 +759,7 @@ jobjectArray getMetadata(JNIEnv * env, jlong pointer) {
 		}
 		(*env)->SetObjectArrayElement(env, result, index++, (*env)->NewStringUTF(env, "frame_conversion"));
 		(*env)->SetObjectArrayElement(env, result, index++, (*env)->NewStringUTF(env,
-				player->video.hardwareDecoderActive ? "MediaCodec surface" :
-				player->video.useLibyuv == 1 ? "libyuv" :
-				player->video.useLibyuv == 0 ? "libswscale" : "Unknown"));
+				player->video.hardwareDecoderActive ? "MediaCodec surface" : "libswscale"));
 	}
 	if (HAS_STREAM(player, audio)) {
 		AVCodecContext * audioContext = GET_CONTEXT(player, audio);

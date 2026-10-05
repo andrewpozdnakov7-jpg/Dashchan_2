@@ -1,0 +1,8 @@
+Added username/password proxy authentication. Each forum can use its own proxy or a direct connection.
+Proxy settings now warn that an anti-bot check in the embedded browser may bypass the forum proxy.
+When disabling reply tracking, you can keep the history or delete it from the app.
+After an update initiated from the app, an "Open Slooop" notification lets you return quickly.
+Dialog rounding settings moved from Accessibility to Interface.
+Adjusted some launcher icons to reduce unwanted borders.
+Updated the GIF playback library. Removed the old libyuv dependency; software video frame conversion now uses FFmpeg.
+Modernized system API usage, removed obsolete code, and addressed static analysis findings.

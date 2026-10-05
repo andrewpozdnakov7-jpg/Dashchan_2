@@ -37,11 +37,10 @@ the transitive-dependency result produced by `fdroid scanner`.
 | --- | --- | --- |
 | FFmpeg 8.1.2 | Release archive with fixed SHA-256; LGPL-only configuration without `--enable-gpl` or `--enable-nonfree` | LGPL-2.1-or-later |
 | dav1d 1.5.3 | Release archive with fixed SHA-256 | BSD-2-Clause |
-| libyuv | Exact Git commit `6afd9becdf58822b1da6770598d8597c583ccfad` | BSD-3-Clause |
 | GIFLIB decoder sources | Stored as source under `jni/src/gif/dgif` | MIT |
 
-The F-Droid build accepts all three downloaded native source trees through `DASHCHAN_DAV1D_SOURCE_DIR`,
-`DASHCHAN_FFMPEG_SOURCE_DIR`, and `DASHCHAN_LIBYUV_SOURCE_DIR`. Gradle then uses only those pre-provided trees and
+The F-Droid build accepts both downloaded native source trees through `DASHCHAN_DAV1D_SOURCE_DIR`
+and `DASHCHAN_FFMPEG_SOURCE_DIR`. Gradle then uses only those pre-provided trees and
 does not fetch native sources.
 
 ## Assets

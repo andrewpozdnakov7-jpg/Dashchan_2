@@ -77,7 +77,7 @@ typedef struct { int64_t wallUs, cpuUs; } DiagnosticsWorkStamp;
 DiagnosticsWorkStamp diagnosticsWorkBegin(void);
 void diagnosticsWorkEnd(Player * player, int operation, DiagnosticsWorkStamp stamp, int result);
 void diagnosticsSoftwareFrame(Player * player, int64_t position, int64_t lateness, int canDrop,
-		int width, int height, int outputWidth, int outputHeight, int useLibyuv, int outputLevel);
+		int width, int height, int outputWidth, int outputHeight, int outputLevel);
 void diagnosticsSoftwarePolicy(Player * player, int lateMs, int anchorMs, int maxFps,
 		int governorLateMs, int governorFrames, int recoveryMs, int recoveryFrames, int conversionUs);
 

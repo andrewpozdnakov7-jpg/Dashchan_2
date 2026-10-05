@@ -4,19 +4,18 @@ Slooop uses `io.dashchan2` as its application ID and is licensed under GPL-3.0-o
 
 ## Native source policy
 
-The player builds FFmpeg 8.1.2, dav1d 1.5.3, and libyuv commit `6afd9becdf58822b1da6770598d8597c583ccfad` from source. A regular build downloads these pinned sources and verifies the release archives or exact Git commit.
+The player builds FFmpeg 8.1.2 and dav1d 1.5.3 from source. A regular build downloads these pinned sources and verifies the release archives or exact Git commit. Software frame conversion uses FFmpeg's libswscale.
 If the primary FFmpeg release host is temporarily unreachable, source preparation falls back to the official FFmpeg GitHub mirror, resolves tag `n8.1.2`, and requires commit `38b88335f99e76ed89ff3c93f877fdefce736c13` before exporting the tree.
 
-For an F-Droid build, the fdroiddata recipe must acquire the three source trees before Gradle starts and expose them through:
+For an F-Droid build, the fdroiddata recipe must acquire the two source trees before Gradle starts and expose them through:
 
 - `DASHCHAN_DAV1D_SOURCE_DIR`
 - `DASHCHAN_FFMPEG_SOURCE_DIR`
-- `DASHCHAN_LIBYUV_SOURCE_DIR`
 
-All three variables are required for the network-free F-Droid path. `Dashchan-Webm/shared-prepare.sh` copies the supplied trees into the isolated Gradle build directory and does not invoke `curl` or `git` for those components.
+Both variables are required for the network-free F-Droid path. `Dashchan-Webm/shared-prepare.sh` copies the supplied trees into the isolated Gradle build directory and does not invoke `curl` or `git` for those components.
 
 An fdroiddata recipe can provide the same paths through Gradle properties named `dashchanDav1dSourceDir`,
-`dashchanFfmpegSourceDir`, and `dashchanLibyuvSourceDir`. Environment variables take precedence. This allows the
+and `dashchanFfmpegSourceDir`. Environment variables take precedence. This allows the
 recipe to use fdroiddata `srclibs` without patching the application source.
 
 The recipe uses the conventional `fdroid` flavor and `release` build type (`assembleFdroidRelease`). The release
@@ -54,8 +53,7 @@ The application client itself remains excluded from this updater in the F-Droid 
 
 ## Reproducibility
 
-The native build disables GNU build IDs for the app-owned JNI libraries and externally built libyuv. This removes
-the last known environment-dependent byte difference between independent GitHub and fdroidserver APKs. A final
+The native build disables GNU build IDs for the app-owned JNI libraries. A final
 comparison is still required for every release; source-level configuration alone is not proof of reproducibility.
 
 The GitHub universal APK and the F-Droid ABI-specific APKs keep the same application ID and established developer

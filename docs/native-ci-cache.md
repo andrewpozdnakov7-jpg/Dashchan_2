@@ -1,6 +1,6 @@
 # Native library cache in Android CI
 
-Ordinary Android CI caches only FFmpeg, dav1d and libyuv shared libraries,
+Ordinary Android CI caches only FFmpeg and dav1d shared libraries,
 generated headers and symbol stubs. JNI/player code, Java code, APK packaging,
 unit tests, native policy tests, lint and APK checks are not skipped.
 Stable Signed Candidate uses a separate trusted namespace (see below).

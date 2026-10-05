@@ -8,7 +8,6 @@ pins = {
     "androidNdkVersion": "ANDROID_NDK_VERSION",
     "nativeDav1dVersion": "DAV1D_VERSION",
     "nativeFfmpegVersion": "FFMPEG_VERSION",
-    "nativeLibyuvRevision": "YUV_VERSION",
 }
 properties = {}
 for line in Path("gradle.properties").read_text(encoding="utf-8").splitlines():

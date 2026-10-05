@@ -25,7 +25,6 @@ tasks.withType(JavaCompile) {
 def androidNdkVersion = providers.gradleProperty('androidNdkVersion').get()
 def nativeDav1dVersion = providers.gradleProperty('nativeDav1dVersion').get()
 def nativeFfmpegVersion = providers.gradleProperty('nativeFfmpegVersion').get()
-def nativeLibyuvRevision = providers.gradleProperty('nativeLibyuvRevision').get()
 def buildConfigStringArray = { values -> '{"' + values.join('", "') + '"}' }
 def knownChanExtensionPackages = [
 		'com.mishiranu.dashchan.chan.archb4k',
@@ -103,8 +102,7 @@ def builtinWebmLibraries = new File(builtinWebmBuildDir, 'intermediates/shared_l
 def builtinWebmExternal = new File(builtinWebmBuildDir, 'outputs/external')
 def builtinWebmJniLibDirs = [
 		new File(builtinWebmLibraries, 'dav1d'),
-		new File(builtinWebmLibraries, 'ffmpeg'),
-		new File(builtinWebmLibraries, 'yuv')
+		new File(builtinWebmLibraries, 'ffmpeg')
 ]
 def builtinWebmLibrariesPattern = [
 		'/lib/*/libdav1d.so',
@@ -113,16 +111,13 @@ def builtinWebmLibrariesPattern = [
 		'/lib/*/libavfilter.so',
 		'/lib/*/libavutil.so',
 		'/lib/*/libswresample.so',
-		'/lib/*/libswscale.so',
-		'/lib/*/libyuv.so'
+		'/lib/*/libswscale.so'
 ]
 def builtinWebmProvidedSourceDirectories = [
 		dav1d: providers.environmentVariable('DASHCHAN_DAV1D_SOURCE_DIR')
 				.orElse(providers.gradleProperty('dashchanDav1dSourceDir')),
 		ffmpeg: providers.environmentVariable('DASHCHAN_FFMPEG_SOURCE_DIR')
-				.orElse(providers.gradleProperty('dashchanFfmpegSourceDir')),
-		libyuv: providers.environmentVariable('DASHCHAN_LIBYUV_SOURCE_DIR')
-				.orElse(providers.gradleProperty('dashchanLibyuvSourceDir'))
+				.orElse(providers.gradleProperty('dashchanFfmpegSourceDir'))
 ]
 def getAndroidSdkDirectory = {
 	def localProperties = new Properties()
@@ -273,8 +268,8 @@ android {
 
 	defaultConfig {
 		applicationId = 'io.dashchan2'
-		versionCode = 11340
-		versionName = '3.2.54'
+		versionCode = 11350
+		versionName = '3.2.55'
 		def releaseVersionCode = versionCode
 		def packageVersionCodeProperty = project.findProperty('packageVersionCode')
 		if (packageVersionCodeProperty != null) {
@@ -527,12 +522,11 @@ tasks.register('prepareBuiltinWebmSources', Exec) {
 	commandLine 'bash', new File(builtinWebmProjectDir, 'shared-prepare.sh').absolutePath,
 			builtinWebmSources.absolutePath
 	environment DAV1D_VERSION: nativeDav1dVersion,
-			FFMPEG_VERSION: nativeFfmpegVersion,
-			YUV_VERSION: nativeLibyuvRevision
+			FFMPEG_VERSION: nativeFfmpegVersion
+	environment WEBM_ARCHIVE_CACHE_DIR: providers.environmentVariable('WEBM_ARCHIVE_CACHE_DIR').orElse('').get()
 	inputs.file new File(builtinWebmProjectDir, 'shared-prepare.sh')
 	inputs.property 'dav1dVersion', nativeDav1dVersion
 	inputs.property 'ffmpegVersion', nativeFfmpegVersion
-	inputs.property 'yuvVersion', nativeLibyuvRevision
 	builtinWebmProvidedSourceDirectories.each { name, directory ->
 		inputs.property "${name}ProvidedSourceDirectory", directory.orElse('')
 		if (directory.isPresent()) {
