@@ -4,10 +4,8 @@ import android.content.ContentResolver;
 import android.content.Context;
 import android.database.Cursor;
 import android.net.Uri;
-import android.os.Build;
 import android.provider.DocumentsContract;
 import android.util.Pair;
-import androidx.annotation.RequiresApi;
 import chan.annotation.Public;
 import com.mishiranu.dashchan.content.CacheManager;
 import com.mishiranu.dashchan.content.FileProvider;
@@ -199,7 +197,6 @@ public abstract class DataFile {
 		}
 	}
 
-	@RequiresApi(Build.VERSION_CODES.LOLLIPOP)
 	private static class SafFile extends DataFile {
 		private enum SafTarget {
 			DOWNLOADS(Preferences::getDownloadUriTree);

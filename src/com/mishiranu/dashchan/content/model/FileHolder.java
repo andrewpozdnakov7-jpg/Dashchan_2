@@ -496,18 +496,20 @@ public abstract class FileHolder {
 				if (cursor != null && cursor.moveToFirst()) {
 					int nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
 					int sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE);
-					if (nameIndex >= 0 && (sizeIndex >= 0 || !calculateSize)) {
-						String name = cursor.getString(nameIndex);
+					if (sizeIndex >= 0 || !calculateSize) {
+						String name = nameIndex >= 0 ? cursor.getString(nameIndex) : null;
 						long longSize = sizeIndex >= 0 ? cursor.getLong(sizeIndex) : -1;
 						int size = longSize >= 0 && longSize <= Integer.MAX_VALUE ? (int) longSize : -1;
 						if (StringUtils.isEmpty(name)) {
-							@SuppressWarnings("deprecation")
-							String column = MediaStore.MediaColumns.DATA;
-							int dataIndex = cursor.getColumnIndex(column);
-							if (dataIndex >= 0) {
-								String data = cursor.getString(dataIndex);
-								if (data != null) {
-									name = new File(data).getName();
+							// Some providers omit DISPLAY_NAME. Use a filename-like URI segment,
+							// but do not mistake an opaque document ID for a filename.
+							String segment = uri.getLastPathSegment();
+							if (!StringUtils.isEmpty(segment)) {
+								int separator = Math.max(segment.lastIndexOf('/'), segment.lastIndexOf(':'));
+								String candidate = segment.substring(separator + 1);
+								if (!candidate.startsWith(".")
+										&& !StringUtils.isEmpty(StringUtils.getFileExtension(candidate))) {
+									name = candidate;
 								}
 							}
 						}
@@ -523,9 +525,10 @@ public abstract class FileHolder {
 								}
 							}
 						}
-						if (!StringUtils.isEmpty(name)) {
-							return new ContentFileHolder(uri, name, size, calculateSize);
+						if (StringUtils.isEmpty(name)) {
+							name = ++fileNameStart + ".bin";
 						}
+						return new ContentFileHolder(uri, name, size, calculateSize);
 					}
 				}
 			} catch (SecurityException e) {

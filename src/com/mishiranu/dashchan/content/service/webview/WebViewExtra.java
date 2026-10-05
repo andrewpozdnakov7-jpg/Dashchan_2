@@ -19,17 +19,16 @@ public interface WebViewExtra extends Parcelable {
 	}
 
 	Creator<WebViewExtra> CREATOR = new Creator<WebViewExtra>() {
-		@SuppressWarnings("unchecked")
 		@Override
 		public WebViewExtra createFromParcel(Parcel source) {
 			String className = source.readString();
-			Creator<WebViewExtra> creator;
+			Creator<?> creator;
 			try {
-				creator = (Creator<WebViewExtra>) Class.forName(className).getField("CREATOR").get(null);
+				creator = (Creator<?>) Class.forName(className).getField("CREATOR").get(null);
 			} catch (Exception e) {
 				throw new RuntimeException(e);
 			}
-			return creator.createFromParcel(source);
+			return (WebViewExtra) creator.createFromParcel(source);
 		}
 
 		@Override

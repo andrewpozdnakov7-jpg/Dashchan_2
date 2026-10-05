@@ -9,6 +9,8 @@ import android.net.Uri;
 import android.net.http.SslError;
 import android.os.Bundle;
 import android.text.InputType;
+import android.text.SpannableStringBuilder;
+import android.text.style.ForegroundColorSpan;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
@@ -52,6 +54,7 @@ import com.mishiranu.dashchan.ui.preference.core.MultipleEditPreference;
 import com.mishiranu.dashchan.ui.preference.core.Preference;
 import com.mishiranu.dashchan.ui.preference.core.PreferenceFragment;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
+import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.util.SharedPreferences;
 import com.mishiranu.dashchan.util.WebViewUtils;
 import com.mishiranu.dashchan.widget.ClickableToast;
@@ -90,6 +93,16 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 
 	private String getChanName() {
 		return requireArguments().getString(EXTRA_CHAN_NAME);
+	}
+
+	private CharSequence getProxyWarning(boolean authUnavailable) {
+		SpannableStringBuilder warning = new SpannableStringBuilder(getString(R.string.proxy_webview_warning));
+		if (authUnavailable) {
+			warning.append('\n').append(getString(R.string.proxy_auth_unavailable));
+		}
+		warning.setSpan(new ForegroundColorSpan(ResourceUtils.getColor(requireContext(), R.attr.colorTextError)),
+				0, warning.length(), SpannableStringBuilder.SPAN_EXCLUSIVE_EXCLUSIVE);
+		return warning;
 	}
 
 	@Override
@@ -266,20 +279,56 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 					R.string.secure_connection, R.string.secure_connection__summary);
 		}
 		if (!localMode) {
+			MultipleEditPreference.MapValueCodec proxyCodec = new MultipleEditPreference.MapValueCodec
+					(Preferences.KEYS_PROXY_EDITOR) {
+				@Override
+				public Map<String, String> fromString(String value) {
+					return Preferences.unpackProxy(chanName, value);
+				}
+
+				@Override
+				public String toString(Map<String, String> value) {
+					Map<String, String> saved = new LinkedHashMap<>(value);
+					String username = saved.remove(Preferences.SUB_KEY_PROXY_USERNAME);
+					String password = saved.remove(Preferences.SUB_KEY_PROXY_PASSWORD);
+					saved.remove(Preferences.SUB_KEY_PROXY_AUTH_INVALID);
+					if (!StringUtils.isEmpty(username) && !StringUtils.isEmpty(password)) {
+						saved.put("auth", com.mishiranu.dashchan.content.ProxyCredentials
+								.encrypt(chanName, username, password));
+					}
+					return super.toString(saved);
+				}
+			};
 			MultipleEditPreference<Map<String, String>> proxyPreference = addMultipleEdit
-					(Preferences.KEY_PROXY.bind(chanName), R.string.proxy, "%s:%s",
-							Arrays.asList(getString(R.string.address), getString(R.string.port), null),
+					(Preferences.KEY_PROXY.bind(chanName), R.string.proxy, p -> {
+						String host = p.getValue().get(Preferences.SUB_KEY_PROXY_HOST);
+						return StringUtils.isEmpty(host) ? getString(R.string.proxy_direct)
+								: new SpannableStringBuilder(host + ":"
+										+ p.getValue().get(Preferences.SUB_KEY_PROXY_PORT) + "\n")
+										.append(getProxyWarning(p.getValue().containsKey
+												(Preferences.SUB_KEY_PROXY_AUTH_INVALID)));
+					}, Arrays.asList(getString(R.string.address), getString(R.string.port), null,
+							getString(R.string.proxy_username), getString(R.string.password)),
 							Arrays.asList(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD,
-									InputType.TYPE_CLASS_NUMBER | InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD, 0),
-							new MultipleEditPreference.MapValueCodec(Preferences.KEYS_PROXY));
+									InputType.TYPE_CLASS_NUMBER | InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD, 0,
+									InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD,
+									InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD), proxyCodec);
 			proxyPreference.setValues(Preferences.KEYS_PROXY.indexOf(Preferences.SUB_KEY_PROXY_TYPE),
 					Preferences.ENTRIES_PROXY_TYPE, Preferences.VALUES_PROXY_TYPE);
-			proxyPreference.setOnAfterChangeListener(p -> {
-				boolean success = HttpClient.getInstance().checkProxyValid(p.getValue());
-				if (!success) {
+			if (!StringUtils.isEmpty(proxyPreference.getValue().get(Preferences.SUB_KEY_PROXY_HOST))) {
+				proxyPreference.setDescription(getProxyWarning(proxyPreference.getValue().containsKey
+						(Preferences.SUB_KEY_PROXY_AUTH_INVALID)));
+			}
+			proxyPreference.setOnBeforeChangeListener((p, value) -> {
+				if (!HttpClient.getInstance().checkProxyValid(value)) {
 					ClickableToast.show(R.string.enter_valid_data);
-					proxyPreference.performClick();
+					return false;
 				}
+				return true;
+			});
+			proxyPreference.setOnAfterChangeListener(p -> {
+				proxyPreference.setDescription(!StringUtils.isEmpty(p.getValue()
+						.get(Preferences.SUB_KEY_PROXY_HOST)) ? getProxyWarning(false) : null);
 			});
 		}
 		if (canReadThreadPartially) {
@@ -853,12 +902,6 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 			@Override
 			public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
 				return request.isForMainFrame() && handleUri(request.getUrl());
-			}
-
-			@SuppressWarnings("deprecation")
-			@Override
-			public boolean shouldOverrideUrlLoading(WebView view, String url) {
-				return handleUri(Uri.parse(url));
 			}
 
 			private boolean handleUri(Uri uri) {

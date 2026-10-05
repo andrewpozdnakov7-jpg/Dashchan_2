@@ -117,6 +117,24 @@ public class WatcherNotifications {
 				chanName, boardName, threadNumber, Collections.emptyList(), postNumbers));
 	}
 
+	/** Runs behind already queued reply deliveries, without cancelling unrelated notifications. */
+	public static void cancelAllReplies(Context context) {
+		Context applicationContext = context.getApplicationContext();
+		EXECUTOR.execute(() -> {
+			NotificationManager manager = (NotificationManager)
+					applicationContext.getSystemService(Context.NOTIFICATION_SERVICE);
+			StatusBarNotification[] notifications = manager.getActiveNotifications();
+			if (notifications != null) {
+				for (StatusBarNotification notification : notifications) {
+					if (notification.getId() == C.NOTIFICATION_ID_REPLIES) {
+						manager.cancel(notification.getTag(), notification.getId());
+					}
+				}
+			}
+			manager.cancel(C.NOTIFICATION_ID_REPLIES);
+		});
+	}
+
 	private static class Task implements Runnable {
 		private static final String GROUP_REPLIES = "replies";
 
@@ -226,6 +244,9 @@ public class WatcherNotifications {
 
 		@Override
 		public void run() {
+			if (!"cancel".equals(source) && !Preferences.isTrackMyPostsEnabled()) {
+				return;
+			}
 			NotificationManager notificationManager = (NotificationManager)
 					context.getSystemService(Context.NOTIFICATION_SERVICE);
 			NotificationChannel channel = notificationManager.getNotificationChannel(C.NOTIFICATION_CHANNEL_REPLIES);

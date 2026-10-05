@@ -15,6 +15,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
+import android.webkit.ConsoleMessage;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
@@ -374,11 +375,11 @@ public class RecaptchaReader {
 				webView.addJavascriptInterface(javascriptInterface, "jsi");
 				webView.setWebViewClient(client);
 				webView.setWebChromeClient(new WebChromeClient() {
-					@SuppressWarnings("deprecation")
 					@Override
-					public void onConsoleMessage(String message, int lineNumber, String sourceID) {
-						Log.d("RecaptchaReader", "Console message: " + lineNumber + " " + sourceID + " " + message);
-						super.onConsoleMessage(message, lineNumber, sourceID);
+					public boolean onConsoleMessage(ConsoleMessage consoleMessage) {
+						Log.d("RecaptchaReader", "Console message: " + consoleMessage.lineNumber() + " "
+								+ consoleMessage.sourceId() + " " + consoleMessage.message());
+						return super.onConsoleMessage(consoleMessage);
 					}
 				});
 			}
@@ -545,21 +546,9 @@ public class RecaptchaReader {
 				return true;
 			}
 
-			@SuppressWarnings("deprecation")
-			@Override
-			public boolean shouldOverrideUrlLoading(WebView view, String url) {
-				return true;
-			}
-
 			@Override
 			public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
 				return handleInterceptRequest(request.getUrl());
-			}
-
-			@SuppressWarnings("deprecation")
-			@Override
-			public WebResourceResponse shouldInterceptRequest(WebView view, String url) {
-				return handleInterceptRequest(Uri.parse(url));
 			}
 
 			private WebResourceResponse handleInterceptRequest(Uri uri) {
@@ -577,14 +566,6 @@ public class RecaptchaReader {
 				if (request == null || request.isForMainFrame()) {
 					handleReceivedError(request != null ? request.getUrl().toString() : null);
 				}
-			}
-
-			@SuppressWarnings("deprecation")
-			@Override
-			public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
-				super.onReceivedError(view, errorCode, description, failingUrl);
-
-				handleReceivedError(failingUrl);
 			}
 
 			private void handleReceivedError(String failingUrl) {

@@ -321,12 +321,6 @@ public class PrivateBrowserActivity extends StateActivity implements DownloadLis
 			return request.isForMainFrame() && handleUrlLoading(view, request.getUrl());
 		}
 
-		@SuppressWarnings("deprecation")
-		@Override
-		public boolean shouldOverrideUrlLoading(WebView view, String url) {
-			return handleUrlLoading(view, Uri.parse(url));
-		}
-
 		private boolean handleUrlLoading(WebView view, Uri uri) {
 			if (BrowserFragment.isSupportedUri(uri)) {
 				view.loadUrl(uri.toString());

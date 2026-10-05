@@ -711,18 +711,23 @@ public class PikabuChanPerformer extends ChanPerformer {
 					PikabuChanConfiguration.get(this).getResources().getString(
 							R.string.pikabu_category_my_communities), customBoards));
 		}
-		@SuppressWarnings("unchecked")
-		ArrayList<Board>[] grouped = new ArrayList[COMMUNITY_CATEGORY_TITLES.length];
+		ArrayList<List<Board>> grouped = new ArrayList<>(COMMUNITY_CATEGORY_TITLES.length);
+		for (int i = 0; i < COMMUNITY_CATEGORY_TITLES.length; i++) grouped.add(null);
 		for (PikabuHtmlParser.Community community : communities) {
 			if (customSet.contains(community.board.getBoardName())) continue;
 			int index = chooseCommunityCategory(community);
-			if (grouped[index] == null) grouped[index] = new ArrayList<>();
-			grouped[index].add(community.board);
+			List<Board> group = grouped.get(index);
+			if (group == null) {
+				group = new ArrayList<>();
+				grouped.set(index, group);
+			}
+			group.add(community.board);
 		}
-		for (int i = 0; i < grouped.length; i++) {
-			if (grouped[i] != null && !grouped[i].isEmpty()) {
+		for (int i = 0; i < grouped.size(); i++) {
+			List<Board> group = grouped.get(i);
+			if (group != null && !group.isEmpty()) {
 				categories.add(new BoardCategory(PikabuChanConfiguration.get(this).getResources()
-						.getString(COMMUNITY_CATEGORY_TITLES[i]), grouped[i]));
+						.getString(COMMUNITY_CATEGORY_TITLES[i]), group));
 			}
 		}
 	}

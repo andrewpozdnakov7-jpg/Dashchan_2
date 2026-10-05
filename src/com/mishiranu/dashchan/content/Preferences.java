@@ -7,11 +7,9 @@ import android.content.UriPermission;
 import android.content.res.Configuration;
 import android.database.Cursor;
 import android.net.Uri;
-import android.os.Build;
 import android.os.Environment;
 import android.provider.DocumentsContract;
 import android.util.Pair;
-import androidx.annotation.RequiresApi;
 import chan.content.Chan;
 import chan.content.ChanConfiguration;
 import chan.content.ChanManager;
@@ -1129,7 +1127,6 @@ public class Preferences {
 		return dir;
 	}
 
-	@RequiresApi(Build.VERSION_CODES.LOLLIPOP)
 	public static Uri getDownloadUriTree(Context context) {
 		ContentResolver contentResolver = context.getContentResolver();
 		List<UriPermission> uriPermissions = contentResolver.getPersistedUriPermissions();
@@ -1199,7 +1196,6 @@ public class Preferences {
 		PREFERENCES.edit().put(KEY_DOWNLOAD_DIRECTORY_SETUP_PROMPTED, true).close();
 	}
 
-	@RequiresApi(Build.VERSION_CODES.KITKAT)
 	public static void setDownloadUriTree(Context context, Uri uri, int uriFlags) {
 		ContentResolver contentResolver = context.getContentResolver();
 		if (uri == null || "com.android.providers.downloads.documents".equals(uri.getAuthority())) {
@@ -1609,8 +1605,13 @@ public class Preferences {
 	public static final String SUB_KEY_PROXY_HOST = "host";
 	public static final String SUB_KEY_PROXY_PORT = "port";
 	public static final String SUB_KEY_PROXY_TYPE = "type";
+	public static final String SUB_KEY_PROXY_USERNAME = "username";
+	public static final String SUB_KEY_PROXY_PASSWORD = "password";
+	public static final String SUB_KEY_PROXY_AUTH_INVALID = "auth_invalid";
 	public static final List<String> KEYS_PROXY = Arrays
 			.asList(SUB_KEY_PROXY_HOST, SUB_KEY_PROXY_PORT, SUB_KEY_PROXY_TYPE);
+	public static final List<String> KEYS_PROXY_EDITOR = Arrays.asList(SUB_KEY_PROXY_HOST,
+			SUB_KEY_PROXY_PORT, SUB_KEY_PROXY_TYPE, SUB_KEY_PROXY_USERNAME, SUB_KEY_PROXY_PASSWORD);
 	public static final String VALUE_PROXY_TYPE_HTTP = "http";
 	public static final String VALUE_PROXY_TYPE_SOCKS = "socks";
 	public static final List<CharSequence> ENTRIES_PROXY_TYPE = Arrays.asList("HTTP", "SOCKS");
@@ -1622,7 +1623,29 @@ public class Preferences {
 			return null;
 		}
 		String value = PREFERENCES.getString(KEY_PROXY.bind(chan.name), null);
-		return unpackOrCastMultipleValues(value, KEYS_PROXY);
+		return unpackProxy(chan.name, value);
+	}
+
+	public static Map<String, String> unpackProxy(String chanName, String value) {
+		Map<String, String> map = unpackOrCastMultipleValues(value, KEYS_PROXY);
+		if (value != null) {
+			try {
+				String encrypted = new JSONObject(value).optString("auth");
+				if (!encrypted.isEmpty()) {
+					try {
+						String[] credentials = ProxyCredentials.decrypt(chanName, encrypted);
+						map.put(SUB_KEY_PROXY_USERNAME, credentials[0]);
+						map.put(SUB_KEY_PROXY_PASSWORD, credentials[1]);
+					} catch (Exception e) {
+						// A restored preference may have lost its device-bound keystore key. Never use it directly.
+						map.put(SUB_KEY_PROXY_AUTH_INVALID, "1");
+					}
+				}
+			} catch (JSONException e) {
+				// Legacy list-form proxy preference has no credentials.
+			}
+		}
+		return map;
 	}
 
 	public static final String KEY_RECAPTCHA_JAVASCRIPT = "recaptcha_javascript";
@@ -2996,6 +3019,7 @@ public class Preferences {
 
 	public static final String KEY_TRACK_MY_POSTS = "track_my_posts";
 	public static final boolean DEFAULT_TRACK_MY_POSTS = true;
+	private static final String KEY_REPLY_HISTORY_DELETE_PENDING = "reply_history_delete_pending";
 	public static final String KEY_TRACKED_REPLIES_LOCAL_CHECK = "tracked_replies_local_check";
 	public static final boolean DEFAULT_TRACKED_REPLIES_LOCAL_CHECK = true;
 	public static final String KEY_TRACKED_REPLIES_REFRESH_INTERVAL = "tracked_replies_refresh_interval";
@@ -3018,6 +3042,14 @@ public class Preferences {
 
 	public static boolean isTrackMyPostsEnabled() {
 		return PREFERENCES.getBoolean(KEY_TRACK_MY_POSTS, DEFAULT_TRACK_MY_POSTS);
+	}
+
+	public static boolean isReplyHistoryDeletePending() {
+		return PREFERENCES.getBoolean(KEY_REPLY_HISTORY_DELETE_PENDING, false);
+	}
+
+	public static void setReplyHistoryDeletePending(boolean pending) {
+		PREFERENCES.edit().put(KEY_REPLY_HISTORY_DELETE_PENDING, pending).close();
 	}
 
 	public static boolean isTrackedRepliesLocalCheckEnabled() {

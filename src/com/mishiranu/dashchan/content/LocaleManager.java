@@ -22,9 +22,10 @@ public class LocaleManager {
 	public static final String DEFAULT_LOCALE = "";
 	private static final Map<String, Locale> VALUES_LOCALE_OBJECTS;
 
-	@SuppressWarnings("deprecation")
 	private static Locale createLocale(String language, String country) {
-		return country != null ? new Locale(language, country) : new Locale(language);
+		Locale.Builder builder = new Locale.Builder().setLanguage(language);
+		if (country != null) builder.setRegion(country);
+		return builder.build();
 	}
 
 	static {

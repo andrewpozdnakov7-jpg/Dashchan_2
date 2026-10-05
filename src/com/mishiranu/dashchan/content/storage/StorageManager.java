@@ -6,6 +6,7 @@ import android.os.Message;
 import android.os.SystemClock;
 import android.util.Pair;
 import com.mishiranu.dashchan.content.MainApplication;
+import com.mishiranu.dashchan.util.ConcurrentUtils;
 import com.mishiranu.dashchan.util.IOUtils;
 import com.mishiranu.dashchan.util.Logger;
 import java.io.ByteArrayOutputStream;
@@ -16,6 +17,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
+import java.util.function.Consumer;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -101,14 +104,18 @@ public class StorageManager implements Handler.Callback {
 			return INSTANCE.awaitSaved(this);
 		}
 
+		/** Remove the primary and recovery copies after all earlier queued writes. Callback runs on main. */
+		protected final void deleteSavedData(Consumer<Boolean> completion) {
+			INSTANCE.deleteSavedData(this, completion);
+		}
+
 		public abstract Data onClone();
 		public abstract void onRead(InputStream input) throws IOException;
 		public abstract void onWrite(Data data, OutputStream output) throws IOException;
 	}
 
 	public static abstract class JsonOrgStorage<Data> extends Storage<Data> {
-		@SuppressWarnings("CharsetObjectCanBeUsed")
-		private static final Charset CHARSET = Charset.forName("UTF-8");
+		private static final Charset CHARSET = StandardCharsets.UTF_8;
 
 		public JsonOrgStorage(String name, int timeout, int maxTimeout) {
 			super(name, timeout, maxTimeout);
@@ -210,6 +217,31 @@ public class StorageManager implements Handler.Callback {
 				enqueueSerialize(storage);
 			}
 			return storage.lastWrite;
+		}
+	}
+
+	private void deleteSavedData(Storage<?> storage, Consumer<Boolean> completion) {
+		StorageWriteQueue.Ticket ticket;
+		synchronized (storage) {
+			cancelPending(storage);
+			ticket = writer.enqueue(() -> {
+				synchronized (storage.lock) {
+					deleteFile(getBackupFile(storage));
+					deleteFile(getRestoreFile(storage));
+					deleteFile(getFile(storage));
+				}
+			});
+			storage.lastWrite = ticket;
+		}
+		ConcurrentUtils.SEPARATE_EXECUTOR.execute(() -> {
+			boolean successful = ticket.await();
+			ConcurrentUtils.HANDLER.post(() -> completion.accept(successful));
+		});
+	}
+
+	private static void deleteFile(File file) throws IOException {
+		if (file.exists() && (!file.isFile() || !file.delete()) || file.exists()) {
+			throw new IOException("Cannot delete storage history");
 		}
 	}
 

@@ -24,20 +24,22 @@ import java.io.InputStream;
 import java.io.InterruptedIOException;
 import java.io.OutputStream;
 import java.io.SequenceInputStream;
-import java.io.UnsupportedEncodingException;
 import java.net.CookieHandler;
 import java.net.CookieManager;
+import java.net.Authenticator;
 import java.net.HttpURLConnection;
 import java.net.IDN;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.MalformedURLException;
 import java.net.Proxy;
+import java.net.PasswordAuthentication;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.net.URI;
 import java.net.URL;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.nio.charset.UnsupportedCharsetException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -55,13 +57,13 @@ import java.util.zip.ZipException;
 import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLException;
-import javax.net.ssl.SSLProtocolException;
 import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
 import org.brotli.dec.BrotliInputStream;
 
 public class HttpClient {
 	private static final HashMap<String, String> SHORT_RESPONSE_MESSAGES = new HashMap<>();
+	private static final ThreadLocal<ProxyData> PROXY_AUTHENTICATION = new ThreadLocal<>();
 
 	static final int HTTP_TEMPORARY_REDIRECT = 307;
 
@@ -70,6 +72,22 @@ public class HttpClient {
 		SHORT_RESPONSE_MESSAGES.put("Service Temporarily Unavailable", "Service Unavailable");
 
 		SecurityProviderInstaller.installIfEnabled();
+		Authenticator.setDefault(new Authenticator() {
+			@Override
+			protected PasswordAuthentication getPasswordAuthentication() {
+				ProxyData data = PROXY_AUTHENTICATION.get();
+				// Android's SOCKS implementation labels its SOCKS5 challenge as SERVER, not PROXY.
+				boolean proxyChallenge = getRequestorType() == RequestorType.PROXY || data != null && data.socks &&
+						getRequestorType() == RequestorType.SERVER &&
+						"SOCKS5".equalsIgnoreCase(getRequestingProtocol());
+				if (data == null || data.authInvalid || data.username == null || data.password == null ||
+						!proxyChallenge || getRequestingHost() == null ||
+						!data.host.equalsIgnoreCase(getRequestingHost()) || data.port != getRequestingPort()) {
+					return null;
+				}
+				return new PasswordAuthentication(data.username, data.password.toCharArray());
+			}
+		});
 
 		/*
 		 * MediaPlayer uses MediaHTTPConnection that uses its own CookieHandler instance.
@@ -120,11 +138,22 @@ public class HttpClient {
 		public final boolean socks;
 		public final String host;
 		public final int port;
+		public final String username;
+		public final String password;
+		public final boolean authInvalid;
 
 		public ProxyData(boolean socks, String host, int port) {
+			this(socks, host, port, null, null, false);
+		}
+
+		public ProxyData(boolean socks, String host, int port, String username, String password,
+				boolean authInvalid) {
 			this.socks = socks;
 			this.host = host;
 			this.port = port;
+			this.username = username;
+			this.password = password;
+			this.authInvalid = authInvalid;
 		}
 
 		private Proxy proxy;
@@ -150,7 +179,10 @@ public class HttpClient {
 				ProxyData proxyData = (ProxyData) o;
 				return socks == proxyData.socks &&
 						CommonUtils.equals(host, proxyData.host) &&
-						port == proxyData.port;
+						port == proxyData.port &&
+						CommonUtils.equals(username, proxyData.username) &&
+						CommonUtils.equals(password, proxyData.password) &&
+						authInvalid == proxyData.authInvalid;
 			}
 			return false;
 		}
@@ -160,13 +192,25 @@ public class HttpClient {
 			int result = (socks ? 1 : 0);
 			result = 31 * result + (host != null ? host.hashCode() : 0);
 			result = 31 * result + port;
+			result = 31 * result + (username != null ? username.hashCode() : 0);
+			result = 31 * result + (password != null ? password.hashCode() : 0);
+			result = 31 * result + (authInvalid ? 1 : 0);
 			return result;
 		}
 	}
 
 	public boolean checkProxyValid(Map<String, String> map) {
+		String host = map.get(Preferences.SUB_KEY_PROXY_HOST);
+		String port = map.get(Preferences.SUB_KEY_PROXY_PORT);
+		String username = map.get(Preferences.SUB_KEY_PROXY_USERNAME);
+		String password = map.get(Preferences.SUB_KEY_PROXY_PASSWORD);
+		if (StringUtils.isEmpty(host)) {
+			return StringUtils.isEmpty(port) && StringUtils.isEmpty(username) && StringUtils.isEmpty(password);
+		}
+		if (StringUtils.isEmpty(username) != StringUtils.isEmpty(password) ||
+				host.indexOf('\r') >= 0 || host.indexOf('\n') >= 0 || host.indexOf('@') >= 0) return false;
 		ProxyData proxyData = getProxyData(map);
-		return proxyData == null || proxyData.getProxy() != null;
+		return proxyData != null && proxyData.getProxy() != null;
 	}
 
 	public ProxyData getProxyData(Chan chan) {
@@ -183,9 +227,11 @@ public class HttpClient {
 				} catch (Exception e) {
 					port = -1;
 				}
-				if (port > 0) {
+				if (port > 0 && port <= 65535) {
 					boolean socks = Preferences.VALUE_PROXY_TYPE_SOCKS.equals(map.get(Preferences.SUB_KEY_PROXY_TYPE));
-					return new ProxyData(socks, host, port);
+					return new ProxyData(socks, host, port, map.get(Preferences.SUB_KEY_PROXY_USERNAME),
+							map.get(Preferences.SUB_KEY_PROXY_PASSWORD),
+							map.containsKey(Preferences.SUB_KEY_PROXY_AUTH_INVALID));
 				}
 			}
 		}
@@ -207,9 +253,15 @@ public class HttpClient {
 	}
 
 	private final HashMap<String, ProxyData> proxies = new HashMap<>();
+
+	static ProxyData setProxyAuthentication(ProxyData data) {
+		ProxyData previous = PROXY_AUTHENTICATION.get();
+		if (data != null) PROXY_AUTHENTICATION.set(data);
+		else PROXY_AUTHENTICATION.remove();
+		return previous;
+	}
 	private final ThreadLocal<HandshakeSSLSocket.Session> handshakeSessions = new ThreadLocal<>();
 
-	private boolean ssl3Disabled = false;
 	private SSLSocketFactory sslSocketFactory;
 
 	static final class InterruptedHttpException extends IOException {
@@ -282,18 +334,13 @@ public class HttpClient {
 		}
 	}
 
-	@SuppressWarnings("CharsetObjectCanBeUsed")
 	private static void encodeUriBufferPart(StringBuilder uriStringBuilder,
 			char[] chars, int i, int start, boolean ascii) {
 		if (!ascii) {
-			try {
-				for (byte b : new String(chars, start, i - start).getBytes("UTF-8")) {
-					String s = Integer.toString(b & 0xff, 16).toUpperCase(Locale.US);
-					uriStringBuilder.append('%');
-					uriStringBuilder.append(s);
-				}
-			} catch (UnsupportedEncodingException e) {
-				throw new RuntimeException(e);
+			for (byte b : new String(chars, start, i - start).getBytes(StandardCharsets.UTF_8)) {
+				String s = Integer.toString(b & 0xff, 16).toUpperCase(Locale.US);
+				uriStringBuilder.append('%');
+				uriStringBuilder.append(s);
 			}
 		} else {
 			uriStringBuilder.append(chars, start, i - start);
@@ -343,7 +390,13 @@ public class HttpClient {
 		session.checkExecuting();
 		session.disconnectAndClear();
 		session.executing = true;
+		ProxyData authData = getProxyData(session.holder.chan);
+		ProxyData previousAuthData = setProxyAuthentication(authData != null && session.proxy != null &&
+				session.proxy.equals(authData.getProxy()) ? authData : null);
 		try {
+			if (authData != null && authData.authInvalid) {
+				throw new HttpException(ErrorItem.Type.DOWNLOAD, false, false);
+			}
 			Uri requestedUri = session.getCurrentRequestedUri();
 			if (!session.holder.chan.locator.isWebScheme(requestedUri)) {
 				throw new HttpException(ErrorItem.Type.UNSUPPORTED_SCHEME, false, false);
@@ -563,24 +616,10 @@ public class HttpClient {
 		} catch (IOException e) {
 			// Do not retransmit a request here. Read operations are retried as a whole by ChanPerformer.Safe,
 			// including body download and parsing; mutating operations must remain single-shot.
-			if (e.getCause() instanceof SSLProtocolException) {
-				String message = e.getMessage();
-				if (message != null && message.contains("routines:SSL23_GET_SERVER_HELLO:sslv3")) {
-					synchronized (this) {
-						if (!ssl3Disabled) {
-							ssl3Disabled = true;
-							// Fix https://code.google.com/p/android/issues/detail?id=78187
-							sslSocketFactory = new SSLSocketFactoryWrapper(sslSocketFactory, NoSSLv3SSLSocket::new);
-						}
-					}
-					if (session.nextAttempt()) {
-						throw new RetryException();
-					}
-				}
-			}
 			session.disconnectAndClear();
 			throw transformIOException(e);
 		} finally {
+			setProxyAuthentication(previousAuthData);
 			session.executing = false;
 		}
 	}
@@ -1182,31 +1221,6 @@ public class HttpClient {
 				}
 				throw e;
 			}
-		}
-	}
-
-	private static class NoSSLv3SSLSocket extends SSLSocketWrapper {
-		public NoSSLv3SSLSocket(SSLSocket socket) {
-			super(socket);
-			SSLSocket realSocket = getRealSocket();
-			try {
-				realSocket.getClass().getMethod("setUseSessionTickets", boolean.class).invoke(realSocket, true);
-			} catch (Exception e) {
-				// Reflective operation, ignore exception
-			}
-		}
-
-		@Override
-		public void setEnabledProtocols(String[] protocols) {
-			if (protocols != null && protocols.length == 1 && "SSLv3".equals(protocols[0])) {
-				ArrayList<String> enabledProtocols = new ArrayList<>();
-				Collections.addAll(enabledProtocols, getEnabledProtocols());
-				if (enabledProtocols.size() > 1) {
-					enabledProtocols.remove("SSLv3");
-				}
-				protocols = CommonUtils.toArray(enabledProtocols, String.class);
-			}
-			super.setEnabledProtocols(protocols);
 		}
 	}
 }

@@ -3,11 +3,14 @@ package com.mishiranu.dashchan.content.storage;
 import chan.text.JsonSerial;
 import chan.text.ParseException;
 import chan.util.StringUtils;
+import com.mishiranu.dashchan.content.Preferences;
+import com.mishiranu.dashchan.content.database.CommonDatabase;
 import com.mishiranu.dashchan.content.model.Post;
 import com.mishiranu.dashchan.content.model.PostItem;
 import com.mishiranu.dashchan.content.model.PostNumber;
 import com.mishiranu.dashchan.text.HtmlParser;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
+import com.mishiranu.dashchan.util.Logger;
 import com.mishiranu.dashchan.util.WeakObservable;
 import java.io.IOException;
 import java.io.InputStream;
@@ -21,6 +24,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Consumer;
 
 public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.TrackedPost>> {
 	private static final int MAX_STORED_POSTS = 1000;
@@ -193,9 +197,14 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 
 	private MyPostsStorage() {
 		super("my-posts", 1000, 5000);
-		startRead();
-		if (pruneInactivePosts()) {
-			serialize();
+		if (Preferences.isReplyHistoryDeletePending()) {
+			// A previous process may have stopped before the queued file/marker cleanup finished.
+			clearAllHistory(success -> {});
+		} else {
+			startRead();
+			if (pruneInactivePosts()) {
+				serialize();
+			}
 		}
 	}
 
@@ -765,6 +774,31 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 			serialize();
 			notifyChanged();
 		}
+	}
+
+	/** Clears own posts and replies, including the persistent recovery copies. */
+	public synchronized void clearAllHistory(Consumer<Boolean> completion) {
+		posts.clear();
+		postsMap.clear();
+		notifyChanged();
+		deleteSavedData(filesDeleted -> {
+			if (!filesDeleted) {
+				completion.accept(false);
+				return;
+			}
+			try {
+				CommonDatabase.getInstance().getPosts().clearUserPostFlags(success -> {
+					if (success) {
+						Preferences.setReplyHistoryDeletePending(false);
+					}
+					completion.accept(success);
+				});
+			} catch (RuntimeException e) {
+				Logger.write(Logger.Type.ERROR, "MyPostsStorage", "clear_markers_enqueue_failed",
+						e.getClass().getSimpleName());
+				completion.accept(false);
+			}
+		});
 	}
 
 	public synchronized void setThreadDeleted(ThreadKey key, boolean deleted) {

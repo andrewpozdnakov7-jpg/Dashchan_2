@@ -390,6 +390,14 @@ public class DownloadDialog {
 	}
 
 	private static class Adapter extends BaseAdapter implements Filterable {
+		private static class DirectoryFilterItems {
+			private final ArrayList<DialogDirectory> items;
+
+			private DirectoryFilterItems(ArrayList<DialogDirectory> items) {
+				this.items = items;
+			}
+		}
+
 		private final DataFile root;
 		private final Runnable refresh;
 
@@ -541,16 +549,14 @@ public class DownloadDialog {
 				}
 
 				FilterResults results = new FilterResults();
-				results.values = result;
+				results.values = new DirectoryFilterItems(result);
 				results.count = result.size();
 				return results;
 			}
 
 			@Override
 			protected void publishResults(CharSequence constraint, FilterResults results) {
-				@SuppressWarnings("unchecked")
-				ArrayList<DialogDirectory> items = (ArrayList<DialogDirectory>) results.values;
-				Adapter.this.items = items;
+				Adapter.this.items = ((DirectoryFilterItems) results.values).items;
 				notifyDataSetChanged();
 			}
 		};

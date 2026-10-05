@@ -12,10 +12,8 @@ import android.view.MenuItem;
 import android.view.View;
 import androidx.annotation.NonNull;
 import androidx.core.view.GravityCompat;
-import androidx.customview.widget.ViewDragHelper;
 import androidx.drawerlayout.widget.DrawerLayout;
 import com.mishiranu.dashchan.graphics.BaseDrawable;
-import java.lang.reflect.Field;
 
 public class DrawerToggle implements DrawerLayout.DrawerListener {
 	private final Activity activity;
@@ -34,20 +32,8 @@ public class DrawerToggle implements DrawerLayout.DrawerListener {
 		arrowDrawable = new ArrowDrawable(context);
 	}
 
-	private static final int DRAWER_CLOSE_DURATION;
-
-	static {
-		int duration;
-		try {
-			Field baseSettleDurationField = ViewDragHelper.class.getDeclaredField("BASE_SETTLE_DURATION");
-			baseSettleDurationField.setAccessible(true);
-			duration = (int) baseSettleDurationField.get(null);
-		} catch (Exception e) {
-			// Library method, fix if needed
-			throw new RuntimeException(e);
-		}
-		DRAWER_CLOSE_DURATION = duration;
-	}
+	// Match the pinned AndroidX ViewDragHelper's base settle duration.
+	private static final int DRAWER_CLOSE_DURATION = 256;
 
 	public void setDrawerIndicatorMode(Mode mode) {
 		if (this.mode != mode) {

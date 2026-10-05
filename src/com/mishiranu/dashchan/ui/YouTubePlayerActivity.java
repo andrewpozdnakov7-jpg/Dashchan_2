@@ -290,17 +290,6 @@ public class YouTubePlayerActivity extends ComponentActivity {
 			return true;
 		}
 
-		@SuppressWarnings("deprecation")
-		@Override
-		public boolean shouldOverrideUrlLoading(WebView view, String url) {
-			Uri uri = Uri.parse(url);
-			if (isEmbedUri(uri, videoId)) {
-				return false;
-			}
-			openOriginalExternally();
-			return true;
-		}
-
 		@Override
 		public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
 			handler.cancel();

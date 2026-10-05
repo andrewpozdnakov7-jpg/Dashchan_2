@@ -33,6 +33,7 @@ import com.mishiranu.dashchan.util.Hasher;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -48,12 +49,11 @@ public class FirewallResolvers extends FirewallResolver.Implementation {
 			private ByteArrayOutputStream output;
 			private OutputStreamWriter writer;
 
-			@SuppressWarnings("CharsetObjectCanBeUsed")
 			public void append(String key, String value) {
 				try {
 					if (output == null) {
 						output = new ByteArrayOutputStream();
-						writer = new OutputStreamWriter(output, "UTF-8");
+						writer = new OutputStreamWriter(output, StandardCharsets.UTF_8);
 					}
 					writer.write(key);
 					writer.write('=');
@@ -421,6 +421,12 @@ public class FirewallResolvers extends FirewallResolver.Implementation {
 
 	private <T> T resolveWebView(FirewallResolver.Session session, FirewallResolver.WebViewClient<T> client)
 			throws FirewallResolver.CancelException, InterruptedException {
+		HttpClient.ProxyData configuredProxy = HttpClient.getInstance().getProxyData(session.getChan());
+		if (configuredProxy != null && (configuredProxy.authInvalid || configuredProxy.username != null)) {
+			// WebView cannot authenticate SOCKS5 and does not share HttpClient's scoped authenticator.
+			// Do not retry this challenge using an unauthenticated or direct connection.
+			return null;
+		}
 		Context context = MainApplication.getInstance();
 		class Status {
 			boolean established;
@@ -469,7 +475,7 @@ public class FirewallResolvers extends FirewallResolver.Implementation {
 				Uri initialUri = session.getUri().buildUpon().clearQuery().encodedFragment(null).build();
 				String chanTitle = chan.configuration.getTitle();
 				String userAgent = session.getIdentifier().userAgent;
-				HttpClient.ProxyData proxyData = HttpClient.getInstance().getProxyData(chan);
+				HttpClient.ProxyData proxyData = configuredProxy;
 				boolean verifyCertificate = chan.locator.isUseHttps() && Preferences.isVerifyCertificate();
 				WebViewRequestCallback requestCallback = new WebViewRequestCallback(client, initialUri, chanTitle,
 						() -> status.cancel = true);

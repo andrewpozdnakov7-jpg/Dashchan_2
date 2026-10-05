@@ -663,10 +663,17 @@ public class ThemeEngine {
 				ColorUtils.blendARGB(STATUS_OVERLAY_DARK, STATUS_OVERLAY_LIGHT, lightness));
 	}
 
-	@SuppressWarnings("deprecation")
 	private static ActivityManager.TaskDescription createTaskDescription(int toolbarColor) {
-		// The legacy constructor remains the compatible way to supply the task color on API 30+.
 		int iconResId = LauncherIconManager.getLogoOption(Preferences.getApplicationLogo()).iconResId;
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+			return new ActivityManager.TaskDescription.Builder().setIcon(iconResId)
+					.setPrimaryColor(toolbarColor).build();
+		}
+		return createTaskDescriptionLegacy(iconResId, toolbarColor);
+	}
+
+	@SuppressWarnings("deprecation")
+	private static ActivityManager.TaskDescription createTaskDescriptionLegacy(int iconResId, int toolbarColor) {
 		return new ActivityManager.TaskDescription(null, iconResId, toolbarColor);
 	}
 

@@ -1515,13 +1515,6 @@ public class RedditWebReaderFragment extends ContentFragment {
 					openExternal(request.getUrl());
 		}
 
-		@SuppressWarnings("deprecation")
-		@Override
-		public boolean shouldOverrideUrlLoading(WebView view, String url) {
-			Uri uri = Uri.parse(url);
-			return !isAllowedRedditPage(uri) && openExternal(uri);
-		}
-
 		@Override
 		public void doUpdateVisitedHistory(WebView view, String url, boolean isReload) {
 			recordVisitedPage(view, url, false);

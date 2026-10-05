@@ -6,10 +6,10 @@ This directory contains the reproducible native-library build used by the Dashch
 
 | Component | Version |
 | --- | --- |
-| FFmpeg | 8.1.2 |
-| dav1d | 1.5.3 |
-| libyuv | commit `6afd9becdf58822b1da6770598d8597c583ccfad` |
-| Android NDK | 29.0.14206865 |
+| FFmpeg | `nativeFfmpegVersion` in root `gradle.properties` |
+| dav1d | `nativeDav1dVersion` in root `gradle.properties` |
+| libyuv | `nativeLibyuvRevision` in root `gradle.properties` |
+| Android NDK | `androidNdkVersion` in root `gradle.properties` |
 | Android Build Tools | 36.0.0 |
 | Native ABIs | `arm64-v8a`, `armeabi-v7a`, `x86` |
 

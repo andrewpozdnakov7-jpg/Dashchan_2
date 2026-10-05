@@ -79,6 +79,12 @@ public class InterfaceFragment extends PreferenceFragment {
 		addButton(R.string.popup_appearance, R.string.popup_appearance__summary)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 						.pushFragment(new PopupAppearanceFragment()));
+		addCheck(true, Preferences.KEY_ROUNDED_DIALOGS, Preferences.DEFAULT_ROUNDED_DIALOGS,
+				R.string.rounded_dialogs, R.string.rounded_dialogs__summary);
+		RoundedDialogsRadiusPreference roundedDialogsRadiusPreference =
+				new RoundedDialogsRadiusPreference(requireContext());
+		addDialogPreference(roundedDialogsRadiusPreference);
+		addDependency(Preferences.KEY_ROUNDED_DIALOGS_RADIUS, Preferences.KEY_ROUNDED_DIALOGS, true);
 		List<String> lightThemeValues = new ArrayList<>();
 		List<CharSequence> lightThemeEntries = new ArrayList<>();
 		List<String> darkThemeValues = new ArrayList<>();

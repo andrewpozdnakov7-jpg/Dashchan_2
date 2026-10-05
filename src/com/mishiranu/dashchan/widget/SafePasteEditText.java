@@ -1,8 +1,6 @@
 package com.mishiranu.dashchan.widget;
 
-import android.annotation.TargetApi;
 import android.content.Context;
-import android.os.Build;
 import android.text.Editable;
 import android.text.InputFilter;
 import android.text.Spanned;
@@ -30,7 +28,6 @@ public class SafePasteEditText extends EditText {
 	}
 
 	@SuppressWarnings("unused")
-	@TargetApi(Build.VERSION_CODES.LOLLIPOP)
 	public SafePasteEditText(Context context, AttributeSet attrs, int defStyleAttr, int defStyleRes) {
 		super(context, attrs, defStyleAttr, defStyleRes);
 	}

@@ -14,7 +14,6 @@ public class D3ChanLocator extends ChanLocator {
 	private static final Pattern THREAD_PATH = Pattern.compile("/(?:[^/?#]*-)?(\\d+)/?");
 	private static final Pattern COMMENT_FRAGMENT = Pattern.compile("(?:comment[-_])?(\\d+)");
 
-	@SuppressWarnings("unchecked")
 	public static D3ChanLocator get(Object object) {
 		return ChanLocator.get(object);
 	}

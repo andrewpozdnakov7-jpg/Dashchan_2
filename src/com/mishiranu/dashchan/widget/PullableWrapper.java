@@ -356,12 +356,8 @@ public class PullableWrapper {
 			}
 		}
 
-		@SuppressWarnings("UnnecessaryLocalVariable")
 		private void invalidate(Wrapped wrapped, int width, int padding) {
 			int hw = width / 2;
-			int radius = this.radius;
-			int shadowSize = this.shadowSize;
-			int shadowShift = this.shadowShift;
 			int l = hw - radius - shadowSize - 1;
 			int r = hw + radius + shadowSize + 1;
 			int t = padding - 2 * radius - shadowSize + shadowShift - 1;

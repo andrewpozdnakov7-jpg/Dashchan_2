@@ -23,6 +23,9 @@ tasks.withType(JavaCompile) {
 }
 
 def androidNdkVersion = providers.gradleProperty('androidNdkVersion').get()
+def nativeDav1dVersion = providers.gradleProperty('nativeDav1dVersion').get()
+def nativeFfmpegVersion = providers.gradleProperty('nativeFfmpegVersion').get()
+def nativeLibyuvRevision = providers.gradleProperty('nativeLibyuvRevision').get()
 def buildConfigStringArray = { values -> '{"' + values.join('", "') + '"}' }
 def knownChanExtensionPackages = [
 		'com.mishiranu.dashchan.chan.archb4k',
@@ -478,7 +481,7 @@ android {
 	}
 
 	lint {
-		disable += ['MissingTranslation', 'ValidFragment', 'ResourceType']
+		disable += ['MissingTranslation', 'ValidFragment']
 	}
 
 	compileOptions {
@@ -523,13 +526,13 @@ tasks.register('prepareBuiltinWebmSources', Exec) {
 	workingDir builtinWebmProjectDir
 	commandLine 'bash', new File(builtinWebmProjectDir, 'shared-prepare.sh').absolutePath,
 			builtinWebmSources.absolutePath
-	environment DAV1D_VERSION: '1.5.3',
-			FFMPEG_VERSION: '8.1.2',
-			YUV_VERSION: '6afd9becdf58822b1da6770598d8597c583ccfad'
+	environment DAV1D_VERSION: nativeDav1dVersion,
+			FFMPEG_VERSION: nativeFfmpegVersion,
+			YUV_VERSION: nativeLibyuvRevision
 	inputs.file new File(builtinWebmProjectDir, 'shared-prepare.sh')
-	inputs.property 'dav1dVersion', '1.5.3'
-	inputs.property 'ffmpegVersion', '8.1.2'
-	inputs.property 'yuvVersion', '6afd9becdf58822b1da6770598d8597c583ccfad'
+	inputs.property 'dav1dVersion', nativeDav1dVersion
+	inputs.property 'ffmpegVersion', nativeFfmpegVersion
+	inputs.property 'yuvVersion', nativeLibyuvRevision
 	builtinWebmProvidedSourceDirectories.each { name, directory ->
 		inputs.property "${name}ProvidedSourceDirectory", directory.orElse('')
 		if (directory.isPresent()) {
@@ -550,13 +553,13 @@ tasks.register('buildBuiltinWebmLibraries', Exec) {
 			builtinWebmSources.absolutePath, builtinWebmLibraries.absolutePath,
 			builtinWebmExternal.absolutePath
 	environment ANDROID_NDK_HOME: new File(getAndroidSdkDirectory(), "ndk/${androidNdkVersion}").absolutePath,
-			DAV1D_VERSION: '1.5.3',
+			DAV1D_VERSION: nativeDav1dVersion,
 			EXTERNAL_CORES: Runtime.runtime.availableProcessors().toString(),
 			NATIVE_ABIS: nativeAbis.join(' ')
 	inputs.file new File(builtinWebmProjectDir, 'shared-build.sh')
 	inputs.dir builtinWebmSources
 	inputs.property 'nativeAbis', nativeAbis.join(' ')
-	inputs.property 'dav1dVersion', '1.5.3'
+	inputs.property 'dav1dVersion', nativeDav1dVersion
 	outputs.dirs builtinWebmLibraries, builtinWebmExternal
 	doFirst {
 		requireUnixBuiltinWebmBuild()

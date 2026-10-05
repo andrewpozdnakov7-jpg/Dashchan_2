@@ -476,6 +476,10 @@ public final class SettingsSearchIndex {
 				R.string.touch_feedback_intensity, Preferences.KEY_TOUCH_FEEDBACK);
 		add(context, entries, Screen.POPUP_APPEARANCE, R.string.popup_appearance,
 				R.string.popup_appearance__summary, null);
+		add(context, entries, Screen.INTERFACE, R.string.rounded_dialogs, R.string.rounded_dialogs__summary,
+				Preferences.KEY_ROUNDED_DIALOGS);
+		add(context, entries, Screen.INTERFACE, R.string.rounded_dialogs_radius, 0,
+				Preferences.KEY_ROUNDED_DIALOGS_RADIUS);
 		add(context, entries, Screen.POPUP_APPEARANCE, R.string.popup_color_style, 0,
 				Preferences.KEY_POPUP_COLOR_MODE);
 		add(context, entries, Screen.POPUP_APPEARANCE, R.string.popup_background_color, 0,
@@ -629,10 +633,6 @@ public final class SettingsSearchIndex {
 				R.string.volume_buttons_text_scale__summary, Preferences.KEY_VOLUME_BUTTONS_TEXT_SCALE);
 		add(context, entries, Screen.ACCESSIBILITY, R.string.video_right_hand_controls,
 				R.string.video_right_hand_controls__summary, Preferences.KEY_VIDEO_RIGHT_HAND_CONTROLS);
-		add(context, entries, Screen.ACCESSIBILITY, R.string.rounded_dialogs, R.string.rounded_dialogs__summary,
-				Preferences.KEY_ROUNDED_DIALOGS);
-		add(context, entries, Screen.ACCESSIBILITY, R.string.rounded_dialogs_radius, 0,
-				Preferences.KEY_ROUNDED_DIALOGS_RADIUS);
 
 		add(context, entries, Screen.ABOUT, R.string.statistics);
 		add(context, entries, Screen.ABOUT, R.string.backup_data, R.string.backup_data__summary, null);

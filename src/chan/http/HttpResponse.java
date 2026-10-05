@@ -17,6 +17,7 @@ import java.io.InputStreamReader;
 import java.io.SequenceInputStream;
 import java.io.UnsupportedEncodingException;
 import java.net.HttpURLConnection;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -169,7 +170,6 @@ public final class HttpResponse {
 	private static Pair<InputStream, String> extractCharsetFromHtml(InputStream input,
 			boolean checkHtml) throws IOException {
 		ByteArrayOutputStream output = new ByteArrayOutputStream();
-		@SuppressWarnings("CharsetObjectCanBeUsed")
 		InputStreamReader reader = new InputStreamReader(new InputStream() {
 			@Override
 			public int read() throws IOException {
@@ -188,7 +188,7 @@ public final class HttpResponse {
 				}
 				return result;
 			}
-		}, "ISO-8859-1");
+		}, StandardCharsets.ISO_8859_1);
 		StringBuilder builder = new StringBuilder();
 		if (checkHtml) {
 			final String minHtmlStart = "<!DOCTYPE html><html><head>";

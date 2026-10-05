@@ -711,6 +711,10 @@
 	<string name="proceed">Proceed</string>
 	<string name="processing_data__ellipsis">Processing data…</string>
 	<string name="proxy">Proxy</string>
+	<string name="proxy_direct">Direct connection</string>
+	<string name="proxy_username">Proxy username</string>
+	<string name="proxy_auth_unavailable">Saved proxy credentials are unavailable. Enter them again.</string>
+	<string name="proxy_webview_warning">The anti-bot check may open in the built-in browser and bypass the forum proxy.</string>
 	<string name="quality">Quality</string>
 	<string name="quote__verb">Quote</string>
 	<string name="rating">Rating</string>
@@ -939,6 +943,8 @@
 	<string name="update_available">Update available</string>
 	<string name="update_check_failed">Failed to check for updates</string>
 	<string name="update_downloaded">Update downloaded</string>
+	<string name="open_slooop_after_update">Open Slooop</string>
+	<string name="update_installed_open_app">Update installed. Tap to return to the app.</string>
 	<string name="update_found_on_github">Release found on GitHub</string>
 	<string name="update_channel">Update channel</string>
 	<string name="update_channel_stable">Stable (recommended)</string>
@@ -1193,6 +1199,12 @@
 	<string name="replies_with_unread__format">Replies (%d)</string>
 	<string name="track_replies">Track replies</string>
 	<string name="track_replies__summary">Store messages sent through Slooop and automatically check for replies</string>
+	<string name="disable_reply_tracking__title">Turn off reply tracking?</string>
+	<string name="disable_reply_tracking__message">You can keep your post and reply history for later, or remove it from this app. Deleted history cannot be restored by turning tracking back on. Existing external or system backups cannot be removed by the app.</string>
+	<string name="disable_reply_tracking_keep">Turn off, keep history</string>
+	<string name="disable_reply_tracking_delete">Turn off and delete history</string>
+	<string name="reply_history_deleted">Reply history deleted from this app</string>
+	<string name="reply_history_delete_failed">Could not delete all saved history files. Check app storage.</string>
 	<string name="replies_and_notifications">Replies and notifications</string>
 	<string name="replies_and_notifications_disabled">Disabled</string>
 	<string name="replies_and_notifications_local_only">Local checks only</string>

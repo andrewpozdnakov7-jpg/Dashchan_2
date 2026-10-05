@@ -13,6 +13,7 @@ import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
+import android.os.Build;
 import android.util.Base64;
 import android.util.Pair;
 import android.view.Gravity;
@@ -63,9 +64,15 @@ public class GraphicsUtils {
 		SKIA_SUPPORTS_GAMMA_CORRECTION = pixel != 0xff7f7f7f;
 	}
 
-	@SuppressWarnings("deprecation")
 	public static BitmapRegionDecoder createBitmapRegionDecoder(InputStream input) throws IOException {
-		// Keep the existing stream decoder path; ImageDecoder migration needs image/media regression testing.
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+			return BitmapRegionDecoder.newInstance(input);
+		}
+		return createBitmapRegionDecoderLegacy(input);
+	}
+
+	@SuppressWarnings("deprecation")
+	private static BitmapRegionDecoder createBitmapRegionDecoderLegacy(InputStream input) throws IOException {
 		return BitmapRegionDecoder.newInstance(input, false);
 	}
 

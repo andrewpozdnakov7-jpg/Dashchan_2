@@ -35,9 +35,6 @@ import java.util.ArrayList;
 public class ViewUtils {
 	public static final int STATUS_OVERLAY_TRANSPARENT = 0x4d000000;
 
-	@SuppressWarnings("deprecation")
-	public static final int SOFT_INPUT_ADJUST_RESIZE_COMPAT = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE;
-
 	public static final DialogInterface.OnShowListener ALERT_DIALOG_LONGER_TITLE = dialog -> {
 		if (dialog instanceof AlertDialog) {
 			View view = ((AlertDialog) dialog).getWindow().getDecorView();
@@ -273,12 +270,6 @@ public class ViewUtils {
 	public static int getStatusBarColor(Window window) {
 		// Kept as a compatibility fallback for windows that are not rendered by the custom inset layer.
 		return window.getStatusBarColor();
-	}
-
-	@SuppressWarnings("deprecation")
-	public static int getNavigationBarColor(Window window) {
-		// Kept as a compatibility fallback for windows that are not rendered by the custom inset layer.
-		return window.getNavigationBarColor();
 	}
 
 	@SuppressWarnings("deprecation")

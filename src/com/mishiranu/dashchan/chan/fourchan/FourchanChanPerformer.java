@@ -742,15 +742,13 @@ public class FourchanChanPerformer extends ChanPerformer {
 		return configuration.get(null, CAPTCHA_TICKET_KEY, null);
 	}
 
-	private static final SimpleDateFormat DATE_FORMAT_BAN = new SimpleDateFormat("MMMM d yyyy", Locale.US);
-
 	private static long parseBanDate(String value) {
 		if (value == null) {
 			return -1;
 		}
 		value = value.replaceAll("(st|nd|rd|th),", "");
 		try {
-			Date date = DATE_FORMAT_BAN.parse(value);
+			Date date = new SimpleDateFormat("MMMM d yyyy", Locale.US).parse(value);
 			return date != null ? date.getTime() : 0;
 		} catch (java.text.ParseException e) {
 			return 0;
