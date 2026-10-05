@@ -1212,7 +1212,7 @@ int DGifSlurp(GifFileType *GifFile) {
 				DGifDecreaseImageCounter(GifFile);
 				return GIF_ERROR;
 			}
-			ImageSize = sp->ImageDesc.Width * sp->ImageDesc.Height;
+			ImageSize = (size_t)sp->ImageDesc.Width * (size_t)sp->ImageDesc.Height;
 
 			if (ImageSize > (SIZE_MAX / sizeof(GifPixelType))) {
 				DGifDecreaseImageCounter(GifFile);
