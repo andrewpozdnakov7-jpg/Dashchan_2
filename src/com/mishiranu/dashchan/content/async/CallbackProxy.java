@@ -54,9 +54,8 @@ public class CallbackProxy<Callback> {
 				}
 			}
 		};
-		@SuppressWarnings("unchecked")
-		Callback callback = (Callback) Proxy.newProxyInstance
-				(callbackClass.getClassLoader(), instances, invocationHandler);
+		Callback callback = callbackClass.cast(Proxy.newProxyInstance
+				(callbackClass.getClassLoader(), instances, invocationHandler));
 		return callback;
 	}
 }

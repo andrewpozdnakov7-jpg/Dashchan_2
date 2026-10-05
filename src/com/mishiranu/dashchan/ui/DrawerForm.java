@@ -1557,7 +1557,6 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	}
 
 	private final View.OnClickListener sectionButtonListener = new View.OnClickListener() {
-		@SuppressLint("NewApi")
 		@Override
 		public void onClick(View v) {
 			ListItem listItem = getItemFromChild(v);

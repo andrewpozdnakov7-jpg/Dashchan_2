@@ -133,6 +133,9 @@ jobs:
           distribution: temurin
           java-version: '21'
 
+      - name: Load pinned native versions
+        run: python3 .github/scripts/export_native_versions.py >> "$GITHUB_ENV"
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
 
@@ -159,13 +162,9 @@ jobs:
             'platforms;android-37.0' \
             'build-tools;34.0.0' \
             'build-tools;36.0.0' \
-            'ndk;29.0.14206865'
+            "ndk;$ANDROID_NDK_VERSION"
 
       - name: Prepare pinned native source inputs
-        env:
-          DAV1D_VERSION: '1.5.3'
-          FFMPEG_VERSION: '8.1.2'
-          YUV_VERSION: '6afd9becdf58822b1da6770598d8597c583ccfad'
         run: |
           set -euo pipefail
           source_root="$RUNNER_TEMP/fdroid-native-sources"
@@ -174,7 +173,6 @@ jobs:
             echo "CI_NATIVE_SOURCES=$source_root"
             echo "ORG_GRADLE_PROJECT_dashchanDav1dSourceDir=$source_root/dav1d"
             echo "ORG_GRADLE_PROJECT_dashchanFfmpegSourceDir=$source_root/ffmpeg"
-            echo "ORG_GRADLE_PROJECT_dashchanLibyuvSourceDir=$source_root/yuv"
           } >> "$GITHUB_ENV"
 
       - name: Test native cache validation

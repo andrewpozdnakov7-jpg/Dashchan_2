@@ -64,12 +64,6 @@ public class WebViewDecoder extends WebViewClient {
 		return handleInterceptRequest(request.getUrl().toString());
 	}
 
-	@SuppressWarnings("deprecation")
-	@Override
-	public WebResourceResponse shouldInterceptRequest(WebView view, String url) {
-		return handleInterceptRequest(url);
-	}
-
 	private WebResourceResponse handleInterceptRequest(String url) {
 		if (url.startsWith("http://") || url.startsWith("https://")) {
 			if (url.endsWith("//127.0.0.1/image.jpeg")) {

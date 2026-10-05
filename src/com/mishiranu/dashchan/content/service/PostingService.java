@@ -692,9 +692,9 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 
 				PendingUserPost pendingUserPost = null;
 				if (postNumber != null) {
-					CommonDatabase.getInstance().getPosts().setFlags(true, chanName, data.boardName,
-							targetThreadNumber, postNumber, PostItem.HideState.UNDEFINED, true);
 					if (Preferences.isTrackMyPostsEnabled()) {
+						CommonDatabase.getInstance().getPosts().setFlags(true, chanName, data.boardName,
+								targetThreadNumber, postNumber, PostItem.HideState.UNDEFINED, true);
 						MyPostsStorage.getInstance().add(chanName, data.boardName, targetThreadNumber,
 								postNumber, comment, System.currentTimeMillis());
 						ReplyPushManager.onPostTracked(this, chanName, data.boardName,

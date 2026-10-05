@@ -529,14 +529,12 @@ public class ThemeEngine {
 					: popup ? POPUP_ATTACH_LISTENER : null;
 		}
 
-		private static final int[] CLONE_ATTRS = {android.R.attr.windowIsFloating, R.attr.isOverlay, R.attr.isPopup};
-
 		@Override
 		public LayoutInflater cloneInContext(Context newContext) {
-			TypedArray typedArray = newContext.obtainStyledAttributes(CLONE_ATTRS);
-			boolean dialog = typedArray.getBoolean(0, false);
-			boolean overlay = typedArray.getBoolean(1, false);
-			boolean popup = typedArray.getBoolean(2, false);
+			TypedArray typedArray = newContext.obtainStyledAttributes(R.styleable.ThemeContextAppearance);
+			boolean dialog = typedArray.getBoolean(R.styleable.ThemeContextAppearance_android_windowIsFloating, false);
+			boolean overlay = typedArray.getBoolean(R.styleable.ThemeContextAppearance_isOverlay, false);
+			boolean popup = typedArray.getBoolean(R.styleable.ThemeContextAppearance_isPopup, false);
 			typedArray.recycle();
 			boolean inheritDirect = dialog || popup;
 			boolean forceDirect = newContext instanceof Activity;
@@ -663,10 +661,17 @@ public class ThemeEngine {
 				ColorUtils.blendARGB(STATUS_OVERLAY_DARK, STATUS_OVERLAY_LIGHT, lightness));
 	}
 
-	@SuppressWarnings("deprecation")
 	private static ActivityManager.TaskDescription createTaskDescription(int toolbarColor) {
-		// The legacy constructor remains the compatible way to supply the task color on API 30+.
 		int iconResId = LauncherIconManager.getLogoOption(Preferences.getApplicationLogo()).iconResId;
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+			return new ActivityManager.TaskDescription.Builder().setIcon(iconResId)
+					.setPrimaryColor(toolbarColor).build();
+		}
+		return createTaskDescriptionLegacy(iconResId, toolbarColor);
+	}
+
+	@SuppressWarnings("deprecation")
+	private static ActivityManager.TaskDescription createTaskDescriptionLegacy(int iconResId, int toolbarColor) {
 		return new ActivityManager.TaskDescription(null, iconResId, toolbarColor);
 	}
 
@@ -1164,10 +1169,10 @@ public class ThemeEngine {
 			int thread = GraphicsUtils.applyAlpha(post, postToThreadAlpha);
 			int controlNormal21 = 0;
 			float disabledAlpha21 = 1f;
-			int[] attrs = {android.R.attr.colorControlNormal, android.R.attr.disabledAlpha};
-			typedArray = context.obtainStyledAttributes(attrs);
-			ColorStateList colorControlNormal = typedArray.getColorStateList(0);
-			disabledAlpha21 = typedArray.getFloat(1, 1f);
+			typedArray = context.obtainStyledAttributes(R.styleable.ThemeControlAppearance);
+			ColorStateList colorControlNormal = typedArray.getColorStateList(
+					R.styleable.ThemeControlAppearance_android_colorControlNormal);
+			disabledAlpha21 = typedArray.getFloat(R.styleable.ThemeControlAppearance_android_disabledAlpha, 1f);
 			typedArray.recycle();
 			controlNormal21 = colorControlNormal.getColorForState(new int[] {android.R.attr.state_enabled},
 					colorControlNormal.getDefaultColor());

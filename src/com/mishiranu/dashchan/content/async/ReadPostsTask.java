@@ -234,9 +234,9 @@ public class ReadPostsTask extends HttpHolderTask<Void, ReadPostsTask.Result> {
 							removedPendingUserPosts = new HashSet<>();
 						}
 						removedPendingUserPosts.add(pendingUserPost);
-						CommonDatabase.getInstance().getPosts().setFlags(false, chan.name,
-								boardName, threadNumber, postNumber, PostItem.HideState.UNDEFINED, true);
 						if (Preferences.isTrackMyPostsEnabled()) {
+							CommonDatabase.getInstance().getPosts().setFlags(false, chan.name,
+									boardName, threadNumber, postNumber, PostItem.HideState.UNDEFINED, true);
 							Post ownPost = null;
 							for (Post post : posts) {
 								if (post.number.equals(postNumber)) {

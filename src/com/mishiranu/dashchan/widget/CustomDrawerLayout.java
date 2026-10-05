@@ -7,12 +7,12 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewConfiguration;
 import androidx.core.view.GravityCompat;
-import androidx.customview.widget.ViewDragHelper;
 import androidx.drawerlayout.widget.DrawerLayout;
 import com.mishiranu.dashchan.util.ResourceUtils;
-import java.lang.reflect.Field;
 
 public class CustomDrawerLayout extends DrawerLayout {
+	// Match the default edge width of the pinned AndroidX ViewDragHelper.
+	private static final int DRAWER_EDGE_SIZE_DP = 20;
 	private final int touchSlop;
 	private final int edgeSize;
 
@@ -28,15 +28,7 @@ public class CustomDrawerLayout extends DrawerLayout {
 
 		float density = ResourceUtils.obtainDensity(context);
 		touchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
-		try {
-			Field field = ViewDragHelper.class.getDeclaredField("EDGE_SIZE");
-			field.setAccessible(true);
-			edgeSize = (int) (field.getInt(null) * density);
-		} catch (RuntimeException e) {
-			throw e;
-		} catch (Exception e) {
-			throw new RuntimeException(e);
-		}
+		edgeSize = (int) (DRAWER_EDGE_SIZE_DP * density);
 	}
 
 	public void setExpandableFromAnyPoint(boolean expandableFromAnyPoint) {

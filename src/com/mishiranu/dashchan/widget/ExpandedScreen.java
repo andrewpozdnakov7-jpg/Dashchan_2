@@ -18,6 +18,7 @@ import android.view.Window;
 import android.widget.FrameLayout;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
+import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.graphics.BaseDrawable;
 import com.mishiranu.dashchan.util.AnimationUtils;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
@@ -467,11 +468,9 @@ public class ExpandedScreen implements RecyclerScrollTracker.OnScrollListener {
 		updatePaddings();
 	}
 
-	private static final int[] ATTRS_ACTION_BAR_SIZE = {android.R.attr.actionBarSize};
-
 	private static int obtainActionBarHeight(Context context) {
-		TypedArray typedArray = context.obtainStyledAttributes(ATTRS_ACTION_BAR_SIZE);
-		int actionHeight = typedArray.getDimensionPixelSize(0, 0);
+		TypedArray typedArray = context.obtainStyledAttributes(R.styleable.ExpandedScreenAppearance);
+		int actionHeight = typedArray.getDimensionPixelSize(R.styleable.ExpandedScreenAppearance_android_actionBarSize, 0);
 		typedArray.recycle();
 		return actionHeight;
 	}

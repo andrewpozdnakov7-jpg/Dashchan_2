@@ -306,18 +306,9 @@ public class UpdateFragment extends BaseListFragment {
 		}
 	}
 
-	@SuppressWarnings("ComparatorCombinators")
-	private static final Comparator<ReadUpdateTask.ApplicationItem> UPDATE_DATA_COMPARATOR = (lhs, rhs) -> {
-		int result = lhs.type.compareTo(rhs.type);
-		if (result != 0) {
-			return result;
-		}
-		result = lhs.title.compareTo(rhs.title);
-		if (result != 0) {
-			return result;
-		}
-		return lhs.name.compareTo(rhs.name);
-	};
+	private static final Comparator<ReadUpdateTask.ApplicationItem> UPDATE_DATA_COMPARATOR =
+			Comparator.comparing((ReadUpdateTask.ApplicationItem item) -> item.type)
+					.thenComparing(item -> item.title).thenComparing(item -> item.name);
 
 	private static ArrayList<ReadUpdateTask.ApplicationItem> collectSorted
 			(ReadUpdateTask.UpdateDataMap updateDataMap, boolean installed) {

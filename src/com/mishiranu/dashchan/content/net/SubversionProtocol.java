@@ -18,6 +18,7 @@ import java.io.InterruptedIOException;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -278,8 +279,7 @@ public class SubversionProtocol {
 				if (b < 0) {
 					break;
 				} else if (b == '\n') {
-					@SuppressWarnings("CharsetObjectCanBeUsed")
-					String line = new String(buffer.toByteArray(), "ISO-8859-1");
+					String line = new String(buffer.toByteArray(), StandardCharsets.ISO_8859_1);
 					buffer.reset();
 					if (line.isEmpty()) {
 						// HTTP headers finished

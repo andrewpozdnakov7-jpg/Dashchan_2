@@ -85,18 +85,22 @@ public class ConcurrentUtils {
 		return Looper.myLooper() == Looper.getMainLooper();
 	}
 
-	@SuppressWarnings("unchecked")
+	private static class MainGetResult<T> {
+		private T value;
+		private Throwable error;
+	}
+
 	public static <T> T mainGet(Callable<T> callable) {
 		if (callable == null) {
 			return null;
 		}
 		CountDownLatch latch = new CountDownLatch(1);
-		Object[] result = new Object[2];
+		MainGetResult<T> result = new MainGetResult<>();
 		Runnable runnable = () -> {
 			try {
-				result[0] = callable.call();
+				result.value = callable.call();
 			} catch (Throwable t) {
-				result[1] = t;
+				result.error = t;
 			}
 			latch.countDown();
 		};
@@ -117,15 +121,15 @@ public class ConcurrentUtils {
 				}
 			}
 		}
-		if (result[1] != null) {
-			if (result[1] instanceof RuntimeException) {
-				throw ((RuntimeException) result[1]);
+		if (result.error != null) {
+			if (result.error instanceof RuntimeException) {
+				throw (RuntimeException) result.error;
 			}
-			if (result[1] instanceof Error) {
-				throw ((Error) result[1]);
+			if (result.error instanceof Error) {
+				throw (Error) result.error;
 			}
-			throw new RuntimeException((Throwable) result[1]);
+			throw new RuntimeException(result.error);
 		}
-		return (T) result[0];
+		return result.value;
 	}
 }

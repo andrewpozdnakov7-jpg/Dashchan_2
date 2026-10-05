@@ -9,7 +9,7 @@ Required tools:
 - JDK 21;
 - Android SDK Platform 37;
 - Android SDK Build Tools 36.0.0;
-- Android NDK 29.0.14206865;
+- Android NDK version specified by `androidNdkVersion` in `gradle.properties`;
 - `bash`, `curl`, `tar`, `xz`, `bzip2`, `make`, `ninja`, `meson`, and Python 3;
 - enough free space for three native ABIs and downloaded source archives.
 
@@ -25,7 +25,7 @@ Use the checked-in Gradle Wrapper:
   -PnativeAbis=arm64-v8a,armeabi-v7a,x86
 ```
 
-The first run executes `prepareBuiltinWebmSources` and `buildBuiltinWebmLibraries`. These tasks download and build FFmpeg 8.1.2, dav1d 1.5.3, and the pinned libyuv revision.
+The first run executes `prepareBuiltinWebmSources` and `buildBuiltinWebmLibraries`. These tasks download and build the FFmpeg and dav1d revisions pinned in `gradle.properties`.
 
 GitHub-flavor builds also run `prepareBergamotRuntime`. It downloads the pinned MPL-2.0 Mozilla Bergamot JavaScript
 and WebAssembly runtime, verifies both files by SHA-256, and places them in generated assets. Language models are not

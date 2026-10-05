@@ -18,11 +18,11 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.io.UnsupportedEncodingException;
 import java.net.HttpURLConnection;
 import java.net.Proxy;
 import java.net.Socket;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
@@ -360,6 +360,10 @@ public final class WebSocket {
 
 			boolean resolve;
 			Proxy proxy = client.getProxy(holder.chan);
+			HttpClient.ProxyData authData = client.getProxyData(holder.chan);
+			if (authData != null && authData.authInvalid) {
+				throw new HttpException(ErrorItem.Type.DOWNLOAD, false, false);
+			}
 			InetSocket.Builder.Factory factory;
 			if (proxy != null && proxy.type() == Proxy.Type.HTTP) {
 				// TODO Add support for HTTP proxy
@@ -371,12 +375,15 @@ public final class WebSocket {
 				resolve = true;
 				factory = InetSocket.Builder.Factory.DEFAULT;
 			}
+			HttpClient.ProxyData previousAuthData = HttpClient.setProxyAuthentication(authData);
 			try {
 				socket = new InetSocket.Builder(url.getHost(), port, resolve)
 						.setFactory(factory).setSecure(secure, verifyCertificate)
 						.setTimeouts(connectTimeout, readTimeout).open();
 			} catch (InetSocket.InvalidCertificateException e) {
 				throw new HttpException(ErrorItem.Type.INVALID_CERTIFICATE, false, false, e);
+			} finally {
+				HttpClient.setProxyAuthentication(previousAuthData);
 			}
 
 			byte[] webSocketKey = new byte[16];
@@ -457,8 +464,7 @@ public final class WebSocket {
 						.append("\r\n");
 			}
 			requestBuilder.append("\r\n");
-			@SuppressWarnings("CharsetObjectCanBeUsed")
-			byte[] bytes = requestBuilder.toString().getBytes("ISO-8859-1");
+			byte[] bytes = requestBuilder.toString().getBytes(StandardCharsets.ISO_8859_1);
 			outputStream.write(bytes);
 			outputStream.flush();
 
@@ -493,8 +499,8 @@ public final class WebSocket {
 				}
 			}
 
-			@SuppressWarnings("CharsetObjectCanBeUsed")
-			String[] responseHeaders = new String(byteArrayOutputStream.toByteArray(), "ISO-8859-1").split("\r\n");
+			String[] responseHeaders = new String(byteArrayOutputStream.toByteArray(),
+					StandardCharsets.ISO_8859_1).split("\r\n");
 			Matcher matcher = RESPONSE_CODE_PATTERN.matcher(responseHeaders[0]);
 			if (matcher.matches()) {
 				int responseCode = Integer.parseInt(matcher.group(1));
@@ -538,9 +544,8 @@ public final class WebSocket {
 			String checkKeyEncoded;
 			try {
 				MessageDigest digest = MessageDigest.getInstance("SHA-1");
-				@SuppressWarnings("CharsetObjectCanBeUsed")
 				byte[] result = digest.digest((webSocketKeyEncoded + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11")
-						.getBytes("ISO-8859-1"));
+						.getBytes(StandardCharsets.ISO_8859_1));
 				checkKeyEncoded = Base64.encodeToString(result, Base64.NO_WRAP);
 			} catch (NoSuchAlgorithmException e) {
 				throw new RuntimeException(e);
@@ -685,16 +690,11 @@ public final class WebSocket {
 
 	@Public
 	public class Connection {
-		@SuppressWarnings("CharsetObjectCanBeUsed")
 		@Public
 		public Connection sendText(String text) throws HttpException {
 			checkException();
-			try {
-				writeQueue.add(new WriteFrame(OPCODE_TEXT, true, text != null ? text.getBytes("UTF-8") : new byte[0]));
-			} catch (UnsupportedEncodingException e) {
-				checkException();
-				throw new RuntimeException(e);
-			}
+			writeQueue.add(new WriteFrame(OPCODE_TEXT, true,
+					text != null ? text.getBytes(StandardCharsets.UTF_8) : new byte[0]));
 			return this;
 		}
 

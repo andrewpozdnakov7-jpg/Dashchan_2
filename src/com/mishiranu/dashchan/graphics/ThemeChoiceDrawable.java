@@ -6,9 +6,7 @@ import android.graphics.Outline;
 import android.graphics.Paint;
 import android.graphics.Rect;
 import android.graphics.RectF;
-import android.os.Build;
 import androidx.annotation.NonNull;
-import androidx.annotation.RequiresApi;
 
 public class ThemeChoiceDrawable extends BaseDrawable {
 	private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -46,7 +44,6 @@ public class ThemeChoiceDrawable extends BaseDrawable {
 		canvas.drawCircle(cx, cy, radius * 0.5f, paint);
 	}
 
-	@RequiresApi(Build.VERSION_CODES.LOLLIPOP)
 	@Override
 	public void getOutline(Outline outline) {
 		Rect bounds = getBounds();

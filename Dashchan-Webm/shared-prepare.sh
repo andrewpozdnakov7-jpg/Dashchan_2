@@ -14,10 +14,6 @@ sources="$1"
 	echo 'FFMPEG_VERSION is not defined' >&2
 	exit 1
 }
-[ -n "$YUV_VERSION" ] || {
-	echo 'YUV_VERSION is not defined' >&2
-	exit 1
-}
 
 copy_provided_source() {
 	local name="$1"
@@ -54,8 +50,7 @@ copy_provided_source() {
 	printf '%s\n' "$expected" > "$marker"
 }
 
-# Pinned checksums for stable release archives. libyuv is fetched and verified
-# separately by its full Git commit ID because Gitiles archives are not byte-stable.
+# Pinned checksums for stable release archives.
 DAV1D_SHA256="732010aa5ef461fa93355ed2c6c5fedb48ddc4b74e697eaabe8907eaeb943011"
 FFMPEG_SHA256="b4925bd4411e654ad3884bc8da1860b0d860bd64a95a17220de48cfcd5f0a859"
 FFMPEG_COMMIT="38b88335f99e76ed89ff3c93f877fdefce736c13"
@@ -66,15 +61,48 @@ download_and_extract() {
 	local target="$3"
 	shift 3
 	local archive
-	archive="$(mktemp)"
+	local cache_dir="${WEBM_ARCHIVE_CACHE_DIR:-}"
+	local cached=0
+	if [ -n "$cache_dir" ]; then
+		mkdir -p "$cache_dir"
+		# The URL and expected checksum identify the archive, not a mutable basename.
+		archive="$cache_dir/$(printf '%s\n%s\n' "$url" "$checksum" | sha256sum | cut -d ' ' -f 1).archive"
+		cached=1
+		if [ -f "$archive" ] && [ -n "$checksum" ] &&
+				! echo "$checksum  $archive" | sha256sum -c - >/dev/null 2>&1; then
+			echo 'Cached archive checksum mismatch; downloading a verified replacement' >&2
+			rm -f "$archive"
+		fi
+	fi
 	rm -rf "$target"
 	mkdir -p "$target"
-	curl --fail --location --retry 1 --retry-delay 2 --retry-all-errors \
-			--connect-timeout 10 --max-time 120 "$url" -o "$archive" || {
-		rm -f "$archive"
-		rm -rf "$target"
-		return 1
-	}
+	if [ "$cached" -eq 1 ] && [ -s "$archive" ]; then
+		echo "Using cached archive: $archive"
+	else
+		local download
+		if [ "$cached" -eq 1 ]; then
+			download="$(mktemp "$cache_dir/.download.XXXXXXXX")"
+		else
+			download="$(mktemp)"
+		fi
+		echo "Downloading archive: $url"
+		curl --fail --location --retry 1 --retry-delay 2 --retry-all-errors \
+				--connect-timeout 10 --max-time 120 "$url" -o "$download" || {
+			rm -f "$download"
+			rm -rf "$target"
+			return 1
+		}
+		if [ -n "$checksum" ] && ! echo "$checksum  $download" | sha256sum -c -; then
+			rm -f "$download"
+			rm -rf "$target"
+			return 1
+		fi
+		if [ "$cached" -eq 1 ]; then
+			mv -f "$download" "$archive"
+		else
+			archive="$download"
+		fi
+	fi
 	if [ -n "$checksum" ]; then
 		echo "$checksum  $archive" | sha256sum -c - || {
 			rm -f "$archive"
@@ -87,7 +115,7 @@ download_and_extract() {
 		rm -rf "$target"
 		return 1
 	}
-	rm -f "$archive"
+	[ "$cached" -eq 1 ] || rm -f "$archive"
 }
 
 prepare_source() {
@@ -168,7 +196,6 @@ prepare_source_with_git_fallback() {
 
 sources_dav1d="$sources/dav1d"
 sources_ffmpeg="$sources/ffmpeg"
-sources_yuv="$sources/yuv"
 
 if [ -n "${DASHCHAN_DAV1D_SOURCE_DIR:-}" ]; then
 	copy_provided_source dav1d "$DAV1D_VERSION" "$DASHCHAN_DAV1D_SOURCE_DIR" "$sources_dav1d"
@@ -186,11 +213,4 @@ else
 		"$FFMPEG_SHA256" "refs/tags/n$FFMPEG_VERSION" "$FFMPEG_COMMIT" \
 		"https://github.com/FFmpeg/FFmpeg.git" "$sources_ffmpeg" \
 		-xj --touch --strip-components=1
-fi
-
-if [ -n "${DASHCHAN_LIBYUV_SOURCE_DIR:-}" ]; then
-	copy_provided_source yuv "$YUV_VERSION" "$DASHCHAN_LIBYUV_SOURCE_DIR" "$sources_yuv"
-else
-	prepare_git_source yuv "$YUV_VERSION" "$YUV_VERSION" "$YUV_VERSION" \
-		"https://chromium.googlesource.com/libyuv/libyuv" "$sources_yuv"
 fi

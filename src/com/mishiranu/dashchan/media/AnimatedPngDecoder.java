@@ -21,6 +21,7 @@ import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.zip.CRC32;
 
 public class AnimatedPngDecoder implements Runnable {
@@ -155,8 +156,7 @@ public class AnimatedPngDecoder implements Runnable {
 						}
 						IOUtils.intToBytes(length - 8, false, 0, 4, buffer);
 						output.write(buffer, 0, 4);
-						@SuppressWarnings("CharsetObjectCanBeUsed")
-						byte[] nameBytes = "IDAT".getBytes("ISO-8859-1");
+						byte[] nameBytes = "IDAT".getBytes(StandardCharsets.ISO_8859_1);
 						output.write(nameBytes);
 						crc32.update(nameBytes);
 						if (!IOUtils.skipExactlyCheck(input, 4)) {

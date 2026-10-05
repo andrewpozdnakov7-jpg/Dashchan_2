@@ -1,13 +1,11 @@
 package com.mishiranu.dashchan.widget;
 
-import android.annotation.TargetApi;
 import android.content.ClipData;
 import android.content.ClipDescription;
 import android.content.ClipboardManager;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.net.Uri;
-import android.os.Build;
 import android.text.Editable;
 import android.text.Selection;
 import android.text.Spanned;
@@ -84,7 +82,6 @@ public class UriPasteEditText extends SafePasteEditText implements ActionMode.Ca
 	}
 
 	@SuppressWarnings("unused")
-	@TargetApi(Build.VERSION_CODES.LOLLIPOP)
 	public UriPasteEditText(Context context, AttributeSet attrs, int defStyleAttr, int defStyleRes) {
 		super(context, attrs, defStyleAttr, defStyleRes);
 	}

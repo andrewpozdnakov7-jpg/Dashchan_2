@@ -15,9 +15,11 @@ import androidx.annotation.NonNull;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
+import com.mishiranu.dashchan.content.WatcherNotifications;
 import com.mishiranu.dashchan.content.push.ReplyPushContract;
 import com.mishiranu.dashchan.content.push.ReplyPushManager;
 import com.mishiranu.dashchan.content.service.BackgroundWatcherWorker;
+import com.mishiranu.dashchan.content.storage.MyPostsStorage;
 import com.mishiranu.dashchan.ui.FragmentHandler;
 import com.mishiranu.dashchan.ui.preference.core.CheckPreference;
 import com.mishiranu.dashchan.ui.preference.core.Preference;
@@ -102,10 +104,20 @@ public class ReplyNotificationsFragment extends PreferenceFragment {
 
 		CheckPreference trackingPreference = addCheck(true, Preferences.KEY_TRACK_MY_POSTS,
 				Preferences.DEFAULT_TRACK_MY_POSTS, R.string.track_replies, R.string.track_replies__summary);
+		trackingPreference.setOnBeforeChangeListener((p, value) -> {
+			if (!value) {
+				showDisableTrackingDialog(p);
+				return false;
+			}
+			return true;
+		});
 		trackingPreference.setOnAfterChangeListener(p -> {
-			if (!p.getValue() && Preferences.isReplyPushEnabled()) {
-				Preferences.setReplyPushEnabled(false);
-				ReplyPushManager.disable(requireContext());
+			if (!p.getValue()) {
+				if (Preferences.isReplyPushEnabled()) {
+					Preferences.setReplyPushEnabled(false);
+					ReplyPushManager.disable(requireContext());
+				}
+				WatcherNotifications.cancelAllReplies(requireContext());
 			}
 			if (p.getValue() && Preferences.isTrackedRepliesNotificationsEnabled()) {
 				requestNotificationPermission();
@@ -157,6 +169,39 @@ public class ReplyNotificationsFragment extends PreferenceFragment {
 		lastResetPending = ReplyPushManager.isIdentityResetPending(requireContext());
 		if (lastResetPending) {
 			view.postDelayed(pushStateRunnable, 1000L);
+		}
+	}
+
+	private void showDisableTrackingDialog(Preference<Boolean> preference) {
+		new AlertDialog.Builder(requireContext())
+				.setTitle(R.string.disable_reply_tracking__title)
+				.setMessage(R.string.disable_reply_tracking__message)
+				.setPositiveButton(R.string.disable_reply_tracking_keep, (dialog, which) ->
+						disableTracking(preference, false))
+				.setNeutralButton(R.string.disable_reply_tracking_delete, (dialog, which) ->
+						disableTracking(preference, true))
+				.setNegativeButton(android.R.string.cancel, null)
+				.show();
+	}
+
+	private void disableTracking(Preference<Boolean> preference, boolean deleteHistory) {
+		// The choice is already confirmed; bypass only this preference's confirmation listener.
+		MyPostsStorage storage = deleteHistory ? MyPostsStorage.getInstance() : null;
+		if (deleteHistory) {
+			Preferences.setReplyHistoryDeletePending(true);
+		}
+		preference.setOnBeforeChangeListener(null);
+		preference.setValue(false);
+		preference.setOnBeforeChangeListener((p, value) -> {
+			if (!value) {
+				showDisableTrackingDialog(p);
+				return false;
+			}
+			return true;
+		});
+		if (deleteHistory) {
+			storage.clearAllHistory(success -> ClickableToast.show(success
+					? R.string.reply_history_deleted : R.string.reply_history_delete_failed));
 		}
 	}
 

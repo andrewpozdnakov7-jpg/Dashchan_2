@@ -286,7 +286,6 @@ public class HidePerformer {
 		}
 	}
 
-	@SuppressWarnings({"UnnecessaryReturnStatement", "UnusedAssignment"})
 	public void removeLocalFilter(int index) {
 		if (replies != null) {
 			if (index >= replies.size()) {
@@ -311,14 +310,11 @@ public class HidePerformer {
 			}
 		}
 		if (similar != null) {
-			if (index >= similar.size()) {
-				index -= similar.size();
-			} else {
+			if (index < similar.size()) {
 				similar.remove(index);
 				if (similar.isEmpty()) {
 					similar = null;
 				}
-				return;
 			}
 		}
 	}

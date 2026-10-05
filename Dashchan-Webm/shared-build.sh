@@ -34,12 +34,9 @@ makeflags=
 
 sources_dav1d="$sources/dav1d"
 sources_ffmpeg="$sources/ffmpeg"
-sources_yuv="$sources/yuv"
 libraries_dav1d="$libraries/dav1d"
 libraries_ffmpeg="$libraries/ffmpeg"
-libraries_yuv="$libraries/yuv"
 external_ffmpeg="$external/ffmpeg"
-external_yuv="$external/yuv"
 
 prepare_sources() {
 	cd "$libraries"
@@ -358,19 +355,6 @@ has_abi 'armeabi-v7a' && ffmpeg_build 'armeabi-v7a' 'arm' 'arm' 'armv7a' 'androi
 has_abi 'arm64-v8a' && ffmpeg_build 'arm64-v8a' 'arm64' 'aarch64' 'aarch64' 'android' 21
 has_abi 'x86' && ffmpeg_build 'x86' 'x86' 'i686' 'i686' 'android' 21 --enable-pic --disable-asm
 
-prepare_sources "$sources_yuv"
-"$ANDROID_NDK_HOME/ndk-build" \
-	APP_PLATFORM=android-21 \
-	APP_BUILD_SCRIPT=Android.mk \
-	NDK_PROJECT_PATH=. \
-	APP_ABI="$native_abis" \
-	APP_LDFLAGS='-Wl,--build-id=none' \
-	LIBYUV_DISABLE_JPEG='"yes"' $makeflags
-rm -rf "$libraries_yuv" "$external_yuv"
-mkdir -p "$libraries_yuv" "$external_yuv"
-cp -R libs/* "$libraries_yuv"
-cp -R include "$external_yuv"
-
 make_symbols() {
 	pushd "$1"
 	for so in */*.so; do
@@ -407,4 +391,3 @@ make_symbols() {
 
 prepare_sources
 make_symbols "$libraries_ffmpeg" "$external_ffmpeg"
-make_symbols "$libraries_yuv" "$external_yuv"

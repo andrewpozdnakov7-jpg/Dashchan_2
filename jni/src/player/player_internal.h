@@ -249,7 +249,6 @@ struct Player {
 		int drawThreadStarted;
 		pthread_t drawThread;
 		ANativeWindow * window;
-		int useLibyuv;
 		int format;
 		int softwareOutputLevel;
 		// Controller fields are owned by video.frameMutex; epochs are atomic.

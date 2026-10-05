@@ -384,12 +384,6 @@ public class TranslationService extends Service {
 		}
 
 		@Override
-		@SuppressWarnings("deprecation")
-		public WebResourceResponse shouldInterceptRequest(WebView view, String url) {
-			return openLocalResource(Uri.parse(url), clientDirection);
-		}
-
-		@Override
 		public void onPageFinished(WebView view, String url) {
 			if ((BASE_URL + "runtime/runner.html").equals(url)) {
 				initializeEngine(clientGeneration);

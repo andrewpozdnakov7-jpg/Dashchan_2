@@ -2,6 +2,7 @@ package com.mishiranu.dashchan.util;
 
 import android.content.Context;
 import android.graphics.PorterDuff;
+import android.graphics.PorterDuffColorFilter;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.StateListDrawable;
 import android.view.View;
@@ -69,7 +70,6 @@ public class ListViewUtils {
 		return view;
 	}
 
-	@SuppressWarnings("unchecked")
 	public static <T> T getViewHolder(View view, Class<T> clazz) {
 		view = getRootViewInList(view);
 		View parent = (View) view.getParent();
@@ -79,7 +79,7 @@ public class ListViewUtils {
 		} else {
 			holder = view.getTag();
 		}
-		return holder != null && clazz.isAssignableFrom(holder.getClass()) ? (T) holder : null;
+		return holder != null && clazz.isInstance(holder) ? clazz.cast(holder) : null;
 	}
 
 	// Unlimited pool size for immediate scrolls to improve performance
@@ -136,14 +136,14 @@ public class ListViewUtils {
 			drawable.setState(defaultState);
 			final Drawable defaultDrawable = drawable.getCurrent();
 			if (defaultDrawable != pressedDrawable) {
+				PorterDuffColorFilter pressedFilter = new PorterDuffColorFilter(colorPressed, PorterDuff.Mode.SRC_IN);
+				PorterDuffColorFilter defaultFilter = new PorterDuffColorFilter(colorDefault, PorterDuff.Mode.SRC_IN);
 				StateListDrawable stateListDrawable = new StateListDrawable() {
-					@SuppressWarnings("deprecation")
 					@Override
 					protected boolean onStateChange(int[] stateSet) {
 						boolean result = super.onStateChange(stateSet);
 						if (result) {
-							setColorFilter(getCurrent() == pressedDrawable ? colorPressed
-									: colorDefault, PorterDuff.Mode.SRC_IN);
+							setColorFilter(getCurrent() == pressedDrawable ? pressedFilter : defaultFilter);
 						}
 						return result;
 					}

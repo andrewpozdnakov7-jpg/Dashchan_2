@@ -60,6 +60,7 @@ public class C {
 	public static final int NOTIFICATION_ID_AUDIO_PLAYER = 3;
 	public static final int NOTIFICATION_ID_UPDATES = 4;
 	public static final int NOTIFICATION_ID_REPLIES = 5;
+	public static final int NOTIFICATION_ID_UPDATE_INSTALLED = 6;
 
 	public static final String NOTIFICATION_CHANNEL_POSTING = "posting";
 	public static final String NOTIFICATION_CHANNEL_POSTING_COMPLETE = "postingComplete";

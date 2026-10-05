@@ -24,6 +24,7 @@ import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import androidx.webkit.WebViewFeature;
 import chan.http.HttpClient;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.util.IOUtils;
@@ -171,12 +172,6 @@ public class WebViewService extends Service {
 			return false;
 		}
 
-		@SuppressWarnings("deprecation")
-		@Override
-		public boolean shouldOverrideUrlLoading(WebView view, String url) {
-			return false;
-		}
-
 		@Override
 		public void onPageFinished(WebView view, String url) {
 			if (view != webView || destroyed) return;
@@ -237,15 +232,6 @@ public class WebViewService extends Service {
 			}
 		}
 
-		@SuppressWarnings("deprecation")
-		@Override
-		public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
-			if (view != webView || destroyed) return;
-			super.onReceivedError(view, errorCode, description, failingUrl);
-
-			handleReceivedError();
-		}
-
 		private void handleReceivedError() {
 			handler.removeMessages(MESSAGE_HANDLE_FINISH);
 			handler.sendEmptyMessage(MESSAGE_HANDLE_FINISH);
@@ -262,13 +248,6 @@ public class WebViewService extends Service {
 		public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
 			if (view != webView || destroyed) return new WebResourceResponse("text/plain", "UTF-8", null);
 			return handleInterceptRequest(request.getUrl().toString());
-		}
-
-		@SuppressWarnings("deprecation")
-		@Override
-		public WebResourceResponse shouldInterceptRequest(WebView view, String url) {
-			if (view != webView || destroyed) return new WebResourceResponse("text/plain", "UTF-8", null);
-			return handleInterceptRequest(url);
 		}
 
 		private WebResourceResponse handleInterceptRequest(String url) {
@@ -382,6 +361,10 @@ public class WebViewService extends Service {
 			public boolean loadWithCookieResult(String requestId, String uriString, String userAgent,
 					boolean proxySocks, String proxyHost, int proxyPort, boolean verifyCertificate, long timeout,
 					WebViewExtra extra, IRequestCallback requestCallback) throws RemoteException {
+			if (proxySocks && !WebViewFeature.isFeatureSupported(WebViewFeature.PROXY_OVERRIDE)) {
+				// The fallback proxy path handles HTTP only. Never silently load a SOCKS forum directly.
+				return false;
+			}
 				HttpClient.ProxyData proxyData = proxyHost != null
 						? new HttpClient.ProxyData(proxySocks, proxyHost, proxyPort) : null;
 				CookieRequest cookieRequest = new CookieRequest(uriString, userAgent, proxyData,

@@ -732,6 +732,10 @@
 	<string name="proceed">Продолжить</string>
 	<string name="processing_data__ellipsis">Обработка данных…</string>
 	<string name="proxy">Прокси</string>
+	<string name="proxy_direct">Прямое подключение</string>
+	<string name="proxy_username">Логин прокси</string>
+	<string name="proxy_auth_unavailable">Сохранённые данные авторизации прокси недоступны. Введите их заново.</string>
+	<string name="proxy_webview_warning">Антибот-проверка может открыться во встроенном браузере и пройти в обход прокси форума.</string>
 	<string name="quality">Качество</string>
 	<string name="quote__verb">Цитировать</string>
 	<string name="rating">Рейтинг</string>
@@ -963,6 +967,8 @@
 	<string name="update_available">Доступно обновление</string>
 	<string name="update_check_failed">Не удалось проверить обновления</string>
 	<string name="update_downloaded">Обновление загружено</string>
+	<string name="open_slooop_after_update">Открыть Slooop</string>
+	<string name="update_installed_open_app">Обновление установлено. Нажмите, чтобы вернуться в приложение.</string>
 	<string name="update_found_on_github">Найден релиз на GitHub</string>
 	<string name="update_channel">Канал обновлений</string>
 	<string name="update_channel_stable">Стабильный (рекомендуется)</string>
@@ -1219,6 +1225,12 @@
 	<string name="replies_with_unread__format">Ответы (%d)</string>
 	<string name="track_replies">Отслеживать ответы</string>
 	<string name="track_replies__summary">Сохранять сообщения, отправленные через Slooop, и автоматически проверять ответы на них</string>
+	<string name="disable_reply_tracking__title">Отключить отслеживание ответов?</string>
+	<string name="disable_reply_tracking__message">Историю своих сообщений и ответов можно сохранить или удалить из приложения. После удаления повторное включение отслеживания её не восстановит. Уже созданные внешние и системные резервные копии приложение удалить не может.</string>
+	<string name="disable_reply_tracking_keep">Отключить, оставить историю</string>
+	<string name="disable_reply_tracking_delete">Отключить и удалить историю</string>
+	<string name="reply_history_deleted">История ответов удалена из приложения</string>
+	<string name="reply_history_delete_failed">Не удалось удалить все файлы истории. Проверьте хранилище приложения.</string>
 	<string name="replies_and_notifications">Ответы и уведомления</string>
 	<string name="replies_and_notifications_disabled">Отключено</string>
 	<string name="replies_and_notifications_local_only">Только локальная проверка</string>

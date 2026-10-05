@@ -1257,19 +1257,16 @@ public class PagesDatabase {
 
 		List<Post> changed = null;
 		if (extractedList != null) {
-			@SuppressWarnings("unchecked")
-			List<Post> unsafeChanged = (List<Post>) (List<?>) extractedList;
-			for (int i = 0; i < extractedList.size(); i++) {
-				Extracted extracted = extractedList.get(i);
+			changed = new ArrayList<>(extractedList.size());
+			for (Extracted extracted : extractedList) {
 				Post post;
 				try (JsonSerial.Reader reader = JsonSerial.reader(extracted.data)) {
 					post = Post.deserialize(extracted.postNumber, extracted.deleted, reader);
 				} catch (IOException e) {
 					throw new RuntimeException(e);
 				}
-				unsafeChanged.set(i, post);
+				changed.add(post);
 			}
-			changed = unsafeChanged;
 		}
 		Collection<PostNumber> removed = Collections.emptyList();
 		if (existing != null) {

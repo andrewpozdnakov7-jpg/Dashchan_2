@@ -6,14 +6,14 @@ import chan.content.ChanLocator;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.content.model.Post;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.regex.Pattern;
 
-@SuppressWarnings("ArraysAsListWithZeroOrOneArgument")
 public enum EmbeddedType {
 	YOUTUBE(Pattern.compile("(?:https?://)(?:www\\.)?(?:m\\.)?" +
 			"youtu(?:\\.be/|be\\.com/(?:v/|embed/|(?:#/)?watch\\?(?:.*?|)v=))([\\w\\-]{11})"),
-			1, Arrays.asList("youtu"), (locator, embeddedCode) -> {
+			1, Collections.singletonList("youtu"), (locator, embeddedCode) -> {
 		Uri fileUri = locator.buildQueryWithSchemeHost(true,
 				"www.youtube.com", "watch", "v", embeddedCode);
 		Uri thumbnailUri = locator.buildPathWithSchemeHost(true,
@@ -22,7 +22,7 @@ public enum EmbeddedType {
 				Post.Attachment.Embedded.ContentType.VIDEO, false, null);
 	}),
 	VIMEO(Pattern.compile("(?:https?://)(?:player\\.)?vimeo.com/(?:video/)?(?:channels/staffpicks/)?(\\d+)"),
-			1, Arrays.asList("vimeo"), (locator, embeddedCode) -> {
+			1, Collections.singletonList("vimeo"), (locator, embeddedCode) -> {
 		Uri fileUri = locator.buildPathWithSchemeHost(true, "vimeo.com", embeddedCode);
 		return Post.Attachment.Embedded.createExternal(true, fileUri, null, "Vimeo",
 				Post.Attachment.Embedded.ContentType.VIDEO, false, null);

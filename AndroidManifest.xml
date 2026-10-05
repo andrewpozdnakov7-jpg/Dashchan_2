@@ -8,13 +8,11 @@
 	<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 	<uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 	<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-	<uses-permission android:name="android.permission.VIBRATE" android:maxSdkVersion="18" />
-	<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="22" />
-	<uses-permission-sdk-23 android:name="android.permission.FOREGROUND_SERVICE" />
+	<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
 	<uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 	<uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
-	<uses-permission-sdk-23 android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
-	<uses-permission-sdk-23 android:name="android.permission.REQUEST_DELETE_PACKAGES" />
+	<uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+	<uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
 
 	<queries>
 		<!-- Browser and deep-link handlers queried by NavigationUtils and BrowserFragment. -->
@@ -79,8 +77,9 @@
 		android:theme="@style/Theme.Launcher"
 		android:largeHeap="true"
 		android:allowBackup="true"
-		android:fullBackupContent="true"
-		android:usesCleartextTraffic="true"
+		android:fullBackupContent="@xml/reply_history_backup_rules"
+		android:dataExtractionRules="@xml/reply_history_data_extraction_rules"
+		android:networkSecurityConfig="@xml/network_security_config"
 		android:enableOnBackInvokedCallback="false"
 		tools:ignore="GoogleAppIndexingWarning,UnusedAttribute">
 
@@ -1733,6 +1732,14 @@
 			android:excludeFromRecents="true"
 			android:exported="false"
 			android:theme="@android:style/Theme.Panel" />
+
+		<receiver
+			android:name=".content.UpdaterActivity$AppUpdatedReceiver"
+			android:exported="false">
+			<intent-filter>
+				<action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+			</intent-filter>
+		</receiver>
 
 		<activity
 			android:name=".content.OpenFileActivity"

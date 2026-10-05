@@ -14,7 +14,6 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Parcel;
 import android.os.Parcelable;
-import androidx.annotation.RequiresApi;
 import chan.util.StringUtils;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -134,7 +133,6 @@ public class AndroidUtils {
 		service.stopForeground(Service.STOP_FOREGROUND_REMOVE);
 	}
 
-	@RequiresApi(Build.VERSION_CODES.O)
 	public static NotificationChannel createHeadsUpNotificationChannel(String id, CharSequence name) {
 		NotificationChannel channel = new NotificationChannel(id, name, NotificationManager.IMPORTANCE_HIGH);
 		channel.setSound(null, null);
@@ -142,7 +140,6 @@ public class AndroidUtils {
 		return channel;
 	}
 
-	@SuppressLint("NewApi")
 	public static boolean hasCallbacks(Handler handler, Runnable runnable) {
 		return handler.hasCallbacks(runnable);
 	}

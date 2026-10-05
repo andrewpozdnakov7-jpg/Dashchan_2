@@ -2,7 +2,6 @@ LOCAL_PATH := $(call my-dir)
 
 LOCAL_PATH_SRC_PLAYER := $(LOCAL_PATH)
 include $(LOCAL_PATH_SRC_PLAYER)/ffmpeg/Android.mk
-include $(LOCAL_PATH_SRC_PLAYER)/yuv/Android.mk
 LOCAL_PATH := $(LOCAL_PATH_SRC_PLAYER)
 
 include $(CLEAR_VARS)
@@ -22,7 +21,7 @@ LOCAL_CFLAGS += -DDEBUG_VERBOSE
 else
 LOCAL_CFLAGS += -Werror
 endif
-LOCAL_SHARED_LIBRARIES := avcodec avformat avutil swresample swscale yuv
+LOCAL_SHARED_LIBRARIES := avcodec avformat avutil swresample swscale
 ifeq ($(DASHCHAN_FFMPEG_FLAVOR),ffmpeg8)
 LOCAL_CFLAGS += -DDASHCHAN_HAS_ATEMPO=1 -DDASHCHAN_HAS_MEDIACODEC=1
 LOCAL_SRC_FILES += tempo.c

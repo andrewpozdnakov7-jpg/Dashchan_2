@@ -9,10 +9,13 @@ import androidx.annotation.NonNull;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.content.model.PostItem;
 import com.mishiranu.dashchan.content.model.PostNumber;
+import com.mishiranu.dashchan.util.ConcurrentUtils;
 import com.mishiranu.dashchan.util.FlagUtils;
+import com.mishiranu.dashchan.util.Logger;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Consumer;
 
 public class PostsDatabase implements CommonDatabase.Instance {
 	private interface Schema {
@@ -203,6 +206,34 @@ public class PostsDatabase implements CommonDatabase.Instance {
 		} else {
 			database.execute(callback);
 		}
+	}
+
+	/** Runs after earlier queued flag writes; preserves independent hidden/shown flags. */
+	public void clearUserPostFlags(Consumer<Boolean> completion) {
+		database.enqueue(database -> {
+			boolean successful;
+			try {
+				database.beginTransaction();
+				try {
+					int userFlag = Schema.Posts.Flags.USER;
+					database.execSQL("UPDATE " + Schema.Posts.TABLE_NAME + " SET " + Schema.Posts.Columns.FLAGS
+							+ " = (" + Schema.Posts.Columns.FLAGS + " & " + ~userFlag + ") WHERE ("
+							+ Schema.Posts.Columns.FLAGS + " & " + userFlag + ") != 0");
+					database.delete(Schema.Posts.TABLE_NAME, Schema.Posts.Columns.FLAGS + " = 0", null);
+					database.setTransactionSuccessful();
+				} finally {
+					database.endTransaction();
+				}
+				successful = true;
+			} catch (RuntimeException e) {
+				Logger.write(Logger.Type.ERROR, "PostsDatabase", "clear_user_flags_failed",
+						e.getClass().getSimpleName());
+				successful = false;
+			}
+			boolean result = successful;
+			ConcurrentUtils.HANDLER.post(() -> completion.accept(result));
+			return null;
+		});
 	}
 
 	public Flags getFlags(@NonNull String chanName, String boardName, @NonNull String threadNumber) {

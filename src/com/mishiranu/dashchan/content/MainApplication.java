@@ -5,7 +5,6 @@ import android.app.Application;
 import android.app.NotificationManager;
 import android.content.Context;
 import android.database.sqlite.SQLiteDatabase;
-import android.os.Build;
 import android.os.Process;
 import android.webkit.WebView;
 import androidx.work.WorkManager;
@@ -123,11 +122,9 @@ public class MainApplication extends Application {
 		new File(storageDirectory, "auto_bump.restore.json").delete();
 		Preferences.PREFERENCES.edit().remove("auto_bump_enabled")
 				.put(KEY_REMOVED_AUTO_BUMP_CLEANUP, true).close();
-		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-			NotificationManager notificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-			if (notificationManager != null) {
-				notificationManager.deleteNotificationChannel("autoBump");
-			}
+		NotificationManager notificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+		if (notificationManager != null) {
+			notificationManager.deleteNotificationChannel("autoBump");
 		}
 	}
 

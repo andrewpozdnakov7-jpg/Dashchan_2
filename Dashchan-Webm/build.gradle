@@ -2,7 +2,14 @@ plugins {
 	id 'com.android.application' version '9.2.1'
 }
 
-def androidNdkVersion = '29.0.14206865'
+def nativeVersions = new Properties()
+file('../gradle.properties').withInputStream { nativeVersions.load(it) }
+def androidNdkVersion = nativeVersions.getProperty('androidNdkVersion')
+def nativeDav1dVersion = nativeVersions.getProperty('nativeDav1dVersion')
+def nativeFfmpegVersion = nativeVersions.getProperty('nativeFfmpegVersion')
+if ([androidNdkVersion, nativeDav1dVersion, nativeFfmpegVersion].any { !it }) {
+	throw new GradleException('Missing native version in ../gradle.properties')
+}
 def nativeAbis = providers.gradleProperty('nativeAbis')
 		.orElse('arm64-v8a,armeabi-v7a,x86')
 		.get()
@@ -130,9 +137,9 @@ task sharedPrepare(type: ShellTask) {
 	script = file('shared-prepare.sh')
 	arguments = [sharedSources.absolutePath]
 	environment = [
-			DAV1D_VERSION: '1.5.3',
-			FFMPEG_VERSION: '8.1.2',
-			YUV_VERSION: '6afd9becdf58822b1da6770598d8597c583ccfad',
+			DAV1D_VERSION: nativeDav1dVersion,
+			FFMPEG_VERSION: nativeFfmpegVersion,
+			WEBM_ARCHIVE_CACHE_DIR: providers.environmentVariable('WEBM_ARCHIVE_CACHE_DIR').orElse('').get(),
 	]
 	output = files(sharedSources)
 }
@@ -143,7 +150,7 @@ task sharedBuild(type: ShellTask) {
 	arguments = [sharedSources.absolutePath, sharedLibraries.absolutePath, sharedExternal.absolutePath]
 	environment = [
 			ANDROID_NDK_HOME: new File(getAndroidSdkDirectory(), "ndk/${androidNdkVersion}").absolutePath,
-			DAV1D_VERSION: '1.5.3',
+			DAV1D_VERSION: nativeDav1dVersion,
 			EXTERNAL_CORES: Runtime.runtime.availableProcessors(),
 			NATIVE_ABIS: nativeAbis.join(' ')
 	]
@@ -152,8 +159,7 @@ task sharedBuild(type: ShellTask) {
 
 android.sourceSets.main.jniLibs.srcDirs = [
 		new File(sharedLibraries, 'dav1d'),
-		new File(sharedLibraries, 'ffmpeg'),
-		new File(sharedLibraries, 'yuv')
+		new File(sharedLibraries, 'ffmpeg')
 ]
 
 afterEvaluate {

@@ -3,7 +3,6 @@ package com.mishiranu.dashchan.chan.d3ru;
 import chan.content.ChanConfiguration;
 
 public class D3ChanConfiguration extends ChanConfiguration {
-	@SuppressWarnings("unchecked")
 	public static D3ChanConfiguration get(Object object) {
 		return ChanConfiguration.get(object);
 	}

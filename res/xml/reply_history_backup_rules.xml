@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <full-backup-content>
-	<exclude domain="sharedpref" path="reply_push_private.xml" />
 	<exclude domain="file" path="storage/my-posts.json" />
 	<exclude domain="file" path="storage/my-posts.backup.json" />
 	<exclude domain="file" path="storage/my-posts.restore.json" />

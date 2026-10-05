@@ -95,12 +95,6 @@ public class KohlchanAccessDialog extends DialogFragment {
 				return request.isForMainFrame() && !allowed(request.getUrl());
 			}
 
-			@SuppressWarnings("deprecation")
-			@Override
-			public boolean shouldOverrideUrlLoading(WebView view, String url) {
-				return !allowed(Uri.parse(url));
-			}
-
 			@Override
 			public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
 				handler.cancel();

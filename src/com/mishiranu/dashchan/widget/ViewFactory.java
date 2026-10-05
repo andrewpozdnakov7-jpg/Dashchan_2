@@ -88,13 +88,6 @@ public class ViewFactory {
 		}
 	}
 
-	private static final int[] ATTRS_TWO_LINES = {
-			android.R.attr.listPreferredItemHeightSmall,
-			android.R.attr.textAppearanceListItem,
-			android.R.attr.textAppearanceListItemSecondary,
-			android.R.attr.textColorSecondary
-	};
-
 	public static TwoLinesViewHolder makeTwoLinesListItem(ViewGroup parent, int features) {
 		float density = ResourceUtils.obtainDensity(parent);
 		LinearLayout outerLayout = new LinearLayout(parent.getContext());
@@ -120,11 +113,13 @@ public class ViewFactory {
 			innerLayout = outerLayout;
 		}
 		outerLayout.setGravity(Gravity.CENTER_VERTICAL);
-		TypedArray typedArray = parent.getContext().obtainStyledAttributes(ATTRS_TWO_LINES);
+		TypedArray typedArray = parent.getContext().obtainStyledAttributes(R.styleable.TwoLineListItemAppearance);
 		try {
-			outerLayout.setMinimumHeight(typedArray.getDimensionPixelSize(0, 0));
+			outerLayout.setMinimumHeight(typedArray.getDimensionPixelSize(
+					R.styleable.TwoLineListItemAppearance_android_listPreferredItemHeightSmall, 0));
 			TextView text1 = new TextView(parent.getContext());
-			TextViewCompat.setTextAppearance(text1, typedArray.getResourceId(1, 0));
+			TextViewCompat.setTextAppearance(text1, typedArray.getResourceId(
+					R.styleable.TwoLineListItemAppearance_android_textAppearanceListItem, 0));
 			ThemeEngine.applyStyle(text1);
 			if (FlagUtils.get(features, FEATURE_MULTILINE_TITLE)) {
 				text1.setMaxLines(2);
@@ -133,9 +128,10 @@ public class ViewFactory {
 			}
 			text1.setEllipsize(TextUtils.TruncateAt.END);
 			TextView text2 = new TextView(parent.getContext());
-			TextViewCompat.setTextAppearance(text2, typedArray.getResourceId(2, 0));
+			TextViewCompat.setTextAppearance(text2, typedArray.getResourceId(
+					R.styleable.TwoLineListItemAppearance_android_textAppearanceListItemSecondary, 0));
 			ThemeEngine.applyStyle(text2);
-			text2.setTextColor(typedArray.getColorStateList(3));
+			text2.setTextColor(typedArray.getColorStateList(R.styleable.TwoLineListItemAppearance_android_textColorSecondary));
 			boolean featureText2End = FlagUtils.get(features, FEATURE_TEXT2_END);
 			if (FlagUtils.get(features, FEATURE_SINGLE_LINE) || featureText2End) {
 				text2.setSingleLine(true);
@@ -146,9 +142,11 @@ public class ViewFactory {
 			TextView text2End;
 			if (featureText2End) {
 				text2End = new TextView(parent.getContext());
-				TextViewCompat.setTextAppearance(text2End, typedArray.getResourceId(2, 0));
+				TextViewCompat.setTextAppearance(text2End, typedArray.getResourceId(
+						R.styleable.TwoLineListItemAppearance_android_textAppearanceListItemSecondary, 0));
 				ThemeEngine.applyStyle(text2End);
-				text2End.setTextColor(typedArray.getColorStateList(3));
+				text2End.setTextColor(typedArray.getColorStateList(
+						R.styleable.TwoLineListItemAppearance_android_textColorSecondary));
 				text2.setSingleLine(true);
 				text2.setEllipsize(TextUtils.TruncateAt.END);
 			} else {

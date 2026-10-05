@@ -10,6 +10,7 @@ import chan.util.StringUtils;
 import com.mishiranu.dashchan.R;
 import java.io.IOException;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 import org.json.JSONException;
@@ -60,7 +61,6 @@ public class FourchanChanConfiguration extends ChanConfiguration {
 		return null;
 	}
 
-	@SuppressWarnings("ComparatorCombinators")
 	@Override
 	public Posting obtainPostingConfiguration(String boardName, boolean newThread) {
 		Posting posting = new Posting();
@@ -85,7 +85,7 @@ public class FourchanChanConfiguration extends ChanConfiguration {
 				String title = jsonObject.getString(key);
 				posting.userIcons.add(new Pair<>(key, title));
 			}
-			Collections.sort(posting.userIcons, (lhs, rhs) -> lhs.first.compareTo(rhs.first));
+			Collections.sort(posting.userIcons, Comparator.comparing(pair -> pair.first));
 		} catch (JSONException e) {
 			// Ignore
 		}

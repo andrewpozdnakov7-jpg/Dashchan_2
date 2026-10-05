@@ -9,6 +9,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -33,9 +34,7 @@ public class AdvancedPreferences {
 				try (FileInputStream input = new FileInputStream(file)) {
 					ByteArrayOutputStream output = new ByteArrayOutputStream();
 					IOUtils.copyStream(input, output);
-					@SuppressWarnings("CharsetObjectCanBeUsed")
-					String jsonStringSuppress = new String(output.toByteArray(), "UTF-8");
-					jsonString = jsonStringSuppress;
+					jsonString = new String(output.toByteArray(), StandardCharsets.UTF_8);
 				} catch (IOException e) {
 					e.printStackTrace();
 				}

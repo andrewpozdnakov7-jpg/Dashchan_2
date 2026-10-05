@@ -16,7 +16,7 @@ class NativeCacheTest(unittest.TestCase):
         self.sources = self.root / "sources"
         self.entry = self.root / "slooop-native-cache"
         self.abis = ["arm64-v8a"]
-        for name in ("dav1d", "ffmpeg", "yuv"):
+        for name in ("dav1d", "ffmpeg"):
             self.write(self.sources / name / "source.c", b"source")
         self.write(self.repo / "build.gradle", b"versionCode = 100\n"
                    b"tasks.register('prepareBuiltinWebmSources', Exec) {\nversion='1'\n}\n"
@@ -50,6 +50,22 @@ class NativeCacheTest(unittest.TestCase):
         other = self.root / "another-zip"
         shutil.copytree(self.repo, other)
         self.assertEqual(before, cache.fingerprint(other, self.sources, self.abis, self.environment))
+
+    def test_player_uses_only_ffmpeg_frame_converter(self):
+        repo = Path(__file__).resolve().parents[2]
+        video = (repo / "jni/src/player/player_video_software.c").read_text(encoding="utf-8")
+        self.assertIn("sws_getCachedContext(", video)
+        self.assertIn("sws_scale(", video)
+        self.assertNotIn("I420ToABGR", video)
+        self.assertNotIn("useLibyuv", video)
+        for name in ("src/com/mishiranu/dashchan/media/VideoPlayer.java",
+                     "jni/src/player/Android.mk", "build.gradle", "gradle.properties",
+                     "Dashchan-Webm/build.gradle", "Dashchan-Webm/shared-prepare.sh",
+                     "Dashchan-Webm/shared-build.sh"):
+            text = (repo / name).read_text(encoding="utf-8")
+            self.assertNotIn("libyuv", text.lower(), name)
+            self.assertNotIn('"yuv"', text, name)
+        self.assertFalse((repo / "jni/src/player/yuv/Android.mk").exists())
 
     def test_source_content_invalidates(self):
         before = self.key()
@@ -90,6 +106,19 @@ class NativeCacheTest(unittest.TestCase):
         self.outputs()
         cache.pack(self.repo, self.entry, self.key(), self.abis)
         self.assertFalse(cache.restore(self.repo, self.entry, "different", self.abis))
+
+    def test_legacy_converter_outputs_are_not_packed(self):
+        self.outputs()
+        locations = cache.output_locations(self.repo)
+        self.write(locations["libraries"] / "yuv/arm64-v8a/libyuv.so", b"old library")
+        self.write(locations["external"] / "yuv/include/libyuv.h", b"old header")
+        key = self.key()
+        cache.pack(self.repo, self.entry, key, self.abis)
+        files = json.loads((self.entry / "manifest.json").read_text())["files"]
+        self.assertFalse(any("yuv" in name for name in files))
+        self.assertFalse((self.entry / "payload/libraries/yuv").exists())
+        self.assertFalse((self.entry / "payload/external/yuv").exists())
+        self.assertTrue(cache.restore(self.repo, self.entry, key, self.abis))
 
     def test_universal_outputs_can_be_restored_between_split_builds(self):
         self.abis = sorted(cache.MACHINES)

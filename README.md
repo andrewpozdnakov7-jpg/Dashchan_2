@@ -71,7 +71,7 @@ F-Droid-версия не содержит встроенный механизм
   -PnativeAbis=arm64-v8a,armeabi-v7a,x86
 ```
 
-APK появится в `build/outputs/apk`. Первая сборка скачивает исходники FFmpeg, dav1d и libyuv и может занять заметное время. Репозиторий не содержит приватный ключ публикации. Защищённый ручной workflow может создать временный подписанный кандидат, но ничего не публикует автоматически.
+APK появится в `build/outputs/apk`. Первая сборка скачивает исходники FFmpeg и dav1d и может занять заметное время. Репозиторий не содержит приватный ключ публикации. Защищённый ручной workflow может создать временный подписанный кандидат, но ничего не публикует автоматически.
 
 Подробные инструкции:
 
@@ -161,7 +161,7 @@ Install JDK 21, Android SDK Platform 37, Build Tools 36.0.0, NDK 29.0.14206865, 
   -PnativeAbis=arm64-v8a,armeabi-v7a,x86
 ```
 
-The APK is written under `build/outputs/apk`. The first build downloads FFmpeg, dav1d, and libyuv sources. The repository does not contain the private release key. A protected manual workflow can create a temporary signed candidate, but it never publishes a release automatically.
+The APK is written under `build/outputs/apk`. The first build downloads FFmpeg and dav1d sources. The repository does not contain the private release key. A protected manual workflow can create a temporary signed candidate, but it never publishes a release automatically.
 
 See [docs/BUILDING.md](docs/BUILDING.md), [docs/TESTING.md](docs/TESTING.md), and [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md) for the complete workflow.
 

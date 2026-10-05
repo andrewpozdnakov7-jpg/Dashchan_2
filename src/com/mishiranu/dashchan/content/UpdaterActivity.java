@@ -1,12 +1,16 @@
 package com.mishiranu.dashchan.content;
 
+import android.Manifest;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
+import android.content.pm.PackageManager;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
 import androidx.activity.result.ActivityResult;
@@ -21,6 +25,7 @@ import com.mishiranu.dashchan.BuildConfig;
 import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.service.DownloadService;
+import com.mishiranu.dashchan.ui.MainActivity;
 import com.mishiranu.dashchan.ui.StateActivity;
 import com.mishiranu.dashchan.util.AndroidUtils;
 import java.io.File;
@@ -32,6 +37,10 @@ public class UpdaterActivity extends StateActivity {
 	private static final String EXTRA_FILES = "files";
 
 	private static final String EXTRA_INDEX = "index";
+	private static final String RESUME_PREFERENCES = "self_update_resume";
+	private static final String KEY_STARTED_AT = "started_at";
+	private static final String KEY_PREVIOUS_VERSION_CODE = "previous_version_code";
+	private static final long RESUME_MAX_AGE_MS = 2L * 60L * 60L * 1000L;
 
 	private int index = 0;
 
@@ -40,6 +49,28 @@ public class UpdaterActivity extends StateActivity {
 
 	private List<String> getFiles() {
 		return getIntent().getStringArrayListExtra(EXTRA_FILES);
+	}
+
+	private static boolean isClientFile(String name) {
+		return name != null && name.startsWith(ChanManager.EXTENSION_NAME_CLIENT + "-")
+				&& name.endsWith(".apk");
+	}
+
+	private boolean isInstallingClient() {
+		List<String> files = getFiles();
+		return files != null && index < files.size() && isClientFile(files.get(index));
+	}
+
+	private static void markClientInstall(Context context) {
+		// Commit before opening the installer: replacing this package may kill our process.
+		context.getSharedPreferences(RESUME_PREFERENCES, Context.MODE_PRIVATE).edit()
+				.putLong(KEY_STARTED_AT, System.currentTimeMillis())
+				.putInt(KEY_PREVIOUS_VERSION_CODE, BuildConfig.VERSION_CODE)
+				.commit();
+	}
+
+	private static void clearClientInstall(Context context) {
+		context.getSharedPreferences(RESUME_PREFERENCES, Context.MODE_PRIVATE).edit().clear().commit();
 	}
 
 	@Override
@@ -65,10 +96,16 @@ public class UpdaterActivity extends StateActivity {
 		if (files != null && files.size() > index) {
 			File file = FileProvider.getUpdatesFile(files.get(index));
 			if (file == null) {
+				if (isInstallingClient()) {
+					clearClientInstall(this);
+				}
 				index++;
 				performInstallation();
 			} else {
 				Uri uri = FileProvider.convertUpdatesUri(Uri.fromFile(file));
+				if (isInstallingClient()) {
+					markClientInstall(this);
+				}
 				@SuppressWarnings("deprecation")
 				String action = Intent.ACTION_INSTALL_PACKAGE;
 				packageInstaller.launch(new Intent(action)
@@ -79,6 +116,47 @@ public class UpdaterActivity extends StateActivity {
 			}
 		} else {
 			finish();
+		}
+	}
+
+	/** Only the app's own successful replacement may offer to reopen its saved page. */
+	public static class AppUpdatedReceiver extends BroadcastReceiver {
+		@Override
+		public void onReceive(Context context, Intent intent) {
+			if (intent == null || !Intent.ACTION_MY_PACKAGE_REPLACED.equals(intent.getAction())) {
+				return;
+			}
+			android.content.SharedPreferences preferences = context.getSharedPreferences(
+					RESUME_PREFERENCES, Context.MODE_PRIVATE);
+			long startedAt = preferences.getLong(KEY_STARTED_AT, 0L);
+			int previousVersionCode = preferences.getInt(KEY_PREVIOUS_VERSION_CODE, 0);
+			preferences.edit().clear().commit();
+			long age = System.currentTimeMillis() - startedAt;
+			if (startedAt <= 0L || age < 0L || age > RESUME_MAX_AGE_MS
+					|| BuildConfig.VERSION_CODE <= previousVersionCode) {
+				return;
+			}
+			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && context.checkSelfPermission(
+					Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+				return;
+			}
+			NotificationManager notificationManager = (NotificationManager)
+					context.getSystemService(Context.NOTIFICATION_SERVICE);
+			notificationManager.createNotificationChannel(AndroidUtils.createHeadsUpNotificationChannel(
+					C.NOTIFICATION_CHANNEL_UPDATES, context.getString(R.string.updates)));
+			Intent openApp = new Intent(context, MainActivity.class)
+					.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+			PendingIntent pendingIntent = PendingIntent.getActivity(context,
+					C.NOTIFICATION_ID_UPDATE_INSTALLED, openApp,
+					PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+			NotificationCompat.Builder notification = new NotificationCompat.Builder(
+					context, C.NOTIFICATION_CHANNEL_UPDATES)
+					.setSmallIcon(android.R.drawable.stat_sys_download_done)
+					.setContentTitle(context.getString(R.string.open_slooop_after_update))
+					.setContentText(context.getString(R.string.update_installed_open_app))
+					.setContentIntent(pendingIntent)
+					.setAutoCancel(true);
+			notificationManager.notify(C.NOTIFICATION_ID_UPDATE_INSTALLED, notification.build());
 		}
 	}
 
@@ -97,6 +175,9 @@ public class UpdaterActivity extends StateActivity {
 			// sometimes the flag doesn't take effect and package installer is unable to access the package file.
 			performInstallation();
 		} else {
+			if (isInstallingClient()) {
+				clearClientInstall(this);
+			}
 			finish();
 		}
 	}

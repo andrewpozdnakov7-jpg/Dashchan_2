@@ -61,12 +61,12 @@ public class VideoPlayer {
 	private static final String[] PLAYER_LIBRARIES = BUNDLED_ATEMPO
 			? new String[] {"player", "avfilter"} : new String[] {"player"};
 	private static final String[] WEBM_REQUIRED_LIBRARIES =
-			{"avutil", "swresample", "swscale", "avcodec", "avformat", "yuv"};
+			{"avutil", "swresample", "swscale", "avcodec", "avformat"};
 	private static final String[] WEBM_OPTIONAL_LIBRARIES = {"dav1d"};
 	private static final String[] BUNDLED_REQUIRED_LIBRARIES = BUNDLED_ATEMPO
 			? new String[] {"player", "dav1d", "avutil", "swresample", "swscale", "avcodec", "avformat",
-					"avfilter", "yuv"}
-			: new String[] {"player", "dav1d", "avutil", "swresample", "swscale", "avcodec", "avformat", "yuv"};
+					"avfilter"}
+			: new String[] {"player", "dav1d", "avutil", "swresample", "swscale", "avcodec", "avformat"};
 
 	public static Pair<Boolean, String> loadLibraries(Context context) {
 		synchronized (VideoPlayer.class) {
@@ -1588,7 +1588,6 @@ public class VideoPlayer {
 			if (BUNDLED_ATEMPO) {
 				System.loadLibrary("avfilter");
 			}
-			System.loadLibrary("yuv");
 			System.loadLibrary("player");
 		}
 	}

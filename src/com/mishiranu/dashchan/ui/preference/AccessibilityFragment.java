@@ -92,12 +92,6 @@ public class AccessibilityFragment extends PreferenceFragment {
 		addCheck(true, Preferences.KEY_VIDEO_RIGHT_HAND_CONTROLS,
 				Preferences.DEFAULT_VIDEO_RIGHT_HAND_CONTROLS, R.string.video_right_hand_controls,
 				R.string.video_right_hand_controls__summary);
-		addCheck(true, Preferences.KEY_ROUNDED_DIALOGS, Preferences.DEFAULT_ROUNDED_DIALOGS,
-				R.string.rounded_dialogs, R.string.rounded_dialogs__summary);
-		RoundedDialogsRadiusPreference roundedDialogsRadiusPreference =
-				new RoundedDialogsRadiusPreference(requireContext());
-		addDialogPreference(roundedDialogsRadiusPreference);
-		addDependency(Preferences.KEY_ROUNDED_DIALOGS_RADIUS, Preferences.KEY_ROUNDED_DIALOGS, true);
 	}
 
 	private void selectCustomFont() {
