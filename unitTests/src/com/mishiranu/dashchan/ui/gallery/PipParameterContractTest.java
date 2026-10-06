@@ -160,4 +160,13 @@ public class PipParameterContractTest {
 		assertFalse(entry.contains("setPlaying("));
 		assertFalse(entry.contains("releaseVideoView"));
 	}
+
+	@Test public void entryRetainsBuilderInputsWithoutAndroid13Getters() throws Exception {
+		String entry = method("enterPictureInPicture");
+		assertTrue(entry.contains("createPictureInPictureParams(aspectRatio, sourceRect)"));
+		assertTrue(entry.contains("lastPublishedAspectRatio = aspectRatio"));
+		assertTrue(entry.contains("lastSourceRectHint.set(sourceRect)"));
+		assertFalse(source().contains("params.getAspectRatio()"));
+		assertFalse(source().contains("params.getSourceRectHint()"));
+	}
 }

@@ -850,14 +850,16 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 		cancelGalleryReturn("enter");
 		pictureInPictureEntryRequested = true;
 		recordTransition("entry_request");
-		PictureInPictureParams params = createPictureInPictureParams(player.getDimensions());
+		Rational aspectRatio = getPictureInPictureAspectRatio(player.getDimensions());
+		Rect sourceRect = getPictureInPictureSourceRect();
+		PictureInPictureParams params = createPictureInPictureParams(aspectRatio, sourceRect);
 		try {
 			// enterPictureInPictureMode publishes this snapshot itself; do not send it twice.
-			lastPublishedAspectRatio = params.getAspectRatio();
+			// Retain the exact builder inputs: Params getters require Android 13.
+			lastPublishedAspectRatio = aspectRatio;
 			pictureInPictureActionsPublished = true;
 			lastPublishedPlaying = player.isPlaying();
 			lastPublishedSeekSeconds = Preferences.getVideoDoubleTapSeekInterval();
-			Rect sourceRect = params.getSourceRectHint();
 			if (sourceRect != null && !sourceRect.isEmpty()) {
 				lastSourceRectHint.set(sourceRect);
 				VideoDiagnostics.recordUi("pip source_rect=" + sourceRect.toShortString() + " in_pip=false");
@@ -877,18 +879,16 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 		}
 	}
 
-	private PictureInPictureParams createPictureInPictureParams(Point dimensions) {
+	private PictureInPictureParams createPictureInPictureParams(Rational aspectRatio, Rect sourceRect) {
 		PictureInPictureParams.Builder builder = new PictureInPictureParams.Builder();
 		// Crop to the actual video, not the full portrait activity including its black bars.
 		// Missing source bounds lets Android cover the PiP transition with a content overlay.
-		Rect sourceRect = getPictureInPictureSourceRect();
 		if (sourceRect != null) {
 			builder.setSourceRectHint(sourceRect);
 		}
 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
 			builder.setSeamlessResizeEnabled(true);
 		}
-		Rational aspectRatio = getPictureInPictureAspectRatio(dimensions);
 		if (aspectRatio != null) builder.setAspectRatio(aspectRatio);
 		VideoPlayer player = this.player;
 		builder.setActions(createPictureInPictureActions(player != null && player.isPlaying(),
