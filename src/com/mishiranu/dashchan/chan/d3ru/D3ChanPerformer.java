@@ -29,8 +29,8 @@ public class D3ChanPerformer extends ChanPerformer {
 
 	@Override
 	public ReadBoardsResult onReadBoards(ReadBoardsData data) throws HttpException, InvalidResponseException {
-		D3ChanLocator locator = D3ChanLocator.get(this);
-		D3ChanConfiguration configuration = D3ChanConfiguration.get(this);
+		D3ChanLocator locator = D3ChanLocator.getLocator(this);
+		D3ChanConfiguration configuration = D3ChanConfiguration.getConfiguration(this);
 		try {
 			JSONObject root = new JSONObject(createRequest(locator.createBoardsApiUri(), data)
 					.perform().readString());
@@ -71,8 +71,8 @@ public class D3ChanPerformer extends ChanPerformer {
 		if (data.isCatalog() || !D3ChanLocator.isBoardName(data.boardName)) {
 			throw new InvalidResponseException();
 		}
-		D3ChanLocator locator = D3ChanLocator.get(this);
-		D3ChanConfiguration configuration = D3ChanConfiguration.get(this);
+		D3ChanLocator locator = D3ChanLocator.getLocator(this);
+		D3ChanConfiguration configuration = D3ChanConfiguration.getConfiguration(this);
 		try {
 			HttpResponse response = createRequest(locator.createThreadsApiUri(data.boardName, data.pageNumber), data)
 					.setValidator(data.validator).perform();
@@ -101,7 +101,7 @@ public class D3ChanPerformer extends ChanPerformer {
 	public ReadPostsResult onReadPosts(ReadPostsData data) throws HttpException, InvalidResponseException {
 		if (!D3ChanLocator.isBoardName(data.boardName) || StringUtils.isEmpty(data.threadNumber)
 				|| !data.threadNumber.matches("\\d+")) throw new InvalidResponseException();
-		D3ChanLocator locator = D3ChanLocator.get(this);
+		D3ChanLocator locator = D3ChanLocator.getLocator(this);
 		try {
 			JSONObject postRoot = new JSONObject(createRequest(locator.createPostApiUri(data.threadNumber), data)
 					.perform().readString());

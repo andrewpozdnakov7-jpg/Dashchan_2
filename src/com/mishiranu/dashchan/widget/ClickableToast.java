@@ -14,6 +14,7 @@ import android.graphics.Rect;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
+import android.os.Build;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
@@ -504,14 +505,23 @@ public class ClickableToast implements DefaultLifecycleObserver {
 		layoutParams.windowAnimations = android.R.style.Animation_Toast;
 		layoutParams.gravity = Gravity.CENTER_HORIZONTAL | Gravity.BOTTOM;
 		layoutParams.y = Y_OFFSET;
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+			layoutParams.setCanPlayMoveAnimation(false);
+		} else {
+			disableLegacyMoveAnimation(layoutParams);
+		}
+		return updateLayoutParams(layoutParams);
+	}
+
+	// API 30-33 have no public counterpart. Failure is cosmetic, never fatal.
+	private static void disableLegacyMoveAnimation(WindowManager.LayoutParams layoutParams) {
 		try {
 			Field field = WindowManager.LayoutParams.class.getField("privateFlags");
 			// PRIVATE_FLAG_NO_MOVE_ANIMATION == 0x00000040
 			field.set(layoutParams, field.getInt(layoutParams) | 0x00000040);
-		} catch (Exception e) {
-			e.printStackTrace();
+		} catch (ReflectiveOperationException | RuntimeException e) {
+			// Some vendors block hidden fields; use their normal window animation.
 		}
-		return updateLayoutParams(layoutParams);
 	}
 
 	private void updateAndApplyLayoutChecked() {

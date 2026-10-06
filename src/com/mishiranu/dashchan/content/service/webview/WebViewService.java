@@ -332,22 +332,31 @@ public class WebViewService extends Service {
 			}
 			handler.removeMessages(MESSAGE_DRAW_TO_FILE);
 			webView.stopLoading();
-			WebViewUtils.clearAll(webView);
 			CookieRequest cookieRequest = this.cookieRequest;
+			WebView clearedView = webView;
 			if (cookieRequest != null) {
 				handler.removeMessages(MESSAGE_HANDLE_FINISH);
 				handler.sendEmptyMessageDelayed(MESSAGE_HANDLE_FINISH, cookieRequest.timeout);
-				webView.getSettings().setUserAgentString(cookieRequest.userAgent);
-				WebViewUtils.setProxy(this, cookieRequest.proxyData, () -> {
-					if (this.cookieRequest == cookieRequest && webView != null) {
-						webView.loadUrl(cookieRequest.uriString);
+				WebViewUtils.clearAll(clearedView, () -> {
+					if (destroyed || this.cookieRequest != cookieRequest || webView != clearedView
+							|| cookieRequest.ready) return;
+					clearedView.getSettings().setUserAgentString(cookieRequest.userAgent);
+					WebViewUtils.setProxy(this, cookieRequest.proxyData, () -> {
+						if (!destroyed && this.cookieRequest == cookieRequest && webView == clearedView
+								&& !cookieRequest.ready) {
+							clearedView.loadUrl(cookieRequest.uriString);
+						}
+					});
+					if (captureImageFile != null) {
+						handler.sendEmptyMessageDelayed(MESSAGE_DRAW_TO_FILE, DRAW_TO_FILE_INTERVAL);
 					}
 				});
-				if (captureImageFile != null) {
-					handler.sendEmptyMessageDelayed(MESSAGE_DRAW_TO_FILE, DRAW_TO_FILE_INTERVAL);
-				}
 			} else {
-				webView.loadUrl("about:blank");
+				WebViewUtils.clearAll(clearedView, () -> {
+					if (!destroyed && this.cookieRequest == null && webView == clearedView) {
+						clearedView.loadUrl("about:blank");
+					}
+				});
 			}
 		}
 	}

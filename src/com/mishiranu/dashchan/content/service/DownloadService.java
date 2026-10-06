@@ -1317,10 +1317,11 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 				view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
 			}
 		}
-		if (success) {
+		// SAF downloads are already registered by their document provider.
+		if (success && !taskData.target.isExternal()) {
 			File file = taskDataFile != null ? taskDataFile.getFileOrUri().first : null;
 			if (file != null) {
-				scanFileLegacy(file);
+				scanRegularFile(file);
 			}
 		}
 		for (Callback callback : callbacks) {
@@ -1355,7 +1356,7 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 		}
 	}
 
-	private void scanFileLegacy(File file) {
+	private void scanRegularFile(File file) {
 		String[] fileArray = {file.getAbsolutePath()};
 		MediaScannerConnection.scanFile(this, fileArray, null, null);
 	}

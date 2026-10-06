@@ -104,7 +104,6 @@
 	<string name="toolbar_title_size_compact">Многострочный заголовок (sp)</string>
 	<string name="toolbar_title_sizes_error">Введите размер от 10 до 32. Минимальный размер и размер многострочного заголовка не должны превышать обычный.</string>
 	<string name="toast_diagnostics_test">Проверить всплывающее сообщение</string>
-	<string name="toast_diagnostics_test__summary">Показать тестовую всплывашку и записать её цвета, тему и разметку в Logcat (ToastDiag). Диагностика работает 10 минут, до 80 всплывашек. Текст постов и данные аккаунтов не записываются</string>
 	<string name="whats_new_unavailable">Для этой версии в приложение не добавлен список изменений.</string>
 	<string name="check_for_updates">Проверить наличие обновлений</string>
 	<string name="check_on_startup">Проверять при запуске</string>
@@ -275,16 +274,12 @@
 		папку или создайте новую.</string>
 	<string name="download_file">Загрузить файл</string>
 	<string name="download_files">Загрузить файлы</string>
-	<string name="download_path">Путь загрузки</string>
 	<string name="downloading_audio">Загрузка аудио</string>
 	<string name="downloading_number_of_number__format">Загрузка %1$d из %2$d</string>
 	<string name="downloads">Загрузки</string>
 	<string name="draft_saved">Черновик сохранён</string>
 	<string name="shared_text_saved_for_posting">Текст сохранён. Откройте редактор сообщения, чтобы вставить его.</string>
 	<string name="draw_over_other_applications">Отображать поверх других приложений</string>
-	<string name="draw_over_other_applications__summary">Данное разрешение необходимо для полноценной работы всплывающих
-		уведомлений с кнопкой, обеспечения надёжного перезапуска приложения и возможности запустить приложение при
-		неудачной отправке сообщения</string>
 	<string name="empty_response">Пустой ответ сервера</string>
 	<string name="no_more_threads">Больше тредов нет</string>
 	<string name="enabled">Включено</string>
@@ -686,9 +681,6 @@
 	<string name="tiktok_filter_hint">Теперь в TikTok-режиме можно листать и фото! Удерживайте кнопку TikTok, чтобы выбрать: всё, только видео или только фото. Фильтр также доступен через меню «⋮».</string>
 	<string name="enable_video_tiktok_mode">Включить режим TikTok</string>
 	<string name="disable_video_tiktok_mode">Выключить режим TikTok</string>
-	<string name="video_tiktok_mode_hint">Смахните вверх для следующего видео или вниз для предыдущего. Двойное нажатие ставит видео на паузу или продолжает воспроизведение. Удерживайте палец по центру экрана, чтобы открыть меню. Жест громкости работает в настроенной боковой зоне, если включён. Остальные жесты отключены; экранные кнопки работают. Выбранный режим запоминается.</string>
-	<string name="video_tiktok_no_next_video">Следующих видео в этом треде больше нет</string>
-	<string name="video_tiktok_no_previous_video">Предыдущих видео в этом треде больше нет</string>
 	<string name="video_screen_off_action">При выключении экрана</string>
 	<string name="video_screen_off_action__summary">Выберите, ставить ли видео PiP на паузу или продолжать воспроизведение с выключенным экраном</string>
 	<string name="video_screen_off_action_pause">Ставить видео на паузу</string>
@@ -996,8 +988,6 @@
 	<string name="use_built_in_video_player__summary">Воспроизводить вложенные WebM видео</string>
 	<string name="use_forum_settings">Использовать настройки форума</string>
 	<string name="use_gms_security_provider">Использ. постав. безопасности GMS</string>
-	<string name="use_gms_security_provider__summary">Поставщик безопасности сервисов Google Play добавляет поддержку
-		более новой реализации SSL/TLS, что может быть полезно на старых Android устройствах</string>
 	<string name="use_javascript_for_recaptcha">Использ. JavaScript для reCAPTCHA</string>
 	<string name="use_javascript_for_recaptcha__summary">Google reCAPTCHA может быть упрощена</string>
 	<string name="user_authorization">Авторизация пользователя</string>
@@ -1007,7 +997,6 @@
 	<string name="user_is_warned">Пользователь предупреждён</string>
 	<string name="validation_completed">Проверка завершена</string>
 	<string name="verify_certificate">Проверять сертификат</string>
-	<string name="verify_certificate__summary">Соединение будет разорвано, если сертификат не достоверен</string>
 	<string name="version">Версия</string>
 	<string name="vibration">Вибрация</string>
 	<string name="video_player">Видеоплеер</string>
@@ -1018,7 +1007,7 @@
 	<string name="watch_initially__summary">Включать отслеживание при добавлении в избранное</string>
 	<string name="web_browser">Браузер</string>
 	<string name="wifi_only">Только через Wi-Fi</string>
-	<string name="wifi_or_3g_plus">Через Wi-Fi или 3G+</string>
+	<string name="wifi_or_mobile">Через Wi-Fi или мобильную сеть</string>
 	<string name="with_name_name__format">С именем %s</string>
 	<string name="word_or_phrase">Слово или фраза</string>
 	<string name="yesterday">Вчера</string>
@@ -1066,7 +1055,6 @@
 	<string name="application_logo_requirements">Изображение должно быть квадратным, с чёткими деталями, которые хорошо читаются в маленьком размере.</string>
 	<string name="no_verified_dvach_pass">У вас нет сохранённого паскода Двача</string>
 	<string name="custom_application_shortcut">Свой ярлык</string>
-	<string name="custom_application_shortcut__summary">Создать дополнительный ярлык со своим названием и изображением</string>
 	<string name="confirm_custom_shortcut">Подтвердите добавление ярлыка на рабочий стол</string>
 	<string name="custom_shortcuts_not_supported">Текущий лаунчер не поддерживает закреплённые ярлыки</string>
 	<string name="custom_shortcut_ai_prompt_title">Промт для генератора изображений</string>
@@ -1082,7 +1070,6 @@
 	<string name="custom_shortcut_select_image_first">Сначала выберите изображение</string>
 	<string name="custom_shortcut_image_error">Не удалось открыть изображение</string>
 	<string name="post_marks_colors">Цвета меток постов</string>
-	<string name="post_marks_colors__summary">Настроить метки возле постов и на полосе прокрутки треда</string>
 	<string name="post_marks_color_source">Источник цветов</string>
 	<string name="post_marks_colors_default">По умолчанию</string>
 	<string name="post_marks_colors_theme">Из темы</string>
@@ -1358,7 +1345,6 @@
 	<string name="image_preload_count">Количество следующих фото</string>
 	<string name="image_preload_size">Максимальный размер одного фото</string>
 	<string name="image_preload_size_description">Фото больше указанного размера не загружаются заранее. При открытии вручную они загружаются полностью. В кэше хранятся файлы, а не развёрнутые полноразмерные изображения в оперативной памяти.</string>
-	<string name="video_preload_summary">Загрузка следующих роликов заранее: сеть, количество и ограничение размера</string>
 	<string name="video_preload_enable">Загружать следующие видео заранее</string>
 	<string name="video_preload_description">После полной загрузки открытого вложения следующие видео этой галереи по одному загружаются в кэш, в общей очереди с фото. Расходует трафик и место на диске. Ролики больше лимита или с неизвестным размером загрузки пропускаются без замены более дальними. При сворачивании приложения или выходе из просмотра предзагрузка прекращается. Не применяется к YouTube и веб-плеерам.</string>
 	<string name="video_preload_network">Сеть для предзагрузки</string>
@@ -1383,7 +1369,6 @@
 	<string name="popup_preview">Показать пример</string>
 	<string name="popup_preview_message">Так будут выглядеть всплывающие сообщения</string>
 	<string name="popup_reset">Сбросить</string>
-	<string name="popup_reset__summary">Вернуть оформление в цвет шапки и сбросить свои цвета</string>
 	<string name="show_original_post_title">Показывать заголовок в первом посте</string>
 	<string name="show_original_post_title__summary">Повторять название треда над первым сообщением, даже если оно уже есть в верхней панели. В списке тредов, предпросмотре и при скрытом названии в верхней панели заголовок сохраняется.</string>
 	<string name="popup_color_hue">Оттенок</string>

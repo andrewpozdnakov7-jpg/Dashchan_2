@@ -85,7 +85,6 @@
 	<string name="download_completed">Download completo</string>
 	<string name="download_file">Baixar arquivo</string>
 	<string name="download_files">Baixar arquivos</string>
-	<string name="download_path">Local de download</string>
 	<string name="downloading_audio">Baixando áudio</string>
 	<string name="downloading_number_of_number__format">Baixando %1$d de %2$d</string>
 	<string name="empty_response">Resposta vazia</string>
@@ -365,14 +364,13 @@
 	<string name="user_is_warned">Usuário foi avisado</string>
 	<string name="validation_completed">Validação completa</string>
 	<string name="verify_certificate">Verificar certificado</string>
-	<string name="verify_certificate__summary">A conexão será encerrada se o certificado for inválido</string>
 	<string name="version">Versão</string>
 	<string name="video_player">Reprodutor de vídeo</string>
 	<string name="view__verb">Ver</string>
 	<string name="watch_initially">Iniciar o watcher</string>
 	<string name="watch_initially__summary">Ativa o watcher assim que um fio é adcionado aos favoritos</string>
 	<string name="wifi_only">Somente Wi-Fi</string>
-	<string name="wifi_or_3g_plus">Wi-Fi ou 3G+</string>
+	<string name="wifi_or_mobile">Wi-Fi ou rede móvel</string>
 	<string name="with_name_name__format">Com nome %s</string>
 	<string name="yesterday">Ontem</string>
 	<string name="you_are_banned">Voce está banido</string>

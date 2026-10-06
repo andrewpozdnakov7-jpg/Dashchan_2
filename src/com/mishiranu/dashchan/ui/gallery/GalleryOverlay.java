@@ -1210,6 +1210,10 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 
 	private void applyGalleryFilter(String filter, GallerySort sort, boolean refresh) {
 		List<GalleryItem> oldItems = refresh ? new ArrayList<>(instance.galleryItems) : null;
+		// Capture the actual grid BEFORE replacing its backing list. The pager may
+		// still point to the image used to enter the gallery, far from this viewport.
+		ListUnit.FilterViewport viewport = !refresh && galleryMode ? listUnit.captureFilterViewport() : null;
+		boolean preserveEdges = sort == gallerySort;
 		GalleryItem currentGalleryItem = pagerUnit.getCurrentGalleryItem();
 		if (refresh && currentGalleryItem == null && !instance.galleryItems.isEmpty()) {
 			currentGalleryItem = instance.galleryItems.get(Math.max(0,
@@ -1220,8 +1224,8 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 		instance.galleryItems.clear();
 		instance.galleryItems.addAll(galleryItems);
 		int position = currentGalleryItem != null ? instance.galleryItems.indexOf(currentGalleryItem) : -1;
-		if (position < 0) position = 0;
 		if (refresh) {
+			if (position < 0) position = 0;
 			listUnit.onGalleryItemsRefreshed(oldItems);
 			pagerUnit.onGalleryItemsRefreshed(position);
 			updateTitle();
@@ -1229,10 +1233,24 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 			invalidateOptionsMenu();
 			return;
 		}
+		int gridPosition = viewport != null ? GalleryFilterPosition.resolve(allGalleryItems,
+				instance.galleryItems, viewport.item, viewport.atStart, viewport.atEnd, preserveEdges) : -1;
+		if (position < 0) {
+			position = gridPosition >= 0 ? gridPosition : GalleryFilterPosition.resolve(allGalleryItems,
+					instance.galleryItems, currentGalleryItem, false, false, false);
+			if (position < 0) position = 0;
+		}
 		listUnit.onGalleryItemsChanged();
 		pagerUnit.onGalleryItemsChanged(position);
 		if (galleryMode) {
-			listUnit.scrollListToPosition(position, false);
+			if (gridPosition < 0) gridPosition = position;
+			int offset = viewport != null && !(preserveEdges && (viewport.atStart || viewport.atEnd))
+					? viewport.offset : 0;
+			listUnit.restoreFilterPosition(gridPosition, offset);
+			instance.logNavigation("filter_position schema=1 index=" + gridPosition + " offset=" + offset
+					+ " anchor=" + (viewport != null) + " preserveEdges=" + preserveEdges
+					+ " start=" + (viewport != null && viewport.atStart)
+					+ " end=" + (viewport != null && viewport.atEnd));
 			updateGalleryModeTitle();
 		} else {
 			updateTitle();

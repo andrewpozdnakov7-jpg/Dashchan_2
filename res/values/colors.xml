@@ -15,7 +15,7 @@
 	<color name="color_launcher_background_logo_11">#ff142330</color>
 	<color name="color_launcher_background_pass">#ff000000</color>
 	<color name="color_launcher_background_subscriber">#ff000000</color>
-	<color name="color_text_error">#ffcc0000</color>
+	<color name="color_text_error">#ffe53935</color>
 
 	<color name="background_popup_light">#ffffffff</color>
 	<color name="background_clickable_toast_light">@color/background_popup_dark</color>

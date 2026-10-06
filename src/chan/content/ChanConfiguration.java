@@ -2,6 +2,7 @@ package chan.content;
 
 import com.mishiranu.dashchan.util.AuditDiagnostics;
 import android.content.Context;
+import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.net.Uri;
 import android.os.CancellationSignal;
@@ -15,6 +16,7 @@ import chan.util.DataFile;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.MainApplication;
+import com.mishiranu.dashchan.content.LocaleManager;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.database.ChanDatabase;
 import com.mishiranu.dashchan.util.IOUtils;
@@ -33,7 +35,7 @@ import java.util.Set;
 @Extendable
 public class ChanConfiguration implements Chan.Linked {
 	private final Chan.Provider chanProvider;
-	private final Resources resources;
+	private final ChanResources chanResources;
 	private final HashMap<ChanDatabase.DataKey, Object> editData;
 
 	private boolean isInitialized = false;
@@ -49,11 +51,13 @@ public class ChanConfiguration implements Chan.Linked {
 		if (chanProvider == null) {
 			ChanManager.Initializer.Holder holder = INITIALIZER.consume();
 			this.chanProvider = holder.chanProvider;
-			resources = holder.resources;
+			chanResources = holder.chanResources;
 			editData = new HashMap<>();
 		} else {
 			this.chanProvider = chanProvider;
-			resources = null;
+			Context context = MainApplication.getInstance();
+			chanResources = new ChanResources(context, LocaleManager.getInstance()
+					.createEffectiveConfiguration(context.getResources().getConfiguration()));
 			editData = null;
 		}
 	}
@@ -761,55 +765,65 @@ public class ChanConfiguration implements Chan.Linked {
 
 	@Public
 	public final Resources getResources() {
-		return resources;
+		// Extensions must obtain Resources again after configuration changes, not retain this instance.
+		return chanResources.getSnapshot().resources;
+	}
+
+	/** Internal cache token, not part of the public extension API. */
+	public final long getResourcesGenerationInternal() {
+		return chanResources.getSnapshot().generation;
 	}
 
 	private final SparseArray<Uri> resourceUris = new SparseArray<>();
 
+	final void updateResources(Configuration configuration) {
+		synchronized (resourceUris) {
+			if (chanResources.update(configuration)) resourceUris.clear();
+		}
+	}
+
 	@Public
 	public final Uri getResourceUri(int resId) {
-		Uri uri;
 		synchronized (resourceUris) {
-			uri = resourceUris.get(resId);
-		}
-		if (uri == null) {
-			String packageName = resources.getResourcePackageName(resId);
-			if (get().packageName.equals(packageName)) {
-				String type = resources.getResourceTypeName(resId);
-				String name = resources.getResourceEntryName(resId);
-				uri = Uri.parse(SCHEME_CHAN + ":///res/" + type + "/" + name);
-				if (uri != null) {
-					synchronized (resourceUris) {
+			Uri uri = resourceUris.get(resId);
+			if (uri == null) {
+				ChanResources.Snapshot snapshot = chanResources.getSnapshot();
+				Resources resources = snapshot.resources;
+				try {
+					if (get().packageName.equals(resources.getResourcePackageName(resId))) {
+						String value = ChanResourceUri.build(get().name, resources.getResourceTypeName(resId),
+								resources.getResourceEntryName(resId), snapshot.generation);
+						if (value == null) return null;
+						uri = Uri.parse(value);
 						resourceUris.put(resId, uri);
 					}
+				} catch (Resources.NotFoundException e) {
+					return null;
 				}
 			}
+			return uri;
 		}
-		return uri;
 	}
 
 	public final boolean readResourceUri(Uri uri, OutputStream output) throws IOException {
 		Chan chan = get();
-		if (chan.name == null) {
-			return false;
-		}
-		String chanName = uri.getAuthority();
-		if (!StringUtils.isEmpty(chanName) && !chanName.equals(chan.name)) {
-			return false;
-		}
+		if (uri == null || !uri.isHierarchical()) return false;
 		List<String> pathSegments = uri.getPathSegments();
-		if (pathSegments == null || pathSegments.size() != 3 || !"res".equals(pathSegments.get(0))) {
+		if (!ChanResourceUri.accepts(uri.getScheme(), uri.getAuthority(), chan.name, pathSegments)) {
 			return false;
 		}
 		String type = pathSegments.get(1);
 		String name = pathSegments.get(2);
-		int id = resources.getIdentifier(name, type, chan.packageName);
-		if (id == 0) {
+		Resources resources = getResources();
+		try {
+			int id = resources.getIdentifier(name, type, chan.packageName);
+			if (id == 0 || !chan.packageName.equals(resources.getResourcePackageName(id))) return false;
+			try (InputStream input = resources.openRawResource(id)) {
+				IOUtils.copyStream(input, output);
+				return true;
+			}
+		} catch (Resources.NotFoundException e) {
 			return false;
-		}
-		try (InputStream input = resources.openRawResource(id)) {
-			IOUtils.copyStream(input, output);
-			return true;
 		}
 	}
 

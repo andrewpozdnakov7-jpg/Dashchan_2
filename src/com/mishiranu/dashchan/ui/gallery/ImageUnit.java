@@ -305,6 +305,10 @@ public class ImageUnit {
 		@Override
 		protected void onComplete(Void result) {
 			PagerInstance.ViewHolder holder = instance.currentHolder;
+			if (holder == null || holder.photoView != photoView || holder.decodeBitmapTask != this) {
+				onCancel(result);
+				return;
+			}
 			holder.decodeBitmapTask = null;
 			holder.progressBar.setVisible(false, false);
 			if (bitmap != null || decoderDrawable != null || animatedPngDecoder != null || gifDecoder != null) {
@@ -348,6 +352,28 @@ public class ImageUnit {
 			holder.photoView.setImage(drawable, hasAlpha, false, holder.photoViewThumbnail);
 			holder.jpegData = fileHolder.getJpegData();
 			holder.photoViewThumbnail = false;
+		}
+
+		@Override
+		protected void onCancel(Void result) {
+			// Worker has finished before this callback: no decoder can be freed during init.
+			// Successful results belong to the holder; cancelled/stale results still belong here.
+			if (gifDecoder != null) {
+				gifDecoder.close();
+				gifDecoder = null;
+			}
+			if (animatedPngDecoder != null) {
+				animatedPngDecoder.recycle();
+				animatedPngDecoder = null;
+			}
+			if (decoderDrawable != null) {
+				decoderDrawable.recycle();
+				decoderDrawable = null;
+			}
+			if (bitmap != null) {
+				bitmap.recycle();
+				bitmap = null;
+			}
 		}
 	}
 }

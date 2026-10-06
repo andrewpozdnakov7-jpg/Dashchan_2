@@ -1,6 +1,5 @@
 package chan.content;
 
-import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import androidx.annotation.NonNull;
 
@@ -13,18 +12,18 @@ public final class Chan {
 	public final ChanLocator locator;
 	public final ChanMarkup markup;
 
-	final Drawable icon;
+	final int iconResId;
 
 	Chan(String name, String packageName,
 			ChanConfiguration configuration, ChanPerformer performer,
-			ChanLocator locator, ChanMarkup markup, Drawable icon) {
+			ChanLocator locator, ChanMarkup markup, int iconResId) {
 		this.name = name;
 		this.packageName = packageName;
 		this.configuration = configuration;
 		this.performer = performer;
 		this.locator = locator;
 		this.markup = markup;
-		this.icon = icon;
+		this.iconResId = iconResId;
 	}
 
 	static final class Provider {

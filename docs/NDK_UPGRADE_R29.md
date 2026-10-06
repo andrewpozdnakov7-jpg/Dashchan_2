@@ -6,8 +6,8 @@ Dashchan_2 currently uses Android NDK `29.0.14206865`, declared in `gradle.prope
 
 - minimum Android API: 30;
 - ABIs: `arm64-v8a`, `armeabi-v7a`, `x86`;
-- FFmpeg: 8.1.2;
-- dav1d: 1.5.3;
+- FFmpeg: 8.1.3;
+- dav1d: 1.5.4;
 - build host: Linux x86_64 or WSL.
 
 The native scripts use the NDK LLVM toolchain and generate shared libraries consumed by `libplayer.so`. Compatibility wrappers are retained for FFmpeg APIs removed after the original Dashchan player was written.

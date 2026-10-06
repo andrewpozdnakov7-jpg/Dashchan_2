@@ -38,4 +38,6 @@
 !/src
 !/unitTests
 !/unitTests/**
+!/instrumentationTests
+!/instrumentationTests/**
 !/update

@@ -766,7 +766,9 @@ public class VideoUnit {
 				player.init(file, null);
 				loadedFromFile = true;
 			} catch (IOException e) {
-				// Player was consumed, create a new one and try to download a new video file
+				// Also close failures before native init (for example, opening the file).
+				player.close();
+				// Create a new one and try to download a new video file.
 				player = new VideoPlayer(playerListener, seekAnyFrame);
 			}
 		}

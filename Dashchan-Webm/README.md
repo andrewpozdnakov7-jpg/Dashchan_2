@@ -20,7 +20,7 @@ The root project invokes:
 
 1. `shared-prepare.sh` to download and verify pinned source versions;
 2. `shared-build.sh` to build libraries for the requested ABIs;
-3. `syncBuiltinWebmPlayerHeaders` to synchronize generated FFmpeg headers and symbol lists;
+3. `syncBuiltinWebmPlayerHeaders` to validate the generated headers against the pinned FFmpeg version (the task name is retained for existing build/cache callers);
 4. the main NDK build to link `libplayer.so` against those libraries.
 
 Use the root Gradle Wrapper:
@@ -31,15 +31,17 @@ Use the root Gradle Wrapper:
   -PnativeAbis=arm64-v8a,armeabi-v7a,x86
 ```
 
-Linux x86_64 or WSL is required. The generated sources and libraries are stored below `Dashchan-Webm/build` and are excluded from Git.
+Linux x86_64 or WSL is required. The generated sources, headers and libraries are stored below `Dashchan-Webm/build` and are excluded from Git. JNI consumes the headers directly from `build/outputs/external/ffmpeg/include/<ABI>`, alongside the matching libraries from `build/intermediates/shared_libraries`. The build never copies generated headers or symbol lists back into `jni/`. The legacy FFmpeg 4.3.1 flavour retains its separate checked-in compatibility headers and symbol stubs.
+
+Native generation is registered through the public Android variant `lifecycleTasks.registerPreBuild` API, not AGP task-name guessing. Cached outputs must pass the same version/header checks as freshly built outputs.
 
 ## Pre-provided Native Sources
 
 Build environments that acquire and audit source code before the Gradle build, such as F-Droid, can bypass all network access in `shared-prepare.sh`. Set both variables to clean source trees at the pinned revisions:
 
 ```sh
-export DASHCHAN_DAV1D_SOURCE_DIR=/sources/dav1d-1.5.3
-export DASHCHAN_FFMPEG_SOURCE_DIR=/sources/ffmpeg-8.1.2
+export DASHCHAN_DAV1D_SOURCE_DIR=/sources/dav1d-1.5.4
+export DASHCHAN_FFMPEG_SOURCE_DIR=/sources/ffmpeg-8.1.3
 ```
 
 The preparation step copies these trees into its private build directory without VCS metadata. An invalid or missing directory aborts the build. When a variable is unset, the existing pinned download-and-verification path remains in use; ordinary local and GitHub Actions builds therefore keep their current behavior.
@@ -57,8 +59,8 @@ This standalone APK is not part of the normal Dashchan_2 installation or stable 
 
 ## Notable Changes From The Original Library
 
-- migrated to Android Gradle Plugin 9.2.1, Gradle 9.4.1-compatible scripts, SDK 36, and NDK 29;
-- updated FFmpeg 4.3.1 to 8.1.2 and dav1d 0.7.1 to 1.5.3;
+- migrated to Android Gradle Plugin 9.4.0, Gradle 9.6.1-compatible scripts, SDK 36, and NDK 29;
+- updated FFmpeg 4.3.1 to 8.1.3 and dav1d 0.7.1 to 1.5.4;
 - added MOV/MP4, H.264, HEVC, AAC, and MP3 support while retaining WebM codecs;
 - retained all three project ABIs;
 - removed machine-specific SDK paths from the public FFmpeg configuration string;

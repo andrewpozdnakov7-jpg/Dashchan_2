@@ -35,7 +35,7 @@ public class VideoPreloadFragment extends PreferenceFragment {
 		addList(Preferences.KEY_IMAGE_PRELOAD_NETWORK, Arrays.asList("wifi", "all", "wifi_3g"),
 				Preferences.getImagePreloadNetwork(), R.string.video_preload_network,
 				Arrays.<CharSequence>asList(getString(R.string.wifi_only), getString(R.string.video_preload_all_networks),
-						getString(R.string.wifi_or_3g_plus)));
+						getString(R.string.wifi_or_mobile)));
 		addSeek(Preferences.KEY_IMAGE_PRELOAD_COUNT, Preferences.DEFAULT_IMAGE_PRELOAD_COUNT,
 				getString(R.string.image_preload_count), "%d", null, 1, 5, 1);
 		addDialogPreference(new SizePreference(requireContext(), true));

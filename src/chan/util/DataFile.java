@@ -27,20 +27,25 @@ import java.util.Locale;
 @Public
 public abstract class DataFile {
 	public enum Target {
-		CACHE(null, CacheManager.getInstance()::getMediaDirectory),
-		UPDATES(null, FileProvider::getUpdatesDirectory),
-		DOWNLOADS(SafFile.SafTarget.DOWNLOADS, Preferences::getDownloadDirectoryLegacy);
+		CACHE(CacheManager.getInstance()::getMediaDirectory),
+		UPDATES(FileProvider::getUpdatesDirectory),
+		DOWNLOADS(SafFile.SafTarget.DOWNLOADS);
 
-		private interface LegacyDirectory {
-			File getLegacyDirectory();
+		private interface Directory {
+			File getDirectory();
 		}
 
 		private final SafFile.SafTarget safTarget;
-		private final LegacyDirectory legacyDirectory;
+		private final Directory directory;
 
-		Target(SafFile.SafTarget safTarget, LegacyDirectory legacyDirectory) {
+		Target(Directory directory) {
+			this.safTarget = null;
+			this.directory = directory;
+		}
+
+		Target(SafFile.SafTarget safTarget) {
 			this.safTarget = safTarget;
-			this.legacyDirectory = legacyDirectory;
+			this.directory = null;
 		}
 
 		public boolean isExternal() {
@@ -126,7 +131,10 @@ public abstract class DataFile {
 
 		private RegularFile(Target target, String path) {
 			super(target, path);
-			File directory = target.legacyDirectory.getLegacyDirectory();
+			if (target.directory == null) {
+				throw new IllegalArgumentException("Target requires SAF");
+			}
+			File directory = target.directory.getDirectory();
 			file = StringUtils.isEmpty(path) ? directory : new File(directory, path);
 		}
 

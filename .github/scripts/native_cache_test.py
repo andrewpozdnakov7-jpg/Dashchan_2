@@ -20,7 +20,7 @@ class NativeCacheTest(unittest.TestCase):
             self.write(self.sources / name / "source.c", b"source")
         self.write(self.repo / "build.gradle", b"versionCode = 100\n"
                    b"tasks.register('prepareBuiltinWebmSources', Exec) {\nversion='1'\n}\n"
-                   b"tasks.register('syncBuiltinWebmPlayerHeaders', Copy) {}\n")
+                   b"tasks.register('syncBuiltinWebmPlayerHeaders') {}\n")
         for name in ("Dashchan-Webm/shared-build.sh", "Dashchan-Webm/shared-prepare.sh",
                      ".github/scripts/native_cache.py"):
             self.write(self.repo / name, b"recipe")
@@ -71,6 +71,27 @@ class NativeCacheTest(unittest.TestCase):
         before = self.key()
         self.write(self.sources / "ffmpeg/source.c", b"patched")
         self.assertNotEqual(before, self.key())
+
+    def test_jni_uses_generated_headers_without_source_tree_writes(self):
+        repo = Path(__file__).resolve().parents[2]
+        build = (repo / "build.gradle").read_text(encoding="utf-8")
+        makefile = (repo / "jni/src/player/ffmpeg/Android.mk").read_text(encoding="utf-8")
+        self.assertIn('DASHCHAN_WEBM_EXTERNAL=${builtinWebmExternal.absolutePath}', build)
+        self.assertIn('variant.lifecycleTasks.registerPreBuild(', build)
+        self.assertIn("'libavutil/ffversion.h'", build)
+        self.assertNotIn('afterEvaluate', build)
+        self.assertNotIn("into file('jni/", build)
+        self.assertIn('$(DASHCHAN_WEBM_EXTERNAL)/ffmpeg/include/$(TARGET_ARCH_ABI)', makefile)
+        self.assertIn('$(error ffmpeg8 requires', makefile)
+        self.assertFalse((repo / 'jni/src/player/ffmpeg8').exists())
+        self.assertTrue((repo / 'jni/src/player/ffmpeg/include/arm64-v8a/libavcodec/avcodec.h').is_file())
+
+    def test_version_header_is_required_in_native_cache(self):
+        self.outputs()
+        cache.pack(self.repo, self.entry, self.key(), self.abis)
+        header = self.entry / 'payload/external/ffmpeg/include/arm64-v8a/libavutil/ffversion.h'
+        header.unlink()
+        self.assertFalse(cache.restore(self.repo, self.entry, self.key(), self.abis))
 
     def test_recipe_invalidates(self):
         before = self.key()

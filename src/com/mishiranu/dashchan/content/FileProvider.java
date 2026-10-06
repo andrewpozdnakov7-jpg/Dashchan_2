@@ -21,7 +21,6 @@ import java.util.List;
 public class FileProvider extends ContentProvider {
 	private static final String AUTHORITY = BuildConfig.FILE_PROVIDER_AUTHORITY;
 	private static final String PATH_UPDATES = "updates";
-	private static final String PATH_DOWNLOADS = "downloads";
 	private static final String PATH_SHARE = "share";
 	static final String GALLERY_SHARE_FILE_NAME_START = "gallery-share-";
 
@@ -76,15 +75,6 @@ public class FileProvider extends ContentProvider {
 		return builder.build();
 	}
 
-	public static Uri convertDownloadsLegacyFile(File file, String type) {
-		try {
-			return buildUri(PATH_DOWNLOADS,
-					ProviderFileResolver.relativePath(Preferences.getDownloadDirectoryLegacy(), file), type);
-		} catch (IOException e) {
-			return Uri.fromFile(file);
-		}
-	}
-
 	public static Uri convertShareFile(File directory, File file, String type) {
 		try {
 			File root = MainApplication.getInstance().getExternalCacheDir();
@@ -118,9 +108,6 @@ public class FileProvider extends ContentProvider {
 			switch (segments.get(0)) {
 				case PATH_UPDATES: {
 					return segments.size() == 2 ? getUpdatesFile(path) : null;
-				}
-				case PATH_DOWNLOADS: {
-					return ProviderFileResolver.resolve(Preferences.getDownloadDirectoryLegacy(), path);
 				}
 				case PATH_SHARE: {
 					return segments.size() == 2 && path.indexOf('/') < 0

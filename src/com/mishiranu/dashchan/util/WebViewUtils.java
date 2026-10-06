@@ -49,21 +49,21 @@ public class WebViewUtils {
 		settings.setUserAgentString(UserAgentProvider.getInstance().getUserAgent());
 	}
 
-	@SuppressWarnings("deprecation")
-	public static void clearCookie() {
-		CookieManager.getInstance().removeAllCookie();
+	public static void clearCookie(Runnable completion) {
+		CookieManager.getInstance().removeAllCookies(removed -> {
+			if (completion != null) completion.run();
+		});
 	}
 
-	@SuppressWarnings("deprecation")
-	public static void clearAll(WebView webView) {
-		clearCookie();
+	public static void clearAll(WebView webView, Runnable completion) {
 		if (webView != null) {
 			webView.clearCache(true);
 		}
 		WebViewDatabase webViewDatabase = WebViewDatabase.getInstance(MainApplication.getInstance());
-		webViewDatabase.clearFormData();
 		webViewDatabase.clearHttpAuthUsernamePassword();
 		WebStorage.getInstance().deleteAllData();
+		// Both true (removed) and false (already empty) mean the asynchronous operation finished.
+		clearCookie(completion);
 	}
 
 	public static String getProviderSummary(Context context) {
@@ -107,22 +107,26 @@ public class WebViewUtils {
 		return builder.length() > 0 ? builder.toString() : null;
 	}
 
-	private static final Field FIELD_APPLICATION_LOADED_APK;
-	private static final Field FIELD_LOADED_APK_RECEIVERS;
+	// Never inspect hidden Android fields for normal, PROXY_OVERRIDE-capable WebViews.
+	// Keep the old best-effort fallback isolated for outdated/vendor providers.
+	private static class LegacyProxyFields {
+		private static final Field APPLICATION_LOADED_APK;
+		private static final Field LOADED_APK_RECEIVERS;
 
-	static {
-		Field applicationLoadedApkField = null;
-		Field loadedApkReceiversField = null;
-		try {
-			applicationLoadedApkField = Application.class.getField("mLoadedApk");
-			loadedApkReceiversField = applicationLoadedApkField.getType().getDeclaredField("mReceivers");
-			loadedApkReceiversField.setAccessible(true);
-		} catch (Exception e) {
-			applicationLoadedApkField = null;
-			loadedApkReceiversField = null;
+		static {
+			Field applicationLoadedApkField = null;
+			Field loadedApkReceiversField = null;
+			try {
+				applicationLoadedApkField = Application.class.getField("mLoadedApk");
+				loadedApkReceiversField = applicationLoadedApkField.getType().getDeclaredField("mReceivers");
+				loadedApkReceiversField.setAccessible(true);
+			} catch (Exception e) {
+				applicationLoadedApkField = null;
+				loadedApkReceiversField = null;
+			}
+			APPLICATION_LOADED_APK = applicationLoadedApkField;
+			LOADED_APK_RECEIVERS = loadedApkReceiversField;
 		}
-		FIELD_APPLICATION_LOADED_APK = applicationLoadedApkField;
-		FIELD_LOADED_APK_RECEIVERS = loadedApkReceiversField;
 	}
 
 	private static BroadcastReceiver findProxyChangeReceiver(Map<?, ?> receivers) {
@@ -172,12 +176,12 @@ public class WebViewUtils {
 		System.setProperty("https.proxyHost", hostProperty);
 		System.setProperty("https.proxyPort", portProperty);
 
-		if (FIELD_APPLICATION_LOADED_APK != null && FIELD_LOADED_APK_RECEIVERS != null) {
+		if (LegacyProxyFields.APPLICATION_LOADED_APK != null && LegacyProxyFields.LOADED_APK_RECEIVERS != null) {
 			Context applicationContext = context.getApplicationContext();
 			Map<?, ?> receivers = null;
 			try {
-				Object loadedApk = FIELD_APPLICATION_LOADED_APK.get(applicationContext);
-				receivers = (Map<?, ?>) FIELD_LOADED_APK_RECEIVERS.get(loadedApk);
+				Object loadedApk = LegacyProxyFields.APPLICATION_LOADED_APK.get(applicationContext);
+				receivers = (Map<?, ?>) LegacyProxyFields.LOADED_APK_RECEIVERS.get(loadedApk);
 			} catch (Exception e) {
 				e.printStackTrace();
 			}

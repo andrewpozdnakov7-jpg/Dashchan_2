@@ -1,0 +1,5 @@
+Fixed gallery position preservation when switching between image and video filters.
+Fixed parsing of ban expiration dates on Dvach.
+Reworked file saving to use the system folder picker and improved handling of lost access permissions.
+Updated the installation mechanism for application and extension updates.
+Improved extension language and icon handling, simplified preloading settings, updated libraries, and removed obsolete code. Automatic Android backups are disabled to protect private data; manual export remains available.

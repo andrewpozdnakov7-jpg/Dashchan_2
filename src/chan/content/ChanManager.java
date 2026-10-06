@@ -1,7 +1,7 @@
 package chan.content;
 
-import android.annotation.SuppressLint;
 import android.content.Intent;
+import android.content.Context;
 import android.content.IntentFilter;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.FeatureInfo;
@@ -14,7 +14,6 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Parcel;
 import android.os.Parcelable;
-import android.util.DisplayMetrics;
 import android.util.Log;
 import androidx.annotation.NonNull;
 import androidx.core.content.pm.PackageInfoCompat;
@@ -22,6 +21,7 @@ import chan.util.StringUtils;
 import com.mishiranu.dashchan.BuildConfig;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.MainApplication;
+import com.mishiranu.dashchan.content.LocaleManager;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.graphics.ChanIconDrawable;
 import com.mishiranu.dashchan.media.VideoPlayer;
@@ -467,13 +467,12 @@ public class ChanManager {
 		return new Extension(extensionItem.changeLoadError(result.error), result.chan);
 	}
 
-	@SuppressLint("PackageManagerGetSignatures")
 	private ChanManager() {
 		String packageName = MainApplication.getInstance().getPackageName();
 		Chan.Provider fallbackChanProvider = new Chan.Provider(null);
 		Chan fallbackChan = new Chan(null, packageName, new ChanConfiguration(fallbackChanProvider),
 				new ChanPerformer(fallbackChanProvider), new ChanLocator(fallbackChanProvider),
-				new ChanMarkup(fallbackChanProvider), null);
+				new ChanMarkup(fallbackChanProvider), 0);
 		fallbackChanProvider.set(fallbackChan);
 		this.fallbackChan = fallbackChan;
 
@@ -566,7 +565,6 @@ public class ChanManager {
 		}
 	}
 
-	@SuppressLint("PackageManagerGetSignatures")
 	private void registerReceiver() {
 		IntentFilter filter = new IntentFilter();
 		filter.addAction(Intent.ACTION_PACKAGE_ADDED);
@@ -907,10 +905,11 @@ public class ChanManager {
 			String chanName = chanItem.name;
 			try {
 				ClassLoader classLoader;
-				Resources resources;
+				Context application = MainApplication.getInstance();
+				Context resourceContext;
 				if (chanItem.builtIn) {
 					classLoader = ChanManager.class.getClassLoader();
-					resources = MainApplication.getInstance().getResources();
+					resourceContext = application;
 				} else {
 					String nativeLibraryDir = chanItem.applicationInfo.nativeLibraryDir;
 					if (nativeLibraryDir != null && !new File(nativeLibraryDir).exists()) {
@@ -919,8 +918,11 @@ public class ChanManager {
 					String dexPath = chanItem.applicationInfo.sourceDir;
 					ClassLoader parent = ChanManager.class.getClassLoader();
 					classLoader = new DelegateLastClassLoader(dexPath, nativeLibraryDir, parent);
-					resources = packageManager.getResourcesForApplication(chanItem.applicationInfo);
+					// Resources only: do not load package code or bypass its security through this context.
+					resourceContext = application.createPackageContext(chanItem.packageName, 0);
 				}
+				ChanResources resources = new ChanResources(resourceContext, LocaleManager.getInstance()
+						.createEffectiveConfiguration(application.getResources().getConfiguration()));
 				Chan.Provider chanProvider = new Chan.Provider(null);
 				ChanConfiguration configuration = ChanConfiguration.INITIALIZER.initialize(classLoader,
 						chanItem.classConfiguration, chanName, chanProvider, resources);
@@ -930,8 +932,8 @@ public class ChanManager {
 						chanItem.classLocator, chanName, chanProvider, resources);
 				ChanMarkup markup = ChanMarkup.INITIALIZER.initialize(classLoader,
 						chanItem.classMarkup, chanName, chanProvider, resources);
-				Drawable icon = chanItem.iconResId != 0 ? resources.getDrawable(chanItem.iconResId, null) : null;
-				Chan chan = new Chan(chanName, chanItem.packageName, configuration, performer, locator, markup, icon);
+				Chan chan = new Chan(chanName, chanItem.packageName, configuration, performer, locator, markup,
+						chanItem.iconResId);
 				chanProvider.set(chan);
 				return new LoadChanResult(chan, null);
 			} catch (Exception | LinkageError e) {
@@ -1017,11 +1019,11 @@ public class ChanManager {
 		public static class Holder {
 			public final String chanName;
 			public final Chan.Provider chanProvider;
-			public final Resources resources;
+			final ChanResources chanResources;
 
-			private Holder(String chanName, Chan.Provider chanProvider, Resources resources) {
+			private Holder(String chanName, Chan.Provider chanProvider, ChanResources resources) {
 				this.chanName = chanName;
-				this.resources = resources;
+				chanResources = resources;
 				this.chanProvider = chanProvider;
 			}
 		}
@@ -1029,8 +1031,8 @@ public class ChanManager {
 		private Holder holder;
 
 		@SuppressWarnings("unchecked")
-		public <T extends Chan.Linked> T initialize(ClassLoader classLoader, String className, String chanName,
-				Chan.Provider chanProvider, Resources resources) throws LinkageError, Exception {
+		<T extends Chan.Linked> T initialize(ClassLoader classLoader, String className, String chanName,
+				Chan.Provider chanProvider, ChanResources resources) throws LinkageError, Exception {
 			synchronized (this) {
 				holder = new Holder(chanName, chanProvider, resources);
 				T result;
@@ -1220,18 +1222,33 @@ public class ChanManager {
 		if (chan == null) {
 			return null;
 		}
-		Drawable drawable = chan.icon;
-		if (drawable == null) {
-			drawable = MainApplication.getInstance().getDrawable(R.drawable.ic_extension);
+		if (chan.name != null) {
+			Chan current = getChan(chan.name);
+			if (current.name != null) chan = current;
 		}
-		return new ChanIconDrawable(drawable.getConstantState().newDrawable().mutate());
+		Resources resources = chan.configuration.getResources();
+		Drawable drawable = null;
+		if (chan.iconResId != 0) {
+			try {
+				drawable = resources.getDrawable(chan.iconResId, null);
+			} catch (Resources.NotFoundException e) {
+				// An invalid or removed icon must not prevent loading the extension.
+			}
+		}
+		if (drawable == null) {
+			resources = MainApplication.getInstance().getResources();
+			drawable = resources.getDrawable(R.drawable.ic_extension, null);
+		}
+		Drawable.ConstantState state = drawable.getConstantState();
+		return new ChanIconDrawable((state != null ? state.newDrawable(resources)
+				: drawable).mutate());
 	}
 
-	@SuppressWarnings("deprecation")
-	public void updateConfiguration(Configuration newConfig, DisplayMetrics metrics) {
+	public void updateConfiguration(Configuration newConfig) {
+		fallbackChan.configuration.updateResources(newConfig);
 		for (Extension extension : extensions.values()) {
 			if (extension.chan != null) {
-				extension.chan.configuration.getResources().updateConfiguration(newConfig, metrics);
+				extension.chan.configuration.updateResources(newConfig);
 			}
 		}
 	}

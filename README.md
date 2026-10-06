@@ -23,7 +23,7 @@ Slooop доступен в [GitHub Releases](https://github.com/andrewpozdnakov7
 | Android package | `io.dashchan2` |
 | Минимальная версия | API 30 / Android 11 |
 | ABI | `arm64-v8a`, `armeabi-v7a`, `x86` |
-| Видеоплеер | FFmpeg 8.1.2, dav1d 1.5.3 |
+| Видеоплеер | FFmpeg 8.1.3, dav1d 1.5.4 |
 
 Поддержка борд и нативные библиотеки плеера встроены в основной APK. Отдельные дополнения Двача и WebM для нормальной работы больше не требуются. Старые отдельные дополнения можно удалить после проверки встроенных компонентов.
 
@@ -63,7 +63,7 @@ F-Droid-версия не содержит встроенный механизм
 
 ### Сборка
 
-Необходимы JDK 21, Android SDK Platform 37, Build Tools 36.0.0, NDK 29.0.14206865 и Linux x86_64/WSL для нативных библиотек. Gradle Wrapper загружает Gradle 9.4.1.
+Необходимы JDK 21, Android SDK Platform 37, Build Tools 36.0.0, NDK 29.0.14206865 и Linux x86_64/WSL для нативных библиотек. Gradle Wrapper загружает Gradle 9.6.1; используется Android Gradle Plugin 9.4.0.
 
 ```sh
 ./gradlew assembleGithubNdebug \
@@ -115,7 +115,7 @@ Slooop is available through [GitHub Releases](https://github.com/andrewpozdnakov
 | Android package | `io.dashchan2` |
 | Minimum Android | API 30 / Android 11 |
 | ABIs | `arm64-v8a`, `armeabi-v7a`, `x86` |
-| Video player | FFmpeg 8.1.2, dav1d 1.5.3 |
+| Video player | FFmpeg 8.1.3, dav1d 1.5.4 |
 
 Forum support and the native player libraries are bundled into the main APK. Separate Dvach and WebM extensions are no longer required for normal use.
 
@@ -153,7 +153,7 @@ The F-Droid build excludes the application self-updater, Firebase, Google Play S
 
 ### Building
 
-Install JDK 21, Android SDK Platform 37, Build Tools 36.0.0, NDK 29.0.14206865, and use Linux x86_64 or WSL for native libraries. The Gradle Wrapper downloads Gradle 9.4.1.
+Install JDK 21, Android SDK Platform 37, Build Tools 36.0.0, NDK 29.0.14206865, and use Linux x86_64 or WSL for native libraries. The Gradle Wrapper downloads Gradle 9.6.1; the project uses Android Gradle Plugin 9.4.0.
 
 ```sh
 ./gradlew assembleGithubNdebug \

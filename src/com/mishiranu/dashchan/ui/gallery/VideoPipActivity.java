@@ -47,6 +47,7 @@ import java.io.File;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.UUID;
 
 public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
@@ -66,6 +67,7 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 	private static final long PICTURE_IN_PICTURE_RETURN_INITIAL_DELAY = 250L;
 	private static final long PICTURE_IN_PICTURE_RETURN_RETRY_DELAY = 100L;
 	private static final int PICTURE_IN_PICTURE_RETURN_MAX_ATTEMPTS = 20;
+	private static final long PICTURE_IN_PICTURE_BOUNDS_OBSERVATION_DELAY = 1000L;
 
 	private static final Object TRANSFER_LOCK = new Object();
 	// The PiP activity runs in the same process, so it can reuse the initialized native player.
@@ -349,6 +351,19 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 	private CircularProgressBar bufferingProgress;
 	private View pipVideoView;
 	private final Rect lastSourceRectHint = new Rect();
+	private Rational lastPublishedAspectRatio;
+	private boolean pictureInPictureActionsPublished;
+	private boolean lastPublishedPlaying;
+	private int lastPublishedSeekSeconds;
+	private boolean pictureInPictureGeometryDeferred;
+	private ViewTreeObserver pictureInPictureGeometryObserver;
+	private boolean pictureInPictureGeometryWaitReported;
+	private String pictureInPictureGeometryWaitReason = "unmeasured";
+	private int pictureInPictureParamsPublished;
+	private int pictureInPictureParamsSkipped;
+	private final PipBoundsMonitor pictureInPictureBoundsMonitor = new PipBoundsMonitor();
+	private int pictureInPictureBoundsAnomalies;
+	private boolean pictureInPictureControlsDeferred;
 	private long activityCreatedElapsedMs;
 	private long entryRequestedElapsedMs = -1L;
 	private boolean firstVideoFrameReceived;
@@ -388,6 +403,7 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 	private boolean galleryRestorePrepared;
 	private boolean returnToGalleryScheduled;
 	private boolean standalonePlayback;
+	private boolean activityStarted;
 	private boolean activityResumed;
 	private boolean pictureInPictureEntryRequested;
 	private boolean pictureInPictureFirstDraw;
@@ -395,6 +411,9 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 	private int returnToGalleryAttempts;
 	private final Handler handler = new Handler(Looper.getMainLooper());
 	private final Runnable enterPictureInPictureAfterDraw = this::enterPictureInPicture;
+	private final ViewTreeObserver.OnPreDrawListener pictureInPictureGeometryPreDraw =
+			this::publishPictureInPictureGeometryBeforeDraw;
+	private final Runnable observeSettledPictureInPictureBounds = this::observePictureInPictureBounds;
 
 	private void recordTransition(String event) {
 		VideoUnit source = getSource();
@@ -440,6 +459,11 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 				+ " window_bounds=" + getWindowManager().getCurrentWindowMetrics().getBounds().toShortString()
 				+ " window_size=" + window.getAttributes().width + "x" + window.getAttributes().height
 				+ " window_gravity=" + window.getAttributes().gravity + " flags=" + window.getAttributes().flags
+				+ " params_published=" + pictureInPictureParamsPublished
+				+ " params_skipped=" + pictureInPictureParamsSkipped
+				+ " geometry_deferred=" + pictureInPictureGeometryDeferred
+				+ " bounds_anomalies=" + pictureInPictureBoundsAnomalies
+				+ " controls_deferred=" + pictureInPictureControlsDeferred
 				+ " system_insets=" + (insets != null ? insets.getInsets(WindowInsets.Type.systemBars()) : null)
 				+ " cutout_insets=" + (insets != null ? insets.getInsets(WindowInsets.Type.displayCutout()) : null));
 		VideoDiagnostics.recordViewGeometry("pip_" + event, rootView);
@@ -458,9 +482,14 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 
 	@Override
 	public void onConfigurationChanged(Configuration newConfig) {
+		// A resize/rotation callback can precede the corresponding view layout. Do not
+		// publish that intermediate layout back into the system's PiP animation.
+		pictureInPictureGeometryDeferred = true;
 		recordPipGeometry("configuration_before");
 		super.onConfigurationChanged(newConfig);
 		recordPipGeometry("configuration_after");
+		schedulePictureInPictureGeometryUpdate();
+		schedulePictureInPictureBoundsCheck();
 		schedulePipGeometry();
 	}
 
@@ -603,7 +632,19 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 		window.setAttributes(attributes);
 		rootView = new FrameLayout(this);
 		rootView.addOnLayoutChangeListener((v, l, t, r, b, oldL, oldT, oldR, oldB) -> {
-			if (l != oldL || t != oldT || r != oldR || b != oldB) schedulePipGeometry();
+			if (l != oldL || t != oldT || r != oldR || b != oldB) {
+				schedulePictureInPictureGeometryUpdate();
+				schedulePipGeometry();
+				schedulePictureInPictureBoundsCheck();
+			}
+		});
+		rootView.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
+			@Override public void onViewAttachedToWindow(View view) {
+				schedulePictureInPictureGeometryUpdate();
+			}
+			@Override public void onViewDetachedFromWindow(View view) {
+				cancelPictureInPictureGeometryUpdate();
+			}
 		});
 		rootView.setBackgroundColor(Color.BLACK);
 		rootView.setOnClickListener(v -> {
@@ -638,14 +679,14 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 				case LOSS_TRANSIENT: {
 					startPlaying = player.isPlaying();
 					player.setPlaying(false);
-					updatePictureInPictureParams();
+					updatePictureInPictureControls();
 					break;
 				}
 				case GAIN: {
 					if (startPlaying) {
 						player.setPlaying(true);
 					}
-					updatePictureInPictureParams();
+					updatePictureInPictureControls();
 					break;
 				}
 			}
@@ -666,8 +707,8 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 		pipVideoView.addOnLayoutChangeListener((view, left, top, right, bottom,
 				oldLeft, oldTop, oldRight, oldBottom) -> {
 			if (left != oldLeft || top != oldTop || right != oldRight || bottom != oldBottom) {
-				// Publish the laid-out video bounds before the system animates entry or exit.
-				updatePictureInPictureParams();
+				// PiP menu resizing must not republish controls or PiP-window bounds.
+				schedulePictureInPictureGeometryUpdate();
 			}
 		});
 		rootView.addView(pipVideoView, new FrameLayout.LayoutParams(
@@ -706,6 +747,8 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 	}
 
 	private void replacePictureInPictureContent(Intent intent, PendingTransfer transfer) {
+		cancelPictureInPictureGeometryUpdate();
+		cancelPictureInPictureBoundsObservation();
 		cancelGalleryReturn("replace_content");
 		handler.removeCallbacks(finishDismissedPictureInPicture);
 		handler.removeCallbacks(hidePreviewFrameRunnable);
@@ -740,7 +783,8 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 		holdPreviewForGalleryReturn = false;
 		player.setListener(this);
 		attachPlayerView();
-		updatePictureInPictureParams();
+		updatePictureInPictureControls();
+		schedulePictureInPictureGeometryUpdate();
 		recordTransition("content_replaced_same_window");
 		recordPipGeometry("content_replaced");
 	}
@@ -806,9 +850,21 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 		cancelGalleryReturn("enter");
 		pictureInPictureEntryRequested = true;
 		recordTransition("entry_request");
-		PictureInPictureParams params = createPictureInPictureParams(player.getDimensions());
+		Rational aspectRatio = getPictureInPictureAspectRatio(player.getDimensions());
+		Rect sourceRect = getPictureInPictureSourceRect();
+		PictureInPictureParams params = createPictureInPictureParams(aspectRatio, sourceRect);
 		try {
-			setPictureInPictureParams(params);
+			// enterPictureInPictureMode publishes this snapshot itself; do not send it twice.
+			// Retain the exact builder inputs: Params getters require Android 13.
+			lastPublishedAspectRatio = aspectRatio;
+			pictureInPictureActionsPublished = true;
+			lastPublishedPlaying = player.isPlaying();
+			lastPublishedSeekSeconds = Preferences.getVideoDoubleTapSeekInterval();
+			if (sourceRect != null && !sourceRect.isEmpty()) {
+				lastSourceRectHint.set(sourceRect);
+				VideoDiagnostics.recordUi("pip source_rect=" + sourceRect.toShortString() + " in_pip=false");
+			}
+			recordPictureInPictureParams("entry");
 			entryRequestedElapsedMs = SystemClock.elapsedRealtime();
 			VideoDiagnostics.recordUi("pip entry_requested source_rect="
 					+ (lastSourceRectHint.isEmpty() ? "none" : lastSourceRectHint.toShortString())
@@ -823,24 +879,24 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 		}
 	}
 
-	private PictureInPictureParams createPictureInPictureParams(Point dimensions) {
+	private PictureInPictureParams createPictureInPictureParams(Rational aspectRatio, Rect sourceRect) {
 		PictureInPictureParams.Builder builder = new PictureInPictureParams.Builder();
 		// Crop to the actual video, not the full portrait activity including its black bars.
 		// Missing source bounds lets Android cover the PiP transition with a content overlay.
-		Rect sourceRect = new Rect();
-		if (ownsVideoView() && pipVideoView.getGlobalVisibleRect(sourceRect) && !sourceRect.isEmpty()) {
+		if (sourceRect != null) {
 			builder.setSourceRectHint(sourceRect);
-			if (!lastSourceRectHint.equals(sourceRect)) {
-				lastSourceRectHint.set(sourceRect);
-				VideoDiagnostics.recordUi("pip source_rect=" + sourceRect.toShortString()
-						+ " in_pip=" + isInPictureInPictureMode());
-			}
-		} else {
-			lastSourceRectHint.setEmpty();
 		}
 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
 			builder.setSeamlessResizeEnabled(true);
 		}
+		if (aspectRatio != null) builder.setAspectRatio(aspectRatio);
+		VideoPlayer player = this.player;
+		builder.setActions(createPictureInPictureActions(player != null && player.isPlaying(),
+				Preferences.getVideoDoubleTapSeekInterval()));
+		return builder.build();
+	}
+
+	private static Rational getPictureInPictureAspectRatio(Point dimensions) {
 		if (dimensions != null && dimensions.x > 0 && dimensions.y > 0) {
 			int width = dimensions.x;
 			int height = dimensions.y;
@@ -851,21 +907,21 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 				width = 1000;
 				height = 2390;
 			}
-			builder.setAspectRatio(new Rational(width, height));
+			return new Rational(width, height);
 		}
-		VideoPlayer player = this.player;
-		boolean playing = player != null && player.isPlaying();
+		return null;
+	}
+
+	private List<RemoteAction> createPictureInPictureActions(boolean playing, int seekSeconds) {
 		int iconResource = playing ? R.drawable.ic_pause : R.drawable.ic_play_arrow;
 		String title = getString(playing ? R.string.pause : R.string.play);
-		int seekSeconds = Preferences.getVideoDoubleTapSeekInterval();
 		RemoteAction seekBackward = createRemoteAction(ACTION_SEEK_BACKWARD, REQUEST_SEEK_BACKWARD,
 				R.drawable.ic_fast_rewind, getString(R.string.video_seek_backward__format, seekSeconds));
 		RemoteAction toggle = createRemoteAction(ACTION_TOGGLE_PLAYBACK, REQUEST_TOGGLE_PLAYBACK,
 				iconResource, title);
 		RemoteAction seekForward = createRemoteAction(ACTION_SEEK_FORWARD, REQUEST_SEEK_FORWARD,
 				R.drawable.ic_fast_forward, getString(R.string.video_seek_forward__format, seekSeconds));
-		builder.setActions(Arrays.asList(seekBackward, toggle, seekForward));
-		return builder.build();
+		return Arrays.asList(seekBackward, toggle, seekForward);
 	}
 
 	private RemoteAction createRemoteAction(String action, int requestCode, int iconResource, String title) {
@@ -880,12 +936,211 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 				&& player.isVideoView(pipVideoView);
 	}
 
-	private void updatePictureInPictureParams() {
+	private Rect getPictureInPictureSourceRect() {
+		pictureInPictureGeometryWaitReason = "view_not_ready";
+		if (!ownsVideoView() || !rootView.isAttachedToWindow() || !rootView.isShown()
+				|| rootView.isLayoutRequested() || pipVideoView.isLayoutRequested()) return null;
+		// The app owns WINDOW-local video bounds; Android owns screen/PiP position.
+		// Re-measure every publication; never reuse an already-offset system hint.
+		if (rootView.getDisplay() == null) return null;
+		int rotation = rootView.getDisplay().getRotation();
+		Rect windowBounds = getWindowManager().getCurrentWindowMetrics().getBounds();
+		Rect displayBounds = getWindowManager().getMaximumWindowMetrics().getBounds();
+		View decor = getWindow().getDecorView();
+		if (!PipGeometryGate.matchesLayout(windowBounds.width(), windowBounds.height(),
+				decor.getWidth(), decor.getHeight())) {
+			pictureInPictureGeometryWaitReason = "layout_mismatch window=" + windowBounds.width() + "x"
+					+ windowBounds.height() + " decor=" + decor.getWidth() + "x" + decor.getHeight();
+			return null;
+		}
+		// A stashed window still intersects the display. A stale, completely off-screen
+		// pre-rotation window is not a valid animation source and must not be echoed back.
+		if (isInPictureInPictureMode() && !PipGeometryGate.intersectsDisplay(
+				windowBounds.left, windowBounds.top, windowBounds.right, windowBounds.bottom,
+				displayBounds.left, displayBounds.top, displayBounds.right, displayBounds.bottom)) {
+			pictureInPictureGeometryWaitReason = "offscreen window=" + windowBounds.toShortString()
+					+ " display=" + displayBounds.toShortString();
+			return null;
+		}
+		Rect sourceRect = new Rect();
+		if (!pipVideoView.getLocalVisibleRect(sourceRect) || sourceRect.isEmpty()) return null;
+		int[] location = new int[2];
+		pipVideoView.getLocationInWindow(location);
+		sourceRect.offset(location[0], location[1]);
+		if (rootView.getDisplay() == null || rotation != rootView.getDisplay().getRotation()) return null;
+		return sourceRect.intersect(0, 0, decor.getWidth(), decor.getHeight()) ? sourceRect : null;
+	}
+
+	private void updatePictureInPictureControls() {
 		VideoPlayer player = this.player;
 		if (player != null && ownsVideoView() && !isFinishing() && !isDestroyed()) {
-			rootView.setKeepScreenOn(player.isPlaying());
-			setPictureInPictureParams(createPictureInPictureParams(player.getDimensions()));
+			boolean playing = player.isPlaying();
+			rootView.setKeepScreenOn(playing);
+			int seekSeconds = Preferences.getVideoDoubleTapSeekInterval();
+			if (pictureInPictureActionsPublished && playing == lastPublishedPlaying
+					&& seekSeconds == lastPublishedSeekSeconds) {
+				pictureInPictureControlsDeferred = false;
+				pictureInPictureParamsSkipped++;
+				return;
+			}
+			pictureInPictureControlsDeferred = true;
+			// Coalesce actions and layout into one publication from the same frame.
+			// Never race an actions-only update against a pending rotation layout.
+			schedulePictureInPictureGeometryUpdate();
 		}
+	}
+
+	private void schedulePictureInPictureGeometryUpdate() {
+		if (!activityStarted || player == null || !ownsVideoView() || isFinishing() || isDestroyed()) return;
+		pictureInPictureGeometryDeferred = true;
+		// Ensure a frame even when a previous request is waiting for a valid layout.
+		rootView.invalidate();
+		if (pictureInPictureGeometryObserver != null && pictureInPictureGeometryObserver.isAlive()) return;
+		pictureInPictureGeometryObserver = rootView.getViewTreeObserver();
+		if (pictureInPictureGeometryObserver.isAlive()) {
+			pictureInPictureGeometryObserver.addOnPreDrawListener(pictureInPictureGeometryPreDraw);
+		}
+	}
+
+	private boolean publishPictureInPictureGeometryBeforeDraw() {
+		if (!activityStarted || player == null || !ownsVideoView() || isFinishing() || isDestroyed()) {
+			cancelPictureInPictureGeometryUpdate();
+			return true;
+		}
+		// Android's exit destination is laid out before the exit animation. Publish
+		// from that traversal, not from a delayed callback after the animation started.
+		// Entry already publishes a full snapshot; wait for its mode callback instead.
+		if (pictureInPictureEntryRequested || (!enteredPictureInPicture && !standalonePlayback)) return true;
+		if (updatePictureInPictureGeometry()) {
+			cancelPictureInPictureGeometryUpdate();
+		} else if (!pictureInPictureGeometryWaitReported) {
+			pictureInPictureGeometryWaitReported = true;
+			VideoDiagnostics.recordUi("pip_params schema=3 deferred=" + pictureInPictureGeometryWaitReason
+					+ " in_pip=" + isInPictureInPictureMode());
+		}
+		// Do not cancel drawing or continuously invalidate an unready window. The
+		// next actual layout/frame retries the queued update without polling timers.
+		return true;
+	}
+
+	private void cancelPictureInPictureGeometryUpdate() {
+		ViewTreeObserver observer = pictureInPictureGeometryObserver;
+		pictureInPictureGeometryObserver = null;
+		if (observer != null) {
+			if (!observer.isAlive() && rootView != null) observer = rootView.getViewTreeObserver();
+			if (observer.isAlive()) observer.removeOnPreDrawListener(pictureInPictureGeometryPreDraw);
+		}
+		pictureInPictureGeometryDeferred = false;
+		pictureInPictureGeometryWaitReported = false;
+	}
+
+	private boolean updatePictureInPictureGeometry() {
+		Rational aspectRatio = getPictureInPictureAspectRatio(player.getDimensions());
+		boolean aspectChanged = aspectRatio != null && !aspectRatio.equals(lastPublishedAspectRatio);
+		Rect sourceRect = getPictureInPictureSourceRect();
+		if (sourceRect == null) return false;
+		boolean sourceChanged = !sourceRect.equals(lastSourceRectHint);
+		boolean playing = player.isPlaying();
+		int seekSeconds = Preferences.getVideoDoubleTapSeekInterval();
+		boolean controlsChanged = !pictureInPictureActionsPublished || playing != lastPublishedPlaying
+				|| seekSeconds != lastPublishedSeekSeconds;
+		if (!aspectChanged && !sourceChanged && !controlsChanged) {
+			pictureInPictureControlsDeferred = false;
+			pictureInPictureParamsSkipped++;
+			return true;
+		}
+		PictureInPictureParams.Builder builder = new PictureInPictureParams.Builder();
+		if (aspectChanged) builder.setAspectRatio(aspectRatio);
+		if (controlsChanged) builder.setActions(createPictureInPictureActions(playing, seekSeconds));
+		if (publishPictureInPictureParams(builder, sourceRect, controlsChanged ? "layout_and_controls" : "layout")) {
+			if (aspectChanged) lastPublishedAspectRatio = aspectRatio;
+			pictureInPictureActionsPublished = true;
+			pictureInPictureControlsDeferred = false;
+			lastPublishedPlaying = playing;
+			lastPublishedSeekSeconds = seekSeconds;
+			if (aspectChanged) schedulePictureInPictureBoundsCheck();
+		}
+		// Runtime rejection is recorded by the publisher. Retry on the next real
+		// event, not on every frame of an animation the system has already rejected.
+		return true;
+	}
+
+	private void schedulePictureInPictureBoundsCheck() {
+		handler.removeCallbacks(observeSettledPictureInPictureBounds);
+		if (!canObservePictureInPictureBounds() || rootView.getDisplay() == null) return;
+		long now = SystemClock.elapsedRealtime();
+		pictureInPictureBoundsMonitor.observeRotation(rootView.getDisplay().getRotation(), now);
+		if (pictureInPictureBoundsMonitor.isWatching(now)) {
+			handler.postDelayed(observeSettledPictureInPictureBounds, PICTURE_IN_PICTURE_BOUNDS_OBSERVATION_DELAY);
+		}
+	}
+
+	private boolean canObservePictureInPictureBounds() {
+		return activityStarted && enteredPictureInPicture && !exitedPictureInPicture && !returnedToGallery
+				&& isInPictureInPictureMode() && !isFinishing() && !isDestroyed()
+				&& rootView != null && rootView.isAttachedToWindow() && ownsVideoView();
+	}
+
+	private void observePictureInPictureBounds() {
+		if (!canObservePictureInPictureBounds()) return;
+		try {
+			if (rootView.getDisplay() == null) return;
+			long now = SystemClock.elapsedRealtime();
+			if (pictureInPictureBoundsMonitor.observeRotation(rootView.getDisplay().getRotation(), now)) {
+				schedulePictureInPictureBoundsCheck();
+				return;
+			}
+			Rect bounds = getWindowManager().getCurrentWindowMetrics().getBounds();
+			Rect displayBounds = getWindowManager().getMaximumWindowMetrics().getBounds();
+			boolean stale = pictureInPictureBoundsMonitor.shouldReport(now, bounds.left, bounds.top, bounds.right,
+					bounds.bottom, displayBounds.left, displayBounds.top, displayBounds.right, displayBounds.bottom);
+			if (stale) {
+				pictureInPictureBoundsMonitor.markReported();
+				pictureInPictureBoundsAnomalies++;
+			}
+			// Observation only: no relocation, ratio pulse, playback reset or PiP re-entry.
+			recordPictureInPictureBoundsObservation("settled visible=" + Rect.intersects(bounds, displayBounds)
+					+ " stale_rotation_bounds=" + stale + " bounds=" + bounds.toShortString()
+					+ " display=" + displayBounds.toShortString() + " anomalies=" + pictureInPictureBoundsAnomalies);
+		} catch (RuntimeException e) {
+			recordPictureInPictureBoundsObservation("failed=" + e.getClass().getSimpleName());
+		}
+	}
+	private void cancelPictureInPictureBoundsObservation() {
+		handler.removeCallbacks(observeSettledPictureInPictureBounds);
+		pictureInPictureBoundsMonitor.reset();
+	}
+
+	private void recordPictureInPictureBoundsObservation(String message) {
+		// Keep rotation events in logcat too: verbose geometry can fill the UI ring.
+		String event = "pip_rotation_bounds schema=2 " + message;
+		VideoDiagnostics.recordUi(event);
+		Log.i(TAG, event);
+	}
+
+	private boolean publishPictureInPictureParams(PictureInPictureParams.Builder builder, Rect sourceRect,
+			String reason) {
+		// Always include the fresh window-local hint from this pre-draw snapshot:
+		// null/empty values do not clear Android's retained, screen-offset hint.
+		builder.setSourceRectHint(sourceRect);
+		try {
+			setPictureInPictureParams(builder.build());
+			lastSourceRectHint.set(sourceRect);
+			VideoDiagnostics.recordUi("pip source_rect schema=3 local=" + sourceRect.toShortString()
+					+ " in_pip=" + isInPictureInPictureMode());
+			recordPictureInPictureParams(reason);
+			return true;
+		} catch (IllegalArgumentException | IllegalStateException e) {
+			VideoDiagnostics.recordUi("pip_params failed=" + e.getClass().getSimpleName() + " reason=" + reason);
+			return false;
+		}
+	}
+
+	private void recordPictureInPictureParams(String reason) {
+		pictureInPictureParamsPublished++;
+		VideoDiagnostics.recordUi("pip_params schema=3 reason=" + reason + " in_pip="
+				+ isInPictureInPictureMode() + " published=" + pictureInPictureParamsPublished
+				+ " skipped=" + pictureInPictureParamsSkipped);
 	}
 
 	private void togglePlayback() {
@@ -908,7 +1163,7 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 		}
 		startPlaying = playing;
 		player.setPlaying(playing);
-		updatePictureInPictureParams();
+		updatePictureInPictureControls();
 	}
 
 	private void seekBy(int direction) {
@@ -938,7 +1193,7 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 			if (audioFocus != null) {
 				audioFocus.release();
 			}
-			updatePictureInPictureParams();
+			updatePictureInPictureControls();
 		}
 	}
 
@@ -1118,7 +1373,7 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 		}
 		player.setPlaying(startPlaying);
 		rootView.setKeepScreenOn(startPlaying);
-		updatePictureInPictureParams();
+		updatePictureInPictureControls();
 	}
 
 	private void suspendPlaybackAfterPictureInPictureExit() {
@@ -1140,6 +1395,9 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 	@Override
 	protected void onStart() {
 		super.onStart();
+		activityStarted = true;
+		schedulePictureInPictureGeometryUpdate();
+		schedulePictureInPictureBoundsCheck();
 		if (isInPictureInPictureMode()) {
 			stoppedWhileInPictureInPicture = false;
 		}
@@ -1149,6 +1407,7 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 	protected void onResume() {
 		super.onResume();
 		activityResumed = true;
+		schedulePictureInPictureGeometryUpdate();
 		recordTransition("resume");
 		if (!enteredPictureInPicture && pictureInPictureFirstDraw) {
 			handler.removeCallbacks(enterPictureInPictureAfterDraw);
@@ -1184,7 +1443,10 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 
 	@Override
 	protected void onStop() {
+		activityStarted = false;
 		super.onStop();
+		cancelPictureInPictureBoundsObservation();
+		cancelPictureInPictureGeometryUpdate();
 		handler.removeCallbacks(enterPictureInPictureAfterDraw);
 		VideoUnit source = getSource();
 		if (!galleryRestorePrepared || source == null || !source.hasPictureInPictureGalleryFocus()) {
@@ -1222,7 +1484,10 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 	@Override
 	public void onPictureInPictureModeChanged(boolean isInPictureInPictureMode, Configuration newConfig) {
 		super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig);
+		cancelPictureInPictureBoundsObservation();
 		pictureInPictureEntryRequested = false;
+		pictureInPictureGeometryDeferred = true;
+		schedulePictureInPictureGeometryUpdate();
 		transitionSequence++;
 		recordTransition(isInPictureInPictureMode ? "mode_enter" : "mode_exit");
 		recordPipGeometry("mode_changed");
@@ -1244,6 +1509,7 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 			returnToGalleryAttempts = 0;
 			VideoDiagnostics.recordUi("pip mode_changed=true entry_age_ms=" + (entryRequestedElapsedMs >= 0L
 					? SystemClock.elapsedRealtime() - entryRequestedElapsedMs : -1L));
+			schedulePictureInPictureBoundsCheck();
 		} else if (enteredPictureInPicture) {
 			holdReturnPreview();
 			exitedPictureInPicture = true;
@@ -1263,11 +1529,13 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 
 	@Override
 	protected void onDestroy() {
+		cancelPictureInPictureBoundsObservation();
 		if (activePictureInPicture.get() == this) activePictureInPicture.clear();
 		activityResumed = false;
 		handler.removeCallbacks(enterPictureInPictureAfterDraw);
 		recordTransition("destroy");
 		handler.removeCallbacks(recordSettledPipGeometry);
+		cancelPictureInPictureGeometryUpdate();
 		handler.removeCallbacks(finishDismissedPictureInPicture);
 		handler.removeCallbacks(returnToGalleryAfterExit);
 		if (receiverRegistered) {
@@ -1336,7 +1604,7 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 					player.setPlaying(false);
 					audioFocus.release();
 				}
-				updatePictureInPictureParams();
+				updatePictureInPictureControls();
 			}
 		});
 	}
@@ -1377,7 +1645,8 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 	public void onDimensionChange(VideoPlayer player) {
 		runOnUiThread(() -> {
 			if (this.player == player) {
-				updatePictureInPictureParams();
+				updatePictureInPictureControls();
+				schedulePictureInPictureGeometryUpdate();
 			}
 		});
 	}

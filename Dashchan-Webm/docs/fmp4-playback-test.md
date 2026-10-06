@@ -4,11 +4,11 @@ Dashchan_2 bundles the FFmpeg libraries from `Dashchan-Webm` into its main APK. 
 
 ## Baseline
 
-- Android Gradle Plugin 9.2.1;
+- Android Gradle Plugin 9.4.0 / Gradle 9.6.1;
 - compile SDK 36 and target SDK 30 in the main app;
 - minimum SDK 30 / Android 11;
 - Build Tools 36.0.0 and NDK 29.0.14206865;
-- FFmpeg 8.1.2 and dav1d 1.5.3.
+- FFmpeg 8.1.3 and dav1d 1.5.4.
 
 ## Useful Sample Traits
 

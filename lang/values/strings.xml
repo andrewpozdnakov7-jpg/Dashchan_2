@@ -101,7 +101,6 @@
 	<string name="toolbar_title_size_compact">Multiline title (sp)</string>
 	<string name="toolbar_title_sizes_error">Enter a size from 10 to 32. The minimum and multiline sizes must not exceed the normal size.</string>
 	<string name="toast_diagnostics_test">Test popup message</string>
-	<string name="toast_diagnostics_test__summary">Show a test popup and log its colors, theme and layout to Logcat (ToastDiag). Diagnostics run for 10 minutes, up to 80 popups. Post text and account data are not recorded</string>
 	<string name="whats_new_unavailable">No release notes are bundled for this version.</string>
 	<string name="check_for_updates">Check for updates</string>
 	<string name="check_on_startup">Check on startup</string>
@@ -271,7 +270,6 @@
 		a new one.</string>
 	<string name="download_file">Download file</string>
 	<string name="download_files">Download files</string>
-	<string name="download_path">Download path</string>
 	<string name="downloading">Downloading</string>
 	<string name="downloading_audio">Downloading audio</string>
 	<string name="downloading_number_of_number__format">Downloading %1$d of %2$d</string>
@@ -279,8 +277,6 @@
 	<string name="draft_saved">Draft saved</string>
 	<string name="shared_text_saved_for_posting">Shared text saved. Open a post editor to insert it.</string>
 	<string name="draw_over_other_applications">Draw over other applications</string>
-	<string name="draw_over_other_applications__summary">This permission is needed to enable all features of clickable
-		toasts, ensure reliable application restarts, and allow to launch application when posting fails</string>
 	<string name="empty_response">Empty response</string>
 	<string name="no_more_threads">There are no more threads</string>
 	<string name="enabled">Enabled</string>
@@ -664,9 +660,6 @@
 	<string name="tiktok_filter_hint">You can now swipe through photos in TikTok mode too! Hold the TikTok button to choose everything, videos only or photos only. The filter is also available in the ⋮ menu.</string>
 	<string name="enable_video_tiktok_mode">Enable TikTok mode</string>
 	<string name="disable_video_tiktok_mode">Disable TikTok mode</string>
-	<string name="video_tiktok_mode_hint">Swipe up for the next video or down for the previous one. Double-tap to pause or resume playback. Touch and hold the center of the screen to open the menu. The volume gesture works in its configured side area when enabled. Other gestures are disabled; on-screen controls still work. Your selected mode is remembered.</string>
-	<string name="video_tiktok_no_next_video">There are no more videos in this thread</string>
-	<string name="video_tiktok_no_previous_video">There are no previous videos in this thread</string>
 	<string name="video_screen_off_action">When the screen turns off</string>
 	<string name="video_screen_off_action__summary">Choose whether PiP video pauses or continues playing with the screen off</string>
 	<string name="video_screen_off_action_pause">Pause video</string>
@@ -972,8 +965,6 @@
 	<string name="use_built_in_video_player__summary">Play WebM video attachments</string>
 	<string name="use_forum_settings">Use forum settings</string>
 	<string name="use_gms_security_provider">Use GMS security provider</string>
-	<string name="use_gms_security_provider__summary">Google Play Services security provider adds support for newer
-		SSL/TLS implementation, which may be important for old Android devices</string>
 	<string name="use_javascript_for_recaptcha">Use JavaScript for reCAPTCHA</string>
 	<string name="use_javascript_for_recaptcha__summary">May simplify Google reCAPTCHA</string>
 	<string name="user_authorization">User authorization</string>
@@ -983,7 +974,6 @@
 	<string name="user_is_warned">User is warned</string>
 	<string name="validation_completed">Validation completed</string>
 	<string name="verify_certificate">Verify certificate</string>
-	<string name="verify_certificate__summary">Connection will be terminated if the certificate is not valid</string>
 	<string name="version">Version</string>
 	<string name="vibration">Vibration</string>
 	<string name="video_player">Video player</string>
@@ -994,7 +984,7 @@
 	<string name="watch_initially__summary">Enable watcher when thread is added to favorites</string>
 	<string name="web_browser">Web browser</string>
 	<string name="wifi_only">Wi-Fi only</string>
-	<string name="wifi_or_3g_plus">Wi-Fi or 3G+</string>
+	<string name="wifi_or_mobile">Wi-Fi or mobile network</string>
 	<string name="with_name_name__format">With name %s</string>
 	<string name="word_or_phrase">Word or phrase</string>
 	<string name="yesterday">Yesterday</string>
@@ -1043,7 +1033,6 @@
 	<string name="application_logo_requirements">Use a square image with clear details that remain readable at a small size.</string>
 	<string name="no_verified_dvach_pass">You do not have a saved Dvach Passcode</string>
 	<string name="custom_application_shortcut">Custom shortcut</string>
-	<string name="custom_application_shortcut__summary">Create an additional Home screen shortcut with your own name and image</string>
 	<string name="confirm_custom_shortcut">Confirm adding the shortcut on the Home screen</string>
 	<string name="custom_shortcuts_not_supported">The current launcher does not support pinned shortcuts</string>
 	<string name="custom_shortcut_ai_prompt_title">Prompt for an image generator</string>
@@ -1059,7 +1048,6 @@
 	<string name="custom_shortcut_select_image_first">Select an image first</string>
 	<string name="custom_shortcut_image_error">Could not open this image</string>
 	<string name="post_marks_colors">Post marker colors</string>
-	<string name="post_marks_colors__summary">Configure marks beside posts and on the thread scrollbar</string>
 	<string name="post_marks_color_source">Color source</string>
 	<string name="post_marks_colors_default">Default</string>
 	<string name="post_marks_colors_theme">From theme</string>
@@ -1330,7 +1318,6 @@
 	<string name="image_preload_count">Number of next photos</string>
 	<string name="image_preload_size">Maximum size per photo</string>
 	<string name="image_preload_size_description">Photos larger than this limit are not preloaded. They still download in full when opened manually. Only files are cached, not full-size decoded images in memory.</string>
-	<string name="video_preload_summary">Download upcoming videos in advance: network, count and size limit</string>
 	<string name="video_preload_enable">Preload next videos</string>
 	<string name="video_preload_description">After the current attachment finishes downloading, cache the next videos in this gallery one at a time, sharing the queue with photos. Uses data and disk space. Videos exceeding the limit or with an unknown download size are skipped without replacement. Preloading stops when the app is backgrounded or you leave the viewer. Does not apply to YouTube or web players.</string>
 	<string name="video_preload_network">Network for preloading</string>
@@ -1355,7 +1342,6 @@
 	<string name="popup_preview">Preview message</string>
 	<string name="popup_preview_message">This is how popup messages will look</string>
 	<string name="popup_reset">Reset</string>
-	<string name="popup_reset__summary">Restore messages matching the toolbar color and reset custom colors</string>
 	<string name="show_original_post_title">Show title in the first post</string>
 	<string name="show_original_post_title__summary">Repeat the thread title above the first post even when it is already shown in the top bar. Titles remain visible in thread lists and previews, and when the top bar title is hidden.</string>
 	<string name="popup_color_hue">Hue</string>

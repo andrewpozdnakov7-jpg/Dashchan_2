@@ -4,6 +4,7 @@ import android.app.ActivityManager;
 import android.app.Application;
 import android.app.NotificationManager;
 import android.content.Context;
+import android.content.res.Configuration;
 import android.database.sqlite.SQLiteDatabase;
 import android.os.Process;
 import android.webkit.WebView;
@@ -100,6 +101,12 @@ public class MainApplication extends Application {
 				UserAgentProvider.initialize(this);
 			}
 		}
+	}
+
+	@Override
+	public void onConfigurationChanged(Configuration newConfig) {
+		super.onConfigurationChanged(newConfig);
+		if (isMainProcess()) LocaleManager.getInstance().onConfigurationChanged(newConfig);
 	}
 
 	@Override

@@ -23,7 +23,7 @@ public class D3ChanMarkup extends ChanMarkup {
 	@Override
 	public Pair<String, String> obtainPostLinkThreadPostNumbers(String uriString) {
 		Uri uri = Uri.parse(uriString);
-		D3ChanLocator locator = D3ChanLocator.get(this);
+		D3ChanLocator locator = D3ChanLocator.getLocator(this);
 		String threadNumber = locator.getThreadNumber(uri);
 		return !StringUtils.isEmpty(threadNumber)
 				? new Pair<>(threadNumber, locator.getPostNumber(uri)) : null;

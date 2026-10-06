@@ -25,7 +25,6 @@ import java.util.concurrent.CountDownLatch;
 
 public class WebViewDecoder extends WebViewClient {
 	private static final int MESSAGE_INIT_WEB_VIEW = 1;
-	private static final int MESSAGE_MEASURE_PICTURE = 2;
 	private static final int MESSAGE_CHECK_PICTURE_SIZE = 3;
 
 	private static final Handler HANDLER = new Handler(Looper.getMainLooper(), new Callback());
@@ -35,6 +34,7 @@ public class WebViewDecoder extends WebViewClient {
 	private final CountDownLatch latch = new CountDownLatch(1);
 
 	private volatile Bitmap bitmap;
+	private Bitmap pendingBitmap;
 
 	private WebView webView;
 	private boolean finished;
@@ -82,47 +82,29 @@ public class WebViewDecoder extends WebViewClient {
 		}
 	}
 
-	private boolean pageFinished = false;
-
 	@Override
 	public void onPageFinished(WebView view, String url) {
 		if (finished || view != webView) return;
 		super.onPageFinished(view, url);
-		pageFinished = true;
-		notifyExtract(view);
-	}
-
-	@SuppressWarnings("deprecation")
-	private final WebView.PictureListener pictureListener = (view, picture) -> {
-		if (pageFinished) {
-			notifyExtract(view);
-		}
-	};
-
-	private void notifyExtract(WebView view) {
-		if (finished || view != webView) return;
-		HANDLER.removeMessages(MESSAGE_MEASURE_PICTURE, this);
-		HANDLER.sendMessageDelayed(HANDLER.obtainMessage(MESSAGE_MEASURE_PICTURE, this), 1000);
+		// onPageFinished alone does not mean the image subresource has decoded.
+		view.evaluateJavascript("notifyImageReady();", null);
 	}
 
 	private boolean measured = false;
-
-	private void measurePicture(WebView view) {
-		if (!finished && view != null && !measured) {
-			measured = true;
-			webView = view;
-			view.loadUrl("javascript:calculateSize();");
-		}
-	}
 
 	private void countDownAndDestroy(WebView view) {
 		if (finished) return;
 		finished = true;
 		webView = null;
 		HANDLER.removeCallbacks(timeout);
-		HANDLER.removeMessages(MESSAGE_MEASURE_PICTURE, this);
+		if (pendingBitmap != null) {
+			pendingBitmap.recycle();
+			pendingBitmap = null;
+		}
 		try {
 			if (view != null) view.destroy();
+		} catch (RuntimeException e) {
+			android.util.Log.w("WebViewRecovery", "decoder_destroy_failed type=" + e.getClass().getSimpleName());
 		} finally {
 			latch.countDown();
 		}
@@ -139,25 +121,41 @@ public class WebViewDecoder extends WebViewClient {
 	}
 
 	private void checkPictureSize(int width, int height) {
-		if (finished || webView == null) return;
+		if (finished || webView == null || measured) return;
+		measured = true;
 		if (width > 0 && height > 0) {
 			if (webView.getWidth() <= 0 || webView.getHeight() <= 0) {
-				measured = false;
 				webView.layout(0, 0, width, height);
-				webView.reload();
-			} else {
-				if (webView.getWidth() != width || webView.getHeight() != height) {
-					countDownAndDestroy(webView);
-				} else {
-					try {
-						bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
-						webView.draw(new Canvas(bitmap));
-					} catch (OutOfMemoryError e) {
-						bitmap = null;
-					} finally {
-						countDownAndDestroy(webView);
+			}
+			if (webView.getWidth() != width || webView.getHeight() != height) {
+				countDownAndDestroy(webView);
+				return;
+			}
+			WebView view = webView;
+			try {
+				pendingBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+				view.postVisualStateCallback(0L, new WebView.VisualStateCallback() {
+					@Override public void onComplete(long requestId) {
+						if (finished || view != webView || pendingBitmap == null) return;
+						try {
+							pendingBitmap.eraseColor(Color.TRANSPARENT);
+							view.draw(new Canvas(pendingBitmap));
+							bitmap = pendingBitmap;
+							pendingBitmap = null; // ownership transfers to the waiting caller
+						} catch (RuntimeException | OutOfMemoryError e) {
+							android.util.Log.w("WebViewRecovery", "decoder_draw_failed type="
+									+ e.getClass().getSimpleName());
+						} finally {
+							countDownAndDestroy(view);
+						}
 					}
-				}
+				});
+				// This decoder is not attached to an Activity. Explicit software drawing
+				// drives the offscreen renderer; do not depend on a screen frame/Choreographer.
+				view.draw(new Canvas(pendingBitmap));
+			} catch (RuntimeException | OutOfMemoryError e) {
+				android.util.Log.w("WebViewRecovery", "decoder_prepare_failed type=" + e.getClass().getSimpleName());
+				countDownAndDestroy(view);
 			}
 		} else {
 			countDownAndDestroy(webView);
@@ -165,7 +163,6 @@ public class WebViewDecoder extends WebViewClient {
 	}
 
 	private static class Callback implements Handler.Callback {
-		@SuppressWarnings("deprecation")
 		@SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
 		@Override
 		public boolean handleMessage(Message msg) {
@@ -179,9 +176,10 @@ public class WebViewDecoder extends WebViewClient {
 					if (rotation == 90 || rotation == 270) width = height ^ width ^ (height = width); // Swap
 					width /= decoder.sampleSize;
 					height /= decoder.sampleSize;
+					HANDLER.postDelayed(decoder.timeout, 20000);
+					try {
 					WebView webView = new WebView(MainApplication.getInstance());
 					decoder.webView = webView;
-					HANDLER.postDelayed(decoder.timeout, 20000);
 					WebSettings settings = webView.getSettings();
 					WebViewUtils.configureCommonSettings(settings);
 					settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
@@ -189,21 +187,23 @@ public class WebViewDecoder extends WebViewClient {
 					webView.setInitialScale(100 / decoder.sampleSize);
 					webView.setWebViewClient(decoder);
 					webView.setBackgroundColor(Color.TRANSPARENT);
-					webView.setPictureListener(decoder.pictureListener);
 					webView.addJavascriptInterface(decoder, "jsi");
 					if (width > 0 && height > 0) {
 						webView.layout(0, 0, width, height);
 					}
 					webView.loadData("<!DOCTYPE html><html><head><script type=\"text/javascript\">"
-							+ "function calculateSize() {jsi.onCalculateSize(document.body.children[0].naturalWidth, "
-							+ "document.body.children[0].naturalHeight);}</script></head>"
-							+ "<body style=\"margin: 0\"><img src=\"http://127.0.0.1/image.jpeg\" /></body></html>",
+							+ "function notifyImageReady(){var i=document.getElementById('image');"
+							+ "if(!i||!i.complete)return;function report(){jsi.onCalculateSize(i.naturalWidth,i.naturalHeight);}"
+							+ "if(i.naturalWidth>0&&i.decode){i.decode().then(report,report);}else{report();}}"
+							+ "</script></head><body style=\"margin: 0\"><img id=\"image\" "
+							+ "onload=\"notifyImageReady()\" onerror=\"notifyImageReady()\" "
+							+ "src=\"http://127.0.0.1/image.jpeg\" /></body></html>",
 							"text/html", "UTF-8");
-					return true;
-				}
-				case MESSAGE_MEASURE_PICTURE: {
-					WebViewDecoder decoder = (WebViewDecoder) msg.obj;
-					decoder.measurePicture(decoder.webView);
+					} catch (RuntimeException | OutOfMemoryError e) {
+						android.util.Log.w("WebViewRecovery", "decoder_create_failed type="
+								+ e.getClass().getSimpleName());
+						decoder.countDownAndDestroy(decoder.webView);
+					}
 					return true;
 				}
 				case MESSAGE_CHECK_PICTURE_SIZE: {

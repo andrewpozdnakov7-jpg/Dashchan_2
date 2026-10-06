@@ -73,7 +73,7 @@ public class PikabuChanPerformer extends ChanPerformer {
 		HttpRequest request = new HttpRequest(uri, preset)
 				.addHeader("User-Agent", userAgent)
 				.addHeader("Accept-Language", "ru-RU,ru;q=0.9,en;q=0.5");
-		PikabuChanConfiguration configuration = PikabuChanConfiguration.get(this);
+		PikabuChanConfiguration configuration = PikabuChanConfiguration.getConfiguration(this);
 		String cookies = isPikabuDomain(uri) ? configuration.getAuthorizationCookies() : null;
 		if (!StringUtils.isEmpty(cookies)) {
 			String webViewCookies = getWebViewCookies(uri);
@@ -121,7 +121,7 @@ public class PikabuChanPerformer extends ChanPerformer {
 
 	private HttpResponse perform(android.net.Uri uri, HttpRequest request) throws HttpException {
 		HttpResponse response = request.perform();
-		PikabuChanConfiguration configuration = PikabuChanConfiguration.get(this);
+		PikabuChanConfiguration configuration = PikabuChanConfiguration.getConfiguration(this);
 		String current = configuration.getAuthorizationCookies();
 		if (!StringUtils.isEmpty(current)) {
 			String updated = mergeCookies(current, response);
@@ -467,7 +467,7 @@ public class PikabuChanPerformer extends ChanPerformer {
 		if (data.attachments != null && data.attachments.length > 0) {
 			throw new ApiException(ApiException.SEND_ERROR_FILE_NOT_SUPPORTED);
 		}
-		PikabuChanConfiguration configuration = PikabuChanConfiguration.get(this);
+		PikabuChanConfiguration configuration = PikabuChanConfiguration.getConfiguration(this);
 		if (!configuration.isAuthorized()) {
 			throw new ApiException(configuration.getResources().getString(R.string.pikabu_sign_in_to_post));
 		}
@@ -511,7 +511,7 @@ public class PikabuChanPerformer extends ChanPerformer {
 	@Override
 	protected SendDeletePostsResult onSendDeletePosts(SendDeletePostsData data) throws HttpException, ApiException,
 			InvalidResponseException {
-		PikabuChanConfiguration configuration = PikabuChanConfiguration.get(this);
+		PikabuChanConfiguration configuration = PikabuChanConfiguration.getConfiguration(this);
 		if (!configuration.isAuthorized()) {
 			throw new ApiException(configuration.getResources().getString(R.string.pikabu_sign_in_to_post));
 		}
@@ -545,7 +545,7 @@ public class PikabuChanPerformer extends ChanPerformer {
 		if (data.type != CheckAuthorizationData.TYPE_USER_AUTHORIZATION) {
 			throw new InvalidResponseException();
 		}
-		PikabuChanConfiguration configuration = PikabuChanConfiguration.get(this);
+		PikabuChanConfiguration configuration = PikabuChanConfiguration.getConfiguration(this);
 		android.net.Uri uri = android.net.Uri.parse(PIKABU_REFERER);
 		HttpResponse response = perform(uri, preparePageRequest(uri, data));
 		String html = response.readString();
@@ -562,7 +562,7 @@ public class PikabuChanPerformer extends ChanPerformer {
 	@Override
 	public SendVotePostResult onSendVotePost(SendVotePostData data) throws HttpException, ApiException,
 			InvalidResponseException {
-		PikabuChanConfiguration configuration = PikabuChanConfiguration.get(this);
+		PikabuChanConfiguration configuration = PikabuChanConfiguration.getConfiguration(this);
 		if (!configuration.isAuthorized()) {
 			throw new ApiException("Для голосования войдите в аккаунт Пикабу в настройках «Кекабу».");
 		}
@@ -708,7 +708,7 @@ public class PikabuChanPerformer extends ChanPerformer {
 				customBoards.add(board);
 			}
 			if (!customBoards.isEmpty()) categories.add(1, new BoardCategory(
-					PikabuChanConfiguration.get(this).getResources().getString(
+					PikabuChanConfiguration.getConfiguration(this).getResources().getString(
 							R.string.pikabu_category_my_communities), customBoards));
 		}
 		ArrayList<List<Board>> grouped = new ArrayList<>(COMMUNITY_CATEGORY_TITLES.length);
@@ -726,7 +726,7 @@ public class PikabuChanPerformer extends ChanPerformer {
 		for (int i = 0; i < grouped.size(); i++) {
 			List<Board> group = grouped.get(i);
 			if (group != null && !group.isEmpty()) {
-				categories.add(new BoardCategory(PikabuChanConfiguration.get(this).getResources()
+				categories.add(new BoardCategory(PikabuChanConfiguration.getConfiguration(this).getResources()
 						.getString(COMMUNITY_CATEGORY_TITLES[i]), group));
 			}
 		}
@@ -735,7 +735,7 @@ public class PikabuChanPerformer extends ChanPerformer {
 	@Override
 	public ReadBoardsResult onReadBoards(ReadBoardsData data) {
 		PikabuChanLocator locator = PikabuChanLocator.get(this);
-		PikabuChanConfiguration configuration = PikabuChanConfiguration.get(this);
+		PikabuChanConfiguration configuration = PikabuChanConfiguration.getConfiguration(this);
 		ArrayList<BoardCategory> categories = new ArrayList<>();
 		categories.add(new BoardCategory(configuration.getResources().getString(R.string.pikabu_category_feeds), Arrays.asList(
 				new Board(PikabuChanLocator.BOARD_HOT, "Горячее", "Популярные истории"),

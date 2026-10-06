@@ -4,7 +4,6 @@ import android.content.Context;
 import android.net.ConnectivityManager;
 import android.net.Network;
 import android.net.NetworkCapabilities;
-import android.os.SystemClock;
 import android.telephony.TelephonyManager;
 import android.util.Pair;
 import androidx.annotation.NonNull;
@@ -24,8 +23,6 @@ public class NetworkObserver {
 	private final TelephonyManager telephonyManager;
 
 	private NetworkState networkState = NetworkState.UNDEFINED;
-	private long last3GChecked;
-	private boolean last3GAvailable;
 
 	private NetworkObserver() {
 		Context context = MainApplication.getInstance();
@@ -52,7 +49,7 @@ public class NetworkObserver {
 		});
 	}
 
-	private Pair<Network, NetworkCapabilities> getNetwork28() {
+	private Pair<Network, NetworkCapabilities> getActiveNetworkWithCapabilities() {
 		Network network = connectivityManager.getActiveNetwork();
 		if (network != null) {
 			NetworkCapabilities capabilities = connectivityManager.getNetworkCapabilities(network);
@@ -66,7 +63,7 @@ public class NetworkObserver {
 	}
 
 	public boolean isVpnConnected() {
-		Pair<Network, NetworkCapabilities> pair = getNetwork28();
+		Pair<Network, NetworkCapabilities> pair = getActiveNetworkWithCapabilities();
 		return pair != null && pair.second.hasTransport(NetworkCapabilities.TRANSPORT_VPN);
 	}
 
@@ -88,77 +85,18 @@ public class NetworkObserver {
 		return countryIso != null ? countryIso.toUpperCase(Locale.US) : "";
 	}
 
-	public boolean isMobile3GConnected() {
-		switch (networkState) {
-			case WIFI: {
-				return true;
-			}
-			case MOBILE: {
-				if (SystemClock.elapsedRealtime() - last3GChecked >= 2000) {
-					update3GConnected28();
-					last3GChecked = SystemClock.elapsedRealtime();
-				}
-				return last3GAvailable;
-			}
-			case UNDEFINED:
-			default: {
-				return false;
-			}
-		}
-	}
-
-	@SuppressWarnings("deprecation")
-	private void update3GConnected28() {
-		boolean is3GAvailable = false;
-		Pair<Network, NetworkCapabilities> pair = getNetwork28();
-		if (pair != null && pair.second.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) {
-			// Is there a non-deprecated way to get network subtype without READ_PHONE_STATE permission?
-			android.net.NetworkInfo networkInfo = connectivityManager.getNetworkInfo(pair.first);
-			// Connectivity can disappear between the capabilities and subtype queries.
-			is3GAvailable = networkInfo != null && isNetworkType3G(networkInfo.getSubtype());
-		}
-		last3GAvailable = is3GAvailable;
-	}
-
-	@SuppressWarnings({"DuplicateBranchesInSwitch", "deprecation"})
-	private boolean isNetworkType3G(int type) {
-		switch (type) {
-			case TelephonyManager.NETWORK_TYPE_UMTS:
-			case TelephonyManager.NETWORK_TYPE_EVDO_0:
-			case TelephonyManager.NETWORK_TYPE_EVDO_A:
-			case TelephonyManager.NETWORK_TYPE_HSDPA:
-			case TelephonyManager.NETWORK_TYPE_HSUPA:
-			case TelephonyManager.NETWORK_TYPE_HSPA:
-			case TelephonyManager.NETWORK_TYPE_EVDO_B:
-			case TelephonyManager.NETWORK_TYPE_EHRPD:
-			case TelephonyManager.NETWORK_TYPE_HSPAP:
-			case TelephonyManager.NETWORK_TYPE_TD_SCDMA: {
-				// 3G
-				return true;
-			}
-			case TelephonyManager.NETWORK_TYPE_LTE:
-			case TelephonyManager.NETWORK_TYPE_IWLAN: {
-				// 4G
-				return true;
-			}
-			case TelephonyManager.NETWORK_TYPE_NR: {
-				// 5G
-				return true;
-			}
-			default: {
-				return false;
-			}
-		}
+	public boolean isWifiOrMobileConnected() {
+		// Keep the existing connectivity/VPN classification, without inspecting radio generation.
+		return networkState == NetworkState.WIFI || networkState == NetworkState.MOBILE;
 	}
 
 	private void onActiveNetworkChange() {
-		updateNetworkState28();
-		last3GChecked = 0L;
+		updateNetworkState();
 	}
 
-	private void updateNetworkState28() {
+	private void updateNetworkState() {
 		NetworkState networkState = NetworkState.UNDEFINED;
-		Pair<Network, NetworkCapabilities> pair = getNetwork28();
+		Pair<Network, NetworkCapabilities> pair = getActiveNetworkWithCapabilities();
 		if (pair != null) {
 			networkState = pair.second.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
 					? NetworkState.MOBILE : NetworkState.WIFI;

@@ -71,38 +71,47 @@ public class LocaleManager {
 
 	private LocaleManager() {}
 
-	private List<Locale> lastLocales = Collections.emptyList();
+	private Configuration lastConfiguration;
 	private Context applicationContext;
+
+	/** Builds the startup/resource configuration without initializing ChanManager or changing globals. */
+	public Configuration createEffectiveConfiguration(Configuration base) {
+		return createEffectiveConfiguration(base, Preferences.PREFERENCES != null
+				? Preferences.getLocale() : DEFAULT_LOCALE);
+	}
+
+	static Configuration createEffectiveConfiguration(Configuration base, String localeCode) {
+		Configuration effective = new Configuration(base);
+		Locale locale = VALUES_LOCALE_OBJECTS.get(localeCode);
+		if (locale != null) {
+			effective.setLocales(!Locale.US.equals(locale)
+					? new LocaleList(locale, Locale.US) : new LocaleList(Locale.US));
+		}
+		return effective;
+	}
+
+	private void updateConfiguration(Configuration configuration) {
+		if (lastConfiguration == null || !configuration.equals(lastConfiguration)) {
+			lastConfiguration = new Configuration(configuration);
+			applicationContext = null;
+			ChanManager.getInstance().updateConfiguration(configuration);
+		}
+	}
+
+	public void onConfigurationChanged(Configuration configuration) {
+		applicationContext = null;
+		updateConfiguration(createEffectiveConfiguration(configuration));
+	}
 
 	public Context apply(Context context) {
 		Resources resources = context.getResources();
-		Configuration configuration = resources.getConfiguration();
-		Locale locale = VALUES_LOCALE_OBJECTS.get(Preferences.getLocale());
-		if (locale != null) {
-			configuration = new Configuration(configuration);
-			configuration.setLocales(locale != Locale.US
-					? new LocaleList(locale, Locale.US) : new LocaleList(Locale.US));
-			Locale.setDefault(locale);
+		Configuration configuration = createEffectiveConfiguration(resources.getConfiguration());
+		if (!configuration.equals(resources.getConfiguration())) {
 			context = context.createConfigurationContext(configuration);
-		} else {
-			LocaleList localeList = configuration.getLocales();
-			locale = localeList.size() > 0 ? localeList.get(0) : null;
-			if (locale == null) {
-				locale = Locale.US;
-			}
-			Locale.setDefault(locale);
 		}
-		List<Locale> lastLocales;
-		LocaleList localeList = configuration.getLocales();
-		lastLocales = new ArrayList<>(localeList.size());
-		for (int i = 0; i < localeList.size(); i++) {
-			lastLocales.add(localeList.get(i));
-		}
-		if (!this.lastLocales.equals(lastLocales)) {
-			this.lastLocales = lastLocales;
-			applicationContext = null;
-			ChanManager.getInstance().updateConfiguration(configuration, resources.getDisplayMetrics());
-		}
+		LocaleList locales = configuration.getLocales();
+		Locale.setDefault(locales.isEmpty() ? Locale.US : locales.get(0));
+		updateConfiguration(configuration);
 		return context;
 	}
 

@@ -21,7 +21,7 @@ filesystem paths, workstation identifiers, signing data, credentials, or private
 | Dependency | Scope in the F-Droid APK | License |
 | --- | --- | --- |
 | AndroidX Activity, Core, Fragment, RecyclerView, DrawerLayout, WebKit, Browser, WorkManager | Runtime | Apache-2.0 |
-| Jackson Core 2.22.1 | Runtime | Apache-2.0 |
+| Jackson Core 2.22.3 | Runtime | Apache-2.0 |
 | Google Brotli Java decoder v1.2.0 (vendored source) | Runtime | MIT |
 | jsoup 1.23.2 | Runtime | MIT |
 | LeakCanary 3.0 alpha 9 | `leak` build only; absent from `fdroidNdebug` | Apache-2.0 |
@@ -35,8 +35,8 @@ the transitive-dependency result produced by `fdroid scanner`.
 
 | Component | Source selection | License |
 | --- | --- | --- |
-| FFmpeg 8.1.2 | Release archive with fixed SHA-256; LGPL-only configuration without `--enable-gpl` or `--enable-nonfree` | LGPL-2.1-or-later |
-| dav1d 1.5.3 | Release archive with fixed SHA-256 | BSD-2-Clause |
+| FFmpeg 8.1.3 | Release archive with fixed SHA-256; LGPL-only configuration without `--enable-gpl` or `--enable-nonfree` | LGPL-2.1-or-later |
+| dav1d 1.5.4 | Release archive with fixed SHA-256 | BSD-2-Clause |
 | GIFLIB decoder sources | Stored as source under `jni/src/gif/dgif` | MIT |
 
 The F-Droid build accepts both downloaded native source trees through `DASHCHAN_DAV1D_SOURCE_DIR`
