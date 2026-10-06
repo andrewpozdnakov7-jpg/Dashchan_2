@@ -342,10 +342,9 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 			addButton(R.string.uninstall_extension, 0).setOnClickListener(p -> {
 				Chan innerChan = Chan.get(chanName);
 				if (innerChan.name != null) {
-					@SuppressWarnings("deprecation")
-					Intent intent = new Intent(Intent.ACTION_UNINSTALL_PACKAGE)
-							.setData(Uri.parse("package:" + innerChan.packageName))
-							.putExtra(Intent.EXTRA_RETURN_RESULT, true);
+					// ACTION_DELETE also supports extensions installed outside this app.
+					Intent intent = new Intent(Intent.ACTION_DELETE)
+							.setData(Uri.parse("package:" + innerChan.packageName));
 					startActivity(intent);
 				}
 			});

@@ -47,7 +47,7 @@ public final class PreloadMediaTask extends HttpHolderTask<Void, File> {
 			}
 			if ("all".equals(networkMode)) return true;
 			if ("wifi_3g".equals(networkMode)) {
-				return ConcurrentUtils.mainGet(() -> NetworkObserver.getInstance().isMobile3GConnected());
+				return ConcurrentUtils.mainGet(() -> NetworkObserver.getInstance().isWifiOrMobileConnected());
 			}
 			return capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
 					&& !capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR);

@@ -1,8 +1,7 @@
 *.mk text eol=lf
+*.sh text eol=lf
 /gradlew text eol=lf
 /jni/src/gif/dgif/**.c linguist-vendored
 /jni/src/gif/dgif/**.h linguist-vendored
 /jni/src/player/ffmpeg/include/** linguist-vendored
 /jni/src/player/ffmpeg/symbols/** linguist-vendored
-/jni/src/player/yuv/include/** linguist-vendored
-/jni/src/player/yuv/symbols/** linguist-vendored

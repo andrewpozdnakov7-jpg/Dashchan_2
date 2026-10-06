@@ -45,7 +45,7 @@ import java.util.concurrent.Semaphore;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
-public class VideoPlayer {
+public class VideoPlayer implements AutoCloseable {
 	private static final long SEEK_STALL_REPORT_DELAY = 5000L;
 	private static final long THUMBNAIL_MIN_POSITION = 250L;
 	private static final long THUMBNAIL_MAX_POSITION = 2000L;
@@ -292,10 +292,13 @@ public class VideoPlayer {
 	}
 
 	public void setListener(Listener listener) {
-		this.listener = listener;
-		handler.post(() -> {
-			if (this.listener == listener) notifyBusyState();
-		});
+		synchronized (this) {
+			if (consumed) return;
+			this.listener = listener;
+			handler.post(() -> {
+				if (!consumed && this.listener == listener) notifyBusyState();
+			});
+		}
 	}
 
 	public static Bitmap createThumbnail(File file) throws IOException, InterruptedException {
@@ -1136,6 +1139,12 @@ public class VideoPlayer {
 	}
 
 	public void destroy() {
+		close();
+	}
+
+	/** The current gallery/PiP owner closes the player; a transfer must not close it. */
+	@Override
+	public void close() {
 		destroyInternal(null);
 	}
 
@@ -1149,6 +1158,7 @@ public class VideoPlayer {
 		synchronized (this) {
 			if (!consumed) {
 				consumed = true;
+				listener = null;
 				try {
 					if (initData != null) {
 						holder.destroy(initData.pointer, true);
@@ -1162,20 +1172,12 @@ public class VideoPlayer {
 						holder.destroy(sessionData.pointer, false);
 					}
 				} finally {
+					handler.removeCallbacksAndMessages(null);
 					transferableSurfaceGeneration = 0L;
 					releaseAllSurfaceRequestsLocked();
 					releaseDeferredSurfaceTexturesLocked(Long.MAX_VALUE, true);
 				}
 			}
-		}
-	}
-
-	@Override
-	protected void finalize() throws Throwable {
-		try {
-			destroy();
-		} finally {
-			super.finalize();
 		}
 	}
 
@@ -1205,6 +1207,7 @@ public class VideoPlayer {
 		REPORT_STALLED_SEEK, SURFACE_APPLIED, REQUEST_RANGE, DURATION_CHANGED, NETWORK_BUFFERING}
 
 	private final Handler handler = new Handler(Looper.getMainLooper(), msg -> {
+		if (consumed) return true;
 		switch (Message.values()[msg.what]) {
 			case NETWORK_BUFFERING: {
 				long serial = (long) msg.obj;

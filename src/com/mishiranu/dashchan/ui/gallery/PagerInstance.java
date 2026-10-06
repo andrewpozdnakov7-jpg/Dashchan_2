@@ -100,7 +100,7 @@ public class PagerInstance {
 				animatedPngDecoder = null;
 			}
 			if (gifDecoder != null) {
-				gifDecoder.recycle();
+				gifDecoder.close();
 				gifDecoder = null;
 			}
 			jpegData = null;

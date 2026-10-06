@@ -60,7 +60,8 @@ public class ImageLoader {
 	}
 
 	private interface TaskCallback {
-		void onTaskFinished(String key, Bitmap bitmap, boolean error);
+		void onTaskFinished(String key, String taskKey, Bitmap bitmap, boolean error);
+		void onResourcesChanged(Chan chan, Uri uri, String key, String taskKey, boolean fromCacheOnly);
 	}
 
 	private class LoaderTask extends HttpHolderTask<Void, Bitmap> {
@@ -70,6 +71,7 @@ public class ImageLoader {
 		public final String memoryKey;
 		public final int targetSize;
 		public final boolean fromCacheOnly;
+		private final long resourcesGeneration;
 
 		public final HashSet<TaskCallback> callbacks = new HashSet<>();
 		private final Runnable startRunnable = this::start;
@@ -80,7 +82,8 @@ public class ImageLoader {
 
 		private boolean notFound;
 
-		public LoaderTask(Uri uri, Chan chan, String key, String memoryKey, int targetSize, boolean fromCacheOnly) {
+		public LoaderTask(Uri uri, Chan chan, String key, String memoryKey, int targetSize, boolean fromCacheOnly,
+				long resourcesGeneration) {
 			super(chan);
 			this.uri = uri;
 			this.chan = chan;
@@ -88,6 +91,7 @@ public class ImageLoader {
 			this.memoryKey = memoryKey;
 			this.targetSize = targetSize;
 			this.fromCacheOnly = fromCacheOnly;
+			this.resourcesGeneration = resourcesGeneration;
 		}
 
 		@Override
@@ -198,6 +202,23 @@ public class ImageLoader {
 		protected void onComplete(Bitmap bitmap) {
 			// FutureTask holds its result: retaining completed tasks would bypass the bitmap cache budget.
 			if (loaderTasks.get(memoryKey) == this) loaderTasks.remove(memoryKey);
+			boolean obsoleteResource = ChanConfiguration.SCHEME_CHAN.equals(uri.getScheme()) &&
+					resourcesGeneration != Chan.get(chan.name).configuration.getResourcesGenerationInternal();
+			if (obsoleteResource) {
+				// Never publish a resource decoded while its extension/configuration was being replaced.
+				if (bitmap != null) bitmap.recycle();
+				bitmap = null;
+				notFound = false;
+			}
+			ArrayList<TaskCallback> completedCallbacks = new ArrayList<>(callbacks);
+			callbacks.clear();
+			if (obsoleteResource) {
+				// Retry only targets still awaiting THIS generation, not a newer request or a detached view.
+				for (TaskCallback callback : completedCallbacks) {
+					callback.onResourcesChanged(chan, uri, key, memoryKey, fromCacheOnly);
+				}
+				return;
+			}
 			if (notFound && !LocalArchiveManager.RESOURCE_SCHEME.equals(uri.getScheme())) {
 				notFoundMap.put(memoryKey);
 			}
@@ -205,10 +226,8 @@ public class ImageLoader {
 				notFoundMap.remove(memoryKey);
 				bitmapCache.put(memoryKey, bitmap);
 			}
-			ArrayList<TaskCallback> completedCallbacks = new ArrayList<>(callbacks);
-			callbacks.clear();
 			for (TaskCallback callback : completedCallbacks) {
-				callback.onTaskFinished(key, bitmap, !fromCacheOnly);
+				callback.onTaskFinished(key, memoryKey, bitmap, !fromCacheOnly);
 			}
 		}
 
@@ -246,9 +265,18 @@ public class ImageLoader {
 		public String currentKey;
 		private String currentTaskKey;
 
-		private final TaskCallback taskCallback = (key, bitmap, error) -> {
-			if (key.equals(currentKey)) {
-				onResult(key, bitmap, error, false);
+		private final TaskCallback taskCallback = new TaskCallback() {
+			@Override public void onTaskFinished(String key, String taskKey, Bitmap bitmap, boolean error) {
+				if (key.equals(currentKey) && taskKey.equals(currentTaskKey)) {
+					onResult(key, bitmap, error, false);
+				}
+			}
+
+			@Override public void onResourcesChanged(Chan chan, Uri uri, String key, String taskKey,
+					boolean fromCacheOnly) {
+				if (key.equals(currentKey) && taskKey.equals(currentTaskKey)) {
+					INSTANCE.loadImage(chan, uri, key, fromCacheOnly, Target.this);
+				}
 			}
 		};
 
@@ -384,6 +412,13 @@ public class ImageLoader {
 	}
 
 	public boolean loadImage(Chan chan, Uri uri, String key, boolean fromCacheOnly, Target target) {
+		boolean resource = uri != null && ChanConfiguration.SCHEME_CHAN.equals(uri.getScheme());
+		// Models may keep old chan URIs/objects across an extension update. Resolve the current owner.
+		if (resource) {
+			String authority = uri.getAuthority();
+			if (authority != null && !authority.isEmpty()) chan = Chan.get(authority);
+			else if (chan.name != null) chan = Chan.get(chan.name);
+		}
 		if (key == null) {
 			key = CacheManager.getInstance().getCachedFileKey(uri);
 		}
@@ -392,7 +427,8 @@ public class ImageLoader {
 		}
 		int targetSize = ThumbnailDecoder.targetSize(MainApplication.getInstance().getResources());
 		// Keep the public attachment/disk key unchanged (also used by reverse image search).
-		String memoryKey = chan.name + "\n" + targetSize + "\n" + key;
+		long resourcesGeneration = resource ? chan.configuration.getResourcesGenerationInternal() : 0L;
+		String memoryKey = ImageMemoryKey.create(chan.name, targetSize, key, resource, resourcesGeneration);
 		boolean mainThread = ConcurrentUtils.isMain();
 		if (mainThread) {
 			cancel(target);
@@ -411,6 +447,12 @@ public class ImageLoader {
 				});
 				scope.result(memoryCachedBitmap != null ? "hit" : "miss");
 			}
+		}
+		if (resource && resourcesGeneration != Chan.get(chan.name).configuration.getResourcesGenerationInternal()) {
+			// A worker's main-thread cache lookup may span a configuration/extension replacement.
+			// Follow the existing worker contract: do not enqueue asynchronous work from that caller.
+			target.onResult(key, null, false, true);
+			return false;
 		}
 		if (memoryCachedBitmap != null) {
 			target.onResult(key, memoryCachedBitmap, false, true);
@@ -433,7 +475,8 @@ public class ImageLoader {
 				currentLoaderTask.fromCacheOnly && !fromCacheOnly;
 		LoaderTask registerLoaderTask = currentLoaderTask;
 		if (startTask) {
-			LoaderTask loaderTask = new LoaderTask(uri, chan, key, memoryKey, targetSize, fromCacheOnly);
+			LoaderTask loaderTask = new LoaderTask(uri, chan, key, memoryKey, targetSize, fromCacheOnly,
+					resourcesGeneration);
 			registerLoaderTask = loaderTask;
 			if (currentLoaderTask != null) {
 				currentLoaderTask.cancel();

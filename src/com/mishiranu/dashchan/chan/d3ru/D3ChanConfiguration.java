@@ -3,7 +3,7 @@ package com.mishiranu.dashchan.chan.d3ru;
 import chan.content.ChanConfiguration;
 
 public class D3ChanConfiguration extends ChanConfiguration {
-	public static D3ChanConfiguration get(Object object) {
+	public static D3ChanConfiguration getConfiguration(Object object) {
 		return ChanConfiguration.get(object);
 	}
 

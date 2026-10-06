@@ -164,6 +164,14 @@ public class ListUnit implements ActionMode.Callback {
 	}
 
 	public void scrollListToPosition(int position, boolean checkVisibility) {
+		scrollListToPosition(position, 0, checkVisibility);
+	}
+
+	void restoreFilterPosition(int position, int offset) {
+		scrollListToPosition(position, offset, false);
+	}
+
+	private void scrollListToPosition(int position, int offset, boolean checkVisibility) {
 		diagnosticTarget = position;
 		diagnosticLayoutPending = true;
 		logPosition("scroll_request checkVisibility=" + checkVisibility);
@@ -185,9 +193,37 @@ public class ListUnit implements ActionMode.Callback {
 		}
 		// Keep the explicit target through the initial one-column layout and the later
 		// measured grid layout. GridLayoutManager's implicit anchor can change between them.
-		pendingListPosition = new ListPosition(position, 0);
+		pendingListPosition = new ListPosition(position, offset);
 		pendingListPosition.apply(recyclerView);
 		logPosition("scroll_submitted");
+	}
+
+	static final class FilterViewport {
+		final GalleryItem item;
+		final int offset;
+		final boolean atStart;
+		final boolean atEnd;
+
+		FilterViewport(GalleryItem item, int offset, boolean atStart, boolean atEnd) {
+			this.item = item;
+			this.offset = offset;
+			this.atStart = atStart;
+			this.atEnd = atEnd;
+		}
+	}
+
+	FilterViewport captureFilterViewport() {
+		recyclerView.stopScroll();
+		boolean settled = recyclerView.isShown() && recyclerView.getChildCount() > 0
+				&& !recyclerView.isLayoutRequested() && !recyclerView.hasPendingAdapterUpdates();
+		ListPosition position = !settled && pendingListPosition != null
+				? pendingListPosition : ListPosition.obtain(recyclerView, null);
+		if (position == null || position.position < 0 || position.position >= instance.galleryItems.size()) {
+			return null;
+		}
+		return new FilterViewport(instance.galleryItems.get(position.position), position.offset,
+				settled && !recyclerView.canScrollVertically(-1),
+				settled && !recyclerView.canScrollVertically(1));
 	}
 
 	void logPosition(String event) {

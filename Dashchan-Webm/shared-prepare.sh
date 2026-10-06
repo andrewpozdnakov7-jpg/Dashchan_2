@@ -51,9 +51,9 @@ copy_provided_source() {
 }
 
 # Pinned checksums for stable release archives.
-DAV1D_SHA256="732010aa5ef461fa93355ed2c6c5fedb48ddc4b74e697eaabe8907eaeb943011"
-FFMPEG_SHA256="b4925bd4411e654ad3884bc8da1860b0d860bd64a95a17220de48cfcd5f0a859"
-FFMPEG_COMMIT="38b88335f99e76ed89ff3c93f877fdefce736c13"
+DAV1D_SHA256="686616b7c69eb88d44459391ab25cac13b6647a3b288835c5784e71c1514a5c5"
+FFMPEG_SHA256="f3dff3070372593fe579535a9f03b76ec3600c82b7170f8ff8f5aa6927e18fe2"
+FFMPEG_COMMIT="1041abdc962f4cc4f394aa8de9dc5236c0c3b9e7"
 
 download_and_extract() {
 	local url="$1"

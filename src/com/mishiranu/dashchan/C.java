@@ -38,8 +38,6 @@ public class C {
 		EXTENSION_TRANSFORMATION = Collections.unmodifiableMap(extensionTransformation);
 	}
 
-	public static final String DEFAULT_DOWNLOAD_PATH = "/Download/Dashchan/";
-
 	public static final String ACTION_POSTING = "com.mishiranu.dashchan.action.POSTING";
 	public static final String ACTION_POSTING_SHARE = "com.mishiranu.dashchan.action.POSTING_SHARE";
 	public static final String ACTION_GALLERY = "com.mishiranu.dashchan.action.GALLERY";
@@ -61,6 +59,7 @@ public class C {
 	public static final int NOTIFICATION_ID_UPDATES = 4;
 	public static final int NOTIFICATION_ID_REPLIES = 5;
 	public static final int NOTIFICATION_ID_UPDATE_INSTALLED = 6;
+	public static final int NOTIFICATION_ID_INSTALL_CONFIRMATION = 7;
 
 	public static final String NOTIFICATION_CHANNEL_POSTING = "posting";
 	public static final String NOTIFICATION_CHANNEL_POSTING_COMPLETE = "postingComplete";

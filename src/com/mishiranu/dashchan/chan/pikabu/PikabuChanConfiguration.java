@@ -6,7 +6,7 @@ public class PikabuChanConfiguration extends ChanConfiguration {
 	private static final String COOKIE_AUTH_SESSION = "pikabu_auth_session";
 	private static final String COOKIE_AUTH_USER = "pikabu_auth_user";
 
-	public static PikabuChanConfiguration get(Object object) {
+	public static PikabuChanConfiguration getConfiguration(Object object) {
 		return ChanConfiguration.get(object);
 	}
 

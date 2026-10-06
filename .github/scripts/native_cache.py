@@ -75,9 +75,10 @@ def required_files(abis):
     for abi in abis:
         required += [f"libraries/dav1d/{abi}/libdav1d.so",
                      f"libraries/dav1d/{abi}/include/dav1d/dav1d.h",
-                     f"external/ffmpeg/include/{abi}/libavcodec/avcodec.h"]
+                     f"external/ffmpeg/include/{abi}/libavutil/ffversion.h"]
         for lib in ("avcodec", "avformat", "avfilter", "avutil", "swresample", "swscale"):
             required += [f"libraries/ffmpeg/{abi}/lib{lib}.so",
+                         f"external/ffmpeg/include/{abi}/lib{lib}/{lib}.h",
                          f"external/ffmpeg/symbols/{abi}/lib{lib}.c"]
     return required
 

@@ -738,10 +738,8 @@ public class PagerUnit implements PagerInstance.Callback {
 			}
 		}
 		interrupt(true);
-		viewPager.postDelayed(() -> {
-			pagerAdapter.recycleAll();
-			System.gc();
-		}, 200);
+		// Release owned resources after the closing animation; let ART schedule GC.
+		viewPager.postDelayed(pagerAdapter::recycleAll, 200);
 	}
 
 	private void startCachedImagePreload() {

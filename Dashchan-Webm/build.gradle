@@ -1,5 +1,5 @@
 plugins {
-	id 'com.android.application' version '9.2.1'
+	id 'com.android.application' version '9.4.0'
 }
 
 def nativeVersions = new Properties()
@@ -162,11 +162,9 @@ android.sourceSets.main.jniLibs.srcDirs = [
 		new File(sharedLibraries, 'ffmpeg')
 ]
 
-afterEvaluate {
-	android.buildTypes.all {
-		String name = it.name.capitalize()
-		tasks.named('pre' + name + 'Build').configure {
-			dependsOn sharedBuild
-		}
+
+androidComponents {
+	onVariants(selector().all()) { variant ->
+		variant.lifecycleTasks.registerPreBuild(tasks.named('sharedBuild'))
 	}
 }

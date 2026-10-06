@@ -7,7 +7,6 @@ import android.content.UriPermission;
 import android.content.res.Configuration;
 import android.database.Cursor;
 import android.net.Uri;
-import android.os.Environment;
 import android.provider.DocumentsContract;
 import android.util.Pair;
 import chan.content.Chan;
@@ -323,7 +322,8 @@ public class Preferences {
 
 	public enum NetworkMode {
 		ALWAYS("always", R.string.always, o -> true),
-		WIFI_3G("wifi_3g", R.string.wifi_or_3g_plus, NetworkObserver::isMobile3GConnected),
+		// Keep the serialized value so existing settings/backups retain the selected mode.
+		WIFI_MOBILE("wifi_3g", R.string.wifi_or_mobile, NetworkObserver::isWifiOrMobileConnected),
 		WIFI("wifi", R.string.wifi_only, NetworkObserver::isWifiConnected),
 		NEVER("never", R.string.never, o -> false);
 
@@ -1090,84 +1090,48 @@ public class Preferences {
 				DEFAULT_DOWNLOAD_CONFLICT_MODE, DownloadConflictMode.VALUE_PROVIDER);
 	}
 
-	public static final String KEY_DOWNLOAD_PATH = "download_path";
 	private static final String KEY_DOWNLOAD_URI_TREE = "download_uri_tree";
 	private static final String KEY_DOWNLOAD_DIRECTORY_SETUP_PROMPTED = "download_directory_setup_prompted";
-
-	private static String getDownloadPathLegacy() {
-		String path = PREFERENCES.getString(KEY_DOWNLOAD_PATH, null);
-		return !StringUtils.isEmptyOrWhitespace(path) ? path : C.DEFAULT_DOWNLOAD_PATH;
-	}
-
-	private static File externalStorageDirectory;
-
-	@SuppressWarnings("deprecation")
-	public static File getDownloadDirectoryLegacy() {
-		String path = getDownloadPathLegacy();
-		File dir = new File(path);
-		boolean absolute = false;
-		Uri uri = Uri.fromFile(dir);
-		List<String> pathSegments = uri.getPathSegments();
-		if (pathSegments.size() > 0) {
-			File first = new File("/" + uri.getPathSegments().get(0));
-			if (first.exists() && first.isDirectory()) {
-				absolute = true;
-			}
-		}
-		if (!absolute) {
-			File file = externalStorageDirectory;
-			if (file == null) {
-				// Cache for faster calls
-				file = Environment.getExternalStorageDirectory();
-				externalStorageDirectory = file;
-			}
-			dir = new File(file, path);
-		}
-		dir.mkdirs();
-		return dir;
-	}
 
 	public static Uri getDownloadUriTree(Context context) {
 		ContentResolver contentResolver = context.getContentResolver();
 		List<UriPermission> uriPermissions = contentResolver.getPersistedUriPermissions();
-		if (uriPermissions == null || uriPermissions.isEmpty()) {
-			return null;
-		}
 		String configuredUriString = PREFERENCES.getString(KEY_DOWNLOAD_URI_TREE, null);
-		if (!StringUtils.isEmpty(configuredUriString)) {
-			Uri configuredUri = Uri.parse(configuredUriString);
-			for (UriPermission uriPermission : uriPermissions) {
-				if (configuredUri.equals(uriPermission.getUri()) && uriPermission.isReadPermission()
-						&& uriPermission.isWritePermission() && isUriTreeAvailable(contentResolver, configuredUri)) {
-					return configuredUri;
-				}
-			}
-			return null;
-		}
-
 		// Older versions did not store the downloads URI explicitly. Their storage picker released every unrelated
 		// non-archive grant, so a single remaining candidate can be migrated without changing existing setups.
 		HashSet<String> localArchiveUriTrees = new HashSet<>(getLocalArchiveUriTrees());
-		Uri legacyUri = null;
-		for (UriPermission uriPermission : uriPermissions) {
-			Uri treeUri = uriPermission.getUri();
-			if (uriPermission.isReadPermission() && uriPermission.isWritePermission()
-					&& !localArchiveUriTrees.contains(treeUri.toString())
-					&& isUriTreeAvailable(contentResolver, treeUri)) {
-				if (legacyUri != null) {
-					return null;
-				}
-				legacyUri = treeUri;
+		ArrayList<DownloadDirectoryAccess.Grant> grants = new ArrayList<>();
+		boolean hasConfiguredUri = !StringUtils.isEmpty(configuredUriString);
+		if (uriPermissions != null) {
+			for (UriPermission uriPermission : uriPermissions) {
+				String value = uriPermission.getUri().toString();
+				if (hasConfiguredUri ? !configuredUriString.equals(value)
+						: localArchiveUriTrees.contains(value)) continue;
+				grants.add(new DownloadDirectoryAccess.Grant(value, uriPermission.isReadPermission(),
+						uriPermission.isWritePermission(), uriPermission.isReadPermission()
+						&& uriPermission.isWritePermission() && isUriTreeAvailable(contentResolver, uriPermission.getUri())));
 			}
 		}
-		if (legacyUri != null) {
-			PREFERENCES.edit().put(KEY_DOWNLOAD_URI_TREE, legacyUri.toString()).close();
+		DownloadDirectoryAccess.Selection selection = DownloadDirectoryAccess.select(configuredUriString,
+				grants, localArchiveUriTrees);
+		if (selection.uri != null) {
+			if (!selection.uri.equals(configuredUriString)) {
+				PREFERENCES.edit().put(KEY_DOWNLOAD_URI_TREE, selection.uri).close();
+			}
+			return Uri.parse(selection.uri);
 		}
-		return legacyUri;
+		if (selection.clearConfiguredUri) {
+			// Backups restore URI strings, not Android's persisted permission. Also covers revocation/unavailable trees.
+			PREFERENCES.edit().remove(KEY_DOWNLOAD_URI_TREE).put(KEY_DOWNLOAD_DIRECTORY_SETUP_PROMPTED, false).close();
+		}
+		return null;
 	}
 
 	private static boolean isUriTreeAvailable(ContentResolver contentResolver, Uri treeUri) {
 		try {
+			if (!ContentResolver.SCHEME_CONTENT.equals(treeUri.getScheme()) || !DocumentsContract.isTreeUri(treeUri)) {
+				return false;
+			}
 			Uri uri = DocumentsContract.buildDocumentUriUsingTree(treeUri,
 					DocumentsContract.getTreeDocumentId(treeUri));
 			try (Cursor cursor = contentResolver.query(uri, null, null, null, null)) {
@@ -1198,15 +1162,30 @@ public class Preferences {
 
 	public static void setDownloadUriTree(Context context, Uri uri, int uriFlags) {
 		ContentResolver contentResolver = context.getContentResolver();
-		if (uri == null || "com.android.providers.downloads.documents".equals(uri.getAuthority())) {
+		int requiredFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION;
+		if (uri == null || !ContentResolver.SCHEME_CONTENT.equals(uri.getScheme()) || !DocumentsContract.isTreeUri(uri)
+				|| "com.android.providers.downloads.documents".equals(uri.getAuthority())
+				|| (uriFlags & requiredFlags) != requiredFlags) {
 			// Downloads provider fails when ".nomedia" files present
 			ClickableToast.show(R.string.no_access_to_memory);
 		} else {
-			int takeFlags = uriFlags & (Intent.FLAG_GRANT_READ_URI_PERMISSION
-					| Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
 			try {
-				contentResolver.takePersistableUriPermission(uri, takeFlags);
-			} catch (SecurityException e) {
+				contentResolver.takePersistableUriPermission(uri, requiredFlags);
+			} catch (SecurityException | IllegalArgumentException e) {
+				ClickableToast.show(R.string.no_access_to_memory);
+				return;
+			}
+			List<UriPermission> uriPermissions = contentResolver.getPersistedUriPermissions();
+			boolean persisted = false;
+			if (uriPermissions != null) {
+				for (UriPermission permission : uriPermissions) {
+					if (uri.equals(permission.getUri()) && permission.isReadPermission() && permission.isWritePermission()) {
+						persisted = true;
+						break;
+					}
+				}
+			}
+			if (!persisted || !isUriTreeAvailable(contentResolver, uri)) {
 				ClickableToast.show(R.string.no_access_to_memory);
 				return;
 			}
@@ -2101,7 +2080,7 @@ public class Preferences {
 		if (PREFERENCES.contains(KEY_LOAD_NEAREST_IMAGE)) {
 			NetworkMode oldMode = getLoadNearestImage();
 			if (oldMode == NetworkMode.WIFI) defaultValue = "wifi";
-			else if (oldMode == NetworkMode.WIFI_3G) defaultValue = "wifi_3g";
+			else if (oldMode == NetworkMode.WIFI_MOBILE) defaultValue = "wifi_3g";
 		}
 		String value = PREFERENCES.getString(KEY_IMAGE_PRELOAD_NETWORK, defaultValue);
 		return "all".equals(value) || "wifi_3g".equals(value) ? value : "wifi";

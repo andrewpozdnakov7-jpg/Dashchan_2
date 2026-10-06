@@ -13,7 +13,7 @@ import com.mishiranu.dashchan.graphics.BaseDrawable;
 import java.io.File;
 import java.io.IOException;
 
-public class GifDecoder implements Runnable {
+public class GifDecoder implements Runnable, AutoCloseable {
 	private static native long init(String fileName);
 	private static native void destroy(long pointer);
 
@@ -24,12 +24,12 @@ public class GifDecoder implements Runnable {
 
 	private static final Handler HANDLER = new Handler(Looper.getMainLooper());
 
-	private final long pointer;
+	private long pointer;
 	private boolean destroyed = false;
 
 	private final int width;
 	private final int height;
-	private final Bitmap bitmap;
+	private Bitmap bitmap;
 
 	private static boolean loaded = false;
 
@@ -45,34 +45,41 @@ public class GifDecoder implements Runnable {
 			}
 		}
 		pointer = init(file.getAbsolutePath());
-		int errorCode = getErrorCode(pointer);
-		if (errorCode != 0) {
-			recycle();
-			throw new IOException("Can't initialize decoder: CODE=" + errorCode);
+		try {
+			if (pointer == 0L) throw new IOException("Can't allocate GIF decoder");
+			int errorCode = getErrorCode(pointer);
+			if (errorCode != 0) {
+				throw new IOException("Can't initialize decoder: CODE=" + errorCode);
+			}
+			int[] summary = new int[2];
+			getSummary(pointer, summary);
+			width = summary[0];
+			height = summary[1];
+			bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+		} catch (IOException | RuntimeException | Error e) {
+			close();
+			throw e;
 		}
-		int[] summary = new int[2];
-		getSummary(pointer, summary);
-		width = summary[0];
-		height = summary[1];
-		bitmap = Bitmap.createBitmap(summary[0], summary[1], Bitmap.Config.ARGB_8888);
 	}
 
 	public void recycle() {
-		if (!destroyed) {
-			destroyed = true;
-			if (bitmap != null) {
-				bitmap.recycle();
-			}
-			destroy(pointer);
-		}
+		close();
 	}
 
+	/** Idempotent; also cancels pending animation callbacks owned by this decoder. */
 	@Override
-	protected void finalize() throws Throwable {
-		try {
-			recycle();
-		} finally {
-			super.finalize();
+	public synchronized void close() {
+		if (!destroyed) {
+			destroyed = true;
+			HANDLER.removeCallbacks(this);
+			if (bitmap != null) {
+				bitmap.recycle();
+				bitmap = null;
+			}
+			if (pointer != 0L) {
+				destroy(pointer);
+				pointer = 0L;
+			}
 		}
 	}
 
@@ -105,20 +112,23 @@ public class GifDecoder implements Runnable {
 
 				@Override
 				public void draw(@NonNull Canvas canvas) {
-					if (!destroyed) {
-						Rect bounds = getBounds();
-						canvas.save();
-						canvas.scale((float) bounds.width() / width, (float) bounds.height() / height);
-						int delay = GifDecoder.draw(pointer, bitmap);
-						canvas.drawBitmap(bitmap, 0, 0, paint);
-						canvas.restore();
-						if (delay >= 0) {
-							delay -= 20;
-							if (delay > 0) {
-								delay = Math.min(delay, 500);
-								HANDLER.postDelayed(GifDecoder.this, delay);
-							} else {
-								invalidateSelf();
+					synchronized (GifDecoder.this) {
+						if (!destroyed) {
+							Rect bounds = getBounds();
+							canvas.save();
+							canvas.scale((float) bounds.width() / width, (float) bounds.height() / height);
+							int delay = GifDecoder.draw(pointer, bitmap);
+							canvas.drawBitmap(bitmap, 0, 0, paint);
+							canvas.restore();
+							if (delay >= 0) {
+								HANDLER.removeCallbacks(GifDecoder.this);
+								delay -= 20;
+								if (delay > 0) {
+									delay = Math.min(delay, 500);
+									HANDLER.postDelayed(GifDecoder.this, delay);
+								} else {
+									invalidateSelf();
+								}
 							}
 						}
 					}
@@ -129,7 +139,7 @@ public class GifDecoder implements Runnable {
 	}
 
 	@Override
-	public void run() {
-		drawable.invalidateSelf();
+	public synchronized void run() {
+		if (!destroyed && drawable != null) drawable.invalidateSelf();
 	}
 }

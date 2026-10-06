@@ -4,8 +4,8 @@ Slooop uses `io.dashchan2` as its application ID and is licensed under GPL-3.0-o
 
 ## Native source policy
 
-The player builds FFmpeg 8.1.2 and dav1d 1.5.3 from source. A regular build downloads these pinned sources and verifies the release archives or exact Git commit. Software frame conversion uses FFmpeg's libswscale.
-If the primary FFmpeg release host is temporarily unreachable, source preparation falls back to the official FFmpeg GitHub mirror, resolves tag `n8.1.2`, and requires commit `38b88335f99e76ed89ff3c93f877fdefce736c13` before exporting the tree.
+The player builds FFmpeg 8.1.3 and dav1d 1.5.4 from source. A regular build downloads these pinned sources and verifies the release archives or exact Git commit. Software frame conversion uses FFmpeg's libswscale.
+If the primary FFmpeg release host is temporarily unreachable, source preparation falls back to the official FFmpeg GitHub mirror, resolves tag `n8.1.3`, and requires commit `1041abdc962f4cc4f394aa8de9dc5236c0c3b9e7` before exporting the tree.
 
 For an F-Droid build, the fdroiddata recipe must acquire the two source trees before Gradle starts and expose them through:
 

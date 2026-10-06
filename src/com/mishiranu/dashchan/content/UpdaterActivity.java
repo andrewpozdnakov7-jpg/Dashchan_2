@@ -9,15 +9,18 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
+import android.content.pm.PackageInstaller;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
-import androidx.activity.result.ActivityResult;
+import android.provider.Settings;
+import android.widget.Toast;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.core.app.NotificationCompat;
+import androidx.lifecycle.ViewModelProvider;
 import chan.content.ChanManager;
 import chan.util.DataFile;
 import chan.util.StringUtils;
@@ -43,9 +46,22 @@ public class UpdaterActivity extends StateActivity {
 	private static final long RESUME_MAX_AGE_MS = 2L * 60L * 60L * 1000L;
 
 	private int index = 0;
+	private UpdateInstallSession.Model installModel;
+	private boolean resumed;
+	private boolean permissionRequest;
+	private String confirmationLaunched;
 
 	private final ActivityResultLauncher<Intent> packageInstaller = registerForActivityResult(
-			new ActivityResultContracts.StartActivityForResult(), this::onInstallationResult);
+			new ActivityResultContracts.StartActivityForResult(), result -> {
+				// Session status, not the confirmation Activity result, is authoritative.
+				if (resumed) performInstallation();
+			});
+	private final ActivityResultLauncher<Intent> unknownSources = registerForActivityResult(
+			new ActivityResultContracts.StartActivityForResult(), result -> {
+				permissionRequest = false;
+				if (getPackageManager().canRequestPackageInstalls()) performInstallation();
+				else finish();
+			});
 
 	private List<String> getFiles() {
 		return getIntent().getStringArrayListExtra(EXTRA_FILES);
@@ -61,7 +77,7 @@ public class UpdaterActivity extends StateActivity {
 		return files != null && index < files.size() && isClientFile(files.get(index));
 	}
 
-	private static void markClientInstall(Context context) {
+	static void markClientInstall(Context context) {
 		// Commit before opening the installer: replacing this package may kill our process.
 		context.getSharedPreferences(RESUME_PREFERENCES, Context.MODE_PRIVATE).edit()
 				.putLong(KEY_STARTED_AT, System.currentTimeMillis())
@@ -69,7 +85,7 @@ public class UpdaterActivity extends StateActivity {
 				.commit();
 	}
 
-	private static void clearClientInstall(Context context) {
+	static void clearClientInstall(Context context) {
 		context.getSharedPreferences(RESUME_PREFERENCES, Context.MODE_PRIVATE).edit().clear().commit();
 	}
 
@@ -78,10 +94,46 @@ public class UpdaterActivity extends StateActivity {
 		super.onCreate(savedInstanceState);
 
 		((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).cancel(C.NOTIFICATION_ID_UPDATES);
-		if (savedInstanceState == null) {
-			performInstallation();
-		} else {
+		if (savedInstanceState != null) {
 			index = savedInstanceState.getInt(EXTRA_INDEX);
+			permissionRequest = savedInstanceState.getBoolean("permission_request");
+			confirmationLaunched = savedInstanceState.getString("confirmation_launched");
+		}
+		installModel = new ViewModelProvider(this).get(UpdateInstallSession.Model.class);
+		installModel.recoverPreparation();
+		readPendingConfirmation(getIntent());
+		installModel.changed.observe(this, changed -> {
+			if (resumed) performInstallation();
+		});
+	}
+
+	@Override protected void onResume() {
+		super.onResume();
+		resumed = true;
+		installModel.foreground = true;
+		performInstallation();
+	}
+
+	@Override protected void onPause() {
+		resumed = false;
+		if (installModel != null) installModel.foreground = false;
+		super.onPause();
+	}
+
+	@Override protected void onNewIntent(Intent intent) {
+		super.onNewIntent(intent);
+		setIntent(intent);
+		readPendingConfirmation(intent);
+		if (resumed) performInstallation();
+	}
+
+	private void readPendingConfirmation(Intent intent) {
+		String token = UpdateInstallSession.token(this);
+		if (token != null && token.equals(intent.getStringExtra(UpdateInstallSession.EXTRA_TOKEN))) {
+			installModel.confirmation = AndroidUtils.getParcelableExtra(intent,
+					UpdateInstallSession.EXTRA_CONFIRMATION, Intent.class);
+			intent.removeExtra(UpdateInstallSession.EXTRA_CONFIRMATION);
+			confirmationLaunched = null;
 		}
 	}
 
@@ -89,30 +141,80 @@ public class UpdaterActivity extends StateActivity {
 	protected void onSaveInstanceState(@NonNull Bundle outState) {
 		super.onSaveInstanceState(outState);
 		outState.putInt(EXTRA_INDEX, index);
+		outState.putBoolean("permission_request", permissionRequest);
+		outState.putString("confirmation_launched", confirmationLaunched);
 	}
 
 	private void performInstallation() {
+		if (!resumed || isFinishing() || permissionRequest) return;
+		String token = UpdateInstallSession.token(this);
+		if (token != null) {
+			// The durable session owns the exact queue, including across process recreation.
+			getIntent().putStringArrayListExtra(EXTRA_FILES, UpdateInstallSession.files(this));
+			index = UpdateInstallSession.index(this);
+			int status = UpdateInstallSession.status(this);
+			if (status == PackageInstaller.STATUS_PENDING_USER_ACTION) {
+				if (installModel.confirmation != null && !token.equals(confirmationLaunched)) {
+					Intent confirmation = installModel.confirmation;
+					installModel.confirmation = null;
+					confirmationLaunched = token;
+					try { packageInstaller.launch(confirmation); }
+					catch (RuntimeException e) {
+						android.util.Log.w("UpdateInstaller", "confirmation_failed type="
+								+ e.getClass().getSimpleName());
+						UpdateInstallSession.cancel(this, token);
+						clearClientInstall(this);
+						finish();
+					}
+				} else if (installModel.confirmation == null && confirmationLaunched == null) {
+					// Process died before confirmation, with notifications unavailable/dismissed.
+					// Reopen a fresh session rather than silently waiting forever or auto-installing.
+					UpdateInstallSession.cancel(this, token);
+					clearClientInstall(this);
+					performInstallation();
+				}
+				return;
+			}
+			if (status < PackageInstaller.STATUS_SUCCESS) return;
+			UpdateInstallSession.clear(this, token);
+			confirmationLaunched = null;
+			if (status != PackageInstaller.STATUS_SUCCESS) {
+				clearClientInstall(this);
+				if (status != PackageInstaller.STATUS_FAILURE_ABORTED) {
+					Toast.makeText(this, R.string.unknown_error, Toast.LENGTH_LONG).show();
+				}
+				finish();
+				return;
+			}
+			index++;
+		}
 		List<String> files = getFiles();
-		if (files != null && files.size() > index) {
+		if (files != null && index >= 0 && files.size() > index) {
 			File file = FileProvider.getUpdatesFile(files.get(index));
-			if (file == null) {
+			if (file == null || !file.isFile()) {
 				if (isInstallingClient()) {
 					clearClientInstall(this);
 				}
 				index++;
 				performInstallation();
 			} else {
-				Uri uri = FileProvider.convertUpdatesUri(Uri.fromFile(file));
-				if (isInstallingClient()) {
-					markClientInstall(this);
+				if (!getPackageManager().canRequestPackageInstalls()) {
+					permissionRequest = true;
+					try {
+						unknownSources.launch(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+								Uri.parse("package:" + getPackageName())));
+					} catch (RuntimeException e) {
+						permissionRequest = false;
+						finish();
+					}
+				} else {
+					try { installModel.start(new ArrayList<>(files), index, file, isInstallingClient()); }
+					catch (RuntimeException e) {
+						android.util.Log.w("UpdateInstaller", "start_failed type=" + e.getClass().getSimpleName());
+						clearClientInstall(this);
+						finish();
+					}
 				}
-				@SuppressWarnings("deprecation")
-				String action = Intent.ACTION_INSTALL_PACKAGE;
-				packageInstaller.launch(new Intent(action)
-						.setDataAndType(uri, "application/vnd.android.package-archive")
-						.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-						.putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true)
-						.putExtra(Intent.EXTRA_RETURN_RESULT, true));
 			}
 		} else {
 			finish();
@@ -160,31 +262,9 @@ public class UpdaterActivity extends StateActivity {
 		}
 	}
 
-	// Hidden error code in PackageManager
-	private static final int INSTALL_FAILED_INVALID_APK = -2;
-
-	private void onInstallationResult(ActivityResult result) {
-		int resultCode = result.getResultCode();
-		Intent data = result.getData();
-		if (resultCode == RESULT_OK) {
-			index++;
-			performInstallation();
-		} else if (resultCode == RESULT_FIRST_USER && data != null &&
-				data.getIntExtra("android.intent.extra.INSTALL_RESULT", 0) == INSTALL_FAILED_INVALID_APK) {
-			// Retry on failure. Workaround for Android 10+ bug in FLAG_GRANT_READ_URI_PERMISSION behavior:
-			// sometimes the flag doesn't take effect and package installer is unable to access the package file.
-			performInstallation();
-		} else {
-			if (isInstallingClient()) {
-				clearClientInstall(this);
-			}
-			finish();
-		}
-	}
-
 	private static Connection activeConnection;
 
-	private static Intent createInstallIntent(Context context, ArrayList<String> files) {
+	static Intent createInstallIntent(Context context, ArrayList<String> files) {
 		return new Intent(context, UpdaterActivity.class)
 				.putStringArrayListExtra(EXTRA_FILES, files)
 				.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);

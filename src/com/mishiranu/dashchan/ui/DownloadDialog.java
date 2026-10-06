@@ -31,7 +31,6 @@ import chan.util.CommonUtils;
 import chan.util.DataFile;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.R;
-import com.mishiranu.dashchan.content.FileProvider;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.async.ExecutorTask;
 import com.mishiranu.dashchan.content.service.DownloadService;
@@ -41,7 +40,6 @@ import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.util.ViewUtils;
 import com.mishiranu.dashchan.widget.ClickableToast;
 import com.mishiranu.dashchan.widget.ThemeEngine;
-import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -363,15 +361,7 @@ public class DownloadDialog {
 			dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v -> {
 				String extension = StringUtils.getFileExtension(singleFile.getName());
 				String type = MimeTypes.forExtension(extension, "image/jpeg");
-				Pair<File, Uri> fileOrUri = singleFile.getFileOrUri();
-				Uri uri;
-				if (fileOrUri.first != null) {
-					uri = FileProvider.convertDownloadsLegacyFile(fileOrUri.first, type);
-				} else if (fileOrUri.second != null) {
-					uri = fileOrUri.second;
-				} else {
-					uri = null;
-				}
+				Uri uri = singleFile.getFileOrUri().second;
 				if (uri != null) {
 					try {
 						context.startActivity(new Intent(Intent.ACTION_VIEW).setDataAndType(uri, type)

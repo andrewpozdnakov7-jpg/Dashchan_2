@@ -8,7 +8,7 @@
 
 ## English version
 
-**Effective and last updated: September 1, 2026.**
+**Effective and last updated: October 6, 2026.**
 
 ### 1. Scope
 
@@ -86,9 +86,9 @@ Cache and temporary files are periodically limited or removed by the app and And
 
 ### 8. Android backup and manual export
 
-Standard Android backup is enabled for the app. Ordinary settings, databases, and some sessions may therefore be included by Android in cloud backup or device transfer, depending on system settings and the backup provider. The separate private push store containing the installation secret and FCM token is excluded from these operations.
+Automatic Android backup is disabled. Explicit rules also exclude the app's private files, settings, databases, app-specific external files, and device-protected storage from cloud backup and Android device-to-device transfer in both GitHub and F-Droid builds. This includes website sessions, proxy credentials, drafts, reply history, and push identifiers. Ordinary settings and favorites are not automatically restored on another device either; use the app's manual export for data you want to transfer. These rules do not delete copies already made by older versions or files exported outside the app's storage, and cannot control independent root or manufacturer tools.
 
-At the user's request, Slooop can also create a ZIP backup in Downloads. It may contain settings, history, favorites, custom feeds, filters, statistics, and themes. The user is responsible for storing, sharing, and deleting the exported file.
+At the user's request, Slooop can still create a ZIP backup in Downloads. It may contain settings (including configured credentials), history, favorites, custom feeds, filters, statistics, and themes. The user is responsible for storing, sharing, and deleting the exported file.
 
 ### 9. Diagnostics
 
@@ -131,7 +131,7 @@ Privacy questions may be submitted through [GitHub Issues](https://github.com/an
 
 ## Русская версия
 
-**Дата вступления в силу и последнего обновления: 1 сентября 2026 г.**
+**Дата вступления в силу и последнего обновления: 6 октября 2026 г.**
 
 ### 1. Область действия
 
@@ -209,9 +209,9 @@ Slooop не отправляет эти данные на сервер Slooop д
 
 ### 8. Резервные копии Android и ручной экспорт
 
-Для приложения разрешено стандартное резервное копирование Android. Поэтому обычные настройки, базы и некоторые сессии могут быть включены Android в cloud backup или перенос на новое устройство в зависимости от системных настроек и поставщика резервного копирования. Отдельное приватное push-хранилище с секретом установки и FCM-токеном из этих операций исключено.
+Автоматическое резервное копирование Android отключено. Явные правила также исключают приватные файлы приложения, настройки, базы данных, внешние файлы в каталоге приложения и хранилище с защитой устройства из облачного бэкапа и системного переноса между Android-устройствами в сборках GitHub и F-Droid. Это включает сессии сайтов, данные авторизации прокси, черновики, историю ответов и push-идентификаторы. Обычные настройки и избранное тоже не восстанавливаются автоматически на другом устройстве; для переноса нужных данных используйте ручной экспорт приложения. Правила не удаляют копии, созданные прежними версиями, и файлы, экспортированные за пределы хранилища приложения, и не управляют независимыми root-инструментами или утилитами производителя.
 
-По команде пользователя Slooop также может создать ZIP-резервную копию в папке Downloads. Она может содержать настройки, историю, избранное, пользовательские ленты, фильтры, статистику и темы. Пользователь самостоятельно отвечает за хранение, передачу и удаление экспортированного файла.
+По команде пользователя Slooop по-прежнему может создать ZIP-резервную копию в папке Downloads. Она может содержать настройки (включая заданные данные авторизации), историю, избранное, пользовательские ленты, фильтры, статистику и темы. Пользователь самостоятельно отвечает за хранение, передачу и удаление экспортированного файла.
 
 ### 9. Диагностика
 

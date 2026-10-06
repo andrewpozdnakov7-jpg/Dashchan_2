@@ -20,6 +20,7 @@ import android.os.Bundle;
 import android.os.IBinder;
 import android.os.Parcel;
 import android.os.SystemClock;
+import android.text.TextUtils;
 import android.os.Trace;
 import android.provider.DocumentsContract;
 import android.util.AtomicFile;
@@ -3104,8 +3105,9 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 				.putExtra("android.provider.extra.SHOW_ADVANCED", true)
 				.putExtra("android.content.extra.SHOW_ADVANCED", true)
 				.putExtra(Intent.EXTRA_LOCAL_ONLY, true);
-		intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, DocumentsContract
-				.buildRootUri("com.android.externalstorage.documents", "primary"));
+		// This is only a navigation hint. Access still requires the user's selection and a persisted grant.
+		intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI,
+				DocumentsContract.buildRootUri("com.android.externalstorage.documents", "primary"));
 		try {
 			storageDirectoryPicker.launch(intent);
 		} catch (ActivityNotFoundException e) {
