@@ -67,6 +67,8 @@ public class ExperimentalFragment extends PreferenceFragment implements Translat
 			refreshPreferences();
 		});
 		addVideoDiagnosticsPreferences();
+		addCheck(true, Preferences.KEY_NEW_PHOTO_EDITOR, Preferences.DEFAULT_NEW_PHOTO_EDITOR,
+				R.string.new_photo_editor, R.string.new_photo_editor__summary);
 		addCheck(true, Preferences.KEY_DISCUSSION_CONTEXT, Preferences.DEFAULT_DISCUSSION_CONTEXT,
 				R.string.discussion_context, R.string.discussion_context_summary);
 		addCheck(true, Preferences.KEY_OUTBOX_JOURNAL, Preferences.DEFAULT_OUTBOX_JOURNAL,

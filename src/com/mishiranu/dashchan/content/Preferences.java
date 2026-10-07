@@ -2244,6 +2244,8 @@ public class Preferences {
 	public static final boolean DEFAULT_OUTBOX_JOURNAL = false;
 	public static final String KEY_DISCUSSION_CONTEXT = "experimental_discussion_context";
 	public static final boolean DEFAULT_DISCUSSION_CONTEXT = false;
+	public static final String KEY_NEW_PHOTO_EDITOR = "experimental_new_photo_editor";
+	public static final boolean DEFAULT_NEW_PHOTO_EDITOR = false;
 	public static final String KEY_TRANSLATION_NATIVE_LANGUAGE = "translation_native_language";
 	public static final String DEFAULT_TRANSLATION_NATIVE_LANGUAGE = "ru";
 	public static final String KEY_TRANSLATION_AUTO = "translation_auto";
@@ -2265,6 +2267,10 @@ public class Preferences {
 
 	public static boolean isImageEditorEnabled() {
 		return PREFERENCES.getBoolean(KEY_IMAGE_EDITOR, DEFAULT_IMAGE_EDITOR);
+	}
+
+	public static boolean isNewPhotoEditorEnabled() {
+		return PREFERENCES.getBoolean(KEY_NEW_PHOTO_EDITOR, DEFAULT_NEW_PHOTO_EDITOR);
 	}
 
 	public static boolean isDefaultAttachmentUniqueHash() {

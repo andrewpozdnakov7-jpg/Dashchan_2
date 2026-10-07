@@ -1,5 +1,54 @@
 # Android smoke tests
 
+`PhotoEditorEngineTest` covers photo editor geometry/history/bitmap processing,
+cooperative preview cancellation, detached session snapshots and the opt-in
+legacy/new editor Intent contract. The switch test restores its preference in a
+finally block; use a disposable test installation as described below. These
+tests do not establish native UI appearance, keyboard layout or process-death
+restoration. The new editor is disabled by default under Experimental features.
+
+Editor regressions additionally exercise all fixed-aspect corners and edges,
+opposite anchors, bounds, quarter-turns, free cropping, real MotionEvent pinch
+commit/cancel and single-finger tail suppression, exported dimensions, undo/redo,
+view-only pinch outside crop mode, and silent ruler synchronization after mirror.
+The ruler test uses a standalone Android View; it is not an end-to-end Activity
+visual test. Source contracts guard model binding, export selection colors,
+landscape history access and the non-dismissing text validation handler.
+These additions have not been executed in SOURCE PATCH ONLY mode.
+
+Presentation regressions additionally cover final Matrix point agreement for all
+eight orientations, clockwise 3-to-0 and four rapid retargeted turns, unchanged
+document/history during transition samples, stale completion fences, positive
+scale and intermediate bounds, reflection without an extra half-turn, retained
+snapshot coordinate agreement, and premultiplied transparent-PNG blending. They
+use real Android Matrix/Canvas/Bitmap and must be run on the disposable test
+installation. The accessibility ruler test now checks the API-30 RangeInfo
+constructor as well as its values after mirror/key actions.
+These tests are prepared, not executed here; they do not measure smoothness,
+GPU compositing on each device, Activity lifecycle races or panel layout visually.
+Manually check rapid rotate/mirror/ratio/reset and undo/redo, crop Apply/Cancel,
+fast filter selection with transparent PNG, save during a transition, Back,
+background/restore, rotation, and system animation scales 0/0.5/1/2. Old editor
+and posting attachment behavior must remain unchanged when the flag is off.
+
+Phone-dialog regressions additionally check the explicit dialog palette against
+light/dark host contexts. The six JVM `EditorPreviewSchedulerTest` cases model
+slow work during continuous MOVE events, a bounded coalesced queue, progressive
+publication, exact final UP, cancellation/undo epochs and stale callbacks. They
+are prepared, not executed in source-only mode. On a phone, check three-line
+text, black/white output colors, nested color cancel/cursor retention, keyboard
+and landscape scrolling, JPEG/PNG export, and 2-3 seconds of uninterrupted
+blur/mosaic/cover dragging: the effect must progress before lifting the finger.
+Verify final coverage, undo/redo and cancelling the tool after preview results.
+
+The standalone `python3 unitTests/check_photo_editor_sources.py` performs source
+checks only (resources, lexical balance and attachment extras), not compilation
+or Android tests. `PhotoEditorSessionFilesTest` and
+`PhotoEditorIntegrationContractTest` are JVM checks for bounded private-cache
+cleanup and opt-in integration. Abandoned inactive editor sessions older than
+seven days are pruned on the next editor open; cache clearing or process death
+before a queued session write finishes can still prevent restoration.
+
 These tests are separate from the existing JVM unit tests. They need a running
 Android device/emulator and are **not** run by an ordinary APK build. All test
 dependencies use `androidTestImplementation`; none is a production dependency.
@@ -65,3 +114,17 @@ locale preference is restored in finally; the real-manager generation/key check
 also restores its previous configuration. Use only the disposable installation
 described above. These smoke checks do not install/update an external extension
 or replace manual hot-update, drawer, captcha, and archive/export checks.
+
+The final resource cleanup additionally checks stable URI/post serialization and
+SHA-256 across resource generation changes, old query-bearing cached posts,
+canonical archive/chan cache identity, and current-manager resolution from a
+stale task fallback. The JSON/schema and public extension API are unchanged.
+Legacy owner-less icon migration now also compares cached chan:///res/... icons
+with owner-qualified icons using the owner of the compared thread. Smoke tests
+cover deserialization, unknown/foreign owners, unchanged persistent serialization,
+real comment changes, and network query identity. JVM source contracts verify
+that PagesDatabase passes threadKey.chanName and gates MARK_EDITED on the result;
+this is not an executed end-to-end database test.
+These tests still do not install an old external extension; manually verify its
+language/configuration and hot-update behavior. Extensions must fetch Resources
+again after configuration changes, rather than retain a Resources snapshot.

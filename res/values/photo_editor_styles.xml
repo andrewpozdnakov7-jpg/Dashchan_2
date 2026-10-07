@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="PhotoEditorDialogTheme" parent="android:style/Theme.Material.Dialog.Alert">
+        <item name="android:windowBackground">@drawable/bg_pe_dialog</item>
+        <item name="android:colorBackground">#1B1B1F</item>
+        <item name="android:colorBackgroundFloating">#1B1B1F</item>
+        <item name="android:alertDialogTheme">@style/PhotoEditorDialogTheme</item>
+        <item name="android:forceDarkAllowed">false</item>
+        <item name="android:colorAccent">#A8C7FA</item>
+        <item name="android:textColorPrimary">#E3E3E3</item>
+        <item name="android:textColorSecondary">#B4B6BD</item>
+        <item name="android:colorControlActivated">#A8C7FA</item>
+        <item name="android:colorControlNormal">#B4B6BD</item>
+        <item name="android:textColorHint">#B4B6BD</item>
+        <item name="android:textColorHighlight">#506B8CB8</item>
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowMinWidthMajor">88%</item>
+        <item name="android:windowMinWidthMinor">88%</item>
+    </style>
+</resources>

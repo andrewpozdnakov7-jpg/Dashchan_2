@@ -1028,7 +1028,7 @@ public class PagesDatabase {
 						if (oldData != null) {
 							try (JsonSerial.Reader reader = JsonSerial.reader(oldData)) {
 								Post oldPost = Post.deserialize(postNumber, false, reader);
-								contentChanged = !serialized.post.isContentEqual(oldPost);
+								contentChanged = !serialized.post.isContentEqual(oldPost, threadKey.chanName);
 							} catch (IOException | ParseException e) {
 								// Preserve the previous behavior if an old cached post cannot be decoded.
 							}

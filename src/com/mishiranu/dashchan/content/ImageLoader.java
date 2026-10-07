@@ -11,6 +11,7 @@ import android.view.View;
 import android.widget.ImageView;
 import chan.content.Chan;
 import chan.content.ChanConfiguration;
+import chan.content.ChanResourceAccess;
 import chan.content.ChanPerformer;
 import chan.content.ExtensionException;
 import chan.http.HttpException;
@@ -112,7 +113,8 @@ public class ImageLoader {
 				if (bitmap == null && (!fromCacheOnly || localArchiveScheme)) {
 					if (chanScheme) {
 						ThumbnailDecoder.LimitedOutput output = new ThumbnailDecoder.LimitedOutput();
-						if (!chan.configuration.readResourceUri(uri, output)) {
+						Chan resourceChan = ChanResourceAccess.resolveResourceChan(chan, uri);
+						if (!resourceChan.configuration.readResourceUri(uri, output)) {
 							throw HttpException.createNotFoundException();
 						}
 						bitmap = output.decode(targetSize);
@@ -203,7 +205,8 @@ public class ImageLoader {
 			// FutureTask holds its result: retaining completed tasks would bypass the bitmap cache budget.
 			if (loaderTasks.get(memoryKey) == this) loaderTasks.remove(memoryKey);
 			boolean obsoleteResource = ChanConfiguration.SCHEME_CHAN.equals(uri.getScheme()) &&
-					resourcesGeneration != Chan.get(chan.name).configuration.getResourcesGenerationInternal();
+					resourcesGeneration != ChanResourceAccess.resolveResourceChan(chan, uri)
+							.configuration.getResourcesGenerationInternal();
 			if (obsoleteResource) {
 				// Never publish a resource decoded while its extension/configuration was being replaced.
 				if (bitmap != null) bitmap.recycle();
@@ -415,9 +418,8 @@ public class ImageLoader {
 		boolean resource = uri != null && ChanConfiguration.SCHEME_CHAN.equals(uri.getScheme());
 		// Models may keep old chan URIs/objects across an extension update. Resolve the current owner.
 		if (resource) {
-			String authority = uri.getAuthority();
-			if (authority != null && !authority.isEmpty()) chan = Chan.get(authority);
-			else if (chan.name != null) chan = Chan.get(chan.name);
+			chan = ChanResourceAccess.resolveResourceChan(chan, uri);
+			uri = ChanResourceAccess.canonicalize(uri);
 		}
 		if (key == null) {
 			key = CacheManager.getInstance().getCachedFileKey(uri);
@@ -448,7 +450,8 @@ public class ImageLoader {
 				scope.result(memoryCachedBitmap != null ? "hit" : "miss");
 			}
 		}
-		if (resource && resourcesGeneration != Chan.get(chan.name).configuration.getResourcesGenerationInternal()) {
+		if (resource && resourcesGeneration != ChanResourceAccess.resolveResourceChan(chan, uri)
+				.configuration.getResourcesGenerationInternal()) {
 			// A worker's main-thread cache lookup may span a configuration/extension replacement.
 			// Follow the existing worker contract: do not enqueue asynchronous work from that caller.
 			target.onResult(key, null, false, true);

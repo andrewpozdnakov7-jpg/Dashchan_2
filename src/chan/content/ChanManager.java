@@ -109,7 +109,7 @@ public class ChanManager {
 
 	private final Chan fallbackChan;
 	private final Fingerprints applicationFingerprints;
-	private Map<String, Extension> extensions;
+	private volatile Map<String, Extension> extensions;
 	private List<String> sortedExtensionNames;
 	private Map<String, List<String>> archiveMap = Collections.emptyMap();
 

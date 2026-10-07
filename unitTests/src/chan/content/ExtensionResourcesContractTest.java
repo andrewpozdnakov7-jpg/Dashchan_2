@@ -55,7 +55,7 @@ public class ExtensionResourcesContractTest {
 
 	@Test public void imageCacheUsesCurrentGenerationAndRejectsObsoleteCompletion() throws Exception {
 		String loader = source("com/mishiranu/dashchan/content/ImageLoader.java");
-		assertTrue(loader.contains("chan = Chan.get(chan.name)"));
+		assertTrue(loader.contains("chan = ChanResourceAccess.resolveResourceChan(chan, uri)"));
 		assertTrue(loader.contains("resource ? chan.configuration.getResourcesGenerationInternal() : 0L"));
 		assertTrue(loader.contains("ImageMemoryKey.create(chan.name, targetSize, key, resource, resourcesGeneration)"));
 		assertTrue(loader.contains("if (obsoleteResource)"));
@@ -63,6 +63,65 @@ public class ExtensionResourcesContractTest {
 		assertTrue(loader.contains("taskKey.equals(currentTaskKey)"));
 		assertTrue(loader.contains("INSTANCE.loadImage(chan, uri, key, fromCacheOnly, Target.this)"));
 		assertFalse(loader.contains("bitmapCache.clear()"));
+	}
+
+	@Test public void allReadersResolveAtPointOfUseAndExtensionMapIsSafelyPublished() throws Exception {
+		assertTrue(source("chan/content/ChanManager.java").contains("private volatile Map<String, Extension> extensions"));
+		for (String path : new String[] {"com/mishiranu/dashchan/content/ImageLoader.java",
+				"com/mishiranu/dashchan/content/async/ReadFileTask.java",
+				"com/mishiranu/dashchan/content/async/SendLocalArchiveTask.java"}) {
+			String reader = source(path);
+			assertTrue(path, reader.contains("ChanResourceAccess.resolveResourceChan(chan,"));
+			assertTrue(path, reader.contains("resourceChan.configuration.readResourceUri("));
+			assertFalse(path, reader.contains("!chan.configuration.readResourceUri("));
+		}
+		String access = source("chan/content/ChanResourceAccess.java");
+		assertTrue(access.contains("ChanResourceUri.resolveCurrent("));
+		assertTrue(access.contains("Chan::get"));
+		assertFalse(access.contains("@Public"));
+	}
+
+	@Test public void persistentIdentityAndPostComparisonDoNotContainRuntimeGeneration() throws Exception {
+		String uri = source("chan/content/ChanResourceUri.java");
+		assertTrue(uri.contains("static String build(String chanName, String type, String name)"));
+		assertFalse(uri.contains("?g="));
+		String config = source("chan/content/ChanConfiguration.java");
+		String builder = config.substring(config.indexOf("public final Uri getResourceUri("),
+				config.indexOf("public final boolean readResourceUri("));
+		assertFalse(builder.contains("snapshot.generation"));
+		assertTrue(source("com/mishiranu/dashchan/content/model/Post.java")
+				.contains("this.uri = ChanResourceAccess.canonicalize(uri)"));
+		String pages = source("com/mishiranu/dashchan/content/database/PagesDatabase.java");
+		assertTrue(pages.contains("contentChanged = !serialized.post.isContentEqual(oldPost, threadKey.chanName)"));
+		assertTrue(pages.contains("if (contentChanged)"));
+	}
+
+	@Test public void legacyComparisonHasThreadOwnerAndDoesNotChangePersistentSerialization() throws Exception {
+		String post = source("com/mishiranu/dashchan/content/model/Post.java");
+		assertTrue(post.contains("return isContentEqual(another, null)"));
+		assertTrue(post.contains("serialize(writer, true, null)"));
+		assertTrue(post.contains("serialize(writer, false, chanName)"));
+		assertTrue(post.contains("another.serialize(anotherWriter, false, chanName)"));
+		assertTrue(post.contains("includeVote ? icon.uri.toString()"));
+		assertTrue(post.contains("normalizeResourceUriForContentComparison(icon.uri, comparisonChanName)"));
+		String pages = source("com/mishiranu/dashchan/content/database/PagesDatabase.java");
+		int comparison = pages.indexOf("contentChanged = !serialized.post.isContentEqual(oldPost, threadKey.chanName)");
+		int editedGate = pages.indexOf("if (contentChanged)", comparison);
+		int markEdited = pages.indexOf("flags = FlagUtils.set(flags, Schema.Posts.Flags.MARK_EDITED, true)", editedGate);
+		assertTrue(comparison >= 0 && editedGate > comparison && markEdited > editedGate);
+		String access = source("chan/content/ChanResourceAccess.java");
+		String helper = access.substring(access.indexOf("public static String normalizeResourceUriForContentComparison("));
+		assertFalse(helper.contains("Chan::get"));
+		assertFalse(helper.contains("ChanManager"));
+	}
+
+	@Test public void archiveAndChanCacheKeysIgnoreMetadataWithoutChangingNetworkKeys() throws Exception {
+		String archive = source("com/mishiranu/dashchan/content/async/SendLocalArchiveTask.java");
+		assertTrue(archive.contains("ChanResourceAccess.canonicalize(chan.locator.convert(icon.uri))"));
+		assertTrue(archive.contains("String simpleUri = resource ? iconUri.toString()"));
+		assertTrue(archive.indexOf("ChanResourceAccess.canonicalize(") < archive.indexOf("hasher.calculate(simpleUri)"));
+		assertTrue(source("com/mishiranu/dashchan/content/CacheManager.java")
+				.contains("data = ChanResourceAccess.canonicalize(uri).toString()"));
 	}
 
 	@Test public void iconsResolveCurrentResourcesAndApplicationConfigurationIsForwarded() throws Exception {

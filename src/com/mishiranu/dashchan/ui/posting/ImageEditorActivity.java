@@ -34,6 +34,7 @@ import androidx.activity.ComponentActivity;
 import androidx.activity.OnBackPressedCallback;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.LocaleManager;
+import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.model.FileHolder;
 import com.mishiranu.dashchan.content.storage.DraftsStorage;
 import com.mishiranu.dashchan.util.ViewUtils;
@@ -62,6 +63,9 @@ public class ImageEditorActivity extends ComponentActivity {
 	private static final String[] STICKERS = {"😀", "😂", "❤️", "👍", "🔥", "💩", "🤡", "🚫"};
 
 	public static Intent createIntent(Context context, String sourceHash, String sourceName, int attachmentIndex) {
+		if (Preferences.isNewPhotoEditorEnabled()) {
+			return ExperimentalImageEditorActivity.createIntent(context, sourceHash, sourceName, attachmentIndex);
+		}
 		return new Intent(context, ImageEditorActivity.class)
 				.putExtra(EXTRA_SOURCE_HASH, sourceHash)
 				.putExtra(EXTRA_SOURCE_NAME, sourceName)

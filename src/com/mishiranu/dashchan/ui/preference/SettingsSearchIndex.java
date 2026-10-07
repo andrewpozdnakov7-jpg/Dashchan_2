@@ -538,6 +538,8 @@ public final class SettingsSearchIndex {
 				R.string.outbox_experimental_summary, Preferences.KEY_OUTBOX_JOURNAL);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.discussion_context,
 				R.string.discussion_context_summary, Preferences.KEY_DISCUSSION_CONTEXT);
+		add(context, entries, Screen.EXPERIMENTAL, R.string.new_photo_editor,
+				R.string.new_photo_editor__summary, Preferences.KEY_NEW_PHOTO_EDITOR);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.thread_page_preload,
 				R.string.thread_page_preload__summary, Preferences.KEY_THREAD_PAGE_PRELOAD);
 

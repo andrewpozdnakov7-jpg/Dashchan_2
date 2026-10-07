@@ -1,6 +1,7 @@
 package com.mishiranu.dashchan.content.model;
 
 import android.net.Uri;
+import chan.content.ChanResourceAccess;
 import chan.text.JsonSerial;
 import chan.text.ParseException;
 import chan.util.StringUtils;
@@ -107,7 +108,9 @@ public final class Post implements Comparable<Post> {
 		public final String title;
 
 		private Icon(Uri uri, String title) {
-			this.uri = uri;
+			// Strip old runtime metadata on deserialization. Authority-less migration is
+			// handled separately during content comparison, where the thread owner is known.
+			this.uri = ChanResourceAccess.canonicalize(uri);
 			this.title = title;
 		}
 
@@ -250,20 +253,24 @@ public final class Post implements Comparable<Post> {
 	}
 
 	public void serialize(JsonSerial.Writer writer) throws IOException {
-		serialize(writer, true);
+		serialize(writer, true, null);
 	}
 
 	public boolean isContentEqual(Post another) throws IOException {
+		return isContentEqual(another, null);
+	}
+
+	public boolean isContentEqual(Post another, String chanName) throws IOException {
 		if (another == null) return false;
 		try (JsonSerial.Writer writer = JsonSerial.writer();
 				JsonSerial.Writer anotherWriter = JsonSerial.writer()) {
-			serialize(writer, false);
-			another.serialize(anotherWriter, false);
+			serialize(writer, false, chanName);
+			another.serialize(anotherWriter, false, chanName);
 			return Arrays.equals(writer.build(), anotherWriter.build());
 		}
 	}
 
-	private void serialize(JsonSerial.Writer writer, boolean includeVote) throws IOException {
+	private void serialize(JsonSerial.Writer writer, boolean includeVote, String comparisonChanName) throws IOException {
 		writer.startObject();
 		writer.name("flags");
 		writer.value(includeVote ? flags : FlagUtils.set(flags, Flags.DELETABLE, false));
@@ -370,7 +377,8 @@ public final class Post implements Comparable<Post> {
 				writer.startObject();
 				if (icon.uri != null) {
 					writer.name("uri");
-					writer.value(icon.uri.toString());
+					writer.value(includeVote ? icon.uri.toString() :
+							ChanResourceAccess.normalizeResourceUriForContentComparison(icon.uri, comparisonChanName));
 				}
 				if (!icon.title.isEmpty()) {
 					writer.name("title");
