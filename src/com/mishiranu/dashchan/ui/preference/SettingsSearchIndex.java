@@ -11,6 +11,7 @@ import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.push.ReplyPushManager;
 import com.mishiranu.dashchan.ui.ContentFragment;
+import com.mishiranu.dashchan.ui.posting.PhotoEditorBridge;
 import com.mishiranu.dashchan.ui.preference.core.PreferenceFragment;
 import java.text.Normalizer;
 import java.util.ArrayList;
@@ -374,6 +375,8 @@ public final class SettingsSearchIndex {
 				R.string.hardware_video_acceleration__summary, Preferences.KEY_HARDWARE_VIDEO_ACCELERATION);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.video_diagnostics_extended,
 				R.string.video_diagnostics_extended__summary, Preferences.KEY_EXTENDED_VIDEO_DIAGNOSTICS);
+		add(context, entries, Screen.EXPERIMENTAL, R.string.pip_diagnostic_mode,
+				R.string.pip_diagnostic_warning, Preferences.KEY_PIP_DIAGNOSTIC_MODE);
 		add(context, entries, Screen.MEDIA, R.string.open_configured_attachment_folder,
 				R.string.open_configured_attachment_folder__summary,
 				Preferences.KEY_OPEN_CONFIGURED_ATTACHMENT_FOLDER);
@@ -538,10 +541,16 @@ public final class SettingsSearchIndex {
 				R.string.outbox_experimental_summary, Preferences.KEY_OUTBOX_JOURNAL);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.discussion_context,
 				R.string.discussion_context_summary, Preferences.KEY_DISCUSSION_CONTEXT);
+		if (PhotoEditorBridge.isAvailable()) {
+			add(context, entries, Screen.EXPERIMENTAL, PhotoEditorBridge.getTitleResId(),
+					PhotoEditorBridge.getSummaryResId(), Preferences.KEY_NEW_PHOTO_EDITOR);
+		}
 		add(context, entries, Screen.EXPERIMENTAL, R.string.thread_page_preload,
 				R.string.thread_page_preload__summary, Preferences.KEY_THREAD_PAGE_PRELOAD);
 
 		add(context, entries, Screen.MEDIA, R.string.load_thumbnails, 0, Preferences.KEY_LOAD_THUMBNAILS);
+		add(context, entries, Screen.MEDIA, R.string.scroll_gallery_to_current_file,
+				R.string.scroll_gallery_to_current_file__summary, Preferences.KEY_SCROLL_GALLERY_TO_CURRENT_FILE);
 		add(context, entries, Screen.VIDEO_PRELOAD, R.string.load_nearest_image, 0, Preferences.KEY_IMAGE_PRELOAD);
 		add(context, entries, Screen.MEDIA, R.string.image_editor,
 				R.string.image_editor__summary, Preferences.KEY_IMAGE_EDITOR);
@@ -569,6 +578,8 @@ public final class SettingsSearchIndex {
 				R.string.use_built_in_video_player__summary, Preferences.KEY_USE_VIDEO_PLAYER);
 		add(context, entries, Screen.MEDIA, R.string.start_videos_muted,
 				R.string.start_videos_muted__summary, Preferences.KEY_VIDEO_START_MUTED);
+		add(context, entries, Screen.MEDIA, R.string.remember_last_video_position,
+				R.string.remember_last_video_position__summary, Preferences.KEY_REMEMBER_LAST_VIDEO_POSITION);
 		add(context, entries, Screen.MEDIA, R.string.video_audio_boost,
 				R.string.video_audio_boost__summary, Preferences.KEY_VIDEO_AUDIO_BOOST);
 		add(context, entries, Screen.MEDIA, R.string.video_audio_boost_level, 0,

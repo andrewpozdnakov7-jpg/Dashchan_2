@@ -91,6 +91,7 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 	private static final String EXTRA_SORT = "restoreSort";
 	private static final String EXTRA_ATTACHMENT = "restoreAttachment";
 	private static final String EXTRA_GRID_POSITION = "restoreGridPosition";
+	private static final String EXTRA_GRID_VIEWPORT = "restoreGridViewport";
 	private static final String EXTRA_SELECTED = "selected";
 	private static final String EXTRA_GALLERY_WINDOW = "galleryWindow";
 	private static final String EXTRA_GALLERY_MODE = "galleryMode";
@@ -120,6 +121,7 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 	private GalleryInstance instance;
 	private PagerUnit pagerUnit;
 	private GalleryStateViewModel galleryState;
+	private GalleryViewportViewModel viewportState;
 	private android.os.CancellationSignal restoreSignal;
 	private Bundle restorationState;
 	private boolean restoreUnavailable;
@@ -229,6 +231,34 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 	private static String galleryItemKey(GalleryItem item, Chan chan) {
 		return item.postNumber + "|" + item.getFileUri(chan);
 	}
+
+	private String viewportScope() {
+		// Do not mix standalone files or galleries spanning different threads.
+		if (allGalleryItems == null || allGalleryItems.isEmpty()
+				|| AndroidUtils.getParcelable(requireArguments(), EXTRA_URI, Uri.class) != null) return null;
+		GalleryItem first = allGalleryItems.get(0);
+		if (first.threadNumber == null) return null;
+		for (GalleryItem item : allGalleryItems) {
+			if (!java.util.Objects.equals(first.boardName, item.boardName)
+					|| !java.util.Objects.equals(first.threadNumber, item.threadNumber)) return null;
+		}
+		StringBuilder scope = new StringBuilder();
+		for (String part : new String[] {getChanName(), first.boardName, first.threadNumber,
+				getNavigatePostMode().name(), galleryFilter, gallerySort.name()}) {
+			if (part == null) scope.append("-1:");
+			else scope.append(part.length()).append(':').append(part);
+		}
+		return scope.toString();
+	}
+
+	private void rememberViewport() {
+		if (listUnit == null) return;
+		GalleryViewportMemory.Snapshot snapshot = listUnit.getViewport();
+		galleryState.viewport = snapshot;
+		if (snapshot != null) {
+			viewportState.memory.put(viewportScope(), snapshot);
+		}
+	}
 	private final boolean scrollThread = Preferences.isScrollThreadGallery();
 
 	private Pair<CharSequence, CharSequence> titleSubtitle;
@@ -306,8 +336,18 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 	public void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		galleryState = new ViewModelProvider(this).get(GalleryStateViewModel.class);
+		viewportState = new ViewModelProvider(requireActivity()).get(GalleryViewportViewModel.class);
 		if (savedInstanceState != null) {
 			restorationState = new Bundle(savedInstanceState);
+			if (galleryState.viewport == null) {
+				Bundle viewport = savedInstanceState.getBundle(EXTRA_GRID_VIEWPORT);
+				if (viewport != null) {
+					GalleryViewportMemory.Snapshot snapshot = new GalleryViewportMemory.Snapshot(
+							viewport.getString("item"), viewport.getInt("offset"), viewport.getInt("width"),
+							viewport.getInt("columns"));
+					if (snapshot.isValid()) galleryState.viewport = snapshot;
+				}
+			}
 			if (galleryState.restoreToken == null) galleryState.restoreToken = savedInstanceState.getString(EXTRA_RESTORE);
 			if (galleryState.filter == null) galleryState.filter = savedInstanceState.getString(EXTRA_FILTER);
 			if (galleryState.sort == null) galleryState.sort = savedInstanceState.getString(EXTRA_SORT);
@@ -640,6 +680,9 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 					galleryState.refreshKnownPosts = refreshSource.getGalleryPostNumbers();
 				}
 				listUnit = new ListUnit(instance);
+				GalleryViewportMemory.Snapshot viewport = galleryState.viewport != null ? galleryState.viewport
+						: viewportState.memory.get(viewportScope());
+				if (listUnit.setViewport(viewport)) instance.logNavigation("grid_session_restore available=true");
 				// Gallery has a separate dark overlay theme; refresh belongs to the underlying thread.
 				listUnit.setRefreshColor(ThemeEngine.getTheme(refreshSource != null && refreshSource.getView() != null
 						? refreshSource.getView().getContext() : requireActivity()).accent);
@@ -668,8 +711,8 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 			} else if (newImagePosition != null) {
 				int imagePosition = newImagePosition;
 				galleryWindow = imagePosition < 0 || requireArguments().getBoolean(EXTRA_INITIAL_GALLERY_MODE);
-				if (galleryWindow && imagePosition >= 0) {
-					listUnit.scrollListToPosition(imagePosition, false);
+				if (galleryWindow) {
+					listUnit.initializeGridPosition(imagePosition);
 				}
 				switchMode(galleryWindow, false);
 			}
@@ -689,7 +732,7 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 			listUnit.getRecyclerView().getLayoutManager().onRestoreInstanceState(galleryState.gridState);
 			listUnit.logPosition("restore_grid_state_submitted");
 			galleryState.gridState = null;
-		} else if (listUnit != null && galleryMode && savedInstanceState != null) {
+		} else if (listUnit != null && galleryMode && savedInstanceState != null && listUnit.getViewport() == null) {
 			int position = savedInstanceState.getInt(EXTRA_GRID_POSITION, savedInstanceState.getInt(EXTRA_POSITION));
 			listUnit.scrollListToPosition(Math.max(0, Math.min(position, instance.galleryItems.size() - 1)), false);
 		}
@@ -822,7 +865,7 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 
 	private void invalidateListPosition() {
 		instance.logNavigation("sync_grid_to_pager index=" + pagerUnit.getCurrentIndex());
-		listUnit.scrollListToPosition(pagerUnit.getCurrentIndex(), true);
+		listUnit.requestReturnToGrid(pagerUnit.getCurrentIndex());
 	}
 
 	private final Runnable returnToGalleryRunnable = () -> {
@@ -1046,11 +1089,21 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 	}
 
 	private void saveGalleryState(Bundle outState) {
+		rememberViewport();
 		if (instance == null && restorationState != null) outState.putAll(restorationState);
 		GalleryRestoreDiagnostics.observe("Audit/Gallery/tokenInSavedState", galleryState.restoreToken);
 		outState.putString(EXTRA_RESTORE, galleryState.restoreToken);
 		outState.putString(EXTRA_FILTER, galleryFilter);
 		outState.putString(EXTRA_SORT, gallerySort.name());
+		GalleryViewportMemory.Snapshot viewport = galleryState.viewport;
+		if (viewport != null) {
+			Bundle snapshot = new Bundle();
+			snapshot.putString("item", viewport.itemKey);
+			snapshot.putInt("offset", viewport.offset);
+			snapshot.putInt("width", viewport.width);
+			snapshot.putInt("columns", viewport.columns);
+			outState.putBundle(EXTRA_GRID_VIEWPORT, snapshot);
+		}
 		outState.putBoolean(EXTRA_PIP_WINDOW_RETIRED, retirePictureInPictureGallery || hiddenForPictureInPicture);
 		if (instance == null) return;
 		if (pagerUnit != null) {
@@ -1585,6 +1638,7 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 
 	@Override
 	public void navigatePageFromList(int position) {
+		listUnit.onPageOpenedFromGrid(position);
 		switchMode(false, true);
 		pagerUnit.navigatePageFromList(position, GALLERY_TRANSITION_DURATION);
 	}
@@ -1598,6 +1652,7 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 	@Override
 	public void navigatePost(GalleryItem galleryItem, boolean manually, boolean force) {
 		if (checkAllowNavigatePost(manually) && (scrollThread || force)) {
+			if (force) rememberViewport();
 			((FragmentHandler) requireActivity()).scrollToPost(instance.chanName, galleryItem.boardName,
 					galleryItem.threadNumber, galleryItem.postNumber);
 			if (force) {

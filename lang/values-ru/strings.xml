@@ -2,6 +2,8 @@
 <resources>
 	<string name="webview_renderer_gone">Веб-страница перестала работать. Откройте её заново.</string>
 	<string name="gallery_restore_unavailable">Не удалось восстановить галерею из локальных данных. Откройте её заново из треда или архива.</string>
+	<string name="scroll_gallery_to_current_file">Прокручивать галерею к текущему файлу</string>
+	<string name="scroll_gallery_to_current_file__summary">При возвращении из просмотра файлов сетка галереи прокручивается к последнему открытому файлу. Если выключено — сохраняет прежнюю позицию.</string>
 	<string name="gallery_refresh">Обновить галерею</string>
 	<string name="gallery_refresh_result">Новых медиафайлов: %1$d · сообщений: %2$d</string>
 	<string name="gallery_refresh_failed">Не удалось обновить галерею. Попробуйте ещё раз.</string>
@@ -605,6 +607,8 @@
 	<string name="play_after_scroll">Воспроизвести после прокрутки</string>
 	<string name="play_after_scroll__summary">Не показывать кнопку воспроизведения перед просмотром видео</string>
 	<string name="start_videos_muted">Запускать видео без звука</string>
+	<string name="remember_last_video_position">Запоминать позицию последнего видео</string>
+	<string name="remember_last_video_position__summary">Продолжать последнее видео при повторном открытии, в том числе после перезапуска приложения. Просмотренное до конца видео начинается заново</string>
 	<string name="start_videos_muted__summary">Все новые видео во встроенном плеере будут начинать воспроизведение без звука</string>
 	<string name="play_again">Воспроизвести снова</string>
 	<string name="playback_error">Ошибка воспроизведения</string>

@@ -316,6 +316,7 @@ public class VideoUnit {
 		java.lang.ref.WeakReference<VideoPlayer> pipPlayer;
 
 		void dispose() {
+			VideoPositionMemory.save(player, finished);
 			if (handoff != null) handoff.stop("state_disposed");
 			handoff = null;
 			if (download != null) download.cancel();
@@ -348,6 +349,7 @@ public class VideoUnit {
 			return state;
 		}
 		if (player == null || instance.currentHolder == null) return null;
+		if (!pictureInPictureTransferred) VideoPositionMemory.save(player, finishedPlayback);
 		LifecycleState state = new LifecycleState();
 		state.file = sourceFile;
 		state.item = instance.currentHolder.galleryItem;
@@ -460,7 +462,7 @@ public class VideoUnit {
 		controlsView = new LinearLayout(instance.galleryInstance.context);
 		controlsView.setOrientation(LinearLayout.VERTICAL);
 		controlsView.setVisibility(View.GONE);
-		audioFocus = new AudioFocus(instance.galleryInstance.context, change -> {
+		audioFocus = AudioFocus.forVideo(instance.galleryInstance.context, change -> {
 			if (player == null || pictureInPictureTransferred) return;
 			switch (change) {
 				case LOSS: {
@@ -582,6 +584,7 @@ public class VideoUnit {
 	}
 
 	public void interrupt(boolean force) {
+		if (!pictureInPictureTransferred) VideoPositionMemory.save(player, finishedPlayback);
 		cancelPendingPictureInPictureRestore("target_interrupted");
 		stopPlaybackHandoff("gallery_interrupted");
 		hidePictureInPictureReturnPreview();
@@ -834,19 +837,23 @@ public class VideoUnit {
 	}
 
 	private boolean setPlaying(boolean playing, boolean resetFocus) {
-		if (player.isPlaying() != playing) {
-			if (resetFocus && player.isAudioPresent() && !muted) {
-				if (playing) {
-					if (!audioFocus.acquire()) {
-						return false;
-					}
-				} else {
-					audioFocus.release();
+		// EOF may already have stopped the decoder. Focus still needs explicit release,
+		// even when the requested playback state equals the decoder's current state.
+		if (resetFocus) {
+			if (playing && player.isAudioPresent() && !muted) {
+				if (!audioFocus.acquire()) {
+					return false;
 				}
+			} else {
+				audioFocus.release();
 			}
+			pausedByTransientLossOfFocus = false;
+		}
+		if (player.isPlaying() != playing) {
 			player.setPlaying(playing);
 			pausedByTransientLossOfFocus = false;
 		}
+		if (resetFocus && !playing) VideoPositionMemory.save(player, finishedPlayback);
 		return true;
 	}
 
@@ -875,6 +882,7 @@ public class VideoUnit {
 		if (!muteSupported) {
 			muted = false;
 		}
+		VideoPositionMemory.restoreOnce(player, sourceFile);
 		recreateVideoControls();
 		playPauseButton.setEnabled(true);
 		seekBar.setEnabled(true);
@@ -1644,6 +1652,7 @@ public class VideoUnit {
 			return false;
 		}
 		pictureInPictureTransferred = false;
+		VideoPositionMemory.save(transferredPlayer, false);
 		audioFocus.release();
 		transferredPlayer.setListener(null);
 		transferredPlayer.setPlaying(false);
@@ -1762,6 +1771,7 @@ public class VideoUnit {
 		long position = player.getPosition();
 		long nextPosition = Math.max(0L, Math.min(duration, position + offset));
 		player.setPosition(nextPosition);
+		VideoPositionMemory.save(player, nextPosition >= duration);
 		seekBar.setProgress((int) nextPosition);
 		timeTextView.setText(formatVideoTime(nextPosition));
 		if (finishedPlayback && nextPosition < duration) {
@@ -1810,6 +1820,7 @@ public class VideoUnit {
 					restoreVideoViewAfterFinishedPlayback();
 					updatePlayState();
 				}
+				VideoPositionMemory.save(player, finishedPlayback);
 			} else {
 				progressRunnable.run();
 			}
@@ -1955,6 +1966,7 @@ public class VideoUnit {
 	private final VideoPlayer.Listener playerListener = new VideoPlayer.Listener() {
 		@Override
 		public void onComplete(VideoPlayer player) {
+			VideoPositionMemory.save(player, true);
 			switch (Preferences.getVideoCompletionMode()) {
 				case NOTHING: {
 					markPlaybackFinished();
@@ -1990,6 +2002,7 @@ public class VideoUnit {
 		@Override
 		public void onDurationChange(VideoPlayer player, long duration) {
 			if (initialized && player == VideoUnit.this.player) {
+				VideoPositionMemory.restoreOnce(player, sourceFile);
 				updateDuration(duration);
 			}
 		}

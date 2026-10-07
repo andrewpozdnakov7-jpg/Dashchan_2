@@ -1,31 +1,19 @@
 package com.mishiranu.dashchan.ui.posting;
 
 import android.app.Activity;
-import android.content.ActivityNotFoundException;
-import android.content.ClipData;
-import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
-import android.content.ServiceConnection;
 import android.content.res.ColorStateList;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.Outline;
 import android.graphics.Paint;
 import android.graphics.Rect;
-import android.net.Uri;
 import android.os.Bundle;
-import android.os.IBinder;
-import android.os.SystemClock;
-import android.provider.DocumentsContract;
 import android.text.Editable;
 import android.text.Layout;
 import android.text.SpannableStringBuilder;
-import android.text.TextUtils;
-import android.util.DisplayMetrics;
 import android.util.Pair;
-import android.view.DragEvent;
-import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -49,48 +37,31 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
-import androidx.core.widget.TextViewCompat;
-import androidx.lifecycle.ViewModelProvider;
 import chan.content.Chan;
 import chan.content.ChanConfiguration;
 import chan.content.ChanMarkup;
-import chan.content.ChanPerformer;
 import chan.text.CommentEditor;
 import chan.util.CommonUtils;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.chan.dvach.DvachChanConfiguration;
-import com.mishiranu.dashchan.content.MainApplication;
 import com.mishiranu.dashchan.content.Preferences;
-import com.mishiranu.dashchan.content.async.ExecutorTask;
 import com.mishiranu.dashchan.content.async.ReadCaptchaTask;
 import com.mishiranu.dashchan.content.async.SendPostTask;
-import com.mishiranu.dashchan.content.async.TaskViewModel;
 import com.mishiranu.dashchan.content.model.ErrorItem;
-import com.mishiranu.dashchan.content.model.FileHolder;
 import com.mishiranu.dashchan.content.model.PostNumber;
 import com.mishiranu.dashchan.content.service.PostingService;
 import com.mishiranu.dashchan.content.storage.DraftsStorage;
-import com.mishiranu.dashchan.graphics.RoundedCornersDrawable;
-import com.mishiranu.dashchan.graphics.TransparentTileDrawable;
-import com.mishiranu.dashchan.media.JpegData;
-import com.mishiranu.dashchan.media.PngData;
-import com.mishiranu.dashchan.media.VideoPlayer;
 import com.mishiranu.dashchan.ui.CaptchaForm;
 import com.mishiranu.dashchan.ui.ContentFragment;
 import com.mishiranu.dashchan.ui.FragmentHandler;
-import com.mishiranu.dashchan.ui.gallery.GalleryOverlay;
-import com.mishiranu.dashchan.ui.posting.dialog.AttachmentOptionsDialog;
-import com.mishiranu.dashchan.ui.posting.dialog.AttachmentRatingDialog;
-import com.mishiranu.dashchan.ui.posting.dialog.AttachmentWarningDialog;
 import com.mishiranu.dashchan.ui.posting.dialog.SendPostFailDetailsDialog;
 import com.mishiranu.dashchan.ui.posting.text.CommentEditWatcher;
 import com.mishiranu.dashchan.ui.posting.text.MarkupButtonProvider;
 import com.mishiranu.dashchan.ui.posting.text.NameEditWatcher;
 import com.mishiranu.dashchan.ui.posting.text.QuoteEditWatcher;
 import com.mishiranu.dashchan.util.AndroidUtils;
-import com.mishiranu.dashchan.util.ConcurrentUtils;
 import com.mishiranu.dashchan.util.GraphicsUtils;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.util.ViewUtils;
@@ -101,17 +72,13 @@ import com.mishiranu.dashchan.widget.ProgressDialog;
 import com.mishiranu.dashchan.widget.ThemeEngine;
 import com.mishiranu.dashchan.widget.UriPasteEditText;
 import com.mishiranu.dashchan.widget.ViewFactory;
-import java.io.File;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.concurrent.Executor;
 
 public class PostingFragment extends ContentFragment implements FragmentHandler.Callback, CaptchaForm.Callback,
-		ReadCaptchaTask.Callback, PostingDialogCallback, UriPasteEditText.Callback {
+		PostingDialogCallback, UriPasteEditText.Callback {
 	private static final String EXTRA_CHAN_NAME = "chanName";
 	private static final String EXTRA_BOARD_NAME = "boardName";
 	private static final String EXTRA_THREAD_NUMBER = "threadNumber";
@@ -129,6 +96,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 
 	private static final String EXTRA_CAPTCHA_DRAFT = "captchaDraft";
 
+	// Launchers belong to the Fragment, not an attachment controller.
 	// Register in a fixed order for every instance, including restoration while a picker is open.
 	private final ActivityResultLauncher<Intent> attachmentPicker = registerForActivityResult(
 			new ActivityResultContracts.StartActivityForResult(), result -> handlePostingActivityResult(
@@ -167,27 +135,21 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 				CommonUtils.equals(getThreadNumber(), threadNumber);
 	}
 
+	// Screen-level posting permission; send results and draft guards live in their controllers.
 	private boolean allowPosting;
-	private boolean sendSuccess;
-	private boolean draftSaved;
-	private PostingService.FailResult failResult;
 
 	private CommentEditor commentEditor;
 
 	private ChanConfiguration.Posting postingConfiguration;
 	private List<Pair<String, String>> userIconItems;
-	private List<Pair<String, String>> attachmentRatingItems;
 
-	private String captchaType;
-	private ReadCaptchaTask.CaptchaState captchaState;
-	private ChanPerformer.CaptchaData captchaData;
-	private String loadedCaptchaType;
-	private ChanConfiguration.Captcha.Input loadedCaptchaInput;
-	private ChanConfiguration.Captcha.Validity loadedCaptchaValidity;
-	private Bitmap captchaImage;
-	private boolean captchaLarge;
-	private boolean captchaBlackAndWhite;
-	private long captchaLoadTime;
+	// One state owner per subsystem. Hosts are attached only for the current view lifetime.
+	private final PostingAttachmentsController attachmentController = new PostingAttachmentsController();
+	private final PostingCaptchaController captchaController = new PostingCaptchaController();
+	private final PostingDraftController draftController = new PostingDraftController();
+	private final PostingSendCoordinator sendCoordinator = new PostingSendCoordinator(draftController);
+
+	// View-owned state: initialized in onViewCreated and released in onDestroyView.
 	private PostingFormDiagnostics.Observer formDiagnostics;
 
 	private ScrollView scrollView;
@@ -196,7 +158,6 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 	private CheckBox spoilerCheckBox;
 	private CheckBox originalPosterCheckBox;
 	private View checkBoxParent;
-	private LinearLayout attachmentContainer;
 	private EditText nameView;
 	private EditText emailView;
 	private EditText passwordView;
@@ -207,36 +168,9 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 	private CommentEditWatcher commentEditWatcher;
 	private CaptchaForm captchaForm;
 	private Button sendButton;
-	private int attachmentColumnCount;
+	private ProgressDialog progressDialog;
 
-	private final ArrayList<AttachmentHolder> attachments = new ArrayList<>();
-	private static final Executor VIDEO_THUMBNAIL_EXECUTOR = ConcurrentUtils
-			.newSingleThreadPool(3000, "PostingThumbnail", null);
-	private final HashMap<AttachmentHolder, VideoThumbnailTask> videoThumbnailTasks = new HashMap<>();
-	private AttachmentHolder draggedAttachment;
-	private AttachmentHolder attachmentDragTarget;
-
-	private boolean allowDialog = true;
 	private boolean sendButtonEnabled = true;
-	private boolean attachmentImportInProgress;
-	private AttachmentImportViewModel attachmentImportViewModel;
-
-	private PostingService.Binder postingBinder;
-	private final ServiceConnection postingConnection = new ServiceConnection() {
-		@Override
-		public void onServiceConnected(ComponentName name, IBinder service) {
-			postingBinder = (PostingService.Binder) service;
-			postingBinder.register(postingCallback, getChanName(), getBoardName(), getThreadNumber());
-		}
-
-		@Override
-		public void onServiceDisconnected(ComponentName name) {
-			if (postingBinder != null) {
-				postingBinder.unregister(postingCallback);
-				postingBinder = null;
-			}
-		}
-	};
 
 	@Override
 	public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
@@ -262,8 +196,8 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 			allowPosting = false;
 		}
 
-		DraftsStorage draftsStorage = DraftsStorage.getInstance();
-		captchaType = chan.configuration.getCaptchaType();
+		String captchaType = chan.configuration.getCaptchaType();
+		captchaController.configure(getChanName(), getBoardName(), getThreadNumber(), captchaType);
 		if (allowPosting) {
 			commentEditor = chan.markup.safe().obtainCommentEditor(getBoardName());
 		}
@@ -288,8 +222,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		subjectView = view.findViewById(R.id.subject);
 		iconView = view.findViewById(R.id.icon);
 		personalDataBlock = view.findViewById(R.id.personal_data_block);
-		attachmentContainer = view.findViewById(R.id.attachment_container);
-		attachmentContainer.setOnDragListener(attachmentContainerDragListener);
+		LinearLayout attachmentContainer = view.findViewById(R.id.attachment_container);
 		FrameLayout footerContainer = view.findViewById(R.id.footer_container);
 		int[] oldScrollViewSize = {-1, -1};
 		scrollView.addOnLayoutChangeListener((v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
@@ -317,7 +250,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 				!postingConfiguration.allowTripcode, nameView, tripcodeWarning, () -> resizeComment(true)));
 		ViewUtils.applyMonospaceTypeface(passwordView);
 		commentEditWatcher = new CommentEditWatcher(postingConfiguration, commentView, remainingCharacters,
-				() -> resizeComment(true), () -> DraftsStorage.getInstance().store(obtainPostDraft()));
+				() -> resizeComment(true), () -> draftController.storePostDraft(capturePostDraft()));
 		commentView.setOnFocusChangeListener((v, hasFocus) -> {
 			updateFocusButtons(hasFocus);
 			if (hasFocus) {
@@ -363,7 +296,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		});
 		commentView.addTextChangedListener(commentEditWatcher);
 		commentView.addTextChangedListener(new QuoteEditWatcher(requireContext()));
-		commentView.setCallback(this, buildMimeTypeList(postingConfiguration.attachmentMimeTypes));
+		commentView.setCallback(this, PostingAttachmentsController.buildMimeTypeList(postingConfiguration.attachmentMimeTypes));
 		boolean addPaddingToRoot = false;
 		boolean landscape = getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE;
 		ViewGroup extra = landscape ? ((FragmentHandler) requireActivity()).getToolbarView()
@@ -398,6 +331,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		ChanConfiguration.Captcha captcha = chan.configuration.safe().obtainCaptcha(captchaType);
 		captchaForm = new CaptchaForm(this, true, !longFooter,
 				footerContainer, captchaInputParentView, captchaInputView, captcha);
+		captchaController.attachView(createCaptchaHost());
 		float maxTranslationZ = (int) (2f * density);
 		sendButton = new Button(captchaInputParentView.getContext(), null, 0,
 				android.R.style.Widget_Material_Button_Colored) {
@@ -430,7 +364,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		sendButton.setAllCaps(true);
 		captchaInputParentView.addView(sendButton, 0, LinearLayout.LayoutParams.WRAP_CONTENT);
 		sendButton.setText(R.string.send);
-		sendButton.setOnClickListener(v -> executeSendPost());
+		sendButton.setOnClickListener(v -> submitPostingForm());
 		if (longFooter) {
 			((LinearLayout.LayoutParams) sendButton.getLayoutParams()).weight = 2f;
 			boolean[] lastAddWeight = {true};
@@ -446,33 +380,19 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		} else {
 			((LinearLayout.LayoutParams) sendButton.getLayoutParams()).weight = 1f;
 		}
-		attachmentColumnCount = screenWidthDp >= 960 ? 4 : screenWidthDp >= 480 ? 2 : 1;
+		attachmentController.attachView(createAttachmentHost(), attachmentContainer, scrollView, sendButton,
+				screenWidthDp >= 960 ? 4 : screenWidthDp >= 480 ? 2 : 1);
 
 		StringBuilder builder = new StringBuilder();
 		int commentCarriage = 0;
 
-		attachments.clear();
-		DraftsStorage.PostDraft postDraft = draftsStorage
-				.getPostDraft(getChanName(), getBoardName(), getThreadNumber());
-		if (postDraft == null || PostingService.isPostDraftQueued(postDraft)) {
-			DraftsStorage.PostDraft failedPostDraft = PostingService.restoreFailedPostDraft(getChanName(),
-					getBoardName(), getThreadNumber());
-			postDraft = failedPostDraft != null ? failedPostDraft : null;
-		}
+		DraftsStorage.PostDraft postDraft = draftController.restorePostDraft(getChanName(), getBoardName(), getThreadNumber());
 		if (postDraft != null) {
 			if (!StringUtils.isEmpty(postDraft.comment)) {
 				builder.append(postDraft.comment);
 				commentCarriage = postDraft.commentCarriage;
 			}
-			ArrayList<DraftsStorage.AttachmentDraft> attachmentDrafts = postDraft.attachmentDrafts;
-			if (attachmentDrafts != null && !attachmentDrafts.isEmpty()) {
-				for (DraftsStorage.AttachmentDraft attachmentDraft : attachmentDrafts) {
-					addAttachment(attachmentDraft.hash, attachmentDraft.name, attachmentDraft.rating,
-							attachmentDraft.optionUniqueHash, attachmentDraft.optionRemoveMetadata,
-							attachmentDraft.optionRemoveFileName, attachmentDraft.optionSpoiler,
-							attachmentDraft.reencoding);
-				}
-			}
+			attachmentController.restoreAttachmentDrafts(postDraft.attachmentDrafts);
 			nameView.setText(postDraft.name);
 			emailView.setText(postDraft.email);
 			passwordView.setText(postDraft.password);
@@ -494,76 +414,11 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 			}
 		}
 
-		boolean captchaRestoreSuccess = false;
-		if (savedInstanceState != null && savedInstanceState.containsKey(EXTRA_CAPTCHA_DRAFT)) {
-			DraftsStorage.CaptchaDraft captchaDraft = AndroidUtils.getParcelable(savedInstanceState,
-					EXTRA_CAPTCHA_DRAFT, DraftsStorage.CaptchaDraft.class);
-			if (captchaDraft.captchaState != null) {
-				captchaLoadTime = captchaDraft.loadTime;
-				showCaptcha(captchaDraft.captchaState, captchaDraft.captchaData, captchaDraft.loadedCaptchaType,
-						captchaDraft.loadedInput, captchaDraft.loadedValidity, captchaDraft.image,
-						captchaDraft.large, captchaDraft.blackAndWhite);
-				captchaForm.setText(captchaDraft.text);
-				captchaRestoreSuccess = true;
-			}
-		} else {
-			DraftsStorage.CaptchaDraft captchaDraft = draftsStorage.getCaptchaDraft(getChanName());
-			if (captchaDraft != null && captchaDraft.loadedCaptchaType == null) {
-				captchaLoadTime = captchaDraft.loadTime;
-				ChanConfiguration.Captcha.Validity captchaValidity = captcha.validity;
-				if (captchaValidity == null) {
-					captchaValidity = ChanConfiguration.Captcha.Validity.SHORT_LIFETIME;
-				}
-				if (captchaDraft.loadedValidity != null) {
-					ChanConfiguration.Captcha.Validity loadedCaptchaValidity = captchaDraft.loadedValidity;
-					if (captchaDraft.captchaState != ReadCaptchaTask.CaptchaState.CAPTCHA ||
-							captchaValidity.compareTo(loadedCaptchaValidity) >= 0) {
-						// Allow only reducing of validity
-						captchaValidity = loadedCaptchaValidity;
-					}
-				}
-				boolean canLoadState = false;
-				switch (captchaValidity) {
-					case SHORT_LIFETIME: {
-						canLoadState = false;
-						break;
-					}
-					case IN_THREAD: {
-						canLoadState = CommonUtils.equals(getBoardName(), captchaDraft.boardName)
-								&& CommonUtils.equals(getThreadNumber(), captchaDraft.threadNumber);
-						break;
-					}
-					case IN_BOARD_SEPARATELY: {
-						canLoadState = CommonUtils.equals(getBoardName(), captchaDraft.boardName)
-								&& ((getThreadNumber() == null) == (captchaDraft.threadNumber == null));
-						break;
-					}
-					case IN_BOARD: {
-						canLoadState = CommonUtils.equals(getBoardName(), captchaDraft.boardName);
-						break;
-					}
-					case LONG_LIFETIME: {
-						canLoadState = true;
-						break;
-					}
-				}
-				if (canLoadState && CommonUtils.equals(captchaType, captchaDraft.captchaType)) {
-					if (captchaDraft.captchaState == ReadCaptchaTask.CaptchaState.CAPTCHA &&
-							captchaDraft.image != null) {
-						showCaptcha(ReadCaptchaTask.CaptchaState.CAPTCHA, captchaDraft.captchaData, null,
-								captchaDraft.loadedInput, captchaDraft.loadedValidity,
-								captchaDraft.image, captchaDraft.large, captchaDraft.blackAndWhite);
-						captchaForm.setText(captchaDraft.text);
-						captchaRestoreSuccess = true;
-					} else if (canLoadState && (captchaDraft.captchaState == ReadCaptchaTask.CaptchaState.SKIP
-							|| captchaDraft.captchaState == ReadCaptchaTask.CaptchaState.PASS)) {
-						showCaptcha(captchaDraft.captchaState, captchaDraft.captchaData, null, null,
-								captchaDraft.loadedValidity, null, false, false);
-						captchaRestoreSuccess = true;
-					}
-				}
-			}
-		}
+		boolean savedCaptcha = savedInstanceState != null && savedInstanceState.containsKey(EXTRA_CAPTCHA_DRAFT);
+		DraftsStorage.CaptchaDraft captchaDraft = savedCaptcha
+				? AndroidUtils.getParcelable(savedInstanceState, EXTRA_CAPTCHA_DRAFT, DraftsStorage.CaptchaDraft.class)
+				: draftController.getCaptchaDraft(getChanName());
+		boolean captchaRestoreSuccess = captchaController.restoreDraft(captchaDraft, savedCaptcha, captcha);
 
 		List<Replyable.ReplyData> replyDataList = savedInstanceState != null ? Collections.emptyList()
 				: AndroidUtils.getParcelableArrayList(requireArguments(), EXTRA_REPLY_DATA_LIST,
@@ -638,9 +493,9 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		commentView.setSelection(commentCarriage);
 		commentView.requestFocus();
 		if (!captchaRestoreSuccess) {
-			refreshCaptcha(false, true, false);
+			captchaController.refreshCaptcha(this, false, true, false);
 		}
-		bindPostingState();
+		bindControllers();
 		formDiagnostics = new PostingFormDiagnostics.Observer(requireActivity(), view, scrollView,
 				commentView, footerContainer);
 	}
@@ -653,14 +508,9 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		}
 		super.onDestroyView();
 
-		if (postingBinder != null) {
-			postingBinder.unregister(postingCallback);
-			postingBinder = null;
-		}
-		requireActivity().unbindService(postingConnection);
-
-		dismissSendPost();
-		saveDraft();
+		sendCoordinator.unbind();
+		saveDraftIfNeeded();
+		captchaController.detachView();
 		ViewUtils.removeFromParent(textFormatView);
 		scrollView.removeCallbacks(resizeComment);
 		scrollView.getViewTreeObserver().removeOnPreDrawListener(showCommentAfterLayout);
@@ -671,12 +521,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		spoilerCheckBox = null;
 		originalPosterCheckBox = null;
 		checkBoxParent = null;
-		clearAttachmentDragState();
-		for (VideoThumbnailTask task : videoThumbnailTasks.values()) {
-			task.cancel();
-		}
-		videoThumbnailTasks.clear();
-		attachmentContainer = null;
+		attachmentController.detachView();
 		nameView = null;
 		emailView = null;
 		passwordView = null;
@@ -687,34 +532,21 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		commentEditWatcher = null;
 		captchaForm = null;
 		sendButton = null;
-		attachmentImportViewModel = null;
-		attachments.clear();
 	}
 
-	private void bindPostingState() {
+	private void bindControllers() {
 		((FragmentHandler) requireActivity()).setTitleSubtitle(getString(StringUtils.isEmpty(getThreadNumber())
 				? R.string.new_thread : R.string.new_post), null);
-		requireActivity().bindService(new Intent(requireContext(), PostingService.class),
-				postingConnection, Context.BIND_AUTO_CREATE);
+		sendCoordinator.bind(createSendHost(), requireActivity(), getChanName(), getBoardName(), getThreadNumber());
 
-		CaptchaViewModel viewModel = new ViewModelProvider(this).get(CaptchaViewModel.class);
-		viewModel.observe(getViewLifecycleOwner(), this);
+		captchaController.bindState(this);
 
-		attachmentImportViewModel = new ViewModelProvider(this).get(AttachmentImportViewModel.class);
-		setAttachmentImportInProgress(attachmentImportViewModel.hasTaskOrValue());
-		attachmentImportViewModel.observe(getViewLifecycleOwner(), this::onAttachmentImportComplete);
+		attachmentController.bindImportState(this);
 	}
 
-	private DraftsStorage.PostDraft obtainPostDraft() {
-		ArrayList<DraftsStorage.AttachmentDraft> attachmentDrafts = null;
-		if (attachments.size() > 0) {
-			attachmentDrafts = new ArrayList<>(attachments.size());
-			for (AttachmentHolder holder : attachments) {
-				attachmentDrafts.add(new DraftsStorage.AttachmentDraft(holder.hash, holder.name, holder.rating,
-						holder.optionUniqueHash, holder.optionRemoveMetadata, holder.optionRemoveFileName,
-						holder.optionSpoiler, holder.reencoding));
-			}
-		}
+	// Snapshot raw form values (including hidden fields), unlike the visibility-filtered send payload.
+	private DraftsStorage.PostDraft capturePostDraft() {
+		ArrayList<DraftsStorage.AttachmentDraft> attachmentDrafts = attachmentController.createAttachmentDrafts();
 		String subject = subjectView.getText().toString();
 		String comment = commentView.getText().toString();
 		int commentCarriage = commentView.getSelectionEnd();
@@ -725,52 +557,40 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		boolean optionSpoiler = spoilerCheckBox.isChecked();
 		boolean optionOriginalPoster = originalPosterCheckBox.isChecked();
 		String userIcon = getUserIcon();
-		return new DraftsStorage.PostDraft(getChanName(), getBoardName(), getThreadNumber(), name, email, password,
+		return draftController.obtainPostDraft(getChanName(), getBoardName(), getThreadNumber(), name, email, password,
 				subject, comment, commentCarriage, attachmentDrafts,
 				optionSage, optionSpoiler, optionOriginalPoster, userIcon);
 	}
 
-	private DraftsStorage.CaptchaDraft obtainCaptchaDraft() {
-		String input = captchaForm.getInput();
-		return new DraftsStorage.CaptchaDraft(captchaType, captchaState, captchaData, loadedCaptchaType,
-				loadedCaptchaInput, loadedCaptchaValidity, input, captchaImage, captchaLarge,
-				captchaBlackAndWhite, captchaLoadTime, getBoardName(), getThreadNumber());
+	private DraftsStorage.CaptchaDraft captureCaptchaDraft() {
+		return captchaController.createDraft(captchaForm.getInput());
 	}
 
 	@Override
 	public void onSaveInstanceState(@NonNull Bundle outState) {
 		super.onSaveInstanceState(outState);
 
-		DraftsStorage.CaptchaDraft captchaDraft = obtainCaptchaDraft();
+		DraftsStorage.CaptchaDraft captchaDraft = captureCaptchaDraft();
 		outState.putParcelable(EXTRA_CAPTCHA_DRAFT, captchaDraft);
-		saveDraft();
+		saveDraftIfNeeded();
 	}
 
 	@Override
 	public void onResume() {
 		super.onResume();
 
-		DraftsStorage draftsStorage = DraftsStorage.getInstance();
 		if (allowPosting) {
 			consumeFuturePostText();
 		}
-		ArrayList<DraftsStorage.AttachmentDraft> futureAttachmentDrafts = draftsStorage.getFutureAttachmentDrafts();
+		ArrayList<DraftsStorage.AttachmentDraft> futureAttachmentDrafts = draftController.getFutureAttachmentDrafts();
 		if (!futureAttachmentDrafts.isEmpty()) {
-			ArrayList<Pair<String, String>> attachmentsToAdd = new ArrayList<>(futureAttachmentDrafts.size());
-			for (DraftsStorage.AttachmentDraft attachmentDraft : futureAttachmentDrafts) {
-				attachmentsToAdd.add(new Pair<>(attachmentDraft.hash, attachmentDraft.name));
-			}
-			handleAttachmentsToAdd(attachmentsToAdd, futureAttachmentDrafts.size());
-			DraftsStorage.getInstance().consumeFutureAttachmentDrafts();
+			attachmentController.addFutureAttachments(futureAttachmentDrafts);
+			draftController.consumeFutureAttachmentDrafts();
 		}
 
-		PostingService.FailResult failResult = this.failResult;
-		this.failResult = null;
-		if (failResult != null) {
-			handleFailResult(failResult);
-		}
-		draftSaved = false;
-		if (!allowPosting || sendSuccess) {
+		sendCoordinator.deliverPendingUiEvents();
+		draftController.resetSavedGuard();
+		if (!allowPosting || sendCoordinator.isSendSuccess()) {
 			((FragmentHandler) requireActivity()).removeFragment();
 		}
 	}
@@ -790,7 +610,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		editable.append(text);
 		commentView.setSelection(editable.length());
 		commentView.requestFocus();
-		DraftsStorage.getInstance().store(obtainPostDraft());
+		draftController.storePostDraft(capturePostDraft());
 		return true;
 	}
 
@@ -807,23 +627,18 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 	// Should be called both from onDestroyView (1) and onSaveInstanceState (2).
 	// 1: Ensures draft is saved when user leaves posting screen.
 	// 2: Ensures draft is saved when activity is recreated.
-	private void saveDraft() {
-		if (!sendSuccess && !draftSaved) {
-			draftSaved = true;
-			DraftsStorage draftsStorage = DraftsStorage.getInstance();
-			draftsStorage.store(obtainPostDraft());
-			draftsStorage.store(getChanName(), obtainCaptchaDraft());
-		}
+	private void saveDraftIfNeeded() {
+		draftController.saveDraft(sendCoordinator.isSendSuccess(), getChanName(), this::capturePostDraft, this::captureCaptchaDraft);
 	}
 
 	@Override
 	public void onRefreshCaptcha(boolean forceRefresh) {
-		refreshCaptcha(forceRefresh, false, true);
+		captchaController.refreshCaptcha(this, forceRefresh, false, true);
 	}
 
 	@Override
 	public void onConfirmCaptcha() {
-		executeSendPost();
+		submitPostingForm();
 	}
 
 	private static void addHeader(ViewGroup layout, int index, int textResId) {
@@ -881,20 +696,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 			personalDataBlock.setVisibility(showPersonalDataBlock ? View.VISIBLE : View.GONE);
 			commentEditWatcher.updateConfiguration(postingConfiguration);
 		}
-		if (attachmentOptions || attachmentCount) {
-			if (attachmentOptions) {
-				attachmentRatingItems = posting.attachmentRatings.size() > 0 ? posting.attachmentRatings : null;
-			}
-			if (attachmentCount) {
-				if (attachments.size() > posting.attachmentCount) {
-					attachments.subList(posting.attachmentCount, attachments.size()).clear();
-				}
-			}
-			invalidateAttachments(attachmentCount);
-			if (attachmentCount) {
-				invalidateOptionsMenu();
-			}
-		}
+		attachmentController.updateConfiguration(posting, attachmentOptions, attachmentCount);
 	}
 
 	private boolean compareListOfPairs(List<Pair<String, String>> first, List<Pair<String, String>> second) {
@@ -902,12 +704,12 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 			return false;
 		}
 		for (int i = 0; i < first.size(); i++) {
-			if (!CommonUtils.equals(first.get(i).first, first.get(i).second)
-					|| !CommonUtils.equals(first.get(i).second, first.get(i).second)) {
+			if (!CommonUtils.equals(first.get(i).first, second.get(i).first)
+					|| !CommonUtils.equals(first.get(i).second, second.get(i).second)) {
 				return false;
 			}
 		}
-		return false;
+		return true;
 	}
 
 	private void updatePostingConfigurationIfNeeded() {
@@ -958,246 +760,21 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 
 	@Override
 	public void onPrepareOptionsMenu(Menu menu, boolean primary) {
-		menu.findItem(R.id.menu_attach).setVisible(!attachmentImportInProgress &&
-				attachments.size() < postingConfiguration.attachmentCount);
-	}
-
-	private void handleMimeTypeGroup(ArrayList<String> list, Collection<String> mimeTypes, String mimeTypeGroup) {
-		String allSubMimeTypes = mimeTypeGroup + "*";
-		if (mimeTypes.contains(allSubMimeTypes)) {
-			list.add(allSubMimeTypes);
-		}
-		for (String mimeType : mimeTypes) {
-			if (mimeType.startsWith(mimeTypeGroup) && !allSubMimeTypes.equals(mimeType)) {
-				list.add(mimeType);
-			}
-		}
-	}
-
-	private ArrayList<String> buildMimeTypeList(Collection<String> mimeTypes) {
-		ArrayList<String> list = new ArrayList<>();
-		handleMimeTypeGroup(list, mimeTypes, "image/");
-		handleMimeTypeGroup(list, mimeTypes, "video/");
-		handleMimeTypeGroup(list, mimeTypes, "audio/");
-		for (String mimeType : mimeTypes) {
-			if (!list.contains(mimeType)) {
-				list.add(mimeType);
-			}
-		}
-		return list;
+		menu.findItem(R.id.menu_attach).setVisible(attachmentController.canAttach());
 	}
 
 	@Override
 	public UriPasteEditText.PasteResult onUrisWithAllowedMimeTypePasted(
 			List<UriPasteEditText.UriContent> uriContents) {
-		if (uriContents == null || uriContents.isEmpty()) {
-			return UriPasteEditText.PasteResult.FAILED;
-		}
-		if (attachmentImportViewModel == null) {
-			return UriPasteEditText.PasteResult.FAILED;
-		}
-		if (attachmentImportViewModel.hasTaskOrValue()) {
-			return UriPasteEditText.PasteResult.IMPORT_IN_PROGRESS;
-		}
-		int availableCount = postingConfiguration.attachmentCount - attachments.size();
-		if (availableCount <= 0) {
-			return UriPasteEditText.PasteResult.FILES_LIMIT_REACHED;
-		}
-		int acceptedCount = Math.min(availableCount, uriContents.size());
-		ArrayList<UriPasteEditText.UriContent> acceptedUriContents = new ArrayList<>(acceptedCount);
-		for (int i = 0; i < uriContents.size(); i++) {
-			UriPasteEditText.UriContent uriContent = uriContents.get(i);
-			if (i < acceptedCount) {
-				acceptedUriContents.add(uriContent);
-			} else {
-				uriContent.releasePermission();
-			}
-		}
-		int rejectedCount = uriContents.size() - acceptedCount;
-		if (rejectedCount > 0) {
-			ClickableToast.show(getResources().getQuantityString(R.plurals
-					.number_files_havent_been_attached__format, rejectedCount, rejectedCount));
-		}
-		AttachmentImportTask task = new AttachmentImportTask(attachmentImportViewModel, acceptedUriContents);
-		try {
-			task.execute(ConcurrentUtils.SEPARATE_EXECUTOR);
-		} catch (RuntimeException e) {
-			return UriPasteEditText.PasteResult.FAILED;
-		}
-		attachmentImportViewModel.attach(task);
-		setAttachmentImportInProgress(true);
-		return UriPasteEditText.PasteResult.ACCEPTED;
-	}
-
-	private void setAttachmentImportInProgress(boolean inProgress) {
-		attachmentImportInProgress = inProgress;
-		if (sendButton != null) {
-			updateSendButtonState();
-			if (inProgress) {
-				Button currentSendButton = sendButton;
-				currentSendButton.postDelayed(() -> {
-					if (sendButton == currentSendButton && attachmentImportInProgress) {
-						ClickableToast.show(R.string.processing_data__ellipsis);
-					}
-				}, 500L);
-			}
-		}
-		invalidateOptionsMenu();
-	}
-
-	private void onAttachmentImportComplete(AttachmentImportResult result) {
-		setAttachmentImportInProgress(false);
-		if (result == null) {
-			ClickableToast.show(R.string.unknown_error);
-			return;
-		}
-		int oldCount = attachments.size();
-		for (Pair<String, String> attachment : result.attachments) {
-			if (attachments.size() < postingConfiguration.attachmentCount) {
-				addAttachment(attachment.first, attachment.second);
-			}
-		}
-		int attachedCount = attachments.size() - oldCount;
-		if (attachedCount > 0) {
-			DraftsStorage.getInstance().store(obtainPostDraft());
-		}
-		int errorCount = result.requestedCount - attachedCount;
-		if (errorCount > 0) {
-			ClickableToast.show(getResources().getQuantityString(R.plurals
-					.number_files_havent_been_attached__format, errorCount, errorCount));
-		}
-	}
-
-	private static class AttachmentImportResult {
-		public final ArrayList<Pair<String, String>> attachments;
-		public final int requestedCount;
-
-		public AttachmentImportResult(ArrayList<Pair<String, String>> attachments, int requestedCount) {
-			this.attachments = attachments;
-			this.requestedCount = requestedCount;
-		}
-	}
-
-	public static class AttachmentImportViewModel extends TaskViewModel<AttachmentImportTask,
-			AttachmentImportResult> {}
-
-	private static class AttachmentImportTask extends ExecutorTask<Void, AttachmentImportResult> {
-		private final AttachmentImportViewModel viewModel;
-		private final ArrayList<UriPasteEditText.UriContent> uriContents;
-
-		public AttachmentImportTask(AttachmentImportViewModel viewModel,
-				ArrayList<UriPasteEditText.UriContent> uriContents) {
-			this.viewModel = viewModel;
-			this.uriContents = uriContents;
-		}
-
-		@Override
-		protected AttachmentImportResult run() {
-			ArrayList<Pair<String, String>> attachments = new ArrayList<>(uriContents.size());
-			try {
-				for (UriPasteEditText.UriContent uriContent : uriContents) {
-					if (isCancelled()) {
-						return null;
-					}
-					try {
-						FileHolder fileHolder = FileHolder.obtainForStreaming(uriContent.getUri());
-						if (fileHolder != null) {
-							String hash = DraftsStorage.getInstance().storeAttachmentFile(fileHolder);
-							if (hash != null && !isCancelled()) {
-								attachments.add(new Pair<>(hash, fileHolder.getName()));
-							}
-						}
-					} catch (RuntimeException e) {
-						// Continue importing the other items from the same receive-content payload.
-					}
-				}
-				return isCancelled() ? null : new AttachmentImportResult(attachments, uriContents.size());
-			} finally {
-				releasePermissions();
-			}
-		}
-
-		@Override
-		protected void onCancel(AttachmentImportResult result) {
-			releasePermissions();
-		}
-
-		@Override
-		protected void onComplete(AttachmentImportResult result) {
-			viewModel.handleResult(result != null ? result
-					: new AttachmentImportResult(new ArrayList<>(), uriContents.size()));
-		}
-
-		private void releasePermissions() {
-			for (UriPasteEditText.UriContent uriContent : uriContents) {
-				uriContent.releasePermission();
-			}
-		}
+		return attachmentController.onUrisWithAllowedMimeTypePasted(uriContents);
 	}
 
 	@Override
 	public boolean onMenuItemSelected(MenuItem item) {
 		if (item.getItemId() == R.id.menu_attach) {
-			if (attachmentImportInProgress) {
-				ClickableToast.show(R.string.processing_data__ellipsis);
-				return true;
-			}
-			if (Preferences.isOpenConfiguredAttachmentFolderEnabled()) {
-				openConfiguredAttachmentFolder();
-			} else {
-				openSystemAttachmentPicker();
-			}
+			attachmentController.openPicker();
 		}
 		return true;
-	}
-
-	private void openConfiguredAttachmentFolder() {
-		Uri treeUri = Preferences.getDownloadUriTree(requireContext());
-		if (treeUri == null) {
-			((FragmentHandler) requireActivity()).requestStorage();
-			return;
-		}
-		try {
-			Uri initialUri = DocumentsContract.buildDocumentUriUsingTree(treeUri,
-					DocumentsContract.getTreeDocumentId(treeUri));
-			openSystemAttachmentPicker(Intent.ACTION_OPEN_DOCUMENT, initialUri);
-		} catch (RuntimeException e) {
-			openSystemAttachmentPicker();
-		}
-	}
-
-	private void openSystemAttachmentPicker() {
-		openSystemAttachmentPicker(Intent.ACTION_GET_CONTENT, null);
-	}
-
-	private void openSystemAttachmentPicker(String action, Uri initialUri) {
-		// SHOW_ADVANCED is only a hint. Some photo providers still hide folder navigation.
-		Intent intent = new Intent(action).addCategory(Intent.CATEGORY_OPENABLE)
-				.putExtra("android.content.extra.SHOW_ADVANCED", true);
-		if (initialUri != null) {
-			intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, initialUri);
-			intent.putExtra(Intent.EXTRA_LOCAL_ONLY, true);
-		}
-		ArrayList<String> mimeTypes = buildMimeTypeList(postingConfiguration.attachmentMimeTypes);
-		if (mimeTypes.size() >= 2) {
-			intent.setType("*/*");
-			intent.putExtra(Intent.EXTRA_MIME_TYPES, CommonUtils.toArray(mimeTypes, String.class));
-		} else if (mimeTypes.size() == 1) {
-			intent.setType(mimeTypes.get(0));
-		} else {
-			intent.setType("*/*");
-		}
-		intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
-		try {
-			DraftsStorage.getInstance().store(obtainPostDraft());
-			attachmentPicker.launch(intent);
-		} catch (ActivityNotFoundException e) {
-			if (initialUri != null) {
-				openSystemAttachmentPicker();
-			} else {
-				ClickableToast.show(R.string.unknown_address);
-			}
-		}
 	}
 
 	private void updateFocusButtons(boolean commentFocused) {
@@ -1316,8 +893,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 	}
 
 	private void updateSendButtonState() {
-		sendButton.setEnabled(sendButtonEnabled && !attachmentImportInProgress && captchaState != null &&
-				captchaState != ReadCaptchaTask.CaptchaState.NEED_LOAD);
+		sendButton.setEnabled(sendButtonEnabled && !attachmentController.isImportInProgress() && captchaController.canSend());
 	}
 
 	private String getTextIfVisible(EditText editText) {
@@ -1328,360 +904,55 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		return checkBox.getVisibility() == View.VISIBLE && checkBox.isChecked();
 	}
 
-	private void executeSendPost() {
-		if (attachmentImportInProgress) {
+	// Send boundary: visible fields, password/rating fallback and a copied captcha payload.
+	// Keep draft persistence before service handoff and cancel separate from minimize.
+	private void submitPostingForm() {
+		if (attachmentController.isImportInProgress()) {
 			ClickableToast.show(R.string.processing_data__ellipsis);
 			return;
 		}
-		if (postingBinder == null) {
-			return;
+		if (sendCoordinator.canSend()) {
+			sendCoordinator.send(collectPostingFormData(), this::capturePostDraft, this::captureCaptchaDraft);
 		}
+	}
+
+	private PostingFormData collectPostingFormData() {
 		String subject = getTextIfVisible(subjectView);
 		String comment = getTextIfVisible(commentView);
 		String name = getTextIfVisible(nameView);
 		String email = getTextIfVisible(emailView);
-		String password = getTextIfVisible(passwordView);
-		if (password == null) {
-			password = Preferences.getPassword(Chan.get(getChanName()));
-		}
+		String password = PostingFormData.resolvePassword(getTextIfVisible(passwordView),
+				() -> Preferences.getPassword(Chan.get(getChanName())));
 		boolean optionSage = isCheckedIfVisible(sageCheckBox);
 		boolean optionSpoiler = isCheckedIfVisible(spoilerCheckBox);
 		boolean optionOriginalPoster = isCheckedIfVisible(originalPosterCheckBox);
 		String userIcon = iconView.getVisibility() == View.VISIBLE ? getUserIcon() : null;
-		ArrayList<ChanPerformer.SendPostData.Attachment> array = new ArrayList<>();
-		ArrayList<String> attachmentHashes = new ArrayList<>();
-		DraftsStorage draftsStorage = DraftsStorage.getInstance();
-		for (int i = 0; i < attachments.size(); i++) {
-			AttachmentHolder data = attachments.get(i);
-			String rating = data.rating;
-			if (rating != null && attachmentRatingItems != null) {
-				boolean found = false;
-				for (Pair<String, String> pair : attachmentRatingItems) {
-					if (rating.equals(pair.first)) {
-						found = true;
-						break;
-					}
-				}
-				if (!found) {
-					rating = null;
-				}
-			} else {
-				rating = null;
-			}
-			if (attachmentRatingItems != null && rating == null) {
-				rating = attachmentRatingItems.get(0).first;
-			}
-			FileHolder fileHolder = draftsStorage.getAttachmentDraftFileHolder(data.hash);
-			if (fileHolder != null) {
-				attachmentHashes.add(data.hash);
-				array.add(new ChanPerformer.SendPostData.Attachment(fileHolder, data.name, rating,
-						data.optionUniqueHash, data.optionRemoveMetadata, data.optionRemoveFileName,
-						postingConfiguration.attachmentSpoiler && data.optionSpoiler, data.reencoding));
-			}
-		}
-		ChanPerformer.SendPostData.Attachment[] attachments = null;
-		if (array.size() > 0) {
-			attachments = CommonUtils.toArray(array, ChanPerformer.SendPostData.Attachment.class);
-		}
-		String captchaType = loadedCaptchaType != null ? loadedCaptchaType : this.captchaType;
-		ChanPerformer.CaptchaData captchaData = this.captchaData;
-		if (captchaData != null) {
-			captchaData = captchaData.copy();
-			captchaData.put(ChanPerformer.CaptchaData.INPUT, captchaForm.getInput());
-		}
-		boolean captchaNeedLoad = captchaState == ReadCaptchaTask.CaptchaState.MAY_LOAD ||
-				captchaState == ReadCaptchaTask.CaptchaState.MAY_LOAD_SOLVING;
-		ChanPerformer.SendPostData data = new ChanPerformer.SendPostData(getBoardName(), getThreadNumber(),
-				subject, comment, name, email, password, attachments, optionSage, optionSpoiler, optionOriginalPoster,
-				userIcon, captchaType, captchaData, captchaNeedLoad, 15000, 45000);
-		DraftsStorage.PostDraft postDraft = obtainPostDraft();
-		draftsStorage.store(postDraft);
-		draftsStorage.store(getChanName(), obtainCaptchaDraft());
-		draftSaved = true;
-		allowDialog = false;
-		boolean allowFloodRetry = captchaState == ReadCaptchaTask.CaptchaState.PASS;
-		if (postingBinder.executeSendPost(getChanName(), data, postDraft, attachmentHashes, allowFloodRetry)) {
-			sendButtonEnabled = false;
-			updateSendButtonState();
-			if (progressDialog != null) {
-				progressDialog.dismiss();
-				progressDialog = null;
-			}
-			onSendPostMinimize();
-		} else {
-			allowDialog = true;
-			draftSaved = false;
-		}
+		PostingAttachmentsController.SendAttachments sendAttachments = attachmentController.createSendAttachments();
+		PostingCaptchaController.CaptchaSnapshot captcha = captchaController.snapshot(captchaForm.getInput());
+		return new PostingFormData(subject, comment, name, email, password, optionSage, optionSpoiler,
+				optionOriginalPoster, userIcon, sendAttachments, captcha);
 	}
-
-	private ProgressDialog progressDialog;
-
-	private void onSendPostCancel() {
-		progressDialog = null;
-		postingBinder.cancelSendPost(getChanName(), getBoardName(), getThreadNumber());
-	}
-
-	private void onSendPostMinimize() {
-		progressDialog = null;
-		((FragmentHandler) requireActivity()).removeFragment();
-	}
-
-	private void dismissSendPost() {
-		if (progressDialog != null) {
-			progressDialog.dismiss();
-		}
-		progressDialog = null;
-		sendButtonEnabled = true;
-		if (sendButton != null) {
-			updateSendButtonState();
-		}
-	}
-
-	private final PostingService.Callback postingCallback = new PostingService.Callback() {
-		@Override
-		public void onState(boolean progressMode, SendPostTask.ProgressState progressState,
-				int attachmentIndex, int attachmentsCount) {
-			if (allowDialog && progressDialog == null) {
-				progressDialog = new ProgressDialog(requireContext(), progressMode ? "%1$d / %2$d kB" : null);
-				progressDialog.setOnCancelListener(d -> onSendPostCancel());
-				progressDialog.setButton(ProgressDialog.BUTTON_POSITIVE, getString(R.string.minimize),
-						(d, w) -> onSendPostMinimize());
-				progressDialog.setButton(ProgressDialog.BUTTON_NEGATIVE, getString(android.R.string.cancel),
-						(d, w) -> onSendPostCancel());
-				progressDialog.show();
-			}
-			if (progressDialog == null) {
-				return;
-			}
-			switch (progressState) {
-				case CONNECTING: {
-					progressDialog.setMax(1);
-					progressDialog.setIndeterminate(true);
-					progressDialog.setMessage(getString(R.string.sending__ellipsis));
-					break;
-				}
-				case SENDING: {
-					progressDialog.setIndeterminate(false);
-					if (progressMode) {
-						progressDialog.setMessage(getString(R.string.sending_number_of_number__ellipsis_format,
-								attachmentIndex + 1, attachmentsCount));
-					} else {
-						progressDialog.setMessage(getString(R.string.sending__ellipsis));
-					}
-					break;
-				}
-				case PROCESSING: {
-					progressDialog.setIndeterminate(false);
-					progressDialog.setMessage(getString(R.string.processing_data__ellipsis));
-					break;
-				}
-			}
-		}
-
-		@Override
-		public void onProgress(long progress, long progressMax) {
-			if (progressDialog != null) {
-				progressDialog.setMax((int) (progressMax / 1000));
-				progressDialog.setValue((int) (progress / 1000));
-			}
-		}
-
-		@Override
-		public void onStop(boolean success) {
-			dismissSendPost();
-			if (success) {
-				sendSuccess = true;
-				if (isResumed()) {
-					((FragmentHandler) requireActivity()).removeFragment();
-				}
-			}
-		}
-	};
 
 	public void handleFailResult(PostingService.FailResult failResult) {
-		if (isResumed()) {
-			if (failResult.extra != null) {
-				ClickableToast.show(failResult.errorItem.toString(), null, new ClickableToast
-						.Button(R.string.details, false, () -> new SendPostFailDetailsDialog(failResult.extra)
-						.show(getChildFragmentManager(), null)));
-			} else {
-				ClickableToast.show(failResult.errorItem);
-			}
-			if (failResult.errorItem.httpResponseCode == 0 && !failResult.keepCaptcha) {
-				refreshCaptcha(false, !failResult.captchaError, true);
-			}
-			updatePostingConfigurationIfNeeded();
-		} else {
-			this.failResult = failResult;
-		}
+		sendCoordinator.handleFailResult(failResult);
 	}
 
-	private void refreshCaptcha(boolean forceCaptcha, boolean mayShowLoadButton, boolean restart) {
-		boolean allowSolveAutomatically = !forceCaptcha ||
-				captchaState != ReadCaptchaTask.CaptchaState.MAY_LOAD_SOLVING;
-		captchaState = null;
-		loadedCaptchaType = null;
-		captchaLoadTime = 0L;
-		updateSendButtonState();
-		captchaForm.showLoading();
-		CaptchaViewModel viewModel = new ViewModelProvider(this).get(CaptchaViewModel.class);
-		if (restart || !viewModel.hasTaskOrValue()) {
-			Chan chan = Chan.get(getChanName());
-			List<String> captchaPass = forceCaptcha ? null : Preferences.getCaptchaPass(chan);
-			ReadCaptchaTask task = new ReadCaptchaTask(viewModel.callback, null, captchaType, null, captchaPass,
-					mayShowLoadButton, allowSolveAutomatically, chan, getBoardName(), getThreadNumber());
-			task.execute(ConcurrentUtils.PARALLEL_EXECUTOR);
-			viewModel.attach(task);
-		}
-	}
-
-	public static class CaptchaViewModel extends TaskViewModel.Proxy<ReadCaptchaTask, ReadCaptchaTask.Callback> {}
-
-	@Override
-	public void onReadCaptchaSuccess(ReadCaptchaTask.Result result) {
-		captchaLoadTime = SystemClock.elapsedRealtime();
-		showCaptcha(result.captchaState, result.captchaData, result.captchaType, result.input, result.validity,
-				result.image, result.large, result.blackAndWhite);
-		updatePostingConfigurationIfNeeded();
-	}
-
-	@Override
-	public void onReadCaptchaError(ErrorItem errorItem) {
-		ClickableToast.show(errorItem);
-		captchaForm.showError();
-		updatePostingConfigurationIfNeeded();
-	}
-
-	private void showCaptcha(ReadCaptchaTask.CaptchaState captchaState, ChanPerformer.CaptchaData captchaData,
-			String captchaType, ChanConfiguration.Captcha.Input input, ChanConfiguration.Captcha.Validity validity,
-			Bitmap image, boolean large, boolean blackAndWhite) {
-		this.captchaState = captchaState;
-		if (captchaImage != null && captchaImage != image) {
-			captchaImage.recycle();
-		}
-		this.captchaData = captchaData;
-		captchaImage = image;
-		captchaLarge = large;
-		captchaBlackAndWhite = blackAndWhite;
-		loadedCaptchaType = captchaType;
-		if (captchaType != null) {
-			ChanConfiguration.Captcha captcha = Chan.get(getChanName()).configuration
-					.safe().obtainCaptcha(captchaType);
-			if (input == null) {
-				input = captcha.input;
-			}
-			if (validity == null) {
-				validity = captcha.validity;
-			}
-		}
-		loadedCaptchaInput = input;
-		loadedCaptchaValidity = validity;
-		boolean invertColors = blackAndWhite && !GraphicsUtils
-				.isLight(ResourceUtils.getColor(requireContext(), android.R.attr.colorBackground));
-		captchaForm.showCaptcha(captchaState, input, image, large, invertColors);
-		if (scrollView.getScrollY() + scrollView.getHeight() >= scrollView.getChildAt(0).getHeight()) {
-			scrollView.post(() -> {
-				if (scrollView != null) {
-					scrollView.setScrollY(Math.max(scrollView.getChildAt(0).getHeight() - scrollView.getHeight(), 0));
-				}
-			});
-		}
-		updateSendButtonState();
-	}
-
+	// ActivityResult boundary: preserve request codes, URI order and stale-editor identity checks.
 	private void handlePostingActivityResult(int requestCode, int resultCode, Intent data) {
 		com.mishiranu.dashchan.ui.UiLifecycleDiagnostics.event(this,
 				"activity_result request=" + requestCode + " ok=" + (resultCode == Activity.RESULT_OK)
 						+ " view=" + (getView() != null));
-		if (resultCode == Activity.RESULT_OK && data != null) {
-			switch (requestCode) {
-				case C.REQUEST_CODE_ATTACH: {
-					if ((data.getFlags() & Intent.FLAG_GRANT_READ_URI_PERMISSION) == 0) {
-						ClickableToast.show(R.string.no_access_to_memory);
-						break;
-					}
-					LinkedHashSet<Uri> uris = new LinkedHashSet<>();
-					Uri dataUri = data.getData();
-					if (dataUri != null) {
-						uris.add(dataUri);
-					}
-					ClipData clipData = data.getClipData();
-					if (clipData != null) {
-						for (int i = 0; i < clipData.getItemCount(); i++) {
-							ClipData.Item item = clipData.getItemAt(i);
-							Uri uri = item.getUri();
-							if (uri != null) {
-								uris.add(uri);
-							}
-						}
-					}
-					ArrayList<Pair<String, String>> attachmentsToAdd = new ArrayList<>();
-					for (Uri uri : uris) {
-						FileHolder fileHolder = FileHolder.obtain(uri);
-						if (fileHolder != null) {
-							String hash = DraftsStorage.getInstance().store(fileHolder);
-							if (hash != null) {
-								attachmentsToAdd.add(new Pair<>(hash, fileHolder.getName()));
-							}
-						}
-					}
-					handleAttachmentsToAdd(attachmentsToAdd, uris.size());
-					break;
-				}
-				case C.REQUEST_CODE_IMAGE_EDITOR: {
-					int index = data.getIntExtra(ImageEditorActivity.EXTRA_RESULT_ATTACHMENT_INDEX, -1);
-					String hash = data.getStringExtra(ImageEditorActivity.EXTRA_RESULT_HASH);
-					String name = data.getStringExtra(ImageEditorActivity.EXTRA_RESULT_NAME);
-					AttachmentHolder holder = getAttachmentHolder(index);
-					if (holder == null || !AttachmentResultGuard.matches(
-							data.getStringExtra(ImageEditorActivity.EXTRA_RESULT_SOURCE_HASH),
-							data.getStringExtra(ImageEditorActivity.EXTRA_RESULT_SOURCE_NAME), holder.hash, holder.name)) {
-						com.mishiranu.dashchan.ui.UiLifecycleDiagnostics.event(this, "editor_result_stale");
-						ClickableToast.show(R.string.image_editor_attachment_changed);
-						break;
-					}
-					if (hash != null && name != null) {
-						holder.hash = hash;
-						holder.name = name;
-						FileHolder fileHolder = DraftsStorage.getInstance().getAttachmentDraftFileHolder(hash);
-						if (fileHolder == null || !GraphicsUtils.canReencode(fileHolder)) {
-							holder.reencoding = null;
-						}
-						bindAttachmentFile(holder, fileHolder);
-						DraftsStorage.getInstance().store(obtainPostDraft());
-					}
-					break;
-				}
-			}
-		}
-	}
-
-	private void handleAttachmentsToAdd(ArrayList<Pair<String, String>> attachmentsToAdd, int addedCount) {
-		int oldCount = attachments.size();
-		for (Pair<String, String> attachmentToAdd : attachmentsToAdd) {
-			if (attachments.size() < postingConfiguration.attachmentCount) {
-				addAttachment(attachmentToAdd.first, attachmentToAdd.second);
-			}
-		}
-		int newCount = attachments.size() - oldCount;
-		if (newCount > 0) {
-			DraftsStorage.getInstance().store(obtainPostDraft());
-		}
-		int errorCount = addedCount - newCount;
-		if (errorCount > 0) {
-			ClickableToast.show(getResources().getQuantityString(R.plurals
-					.number_files_havent_been_attached__format, errorCount, errorCount));
-		}
+		attachmentController.handleActivityResult(requestCode, resultCode, data);
 	}
 
 	@Override
 	public AttachmentHolder getAttachmentHolder(int index) {
-		return index >= 0 && index < attachments.size() ? attachments.get(index) : null;
+		return attachmentController.getAttachmentHolder(index);
 	}
 
 	@Override
 	public List<Pair<String, String>> getAttachmentRatingItems() {
-		return attachmentRatingItems;
+		return attachmentController.getAttachmentRatingItems();
 	}
 
 	@Override
@@ -1689,520 +960,143 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		return postingConfiguration;
 	}
 
-	private final View.OnClickListener attachmentOptionsListener = v -> {
-		AttachmentHolder holder = (AttachmentHolder) v.getTag();
-		int attachmentIndex = attachments.indexOf(holder);
-		new AttachmentOptionsDialog(attachmentIndex).show(getChildFragmentManager(), AttachmentOptionsDialog.TAG);
-	};
-
-	private final View.OnClickListener attachmentWarningListener = v -> {
-		AttachmentHolder holder = (AttachmentHolder) v.getTag();
-		int attachmentIndex = attachments.indexOf(holder);
-		new AttachmentWarningDialog(attachmentIndex).show(getChildFragmentManager(), AttachmentWarningDialog.TAG);
-	};
-
-	private final View.OnClickListener attachmentRatingListener = v -> {
-		AttachmentHolder holder = (AttachmentHolder) v.getTag();
-		int attachmentIndex = attachments.indexOf(holder);
-		new AttachmentRatingDialog(attachmentIndex).show(getChildFragmentManager(), AttachmentRatingDialog.TAG);
-	};
-
-	private final View.OnClickListener attachmentPreviewListener = v -> {
-		AttachmentHolder holder = (AttachmentHolder) v.getTag();
-		if (holder == null || !attachments.contains(holder)) {
-			return;
-		}
-		File file = DraftsStorage.getInstance().getAttachmentDraftFile(holder.hash);
-		if (file == null) {
-			ClickableToast.show(R.string.unknown_error);
-			return;
-		}
-		String tag = GalleryOverlay.class.getName();
-		if (getParentFragmentManager().findFragmentByTag(tag) == null) {
-			new GalleryOverlay(Uri.fromFile(file), holder.name).show(getParentFragmentManager(), tag);
-		}
-	};
-
-	private final View.OnClickListener attachmentEditListener = v -> {
-		AttachmentHolder holder = (AttachmentHolder) v.getTag();
-		int attachmentIndex = attachments.indexOf(holder);
-		if (attachmentIndex >= 0 && Preferences.isImageEditorEnabled()) {
-			// Persist the exact source list before leaving for an external Activity.
-			DraftsStorage.getInstance().store(obtainPostDraft());
-			imageEditor.launch(ImageEditorActivity.createIntent(requireContext(), holder.hash, holder.name,
-					attachmentIndex));
-		}
-	};
-
-	private final View.OnLongClickListener attachmentDragStartListener = v -> {
-		AttachmentHolder holder = (AttachmentHolder) v.getTag();
-		if (holder == null || attachments.size() < 2 || !attachments.contains(holder)) {
-			return false;
-		}
-		return v.startDragAndDrop(ClipData.newPlainText("", ""),
-				new View.DragShadowBuilder(holder.view), holder, 0);
-	};
-
-	private final View.OnDragListener attachmentContainerDragListener = (v, event) -> {
-		Object localState = event.getLocalState();
-		if (!(localState instanceof AttachmentHolder)) {
-			return false;
-		}
-		AttachmentHolder holder = (AttachmentHolder) localState;
-		switch (event.getAction()) {
-			case DragEvent.ACTION_DRAG_STARTED: {
-				if (!attachments.contains(holder)) {
-					return false;
+	private PostingSendCoordinator.Host createSendHost() {
+		return new PostingSendCoordinator.Host() {
+			@Override public boolean isResumed() { return PostingFragment.this.isResumed(); }
+			@Override public void showPostingState(boolean allowDialog, boolean progressMode, SendPostTask.ProgressState progressState,
+					int attachmentIndex, int attachmentsCount) {
+				if (allowDialog && progressDialog == null) {
+					progressDialog = new ProgressDialog(requireContext(), progressMode ? "%1$d / %2$d kB" : null);
+					progressDialog.setOnCancelListener(d -> sendCoordinator.cancel());
+					progressDialog.setButton(ProgressDialog.BUTTON_POSITIVE, getString(R.string.minimize),
+							(d, w) -> sendCoordinator.minimize());
+					progressDialog.setButton(ProgressDialog.BUTTON_NEGATIVE, getString(android.R.string.cancel),
+							(d, w) -> sendCoordinator.cancel());
+					progressDialog.show();
 				}
-				draggedAttachment = holder;
-				holder.view.setAlpha(0.45f);
-				setAttachmentDragTarget(holder);
-				return true;
-			}
-			case DragEvent.ACTION_DRAG_LOCATION: {
-				scrollPostingFormDuringAttachmentDrag(event.getY());
-				int index = findAttachmentDropIndex(event.getX(), event.getY());
-				setAttachmentDragTarget(index >= 0 ? attachments.get(index) : null);
-				return true;
-			}
-			case DragEvent.ACTION_DROP: {
-				int index = findAttachmentDropIndex(event.getX(), event.getY());
-				if (index >= 0) {
-					moveAttachment(holder, index);
+				if (progressDialog == null) {
+					return;
 				}
-				clearAttachmentDragState();
-				return true;
-			}
-			case DragEvent.ACTION_DRAG_ENDED: {
-				clearAttachmentDragState();
-				return true;
-			}
-		}
-		return true;
-	};
-
-	private void setAttachmentDragTarget(AttachmentHolder target) {
-		if (attachmentDragTarget == target) {
-			return;
-		}
-		if (attachmentDragTarget != null && attachmentDragTarget != draggedAttachment) {
-			attachmentDragTarget.view.setScaleX(1f);
-			attachmentDragTarget.view.setScaleY(1f);
-		}
-		attachmentDragTarget = target;
-		if (target != null && target != draggedAttachment) {
-			target.view.setScaleX(0.96f);
-			target.view.setScaleY(0.96f);
-		}
-	}
-
-	private int findAttachmentDropIndex(float x, float y) {
-		int result = -1;
-		float minDistance = Float.MAX_VALUE;
-		Rect rect = new Rect();
-		for (int i = 0; i < attachments.size(); i++) {
-			View view = attachments.get(i).view;
-			view.getDrawingRect(rect);
-			attachmentContainer.offsetDescendantRectToMyCoords(view, rect);
-			if (rect.contains((int) x, (int) y)) {
-				return i;
-			}
-			float dx = x - rect.exactCenterX();
-			float dy = y - rect.exactCenterY();
-			float distance = dx * dx + dy * dy;
-			if (distance < minDistance) {
-				minDistance = distance;
-				result = i;
-			}
-		}
-		return result;
-	}
-
-	private void scrollPostingFormDuringAttachmentDrag(float y) {
-		if (scrollView == null || attachmentContainer == null) {
-			return;
-		}
-		int[] containerLocation = new int[2];
-		int[] scrollLocation = new int[2];
-		attachmentContainer.getLocationOnScreen(containerLocation);
-		scrollView.getLocationOnScreen(scrollLocation);
-		float screenY = containerLocation[1] + y;
-		float density = ResourceUtils.obtainDensity(getResources());
-		int threshold = (int) (48f * density);
-		int step = (int) (12f * density);
-		if (screenY < scrollLocation[1] + threshold && scrollView.canScrollVertically(-1)) {
-			scrollView.scrollBy(0, -step);
-		} else if (screenY > scrollLocation[1] + scrollView.getHeight() - threshold
-				&& scrollView.canScrollVertically(1)) {
-			scrollView.scrollBy(0, step);
-		}
-	}
-
-	private void moveAttachment(AttachmentHolder holder, int targetIndex) {
-		int sourceIndex = attachments.indexOf(holder);
-		if (sourceIndex < 0 || sourceIndex == targetIndex) {
-			return;
-		}
-		attachments.remove(sourceIndex);
-		attachments.add(targetIndex, holder);
-		invalidateAttachments(true);
-		DraftsStorage.getInstance().store(obtainPostDraft());
-	}
-
-	private void clearAttachmentDragState() {
-		if (draggedAttachment != null) {
-			draggedAttachment.view.setAlpha(1f);
-		}
-		if (attachmentDragTarget != null && attachmentDragTarget != draggedAttachment) {
-			attachmentDragTarget.view.setScaleX(1f);
-			attachmentDragTarget.view.setScaleY(1f);
-		}
-		draggedAttachment = null;
-		attachmentDragTarget = null;
-	}
-
-	private final View.OnClickListener attachmentRemoveListener = new View.OnClickListener() {
-		@Override
-		public void onClick(View v) {
-			AttachmentHolder holder = (AttachmentHolder) v.getTag();
-			if (attachments.remove(holder)) {
-				VideoThumbnailTask task = videoThumbnailTasks.remove(holder);
-				if (task != null) {
-					task.cancel();
+				switch (progressState) {
+					case CONNECTING: {
+						progressDialog.setMax(1);
+						progressDialog.setIndeterminate(true);
+						progressDialog.setMessage(getString(R.string.sending__ellipsis));
+						break;
+					}
+					case SENDING: {
+						progressDialog.setIndeterminate(false);
+						if (progressMode) {
+							progressDialog.setMessage(getString(R.string.sending_number_of_number__ellipsis_format,
+									attachmentIndex + 1, attachmentsCount));
+						} else {
+							progressDialog.setMessage(getString(R.string.sending__ellipsis));
+						}
+						break;
+					}
+					case PROCESSING: {
+						progressDialog.setIndeterminate(false);
+						progressDialog.setMessage(getString(R.string.processing_data__ellipsis));
+						break;
+					}
 				}
-				if (attachmentColumnCount == 1) {
-					attachmentContainer.removeView(holder.view);
+
+			}
+			@Override public void updatePostingProgress(long progress, long progressMax) {
+				if (progressDialog != null) {
+					progressDialog.setMax((int) (progressMax / 1000));
+					progressDialog.setValue((int) (progress / 1000));
+				}
+			}
+			@Override public void dismissPostingProgress() {
+				if (progressDialog != null) progressDialog.dismiss();
+				progressDialog = null;
+			}
+			@Override public void forgetPostingProgress() { progressDialog = null; }
+			@Override public void setSendButtonEnabled(boolean enabled) {
+				sendButtonEnabled = enabled;
+				if (sendButton != null) updateSendButtonState();
+			}
+			@Override public void closePostingFragment() {
+				((FragmentHandler) requireActivity()).removeFragment();
+			}
+			@Override public void showPostingFailure(PostingService.FailResult failResult) {
+				if (failResult.extra != null) {
+					ClickableToast.show(failResult.errorItem.toString(), null, new ClickableToast
+							.Button(R.string.details, false, () -> new SendPostFailDetailsDialog(failResult.extra)
+							.show(getChildFragmentManager(), null)));
 				} else {
-					invalidateAttachments(true);
+					ClickableToast.show(failResult.errorItem);
 				}
-				invalidateOptionsMenu();
+			}
+			@Override public void refreshCaptcha(boolean mayShowLoadButton) {
+				captchaController.refreshCaptcha(PostingFragment.this, false, mayShowLoadButton, true);
+			}
+			@Override public void updatePostingConfigurationIfNeeded() { PostingFragment.this.updatePostingConfigurationIfNeeded(); }
+		};
+	}
+
+	private PostingCaptchaController.Host createCaptchaHost() {
+		return new PostingCaptchaController.Host() {
+			@Override public void updateSendButtonState() { PostingFragment.this.updateSendButtonState(); }
+			@Override public void showLoading() { captchaForm.showLoading(); }
+			@Override public void setInput(String text) { captchaForm.setText(text); }
+			@Override public void showError(ErrorItem errorItem) {
+				ClickableToast.show(errorItem); captchaForm.showError();
+			}
+			@Override public void updatePostingConfigurationIfNeeded() { PostingFragment.this.updatePostingConfigurationIfNeeded(); }
+			@Override public void showCaptcha(ReadCaptchaTask.CaptchaState state, ChanConfiguration.Captcha.Input input,
+					Bitmap image, boolean large, boolean blackAndWhite) {
+				boolean invertColors = blackAndWhite && !GraphicsUtils
+						.isLight(ResourceUtils.getColor(requireContext(), android.R.attr.colorBackground));
+				captchaForm.showCaptcha(state, input, image, large, invertColors);
+				if (scrollView.getScrollY() + scrollView.getHeight() >= scrollView.getChildAt(0).getHeight()) {
+					scrollView.post(() -> {
+						if (scrollView != null) {
+							scrollView.setScrollY(Math.max(scrollView.getChildAt(0).getHeight() - scrollView.getHeight(), 0));
+						}
+					});
+				}
+			}
+		};
+	}
+
+	private PostingAttachmentsController.Host createAttachmentHost() {
+		return new PostingAttachmentsController.Host() {
+			@Override public Context requireContext() {
+				return PostingFragment.this.requireContext();
+			}
+			@Override public androidx.fragment.app.FragmentManager getChildFragmentManager() {
+				return PostingFragment.this.getChildFragmentManager();
+			}
+			@Override public androidx.fragment.app.FragmentManager getParentFragmentManager() {
+				return PostingFragment.this.getParentFragmentManager();
+			}
+			@Override public void requestStorage() {
+				((FragmentHandler) requireActivity()).requestStorage();
+			}
+			@Override public void invalidateOptionsMenu() {
+				PostingFragment.this.invalidateOptionsMenu();
+			}
+			@Override public void resizeCommentAfterAttachmentChange() {
 				resizeComment(true);
-				DraftsStorage.getInstance().store(obtainPostDraft());
 			}
-		}
-	};
-
-	private void invalidateAttachments(boolean clearContainer) {
-		if (clearContainer) {
-			attachmentContainer.removeAllViews();
-		}
-		for (int i = 0; i < attachments.size(); i++) {
-			AttachmentHolder holder = attachments.get(i);
-			if (clearContainer) {
-				ViewUtils.removeFromParent(holder.view);
-				addAttachmentViewToContainer(holder.view, i);
+			@Override public void saveDraftAfterAttachmentChange() {
+				draftController.storePostDraft(capturePostDraft());
 			}
-			updateAttachmentConfiguration(holder);
-		}
-	}
-
-	private void addAttachmentViewToContainer(View attachmentView, int position) {
-		LinearLayout.LayoutParams layoutParams = (LinearLayout.LayoutParams) attachmentView.getLayoutParams();
-		if (attachmentColumnCount == 1) {
-			layoutParams.width = LinearLayout.LayoutParams.MATCH_PARENT;
-			layoutParams.weight = 0;
-			layoutParams.leftMargin = 0;
-			attachmentContainer.addView(attachmentView);
-		} else {
-			float density = ResourceUtils.obtainDensity(this);
-			float paddingDp = 4f;
-			layoutParams.width = 0;
-			layoutParams.weight = 1;
-			layoutParams.leftMargin = (int) (paddingDp * density);
-			int row = position / attachmentColumnCount, column = position % attachmentColumnCount;
-			LinearLayout subcontainer;
-			View placeholder;
-			if (column == 0) {
-				subcontainer = new LinearLayout(requireContext());
-				attachmentContainer.addView(subcontainer, LinearLayout.LayoutParams.MATCH_PARENT,
-						LinearLayout.LayoutParams.WRAP_CONTENT);
-				subcontainer.setOrientation(LinearLayout.HORIZONTAL);
-				placeholder = new View(requireContext());
-				subcontainer.addView(placeholder, 0, LinearLayout.LayoutParams.MATCH_PARENT);
-				subcontainer.setPadding(0, 0, (int) (paddingDp * density), 0);
-				subcontainer.setGravity(Gravity.BOTTOM);
-			} else {
-				subcontainer = (LinearLayout) attachmentContainer.getChildAt(row);
-				placeholder = subcontainer.getChildAt(subcontainer.getChildCount() - 1);
+			@Override public void updateSendButtonState() {
+				PostingFragment.this.updateSendButtonState();
 			}
-			subcontainer.addView(attachmentView, column);
-			layoutParams = ((LinearLayout.LayoutParams) placeholder.getLayoutParams());
-			layoutParams.weight = attachmentColumnCount - column - 1;
-			layoutParams.leftMargin = (int) (paddingDp * density * layoutParams.weight);
-			placeholder.setVisibility(attachmentColumnCount == column + 1 ? View.GONE : View.VISIBLE);
-		}
-	}
-
-	private static View addAttachmentButton(LinearLayout parent, int width,
-			int attrResId, View.OnClickListener listener) {
-		ImageView imageView = createAttachmentButton(parent, width, listener);
-		imageView.setImageDrawable(ResourceUtils.getDrawable(imageView.getContext(), attrResId, 0));
-		return imageView;
-	}
-
-	private static View addAttachmentButtonResource(LinearLayout parent, int width,
-			int drawableResId, View.OnClickListener listener) {
-		ImageView imageView = createAttachmentButton(parent, width, listener);
-		imageView.setImageResource(drawableResId);
-		return imageView;
-	}
-
-	private static ImageView createAttachmentButton(LinearLayout parent, int width,
-			View.OnClickListener listener) {
-		float density = ResourceUtils.obtainDensity(parent);
-		ImageView imageView = new ImageView(parent.getContext(), null, android.R.attr.borderlessButtonStyle);
-		parent.addView(imageView, width, LinearLayout.LayoutParams.MATCH_PARENT);
-		LinearLayout.LayoutParams layoutParams = (LinearLayout.LayoutParams) imageView.getLayoutParams();
-		layoutParams.gravity = Gravity.CENTER_VERTICAL;
-		ViewUtils.setNewMarginRelative(imageView, (int) (-8f * density), 0, 0, 0);
-		imageView.setScaleType(ImageView.ScaleType.CENTER);
-		imageView.setImageTintList(ResourceUtils.getColorStateList(imageView.getContext(),
-				android.R.attr.textColorPrimary));
-		imageView.setOnClickListener(listener);
-		return imageView;
-	}
-
-	private AttachmentHolder addNewAttachment() {
-		float density = ResourceUtils.obtainDensity(getResources());
-		int minHeight = (int) (48f * density);
-		FrameLayout view = new FrameLayout(attachmentContainer.getContext());
-		view.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, minHeight));
-		ViewUtils.setNewMargin(view, 0, (int) (4f * density), 0, 0);
-		view.setBackgroundColor(0xff000000);
-		view.setForeground(new RoundedCornersDrawable((int) (2f * density),
-				ThemeEngine.getTheme(view.getContext()).window));
-		addAttachmentViewToContainer(view, attachments.size());
-		ImageView imageView = new ImageView(view.getContext());
-		imageView.setScaleType(ImageView.ScaleType.CENTER_CROP);
-		imageView.setBackground(new TransparentTileDrawable(imageView.getContext(), true));
-		imageView.setVisibility(View.GONE);
-		view.addView(imageView, FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT);
-		View overlay = new View(view.getContext());
-		overlay.setBackgroundColor(ResourceUtils.getColor(overlay.getContext(), R.attr.colorBlockBackground));
-		view.addView(overlay, FrameLayout.LayoutParams.MATCH_PARENT, minHeight);
-		((FrameLayout.LayoutParams) overlay.getLayoutParams()).gravity = Gravity.BOTTOM;
-		View options = new View(view.getContext());
-		ViewUtils.setSelectableItemBackground(options);
-		options.setOnClickListener(attachmentOptionsListener);
-		view.addView(options, FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT);
-		ImageView previewButton = new ImageView(view.getContext(), null, android.R.attr.borderlessButtonStyle);
-		previewButton.setScaleType(ImageView.ScaleType.CENTER);
-		previewButton.setImageDrawable(ResourceUtils.getDrawable(previewButton.getContext(),
-				R.attr.iconAttachmentVideo, 0));
-		previewButton.setVisibility(View.GONE);
-		previewButton.setContentDescription(getString(R.string.preview_video_attachment));
-		previewButton.setOnClickListener(attachmentPreviewListener);
-		int previewButtonSize = (int) (48f * density);
-		view.addView(previewButton, previewButtonSize, previewButtonSize);
-		FrameLayout.LayoutParams previewLayoutParams = (FrameLayout.LayoutParams) previewButton.getLayoutParams();
-		previewLayoutParams.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
-		previewLayoutParams.topMargin = (int) (16f * density);
-
-		LinearLayout controls = new LinearLayout(view.getContext());
-		controls.setOrientation(LinearLayout.HORIZONTAL);
-		view.addView(controls, FrameLayout.LayoutParams.MATCH_PARENT, minHeight);
-		((FrameLayout.LayoutParams) controls.getLayoutParams()).gravity = Gravity.BOTTOM;
-		controls.setPaddingRelative((int) (8f * density), 0, 0, 0);
-		LinearLayout textLayout = new LinearLayout(controls.getContext());
-		textLayout.setOrientation(LinearLayout.VERTICAL);
-		textLayout.setGravity(Gravity.CENTER_VERTICAL);
-		controls.addView(textLayout, 0, LinearLayout.LayoutParams.MATCH_PARENT);
-		((LinearLayout.LayoutParams) textLayout.getLayoutParams()).weight = 1f;
-		textLayout.setPaddingRelative((int) (4f * density), 0, (int) (8f * density), 0);
-		TextView fileName = new TextView(controls.getContext());
-		textLayout.addView(fileName, LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-		TextViewCompat.setTextAppearance(fileName, ResourceUtils.getResourceId(fileName.getContext(),
-				android.R.attr.textAppearanceListItem, 0));
-		ThemeEngine.applyStyle(fileName);
-		fileName.setSingleLine(true);
-		fileName.setEllipsize(TextUtils.TruncateAt.END);
-		ViewUtils.setTextSizeScaled(fileName, 12);
-		fileName.setTypeface(ResourceUtils.TYPEFACE_MEDIUM);
-		TextView fileSize = new TextView(controls.getContext());
-		textLayout.addView(fileSize, LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-		TextViewCompat.setTextAppearance(fileSize, ResourceUtils.getResourceId(fileSize.getContext(),
-				android.R.attr.textAppearanceListItem, 0));
-		ThemeEngine.applyStyle(fileSize);
-		fileSize.setSingleLine(true);
-		fileSize.setEllipsize(TextUtils.TruncateAt.END);
-		ViewUtils.setTextSizeScaled(fileSize, 12);
-		View warningButton = addAttachmentButton(controls, minHeight,
-				R.attr.iconButtonWarning, attachmentWarningListener);
-		View ratingButton = addAttachmentButton(controls, minHeight,
-				R.attr.iconButtonRating, attachmentRatingListener);
-		View editButton = addAttachmentButtonResource(controls, minHeight,
-				R.drawable.ic_edit, attachmentEditListener);
-		int editIconColor = GraphicsUtils.isLight(ResourceUtils.getColor(editButton.getContext(),
-				R.attr.colorBlockBackground)) ? 0xff000000 : 0xffffffff;
-		((ImageView) editButton).setImageTintList(ColorStateList.valueOf(editIconColor));
-		editButton.setVisibility(View.GONE);
-		editButton.setContentDescription(getString(R.string.edit_image));
-		View dragButton = addAttachmentButton(controls, minHeight,
-				R.attr.iconButtonDragHandle, null);
-		View removeButton = addAttachmentButton(controls, minHeight,
-				R.attr.iconButtonCancel, attachmentRemoveListener);
-
-		AttachmentHolder holder = new AttachmentHolder(view, fileName, fileSize, imageView, previewButton,
-				warningButton, ratingButton, editButton);
-		warningButton.setTag(holder);
-		ratingButton.setTag(holder);
-		editButton.setTag(holder);
-		dragButton.setTag(holder);
-		dragButton.setContentDescription(getString(R.string.reorder_attachment));
-		dragButton.setOnLongClickListener(attachmentDragStartListener);
-		previewButton.setTag(holder);
-		removeButton.setTag(holder);
-		options.setTag(holder);
-		attachments.add(holder);
-		invalidateOptionsMenu();
-		resizeComment(true);
-		return holder;
-	}
-
-	private void addAttachment(String hash, String name) {
-		FileHolder fileHolder = DraftsStorage.getInstance().getAttachmentDraftFileHolder(hash);
-		GraphicsUtils.Reencoding reencoding = Preferences.isDefaultAttachmentReencoding()
-				&& fileHolder != null && GraphicsUtils.canReencode(fileHolder)
-				? new GraphicsUtils.Reencoding(GraphicsUtils.Reencoding.FORMAT_JPEG, 90, 1) : null;
-		addAttachment(hash, name, null, Preferences.isDefaultAttachmentUniqueHash(),
-				Preferences.isDefaultAttachmentRemoveMetadata(), Preferences.isDefaultAttachmentRemoveFileName(),
-				false, reencoding);
-	}
-
-	private void addAttachment(String hash, String name, String rating, boolean optionUniqueHash,
-			boolean optionRemoveMetadata, boolean optionRemoveFileName, boolean optionSpoiler,
-			GraphicsUtils.Reencoding reencoding) {
-		FileHolder fileHolder = DraftsStorage.getInstance().getAttachmentDraftFileHolder(hash);
-		AttachmentHolder holder = addNewAttachment();
-		holder.hash = hash;
-		holder.name = name;
-		holder.rating = rating;
-		holder.optionUniqueHash = optionUniqueHash;
-		holder.optionRemoveMetadata = optionRemoveMetadata;
-		holder.optionRemoveFileName = optionRemoveFileName;
-		holder.optionSpoiler = optionSpoiler;
-		holder.reencoding = reencoding;
-		bindAttachmentFile(holder, fileHolder);
-		updateAttachmentConfiguration(holder);
-	}
-
-	private void bindAttachmentFile(AttachmentHolder holder, FileHolder fileHolder) {
-		VideoThumbnailTask oldTask = videoThumbnailTasks.remove(holder);
-		if (oldTask != null) oldTask.cancel();
-		JpegData jpegData = fileHolder != null ? fileHolder.getJpegData() : null;
-		PngData pngData = fileHolder != null ? fileHolder.getPngData() : null;
-		holder.fileName.setText(holder.name);
-		int size = fileHolder != null ? fileHolder.getSize() : 0;
-		String fileSize = StringUtils.formatFileSize(size, false);
-		Bitmap bitmap = null;
-		DisplayMetrics metrics = getResources().getDisplayMetrics();
-		int targetImageSize = Math.max(metrics.widthPixels, metrics.heightPixels);
-		boolean video = Chan.getFallback().locator.isVideoExtension(holder.name);
-		holder.imageView.setImageDrawable(null);
-		holder.imageView.setVisibility(View.GONE);
-		holder.previewButton.setVisibility(View.GONE);
-		holder.warningButton.setVisibility(View.VISIBLE);
-		holder.editButton.setVisibility(View.GONE);
-		holder.view.getLayoutParams().height = (int) (48f * ResourceUtils.obtainDensity(this));
-		if (fileHolder != null) {
-			if (fileHolder.isImage()) {
-				try {
-					bitmap = fileHolder.readImageBitmap(targetImageSize, false, false);
-				} catch (OutOfMemoryError e) {
-					// Ignore
-				}
-				fileSize += " " + fileHolder.getImageWidth() + '×' + fileHolder.getImageHeight();
+			@Override public void launchAttachmentPicker(Intent intent) {
+				attachmentPicker.launch(intent);
 			}
-		}
-		if (video) {
-			holder.previewButton.setVisibility(Preferences.isAttachmentVideoPreview()
-					&& Preferences.isUseVideoPlayer() ? View.VISIBLE : View.GONE);
-			holder.view.getLayoutParams().height = (int) (128f * ResourceUtils.obtainDensity(this));
-			VideoThumbnailTask task = new VideoThumbnailTask(holder, holder.hash, targetImageSize);
-			videoThumbnailTasks.put(holder, task);
-			task.execute(VIDEO_THUMBNAIL_EXECUTOR);
-		}
-		if (fileHolder != null && Preferences.isImageEditorEnabled() && isEditableImage(fileHolder, holder.name)) {
-			holder.editButton.setVisibility(View.VISIBLE);
-		}
-		if (bitmap != null) {
-			holder.imageView.setVisibility(View.VISIBLE);
-			holder.imageView.setImageBitmap(bitmap);
-			holder.view.getLayoutParams().height = (int) (128f * ResourceUtils.obtainDensity(this));
-		}
-		holder.fileSize.setText(fileSize);
-		if ((jpegData == null || jpegData.exifData == null) && (pngData == null || !pngData.hasMetadata)) {
-			holder.warningButton.setVisibility(View.GONE);
-		}
-	}
-
-	private static boolean isEditableImage(FileHolder fileHolder, String name) {
-		String extension = StringUtils.getFileExtension(name);
-		if ("gif".equals(extension) || "apng".equals(extension) || "svg".equals(extension)) return false;
-		switch (fileHolder.getImageType()) {
-			case IMAGE_JPEG:
-			case IMAGE_PNG:
-			case IMAGE_WEBP:
-			case IMAGE_BMP: return true;
-			default: return false;
-		}
-	}
-
-	private class VideoThumbnailTask extends ExecutorTask<Void, Bitmap> {
-		private final AttachmentHolder holder;
-		private final String hash;
-		private final int targetImageSize;
-
-		public VideoThumbnailTask(AttachmentHolder holder, String hash, int targetImageSize) {
-			this.holder = holder;
-			this.hash = hash;
-			this.targetImageSize = targetImageSize;
-		}
-
-		@Override
-		protected Bitmap run() throws InterruptedException {
-			File file = DraftsStorage.getInstance().getAttachmentDraftFile(hash);
-			if (file == null || !VideoPlayer.loadLibraries(MainApplication.getInstance()).first) {
-				return null;
+			@Override public void launchImageEditor(Intent intent) {
+				imageEditor.launch(intent);
 			}
-			try {
-				Bitmap bitmap = VideoPlayer.createThumbnail(file);
-				return bitmap != null ? GraphicsUtils.reduceBitmapSize(bitmap, targetImageSize, true) : null;
-			} catch (java.io.IOException | RuntimeException | LinkageError | OutOfMemoryError e) {
-				return null;
+			@Override public void onAttachmentDiagnostic(String event) {
+				com.mishiranu.dashchan.ui.UiLifecycleDiagnostics.event(PostingFragment.this, event);
 			}
-		}
-
-		@Override
-		protected void onCancel(Bitmap bitmap) {
-			if (bitmap != null) {
-				bitmap.recycle();
-			}
-		}
-
-		@Override
-		protected void onComplete(Bitmap bitmap) {
-			if (videoThumbnailTasks.get(holder) == this) {
-				videoThumbnailTasks.remove(holder);
-			}
-			if (bitmap != null && attachments.contains(holder) && hash.equals(holder.hash)) {
-				holder.imageView.setImageBitmap(bitmap);
-				holder.imageView.setVisibility(View.VISIBLE);
-			} else if (bitmap != null) {
-				bitmap.recycle();
-			}
-		}
-	}
-
-	private void updateAttachmentConfiguration(AttachmentHolder holder) {
-		if (attachmentRatingItems != null) {
-			if (holder.rating == null) {
-				holder.rating = attachmentRatingItems.get(0).first;
-			}
-			holder.ratingButton.setVisibility(View.VISIBLE);
-		} else {
-			holder.ratingButton.setVisibility(View.GONE);
-		}
+		};
 	}
 
 	private void formatQuote() {

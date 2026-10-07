@@ -4,6 +4,7 @@ import android.net.Uri;
 import android.util.Log;
 import chan.content.Chan;
 import chan.content.ChanConfiguration;
+import chan.content.ChanResourceAccess;
 import chan.content.ChanManager;
 import chan.content.ChanPerformer;
 import chan.content.ExtensionException;
@@ -160,7 +161,8 @@ public class ReadFileTask extends HttpHolderTask<long[], Boolean> {
 				}
 			} else if (ChanConfiguration.SCHEME_CHAN.equals(fromUri.getScheme())) {
 				try (OutputStream output = toFile.openOutputStream()) {
-					if (!chan.configuration.readResourceUri(fromUri, output)) {
+					Chan resourceChan = ChanResourceAccess.resolveResourceChan(chan, fromUri);
+					if (!resourceChan.configuration.readResourceUri(fromUri, output)) {
 						throw HttpException.createNotFoundException();
 					}
 				} catch (IOException e) {

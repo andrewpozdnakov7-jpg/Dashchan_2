@@ -792,7 +792,7 @@ public class ChanConfiguration implements Chan.Linked {
 				try {
 					if (get().packageName.equals(resources.getResourcePackageName(resId))) {
 						String value = ChanResourceUri.build(get().name, resources.getResourceTypeName(resId),
-								resources.getResourceEntryName(resId), snapshot.generation);
+								resources.getResourceEntryName(resId));
 						if (value == null) return null;
 						uri = Uri.parse(value);
 						resourceUris.put(resId, uri);

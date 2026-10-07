@@ -17,6 +17,7 @@ import com.mishiranu.dashchan.BuildConfig;
 import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.translation.TranslationEngine;
+import com.mishiranu.dashchan.ui.posting.PhotoEditorBridge;
 import com.mishiranu.dashchan.util.SharedPreferences;
 import com.mishiranu.dashchan.widget.ClickableToast;
 import java.io.File;
@@ -1650,6 +1651,13 @@ public class Preferences {
 
 	public static final String KEY_SHOWCASE_GALLERY = "showcase_gallery";
 
+	public static final String KEY_SCROLL_GALLERY_TO_CURRENT_FILE = "scroll_gallery_to_current_file";
+	public static final boolean DEFAULT_SCROLL_GALLERY_TO_CURRENT_FILE = true;
+
+	public static boolean isScrollGalleryToCurrentFile() {
+		return PREFERENCES.getBoolean(KEY_SCROLL_GALLERY_TO_CURRENT_FILE, DEFAULT_SCROLL_GALLERY_TO_CURRENT_FILE);
+	}
+
 	public static void consumeShowcaseGallery() {
 		PREFERENCES.edit().put(KEY_SHOWCASE_GALLERY, false).close();
 	}
@@ -2244,6 +2252,11 @@ public class Preferences {
 	public static final boolean DEFAULT_OUTBOX_JOURNAL = false;
 	public static final String KEY_DISCUSSION_CONTEXT = "experimental_discussion_context";
 	public static final boolean DEFAULT_DISCUSSION_CONTEXT = false;
+	public static final String KEY_NEW_PHOTO_EDITOR = "experimental_new_photo_editor";
+	// Availability remains gated by the distribution bridge; an explicit user choice takes precedence.
+	public static final boolean DEFAULT_NEW_PHOTO_EDITOR = true;
+	public static final String KEY_PIP_DIAGNOSTIC_MODE = "experimental_pip_diagnostic_mode";
+	public static final String DEFAULT_PIP_DIAGNOSTIC_MODE = "normal";
 	public static final String KEY_TRANSLATION_NATIVE_LANGUAGE = "translation_native_language";
 	public static final String DEFAULT_TRANSLATION_NATIVE_LANGUAGE = "ru";
 	public static final String KEY_TRANSLATION_AUTO = "translation_auto";
@@ -2265,6 +2278,14 @@ public class Preferences {
 
 	public static boolean isImageEditorEnabled() {
 		return PREFERENCES.getBoolean(KEY_IMAGE_EDITOR, DEFAULT_IMAGE_EDITOR);
+	}
+
+	public static boolean isNewPhotoEditorEnabled() {
+		return PhotoEditorBridge.isAvailable() && PREFERENCES.getBoolean(KEY_NEW_PHOTO_EDITOR, DEFAULT_NEW_PHOTO_EDITOR);
+	}
+
+	public static String getPipDiagnosticMode() {
+		return PREFERENCES.getString(KEY_PIP_DIAGNOSTIC_MODE, DEFAULT_PIP_DIAGNOSTIC_MODE);
 	}
 
 	public static boolean isDefaultAttachmentUniqueHash() {
@@ -2812,6 +2833,24 @@ public class Preferences {
 		playbackSpeed = Math.round(playbackSpeed / 10f) * 10;
 		PREFERENCES.edit().put(KEY_VIDEO_CUSTOM_PLAYBACK_SPEED_VALUE,
 				Math.max(10, Math.min(playbackSpeed, 10000))).close();
+	}
+
+	public static final String KEY_REMEMBER_LAST_VIDEO_POSITION = "remember_last_video_position";
+	public static final boolean DEFAULT_REMEMBER_LAST_VIDEO_POSITION = true;
+	private static final String KEY_SAVED_LAST_VIDEO_POSITION = "saved_last_video_position";
+
+	public static boolean isRememberLastVideoPosition() {
+		return PREFERENCES.getBoolean(KEY_REMEMBER_LAST_VIDEO_POSITION, DEFAULT_REMEMBER_LAST_VIDEO_POSITION);
+	}
+
+	public static String getSavedLastVideoPosition() {
+		return PREFERENCES.getString(KEY_SAVED_LAST_VIDEO_POSITION, null);
+	}
+
+	public static void setSavedLastVideoPosition(String position) {
+		if (!java.util.Objects.equals(position, getSavedLastVideoPosition())) {
+			PREFERENCES.edit().put(KEY_SAVED_LAST_VIDEO_POSITION, position).close();
+		}
 	}
 
 	public static final String KEY_REMEMBER_VIDEO_PLAYBACK_SPEED = "remember_video_playback_speed";

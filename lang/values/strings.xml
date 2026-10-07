@@ -2,6 +2,8 @@
 <resources>
 	<string name="webview_renderer_gone">The web page stopped working. Please open it again.</string>
 	<string name="gallery_restore_unavailable">Could not restore the gallery from local data. Open it again from the thread or archive.</string>
+	<string name="scroll_gallery_to_current_file">Scroll gallery to current file</string>
+	<string name="scroll_gallery_to_current_file__summary">When returning from the file viewer, scroll the gallery grid to the last opened file. When disabled, keep the previous grid position.</string>
 	<string name="gallery_refresh">Refresh gallery</string>
 	<string name="gallery_refresh_result">New media files: %1$d · posts: %2$d</string>
 	<string name="gallery_refresh_failed">Could not refresh the gallery. Please try again.</string>
@@ -584,6 +586,8 @@
 	<string name="play_after_scroll">Play after scroll</string>
 	<string name="play_after_scroll__summary">Hide play button before playing video</string>
 	<string name="start_videos_muted">Start videos muted</string>
+	<string name="remember_last_video_position">Remember last video position</string>
+	<string name="remember_last_video_position__summary">Resume the last video when you reopen it, even after restarting the app. Finished videos start from the beginning</string>
 	<string name="start_videos_muted__summary">All new videos in the built-in player will start without sound</string>
 	<string name="play_again">Play again</string>
 	<string name="playback_error">Playback error</string>

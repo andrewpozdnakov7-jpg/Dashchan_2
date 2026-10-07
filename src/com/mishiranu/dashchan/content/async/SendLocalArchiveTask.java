@@ -8,6 +8,7 @@ import android.text.style.UnderlineSpan;
 import android.util.Base64;
 import chan.content.Chan;
 import chan.content.ChanConfiguration;
+import chan.content.ChanResourceAccess;
 import chan.content.ChanMarkup;
 import chan.util.DataFile;
 import chan.util.StringUtils;
@@ -235,8 +236,11 @@ public class SendLocalArchiveTask extends ExecutorTask<Integer, SendLocalArchive
 					sage, originalPoster, timestamp, deleted, useDefaultName, comment);
 			for (Post.Icon icon : post.icons) {
 				if (icon.uri != null && !StringUtils.isEmpty(icon.title)) {
-					Uri iconUri = chan.locator.convert(icon.uri);
-					String simpleUri = iconUri.buildUpon().scheme(null).authority(null).build().toString();
+					Uri iconUri = ChanResourceAccess.canonicalize(chan.locator.convert(icon.uri));
+					boolean resource = ChanConfiguration.SCHEME_CHAN.equals(iconUri.getScheme());
+					// Resource owners are part of identity; generation/query/fragment are not.
+					String simpleUri = resource ? iconUri.toString()
+							: iconUri.buildUpon().scheme(null).authority(null).build().toString();
 					String pathHash = Base64.encodeToString(hasher.calculate(simpleUri), 0, 12,
 							Base64.NO_WRAP | Base64.URL_SAFE);
 					String iconNameWithoutExtension = "icon-" + pathHash;
@@ -244,10 +248,11 @@ public class SendLocalArchiveTask extends ExecutorTask<Integer, SendLocalArchive
 					boolean downloadIcon = false;
 					if (iconName == null) {
 						String extension = null;
-						if (ChanConfiguration.SCHEME_CHAN.equals(iconUri.getScheme())) {
+						if (resource) {
 							ByteArrayOutputStream output = new ByteArrayOutputStream();
 							try {
-								if (chan.configuration.readResourceUri(iconUri, output)) {
+								Chan resourceChan = ChanResourceAccess.resolveResourceChan(chan, iconUri);
+								if (resourceChan.configuration.readResourceUri(iconUri, output)) {
 									byte[] bytes = output.toByteArray();
 									String contentType = URLConnection
 											.guessContentTypeFromStream(new ByteArrayInputStream(bytes));

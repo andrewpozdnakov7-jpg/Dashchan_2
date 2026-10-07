@@ -5,8 +5,9 @@ import org.junit.Test;
 
 public class ImageMemoryKeyTest {
 	@Test public void resourceGenerationSeparatesBitmapsAndNegativeCache() {
-		assertNotEquals(ImageMemoryKey.create("dvach", 100, "old-uri-key", true, 1L),
-				ImageMemoryKey.create("dvach", 100, "old-uri-key", true, 2L));
+		String stableUriKey = "chan://dvach/res/raw/foo";
+		assertNotEquals(ImageMemoryKey.create("dvach", 100, stableUriKey, true, 1L),
+				ImageMemoryKey.create("dvach", 100, stableUriKey, true, 2L));
 	}
 
 	@Test public void resourceOwnerAndTargetSizeRemainPartOfKey() {

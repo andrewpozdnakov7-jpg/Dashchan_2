@@ -8,6 +8,7 @@ import android.os.Environment;
 import android.util.Pair;
 import androidx.annotation.NonNull;
 import chan.content.Chan;
+import chan.content.ChanResourceAccess;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.util.AndroidUtils;
 import com.mishiranu.dashchan.util.Hasher;
@@ -498,7 +499,9 @@ public class CacheManager implements Runnable {
 				} else {
 					data = uriString;
 				}
-			} else if ("chan".equals(scheme) || LocalArchiveManager.RESOURCE_SCHEME.equals(scheme)) {
+			} else if ("chan".equals(scheme)) {
+				data = ChanResourceAccess.canonicalize(uri).toString();
+			} else if (LocalArchiveManager.RESOURCE_SCHEME.equals(scheme)) {
 				data = uri.toString();
 			} else {
 				Chan chan = Chan.getPreferred(null, uri);

@@ -77,6 +77,11 @@ public class MediaFragment extends PreferenceFragment implements FragmentHandler
 		preloadPreference.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 				.pushFragment(new VideoPreloadFragment()));
 
+		addHeader(R.string.gallery);
+		addCheck(true, Preferences.KEY_SCROLL_GALLERY_TO_CURRENT_FILE,
+				Preferences.DEFAULT_SCROLL_GALLERY_TO_CURRENT_FILE, R.string.scroll_gallery_to_current_file,
+				R.string.scroll_gallery_to_current_file__summary);
+
 		addHeader(R.string.images);
 		addList(Preferences.KEY_LOAD_THUMBNAILS, enumList(Preferences.NetworkMode.values(), v -> v.value),
 				Preferences.DEFAULT_LOAD_THUMBNAILS.value, R.string.load_thumbnails,
@@ -153,6 +158,13 @@ public class MediaFragment extends PreferenceFragment implements FragmentHandler
 				Preferences.DEFAULT_USE_VIDEO_PLAYER, R.string.use_built_in_video_player,
 				R.string.use_built_in_video_player__summary);
 		videoPlayerPreference.setEnabled(playerLoadResult.first);
+		CheckPreference rememberPositionPreference = addCheck(true, Preferences.KEY_REMEMBER_LAST_VIDEO_POSITION,
+				Preferences.DEFAULT_REMEMBER_LAST_VIDEO_POSITION, R.string.remember_last_video_position,
+				R.string.remember_last_video_position__summary);
+		rememberPositionPreference.setEnabled(playerLoadResult.first);
+		rememberPositionPreference.setOnAfterChangeListener(p -> {
+			if (!rememberPositionPreference.getValue()) Preferences.setSavedLastVideoPosition(null);
+		});
 		addCheck(true, Preferences.KEY_VIDEO_START_MUTED, Preferences.DEFAULT_VIDEO_START_MUTED,
 				R.string.start_videos_muted, R.string.start_videos_muted__summary)
 				.setEnabled(playerLoadResult.first);
@@ -200,6 +212,7 @@ public class MediaFragment extends PreferenceFragment implements FragmentHandler
 				R.string.attachment_video_preview,
 				R.string.attachment_video_preview__summary).setEnabled(playerLoadResult.first);
 		if (playerLoadResult.first) {
+			addDependency(Preferences.KEY_REMEMBER_LAST_VIDEO_POSITION, Preferences.KEY_USE_VIDEO_PLAYER, true);
 			addDependency(Preferences.KEY_VIDEO_START_MUTED, Preferences.KEY_USE_VIDEO_PLAYER, true);
 			addDependency(Preferences.KEY_VIDEO_COMPLETION, Preferences.KEY_USE_VIDEO_PLAYER, true);
 			addDependency(Preferences.KEY_VIDEO_PLAY_AFTER_SCROLL, Preferences.KEY_USE_VIDEO_PLAYER, true);

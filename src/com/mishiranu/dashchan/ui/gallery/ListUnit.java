@@ -31,6 +31,7 @@ import chan.util.StringUtils;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.CacheManager;
 import com.mishiranu.dashchan.content.ImageLoader;
+import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.model.GalleryItem;
 import com.mishiranu.dashchan.graphics.SelectorCheckDrawable;
 import com.mishiranu.dashchan.media.VideoDiagnostics;
@@ -66,6 +67,14 @@ public class ListUnit implements ActionMode.Callback {
 	private int diagnosticTarget = RecyclerView.NO_POSITION;
 	private ListPosition pendingListPosition;
 	private int gridMetricsWidth;
+	private GalleryItem pendingReturnItem;
+	private GalleryItem openedFromGridItem;
+	private int openedGridWidth;
+	private int openedGridHeight;
+	private boolean gridVisible;
+	private GalleryViewportMemory.Snapshot viewport;
+	private GalleryViewportMemory.Snapshot pendingViewport;
+	private GalleryItem viewportItem;
 
 	public ListUnit(GalleryInstance instance) {
 		this.instance = instance;
@@ -89,21 +98,53 @@ public class ListUnit implements ActionMode.Callback {
 				if (newState == RecyclerView.SCROLL_STATE_DRAGGING) {
 					// A user's scroll takes priority over a previous navigation request.
 					pendingListPosition = null;
+					pendingReturnItem = null;
+					pendingViewport = null;
 				}
 				logPosition("scroll_state=" + newState);
 			}
 		});
 		recyclerView.getViewTreeObserver().addOnPreDrawListener(() -> {
-			if (pendingListPosition != null && recyclerView.isShown() &&
-					gridMetricsWidth == getGridWidth() && !recyclerView.isLayoutRequested() &&
-					!recyclerView.hasPendingAdapterUpdates()) {
+			if (pendingListPosition != null && isGridLayoutSettled()) {
 				logPosition("scroll_settled index=" + pendingListPosition.position);
 				pendingListPosition = null;
+			}
+			if (pendingViewport != null && isGridLayoutSettled()) {
+				GalleryViewportMemory.Snapshot snapshot = pendingViewport;
+				pendingViewport = null;
+				int anchor = findViewportItem(snapshot);
+				if (anchor >= 0) {
+					GalleryItem returnItem = pendingReturnItem;
+					GridLayoutManager manager = (GridLayoutManager) recyclerView.getLayoutManager();
+					int offset = snapshot.offsetFor(getGridWidth(), manager.getSpanCount());
+					scrollListToPosition(anchor, offset);
+					pendingReturnItem = returnItem;
+					logPosition("grid_viewport_restored index=" + anchor + " offset=" + offset);
+					return false;
+				}
+			}
+			if (pendingReturnItem != null && isGridLayoutSettled()) {
+				GalleryItem item = pendingReturnItem;
+				pendingReturnItem = null;
+				int position = instance.galleryItems.indexOf(item);
+				GridLayoutManager manager = (GridLayoutManager) recyclerView.getLayoutManager();
+				boolean unchanged = item == openedFromGridItem
+						&& openedGridWidth == recyclerView.getWidth()
+						&& openedGridHeight == recyclerView.getHeight();
+				if (GalleryGridReturnPolicy.shouldReveal(position, manager.findFirstVisibleItemPosition(),
+						manager.findLastVisibleItemPosition(), unchanged)) {
+					logPosition("grid_return_reveal index=" + position);
+					scrollListToPosition(position, 0);
+					// Resolve the requested row before painting, rather than showing a jump.
+					return false;
+				}
+				logPosition("grid_return_preserved index=" + position + " unchanged=" + unchanged);
 			}
 			if (diagnosticLayoutPending && recyclerView.isShown()) {
 				diagnosticLayoutPending = false;
 				logPosition("grid_pre_draw");
 			}
+			captureViewport();
 			return true;
 		});
 		recyclerView.addOnLayoutChangeListener((view, left, top, right, bottom,
@@ -164,33 +205,123 @@ public class ListUnit implements ActionMode.Callback {
 	}
 
 	public void scrollListToPosition(int position, boolean checkVisibility) {
-		scrollListToPosition(position, 0, checkVisibility);
+		if (checkVisibility) {
+			requestReturnToGrid(position);
+			return;
+		}
+		scrollListToPosition(position, 0);
+	}
+
+	void onPageOpenedFromGrid(int position) {
+		recyclerView.stopScroll();
+		captureViewport();
+		pendingReturnItem = null;
+		openedFromGridItem = position >= 0 && position < instance.galleryItems.size()
+				? instance.galleryItems.get(position) : null;
+		openedGridWidth = recyclerView.getWidth();
+		openedGridHeight = recyclerView.getHeight();
+		logPosition("grid_open_page index=" + position);
+	}
+
+	void requestReturnToGrid(int position) {
+		diagnosticTarget = position;
+		diagnosticLayoutPending = true;
+		if (viewport == null || findViewportItem(viewport) < 0) {
+			// The first swipe from a thread image is INITIAL ENTRY, not a return.
+			// It must locate that image even when automatic following is disabled.
+			viewport = null;
+			logPosition("grid_initial_entry index=" + position);
+			scrollListToPosition(position, 0);
+			return;
+		}
+		pendingViewport = viewport;
+		if (!Preferences.isScrollGalleryToCurrentFile()) {
+			// Restore the old anchor AND offset, not the hidden LayoutManager's anchor.
+			pendingReturnItem = null;
+			logPosition("grid_return_preserved autoScroll=false index=" + position);
+			recyclerView.invalidate();
+			return;
+		}
+		pendingReturnItem = position >= 0 && position < instance.galleryItems.size()
+				? instance.galleryItems.get(position) : null;
+		// Showing a GONE view requests layout. Its old visibility indices must not
+		// decide whether to scroll. Keep the existing LayoutManager viewport and
+		// reveal only an off-screen item once layout and adapter updates have settled.
+		logPosition("grid_return_requested index=" + position);
+		recyclerView.invalidate();
+	}
+
+	private String viewportItemKey(GalleryItem item) {
+		return item.postNumber + "|" + item.getFileUri(Chan.get(instance.chanName));
+	}
+
+	private int findViewportItem(GalleryViewportMemory.Snapshot snapshot) {
+		for (int i = 0; i < instance.galleryItems.size(); i++) {
+			if (snapshot.itemKey.equals(viewportItemKey(instance.galleryItems.get(i)))) return i;
+		}
+		return -1;
+	}
+
+	private void captureViewport() {
+		// GONE/animating-away grids and unsettled targets are not a user's viewport.
+		if (!gridVisible || !isGridLayoutSettled() || pendingViewport != null
+				|| pendingListPosition != null || pendingReturnItem != null) return;
+		ListPosition position = ListPosition.obtain(recyclerView, null);
+		if (position != null && position.position >= 0 && position.position < instance.galleryItems.size()) {
+			GridLayoutManager manager = (GridLayoutManager) recyclerView.getLayoutManager();
+			GalleryItem item = instance.galleryItems.get(position.position);
+			if (viewport != null && item == viewportItem && viewport.offset == position.offset
+					&& viewport.width == getGridWidth() && viewport.columns == manager.getSpanCount()) return;
+			viewportItem = item;
+			viewport = new GalleryViewportMemory.Snapshot(viewportItemKey(item),
+					position.offset, getGridWidth(), manager.getSpanCount());
+		}
+	}
+
+	GalleryViewportMemory.Snapshot getViewport() {
+		captureViewport();
+		return viewport;
+	}
+
+	boolean setViewport(GalleryViewportMemory.Snapshot snapshot) {
+		if (snapshot == null || !snapshot.isValid() || findViewportItem(snapshot) < 0) return false;
+		viewport = snapshot;
+		pendingViewport = snapshot;
+		return true;
+	}
+
+	void initializeGridPosition(int position) {
+		if (viewport != null) {
+			pendingViewport = viewport;
+			if (Preferences.isScrollGalleryToCurrentFile() && position >= 0 && position < instance.galleryItems.size()) {
+				pendingReturnItem = instance.galleryItems.get(position);
+			}
+		}
+		else if (position >= 0) scrollListToPosition(position, 0);
+	}
+
+	private boolean isGridLayoutSettled() {
+		return recyclerView.isShown() && recyclerView.getWidth() > 0 && recyclerView.getHeight() > 0
+				&& gridMetricsWidth == getGridWidth() && !recyclerView.isLayoutRequested()
+				&& !recyclerView.hasPendingAdapterUpdates() && !recyclerView.isComputingLayout();
 	}
 
 	void restoreFilterPosition(int position, int offset) {
-		scrollListToPosition(position, offset, false);
+		scrollListToPosition(position, offset);
 	}
 
-	private void scrollListToPosition(int position, int offset, boolean checkVisibility) {
+	private void scrollListToPosition(int position, int offset) {
+		pendingReturnItem = null;
+		pendingViewport = null;
 		diagnosticTarget = position;
 		diagnosticLayoutPending = true;
-		logPosition("scroll_request checkVisibility=" + checkVisibility);
+		logPosition("scroll_request explicit=true offset=" + offset);
 		if (position < 0 || position >= instance.galleryItems.size()) {
 			logPosition("scroll_rejected_invalid_index");
 			return;
 		}
 		recyclerView.stopScroll();
 		updateGridMetrics(recyclerView.getResources().getConfiguration());
-		GridLayoutManager layoutManager = (GridLayoutManager) recyclerView.getLayoutManager();
-		if (checkVisibility && !recyclerView.isLayoutRequested() &&
-				!recyclerView.hasPendingAdapterUpdates() && gridMetricsWidth == getGridWidth()) {
-			if (position >= layoutManager.findFirstCompletelyVisibleItemPosition() &&
-					position <= layoutManager.findLastCompletelyVisibleItemPosition()) {
-				logPosition("scroll_skipped_already_visible");
-				pendingListPosition = null;
-				return;
-			}
-		}
 		// Keep the explicit target through the initial one-column layout and the later
 		// measured grid layout. GridLayoutManager's implicit anchor can change between them.
 		pendingListPosition = new ListPosition(position, offset);
@@ -249,6 +380,11 @@ public class ListUnit implements ActionMode.Callback {
 
 	public void onGalleryItemsChanged() {
 		pendingListPosition = null;
+		pendingReturnItem = null;
+		openedFromGridItem = null;
+		viewport = null;
+		pendingViewport = null;
+		viewportItem = null;
 		if (selectionMode != null) {
 			selectionMode.finish();
 		} else {
@@ -330,6 +466,8 @@ public class ListUnit implements ActionMode.Callback {
 	private static final float GRID_SCALE = 1.1f;
 
 	public void switchMode(boolean galleryMode, int duration) {
+		if (!galleryMode) captureViewport();
+		gridVisible = galleryMode;
 		diagnosticLayoutPending = true;
 		logPosition("grid_switch visible=" + galleryMode + " duration=" + duration);
 		if (galleryMode) {
@@ -342,6 +480,7 @@ public class ListUnit implements ActionMode.Callback {
 				recyclerView.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(duration).setListener(null).start();
 			}
 		} else {
+			pendingReturnItem = null;
 			if (duration > 0) {
 				recyclerView.setAlpha(1f);
 				recyclerView.setScaleX(1f);

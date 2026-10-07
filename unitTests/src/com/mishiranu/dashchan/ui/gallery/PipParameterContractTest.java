@@ -169,4 +169,49 @@ public class PipParameterContractTest {
 		assertFalse(source().contains("params.getAspectRatio()"));
 		assertFalse(source().contains("params.getSourceRectHint()"));
 	}
+
+	@Test public void diagnosticChoiceIsFrozenAndGuardedAtTheFinalPublisher() throws Exception {
+		assertTrue(method("onCreate").contains("PipDiagnosticMode.fromPreference(Preferences.getPipDiagnosticMode())"));
+		assertEquals(1, source().split("Preferences.getPipDiagnosticMode\\(\\)", -1).length - 1);
+		String publish = method("publishPictureInPictureParams");
+		assertTrue(publish.indexOf("allowsParameterUpdate(isInPictureInPictureMode())")
+				< publish.indexOf("setPictureInPictureParams("));
+		assertTrue(method("enterPictureInPicture").contains("allowsHintAtEntry() ? getPictureInPictureSourceRect() : null"));
+	}
+
+	@Test public void diagnosticLayoutOnlyUpdatesFreshHintWithoutActionsOrAspectChanges() throws Exception {
+		String layout = method("updateDiagnosticPictureInPictureGeometry");
+		assertTrue(layout.contains("getPictureInPictureSourceRect()"));
+		assertTrue(layout.contains("sourceRect.equals(lastSourceRectHint)"));
+		assertFalse(layout.contains("setActions(")); assertFalse(layout.contains("setAspectRatio("));
+		String controls = method("updatePictureInPictureControls");
+		assertTrue(controls.indexOf("rootView.setKeepScreenOn(playing)") < controls.indexOf("isDiagnostic()"));
+		assertTrue(method("togglePlayback").contains("player.setPlaying(playing)"));
+		assertTrue(method("seekBy").contains("player.setPosition(position)"));
+	}
+
+	@Test public void seamlessResizeUsesApiGuardAndRestoresOnlyAfterSuccessfulPublication() throws Exception {
+		String create = method("createPictureInPictureParams");
+		assertTrue(create.indexOf("Build.VERSION.SDK_INT >= Build.VERSION_CODES.S")
+				< create.indexOf("builder.setSeamlessResizeEnabled("));
+		assertTrue(create.contains("pictureInPictureDiagnosticMode.isSeamlessResizeEnabled()"));
+		String publish = method("publishPictureInPictureParams");
+		assertTrue(publish.indexOf("allowsParameterUpdate(") < publish.indexOf("setSeamlessResizeEnabled("));
+		assertTrue(publish.contains("seamlessResizeEnabled != lastPublishedSeamlessResizeEnabled"));
+		assertTrue(publish.indexOf("setPictureInPictureParams(") < publish.indexOf("lastPublishedSeamlessResizeEnabled ="));
+		assertTrue(method("getPictureInPictureSeamlessResizeDiagnosticValue").contains("\"unsupported\""));
+		assertTrue(method("onCreate").contains("!pictureInPictureDiagnosticMode.isSeamlessResizeEnabled()) pictureInPictureDiagnosticTrialValid = false"));
+	}
+
+	@Test public void changingVideoOrReenteringEndsTheDiagnosticTrialWithoutMovingTheWindow() throws Exception {
+		assertTrue(method("replacePictureInPictureContent").contains("endPictureInPictureDiagnosticTrial(\"content_replaced\")"));
+		assertTrue(method("enterPictureInPicture").contains("endPictureInPictureDiagnosticTrial(\"same_activity_reentry\")"));
+		String end = method("endPictureInPictureDiagnosticTrial");
+		assertTrue(end.contains("pictureInPictureDiagnosticMode = PipDiagnosticMode.NORMAL"));
+		assertTrue(end.contains("pictureInPictureDiagnosticTrialValid = false"));
+		for (String forbidden : new String[] {"setAspectRatio", "setActions", "setRequestedOrientation",
+				"setPlaying(", "releaseVideoView", "enterPictureInPictureMode", "startActivity("}) {
+			assertFalse(forbidden, end.contains(forbidden));
+		}
+	}
 }

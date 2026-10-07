@@ -1220,32 +1220,6 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		return false;
 	}
 
-	private void clearStackAndCurrent() {
-		ContentFragment currentFragment = getCurrentFragment("FragmentAccess/clearStackAndCurrent");
-		boolean mergeChans = Preferences.isMergeChans();
-		boolean closeOnBack = Preferences.isCloseOnBack();
-		String chanName = ((PageFragment) currentFragment).getPage().chanName;
-		Iterator<SavedPageItem> iterator = stackPageItems.iterator();
-		while (iterator.hasNext()) {
-			SavedPageItem savedPageItem = iterator.next();
-			Page page = getSavedPage(savedPageItem);
-			if (page.chanName.equals(chanName) || mergeChans && isPageEnabled(page)) {
-				iterator.remove();
-				if (!(page.canDestroyIfNotInStack() || closeOnBack && page.isThreadsOrPosts())) {
-					preservedPageItems.add(savedPageItem);
-				}
-			}
-		}
-		Page page = ((PageFragment) currentFragment).getPage();
-		if (mergeChans || page.chanName.equals(chanName)) {
-			if (!(page.canDestroyIfNotInStack() || closeOnBack && page.isThreadsOrPosts())) {
-				preservedPageItems.add(currentPageItem.toSaved(getSupportFragmentManager(),
-						(PageFragment) currentFragment));
-			}
-			currentPageItem = null;
-		}
-	}
-
 	private boolean navigateInitial(boolean closeOverlays) {
 		if (deferContentNavigation(() -> navigateInitial(closeOverlays))) return true;
 		currentPageItem = null;
@@ -1373,7 +1347,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 				? ((PageFragment) currentFragment).getPage() : null;
 		if (currentPage != null && currentPage.is(content, chanName, boardName, threadNumber) && searchQuery == null) {
 			if (currentPageItem == null && (content == Page.Content.BOARDS || content == Page.Content.THREADS)) {
-				// Was removed from stack during clearStackAndCurrent
+				// The current page may already have been removed from the stack.
 				Iterator<SavedPageItem> iterator = new ConcatIterable<>(preservedPageItems, stackPageItems).iterator();
 				while (iterator.hasNext()) {
 					if (getSavedPage(iterator.next()).is(content, chanName, boardName, null)) {
@@ -2167,44 +2141,9 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		}
 		ContentFragment currentFragment = getCurrentFragment("FragmentAccess/onOptionsItemSelected");
 		if (item.getItemId() == android.R.id.home) {
-			if (currentFragment != null && currentFragment.onHomePressed()) {
-				return true;
-			}
-			drawerLayout.closeDrawers();
-			if (currentFragment instanceof PageFragment) {
-				Page page = ((PageFragment) currentFragment).getPage();
-				String newChanName = page.chanName;
-				String newBoardName = page.boardName;
-				if (page.content == Page.Content.THREADS) {
-					// Up button must navigate to main page in threads list
-					newBoardName = Preferences.getDefaultBoardName(Chan.get(page.chanName));
-					if (Preferences.isMergeChans() && CommonUtils.equals(page.boardName, newBoardName)) {
-						Chan chan = getLastVisitedEnabledChan();
-						if (chan != null) {
-							newChanName = chan.name;
-							newBoardName = Preferences.getDefaultBoardName(chan);
-						} else {
-							clearStackAndCurrent();
-							navigateInitial(true);
-							return true;
-						}
-					}
-				}
-				clearStackAndCurrent();
-				boolean fromCache = false;
-				for (SavedPageItem savedPageItem : new ConcatIterable<>(preservedPageItems, stackPageItems)) {
-					if (getSavedPage(savedPageItem).is(Page.Content.THREADS, newChanName, newBoardName, null)) {
-						fromCache = true;
-						break;
-					}
-				}
-				navigateData(newChanName, newBoardName, null, null, null, null,
-						FLAG_DATA_CLOSE_OVERLAYS | (fromCache ? FLAG_DATA_FROM_CACHE : 0));
-			} else {
-				// Keep toolbar Up consistent with system Back for nested non-page screens.
-				// removeFragment() pops one saved fragment and falls back to the last page only at the root.
-				removeFragment();
-			}
+			// Match system Back: restore the previous screen, including its cached list and scroll position.
+			// Do not clear the page stack or reopen the parent board with a forced load.
+			onSystemBackPressed();
 			return true;
 		} else if (item.getItemId() == R.id.menu_change_theme || item.getItemId() == R.id.menu_expanded_screen ||
 				item.getItemId() == R.id.menu_spoilers || item.getItemId() == R.id.menu_my_posts ||

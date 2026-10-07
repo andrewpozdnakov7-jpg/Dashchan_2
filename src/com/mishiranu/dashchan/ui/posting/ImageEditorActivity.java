@@ -62,6 +62,8 @@ public class ImageEditorActivity extends ComponentActivity {
 	private static final String[] STICKERS = {"😀", "😂", "❤️", "👍", "🔥", "💩", "🤡", "🚫"};
 
 	public static Intent createIntent(Context context, String sourceHash, String sourceName, int attachmentIndex) {
+		Intent experimental = PhotoEditorBridge.createIntent(context, sourceHash, sourceName, attachmentIndex);
+		if (experimental != null) return experimental;
 		return new Intent(context, ImageEditorActivity.class)
 				.putExtra(EXTRA_SOURCE_HASH, sourceHash)
 				.putExtra(EXTRA_SOURCE_NAME, sourceName)
