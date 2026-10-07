@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="pip_diagnostic_mode">PiP rotation diagnostics</string>
+    <string name="pip_diagnostic_normal">Normal mode</string>
+    <string name="pip_diagnostic_no_hint">0 — No content hint, no parameter updates</string>
+    <string name="pip_diagnostic_entry_hint">1 — Content hint only on entry</string>
+    <string name="pip_diagnostic_layout_hint">2 — Content hint on entry and PiP layout changes</string>
+    <string name="pip_diagnostic_warning">For testing only, not a PiP fix. Close PiP before changing the mode, then open the same video in a new PiP window. Keep the video unchanged during the test. Playback and seek buttons work, but their icons do not update in diagnostic modes. Switching video or re-entering PiP in the same Activity ends the experiment and restores normal behavior. Enable extended player diagnostics and record a new session for each mode. After testing, select Normal mode.</string>
+    <string name="pip_diagnostic_trial_ended">PiP experiment ended: normal behavior restored. Close PiP and reopen the same video for a new test.</string>
+</resources>

@@ -67,6 +67,14 @@ public class ExperimentalFragment extends PreferenceFragment implements Translat
 			refreshPreferences();
 		});
 		addVideoDiagnosticsPreferences();
+		addList(Preferences.KEY_PIP_DIAGNOSTIC_MODE,
+				Arrays.asList("normal", "no_hint", "entry_hint", "layout_hint"),
+				Preferences.DEFAULT_PIP_DIAGNOSTIC_MODE, R.string.pip_diagnostic_mode,
+				Arrays.asList(getText(R.string.pip_diagnostic_normal), getText(R.string.pip_diagnostic_no_hint),
+						getText(R.string.pip_diagnostic_entry_hint), getText(R.string.pip_diagnostic_layout_hint)))
+				.setOnAfterChangeListener(p -> new AlertDialog.Builder(requireContext())
+						.setTitle(R.string.pip_diagnostic_mode).setMessage(R.string.pip_diagnostic_warning)
+						.setPositiveButton(android.R.string.ok, null).show());
 		addCheck(true, Preferences.KEY_NEW_PHOTO_EDITOR, Preferences.DEFAULT_NEW_PHOTO_EDITOR,
 				R.string.new_photo_editor, R.string.new_photo_editor__summary);
 		addCheck(true, Preferences.KEY_DISCUSSION_CONTEXT, Preferences.DEFAULT_DISCUSSION_CONTEXT,

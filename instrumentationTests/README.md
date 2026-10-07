@@ -1,5 +1,19 @@
 # Android smoke tests
 
+Integrated PiP rotation diagnostics are in Experimental settings and are off by
+default (`Normal mode`). Six `PipDiagnosticModeTest` JVM cases cover the pure
+policy; `PipParameterContractTest` additionally guards a frozen session choice,
+the final publisher, hint-only mode 2, working playback controls, and safe trial
+invalidation when content changes or the same Activity re-enters PiP. These are
+prepared, not executed in source-only mode. They do not simulate SystemUI.
+For device testing, close PiP before selecting each mode; use the same video,
+size and menu/rotation scenario, with a separate extended recording per mode.
+Modes 0/1 must log `updates=0`; mode 2 logs only changed ready hint publications.
+Check `valid=true`: a missing initial hint or content replacement invalidates
+the comparison. After testing, restore Normal mode and check controls, PiP exit,
+gallery return and video replacement. No decoder/size/orientation policy changes
+are part of this diagnostic feature.
+
 `PhotoEditorEngineTest` covers photo editor geometry/history/bitmap processing,
 cooperative preview cancellation, detached session snapshots and the opt-in
 legacy/new editor Intent contract. The switch test restores its preference in a

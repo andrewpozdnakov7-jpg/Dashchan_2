@@ -2246,6 +2246,8 @@ public class Preferences {
 	public static final boolean DEFAULT_DISCUSSION_CONTEXT = false;
 	public static final String KEY_NEW_PHOTO_EDITOR = "experimental_new_photo_editor";
 	public static final boolean DEFAULT_NEW_PHOTO_EDITOR = false;
+	public static final String KEY_PIP_DIAGNOSTIC_MODE = "experimental_pip_diagnostic_mode";
+	public static final String DEFAULT_PIP_DIAGNOSTIC_MODE = "normal";
 	public static final String KEY_TRANSLATION_NATIVE_LANGUAGE = "translation_native_language";
 	public static final String DEFAULT_TRANSLATION_NATIVE_LANGUAGE = "ru";
 	public static final String KEY_TRANSLATION_AUTO = "translation_auto";
@@ -2271,6 +2273,10 @@ public class Preferences {
 
 	public static boolean isNewPhotoEditorEnabled() {
 		return PREFERENCES.getBoolean(KEY_NEW_PHOTO_EDITOR, DEFAULT_NEW_PHOTO_EDITOR);
+	}
+
+	public static String getPipDiagnosticMode() {
+		return PREFERENCES.getString(KEY_PIP_DIAGNOSTIC_MODE, DEFAULT_PIP_DIAGNOSTIC_MODE);
 	}
 
 	public static boolean isDefaultAttachmentUniqueHash() {
