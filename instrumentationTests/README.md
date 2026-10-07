@@ -1,5 +1,61 @@
 # Android smoke tests
 
+Posting refactor stage 5 completes the source decomposition. The two added JVM
+source contracts cover single state ownership and the final view attach/detach
+boundaries; all prior Android controller/model cases remain in place.
+No tests, source-check scripts, lint or build were run during stage 5, as requested
+by the user. These source contracts do not prove runtime recreation or UI parity.
+See `unitTests/POSTING_STAGE_5.md` for the final ownership map and manual handoff.
+
+Posting refactor stage 4 adds 12 shared `PostingSendCoordinatorTest` cases for
+the actual coordinator/form snapshot with injected service/binding and in-memory
+drafts: payload/visibility/password, registration, progress, cancel/minimize,
+success/failure timing, save ordering, stale callbacks, reconnect and bind failure.
+The UI helper case creates standalone Android Views on the main thread.
+No test sends posts, binds a real PostingService, changes preferences or writes
+real drafts. These tests are prepared, not executed; Activity recreation and
+real service/dialog behavior still require external device checks.
+See `unitTests/POSTING_STAGE_4.md` for that stage's historical snapshot.
+
+Posting refactor stage 3 adds 12 shared `PostingStateControllersTest` cases for
+the actual captcha/draft owners: copied send snapshots, complete Bundle model
+restore, validity/scope gates, image lifetime, Host detach/re-attach, raw fields
+and cursor, ordered attachments, saved guard, send/success and deferred inputs.
+Persistence is injected and stays in memory. A new reflection smoke case covers
+the moved public CaptchaViewModel constructor and generic callback signature.
+These are prepared, not executed. They do not recreate the real posting Activity
+or measure its UI; that device gate is explicitly still pending.
+See `unitTests/POSTING_STAGE_3.md` for exact scope and external checks.
+
+Posting refactor stage 2 adds 8 shared `PostingAttachmentsControllerTest` Android
+cases for actual controller/View order, draft options, send conversion, MIME
+ordering, partial import, stale editor results and view detach/restore.
+The existing 8 `PostingDraftContractTest` serializer tests remain unchanged.
+See `unitTests/POSTING_STAGE_2.md` for scope, commands, limitations and device
+smoke. All Android/JVM tests are prepared, not run in source-only mode.
+
+The experimental photo editor is GitHub-only. Its Activity/engine/resources are
+under `distribution/github`, and `PhotoEditorEngineTest` is now in
+`distribution/github/instrumentationTests/src` (`androidTestGithub`), not shared
+Android tests. `EditorPreviewSchedulerTest` and `PhotoEditorSessionFilesTest`
+also moved to `distribution/github/unitTests/src` (`testGithub`). These tests
+are still included for GitHub; they are not silently disabled there.
+F-Droid compiles a `PhotoEditorBridge` stub, with no optional Activity, engine,
+setting/search entry or exclusive editor resources. An imported opt-in preference
+cannot enable the missing editor. Shared `PhotoEditorDistributionSmokeTest`
+checks intent routing/extras and restored opt-in on either flavour; it restores
+the temporary preference in finally. Three `testFdroid` bridge unit tests guard
+the stub. These tests are prepared, not executed in SOURCE PATCH ONLY mode.
+`unitTests/check_photo_editor_distribution.py` checks source-set isolation only;
+it does not replace compilation or an APK/merged-manifest/DEX audit.
+
+After external builds, GitHub should show the editor switch and open the new
+editor by default when no explicit choice is saved. An explicit false keeps the
+old editor; true selects the new one. F-Droid should have no setting/search entry
+and always open the old editor, including after a GitHub backup restore.
+The shared distribution smoke includes default/explicit-disable routing as well
+as imported true. These updated cases have not been executed here.
+
 Integrated PiP rotation diagnostics are in Experimental settings and are off by
 default (`Normal mode`). Six `PipDiagnosticModeTest` JVM cases cover the pure
 policy; `PipParameterContractTest` additionally guards a frozen session choice,
@@ -15,11 +71,12 @@ gallery return and video replacement. No decoder/size/orientation policy changes
 are part of this diagnostic feature.
 
 `PhotoEditorEngineTest` covers photo editor geometry/history/bitmap processing,
-cooperative preview cancellation, detached session snapshots and the opt-in
+cooperative preview cancellation, detached session snapshots and the switchable
 legacy/new editor Intent contract. The switch test restores its preference in a
 finally block; use a disposable test installation as described below. These
 tests do not establish native UI appearance, keyboard layout or process-death
-restoration. The new editor is disabled by default under Experimental features.
+restoration. The new editor is enabled by default in GitHub builds; its switch
+remains under Experimental features and the explicit saved choice takes precedence.
 
 Editor regressions additionally exercise all fixed-aspect corners and edges,
 opposite anchors, bounds, quarter-turns, free cropping, real MotionEvent pinch

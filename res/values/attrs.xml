@@ -17,6 +17,8 @@
 		<attr name="android:windowIsFloating" />
 		<attr name="isOverlay" />
 		<attr name="isPopup" />
+		<!-- Opt-in surfaces keep their explicit palette while retaining overlay tracking. -->
+		<attr name="themeEnginePreserveColors" format="boolean" />
 	</declare-styleable>
 	<declare-styleable name="ThemeControlAppearance">
 		<attr name="android:colorControlNormal" />

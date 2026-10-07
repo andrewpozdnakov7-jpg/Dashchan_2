@@ -1,8 +1,9 @@
 package com.mishiranu.dashchan.ui.gallery;
 
-/** Publication policy only: never owns the player's lifecycle or the system PiP window. */
+/** Parameter policy only: never owns the player's lifecycle or the system PiP window. */
 public enum PipDiagnosticMode {
-	NORMAL("normal", -1), NO_HINT("no_hint", 0), ENTRY_HINT("entry_hint", 1), LAYOUT_HINT("layout_hint", 2);
+	NORMAL("normal", -1), NO_HINT("no_hint", 0), ENTRY_HINT("entry_hint", 1), LAYOUT_HINT("layout_hint", 2),
+	NO_SEAMLESS_RESIZE("no_seamless_resize", 3);
 
 	public final String preferenceValue;
 	public final int probeId;
@@ -20,7 +21,8 @@ public enum PipDiagnosticMode {
 	}
 
 	public boolean isDiagnostic() { return this != NORMAL; }
-	public boolean allowsHintAtEntry() { return this != NO_HINT; }
+	public boolean allowsHintAtEntry() { return this != NO_HINT && this != NO_SEAMLESS_RESIZE; }
+	public boolean isSeamlessResizeEnabled() { return this != NO_SEAMLESS_RESIZE; }
 	public boolean allowsParameterUpdate(boolean inPictureInPicture) {
 		return this == NORMAL || this == LAYOUT_HINT && inPictureInPicture;
 	}

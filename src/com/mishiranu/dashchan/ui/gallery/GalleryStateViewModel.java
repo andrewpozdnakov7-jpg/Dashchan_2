@@ -13,6 +13,7 @@ public class GalleryStateViewModel extends ViewModel {
 	java.util.Set<com.mishiranu.dashchan.content.model.PostNumber> refreshKnownPosts;
 	Bundle dialogState;
 	Parcelable gridState;
+	GalleryViewportMemory.Snapshot viewport;
 	String filter;
 	String sort;
 	String restoreToken;
@@ -32,5 +33,6 @@ public class GalleryStateViewModel extends ViewModel {
 		refreshKnownPosts = null;
 		dialogState = null;
 		gridState = null;
+		viewport = null;
 	}
 }

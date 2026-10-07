@@ -535,10 +535,14 @@ public class ThemeEngine {
 			boolean dialog = typedArray.getBoolean(R.styleable.ThemeContextAppearance_android_windowIsFloating, false);
 			boolean overlay = typedArray.getBoolean(R.styleable.ThemeContextAppearance_isOverlay, false);
 			boolean popup = typedArray.getBoolean(R.styleable.ThemeContextAppearance_isPopup, false);
+			boolean preserveColors = typedArray.getBoolean(
+					R.styleable.ThemeContextAppearance_themeEnginePreserveColors, false);
 			typedArray.recycle();
 			boolean inheritDirect = dialog || popup;
 			boolean forceDirect = newContext instanceof Activity;
-			boolean direct = isDirect() && inheritDirect || forceDirect;
+			// A dedicated palette must survive both widget styling and the dialog attach pass.
+			// Keep dialog/overlay flags so focus tracking still runs normally.
+			boolean direct = !preserveColors && (isDirect() && inheritDirect || forceDirect);
 			return new ThemeLayoutInflater(this, newContext, direct, dialog, overlay, popup);
 		}
 

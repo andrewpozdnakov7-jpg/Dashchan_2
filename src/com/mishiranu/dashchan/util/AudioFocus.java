@@ -14,11 +14,22 @@ public class AudioFocus {
 
 	private final AudioManager audioManager;
 	private final Callback callback;
+	private final int focusGain;
 	private Session session;
 
 	public AudioFocus(Context context, Callback callback) {
+		this(context, AudioManager.AUDIOFOCUS_GAIN, callback);
+	}
+
+	/** Video briefly interrupts the previous player; release allows it to regain focus. */
+	public static AudioFocus forVideo(Context context, Callback callback) {
+		return new AudioFocus(context, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT, callback);
+	}
+
+	private AudioFocus(Context context, int focusGain, Callback callback) {
 		audioManager = (AudioManager) context.getApplicationContext().getSystemService(Context.AUDIO_SERVICE);
 		this.callback = callback;
+		this.focusGain = focusGain;
 	}
 
 	// A request follows the playing media, not the window. All operations use the main thread.
@@ -28,7 +39,7 @@ public class AudioFocus {
 		Callback callback;
 		boolean acquired;
 
-		Session(AudioManager audioManager, Callback callback) {
+		Session(AudioManager audioManager, int focusGain, Callback callback) {
 			this.audioManager = audioManager;
 			this.callback = callback;
 			AudioManager.OnAudioFocusChangeListener listener = focusChange -> {
@@ -54,7 +65,7 @@ public class AudioFocus {
 					}
 				}
 			};
-			request = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+			request = new AudioFocusRequest.Builder(focusGain)
 					.setAudioAttributes(new AudioAttributes.Builder()
 							.setLegacyStreamType(AudioManager.STREAM_MUSIC).build())
 					.setOnAudioFocusChangeListener(listener).build();
@@ -69,7 +80,7 @@ public class AudioFocus {
 	}
 
 	public boolean acquire() {
-		if (session == null) session = new Session(audioManager, callback);
+		if (session == null) session = new Session(audioManager, focusGain, callback);
 		if (!session.acquired && audioManager.requestAudioFocus(session.request) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
 			session.acquired = true;
 			return true;

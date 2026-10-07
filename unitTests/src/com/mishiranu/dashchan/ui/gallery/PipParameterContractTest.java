@@ -190,6 +190,19 @@ public class PipParameterContractTest {
 		assertTrue(method("seekBy").contains("player.setPosition(position)"));
 	}
 
+	@Test public void seamlessResizeUsesApiGuardAndRestoresOnlyAfterSuccessfulPublication() throws Exception {
+		String create = method("createPictureInPictureParams");
+		assertTrue(create.indexOf("Build.VERSION.SDK_INT >= Build.VERSION_CODES.S")
+				< create.indexOf("builder.setSeamlessResizeEnabled("));
+		assertTrue(create.contains("pictureInPictureDiagnosticMode.isSeamlessResizeEnabled()"));
+		String publish = method("publishPictureInPictureParams");
+		assertTrue(publish.indexOf("allowsParameterUpdate(") < publish.indexOf("setSeamlessResizeEnabled("));
+		assertTrue(publish.contains("seamlessResizeEnabled != lastPublishedSeamlessResizeEnabled"));
+		assertTrue(publish.indexOf("setPictureInPictureParams(") < publish.indexOf("lastPublishedSeamlessResizeEnabled ="));
+		assertTrue(method("getPictureInPictureSeamlessResizeDiagnosticValue").contains("\"unsupported\""));
+		assertTrue(method("onCreate").contains("!pictureInPictureDiagnosticMode.isSeamlessResizeEnabled()) pictureInPictureDiagnosticTrialValid = false"));
+	}
+
 	@Test public void changingVideoOrReenteringEndsTheDiagnosticTrialWithoutMovingTheWindow() throws Exception {
 		assertTrue(method("replacePictureInPictureContent").contains("endPictureInPictureDiagnosticTrial(\"content_replaced\")"));
 		assertTrue(method("enterPictureInPicture").contains("endPictureInPictureDiagnosticTrial(\"same_activity_reentry\")"));

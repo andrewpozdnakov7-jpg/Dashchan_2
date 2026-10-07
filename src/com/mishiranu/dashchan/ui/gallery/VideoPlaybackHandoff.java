@@ -17,7 +17,7 @@ final class VideoPlaybackHandoff {
 
 	VideoPlaybackHandoff(Context context, VideoPlayer player, AudioFocus source, String reason) {
 		this.player = player;
-		focus = new AudioFocus(context, change -> {
+		focus = AudioFocus.forVideo(context, change -> {
 			if (change != AudioFocus.Change.GAIN) stop("focus_loss");
 		});
 		source.transferTo(focus);

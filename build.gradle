@@ -268,8 +268,8 @@ android {
 
 	defaultConfig {
 		applicationId = 'io.dashchan2'
-		versionCode = 11360
-		versionName = '3.2.56'
+		versionCode = 11370
+		versionName = '3.2.57'
 		def releaseVersionCode = versionCode
 		def packageVersionCodeProperty = project.findProperty('packageVersionCode')
 		if (packageVersionCodeProperty != null) {
@@ -402,6 +402,10 @@ android {
 		resources.srcDirs = ['unitTests/resources']
 	}
 	sourceSets.androidTest.java.srcDirs = ['instrumentationTests/src']
+	// Experimental photo editor code/resources and its executable tests are GitHub-only.
+	sourceSets.maybeCreate('testGithub').java.srcDir 'distribution/github/unitTests/src'
+	sourceSets.maybeCreate('androidTestGithub').java.srcDir 'distribution/github/instrumentationTests/src'
+	sourceSets.maybeCreate('testFdroid').java.srcDir 'distribution/fdroid/unitTests/src'
 	if (builtinWebmEnabled) {
 		sourceSets.main.jniLibs.srcDirs += builtinWebmJniLibDirs
 	}

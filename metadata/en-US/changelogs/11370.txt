@@ -1,0 +1,6 @@
+Added a new experimental photo editor with cropping and straightening, color adjustments, filters, drawing, text, stickers, blur and mosaic. Export size and quality are configurable. The editor is enabled by default; the previous editor remains selectable in experimental settings.
+Fixed gallery grid position when returning from media viewing. Added a setting to scroll the gallery to the current file.
+Added last-video position persistence across closing and app restarts, enabled by default.
+Improved audio focus release when pausing, muting or closing video, allowing background players to resume playback.
+The toolbar back arrow in threads now follows system Back behavior without forcing a board refresh.
+Refactored posting internals, improved extension resources and expanded diagnostics.

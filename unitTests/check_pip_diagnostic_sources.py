@@ -38,13 +38,27 @@ def main():
     assert 'DEFAULT_PIP_DIAGNOSTIC_MODE = "normal"' in preferences
     assert 'NORMAL("normal", -1)' in policy and 'NO_HINT("no_hint", 0)' in policy
     assert 'ENTRY_HINT("entry_hint", 1)' in policy and 'LAYOUT_HINT("layout_hint", 2)' in policy
+    assert 'NO_SEAMLESS_RESIZE("no_seamless_resize", 3)' in policy
     assert "return this == NORMAL || this == LAYOUT_HINT && inPictureInPicture;" in policy
-    assert "return this != NO_HINT;" in policy and "import android." not in policy
+    assert "return this != NO_HINT && this != NO_SEAMLESS_RESIZE;" in policy and "import android." not in policy
+    assert "return this != NO_SEAMLESS_RESIZE;" in method(policy, "isSeamlessResizeEnabled")
+    create = method(activity, "createPictureInPictureParams")
+    assert "builder.setSeamlessResizeEnabled(pictureInPictureDiagnosticMode.isSeamlessResizeEnabled())" in create
+    assert create.index("Build.VERSION.SDK_INT >= Build.VERSION_CODES.S") < create.index("setSeamlessResizeEnabled(")
     assert activity.count("Preferences.getPipDiagnosticMode()") == 1
     assert "Preferences.getPipDiagnosticMode()" in method(activity, "onCreate")
     assert activity.count("setPictureInPictureParams(") == 1
     publish = method(activity, "publishPictureInPictureParams")
     assert publish.index("allowsParameterUpdate(") < publish.index("setPictureInPictureParams(")
+    assert publish.index("allowsParameterUpdate(") < publish.index("setSeamlessResizeEnabled(")
+    assert "seamlessResizeEnabled != lastPublishedSeamlessResizeEnabled" in publish
+    assert publish.index("setPictureInPictureParams(") < publish.index("lastPublishedSeamlessResizeEnabled =")
+    assert "lastPublishedSeamlessResizeEnabled = pictureInPictureDiagnosticMode.isSeamlessResizeEnabled()" in method(activity, "enterPictureInPicture")
+    assert '!pictureInPictureDiagnosticMode.isSeamlessResizeEnabled()) pictureInPictureDiagnosticTrialValid = false' in method(activity, "onCreate")
+    flag = method(activity, "getPictureInPictureSeamlessResizeDiagnosticValue")
+    assert "Build.VERSION.SDK_INT >= Build.VERSION_CODES.S" in flag and '"unsupported"' in flag
+    for name in ["recordPictureInPictureParams", "recordPictureInPictureProbe"]:
+        assert "seamless_resize_requested=" in method(activity, name)
     for name in ["schedulePictureInPictureGeometryUpdate", "publishPictureInPictureGeometryBeforeDraw"]:
         assert "allowsParameterUpdate(isInPictureInPictureMode())" in method(activity, name)
     assert "allowsHintAtEntry() ? getPictureInPictureSourceRect() : null" in method(activity, "enterPictureInPicture")
@@ -65,7 +79,7 @@ def main():
             assert forbidden not in body, f"Unexpected side effect in {name}: {forbidden}"
     assert "PipDiagnosticMode.NORMAL" in method(activity, "endPictureInPictureDiagnosticTrial")
     assert "endPictureInPictureDiagnosticTrial" in method(activity, "replacePictureInPictureContent")
-    assert 'Arrays.asList("normal", "no_hint", "entry_hint", "layout_hint")' in experimental
+    assert 'Arrays.asList("normal", "no_hint", "entry_hint", "layout_hint", "no_seamless_resize")' in experimental
     assert "Preferences.KEY_PIP_DIAGNOSTIC_MODE" in search
     refs = set(re.findall(r"R.string.(pip_diagnostic_\w+)", activity + experimental + search))
     for locale in ["values", "values-ru"]:
@@ -74,6 +88,7 @@ def main():
         assert len(names) == len(set(names)) and refs <= set(names), f"Missing/duplicate {locale} strings"
     print("PASS: PiP lexical balance, default-off/frozen selection, final publication guard, hint-only mode 2")
     print("PASS: settings/search/localization, live playback controls, normal branch and invalidation safeguards")
+    print("PASS: mode 3 isolates seamless resize from mode 0, API guard, flag logging and normal flag restoration")
     print("NOT RUN: compilation, JVM/Android tests, APK, device/SystemUI rotation")
 
 

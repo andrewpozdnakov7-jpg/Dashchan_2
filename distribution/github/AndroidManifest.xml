@@ -9,6 +9,12 @@
 	</queries>
 
 	<application>
+		<activity
+			android:name=".ui.posting.ExperimentalImageEditorActivity"
+			android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"
+			android:enableOnBackInvokedCallback="true"
+			android:exported="false" />
+
 		<!-- Keep Firebase completely dormant until the user explicitly accepts the experimental feature. -->
 		<meta-data android:name="firebase_messaging_auto_init_enabled" android:value="false" />
 		<meta-data android:name="firebase_messaging_installation_id_enabled" android:value="true" />
