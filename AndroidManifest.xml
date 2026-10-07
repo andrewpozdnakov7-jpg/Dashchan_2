@@ -1767,11 +1767,6 @@
 			android:exported="false" />
 
 		<activity
-			android:name=".ui.posting.ExperimentalImageEditorActivity"
-			android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"
-			android:exported="false" />
-
-		<activity
 			android:name=".ui.gallery.VideoPipActivity"
 			android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"
 			android:excludeFromRecents="true"
