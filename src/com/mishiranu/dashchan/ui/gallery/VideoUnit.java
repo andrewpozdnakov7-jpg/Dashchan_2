@@ -19,6 +19,7 @@ import android.net.Uri;
 import android.os.SystemClock;
 import android.view.ContextThemeWrapper;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewTreeObserver;
 import android.widget.FrameLayout;
@@ -44,11 +45,12 @@ import com.mishiranu.dashchan.ui.InstanceDialog;
 import com.mishiranu.dashchan.ui.preference.PlaybackSpeedDialog;
 import com.mishiranu.dashchan.util.AnimationUtils;
 import com.mishiranu.dashchan.util.AudioFocus;
+import com.mishiranu.dashchan.util.InterfaceMotion;
+import com.mishiranu.dashchan.widget.ThemeEngine;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.util.ViewUtils;
 import com.mishiranu.dashchan.widget.ClickableToast;
 import com.mishiranu.dashchan.widget.SummaryLayout;
-import com.mishiranu.dashchan.widget.ThemeEngine;
 import java.io.File;
 import java.io.IOException;
 import java.util.Locale;
@@ -71,11 +73,12 @@ public class VideoUnit {
 
 	private static final int PLAYBACK_SPEED_MIN = 10;
 	private static final int PLAYBACK_SPEED_MAX = 10000;
-	private static final long PAUSED_SEEK_PREVIEW_DELAY = 100L;
+	private final VideoScrubSession scrubSession = new VideoScrubSession();
 
 	private final PagerInstance instance;
 	private boolean preloadResumed;
 	private final LinearLayout controlsView;
+	private ImageButton centerPlayPauseButton;
 	private final AudioFocus audioFocus;
 	private VideoPlaybackHandoff playbackHandoff;
 	private final AudioManager audioManager;
@@ -83,6 +86,7 @@ public class VideoUnit {
 
 	private int layoutConfiguration = -1;
 	private boolean rightHandControls;
+	private boolean modernControls;
 	private LinearLayout configurationView;
 	private TextView timeTextView;
 	private TextView totalTimeTextView;
@@ -105,7 +109,7 @@ public class VideoUnit {
 	private boolean pausedByTransientLossOfFocus;
 	private boolean finishedPlayback;
 	private boolean trackingNow;
-	private int nextSeekPosition = -1;
+	private boolean scrubPreviewScheduled;
 	private boolean hideSurfaceOnInit;
 	private boolean pictureInPictureTransferred;
 	private ImageView pictureInPictureReturnPreview;
@@ -341,6 +345,7 @@ public class VideoUnit {
 	}
 
 	LifecycleState detachLifecycleState() {
+		cancelScrubbing();
 		hidePictureInPictureReturnPreview();
 		if (pendingLifecycleState != null) {
 			LifecycleState state = pendingLifecycleState;
@@ -493,6 +498,7 @@ public class VideoUnit {
 	public void addViews(FrameLayout frameLayout) {
 		frameLayout.addView(controlsView, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,
 				FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM));
+		updateCenterPlayPauseButton(ResourceUtils.obtainDensity(frameLayout.getContext()));
 		// A retained gallery may miss configuration updates while its PiP window is active.
 		// Reconcile against the actual gallery viewport once it has been laid out again.
 		frameLayout.addOnLayoutChangeListener((view, left, top, right, bottom,
@@ -529,6 +535,7 @@ public class VideoUnit {
 	}
 
 	public void onPause(boolean changingConfigurations) {
+		cancelScrubbing();
 		preloadResumed = false;
 		if (pendingPictureInPictureRestore != null) {
 			VideoPipActivity.releasePendingGalleryTarget(this,
@@ -569,6 +576,11 @@ public class VideoUnit {
 
 	public void onApplyWindowInsets(int left, int right, int bottom) {
 		controlsView.setPadding(left, 0, right, bottom);
+		if (centerPlayPauseButton != null && centerPlayPauseButton.getLayoutParams() instanceof FrameLayout.LayoutParams) {
+			FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) centerPlayPauseButton.getLayoutParams();
+			params.setMargins(left, 0, right, bottom);
+			centerPlayPauseButton.setLayoutParams(params);
+		}
 	}
 
 	public boolean isInitialized() {
@@ -584,6 +596,7 @@ public class VideoUnit {
 	}
 
 	public void interrupt(boolean force) {
+		cancelScrubbing();
 		if (!pictureInPictureTransferred) VideoPositionMemory.save(player, finishedPlayback);
 		cancelPendingPictureInPictureRestore("target_interrupted");
 		stopPlaybackHandoff("gallery_interrupted");
@@ -596,7 +609,7 @@ public class VideoUnit {
 		}
 		if (seekBar != null) {
 			seekBar.removeCallbacks(progressRunnable);
-			seekBar.removeCallbacks(pausedSeekPreviewRunnable);
+			seekBar.removeCallbacks(scrubPreviewRunnable);
 		}
 		if (pictureInPictureTransferred && !force) {
 			// PagerUnit may be rebound while its dialog is hidden behind VideoPipActivity. The native player
@@ -938,62 +951,77 @@ public class VideoUnit {
 	private void recreateVideoControls(int targetLayoutConfiguration) {
 		Context context = instance.galleryInstance.context;
 		float density = ResourceUtils.obtainDensity(context);
+		boolean modern = InterfaceMotion.isEnabled();
 		boolean speedControl = Preferences.isVideoPlaybackSpeedControl();
 		boolean pictureInPictureControl = Preferences.isVideoPictureInPicture() && context.getPackageManager()
 				.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE);
 		boolean rightHandControls = Preferences.isVideoRightHandControls();
 		if (targetLayoutConfiguration != layoutConfiguration || speedControl != playbackSpeedControl
 				|| pictureInPictureControl != this.pictureInPictureControl
-				|| rightHandControls != this.rightHandControls) {
+				|| rightHandControls != this.rightHandControls || modern != modernControls) {
 			boolean firstTimeLayout = layoutConfiguration < 0;
 			layoutConfiguration = targetLayoutConfiguration;
 			playbackSpeedControl = speedControl;
 			this.pictureInPictureControl = pictureInPictureControl;
 			this.rightHandControls = rightHandControls;
-			boolean longLayout = targetLayoutConfiguration == 1;
+			modernControls = modern;
 
 			controlsView.removeAllViews();
 			if (seekBar != null) {
 				seekBar.removeCallbacks(progressRunnable);
-				seekBar.removeCallbacks(pausedSeekPreviewRunnable);
+				seekBar.removeCallbacks(scrubPreviewRunnable);
 			}
-			trackingNow = false;
+			cancelScrubbing();
 			playbackSpeedButton = null;
 			muteButton = null;
 			pictureInPictureButton = null;
 			tikTokModeButton = null;
 			fullscreenButton = null;
 
-			configurationView = new LinearLayout(context);
-			configurationView.setOrientation(LinearLayout.HORIZONTAL);
-			configurationView.setGravity(Gravity.CENTER_VERTICAL | Gravity.END);
-			configurationView.setPadding((int) (8f * density), 0, (int) (8f * density), 0);
-			controlsView.addView(configurationView, LinearLayout.LayoutParams.MATCH_PARENT,
-					LinearLayout.LayoutParams.WRAP_CONTENT);
+			if (modern) {
+				configurationView = new LinearLayout(context);
+				configurationView.setOrientation(LinearLayout.HORIZONTAL);
+				configurationView.setGravity(Gravity.CENTER_VERTICAL);
+				configurationView.setPadding((int) (8f * density), (int) (4f * density),
+						(int) (8f * density), (int) (4f * density));
+				configurationView.setBackground(PlayerControlsStyle.panel(density, 16));
+				configurationView.setClickable(true);
+				LinearLayout.LayoutParams configurationParams = new LinearLayout.LayoutParams(
+						LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+				configurationParams.gravity = rightHandControls ? Gravity.RIGHT : Gravity.LEFT;
+				configurationParams.setMargins((int) (8f * density), 0, (int) (8f * density),
+						(int) (4f * density));
+				controlsView.addView(configurationView, configurationParams);
 
-			LinearLayout controls = new LinearLayout(context);
-			controls.setOrientation(longLayout ? LinearLayout.HORIZONTAL : LinearLayout.VERTICAL);
-			controls.setBackgroundColor(instance.galleryInstance.actionBarColor);
-			controls.setPadding((int) (8f * density), longLayout ? 0 : (int) (8f * density), (int) (8f * density), 0);
-			controls.setClickable(true);
-			controlsView.addView(controls, LinearLayout.LayoutParams.MATCH_PARENT,
-					LinearLayout.LayoutParams.WRAP_CONTENT);
+			} else {
+				configurationView = new LinearLayout(context);
+				configurationView.setOrientation(LinearLayout.HORIZONTAL);
+				configurationView.setGravity(Gravity.CENTER_VERTICAL | Gravity.END);
+				configurationView.setPadding((int) (8f * density), 0, (int) (8f * density), 0);
+				controlsView.addView(configurationView, LinearLayout.LayoutParams.MATCH_PARENT,
+						LinearLayout.LayoutParams.WRAP_CONTENT);
+
+			}
 
 			CharSequence oldTimeText = timeTextView != null ? timeTextView.getText() : null;
 			timeTextView = new TextView(context, null, android.R.attr.textAppearanceListItem);
-			ThemeEngine.applyStyle(timeTextView);
-			ViewUtils.setTextSizeScaled(timeTextView, 14);
-			timeTextView.setGravity(Gravity.CENTER_HORIZONTAL);
-			timeTextView.setTypeface(ResourceUtils.TYPEFACE_MEDIUM);
-			if (oldTimeText != null) {
-				timeTextView.setText(oldTimeText);
-			}
-
+			styleTimeText(timeTextView, modern);
+			if (oldTimeText != null) timeTextView.setText(oldTimeText);
 			totalTimeTextView = new TextView(context, null, android.R.attr.textAppearanceListItem);
-			ThemeEngine.applyStyle(totalTimeTextView);
-			ViewUtils.setTextSizeScaled(totalTimeTextView, 14);
-			totalTimeTextView.setGravity(Gravity.CENTER_HORIZONTAL);
-			totalTimeTextView.setTypeface(ResourceUtils.TYPEFACE_MEDIUM);
+			styleTimeText(totalTimeTextView, modern);
+			LinearLayout timeGroup = null;
+			if (modern) {
+				TextView timeSeparator = new TextView(context);
+				PlayerControlsStyle.text(timeSeparator, 11);
+				timeSeparator.setText(" / ");
+				timeGroup = new LinearLayout(context);
+				timeGroup.setGravity(Gravity.CENTER_VERTICAL);
+				timeGroup.setPadding((int) (4f * density), 0, (int) (4f * density), 0);
+				timeGroup.addView(timeTextView);
+				timeGroup.addView(timeSeparator);
+				timeGroup.addView(totalTimeTextView);
+
+			}
 
 			int oldMaximum = seekBar != null ? seekBar.getMax() : 100;
 			int oldProgress = seekBar != null ? seekBar.getProgress() : 0;
@@ -1006,36 +1034,51 @@ public class VideoUnit {
 			seekBar.setSecondaryProgress(oldSecondaryProgress);
 			seekBar.setEnabled(seekingEnabled);
 			seekBar.setOnSeekBarChangeListener(seekBarListener);
+			if (modern) PlayerControlsStyle.slider(seekBar, density);
+			seekBar.setOnTouchListener((view, event) -> {
+				if (view == seekBar && event.getActionMasked() == MotionEvent.ACTION_CANCEL) {
+					cancelScrubbing();
+					seekBar.removeCallbacks(progressRunnable);
+					if (initialized && player != null && !pictureInPictureTransferred) {
+						seekBar.post(progressRunnable);
+					}
+				}
+				return false;
+			});
 
 			playPauseButton = new ImageButton(context, null, android.R.attr.borderlessButtonStyle);
-			playPauseButton.setScaleType(ImageButton.ScaleType.CENTER);
+			playPauseButton.setScaleType(modern ? ImageButton.ScaleType.FIT_CENTER : ImageButton.ScaleType.CENTER);
 			playPauseButton.setOnClickListener(playPauseClickListener);
 			playPauseButton.setEnabled(playbackEnabled);
+			if (modern) PlayerControlsStyle.button(playPauseButton, density, false);
 
 			if (playbackSpeedControl) {
 				playbackSpeedButton = new TextView(context, null, android.R.attr.textAppearanceListItem);
-				ThemeEngine.applyStyle(playbackSpeedButton);
-				ViewUtils.setTextSizeScaled(playbackSpeedButton, 14);
+				styleTimeText(playbackSpeedButton, modern);
 				playbackSpeedButton.setGravity(Gravity.CENTER);
-				playbackSpeedButton.setTypeface(ResourceUtils.TYPEFACE_MEDIUM);
+				if (modern) playbackSpeedButton.setMinimumWidth((int) (32f * density));
 				playbackSpeedButton.setContentDescription(context.getString(R.string.playback_speed));
-				playbackSpeedButton.setPadding((int) (8f * density), 0, (int) (8f * density), 0);
+				int speedPadding = (int) ((modern ? 4f : 8f) * density);
+				playbackSpeedButton.setPadding(speedPadding, 0, speedPadding, 0);
 				ViewUtils.setSelectableItemBackground(playbackSpeedButton);
 				playbackSpeedButton.setOnClickListener(playbackSpeedClickListener);
 				updatePlaybackSpeedButton();
 			}
 			muteButton = new ImageButton(context, null, android.R.attr.borderlessButtonStyle);
-			muteButton.setScaleType(ImageButton.ScaleType.CENTER);
+			muteButton.setScaleType(modern ? ImageButton.ScaleType.FIT_CENTER : ImageButton.ScaleType.CENTER);
 			muteButton.setOnClickListener(muteClickListener);
+			if (modern) PlayerControlsStyle.button(muteButton, density, false);
 			if (pictureInPictureControl) {
 				pictureInPictureButton = new ImageButton(context, null, android.R.attr.borderlessButtonStyle);
-				pictureInPictureButton.setScaleType(ImageButton.ScaleType.CENTER);
+				pictureInPictureButton.setScaleType(modern ? ImageButton.ScaleType.FIT_CENTER : ImageButton.ScaleType.CENTER);
 				pictureInPictureButton.setImageResource(R.drawable.ic_picture_in_picture);
 				pictureInPictureButton.setContentDescription(context.getString(R.string.enter_picture_in_picture));
 				pictureInPictureButton.setOnClickListener(pictureInPictureClickListener);
+				if (modern) PlayerControlsStyle.button(pictureInPictureButton, density, false);
 			}
 			tikTokModeButton = new ImageButton(context, null, android.R.attr.borderlessButtonStyle);
-			tikTokModeButton.setScaleType(ImageButton.ScaleType.CENTER);
+			tikTokModeButton.setScaleType(modern ? ImageButton.ScaleType.FIT_CENTER : ImageButton.ScaleType.CENTER);
+			if (modern) PlayerControlsStyle.button(tikTokModeButton, density, false);
 			tikTokModeButton.setImageResource(R.drawable.ic_tiktok_mode);
 			tikTokModeButton.setContentDescription(context.getString(R.string.video_tiktok_mode));
 			tikTokModeButton.setOnClickListener(tikTokModeClickListener);
@@ -1045,75 +1088,74 @@ public class VideoUnit {
 			});
 			updateTikTokModeButton();
 			fullscreenButton = new ImageButton(context, null, android.R.attr.borderlessButtonStyle);
-			fullscreenButton.setScaleType(ImageButton.ScaleType.CENTER);
+			fullscreenButton.setScaleType(modern ? ImageButton.ScaleType.FIT_CENTER : ImageButton.ScaleType.CENTER);
+			if (modern) PlayerControlsStyle.button(fullscreenButton, density, false);
 			fullscreenButton.setOnClickListener(fullscreenClickListener);
 			updateFullscreenButton();
 
-			if (longLayout) {
-				controls.setGravity(Gravity.CENTER_VERTICAL);
-				controls.addView(timeTextView, (int) (48f * density), LinearLayout.LayoutParams.WRAP_CONTENT);
-				controls.addView(seekBar, new LinearLayout.LayoutParams(0,
-						LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-				controls.addView(playPauseButton, (int) (80f * density), LinearLayout.LayoutParams.WRAP_CONTENT);
-				controls.addView(totalTimeTextView, (int) (48f * density),
-						LinearLayout.LayoutParams.WRAP_CONTENT);
-				controls.addView(fullscreenButton, (int) (48f * density),
-						LinearLayout.LayoutParams.WRAP_CONTENT);
+			if (modern) {
+				View controls = PlayerControlsStyle.createBar(context, playPauseButton, timeGroup,
+						seekBar, muteButton, fullscreenButton);
+				LinearLayout.LayoutParams controlsParams = new LinearLayout.LayoutParams(
+						LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+				controlsParams.setMargins((int) (8f * density), 0, (int) (8f * density),
+						(int) (16f * density));
+				controlsView.addView(controls, controlsParams);
 			} else {
-				LinearLayout controls1 = new LinearLayout(context);
-				controls1.setOrientation(LinearLayout.HORIZONTAL);
-				controls1.setGravity(Gravity.CENTER_VERTICAL);
-				controls1.setPadding(0, (int) (8f * density), 0, (int) (8f * density));
-				LinearLayout controls2 = new LinearLayout(context);
-				controls2.setOrientation(LinearLayout.HORIZONTAL);
-				controls2.setGravity(Gravity.CENTER_VERTICAL);
-				controls.addView(controls1, LinearLayout.LayoutParams.MATCH_PARENT,
-						LinearLayout.LayoutParams.WRAP_CONTENT);
-				controls.addView(controls2, LinearLayout.LayoutParams.MATCH_PARENT,
-						LinearLayout.LayoutParams.WRAP_CONTENT);
-				controls1.addView(seekBar, LinearLayout.LayoutParams.MATCH_PARENT,
-						LinearLayout.LayoutParams.WRAP_CONTENT);
-				controls2.addView(timeTextView, new LinearLayout.LayoutParams(0,
-						LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-				controls2.addView(playPauseButton, (int) (80f * density), LinearLayout.LayoutParams.WRAP_CONTENT);
-				controls2.addView(totalTimeTextView, new LinearLayout.LayoutParams(0,
-						LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-				controls2.addView(fullscreenButton, (int) (48f * density),
-						LinearLayout.LayoutParams.WRAP_CONTENT);
+				addLegacyControls(context, density, targetLayoutConfiguration == 1);
 			}
+			updateCenterPlayPauseButton(density);
 			if (firstTimeLayout) {
-				AnimationUtils.measureDynamicHeight(controlsView);
-				controlsView.setTranslationY(controlsView.getMeasuredHeight());
+				if (!modern) AnimationUtils.measureDynamicHeight(controlsView);
+				controlsView.setTranslationY(modern ? PlayerControlsStyle.dp(density, 12)
+						: controlsView.getMeasuredHeight());
 				controlsView.setAlpha(0f);
 			}
 		}
 		if (player != null) {
 			configurationView.removeAllViews();
-			View spacer = new View(context);
-			if (rightHandControls) {
-				configurationView.addView(spacer, new LinearLayout.LayoutParams(0, 1, 1f));
-				configurationView.addView(muteButton, (int) (48f * density), (int) (48f * density));
-				configurationView.addView(tikTokModeButton, (int) (48f * density), (int) (48f * density));
-				if (pictureInPictureButton != null) {
-					configurationView.addView(pictureInPictureButton, (int) (48f * density),
-							(int) (48f * density));
-				}
-				if (playbackSpeedButton != null) {
-					configurationView.addView(playbackSpeedButton, (int) (56f * density),
-							(int) (48f * density));
+			if (modern) {
+				int actionSize = (int) (32f * density);
+				if (rightHandControls) {
+					configurationView.addView(tikTokModeButton, actionSize, actionSize);
+					if (pictureInPictureButton != null) configurationView.addView(pictureInPictureButton,
+							actionSize, actionSize);
+					if (playbackSpeedButton != null) configurationView.addView(playbackSpeedButton,
+							LinearLayout.LayoutParams.WRAP_CONTENT, actionSize);
+				} else {
+					if (playbackSpeedButton != null) configurationView.addView(playbackSpeedButton,
+							LinearLayout.LayoutParams.WRAP_CONTENT, actionSize);
+					if (pictureInPictureButton != null) configurationView.addView(pictureInPictureButton,
+							actionSize, actionSize);
+					configurationView.addView(tikTokModeButton, actionSize, actionSize);
 				}
 			} else {
-				if (playbackSpeedButton != null) {
-					configurationView.addView(playbackSpeedButton, (int) (56f * density),
-							(int) (48f * density));
+				View spacer = new View(context);
+				if (rightHandControls) {
+					configurationView.addView(spacer, new LinearLayout.LayoutParams(0, 1, 1f));
+					configurationView.addView(muteButton, (int) (48f * density), (int) (48f * density));
+					configurationView.addView(tikTokModeButton, (int) (48f * density), (int) (48f * density));
+					if (pictureInPictureButton != null) {
+						configurationView.addView(pictureInPictureButton, (int) (48f * density),
+								(int) (48f * density));
+					}
+					if (playbackSpeedButton != null) {
+						configurationView.addView(playbackSpeedButton, (int) (56f * density),
+								(int) (48f * density));
+					}
+				} else {
+					if (playbackSpeedButton != null) {
+						configurationView.addView(playbackSpeedButton, (int) (56f * density),
+								(int) (48f * density));
+					}
+					if (pictureInPictureButton != null) {
+						configurationView.addView(pictureInPictureButton, (int) (48f * density),
+								(int) (48f * density));
+					}
+					configurationView.addView(tikTokModeButton, (int) (48f * density), (int) (48f * density));
+					configurationView.addView(muteButton, (int) (48f * density), (int) (48f * density));
+					configurationView.addView(spacer, new LinearLayout.LayoutParams(0, 1, 1f));
 				}
-				if (pictureInPictureButton != null) {
-					configurationView.addView(pictureInPictureButton, (int) (48f * density),
-							(int) (48f * density));
-				}
-				configurationView.addView(tikTokModeButton, (int) (48f * density), (int) (48f * density));
-				configurationView.addView(muteButton, (int) (48f * density), (int) (48f * density));
-				configurationView.addView(spacer, new LinearLayout.LayoutParams(0, 1, 1f));
 			}
 			updateMuteButton();
 			updatePictureInPictureButton();
@@ -1124,9 +1166,99 @@ public class VideoUnit {
 		updatePlayState();
 	}
 
+	private static void styleTimeText(TextView view, boolean modern) {
+		if (modern) {
+			PlayerControlsStyle.text(view, 11);
+		} else {
+			ThemeEngine.applyStyle(view);
+			ViewUtils.setTextSizeScaled(view, 14);
+			view.setGravity(Gravity.CENTER_HORIZONTAL);
+			view.setTypeface(ResourceUtils.TYPEFACE_MEDIUM);
+		}
+	}
+
+	private void addLegacyControls(Context context, float density, boolean longLayout) {
+		LinearLayout controls = new LinearLayout(context);
+		controls.setOrientation(longLayout ? LinearLayout.HORIZONTAL : LinearLayout.VERTICAL);
+		controls.setBackgroundColor(instance.galleryInstance.actionBarColor);
+		controls.setPadding((int) (8f * density), longLayout ? 0 : (int) (8f * density), (int) (8f * density), 0);
+		controls.setClickable(true);
+		controlsView.addView(controls, LinearLayout.LayoutParams.MATCH_PARENT,
+				LinearLayout.LayoutParams.WRAP_CONTENT);
+
+		if (longLayout) {
+			controls.setGravity(Gravity.CENTER_VERTICAL);
+			controls.addView(timeTextView, (int) (48f * density), LinearLayout.LayoutParams.WRAP_CONTENT);
+			controls.addView(seekBar, new LinearLayout.LayoutParams(0,
+					LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+			controls.addView(playPauseButton, (int) (80f * density), LinearLayout.LayoutParams.WRAP_CONTENT);
+			controls.addView(totalTimeTextView, (int) (48f * density),
+					LinearLayout.LayoutParams.WRAP_CONTENT);
+			controls.addView(fullscreenButton, (int) (48f * density),
+					LinearLayout.LayoutParams.WRAP_CONTENT);
+		} else {
+			LinearLayout controls1 = new LinearLayout(context);
+			controls1.setOrientation(LinearLayout.HORIZONTAL);
+			controls1.setGravity(Gravity.CENTER_VERTICAL);
+			controls1.setPadding(0, (int) (8f * density), 0, (int) (8f * density));
+			LinearLayout controls2 = new LinearLayout(context);
+			controls2.setOrientation(LinearLayout.HORIZONTAL);
+			controls2.setGravity(Gravity.CENTER_VERTICAL);
+			controls.addView(controls1, LinearLayout.LayoutParams.MATCH_PARENT,
+					LinearLayout.LayoutParams.WRAP_CONTENT);
+			controls.addView(controls2, LinearLayout.LayoutParams.MATCH_PARENT,
+					LinearLayout.LayoutParams.WRAP_CONTENT);
+			controls1.addView(seekBar, LinearLayout.LayoutParams.MATCH_PARENT,
+					LinearLayout.LayoutParams.WRAP_CONTENT);
+			controls2.addView(timeTextView, new LinearLayout.LayoutParams(0,
+					LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+			controls2.addView(playPauseButton, (int) (80f * density), LinearLayout.LayoutParams.WRAP_CONTENT);
+			controls2.addView(totalTimeTextView, new LinearLayout.LayoutParams(0,
+					LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+			controls2.addView(fullscreenButton, (int) (48f * density),
+					LinearLayout.LayoutParams.WRAP_CONTENT);
+		}
+	}
+
+	private void updateCenterPlayPauseButton(float density) {
+		if (!modernControls) {
+			if (centerPlayPauseButton != null) {
+				centerPlayPauseButton.animate().cancel();
+				if (centerPlayPauseButton.getParent() instanceof FrameLayout) {
+					((FrameLayout) centerPlayPauseButton.getParent()).removeView(centerPlayPauseButton);
+				}
+				centerPlayPauseButton = null;
+			}
+			return;
+		}
+		if (centerPlayPauseButton == null && controlsView.getParent() instanceof FrameLayout) {
+			FrameLayout host = (FrameLayout) controlsView.getParent();
+			centerPlayPauseButton = new ImageButton(host.getContext());
+			centerPlayPauseButton.setScaleType(ImageButton.ScaleType.FIT_CENTER);
+			PlayerControlsStyle.button(centerPlayPauseButton, density, true);
+			centerPlayPauseButton.setOnClickListener(playPauseClickListener);
+			int size = PlayerControlsStyle.dp(density, 72);
+			FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(size, size, Gravity.CENTER);
+			params.setMargins(controlsView.getPaddingLeft(), 0, controlsView.getPaddingRight(),
+					controlsView.getPaddingBottom());
+			host.addView(centerPlayPauseButton, params);
+		}
+		if (centerPlayPauseButton != null) {
+			boolean visible = controlsVisible && initialized && !pictureInPictureTransferred
+					&& instance.galleryInstance.callback.isSystemUiVisible();
+			centerPlayPauseButton.animate().cancel();
+			centerPlayPauseButton.setAlpha(visible ? 1f : 0f);
+			centerPlayPauseButton.setVisibility(visible ? View.VISIBLE : View.GONE);
+			centerPlayPauseButton.setClickable(visible);
+			centerPlayPauseButton.setImportantForAccessibility(visible
+					? View.IMPORTANT_FOR_ACCESSIBILITY_AUTO : View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
+		}
+	}
+
+
 	private static String formatVideoTime(long position) {
 		position /= 1000;
-		int m = (int) (position / 60 % 60);
+		long m = position / 60;
 		int s = (int) (position % 60);
 		return String.format(Locale.US, "%02d:%02d", m, s);
 	}
@@ -1261,9 +1393,10 @@ public class VideoUnit {
 			muteButton.setEnabled(enabled);
 			muteButton.setActivated(enabled && effectiveMuted);
 			muteButton.setAlpha(enabled ? 1f : 0.45f);
-			muteButton.setImageResource(ResourceUtils.getResourceId(context,
-					showMuted ? R.attr.iconActionVolumeOff : R.attr.iconActionVolumeOn, 0));
-			muteButton.setImageTintList(ColorStateList.valueOf(enabled && effectiveMuted
+			muteButton.setImageResource(modernControls ? (showMuted ? R.drawable.ic_volume_off : R.drawable.ic_volume_up)
+					: ResourceUtils.getResourceId(context,
+							showMuted ? R.attr.iconActionVolumeOff : R.attr.iconActionVolumeOn, 0));
+			muteButton.setImageTintList(ColorStateList.valueOf(!modernControls && enabled && effectiveMuted
 					? 0xffff5252 : Color.WHITE));
 			muteButton.setContentDescription(context.getString(!audioPresent ? R.string.video_has_no_audio
 					: effectiveMuted ? R.string.unmute_video : R.string.mute_video));
@@ -1454,6 +1587,7 @@ public class VideoUnit {
 		if (!canEnterPictureInPicture() || requirePlaying && !player.isPlaying()) {
 			return false;
 		}
+		cancelScrubbing();
 		boolean playing = player.isPlaying();
 		long position = player.getPosition();
 		Bitmap previewFrame = createPictureInPicturePreview();
@@ -1713,6 +1847,7 @@ public class VideoUnit {
 		if (!initialized || player == null) {
 			return false;
 		}
+		cancelScrubbing();
 		if (finishedPlayback) {
 			finishedPlayback = false;
 			player.setPosition(0);
@@ -1764,6 +1899,7 @@ public class VideoUnit {
 		if (!initialized || player == null) {
 			return null;
 		}
+		cancelScrubbing();
 		long duration = player.getDuration();
 		if (duration <= 0L) {
 			return null;
@@ -1799,49 +1935,102 @@ public class VideoUnit {
 		}
 	};
 
-	private final Runnable pausedSeekPreviewRunnable = () -> {
-		if (initialized && trackingNow && player != null && !player.isPlaying() && nextSeekPosition >= 0) {
-			player.setPosition(nextSeekPosition);
+	private void cancelScrubbing() {
+		boolean completed = scrubSession.takeDeferredCompletion();
+		boolean wasTracking = trackingNow;
+		if (seekBar != null) seekBar.removeCallbacks(scrubPreviewRunnable);
+		scrubPreviewScheduled = false;
+		trackingNow = false;
+		scrubSession.cancel();
+		if (completed && initialized && player != null && !pictureInPictureTransferred
+				&& !player.isSeekPending() && player.getDuration() > 0L
+				&& player.getPosition() >= player.getDuration()) {
+			handlePlaybackCompletion(player);
+		}
+		if (wasTracking && seekBar != null && initialized && player != null && !pictureInPictureTransferred) {
+			seekBar.removeCallbacks(progressRunnable);
+			seekBar.post(progressRunnable);
+		}
+	}
+
+	private void applyScrubPosition(long position) {
+		if (finishedPlayback && position < player.getDuration()) {
+			finishedPlayback = false;
+			restoreVideoViewAfterFinishedPlayback();
+			updatePlayState();
+		}
+		scrubSession.clearDeferredCompletion();
+		player.setPosition(position);
+	}
+
+	private void scheduleScrubPreview(SeekBar view) {
+		if (!scrubPreviewScheduled) {
+			scrubPreviewScheduled = true;
+			view.post(scrubPreviewRunnable);
+		}
+	}
+
+	private final Runnable scrubPreviewRunnable = new Runnable() {
+		@Override public void run() {
+			scrubPreviewScheduled = false;
+			if (!initialized || !trackingNow || player == null || pictureInPictureTransferred) return;
+			long position = scrubSession.takePreview(SystemClock.uptimeMillis(), player.isSeekPending());
+			if (position >= 0L) applyScrubPosition(position);
+			// Polling is confined to the active gesture; never restart/cancel a busy native preview.
+			scrubPreviewScheduled = true;
+			seekBar.postDelayed(this, VideoScrubSession.PREVIEW_INTERVAL_MS);
 		}
 	};
 
 	private final SeekBar.OnSeekBarChangeListener seekBarListener = new SeekBar.OnSeekBarChangeListener() {
 		@Override
-		public void onStopTrackingTouch(SeekBar seekBar) {
+		public void onStopTrackingTouch(SeekBar view) {
+			if (view != seekBar || !trackingNow) return;
+			boolean completed = scrubSession.takeDeferredCompletion();
+			long position = scrubSession.finish();
 			trackingNow = false;
-			seekBar.removeCallbacks(progressRunnable);
-			seekBar.removeCallbacks(pausedSeekPreviewRunnable);
-			if (nextSeekPosition != -1) {
-				seekBar.setProgress(nextSeekPosition);
-				player.setPosition(nextSeekPosition);
-				seekBar.postDelayed(progressRunnable, 250);
-				if (finishedPlayback && nextSeekPosition < player.getDuration()) {
-					finishedPlayback = false;
-					restoreVideoViewAfterFinishedPlayback();
-					updatePlayState();
+			view.removeCallbacks(progressRunnable);
+			view.removeCallbacks(scrubPreviewRunnable);
+			scrubPreviewScheduled = false;
+			VideoDiagnostics.recordUi("controls scrub_end changed=" + (position >= 0L));
+			if (!initialized || player == null || pictureInPictureTransferred) return;
+			if (position >= 0L) {
+				view.setProgress((int) position);
+				applyScrubPosition(position);
+				if (completed && player.getDuration() > 0L && position >= player.getDuration()) {
+					handlePlaybackCompletion(player);
 				}
 				VideoPositionMemory.save(player, finishedPlayback);
+				view.postDelayed(progressRunnable, 250);
 			} else {
+				if (completed) handlePlaybackCompletion(player);
 				progressRunnable.run();
 			}
 		}
 
 		@Override
-		public void onStartTrackingTouch(SeekBar seekBar) {
+		public void onStartTrackingTouch(SeekBar view) {
+			if (view != seekBar || !initialized || player == null || pictureInPictureTransferred) return;
 			trackingNow = true;
-			seekBar.removeCallbacks(progressRunnable);
-			seekBar.removeCallbacks(pausedSeekPreviewRunnable);
-			nextSeekPosition = -1;
+			view.removeCallbacks(progressRunnable);
+			view.removeCallbacks(scrubPreviewRunnable);
+			scrubPreviewScheduled = false;
+			scrubSession.start();
+			VideoDiagnostics.recordUi("controls scrub_start");
 		}
 
 		@Override
-		public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-			if (fromUser) {
-				nextSeekPosition = progress;
-				if (initialized && player != null && !player.isPlaying()) {
-					seekBar.removeCallbacks(pausedSeekPreviewRunnable);
-					seekBar.postDelayed(pausedSeekPreviewRunnable, PAUSED_SEEK_PREVIEW_DELAY);
-				}
+		public void onProgressChanged(SeekBar view, int progress, boolean fromUser) {
+			if (!fromUser || view != seekBar || !initialized || player == null
+					|| pictureInPictureTransferred) return;
+			timeTextView.setText(formatVideoTime(progress));
+			if (trackingNow) {
+				scrubSession.update(progress);
+				scheduleScrubPreview(view);
+			} else {
+				// Keyboard and accessibility actions do not necessarily bracket changes with a drag.
+				applyScrubPosition(progress);
+				VideoPositionMemory.save(player, finishedPlayback);
 			}
 		}
 	};
@@ -1849,9 +2038,16 @@ public class VideoUnit {
 	private void updatePlayState() {
 		if (player != null) {
 			boolean playing = player.isPlaying();
-			playPauseButton.setImageResource(ResourceUtils
-					.getResourceId(instance.galleryInstance.context, finishedPlayback ? R.attr.iconButtonRefresh
-							: playing ? R.attr.iconButtonPause : R.attr.iconButtonPlay, 0));
+			int icon = finishedPlayback ? R.drawable.ic_refresh
+					: playing ? R.drawable.ic_pause : R.drawable.ic_play_arrow;
+			int description = finishedPlayback ? R.string.play_again : playing ? R.string.pause : R.string.play;
+			playPauseButton.setImageResource(icon);
+			playPauseButton.setContentDescription(instance.galleryInstance.context.getString(description));
+			if (centerPlayPauseButton != null) {
+				centerPlayPauseButton.setImageResource(icon);
+				centerPlayPauseButton.setContentDescription(instance.galleryInstance.context.getString(description));
+				centerPlayPauseButton.setEnabled(playPauseButton.isEnabled());
+			}
 			instance.galleryInstance.callback.setScreenOnFixed(!finishedPlayback && playing);
 		}
 	}
@@ -1946,16 +2142,33 @@ public class VideoUnit {
 	private boolean controlsVisible = false;
 
 	public void invalidateControlsVisibility() {
-		boolean visible = initialized && instance.galleryInstance.callback.isSystemUiVisible();
+		boolean visible = initialized && !pictureInPictureTransferred
+				&& instance.galleryInstance.callback.isSystemUiVisible();
 		if (layoutConfiguration >= 0 && controlsVisible != visible) {
 			controlsView.animate().cancel();
+			if (centerPlayPauseButton != null) {
+				centerPlayPauseButton.animate().cancel();
+				centerPlayPauseButton.setClickable(visible);
+				centerPlayPauseButton.setImportantForAccessibility(visible
+						? View.IMPORTANT_FOR_ACCESSIBILITY_AUTO : View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
+			}
+			// A hidden central button must never intercept the gallery's tap/zoom gestures.
 			if (visible) {
+				if (centerPlayPauseButton != null) {
+					centerPlayPauseButton.setVisibility(View.VISIBLE);
+					centerPlayPauseButton.setAlpha(0f);
+					centerPlayPauseButton.animate().alpha(1f).setDuration(180).setListener(null).start();
+				}
 				controlsView.setVisibility(View.VISIBLE);
-				controlsView.animate().alpha(1f).translationY(0f).setDuration(250).setListener(null)
+				controlsView.animate().alpha(1f).translationY(0f).setDuration(modernControls ? 220 : 250).setListener(null)
 						.setInterpolator(AnimationUtils.DECELERATE_INTERPOLATOR).start();
 			} else {
-				controlsView.animate().alpha(0f).translationY(controlsView.getHeight() -
-						configurationView.getHeight()).setDuration(350)
+				if (centerPlayPauseButton != null) centerPlayPauseButton.animate().alpha(0f).setDuration(160)
+						.setListener(new AnimationUtils.VisibilityListener(centerPlayPauseButton, View.GONE)).start();
+				controlsView.animate().alpha(0f).translationY(
+						modernControls ? PlayerControlsStyle.dp(ResourceUtils.obtainDensity(controlsView.getContext()), 12)
+								: controlsView.getHeight() - configurationView.getHeight())
+						.setDuration(modernControls ? 160 : 350)
 						.setListener(new AnimationUtils.VisibilityListener(controlsView, View.GONE))
 						.setInterpolator(AnimationUtils.ACCELERATE_DECELERATE_INTERPOLATOR).start();
 			}
@@ -1966,20 +2179,13 @@ public class VideoUnit {
 	private final VideoPlayer.Listener playerListener = new VideoPlayer.Listener() {
 		@Override
 		public void onComplete(VideoPlayer player) {
-			VideoPositionMemory.save(player, true);
-			switch (Preferences.getVideoCompletionMode()) {
-				case NOTHING: {
-					markPlaybackFinished();
-					break;
-				}
-				case LOOP: {
-					player.setPosition(0L);
-					break;
-				}
-				default: {
-					throw new IllegalStateException();
-				}
+			if (player != VideoUnit.this.player || !initialized || pictureInPictureTransferred) return;
+			// Previewing EOF must not restart the loop or change play/pause under the user's finger.
+			if (trackingNow) {
+				scrubSession.deferCompletion();
+				return;
 			}
+			handlePlaybackCompletion(player);
 		}
 
 		@Override
@@ -2023,6 +2229,24 @@ public class VideoUnit {
 			}
 		}
 	};
+
+	private void handlePlaybackCompletion(VideoPlayer completedPlayer) {
+		if (completedPlayer != player || !initialized || pictureInPictureTransferred) return;
+		VideoPositionMemory.save(completedPlayer, true);
+		switch (Preferences.getVideoCompletionMode()) {
+			case NOTHING: {
+				markPlaybackFinished();
+				break;
+			}
+			case LOOP: {
+				completedPlayer.setPosition(0L);
+				break;
+			}
+			default: {
+				throw new IllegalStateException();
+			}
+		}
+	}
 
 	private void markPlaybackFinished() {
 		finishedPlayback = true;
@@ -2078,8 +2302,10 @@ public class VideoUnit {
 	}
 
 	public void handleSwipingContent(boolean swiping, boolean hideSurface) {
+		if (swiping) cancelScrubbing();
 		if (getOwnedVideoView(instance.currentHolder) != null) {
 			playPauseButton.setEnabled(!swiping);
+			if (centerPlayPauseButton != null) centerPlayPauseButton.setEnabled(!swiping);
 			seekBar.setEnabled(!swiping);
 			fullscreenButton.setEnabled(!swiping);
 			if (swiping) {

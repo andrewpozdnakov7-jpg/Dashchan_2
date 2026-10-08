@@ -172,4 +172,7 @@
 	<string name="pe_plaque_text">Надпись</string>
 	<string name="pe_select_plaque">Выберите плашку на фото</string>
 	<string name="pe_plaque_limit">До 120 символов и трёх строк</string>
+	<string name="pe_new_region">Новая область</string>
+	<string name="pe_object_below_effects">Под эффектами</string>
+	<string name="pe_object_above_effects">Поверх всего</string>
 </resources>

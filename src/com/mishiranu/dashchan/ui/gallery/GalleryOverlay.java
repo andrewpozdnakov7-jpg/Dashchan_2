@@ -57,6 +57,7 @@ import com.mishiranu.dashchan.util.AnimationUtils;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
 import com.mishiranu.dashchan.util.FlagUtils;
 import com.mishiranu.dashchan.util.ResourceUtils;
+import com.mishiranu.dashchan.util.InterfaceMotion;
 import com.mishiranu.dashchan.util.ViewUtils;
 import com.mishiranu.dashchan.widget.InsetsLayout;
 import com.mishiranu.dashchan.widget.ThemeEngine;
@@ -898,6 +899,7 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 
 	@Override
 	public void onPredictiveBackStarted(boolean fromLeft) {
+		if (InterfaceMotion.isEnabled() && InterfaceMotion.duration(1) == 0) return;
 		if (rootView != null) {
 			predictiveBackRunning = true;
 			rootView.animate().cancel();
@@ -931,7 +933,14 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 		if (rootView != null) {
 			rootView.animate().cancel();
 			if (animate && rootView.isAttachedToWindow()) {
-				rootView.animate().translationX(0f).scaleX(1f).scaleY(1f).alpha(1f).setDuration(150).start();
+				if (InterfaceMotion.isEnabled()) {
+					rootView.animate().translationX(0f).scaleX(1f).scaleY(1f).alpha(1f)
+							.setDuration(InterfaceMotion.duration(InterfaceMotion.RECOVERY_DURATION))
+							.setInterpolator(InterfaceMotion.STANDARD).start();
+				} else {
+					rootView.animate().translationX(0f).scaleX(1f).scaleY(1f).alpha(1f).setDuration(150)
+							.setInterpolator(new android.view.animation.AccelerateDecelerateInterpolator()).start();
+				}
 			} else {
 				rootView.setTranslationX(0f);
 				rootView.setScaleX(1f);

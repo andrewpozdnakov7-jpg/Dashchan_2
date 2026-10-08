@@ -9,6 +9,7 @@ import androidx.annotation.NonNull;
 import androidx.fragment.app.DialogFragment;
 import androidx.lifecycle.ViewModelProvider;
 import chan.util.StringUtils;
+import com.mishiranu.dashchan.BuildConfig;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.async.ExecutorTask;
@@ -16,10 +17,8 @@ import com.mishiranu.dashchan.content.async.TaskViewModel;
 import com.mishiranu.dashchan.content.database.PagesDatabase;
 import com.mishiranu.dashchan.content.translation.TranslationController;
 import com.mishiranu.dashchan.content.storage.FavoritesStorage;
-import com.mishiranu.dashchan.content.service.BackgroundWatcherWorker;
 import com.mishiranu.dashchan.ui.DrawerForm;
 import com.mishiranu.dashchan.ui.FragmentHandler;
-import com.mishiranu.dashchan.ui.preference.core.CheckPreference;
 import com.mishiranu.dashchan.ui.preference.core.Preference;
 import com.mishiranu.dashchan.ui.preference.core.PreferenceFragment;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
@@ -28,13 +27,10 @@ import com.mishiranu.dashchan.widget.ProgressDialog;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
-import java.util.Set;
 
 public class ContentsFragment extends PreferenceFragment {
 	private static final String RESULT_CACHE_SIZE_CHANGED = "contentsCacheSizeChanged";
 
-	private CheckPreference replyNotifications;
 	private Preference<?> clearCachePreference;
 
 	@Override
@@ -45,6 +41,18 @@ public class ContentsFragment extends PreferenceFragment {
 	@Override
 	public void onViewCreated(@NonNull View view, Bundle savedInstanceState) {
 		super.onViewCreated(view, savedInstanceState);
+
+		addButton(R.string.replies_and_notifications, R.string.replies_and_notifications_entry_summary)
+				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
+						.pushFragment(new ReplyNotificationsFragment()));
+		if (BuildConfig.ENABLE_LOCAL_TRANSLATION) {
+			addButton(R.string.local_translation, R.string.local_translation_entry_summary)
+					.setOnClickListener(p -> ((FragmentHandler) requireActivity())
+							.pushFragment(new OfflineTranslationFragment()));
+		}
+		addHeader(R.string.settings_boards);
+		addCheck(true, Preferences.KEY_THREAD_PAGE_PRELOAD, Preferences.DEFAULT_THREAD_PAGE_PRELOAD,
+				R.string.thread_page_preload, R.string.thread_page_preload__summary);
 
 		addHeader(R.string.threads);
 		addSeek(Preferences.KEY_AUTO_REFRESH_INTERVAL, Preferences.DEFAULT_AUTO_REFRESH_INTERVAL,
@@ -64,46 +72,6 @@ public class ContentsFragment extends PreferenceFragment {
 		addList(Preferences.KEY_FAVORITE_ON_REPLY, enumList(Preferences.FavoriteOnReplyMode.values(), o -> o.value),
 				Preferences.DEFAULT_FAVORITE_ON_REPLY.value, R.string.add_thread_on_reply,
 				enumResList(Preferences.FavoriteOnReplyMode.values(), o -> o.titleResId));
-		addCheck(true, Preferences.KEY_WATCHER_WATCH_INITIALLY, Preferences.DEFAULT_WATCHER_WATCH_INITIALLY,
-				R.string.watch_initially, R.string.watch_initially__summary);
-
-		addHeader(R.string.favorites_watcher);
-		addSeek(Preferences.KEY_WATCHER_REFRESH_INTERVAL, Preferences.DEFAULT_WATCHER_REFRESH_INTERVAL,
-				R.string.refresh_favorites, R.string.every_number_sec__format,
-				new Pair<>(Preferences.DISABLED_WATCHER_REFRESH_INTERVAL, R.string.disabled),
-				Preferences.MIN_WATCHER_REFRESH_INTERVAL, Preferences.MAX_WATCHER_REFRESH_INTERVAL,
-				Preferences.STEP_WATCHER_REFRESH_INTERVAL);
-		CheckPreference backgroundReplyCheck = addCheck(true, Preferences.KEY_BACKGROUND_REPLY_CHECK,
-				Preferences.DEFAULT_BACKGROUND_REPLY_CHECK, R.string.background_reply_check,
-				R.string.background_reply_check__summary);
-		backgroundReplyCheck.setOnAfterChangeListener(p -> {
-			if (p.getValue()) {
-				Set<Preferences.NotificationFeature> notificationFeatures =
-						new HashSet<>(Preferences.getWatcherNotifications());
-				if (notificationFeatures.add(Preferences.NotificationFeature.ENABLED)) {
-					Preferences.setWatcherNotifications(notificationFeatures);
-					invalidateReplyNotifications();
-				}
-			}
-			BackgroundWatcherWorker.updateSchedule(requireContext());
-		});
-		addCheck(true, Preferences.KEY_WATCHER_WIFI_ONLY, Preferences.DEFAULT_WATCHER_WIFI_ONLY,
-				R.string.wifi_only, 0).setOnAfterChangeListener(p ->
-				BackgroundWatcherWorker.updateSchedule(requireContext()));
-		replyNotifications = addCheck(false, "reply_notifications", false,
-				R.string.reply_notifications, R.string.reply_notifications__format);
-		replyNotifications.setOnClickListener(p -> {
-			Set<Preferences.NotificationFeature> notificationFeatures;
-			if (p.getValue()) {
-				notificationFeatures = Collections.emptySet();
-			} else {
-				notificationFeatures = new HashSet<>(Preferences.DEFAULT_WATCHER_NOTIFICATIONS);
-				notificationFeatures.add(Preferences.NotificationFeature.ENABLED);
-			}
-			Preferences.setWatcherNotifications(notificationFeatures);
-			invalidateReplyNotifications();
-		});
-		invalidateReplyNotifications();
 
 		addHeader(R.string.additional);
 		clearCachePreference = addButton(getString(R.string.clear_cache),
@@ -127,11 +95,6 @@ public class ContentsFragment extends PreferenceFragment {
 	public void onViewStateRestored(Bundle savedInstanceState) {
 		super.onViewStateRestored(savedInstanceState);
 		((FragmentHandler) requireActivity()).setTitleSubtitle(getString(R.string.contents), null);
-	}
-
-	private void invalidateReplyNotifications() {
-		replyNotifications.setValue(Preferences.getWatcherNotifications()
-				.contains(Preferences.NotificationFeature.ENABLED));
 	}
 
 	public static class ClearCacheDialog extends DialogFragment {

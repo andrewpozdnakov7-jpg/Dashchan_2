@@ -1,6 +1,8 @@
 package com.mishiranu.dashchan.ui.navigator;
 
 import android.content.Context;
+import android.graphics.Canvas;
+import android.graphics.Rect;
 import android.os.BadParcelableException;
 import android.os.Bundle;
 import android.os.Parcelable;
@@ -12,8 +14,11 @@ import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import androidx.annotation.NonNull;
+import androidx.core.view.OneShotPreDrawListener;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
+import com.mishiranu.dashchan.util.InterfaceMotion;
+import com.mishiranu.dashchan.util.ThreadMotionKey;
 import com.mishiranu.dashchan.content.WallpaperManager;
 import com.mishiranu.dashchan.content.model.ErrorItem;
 import com.mishiranu.dashchan.content.model.PostNumber;
@@ -102,6 +107,57 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 	private PaddedRecyclerView recyclerView;
 	private ThreadQuickNavigation quickNavigation;
 
+	/** The visible message viewport, in root coordinates, excluding toolbar/system padding. */
+	public Rect getThreadMotionContentBounds() {
+		View root = getView();
+		if (root == null || recyclerView == null || recyclerView.getChildCount() == 0
+				|| recyclerView.getVisibility() != View.VISIBLE || recyclerView.getAlpha() <= 0f) return null;
+		int[] rootLocation = new int[2], listLocation = new int[2];
+		root.getLocationInWindow(rootLocation);
+		recyclerView.getLocationInWindow(listLocation);
+		int left = listLocation[0] - rootLocation[0], top = listLocation[1] - rootLocation[1];
+		Rect viewport = new Rect(left + recyclerView.getPaddingLeft(), top + recyclerView.getPaddingTop(),
+				left + recyclerView.getWidth() - recyclerView.getPaddingRight(),
+				top + recyclerView.getHeight() - recyclerView.getPaddingBottom());
+		return viewport.intersect(0, 0, root.getWidth(), root.getHeight()) && !viewport.isEmpty()
+				? viewport : null;
+	}
+
+	/** Draw wallpaper and messages only; later siblings (progress, errors, arrows) stay out of the morph. */
+	public void drawThreadMotionContent(Canvas canvas) {
+		View root = getView();
+		if (!(root instanceof ViewGroup) || recyclerView == null) return;
+		if (root.getBackground() != null) root.getBackground().draw(canvas);
+		ViewGroup group = (ViewGroup) root;
+		for (int i = 0; i < group.getChildCount(); i++) {
+			View child = group.getChildAt(i);
+			if (child.getVisibility() == View.VISIBLE && child.getAlpha() > 0f) {
+				int save = canvas.save();
+				canvas.translate(child.getLeft() - group.getScrollX(), child.getTop() - group.getScrollY());
+				canvas.concat(child.getMatrix());
+				if (child.getAlpha() < 1f) {
+					canvas.saveLayerAlpha(0, 0, child.getWidth(), child.getHeight(),
+							Math.round(255f * child.getAlpha()));
+				}
+				if (child == recyclerView) recyclerView.drawContentSnapshot(canvas);
+				else child.draw(canvas);
+				canvas.restoreToCount(save);
+			}
+			if (child == recyclerView) break;
+		}
+	}
+
+	/** Resolve the currently bound visible card, never a saved adapter position or old rectangle. */
+	public View findThreadMotionCard(ThreadMotionKey key) {
+		if (recyclerView != null) {
+			for (int i = 0; i < recyclerView.getChildCount(); i++) {
+				View child = recyclerView.getChildAt(i);
+				if (key.equals(child.getTag(R.id.thread_motion_key))) return child;
+			}
+		}
+		return null;
+	}
+
 	private CustomSearchView searchView;
 	private MenuItem searchMenuItem;
 
@@ -119,6 +175,7 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 	private boolean resetScroll = false;
 
 	private boolean allowShowScale;
+	private OneShotPreDrawListener listRevealListener;
 	private Runnable doOnResume;
 	private boolean searchMode = false;
 	private boolean saveToStack = false;
@@ -190,6 +247,8 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 	@Override
 	public void onDestroyView() {
 		doOnResume = null;
+		clearPendingListReveal();
+		InterfaceMotion.cancel(recyclerView);
 		super.onDestroyView();
 
 		FragmentHandler fragmentHandler = (FragmentHandler) requireActivity();
@@ -279,6 +338,7 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 	@Override
 	public void onTerminate() {
 		doOnResume = null;
+		clearPendingListReveal();
 		super.onTerminate();
 
 		if (listPage != null) {
@@ -546,11 +606,27 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 		errorHolder.text.setText(errorItem.toString());
 	}
 
+	private void clearPendingListReveal() {
+		if (listRevealListener != null) {
+			listRevealListener.removeListener();
+			listRevealListener = null;
+		}
+	}
+
 	@Override
 	public void showScaleAnimation() {
 		if (allowShowScale) {
 			allowShowScale = false;
-			createAnimator(recyclerView, true).start();
+			if (InterfaceMotion.isEnabled()) {
+				View target = recyclerView;
+				View root = getView();
+				clearPendingListReveal();
+				listRevealListener = InterfaceMotion.revealBeforeDraw(target, root, () ->
+						target == recyclerView && root != null && root == getView() && listPage != null &&
+						InterfaceMotion.isEnabled());
+			} else {
+				createAnimator(recyclerView, true).start();
+			}
 		}
 	}
 

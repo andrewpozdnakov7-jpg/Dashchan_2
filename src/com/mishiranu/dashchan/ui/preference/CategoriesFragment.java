@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui.preference;
 
+import android.app.AlertDialog;
 import android.os.Bundle;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -9,6 +10,7 @@ import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.ui.FragmentHandler;
 import com.mishiranu.dashchan.ui.preference.core.PreferenceFragment;
+import com.mishiranu.dashchan.ui.preference.core.Preference;
 import com.mishiranu.dashchan.util.SharedPreferences;
 import com.mishiranu.dashchan.widget.CustomSearchView;
 import com.mishiranu.dashchan.widget.MenuExpandListener;
@@ -19,6 +21,7 @@ public class CategoriesFragment extends PreferenceFragment {
 	private static final String EXTRA_SEARCH_FOCUSED = "searchFocused";
 
 	private List<SettingsSearchIndex.Entry> searchIndex;
+	private SettingsSearchHistory searchHistory;
 	private CustomSearchView searchView;
 	private MenuItem searchMenuItem;
 	private String searchQuery;
@@ -42,6 +45,7 @@ public class CategoriesFragment extends PreferenceFragment {
 		super.onViewCreated(view, savedInstanceState);
 
 		searchIndex = SettingsSearchIndex.create(requireContext());
+		searchHistory = SettingsSearchHistory.create(requireContext());
 		searchView = obtainSearchView();
 		searchView.setHint(getString(R.string.search_settings));
 		searchView.setOnChangeListener(query -> {
@@ -58,13 +62,17 @@ public class CategoriesFragment extends PreferenceFragment {
 		if (searchQuery != null) {
 			List<SettingsSearchIndex.Entry> results = SettingsSearchIndex.search(searchIndex, searchQuery);
 			if (searchQuery.trim().isEmpty()) {
-				addButton(R.string.search_settings_hint, 0).setSelectable(false);
+				populateSearchHistory();
 			} else if (results.isEmpty()) {
 				addButton(R.string.no_settings_found, 0).setSelectable(false);
 			} else {
+				String completedQuery = searchQuery;
 				for (SettingsSearchIndex.Entry entry : results) {
-					addButton(entry.getTitle(), entry.getBreadcrumb()).setOnClickListener(preference ->
-							((FragmentHandler) requireActivity()).pushFragment(entry.createFragment()));
+					addButton(entry.getTitle(), entry.getBreadcrumb()).setOnClickListener(preference -> {
+						SettingsSearchHistory history = searchHistory;
+						((FragmentHandler) requireActivity()).pushFragment(entry.createFragment());
+						if (history != null) history.record(completedQuery);
+					});
 				}
 			}
 			return;
@@ -102,11 +110,56 @@ public class CategoriesFragment extends PreferenceFragment {
 						.pushFragment(new AccessibilityFragment()));
 	}
 
+	private void populateSearchHistory() {
+		List<String> queries = searchHistory != null ? searchHistory.getQueries() : java.util.Collections.emptyList();
+		if (queries.isEmpty()) {
+			addButton(R.string.search_settings_hint, 0).setSelectable(false);
+			return;
+		}
+		addHeader(R.string.settings_search_history);
+		for (String query : queries) {
+			Preference<Void> item =
+					addButton(query, getString(R.string.settings_search_history_item_hint));
+			item.setOnClickListener(preference -> {
+				if (searchView == null) return;
+				if (query.equals(searchView.getQuery())) {
+					searchQuery = query;
+					populatePreferences();
+				} else {
+					searchView.setQuery(query);
+				}
+			});
+			item.setOnLongClickListener(preference -> {
+				SettingsSearchHistory history = searchHistory;
+				if (history == null) return;
+				new AlertDialog.Builder(requireContext()).setTitle(query)
+						.setMessage(R.string.settings_search_history_delete_confirm)
+						.setNegativeButton(android.R.string.cancel, null)
+						.setPositiveButton(android.R.string.ok, (dialog, which) -> {
+							history.remove(query);
+							if (getView() != null) populatePreferences();
+						}).show();
+			});
+		}
+		addButton(R.string.settings_search_clear_history, 0).setOnClickListener(preference -> {
+			SettingsSearchHistory history = searchHistory;
+			if (history == null) return;
+			new AlertDialog.Builder(requireContext()).setTitle(R.string.settings_search_clear_history)
+					.setMessage(R.string.settings_search_history_clear_confirm)
+					.setNegativeButton(android.R.string.cancel, null)
+					.setPositiveButton(android.R.string.ok, (dialog, which) -> {
+						history.clear();
+						if (getView() != null) populatePreferences();
+					}).show();
+		});
+	}
+
 	@Override
 	public void onDestroyView() {
 		super.onDestroyView();
 
 		searchIndex = null;
+		searchHistory = null;
 		searchView = null;
 		searchMenuItem = null;
 	}

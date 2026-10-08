@@ -12,6 +12,7 @@ import androidx.annotation.NonNull;
 import com.mishiranu.dashchan.util.AnimationUtils;
 import com.mishiranu.dashchan.util.GraphicsUtils;
 import com.mishiranu.dashchan.util.ResourceUtils;
+import com.mishiranu.dashchan.util.InterfaceMotion;
 
 public class GalleryBackgroundDrawable extends BaseDrawable {
 	private final View view;
@@ -21,6 +22,7 @@ public class GalleryBackgroundDrawable extends BaseDrawable {
 	private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
 	private final int[] location = new int[2];
 
+	private final boolean modern = InterfaceMotion.isEnabled();
 	private ValueAnimator animator;
 	private int alpha = 0xff;
 
@@ -49,14 +51,20 @@ public class GalleryBackgroundDrawable extends BaseDrawable {
 		if (view != null) {
 			if (animator == null) {
 				animator = ValueAnimator.ofFloat(0f, 1f);
-				animator.setInterpolator(AnimationUtils.ACCELERATE_INTERPOLATOR);
-				animator.setDuration(300);
+				animator.setInterpolator(modern ? InterfaceMotion.STANDARD : AnimationUtils.ACCELERATE_INTERPOLATOR);
+				animator.setDuration(modern ? InterfaceMotion.duration(InterfaceMotion.GALLERY_DURATION) : 300);
 				animator.start();
 				view.getLocationOnScreen(location);
 			}
 			t = (float) animator.getAnimatedValue();
 		} else {
 			t = 1f;
+		}
+		if (modern) {
+			paint.setAlpha(Math.round(alpha * t));
+			canvas.drawRect(bounds, paint);
+			if (t < 1f) invalidateSelf();
+			return;
 		}
 		if (t >= 1f) {
 			paint.setAlpha(alpha);

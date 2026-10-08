@@ -157,6 +157,10 @@ public class UiManager {
 		void navigateBoardsOrThreads(String chanName, String boardName);
 		void navigatePosts(String chanName, String boardName, String threadNumber,
 				PostNumber postNumber, String threadTitle);
+		default void navigatePostsFromCard(String chanName, String boardName, String threadNumber,
+				PostNumber postNumber, String threadTitle, View source) {
+			navigatePosts(chanName, boardName, threadNumber, postNumber, threadTitle);
+		}
 		void navigateSearch(String chanName, String boardName, String searchQuery);
 		void navigateArchive(String chanName, String boardName);
 		void navigateTargetAllowReturn(String chanName, ChanLocator.NavigationData data);

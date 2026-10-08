@@ -21,10 +21,17 @@
 				android:layout_height="match_parent"
 				tools:ignore="Suspicious0dp" />
 
-			<androidx.fragment.app.FragmentContainerView
-				android:id="@+id/content_fragment"
+			<com.mishiranu.dashchan.widget.ThreadMotionLayout
+				android:id="@+id/thread_motion_host"
 				android:layout_width="match_parent"
-				android:layout_height="match_parent" />
+				android:layout_height="match_parent">
+
+				<androidx.fragment.app.FragmentContainerView
+					android:id="@+id/content_fragment"
+					android:layout_width="match_parent"
+					android:layout_height="match_parent" />
+
+			</com.mishiranu.dashchan.widget.ThreadMotionLayout>
 
 		</LinearLayout>
 

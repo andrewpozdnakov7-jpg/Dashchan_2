@@ -538,6 +538,17 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 
 	@Override
 	public void onItemClick(PostItem postItem) {
+		onThreadClick(postItem, null);
+	}
+
+	@Override
+	public boolean onItemClick(RecyclerView.ViewHolder holder, int position, PostItem postItem, boolean longClick) {
+		if (longClick) return onItemLongClick(postItem);
+		onThreadClick(postItem, holder.itemView);
+		return true;
+	}
+
+	private void onThreadClick(PostItem postItem, View source) {
 		if (postItem != null) {
 			Page page = getPage();
 			if (postItem.getHideState().hidden) {
@@ -545,8 +556,8 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 				updateSecretAbuThread();
 				getAdapter().notifyDataSetChanged();
 			} else {
-				getUiManager().navigator().navigatePosts(page.chanName, page.boardName,
-						postItem.getThreadNumber(), null, postItem.getSubjectOrComment());
+				getUiManager().navigator().navigatePostsFromCard(page.chanName, page.boardName,
+						postItem.getThreadNumber(), null, postItem.getSubjectOrComment(), source);
 			}
 		}
 	}

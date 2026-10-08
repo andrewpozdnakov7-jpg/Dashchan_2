@@ -6,6 +6,7 @@ import android.util.Pair;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.SubMenu;
+import android.view.View;
 import androidx.annotation.NonNull;
 import androidx.fragment.app.FragmentManager;
 import androidx.lifecycle.LifecycleOwner;
@@ -762,6 +763,17 @@ public class CombinedThreadsPage extends ListPage implements ThreadsAdapter.Call
 
 	@Override
 	public void onItemClick(PostItem postItem) {
+		onThreadClick(postItem, null);
+	}
+
+	@Override
+	public boolean onItemClick(RecyclerView.ViewHolder holder, int position, PostItem postItem, boolean longClick) {
+		if (longClick) return onItemLongClick(postItem);
+		onThreadClick(postItem, holder.itemView);
+		return true;
+	}
+
+	private void onThreadClick(PostItem postItem, View source) {
 		if (postItem == null) {
 			return;
 		}
@@ -769,8 +781,8 @@ public class CombinedThreadsPage extends ListPage implements ThreadsAdapter.Call
 			setThreadHideState(postItem, PostItem.HideState.SHOWN);
 			getAdapter().notifyThreadChanged(postItem);
 		} else {
-			getUiManager().navigator().navigatePosts(postItem.getChanName(), postItem.getBoardName(),
-					postItem.getThreadNumber(), null, postItem.getSubjectOrComment());
+			getUiManager().navigator().navigatePostsFromCard(postItem.getChanName(), postItem.getBoardName(),
+					postItem.getThreadNumber(), null, postItem.getSubjectOrComment(), source);
 		}
 	}
 

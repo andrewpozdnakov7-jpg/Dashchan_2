@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<string name="settings_boards">Доски</string>
+	<string name="my_message_replies">Ответы на мои сообщения</string>
+	<string name="replies_and_notifications_entry_summary">Ответы на ваши сообщения, обновления избранных тредов и способы получения уведомлений</string>
+	<string name="local_translation_entry_summary">Перевод постов на устройстве, выбор языка и переводчика, языковые пакеты и сохранённые переводы</string>
+	<string name="pip_diagnostic_hidden_summary">Выбор диагностических режимов временно скрыт. Код диагностики сохранён.</string>
+</resources>

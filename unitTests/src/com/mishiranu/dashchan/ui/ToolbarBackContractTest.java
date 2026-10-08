@@ -25,10 +25,23 @@ public class ToolbarBackContractTest {
 	}
 
 	private static String method(String name) throws Exception {
+		return method(name, null);
+	}
+
+	private static String method(String name, String parameters) throws Exception {
 		String text = activity();
-		Matcher matcher = Pattern.compile("(?m)^\\t(?:private|protected|public) void " + Pattern.quote(name) + "\\(").matcher(text);
-		assertTrue("Missing method: " + name, matcher.find());
-		int start = text.indexOf('{', matcher.end()) + 1;
+		Matcher matcher = Pattern.compile("(?m)^\\t(?:private|protected|public) void " + Pattern.quote(name)
+				+ "\\(([^)]*)\\)\\s*\\{").matcher(text);
+		boolean found = false;
+		while (matcher.find()) {
+			if (parameters == null || parameters.replaceAll("\\s+", "")
+					.equals(matcher.group(1).replaceAll("\\s+", ""))) {
+				found = true;
+				break;
+			}
+		}
+		assertTrue("Missing method: " + name + (parameters != null ? "(" + parameters + ")" : ""), found);
+		int start = matcher.end();
 		int depth = 1, end = start;
 		while (end < text.length() && depth > 0) {
 			char c = text.charAt(end++);
@@ -60,18 +73,44 @@ public class ToolbarBackContractTest {
 		assertTrue(back.contains("onBackPressed(false, true, this::performDefaultBack)"));
 		assertTrue(back.contains("resetPredictiveBackView(predictiveBackView, true)"));
 		assertTrue(back.contains("scheduleSystemBackCallbackUpdate()"));
+		int modernStart = back.indexOf("if (InterfaceMotion.isEnabled())");
+		int legacyStart = back.indexOf("} else {", modernStart);
+		assertTrue("Separate modern and legacy cleanup paths", modernStart >= 0 && legacyStart > modernStart);
+		String modern = back.substring(modernStart, legacyStart);
+		assertTrue("Modern cleanup precedes exit animation",
+				modern.indexOf("resetPredictiveBackView(predictiveBackView, false)") >= 0 &&
+				modern.indexOf("resetPredictiveBackView(predictiveBackView, false)") <
+				modern.indexOf("onBackPressed(false, true, this::performDefaultBack)"));
+		String legacy = back.substring(legacyStart);
+		assertTrue("Legacy recovery still follows dispatch",
+				legacy.indexOf("onBackPressed(false, true, this::performDefaultBack)") >= 0 &&
+				legacy.indexOf("resetPredictiveBackView(predictiveBackView, true)") >
+				legacy.indexOf("onBackPressed(false, true, this::performDefaultBack)"));
 		String dispatch = method("onBackPressed");
 		assertTrue(dispatch.contains("currentFragment.onBackPressed()"));
-		assertTrue(dispatch.contains("navigateSavedPage(savedPageItem, true)"));
+		assertTrue(dispatch.contains("navigateSavedPage(savedPageItem, true, FragmentTransaction.TRANSIT_FRAGMENT_CLOSE)"));
+		assertTrue(dispatch.contains("navigateFragment(fragment, null, true, FragmentTransaction.TRANSIT_FRAGMENT_CLOSE)"));
 		assertTrue(dispatch.contains("Preferences.isCloseOnBack()"));
+		assertFalse(dispatch.contains("navigateData("));
+		assertFalse(dispatch.contains("setInitRequest("));
 	}
 
 	@Test public void savedPageReturnDoesNotRequestForcedLoading() throws Exception {
-		String restore = method("navigateSavedPage");
+		String entry = method("navigateSavedPage", "SavedPageItem savedPageItem, boolean closeOverlays");
+		assertTrue(entry.contains("navigateSavedPage(savedPageItem, closeOverlays, navigationMotionTransition())"));
+		String restore = method("navigateSavedPage",
+				"SavedPageItem savedPageItem, boolean closeOverlays, int motionTransition");
 		assertTrue(restore.contains("savedPageItem.create()"));
-		assertTrue(restore.contains("navigateFragment(pair.first, pair.second, closeOverlays)"));
+		assertTrue(restore.contains("navigateFragment(pair.first, pair.second, closeOverlays, motionTransition)"));
 		assertFalse(restore.contains("setInitRequest("));
 		assertFalse(restore.contains("navigateData("));
+		assertFalse(entry.contains("setInitRequest("));
+		assertFalse(entry.contains("navigateData("));
+		String commit = method("commitContentFragment",
+				"ContentFragment fragment, PageItem pageItem, boolean animate, int motionTransition");
+		assertTrue("Legacy transition is unchanged when the experimental switch is off",
+				commit.contains("transaction.setTransition(InterfaceMotion.isEnabled() ? motionTransition"
+						+ " : FragmentTransaction.TRANSIT_FRAGMENT_OPEN)"));
 		String page = source("src/com/mishiranu/dashchan/ui/navigator/page/ListPage.java");
 		assertTrue(page.contains("EMPTY_REQUEST = new InitRequest(false, null, null)"));
 		String threads = source("src/com/mishiranu/dashchan/ui/navigator/page/ThreadsPage.java");

@@ -95,7 +95,7 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
     private int attachmentIndex, selectedColor = Color.WHITE, exportSide = 0, exportQuality = 94, adjustmentIndex;
     private float brushSize = .025f, mosaicSize = .025f;
     private int blurPreset = 1;
-    private boolean drawAll = true;
+    private boolean drawAll = true, objectAboveEffects;
     private Runnable toolBinding;
     private boolean exportPng, busy, completed, restoredWithLoss, maskAll = true;
     private int originalWidth, originalHeight, stickerGroup;
@@ -386,6 +386,7 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
                                 json.optBoolean("toolSettingsV2", false) ? 1
                                 : com.mishiranu.dashchan.ui.posting.photo.EditorBlurPresets.nearest(brushSize)));
                         drawAll = json.optBoolean("drawAll", true);
+                        objectAboveEffects = json.optBoolean("objectAboveEffects", false);
                         if (exportSide != 0 && exportSide != 1024 && exportSide != 2048 && exportSide != 3072 && exportSide != 4096) exportSide = 0;
                         exportQuality = Math.max(50, Math.min(100, exportQuality));
                     } catch (IOException | JSONException | IllegalArgumentException e) {
@@ -558,6 +559,10 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
     }
     private View slider(LinearLayout parent, int title, int minimum, int maximum, int value, ValueChange change,
             boolean history, String suffix) {
+        return slider(parent, title, minimum, maximum, value, change, history, suffix, null);
+    }
+    private View slider(LinearLayout parent, int title, int minimum, int maximum, int value, ValueChange change,
+            boolean history, String suffix, java.util.function.Supplier<Integer> currentValue) {
         LinearLayout group = new LinearLayout(parent.getContext()); group.setOrientation(LinearLayout.VERTICAL); parent.addView(group);
         parent = group;
         TextView label = label(parent.getContext(), title); parent.addView(label);
@@ -574,7 +579,7 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
         updateLabel.run();
         slider.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override public void onStartTrackingTouch(SeekBar bar) {
-                if (history && !busy) document.begin();
+                if (history && !busy) { canvas.finishGesture(true); document.begin(); }
                 if (title == R.string.pe_thickness && !busy) canvas.beginBrushPreview();
             }
             @Override public void onProgressChanged(SeekBar bar, int progress, boolean fromUser) {
@@ -590,6 +595,14 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
             @Override public void onStopTrackingTouch(SeekBar bar) { if (history) document.commit();
                 if (title == R.string.pe_thickness) canvas.endBrushPreview(); changed(); }
         });
+        if (currentValue != null) {
+            Runnable previousBinding = toolBinding;
+            toolBinding = () -> {
+                if (previousBinding != null) previousBinding.run();
+                slider.setProgress(Math.max(minimum, Math.min(maximum, currentValue.get())) - minimum);
+            };
+            toolBinding.run();
+        }
         return group;
     }
 
@@ -785,9 +798,12 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
             scope.addView(title);
             Button all = button(R.string.pe_mask_all, () -> {}), photo = button(R.string.pe_mask_photo, () -> {});
             toolBinding = () -> {
-                EditorDocument.Item active = canvas.lastMask(kind);
+                EditorDocument.Item active = canvas.activeMask(kind);
                 boolean value = active != null ? active.affectAnnotations : maskAll;
                 maskAll = value; canvas.setMaskScope(value);
+                if (kind == EditorDocument.Kind.COVER && active != null) {
+                    selectedColor = active.color; canvas.setBrush(selectedColor, toolSize(kind)); updateBrushSwatch();
+                }
                 all.setSelected(value); photo.setSelected(!value);
                 highlight(all, value); highlight(photo, !value);
             };
@@ -798,6 +814,8 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
                 maskAll = false; canvas.setMaskScope(false); canvas.updateLastMask(kind, null, false); toolBinding.run(); persist();
             } });
             addButton(scope, all); addButton(scope, photo); toolBinding.run();
+            LinearLayout actions = scrollRow(parameters);
+            addButton(actions, button(R.string.pe_new_region, () -> { if (!busy) canvas.requestNewMask(); }));
         }
         if (kind == EditorDocument.Kind.BLUR) {
             LinearLayout row = new LinearLayout(this); row.setGravity(Gravity.CENTER_VERTICAL);
@@ -807,7 +825,7 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
             Runnable scopeBinding = toolBinding;
             toolBinding = () -> {
                 if (scopeBinding != null) scopeBinding.run();
-                EditorDocument.Item active = canvas.lastMask(kind);
+                EditorDocument.Item active = canvas.activeMask(kind);
                 int selected = active == null ? blurPreset
                         : com.mishiranu.dashchan.ui.posting.photo.EditorBlurPresets.nearest(active.size);
                 blurPreset = selected; canvas.setBrush(selectedColor, toolSize(kind));
@@ -828,10 +846,19 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
         } else if (kind != EditorDocument.Kind.COVER) {
             slider(parameters, kind == EditorDocument.Kind.MOSAIC ? R.string.pe_block_size : R.string.pe_thickness,
                     1, 100, Math.round(toolSize(kind) * 1000), value -> {
-                        if (kind == EditorDocument.Kind.MOSAIC) mosaicSize = value / 1000f;
+                        if (kind == EditorDocument.Kind.MOSAIC) {
+                            mosaicSize = value / 1000f;
+                            EditorDocument.Item active = canvas.activeMask(kind);
+                            if (active != null) active.size = mosaicSize;
+                        }
                         else brushSize = value / 1000f;
                         canvas.setBrush(selectedColor, toolSize(kind));
-                    }, false, "‰");
+                    }, kind == EditorDocument.Kind.MOSAIC, "‰", kind == EditorDocument.Kind.MOSAIC ? () -> {
+                        EditorDocument.Item active = canvas.activeMask(kind);
+                        if (active != null) mosaicSize = active.size;
+                        canvas.setBrush(selectedColor, toolSize(kind));
+                        return Math.round(mosaicSize * 1000);
+                    } : null);
         }
     }
 
@@ -842,6 +869,9 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
     private void chooseColor() {
         chooseColor(selectedColor, color -> {
             selectedColor = color; canvas.setBrush(selectedColor, toolSize(section == Section.HIDE ? hideTool : drawTool)); updateBrushSwatch();
+            if (section == Section.HIDE && hideTool == EditorDocument.Kind.COVER) {
+                canvas.updateMask(hideTool, null, null, color);
+            }
         });
     }
     private void chooseColor(int initialColor, java.util.function.IntConsumer accept) {
@@ -856,7 +886,38 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
         if (dialog.getWindow() != null) resizeTextDialogForIme(dialog.getWindow(), false);
     }
 
+    private EditorDocument.Item layerObject() {
+        EditorDocument.Item item = canvas.selectedItem();
+        if (item == null) return null;
+        return section == Section.TEXT && item.kind == EditorDocument.Kind.TEXT
+                || section == Section.STICKERS && (item.kind == EditorDocument.Kind.STICKER || item.kind == EditorDocument.Kind.IMAGE)
+                ? item : null;
+    }
+    private void objectLayerPanel(LinearLayout parent) {
+        LinearLayout row = new LinearLayout(this); row.setPadding(dp(8), 0, dp(8), 0); parent.addView(row);
+        Button below = button(R.string.pe_object_below_effects, () -> changeObjectLayer(false));
+        Button above = button(R.string.pe_object_above_effects, () -> changeObjectLayer(true));
+        below.setMaxLines(2); above.setMaxLines(2);
+        row.addView(below, new LinearLayout.LayoutParams(0, -2, 1));
+        row.addView(above, new LinearLayout.LayoutParams(0, -2, 1));
+        toolBinding = () -> {
+            EditorDocument.Item item = layerObject();
+            boolean value = item == null ? objectAboveEffects : item.aboveEffects;
+            objectAboveEffects = value;
+            above.setSelected(value); below.setSelected(!value); highlight(above, value); highlight(below, !value);
+        };
+        toolBinding.run();
+    }
+    private void changeObjectLayer(boolean above) {
+        if (busy) return;
+        canvas.finishGesture(true); objectAboveEffects = above;
+        EditorDocument.Item item = layerObject();
+        if (item != null && item.aboveEffects != above) mutate(() -> item.aboveEffects = above);
+        if (toolBinding != null) toolBinding.run(); persist();
+    }
+
     private void textPanel() {
+        objectLayerPanel(panel);
         LinearLayout row = scrollRow(panel);
         addButton(row, button(R.string.pe_add_text, () -> editText(null, null)));
         addButton(row, button(R.string.pe_edit_selected, () -> {
@@ -954,7 +1015,7 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
             mutate(() -> {
                 if (!plaque) item.kind = EditorDocument.Kind.TEXT; item.text = text; item.color = textColor[0];
                 item.background = bg.isChecked(); item.outline = outline.isChecked();
-                if (target == null) { placeAtCropCenter(item); item.size = .07f; document.state().items.add(item); }
+                if (target == null) { item.aboveEffects = objectAboveEffects; placeAtCropCenter(item); item.size = .07f; document.state().items.add(item); }
             }); canvas.select(item); dialog.dismiss();
         }); }); dialog.show();
     }
@@ -980,6 +1041,7 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
     }
 
     private void stickerPanel() {
+        objectLayerPanel(panel);
         LinearLayout tabs = scrollRow(panel);
         LinearLayout grid = new LinearLayout(this); grid.setOrientation(LinearLayout.VERTICAL);
         int[] names = {R.string.pe_sticker_reactions, R.string.pe_sticker_symbols, R.string.pe_sticker_shapes};
@@ -1018,7 +1080,7 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
         if (busy) return;
         if (document.state().items.size() >= EditorDocument.ITEM_LIMIT) { failure(R.string.pe_limit); return; }
         EditorDocument.Item item = new EditorDocument.Item(); item.kind = EditorDocument.Kind.STICKER;
-        item.asset = id; item.size = EditorStickers.isPlaque(id) ? .4f : .25f; item.color = 0xff252936; placeAtCropCenter(item);
+        item.aboveEffects = objectAboveEffects; item.asset = id; item.size = EditorStickers.isPlaque(id) ? .4f : .25f; item.color = 0xff252936; placeAtCropCenter(item);
         mutate(() -> document.state().items.add(item)); canvas.select(item); persist();
     }
 
@@ -1043,7 +1105,7 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
                     if (destroyed) { ready.recycle(); return; }
                     assets.put(file.getName(), ready); setBusy(false, 0);
                     EditorDocument.Item item = new EditorDocument.Item(); item.kind = EditorDocument.Kind.IMAGE;
-                    item.asset = file.getName(); item.size = .3f; placeAtCropCenter(item);
+                    item.aboveEffects = objectAboveEffects; item.asset = file.getName(); item.size = .3f; placeAtCropCenter(item);
                     mutate(() -> document.state().items.add(item)); canvas.select(item); persist();
                 });
             } catch (IOException | RuntimeException | OutOfMemoryError e) {
@@ -1227,7 +1289,7 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
         final int savedSide = exportSide, savedQuality = exportQuality;
         final float savedSize = brushSize, savedMosaicSize = mosaicSize;
         final int savedBlurPreset = blurPreset;
-        final boolean savedDrawAll = drawAll;
+        final boolean savedDrawAll = drawAll, savedObjectAboveEffects = objectAboveEffects;
         final boolean savedPng = exportPng, savedMaskAll = maskAll;
         // Serialization and AtomicFile IO are ordered with other worker jobs and final cleanup.
         worker.execute(() -> {
@@ -1240,7 +1302,7 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
                         .put("checkpoint", savedCheckpoint == null ? JSONObject.NULL : new JSONObject(savedCheckpoint))
                         .put("adjustment", savedAdjustment).put("drawTool", savedDrawTool).put("hideTool", savedHideTool)
                         .put("color", savedColor).put("size", savedSize).put("png", savedPng)
-                        .put("toolSettingsV2", true).put("mosaicSize", savedMosaicSize).put("blurPreset", savedBlurPreset).put("drawAll", savedDrawAll)
+                        .put("toolSettingsV2", true).put("mosaicSize", savedMosaicSize).put("blurPreset", savedBlurPreset).put("drawAll", savedDrawAll).put("objectAboveEffects", savedObjectAboveEffects)
                         .put("side", savedSide).put("quality", savedQuality).put("exportOptionsV2", true).put("maskAll", savedMaskAll);
                 byte[] bytes = json.toString().getBytes(StandardCharsets.UTF_8);
                 if (request != sessionGeneration) return;

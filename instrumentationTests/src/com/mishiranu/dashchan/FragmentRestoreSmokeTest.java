@@ -13,6 +13,7 @@ import com.mishiranu.dashchan.ui.LocalArchiveViewerFragment;
 import com.mishiranu.dashchan.ui.StackItem;
 import com.mishiranu.dashchan.ui.navigator.Page;
 import com.mishiranu.dashchan.ui.navigator.PageFragment;
+import com.mishiranu.dashchan.ui.navigator.SavedPageItem;
 import com.mishiranu.dashchan.ui.posting.PostingFragment;
 import com.mishiranu.dashchan.ui.preference.AboutFragment;
 import com.mishiranu.dashchan.ui.preference.ChanFragment;
@@ -60,6 +61,24 @@ public class FragmentRestoreSmokeTest {
 			BrowserFragment browser = new BrowserFragment(Uri.parse("https://example.invalid/"));
 			assertEquals(AndroidUtils.getParcelable(browser.requireArguments(), "uri", Uri.class),
 					AndroidUtils.getParcelable(restore(browser).requireArguments(), "uri", Uri.class));
+		});
+	}
+
+	@Test public void preservedPageStackRetainsMetadataAndArguments() {
+		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+			PageFragment fragment = new PageFragment(new Page(Page.Content.POSTS, "dvach", "test", "123", null),
+					"retained-page");
+			SavedPageItem item = new SavedPageItem(
+					new StackItem(fragment.getClass().getName(), fragment.getArguments(), null), 42L, "title", true);
+			Parcel parcel = Parcel.obtain();
+			try {
+				item.writeToParcel(parcel, 0); parcel.setDataPosition(0);
+				SavedPageItem restored = SavedPageItem.CREATOR.createFromParcel(parcel);
+				assertEquals(42L, restored.createdRealtime);
+				assertEquals("title", restored.threadTitle); assertTrue(restored.allowReturn);
+				assertEquals("123", restored.create().first.getPage().threadNumber);
+				assertEquals("retained-page", restored.create().first.getRetainId());
+			} finally { parcel.recycle(); }
 		});
 	}
 

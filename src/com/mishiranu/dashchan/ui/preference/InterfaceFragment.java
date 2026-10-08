@@ -114,6 +114,13 @@ public class InterfaceFragment extends PreferenceFragment {
 						.pushFragment(new GestureSettingsFragment()));
 
 		addHeader(R.string.navigation_drawer);
+		addButton(R.string.drawer_section_order, R.string.drawer_section_order_entry_summary)
+				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
+						.pushFragment(new DrawerOrderFragment()));
+		addCheck(true, Preferences.KEY_COLLAPSE_LONG_OPEN_THREADS,
+				Preferences.DEFAULT_COLLAPSE_LONG_OPEN_THREADS,
+				R.string.collapse_long_open_threads,
+				R.string.collapse_long_open_threads__summary);
 		addList(Preferences.KEY_PAGES_LIST, enumList(Preferences.PagesListMode.values(), o -> o.value),
 				Preferences.DEFAULT_PAGES_LIST.value, R.string.headers_order,
 				enumResList(Preferences.PagesListMode.values(), o -> o.titleResId));
@@ -132,7 +139,12 @@ public class InterfaceFragment extends PreferenceFragment {
 				Preferences.DEFAULT_HIDE_THREADS_WITH_SWIPE, R.string.hide_threads_with_swipe, 0);
 
 		addHeader(R.string.posts_list);
-		addButton(R.string.thread_quick_navigation, 0)
+		addCheck(true, Preferences.KEY_THREAD_GALLERY_BUTTON, Preferences.DEFAULT_THREAD_GALLERY_BUTTON,
+				R.string.thread_gallery_button, R.string.thread_gallery_button__summary);
+		addCheck(true, Preferences.KEY_SHOW_ORIGINAL_POST_TITLE, Preferences.DEFAULT_SHOW_ORIGINAL_POST_TITLE,
+				R.string.show_original_post_title, R.string.show_original_post_title__summary)
+				.setOnAfterChangeListener(p -> requireActivity().recreate());
+		addButton(R.string.thread_quick_navigation, R.string.thread_quick_navigation__search_summary)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 						.pushFragment(new ThreadQuickNavigationFragment()));
 		addCheck(true, Preferences.KEY_SWIPE_REPLY, Preferences.DEFAULT_SWIPE_REPLY,

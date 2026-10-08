@@ -268,8 +268,8 @@ android {
 
 	defaultConfig {
 		applicationId = 'io.dashchan2'
-		versionCode = 11370
-		versionName = '3.2.57'
+		versionCode = 11380
+		versionName = '3.2.58'
 		def releaseVersionCode = versionCode
 		def packageVersionCodeProperty = project.findProperty('packageVersionCode')
 		if (packageVersionCodeProperty != null) {
@@ -333,6 +333,7 @@ android {
 			buildConfigField 'String', 'SLOOOP_PUSH_BASE_URL',
 					'"https://slooop-push-er3p3rs4cq-ew.a.run.app"'
 			buildConfigField 'boolean', 'ENABLE_LOCAL_TRANSLATION', 'true'
+			buildConfigField 'boolean', 'ENABLE_EXPERIMENTAL_INTERFACE_MOTION', 'true'
 			buildConfigField 'boolean', 'ENABLE_GOOGLE_TRANSLATION', 'true'
 			buildConfigField 'boolean', 'ENABLE_GEMINI_NANO_TRANSLATION', 'true'
 			buildConfigField 'String', 'GOOGLE_TRANSLATION_ADDON_DOWNLOAD_URL',
@@ -360,6 +361,7 @@ android {
 		fdroid {
 			dimension = 'distribution'
 			buildConfigField 'boolean', 'ENABLE_LOCAL_TRANSLATION', 'false'
+			buildConfigField 'boolean', 'ENABLE_EXPERIMENTAL_INTERFACE_MOTION', 'false'
 			buildConfigField 'boolean', 'ENABLE_GOOGLE_TRANSLATION', 'false'
 			buildConfigField 'boolean', 'ENABLE_GEMINI_NANO_TRANSLATION', 'false'
 			buildConfigField 'boolean', 'ALLOW_GMS_SECURITY_PROVIDER', 'false'

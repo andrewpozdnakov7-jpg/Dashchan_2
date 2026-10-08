@@ -114,6 +114,8 @@ public final class EditorRenderer {
                 else if (item.affectAnnotations && isMask(item.kind)) applyMask(result, item, cancelled);
             }
             checkCancelled(cancelled);
+            drawObjects(scene, state, source.getWidth(), source.getHeight(), assets, true);
+            checkCancelled(cancelled);
             return result;
         } catch (RuntimeException | OutOfMemoryError e) { result.recycle(); throw e; }
     }
@@ -144,6 +146,12 @@ public final class EditorRenderer {
     }
 
     private static Rect maskRect(EditorDocument.Item item, int width, int height) {
+        if (item.orientedMask) {
+            RectF bounds = EditorMaskGeometry.localBounds(item, width, height);
+            EditorMaskGeometry.matrix(item, width, height).mapRect(bounds);
+            return new Rect(Math.max(0, (int) Math.floor(bounds.left)), Math.max(0, (int) Math.floor(bounds.top)),
+                    Math.min(width, (int) Math.ceil(bounds.right)), Math.min(height, (int) Math.ceil(bounds.bottom)));
+        }
         return new Rect(Math.max(0, Math.round(Math.min(item.x, item.endX) * width)),
                 Math.max(0, Math.round(Math.min(item.y, item.endY) * height)),
                 Math.min(width, Math.round(Math.max(item.x, item.endX) * width)),
@@ -164,6 +172,7 @@ public final class EditorRenderer {
     private static void applyMask(Bitmap photo, EditorDocument.Item item, BooleanSupplier cancelled) {
         checkCancelled(cancelled);
         Canvas canvas = new Canvas(photo);
+        if (item.orientedMask) canvas.clipPath(EditorMaskGeometry.path(item, photo.getWidth(), photo.getHeight()));
         Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         int width = photo.getWidth(), height = photo.getHeight();
         Rect rect = maskRect(item, width, height);
@@ -216,6 +225,7 @@ public final class EditorRenderer {
     }
 
     public static RectF localBounds(EditorDocument.Item item, int width, int height, Map<String, Bitmap> assets) {
+        if (EditorMaskGeometry.isMask(item.kind)) return EditorMaskGeometry.localBounds(item, width, height);
         float size = Math.min(width, height) * item.size;
         if (item.kind == EditorDocument.Kind.IMAGE) {
             Bitmap image = assets.get(item.asset);
@@ -231,6 +241,7 @@ public final class EditorRenderer {
     }
 
     public static Matrix itemMatrix(EditorDocument.Item item, int width, int height) {
+        if (EditorMaskGeometry.isMask(item.kind)) return EditorMaskGeometry.matrix(item, width, height);
         Matrix matrix = new Matrix();
         matrix.postScale(item.mirrored ? -item.scale : item.scale, item.scale); matrix.postRotate(item.angle);
         matrix.postTranslate(item.x * width, item.y * height);
@@ -246,13 +257,20 @@ public final class EditorRenderer {
             if (isDrawing(item.kind) && item.drawOnComposition)
                 drawTopDrawing(canvas, state, i, width, height, paint);
         }
+        drawObjects(canvas, state, width, height, assets, true);
     }
 
     private static void drawBaseAnnotations(Canvas canvas, EditorDocument.State state, int width, int height,
             Map<String, Bitmap> assets) {
-        Paint paint = shapePaint();
         drawDrawingLayer(canvas, state, width, height, false);
+        drawObjects(canvas, state, width, height, assets, false);
+    }
+
+    private static void drawObjects(Canvas canvas, EditorDocument.State state, int width, int height,
+            Map<String, Bitmap> assets, boolean above) {
+        Paint paint = shapePaint();
         for (EditorDocument.Item item : state.items) {
+            if (item.aboveEffects != above) continue;
             if (item.kind != EditorDocument.Kind.TEXT && item.kind != EditorDocument.Kind.IMAGE && item.kind != EditorDocument.Kind.STICKER) continue;
             int saved = canvas.save(); canvas.concat(itemMatrix(item, width, height));
             RectF bounds = localBounds(item, width, height, assets);

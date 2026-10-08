@@ -11,6 +11,8 @@ import androidx.recyclerview.widget.RecyclerView;
 import chan.content.Chan;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.content.Preferences;
+import com.mishiranu.dashchan.R;
+import com.mishiranu.dashchan.util.ThreadMotionKey;
 import com.mishiranu.dashchan.content.async.AsyncCatalogSearch;
 import com.mishiranu.dashchan.content.async.CatalogSearch;
 import com.mishiranu.dashchan.content.model.AttachmentItem;
@@ -125,10 +127,13 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 	public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder,
 			int position, @NonNull List<Object> payloads) {
 		if (holder.getItemViewType() == VIEW_SECRET_ABU) {
+			holder.itemView.setTag(R.id.thread_motion_key, null);
 			SecretAbuThread.bindViewHolder(holder, uiManager);
 			return;
 		}
 		PostItem postItem = getItem(position);
+		holder.itemView.setTag(R.id.thread_motion_key, new ThreadMotionKey(postItem.getChanName(),
+				postItem.getBoardName(), postItem.getThreadNumber()));
 		switch (ViewUnit.ViewType.values()[holder.getItemViewType()]) {
 			case THREAD:
 			case THREAD_CARD: {
