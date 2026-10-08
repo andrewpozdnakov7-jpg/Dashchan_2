@@ -5,14 +5,14 @@
 	"client": [
 		{
 			"title": "Release",
-			"name": "3.2.57",
-			"code": 11370,
+			"name": "3.2.58",
+			"code": 11380,
 			"minVersion": 1,
 			"maxVersion": 1,
 			"minSdk": 30,
-			"length": 42291200,
-			"sha256sum": "5a4d7d038f54e2b477d5ab2951088c9c8b6c6fd1e8c8a0abe51e82649fdb275e",
-			"source": "https://github.com/andrewpozdnakov7-jpg/Dashchan_2/releases/download/3.2.57/Slooop-3.2.57-11370-ffmpeg8-all-abi-signed.apk",
+			"length": 42459431,
+			"sha256sum": "b6d47263b54812f1c4a6b1f5128ab6de478f828527fb28582d887760d74446b5",
+			"source": "https://github.com/andrewpozdnakov7-jpg/Dashchan_2/releases/download/3.2.58/Slooop-3.2.58-11380-ffmpeg8-all-abi-signed.apk",
 			"fingerprint": "a9fbac6c498f7ad8e7c56849afe43881966bed2ed2bc1dd1c73d0ffe0b9ebeba"
 		}
 	],
