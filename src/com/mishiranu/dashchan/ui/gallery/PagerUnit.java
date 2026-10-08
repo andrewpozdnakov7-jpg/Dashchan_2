@@ -44,6 +44,7 @@ import com.mishiranu.dashchan.ui.SearchImageDialog;
 import com.mishiranu.dashchan.util.AnimationUtils;
 import com.mishiranu.dashchan.util.NavigationUtils;
 import com.mishiranu.dashchan.util.ResourceUtils;
+import com.mishiranu.dashchan.util.InterfaceMotion;
 import com.mishiranu.dashchan.widget.ClickableToast;
 import com.mishiranu.dashchan.widget.InsetsLayout;
 import com.mishiranu.dashchan.widget.PhotoView;
@@ -113,7 +114,8 @@ public class PagerUnit implements PagerInstance.Callback {
 		float density = ResourceUtils.obtainDensity(instance.context);
 		viewPagerParent = new FrameLayout(instance.context);
 		pagerAdapter = new PagerAdapter(instance.galleryItems);
-		pagerAdapter.setWaitBeforeNextVideo(PhotoView.INITIAL_SCALE_TRANSITION_TIME + 100);
+		pagerAdapter.setWaitBeforeNextVideo((InterfaceMotion.isEnabled()
+				? InterfaceMotion.duration(InterfaceMotion.GALLERY_DURATION) : PhotoView.INITIAL_SCALE_TRANSITION_TIME) + 100);
 		viewPager = new PhotoViewPager(instance.context, pagerAdapter);
 		viewPager.setInnerPadding((int) (16f * density));
 		viewPager.setLayoutParams(new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,
@@ -929,7 +931,7 @@ public class PagerUnit implements PagerInstance.Callback {
 			}
 			if (image || tikTokPagingActive) {
 				galleryInstance.callback.toggleSystemUIVisibility(GalleryInstance.Flags.LOCKED_USER);
-			} else {
+			} else if (Preferences.isCloseGalleryOnBackgroundTap()) {
 				galleryInstance.callback.navigateGalleryOrFinish(false);
 			}
 		}

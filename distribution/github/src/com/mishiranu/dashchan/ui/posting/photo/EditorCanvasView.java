@@ -61,7 +61,7 @@ public final class EditorCanvasView extends View {
     private boolean processedIsScene, affectAnnotations = true, drawOnComposition = true;
     private String renderKey = "";
     private final EditorPreviewScheduler previewScheduler = new EditorPreviewScheduler();
-    private boolean renderPosted, liveMaskGesture;
+    private boolean renderPosted, liveMaskGesture, maskCreationArmed;
     private long lastRenderStart;
     private volatile boolean released;
     private boolean enabled = true, cropMode, comparing;
@@ -118,12 +118,12 @@ public final class EditorCanvasView extends View {
     }
     public void setDrawingKind(EditorDocument.Kind kind) {
         finishGesture(true); if (drawingKind != kind) invalidatePreview();
-        drawingKind = kind; selected = null; invalidate();
+        drawingKind = kind; maskCreationArmed = false; selected = kind != null && isMask(kind) ? lastMask(kind) : null; invalidate();
     }
     public void setBrush(int color, float size) { this.color = color; brushSize = size; invalidate(); }
     public void setMaskScope(boolean all) { affectAnnotations = all; }
     public void setDrawingScope(boolean all) { drawOnComposition = all; }
-    /** The most recently created region is the active region while its tool is open. */
+    /** Fallback selection when a mask tool is opened without an explicitly selected region. */
     public EditorDocument.Item lastMask(EditorDocument.Kind kind) {
         for (int i = document.state().items.size() - 1; i >= 0; i--) {
             EditorDocument.Item item = document.state().items.get(i);
@@ -131,14 +131,33 @@ public final class EditorCanvasView extends View {
         }
         return null;
     }
+    public EditorDocument.Item activeMask(EditorDocument.Kind kind) {
+        if (maskCreationArmed) return null;
+        return selected != null && selected.kind == kind && document.state().items.contains(selected) ? selected : lastMask(kind);
+    }
+    public void requestNewMask() {
+        finishGesture(true); selected = null; maskCreationArmed = true; invalidate(); listener.onChange();
+    }
+    private boolean canManipulate() { return drawingKind == null || isMask(drawingKind); }
+    private void prepareMaskEdit() {
+        if (selected != null && isMask(selected.kind)) {
+            EditorMaskGeometry.makeEditable(selected, source.getWidth(), source.getHeight());
+            liveMaskGesture = true;
+        }
+    }
     public void updateLastMask(EditorDocument.Kind kind, Float size, Boolean all) {
+        updateMask(kind, size, all, null);
+    }
+    public void updateMask(EditorDocument.Kind kind, Float size, Boolean all, Integer color) {
         if (!enabled || released) return;
         finishGesture(true);
-        EditorDocument.Item item = lastMask(kind);
-        if (item == null || (size == null || item.size == size) && (all == null || item.affectAnnotations == all)) return;
+        EditorDocument.Item item = activeMask(kind);
+        if (item == null || (size == null || item.size == size) && (all == null || item.affectAnnotations == all)
+                && (color == null || item.color == color)) return;
         document.begin();
         if (size != null) item.size = size;
         if (all != null) item.affectAnnotations = all;
+        if (color != null) item.color = color;
         document.commit(); refresh(); listener.onChange();
     }
     public void beginBrushPreview() { settlePresentation(); brushTracking = true; showBrushPreview(); }
@@ -156,7 +175,7 @@ public final class EditorCanvasView extends View {
         brushPreviewAlpha = 0; invalidate();
     }
     public EditorDocument.Item selectedItem() { return selected; }
-    public void select(EditorDocument.Item item) { selected = item; invalidate(); }
+    public void select(EditorDocument.Item item) { selected = item; invalidate(); listener.onChange(); }
     public void compare(boolean compare) { if (compare) settlePresentation(); comparing = compare; invalidate(); }
 
     /** Freeze what is visible before changing the document/layout. No history is mutated. */
@@ -323,7 +342,9 @@ public final class EditorCanvasView extends View {
             if (scene || isMask(item.kind)) {
                 key.append('|').append(item.kind).append(':').append(item.x).append(':').append(item.y).append(':')
                         .append(item.endX).append(':').append(item.endY).append(':').append(item.size).append(':').append(item.color)
-                        .append(':').append(item.affectAnnotations).append(':').append(item.drawOnComposition);
+                        .append(':').append(item.affectAnnotations).append(':').append(item.drawOnComposition).append(':').append(item.orientedMask)
+                        .append(':').append(item.maskWidth).append(':').append(item.maskHeight).append(':').append(item.aboveEffects)
+                        .append(':').append(item.angle).append(':').append(item.scale).append(':').append(item.mirrored);
                 if (scene) {
                     // Every composited property must invalidate a scene mask, without allocating JSON on MOVE.
                     key.append(':').append(item.angle).append(':').append(item.scale).append(':').append(item.mirrored)
@@ -438,15 +459,15 @@ public final class EditorCanvasView extends View {
         canvas.restoreToCount(saved);
         if (brushPreviewAlpha > 0 && !cropMode) drawBrushPreview(canvas);
         if (drawing != null && isMask(drawing.kind)) drawLiveMask(canvas);
-        else if (drawing == null && drawingKind != null && isMask(drawingKind) && !cropMode && !presentation.running())
-            drawMaskOutline(canvas, lastMask(drawingKind));
+        else if (drawing == null && selected == null && !maskCreationArmed && drawingKind != null && isMask(drawingKind) && !cropMode && !presentation.running())
+            drawMaskOutline(canvas, activeMask(drawingKind));
         if (pose.cropVisibility > 0) {
             overlayBounds.set(pose.clip); displayFrame.mapRect(overlayBounds);
             overlayBounds.union(0, 0, getWidth(), getHeight());
             int overlay = pose.cropVisibility >= 1 ? canvas.save()
                     : canvas.saveLayerAlpha(overlayBounds, Math.round(255 * pose.cropVisibility));
             canvas.concat(displayFrame); drawCrop(canvas, pose); canvas.restoreToCount(overlay);
-        } else if (selected != null && !presentation.running() && pendingPose == null) drawSelection(canvas);
+        } else if (selected != null && drawing == null && !presentation.running() && pendingPose == null) drawSelection(canvas);
     }
 
     private void drawCrop(Canvas canvas, EditorPose pose) {
@@ -567,7 +588,8 @@ public final class EditorCanvasView extends View {
         return -1;
     }
     private float pointerAngle(float x, float y) {
-        float[] center = {selected.x * source.getWidth(), selected.y * source.getHeight()}; sourceToView.mapPoints(center);
+        float[] center = isMask(selected.kind) ? EditorMaskGeometry.center(selected, source.getWidth(), source.getHeight())
+                : new float[] {selected.x * source.getWidth(), selected.y * source.getHeight()}; sourceToView.mapPoints(center);
         return (float) Math.toDegrees(Math.atan2(y - center[1], x - center[0]));
     }
     private float visibleObjectAngle() {
@@ -607,29 +629,25 @@ public final class EditorCanvasView extends View {
     }
     private void drawLiveMask(Canvas canvas) {
         int saved = canvas.save(); canvas.clipRect(frame); canvas.concat(sourceToView);
-        RectF rect = new RectF(Math.min(drawing.x, drawing.endX) * source.getWidth(),
-                Math.min(drawing.y, drawing.endY) * source.getHeight(), Math.max(drawing.x, drawing.endX) * source.getWidth(),
-                Math.max(drawing.y, drawing.endY) * source.getHeight());
+        Path region = EditorMaskGeometry.path(drawing, source.getWidth(), source.getHeight());
         if (drawing.kind == EditorDocument.Kind.COVER) {
-            uiPaint.setStyle(Paint.Style.FILL); uiPaint.setColor(drawing.color | 0xff000000); canvas.drawRect(rect, uiPaint);
+            uiPaint.setStyle(Paint.Style.FILL); uiPaint.setColor(drawing.color | 0xff000000); canvas.drawPath(region, uiPaint);
         }
         float[] values = new float[9]; sourceToView.getValues(values);
         float scale = (float) Math.hypot(values[Matrix.MSCALE_X], values[Matrix.MSKEW_Y]);
         uiPaint.setStyle(Paint.Style.STROKE); uiPaint.setColor(0xb0000000); uiPaint.setStrokeWidth(dp(3) / Math.max(.001f, scale));
-        canvas.drawRect(rect, uiPaint); uiPaint.setColor(Color.WHITE); uiPaint.setStrokeWidth(dp(1) / Math.max(.001f, scale));
-        canvas.drawRect(rect, uiPaint); canvas.restoreToCount(saved);
+        canvas.drawPath(region, uiPaint); uiPaint.setColor(Color.WHITE); uiPaint.setStrokeWidth(dp(1) / Math.max(.001f, scale));
+        canvas.drawPath(region, uiPaint); canvas.restoreToCount(saved);
     }
     private void drawMaskOutline(Canvas canvas, EditorDocument.Item item) {
         if (item == null) return;
         int saved = canvas.save(); canvas.clipRect(frame); canvas.concat(sourceToView);
-        RectF rect = new RectF(Math.min(item.x, item.endX) * source.getWidth(),
-                Math.min(item.y, item.endY) * source.getHeight(), Math.max(item.x, item.endX) * source.getWidth(),
-                Math.max(item.y, item.endY) * source.getHeight());
+        Path region = EditorMaskGeometry.path(item, source.getWidth(), source.getHeight());
         float[] values = new float[9]; sourceToView.getValues(values);
         float scale = Math.max(.001f, (float) Math.hypot(values[Matrix.MSCALE_X], values[Matrix.MSKEW_Y]));
         uiPaint.setStyle(Paint.Style.STROKE); uiPaint.setColor(0xb0000000); uiPaint.setStrokeWidth(dp(3) / scale);
-        canvas.drawRect(rect, uiPaint); uiPaint.setColor(EditorPalette.ACCENT); uiPaint.setStrokeWidth(dp(1) / scale);
-        canvas.drawRect(rect, uiPaint); canvas.restoreToCount(saved);
+        canvas.drawPath(region, uiPaint); uiPaint.setColor(EditorPalette.ACCENT); uiPaint.setStrokeWidth(dp(1) / scale);
+        canvas.drawPath(region, uiPaint); canvas.restoreToCount(saved);
     }
 
     private float[] sourcePoint(float x, float y) {
@@ -661,7 +679,7 @@ public final class EditorCanvasView extends View {
             }
             twoPointers = true; pinchPointerId0 = event.getPointerId(0); pinchPointerId1 = event.getPointerId(1);
             pinchDistance = Math.max(1, distance(event, 0, 1)); pinchAngle = angle(event, 0, 1); pinchZoom = zoom;
-            objectGesture = selected != null && !cropMode && drawingKind == null;
+            objectGesture = selected != null && !cropMode && canManipulate() && !maskCreationArmed;
             if (objectGesture) {
                 document.begin(); objectStartScale = selected.scale; objectStartAngle = selected.angle;
             } else {
@@ -683,6 +701,7 @@ public final class EditorCanvasView extends View {
                 if (a < 0 || b < 0) return true;
                 float ratio = distance(event, a, b) / pinchDistance;
                 if (objectGesture && selected != null) {
+                    prepareMaskEdit();
                     annotationsDirty = true;
                     selected.scale = Math.max(.15f, Math.min(8f, objectStartScale * ratio));
                     float next = angle(event, a, b);
@@ -724,11 +743,24 @@ public final class EditorCanvasView extends View {
                 if (selected != null) {
                     RectF bounds = selectionBounds(); bounds.inset(-dp(26), -dp(26)); touchFrame.union(bounds);
                 }
-                int control = !cropMode && drawingKind == null ? hitControl(downX, downY) : -1;
+                int control = !cropMode && canManipulate() && !maskCreationArmed ? hitControl(downX, downY) : -1;
                 downAccepted = control >= 0 || touchFrame.contains(downX, downY); limitReported = false;
                 if (!downAccepted) return true;
                 float[] point = sourcePoint(downX, downY); sourceDownX = point[0]; sourceDownY = point[1];
                 if (cropMode) { beginCrop(downX, downY); return true; }
+                if (drawingKind != null && isMask(drawingKind) && !maskCreationArmed) {
+                    EditorDocument.Item mask = control >= 0 ? selected : hitMask(downX, downY);
+                    if (mask != null) {
+                        selected = mask; objectDelete = control == 0; objectRotate = control == 1; objectResize = control == 2;
+                        if (!objectDelete) {
+                            document.begin();
+                            float[] center = EditorMaskGeometry.center(selected, source.getWidth(), source.getHeight());
+                            objectStartX = center[0] / source.getWidth(); objectStartY = center[1] / source.getHeight();
+                            objectStartScale = selected.scale; rotateRaw = selected.angle; rotateLast = pointerAngle(downX, downY);
+                        }
+                        invalidate(); listener.onChange(); return true;
+                    }
+                }
                 if (drawingKind != null) {
                     if (document.state().items.size() >= EditorDocument.ITEM_LIMIT
                             || document.state().pathFloatCount() + 2 > EditorDocument.TOTAL_PATH_FLOAT_LIMIT) {
@@ -740,7 +772,10 @@ public final class EditorCanvasView extends View {
                     drawing.affectAnnotations = isMask(drawingKind) && affectAnnotations;
                     drawing.drawOnComposition = EditorRenderer.isDrawing(drawingKind) && drawOnComposition;
                     drawing.x = drawing.endX = point[0]; drawing.y = drawing.endY = point[1];
-                    drawing.points.add(point[0]); drawing.points.add(point[1]);
+                    if (isMask(drawingKind)) {
+                        maskCreationArmed = false;
+                        EditorMaskGeometry.fromScreenDrag(drawing, source.getWidth(), source.getHeight(), viewToSource, downX, downY, downX, downY);
+                    } else { drawing.points.add(point[0]); drawing.points.add(point[1]); }
                     document.state().items.add(drawing); refresh(); return true;
                 }
                 objectDelete = control == 0; objectRotate = control == 1; objectResize = control == 2;
@@ -758,15 +793,20 @@ public final class EditorCanvasView extends View {
                 }
                 if (cropMode) moveCrop(x, y);
                 else if (drawing != null) {
-                    float[] p = sourcePoint(x, y); drawing.endX = p[0]; drawing.endY = p[1];
-                    if (Math.hypot(x - lastX, y - lastY) >= dp(1.5f)) {
+                    float[] p = sourcePoint(x, y);
+                    if (isMask(drawing.kind)) EditorMaskGeometry.fromScreenDrag(drawing, source.getWidth(), source.getHeight(),
+                            viewToSource, downX, downY, Math.max(frame.left, Math.min(frame.right, x)), Math.max(frame.top, Math.min(frame.bottom, y)));
+                    else { drawing.endX = p[0]; drawing.endY = p[1]; }
+                    if (!isMask(drawing.kind) && Math.hypot(x - lastX, y - lastY) >= dp(1.5f)) {
                         if (drawing.points.size() + 2 <= EditorDocument.PATH_FLOAT_LIMIT
                                 && document.state().pathFloatCount() + 2 <= EditorDocument.TOTAL_PATH_FLOAT_LIMIT) {
                             drawing.points.add(p[0]); drawing.points.add(p[1]);
                         } else if (!limitReported) { limitReported = true; listener.onLimit(); }
                     }
                     refresh();
-                } else if (selected != null && document.isInTransaction()) {
+                } else if (selected != null && document.isInTransaction()
+                        && (!isMask(selected.kind) || dragging)) {
+                    prepareMaskEdit();
                     annotationsDirty = true;
                     float[] p = sourcePoint(x, y);
                     if (objectRotate) {
@@ -775,7 +815,8 @@ public final class EditorCanvasView extends View {
                         float angle = visibleObjectAngle(), snapped = Math.round(angle / 90) * 90;
                         if (Math.abs(angle - snapped) <= 3) selected.angle += (document.state().mirror ? -1 : 1) * (snapped - angle);
                     } else if (objectResize) {
-                        float[] center = {selected.x * source.getWidth(), selected.y * source.getHeight()}; sourceToView.mapPoints(center);
+                        float[] center = isMask(selected.kind) ? EditorMaskGeometry.center(selected, source.getWidth(), source.getHeight())
+                                : new float[] {selected.x * source.getWidth(), selected.y * source.getHeight()}; sourceToView.mapPoints(center);
                         float initial = Math.max(dp(10), (float) Math.hypot(downX - center[0], downY - center[1]));
                         selected.scale = Math.max(.15f, Math.min(8, objectStartScale
                                 * (float) Math.hypot(x - center[0], y - center[1]) / initial));
@@ -787,6 +828,8 @@ public final class EditorCanvasView extends View {
                 } else if (dragging && !objectDelete) { offsetX += x - lastX; offsetY += y - lastY; updateMatrices(); invalidate(); }
                 lastX = x; lastY = y; return true;
             case MotionEvent.ACTION_UP:
+                if (drawing != null && isMask(drawing.kind)) EditorMaskGeometry.fromScreenDrag(drawing, source.getWidth(), source.getHeight(),
+                        viewToSource, downX, downY, Math.max(frame.left, Math.min(frame.right, event.getX())), Math.max(frame.top, Math.min(frame.bottom, event.getY())));
                 performClick();
                 if (downAccepted && objectDelete && !dragging && hitControl(event.getX(), event.getY()) == 0) deleteSelection();
                 finishGesture(true); return true;
@@ -799,6 +842,12 @@ public final class EditorCanvasView extends View {
 
     public void finishGesture(boolean commit) {
         hideBrushPreview();
+        boolean createdMask = drawing != null && isMask(drawing.kind);
+        if (createdMask && commit) {
+            float side = Math.max(source.getWidth(), source.getHeight());
+            if (drawing.maskWidth * side < 1 || drawing.maskHeight * side < 1) commit = false;
+            else selected = drawing;
+        }
         boolean wasLive = liveMaskGesture || directInput;
         handler.removeCallbacks(compareHold); comparing = false;
         if (!commit && cropMode && twoPointers && cropStart != null) {
@@ -815,16 +864,33 @@ public final class EditorCanvasView extends View {
             }
         }
         ignoreUntilUp = false; drawing = null; cropStart = null; cropEdges = 0; twoPointers = false; objectGesture = false; downAccepted = false;
+        if (createdMask && !commit && drawingKind != null) selected = lastMask(drawingKind);
         directInput = false; objectResize = objectRotate = objectDelete = false;
         liveMaskGesture = false;
         if (wasLive) previewScheduler.change(commit);
         refresh(); listener.onChange();
     }
 
-    private EditorDocument.Item hitItem(float x, float y) {
+    private EditorDocument.Item hitMask(float x, float y) {
         for (int i = document.state().items.size() - 1; i >= 0; i--) {
             EditorDocument.Item item = document.state().items.get(i);
-            if (item.kind != EditorDocument.Kind.TEXT && item.kind != EditorDocument.Kind.IMAGE && item.kind != EditorDocument.Kind.STICKER) continue;
+            if (item.kind != drawingKind) continue;
+            Matrix matrix = EditorRenderer.itemMatrix(item, source.getWidth(), source.getHeight()); matrix.postConcat(sourceToView);
+            Matrix inverse = new Matrix(); if (!matrix.invert(inverse)) continue;
+            float[] p = {x, y}; inverse.mapPoints(p);
+            if (EditorRenderer.localBounds(item, source.getWidth(), source.getHeight(), assets).contains(p[0], p[1])) return item;
+        }
+        return null;
+    }
+
+    private EditorDocument.Item hitItem(float x, float y) {
+        EditorDocument.Item item = hitObject(x, y, true);
+        return item != null ? item : hitObject(x, y, false);
+    }
+    private EditorDocument.Item hitObject(float x, float y, boolean above) {
+        for (int i = document.state().items.size() - 1; i >= 0; i--) {
+            EditorDocument.Item item = document.state().items.get(i);
+            if (item.aboveEffects != above || item.kind != EditorDocument.Kind.TEXT && item.kind != EditorDocument.Kind.IMAGE && item.kind != EditorDocument.Kind.STICKER) continue;
             Matrix matrix = EditorRenderer.itemMatrix(item, source.getWidth(), source.getHeight());
             matrix.postConcat(sourceToView); Matrix inverse = new Matrix(); matrix.invert(inverse);
             float[] p = {x, y}; inverse.mapPoints(p);
@@ -837,7 +903,7 @@ public final class EditorCanvasView extends View {
 
     @Override public void onInitializeAccessibilityNodeInfo(android.view.accessibility.AccessibilityNodeInfo info) {
         super.onInitializeAccessibilityNodeInfo(info);
-        if (selected != null && !released && enabled && drawingKind == null && !cropMode) {
+        if (selected != null && !released && enabled && canManipulate() && !cropMode) {
             info.addAction(new android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction(
                     android.view.accessibility.AccessibilityNodeInfo.ACTION_DISMISS, getContext().getString(R.string.pe_delete_selected)));
             info.addAction(new android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction(
@@ -847,11 +913,11 @@ public final class EditorCanvasView extends View {
         }
     }
     @Override public boolean performAccessibilityAction(int action, android.os.Bundle args) {
-        if (selected != null && !released && enabled && drawingKind == null && !cropMode) {
+        if (selected != null && !released && enabled && canManipulate() && !cropMode) {
             if (action == android.view.accessibility.AccessibilityNodeInfo.ACTION_DISMISS) { finishGesture(true); deleteSelection(); return true; }
             if (action == android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_FORWARD
                     || action == android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD) {
-                finishGesture(true); document.begin();
+                finishGesture(true); document.begin(); prepareMaskEdit();
                 selected.angle += (document.state().mirror ? -1 : 1)
                         * (action == android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_FORWARD ? 15 : -15);
                 document.commit(); refresh(); listener.onChange(); return true;

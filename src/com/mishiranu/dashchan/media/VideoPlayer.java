@@ -539,6 +539,11 @@ public class VideoPlayer implements AutoCloseable {
 		}
 	}
 
+	/** An in-flight or queued native seek. UI previews wait instead of repeatedly cancelling it. */
+	public boolean isSeekPending() {
+		return seekToPosition != null;
+	}
+
 	public void setPosition(long position) {
 		synchronized (this) {
 			if (isInitialized()) {

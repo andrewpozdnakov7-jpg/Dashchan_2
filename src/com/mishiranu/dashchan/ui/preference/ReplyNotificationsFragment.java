@@ -8,6 +8,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.text.InputType;
 import android.text.format.DateFormat;
+import android.util.Pair;
 import android.view.View;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
@@ -27,11 +28,16 @@ import com.mishiranu.dashchan.ui.preference.core.PreferenceFragment;
 import com.mishiranu.dashchan.util.SharedPreferences;
 import com.mishiranu.dashchan.widget.ClickableToast;
 import java.util.Calendar;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.Objects;
+import java.util.Set;
 
 public class ReplyNotificationsFragment extends PreferenceFragment {
 	private final ActivityResultLauncher<String> notificationPermissionLauncher = registerForActivityResult(
 			new ActivityResultContracts.RequestPermission(), granted -> {});
+
+	private CheckPreference replyNotifications;
 
 	private String lastInstallationId;
 	private boolean lastResetPending;
@@ -85,6 +91,7 @@ public class ReplyNotificationsFragment extends PreferenceFragment {
 		if (view != null) {
 			view.removeCallbacks(pushStateRunnable);
 		}
+		replyNotifications = null;
 		super.onDestroyView();
 	}
 
@@ -102,6 +109,7 @@ public class ReplyNotificationsFragment extends PreferenceFragment {
 		view.removeCallbacks(pushStateRunnable);
 		removeAllPreferences();
 
+		addHeader(R.string.my_message_replies);
 		CheckPreference trackingPreference = addCheck(true, Preferences.KEY_TRACK_MY_POSTS,
 				Preferences.DEFAULT_TRACK_MY_POSTS, R.string.track_replies, R.string.track_replies__summary);
 		trackingPreference.setOnBeforeChangeListener((p, value) -> {
@@ -165,11 +173,61 @@ public class ReplyNotificationsFragment extends PreferenceFragment {
 			}
 		}
 
+		addFavoritesWatcherPreferences();
+
 		lastInstallationId = ReplyPushManager.getInstallationId(requireContext());
 		lastResetPending = ReplyPushManager.isIdentityResetPending(requireContext());
 		if (lastResetPending) {
 			view.postDelayed(pushStateRunnable, 1000L);
 		}
+	}
+
+	private void addFavoritesWatcherPreferences() {
+		addHeader(R.string.favorites_watcher);
+		addCheck(true, Preferences.KEY_WATCHER_WATCH_INITIALLY, Preferences.DEFAULT_WATCHER_WATCH_INITIALLY,
+				R.string.watch_initially, R.string.watch_initially__summary);
+
+		addSeek(Preferences.KEY_WATCHER_REFRESH_INTERVAL, Preferences.DEFAULT_WATCHER_REFRESH_INTERVAL,
+				R.string.refresh_favorites, R.string.every_number_sec__format,
+				new Pair<>(Preferences.DISABLED_WATCHER_REFRESH_INTERVAL, R.string.disabled),
+				Preferences.MIN_WATCHER_REFRESH_INTERVAL, Preferences.MAX_WATCHER_REFRESH_INTERVAL,
+				Preferences.STEP_WATCHER_REFRESH_INTERVAL);
+		CheckPreference backgroundReplyCheck = addCheck(true, Preferences.KEY_BACKGROUND_REPLY_CHECK,
+				Preferences.DEFAULT_BACKGROUND_REPLY_CHECK, R.string.background_reply_check,
+				R.string.background_reply_check__summary);
+		backgroundReplyCheck.setOnAfterChangeListener(p -> {
+			if (p.getValue()) {
+				Set<Preferences.NotificationFeature> notificationFeatures =
+						new HashSet<>(Preferences.getWatcherNotifications());
+				if (notificationFeatures.add(Preferences.NotificationFeature.ENABLED)) {
+					Preferences.setWatcherNotifications(notificationFeatures);
+					invalidateReplyNotifications();
+				}
+			}
+			BackgroundWatcherWorker.updateSchedule(requireContext());
+		});
+		addCheck(true, Preferences.KEY_WATCHER_WIFI_ONLY, Preferences.DEFAULT_WATCHER_WIFI_ONLY,
+				R.string.wifi_only, 0).setOnAfterChangeListener(p ->
+				BackgroundWatcherWorker.updateSchedule(requireContext()));
+		replyNotifications = addCheck(false, "reply_notifications", false,
+				R.string.reply_notifications, R.string.reply_notifications__format);
+		replyNotifications.setOnClickListener(p -> {
+			Set<Preferences.NotificationFeature> notificationFeatures;
+			if (p.getValue()) {
+				notificationFeatures = Collections.emptySet();
+			} else {
+				notificationFeatures = new HashSet<>(Preferences.DEFAULT_WATCHER_NOTIFICATIONS);
+				notificationFeatures.add(Preferences.NotificationFeature.ENABLED);
+			}
+			Preferences.setWatcherNotifications(notificationFeatures);
+			invalidateReplyNotifications();
+		});
+		invalidateReplyNotifications();
+	}
+
+	private void invalidateReplyNotifications() {
+		replyNotifications.setValue(Preferences.getWatcherNotifications()
+				.contains(Preferences.NotificationFeature.ENABLED));
 	}
 
 	private void showDisableTrackingDialog(Preference<Boolean> preference) {

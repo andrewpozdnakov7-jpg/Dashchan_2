@@ -17,8 +17,8 @@ import android.widget.Toolbar;
 import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
 import com.mishiranu.dashchan.R;
-import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.util.ViewUtils;
+import com.mishiranu.dashchan.util.InterfaceMotion;
 import com.mishiranu.dashchan.widget.ViewFactory;
 
 public class GalleryDialog extends Dialog {
@@ -89,7 +89,7 @@ public class GalleryDialog extends Dialog {
 	private void registerPredictiveBackCallback() {
 		if (predictiveBackCallback == null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
 			predictiveBackCallback = Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
-					Preferences.isPredictiveBackEnabled()
+					InterfaceMotion.isPredictiveBackEnabled()
 					? Api34Impl.register(this) : Api33Impl.register(this);
 		}
 	}

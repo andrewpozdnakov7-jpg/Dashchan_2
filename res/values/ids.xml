@@ -79,4 +79,8 @@
 	<item type="id" name="tag_text_colors" />
 	<item type="id" name="tag_theme_engine" />
 
+	<item type="id" name="interface_motion_animator" />
+	<item type="id" name="thread_motion_owner" />
+	<item type="id" name="screen_motion_owner" />
+	<item type="id" name="thread_motion_key" />
 </resources>

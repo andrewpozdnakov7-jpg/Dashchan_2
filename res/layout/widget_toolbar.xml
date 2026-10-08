@@ -25,7 +25,7 @@
 		android:popupTheme="?android:attr/popupTheme"
 		android:tag="theme.background=primary" />
 
-	<FrameLayout
+	<com.mishiranu.dashchan.widget.MotionToolbarExtra
 		android:id="@+id/toolbar_extra"
 		android:layout_width="match_parent"
 		android:layout_height="wrap_content" />

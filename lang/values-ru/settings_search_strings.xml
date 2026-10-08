@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<string name="settings_search_history">История поиска</string>
+	<string name="settings_search_history_item_hint">Нажмите для поиска; удерживайте, чтобы удалить</string>
+	<string name="settings_search_clear_history">Очистить историю поиска</string>
+	<string name="settings_search_history_delete_confirm">Удалить этот запрос из истории поиска?</string>
+	<string name="settings_search_history_clear_confirm">Удалить все сохранённые запросы поиска по настройкам?</string>
+</resources>

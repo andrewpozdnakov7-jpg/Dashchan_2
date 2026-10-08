@@ -23,12 +23,27 @@ import androidx.lifecycle.Lifecycle;
 import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.util.ViewUtils;
+import com.mishiranu.dashchan.util.InterfaceMotion;
 import com.mishiranu.dashchan.widget.CustomSearchView;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.WeakHashMap;
 
 public abstract class ContentFragment extends Fragment implements MenuProvider {
+	private ThreadMotionController.Session threadMotionSession;
+	private ScreenMotionController.Session screenMotionSession;
+	private boolean suppressScreenMotionExit;
+
+	public final void setScreenMotionSession(ScreenMotionController.Session session) { screenMotionSession = session; }
+	final void suppressScreenMotionExit() { suppressScreenMotionExit = true; }
+	private boolean suppressThreadMotionExit;
+
+	public final void setThreadMotionSession(ThreadMotionController.Session session) {
+		threadMotionSession = session;
+	}
+
+	final void suppressThreadMotionExit() { suppressThreadMotionExit = true; }
+
 	private static class MenuState {
 		public boolean created;
 		public final ArrayList<WeakReference<MenuItem>> actionItems = new ArrayList<>();
@@ -101,6 +116,11 @@ public abstract class ContentFragment extends Fragment implements MenuProvider {
 	@Override
 	public void onDestroyView() {
 		menuTerminated = true;
+		if (screenMotionSession != null) { screenMotionSession.finish(); screenMotionSession = null; }
+		suppressScreenMotionExit = false;
+		if (threadMotionSession != null) { threadMotionSession.finish(); threadMotionSession = null; }
+		suppressThreadMotionExit = false;
+		InterfaceMotion.cancel(getView());
 		super.onDestroyView();
 
 		clearOptionMenus();
@@ -127,6 +147,22 @@ public abstract class ContentFragment extends Fragment implements MenuProvider {
 
 	@Override
 	public Animator onCreateAnimator(int transit, boolean enter, int nextAnim) {
+		if (enter && screenMotionSession != null) {
+			Animator primary = threadMotionSession != null ? threadMotionSession.createAnimator() : null;
+			return screenMotionSession.createAnimator(primary);
+		}
+		if (enter && threadMotionSession != null) return threadMotionSession.createAnimator();
+		if (!enter && (suppressThreadMotionExit || suppressScreenMotionExit)) {
+			suppressThreadMotionExit = false;
+			suppressScreenMotionExit = false;
+			// The host already captured this page. Do not also animate the outgoing root underneath it.
+			return android.animation.ValueAnimator.ofFloat(0f, 1f).setDuration(0);
+		}
+		if (InterfaceMotion.isEnabled() && (transit == FragmentTransaction.TRANSIT_FRAGMENT_OPEN ||
+				transit == FragmentTransaction.TRANSIT_FRAGMENT_CLOSE ||
+				transit == FragmentTransaction.TRANSIT_FRAGMENT_FADE)) {
+			return InterfaceMotion.content(getView(), enter, transit);
+		}
 		if (transit == FragmentTransaction.TRANSIT_FRAGMENT_OPEN) {
 			return createAnimator(getView(), enter);
 		} else {
@@ -174,6 +210,8 @@ public abstract class ContentFragment extends Fragment implements MenuProvider {
 	@Override
 	public void onViewCreated(@NonNull View view, Bundle savedInstanceState) {
 		super.onViewCreated(view, savedInstanceState);
+		if (threadMotionSession != null) threadMotionSession.bind(view);
+		if (screenMotionSession != null) screenMotionSession.bind(view);
 		menuTerminated = false;
 		// Activate only after view initialization; unregister automatically when its view is destroyed.
 		requireActivity().addMenuProvider(this, getViewLifecycleOwner(), Lifecycle.State.STARTED);

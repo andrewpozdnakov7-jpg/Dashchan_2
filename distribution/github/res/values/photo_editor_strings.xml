@@ -172,4 +172,7 @@
 	<string name="pe_plaque_text">Caption</string>
 	<string name="pe_select_plaque">Select a label on the photo</string>
 	<string name="pe_plaque_limit">Up to 120 characters and three lines</string>
+	<string name="pe_new_region">New region</string>
+	<string name="pe_object_below_effects">Under effects</string>
+	<string name="pe_object_above_effects">On top</string>
 </resources>

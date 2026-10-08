@@ -582,6 +582,11 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 		}
 	}
 
+	/** Presentation-only snapshot: do not move pull-to-refresh indicators with message content. */
+	public void drawContentSnapshot(Canvas canvas) {
+		super.draw(canvas);
+	}
+
 	private final Rect bounds = new Rect();
 
 	@Override

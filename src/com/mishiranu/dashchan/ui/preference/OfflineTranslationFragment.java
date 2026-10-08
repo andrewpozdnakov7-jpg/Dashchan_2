@@ -1,0 +1,301 @@
+package com.mishiranu.dashchan.ui.preference;
+
+import android.app.AlertDialog;
+import android.os.Bundle;
+import android.view.View;
+import androidx.annotation.NonNull;
+import com.mishiranu.dashchan.BuildConfig;
+import com.mishiranu.dashchan.R;
+import com.mishiranu.dashchan.content.Preferences;
+import com.mishiranu.dashchan.content.translation.GeminiNanoTranslationBridge;
+import com.mishiranu.dashchan.content.translation.GoogleTranslationBridge;
+import com.mishiranu.dashchan.content.translation.TranslationController;
+import com.mishiranu.dashchan.content.translation.TranslationEngine;
+import com.mishiranu.dashchan.content.translation.TranslationModel;
+import com.mishiranu.dashchan.content.translation.TranslationModelManager;
+import com.mishiranu.dashchan.ui.FragmentHandler;
+import com.mishiranu.dashchan.ui.preference.core.CheckPreference;
+import com.mishiranu.dashchan.ui.preference.core.Preference;
+import com.mishiranu.dashchan.ui.preference.core.PreferenceFragment;
+import com.mishiranu.dashchan.util.SharedPreferences;
+import com.mishiranu.dashchan.widget.ClickableToast;
+import com.mishiranu.dashchan.widget.MessageDialog;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Locale;
+
+public class OfflineTranslationFragment extends PreferenceFragment implements TranslationModelManager.Listener,
+		GoogleTranslationBridge.Listener, GeminiNanoTranslationBridge.Listener {
+	@Override
+	protected SharedPreferences getPreferences() { return Preferences.PREFERENCES; }
+
+	@Override
+	public void onViewCreated(@NonNull View view, Bundle savedInstanceState) {
+		super.onViewCreated(view, savedInstanceState);
+		refreshPreferences();
+	}
+
+	private void refreshPreferences() {
+		if (getView() == null) return;
+		removeAllPreferences();
+		CheckPreference translationPreference = addCheck(true, Preferences.KEY_LOCAL_TRANSLATION,
+				Preferences.DEFAULT_LOCAL_TRANSLATION, R.string.local_translation,
+				R.string.local_translation__summary);
+		translationPreference.setOnAfterChangeListener(p -> {
+			TranslationController.getInstance().unload();
+			refreshPreferences();
+		});
+		if (translationPreference.getValue()) {
+			addEnabledTranslationPreferences();
+			addCheck(true, Preferences.KEY_PERSISTENT_TRANSLATION_CACHE,
+					Preferences.DEFAULT_PERSISTENT_TRANSLATION_CACHE, R.string.persistent_translation_cache,
+					R.string.persistent_translation_cache_summary).setOnAfterChangeListener(p -> {
+				TranslationController.getInstance().unload();
+				refreshPreferences();
+			});
+		}
+		addButton(R.string.clear_translation_cache, R.string.clear_translation_cache_summary).setOnClickListener(p ->
+				new AlertDialog.Builder(requireContext()).setTitle(R.string.clear_translation_cache)
+						.setMessage(R.string.clear_translation_cache_summary)
+						.setNegativeButton(android.R.string.cancel, null)
+						.setPositiveButton(android.R.string.ok, (dialog, which) ->
+								TranslationController.getInstance().clearPersistentCache(success ->
+										ClickableToast.show(success ? R.string.translation_cache_cleared : R.string.translation_cache_failed)))
+						.show());
+	}
+
+	private void addEnabledTranslationPreferences() {
+		addList(Preferences.KEY_TRANSLATION_NATIVE_LANGUAGE, Arrays.asList("ru", "en"),
+				Preferences.DEFAULT_TRANSLATION_NATIVE_LANGUAGE, R.string.translation_native_language,
+				Arrays.asList(getText(R.string.translation_language_russian),
+						getText(R.string.translation_language_english)))
+				.setOnAfterChangeListener(p -> {
+					TranslationController.getInstance().unload();
+					refreshPreferences();
+				});
+		ArrayList<String> engineValues = new ArrayList<>();
+		ArrayList<CharSequence> engineTitles = new ArrayList<>();
+		engineValues.add(TranslationEngine.MOZILLA.value);
+		engineTitles.add(getText(R.string.translation_engine_mozilla));
+		if (BuildConfig.ENABLE_GOOGLE_TRANSLATION) {
+			engineValues.add(TranslationEngine.GOOGLE.value);
+			engineTitles.add(getText(R.string.translation_engine_google));
+		}
+		if (BuildConfig.ENABLE_GEMINI_NANO_TRANSLATION) {
+			engineValues.add(TranslationEngine.GEMINI_NANO.value);
+			engineTitles.add(getText(R.string.translation_engine_gemini_nano));
+		}
+		addList(Preferences.KEY_TRANSLATION_ENGINE, engineValues, Preferences.DEFAULT_TRANSLATION_ENGINE,
+				R.string.translation_engine, engineTitles)
+				.setOnAfterChangeListener(p -> {
+					TranslationController.getInstance().unload();
+					refreshPreferences();
+				});
+		addCheck(true, Preferences.KEY_TRANSLATION_AUTO, Preferences.DEFAULT_TRANSLATION_AUTO,
+				R.string.translation_automatic, R.string.translation_automatic__summary);
+
+		TranslationModel.Direction direction = TranslationModel.forNativeLanguage(
+				Preferences.getTranslationNativeLanguage());
+		TranslationEngine engine = Preferences.getTranslationEngine();
+		String directionName = direction.getDisplayName(requireContext());
+		TranslationModelManager.State state;
+		int progress;
+		long downloadedBytes;
+		String error;
+		long packageSize;
+		GeminiNanoTranslationBridge.Snapshot geminiSnapshot = null;
+		if (engine == TranslationEngine.GOOGLE) {
+			GoogleTranslationBridge.Snapshot snapshot = GoogleTranslationBridge.getSnapshot(direction);
+			if (!snapshot.addonInstalled) {
+				String addonSummary = snapshot.error != null
+						? getString(R.string.translation_addon_error__format, snapshot.error)
+						: getString(R.string.translation_addon_not_installed__format,
+								formatSize(GoogleTranslationBridge.APPROXIMATE_ADDON_SIZE));
+				addButton(getString(R.string.translation_google_addon), addonSummary).setOnClickListener(p ->
+						new MessageDialog.Builder(requireContext())
+								.setTitle(R.string.translation_google_addon)
+								.setMessage(R.string.translation_google_addon_install__message)
+								.setPositiveButton(R.string.translation_google_addon_download,
+										(dialog, which) -> GoogleTranslationBridge.downloadAddon())
+								.setNegativeButton(android.R.string.cancel, null)
+								.show());
+				return;
+			}
+			state = snapshot.state;
+			progress = snapshot.progress;
+			downloadedBytes = snapshot.downloadedBytes;
+			error = snapshot.error;
+			packageSize = GoogleTranslationBridge.APPROXIMATE_MODEL_SIZE;
+		} else if (engine == TranslationEngine.GEMINI_NANO) {
+			geminiSnapshot = GeminiNanoTranslationBridge.getSnapshot(direction);
+			state = geminiSnapshot.state;
+			progress = geminiSnapshot.progress;
+			downloadedBytes = geminiSnapshot.downloadedBytes;
+			error = geminiSnapshot.error;
+			packageSize = geminiSnapshot.totalBytes;
+		} else {
+			TranslationModelManager.Snapshot snapshot = TranslationModelManager.getInstance().getSnapshot(direction);
+			state = snapshot.state;
+			progress = snapshot.progress;
+			downloadedBytes = 0L;
+			error = snapshot.error;
+			packageSize = direction.compressedSize;
+		}
+		String summary;
+		switch (state) {
+			case INSTALLED: {
+				summary = engine == TranslationEngine.GEMINI_NANO
+						? getString(R.string.translation_package_gemini_installed)
+						: getString(R.string.translation_package_installed__format, directionName,
+								formatSize(engine == TranslationEngine.GOOGLE
+										? GoogleTranslationBridge.APPROXIMATE_MODEL_SIZE : direction.uncompressedSize));
+				break;
+			}
+			case CHECKING: {
+				summary = getString(R.string.translation_package_checking);
+				break;
+			}
+			case DOWNLOADING: {
+				if (engine == TranslationEngine.GEMINI_NANO) {
+					summary = packageSize > 0L
+							? getString(R.string.translation_package_downloading_bytes_total__format,
+									formatSize(downloadedBytes), formatSize(packageSize))
+							: getString(R.string.translation_package_downloading_bytes__format,
+									formatSize(downloadedBytes));
+				} else {
+					summary = engine == TranslationEngine.GOOGLE
+							? getString(R.string.translation_package_downloading_bytes__format,
+									formatSize(downloadedBytes))
+							: getString(R.string.translation_package_downloading__format, progress);
+				}
+				break;
+			}
+			case ERROR: {
+				summary = engine == TranslationEngine.GEMINI_NANO && geminiSnapshot != null &&
+						!geminiSnapshot.supported
+						? getString(R.string.translation_package_gemini_unavailable)
+						: getString(R.string.translation_package_error__format, error);
+				break;
+			}
+			default: {
+				if (engine == TranslationEngine.GEMINI_NANO && geminiSnapshot != null) {
+					summary = geminiSnapshot.supported
+							? getString(R.string.translation_package_gemini_downloadable)
+							: getString(R.string.translation_package_gemini_unavailable);
+				} else {
+					summary = getString(R.string.translation_package_not_installed__format, directionName,
+							formatSize(packageSize));
+				}
+				break;
+			}
+		}
+		Preference<Void> packagePreference = addButton(getString(R.string.translation_language_package), summary);
+		packagePreference.setSelectable(state != TranslationModelManager.State.DOWNLOADING &&
+				state != TranslationModelManager.State.CHECKING &&
+				!(engine == TranslationEngine.GEMINI_NANO && state == TranslationModelManager.State.INSTALLED));
+		GeminiNanoTranslationBridge.Snapshot finalGeminiSnapshot = geminiSnapshot;
+		packagePreference.setOnClickListener(p -> {
+			if (engine == TranslationEngine.GEMINI_NANO && finalGeminiSnapshot != null &&
+					!finalGeminiSnapshot.supported) {
+				GeminiNanoTranslationBridge.refresh();
+				return;
+			}
+			if (state == TranslationModelManager.State.INSTALLED) {
+				new MessageDialog.Builder(requireContext())
+						.setTitle(R.string.translation_package_delete)
+						.setMessage(R.string.translation_package_delete__message)
+						.setPositiveButton(R.string.delete, (dialog, which) -> {
+							if (engine == TranslationEngine.GOOGLE) {
+								GoogleTranslationBridge.delete(direction, () -> {
+									ClickableToast.show(R.string.translation_package_deleted);
+									refreshPreferences();
+								});
+							} else if (TranslationModelManager.getInstance().delete(direction)) {
+								ClickableToast.show(R.string.translation_package_deleted);
+								refreshPreferences();
+							}
+						})
+						.setNegativeButton(android.R.string.cancel, null)
+						.show();
+			} else {
+				new MessageDialog.Builder(requireContext())
+						.setTitle(R.string.translation_package_download)
+						.setMessage(engine == TranslationEngine.GOOGLE
+								? R.string.translation_package_download_google__message
+								: engine == TranslationEngine.GEMINI_NANO
+										? R.string.translation_package_download_gemini__message
+										: R.string.translation_package_download__message)
+						.setPositiveButton(R.string.translation_package_download_action,
+								(dialog, which) -> {
+									if (engine == TranslationEngine.GOOGLE) {
+										GoogleTranslationBridge.download(direction);
+									} else if (engine == TranslationEngine.GEMINI_NANO) {
+										GeminiNanoTranslationBridge.download(direction);
+									} else {
+										TranslationModelManager.getInstance().download(direction);
+									}
+								})
+						.setNegativeButton(android.R.string.cancel, null)
+						.show();
+			}
+		});
+	}
+
+	private static String formatSize(long bytes) {
+		return String.format(Locale.getDefault(), "%.1f MB", bytes / 1024f / 1024f);
+	}
+
+	@Override
+	public void onViewStateRestored(Bundle savedInstanceState) {
+		super.onViewStateRestored(savedInstanceState);
+		((FragmentHandler) requireActivity()).setTitleSubtitle(getString(R.string.local_translation), null);
+	}
+
+	@Override
+	public void onResume() {
+		super.onResume();
+		if (BuildConfig.ENABLE_LOCAL_TRANSLATION) {
+			TranslationModelManager.getInstance().register(this);
+			if (BuildConfig.ENABLE_GOOGLE_TRANSLATION) {
+				GoogleTranslationBridge.register(this);
+				GoogleTranslationBridge.refresh(TranslationModel.forNativeLanguage(
+						Preferences.getTranslationNativeLanguage()));
+			}
+			if (BuildConfig.ENABLE_GEMINI_NANO_TRANSLATION) {
+				GeminiNanoTranslationBridge.register(this);
+			}
+		}
+		refreshPreferences();
+	}
+
+	@Override
+	public void onPause() {
+		if (BuildConfig.ENABLE_LOCAL_TRANSLATION) {
+			TranslationModelManager.getInstance().unregister(this);
+			if (BuildConfig.ENABLE_GOOGLE_TRANSLATION) {
+				GoogleTranslationBridge.unregister(this);
+			}
+			if (BuildConfig.ENABLE_GEMINI_NANO_TRANSLATION) {
+				GeminiNanoTranslationBridge.unregister(this);
+			}
+		}
+		super.onPause();
+	}
+
+	@Override
+	public void onTranslationModelChanged(TranslationModel.Direction direction,
+			TranslationModelManager.Snapshot snapshot) {
+		refreshPreferences();
+	}
+
+	@Override
+	public void onGoogleTranslationModelChanged(GoogleTranslationBridge.Snapshot snapshot) {
+		refreshPreferences();
+	}
+
+	@Override
+	public void onGeminiNanoTranslationModelChanged(GeminiNanoTranslationBridge.Snapshot snapshot) {
+		refreshPreferences();
+	}
+
+}

@@ -29,7 +29,6 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.fragment.app.FragmentManager;
-import androidx.lifecycle.MutableLiveData;
 import androidx.recyclerview.widget.RecyclerView;
 import chan.content.Chan;
 import chan.content.ChanConfiguration;
@@ -41,6 +40,7 @@ import chan.util.StringUtils;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.ImageLoader;
 import com.mishiranu.dashchan.content.Preferences;
+import com.mishiranu.dashchan.content.async.LocalArchiveViewModel;
 import com.mishiranu.dashchan.content.async.ReadSinglePostTask;
 import com.mishiranu.dashchan.content.async.ReadThreadPreviewTask;
 import com.mishiranu.dashchan.content.async.SendLocalArchiveTask;
@@ -1927,8 +1927,6 @@ public class DialogUnit {
 		});
 	}
 
-	private static final SendLocalArchiveTask.DownloadResult DOWNLOAD_RESULT_ERROR = binder -> {};
-
 	private static void showLocalArchiveWarning(FragmentManager fragmentManager,
 			String chanName, String boardName, String threadNumber, String threadTitle, Collection<Post> posts,
 			boolean saveThumbnails, boolean saveFiles) {
@@ -1941,47 +1939,36 @@ public class DialogUnit {
 				.create());
 	}
 
-	public static class LocalArchiveViewModel extends TaskViewModel<SendLocalArchiveTask,
-			SendLocalArchiveTask.DownloadResult> implements SendLocalArchiveTask.Callback {
-		public final MutableLiveData<Integer> progress = new MutableLiveData<>();
-
-		@Override
-		public void onLocalArchivationProgressUpdate(int handledPostsCount) {
-			progress.setValue(handledPostsCount);
-		}
-
-		@Override
-		public void onLocalArchivationComplete(SendLocalArchiveTask.DownloadResult result) {
-			handleResult(result != null ? result : DOWNLOAD_RESULT_ERROR);
-		}
-	}
-
 	private static void startLocalArchiveProcess(FragmentManager fragmentManager,
 			String chanName, String boardName, String threadNumber, String threadTitle, Collection<Post> posts,
 			boolean saveThumbnails, boolean saveFiles, boolean createZip) {
+		LocalArchiveViewModel.Request request = new LocalArchiveViewModel.Request(chanName, boardName,
+				threadNumber, threadTitle, posts, saveThumbnails, saveFiles, createZip);
 		new InstanceDialog(fragmentManager, null, provider -> {
 			Context context = provider.getContext();
 			ProgressDialog dialog = new ProgressDialog(context, "%d / %d");
 			dialog.setMessage(context.getString(R.string.processing_data__ellipsis));
-			dialog.setMax(posts.size());
+			dialog.setMax(request.posts.size());
 			LocalArchiveViewModel viewModel = provider.getViewModel(LocalArchiveViewModel.class);
-			if (!viewModel.hasTaskOrValue()) {
-				SendLocalArchiveTask task = new SendLocalArchiveTask(viewModel, Chan.get(chanName),
-						boardName, threadNumber, threadTitle, posts, saveThumbnails, saveFiles, createZip);
-				task.execute(ConcurrentUtils.PARALLEL_EXECUTOR);
-				viewModel.attach(task);
-			}
+			viewModel.startIfNeeded(request);
 			viewModel.observe(provider.getLifecycleOwner(), result -> {
 				provider.dismiss();
-				if (result == DOWNLOAD_RESULT_ERROR) {
+				if (result.status == LocalArchiveViewModel.PreparationResult.Status.ERROR) {
 					ClickableToast.show(R.string.unknown_error);
 				} else {
-					UiManager uiManager = UiManager.extract(provider);
-					result.run(uiManager.callback().getDownloadBinder());
+					enqueuePreparedLocalArchive(provider, result.downloadResult);
 				}
 			});
 			viewModel.progress.observe(provider.getLifecycleOwner(), dialog::setValue);
 			return dialog;
 		});
+	}
+
+	/** Resolve the current UI host only when handing prepared data to the existing download pipeline. */
+	private static void enqueuePreparedLocalArchive(InstanceDialog.Provider provider,
+			SendLocalArchiveTask.DownloadResult result) {
+		UiManager uiManager = UiManager.extract(provider);
+		// Preserve the host/binder contract: no silent drop or successful no-op when unavailable.
+		result.run(uiManager.callback().getDownloadBinder());
 	}
 }

@@ -90,4 +90,26 @@ public class NavigationRequestQueueTest {
 		queue.begin();
 		queue.begin();
 	}
+	@Test public void staleDuplicateCompletionCannotReleaseNextTransaction() {
+		NavigationRequestQueue queue = new NavigationRequestQueue();
+		int first = queue.begin();
+		assertTrue(queue.complete(first));
+		int second = queue.begin();
+		assertFalse(queue.complete(first));
+		assertTrue(queue.isPending());
+		assertTrue(queue.complete(second));
+		assertFalse(queue.complete(second));
+	}
+
+	@Test public void savedStateRequeuePreservesRapidRequestOrder() {
+		NavigationRequestQueue queue = new NavigationRequestQueue();
+		List<Integer> values = new ArrayList<>();
+		queue.defer(() -> values.add(1), true);
+		queue.defer(() -> values.add(2), true);
+		queue.drainOne(true); assertTrue(values.isEmpty());
+		queue.drainOne(false);
+		queue.defer(() -> values.add(3), false);
+		queue.drainOne(false); queue.drainOne(false);
+		assertEquals(Arrays.asList(1, 2, 3), values);
+	}
 }

@@ -13,17 +13,12 @@ import com.mishiranu.dashchan.content.push.ReplyPushManager;
 import com.mishiranu.dashchan.ui.ContentFragment;
 import com.mishiranu.dashchan.ui.posting.PhotoEditorBridge;
 import com.mishiranu.dashchan.ui.preference.core.PreferenceFragment;
-import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
-import java.util.regex.Pattern;
 
 public final class SettingsSearchIndex {
-	private static final Pattern DIACRITICS_PATTERN = Pattern.compile("\\p{M}+");
-
 	private SettingsSearchIndex() {}
 
 	private enum Screen {
@@ -43,9 +38,17 @@ public final class SettingsSearchIndex {
 			@Override
 			ContentFragment createFragment() { return new ExperimentalFragment(); }
 		},
-		REPLY_NOTIFICATIONS(R.string.experimental_features, R.string.replies_and_notifications) {
+		REPLY_NOTIFICATIONS(R.string.contents, R.string.replies_and_notifications) {
 			@Override
 			ContentFragment createFragment() { return new ReplyNotificationsFragment(); }
+		},
+		OFFLINE_TRANSLATION(R.string.contents, R.string.local_translation) {
+			@Override
+			ContentFragment createFragment() { return new OfflineTranslationFragment(); }
+		},
+		PIP_DIAGNOSTICS(R.string.experimental_features, R.string.pip_diagnostic_mode) {
+			@Override
+			ContentFragment createFragment() { return new PipDiagnosticsFragment(); }
 		},
 		INTERFACE(R.string.user_interface) {
 			@Override
@@ -83,7 +86,7 @@ public final class SettingsSearchIndex {
 			@Override
 			ContentFragment createFragment() { return new VideoPreloadFragment(); }
 		},
-		DRAWER_ORDER(R.string.experimental_features, R.string.drawer_section_order) {
+		DRAWER_ORDER(R.string.user_interface, R.string.drawer_section_order) {
 			@Override
 			ContentFragment createFragment() { return new DrawerOrderFragment(); }
 		},
@@ -142,7 +145,7 @@ public final class SettingsSearchIndex {
 		private final String preferenceKey;
 		private final String title;
 		private final String breadcrumb;
-		private final String searchableText;
+		private final SettingsSearchMatcher.Text searchableText;
 
 		private Entry(Context context, Screen screen, int titleResId, int summaryResId, String preferenceKey) {
 			this(screen, context.getString(titleResId), summaryResId != 0 ? context.getString(summaryResId) : null,
@@ -156,7 +159,7 @@ public final class SettingsSearchIndex {
 			this.preferenceKey = preferenceKey;
 			this.title = title.toString();
 			this.breadcrumb = breadcrumb;
-			searchableText = normalize(title + " " + breadcrumb + " " + (summary != null ? summary : ""));
+			searchableText = new SettingsSearchMatcher.Text(title + " " + breadcrumb + " " + (summary != null ? summary : ""));
 		}
 
 		public String getTitle() {
@@ -165,15 +168,6 @@ public final class SettingsSearchIndex {
 
 		public String getBreadcrumb() {
 			return breadcrumb;
-		}
-
-		private boolean matches(String[] words) {
-			for (String word : words) {
-				if (!searchableText.contains(word)) {
-					return false;
-				}
-			}
-			return true;
 		}
 
 		public ContentFragment createFragment() {
@@ -312,13 +306,15 @@ public final class SettingsSearchIndex {
 		add(context, entries, Screen.FORUMS, R.string.combined_feeds,
 				R.string.combined_feeds__summary, Preferences.KEY_COMBINED_FEEDS_ENABLED);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.experimental_features);
-		add(context, entries, Screen.EXPERIMENTAL, R.string.drawer_section_order,
+		add(context, entries, Screen.INTERFACE, R.string.drawer_section_order,
 				R.string.drawer_section_order_entry_summary, null);
 		add(context, entries, Screen.DRAWER_ORDER, R.string.drawer_custom_order,
 				R.string.drawer_section_order_summary, Preferences.KEY_DRAWER_CUSTOM_ORDER);
-		add(context, entries, Screen.EXPERIMENTAL, R.string.show_original_post_title,
+		add(context, entries, Screen.INTERFACE, R.string.show_original_post_title,
 				R.string.show_original_post_title__summary, Preferences.KEY_SHOW_ORIGINAL_POST_TITLE);
 		add(context, entries, Screen.INTERFACE, R.string.user_interface);
+		add(context, entries, Screen.INTERFACE, R.string.collapse_long_open_threads,
+				R.string.collapse_long_open_threads__summary, Preferences.KEY_COLLAPSE_LONG_OPEN_THREADS);
 		add(context, entries, Screen.CONTENTS, R.string.contents);
 		add(context, entries, Screen.MEDIA, R.string.media);
 		add(context, entries, Screen.AUTOHIDE, R.string.autohide);
@@ -347,7 +343,7 @@ public final class SettingsSearchIndex {
 
 		add(context, entries, Screen.EXPERIMENTAL, R.string.toolbar_title_sizes,
 				R.string.toolbar_title_sizes__summary, null);
-		add(context, entries, Screen.EXPERIMENTAL, R.string.thread_gallery_button,
+		add(context, entries, Screen.INTERFACE, R.string.thread_gallery_button,
 				R.string.thread_gallery_button__summary, Preferences.KEY_THREAD_GALLERY_BUTTON);
 		add(context, entries, Screen.TOOLBAR_TITLE, R.string.toolbar_title_customization,
 				R.string.toolbar_title_customization__summary, Preferences.KEY_TOOLBAR_TITLE_CUSTOMIZATION);
@@ -371,36 +367,34 @@ public final class SettingsSearchIndex {
 				R.string.reddit_slooop_style__summary, Preferences.KEY_REDDIT_WEB_READER_STYLE);
 		add(context, entries, Screen.REDDIT, R.string.reddit_board_style,
 				R.string.reddit_board_style__summary, Preferences.KEY_REDDIT_BOARD_STYLE);
-		add(context, entries, Screen.EXPERIMENTAL, R.string.hardware_video_acceleration,
+		add(context, entries, Screen.MEDIA, R.string.hardware_video_acceleration,
 				R.string.hardware_video_acceleration__summary, Preferences.KEY_HARDWARE_VIDEO_ACCELERATION);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.video_diagnostics_extended,
 				R.string.video_diagnostics_extended__summary, Preferences.KEY_EXTENDED_VIDEO_DIAGNOSTICS);
-		add(context, entries, Screen.EXPERIMENTAL, R.string.pip_diagnostic_mode,
-				R.string.pip_diagnostic_warning, Preferences.KEY_PIP_DIAGNOSTIC_MODE);
+		add(context, entries, Screen.PIP_DIAGNOSTICS, R.string.pip_diagnostic_mode,
+				R.string.pip_diagnostic_hidden_summary, null);
 		add(context, entries, Screen.MEDIA, R.string.open_configured_attachment_folder,
 				R.string.open_configured_attachment_folder__summary,
 				Preferences.KEY_OPEN_CONFIGURED_ATTACHMENT_FOLDER);
 		add(context, entries, Screen.INTERFACE, R.string.swipe_reply,
 				R.string.swipe_reply__summary, Preferences.KEY_SWIPE_REPLY);
 		if (BuildConfig.ENABLE_LOCAL_TRANSLATION) {
-			add(context, entries, Screen.EXPERIMENTAL, R.string.persistent_translation_cache,
+			add(context, entries, Screen.OFFLINE_TRANSLATION, R.string.persistent_translation_cache,
 					R.string.persistent_translation_cache_summary, Preferences.KEY_PERSISTENT_TRANSLATION_CACHE);
-			add(context, entries, Screen.EXPERIMENTAL, R.string.local_translation,
-					R.string.local_translation__summary, Preferences.KEY_LOCAL_TRANSLATION);
-			add(context, entries, Screen.EXPERIMENTAL, R.string.translation_native_language, 0,
+			add(context, entries, Screen.OFFLINE_TRANSLATION, R.string.local_translation,
+					R.string.local_translation_entry_summary, Preferences.KEY_LOCAL_TRANSLATION);
+			add(context, entries, Screen.OFFLINE_TRANSLATION, R.string.translation_native_language, 0,
 					Preferences.KEY_TRANSLATION_NATIVE_LANGUAGE);
-			if (BuildConfig.ENABLE_GOOGLE_TRANSLATION || BuildConfig.ENABLE_GEMINI_NANO_TRANSLATION) {
-				add(context, entries, Screen.EXPERIMENTAL, R.string.translation_engine, 0,
-						Preferences.KEY_TRANSLATION_ENGINE);
-			}
-			add(context, entries, Screen.EXPERIMENTAL, R.string.translation_automatic,
+			add(context, entries, Screen.OFFLINE_TRANSLATION, R.string.translation_engine, 0,
+					Preferences.KEY_TRANSLATION_ENGINE);
+			add(context, entries, Screen.OFFLINE_TRANSLATION, R.string.translation_automatic,
 					R.string.translation_automatic__summary, Preferences.KEY_TRANSLATION_AUTO);
-			add(context, entries, Screen.EXPERIMENTAL, R.string.translation_language_package);
-			add(context, entries, Screen.EXPERIMENTAL, R.string.clear_translation_cache);
+			add(context, entries, Screen.OFFLINE_TRANSLATION, R.string.translation_language_package);
+			add(context, entries, Screen.OFFLINE_TRANSLATION, R.string.clear_translation_cache);
 		}
 		add(context, entries, Screen.MEDIA, R.string.video_zoom_gestures,
 				R.string.video_zoom_gestures__summary, Preferences.KEY_VIDEO_ZOOM_GESTURES);
-		add(context, entries, Screen.EXPERIMENTAL, R.string.replies_and_notifications, 0, null);
+		add(context, entries, Screen.REPLY_NOTIFICATIONS, R.string.replies_and_notifications, R.string.replies_and_notifications_entry_summary, null);
 		add(context, entries, Screen.REPLY_NOTIFICATIONS, R.string.track_replies,
 				R.string.track_replies__summary, Preferences.KEY_TRACK_MY_POSTS);
 		add(context, entries, Screen.REPLY_NOTIFICATIONS, R.string.tracked_replies_local_check,
@@ -528,15 +522,20 @@ public final class SettingsSearchIndex {
 				Preferences.KEY_FAVORITES_ORDER);
 		add(context, entries, Screen.CONTENTS, R.string.add_thread_on_reply, 0,
 				Preferences.KEY_FAVORITE_ON_REPLY);
-		add(context, entries, Screen.CONTENTS, R.string.watch_initially, R.string.watch_initially__summary,
+		add(context, entries, Screen.REPLY_NOTIFICATIONS, R.string.watch_initially, R.string.watch_initially__summary,
 				Preferences.KEY_WATCHER_WATCH_INITIALLY);
-		add(context, entries, Screen.CONTENTS, R.string.refresh_favorites, 0,
+		add(context, entries, Screen.REPLY_NOTIFICATIONS, R.string.refresh_favorites, 0,
 				Preferences.KEY_WATCHER_REFRESH_INTERVAL);
-		add(context, entries, Screen.CONTENTS, R.string.background_reply_check,
+		add(context, entries, Screen.REPLY_NOTIFICATIONS, R.string.background_reply_check,
 				R.string.background_reply_check__summary, Preferences.KEY_BACKGROUND_REPLY_CHECK);
-		add(context, entries, Screen.CONTENTS, R.string.wifi_only, 0, Preferences.KEY_WATCHER_WIFI_ONLY);
-		add(context, entries, Screen.CONTENTS, R.string.reply_notifications, 0, "reply_notifications");
+		add(context, entries, Screen.REPLY_NOTIFICATIONS, R.string.wifi_only, 0, Preferences.KEY_WATCHER_WIFI_ONLY);
+		add(context, entries, Screen.REPLY_NOTIFICATIONS, R.string.reply_notifications, 0, "reply_notifications");
+		add(context, entries, Screen.REPLY_NOTIFICATIONS, R.string.favorites_watcher);
 		add(context, entries, Screen.CONTENTS, R.string.clear_cache);
+		if (BuildConfig.ENABLE_EXPERIMENTAL_INTERFACE_MOTION) {
+			add(context, entries, Screen.EXPERIMENTAL, R.string.new_interface_motion,
+					R.string.new_interface_motion_summary, Preferences.KEY_NEW_INTERFACE_MOTION);
+		}
 		add(context, entries, Screen.EXPERIMENTAL, R.string.outbox_title,
 				R.string.outbox_experimental_summary, Preferences.KEY_OUTBOX_JOURNAL);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.discussion_context,
@@ -545,10 +544,12 @@ public final class SettingsSearchIndex {
 			add(context, entries, Screen.EXPERIMENTAL, PhotoEditorBridge.getTitleResId(),
 					PhotoEditorBridge.getSummaryResId(), Preferences.KEY_NEW_PHOTO_EDITOR);
 		}
-		add(context, entries, Screen.EXPERIMENTAL, R.string.thread_page_preload,
+		add(context, entries, Screen.CONTENTS, R.string.thread_page_preload,
 				R.string.thread_page_preload__summary, Preferences.KEY_THREAD_PAGE_PRELOAD);
 
 		add(context, entries, Screen.MEDIA, R.string.load_thumbnails, 0, Preferences.KEY_LOAD_THUMBNAILS);
+		add(context, entries, Screen.MEDIA, R.string.close_gallery_on_background_tap,
+				R.string.close_gallery_on_background_tap__summary, Preferences.KEY_CLOSE_GALLERY_ON_BACKGROUND_TAP);
 		add(context, entries, Screen.MEDIA, R.string.scroll_gallery_to_current_file,
 				R.string.scroll_gallery_to_current_file__summary, Preferences.KEY_SCROLL_GALLERY_TO_CURRENT_FILE);
 		add(context, entries, Screen.VIDEO_PRELOAD, R.string.load_nearest_image, 0, Preferences.KEY_IMAGE_PRELOAD);
@@ -670,23 +671,25 @@ public final class SettingsSearchIndex {
 	}
 
 	public static List<Entry> search(List<Entry> entries, String query) {
-		String normalized = normalize(query).trim();
-		if (StringUtils.isEmpty(normalized)) {
-			return Collections.emptyList();
-		}
-		String[] words = normalized.split("\\s+");
-		ArrayList<Entry> result = new ArrayList<>();
+		SettingsSearchMatcher.Query matcher = new SettingsSearchMatcher.Query(query);
+		if (matcher.isEmpty()) return Collections.emptyList();
+		ArrayList<Match> matches = new ArrayList<>();
 		for (Entry entry : entries) {
-			if (entry.matches(words)) {
-				result.add(entry);
-			}
+			int score = matcher.score(entry.searchableText);
+			if (score >= 0) matches.add(new Match(entry, score));
 		}
+		// Stable sort: preserve the existing title order within equal relevance.
+		Collections.sort(matches, (first, second) -> Integer.compare(first.score, second.score));
+		ArrayList<Entry> result = new ArrayList<>(matches.size());
+		for (Match match : matches) result.add(match.entry);
 		return result;
 	}
 
-	private static String normalize(String value) {
-		String normalized = DIACRITICS_PATTERN.matcher(Normalizer.normalize(value, Normalizer.Form.NFD))
-				.replaceAll("").toLowerCase(Locale.ROOT);
-		return normalized.replace('\u0451', '\u0435');
+	private static final class Match {
+		final Entry entry;
+		final int score;
+		Match(Entry entry, int score) { this.entry = entry; this.score = score; }
 	}
+
+	private static String normalize(String value) { return SettingsSearchMatcher.normalize(value); }
 }

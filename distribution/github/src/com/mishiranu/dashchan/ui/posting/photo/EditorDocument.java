@@ -26,6 +26,9 @@ public final class EditorDocument {
         public boolean affectAnnotations;
         // Missing in legacy sessions: preserve drawings below objects.
         public boolean drawOnComposition;
+        public boolean aboveEffects, orientedMask;
+        // Region dimensions relative to max(source width, source height), independent of effect strength.
+        public float maskWidth, maskHeight;
         public String text = "", asset = "";
 
         public Item copy() {
@@ -33,6 +36,8 @@ public final class EditorDocument {
             out.kind = kind; out.points.addAll(points);
             out.x = x; out.y = y; out.endX = endX; out.endY = endY;
             out.size = size; out.angle = angle; out.scale = scale; out.color = color;
+            out.aboveEffects = aboveEffects; out.orientedMask = orientedMask;
+            out.maskWidth = maskWidth; out.maskHeight = maskHeight;
             out.drawOnComposition = drawOnComposition; out.affectAnnotations = affectAnnotations; out.background = background; out.outline = outline; out.mirrored = mirrored; out.text = text; out.asset = asset;
             return out;
         }
@@ -41,6 +46,8 @@ public final class EditorDocument {
             return new JSONObject().put("kind", kind.name()).put("points", new JSONArray(points))
                     .put("x", x).put("y", y).put("endX", endX).put("endY", endY)
                     .put("size", size).put("angle", angle).put("scale", scale).put("color", color)
+                    .put("aboveEffects", aboveEffects).put("orientedMask", orientedMask)
+                    .put("maskWidth", maskWidth).put("maskHeight", maskHeight)
                     .put("drawOnComposition", drawOnComposition).put("affectAnnotations", affectAnnotations).put("background", background).put("outline", outline).put("mirrored", mirrored).put("text", text).put("asset", asset);
         }
 
@@ -54,6 +61,14 @@ public final class EditorDocument {
             out.endX = (float) json.getDouble("endX"); out.endY = (float) json.getDouble("endY");
             out.size = (float) json.getDouble("size"); out.angle = (float) json.getDouble("angle");
             out.scale = (float) json.getDouble("scale"); out.color = json.getInt("color");
+            out.aboveEffects = json.optBoolean("aboveEffects", false);
+            out.orientedMask = json.optBoolean("orientedMask", false);
+            out.maskWidth = (float) json.optDouble("maskWidth", 0);
+            out.maskHeight = (float) json.optDouble("maskHeight", 0);
+            if (!Float.isFinite(out.maskWidth) || !Float.isFinite(out.maskHeight)
+                    || out.maskWidth < 0 || out.maskHeight < 0 || out.maskWidth > 2 || out.maskHeight > 2
+                    || out.orientedMask && (!EditorMaskGeometry.isMask(out.kind) || out.maskWidth <= 0 || out.maskHeight <= 0))
+                throw new JSONException("Invalid region geometry");
             out.drawOnComposition = json.optBoolean("drawOnComposition", false);
             out.affectAnnotations = json.optBoolean("affectAnnotations", false);
             out.background = json.optBoolean("background"); out.outline = json.optBoolean("outline");

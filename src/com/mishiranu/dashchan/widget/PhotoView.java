@@ -1,6 +1,7 @@
 package com.mishiranu.dashchan.widget;
 
 import android.animation.ValueAnimator;
+import android.view.animation.LinearInterpolator;
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.graphics.Canvas;
@@ -23,6 +24,7 @@ import androidx.annotation.NonNull;
 import com.mishiranu.dashchan.graphics.TransparentTileDrawable;
 import com.mishiranu.dashchan.media.VideoDiagnostics;
 import com.mishiranu.dashchan.util.AnimationUtils;
+import com.mishiranu.dashchan.util.InterfaceMotion;
 
 public class PhotoView extends View implements ScaleGestureDetector.OnScaleGestureListener {
 	private enum ScrollEdge {NONE, START, END, BOTH}
@@ -216,7 +218,12 @@ public class PhotoView extends View implements ScaleGestureDetector.OnScaleGestu
 			initialScalingAnimator = ValueAnimator.ofFloat(0f, 1f);
 			initialScalingAnimator.addUpdateListener(new InitialScaleListener(centerX, centerY,
 					viewWidth, viewHeight, cropEnabled));
-			initialScalingAnimator.setDuration(INITIAL_SCALE_TRANSITION_TIME);
+			if (InterfaceMotion.isEnabled()) {
+				initialScalingAnimator.setInterpolator(new LinearInterpolator());
+				initialScalingAnimator.setDuration(InterfaceMotion.duration(InterfaceMotion.GALLERY_DURATION));
+			} else {
+				initialScalingAnimator.setDuration(INITIAL_SCALE_TRANSITION_TIME);
+			}
 			initialScalingAnimator.start();
 		}
 	}
@@ -933,6 +940,7 @@ public class PhotoView extends View implements ScaleGestureDetector.OnScaleGestu
 		private final float centerX, centerY;
 		private final int viewWidth, viewHeight;
 		private final boolean cropEnabled;
+		private final boolean modern = InterfaceMotion.isEnabled();
 
 		private static final int WAIT_TIME = 100;
 		private static final float TRANSFER_TIME_FACTOR = 1.5f;
@@ -963,12 +971,16 @@ public class PhotoView extends View implements ScaleGestureDetector.OnScaleGestu
 				t = 1f;
 				finished = true;
 			}
-			float wait = (float) WAIT_TIME / INITIAL_SCALE_TRANSITION_TIME;
-			t = t >= wait ? AnimationUtils.ACCELERATE_DECELERATE_INTERPOLATOR
-					.getInterpolation((t - wait) / (1f - wait)) : 0f;
+			if (modern) {
+				t = InterfaceMotion.STANDARD.getInterpolation(t);
+			} else {
+				float wait = (float) WAIT_TIME / INITIAL_SCALE_TRANSITION_TIME;
+				t = t >= wait ? AnimationUtils.ACCELERATE_DECELERATE_INTERPOLATOR
+						.getInterpolation((t - wait) / (1f - wait)) : 0f;
+			}
 
 			if (!finished) {
-				float ct = (float) Math.pow(t, TRANSFER_TIME_FACTOR); // Make XY transition faster
+				float ct = modern ? t : (float) Math.pow(t, TRANSFER_TIME_FACTOR);
 				float targetX = AnimationUtils.lerp(centerX, getWidth() / 2f, ct);
 				float targetY = AnimationUtils.lerp(centerY, getHeight() / 2f, ct);
 				float targetScale = AnimationUtils.lerp(scale, initialScale, t);

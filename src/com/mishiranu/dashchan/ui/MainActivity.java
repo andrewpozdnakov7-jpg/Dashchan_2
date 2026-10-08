@@ -1,5 +1,8 @@
 package com.mishiranu.dashchan.ui;
 
+import static com.mishiranu.dashchan.ui.PageSessionStore.EXTRA_PAGES_STATE_VERSION;
+import static com.mishiranu.dashchan.ui.PageSessionStore.PAGES_STATE_VERSION;
+
 import android.Manifest;
 import android.animation.LayoutTransition;
 import android.app.AlertDialog;
@@ -18,12 +21,10 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
-import android.os.Parcel;
 import android.os.SystemClock;
 import android.text.TextUtils;
 import android.os.Trace;
 import android.provider.DocumentsContract;
-import android.util.AtomicFile;
 import android.util.Log;
 import android.util.Pair;
 import android.view.ActionMode;
@@ -96,24 +97,22 @@ import com.mishiranu.dashchan.util.ConcatIterable;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
 import com.mishiranu.dashchan.util.DrawerToggle;
 import com.mishiranu.dashchan.util.FlagUtils;
-import com.mishiranu.dashchan.util.IOUtils;
 import com.mishiranu.dashchan.util.NavigationUtils;
 import com.mishiranu.dashchan.util.ResourceUtils;
+import com.mishiranu.dashchan.util.InterfaceMotion;
+import com.mishiranu.dashchan.util.ThreadMotionKey;
+import com.mishiranu.dashchan.widget.ThreadMotionLayout;
 import com.mishiranu.dashchan.util.PerformanceDiagnostics;
 import com.mishiranu.dashchan.util.FragmentAccessDiagnostics;
-import com.mishiranu.dashchan.util.NavigationRequestQueue;
 import com.mishiranu.dashchan.util.SharedPreferences;
 import com.mishiranu.dashchan.util.ViewUtils;
 import com.mishiranu.dashchan.widget.ClickableToast;
 import com.mishiranu.dashchan.widget.CustomDrawerLayout;
+import com.mishiranu.dashchan.widget.DrawerMotionController;
 import com.mishiranu.dashchan.widget.ExpandedScreen;
 import com.mishiranu.dashchan.widget.ThemeEngine;
 import com.mishiranu.dashchan.widget.ViewFactory;
-import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -136,9 +135,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	private static final String EXTRA_DRAWER_EXPANDED = "drawerExpanded";
 	private static final String EXTRA_DRAWER_CHAN_SELECT_MODE = "drawerChanSelectMode";
 	private static final String EXTRA_STORAGE_REQUEST_STATE = "storageRequestState";
-	private static final String EXTRA_PAGES_STATE_VERSION = "pagesStateVersion";
 	private static final String EXTRA_PAGES_STATE_STORED_EXTERNALLY = "pagesStateStoredExternally";
-	private static final int PAGES_STATE_VERSION = 1;
 	private static final int REQUEST_CODE_POST_NOTIFICATIONS = 1;
 
 	private static final PageFragment REFERENCE_FRAGMENT = new PageFragment();
@@ -178,35 +175,37 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	private FrameLayout drawerParent;
 	private CustomDrawerLayout drawerLayout;
 	private DrawerToggle drawerToggle;
-	private final NavigationRequestQueue contentNavigation = new NavigationRequestQueue();
-	private ContentFragment pendingContentFragment;
-	private PageItem pendingContentPageItem;
-	private int pendingContentTicket;
-	private boolean contentDrainPosted;
-	private boolean saveSessionAfterNavigation;
-	private final Runnable drainContentNavigation = () -> {
-		contentDrainPosted = false;
-		if (isFinishing() || isDestroyed()) return;
-		PerformanceDiagnostics.run("ContentNavigation/drain",
-				() -> contentNavigation.drainOne(getSupportFragmentManager().isStateSaved()));
-		scheduleContentNavigationDrain();
-	};
+	private DrawerMotionController drawerMotion;
+	private ThreadMotionController threadMotion;
+	private ScreenMotionController screenMotion;
+	private final PageSessionStore pageSessionStore = new PageSessionStore(this::getFilesDir,
+			() -> CacheManager.getInstance().getInternalCacheFile("saved-pages"), getClass().getClassLoader());
+	private final ContentNavigationCoordinator contentNavigation = new ContentNavigationCoordinator(
+			new ContentNavigationCoordinator.Host() {
+				@Override public boolean isUnavailable() { return isFinishing() || isDestroyed(); }
+				@Override public boolean isStateSaved() { return getSupportFragmentManager().isStateSaved(); }
+				@Override public void post(Runnable work) { ConcurrentUtils.HANDLER.post(work); }
+				@Override public void remove(Runnable work) { ConcurrentUtils.HANDLER.removeCallbacks(work); }
+			});
 	private final FragmentManager.FragmentLifecycleCallbacks contentLifecycle =
 			new FragmentManager.FragmentLifecycleCallbacks() {
 		@Override
 		public void onFragmentPreAttached(@NonNull FragmentManager manager, @NonNull Fragment fragment,
 				@NonNull Context context) {
-			if (fragment == pendingContentFragment) {
+			if (fragment instanceof ContentFragment && contentNavigation.isPendingFragment((ContentFragment) fragment)) {
 				// Bind metadata before the destination's onCreate/onViewCreated callbacks.
-				currentPageItem = pendingContentPageItem;
+				currentPageItem = contentNavigation.pendingPageItem();
 			}
 		}
 	};
-
-	private Runnable pendingDrawerNavigation;
-	private boolean performingDrawerNavigation;
-	private boolean drawerNavigationTransitionRunning;
-	private final ArrayList<Runnable> deferredDrawerUiWork = new ArrayList<>();
+	private final DrawerNavigationCoordinator drawerNavigation = new DrawerNavigationCoordinator(
+			new DrawerNavigationCoordinator.Host() {
+				@Override public boolean isWide() { return wideMode; }
+				@Override public boolean isDrawerVisible() { return drawerLayout.isDrawerVisible(GravityCompat.START); }
+				@Override public void cancelPrewarm() { uiManager.view().cancelPostViewPrewarm(); }
+				@Override public void closeDrawer() { drawerLayout.closeDrawer(GravityCompat.START); }
+				@Override public void postAfterClose(Runnable work) { drawerLayout.post(work); }
+			});
 	private final HashSet<String> navigationAreaLockers = new HashSet<>();
 
 	private ExpandedScreen expandedScreen;
@@ -254,8 +253,40 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 			VideoDiagnostics.recordUi("pip_return host_create saved=" + (savedInstanceState != null));
 		}
 		getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING);
+		CreationLayout layout = createDrawerAndToolbar();
+		createDownloadDialog();
+		attachContentInfrastructure(expandedScreenInit, layout);
+		restoreDrawerPresentation(savedInstanceState);
+		CreationRestoreState state = readCreationState(savedInstanceState);
+		restoreNavigationStacks(state);
+		restoreCurrentContent(state);
+		initializeStartupNavigation(savedInstanceState, state.restoredPagesSession);
+		finishCreation();
+	}
+
+	private static final class CreationLayout {
+		final int drawerBackground;
+		final FrameLayout drawerInterlayer;
+		final View toolbarLayout;
+		CreationLayout(int drawerBackground, FrameLayout drawerInterlayer, View toolbarLayout) {
+			this.drawerBackground = drawerBackground;
+			this.drawerInterlayer = drawerInterlayer;
+			this.toolbarLayout = toolbarLayout;
+		}
+	}
+
+	private static final class CreationRestoreState {
+		Bundle pagesState;
+		ContentFragment currentFragmentFromSaved;
+		StackItem currentStackItemFromSaved;
+		boolean restoredPagesSession;
+	}
+
+	private CreationLayout createDrawerAndToolbar() {
 		float density = ResourceUtils.obtainDensity(this);
 		setContentView(R.layout.activity_main);
+		ThreadMotionLayout motionHost = findViewById(R.id.thread_motion_host);
+		threadMotion = new ThreadMotionController(motionHost);
 		ClickableToast.register(this);
 		ForegroundManager.getInstance().register(this);
 		FavoritesStorage.getInstance().getObservable().register(this);
@@ -293,11 +324,13 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		layoutTransition.setDuration(100);
 		toolbarExtra.setLayoutTransition(layoutTransition);
 		View toolbarLayout = drawerInterlayer.findViewById(R.id.toolbar_layout);
+		screenMotion = new ScreenMotionController(motionHost, drawerInterlayer, toolbar, toolbarExtra);
 
 		drawerToggle = new DrawerToggle(this, toolbarHolder != null
 				? toolbarHolder.toolbar.getContext() : null, drawerLayout);
 		drawerCommon.setElevation(4f * density);
 		drawerWide.setElevation(4f * density);
+		drawerMotion = new DrawerMotionController(drawerLayout, drawerCommon);
 		drawerLayout.addDrawerListener(drawerToggle);
 		drawerLayout.addDrawerListener(drawerForm);
 		drawerLayout.addDrawerListener(new DrawerActionModeListener());
@@ -306,7 +339,10 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		if (toolbarHolder == null) {
 			drawerLayout.addDrawerListener(new ExpandedScreenDrawerLocker());
 		}
+		return new CreationLayout(drawerBackground, drawerInterlayer, toolbarLayout);
+	}
 
+	private void createDownloadDialog() {
 		downloadDialog = new DownloadDialog(this, new DownloadDialog.Callback() {
 			@Override
 			public void resolve(DownloadService.ChoiceRequest choiceRequest,
@@ -324,7 +360,12 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 				}
 			}
 		});
+	}
 
+	private void attachContentInfrastructure(ExpandedScreen.Init expandedScreenInit, CreationLayout layout) {
+		int drawerBackground = layout.drawerBackground;
+		FrameLayout drawerInterlayer = layout.drawerInterlayer;
+		View toolbarLayout = layout.toolbarLayout;
 		updateWideConfiguration(true);
 		expandedScreen = new ExpandedScreen(expandedScreenInit, drawerLayout, toolbarLayout, drawerInterlayer,
 				drawerParent, drawerForm.getContentView(), drawerForm.getHeaderView(), drawerBackground);
@@ -351,6 +392,9 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		}
 		bindService(new Intent(this, PostingService.class), postingConnection, BIND_AUTO_CREATE);
 		bindService(new Intent(this, DownloadService.class), downloadConnection, BIND_AUTO_CREATE);
+	}
+
+	private void restoreDrawerPresentation(Bundle savedInstanceState) {
 		boolean allowSelectChan = drawerForm.hasMultipleChans();
 		if (savedInstanceState == null) {
 			Preferences.DrawerInitialPosition drawerInitialPosition = Preferences.getDrawerInitialPosition();
@@ -369,59 +413,58 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 			drawerForm.setChanSelectMode(allowSelectChan &&
 					savedInstanceState.getBoolean(EXTRA_DRAWER_CHAN_SELECT_MODE));
 		}
+	}
 
+	private CreationRestoreState readCreationState(Bundle savedInstanceState) {
 		instanceViewModel = new ViewModelProvider(this).get(InstanceViewModel.class);
 		storageRequestState = savedInstanceState != null ? StorageRequestState
 				.valueOf(savedInstanceState.getString(EXTRA_STORAGE_REQUEST_STATE)) : StorageRequestState.NONE;
 
-		Bundle pagesState = savedInstanceState;
+		CreationRestoreState state = new CreationRestoreState();
+		state.pagesState = savedInstanceState;
 		if (savedInstanceState != null &&
 				savedInstanceState.getBoolean(EXTRA_PAGES_STATE_STORED_EXTERNALLY)) {
-			pagesState = readPagesState(getPagesInstanceStateFile(), true, true);
-			if (pagesState == null) {
-				// Keep the restored current page usable even if the external state was removed or damaged.
-				pagesState = savedInstanceState;
-			}
+			state.pagesState = pageSessionStore.readPagesInstanceStateOrFallback(savedInstanceState);
 		}
 
-		ContentFragment currentFragmentFromSaved = null;
-		StackItem currentStackItemFromSaved = null;
-		boolean restoredPagesSession = false;
 		if (savedInstanceState == null) {
 			File file = getSavedPagesFile();
-			pagesState = readPagesState(file, true, false);
-			if (pagesState == null) {
+			state.pagesState = readPagesState(file, true, false);
+			if (state.pagesState == null) {
 				File sessionFile = getPagesSessionFile();
 				if (Preferences.isRestorePages()) {
-					pagesState = readPagesState(sessionFile, false, true);
-					restoredPagesSession = pagesState != null;
+					state.pagesState = readPagesState(sessionFile, false, true);
+					state.restoredPagesSession = state.pagesState != null;
 				} else {
 					deletePagesState(sessionFile);
 				}
 			}
-			if (pagesState != null) {
+			if (state.pagesState != null) {
 				try {
-					StackItem stackItem = AndroidUtils.getParcelable(pagesState,
+					StackItem stackItem = AndroidUtils.getParcelable(state.pagesState,
 							EXTRA_CURRENT_FRAGMENT, StackItem.class);
-					currentStackItemFromSaved = stackItem;
-					currentFragmentFromSaved = stackItem != null ? (ContentFragment) stackItem.create(null) : null;
+					state.currentStackItemFromSaved = stackItem;
+					state.currentFragmentFromSaved = stackItem != null ? (ContentFragment) stackItem.create(null) : null;
 				} catch (RuntimeException e) {
-					currentFragmentFromSaved = null;
+					state.currentFragmentFromSaved = null;
 				}
-				if (currentFragmentFromSaved == null) {
-					pagesState = null;
-					restoredPagesSession = false;
+				if (state.currentFragmentFromSaved == null) {
+					state.pagesState = null;
+					state.restoredPagesSession = false;
 					deletePagesState(getPagesSessionFile());
 				}
 			}
 		}
+		return state;
+	}
 
-		if (pagesState != null) {
-			ArrayList<StackItem> restoredFragments = AndroidUtils.getParcelableArrayList(pagesState,
+	private void restoreNavigationStacks(CreationRestoreState state) {
+		if (state.pagesState != null) {
+			ArrayList<StackItem> restoredFragments = AndroidUtils.getParcelableArrayList(state.pagesState,
 					EXTRA_FRAGMENTS, StackItem.class);
-			ArrayList<SavedPageItem> restoredStackPageItems = AndroidUtils.getParcelableArrayList(pagesState,
+			ArrayList<SavedPageItem> restoredStackPageItems = AndroidUtils.getParcelableArrayList(state.pagesState,
 					EXTRA_STACK_PAGE_ITEMS, SavedPageItem.class);
-			ArrayList<SavedPageItem> restoredPreservedPageItems = AndroidUtils.getParcelableArrayList(pagesState,
+			ArrayList<SavedPageItem> restoredPreservedPageItems = AndroidUtils.getParcelableArrayList(state.pagesState,
 					EXTRA_PRESERVED_PAGE_ITEMS, SavedPageItem.class);
 			if (restoredFragments != null) {
 				fragments.addAll(restoredFragments);
@@ -432,8 +475,8 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 			if (restoredPreservedPageItems != null) {
 				preservedPageItems.addAll(restoredPreservedPageItems);
 			}
-			currentPageItem = AndroidUtils.getParcelable(pagesState, EXTRA_CURRENT_PAGE_ITEM, PageItem.class);
-			if (restoredPagesSession) {
+			currentPageItem = AndroidUtils.getParcelable(state.pagesState, EXTRA_CURRENT_PAGE_ITEM, PageItem.class);
+			if (state.restoredPagesSession) {
 				rebasePagesRealtime();
 			}
 		}
@@ -443,29 +486,32 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 				iterator.remove();
 			}
 		}
-		if (currentFragmentFromSaved != null) {
-			if (currentFragmentFromSaved instanceof PageFragment) {
-				Page page = ((PageFragment) currentFragmentFromSaved).getPage();
+	}
+
+	private void restoreCurrentContent(CreationRestoreState state) {
+		if (state.currentFragmentFromSaved != null) {
+			if (state.currentFragmentFromSaved instanceof PageFragment) {
+				Page page = ((PageFragment) state.currentFragmentFromSaved).getPage();
 				if (!isPageEnabled(page)) {
 					if (Chan.get(page.chanName).name != null && currentPageItem != null
-							&& currentStackItemFromSaved != null) {
-						preservedPageItems.add(new SavedPageItem(currentStackItemFromSaved,
+							&& state.currentStackItemFromSaved != null) {
+						preservedPageItems.add(new SavedPageItem(state.currentStackItemFromSaved,
 								currentPageItem.createdRealtime, currentPageItem.threadTitle, currentPageItem.allowReturn));
 					}
-					currentFragmentFromSaved = null;
+					state.currentFragmentFromSaved = null;
 					currentPageItem = null;
 				}
 			}
-			if (currentFragmentFromSaved == null) {
+			if (state.currentFragmentFromSaved == null) {
 				SavedPageItem savedPageItem = removeLastEnabledSavedPage();
 				Pair<PageFragment, PageItem> pair = savedPageItem != null ? savedPageItem.create() : null;
 				if (pair != null) {
-					currentFragmentFromSaved = pair.first;
+					state.currentFragmentFromSaved = pair.first;
 					currentPageItem = pair.second;
 				}
 			}
-			if (currentFragmentFromSaved != null) {
-				commitContentFragment(currentFragmentFromSaved, currentPageItem, false);
+			if (state.currentFragmentFromSaved != null) {
+				commitContentFragment(state.currentFragmentFromSaved, currentPageItem, false);
 			}
 		} else {
 			ContentFragment currentFragment = getCurrentFragment("FragmentAccess/onCreate");
@@ -478,7 +524,9 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 				updatePostFragmentConfiguration(currentFragment);
 			}
 		}
+	}
 
+	private void initializeStartupNavigation(Bundle savedInstanceState, boolean restoredPagesSession) {
 		boolean handleInitialIntent = !FlagUtils.get(getIntent().getFlags(), Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY)
 				&& (savedInstanceState == null || restoredPagesSession);
 		Runnable initializeNavigation = () -> {
@@ -499,7 +547,9 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 			}
 		};
 		if (!deferContentNavigation(initializeNavigation)) initializeNavigation.run();
+	}
 
+	private void finishCreation() {
 		ExtensionsTrustLoop.handleUntrustedExtensions(this, extensionsTrustLoopState);
 		if (storageRequestState == StorageRequestState.INITIAL_INSTRUCTIONS) {
 			showInitialStorageSetupDialog();
@@ -567,75 +617,17 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		outState.putParcelable(EXTRA_CURRENT_PAGE_ITEM, currentPageItem);
 	}
 
-	private File getSavedPagesFile() {
-		return CacheManager.getInstance().getInternalCacheFile("saved-pages");
-	}
+	private File getSavedPagesFile() { return pageSessionStore.getSavedPagesFile(); }
 
-	private File getPagesSessionFile() {
-		return new File(getFilesDir(), "pages-session");
-	}
+	private File getPagesSessionFile() { return pageSessionStore.getPagesSessionFile(); }
 
-	private File getPagesInstanceStateFile() {
-		return new File(getFilesDir(), "pages-instance-state");
-	}
+	private File getPagesInstanceStateFile() { return pageSessionStore.getPagesInstanceStateFile(); }
 
-	private Bundle readPagesState(File file, boolean deleteAfterRead, boolean checkVersion) {
-		if (file == null) {
-			return null;
-		}
-		Parcel parcel = Parcel.obtain();
-		ByteArrayOutputStream output = new ByteArrayOutputStream();
-		AtomicFile atomicFile = new AtomicFile(file);
-		boolean success = false;
-		try (FileInputStream input = atomicFile.openRead()) {
-			IOUtils.copyStream(input, output);
-			byte[] data = output.toByteArray();
-			parcel.unmarshall(data, 0, data.length);
-			parcel.setDataPosition(0);
-			Bundle bundle = new Bundle();
-			bundle.setClassLoader(getClass().getClassLoader());
-			bundle.readFromParcel(parcel);
-			if (checkVersion && bundle.getInt(EXTRA_PAGES_STATE_VERSION, 0) != PAGES_STATE_VERSION) {
-				return null;
-			}
-			success = true;
-			return bundle;
-		} catch (IOException | RuntimeException e) {
-			return null;
-		} finally {
-			parcel.recycle();
-			if (deleteAfterRead || !success) {
-				atomicFile.delete();
-			}
-		}
-	}
+	private Bundle readPagesState(File file, boolean deleteAfterRead, boolean checkVersion) { return pageSessionStore.readPagesState(file, deleteAfterRead, checkVersion); }
 
-	private static void deletePagesState(File file) {
-		if (file != null) {
-			new AtomicFile(file).delete();
-		}
-	}
+	private static void deletePagesState(File file) { PageSessionStore.deletePagesState(file); }
 
-	private boolean writePagesState(File file, Bundle state) {
-		Parcel parcel = Parcel.obtain();
-		AtomicFile atomicFile = new AtomicFile(file);
-		FileOutputStream output = null;
-		try {
-			state.writeToParcel(parcel, 0);
-			byte[] data = parcel.marshall();
-			output = atomicFile.startWrite();
-			output.write(data);
-			atomicFile.finishWrite(output);
-			return true;
-		} catch (IOException | RuntimeException e) {
-			if (output != null) {
-				atomicFile.failWrite(output);
-			}
-			return false;
-		} finally {
-			parcel.recycle();
-		}
-	}
+	private boolean writePagesState(File file, Bundle state) { return pageSessionStore.writePagesState(file, state); }
 
 	private Bundle createPagesState(boolean pagesOnly) {
 		ContentFragment currentFragment = getCurrentFragment("FragmentAccess/createPagesState");
@@ -673,10 +665,10 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	private void savePagesSession() {
 		if (contentNavigation.isPending()) {
-			saveSessionAfterNavigation = true;
+			contentNavigation.setSaveSessionPending(true);
 			return;
 		}
-		saveSessionAfterNavigation = false;
+		contentNavigation.setSaveSessionPending(false);
 		File file = getPagesSessionFile();
 		if (!Preferences.isRestorePages()) {
 			deletePagesState(file);
@@ -752,52 +744,34 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		}
 	}
 
-	private boolean deferContentNavigation(Runnable action) {
-		if (isFinishing() || isDestroyed()) return true;
-		boolean deferred = contentNavigation.defer(action, getSupportFragmentManager().isStateSaved());
-		if (deferred) scheduleContentNavigationDrain();
-		return deferred;
-	}
+	private boolean deferContentNavigation(Runnable action) { return contentNavigation.defer(action); }
 
-	private void scheduleContentNavigationDrain() {
-		if (!contentDrainPosted && !contentNavigation.isPending() && contentNavigation.hasRequests()
-				&& !isFinishing() && !isDestroyed() && !getSupportFragmentManager().isStateSaved()) {
-			contentDrainPosted = true;
-			ConcurrentUtils.HANDLER.post(drainContentNavigation);
-		}
-	}
+	private void scheduleContentNavigationDrain() { contentNavigation.scheduleDrain(); }
 
 	private void commitContentFragment(ContentFragment fragment, PageItem pageItem, boolean animate) {
-		int ticket = contentNavigation.begin();
-		pendingContentFragment = fragment;
-		pendingContentPageItem = pageItem;
-		pendingContentTicket = ticket;
-		Trace.beginAsyncSection("ContentNavigation/commit", ticket);
+		commitContentFragment(fragment, pageItem, animate, FragmentTransaction.TRANSIT_FRAGMENT_OPEN);
+	}
+
+	private void commitContentFragment(ContentFragment fragment, PageItem pageItem, boolean animate,
+			int motionTransition) {
+		int ticket = contentNavigation.begin(fragment, pageItem);
 		try {
 			FragmentTransaction transaction = getSupportFragmentManager().beginTransaction();
-			if (animate) transaction.setTransition(FragmentTransaction.TRANSIT_FRAGMENT_OPEN);
+			if (animate) transaction.setTransition(InterfaceMotion.isEnabled() ? motionTransition
+					: FragmentTransaction.TRANSIT_FRAGMENT_OPEN);
 			transaction.replace(R.id.content_fragment, fragment).runOnCommit(() -> {
 				if (!contentNavigation.complete(ticket)) return;
-				Trace.endAsyncSection("ContentNavigation/commit", ticket);
-				pendingContentFragment = null;
-				pendingContentPageItem = null;
-				pendingContentTicket = 0;
 				if (!isFinishing() && !isDestroyed()) {
 					currentPageItem = pageItem;
 					PerformanceDiagnostics.run("ContentNavigation/committedConfiguration",
 							() -> updatePostFragmentConfiguration(fragment));
 					scheduleSystemBackCallbackUpdate();
-					if (saveSessionAfterNavigation) savePagesSession();
+					if (contentNavigation.shouldSaveSession()) savePagesSession();
 					scheduleContentNavigationDrain();
 				}
 			}).commit();
 		} catch (RuntimeException | Error e) {
-			if (contentNavigation.complete(ticket)) {
-				Trace.endAsyncSection("ContentNavigation/commit", ticket);
-				pendingContentFragment = null;
-				pendingContentPageItem = null;
-				pendingContentTicket = 0;
-			}
+			contentNavigation.complete(ticket);
 			throw e;
 		}
 	}
@@ -847,6 +821,17 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	public void navigatePosts(String chanName, String boardName, String threadNumber,
 			PostNumber postNumber, String threadTitle) {
 		navigatePosts(chanName, boardName, threadNumber, postNumber, threadTitle, false, false);
+	}
+
+	@Override
+	public void navigatePostsFromCard(String chanName, String boardName, String threadNumber,
+			PostNumber postNumber, String threadTitle, View source) {
+		ContentFragment current = getCurrentFragment("FragmentAccess/navigatePostsFromCard");
+		ThreadMotionController.Opening opening = current instanceof PageFragment && source != null
+				? new ThreadMotionController.Opening(((PageFragment) current).getRetainId(),
+						new ThreadMotionKey(chanName, boardName, threadNumber), source) : null;
+		navigateData(chanName, boardName, threadNumber, postNumber, threadTitle, null,
+				FLAG_DATA_CLOSE_OVERLAYS, opening);
 	}
 
 	private void navigatePosts(String chanName, String boardName, String threadNumber,
@@ -1248,9 +1233,14 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	private void navigateData(String chanName, String boardName, String threadNumber, PostNumber postNumber,
 			String threadTitle, String searchQuery, int dataFlags) {
+		navigateData(chanName, boardName, threadNumber, postNumber, threadTitle, searchQuery, dataFlags, null);
+	}
+
+	private void navigateData(String chanName, String boardName, String threadNumber, PostNumber postNumber,
+			String threadTitle, String searchQuery, int dataFlags, ThreadMotionController.Opening opening) {
 		String requestedBoard = boardName;
 		if (deferContentNavigation(() -> navigateData(chanName, requestedBoard, threadNumber, postNumber,
-				threadTitle, searchQuery, dataFlags))) return;
+				threadTitle, searchQuery, dataFlags, opening))) return;
 		Chan chan = Chan.get(chanName);
 		if (chan.name == null) {
 			return;
@@ -1270,7 +1260,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 					FlagUtils.get(dataFlags, FLAG_DATA_FROM_CACHE));
 			Page.Content content = searchQuery != null ? Page.Content.SEARCH
 					: threadNumber == null ? Page.Content.THREADS : Page.Content.POSTS;
-			navigatePage(content, chan.name, boardName, threadNumber, postNumber, threadTitle, searchQuery, pageFlags);
+			navigatePage(content, chan.name, boardName, threadNumber, postNumber, threadTitle, searchQuery, pageFlags, opening);
 		} else {
 			String currentChanName = null;
 			ContentFragment currentFragment = getCurrentFragment("FragmentAccess/navigateData");
@@ -1340,8 +1330,14 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	private void navigatePage(Page.Content content, String chanName, String boardName,
 			String threadNumber, PostNumber postNumber, String threadTitle, String searchQuery, int pageFlags) {
+		navigatePage(content, chanName, boardName, threadNumber, postNumber, threadTitle, searchQuery, pageFlags, null);
+	}
+
+	private void navigatePage(Page.Content content, String chanName, String boardName,
+			String threadNumber, PostNumber postNumber, String threadTitle, String searchQuery, int pageFlags,
+			ThreadMotionController.Opening opening) {
 		if (deferContentNavigation(() -> navigatePage(content, chanName, boardName, threadNumber, postNumber,
-				threadTitle, searchQuery, pageFlags))) return;
+				threadTitle, searchQuery, pageFlags, opening))) return;
 		ContentFragment currentFragment = getCurrentFragment("FragmentAccess/navigatePage");
 		Page currentPage = currentFragment instanceof PageFragment
 				? ((PageFragment) currentFragment).getPage() : null;
@@ -1407,12 +1403,23 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		if (FlagUtils.get(pageFlags, FLAG_PAGE_RESET_SCROLL)) {
 			pair.first.requestResetScroll();
 		}
-		navigateFragment(pair.first, pair.second, FlagUtils.get(pageFlags, FLAG_PAGE_CLOSE_OVERLAYS));
+		navigateFragment(pair.first, pair.second, FlagUtils.get(pageFlags, FLAG_PAGE_CLOSE_OVERLAYS),
+				navigationMotionTransition(), opening);
+	}
+
+	private int navigationMotionTransition() {
+		int scoped = contentNavigation.requestTransition();
+		return scoped != FragmentTransaction.TRANSIT_NONE ? scoped : drawerNavigation.isPerforming()
+				? FragmentTransaction.TRANSIT_FRAGMENT_FADE : FragmentTransaction.TRANSIT_FRAGMENT_OPEN;
 	}
 
 	private void navigateSavedPage(SavedPageItem savedPageItem, boolean closeOverlays) {
+		navigateSavedPage(savedPageItem, closeOverlays, navigationMotionTransition());
+	}
+
+	private void navigateSavedPage(SavedPageItem savedPageItem, boolean closeOverlays, int motionTransition) {
 		Pair<PageFragment, PageItem> pair = savedPageItem.create();
-		navigateFragment(pair.first, pair.second, closeOverlays);
+		navigateFragment(pair.first, pair.second, closeOverlays, motionTransition);
 	}
 
 	@Override
@@ -1427,12 +1434,30 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	}
 
 	private void navigateFragment(ContentFragment fragment, PageItem pageItem, boolean closeOverlays) {
-		if (deferContentNavigation(() -> navigateFragment(fragment, pageItem, closeOverlays))) return;
+		navigateFragment(fragment, pageItem, closeOverlays, navigationMotionTransition());
+	}
+
+	private void navigateFragment(ContentFragment fragment, PageItem pageItem, boolean closeOverlays,
+			int motionTransition) {
+		navigateFragment(fragment, pageItem, closeOverlays, motionTransition, null);
+	}
+
+	private void navigateFragment(ContentFragment fragment, PageItem pageItem, boolean closeOverlays,
+			int motionTransition, ThreadMotionController.Opening opening) {
+		if (deferContentNavigation(() -> navigateFragment(fragment, pageItem, closeOverlays,
+				motionTransition, opening))) return;
 		if (closeOverlays) {
 			closeOverlaysForNavigation();
 		}
 		FragmentManager fragmentManager = getSupportFragmentManager();
 		ContentFragment currentFragment = getCurrentFragment("FragmentAccess/navigateFragment");
+		if (screenMotion != null) screenMotion.finish();
+		ThreadMotionController.Session session = threadMotion != null
+				? threadMotion.prepare(currentFragment, fragment, motionTransition, opening) : null;
+		fragment.setThreadMotionSession(session);
+		ScreenMotionController.Session screenSession = screenMotion != null
+				? screenMotion.prepare(currentFragment, fragment, motionTransition, session != null) : null;
+		fragment.setScreenMotionSession(screenSession);
 		if (currentFragment instanceof PageFragment) {
 			// currentPageItem == null means page was deleted
 			if (currentPageItem != null) {
@@ -1460,7 +1485,13 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 			pageItem.createdRealtime = SystemClock.elapsedRealtime();
 		}
 		// Configuration belongs to this destination and runs after its own commit, not via a getter flush.
-		commitContentFragment(fragment, pageItem, true);
+		try {
+			commitContentFragment(fragment, pageItem, true, motionTransition);
+		} catch (RuntimeException | Error e) {
+			if (screenMotion != null) screenMotion.finish();
+			if (threadMotion != null) threadMotion.finish();
+			throw e;
+		}
 
 		if (currentFragment instanceof PageFragment || fragment instanceof PageFragment) {
 			HashSet<String> retainIds = new HashSet<>(1 + stackPageItems.size() + preservedPageItems.size());
@@ -1492,79 +1523,14 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		}
 	}
 
-	private boolean scheduleDrawerNavigation(Runnable navigation) {
-		if (!performingDrawerNavigation && !wideMode && drawerLayout.isDrawerVisible(GravityCompat.START)) {
-			// Start both transitions from the click event. Posting the navigation to the next animation frame puts
-			// fragment creation directly into the drawer frame and causes visible stalls on 120 Hz devices.
-			pendingDrawerNavigation = navigation;
-			drawerNavigationTransitionRunning = true;
-			uiManager.view().cancelPostViewPrewarm();
-			Trace.beginSection("DrawerNavigation/transition_start");
-			Trace.endSection();
-			Log.d("DrawerNavPerf", "event=transition_start");
-			drawerLayout.closeDrawer(GravityCompat.START);
-			runPendingDrawerNavigation();
-			return true;
-		}
-		return false;
-	}
+	private boolean scheduleDrawerNavigation(Runnable navigation) { return drawerNavigation.schedule(navigation); }
 
-	private void runPendingDrawerNavigation() {
-		Runnable navigation = pendingDrawerNavigation;
-		pendingDrawerNavigation = null;
-		if (navigation != null) {
-			Trace.beginSection("MainActivity#drawerNavigation");
-			long start = SystemClock.elapsedRealtime();
-			performingDrawerNavigation = true;
-			try {
-				navigation.run();
-			} finally {
-				performingDrawerNavigation = false;
-				Trace.endSection();
-				Log.d("DrawerNavPerf", "event=navigation_end elapsed_ms="
-						+ (SystemClock.elapsedRealtime() - start));
-			}
-		}
-	}
+	private void runPendingDrawerNavigation() { drawerNavigation.runPending(); }
 
 	@Override
-	public boolean deferUiWorkUntilDrawerIdle(Runnable runnable) {
-		if (!drawerNavigationTransitionRunning || wideMode) {
-			return false;
-		}
-		deferredDrawerUiWork.add(runnable);
-		Trace.beginSection("DrawerNavigation/work_deferred");
-		Trace.endSection();
-		Log.d("DrawerNavPerf", "event=work_deferred count=" + deferredDrawerUiWork.size());
-		return true;
-	}
+	public boolean deferUiWorkUntilDrawerIdle(Runnable runnable) { return drawerNavigation.deferUiWork(runnable); }
 
-	private void finishDrawerNavigationTransition() {
-		drawerNavigationTransitionRunning = false;
-		if (deferredDrawerUiWork.isEmpty()) {
-			Log.d("DrawerNavPerf", "event=drawer_closed deferred_count=0");
-			return;
-		}
-		ArrayList<Runnable> work = new ArrayList<>(deferredDrawerUiWork);
-		deferredDrawerUiWork.clear();
-		Log.d("DrawerNavPerf", "event=drawer_closed deferred_count=" + work.size());
-		// Do not use postOnAnimation here: a Choreographer callback makes the deferred adapter update
-		// part of the first frame after the drawer closes. Run it as a regular main-loop message instead,
-		// so the final drawer frame is committed before heavier destination work begins.
-		drawerLayout.post(() -> {
-			Trace.beginSection("DrawerNavigation/deferred_work_after_close");
-			long start = SystemClock.elapsedRealtime();
-			try {
-				for (Runnable runnable : work) {
-					runnable.run();
-				}
-			} finally {
-				Trace.endSection();
-				Log.d("DrawerNavPerf", "event=deferred_work_end count=" + work.size()
-						+ " elapsed_ms=" + (SystemClock.elapsedRealtime() - start));
-			}
-		});
-	}
+	private void finishDrawerNavigationTransition() { drawerNavigation.finishTransition(); }
 
 	private void updatePostFragmentConfiguration() {
 		updatePostFragmentConfiguration(getCurrentFragment("FragmentAccess/updatePostFragmentConfiguration"));
@@ -1691,6 +1657,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		Configuration configuration = getResources().getConfiguration();
 		boolean newWideMode = ViewUtils.isDrawerLockable(this) && Preferences.isDrawerLocked();
 		if (wideMode != newWideMode || forced) {
+			if (drawerMotion != null) drawerMotion.suspend();
 			wideMode = newWideMode;
 			if (!forced) {
 				expandedScreen.setDrawerOverToolbarEnabled(!wideMode);
@@ -1701,6 +1668,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 			ViewUtils.removeFromParent(drawerParent);
 			(wideMode ? drawerWide : drawerCommon).addView(drawerParent);
 			drawerForm.setDrawerAlwaysVisible(wideMode);
+			if (drawerMotion != null && !wideMode) drawerMotion.resume();
 			invalidateHomeUpState();
 		}
 		float density = ResourceUtils.obtainDensity(this);
@@ -1724,6 +1692,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	@Override
 	protected void onStart() {
 		super.onStart();
+		if (drawerMotion != null) drawerMotion.resume();
 
 		if (!instanceViewModel.updateCheckStarted && Preferences.isUpdateAutoCheckEnabled()) {
 			instanceViewModel.updateCheckStarted = true;
@@ -1850,7 +1819,10 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	@Override
 	protected void onStop() {
+		if (screenMotion != null) screenMotion.finish();
+		if (threadMotion != null) threadMotion.finish();
 		resetPredictiveBackView(false);
+		if (drawerMotion != null) drawerMotion.suspend();
 		clearPictureInPictureReturnCover("host_stop");
 		super.onStop();
 		if (VideoPipActivity.getPendingGalleryReturnToken() != null) {
@@ -1864,12 +1836,9 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	@Override
 	protected void onDestroy() {
-		ConcurrentUtils.HANDLER.removeCallbacks(drainContentNavigation);
+		if (screenMotion != null) screenMotion.finish();
+		if (threadMotion != null) threadMotion.clear();
 		contentNavigation.close();
-		if (pendingContentTicket != 0) Trace.endAsyncSection("ContentNavigation/commit", pendingContentTicket);
-		pendingContentTicket = 0;
-		pendingContentFragment = null;
-		pendingContentPageItem = null;
 		getSupportFragmentManager().unregisterFragmentLifecycleCallbacks(contentLifecycle);
 		super.onDestroy();
 	}
@@ -1933,9 +1902,14 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	private long backPressed = 0;
 	private View predictiveBackView;
 
+	private boolean isDrawerVisibleForBack() {
+		return drawerLayout != null && (drawerLayout.isDrawerOpen(GravityCompat.START) ||
+				InterfaceMotion.isDrawerEnabled() && drawerLayout.isDrawerVisible(GravityCompat.START));
+	}
+
 	private boolean canHandleBackInApp() {
 		if (contentNavigation.isPending() || contentNavigation.hasRequests()) return true;
-		if (!wideMode && drawerLayout != null && drawerLayout.isDrawerOpen(GravityCompat.START)) {
+		if (!wideMode && isDrawerVisibleForBack()) {
 			return true;
 		}
 		ContentFragment currentFragment = getCurrentFragment("FragmentAccess/canHandleBackInApp");
@@ -1961,7 +1935,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	@Override
 	protected boolean isSystemPredictiveBackEnabled() {
-		return Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && Preferences.isPredictiveBackEnabled();
+		return InterfaceMotion.isPredictiveBackEnabled();
 	}
 
 	@Override
@@ -1971,11 +1945,17 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	@Override
 	protected void onSystemBackStarted(BackEventCompat backEvent) {
+		if (screenMotion != null) screenMotion.finish();
+		if (threadMotion != null) threadMotion.finish();
+		if (InterfaceMotion.isEnabled() && InterfaceMotion.duration(1) == 0) return;
+		if (!wideMode && !contentNavigation.isPending() && drawerMotion != null &&
+				drawerMotion.start(backEvent.getSwipeEdge() == BackEventCompat.EDGE_LEFT)) return;
 		if (isSystemPredictiveBackEnabled() && !contentNavigation.isPending() && drawerLayout != null &&
-				!drawerLayout.isDrawerOpen(GravityCompat.START)) {
+				!isDrawerVisibleForBack()) {
 			ContentFragment currentFragment = getCurrentFragment("FragmentAccess/onSystemBackStarted");
 			predictiveBackView = currentFragment != null ? currentFragment.getView() : null;
 			if (predictiveBackView != null) {
+				InterfaceMotion.cancel(predictiveBackView);
 				predictiveBackView.animate().cancel();
 			}
 		}
@@ -1983,6 +1963,10 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	@Override
 	protected void onSystemBackProgressed(BackEventCompat backEvent) {
+		if (drawerMotion != null && drawerMotion.isTracking()) {
+			drawerMotion.progress(backEvent.getProgress(), backEvent.getSwipeEdge() == BackEventCompat.EDGE_LEFT);
+			return;
+		}
 		if (predictiveBackView != null) {
 			float progress = 1f - (float) Math.pow(1f - backEvent.getProgress(), 3f);
 			float direction = backEvent.getSwipeEdge() == BackEventCompat.EDGE_LEFT ? 1f : -1f;
@@ -1996,6 +1980,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	@Override
 	protected void onSystemBackCancelled() {
+		if (drawerMotion != null) drawerMotion.recover(true);
 		resetPredictiveBackView(true);
 	}
 
@@ -2009,7 +1994,14 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		if (view != null) {
 			view.animate().cancel();
 			if (animate && view.isAttachedToWindow()) {
-				view.animate().translationX(0f).scaleX(1f).scaleY(1f).alpha(1f).setDuration(150).start();
+				if (InterfaceMotion.isEnabled()) {
+					view.animate().translationX(0f).scaleX(1f).scaleY(1f).alpha(1f)
+							.setDuration(InterfaceMotion.duration(InterfaceMotion.RECOVERY_DURATION))
+							.setInterpolator(InterfaceMotion.STANDARD).start();
+				} else {
+					view.animate().translationX(0f).scaleX(1f).scaleY(1f).alpha(1f).setDuration(150)
+							.setInterpolator(new android.view.animation.AccelerateDecelerateInterpolator()).start();
+				}
 			} else {
 				view.setTranslationX(0f);
 				view.setScaleX(1f);
@@ -2021,16 +2013,25 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	@Override
 	protected void onSystemBackPressed() {
+		if (screenMotion != null) screenMotion.finish();
+		if (threadMotion != null) threadMotion.finish();
+		if (drawerMotion != null) drawerMotion.recover(true);
 		View predictiveBackView = this.predictiveBackView;
 		this.predictiveBackView = null;
-		onBackPressed(false, true, this::performDefaultBack);
-		resetPredictiveBackView(predictiveBackView, true);
+		if (InterfaceMotion.isEnabled()) {
+			// Hand the root back to FragmentManager before its exit animator starts.
+			resetPredictiveBackView(predictiveBackView, false);
+			onBackPressed(false, true, this::performDefaultBack);
+		} else {
+			onBackPressed(false, true, this::performDefaultBack);
+			resetPredictiveBackView(predictiveBackView, true);
+		}
 		scheduleSystemBackCallbackUpdate();
 	}
 
 	private void onBackPressed(boolean homeHandled, boolean allowTimeout, Runnable close) {
 		if (deferContentNavigation(() -> onBackPressed(homeHandled, allowTimeout, close))) return;
-		if (!wideMode && drawerLayout.isDrawerOpen(GravityCompat.START)) {
+		if (!wideMode && isDrawerVisibleForBack()) {
 			drawerLayout.closeDrawers();
 		} else {
 			ContentFragment currentFragment = getCurrentFragment("FragmentAccess/onBackPressed");
@@ -2049,17 +2050,17 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 						}
 						currentPageItem = null;
 					}
-					navigateSavedPage(savedPageItem, true);
+					navigateSavedPage(savedPageItem, true, FragmentTransaction.TRANSIT_FRAGMENT_CLOSE);
 					handled = true;
 				}
 			} else if (!fragments.isEmpty()) {
 				ContentFragment fragment = (ContentFragment) fragments.remove(fragments.size() - 1).create(null);
-				navigateFragment(fragment, null, true);
+				navigateFragment(fragment, null, true, FragmentTransaction.TRANSIT_FRAGMENT_CLOSE);
 				handled = true;
 			} else {
 				SavedPageItem savedPageItem = removeLastEnabledSavedPage();
 				if (savedPageItem != null) {
-					navigateSavedPage(savedPageItem, true);
+					navigateSavedPage(savedPageItem, true, FragmentTransaction.TRANSIT_FRAGMENT_CLOSE);
 					handled = true;
 				}
 			}
@@ -2250,7 +2251,11 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	private final SharedPreferences.Listener preferencesListener = key -> {
 		drawerForm.updatePreferences();
-		if (Preferences.KEY_PREDICTIVE_BACK.equals(key)) {
+		if (Preferences.KEY_PREDICTIVE_BACK.equals(key) || Preferences.KEY_NEW_INTERFACE_MOTION.equals(key)) {
+			if (screenMotion != null) screenMotion.finish();
+			if (threadMotion != null) threadMotion.clear();
+			resetPredictiveBackView(false);
+			if (drawerMotion != null) drawerMotion.updatePolicy();
 			updateSystemBackCallback();
 		} else if (Preferences.KEY_RESTORE_PAGES.equals(key) && !Preferences.isRestorePages()) {
 			deletePagesState(getPagesSessionFile());
@@ -2259,6 +2264,10 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	@Override
 	public void onSelectChan(String chanName) {
+		contentNavigation.runWithTransition(FragmentTransaction.TRANSIT_FRAGMENT_FADE, () -> handleSelectChan(chanName));
+	}
+
+	private void handleSelectChan(String chanName) {
 		if (deferContentNavigation(() -> onSelectChan(chanName))) return;
 		if (scheduleDrawerNavigation(() -> onSelectChan(chanName))) {
 			return;
@@ -2318,6 +2327,11 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	@Override
 	public void onSelectBoard(String chanName, String boardName, boolean fromCache) {
+		contentNavigation.runWithTransition(FragmentTransaction.TRANSIT_FRAGMENT_FADE,
+				() -> handleSelectBoard(chanName, boardName, fromCache));
+	}
+
+	private void handleSelectBoard(String chanName, String boardName, boolean fromCache) {
 		String requestedBoardName = boardName;
 		if (deferContentNavigation(() -> onSelectBoard(chanName, requestedBoardName, fromCache))) return;
 		if (scheduleDrawerNavigation(() -> onSelectBoard(chanName, requestedBoardName, fromCache))) {
@@ -2338,6 +2352,10 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	@Override
 	public void onSelectCombinedFeed(String feedId) {
+		contentNavigation.runWithTransition(FragmentTransaction.TRANSIT_FRAGMENT_FADE, () -> handleSelectCombinedFeed(feedId));
+	}
+
+	private void handleSelectCombinedFeed(String feedId) {
 		if (deferContentNavigation(() -> onSelectCombinedFeed(feedId))) return;
 		if (scheduleDrawerNavigation(() -> onSelectCombinedFeed(feedId))) {
 			return;
@@ -2376,6 +2394,12 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	@Override
 	public boolean onSelectThread(String chanName, String boardName, String threadNumber, PostNumber postNumber,
+			String threadTitle, boolean fromCache) {
+		return contentNavigation.callWithTransition(FragmentTransaction.TRANSIT_FRAGMENT_FADE,
+				() -> handleSelectThread(chanName, boardName, threadNumber, postNumber, threadTitle, fromCache));
+	}
+
+	private boolean handleSelectThread(String chanName, String boardName, String threadNumber, PostNumber postNumber,
 			String threadTitle, boolean fromCache) {
 		String requestedBoardName = boardName;
 		if (deferContentNavigation(() -> onSelectThread(chanName, requestedBoardName, threadNumber,
@@ -2567,6 +2591,10 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	@Override
 	public void onSelectRedditPage(String url) {
+		contentNavigation.runWithTransition(FragmentTransaction.TRANSIT_FRAGMENT_FADE, () -> handleSelectRedditPage(url));
+	}
+
+	private void handleSelectRedditPage(String url) {
 		if (deferContentNavigation(() -> onSelectRedditPage(url))) return;
 		String normalized = RedditPageStorage.normalizeUrl(url);
 		if (normalized == null) {
@@ -2632,6 +2660,10 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	@Override
 	public void onSelectDrawerMenuItem(int item) {
+		contentNavigation.runWithTransition(FragmentTransaction.TRANSIT_FRAGMENT_FADE, () -> handleSelectDrawerMenuItem(item));
+	}
+
+	private void handleSelectDrawerMenuItem(int item) {
 		if (deferContentNavigation(() -> onSelectDrawerMenuItem(item))) return;
 		if (scheduleDrawerNavigation(() -> onSelectDrawerMenuItem(item))) {
 			return;
@@ -2761,6 +2793,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		if (!wideMode) {
 			drawerLayout.setDrawerLockMode(dragging ? CustomDrawerLayout.LOCK_MODE_LOCKED_OPEN
 					: CustomDrawerLayout.LOCK_MODE_UNLOCKED);
+			if (drawerMotion != null) drawerMotion.onLockModeChanged();
 		}
 	}
 
@@ -3231,7 +3264,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	private class DeferredDrawerNavigationListener implements CustomDrawerLayout.DrawerListener {
 		@Override
 		public void onDrawerSlide(@NonNull View drawerView, float slideOffset) {
-			if (drawerNavigationTransitionRunning) {
+			if (drawerNavigation.isTransitionRunning()) {
 				Trace.setCounter("DrawerNavigation/slide", Math.round(slideOffset * 1000f));
 			}
 		}
@@ -3255,7 +3288,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 			if (newState != CustomDrawerLayout.STATE_IDLE) {
 				uiManager.view().cancelPostViewPrewarm();
 			}
-			if (drawerNavigationTransitionRunning) {
+			if (drawerNavigation.isTransitionRunning()) {
 				Trace.setCounter("DrawerNavigation/state", newState);
 				Log.d("DrawerNavPerf", "event=drawer_state state=" + newState);
 			}
@@ -3281,8 +3314,15 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	}
 
 	private class PredictiveBackDrawerListener implements CustomDrawerLayout.DrawerListener {
+		private boolean visible;
 		@Override
-		public void onDrawerSlide(@NonNull View drawerView, float slideOffset) {}
+		public void onDrawerSlide(@NonNull View drawerView, float slideOffset) {
+			boolean nextVisible = slideOffset > 0f;
+			if (InterfaceMotion.isDrawerEnabled() && visible != nextVisible) {
+				visible = nextVisible;
+				updateSystemBackCallback();
+			}
+		}
 
 		@Override
 		public void onDrawerOpened(@NonNull View drawerView) {

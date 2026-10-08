@@ -6,6 +6,7 @@ import androidx.test.core.app.ActivityScenario;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import com.mishiranu.dashchan.ui.MainActivity;
 import com.mishiranu.dashchan.ui.preference.AboutFragment;
+import com.mishiranu.dashchan.ui.preference.TextFragment;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -30,16 +31,34 @@ public class NavigationLifecycleSmokeTest {
 		}
 	}
 
+	@Test public void rapidSettingsNavigationThenBackSurvivesRecreation() {
+		try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
+			scenario.onActivity(activity -> {
+				activity.pushFragment(new AboutFragment());
+				activity.pushFragment(new TextFragment(TextFragment.Type.PRIVACY_POLICY));
+			});
+			awaitScreen(scenario, TextFragment.class);
+			scenario.recreate();
+			awaitScreen(scenario, TextFragment.class);
+			scenario.onActivity(activity -> activity.getOnBackPressedDispatcher().onBackPressed());
+			awaitScreen(scenario, AboutFragment.class);
+		}
+	}
+
 	private static void awaitAboutScreen(ActivityScenario<MainActivity> scenario) {
+		awaitScreen(scenario, AboutFragment.class);
+	}
+
+	private static void awaitScreen(ActivityScenario<MainActivity> scenario, Class<?> screen) {
 		long deadline = SystemClock.elapsedRealtime() + 5000;
 		AtomicBoolean shown = new AtomicBoolean();
 		do {
-			scenario.onActivity(activity -> shown.set(activity.getSupportFragmentManager()
-					.findFragmentById(R.id.content_fragment) instanceof AboutFragment));
+			scenario.onActivity(activity -> shown.set(screen.isInstance(activity.getSupportFragmentManager()
+					.findFragmentById(R.id.content_fragment))));
 			if (shown.get()) return;
-			// Observe the application's real asynchronous queue; do not force pending transactions.
+			// Observe the real queue without forcing FragmentManager transactions.
 			SystemClock.sleep(20);
 		} while (SystemClock.elapsedRealtime() < deadline);
-		fail("Settings navigation did not finish");
+		fail("Navigation did not finish: " + screen.getSimpleName());
 	}
 }

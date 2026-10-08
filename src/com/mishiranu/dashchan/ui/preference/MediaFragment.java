@@ -78,6 +78,9 @@ public class MediaFragment extends PreferenceFragment implements FragmentHandler
 				.pushFragment(new VideoPreloadFragment()));
 
 		addHeader(R.string.gallery);
+		addCheck(true, Preferences.KEY_CLOSE_GALLERY_ON_BACKGROUND_TAP,
+				Preferences.DEFAULT_CLOSE_GALLERY_ON_BACKGROUND_TAP, R.string.close_gallery_on_background_tap,
+				R.string.close_gallery_on_background_tap__summary);
 		addCheck(true, Preferences.KEY_SCROLL_GALLERY_TO_CURRENT_FILE,
 				Preferences.DEFAULT_SCROLL_GALLERY_TO_CURRENT_FILE, R.string.scroll_gallery_to_current_file,
 				R.string.scroll_gallery_to_current_file__summary);
@@ -140,6 +143,9 @@ public class MediaFragment extends PreferenceFragment implements FragmentHandler
 				R.string.notify_when_download_is_completed, R.string.notify_when_download_is_completed__summary);
 
 		addHeader(R.string.video_player);
+		addCheck(true, Preferences.KEY_HARDWARE_VIDEO_ACCELERATION,
+				Preferences.DEFAULT_HARDWARE_VIDEO_ACCELERATION,
+				R.string.hardware_video_acceleration, R.string.hardware_video_acceleration__summary);
 		Pair<Boolean, String> playerLoadResult = VideoPlayer.loadLibraries(requireContext());
 		if (!playerLoadResult.first) {
 			if (playerLoadResult.second != null) {

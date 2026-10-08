@@ -1,0 +1,6 @@
+Introduced an experimental Material 3-inspired interface with a redesigned side menu and animations for screen, thread, gallery and reply form transitions. Enable it in Settings → Experimental features → New interface animations.
+The new interface includes compact video controls, a central playback button and seeking with position updates while dragging the slider.
+Settings search now includes search history and typo-tolerant matching.
+Settings have been moved to appropriate sections. Offline translation has its own page, and favorite thread monitoring is now under Replies and notifications.
+Tapping the empty space around an image, video or GIF no longer closes the viewer by default. The previous behavior can be enabled in media settings.
+Photo editor blur, mosaic and cover regions can be moved, scaled and rotated. Text and stickers can be placed below effects or above them.

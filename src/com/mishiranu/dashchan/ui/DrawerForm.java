@@ -1,6 +1,8 @@
 package com.mishiranu.dashchan.ui;
 
 import com.mishiranu.dashchan.util.AuditDiagnostics;
+import com.mishiranu.dashchan.ui.DrawerContentController.ListItem;
+import com.mishiranu.dashchan.ui.DrawerContentController.CategoriesOrder;
 import android.annotation.SuppressLint;
 import android.app.AlertDialog;
 import android.content.Context;
@@ -82,6 +84,7 @@ import java.util.regex.Pattern;
 public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> implements EdgeEffectHandler.Shift,
 		DrawerLayout.DrawerListener, EditText.OnEditorActionListener, SortableHelper.Callback<DrawerForm.ViewHolder> {
 	private final Context context;
+	private final DrawerContentController content;
 	private final Callback callback;
 	private final FragmentManager fragmentManager;
 	private final WatcherView.ColorSet watcherViewColorSet;
@@ -107,34 +110,15 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	private final HashSet<String> watcherSupportSet = new HashSet<>();
 
 	private final ArrayList<ListItem> chans = new ArrayList<>();
-	private final ArrayList<ListItem> pages = new ArrayList<>();
-	private final ArrayList<ListItem> pageNavigation = new ArrayList<>();
-	private final ArrayList<ListItem> orderedDrawerItems = new ArrayList<>();
-	private List<Preferences.DrawerSection> drawerSectionOrder;
-	private final ArrayList<Page> collapsedPages = new ArrayList<>();
-	private final ArrayList<RedditPageStorage.Entry> collapsedRedditPages = new ArrayList<>();
-	private final ArrayList<ListItem> favorites = new ArrayList<>();
-	private final ArrayList<ListItem> displayedFavorites = new ArrayList<>();
-	private final ArrayList<ListItem> menu = new ArrayList<>();
 	private final HashMap<WatcherUpdateKey, WatcherService.Counter> pendingWatcherUpdates = new HashMap<>();
 	private static final int PREWARM_ITEM_COUNT = 12;
-	private static final int COLLAPSED_OPEN_THREAD_LIMIT = 12;
 	private boolean drawerPrewarmScheduled;
 	private boolean drawerPrewarmed;
 	private int[] drawerPrewarmViewTypes;
 	private int drawerPrewarmViewTypeIndex;
 
-	private boolean mergeChans = false;
-	private boolean showHistory = false;
-	private boolean combinedFeedsEnabled = false;
-	private boolean redditWebReaderEnabled = false;
-	private boolean trackMyPostsEnabled;
-	private boolean collapseLongOpenThreadsEnabled;
-	private boolean pagesExpanded;
-	private Preferences.PagesListMode pagesListMode = null;
 	private boolean chanSelectMode = false;
 	private boolean showRestartButton = false;
-	private CategoriesOrder categoriesOrder;
 	private String chanName;
 	private int drawerState = DrawerLayout.STATE_IDLE;
 	private boolean drawerOpened;
@@ -159,8 +143,6 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	public static final String CHAN_REDDIT = "reddit-web-reader";
 
 	private final Runnable myPostsObserver = () -> updateConfigurationInternal(chanName, true);
-
-	private enum CategoriesOrder {PAGES_FIRST, FAVORITES_FIRST, HIDE_PAGES}
 
 	public static class Page implements Comparable<Page> {
 		public final String chanName;
@@ -213,6 +195,8 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		this.callback = callback;
 		this.fragmentManager = fragmentManager;
 		this.watcherServiceClient = watcherServiceClient;
+		content = new DrawerContentController(context, () -> this.chanName, callback,
+				item -> watcherServiceClient.getCounter(item.chanName, item.boardName, item.threadNumber).deleted);
 
 		ThemeEngine.Theme theme = ThemeEngine.getTheme(context);
 		int enabledColor = theme.accent;
@@ -410,65 +394,21 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 				ChanManager.getInstance().getDefaultChan() == null) {
 			chanName = CHAN_REDDIT;
 		}
-		if (!CommonUtils.equals(chanName, this.chanName) || force || menu.isEmpty()) {
+		if (!CommonUtils.equals(chanName, this.chanName) || force || content.menu.isEmpty()) {
 			updateConfigurationInternal(chanName, force, createAdapterSnapshot());
 		}
 	}
 
 	private void updateConfigurationInternal(String chanName, boolean force,
 			ArrayList<AdapterItem> previousItems) {
-		if (chanName != null && !isSelectableChanEnabled(chanName)) {
-			chanName = null;
-		}
+		if (chanName != null && !isSelectableChanEnabled(chanName)) chanName = null;
 		if (chanName == null && Preferences.isRedditWebReaderEnabled() &&
-				ChanManager.getInstance().getDefaultChan() == null) {
-			chanName = CHAN_REDDIT;
-		}
-		if (!CommonUtils.equals(chanName, this.chanName) || force || menu.isEmpty()) {
+				ChanManager.getInstance().getDefaultChan() == null) chanName = CHAN_REDDIT;
+		if (!CommonUtils.equals(chanName, this.chanName) || force || content.menu.isEmpty()) {
 			this.chanName = chanName;
-			if (CHAN_REDDIT.equals(chanName)) {
-				Context context = this.context;
-				chanNameView.setText(R.string.forum_reddit);
-				menu.clear();
-				TypedArray typedArray = context.obtainStyledAttributes(new int[] {
-						R.attr.iconDrawerMenuBoards, R.attr.iconDrawerMenuPreferences});
-				int sectionIcon = typedArray.getResourceId(0, 0);
-				int preferencesIcon = typedArray.getResourceId(1, 0);
-				menu.add(new ListItem(ListItem.Type.MENU, MENU_ITEM_REDDIT_SECTIONS, sectionIcon,
-						context.getString(R.string.reddit_sections)));
-				menu.add(new ListItem(ListItem.Type.MENU, MENU_ITEM_REDDIT_OFFICIAL_APP, R.drawable.ic_reddit,
-						context.getString(R.string.reddit_official_app)));
-				menu.add(new ListItem(ListItem.Type.MENU, MENU_ITEM_PREFERENCES, preferencesIcon,
-						context.getString(R.string.preferences)));
-				typedArray.recycle();
-				updateItems(true, true, previousItems);
-				return;
-			}
-			Chan chan = Chan.get(chanName);
-			chanNameView.setText(chan.configuration.getTitle());
-			menu.clear();
-			Context context = this.context;
-			TypedArray typedArray = context.obtainStyledAttributes(new int[] {R.attr.iconDrawerMenuBoards,
-					R.attr.iconDrawerMenuUserBoards, R.attr.iconDrawerMenuHistory,
-					R.attr.iconDrawerMenuLocalArchives, R.attr.iconDrawerMenuPreferences});
-			boolean hasUserBoards = chan.configuration.getOption(ChanConfiguration.OPTION_READ_USER_BOARDS);
-			if (chanName != null && !chan.configuration.getOption(ChanConfiguration.OPTION_SINGLE_BOARD_MODE)) {
-				menu.add(new ListItem(ListItem.Type.MENU, MENU_ITEM_BOARDS, typedArray.getResourceId(0, 0),
-						context.getString(hasUserBoards ? R.string.general_boards : R.string.boards)));
-			}
-			if (chanName != null && hasUserBoards) {
-				menu.add(new ListItem(ListItem.Type.MENU, MENU_ITEM_USER_BOARDS, typedArray.getResourceId(1, 0),
-						context.getString(R.string.user_boards)));
-			}
-			if (chanName != null && Preferences.isRememberHistory()) {
-				menu.add(new ListItem(ListItem.Type.MENU, MENU_ITEM_HISTORY, typedArray.getResourceId(2, 0),
-						context.getString(R.string.history)));
-			}
-			menu.add(new ListItem(ListItem.Type.MENU, MENU_ITEM_LOCAL_ARCHIVES, typedArray.getResourceId(3, 0),
-					context.getString(R.string.local_archives)));
-			menu.add(new ListItem(ListItem.Type.MENU, MENU_ITEM_PREFERENCES, typedArray.getResourceId(4, 0),
-					context.getString(R.string.preferences)));
-			typedArray.recycle();
+			chanNameView.setText(CHAN_REDDIT.equals(chanName) ? context.getString(R.string.forum_reddit)
+					: Chan.get(chanName).configuration.getTitle());
+			content.updateMenu(chanName);
 			updateItems(true, true, previousItems);
 		}
 	}
@@ -546,44 +486,13 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 
 	public void updatePreferences() {
 		ArrayList<AdapterItem> previousItems = createAdapterSnapshot();
-		boolean redditWebReaderEnabledChanged = redditWebReaderEnabled != Preferences.isRedditWebReaderEnabled();
+		boolean redditWebReaderEnabledChanged = content.redditWebReaderEnabled != Preferences.isRedditWebReaderEnabled();
 		if (updatePreferencesWithoutConfiguration()) {
 			if (redditWebReaderEnabledChanged) {
 				updateChansWithoutConfiguration();
 			}
 			updateConfigurationInternal(chanName, true, previousItems);
 		}
-	}
-
-	private boolean updatePreferencesWithoutConfiguration() {
-		boolean mergeChans = Preferences.isMergeChans();
-		boolean showHistory = Preferences.isRememberHistory();
-		boolean combinedFeedsEnabled = Preferences.isCombinedFeedsEnabled();
-		boolean redditWebReaderEnabled = Preferences.isRedditWebReaderEnabled();
-		boolean trackMyPostsEnabled = Preferences.isTrackMyPostsEnabled();
-		boolean collapseLongOpenThreadsEnabled = Preferences.isCollapseLongOpenThreadsEnabled();
-		Preferences.PagesListMode pagesListMode = Preferences.getPagesListMode();
-		List<Preferences.DrawerSection> drawerSectionOrder = Preferences.isDrawerCustomOrderEnabled()
-				? Preferences.getDrawerSectionOrder() : null;
-		if (this.mergeChans != mergeChans || this.showHistory != showHistory ||
-				this.combinedFeedsEnabled != combinedFeedsEnabled ||
-				this.redditWebReaderEnabled != redditWebReaderEnabled ||
-				this.trackMyPostsEnabled != trackMyPostsEnabled ||
-				this.collapseLongOpenThreadsEnabled != collapseLongOpenThreadsEnabled ||
-				this.pagesListMode != pagesListMode ||
-				!CommonUtils.equals(this.drawerSectionOrder, drawerSectionOrder)) {
-			this.drawerSectionOrder = drawerSectionOrder;
-			this.mergeChans = mergeChans;
-			this.showHistory = showHistory;
-			this.combinedFeedsEnabled = combinedFeedsEnabled;
-			this.redditWebReaderEnabled = redditWebReaderEnabled;
-			this.trackMyPostsEnabled = trackMyPostsEnabled;
-			this.collapseLongOpenThreadsEnabled = collapseLongOpenThreadsEnabled;
-			this.pagesExpanded = false;
-			this.pagesListMode = pagesListMode;
-			return true;
-		}
-		return false;
 	}
 
 	private static boolean isSelectableChanEnabled(String chanName) {
@@ -626,7 +535,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 				break;
 			}
 			case PAGES_TOGGLE: {
-				pagesExpanded = !pagesExpanded;
+				content.pagesExpanded = !content.pagesExpanded;
 				updateItems(true, false);
 				break;
 			}
@@ -708,14 +617,6 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		}
 	}
 
-	private int getVisibleFavoriteThreadCount() {
-		int count = 0;
-		for (ListItem listItem : favorites) {
-			if (listItem.type == ListItem.Type.FAVORITE && listItem.isThreadItem()) count++;
-		}
-		return count;
-	}
-
 	private void toggleFavoriteSelection(ListItem listItem) {
 		if (!selectedFavoriteIds.add(listItem.id)) selectedFavoriteIds.remove(listItem.id);
 		int position = findAdapterPosition(listItem.id);
@@ -741,7 +642,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	private ArrayList<FavoritesStorage.FavoriteItem> collectSelectedFavoriteThreads() {
 		ArrayList<FavoritesStorage.FavoriteItem> selected = new ArrayList<>();
 		FavoritesStorage storage = FavoritesStorage.getInstance();
-		for (ListItem listItem : favorites) {
+		for (ListItem listItem : content.favorites) {
 			if (listItem.type == ListItem.Type.FAVORITE && listItem.isThreadItem()
 					&& selectedFavoriteIds.contains(listItem.id)) {
 				FavoritesStorage.FavoriteItem favoriteItem = storage.getFavorite(listItem.chanName,
@@ -843,8 +744,8 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		setWatcherProgressAnimationsEnabled(false);
 		hideKeyboard();
 		setChanSelectMode(false);
-		if (pagesExpanded && collapseLongOpenThreadsEnabled) {
-			pagesExpanded = false;
+		if (content.pagesExpanded && content.collapseLongOpenThreadsEnabled) {
+			content.pagesExpanded = false;
 			updateItems(true, false);
 		}
 	}
@@ -1099,268 +1000,27 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	});
 
 	public void updateItems(boolean pages, boolean favorites) {
-		ArrayList<AdapterItem> previousItems = createAdapterSnapshot();
-		updateItems(pages, favorites, previousItems);
+		updateItems(pages, favorites, createAdapterSnapshot());
 	}
-
 	private void updateItems(boolean pages, boolean favorites, ArrayList<AdapterItem> previousItems) {
-		updatePageNavigation();
-		if (pages && pagesListMode != Preferences.PagesListMode.HIDE_PAGES) {
-			updateListPages();
-		}
-		if (favorites) {
-			updateListFavorites();
-		}
-		if (pagesListMode == null) {
-			categoriesOrder = null;
-		} else {
-			switch (pagesListMode) {
-				case PAGES_FIRST: {
-					categoriesOrder = CategoriesOrder.PAGES_FIRST;
-					break;
-				}
-				case FAVORITES_FIRST: {
-					categoriesOrder = CategoriesOrder.FAVORITES_FIRST;
-					break;
-				}
-				case HIDE_PAGES: {
-					categoriesOrder = CategoriesOrder.HIDE_PAGES;
-					break;
-				}
-				default: {
-					throw new IllegalStateException();
-				}
-			}
-		}
-		dispatchAdapterDiff(previousItems);
-	}
-
-	private void updatePageNavigation() {
-		pageNavigation.clear();
-		menu.removeIf(item -> item.type == ListItem.Type.MENU && item.data == MENU_ITEM_MY_POSTS);
-		// Keep the existing forum scope: Reddit has its own drawer menu.
-		if (CHAN_REDDIT.equals(chanName)) return;
-		if (combinedFeedsEnabled && pagesListMode != Preferences.PagesListMode.HIDE_PAGES) {
-			pageNavigation.add(new ListItem(ListItem.Type.SECTION, SECTION_ACTION_COMBINED_FEEDS_SETTINGS,
-					ResourceUtils.getResourceId(context, R.attr.iconDrawerMenuPreferences, 0),
-					context.getString(R.string.combined_feeds)));
-			for (CombinedFeedStorage.Feed feed : CombinedFeedStorage.getInstance().getFeeds()) {
-				pageNavigation.add(new ListItem(ListItem.Type.COMBINED_FEED, feed.getPrimaryChanName(),
-						feed.id, null, feed.title));
-			}
-		}
-		if (trackMyPostsEnabled) {
-			int repliesPosition = 0;
-			while (repliesPosition < menu.size() && (menu.get(repliesPosition).data == MENU_ITEM_BOARDS ||
-					menu.get(repliesPosition).data == MENU_ITEM_USER_BOARDS)) repliesPosition++;
-			menu.add(repliesPosition, new ListItem(ListItem.Type.MENU, MENU_ITEM_MY_POSTS, R.drawable.ic_reply,
-					context.getString(R.string.replies), MyPostsStorage.getInstance().getUnreadCount()));
-		}
-	}
-
-	private void updateListPages() {
-		ArrayList<ListItem> newPages = new ArrayList<>();
-		ArrayList<Page> newCollapsedPages = new ArrayList<>();
-		collapsedRedditPages.clear();
-		if (CHAN_REDDIT.equals(chanName)) {
-			List<RedditPageStorage.Entry> redditPages = RedditPageStorage.getInstance().getPages();
-			// Keep the header available even with no pages, so communities can always be added.
-			newPages.add(new ListItem(ListItem.Type.SECTION, SECTION_ACTION_CLOSE_ALL_REDDIT,
-					ResourceUtils.getResourceId(context, R.attr.iconButtonCancel, 0),
-					context.getString(R.string.open_pages__noun), redditPages.size()));
-			String currentUrl = callback.getCurrentRedditPageUrl();
-			int threadCount = 0;
-			RedditPageStorage.Entry currentThread = null;
-			for (RedditPageStorage.Entry page : redditPages) {
-				if (page.type == RedditPageStorage.Type.THREAD) {
-					threadCount++;
-					if (page.url.equals(currentUrl)) currentThread = page;
-				}
-			}
-			boolean collapsible = collapseLongOpenThreadsEnabled && threadCount > COLLAPSED_OPEN_THREAD_LIMIT;
-			HashSet<RedditPageStorage.Entry> visibleThreads = null;
-			if (collapsible && !pagesExpanded) {
-				visibleThreads = new HashSet<>(COLLAPSED_OPEN_THREAD_LIMIT);
-				if (currentThread != null) visibleThreads.add(currentThread);
-				// Storage is ordered most recently visited first, including restored pages.
-				for (RedditPageStorage.Entry page : redditPages) {
-					if (page.type == RedditPageStorage.Type.THREAD && visibleThreads.size() < COLLAPSED_OPEN_THREAD_LIMIT) {
-						visibleThreads.add(page);
-					}
-				}
-			}
-			for (RedditPageStorage.Entry page : redditPages) {
-				if (page.type == RedditPageStorage.Type.THREAD && visibleThreads != null && !visibleThreads.contains(page)) {
-					collapsedRedditPages.add(page);
-				} else {
-					newPages.add(new ListItem(ListItem.Type.REDDIT_PAGE, 0, CHAN_REDDIT,
-							page.url, page.threadId, page.title));
-				}
-			}
-			if (collapsible) {
-				newPages.add(new ListItem(ListItem.Type.PAGES_TOGGLE, pagesExpanded ? 1 : 0,
-						R.drawable.ic_arrow_drop_down, pagesExpanded
-								? context.getString(R.string.collapse_open_threads)
-								: context.getString(R.string.show_remaining_open_threads__format,
-										threadCount - COLLAPSED_OPEN_THREAD_LIMIT)));
-			} else {
-				pagesExpanded = false;
-			}
-			this.pages.clear();
-			this.pages.addAll(newPages);
-			collapsedPages.clear();
-			return;
-		}
-		boolean mergeChans = this.mergeChans;
-		Collection<Page> allPages = callback.obtainDrawerPages();
-		ArrayList<Page> pages = new ArrayList<>();
-		for (Page page : allPages) {
-			if (mergeChans || page.chanName.equals(chanName)) {
-				if (page.threadNumber != null || !Chan.get(page.chanName).configuration
-						.getOption(ChanConfiguration.OPTION_SINGLE_BOARD_MODE)) {
-					pages.add(page);
-				}
-			}
-		}
-		if (pages.size() > 0) {
-			Collections.sort(pages);
-			newPages.add(new ListItem(ListItem.Type.SECTION, SECTION_ACTION_CLOSE_ALL,
-					ResourceUtils.getResourceId(context, R.attr.iconButtonCancel, 0),
-					context.getString(R.string.open_pages__noun)));
-			int threadCount = 0;
-			Page currentThread = null;
-			for (Page page : pages) {
-				if (page.threadNumber != null) {
-					threadCount++;
-					if (page.current) {
-						currentThread = page;
-					}
-				}
-			}
-			boolean collapsible = collapseLongOpenThreadsEnabled
-					&& threadCount > COLLAPSED_OPEN_THREAD_LIMIT;
-			HashSet<Page> visibleThreads = null;
-			if (collapsible && !pagesExpanded) {
-				visibleThreads = new HashSet<>(COLLAPSED_OPEN_THREAD_LIMIT);
-				if (currentThread != null) {
-					visibleThreads.add(currentThread);
-				}
-				for (Page page : pages) {
-					if (page.threadNumber != null && visibleThreads.size() < COLLAPSED_OPEN_THREAD_LIMIT) {
-						visibleThreads.add(page);
-					}
-				}
-			}
-			for (Page page : pages) {
-				if (page.threadNumber != null && visibleThreads != null && !visibleThreads.contains(page)) {
-					newCollapsedPages.add(page);
-					continue;
-				}
-				if (page.threadNumber != null) {
-					newPages.add(new ListItem(ListItem.Type.PAGE, 0, page.chanName, page.boardName,
-							page.threadNumber, page.threadTitle));
-				} else {
-					newPages.add(new ListItem(ListItem.Type.PAGE, 0, page.chanName, page.boardName,
-							null, Chan.get(page.chanName).configuration.getBoardTitle(page.boardName)));
-				}
-			}
-			if (collapsible) {
-				int hiddenCount = threadCount - COLLAPSED_OPEN_THREAD_LIMIT;
-				newPages.add(new ListItem(ListItem.Type.PAGES_TOGGLE, pagesExpanded ? 1 : 0,
-						R.drawable.ic_arrow_drop_down, pagesExpanded
-								? context.getString(R.string.collapse_open_threads)
-								: context.getString(R.string.show_remaining_open_threads__format, hiddenCount)));
-			} else {
-				pagesExpanded = false;
-			}
-		}
-		// Build the category off to the side and publish it in one step. Calls reached while page metadata is
-		// being resolved must never interleave writes into the adapter's live list and duplicate a section.
-		this.pages.clear();
-		this.pages.addAll(newPages);
-		collapsedPages.clear();
-		collapsedPages.addAll(newCollapsedPages);
-	}
-
-	private void updateListFavorites() {
-		this.favorites.clear();
-		boolean mergeChans = this.mergeChans;
-		boolean showAllFavoriteThreads = mergeChans || chanName == null;
-		FavoritesStorage favoritesStorage = FavoritesStorage.getInstance();
-		ArrayList<FavoritesStorage.FavoriteItem> favoriteBoards = favoritesStorage.getBoards(mergeChans
-				? null : chanName);
-		ArrayList<FavoritesStorage.FavoriteItem> favoriteThreads = favoritesStorage.getThreads(showAllFavoriteThreads
-				? null : chanName);
-		boolean addSection = true;
-		for (int i = 0; i < favoriteThreads.size(); i++) {
-			FavoritesStorage.FavoriteItem favoriteItem = favoriteThreads.get(i);
-			Chan chan = Chan.get(favoriteItem.chanName);
-			if (chan.name == null) {
-				continue;
-			}
-			if (showAllFavoriteThreads || favoriteItem.chanName.equals(chanName)) {
-				if (addSection) {
-					favorites.add(new ListItem(ListItem.Type.SECTION, SECTION_ACTION_FAVORITES_MENU,
-							ResourceUtils.getResourceId(context, R.attr.iconButtonMore, 0),
-							context.getString(R.string.favorite_threads)));
-					addSection = false;
-				}
-				if (!isFavoriteThreadHidden(favoriteItem)) {
-					ListItem listItem = new ListItem(ListItem.Type.FAVORITE, 0, favoriteItem.chanName,
-							favoriteItem.boardName, favoriteItem.threadNumber, favoriteItem.title);
-					favorites.add(listItem);
-				}
-			}
-		}
-		addSection = true;
-		for (int i = 0; i < favoriteBoards.size(); i++) {
-			FavoritesStorage.FavoriteItem favoriteItem = favoriteBoards.get(i);
-			Chan chan = Chan.get(favoriteItem.chanName);
-			if (chan.name == null || !Preferences.isChanEnabled(favoriteItem.chanName)) {
-				continue;
-			}
-			if (mergeChans || favoriteItem.chanName.equals(chanName)) {
-				if (addSection) {
-					favorites.add(new ListItem(ListItem.Type.SECTION, null, null, null,
-							context.getString(R.string.favorite_boards)));
-					addSection = false;
-				}
-				favorites.add(new ListItem(ListItem.Type.FAVORITE, 0, favoriteItem.chanName, favoriteItem.boardName,
-						null, chan.configuration.getBoardTitle(favoriteItem.boardName)));
-			}
-		}
-		updateDisplayedFavorites();
-		if (favoriteSelectionActive) {
+		content.updateItems(pages, favorites);
+		if (favorites && favoriteSelectionActive) {
 			HashSet<Long> visibleIds = new HashSet<>();
-			for (ListItem listItem : this.favorites) {
-				if (listItem.type == ListItem.Type.FAVORITE && listItem.isThreadItem()) {
-					visibleIds.add(listItem.id);
-				}
+			for (ListItem item : content.favorites) {
+				if (item.type == ListItem.Type.FAVORITE && item.isThreadItem()) visibleIds.add(item.id);
 			}
 			selectedFavoriteIds.retainAll(visibleIds);
 			updateFavoriteSelectionPanel();
 		}
+		dispatchAdapterDiff(previousItems);
 	}
-
-	private void updateDisplayedFavorites() {
-		boolean collapsed = Preferences.isFavoriteThreadsCollapsed();
-		int threadCount = getVisibleFavoriteThreadCount();
-		displayedFavorites.clear();
-		for (ListItem item : favorites) {
-			if (item.type == ListItem.Type.SECTION && item.data == SECTION_ACTION_FAVORITES_MENU) {
-				displayedFavorites.add(new ListItem(item.type, item.data, false, item.iconResId,
-						null, null, null, context.getString(R.string.favorite_threads_count__format, threadCount),
-						0, !collapsed));
-			} else if (!collapsed || item.type != ListItem.Type.FAVORITE || !item.isThreadItem()) {
-				displayedFavorites.add(item);
-			}
-		}
-	}
-
-	private boolean isFavoriteThreadHidden(FavoritesStorage.FavoriteItem favoriteItem) {
-		return Preferences.isFavoritesHidedDeleted() &&
-				watcherServiceClient.getCounter(favoriteItem.chanName, favoriteItem.boardName,
-						favoriteItem.threadNumber).deleted;
+	private boolean updatePreferencesWithoutConfiguration() { return content.updatePreferencesWithoutConfiguration(); }
+	private int getVisibleFavoriteThreadCount() { return content.getVisibleFavoriteThreadCount(); }
+	private void updateDisplayedFavorites() { content.updateDisplayedFavorites(); }
+	private void rebuildOrderedDrawerItems() { content.rebuildOrderedDrawerItems(); }
+	private boolean isFavoriteThreadHidden(FavoritesStorage.FavoriteItem item) { return content.isFavoriteThreadHidden(item); }
+	private boolean removeFavoriteThreadFromList(String chanName, String boardName, String threadNumber) {
+		return content.removeFavoriteThreadFromList(chanName, boardName, threadNumber);
 	}
 
 	private String formatBoardThreadTitle(String itemChanName, boolean threadItem, String boardName,
@@ -1376,140 +1036,6 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		}
 	}
 
-	private static class ListItem {
-		public enum Type {HEADER, RESTART, SECTION, COMBINED_FEED, PAGE, REDDIT_PAGE,
-			PAGES_TOGGLE, FAVORITE, MENU, CHAN}
-
-		public static final ListItem HEADER = new ListItem(Type.HEADER, null, null, null, null);
-		public static final ListItem RESTART = new ListItem(Type.RESTART, null, null, null, null);
-
-		public final long id;
-		public final Type type;
-		public final int data;
-		public final boolean iconChan;
-		public final int iconResId;
-		public final String chanName;
-		public final String boardName;
-		public final String threadNumber;
-		public final String title;
-		public final int badgeCount;
-		public final boolean expanded;
-
-		private static final long ID_HASH_OFFSET = 0xcbf29ce484222325L;
-		private static final long ID_HASH_PRIME = 0x100000001b3L;
-
-		private static long appendIdHash(long hash, int value) {
-			for (int i = 0; i < Integer.BYTES; i++) {
-				hash = (hash ^ value & 0xffL) * ID_HASH_PRIME;
-				value >>>= 8;
-			}
-			return hash;
-		}
-
-		private static long appendIdHash(long hash, String value) {
-			if (value != null) {
-				for (int i = 0; i < value.length(); i++) {
-					hash = (hash ^ value.charAt(i)) * ID_HASH_PRIME;
-				}
-			}
-			return (hash ^ 0xffL) * ID_HASH_PRIME;
-		}
-
-		private static long calculateId(Type type, int data,
-				String chanName, String boardName, String threadNumber, String title) {
-			long hash = appendIdHash(ID_HASH_OFFSET, type.ordinal());
-			switch (type) {
-				case COMBINED_FEED:
-				case PAGE:
-				case REDDIT_PAGE:
-				case FAVORITE: {
-					hash = appendIdHash(hash, chanName);
-					hash = appendIdHash(hash, boardName);
-					return appendIdHash(hash, threadNumber);
-				}
-				case CHAN: {
-					return appendIdHash(hash, chanName);
-				}
-				case PAGES_TOGGLE: {
-					return hash;
-				}
-				case SECTION: {
-					hash = appendIdHash(hash, data);
-					if (data == SECTION_ACTION_FAVORITES_MENU) return hash;
-					return appendIdHash(hash, title);
-				}
-				case MENU: {
-					return appendIdHash(hash, data);
-				}
-				case HEADER:
-				case RESTART: {
-					return hash;
-				}
-				default: {
-					throw new IllegalStateException();
-				}
-			}
-		}
-
-		private ListItem(Type type, int data, boolean iconChan, int iconResId,
-				String chanName, String boardName, String threadNumber, String title, int badgeCount) {
-			this(type, data, iconChan, iconResId, chanName, boardName, threadNumber, title, badgeCount, true);
-		}
-
-		private ListItem(Type type, int data, boolean iconChan, int iconResId,
-				String chanName, String boardName, String threadNumber, String title, int badgeCount, boolean expanded) {
-			id = calculateId(type, data, chanName, boardName, threadNumber, title);
-			this.type = type;
-			this.data = data;
-			this.iconChan = iconChan;
-			this.iconResId = iconResId;
-			this.chanName = chanName;
-			this.boardName = boardName;
-			this.threadNumber = threadNumber;
-			this.title = title;
-			this.badgeCount = badgeCount;
-			this.expanded = expanded;
-		}
-
-		public ListItem(Type type, int data, int iconResId,
-				String chanName, String boardName, String threadNumber, String title) {
-			this(type, data, false, iconResId, chanName, boardName, threadNumber, title, 0);
-		}
-
-		public ListItem(Type type, int data, String chanName, String boardName, String threadNumber, String title) {
-			this(type, data, true, 0, chanName, boardName, threadNumber, title, 0);
-		}
-
-		public ListItem(Type type, String chanName, String boardName, String threadNumber, String title) {
-			this(type, 0, 0, chanName, boardName, threadNumber, title);
-		}
-
-		public ListItem(Type type, int data, int iconResId, String title) {
-			this(type, data, false, iconResId, null, null, null, title, 0);
-		}
-
-		public ListItem(Type type, int data, int iconResId, String title, int badgeCount) {
-			this(type, data, false, iconResId, null, null, null, title, badgeCount);
-		}
-
-		public boolean isThreadItem() {
-			return threadNumber != null;
-		}
-
-		public boolean contentEquals(ListItem other) {
-			return other != null && type == other.type && data == other.data && iconChan == other.iconChan &&
-					iconResId == other.iconResId && CommonUtils.equals(chanName, other.chanName) &&
-					CommonUtils.equals(boardName, other.boardName) &&
-					CommonUtils.equals(threadNumber, other.threadNumber) && CommonUtils.equals(title, other.title)
-					&& badgeCount == other.badgeCount && expanded == other.expanded;
-		}
-
-		public boolean compare(String chanName, String boardName, String threadNumber) {
-			return CommonUtils.equals(this.chanName, chanName) && CommonUtils.equals(this.boardName, boardName)
-					&& CommonUtils.equals(this.threadNumber, threadNumber);
-		}
-	}
-
 	private final View.OnClickListener closeButtonListener = new View.OnClickListener() {
 		@Override
 		public void onClick(View v) {
@@ -1520,10 +1046,10 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 				} else if (listItem.type == ListItem.Type.REDDIT_PAGE) {
 					callback.onCloseRedditPage(listItem.boardName);
 				} else if (listItem.type == ListItem.Type.PAGES_TOGGLE && listItem.data == 0
-						&& (!collapsedPages.isEmpty() || !collapsedRedditPages.isEmpty())) {
+						&& (!content.collapsedPages.isEmpty() || !content.collapsedRedditPages.isEmpty())) {
 					// Freeze the exact hidden set; never close newly opened or visible pages.
-					ArrayList<Page> targets = new ArrayList<>(collapsedPages);
-					ArrayList<RedditPageStorage.Entry> redditTargets = new ArrayList<>(collapsedRedditPages);
+					ArrayList<Page> targets = new ArrayList<>(content.collapsedPages);
+					ArrayList<RedditPageStorage.Entry> redditTargets = new ArrayList<>(content.collapsedRedditPages);
 					new InstanceDialog(fragmentManager, null, provider -> new MessageDialog.Builder(provider.getContext())
 							.setTitle(R.string.close_remaining_threads)
 							.setMessage(provider.getContext().getString(
@@ -1540,10 +1066,10 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		}
 	};
 
-	private static final int SECTION_ACTION_CLOSE_ALL = 0;
-	private static final int SECTION_ACTION_FAVORITES_MENU = 1;
-	private static final int SECTION_ACTION_COMBINED_FEEDS_SETTINGS = 2;
-	private static final int SECTION_ACTION_CLOSE_ALL_REDDIT = 3;
+	static final int SECTION_ACTION_CLOSE_ALL = 0;
+	static final int SECTION_ACTION_FAVORITES_MENU = 1;
+	static final int SECTION_ACTION_COMBINED_FEEDS_SETTINGS = 2;
+	static final int SECTION_ACTION_CLOSE_ALL_REDDIT = 3;
 
 	private static final int FAVORITES_MENU_REFRESH = 1;
 	private static final int FAVORITES_MENU_CLEAR_DELETED = 2;
@@ -1578,7 +1104,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 						boolean hasEnabled = false;
 						ArrayList<FavoritesStorage.FavoriteItem> deleteFavoriteItems = new ArrayList<>();
 						FavoritesStorage favoritesStorage = FavoritesStorage.getInstance();
-						for (ListItem itListItem : favorites) {
+						for (ListItem itListItem : content.favorites) {
 							if (itListItem.isThreadItem()) {
 								FavoritesStorage.FavoriteItem favoriteItem = favoritesStorage.getFavorite
 										(itListItem.chanName, itListItem.boardName, itListItem.threadNumber);
@@ -1607,7 +1133,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 						popupMenu.setOnMenuItemClickListener(item -> {
 							switch (item.getItemId()) {
 								case FAVORITES_MENU_REFRESH: {
-									if (mergeChans) {
+									if (content.mergeChans) {
 										watcherServiceClient.refreshAll(null);
 									} else if (chanName != null) {
 										watcherServiceClient.refreshAll(chanName);
@@ -1650,7 +1176,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		if (!favoriteSelectionActive) return;
 		ArrayList<AdapterItem> previousItems = createAdapterSnapshot();
 		selectedFavoriteIds.clear();
-		for (ListItem listItem : favorites) {
+		for (ListItem listItem : content.favorites) {
 			if (listItem.type == ListItem.Type.FAVORITE && listItem.isThreadItem()) {
 				selectedFavoriteIds.add(listItem.id);
 			}
@@ -1731,7 +1257,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 				break;
 			}
 			case PAGE: {
-				viewType = mergeChans ? ViewType.CLOSEABLE_ICON : ViewType.CLOSEABLE;
+				viewType = content.mergeChans ? ViewType.CLOSEABLE_ICON : ViewType.CLOSEABLE;
 				break;
 			}
 			case REDDIT_PAGE: {
@@ -1745,13 +1271,13 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 			case FAVORITE: {
 				if (listItem.threadNumber != null) {
 					boolean watcherSupported = watcherSupportSet.contains(listItem.chanName);
-					if (mergeChans) {
+					if (content.mergeChans) {
 						viewType = watcherSupported ? ViewType.WATCHER_ICON : ViewType.ITEM_ICON;
 					} else {
 						viewType = watcherSupported ? ViewType.WATCHER : ViewType.ITEM;
 					}
 				} else {
-					viewType = mergeChans ? ViewType.ITEM_ICON : ViewType.ITEM;
+					viewType = content.mergeChans ? ViewType.ITEM_ICON : ViewType.ITEM;
 				}
 				break;
 			}
@@ -1791,7 +1317,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	}
 
 	private ArrayList<AdapterItem> createAdapterSnapshot() {
-		if (categoriesOrder == null) {
+		if (content.categoriesOrder == null) {
 			return null;
 		}
 		int count = getItemCount();
@@ -1859,7 +1385,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	}
 
 	private void scheduleDrawerPrewarm() {
-		if (drawerPrewarmed || drawerPrewarmScheduled || categoriesOrder == null) {
+		if (drawerPrewarmed || drawerPrewarmScheduled || content.categoriesOrder == null) {
 			return;
 		}
 		drawerPrewarmScheduled = true;
@@ -1914,58 +1440,13 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		return true;
 	}
 
-	private void rebuildOrderedDrawerItems() {
-		orderedDrawerItems.clear();
-		if (drawerSectionOrder == null) {
-			if (categoriesOrder == CategoriesOrder.FAVORITES_FIRST) orderedDrawerItems.addAll(displayedFavorites);
-			orderedDrawerItems.addAll(pageNavigation);
-			if (categoriesOrder != CategoriesOrder.HIDE_PAGES) orderedDrawerItems.addAll(pages);
-			if (categoriesOrder != CategoriesOrder.FAVORITES_FIRST) orderedDrawerItems.addAll(displayedFavorites);
-			orderedDrawerItems.addAll(menu);
-			return;
-		}
-		// Split only at real section boundaries; keep headers, collapsed state and rows together.
-		java.util.EnumMap<Preferences.DrawerSection, List<ListItem>> blocks =
-				new java.util.EnumMap<>(Preferences.DrawerSection.class);
-		blocks.put(Preferences.DrawerSection.MY_BOARDS, pageNavigation);
-		if (categoriesOrder != CategoriesOrder.HIDE_PAGES) blocks.put(Preferences.DrawerSection.PAGES, pages);
-		Preferences.DrawerSection favoriteSection = Preferences.DrawerSection.FAVORITE_THREADS;
-		for (ListItem item : displayedFavorites) {
-			if (item.type == ListItem.Type.SECTION) {
-				favoriteSection = item.data == SECTION_ACTION_FAVORITES_MENU
-						? Preferences.DrawerSection.FAVORITE_THREADS : Preferences.DrawerSection.FAVORITE_BOARDS;
-			}
-			blocks.computeIfAbsent(favoriteSection, key -> new ArrayList<>()).add(item);
-		}
-		for (ListItem item : menu) {
-			Preferences.DrawerSection section;
-			switch (item.data) {
-				case MENU_ITEM_COMBINED_FEEDS: section = Preferences.DrawerSection.MY_BOARDS; break;
-				case MENU_ITEM_BOARDS:
-				case MENU_ITEM_REDDIT_SECTIONS: section = Preferences.DrawerSection.BOARDS; break;
-				case MENU_ITEM_USER_BOARDS: section = Preferences.DrawerSection.USER_BOARDS; break;
-				case MENU_ITEM_MY_POSTS: section = Preferences.DrawerSection.REPLIES; break;
-				case MENU_ITEM_HISTORY: section = Preferences.DrawerSection.HISTORY; break;
-				case MENU_ITEM_LOCAL_ARCHIVES: section = Preferences.DrawerSection.ARCHIVES; break;
-				case MENU_ITEM_REDDIT_OFFICIAL_APP: section = Preferences.DrawerSection.REDDIT_APP; break;
-				case MENU_ITEM_PREFERENCES: section = Preferences.DrawerSection.SETTINGS; break;
-				default: throw new IllegalStateException("Unknown drawer menu item: " + item.data);
-			}
-			blocks.computeIfAbsent(section, key -> new ArrayList<>()).add(item);
-		}
-		for (Preferences.DrawerSection section : drawerSectionOrder) {
-			List<ListItem> block = blocks.get(section);
-			if (block != null) orderedDrawerItems.addAll(block);
-		}
-	}
-
 	@Override
 	public int getItemCount() {
 		int count = showRestartButton ? 2 : 1;
 		if (chanSelectMode) {
 			count += chans.size();
 		} else {
-			count += orderedDrawerItems.size();
+			count += content.orderedDrawerItems.size();
 		}
 		return count;
 	}
@@ -1987,8 +1468,8 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 					return chans.get(position);
 				}
 			} else {
-				if (position < orderedDrawerItems.size()) {
-					return orderedDrawerItems.get(position);
+				if (position < content.orderedDrawerItems.size()) {
+					return content.orderedDrawerItems.get(position);
 				}
 			}
 		}
@@ -2421,22 +1902,8 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		return watcherServiceClient.getCounter(listItem.chanName, listItem.boardName, listItem.threadNumber);
 	}
 
-	private boolean removeFavoriteThreadFromList(String chanName, String boardName, String threadNumber) {
-		boolean removed = false;
-		for (int i = favorites.size() - 1; i >= 0; i--) {
-			ListItem favorite = favorites.get(i);
-			if (favorite.type == ListItem.Type.FAVORITE && favorite.isThreadItem() &&
-					favorite.compare(chanName, boardName, threadNumber)) {
-				favorites.remove(i);
-				removed = true;
-			}
-		}
-		if (removed) updateDisplayedFavorites();
-		return removed;
-	}
-
 	private final View.OnClickListener watcherClickListener = v -> {
-		DrawerForm.ListItem listItem = getItemFromChild(v);
+		DrawerContentController.ListItem listItem = getItemFromChild(v);
 		if (listItem != null) {
 			FavoritesStorage.getInstance().setWatcherEnabled(listItem.chanName,
 					listItem.boardName, listItem.threadNumber, null);
@@ -2480,7 +1947,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	}
 
 	private void updateVisibleWatcher(WatcherUpdateKey key, WatcherService.Counter counter) {
-		if (mergeChans || key.chanName.equals(chanName)) {
+		if (content.mergeChans || key.chanName.equals(chanName)) {
 			long id = ListItem.calculateId(ListItem.Type.FAVORITE, 0,
 					key.chanName, key.boardName, key.threadNumber, null);
 			RecyclerView.ViewHolder holder = recyclerView.findViewHolderForItemId(id);
@@ -2554,23 +2021,23 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 			int favoriteMovedTo = favoriteDragState.getMovedTo();
 			if (chanMovedTo >= 0) {
 				ArrayList<String> chanNames = new ArrayList<>();
-				for (DrawerForm.ListItem listItem : chans) {
+				for (DrawerContentController.ListItem listItem : chans) {
 					chanNames.add(listItem.chanName);
 				}
 				Preferences.setChansOrder(chanNames);
 				// Regroup favorite threads
-				if (mergeChans) {
+				if (content.mergeChans) {
 					updateItems(false, true);
 				}
 			} else if (favoriteMovedTo >= 0) {
 				// "to" is always > 0 since favorites list contains header
-				DrawerForm.ListItem listItem = favorites.get(favoriteMovedTo);
-				DrawerForm.ListItem afterListItem = favorites.get(favoriteMovedTo - 1);
+				DrawerContentController.ListItem listItem = content.favorites.get(favoriteMovedTo);
+				DrawerContentController.ListItem afterListItem = content.favorites.get(favoriteMovedTo - 1);
 				FavoritesStorage favoritesStorage = FavoritesStorage.getInstance();
 				FavoritesStorage.FavoriteItem favoriteItem = favoritesStorage.getFavorite(listItem.chanName,
 						listItem.boardName, listItem.threadNumber);
 				FavoritesStorage.FavoriteItem afterFavoriteItem = afterListItem.type ==
-						DrawerForm.ListItem.Type.FAVORITE && afterListItem.chanName.equals(favoriteItem.chanName)
+						DrawerContentController.ListItem.Type.FAVORITE && afterListItem.chanName.equals(favoriteItem.chanName)
 						? favoritesStorage.getFavorite(afterListItem.chanName, afterListItem.boardName,
 						afterListItem.threadNumber) : null;
 				favoritesStorage.moveAfter(favoriteItem, afterFavoriteItem);
@@ -2588,10 +2055,10 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 				|| fromIndex >= getItemCount() || toIndex >= getItemCount()) {
 			return false;
 		}
-		DrawerForm.ListItem from = getItem(fromIndex);
-		DrawerForm.ListItem to = getItem(toIndex);
-		return from.type == to.type && (from.type == DrawerForm.ListItem.Type.CHAN ||
-				from.type == DrawerForm.ListItem.Type.FAVORITE && CommonUtils.equals(from.chanName, to.chanName) &&
+		DrawerContentController.ListItem from = getItem(fromIndex);
+		DrawerContentController.ListItem to = getItem(toIndex);
+		return from.type == to.type && (from.type == DrawerContentController.ListItem.Type.CHAN ||
+				from.type == DrawerContentController.ListItem.Type.FAVORITE && CommonUtils.equals(from.chanName, to.chanName) &&
 						(from.threadNumber == null) == (to.threadNumber == null));
 	}
 
@@ -2603,13 +2070,13 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 				|| fromIndex >= getItemCount() || toIndex >= getItemCount()) {
 			return false;
 		}
-		DrawerForm.ListItem from = getItem(fromIndex);
-		DrawerForm.ListItem to = getItem(toIndex);
+		DrawerContentController.ListItem from = getItem(fromIndex);
+		DrawerContentController.ListItem to = getItem(toIndex);
 		int chansFrom = chans.indexOf(from);
 		int chansTo = chans.indexOf(to);
-		int favoritesFrom = favorites.indexOf(from);
-		int favoritesTo = favorites.indexOf(to);
-		ArrayList<DrawerForm.ListItem> workList = null;
+		int favoritesFrom = content.favorites.indexOf(from);
+		int favoritesTo = content.favorites.indexOf(to);
+		ArrayList<DrawerContentController.ListItem> workList = null;
 		SortableHelper.DragState dragState = null;
 		int workFrom = -1;
 		int workTo = -1;
@@ -2619,14 +2086,14 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 			workFrom = chansFrom;
 			workTo = chansTo;
 		} else if (favoritesFrom >= 0 && favoritesTo >= 0) {
-			workList = favorites;
+			workList = content.favorites;
 			dragState = favoriteDragState;
 			workFrom = favoritesFrom;
 			workTo = favoritesTo;
 		}
 		if (workList != null && dragState != null) {
 			workList.add(workTo, workList.remove(workFrom));
-			if (workList == favorites) updateDisplayedFavorites();
+			if (workList == content.favorites) updateDisplayedFavorites();
 			rebuildOrderedDrawerItems();
 			notifyItemMoved(fromIndex, toIndex);
 			dragState.set(workFrom, workTo);

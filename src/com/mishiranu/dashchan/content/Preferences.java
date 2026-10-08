@@ -1658,6 +1658,13 @@ public class Preferences {
 		return PREFERENCES.getBoolean(KEY_SCROLL_GALLERY_TO_CURRENT_FILE, DEFAULT_SCROLL_GALLERY_TO_CURRENT_FILE);
 	}
 
+	public static final String KEY_CLOSE_GALLERY_ON_BACKGROUND_TAP = "close_gallery_on_background_tap";
+	public static final boolean DEFAULT_CLOSE_GALLERY_ON_BACKGROUND_TAP = false;
+
+	public static boolean isCloseGalleryOnBackgroundTap() {
+		return PREFERENCES.getBoolean(KEY_CLOSE_GALLERY_ON_BACKGROUND_TAP, DEFAULT_CLOSE_GALLERY_ON_BACKGROUND_TAP);
+	}
+
 	public static void consumeShowcaseGallery() {
 		PREFERENCES.edit().put(KEY_SHOWCASE_GALLERY, false).close();
 	}
@@ -2255,6 +2262,8 @@ public class Preferences {
 	public static final String KEY_NEW_PHOTO_EDITOR = "experimental_new_photo_editor";
 	// Availability remains gated by the distribution bridge; an explicit user choice takes precedence.
 	public static final boolean DEFAULT_NEW_PHOTO_EDITOR = true;
+	public static final String KEY_NEW_INTERFACE_MOTION = "experimental_new_interface_motion";
+	public static final boolean DEFAULT_NEW_INTERFACE_MOTION = false;
 	public static final String KEY_PIP_DIAGNOSTIC_MODE = "experimental_pip_diagnostic_mode";
 	public static final String DEFAULT_PIP_DIAGNOSTIC_MODE = "normal";
 	public static final String KEY_TRANSLATION_NATIVE_LANGUAGE = "translation_native_language";
@@ -2282,6 +2291,11 @@ public class Preferences {
 
 	public static boolean isNewPhotoEditorEnabled() {
 		return PhotoEditorBridge.isAvailable() && PREFERENCES.getBoolean(KEY_NEW_PHOTO_EDITOR, DEFAULT_NEW_PHOTO_EDITOR);
+	}
+
+	public static boolean isNewInterfaceMotionEnabled() {
+		return BuildConfig.ENABLE_EXPERIMENTAL_INTERFACE_MOTION &&
+				PREFERENCES.getBoolean(KEY_NEW_INTERFACE_MOTION, DEFAULT_NEW_INTERFACE_MOTION);
 	}
 
 	public static String getPipDiagnosticMode() {

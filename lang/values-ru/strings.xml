@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+	<string name="close_gallery_on_background_tap">Закрывать просмотр касанием фона</string>
+	<string name="close_gallery_on_background_tap__summary">В обычном режиме закрывать просмотр файла касанием пустого пространства вокруг него. Если выключено — касания фона игнорируются; кнопка «Назад» и жест закрытия продолжают работать.</string>
 	<string name="webview_renderer_gone">Веб-страница перестала работать. Откройте её заново.</string>
 	<string name="gallery_restore_unavailable">Не удалось восстановить галерею из локальных данных. Откройте её заново из треда или архива.</string>
 	<string name="scroll_gallery_to_current_file">Прокручивать галерею к текущему файлу</string>
@@ -214,7 +216,7 @@
 	<string name="translation_package_delete">Удалить языковой пакет?</string>
 	<string name="translation_package_delete__message">Перевод не будет работать, пока пакет не будет загружен заново.</string>
 	<string name="translation_package_deleted">Языковой пакет удалён</string>
-	<string name="translation_package_unavailable">Сначала загрузите языковой пакет в экспериментальных функциях</string>
+	<string name="translation_package_unavailable">Сначала загрузите языковой пакет: Настройки → Содержимое → Офлайн-перевод</string>
 	<string name="translate_posts">Перевести посты</string>
 	<string name="show_original_posts">Показать оригинал</string>
 	<string name="translation_initializing">Подготовка офлайн-переводчика…</string>
@@ -1402,7 +1404,7 @@
 	<string name="translation_cache_cleared">Сохранённые переводы очищены</string>
 	<string name="translation_cache_failed">Не удалось очистить сохранённые переводы</string>
 	<string name="persistent_translation_cache">Кэш переводчика</string>
-	<string name="persistent_translation_cache_summary">Экспериментально. Сохранять готовые переводы между запусками приложения. Выключение не удаляет сохранённые переводы.</string>
+	<string name="persistent_translation_cache_summary">Сохранять готовые переводы между запусками приложения. Выключение не удаляет сохранённые переводы.</string>
 	<string name="outbox_experimental_summary">Экспериментально. Сохранять статус отправки и восстанавливать прерванные черновики. Для новых отправок; автоматической повторной отправки нет. Выключение не удаляет записи.</string>
 	<string name="outbox_disabled">Включите журнал исходящих в экспериментальных настройках, чтобы посмотреть сохранённые записи.</string>
 	<string name="outbox_title">Журнал исходящих</string>
@@ -1492,4 +1494,6 @@
 	<string name="reddit_remove_category">Удалить категорию</string>
 	<string name="reddit_remove_category_confirm">Удалить категорию? Сообщества из неё переместятся в «Без категории».</string>
 	<string name="reddit_remove_community_confirm">Убрать сообщество из вашего локального списка? Подписки в Reddit не изменятся.</string>
+	<string name="new_interface_motion">Новые анимации интерфейса</string>
+	<string name="new_interface_motion_summary">Переходы экранов и галереи в стиле Material 3, новое оформление видеоплеера. Новое оформление бокового меню и анимация жеста «Назад» на Android 14+. Применяется при следующих переходах и открытиях плеера.</string>
 </resources>

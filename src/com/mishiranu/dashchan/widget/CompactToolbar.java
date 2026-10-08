@@ -4,6 +4,8 @@ import android.content.Context;
 import android.graphics.drawable.Drawable;
 import android.util.AttributeSet;
 import android.view.View;
+import android.view.MotionEvent;
+import com.mishiranu.dashchan.R;
 import android.view.ViewGroup;
 import android.widget.ImageButton;
 import android.widget.Toolbar;
@@ -13,6 +15,10 @@ public class CompactToolbar extends Toolbar {
 	public CompactToolbar(Context context, AttributeSet attrs) {
 		super(context, attrs);
 		ThemeEngine.applyToolbarStyle(this);
+	}
+
+	@Override public boolean dispatchTouchEvent(MotionEvent event) {
+		return getTag(R.id.screen_motion_owner) != null || super.dispatchTouchEvent(event);
 	}
 
 	@Override
