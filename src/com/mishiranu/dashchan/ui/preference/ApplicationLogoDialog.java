@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui.preference;
 
+import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import android.app.AlertDialog;
 import android.app.Dialog;
 import android.content.Context;
@@ -73,7 +74,7 @@ public class ApplicationLogoDialog extends DialogFragment {
 					density, padding, smallPadding));
 		}
 
-		return new AlertDialog.Builder(context)
+		return new MotionDialogBuilder(context)
 				.setTitle(R.string.application_logo)
 				.setView(scrollView)
 				.setNegativeButton(android.R.string.cancel, null)

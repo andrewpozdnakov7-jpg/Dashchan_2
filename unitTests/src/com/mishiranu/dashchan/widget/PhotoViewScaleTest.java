@@ -15,7 +15,8 @@ public class PhotoViewScaleTest {
 	@Test public void smallVideoFitIsNotManualZoom() {
 		PhotoViewScale scales = forSize(1440, 3168, 220, 392, false, 10f);
 		assertEquals(1440f / 220f, scales.initial, EPSILON);
-		assertEquals(scales.doubleTap, scales.initial, EPSILON);
+		assertTrue(scales.doubleTap > scales.initial);
+		assertTrue(scales.doubleTap <= scales.maximum);
 		assertEquals(40f, scales.maximum, EPSILON);
 		assertFalse(PhotoViewScale.isZoomed(scales.initial, scales.initial));
 		// Regression: the old baseline was 4, although the displayed scale was over 6.
@@ -29,7 +30,9 @@ public class PhotoViewScaleTest {
 				for (float factor : new float[] {0f, 2f, 10f}) {
 					PhotoViewScale scales = forSize(view[0], view[1], media[0], media[1], false, factor);
 					float fit = Math.min((float) view[0] / media[0], (float) view[1] / media[1]);
-					float appliedOnReset = fit > 1f ? scales.doubleTap : 1f;
+					float base = Math.min(fit, 1f), post = Math.max(fit, 1f);
+					float oldLimit = factor > 1f ? Math.min(post, 4f / base) * factor : 4f / base;
+					float appliedOnReset = fit > 1f ? Math.min(post, oldLimit) : 1f;
 					assertEquals(appliedOnReset, scales.initial, EPSILON);
 					assertFalse(PhotoViewScale.isZoomed(appliedOnReset, scales.initial));
 					assertTrue(scales.initial >= scales.minimum);
@@ -49,11 +52,11 @@ public class PhotoViewScaleTest {
 		}
 	}
 
-	@Test public void defaultPhotoUpscaleLimitIsPreserved() {
+	@Test public void defaultPhotoFitIsPreservedButDoubleTapCanEnlargeIt() {
 		PhotoViewScale scales = forSize(1440, 3168, 220, 392, false, 0f);
 		assertEquals(4f, scales.initial, EPSILON);
-		assertEquals(4f, scales.doubleTap, EPSILON);
-		assertEquals(4f, scales.maximum, EPSILON);
+		assertEquals(8f, scales.doubleTap, EPSILON);
+		assertEquals(8f, scales.maximum, EPSILON);
 		assertEquals(1f, scales.minimum, EPSILON);
 	}
 
@@ -79,5 +82,24 @@ public class PhotoViewScaleTest {
 			assertEquals(scales.doubleTap, scales.initial, EPSILON);
 			assertFalse(PhotoViewScale.isZoomed(scales.initial, scales.initial));
 		}
+	}
+
+	@Test public void doubleTapAlternatesEnlargementAndFittedBaselineForPhotos() {
+		for (int[] media : new int[][] {{16, 16}, {220, 392}, {1080, 1920}, {1200, 2000}, {4320, 7680}}) {
+			PhotoViewScale scales = forSize(1080, 1920, media[0], media[1], false, 0f);
+			float enlarged = PhotoViewScale.doubleTapTarget(scales.initial, scales.initial, scales.doubleTap);
+			assertTrue(enlarged > scales.initial);
+			assertTrue(enlarged <= scales.maximum);
+			assertEquals(scales.initial, PhotoViewScale.doubleTapTarget(enlarged, scales.initial, scales.doubleTap), EPSILON);
+		}
+	}
+
+	@Test public void manualZoomResetsToFitRatherThanNaturalPixelSize() {
+		PhotoViewScale scales = forSize(1440, 3168, 640, 360, false, 0f);
+		assertTrue(scales.initial > scales.minimum);
+		assertEquals(scales.initial, PhotoViewScale.doubleTapTarget(scales.initial * 1.1f,
+				scales.initial, scales.doubleTap), EPSILON);
+		assertEquals(scales.doubleTap, PhotoViewScale.doubleTapTarget(scales.minimum,
+				scales.initial, scales.doubleTap), EPSILON);
 	}
 }

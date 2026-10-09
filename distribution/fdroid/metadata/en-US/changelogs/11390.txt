@@ -1,0 +1,3 @@
+Fixed unintended TikTok mode in the ordinary gallery and the Android 13 crash when rotating or entering fullscreen video.
+Added the thread return button setting: Back, Thread list or Hidden. Back is the default; returning to the list does not force a refresh.
+Improved saved-screen state compatibility and internal control handling.

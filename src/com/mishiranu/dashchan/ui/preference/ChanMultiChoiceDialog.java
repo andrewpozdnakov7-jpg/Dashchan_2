@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui.preference;
 
+import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import android.app.AlertDialog;
 import android.content.DialogInterface;
 import android.os.Bundle;
@@ -61,7 +62,7 @@ public class ChanMultiChoiceDialog extends DialogFragment implements DialogInter
 		for (int i = 0; i < chans.size(); i++) {
 			checkedItems[i] = selectedSet.contains(chanNames[i]);
 		}
-		AlertDialog dialog = new AlertDialog.Builder(requireContext())
+		AlertDialog dialog = new MotionDialogBuilder(requireContext())
 				.setMultiChoiceItems(items, checkedItems, this)
 				.setNegativeButton(android.R.string.cancel, null)
 				.setPositiveButton(android.R.string.ok, (d, which) -> ((Callback) getParentFragment())

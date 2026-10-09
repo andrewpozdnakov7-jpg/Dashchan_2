@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui.preference;
 
+import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import android.app.AlertDialog;
 import android.app.Dialog;
 import android.os.Bundle;
@@ -27,7 +28,7 @@ public class WhatsNewDialog extends DialogFragment {
 		String versionName = release != null ? release.name : BuildConfig.VERSION_NAME;
 		CharSequence message = release != null ? formatChanges(release.text)
 				: getText(R.string.whats_new_unavailable);
-		return new AlertDialog.Builder(requireContext())
+		return new MotionDialogBuilder(requireContext())
 				.setTitle(getString(R.string.whats_new_title__format, versionName))
 				.setMessage(message)
 				.setNeutralButton(R.string.changelog, (dialog, which) ->

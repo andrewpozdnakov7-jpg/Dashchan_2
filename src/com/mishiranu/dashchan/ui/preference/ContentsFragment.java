@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui.preference;
 
+import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import android.app.AlertDialog;
 import android.content.DialogInterface;
 import android.os.Bundle;
@@ -107,7 +108,7 @@ public class ContentsFragment extends PreferenceFragment {
 		public AlertDialog onCreateDialog(Bundle savedInstanceState) {
 			checkedIndex = savedInstanceState != null ? savedInstanceState.getInt(EXTRA_CHECKED_INDEX) : 0;
 			String[] items = {getString(R.string.old_threads), getString(R.string.all_threads)};
-			return new AlertDialog.Builder(requireContext())
+			return new MotionDialogBuilder(requireContext())
 					.setTitle(getString(R.string.clear_cache))
 					.setSingleChoiceItems(items, checkedIndex, (d, which) -> checkedIndex = which)
 					.setPositiveButton(android.R.string.ok, (d, w) -> {

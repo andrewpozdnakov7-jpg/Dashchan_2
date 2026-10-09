@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui.preference;
 
+import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
@@ -48,7 +49,7 @@ public class WallpaperFragment extends PreferenceFragment {
 				.setOnClickListener(p -> selectCustomWallpaper());
 		if (WallpaperManager.hasActiveWallpaper(requireContext())) {
 			addButton(R.string.wallpaper_remove, R.string.wallpaper_remove__summary)
-					.setOnClickListener(p -> new AlertDialog.Builder(requireContext())
+					.setOnClickListener(p -> new MotionDialogBuilder(requireContext())
 							.setMessage(R.string.wallpaper_remove_confirmation)
 							.setPositiveButton(R.string.delete, (dialog, which) -> {
 								WallpaperManager.remove(requireContext());

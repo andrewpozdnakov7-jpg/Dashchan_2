@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui.preference;
 
+import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.os.Bundle;
@@ -166,7 +167,7 @@ public class PostTextSizesFragment extends PreferenceFragment {
 			Preview preview = new Preview(context);
 			preview.update(key, initial != null ? initial : getValue());
 			layout.second.addView(preview);
-			AlertDialog dialog = super.configureDialog(savedInstanceState, new AlertDialog.Builder(context))
+			AlertDialog dialog = super.configureDialog(savedInstanceState, new MotionDialogBuilder(context))
 					.setView(layout.first).setPositiveButton(android.R.string.ok, (d, which) -> {
 						Integer value = parse(input.getText());
 						if (value != null) ConcurrentUtils.HANDLER.post(() -> setValue(value));

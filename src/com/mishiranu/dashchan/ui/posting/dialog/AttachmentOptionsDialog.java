@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui.posting.dialog;
 
+import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.Dialog;
@@ -151,7 +152,7 @@ public class AttachmentOptionsDialog extends DialogFragment implements AdapterVi
 		}
 		listView.setOnItemClickListener(this);
 		updateItemsEnabled(adapter, holder);
-		AlertDialog dialog = new AlertDialog.Builder(activity).setView(linearLayout).create();
+		AlertDialog dialog = new MotionDialogBuilder(activity).setView(linearLayout).create();
 		dialog.setCanceledOnTouchOutside(true);
 		return dialog;
 	}

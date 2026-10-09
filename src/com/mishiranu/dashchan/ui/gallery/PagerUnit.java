@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui.gallery;
 
+import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.res.ColorStateList;
@@ -16,6 +17,7 @@ import android.graphics.drawable.ShapeDrawable;
 import android.graphics.drawable.shapes.Shape;
 import android.media.AudioManager;
 import android.net.Uri;
+import android.os.Bundle;
 import android.os.SystemClock;
 import android.view.Gravity;
 import android.view.HapticFeedbackConstants;
@@ -42,9 +44,9 @@ import com.mishiranu.dashchan.ui.DialogMenu;
 import com.mishiranu.dashchan.ui.InstanceDialog;
 import com.mishiranu.dashchan.ui.SearchImageDialog;
 import com.mishiranu.dashchan.util.AnimationUtils;
+import com.mishiranu.dashchan.util.InterfaceMotion;
 import com.mishiranu.dashchan.util.NavigationUtils;
 import com.mishiranu.dashchan.util.ResourceUtils;
-import com.mishiranu.dashchan.util.InterfaceMotion;
 import com.mishiranu.dashchan.widget.ClickableToast;
 import com.mishiranu.dashchan.widget.InsetsLayout;
 import com.mishiranu.dashchan.widget.PhotoView;
@@ -73,9 +75,10 @@ public class PagerUnit implements PagerInstance.Callback {
 	private int seekGestureDirection;
 	private int seekGestureSeconds;
 	private long lastSeekGestureTime;
-	private boolean tikTokMode;
+	private static final String EXTRA_TIKTOK_PAGING_SESSION = "tikTokPagingSession";
+	private TikTokPagingSession tikTokSession = new TikTokPagingSession();
 	private int tikTokFilter = Preferences.getTikTokMediaFilter();
-	// The saved preference must not disable gestures on excluded attachments.
+	// Actual view routing follows this session, not each attachment's match alone.
 	private boolean tikTokPagingActive;
 	private enum VerticalGesture { NONE, VOLUME, TIKTOK }
 	private VerticalGesture verticalGesture = VerticalGesture.NONE;
@@ -193,15 +196,40 @@ public class PagerUnit implements PagerInstance.Callback {
 		// Select the item before applying its gesture mode or consuming a retained player.
 		viewsInitialized = true;
 		VideoDiagnostics.recordUi("gallery pager_ready index=" + Math.max(initialPosition, 0)
-				+ " tiktok=" + tikTokMode);
+				+ " tiktok=" + tikTokSession.isEnabled());
 		viewPager.setCurrentIndex(Math.max(initialPosition, 0));
 	}
 
-	void restoreLifecycleState(GalleryStateViewModel state) {
+	void restoreLifecycleState(GalleryStateViewModel state, Bundle savedState) {
 		videoUnit.setPendingLifecycleState(state.video);
 		state.video = null;
-		// A stale gallery/PiP snapshot must not override the latest user choice.
-		setTikTokMode(Preferences.isVideoTikTokMode());
+		Bundle paging = savedState != null ? savedState.getBundle(EXTRA_TIKTOK_PAGING_SESSION) : null;
+		if (paging != null) {
+			int filter = paging.getInt("preferenceFilter", -1);
+			if (filter >= Preferences.TIKTOK_FILTER_ALL && filter <= Preferences.TIKTOK_FILTER_IMAGE) {
+				tikTokSession = new TikTokPagingSession(new TikTokPagingSession.Snapshot(
+						paging.getBoolean("preferenceEnabled"), filter, paging.getBoolean("enabled")));
+			}
+		}
+		// Preserve ordinary browsing across recreation/PiP unless the user actually
+		// changed the saved preference after this snapshot was taken.
+		syncTikTokPreferences();
+	}
+
+	void savePagingState(Bundle outState) {
+		TikTokPagingSession.Snapshot snapshot = tikTokSession.snapshot();
+		if (snapshot == null) return;
+		Bundle paging = new Bundle();
+		paging.putBoolean("preferenceEnabled", snapshot.preferenceEnabled);
+		paging.putInt("preferenceFilter", snapshot.preferenceFilter);
+		paging.putBoolean("enabled", snapshot.enabled);
+		outState.putBundle(EXTRA_TIKTOK_PAGING_SESSION, paging);
+	}
+
+	private void syncTikTokPreferences() {
+		tikTokFilter = Preferences.getTikTokMediaFilter();
+		tikTokSession.syncPreferences(Preferences.isVideoTikTokMode(), tikTokFilter);
+		if (viewsInitialized) updateTikTokPagingMode(getCurrentGalleryItem());
 	}
 
 	void saveLifecycleState(GalleryStateViewModel state) {
@@ -211,7 +239,37 @@ public class PagerUnit implements PagerInstance.Callback {
 		if (state.cleared && video != null) video.dispose();
 	}
 
+	public PhotoView getMotionPhotoView() {
+		PagerInstance.ViewHolder holder = getCurrentHolder();
+		return !galleryMode && holder != null && holder.galleryItem != null &&
+				holder.galleryItem.isImage(Chan.get(galleryInstance.chanName))
+				? holder.photoView : null;
+	}
+	public PhotoView getMotionMediaPhotoView() {
+		PagerInstance.ViewHolder holder = getCurrentHolder();
+		if (galleryMode || holder == null || holder.galleryItem == null || videoUnit.isPictureInPictureTransferred()) return null;
+		Chan chan = Chan.get(galleryInstance.chanName);
+		return holder.galleryItem.isImage(chan) || holder.galleryItem.isVideo(chan) ? holder.photoView : null;
+	}
+	public View getMotionVideoSurface() {
+		PagerInstance.ViewHolder holder = getCurrentHolder();
+		return holder != null && getMotionMediaPhotoView() != null && holder.galleryItem.isVideo(Chan.get(galleryInstance.chanName))
+				? holder.surfaceParent : null;
+	}
+	public View[] getMotionVideoControls() {
+		return getMotionVideoSurface() != null ? videoUnit.getGalleryMotionControls() : new View[0];
+	}
+	public boolean isModeMotionRunning() { return GalleryMotionController.blocks(viewPager); }
+	public void finishPhotoMotion() {
+		GalleryMotionController.finishHost(viewPager);
+		for (PagerInstance.ViewHolder holder : new PagerInstance.ViewHolder[] {
+				pagerInstance.leftHolder, pagerInstance.currentHolder, pagerInstance.rightHolder}) {
+			if (holder != null) holder.photoView.finishGalleryPresentation();
+		}
+	}
+
 	public void onViewsCreated(int[] imageViewPosition) {
+		if (InterfaceMotion.isEnabled() && getMotionMediaPhotoView() != null) return;
 		if (!galleryInstance.callback.isGalleryWindow() && imageViewPosition != null) {
 			View view = viewPager.getCurrentView();
 			if (view != null) {
@@ -230,14 +288,13 @@ public class PagerUnit implements PagerInstance.Callback {
 	public void onResume() {
 		resumed = true;
 		pagerInstance.mediaPreloader.setResumed(true);
-		tikTokFilter = Preferences.getTikTokMediaFilter();
-		setTikTokMode(Preferences.isVideoTikTokMode());
-		if (viewsInitialized) updateTikTokPagingMode(getCurrentGalleryItem());
+		syncTikTokPreferences();
 		videoUnit.onResume();
 		startCachedImagePreload();
 	}
 
 	public void onPause(boolean changingConfigurations) {
+		finishPhotoMotion();
 		resumed = false;
 		pagerInstance.mediaPreloader.setResumed(false);
 		endVolumeGesture();
@@ -264,41 +321,30 @@ public class PagerUnit implements PagerInstance.Callback {
 	}
 
 	private void setTikTokMode(boolean enabled) {
-		if (tikTokMode == enabled) {
-			return;
-		}
-		endVolumeGesture();
-		verticalGesture = VerticalGesture.NONE;
-		tikTokMode = enabled;
-		VideoDiagnostics.recordUi("gallery tiktok_apply enabled=" + enabled
-				+ " views_ready=" + viewsInitialized);
-		// Lifecycle restoration runs before addAndInitViews attaches the controls.
-		if (!viewsInitialized) return;
-		cancelTikTokTransitionImmediately();
-		tikTokGestureDistance = 0f;
-		tikTokGestureThresholdReached = false;
-		updateTikTokPagingMode(getCurrentGalleryItem());
-		PagerInstance.ViewHolder holder = pagerInstance.currentHolder;
-		if (holder != null && holder.photoView != null) {
-			holder.photoView.resetScale();
-		}
-		volumeGestureView.removeCallbacks(hideVolumeGesture);
-		volumeGestureView.setVisibility(View.GONE);
-		seekGestureView.removeCallbacks(hideSeekGesture);
-		hideSeekGesture.run();
-		videoUnit.onTikTokModeChanged();
+		tikTokSession.selectMode(enabled, tikTokFilter);
+		if (viewsInitialized) updateTikTokPagingMode(getCurrentGalleryItem());
 	}
 
 	private void updateTikTokPagingMode(GalleryItem item) {
 		Chan chan = Chan.get(galleryInstance.chanName);
-		boolean active = tikTokMode && matchesTikTokFilter(item, tikTokFilter);
+		// Null holders occur while the grid is open; they are not a user selection.
+		boolean active = item != null && tikTokSession.selectItem(matchesTikTokFilter(item, tikTokFilter));
 		if (tikTokPagingActive != active) {
 			endVolumeGesture();
 			verticalGesture = VerticalGesture.NONE;
+			cancelTikTokTransitionImmediately();
 			tikTokGestureDistance = 0f;
 			tikTokGestureThresholdReached = false;
 			tikTokPagingActive = active;
-			VideoDiagnostics.recordUi("gallery tiktok_paging active=" + active + " saved=" + tikTokMode
+			PagerInstance.ViewHolder holder = pagerInstance.currentHolder;
+			if (holder != null && holder.photoView != null) holder.photoView.resetScale();
+			volumeGestureView.removeCallbacks(hideVolumeGesture);
+			volumeGestureView.setVisibility(View.GONE);
+			seekGestureView.removeCallbacks(hideSeekGesture);
+			hideSeekGesture.run();
+			videoUnit.onTikTokModeChanged();
+			VideoDiagnostics.recordUi("gallery tiktok_paging active=" + active
+					+ " saved=" + Preferences.isVideoTikTokMode() + " session=" + tikTokSession.isEnabled()
 					+ " filter=" + tikTokFilter + " index=" + viewPager.getCurrentIndex());
 		}
 		viewPager.setVerticalPagingMode(active, active && item.isImage(chan));
@@ -345,7 +391,7 @@ public class PagerUnit implements PagerInstance.Callback {
 			String[] choices = {provider.getContext().getString(R.string.tiktok_filter_all),
 					provider.getContext().getString(R.string.tiktok_filter_video),
 					provider.getContext().getString(R.string.tiktok_filter_image)};
-			return new AlertDialog.Builder(provider.getContext()).setTitle(R.string.tiktok_filter)
+			return new MotionDialogBuilder(provider.getContext()).setTitle(R.string.tiktok_filter)
 					.setSingleChoiceItems(choices, unit.tikTokFilter, (dialog, which) -> {
 						provider.dismiss();
 						unit.selectTikTokFilter(which, enable);
@@ -355,7 +401,7 @@ public class PagerUnit implements PagerInstance.Callback {
 
 	private void selectTikTokFilter(int filter, boolean enable) {
 		if (finished || !viewsInitialized) return;
-		boolean active = enable || tikTokMode;
+		boolean active = enable || tikTokSession.isEnabled();
 		int target = viewPager.getCurrentIndex();
 		if (active && !matchesTikTokFilter(getCurrentGalleryItem(), filter)) {
 			target = findTikTokItem(target + 1, 1, filter);
@@ -369,7 +415,7 @@ public class PagerUnit implements PagerInstance.Callback {
 						PagerUnit unit = new ViewModelProvider(provider.getParentFragment())
 								.get(PagerUnitViewModel.class).pagerUnit.get();
 						if (unit == null || unit.finished) return provider.createDismissDialog();
-						return new AlertDialog.Builder(provider.getContext()).setMessage(R.string.tiktok_filter_first)
+						return new MotionDialogBuilder(provider.getContext()).setMessage(R.string.tiktok_filter_first)
 								.setPositiveButton(android.R.string.ok, (d, w) -> {
 									int index = unit.findTikTokItem(0, 1, filter);
 									if (index >= 0) unit.applyTikTokFilter(filter, true, index);
@@ -388,10 +434,14 @@ public class PagerUnit implements PagerInstance.Callback {
 		tikTokFilter = filter;
 		Preferences.setTikTokMediaFilter(filter);
 		Preferences.setVideoTikTokMode(enabled);
-		setTikTokMode(enabled);
-		updateTikTokPagingMode(getCurrentGalleryItem());
-		videoUnit.onTikTokModeChanged();
-		if (target != viewPager.getCurrentIndex()) viewPager.setCurrentIndex(target);
+		tikTokSession.selectMode(enabled, filter);
+		// Resolve the explicit choice against its destination, not the excluded
+		// attachment that was visible when the filter dialog opened.
+		if (target != viewPager.getCurrentIndex()) {
+			viewPager.setCurrentIndex(target);
+		} else {
+			updateTikTokPagingMode(getCurrentGalleryItem());
+		}
 	}
 
 	private float getTikTokGestureThreshold(PhotoViewPager view) {
@@ -613,6 +663,7 @@ public class PagerUnit implements PagerInstance.Callback {
 
 	public void setHasFocus(boolean hasFocus) {
 		this.hasFocus = hasFocus;
+		videoUnit.onWindowFocusChanged(hasFocus);
 		updateActive();
 	}
 
@@ -625,7 +676,9 @@ public class PagerUnit implements PagerInstance.Callback {
 			pagerInstance.leftHolder = null;
 			pagerInstance.currentHolder = null;
 			pagerInstance.rightHolder = null;
-			if (duration > 0) {
+			if (GalleryMotionController.mode(viewPager, false, duration, false)) {
+				// Shared mode clock owns only rendering and final visibility.
+			} else if (duration > 0) {
 				viewPager.setAlpha(1f);
 				viewPager.setScaleX(1f);
 				viewPager.setScaleY(1f);
@@ -636,7 +689,9 @@ public class PagerUnit implements PagerInstance.Callback {
 			}
 		} else {
 			viewPager.setVisibility(View.VISIBLE);
-			if (duration > 0) {
+			if (GalleryMotionController.mode(viewPager, true, duration, false)) {
+				// Shared mode clock owns only rendering and final visibility.
+			} else if (duration > 0) {
 				viewPager.setAlpha(0f);
 				viewPager.setScaleX(PAGER_SCALE);
 				viewPager.setScaleY(PAGER_SCALE);
@@ -724,6 +779,7 @@ public class PagerUnit implements PagerInstance.Callback {
 	}
 
 	public void onFinish() {
+		finishPhotoMotion();
 		finished = true;
 		pagerInstance.mediaPreloader.setResumed(false);
 		endVolumeGesture();
@@ -909,9 +965,11 @@ public class PagerUnit implements PagerInstance.Callback {
 		@Override
 		public void onClick(PhotoView photoView, boolean image, float x, float y) {
 			if (tikTokPagingActive && !canHandleTikTokTap(photoView)) return;
-			GalleryItem galleryItem = pagerInstance.currentHolder.galleryItem;
+			PagerInstance.ViewHolder holder = pagerInstance.currentHolder;
+			if (holder == null || holder.photoView != photoView || holder.galleryItem == null) return;
+			GalleryItem galleryItem = holder.galleryItem;
 			Chan chan = Chan.get(galleryInstance.chanName);
-			View playButton = pagerInstance.currentHolder.playButton;
+			View playButton = holder.playButton;
 			if (playButton.getVisibility() == View.VISIBLE && galleryItem.isVideo(chan)
 					&& !videoUnit.isCreated()) {
 				int centerX = playButton.getLeft() + playButton.getWidth() / 2;
@@ -929,7 +987,10 @@ public class PagerUnit implements PagerInstance.Callback {
 					return;
 				}
 			}
-			if (image || tikTokPagingActive) {
+			// Letterbox space is part of the video tap target unless explicitly configured to close.
+			boolean videoBackgroundTap = galleryItem.isVideo(chan) && videoUnit.isCreated()
+					&& !Preferences.isCloseGalleryOnBackgroundTap();
+			if (image || tikTokPagingActive || videoBackgroundTap) {
 				galleryInstance.callback.toggleSystemUIVisibility(GalleryInstance.Flags.LOCKED_USER);
 			} else if (Preferences.isCloseGalleryOnBackgroundTap()) {
 				galleryInstance.callback.navigateGalleryOrFinish(false);
@@ -1002,7 +1063,17 @@ public class PagerUnit implements PagerInstance.Callback {
 		}
 
 		@Override
+		public void onCloseAnimationFinished(PhotoView photoView) {
+			galleryInstance.callback.completePhotoSwipeClose();
+		}
+		@Override
+		public boolean isPhotoMotionEnabled(PhotoView photoView) {
+			return photoView == getMotionPhotoView();
+		}
+
+		@Override
 		public boolean onClose(PhotoView photoView, boolean down) {
+			if (galleryInstance.callback.deferPhotoSwipeClose(down)) return true;
 			galleryInstance.callback.navigateGalleryOrFinish(down);
 			return true;
 		}
@@ -1211,7 +1282,7 @@ public class PagerUnit implements PagerInstance.Callback {
 			// selected gesture stays fixed until release, even if the finger moves away.
 			if (tryStartVolumeGesture(view, x, y)) {
 				verticalGesture = VerticalGesture.VOLUME;
-				VideoDiagnostics.recordUi("gallery volume_gesture start tiktok=" + tikTokMode
+				VideoDiagnostics.recordUi("gallery volume_gesture start tiktok=" + tikTokSession.isEnabled()
 						+ " local=" + videoUnit.isVolumeGestureLocal());
 				recordVerticalGesture(view, "start", "volume_edge");
 				return true;
@@ -1237,7 +1308,7 @@ public class PagerUnit implements PagerInstance.Callback {
 			if (!VideoDiagnostics.isExtendedRecording()) return;
 			PagerInstance.ViewHolder holder = pagerInstance.currentHolder;
 			VideoDiagnostics.recordUi("gallery vertical_gesture " + event + " reason=" + reason
-					+ " index=" + view.getCurrentIndex() + " tiktok=" + tikTokMode
+					+ " index=" + view.getCurrentIndex() + " tiktok=" + tikTokSession.isEnabled()
 					+ " active=" + tikTokPagingActive + " filter=" + tikTokFilter
 					+ " resumed=" + resumed + " finished=" + finished + " transition=" + tikTokTransitionRunning
 					+ " video=" + (holder != null && holder.galleryItem != null

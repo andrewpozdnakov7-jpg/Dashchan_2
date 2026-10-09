@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui.preference;
 
+import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.os.Bundle;
@@ -206,7 +207,7 @@ public class InterfaceFragment extends PreferenceFragment {
 		new InstanceDialog(fragmentManager, null, provider -> {
 			Context context = provider.getContext();
 			String html = IOUtils.readRawResourceString(context.getResources(), R.raw.markup_advanced_search);
-			return new AlertDialog.Builder(context)
+			return new MotionDialogBuilder(context)
 					.setTitle(R.string.advanced_search)
 					.setMessage(BUILDER_ADVANCED_SEARCH.fromHtmlReduced(html))
 					.setPositiveButton(android.R.string.ok, null)

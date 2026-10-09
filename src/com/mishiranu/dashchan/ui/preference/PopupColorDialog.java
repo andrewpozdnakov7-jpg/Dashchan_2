@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui.preference;
 
+import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import android.app.AlertDialog;
 import android.app.Dialog;
 import android.content.Context;
@@ -166,7 +167,7 @@ public class PopupColorDialog extends DialogFragment {
 		if (savedInstanceState != null) hex.setText(savedInstanceState.getString("hex", formatColor(color)));
 		ScrollView scroll = new ScrollView(context);
 		scroll.addView(layout);
-		return new AlertDialog.Builder(context).setTitle(requireArguments().getInt("title"))
+		return new MotionDialogBuilder(context).setTitle(requireArguments().getInt("title"))
 				.setView(scroll).setNegativeButton(android.R.string.cancel, null)
 				.setPositiveButton(android.R.string.ok, null).create();
 	}

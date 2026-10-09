@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Only the drawable's private configuration view receives this theme. -->
+    <style name="Theme.Slooop.LoadingIndicator" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="loadingIndicatorStyle">@style/Widget.Slooop.LoadingIndicator</item>
+    </style>
+    <style name="Widget.Slooop.LoadingIndicator" parent="Widget.Material3.LoadingIndicator.Contained">
+        <item name="indicatorSize">34dp</item>
+        <item name="containerWidth">48dp</item>
+        <item name="containerHeight">48dp</item>
+        <item name="showDelay">0</item>
+        <item name="minHideDelay">0</item>
+    </style>
+</resources>

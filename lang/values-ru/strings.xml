@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 	<string name="close_gallery_on_background_tap">Закрывать просмотр касанием фона</string>
-	<string name="close_gallery_on_background_tap__summary">В обычном режиме закрывать просмотр файла касанием пустого пространства вокруг него. Если выключено — касания фона игнорируются; кнопка «Назад» и жест закрытия продолжают работать.</string>
+	<string name="close_gallery_on_background_tap__summary">В обычном режиме закрывать просмотр файла касанием пустого пространства вокруг него. Если выключено — при просмотре видео касание фона показывает или скрывает управление, а при просмотре изображения игнорируется. Кнопка «Назад» и жест закрытия продолжают работать.</string>
 	<string name="webview_renderer_gone">Веб-страница перестала работать. Откройте её заново.</string>
 	<string name="gallery_restore_unavailable">Не удалось восстановить галерею из локальных данных. Откройте её заново из треда или архива.</string>
 	<string name="scroll_gallery_to_current_file">Прокручивать галерею к текущему файлу</string>
@@ -653,7 +653,7 @@
 	<string name="gesture_controls">Управление жестами</string>
 	<string name="gesture_controls__summary">Настройка областей жестов видеоплеера</string>
 	<string name="rounded_dialogs">Скруглённые всплывающие окна</string>
-	<string name="rounded_dialogs__summary">Скругляет углы диалогов, меню и окон предпросмотра постов</string>
+	<string name="rounded_dialogs__summary">Скругляет углы диалогов, меню и окон предпросмотра постов, а также внешний край бокового меню</string>
 	<string name="rounded_dialogs_radius">Радиус скругления</string>
 	<string name="rounded_dialogs_radius__summary_format">%1$d dp</string>
 	<string name="rounded_dialogs_preview">Тестовое окно</string>

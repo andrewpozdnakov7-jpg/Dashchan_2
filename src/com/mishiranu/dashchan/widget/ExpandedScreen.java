@@ -51,6 +51,10 @@ public class ExpandedScreen implements RecyclerScrollTracker.OnScrollListener {
 	private final LinkedHashMap<View, RecyclerView> contentViews = new LinkedHashMap<>();
 
 	private final List<ForegroundDrawable> foregroundDrawables;
+	private ValueAnimator chromeAnimator;
+	private float chromeValue = 1f;
+	private boolean chromeTarget = true, modernChromeOwned;
+
 	private ValueAnimator foregroundAnimator;
 	private boolean foregroundAnimatorShow;
 
@@ -299,6 +303,7 @@ public class ExpandedScreen implements RecyclerScrollTracker.OnScrollListener {
 	private class ForegroundAnimatorListener implements ValueAnimator.AnimatorListener,
 			ValueAnimator.AnimatorUpdateListener {
 		private final boolean show;
+		private boolean cancelled;
 
 		public ForegroundAnimatorListener(boolean show) {
 			this.show = show;
@@ -321,14 +326,13 @@ public class ExpandedScreen implements RecyclerScrollTracker.OnScrollListener {
 
 		@Override
 		public void onAnimationEnd(Animator animation) {
-			if (toolbarView != null && !show) {
-				activity.getActionBar().hide();
-			}
+			if (foregroundAnimator != animation) return;
+			if (!cancelled && toolbarView != null && !show) activity.getActionBar().hide();
 			foregroundAnimator = null;
 		}
 
 		@Override
-		public void onAnimationCancel(Animator animation) {}
+		public void onAnimationCancel(Animator animation) { cancelled = true; }
 
 		@Override
 		public void onAnimationRepeat(Animator animation) {}
@@ -344,8 +348,59 @@ public class ExpandedScreen implements RecyclerScrollTracker.OnScrollListener {
 		return FlagUtils.get(stateFlags, state.flag());
 	}
 
+	private void applyModernChrome(float value) {
+		chromeValue = value;
+		for (ForegroundDrawable drawable : foregroundDrawables) drawable.applyAlpha(Math.round(255f * value));
+		toolbarView.setAlpha(value);
+		toolbarView.setTranslationY(-24f * ResourceUtils.obtainDensity(toolbarView) * (1f - value));
+	}
+
+	private void showModernChrome(boolean show) {
+		if (foregroundAnimator != null) { ValueAnimator old = foregroundAnimator; foregroundAnimator = null; old.cancel(); }
+		if (chromeAnimator != null) { ValueAnimator old = chromeAnimator; chromeAnimator = null; old.cancel(); }
+		if (!modernChromeOwned) chromeValue = activity.getActionBar().isShowing() ? toolbarView.getAlpha() : 0f;
+		modernChromeOwned = true; chromeTarget = show;
+		ToolbarSearchMotion.finish(activity.findViewById(com.mishiranu.dashchan.R.id.toolbar));
+		if (show) activity.getActionBar().show();
+		applyModernChrome(chromeValue);
+		if (com.mishiranu.dashchan.util.InterfaceMotion.duration(1) == 0 || Math.abs(chromeValue - (show ? 1f : 0f)) < .001f) {
+			finishMotion(); return;
+		}
+		ValueAnimator next = ValueAnimator.ofFloat(chromeValue, show ? 1f : 0f); chromeAnimator = next;
+		next.setDuration(com.mishiranu.dashchan.util.InterfaceMotion.duration(show ? 240 : 180));
+		next.setInterpolator(com.mishiranu.dashchan.util.InterfaceMotion.STANDARD);
+		next.addUpdateListener(value -> {
+			if (chromeAnimator != value) return;
+			if (!com.mishiranu.dashchan.util.InterfaceMotion.isEnabled()) { finishMotion(); return; }
+			applyModernChrome((float) value.getAnimatedValue());
+		});
+		next.addListener(new android.animation.AnimatorListenerAdapter() {
+			@Override public void onAnimationEnd(Animator animation) { if (chromeAnimator == animation) finishMotion(); }
+		});
+		next.start();
+	}
+
+	/** Settle the latest requested state; cancellation never invokes an old hide action. */
+	public void finishMotion() {
+		if (chromeAnimator != null) { ValueAnimator old = chromeAnimator; chromeAnimator = null; old.cancel(); }
+		if (modernChromeOwned && toolbarView != null) {
+			applyModernChrome(chromeTarget ? 1f : 0f);
+			toolbarView.setTranslationY(0f);
+			if (!chromeTarget) activity.getActionBar().hide();
+		}
+	}
+
+	public void updateMotionPolicy() {
+		finishMotion();
+		if (!com.mishiranu.dashchan.util.InterfaceMotion.isEnabled()) modernChromeOwned = false;
+	}
+
 	private void applyShowActionBar(boolean show) {
 		ActionBar actionBar = activity.getActionBar();
+		if (fullScreenLayoutEnabled && toolbarView != null && com.mishiranu.dashchan.util.InterfaceMotion.isEnabled()) {
+			if (chromeTarget != show || !modernChromeOwned) showModernChrome(show);
+			return;
+		}
 		if (fullScreenLayoutEnabled) {
 			boolean showing = isActionBarShowing();
 			ValueAnimator foregroundAnimator = ExpandedScreen.this.foregroundAnimator;
@@ -362,9 +417,9 @@ public class ExpandedScreen implements RecyclerScrollTracker.OnScrollListener {
 				foregroundAnimator.setDuration(ACTION_BAR_ANIMATION_TIME);
 				foregroundAnimator.addListener(listener);
 				foregroundAnimator.addUpdateListener(listener);
-				foregroundAnimator.start();
 				ExpandedScreen.this.foregroundAnimator = foregroundAnimator;
 				foregroundAnimatorShow = show;
+				foregroundAnimator.start();
 			}
 		}
 		if (toolbarView == null) {
@@ -377,6 +432,7 @@ public class ExpandedScreen implements RecyclerScrollTracker.OnScrollListener {
 	}
 
 	private boolean isActionBarShowing() {
+		if (chromeAnimator != null) return chromeTarget;
 		if (!activity.getActionBar().isShowing()) {
 			return false;
 		}

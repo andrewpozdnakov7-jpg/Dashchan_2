@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui;
 
+import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import static com.mishiranu.dashchan.ui.PageSessionStore.EXTRA_PAGES_STATE_VERSION;
 import static com.mishiranu.dashchan.ui.PageSessionStore.PAGES_STATE_VERSION;
 
@@ -81,6 +82,7 @@ import com.mishiranu.dashchan.ui.gallery.GalleryOverlay;
 import com.mishiranu.dashchan.ui.gallery.VideoPipActivity;
 import com.mishiranu.dashchan.ui.navigator.Page;
 import com.mishiranu.dashchan.ui.navigator.PageFragment;
+import com.mishiranu.dashchan.ui.navigator.ThreadListNavigation;
 import com.mishiranu.dashchan.ui.navigator.PageItem;
 import com.mishiranu.dashchan.ui.navigator.SavedPageItem;
 import com.mishiranu.dashchan.ui.navigator.manager.UiManager;
@@ -262,6 +264,8 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		restoreCurrentContent(state);
 		initializeStartupNavigation(savedInstanceState, state.restoredPagesSession);
 		finishCreation();
+		StartupNotices.install(this, () -> storageRequestState == StorageRequestState.NONE
+				&& ChanManager.getInstance().getFirstUntrustedExtension() == null);
 	}
 
 	private static final class CreationLayout {
@@ -330,7 +334,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 				? toolbarHolder.toolbar.getContext() : null, drawerLayout);
 		drawerCommon.setElevation(4f * density);
 		drawerWide.setElevation(4f * density);
-		drawerMotion = new DrawerMotionController(drawerLayout, drawerCommon);
+		drawerMotion = new DrawerMotionController(drawerLayout, drawerCommon, drawerForm.getContentView());
 		drawerLayout.addDrawerListener(drawerToggle);
 		drawerLayout.addDrawerListener(drawerForm);
 		drawerLayout.addDrawerListener(new DrawerActionModeListener());
@@ -1399,6 +1403,15 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 				throw new RuntimeException();
 			}
 		}
+		if (content == Page.Content.POSTS) {
+			Page thread = pair.first.getPage();
+			Page origin = currentPage;
+			if (currentPage != null && currentPage.content == Page.Content.POSTS) {
+				origin = ((PageFragment) currentFragment).getThreadListOrigin();
+			}
+			pair.first.setThreadListOrigin(isThreadListOrigin(origin, thread)
+					? origin : ThreadListNavigation.fallback(thread));
+		}
 		pair.second.allowReturn = FlagUtils.get(pageFlags, FLAG_PAGE_ALLOW_RETURN);
 		if (FlagUtils.get(pageFlags, FLAG_PAGE_RESET_SCROLL)) {
 			pair.first.requestResetScroll();
@@ -1420,6 +1433,70 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	private void navigateSavedPage(SavedPageItem savedPageItem, boolean closeOverlays, int motionTransition) {
 		Pair<PageFragment, PageItem> pair = savedPageItem.create();
 		navigateFragment(pair.first, pair.second, closeOverlays, motionTransition);
+	}
+
+	private boolean isThreadListOrigin(Page origin, Page thread) {
+		CombinedFeedStorage.Feed feed = origin != null && origin.content == Page.Content.COMBINED_THREADS
+				? CombinedFeedStorage.getInstance().getFeed(origin.boardName) : null;
+		return ThreadListNavigation.matches(origin, thread, feed) && isPageEnabled(origin);
+	}
+
+	private boolean handleThreadToolbarAction(PageFragment fragment) {
+		if (fragment.getPage().content != Page.Content.POSTS || fragment.isSearchMode()) return false;
+		switch (Preferences.getThreadToolbarAction()) {
+			case BACK: return false;
+			case HIDDEN: return true;
+			case THREAD_LIST: {
+				// Respect local Back handling without changing the system Back policy.
+				if (!fragment.onBackPressed()) returnToThreadList(fragment);
+				return true;
+			}
+			default: return false;
+		}
+	}
+
+	private void returnToThreadList(PageFragment fragment) {
+		finishLocalToolbarMotion();
+		Page thread = fragment.getPage();
+		Page origin = fragment.getThreadListOrigin();
+		Page target = isThreadListOrigin(origin, thread) ? origin : ThreadListNavigation.fallback(thread);
+		SavedPageItem savedTarget = null;
+		for (int i = stackPageItems.size() - 1; i >= 0; i--) {
+			if (getSavedPage(stackPageItems.get(i)).equals(target)) {
+				// Pop to the actual source list. Keep skipped thread states available in the drawer.
+				while (stackPageItems.size() - 1 > i) {
+					preservedPageItems.add(stackPageItems.remove(stackPageItems.size() - 1));
+				}
+				savedTarget = stackPageItems.remove(i);
+				break;
+			}
+		}
+		if (savedTarget == null) {
+			Iterator<SavedPageItem> iterator = preservedPageItems.iterator();
+			while (iterator.hasNext()) {
+				SavedPageItem item = iterator.next();
+				if (getSavedPage(item).equals(target)) {
+					savedTarget = item;
+					iterator.remove();
+					break;
+				}
+			}
+		}
+		if (currentPageItem != null) {
+			if (!Preferences.isCloseOnBack()) {
+				preservedPageItems.add(currentPageItem.toSaved(getSupportFragmentManager(), fragment));
+			}
+			// Do not push the outgoing thread behind its own list and create a Back navigation cycle.
+			currentPageItem = null;
+		}
+		if (savedTarget != null) {
+			// No InitRequest: keep the cached list, filters and reading position without forcing refresh.
+			navigateSavedPage(savedTarget, true, FragmentTransaction.TRANSIT_FRAGMENT_CLOSE);
+		} else {
+			// No cached list (e.g. a deep link or an evicted feed): the list performs its normal initial load.
+			PageFragment destination = new PageFragment(target, UUID.randomUUID().toString());
+			navigateFragment(destination, new PageItem(), true, FragmentTransaction.TRANSIT_FRAGMENT_CLOSE);
+		}
 	}
 
 	@Override
@@ -1622,6 +1699,12 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 			boolean displayUp;
 			if (currentFragment instanceof PageFragment) {
 				Page page = ((PageFragment) currentFragment).getPage();
+				if (page.content == Page.Content.POSTS
+						&& Preferences.getThreadToolbarAction() == Preferences.ThreadToolbarAction.HIDDEN) {
+					// Remove the navigation slot itself so the title can occupy the released space.
+					drawerToggle.setDrawerIndicatorMode(DrawerToggle.Mode.DISABLED);
+					return;
+				}
 				switch (page.content) {
 					case THREADS: {
 						displayUp = getPagesStackSize(page.chanName) > 1;
@@ -1819,6 +1902,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	@Override
 	protected void onStop() {
+		finishLocalToolbarMotion();
 		if (screenMotion != null) screenMotion.finish();
 		if (threadMotion != null) threadMotion.finish();
 		resetPredictiveBackView(false);
@@ -1836,6 +1920,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	@Override
 	protected void onDestroy() {
+		finishLocalToolbarMotion();
 		if (screenMotion != null) screenMotion.finish();
 		if (threadMotion != null) threadMotion.clear();
 		contentNavigation.close();
@@ -2142,6 +2227,8 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		}
 		ContentFragment currentFragment = getCurrentFragment("FragmentAccess/onOptionsItemSelected");
 		if (item.getItemId() == android.R.id.home) {
+			if (currentFragment instanceof PageFragment
+					&& handleThreadToolbarAction((PageFragment) currentFragment)) return true;
 			// Match system Back: restore the previous screen, including its cached list and scroll position.
 			// Do not clear the page stack or reopen the parent board with a forced load.
 			onSystemBackPressed();
@@ -2249,14 +2336,39 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		}
 	}
 
+	private void finishLocalToolbarMotion() {
+		com.mishiranu.dashchan.widget.ElementMotion.finishTree(findViewById(android.R.id.content));
+		com.mishiranu.dashchan.widget.ToolbarSearchMotion.finish(findViewById(R.id.toolbar));
+		if (toolbarExtra instanceof com.mishiranu.dashchan.widget.MotionToolbarExtra) {
+			((com.mishiranu.dashchan.widget.MotionToolbarExtra) toolbarExtra).finishPresentation();
+		}
+		if (expandedScreen != null) expandedScreen.finishMotion();
+	}
+
 	private final SharedPreferences.Listener preferencesListener = key -> {
 		drawerForm.updatePreferences();
 		if (Preferences.KEY_PREDICTIVE_BACK.equals(key) || Preferences.KEY_NEW_INTERFACE_MOTION.equals(key)) {
+			finishLocalToolbarMotion();
+			com.mishiranu.dashchan.widget.SurfaceMotion.updatePopupPolicies();
+			com.mishiranu.dashchan.widget.InterfaceAppearance.refreshTree(findViewById(android.R.id.content));
+			com.mishiranu.dashchan.widget.PullLoadingIndicator.refreshTree(findViewById(android.R.id.content));
+			View toolbar = findViewById(R.id.toolbar);
+			if (toolbar instanceof com.mishiranu.dashchan.widget.CompactToolbar) {
+				((com.mishiranu.dashchan.widget.CompactToolbar) toolbar).refreshMotionPolicy();
+			}
+			if (toolbarExtra instanceof com.mishiranu.dashchan.widget.MotionToolbarExtra) {
+				((com.mishiranu.dashchan.widget.MotionToolbarExtra) toolbarExtra).updatePolicy();
+			}
+			if (expandedScreen != null) expandedScreen.updateMotionPolicy();
 			if (screenMotion != null) screenMotion.finish();
 			if (threadMotion != null) threadMotion.clear();
 			resetPredictiveBackView(false);
 			if (drawerMotion != null) drawerMotion.updatePolicy();
 			updateSystemBackCallback();
+		} else if (Preferences.KEY_THREAD_TOOLBAR_ACTION.equals(key)) {
+			invalidateHomeUpState();
+		} else if (Preferences.KEY_ROUNDED_DIALOGS.equals(key) || Preferences.KEY_ROUNDED_DIALOGS_RADIUS.equals(key)) {
+			if (drawerMotion != null) drawerMotion.updatePolicy();
 		} else if (Preferences.KEY_RESTORE_PAGES.equals(key) && !Preferences.isRestorePages()) {
 			deletePagesState(getPagesSessionFile());
 		}
@@ -3039,7 +3151,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	};
 
 	private void showStorageInstructionsDialog() {
-		new AlertDialog.Builder(this)
+		new MotionDialogBuilder(this)
 				.setTitle(R.string.download_directory)
 				.setMessage(R.string.saf_instructions__sentence)
 				.setPositiveButton(R.string.proceed, (d, w) -> startStorageDirectoryPicker())
@@ -3057,7 +3169,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	}
 
 	private void showInitialStorageSetupDialog() {
-		new AlertDialog.Builder(this)
+		new MotionDialogBuilder(this)
 				.setTitle(R.string.download_directory)
 				.setMessage(R.string.download_directory_setup__sentence)
 				.setPositiveButton(R.string.select_folder, (d, w) -> startStorageDirectoryPicker())

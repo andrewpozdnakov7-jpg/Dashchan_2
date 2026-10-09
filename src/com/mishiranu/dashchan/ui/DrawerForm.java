@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui;
 
+import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import com.mishiranu.dashchan.util.AuditDiagnostics;
 import com.mishiranu.dashchan.ui.DrawerContentController.ListItem;
 import com.mishiranu.dashchan.ui.DrawerContentController.CategoriesOrder;
@@ -715,7 +716,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 			int padding = context.getResources().getDimensionPixelSize(R.dimen
 					.dialog_padding_view);
 			linearLayout.setPadding(padding, padding, padding, padding);
-			AlertDialog dialog = new AlertDialog.Builder(context)
+			AlertDialog dialog = new MotionDialogBuilder(context)
 					.setView(linearLayout).setTitle(R.string.rename)
 					.setNegativeButton(android.R.string.cancel, null)
 					.setPositiveButton(android.R.string.ok, (d, which) -> {
@@ -1119,8 +1120,8 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 						int resId = ResourceUtils.getResourceId(context, android.R.attr.popupTheme, 0);
 						Context context = v.getContext();
 						Context popupContext = resId != 0 ? new ContextThemeWrapper(context, resId) : context;
-						PopupMenu popupMenu = new PopupMenu(popupContext, v, Gravity.END, 0,
-								R.style.Widget_OverlapPopupMenu);
+						PopupMenu popupMenu = new PopupMenu(com.mishiranu.dashchan.widget.SurfaceMotion.popupContext(popupContext), v, Gravity.END, 0,
+								com.mishiranu.dashchan.widget.SurfaceMotion.popupStyle(R.style.Widget_OverlapPopupMenu));
 						popupMenu.getMenu().add(0, FAVORITES_MENU_REFRESH, 0, R.string.refresh)
 								.setEnabled(hasEnabled);
 						popupMenu.getMenu().add(0, FAVORITES_MENU_CLEAR_DELETED, 0, R.string.clear_deleted)

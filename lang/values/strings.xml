@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 	<string name="close_gallery_on_background_tap">Close viewer by tapping the background</string>
-	<string name="close_gallery_on_background_tap__summary">In normal viewing mode, close the file viewer by tapping empty space around the file. When off, background taps do nothing; Back and swipe-to-close still work.</string>
+	<string name="close_gallery_on_background_tap__summary">In normal viewing mode, close the file viewer by tapping empty space around the file. When off, background taps show or hide controls while viewing a video and do nothing while viewing an image. Back and swipe-to-close still work.</string>
 	<string name="webview_renderer_gone">The web page stopped working. Please open it again.</string>
 	<string name="gallery_restore_unavailable">Could not restore the gallery from local data. Open it again from the thread or archive.</string>
 	<string name="scroll_gallery_to_current_file">Scroll gallery to current file</string>
@@ -632,7 +632,7 @@
 	<string name="gesture_controls">Gesture controls</string>
 	<string name="gesture_controls__summary">Configure video player gesture areas</string>
 	<string name="rounded_dialogs">Rounded pop-up windows</string>
-	<string name="rounded_dialogs__summary">Round the corners of dialogs, menus, and post previews</string>
+	<string name="rounded_dialogs__summary">Round the corners of dialogs, menus, and post previews, as well as the outer edge of the side menu</string>
 	<string name="rounded_dialogs_radius">Corner radius</string>
 	<string name="rounded_dialogs_radius__summary_format">%1$d dp</string>
 	<string name="rounded_dialogs_preview">Preview window</string>

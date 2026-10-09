@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui.preference;
 
+import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import android.app.AlertDialog;
 import android.app.Dialog;
 import android.content.Context;
@@ -245,7 +246,7 @@ public class GestureSettingsFragment extends PreferenceFragment {
 			scrollView.addView(layout, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
 					ViewGroup.LayoutParams.WRAP_CONTENT));
 
-			return new AlertDialog.Builder(context)
+			return new MotionDialogBuilder(context)
 					.setTitle(R.string.video_volume_gesture_area)
 					.setView(scrollView)
 					.setNegativeButton(android.R.string.cancel, null)

@@ -17,8 +17,16 @@ public class CompactToolbar extends Toolbar {
 		ThemeEngine.applyToolbarStyle(this);
 	}
 
+	public void refreshMotionPolicy() { ToolbarSearchMotion.finish(this); }
+
 	@Override public boolean dispatchTouchEvent(MotionEvent event) {
-		return getTag(R.id.screen_motion_owner) != null || super.dispatchTouchEvent(event);
+		return getTag(R.id.screen_motion_owner) != null || getTag(R.id.toolbar_search_motion_owner) != null
+				|| super.dispatchTouchEvent(event);
+	}
+
+	@Override protected void onDetachedFromWindow() {
+		ToolbarSearchMotion.finish(this);
+		super.onDetachedFromWindow();
 	}
 
 	@Override

@@ -19,6 +19,7 @@ public class ProgressDialog extends AlertDialog {
 
 	public ProgressDialog(Context context, String progressFormat) {
 		super(context);
+		SurfaceMotion.configureDialog(this);
 		context = getContext();
 		setCanceledOnTouchOutside(false);
 

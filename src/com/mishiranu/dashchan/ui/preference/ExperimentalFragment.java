@@ -4,10 +4,9 @@ import android.app.AlertDialog;
 import android.os.Bundle;
 import android.view.View;
 import androidx.annotation.NonNull;
-import com.mishiranu.dashchan.BuildConfig;
+import androidx.annotation.Nullable;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
-import com.mishiranu.dashchan.ui.posting.PhotoEditorBridge;
 import com.mishiranu.dashchan.media.VideoDiagnostics;
 import com.mishiranu.dashchan.ui.FragmentHandler;
 import com.mishiranu.dashchan.ui.posting.PostingFormDiagnostics;
@@ -19,6 +18,7 @@ import com.mishiranu.dashchan.util.SharedPreferences;
 import com.mishiranu.dashchan.widget.ClickableToast;
 import com.mishiranu.dashchan.widget.MessageDialog;
 import java.io.File;
+import java.util.ArrayList;
 
 public class ExperimentalFragment extends PreferenceFragment {
 	@Override
@@ -32,15 +32,26 @@ public class ExperimentalFragment extends PreferenceFragment {
 		refreshPreferences();
 	}
 
+	@Nullable
+	private CheckPreference addExperimentalToggle(ExperimentalPreferenceDescriptors.Toggle toggle) {
+		return toggle.available
+				? addCheck(true, toggle.key, toggle.defaultValue, toggle.titleResId, toggle.summaryResId) : null;
+	}
+
 	private void refreshPreferences() {
 		if (getView() == null) {
 			return;
 		}
 		removeAllPreferences();
-		if (BuildConfig.ENABLE_EXPERIMENTAL_INTERFACE_MOTION) {
-			addCheck(true, Preferences.KEY_NEW_INTERFACE_MOTION, Preferences.DEFAULT_NEW_INTERFACE_MOTION,
-					R.string.new_interface_motion, R.string.new_interface_motion_summary);
+		addExperimentalToggle(ExperimentalPreferenceDescriptors.interfaceMotion());
+		ArrayList<String> toolbarValues = new ArrayList<>();
+		ArrayList<CharSequence> toolbarEntries = new ArrayList<>();
+		for (Preferences.ThreadToolbarAction action : Preferences.ThreadToolbarAction.values()) {
+			toolbarValues.add(action.value);
+			toolbarEntries.add(getString(action.titleResId));
 		}
+		addList(Preferences.KEY_THREAD_TOOLBAR_ACTION, toolbarValues,
+				Preferences.DEFAULT_THREAD_TOOLBAR_ACTION.value, R.string.thread_toolbar_action, toolbarEntries);
 		addFormDiagnosticsPreferences();
 		addButton(R.string.toolbar_title_sizes, R.string.toolbar_title_sizes__summary)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
@@ -49,15 +60,12 @@ public class ExperimentalFragment extends PreferenceFragment {
 		addButton(R.string.pip_diagnostic_mode, R.string.pip_diagnostic_hidden_summary)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 						.pushFragment(new PipDiagnosticsFragment()));
-		if (PhotoEditorBridge.isAvailable()) {
-			addCheck(true, Preferences.KEY_NEW_PHOTO_EDITOR, Preferences.DEFAULT_NEW_PHOTO_EDITOR,
-					PhotoEditorBridge.getTitleResId(), PhotoEditorBridge.getSummaryResId());
+		addExperimentalToggle(ExperimentalPreferenceDescriptors.photoEditor());
+		addExperimentalToggle(ExperimentalPreferenceDescriptors.discussionContext());
+		CheckPreference outboxPreference = addExperimentalToggle(ExperimentalPreferenceDescriptors.outboxJournal());
+		if (outboxPreference != null) {
+			outboxPreference.setOnAfterChangeListener(p -> refreshPreferences());
 		}
-		addCheck(true, Preferences.KEY_DISCUSSION_CONTEXT, Preferences.DEFAULT_DISCUSSION_CONTEXT,
-				R.string.discussion_context, R.string.discussion_context_summary);
-		addCheck(true, Preferences.KEY_OUTBOX_JOURNAL, Preferences.DEFAULT_OUTBOX_JOURNAL,
-				R.string.outbox_title, R.string.outbox_experimental_summary)
-				.setOnAfterChangeListener(p -> refreshPreferences());
 		if (Preferences.isOutboxJournalEnabled()) {
 			addButton(R.string.outbox_open, R.string.outbox_summary).setOnClickListener(p ->
 					((FragmentHandler) requireActivity()).pushFragment(new OutboxFragment()));

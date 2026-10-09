@@ -25,6 +25,7 @@ import com.mishiranu.dashchan.graphics.TransparentTileDrawable;
 import com.mishiranu.dashchan.media.VideoDiagnostics;
 import com.mishiranu.dashchan.util.AnimationUtils;
 import com.mishiranu.dashchan.util.InterfaceMotion;
+import com.mishiranu.dashchan.R;
 
 public class PhotoView extends View implements ScaleGestureDetector.OnScaleGestureListener {
 	private enum ScrollEdge {NONE, START, END, BOTH}
@@ -45,6 +46,61 @@ public class PhotoView extends View implements ScaleGestureDetector.OnScaleGestu
 	private int[] initialScalingData;
 	private ValueAnimator initialScalingAnimator;
 	private Rect initialScaleClipRect;
+	private Object galleryFrameOwner;
+	private final Matrix galleryFrameMatrix = new Matrix();
+	private final RectF galleryFrameClip = new RectF();
+	private Object galleryPreviewOwner;
+	private Drawable galleryPreview;
+
+	public RectF getGalleryImageBounds() {
+		Point dimensions = getDimensions();
+		if (dimensions == null || dimensions.x <= 0 || dimensions.y <= 0 || getWidth() <= 0 || getHeight() <= 0) return null;
+		RectF bounds = new RectF(initDisplayMatrixAndRect());
+		return bounds.width() > 0f && bounds.height() > 0f ? bounds : null;
+	}
+	public boolean isGalleryImageAtRest() {
+		return hasImage() && !isZoomed() && !isScaling() && !isClosingTouchMode() &&
+				!isDragging && flingRunnable == null;
+	}
+	/** Render-only matrix: leave the gesture/zoom matrix intact. */
+	public void setGalleryFrame(Object owner, RectF clip, boolean crop) {
+		Point dimensions = getDimensions();
+		if (getTag(R.id.gallery_motion_owner) != owner || dimensions == null ||
+				dimensions.x <= 0 || dimensions.y <= 0 || clip.width() <= 0f || clip.height() <= 0f) return;
+		galleryFrameOwner = owner; galleryFrameClip.set(clip);
+		float x = clip.width() / dimensions.x, y = clip.height() / dimensions.y;
+		float scale = crop ? Math.max(x, y) : Math.min(x, y);
+		galleryFrameMatrix.setScale(scale, scale);
+		galleryFrameMatrix.postTranslate(clip.centerX() - dimensions.x * scale / 2f,
+				clip.centerY() - dimensions.y * scale / 2f);
+		invalidate();
+	}
+	public void clearGalleryFrame(Object owner) {
+		if (galleryFrameOwner == owner) { galleryFrameOwner = null; invalidate(); }
+	}
+	/** View.draw() paints its framework overlay before our image, so this preview is drawn last. */
+	public void setGalleryPreview(Object owner, Drawable preview) {
+		if (getTag(R.id.gallery_motion_owner) != owner) return;
+		if (galleryPreview != null) galleryPreview.setCallback(null);
+		galleryPreviewOwner = owner; galleryPreview = preview;
+		preview.setCallback(this); invalidate();
+	}
+	public void clearGalleryPreview(Object owner) {
+		if (galleryPreviewOwner == owner) {
+			if (galleryPreview != null) galleryPreview.setCallback(null);
+			galleryPreviewOwner = null; galleryPreview = null; invalidate();
+		}
+	}
+	public void finishGalleryPresentation() {
+		if (modernZoomAnimator != null) { modernZoomAnimator.cancel(); modernZoomAnimator = null; }
+		if (animatedRestoreSwipeRunnable != null && animatedRestoreSwipeRunnable.modernAnimator != null) {
+			// Recovery owns both the image offset and the swipe scrim until settled.
+			if (!animatedRestoreSwipeRunnable.finish) animatedRestoreSwipeRunnable.applyModern(1f);
+			cancelRestoreVerticalSwipe(false);
+		}
+		Object owner = getTag(R.id.gallery_motion_owner);
+		if (owner instanceof Runnable) ((Runnable) owner).run();
+	}
 
 	private float minimumScale;
 	private float maximumScale;
@@ -69,6 +125,7 @@ public class PhotoView extends View implements ScaleGestureDetector.OnScaleGestu
 
 	private TouchMode touchMode = TouchMode.UNDEFINED;
 	private AnimatedRestoreSwipeRunnable animatedRestoreSwipeRunnable;
+	private ValueAnimator modernZoomAnimator;
 
 	private int activePointerId = INVALID_POINTER_ID;
 	private int activePointerIndex = 0;
@@ -120,6 +177,7 @@ public class PhotoView extends View implements ScaleGestureDetector.OnScaleGestu
 	protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
 		if (top != lastLayout.top || bottom != lastLayout.bottom
 				|| left != lastLayout.left || right != lastLayout.right) {
+			if (lastLayout.width() > 0 && lastLayout.height() > 0) finishGalleryPresentation();
 			lastLayout.set(left, top, right, bottom);
 			resetScale();
 		}
@@ -133,6 +191,8 @@ public class PhotoView extends View implements ScaleGestureDetector.OnScaleGestu
 		void onTransformChanged(PhotoView photoView, float left, float top, float right, float bottom);
 		void onVerticalSwipe(PhotoView photoView, boolean down, float value);
 		boolean onClose(PhotoView photoView, boolean down);
+		default void onCloseAnimationFinished(PhotoView photoView) {}
+		default boolean isPhotoMotionEnabled(PhotoView photoView) { return false; }
 	}
 
 	public void setListener(Listener listener) {
@@ -140,6 +200,7 @@ public class PhotoView extends View implements ScaleGestureDetector.OnScaleGestu
 	}
 
 	public void recycle() {
+		finishGalleryPresentation();
 		if (drawable != null) {
 			drawable.setCallback(null);
 			unscheduleDrawable(drawable);
@@ -244,6 +305,11 @@ public class PhotoView extends View implements ScaleGestureDetector.OnScaleGestu
 			canvas.clipRect(initialScaleClipRect);
 		}
 		RectF rect = initDisplayMatrixAndRect();
+		if (galleryFrameOwner != null && getTag(R.id.gallery_motion_owner) == galleryFrameOwner) {
+			if (!restoreClip) { canvas.save(); restoreClip = true; }
+			canvas.clipRect(galleryFrameClip);
+			displayMatrix.set(galleryFrameMatrix); rect = initDisplayRect();
+		}
 		int workAlpha = 0xff;
 		if (isClosingTouchMode()) {
 			float value = Math.min(Math.abs(getClosingTouchModeShift(rect)) * 2f / getHeight(), 1f);
@@ -283,12 +349,13 @@ public class PhotoView extends View implements ScaleGestureDetector.OnScaleGestu
 		if (restoreClip) {
 			canvas.restore();
 		}
+		if (galleryPreview != null && getTag(R.id.gallery_motion_owner) == galleryPreviewOwner) galleryPreview.draw(canvas);
 	}
 
 	@Override
 	public void invalidateDrawable(@NonNull Drawable drawable) {
 		// Override this method instead of verifyDrawable because I use own matrix to concatenate canvas
-		if (drawable == this.drawable) {
+		if (drawable == this.drawable || drawable == galleryPreview) {
 			invalidate();
 		} else {
 			super.invalidateDrawable(drawable);
@@ -336,6 +403,8 @@ public class PhotoView extends View implements ScaleGestureDetector.OnScaleGestu
 	}
 
 	public void cleanup() {
+		finishGalleryPresentation();
+		cancelRestoreVerticalSwipe(false);
 		cancelFling();
 	}
 
@@ -378,7 +447,7 @@ public class PhotoView extends View implements ScaleGestureDetector.OnScaleGestu
 				return true;
 			}
 			float scale = getScale();
-			setScale(scale < doubleTapScale ? doubleTapScale : minimumScale, x, y, true);
+			setScale(PhotoViewScale.doubleTapTarget(scale, initialScale, doubleTapScale), x, y, true);
 			return true;
 		}
 		return false;
@@ -463,6 +532,7 @@ public class PhotoView extends View implements ScaleGestureDetector.OnScaleGestu
 			int action = event.getActionMasked();
 			switch (action) {
 				case MotionEvent.ACTION_DOWN: {
+					finishGalleryPresentation();
 					isParentDragging = false;
 					touchMode = TouchMode.UNDEFINED;
 					cancelFling();
@@ -473,7 +543,7 @@ public class PhotoView extends View implements ScaleGestureDetector.OnScaleGestu
 					if (getScale() < minimumScale) {
 						RectF rect = checkMatrixBounds();
 						if (rect != null) {
-							post(new AnimatedScaleRunnable(minimumScale, rect.centerX(), rect.centerY()));
+							animateScale(minimumScale, rect.centerX(), rect.centerY());
 						}
 					}
 					break;
@@ -577,7 +647,7 @@ public class PhotoView extends View implements ScaleGestureDetector.OnScaleGestu
 		}
 		touchMode = TouchMode.UNDEFINED;
 		if (animate) {
-			post(new AnimatedScaleRunnable(scale, focalX, focalY));
+			animateScale(scale, focalX, focalY);
 		} else {
 			transformMatrix.setScale(scale, scale, focalX, focalY);
 			checkMatrixBoundsAndInvalidate();
@@ -752,8 +822,10 @@ public class PhotoView extends View implements ScaleGestureDetector.OnScaleGestu
 
 	private void cancelRestoreVerticalSwipe(boolean notify) {
 		if (animatedRestoreSwipeRunnable != null) {
-			removeCallbacks(animatedRestoreSwipeRunnable);
+			AnimatedRestoreSwipeRunnable previous = animatedRestoreSwipeRunnable;
 			animatedRestoreSwipeRunnable = null;
+			removeCallbacks(previous);
+			previous.cancelModern();
 			if (notify) {
 				notifyVerticalSwipe(0f, false);
 			}
@@ -766,7 +838,42 @@ public class PhotoView extends View implements ScaleGestureDetector.OnScaleGestu
 			rect = checkMatrixBounds();
 		}
 		animatedRestoreSwipeRunnable = new AnimatedRestoreSwipeRunnable(rect, close, velocity);
-		post(animatedRestoreSwipeRunnable);
+		if (InterfaceMotion.isEnabled() && listener != null && listener.isPhotoMotionEnabled(this)) animatedRestoreSwipeRunnable.startModern();
+		else post(animatedRestoreSwipeRunnable);
+	}
+
+	private void animateScale(float scale, float focalX, float focalY) {
+		if (!InterfaceMotion.isEnabled() || listener == null || !listener.isPhotoMotionEnabled(this)) {
+			post(new AnimatedScaleRunnable(scale, focalX, focalY)); return;
+		}
+		if (modernZoomAnimator != null) modernZoomAnimator.cancel();
+		cancelFling();
+		Matrix start = new Matrix(transformMatrix);
+		float from = getScale();
+		ValueAnimator animator = ValueAnimator.ofFloat(from, scale);
+		modernZoomAnimator = animator;
+		animator.setDuration(InterfaceMotion.duration(220)); animator.setInterpolator(InterfaceMotion.STANDARD);
+		animator.addUpdateListener(value -> {
+			if (modernZoomAnimator != value) return;
+			if (!InterfaceMotion.isEnabled()) {
+				transformMatrix.set(start);
+				transformMatrix.postScale(from > 0f ? scale / from : 1f, from > 0f ? scale / from : 1f,
+						focalX, focalY);
+				checkMatrixBoundsAndInvalidate();
+				animator.cancel();
+				return;
+			}
+			transformMatrix.set(start);
+			float delta = from > 0f ? (float) value.getAnimatedValue() / from : 1f;
+			transformMatrix.postScale(delta, delta, focalX, focalY);
+			checkMatrixBoundsAndInvalidate();
+		});
+		animator.addListener(new android.animation.AnimatorListenerAdapter() {
+			@Override public void onAnimationEnd(android.animation.Animator animation) {
+				if (modernZoomAnimator == animation) modernZoomAnimator = null;
+			}
+		});
+		animator.start();
 	}
 
 	private class AnimatedScaleRunnable implements Runnable {
@@ -847,6 +954,46 @@ public class PhotoView extends View implements ScaleGestureDetector.OnScaleGestu
 		}
 
 		private float lastDeltaY = 0f;
+		private ValueAnimator modernAnimator;
+		private boolean modernEnded;
+
+		void startModern() {
+			modernAnimator = ValueAnimator.ofFloat(0f, 1f);
+			modernAnimator.setDuration(InterfaceMotion.duration(finish ? Math.min(duration, 300) : 200));
+			modernAnimator.setInterpolator(InterfaceMotion.STANDARD);
+			modernAnimator.addUpdateListener(value -> applyModern((float) value.getAnimatedValue()));
+			modernAnimator.addListener(new android.animation.AnimatorListenerAdapter() {
+				@Override public void onAnimationEnd(android.animation.Animator animation) { endModern(); }
+			});
+			modernAnimator.start();
+		}
+		void cancelModern() { if (modernAnimator != null) { modernAnimator.cancel(); modernAnimator = null; } }
+		void endModern() {
+			if (modernEnded) return;
+			modernEnded = true;
+			if (animatedRestoreSwipeRunnable == this) animatedRestoreSwipeRunnable = null;
+			if (finish && listener != null) listener.onCloseAnimationFinished(PhotoView.this);
+		}
+		void applyModern(float progress) {
+			if (modernEnded || animatedRestoreSwipeRunnable != this) return;
+			if (!InterfaceMotion.isEnabled()) { progress = 1f; }
+			float delta = deltaY * progress;
+			transformMatrix.postTranslate(0f, delta - lastDeltaY); lastDeltaY = delta;
+			notifyTransformChangedAndInvalidate();
+			if (finish) {
+				RectF rect = initDisplayMatrixAndRect();
+				notifyVerticalSwipe(getClosingTouchModeShift(rect), false);
+			} else notifyVerticalSwipe(deltaY - delta, true);
+			if (progress == 1f && !finish) {
+				touchMode = TouchMode.COMMON;
+				isDragging = false;
+				checkMatrixBoundsAndInvalidate(); notifyVerticalSwipe(0f, true);
+			}
+			if (progress == 1f && !InterfaceMotion.isEnabled()) {
+				endModern();
+				if (modernAnimator != null) modernAnimator.cancel();
+			}
+		}
 
 		@Override
 		public void run() {

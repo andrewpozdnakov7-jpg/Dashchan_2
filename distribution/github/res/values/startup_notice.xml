@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="material3_notice_title">New Material 3 interface</string>
+    <string name="material3_notice_message">Slooop now has an experimental Material 3-style interface.\nTo enable it: Settings → Experimental features → “New interface animations”.</string>
+    <string name="material3_notice_read">I have read this</string>
+    <string name="material3_notice_save_failed">Could not save the confirmation. Please try again.</string>
+    <!-- Local dialog contexts only; never replace the Activity or application theme. -->
+    <style name="Theme.Slooop.StartupNotice.Light" parent="Theme.Material3.Light.NoActionBar" />
+    <style name="Theme.Slooop.StartupNotice.Dark" parent="Theme.Material3.Dark.NoActionBar" />
+</resources>

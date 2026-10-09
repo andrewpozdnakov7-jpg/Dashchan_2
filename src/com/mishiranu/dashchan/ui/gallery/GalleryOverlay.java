@@ -1,6 +1,8 @@
 package com.mishiranu.dashchan.ui.gallery;
 
+import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import android.app.ActionBar;
+import android.animation.ValueAnimator;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Context;
@@ -119,6 +121,12 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 	private VideoPipActivity.GalleryRestoreData queuedPictureInPictureRestoreData;
 
 	private InsetsLayout rootView;
+	private GalleryMotionController galleryMotion;
+	private final GallerySwipeChrome swipeChrome = new GallerySwipeChrome();
+	private boolean modernPhotoOpening;
+	private boolean photoSwipeClosePending;
+	private GalleryDialog photoSwipeWindow;
+	private final Runnable photoSwipeOwner = this::completePhotoSwipeClose;
 	private GalleryInstance instance;
 	private PagerUnit pagerUnit;
 	private GalleryStateViewModel galleryState;
@@ -426,6 +434,8 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 
 	@Override
 	public void onDestroyView() {
+		finishGalleryMotion();
+		swipeChrome.reset();
 		if (restoreSignal != null) restoreSignal.cancel();
 		restoreSignal = null;
 		endGalleryRefresh();
@@ -463,6 +473,7 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 		super.onDestroyView();
 		destroyShowcase(false);
 		rootView = null;
+		galleryMotion = null;
 		instance = null;
 		pagerUnit = null;
 		listUnit = null;
@@ -563,14 +574,25 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 			imageViewPosition = new int[] {location[0], location[1],
 					queuedFromView.getWidth(), queuedFromView.getHeight()};
 		}
+		modernPhotoOpening = false;
+		if (InterfaceMotion.isEnabled() && queuedGalleryItems != null &&
+				!requireArguments().getBoolean(EXTRA_INITIAL_GALLERY_MODE)) {
+			int index = requireArguments().getInt(EXTRA_IMAGE_INDEX);
+			if (index >= 0 && index < queuedGalleryItems.size()) {
+				GalleryItem item = queuedGalleryItems.get(index);
+				Chan chan = Chan.get(getChanName());
+				modernPhotoOpening = item.isImage(chan) || item.isVideo(chan);
+			}
+		}
 		boolean restoring = pendingDialogState != null || galleryState.video != null
 				|| requireArguments().getString(EXTRA_PIP_RESTORE_TOKEN) != null;
-		if (restoring) imageViewPosition = null;
+		if (restoring) { imageViewPosition = null; modernPhotoOpening = false; }
 		WindowManager.LayoutParams attributes = dialog.getWindow().getAttributes();
 		attributes.windowAnimations = restoring ? R.style.Animation_Gallery_Restore : imageViewPosition == null
 				? R.style.Animation_Gallery_Full : R.style.Animation_Gallery_Partial;
 		VideoDiagnostics.recordUi("gallery window_prepare restoring=" + restoring
 				+ " enter_animation=" + !restoring);
+		if (modernPhotoOpening) attributes.windowAnimations = 0;
 		attributes.layoutInDisplayCutoutMode = WindowManager.LayoutParams
 				.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
 
@@ -603,8 +625,11 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 			});
 			rootView.setLayoutParams(new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
 					ViewGroup.LayoutParams.MATCH_PARENT));
-			rootView.setBackground(new GalleryBackgroundDrawable(rootView, imageViewPosition, BACKGROUND_COLOR));
+			rootView.setBackground(new GalleryBackgroundDrawable(rootView,
+					modernPhotoOpening ? null : imageViewPosition, BACKGROUND_COLOR));
+			galleryMotion = new GalleryMotionController(rootView);
 		}
+		if (galleryMotion != null) galleryMotion.setSource(restoring ? null : queuedFromView);
 		ViewUtils.removeFromParent(rootView);
 		dialog.setContentView(rootView);
 		return imageViewPosition;
@@ -625,6 +650,7 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 		pendingSystemUiFlags = invalidateSystemUiFlags;
 		windowFocusView = dialog.getWindow().getDecorView();
 		windowFocusListener = (v, hasFocus) -> {
+			if (!hasFocus) finishGalleryMotion();
 			if (pagerUnit != null) {
 				// Block touch events when dialogs are opened
 				pagerUnit.setHasFocus(hasFocus);
@@ -688,7 +714,7 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 				listUnit.setRefreshColor(ThemeEngine.getTheme(refreshSource != null && refreshSource.getView() != null
 						? refreshSource.getView().getContext() : requireActivity()).accent);
 				pagerUnit = new PagerUnit(instance);
-				pagerUnit.restoreLifecycleState(galleryState);
+				pagerUnit.restoreLifecycleState(galleryState, savedInstanceState);
 				rootView.addView(listUnit.getRecyclerView(), InsetsLayout.LayoutParams.MATCH_PARENT,
 						InsetsLayout.LayoutParams.MATCH_PARENT);
 				rootView.addView(pagerUnit.getView(), InsetsLayout.LayoutParams.MATCH_PARENT,
@@ -759,6 +785,14 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 		}
 		setScreenOnFixed(screenOnFixed);
 		invalidateSystemUiVisibility();
+		if (galleryMotion != null && pagerUnit != null) {
+			galleryMotion.setMediaChrome(pagerUnit.getMotionVideoControls());
+			galleryMotion.enter(pagerUnit.getMotionMediaPhotoView(), pagerUnit.getCurrentGalleryItem(),
+					dialog.getActionBarView(), !modernPhotoOpening || savedInstanceState != null,
+					pagerUnit.getMotionVideoSurface());
+		}
+		// The window has already been shown. Retain its native exit for grid/forced dismiss.
+		if (modernPhotoOpening && getWindow() != null) getWindow().setWindowAnimations(R.style.Animation_Gallery_Partial);
 	}
 
 	private void clearDialogCallbacks() {
@@ -827,6 +861,8 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 
 	@Override
 	public void onPause() {
+		finishGalleryMotion();
+		swipeChrome.reset();
 		disableAnimationForWindowRecreation();
 		super.onPause();
 
@@ -892,13 +928,69 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 			return true;
 		}
 		if (videoFullscreen) {
-			return false;
+			return requestPhotoClose();
 		}
-		return returnToGallery();
+		if (photoSwipeClosePending) return true;
+		return returnToGallery() || requestPhotoClose();
+	}
+
+	boolean isGalleryMotionBlocking() {
+		return rootView != null && GalleryMotionController.blocks(rootView) ||
+				pagerUnit != null && pagerUnit.isModeMotionRunning() ||
+				listUnit != null && GalleryMotionController.blocks(listUnit.getRecyclerView());
+	}
+
+	private void finishGalleryMotion() {
+		if (galleryMotion != null) galleryMotion.finish();
+		if (rootView != null) GalleryMotionController.finishHost(rootView);
+		if (listUnit != null) GalleryMotionController.finishHost(listUnit.getRecyclerView());
+		if (pagerUnit != null) pagerUnit.finishPhotoMotion();
+	}
+
+	private boolean requestPhotoClose() {
+		if (photoSwipeClosePending) return true;
+		if (galleryMotion == null || pagerUnit == null || hiddenForPictureInPicture || galleryMode) return false;
+		if (pagerUnit.getMotionMediaPhotoView() == null || !InterfaceMotion.isEnabled()) return false;
+		resetPredictiveBackView(false);
+		GalleryDialog closing = getDialog();
+		if (closing == null) return false;
+		swipeChrome.reset();
+		galleryMotion.setMediaChrome(pagerUnit.getMotionVideoControls());
+		boolean animated = galleryMotion.close(pagerUnit.getMotionMediaPhotoView(), pagerUnit.getCurrentGalleryItem(),
+				closing.getActionBarView(), () -> dismissPhotoAfterMotion(closing), pagerUnit.getMotionVideoSurface());
+		if (animated && getWindow() != null) getWindow().setWindowAnimations(0);
+		return animated;
+	}
+
+	private void dismissPhotoAfterMotion(GalleryDialog expected) {
+		if (!isAdded() || isRemoving() || getDialog() != expected || expected == null) return;
+		if (getParentFragmentManager().isDestroyed()) return;
+		if (getParentFragmentManager().isStateSaved()) dismissAllowingStateLoss(); else dismiss();
+	}
+
+	@Override public boolean deferPhotoSwipeClose(boolean down) {
+		if (!InterfaceMotion.isEnabled() || down || galleryWindow || pagerUnit == null ||
+				pagerUnit.getMotionPhotoView() == null || rootView == null || getDialog() == null) return false;
+		finishGalleryMotion();
+		photoSwipeClosePending = true;
+		photoSwipeWindow = getDialog();
+		rootView.setTag(R.id.gallery_motion_owner, photoSwipeOwner);
+		if (getWindow() != null) getWindow().setWindowAnimations(0);
+		return true;
+	}
+
+	@Override public void completePhotoSwipeClose() {
+		if (!photoSwipeClosePending) return;
+		photoSwipeClosePending = false;
+		GalleryDialog closing = photoSwipeWindow;
+		photoSwipeWindow = null;
+		if (rootView != null && rootView.getTag(R.id.gallery_motion_owner) == photoSwipeOwner) rootView.setTag(R.id.gallery_motion_owner, null);
+		dismissPhotoAfterMotion(closing);
 	}
 
 	@Override
 	public void onPredictiveBackStarted(boolean fromLeft) {
+		finishGalleryMotion();
 		if (InterfaceMotion.isEnabled() && InterfaceMotion.duration(1) == 0) return;
 		if (rootView != null) {
 			predictiveBackRunning = true;
@@ -925,6 +1017,7 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 
 	@Override
 	public void onPredictiveBackCommitted() {
+		if (photoSwipeClosePending || galleryMotion != null && galleryMotion.isClosing()) return;
 		resetPredictiveBackView(true);
 	}
 
@@ -1014,7 +1107,7 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 	@Override
 	public boolean onMenuItemSelected(@NonNull MenuItem item) {
 		if (item.getItemId() == android.R.id.home) {
-			dismiss();
+			if (!requestPhotoClose()) dismiss();
 			return true;
 		}
 		// Ignore stale menu actions during creation/teardown or in an empty gallery.
@@ -1117,6 +1210,7 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 		if (instance == null) return;
 		if (pagerUnit != null) {
 			outState.putInt(EXTRA_POSITION, pagerUnit.getCurrentIndex());
+			pagerUnit.savePagingState(outState);
 			GalleryItem selected = pagerUnit.getCurrentGalleryItem();
 			if (selected != null && selected.getFileUri(Chan.get(instance.chanName)) != null
 					&& selected.getFileUri(Chan.get(instance.chanName)).toString().length() <= 8192) {
@@ -1153,7 +1247,8 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 	private void switchMode(boolean galleryMode, boolean animated) {
 		instance.logNavigation("mode_change fromGrid=" + this.galleryMode + " toGrid=" + galleryMode
 				+ " index=" + pagerUnit.getCurrentIndex() + " animated=" + animated);
-		int duration = animated ? GALLERY_TRANSITION_DURATION : 0;
+		finishGalleryMotion();
+		int duration = animated ? (InterfaceMotion.isEnabled() ? 300 : GALLERY_TRANSITION_DURATION) : 0;
 		pagerUnit.switchMode(galleryMode, duration);
 		listUnit.switchMode(galleryMode, duration);
 		if (galleryMode) {
@@ -1434,7 +1529,7 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 
 		ScrollView scrollView = new ScrollView(context);
 		scrollView.addView(container);
-		new AlertDialog.Builder(context).setTitle(R.string.gallery_filter).setView(scrollView)
+		new MotionDialogBuilder(context).setTitle(R.string.gallery_filter).setView(scrollView)
 				.setNegativeButton(android.R.string.cancel, null)
 				.setNeutralButton(R.string.gallery_filter_reset, (dialog, which) ->
 						applyGalleryFilter(FILTER_ALL, GallerySort.POST_ORDER))
@@ -1448,59 +1543,58 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 
 	private class CornerAnimator implements Runnable {
 		private final long startTime = SystemClock.elapsedRealtime();
-
-		private final int fromActionBarAlpha;
-		private final int toActionBarAlpha;
-		private final int fromStatusBarAlpha;
-		private final int toStatusBarAlpha;
-
+		private final int fromActionBarAlpha, toActionBarAlpha, fromStatusBarAlpha, toStatusBarAlpha;
+		private ValueAnimator modernAnimator;
 		private static final int INTERVAL = 200;
 
 		public CornerAnimator(int actionBarAlpha, int statusBarAlpha) {
-			if (cornerAnimator != null) {
-				cornerAnimator.cancel();
-			}
+			if (cornerAnimator != null) cornerAnimator.cancel();
 			Drawable drawable = getDialog().getActionBarView().getBackground();
-			fromActionBarAlpha = Color.alpha(drawable instanceof ColorDrawable
-					? ((ColorDrawable) drawable).getColor() : statusBarAlpha);
+			fromActionBarAlpha = Color.alpha(drawable instanceof ColorDrawable ? ((ColorDrawable) drawable).getColor() : statusBarAlpha);
 			toActionBarAlpha = actionBarAlpha;
 			fromStatusBarAlpha = Color.alpha(ViewUtils.getStatusBarColor(getWindow()));
 			toStatusBarAlpha = statusBarAlpha;
 			if (fromActionBarAlpha != toActionBarAlpha || fromStatusBarAlpha != toStatusBarAlpha) {
 				cornerAnimator = this;
-				run();
+				if (InterfaceMotion.isEnabled()) {
+					modernAnimator = ValueAnimator.ofFloat(0f, 1f);
+					modernAnimator.setDuration(InterfaceMotion.duration(INTERVAL));
+					modernAnimator.setInterpolator(InterfaceMotion.STANDARD);
+					modernAnimator.addUpdateListener(value -> {
+						if (cornerAnimator != this || !apply((float) value.getAnimatedValue())) cancel();
+					});
+					modernAnimator.addListener(new android.animation.AnimatorListenerAdapter() {
+						@Override public void onAnimationEnd(android.animation.Animator animation) {
+							if (cornerAnimator == CornerAnimator.this) cornerAnimator = null;
+						}
+					});
+					modernAnimator.start();
+				} else run();
 			}
 		}
-
-		@Override
-		public void run() {
-			float t = Math.min((float) (SystemClock.elapsedRealtime() - startTime) / INTERVAL, 1f);
-			int actionBarColorAlpha = (int) AnimationUtils.lerp(fromActionBarAlpha, toActionBarAlpha, t);
+		private boolean apply(float progress) {
 			GalleryDialog dialog = getDialog();
-			if (dialog != null) {
-				int actionBarColor = (actionBarColorAlpha << 24) | (0x00ffffff & ACTION_BAR_COLOR);
-				dialog.getActionBarView().setBackgroundColor(actionBarColor);
-				View actionContextBar = dialog.getActionContextBarView();
-				if (actionContextBar != null) {
-					actionContextBar.setBackgroundColor(actionBarColor);
-				}
-				int statusBarColorAlpha = (int) AnimationUtils.lerp(fromStatusBarAlpha, toStatusBarAlpha, t);
-				int color = (statusBarColorAlpha << 24) | (0x00ffffff & ACTION_BAR_COLOR);
-				ViewUtils.setStatusBarColor(getWindow(), color);
-				ViewUtils.setNavigationBarColor(getWindow(), color);
-				if (t < 1f) {
-					rootView.postOnAnimation(this);
-				} else if (cornerAnimator == this) {
-					cornerAnimator = null;
-				}
-			}
+			if (dialog == null || rootView == null || getWindow() == null) return false;
+			int actionBarColor = ((int) AnimationUtils.lerp(fromActionBarAlpha, toActionBarAlpha, progress) << 24)
+					| (0x00ffffff & ACTION_BAR_COLOR);
+			dialog.getActionBarView().setBackgroundColor(actionBarColor);
+			View actionContextBar = dialog.getActionContextBarView();
+			if (actionContextBar != null) actionContextBar.setBackgroundColor(actionBarColor);
+			int color = ((int) AnimationUtils.lerp(fromStatusBarAlpha, toStatusBarAlpha, progress) << 24)
+					| (0x00ffffff & ACTION_BAR_COLOR);
+			ViewUtils.setStatusBarColor(getWindow(), color); ViewUtils.setNavigationBarColor(getWindow(), color);
+			return true;
 		}
-
+		@Override public void run() {
+			float progress = Math.min((float) (SystemClock.elapsedRealtime() - startTime) / INTERVAL, 1f);
+			if (!apply(progress)) { cancel(); return; }
+			if (progress < 1f) rootView.postOnAnimation(this);
+			else if (cornerAnimator == this) cornerAnimator = null;
+		}
 		public void cancel() {
-			rootView.removeCallbacks(this);
-			if (cornerAnimator == this) {
-				cornerAnimator = null;
-			}
+			if (rootView != null) rootView.removeCallbacks(this);
+			if (modernAnimator != null) { modernAnimator.cancel(); modernAnimator = null; }
+			if (cornerAnimator == this) cornerAnimator = null;
 		}
 	}
 
@@ -1518,7 +1612,13 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 		if (ignoreIfGallery || galleryWindow) {
 			value = 0f;
 		}
-		rootView.getBackground().setAlpha((int) (0xff * (1f - value)));
+		if (rootView == null) return;
+		float amount = Math.max(0f, Math.min(1f, 1f - value));
+		rootView.getBackground().setAlpha((int) (0xff * amount));
+		GalleryDialog dialog = getDialog();
+		if (InterfaceMotion.isEnabled() && dialog != null && amount < 1f) {
+			swipeChrome.fade(amount, dialog.getActionBarView(), dialog.getActionContextBarView());
+		} else swipeChrome.reset();
 	}
 
 	@Override
@@ -1569,6 +1669,7 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 		// always opens the selected video in a freshly prepared destination window.
 		Bundle dialogState = new Bundle();
 		dialogState.putInt(EXTRA_POSITION, imageIndex);
+		pagerUnit.savePagingState(dialogState);
 		dialogState.putBoolean(EXTRA_GALLERY_WINDOW, galleryWindow);
 		dialogState.putBoolean(EXTRA_GALLERY_MODE, false);
 		dialogState.putBoolean(EXTRA_SYSTEM_UI_VISIBILITY,

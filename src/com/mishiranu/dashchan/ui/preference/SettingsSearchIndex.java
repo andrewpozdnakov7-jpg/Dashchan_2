@@ -11,7 +11,6 @@ import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.push.ReplyPushManager;
 import com.mishiranu.dashchan.ui.ContentFragment;
-import com.mishiranu.dashchan.ui.posting.PhotoEditorBridge;
 import com.mishiranu.dashchan.ui.preference.core.PreferenceFragment;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -181,6 +180,13 @@ public final class SettingsSearchIndex {
 				PreferenceFragment.putSearchTarget(arguments, preferenceKey, title);
 			}
 			return fragment;
+		}
+	}
+
+	private static void addExperimentalToggle(Context context, List<Entry> entries,
+			ExperimentalPreferenceDescriptors.Toggle toggle) {
+		if (toggle.available) {
+			add(context, entries, Screen.EXPERIMENTAL, toggle.titleResId, toggle.summaryResId, toggle.key);
 		}
 	}
 
@@ -532,18 +538,12 @@ public final class SettingsSearchIndex {
 		add(context, entries, Screen.REPLY_NOTIFICATIONS, R.string.reply_notifications, 0, "reply_notifications");
 		add(context, entries, Screen.REPLY_NOTIFICATIONS, R.string.favorites_watcher);
 		add(context, entries, Screen.CONTENTS, R.string.clear_cache);
-		if (BuildConfig.ENABLE_EXPERIMENTAL_INTERFACE_MOTION) {
-			add(context, entries, Screen.EXPERIMENTAL, R.string.new_interface_motion,
-					R.string.new_interface_motion_summary, Preferences.KEY_NEW_INTERFACE_MOTION);
-		}
-		add(context, entries, Screen.EXPERIMENTAL, R.string.outbox_title,
-				R.string.outbox_experimental_summary, Preferences.KEY_OUTBOX_JOURNAL);
-		add(context, entries, Screen.EXPERIMENTAL, R.string.discussion_context,
-				R.string.discussion_context_summary, Preferences.KEY_DISCUSSION_CONTEXT);
-		if (PhotoEditorBridge.isAvailable()) {
-			add(context, entries, Screen.EXPERIMENTAL, PhotoEditorBridge.getTitleResId(),
-					PhotoEditorBridge.getSummaryResId(), Preferences.KEY_NEW_PHOTO_EDITOR);
-		}
+		addExperimentalToggle(context, entries, ExperimentalPreferenceDescriptors.interfaceMotion());
+		add(context, entries, Screen.EXPERIMENTAL, R.string.thread_toolbar_action,
+				R.string.thread_toolbar_action__summary, Preferences.KEY_THREAD_TOOLBAR_ACTION);
+		addExperimentalToggle(context, entries, ExperimentalPreferenceDescriptors.outboxJournal());
+		addExperimentalToggle(context, entries, ExperimentalPreferenceDescriptors.discussionContext());
+		addExperimentalToggle(context, entries, ExperimentalPreferenceDescriptors.photoEditor());
 		add(context, entries, Screen.CONTENTS, R.string.thread_page_preload,
 				R.string.thread_page_preload__summary, Preferences.KEY_THREAD_PAGE_PRELOAD);
 

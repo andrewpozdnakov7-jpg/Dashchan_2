@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui.posting.dialog;
 
+import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.Dialog;
@@ -55,7 +56,7 @@ public class AttachmentRatingDialog extends DialogFragment implements DialogInte
 				checkedItem = i;
 			}
 		}
-		return new AlertDialog.Builder(activity).setTitle(R.string.rating).setSingleChoiceItems(items,
+		return new MotionDialogBuilder(activity).setTitle(R.string.rating).setSingleChoiceItems(items,
 				checkedItem, this).setNegativeButton(android.R.string.cancel, null).create();
 	}
 

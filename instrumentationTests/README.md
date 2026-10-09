@@ -199,3 +199,30 @@ this is not an executed end-to-end database test.
 These tests still do not install an old external extension; manually verify its
 language/configuration and hot-update behavior. Extensions must fetch Resources
 again after configuration changes, rather than retain a Resources snapshot.
+
+
+## Technical debt stage 2
+
+`PhotoEditorSessionCodecTest` is GitHub-only and uses real Android JSON/RectF/Bitmap.
+It covers the old seven-slot adjustment layout (including negative legacy sharpness),
+all session fields and undo/redo, missing legacy markers/options, source/version rejection,
+incremental failure order, detached session/export data and borrowed asset Bitmap ownership.
+`EditorAdjustmentTest` is a GitHub JVM test for explicit indices, UI ranges and selection bounds.
+
+The shared `ui/reddit/RedditReaderScriptsTest` loads offline HTML with network loads blocked.
+It covers JSON escaping, app-promo/shadow-root suppression, light/dark score colors, board and reader path guards, reinjection,
+hybrid comment order/collapse, translation-driven mutation, original/reader switching,
+Russian labels and loading more replies through existing fixture DOM controls.
+These test sources are prepared; none was executed in SOURCE PATCH ONLY mode.
+
+Run the source-only checks from the project root:
+
+```text
+python3 unitTests/check_photo_editor_distribution.py
+python3 unitTests/check_photo_editor_sources.py
+python3 unitTests/check_reddit_reader_sources.py
+```
+
+The Reddit check also runs `node --check` when Node is available. It checks JS syntax,
+asset/config wiring and source guards, not actual WebView behavior. Android runtime tests
+and editor dialog/export/lifecycle acceptance still require the separately authorized mode.

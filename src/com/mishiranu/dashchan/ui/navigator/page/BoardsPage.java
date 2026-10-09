@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui.navigator.page;
 
+import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import android.app.AlertDialog;
 import android.net.Uri;
 import android.text.InputType;
@@ -191,7 +192,7 @@ public class BoardsPage extends ListPage implements BoardsAdapter.Callback,
 					LinearLayout.LayoutParams.WRAP_CONTENT);
 			int padding = provider.getContext().getResources().getDimensionPixelSize(R.dimen.dialog_padding_view);
 			container.setPadding(padding, padding, padding, padding);
-			AlertDialog dialog = new AlertDialog.Builder(provider.getContext())
+			AlertDialog dialog = new MotionDialogBuilder(provider.getContext())
 					.setTitle(R.string.pikabu_add_community)
 					.setView(container)
 					.setNegativeButton(android.R.string.cancel, null)

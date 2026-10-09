@@ -1,5 +1,7 @@
 package com.mishiranu.dashchan.ui.preference.core;
 
+import com.mishiranu.dashchan.widget.InterfaceAppearance;
+
 import android.app.AlertDialog;
 import android.content.Context;
 import android.os.Bundle;
@@ -100,6 +102,9 @@ public class MultipleEditPreference<T> extends DialogPreference<T> {
 			}
 			viewHolders.add(viewHolder);
 			pair.second.addView(viewHolder.getView());
+			if (viewHolder.getView() instanceof android.widget.EditText) {
+				InterfaceAppearance.field((android.widget.EditText) viewHolder.getView());
+			}
 			viewHolder.getView().setTag(viewHolder);
 			if (savedInstanceState != null) {
 				viewHolder.restoreState(savedInstanceState, i);

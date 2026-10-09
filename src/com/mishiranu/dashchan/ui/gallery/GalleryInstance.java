@@ -58,6 +58,8 @@ public class GalleryInstance {
 		void refreshGallery();
 
 		void navigateGalleryOrFinish(boolean enableGalleryMode);
+		default boolean deferPhotoSwipeClose(boolean down) { return false; }
+		default void completePhotoSwipeClose() {}
 		VideoPipActivity.GalleryRestoreData createPictureInPictureGalleryRestoreData();
 		void setGalleryVisibleForPictureInPicture(boolean visible);
 		void bringGalleryToForeground(Context context);

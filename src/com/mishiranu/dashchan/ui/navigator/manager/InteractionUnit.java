@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui.navigator.manager;
 
+import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.net.Uri;
@@ -111,7 +112,7 @@ public class InteractionUnit {
 				messageId = R.string.follow_the_link__sentence;
 			}
 			final ChanLocator.NavigationData navigationDataFinal = navigationData;
-			return new AlertDialog.Builder(provider.getContext())
+			return new MotionDialogBuilder(provider.getContext())
 					.setMessage(messageId)
 					.setNegativeButton(android.R.string.cancel, null)
 					.setPositiveButton(android.R.string.ok, (d, which) -> UiManager.extract(provider).navigator()

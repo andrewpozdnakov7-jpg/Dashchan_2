@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui;
 
+import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
@@ -194,7 +195,7 @@ public class LocalArchivesFragment extends ContentFragment {
 		for (int i = 0; i < names.length; i++) {
 			names[i] = LocalArchiveManager.getTreeName(uriStrings.get(i));
 		}
-		new AlertDialog.Builder(requireContext()).setTitle(R.string.local_archive_manage_folders)
+		new MotionDialogBuilder(requireContext()).setTitle(R.string.local_archive_manage_folders)
 				.setMultiChoiceItems(names, checked, (dialog, which, value) -> checked[which] = value)
 				.setNegativeButton(android.R.string.cancel, null)
 				.setPositiveButton(R.string.local_archive_remove_folders, (dialog, which) -> {
@@ -311,7 +312,7 @@ public class LocalArchivesFragment extends ContentFragment {
 	}
 
 	private void confirmDeleteArchives(ActionMode actionMode, ArrayList<LocalArchiveManager.Item> items) {
-		new AlertDialog.Builder(requireContext())
+		new MotionDialogBuilder(requireContext())
 				.setTitle(R.string.delete_local_archive)
 				.setMessage(getResources().getQuantityString(
 						R.plurals.local_archives_delete_selected_confirmation__format,

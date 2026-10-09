@@ -40,7 +40,7 @@ F-Droid-версия не содержит встроенный механизм
 - экспериментальные режимы Reddit: официальный сайт внутри приложения, каталог до 200 популярных сообществ и отдельные режимы доски и чтения обсуждений, выключенные по умолчанию;
 - редактирование постов и сортировка тредов на Апачане по последнему бампу, дате создания или количеству сообщений;
 - «Мои доски» для объединения досок разных имиджборд в несколько собственных лент;
-- экспериментальный раздел «Ответы», включаемый вручную в настройках: локальное запоминание отправленных через Slooop сообщений, автоматическая проверка ответов, счётчик непрочитанных, системные уведомления и очищаемый журнал последних 50 ответов; свежие треды проверяются чаще, а давно неактивные — реже;
+- экспериментальный раздел «Ответы», включённый по умолчанию и отключаемый в настройках: локальное запоминание отправленных через Slooop сообщений, автоматическая проверка ответов, счётчик непрочитанных, системные уведомления и очищаемый журнал последних 50 ответов; свежие треды проверяются чаще, а давно неактивные — реже;
 - офлайн-перевод постов через Mozilla Bergamot, отдельное дополнение Google ML Kit или Gemini Nano на поддерживаемых устройствах;
 - FFmpeg-плеер для WebM, MP4, fMP4, MOV, H.264, HEVC, VP8, VP9 и AV1;
 - скорость воспроизведения с сохранением тембра и редактируемыми пресетами, перемотка двойным нажатием, масштабирование видео до 10×, отдельная громкость, настраиваемый жест громкости, полноэкранный режим, «картинка в картинке» и TikTok-режим для переключения видео вертикальными свайпами;
@@ -58,7 +58,8 @@ F-Droid-версия не содержит встроенный механизм
 - d3.ru, 4chan и Архивач не поддерживают отправку постов; «Кекабу» пока не публикует истории и не обходит возрастные ограничения Пикабу;
 - режимы Reddit и внутреннее воспроизведение YouTube/PiP экспериментальны, зависят от сайтов, WebView, сети и устройства и могут работать не везде; веб-интерфейсы поддерживаемых сайтов могут меняться;
 - Google ML Kit доступен только как отдельное дополнение GitHub-версии, а Gemini Nano работает только на поддерживаемых устройствах;
-- Predictive Back и «картинка в картинке» включаются вручную;
+- Predictive Back на Android 13+ выключен по умолчанию и включается в настройках; «картинка в картинке» и автоматический переход в неё включены по умолчанию, отключаются в настройках и требуют поддержки устройства и разрешённого Android доступа к PiP;
+- локальное отслеживание в разделе «Ответы» включено по умолчанию; серверные push-уведомления включаются отдельно с согласием пользователя; системные уведомления зависят от разрешения на Android 13+ и настроек канала уведомлений;
 - `targetSdk` равен 37 для совместимости с Android 17; `minSdk` остаётся равен 30.
 
 ### Сборка
@@ -132,7 +133,7 @@ The F-Droid build excludes the application self-updater, Firebase, Google Play S
 - experimental Reddit modes with the official website inside the app, a catalog of up to 200 popular communities, and separate opt-in board and discussion-reader modes;
 - Apachan post editing and thread sorting by last bump, creation date, or post count;
 - My Boards feeds that combine boards from different imageboards into several custom feeds;
-- an opt-in experimental Replies section that locally remembers messages sent through Slooop, automatically checks for replies, shows an unread counter and Android notifications, and keeps a clearable history of the latest 50 replies; recent threads are checked more frequently than inactive ones;
+- an experimental Replies section, enabled by default and switchable off in settings, that locally remembers messages sent through Slooop, automatically checks for replies, shows an unread counter and Android notifications, and keeps a clearable history of the latest 50 replies; recent threads are checked more frequently than inactive ones;
 - offline post translation through Mozilla Bergamot, the separate Google ML Kit add-on, or Gemini Nano on supported devices;
 - FFmpeg playback for WebM, MP4, fMP4, MOV, H.264, HEVC, VP8, VP9, and AV1;
 - pitch-preserving speed control with editable presets, double-tap seeking, video zoom up to 10×, per-video volume, configurable volume gestures, fullscreen playback, picture-in-picture, and a TikTok mode for switching videos with vertical swipes;
@@ -148,7 +149,8 @@ The F-Droid build excludes the application self-updater, Firebase, Google Play S
 - d3.ru, 4chan, and Arhivach posting are not implemented; Kekabu does not publish stories or bypass Pikabu age restrictions;
 - Reddit modes and internal YouTube/PiP playback are experimental, depend on the websites, WebView, network, and device, and may not work everywhere; supported websites may change their interfaces;
 - Google ML Kit is available only as a separate add-on for the GitHub build, while Gemini Nano requires a supported device;
-- Predictive Back and picture-in-picture are opt-in settings;
+- Predictive Back on Android 13+ is off by default and can be enabled in settings; picture-in-picture and automatic entry are on by default, can be disabled in settings, and require device support and Android PiP access;
+- local Replies tracking is on by default; server push notifications require a separate opt-in and user consent; Android notifications depend on the Android 13+ notification permission and notification-channel settings;
 - `targetSdk` is 37 for Android 17 compatibility; `minSdk` remains 30.
 
 ### Building

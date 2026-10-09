@@ -48,6 +48,10 @@ import com.mishiranu.dashchan.ui.posting.photo.EditorPalette;
 import com.mishiranu.dashchan.ui.posting.photo.EditorStickers;
 import com.mishiranu.dashchan.ui.posting.photo.EditorDocument;
 import com.mishiranu.dashchan.ui.posting.photo.EditorGeometry;
+import com.mishiranu.dashchan.ui.posting.photo.EditorExportRequest;
+import com.mishiranu.dashchan.ui.posting.photo.EditorSessionSnapshot;
+import com.mishiranu.dashchan.ui.posting.photo.EditorSessionSnapshot.Section;
+import com.mishiranu.dashchan.ui.posting.photo.EditorSessionCodec;
 import com.mishiranu.dashchan.ui.posting.photo.EditorMotion;
 import com.mishiranu.dashchan.ui.posting.photo.EditorPanelMotion;
 import com.mishiranu.dashchan.ui.posting.photo.EditorRenderer;
@@ -76,7 +80,6 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
     public static final String EXTRA_RESULT_SOURCE_HASH = "resultSourceHash", EXTRA_RESULT_SOURCE_NAME = "resultSourceName";
     private static final String SESSION = "editorSession";
     private static final int ACCENT = EditorPalette.ACCENT, SURFACE = EditorPalette.SURFACE, INK = EditorPalette.TEXT;
-    private enum Section { HOME, CROP, ADJUST, FILTERS, DRAW, TEXT, HIDE, STICKERS }
     private final ExecutorService worker = Executors.newSingleThreadExecutor(r -> new Thread(r, "PhotoEditorWorker"));
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final HashMap<String, Bitmap> assets = new HashMap<>();
@@ -362,36 +365,18 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
                 exportPng = holder.getImageType() == FileHolder.ImageType.IMAGE_PNG;
                 AtomicFile session = new AtomicFile(new File(sessionDirectory, "session.json"));
                 if (session.getBaseFile().isFile()) {
+                    EditorSessionSnapshot.Builder restored = sessionBuilder(document);
                     try {
                         if (session.getBaseFile().length() > 16 * 1024 * 1024) throw new IOException("Oversized session");
                         JSONObject json = new JSONObject(new String(session.readFully(), StandardCharsets.UTF_8));
-                        if (!sourceHash.equals(json.getString("hash")) || !sourceName.equals(json.getString("name"))) {
-                            throw new JSONException("Source mismatch");
-                        }
-                        document = EditorDocument.fromJson(json.getJSONObject("document"));
-                        checkpoint = json.isNull("checkpoint") ? null : json.getJSONObject("checkpoint").toString();
-                        section = Section.valueOf(json.getString("section"));
-                        selectedColor = json.optInt("color", Color.WHITE); brushSize = (float) json.optDouble("size", .025);
-                        exportPng = json.optBoolean("png", exportPng); exportSide = json.optInt("side", 0);
-                        if (!json.optBoolean("exportOptionsV2", false) || exportSide == 16384) exportSide = 0;
-                        maskAll = json.optBoolean("maskAll", true);
-                        exportQuality = json.optInt("quality", 94);
-                        adjustmentIndex = Math.max(0, Math.min(6, json.optInt("adjustment", 0)));
-                        drawTool = EditorDocument.Kind.valueOf(json.optString("drawTool", "PEN"));
-                        hideTool = EditorDocument.Kind.valueOf(json.optString("hideTool", "COVER"));
-                        brushSize = com.mishiranu.dashchan.ui.posting.photo.EditorBlurPresets.brush(brushSize);
-                        mosaicSize = com.mishiranu.dashchan.ui.posting.photo.EditorBlurPresets.brush(
-                                (float) json.optDouble("mosaicSize", brushSize));
-                        blurPreset = com.mishiranu.dashchan.ui.posting.photo.EditorBlurPresets.clamp(json.optInt("blurPreset",
-                                json.optBoolean("toolSettingsV2", false) ? 1
-                                : com.mishiranu.dashchan.ui.posting.photo.EditorBlurPresets.nearest(brushSize)));
-                        drawAll = json.optBoolean("drawAll", true);
-                        objectAboveEffects = json.optBoolean("objectAboveEffects", false);
-                        if (exportSide != 0 && exportSide != 1024 && exportSide != 2048 && exportSide != 3072 && exportSide != 4096) exportSide = 0;
-                        exportQuality = Math.max(50, Math.min(100, exportQuality));
+                        EditorSessionCodec.restore(json, restored);
                     } catch (IOException | JSONException | IllegalArgumentException e) {
-                        document = new EditorDocument(); checkpoint = null; section = Section.HOME; restoredWithLoss = true;
+                        restored.document = new EditorDocument();
+                        restored.checkpoint = null;
+                        restored.section = Section.HOME;
+                        restoredWithLoss = true;
                     }
+                    applySession(restored.build());
                 }
                 loaded = holder.readImageBitmap(1536, false, false);
                 if (loaded == null) throw new IOException("Unsupported photo");
@@ -672,25 +657,57 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
         popup.showAsDropDown(ratioButton, 0, dp(2), Gravity.END);
     }
 
-    private void adjustmentPanel() {
-        int[] labels = {R.string.pe_brightness, R.string.pe_contrast, R.string.pe_saturation, R.string.pe_warmth,
-                R.string.pe_shadows, R.string.pe_highlights, R.string.pe_sharpness};
-        int[] icons = {R.drawable.ic_pe_brightness, R.drawable.ic_pe_contrast, R.drawable.ic_pe_saturation,
-                R.drawable.ic_pe_warmth, R.drawable.ic_pe_shadows, R.drawable.ic_pe_highlights, R.drawable.ic_pe_sharpness};
-        LinearLayout selection = scrollRow(panel), controls = new LinearLayout(this); controls.setOrientation(LinearLayout.VERTICAL);
-        panel.addView(controls);
-        for (int i = 0; i < labels.length; i++) {
-            final int index = i;
-            selection.addView(toolTile(labels[i], icons[i], i == adjustmentIndex, false,
-                    () -> { adjustmentIndex = index; buildPanel(); }), new LinearLayout.LayoutParams(dp(80), -2));
+    /** One UI description per named adjustment; no parallel label/icon arrays. */
+    private enum AdjustmentControl {
+        BRIGHTNESS(EditorDocument.Adjustment.BRIGHTNESS, R.string.pe_brightness, R.drawable.ic_pe_brightness),
+        CONTRAST(EditorDocument.Adjustment.CONTRAST, R.string.pe_contrast, R.drawable.ic_pe_contrast),
+        SATURATION(EditorDocument.Adjustment.SATURATION, R.string.pe_saturation, R.drawable.ic_pe_saturation),
+        WARMTH(EditorDocument.Adjustment.WARMTH, R.string.pe_warmth, R.drawable.ic_pe_warmth),
+        SHADOWS(EditorDocument.Adjustment.SHADOWS, R.string.pe_shadows, R.drawable.ic_pe_shadows),
+        HIGHLIGHTS(EditorDocument.Adjustment.HIGHLIGHTS, R.string.pe_highlights, R.drawable.ic_pe_highlights),
+        SHARPNESS(EditorDocument.Adjustment.SHARPNESS, R.string.pe_sharpness, R.drawable.ic_pe_sharpness);
+
+        final EditorDocument.Adjustment adjustment;
+        final int label, icon;
+
+        AdjustmentControl(EditorDocument.Adjustment adjustment, int label, int icon) {
+            this.adjustment = adjustment;
+            this.label = label;
+            this.icon = icon;
         }
-        final int index = adjustmentIndex;
-        ruler(controls, labels[index], index == 6 ? 0 : -100, 100, 1, () -> (float) document.state().adjustments[index],
+
+        static AdjustmentControl forStorageIndex(int index) {
+            for (AdjustmentControl control : values()) {
+                if (control.adjustment.storageIndex == index) return control;
+            }
+            throw new IllegalArgumentException("Unknown adjustment: " + index);
+        }
+    }
+
+    private void adjustmentPanel() {
+        LinearLayout selection = scrollRow(panel);
+        LinearLayout controls = new LinearLayout(this);
+        controls.setOrientation(LinearLayout.VERTICAL);
+        panel.addView(controls);
+        for (AdjustmentControl control : AdjustmentControl.values()) {
+            final int index = control.adjustment.storageIndex;
+            selection.addView(toolTile(control.label, control.icon, index == adjustmentIndex, false, () -> {
+                adjustmentIndex = index;
+                buildPanel();
+            }), new LinearLayout.LayoutParams(dp(80), -2));
+        }
+        AdjustmentControl control = AdjustmentControl.forStorageIndex(adjustmentIndex);
+        EditorDocument.Adjustment adjustment = control.adjustment;
+        final int index = adjustment.storageIndex;
+        ruler(controls, control.label, adjustment.uiMinimum, adjustment.uiMaximum, 1,
+                () -> (float) document.state().adjustments[index],
                 value -> document.state().adjustments[index] = Math.round(value));
         LinearLayout row = scrollRow(controls);
         Button reset = button(R.string.pe_reset, () -> geometryChange(EditorMotion.RESET, 0, true,
                 () -> document.state().adjustments[index] = 0, true));
-        reset.setMinHeight(dp(40)); reset.setTextSize(12); row.addView(reset, new LinearLayout.LayoutParams(-2, dp(40)));
+        reset.setMinHeight(dp(40));
+        reset.setTextSize(12);
+        row.addView(reset, new LinearLayout.LayoutParams(-2, dp(40)));
     }
 
     private void filterPanel() {
@@ -1117,12 +1134,17 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
 
     private void prepareSave() {
         if (section != Section.HOME) closeSection(true);
-        panelMotion.release(); canvas.finishGesture(true); canvas.settlePresentation();
+        panelMotion.release();
+        canvas.finishGesture(true);
+        canvas.settlePresentation();
     }
+
     private void saveDirect() {
         if (canvas == null || busy) return;
-        prepareSave(); encode(true, null);
+        prepareSave();
+        encode(true, null);
     }
+
     private int exportSample(EditorDocument.State state, int width, int height, int side) {
         android.graphics.RectF crop = EditorGeometry.cropPixels(state, width, height);
         float wanted = side == 0 ? 1 : Math.max(1f, Math.max(crop.width(), crop.height()) / side);
@@ -1141,121 +1163,207 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
     }
     private void showExport() {
         if (canvas == null || busy || exportDialog != null) return;
-        canvas.finishGesture(true); canvas.settlePresentation();
-        AlertDialog.Builder builder = dialogBuilder(); Context context = builder.getContext();
-        LinearLayout layout = new LinearLayout(context); layout.setOrientation(LinearLayout.VERTICAL); layout.setPadding(dp(16), dp(8), dp(16), dp(8));
+        canvas.finishGesture(true);
+        canvas.settlePresentation();
+        AlertDialog.Builder builder = dialogBuilder();
+        Context context = builder.getContext();
+        LinearLayout layout = new LinearLayout(context);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(dp(16), dp(8), dp(16), dp(8));
         // This is a draft: Cancel, outside tap and Back leave export settings unchanged.
-        int[] side = {exportSide}, quality = {exportQuality}; boolean[] png = {exportPng};
-        TextView dimensions = label(context, R.string.pe_export_size); layout.addView(dimensions);
-        Button size = button(context, side[0] == 0 ? getString(R.string.pe_export_no_resize) + " · " + exportDimensions(0) : exportDimensions(side[0]), () -> {});
+        int[] side = {exportSide};
+        int[] quality = {exportQuality};
+        boolean[] png = {exportPng};
+        TextView dimensions = label(context, R.string.pe_export_size);
+        layout.addView(dimensions);
+        Button size = button(context, side[0] == 0 ? getString(R.string.pe_export_no_resize) + " · " + exportDimensions(0)
+                : exportDimensions(side[0]), () -> {});
         layout.addView(size);
         size.setOnClickListener(v -> {
-            java.util.ArrayList<Integer> limits = new java.util.ArrayList<>(); java.util.ArrayList<String> labels = new java.util.ArrayList<>();
-            limits.add(0); labels.add(getString(R.string.pe_export_no_resize) + " · " + exportDimensions(0));
+            java.util.ArrayList<Integer> limits = new java.util.ArrayList<>();
+            java.util.ArrayList<String> labels = new java.util.ArrayList<>();
+            limits.add(0);
+            labels.add(getString(R.string.pe_export_no_resize) + " · " + exportDimensions(0));
             android.graphics.RectF crop = EditorGeometry.cropPixels(document.state(), originalWidth, originalHeight);
-            for (int limit : new int[] {4096, 3072, 2048, 1024}) if (limit < Math.max(crop.width(), crop.height())) {
-                String dimensionsLabel = exportDimensions(limit);
-                if (!dimensionsLabel.equals(exportDimensions(0)) && !labels.contains(dimensionsLabel)) { limits.add(limit); labels.add(dimensionsLabel); }
+            for (int limit : new int[] {4096, 3072, 2048, 1024}) {
+                if (limit < Math.max(crop.width(), crop.height())) {
+                    String dimensionsLabel = exportDimensions(limit);
+                    if (!dimensionsLabel.equals(exportDimensions(0)) && !labels.contains(dimensionsLabel)) {
+                        limits.add(limit);
+                        labels.add(dimensionsLabel);
+                    }
+                }
             }
             int checked = limits.indexOf(side[0]);
-            if (checked < 0) { checked = labels.indexOf(exportDimensions(side[0])); if (checked < 0) checked = 0; }
-            dialogBuilder().setTitle(R.string.pe_export_size).setSingleChoiceItems(labels.toArray(new String[0]), checked, (d, which) -> {
-                side[0] = limits.get(which); size.setText(side[0] == 0 ? getString(R.string.pe_export_no_resize) + " · " + exportDimensions(0) : exportDimensions(side[0])); d.dismiss();
-            }).setNegativeButton(android.R.string.cancel, null).show();
+            if (checked < 0) {
+                checked = labels.indexOf(exportDimensions(side[0]));
+                if (checked < 0) checked = 0;
+            }
+            dialogBuilder().setTitle(R.string.pe_export_size)
+                    .setSingleChoiceItems(labels.toArray(new String[0]), checked, (d, which) -> {
+                        side[0] = limits.get(which);
+                        size.setText(side[0] == 0 ? getString(R.string.pe_export_no_resize) + " · " + exportDimensions(0)
+                                : exportDimensions(side[0]));
+                        d.dismiss();
+                    }).setNegativeButton(android.R.string.cancel, null).show();
         });
-        TextView formatTitle = label(context, R.string.pe_export_format); layout.addView(formatTitle);
+        TextView formatTitle = label(context, R.string.pe_export_format);
+        layout.addView(formatTitle);
         LinearLayout formats = scrollRow(layout);
-        Button jpeg = button(context, "JPEG", () -> {}), pngButton = button(context, "PNG", () -> {});
-        addButton(formats, jpeg); addButton(formats, pngButton);
-        View qualityControl = slider(layout, R.string.pe_quality, 50, 100, quality[0], value -> quality[0] = value, false, "%");
-        Runnable sync = () -> { highlight(jpeg, !png[0]); highlight(pngButton, png[0]); qualityControl.setVisibility(png[0] ? View.GONE : View.VISIBLE); };
-        jpeg.setOnClickListener(v -> { png[0] = false; sync.run(); }); pngButton.setOnClickListener(v -> { png[0] = true; sync.run(); }); sync.run();
-        ScrollView scroll = new ScrollView(context); scroll.addView(layout);
+        Button jpeg = button(context, "JPEG", () -> {});
+        Button pngButton = button(context, "PNG", () -> {});
+        addButton(formats, jpeg);
+        addButton(formats, pngButton);
+        View qualityControl = slider(layout, R.string.pe_quality, 50, 100, quality[0],
+                value -> quality[0] = value, false, "%");
+        Runnable sync = () -> {
+            highlight(jpeg, !png[0]);
+            highlight(pngButton, png[0]);
+            qualityControl.setVisibility(png[0] ? View.GONE : View.VISIBLE);
+        };
+        jpeg.setOnClickListener(v -> {
+            png[0] = false;
+            sync.run();
+        });
+        pngButton.setOnClickListener(v -> {
+            png[0] = true;
+            sync.run();
+        });
+        sync.run();
+        ScrollView scroll = new ScrollView(context);
+        scroll.addView(layout);
         AlertDialog dialog = builder.setTitle(R.string.pe_export_settings).setView(scroll)
-                .setNegativeButton(android.R.string.cancel, null).setPositiveButton(R.string.pe_color_done, (d, w) -> {
-                    exportSide = side[0]; exportQuality = quality[0]; exportPng = png[0]; encodedKey = null; persist();
+                .setNegativeButton(android.R.string.cancel, null)
+                .setPositiveButton(R.string.pe_color_done, (d, w) -> {
+                    exportSide = side[0];
+                    exportQuality = quality[0];
+                    exportPng = png[0];
+                    encodedKey = null;
+                    persist();
                 }).create();
-        exportDialog = dialog; exportControls = layout;
-        dialog.setOnDismissListener(ignored -> { if (exportDialog == dialog) { exportDialog = null; exportControls = null; } });
+        exportDialog = dialog;
+        exportControls = layout;
+        dialog.setOnDismissListener(d -> {
+            if (exportDialog == dialog) {
+                exportDialog = null;
+                exportControls = null;
+            }
+        });
         dialog.show();
     }
 
     private void encode(boolean attach, TextView sizeInfo) {
         if (busy || destroyed) return;
-        EditorDocument.State state = document.state().copy();
-        final int side = exportSide, quality = exportQuality;
-        final boolean png = exportPng;
-        final String key;
-        try { key = document.toJson().getJSONObject("state").toString() + ":" + side + ":" + quality + ":" + png; }
-        catch (JSONException e) { failure(R.string.image_editor_save_failed); return; }
-        HashMap<String, Bitmap> assetSnapshot = new HashMap<>(assets);
+        final EditorExportRequest request;
+        try {
+            request = EditorExportRequest.capture(document,
+                    new EditorExportRequest.Options(exportSide, exportQuality, exportPng),
+                    new EditorExportRequest.Source(sourceHash, sourceName, attachmentIndex, originalWidth, originalHeight),
+                    attach, assets);
+        } catch (JSONException e) {
+            failure(R.string.image_editor_save_failed);
+            return;
+        }
         setBusy(true, R.string.image_editor_saving);
         worker.execute(() -> {
-            File output = new File(sessionDirectory, "export." + (png ? "png" : "jpg"));
-            Bitmap decoded = null, result = null;
+            EditorDocument.State state = request.state;
+            EditorExportRequest.Options options = request.options;
+            File output = new File(sessionDirectory, options.png ? "export.png" : "export.jpg");
+            Bitmap decoded = null;
+            Bitmap result = null;
             try {
-                if (!key.equals(encodedKey) || !output.isFile()) {
-                    FileHolder holder = DraftsStorage.getInstance().getAttachmentDraftFileHolder(sourceHash);
+                if (!request.cacheKey.equals(encodedKey) || !output.isFile()) {
+                    FileHolder holder = DraftsStorage.getInstance().getAttachmentDraftFileHolder(request.source.hash);
                     if (holder == null) throw new IOException("Source removed");
-                    int w = holder.getImageWidth(), h = holder.getImageHeight();
+                    int w = holder.getImageWidth();
+                    int h = holder.getImageHeight();
                     if (w <= 0 || h <= 0) throw new IOException("Invalid source dimensions");
                     // The settings size estimate and export share the existing bounded decode policy.
-                    int sample = exportSample(state, w, h, side);
+                    int sample = exportSample(state, w, h, options.side);
                     int decodeSide = (int) ((Math.max(w, h) + (long) sample - 1) / sample);
                     decoded = holder.readImageBitmap(decodeSide, false, false);
                     if (decoded == null) throw new IOException("Decode failed");
-                    result = EditorRenderer.export(decoded, state, side, !png, assetSnapshot);
+                    result = EditorRenderer.export(decoded, state, options.side, !options.png, request.assets);
                     try (FileOutputStream stream = new FileOutputStream(output)) {
-                        if (!result.compress(png ? Bitmap.CompressFormat.PNG : Bitmap.CompressFormat.JPEG, quality, stream)) {
+                        if (!result.compress(options.png ? Bitmap.CompressFormat.PNG : Bitmap.CompressFormat.JPEG,
+                                options.quality, stream)) {
                             throw new IOException("Encode failed");
                         }
                     }
-                    encodedKey = key;
+                    encodedKey = request.cacheKey;
                 }
-                FileHolder resultHolder = FileHolder.obtain(output); if (resultHolder == null) throw new IOException("Invalid result");
-                int outWidth = resultHolder.getImageWidth(), outHeight = resultHolder.getImageHeight(); long bytes = output.length();
-                String hash = attach ? DraftsStorage.getInstance().storeAttachmentFile(resultHolder) : null;
-                if (attach && hash == null) throw new IOException("Draft save failed");
+                FileHolder resultHolder = FileHolder.obtain(output);
+                if (resultHolder == null) throw new IOException("Invalid result");
+                int outWidth = resultHolder.getImageWidth();
+                int outHeight = resultHolder.getImageHeight();
+                long bytes = output.length();
+                String hash = request.attach ? DraftsStorage.getInstance().storeAttachmentFile(resultHolder) : null;
+                if (request.attach && hash == null) throw new IOException("Draft save failed");
                 handler.post(() -> {
                     if (destroyed) return;
                     setBusy(false, 0);
-                    if (!attach) {
+                    if (!request.attach) {
                         if (sizeInfo != null) sizeInfo.setText(getString(R.string.pe_export_info, outWidth, outHeight, bytes / 1024f));
                         return;
                     }
-                    android.graphics.RectF wantedCrop = EditorGeometry.cropPixels(state, originalWidth, originalHeight);
-                    float wantedScale = side == 0 ? 1 : Math.min(1, side / Math.max(wantedCrop.width(), wantedCrop.height()));
-                    if (outWidth + 1 < Math.round(wantedCrop.width() * wantedScale) || outHeight + 1 < Math.round(wantedCrop.height() * wantedScale))
-                        android.widget.Toast.makeText(this, getString(R.string.pe_export_actual_size, outWidth, outHeight), android.widget.Toast.LENGTH_LONG).show();
-                    int dot = sourceName.lastIndexOf('.'); String base = dot > 0 ? sourceName.substring(0, dot) : sourceName;
+                    android.graphics.RectF wantedCrop = EditorGeometry.cropPixels(state, request.source.width, request.source.height);
+                    float wantedScale = options.side == 0 ? 1 : Math.min(1, options.side / Math.max(wantedCrop.width(), wantedCrop.height()));
+                    if (outWidth + 1 < Math.round(wantedCrop.width() * wantedScale)
+                            || outHeight + 1 < Math.round(wantedCrop.height() * wantedScale)) {
+                        android.widget.Toast.makeText(this, getString(R.string.pe_export_actual_size, outWidth, outHeight),
+                                android.widget.Toast.LENGTH_LONG).show();
+                    }
+                    int dot = request.source.name.lastIndexOf('.');
+                    String base = dot > 0 ? request.source.name.substring(0, dot) : request.source.name;
                     setResult(RESULT_OK, new Intent().putExtra(EXTRA_RESULT_HASH, hash)
-                            .putExtra(EXTRA_RESULT_NAME, base + "_edited." + (png ? "png" : "jpg"))
-                            .putExtra(EXTRA_RESULT_ATTACHMENT_INDEX, attachmentIndex)
-                            .putExtra(EXTRA_RESULT_SOURCE_HASH, sourceHash).putExtra(EXTRA_RESULT_SOURCE_NAME, sourceName));
-                    completed = true; finish();
+                            .putExtra(EXTRA_RESULT_NAME, base + "_edited." + (options.png ? "png" : "jpg"))
+                            .putExtra(EXTRA_RESULT_ATTACHMENT_INDEX, request.source.attachmentIndex)
+                            .putExtra(EXTRA_RESULT_SOURCE_HASH, request.source.hash)
+                            .putExtra(EXTRA_RESULT_SOURCE_NAME, request.source.name));
+                    completed = true;
+                    finish();
                 });
             } catch (IOException | RuntimeException | OutOfMemoryError e) {
-                encodedKey = null; output.delete();
-                handler.post(() -> { if (!destroyed) { setBusy(false, 0); failure(R.string.image_editor_save_failed); }});
-            } finally { if (result != null) result.recycle(); if (decoded != null) decoded.recycle(); }
+                encodedKey = null;
+                output.delete();
+                handler.post(() -> {
+                    if (!destroyed) {
+                        setBusy(false, 0);
+                        failure(R.string.image_editor_save_failed);
+                    }
+                });
+            } finally {
+                if (result != null) result.recycle();
+                if (decoded != null) decoded.recycle();
+            }
         });
     }
 
     private void setBusy(boolean busy, int message) {
-        panelMotion.release(); if (canvas != null) canvas.settlePresentation();
-        this.busy = busy; save.setEnabled(!busy && canvas != null); categories.setAlpha(busy ? .35f : 1);
+        panelMotion.release();
+        if (canvas != null) canvas.settlePresentation();
+        this.busy = busy;
+        save.setEnabled(!busy && canvas != null);
+        categories.setAlpha(busy ? .35f : 1);
         if (canvas != null) canvas.setInputEnabled(!busy);
         if (panel != null) setTreeEnabled(panel, !busy);
         if (cropToolbar != null) setTreeEnabled(cropToolbar, !busy);
         if (cropScale != null) setTreeEnabled(cropScale, !busy);
         setTreeEnabled(categories, !busy);
         if (exportDialog != null) {
-            exportDialog.setCancelable(!busy); exportDialog.setCanceledOnTouchOutside(!busy);
+            exportDialog.setCancelable(!busy);
+            exportDialog.setCanceledOnTouchOutside(!busy);
             exportDialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(!busy);
             exportDialog.getButton(AlertDialog.BUTTON_NEGATIVE).setEnabled(!busy);
             setTreeEnabled(exportControls, !busy);
         }
-        if (busy) { subtitle.setVisibility(View.VISIBLE); subtitle.setText(message); } else updateSubtitle(); updateHistory();
+        if (busy) {
+            subtitle.setVisibility(View.VISIBLE);
+            subtitle.setText(message);
+        } else {
+            updateSubtitle();
+        }
+        updateHistory();
     }
 
     private static void setTreeEnabled(View view, boolean enabled) {
@@ -1274,60 +1382,109 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
         if (!destroyed && !isFinishing()) dialogBuilder().setMessage(message).setPositiveButton(android.R.string.ok, null).show();
     }
 
+    private EditorSessionSnapshot.Builder sessionBuilder(EditorDocument capturedDocument) {
+        EditorSessionSnapshot.Builder builder = new EditorSessionSnapshot.Builder(capturedDocument, sourceHash, sourceName);
+        builder.checkpoint = checkpoint;
+        builder.section = section;
+        builder.adjustmentIndex = adjustmentIndex;
+        builder.drawTool = drawTool;
+        builder.hideTool = hideTool;
+        builder.selectedColor = selectedColor;
+        builder.brushSize = brushSize;
+        builder.mosaicSize = mosaicSize;
+        builder.blurPreset = blurPreset;
+        builder.drawAll = drawAll;
+        builder.objectAboveEffects = objectAboveEffects;
+        builder.maskAll = maskAll;
+        builder.exportSide = exportSide;
+        builder.exportQuality = exportQuality;
+        builder.exportPng = exportPng;
+        return builder;
+    }
+
+    private void applySession(EditorSessionSnapshot snapshot) {
+        document = snapshot.document;
+        checkpoint = snapshot.checkpoint;
+        section = snapshot.section;
+        adjustmentIndex = snapshot.adjustmentIndex;
+        drawTool = snapshot.drawTool;
+        hideTool = snapshot.hideTool;
+        selectedColor = snapshot.selectedColor;
+        brushSize = snapshot.brushSize;
+        mosaicSize = snapshot.mosaicSize;
+        blurPreset = snapshot.blurPreset;
+        drawAll = snapshot.drawAll;
+        objectAboveEffects = snapshot.objectAboveEffects;
+        maskAll = snapshot.maskAll;
+        exportSide = snapshot.exportSide;
+        exportQuality = snapshot.exportQuality;
+        exportPng = snapshot.exportPng;
+    }
+
     private void persist() {
         if (source == null || completed || destroyed || sessionDirectory == null) return;
-        final EditorDocument snapshot;
+        final EditorSessionSnapshot snapshot;
         try {
-            snapshot = document.copy();
+            snapshot = sessionBuilder(document.copy()).build();
         } catch (OutOfMemoryError e) {
-            failure(R.string.pe_session_failed); return;
+            failure(R.string.pe_session_failed);
+            return;
         }
         final int request = ++sessionGeneration;
-        final String savedSection = section.name(), savedCheckpoint = checkpoint;
-        final String savedDrawTool = drawTool.name(), savedHideTool = hideTool.name();
-        final int savedAdjustment = adjustmentIndex, savedColor = selectedColor;
-        final int savedSide = exportSide, savedQuality = exportQuality;
-        final float savedSize = brushSize, savedMosaicSize = mosaicSize;
-        final int savedBlurPreset = blurPreset;
-        final boolean savedDrawAll = drawAll, savedObjectAboveEffects = objectAboveEffects;
-        final boolean savedPng = exportPng, savedMaskAll = maskAll;
         // Serialization and AtomicFile IO are ordered with other worker jobs and final cleanup.
         worker.execute(() -> {
             if (request != sessionGeneration) return;
             AtomicFile file = new AtomicFile(new File(sessionDirectory, "session.json"));
             FileOutputStream stream = null;
             try {
-                JSONObject json = new JSONObject().put("hash", sourceHash).put("name", sourceName)
-                        .put("document", snapshot.toJson()).put("section", savedSection)
-                        .put("checkpoint", savedCheckpoint == null ? JSONObject.NULL : new JSONObject(savedCheckpoint))
-                        .put("adjustment", savedAdjustment).put("drawTool", savedDrawTool).put("hideTool", savedHideTool)
-                        .put("color", savedColor).put("size", savedSize).put("png", savedPng)
-                        .put("toolSettingsV2", true).put("mosaicSize", savedMosaicSize).put("blurPreset", savedBlurPreset).put("drawAll", savedDrawAll).put("objectAboveEffects", savedObjectAboveEffects)
-                        .put("side", savedSide).put("quality", savedQuality).put("exportOptionsV2", true).put("maskAll", savedMaskAll);
-                byte[] bytes = json.toString().getBytes(StandardCharsets.UTF_8);
+                byte[] bytes = EditorSessionCodec.encode(snapshot).toString().getBytes(StandardCharsets.UTF_8);
                 if (request != sessionGeneration) return;
-                stream = file.startWrite(); stream.write(bytes); file.finishWrite(stream);
+                stream = file.startWrite();
+                stream.write(bytes);
+                file.finishWrite(stream);
             } catch (IOException | JSONException | OutOfMemoryError e) {
                 if (stream != null) file.failWrite(stream);
-                handler.post(() -> { if (!destroyed && request == sessionGeneration) failure(R.string.pe_session_failed); });
+                handler.post(() -> {
+                    if (!destroyed && request == sessionGeneration) failure(R.string.pe_session_failed);
+                });
             }
         });
     }
+
     @Override protected void onSaveInstanceState(Bundle out) {
         if (sessionDirectory != null) out.putString(SESSION, sessionDirectory.getName());
-        settleEditor(); persist(); super.onSaveInstanceState(out);
+        settleEditor();
+        persist();
+        super.onSaveInstanceState(out);
     }
+
     @Override public void onConfigurationChanged(android.content.res.Configuration configuration) {
         super.onConfigurationChanged(configuration);
-        settleEditor(); if (canvas != null) buildPanel();
-        handler.post(() -> { if (!destroyed && content != null) content.getRootView().requestLayout(); });
+        settleEditor();
+        if (canvas != null) buildPanel();
+        handler.post(() -> {
+            if (!destroyed && content != null) content.getRootView().requestLayout();
+        });
     }
+
     private void settleEditor() {
-        panelMotion.release(); if (canvas != null) { canvas.finishGesture(true); canvas.settlePresentation(); }
+        panelMotion.release();
+        if (canvas != null) {
+            canvas.finishGesture(true);
+            canvas.settlePresentation();
+        }
     }
-    @Override protected void onStop() { settleEditor(); persist(); super.onStop(); }
+
+    @Override protected void onStop() {
+        settleEditor();
+        persist();
+        super.onStop();
+    }
+
     @Override protected void onDestroy() {
-        destroyed = true; panelMotion.release(); if (canvas != null) canvas.release();
+        destroyed = true;
+        panelMotion.release();
+        if (canvas != null) canvas.release();
         // Cleanup is ordered after every render/export job; bitmaps cannot be recycled under a running worker.
         worker.execute(() -> {
             if (source != null && !source.isRecycled()) source.recycle();
@@ -1335,6 +1492,8 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
             for (Bitmap bitmap : thumbnails) if (!bitmap.isRecycled()) bitmap.recycle();
             if (completed && sessionDirectory != null) PhotoEditorSessionFiles.remove(sessionDirectory);
             if (sessionDirectory != null) PhotoEditorSessionFiles.unregister(sessionDirectory);
-        }); worker.shutdown(); super.onDestroy();
+        });
+        worker.shutdown();
+        super.onDestroy();
     }
 }

@@ -46,6 +46,10 @@ public class ExpandedLayout extends FrameLayout implements ExpandedScreen.Layout
 		}
 	}
 
+	@Override public boolean dispatchTouchEvent(android.view.MotionEvent event) {
+		return ContentStateMotion.isActive(this) || super.dispatchTouchEvent(event);
+	}
+
 	private void applyPadding() {
 		int childTop;
 		int childBottom;

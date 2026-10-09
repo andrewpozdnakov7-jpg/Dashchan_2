@@ -14,6 +14,8 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Parcel;
 import android.os.Parcelable;
+import androidx.core.content.IntentCompat;
+import androidx.core.os.BundleCompat;
 import chan.util.StringUtils;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -68,64 +70,38 @@ public class AndroidUtils {
 	}
 
 	public static <T extends Parcelable> T getParcelable(Bundle bundle, String key, Class<T> clazz) {
-		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-			return bundle.getParcelable(key, clazz);
-		} else {
-			@SuppressWarnings("deprecation")
-			T result = bundle.getParcelable(key);
-			return result;
-		}
+		// AndroidX avoids the broken typed Parcelable readers on Android 13.
+		return BundleCompat.getParcelable(bundle, key, clazz);
 	}
 
 	public static <T extends Parcelable> ArrayList<T> getParcelableArrayList
 			(Bundle bundle, String key, Class<? extends T> clazz) {
-		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-			return bundle.getParcelableArrayList(key, clazz);
-		} else {
-			@SuppressWarnings("deprecation")
-			ArrayList<T> result = bundle.getParcelableArrayList(key);
-			return result;
-		}
+		return BundleCompat.getParcelableArrayList(bundle, key, clazz);
 	}
 
 	public static Parcelable[] getParcelableArray(Bundle bundle, String key, Class<? extends Parcelable> clazz) {
-		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-			return bundle.getParcelableArray(key, clazz);
-		} else {
-			@SuppressWarnings("deprecation")
-			Parcelable[] result = bundle.getParcelableArray(key);
-			return result;
-		}
+		return BundleCompat.getParcelableArray(bundle, key, clazz);
 	}
 
 	public static <T extends Parcelable> T getParcelableExtra(Intent intent, String key, Class<T> clazz) {
-		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-			return intent.getParcelableExtra(key, clazz);
-		} else {
-			@SuppressWarnings("deprecation")
-			T result = intent.getParcelableExtra(key);
-			return result;
-		}
+		return IntentCompat.getParcelableExtra(intent, key, clazz);
 	}
 
 	public static <T extends Parcelable> ArrayList<T> getParcelableArrayListExtra
 			(Intent intent, String key, Class<? extends T> clazz) {
-		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-			return intent.getParcelableArrayListExtra(key, clazz);
-		} else {
-			@SuppressWarnings("deprecation")
-			ArrayList<T> result = intent.getParcelableArrayListExtra(key);
-			return result;
-		}
+		return IntentCompat.getParcelableArrayListExtra(intent, key, clazz);
 	}
 
 	public static <T extends Parcelable> T readParcelable(Parcel source, ClassLoader loader, Class<T> clazz) {
-		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+		// Like BundleCompat/IntentCompat, only use the typed reader from API 34.
+		// API 33 checks cached CREATOR.getClass().getEnclosingClass(), which may
+		// be null for a valid creator (including after release optimization).
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
 			return source.readParcelable(loader, clazz);
 		} else {
 			@SuppressWarnings("deprecation")
-			T result = source.readParcelable(loader);
-			return result;
+			Parcelable result = source.readParcelable(loader);
+			return clazz.cast(result);
 		}
 	}
 

@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui.preference;
 
+import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.os.Bundle;
@@ -85,7 +86,7 @@ public class ThreadArrowTransparencyPreference extends DialogPreference<Integer>
 		Integer initial = parseValue(input.getText());
 		seek.setProgress(initial != null ? initial : getValue());
 		layout.second.addView(seek, LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-		AlertDialog dialog = super.configureDialog(savedInstanceState, new AlertDialog.Builder(context))
+		AlertDialog dialog = super.configureDialog(savedInstanceState, new MotionDialogBuilder(context))
 				.setView(layout.first).setPositiveButton(android.R.string.ok, (d, which) -> {
 					Integer value = parseValue(input.getText());
 					if (value != null) ConcurrentUtils.HANDLER.post(() -> setValue(value));

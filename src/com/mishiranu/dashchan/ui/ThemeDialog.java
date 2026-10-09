@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui;
 
+import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import android.app.AlertDialog;
 import android.app.Dialog;
 import android.content.Context;
@@ -49,7 +50,7 @@ public class ThemeDialog extends DialogFragment {
 		recyclerView.setLayoutManager(new LinearLayoutManager(context));
 		float density = ResourceUtils.obtainDensity(context);
 		recyclerView.setPadding(0, (int) (12f * density), 0, 0);
-		AlertDialog dialog = new AlertDialog.Builder(context)
+		AlertDialog dialog = new MotionDialogBuilder(context)
 				.setTitle(R.string.change_theme)
 				.setView(recyclerView)
 				.setNegativeButton(android.R.string.cancel, null)

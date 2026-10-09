@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui.preference;
 
+import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import android.app.AlertDialog;
 import android.os.Bundle;
 import android.view.View;
@@ -55,7 +56,7 @@ public class OfflineTranslationFragment extends PreferenceFragment implements Tr
 			});
 		}
 		addButton(R.string.clear_translation_cache, R.string.clear_translation_cache_summary).setOnClickListener(p ->
-				new AlertDialog.Builder(requireContext()).setTitle(R.string.clear_translation_cache)
+				new MotionDialogBuilder(requireContext()).setTitle(R.string.clear_translation_cache)
 						.setMessage(R.string.clear_translation_cache_summary)
 						.setNegativeButton(android.R.string.cancel, null)
 						.setPositiveButton(android.R.string.ok, (dialog, which) ->

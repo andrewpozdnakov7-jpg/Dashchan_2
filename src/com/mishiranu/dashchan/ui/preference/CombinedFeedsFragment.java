@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui.preference;
 
+import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import android.app.AlertDialog;
 import android.os.Bundle;
 import android.text.Editable;
@@ -316,7 +317,7 @@ public class CombinedFeedsFragment extends PreferenceFragment implements GetBoar
 		scrollView.addView(checks, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
 		root.addView(scrollView, ViewGroup.LayoutParams.MATCH_PARENT, (int) (320f * density));
 
-		AlertDialog.Builder builder = new AlertDialog.Builder(requireContext())
+		AlertDialog.Builder builder = new MotionDialogBuilder(requireContext())
 				.setTitle(existing != null ? R.string.edit_combined_feed : R.string.add_combined_feed)
 				.setView(root)
 				.setNegativeButton(android.R.string.cancel, null)
@@ -354,7 +355,7 @@ public class CombinedFeedsFragment extends PreferenceFragment implements GetBoar
 			});
 			if (existing != null) {
 				dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(button ->
-						new AlertDialog.Builder(requireContext())
+						new MotionDialogBuilder(requireContext())
 								.setMessage(R.string.delete_combined_feed_confirmation)
 								.setNegativeButton(android.R.string.cancel, null)
 								.setPositiveButton(R.string.delete, (confirmation, which) -> {

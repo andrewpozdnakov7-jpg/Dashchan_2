@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui;
 
+import com.mishiranu.dashchan.widget.ContentStateMotion;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.text.InputFilter;
@@ -37,6 +38,7 @@ public class CaptchaForm implements View.OnClickListener, View.OnLongClickListen
 	private final View cancelView;
 
 	private ChanConfiguration.Captcha.Input captchaInput;
+	private CaptchaViewType presentedCaptchaType;
 
 	public interface Callback {
 		void onRefreshCaptcha(boolean forceRefresh);
@@ -196,6 +198,8 @@ public class CaptchaForm implements View.OnClickListener, View.OnLongClickListen
 
 	private void switchToCaptchaView(CaptchaViewType captchaViewType,
 			ChanConfiguration.Captcha.Input input, boolean large) {
+		boolean changed = presentedCaptchaType != captchaViewType;
+		ContentStateMotion.finish(loadingView); ContentStateMotion.finish(imageView); ContentStateMotion.finish(skipBlockView);
 		switch (captchaViewType) {
 			case LOADING: {
 				blockParentView.setClickable(true);
@@ -242,6 +246,9 @@ public class CaptchaForm implements View.OnClickListener, View.OnLongClickListen
 				break;
 			}
 		}
+		presentedCaptchaType = captchaViewType;
+		if (changed) ContentStateMotion.reveal(captchaViewType == CaptchaViewType.LOADING ? loadingView
+				: captchaViewType == CaptchaViewType.IMAGE ? imageView : skipBlockView);
 	}
 
 	public void setText(String text) {

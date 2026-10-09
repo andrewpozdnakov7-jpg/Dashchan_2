@@ -52,13 +52,14 @@ public class ToolbarBackContractTest {
 		return text.substring(start, end - 1).replaceAll("\\s+", " ");
 	}
 
-	@Test public void toolbarArrowUsesSystemBackInsteadOfOpeningParentBoard() throws Exception {
+	@Test public void defaultToolbarArrowUsesSystemBackWithExplicitThreadOverride() throws Exception {
 		String text = activity();
 		int start = text.indexOf("if (item.getItemId() == android.R.id.home)");
 		assertTrue(start >= 0);
 		int end = text.indexOf("} else if (item.getItemId()", start);
 		assertTrue(end > start);
 		String home = text.substring(start, end);
+		assertTrue(home.contains("handleThreadToolbarAction((PageFragment) currentFragment)"));
 		assertTrue(home.contains("onSystemBackPressed();"));
 		assertTrue(home.contains("return true;"));
 		for (String forbidden : new String[] {"onHomePressed()", "navigateData(", "navigateInitial(", "removeFragment()",
@@ -93,6 +94,19 @@ public class ToolbarBackContractTest {
 		assertTrue(dispatch.contains("Preferences.isCloseOnBack()"));
 		assertFalse(dispatch.contains("navigateData("));
 		assertFalse(dispatch.contains("setInitRequest("));
+	}
+
+	@Test public void explicitListReturnRestoresCacheWithoutPushingOutgoingThread() throws Exception {
+		String route = method("returnToThreadList", "PageFragment fragment");
+		assertTrue(route.contains("fragment.getThreadListOrigin()"));
+		assertTrue(route.contains("ThreadListNavigation.fallback(thread)"));
+		assertTrue(route.contains("getSavedPage(stackPageItems.get(i)).equals(target)"));
+		assertTrue(route.contains("currentPageItem = null;"));
+		assertTrue(route.contains("navigateSavedPage(savedTarget, true, FragmentTransaction.TRANSIT_FRAGMENT_CLOSE)"));
+		assertTrue(route.contains("Preferences.isCloseOnBack()"));
+		assertFalse(route.contains("setInitRequest("));
+		assertFalse(route.contains("navigateData("));
+		assertFalse(route.contains("stackPageItems.clear()"));
 	}
 
 	@Test public void savedPageReturnDoesNotRequestForcedLoading() throws Exception {

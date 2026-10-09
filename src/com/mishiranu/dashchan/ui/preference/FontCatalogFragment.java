@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui.preference;
 
+import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.os.Bundle;
@@ -74,7 +75,7 @@ public class FontCatalogFragment extends BaseListFragment {
 			requireActivity().recreate();
 			return;
 		}
-		new AlertDialog.Builder(requireContext())
+		new MotionDialogBuilder(requireContext())
 				.setTitle(font.title)
 				.setMessage(getString(R.string.font_download_confirmation__format,
 						font.license, formatSize(font.fileSize)))

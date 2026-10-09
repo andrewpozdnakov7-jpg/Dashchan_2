@@ -268,8 +268,8 @@ android {
 
 	defaultConfig {
 		applicationId = 'io.dashchan2'
-		versionCode = 11380
-		versionName = '3.2.58'
+		versionCode = 11390
+		versionName = '3.2.59'
 		def releaseVersionCode = versionCode
 		def packageVersionCodeProperty = project.findProperty('packageVersionCode')
 		if (packageVersionCodeProperty != null) {
@@ -399,6 +399,7 @@ android {
 	githubDebugSourceSet.java.srcDir 'distribution/githubDebug/src'
 	githubDebugSourceSet.manifest.srcFile 'distribution/githubDebug/AndroidManifest.xml'
 	sourceSets.fdroid.java.srcDir 'distribution/fdroid/src'
+	sourceSets.fdroid.assets.srcDir 'distribution/fdroid/metadata'
 	sourceSets.test {
 		java.srcDirs = ['unitTests/src']
 		resources.srcDirs = ['unitTests/resources']
@@ -604,6 +605,8 @@ dependencies {
 	leakImplementation 'com.squareup.leakcanary:leakcanary-android:3.0-alpha-9'
 	githubImplementation platform('com.google.firebase:firebase-bom:34.19.0')
 	githubImplementation 'com.google.firebase:firebase-messaging'
+	// Real Material 3 Expressive LoadingIndicator; restricted to the experimental GitHub UI.
+	githubImplementation 'com.google.android.material:material:1.14.0'
 	githubImplementation 'com.google.mlkit:genai-prompt:1.0.0-beta4'
 	// beta4 calls coroutine APIs missing in 1.10.x. Align core, Guava and reactive
 	// adapters too: its published POM still requests older versions of these modules.

@@ -1,5 +1,7 @@
 package com.mishiranu.dashchan.ui.preference.core;
 
+import com.mishiranu.dashchan.widget.InterfaceAppearance;
+
 import com.mishiranu.dashchan.util.AuditDiagnostics;
 import android.app.AlertDialog;
 import android.content.Context;
@@ -521,6 +523,12 @@ public abstract class PreferenceFragment extends ContentFragment {
 		public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
 			Preference<?> preference = preferences.get(position);
 			preference.bindViewHolder(holder.viewHolder);
+			Preference.ViewType type = preference.getViewType();
+			if (type == Preference.ViewType.NORMAL || type == Preference.ViewType.CATEGORY
+					|| type == Preference.ViewType.CHECK || type == Preference.ViewType.HEADER) {
+				InterfaceAppearance.row(holder.viewHolder.view, holder.viewHolder.title, holder.viewHolder.summary,
+						type == Preference.ViewType.HEADER);
+			}
 			holder.itemView.setOnLongClickListener(preference.hasLongClickListener()
 					? view -> preference.performLongClick() : null);
 		}

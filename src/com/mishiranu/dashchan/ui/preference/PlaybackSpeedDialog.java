@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui.preference;
 
+import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.text.Editable;
@@ -16,12 +17,12 @@ import android.widget.TextView;
 import androidx.fragment.app.FragmentManager;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
+import com.mishiranu.dashchan.media.PlaybackSpeed;
 import com.mishiranu.dashchan.ui.InstanceDialog;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.widget.ThemeEngine;
 import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.Locale;
 
 public final class PlaybackSpeedDialog {
 	private static final int SLOW_PROGRESS_MAX = 99;
@@ -39,12 +40,7 @@ public final class PlaybackSpeedDialog {
 	private PlaybackSpeedDialog() {}
 
 	public static String formatPlaybackSpeed(int playbackSpeed) {
-		if (playbackSpeed % 1000 == 0) {
-			return String.format(Locale.US, "%dx", playbackSpeed / 1000);
-		} else if (playbackSpeed % 100 == 0) {
-			return String.format(Locale.US, "%.1fx", playbackSpeed / 1000f);
-		}
-		return String.format(Locale.US, "%.2fx", playbackSpeed / 1000f);
+		return PlaybackSpeed.format(playbackSpeed);
 	}
 
 	public static String formatPlaybackSpeedSummary(Context context, int playbackSpeed) {
@@ -183,7 +179,7 @@ public final class PlaybackSpeedDialog {
 			layout.addView(warning, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
 					ViewGroup.LayoutParams.WRAP_CONTENT));
 
-			AlertDialog dialog = new AlertDialog.Builder(context)
+			AlertDialog dialog = new MotionDialogBuilder(context)
 					.setTitle(R.string.playback_speed_presets)
 					.setView(scrollView)
 					.setNegativeButton(android.R.string.cancel, null)
@@ -296,7 +292,7 @@ public final class PlaybackSpeedDialog {
 				public void afterTextChanged(Editable s) {}
 			});
 
-			AlertDialog dialog = new AlertDialog.Builder(context)
+			AlertDialog dialog = new MotionDialogBuilder(context)
 					.setTitle(R.string.playback_speed)
 					.setView(layout)
 					.setNegativeButton(android.R.string.cancel, null)

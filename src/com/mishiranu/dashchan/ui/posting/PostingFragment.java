@@ -1,5 +1,8 @@
 package com.mishiranu.dashchan.ui.posting;
 
+import com.mishiranu.dashchan.widget.InterfaceAppearance;
+
+import com.mishiranu.dashchan.widget.ImePanelMotion;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
@@ -498,10 +501,18 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		bindControllers();
 		formDiagnostics = new PostingFormDiagnostics.Observer(requireActivity(), view, scrollView,
 				commentView, footerContainer);
+		// Explicit roles preserve editor sizing, IME ownership and controller bindings.
+		for (EditText field : new EditText[] {nameView, emailView, passwordView, subjectView, commentView, captchaInputView}) {
+			InterfaceAppearance.field(field);
+		}
+		InterfaceAppearance.check(sageCheckBox); InterfaceAppearance.check(spoilerCheckBox);
+		InterfaceAppearance.check(originalPosterCheckBox); InterfaceAppearance.action(sendButton, true);
+		ImePanelMotion.attach(view, view.findViewById(R.id.posting_action_container));
 	}
 
 	@Override
 	public void onDestroyView() {
+		ImePanelMotion.release(getView());
 		if (formDiagnostics != null) {
 			formDiagnostics.close();
 			formDiagnostics = null;

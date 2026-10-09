@@ -1,5 +1,7 @@
 package com.mishiranu.dashchan.ui.preference.core;
 
+import com.mishiranu.dashchan.widget.InterfaceAppearance;
+
 import android.app.AlertDialog;
 import android.content.Context;
 import android.os.Bundle;
@@ -48,6 +50,8 @@ public class SeekPreference extends DialogPreference<Integer> {
 	protected AlertDialog.Builder configureDialog(Bundle savedInstanceState, AlertDialog.Builder builder) {
 		ViewFactory.SeekLayoutHolder holder = ViewFactory.createSeekLayout(builder.getContext(),
 				specialValue != null, minValue, maxValue, step, dialogValueFormat);
+		InterfaceAppearance.slider(holder.layout.findViewById(R.id.seek_bar));
+		InterfaceAppearance.check(holder.layout.findViewById(R.id.switch_view));
 		if (savedInstanceState != null) {
 			holder.setEnabled(savedInstanceState.getBoolean(STATE_ENABLED));
 			holder.setValue(savedInstanceState.getInt(STATE_VALUE));

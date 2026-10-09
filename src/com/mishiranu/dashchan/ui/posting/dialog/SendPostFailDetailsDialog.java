@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui.posting.dialog;
 
+import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import android.app.AlertDialog;
 import android.app.Dialog;
 import android.os.Bundle;
@@ -30,7 +31,7 @@ public class SendPostFailDetailsDialog extends DialogFragment {
 	@Override
 	public Dialog onCreateDialog(Bundle savedInstanceState) {
 		ApiException.Extra extra = AndroidUtils.getParcelable(requireArguments(), EXTRA_EXTRA, ApiException.Extra.class);
-		AlertDialog dialog = new AlertDialog.Builder(requireContext())
+		AlertDialog dialog = new MotionDialogBuilder(requireContext())
 				.setTitle(R.string.details)
 				.setPositiveButton(android.R.string.ok, null)
 				.create();

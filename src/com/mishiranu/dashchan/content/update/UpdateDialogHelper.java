@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.content.update;
 
+import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Context;
@@ -68,7 +69,7 @@ public class UpdateDialogHelper {
 		switch (result.status) {
 			case NO_UPDATE: {
 				if (manual) {
-					new AlertDialog.Builder(context)
+					new MotionDialogBuilder(context)
 							.setTitle(R.string.check_for_updates)
 							.setMessage(R.string.latest_version_installed)
 							.setPositiveButton(android.R.string.ok, null)
@@ -78,7 +79,7 @@ public class UpdateDialogHelper {
 			}
 			case ERROR: {
 				if (manual) {
-					new AlertDialog.Builder(context)
+					new MotionDialogBuilder(context)
 							.setTitle(R.string.update_check_failed)
 							.setMessage(!StringUtils.isEmpty(result.errorMessage)
 									? result.errorMessage : context.getString(R.string.unknown_error))
@@ -115,7 +116,7 @@ public class UpdateDialogHelper {
 		actions.add(ACTION_SKIP);
 		labels.add(context.getString(android.R.string.cancel));
 		actions.add(ACTION_CLOSE);
-		AlertDialog.Builder builder = new AlertDialog.Builder(context)
+		AlertDialog.Builder builder = new MotionDialogBuilder(context)
 				.setTitle(title)
 				.setMessage(message)
 				.setItems(labels.toArray(new String[0]), (dialog, which) -> {

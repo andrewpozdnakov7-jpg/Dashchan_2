@@ -170,6 +170,7 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 	@Override
 	protected void onAttachedToWindow() {
 		super.onAttachedToWindow();
+		updatePullIndicatorActivity();
 		ViewParent parent = getParent();
 		if (parent instanceof ViewGroup) {
 			fastScrollerOverlayHost = (ViewGroup) parent;
@@ -180,11 +181,33 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 
 	@Override
 	protected void onDetachedFromWindow() {
+		if (pullableWrapper != null) pullableWrapper.setHostActive(false);
 		if (fastScrollerOverlayHost != null) {
 			fastScrollerOverlayHost.getOverlay().remove(fastScrollerOverlayDrawable);
 			fastScrollerOverlayHost = null;
 		}
 		super.onDetachedFromWindow();
+	}
+
+	private void updatePullIndicatorActivity() {
+		if (pullableWrapper != null) pullableWrapper.setHostActive(isAttachedToWindow()
+				&& isShown() && getWindowVisibility() == VISIBLE && hasWindowFocus());
+	}
+
+	public void refreshPullIndicator() {
+		if (pullableWrapper != null) { updatePullIndicatorActivity(); invalidate(); }
+	}
+
+	@Override
+	protected void onWindowVisibilityChanged(int visibility) {
+		super.onWindowVisibilityChanged(visibility);
+		updatePullIndicatorActivity();
+	}
+
+	@Override
+	protected void onVisibilityChanged(View changedView, int visibility) {
+		super.onVisibilityChanged(changedView, visibility);
+		updatePullIndicatorActivity();
 	}
 
 	private void updateFastScrollerOverlayBounds() {
@@ -264,6 +287,7 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 	@Override
 	public void onWindowFocusChanged(boolean hasWindowFocus) {
 		super.onWindowFocusChanged(hasWindowFocus);
+		updatePullIndicatorActivity();
 
 		if (!hasWindowFocus) {
 			fastScrollingDown = false;
@@ -525,6 +549,7 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 		if (pullableWrapper == null) {
 			PullableWrapper wrapper = new PullableWrapper(this);
 			this.pullableWrapper = wrapper;
+			updatePullIndicatorActivity();
 			addOnItemTouchListener(new OnItemTouchListener() {
 				private boolean intercepted = false;
 				private float downY;

@@ -9,6 +9,7 @@ import android.view.ActionMode;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowInsets;
@@ -70,6 +71,10 @@ public class GalleryDialog extends Dialog {
 				return insets;
 			});
 		}
+	}
+
+	@Override public boolean dispatchTouchEvent(MotionEvent event) {
+		return fragment.isGalleryMotionBlocking() || super.dispatchTouchEvent(event);
 	}
 
 	private boolean actionBarAnimationsFixed = false;

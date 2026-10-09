@@ -115,7 +115,7 @@ public final class SecretAbuThread {
 		});
 		presentation.setOnLongClickListener(v -> {
 			if (catalog) {
-				PopupMenu menu = new PopupMenu(v.getContext(), v);
+				PopupMenu menu = new PopupMenu(com.mishiranu.dashchan.widget.SurfaceMotion.popupContext(v.getContext()), v);
 				menu.getMenu().add(R.string.hide).setOnMenuItemClickListener(item -> {
 					tryHide(state);
 					return true;

@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Animation.Motion.Dialog" parent="@android:style/Animation">
+        <item name="android:windowEnterAnimation">@anim/motion_dialog_enter</item>
+        <item name="android:windowExitAnimation">@anim/motion_dialog_exit</item>
+    </style>
+    <style name="Theme.Motion.Popup" parent="">
+        <item name="android:textAppearanceLargePopupMenu">@style/TextAppearance.Interface.Popup</item>
+        <item name="android:textAppearanceSmallPopupMenu">@style/TextAppearance.Interface.Popup</item>
+        <item name="android:popupMenuStyle">@style/Widget.Motion.Popup</item>
+        <item name="android:listPopupWindowStyle">@style/Widget.Motion.Popup</item>
+        <item name="android:actionOverflowMenuStyle">@style/Widget.Motion.Popup.Overflow</item>
+    </style>
+    <style name="Theme.Motion.Popup.Static" parent="">
+        <item name="android:textAppearanceLargePopupMenu">@style/TextAppearance.Interface.Popup</item>
+        <item name="android:textAppearanceSmallPopupMenu">@style/TextAppearance.Interface.Popup</item>
+        <item name="android:popupMenuStyle">@style/Widget.Motion.Popup.Static</item>
+        <item name="android:listPopupWindowStyle">@style/Widget.Motion.Popup.Static</item>
+        <item name="android:actionOverflowMenuStyle">@style/Widget.Motion.Popup.Static.Overflow</item>
+    </style>
+    <style name="Widget.Motion.Popup" parent="@android:style/Widget.Material.PopupMenu">
+        <item name="android:popupAnimationStyle">@null</item>
+        <item name="android:popupEnterTransition">@transition/motion_popup_enter</item>
+        <item name="android:popupExitTransition">@transition/motion_popup_exit</item>
+    </style>
+    <style name="Widget.Motion.Popup.Overlap" parent="@style/Widget.Motion.Popup">
+        <item name="android:overlapAnchor">true</item>
+    </style>
+    <style name="Widget.Motion.Popup.Static" parent="@style/Widget.Motion.Popup">
+        <item name="android:popupEnterTransition">@null</item>
+        <item name="android:popupExitTransition">@null</item>
+    </style>
+    <style name="Widget.Motion.Popup.Static.Overlap" parent="@style/Widget.Motion.Popup.Static">
+        <item name="android:overlapAnchor">true</item>
+    </style>
+    <!-- Keep the native overflow anchor offset; explicit overlap menus have no offset. -->
+    <style name="Widget.Motion.Popup.Overflow" parent="@style/Widget.Motion.Popup.Overlap">
+        <item name="android:dropDownVerticalOffset">-4dp</item>
+    </style>
+    <style name="Widget.Motion.Popup.Static.Overflow" parent="@style/Widget.Motion.Popup.Static.Overlap">
+        <item name="android:dropDownVerticalOffset">-4dp</item>
+    </style>
+    <!-- A child popup theme can be copied after its parent acquired the motion overlay. -->
+    <style name="Theme.Motion.Popup.Legacy" parent="">
+        <item name="android:textAppearanceLargePopupMenu">@android:style/TextAppearance.Material.Widget.PopupMenu.Large</item>
+        <item name="android:textAppearanceSmallPopupMenu">@android:style/TextAppearance.Material.Widget.PopupMenu.Small</item>
+        <item name="android:popupMenuStyle">@android:style/Widget.Material.PopupMenu</item>
+        <item name="android:listPopupWindowStyle">@android:style/Widget.Material.PopupMenu</item>
+        <item name="android:actionOverflowMenuStyle">@style/Widget.Motion.Popup.LegacyOverflow</item>
+    </style>
+    <style name="Widget.Motion.Popup.LegacyOverflow" parent="@android:style/Widget.Material.PopupMenu">
+        <item name="android:overlapAnchor">true</item>
+        <item name="android:dropDownVerticalOffset">-4dp</item>
+    </style>
+    <style name="Theme.Motion.Popup.Marker" parent="">
+        <item name="isPopup">true</item>
+    </style>
+    <style name="TextAppearance.Interface.Popup" parent="@android:style/TextAppearance.Material.Widget.PopupMenu.Large">
+        <item name="android:textSize">14sp</item>
+        <item name="android:textAllCaps">false</item>
+    </style>
+</resources>

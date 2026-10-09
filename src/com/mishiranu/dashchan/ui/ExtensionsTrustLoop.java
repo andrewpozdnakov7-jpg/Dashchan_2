@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui;
 
+import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.Intent;
@@ -74,7 +75,7 @@ public class ExtensionsTrustLoop {
 			fingerprints.setSpan(new MonospaceSpan(false), 0, fingerprints.length(),
 					SpannableStringBuilder.SPAN_EXCLUSIVE_EXCLUSIVE);
 			message.append("SHA-256 fingerprint:\n").append(fingerprints);
-			AlertDialog dialog = new AlertDialog.Builder(context)
+			AlertDialog dialog = new MotionDialogBuilder(context)
 					.setTitle(extensionItem.title).setMessage(message)
 					.setCancelable(false)
 					.setPositiveButton(android.R.string.ok, (d, w) -> {

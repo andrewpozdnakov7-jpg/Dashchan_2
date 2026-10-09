@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="material3_notice_title">Новый интерфейс Material 3</string>
+    <string name="material3_notice_message">В Slooop появился экспериментальный интерфейс в стиле Material 3.\nЧтобы включить: Настройки → Экспериментальные функции → „Новые анимации интерфейса“.</string>
+    <string name="material3_notice_read">Я прочитал</string>
+    <string name="material3_notice_save_failed">Не удалось сохранить подтверждение. Попробуйте ещё раз.</string>
+</resources>

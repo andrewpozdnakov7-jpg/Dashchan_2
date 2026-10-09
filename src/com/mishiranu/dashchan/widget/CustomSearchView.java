@@ -111,6 +111,23 @@ public class CustomSearchView extends FrameLayout implements CollapsibleActionVi
 		}
 	}
 
+	Toolbar findToolbar() {
+		android.view.ViewParent parent = getParent();
+		while (parent instanceof View) {
+			if (parent instanceof Toolbar) return (Toolbar) parent;
+			parent = parent.getParent();
+		}
+		Context context = getContext();
+		while (context instanceof android.content.ContextWrapper && !(context instanceof android.app.Activity)) {
+			Context next = ((android.content.ContextWrapper) context).getBaseContext();
+			if (next == context) return null;
+			context = next;
+		}
+		View toolbar = context instanceof android.app.Activity
+				? ((android.app.Activity) context).findViewById(com.mishiranu.dashchan.R.id.toolbar) : null;
+		return toolbar instanceof Toolbar ? (Toolbar) toolbar : null;
+	}
+
 	public void setHint(CharSequence hint) {
 		searchView.setQueryHint(hint);
 	}

@@ -1,13 +1,13 @@
 package com.mishiranu.dashchan.widget;
 
 import android.animation.ValueAnimator;
-import android.graphics.Outline;
 import android.os.Build;
 import android.view.View;
-import android.view.ViewOutlineProvider;
+import android.view.ViewParent;
 import androidx.annotation.RequiresApi;
 import androidx.core.view.GravityCompat;
 import androidx.drawerlayout.widget.DrawerLayout;
+import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.util.InterfaceMotion;
 import com.mishiranu.dashchan.util.ResourceUtils;
 
@@ -17,9 +17,8 @@ public final class DrawerMotionController implements DrawerLayout.DrawerListener
 	private static final int MODERN_SCRIM_ALPHA = 82;
 	private final DrawerLayout layout;
 	private final View panel;
-	private final ViewOutlineProvider originalOutline;
-	private final boolean originalClip;
-	private final ViewOutlineProvider modernOutline;
+	private final View drawerContent;
+	private final DrawerAppearance appearance;
 	private boolean enabled;
 	private boolean tracking;
 	private boolean transformed;
@@ -30,21 +29,15 @@ public final class DrawerMotionController implements DrawerLayout.DrawerListener
 	private float progress;
 	private float originalScaleX, originalScaleY, originalTranslationX, originalPivotX, originalPivotY;
 	private ValueAnimator recovery;
+	private float slideOffset;
+	private View revealContent;
+	private float contentAlpha, contentScaleX, contentScaleY, contentTranslationX, contentPivotX, contentPivotY;
 
-	public DrawerMotionController(DrawerLayout layout, View panel) {
+	public DrawerMotionController(DrawerLayout layout, View panel, View drawerContent) {
 		this.layout = layout;
 		this.panel = panel;
-		originalOutline = panel.getOutlineProvider();
-		originalClip = panel.getClipToOutline();
-		modernOutline = new ViewOutlineProvider() {
-			@Override public void getOutline(View view, Outline outline) {
-				float radius = 28f * ResourceUtils.obtainDensity(view);
-				boolean rtl = view.getLayoutDirection() == View.LAYOUT_DIRECTION_RTL;
-				// Extend the rectangle past the attached edge, rounding only the outer edge.
-				outline.setRoundRect(rtl ? 0 : -(int) Math.ceil(radius), 0,
-						view.getWidth() + (rtl ? (int) Math.ceil(radius) : 0), view.getHeight(), radius);
-			}
-		};
+		this.drawerContent = drawerContent;
+		appearance = new DrawerAppearance(panel);
 		layout.addDrawerListener(this);
 		layout.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
 			@Override public void onViewAttachedToWindow(View view) { scheduleBackCallback(); }
@@ -54,6 +47,12 @@ public final class DrawerMotionController implements DrawerLayout.DrawerListener
 				reset();
 			}
 		});
+		panel.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
+			if (r - l != or - ol || b - t != ob - ot) {
+				reset();
+				reveal(slideOffset);
+			}
+		});
 		updatePolicy();
 	}
 
@@ -61,15 +60,17 @@ public final class DrawerMotionController implements DrawerLayout.DrawerListener
 		reset();
 		unregisterNativeBack();
 		enabled = InterfaceMotion.isDrawerEnabled();
-		panel.setOutlineProvider(enabled ? modernOutline : originalOutline);
-		panel.setClipToOutline(enabled || originalClip);
-		panel.invalidateOutline();
-		layout.setScrimColor(enabled ? MODERN_SCRIM_ALPHA << 24 : LEGACY_SCRIM);
+		if (layout.isDrawerOpen(panel)) slideOffset = 1f;
+		else if (!layout.isDrawerVisible(panel)) slideOffset = 0f;
+		appearance.update();
+		updateScrim();
 		scheduleBackCallback();
 	}
 
 	public void resume() {
 		resumed = true;
+		reveal(slideOffset);
+		updateScrim();
 		scheduleBackCallback();
 	}
 
@@ -145,7 +146,7 @@ public final class DrawerMotionController implements DrawerLayout.DrawerListener
 		panel.setScaleX(originalScaleX * (1f - 0.02f * value));
 		panel.setScaleY(originalScaleY * (1f - 0.02f * value));
 		panel.setTranslationX(originalTranslationX + (fromLeft ? distance : -distance));
-		layout.setScrimColor(Math.round(MODERN_SCRIM_ALPHA * (1f - 0.2f * value)) << 24);
+		updateScrim();
 	}
 
 	/** Recovery may run together with DrawerLayout's real close, with no fake open/closed events. */
@@ -181,10 +182,11 @@ public final class DrawerMotionController implements DrawerLayout.DrawerListener
 			transformed = false;
 		}
 		progress = 0f;
-		layout.setScrimColor(enabled ? MODERN_SCRIM_ALPHA << 24 : LEGACY_SCRIM);
+		updateScrim();
 	}
 
 	public void reset() {
+		releaseContent();
 		tracking = false;
 		if (recovery != null) {
 			recovery.cancel();
@@ -193,8 +195,64 @@ public final class DrawerMotionController implements DrawerLayout.DrawerListener
 		restoreTransform();
 	}
 
+	private void updateScrim() {
+		// DrawerLayout already multiplies its scrim by slideOffset. Do not multiply it twice here.
+		int alpha = Math.round(MODERN_SCRIM_ALPHA * DrawerMotionSpec.scrimCoefficient(slideOffset)
+				* (1f - 0.2f * progress));
+		layout.setScrimColor(enabled ? alpha << 24 : LEGACY_SCRIM);
+	}
+
+	private void reveal(float offset) {
+		if (!enabled || !resumed || !InterfaceMotion.isDrawerEnabled() || !ValueAnimator.areAnimatorsEnabled()
+				|| offset <= 0f || offset >= 1f || layout.getDrawerLockMode(panel) != DrawerLayout.LOCK_MODE_UNLOCKED) {
+			releaseContent();
+			return;
+		}
+		// Animate the list, not drawerParent: its foreground paints the status-bar inset.
+		View child = isInPanel(drawerContent) ? drawerContent : null;
+		if (child != revealContent) releaseContent();
+		if (child == null) return;
+		if (revealContent == null) {
+			if (child.getTag(R.id.drawer_motion_owner) != null) return;
+			revealContent = child;
+			contentAlpha = child.getAlpha(); contentScaleX = child.getScaleX(); contentScaleY = child.getScaleY();
+			contentTranslationX = child.getTranslationX(); contentPivotX = child.getPivotX(); contentPivotY = child.getPivotY();
+			child.setTag(R.id.drawer_motion_owner, this);
+			child.setPivotX(child.getWidth() / 2f); child.setPivotY(child.getHeight() / 2f);
+		}
+		if (child.getTag(R.id.drawer_motion_owner) != this) { revealContent = null; return; }
+		boolean rtl = panel.getLayoutDirection() == View.LAYOUT_DIRECTION_RTL;
+		float reveal = DrawerMotionSpec.reveal(offset);
+		child.setAlpha(contentAlpha * (0.55f + 0.45f * reveal));
+		child.setScaleX(contentScaleX * (0.96f + 0.04f * reveal));
+		child.setScaleY(contentScaleY * (0.96f + 0.04f * reveal));
+		child.setTranslationX(contentTranslationX + (rtl ? -1f : 1f) * 32f
+				* ResourceUtils.obtainDensity(panel) * (1f - reveal));
+	}
+
+	private boolean isInPanel(View child) {
+		if (child == null) return false;
+		for (ViewParent parent = child.getParent(); parent != null; parent = parent.getParent()) {
+			if (parent == panel) return true;
+		}
+		return false;
+	}
+
+	private void releaseContent() {
+		View child = revealContent;
+		revealContent = null;
+		if (child != null && child.getTag(R.id.drawer_motion_owner) == this) {
+			child.setTag(R.id.drawer_motion_owner, null);
+			child.setAlpha(contentAlpha); child.setScaleX(contentScaleX); child.setScaleY(contentScaleY);
+			child.setTranslationX(contentTranslationX); child.setPivotX(contentPivotX); child.setPivotY(contentPivotY);
+		}
+	}
+
 	@Override public void onDrawerSlide(View drawerView, float slideOffset) {
 		if (drawerView != panel) return;
+		this.slideOffset = Math.max(0f, Math.min(1f, slideOffset));
+		reveal(this.slideOffset);
+		updateScrim();
 		boolean nextVisible = slideOffset > 0f;
 		if (visible != nextVisible) {
 			visible = nextVisible;
@@ -206,10 +264,11 @@ public final class DrawerMotionController implements DrawerLayout.DrawerListener
 		}
 	}
 	@Override public void onDrawerOpened(View drawerView) {
-		if (drawerView == panel) scheduleBackCallback();
+		if (drawerView == panel) { slideOffset = 1f; releaseContent(); updateScrim(); scheduleBackCallback(); }
 	}
 	@Override public void onDrawerClosed(View drawerView) {
 		if (drawerView == panel) {
+			slideOffset = 0f;
 			unregisterNativeBack();
 			reset();
 		}
@@ -217,6 +276,8 @@ public final class DrawerMotionController implements DrawerLayout.DrawerListener
 	@Override public void onDrawerStateChanged(int newState) {
 		if (newState == DrawerLayout.STATE_DRAGGING || tracking && newState == DrawerLayout.STATE_SETTLING) {
 			reset();
+			// Reset predictive Back's panel transform without flashing partially open content.
+			reveal(slideOffset);
 		}
 		if (newState == DrawerLayout.STATE_IDLE) scheduleBackCallback();
 	}
