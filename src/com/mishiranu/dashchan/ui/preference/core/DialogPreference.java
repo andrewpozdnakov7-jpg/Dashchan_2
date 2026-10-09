@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui.preference.core;
 
+import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.os.Bundle;
@@ -25,7 +26,7 @@ public abstract class DialogPreference<T> extends Preference<T> {
 	}
 
 	protected AlertDialog createDialog(Bundle savedInstanceState) {
-		AlertDialog dialog = configureDialog(savedInstanceState, new AlertDialog.Builder(context)).create();
+		AlertDialog dialog = configureDialog(savedInstanceState, new MotionDialogBuilder(context)).create();
 		if (neutralButtonText != null) {
 			dialog.setButton(AlertDialog.BUTTON_NEUTRAL, neutralButtonText, (AlertDialog.OnClickListener) null);
 			dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_NEUTRAL)

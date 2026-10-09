@@ -1,0 +1,31 @@
+shreddit-app-selector,shreddit-app-selector-banner,shreddit-app-selector-modal,xpromo-app-selector,shreddit-async-loader[bundlename*="app-selector"],[data-testid*="app-selector"],[data-testid*="app-promo"],.XPromoPopupRpl.m-active,[paint-group="xpromo"],#xpromo-bottom-sheet{
+	display:none!important
+}
+.slooop-reddit-app-promo{
+	display:none!important
+}
+reddit-header-large,reddit-header-small{
+	display:none!important;
+	visibility:hidden!important;
+	height:0!important;
+	min-height:0!important
+}
+community-header,shreddit-subreddit-header,subreddit-header,[data-testid="subreddit-header"]{
+	background-image:none!important
+}
+community-header,shreddit-subreddit-header,subreddit-header,[data-testid="subreddit-header"] [style*="background-image"]{
+	background-image:none!important
+}
+shreddit-community-banner,community-banner,[data-testid*="subreddit-banner" i],[data-testid*="community-banner" i],[class*="subreddit-banner" i],[class*="community-banner" i],[slot="banner"],[part*="banner" i]{
+	display:none!important;
+	height:0!important;
+	min-height:0!important;
+	margin:0!important;
+	padding:0!important;
+	border:0!important;
+	overflow:hidden!important
+}
+shreddit-app{
+	--shreddit-header-height:0px!important;
+	--shreddit-header-large-height:0px!important;
+}

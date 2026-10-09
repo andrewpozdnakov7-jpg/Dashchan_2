@@ -51,6 +51,7 @@ public final class MessageDialog extends Dialog {
 
 	private MessageDialog(Builder builder) {
 		super(builder.context, ResourceUtils.getResourceId(builder.context, android.R.attr.alertDialogTheme, 0));
+		SurfaceMotion.configureDialog(this);
 		requestWindowFeature(Window.FEATURE_NO_TITLE);
 		setCanceledOnTouchOutside(true);
 		Context context = getContext();

@@ -79,8 +79,18 @@
 	<item type="id" name="tag_text_colors" />
 	<item type="id" name="tag_theme_engine" />
 
+	<item type="id" name="toolbar_search_motion_owner" />
+	<item type="id" name="popup_motion_owner" />
 	<item type="id" name="interface_motion_animator" />
 	<item type="id" name="thread_motion_owner" />
 	<item type="id" name="screen_motion_owner" />
+	<item type="id" name="dialog_motion_owner" />
+	<item type="id" name="drawer_motion_owner" />
+	<item type="id" name="gallery_motion_owner" />
 	<item type="id" name="thread_motion_key" />
+	<item type="id" name="element_motion_owner" />
+	<item type="id" name="icon_motion_owner" />
+	<item type="id" name="content_state_motion_owner" />
+	<item type="id" name="ime_panel_motion_owner" />
+	<item type="id" name="interface_appearance_state" />
 </resources>

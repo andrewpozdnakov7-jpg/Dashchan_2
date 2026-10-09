@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui.navigator.page;
 
+import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.graphics.Canvas;
@@ -780,7 +781,7 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 		new InstanceDialog(fragmentManager, null, provider -> {
 			Chan chan = Chan.get(chanName);
 			Context context = provider.getContext();
-			AlertDialog dialog = new AlertDialog.Builder(context)
+			AlertDialog dialog = new MotionDialogBuilder(context)
 					.setTitle(R.string.summary)
 					.setPositiveButton(android.R.string.ok, null)
 					.create();
@@ -1335,7 +1336,7 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 			ThreadsPage threadsPage = extract(provider);
 			String message = provider.getContext().getString(R.string.open_forum__format_sentence,
 					Chan.get(target.chanName).configuration.getTitle());
-			return new AlertDialog.Builder(provider.getContext())
+			return new MotionDialogBuilder(provider.getContext())
 					.setMessage(message)
 					.setNegativeButton(android.R.string.cancel, null)
 					.setPositiveButton(android.R.string.ok, (d, which) -> threadsPage

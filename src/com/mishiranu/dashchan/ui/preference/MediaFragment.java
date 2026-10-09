@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui.preference;
 
+import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.DialogInterface;
@@ -309,7 +310,7 @@ public class MediaFragment extends PreferenceFragment implements FragmentHandler
 		new InstanceDialog(fragmentManager, null, provider -> {
 			Context context = provider.getContext();
 			String html = IOUtils.readRawResourceString(context.getResources(), R.raw.markup_subdirectory_info);
-			return new AlertDialog.Builder(context)
+			return new MotionDialogBuilder(context)
 					.setTitle(R.string.subdirectory_pattern)
 					.setMessage(BUILDER_SUBDIRECTORY.fromHtmlReduced(html))
 					.setPositiveButton(android.R.string.ok, null)
@@ -333,7 +334,7 @@ public class MediaFragment extends PreferenceFragment implements FragmentHandler
 				checkedItems = new boolean[] {true, true};
 			}
 			String[] items = {getString(R.string.thumbnails), getString(R.string.cached_files)};
-			return new AlertDialog.Builder(requireContext())
+			return new MotionDialogBuilder(requireContext())
 					.setTitle(getString(R.string.clear_cache))
 					.setMultiChoiceItems(items, checkedItems, (d, which, isChecked) -> checkedItems[which] = isChecked)
 					.setPositiveButton(android.R.string.ok, (d, w) -> {

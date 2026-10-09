@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui;
 
+import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import android.app.AlertDialog;
 import android.app.Dialog;
 import android.content.Context;
@@ -409,7 +410,7 @@ public class ForegroundManager implements Handler.Callback {
 					.safe().obtainCaptcha(args.getString(EXTRA_CAPTCHA_TYPE));
 			EditText captchaInputView = container.findViewById(R.id.captcha_input);
 			captchaForm = new CaptchaForm(this, false, true, container, null, captchaInputView, captcha);
-			AlertDialog alertDialog = new AlertDialog.Builder(requireContext())
+			AlertDialog alertDialog = new MotionDialogBuilder(requireContext())
 					.setTitle(R.string.confirmation).setView(container)
 					.setPositiveButton(android.R.string.ok, (dialog, which) -> confirmCaptchaInternal())
 					.setNegativeButton(android.R.string.cancel, (dialog, which) -> cancelInternal())
@@ -604,7 +605,7 @@ public class ForegroundManager implements Handler.Callback {
 			int resId = ResourceUtils.obtainAlertDialogLayoutResId(requireContext(), multiple
 					? ResourceUtils.DialogLayout.MULTI_CHOICE : ResourceUtils.DialogLayout.SINGLE_CHOICE);
 			ItemsAdapter adapter = new ItemsAdapter(requireContext(), resId, itemsList, imageLayout);
-			AlertDialog alertDialog = new AlertDialog.Builder(requireContext())
+			AlertDialog alertDialog = new MotionDialogBuilder(requireContext())
 					.setTitle(descriptionText)
 					.setAdapter(adapter, null)
 					.setPositiveButton(android.R.string.ok, this)
@@ -930,7 +931,7 @@ public class ForegroundManager implements Handler.Callback {
 						ViewGroup.LayoutParams.WRAP_CONTENT);
 				contentView = scrollView;
 			}
-			AlertDialog.Builder builder = new AlertDialog.Builder(requireContext());
+			AlertDialog.Builder builder = new MotionDialogBuilder(requireContext());
 			if (!landscape) {
 				builder.setTitle(descriptionText);
 			}

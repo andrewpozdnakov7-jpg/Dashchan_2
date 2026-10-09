@@ -18,19 +18,13 @@ public class PhotoEditorIntegrationContractTest {
         throw new AssertionError("Missing source: " + relative);
     }
 
-    @Test public void editorIsEnabledByDefaultWhenAvailableAndRemainsSearchable() throws Exception {
+    @Test public void photoEditorDefaultAndDistributionBoundaryRemain() throws Exception {
         String preferences = source("src/com/mishiranu/dashchan/content/Preferences.java");
         assertTrue(preferences.contains("DEFAULT_NEW_PHOTO_EDITOR = true"));
         assertTrue(preferences.contains("getBoolean(KEY_NEW_PHOTO_EDITOR, DEFAULT_NEW_PHOTO_EDITOR)"));
-        assertTrue(source("src/com/mishiranu/dashchan/ui/preference/ExperimentalFragment.java")
-                .contains("addCheck(true, Preferences.KEY_NEW_PHOTO_EDITOR, Preferences.DEFAULT_NEW_PHOTO_EDITOR"));
-        assertTrue(source("src/com/mishiranu/dashchan/ui/preference/SettingsSearchIndex.java")
-                .contains("PhotoEditorBridge.getSummaryResId(), Preferences.KEY_NEW_PHOTO_EDITOR"));
         assertTrue(preferences.contains("PhotoEditorBridge.isAvailable() && PREFERENCES.getBoolean("));
-        assertTrue(source("src/com/mishiranu/dashchan/ui/preference/ExperimentalFragment.java")
-                .contains("if (PhotoEditorBridge.isAvailable())"));
-        assertTrue(source("src/com/mishiranu/dashchan/ui/preference/SettingsSearchIndex.java")
-                .contains("if (PhotoEditorBridge.isAvailable())"));
+        // Descriptor availability and the real search/navigation result are covered by
+        // ExperimentalPreferenceDescriptorsTest in both Android distribution variants.
     }
 
     @Test public void legacyEditorAndPostingGuardRemain() throws Exception {
@@ -52,7 +46,7 @@ public class PhotoEditorIntegrationContractTest {
         String activity = source("distribution/github/src/com/mishiranu/dashchan/ui/posting/ExperimentalImageEditorActivity.java");
         String persist = activity.substring(activity.indexOf("private void persist()"),
                 activity.indexOf("@Override protected void onSaveInstanceState"));
-        assertTrue(persist.contains("snapshot = document.copy()"));
+        assertTrue(persist.contains("sessionBuilder(document.copy()).build()"));
         assertTrue(persist.indexOf("worker.execute(") < persist.indexOf("file.startWrite()"));
         assertTrue(persist.contains("request != sessionGeneration"));
         assertFalse(persist.contains("document.toJson()"));
@@ -74,7 +68,8 @@ public class PhotoEditorIntegrationContractTest {
 
     @Test public void editorControlsRemainReadableAndTextErrorsKeepTheDialogOpen() throws Exception {
         String activity = source("distribution/github/src/com/mishiranu/dashchan/ui/posting/ExperimentalImageEditorActivity.java");
-        assertTrue(activity.contains("highlight(jpeg, !png[0]); highlight(pngButton, png[0])"));
+        assertTrue(activity.contains("highlight(jpeg, !png[0])"));
+        assertTrue(activity.contains("highlight(pngButton, png[0])"));
         assertFalse(activity.contains("setTextColor(selectedColor)"));
         assertFalse(activity.contains("ORIENTATION_LANDSCAPE ? View.GONE"));
         assertTrue(activity.contains("view.setBackgroundTintList(null)"));
@@ -88,14 +83,21 @@ public class PhotoEditorIntegrationContractTest {
     @Test public void primarySaveIsDirectAndOptionsAreAnIndependentDraft() throws Exception {
         String activity = source("distribution/github/src/com/mishiranu/dashchan/ui/posting/ExperimentalImageEditorActivity.java");
         assertTrue(activity.contains("save = button(R.string.pe_save, this::saveDirect)"));
-        assertTrue(activity.contains("prepareSave(); encode(true, null)"));
+        String direct = activity.substring(activity.indexOf("private void saveDirect()"), activity.indexOf("private int exportSample("));
+        assertTrue(direct.contains("prepareSave();"));
+        assertTrue(direct.contains("encode(true, null);"));
+        assertTrue(direct.indexOf("prepareSave();") < direct.indexOf("encode(true, null);"));
         assertTrue(activity.contains("R.string.pe_export_settings, this::showExport"));
         String options = activity.substring(activity.indexOf("private void showExport()"), activity.indexOf("private void encode("));
         assertFalse(options.contains("closeSection("));
         assertFalse(options.contains("encode("));
-        assertTrue(options.contains("int[] side = {exportSide}, quality = {exportQuality}; boolean[] png = {exportPng}"));
+        assertTrue(options.contains("int[] side = {exportSide}"));
+        assertTrue(options.contains("int[] quality = {exportQuality}"));
+        assertTrue(options.contains("boolean[] png = {exportPng}"));
         assertTrue(options.contains("setPositiveButton(R.string.pe_color_done"));
-        assertTrue(options.contains("exportSide = side[0]; exportQuality = quality[0]; exportPng = png[0]"));
+        assertTrue(options.contains("exportSide = side[0]"));
+        assertTrue(options.contains("exportQuality = quality[0]"));
+        assertTrue(options.contains("exportPng = png[0]"));
         for (String oldControl : new String[] {"pe_export_hint", "pe_measure", "pe_png", "pe_size_unknown"}) {
             assertFalse(options.contains(oldControl));
         }
@@ -138,9 +140,10 @@ public class PhotoEditorIntegrationContractTest {
         assertTrue(document.contains("put(\"drawOnComposition\", drawOnComposition)"));
         assertTrue(document.contains("json.optBoolean(\"drawOnComposition\", false)"));
         String activity = source("distribution/github/src/com/mishiranu/dashchan/ui/posting/ExperimentalImageEditorActivity.java");
+        String codec = source("distribution/github/src/com/mishiranu/dashchan/ui/posting/photo/EditorSessionCodec.java");
         for (String key : new String[] {"mosaicSize", "blurPreset", "drawAll", "toolSettingsV2"}) {
-            assertTrue(key, activity.contains("put(\"" + key + "\","));
-            assertTrue(key, activity.contains("json.opt") && activity.contains("\"" + key + "\""));
+            assertTrue(key, codec.contains("put(\"" + key + "\","));
+            assertTrue(key, codec.contains("json.opt") && codec.contains("\"" + key + "\""));
         }
         assertTrue(activity.contains("canvas.setDrawingScope(drawAll)"));
         assertTrue(activity.contains("canvas.updateLastMask(kind, toolSize(kind), null)"));

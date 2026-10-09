@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui.navigator.manager;
 
+import com.mishiranu.dashchan.widget.ElementMotion;
 import android.animation.Animator;
 import android.animation.ArgbEvaluator;
 import android.animation.ValueAnimator;
@@ -1334,7 +1335,9 @@ public class ViewUnit {
 			int color = drawable.getColor();
 			animator = ValueAnimator.ofObject(new ArgbEvaluator(), color, color & 0x00ffffff);
 			animator.addUpdateListener(this);
-			animator.setDuration(500);
+			boolean modernMotion = com.mishiranu.dashchan.util.InterfaceMotion.isEnabled();
+			animator.setDuration(modernMotion ? com.mishiranu.dashchan.util.InterfaceMotion.duration(420) : 500);
+			if (modernMotion) animator.setInterpolator(com.mishiranu.dashchan.util.InterfaceMotion.STANDARD);
 			animator.start();
 		}
 
@@ -1659,10 +1662,12 @@ public class ViewUnit {
 					} else if (value < 0.2f) {
 						value = 0.2f;
 					}
-					Animator animator = AnimationUtils.ofHeight(comment, fromHeight,
+					boolean modernMotion = com.mishiranu.dashchan.util.InterfaceMotion.isEnabled();
+					Animator animator = modernMotion ? ElementMotion.height(comment, fromHeight, toHeight,
+							ViewGroup.LayoutParams.WRAP_CONTENT) : AnimationUtils.ofHeight(comment, fromHeight,
 							ViewGroup.LayoutParams.WRAP_CONTENT, false);
 					this.expandAnimator = animator;
-					animator.setDuration((int) (200 * value));
+					if (!modernMotion) animator.setDuration((int) (200 * value));
 					animator.start();
 				}
 			}

@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui.preference;
 
+import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import android.annotation.SuppressLint;
 import android.app.AlertDialog;
 import android.content.res.ColorStateList;
@@ -113,7 +114,7 @@ public class DrawerOrderFragment extends PreferenceFragment {
 		String[] entries = new String[order.size()];
 		for (int i = 0; i < order.size(); i++) entries[i] = (i + 1) + ". " + getString(order.get(i).titleResId);
 		if (positionDialog != null) positionDialog.dismiss();
-		positionDialog = new AlertDialog.Builder(requireContext()).setTitle(section.titleResId)
+		positionDialog = new MotionDialogBuilder(requireContext()).setTitle(section.titleResId)
 				.setSingleChoiceItems(entries, order.indexOf(section), (dialog, position) -> {
 					int from = order.indexOf(section);
 					if (getView() != null && Preferences.isDrawerCustomOrderEnabled() && from >= 0) {

@@ -1,5 +1,8 @@
 package com.mishiranu.dashchan.ui;
 
+import com.mishiranu.dashchan.widget.InterfaceAppearance;
+
+import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.res.ColorStateList;
@@ -113,7 +116,7 @@ public class DialogMenu {
 	}
 
 	public AlertDialog create() {
-		AlertDialog.Builder builder = new AlertDialog.Builder(context);
+		AlertDialog.Builder builder = new MotionDialogBuilder(context);
 		RecyclerView recyclerView = new PaddedRecyclerView(builder.getContext());
 		recyclerView.setMotionEventSplittingEnabled(false);
 		recyclerView.setVerticalScrollBarEnabled(true);
@@ -220,6 +223,7 @@ public class DialogMenu {
 				if (viewType == ViewType.CHECK) {
 					checkBox = new CheckBox(parent.getContext());
 					ThemeEngine.applyStyle(checkBox);
+					InterfaceAppearance.check(checkBox);
 					checkBox.setClickable(false);
 					checkBox.setFocusable(false);
 					contentLayout.addView(checkBox, LinearLayout.LayoutParams.WRAP_CONTENT,
@@ -233,6 +237,7 @@ public class DialogMenu {
 			}
 			textView = itemView.findViewById(android.R.id.text1);
 			ViewUtils.setSelectableItemBackground(itemView);
+			InterfaceAppearance.row(itemView, textView, null, false);
 		}
 	}
 

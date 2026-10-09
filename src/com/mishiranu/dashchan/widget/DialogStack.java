@@ -29,6 +29,7 @@ import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.util.GraphicsUtils;
 import com.mishiranu.dashchan.util.ResourceUtils;
+import com.mishiranu.dashchan.util.SharedPreferences;
 import com.mishiranu.dashchan.util.ViewUtils;
 import java.lang.ref.WeakReference;
 import java.util.Iterator;
@@ -43,6 +44,9 @@ public class DialogStack<T extends DialogStack.ViewFactory<T>> implements Iterab
 	private final Context context;
 	private final View contentView;
 	private final DragLayout rootView;
+	private final DialogStackMotion motion;
+	private boolean restoring;
+	private boolean clearing;
 	private final int dialogAnimations;
 	private final float dialogDimAmount;
 	private final int dialogBackgroundResId;
@@ -98,6 +102,8 @@ public class DialogStack<T extends DialogStack.ViewFactory<T>> implements Iterab
 		} finally {
 			typedArray.recycle();
 		}
+
+		motion = new DialogStackMotion(contentView, rootView);
 
 		// Apply elevation to visible children only so their shadows didn't overlap each other too much.
 		rootView.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
@@ -171,17 +177,24 @@ public class DialogStack<T extends DialogStack.ViewFactory<T>> implements Iterab
 	};
 
 	public void push(T viewFactory) {
+		motion.finish();
+		DialogView previous = visibleViews.isEmpty() ? null : visibleViews.getLast().second;
+		DialogStackMotion.Snapshot snapshot = restoring ? null : motion.capture(previous);
+		boolean firstWindow = dialog == null;
 		if (dialog == null) {
 			Dialog dialog = new Dialog(context, ResourceUtils.getResourceId(context, R.attr.overlayTheme, 0)) {
 				@Override
 				protected void onStart() {
 					super.onStart();
 					registerPredictiveBackCallback(this);
+					Preferences.PREFERENCES.register(motionPreferencesListener);
 				}
 
 				@Override
 				protected void onStop() {
 					unregisterPredictiveBackCallback(this);
+					Preferences.PREFERENCES.unregister(motionPreferencesListener);
+					motion.closed(getWindow());
 					super.onStop();
 				}
 
@@ -225,6 +238,7 @@ public class DialogStack<T extends DialogStack.ViewFactory<T>> implements Iterab
 			ViewUtils.setStatusBarColor(window, 0x00000000);
 			ViewUtils.setNavigationBarColor(window, 0x00000000);
 			ViewUtils.setWindowLayoutFullscreen(window);
+			motion.configure(window, dialogDimAmount, dialogAnimations);
 			dialog.show();
 			this.dialog = dialog;
 		}
@@ -245,27 +259,33 @@ public class DialogStack<T extends DialogStack.ViewFactory<T>> implements Iterab
 			}
 		}
 		DialogView dialogView = addDialogView(viewFactory, rootView.getChildCount());
-		dialogView.setAlpha(0f);
-		dialogView.animate().alpha(1f).setDuration(100).start();
+		if (!motion.enter(snapshot, previous, dialogView, firstWindow, restoring)) {
+			dialogView.setAlpha(0f);
+			dialogView.animate().alpha(1f).setDuration(100).start();
+		}
 		visibleViews.add(new Pair<>(viewFactory, dialogView));
 		switchBackground(false);
 	}
 
 	public void addAll(List<T> viewFactories) {
-		if (!viewFactories.isEmpty()) {
-			int hiddenTo = viewFactories.size() - VISIBLE_COUNT;
-			if (hiddenTo > 0) {
-				for (Pair<T, DialogView> pair : visibleViews) {
-					pair.first.destroyView(pair.second.getContent(), false);
-					hiddenViews.add(pair.first);
-					rootView.removeView(pair.second.getContainer());
+		motion.finish();
+		restoring = true;
+		try {
+			if (!viewFactories.isEmpty()) {
+				int hiddenTo = viewFactories.size() - VISIBLE_COUNT;
+				if (hiddenTo > 0) {
+					for (Pair<T, DialogView> pair : visibleViews) {
+						pair.first.destroyView(pair.second.getContent(), false);
+						hiddenViews.add(pair.first);
+						rootView.removeView(pair.second.getContainer());
+					}
+					hiddenViews.addAll(viewFactories.subList(0, hiddenTo));
 				}
-				hiddenViews.addAll(viewFactories.subList(0, hiddenTo));
+				for (T viewFactory : viewFactories.subList(Math.max(0, hiddenTo), viewFactories.size())) {
+					push(viewFactory);
+				}
 			}
-			for (T viewFactory : viewFactories.subList(Math.max(0, hiddenTo), viewFactories.size())) {
-				push(viewFactory);
-			}
-		}
+		} finally { restoring = false; }
 	}
 
 	public T pop() {
@@ -273,9 +293,11 @@ public class DialogStack<T extends DialogStack.ViewFactory<T>> implements Iterab
 	}
 
 	public void clear() {
-		while (!visibleViews.isEmpty()) {
-			popInternal();
-		}
+		motion.finish();
+		clearing = true;
+		try {
+			while (!visibleViews.isEmpty()) popInternal();
+		} finally { clearing = false; }
 	}
 
 	private void switchBackground(boolean background) {
@@ -296,6 +318,8 @@ public class DialogStack<T extends DialogStack.ViewFactory<T>> implements Iterab
 	}
 
 	private T popInternal() {
+		motion.finish();
+		DialogStackMotion.Snapshot snapshot = clearing ? null : motion.capture(visibleViews.getLast().second);
 		if (hiddenViews.size() > 0) {
 			int index = rootView.indexOfChild(visibleViews.getFirst().second.getContainer());
 			T last = hiddenViews.removeLast();
@@ -305,16 +329,30 @@ public class DialogStack<T extends DialogStack.ViewFactory<T>> implements Iterab
 		}
 		Pair<T, DialogView> last = visibleViews.removeLast();
 		rootView.removeView(last.second.getContainer());
+		Runnable close = null;
 		if (visibleViews.isEmpty()) {
-			dialog.dismiss();
+			Dialog closing = dialog;
 			dialog = null;
 			currentActionMode = null;
-			ViewUtils.removeFromParent(contentView);
+			close = () -> { closing.dismiss(); ViewUtils.removeFromParent(contentView); };
 		} else {
 			visibleViews.getLast().second.setActive(true);
 		}
+		// Install exit ownership before destroyView: a reentrant push must finish/dismiss this window first.
+		motion.leave(snapshot, visibleViews.isEmpty() ? null : visibleViews.getLast().second,
+				visibleViews.isEmpty(), close);
+		// Provider cancellation is synchronous; no factory or detached View survives in the exit scene.
 		last.first.destroyView(last.second.getContent(), true);
 		return last.first;
+	}
+
+	private final SharedPreferences.Listener motionPreferencesListener = key -> {
+		if (Preferences.KEY_NEW_INTERFACE_MOTION.equals(key)) updateMotionPolicy();
+	};
+
+	private void updateMotionPolicy() {
+		motion.finish();
+		if (dialog != null) motion.configure(dialog.getWindow(), dialogDimAmount, dialogAnimations);
 	}
 
 	private void registerPredictiveBackCallback(Dialog dialog) {
@@ -649,6 +687,17 @@ public class DialogStack<T extends DialogStack.ViewFactory<T>> implements Iterab
 		public ContentView(Context context, Side side, Callback callback) {
 			super(context, side, callback);
 			setWillNotDraw(false);
+		}
+
+		@Override
+		public boolean dispatchTouchEvent(MotionEvent event) {
+			return DialogStackMotion.blocks(this, event) || super.dispatchTouchEvent(event);
+		}
+
+		@Override
+		public void onWindowFocusChanged(boolean hasWindowFocus) {
+			if (!hasWindowFocus) DialogStackMotion.lostFocus(this);
+			super.onWindowFocusChanged(hasWindowFocus);
 		}
 
 		@Override

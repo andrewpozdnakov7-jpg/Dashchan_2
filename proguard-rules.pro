@@ -64,3 +64,8 @@
     void dispatchChildAttached(android.view.View);
     void dispatchChildDetached(android.view.View);
 }
+
+# Inflated by TransitionInflater from the GitHub-only motion popup XML.
+-keep class com.mishiranu.dashchan.widget.PopupSurfaceTransition {
+    public <init>(android.content.Context, android.util.AttributeSet);
+}

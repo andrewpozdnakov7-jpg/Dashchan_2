@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<set xmlns:android="http://schemas.android.com/apk/res/android" android:shareInterpolator="true"
+    android:interpolator="@interpolator/motion_standard" android:duration="280">
+    <alpha android:fromAlpha="0" android:toAlpha="1" />
+    <scale android:fromXScale="0.94" android:toXScale="1"
+        android:fromYScale="0.94" android:toYScale="1"
+        android:pivotX="50%" android:pivotY="50%" />
+    <translate android:fromYDelta="5%" android:toYDelta="0" />
+</set>

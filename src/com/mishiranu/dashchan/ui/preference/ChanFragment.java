@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui.preference;
 
+import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import android.annotation.SuppressLint;
 import android.app.AlertDialog;
 import android.app.Dialog;
@@ -497,7 +498,7 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 		@NonNull
 		@Override
 		public Dialog onCreateDialog(Bundle savedInstanceState) {
-			return new AlertDialog.Builder(requireContext())
+			return new MotionDialogBuilder(requireContext())
 					.setTitle(R.string.pikabu_sign_in)
 					.setMessage(R.string.pikabu_authorization_warning)
 					.setNegativeButton(android.R.string.cancel, null)
@@ -609,7 +610,7 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 
 			if (savedInstanceState != null) webView.restoreState(savedInstanceState);
 			else webView.loadUrl(PIKABU_URL);
-			return new AlertDialog.Builder(requireContext())
+			return new MotionDialogBuilder(requireContext())
 					.setView(layout)
 					.setNegativeButton(android.R.string.cancel, null)
 					.setNeutralButton(R.string.pikabu_check_adult_settings, null)
@@ -823,7 +824,7 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 			@Override
 			public Dialog onCreateDialog(Bundle savedInstanceState) {
 				setCancelable(false);
-				AlertDialog dialog = new AlertDialog.Builder(requireContext())
+				AlertDialog dialog = new MotionDialogBuilder(requireContext())
 						.setTitle(R.string.pikabu_check_adult_settings)
 						.setMessage(R.string.pikabu_adult_settings_instruction)
 						.setPositiveButton(R.string.pikabu_i_understand, (currentDialog, which) -> {

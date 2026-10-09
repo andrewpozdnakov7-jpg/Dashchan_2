@@ -1,0 +1,8 @@
+The experimental Material 3-style interface now includes redesigned settings, dialogs and controls, with new gallery, drawer and reply-form animations. Enable it in Settings → Experimental features → New interface animations.
+Added a Material 3 Expressive refresh indicator with a morphing shape and theme-aware colors.
+New player controls hide after 2 seconds of playback inactivity. Tap the video or surrounding empty area to show them; the speed menu is more compact.
+Improved image, GIF, video and attachment-preview transitions, photo double-tap zoom and thread title restoration.
+Fixed unintended TikTok mode and the Android 13 crash when rotating or entering fullscreen video.
+The thread return button can use Back, Thread list or Hidden. Returning to the list does not force a refresh.
+Improved photo editor session saving and restoration.
+A launch hint explains how to enable the new interface; it stops appearing after three acknowledgements in this installation.

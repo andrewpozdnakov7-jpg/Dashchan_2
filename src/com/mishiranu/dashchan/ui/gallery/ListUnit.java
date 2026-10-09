@@ -473,7 +473,9 @@ public class ListUnit implements ActionMode.Callback {
 		if (galleryMode) {
 			recyclerView.setVisibility(View.VISIBLE);
 			getAdapter().activate();
-			if (duration > 0) {
+			if (GalleryMotionController.mode(recyclerView, true, duration, true)) {
+				// The outgoing photo disappears before grid content is revealed.
+			} else if (duration > 0) {
 				recyclerView.setAlpha(0f);
 				recyclerView.setScaleX(GRID_SCALE);
 				recyclerView.setScaleY(GRID_SCALE);
@@ -481,7 +483,9 @@ public class ListUnit implements ActionMode.Callback {
 			}
 		} else {
 			pendingReturnItem = null;
-			if (duration > 0) {
+			if (GalleryMotionController.mode(recyclerView, false, duration, true)) {
+				// The incoming photo is revealed only after the grid fades out.
+			} else if (duration > 0) {
 				recyclerView.setAlpha(1f);
 				recyclerView.setScaleX(1f);
 				recyclerView.setScaleY(1f);

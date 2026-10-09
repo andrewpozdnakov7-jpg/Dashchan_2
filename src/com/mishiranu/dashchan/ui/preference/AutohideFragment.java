@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui.preference;
 
+import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import android.annotation.SuppressLint;
 import android.app.AlertDialog;
 import android.content.Context;
@@ -626,7 +627,7 @@ public class AutohideFragment extends BaseListFragment {
 		@Override
 		public AlertDialog onCreateDialog(Bundle savedInstanceState) {
 			int index = requireArguments().getInt(EXTRA_INDEX);
-			AlertDialog.Builder builder = new AlertDialog.Builder(requireContext())
+			AlertDialog.Builder builder = new MotionDialogBuilder(requireContext())
 					.setTitle(R.string.quick_filter)
 					.setView(dialogView)
 					.setNegativeButton(android.R.string.cancel, null)
@@ -767,7 +768,7 @@ public class AutohideFragment extends BaseListFragment {
 		@Override
 		public AlertDialog onCreateDialog(Bundle savedInstanceState) {
 			int index = requireArguments().getInt(EXTRA_INDEX);
-			AlertDialog.Builder builder = new AlertDialog.Builder(requireContext())
+			AlertDialog.Builder builder = new MotionDialogBuilder(requireContext())
 					.setView(scrollView)
 					.setNegativeButton(android.R.string.cancel, null)
 					.setPositiveButton(R.string.save, (d, which) -> ((AutohideFragment) getParentFragment())

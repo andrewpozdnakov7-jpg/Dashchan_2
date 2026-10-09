@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui.navigator.page;
 
+import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import android.app.AlertDialog;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -319,7 +320,7 @@ public class MyPostsPage extends ListPage implements MyPostsAdapter.Callback, Re
 	}
 
 	private void showClearMyPostsListDialog() {
-		new InstanceDialog(getFragmentManager(), null, provider -> new AlertDialog.Builder(provider.getContext())
+		new InstanceDialog(getFragmentManager(), null, provider -> new MotionDialogBuilder(provider.getContext())
 				.setMessage(R.string.clear_my_posts_list__sentence)
 				.setNegativeButton(android.R.string.cancel, null)
 				.setPositiveButton(android.R.string.ok, (dialog, which) -> {
@@ -330,7 +331,7 @@ public class MyPostsPage extends ListPage implements MyPostsAdapter.Callback, Re
 	}
 
 	private void showClearReplyHistoryDialog() {
-		new InstanceDialog(getFragmentManager(), null, provider -> new AlertDialog.Builder(provider.getContext())
+		new InstanceDialog(getFragmentManager(), null, provider -> new MotionDialogBuilder(provider.getContext())
 				.setMessage(R.string.clear_reply_history__sentence)
 				.setNegativeButton(android.R.string.cancel, null)
 				.setPositiveButton(android.R.string.ok, (dialog, which) -> clearReplyHistory())

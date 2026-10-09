@@ -25,8 +25,12 @@ def main():
     assert not (ROOT / POSTING / "ExperimentalImageEditorActivity.java").exists()
     assert not list((ROOT / POSTING / "photo").glob("*.java"))
     engine = list((GITHUB / POSTING / "photo").glob("*.java"))
-    assert len(engine) == 15 and (GITHUB / POSTING / "ExperimentalImageEditorActivity.java").is_file()
-    assert {"EditorPalette.java", "EditorColorState.java", "EditorColorPickerView.java"} <= {p.name for p in engine}
+    assert (GITHUB / POSTING / "ExperimentalImageEditorActivity.java").is_file()
+    # Engine growth is allowed; isolation is checked for every source below.
+    required_engine = {"EditorDocument.java", "EditorRenderer.java", "EditorCanvasView.java",
+                       "EditorGeometry.java", "EditorPalette.java", "EditorColorState.java", "EditorColorPickerView.java"}
+    missing_engine = required_engine - {p.name for p in engine}
+    assert not missing_engine, f"Missing GitHub editor classes: {sorted(missing_engine)}"
     shared = text(ROOT / POSTING / "ImageEditorActivity.java")
     assert "PhotoEditorBridge.createIntent(" in shared and "if (experimental != null) return experimental" in shared
     assert "new Intent(context, ImageEditorActivity.class)" in shared
@@ -37,13 +41,24 @@ def main():
     assert "return false;" in fd_bridge and "return null;" in fd_bridge and fd_bridge.count("return 0;") == 2
     assert "Preferences." not in fd_bridge and "R." not in fd_bridge
     assert "PhotoEditorBridge.isAvailable() && PREFERENCES.getBoolean(KEY_NEW_PHOTO_EDITOR, DEFAULT_NEW_PHOTO_EDITOR)" in text(ROOT / "src/com/mishiranu/dashchan/content/Preferences.java")
+    preference_root = ROOT / "src/com/mishiranu/dashchan/ui/preference"
+    descriptors = text(preference_root / "ExperimentalPreferenceDescriptors.java")
+    editor_block = descriptors[descriptors.index("static Toggle photoEditor() {"):]
+    editor_block = editor_block[:editor_block.index("\n\t}")]
+    assert "Preferences.KEY_NEW_PHOTO_EDITOR, Preferences.DEFAULT_NEW_PHOTO_EDITOR" in editor_block
+    assert "PhotoEditorBridge.isAvailable()" in editor_block
+    assert "PhotoEditorBridge.getTitleResId()" in editor_block and "PhotoEditorBridge.getSummaryResId()" in editor_block
+    assert "R.string.new_photo_editor" not in descriptors
     for name in ("ExperimentalFragment.java", "SettingsSearchIndex.java"):
-        source = text(ROOT / "src/com/mishiranu/dashchan/ui/preference" / name)
-        block = source[source.index("if (PhotoEditorBridge.isAvailable())"):]
-        block = block[:block.index("\n\t\t}")]
-        assert "Preferences.KEY_NEW_PHOTO_EDITOR" in block
-        assert "PhotoEditorBridge.getTitleResId()" in block and "PhotoEditorBridge.getSummaryResId()" in block
+        source = text(preference_root / name)
+        assert "addExperimentalToggle(" in source and "ExperimentalPreferenceDescriptors.photoEditor()" in source
         assert "R.string.new_photo_editor" not in source
+        assert "toggle.available" in source
+        if name == "ExperimentalFragment.java":
+            assert "addCheck(true, toggle.key, toggle.defaultValue, toggle.titleResId, toggle.summaryResId)" in source
+        else:
+            assert "if (toggle.available)" in source
+            assert "Screen.EXPERIMENTAL, toggle.titleResId, toggle.summaryResId, toggle.key" in source
     android = "{http://schemas.android.com/apk/res/android}"
     main_manifest = ET.parse(ROOT / "AndroidManifest.xml").getroot()
     gh_manifest = ET.parse(GITHUB / "AndroidManifest.xml").getroot()
@@ -85,8 +100,8 @@ def main():
                  GITHUB / POSTING / "PhotoEditorBridge.java", FDROID / POSTING / "PhotoEditorBridge.java",
                  ROOT / POSTING / "ImageEditorActivity.java"):
         balance(path)
-    print("PASS: 16 editor/engine classes, exclusive resources and Activity are GitHub-only")
-    print("PASS: no F-Droid dependency; restored opt-in gated; settings/search availability guard")
+    print(f"PASS: {len(engine) + 1} editor/engine classes, exclusive resources and Activity are GitHub-only")
+    print("PASS: no F-Droid dependency; existing preference gate and settings/search availability guard")
     print("PASS: flavour-specific JVM/Android tests wired; shared tests have no excluded class imports")
     print("NOT RUN: Gradle configuration, compilation, JUnit, instrumentation, final manifest/DEX/APK audit")
 

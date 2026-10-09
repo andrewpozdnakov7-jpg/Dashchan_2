@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui.preference;
 
+import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import android.app.AlertDialog;
 import android.app.Dialog;
 import android.content.Context;
@@ -257,7 +258,7 @@ public class PostMarksColorsFragment extends PreferenceFragment {
 					ViewGroup.LayoutParams.WRAP_CONTENT));
 			setSwatch(preview, color);
 
-			return new AlertDialog.Builder(context)
+			return new MotionDialogBuilder(context)
 					.setTitle(requireArguments().getInt(EXTRA_TITLE))
 					.setView(layout)
 					.setNegativeButton(android.R.string.cancel, null)

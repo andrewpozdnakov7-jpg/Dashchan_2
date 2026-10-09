@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui;
 
+import com.mishiranu.dashchan.widget.ElementMotion;
 import com.mishiranu.dashchan.util.AuditDiagnostics;
 import android.animation.Animator;
 import android.animation.AnimatorSet;
@@ -120,6 +121,7 @@ public abstract class ContentFragment extends Fragment implements MenuProvider {
 		suppressScreenMotionExit = false;
 		if (threadMotionSession != null) { threadMotionSession.finish(); threadMotionSession = null; }
 		suppressThreadMotionExit = false;
+		ElementMotion.finishTree(getView());
 		InterfaceMotion.cancel(getView());
 		super.onDestroyView();
 
@@ -288,6 +290,7 @@ public abstract class ContentFragment extends Fragment implements MenuProvider {
 
 	@Override
 	public void onStop() {
+		ElementMotion.finishTree(getView());
 		// Keep action views for cleanup/search-state restoration, but forget readiness.
 		// MenuHost removes the provider on stop and can clear the menu without notifying us.
 		for (MenuState state : menuStates.values()) {

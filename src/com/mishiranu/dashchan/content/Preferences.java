@@ -16,6 +16,7 @@ import chan.util.StringUtils;
 import com.mishiranu.dashchan.BuildConfig;
 import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
+import com.mishiranu.dashchan.media.PlaybackSpeed;
 import com.mishiranu.dashchan.content.translation.TranslationEngine;
 import com.mishiranu.dashchan.ui.posting.PhotoEditorBridge;
 import com.mishiranu.dashchan.util.SharedPreferences;
@@ -2264,6 +2265,29 @@ public class Preferences {
 	public static final boolean DEFAULT_NEW_PHOTO_EDITOR = true;
 	public static final String KEY_NEW_INTERFACE_MOTION = "experimental_new_interface_motion";
 	public static final boolean DEFAULT_NEW_INTERFACE_MOTION = false;
+	public enum ThreadToolbarAction {
+		BACK("back", R.string.thread_toolbar_back),
+		THREAD_LIST("thread_list", R.string.thread_toolbar_list),
+		HIDDEN("hidden", R.string.thread_toolbar_hidden);
+
+		private static final EnumValueProvider<ThreadToolbarAction> VALUE_PROVIDER = o -> o.value;
+		public final String value;
+		public final int titleResId;
+
+		ThreadToolbarAction(String value, int titleResId) {
+			this.value = value;
+			this.titleResId = titleResId;
+		}
+	}
+
+	public static final String KEY_THREAD_TOOLBAR_ACTION = "experimental_thread_toolbar_action";
+	public static final ThreadToolbarAction DEFAULT_THREAD_TOOLBAR_ACTION = ThreadToolbarAction.BACK;
+
+	public static ThreadToolbarAction getThreadToolbarAction() {
+		return getEnumValue(KEY_THREAD_TOOLBAR_ACTION, ThreadToolbarAction.values(),
+				DEFAULT_THREAD_TOOLBAR_ACTION, ThreadToolbarAction.VALUE_PROVIDER);
+	}
+
 	public static final String KEY_PIP_DIAGNOSTIC_MODE = "experimental_pip_diagnostic_mode";
 	public static final String DEFAULT_PIP_DIAGNOSTIC_MODE = "normal";
 	public static final String KEY_TRANSLATION_NATIVE_LANGUAGE = "translation_native_language";
@@ -2786,42 +2810,12 @@ public class Preferences {
 	public static int[] getVideoPlaybackSpeedPresets() {
 		String value = PREFERENCES.getString(KEY_VIDEO_PLAYBACK_SPEED_PRESETS,
 				DEFAULT_VIDEO_PLAYBACK_SPEED_PRESETS);
-		String[] split = value.split(",");
-		ArrayList<Integer> presets = new ArrayList<>();
-		for (String item : split) {
-			try {
-				int playbackSpeed = Integer.parseInt(item.trim());
-				if (playbackSpeed >= 10 && playbackSpeed <= 10000 && !presets.contains(playbackSpeed)) {
-					presets.add(playbackSpeed);
-				}
-			} catch (NumberFormatException e) {
-				// Ignore invalid stored values and fall back to defaults when none remain.
-			}
-		}
-		if (presets.isEmpty()) {
-			return DEFAULT_VIDEO_PLAYBACK_SPEED_PRESET_VALUES.clone();
-		}
-		int[] result = new int[presets.size()];
-		for (int i = 0; i < presets.size(); i++) {
-			result[i] = presets.get(i);
-		}
-		return result;
+		return PlaybackSpeed.parsePresets(value, DEFAULT_VIDEO_PLAYBACK_SPEED_PRESET_VALUES);
 	}
 
 	public static void setVideoPlaybackSpeedPresets(int[] presets) {
-		StringBuilder builder = new StringBuilder();
-		for (int playbackSpeed : presets) {
-			playbackSpeed = Math.round(playbackSpeed / 10f) * 10;
-			if (playbackSpeed < 10 || playbackSpeed > 10000) {
-				continue;
-			}
-			if (builder.length() > 0) {
-				builder.append(',');
-			}
-			builder.append(playbackSpeed);
-		}
-		PREFERENCES.edit().put(KEY_VIDEO_PLAYBACK_SPEED_PRESETS,
-				builder.length() > 0 ? builder.toString() : DEFAULT_VIDEO_PLAYBACK_SPEED_PRESETS).close();
+		String value = PlaybackSpeed.encodePresets(presets, DEFAULT_VIDEO_PLAYBACK_SPEED_PRESETS);
+		PREFERENCES.edit().put(KEY_VIDEO_PLAYBACK_SPEED_PRESETS, value).close();
 	}
 
 	public static int[] getDefaultVideoPlaybackSpeedPresets() {
@@ -2840,13 +2834,12 @@ public class Preferences {
 	public static int getVideoCustomPlaybackSpeedValue() {
 		int value = PREFERENCES.getInt(KEY_VIDEO_CUSTOM_PLAYBACK_SPEED_VALUE,
 				DEFAULT_VIDEO_CUSTOM_PLAYBACK_SPEED_VALUE);
-		return Math.max(10, Math.min(value, 10000));
+		return PlaybackSpeed.clamp(value);
 	}
 
 	public static void setVideoCustomPlaybackSpeedValue(int playbackSpeed) {
-		playbackSpeed = Math.round(playbackSpeed / 10f) * 10;
-		PREFERENCES.edit().put(KEY_VIDEO_CUSTOM_PLAYBACK_SPEED_VALUE,
-				Math.max(10, Math.min(playbackSpeed, 10000))).close();
+		int value = PlaybackSpeed.normalizeCustom(playbackSpeed);
+		PREFERENCES.edit().put(KEY_VIDEO_CUSTOM_PLAYBACK_SPEED_VALUE, value).close();
 	}
 
 	public static final String KEY_REMEMBER_LAST_VIDEO_POSITION = "remember_last_video_position";

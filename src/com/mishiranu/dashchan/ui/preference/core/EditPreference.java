@@ -1,5 +1,7 @@
 package com.mishiranu.dashchan.ui.preference.core;
 
+import com.mishiranu.dashchan.widget.InterfaceAppearance;
+
 import android.app.AlertDialog;
 import android.content.Context;
 import android.os.Bundle;
@@ -71,5 +73,6 @@ public class EditPreference extends DialogPreference<String> {
 		}
 		editText.setText(text);
 		editText.setSelection(editText.getText().length());
+		InterfaceAppearance.field(editText);
 	}
 }

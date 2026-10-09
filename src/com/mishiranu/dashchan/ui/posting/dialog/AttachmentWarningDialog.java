@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui.posting.dialog;
 
+import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.Dialog;
@@ -60,7 +61,7 @@ public class AttachmentWarningDialog extends DialogFragment {
 		if (geolocation != null) {
 			message = appendMessage(message, getString(R.string.geolocation));
 		}
-		return new AlertDialog.Builder(activity).setTitle(R.string.warning)
+		return new MotionDialogBuilder(activity).setTitle(R.string.warning)
 				.setMessage(getString(R.string.file_contains_data__format_sentence, message))
 				.setPositiveButton(android.R.string.ok, null).create();
 	}

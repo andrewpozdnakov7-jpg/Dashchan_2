@@ -13,14 +13,20 @@ final class PhotoViewScale {
 		} else {
 			minimum = 1f;
 			float defaultMaximum = 4f / baseScale;
-			// Preserve existing zoom limits, including the default photo upscale cap.
-			maximum = maximumScaleFactor > 1f
+			// Preserve the historical fit cap and explicit video zoom limit.
+			float limit = maximumScaleFactor > 1f
 					? Math.min(postScale, defaultMaximum) * maximumScaleFactor : defaultMaximum;
 			// Automatic fitting is the baseline, not a user zoom. This must also be
 			// the scale applied on reset and when the opening animation finishes.
-			initial = Math.min(postScale, maximum);
-			doubleTap = postScale > 1f ? initial : Math.min(1f / baseScale, 8f);
+			initial = Math.min(postScale, limit);
+			// Keep the fitted baseline, but allow a photo already at the old upscale cap to zoom.
+			maximum = maximumScaleFactor > 1f ? limit : Math.max(limit, initial * 2f);
+			doubleTap = Math.min(maximum, Math.max(initial * 2f, Math.min(1f / baseScale, 8f)));
 		}
+	}
+
+	static float doubleTapTarget(float current, float initial, float enlarged) {
+		return isZoomed(current, initial) ? initial : enlarged;
 	}
 
 	static boolean isZoomed(float current, float initial) {

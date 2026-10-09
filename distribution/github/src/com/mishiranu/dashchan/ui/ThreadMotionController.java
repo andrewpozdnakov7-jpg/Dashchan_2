@@ -86,6 +86,7 @@ public final class ThreadMotionController {
 	/** Called before outgoing.onTerminate(): a destroyed adapter is too late to capture. */
 	public Session prepare(ContentFragment outgoing, ContentFragment incoming, int transition, Opening opening) {
 		finish();
+		if (outgoing != null) com.mishiranu.dashchan.widget.ElementMotion.finishTree(outgoing.getView());
 		if (!InterfaceMotion.isEnabled() || InterfaceMotion.duration(1) == 0 || !host.isAttachedToWindow() ||
 				!(outgoing instanceof PageFragment) || !(incoming instanceof PageFragment)) return null;
 		PageFragment from = (PageFragment) outgoing, to = (PageFragment) incoming;

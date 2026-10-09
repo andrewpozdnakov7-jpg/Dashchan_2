@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui;
 
+import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import android.annotation.SuppressLint;
 import android.app.AlertDialog;
 import android.net.Uri;
@@ -184,7 +185,7 @@ public class LocalArchiveViewerFragment extends ContentFragment implements Posts
 			items[i] = getViewModeTitle(i);
 		}
 		new InstanceDialog(getParentFragmentManager(), "local-archive-view-mode", provider ->
-				new AlertDialog.Builder(provider.getContext()).setTitle(R.string.local_archive_view_mode)
+				new MotionDialogBuilder(provider.getContext()).setTitle(R.string.local_archive_view_mode)
 						.setSingleChoiceItems(items, Math.min(viewMode, count - 1), (dialog, which) -> {
 							applyViewMode(which);
 							dialog.dismiss();

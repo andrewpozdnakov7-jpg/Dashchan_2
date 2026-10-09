@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui;
 
+import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import android.app.AlertDialog;
 import android.content.ActivityNotFoundException;
 import android.content.Context;
@@ -239,7 +240,7 @@ public class DownloadDialog {
 		});
 		editText.setAdapter(adapter);
 
-		AlertDialog dialog = new AlertDialog.Builder(context)
+		AlertDialog dialog = new MotionDialogBuilder(context)
 				.setTitle(R.string.select_where_to_save)
 				.setView(view)
 				.setNegativeButton(android.R.string.cancel, (d, w) -> callback.resolve(choiceRequest, null))
@@ -332,7 +333,7 @@ public class DownloadDialog {
 		radioGroup.setOnCheckedChangeListener((g, id) -> state.selectedId = id);
 		linearLayout.addView(radioGroup);
 
-		AlertDialog.Builder builder = new AlertDialog.Builder(context)
+		AlertDialog.Builder builder = new MotionDialogBuilder(context)
 				.setView(linearLayout)
 				.setPositiveButton(android.R.string.ok, (dialog, which) -> {
 					switch (radioGroup.getCheckedRadioButtonId()) {

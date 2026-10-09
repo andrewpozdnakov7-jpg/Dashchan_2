@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui.preference;
 
+import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import android.app.AlertDialog;
 import android.os.Bundle;
 import android.view.Menu;
@@ -132,7 +133,7 @@ public class CategoriesFragment extends PreferenceFragment {
 			item.setOnLongClickListener(preference -> {
 				SettingsSearchHistory history = searchHistory;
 				if (history == null) return;
-				new AlertDialog.Builder(requireContext()).setTitle(query)
+				new MotionDialogBuilder(requireContext()).setTitle(query)
 						.setMessage(R.string.settings_search_history_delete_confirm)
 						.setNegativeButton(android.R.string.cancel, null)
 						.setPositiveButton(android.R.string.ok, (dialog, which) -> {
@@ -144,7 +145,7 @@ public class CategoriesFragment extends PreferenceFragment {
 		addButton(R.string.settings_search_clear_history, 0).setOnClickListener(preference -> {
 			SettingsSearchHistory history = searchHistory;
 			if (history == null) return;
-			new AlertDialog.Builder(requireContext()).setTitle(R.string.settings_search_clear_history)
+			new MotionDialogBuilder(requireContext()).setTitle(R.string.settings_search_clear_history)
 					.setMessage(R.string.settings_search_history_clear_confirm)
 					.setNegativeButton(android.R.string.cancel, null)
 					.setPositiveButton(android.R.string.ok, (dialog, which) -> {

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="thread_toolbar_action">Кнопка возврата в треде</string>
+    <string name="thread_toolbar_action__summary">Назад, к списку тредов доски или «Моей доски» без обновления либо скрытие кнопки с расширением заголовка.</string>
+    <string name="thread_toolbar_back">Назад</string>
+    <string name="thread_toolbar_list">К списку тредов</string>
+    <string name="thread_toolbar_hidden">Скрыта</string>
+</resources>

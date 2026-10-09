@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui.preference;
 
+import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
@@ -140,10 +141,10 @@ public class AccessibilityFragment extends PreferenceFragment {
 		for (int i = 0; i < installedFonts.size(); i++) {
 			entries[i] = installedFonts.get(i).name;
 		}
-		AlertDialog dialog = new AlertDialog.Builder(requireContext())
+		AlertDialog dialog = new MotionDialogBuilder(requireContext())
 				.setTitle(R.string.delete_installed_font)
 				.setItems(entries, (listDialog, which) -> {
-					AlertDialog confirmationDialog = new AlertDialog.Builder(requireContext())
+					AlertDialog confirmationDialog = new MotionDialogBuilder(requireContext())
 						.setMessage(getString(R.string.delete_custom_font_confirmation__format, entries[which]))
 						.setNegativeButton(android.R.string.cancel, null)
 						.setPositiveButton(R.string.delete, (confirmation, confirmationWhich) -> {

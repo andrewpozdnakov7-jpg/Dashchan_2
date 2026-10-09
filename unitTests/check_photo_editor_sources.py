@@ -82,11 +82,35 @@ def main():
     assert "previewScheduler.start(liveMaskGesture || directInput)" in canvas
     assert "processedIsScene = scene" in canvas and "if (processedIsScene) return" in canvas
     assert "EditorRenderer.prepareScene(source, state, assetSnapshot" in canvas
-    assert "this::saveDirect" in activity and "prepareSave(); encode(true, null)" in activity
+    assert "this::saveDirect" in activity
+    direct = activity[activity.index("private void saveDirect()"):activity.index("private int exportSample(")]
+    assert 0 <= direct.index("prepareSave();") < direct.index("encode(true, null);")
     export_options = activity[activity.index("private void showExport()"):activity.index("private void encode(")]
     assert "closeSection(" not in export_options and "encode(" not in export_options
-    assert "int[] side = {exportSide}, quality = {exportQuality}; boolean[] png = {exportPng}" in export_options
-    assert "exportSide = side[0]; exportQuality = quality[0]; exportPng = png[0]" in export_options
+    for draft in ("int[] side = {exportSide}", "int[] quality = {exportQuality}", "boolean[] png = {exportPng}"):
+        assert draft in export_options
+    for update in ("exportSide = side[0]", "exportQuality = quality[0]", "exportPng = png[0]"):
+        assert update in export_options
+    persist = activity[activity.index("private void persist()"):activity.index("@Override protected void onSaveInstanceState")]
+    assert "sessionBuilder(document.copy()).build()" in persist
+    assert persist.count("if (request != sessionGeneration) return") == 2
+    assert persist.index("worker.execute(") < persist.index("EditorSessionCodec.encode(snapshot)") < persist.index("file.startWrite()")
+    assert "file.finishWrite(stream)" in persist and "file.failWrite(stream)" in persist
+    assert "!destroyed && request == sessionGeneration" in persist
+    load = activity[activity.index("private void load()"):activity.index("private void updateSubtitle()")]
+    assert "16 * 1024 * 1024" in load and "EditorSessionCodec.restore(json, restored)" in load
+    for fallback in ("restored.document = new EditorDocument()", "restored.checkpoint = null", "restored.section = Section.HOME"):
+        assert fallback in load
+    codec = (JAVA / "photo/EditorSessionCodec.java").read_text(encoding="utf-8")
+    keys = set(re.findall(r'json\.put\("(\w+)"', codec))
+    assert keys == {"hash", "name", "document", "section", "checkpoint", "adjustment", "drawTool", "hideTool", "color", "size", "png",
+                    "toolSettingsV2", "mosaicSize", "blurPreset", "drawAll", "objectAboveEffects", "side", "quality", "exportOptionsV2", "maskAll"}
+    document = (JAVA / "photo/EditorDocument.java").read_text(encoding="utf-8")
+    assert "new int[Adjustment.COUNT]" in document and "ordinal()" not in document
+    assert "Math.max(-100, Math.min(100, adjustments.getInt(i)))" in document
+    request = (JAVA / "photo/EditorExportRequest.java").read_text(encoding="utf-8")
+    assert "document.state().copy()" in request and "new HashMap<>(assets)" in request
+    assert "recycle()" not in request
     assert "EditorStickers.GROUPS[stickerGroup]" in activity and "new EditorStickers.Tile(" in activity
     render = canvas[canvas.index("public void refresh()"):canvas.index("private static String photoKey(")]
     assert "handler.removeCallbacks(renderRequest)" not in render
@@ -111,6 +135,7 @@ def main():
     print(f"PASS: {len(required)} localized strings and format placeholders")
     print(f"PASS: {len(drawables)} referenced drawable resources parse as XML")
     print("PASS: input/result extras and stale attachment guard")
+    print("PASS: detached export/session capture, worker/generation/AtomicFile guards and legacy session schema")
     print("PASS: persistent crop navigation, no shared-panel crossfade or doubled insets, direct switch/checkpoint")
     print("NOT RUN: Java compilation, Android tests, APK, native UI rendering")
 

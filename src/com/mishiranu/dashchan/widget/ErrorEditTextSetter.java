@@ -34,6 +34,7 @@ public class ErrorEditTextSetter {
 				backgroundError.mutate().setColorFilter(colorFilter);
 			}
 			editText.setBackground(error ? backgroundError : backgroundNormal);
+			InterfaceAppearance.fieldError(editText, error);
 		}
 	}
 }

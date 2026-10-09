@@ -10,6 +10,26 @@ import java.util.ArrayList;
 
 /** Bitmap-free editing state. All annotations use normalized, EXIF-oriented source coordinates. */
 public final class EditorDocument {
+    /** Explicit indices are the version-1 JSON layout; declaration order is not a file format. */
+    public enum Adjustment {
+        BRIGHTNESS(0, -100), CONTRAST(1, -100), SATURATION(2, -100), WARMTH(3, -100),
+        SHADOWS(4, -100), HIGHLIGHTS(5, -100), SHARPNESS(6, 0);
+
+        public static final int COUNT = 7;
+        public final int storageIndex;
+        public final int uiMinimum;
+        public final int uiMaximum = 100;
+
+        Adjustment(int storageIndex, int uiMinimum) {
+            this.storageIndex = storageIndex;
+            this.uiMinimum = uiMinimum;
+        }
+
+        public static int clampStorageIndex(int index) {
+            return Math.max(0, Math.min(COUNT - 1, index));
+        }
+    }
+
     public enum Kind { PEN, MARKER, ERASER, LINE, ARROW, RECTANGLE, OVAL, TEXT, IMAGE, STICKER, COVER, MOSAIC, BLUR }
     public enum Filter { NONE, MONO, SEPIA, WARM, COOL, VIVID, FADE }
     public static final int HISTORY_LIMIT = 24;
@@ -94,7 +114,7 @@ public final class EditorDocument {
         public boolean mirror;
         public final RectF crop = new RectF(0, 0, 1, 1);
         public float aspect; // zero = free; ratio is in output orientation
-        public final int[] adjustments = new int[7]; // brightness, contrast, saturation, warmth, shadows, highlights, sharpness
+        public final int[] adjustments = new int[Adjustment.COUNT]; // Stable storage indices are declared in Adjustment.
         public Filter filter = Filter.NONE;
         public int filterStrength = 100;
         public final ArrayList<Item> items = new ArrayList<>();

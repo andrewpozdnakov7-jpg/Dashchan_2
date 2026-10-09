@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui.navigator;
 
+import com.mishiranu.dashchan.widget.ContentStateMotion;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Rect;
@@ -40,6 +41,7 @@ import java.util.UUID;
 public final class PageFragment extends ContentFragment implements FragmentHandler.Callback, ListPage.Callback {
 	private static final String EXTRA_PAGE = "page";
 	private static final String EXTRA_RETAIN_ID = "retainId";
+	private static final String EXTRA_THREAD_LIST_ORIGIN = "threadListOrigin";
 
 	private static final String EXTRA_LIST_POSITION = "listPosition";
 	private static final String EXTRA_PARCELABLE_EXTRA = "parcelableExtra";
@@ -74,6 +76,21 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 
 	public String getRetainId() {
 		return requireArguments().getString(EXTRA_RETAIN_ID);
+	}
+
+	public Page getThreadListOrigin() {
+		try {
+			return AndroidUtils.getParcelable(requireArguments(), EXTRA_THREAD_LIST_ORIGIN, Page.class);
+		} catch (BadParcelableException e) {
+			return null;
+		}
+	}
+
+	/** Set only on a prepared, not yet added fragment. Do not mutate a saved StackItem's Bundle. */
+	public void setThreadListOrigin(Page origin) {
+		Bundle args = new Bundle(requireArguments());
+		args.putParcelable(EXTRA_THREAD_LIST_ORIGIN, origin);
+		setArguments(args);
 	}
 
 	@Override
@@ -580,22 +597,27 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 
 	@Override
 	public void switchList() {
+		ContentStateMotion.Session motion = prepareStateMotion(recyclerView);
 		if (quickNavigation != null) quickNavigation.setContentVisible(true);
 		initErrorItem = null;
 		progressView.setVisibility(View.GONE);
 		errorHolder.layout.setVisibility(View.GONE);
+		if (motion != null) motion.commit();
 	}
 
 	@Override
 	public void switchProgress() {
+		ContentStateMotion.Session motion = prepareStateMotion(progressView);
 		if (quickNavigation != null) quickNavigation.setContentVisible(false);
 		initErrorItem = null;
 		progressView.setVisibility(View.VISIBLE);
 		errorHolder.layout.setVisibility(View.GONE);
+		if (motion != null) motion.commit();
 	}
 
 	@Override
 	public void switchError(ErrorItem errorItem) {
+		ContentStateMotion.Session motion = prepareStateMotion(errorHolder.layout);
 		if (quickNavigation != null) quickNavigation.setContentVisible(false);
 		if (errorItem == null) {
 			errorItem = new ErrorItem(ErrorItem.Type.UNKNOWN);
@@ -604,6 +626,15 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 		progressView.setVisibility(View.GONE);
 		errorHolder.layout.setVisibility(View.VISIBLE);
 		errorHolder.text.setText(errorItem.toString());
+		if (motion != null) motion.commit();
+	}
+
+	private ContentStateMotion.Session prepareStateMotion(View incoming) {
+		clearPendingListReveal();
+		View root = getView();
+		View outgoing = errorHolder.layout.getVisibility() == View.VISIBLE ? errorHolder.layout
+				: progressView.getVisibility() == View.VISIBLE ? progressView : recyclerView;
+		return root instanceof ViewGroup ? ContentStateMotion.prepare((ViewGroup) root, outgoing, incoming) : null;
 	}
 
 	private void clearPendingListReveal() {
@@ -621,7 +652,7 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 				View target = recyclerView;
 				View root = getView();
 				clearPendingListReveal();
-				listRevealListener = InterfaceMotion.revealBeforeDraw(target, root, () ->
+				listRevealListener = ContentStateMotion.revealBeforeDraw(target, root, () ->
 						target == recyclerView && root != null && root == getView() && listPage != null &&
 						InterfaceMotion.isEnabled());
 			} else {

@@ -55,6 +55,11 @@ public final class ScreenMotionController {
 	/** Capture before onTerminate removes the old toolbar action views / formatting row. */
 	public Session prepare(ContentFragment outgoing, ContentFragment incoming, int transition, boolean container) {
 		finish();
+		if (outgoing != null) com.mishiranu.dashchan.widget.ElementMotion.finishTree(outgoing.getView());
+		com.mishiranu.dashchan.widget.ToolbarSearchMotion.finish(toolbar);
+		if (toolbarExtra instanceof com.mishiranu.dashchan.widget.MotionToolbarExtra) {
+			((com.mishiranu.dashchan.widget.MotionToolbarExtra) toolbarExtra).finishPresentation();
+		}
 		if (!InterfaceMotion.isEnabled() || InterfaceMotion.duration(1) == 0 || outgoing == null ||
 				!host.isAttachedToWindow() || !chromeHost.isAttachedToWindow() ||
 				(transition != FragmentTransaction.TRANSIT_FRAGMENT_OPEN &&

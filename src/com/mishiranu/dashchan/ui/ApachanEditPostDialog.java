@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui;
 
+import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import android.app.AlertDialog;
 import android.app.Dialog;
 import android.os.Bundle;
@@ -187,7 +188,7 @@ public final class ApachanEditPostDialog {
 
 			ScrollView scrollView = new ScrollView(requireContext());
 			scrollView.addView(root, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-			AlertDialog dialog = new AlertDialog.Builder(requireContext()).setTitle(R.string.edit_post)
+			AlertDialog dialog = new MotionDialogBuilder(requireContext()).setTitle(R.string.edit_post)
 					.setView(scrollView).setNegativeButton(android.R.string.cancel, null)
 					.setPositiveButton(R.string.save, null).create();
 			dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE)

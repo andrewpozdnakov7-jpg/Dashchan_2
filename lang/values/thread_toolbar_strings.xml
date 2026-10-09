@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="thread_toolbar_action">Thread back button</string>
+    <string name="thread_toolbar_action__summary">Go back, return to the board or My board thread list without refreshing, or hide the button to give the title more space.</string>
+    <string name="thread_toolbar_back">Back</string>
+    <string name="thread_toolbar_list">Thread list</string>
+    <string name="thread_toolbar_hidden">Hidden</string>
+</resources>

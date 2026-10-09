@@ -535,6 +535,7 @@ public class ThemeEngine {
 			boolean dialog = typedArray.getBoolean(R.styleable.ThemeContextAppearance_android_windowIsFloating, false);
 			boolean overlay = typedArray.getBoolean(R.styleable.ThemeContextAppearance_isOverlay, false);
 			boolean popup = typedArray.getBoolean(R.styleable.ThemeContextAppearance_isPopup, false);
+			if (popup) SurfaceMotion.registerPopupContext(newContext);
 			boolean preserveColors = typedArray.getBoolean(
 					R.styleable.ThemeContextAppearance_themeEnginePreserveColors, false);
 			typedArray.recycle();

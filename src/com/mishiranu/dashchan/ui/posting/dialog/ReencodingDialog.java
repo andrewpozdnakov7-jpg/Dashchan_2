@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui.posting.dialog;
 
+import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import android.app.AlertDialog;
 import android.app.Dialog;
 import android.content.Context;
@@ -79,7 +80,7 @@ public class ReencodingDialog extends DialogFragment implements DialogInterface.
 		ScrollView scrollView = new ScrollView(context);
 		scrollView.addView(linearLayout, ScrollView.LayoutParams.MATCH_PARENT,
 				ScrollView.LayoutParams.WRAP_CONTENT);
-		return new AlertDialog.Builder(context).setTitle(R.string.reencode_image)
+		return new MotionDialogBuilder(context).setTitle(R.string.reencode_image)
 				.setView(scrollView).setNegativeButton(android.R.string.cancel, null)
 				.setPositiveButton(android.R.string.ok, this).create();
 	}

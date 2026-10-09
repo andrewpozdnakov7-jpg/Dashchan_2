@@ -1,5 +1,7 @@
 package com.mishiranu.dashchan.ui.preference.core;
 
+import com.mishiranu.dashchan.widget.InterfaceAppearance;
+
 import android.content.Context;
 import android.view.View;
 import android.view.ViewGroup;
@@ -43,6 +45,7 @@ public class CheckPreference extends Preference<Boolean> {
 		viewHolder.widgetFrame.setVisibility(View.VISIBLE);
 		CheckBox check = new CheckBox(viewHolder.widgetFrame.getContext());
 		ThemeEngine.applyStyle(check);
+		InterfaceAppearance.check(check);
 		check.setClickable(false);
 		check.setFocusable(false);
 		viewHolder.widgetFrame.addView(check, ViewGroup.LayoutParams.WRAP_CONTENT,

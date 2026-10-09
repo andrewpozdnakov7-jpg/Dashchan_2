@@ -72,6 +72,9 @@ public class AttachmentView extends View {
 	public enum Overlay {NONE, MULTIPLE, AUDIO, VIDEO, FILE, WARNING}
 
 	private String key;
+	private long imageBindingGeneration;
+	public long getImageBindingGeneration() { return imageBindingGeneration; }
+	public boolean isCropEnabled() { return cropEnabled; }
 	private Bitmap bitmap;
 	private boolean error;
 	private Overlay overlay;
@@ -86,6 +89,7 @@ public class AttachmentView extends View {
 		boolean invalidate = false;
 		if (!CommonUtils.equals(this.key, key)) {
 			this.key = key;
+			imageBindingGeneration++;
 			if (bitmap != null || error) {
 				bitmap = null;
 				error = false;

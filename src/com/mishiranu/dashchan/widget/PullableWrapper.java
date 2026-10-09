@@ -34,6 +34,12 @@ public class PullableWrapper {
 		setColor(ThemeEngine.getTheme(listView.getContext()).accent);
 	}
 
+	/** Pauses presentation only; busySide and pending refresh callbacks stay intact. */
+	public void setHostActive(boolean active) {
+		topView.setHostActive(active);
+		bottomView.setHostActive(active);
+	}
+
 	public void setColor(int color) {
 		topView.setColor(color);
 		bottomView.setColor(color);
@@ -259,12 +265,13 @@ public class PullableWrapper {
 		}
 	}
 
-	private interface PullView {
+	interface PullView {
 		enum State {IDLE, PULL, LOADING}
 
 		int MAX_STRAIN = 1000;
 
 		void setColor(int color);
+		default void setHostActive(boolean active) {}
 		void setState(State state, int padding);
 		void setPullStrain(int pullStrain, int padding);
 		int getPullStrain();
@@ -275,6 +282,7 @@ public class PullableWrapper {
 	}
 
 	private static class LollipopView implements PullView {
+		private final PullLoadingIndicator modern;
 		private static final int IDLE_FOLD_TIME = 100;
 		private static final int LOADING_FOLD_TIME = 150;
 		private static final int FULL_CYCLE_TIME = 6665;
@@ -317,6 +325,7 @@ public class PullableWrapper {
 		public LollipopView(Wrapped wrapped, boolean top) {
 			this.wrapped = new WeakReference<>(wrapped);
 			this.top = top;
+			modern = new PullLoadingIndicator(wrapped, top);
 			float density = ResourceUtils.obtainDensity(wrapped.getContext());
 			radius = (int) (CIRCLE_RADIUS * density);
 			commonShift = (int) (DEFAULT_CIRCLE_TARGET * density);
@@ -347,7 +356,11 @@ public class PullableWrapper {
 		@Override
 		public void setColor(int color) {
 			circlePaint.setColor(color);
+			modern.setColor(color);
 		}
+
+		@Override
+		public void setHostActive(boolean active) { modern.setHostActive(active); }
 
 		private void invalidate(int padding) {
 			Wrapped wrapped = this.wrapped.get();
@@ -410,6 +423,7 @@ public class PullableWrapper {
 						break;
 					}
 				}
+				modern.setState(state, padding);
 				invalidate(padding);
 			}
 		}
@@ -422,6 +436,7 @@ public class PullableWrapper {
 			} else if (this.pullStrain < 0) {
 				this.pullStrain = 0;
 			}
+			modern.setPullStrain(this.pullStrain, padding);
 			if (state == State.PULL) {
 				invalidate(padding);
 			}
@@ -456,6 +471,7 @@ public class PullableWrapper {
 
 		@Override
 		public void draw(Canvas canvas, int padding) {
+			if (modern.draw(canvas, padding)) return;
 			Wrapped wrapped = this.wrapped.get();
 			if (wrapped == null) {
 				return;

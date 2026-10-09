@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui.gallery;
 
+import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.Intent;
@@ -202,7 +203,7 @@ public class ImageUnit {
 	private static void showMetadata(FragmentManager fragmentManager, JpegData jpegData, String fileName) {
 		new InstanceDialog(fragmentManager, null, provider -> {
 			Context context = GalleryInstance.getCallback(provider).getWindow().getContext();
-			AlertDialog.Builder dialogBuilder = new AlertDialog.Builder(context)
+			AlertDialog.Builder dialogBuilder = new MotionDialogBuilder(context)
 					.setTitle(R.string.metadata)
 					.setPositiveButton(android.R.string.ok, null);
 			ExifData exifData = jpegData != null ? jpegData.exifData : null;
@@ -349,7 +350,17 @@ public class ImageUnit {
 		}
 
 		private void setPhotoViewImage(PagerInstance.ViewHolder holder, Drawable drawable, boolean hasAlpha) {
-			holder.photoView.setImage(drawable, hasAlpha, false, holder.photoViewThumbnail);
+			boolean still = holder.animatedPngDecoder == null && holder.gifDecoder == null;
+			boolean hadImage = holder.photoView.hasImage();
+			GalleryMotionController.Preview preview = still ? GalleryMotionController.capturePreview(holder.photoView) : null;
+			try {
+				holder.photoView.setImage(drawable, hasAlpha, false, holder.photoViewThumbnail);
+				if (still) GalleryMotionController.revealPhoto(holder.photoView, preview, hadImage);
+				else if (preview != null) preview.discard();
+			} catch (RuntimeException | Error e) {
+				if (preview != null) preview.discard();
+				throw e;
+			}
 			holder.jpegData = fileHolder.getJpegData();
 			holder.photoViewThumbnail = false;
 		}

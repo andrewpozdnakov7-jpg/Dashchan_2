@@ -32,11 +32,11 @@ public final class EditorRenderer {
         int width = source.getWidth(), height = source.getHeight();
         int[] pixels = new int[width * height];
         source.getPixels(pixels, 0, width, 0, 0, width, height);
-        float brightness = state.adjustments[0] * 1.2f;
-        float contrast = (float) Math.pow(2, state.adjustments[1] / 100f);
-        float saturation = 1f + state.adjustments[2] / 100f;
-        float warmth = state.adjustments[3] * 0.35f;
-        float shadows = state.adjustments[4] * 0.8f, highlights = state.adjustments[5] * 0.8f;
+        float brightness = state.adjustments[EditorDocument.Adjustment.BRIGHTNESS.storageIndex] * 1.2f;
+        float contrast = (float) Math.pow(2, state.adjustments[EditorDocument.Adjustment.CONTRAST.storageIndex] / 100f);
+        float saturation = 1f + state.adjustments[EditorDocument.Adjustment.SATURATION.storageIndex] / 100f;
+        float warmth = state.adjustments[EditorDocument.Adjustment.WARMTH.storageIndex] * 0.35f;
+        float shadows = state.adjustments[EditorDocument.Adjustment.SHADOWS.storageIndex] * 0.8f, highlights = state.adjustments[EditorDocument.Adjustment.HIGHLIGHTS.storageIndex] * 0.8f;
         float strength = state.filterStrength / 100f;
         for (int i = 0; i < pixels.length; i++) {
             if ((i & 4095) == 0) checkCancelled(cancelled);
@@ -71,7 +71,7 @@ public final class EditorRenderer {
             pixels[i] = Color.argb(Color.alpha(color), channel(r + (fr - r) * strength),
                     channel(g + (fg - g) * strength), channel(b + (fb - b) * strength));
         }
-        if (state.adjustments[6] > 0) sharpen(pixels, width, height, state.adjustments[6] / 100f, cancelled);
+        if (state.adjustments[EditorDocument.Adjustment.SHARPNESS.storageIndex] > 0) sharpen(pixels, width, height, state.adjustments[EditorDocument.Adjustment.SHARPNESS.storageIndex] / 100f, cancelled);
         checkCancelled(cancelled);
         Bitmap result = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
         try {

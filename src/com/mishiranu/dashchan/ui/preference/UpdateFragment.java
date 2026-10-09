@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui.preference;
 
+import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.DialogInterface;
@@ -721,7 +722,7 @@ public class UpdateFragment extends BaseListFragment {
 					titles[i] = builder;
 				}
 			}
-			return new AlertDialog.Builder(requireContext())
+			return new MotionDialogBuilder(requireContext())
 					.setTitle(requireArguments().getString(EXTRA_TITLE))
 					.setSingleChoiceItems(titles, index, this)
 					.setNegativeButton(android.R.string.cancel, null).create();

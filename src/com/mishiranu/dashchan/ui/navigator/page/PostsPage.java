@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui.navigator.page;
 
+import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.res.ColorStateList;
@@ -1306,7 +1307,7 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 					}
 				}
 			}
-			AlertDialog dialog = new AlertDialog.Builder(context)
+			AlertDialog dialog = new MotionDialogBuilder(context)
 					.setTitle(R.string.summary)
 					.setPositiveButton(android.R.string.ok, null)
 					.create();

@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui.navigator.manager;
 
+import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import android.animation.ObjectAnimator;
 import android.annotation.SuppressLint;
 import android.app.AlertDialog;
@@ -57,6 +58,8 @@ import com.mishiranu.dashchan.content.storage.FavoritesStorage;
 import com.mishiranu.dashchan.content.translation.TranslationController;
 import com.mishiranu.dashchan.ui.InstanceDialog;
 import com.mishiranu.dashchan.ui.gallery.GalleryOverlay;
+import com.mishiranu.dashchan.ui.gallery.AttachmentGridDialog;
+import com.mishiranu.dashchan.util.InterfaceMotion;
 import com.mishiranu.dashchan.ui.posting.Replyable;
 import com.mishiranu.dashchan.util.AnimationUtils;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
@@ -1260,8 +1263,14 @@ public class DialogUnit {
 
 	private void showAttachmentsGrid(UiManager.ConfigurationSet configurationSet, List<AttachmentItem> attachmentItems,
 			int startImageIndex, GalleryOverlay.NavigatePostMode navigatePostMode, GalleryItem.Set gallerySet) {
+		showAttachmentsGrid(configurationSet, attachmentItems, startImageIndex, navigatePostMode, gallerySet, null);
+	}
+
+	private void showAttachmentsGrid(UiManager.ConfigurationSet configurationSet, List<AttachmentItem> attachmentItems,
+			int startImageIndex, GalleryOverlay.NavigatePostMode navigatePostMode, GalleryItem.Set gallerySet,
+			View sourceImageView) {
 		Context context = uiManager.getContext();
-		Dialog dialog = new Dialog(context, R.style.Theme_Gallery);
+		AttachmentGridDialog dialog = new AttachmentGridDialog(context, R.style.Theme_Gallery);
 		Context styledContext = dialog.getContext();
 		Pair<StackInstance.AttachmentDialog, Dialog> attachmentDialog = new Pair<>(new StackInstance
 				.AttachmentDialog(attachmentItems, startImageIndex, navigatePostMode, gallerySet), dialog);
@@ -1303,7 +1312,9 @@ public class DialogUnit {
 					imageIndex++;
 				}
 			}
-			openAttachment(v, configurationSet.chanName,
+			// The click overlay is not the image; pass the actual sibling thumbnail for geometry.
+			View thumbnail = v.getParent() instanceof View ? ((View) v.getParent()).findViewById(R.id.thumbnail) : null;
+			openAttachment(thumbnail != null ? thumbnail : v, configurationSet.chanName,
 					attachmentItems, index, imageIndex, navigatePostMode, gallerySet);
 		};
 		Chan chan = Chan.get(configurationSet.chanName);
@@ -1362,13 +1373,14 @@ public class DialogUnit {
 			attachmentViews.put(attachmentItem, attachmentView);
 		}
 		dialog.setContentView(rootView);
+		dialog.setMotionContent(scrollView, sourceImageView);
 		Window window = dialog.getWindow();
 		WindowManager.LayoutParams layoutParams = window.getAttributes();
 		layoutParams.flags |= WindowManager.LayoutParams.FLAG_DIM_BEHIND;
 		int[] attrs = new int[] {android.R.attr.windowAnimationStyle, android.R.attr.backgroundDimAmount};
 		TypedArray typedArray = styledContext.obtainStyledAttributes(null, attrs, android.R.attr.dialogTheme, 0);
 		try {
-			layoutParams.windowAnimations = typedArray.getResourceId(0, 0);
+			layoutParams.windowAnimations = InterfaceMotion.isEnabled() ? 0 : typedArray.getResourceId(0, 0);
 			layoutParams.dimAmount = typedArray.getFloat(1, 0.6f);
 		} finally {
 			typedArray.recycle();
@@ -1405,7 +1417,7 @@ public class DialogUnit {
 			List<AttachmentItem> attachmentItems, int imageIndex,
 			GalleryOverlay.NavigatePostMode navigatePostMode, GalleryItem.Set gallerySet) {
 		if (attachmentItems.size() > 1) {
-			showAttachmentsGrid(configurationSet, attachmentItems, imageIndex, navigatePostMode, gallerySet);
+			showAttachmentsGrid(configurationSet, attachmentItems, imageIndex, navigatePostMode, gallerySet, imageView);
 		} else {
 			openAttachment(imageView, configurationSet.chanName,
 					attachmentItems, 0, imageIndex, navigatePostMode, gallerySet);
@@ -1509,7 +1521,7 @@ public class DialogUnit {
 			ViewUtils.setTextSizeScaled(textView, 14);
 			textView.setTypeface(ResourceUtils.TYPEFACE_MEDIUM);
 		}
-		AlertDialog.Builder builder = new AlertDialog.Builder(context).setPositiveButton(android.R.string.ok, null);
+		AlertDialog.Builder builder = new MotionDialogBuilder(context).setPositiveButton(android.R.string.ok, null);
 		if (!StringUtils.isEmpty(emailToCopy)) {
 			builder.setNeutralButton(R.string.copy_email,
 					(dialog, which) -> StringUtils.copyToClipboard(context, emailToCopy));
@@ -1611,7 +1623,7 @@ public class DialogUnit {
 					chanNameItems[canArchiveLocal ? i + 1 : i] = archiveChan.name;
 					items[canArchiveLocal ? i + 1 : i] = archiveChan.configuration.getTitle();
 				}
-				return new AlertDialog.Builder(provider.getContext())
+				return new MotionDialogBuilder(provider.getContext())
 						.setTitle(R.string.archive__verb)
 						.setItems(items, (d, which) -> performSendArchiveThreadInternal(provider.getContext(),
 								provider.getFragmentManager(), state, chanNameItems[which], posts))
@@ -1766,7 +1778,7 @@ public class DialogUnit {
 		int padding = context.getResources().getDimensionPixelSize(R.dimen.dialog_padding_view);
 		linearLayout.setPadding(padding, padding, padding, padding);
 
-		AlertDialog.Builder builder = new AlertDialog.Builder(context);
+		AlertDialog.Builder builder = new MotionDialogBuilder(context);
 		if (linearLayout.getChildCount() > 0) {
 			ScrollView scrollView = new ScrollView(context);
 			scrollView.addView(linearLayout, ScrollView.LayoutParams.MATCH_PARENT,
@@ -1930,7 +1942,7 @@ public class DialogUnit {
 	private static void showLocalArchiveWarning(FragmentManager fragmentManager,
 			String chanName, String boardName, String threadNumber, String threadTitle, Collection<Post> posts,
 			boolean saveThumbnails, boolean saveFiles) {
-		new InstanceDialog(fragmentManager, null, provider -> new AlertDialog.Builder(provider.getContext())
+		new InstanceDialog(fragmentManager, null, provider -> new MotionDialogBuilder(provider.getContext())
 				.setMessage(R.string.zip_archive_warning)
 				.setNegativeButton(android.R.string.cancel, null)
 				.setPositiveButton(android.R.string.ok, (dialog, which) -> startLocalArchiveProcess(

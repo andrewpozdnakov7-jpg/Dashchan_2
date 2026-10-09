@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<transition xmlns:android="http://schemas.android.com/apk/res/android"
+    class="com.mishiranu.dashchan.widget.PopupSurfaceTransition" android:duration="220"
+    android:interpolator="@interpolator/motion_standard" />
