@@ -1271,17 +1271,13 @@ public class VideoUnit {
 		}
 		if (centerPlayPauseButton == null && controlsView.getParent() instanceof FrameLayout) {
 			FrameLayout host = (FrameLayout) controlsView.getParent();
-			centerPlayPauseButton = new ImageButton(host.getContext()) {
-				@Override
-				public boolean dispatchTouchEvent(MotionEvent event) {
-					onControlsTouchEvent(event, true);
-					try {
-						return super.dispatchTouchEvent(event);
-					} finally {
-						onControlsTouchEvent(event, false);
-					}
-				}
-			};
+			centerPlayPauseButton = new ImageButton(host.getContext());
+			centerPlayPauseButton.setOnTouchListener((view, event) -> {
+				// Observe interaction only. The ordinary button retains touch, click and accessibility dispatch.
+				onControlsTouchEvent(event, true);
+				onControlsTouchEvent(event, false);
+				return false;
+			});
 			centerPlayPauseButton.setScaleType(ImageButton.ScaleType.FIT_CENTER);
 			PlayerControlsStyle.button(centerPlayPauseButton, density, true);
 			centerPlayPauseButton.setOnClickListener(playPauseClickListener);
