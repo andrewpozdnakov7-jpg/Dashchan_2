@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<string name="posting_appearance">Окно ввода сообщения</string>
+	<string name="posting_appearance_summary">Высота поля, личные данные, тема и предпросмотр</string>
+	<string name="posting_editor_height">Высота поля сообщения</string>
+	<string name="posting_height_automatic">Автоматическая</string>
+	<string name="posting_height_compact">Компактная</string>
+	<string name="posting_height_expanded">Увеличенная</string>
+	<string name="posting_height_fixed">Фиксированная</string>
+	<string name="posting_height_automatic_summary">Подстраивается под свободное место; с клавиатурой — от 4 до 9 строк</string>
+	<string name="posting_height_compact_summary">От 4 до 9 строк, без заполнения всего свободного места</string>
+	<string name="posting_height_expanded_summary">От 8 до 16 строк, если хватает места на экране</string>
+	<string name="posting_height_fixed_summary">Заданное количество строк; на маленьком экране высота ограничивается доступным местом</string>
+	<string name="posting_fixed_lines">Количество видимых строк</string>
+	<string name="posting_fixed_lines_format">Строк: %d</string>
+	<string name="posting_hide_name">Скрыть имя</string>
+	<string name="posting_hide_email">Скрыть email</string>
+	<string name="posting_hide_field_summary">Скрывает поле, не удаляя сохранённое значение</string>
+	<string name="posting_hide_password">Скрыть пароль</string>
+	<string name="posting_hide_password_summary">Скрывает поле пароля удаления. Сохранённый пароль продолжает использоваться.</string>
+	<string name="posting_hide_subject">Скрыть тему</string>
+	<string name="posting_hide_subject_summary">Скрывает поле темы сообщения. Для создания темы форум может потребовать заголовок.</string>
+	<string name="posting_preview">Предпросмотр формы</string>
+	<string name="posting_preview_summary">Введите текст и откройте клавиатуру, чтобы оценить выбранную высоту</string>
+	<string name="posting_preview_notice">Предпросмотр — сообщение никуда не отправляется</string>
+	<string name="posting_preview_sample_line">Тестовый текст — строка %1$d</string>
+</resources>

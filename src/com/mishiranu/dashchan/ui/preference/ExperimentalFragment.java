@@ -43,7 +43,11 @@ public class ExperimentalFragment extends PreferenceFragment {
 			return;
 		}
 		removeAllPreferences();
-		addExperimentalToggle(ExperimentalPreferenceDescriptors.interfaceMotion());
+		if (ExperimentalPreferenceDescriptors.interfaceMotion().available) {
+			addButton(R.string.material3_design_settings, R.string.material3_design_settings_summary)
+					.setOnClickListener(p -> ((FragmentHandler) requireActivity())
+							.pushFragment(new Material3DesignFragment()));
+		}
 		ArrayList<String> toolbarValues = new ArrayList<>();
 		ArrayList<CharSequence> toolbarEntries = new ArrayList<>();
 		for (Preferences.ThreadToolbarAction action : Preferences.ThreadToolbarAction.values()) {

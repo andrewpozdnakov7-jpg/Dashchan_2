@@ -17,6 +17,8 @@ public final class InterfaceAppearance {
 	public static void row(View view, TextView title, TextView summary, boolean header) {}
 	public static void action(Button view, boolean primary) {}
 	public static void field(EditText view) {}
+	public static void postingForm(View view) {}
+	public static void postingField(EditText view) {}
 	public static void check(CompoundButton view) {}
 	public static void slider(SeekBar view) {}
 	public static void icon(ImageView view) {}

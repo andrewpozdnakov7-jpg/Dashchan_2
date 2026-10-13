@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<string name="posting_appearance">Message input form</string>
+	<string name="posting_appearance_summary">Editor height, personal details, subject and preview</string>
+	<string name="posting_editor_height">Message field height</string>
+	<string name="posting_height_automatic">Automatic</string>
+	<string name="posting_height_compact">Compact</string>
+	<string name="posting_height_expanded">Expanded</string>
+	<string name="posting_height_fixed">Fixed</string>
+	<string name="posting_height_automatic_summary">Fits the available space; 4 to 9 lines with the keyboard open</string>
+	<string name="posting_height_compact_summary">4 to 9 lines without filling all the available space</string>
+	<string name="posting_height_expanded_summary">8 to 16 lines when space permits</string>
+	<string name="posting_height_fixed_summary">A chosen line count, limited by the available space on small screens</string>
+	<string name="posting_fixed_lines">Visible line count</string>
+	<string name="posting_fixed_lines_format">Lines: %d</string>
+	<string name="posting_hide_name">Hide name</string>
+	<string name="posting_hide_email">Hide email</string>
+	<string name="posting_hide_field_summary">Hides the field without deleting its saved value</string>
+	<string name="posting_hide_password">Hide password</string>
+	<string name="posting_hide_password_summary">Hides the deletion-password field. The saved password is still used.</string>
+	<string name="posting_hide_subject">Hide subject</string>
+	<string name="posting_hide_subject_summary">Hides the message subject. A forum may require a title to create a thread.</string>
+	<string name="posting_preview">Preview form</string>
+	<string name="posting_preview_summary">Enter text and open the keyboard to try the selected height</string>
+	<string name="posting_preview_notice">Preview — no message will be sent</string>
+	<string name="posting_preview_sample_line">Sample text — line %1$d</string>
+</resources>

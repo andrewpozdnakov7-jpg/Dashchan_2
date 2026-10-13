@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="posting_captcha_label">Captcha</string>
+    <string name="posting_captcha_done">Done</string>
+    <string name="posting_captcha_retry">Retry</string>
+    <item name="posting_captcha_status" type="id" />
+    <string name="posting_format_bold">Bold</string>
+    <string name="posting_format_italic">Italic</string>
+    <string name="posting_format_underline">Underline</string>
+    <string name="posting_format_overline">Overline</string>
+    <string name="posting_format_strike">Strikethrough</string>
+    <string name="posting_format_code">Code</string>
+    <string name="posting_format_ascii">ASCII art</string>
+    <string name="posting_format_heading">Heading</string>
+    <string name="posting_format_subscript">Subscript</string>
+    <string name="posting_format_superscript">Superscript</string>
+    <string name="posting_format_spoiler">Spoiler</string>
+    <string name="posting_format_quote">Quote</string>
+    <string name="posting_format_more">More formatting</string>
+    <item name="posting_format_more" type="id" />
+    <item name="posting_compact_captcha" type="id" />
+    <string name="posting_captcha_loading">Loading captcha</string>
+    <item name="posting_captcha_loading" type="id" />
+    <item name="posting_captcha_ready" type="id" />
+    <string name="posting_captcha_ready_description">%1$s. Tap to reload</string>
+</resources>

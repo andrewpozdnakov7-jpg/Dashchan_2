@@ -17,17 +17,31 @@ final class VideoPositionMemory {
 	private VideoPositionMemory() {}
 
 	static void restoreOnce(VideoPlayer player, File file) {
+		restoreOnce(player, file, false);
+	}
+
+	static long requestedPosition(File file) {
+		if (file == null || !Preferences.isRememberLastVideoPosition()) return 0L;
+		LastVideoPosition bookmark = LastVideoPosition.decode(Preferences.getSavedLastVideoPosition());
+		return bookmark != null && bookmark.key.equals(key(file)) ? bookmark.position : 0L;
+	}
+
+	private static String key(File file) {
+		return StringUtils.formatHex(Hasher.getInstanceSha256()
+				.calculate(file.getAbsolutePath().getBytes(StandardCharsets.UTF_8)));
+	}
+
+	static void restoreOnce(VideoPlayer player, File file, boolean positionPrepared) {
 		// Reattaching an existing player must never replay an old persisted seek.
 		if (file == null || players.containsKey(player) || player.getDuration() <= 0L) return;
-		String key = StringUtils.formatHex(Hasher.getInstanceSha256()
-				.calculate(file.getAbsolutePath().getBytes(StandardCharsets.UTF_8)));
+		String key = key(file);
 		players.put(player, key);
 		latestKey = key;
 		latestPlayer = new java.lang.ref.WeakReference<>(player);
 		if (!Preferences.isRememberLastVideoPosition()) return;
 		LastVideoPosition bookmark = LastVideoPosition.decode(Preferences.getSavedLastVideoPosition());
 		long position = bookmark != null ? bookmark.resumePosition(key, player.getDuration()) : 0L;
-		if (position > 0L) player.setPosition(position);
+		if (position > 0L && !positionPrepared) player.setPosition(position);
 		// Opening another playable video replaces the single bookmark, even if it is closed immediately.
 		Preferences.setSavedLastVideoPosition(new LastVideoPosition(key, position).encode());
 	}

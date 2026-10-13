@@ -123,7 +123,7 @@ public final class DialogStackMotion {
 	}
 
 	public void leave(Snapshot outgoing, View incoming, boolean last, Runnable close) {
-		if (!enabled() || outgoing == null || !last && cardContent(incoming) == null) {
+		if (!enabled() || outgoing == null) {
 			discard(outgoing);
 			if (close != null) close.run();
 			return;
@@ -163,7 +163,16 @@ public final class DialogStackMotion {
 	}
 
 	public static boolean blocks(View host, MotionEvent event) {
-		return host.getTag(R.id.dialog_motion_owner) != null;
+		Object owner = host.getTag(R.id.dialog_motion_owner);
+		if (owner instanceof Scene) {
+			Scene current = (Scene) owner;
+			if (current.returning && !current.last) {
+				// Finish the visual exit before routing a new gesture to the already active lower card.
+				if (event.getActionMasked() == MotionEvent.ACTION_DOWN) current.release();
+				return false;
+			}
+		}
+		return owner != null;
 	}
 
 	public static void lostFocus(View host) {
@@ -198,9 +207,8 @@ public final class DialogStackMotion {
 		Scene(Snapshot outgoing, View incoming, boolean first, boolean last, boolean returning, Runnable close) {
 			this.outgoing = outgoing; this.incoming = incoming;
 			this.first = first; this.last = last; this.returning = returning; this.close = close;
-			// Nested transitions keep the real card surface opaque and stationary.
-			// Only first entrance/final exit may fade the whole card and screen dim.
-			animated = first ? incoming : cardContent(incoming);
+			// On return, only the detached outgoing snapshot fades. The lower live card stays intact.
+			animated = returning ? null : first ? incoming : cardContent(incoming);
 			incomingAlpha = animated != null ? animated.getAlpha() : 1f;
 			scaleX = animated != null ? animated.getScaleX() : 1f;
 			scaleY = animated != null ? animated.getScaleY() : 1f;
@@ -212,10 +220,10 @@ public final class DialogStackMotion {
 
 		void prepare() {
 			root.setTag(R.id.dialog_motion_owner, this);
-			root.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
+			if (!returning) root.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
 			// Lower cards remain visible with DialogStack's normal inactive dim.
 			// Taking their alpha ownership would hide them until this scene ends.
-			if (incoming != null) incoming.setTag(R.id.dialog_motion_owner, this);
+			if (!returning && incoming != null) incoming.setTag(R.id.dialog_motion_owner, this);
 			if (animated != null) { animated.setTag(R.id.dialog_motion_owner, this); animated.setAlpha(0f); }
 			if (outgoing != null) {
 				setBounds(0, 0, root.getWidth(), root.getHeight());
@@ -234,7 +242,7 @@ public final class DialogStackMotion {
 				if (animated != null) {
 					animated.setPivotX(animated.getWidth() / 2f); animated.setPivotY(animated.getHeight() / 2f);
 				}
-				if (!first && !last && incoming != null) {
+				if (!returning && !first && !last && incoming != null) {
 					int[] position = new int[2], origin = new int[2];
 					incoming.getLocationInWindow(position); root.getLocationInWindow(origin);
 					float left = position[0] - origin[0], top = position[1] - origin[1];
@@ -248,7 +256,7 @@ public final class DialogStackMotion {
 					surfaceClip.addRoundRect(contentClip, radius, radius, Path.Direction.CW);
 				}
 				animator = ValueAnimator.ofFloat(0f, 1f);
-				animator.setDuration(last ? 220 : 280);
+				animator.setDuration(returning ? 90 : 280);
 				animator.setInterpolator(input -> input);
 				animator.addUpdateListener(value -> {
 					if (!owned() || !enabled()) { release(); return; }
@@ -275,26 +283,28 @@ public final class DialogStackMotion {
 		@Override public void draw(Canvas canvas) {
 			if (outgoing == null || outgoing.bitmap.isRecycled()) return;
 			float eased = InterfaceMotion.STANDARD.getInterpolation(clock);
-			float alpha = last ? 1f - eased : DialogMotionSpec.outgoingAlpha(clock);
+			float alpha = returning ? 1f - clock : DialogMotionSpec.outgoingAlpha(clock);
 			paint.setAlpha(Math.round(255f * alpha * outgoing.alpha));
 			RectF bounds = outgoing.bounds;
 			int save = canvas.save();
-			// A snapshot includes the old background. Never draw its fading surface
-			// outside the stable incoming card, including when their heights differ.
-			if (!last) {
+			// On entrance, clip the replaced snapshot to the new card's surface.
+			// On return, fade the outgoing card in its original bounds over the untouched lower card.
+			if (!returning && !last) {
 				if (!started) { canvas.restoreToCount(save); return; }
 				canvas.clipPath(surfaceClip);
 			}
-			canvas.translate(0f, (returning ? 24f : -12f) * ResourceUtils.obtainDensity(root) * eased);
-			float scale = 1f - 0.04f * eased;
-			canvas.scale(scale, scale, bounds.centerX(), bounds.centerY());
+			if (!returning) {
+				canvas.translate(0f, -12f * ResourceUtils.obtainDensity(root) * eased);
+				float scale = 1f - 0.04f * eased;
+				canvas.scale(scale, scale, bounds.centerX(), bounds.centerY());
+			}
 			canvas.drawBitmap(outgoing.bitmap, null, bounds, paint);
 			canvas.restoreToCount(save);
 		}
 
 		private boolean owned() {
 			return root.getTag(R.id.dialog_motion_owner) == this &&
-					(incoming == null || incoming.getTag(R.id.dialog_motion_owner) == this) &&
+					(returning || incoming == null || incoming.getTag(R.id.dialog_motion_owner) == this) &&
 					(animated == null || animated.getTag(R.id.dialog_motion_owner) == this);
 		}
 
@@ -314,7 +324,8 @@ public final class DialogStackMotion {
 			if (incoming != null && incoming.getTag(R.id.dialog_motion_owner) == this)
 				incoming.setTag(R.id.dialog_motion_owner, null);
 			if (root.getTag(R.id.dialog_motion_owner) == this) {
-				root.setTag(R.id.dialog_motion_owner, null); root.setImportantForAccessibility(accessibility);
+				root.setTag(R.id.dialog_motion_owner, null);
+				if (!returning) root.setImportantForAccessibility(accessibility);
 			}
 			discard(outgoing);
 			setDim(1f);

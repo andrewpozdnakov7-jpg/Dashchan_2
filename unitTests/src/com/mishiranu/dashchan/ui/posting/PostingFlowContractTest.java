@@ -157,14 +157,18 @@ public class PostingFlowContractTest {
 		containsAll(method("getTextIfVisible"), "editText.getVisibility() == View.VISIBLE", "StringUtils.nullIfEmpty");
 		containsAll(method("isCheckedIfVisible"), "checkBox.getVisibility() == View.VISIBLE && checkBox.isChecked()");
 		String collect = method("collectPostingFormData");
-		for (String field : new String[] {"subjectView", "commentView", "nameView", "emailView", "passwordView"})
+		for (String field : new String[] {"subjectView", "commentView", "nameView", "emailView"})
 			containsAll(collect, "getTextIfVisible(" + field + ")");
 		containsAll(method("submitPostingForm"), "if (attachmentController.isImportInProgress())", "sendCoordinator.canSend()");
-		containsAll(collect, "PostingFormData.resolvePassword(getTextIfVisible(passwordView)",
+		// Password visibility is presentation-only; supported deletion passwords still use
+		// a custom draft value, or the forum fallback when that value is empty.
+		containsAll(collect, "PostingFormData.resolvePassword(deletionPasswordSupported",
+				"? StringUtils.nullIfEmpty(passwordView.getText().toString()) : null",
 				"Preferences.getPassword(Chan.get(getChanName()))", "iconView.getVisibility() == View.VISIBLE ? getUserIcon() : null",
 				"attachmentController.createSendAttachments()", "isCheckedIfVisible(sageCheckBox)",
 				"isCheckedIfVisible(spoilerCheckBox)", "isCheckedIfVisible(originalPosterCheckBox)");
 		containsAll(form("resolvePassword"), "password != null ? password : fallback.get()");
+		assertFalse(collect.contains("getTextIfVisible(passwordView)"));
 		containsAll(attachment("createSendAttachments"),
 				"for (int i = 0; i < attachments.size(); i++)", "AttachmentHolder data = attachments.get(i)",
 				"if (!found)", "rating = null", "attachmentRatingItems.get(0).first", "if (fileHolder != null)",
@@ -172,6 +176,18 @@ public class PostingFlowContractTest {
 				"data.optionUniqueHash, data.optionRemoveMetadata, data.optionRemoveFileName",
 				"postingConfiguration.attachmentSpoiler && data.optionSpoiler, data.reencoding",
 				"return new SendAttachments(attachments, attachmentHashes)");
+	}
+
+	@Test public void deletionPasswordRetainsCustomValueOrUsesForumFallback() {
+		int[] fallbackCalls = {0};
+		java.util.function.Supplier<String> fallback = () -> {
+			fallbackCalls[0]++;
+			return "test-fallback";
+		};
+		assertEquals("test-custom", PostingFormData.resolvePassword("test-custom", fallback));
+		assertEquals(0, fallbackCalls[0]);
+		assertEquals("test-fallback", PostingFormData.resolvePassword(null, fallback));
+		assertEquals(1, fallbackCalls[0]);
 	}
 
 	@Test public void sendCopiesCaptchaAndPersistsDraftBeforeServiceHandoff() throws Exception {

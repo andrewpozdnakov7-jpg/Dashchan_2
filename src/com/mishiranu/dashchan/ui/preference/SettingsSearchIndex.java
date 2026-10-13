@@ -37,6 +37,10 @@ public final class SettingsSearchIndex {
 			@Override
 			ContentFragment createFragment() { return new ExperimentalFragment(); }
 		},
+		MATERIAL3_DESIGN(R.string.experimental_features, R.string.material3_design_settings) {
+			@Override
+			ContentFragment createFragment() { return new Material3DesignFragment(); }
+		},
 		REPLY_NOTIFICATIONS(R.string.contents, R.string.replies_and_notifications) {
 			@Override
 			ContentFragment createFragment() { return new ReplyNotificationsFragment(); }
@@ -72,6 +76,10 @@ public final class SettingsSearchIndex {
 		POPUP_APPEARANCE(R.string.user_interface, R.string.popup_appearance) {
 			@Override
 			ContentFragment createFragment() { return new PopupAppearanceFragment(); }
+		},
+		POSTING_APPEARANCE(R.string.user_interface, R.string.submission_form, R.string.posting_appearance) {
+			@Override
+			ContentFragment createFragment() { return new PostingAppearanceFragment(); }
 		},
 		CONTENTS(R.string.contents) {
 			@Override
@@ -494,8 +502,22 @@ public final class SettingsSearchIndex {
 				Preferences.KEY_ADVANCED_SEARCH);
 		add(context, entries, Screen.INTERFACE, R.string.display_post_icons, R.string.display_post_icons__summary,
 				Preferences.KEY_DISPLAY_ICONS);
-		add(context, entries, Screen.INTERFACE, R.string.hide_personal_data_block, 0,
-				Preferences.KEY_HIDE_PERSONAL_DATA);
+		add(context, entries, Screen.POSTING_APPEARANCE, R.string.posting_appearance,
+				R.string.posting_appearance_summary, null);
+		add(context, entries, Screen.POSTING_APPEARANCE, R.string.posting_editor_height,
+				0, Preferences.KEY_POSTING_EDITOR_HEIGHT);
+		add(context, entries, Screen.POSTING_APPEARANCE, R.string.posting_fixed_lines, 0,
+				Preferences.KEY_POSTING_EDITOR_LINES);
+		add(context, entries, Screen.POSTING_APPEARANCE, R.string.posting_hide_name,
+				R.string.posting_hide_field_summary, Preferences.KEY_POSTING_HIDE_NAME);
+		add(context, entries, Screen.POSTING_APPEARANCE, R.string.posting_hide_email,
+				R.string.posting_hide_field_summary, Preferences.KEY_POSTING_HIDE_EMAIL);
+		add(context, entries, Screen.POSTING_APPEARANCE, R.string.posting_hide_password,
+				R.string.posting_hide_password_summary, Preferences.KEY_POSTING_HIDE_PASSWORD);
+		add(context, entries, Screen.POSTING_APPEARANCE, R.string.posting_hide_subject,
+				R.string.posting_hide_subject_summary, Preferences.KEY_POSTING_HIDE_SUBJECT);
+		add(context, entries, Screen.POSTING_APPEARANCE, R.string.posting_preview,
+				R.string.posting_preview_summary, null);
 		add(context, entries, Screen.INTERFACE, R.string.huge_captcha, 0, Preferences.KEY_HUGE_CAPTCHA);
 
 		add(context, entries, Screen.GESTURES, R.string.video_volume_gesture,
@@ -538,7 +560,14 @@ public final class SettingsSearchIndex {
 		add(context, entries, Screen.REPLY_NOTIFICATIONS, R.string.reply_notifications, 0, "reply_notifications");
 		add(context, entries, Screen.REPLY_NOTIFICATIONS, R.string.favorites_watcher);
 		add(context, entries, Screen.CONTENTS, R.string.clear_cache);
-		addExperimentalToggle(context, entries, ExperimentalPreferenceDescriptors.interfaceMotion());
+		if (BuildConfig.ENABLE_EXPERIMENTAL_INTERFACE_MOTION) {
+			add(context, entries, Screen.MATERIAL3_DESIGN, R.string.material3_design_settings,
+					R.string.material3_design_settings_summary, null);
+			add(context, entries, Screen.MATERIAL3_DESIGN, R.string.material3_enable_design,
+					R.string.new_interface_motion_summary, Preferences.KEY_NEW_INTERFACE_MOTION);
+			add(context, entries, Screen.MATERIAL3_DESIGN, R.string.material3_posting_form,
+					R.string.material3_posting_form_summary, Preferences.KEY_NEW_POSTING_FORM);
+		}
 		add(context, entries, Screen.EXPERIMENTAL, R.string.thread_toolbar_action,
 				R.string.thread_toolbar_action__summary, Preferences.KEY_THREAD_TOOLBAR_ACTION);
 		addExperimentalToggle(context, entries, ExperimentalPreferenceDescriptors.outboxJournal());

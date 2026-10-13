@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="material3_design_settings">New Material 3 interface</string>
+    <string name="material3_design_settings_summary">Experimental appearance, animations and the new posting form</string>
+    <string name="material3_enable_design">Enable the new interface</string>
+    <string name="material3_posting_form">New posting form</string>
+    <string name="material3_posting_form_summary">New field layout, formatting inside the editor and redesigned actions. Requires the new interface. Applies the next time the form is opened.</string>
+</resources>

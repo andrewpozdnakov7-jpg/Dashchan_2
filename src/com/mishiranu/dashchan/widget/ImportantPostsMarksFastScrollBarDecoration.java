@@ -31,30 +31,25 @@ public class ImportantPostsMarksFastScrollBarDecoration {
 	}
 
 	public void draw(int scrollBarLeft, int scrollBarTop, int scrollBarRight, int scrollBarBottom,
-			Canvas canvas) {
+			Canvas canvas, FastScrollGeometry geometry) {
 		if (data == null || data.totalPostsCount <= 1) {
 			return;
 		}
-		// Positions and their range must come from the same immutable snapshot. The adapter item count
-		// can fluctuate while posts are preloaded, filtered, or replaced with window placeholders;
-		// reading it on every frame rescales the entire mark map and makes all marks jump while scrolling.
-		int postPositionRange = data.totalPostsCount - 1;
+		// Keep mark positions/count in their immutable data snapshot. Project them through the same
+		// continuous viewport scale as navigation; do not use an integer visible-child count.
+		double viewportFraction = geometry != null ? geometry.viewportFraction() : 1d / data.totalPostsCount;
 		int scrollBarHeight = scrollBarBottom - scrollBarTop;
 		if (scrollBarHeight <= 0) {
 			return;
 		}
-		// Use the same stable adapter-position range as PaddedRecyclerView.scroll(). Deriving this
-		// range from visible children makes every mark jump when differently sized posts enter or
-		// leave the viewport.
-		float postMarkRealHeight = scrollBarHeight / (float) postPositionRange;
-		drawPostMarks(data.userPostsPositions, userPostMarkPaint, postMarkRealHeight,
-				scrollBarLeft, scrollBarTop, scrollBarRight, postPositionRange, canvas);
-		drawPostMarks(data.repliesPositions, replyMarkPaint, postMarkRealHeight,
-				scrollBarLeft, scrollBarTop, scrollBarRight, postPositionRange, canvas);
+		drawPostMarks(data.userPostsPositions, userPostMarkPaint, viewportFraction,
+				scrollBarLeft, scrollBarTop, scrollBarRight, scrollBarBottom, canvas);
+		drawPostMarks(data.repliesPositions, replyMarkPaint, viewportFraction,
+				scrollBarLeft, scrollBarTop, scrollBarRight, scrollBarBottom, canvas);
 	}
 
-	private void drawPostMarks(List<Integer> postPositions, Paint postMarkPaint, float postMarkRealHeight,
-			int scrollBarLeft, int scrollBarTop, int scrollBarRight, int postPositionRange, Canvas canvas) {
+	private void drawPostMarks(List<Integer> postPositions, Paint postMarkPaint, double viewportFraction,
+			int scrollBarLeft, int scrollBarTop, int scrollBarRight, int scrollBarBottom, Canvas canvas) {
 		int postPositionIndex = 0;
 		while (postPositionIndex < postPositions.size()) {
 			int postPosition = postPositions.get(postPositionIndex++);
@@ -69,10 +64,12 @@ public class ImportantPostsMarksFastScrollBarDecoration {
 				}
 			}
 
-			int markPosition = Math.min(postPosition, postPositionRange);
-			float postMarkTop = scrollBarTop + postMarkRealHeight * markPosition;
-			float postMarkHeight = postMarkRealHeight *
-					Math.min(contiguousPostMarks, Math.max(1, postPositionRange - markPosition));
+			int height = scrollBarBottom - scrollBarTop;
+			float postMarkTop = scrollBarTop + height *
+					FastScrollGeometry.markOffset(postPosition, data.totalPostsCount, viewportFraction);
+			float postMarkEnd = scrollBarTop + height *
+					FastScrollGeometry.markOffset(postPosition + contiguousPostMarks, data.totalPostsCount, viewportFraction);
+			float postMarkHeight = postMarkEnd - postMarkTop;
 			float postMarkMinHeight = postMarkMinSize * contiguousPostMarks;
 			if (postMarkHeight < postMarkMinHeight) {
 				postMarkHeight = postMarkMinHeight;

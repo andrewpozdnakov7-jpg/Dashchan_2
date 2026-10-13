@@ -1,6 +1,7 @@
 package com.mishiranu.dashchan.ui.posting;
 
 import com.mishiranu.dashchan.widget.InterfaceAppearance;
+import com.mishiranu.dashchan.widget.PostingFormAppearance;
 
 import com.mishiranu.dashchan.widget.ImePanelMotion;
 import android.app.Activity;
@@ -10,7 +11,6 @@ import android.content.res.ColorStateList;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.Outline;
-import android.graphics.Paint;
 import android.graphics.Rect;
 import android.os.Bundle;
 import android.text.Editable;
@@ -38,8 +38,6 @@ import android.widget.TextView;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
-import androidx.core.view.ViewCompat;
-import androidx.core.view.WindowInsetsCompat;
 import chan.content.Chan;
 import chan.content.ChanConfiguration;
 import chan.content.ChanMarkup;
@@ -164,6 +162,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 	private EditText nameView;
 	private EditText emailView;
 	private EditText passwordView;
+	private boolean deletionPasswordSupported;
 	private EditText subjectView;
 	private DropdownView iconView;
 	private ViewGroup personalDataBlock;
@@ -171,6 +170,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 	private CommentEditWatcher commentEditWatcher;
 	private CaptchaForm captchaForm;
 	private Button sendButton;
+	private PostingFormAppearance postingAppearance;
 	private ProgressDialog progressDialog;
 
 	private boolean sendButtonEnabled = true;
@@ -208,7 +208,8 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		int screenWidthDp = ViewUtils.getWindowContentWidthDp(requireContext());
 		boolean hugeCaptcha = Preferences.isHugeCaptcha();
 		boolean longLayout = screenWidthDp >= 480;
-		boolean longFooter = longLayout && !hugeCaptcha;
+		boolean newForm = PostingFormAppearance.isEnabled();
+		boolean longFooter = !newForm && longLayout && !hugeCaptcha;
 
 		scrollView = view.findViewById(R.id.scroll_view);
 		scrollView.getViewTreeObserver().addOnPreDrawListener(showCommentAfterLayout);
@@ -242,7 +243,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		});
 		postingLayout.setPadding((int) (8f * density), 0, (int) (8f * density), 0);
 		addHeader(personalDataBlock, 0, R.string.personal_data);
-		addHeader(postingLayout, postingLayout.indexOfChild(subjectView), R.string.message_data);
+		if (!newForm) addHeader(postingLayout, postingLayout.indexOfChild(subjectView), R.string.message_data);
 		TextView tripcodeWarning = view.findViewById(R.id.personal_tripcode_warning);
 		TextView remainingCharacters = view.findViewById(R.id.remaining_characters);
 		ViewUtils.setTextSizeScaled(tripcodeWarning, 12);
@@ -304,21 +305,27 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		boolean landscape = getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE;
 		ViewGroup extra = landscape ? ((FragmentHandler) requireActivity()).getToolbarView()
 				: ((FragmentHandler) requireActivity()).getToolbarExtra();
-		LinearLayout textFormatView = new LinearLayout(extra.getContext());
+		LinearLayout textFormatView = new LinearLayout(newForm ? view.getContext() : extra.getContext());
 		textFormatView.setOrientation(LinearLayout.HORIZONTAL);
 		this.textFormatView = textFormatView;
-		if (landscape) {
-			boolean rtl = textFormatView.getLayoutDirection() == View.LAYOUT_DIRECTION_RTL;
-			textFormatView.setPadding(rtl ? 0 : (int) (8f * density), 0, rtl ? (int) (8f * density) : 0, 0);
+		if (newForm) {
+			postingAppearance = new PostingFormAppearance(view);
+			postingAppearance.setupEditor(commentParent, commentView, textFormatView);
+			postingAppearance.decorateFields(nameView, emailView, passwordView, subjectView);
 		} else {
-			textFormatView.setPadding((int) (8f * density), 0, (int) (8f * density), (int) (4f * density));
-			addPaddingToRoot = true;
+			if (landscape) {
+				boolean rtl = textFormatView.getLayoutDirection() == View.LAYOUT_DIRECTION_RTL;
+				textFormatView.setPadding(rtl ? 0 : (int) (8f * density), 0, rtl ? (int) (8f * density) : 0, 0);
+			} else {
+				textFormatView.setPadding((int) (8f * density), 0, (int) (8f * density), (int) (4f * density));
+				addPaddingToRoot = true;
+			}
+			extra.addView(textFormatView, ViewGroup.LayoutParams.MATCH_PARENT,
+					ViewGroup.LayoutParams.WRAP_CONTENT);
+			commentParent.removeView(commentView);
+			postingLayout.addView(commentView, postingLayout.indexOfChild(commentParent));
+			postingLayout.removeView(commentParent);
 		}
-		extra.addView(textFormatView, ViewGroup.LayoutParams.MATCH_PARENT,
-				ViewGroup.LayoutParams.WRAP_CONTENT);
-		commentParent.removeView(commentView);
-		postingLayout.addView(commentView, postingLayout.indexOfChild(commentParent));
-		postingLayout.removeView(commentParent);
 		ViewUtils.setNewMargin(checkBoxParent, 0, (int) (4f * density), 0, 0);
 		updatePostingConfiguration(true, false, false);
 		new MarkupButtonsBuilder(addPaddingToRoot, ViewUtils.getWindowContentSize(requireContext()).x);
@@ -502,17 +509,30 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		formDiagnostics = new PostingFormDiagnostics.Observer(requireActivity(), view, scrollView,
 				commentView, footerContainer);
 		// Explicit roles preserve editor sizing, IME ownership and controller bindings.
-		for (EditText field : new EditText[] {nameView, emailView, passwordView, subjectView, commentView, captchaInputView}) {
-			InterfaceAppearance.field(field);
+		if (postingAppearance != null) {
+			postingAppearance.decorateFields(captchaInputView);
+			postingAppearance.finishSetup(sendButton, sageCheckBox, spoilerCheckBox, originalPosterCheckBox);
+			postingAppearance.setAttachmentAction(attachmentController::openPicker);
+			postingAppearance.setAttachmentAvailable(attachmentController.canAttach());
+			PostingFormAppearance.syncFieldVisibility(nameView, emailView, passwordView, subjectView);
+		} else {
+			InterfaceAppearance.postingForm(view);
+			for (EditText field : new EditText[] {nameView, emailView, passwordView, subjectView, commentView, captchaInputView}) {
+				InterfaceAppearance.postingField(field);
+			}
+			InterfaceAppearance.check(sageCheckBox); InterfaceAppearance.check(spoilerCheckBox);
+			InterfaceAppearance.check(originalPosterCheckBox); InterfaceAppearance.action(sendButton, true);
 		}
-		InterfaceAppearance.check(sageCheckBox); InterfaceAppearance.check(spoilerCheckBox);
-		InterfaceAppearance.check(originalPosterCheckBox); InterfaceAppearance.action(sendButton, true);
 		ImePanelMotion.attach(view, view.findViewById(R.id.posting_action_container));
 	}
 
 	@Override
 	public void onDestroyView() {
 		ImePanelMotion.release(getView());
+		if (postingAppearance != null) {
+			postingAppearance.close();
+			postingAppearance = null;
+		}
 		if (formDiagnostics != null) {
 			formDiagnostics.close();
 			formDiagnostics = null;
@@ -536,6 +556,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		nameView = null;
 		emailView = null;
 		passwordView = null;
+		deletionPasswordSupported = false;
 		subjectView = null;
 		iconView = null;
 		personalDataBlock = null;
@@ -589,6 +610,13 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 	@Override
 	public void onResume() {
 		super.onResume();
+		if (postingAppearance != null) {
+			postingAppearance.activateToolbar(((FragmentHandler) requireActivity()).getToolbarView());
+		}
+		if (commentView != null) {
+			applyPostingFieldVisibility();
+			resizeComment(true);
+		}
 
 		if (allowPosting) {
 			consumeFuturePostText();
@@ -604,6 +632,12 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		if (!allowPosting || sendCoordinator.isSendSuccess()) {
 			((FragmentHandler) requireActivity()).removeFragment();
 		}
+	}
+
+	@Override
+	public void onPause() {
+		if (postingAppearance != null) postingAppearance.deactivateToolbar();
+		super.onPause();
 	}
 
 	public boolean consumeFuturePostText() {
@@ -690,24 +724,32 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 				ChanConfiguration.Deleting deleting = chan.configuration.safe().obtainDeleting(getChanName());
 				needPassword = deleting != null && deleting.password;
 			}
-			nameView.setVisibility(posting.allowName ? View.VISIBLE : View.GONE);
-			emailView.setVisibility(posting.allowEmail ? View.VISIBLE : View.GONE);
-			passwordView.setVisibility(needPassword ? View.VISIBLE : View.GONE);
-			subjectView.setVisibility(posting.allowSubject ? View.VISIBLE : View.GONE);
+			deletionPasswordSupported = needPassword;
+			applyPostingFieldVisibility();
 			sageCheckBox.setVisibility(posting.optionSage ? View.VISIBLE : View.GONE);
 			spoilerCheckBox.setVisibility(posting.optionSpoiler ? View.VISIBLE : View.GONE);
 			originalPosterCheckBox.setVisibility(posting.optionOriginalPoster ? View.VISIBLE : View.GONE);
-			checkBoxParent.setVisibility(posting.optionSage || posting.optionSpoiler || posting.optionOriginalPoster
+			if (postingAppearance != null) postingAppearance.syncOptionsVisibility();
+			else checkBoxParent.setVisibility(posting.optionSage || posting.optionSpoiler || posting.optionOriginalPoster
 					? View.VISIBLE : View.GONE);
-			boolean showPersonalDataBlock = !Preferences.isHidePersonalData();
-			if (showPersonalDataBlock) {
-				showPersonalDataBlock = posting.allowName || posting.allowEmail ||
-						needPassword || userIconItems != null;
-			}
-			personalDataBlock.setVisibility(showPersonalDataBlock ? View.VISIBLE : View.GONE);
 			commentEditWatcher.updateConfiguration(postingConfiguration);
 		}
 		attachmentController.updateConfiguration(posting, attachmentOptions, attachmentCount);
+	}
+
+	private void applyPostingFieldVisibility() {
+		ChanConfiguration.Posting posting = postingConfiguration;
+		nameView.setVisibility(posting.allowName && !Preferences.isPostingNameHidden() ? View.VISIBLE : View.GONE);
+		emailView.setVisibility(posting.allowEmail && !Preferences.isPostingEmailHidden() ? View.VISIBLE : View.GONE);
+		passwordView.setVisibility(deletionPasswordSupported && !Preferences.isPostingPasswordHidden()
+				? View.VISIBLE : View.GONE);
+		subjectView.setVisibility(posting.allowSubject && !Preferences.isPostingSubjectHidden()
+				? View.VISIBLE : View.GONE);
+		// Hide the section as well when all its fields and the forum's icon selector are hidden.
+		boolean showBlock = nameView.getVisibility() == View.VISIBLE || emailView.getVisibility() == View.VISIBLE
+				|| passwordView.getVisibility() == View.VISIBLE || iconView.getVisibility() == View.VISIBLE;
+		personalDataBlock.setVisibility(showBlock ? View.VISIBLE : View.GONE);
+		PostingFormAppearance.syncFieldVisibility(nameView, emailView, passwordView, subjectView);
 	}
 
 	private boolean compareListOfPairs(List<Pair<String, String>> first, List<Pair<String, String>> second) {
@@ -771,7 +813,9 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 
 	@Override
 	public void onPrepareOptionsMenu(Menu menu, boolean primary) {
-		menu.findItem(R.id.menu_attach).setVisible(attachmentController.canAttach());
+		boolean available = attachmentController.canAttach();
+		menu.findItem(R.id.menu_attach).setVisible(postingAppearance == null && available);
+		if (postingAppearance != null) postingAppearance.setAttachmentAvailable(available);
 	}
 
 	@Override
@@ -905,6 +949,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 
 	private void updateSendButtonState() {
 		sendButton.setEnabled(sendButtonEnabled && !attachmentController.isImportInProgress() && captchaController.canSend());
+		if (postingAppearance != null) postingAppearance.updateSendState();
 	}
 
 	private String getTextIfVisible(EditText editText) {
@@ -932,7 +977,9 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		String comment = getTextIfVisible(commentView);
 		String name = getTextIfVisible(nameView);
 		String email = getTextIfVisible(emailView);
-		String password = PostingFormData.resolvePassword(getTextIfVisible(passwordView),
+		// Hiding the password is presentation-only: keep a custom draft password and its fallback.
+		String password = PostingFormData.resolvePassword(deletionPasswordSupported
+				? StringUtils.nullIfEmpty(passwordView.getText().toString()) : null,
 				() -> Preferences.getPassword(Chan.get(getChanName())));
 		boolean optionSage = isCheckedIfVisible(sageCheckBox);
 		boolean optionSpoiler = isCheckedIfVisible(spoilerCheckBox);
@@ -1052,15 +1099,20 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 			@Override public void updateSendButtonState() { PostingFragment.this.updateSendButtonState(); }
 			@Override public void showLoading() { captchaForm.showLoading(); }
 			@Override public void setInput(String text) { captchaForm.setText(text); }
+			@Override public void setPresentationRestoring(boolean restoring) { captchaForm.setPresentationRestoring(restoring); }
 			@Override public void showError(ErrorItem errorItem) {
 				ClickableToast.show(errorItem); captchaForm.showError();
 			}
 			@Override public void updatePostingConfigurationIfNeeded() { PostingFragment.this.updatePostingConfigurationIfNeeded(); }
 			@Override public void showCaptcha(ReadCaptchaTask.CaptchaState state, ChanConfiguration.Captcha.Input input,
 					Bitmap image, boolean large, boolean blackAndWhite) {
+				showCaptcha(state, input, image, large, blackAndWhite, false);
+			}
+			@Override public void showCaptcha(ReadCaptchaTask.CaptchaState state, ChanConfiguration.Captcha.Input input,
+					Bitmap image, boolean large, boolean blackAndWhite, boolean answerSaved) {
 				boolean invertColors = blackAndWhite && !GraphicsUtils
 						.isLight(ResourceUtils.getColor(requireContext(), android.R.attr.colorBackground));
-				captchaForm.showCaptcha(state, input, image, large, invertColors);
+				captchaForm.showCaptcha(state, input, image, large, invertColors, answerSaved);
 				if (scrollView.getScrollY() + scrollView.getHeight() >= scrollView.getChildAt(0).getHeight()) {
 					scrollView.post(() -> {
 						if (scrollView != null) {
@@ -1174,55 +1226,13 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 	}
 
 	private final Runnable resizeComment = () -> {
-		if (scrollView != null && commentView != null && scrollView.getWidth() > 0) {
-			int availableHeight = scrollView.getHeight() - scrollView.getPaddingTop() - scrollView.getPaddingBottom();
-			if (availableHeight <= 0) {
-				if (formDiagnostics != null) formDiagnostics.decision("resize_skipped available=" + availableHeight);
-				return;
-			}
-			int padding = commentView.getCompoundPaddingTop() + commentView.getCompoundPaddingBottom();
-			if (commentView.getIncludeFontPadding()) {
-				Paint.FontMetricsInt metrics = commentView.getPaint().getFontMetricsInt();
-				padding += metrics.ascent - metrics.top + metrics.bottom - metrics.descent;
-			}
-			int lineHeight = Math.max(1, commentView.getLineHeight());
-			if (!isCommentKeyboardVisible()) {
-				// Measure the natural form height, excluding the current editor height. This
-				// accounts for visible fields and attachments without depending on text length.
-				View form = scrollView.getChildAt(0);
-				int width = scrollView.getWidth() - scrollView.getPaddingLeft() - scrollView.getPaddingRight();
-				form.measure(View.MeasureSpec.makeMeasureSpec(Math.max(0, width), View.MeasureSpec.EXACTLY),
-						View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
-				int otherHeight = form.getMeasuredHeight() - commentView.getMeasuredHeight();
-				int height = Math.min(availableHeight, Math.max(padding + COMMENT_MIN_LINES * lineHeight,
-						availableHeight - otherHeight));
-				if (formDiagnostics != null) formDiagnostics.decision("resize ime=false available=" + availableHeight
-						+ " other=" + otherHeight + " targetHeight=" + height + " lineHeight=" + lineHeight);
-				// Fixed pixel bounds follow available space, not the number of typed lines.
-				// Overflow remains scrollable; avoid requesting another layout if bounds are unchanged.
-				if (commentView.getMinHeight() != height || commentView.getMaxHeight() != height) {
-					commentView.setHeight(height);
-				}
-				return;
-			}
-			// Normally grow from four to nine lines. In a short window, even the minimum
-			// must fit above the keyboard and the separate send panel.
-			int visibleLines = Math.max(1, Math.min(COMMENT_MAX_LINES, (availableHeight - padding) / lineHeight));
-			int minLines = Math.min(COMMENT_MIN_LINES, visibleLines);
-			if (formDiagnostics != null) formDiagnostics.decision("resize ime=true available=" + availableHeight
-					+ " minLines=" + minLines + " maxLines=" + visibleLines + " lineHeight=" + lineHeight);
-			if (commentView.getMinLines() != minLines) {
-				commentView.setMinLines(minLines);
-			}
-			if (commentView.getMaxLines() != visibleLines) {
-				commentView.setMaxLines(visibleLines);
-			}
-		}
+		PostingCommentSizing.apply(scrollView, commentView, detail -> {
+			if (formDiagnostics != null) formDiagnostics.decision(detail);
+		});
 	};
 
 	private boolean isCommentKeyboardVisible() {
-		WindowInsetsCompat insets = scrollView != null ? ViewCompat.getRootWindowInsets(scrollView) : null;
-		return insets != null && insets.isVisible(WindowInsetsCompat.Type.ime());
+		return PostingCommentSizing.isKeyboardVisible(scrollView);
 	}
 
 	private boolean revealCommentAfterLayout;
@@ -1318,9 +1328,10 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		private int lastServerCommandButtons;
 
 		private void fillContainer() {
+			boolean newForm = postingAppearance != null;
 			float density = ResourceUtils.obtainDensity(getResources());
 			int maxButtonsWidth = lastWidth - textFormatView.getPaddingLeft() - textFormatView.getPaddingRight();
-			int buttonMarginLeft = (int) (-4f * density);
+			int buttonMarginLeft = newForm ? 0 : (int) (-4f * density);
 			int serverCommandButtons = getServerCommandButtons();
 			int serverCommandButtonCount = Integer.bitCount(serverCommandButtons);
 			if (serverCommandButtonCount > 0) {
@@ -1333,7 +1344,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 					.obtainSupportedAndDisplayedTags(allowPosting ? Chan.get(getChanName()).markup : null,
 							getBoardName(), density, maxButtonsWidth, buttonMarginLeft);
 			int supportedTags = supportedAndDisplayedTags.first;
-			int displayedTags = supportedAndDisplayedTags.second;
+			int displayedTags = newForm ? supportedTags : supportedAndDisplayedTags.second;
 			if (lastSupportedTags == supportedTags && lastDisplayedTags == displayedTags
 					&& lastServerCommandButtons == serverCommandButtons) {
 				return;
@@ -1345,6 +1356,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 			if (commentEditor != null) {
 				commentEditor.handleSimilar(supportedTags);
 			}
+			if (newForm) postingAppearance.resetCommands();
 			textFormatView.removeAllViews();
 			boolean firstMarkupButton = true;
 			for (MarkupButtonProvider provider : MarkupButtonProvider.iterable(displayedTags)) {
@@ -1352,7 +1364,8 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 						android.R.attr.borderlessButtonStyle);
 				ViewUtils.setTextSizeScaled(button, 14);
 				LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams
-						((int) (provider.widthDp * density), (int) (40f * density));
+						((int) ((newForm ? Math.max(48, provider.widthDp) : provider.widthDp) * density),
+								(int) ((newForm ? 48f : 40f) * density));
 				if (!firstMarkupButton) {
 					layoutParams.leftMargin = buttonMarginLeft;
 				}
@@ -1361,6 +1374,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 				button.setPadding(0, 0, 0, 0);
 				button.setAllCaps(false);
 				provider.applyTextAndStyle(button);
+				if (newForm) postingAppearance.styleMarkup(button, provider.tag);
 				textFormatView.addView(button, layoutParams);
 				firstMarkupButton = false;
 			}
@@ -1377,6 +1391,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 						"[video]", "[/video]", density, buttonMarginLeft);
 			}
 			textFormatView.setVisibility(textFormatView.getChildCount() > 0 ? View.VISIBLE : View.GONE);
+			if (newForm) postingAppearance.formattingVisibility(textFormatView.getChildCount() > 0);
 
 			if (addPaddingToRoot) {
 				int padding;
@@ -1405,8 +1420,11 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 			button.setContentDescription(description);
 			button.setTooltipText(description);
 			button.setOnClickListener(v -> insertServerCommand(command));
+			boolean newForm = postingAppearance != null;
+			if (newForm) postingAppearance.styleCommand(button);
 			LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(
-					(int) (SERVER_COMMAND_BUTTON_WIDTH_DP * density), (int) (40f * density));
+					(int) ((newForm ? Math.max(48, SERVER_COMMAND_BUTTON_WIDTH_DP) : SERVER_COMMAND_BUTTON_WIDTH_DP) * density),
+					(int) ((newForm ? 48f : 40f) * density));
 			if (textFormatView.getChildCount() > 0) {
 				layoutParams.leftMargin = buttonMarginLeft;
 			}
@@ -1427,8 +1445,11 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 			button.setContentDescription(description);
 			button.setTooltipText(description);
 			button.setOnClickListener(v -> insertWrappedMarkup(open, close));
+			boolean newForm = postingAppearance != null;
+			if (newForm) postingAppearance.styleCommand(button);
 			LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(
-					(int) (SERVER_COMMAND_BUTTON_WIDTH_DP * density), (int) (40f * density));
+					(int) ((newForm ? Math.max(48, SERVER_COMMAND_BUTTON_WIDTH_DP) : SERVER_COMMAND_BUTTON_WIDTH_DP) * density),
+					(int) ((newForm ? 48f : 40f) * density));
 			if (textFormatView.getChildCount() > 0) layoutParams.leftMargin = buttonMarginLeft;
 			textFormatView.addView(button, layoutParams);
 		}

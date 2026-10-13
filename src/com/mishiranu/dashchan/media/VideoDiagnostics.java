@@ -81,6 +81,10 @@ public final class VideoDiagnostics {
 		synchronized (LOCK) { return recording && extended; }
 	}
 
+	static long getExtendedCaptureId() {
+		synchronized (LOCK) { return recording && extended ? startedElapsedRealtime : 0L; }
+	}
+
 	public static boolean isSaving() {
 		synchronized (LOCK) { return saving; }
 	}

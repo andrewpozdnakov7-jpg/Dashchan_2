@@ -17,6 +17,7 @@ import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.view.ViewParent;
 import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import com.mishiranu.dashchan.R;
@@ -44,6 +45,7 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 	private final int[] fastScrollerOverlayHostLocation = new int[2];
 	private ImportantPostsMarksFastScrollBarDecoration importantPostsMarksFastScrollBarDecoration;
 
+	private boolean verticalScrollBarRequested;
 	private boolean fastScrollerEnabled;
 	private boolean fastScrollerAllowed;
 	private boolean regularScrolling;
@@ -53,6 +55,10 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 	private Float fastScrollingStartOffset;
 	private float fastScrollingStartY;
 	private float fastScrollingCurrentY;
+	private int pendingFastScrollPosition = NO_POSITION;
+	private double pendingFastScrollFraction;
+	private boolean pendingFastScrollAlignEnd;
+	private int pendingFastScrollItemCount;
 
 	private long showFastScrollingStart;
 	private boolean showFastScrolling;
@@ -78,10 +84,12 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 
 	public PaddedRecyclerView(@NonNull Context context, AttributeSet attrs) {
 		super(context, attrs);
+		verticalScrollBarRequested = isVerticalScrollBarEnabled();
 	}
 
 	public PaddedRecyclerView(@NonNull Context context, AttributeSet attrs, int defStyleAttr) {
 		super(context, attrs, defStyleAttr);
+		verticalScrollBarRequested = isVerticalScrollBarEnabled();
 	}
 
 	/* init */ {
@@ -158,6 +166,7 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 			@Override
 			public void onRequestDisallowInterceptTouchEvent(boolean disallowIntercept) {
 				if (disallowIntercept) {
+					pendingFastScrollPosition = NO_POSITION;
 					fastScrollingDown = false;
 					if (fastScrolling) {
 						updateFastScroller(true, fastScrollerEnabled, fastScrollerAllowed, regularScrolling, false);
@@ -181,6 +190,7 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 
 	@Override
 	protected void onDetachedFromWindow() {
+		pendingFastScrollPosition = NO_POSITION;
 		if (pullableWrapper != null) pullableWrapper.setHostActive(false);
 		if (fastScrollerOverlayHost != null) {
 			fastScrollerOverlayHost.getOverlay().remove(fastScrollerOverlayDrawable);
@@ -225,8 +235,21 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 		}
 	}
 
+	@Override
+	public void setVerticalScrollBarEnabled(boolean enabled) {
+		verticalScrollBarRequested = enabled;
+		updateVerticalScrollBar();
+	}
+
+	private void updateVerticalScrollBar() {
+		// Preserve the caller's fallback choice, but give the available fast scroller sole ownership.
+		// Use the public View API: the hidden drawing callback is not part of the SDK/R8 contract.
+		super.setVerticalScrollBarEnabled(verticalScrollBarRequested && !isFastScrollerAvailable());
+	}
+
 	public void setFastScrollerEnabled(boolean fastScrollerEnabled) {
 		if (this.fastScrollerEnabled != fastScrollerEnabled) {
+			pendingFastScrollPosition = NO_POSITION;
 			fastScrollingDown = false;
 			updateFastScroller(true, fastScrollerEnabled, fastScrollerAllowed, regularScrolling, false);
 		}
@@ -242,6 +265,7 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 		return fastScrollerEnabled && fastScrollerAllowed;
 	}
 
+	// Legacy geometry hook only; scrollbar exclusivity must not depend on this hidden callback.
 	@SuppressWarnings("unused") // Overrides hidden Android API protected method
 	protected void onDrawVerticalScrollBar(Canvas canvas, Drawable scrollBar, int l, int t, int r, int b) {
 		if (!isFastScrollerAvailable()) {
@@ -274,6 +298,7 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 	@Override
 	protected void onLayout(boolean changed, int l, int t, int r, int b) {
 		super.onLayout(changed, l, t, r, b);
+		applyPendingFastScrollFraction();
 		updateFastScrollerOverlayBounds();
 
 		int range = computeVerticalScrollRange();
@@ -290,6 +315,7 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 		updatePullIndicatorActivity();
 
 		if (!hasWindowFocus) {
+			pendingFastScrollPosition = NO_POSITION;
 			fastScrollingDown = false;
 			if (fastScrolling) {
 				updateFastScroller(true, fastScrollerEnabled, fastScrollerAllowed, regularScrolling, false);
@@ -301,6 +327,7 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 
 	private void updateFastScroller(boolean immediately, boolean fastScrollerEnabled, boolean fastScrollerAllowed,
 			boolean regularScrolling, boolean fastScrolling) {
+		boolean wasAvailable = isFastScrollerAvailable();
 		boolean oldShow = this.fastScrollerAllowed && this.fastScrollerEnabled &&
 				(this.regularScrolling || this.fastScrolling);
 		boolean newShow = fastScrollerAllowed && fastScrollerEnabled &&
@@ -309,6 +336,11 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 		this.fastScrollerAllowed = fastScrollerAllowed;
 		this.regularScrolling = regularScrolling;
 		this.fastScrolling = fastScrolling;
+		if (!isFastScrollerAvailable()) pendingFastScrollPosition = NO_POSITION;
+		updateVerticalScrollBar();
+		if (wasAvailable != isFastScrollerAvailable()) {
+			invalidateFastScroller();
+		}
 		long time = SystemClock.elapsedRealtime();
 		long passed = time - showFastScrollingStart;
 		if (oldShow != newShow) {
@@ -351,64 +383,126 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 				getEdgeEffectShift(EdgeEffectHandler.Side.BOTTOM);
 		if (fastScrollingStartOffset != null) {
 			result = fastScrollingStartOffset + (fastScrollingCurrentY - fastScrollingStartY) /
-					(height - thumbDrawable.getIntrinsicHeight());
+					Math.max(1, height - thumbDrawable.getIntrinsicHeight());
 		} else {
 			// A post mark denotes the top item on screen, so use the top edge of the thumb as the
 			// common anchor for track taps, dragging and marks. Centering the thumb on a tap used a
 			// different coordinate system and made the selected post miss its mark.
 			result = fastScrollingCurrentY /
-					(height - thumbDrawable.getIntrinsicHeight());
+					Math.max(1, height - thumbDrawable.getIntrinsicHeight());
 		}
 		return Math.max(0, Math.min(result, 1));
 	}
 
 	private int getFastScrollerPositionRange(LinearLayoutManager layoutManager) {
-		// Keep the range independent of currently visible children. Posts have different heights,
-		// so their visible count changes during a regular scroll and must not move the thumb marks.
+		// Legacy navigation fallback for layouts that do not have linear viewport geometry.
 		return Math.max(0, layoutManager.getItemCount() - 1);
 	}
 
-	private float getCurrentOffset() {
+	FastScrollGeometry getFastScrollGeometry() {
 		LayoutManager layoutManager = getLayoutManager();
-		if (layoutManager instanceof LinearLayoutManager) {
+		if (layoutManager instanceof LinearLayoutManager && !(layoutManager instanceof GridLayoutManager)) {
 			LinearLayoutManager linearLayoutManager = (LinearLayoutManager) layoutManager;
-			if (!canScrollVertically(-1)) {
-				return 0f;
-			}
-			if (!canScrollVertically(1)) {
-				return 1f;
-			}
-			int range = getFastScrollerPositionRange(linearLayoutManager);
+			if (linearLayoutManager.getOrientation() != VERTICAL || linearLayoutManager.getReverseLayout()) return null;
+			int count = linearLayoutManager.getItemCount();
 			int first = linearLayoutManager.findFirstVisibleItemPosition();
-			if (range > 0 && first >= 0) {
-				float itemOffset = 0f;
-				View firstView = linearLayoutManager.findViewByPosition(first);
-				if (firstView != null) {
-					int itemHeight = linearLayoutManager.getDecoratedMeasuredHeight(firstView);
-					if (itemHeight > 0) {
-						itemOffset = (linearLayoutManager.getPaddingTop() -
-								linearLayoutManager.getDecoratedTop(firstView)) / (float) itemHeight;
-						itemOffset = Math.max(0f, Math.min(itemOffset, 1f));
-					}
-				}
-				return Math.max(0f, Math.min((first + itemOffset) / range, 1f));
-			}
+			int last = linearLayoutManager.findLastVisibleItemPosition();
+			if (count <= 0 || first < 0 || last < first || last >= count) return null;
+			View firstView = linearLayoutManager.findViewByPosition(first);
+			View lastView = linearLayoutManager.findViewByPosition(last);
+			if (firstView == null || lastView == null) return null;
+			Rect bounds = this.bounds;
+			getDecoratedBoundsWithMargins(firstView, bounds);
+			if (bounds.height() <= 0) return null;
+			double start = first + Math.max(0, Math.min(1,
+					(linearLayoutManager.getPaddingTop() - bounds.top) / (double) bounds.height()));
+			getDecoratedBoundsWithMargins(lastView, bounds);
+			if (bounds.height() <= 0) return null;
+			double end = last + Math.max(0, Math.min(1,
+					(getHeight() - linearLayoutManager.getPaddingBottom() - bounds.top) / (double) bounds.height()));
+			return new FastScrollGeometry(count, start, end);
 		}
+		return null;
+	}
+
+	private float getCurrentOffset() {
+		FastScrollGeometry geometry = getFastScrollGeometry();
+		if (geometry != null) return geometry.offset();
 		int offset = computeVerticalScrollOffset();
 		int range = computeVerticalScrollRange() - computeVerticalScrollExtent();
 		return Math.max(0, Math.min(range > 0 ? (float) offset / range : 0f, 1));
 	}
 
 	private void scroll(float offset) {
+		if (!(getLayoutManager() instanceof LinearLayoutManager)) return;
 		LinearLayoutManager layoutManager = (LinearLayoutManager) getLayoutManager();
 		int count = layoutManager.getItemCount();
+		pendingFastScrollPosition = NO_POSITION;
+		pendingFastScrollAlignEnd = false;
 		if (count > 0) {
-			if (offset < 1f) {
+			if (offset <= 0f) {
+				layoutManager.scrollToPositionWithOffset(0, 0);
+			} else if (offset < 1f) {
+				FastScrollGeometry geometry = getFastScrollGeometry();
+				if (geometry != null) {
+					double coordinate = geometry.targetCoordinate(offset);
+					int position = (int) coordinate;
+					double fraction = coordinate - position;
+					View target = layoutManager.findViewByPosition(position);
+					int itemHeight = 0;
+					if (target != null) {
+						getDecoratedBoundsWithMargins(target, bounds);
+						itemHeight = bounds.height();
+					}
+					if (fraction > 0 && itemHeight <= 0) {
+						// Resolve only this target after layout, never bind/measure the whole adapter.
+						pendingFastScrollPosition = position;
+						pendingFastScrollFraction = fraction;
+						pendingFastScrollItemCount = count;
+					}
+					layoutManager.scrollToPositionWithOffset(position, -(int) Math.round(fraction * itemHeight));
+					return;
+				}
 				int position = (int) (getFastScrollerPositionRange(layoutManager) * offset + 0.5f);
 				layoutManager.scrollToPositionWithOffset(position, 0);
 			} else {
-				scrollToPosition(count - 1);
+				if (getFastScrollGeometry() != null) {
+					int position = count - 1;
+					View target = layoutManager.findViewByPosition(position);
+					if (target != null) {
+						getDecoratedBoundsWithMargins(target, bounds);
+						layoutManager.scrollToPositionWithOffset(position,
+								getFastScrollViewportHeight(layoutManager) - bounds.height());
+					} else {
+						// Measuring only the last item also allows reaching the end of an oversized post.
+						pendingFastScrollPosition = position;
+						pendingFastScrollAlignEnd = true;
+						pendingFastScrollItemCount = count;
+						layoutManager.scrollToPositionWithOffset(position, 0);
+					}
+				} else {
+					scrollToPosition(count - 1);
+				}
 			}
+		}
+	}
+
+	private int getFastScrollViewportHeight(LinearLayoutManager layoutManager) {
+		return Math.max(0, getHeight() - layoutManager.getPaddingTop() - layoutManager.getPaddingBottom());
+	}
+
+	private void applyPendingFastScrollFraction() {
+		int position = pendingFastScrollPosition;
+		pendingFastScrollPosition = NO_POSITION;
+		if (position < 0 || !isFastScrollerAvailable() || !(getLayoutManager() instanceof LinearLayoutManager)) return;
+		LinearLayoutManager layoutManager = (LinearLayoutManager) getLayoutManager();
+		if (pendingFastScrollItemCount != layoutManager.getItemCount() || position >= layoutManager.getItemCount()) return;
+		View target = layoutManager.findViewByPosition(position);
+		if (target != null) {
+			getDecoratedBoundsWithMargins(target, bounds);
+			if (bounds.height() > 0) layoutManager.scrollToPositionWithOffset(position, pendingFastScrollAlignEnd
+					? getFastScrollViewportHeight(layoutManager) - bounds.height()
+					: -(int) Math.round(pendingFastScrollFraction * bounds.height()));
 		}
 	}
 
@@ -418,6 +512,7 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 		float currentY = event.getY() - top;
 		boolean fastScrollerAvailable = isFastScrollerAvailable();
 		if (action == MotionEvent.ACTION_DOWN) {
+			pendingFastScrollPosition = NO_POSITION;
 			fastScrollingDown = false;
 			if (!fastScrollerAvailable) {
 				return false;
@@ -464,10 +559,11 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 			}
 			if (fastScrolling) {
 				boolean cancel = !fastScrollerAvailable || finish;
-				if (fastScrollerAvailable) {
+				if (fastScrollerAvailable && action != MotionEvent.ACTION_CANCEL) {
 					fastScrollingCurrentY = currentY;
 					scroll(calculateOffset());
 				}
+				if (action == MotionEvent.ACTION_CANCEL) pendingFastScrollPosition = NO_POSITION;
 				if (cancel) {
 					updateFastScroller(false, fastScrollerEnabled, fastScrollerAllowed, regularScrolling, false);
 				}
@@ -481,6 +577,10 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 	private static final int[] STATE_NORMAL = {android.R.attr.state_enabled};
 
 	private void onDrawFastScroller(Canvas canvas) {
+		// A disabled/unavailable scroller must not fade over the restored native scrollbar.
+		if (!isFastScrollerAvailable()) {
+			return;
+		}
 		long time = SystemClock.elapsedRealtime();
 		long passed = time - showFastScrollingStart;
 		boolean shouldInvalidate;
@@ -503,7 +603,9 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 			int translateX = (int) (maxWidth * (1f - stateValue) + 0.5f);
 			int top = getEdgeEffectShift(EdgeEffectHandler.Side.TOP);
 			int height = getHeight() - top - getEdgeEffectShift(EdgeEffectHandler.Side.BOTTOM);
-			float offset = fastScrolling ? calculateOffset() : getCurrentOffset();
+			FastScrollGeometry geometry = getFastScrollGeometry();
+			// Draw the laid-out position, not an optimistic finger position that snaps on release.
+			float offset = geometry != null ? geometry.offset() : getCurrentOffset();
 			int thumbHeight = thumbDrawable.getIntrinsicHeight();
 			int thumbY = (int) ((height - thumbHeight) * offset);
 
@@ -526,7 +628,7 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 			if (importantPostsMarksFastScrollBarDecoration != null &&
 					importantPostsMarksFastScrollBarDecoration.hasMarks()) {
 				importantPostsMarksFastScrollBarDecoration.draw(trackLeft, top, trackRight,
-						top + height - thumbHeight, canvas);
+						top + height - thumbHeight, canvas, geometry);
 			}
 			int thumbExtra = (maxWidth - thumbDrawable.getIntrinsicWidth()) / 2;
 			thumbDrawable.setState(fastScrolling ? STATE_PRESSED : STATE_NORMAL);

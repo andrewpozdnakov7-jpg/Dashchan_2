@@ -104,7 +104,18 @@ When the user explicitly requests a source ZIP for external compilation:
    verification.
 11. If verification fails, immediately mark that ZIP as invalid, explain why,
     create a replacement, and repeat the workflow.
-12. In the final response, clearly report whether verification passed.
+12. After the ZIP has been closed, its mandatory fast layout gate and SHA-256
+    calculation have passed, and any requested content verification is complete,
+    automatically delete the staging directory created for this bundle. For a
+    user-requested fast ZIP without content verification, clean up after the
+    mandatory fast gate and hash; do not start additional checks just to clean up.
+    Use a separate native PowerShell cleanup command with `-LiteralPath` after
+    validating the exact target as described below. Keep the ZIP itself.
+    If creation or verification fails, retain staging for recovery and report it;
+    do not silently delete the only usable snapshot.
+13. In the final response, clearly report whether verification passed and whether
+    staging cleanup completed. If cleanup fails, report the remaining directory
+    without invalidating an otherwise valid ZIP.
 
 #### Reliable first-pass implementation
 
@@ -134,13 +145,23 @@ large PowerShell command:
    create and delete a temporary wrapper file.
 7. Do not put `Remove-Item`, staging cleanup, archive creation, and verification
    into the same command. Long mixed commands are harder to audit and may be
-   rejected before the ZIP is created. Keep cleanup separate and perform it
-   only after the verified archive has been handed off and cleanup is actually
-   requested.
+   rejected before the ZIP is created. Keep cleanup separate. The user's standing
+   instruction authorizes automatic cleanup of the staging directory created by
+   the current successful bundle operation; no extra confirmation is required.
 8. After reporting the ZIP path and hash, compare every frozen ZIP entry with
    staging, compare every `Dashchan_2/` entry with the current
    `git ls-files` snapshot, scan for local paths and credential files, and
    assert that the latest feature files and strings are present.
+9. Once the applicable verification scope is finished, remove only the current
+   bundle's staging directory in a separate PowerShell command. Resolve and
+   validate its absolute path first: it must be an immediate child of the intended
+   `build-artifacts/source-bundles` directory, with the exact expected name
+   `.staging-<bundle-name>`. Reject a mismatched path/name or any reparse point in
+   the target tree. Use native PowerShell `Remove-Item -LiteralPath` with explicit
+   recursion and stop-on-error behavior; never hand computed paths to another
+   shell. Do not delete the source checkout, source-bundles parent, ZIPs, helper
+   files, or staging directories belonging to earlier operations. Cleaning up
+   old staging directories is a separate task requiring explicit user scope.
 
 Creating this source-only ZIP does not authorize Gradle, compilation, APK/AAB
 packaging, installation, publication, or upload.

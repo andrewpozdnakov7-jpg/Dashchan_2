@@ -24,7 +24,12 @@ public final class PostingCaptchaController implements ReadCaptchaTask.Callback 
 		void showLoading();
 		void showCaptcha(ReadCaptchaTask.CaptchaState state, ChanConfiguration.Captcha.Input input,
 				Bitmap image, boolean large, boolean blackAndWhite);
+		default void showCaptcha(ReadCaptchaTask.CaptchaState state, ChanConfiguration.Captcha.Input input,
+				Bitmap image, boolean large, boolean blackAndWhite, boolean answerSaved) {
+			showCaptcha(state, input, image, large, blackAndWhite);
+		}
 		void setInput(String text);
+		default void setPresentationRestoring(boolean restoring) {}
 		void showError(ErrorItem errorItem);
 		void updatePostingConfigurationIfNeeded();
 	}
@@ -84,6 +89,13 @@ public final class PostingCaptchaController implements ReadCaptchaTask.Callback 
 
 	boolean restoreDraft(DraftsStorage.CaptchaDraft draft, boolean savedState, ChanConfiguration.Captcha captcha) {
 		if (draft == null || host == null) return false;
+		Host restoringHost = host;
+		restoringHost.setPresentationRestoring(true);
+		try { return restoreDraftData(draft, savedState, captcha); }
+		finally { restoringHost.setPresentationRestoring(false); }
+	}
+
+	private boolean restoreDraftData(DraftsStorage.CaptchaDraft draft, boolean savedState, ChanConfiguration.Captcha captcha) {
 		if (savedState) {
 			if (draft.captchaState == null) return false;
 			captchaLoadTime = draft.loadTime;
@@ -176,7 +188,16 @@ public final class PostingCaptchaController implements ReadCaptchaTask.Callback 
 			if (validity == null) validity = captcha.validity;
 		}
 		loadedCaptchaInput = input; loadedCaptchaValidity = validity;
-		host.showCaptcha(state, input, image, large, blackAndWhite);
+		host.showCaptcha(state, input, image, large, blackAndWhite, hasSavedAnswer(state, data));
 		host.updateSendButtonState();
+	}
+
+	static boolean hasSavedAnswer(ReadCaptchaTask.CaptchaState state, ChanPerformer.CaptchaData data) {
+		// SKIP also means "not required". Only actual solution data is a solved challenge.
+		// PASS is authorization and must keep its existing presentation, not celebrate a solution.
+		return state == ReadCaptchaTask.CaptchaState.SKIP && data != null
+				&& (!chan.util.StringUtils.isEmpty(data.get(ReadCaptchaTask.RECAPTCHA_SKIP_RESPONSE))
+						|| !chan.util.StringUtils.isEmpty(data.get(ChanPerformer.CaptchaData.CHALLENGE))
+						|| !chan.util.StringUtils.isEmpty(data.get(ChanPerformer.CaptchaData.INPUT)));
 	}
 }
