@@ -179,8 +179,9 @@ public class InterfaceFragment extends PreferenceFragment {
 				R.string.display_post_icons, R.string.display_post_icons__summary);
 
 		addHeader(R.string.submission_form);
-		addCheck(true, Preferences.KEY_HIDE_PERSONAL_DATA,
-				Preferences.DEFAULT_HIDE_PERSONAL_DATA, R.string.hide_personal_data_block, 0);
+		addButton(R.string.posting_appearance, R.string.posting_appearance_summary)
+				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
+						.pushFragment(new PostingAppearanceFragment()));
 		addCheck(true, Preferences.KEY_HUGE_CAPTCHA, Preferences.DEFAULT_HUGE_CAPTCHA,
 				R.string.huge_captcha, 0);
 	}

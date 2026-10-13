@@ -1366,6 +1366,46 @@ public class Preferences {
 		return PREFERENCES.getBoolean(KEY_HIDE_PERSONAL_DATA, DEFAULT_HIDE_PERSONAL_DATA);
 	}
 
+	public static final String KEY_POSTING_EDITOR_HEIGHT = "posting_editor_height";
+	public static final String KEY_POSTING_EDITOR_LINES = "posting_editor_lines";
+	public static final String KEY_POSTING_HIDE_NAME = "posting_hide_name";
+	public static final String KEY_POSTING_HIDE_EMAIL = "posting_hide_email";
+	public static final String KEY_POSTING_HIDE_PASSWORD = "posting_hide_password";
+	public static final boolean DEFAULT_POSTING_HIDE_PASSWORD = true;
+	public static final String KEY_POSTING_HIDE_SUBJECT = "posting_hide_subject";
+
+	public static boolean isPostingNameHidden() {
+		// Preserve the old combined choice until the user sets the independent option.
+		return PREFERENCES.getBoolean(KEY_POSTING_HIDE_NAME, isHidePersonalData());
+	}
+
+	public static boolean isPostingEmailHidden() {
+		return PREFERENCES.getBoolean(KEY_POSTING_HIDE_EMAIL, isHidePersonalData());
+	}
+
+	public static boolean isPostingPasswordHidden() {
+		return PREFERENCES.getBoolean(KEY_POSTING_HIDE_PASSWORD, DEFAULT_POSTING_HIDE_PASSWORD);
+	}
+
+	public static com.mishiranu.dashchan.ui.posting.EditorHeightPolicy.Mode getPostingEditorHeightMode() {
+		String value = PREFERENCES.getString(KEY_POSTING_EDITOR_HEIGHT, "automatic");
+		switch (value) {
+			case "compact": return com.mishiranu.dashchan.ui.posting.EditorHeightPolicy.Mode.COMPACT;
+			case "expanded": return com.mishiranu.dashchan.ui.posting.EditorHeightPolicy.Mode.EXPANDED;
+			case "fixed": return com.mishiranu.dashchan.ui.posting.EditorHeightPolicy.Mode.FIXED;
+			default: return com.mishiranu.dashchan.ui.posting.EditorHeightPolicy.Mode.AUTOMATIC;
+		}
+	}
+
+	public static int getPostingEditorFixedLines() {
+		return com.mishiranu.dashchan.ui.posting.EditorHeightPolicy.clampLines(PREFERENCES.getInt(
+				KEY_POSTING_EDITOR_LINES, com.mishiranu.dashchan.ui.posting.EditorHeightPolicy.DEFAULT_LINES));
+	}
+
+	public static boolean isPostingSubjectHidden() {
+		return PREFERENCES.getBoolean(KEY_POSTING_HIDE_SUBJECT, false);
+	}
+
 	public enum HighlightUnreadMode {
 		AUTOMATICALLY("automatically", R.string.hide_eventually__imperfective),
 		MANUALLY("manually", R.string.hide_on_tap__imperfective),
@@ -2265,6 +2305,8 @@ public class Preferences {
 	public static final boolean DEFAULT_NEW_PHOTO_EDITOR = true;
 	public static final String KEY_NEW_INTERFACE_MOTION = "experimental_new_interface_motion";
 	public static final boolean DEFAULT_NEW_INTERFACE_MOTION = false;
+	public static final String KEY_NEW_POSTING_FORM = "experimental_new_posting_form";
+	public static final boolean DEFAULT_NEW_POSTING_FORM = false;
 	public enum ThreadToolbarAction {
 		BACK("back", R.string.thread_toolbar_back),
 		THREAD_LIST("thread_list", R.string.thread_toolbar_list),
@@ -2320,6 +2362,11 @@ public class Preferences {
 	public static boolean isNewInterfaceMotionEnabled() {
 		return BuildConfig.ENABLE_EXPERIMENTAL_INTERFACE_MOTION &&
 				PREFERENCES.getBoolean(KEY_NEW_INTERFACE_MOTION, DEFAULT_NEW_INTERFACE_MOTION);
+	}
+
+	public static boolean isNewPostingFormEnabled() {
+		return isNewInterfaceMotionEnabled()
+				&& PREFERENCES.getBoolean(KEY_NEW_POSTING_FORM, DEFAULT_NEW_POSTING_FORM);
 	}
 
 	public static String getPipDiagnosticMode() {

@@ -480,10 +480,16 @@ public abstract class PreferenceFragment extends ContentFragment {
 		private class ViewHolder extends RecyclerView.ViewHolder
 				implements ListViewUtils.ClickCallback<Void, ViewHolder> {
 			private final Preference.ViewHolder viewHolder;
+			private final View textContainer;
+			private final int normalTextPaddingTop;
 
 			public ViewHolder(View itemView, Preference.ViewHolder viewHolder) {
 				super(itemView);
 				this.viewHolder = viewHolder;
+				Object tag = viewHolder.view.getTag();
+				textContainer = tag instanceof ViewFactory.TwoLinesViewHolder
+						? (View) ((ViewFactory.TwoLinesViewHolder) tag).text1.getParent() : null;
+				normalTextPaddingTop = textContainer != null ? textContainer.getPaddingTop() : 0;
 				ListViewUtils.bind(this, false, null, this);
 				if (itemView.getBackground() == null) {
 					ViewUtils.setSelectableItemBackground(itemView);
@@ -529,6 +535,17 @@ public abstract class PreferenceFragment extends ContentFragment {
 				InterfaceAppearance.row(holder.viewHolder.view, holder.viewHolder.title, holder.viewHolder.summary,
 						type == Preference.ViewType.HEADER);
 			}
+			if (holder.textContainer != null) {
+				boolean afterHeader = position > 0
+						&& preferences.get(position - 1).getViewType() == Preference.ViewType.HEADER;
+				int top = afterHeader ? (int) (6f * ResourceUtils.obtainDensity(holder.textContainer) + 0.5f)
+						: holder.normalTextPaddingTop;
+				// Restore normal padding on reuse; only the first row after a section label is compact.
+				if (holder.textContainer.getPaddingTop() != top) {
+					holder.textContainer.setPaddingRelative(holder.textContainer.getPaddingStart(), top,
+							holder.textContainer.getPaddingEnd(), holder.textContainer.getPaddingBottom());
+				}
+			}
 			holder.itemView.setOnLongClickListener(preference.hasLongClickListener()
 					? view -> preference.performLongClick() : null);
 		}
@@ -549,6 +566,11 @@ public abstract class PreferenceFragment extends ContentFragment {
 		public ViewHolder createViewHolder(ViewGroup parent) {
 			FrameLayout layout = new FrameLayout(parent.getContext());
 			TextView header = ViewFactory.makeListTextHeader(layout);
+			float density = ResourceUtils.obtainDensity(parent);
+			// Compact section labels, without shrinking selectable rows or clipping enlarged text.
+			header.setMinHeight((int) (36f * density));
+			header.setPadding(header.getPaddingLeft(), (int) (6f * density),
+					header.getPaddingRight(), (int) (6f * density));
 			layout.addView(header);
 			layout.setLayoutParams(new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
 					ViewGroup.LayoutParams.WRAP_CONTENT));

@@ -28,6 +28,7 @@ final class MediaPreloader {
 	private ConnectivityManager.NetworkCallback networkCallback;
 	private boolean resumed;
 	private int generation;
+	private Runnable onVideoCached;
 
 	private static final class Entry {
 		final Uri uri;
@@ -53,6 +54,8 @@ final class MediaPreloader {
 		this.resumed = resumed;
 		if (!resumed) stop();
 	}
+
+	void setOnVideoCached(Runnable callback) { onVideoCached = callback; }
 
 	void stop() {
 		generation++;
@@ -152,6 +155,7 @@ final class MediaPreloader {
 						if (generation != expectedGeneration || currentEntry != expectedEntry) return;
 						task = null;
 						currentEntry = null;
+						if (!expectedEntry.image && onVideoCached != null) onVideoCached.run();
 						next();
 					});
 			task.execute(EXECUTOR);

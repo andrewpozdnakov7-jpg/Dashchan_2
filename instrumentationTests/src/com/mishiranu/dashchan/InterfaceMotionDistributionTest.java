@@ -51,7 +51,7 @@ public class InterfaceMotionDistributionTest {
 			Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
 			int matches = 0;
 			for (SettingsSearchIndex.Entry entry : SettingsSearchIndex.create(context)) {
-				if (context.getString(R.string.new_interface_motion).equals(entry.getTitle())) matches++;
+				if (context.getString(R.string.material3_enable_design).equals(entry.getTitle())) matches++;
 			}
 			assertEquals(BuildConfig.ENABLE_EXPERIMENTAL_INTERFACE_MOTION ? 1 : 0, matches);
 		});

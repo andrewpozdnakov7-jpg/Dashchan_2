@@ -1,0 +1,5 @@
+Added a new experimental Material 3-style posting form. Enable it in Settings → Experimental features → Material 3 interface: turn on the new interface and the new posting form.
+Improved video startup and paging: a prepared startup frame replaces the site's thumbnail when available. Expanded the frame cache for returning to recently watched videos.
+Fixed duplicate thread scrollbars and abrupt changes in scrollbar position.
+Fixed a crash when opening replies consecutively. Closing a nested reply no longer replays the animation of the underlying dialog.
+Improved the readability of image and video menus, spacing, and the appearance of settings and dialogs.

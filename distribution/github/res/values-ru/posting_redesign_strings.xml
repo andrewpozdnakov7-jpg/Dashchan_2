@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="posting_captcha_label">Капча</string>
+    <string name="posting_captcha_done">Готово</string>
+    <string name="posting_captcha_retry">Повторить</string>
+    <string name="posting_format_bold">Жирный</string>
+    <string name="posting_format_italic">Курсив</string>
+    <string name="posting_format_underline">Подчёркивание</string>
+    <string name="posting_format_overline">Надчёркивание</string>
+    <string name="posting_format_strike">Зачёркивание</string>
+    <string name="posting_format_code">Код</string>
+    <string name="posting_format_ascii">ASCII-арт</string>
+    <string name="posting_format_heading">Заголовок</string>
+    <string name="posting_format_subscript">Подстрочный текст</string>
+    <string name="posting_format_superscript">Надстрочный текст</string>
+    <string name="posting_format_spoiler">Спойлер</string>
+    <string name="posting_format_quote">Цитата</string>
+    <string name="posting_format_more">Дополнительное форматирование</string>
+    <string name="posting_captcha_loading">Загрузка капчи</string>
+    <string name="posting_captcha_ready_description">%1$s. Нажмите для обновления</string>
+</resources>

@@ -9,6 +9,7 @@ import android.text.InputFilter;
 import android.text.InputType;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.LinearLayout;
 import android.widget.SeekBar;
 import android.widget.Switch;
 import androidx.core.graphics.ColorUtils;
@@ -49,6 +50,53 @@ public class InterfaceAppearanceTest {
 			});
 			view.setThumb(new ColorDrawable(Color.BLUE)); state.restore(view);
 			assertEquals(1000, view.getMax()); assertEquals(750, view.getProgress()); assertEquals(0, calls[0]);
+		});
+	}
+	@Test public void borderlessPostingColorsKeepFillDistinctAndTextReadable() {
+		int[] colors = {Color.WHITE, Color.BLACK, Color.YELLOW, Color.RED, Color.GREEN, Color.BLUE, 0xffeeeeee, 0xff242424};
+		for (int window : colors) for (int accent : colors) {
+			int background = InterfaceAppearance.postingBackground(window);
+			int fill = InterfaceAppearance.lighterPostingFill(ColorUtils.blendARGB(background, Color.WHITE,
+					ColorUtils.calculateLuminance(background) < .5 ? .10f : .80f), background);
+			int focused = InterfaceAppearance.lighterPostingFill(ColorUtils.blendARGB(fill, accent, .06f), background);
+			int error = InterfaceAppearance.lighterPostingFill(ColorUtils.blendARGB(fill, Color.RED, .08f), background);
+			for (int color : new int[] {fill, focused, error}) {
+				assertTrue(ColorUtils.calculateLuminance(color) > ColorUtils.calculateLuminance(background));
+				assertTrue(ColorUtils.calculateContrast(color, background) >= 1.08);
+			}
+			for (int text : colors) {
+				assertTrue(ColorUtils.calculateContrast(InterfaceAppearance.contrasting(text, fill, 4.5), fill) >= 4.5);
+				assertTrue(ColorUtils.calculateContrast(InterfaceAppearance.contrasting(text, focused, 4.5), focused) >= 4.5);
+				assertTrue(ColorUtils.calculateContrast(InterfaceAppearance.contrasting(text, error, 4.5), error) >= 4.5);
+			}
+		}
+	}
+	@Test public void restoringPostingFormKeepsTheOriginalLocalBackdropAndLatestBounds() {
+		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+			LinearLayout view = new LinearLayout(context()); ColorDrawable original = new ColorDrawable(Color.WHITE);
+			view.setBackground(original); view.setPadding(3, 4, 5, 6);
+			InterfaceAppearance.State state = new InterfaceAppearance.State(view); state.role = InterfaceAppearance.Role.POSTING_FORM;
+			view.setBackground(new ColorDrawable(Color.GRAY)); view.setLayoutParams(new LinearLayout.LayoutParams(200, 300));
+			state.restore(view);
+			assertSame(original, view.getBackground()); assertEquals(Color.WHITE, original.getColor());
+			assertEquals(200, view.getLayoutParams().width); assertEquals(300, view.getLayoutParams().height);
+			assertEquals(3, view.getPaddingLeft()); assertEquals(4, view.getPaddingTop()); assertEquals(5, view.getPaddingRight()); assertEquals(6, view.getPaddingBottom());
+		});
+	}
+	@Test public void restoringPostingFieldRestoresOnlyItsSpacingWithoutRollingBackEditorBounds() {
+		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+			EditText view = new EditText(context());
+			LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(120, 180);
+			params.setMargins(3, 4, 5, 6); view.setLayoutParams(params);
+			InterfaceAppearance.State state = new InterfaceAppearance.State(view);
+			state.role = InterfaceAppearance.Role.POSTING_FIELD;
+			view.setText("latest draft"); view.setSelection(3); view.setMinLines(7); view.setMaxLines(11);
+			params.width = 200; params.height = 300; params.setMargins(9, 10, 11, 14);
+			state.restore(view);
+			assertSame(params, view.getLayoutParams()); assertEquals(200, params.width); assertEquals(300, params.height);
+			assertEquals(9, params.leftMargin); assertEquals(10, params.topMargin); assertEquals(11, params.rightMargin);
+			assertEquals(6, params.bottomMargin); assertEquals(7, view.getMinLines()); assertEquals(11, view.getMaxLines());
+			assertEquals("latest draft", view.getText().toString()); assertEquals(3, view.getSelectionStart());
 		});
 	}
 	@Test public void restoringSwitchDoesNotChangeTheCheckedValueOrFireAChange() {

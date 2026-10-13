@@ -534,7 +534,9 @@ public class ListUnit implements ActionMode.Callback {
 		GalleryInstance.Callback callback = GalleryInstance.getCallback(provider);
 		Context context = callback.getWindow().getContext();
 		Chan chan = Chan.get(chanName);
-		DialogMenu dialogMenu = new DialogMenu(context);
+		// Use the same application dialog theme as attachments in the thread and opened files.
+		// Keep the gallery window context for the existing clipboard/share actions below.
+		DialogMenu dialogMenu = new DialogMenu(provider.getContext());
 		dialogMenu.setTitle(!StringUtils.isEmpty(galleryItem.originalName)
 				? galleryItem.originalName : galleryItem.getFileName(chan));
 		dialogMenu.add(R.string.download_file, () -> callback.downloadGalleryItem(galleryItem));

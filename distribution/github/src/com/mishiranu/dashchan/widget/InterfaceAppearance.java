@@ -13,6 +13,7 @@ import android.graphics.Path;
 import android.graphics.PixelFormat;
 import android.graphics.Rect;
 import android.graphics.drawable.ClipDrawable;
+import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.LayerDrawable;
@@ -41,7 +42,7 @@ import java.util.WeakHashMap;
 /** Explicit component roles. Does not replace widgets, listeners, data or the application's theme. */
 public final class InterfaceAppearance {
 	private InterfaceAppearance() {}
-	enum Role {ROW, HEADER, TEXT, SECONDARY, ACTION, TEXT_ACTION, FIELD, CHECK, SWITCH, SLIDER, ICON, AUDIO_TITLE}
+	enum Role {ROW, HEADER, TEXT, SECONDARY, ACTION, TEXT_ACTION, FIELD, POSTING_FORM, POSTING_FIELD, CHECK, SWITCH, SLIDER, ICON, AUDIO_TITLE}
 	private static final WeakHashMap<Context, Palette> PALETTES = new WeakHashMap<>();
 	public static boolean isEnabled(Context context) {
 		return InterfaceMotion.isEnabled() && supported(context);
@@ -65,11 +66,26 @@ public final class InterfaceAppearance {
 		}
 		return target;
 	}
+	static int postingBackground(int window) {
+		// Leave room for a lighter field even in nearly white custom themes.
+		return ColorUtils.calculateLuminance(window) > .9 ? ColorUtils.blendARGB(window, Color.BLACK, .04f) : window;
+	}
+	static int lighterPostingFill(int requested, int background) {
+		int fill = opaque(requested, background);
+		double backgroundLuminance = ColorUtils.calculateLuminance(background);
+		// A gentle surface distinction, not the text accessibility contrast threshold.
+		for (int i = 0; i <= 20; i++) {
+			int candidate = ColorUtils.blendARGB(fill, Color.WHITE, i / 20f);
+			if (ColorUtils.calculateLuminance(candidate) > backgroundLuminance
+					&& ColorUtils.calculateContrast(candidate, background) >= 1.08) return candidate;
+		}
+		return Color.WHITE;
+	}
 	private static final class Palette {
-		final ThemeEngine.Theme theme; final int surface, text, secondary, accent, onAccent, outline, tonal, error;
+		final ThemeEngine.Theme theme; final int window, surface, text, secondary, accent, onAccent, outline, tonal, error;
 		Palette(Context context, ThemeEngine.Theme theme) {
 			this.theme = theme;
-			int window = opaque(theme.window, theme.base == ThemeEngine.Theme.Base.LIGHT ? Color.WHITE : Color.BLACK);
+			window = opaque(theme.window, theme.base == ThemeEngine.Theme.Base.LIGHT ? Color.WHITE : Color.BLACK);
 			surface = opaque(theme.card, window);
 			text = contrasting(ResourceUtils.getColor(context, android.R.attr.textColorPrimary), surface, 4.5);
 			secondary = contrasting(ColorUtils.blendARGB(surface, text, .72f), surface, 4.5);
@@ -88,6 +104,19 @@ public final class InterfaceAppearance {
 	private static int dp(View view, float amount) { return Math.round(ResourceUtils.obtainDensity(view) * amount); }
 	private static ColorStateList enabled(int color, int surface) {
 		return new ColorStateList(new int[][] {{-android.R.attr.state_enabled}, {}}, new int[] {ColorUtils.blendARGB(surface, color, .38f), color});
+	}
+	private static ColorStateList fieldStates(int normal, int focused, int window) {
+		return new ColorStateList(new int[][] {{-android.R.attr.state_enabled}, {android.R.attr.state_focused}, {}},
+				new int[] {ColorUtils.blendARGB(window, normal, .38f), focused, normal});
+	}
+	private static void setBottomMargin(View view, int margin) {
+		if (view.getLayoutParams() instanceof ViewGroup.MarginLayoutParams) {
+			ViewGroup.MarginLayoutParams params = (ViewGroup.MarginLayoutParams) view.getLayoutParams();
+			if (params.bottomMargin != margin) {
+				params.bottomMargin = margin;
+				view.setLayoutParams(params);
+			}
+		}
 	}
 	private static GradientDrawable shape(View view, float radius, ColorStateList color) {
 		GradientDrawable drawable = new GradientDrawable(); drawable.setColor(color); drawable.setCornerRadius(dp(view, radius)); return drawable;
@@ -108,19 +137,25 @@ public final class InterfaceAppearance {
 	}
 	public static void action(Button view, boolean primary) { role(view, primary ? Role.ACTION : Role.TEXT_ACTION); }
 	public static void field(EditText view) { role(view, Role.FIELD); }
+	/** Local backdrop only; does not change the application's window or theme. */
+	public static void postingForm(View view) { role(view, Role.POSTING_FORM); }
+	/** Filled, borderless fields scoped to the real posting form and its offline preview. */
+	public static void postingField(EditText view) { role(view, Role.POSTING_FIELD); }
 	public static void check(CompoundButton view) { role(view, view instanceof Switch ? Role.SWITCH : Role.CHECK); }
 	public static void slider(SeekBar view) { role(view, Role.SLIDER); }
 	public static void icon(ImageView view) { role(view, Role.ICON); }
 	public static void secondary(TextView view) { role(view, Role.SECONDARY); }
 	public static void audioTitle(TextView view) { role(view, Role.AUDIO_TITLE); }
 	public static void fieldError(EditText view, boolean error) {
+		if (PostingFormAppearance.fieldError(view, error)) return;
 		Object tag = view.getTag(R.id.interface_appearance_state);
-		if (tag instanceof State && ((State) tag).role == Role.FIELD) {
+		if (tag instanceof State && (((State) tag).role == Role.FIELD || ((State) tag).role == Role.POSTING_FIELD)) {
 			State state = (State) tag; state.rendered = false; state.error = error; state.legacyError = error ? view.getBackground() : null;
 			if (isEnabled(view.getContext())) render(view, state);
 		}
 	}
 	public static void refreshTree(View view) {
+		if (view != null) PostingFormAppearance.refreshView(view);
 		if (view == null) return;
 		Object state = view.getTag(R.id.interface_appearance_state);
 		if (state instanceof State) render(view, (State) state);
@@ -176,7 +211,7 @@ public final class InterfaceAppearance {
 			}
 			case ROW: {
 				if (view instanceof TextView) ((TextView) view).setTextColor(enabled(p.text, p.surface));
-				view.setMinimumHeight(dp(view, 64));
+				// Keep the original row height; appearance must not enlarge menus or preferences.
 				ColorStateList fill = new ColorStateList(new int[][] {{android.R.attr.state_selected}, {android.R.attr.state_activated}, {}},
 						new int[] {p.tonal, p.tonal, Color.TRANSPARENT});
 				view.setBackgroundTintList(null); view.setBackground(ripple(view, shape(view, 12, fill), 12, p.text)); break;
@@ -201,6 +236,29 @@ public final class InterfaceAppearance {
 				edit.setBackground(background); edit.setMinimumHeight(Math.max(state.minimumHeight, dp(view, 48)));
 				edit.setPaddingRelative(dp(view, 12), dp(view, 10), dp(view, 12), dp(view, 10));
 				edit.setTextColor(enabled(contrasting(p.text, p.tonal, 4.5), p.surface)); edit.setHintTextColor(enabled(contrasting(p.secondary, p.tonal, 4.5), p.surface));
+				break;
+			}
+			case POSTING_FORM: {
+				view.setBackgroundTintList(null); view.setBackground(new ColorDrawable(postingBackground(p.window)));
+				return; // The container itself must not receive control touch feedback.
+			}
+			case POSTING_FIELD: {
+				EditText edit = (EditText) view;
+				int background = postingBackground(p.window);
+				// Both light and dark themes use a lighter writing surface, without an outline.
+				int fill = lighterPostingFill(ColorUtils.blendARGB(background, Color.WHITE,
+						ColorUtils.calculateLuminance(background) < .5 ? .10f : .80f), background);
+				if (state.error) fill = lighterPostingFill(ColorUtils.blendARGB(fill, p.error, .08f), background);
+				int focused = lighterPostingFill(ColorUtils.blendARGB(fill, state.error ? p.error : p.accent, .06f), background);
+				edit.setBackgroundTintList(null);
+				edit.setBackground(shape(view, 12, fieldStates(fill, focused, background)));
+				edit.setMinimumHeight(Math.max(state.minimumHeight, dp(view, 48)));
+				edit.setPaddingRelative(dp(view, 12), dp(view, 10), dp(view, 12), dp(view, 10));
+				edit.setTextColor(fieldStates(contrasting(p.text, fill, 4.5), contrasting(p.text, focused, 4.5), background));
+				int hint = state.error ? p.error : p.secondary;
+				edit.setHintTextColor(fieldStates(contrasting(hint, fill, 4.5), contrasting(hint, focused, 4.5), background));
+				setBottomMargin(view, Math.max(state.bottomMargin, dp(view, 8)));
+				// Keep the themed cursor, text size, editor bounds, selection and IME behavior.
 				break;
 			}
 			case CHECK: {
@@ -232,13 +290,15 @@ public final class InterfaceAppearance {
 	static final class State {
 		Role role, appliedRole; boolean error, rendered, applied, appliedError; Drawable legacyError; ThemeEngine.Theme appliedTheme;
 		final Drawable background; final ColorStateList backgroundTint; final StateListAnimator animator; final float elevation;
-		final int start, top, end, bottom, minimumHeight;
+		final int start, top, end, bottom, minimumHeight, bottomMargin;
 		final ColorStateList text, hint, imageTint, buttonTint, trackTint, thumbTint, progressTint, progressBackgroundTint;
 		final TransformationMethod transformation; final float textSize; final int maxLines;
 		final Drawable mark, track, thumb, progress; final int switchWidth, thumbOffset, minTrackHeight, maxTrackHeight; final boolean splitTrack;
 		State(View view) {
 			background = view.getBackground(); backgroundTint = view.getBackgroundTintList(); animator = view.getStateListAnimator(); elevation = view.getElevation();
 			start = view.getPaddingStart(); top = view.getPaddingTop(); end = view.getPaddingEnd(); bottom = view.getPaddingBottom(); minimumHeight = view.getMinimumHeight();
+			bottomMargin = view.getLayoutParams() instanceof ViewGroup.MarginLayoutParams
+					? ((ViewGroup.MarginLayoutParams) view.getLayoutParams()).bottomMargin : 0;
 			TextView t = view instanceof TextView ? (TextView) view : null; text = t != null ? t.getTextColors() : null; hint = t != null ? t.getHintTextColors() : null;
 			textSize = t != null ? t.getTextSize() : 0; transformation = t != null ? t.getTransformationMethod() : null; maxLines = t != null ? t.getMaxLines() : -1;
 			imageTint = view instanceof ImageView ? ((ImageView) view).getImageTintList() : null;
@@ -252,8 +312,9 @@ public final class InterfaceAppearance {
 			minTrackHeight = b != null ? b.getMinHeight() : 0; maxTrackHeight = b != null ? b.getMaxHeight() : 0;
 		}
 		void restore(View view) {
-			view.setBackground(role == Role.FIELD && error && legacyError != null ? legacyError : background); view.setBackgroundTintList(backgroundTint);
+			view.setBackground((role == Role.FIELD || role == Role.POSTING_FIELD) && error && legacyError != null ? legacyError : background); view.setBackgroundTintList(backgroundTint);
 			view.setPaddingRelative(start, top, end, bottom); view.setMinimumHeight(minimumHeight);
+			if (role == Role.POSTING_FIELD || appliedRole == Role.POSTING_FIELD) setBottomMargin(view, bottomMargin);
 			if (view instanceof TextView) {
 				TextView t = (TextView) view; t.setTextColor(text); if (hint != null) t.setHintTextColor(hint);
 				if (role == Role.ACTION || role == Role.TEXT_ACTION || role == Role.AUDIO_TITLE) {

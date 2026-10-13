@@ -100,9 +100,44 @@ public class DialogStackMotionTest {
 			Bitmap bitmap = Bitmap.createBitmap(10, 10, Bitmap.Config.ARGB_8888);
 			f.motion.leave(new DialogStackMotion.Snapshot(bitmap, new RectF(0, 0, 80, 80)), f.incoming, false, null);
 			assertEquals(.8f, f.incoming.getAlpha(), 0f);
-			assertEquals(0f, f.body.getAlpha(), 0f);
+			assertEquals(.6f, f.body.getAlpha(), 0f);
+			assertEquals(.95f, f.body.getScaleX(), 0f);
+			assertEquals(.9f, f.body.getScaleY(), 0f);
+			assertEquals(3f, f.body.getTranslationY(), 0f);
+			assertNull(f.incoming.getTag(R.id.dialog_motion_owner));
+			assertNull(f.body.getTag(R.id.dialog_motion_owner));
+			assertEquals(View.IMPORTANT_FOR_ACCESSIBILITY_YES, f.root.getImportantForAccessibility());
 			assertEquals(dim, ((android.graphics.drawable.ColorDrawable) f.content.getBackground()).getColor());
 			f.motion.finish(); assertTrue(bitmap.isRecycled()); f.assertReleased();
+		});
+	}
+
+	@Test public void nestedExitAllowsTheNextGestureAndReleasesItsSnapshotOnDown() {
+		fixture(f -> {
+			f.motion.leave(f.snapshot(), f.incoming, false, null);
+			assertFalse(f.bitmap.isRecycled());
+			MotionEvent move = MotionEvent.obtain(0, 0, MotionEvent.ACTION_MOVE, 0, 0, 0);
+			MotionEvent down = MotionEvent.obtain(0, 1, MotionEvent.ACTION_DOWN, 0, 0, 0);
+			try {
+				assertFalse(DialogStackMotion.blocks(f.root, move));
+				assertFalse(f.bitmap.isRecycled());
+				assertFalse(DialogStackMotion.blocks(f.root, down));
+				f.assertReleased();
+			} finally { move.recycle(); down.recycle(); }
+		});
+	}
+
+	@Test public void nestedExitDoesNotTakeOwnershipOfTheLowerCardsTag() {
+		fixture(f -> {
+			Object owner = new Object();
+			f.incoming.setTag(R.id.dialog_motion_owner, owner);
+			f.motion.leave(f.snapshot(), f.incoming, false, null);
+			assertSame(owner, f.incoming.getTag(R.id.dialog_motion_owner));
+			assertEquals(.6f, f.body.getAlpha(), 0f);
+			f.motion.finish();
+			assertSame(owner, f.incoming.getTag(R.id.dialog_motion_owner));
+			f.incoming.setTag(R.id.dialog_motion_owner, null);
+			f.assertReleased();
 		});
 	}
 

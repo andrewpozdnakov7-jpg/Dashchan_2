@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="material3_design_settings">Новый интерфейс Material 3</string>
+    <string name="material3_design_settings_summary">Экспериментальное оформление, анимации и новая форма отправки сообщений</string>
+    <string name="material3_enable_design">Включить новый интерфейс</string>
+    <string name="material3_posting_form">Новая форма отправки сообщений</string>
+    <string name="material3_posting_form_summary">Новая компоновка полей, форматирование внутри редактора и обновлённые кнопки. Требуется новый интерфейс. Применяется при следующем открытии формы.</string>
+</resources>

@@ -1,6 +1,7 @@
 package com.mishiranu.dashchan.ui;
 
 import com.mishiranu.dashchan.widget.ContentStateMotion;
+import com.mishiranu.dashchan.widget.PostingFormAppearance;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.text.InputFilter;
@@ -39,6 +40,10 @@ public class CaptchaForm implements View.OnClickListener, View.OnLongClickListen
 
 	private ChanConfiguration.Captcha.Input captchaInput;
 	private CaptchaViewType presentedCaptchaType;
+	private ReadCaptchaTask.CaptchaState presentedCaptchaState;
+	private boolean answerSaved;
+	private boolean restoringInput;
+	private boolean presentationRestoring;
 
 	public interface Callback {
 		void onRefreshCaptcha(boolean forceRefresh);
@@ -82,6 +87,19 @@ public class CaptchaForm implements View.OnClickListener, View.OnLongClickListen
 		if (inputParentView != null) {
 			inputParentView.setOnClickListener(this);
 		}
+		if (PostingFormAppearance.isEnabled()) inputView.addTextChangedListener(new android.text.TextWatcher() {
+			@Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+			@Override public void onTextChanged(CharSequence s, int start, int before, int count) { publishPresentation(); }
+			@Override public void afterTextChanged(android.text.Editable s) {}
+		});
+	}
+
+	/** Presentation metadata only. Do not infer successful verification from the painted button. */
+	public void setPresentationRestoring(boolean restoring) { presentationRestoring = restoring; }
+	private void publishPresentation() {
+		boolean entered = presentedCaptchaType == CaptchaViewType.IMAGE && inputView.length() > 0;
+		PostingFormAppearance.captchaStateChanged(blockParentView, presentedCaptchaType, presentedCaptchaState,
+				answerSaved || entered, restoringInput || presentationRestoring);
 	}
 
 	private void updateCaptchaInput(ChanConfiguration.Captcha.Input input) {
@@ -146,6 +164,12 @@ public class CaptchaForm implements View.OnClickListener, View.OnLongClickListen
 
 	public void showCaptcha(ReadCaptchaTask.CaptchaState captchaState, ChanConfiguration.Captcha.Input input,
 			Bitmap image, boolean large, boolean invertColors) {
+		showCaptcha(captchaState, input, image, large, invertColors, false);
+	}
+	public void showCaptcha(ReadCaptchaTask.CaptchaState captchaState, ChanConfiguration.Captcha.Input input,
+			Bitmap image, boolean large, boolean invertColors, boolean answerSaved) {
+		this.answerSaved = answerSaved;
+		presentedCaptchaState = captchaState;
 		switch (captchaState) {
 			case CAPTCHA: {
 				imageView.setImageBitmap(image);
@@ -178,6 +202,7 @@ public class CaptchaForm implements View.OnClickListener, View.OnLongClickListen
 	}
 
 	public void showError() {
+		answerSaved = false;
 		imageView.setImageResource(android.R.color.transparent);
 		skipTextView.setText(R.string.load_captcha);
 		cancelView.setVisibility(View.GONE);
@@ -185,6 +210,7 @@ public class CaptchaForm implements View.OnClickListener, View.OnLongClickListen
 	}
 
 	public void showLoading() {
+		answerSaved = false;
 		inputView.setText(null);
 		switchToCaptchaView(CaptchaViewType.LOADING, null, false);
 	}
@@ -247,12 +273,14 @@ public class CaptchaForm implements View.OnClickListener, View.OnLongClickListen
 			}
 		}
 		presentedCaptchaType = captchaViewType;
+		publishPresentation();
 		if (changed) ContentStateMotion.reveal(captchaViewType == CaptchaViewType.LOADING ? loadingView
 				: captchaViewType == CaptchaViewType.IMAGE ? imageView : skipBlockView);
 	}
 
 	public void setText(String text) {
-		inputView.setText(text);
+		restoringInput = true;
+		try { inputView.setText(text); publishPresentation(); } finally { restoringInput = false; }
 	}
 
 	public String getInput() {

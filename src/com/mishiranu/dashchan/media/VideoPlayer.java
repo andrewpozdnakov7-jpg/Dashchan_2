@@ -17,6 +17,7 @@ import android.view.Surface;
 import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewTreeObserver;
 import chan.content.ChanManager;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.BuildConfig;
@@ -36,12 +37,14 @@ import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.concurrent.Semaphore;
+import java.util.function.BooleanSupplier;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
@@ -361,8 +364,16 @@ public class VideoPlayer implements AutoCloseable {
 	}
 
 	public void init(File file, RangeCallback rangeCallback) throws IOException {
+		init(file, rangeCallback, true);
+	}
+
+	private void init(File file, RangeCallback rangeCallback, boolean foreground) throws IOException {
+		init(file, rangeCallback, foreground, Preferences.isHardwareVideoAcceleration());
+	}
+
+	private void init(File file, RangeCallback rangeCallback, boolean foreground, boolean hardware) throws IOException {
 		int priority = Process.getThreadPriority(Process.myTid());
-		Process.setThreadPriority(Process.THREAD_PRIORITY_DISPLAY);
+		if (foreground) Process.setThreadPriority(Process.THREAD_PRIORITY_DISPLAY);
 		try {
 			SessionData initData = null;
 			synchronized (this) {
@@ -382,8 +393,7 @@ public class VideoPlayer implements AutoCloseable {
 					if (!audioEnabled) {
 						holder.setAudioEnabled(initPointer, false);
 					}
-					holder.setHardwareAcceleration(initPointer,
-							audioEnabled && Preferences.isHardwareVideoAcceleration());
+						holder.setHardwareAcceleration(initPointer, audioEnabled && hardware);
 				}
 			}
 			if (initData != null) {
@@ -406,7 +416,85 @@ public class VideoPlayer implements AutoCloseable {
 				}
 			}
 		} finally {
-			Process.setThreadPriority(priority);
+			if (foreground) Process.setThreadPriority(priority);
+		}
+	}
+
+	/** One paused, fully local decoder and its actual start frame. Never calls setPlaying(true). */
+	public static PreparedPlayback preparePlayback(File file, boolean seekAnyFrame, boolean hardware, long requestedPosition,
+			BooleanSupplier cancelled) throws IOException, InterruptedException {
+		if (!isLoaded() || cancelled.getAsBoolean() || !file.isFile()) return null;
+		VideoPlayer player = new VideoPlayer(null, seekAnyFrame);
+		VideoFramePreparation output = null;
+		Bitmap frame = null;
+		boolean success = false;
+		try {
+			player.init(file, null, false, hardware);
+			if (cancelled.getAsBoolean()) return null;
+			Point size = player.getDimensions();
+			// A speculative decoder must not multiply the working set of a very large video.
+			if (!VideoPreparationPolicy.dimensionsAllowed(size.x, size.y)) return null;
+			long duration = player.getDuration();
+			long position = requestedPosition > 0 && requestedPosition < duration ? requestedPosition : 0L;
+			output = new VideoFramePreparation(size.x, size.y);
+			long generation = player.setSurface(output.createSurface(), size.x, size.y);
+			if (generation == 0L || cancelled.getAsBoolean()) return null;
+			// Paused seek decodes and presents one frame without starting the audio clock.
+			player.setPosition(position);
+			frame = output.awaitFrame(cancelled);
+			if (frame == null || cancelled.getAsBoolean()) return null;
+			SurfaceTexture texture = output.takeTexture();
+			synchronized (player) {
+				player.deferredSurfaceTextures.add(new DeferredSurfaceTexture(generation, texture));
+				player.transferableSurfaceGeneration = generation;
+				player.surfaceTransferStartedMs = SystemClock.elapsedRealtime();
+			}
+			PreparedPlayback prepared = new PreparedPlayback(player, frame, position, generation);
+			success = true;
+			return prepared;
+		} finally {
+			// Stop the native producer before releasing an untransferred consumer.
+			try {
+				if (!success) { try { player.close(); } finally { if (frame != null) frame.recycle(); } }
+			} finally { if (output != null) output.close(); }
+		}
+	}
+
+	/** Ownership is either transferred once to the visible gallery or closed off the UI thread. */
+	public static final class PreparedPlayback implements AutoCloseable {
+		private VideoPlayer player;
+		private Bitmap frame;
+		public final long position;
+		private final long generation;
+		private PreparedPlayback(VideoPlayer player, Bitmap frame, long position, long generation) {
+			this.player = player; this.frame = frame; this.position = position; this.generation = generation;
+		}
+		public VideoPlayer getPlayer() { return player; }
+		public boolean isReady() {
+			VideoPlayer player = this.player;
+			if (player == null || frame == null || frame.isRecycled()) return false;
+			synchronized (player) {
+				return player.isInitialized() && !player.playing && !player.isSeekPending()
+						&& player.latestAppliedSurfaceGeneration == generation
+						&& player.transferableSurfaceGeneration == generation;
+			}
+		}
+		public VideoPlayer takePlayer(Listener listener) {
+			if (!isReady()) return null;
+			VideoPlayer result = player; player = null;
+			result.setListener(listener); return result;
+		}
+		public Bitmap takeFrame() { Bitmap result = frame; frame = null; return result; }
+		/** Independent page image; it must survive cancellation/transfer of this decoder owner. */
+		public Bitmap copyFrame() {
+			if (!isReady()) return null;
+			try { return frame.copy(Bitmap.Config.ARGB_8888, false); }
+			catch (RuntimeException | OutOfMemoryError e) { return null; }
+		}
+		@Override public void close() {
+			VideoPlayer player = this.player; this.player = null;
+			try { if (player != null) player.close(); }
+			finally { if (frame != null) { frame.recycle(); frame = null; } }
 		}
 	}
 
@@ -601,6 +689,11 @@ public class VideoPlayer implements AutoCloseable {
 		private SurfaceTexture playerSurfaceTexture;
 		private long playerSurfaceGeneration;
 		private int surfaceUpdates;
+		private VideoFrameReadiness frameReadiness;
+		private boolean firstFrameCommitted;
+		private FrameCommitProbe frameCommitProbe;
+		private int frameCommitSequence;
+		private int diagnosticCommitReports;
 		private long transferredSurfaceStartedMs = -1L;
 		private final Runnable recordSettledGeometry = () ->
 				VideoDiagnostics.recordViewGeometry("texture_layout_settled", this);
@@ -653,6 +746,7 @@ public class VideoPlayer implements AutoCloseable {
 			playerSurface = new Surface(surface);
 			playerSurfaceTexture = surface;
 			surfaceUpdates = 0;
+			resetFrameReadiness(surface, false);
 			VideoDiagnostics.surfaceAvailable(diagnosticsId);
 			VideoDiagnostics.recordUi("texture=" + diagnosticsId + " surface_available"
 					+ " surface_size=" + width + "x" + height
@@ -693,17 +787,32 @@ public class VideoPlayer implements AutoCloseable {
 		@Override
 		public void onSurfaceTextureUpdated(SurfaceTexture surface) {
 			surfaceUpdates++;
+			if (VideoDiagnostics.isExtendedRecording() && surfaceUpdates <= 8) {
+				VideoDiagnostics.recordUi("texture=" + diagnosticsId + " startup_texture_update schema=1"
+						+ " generation=" + playerSurfaceGeneration + " update=" + surfaceUpdates
+						+ " first_frame_committed=" + firstFrameCommitted + " probe_pending=" + (frameCommitProbe != null)
+						+ " shown=" + isShown() + " attached=" + isAttachedToWindow()
+						+ " hardware_rendering=" + isHardwareAccelerated()
+						+ " size=" + getWidth() + "x" + getHeight() + " alpha=" + getAlpha());
+			}
 			if (surfaceUpdates == 1 && transferredSurfaceStartedMs >= 0L) {
 				VideoDiagnostics.recordUi("surface_transfer_first_update generation=" + playerSurfaceGeneration
 						+ " elapsed_ms=" + (SystemClock.elapsedRealtime() - transferredSurfaceStartedMs));
 			}
 			VideoDiagnostics.surfaceUpdated(diagnosticsId);
-			VideoPlayer player = this.player.get();
-			if (player != null) {
-				if (surfaceUpdates == 1 && playerSurfaceGeneration > 0L) {
-					player.onSurfaceFrameRendered(playerSurfaceGeneration);
-				}
-				player.notifyVideoViewFrameUpdated();
+			// TextureView also issues this callback for layer preparation/resize. The render
+			// thread may not have latched a decoder buffer yet; never uncover the preview here.
+			scheduleFrameCommitProbe();
+			if (VideoDiagnostics.isExtendedRecording() && (surfaceUpdates == 1 || surfaceUpdates == 2
+					|| surfaceUpdates == 4 || surfaceUpdates == 8)) {
+				long sampledGeneration = playerSurfaceGeneration;
+				VideoFrameDiagnostics.recordSurface(surface, this, sampledGeneration, surfaceUpdates,
+						() -> {
+							VideoPlayer owner = player.get();
+							return isAttachedToWindow() && playerSurfaceTexture == surface
+									&& !surface.isReleased() && playerSurfaceGeneration == sampledGeneration
+									&& owner != null && owner.isVideoView(this);
+						});
 			}
 			if (surfaceUpdates == 1 || surfaceUpdates == 30 || surfaceUpdates % 120 == 0) {
 				VideoDiagnostics.recordViewGeometry("texture_frame", this);
@@ -713,15 +822,154 @@ public class VideoPlayer implements AutoCloseable {
 			}
 		}
 
+		private void resetFrameReadiness(SurfaceTexture surface, boolean retainedFrame) {
+			cancelFrameCommitProbe();
+			frameCommitSequence = 0;
+			diagnosticCommitReports = 0;
+			float[] transform = new float[16];
+			surface.getTransformMatrix(transform);
+			long timestamp = surface.getTimestamp();
+			frameReadiness = new VideoFrameReadiness(timestamp, transform, retainedFrame);
+			firstFrameCommitted = false;
+			if (VideoDiagnostics.isExtendedRecording()) {
+				VideoDiagnostics.recordUi("texture=" + diagnosticsId + " startup_buffer_baseline schema=1"
+						+ " timestamp_ns=" + timestamp + " retained_frame=" + retainedFrame
+						+ " sampling_transform=" + Arrays.toString(transform));
+			}
+		}
+
+		private void scheduleFrameCommitProbe() {
+			VideoPlayer owner = player.get();
+			if (frameCommitProbe != null || frameReadiness == null || playerSurfaceTexture == null
+					|| playerSurfaceGeneration == 0L || !isAttachedToWindow() || !isHardwareAccelerated()
+					|| owner == null || !owner.isVideoView(this)
+					|| firstFrameCommitted && owner.videoViewFrameCallback == null) return;
+			ViewTreeObserver observer = getViewTreeObserver();
+			if (!observer.isAlive()) return;
+			FrameCommitProbe probe = new FrameCommitProbe(observer);
+			frameCommitProbe = probe;
+			observer.registerFrameCommitCallback(probe);
+			if (probe.diagnostics) {
+				VideoDiagnostics.recordUi("texture=" + diagnosticsId + " startup_commit_registered schema=1"
+						+ " generation=" + probe.generation + " probe=" + probe.sequence + " updates=" + probe.updates);
+			}
+			// The update callback can arrive after this draw's commit callbacks were captured.
+			// Request a draw, not a timeout: even a paused one-frame video must complete the handoff.
+			postInvalidateOnAnimation();
+		}
+
+		private void cancelFrameCommitProbe() {
+			FrameCommitProbe probe = frameCommitProbe;
+			frameCommitProbe = null;
+			if (probe != null && probe.diagnostics) {
+				VideoDiagnostics.recordUi("texture=" + diagnosticsId + " startup_commit_cancelled schema=1"
+						+ " generation=" + probe.generation + " probe=" + probe.sequence);
+			}
+			if (probe != null && probe.observer.isAlive()) {
+				probe.observer.unregisterFrameCommitCallback(probe);
+			}
+		}
+
+		private final class FrameCommitProbe implements Runnable {
+			final ViewTreeObserver observer;
+			final SurfaceTexture surface = playerSurfaceTexture;
+			final long generation = playerSurfaceGeneration;
+			final VideoFrameReadiness readiness = frameReadiness;
+			final int updates = surfaceUpdates;
+			final int sequence = ++frameCommitSequence;
+			final long registeredAtMs = SystemClock.elapsedRealtime();
+			final boolean diagnostics;
+
+			FrameCommitProbe(ViewTreeObserver observer) {
+				this.observer = observer;
+				diagnostics = VideoDiagnostics.isExtendedRecording() && diagnosticCommitReports < 8;
+				if (diagnostics) diagnosticCommitReports++;
+			}
+
+			@Override public void run() {
+				// Sample at the commit boundary, before posting to the UI thread. Reading during
+				// onSurfaceTextureUpdated can observe the layer's previous, empty image.
+				boolean hasBuffer = false;
+				long timestamp = 0L;
+				float[] transform = null;
+				boolean sampled = false;
+				try {
+					if (!surface.isReleased()) {
+						transform = new float[16];
+						surface.getTransformMatrix(transform);
+						timestamp = surface.getTimestamp();
+						hasBuffer = readiness.hasBuffer(timestamp, transform);
+						sampled = true;
+					}
+				} catch (RuntimeException e) {
+					// A concurrent detach may abandon the surface before this already-submitted frame.
+					VideoDiagnostics.recordUi("texture_commit_unavailable error=" + e.getClass().getSimpleName());
+				}
+				long committedAtMs = SystemClock.elapsedRealtime();
+				if (diagnostics) {
+					VideoDiagnostics.recordUi("texture=" + diagnosticsId + " startup_commit_sample schema=1"
+							+ " generation=" + generation + " probe=" + sequence
+							+ " registered_updates=" + updates + " commit_latency_ms=" + (committedAtMs - registeredAtMs)
+							+ " sampled=" + sampled + " has_buffer=" + hasBuffer + " timestamp_ns=" + timestamp
+							+ " sampling_transform=" + Arrays.toString(transform));
+				}
+				boolean committedBuffer = hasBuffer;
+				post(() -> completeFrameCommit(this, committedBuffer, committedAtMs));
+			}
+		}
+
+		private void completeFrameCommit(FrameCommitProbe probe, boolean hasBuffer, long committedAtMs) {
+			if (probe.diagnostics) {
+				VideoDiagnostics.recordUi("texture=" + diagnosticsId + " startup_commit_ui_delivery schema=1"
+						+ " generation=" + probe.generation + " probe=" + probe.sequence
+						+ " ui_queue_delay_ms=" + (SystemClock.elapsedRealtime() - committedAtMs)
+						+ " pending_match=" + (frameCommitProbe == probe)
+						+ " surface_match=" + (playerSurfaceTexture == probe.surface)
+						+ " generation_match=" + (playerSurfaceGeneration == probe.generation)
+						+ " attached=" + isAttachedToWindow() + " has_buffer=" + hasBuffer);
+			}
+			if (frameCommitProbe != probe) return;
+			frameCommitProbe = null;
+			VideoPlayer owner = player.get();
+			if (!isAttachedToWindow() || playerSurfaceTexture != probe.surface
+					|| playerSurfaceGeneration != probe.generation || owner == null
+					|| !owner.isVideoView(this)) return;
+			if (!hasBuffer) {
+				if (surfaceUpdates <= 2) VideoDiagnostics.recordUi("texture=" + diagnosticsId
+						+ " surface_commit_waiting generation=" + probe.generation + " reason=empty_buffer");
+				// Coalesce updates that arrived while this probe was in flight. Otherwise wait
+				// for the producer's next update, without polling an empty surface every frame.
+				if (surfaceUpdates > probe.updates) scheduleFrameCommitProbe();
+				return;
+			}
+			synchronized (owner) {
+				if (!owner.isInitialized() || probe.generation != owner.latestSurfaceGeneration) return;
+				if (!firstFrameCommitted) {
+					firstFrameCommitted = true;
+					owner.onSurfaceFrameRendered(probe.generation);
+					VideoDiagnostics.recordUi("texture=" + diagnosticsId + " surface_buffer_committed"
+							+ " generation=" + probe.generation + " updates=" + surfaceUpdates);
+				}
+			}
+			if (probe.diagnostics) {
+				VideoDiagnostics.recordUi("texture=" + diagnosticsId + " startup_commit_accepted schema=1"
+						+ " generation=" + probe.generation + " probe=" + probe.sequence
+						+ " updates=" + surfaceUpdates + " callback_present=" + (owner.videoViewFrameCallback != null));
+			}
+			owner.notifyVideoViewFrameUpdated();
+		}
+
 		@Override
 		protected void onAttachedToWindow() {
 			super.onAttachedToWindow();
+			scheduleFrameCommitProbe();
 			VideoDiagnostics.recordUi("texture=" + diagnosticsId + " attached"
 					+ " visibility=" + getVisibility());
 		}
 
 		@Override
 		protected void onDetachedFromWindow() {
+			cancelFrameCommitProbe();
 			removeCallbacks(recordSettledGeometry);
 			VideoDiagnostics.recordUi("texture=" + diagnosticsId + " detached"
 					+ " updates=" + surfaceUpdates);
@@ -742,6 +990,7 @@ public class VideoPlayer implements AutoCloseable {
 				return false;
 			}
 			VideoPlayer player = this.player.get();
+			cancelFrameCommitProbe();
 			long generation = playerSurfaceGeneration;
 			playerSurface = null;
 			playerSurfaceTexture = null;
@@ -753,7 +1002,7 @@ public class VideoPlayer implements AutoCloseable {
 		}
 
 		public Bitmap getCurrentFrame() {
-			if (isAvailable() && surfaceUpdates > 0 && getWidth() > 0 && getHeight() > 0) {
+			if (isAvailable() && firstFrameCommitted && getWidth() > 0 && getHeight() > 0) {
 				try {
 					Bitmap bitmap = getBitmap();
 					if (bitmap != null) {
@@ -768,6 +1017,13 @@ public class VideoPlayer implements AutoCloseable {
 			}
 			return null;
 		}
+
+		Bitmap getCommittedPageFrame(int maxEdge) {
+			if (!isAvailable() || !firstFrameCommitted || getWidth() <= 0 || getHeight() <= 0 || maxEdge <= 0) return null;
+			float scale = Math.min(1f, (float) maxEdge / Math.max(getWidth(), getHeight()));
+			try { return getBitmap(Math.max(1, Math.round(getWidth() * scale)), Math.max(1, Math.round(getHeight() * scale))); }
+			catch (RuntimeException | OutOfMemoryError e) { return null; }
+		}
 	}
 
 	private View videoView;
@@ -775,6 +1031,14 @@ public class VideoPlayer implements AutoCloseable {
 
 	public void setVideoViewFrameCallback(Runnable callback) {
 		videoViewFrameCallback = callback;
+		if (callback != null && videoView instanceof PlayerTextureView) {
+			((PlayerTextureView) videoView).scheduleFrameCommitProbe();
+		}
+	}
+
+	public void clearVideoViewFrameCallback(Runnable expected) {
+		// A stale preview must not cancel a newer callback installed by a PiP transfer.
+		if (videoViewFrameCallback == expected) videoViewFrameCallback = null;
 	}
 
 	private void notifyVideoViewFrameUpdated() {
@@ -857,11 +1121,15 @@ public class VideoPlayer implements AutoCloseable {
 				target.playerSurfaceTexture = deferred.surfaceTexture;
 				target.playerSurfaceGeneration = generation;
 				target.surfaceUpdates = 0;
+				target.resetFrameReadiness(deferred.surfaceTexture, true);
 				target.transferredSurfaceStartedMs = surfaceTransferStartedMs;
 				setSurfaceSize(width, height);
 				VideoDiagnostics.surfaceAvailable(target.diagnosticsId);
 				VideoDiagnostics.recordUi("surface_transfer_reused generation=" + generation
 						+ " texture=" + target.diagnosticsId + " size=" + width + "x" + height);
+				// A prepared/paused surface already contains an image and need not produce
+				// another update. Commit that retained buffer even before Play is pressed.
+				target.scheduleFrameCommitProbe();
 				return true;
 			}
 			VideoDiagnostics.recordUi("surface_transfer_fallback generation=" + generation
@@ -982,7 +1250,8 @@ public class VideoPlayer implements AutoCloseable {
 
 	private void onSurfaceFrameRendered(long generation) {
 		synchronized (this) {
-			if (!isInitialized() || generation <= latestRenderedSurfaceGeneration) {
+			if (!isInitialized() || generation != latestSurfaceGeneration
+					|| generation <= latestRenderedSurfaceGeneration) {
 				return;
 			}
 			latestRenderedSurfaceGeneration = generation;
@@ -1095,6 +1364,12 @@ public class VideoPlayer implements AutoCloseable {
 	}
 
 	private final int[] dimensionsOutput = new int[2];
+
+	/** UI-thread snapshot of an already committed texture only; no native fallback or new decode. */
+	public Bitmap getCommittedPageFrame(int maxEdge) {
+		View view = videoView;
+		return view instanceof PlayerTextureView ? ((PlayerTextureView) view).getCommittedPageFrame(maxEdge) : null;
+	}
 
 	public Bitmap getCurrentFrame() {
 		synchronized (this) {

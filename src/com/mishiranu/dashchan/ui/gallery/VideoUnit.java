@@ -37,10 +37,12 @@ import chan.content.Chan;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
+import com.mishiranu.dashchan.content.CacheManager;
 import com.mishiranu.dashchan.media.PlaybackSpeed;
 import com.mishiranu.dashchan.content.model.ErrorItem;
 import com.mishiranu.dashchan.content.model.GalleryItem;
 import com.mishiranu.dashchan.graphics.BaseDrawable;
+import com.mishiranu.dashchan.graphics.SimpleBitmapDrawable;
 import com.mishiranu.dashchan.media.VideoPlayer;
 import com.mishiranu.dashchan.media.VideoDiagnostics;
 import com.mishiranu.dashchan.media.VolumeGestureUtils;
@@ -58,12 +60,15 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Locale;
 import java.util.Map;
+import java.util.ArrayList;
 
 public class VideoUnit {
 	interface TikTokModeCallback {
 		boolean isEnabled();
 		void setEnabled(boolean enabled);
 		void showFilter();
+		default GalleryItem getNextItem() { return null; }
+		default void onPageFrameAvailable() {}
 	}
 
 	enum PictureInPictureRestoreState {
@@ -109,6 +114,12 @@ public class VideoUnit {
 
 	private VideoPlayer player;
 	private BackgroundDrawable backgroundDrawable;
+	private VideoStartupPreview startupPreview;
+	private final NextVideoPreparation nextVideoPreparation;
+	private final VideoPageFrames<VideoPageFrame> pageFrames = new VideoPageFrames<>();
+	private VideoPreparationIdentity startupFrameIdentity;
+	private Bitmap preparedStartupFrame;
+	private boolean firstFrameReady;
 	private int playbackSpeed = 1000;
 	private boolean muted;
 	private boolean muteSupported = true;
@@ -235,6 +246,7 @@ public class VideoUnit {
 
 	private void showPictureInPictureReturnPreview(VideoPlayer owner, Bitmap frame) {
 		if (frame == null || instance.currentHolder == null) return;
+		clearStartupPreview();
 		hidePictureInPictureReturnPreview();
 		ImageView preview = pictureInPictureReturnPreview != null
 				&& pictureInPictureReturnPreview.getParent() == instance.currentHolder.surfaceParent
@@ -353,6 +365,7 @@ public class VideoUnit {
 	}
 
 	LifecycleState detachLifecycleState() {
+		clearStartupPreview();
 		cancelScrubbing();
 		hidePictureInPictureReturnPreview();
 		if (pendingLifecycleState != null) {
@@ -456,6 +469,12 @@ public class VideoUnit {
 		this.instance = instance;
 		this.audioManager = audioManager;
 		this.tikTokModeCallback = tikTokModeCallback;
+		nextVideoPreparation = new NextVideoPreparation(instance.galleryInstance.context);
+		nextVideoPreparation.setOnReady(() -> {
+			cachePreparedPageFrame();
+			this.tikTokModeCallback.onPageFrameAvailable();
+		});
+		instance.mediaPreloader.setOnVideoCached(this::prepareNextVideo);
 		surfaceParentLayoutChangeListener = this::onSurfaceParentLayoutChanged;
 		if (audioManager != null) {
 			int volume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC);
@@ -538,6 +557,7 @@ public class VideoUnit {
 			pendingPictureInPictureRestore.holder.surfaceParent.invalidate();
 		}
 		startVideoPreload();
+		prepareNextVideo();
 		if (pictureInPictureTransferred) {
 			return;
 		}
@@ -554,6 +574,8 @@ public class VideoUnit {
 	}
 
 	public void onPause(boolean changingConfigurations) {
+		nextVideoPreparation.stop();
+		pageFrames.clear();
 		finishControlsMotion();
 		preloadResumed = false;
 		dismissPlaybackSpeedPopupMenu();
@@ -625,6 +647,13 @@ public class VideoUnit {
 	}
 
 	public void interrupt(boolean force) {
+		startupFrameIdentity = null;
+		if (force) pageFrames.clear();
+		PagerInstance.ViewHolder selected = instance.currentHolder;
+		if (force || !preloadResumed || pictureInPictureTransferred) nextVideoPreparation.stop();
+		else nextVideoPreparation.retainFor(selected != null && selected.galleryItem != null
+				? selected.galleryItem.getFileUri(Chan.get(instance.galleryInstance.chanName)) : null);
+		clearStartupPreview();
 		finishControlsMotion();
 		cancelControlsAutoHide();
 		controlsTouchInProgress = false;
@@ -774,6 +803,7 @@ public class VideoUnit {
 	}
 
 	public void forcePause() {
+		nextVideoPreparation.stop();
 		wasPlaying = false;
 		if (initialized) {
 			setPlaying(false, true);
@@ -788,8 +818,86 @@ public class VideoUnit {
 		}
 	}
 
+	/** Preparation is local only; MediaPreloader still owns all optional network traffic. */
+	void prepareNextVideo() {
+		PagerInstance.ViewHolder holder = instance.currentHolder;
+		if (!preloadResumed || pictureInPictureTransferred || holder == null || holder.galleryItem == null
+				|| instance.galleryInstance.callback.isGalleryMode() || !Preferences.isUseVideoPlayer()) {
+			nextVideoPreparation.stop(); return;
+		}
+		updatePageFrameWindow();
+		Chan chan = Chan.get(instance.galleryInstance.chanName);
+		if (holder.galleryItem.isVideo(chan) && (!initialized || !firstFrameReady)
+				|| holder.galleryItem.isImage(chan) && holder.loadState != PagerInstance.LoadState.COMPLETE) return;
+		GalleryItem next = tikTokModeCallback.getNextItem();
+		if (next == null || !next.isOpenableVideo(chan)) { nextVideoPreparation.stop(); return; }
+		Uri uri = next.getFileUri(chan);
+		File file = uri != null && "file".equals(uri.getScheme()) && uri.getPath() != null ? new File(uri.getPath())
+				: uri != null ? CacheManager.getInstance().getMediaFile(uri, false) : null;
+		nextVideoPreparation.request(uri, file);
+	}
+
+	boolean isNextVideoPrepared(GalleryItem item) {
+		return item != null && nextVideoPreparation.isReady(item.getFileUri(Chan.get(instance.galleryInstance.chanName)));
+	}
+
+	private void cachePreparedPageFrame() {
+		VideoPreparationIdentity identity = nextVideoPreparation.readyIdentity();
+		if (identity == null || !pageFrames.retains(identity.resource) || pageFrames.get(identity) != null) return;
+		VideoPageFrame frame = nextVideoPreparation.copyReadyFrame();
+		if (frame != null) {
+			pageFrames.put(identity, frame);
+			VideoDiagnostics.recordUi("gallery page_frame phase=published source=prepared");
+		}
+	}
+
+	VideoPageFrame findPageFrame(GalleryItem item) {
+		if (item == null || !Preferences.isUseVideoPlayer() || !nextVideoPreparation.allowsPageFrames()) return null;
+		updatePageFrameWindow();
+		Chan chan = Chan.get(instance.galleryInstance.chanName);
+		if (!item.isOpenableVideo(chan)) return null;
+		Uri uri = item.getFileUri(chan);
+		File file = uri != null && "file".equals(uri.getScheme()) && uri.getPath() != null ? new File(uri.getPath())
+				: uri != null ? CacheManager.getInstance().getMediaFile(uri, false) : null;
+		if (uri == null || file == null || !file.isFile()) return null;
+		cachePreparedPageFrame();
+		return pageFrames.get(NextVideoPreparation.identity(uri, file));
+	}
+
+	/** Frame retention follows the same video-slot count as file preloading; no extra workers. */
+	private void updatePageFrameWindow() {
+		PagerInstance.ViewHolder holder = instance.currentHolder;
+		if (holder == null || holder.galleryItem == null) return;
+		GalleryInstance gallery = instance.galleryInstance;
+		Chan chan = Chan.get(gallery.chanName);
+		GalleryItem selected = holder.galleryItem;
+		Uri currentUri = selected.getFileUri(chan);
+		ArrayList<String> following = new ArrayList<>();
+		int remaining = Preferences.isVideoPreload() && Preferences.isUseVideoPlayer()
+				? Preferences.getVideoPreloadCount() : 0;
+		int index = gallery.galleryItems.indexOf(selected);
+		if (index >= 0) for (int i = index + 1; i < gallery.galleryItems.size() && remaining > 0; i++) {
+			GalleryItem item = gallery.galleryItems.get(i);
+			if (!item.isVideo(chan)) continue;
+			remaining--; // Duplicate/unsupported entries consume the same slots as MediaPreloader.
+			if (!item.isOpenableVideo(chan)) continue;
+			Uri uri = item.getFileUri(chan);
+			if (uri != null) following.add(uri.toString());
+		}
+		pageFrames.setWindow(currentUri != null ? currentUri.toString() : null, following);
+	}
+
+	void invalidatePageFrame(GalleryItem item) {
+		if (item == null) return;
+		Uri uri = item.getFileUri(Chan.get(instance.galleryInstance.chanName));
+		if (uri != null) pageFrames.remove(uri.toString());
+		nextVideoPreparation.stop();
+	}
+
 	public void applyVideo(Uri uri, File file, boolean reload) {
 		instance.mediaPreloader.stop();
+		updatePageFrameWindow();
+		startupFrameIdentity = !reload && file.isFile() ? NextVideoPreparation.identity(uri, file) : null;
 		sourceFile = file;
 		wasPlaying = true;
 		finishedPlayback = false;
@@ -808,9 +916,16 @@ public class VideoUnit {
 		}
 		dismissPlaybackSpeedPopupMenu();
 		boolean seekAnyFrame = Preferences.isVideoSeekAnyFrame();
-		VideoPlayer player = new VideoPlayer(playerListener, seekAnyFrame);
-		boolean loadedFromFile = false;
-		if (!reload && file.exists()) {
+		VideoPlayer.PreparedPlayback prepared = nextVideoPreparation.take(uri, file, reload);
+		VideoPlayer player = prepared != null ? prepared.takePlayer(playerListener) : null;
+		Bitmap preparedFrame = player != null ? prepared.takeFrame() : null;
+		if (prepared != null) {
+			if (player != null) prepared.close(); // Empty owner after transfer; no native destruction here.
+			else NextVideoPreparation.dispose(prepared);
+		}
+		boolean loadedFromFile = player != null;
+		if (player == null) player = new VideoPlayer(playerListener, seekAnyFrame);
+		if (!loadedFromFile && !reload && file.exists()) {
 			try {
 				player.init(file, null);
 				loadedFromFile = true;
@@ -823,7 +938,7 @@ public class VideoUnit {
 		}
 		this.player = player;
 		if (loadedFromFile) {
-			initializePlayer();
+			initializePlayer(preparedFrame);
 			startVideoPreload();
 			seekBar.setSecondaryProgress(seekBar.getMax());
 			if (instance.currentHolder.mediaSummary.updateSize(file.length())) {
@@ -904,7 +1019,22 @@ public class VideoUnit {
 		return true;
 	}
 
+	private void clearStartupPreview() {
+		if (startupPreview != null) {
+			startupPreview.close();
+			startupPreview = null;
+		}
+		if (preparedStartupFrame != null) { preparedStartupFrame.recycle(); preparedStartupFrame = null; }
+	}
+
 	private void initializePlayer() {
+		initializePlayer(null);
+	}
+
+	private void initializePlayer(Bitmap preparedFrame) {
+		clearStartupPreview();
+		preparedStartupFrame = preparedFrame;
+		firstFrameReady = false;
 		PagerInstance.ViewHolder holder = instance.currentHolder;
 		holder.progressBar.setVisible(false, false);
 		Point dimensions = player.getDimensions();
@@ -914,6 +1044,23 @@ public class VideoUnit {
 		backgroundDrawable = new BackgroundDrawable();
 		backgroundDrawable.width = dimensions.x;
 		backgroundDrawable.height = dimensions.y;
+		// Thumbnail drawables borrow ImageLoader's bitmap (allowRecycle=false). Keep that
+		// existing preview over the empty texture until its first frame, not a timed delay.
+		SimpleBitmapDrawable startupThumbnail = preparedFrame != null
+				? new SimpleBitmapDrawable(preparedFrame, dimensions.x, dimensions.y, false)
+				: holder.photoViewThumbnail ? holder.simpleBitmapDrawable : null;
+		boolean pageFrameAvailable = holder.videoPageFrame != null;
+		VideoStartupPreview.Geometry startupGeometry = preparedFrame == null && startupThumbnail != null
+				? VideoStartupPreview.captureGeometry(holder.photoView, holder.surfaceParent) : null;
+		if (VideoDiagnostics.isExtendedRecording()) {
+			VideoDiagnostics.recordUi("gallery startup_handoff schema=1 phase=before_photo_clear holder="
+					+ System.identityHashCode(holder) + " parent=" + System.identityHashCode(holder.surfaceParent)
+					+ " thumbnail_flag=" + holder.photoViewThumbnail + " thumbnail_available=" + (startupThumbnail != null)
+					+ " prepared_frame=" + (preparedFrame != null)
+					+ " page_frame=" + pageFrameAvailable
+					+ " hide_surface=" + hideSurfaceOnInit + " dimensions=" + dimensions.x + "x" + dimensions.y);
+			VideoDiagnostics.recordViewGeometry("startup_before_photo_clear", holder.photoView);
+		}
 		holder.recyclePhotoView();
 		boolean zoomGestures = Preferences.isVideoZoomGesturesEnabled();
 		holder.photoView.setImage(backgroundDrawable, false, !zoomGestures, false, zoomGestures ? 10f : 0f);
@@ -924,12 +1071,35 @@ public class VideoUnit {
 		attachSurfaceParentLayoutListener(holder);
 		holder.surfaceParent.addView(videoView, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,
 				FrameLayout.LayoutParams.MATCH_PARENT, Gravity.CENTER));
+		if (VideoDiagnostics.isExtendedRecording()) {
+			VideoDiagnostics.recordUi("gallery startup_handoff schema=1 phase=texture_attached holder="
+					+ System.identityHashCode(holder) + " texture=" + System.identityHashCode(videoView)
+					+ " parent=" + System.identityHashCode(holder.surfaceParent)
+					+ " preview_available=" + (startupThumbnail != null)
+					+ " prepared_frame=" + (preparedFrame != null)
+					+ " page_frame=" + pageFrameAvailable
+					+ " preload_resumed=" + preloadResumed + " retained_handoff=" + (playbackHandoff != null));
+		}
+		if (startupThumbnail != null) {
+			VideoPlayer owner = player;
+			startupPreview = new VideoStartupPreview(holder.surfaceParent, videoView, owner, startupThumbnail, startupGeometry,
+					instance.galleryInstance.callback.getWindow(),
+					() -> player == owner && instance.currentHolder == holder && !pictureInPictureTransferred,
+					() -> onFirstVideoFrame(owner, holder));
+		} else {
+			VideoPlayer owner = player;
+			player.setVideoViewFrameCallback(() -> onFirstVideoFrame(owner, holder));
+		}
 		applyPlayerVolume(player);
 		muteSupported = !player.isAudioPresent() || player.setMuted(muted);
 		if (!muteSupported) {
 			muted = false;
 		}
-		VideoPositionMemory.restoreOnce(player, sourceFile);
+		VideoPositionMemory.restoreOnce(player, sourceFile, preparedFrame != null);
+		// The single persisted bookmark now belongs to this video. A previous page's
+		// start frame may become valid again even though no new frame was published.
+		tikTokModeCallback.onPageFrameAvailable();
+		VideoDiagnostics.recordUi("gallery page_frame phase=refresh reason=bookmark_owner_changed");
 		recreateVideoControls();
 		playPauseButton.setEnabled(true);
 		seekBar.setEnabled(true);
@@ -947,6 +1117,26 @@ public class VideoUnit {
 		setPlaying((preloadResumed || playbackHandoff != null && playbackHandoff.isPlaying()) && wasPlaying, true);
 		if (preloadResumed) finishPlaybackHandoff();
 		updatePlayState();
+	}
+
+	private void onFirstVideoFrame(VideoPlayer owner, PagerInstance.ViewHolder holder) {
+		if (player != owner || instance.currentHolder != holder || pictureInPictureTransferred) return;
+		firstFrameReady = true;
+		updatePageFrameWindow();
+		if (preloadResumed && startupFrameIdentity != null && nextVideoPreparation.allowsPageFrames()
+				&& pageFrames.get(startupFrameIdentity) == null) {
+			Bitmap frame = owner.getCommittedPageFrame(640);
+			if (frame != null) {
+				Point size = owner.getDimensions();
+				pageFrames.put(startupFrameIdentity, new VideoPageFrame(frame, size.x, size.y));
+				VideoDiagnostics.recordUi("gallery page_frame phase=published source=committed");
+			}
+		}
+		startupFrameIdentity = null;
+		// Rebind both neighbours also when the current start frame already existed.
+		// Reverse navigation must not depend on another successful forward preparation.
+		tikTokModeCallback.onPageFrameAvailable();
+		prepareNextVideo();
 	}
 
 	private void finishPlaybackHandoff() {
@@ -1276,7 +1466,7 @@ public class VideoUnit {
 				// Observe interaction only. The ordinary button retains touch, click and accessibility dispatch.
 				onControlsTouchEvent(event, true);
 				onControlsTouchEvent(event, false);
-				return false;
+			return false;
 			});
 			centerPlayPauseButton.setScaleType(ImageButton.ScaleType.FIT_CENTER);
 			PlayerControlsStyle.button(centerPlayPauseButton, density, true);
@@ -1649,6 +1839,8 @@ public class VideoUnit {
 		if (!canEnterPictureInPicture() || requirePlaying && !player.isPlaying()) {
 			return false;
 		}
+		nextVideoPreparation.stop();
+		clearStartupPreview();
 		cancelScrubbing();
 		boolean playing = player.isPlaying();
 		long position = player.getPosition();
@@ -1973,6 +2165,7 @@ public class VideoUnit {
 		}
 		long position = player.getPosition();
 		long nextPosition = Math.max(0L, Math.min(duration, position + offset));
+		startupFrameIdentity = null;
 		player.setPosition(nextPosition);
 		VideoPositionMemory.save(player, nextPosition >= duration);
 		seekBar.setProgress((int) nextPosition);
@@ -2028,6 +2221,7 @@ public class VideoUnit {
 			updatePlayState();
 		}
 		scrubSession.clearDeferredCompletion();
+		startupFrameIdentity = null;
 		player.setPosition(position);
 	}
 

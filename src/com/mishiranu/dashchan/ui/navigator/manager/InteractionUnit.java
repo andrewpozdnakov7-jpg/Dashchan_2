@@ -6,7 +6,6 @@ import android.content.Context;
 import android.net.Uri;
 import android.text.SpannableStringBuilder;
 import android.text.Spanned;
-import android.view.ContextThemeWrapper;
 import android.view.View;
 import androidx.fragment.app.FragmentManager;
 import chan.content.Chan;
@@ -31,6 +30,7 @@ import com.mishiranu.dashchan.util.ListViewUtils;
 import com.mishiranu.dashchan.util.NavigationUtils;
 import com.mishiranu.dashchan.widget.AttachmentView;
 import com.mishiranu.dashchan.widget.CommentTextView;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
@@ -255,7 +255,9 @@ public class InteractionUnit {
 	private static AlertDialog createThumbnailLongClickDialog(InstanceDialog.Provider provider,
 			String chanName, AttachmentItem attachmentItem, String threadTitle, boolean canLoadThumbnailManually) {
 		Chan chan = Chan.get(chanName);
-		Context context = new ContextThemeWrapper(provider.getContext(), R.style.Theme_Gallery);
+		// Attachment menus follow the application theme, just like the grid and pager menus.
+		// Gallery's dark chrome must not override the dialog background independently of its text.
+		Context context = provider.getContext();
 		DialogMenu dialogMenu = new DialogMenu(context);
 		dialogMenu.setTitle(attachmentItem.getDialogTitle(chan));
 		if (attachmentItem.canDownloadToStorage()) {
@@ -304,13 +306,23 @@ public class InteractionUnit {
 			return true;
 		} else {
 			if (Preferences.getHighlightUnreadMode() == Preferences.HighlightUnreadMode.MANUALLY) {
+				ArrayList<PostItem> readPostItems = null;
 				for (PostItem localPostItem : localPostItems) {
 					if (!postStateProvider.isRead(localPostItem.getPostNumber())) {
 						postStateProvider.setRead(localPostItem.getPostNumber());
-						uiManager.sendPostItemMessage(localPostItem, UiManager.Message.POST_INVALIDATE_ALL_VIEWS);
+						if (readPostItems == null) {
+							readPostItems = new ArrayList<>();
+						}
+						readPostItems.add(localPostItem);
 					}
 					if (localPostItem == postItem) {
 						break;
+					}
+				}
+				// Observers can rebuild localPostItems synchronously. Notify only after iteration ends.
+				if (readPostItems != null) {
+					for (PostItem readPostItem : readPostItems) {
+						uiManager.sendPostItemMessage(readPostItem, UiManager.Message.POST_INVALIDATE_ALL_VIEWS);
 					}
 				}
 			}

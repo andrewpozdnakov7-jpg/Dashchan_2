@@ -4,7 +4,11 @@ import android.animation.ValueAnimator;
 import android.app.ActionBar;
 import android.app.Activity;
 import android.content.Context;
+import android.content.res.ColorStateList;
+import android.graphics.BlendMode;
+import android.graphics.BlendModeColorFilter;
 import android.graphics.Canvas;
+import android.graphics.ColorFilter;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.Rect;
@@ -114,6 +118,10 @@ public class DrawerToggle implements DrawerLayout.DrawerListener {
 	private class ArrowDrawable extends BaseDrawable {
 		private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
 		private final Path path = new Path();
+		private ColorStateList tint;
+		private BlendMode tintMode = BlendMode.SRC_IN;
+		private ColorFilter colorFilter;
+		private BlendModeColorFilter tintFilter;
 
 		private final float barThickness;
 		private final float topBottomArrowSize;
@@ -149,6 +157,41 @@ public class DrawerToggle implements DrawerLayout.DrawerListener {
 				verticalMirror = false;
 			}
 			this.position = position;
+			invalidateSelf();
+		}
+
+		@Override public void setColorFilter(ColorFilter colorFilter) {
+			this.colorFilter = colorFilter;
+			paint.setColorFilter(colorFilter != null ? colorFilter : tintFilter);
+			invalidateSelf();
+		}
+
+		@Override public ColorFilter getColorFilter() { return colorFilter; }
+
+		@Override public void setTintList(ColorStateList tint) {
+			// ImageView uses Drawable.setTintList, not setColorFilter, for its image tint.
+			// The base Drawable implementation is a no-op for this custom Paint.
+			this.tint = tint;
+			updateTintFilter();
+		}
+
+		@Override public void setTintBlendMode(BlendMode mode) {
+			tintMode = mode != null ? mode : BlendMode.SRC_IN;
+			updateTintFilter();
+		}
+
+		@Override public boolean isStateful() { return tint != null && tint.isStateful(); }
+
+		@Override protected boolean onStateChange(int[] state) {
+			if (tint == null) return false;
+			updateTintFilter();
+			return true;
+		}
+
+		private void updateTintFilter() {
+			tintFilter = tint != null ? new BlendModeColorFilter(
+					tint.getColorForState(getState(), tint.getDefaultColor()), tintMode) : null;
+			paint.setColorFilter(colorFilter != null ? colorFilter : tintFilter);
 			invalidateSelf();
 		}
 

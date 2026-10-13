@@ -80,6 +80,7 @@ public class PagerInstance {
 		public GifDecoder gifDecoder;
 		public JpegData jpegData;
 		public boolean photoViewThumbnail;
+		VideoPageFrame videoPageFrame;
 		public ImageLoader.Target thumbnailTarget;
 
 		public LoadState loadState = LoadState.PREVIEW_OR_LOADING;
@@ -105,6 +106,7 @@ public class PagerInstance {
 			}
 			jpegData = null;
 			photoViewThumbnail = false;
+			videoPageFrame = null;
 		}
 	}
 
