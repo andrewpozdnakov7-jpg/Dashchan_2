@@ -959,7 +959,15 @@ public class ForegroundManager implements Handler.Callback {
 						LinearLayout.LayoutParams.WRAP_CONTENT);
 				for (int j = 0; j < columns; j++) {
 					int index = columns * i + j;
-					FrameLayout frameLayout = new FrameLayout(inner.getContext());
+					// Geometry belongs to the cell. Keep the platform ImageView and its
+					// native theme behavior, without a custom ImageView subclass.
+					FrameLayout frameLayout = new FrameLayout(inner.getContext()) {
+						@Override protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+							super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+							int side = getMeasuredWidth();
+							super.onMeasure(widthMeasureSpec, View.MeasureSpec.makeMeasureSpec(side, View.MeasureSpec.EXACTLY));
+						}
+					};
 					LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(0,
 							LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
 					if (j < columns - 1) {
@@ -971,13 +979,7 @@ public class ForegroundManager implements Handler.Callback {
 					inner.addView(frameLayout, layoutParams);
 					if (index < images.length) {
 						selectionViews[index] = frameLayout;
-						ImageView imageView = new ImageView(frameLayout.getContext()) {
-							@Override
-							protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-								super.onMeasure(widthMeasureSpec, heightMeasureSpec);
-								setMeasuredDimension(getMeasuredWidth(), getMeasuredWidth());
-							}
-						};
+						ImageView imageView = new ImageView(frameLayout.getContext());
 						imageView.setScaleType(ImageView.ScaleType.CENTER_CROP);
 						if (keepOpen()) {
 							imageView.setScaleType(ImageView.ScaleType.FIT_CENTER);
@@ -985,7 +987,7 @@ public class ForegroundManager implements Handler.Callback {
 						imageView.setImageBitmap(images[index]);
 						ViewUtils.makeRoundedCorners(imageView, cornersRadius, false);
 						frameLayout.addView(imageView, FrameLayout.LayoutParams.MATCH_PARENT,
-								FrameLayout.LayoutParams.WRAP_CONTENT);
+								FrameLayout.LayoutParams.MATCH_PARENT);
 						View view = new View(frameLayout.getContext());
 						ViewUtils.setSelectableItemBackground(view);
 						view.setTag(index);
