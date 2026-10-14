@@ -897,6 +897,11 @@ public class DvachChanPerformer extends ChanPerformer {
 						throw new HttpException(com.mishiranu.dashchan.content.model.ErrorItem.Type.UNKNOWN,
 								false, false, e);
 					}
+				} catch (HttpException | InvalidResponseException e) {
+					// Only the opt-in native captcha window can keep a failed request open for an explicit retry.
+					if (!Thread.currentThread().isInterrupted() && session.awaitRetry()) continue;
+					if (session.isCancelled()) return new ReadCaptchaResult(CaptchaState.NEED_LOAD, null);
+					throw e;
 				}
 			}
 			return new ReadCaptchaResult(CaptchaState.NEED_LOAD, null);
@@ -981,11 +986,11 @@ public class DvachChanPerformer extends ChanPerformer {
 					return new ReadCaptchaResult(CaptchaState.NEED_LOAD, null);
 				}
 				DvachEmojiCaptchaProvider.DvachEmojiCaptchaAnswerRetriever retriever =
-						(Bitmap task, Bitmap[] keyboardImages) -> {
+						(Bitmap task, Bitmap[] keyboardImages, Bitmap[] selectedImages) -> {
 							try {
 								return session.require(keyboardImages,
 										configuration.getResources().getString(R.string.emoji_captcha_input),
-										task);
+										task, selectedImages);
 							} catch (InterruptedException e) {
 								Thread.currentThread().interrupt();
 								return -1;

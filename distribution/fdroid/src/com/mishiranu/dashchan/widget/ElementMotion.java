@@ -10,6 +10,7 @@ public final class ElementMotion {
 	private ElementMotion() {}
 	public static boolean busy(View view) { return false; }
 	public static void finish(View view) {}
+	public static void finishIcon(View view) {}
 	public static void finishTree(View view) {}
 	public static boolean blocksInput(View view) { return false; }
 	public static void visibility(View view, boolean visible, float distanceDp, boolean scale, BooleanSupplier valid) {
@@ -17,4 +18,5 @@ public final class ElementMotion {
 	}
 	public static Animator height(View view, int from, int to, int finalHeight) { return null; }
 	public static void icon(ImageView view, int resource) { if (view != null) view.setImageResource(resource); }
+	public static void icon(ImageView view, int resource, boolean animate) { icon(view, resource); }
 }

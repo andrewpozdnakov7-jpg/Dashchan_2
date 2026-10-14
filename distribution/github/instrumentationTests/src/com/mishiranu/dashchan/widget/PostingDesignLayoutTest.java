@@ -26,20 +26,16 @@ public class PostingDesignLayoutTest {
 		view.layout(0, 0, width, view.getMeasuredHeight());
 	}
 
-	@Test public void optionsStackWhenNeededAndHiddenOptionsDoNotReserveSpaceOrLoseTheirState() {
+	@Test public void staticUtilityRowKeepsEveryControlInsideTheViewportAndRetainsCallbacks() {
 		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
-			for (float fontScale : new float[] {1f, 1.3f, 2f}) {
+			for (float scale : new float[] {1f, 1.3f, 2f}) {
 				Context base = InstrumentationRegistry.getInstrumentation().getTargetContext();
-				Configuration config = new Configuration(base.getResources().getConfiguration()); config.fontScale = fontScale;
+				Configuration config = new Configuration(base.getResources().getConfiguration()); config.fontScale = scale;
 				config.setLocale(java.util.Locale.forLanguageTag("ru"));
 				Context context = ThemeEngine.attach(base.createConfigurationContext(config));
 				View root = LayoutInflater.from(context).inflate(R.layout.activity_posting, null);
-				LayoutInflater.from(context).inflate(R.layout.activity_posting_footer_common, (FrameLayout) root.findViewById(R.id.footer_container));
-				root.findViewById(R.id.captcha_block).setVisibility(View.INVISIBLE);
-				root.findViewById(R.id.captcha_skip_block).setVisibility(View.VISIBLE);
-				root.findViewById(R.id.captcha_cancel).setVisibility(View.GONE);
-				((android.widget.TextView) root.findViewById(R.id.captcha_skip_text)).setText(R.string.load_captcha);
-				root.findViewById(R.id.captcha_block_parent).setOnClickListener(v -> {});
+				LayoutInflater.from(context).inflate(R.layout.activity_posting_footer_common,
+						(FrameLayout) root.findViewById(R.id.footer_container));
 				PostingFormAppearance appearance = new PostingFormAppearance(root);
 				try {
 					appearance.setupEditor(root.findViewById(R.id.comment_parent), root.findViewById(R.id.comment), new LinearLayout(context));
@@ -48,44 +44,56 @@ public class PostingDesignLayoutTest {
 					sage.setChecked(true); int[] changes = {0}; sage.setOnCheckedChangeListener((v, checked) -> changes[0]++);
 					Button send = new Button(context); ((LinearLayout) root.findViewById(R.id.captcha_input_parent)).addView(send);
 					appearance.finishSetup(send, sage, spoiler, op);
-					View slot = (View) root.findViewById(R.id.posting_compact_captcha).getParent();
-					View panel = (View) slot.getParent(), column = root.findViewById(R.id.checkbox_parent);
-					panel.setLayoutDirection(View.LAYOUT_DIRECTION_LTR);
-					for (int widthDp : new int[] {368, 328, 180}) {
-						layout(panel, dp(context, widthDp));
-						View first = (View) sage.getParent(), second = (View) op.getParent();
-						assertTrue(second.getTop() >= first.getBottom());
-						int minimumRow = dp(context, fontScale > 1f ? 48 : 32);
-						assertTrue(first.getHeight() >= minimumRow); assertTrue(second.getHeight() >= minimumRow);
-						assertTrue(column.getRight() <= panel.getWidth());
-						assertTrue(column.getTop() >= slot.getBottom() || column.getLeft() >= slot.getRight());
-						assertNull(sage.getEllipsize()); assertNull(op.getEllipsize());
-						assertEquals(sage.getText(), sage.getContentDescription());
-						assertEquals(op.getText(), op.getContentDescription());
-						if (fontScale == 1f && widthDp >= 328) {
-							assertEquals(dp(context, widthDp == 368 ? 168 : 128), slot.getWidth());
-							assertEquals(dp(context, 56), slot.getHeight());
-							assertEquals(dp(context, 64), column.getHeight());
-							assertEquals(dp(context, 32), second.getTop() - first.getTop());
-							assertEquals(dp(context, 24), column.getLeft() - slot.getRight());
-						} else if (widthDp == 180) assertTrue(column.getTop() >= slot.getBottom());
-						assertTrue(sage.isChecked()); assertEquals(0, changes[0]);
+					appearance.setAttachmentAction(() -> {}); appearance.setAttachmentAvailable(true);
+					LinearLayout content = (LinearLayout) sage.getParent();
+					View slot = (View) content.getParent(), panel = (View) slot.getParent();
+					View attach = root.findViewById(R.id.menu_attach);
+					assertSame(content, op.getParent()); assertSame(content, attach.getParent());
+					assertEquals(LinearLayout.HORIZONTAL, content.getOrientation());
+					assertTrue(content instanceof PostingUtilityRow);
+					assertFalse(content.getParent() instanceof android.widget.HorizontalScrollView);
+					for (int direction : new int[] {View.LAYOUT_DIRECTION_LTR, View.LAYOUT_DIRECTION_RTL}) {
+						panel.setLayoutDirection(direction);
+						float wideTextSize = -1f;
+						for (int width : new int[] {368, 328, 288, 368}) {
+							layout(panel, dp(context, width));
+							if (width == 368) {
+								if (wideTextSize < 0) wideTextSize = sage.getTextSize();
+								else assertEquals(wideTextSize, sage.getTextSize(), .01f);
+							}
+							assertEquals(dp(context, width), content.getWidth());
+							for (View control : new View[] {attach, sage, op}) {
+								assertTrue(control.getLeft() >= 0 && control.getRight() <= content.getWidth());
+							}
+							assertTrue(slot.getHeight() >= dp(context, 64));
+							assertEquals(sage.getTop() + sage.getHeight() / 2, op.getTop() + op.getHeight() / 2);
+							assertTrue(op.getWidth() > dp(context, 28)); assertTrue(sage.getWidth() > dp(context, 28));
+							assertNull(sage.getEllipsize()); assertNull(op.getEllipsize());
+							assertEquals(1, sage.getMaxLines()); assertEquals(1, op.getMaxLines());
+							assertEquals(1, sage.getLineCount()); assertEquals(1, op.getLineCount());
+							assertTrue(android.text.Layout.getDesiredWidth(sage.getText(), sage.getPaint())
+									<= sage.getWidth() - sage.getCompoundPaddingLeft() - sage.getCompoundPaddingRight());
+							assertTrue(android.text.Layout.getDesiredWidth(op.getText(), op.getPaint())
+									<= op.getWidth() - op.getCompoundPaddingLeft() - op.getCompoundPaddingRight());
+							assertEquals(sage.getTextSize(), op.getTextSize(), .01f);
+							assertEquals(sage.getText(), sage.getContentDescription());
+							assertTrue(sage.isChecked()); assertEquals(0, changes[0]);
+							assertEquals(0, content.getScrollX());
+							assertTrue(((View) send.getParent()).getTop() >= slot.getBottom() + dp(context, 16));
+							if (scale > 1f) assertTrue(sage.getHeight() >= dp(context, 48));
+						}
 					}
-					panel.setLayoutDirection(View.LAYOUT_DIRECTION_RTL); layout(panel, dp(context, 368));
-					assertTrue(column.getTop() >= slot.getBottom() || column.getRight() <= slot.getLeft());
-					assertTrue(sage.isChecked()); assertEquals(0, changes[0]);
 					sage.performClick(); assertFalse(sage.isChecked()); assertEquals(1, changes[0]);
-					op.setVisibility(View.GONE); appearance.syncOptionsVisibility(); layout(panel, dp(context, 368));
-					assertEquals(View.GONE, ((View) op.getParent()).getVisibility());
-					sage.setVisibility(View.GONE); appearance.syncOptionsVisibility();
-					assertEquals(View.GONE, column.getVisibility());
-					assertEquals(View.VISIBLE, slot.getVisibility());
+					op.setVisibility(View.GONE); sage.setVisibility(View.GONE); appearance.setAttachmentAvailable(false);
+					appearance.syncOptionsVisibility(); layout(panel, dp(context, 328));
+					assertEquals(View.VISIBLE, slot.getVisibility()); assertEquals(dp(context, 64), slot.getHeight());
+					assertEquals(View.GONE, spoiler.getVisibility());
 				} finally { appearance.close(); }
 			}
 		});
 	}
 
-	@Test public void v4PinsMoreAndPreservesAllSupportedActionsAcrossWidths() {
+	@Test public void v53OmitsMoreWhenAllToolsFitAndKeepsEveryOriginalAction() {
 		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
 			Context context = ThemeEngine.attach(InstrumentationRegistry.getInstrumentation().getTargetContext());
 			View root = LayoutInflater.from(context).inflate(R.layout.activity_posting, null);
@@ -104,6 +112,9 @@ public class PostingDesignLayoutTest {
 				}
 				appearance.formattingVisibility(true);
 				View viewport = (View) row.getParent(), more = root.findViewById(R.id.posting_format_more);
+				layout(viewport, dp(context, 352));
+				for (Button button : buttons) assertEquals(View.VISIBLE, button.getVisibility());
+				assertEquals(View.GONE, more.getVisibility());
 				layout(viewport, dp(context, 304));
 				for (int i = 0; i < 7; i++) assertEquals(View.VISIBLE, buttons[i].getVisibility());
 				assertEquals(row.getWidth() - dp(context, 4), more.getRight());

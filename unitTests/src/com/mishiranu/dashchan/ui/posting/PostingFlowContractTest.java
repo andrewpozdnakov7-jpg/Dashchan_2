@@ -264,6 +264,17 @@ public class PostingFlowContractTest {
 		containsAll(source("PostingFormData"), "Collections.unmodifiableList", "captcha.data.copy()");
 	}
 
+	@Test public void newPrimaryRechecksTheModelAndCaptchaConfirmationNeverSubmits() throws Exception {
+		String click = method("onPrimaryAction");
+		containsAll(click, "captchaForm.publishCurrentPresentation()", "updateSendButtonState()",
+				"if (!sendButton.isEnabled()) return", "needsCaptchaSolution()", "requestCaptchaSolution()", "submitPostingForm()");
+		assertTrue(click.indexOf("captchaForm.publishCurrentPresentation()") < click.indexOf("needsCaptchaSolution()"));
+		assertTrue(click.indexOf("requestCaptchaSolution()") < click.indexOf("submitPostingForm()"));
+		containsAll(method("onConfirmCaptcha"), "confirmCaptchaDialog()", "return", "submitPostingForm()");
+		containsAll(method("updateSendButtonState"), "sendButtonEnabled", "isImportInProgress()", "needsCaptchaSolution()",
+				"isLoading()", "hasSendAttachments()", "captchaController.canSend() && content", "canActivatePrimary()");
+	}
+
 	@Test public void finalLifecycleBindsOnceAndReleasesEachUiHostAfterSnapshot() throws Exception {
 		containsAll(method("onViewCreated"), "attachmentController.attachView(", "captchaController.attachView(createCaptchaHost())",
 				"bindControllers()");

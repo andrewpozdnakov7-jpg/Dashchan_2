@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="posting_solve_captcha">Решить капчу</string>
+    <string name="posting_primary_loading">Загрузка капчи</string>
     <string name="posting_captcha_label">Капча</string>
     <string name="posting_captcha_done">Готово</string>
     <string name="posting_captcha_retry">Повторить</string>

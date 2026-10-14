@@ -24,6 +24,12 @@ public final class PostingFormAppearance {
 	public static void captchaStateChanged(View view, com.mishiranu.dashchan.ui.CaptchaForm.CaptchaViewType type,
 			com.mishiranu.dashchan.content.async.ReadCaptchaTask.CaptchaState state, boolean answerSaved, boolean restoring) {}
 	public void updateSendState() {}
+	public boolean canActivatePrimary() { return true; }
+	public void setPrimaryChanged(Runnable callback) {}
+	public boolean needsCaptchaSolution() { return false; }
+	public void requestCaptchaSolution() {}
+	public boolean confirmCaptchaDialog() { return false; }
+	public void finishPrimaryTransition() {}
 	public static int editorAvailableHeight(EditText editor, int available) { return available; }
 	public static int minimumEditorInputHeight(EditText editor) { return 0; }
 	public void formattingVisibility(boolean visible) {}

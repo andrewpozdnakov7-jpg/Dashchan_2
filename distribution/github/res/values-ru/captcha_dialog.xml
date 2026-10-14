@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="captcha_dialog_selected">Выбрано</string>
+    <string name="captcha_dialog_empty">Пока ничего</string>
+    <string name="captcha_dialog_done">Готово</string>
+    <string name="captcha_dialog_refreshing">Обновление капчи</string>
+    <string name="captcha_dialog_processing">Обработка выбора</string>
+    <string name="captcha_dialog_retry_error">Не удалось обновить капчу. Нажмите обновление, чтобы повторить.</string>
+</resources>

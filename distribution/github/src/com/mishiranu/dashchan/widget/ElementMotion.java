@@ -32,6 +32,11 @@ public final class ElementMotion {
 		if (view == null) return;
 		Object owner = view.getTag(R.id.element_motion_owner);
 		if (owner instanceof Owner) ((Owner) owner).finish();
+		finishIcon(view);
+	}
+	/** Settle glyph feedback without cancelling independent panel visibility or geometry. */
+	public static void finishIcon(View view) {
+		if (view == null) return;
 		Object icon = view.getTag(R.id.icon_motion_owner);
 		if (icon instanceof Icon) ((Icon) icon).finish();
 	}
@@ -85,11 +90,15 @@ public final class ElementMotion {
 		return animator;
 	}
 	public static void icon(ImageView view, int resource) {
+		icon(view, resource, true);
+	}
+	/** Immediate bindings must retain the same resource ownership as animated bindings. */
+	public static void icon(ImageView view, int resource, boolean animate) {
 		if (view == null) return;
 		Object tag = view.getTag(R.id.icon_motion_owner);
 		Icon old = tag instanceof Icon ? (Icon) tag : null;
 		if (old != null && old.resource == resource && (view.getDrawable() == old.target || view.getDrawable() == old.drawable)) {
-			if (!InterfaceMotion.isEnabled() || InterfaceMotion.duration(1) == 0 || busy(view)) old.finish();
+			if (!animate || !InterfaceMotion.isEnabled() || InterfaceMotion.duration(1) == 0 || busy(view)) old.finish();
 			return;
 		}
 		if (old != null) old.finish();
@@ -97,7 +106,7 @@ public final class ElementMotion {
 		view.setImageResource(resource);
 		Drawable target = view.getDrawable();
 		Icon owner = new Icon(view, resource, target); view.setTag(R.id.icon_motion_owner, owner);
-		if (from == null || target == null || from == target || !InterfaceMotion.isEnabled() || InterfaceMotion.duration(1) == 0
+		if (!animate || from == null || target == null || from == target || !InterfaceMotion.isEnabled() || InterfaceMotion.duration(1) == 0
 				|| !view.isAttachedToWindow() || !view.isShown() || busy(view)) return;
 		owner.drawable = new IconDrawable(from, target);
 		view.setImageDrawable(owner.drawable); view.addOnAttachStateChangeListener(owner);

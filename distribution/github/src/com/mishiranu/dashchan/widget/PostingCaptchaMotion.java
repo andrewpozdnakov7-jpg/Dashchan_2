@@ -154,7 +154,7 @@ final class PostingCaptchaMotion implements View.OnAttachStateChangeListener {
 	@Override public void onViewAttachedToWindow(View view) {}
 	@Override public void onViewDetachedFromWindow(View view) { finish(); }
 
-	private static final class CheckDrawable extends Drawable {
+	static final class CheckDrawable extends Drawable {
 		private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
 		private final Path complete = new Path(), segment = new Path();
 		private final PathMeasure measure = new PathMeasure();

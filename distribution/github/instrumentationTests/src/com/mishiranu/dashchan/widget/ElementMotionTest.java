@@ -111,6 +111,44 @@ public class ElementMotionTest {
 			try { icon.draw(new Canvas(image)); assertEquals(Color.RED, image.getPixel(16, 16)); } finally { icon.release(); image.recycle(); }
 		});
 	}
+	@Test public void immediateBindingRegistersTheGlyphSoASameStateRefreshDoesNotReplayItsAnimation() {
+		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+			ImageView view = new ImageView(context());
+			ElementMotion.icon(view, R.drawable.ic_pause, false);
+			Object owner = view.getTag(R.id.icon_motion_owner);
+			assertNotNull(owner); assertTrue(owner instanceof ElementMotion.Icon);
+			android.graphics.drawable.Drawable glyph = view.getDrawable();
+			assertFalse(glyph instanceof ElementMotion.IconDrawable);
+			ElementMotion.icon(view, R.drawable.ic_pause);
+			assertSame(owner, view.getTag(R.id.icon_motion_owner)); assertSame(glyph, view.getDrawable());
+			ElementMotion.icon(view, R.drawable.ic_play_arrow, false);
+			assertNotSame(owner, view.getTag(R.id.icon_motion_owner));
+			Object playingOwner = view.getTag(R.id.icon_motion_owner);
+			ElementMotion.icon(view, R.drawable.ic_play_arrow);
+			assertSame(playingOwner, view.getTag(R.id.icon_motion_owner));
+		});
+	}
+
+	@Test public void immediateRebindSettlesAnOldIconButDoesNotCancelIndependentVisibility() {
+		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+			ImageView view = new ImageView(context());
+			ColorDrawable from = new ColorDrawable(Color.RED), target = new ColorDrawable(Color.BLUE);
+			ElementMotion.Icon old = new ElementMotion.Icon(view, R.drawable.ic_pause, target);
+			old.drawable = new ElementMotion.IconDrawable(from, target); old.drawable.progress = .4f;
+			view.setImageDrawable(old.drawable); view.setTag(R.id.icon_motion_owner, old);
+			ElementMotion.Visibility visibility = new ElementMotion.Visibility(view, true, 0f, 1f, 1f, () -> true);
+			view.setAlpha(.7f); view.setTranslationY(6f);
+			ElementMotion.icon(view, R.drawable.ic_play_arrow, false);
+			Object current = view.getTag(R.id.icon_motion_owner);
+			android.graphics.drawable.Drawable currentGlyph = view.getDrawable();
+			assertNotSame(old, current); assertFalse(currentGlyph instanceof ElementMotion.IconDrawable);
+			assertSame(visibility, view.getTag(R.id.element_motion_owner));
+			assertEquals(.7f, view.getAlpha(), 0f); assertEquals(6f, view.getTranslationY(), 0f);
+			old.finish(); assertSame(current, view.getTag(R.id.icon_motion_owner)); assertSame(currentGlyph, view.getDrawable());
+			visibility.finish();
+		});
+	}
+
 	@Test public void releasingImeHookPreservesUnanimatedPanelAndReplacesOnlyItsOwnRegistration() {
 		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
 			FrameLayout root = new FrameLayout(context()); View panel = new View(root.getContext()); root.addView(panel); panel.setTranslationY(7f);

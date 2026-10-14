@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="captcha_dialog_selected">Selected</string>
+    <string name="captcha_dialog_empty">Nothing yet</string>
+    <string name="captcha_dialog_done">Done</string>
+    <string name="captcha_dialog_refreshing">Refreshing captcha</string>
+    <string name="captcha_dialog_processing">Processing selection</string>
+    <string name="captcha_dialog_retry_error">Could not update the captcha. Tap refresh to try again.</string>
+    <style name="Motion.Captcha.Dialog" parent="">
+        <item name="android:windowEnterAnimation">@anim/captcha_dialog_enter</item>
+        <item name="android:windowExitAnimation">@anim/captcha_dialog_exit</item>
+    </style>
+</resources>

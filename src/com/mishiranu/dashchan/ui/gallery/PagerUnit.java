@@ -839,6 +839,8 @@ public class PagerUnit implements PagerInstance.Callback {
 		GalleryItem galleryItem = holder.galleryItem;
 		Chan chan = Chan.get(galleryInstance.chanName);
 		if (reload) videoUnit.invalidatePageFrame(galleryItem);
+		videoUnit.selectVideoControlsPage(galleryItem.isVideo(chan) && galleryItem.isOpenableVideo(chan)
+				&& !mayShowThumbnailOnly);
 		interrupt(false);
 		holder.loadState = PagerInstance.LoadState.PREVIEW_OR_LOADING;
 		galleryInstance.callback.invalidateOptionsMenu();
@@ -996,6 +998,7 @@ public class PagerUnit implements PagerInstance.Callback {
 	@Override
 	public void showError(PagerInstance.ViewHolder holder, String message) {
 		if (holder == pagerInstance.currentHolder) {
+			videoUnit.selectVideoControlsPage(false);
 			galleryInstance.callback.modifySystemUiVisibility(GalleryInstance.Flags.LOCKED_ERROR, true);
 			holder.photoView.clearInitialScaleAnimationData();
 			holder.recyclePhotoView();
@@ -1291,6 +1294,10 @@ public class PagerUnit implements PagerInstance.Callback {
 			pagerInstance.leftHolder = leftView != null ? (PagerInstance.ViewHolder) leftView.getTag() : null;
 			pagerInstance.currentHolder = holder;
 			pagerInstance.rightHolder = rightView != null ? (PagerInstance.ViewHolder) rightView.getTag() : null;
+			GalleryItem selectedItem = galleryItems.get(index);
+			Chan selectedChan = Chan.get(galleryInstance.chanName);
+			videoUnit.selectVideoControlsPage(selectedItem.isVideo(selectedChan)
+					&& selectedItem.isOpenableVideo(selectedChan) && !mayShowThumbnailOnly);
 			interrupt(false);
 			updateTikTokPagingMode(galleryItems.get(index));
 			if (pagerInstance.leftHolder != null) {
