@@ -149,6 +149,9 @@ public class PostingPreviewFragment extends ContentFragment {
 					(CheckBox) view.findViewById(R.id.original_poster_checkbox));
 			postingAppearance.setAttachmentAction(() -> {});
 			postingAppearance.setAttachmentAvailable(true);
+			// The preview has no captcha requirement and its Send action only exits the preview.
+			PostingFormAppearance.captchaStateChanged(view, com.mishiranu.dashchan.ui.CaptchaForm.CaptchaViewType.SKIP_LOCK,
+					com.mishiranu.dashchan.content.async.ReadCaptchaTask.CaptchaState.SKIP, false, true);
 			PostingFormAppearance.syncFieldVisibility(name, email, password, subject);
 		} else {
 			actions.addView(send, new LinearLayout.LayoutParams(-1, -2));
@@ -177,9 +180,14 @@ public class PostingPreviewFragment extends ContentFragment {
 		editor.addTag(ChanMarkup.TAG_BOLD, "[b]", "[/b]");
 		editor.addTag(ChanMarkup.TAG_ITALIC, "[i]", "[/i]");
 		editor.addTag(ChanMarkup.TAG_UNDERLINE, "[u]", "[/u]");
+		editor.addTag(ChanMarkup.TAG_OVERLINE, "[o]", "[/o]");
+		editor.addTag(ChanMarkup.TAG_STRIKE, "[s]", "[/s]");
+		editor.addTag(ChanMarkup.TAG_SUBSCRIPT, "[sub]", "[/sub]");
+		editor.addTag(ChanMarkup.TAG_SUPERSCRIPT, "[sup]", "[/sup]");
 		editor.addTag(ChanMarkup.TAG_SPOILER, "[spoiler]", "[/spoiler]");
 		editor.addTag(ChanMarkup.TAG_QUOTE, "> ", "");
 		int tags = ChanMarkup.TAG_BOLD | ChanMarkup.TAG_ITALIC | ChanMarkup.TAG_UNDERLINE
+				| ChanMarkup.TAG_OVERLINE | ChanMarkup.TAG_STRIKE | ChanMarkup.TAG_SUBSCRIPT | ChanMarkup.TAG_SUPERSCRIPT
 				| ChanMarkup.TAG_SPOILER | ChanMarkup.TAG_QUOTE;
 		float density = ResourceUtils.obtainDensity(formatting);
 		for (MarkupButtonProvider provider : MarkupButtonProvider.iterable(tags)) {

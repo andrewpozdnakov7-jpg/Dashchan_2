@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.widget;
 
+import android.app.AlertDialog;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.graphics.Typeface;
@@ -29,7 +30,6 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toolbar;
 import androidx.core.graphics.ColorUtils;
-import com.google.android.material.loadingindicator.LoadingIndicator;
 import chan.content.ChanMarkup;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
@@ -66,14 +66,21 @@ public final class PostingFormAppearance {
 	private PostingFormattingMenu formattingMenu;
 	private final Map<View, Integer> markupTags = new IdentityHashMap<>();
 	private CarryLayout optionsRow;
-	private PostingOptionsPanel optionsPanel;
-	private Button captchaEntry;
-	private FrameLayout captchaSlot;
-	private LoadingIndicator captchaIndicator;
-	private PostingCaptchaMotion captchaMotion;
+	private FrameLayout utilitySlot;
+	private PostingUtilityRow utilityContent;
+	private PostingPrimaryMotion primaryMotion;
+	private final CaptchaDialogAppearance.ModalListener foregroundCaptchaListener = this::onForegroundCaptchaChanged;
+	private final PostingPrimaryState primaryState = new PostingPrimaryState();
+	private AlertDialog captchaDialog;
+	private View captchaParking;
+	private EditText captchaInput;
+	private boolean dialogAccepted;
+	private String dialogPreviousInput;
+	private long captchaRevision, dialogRevision;
+	private Runnable primaryChanged;
 	private com.mishiranu.dashchan.ui.CaptchaForm.CaptchaViewType captchaType;
 	private boolean captchaAnswerSaved;
-	private PostingSendMotion sendMotion;
+	private com.mishiranu.dashchan.content.async.ReadCaptchaTask.CaptchaState captchaState;
 	private View captchaRoot;
 	private Button send;
 	private View spoilerCommand;
@@ -96,6 +103,10 @@ public final class PostingFormAppearance {
 
 	public static boolean isEnabled() { return Preferences.isNewPostingFormEnabled(); }
 
+	private void onForegroundCaptchaChanged(boolean visible) {
+		if (!closed && primaryMotion != null) primaryMotion.setCaptchaDialogVisible(visible);
+	}
+
 	public PostingFormAppearance(View root) {
 		this.root = root;
 		scroll = root.findViewById(R.id.scroll_view);
@@ -108,8 +119,29 @@ public final class PostingFormAppearance {
 
 	private static int dp(View view, float value) { return Math.round(ResourceUtils.obtainDensity(view) * value); }
 
+	/** Keep the requested light foreground; adjust only the filled action's luminance. */
+	static int primaryBackground(int accent) {
+		// The CTA fill is opaque. Float interpolation can truncate alpha255 to254,
+		// which calculateContrast rejects even when both endpoint colors were opaque.
+		accent = ColorUtils.setAlphaComponent(accent, 255);
+		if (ColorUtils.calculateContrast(Color.WHITE, accent) >= 4.5) return accent;
+		float low = 0f, high = 1f;
+		for (int i = 0; i < 18; i++) {
+			float fraction = (low + high) / 2f;
+			int candidate = blendPrimaryBackground(accent, Color.BLACK, fraction);
+			if (ColorUtils.calculateContrast(Color.WHITE, candidate) >= 4.5) high = fraction;
+			else low = fraction;
+		}
+		return blendPrimaryBackground(accent, Color.BLACK, high);
+	}
+
+	/** Blend only the primary fill's RGB; opacity is an invariant, not an animated property. */
+	static int blendPrimaryBackground(int from, int to, float fraction) {
+		return ColorUtils.setAlphaComponent(ColorUtils.blendARGB(from, to, fraction), 255);
+	}
+
 	private static final class Palette {
-		final int background, surface, text, secondary, accent, onAccent, outline, tonal, error, disabled;
+		final int background, surface, text, secondary, accent, onAccent, primary, outline, tonal, error, disabled;
 		Palette(View view, ThemeEngine.Theme theme) {
 			int window = ColorUtils.compositeColors(theme.window,
 					theme.base == ThemeEngine.Theme.Base.LIGHT ? Color.WHITE : Color.BLACK);
@@ -121,6 +153,7 @@ public final class PostingFormAppearance {
 					ColorUtils.blendARGB(surface, text, .65f), theme.accent, .25f), surface, 4.5);
 			accent = InterfaceAppearance.contrasting(theme.accent, surface, 3);
 			onAccent = InterfaceAppearance.contrasting(Color.WHITE, accent, 4.5);
+			primary = primaryBackground(accent);
 			outline = InterfaceAppearance.contrasting(ColorUtils.blendARGB(surface, theme.accent, .45f), surface, 3);
 			tonal = ColorUtils.blendARGB(surface, accent, .08f);
 			error = InterfaceAppearance.contrasting(ResourceUtils.getColor(view.getContext(), R.attr.colorTextError), surface, 3);
@@ -154,7 +187,7 @@ public final class PostingFormAppearance {
 		if (formattingScroll != null) formattingScroll.setBackground(shape(14, palette.tonal, 0, 0));
 		if (moreButton != null) renderCommand(moreButton);
 		if (attachButton != null) renderAttachment();
-		if (captchaEntry != null) renderCaptchaEntry();
+
 		styleCaptcha();
 		if (toolbar != null) toolbar.setBackground(new ColorDrawable(palette.background));
 		if (toolbarContainer != null) toolbarContainer.setBackground(new ColorDrawable(palette.background));
@@ -221,9 +254,7 @@ public final class PostingFormAppearance {
 		attachButton.setOnClickListener(v -> {
 			if (!closed && attachmentAvailable && attachmentAction != null) attachmentAction.run();
 		});
-		LinearLayout.LayoutParams attachmentParams = new LinearLayout.LayoutParams(dp(root, 40), dp(root, 44));
-		attachmentParams.setMarginEnd(dp(root, 8));
-		editorActions.addView(attachButton, attachmentParams);
+		// The same attachment widget moves to the utility row in finishSetup; no replacement callback.
 		editorActions.addView(formattingScroll, new LinearLayout.LayoutParams(0, -2, 1f));
 		container.addView(editorActions, new LinearLayout.LayoutParams(-1, -2));
 		renderAttachment();
@@ -248,13 +279,16 @@ public final class PostingFormAppearance {
 	private void renderAttachment() {
 		attachButton.setBackgroundTintList(null);
 		attachButton.setImageTintList(ColorStateList.valueOf(palette.accent));
-		attachButton.setMinimumWidth(0); attachButton.setMinimumHeight(0);
+		attachButton.setMinimumWidth(dp(root, 40)); attachButton.setMinimumHeight(dp(root, 44));
 		attachButton.setBackground(ripple(shape(14, palette.tonal, 0, 0), 14));
 	}
 
 	private void updateEditorActionsVisibility() {
-		if (editorActions != null) editorActions.setVisibility(attachButton.getVisibility() != View.GONE
-				|| formattingScroll.getVisibility() != View.GONE ? View.VISIBLE : View.GONE);
+		if (editorActions != null) {
+			editorActions.setVisibility(View.VISIBLE);
+			editorActions.setMinimumHeight(dp(root, 52)); // 44dp tools + unchanged 8dp bottom padding.
+		}
+		syncOptionsVisibility();
 	}
 
 	/** Own horizontal drags from DOWN, including a reverse drag at either end of the row. */
@@ -442,7 +476,8 @@ public final class PostingFormAppearance {
 		// Reorder only the same presentation widgets; listeners, tags and selection stay owned by posting.
 		int position = 0;
 		for (int tag : new int[] {ChanMarkup.TAG_BOLD, ChanMarkup.TAG_ITALIC, ChanMarkup.TAG_UNDERLINE,
-				ChanMarkup.TAG_OVERLINE, ChanMarkup.TAG_STRIKE, ChanMarkup.TAG_SPOILER, ChanMarkup.TAG_QUOTE}) {
+				ChanMarkup.TAG_OVERLINE, ChanMarkup.TAG_STRIKE, ChanMarkup.TAG_SUBSCRIPT,
+				ChanMarkup.TAG_SUPERSCRIPT, ChanMarkup.TAG_SPOILER, ChanMarkup.TAG_QUOTE}) {
 			for (View command : commands) if (Integer.valueOf(tag).equals(markupTags.get(command))) {
 				formatting.removeView(command); formatting.addView(command, position++);
 			}
@@ -466,7 +501,7 @@ public final class PostingFormAppearance {
 	}
 
 	private int inlineMinimumWidth() {
-		int width = dp(root, 4) * 2 + commandMinimumWidth(moreButton);
+		int width = dp(root, 4) * 2 + (inlineCommands.size() < commands.size() ? commandMinimumWidth(moreButton) : 0);
 		for (View command : inlineCommands) width += commandMinimumWidth(command);
 		return width;
 	}
@@ -475,10 +510,12 @@ public final class PostingFormAppearance {
 		if (formatting == null || moreButton == null || available <= 0) return;
 		inlineCommands.clear();
 		for (int tag : new int[] {ChanMarkup.TAG_BOLD, ChanMarkup.TAG_ITALIC, ChanMarkup.TAG_UNDERLINE,
-				ChanMarkup.TAG_OVERLINE, ChanMarkup.TAG_STRIKE, ChanMarkup.TAG_SPOILER, ChanMarkup.TAG_QUOTE}) {
+				ChanMarkup.TAG_OVERLINE, ChanMarkup.TAG_STRIKE, ChanMarkup.TAG_SUBSCRIPT,
+				ChanMarkup.TAG_SUPERSCRIPT, ChanMarkup.TAG_SPOILER, ChanMarkup.TAG_QUOTE}) {
 			for (View command : commands) if (Integer.valueOf(tag).equals(markupTags.get(command))) inlineCommands.add(command);
 		}
-		for (int tag : new int[] {ChanMarkup.TAG_OVERLINE, ChanMarkup.TAG_STRIKE, ChanMarkup.TAG_UNDERLINE,
+		for (int tag : new int[] {ChanMarkup.TAG_SUBSCRIPT, ChanMarkup.TAG_SUPERSCRIPT,
+				ChanMarkup.TAG_OVERLINE, ChanMarkup.TAG_STRIKE, ChanMarkup.TAG_UNDERLINE,
 				ChanMarkup.TAG_ITALIC, ChanMarkup.TAG_BOLD, ChanMarkup.TAG_QUOTE, ChanMarkup.TAG_SPOILER}) {
 			if (inlineMinimumWidth() <= available) break;
 			for (View command : commands) if (Integer.valueOf(tag).equals(markupTags.get(command))) inlineCommands.remove(command);
@@ -498,7 +535,7 @@ public final class PostingFormAppearance {
 				}
 			}
 		}
-		moreButton.setVisibility(commands.isEmpty() ? View.GONE : View.VISIBLE);
+		moreButton.setVisibility(extra ? View.VISIBLE : View.GONE);
 		moreButton.setEnabled(extra);
 		LinearLayout.LayoutParams moreParams = (LinearLayout.LayoutParams) moreButton.getLayoutParams();
 		int moreWidth = commandMinimumWidth(moreButton);
@@ -561,121 +598,119 @@ public final class PostingFormAppearance {
 		this.send = send;
 		for (CompoundButton option : options) { checks.add(option); renderCheck(option); }
 		FrameLayout footer = root.findViewById(R.id.footer_container);
-		View captcha = footer.getChildAt(0);
-		captchaRoot = captcha;
+		captchaRoot = footer.getChildAt(0);
+		captchaInput = captchaRoot.findViewById(R.id.captcha_input);
 		((ViewGroup) send.getParent()).removeView(send);
-		footer.removeView(captcha);
-		LinearLayout actions = new LinearLayout(root.getContext());
-		actions.setOrientation(LinearLayout.VERTICAL);
+		footer.removeView(captchaRoot);
+		// Keep the original CaptchaForm and its IDs/data/callbacks. Park it outside measured
+		// layout and lend the very same view to the native captcha dialog when requested.
+		FrameLayout parking = new FrameLayout(root.getContext()); parking.setVisibility(View.GONE);
+		captchaParking = parking; parking.addView(captchaRoot);
+		captchaRoot.setTag(R.id.posting_form_owner, this);
+		footer.addView(parking, new FrameLayout.LayoutParams(-1, -2));
+		LinearLayout actions = new LinearLayout(root.getContext()); actions.setOrientation(LinearLayout.VERTICAL);
 		optionsRow = root.findViewById(R.id.checkbox_parent);
 		((ViewGroup) optionsRow.getParent()).removeView(optionsRow);
-		optionsRow.setVerticalSpacing(0);
-		optionsRow.setHorizontalSpacing(0);
-		List<View> optionViews = new ArrayList<>();
-		for (int i = 0; i < optionsRow.getChildCount(); i++) optionViews.add(optionsRow.getChildAt(i));
+		List<View> originalOptions = new ArrayList<>();
+		for (int i = 0; i < optionsRow.getChildCount(); i++) originalOptions.add(optionsRow.getChildAt(i));
 		optionsRow.removeAllViews();
-		for (View option : optionViews) {
+		utilitySlot = new FrameLayout(root.getContext()); utilitySlot.setMinimumHeight(dp(root, 64));
+		utilitySlot.setPadding(0, dp(root, 10), 0, dp(root, 10));
+		utilityContent = new PostingUtilityRow(root.getContext()); utilityContent.setGravity(Gravity.CENTER_VERTICAL);
+		utilityContent.setMinimumHeight(dp(root, 44));
+		utilityContent.addView(attachButton, new LinearLayout.LayoutParams(dp(root, 40), dp(root, 44)));
+		for (View option : originalOptions) {
 			if (option instanceof CompoundButton && !checks.contains(option)) {
 				checks.add((CompoundButton) option); renderCheck((CompoundButton) option);
 			}
-			PostingOptionsPanel.OptionRow row = new PostingOptionsPanel.OptionRow(root.getContext());
-			row.addView(option, new FrameLayout.LayoutParams(-1, -2));
-			optionsRow.addView(row, new ViewGroup.LayoutParams(-1, -2));
+			utilityContent.addView(option, new LinearLayout.LayoutParams(-2, -2));
 		}
-		captchaEntry = new Button(root.getContext(), null, android.R.attr.borderlessButtonStyle);
-		captchaEntry.setId(R.id.posting_compact_captcha);
-		captchaEntry.setText(R.string.posting_captcha_label);
-		captchaEntry.setContentDescription(root.getContext().getString(R.string.load_captcha));
-		captchaEntry.setTooltipText(captchaEntry.getContentDescription());
-		// The delegated original widget supplies feedback; do not play it twice.
-		captchaEntry.setSoundEffectsEnabled(false);
-		captchaEntry.setHapticFeedbackEnabled(false);
-		captchaEntry.setOnClickListener(v -> {
-			View target = root.findViewById(compactCaptchaUsesCancel() ? R.id.captcha_cancel : R.id.captcha_block_parent);
-			if (!closed && target != null && target.isClickable()) target.performClick();
-		});
-		captchaEntry.setOnLongClickListener(v -> {
-			View target = root.findViewById(R.id.captcha_block_parent);
-			return !closed && target != null && target.performLongClick();
-		});
-		// Keep the label measured even while loading: the footer and editor must not jump.
-		captchaSlot = new FrameLayout(root.getContext());
-		captchaSlot.setMinimumWidth(dp(root, 104));
-		captchaSlot.setMinimumHeight(dp(root, 56));
-		captchaSlot.addView(captchaEntry, new FrameLayout.LayoutParams(-1, -1));
-		captchaIndicator = PullLoadingIndicator.createMaterial(root.getContext());
-		captchaIndicator.setId(R.id.posting_captcha_loading);
-		captchaIndicator.setContainerWidth(dp(root, 32));
-		captchaIndicator.setContainerHeight(dp(root, 32));
-		captchaIndicator.setIndicatorSize(dp(root, 26));
-		captchaIndicator.setContainerColor(Color.TRANSPARENT);
-		captchaIndicator.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-		captchaIndicator.setVisibility(View.GONE);
-		captchaSlot.addView(captchaIndicator, new FrameLayout.LayoutParams(dp(root, 32), dp(root, 32), Gravity.CENTER));
-		captchaMotion = new PostingCaptchaMotion(captchaEntry, captchaSlot, captchaIndicator);
-		actions.addView(captcha, new LinearLayout.LayoutParams(-1, -2));
-		optionsPanel = new PostingOptionsPanel(root.getContext(), captchaSlot, optionsRow, checks);
-		actions.addView(optionsPanel, new LinearLayout.LayoutParams(-1, -2));
-		LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
-		params.topMargin = dp(root, 16);
-		actions.addView(send, params);
+		utilitySlot.addView(utilityContent, new FrameLayout.LayoutParams(-1, -2, Gravity.CENTER_VERTICAL));
+		actions.addView(utilitySlot, new LinearLayout.LayoutParams(-1, -2));
+		FrameLayout primarySlot = new FrameLayout(root.getContext());
+		primarySlot.addView(send, new FrameLayout.LayoutParams(-1, -1));
+		primaryMotion = new PostingPrimaryMotion(send, primarySlot);
+		primaryMotion.setAvailabilityChanged(() -> { if (primaryChanged != null) primaryChanged.run(); });
+		CaptchaDialogAppearance.observe(foregroundCaptchaListener);
+		LinearLayout.LayoutParams primaryParams = new LinearLayout.LayoutParams(-1, dp(root, 56));
+		primaryParams.topMargin = dp(root, 16); actions.addView(primarySlot, primaryParams);
 		footer.addView(actions, new FrameLayout.LayoutParams(-1, -2));
-		renderSend();
-		renderCaptchaEntry();
-		styleCaptcha();
-		root.getViewTreeObserver().addOnGlobalLayoutListener(layoutListener);
-		updateLayout();
+		renderSend(); styleCaptcha(); syncOptionsVisibility();
+		root.getViewTreeObserver().addOnGlobalLayoutListener(layoutListener); updateLayout();
 	}
 
-	private void renderCaptchaEntry() {
-		captchaEntry.setAllCaps(false);
-		ViewUtils.setTextSizeScaled(captchaEntry, 16);
-		captchaEntry.setMinWidth(dp(root, 104)); captchaEntry.setMinimumWidth(dp(root, 104));
-		captchaEntry.setMinHeight(dp(root, 56)); captchaEntry.setMinimumHeight(dp(root, 56));
-		captchaEntry.setPadding(dp(root, 6), 0, dp(root, 6), 0);
-		captchaEntry.setStateListAnimator(null); captchaEntry.setElevation(0);
-		captchaMotion.colors(palette.surface, palette.tonal,
-				InterfaceAppearance.contrasting(palette.accent, palette.tonal, 4.5), palette.accent);
-	}
+	public void setPrimaryChanged(Runnable callback) { primaryChanged = callback; }
 
-	private boolean compactCaptchaUsesCancel() {
-		return captchaAnswerSaved && captchaType != com.mishiranu.dashchan.ui.CaptchaForm.CaptchaViewType.IMAGE;
-	}
+	public boolean needsCaptchaSolution() { return primaryState.mode() != PostingPrimaryState.Mode.SEND; }
+
 	private void updateCaptchaEntry() { updateCaptchaEntry(false); }
 	private void updateCaptchaEntry(boolean restoring) {
-		if (captchaEntry == null || captchaRoot == null) return;
-		TextView text = root.findViewById(R.id.captcha_skip_text);
-		View skip = root.findViewById(R.id.captcha_skip_block);
-		View block = root.findViewById(R.id.captcha_block);
-		View cancel = root.findViewById(R.id.captcha_cancel);
-		View target = root.findViewById(R.id.captcha_block_parent);
-		View loadingView = root.findViewById(R.id.captcha_loading);
-		// The cancel child defaults to VISIBLE in XML, but its entire skip block is
-		// GONE during LOADING. Its local visibility must not select the legacy loader.
-		boolean loading = block.getVisibility() == View.VISIBLE && loadingView.getVisibility() == View.VISIBLE;
+		if (send == null || captchaRoot == null) return;
+		boolean loading = captchaType == com.mishiranu.dashchan.ui.CaptchaForm.CaptchaViewType.LOADING;
 		boolean error = captchaType == com.mishiranu.dashchan.ui.CaptchaForm.CaptchaViewType.ERROR;
-		boolean answered = captchaAnswerSaved && !loading && !error;
 		boolean image = captchaType == com.mishiranu.dashchan.ui.CaptchaForm.CaptchaViewType.IMAGE;
-		boolean entry = text != null && skip.getVisibility() == View.VISIBLE
-				&& block.getVisibility() != View.VISIBLE && cancel.getVisibility() == View.GONE
-				&& root.getContext().getString(R.string.load_captcha).contentEquals(text.getText())
-				&& target.isClickable();
-		PostingCaptchaMotionState.State state = PostingCaptchaMotionState.resolve(loading, error, answered, entry || image);
-		boolean compact = state != PostingCaptchaMotionState.State.LEGACY;
-		captchaSlot.setVisibility(compact ? View.VISIBLE : View.GONE);
-		captchaMotion.bind(state, restoring);
-		CharSequence description = answered ? root.getContext().getString(R.string.posting_captcha_ready_description,
-				root.getContext().getString(R.string.posting_captcha_done))
-				: error ? root.getContext().getString(R.string.posting_captcha_retry)
-				: root.getContext().getString(loading ? R.string.posting_captcha_loading : R.string.load_captcha);
-		if (!description.equals(captchaEntry.getContentDescription())) {
-			captchaEntry.setContentDescription(description); captchaEntry.setTooltipText(description);
+		boolean bypass = captchaState == com.mishiranu.dashchan.content.async.ReadCaptchaTask.CaptchaState.PASS
+				|| captchaState == com.mishiranu.dashchan.content.async.ReadCaptchaTask.CaptchaState.SKIP;
+		boolean ready = !loading && !error && (bypass || image && captchaAnswerSaved && captchaDialog == null);
+		PostingPrimaryState.Change change = primaryState.bind(PostingPrimaryState.resolve(loading, ready),
+				ready && captchaAnswerSaved, restoring);
+		primaryMotion.bind(change);
+		if (error || !loading && !image && !ready) primaryState.cancelRequest();
+		if (primaryState.consumeDialogRequest(image && !loading && !error)) openImageCaptcha();
+		if (captchaDialog != null) {
+			Button done = captchaDialog.getButton(AlertDialog.BUTTON_POSITIVE);
+			if (done != null) done.setEnabled(!loading && !error && (bypass || image && captchaInput.length() > 0));
 		}
-		View action = compactCaptchaUsesCancel() ? cancel : target;
-		captchaEntry.setEnabled(action.isEnabled() && action.isClickable());
-		// Inline image/input challenges remain visible even when an entered answer is summarized.
-		captchaRoot.setVisibility(compact && !image ? View.GONE : View.VISIBLE);
-		syncOptionsVisibility();
+		if (primaryChanged != null) primaryChanged.run();
+	}
+
+	public void requestCaptchaSolution() {
+		if (closed || captchaDialog != null || !primaryState.requestDialog()) return;
+		if (captchaType == com.mishiranu.dashchan.ui.CaptchaForm.CaptchaViewType.IMAGE) {
+			if (primaryState.consumeDialogRequest(true)) openImageCaptcha();
+		} else {
+			View target = captchaRoot.findViewById(R.id.captcha_block_parent);
+			if (target != null && target.isEnabled() && target.isClickable()) target.performClick();
+			else primaryState.cancelRequest();
+		}
+	}
+
+	private void openImageCaptcha() {
+		if (closed || !root.isAttachedToWindow() || !root.isShown() || captchaDialog != null) return;
+		dialogAccepted = false; dialogPreviousInput = captchaInput.getText().toString(); dialogRevision = captchaRevision;
+		((ViewGroup) captchaRoot.getParent()).removeView(captchaRoot);
+		captchaRoot.setVisibility(View.VISIBLE);
+		AlertDialog dialog = new MotionDialogBuilder(root.getContext())
+				.setTitle(R.string.confirmation).setView(captchaRoot)
+				.setPositiveButton(android.R.string.ok, null).setNegativeButton(android.R.string.cancel, null).create();
+		captchaDialog = dialog;
+		dialog.setOnDismissListener(ignored -> {
+			if (captchaDialog != dialog) return;
+			captchaDialog = null;
+			if (!dialogAccepted && dialogRevision == captchaRevision) captchaInput.setText(dialogPreviousInput);
+			dialogPreviousInput = null;
+			ViewUtils.removeFromParent(captchaRoot); ((ViewGroup) captchaParking).addView(captchaRoot);
+			if (!closed) updateCaptchaEntry();
+		});
+		dialog.setOnShowListener(ignored -> {
+			dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> confirmCaptchaDialog());
+			updateCaptchaEntry();
+			captchaInput.requestFocus();
+		});
+		dialog.setCanceledOnTouchOutside(false);
+		try { dialog.show(); }
+		catch (android.view.WindowManager.BadTokenException e) {
+			captchaDialog = null; ViewUtils.removeFromParent(captchaRoot); ((ViewGroup) captchaParking).addView(captchaRoot);
+			dialogPreviousInput = null;
+		}
+	}
+
+	/** Native IME confirmation closes only the challenge. Sending always needs a new explicit click. */
+	public boolean confirmCaptchaDialog() {
+		if (captchaDialog == null) return false;
+		Button positive = captchaDialog.getButton(AlertDialog.BUTTON_POSITIVE);
+		if (positive == null || !positive.isEnabled()) return true;
+		dialogAccepted = true; captchaDialog.dismiss(); return true;
 	}
 
 	/** Observe the existing captcha state without replacing its controller or callbacks. */
@@ -691,7 +726,11 @@ public final class PostingFormAppearance {
 	public static void captchaStateChanged(View view, com.mishiranu.dashchan.ui.CaptchaForm.CaptchaViewType type,
 			com.mishiranu.dashchan.content.async.ReadCaptchaTask.CaptchaState state, boolean answerSaved, boolean restoring) {
 		PostingFormAppearance owner = captchaOwner(view);
-		if (owner != null) { owner.captchaType = type; owner.captchaAnswerSaved = answerSaved; owner.updateCaptchaEntry(restoring); }
+		if (owner != null) {
+			if (owner.captchaType != type || owner.captchaState != state) owner.captchaRevision++;
+			owner.captchaType = type; owner.captchaState = state; owner.captchaAnswerSaved = answerSaved;
+			owner.updateCaptchaEntry(restoring);
+		}
 	}
 	private static void updateCaptchaState(View view) {
 		PostingFormAppearance owner = captchaOwner(view);
@@ -710,24 +749,15 @@ public final class PostingFormAppearance {
 	}
 
 	public void syncOptionsVisibility() {
-		CarryLayout row = optionsRow != null ? optionsRow : root.findViewById(R.id.checkbox_parent);
+		if (utilityContent == null) return;
 		boolean any = false;
-		if (optionsPanel != null) {
-			for (CompoundButton check : checks) {
-				if (check.getParent() instanceof PostingOptionsPanel.OptionRow) {
-					((View) check.getParent()).setVisibility(check.getVisibility());
-				}
-				any |= check.getVisibility() != View.GONE;
-			}
-		} else for (int i = 0; i < row.getChildCount(); i++) any |= row.getChildAt(i).getVisibility() != View.GONE;
-		row.setVisibility(any ? View.VISIBLE : View.GONE);
-		if (optionsPanel != null) {
-			boolean shown = any || captchaSlot.getVisibility() != View.GONE;
-			optionsPanel.setVisibility(shown ? View.VISIBLE : View.GONE);
-			LinearLayout.LayoutParams params = (LinearLayout.LayoutParams) optionsPanel.getLayoutParams();
-			int gap = shown && captchaRoot.getVisibility() == View.VISIBLE ? dp(root, 12) : 0;
-			if (params.topMargin != gap) { params.topMargin = gap; optionsPanel.setLayoutParams(params); }
+		for (CompoundButton check : checks) {
+			any |= check.getVisibility() != View.GONE;
 		}
+		LinearLayout.LayoutParams attachParams = (LinearLayout.LayoutParams) attachButton.getLayoutParams();
+		int gap = any && attachButton.getVisibility() != View.GONE ? dp(root, 8) : 0;
+		if (attachParams.getMarginEnd() != gap) { attachParams.setMarginEnd(gap); attachButton.setLayoutParams(attachParams); }
+		// Even when the forum hides every utility control, the 64dp service slot stays reserved.
 	}
 
 	private void renderCheck(CompoundButton check) {
@@ -745,9 +775,9 @@ public final class PostingFormAppearance {
 		}
 		ViewUtils.setTextSizeScaled(check, 16);
 		check.setTextColor(palette.text);
-		// V2 intentionally uses non-overlapping compact touch rows at normal font size.
-		// Larger fonts retain at least 48dp and wrap/grow using the original TextView.
-		int rowHeight = dp(root, check.getResources().getConfiguration().fontScale > 1f ? 48 : 32);
+		// The row fits both complete labels to one line with a shared measured font scale.
+		int rowHeight = Math.max(dp(root, check.getResources().getConfiguration().fontScale > 1f ? 48 : 32),
+				(int) Math.ceil(check.getPaint().getFontSpacing()) + dp(root, 8));
 		check.setMinHeight(rowHeight); check.setMinimumHeight(rowHeight);
 		check.setMinWidth(0); check.setMinimumWidth(0);
 		check.setPadding(0, 0, 0, 0);
@@ -755,11 +785,11 @@ public final class PostingFormAppearance {
 		check.setBackgroundTintList(null);
 		check.setBackground(ripple(shape(0, Color.TRANSPARENT, 0, 0), 0));
 		check.setCompoundDrawablePadding(0);
-		check.setSingleLine(false); check.setMaxLines(Integer.MAX_VALUE); check.setEllipsize(null);
+		check.setSingleLine(true); check.setMaxLines(1); check.setEllipsize(null);
 		check.setButtonTintList(null);
 		StateListDrawable states = new StateListDrawable();
-		states.addState(new int[] {android.R.attr.state_checked}, new InsetDrawable(checkboxDrawable(true), 0, 0, dp(root, 12), 0));
-		states.addState(new int[] {}, new InsetDrawable(checkboxDrawable(false), 0, 0, dp(root, 12), 0));
+		states.addState(new int[] {android.R.attr.state_checked}, new InsetDrawable(checkboxDrawable(true), 0, 0, dp(root, 6), 0));
+		states.addState(new int[] {}, new InsetDrawable(checkboxDrawable(false), 0, 0, dp(root, 6), 0));
 		check.setButtonDrawable(states);
 	}
 
@@ -784,27 +814,32 @@ public final class PostingFormAppearance {
 		ViewUtils.setTextSizeScaled(send, 16);
 		send.setMinHeight(dp(root, 56)); send.setMinimumHeight(dp(root, 56));
 		send.setPadding(dp(root, 16), dp(root, 8), dp(root, 16), dp(root, 8));
+		ViewGroup.LayoutParams slotParams = ((View) send.getParent()).getLayoutParams();
+		int height = Math.max(dp(root, 56), (int) Math.ceil(send.getPaint().getFontSpacing()) + dp(root, 16));
+		if (slotParams.height != height) { slotParams.height = height; ((View) send.getParent()).setLayoutParams(slotParams); }
 		send.setStateListAnimator(null); send.setElevation(0); send.setTranslationZ(0);
 		send.setBackgroundTintList(null);
-		if (sendMotion == null) sendMotion = new PostingSendMotion(send);
-		sendMotion.colors(palette.accent, palette.onAccent, palette.disabled,
+		primaryMotion.colors(palette.primary, Color.WHITE, palette.disabled,
 				InterfaceAppearance.contrasting(palette.secondary, palette.disabled, 4.5));
 	}
-	public void updateSendState() { if (sendMotion != null) sendMotion.bind(); }
+	public void updateSendState() { if (primaryMotion != null) primaryMotion.enabledChanged(); }
+	public boolean canActivatePrimary() { return !closed && (primaryMotion == null || primaryMotion.canActivate()); }
+	public void finishPrimaryTransition() { if (primaryMotion != null) primaryMotion.finishContentTransition(); }
 
 	private void styleCaptcha() {
-		View parent = root.findViewById(R.id.captcha_block_parent);
+		if (captchaRoot == null) return;
+		View parent = captchaRoot.findViewById(R.id.captcha_block_parent);
 		if (parent == null) return;
 		parent.setMinimumHeight(dp(root, 48));
 		parent.setBackground(ripple(shape(16, palette.surface, palette.accent, 1), 16));
 		((FrameLayout) parent).setForeground(null);
-		TextView text = root.findViewById(R.id.captcha_skip_text);
+		TextView text = captchaRoot.findViewById(R.id.captcha_skip_text);
 		text.setAllCaps(false); ViewUtils.setTextSizeScaled(text, 14);
 		text.setTextColor(palette.accent);
 		ViewGroup.MarginLayoutParams params = (ViewGroup.MarginLayoutParams)
-				root.findViewById(R.id.captcha_skip_block).getLayoutParams();
+				captchaRoot.findViewById(R.id.captcha_skip_block).getLayoutParams();
 		params.leftMargin = params.rightMargin = 0;
-		root.findViewById(R.id.captcha_skip_block).setLayoutParams(params);
+		captchaRoot.findViewById(R.id.captcha_skip_block).setLayoutParams(params);
 		text.setPadding(dp(root, 12), 0, dp(root, 12), 0);
 		captchaActionIcon = ResourceUtils.getDrawable(root.getContext(), R.drawable.ic_refresh).mutate();
 		captchaActionIcon.setTint(palette.accent);
@@ -812,7 +847,7 @@ public final class PostingFormAppearance {
 		captchaActionIconShown = !root.getContext().getString(R.string.load_captcha).contentEquals(text.getText());
 		updateCaptchaActionIcon();
 		updateCaptchaEntry();
-		ImageView cancel = root.findViewById(R.id.captcha_cancel);
+		ImageView cancel = captchaRoot.findViewById(R.id.captcha_cancel);
 		cancel.setImageTintList(ColorStateList.valueOf(palette.accent));
 		cancel.setContentDescription(root.getContext().getString(R.string.load_captcha));
 		ViewGroup.MarginLayoutParams cancelParams = (ViewGroup.MarginLayoutParams) cancel.getLayoutParams();
@@ -822,7 +857,8 @@ public final class PostingFormAppearance {
 	}
 
 	private void updateCaptchaActionIcon() {
-		TextView text = root.findViewById(R.id.captcha_skip_text);
+		if (captchaRoot == null) return;
+		TextView text = captchaRoot.findViewById(R.id.captcha_skip_text);
 		if (text == null || captchaActionIcon == null) return;
 		boolean show = root.getContext().getString(R.string.load_captcha).contentEquals(text.getText());
 		if (show != captchaActionIconShown) {
@@ -967,8 +1003,9 @@ public final class PostingFormAppearance {
 
 	public void deactivateToolbar() {
 		dismissFormattingMenu();
-		if (captchaMotion != null) captchaMotion.finish();
-		if (sendMotion != null) sendMotion.finish();
+		primaryState.cancelRequest();
+		if (captchaDialog != null) captchaDialog.dismiss();
+		if (primaryMotion != null) primaryMotion.finish();
 		if (toolbar == null) return;
 		if (toolbar.getViewTreeObserver().isAlive()) toolbar.getViewTreeObserver().removeOnGlobalLayoutListener(toolbarListener);
 		for (Runnable restore : toolbarRestore.values()) restore.run();
@@ -987,11 +1024,12 @@ public final class PostingFormAppearance {
 	}
 
 	public void close() {
+		CaptchaDialogAppearance.unobserve(foregroundCaptchaListener);
 		deactivateToolbar();
 		closed = true;
-		if (captchaMotion != null) captchaMotion.close();
-		if (sendMotion != null) sendMotion.close();
-		if (captchaIndicator != null) captchaIndicator.setVisibility(View.GONE);
+		primaryState.close(); primaryChanged = null;
+		if (primaryMotion != null) primaryMotion.close();
+		if (captchaRoot != null) captchaRoot.setTag(R.id.posting_form_owner, null);
 		if (root.getViewTreeObserver().isAlive()) root.getViewTreeObserver().removeOnGlobalLayoutListener(layoutListener);
 		if (root.getTag(R.id.posting_form_owner) == this) root.setTag(R.id.posting_form_owner, null);
 		for (Field field : fields) field.input.setTag(R.id.posting_form_field, null);

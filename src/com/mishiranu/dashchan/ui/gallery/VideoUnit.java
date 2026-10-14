@@ -647,6 +647,7 @@ public class VideoUnit {
 	}
 
 	public void interrupt(boolean force) {
+		if (force) controlsBinding.clear();
 		startupFrameIdentity = null;
 		if (force) pageFrames.clear();
 		PagerInstance.ViewHolder selected = instance.currentHolder;
@@ -687,6 +688,7 @@ public class VideoUnit {
 			audioFocus.release();
 			initialized = false;
 		}
+		updateMediaControlReadiness(false);
 		invalidateControlsVisibility();
 		if (player != null && !pictureInPictureTransferred) {
 			VideoPlayer workPlayer = player;
@@ -1032,6 +1034,17 @@ public class VideoUnit {
 	}
 
 	private void initializePlayer(Bitmap preparedFrame) {
+		boolean animateEntrance = !controlsBinding.retainsControls();
+		bindingMediaControls = true;
+		try {
+			initializePlayerControls(preparedFrame, animateEntrance);
+		} finally {
+			bindingMediaControls = false;
+			controlsBinding.complete();
+		}
+	}
+
+	private void initializePlayerControls(Bitmap preparedFrame, boolean animateEntrance) {
 		clearStartupPreview();
 		preparedStartupFrame = preparedFrame;
 		firstFrameReady = false;
@@ -1104,6 +1117,7 @@ public class VideoUnit {
 		playPauseButton.setEnabled(true);
 		seekBar.setEnabled(true);
 		initialized = true;
+		updateMediaControlReadiness(true);
 		if (zoomGestures && !tikTokModeCallback.isEnabled()) {
 			videoView.post(() -> captureAndApplyVideoTransform(holder, videoView));
 		}
@@ -1112,7 +1126,7 @@ public class VideoUnit {
 		if (hideSurfaceOnInit) {
 			showHideVideoView(false);
 		}
-		invalidateControlsVisibility();
+		invalidateControlsVisibility(animateEntrance);
 		if (playbackHandoff != null) wasPlaying = playbackHandoff.isPlaying();
 		setPlaying((preloadResumed || playbackHandoff != null && playbackHandoff.isPlaying()) && wasPlaying, true);
 		if (preloadResumed) finishPlaybackHandoff();
@@ -1278,7 +1292,10 @@ public class VideoUnit {
 			playPauseButton.setScaleType(modern ? ImageButton.ScaleType.FIT_CENTER : ImageButton.ScaleType.CENTER);
 			playPauseButton.setOnClickListener(playPauseClickListener);
 			playPauseButton.setEnabled(playbackEnabled);
-			if (modern) PlayerControlsStyle.button(playPauseButton, density, false);
+			if (modern) {
+				PlayerControlsStyle.button(playPauseButton, density, false);
+				PlayerControlsStyle.playbackReadiness(playPauseButton, retainPlaybackButtonAppearance);
+			}
 
 			if (playbackSpeedControl) {
 				playbackSpeedButton = new TextView(context, null, android.R.attr.textAppearanceListItem);
@@ -1470,6 +1487,7 @@ public class VideoUnit {
 			});
 			centerPlayPauseButton.setScaleType(ImageButton.ScaleType.FIT_CENTER);
 			PlayerControlsStyle.button(centerPlayPauseButton, density, true);
+			PlayerControlsStyle.playbackReadiness(centerPlayPauseButton, retainPlaybackButtonAppearance);
 			centerPlayPauseButton.setOnClickListener(playPauseClickListener);
 			int size = PlayerControlsStyle.dp(density, 72);
 			FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(size, size, Gravity.CENTER);
@@ -1478,13 +1496,13 @@ public class VideoUnit {
 			host.addView(centerPlayPauseButton, params);
 		}
 		if (centerPlayPauseButton != null) {
-			boolean visible = controlsVisible && initialized && !pictureInPictureTransferred
+			boolean visible = controlsVisible && (initialized || controlsBinding.retainsControls()) && !pictureInPictureTransferred
 					&& instance.galleryInstance.callback.isSystemUiVisible();
 			centerPlayPauseButton.animate().setListener(null).cancel();
 			ElementMotion.finish(centerPlayPauseButton);
 			centerPlayPauseButton.setAlpha(visible ? 1f : 0f);
 			centerPlayPauseButton.setVisibility(visible ? View.VISIBLE : View.GONE);
-			centerPlayPauseButton.setClickable(visible);
+			centerPlayPauseButton.setClickable(visible && initialized);
 			centerPlayPauseButton.setImportantForAccessibility(visible
 					? View.IMPORTANT_FOR_ACCESSIBILITY_AUTO : View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
 		}
@@ -2301,15 +2319,19 @@ public class VideoUnit {
 	};
 
 	private void updatePlayState() {
+		updatePlayState(true);
+	}
+
+	private void updatePlayState(boolean animateIcon) {
 		if (player != null) {
 			boolean playing = player.isPlaying();
 			int icon = finishedPlayback ? R.drawable.ic_refresh
 					: playing ? R.drawable.ic_pause : R.drawable.ic_play_arrow;
 			int description = finishedPlayback ? R.string.play_again : playing ? R.string.pause : R.string.play;
-			setControlIcon(playPauseButton, icon);
+			setControlIcon(playPauseButton, icon, animateIcon);
 			playPauseButton.setContentDescription(instance.galleryInstance.context.getString(description));
 			if (centerPlayPauseButton != null) {
-				setControlIcon(centerPlayPauseButton, icon);
+				setControlIcon(centerPlayPauseButton, icon, animateIcon);
 				centerPlayPauseButton.setContentDescription(instance.galleryInstance.context.getString(description));
 				centerPlayPauseButton.setEnabled(playPauseButton.isEnabled());
 			}
@@ -2406,6 +2428,41 @@ public class VideoUnit {
 	}
 
 	private boolean controlsVisible = false;
+	private final VideoControlsBinding controlsBinding = new VideoControlsBinding();
+	private boolean bindingMediaControls;
+	private boolean retainPlaybackButtonAppearance;
+
+	void selectVideoControlsPage(boolean playableVideo) {
+		if (!pictureInPictureTransferred) {
+			controlsBinding.select(playableVideo, initialized, modernControls && InterfaceMotion.isEnabled());
+		}
+	}
+
+	private void updateMediaControlReadiness(boolean ready) {
+		setPlaybackControlsReady(ready, !ready && controlsBinding.retainsControls());
+		for (View control : new View[] {seekBar,
+				fullscreenButton, playbackSpeedButton, tikTokModeButton}) {
+			if (control != null) control.setEnabled(ready);
+		}
+		if (!ready) {
+			if (muteButton != null) muteButton.setEnabled(false);
+			if (pictureInPictureButton != null) pictureInPictureButton.setEnabled(false);
+		} else {
+			updateMuteButton(); updatePictureInPictureButton();
+		}
+	}
+
+	private void setPlaybackControlsReady(boolean ready, boolean retainAppearance) {
+		retainPlaybackButtonAppearance = modernControls && retainAppearance;
+		for (ImageButton control : new ImageButton[] {playPauseButton, centerPlayPauseButton}) {
+			if (control != null) {
+				// Paint continuity is separate from readiness. The actual button remains disabled while loading/swiping.
+				if (retainPlaybackButtonAppearance) ElementMotion.finishIcon(control);
+				if (modernControls) PlayerControlsStyle.playbackReadiness(control, retainPlaybackButtonAppearance);
+				control.setEnabled(ready);
+			}
+		}
+	}
 
 	// One timer for the whole modern overlay, not separate timers for its buttons.
 	// Playback progress updates must not reset the inactivity deadline.
@@ -2477,8 +2534,13 @@ public class VideoUnit {
 	}
 
 	private void setControlIcon(android.widget.ImageView view, int resource) {
-		if (preloadResumed && controlsWindowHasFocus && !pictureInPictureTransferred) ElementMotion.icon(view, resource);
-		else { ElementMotion.finish(view); view.setImageResource(resource); }
+		setControlIcon(view, resource, true);
+	}
+
+	private void setControlIcon(android.widget.ImageView view, int resource, boolean animate) {
+		boolean motion = animate && !bindingMediaControls && !controlsBinding.retainsControls()
+				&& preloadResumed && controlsWindowHasFocus && !pictureInPictureTransferred;
+		ElementMotion.icon(view, resource, motion);
 	}
 
 	private void finishControlsMotion() {
@@ -2486,13 +2548,17 @@ public class VideoUnit {
 	}
 
 	public void invalidateControlsVisibility() {
-		boolean visible = initialized && !pictureInPictureTransferred
-				&& instance.galleryInstance.callback.isSystemUiVisible();
+		invalidateControlsVisibility(true);
+	}
+
+	private void invalidateControlsVisibility(boolean animate) {
+		boolean visible = controlsBinding.visible(initialized, pictureInPictureTransferred,
+				instance.galleryInstance.callback.isSystemUiVisible());
+		if (centerPlayPauseButton != null) centerPlayPauseButton.setClickable(visible && initialized);
 		if (layoutConfiguration >= 0 && controlsVisible != visible) {
 			controlsView.animate().setListener(null).cancel();
 			if (centerPlayPauseButton != null) {
 				centerPlayPauseButton.animate().setListener(null).cancel();
-				centerPlayPauseButton.setClickable(visible);
 				// The modern owner captures/restores accessibility itself. Updating it
 				// before cancelling an old hide would seed the new show with a hidden state.
 				if (!InterfaceMotion.isEnabled()) {
@@ -2501,7 +2567,19 @@ public class VideoUnit {
 				}
 			}
 			// A hidden central button must never intercept the gallery's tap/zoom gestures.
-			if (InterfaceMotion.isEnabled()) {
+			if (!animate) {
+				finishControlsMotion();
+				for (View control : new View[] {controlsView, centerPlayPauseButton}) {
+					if (control != null) {
+						control.setVisibility(visible ? View.VISIBLE : View.GONE);
+						if (!ElementMotion.busy(control)) {
+							control.setAlpha(1f); control.setTranslationY(0f); control.setScaleX(1f); control.setScaleY(1f);
+						}
+						control.setImportantForAccessibility(visible ? View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
+								: View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
+					}
+				}
+			} else if (InterfaceMotion.isEnabled()) {
 				View expectedControls = controlsView;
 				ElementMotion.visibility(controlsView, visible, 16f, false, () -> expectedControls == controlsView
 						&& preloadResumed && controlsWindowHasFocus && !pictureInPictureTransferred);
@@ -2665,8 +2743,7 @@ public class VideoUnit {
 	public void handleSwipingContent(boolean swiping, boolean hideSurface) {
 		if (swiping) cancelScrubbing();
 		if (getOwnedVideoView(instance.currentHolder) != null) {
-			playPauseButton.setEnabled(!swiping);
-			if (centerPlayPauseButton != null) centerPlayPauseButton.setEnabled(!swiping);
+			setPlaybackControlsReady(!swiping, swiping);
 			seekBar.setEnabled(!swiping);
 			fullscreenButton.setEnabled(!swiping);
 			if (swiping) {
@@ -2680,7 +2757,8 @@ public class VideoUnit {
 				if (hideSurface) {
 					showHideVideoView(true);
 				}
-				updatePlayState();
+				// The decoder's temporary pause/resume is not a user play/pause toggle.
+				updatePlayState(false);
 			}
 		} else if (player != null) {
 			wasPlaying = !swiping;

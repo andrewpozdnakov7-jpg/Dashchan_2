@@ -26,6 +26,9 @@ import com.mishiranu.dashchan.util.ViewUtils;
 
 /** GitHub-only experimental video styling; playback and native controls stay in the shared player. */
 final class PlayerControlsStyle {
+	private static final ColorStateList BUTTON_COLORS = new ColorStateList(new int[][] {
+			new int[] {-android.R.attr.state_enabled}, new int[] {}}, new int[] {0x73ffffff, Color.WHITE});
+	private static final ColorStateList RETAINED_PLAYBACK_COLORS = ColorStateList.valueOf(Color.WHITE);
 	private PlayerControlsStyle() {}
 
 	static View createBar(Context context, ImageButton play, LinearLayout time, SeekBar seek,
@@ -59,9 +62,7 @@ final class PlayerControlsStyle {
 	}
 
 	static void button(ImageButton view, float density, boolean center) {
-		view.setImageTintList(new ColorStateList(new int[][] {
-				new int[] {-android.R.attr.state_enabled}, new int[] {}},
-				new int[] {0x73ffffff, Color.WHITE}));
+		view.setImageTintList(BUTTON_COLORS);
 		// Match the reference: 18 dp artwork inside 32 dp buttons; the 72 dp center is unchanged.
 		int padding = dp(density, center ? 21 : 7);
 		view.setPadding(padding, padding, padding, padding);
@@ -70,6 +71,11 @@ final class PlayerControlsStyle {
 					surface(density, 36, 0x33000000, 0x26ffffff),
 					rounded(Color.WHITE, dp(density, 36))));
 		}
+	}
+
+	/** Keep the retained playback glyph steady without changing real input availability. */
+	static void playbackReadiness(ImageButton view, boolean retainAppearance) {
+		view.setImageTintList(retainAppearance ? RETAINED_PLAYBACK_COLORS : BUTTON_COLORS);
 	}
 
 	static void slider(SeekBar view, float density) {

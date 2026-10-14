@@ -1,6 +1,7 @@
 package com.mishiranu.dashchan.ui;
 
 import com.mishiranu.dashchan.widget.MotionDialogBuilder;
+import com.mishiranu.dashchan.widget.CaptchaDialogAppearance;
 import android.app.AlertDialog;
 import android.app.Dialog;
 import android.content.Context;
@@ -665,11 +666,23 @@ public class ForegroundManager implements Handler.Callback {
 		private static final String EXTRA_MULTIPLE = "multiple";
 		private static final String EXTRA_ALLOW_REFRESH = "allowRefresh";
 		private static final String EXTRA_KEEP_OPEN = "keepOpen";
+		private static final String EXTRA_SELECTED_IMAGES = "selectedImages";
+		private static final String EXTRA_RETRY_ERROR = "retryError";
+		private static final String EXTRA_MODERN = "modern";
 
 		private FrameLayout[] selectionViews;
 		private boolean[] selected;
 		private ImageView taskImageView;
 		private boolean waiting;
+		private CaptchaDialogAppearance appearance;
+		private LinearLayout keyboardContainer;
+		private boolean refreshing;
+		private static final String EXTRA_REFRESHING = "refreshing";
+
+		private Button actionButton(int which) {
+			return appearance != null ? appearance.button(which) : getDialog() instanceof AlertDialog
+					? ((AlertDialog) getDialog()).getButton(which) : null;
+		}
 
 		private boolean keepOpen() {
 			return requireArguments().getBoolean(EXTRA_KEEP_OPEN);
@@ -683,31 +696,41 @@ public class ForegroundManager implements Handler.Callback {
 					FrameLayout cell = selectionViews[i];
 					if (cell != null) {
 						boolean available = images != null && i < images.length && images[i] != null;
-						cell.getChildAt(1).setEnabled(!waiting && available);
-						cell.setAlpha(waiting ? 0.65f : 1f);
+						cell.getChildAt(1).setEnabled(!waiting && available && !requireArguments().getBoolean(EXTRA_RETRY_ERROR));
+						cell.setAlpha(appearance != null ? 1f : waiting ? 0.65f : 1f);
 					}
 				}
 			}
 			if (getDialog() instanceof AlertDialog) {
 				AlertDialog dialog = (AlertDialog) getDialog();
-				Button refresh = dialog.getButton(AlertDialog.BUTTON_NEUTRAL);
-				Button confirm = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+				Button refresh = actionButton(AlertDialog.BUTTON_NEUTRAL);
+				Button confirm = actionButton(AlertDialog.BUTTON_POSITIVE);
 				if (refresh != null) refresh.setEnabled(!waiting);
-				if (confirm != null) confirm.setEnabled(!waiting);
+				if (confirm != null) confirm.setEnabled(!waiting && !requireArguments().getBoolean(EXTRA_RETRY_ERROR));
 			}
+			if (appearance != null) appearance.waiting(waiting, refreshing, requireArguments().getBoolean(EXTRA_RETRY_ERROR));
 		}
 
 		private void updateImages(ChoiceHandlerData data) {
+			requireArguments().putBoolean(EXTRA_RETRY_ERROR, data.retryError);
+			if (data.retryError) { refreshing = false; setWaiting(false); return; }
 			requireArguments().putParcelableArray(EXTRA_IMAGES, data.images);
+			requireArguments().putParcelableArray(EXTRA_SELECTED_IMAGES, data.selectedImages);
 			requireArguments().putParcelable(EXTRA_DESCRIPTION_IMAGE, data.descriptionImage);
 			requireArguments().putBooleanArray(EXTRA_SELECTED, null);
 			if (taskImageView == null || selectionViews == null) {
 				return; // A restored dialog will use the updated arguments when creating its views.
 			}
+			if (appearance != null) appearance.beforeContentChange(keyboardContainer);
 			if (data.images.length != selected.length) {
-				publishResult(false);
-				dismiss();
-				return;
+				if (appearance != null) {
+					keyboardContainer.removeAllViews(); selectionViews = null; selected = null;
+					buildKeyboard(keyboardContainer, data.images, false, ResourceUtils.obtainDensity(keyboardContainer));
+				} else {
+					publishResult(false);
+					dismiss();
+					return;
+				}
 			}
 			taskImageView.setImageBitmap(data.descriptionImage);
 			for (int i = 0; i < selected.length; i++) {
@@ -715,15 +738,21 @@ public class ForegroundManager implements Handler.Callback {
 				((ImageView) selectionViews[i].getChildAt(0)).setImageBitmap(data.images[i]);
 				updateSelection(i);
 			}
+			if (appearance != null) appearance.bindSelection(data.selectedImages, true);
+			refreshing = false;
+			requireArguments().putBoolean(EXTRA_REFRESHING, false);
 			setWaiting(false);
+			if (appearance != null) appearance.afterContentChange(keyboardContainer);
 		}
 
 		@Override
 		public void onDestroyView() {
+			if (appearance != null) { appearance.close(); appearance = null; }
 			super.onDestroyView();
 			taskImageView = null;
 			selectionViews = null;
 			selected = null;
+			keyboardContainer = null;
 		}
 
 		public ImageChoiceDialog() {}
@@ -765,7 +794,9 @@ public class ForegroundManager implements Handler.Callback {
 				return;
 			}
 			Dialog dialog = getDialog();
-			if (dialog instanceof AlertDialog && requireArguments().getBoolean(EXTRA_ALLOW_REFRESH)) {
+			refreshing = requireArguments().getBoolean(EXTRA_REFRESHING);
+			if (appearance != null && dialog instanceof AlertDialog) appearance.start((AlertDialog) dialog);
+			if (appearance == null && dialog instanceof AlertDialog && requireArguments().getBoolean(EXTRA_ALLOW_REFRESH)) {
 				Button refresh = ((AlertDialog) dialog).getButton(AlertDialog.BUTTON_NEUTRAL);
 				Drawable icon = ResourceUtils.getDrawable(refresh.getContext(), R.attr.iconActionRefresh, 0);
 				if (icon != null) {
@@ -791,9 +822,9 @@ public class ForegroundManager implements Handler.Callback {
 			}
 			if (keepOpen() && dialog instanceof AlertDialog) {
 				AlertDialog alert = (AlertDialog) dialog;
-				alert.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v ->
+				actionButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v ->
 						onClick(alert, AlertDialog.BUTTON_NEUTRAL));
-				alert.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v ->
+				actionButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v ->
 						onClick(alert, AlertDialog.BUTTON_POSITIVE));
 				ChoicePendingData data = getPendingData();
 				if (data != null) {
@@ -803,7 +834,7 @@ public class ForegroundManager implements Handler.Callback {
 				}
 			}
 			Window window = dialog != null ? dialog.getWindow() : null;
-			if (window != null) {
+			if (appearance == null && window != null) {
 				int width = getResources().getDisplayMetrics().widthPixels;
 				int height = getResources().getDisplayMetrics().heightPixels;
 				if (width > height) {
@@ -838,9 +869,17 @@ public class ForegroundManager implements Handler.Callback {
 			String descriptionText = requireArguments().getString(EXTRA_DESCRIPTION_TEXT);
 			Bitmap descriptionImage = AndroidUtils.getParcelable(requireArguments(), EXTRA_DESCRIPTION_IMAGE,
 					Bitmap.class);
+			if (keepOpen() && requireArguments().getBoolean(EXTRA_MODERN) && CaptchaDialogAppearance.isEnabled()) {
+				appearance = new CaptchaDialogAppearance(requireContext(), container, descriptionText);
+				Parcelable[] choices = AndroidUtils.getParcelableArray(requireArguments(), EXTRA_SELECTED_IMAGES, Bitmap.class);
+				Bitmap[] chosen = new Bitmap[choices != null ? choices.length : 0];
+				if (chosen.length > 0) System.arraycopy(choices, 0, chosen, 0, chosen.length);
+				appearance.bindSelection(chosen, false);
+				landscape = false; // Native content scrolls when short; the server's requested columns/order remain intact.
+			}
 			int outerPadding = container.getResources().getDimensionPixelOffset(R.dimen.dialog_padding_text);
 			int verticalPadding = landscape ? (int) (8f * density) : outerPadding;
-			container.setPadding(outerPadding, verticalPadding, outerPadding, verticalPadding);
+			if (appearance == null) container.setPadding(outerPadding, verticalPadding, outerPadding, verticalPadding);
 			if (landscape && !StringUtils.isEmpty(descriptionText)) {
 				TextView titleView = new TextView(container.getContext());
 				titleView.setText(descriptionText);
@@ -853,10 +892,11 @@ public class ForegroundManager implements Handler.Callback {
 				layoutParams.bottomMargin = (int) (4f * density);
 				container.addView(titleView, layoutParams);
 			}
-			int cornersRadius = (int) (2f * density);
 			if (descriptionImage != null) {
 				ImageView imageView;
-				if (keepOpen()) {
+				if (appearance != null) {
+					imageView = appearance.taskImage(descriptionImage);
+				} else if (keepOpen()) {
 					imageView = new ImageView(container.getContext());
 					imageView.setScaleType(ImageView.ScaleType.FIT_CENTER);
 					imageView.setImageBitmap(descriptionImage);
@@ -870,8 +910,43 @@ public class ForegroundManager implements Handler.Callback {
 				if (landscape) {
 					layoutParams.width = LinearLayout.LayoutParams.MATCH_PARENT;
 				}
-				layoutParams.setMargins(0, 0, 0, (int) ((landscape ? 8f : 20f) * density));
+				layoutParams.setMargins(0, 0, 0, (int) ((appearance != null ? 16f : landscape ? 8f : 20f) * density));
 			}
+			keyboardContainer = container;
+			if (appearance != null) {
+				keyboardContainer = new LinearLayout(container.getContext());
+				keyboardContainer.setOrientation(LinearLayout.VERTICAL);
+				container.addView(keyboardContainer, new LinearLayout.LayoutParams(-1, -2));
+			}
+			buildKeyboard(keyboardContainer, images, landscape, density);
+
+			View contentView;
+			if (landscape) { contentView = container; }
+			else {
+				ScrollView scrollView = new ScrollView(container.getContext());
+				scrollView.addView(container, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+				contentView = scrollView;
+			}
+			AlertDialog alertDialog;
+			if (appearance != null) {
+				alertDialog = appearance.create(contentView, this, () -> { publishResult(false); dismiss(); });
+			} else {
+				AlertDialog.Builder builder = new MotionDialogBuilder(requireContext());
+				if (!landscape) builder.setTitle(descriptionText);
+				alertDialog = builder.setView(contentView).setPositiveButton(android.R.string.ok, this)
+						.setNegativeButton(android.R.string.cancel, this).create();
+				if (requireArguments().getBoolean(EXTRA_ALLOW_REFRESH))
+					alertDialog.setButton(AlertDialog.BUTTON_NEUTRAL, getString(R.string.refresh_captcha), this);
+			}
+			boolean[] restored = savedInstanceState != null ? savedInstanceState.getBooleanArray(EXTRA_SELECTED) : null;
+			if (restored == null) restored = requireArguments().getBooleanArray(EXTRA_SELECTED);
+			if (restored != null && restored.length == selected.length) System.arraycopy(restored, 0, selected, 0, restored.length);
+			for (int i = 0; i < selected.length; i++) updateSelection(i);
+			return alertDialog;
+		}
+
+		private void buildKeyboard(LinearLayout container, Bitmap[] images, boolean landscape, float density) {
+			int cornersRadius = (int) (2f * density);
 			int innerPadding = (int) (8f * density);
 			int requestedColumns = requireArguments().getInt(EXTRA_COLUMNS);
 			int columns = landscape && images.length > 0 ? images.length : requestedColumns;
@@ -884,7 +959,15 @@ public class ForegroundManager implements Handler.Callback {
 						LinearLayout.LayoutParams.WRAP_CONTENT);
 				for (int j = 0; j < columns; j++) {
 					int index = columns * i + j;
-					FrameLayout frameLayout = new FrameLayout(inner.getContext());
+					// Geometry belongs to the cell. Keep the platform ImageView and its
+					// native theme behavior, without a custom ImageView subclass.
+					FrameLayout frameLayout = new FrameLayout(inner.getContext()) {
+						@Override protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+							super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+							int side = getMeasuredWidth();
+							super.onMeasure(widthMeasureSpec, View.MeasureSpec.makeMeasureSpec(side, View.MeasureSpec.EXACTLY));
+						}
+					};
 					LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(0,
 							LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
 					if (j < columns - 1) {
@@ -896,13 +979,7 @@ public class ForegroundManager implements Handler.Callback {
 					inner.addView(frameLayout, layoutParams);
 					if (index < images.length) {
 						selectionViews[index] = frameLayout;
-						ImageView imageView = new ImageView(frameLayout.getContext()) {
-							@Override
-							protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-								super.onMeasure(widthMeasureSpec, heightMeasureSpec);
-								setMeasuredDimension(getMeasuredWidth(), getMeasuredWidth());
-							}
-						};
+						ImageView imageView = new ImageView(frameLayout.getContext());
 						imageView.setScaleType(ImageView.ScaleType.CENTER_CROP);
 						if (keepOpen()) {
 							imageView.setScaleType(ImageView.ScaleType.FIT_CENTER);
@@ -910,7 +987,7 @@ public class ForegroundManager implements Handler.Callback {
 						imageView.setImageBitmap(images[index]);
 						ViewUtils.makeRoundedCorners(imageView, cornersRadius, false);
 						frameLayout.addView(imageView, FrameLayout.LayoutParams.MATCH_PARENT,
-								FrameLayout.LayoutParams.WRAP_CONTENT);
+								FrameLayout.LayoutParams.MATCH_PARENT);
 						View view = new View(frameLayout.getContext());
 						ViewUtils.setSelectableItemBackground(view);
 						view.setTag(index);
@@ -922,43 +999,11 @@ public class ForegroundManager implements Handler.Callback {
 				}
 			}
 
-			View contentView;
-			if (landscape) {
-				contentView = container;
-			} else {
-				ScrollView scrollView = new ScrollView(container.getContext());
-				scrollView.addView(container, ViewGroup.LayoutParams.MATCH_PARENT,
-						ViewGroup.LayoutParams.WRAP_CONTENT);
-				contentView = scrollView;
-			}
-			AlertDialog.Builder builder = new MotionDialogBuilder(requireContext());
-			if (!landscape) {
-				builder.setTitle(descriptionText);
-			}
-			final AlertDialog alertDialog = builder.setView(contentView)
-					.setPositiveButton(android.R.string.ok, this)
-					.setNegativeButton(android.R.string.cancel, this)
-					.create();
-			if (requireArguments().getBoolean(EXTRA_ALLOW_REFRESH)) {
-				alertDialog.setButton(AlertDialog.BUTTON_NEUTRAL, getString(R.string.refresh_captcha), this);
-			}
-			// Restore once per dialog creation, not on every return from the background.
-			boolean[] selected = savedInstanceState != null ? savedInstanceState.getBooleanArray(EXTRA_SELECTED) : null;
-			if (selected == null) {
-				selected = requireArguments().getBooleanArray(EXTRA_SELECTED);
-			}
-			if (selected != null && selected.length == this.selected.length) {
-				System.arraycopy(selected, 0, this.selected, 0, selected.length);
-			}
-			for (int i = 0; i < this.selected.length; i++) {
-				updateSelection(i);
-			}
-			return alertDialog;
 		}
 
 		@Override
 		public void onClick(View v) {
-			if (keepOpen() && waiting) {
+			if (keepOpen() && (waiting || requireArguments().getBoolean(EXTRA_RETRY_ERROR))) {
 				return;
 			}
 			int index = (int) v.getTag();
@@ -970,6 +1015,8 @@ public class ForegroundManager implements Handler.Callback {
 					selected[i] = i == index;
 				}
 				if (keepOpen()) {
+					refreshing = false;
+					requireArguments().putBoolean(EXTRA_REFRESHING, false);
 					setWaiting(true);
 				} else {
 					dismiss();
@@ -989,10 +1036,13 @@ public class ForegroundManager implements Handler.Callback {
 				if (waiting) {
 					return;
 				}
+				if (which == AlertDialog.BUTTON_POSITIVE && requireArguments().getBoolean(EXTRA_RETRY_ERROR)) return;
+				refreshing = which == AlertDialog.BUTTON_NEUTRAL;
+				requireArguments().putBoolean(EXTRA_REFRESHING, refreshing);
 				setWaiting(true);
 			}
 			if (which == AlertDialog.BUTTON_NEUTRAL && requireArguments().getBoolean(EXTRA_ALLOW_REFRESH)) {
-				((AlertDialog) dialog).getButton(which).setEnabled(false);
+				actionButton(which).setEnabled(false);
 				notifyResult(pendingData -> pendingData.result = REFRESH_IMAGE_CHOICE_RESULT);
 			} else {
 				publishResult(which == AlertDialog.BUTTON_POSITIVE);
@@ -1132,6 +1182,10 @@ public class ForegroundManager implements Handler.Callback {
 										choiceHandlerData.descriptionText, choiceHandlerData.descriptionImage,
 										choiceHandlerData.multiple, choiceHandlerData.allowRefresh);
 								dialog.requireArguments().putBoolean(ImageChoiceDialog.EXTRA_KEEP_OPEN, choiceHandlerData.keepOpen);
+								dialog.requireArguments().putParcelableArray(ImageChoiceDialog.EXTRA_SELECTED_IMAGES, choiceHandlerData.selectedImages);
+								dialog.requireArguments().putBoolean(ImageChoiceDialog.EXTRA_MODERN,
+									choiceHandlerData.selectedImages != null && CaptchaDialogAppearance.isEnabled());
+								dialog.requireArguments().putBoolean(ImageChoiceDialog.EXTRA_RETRY_ERROR, choiceHandlerData.retryError);
 								dialog.show(activity);
 							} else {
 								new ItemChoiceDialog(handlerData.pendingDataId, choiceHandlerData.selected,
@@ -1197,6 +1251,8 @@ public class ForegroundManager implements Handler.Callback {
 		public final boolean multiple;
 		public final boolean allowRefresh;
 		public boolean keepOpen;
+		public Bitmap[] selectedImages;
+		public boolean retryError;
 
 		public ChoiceHandlerData(String pendingDataId, int columns, boolean[] selected, Bitmap[] images,
 				CharSequence[] items, String descriptionText, Bitmap descriptionImage, boolean multiple,
@@ -1281,9 +1337,14 @@ public class ForegroundManager implements Handler.Callback {
 		}
 
 		public Integer require(Bitmap[] images, String description, Bitmap task) throws InterruptedException {
+			return require(images, description, task, null);
+		}
+
+		public Integer require(Bitmap[] images, String description, Bitmap task, Bitmap[] selectedImages) throws InterruptedException {
 			ChoiceHandlerData request = new ChoiceHandlerData(id, 3, null, images, null, description, task,
 					false, true);
 			request.keepOpen = true;
+			request.selectedImages = selectedImages;
 			synchronized (pending) {
 				if (pending.cancelled || Thread.currentThread().isInterrupted()) {
 					return null;
@@ -1307,6 +1368,33 @@ public class ForegroundManager implements Handler.Callback {
 					}
 				}
 				return -1;
+			}
+		}
+
+		/** Opt-in manual retry. A failed keyboard/token cannot be confirmed or reused. */
+		public boolean awaitRetry() {
+			if (!CaptchaDialogAppearance.isEnabled() || lastRequest == null || lastRequest.selectedImages == null) return false;
+			ChoiceHandlerData previous = lastRequest;
+			ChoiceHandlerData request = new ChoiceHandlerData(id, previous.columns, null, previous.images, null,
+					previous.descriptionText, previous.descriptionImage, false, true);
+			request.keepOpen = true;
+			request.selectedImages = previous.selectedImages;
+			request.retryError = true;
+			synchronized (pending) {
+				if (pending.cancelled || Thread.currentThread().isInterrupted()) return false;
+				pending.ready = false;
+				pending.result = null;
+				lastRequest = request;
+			}
+			handler.obtainMessage(MESSAGE_REQUIRE_USER_CHOICE, request).sendToTarget();
+			try {
+				pending.await(handler, request);
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+				return false;
+			}
+			synchronized (pending) {
+				return !pending.cancelled && pending.result == REFRESH_IMAGE_CHOICE_RESULT;
 			}
 		}
 

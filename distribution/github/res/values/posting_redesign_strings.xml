@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="posting_solve_captcha">Solve captcha</string>
+    <string name="posting_primary_loading">Loading captcha</string>
     <string name="posting_captcha_label">Captcha</string>
     <string name="posting_captcha_done">Done</string>
     <string name="posting_captcha_retry">Retry</string>

@@ -227,6 +227,11 @@ public final class PostingAttachmentsController {
 		}
 	}
 
+	public boolean hasSendAttachments() {
+		for (AttachmentHolder holder : attachments) if (resolveAttachmentFile(holder.hash) != null) return true;
+		return false;
+	}
+
 	// A single snapshot keeps the payload and successful-file hashes in exactly the same order.
 	public SendAttachments createSendAttachments() {
 		ArrayList<ChanPerformer.SendPostData.Attachment> array = new ArrayList<>();

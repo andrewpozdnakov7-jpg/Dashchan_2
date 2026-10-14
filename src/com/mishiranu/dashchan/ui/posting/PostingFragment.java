@@ -374,7 +374,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		sendButton.setAllCaps(true);
 		captchaInputParentView.addView(sendButton, 0, LinearLayout.LayoutParams.WRAP_CONTENT);
 		sendButton.setText(R.string.send);
-		sendButton.setOnClickListener(v -> submitPostingForm());
+		sendButton.setOnClickListener(v -> onPrimaryAction());
 		if (longFooter) {
 			((LinearLayout.LayoutParams) sendButton.getLayoutParams()).weight = 2f;
 			boolean[] lastAddWeight = {true};
@@ -514,6 +514,13 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 			postingAppearance.finishSetup(sendButton, sageCheckBox, spoilerCheckBox, originalPosterCheckBox);
 			postingAppearance.setAttachmentAction(attachmentController::openPicker);
 			postingAppearance.setAttachmentAvailable(attachmentController.canAttach());
+			postingAppearance.setPrimaryChanged(this::updateSendButtonState);
+			captchaForm.publishCurrentPresentation();
+			commentView.addTextChangedListener(new android.text.TextWatcher() {
+				@Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+				@Override public void onTextChanged(CharSequence s, int start, int before, int count) { updateSendButtonState(); }
+				@Override public void afterTextChanged(android.text.Editable s) {}
+			});
 			PostingFormAppearance.syncFieldVisibility(nameView, emailView, passwordView, subjectView);
 		} else {
 			InterfaceAppearance.postingForm(view);
@@ -683,6 +690,10 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 
 	@Override
 	public void onConfirmCaptcha() {
+		if (postingAppearance != null) {
+			postingAppearance.confirmCaptchaDialog();
+			return;
+		}
 		submitPostingForm();
 	}
 
@@ -948,8 +959,31 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 	}
 
 	private void updateSendButtonState() {
-		sendButton.setEnabled(sendButtonEnabled && !attachmentController.isImportInProgress() && captchaController.canSend());
+		if (sendButton == null) return;
+		boolean available = sendButtonEnabled && !attachmentController.isImportInProgress();
+		if (postingAppearance != null) {
+			boolean solve = postingAppearance.needsCaptchaSolution();
+			boolean content = commentView != null && !commentView.getText().toString().trim().isEmpty()
+					|| attachmentController.hasSendAttachments();
+			sendButton.setEnabled(available && postingAppearance.canActivatePrimary()
+					&& (solve ? !captchaController.isLoading() : captchaController.canSend() && content));
+		} else sendButton.setEnabled(available && captchaController.canSend());
 		if (postingAppearance != null) postingAppearance.updateSendState();
+	}
+
+	private void onPrimaryAction() {
+		if (postingAppearance != null) {
+			// Always re-read real captcha/input state; a painted success accent is not validation.
+			captchaForm.publishCurrentPresentation();
+			updateSendButtonState();
+			if (!sendButton.isEnabled()) return;
+			postingAppearance.finishPrimaryTransition();
+			if (postingAppearance.needsCaptchaSolution()) {
+				postingAppearance.requestCaptchaSolution();
+				return;
+			}
+		}
+		submitPostingForm();
 	}
 
 	private String getTextIfVisible(EditText editText) {
@@ -1146,6 +1180,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 			}
 			@Override public void saveDraftAfterAttachmentChange() {
 				draftController.storePostDraft(capturePostDraft());
+				if (postingAppearance != null) PostingFragment.this.updateSendButtonState();
 			}
 			@Override public void updateSendButtonState() {
 				PostingFragment.this.updateSendButtonState();

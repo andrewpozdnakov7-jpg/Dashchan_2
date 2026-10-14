@@ -146,7 +146,8 @@ class DvachEmojiCaptchaProvider {
 
             // prepare captcha task image with previously selected emojis
             Bitmap captchaImage = base64ToBitmap(content.image);
-            Bitmap comboBitmap = createTaskWithSelectedBitmap(captchaImage, selected);
+            boolean structured = com.mishiranu.dashchan.content.Preferences.isNewPostingFormEnabled();
+            Bitmap comboBitmap = structured ? null : createTaskWithSelectedBitmap(captchaImage, selected);
 
             // prepare captcha task keyboard array
             Bitmap[] keyboardImages = new Bitmap[content.keyboard.size()];
@@ -165,7 +166,9 @@ class DvachEmojiCaptchaProvider {
 
             // send task image and keyboard, receive user input
             KeyboardLayout keyboard = stabilizeKeyboard(keyboardImages);
-            Integer answer = answerRetriever.getAnswer(comboBitmap, keyboard.images);
+            // Structured display metadata is available here; never recover symbols from image pixels.
+            Integer answer = answerRetriever.getAnswer(structured ? captchaImage : comboBitmap, keyboard.images,
+                    structured ? selected.bitmaps.toArray(new Bitmap[0]) : null);
 
             if (answer != null && answer == ForegroundManager.IMAGE_CHOICE_REFRESH) {
                 // Ask the performer for a fresh ID, not another keyboard for the old challenge.
@@ -315,11 +318,12 @@ class DvachEmojiCaptchaProvider {
     interface DvachEmojiCaptchaAnswerRetriever {
 
         /**
-         * @param task captcha task bitmap, also showing previously selected emojis
+         * @param task original task for the opt-in UI, otherwise the legacy composite
          * @param keyboard captcha keyboard bitmap array
+         * @param selected server-accepted symbols for the opt-in UI, null for the legacy UI
          * @return keyboard selection index
          */
-        Integer getAnswer(Bitmap task, Bitmap[] keyboard);
+        Integer getAnswer(Bitmap task, Bitmap[] keyboard, Bitmap[] selected);
     }
 
     /**

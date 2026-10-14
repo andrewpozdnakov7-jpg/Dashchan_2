@@ -62,6 +62,7 @@ public final class PostingCaptchaController implements ReadCaptchaTask.Callback 
 	private boolean captchaLarge;
 	private boolean captchaBlackAndWhite;
 	private long captchaLoadTime;
+	private boolean loading;
 
 	PostingCaptchaController() { this(SystemClock::elapsedRealtime); }
 	PostingCaptchaController(LongSupplier clock) { this.clock = clock; }
@@ -73,6 +74,7 @@ public final class PostingCaptchaController implements ReadCaptchaTask.Callback 
 	void attachView(Host host) { this.host = host; }
 	void detachView() { host = null; }
 	boolean canSend() { return captchaState != null && captchaState != ReadCaptchaTask.CaptchaState.NEED_LOAD; }
+	boolean isLoading() { return loading; }
 
 	CaptchaSnapshot snapshot(String userInput) {
 		ChanPerformer.CaptchaData data = captchaData != null ? captchaData.copy() : null;
@@ -96,6 +98,7 @@ public final class PostingCaptchaController implements ReadCaptchaTask.Callback 
 	}
 
 	private boolean restoreDraftData(DraftsStorage.CaptchaDraft draft, boolean savedState, ChanConfiguration.Captcha captcha) {
+		loading = false;
 		if (savedState) {
 			if (draft.captchaState == null) return false;
 			captchaLoadTime = draft.loadTime;
@@ -143,6 +146,7 @@ public final class PostingCaptchaController implements ReadCaptchaTask.Callback 
 		if (host == null) return;
 		boolean allowSolveAutomatically = !forceCaptcha || captchaState != ReadCaptchaTask.CaptchaState.MAY_LOAD_SOLVING;
 		captchaState = null;
+		loading = true;
 		loadedCaptchaType = null;
 		captchaLoadTime = 0L;
 		host.updateSendButtonState();
@@ -163,6 +167,7 @@ public final class PostingCaptchaController implements ReadCaptchaTask.Callback 
 	@Override
 	public void onReadCaptchaSuccess(ReadCaptchaTask.Result result) {
 		if (host == null) return;
+		loading = false;
 		captchaLoadTime = clock.getAsLong();
 		showCaptcha(result.captchaState, result.captchaData, result.captchaType, result.input, result.validity,
 				result.image, result.large, result.blackAndWhite);
@@ -171,6 +176,7 @@ public final class PostingCaptchaController implements ReadCaptchaTask.Callback 
 	@Override
 	public void onReadCaptchaError(ErrorItem errorItem) {
 		if (host == null) return;
+		loading = false;
 		host.showError(errorItem);
 		host.updatePostingConfigurationIfNeeded();
 	}

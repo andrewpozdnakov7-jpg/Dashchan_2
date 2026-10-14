@@ -96,6 +96,7 @@ public class CaptchaForm implements View.OnClickListener, View.OnLongClickListen
 
 	/** Presentation metadata only. Do not infer successful verification from the painted button. */
 	public void setPresentationRestoring(boolean restoring) { presentationRestoring = restoring; }
+	public void publishCurrentPresentation() { publishPresentation(); }
 	private void publishPresentation() {
 		boolean entered = presentedCaptchaType == CaptchaViewType.IMAGE && inputView.length() > 0;
 		PostingFormAppearance.captchaStateChanged(blockParentView, presentedCaptchaType, presentedCaptchaState,

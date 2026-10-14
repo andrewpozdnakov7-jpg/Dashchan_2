@@ -18,5 +18,6 @@ final class PlayerControlsStyle {
 	static GradientDrawable panel(float density, float radius) { return null; }
 	static void text(TextView view, int size) {}
 	static void button(ImageButton view, float density, boolean center) {}
+	static void playbackReadiness(ImageButton view, boolean retainAppearance) {}
 	static void slider(SeekBar view, float density) {}
 }

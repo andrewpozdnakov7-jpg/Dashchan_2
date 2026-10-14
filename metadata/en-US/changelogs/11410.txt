@@ -1,0 +1,4 @@
+- We continue updating the design in the Material 3 style 🐱 The new-message window has received a substantial update: improved buttons, formatting and colors, plus a redesigned captcha dialog with selected symbols and loading indicators. Added smooth transitions between captcha verification and sending, and fixed crashes. To try it, open Settings → Experimental features → New Material 3 interface and enable “Enable the new interface” and “New posting form”.
+- Removed the unnecessary controls entrance animation when switching between videos. Fixed flickering of the play/pause button.
+
+Thanks to everyone who tests the app, sends logs and helps find bugs! 🐾
