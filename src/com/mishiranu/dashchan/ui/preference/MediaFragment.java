@@ -82,6 +82,9 @@ public class MediaFragment extends PreferenceFragment implements FragmentHandler
 		addCheck(true, Preferences.KEY_CLOSE_GALLERY_ON_BACKGROUND_TAP,
 				Preferences.DEFAULT_CLOSE_GALLERY_ON_BACKGROUND_TAP, R.string.close_gallery_on_background_tap,
 				R.string.close_gallery_on_background_tap__summary);
+		addCheck(true, Preferences.KEY_CLOSE_GALLERY_GRID_ON_BACKGROUND_TAP,
+				Preferences.DEFAULT_CLOSE_GALLERY_GRID_ON_BACKGROUND_TAP, R.string.close_gallery_grid_on_background_tap,
+				R.string.close_gallery_grid_on_background_tap__summary);
 		addCheck(true, Preferences.KEY_SCROLL_GALLERY_TO_CURRENT_FILE,
 				Preferences.DEFAULT_SCROLL_GALLERY_TO_CURRENT_FILE, R.string.scroll_gallery_to_current_file,
 				R.string.scroll_gallery_to_current_file__summary);

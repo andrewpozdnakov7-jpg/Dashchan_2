@@ -115,6 +115,10 @@ public class AudioPlayerService extends BaseService implements MediaPlayer.OnCom
 
 	@Override
 	public int onStartCommand(Intent intent, int flags, int startId) {
+		if (com.mishiranu.dashchan.content.security.SecurityStore.locked(this)) {
+			cleanup(true, true);
+			return START_NOT_STICKY;
+		}
 		if (intent != null) {
 			String action = intent.getAction();
 			if (ACTION_START.equals(action)) {
@@ -158,6 +162,7 @@ public class AudioPlayerService extends BaseService implements MediaPlayer.OnCom
 	}
 
 	private void startForeground(NotificationCompat.Builder builder, int foregroundServiceType) {
+		com.mishiranu.dashchan.content.security.AppSecurity.redactNotification(this, builder);
 		startForeground(C.NOTIFICATION_ID_AUDIO_PLAYER, builder.build(), foregroundServiceType);
 	}
 
@@ -341,6 +346,7 @@ public class AudioPlayerService extends BaseService implements MediaPlayer.OnCom
 			builder.setContentTitle(getString(R.string.audio_playback));
 			builder.setContentText(getString(R.string.file_name__format, fileName));
 		}
+		com.mishiranu.dashchan.content.security.AppSecurity.redactNotification(this, builder);
 		return builder;
 	}
 
@@ -377,6 +383,7 @@ public class AudioPlayerService extends BaseService implements MediaPlayer.OnCom
 			builder.setProgress(progressMax, progress, progressMax == 0 ||
 					progress > progressMax || progress < 0);
 		}
+		com.mishiranu.dashchan.content.security.AppSecurity.redactNotification(this, builder);
 		return builder;
 	}
 

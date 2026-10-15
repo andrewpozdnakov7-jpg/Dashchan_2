@@ -92,6 +92,7 @@ public class UpdaterActivity extends StateActivity {
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
+		if (com.mishiranu.dashchan.content.security.AppSecurity.deferIfLocked(this)) return;
 
 		((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).cancel(C.NOTIFICATION_ID_UPDATES);
 		if (savedInstanceState != null) {
@@ -109,6 +110,7 @@ public class UpdaterActivity extends StateActivity {
 
 	@Override protected void onResume() {
 		super.onResume();
+		if (installModel == null || isFinishing()) return;
 		resumed = true;
 		installModel.foreground = true;
 		performInstallation();
@@ -146,6 +148,7 @@ public class UpdaterActivity extends StateActivity {
 	}
 
 	private void performInstallation() {
+		if (com.mishiranu.dashchan.content.security.SecurityStore.locked(this)) return;
 		if (!resumed || isFinishing() || permissionRequest) return;
 		String token = UpdateInstallSession.token(this);
 		if (token != null) {

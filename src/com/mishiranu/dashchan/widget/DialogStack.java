@@ -182,7 +182,7 @@ public class DialogStack<T extends DialogStack.ViewFactory<T>> implements Iterab
 		DialogStackMotion.Snapshot snapshot = restoring ? null : motion.capture(previous);
 		boolean firstWindow = dialog == null;
 		if (dialog == null) {
-			Dialog dialog = new Dialog(context, ResourceUtils.getResourceId(context, R.attr.overlayTheme, 0)) {
+			Dialog dialog = new com.mishiranu.dashchan.content.security.SecureDialog(context, ResourceUtils.getResourceId(context, R.attr.overlayTheme, 0)) {
 				@Override
 				protected void onStart() {
 					super.onStart();

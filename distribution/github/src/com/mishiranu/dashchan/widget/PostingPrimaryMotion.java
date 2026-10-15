@@ -29,9 +29,9 @@ import com.mishiranu.dashchan.util.ViewUtils;
 /** Fixed-bounds feedback. Never enables the button, opens a dialog or sends a post. */
 final class PostingPrimaryMotion implements View.OnAttachStateChangeListener {
 	private static final int CONTENT_DURATION = 180;
-	private static final int SUCCESS_CHECK_DURATION = 500;
-	private static final int SUCCESS_HOLD_DURATION = 500;
-	private static final int SUCCESS_TO_SEND_DURATION = 500;
+	private static final int SUCCESS_CHECK_DURATION = 300;
+	private static final int SUCCESS_HOLD_DURATION = 200;
+	private static final int SUCCESS_TO_SEND_DURATION = 300;
 	private final Button button;
 	private final FrameLayout slot;
 	private final FrameLayout decorations;

@@ -14,7 +14,7 @@ final class PlayerControlBar extends ViewGroup {
 	private final View play;
 	private final LinearLayout time;
 	private final View seek;
-	private final View mute;
+	private final View save;
 	private final View fullscreen;
 	private final int buttonSize;
 	private final int seekHeight;
@@ -24,12 +24,12 @@ final class PlayerControlBar extends ViewGroup {
 	private int timeRowHeight;
 	private int playbackRowHeight;
 
-	PlayerControlBar(Context context, View play, LinearLayout time, View seek, View mute, View fullscreen) {
+	PlayerControlBar(Context context, View play, LinearLayout time, View seek, View save, View fullscreen) {
 		super(context);
 		this.play = play;
 		this.time = time;
 		this.seek = seek;
-		this.mute = mute;
+		this.save = save;
 		this.fullscreen = fullscreen;
 		float density = ResourceUtils.obtainDensity(context);
 		buttonSize = PlayerControlsStyle.dp(density, 32);
@@ -44,7 +44,7 @@ final class PlayerControlBar extends ViewGroup {
 		addView(play);
 		addView(time);
 		addView(seek);
-		addView(mute);
+		addView(save);
 		addView(fullscreen);
 	}
 
@@ -63,7 +63,7 @@ final class PlayerControlBar extends ViewGroup {
 		int buttonSpec = MeasureSpec.makeMeasureSpec(buttonWidth, MeasureSpec.EXACTLY);
 		int buttonHeightSpec = MeasureSpec.makeMeasureSpec(buttonSize, MeasureSpec.EXACTLY);
 		play.measure(buttonSpec, buttonHeightSpec);
-		mute.measure(buttonSpec, buttonHeightSpec);
+		save.measure(buttonSpec, buttonHeightSpec);
 		fullscreen.measure(buttonSpec, buttonHeightSpec);
 		int timeWidth = inline ? naturalTimeWidth : Math.min(naturalTimeWidth, available);
 		time.measure(MeasureSpec.makeMeasureSpec(timeWidth, MeasureSpec.EXACTLY), natural);
@@ -91,7 +91,7 @@ final class PlayerControlBar extends ViewGroup {
 			place(time, timeCursor, getPaddingTop(), timeRowHeight, rtl);
 		}
 		cursor = place(seek, cursor, rowTop, playbackRowHeight, rtl);
-		cursor = place(mute, cursor, rowTop, playbackRowHeight, rtl);
+		cursor = place(save, cursor, rowTop, playbackRowHeight, rtl);
 		place(fullscreen, cursor, rowTop, playbackRowHeight, rtl);
 	}
 

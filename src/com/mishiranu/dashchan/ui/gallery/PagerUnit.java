@@ -775,6 +775,10 @@ public class PagerUnit implements PagerInstance.Callback {
 				searchImage, navigatePost, shareFile);
 	}
 
+	boolean hasVideoSaveControl() {
+		return videoUnit.hasSaveControl();
+	}
+
 	public PagerInstance.ViewHolder getCurrentHolder() {
 		return pagerInstance.currentHolder;
 	}

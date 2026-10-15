@@ -313,7 +313,7 @@ public class ImageEditorActivity extends ComponentActivity {
 		}
 		updateColors.run();
 
-		new AlertDialog.Builder(this).setTitle(R.string.image_editor_marker).setView(layout)
+		new com.mishiranu.dashchan.content.security.SecureDialogBuilder(this).setTitle(R.string.image_editor_marker).setView(layout)
 				.setNegativeButton(android.R.string.cancel, null)
 				.setPositiveButton(android.R.string.ok, (dialog, which) -> {
 					brushWidthRatio = (widthSeek.getProgress() + 5) / 1000f;
@@ -361,7 +361,7 @@ public class ImageEditorActivity extends ComponentActivity {
 					(int) (2f * density), (int) (2f * density));
 			grid.addView(button, params);
 		}
-		dialog[0] = new AlertDialog.Builder(this).setTitle(R.string.image_editor_sticker_hint)
+		dialog[0] = new com.mishiranu.dashchan.content.security.SecureDialogBuilder(this).setTitle(R.string.image_editor_sticker_hint)
 				.setView(container).setNegativeButton(android.R.string.cancel, null).create();
 		dialog[0].show();
 	}
@@ -529,7 +529,7 @@ public class ImageEditorActivity extends ComponentActivity {
 	}
 
 	private void showFailure(int messageResId) {
-		new AlertDialog.Builder(this).setMessage(messageResId).setPositiveButton(android.R.string.ok, null).show();
+		new com.mishiranu.dashchan.content.security.SecureDialogBuilder(this).setMessage(messageResId).setPositiveButton(android.R.string.ok, null).show();
 	}
 
 	@Override

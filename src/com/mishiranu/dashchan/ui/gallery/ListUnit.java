@@ -17,6 +17,7 @@ import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
@@ -80,7 +81,9 @@ public class ListUnit implements ActionMode.Callback {
 		this.instance = instance;
 		float density = ResourceUtils.obtainDensity(instance.context);
 		int spacing = (int) (GRID_SPACING_DP * density);
-		recyclerView = new GalleryRecyclerView(instance.context, spacing);
+		recyclerView = new GalleryRecyclerView(instance.context, spacing,
+				() -> gridVisible && selectionMode == null && Preferences.isCloseGalleryGridOnBackgroundTap(),
+				instance.callback::closeGallery);
 		updateGridMetricsRunnable = () -> updateGridMetrics(recyclerView.getResources().getConfiguration());
 		recyclerView.setId(android.R.id.list);
 		recyclerView.setMotionEventSplittingEnabled(false);
@@ -689,14 +692,23 @@ public class ListUnit implements ActionMode.Callback {
 
 	private static class GalleryRecyclerView extends PaddedRecyclerView {
 		private final int spacing;
+		private final GalleryEmptyAreaTap emptyAreaTap;
 
 		private final Rect rect = new Rect();
 		private final Paint paint = new Paint();
 
-		public GalleryRecyclerView(Context context, int spacing) {
+		public GalleryRecyclerView(Context context, int spacing, java.util.function.BooleanSupplier enabled,
+				Runnable close) {
 			super(context);
 			this.spacing = spacing;
+			emptyAreaTap = new GalleryEmptyAreaTap(this, enabled, close);
 			setVerticalScrollBarEnabled(true);
+		}
+
+		@Override public boolean dispatchTouchEvent(MotionEvent event) {
+			// Observe once before RecyclerView can stop a fling; never intercept item or pull/scroll gestures.
+			emptyAreaTap.onTouchEvent(event);
+			return super.dispatchTouchEvent(event);
 		}
 
 		@Override

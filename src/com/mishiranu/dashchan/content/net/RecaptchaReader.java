@@ -745,7 +745,7 @@ public class RecaptchaReader {
 					lostChallenge = true;
 					webView = null;
 					com.mishiranu.dashchan.ui.UiLifecycleDiagnostics.event(this, "captcha_request_lost");
-					return new Dialog(requireContext());
+					return new com.mishiranu.dashchan.content.security.SecureDialog(requireContext());
 				}
 				webView.initHolder(challengeExtra.holder);
 				if (challengeExtra != null) {
@@ -754,7 +754,7 @@ public class RecaptchaReader {
 				}
 			}
 
-			Dialog dialog = new Dialog(requireActivity());
+			Dialog dialog = new com.mishiranu.dashchan.content.security.SecureDialog(requireActivity());
 			dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
 			FrameLayout layout = new FrameLayout(dialog.getContext());
 			dialog.setContentView(layout, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,

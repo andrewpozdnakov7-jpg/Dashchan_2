@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+	<string name="close_gallery_grid_on_background_tap">Закрывать галерею касанием фона</string>
+	<string name="close_gallery_grid_on_background_tap__summary">Закрывать сетку галереи касанием пустого места вне миниатюр файлов. Прокрутка и выбор файлов не закрывают галерею.</string>
 	<string name="close_gallery_on_background_tap">Закрывать просмотр касанием фона</string>
 	<string name="close_gallery_on_background_tap__summary">В обычном режиме закрывать просмотр файла касанием пустого пространства вокруг него. Если выключено — при просмотре видео касание фона показывает или скрывает управление, а при просмотре изображения игнорируется. Кнопка «Назад» и жест закрытия продолжают работать.</string>
 	<string name="webview_renderer_gone">Веб-страница перестала работать. Откройте её заново.</string>
@@ -22,7 +24,8 @@
 	<string name="classic_monkey_responses__summary">Показывать ответ Манки с отступом и оформлять его как спойлер.</string>
 	<string name="hide_ai_posts">Скрывать AI-сгенерированные посты</string>
 	<string name="hide_threads_with_swipe">Скрывать треды свайпом</string>
-	<string name="highlight_my_posts">Подсвечивать мои посты</string>
+	<string name="highlight_my_posts">Помечать мои посты</string>
+	<string name="highlight_my_posts__summary">Выделять ваши сообщения в тредах. Для меток сохраняются номера постов. Тексты своих сообщений и ответов сохраняются отдельно — при включённом отслеживании ответов.</string>
 	<string name="thread_hidden">Тред скрыт</string>
 	<string name="about">О программе</string>
 	<string name="action_on_playback_completion">Действие при завершении воспроизведения</string>
@@ -1057,7 +1060,7 @@
 	<string name="application_logo_subscriber">Значок подписчика</string>
 	<string name="application_logo_requires_dvach_pass">Доступен только при сохранённом паскоде Двача</string>
 	<string name="application_logo_paid_only">Этот значок доступен только платным подписчикам</string>
-	<string name="application_logo_invitation">Анон, приложению нужны хорошие значки. Присылай свои варианты на dashchan_2@mail.ru</string>
+	<string name="application_logo_invitation">Анон, приложению нужны хорошие значки. Присылай свои варианты на andrewpozdnakov7@gmail.com</string>
 	<string name="application_logo_requirements">Изображение должно быть квадратным, с чёткими деталями, которые хорошо читаются в маленьком размере.</string>
 	<string name="no_verified_dvach_pass">У вас нет сохранённого паскода Двача</string>
 	<string name="custom_application_shortcut">Свой ярлык</string>
@@ -1217,14 +1220,14 @@
 	<string name="endchan_ip_block_bypass_failed">Не удалось пройти проверку блокировки IP на Endchan</string>
 	<string name="replies_with_unread__format">Ответы (%d)</string>
 	<string name="track_replies">Отслеживать ответы</string>
-	<string name="track_replies__summary">Сохранять сообщения, отправленные через Slooop, и автоматически проверять ответы на них</string>
+	<string name="track_replies__summary">Сохранять тексты своих сообщений и полученных ответов. Для автоматической проверки выберите способ ниже. Метки своих постов настраиваются отдельно.</string>
 	<string name="disable_reply_tracking__title">Отключить отслеживание ответов?</string>
-	<string name="disable_reply_tracking__message">Историю своих сообщений и ответов можно сохранить или удалить из приложения. После удаления повторное включение отслеживания её не восстановит. Уже созданные внешние и системные резервные копии приложение удалить не может.</string>
+	<string name="disable_reply_tracking__message">Историю своих сообщений и ответов можно сохранить или удалить из приложения. При удалении также удаляются сохранённые метки своих постов. Повторное включение отслеживания историю не восстановит. Новые метки продолжат создаваться, если включено «Помечать мои посты». Уже созданные внешние и системные резервные копии приложение удалить не может.</string>
 	<string name="disable_reply_tracking_keep">Отключить, оставить историю</string>
 	<string name="disable_reply_tracking_delete">Отключить и удалить историю</string>
 	<string name="reply_history_deleted">История ответов удалена из приложения</string>
 	<string name="reply_history_delete_failed">Не удалось удалить все файлы истории. Проверьте хранилище приложения.</string>
-	<string name="replies_and_notifications">Ответы и уведомления</string>
+	<string name="replies_and_notifications">Мои посты и ответы</string>
 	<string name="replies_and_notifications_disabled">Отключено</string>
 	<string name="replies_and_notifications_local_only">Только локальная проверка</string>
 	<string name="replies_and_notifications_google_only">Google Firebase — только Двач /mobi/</string>
@@ -1237,7 +1240,7 @@
 	<string name="every_number_min__format">Каждые %d мин.</string>
 	<string name="tracked_replies_notifications">Показывать системные уведомления Android</string>
 	<string name="tracked_replies_notifications__summary">Показывать уведомление в шторке Android при получении нового ответа. Если выключить эту настройку, новые ответы будут отображаться только в разделе «Ответы».</string>
-	<string name="reply_push">Google Firebase</string>
+	<string name="reply_push">Серверное отслеживание — Google Firebase</string>
 	<string name="reply_push__summary">Сервер Slooop проверяет отслеживаемые сообщения, а Google Firebase доставляет уведомления на телефон, даже когда приложение закрыто или усыплено Android. Пока серверный push работает только на доске Двача /mobi/.</string>
 	<string name="reply_push_consent__message">Как это работает\n\nSlooop создаст случайный идентификатор установки и передаст серверу номера досок, тредов и ваших сообщений, за которыми нужно следить. Сервер будет проверять публичные ответы и отправлять уведомления через Google Firebase Cloud Messaging. Пока серверный push работает только на доске Двача /mobi/.\n\nДля доставки Google получает технический идентификатор приложения и номера доски, треда, отслеживаемого сообщения и нового ответа. Текст сообщений не передаётся через Firebase. Slooop не передаёт серверу ваш аккаунт Google, адрес электронной почты или постоянный идентификатор устройства.\n\nФункцию можно отключить в любой момент. После отключения регистрация и отслеживание на сервере будут удалены.</string>
 	<string name="reply_push_waiting_for_configuration">Включено. Регистрация на сервере ещё не завершена.</string>

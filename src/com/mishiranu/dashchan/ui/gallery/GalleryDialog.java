@@ -22,7 +22,7 @@ import com.mishiranu.dashchan.util.ViewUtils;
 import com.mishiranu.dashchan.util.InterfaceMotion;
 import com.mishiranu.dashchan.widget.ViewFactory;
 
-public class GalleryDialog extends Dialog {
+public class GalleryDialog extends com.mishiranu.dashchan.content.security.SecureDialog {
 	public interface Callback {
 		boolean onBackPressed();
 		void onPredictiveBackStarted(boolean fromLeft);

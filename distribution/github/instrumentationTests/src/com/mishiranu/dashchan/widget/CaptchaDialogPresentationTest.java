@@ -8,6 +8,8 @@ import android.graphics.Color;
 import android.view.View;
 import android.widget.Button;
 import android.widget.FrameLayout;
+import android.widget.HorizontalScrollView;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
@@ -18,6 +20,83 @@ import org.junit.runner.RunWith;
 /** Prepared native fixtures: not an executed device/network check. */
 @RunWith(AndroidJUnit4.class)
 public class CaptchaDialogPresentationTest {
+	@Test public void fourSelectedImagesUseMeasuredWidthWithoutMovingTheTaskOrShrinkingTheSources() {
+		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+			Context context = ThemeEngine.attach(InstrumentationRegistry.getInstrumentation().getTargetContext());
+			float density = context.getResources().getDisplayMetrics().density;
+			Bitmap source = Bitmap.createBitmap(128, 96, Bitmap.Config.ARGB_8888);
+			source.eraseColor(Color.WHITE);
+			try {
+				for (int innerDp : new int[]{224, 264, 304}) {
+					LinearLayout content = new LinearLayout(context); content.setOrientation(LinearLayout.VERTICAL);
+					CaptchaDialogAppearance appearance = new CaptchaDialogAppearance(context, content, "Select all symbols in any order");
+					try {
+						ImageView task = appearance.taskImage(source);
+						HorizontalScrollView scroll = (HorizontalScrollView) content.getChildAt(1);
+						LinearLayout row = (LinearLayout) scroll.getChildAt(0);
+						int width = Math.round(innerDp * density), top = -1, height = -1;
+						for (int count = 0; count <= 4; count++) {
+							Bitmap[] accepted = new Bitmap[count]; java.util.Arrays.fill(accepted, source);
+							appearance.bindSelection(accepted, false);
+							content.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+									View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+							content.layout(0, 0, width, content.getMeasuredHeight());
+							if (count == 0) { top = task.getTop(); height = content.getHeight(); }
+							assertEquals(top, task.getTop()); assertEquals(height, content.getHeight());
+							assertEquals(4, row.getChildCount());
+							assertEquals(Math.round(64 * density), scroll.getHeight());
+							int sum = 0, min = Integer.MAX_VALUE, max = 0;
+							for (int i = 0; i < 4; i++) {
+								FrameLayout slot = (FrameLayout) row.getChildAt(i);
+								ImageView symbol = (ImageView) slot.getChildAt(0);
+								int slotWidth = slot.getWidth(), side = Math.min(Math.round(64 * density), slotWidth);
+								sum += slotWidth; min = Math.min(min, slotWidth); max = Math.max(max, slotWidth);
+								assertEquals(side, symbol.getWidth()); assertEquals(side, symbol.getHeight());
+								assertEquals(ImageView.ScaleType.FIT_CENTER, symbol.getScaleType());
+								assertEquals(0, symbol.getPaddingLeft() + symbol.getPaddingRight());
+								assertFalse(slot.getClipToOutline()); assertEquals(1f, symbol.getAlpha(), 0f);
+								if (i < count) assertSame(source, ((android.graphics.drawable.BitmapDrawable) symbol.getDrawable()).getBitmap());
+								else assertNull(symbol.getDrawable());
+							}
+							assertTrue(max - min <= 1); assertEquals(width, sum + 3 * Math.round(8 * density));
+						}
+						assertEquals(context.getString(R.string.captcha_dialog_selected), row.getContentDescription());
+						assertEquals(128, source.getWidth()); assertEquals(96, source.getHeight());
+					} finally { appearance.close(); }
+				}
+			} finally { source.recycle(); }
+		});
+	}
+
+	@Test public void selectionLoadingUsesTheHeaderAndRefreshNeverOverlaysAcceptedImages() {
+		CaptchaDialogAppearance[] owner = new CaptchaDialogAppearance[1];
+		LinearLayout[] container = new LinearLayout[1];
+		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+			Context context = ThemeEngine.attach(InstrumentationRegistry.getInstrumentation().getTargetContext());
+			container[0] = new LinearLayout(context);
+			owner[0] = new CaptchaDialogAppearance(context, container[0], "Select symbols");
+			owner[0].waiting(true, false, false);
+			LinearLayout header = (LinearLayout) container[0].getChildAt(0);
+			assertEquals(View.INVISIBLE, ((FrameLayout) header.getChildAt(1)).getChildAt(0).getVisibility());
+		});
+		android.os.SystemClock.sleep(350);
+		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+			try {
+				LinearLayout header = (LinearLayout) container[0].getChildAt(0);
+				View indicator = ((FrameLayout) header.getChildAt(1)).getChildAt(0);
+				LinearLayout row = (LinearLayout) ((HorizontalScrollView) container[0].getChildAt(1)).getChildAt(0);
+				assertEquals(View.VISIBLE, indicator.getVisibility()); assertEquals(4, row.getChildCount());
+				owner[0].waiting(true, true, false);
+				assertEquals(View.INVISIBLE, indicator.getVisibility());
+				FrameLayout refresh = (FrameLayout) owner[0].button(DialogInterface.BUTTON_NEUTRAL).getParent();
+				assertEquals(1f, refresh.getChildAt(2).getAlpha(), 0f);
+				assertEquals(4, row.getChildCount());
+				owner[0].waiting(false, false, true);
+				assertEquals(View.INVISIBLE, indicator.getVisibility());
+			} finally { owner[0].close(); }
+		});
+	}
+
 	@Test public void symbolPickerHeightIgnoresEditorImeButKeepsPhysicalSafeAreas() {
 		android.view.WindowInsets hidden = new android.view.WindowInsets.Builder()
 				.setInsets(android.view.WindowInsets.Type.systemBars(), android.graphics.Insets.of(0, 24, 0, 32))
@@ -63,6 +142,8 @@ public class CaptchaDialogPresentationTest {
 				content.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
 						View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
 				assertEquals(empty, content.getMeasuredHeight());
+				LinearLayout row = (LinearLayout) ((HorizontalScrollView) content.getChildAt(1)).getChildAt(0);
+				assertEquals(10, row.getChildCount()); // Other challenges are never truncated to four.
 				assertEquals(40, source.getWidth()); assertEquals(20, source.getHeight());
 				assertEquals(Color.WHITE, source.getPixel(0, 0));
 			} finally { appearance.close(); source.recycle(); }

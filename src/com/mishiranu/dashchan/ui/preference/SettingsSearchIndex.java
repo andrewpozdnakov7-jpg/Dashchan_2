@@ -21,6 +21,10 @@ public final class SettingsSearchIndex {
 	private SettingsSearchIndex() {}
 
 	private enum Screen {
+		SECURITY(R.string.security_title) {
+			@Override
+			ContentFragment createFragment() { return new SecurityFragment(); }
+		},
 		GENERAL(R.string.general) {
 			@Override
 			ContentFragment createFragment() { return new GeneralFragment(); }
@@ -314,6 +318,11 @@ public final class SettingsSearchIndex {
 		ArrayList<Entry> entries = new ArrayList<>();
 
 		add(context, entries, Screen.GENERAL, R.string.general);
+		add(context, entries, Screen.SECURITY, R.string.security_title);
+		add(context, entries, Screen.SECURITY, R.string.security_primary_pin);
+		add(context, entries, Screen.SECURITY, R.string.security_additional_pin, R.string.security_delete_warning, null);
+		add(context, entries, Screen.SECURITY, R.string.security_biometric);
+		add(context, entries, Screen.SECURITY, R.string.security_delete_downloads, R.string.security_downloads_toggle_summary, null);
 		add(context, entries, Screen.FORUMS, R.string.forums);
 		add(context, entries, Screen.FORUMS, R.string.automatic_domain_selection,
 				R.string.automatic_domain_selection__summary, Preferences.KEY_AUTOMATIC_DOMAIN_SELECTION);
@@ -409,6 +418,8 @@ public final class SettingsSearchIndex {
 		add(context, entries, Screen.MEDIA, R.string.video_zoom_gestures,
 				R.string.video_zoom_gestures__summary, Preferences.KEY_VIDEO_ZOOM_GESTURES);
 		add(context, entries, Screen.REPLY_NOTIFICATIONS, R.string.replies_and_notifications, R.string.replies_and_notifications_entry_summary, null);
+		add(context, entries, Screen.REPLY_NOTIFICATIONS, R.string.highlight_my_posts,
+				R.string.highlight_my_posts__summary, Preferences.KEY_SHOW_MY_POSTS);
 		add(context, entries, Screen.REPLY_NOTIFICATIONS, R.string.track_replies,
 				R.string.track_replies__summary, Preferences.KEY_TRACK_MY_POSTS);
 		add(context, entries, Screen.REPLY_NOTIFICATIONS, R.string.tracked_replies_local_check,
@@ -481,7 +492,6 @@ public final class SettingsSearchIndex {
 				Preferences.KEY_ALL_ATTACHMENTS);
 		add(context, entries, Screen.INTERFACE, R.string.highlight_unread_posts, 0,
 				Preferences.KEY_HIGHLIGHT_UNREAD);
-		add(context, entries, Screen.INTERFACE, R.string.highlight_my_posts, 0, Preferences.KEY_SHOW_MY_POSTS);
 		add(context, entries, Screen.POST_MARKS, R.string.post_marks_colors);
 		add(context, entries, Screen.INTERFACE, R.string.touch_feedback,
 				R.string.touch_feedback_intensity, Preferences.KEY_TOUCH_FEEDBACK);
@@ -567,6 +577,8 @@ public final class SettingsSearchIndex {
 					R.string.new_interface_motion_summary, Preferences.KEY_NEW_INTERFACE_MOTION);
 			add(context, entries, Screen.MATERIAL3_DESIGN, R.string.material3_posting_form,
 					R.string.material3_posting_form_summary, Preferences.KEY_NEW_POSTING_FORM);
+			add(context, entries, Screen.MATERIAL3_DESIGN, R.string.material3_video_player,
+					R.string.material3_video_player_summary, Preferences.KEY_NEW_VIDEO_PLAYER);
 		}
 		add(context, entries, Screen.EXPERIMENTAL, R.string.thread_toolbar_action,
 				R.string.thread_toolbar_action__summary, Preferences.KEY_THREAD_TOOLBAR_ACTION);
@@ -579,6 +591,8 @@ public final class SettingsSearchIndex {
 		add(context, entries, Screen.MEDIA, R.string.load_thumbnails, 0, Preferences.KEY_LOAD_THUMBNAILS);
 		add(context, entries, Screen.MEDIA, R.string.close_gallery_on_background_tap,
 				R.string.close_gallery_on_background_tap__summary, Preferences.KEY_CLOSE_GALLERY_ON_BACKGROUND_TAP);
+		add(context, entries, Screen.MEDIA, R.string.close_gallery_grid_on_background_tap,
+				R.string.close_gallery_grid_on_background_tap__summary, Preferences.KEY_CLOSE_GALLERY_GRID_ON_BACKGROUND_TAP);
 		add(context, entries, Screen.MEDIA, R.string.scroll_gallery_to_current_file,
 				R.string.scroll_gallery_to_current_file__summary, Preferences.KEY_SCROLL_GALLERY_TO_CURRENT_FILE);
 		add(context, entries, Screen.VIDEO_PRELOAD, R.string.load_nearest_image, 0, Preferences.KEY_IMAGE_PRELOAD);

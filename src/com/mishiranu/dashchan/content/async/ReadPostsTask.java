@@ -15,6 +15,7 @@ import chan.http.HttpHolder;
 import chan.http.HttpValidator;
 import chan.util.CommonUtils;
 import com.mishiranu.dashchan.content.Preferences;
+import com.mishiranu.dashchan.content.OwnPostRegistration;
 import com.mishiranu.dashchan.content.MainApplication;
 import com.mishiranu.dashchan.content.database.CommonDatabase;
 import com.mishiranu.dashchan.content.database.PagesDatabase;
@@ -234,9 +235,10 @@ public class ReadPostsTask extends HttpHolderTask<Void, ReadPostsTask.Result> {
 							removedPendingUserPosts = new HashSet<>();
 						}
 						removedPendingUserPosts.add(pendingUserPost);
-						if (Preferences.isTrackMyPostsEnabled()) {
+						OwnPostRegistration.register(Preferences.isShowMyPosts(), Preferences.isTrackMyPostsEnabled(), () -> {
 							CommonDatabase.getInstance().getPosts().setFlags(false, chan.name,
 									boardName, threadNumber, postNumber, PostItem.HideState.UNDEFINED, true);
+						}, () -> {
 							Post ownPost = null;
 							for (Post post : posts) {
 								if (post.number.equals(postNumber)) {
@@ -248,7 +250,7 @@ public class ReadPostsTask extends HttpHolderTask<Void, ReadPostsTask.Result> {
 									ownPost != null ? ownPost.comment : null, System.currentTimeMillis());
 							ReplyPushManager.onPostTracked(MainApplication.getInstance(), chan.name,
 									boardName, threadNumber, postNumber);
-						}
+						});
 					}
 				}
 			}

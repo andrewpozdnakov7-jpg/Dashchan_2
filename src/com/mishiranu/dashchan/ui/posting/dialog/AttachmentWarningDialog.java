@@ -39,7 +39,7 @@ public class AttachmentWarningDialog extends DialogFragment {
 				.getAttachmentDraftFileHolder(holder.hash) : null;
 		if (holder == null || fileHolder == null) {
 			dismiss();
-			return new Dialog(activity);
+			return new com.mishiranu.dashchan.content.security.SecureDialog(activity);
 		}
 		JpegData jpegData = fileHolder.getJpegData();
 		PngData pngData = fileHolder.getPngData();

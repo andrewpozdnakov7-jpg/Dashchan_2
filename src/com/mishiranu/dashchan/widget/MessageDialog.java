@@ -16,7 +16,7 @@ import com.mishiranu.dashchan.util.ViewUtils;
 
 /** Text-only dialogs: the message scrolls, the title and actions never do.
  * Forms, captcha and choice lists intentionally keep their own dialog implementations. */
-public final class MessageDialog extends Dialog {
+public final class MessageDialog extends com.mishiranu.dashchan.content.security.SecureDialog {
 	public static final class Builder {
 		private final Context context;
 		private CharSequence title;

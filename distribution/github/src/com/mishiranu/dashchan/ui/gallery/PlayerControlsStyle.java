@@ -32,8 +32,8 @@ final class PlayerControlsStyle {
 	private PlayerControlsStyle() {}
 
 	static View createBar(Context context, ImageButton play, LinearLayout time, SeekBar seek,
-			ImageButton mute, ImageButton fullscreen) {
-		return new PlayerControlBar(context, play, time, seek, mute, fullscreen);
+			ImageButton save, ImageButton fullscreen) {
+		return new PlayerControlBar(context, play, time, seek, save, fullscreen);
 	}
 
 	static int dp(float density, float value) {

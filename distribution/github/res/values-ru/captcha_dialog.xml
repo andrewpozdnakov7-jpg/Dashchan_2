@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="captcha_dialog_selected">Выбрано</string>
+    <string name="captcha_dialog_selected_symbol">Выбранный символ %1$d</string>
     <string name="captcha_dialog_empty">Пока ничего</string>
     <string name="captcha_dialog_done">Готово</string>
     <string name="captcha_dialog_refreshing">Обновление капчи</string>

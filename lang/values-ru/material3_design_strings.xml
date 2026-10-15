@@ -5,4 +5,6 @@
     <string name="material3_enable_design">Включить новый интерфейс</string>
     <string name="material3_posting_form">Новая форма отправки сообщений</string>
     <string name="material3_posting_form_summary">Новая компоновка полей, форматирование внутри редактора и обновлённые кнопки. Требуется новый интерфейс. Применяется при следующем открытии формы.</string>
+    <string name="material3_video_player">Новый вид видеоплеера</string>
+    <string name="material3_video_player_summary">Управление и меню скорости в стиле Material 3. Выключите, чтобы вернуть прежний вид. Применяется при следующем открытии плеера.</string>
 </resources>

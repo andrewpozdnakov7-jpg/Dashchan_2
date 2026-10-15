@@ -82,6 +82,9 @@ public class CategoriesFragment extends PreferenceFragment {
 		addCategory(R.string.general, R.drawable.ic_map)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 						.pushFragment(new GeneralFragment()));
+		addCategory(R.string.security_title, R.drawable.ic_verified)
+				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
+						.pushFragment(new SecurityFragment()));
 		addCategory(R.string.forums, R.drawable.ic_public)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 						.pushFragment(new ChansFragment()));

@@ -12,6 +12,7 @@ import java.util.WeakHashMap;
 public final class SurfaceMotion {
 	private SurfaceMotion() {}
 	public static void configureDialog(Dialog dialog) {
+		com.mishiranu.dashchan.content.security.AppSecurity.protectDialog(dialog);
 		configureDialog(dialog, InterfaceMotion.isEnabled(), InterfaceMotion.duration(1) > 0);
 	}
 	static void configureDialog(Dialog dialog, boolean enabled, boolean animate) {
@@ -47,11 +48,11 @@ public final class SurfaceMotion {
 		}
 	}
 	public static Context popupContext(Context context) {
-		if (!InterfaceMotion.isEnabled()) return context;
+		if (!InterfaceMotion.isEnabled()) return com.mishiranu.dashchan.content.security.SecurePopupContext.wrap(context);
 		Resources.Theme theme = context.getResources().newTheme(); theme.setTo(context.getTheme());
 		theme.applyStyle(R.style.Theme_Motion_Popup_Marker, true);
 		Context result = new ContextThemeWrapper(context, theme);
-		registerPopupContext(result); return result;
+		registerPopupContext(result); return com.mishiranu.dashchan.content.security.SecurePopupContext.wrap(result);
 	}
 	public static int popupStyle(int legacy) {
 		return InterfaceMotion.isEnabled() ? InterfaceMotion.duration(1) > 0

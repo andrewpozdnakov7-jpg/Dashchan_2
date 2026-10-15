@@ -340,6 +340,7 @@ public class WatcherNotifications {
 			configureNotification(builder, false);
 			String tag = makeTag(chanName, boardName, threadNumber, reply.postNumber);
 			builder.setContentIntent(createContentIntent(tag, reply.postNumber));
+			com.mishiranu.dashchan.content.security.AppSecurity.redactNotification(context, builder);
 			notificationManager.notify(tag, C.NOTIFICATION_ID_REPLIES, builder.build());
 		}
 
@@ -377,6 +378,7 @@ public class WatcherNotifications {
 				builder.setContentIntent(summaryIntent);
 			}
 			builder.setGroupSummary(true);
+			com.mishiranu.dashchan.content.security.AppSecurity.redactNotification(context, builder);
 			notificationManager.notify(C.NOTIFICATION_ID_REPLIES, builder.build());
 		}
 

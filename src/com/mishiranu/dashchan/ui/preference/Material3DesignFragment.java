@@ -11,7 +11,7 @@ import com.mishiranu.dashchan.ui.preference.core.CheckPreference;
 import com.mishiranu.dashchan.ui.preference.core.PreferenceFragment;
 import com.mishiranu.dashchan.util.SharedPreferences;
 
-/** The original design preference retains its key, default and saved choice. */
+/** Opening this screen preserves choices; explicitly enabling the design enables its options. */
 public class Material3DesignFragment extends PreferenceFragment {
 	@Override protected SharedPreferences getPreferences() { return Preferences.PREFERENCES; }
 
@@ -24,9 +24,20 @@ public class Material3DesignFragment extends PreferenceFragment {
 		CheckPreference form = addCheck(true, Preferences.KEY_NEW_POSTING_FORM,
 				Preferences.DEFAULT_NEW_POSTING_FORM, R.string.material3_posting_form,
 				R.string.material3_posting_form_summary);
-		// Disabling the parent suspends the feature; it does not erase the child's saved choice.
+		CheckPreference player = addCheck(true, Preferences.KEY_NEW_VIDEO_PLAYER,
+				Preferences.DEFAULT_NEW_VIDEO_PLAYER, R.string.material3_video_player,
+				R.string.material3_video_player_summary);
+		// Merely reopening/restoring the screen must not re-enable an opted-out feature.
 		form.setEnabled(design.getValue());
-		design.setOnAfterChangeListener(p -> form.setEnabled(p.getValue()));
+		player.setEnabled(design.getValue());
+		design.setOnAfterChangeListener(p -> onDesignToggled(p.getValue(), form, player));
+	}
+
+	static void onDesignToggled(boolean enabled, CheckPreference... options) {
+		for (CheckPreference option : options) {
+			option.setEnabled(enabled);
+			if (enabled) option.setValue(true);
+		}
 	}
 
 	@Override public void onViewStateRestored(Bundle state) {

@@ -125,6 +125,7 @@ public class PostingShareActivity extends ComponentActivity {
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
+		if (com.mishiranu.dashchan.content.security.AppSecurity.deferIfLocked(this)) return;
 		FrameLayout layout = new FrameLayout(this);
 		ProgressBar progressBar = new ProgressBar(this);
 		layout.addView(progressBar, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,

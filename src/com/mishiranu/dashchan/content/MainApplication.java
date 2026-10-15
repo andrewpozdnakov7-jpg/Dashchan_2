@@ -19,6 +19,8 @@ import com.mishiranu.dashchan.content.database.PagesDatabase;
 import com.mishiranu.dashchan.content.net.UserAgentProvider;
 import com.mishiranu.dashchan.content.push.ReplyPushManager;
 import com.mishiranu.dashchan.content.service.BackgroundWatcherWorker;
+import com.mishiranu.dashchan.content.security.AppSecurity;
+import com.mishiranu.dashchan.content.security.PrivacyReset;
 import com.mishiranu.dashchan.util.IOUtils;
 import com.mishiranu.dashchan.util.Logger;
 import com.mishiranu.dashchan.util.PerformanceDiagnostics;
@@ -50,10 +52,22 @@ public class MainApplication extends Application {
 	}
 
 	private String processSuffix;
+	private boolean securityRecoveryProcess;
+	public boolean isSecurityRecoveryProcess() { return securityRecoveryProcess; }
+
+	@Override
+	protected void attachBaseContext(Context base) {
+		super.attachBaseContext(base);
+		// Before ContentProviders, database singletons, WorkManager and cached preferences.
+		if (!Application.getProcessName().endsWith(":security")) {
+			securityRecoveryProcess = PrivacyReset.requiresRecovery(base);
+		}
+	}
 
 	@Override
 	public void onCreate() {
 		super.onCreate();
+		if (securityRecoveryProcess) return;
 
 		String processName = Application.getProcessName();
 		if (StringUtils.isEmpty(processName)) {
@@ -79,6 +93,8 @@ public class MainApplication extends Application {
 		if (isIsolatedWebViewProcess()) {
 			WebView.setDataDirectorySuffix(processSuffix);
 		}
+		if (checkProcess("security")) return;
+		if (isMainProcess() || isPrivateBrowserProcess()) AppSecurity.install(this, isMainProcess());
 
 		if (isMainProcess()) {
 			Logger.init(this);
@@ -106,12 +122,14 @@ public class MainApplication extends Application {
 	@Override
 	public void onConfigurationChanged(Configuration newConfig) {
 		super.onConfigurationChanged(newConfig);
+		if (securityRecoveryProcess) return;
 		if (isMainProcess()) LocaleManager.getInstance().onConfigurationChanged(newConfig);
 	}
 
 	@Override
 	public void onTrimMemory(int level) {
 		super.onTrimMemory(level);
+		if (securityRecoveryProcess) return;
 		if (isMainProcess()) {
 			PostsWindowCache.getInstance().onTrimMemory(level);
 			ImageLoader.getInstance().onTrimMemory(level);

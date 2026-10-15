@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="captcha_dialog_selected">Selected</string>
+    <string name="captcha_dialog_selected_symbol">Selected symbol %1$d</string>
     <string name="captcha_dialog_empty">Nothing yet</string>
     <string name="captcha_dialog_done">Done</string>
     <string name="captcha_dialog_refreshing">Refreshing captcha</string>

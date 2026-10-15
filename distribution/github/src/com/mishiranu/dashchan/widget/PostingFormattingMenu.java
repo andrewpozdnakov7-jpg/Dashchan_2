@@ -54,7 +54,7 @@ final class PostingFormattingMenu {
 			int tonal, int text, int accent, Consumer<View> select) {
 		this.anchor = anchor; this.panel = panel; this.commands = commands; this.tags = tags;
 		this.text = text; this.accent = accent; this.select = select;
-		Context context = anchor.getContext();
+		Context context = com.mishiranu.dashchan.content.security.SecurePopupContext.wrap(anchor.getContext());
 		scroll = new ScrollView(context);
 		scroll.setPadding(dp(8), dp(8), dp(8), dp(8));
 		scroll.setClipToPadding(true); scroll.setVerticalScrollBarEnabled(false);

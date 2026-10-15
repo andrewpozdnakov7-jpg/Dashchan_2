@@ -132,7 +132,7 @@ public class KohlchanAccessDialog extends DialogFragment {
 		checkButton.setOnClickListener(view -> checkPermission());
 		buttons.addView(checkButton, new LinearLayout.LayoutParams(0, -2, 1));
 		layout.addView(buttons, new LinearLayout.LayoutParams(-1, -2));
-		Dialog dialog = new Dialog(requireContext());
+		Dialog dialog = new com.mishiranu.dashchan.content.security.SecureDialog(requireContext());
 		dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
 		dialog.setContentView(layout, new ViewGroup.LayoutParams(-1, -1));
 		return dialog;

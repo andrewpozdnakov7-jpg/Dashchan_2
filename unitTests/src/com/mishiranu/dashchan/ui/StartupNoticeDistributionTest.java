@@ -7,6 +7,15 @@ import org.junit.Test;
 
 /** Source-set boundary assertions; the release APK audit additionally verifies compiled artifacts. */
 public class StartupNoticeDistributionTest {
+	@Test public void compiledResetContainsTheNoticeCounterOnlyForTheGithubFlavor() throws Exception {
+		try (java.io.InputStream input = getClass().getClassLoader().getResourceAsStream(
+				"com/mishiranu/dashchan/content/security/PrivacyReset.class")) {
+			assertNotNull("Compiled reset class must be inspected", input);
+			String bytecode = new String(input.readAllBytes(), java.nio.charset.StandardCharsets.ISO_8859_1);
+			assertEquals(com.mishiranu.dashchan.BuildConfig.ENABLE_EXPERIMENTAL_INTERFACE_MOTION,
+					bytecode.contains("material3-acknowledgements"));
+		}
+	}
 	@Test public void fdroidBridgeHasNoDialogCounterOrResources() throws Exception {
 		String bridge = Files.readString(Path.of("distribution/fdroid/src/com/mishiranu/dashchan/ui/StartupNotices.java"));
 		assertTrue(bridge.contains("BooleanSupplier ready) {}"));

@@ -106,6 +106,7 @@ public class VideoUnit {
 	private ImageButton playPauseButton;
 	private TextView playbackSpeedButton;
 	private ImageButton muteButton;
+	private ImageButton saveButton;
 	private ImageButton pictureInPictureButton;
 	private ImageButton tikTokModeButton;
 	private ImageButton fullscreenButton;
@@ -947,6 +948,7 @@ public class VideoUnit {
 				instance.galleryInstance.callback.updateTitle();
 			}
 			instance.currentHolder.loadState = PagerInstance.LoadState.COMPLETE;
+			updateSaveButton();
 			updatePictureInPictureButton();
 			instance.galleryInstance.callback.invalidateOptionsMenu();
 		} else {
@@ -1189,7 +1191,7 @@ public class VideoUnit {
 	private void recreateVideoControls(int targetLayoutConfiguration) {
 		Context context = instance.galleryInstance.context;
 		float density = ResourceUtils.obtainDensity(context);
-		boolean modern = InterfaceMotion.isEnabled();
+		boolean modern = Preferences.isNewVideoPlayerEnabled();
 		boolean speedControl = Preferences.isVideoPlaybackSpeedControl();
 		boolean pictureInPictureControl = Preferences.isVideoPictureInPicture() && context.getPackageManager()
 				.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE);
@@ -1216,6 +1218,7 @@ public class VideoUnit {
 			cancelScrubbing();
 			playbackSpeedButton = null;
 			muteButton = null;
+			saveButton = null;
 			pictureInPictureButton = null;
 			tikTokModeButton = null;
 			fullscreenButton = null;
@@ -1339,8 +1342,20 @@ public class VideoUnit {
 			updateFullscreenButton();
 
 			if (modern) {
+				saveButton = new ImageButton(context, null, android.R.attr.borderlessButtonStyle);
+				saveButton.setScaleType(ImageButton.ScaleType.FIT_CENTER);
+				PlayerControlsStyle.button(saveButton, density, false);
+				saveButton.setImageResource(R.drawable.ic_save);
+				saveButton.setContentDescription(context.getString(R.string.save));
+				saveButton.setTooltipText(context.getString(R.string.save));
+				saveButton.setOnClickListener(v -> {
+					recordControlsInteraction();
+					if (hasSaveControl() && seekBar.isEnabled()) {
+						instance.galleryInstance.callback.downloadGalleryItem(instance.currentHolder.galleryItem);
+					}
+				});
 				View controls = PlayerControlsStyle.createBar(context, playPauseButton, timeGroup,
-						seekBar, muteButton, fullscreenButton);
+						seekBar, saveButton, fullscreenButton);
 				LinearLayout.LayoutParams controlsParams = new LinearLayout.LayoutParams(
 						LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
 				controlsParams.setMargins((int) (8f * density), 0, (int) (8f * density),
@@ -1363,6 +1378,7 @@ public class VideoUnit {
 				int actionSize = (int) (32f * density);
 				if (rightHandControls) {
 					configurationView.addView(tikTokModeButton, actionSize, actionSize);
+					configurationView.addView(muteButton, actionSize, actionSize);
 					if (pictureInPictureButton != null) configurationView.addView(pictureInPictureButton,
 							actionSize, actionSize);
 					if (playbackSpeedButton != null) configurationView.addView(playbackSpeedButton,
@@ -1373,6 +1389,7 @@ public class VideoUnit {
 					if (pictureInPictureButton != null) configurationView.addView(pictureInPictureButton,
 							actionSize, actionSize);
 					configurationView.addView(tikTokModeButton, actionSize, actionSize);
+					configurationView.addView(muteButton, actionSize, actionSize);
 				}
 			} else {
 				View spacer = new View(context);
@@ -1409,6 +1426,7 @@ public class VideoUnit {
 		seekBar.removeCallbacks(progressRunnable);
 		seekBar.post(progressRunnable);
 		updatePlayState();
+		updateSaveButton();
 	}
 
 	private static void styleTimeText(TextView view, boolean modern) {
@@ -2428,13 +2446,25 @@ public class VideoUnit {
 	}
 
 	private boolean controlsVisible = false;
+	boolean hasSaveControl() {
+		PagerInstance.ViewHolder holder = instance.currentHolder;
+		return modernControls && initialized && !pictureInPictureTransferred && saveButton != null
+				&& holder != null && holder.galleryItem != null
+				&& holder.loadState == PagerInstance.LoadState.COMPLETE
+				&& holder.galleryItem.isOpenableVideo(Chan.get(instance.galleryInstance.chanName));
+	}
+
+	private void updateSaveButton() {
+		if (saveButton != null) saveButton.setEnabled(hasSaveControl() && seekBar != null && seekBar.isEnabled());
+	}
+
 	private final VideoControlsBinding controlsBinding = new VideoControlsBinding();
 	private boolean bindingMediaControls;
 	private boolean retainPlaybackButtonAppearance;
 
 	void selectVideoControlsPage(boolean playableVideo) {
 		if (!pictureInPictureTransferred) {
-			controlsBinding.select(playableVideo, initialized, modernControls && InterfaceMotion.isEnabled());
+			controlsBinding.select(playableVideo, initialized, modernControls && Preferences.isNewVideoPlayerEnabled());
 		}
 	}
 
@@ -2450,6 +2480,7 @@ public class VideoUnit {
 		} else {
 			updateMuteButton(); updatePictureInPictureButton();
 		}
+		updateSaveButton();
 	}
 
 	private void setPlaybackControlsReady(boolean ready, boolean retainAppearance) {
@@ -2538,7 +2569,7 @@ public class VideoUnit {
 	}
 
 	private void setControlIcon(android.widget.ImageView view, int resource, boolean animate) {
-		boolean motion = animate && !bindingMediaControls && !controlsBinding.retainsControls()
+		boolean motion = modernControls && animate && !bindingMediaControls && !controlsBinding.retainsControls()
 				&& preloadResumed && controlsWindowHasFocus && !pictureInPictureTransferred;
 		ElementMotion.icon(view, resource, motion);
 	}
@@ -2561,7 +2592,7 @@ public class VideoUnit {
 				centerPlayPauseButton.animate().setListener(null).cancel();
 				// The modern owner captures/restores accessibility itself. Updating it
 				// before cancelling an old hide would seed the new show with a hidden state.
-				if (!InterfaceMotion.isEnabled()) {
+				if (!modernControls) {
 					centerPlayPauseButton.setImportantForAccessibility(visible
 							? View.IMPORTANT_FOR_ACCESSIBILITY_AUTO : View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
 				}
@@ -2579,7 +2610,7 @@ public class VideoUnit {
 								: View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
 					}
 				}
-			} else if (InterfaceMotion.isEnabled()) {
+			} else if (modernControls) {
 				View expectedControls = controlsView;
 				ElementMotion.visibility(controlsView, visible, 16f, false, () -> expectedControls == controlsView
 						&& preloadResumed && controlsWindowHasFocus && !pictureInPictureTransferred);
@@ -2745,6 +2776,7 @@ public class VideoUnit {
 		if (getOwnedVideoView(instance.currentHolder) != null) {
 			setPlaybackControlsReady(!swiping, swiping);
 			seekBar.setEnabled(!swiping);
+			updateSaveButton();
 			fullscreenButton.setEnabled(!swiping);
 			if (swiping) {
 				wasPlaying = player.isPlaying();
@@ -2812,6 +2844,7 @@ public class VideoUnit {
 					: PagerInstance.LoadState.PREVIEW_OR_LOADING;
 			boolean changed = holder.loadState != state;
 			holder.loadState = state;
+			updateSaveButton();
 			updatePictureInPictureButton();
 			if (changed) instance.galleryInstance.callback.invalidateOptionsMenu();
 			if (complete) startVideoPreload();

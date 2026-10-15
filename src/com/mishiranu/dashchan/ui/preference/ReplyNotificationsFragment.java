@@ -110,6 +110,10 @@ public class ReplyNotificationsFragment extends PreferenceFragment {
 		view.removeCallbacks(pushStateRunnable);
 		removeAllPreferences();
 
+		addHeader(R.string.my_posts);
+		addCheck(true, Preferences.KEY_SHOW_MY_POSTS, Preferences.DEFAULT_SHOW_MY_POSTS,
+				R.string.highlight_my_posts, R.string.highlight_my_posts__summary);
+
 		addHeader(R.string.my_message_replies);
 		CheckPreference trackingPreference = addCheck(true, Preferences.KEY_TRACK_MY_POSTS,
 				Preferences.DEFAULT_TRACK_MY_POSTS, R.string.track_replies, R.string.track_replies__summary);
@@ -405,7 +409,7 @@ public class ReplyNotificationsFragment extends PreferenceFragment {
 	private void showReplyPushQuietTimePicker(boolean start) {
 		int minutes = start ? Preferences.getReplyPushQuietHoursStart()
 				: Preferences.getReplyPushQuietHoursEnd();
-		new TimePickerDialog(requireContext(), (timePicker, hourOfDay, minute) -> {
+		TimePickerDialog dialog = new TimePickerDialog(requireContext(), (timePicker, hourOfDay, minute) -> {
 			int value = hourOfDay * 60 + minute;
 			if (start) {
 				Preferences.setReplyPushQuietHoursStart(value);
@@ -413,7 +417,9 @@ public class ReplyNotificationsFragment extends PreferenceFragment {
 				Preferences.setReplyPushQuietHoursEnd(value);
 			}
 			refreshPreferences();
-		}, minutes / 60, minutes % 60, DateFormat.is24HourFormat(requireContext())).show();
+		}, minutes / 60, minutes % 60, DateFormat.is24HourFormat(requireContext()));
+		com.mishiranu.dashchan.content.security.AppSecurity.protectDialog(dialog);
+		dialog.show();
 	}
 
 	private void requestNotificationPermission() {
