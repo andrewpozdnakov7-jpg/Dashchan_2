@@ -9,6 +9,7 @@ import android.app.job.JobScheduler;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.os.Process;
+import com.mishiranu.dashchan.BuildConfig;
 import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
@@ -169,10 +170,12 @@ public final class PrivacyReset {
 				.putBoolean("background_reply_check", false).putBoolean("tracked_replies_local_check", false)
 				.putInt("watcher_refresh_interval", 0);
 		if (!editor.commit()) throw new IOException("Cannot save retained preferences");
-		SharedPreferences notices = context.getSharedPreferences("startup-notices", Context.MODE_PRIVATE);
-		int acknowledgements = notices.getInt("material3-acknowledgements", 0);
-		if (!notices.edit().clear().putInt("material3-acknowledgements", acknowledgements).commit()) {
-			throw new IOException("Cannot retain presentation notice state");
+		if (BuildConfig.ENABLE_EXPERIMENTAL_INTERFACE_MOTION) {
+			SharedPreferences notices = context.getSharedPreferences("startup-notices", Context.MODE_PRIVATE);
+			int acknowledgements = notices.getInt("material3-acknowledgements", 0);
+			if (!notices.edit().clear().putInt("material3-acknowledgements", acknowledgements).commit()) {
+				throw new IOException("Cannot retain presentation notice state");
+			}
 		}
 	}
 }
