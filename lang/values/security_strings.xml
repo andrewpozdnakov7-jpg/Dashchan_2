@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<string name="security_restore_folder_access">Restore access to the approved folder</string>
+	<string name="security_restore_same_folder">Select exactly the previously approved folder. A different folder cannot replace the cleanup target.</string>
+	<string name="security_title">Security</string>
+	<string name="security_biometric_summary">Unlock with system strong biometrics. The main app PIN remains available.</string>
+	<string name="security_downloads_toggle_summary">OFF by default. After main PIN confirmation, approve the exact folder whose entire contents will be deleted when the additional PIN is entered.</string>
+	<string name="security_approved_directory">Approved directory</string>
+	<string name="security_notification_hidden">Open the application to view this notification</string>
+	<string name="security_delete_downloads">Delete contents of the download folder</string>
+	<string name="security_downloads_warning">Only when the additional PIN is entered: delete ALL files and subfolders in the directory below, including files created by other apps and exported backups. The directory itself remains. This is OFF by default. Approval applies only to this directory; changing the download folder requires new approval. Local subfolders with a persisted read/write grant are supported, not volume roots or cloud providers. Deletion is not guaranteed if permission or storage becomes unavailable.</string>
+	<string name="security_downloads_unavailable">Select an available local download folder first. Volume roots and cloud folders cannot be used.</string>
+	<string name="security_need_additional">Set an additional PIN first</string>
+	<string name="security_downloads_result">Download folder cleanup</string>
+	<string name="security_downloads_optional">Downloaded files and external backups remain unless folder cleanup was separately enabled. Files outside the approved folder are never deleted.</string>
+	<string name="security_downloads_failed">The local profile was cleared, but download folder cleanup did not finish. Restore access and retry. Continuing without deletion requires the main PIN; files may remain in that folder.</string>
+	<string name="security_skip_downloads">Continue without deleting remaining files</string>
+	<string name="security_retry_cleanup">Retry cleanup</string>
+	<string name="security_primary_pin">Application PIN</string>
+	<string name="security_additional_pin">Additional PIN: empty profile and cleanup</string>
+	<string name="security_remove_additional">Remove additional PIN</string>
+	<string name="security_disable">Disable application lock</string>
+	<string name="security_enabled">Enabled</string>
+	<string name="security_disabled">Disabled</string>
+	<string name="security_unlock">Unlock Slooop</string>
+	<string name="security_enter_pin">Enter your application PIN</string>
+	<string name="security_current_pin">Enter the main application PIN to change security settings</string>
+	<string name="security_new_pin">Choose a new PIN. The two PINs must be different.</string>
+	<string name="security_confirm_pin">Enter the new PIN again</string>
+	<string name="security_pin_hint">6–12 digits</string>
+	<string name="security_pin_mismatch">The PINs do not match. Enter a new PIN again.</string>
+	<string name="security_wrong_pin">Incorrect PIN</string>
+	<string name="security_retry_later">Too many attempts. Wait before trying again.</string>
+	<string name="security_save_failed">Could not save the PIN. Check that the PINs differ and try again.</string>
+	<string name="security_unavailable">Security storage is unavailable. Access remains locked.</string>
+	<string name="security_biometric">Biometric unlock</string>
+	<string name="security_biometric_unavailable">Biometrics unavailable or cancelled. Use the main PIN.</string>
+	<string name="security_autolock">Automatic lock</string>
+	<string name="security_autolock_summary">Locks when the screen turns off or the application goes into the background, including picture-in-picture. Background playback stops. App screenshots and recents previews are protected while the lock is enabled.</string>
+	<string name="security_delete_scope">What the additional PIN deletes</string>
+	<string name="security_delete_warning">Entering this PIN deletes local history and searches, open pages, my posts and reply history, bookmarks, custom boards and communities, drafts and queued messages, temporary attachments, caches and translations, video position, forum login data, cookies, saved names and email, deletion passwords, proxy addresses and credentials, and internal diagnostic logs. Background reply tracking is disabled. Appearance, PINs, biometrics, installed extensions and language models remain. Downloaded files and exported backups remain UNLESS folder cleanup was separately enabled. Forum posts and copies outside that folder are not deleted. The main PIN cannot restore deleted data. Folder permissions and folder cleanup approval are reset afterward.</string>
+	<string name="security_understand">I understand, continue</string>
+	<string name="security_opening">Opening Slooop…</string>
+	<string name="security_reset_failed">Cleanup could not finish. Data remains locked. Close and reopen Slooop to retry.</string>
+	<string name="security_limits">Protection limits</string>
+	<string name="security_limits_summary">This is an application lock, not encryption of existing data or protection against a compromised device. Cleanup does not guarantee forensic erasure and cannot delete copies outside its approved scope. There is no forgotten-PIN recovery; clearing app data loses the local profile. Test the additional PIN only on disposable data.</string>
+</resources>

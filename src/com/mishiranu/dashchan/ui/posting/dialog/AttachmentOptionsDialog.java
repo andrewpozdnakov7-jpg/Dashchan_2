@@ -99,7 +99,7 @@ public class AttachmentOptionsDialog extends DialogFragment implements AdapterVi
 				.getAttachmentDraftFileHolder(holder.hash) : null;
 		if (holder == null || fileHolder == null) {
 			dismiss();
-			return new Dialog(activity);
+			return new com.mishiranu.dashchan.content.security.SecureDialog(activity);
 		}
 		ChanConfiguration.Posting postingConfiguration = ((PostingDialogCallback) getParentFragment())
 				.getPostingConfiguration();

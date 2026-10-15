@@ -173,7 +173,7 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
     }
 
     private int dp(float value) { return Math.round(value * getResources().getDisplayMetrics().density); }
-    private AlertDialog.Builder dialogBuilder() { return new AlertDialog.Builder(this, R.style.PhotoEditorDialogTheme); }
+    private AlertDialog.Builder dialogBuilder() { return new com.mishiranu.dashchan.content.security.SecureDialogBuilder(this, R.style.PhotoEditorDialogTheme); }
     private GradientDrawable background(int color) {
         GradientDrawable out = new GradientDrawable(); out.setColor(color); out.setCornerRadius(dp(22)); return out;
     }

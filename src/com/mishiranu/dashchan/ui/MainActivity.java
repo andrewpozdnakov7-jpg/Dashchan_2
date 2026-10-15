@@ -219,11 +219,13 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	private boolean wideMode;
 
 	private Intent navigateIntentOnResume;
+	private Intent securityPendingIntent;
 	private ImageView pictureInPictureReturnCover;
 	private String pictureInPictureReturnCoverToken;
 	private final Runnable pictureInPictureReturnCoverTimeout =
 			() -> clearPictureInPictureReturnCover("timeout");
 	private StorageRequestState storageRequestState;
+	private long securityProfileGeneration;
 
 	private static final String LOCKER_DRAWER = "drawer";
 	private static final String LOCKER_NON_PAGE = "nonPage";
@@ -242,6 +244,13 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
+		try {
+			securityProfileGeneration = com.mishiranu.dashchan.content.security.ProfileGeneration.current(this);
+			if (savedInstanceState != null && savedInstanceState.getLong(
+					com.mishiranu.dashchan.content.security.ProfileGeneration.BUNDLE_KEY) != securityProfileGeneration) {
+				savedInstanceState = null;
+			}
+		} catch (java.io.IOException e) { savedInstanceState = null; securityProfileGeneration = -1; }
 		requestWindowFeature(Window.FEATURE_NO_TITLE);
 		requestWindowFeature(Window.FEATURE_ACTION_MODE_OVERLAY);
 		ExpandedScreen.PreThemeInit expandedScreenPreThemeInit = new ExpandedScreen
@@ -597,6 +606,12 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	@Override
 	protected void onSaveInstanceState(@NonNull Bundle outState) {
 		super.onSaveInstanceState(outState);
+		outState.putLong(com.mishiranu.dashchan.content.security.ProfileGeneration.BUNDLE_KEY, securityProfileGeneration);
+		if (!com.mishiranu.dashchan.content.security.ProfileGeneration.canWrite(this, securityProfileGeneration)) {
+			outState.clear();
+			outState.putLong(com.mishiranu.dashchan.content.security.ProfileGeneration.BUNDLE_KEY, securityProfileGeneration);
+			return;
+		}
 
 		Bundle pagesState = new Bundle();
 		writePagesState(pagesState);
@@ -631,7 +646,10 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	private static void deletePagesState(File file) { PageSessionStore.deletePagesState(file); }
 
-	private boolean writePagesState(File file, Bundle state) { return pageSessionStore.writePagesState(file, state); }
+	private boolean writePagesState(File file, Bundle state) {
+		return com.mishiranu.dashchan.content.security.ProfileGeneration.canWrite(this, securityProfileGeneration)
+				&& pageSessionStore.writePagesState(file, state);
+	}
 
 	private Bundle createPagesState(boolean pagesOnly) {
 		ContentFragment currentFragment = getCurrentFragment("FragmentAccess/createPagesState");
@@ -668,6 +686,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	}
 
 	private void savePagesSession() {
+		if (!com.mishiranu.dashchan.content.security.ProfileGeneration.canWrite(this, securityProfileGeneration)) return;
 		if (contentNavigation.isPending()) {
 			contentNavigation.setSaveSessionPending(true);
 			return;
@@ -945,6 +964,10 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	}
 
 	private void navigateIntentUnchecked(Intent intent) {
+		if (com.mishiranu.dashchan.content.security.SecurityStore.locked(this)) {
+			securityPendingIntent = intent;
+			return;
+		}
 		if (deferContentNavigation(() -> navigateIntentUnchecked(intent))) return;
 		if (C.ACTION_RETURN_FROM_PICTURE_IN_PICTURE.equals(intent.getAction())) {
 			// The pending transfer, not this one-shot intent, owns the return request.
@@ -1806,6 +1829,10 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		if (navigateIntentOnResume != null) {
 			navigateIntentUnchecked(navigateIntentOnResume);
 		}
+		if (securityPendingIntent != null && !com.mishiranu.dashchan.content.security.SecurityStore.locked(this)) {
+			Intent pending = securityPendingIntent; securityPendingIntent = null;
+			navigateIntentUnchecked(pending);
+		}
 
 		if (downloadBinder != null) {
 			downloadBinder.notifyReadyToHandleRequests();
@@ -2198,7 +2225,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 				appearanceOptionsMenu.add(0, R.id.menu_spoilers, 0,
 						R.string.spoilers).setCheckable(true);
 				appearanceOptionsMenu.add(0, R.id.menu_my_posts, 0,
-						R.string.my_posts).setCheckable(true);
+						R.string.highlight_my_posts).setCheckable(true);
 				appearanceOptionsMenu.add(0, R.id.menu_drawer, 0,
 						R.string.lock_navigation).setCheckable(true);
 				appearanceOptionsMenu.add(0, R.id.menu_sfw_mode, 0,

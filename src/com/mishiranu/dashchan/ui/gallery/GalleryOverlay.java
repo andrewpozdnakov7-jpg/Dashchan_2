@@ -1079,13 +1079,20 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 		if (!isGalleryMenuReady()) {
 			return;
 		}
+		GalleryItem currentItem = pagerUnit.getCurrentGalleryItem();
+		boolean modernVideo = !galleryMode && Preferences.isNewVideoPlayerEnabled()
+				&& currentItem != null && currentItem.isOpenableVideo(Chan.get(instance.chanName));
+		// Let Toolbar remeasure the title/subtitle using the space released by this action.
+		// Restore the original placement when paging to a photo or returning to the grid.
+		menu.findItem(R.id.menu_refresh).setShowAsAction(modernVideo
+				? MenuItem.SHOW_AS_ACTION_NEVER : MenuItem.SHOW_AS_ACTION_ALWAYS);
 		if (!galleryMode) {
 			menu.findItem(R.id.menu_tiktok_filter).setVisible(pagerUnit.getCurrentGalleryItem() != null);
 			menu.findItem(R.id.menu_refresh).setEnabled(true).setTitle(R.string.refresh);
 			PagerUnit.OptionsMenuCapabilities capabilities = pagerUnit != null
 					? pagerUnit.obtainOptionsMenuCapabilities() : null;
 			if (capabilities != null && capabilities.available) {
-				menu.findItem(R.id.menu_save).setVisible(capabilities.save);
+				menu.findItem(R.id.menu_save).setVisible(capabilities.save && !pagerUnit.hasVideoSaveControl());
 				menu.findItem(R.id.menu_refresh).setVisible(capabilities.refresh);
 			}
 			if (pagerUnit != null) {

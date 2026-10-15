@@ -5,4 +5,6 @@
     <string name="material3_enable_design">Enable the new interface</string>
     <string name="material3_posting_form">New posting form</string>
     <string name="material3_posting_form_summary">New field layout, formatting inside the editor and redesigned actions. Requires the new interface. Applies the next time the form is opened.</string>
+    <string name="material3_video_player">New video player appearance</string>
+    <string name="material3_video_player_summary">Material 3-style controls and playback speed menu. Turn off to restore the previous appearance. Applies the next time the player is opened.</string>
 </resources>

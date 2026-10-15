@@ -1191,6 +1191,18 @@ public class Preferences {
 				ClickableToast.show(R.string.no_access_to_memory);
 				return;
 			}
+			try {
+				com.mishiranu.dashchan.content.security.SecurityStore.update(context, state -> {
+					if (!uri.toString().equals(state.optString("delete_downloads_uri"))) {
+						state.remove("delete_downloads_uri"); state.remove("delete_downloads_label");
+					}
+					return null;
+				});
+			} catch (java.io.IOException e) {
+				// Do not commit a folder switch if its old deletion approval could not be revoked.
+				ClickableToast.show(R.string.security_unavailable);
+				return;
+			}
 			PREFERENCES.edit().put(KEY_DOWNLOAD_URI_TREE, uri.toString())
 					.put(KEY_DOWNLOAD_DIRECTORY_SETUP_PROMPTED, true).close();
 			HashSet<String> localArchiveUriTrees = new HashSet<>(getLocalArchiveUriTrees());
@@ -1704,6 +1716,14 @@ public class Preferences {
 
 	public static boolean isCloseGalleryOnBackgroundTap() {
 		return PREFERENCES.getBoolean(KEY_CLOSE_GALLERY_ON_BACKGROUND_TAP, DEFAULT_CLOSE_GALLERY_ON_BACKGROUND_TAP);
+	}
+
+	public static final String KEY_CLOSE_GALLERY_GRID_ON_BACKGROUND_TAP = "close_gallery_grid_on_background_tap";
+	public static final boolean DEFAULT_CLOSE_GALLERY_GRID_ON_BACKGROUND_TAP = false;
+
+	public static boolean isCloseGalleryGridOnBackgroundTap() {
+		return PREFERENCES.getBoolean(KEY_CLOSE_GALLERY_GRID_ON_BACKGROUND_TAP,
+				DEFAULT_CLOSE_GALLERY_GRID_ON_BACKGROUND_TAP);
 	}
 
 	public static void consumeShowcaseGallery() {
@@ -2306,7 +2326,10 @@ public class Preferences {
 	public static final String KEY_NEW_INTERFACE_MOTION = "experimental_new_interface_motion";
 	public static final boolean DEFAULT_NEW_INTERFACE_MOTION = false;
 	public static final String KEY_NEW_POSTING_FORM = "experimental_new_posting_form";
-	public static final boolean DEFAULT_NEW_POSTING_FORM = false;
+	public static final boolean DEFAULT_NEW_POSTING_FORM = true;
+	public static final String KEY_NEW_VIDEO_PLAYER = "experimental_new_video_player";
+	// Preserve the modern player for users who already enabled the new interface.
+	public static final boolean DEFAULT_NEW_VIDEO_PLAYER = true;
 	public enum ThreadToolbarAction {
 		BACK("back", R.string.thread_toolbar_back),
 		THREAD_LIST("thread_list", R.string.thread_toolbar_list),
@@ -2367,6 +2390,11 @@ public class Preferences {
 	public static boolean isNewPostingFormEnabled() {
 		return isNewInterfaceMotionEnabled()
 				&& PREFERENCES.getBoolean(KEY_NEW_POSTING_FORM, DEFAULT_NEW_POSTING_FORM);
+	}
+
+	public static boolean isNewVideoPlayerEnabled() {
+		return isNewInterfaceMotionEnabled()
+				&& PREFERENCES.getBoolean(KEY_NEW_VIDEO_PLAYER, DEFAULT_NEW_VIDEO_PLAYER);
 	}
 
 	public static String getPipDiagnosticMode() {

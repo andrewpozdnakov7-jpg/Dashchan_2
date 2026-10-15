@@ -77,7 +77,7 @@ public class InstanceDialog extends DialogFragment {
 		}
 	}
 
-	private static class DismissDialog extends Dialog {
+	private static class DismissDialog extends com.mishiranu.dashchan.content.security.SecureDialog {
 		public DismissDialog(@NonNull Context context) {
 			super(context);
 		}

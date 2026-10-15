@@ -163,8 +163,6 @@ public class InterfaceFragment extends PreferenceFragment {
 		addList(Preferences.KEY_HIGHLIGHT_UNREAD, enumList(Preferences.HighlightUnreadMode.values(), o -> o.value),
 				Preferences.DEFAULT_HIGHLIGHT_UNREAD.value, R.string.highlight_unread_posts,
 				enumResList(Preferences.HighlightUnreadMode.values(), o -> o.titleResId));
-		addCheck(true, Preferences.KEY_SHOW_MY_POSTS, Preferences.DEFAULT_SHOW_MY_POSTS,
-				R.string.highlight_my_posts, 0);
 		addButton(getString(R.string.post_marks_colors), preference -> getString(
 				Preferences.getPostMarksColorMode().titleResId)).setOnClickListener(preference ->
 				((FragmentHandler) requireActivity()).pushFragment(new PostMarksColorsFragment()));

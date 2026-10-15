@@ -20,6 +20,7 @@ import android.widget.TextView;
 import androidx.core.view.OneShotPreDrawListener;
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat;
 import com.mishiranu.dashchan.R;
+import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.media.PlaybackSpeed;
 import com.mishiranu.dashchan.util.InterfaceMotion;
 import java.util.function.IntConsumer;
@@ -44,7 +45,7 @@ final class PlayerSpeedMenu {
 
 	static PlayerSpeedMenu create(View anchor, View controlsPanel, int[] speeds, int current,
 			boolean custom, IntConsumer select) {
-		return InterfaceMotion.isEnabled()
+		return Preferences.isNewVideoPlayerEnabled()
 				? new PlayerSpeedMenu(anchor, controlsPanel, speeds, current, custom, select) : null;
 	}
 
@@ -53,7 +54,7 @@ final class PlayerSpeedMenu {
 		this.anchor = anchor;
 		this.controlsPanel = controlsPanel;
 		rowCount = speeds.length + (custom ? 1 : 0);
-		Context context = anchor.getContext();
+		Context context = com.mishiranu.dashchan.content.security.SecurePopupContext.wrap(anchor.getContext());
 		float density = context.getResources().getDisplayMetrics().density;
 		ScrollView scroll = new ScrollView(context);
 		scroll.setFillViewport(false);

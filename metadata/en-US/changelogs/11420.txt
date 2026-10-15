@@ -1,0 +1,10 @@
+- Added an experimental Security section: PIN or biometric unlock, an additional PIN for clearing local data, and a separate option to delete the contents of the approved download folder. This feature is in testing: security review and improvements are ongoing. Do not rely on it for sensitive data yet; test deletion only with disposable files.
+- Renamed the replies section to “My posts and replies”. Own-post marks can now be enabled separately, without saving their text in the own-post history or enabling reply tracking. Clarified the settings descriptions.
+- Added a separate “New video player appearance” setting. Enabling the new interface also enables the new posting form and player; each can be disabled separately.
+- Rearranged the new player controls: mute is next to TikTok mode, and saving is in the bottom panel. Refresh is inside the “⋮” menu, leaving more room for the video name and details.
+- Refined the new captcha dialog: larger selected images and a loading indicator beside the title. Shortened the transition from “Done” to “Send”.
+- Added an option to close the gallery grid by tapping empty space outside thumbnails. Disabled by default.
+
+The new interface and its components: Settings → Experimental features → New Material 3 interface.
+
+Thanks to everyone who tests the app, sends logs and helps find bugs! 🐾

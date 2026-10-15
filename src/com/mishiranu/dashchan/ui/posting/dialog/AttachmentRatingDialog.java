@@ -43,7 +43,7 @@ public class AttachmentRatingDialog extends DialogFragment implements DialogInte
 				.getAttachmentRatingItems();
 		if (holder == null || attachmentRatingItems == null) {
 			dismiss();
-			return new Dialog(activity);
+			return new com.mishiranu.dashchan.content.security.SecureDialog(activity);
 		}
 		String[] items = new String[attachmentRatingItems.size()];
 		ratings = new String[attachmentRatingItems.size()];

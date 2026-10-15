@@ -24,11 +24,11 @@ import android.widget.AutoCompleteTextView;
 @android.annotation.SuppressLint("AppCompatCustomView")
 public class ForcedAutoCompleteTextView extends AutoCompleteTextView {
 	public ForcedAutoCompleteTextView(Context context) {
-		super(context);
+		super(com.mishiranu.dashchan.content.security.SecurePopupContext.wrap(context));
 	}
 
 	public ForcedAutoCompleteTextView(Context context, AttributeSet attrs) {
-		super(context, attrs);
+		super(com.mishiranu.dashchan.content.security.SecurePopupContext.wrap(context), attrs);
 	}
 
 	@Override

@@ -173,7 +173,11 @@ public class PhotoEditorIntegrationContractTest {
 
     @Test public void phoneDialogsAndLiveMaskPreviewKeepTheirContracts() throws Exception {
         String activity = source("distribution/github/src/com/mishiranu/dashchan/ui/posting/ExperimentalImageEditorActivity.java");
-        assertTrue(activity.contains("new AlertDialog.Builder(this, R.style.PhotoEditorDialogTheme)"));
+        assertTrue(activity.contains("new com.mishiranu.dashchan.content.security.SecureDialogBuilder(this, R.style.PhotoEditorDialogTheme)"));
+        String secureBuilder = source("src/com/mishiranu/dashchan/content/security/SecureDialogBuilder.java");
+        assertTrue(secureBuilder.contains("extends android.app.AlertDialog.Builder"));
+        assertTrue(secureBuilder.contains("super(context, theme)"));
+        assertTrue(secureBuilder.contains("AppSecurity.protectDialog(dialog)"));
         assertTrue(activity.contains("Context context = builder.getContext()"));
         assertTrue(activity.contains("input.setSingleLine(false)")); assertTrue(activity.contains("input.setMinLines(3)"));
         assertTrue(activity.contains("InputType.TYPE_TEXT_FLAG_MULTI_LINE"));

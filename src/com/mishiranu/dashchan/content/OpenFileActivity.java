@@ -21,6 +21,7 @@ public class OpenFileActivity extends Activity {
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
+		if (com.mishiranu.dashchan.content.security.AppSecurity.deferIfLocked(this)) return;
 		Intent intent = getIntent();
 		String target = intent != null ? intent.getStringExtra(EXTRA_FILE_TARGET) : null;
 		String path = intent != null ? intent.getStringExtra(EXTRA_FILE_PATH) : null;

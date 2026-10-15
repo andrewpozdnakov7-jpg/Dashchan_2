@@ -6,7 +6,7 @@ import android.view.MotionEvent;
 import android.view.View;
 
 /** User close may animate; forced dismissal always tears down immediately. */
-public final class AttachmentGridDialog extends Dialog {
+public final class AttachmentGridDialog extends com.mishiranu.dashchan.content.security.SecureDialog {
 	private AttachmentGridMotionController motion;
 
 	public AttachmentGridDialog(Context context, int theme) { super(context, theme); }

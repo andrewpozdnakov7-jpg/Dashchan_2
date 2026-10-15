@@ -4,6 +4,7 @@
 	xmlns:tools="http://schemas.android.com/tools">
 
 	<uses-permission android:name="android.permission.INTERNET" />
+	<uses-permission android:name="android.permission.USE_BIOMETRIC" />
 	<uses-permission android:name="android.permission.WAKE_LOCK" />
 	<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 	<uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
@@ -71,6 +72,7 @@
 
 	<application
 		android:name=".content.MainApplication"
+		android:appComponentFactory="com.mishiranu.dashchan.content.security.SecurityComponentFactory"
 		android:label="${appLabel}"
 		android:icon="@mipmap/ic_launcher_default"
 		android:logo="@drawable/application_logo_default"
@@ -81,6 +83,7 @@
 		android:dataExtractionRules="@xml/app_data_extraction_rules"
 		android:networkSecurityConfig="@xml/network_security_config"
 		android:enableOnBackInvokedCallback="false"
+		tools:replace="android:appComponentFactory"
 		tools:ignore="GoogleAppIndexingWarning,UnusedAttribute">
 
 		<activity
@@ -1760,6 +1763,28 @@
 			android:process=":restart"
 			android:taskAffinity="${applicationId}.restart"
 			android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+		<activity
+			android:name=".content.security.AppLockActivity"
+			android:exported="false"
+			android:excludeFromRecents="true"
+			android:launchMode="singleTop"
+			android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
+		<provider
+			android:name=".content.security.SecuritySessionProvider"
+			android:authorities="${applicationId}.security.session"
+			android:exported="false"
+			android:process=":security" />
+
+		<activity
+			android:name=".content.security.PrivacyResetActivity"
+			android:exported="false"
+			android:launchMode="singleTask"
+			android:configChanges="orientation|screenSize|keyboardHidden"
+			android:excludeFromRecents="true"
+			android:process=":security"
+			android:taskAffinity="${applicationId}.security_reset"
+			android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
 
 		<activity
 			android:name=".ui.posting.ImageEditorActivity"

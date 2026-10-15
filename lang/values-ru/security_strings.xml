@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<string name="security_restore_folder_access">Вернуть доступ к согласованной папке</string>
+	<string name="security_restore_same_folder">Выберите именно ранее согласованную папку. Другая папка не может заменить цель очистки.</string>
+	<string name="security_title">Безопасность</string>
+	<string name="security_biometric_summary">Системная проверка отпечатка или другой надёжной биометрии. Основной PIN приложения остаётся доступен.</string>
+	<string name="security_downloads_toggle_summary">По умолчанию выключено. После ввода основного PIN подтвердите точную папку: всё её содержимое удалится при вводе дополнительного PIN.</string>
+	<string name="security_approved_directory">Согласованная папка</string>
+	<string name="security_notification_hidden">Откройте приложение для просмотра уведомления</string>
+	<string name="security_delete_downloads">Удалять содержимое папки загрузок</string>
+	<string name="security_downloads_warning">Только при вводе дополнительного PIN: удалить ВСЕ файлы и подпапки в указанной ниже папке, включая файлы других приложений и экспортированные резервные копии. Сама папка останется. По умолчанию выключено. Согласие относится только к этой папке: при смене папки загрузок его нужно дать заново. Поддерживаются локальные подпапки с постоянным доступом на чтение и запись, но не корни накопителей и не облачные хранилища. Если доступ или накопитель станут недоступны, удаление не гарантируется.</string>
+	<string name="security_downloads_unavailable">Сначала выберите доступную локальную папку загрузок. Корень накопителя и облачная папка не подходят.</string>
+	<string name="security_need_additional">Сначала задайте дополнительный PIN</string>
+	<string name="security_downloads_result">Очистка папки загрузок</string>
+	<string name="security_downloads_optional">Скачанные файлы и внешние резервные копии сохраняются, если очистка папки не была включена отдельно. Файлы за пределами согласованной папки никогда не удаляются.</string>
+	<string name="security_downloads_failed">Локальный профиль очищен, но очистка папки загрузок не завершена. Верните доступ и повторите. Для продолжения без удаления нужен основной PIN: в папке могут оставаться файлы.</string>
+	<string name="security_skip_downloads">Продолжить без удаления оставшихся файлов</string>
+	<string name="security_retry_cleanup">Повторить очистку</string>
+	<string name="security_primary_pin">PIN-код приложения</string>
+	<string name="security_additional_pin">Дополнительный PIN: пустой профиль и очистка</string>
+	<string name="security_remove_additional">Удалить дополнительный PIN</string>
+	<string name="security_disable">Отключить блокировку приложения</string>
+	<string name="security_enabled">Включено</string>
+	<string name="security_disabled">Выключено</string>
+	<string name="security_unlock">Открыть Slooop</string>
+	<string name="security_enter_pin">Введите PIN-код приложения</string>
+	<string name="security_current_pin">Для изменения защиты введите основной PIN-код приложения</string>
+	<string name="security_new_pin">Придумайте новый PIN-код. Основной и дополнительный коды должны различаться.</string>
+	<string name="security_confirm_pin">Повторите новый PIN-код</string>
+	<string name="security_pin_hint">От 6 до 12 цифр</string>
+	<string name="security_pin_mismatch">Коды не совпадают. Введите новый код заново.</string>
+	<string name="security_wrong_pin">Неверный PIN-код</string>
+	<string name="security_retry_later">Слишком много попыток. Подождите перед повторным вводом.</string>
+	<string name="security_save_failed">Не удалось сохранить код. Убедитесь, что коды различаются, и повторите.</string>
+	<string name="security_unavailable">Хранилище защиты недоступно. Доступ к данным остаётся закрытым.</string>
+	<string name="security_biometric">Вход по биометрии</string>
+	<string name="security_biometric_unavailable">Биометрия недоступна или отменена. Используйте основной PIN-код.</string>
+	<string name="security_autolock">Автоматическая блокировка</string>
+	<string name="security_autolock_summary">При выключении экрана и уходе приложения в фон, в том числе в режиме «картинка в картинке». Фоновое воспроизведение останавливается. При включённой защите блокируются снимки экрана и предпросмотр в списке недавних приложений.</string>
+	<string name="security_delete_scope">Что удаляет дополнительный PIN</string>
+	<string name="security_delete_warning">Ввод этого кода удалит локальную историю и поиск, открытые страницы, мои посты и историю ответов, избранное, свои доски и сообщества, черновики и очередь отправки, временные вложения, кэш и переводы, позицию видео, авторизацию форумов, cookies, сохранённые имя и email, пароли удаления постов, адреса и пароли прокси, внутренние диагностические журналы. Фоновое отслеживание ответов отключится. Внешний вид, PIN-коды, биометрия, установленные расширения и языковые модели сохранятся. Скачанные файлы и экспортированные резервные копии сохранятся, ЕСЛИ очистка папки не включена отдельно. Сообщения на форумах и копии за пределами этой папки не удаляются. Основной PIN не восстановит удалённые данные. После очистки доступ к папкам и согласие на их очистку сбрасываются.</string>
+	<string name="security_understand">Понимаю, продолжить</string>
+	<string name="security_opening">Открываем Slooop…</string>
+	<string name="security_reset_failed">Не удалось завершить очистку. Данные остаются заблокированы. Закройте и снова откройте Slooop для повтора.</string>
+	<string name="security_limits">Границы защиты</string>
+	<string name="security_limits_summary">Это блокировка приложения, а не шифрование существующих данных и не защита от взломанной системы. Очистка не гарантирует невозможность технического восстановления и не удаляет копии за пределами согласованной области. Восстановления забытого PIN нет: удаление данных приложения уничтожит локальный профиль. Проверяйте дополнительный PIN только на ненужных тестовых данных.</string>
+</resources>

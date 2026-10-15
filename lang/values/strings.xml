@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+	<string name="close_gallery_grid_on_background_tap">Close gallery by tapping the background</string>
+	<string name="close_gallery_grid_on_background_tap__summary">Close the gallery grid by tapping empty space outside file thumbnails. Scrolling and selecting files do not close it.</string>
 	<string name="close_gallery_on_background_tap">Close viewer by tapping the background</string>
 	<string name="close_gallery_on_background_tap__summary">In normal viewing mode, close the file viewer by tapping empty space around the file. When off, background taps show or hide controls while viewing a video and do nothing while viewing an image. Back and swipe-to-close still work.</string>
 	<string name="webview_renderer_gone">The web page stopped working. Please open it again.</string>
@@ -427,7 +429,8 @@
 	<string name="hide_pages">Hide pages</string>
 	<string name="hide_personal_data_block">Hide personal data block</string>
 	<string name="highlight_unread_posts">Highlight unread posts</string>
-	<string name="highlight_my_posts">Highlight my posts</string>
+	<string name="highlight_my_posts">Mark my posts</string>
+	<string name="highlight_my_posts__summary">Highlight your posts in threads. Post numbers are saved for these marks. Your post and reply texts are stored separately when reply tracking is enabled.</string>
 	<string name="history">History</string>
 	<string name="history_is_empty">History is empty</string>
 	<string name="huge_captcha">Huge captcha</string>
@@ -1192,14 +1195,14 @@
 	<string name="endchan_ip_block_bypass_failed">Could not pass Endchan IP block verification</string>
 	<string name="replies_with_unread__format">Replies (%d)</string>
 	<string name="track_replies">Track replies</string>
-	<string name="track_replies__summary">Store messages sent through Slooop and automatically check for replies</string>
+	<string name="track_replies__summary">Store your post texts and received replies. Choose a method below for automatic checks. Own-post marks are configured separately.</string>
 	<string name="disable_reply_tracking__title">Turn off reply tracking?</string>
-	<string name="disable_reply_tracking__message">You can keep your post and reply history for later, or remove it from this app. Deleted history cannot be restored by turning tracking back on. Existing external or system backups cannot be removed by the app.</string>
+	<string name="disable_reply_tracking__message">You can keep your post and reply history, or remove it from this app. Deleting history also removes saved own-post marks. Turning tracking back on will not restore deleted history. New marks will still be created if “Mark my posts” is enabled. Existing external or system backups cannot be removed by the app.</string>
 	<string name="disable_reply_tracking_keep">Turn off, keep history</string>
 	<string name="disable_reply_tracking_delete">Turn off and delete history</string>
 	<string name="reply_history_deleted">Reply history deleted from this app</string>
 	<string name="reply_history_delete_failed">Could not delete all saved history files. Check app storage.</string>
-	<string name="replies_and_notifications">Replies and notifications</string>
+	<string name="replies_and_notifications">My posts and replies</string>
 	<string name="replies_and_notifications_disabled">Disabled</string>
 	<string name="replies_and_notifications_local_only">Local checks only</string>
 	<string name="replies_and_notifications_google_only">Google Firebase — Dvach /mobi/ only</string>
@@ -1212,7 +1215,7 @@
 	<string name="every_number_min__format">Every %d min.</string>
 	<string name="tracked_replies_notifications">Show Android system notifications</string>
 	<string name="tracked_replies_notifications__summary">Show a notification in the Android notification shade when a new reply is received. If disabled, new replies will appear only in the Replies section.</string>
-	<string name="reply_push">Google Firebase</string>
+	<string name="reply_push">Server-side tracking — Google Firebase</string>
 	<string name="reply_push__summary">The Slooop server checks tracked posts, and Google Firebase delivers notifications to your phone even when the app is closed or put to sleep by Android. Server push currently works only on the Dvach /mobi/ board.</string>
 	<string name="reply_push_consent__message">How it works\n\nSlooop will create a random installation ID and send the server the board, thread and post numbers that should be watched. The server will check public replies and send notifications through Google Firebase Cloud Messaging. Server push currently works only on the Dvach /mobi/ board.\n\nFor delivery, Google receives a technical app registration identifier and the board, thread, watched-post and new-reply numbers. Message text is not sent through Firebase. Slooop does not send the server your Google account, email address or a permanent device identifier.\n\nYou can disable this feature at any time. The server registration and watches will be deleted after it is disabled.</string>
 	<string name="reply_push_waiting_for_configuration">Enabled. Server registration has not completed yet.</string>

@@ -27,6 +27,7 @@ import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.LocaleManager;
 import com.mishiranu.dashchan.content.Preferences;
+import com.mishiranu.dashchan.content.OwnPostRegistration;
 import com.mishiranu.dashchan.content.async.SendPostTask;
 import com.mishiranu.dashchan.content.storage.OutboxStorage;
 import com.mishiranu.dashchan.content.storage.OutboxState;
@@ -374,6 +375,7 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 					}
 				}
 				builder.setContentText(taskState.text);
+				com.mishiranu.dashchan.content.security.AppSecurity.redactNotification(PostingService.this, builder);
 				startForeground(C.NOTIFICATION_ID_POSTING, builder.build(),
 						ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
 			}
@@ -692,14 +694,16 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 
 				PendingUserPost pendingUserPost = null;
 				if (postNumber != null) {
-					if (Preferences.isTrackMyPostsEnabled()) {
+					String ownComment = comment;
+					OwnPostRegistration.register(Preferences.isShowMyPosts(), Preferences.isTrackMyPostsEnabled(), () -> {
 						CommonDatabase.getInstance().getPosts().setFlags(true, chanName, data.boardName,
 								targetThreadNumber, postNumber, PostItem.HideState.UNDEFINED, true);
+					}, () -> {
 						MyPostsStorage.getInstance().add(chanName, data.boardName, targetThreadNumber,
-								postNumber, comment, System.currentTimeMillis());
+								postNumber, ownComment, System.currentTimeMillis());
 						ReplyPushManager.onPostTracked(this, chanName, data.boardName,
 								targetThreadNumber, postNumber);
-					}
+					});
 				} else if (newThread) {
 					pendingUserPost = PendingUserPost.NewThread.INSTANCE;
 				} else {
@@ -742,6 +746,7 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 						.putExtra(C.EXTRA_POST_NUMBER, postNumber != null ? postNumber.toString() : null);
 				builder.setContentIntent(PendingIntent.getActivity(this, 0, intent,
 						PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
+				com.mishiranu.dashchan.content.security.AppSecurity.redactNotification(this, builder);
 				notificationManager.notify(tag, 0, builder.build());
 			}
 
@@ -834,6 +839,7 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 		builder.setContentTitle(getString(R.string.post_not_sent));
 		builder.setContentText(details);
 		builder.setStyle(new NotificationCompat.BigTextStyle().bigText(details));
+		com.mishiranu.dashchan.content.security.AppSecurity.redactNotification(this, builder);
 		Intent intent = new Intent(this, MainActivity.class).setAction(C.ACTION_POSTING)
 				.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP)
 				.putExtra(C.EXTRA_CHAN_NAME, queueItem.chanName)

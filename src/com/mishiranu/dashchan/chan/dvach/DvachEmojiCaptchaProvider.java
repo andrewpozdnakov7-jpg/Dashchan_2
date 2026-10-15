@@ -168,7 +168,7 @@ class DvachEmojiCaptchaProvider {
             KeyboardLayout keyboard = stabilizeKeyboard(keyboardImages);
             // Structured display metadata is available here; never recover symbols from image pixels.
             Integer answer = answerRetriever.getAnswer(structured ? captchaImage : comboBitmap, keyboard.images,
-                    structured ? selected.bitmaps.toArray(new Bitmap[0]) : null);
+                    structured ? selected.originalBitmaps.toArray(new Bitmap[0]) : null);
 
             if (answer != null && answer == ForegroundManager.IMAGE_CHOICE_REFRESH) {
                 // Ask the performer for a fresh ID, not another keyboard for the old challenge.
@@ -183,6 +183,8 @@ class DvachEmojiCaptchaProvider {
                 // if user made a valid selection, we process it
                 // add selected emoji to list of selected
                 Bitmap selectedBitmap = keyboard.images[answer];
+                // Keep the original for the large opt-in selection strip; legacy composites still use 40px.
+                selected.originalBitmaps.add(selectedBitmap);
                 selected.bitmaps.add(Bitmap.createScaledBitmap(selectedBitmap,
                         selectedBitmap.getWidth() * SelectedEmojis.SIZE / selectedBitmap.getHeight(),
                         SelectedEmojis.SIZE, true));
@@ -338,6 +340,7 @@ class DvachEmojiCaptchaProvider {
         private static final int SIZE_WITH_PADDING = SIZE + PADDING;
 
         private final List<Bitmap> bitmaps = new ArrayList<>();
+        private final List<Bitmap> originalBitmaps = new ArrayList<>();
     }
 
 
