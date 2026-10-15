@@ -1038,7 +1038,7 @@
 	<string name="application_logo_subscriber">Subscriber icon</string>
 	<string name="application_logo_requires_dvach_pass">Available only when a Dvach Passcode is saved</string>
 	<string name="application_logo_paid_only">This icon is available only to paid subscribers</string>
-	<string name="application_logo_invitation">Anon, the application needs good icons. Send your variants to dashchan_2@mail.ru</string>
+	<string name="application_logo_invitation">Anon, the application needs good icons. Send your variants to andrewpozdnakov7@gmail.com</string>
 	<string name="application_logo_requirements">Use a square image with clear details that remain readable at a small size.</string>
 	<string name="no_verified_dvach_pass">You do not have a saved Dvach Passcode</string>
 	<string name="custom_application_shortcut">Custom shortcut</string>
