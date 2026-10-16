@@ -109,6 +109,7 @@ public final class SecurityStore {
 	}
 
 	public static boolean enabled(Context context) throws IOException {
+		if (!com.mishiranu.dashchan.BuildConfig.ENABLE_APP_SECURITY_SETTINGS) return false;
 		return update(context, s -> authenticationMode(s) != null);
 	}
 	public static AuthenticationPolicy.Mode authenticationMode(JSONObject state) {
@@ -116,14 +117,17 @@ public final class SecurityStore {
 				state.has("primary"), state.optBoolean("biometric"));
 	}
 	public static AuthenticationPolicy.Mode authenticationMode(Context context) throws IOException {
+		if (!com.mishiranu.dashchan.BuildConfig.ENABLE_APP_SECURITY_SETTINGS) return null;
 		return update(context, SecurityStore::authenticationMode);
 	}
 
 	public static boolean pending(Context context) throws IOException {
+		if (!com.mishiranu.dashchan.BuildConfig.ENABLE_APP_SECURITY_SETTINGS) return false;
 		return update(context, s -> s.optBoolean("reset_pending"));
 	}
 
 	public static boolean screenCaptureBlocked(Context context) {
+		if (!com.mishiranu.dashchan.BuildConfig.ENABLE_APP_SECURITY_SETTINGS) return false;
 		try {
 			return update(context, s -> ScreenCapturePolicy.blocked(authenticationMode(s) != null, s.optBoolean("reset_pending"),
 					SecuritySessionProvider.isUnlocked(context), s.optBoolean(ALLOW_SCREENSHOTS, false)));
@@ -132,6 +136,7 @@ public final class SecurityStore {
 
 	/** Read-only approval for all app-owned windows during the temporary design period. */
 	static boolean designCaptureAllowed(Context context) {
+		if (!com.mishiranu.dashchan.BuildConfig.ENABLE_APP_SECURITY_SETTINGS) return false;
 		try {
 			return update(context, s -> ScreenCapturePolicy.designAllowed(
 					com.mishiranu.dashchan.BuildConfig.VERSION_NAME, authenticationMode(s) != null,
@@ -150,6 +155,7 @@ public final class SecurityStore {
 	}
 
 	public static boolean locked(Context context) {
+		if (!com.mishiranu.dashchan.BuildConfig.ENABLE_APP_SECURITY_SETTINGS) return false;
 		try { return update(context, s -> s.optBoolean("reset_pending")
 				|| authenticationMode(s) != null && !SecuritySessionProvider.isUnlocked(context)); }
 		catch (IOException e) { return true; }

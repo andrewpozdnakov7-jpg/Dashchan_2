@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <!-- Experimental authentication/reset has no executable entry point in this distribution. -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" tools:node="remove" />
+    <application android:appComponentFactory="androidx.core.app.CoreComponentFactory"
+        tools:replace="android:appComponentFactory">
+        <activity android:name="com.mishiranu.dashchan.content.security.AppLockActivity" tools:node="remove" />
+        <provider android:name="com.mishiranu.dashchan.content.security.SecuritySessionProvider" tools:node="remove" />
+        <activity android:name="com.mishiranu.dashchan.content.security.PrivacyResetActivity" tools:node="remove" />
+    </application>
+</manifest>

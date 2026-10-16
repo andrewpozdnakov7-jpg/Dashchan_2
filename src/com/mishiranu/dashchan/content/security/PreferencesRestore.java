@@ -12,6 +12,7 @@ public final class PreferencesRestore {
 	private PreferencesRestore() {}
 
 	public static void revokeFolderConsent(Context context) throws IOException {
+		if (!com.mishiranu.dashchan.BuildConfig.ENABLE_APP_SECURITY_SETTINGS) return;
 		SecurityStore.update(context, state -> {
 			if (state.optBoolean("reset_pending")) throw new IOException("Profile cleanup pending");
 			// A backup never supplies consent for destructive deletion, even for the same folder.
