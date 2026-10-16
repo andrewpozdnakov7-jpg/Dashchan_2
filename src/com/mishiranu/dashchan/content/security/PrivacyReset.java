@@ -22,6 +22,7 @@ public final class PrivacyReset {
 	public enum RecoveryState { RESET_PENDING, COMPLETED_RECEIPT, NORMAL_START }
 
 	public static RecoveryState recoveryState(Context context) throws IOException {
+		if (!BuildConfig.ENABLE_APP_SECURITY_SETTINGS) return RecoveryState.NORMAL_START;
 		return SecurityStore.update(context, s -> recoveryState(s,
 				android.provider.Settings.Global.getInt(context.getContentResolver(),
 						android.provider.Settings.Global.BOOT_COUNT, -1)));
@@ -50,6 +51,7 @@ public final class PrivacyReset {
 	}
 
 	public static boolean requiresRecovery(Context context) {
+		if (!BuildConfig.ENABLE_APP_SECURITY_SETTINGS) return false;
 		try {
 			return SecurityStore.pending(context);
 		} catch (IOException e) {

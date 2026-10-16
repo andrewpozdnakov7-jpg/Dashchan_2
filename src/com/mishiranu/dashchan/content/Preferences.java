@@ -1196,7 +1196,7 @@ public class Preferences {
 				return;
 			}
 			try {
-				com.mishiranu.dashchan.content.security.SecurityStore.update(context, state -> {
+				if (BuildConfig.ENABLE_APP_SECURITY_SETTINGS) com.mishiranu.dashchan.content.security.SecurityStore.update(context, state -> {
 					if (!uri.toString().equals(state.optString("delete_downloads_uri"))) {
 						state.remove("delete_downloads_uri"); state.remove("delete_downloads_label");
 					}

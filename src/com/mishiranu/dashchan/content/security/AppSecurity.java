@@ -87,6 +87,7 @@ public final class AppSecurity implements Application.ActivityLifecycleCallbacks
 		if (original != null) view.setImportantForAccessibility(original);
 	}
 	public static void protectDialog(android.app.Dialog dialog) {
+		if (!com.mishiranu.dashchan.BuildConfig.ENABLE_APP_SECURITY_SETTINGS) return;
 		android.view.Window window = dialog.getWindow();
 		registerWindow(window);
 	}
@@ -159,6 +160,7 @@ public final class AppSecurity implements Application.ActivityLifecycleCallbacks
 	private AppSecurity(Application application) { this.application = application; }
 
 	public static void install(Application application, boolean mainProcess) {
+		if (!com.mishiranu.dashchan.BuildConfig.ENABLE_APP_SECURITY_SETTINGS) return;
 		instance = new AppSecurity(application);
 		try { SecurityStore.processStarted(application, mainProcess); }
 		catch (IOException ignored) { /* All gates fail closed on storage failure. */ }
@@ -181,6 +183,7 @@ public final class AppSecurity implements Application.ActivityLifecycleCallbacks
 	}
 
 	public static boolean isProtected(Context context) {
+		if (!com.mishiranu.dashchan.BuildConfig.ENABLE_APP_SECURITY_SETTINGS) return false;
 		try { return SecurityStore.enabled(context); }
 		catch (IOException e) { return true; }
 	}
@@ -201,6 +204,7 @@ public final class AppSecurity implements Application.ActivityLifecycleCallbacks
 
 	/** Capture policy is separate from authentication, shielding and notification redaction. */
 	public static boolean shouldSecureWindow(Context context) {
+		if (!com.mishiranu.dashchan.BuildConfig.ENABLE_APP_SECURITY_SETTINGS) return false;
 		if (SecurityStore.designCaptureAllowed(context)) return false;
 		if (authenticationContext(context) || SecurityStore.screenCaptureBlocked(context)) return true;
 		Activity activity = windowActivity(context);
@@ -291,6 +295,7 @@ public final class AppSecurity implements Application.ActivityLifecycleCallbacks
 
 	/** Side-effect-only entry activities must defer before opening another app or importing content. */
 	public static boolean deferIfLocked(Activity activity) {
+		if (!com.mishiranu.dashchan.BuildConfig.ENABLE_APP_SECURITY_SETTINGS) return false;
 		if (!SecurityStore.locked(activity)) return false;
 		Intent target = new Intent(activity.getIntent()).setComponent(activity.getComponentName());
 		Intent gate = new Intent(activity, AppLockActivity.class).putExtra("resume", target);

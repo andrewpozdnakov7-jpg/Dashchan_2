@@ -11,6 +11,7 @@ public final class SecurePopupContext extends ContextWrapper {
 	private WindowManager manager;
 	private SecurePopupContext(Context context) { super(context); }
 	public static Context wrap(Context context) {
+		if (!com.mishiranu.dashchan.BuildConfig.ENABLE_APP_SECURITY_SETTINGS) return context;
 		return context instanceof SecurePopupContext ? context : new SecurePopupContext(context);
 	}
 	@Override public Object getSystemService(String name) {
@@ -19,6 +20,7 @@ public final class SecurePopupContext extends ContextWrapper {
 		return manager;
 	}
 	static WindowManager protect(Context context, WindowManager delegate) {
+		if (!com.mishiranu.dashchan.BuildConfig.ENABLE_APP_SECURITY_SETTINGS) return delegate;
 		return new WindowManager() {
 			@Override public void addView(View view, ViewGroup.LayoutParams params) {
 				boolean originallySecure = params instanceof LayoutParams && (((LayoutParams) params).flags & LayoutParams.FLAG_SECURE) != 0;

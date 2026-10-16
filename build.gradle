@@ -401,6 +401,7 @@ android {
 	githubDebugSourceSet.java.srcDir 'distribution/githubDebug/src'
 	githubDebugSourceSet.manifest.srcFile 'distribution/githubDebug/AndroidManifest.xml'
 	sourceSets.fdroid.java.srcDir 'distribution/fdroid/src'
+	sourceSets.fdroid.manifest.srcFile 'distribution/fdroid/AndroidManifest.xml'
 	sourceSets.fdroid.assets.srcDir 'distribution/fdroid/metadata'
 	sourceSets.test {
 		java.srcDirs = ['unitTests/src']
