@@ -7,6 +7,7 @@ import android.content.ContextWrapper;
 import android.view.WindowManager;
 import android.widget.ArrayAdapter;
 import androidx.test.platform.app.InstrumentationRegistry;
+import com.mishiranu.dashchan.BuildConfig;
 import com.mishiranu.dashchan.content.security.SecurityStore;
 import java.io.File;
 import org.junit.After;
@@ -22,10 +23,12 @@ public class SecureSpinnerTest {
 		sandbox = new File(base.getCacheDir(), "secure-spinner-test-" + java.util.UUID.randomUUID()); assertTrue(sandbox.mkdir());
 		Context isolated = new ContextWrapper(base) { @Override public File getNoBackupFilesDir() { return sandbox; } };
 		context = new android.view.ContextThemeWrapper(isolated, android.R.style.Theme_Material_Light);
-		SecurityStore.update(context, s -> { s.put("primary", new org.json.JSONObject()); return null; });
+		if (BuildConfig.ENABLE_APP_SECURITY_SETTINGS) {
+			SecurityStore.update(context, s -> { s.put("primary", new org.json.JSONObject()); return null; });
+		}
 	}
 	@After public void cleanup() throws Exception {
-		if (context != null) SecurityStore.lock(context);
+		if (context != null && BuildConfig.ENABLE_APP_SECURITY_SETTINGS) SecurityStore.lock(context);
 		com.mishiranu.dashchan.content.security.PrivacyResetFiles.delete(sandbox);
 	}
 	private void checkSelection(boolean secure) {
@@ -36,14 +39,23 @@ public class SecureSpinnerTest {
 			choices.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
 			spinner.setAdapter(choices); spinner.setSelection(1);
 			AlertDialog dialog = spinner.createSelectionDialog(); assertNotNull(dialog);
-			assertEquals(secure, (dialog.getWindow().getAttributes().flags & WindowManager.LayoutParams.FLAG_SECURE) != 0);
-			assertEquals("com.mishiranu.dashchan.content.security.SecurityWindowCallback", dialog.getWindow().getCallback().getClass().getName());
+			assertEquals(secure && BuildConfig.ENABLE_APP_SECURITY_SETTINGS,
+					(dialog.getWindow().getAttributes().flags & WindowManager.LayoutParams.FLAG_SECURE) != 0);
+			if (BuildConfig.ENABLE_APP_SECURITY_SETTINGS) {
+				assertEquals("com.mishiranu.dashchan.content.security.SecurityWindowCallback", dialog.getWindow().getCallback().getClass().getName());
+			} else {
+				assertSame(dialog, dialog.getWindow().getCallback());
+				assertFalse(new File(sandbox, "app-security-v1").exists());
+			}
 			assertEquals(1, spinner.getSelectedItemPosition());
 			dialog.dismiss();
 		});
 	}
 	@Test public void categorySelectionHasItsOwnSecureFlagBeforeShowing() { checkSelection(true); }
 	@Test public void ordinaryUnlockedUnprotectedSelectionIsNotForcedSecure() throws Exception {
-		SecurityStore.update(context, s -> { s.remove("primary"); return null; }); checkSelection(false);
+		if (BuildConfig.ENABLE_APP_SECURITY_SETTINGS) {
+			SecurityStore.update(context, s -> { s.remove("primary"); return null; });
+		}
+		checkSelection(false);
 	}
 }
