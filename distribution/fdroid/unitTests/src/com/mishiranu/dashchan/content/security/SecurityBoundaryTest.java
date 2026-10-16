@@ -12,6 +12,9 @@ public class SecurityBoundaryTest {
         assertFalse(SecurityStore.locked(null));
         assertFalse(PrivacyReset.requiresRecovery(null));
         assertEquals(PrivacyReset.RecoveryState.NORMAL_START, PrivacyReset.recoveryState(null));
+        assertEquals(0, ProfileGeneration.current(null));
+        assertTrue(ProfileGeneration.canWrite(null, 0));
+        assertFalse(ProfileGeneration.canWrite(null, 1));
     }
 
     @Test public void windowAndLaunchGatesAreInert() {
