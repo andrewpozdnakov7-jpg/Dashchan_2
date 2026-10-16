@@ -32,15 +32,21 @@ public class SecurityWindowPrivacyTest {
 		context = new ContextWrapper(base) { @Override public File getNoBackupFilesDir() { return sandbox; } };
 		SecurityStore.update(context, s -> { s.put("primary", new org.json.JSONObject()); return null; });
 	}
-	@After public void cleanup() throws Exception { PrivacyResetFiles.delete(sandbox); }
+	@After public void cleanup() throws Exception {
+		if (context != null) SecuritySessionProvider.revoke(context);
+		PrivacyResetFiles.delete(sandbox);
+	}
 	private void checkPopupDelegation(boolean protectedProfile) {
+		checkPopupDelegation(protectedProfile, protectedProfile);
+	}
+	private void checkPopupDelegation(boolean protectedProfile, boolean captureBlocked) {
 		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
 			java.util.concurrent.atomic.AtomicInteger adds = new java.util.concurrent.atomic.AtomicInteger();
 			WindowManager delegate = (WindowManager) java.lang.reflect.Proxy.newProxyInstance(getClass().getClassLoader(),
 					new Class<?>[]{WindowManager.class}, (proxy, method, args) -> {
 				if ("addView".equals(method.getName()) || "updateViewLayout".equals(method.getName())) {
 					WindowManager.LayoutParams params = (WindowManager.LayoutParams) args[1];
-					assertEquals(protectedProfile, (params.flags & WindowManager.LayoutParams.FLAG_SECURE) != 0);
+					assertEquals(captureBlocked, (params.flags & WindowManager.LayoutParams.FLAG_SECURE) != 0);
 					adds.incrementAndGet();
 				}
 				return null;
@@ -56,6 +62,55 @@ public class SecurityWindowPrivacyTest {
 		});
 	}
 	@Test public void popupSubwindowIsSecureBeforeAddAndCannotLoseTheFlagOnUpdate() { checkPopupDelegation(true); }
+	@Test public void designCaptureOptInRemovesCaptureFlagButDoesNotExposeLockedPopup() throws Exception {
+		SecurityStore.update(context, s -> { s.put(SecurityStore.ALLOW_SCREENSHOTS, true); return null; });
+		checkPopupDelegation(true, !SecurityStore.designCaptureAllowed(context));
+	}
+	@Test public void unlockedOptInMakesOrdinaryDialogCapturableButKeepsItsSecurityGate() throws Exception {
+		SecurityStore.foreground(context, true);
+		SecurityStore.unlock(context);
+		SecurityStore.setScreenshotsAllowed(context, true, () -> true);
+		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+			Context themed = new android.view.ContextThemeWrapper(context, android.R.style.Theme_Material_Dialog_Alert);
+			Dialog dialog = new SecureDialogBuilder(themed).create();
+			assertEquals(0, dialog.getWindow().getAttributes().flags & WindowManager.LayoutParams.FLAG_SECURE);
+			assertTrue(dialog.getWindow().getCallback() instanceof SecurityWindowCallback);
+		});
+		assertTrue(AppSecurity.isProtected(context));
+	}
+	@Test public void popupUpdateRemovesOnlyTheAppCaptureFlagAndKeepsExplicitSecureWindows() throws Exception {
+		SecurityStore.foreground(context, true);
+		SecurityStore.unlock(context);
+		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+			for (boolean originallySecure : new boolean[]{false, true}) {
+				java.util.concurrent.atomic.AtomicBoolean expectSecure = new java.util.concurrent.atomic.AtomicBoolean(true);
+				WindowManager delegate = (WindowManager) java.lang.reflect.Proxy.newProxyInstance(getClass().getClassLoader(),
+						new Class<?>[]{WindowManager.class}, (proxy, method, args) -> {
+					if ("addView".equals(method.getName()) || "updateViewLayout".equals(method.getName())) {
+						WindowManager.LayoutParams params = (WindowManager.LayoutParams) args[1];
+						assertEquals(expectSecure.get(), (params.flags & WindowManager.LayoutParams.FLAG_SECURE) != 0);
+					}
+					return null;
+				});
+				View view = new View(context);
+				WindowManager manager = SecurePopupContext.protect(context, delegate);
+				WindowManager.LayoutParams params = new WindowManager.LayoutParams();
+				if (originallySecure) params.flags |= WindowManager.LayoutParams.FLAG_SECURE;
+				try {
+					SecurityStore.setScreenshotsAllowed(context, false, () -> true);
+					manager.addView(view, params);
+					SecurityStore.setScreenshotsAllowed(context, true, () -> true);
+					expectSecure.set(originallySecure && !SecurityStore.designCaptureAllowed(context));
+					manager.updateViewLayout(view, params);
+					assertEquals(View.VISIBLE, view.getVisibility());
+					SecurityStore.setScreenshotsAllowed(context, false, () -> true);
+					expectSecure.set(true);
+					manager.updateViewLayout(view, params);
+				} catch (java.io.IOException e) { throw new AssertionError(e); }
+				finally { manager.removeViewImmediate(view); }
+			}
+		});
+	}
 	@Test public void popupWithoutAppLockKeepsItsOrdinaryWindowAndVisibility() throws Exception {
 		SecurityStore.update(context, s -> { s.remove("primary"); return null; });
 		checkPopupDelegation(false);
@@ -85,6 +140,18 @@ public class SecurityWindowPrivacyTest {
 			assertTrue((alert.getWindow().getAttributes().flags & WindowManager.LayoutParams.FLAG_SECURE) != 0);
 			assertTrue(alert.getWindow().getCallback() instanceof SecurityWindowCallback);
 		});
+	}
+	@Test public void allWindowDesignCaptureAlsoAppliesToDialogsWithoutUnlockingTheProfile() throws Exception {
+		SecurityStore.update(context, s -> { s.put(SecurityStore.ALLOW_SCREENSHOTS, true); return null; });
+		boolean captureBlocked = !SecurityStore.designCaptureAllowed(context);
+		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+			Context themed = new android.view.ContextThemeWrapper(context, android.R.style.Theme_Material_Dialog_Alert);
+			Dialog dialog = new SecureDialogBuilder(themed).create();
+			assertEquals(captureBlocked, (dialog.getWindow().getAttributes().flags & WindowManager.LayoutParams.FLAG_SECURE) != 0);
+			assertTrue(dialog.getWindow().getCallback() instanceof SecurityWindowCallback);
+		});
+		assertTrue(SecurityStore.locked(context));
+		assertFalse(SecuritySessionProvider.isUnlocked(context));
 	}
 	@Test public void redactionRemovesTextThumbnailExtrasAndPublicCopy() {
 		Bitmap image = Bitmap.createBitmap(2, 2, Bitmap.Config.ARGB_8888);

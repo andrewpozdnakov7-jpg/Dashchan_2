@@ -150,7 +150,7 @@ public class RedditCommunitiesFragment extends BaseListFragment {
 		text.setHint(R.string.reddit_community_hint);
 		if (original != null) text.setText(original);
 		form.addView(text);
-		Spinner spinner = new Spinner(requireContext());
+		Spinner spinner = new com.mishiranu.dashchan.widget.SecureSpinner(requireContext());
 		ArrayList<String> titles = new ArrayList<>();
 		for (Category category : categories) titles.add(title(category));
 		ArrayAdapter<String> choices = new ArrayAdapter<>(requireContext(), android.R.layout.simple_spinner_item, titles);

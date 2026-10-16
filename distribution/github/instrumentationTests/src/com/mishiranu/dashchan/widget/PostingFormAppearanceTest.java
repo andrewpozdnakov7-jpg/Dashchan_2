@@ -29,7 +29,7 @@ import org.junit.runner.RunWith;
 public class PostingFormAppearanceTest {
 	@Test public void wrappingPreservesEditorsWatchersSelectionAndVisibility() {
 		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
-			Context context = ThemeEngine.attach(InstrumentationRegistry.getInstrumentation().getTargetContext());
+			Context context = PostingTestContext.create();
 			View root = LayoutInflater.from(context).inflate(R.layout.activity_posting, null);
 			EditText input = root.findViewById(R.id.comment);
 			EditText subject = root.findViewById(R.id.subject);
@@ -64,7 +64,7 @@ public class PostingFormAppearanceTest {
 
 	@Test public void toolbarRestoreKeepsItsOriginalBackdropAndLatestTitle() {
 		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
-			Context context = ThemeEngine.attach(InstrumentationRegistry.getInstrumentation().getTargetContext());
+			Context context = PostingTestContext.create();
 			View root = LayoutInflater.from(context).inflate(R.layout.activity_posting, null);
 			PostingFormAppearance appearance = new PostingFormAppearance(root);
 			Toolbar toolbar = new Toolbar(context); ColorDrawable original = new ColorDrawable(Color.RED);
@@ -79,7 +79,7 @@ public class PostingFormAppearanceTest {
 
 	@Test public void stylingCommandsRetainsTheirExistingClickAction() {
 		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
-			Context context = ThemeEngine.attach(InstrumentationRegistry.getInstrumentation().getTargetContext());
+			Context context = PostingTestContext.create();
 			View root = LayoutInflater.from(context).inflate(R.layout.activity_posting, null);
 			PostingFormAppearance appearance = new PostingFormAppearance(root);
 			try {
@@ -92,7 +92,7 @@ public class PostingFormAppearanceTest {
 
 	@Test public void allInputHintsStayInsideTheirEditorsWithoutExtraLabelRows() {
 		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
-			Context context = ThemeEngine.attach(InstrumentationRegistry.getInstrumentation().getTargetContext());
+			Context context = PostingTestContext.create();
 			View root = LayoutInflater.from(context).inflate(R.layout.activity_posting, null);
 			LayoutInflater.from(context).inflate(R.layout.activity_posting_footer_common,
 					(FrameLayout) root.findViewById(R.id.footer_container));
@@ -156,13 +156,21 @@ public class PostingFormAppearanceTest {
 	}
 
 	@Test public void formattingCanReverseFromTheRightEndWithoutOpeningItsSwipeParent() {
-		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
-			Context context = ThemeEngine.attach(InstrumentationRegistry.getInstrumentation().getTargetContext());
-			SwipeParent parent = new SwipeParent(context);
+		int[] clicks = {0};
+		SwipeParent[] fixture = new SwipeParent[1];
+		try (androidx.test.core.app.ActivityScenario<PostingGestureTestActivity> scenario =
+				androidx.test.core.app.ActivityScenario.launch(PostingGestureTestActivity.class)) {
+			scenario.onActivity(activity -> {
+				fixture[0] = new SwipeParent(activity);
+				activity.setContentView(fixture[0]);
+			});
+			InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+			scenario.onActivity(activity -> {
+			Context context = PostingTestContext.create();
+			SwipeParent parent = fixture[0];
 			PostingFormAppearance.FormattingScrollView scroll = new PostingFormAppearance.FormattingScrollView(context);
 			LinearLayout commands = new LinearLayout(context);
 			commands.setOrientation(LinearLayout.HORIZONTAL);
-			int[] clicks = {0};
 			for (int i = 0; i < 10; i++) {
 				Button button = new Button(context);
 				button.setOnClickListener(v -> clicks[0]++);
@@ -185,6 +193,12 @@ public class PostingFormAppearanceTest {
 			scroll.scrollTo(0, 0);
 			event(parent, 800, MotionEvent.ACTION_DOWN, 50, 60);
 			event(parent, 850, MotionEvent.ACTION_UP, 50, 60);
+			});
+			// Android posts performClick to the attached view's UI queue after UP.
+			// A detached fixture can never execute that action; asserting inside UP is too early.
+			InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+			scenario.onActivity(activity -> {
+			SwipeParent parent = fixture[0];
 			assertEquals(1, clicks[0]); assertFalse(parent.disallowed);
 			// A vertical drag yields to the enclosing form; CANCEL also releases interception.
 			event(parent, 900, MotionEvent.ACTION_DOWN, 150, 60);
@@ -192,12 +206,13 @@ public class PostingFormAppearanceTest {
 			assertFalse(parent.disallowed);
 			event(parent, 1100, MotionEvent.ACTION_CANCEL, 150, 110);
 			assertFalse(parent.disallowed);
-		});
+			});
+		}
 	}
 
 	@Test public void parentToolbarShadowAndBackdropAreRestoredAfterLeavingTheForm() {
 		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
-			Context context = ThemeEngine.attach(InstrumentationRegistry.getInstrumentation().getTargetContext());
+			Context context = PostingTestContext.create();
 			View root = LayoutInflater.from(context).inflate(R.layout.activity_posting, null);
 			PostingFormAppearance appearance = new PostingFormAppearance(root);
 			LinearLayout parent = new LinearLayout(context); parent.setId(R.id.toolbar_layout);

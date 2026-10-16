@@ -7,7 +7,6 @@ import android.app.ActivityManager;
 import android.app.NotificationManager;
 import android.app.job.JobScheduler;
 import android.content.Context;
-import android.content.SharedPreferences;
 import android.os.Process;
 import com.mishiranu.dashchan.BuildConfig;
 import java.io.File;
@@ -16,11 +15,39 @@ import java.io.RandomAccessFile;
 import java.nio.channels.FileLock;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 /** Internal reset precedes application startup; optional approved SAF cleanup runs in the reset process. */
 public final class PrivacyReset {
 	private PrivacyReset() {}
+	public enum RecoveryState { RESET_PENDING, COMPLETED_RECEIPT, NORMAL_START }
+
+	public static RecoveryState recoveryState(Context context) throws IOException {
+		return SecurityStore.update(context, s -> recoveryState(s,
+				android.provider.Settings.Global.getInt(context.getContentResolver(),
+						android.provider.Settings.Global.BOOT_COUNT, -1)));
+	}
+
+	static RecoveryState recoveryState(org.json.JSONObject state, int boot) {
+		if (state.optBoolean("reset_pending")) return RecoveryState.RESET_PENDING;
+		if (hasReceipt(state, boot)) return RecoveryState.COMPLETED_RECEIPT;
+		return RecoveryState.NORMAL_START;
+	}
+
+	private static boolean hasReceipt(org.json.JSONObject state, int boot) {
+		return state.has("empty_launch") && boot >= 0 && boot == state.optInt("empty_launch_boot", -1)
+				&& state.optLong("empty_launch_generation", -1) == state.optLong("profile_generation");
+	}
+
+	/** Called in the recovery worker after stopping the gated main process. Null means normal PIN startup. */
+	static String launchToken(Context context) throws IOException {
+		return SecurityStore.update(context, s -> {
+			if (s.optBoolean("reset_pending")) throw new IOException("Profile cleanup is still pending");
+			int boot = android.provider.Settings.Global.getInt(context.getContentResolver(),
+					android.provider.Settings.Global.BOOT_COUNT, -1);
+			return hasReceipt(s, boot) && android.os.SystemClock.elapsedRealtime() <= s.optLong("empty_launch_until")
+					? s.getString("empty_launch") : null;
+		});
+	}
 
 	public static boolean requiresRecovery(Context context) {
 		try {
@@ -99,7 +126,7 @@ public final class PrivacyReset {
 			if (bootstrap) return;
 			String tree = SecurityStore.update(context, s -> s.optString("reset_tree", null));
 			if (tree != null) DownloadTreeCleanup.clear(context, tree);
-			SecurityStore.update(context, s -> { s.remove("external_cleanup_incomplete"); return null; });
+			SecurityStore.update(context, s -> { ExternalCleanupLedger.cleared(s, tree); return null; });
 			complete(context);
 		}
 	}
@@ -116,7 +143,9 @@ public final class PrivacyReset {
 				if (flags != 0) context.getContentResolver().releasePersistableUriPermission(permission.getUri(), flags);
 			}
 			SecurityStore.authorizedUpdate(context, authorization, s -> {
-				if (!s.optBoolean("reset_local_done")) throw new IOException("Internal cleanup is incomplete");
+				if (!s.optBoolean("reset_pending") || !s.optBoolean("reset_local_done")) {
+					throw new IOException("Internal cleanup is incomplete");
+				}
 				s.remove("foreground"); s.put("unlocked", false);
 				s.put("empty_launch", SecurityStore.encode(PinCredential.salt()));
 				s.put("empty_launch_generation", s.optLong("profile_generation"));
@@ -148,34 +177,20 @@ public final class PrivacyReset {
 	}
 
 	private static void preservePresentationPreferences(Context context) throws IOException {
-		SharedPreferences preferences = context.getSharedPreferences("preferences", Context.MODE_PRIVATE);
-		Map<String, ?> original = preferences.getAll();
-		SharedPreferences.Editor editor = preferences.edit().clear();
-		for (Map.Entry<String, ?> entry : original.entrySet()) {
-			String key = entry.getKey(); Object value = entry.getValue();
-			if (!PrivacyResetPolicy.keepPreference(key)) continue;
-			if (value instanceof String) editor.putString(key, (String) value);
-			else if (value instanceof Boolean) editor.putBoolean(key, (Boolean) value);
-			else if (value instanceof Integer) editor.putInt(key, (Integer) value);
-			else if (value instanceof Long) editor.putLong(key, (Long) value);
-			else if (value instanceof Float) editor.putFloat(key, (Float) value);
-			else if (value instanceof Set<?>) {
-				java.util.HashSet<String> copy = new java.util.HashSet<>();
-				for (Object item : (Set<?>) value) if (item instanceof String) copy.add((String) item);
-				editor.putStringSet(key, copy);
-			}
+		// Called only after stopOtherProcesses: no normal preference writers remain.
+		// A live :security session provider may outlast several resets. Do not ask
+		// Context.getSharedPreferences() for its stale process-cached map here.
+		File directory = new File(context.getDataDir(), "shared_prefs");
+		Map<String, Object> forced = new java.util.LinkedHashMap<>();
+		for (String key : new String[]{"track_my_posts", "reply_push_enabled", "background_reply_check", "tracked_replies_local_check"}) {
+			forced.put(key, false);
 		}
-		// Cleared local credentials must not trigger fresh background registrations/checks.
-		editor.putBoolean("track_my_posts", false).putBoolean("reply_push_enabled", false)
-				.putBoolean("background_reply_check", false).putBoolean("tracked_replies_local_check", false)
-				.putInt("watcher_refresh_interval", 0);
-		if (!editor.commit()) throw new IOException("Cannot save retained preferences");
+		forced.put("watcher_refresh_interval", 0);
+		PresentationPreferencesFile.retain(new File(directory, "preferences.xml"),
+				PrivacyResetPolicy::keepPreference, forced);
 		if (BuildConfig.ENABLE_EXPERIMENTAL_INTERFACE_MOTION) {
-			SharedPreferences notices = context.getSharedPreferences("startup-notices", Context.MODE_PRIVATE);
-			int acknowledgements = notices.getInt("material3-acknowledgements", 0);
-			if (!notices.edit().clear().putInt("material3-acknowledgements", acknowledgements).commit()) {
-				throw new IOException("Cannot retain presentation notice state");
-			}
+			PresentationPreferencesFile.retain(new File(directory, "startup-notices.xml"),
+					"material3-acknowledgements"::equals, java.util.Collections.emptyMap());
 		}
 	}
 }

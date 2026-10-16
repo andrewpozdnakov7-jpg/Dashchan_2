@@ -68,14 +68,17 @@ public final class InterfaceAppearance {
 	}
 	static int postingBackground(int window) {
 		// Leave room for a lighter field even in nearly white custom themes.
-		return ColorUtils.calculateLuminance(window) > .9 ? ColorUtils.blendARGB(window, Color.BLACK, .04f) : window;
+		return ColorUtils.setAlphaComponent(ColorUtils.calculateLuminance(window) > .9
+				? ColorUtils.blendARGB(window, Color.BLACK, .04f) : window, 255);
 	}
 	static int lighterPostingFill(int requested, int background) {
 		int fill = opaque(requested, background);
 		double backgroundLuminance = ColorUtils.calculateLuminance(background);
 		// A gentle surface distinction, not the text accessibility contrast threshold.
 		for (int i = 0; i <= 20; i++) {
-			int candidate = ColorUtils.blendARGB(fill, Color.WHITE, i / 20f);
+			// Float interpolation can truncate an opaque alpha to 254. Contrast requires
+			// an opaque background, and these are intentionally opaque field surfaces.
+			int candidate = ColorUtils.setAlphaComponent(ColorUtils.blendARGB(fill, Color.WHITE, i / 20f), 255);
 			if (ColorUtils.calculateLuminance(candidate) > backgroundLuminance
 					&& ColorUtils.calculateContrast(candidate, background) >= 1.08) return candidate;
 		}

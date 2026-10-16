@@ -183,7 +183,8 @@ public class ClickableToast implements DefaultLifecycleObserver {
 
 	private ClickableToast(ComponentActivity activity) {
 		this.activity = activity;
-		windowManager = (WindowManager) activity.getSystemService(Context.WINDOW_SERVICE);
+		windowManager = (WindowManager) com.mishiranu.dashchan.content.security.SecurePopupContext.wrap(activity)
+				.getSystemService(Context.WINDOW_SERVICE);
 		ViewUtils.addWindowFocusListener(getTagView(activity), windowFocusListener);
 
 		activity.getLifecycle().addObserver(this);
@@ -318,6 +319,9 @@ public class ClickableToast implements DefaultLifecycleObserver {
 	@Override
 	public void onPause(@NonNull LifecycleOwner owner) {
 		resumed = false;
+		if (com.mishiranu.dashchan.content.security.AppSecurity.isProtected(activity)) {
+			cancelInternal(); return;
+		}
 		updateAndApplyLayoutChecked();
 	}
 
@@ -351,6 +355,10 @@ public class ClickableToast implements DefaultLifecycleObserver {
 	}
 
 	private String showInternal(CharSequence message, String updateId, Button button, boolean diagnosticTest) {
+		if (com.mishiranu.dashchan.content.security.AppSecurity.isProtected(activity)
+				&& (!resumed || com.mishiranu.dashchan.content.security.SecurityStore.locked(activity))) {
+			cancelInternal(); return null;
+		}
 		boolean update = updateId != null && updateId.equals(showing);
 		if (update) {
 			ConcurrentUtils.HANDLER.removeCallbacks(cancelRunnable);

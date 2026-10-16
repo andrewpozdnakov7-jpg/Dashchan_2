@@ -460,6 +460,10 @@ public class BackupManager {
 					LimitedEntryInputStream input = new LimitedEntryInputStream(zip, limits);
 					Entry entry = Entry.find(zipEntry.getName());
 					if (entry != null && entries.contains(entry)) {
+						if (entry == Entry.PREFERENCES_0 || entry == Entry.PREFERENCES_1) {
+							com.mishiranu.dashchan.content.security.PreferencesRestore.revokeFolderConsent(
+									MainApplication.getInstance());
+						}
 						entry.reader.read(new Restore(false, input));
 						restored.add(entry);
 					}

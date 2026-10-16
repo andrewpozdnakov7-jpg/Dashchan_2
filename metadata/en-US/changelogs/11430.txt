@@ -1,0 +1,11 @@
+- Refined app protection: choose PIN-only, biometric-only, or either method. Biometric authentication starts automatically; the interval before authentication is required again is configurable.
+- Updated lock screens with an olive Material 3 appearance, a custom numeric keypad, and a cat with input and successful-unlock animations.
+- Added configurable controls for the new video player: drag to reorder buttons, move them between panels, and choose the number of buttons per row. Includes an interactive preview.
+- Split Media settings into separate screens for preloading, gallery, images and attachment options, downloads, and the video player.
+- Fixed issues with locking, settings restoration, and data cleanup.
+
+Protection is still in testing: review and improvements are ongoing. Do not use it to protect sensitive data; test the additional PIN and file deletion only with disposable data.
+
+New interface: Settings → Experimental features → New Material 3 interface.
+
+Thanks to everyone who tests the app, sends logs and helps find bugs! 🐾

@@ -1,0 +1,1 @@
+Renamed the replies section to “My posts and replies”. Own-post marks can be enabled independently, without saving post text in the own-post history or tracking replies. Added optional gallery-grid closing by tapping empty space outside thumbnails; disabled by default.

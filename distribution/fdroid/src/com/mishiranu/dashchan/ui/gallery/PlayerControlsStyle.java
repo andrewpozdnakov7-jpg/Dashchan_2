@@ -14,7 +14,8 @@ final class PlayerControlsStyle {
 
 	static int dp(float density, float value) { return Math.round(density * value); }
 	static View createBar(Context context, ImageButton play, LinearLayout time, SeekBar seek,
-			ImageButton mute, ImageButton fullscreen) { return null; }
+			View[] actions) { return null; }
+	static View createButtonGrid(Context context, java.util.List<View> buttons, int columns) { return null; }
 	static GradientDrawable panel(float density, float radius) { return null; }
 	static void text(TextView view, int size) {}
 	static void button(ImageButton view, float density, boolean center) {}
