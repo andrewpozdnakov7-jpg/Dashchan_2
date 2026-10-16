@@ -23,6 +23,8 @@ public class SecurityBoundaryTest {
         assertFalse(SecurityStore.screenCaptureBlocked(null));
         assertFalse(SecurityStore.designCaptureAllowed(null));
         assertNull(AppSecurity.redactNotification(null, (android.app.Notification) null));
+        assertNull(SecurePopupContext.wrap(null));
+        assertNull(SecurePopupContext.protect(null, null));
     }
 
     @Test public void backupFolderConsentDoesNotRequireSecurityStorage() throws Exception {
