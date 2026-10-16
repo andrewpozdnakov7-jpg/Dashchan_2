@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<string name="lock_pin_label">PIN-код</string>
+	<string name="lock_enter_pin">Введите PIN</string>
+	<string name="lock_confirm_current">Подтвердите PIN</string>
+	<string name="lock_create_pin">Создайте PIN</string>
+	<string name="lock_create_additional">Создайте дополнительный PIN</string>
+	<string name="lock_repeat_pin">Повторите PIN</string>
+	<string name="lock_unlock">Разблокировать</string>
+	<string name="lock_continue">Продолжить</string>
+	<string name="lock_save">Сохранить</string>
+	<string name="lock_delete_digit">Удалить цифру</string>
+	<string name="lock_welcome">С возвращением</string>
+	<string name="lock_sign_in">Войдите в Slooop</string>
+	<string name="lock_use_pin">Ввести PIN</string>
+	<string name="lock_use_biometrics">Войти по биометрии</string>
+	<string name="lock_unlock_description">Чтобы открыть Slooop</string>
+	<string name="lock_authorize_description">Чтобы изменить настройки защиты</string>
+</resources>

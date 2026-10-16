@@ -32,8 +32,12 @@ final class PlayerControlsStyle {
 	private PlayerControlsStyle() {}
 
 	static View createBar(Context context, ImageButton play, LinearLayout time, SeekBar seek,
-			ImageButton save, ImageButton fullscreen) {
-		return new PlayerControlBar(context, play, time, seek, save, fullscreen);
+			View[] actions) {
+		return new PlayerControlBar(context, play, time, seek, actions);
+	}
+
+	static View createButtonGrid(Context context, java.util.List<View> buttons, int columns) {
+		return new PlayerButtonsGrid(context, buttons, columns, 32);
 	}
 
 	static int dp(float density, float value) {

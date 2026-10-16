@@ -36,7 +36,7 @@ public class DropdownView extends FrameLayout {
 	public DropdownView(Context context, AttributeSet attrs) {
 		super(context, attrs);
 
-		spinner = new Spinner(context);
+		spinner = new SecureSpinner(context);
 		spinner.setId(android.R.id.edit);
 		spinner.setPadding(0, 0, 0, 0);
 		addView(spinner, LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT);

@@ -1,0 +1,2 @@
+Split Media settings into separate screens. Added independent own-post marking and optional gallery closing by tapping empty space.
+Improved video startup and switching. Fixed crashes when opening replies, thread scrollbars, and file-menu readability.

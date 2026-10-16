@@ -42,7 +42,7 @@ public class PostingCompactControlsTest {
 
 	@Test public void primaryUsesRealStateWithoutSubmittingOrReplacingOriginalWidgets() {
 		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
-			Context context = ThemeEngine.attach(InstrumentationRegistry.getInstrumentation().getTargetContext());
+			Context context = PostingTestContext.create();
 			View root = inflateForm(context); PostingFormAppearance appearance = new PostingFormAppearance(root);
 			try {
 				appearance.setupEditor(root.findViewById(R.id.comment_parent), root.findViewById(R.id.comment), new LinearLayout(context));
@@ -84,7 +84,7 @@ public class PostingCompactControlsTest {
 
 	@Test public void movedAttachmentRetainsItsActionAndCapabilityVisibility() {
 		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
-			Context context = ThemeEngine.attach(InstrumentationRegistry.getInstrumentation().getTargetContext());
+			Context context = PostingTestContext.create();
 			View root = inflateForm(context); PostingFormAppearance appearance = new PostingFormAppearance(root);
 			try {
 				appearance.setupEditor(root.findViewById(R.id.comment_parent), root.findViewById(R.id.comment), new LinearLayout(context));
@@ -104,7 +104,7 @@ public class PostingCompactControlsTest {
 
 	@Test public void overflowUsesOriginalGlyphsAndStaysAboveThePanel() {
 		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
-			Context context = ThemeEngine.attach(InstrumentationRegistry.getInstrumentation().getTargetContext());
+			Context context = PostingTestContext.create();
 			Button original = new Button(context);
 			original.setTextSize(18);
 			original.setTag(ChanMarkup.TAG_SUPERSCRIPT); original.setContentDescription("Superscript");
@@ -138,7 +138,7 @@ public class PostingCompactControlsTest {
 
 	@Test public void fixedFooterDoesNotAddAnotherBottomPaddingToTheSixteenDpEditorGap() {
 		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
-			Context context = ThemeEngine.attach(InstrumentationRegistry.getInstrumentation().getTargetContext());
+			Context context = PostingTestContext.create();
 			View root = inflateForm(context);
 			PostingFormAppearance appearance = new PostingFormAppearance(root);
 			try {

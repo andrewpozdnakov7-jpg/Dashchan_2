@@ -125,13 +125,17 @@ def main():
     require(body("isCheckedIfVisible"), "checkBox.getVisibility() == View.VISIBLE && checkBox.isChecked()")
     send = body("submitPostingForm")
     collect = body("collectPostingFormData")
-    for field in "subjectView commentView nameView emailView passwordView".split():
+    for field in "subjectView commentView nameView emailView".split():
         require(collect, "getTextIfVisible(" + field + ")")
     for field in "sageCheckBox spoilerCheckBox originalPosterCheckBox".split():
         require(collect, "isCheckedIfVisible(" + field + ")")
     require(send, "if (attachmentController.isImportInProgress())", "sendCoordinator.canSend()",
             "sendCoordinator.send(collectPostingFormData(), this::capturePostDraft, this::captureCaptchaDraft)")
-    require(collect, "PostingFormData.resolvePassword(getTextIfVisible(passwordView)",
+    # Password visibility is presentation-only; hiding it must retain a custom
+    # deletion password while unsupported boards still use the existing fallback.
+    assert "getTextIfVisible(passwordView)" not in collect
+    require(collect, "PostingFormData.resolvePassword(deletionPasswordSupported",
+            "? StringUtils.nullIfEmpty(passwordView.getText().toString()) : null",
             "Preferences.getPassword(Chan.get(getChanName()))", "iconView.getVisibility() == View.VISIBLE ? getUserIcon() : null",
             "attachmentController.createSendAttachments()", "captchaController.snapshot(captchaForm.getInput())",
             "new PostingFormData(subject, comment, name, email, password, optionSage, optionSpoiler, optionOriginalPoster, userIcon, sendAttachments, captcha)")
@@ -239,11 +243,11 @@ def main():
     assert "PostingAttachmentsController" not in send_source and "PostingCaptchaController" not in send_source
     assert "PostingSendCoordinator" not in draft_source and "PostingSendCoordinator" not in captcha_source
     assert STATE_TESTS.read_text(encoding="utf-8").count("@Test ") == 12
-    assert JVM.read_text(encoding="utf-8").count("@Test ") == 12
+    assert JVM.read_text(encoding="utf-8").count("@Test ") == 14
     assert ANDROID.read_text(encoding="utf-8").count("@Test ") == 8
     assert ANDROID_CONTROLLER.read_text(encoding="utf-8").count("@Test ") == 8
     print("PASS: posting source boundaries (drafts, ordered attachments, captcha, send, lifecycle, activity results)")
-    print("PASS: lexical balance; prepared 12 JVM source contracts, 8 Android model round trips, 8 Android attachment, 12 captcha/draft and 12 send-controller tests")
+    print("PASS: lexical balance; prepared 14 JVM source contracts, 8 Android model round trips, 8 Android attachment, 12 captcha/draft and 12 send-controller tests")
     print("NOT RUN: Java compilation, JUnit, Android instrumentation, Gradle build, lint, device smoke")
 
 

@@ -93,6 +93,26 @@ public final class SettingsSearchIndex {
 			@Override
 			ContentFragment createFragment() { return new MediaFragment(); }
 		},
+		MEDIA_GALLERY(R.string.media, R.string.gallery) {
+			@Override
+			ContentFragment createFragment() { return new GallerySettingsFragment(); }
+		},
+		MEDIA_IMAGES(R.string.media, R.string.media_images_attachments) {
+			@Override
+			ContentFragment createFragment() { return new ImageAttachmentsFragment(); }
+		},
+		MEDIA_DOWNLOADS(R.string.media, R.string.downloads) {
+			@Override
+			ContentFragment createFragment() { return new DownloadsFragment(); }
+		},
+		MEDIA_PLAYER(R.string.media, R.string.video_player) {
+			@Override
+			ContentFragment createFragment() { return new VideoPlayerSettingsFragment(); }
+		},
+		PLAYER_BUTTONS(R.string.media, R.string.video_player, R.string.player_buttons_layout) {
+			@Override
+			ContentFragment createFragment() { return new PlayerButtonsFragment(); }
+		},
 		VIDEO_PRELOAD(R.string.media, R.string.media_preload) {
 			@Override
 			ContentFragment createFragment() { return new VideoPreloadFragment(); }
@@ -105,7 +125,7 @@ public final class SettingsSearchIndex {
 			@Override
 			ContentFragment createFragment() { return new ToolbarTitleSettingsFragment(); }
 		},
-		PLAYBACK_SPEED(R.string.media, R.string.playback_speed) {
+		PLAYBACK_SPEED(R.string.media, R.string.video_player, R.string.playback_speed) {
 			@Override
 			ContentFragment createFragment() { return new PlaybackSpeedFragment(); }
 		},
@@ -318,11 +338,16 @@ public final class SettingsSearchIndex {
 		ArrayList<Entry> entries = new ArrayList<>();
 
 		add(context, entries, Screen.GENERAL, R.string.general);
-		add(context, entries, Screen.SECURITY, R.string.security_title);
-		add(context, entries, Screen.SECURITY, R.string.security_primary_pin);
-		add(context, entries, Screen.SECURITY, R.string.security_additional_pin, R.string.security_delete_warning, null);
-		add(context, entries, Screen.SECURITY, R.string.security_biometric);
-		add(context, entries, Screen.SECURITY, R.string.security_delete_downloads, R.string.security_downloads_toggle_summary, null);
+		if (BuildConfig.ENABLE_APP_SECURITY_SETTINGS) {
+			add(context, entries, Screen.SECURITY, R.string.security_title);
+			add(context, entries, Screen.SECURITY, R.string.security_primary_pin);
+			add(context, entries, Screen.SECURITY, R.string.security_additional_pin);
+			add(context, entries, Screen.SECURITY, R.string.security_authentication_mode, R.string.security_authentication_mode_search, null);
+			add(context, entries, Screen.SECURITY, R.string.security_reauthentication);
+			add(context, entries, Screen.SECURITY, R.string.security_allow_screenshots);
+			add(context, entries, Screen.SECURITY, R.string.security_delete_downloads);
+			add(context, entries, Screen.SECURITY, R.string.security_guide);
+		}
 		add(context, entries, Screen.FORUMS, R.string.forums);
 		add(context, entries, Screen.FORUMS, R.string.automatic_domain_selection,
 				R.string.automatic_domain_selection__summary, Preferences.KEY_AUTOMATIC_DOMAIN_SELECTION);
@@ -390,13 +415,13 @@ public final class SettingsSearchIndex {
 				R.string.reddit_slooop_style__summary, Preferences.KEY_REDDIT_WEB_READER_STYLE);
 		add(context, entries, Screen.REDDIT, R.string.reddit_board_style,
 				R.string.reddit_board_style__summary, Preferences.KEY_REDDIT_BOARD_STYLE);
-		add(context, entries, Screen.MEDIA, R.string.hardware_video_acceleration,
+		add(context, entries, Screen.MEDIA_PLAYER, R.string.hardware_video_acceleration,
 				R.string.hardware_video_acceleration__summary, Preferences.KEY_HARDWARE_VIDEO_ACCELERATION);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.video_diagnostics_extended,
 				R.string.video_diagnostics_extended__summary, Preferences.KEY_EXTENDED_VIDEO_DIAGNOSTICS);
 		add(context, entries, Screen.PIP_DIAGNOSTICS, R.string.pip_diagnostic_mode,
 				R.string.pip_diagnostic_hidden_summary, null);
-		add(context, entries, Screen.MEDIA, R.string.open_configured_attachment_folder,
+		add(context, entries, Screen.MEDIA_IMAGES, R.string.open_configured_attachment_folder,
 				R.string.open_configured_attachment_folder__summary,
 				Preferences.KEY_OPEN_CONFIGURED_ATTACHMENT_FOLDER);
 		add(context, entries, Screen.INTERFACE, R.string.swipe_reply,
@@ -415,7 +440,7 @@ public final class SettingsSearchIndex {
 			add(context, entries, Screen.OFFLINE_TRANSLATION, R.string.translation_language_package);
 			add(context, entries, Screen.OFFLINE_TRANSLATION, R.string.clear_translation_cache);
 		}
-		add(context, entries, Screen.MEDIA, R.string.video_zoom_gestures,
+		add(context, entries, Screen.MEDIA_PLAYER, R.string.video_zoom_gestures,
 				R.string.video_zoom_gestures__summary, Preferences.KEY_VIDEO_ZOOM_GESTURES);
 		add(context, entries, Screen.REPLY_NOTIFICATIONS, R.string.replies_and_notifications, R.string.replies_and_notifications_entry_summary, null);
 		add(context, entries, Screen.REPLY_NOTIFICATIONS, R.string.highlight_my_posts,
@@ -588,59 +613,73 @@ public final class SettingsSearchIndex {
 		add(context, entries, Screen.CONTENTS, R.string.thread_page_preload,
 				R.string.thread_page_preload__summary, Preferences.KEY_THREAD_PAGE_PRELOAD);
 
-		add(context, entries, Screen.MEDIA, R.string.load_thumbnails, 0, Preferences.KEY_LOAD_THUMBNAILS);
-		add(context, entries, Screen.MEDIA, R.string.close_gallery_on_background_tap,
+		add(context, entries, Screen.VIDEO_PRELOAD, R.string.media_preload, R.string.media_preload_summary, null);
+		add(context, entries, Screen.MEDIA_GALLERY, R.string.gallery, R.string.media_gallery_summary, null);
+		add(context, entries, Screen.MEDIA_IMAGES, R.string.media_images_attachments,
+				R.string.media_images_attachments_summary, null);
+		add(context, entries, Screen.MEDIA_DOWNLOADS, R.string.downloads, R.string.media_downloads_summary, null);
+		add(context, entries, Screen.MEDIA_PLAYER, R.string.video_player, R.string.media_video_player_summary, null);
+		add(context, entries, Screen.MEDIA_PLAYER, R.string.playback_speed, R.string.playback_speed_settings__summary, null);
+		if (BuildConfig.ENABLE_EXPERIMENTAL_INTERFACE_MOTION) {
+			add(context, entries, Screen.PLAYER_BUTTONS, R.string.player_buttons_layout,
+					R.string.player_buttons_layout_summary, null);
+			add(context, entries, Screen.PLAYER_BUTTONS, R.string.player_buttons_per_row,
+					R.string.player_buttons_help, null);
+		}
+
+		add(context, entries, Screen.MEDIA_IMAGES, R.string.load_thumbnails, 0, Preferences.KEY_LOAD_THUMBNAILS);
+		add(context, entries, Screen.MEDIA_GALLERY, R.string.close_gallery_on_background_tap,
 				R.string.close_gallery_on_background_tap__summary, Preferences.KEY_CLOSE_GALLERY_ON_BACKGROUND_TAP);
-		add(context, entries, Screen.MEDIA, R.string.close_gallery_grid_on_background_tap,
+		add(context, entries, Screen.MEDIA_GALLERY, R.string.close_gallery_grid_on_background_tap,
 				R.string.close_gallery_grid_on_background_tap__summary, Preferences.KEY_CLOSE_GALLERY_GRID_ON_BACKGROUND_TAP);
-		add(context, entries, Screen.MEDIA, R.string.scroll_gallery_to_current_file,
+		add(context, entries, Screen.MEDIA_GALLERY, R.string.scroll_gallery_to_current_file,
 				R.string.scroll_gallery_to_current_file__summary, Preferences.KEY_SCROLL_GALLERY_TO_CURRENT_FILE);
 		add(context, entries, Screen.VIDEO_PRELOAD, R.string.load_nearest_image, 0, Preferences.KEY_IMAGE_PRELOAD);
-		add(context, entries, Screen.MEDIA, R.string.image_editor,
+		add(context, entries, Screen.MEDIA_IMAGES, R.string.image_editor,
 				R.string.image_editor__summary, Preferences.KEY_IMAGE_EDITOR);
-		add(context, entries, Screen.MEDIA, R.string.unique_hash, 0,
+		add(context, entries, Screen.MEDIA_IMAGES, R.string.unique_hash, 0,
 				Preferences.KEY_DEFAULT_ATTACHMENT_UNIQUE_HASH);
-		add(context, entries, Screen.MEDIA, R.string.reencode_image, 0,
+		add(context, entries, Screen.MEDIA_IMAGES, R.string.reencode_image, 0,
 				Preferences.KEY_DEFAULT_ATTACHMENT_REENCODING);
-		add(context, entries, Screen.MEDIA, R.string.remove_file_name, 0,
+		add(context, entries, Screen.MEDIA_IMAGES, R.string.remove_file_name, 0,
 				Preferences.KEY_DEFAULT_ATTACHMENT_REMOVE_FILE_NAME);
-		add(context, entries, Screen.MEDIA, R.string.remove_metadata, 0,
+		add(context, entries, Screen.MEDIA_IMAGES, R.string.remove_metadata, 0,
 				Preferences.KEY_DEFAULT_ATTACHMENT_REMOVE_METADATA);
-		add(context, entries, Screen.MEDIA, R.string.detailed_file_name, R.string.detailed_file_name__summary,
+		add(context, entries, Screen.MEDIA_DOWNLOADS, R.string.detailed_file_name, R.string.detailed_file_name__summary,
 				Preferences.KEY_DOWNLOAD_DETAIL_NAME);
-		add(context, entries, Screen.MEDIA, R.string.original_file_name, R.string.original_file_name__summary,
+		add(context, entries, Screen.MEDIA_DOWNLOADS, R.string.original_file_name, R.string.original_file_name__summary,
 				Preferences.KEY_DOWNLOAD_ORIGINAL_NAME);
-		add(context, entries, Screen.MEDIA, R.string.download_directory);
-		add(context, entries, Screen.MEDIA, R.string.if_file_already_exists, 0,
+		add(context, entries, Screen.MEDIA_DOWNLOADS, R.string.download_directory);
+		add(context, entries, Screen.MEDIA_DOWNLOADS, R.string.if_file_already_exists, 0,
 				Preferences.KEY_DOWNLOAD_CONFLICT_MODE);
-		add(context, entries, Screen.MEDIA, R.string.show_download_configuration_dialog, 0,
+		add(context, entries, Screen.MEDIA_DOWNLOADS, R.string.show_download_configuration_dialog, 0,
 				Preferences.KEY_DOWNLOAD_SUBDIR);
-		add(context, entries, Screen.MEDIA, R.string.subdirectory_pattern, 0, Preferences.KEY_SUBDIR_PATTERN);
-		add(context, entries, Screen.MEDIA, R.string.notify_when_download_is_completed,
+		add(context, entries, Screen.MEDIA_DOWNLOADS, R.string.subdirectory_pattern, 0, Preferences.KEY_SUBDIR_PATTERN);
+		add(context, entries, Screen.MEDIA_DOWNLOADS, R.string.notify_when_download_is_completed,
 				R.string.notify_when_download_is_completed__summary, Preferences.KEY_NOTIFY_DOWNLOAD_COMPLETE);
-		add(context, entries, Screen.MEDIA, R.string.use_built_in_video_player,
+		add(context, entries, Screen.MEDIA_PLAYER, R.string.use_built_in_video_player,
 				R.string.use_built_in_video_player__summary, Preferences.KEY_USE_VIDEO_PLAYER);
-		add(context, entries, Screen.MEDIA, R.string.start_videos_muted,
+		add(context, entries, Screen.MEDIA_PLAYER, R.string.start_videos_muted,
 				R.string.start_videos_muted__summary, Preferences.KEY_VIDEO_START_MUTED);
-		add(context, entries, Screen.MEDIA, R.string.remember_last_video_position,
+		add(context, entries, Screen.MEDIA_PLAYER, R.string.remember_last_video_position,
 				R.string.remember_last_video_position__summary, Preferences.KEY_REMEMBER_LAST_VIDEO_POSITION);
-		add(context, entries, Screen.MEDIA, R.string.video_audio_boost,
+		add(context, entries, Screen.MEDIA_PLAYER, R.string.video_audio_boost,
 				R.string.video_audio_boost__summary, Preferences.KEY_VIDEO_AUDIO_BOOST);
-		add(context, entries, Screen.MEDIA, R.string.video_audio_boost_level, 0,
+		add(context, entries, Screen.MEDIA_PLAYER, R.string.video_audio_boost_level, 0,
 				Preferences.KEY_VIDEO_AUDIO_BOOST_DB);
-		add(context, entries, Screen.MEDIA, R.string.action_on_playback_completion, 0,
+		add(context, entries, Screen.MEDIA_PLAYER, R.string.action_on_playback_completion, 0,
 				Preferences.KEY_VIDEO_COMPLETION);
-		add(context, entries, Screen.MEDIA, R.string.play_after_scroll, R.string.play_after_scroll__summary,
+		add(context, entries, Screen.MEDIA_PLAYER, R.string.play_after_scroll, R.string.play_after_scroll__summary,
 				Preferences.KEY_VIDEO_PLAY_AFTER_SCROLL);
-		add(context, entries, Screen.MEDIA, R.string.seek_any_frame, R.string.seek_any_frame__summary,
+		add(context, entries, Screen.MEDIA_PLAYER, R.string.seek_any_frame, R.string.seek_any_frame__summary,
 				Preferences.KEY_VIDEO_SEEK_ANY_FRAME);
-		add(context, entries, Screen.MEDIA, R.string.youtube_open_mode, 0,
+		add(context, entries, Screen.MEDIA_PLAYER, R.string.youtube_open_mode, 0,
 				Preferences.KEY_YOUTUBE_OPEN_MODE);
-		add(context, entries, Screen.MEDIA, R.string.video_picture_in_picture,
+		add(context, entries, Screen.MEDIA_PLAYER, R.string.video_picture_in_picture,
 				R.string.video_picture_in_picture__summary, Preferences.KEY_VIDEO_PICTURE_IN_PICTURE);
-		add(context, entries, Screen.MEDIA, R.string.video_picture_in_picture_auto,
+		add(context, entries, Screen.MEDIA_PLAYER, R.string.video_picture_in_picture_auto,
 				R.string.video_picture_in_picture_auto__summary, Preferences.KEY_VIDEO_PICTURE_IN_PICTURE_AUTO);
-		add(context, entries, Screen.MEDIA, R.string.video_screen_off_action,
+		add(context, entries, Screen.MEDIA_PLAYER, R.string.video_screen_off_action,
 				R.string.video_screen_off_action__summary, Preferences.KEY_VIDEO_SCREEN_OFF_ACTION);
 		add(context, entries, Screen.VIDEO_PRELOAD, R.string.video_preload_enable,
 				R.string.video_preload_description, Preferences.KEY_VIDEO_PRELOAD);
@@ -668,7 +707,7 @@ public final class SettingsSearchIndex {
 				R.string.remember_video_playback_speed__summary, Preferences.KEY_REMEMBER_VIDEO_PLAYBACK_SPEED);
 		add(context, entries, Screen.PLAYBACK_SPEED, R.string.persist_video_playback_speed,
 				R.string.persist_video_playback_speed__summary, Preferences.KEY_PERSIST_VIDEO_PLAYBACK_SPEED);
-		add(context, entries, Screen.MEDIA, R.string.attachment_video_preview,
+		add(context, entries, Screen.MEDIA_PLAYER, R.string.attachment_video_preview,
 				R.string.attachment_video_preview__summary, Preferences.KEY_ATTACHMENT_VIDEO_PREVIEW);
 		add(context, entries, Screen.MEDIA, R.string.cache_size, 0, Preferences.KEY_CACHE_SIZE);
 		add(context, entries, Screen.MEDIA, R.string.clear_cache);

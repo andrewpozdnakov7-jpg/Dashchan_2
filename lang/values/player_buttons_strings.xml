@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<string name="player_buttons_instruction">Touch and hold, then drag</string>
+	<string name="player_buttons_rules">Drop on a button to swap.\nDrop on empty space in the other panel to move.</string>
+	<string name="player_buttons_preview_title">Preview</string>
+	<string name="player_buttons_zone_left">Left</string>
+	<string name="player_buttons_zone_right">Right</string>
+	<string name="player_buttons_order">Rows grow upwards</string>
+	<string name="player_buttons_count">%1$d of 2</string>
+	<string name="player_buttons_note">These buttons do not control playback here. Right-side actions belong to the playback bar.</string>
+	<string name="player_buttons_left_label">Left panel</string>
+	<string name="player_buttons_effective">Selected: %1$d. This preview fits %2$d per row.</string>
+	<string name="player_buttons_saved">Changes are saved automatically.</string>
+	<string name="player_buttons_reset">Restore defaults</string>
+	<string name="player_buttons_drag_start">Moving “%1$s”. Choose a destination.</string>
+	<string name="player_buttons_drag_swap">Swap: “%1$s” ↔ “%2$s”.</string>
+	<string name="player_buttons_drag_left">Move “%1$s” to the left.</string>
+	<string name="player_buttons_drag_right">Move “%1$s” to the right.</string>
+	<string name="player_buttons_full">The right panel has 2 buttons. Drop on a button to swap.</string>
+	<string name="player_buttons_noop">Choose another button or the other panel.</string>
+	<string name="player_buttons_empty_right">Right panel, empty, up to 2 buttons</string>
+	<string name="player_buttons_layout">Button layout</string>
+	<string name="player_buttons_layout_summary">Arrange the new player buttons between the left and right panels</string>
+	<string name="player_buttons_help">Hold and drag a button onto another to swap them, or onto an empty panel area to move it there. The right panel holds up to two buttons.</string>
+	<string name="player_buttons_preview">Preview — buttons do not perform playback actions</string>
+	<string name="player_buttons_per_row">Buttons per row</string>
+	<string name="player_buttons_per_row_summary">Left panel: up to %1$d per row. Order starts at the bottom left, then continues in rows above. Narrow screens may use fewer columns.</string>
+	<string name="player_buttons_left">Bottom left panel</string>
+	<string name="player_buttons_right">Bottom right panel</string>
+	<string name="player_buttons_move_left">Move to the end of the left panel</string>
+	<string name="player_buttons_move_right">Move to the end of the right panel</string>
+	<string name="player_buttons_swap">Swap with: %1$s</string>
+	<string name="player_buttons_fullscreen">Expand video</string>
+</resources>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<item type="id" name="player_buttons_move" />
+	<item type="id" name="player_buttons_swap_speed" />
+	<item type="id" name="player_buttons_swap_pip" />
+	<item type="id" name="player_buttons_swap_tiktok" />
+	<item type="id" name="player_buttons_swap_save" />
+	<item type="id" name="player_buttons_swap_mute" />
+	<item type="id" name="player_buttons_swap_fullscreen" />
+</resources>

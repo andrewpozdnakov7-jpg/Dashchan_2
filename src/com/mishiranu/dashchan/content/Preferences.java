@@ -17,6 +17,7 @@ import com.mishiranu.dashchan.BuildConfig;
 import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.media.PlaybackSpeed;
+import com.mishiranu.dashchan.media.PlayerButtonsLayout;
 import com.mishiranu.dashchan.content.translation.TranslationEngine;
 import com.mishiranu.dashchan.ui.posting.PhotoEditorBridge;
 import com.mishiranu.dashchan.util.SharedPreferences;
@@ -128,9 +129,12 @@ public class Preferences {
 				}
 			}
 			File restoreFile = getPreferencesFile(application, PREFERENCES_RESTORE_NAME);
-			if (restoreFile.exists()) {
-				newBackupFile.delete();
-				restoreFile.renameTo(newFile);
+			try {
+				com.mishiranu.dashchan.content.security.PreferencesRestore.applyPending(application, restoreFile, newFile);
+			} catch (java.io.IOException e) {
+				// Keep the restore pending and the current settings. Never switch the folder if
+				// the separately stored destructive-deletion consent cannot be durably revoked.
+				android.util.Log.w("Preferences", "Settings restore deferred: safety state unavailable");
 			}
 			PREFERENCES = new SharedPreferences(application, PREFERENCES_NAME);
 		} else if (application.isPrivateBrowserProcess()) {
@@ -2395,6 +2399,16 @@ public class Preferences {
 	public static boolean isNewVideoPlayerEnabled() {
 		return isNewInterfaceMotionEnabled()
 				&& PREFERENCES.getBoolean(KEY_NEW_VIDEO_PLAYER, DEFAULT_NEW_VIDEO_PLAYER);
+	}
+
+	public static final String KEY_VIDEO_BUTTONS_LAYOUT = "video_buttons_layout_v1";
+
+	public static PlayerButtonsLayout getVideoButtonsLayout() {
+		return PlayerButtonsLayout.decode(PREFERENCES.getString(KEY_VIDEO_BUTTONS_LAYOUT, null));
+	}
+
+	public static void setVideoButtonsLayout(PlayerButtonsLayout layout) {
+		PREFERENCES.edit().put(KEY_VIDEO_BUTTONS_LAYOUT, layout.encode()).close();
 	}
 
 	public static String getPipDiagnosticMode() {

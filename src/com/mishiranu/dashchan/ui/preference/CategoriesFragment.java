@@ -7,6 +7,7 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import androidx.annotation.NonNull;
+import com.mishiranu.dashchan.BuildConfig;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.ui.FragmentHandler;
@@ -82,9 +83,11 @@ public class CategoriesFragment extends PreferenceFragment {
 		addCategory(R.string.general, R.drawable.ic_map)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 						.pushFragment(new GeneralFragment()));
-		addCategory(R.string.security_title, R.drawable.ic_verified)
-				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
-						.pushFragment(new SecurityFragment()));
+		if (BuildConfig.ENABLE_APP_SECURITY_SETTINGS) {
+			addCategory(R.string.security_title, R.drawable.ic_verified)
+					.setOnClickListener(p -> ((FragmentHandler) requireActivity())
+							.pushFragment(new SecurityFragment()));
+		}
 		addCategory(R.string.forums, R.drawable.ic_public)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 						.pushFragment(new ChansFragment()));

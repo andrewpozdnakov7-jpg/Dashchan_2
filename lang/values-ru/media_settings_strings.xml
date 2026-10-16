@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<string name="media_gallery_summary">Закрытие просмотра и сетки, прокрутка к текущему файлу</string>
+	<string name="media_images_attachments">Изображения и параметры вложений</string>
+	<string name="media_images_attachments_summary">Миниатюры, редактор изображений и параметры новых вложений</string>
+	<string name="media_downloads_summary">Папка сохранения, имена файлов, подпапки и уведомления</string>
+	<string name="media_video_player_summary">Воспроизведение, звук, скорость, жесты и картинка в картинке</string>
+</resources>

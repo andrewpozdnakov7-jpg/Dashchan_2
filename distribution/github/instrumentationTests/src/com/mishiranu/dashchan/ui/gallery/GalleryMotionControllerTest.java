@@ -192,6 +192,7 @@ public class GalleryMotionControllerTest {
 		fixture(f -> {
 			Bitmap old = Bitmap.createBitmap(20, 20, Bitmap.Config.ARGB_8888); old.eraseColor(Color.RED);
 			GalleryMotionController.Preview preview = new GalleryMotionController.Preview(old);
+			f.photo.setAlpha(1f); // Establish the intended baseline BEFORE Reveal captures it.
 			GalleryMotionController.Reveal reveal = new GalleryMotionController.Reveal(f.photo, preview);
 			Bitmap output = Bitmap.createBitmap(200, 200, Bitmap.Config.ARGB_8888);
 			try {

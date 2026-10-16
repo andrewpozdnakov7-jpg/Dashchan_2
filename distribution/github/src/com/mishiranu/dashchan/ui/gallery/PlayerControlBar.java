@@ -14,8 +14,7 @@ final class PlayerControlBar extends ViewGroup {
 	private final View play;
 	private final LinearLayout time;
 	private final View seek;
-	private final View save;
-	private final View fullscreen;
+	private final View[] actions;
 	private final int buttonSize;
 	private final int seekHeight;
 	private final int minimumSeekWidth;
@@ -24,13 +23,12 @@ final class PlayerControlBar extends ViewGroup {
 	private int timeRowHeight;
 	private int playbackRowHeight;
 
-	PlayerControlBar(Context context, View play, LinearLayout time, View seek, View save, View fullscreen) {
+	PlayerControlBar(Context context, View play, LinearLayout time, View seek, View[] actions) {
 		super(context);
 		this.play = play;
 		this.time = time;
 		this.seek = seek;
-		this.save = save;
-		this.fullscreen = fullscreen;
+		this.actions = actions.clone();
 		float density = ResourceUtils.obtainDensity(context);
 		buttonSize = PlayerControlsStyle.dp(density, 32);
 		seekHeight = PlayerControlsStyle.dp(density, 24);
@@ -44,8 +42,7 @@ final class PlayerControlBar extends ViewGroup {
 		addView(play);
 		addView(time);
 		addView(seek);
-		addView(save);
-		addView(fullscreen);
+		for (View action : actions) addView(action);
 	}
 
 	@Override
@@ -54,20 +51,30 @@ final class PlayerControlBar extends ViewGroup {
 		time.measure(natural, natural);
 		int naturalTimeWidth = time.getMeasuredWidth();
 		int paddingWidth = getPaddingLeft() + getPaddingRight();
-		int requestedWidth = buttonSize * 3 + naturalTimeWidth + minimumSeekWidth + paddingWidth;
+		int actionsWidth = 0;
+		for (View action : actions) {
+			int actionWidth = buttonSize;
+			if (action instanceof android.widget.TextView) {
+				action.measure(natural, MeasureSpec.makeMeasureSpec(buttonSize, MeasureSpec.EXACTLY));
+				actionWidth = Math.max(buttonSize, action.getMeasuredWidth());
+			}
+			action.measure(MeasureSpec.makeMeasureSpec(actionWidth, MeasureSpec.EXACTLY),
+					MeasureSpec.makeMeasureSpec(buttonSize, MeasureSpec.EXACTLY));
+			actionsWidth += actionWidth;
+		}
+		int fixedWidth = buttonSize + actionsWidth;
+		int requestedWidth = fixedWidth + naturalTimeWidth + minimumSeekWidth + paddingWidth;
 		int width = resolveSize(requestedWidth, widthMeasureSpec);
 		int available = Math.max(0, width - paddingWidth);
-		inline = available >= buttonSize * 3 + naturalTimeWidth + minimumSeekWidth;
+		inline = available >= fixedWidth + naturalTimeWidth + minimumSeekWidth;
 
-		int buttonWidth = Math.min(buttonSize, available / 3);
+		int buttonWidth = buttonSize;
 		int buttonSpec = MeasureSpec.makeMeasureSpec(buttonWidth, MeasureSpec.EXACTLY);
 		int buttonHeightSpec = MeasureSpec.makeMeasureSpec(buttonSize, MeasureSpec.EXACTLY);
 		play.measure(buttonSpec, buttonHeightSpec);
-		save.measure(buttonSpec, buttonHeightSpec);
-		fullscreen.measure(buttonSpec, buttonHeightSpec);
 		int timeWidth = inline ? naturalTimeWidth : Math.min(naturalTimeWidth, available);
 		time.measure(MeasureSpec.makeMeasureSpec(timeWidth, MeasureSpec.EXACTLY), natural);
-		int seekWidth = Math.max(0, available - buttonWidth * 3 - (inline ? timeWidth : 0));
+		int seekWidth = Math.max(0, available - buttonWidth - actionsWidth - (inline ? timeWidth : 0));
 		seek.measure(MeasureSpec.makeMeasureSpec(seekWidth, MeasureSpec.EXACTLY),
 				MeasureSpec.makeMeasureSpec(seekHeight, MeasureSpec.EXACTLY));
 
@@ -91,8 +98,7 @@ final class PlayerControlBar extends ViewGroup {
 			place(time, timeCursor, getPaddingTop(), timeRowHeight, rtl);
 		}
 		cursor = place(seek, cursor, rowTop, playbackRowHeight, rtl);
-		cursor = place(save, cursor, rowTop, playbackRowHeight, rtl);
-		place(fullscreen, cursor, rowTop, playbackRowHeight, rtl);
+		for (View action : actions) cursor = place(action, cursor, rowTop, playbackRowHeight, rtl);
 	}
 
 	private static int place(View child, int cursor, int top, int rowHeight, boolean rtl) {

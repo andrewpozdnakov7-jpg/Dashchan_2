@@ -23,6 +23,13 @@ public class PrivacyResetPolicyTest {
 				"saved_last_video_position", "reply_push_installation_id", "captcha_solving", "reddit_communities",
 				"my_boards", "settings_search_history", "some_future_account_key"}) assertFalse(key, PrivacyResetPolicy.keepPreference(key));
 	}
+	@Test public void playerButtonPlacementSurvivesWithoutAllowingArbitraryVideoPreferences() {
+		assertTrue(PrivacyResetPolicy.keepPreference("video_buttons_layout_v1"));
+		for (String key : new String[]{"video_buttons_layout_v2", "video_buttons_layout_v1_backup",
+				"video_future_account_token", "video_proxy_password", "video_history", "saved_last_video_position"}) {
+			assertFalse(key, PrivacyResetPolicy.keepPreference(key));
+		}
+	}
 	@Test public void onlyThemesSurviveStorageCleanupIncludingRecoveryCopies() {
 		for (String key : new String[]{"themes.json", "themes.backup.json", "themes.restore.json"}) assertTrue(PrivacyResetPolicy.keepStorageFile(key));
 		for (String key : new String[]{"my-posts.json", "my-posts.backup.json", "drafts.restore.json", "favorites.json", "future.json"}) {
