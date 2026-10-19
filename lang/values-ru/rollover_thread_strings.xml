@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="rollover_thread">Перекатить тред</string>
+    <string name="rollover_preparing">Подготовка нового треда и загрузка вложений…</string>
+    <string name="rollover_replace_draft">В этом разделе уже есть черновик нового треда. Заменить его шапкой выбранного треда? Текущий черновик будет заменён только после подготовки.</string>
+    <string name="rollover_replace">Заменить черновик</string>
+    <string name="rollover_missing_files">Не удалось перенести следующие файлы (они недоступны или превышен лимит вложений):\n\n%1$s\n\nОткрыть форму без этих файлов? Ничего не будет отправлено автоматически.</string>
+    <string name="rollover_continue">Продолжить без них</string>
+    <string name="rollover_interrupted">Подготовка прервана либо черновик или доступ изменились. Исходный черновик не заменён. Закройте окно и попробуйте снова.</string>
+</resources>

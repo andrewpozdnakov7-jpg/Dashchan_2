@@ -20,6 +20,7 @@ import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.util.AndroidUtils;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
+import com.mishiranu.dashchan.content.update.DownloadedUpdate;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.OutputStream;
@@ -127,9 +128,16 @@ public final class UpdateInstallSession {
 				int sessionId = -1;
 				boolean committed = false;
 				try {
+					DownloadedUpdate.Entry update = client ? DownloadedUpdate.read(context) : null;
+					if (client && (update == null || !update.file.equals(file.getName())
+							|| DownloadedUpdate.check(context, update) != DownloadedUpdate.Check.READY
+							|| !DownloadedUpdate.beginInstallation(context, update.id))) {
+						throw new java.io.IOException("Client update could not be verified");
+					}
 					PackageInstaller.SessionParams params = new PackageInstaller.SessionParams(
 							PackageInstaller.SessionParams.MODE_FULL_INSTALL);
-					params.setSize(file.length());
+					long length = client ? update.length : file.length();
+					params.setSize(length);
 					if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
 						params.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_REQUIRED);
 					}
@@ -142,12 +150,15 @@ public final class UpdateInstallSession {
 					}
 					try (PackageInstaller.Session session = installer.openSession(sessionId);
 							FileInputStream input = new FileInputStream(file);
-							OutputStream output = session.openWrite("base.apk", 0, file.length())) {
-						byte[] buffer = new byte[65536];
-						int count;
-						while ((count = input.read(buffer)) != -1) {
-							if (cancelled) return;
-							output.write(buffer, 0, count);
+							OutputStream output = session.openWrite("base.apk", 0, length)) {
+						if (client) DownloadedUpdate.copyVerified(update, input, output);
+						else {
+							byte[] buffer = new byte[65536];
+							int count;
+							while ((count = input.read(buffer)) != -1) {
+								if (cancelled) return;
+								output.write(buffer, 0, count);
+							}
 						}
 						session.fsync(output);
 					}
@@ -160,6 +171,7 @@ public final class UpdateInstallSession {
 						PendingIntent callback = PendingIntent.getBroadcast(context, 0, result, flags);
 						synchronized (UpdateInstallSession.class) {
 							if (cancelled || !operation.equals(token(context))) return;
+							if (client && !DownloadedUpdate.current(context, update.id)) throw new java.io.IOException("Client update request changed");
 							if (!preferences(context).edit().putInt("status", COMMITTED).commit()) {
 								throw new IllegalStateException("Cannot persist committed installation");
 							}
@@ -233,6 +245,7 @@ public final class UpdateInstallSession {
 						|| intent.getIntExtra(PackageInstaller.EXTRA_SESSION_ID, -1)
 						!= preferences(context).getInt(KEY_SESSION, -2)
 						|| status(context) >= PackageInstaller.STATUS_SUCCESS) return;
+				android.util.Log.i("UpdateInstaller", "session_status=" + result);
 				if (result == PackageInstaller.STATUS_PENDING_USER_ACTION) {
 					confirmation = AndroidUtils.getParcelableExtra(intent, Intent.EXTRA_INTENT, Intent.class);
 					if (confirmation == null) result = PackageInstaller.STATUS_FAILURE;

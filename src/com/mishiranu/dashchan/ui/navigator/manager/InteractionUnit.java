@@ -26,6 +26,7 @@ import com.mishiranu.dashchan.ui.InstanceDialog;
 import com.mishiranu.dashchan.ui.SearchImageDialog;
 import com.mishiranu.dashchan.ui.gallery.GalleryOverlay;
 import com.mishiranu.dashchan.ui.posting.Replyable;
+import com.mishiranu.dashchan.ui.posting.RolloverThreadDialog;
 import com.mishiranu.dashchan.util.ListViewUtils;
 import com.mishiranu.dashchan.util.NavigationUtils;
 import com.mishiranu.dashchan.widget.AttachmentView;
@@ -347,6 +348,10 @@ public class InteractionUnit {
 						.onRequestReply(true, new Replyable.ReplyData(postItem.getPostNumber(),
 								getCopyReadyComment(postItem.getComment(chan)))));
 			}
+		}
+		if (RolloverThreadDialog.canOffer(chan, postItem)) {
+			dialogMenu.add(R.string.rollover_thread, () -> RolloverThreadDialog.show(
+					configurationSet.fragmentManager, chan, postItem));
 		}
 		if (copyText) {
 			dialogMenu.addMore(R.string.copy, () -> showPostCopyDialog(configurationSet.fragmentManager,

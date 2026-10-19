@@ -49,6 +49,11 @@ final class PostingDraftController {
 		}
 		return draft;
 	}
+	DraftsStorage.PostDraft restoreRolloverDraft(String chan, String board) {
+		DraftsStorage.PostDraft draft = store.getPostDraft(chan, board, null);
+		// Preparing a new OP must not pop an unrelated failed send from the retry queue.
+		return draft != null && !store.isPostDraftQueued(draft) ? draft : null;
+	}
 	DraftsStorage.CaptchaDraft getCaptchaDraft(String chan) { return store.getCaptchaDraft(chan); }
 	ArrayList<DraftsStorage.AttachmentDraft> getFutureAttachmentDrafts() { return store.getFutureAttachmentDrafts(); }
 	void consumeFutureAttachmentDrafts() { store.consumeFutureAttachmentDrafts(); }

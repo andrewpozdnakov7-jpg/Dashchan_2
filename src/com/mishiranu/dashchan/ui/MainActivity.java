@@ -275,6 +275,8 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		finishCreation();
 		StartupNotices.install(this, () -> storageRequestState == StorageRequestState.NONE
 				&& ChanManager.getInstance().getFirstUntrustedExtension() == null);
+		DownloadedUpdatePrompt.install(this, () -> storageRequestState == StorageRequestState.NONE
+				&& ChanManager.getInstance().getFirstUntrustedExtension() == null);
 	}
 
 	private static final class CreationLayout {
@@ -904,6 +906,12 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		if (deferContentNavigation(() -> navigatePosting(chanName, boardName, threadNumber, data))) return;
 		fragments.clear();
 		navigateFragment(new PostingFragment(chanName, boardName, threadNumber, Arrays.asList(data)), null, true);
+	}
+
+	public void navigatePostingRollover(String chanName, String boardName) {
+		if (deferContentNavigation(() -> navigatePostingRollover(chanName, boardName))) return;
+		fragments.clear();
+		navigateFragment(PostingFragment.forRollover(chanName, boardName), null, true);
 	}
 
 	@Override

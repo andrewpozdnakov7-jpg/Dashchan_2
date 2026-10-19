@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="rollover_thread">Roll over thread</string>
+    <string name="rollover_preparing">Preparing a new thread and downloading attachments…</string>
+    <string name="rollover_replace_draft">There is already a new-thread draft on this board. Replace it with the selected opening post? The current draft will only be replaced after preparation.</string>
+    <string name="rollover_replace">Replace draft</string>
+    <string name="rollover_missing_files">These files could not be transferred (unavailable or over the attachment limit):\n\n%1$s\n\nOpen the form without these files? Nothing will be submitted automatically.</string>
+    <string name="rollover_continue">Continue without them</string>
+    <string name="rollover_interrupted">Preparation was interrupted, or the draft or access changed. The original draft was not replaced. Close this dialog and try again.</string>
+</resources>

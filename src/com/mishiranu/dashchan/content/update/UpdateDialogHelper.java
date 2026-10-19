@@ -55,6 +55,10 @@ public class UpdateDialogHelper {
 		automaticCheckRunning = true;
 		UpdateChecker.checkAsync(activity, result -> {
 			automaticCheckRunning = false;
+			DownloadedUpdate.Entry downloaded = DownloadedUpdate.read(activity);
+			// The durable ready prompt owns this version's reminder schedule. Do not bypass Later.
+			if (downloaded != null && result != null && (result.versionCode == downloaded.code
+					|| result.versionCode <= 0 && downloaded.version.equals(result.versionName))) return;
 			if (!activity.isFinishing() && !activity.isDestroyed() &&
 					UpdateChecker.shouldShowAutomatically(result)) {
 				showResult(activity, result, false);

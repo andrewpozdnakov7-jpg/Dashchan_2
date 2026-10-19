@@ -15,25 +15,20 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 
-/** Private session authority. No disk authorization, PID identity, or disk I/O on the input path. */
+/** Private RAM session authority. Durable receipts are verified by SecurityStore, never on the input path. */
 public final class SecuritySessionProvider extends ContentProvider {
 	private static final IBinder CLIENT = new Binder();
 	private final HashSet<String> unlocked = new HashSet<>();
+	private final HashSet<String> restoreBlocked = new HashSet<>();
 	private final Map<String, HashSet<IBinder>> foreground = new HashMap<>();
 	private final Map<IBinder, IBinder.DeathRecipient> clients = new HashMap<>();
 	private final Map<String, Long> generations = new HashMap<>();
-	private static final class Remembered {
-		final IBinder owner;
-		final ReauthenticationPolicy.Grant grant;
-		Remembered(IBinder owner, ReauthenticationPolicy.Grant grant) { this.owner = owner; this.grant = grant; }
-		boolean valid(long now) { return owner.isBinderAlive() && grant.valid(now); }
-	}
-	private final Map<String, Remembered> remembered = new HashMap<>();
+	private final Map<String, IBinder> authenticationOwners = new HashMap<>();
 	private final long initialGeneration = new java.security.SecureRandom().nextLong() & 0x3fff_ffff_ffff_ffffL;
 	@Override public boolean onCreate() { return true; }
 	private long generation(String key) { return generations.getOrDefault(key, initialGeneration); }
 	private void revoke(String key) {
-		remembered.remove(key);
+		authenticationOwners.remove(key);
 		suspend(key);
 	}
 	private void suspend(String key) {
@@ -48,8 +43,7 @@ public final class SecuritySessionProvider extends ContentProvider {
 				clients.remove(client);
 				for (Map.Entry<String, HashSet<IBinder>> entry : foreground.entrySet()) {
 					entry.getValue().remove(client);
-					Remembered auth = remembered.get(entry.getKey());
-					if (entry.getValue().isEmpty() || auth != null && auth.owner == client) revoke(entry.getKey());
+					if (entry.getValue().isEmpty() || authenticationOwners.get(entry.getKey()) == client) revoke(entry.getKey());
 				}
 			}
 		};
@@ -61,33 +55,31 @@ public final class SecuritySessionProvider extends ContentProvider {
 		HashSet<IBinder> active = foreground.get(key);
 		if (active == null) { active = new HashSet<>(); foreground.put(key, active); }
 		boolean lostClient = active.removeIf(client -> !client.isBinderAlive());
-		Remembered auth = remembered.get(key);
-		if (auth != null && !auth.owner.isBinderAlive() || active.isEmpty() && lostClient) revoke(key);
+		IBinder owner = authenticationOwners.get(key);
+		if (owner != null && !owner.isBinderAlive() || active.isEmpty() && lostClient) revoke(key);
 		else if (active.isEmpty() && unlocked.contains(key)) suspend(key);
 		IBinder caller = extras != null ? extras.getBinder("client") : null;
-		if ("lock".equals(method)) revoke(key);
+		if ("lock".equals(method)) { restoreBlocked.add(key); revoke(key); }
 		else if ("suspend".equals(method)) suspend(key);
 		else if ("active".equals(method)) {
 			if (registerClient(caller)) active.add(caller);
 		} else if ("inactive".equals(method)) {
 			active.remove(caller);
 			if (active.isEmpty() && unlocked.contains(key)) suspend(key);
-		} else if ("unlock".equals(method) || "authenticated".equals(method) || "resume".equals(method)) {
+		} else if ("unlock".equals(method) || "authenticated".equals(method) || "restore".equals(method)) {
 			if (caller != null && active.contains(caller) && caller.isBinderAlive()
 					&& extras.getLong("generation", -1) == generation(key)) {
 				long now = android.os.SystemClock.elapsedRealtime();
-				if ("authenticated".equals(method)) {
+				boolean restoring = "restore".equals(method);
+				boolean allowed = true;
+				if ("authenticated".equals(method) || restoring) {
 					ReauthenticationPolicy.Grant grant = new ReauthenticationPolicy.Grant(
 							extras.getLong("authenticated_at", now), extras.getInt("minutes", 0));
-					if (grant.valid(now)) remembered.put(key, new Remembered(caller, grant)); else remembered.remove(key);
+					if (restoring) allowed = !restoreBlocked.contains(key) && grant.valid(now);
+					else restoreBlocked.remove(key); // Only fresh proof can undo an explicit revocation.
 				}
-				boolean allowed = !"resume".equals(method);
-				if (!allowed) {
-					Remembered grant = remembered.get(key);
-					allowed = grant != null && grant.valid(now);
-					if (!allowed) remembered.remove(key);
-				}
-				// Resume does not refresh authenticatedAt: reopening cannot extend the interval.
+				if (allowed) authenticationOwners.put(key, caller);
+				// Restoring a verified receipt never refreshes authenticatedAt.
 				if (allowed && unlocked.add(key)) AppSecurity.notifyChanged(getContext());
 			}
 		} else if (!"query".equals(method)) throw new IllegalArgumentException("Unknown session operation");
@@ -132,8 +124,8 @@ public final class SecuritySessionProvider extends ContentProvider {
 			if (state == null || !state.getBoolean("unlocked") || state.getLong("generation", -1) != generation) throw new IOException("Session unavailable");
 		} catch (RuntimeException e) { throw new IOException("Session unavailable"); }
 	}
-	static void resume(Context context, long generation) throws IOException {
-		try { if (request(context, "resume", generation) == null) throw new IOException("Session unavailable"); }
+	static void restore(Context context, long generation, int minutes, long authenticatedAt) throws IOException {
+		try { if (request(context, "restore", generation, minutes, authenticatedAt) == null) throw new IOException("Session unavailable"); }
 		catch (RuntimeException e) { throw new IOException("Session unavailable"); }
 	}
 	static void foreground(Context context, boolean active) throws IOException {

@@ -31,4 +31,25 @@ public class ReauthenticationPolicyTest {
 		assertFalse(new ReauthenticationPolicy.Grant(1_000, 0).valid(1_000));
 		assertFalse(new ReauthenticationPolicy.Grant(1_000, 300).valid(Long.MAX_VALUE));
 	}
+	@Test public void savedIntervalSurvivesProcessLossButNeverBootChangesOrUnknownBoot() {
+		long at = 123_000;
+		assertTrue(ReauthenticationPolicy.canRestore(at, 5, 8, 8, at + 4 * 60_000));
+		assertFalse(ReauthenticationPolicy.canRestore(at, 5, 8, 8, at + 5 * 60_000));
+		// A reboot is rejected even if the new uptime happens to look within the old interval.
+		assertFalse(ReauthenticationPolicy.canRestore(at, 5, 8, 9, at + 1));
+		assertFalse(ReauthenticationPolicy.canRestore(at, 5, -1, -1, at + 1));
+		assertFalse(ReauthenticationPolicy.canRestore(at, 5, 8, -1, at + 1));
+		assertFalse(ReauthenticationPolicy.canRestore(at, 5, 8, 8, at - 1));
+	}
+	@Test public void restorationChecksDoNotMoveTheDeadlineForAnySupportedInterval() {
+		for (int minutes : ReauthenticationPolicy.choices()) {
+			long at = 5_000, end = at + minutes * 60_000L;
+			if (minutes > 0) {
+				assertTrue(ReauthenticationPolicy.canRestore(at, minutes, 3, 3, at));
+				assertTrue(ReauthenticationPolicy.canRestore(at, minutes, 3, 3, end - 1));
+			}
+			assertFalse(ReauthenticationPolicy.canRestore(at, minutes, 3, 3, end));
+			assertFalse(ReauthenticationPolicy.canRestore(at, minutes, 3, 3, Long.MAX_VALUE));
+		}
+	}
 }

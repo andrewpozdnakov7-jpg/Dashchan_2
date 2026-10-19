@@ -18,7 +18,6 @@ import androidx.annotation.NonNull;
 import androidx.core.view.OneShotPreDrawListener;
 import androidx.recyclerview.widget.RecyclerView;
 import com.mishiranu.dashchan.R;
-import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.media.PlayerButtonsLayout;
 import com.mishiranu.dashchan.media.PlayerButtonsLayout.Button;
 import com.mishiranu.dashchan.util.InterfaceMotion;
@@ -48,7 +47,7 @@ final class PlayerButtonsMotion {
 		final long token = ++generation;
 		final Button source;
 		final ViewGroup root;
-		final PlayerButtonsLayout before = Preferences.getVideoButtonsLayout();
+		final PlayerButtonsLayout before = editor.readLayout();
 		final EnumMap<Button, Bitmap> snapshots = new EnumMap<>(Button.class);
 		final EnumMap<Button, RectF> old = new EnumMap<>(Button.class), end = new EnumMap<>(Button.class);
 		final RectF[] oldPanels = new RectF[2], endPanels = new RectF[2];
@@ -151,12 +150,12 @@ final class PlayerButtonsMotion {
 			case DragEvent.ACTION_DROP:
 				if (!s.nativeActive || s.ended || s.committed != null) return false;
 				location(s, receiver, event.getX(), event.getY());
-				PlayerButtonsLayout now = Preferences.getVideoButtonsLayout();
+				PlayerButtonsLayout now = editor.readLayout();
 				if (!now.encode().equals(s.before.encode())) return false;
 				PlayerButtonsLayout next = dropped(now, s.source, s.target);
 				if (next == now) return false;
 				// The only touch-drag write: validated DROP, independent of animator success.
-				Preferences.setVideoButtonsLayout(next);
+				editor.saveLayout(next);
 				s.committed = next;
 				return true;
 			case DragEvent.ACTION_DRAG_ENDED:
@@ -230,7 +229,7 @@ final class PlayerButtonsMotion {
 	}
 	private void afterNative(Session s) {
 		String expected = (s.committed != null ? s.committed : s.before).encode();
-		if (!expected.equals(Preferences.getVideoButtonsLayout().encode()) || !editor.isAttachedToWindow()) {
+		if (!expected.equals(editor.readLayout().encode()) || !editor.isAttachedToWindow()) {
 			cleanup(false); return;
 		}
 		// Scrolling during drag changes old screen bounds, not the identity/order of the buttons.
@@ -248,7 +247,7 @@ final class PlayerButtonsMotion {
 	void command(PlayerButtonsLayout next, Button focus) {
 		if (isDragging()) return;
 		cleanup(false);
-		PlayerButtonsLayout now = Preferences.getVideoButtonsLayout();
+		PlayerButtonsLayout now = editor.readLayout();
 		if (next.encode().equals(now.encode())) return;
 		ViewGroup root = editor.overlayRoot();
 		Session s = animate() && root != null && editor.isLaidOut() ? capture(null, root) : null;
@@ -261,7 +260,7 @@ final class PlayerButtonsMotion {
 			root.getOverlay().add(s.overlay); root.addOnLayoutChangeListener(s.rootLayout);
 			if (s.recycler != null) s.recycler.addOnScrollListener(s.scrollListener);
 		}
-		Preferences.setVideoButtonsLayout(next);
+		editor.saveLayout(next);
 		if (s == null) { editor.reload(); return; }
 		prepareLayout(s);
 	}
@@ -276,7 +275,7 @@ final class PlayerButtonsMotion {
 		s.preDraw = OneShotPreDrawListener.add(editor, () -> {
 			s.preDraw = null;
 			if (!current(s)) return;
-			if (!s.committed.encode().equals(Preferences.getVideoButtonsLayout().encode())
+			if (!s.committed.encode().equals(editor.readLayout().encode())
 					|| !editor.isAttachedToWindow()) { cleanup(false); return; }
 			captureBounds(s.end, s.endPanels, s.root);
 			captureFurniture(s, true);
@@ -323,8 +322,8 @@ final class PlayerButtonsMotion {
 			if (s.restoreKeyboard) focus.requestFocus();
 			if (s.restoreAccessibility) focus.performAccessibilityAction(
 					AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS, null);
-			if (s.committed != null) focus.setStateDescription(editor.getResources()
-					.getString(R.string.player_buttons_saved));
+			if (s.committed != null) focus.setStateDescription(editor.getResources().getString(
+					s.committed.isEnabled(s.focus) ? R.string.player_buttons_shown : R.string.player_buttons_hidden));
 		}
 		release(s);
 	}
@@ -343,8 +342,8 @@ final class PlayerButtonsMotion {
 	private void captureBounds(EnumMap<Button, RectF> map, RectF[] panels, ViewGroup root) {
 		for (Button button : Button.values()) map.put(button, bounds(editor.board.buttons.get(button), root));
 		RectF board = bounds(editor.board, root);
-		panels[0] = new RectF(editor.board.leftPanel); panels[0].offset(board.left, board.top);
-		panels[1] = new RectF(editor.board.rightPanel); panels[1].offset(board.left, board.top);
+		panels[0] = new RectF(editor.board.leftSurface); panels[0].offset(board.left, board.top);
+		panels[1] = new RectF(editor.board.rightSurface); panels[1].offset(board.left, board.top);
 	}
 	private void captureFurniture(Session s, boolean end) {
 		Map<View, RectF> map = end ? s.endFurniture : s.oldFurniture;

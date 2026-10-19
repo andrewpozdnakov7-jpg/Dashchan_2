@@ -6,7 +6,9 @@ import android.content.res.Configuration;
 import android.graphics.Color;
 import android.graphics.RectF;
 import android.view.View;
+import android.view.accessibility.AccessibilityNodeInfo;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
 import androidx.core.graphics.ColorUtils;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
@@ -15,6 +17,8 @@ import com.mishiranu.dashchan.media.PlayerButtonsLayout;
 import com.mishiranu.dashchan.media.PlayerButtonsLayout.Button;
 import com.mishiranu.dashchan.widget.ThemeEngine;
 import java.util.EnumMap;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -181,5 +185,120 @@ public class PlayerButtonsEditorViewTest {
 			int visible = PlayerButtonsColors.contrast(background, background, 4.5);
 			assertTrue(ColorUtils.calculateContrast(visible, background) >= 4.5);
 		}
+	}
+	@Test public void localToolbarPaintDoesNotMutateTheOriginalBackgroundAndRestoresOnEveryVisit() {
+		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+			Context context = context();
+			FrameLayout surround = new FrameLayout(context), toolbar = new FrameLayout(context);
+			surround.addView(toolbar);
+			android.graphics.drawable.ColorDrawable barBackground = new android.graphics.drawable.ColorDrawable(0xff5284b7);
+			android.graphics.drawable.ColorDrawable surroundBackground = new android.graphics.drawable.ColorDrawable(0xff4975a2);
+			toolbar.setBackground(barBackground); surround.setBackground(surroundBackground);
+			toolbar.setElevation(3); surround.setElevation(7);
+			android.widget.TextView title = new android.widget.TextView(context); title.setTextColor(Color.WHITE);
+			ImageView navigation = new ImageView(context);
+			android.content.res.ColorStateList navigationTint = android.content.res.ColorStateList.valueOf(Color.WHITE);
+			navigation.setImageTintList(navigationTint); toolbar.addView(title); toolbar.addView(navigation);
+			for (int visit = 0; visit < 2; visit++) {
+				PlayerButtonsToolbarAppearance appearance = new PlayerButtonsToolbarAppearance(toolbar, new PlayerButtonsColors(context));
+				assertEquals(0xff5284b7, barBackground.getColor());
+				assertEquals(0xff4975a2, surroundBackground.getColor());
+				assertNotSame(barBackground, toolbar.getBackground());
+				assertNotSame(surroundBackground, surround.getBackground());
+				appearance.restore();
+				assertSame(barBackground, toolbar.getBackground()); assertSame(surroundBackground, surround.getBackground());
+				assertEquals(Color.WHITE, title.getCurrentTextColor()); assertSame(navigationTint, navigation.getImageTintList());
+				assertEquals(3f, toolbar.getElevation(), 0f); assertEquals(7f, surround.getElevation(), 0f);
+			}
+		});
+	}
+	@Test public void roundedSurfaceAlphaNeverReachesContrastCalculation() {
+		for (int background : new int[] {Color.WHITE, Color.BLACK, 0xffdadfe6, 0xffe1e6f0}) {
+			for (float ratio : new float[] {0.075f, 0.055f, 0.15f, 0.42f, 0.12f}) {
+				int surface = PlayerButtonsColors.opaqueBlend(background, 0xff32679f, ratio);
+				assertEquals(255, Color.alpha(surface));
+				int ink = PlayerButtonsColors.contrast(background, surface, 4.5);
+				assertTrue(ColorUtils.calculateContrast(ink, surface) >= 4.5);
+			}
+		}
+		// Exact background reported in the crash, including the erroneous FE alpha.
+		int ink = PlayerButtonsColors.contrast(Color.GRAY, 0xfedadfe6, 4.5);
+		assertTrue(ColorUtils.calculateContrast(ink, 0xffdadfe6) >= 4.5);
+	}
+	@Test public void semanticSurfacesStayOpaqueButRipplePolicyIsUnchanged() {
+		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+			PlayerButtonsColors colors = new PlayerButtonsColors(context());
+			for (int surface : new int[] {colors.background, colors.card, colors.panel, colors.cell, colors.active, colors.divider}) {
+				assertEquals(255, Color.alpha(surface));
+			}
+		});
+	}
+	@Test public void tapTogglesWithoutMovingDisablingOrReplacingTheEditorButton() {
+		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+			AtomicReference<PlayerButtonsLayout> saved = new AtomicReference<>(PlayerButtonsLayout.defaults());
+			AtomicInteger writes = new AtomicInteger();
+			PlayerButtonsEditorView view = new PlayerButtonsEditorView(context(), () -> null, () -> {}, saved::get,
+					layout -> { saved.set(layout); writes.incrementAndGet(); });
+			measure(view, 400);
+			View pip = view.board.buttons.get(Button.PIP);
+			RectF before = new RectF(pip.getLeft(), pip.getTop(), pip.getRight(), pip.getBottom());
+			assertTrue(pip.performClick()); measure(view, 400);
+			assertFalse(saved.get().isEnabled(Button.PIP)); assertFalse(pip.isSelected());
+			assertTrue(pip.isEnabled()); assertTrue(pip.isClickable()); assertTrue(pip.isLongClickable());
+			assertSame(pip, view.board.buttons.get(Button.PIP));
+			assertEquals(before, new RectF(pip.getLeft(), pip.getTop(), pip.getRight(), pip.getBottom()));
+			ImageView icon = (ImageView) ((FrameLayout) pip).getChildAt(0);
+			assertEquals(view.colors.disabled, icon.getImageTintList().getDefaultColor());
+			AccessibilityNodeInfo info = pip.createAccessibilityNodeInfo();
+			assertTrue(info.isCheckable()); assertEquals("android.widget.ToggleButton", info.getClassName().toString());
+			assertEquals(pip.getStateDescription().toString(), info.getStateDescription().toString());
+			assertTrue(pip.performClick()); assertTrue(saved.get().isEnabled(Button.PIP));
+			assertEquals(2, writes.get()); assertEquals(PlayerButtonsLayout.defaults().encode(), saved.get().encode());
+			assertEquals(view.colors.ink, icon.getImageTintList().getDefaultColor());
+		});
+	}
+	@Test public void consumedLongPressDoesNotToggleEvenWhenDraggingCannotStart() {
+		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+			AtomicReference<PlayerButtonsLayout> saved = new AtomicReference<>(PlayerButtonsLayout.defaults());
+			AtomicInteger writes = new AtomicInteger();
+			PlayerButtonsEditorView view = new PlayerButtonsEditorView(context(), () -> null, () -> {}, saved::get,
+					layout -> { saved.set(layout); writes.incrementAndGet(); });
+			measure(view, 400);
+			assertTrue(view.board.buttons.get(Button.SAVE).performLongClick());
+			assertEquals(0, writes.get()); assertTrue(saved.get().isEnabled(Button.SAVE));
+		});
+	}
+	@Test public void allHiddenStayEditableAndResetRestoresAllSixButtons() {
+		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+			AtomicReference<PlayerButtonsLayout> saved = new AtomicReference<>(PlayerButtonsLayout.defaults());
+			PlayerButtonsEditorView view = new PlayerButtonsEditorView(context(), () -> null, () -> {}, saved::get, saved::set);
+			measure(view, 400);
+			EnumMap<Button, View> original = new EnumMap<>(view.board.buttons);
+			for (Button button : Button.values()) view.board.buttons.get(button).performClick();
+			measure(view, 400);
+			assertTrue(saved.get().getVisibleLeft().isEmpty()); assertTrue(saved.get().getVisibleRight().isEmpty());
+			for (Button button : Button.values()) {
+				View cell = view.board.buttons.get(button);
+				assertSame(original.get(button), cell); assertEquals(View.VISIBLE, cell.getVisibility());
+				assertTrue(cell.isEnabled()); assertFalse(cell.isSelected());
+			}
+			view.applyCommand(PlayerButtonsLayout.defaults(), null);
+			assertEquals(PlayerButtonsLayout.defaults().encode(), saved.get().encode());
+			for (Button button : Button.values()) assertTrue(view.board.buttons.get(button).isSelected());
+		});
+	}
+	@Test public void hiddenButtonsRemainDragTargetsAndKeepStateAfterMoving() {
+		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+			AtomicReference<PlayerButtonsLayout> saved = new AtomicReference<>(PlayerButtonsLayout.defaults().toggle(Button.SAVE));
+			PlayerButtonsEditorView view = new PlayerButtonsEditorView(context(), () -> null, () -> {}, saved::get, saved::set);
+			measure(view, 400);
+			View hidden = view.board.buttons.get(Button.SAVE);
+			assertEquals(Button.SAVE, view.board.target(hidden.getLeft() + 1, hidden.getTop() + 1).button);
+			view.applyCommand(PlayerButtonsMotion.dropped(saved.get(), Button.SAVE,
+					new PlayerButtonsMotion.Target(Button.MUTE, false)), Button.SAVE);
+			assertTrue(saved.get().getRight().contains(Button.SAVE)); assertFalse(saved.get().isEnabled(Button.SAVE));
+			assertSame(hidden, view.board.buttons.get(Button.SAVE));
+			assertTrue(ColorUtils.calculateContrast(view.colors.disabled, view.colors.panel) >= 3);
+		});
 	}
 }

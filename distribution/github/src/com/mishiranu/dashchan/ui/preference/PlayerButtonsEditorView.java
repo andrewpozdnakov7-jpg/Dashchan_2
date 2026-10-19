@@ -21,6 +21,7 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import androidx.core.graphics.ColorUtils;
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat;
 import androidx.recyclerview.widget.RecyclerView;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
@@ -30,6 +31,7 @@ import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.function.Supplier;
+import java.util.function.Consumer;
 
 /** Stable, local preview; none of these buttons execute player actions. */
 final class PlayerButtonsEditorView extends FrameLayout {
@@ -45,11 +47,26 @@ final class PlayerButtonsEditorView extends FrameLayout {
 	private final TextView columnsValue, effectiveNote;
 	private final View columnsRow, reset;
 	private final Supplier<ViewGroup> root;
+	private final Supplier<PlayerButtonsLayout> read;
+	private final Consumer<PlayerButtonsLayout> write;
 	private boolean changingGeometry;
 
 	PlayerButtonsEditorView(Context context, Supplier<ViewGroup> root, Runnable chooseColumns) {
+		this(context, root, chooseColumns, Preferences::getVideoButtonsLayout, Preferences::setVideoButtonsLayout);
+	}
+	PlayerButtonsEditorView(Context context, Supplier<ViewGroup> root, Runnable chooseColumns, Runnable showHelp) {
+		this(context, root, chooseColumns, Preferences::getVideoButtonsLayout, Preferences::setVideoButtonsLayout, showHelp);
+	}
+	/** Store seam allows behavioral UI fixtures without editing the installed user's preferences. */
+	PlayerButtonsEditorView(Context context, Supplier<ViewGroup> root, Runnable chooseColumns,
+			Supplier<PlayerButtonsLayout> read, Consumer<PlayerButtonsLayout> write) {
+		this(context, root, chooseColumns, read, write, () -> {});
+	}
+	private PlayerButtonsEditorView(Context context, Supplier<ViewGroup> root, Runnable chooseColumns,
+			Supplier<PlayerButtonsLayout> read, Consumer<PlayerButtonsLayout> write, Runnable showHelp) {
 		super(context);
 		this.root = root;
+		this.read = read; this.write = write;
 		colors = new PlayerButtonsColors(context);
 		setBackgroundColor(colors.background);
 		setForceDarkAllowed(false);
@@ -61,49 +78,65 @@ final class PlayerButtonsEditorView extends FrameLayout {
 		content.setClipToPadding(false);
 		content.setPadding(dp(16), dp(16), dp(16), dp(16));
 		addView(content, new FrameLayout.LayoutParams(-1, -2, Gravity.TOP | Gravity.CENTER_HORIZONTAL));
-		addText(content, R.string.player_buttons_instruction, 16, colors.ink, true, 0);
-		addText(content, R.string.player_buttons_rules, 14, colors.secondary, false, 8);
+		TextView hint = text(14, colors.secondary, false);
+		hint.setText(R.string.player_buttons_instruction); hint.setLineHeight(sp(20));
+		add(content, hint, 0);
+		LinearLayout section = new LinearLayout(context);
+		section.setGravity(Gravity.CENTER_VERTICAL); section.setMinimumHeight(dp(48));
+		TextView sectionTitle = text(18, colors.ink, true); sectionTitle.setText(R.string.player_buttons_preview_title);
+		section.addView(sectionTitle, new LinearLayout.LayoutParams(0, -2, 1));
+		ImageView help = new ImageView(context);
+		help.setImageResource(R.drawable.player_buttons_info); help.setImageTintList(ColorStateList.valueOf(colors.primary));
+		help.setPadding(dp(12), dp(12), dp(12), dp(12));
+		help.setContentDescription(getResources().getString(R.string.player_buttons_help_title));
+		help.setFocusable(true); help.setBackground(colors.ripple(colors.background, dp(24)));
+		help.setOnClickListener(v -> { if (!isDragging()) { finishVisuals(); showHelp.run(); } });
+		section.addView(help, new LinearLayout.LayoutParams(dp(48), dp(48)));
+		add(content, section, 20);
 		LinearLayout card = new LinearLayout(context);
 		previewCard = card;
 		card.setOrientation(LinearLayout.VERTICAL);
 		card.setClipChildren(false);
 		card.setClipToPadding(false);
 		// Reclaim horizontal space for four full-size cells next to the right panel.
-		card.setPadding(dp(8), dp(16), dp(8), dp(16));
-		add(content, card, 24);
-		TextView previewTitle = text(18, colors.ink, true);
-		previewTitle.setText(R.string.player_buttons_preview_title);
-		previewTitle.setPadding(dp(8), 0, dp(8), 0);
-		add(card, previewTitle, 0);
+		card.setPadding(dp(8), dp(8), dp(8), dp(8));
+		add(content, card, 8);
 		board = new Board(context);
-		add(card, board, 16);
+		add(card, board, 0);
 		furniture.add(board.leftLabel);
 		furniture.add(board.rightLabel);
 		status = new ReservedStatus(context);
-		status.setPadding(dp(8), 0, dp(8), 0);
-		add(card, status, 12);
+		add(content, status, 8);
 		furniture.add(status);
+		effectiveNote = text(12, colors.secondary, false);
+		effectiveNote.setLineHeight(sp(16));
+		add(content, effectiveNote, 8);
+		furniture.add(effectiveNote);
 		motion = new PlayerButtonsMotion(this);
 		for (Button button : Button.values()) installButton(board.buttons.get(button), button);
 
 		LinearLayout row = new LinearLayout(context);
 		row.setGravity(Gravity.CENTER_VERTICAL);
-		row.setPadding(dp(16), dp(16), dp(16), dp(16));
+		row.setPadding(0, dp(12), 0, dp(12));
 		row.setMinimumHeight(dp(72));
-		row.setBackground(colors.ripple(colors.card, dp(20)));
+		row.setBackground(colors.ripple(colors.background, dp(12)));
 		LinearLayout columnLabels = new LinearLayout(context);
 		columnLabels.setOrientation(LinearLayout.VERTICAL);
 		columnLabels.setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
 		addText(columnLabels, R.string.player_buttons_per_row, 16, colors.ink, true, 0);
-		addText(columnLabels, R.string.player_buttons_left_label, 12, colors.secondary, false, 4);
+		addText(columnLabels, R.string.player_buttons_left_label, 14, colors.secondary, false, 4);
 		row.addView(columnLabels, new LinearLayout.LayoutParams(0, -2, 1));
-		columnsValue = text(18, colors.ink, true);
-		columnsValue.setPadding(dp(12), 0, dp(12), 0);
+		columnsValue = text(18, colors.primary, true);
+		columnsValue.setPadding(dp(12), dp(4), dp(12), dp(4));
+		columnsValue.setMinWidth(dp(40)); columnsValue.setMinHeight(dp(32));
+		columnsValue.setGravity(Gravity.CENTER); columnsValue.setBackground(PlayerButtonsColors.shape(colors.active, dp(16)));
 		columnsValue.setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
 		row.addView(columnsValue, new LinearLayout.LayoutParams(-2, -2));
-		TextView chevron = text(24, colors.secondary, false);
-		chevron.setText("›"); chevron.setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
-		row.addView(chevron, new LinearLayout.LayoutParams(-2, -2));
+		ImageView chevron = new ImageView(context);
+		chevron.setImageResource(R.drawable.player_buttons_chevron); chevron.setImageTintList(ColorStateList.valueOf(colors.secondary));
+		chevron.setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
+		LinearLayout.LayoutParams chevronParams = new LinearLayout.LayoutParams(dp(24), dp(24)); chevronParams.setMarginStart(dp(8));
+		row.addView(chevron, chevronParams);
 		row.setFocusable(true);
 		row.setOnClickListener(v -> { if (!isDragging()) { finishVisuals(); chooseColumns.run(); } });
 		row.setAccessibilityDelegate(new View.AccessibilityDelegate() {
@@ -112,14 +145,17 @@ final class PlayerButtonsEditorView extends FrameLayout {
 				info.setClassName("android.widget.Button");
 			}
 		});
-		add(content, row, 16);
+		add(content, row, 24);
 		furniture.add(row);
 		columnsRow = row;
-		effectiveNote = text(12, colors.secondary, false);
-		add(content, effectiveNote, 8);
-		furniture.add(effectiveNote);
+		View divider = new View(context); divider.setBackgroundColor(colors.divider);
+		content.addView(divider, new LinearLayout.LayoutParams(-1, dp(1))); furniture.add(divider);
 		TextView saved = text(12, colors.secondary, false); saved.setText(R.string.player_buttons_saved);
-		add(content, saved, 16); furniture.add(saved);
+		saved.setMinHeight(dp(48)); saved.setGravity(Gravity.CENTER_VERTICAL);
+		android.graphics.drawable.Drawable savedIcon = context.getDrawable(R.drawable.ic_editor_done);
+		if (savedIcon != null) { savedIcon.setBounds(0, 0, dp(18), dp(18)); saved.setCompoundDrawablesRelative(savedIcon, null, null, null); }
+		saved.setCompoundDrawableTintList(ColorStateList.valueOf(colors.primary)); saved.setCompoundDrawablePadding(dp(12));
+		add(content, saved, 0); furniture.add(saved);
 		TextView resetText = text(14, PlayerButtonsColors.contrast(colors.primary, colors.background, 4.5), true);
 		resetText.setText(R.string.player_buttons_reset);
 		android.graphics.drawable.Drawable resetIcon = context.getDrawable(android.R.drawable.ic_menu_revert);
@@ -128,18 +164,20 @@ final class PlayerButtonsEditorView extends FrameLayout {
 			resetText.setCompoundDrawablesRelative(resetIcon, null, null, null);
 		}
 		resetText.setCompoundDrawableTintList(ColorStateList.valueOf(resetText.getCurrentTextColor()));
-		resetText.setCompoundDrawablePadding(dp(8));
+		resetText.setCompoundDrawablePadding(dp(12));
 		resetText.setGravity(Gravity.CENTER_VERTICAL);
-		resetText.setPadding(dp(8), dp(8), dp(8), dp(8));
+		resetText.setPadding(0, dp(8), 0, dp(8));
 		resetText.setMinHeight(dp(48));
 		resetText.setBackground(colors.ripple(colors.background, dp(24)));
 		resetText.setOnClickListener(v -> { if (!isDragging()) applyCommand(PlayerButtonsLayout.defaults(), null); });
-		add(content, resetText, 4);
+		add(content, resetText, 0);
 		furniture.add(resetText);
 		reset = resetText;
 		reload();
 	}
 	int dp(float value) { return Math.round(value * getResources().getDisplayMetrics().density); }
+	private int sp(float value) { return Math.round(android.util.TypedValue.applyDimension(
+			android.util.TypedValue.COMPLEX_UNIT_SP, value, getResources().getDisplayMetrics())); }
 	ViewGroup overlayRoot() { return root.get(); }
 	RecyclerView recycler() {
 		for (android.view.ViewParent p = getParent(); p != null; p = p.getParent()) {
@@ -148,24 +186,50 @@ final class PlayerButtonsEditorView extends FrameLayout {
 		return null;
 	}
 	boolean isDragging() { return motion.isDragging(); }
+	PlayerButtonsLayout readLayout() { return read.get(); }
+	void saveLayout(PlayerButtonsLayout layout) { write.accept(layout); }
 	void finishVisuals() { motion.cleanup(true); }
 	void reload() {
-		board.model = Preferences.getVideoButtonsLayout();
+		board.model = readLayout();
 		columnsValue.setText(String.valueOf(board.model.columns));
 		columnsRow.setContentDescription(getResources().getString(R.string.player_buttons_per_row)
 				+ ", " + board.model.columns);
 		board.rightSubtitle.setText(getResources().getString(R.string.player_buttons_count, board.model.getRight().size()));
 		board.rightLabel.setContentDescription(board.model.getRight().isEmpty()
 				? getResources().getString(R.string.player_buttons_empty_right) : null);
+		refreshButtonStates();
 		board.requestLayout();
 		board.invalidate();
+	}
+	void refreshButtonStates() {
+		for (Button button : Button.values()) {
+			View cell = board.buttons.get(button);
+			boolean enabled = board.model.isEnabled(button);
+			int color = enabled ? colors.ink : colors.disabled;
+			View icon = ((FrameLayout) cell).getChildAt(0);
+			if (icon instanceof TextView) ((TextView) icon).setTextColor(color);
+			else ((ImageView) icon).setImageTintList(ColorStateList.valueOf(color));
+			// Hidden in the player, not disabled in this editor: it must remain clickable and draggable.
+			cell.setSelected(enabled);
+			cell.setStateDescription(getResources().getString(enabled ? R.string.player_buttons_shown : R.string.player_buttons_hidden));
+		}
+	}
+	private void toggleButton(Button button) {
+		if (isDragging()) return;
+		finishVisuals();
+		saveLayout(readLayout().toggle(button));
+		reload();
 	}
 	void applyCommand(PlayerButtonsLayout next, Button focus) {
 		if (isDragging()) return;
 		motion.command(next, focus);
 	}
 	void setDragging(boolean dragging) { columnsRow.setEnabled(!dragging); reset.setEnabled(!dragging); }
-	void normalStatus() { status.setText(R.string.player_buttons_note); }
+	void normalStatus() {
+		String caption = getResources().getString(R.string.player_buttons_note);
+		if (board.model.getLeft().size() > board.effectiveColumns) caption += "\n" + getResources().getString(R.string.player_buttons_order);
+		status.setText(caption);
+	}
 	void sayStatus(String value) { status.setText(value); }
 	String label(Button button) { return getResources().getString(PlayerButtonsFragment.title(button)); }
 	void updateEffective() {
@@ -173,10 +237,13 @@ final class PlayerButtonsEditorView extends FrameLayout {
 		String value = m < n ? getResources().getString(R.string.player_buttons_effective, n, m) : "";
 		if (!value.contentEquals(effectiveNote.getText())) effectiveNote.setText(value);
 		effectiveNote.setVisibility(m < n ? VISIBLE : GONE);
+		if (!isDragging()) normalStatus();
 	}
 	@Override protected void onMeasure(int widthSpec, int heightSpec) {
 		int width = MeasureSpec.getSize(widthSpec);
-		content.getLayoutParams().width = Math.min(width, dp(560));
+		int contentWidth = Math.min(width, dp(560)), padding = width <= dp(380) ? dp(16) : dp(24);
+		content.getLayoutParams().width = contentWidth;
+		content.setPadding(padding, dp(16), padding, dp(16));
 		super.onMeasure(widthSpec, heightSpec);
 	}
 	@Override protected void onSizeChanged(int w, int h, int oldW, int oldH) {
@@ -195,7 +262,7 @@ final class PlayerButtonsEditorView extends FrameLayout {
 					previewCard.getRight() + content.getLeft(), previewCard.getBottom() + content.getTop());
 		}
 		cardPaint.setColor(colors.card);
-		canvas.drawRoundRect(rect, dp(24), dp(24), cardPaint);
+		canvas.drawRoundRect(rect, dp(20), dp(20), cardPaint);
 		super.dispatchDraw(canvas);
 	}
 	@Override public boolean dispatchDragEvent(DragEvent event) {
@@ -228,15 +295,20 @@ final class PlayerButtonsEditorView extends FrameLayout {
 				return false;
 			}
 		});
-		view.setOnLongClickListener(v -> motion.start(button));
+		view.setOnClickListener(v -> toggleButton(button));
+		// Consume a long press even if native dragging cannot start; it must never turn into a toggle.
+		view.setOnLongClickListener(v -> { motion.start(button); return true; });
 		view.setAccessibilityDelegate(new View.AccessibilityDelegate() {
 			final int[] swaps = {R.id.player_buttons_swap_speed, R.id.player_buttons_swap_pip,
 					R.id.player_buttons_swap_tiktok, R.id.player_buttons_swap_save,
 					R.id.player_buttons_swap_mute, R.id.player_buttons_swap_fullscreen};
 			@Override public void onInitializeAccessibilityNodeInfo(View host, AccessibilityNodeInfo info) {
 				super.onInitializeAccessibilityNodeInfo(host, info);
-				info.setClassName("android.widget.Button");
-				PlayerButtonsLayout layout = Preferences.getVideoButtonsLayout();
+				info.setClassName("android.widget.ToggleButton");
+				PlayerButtonsLayout layout = readLayout();
+				info.setCheckable(true);
+				AccessibilityNodeInfoCompat.wrap(info).setChecked(layout.isEnabled(button)
+						? AccessibilityNodeInfoCompat.CHECKED_STATE_TRUE : AccessibilityNodeInfoCompat.CHECKED_STATE_FALSE);
 				boolean right = layout.getRight().contains(button);
 				if (right || layout.getRight().size() < 2) info.addAction(new AccessibilityNodeInfo.AccessibilityAction(
 						R.id.player_buttons_move, getResources().getString(right
@@ -247,7 +319,7 @@ final class PlayerButtonsEditorView extends FrameLayout {
 			}
 			@Override public boolean performAccessibilityAction(View host, int action, Bundle arguments) {
 				if (isAttachedToWindow() && !isDragging()) {
-					PlayerButtonsLayout layout = Preferences.getVideoButtonsLayout();
+					PlayerButtonsLayout layout = readLayout();
 					if (action == R.id.player_buttons_move) {
 						applyCommand(layout.moveToEnd(button, !layout.getRight().contains(button)), button); return true;
 					}
@@ -265,8 +337,9 @@ final class PlayerButtonsEditorView extends FrameLayout {
 		final List<String> variants = new ArrayList<>();
 		int cachedWidth = -1, cachedHeight;
 		ReservedStatus(Context context) {
-			super(context); setTextSize(12); setTextColor(colors.secondary);
+			super(context); setTextSize(12); setTextColor(colors.secondary); setLineHeight(sp(16));
 			variants.add(getResources().getString(R.string.player_buttons_note));
+			variants.add(getResources().getString(R.string.player_buttons_note) + "\n" + getResources().getString(R.string.player_buttons_order));
 			variants.add(getResources().getString(R.string.player_buttons_full));
 			variants.add(getResources().getString(R.string.player_buttons_noop));
 			for (Button a : Button.values()) {
@@ -282,7 +355,8 @@ final class PlayerButtonsEditorView extends FrameLayout {
 			if (cachedWidth != width) {
 				cachedWidth = width; cachedHeight = 0;
 				for (String value : variants) cachedHeight = Math.max(cachedHeight, StaticLayout.Builder.obtain(value, 0,
-						value.length(), getPaint(), width).setIncludePad(getIncludeFontPadding()).build().getHeight());
+						value.length(), getPaint(), width).setIncludePad(getIncludeFontPadding())
+						.setLineSpacing(getLineSpacingExtra(), getLineSpacingMultiplier()).build().getHeight());
 				setMinHeight(cachedHeight + getPaddingTop() + getPaddingBottom());
 			}
 			super.onMeasure(widthSpec, heightSpec);
@@ -293,10 +367,11 @@ final class PlayerButtonsEditorView extends FrameLayout {
 	final class Board extends ViewGroup {
 		final EnumMap<Button, View> buttons = new EnumMap<>(Button.class);
 		final RectF leftZone = new RectF(), rightZone = new RectF(), leftPanel = new RectF(), rightPanel = new RectF();
+		final RectF leftSurface = new RectF(), rightSurface = new RectF();
 		final LinearLayout leftLabel, rightLabel;
 		final TextView rightSubtitle;
 		final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-		PlayerButtonsLayout model = Preferences.getVideoButtonsLayout();
+		PlayerButtonsLayout model = readLayout();
 		int effectiveColumns = 1, cellWidth, cellHeight, labelHeight, leftWidth, rightWidth;
 		boolean stacked, hidePanels;
 		RectF highlight;
@@ -305,18 +380,16 @@ final class PlayerButtonsEditorView extends FrameLayout {
 		Board(Context context) {
 			super(context); setWillNotDraw(false); setClipChildren(false); setLayoutDirection(LAYOUT_DIRECTION_LTR);
 			leftLabel = new LinearLayout(context); leftLabel.setOrientation(LinearLayout.VERTICAL);
-			leftLabel.setPadding(dp(8), 0, dp(8), 0);
+			leftLabel.setPadding(dp(8), dp(8), dp(8), 0);
 			addText(leftLabel, R.string.player_buttons_zone_left, 14, colors.ink, true, 0);
-			addText(leftLabel, R.string.player_buttons_order, 12, colors.secondary, false, 4);
 			rightLabel = new LinearLayout(context); rightLabel.setOrientation(LinearLayout.VERTICAL);
-			rightLabel.setPadding(dp(8), 0, dp(8), 0);
-			addText(rightLabel, R.string.player_buttons_zone_right, 14, colors.ink, true, 0);
-			rightSubtitle = text(12, colors.secondary, false);
-			add(rightLabel, rightSubtitle, 4);
+			rightLabel.setPadding(dp(8), dp(8), dp(8), 0);
+			rightSubtitle = text(14, colors.ink, true);
+			add(rightLabel, rightSubtitle, 0);
 			addView(leftLabel); addView(rightLabel);
 			for (Button button : Button.values()) {
 				FrameLayout cell = new FrameLayout(context);
-				cell.setBackground(colors.ripple(android.graphics.Color.TRANSPARENT, dp(12)));
+				cell.setBackground(colors.ripple(colors.cell, dp(12)));
 				if (button == Button.SPEED) {
 					TextView speed = text(14, colors.ink, true); speed.setText("×1");
 					speed.setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
@@ -374,6 +447,9 @@ final class PlayerButtonsEditorView extends FrameLayout {
 					leftZone.left + Math.min(model.getLeft().size(), effectiveColumns) * cellWidth + dp(8), leftZone.bottom);
 			int rightW = model.getRight().isEmpty() ? dp(56) : model.getRight().size() * cellWidth + dp(8);
 			rightPanel.set(rightZone.right - rightW, rightZone.bottom - rightH, rightZone.right, rightZone.bottom);
+			// Decoration is separate from the unchanged cell layout and free-drop hit zones.
+			leftSurface.set(leftZone.left, 0, leftZone.right, leftZone.bottom);
+			rightSurface.set(rightZone.left, stacked ? leftZone.bottom + dp(16) : 0, rightZone.right, rightZone.bottom);
 			for (View button : buttons.values()) button.measure(MeasureSpec.makeMeasureSpec(cellWidth, MeasureSpec.EXACTLY),
 					MeasureSpec.makeMeasureSpec(cellHeight, MeasureSpec.EXACTLY));
 			setMeasuredDimension(width, (int) Math.ceil(rightZone.bottom));
@@ -397,12 +473,11 @@ final class PlayerButtonsEditorView extends FrameLayout {
 		@Override protected LayoutParams generateDefaultLayoutParams() { return new LayoutParams(-2, -2); }
 		@Override protected void onDraw(Canvas canvas) {
 			super.onDraw(canvas);
-			// Invalid-zone tint is behind the opaque surfaces, never tinting the valid swap buttons.
-			if (highlight != null && invalidHighlight) drawHighlight(canvas);
+			// Highlight the free area above its surface, but below the opaque button children.
 			if (!hidePanels) {
-				drawPanel(canvas, leftPanel, false); drawPanel(canvas, rightPanel, model.getRight().isEmpty());
+				drawPanel(canvas, leftSurface, false); drawPanel(canvas, rightSurface, model.getRight().isEmpty());
 			}
-			if (highlight != null && !invalidHighlight) drawHighlight(canvas);
+			if (highlight != null) drawHighlight(canvas);
 		}
 		void drawPanel(Canvas canvas, RectF rect, boolean empty) {
 			paint.setStyle(Paint.Style.FILL); paint.setColor(colors.panel);

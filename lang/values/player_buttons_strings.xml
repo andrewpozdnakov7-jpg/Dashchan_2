@@ -1,17 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-	<string name="player_buttons_instruction">Touch and hold, then drag</string>
+	<string name="player_buttons_instruction">Tap to hide or show a button.\nTouch and hold to move it.</string>
+	<string name="player_buttons_shown">Shown in the player</string>
+	<string name="player_buttons_hidden">Hidden in the player</string>
 	<string name="player_buttons_rules">Drop on a button to swap.\nDrop on empty space in the other panel to move.</string>
-	<string name="player_buttons_preview_title">Preview</string>
+	<string name="player_buttons_preview_title">Player panels</string>
 	<string name="player_buttons_zone_left">Left</string>
 	<string name="player_buttons_zone_right">Right</string>
-	<string name="player_buttons_order">Rows grow upwards</string>
-	<string name="player_buttons_count">%1$d of 2</string>
-	<string name="player_buttons_note">These buttons do not control playback here. Right-side actions belong to the playback bar.</string>
+	<string name="player_buttons_order">Rows run from bottom to top.</string>
+	<string name="player_buttons_count">Right · %1$d/2</string>
+	<string name="player_buttons_note">Button order matches the player.</string>
 	<string name="player_buttons_left_label">Left panel</string>
 	<string name="player_buttons_effective">Selected: %1$d. This preview fits %2$d per row.</string>
-	<string name="player_buttons_saved">Changes are saved automatically.</string>
-	<string name="player_buttons_reset">Restore defaults</string>
+	<string name="player_buttons_saved">Saved automatically</string>
+	<string name="player_buttons_reset">Reset layout</string>
+	<string name="player_buttons_help_title">How to arrange buttons</string>
+	<string name="player_buttons_help_close">Got it</string>
+	<string name="player_buttons_help_body">Tap a button to hide or show it in the player.\n\nTouch and hold, then drag. Drop on another button to swap them. Drop on empty space in the other panel to move the button to the end of that panel.\n\nThe right panel holds up to two buttons. Rows in the left panel run from bottom to top. Changes are saved automatically.</string>
 	<string name="player_buttons_drag_start">Moving “%1$s”. Choose a destination.</string>
 	<string name="player_buttons_drag_swap">Swap: “%1$s” ↔ “%2$s”.</string>
 	<string name="player_buttons_drag_left">Move “%1$s” to the left.</string>
@@ -20,8 +25,8 @@
 	<string name="player_buttons_noop">Choose another button or the other panel.</string>
 	<string name="player_buttons_empty_right">Right panel, empty, up to 2 buttons</string>
 	<string name="player_buttons_layout">Button layout</string>
-	<string name="player_buttons_layout_summary">Arrange the new player buttons between the left and right panels</string>
-	<string name="player_buttons_help">Hold and drag a button onto another to swap them, or onto an empty panel area to move it there. The right panel holds up to two buttons.</string>
+	<string name="player_buttons_layout_summary">Arrange and show or hide the new player buttons in the left and right panels</string>
+	<string name="player_buttons_help">Tap a button to show or hide it in the player. Hold and drag onto another button to swap, or onto an empty panel area to move. The right panel holds up to two buttons.</string>
 	<string name="player_buttons_preview">Preview — buttons do not perform playback actions</string>
 	<string name="player_buttons_per_row">Buttons per row</string>
 	<string name="player_buttons_per_row_summary">Left panel: up to %1$d per row. Order starts at the bottom left, then continues in rows above. Narrow screens may use fewer columns.</string>

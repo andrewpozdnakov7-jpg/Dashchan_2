@@ -1360,10 +1360,11 @@ public class VideoUnit {
 						instance.galleryInstance.callback.downloadGalleryItem(instance.currentHolder.galleryItem);
 					}
 				});
-				ArrayList<View> leftButtons = obtainModernButtons(buttonsLayout.getLeft());
-				configurationView.addView(PlayerControlsStyle.createButtonGrid(context, leftButtons,
+				ArrayList<View> leftButtons = obtainModernButtons(buttonsLayout.getVisibleLeft());
+				if (!leftButtons.isEmpty()) configurationView.addView(PlayerControlsStyle.createButtonGrid(context, leftButtons,
 						buttonsLayout.columns));
-				ArrayList<View> rightButtons = obtainModernButtons(buttonsLayout.getRight());
+				configurationView.setVisibility(leftButtons.isEmpty() ? View.GONE : View.VISIBLE);
+				ArrayList<View> rightButtons = obtainModernButtons(buttonsLayout.getVisibleRight());
 				View controls = PlayerControlsStyle.createBar(context, playPauseButton, timeGroup,
 						seekBar, rightButtons.toArray(new View[0]));
 				LinearLayout.LayoutParams controlsParams = new LinearLayout.LayoutParams(

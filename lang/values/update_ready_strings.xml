@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<string name="downloaded_update_ready">Slooop %1$s has already been downloaded. Install the update now?</string>
+	<string name="downloaded_update_install">Install</string>
+	<string name="downloaded_update_later">Later</string>
+	<string name="downloaded_update_unavailable">The downloaded update is missing or could not be verified. Download it again from Updates.</string>
+</resources>
