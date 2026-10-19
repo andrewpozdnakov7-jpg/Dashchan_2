@@ -39,6 +39,7 @@ import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.CacheManager;
 import com.mishiranu.dashchan.media.PlaybackSpeed;
+import com.mishiranu.dashchan.media.PlayerButtonsLayout;
 import com.mishiranu.dashchan.content.model.ErrorItem;
 import com.mishiranu.dashchan.content.model.GalleryItem;
 import com.mishiranu.dashchan.graphics.BaseDrawable;
@@ -99,6 +100,7 @@ public class VideoUnit {
 	private int layoutConfiguration = -1;
 	private boolean rightHandControls;
 	private boolean modernControls;
+	private String buttonsLayoutSpec;
 	private LinearLayout configurationView;
 	private TextView timeTextView;
 	private TextView totalTimeTextView;
@@ -1192,19 +1194,23 @@ public class VideoUnit {
 		Context context = instance.galleryInstance.context;
 		float density = ResourceUtils.obtainDensity(context);
 		boolean modern = Preferences.isNewVideoPlayerEnabled();
+		PlayerButtonsLayout buttonsLayout = modern ? Preferences.getVideoButtonsLayout() : null;
+		String buttonsSpec = modern ? buttonsLayout.encode() : null;
 		boolean speedControl = Preferences.isVideoPlaybackSpeedControl();
 		boolean pictureInPictureControl = Preferences.isVideoPictureInPicture() && context.getPackageManager()
 				.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE);
 		boolean rightHandControls = Preferences.isVideoRightHandControls();
 		if (targetLayoutConfiguration != layoutConfiguration || speedControl != playbackSpeedControl
 				|| pictureInPictureControl != this.pictureInPictureControl
-				|| rightHandControls != this.rightHandControls || modern != modernControls) {
+				|| rightHandControls != this.rightHandControls || modern != modernControls
+				|| !java.util.Objects.equals(buttonsSpec, buttonsLayoutSpec)) {
 			boolean firstTimeLayout = layoutConfiguration < 0;
 			layoutConfiguration = targetLayoutConfiguration;
 			playbackSpeedControl = speedControl;
 			this.pictureInPictureControl = pictureInPictureControl;
 			this.rightHandControls = rightHandControls;
 			modernControls = modern;
+			buttonsLayoutSpec = buttonsSpec;
 			controlsTouchInProgress = false;
 			dismissPlaybackSpeedPopupMenu();
 			cancelControlsAutoHide();
@@ -1233,7 +1239,7 @@ public class VideoUnit {
 				configurationView.setClickable(true);
 				LinearLayout.LayoutParams configurationParams = new LinearLayout.LayoutParams(
 						LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-				configurationParams.gravity = rightHandControls ? Gravity.RIGHT : Gravity.LEFT;
+				configurationParams.gravity = Gravity.LEFT;
 				configurationParams.setMargins((int) (8f * density), 0, (int) (8f * density),
 						(int) (4f * density));
 				controlsView.addView(configurationView, configurationParams);
@@ -1354,8 +1360,12 @@ public class VideoUnit {
 						instance.galleryInstance.callback.downloadGalleryItem(instance.currentHolder.galleryItem);
 					}
 				});
+				ArrayList<View> leftButtons = obtainModernButtons(buttonsLayout.getLeft());
+				configurationView.addView(PlayerControlsStyle.createButtonGrid(context, leftButtons,
+						buttonsLayout.columns));
+				ArrayList<View> rightButtons = obtainModernButtons(buttonsLayout.getRight());
 				View controls = PlayerControlsStyle.createBar(context, playPauseButton, timeGroup,
-						seekBar, saveButton, fullscreenButton);
+						seekBar, rightButtons.toArray(new View[0]));
 				LinearLayout.LayoutParams controlsParams = new LinearLayout.LayoutParams(
 						LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
 				controlsParams.setMargins((int) (8f * density), 0, (int) (8f * density),
@@ -1373,25 +1383,8 @@ public class VideoUnit {
 			}
 		}
 		if (player != null) {
-			configurationView.removeAllViews();
-			if (modern) {
-				int actionSize = (int) (32f * density);
-				if (rightHandControls) {
-					configurationView.addView(tikTokModeButton, actionSize, actionSize);
-					configurationView.addView(muteButton, actionSize, actionSize);
-					if (pictureInPictureButton != null) configurationView.addView(pictureInPictureButton,
-							actionSize, actionSize);
-					if (playbackSpeedButton != null) configurationView.addView(playbackSpeedButton,
-							LinearLayout.LayoutParams.WRAP_CONTENT, actionSize);
-				} else {
-					if (playbackSpeedButton != null) configurationView.addView(playbackSpeedButton,
-							LinearLayout.LayoutParams.WRAP_CONTENT, actionSize);
-					if (pictureInPictureButton != null) configurationView.addView(pictureInPictureButton,
-							actionSize, actionSize);
-					configurationView.addView(tikTokModeButton, actionSize, actionSize);
-					configurationView.addView(muteButton, actionSize, actionSize);
-				}
-			} else {
+			if (!modern) {
+				configurationView.removeAllViews();
 				View spacer = new View(context);
 				if (rightHandControls) {
 					configurationView.addView(spacer, new LinearLayout.LayoutParams(0, 1, 1f));
@@ -1427,6 +1420,25 @@ public class VideoUnit {
 		seekBar.post(progressRunnable);
 		updatePlayState();
 		updateSaveButton();
+	}
+
+	private ArrayList<View> obtainModernButtons(java.util.List<PlayerButtonsLayout.Button> order) {
+		ArrayList<View> result = new ArrayList<>();
+		for (PlayerButtonsLayout.Button button : order) {
+			View view;
+			switch (button) {
+				case SPEED: view = playbackSpeedButton; break;
+				case PIP: view = pictureInPictureButton; break;
+				case TIKTOK: view = tikTokModeButton; break;
+				case SAVE: view = saveButton; break;
+				case MUTE: view = muteButton; break;
+				case FULLSCREEN: view = fullscreenButton; break;
+				default: throw new IllegalArgumentException();
+			}
+			// Unavailable features do not leave a phantom cell or change the saved order.
+			if (view != null) result.add(view);
+		}
+		return result;
 	}
 
 	private static void styleTimeText(TextView view, boolean modern) {
@@ -1597,7 +1609,7 @@ public class VideoUnit {
 			int[] playbackSpeeds = Preferences.getVideoPlaybackSpeedPresets();
 			// Freeze the final HUD geometry before anchoring the popup to its capsule.
 			if (modernControls) finishControlsMotion();
-			PlayerSpeedMenu modernMenu = PlayerSpeedMenu.create(v, configurationView, playbackSpeeds, playbackSpeed,
+			PlayerSpeedMenu modernMenu = PlayerSpeedMenu.create(v, controlsView, playbackSpeeds, playbackSpeed,
 					Preferences.isVideoCustomPlaybackSpeed(), index -> selectPlaybackSpeed(index, playbackSpeeds));
 			if (modernMenu != null) {
 				modernMenu.setOnDismissListener(() -> {

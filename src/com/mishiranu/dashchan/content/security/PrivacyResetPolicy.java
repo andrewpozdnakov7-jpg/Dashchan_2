@@ -17,7 +17,7 @@ public final class PrivacyResetPolicy {
 			"hide_threads_with_swipe all_attachments advanced_search " +
 			"posting_editor_height posting_editor_lines posting_hide_name posting_hide_email posting_hide_password posting_hide_subject " +
 			"hide_personal_data post_max_lines highlight_unread_posts huge_captcha cut_thumbnails " +
-			"video_right_hand_controls video_completion video_play_after_scroll video_seek_any_frame video_start_muted " +
+			"video_right_hand_controls video_completion video_play_after_scroll video_seek_any_frame video_start_muted video_buttons_layout_v1 " +
 			"hardware_video_acceleration remember_last_video_position remember_video_playback_speed persist_video_playback_speed " +
 			"video_playback_speed_control video_playback_speed_presets video_custom_playback_speed video_custom_playback_speed_value " +
 			"video_volume_gesture video_volume_gesture_target video_volume_gesture_sensitivity video_local_volume_level " +
@@ -51,7 +51,8 @@ public final class PrivacyResetPolicy {
 	}
 	public static String approvedDownloadTarget(String approved, String current) {
 		// Availability is not consent. Only an explicit settings change may revoke approval;
-		// Preferences.setDownloadUriTree clears it when a different directory is selected.
+		// Preferences.setDownloadUriTree clears it on selection of a different directory;
+		// PreferencesRestore revokes it before staging/applying backed-up settings.
 		// Never substitute a new/current URI for the exact tree the user approved.
 		return approved;
 	}

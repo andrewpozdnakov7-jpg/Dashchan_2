@@ -32,7 +32,7 @@ public class PostingDesignLayoutTest {
 				Context base = InstrumentationRegistry.getInstrumentation().getTargetContext();
 				Configuration config = new Configuration(base.getResources().getConfiguration()); config.fontScale = scale;
 				config.setLocale(java.util.Locale.forLanguageTag("ru"));
-				Context context = ThemeEngine.attach(base.createConfigurationContext(config));
+				Context context = PostingTestContext.create(base.createConfigurationContext(config));
 				View root = LayoutInflater.from(context).inflate(R.layout.activity_posting, null);
 				LayoutInflater.from(context).inflate(R.layout.activity_posting_footer_common,
 						(FrameLayout) root.findViewById(R.id.footer_container));
@@ -86,7 +86,9 @@ public class PostingDesignLayoutTest {
 					sage.performClick(); assertFalse(sage.isChecked()); assertEquals(1, changes[0]);
 					op.setVisibility(View.GONE); sage.setVisibility(View.GONE); appearance.setAttachmentAvailable(false);
 					appearance.syncOptionsVisibility(); layout(panel, dp(context, 328));
-					assertEquals(View.VISIBLE, slot.getVisibility()); assertEquals(dp(context, 64), slot.getHeight());
+					assertEquals(View.VISIBLE, slot.getVisibility());
+					// Android rounds the44dp row and each10dp padding independently.
+					assertEquals(Math.max(dp(context, 64), dp(context, 44) + 2 * dp(context, 10)), slot.getHeight());
 					assertEquals(View.GONE, spoiler.getVisibility());
 				} finally { appearance.close(); }
 			}
@@ -95,7 +97,7 @@ public class PostingDesignLayoutTest {
 
 	@Test public void v53OmitsMoreWhenAllToolsFitAndKeepsEveryOriginalAction() {
 		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
-			Context context = ThemeEngine.attach(InstrumentationRegistry.getInstrumentation().getTargetContext());
+			Context context = PostingTestContext.create();
 			View root = LayoutInflater.from(context).inflate(R.layout.activity_posting, null);
 			PostingFormAppearance appearance = new PostingFormAppearance(root);
 			try {
@@ -135,7 +137,7 @@ public class PostingDesignLayoutTest {
 
 	@Test public void narrowFormattingMovesToolsInPriorityOrderWithoutChangingActions() {
 		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
-			Context context = ThemeEngine.attach(InstrumentationRegistry.getInstrumentation().getTargetContext());
+			Context context = PostingTestContext.create();
 			View root = LayoutInflater.from(context).inflate(R.layout.activity_posting, null);
 			PostingFormAppearance appearance = new PostingFormAppearance(root);
 			try {

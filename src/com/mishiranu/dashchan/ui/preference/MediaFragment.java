@@ -1,46 +1,29 @@
 package com.mishiranu.dashchan.ui.preference;
 
-import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import android.app.AlertDialog;
-import android.content.Context;
 import android.content.DialogInterface;
 import android.os.Bundle;
-import android.text.InputType;
-import android.text.SpannableStringBuilder;
-import android.text.style.ForegroundColorSpan;
-import android.util.Pair;
 import android.view.View;
 import androidx.annotation.NonNull;
 import androidx.fragment.app.DialogFragment;
-import androidx.fragment.app.FragmentManager;
 import androidx.lifecycle.ViewModelProvider;
-import chan.content.ChanMarkup;
-import chan.util.DataFile;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.CacheManager;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.async.ExecutorTask;
 import com.mishiranu.dashchan.content.async.TaskViewModel;
-import com.mishiranu.dashchan.media.VideoPlayer;
 import com.mishiranu.dashchan.ui.FragmentHandler;
-import com.mishiranu.dashchan.ui.InstanceDialog;
-import com.mishiranu.dashchan.ui.preference.core.CheckPreference;
-import com.mishiranu.dashchan.ui.preference.core.EditPreference;
 import com.mishiranu.dashchan.ui.preference.core.Preference;
 import com.mishiranu.dashchan.ui.preference.core.PreferenceFragment;
-import com.mishiranu.dashchan.ui.preference.core.SeekPreference;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
-import com.mishiranu.dashchan.util.IOUtils;
-import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.util.SharedPreferences;
+import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import com.mishiranu.dashchan.widget.ProgressDialog;
 
-public class MediaFragment extends PreferenceFragment implements FragmentHandler.Callback {
-	private static final String EXTRA_IN_STORAGE_REQUEST = "inStorageRequest";
+public class MediaFragment extends PreferenceFragment {
 	private static final String RESULT_CACHE_SIZE_CHANGED = "mediaCacheSizeChanged";
 
-	private Preference<?> downloadUriTreePreference;
 	private Preference<?> clearCachePreference;
 	private long lastCacheSize = Long.MIN_VALUE;
 	private final Runnable refreshCacheSize = new Runnable() {
@@ -57,192 +40,25 @@ public class MediaFragment extends PreferenceFragment implements FragmentHandler
 		}
 	};
 
-	private boolean inStorageRequest;
-
 	@Override
 	protected SharedPreferences getPreferences() {
 		return Preferences.PREFERENCES;
 	}
 
 	@Override
-	public void onCreate(Bundle savedInstanceState) {
-		super.onCreate(savedInstanceState);
-		inStorageRequest = savedInstanceState != null && savedInstanceState.getBoolean(EXTRA_IN_STORAGE_REQUEST);
-	}
-
-	@Override
 	public void onViewCreated(@NonNull View view, Bundle savedInstanceState) {
 		super.onViewCreated(view, savedInstanceState);
 
-		Preference<Void> preloadPreference = addButton(R.string.media_preload, R.string.media_preload_summary);
-		preloadPreference.setOnClickListener(p -> ((FragmentHandler) requireActivity())
-				.pushFragment(new VideoPreloadFragment()));
-
-		addHeader(R.string.gallery);
-		addCheck(true, Preferences.KEY_CLOSE_GALLERY_ON_BACKGROUND_TAP,
-				Preferences.DEFAULT_CLOSE_GALLERY_ON_BACKGROUND_TAP, R.string.close_gallery_on_background_tap,
-				R.string.close_gallery_on_background_tap__summary);
-		addCheck(true, Preferences.KEY_CLOSE_GALLERY_GRID_ON_BACKGROUND_TAP,
-				Preferences.DEFAULT_CLOSE_GALLERY_GRID_ON_BACKGROUND_TAP, R.string.close_gallery_grid_on_background_tap,
-				R.string.close_gallery_grid_on_background_tap__summary);
-		addCheck(true, Preferences.KEY_SCROLL_GALLERY_TO_CURRENT_FILE,
-				Preferences.DEFAULT_SCROLL_GALLERY_TO_CURRENT_FILE, R.string.scroll_gallery_to_current_file,
-				R.string.scroll_gallery_to_current_file__summary);
-
-		addHeader(R.string.images);
-		addList(Preferences.KEY_LOAD_THUMBNAILS, enumList(Preferences.NetworkMode.values(), v -> v.value),
-				Preferences.DEFAULT_LOAD_THUMBNAILS.value, R.string.load_thumbnails,
-				enumResList(Preferences.NetworkMode.values(), v -> v.titleResId));
-
-		addHeader(R.string.new_attachment_defaults);
-		addCheck(true, Preferences.KEY_OPEN_CONFIGURED_ATTACHMENT_FOLDER,
-				Preferences.DEFAULT_OPEN_CONFIGURED_ATTACHMENT_FOLDER,
-				R.string.open_configured_attachment_folder,
-				R.string.open_configured_attachment_folder__summary);
-		addCheck(true, Preferences.KEY_IMAGE_EDITOR, Preferences.DEFAULT_IMAGE_EDITOR,
-				R.string.image_editor, R.string.image_editor__summary);
-		addCheck(true, Preferences.KEY_DEFAULT_ATTACHMENT_UNIQUE_HASH,
-				Preferences.DEFAULT_ATTACHMENT_UNIQUE_HASH, R.string.unique_hash, 0);
-		addCheck(true, Preferences.KEY_DEFAULT_ATTACHMENT_REENCODING,
-				Preferences.DEFAULT_ATTACHMENT_REENCODING, R.string.reencode_image, 0);
-		addCheck(true, Preferences.KEY_DEFAULT_ATTACHMENT_REMOVE_FILE_NAME,
-				Preferences.DEFAULT_ATTACHMENT_REMOVE_FILE_NAME, R.string.remove_file_name, 0);
-		addCheck(true, Preferences.KEY_DEFAULT_ATTACHMENT_REMOVE_METADATA,
-				Preferences.DEFAULT_ATTACHMENT_REMOVE_METADATA, R.string.remove_metadata, 0);
-
-		addHeader(R.string.downloads);
-		addCheck(true, Preferences.KEY_DOWNLOAD_DETAIL_NAME, Preferences.DEFAULT_DOWNLOAD_DETAIL_NAME,
-				R.string.detailed_file_name, R.string.detailed_file_name__summary);
-		addCheck(true, Preferences.KEY_DOWNLOAD_ORIGINAL_NAME, Preferences.DEFAULT_DOWNLOAD_ORIGINAL_NAME,
-				R.string.original_file_name, R.string.original_file_name__summary);
-		downloadUriTreePreference = addButton(getString(R.string.download_directory),
-				p -> {
-					if (Preferences.getDownloadUriTree(requireContext()) == null) {
-						return getString(R.string.download_directory_not_selected);
-					}
-					String name = DataFile.obtain(DataFile.Target.DOWNLOADS, null).getName();
-					return !StringUtils.isEmpty(name) ? name
-							: getString(R.string.download_directory_not_selected);
-				});
-		downloadUriTreePreference.setOnClickListener(p -> {
-			if (((FragmentHandler) requireActivity()).requestStorage()) {
-				inStorageRequest = true;
-			}
-		});
-		addList(Preferences.KEY_DOWNLOAD_CONFLICT_MODE,
-				enumList(Preferences.DownloadConflictMode.values(), v -> v.value),
-				Preferences.DEFAULT_DOWNLOAD_CONFLICT_MODE.value, R.string.if_file_already_exists,
-				enumResList(Preferences.DownloadConflictMode.values(), v -> v.titleResId));
-		addList(Preferences.KEY_DOWNLOAD_SUBDIR, enumList(Preferences.DownloadSubdirMode.values(), v -> v.value),
-				Preferences.DEFAULT_DOWNLOAD_SUBDIR.value, R.string.show_download_configuration_dialog,
-				enumResList(Preferences.DownloadSubdirMode.values(), v -> v.titleResId));
-		EditPreference subdirectoryPreference = addEdit(Preferences.KEY_SUBDIR_PATTERN,
-				Preferences.DEFAULT_SUBDIR_PATTERN, R.string.subdirectory_pattern, Preferences.DEFAULT_SUBDIR_PATTERN,
-				InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
-		String subdirectoryHtml = IOUtils.readRawResourceString(getResources(), R.raw.markup_subdirectory);
-		subdirectoryPreference.setDescription(BUILDER_SUBDIRECTORY.fromHtmlReduced(subdirectoryHtml));
-		subdirectoryPreference.setNeutralButton(getString(R.string.more_info),
-				() -> showSubdirectoryInfoDialog(getChildFragmentManager()));
-		addCheck(true, Preferences.KEY_NOTIFY_DOWNLOAD_COMPLETE, Preferences.DEFAULT_NOTIFY_DOWNLOAD_COMPLETE,
-				R.string.notify_when_download_is_completed, R.string.notify_when_download_is_completed__summary);
-
-		addHeader(R.string.video_player);
-		addCheck(true, Preferences.KEY_HARDWARE_VIDEO_ACCELERATION,
-				Preferences.DEFAULT_HARDWARE_VIDEO_ACCELERATION,
-				R.string.hardware_video_acceleration, R.string.hardware_video_acceleration__summary);
-		Pair<Boolean, String> playerLoadResult = VideoPlayer.loadLibraries(requireContext());
-		if (!playerLoadResult.first) {
-			if (playerLoadResult.second != null) {
-				SpannableStringBuilder builder = new SpannableStringBuilder(playerLoadResult.second);
-				if (builder.length() == 0) {
-					builder.append(getString(R.string.unknown_error));
-				}
-				builder.setSpan(new ForegroundColorSpan(ResourceUtils.getColor(requireContext(),
-						R.attr.colorTextError)), 0, builder.length(), SpannableStringBuilder.SPAN_EXCLUSIVE_EXCLUSIVE);
-				addButton(null, builder).setSelectable(false);
-			} else {
-				addButton(0, R.string.requires_decoding_libraries__sentence).setSelectable(false);
-			}
-		}
-		CheckPreference videoPlayerPreference = addCheck(true, Preferences.KEY_USE_VIDEO_PLAYER,
-				Preferences.DEFAULT_USE_VIDEO_PLAYER, R.string.use_built_in_video_player,
-				R.string.use_built_in_video_player__summary);
-		videoPlayerPreference.setEnabled(playerLoadResult.first);
-		CheckPreference rememberPositionPreference = addCheck(true, Preferences.KEY_REMEMBER_LAST_VIDEO_POSITION,
-				Preferences.DEFAULT_REMEMBER_LAST_VIDEO_POSITION, R.string.remember_last_video_position,
-				R.string.remember_last_video_position__summary);
-		rememberPositionPreference.setEnabled(playerLoadResult.first);
-		rememberPositionPreference.setOnAfterChangeListener(p -> {
-			if (!rememberPositionPreference.getValue()) Preferences.setSavedLastVideoPosition(null);
-		});
-		addCheck(true, Preferences.KEY_VIDEO_START_MUTED, Preferences.DEFAULT_VIDEO_START_MUTED,
-				R.string.start_videos_muted, R.string.start_videos_muted__summary)
-				.setEnabled(playerLoadResult.first);
-		CheckPreference audioBoostPreference = addCheck(true, Preferences.KEY_VIDEO_AUDIO_BOOST,
-				Preferences.DEFAULT_VIDEO_AUDIO_BOOST, R.string.video_audio_boost,
-				R.string.video_audio_boost__summary);
-		SeekPreference audioBoostLevelPreference = addSeek(Preferences.KEY_VIDEO_AUDIO_BOOST_DB,
-				Preferences.DEFAULT_VIDEO_AUDIO_BOOST_DB, R.string.video_audio_boost_level,
-				R.string.video_audio_boost_level__format, null, Preferences.MIN_VIDEO_AUDIO_BOOST_DB,
-				Preferences.MAX_VIDEO_AUDIO_BOOST_DB, 3);
-		addList(Preferences.KEY_VIDEO_COMPLETION, enumList(Preferences.VideoCompletionMode.values(), o -> o.value),
-				Preferences.DEFAULT_VIDEO_COMPLETION.value, R.string.action_on_playback_completion,
-				enumResList(Preferences.VideoCompletionMode.values(), o -> o.titleResId))
-				.setEnabled(playerLoadResult.first);
-		addCheck(true, Preferences.KEY_VIDEO_PLAY_AFTER_SCROLL, Preferences.DEFAULT_VIDEO_PLAY_AFTER_SCROLL,
-				R.string.play_after_scroll, R.string.play_after_scroll__summary).setEnabled(playerLoadResult.first);
-		addCheck(true, Preferences.KEY_VIDEO_SEEK_ANY_FRAME, Preferences.DEFAULT_VIDEO_SEEK_ANY_FRAME,
-				R.string.seek_any_frame, R.string.seek_any_frame__summary).setEnabled(playerLoadResult.first);
-		addCheck(true, Preferences.KEY_VIDEO_ZOOM_GESTURES, Preferences.DEFAULT_VIDEO_ZOOM_GESTURES,
-				R.string.video_zoom_gestures, R.string.video_zoom_gestures__summary).setEnabled(playerLoadResult.first);
-		addList(Preferences.KEY_YOUTUBE_OPEN_MODE,
-				enumList(Preferences.YouTubeOpenMode.values(), value -> value.value),
-				Preferences.DEFAULT_YOUTUBE_OPEN_MODE.value, R.string.youtube_open_mode,
-				enumResList(Preferences.YouTubeOpenMode.values(), value -> value.titleResId));
-		addCheck(true, Preferences.KEY_VIDEO_PICTURE_IN_PICTURE,
-				Preferences.DEFAULT_VIDEO_PICTURE_IN_PICTURE,
-				R.string.video_picture_in_picture,
-				R.string.video_picture_in_picture__summary).setEnabled(playerLoadResult.first);
-		addCheck(true, Preferences.KEY_VIDEO_PICTURE_IN_PICTURE_AUTO,
-				Preferences.DEFAULT_VIDEO_PICTURE_IN_PICTURE_AUTO,
-				R.string.video_picture_in_picture_auto,
-				R.string.video_picture_in_picture_auto__summary).setEnabled(playerLoadResult.first);
-		addList(Preferences.KEY_VIDEO_SCREEN_OFF_ACTION,
-				enumList(Preferences.VideoScreenOffAction.values(), value -> value.value),
-				Preferences.DEFAULT_VIDEO_SCREEN_OFF_ACTION.value, R.string.video_screen_off_action,
-				enumResList(Preferences.VideoScreenOffAction.values(), value -> value.titleResId),
-				enumResList(Preferences.VideoScreenOffAction.values(), value -> value.summaryResId))
-				.setEnabled(playerLoadResult.first);
-		Preference<Void> playbackSpeedPreference = addButton(R.string.playback_speed,
-				R.string.playback_speed_settings__summary);
-		playbackSpeedPreference.setOnClickListener(p -> ((FragmentHandler) requireActivity())
-				.pushFragment(new PlaybackSpeedFragment()));
-		addCheck(true, Preferences.KEY_ATTACHMENT_VIDEO_PREVIEW,
-				Preferences.DEFAULT_ATTACHMENT_VIDEO_PREVIEW,
-				R.string.attachment_video_preview,
-				R.string.attachment_video_preview__summary).setEnabled(playerLoadResult.first);
-		if (playerLoadResult.first) {
-			addDependency(Preferences.KEY_REMEMBER_LAST_VIDEO_POSITION, Preferences.KEY_USE_VIDEO_PLAYER, true);
-			addDependency(Preferences.KEY_VIDEO_START_MUTED, Preferences.KEY_USE_VIDEO_PLAYER, true);
-			addDependency(Preferences.KEY_VIDEO_COMPLETION, Preferences.KEY_USE_VIDEO_PLAYER, true);
-			addDependency(Preferences.KEY_VIDEO_PLAY_AFTER_SCROLL, Preferences.KEY_USE_VIDEO_PLAYER, true);
-			addDependency(Preferences.KEY_VIDEO_SEEK_ANY_FRAME, Preferences.KEY_USE_VIDEO_PLAYER, true);
-			addDependency(Preferences.KEY_VIDEO_PICTURE_IN_PICTURE, Preferences.KEY_USE_VIDEO_PLAYER, true);
-			addDependency(Preferences.KEY_VIDEO_PICTURE_IN_PICTURE_AUTO,
-					Preferences.KEY_VIDEO_PICTURE_IN_PICTURE, true);
-			addDependency(Preferences.KEY_VIDEO_SCREEN_OFF_ACTION,
-					Preferences.KEY_VIDEO_PICTURE_IN_PICTURE, true);
-			addDependency(Preferences.KEY_ATTACHMENT_VIDEO_PREVIEW, Preferences.KEY_USE_VIDEO_PLAYER, true);
-		}
-		Runnable updatePlayerState = () -> {
-			boolean playerEnabled = playerLoadResult.first && videoPlayerPreference.getValue();
-			audioBoostPreference.setEnabled(playerEnabled);
-			audioBoostLevelPreference.setEnabled(playerEnabled && audioBoostPreference.getValue());
-			playbackSpeedPreference.setEnabled(playerEnabled);
-		};
-		videoPlayerPreference.setOnAfterChangeListener(p -> updatePlayerState.run());
-		audioBoostPreference.setOnAfterChangeListener(p -> updatePlayerState.run());
-		updatePlayerState.run();
+		addButton(R.string.media_preload, R.string.media_preload_summary).setOnClickListener(p ->
+				((FragmentHandler) requireActivity()).pushFragment(new VideoPreloadFragment()));
+		addButton(R.string.gallery, R.string.media_gallery_summary).setOnClickListener(p ->
+				((FragmentHandler) requireActivity()).pushFragment(new GallerySettingsFragment()));
+		addButton(R.string.media_images_attachments, R.string.media_images_attachments_summary).setOnClickListener(p ->
+				((FragmentHandler) requireActivity()).pushFragment(new ImageAttachmentsFragment()));
+		addButton(R.string.downloads, R.string.media_downloads_summary).setOnClickListener(p ->
+				((FragmentHandler) requireActivity()).pushFragment(new DownloadsFragment()));
+		addButton(R.string.video_player, R.string.media_video_player_summary).setOnClickListener(p ->
+				((FragmentHandler) requireActivity()).pushFragment(new VideoPlayerSettingsFragment()));
 
 		addHeader(R.string.additional);
 		addSeek(Preferences.KEY_CACHE_SIZE, Preferences.DEFAULT_CACHE_SIZE, getString(R.string.cache_size), "%d MB",
@@ -261,9 +77,6 @@ public class MediaFragment extends PreferenceFragment implements FragmentHandler
 		clearCachePreference.invalidate();
 		getParentFragmentManager().setFragmentResultListener(RESULT_CACHE_SIZE_CHANGED,
 				getViewLifecycleOwner(), (requestKey, result) -> clearCachePreference.invalidate());
-
-		addDependency(Preferences.KEY_SUBDIR_PATTERN, Preferences.KEY_DOWNLOAD_SUBDIR, false,
-				Preferences.DownloadSubdirMode.DISABLED.value);
 	}
 
 	@Override
@@ -284,8 +97,6 @@ public class MediaFragment extends PreferenceFragment implements FragmentHandler
 	public void onDestroyView() {
 		ConcurrentUtils.HANDLER.removeCallbacks(refreshCacheSize);
 		super.onDestroyView();
-
-		downloadUriTreePreference = null;
 		clearCachePreference = null;
 	}
 
@@ -294,35 +105,6 @@ public class MediaFragment extends PreferenceFragment implements FragmentHandler
 		super.onViewStateRestored(savedInstanceState);
 		((FragmentHandler) requireActivity()).setTitleSubtitle(getString(R.string.media), null);
 	}
-
-	@Override
-	public void onSaveInstanceState(@NonNull Bundle outState) {
-		super.onSaveInstanceState(outState);
-		outState.putBoolean(EXTRA_IN_STORAGE_REQUEST, inStorageRequest);
-	}
-
-	@Override
-	public void onStorageRequestResult() {
-		if (inStorageRequest) {
-			inStorageRequest = false;
-			downloadUriTreePreference.invalidate();
-		}
-	}
-
-	private static void showSubdirectoryInfoDialog(FragmentManager fragmentManager) {
-		new InstanceDialog(fragmentManager, null, provider -> {
-			Context context = provider.getContext();
-			String html = IOUtils.readRawResourceString(context.getResources(), R.raw.markup_subdirectory_info);
-			return new MotionDialogBuilder(context)
-					.setTitle(R.string.subdirectory_pattern)
-					.setMessage(BUILDER_SUBDIRECTORY.fromHtmlReduced(html))
-					.setPositiveButton(android.R.string.ok, null)
-					.create();
-		});
-	}
-
-	private static final ChanMarkup.MarkupBuilder BUILDER_SUBDIRECTORY = new ChanMarkup
-			.MarkupBuilder(markup -> markup.addTag("b", ChanMarkup.TAG_BOLD));
 
 	public static class ClearCacheDialog extends DialogFragment {
 		private static final String EXTRA_CHECKED_ITEMS = "checkedItems";

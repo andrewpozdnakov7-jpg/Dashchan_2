@@ -27,23 +27,35 @@ public final class AppSecurity implements Application.ActivityLifecycleCallbacks
 	private static final class Popup {
 		final java.lang.ref.WeakReference<View> view;
 		final java.lang.ref.WeakReference<WindowManager> manager;
+		final java.lang.ref.WeakReference<Context> context;
 		final boolean originallySecure;
+		final boolean authenticationWindow;
 		Integer visibility;
-		Popup(View view, WindowManager manager, boolean originallySecure) {
+		Popup(Context context, View view, WindowManager manager, boolean originallySecure, boolean authenticationWindow) {
 			this.view = new java.lang.ref.WeakReference<>(view);
 			this.manager = new java.lang.ref.WeakReference<>(manager);
+			this.context = new java.lang.ref.WeakReference<>(context);
 			this.originallySecure = originallySecure;
+			this.authenticationWindow = authenticationWindow;
 		}
 	}
-	static void registerPopup(View view, WindowManager manager, boolean originallySecure, boolean cover) {
-		Popup popup = new Popup(view, manager, originallySecure);
+	static void registerPopup(Context context, View view, WindowManager manager, boolean originallySecure, boolean cover) {
+		Popup popup = new Popup(context, view, manager, originallySecure, authenticationContext(context));
 		if (cover) { popup.visibility = view.getVisibility(); view.setVisibility(View.INVISIBLE); }
 		synchronized (POPUPS) { POPUPS.add(popup); }
 	}
 	static void unregisterPopup(View view) {
 		synchronized (POPUPS) { POPUPS.removeIf(p -> p.view.get() == null || p.view.get() == view); }
 	}
-	private static void refreshPopups(boolean protect, boolean cover) {
+	static boolean popupAlwaysSecure(View view) {
+		synchronized (POPUPS) {
+			for (Popup popup : POPUPS) if (popup.view.get() == view) {
+				return popup.originallySecure || popup.authenticationWindow;
+			}
+		}
+		return false;
+	}
+	private static void refreshPopups(boolean protect, boolean cover, boolean captureBlocked) {
 		synchronized (POPUPS) {
 			java.util.Iterator<Popup> iterator = POPUPS.iterator();
 			while (iterator.hasNext()) {
@@ -53,7 +65,10 @@ public final class AppSecurity implements Application.ActivityLifecycleCallbacks
 				if (view.getLayoutParams() instanceof WindowManager.LayoutParams) {
 					WindowManager.LayoutParams params = (WindowManager.LayoutParams) view.getLayoutParams();
 					int flags = params.flags;
-					if (protect || popup.originallySecure) params.flags |= WindowManager.LayoutParams.FLAG_SECURE;
+					Context owner = popup.context.get();
+					boolean designCapture = owner != null && SecurityStore.designCaptureAllowed(owner);
+					if (!designCapture && (captureBlocked || popup.originallySecure || popup.authenticationWindow
+							|| owner == null || shouldSecureWindow(owner))) params.flags |= WindowManager.LayoutParams.FLAG_SECURE;
 					else params.flags &= ~WindowManager.LayoutParams.FLAG_SECURE;
 					if (flags != params.flags) manager.updateViewLayout(view, params);
 				}
@@ -72,6 +87,7 @@ public final class AppSecurity implements Application.ActivityLifecycleCallbacks
 		if (original != null) view.setImportantForAccessibility(original);
 	}
 	public static void protectDialog(android.app.Dialog dialog) {
+		if (!com.mishiranu.dashchan.BuildConfig.ENABLE_APP_SECURITY_SETTINGS) return;
 		android.view.Window window = dialog.getWindow();
 		registerWindow(window);
 	}
@@ -83,7 +99,7 @@ public final class AppSecurity implements Application.ActivityLifecycleCallbacks
 			if (!found) WINDOWS.add(new java.lang.ref.WeakReference<>(window));
 		}
 		boolean protect = isProtected(window.getContext());
-		if (protect) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+		applyCaptureFlag(window, false);
 		Window.Callback callback = window.getCallback();
 		if (callback != null && !(callback instanceof SecurityWindowCallback)) window.setCallback(new SecurityWindowCallback(window, callback, protect));
 	}
@@ -107,17 +123,13 @@ public final class AppSecurity implements Application.ActivityLifecycleCallbacks
 	}
 	private static void refreshPrivateWindows(Context context, boolean cover) {
 		boolean protect = isProtected(context);
-		refreshPopups(protect, cover);
+		refreshPopups(protect, cover, protect && cover || shouldSecureWindow(context));
 		synchronized (WINDOWS) {
 			java.util.Iterator<java.lang.ref.WeakReference<android.view.Window>> iterator = WINDOWS.iterator();
 			while (iterator.hasNext()) {
 				android.view.Window window = iterator.next().get();
 				if (window == null) { iterator.remove(); continue; }
-				boolean secure = (window.getAttributes().flags & WindowManager.LayoutParams.FLAG_SECURE) != 0;
-				if (protect != secure) {
-					if (protect) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE);
-					else window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
-				}
+				applyCaptureFlag(window, protect && cover);
 				if (window.getCallback() instanceof SecurityWindowCallback) ((SecurityWindowCallback) window.getCallback()).setProtected(protect);
 				ViewGroup decor = (ViewGroup) window.peekDecorView();
 				if (decor == null) continue;
@@ -148,6 +160,7 @@ public final class AppSecurity implements Application.ActivityLifecycleCallbacks
 	private AppSecurity(Application application) { this.application = application; }
 
 	public static void install(Application application, boolean mainProcess) {
+		if (!com.mishiranu.dashchan.BuildConfig.ENABLE_APP_SECURITY_SETTINGS) return;
 		instance = new AppSecurity(application);
 		try { SecurityStore.processStarted(application, mainProcess); }
 		catch (IOException ignored) { /* All gates fail closed on storage failure. */ }
@@ -155,7 +168,7 @@ public final class AppSecurity implements Application.ActivityLifecycleCallbacks
 		IntentFilter filter = new IntentFilter(Intent.ACTION_SCREEN_OFF);
 		application.registerReceiver(new BroadcastReceiver() {
 			@Override public void onReceive(Context context, Intent intent) {
-				try { SecurityStore.lock(context); } catch (IOException ignored) {}
+				SecurityStore.suspend(context);
 				instance.protectAll();
 			}
 		}, filter);
@@ -170,8 +183,46 @@ public final class AppSecurity implements Application.ActivityLifecycleCallbacks
 	}
 
 	public static boolean isProtected(Context context) {
+		if (!com.mishiranu.dashchan.BuildConfig.ENABLE_APP_SECURITY_SETTINGS) return false;
 		try { return SecurityStore.enabled(context); }
 		catch (IOException e) { return true; }
+	}
+
+	private static Activity windowActivity(Context context) {
+		while (context instanceof android.content.ContextWrapper) {
+			if (context instanceof Activity) return (Activity) context;
+			Context base = ((android.content.ContextWrapper) context).getBaseContext();
+			if (base == context) break;
+			context = base;
+		}
+		return null;
+	}
+	private static boolean authenticationContext(Context context) {
+		Activity activity = windowActivity(context);
+		return activity != null && exempt(activity);
+	}
+
+	/** Capture policy is separate from authentication, shielding and notification redaction. */
+	public static boolean shouldSecureWindow(Context context) {
+		if (!com.mishiranu.dashchan.BuildConfig.ENABLE_APP_SECURITY_SETTINGS) return false;
+		if (SecurityStore.designCaptureAllowed(context)) return false;
+		if (authenticationContext(context) || SecurityStore.screenCaptureBlocked(context)) return true;
+		Activity activity = windowActivity(context);
+		// A still-valid RAM lease during a short Activity handoff is not permission to capture
+		// a paused window. This also covers delayed dialog/popup updates in the background.
+		return activity != null && instance != null && !instance.resumed.contains(activity) && isProtected(context);
+	}
+
+	private static void applyCaptureFlag(Window window, boolean covered) {
+		boolean designCapture = SecurityStore.designCaptureAllowed(window.getContext());
+		boolean secure = !designCapture && (covered || shouldSecureWindow(window.getContext()));
+		if (secure == ((window.getAttributes().flags & WindowManager.LayoutParams.FLAG_SECURE) != 0)) return;
+		if (secure) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+		else window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
+	}
+
+	static void refreshCaptureWindow(Activity activity) {
+		applyCaptureFlag(activity.getWindow(), false);
 	}
 
 	public static void redactNotification(Context context, androidx.core.app.NotificationCompat.Builder builder) {
@@ -232,8 +283,7 @@ public final class AppSecurity implements Application.ActivityLifecycleCallbacks
 		if (locked) instance.protectAll();
 		else for (Activity activity : instance.started) instance.unshield(activity);
 		for (Activity activity : instance.started) {
-			if (instance.enabled() || exempt(activity)) activity.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
-			else activity.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
+			applyCaptureFlag(activity.getWindow(), instance.shields.containsKey(activity));
 		}
 		if (instance.enabled()) {
 			android.app.NotificationManager notifications = instance.application.getSystemService(android.app.NotificationManager.class);
@@ -245,6 +295,7 @@ public final class AppSecurity implements Application.ActivityLifecycleCallbacks
 
 	/** Side-effect-only entry activities must defer before opening another app or importing content. */
 	public static boolean deferIfLocked(Activity activity) {
+		if (!com.mishiranu.dashchan.BuildConfig.ENABLE_APP_SECURITY_SETTINGS) return false;
 		if (!SecurityStore.locked(activity)) return false;
 		Intent target = new Intent(activity.getIntent()).setComponent(activity.getComponentName());
 		Intent gate = new Intent(activity, AppLockActivity.class).putExtra("resume", target);
@@ -266,7 +317,7 @@ public final class AppSecurity implements Application.ActivityLifecycleCallbacks
 		}
 	}
 	@Override public void onActivityPreCreated(Activity activity, Bundle savedInstanceState) {
-		if (enabled()) activity.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+		applyCaptureFlag(activity.getWindow(), false);
 	}
 
 	@Override public void onActivityPostCreated(Activity activity, Bundle state) {
@@ -276,13 +327,16 @@ public final class AppSecurity implements Application.ActivityLifecycleCallbacks
 
 	@Override public void onActivityStarted(Activity activity) {
 		started.add(activity);
-		if (enabled() || exempt(activity)) activity.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
-		else activity.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
+		applyCaptureFlag(activity.getWindow(), false);
 		try { SecurityStore.foreground(activity, true); } catch (IOException ignored) {}
 		consumeEmptyProfileToken(activity);
 	}
 
 	@Override public void onActivityPreResumed(Activity activity) {
+		resumed.add(activity);
+		// Screen-off can pause without a new onStart. Restore only a bounded recent
+		// authentication before deciding whether an unlock Activity is needed.
+		try { SecurityStore.foreground(activity, true); } catch (IOException ignored) {}
 		if (exempt(activity)) { openingLock = false; return; }
 		if (SecurityStore.locked(activity)) {
 			shield(activity);
@@ -290,11 +344,21 @@ public final class AppSecurity implements Application.ActivityLifecycleCallbacks
 				openingLock = true;
 				activity.startActivity(new Intent(activity, AppLockActivity.class));
 			}
-		} else unshield(activity);
+		} else {
+			unshield(activity);
+			refreshPrivateWindows(activity, false);
+			applyCaptureFlag(activity.getWindow(), false);
+		}
 	}
 
 	@Override public void onActivityPrePaused(Activity activity) {
-		if (enabled()) shield(activity); // No sensitive recents snapshot during the background transition.
+		resumed.remove(activity);
+		if (enabled()) {
+			// Concealment remains independent of capture opt-in, including temporary all-window capture.
+			applyCaptureFlag(activity.getWindow(), true);
+			shield(activity);
+			refreshPrivateWindows(activity, true);
+		}
 	}
 
 	@Override public void onActivityStopped(Activity activity) {
@@ -310,6 +374,7 @@ public final class AppSecurity implements Application.ActivityLifecycleCallbacks
 	@Override public void onActivityCreated(Activity activity, Bundle state) {}
 	@Override public void onActivityResumed(Activity activity) {
 		resumed.add(activity);
+		refreshCaptureWindow(activity);
 		handler.removeCallbacks(checkForeground);
 		try { SecurityStore.foreground(activity, true); } catch (IOException ignored) {}
 	}

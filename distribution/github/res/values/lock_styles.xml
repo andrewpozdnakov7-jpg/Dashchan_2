@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<!-- Only AppLockActivity uses this theme, including its pre-content window. -->
+	<style name="Theme.Slooop.Lock" parent="@android:style/Theme.DeviceDefault.NoActionBar">
+		<item name="android:windowNoTitle">true</item>
+		<item name="android:windowActionBar">false</item>
+		<item name="android:windowBackground">@color/slooop_lock_background</item>
+		<item name="android:colorBackground">@color/slooop_lock_background</item>
+		<item name="android:colorAccent">@color/slooop_lock_primary</item>
+		<item name="android:statusBarColor">@color/slooop_lock_background</item>
+		<item name="android:navigationBarColor">@color/slooop_lock_background</item>
+		<item name="android:windowLightStatusBar">false</item>
+		<item name="android:windowLightNavigationBar">false</item>
+		<item name="android:enforceStatusBarContrast">false</item>
+		<item name="android:enforceNavigationBarContrast">false</item>
+	</style>
+</resources>

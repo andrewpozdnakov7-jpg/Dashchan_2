@@ -268,8 +268,8 @@ android {
 
 	defaultConfig {
 		applicationId = 'io.dashchan2'
-		versionCode = 11420
-		versionName = '3.2.62'
+		versionCode = 11430
+		versionName = '3.2.63'
 		def releaseVersionCode = versionCode
 		def packageVersionCodeProperty = project.findProperty('packageVersionCode')
 		if (packageVersionCodeProperty != null) {
@@ -330,6 +330,7 @@ android {
 	productFlavors {
 		github {
 			dimension = 'distribution'
+			buildConfigField 'boolean', 'ENABLE_APP_SECURITY_SETTINGS', 'true'
 			buildConfigField 'String', 'SLOOOP_PUSH_BASE_URL',
 					'"https://slooop-push-er3p3rs4cq-ew.a.run.app"'
 			buildConfigField 'boolean', 'ENABLE_LOCAL_TRANSLATION', 'true'
@@ -360,6 +361,7 @@ android {
 		}
 		fdroid {
 			dimension = 'distribution'
+			buildConfigField 'boolean', 'ENABLE_APP_SECURITY_SETTINGS', 'false'
 			buildConfigField 'boolean', 'ENABLE_LOCAL_TRANSLATION', 'false'
 			buildConfigField 'boolean', 'ENABLE_EXPERIMENTAL_INTERFACE_MOTION', 'false'
 			buildConfigField 'boolean', 'ENABLE_GOOGLE_TRANSLATION', 'false'
@@ -399,6 +401,7 @@ android {
 	githubDebugSourceSet.java.srcDir 'distribution/githubDebug/src'
 	githubDebugSourceSet.manifest.srcFile 'distribution/githubDebug/AndroidManifest.xml'
 	sourceSets.fdroid.java.srcDir 'distribution/fdroid/src'
+	sourceSets.fdroid.manifest.srcFile 'distribution/fdroid/AndroidManifest.xml'
 	sourceSets.fdroid.assets.srcDir 'distribution/fdroid/metadata'
 	sourceSets.test {
 		java.srcDirs = ['unitTests/src']

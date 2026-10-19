@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<color name="slooop_lock_background">#151D11</color>
+	<color name="slooop_lock_on_background">#FFFFFF</color>
+	<color name="slooop_lock_secondary_text">#BECAB5</color>
+	<color name="slooop_lock_primary">#C1DFA1</color>
+	<color name="slooop_lock_on_primary">#000000</color>
+	<color name="slooop_lock_secondary_action">#C1DFA1</color>
+	<color name="slooop_lock_surface">#222B1D</color>
+	<color name="slooop_lock_outline">#89947F</color>
+	<color name="slooop_lock_focus">#C1DFA1</color>
+	<color name="slooop_lock_error">#FFB4AB</color>
+	<color name="slooop_lock_disabled_container">#303A28</color>
+	<color name="slooop_lock_disabled_content">#8D9784</color>
+	<color name="slooop_lock_primary_ripple">#1F000000</color>
+	<color name="slooop_lock_secondary_ripple">#1FC1DFA1</color>
+</resources>

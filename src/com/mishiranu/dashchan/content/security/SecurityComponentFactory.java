@@ -42,7 +42,7 @@ public final class SecurityComponentFactory extends android.app.AppComponentFact
 	public static final class RecoveryRedirectActivity extends Activity {
 		@Override protected void onCreate(Bundle ignoredOldProfileState) {
 			super.onCreate(null);
-			getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
+			AppSecurity.refreshCaptureWindow(this);
 			startActivity(new Intent(this, PrivacyResetActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
 			finishAndRemoveTask();
 		}

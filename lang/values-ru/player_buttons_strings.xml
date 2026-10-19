@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<string name="player_buttons_instruction">Удерживайте и перетаскивайте</string>
+	<string name="player_buttons_rules">На кнопку — обмен местами.\nНа свободное место другой панели — перенос.</string>
+	<string name="player_buttons_preview_title">Предпросмотр</string>
+	<string name="player_buttons_zone_left">Слева</string>
+	<string name="player_buttons_zone_right">Справа</string>
+	<string name="player_buttons_order">Ряды снизу вверх</string>
+	<string name="player_buttons_count">%1$d из 2</string>
+	<string name="player_buttons_note">Кнопки здесь не запускают видео. Справа — действия в полосе плеера.</string>
+	<string name="player_buttons_left_label">Левая панель</string>
+	<string name="player_buttons_effective">Выбрано: %1$d. В этом предпросмотре помещается %2$d в ряду.</string>
+	<string name="player_buttons_saved">Изменения сохраняются сразу.</string>
+	<string name="player_buttons_reset">Вернуть по умолчанию</string>
+	<string name="player_buttons_drag_start">Перенос: «%1$s». Выберите место.</string>
+	<string name="player_buttons_drag_swap">Обмен: «%1$s» ↔ «%2$s».</string>
+	<string name="player_buttons_drag_left">Перенести «%1$s» влево.</string>
+	<string name="player_buttons_drag_right">Перенести «%1$s» вправо.</string>
+	<string name="player_buttons_full">Справа уже 2 кнопки. Наведите на кнопку для обмена.</string>
+	<string name="player_buttons_noop">Выберите другую кнопку или другую панель.</string>
+	<string name="player_buttons_empty_right">Правая панель, пуста, максимум 2 кнопки</string>
+	<string name="player_buttons_layout">Расположение кнопок</string>
+	<string name="player_buttons_layout_summary">Порядок кнопок нового плеера в левой и правой панелях</string>
+	<string name="player_buttons_help">Удерживайте и перетащите кнопку на другую, чтобы поменять их местами, или на свободное место панели, чтобы перенести. Справа — до двух кнопок.</string>
+	<string name="player_buttons_preview">Предпросмотр — кнопки не управляют видео</string>
+	<string name="player_buttons_per_row">Кнопок в ряду</string>
+	<string name="player_buttons_per_row_summary">Слева: до %1$d в ряду. Порядок начинается снизу слева, новые ряды появляются выше. На узком экране кнопки могут переноситься раньше.</string>
+	<string name="player_buttons_left">Нижняя левая панель</string>
+	<string name="player_buttons_right">Нижняя правая панель</string>
+	<string name="player_buttons_move_left">Перенести в конец левой панели</string>
+	<string name="player_buttons_move_right">Перенести в конец правой панели</string>
+	<string name="player_buttons_swap">Поменять местами: %1$s</string>
+	<string name="player_buttons_fullscreen">Развернуть видео</string>
+</resources>

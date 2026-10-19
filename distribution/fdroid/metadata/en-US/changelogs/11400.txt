@@ -1,0 +1,1 @@
+Improved video startup and switching, with a larger prepared-frame cache for browsing back. Fixed duplicate thread scrollbars, scrollbar jumps, and crashes when opening replies in sequence. Improved file-menu readability.

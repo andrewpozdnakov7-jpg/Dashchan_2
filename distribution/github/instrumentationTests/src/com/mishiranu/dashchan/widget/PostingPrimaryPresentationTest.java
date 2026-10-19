@@ -70,7 +70,7 @@ public class PostingPrimaryPresentationTest {
 
 	@Test public void disabledAnimationsPreserveTheNativePressedStateMaskAndCancelResetsBothShapes() {
 		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
-			Context context = ThemeEngine.attach(InstrumentationRegistry.getInstrumentation().getTargetContext());
+			Context context = PostingTestContext.create();
 			Button button = new Button(context); button.setBackgroundTintList(null); button.setEnabled(true);
 			FrameLayout slot = new FrameLayout(context); slot.addView(button, new FrameLayout.LayoutParams(-1, -1));
 			PostingPrimaryMotion motion = new PostingPrimaryMotion(button, slot); // Detached: no motion, final states only.
@@ -94,7 +94,7 @@ public class PostingPrimaryPresentationTest {
 
 	@Test public void mutatedButtonBackgroundDoesNotDetachTheFillAndLoadingHasNoVisibleCaption() {
 		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
-			Context context = ThemeEngine.attach(InstrumentationRegistry.getInstrumentation().getTargetContext());
+			Context context = PostingTestContext.create();
 			Button button = new Button(context); button.setBackgroundTintList(null); button.setEnabled(false);
 			FrameLayout slot = new FrameLayout(context); slot.addView(button, new FrameLayout.LayoutParams(-1, -1));
 			PostingPrimaryMotion motion = new PostingPrimaryMotion(button, slot);
@@ -119,7 +119,7 @@ public class PostingPrimaryPresentationTest {
 				try {
 					slot.getBackground().setBounds(0, 0, width, height);
 					slot.getBackground().draw(new Canvas(bitmap));
-					assertEquals(accent, bitmap.getPixel(width / 2, height / 2));
+					assertEquals(PostingPrimaryMotion.stageFill(accent, .85f), bitmap.getPixel(width / 2, height / 2));
 				} finally { bitmap.recycle(); }
 				motion.bind(state.bind(PostingPrimaryState.Mode.SEND, true, true));
 				assertEquals(View.VISIBLE, slot.findViewById(R.id.posting_captcha_status).getVisibility());

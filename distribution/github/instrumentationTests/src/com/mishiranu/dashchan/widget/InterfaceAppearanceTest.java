@@ -21,7 +21,7 @@ import org.junit.runner.RunWith;
 /** Prepared regression fixtures; no persisted preferences or device build are changed. */
 @RunWith(AndroidJUnit4.class)
 public class InterfaceAppearanceTest {
-	private Context context() { return ThemeEngine.attach(InstrumentationRegistry.getInstrumentation().getTargetContext()); }
+	private Context context() { return PostingTestContext.create(); }
 	@Test public void customThemeForegroundAlwaysMeetsRequestedContrast() {
 		int[] colors = {Color.WHITE, Color.BLACK, Color.YELLOW, Color.RED, Color.GREEN, Color.BLUE, 0xff777777, 0xff1c1c1c};
 		for (int background : colors) for (int requested : colors) {
@@ -56,11 +56,13 @@ public class InterfaceAppearanceTest {
 		int[] colors = {Color.WHITE, Color.BLACK, Color.YELLOW, Color.RED, Color.GREEN, Color.BLUE, 0xffeeeeee, 0xff242424};
 		for (int window : colors) for (int accent : colors) {
 			int background = InterfaceAppearance.postingBackground(window);
+			assertEquals(255, Color.alpha(background));
 			int fill = InterfaceAppearance.lighterPostingFill(ColorUtils.blendARGB(background, Color.WHITE,
 					ColorUtils.calculateLuminance(background) < .5 ? .10f : .80f), background);
 			int focused = InterfaceAppearance.lighterPostingFill(ColorUtils.blendARGB(fill, accent, .06f), background);
 			int error = InterfaceAppearance.lighterPostingFill(ColorUtils.blendARGB(fill, Color.RED, .08f), background);
 			for (int color : new int[] {fill, focused, error}) {
+				assertEquals(255, Color.alpha(color));
 				assertTrue(ColorUtils.calculateLuminance(color) > ColorUtils.calculateLuminance(background));
 				assertTrue(ColorUtils.calculateContrast(color, background) >= 1.08);
 			}

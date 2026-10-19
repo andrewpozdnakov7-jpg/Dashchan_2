@@ -45,7 +45,8 @@ public class ExperimentalPreferenceDescriptorsTest {
 	private static boolean hasTargetKey(SettingsSearchIndex.Entry entry, String breadcrumb, String key) {
 		if (!breadcrumb.equals(entry.getBreadcrumb())) return false;
 		ContentFragment fragment = entry.createFragment();
-		if (!(fragment instanceof ExperimentalFragment)) return false;
+		if (Preferences.KEY_NEW_INTERFACE_MOTION.equals(key)
+				? !(fragment instanceof Material3DesignFragment) : !(fragment instanceof ExperimentalFragment)) return false;
 		Bundle arguments = fragment.getArguments();
 		if (arguments == null) return false;
 		for (String argument : arguments.keySet()) {
@@ -65,10 +66,13 @@ public class ExperimentalPreferenceDescriptorsTest {
 					ExperimentalPreferenceDescriptors.discussionContext(),
 					ExperimentalPreferenceDescriptors.outboxJournal()}) {
 				int count = 0;
+				boolean design = Preferences.KEY_NEW_INTERFACE_MOTION.equals(toggle.key);
+				String targetBreadcrumb = breadcrumb + (design
+						? " \u203a " + context.getString(R.string.material3_design_settings) : "");
 				for (SettingsSearchIndex.Entry entry : entries) {
-					if (hasTargetKey(entry, breadcrumb, toggle.key)) {
+					if (hasTargetKey(entry, targetBreadcrumb, toggle.key)) {
 						count++;
-						assertEquals(context.getString(toggle.titleResId), entry.getTitle());
+						assertEquals(context.getString(design ? R.string.material3_enable_design : toggle.titleResId), entry.getTitle());
 						assertTrue(SettingsSearchIndex.search(entries, entry.getTitle()).contains(entry));
 					}
 				}

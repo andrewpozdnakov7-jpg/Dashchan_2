@@ -4,7 +4,6 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
-import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
@@ -20,14 +19,24 @@ public final class PrivacyResetActivity extends ComponentActivity {
 	private final AtomicBoolean running = new AtomicBoolean();
 	private TextView message;
 	private LinearLayout layout;
-	private boolean cleanupCompleted;
+	private boolean launchReady;
+	private String launchToken;
 	private volatile boolean resumed;
 	private volatile int authorizationGeneration;
+	private android.os.CancellationSignal recoveryCancellation;
+	private BiometricAttempt recoveryBiometric;
 	@Override protected void onResume() {
 		super.onResume(); resumed = true;
-		if (cleanupCompleted) openEmptyProfile();
+		if (launchReady) openProfile();
 	}
-	@Override protected void onPause() { resumed = false; authorizationGeneration++; super.onPause(); }
+	@Override protected void onPause() {
+		resumed = false; authorizationGeneration++;
+		android.os.CancellationSignal signal = recoveryCancellation; recoveryCancellation = null;
+		BiometricAttempt attempt = recoveryBiometric; recoveryBiometric = null;
+		if (signal != null) { signal.cancel(); running.set(false); }
+		if (attempt != null) attempt.close();
+		super.onPause();
+	}
 	private boolean authorized(int generation) {
 		return resumed && generation == authorizationGeneration && !isDestroyed() && !isFinishing()
 				&& getSystemService(android.os.PowerManager.class).isInteractive();
@@ -48,7 +57,7 @@ public final class PrivacyResetActivity extends ComponentActivity {
 	});
 	@Override protected void onCreate(Bundle state) {
 		super.onCreate(state);
-		getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+		AppSecurity.refreshCaptureWindow(this);
 		getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
 			@Override public void handleOnBackPressed() { moveTaskToBack(true); }
 		});
@@ -69,33 +78,46 @@ public final class PrivacyResetActivity extends ComponentActivity {
 
 	private void runCleanup() {
 		if (!running.compareAndSet(false, true)) return;
-		cleanupCompleted = false;
+		launchReady = false;
 		layout.removeAllViews(); layout.addView(message); message.setText(R.string.security_opening);
 		new Thread(() -> {
-			try { PrivacyReset.run(this); runOnUiThread(() -> { cleanupCompleted = true; openEmptyProfile(); }); }
+			try {
+				// An unreadable startup record gates normal components, but is not evidence
+				// that deletion was requested. Once readable, distinguish all three states.
+				if (PrivacyReset.recoveryState(this) == PrivacyReset.RecoveryState.RESET_PENDING) PrivacyReset.run(this);
+				prepareLaunch();
+			}
 			catch (Exception e) { runOnUiThread(this::failed); }
 			finally { running.set(false); }
 		}, "privacy-reset").start();
 	}
 
-	private void openEmptyProfile() {
-		if (!resumed || isDestroyed() || isFinishing()) return;
+	private void prepareLaunch() throws java.io.IOException {
+		if (PrivacyReset.recoveryState(this) == PrivacyReset.RecoveryState.RESET_PENDING) {
+			throw new java.io.IOException("Profile cleanup is still pending");
+		}
+		// The old main process may have skipped initialization after a transient read
+		// failure. Restart it cleanly, without deleting data or inventing an empty-profile receipt.
+		// Process waiting and state I/O must never run on the input/UI thread.
+		PrivacyReset.stopOtherProcesses(this);
+		String token = PrivacyReset.launchToken(this);
+		runOnUiThread(() -> {
+			if (isDestroyed() || isFinishing()) return;
+			launchToken = token; launchReady = true; openProfile();
+		});
+	}
+
+	private void openProfile() {
+		if (!resumed || !launchReady || isDestroyed() || isFinishing()) return;
 		try {
-			String token = SecurityStore.update(this, s -> {
-				int boot = android.provider.Settings.Global.getInt(getContentResolver(), android.provider.Settings.Global.BOOT_COUNT, -1);
-				if (s.optBoolean("reset_pending") || !s.has("empty_launch") || boot < 0
-						|| boot != s.optInt("empty_launch_boot", -1)
-						|| s.optLong("empty_launch_generation", -1) != s.optLong("profile_generation")) {
-					throw new java.io.IOException("No active profile reset receipt");
-				}
-				// A long background stay must not strand the recovery UI or extend its
-				// one-shot authentication grant. Resume normally, requiring the main PIN.
-				return android.os.SystemClock.elapsedRealtime() <= s.optLong("empty_launch_until")
-						? s.getString("empty_launch") : null;
-			});
-			PrivacyReset.stopOtherProcesses(this);
-			startActivity(new Intent(this, MainActivity.class).putExtra("empty_profile_token", token)
-					.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK));
+			launchReady = false;
+			Intent intent = new Intent(this, MainActivity.class)
+					.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+			// MainActivity revalidates expiry, boot, generation and RAM lease before
+			// consuming a real receipt. A normal recovery never bypasses the main PIN.
+			if (launchToken != null) intent.putExtra("empty_profile_token", launchToken);
+			launchToken = null;
+			startActivity(intent);
 			finishAndRemoveTask();
 		} catch (Exception e) { failed(); }
 	}
@@ -121,21 +143,29 @@ public final class PrivacyResetActivity extends ComponentActivity {
 				} catch (Exception e) { message.setText(R.string.security_downloads_failed); }
 			});
 			layout.addView(restore);
+			boolean biometricOnly = SecurityStore.authenticationMode(this) == AuthenticationPolicy.Mode.BIOMETRIC_ONLY;
 			EditText pin = new EditText(this); pin.setHint(R.string.security_current_pin);
 			AppLockActivity.configurePinInput(pin);
-			layout.addView(pin);
+			if (!biometricOnly) layout.addView(pin);
 			Button skip = new Button(this); skip.setText(R.string.security_skip_downloads);
 			skip.setFilterTouchesWhenObscured(true);
 			skip.setOnClickListener(v -> {
 				if (!running.compareAndSet(false, true)) return;
+				if (biometricOnly) { authenticateRecoverySkip(); return; }
 				char[] digits = new char[pin.length()]; pin.getText().getChars(0, digits.length, digits, 0); pin.setText("");
 				int generation = authorizationGeneration;
 				new Thread(() -> {
 					try {
 						if (SecurityStore.verify(this, digits, true) == SecurityStore.Result.PRIMARY) {
-							SecurityStore.authorizedUpdate(this, () -> authorized(generation), s -> { s.put("external_cleanup_incomplete", true); return null; });
+							SecurityStore.authorizedUpdate(this, () -> authorized(generation), s -> {
+								String tree = s.optString("reset_tree", null);
+								if (!s.optBoolean("reset_pending") || !s.optBoolean("reset_local_done") || tree == null) {
+									throw new java.io.IOException("No external cleanup to skip");
+								}
+								ExternalCleanupLedger.skipped(s, tree); return null;
+							});
 							PrivacyReset.complete(this, () -> authorized(generation));
-							runOnUiThread(() -> { if (authorized(generation)) openEmptyProfile(); });
+							prepareLaunch();
 						} else runOnUiThread(() -> pin.setError(getString(R.string.security_wrong_pin)));
 					} catch (Exception e) { runOnUiThread(() -> pin.setError(getString(R.string.security_unavailable))); }
 					finally { PinCredential.clear(digits); running.set(false); }
@@ -143,5 +173,62 @@ public final class PrivacyResetActivity extends ComponentActivity {
 			});
 			layout.addView(skip);
 		} catch (Exception ignored) {}
+	}
+	private void authenticateRecoverySkip() {
+		try {
+			android.hardware.biometrics.BiometricManager manager = getSystemService(android.hardware.biometrics.BiometricManager.class);
+			if (manager == null || manager.canAuthenticate(android.hardware.biometrics.BiometricManager.Authenticators.BIOMETRIC_STRONG)
+					!= android.hardware.biometrics.BiometricManager.BIOMETRIC_SUCCESS) throw new java.io.IOException("Biometrics unavailable");
+			final int generation = authorizationGeneration;
+			final long lease = SecuritySessionProvider.generation(this);
+			final BiometricAttempt attempt = BiometricAttempt.current(this);
+			final android.os.CancellationSignal signal = new android.os.CancellationSignal();
+			recoveryBiometric = attempt; recoveryCancellation = signal;
+			new android.hardware.biometrics.BiometricPrompt.Builder(this)
+					.setTitle(getString(R.string.security_skip_downloads))
+					.setAllowedAuthenticators(android.hardware.biometrics.BiometricManager.Authenticators.BIOMETRIC_STRONG)
+					.setNegativeButton(getString(android.R.string.cancel), getMainExecutor(), (dialog, which) -> {})
+					.build().authenticate(new android.hardware.biometrics.BiometricPrompt.CryptoObject(attempt.mac), signal,
+							getMainExecutor(), new android.hardware.biometrics.BiometricPrompt.AuthenticationCallback() {
+						@Override public void onAuthenticationSucceeded(android.hardware.biometrics.BiometricPrompt.AuthenticationResult result) {
+							if (recoveryBiometric != attempt || recoveryCancellation != signal) { attempt.close(); return; }
+							recoveryBiometric = null; recoveryCancellation = null;
+							try {
+								if (!authorized(generation)) throw new java.io.IOException("Recovery authorization expired");
+								attempt.verify(result.getCryptoObject());
+								new Thread(() -> {
+									try {
+										SecurityStore.authorizedUpdate(PrivacyResetActivity.this, () -> authorized(generation)
+												&& lease >= 0 && lease == SecuritySessionProvider.generation(PrivacyResetActivity.this), s -> {
+											if (SecurityStore.authenticationMode(s) != AuthenticationPolicy.Mode.BIOMETRIC_ONLY
+													|| !attempt.matchesCurrent(PrivacyResetActivity.this, s)) throw new java.io.IOException("Recovery credential changed");
+											String tree = s.optString("reset_tree", null);
+											if (!s.optBoolean("reset_pending") || !s.optBoolean("reset_local_done") || tree == null)
+												throw new java.io.IOException("No external cleanup to skip");
+											ExternalCleanupLedger.skipped(s, tree); return null;
+										});
+										PrivacyReset.complete(PrivacyResetActivity.this, () -> authorized(generation));
+										prepareLaunch();
+									} catch (Exception e) { runOnUiThread(() -> message.setText(R.string.security_unavailable)); }
+									finally { attempt.close(); running.set(false); }
+								}, "privacy-reset-biometric-recovery").start();
+							} catch (Exception e) {
+								attempt.close(); running.set(false);
+								if (authorized(generation)) message.setText(R.string.security_biometric_retry);
+							}
+						}
+						@Override public void onAuthenticationError(int code, CharSequence error) {
+							if (recoveryBiometric != attempt || recoveryCancellation != signal) { attempt.close(); return; }
+							recoveryBiometric = null; recoveryCancellation = null; attempt.close(); running.set(false);
+							if (authorized(generation)) message.setText(R.string.security_biometric_retry);
+						}
+					});
+		} catch (Exception e) {
+			android.os.CancellationSignal signal = recoveryCancellation; recoveryCancellation = null;
+			BiometricAttempt attempt = recoveryBiometric; recoveryBiometric = null;
+			if (signal != null) signal.cancel();
+			if (attempt != null) attempt.close();
+			running.set(false); message.setText(R.string.security_biometric_retry);
+		}
 	}
 }

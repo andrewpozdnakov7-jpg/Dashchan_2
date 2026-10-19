@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<string name="media_gallery_summary">Closing the viewer and grid, scrolling to the current file</string>
+	<string name="media_images_attachments">Images and attachment options</string>
+	<string name="media_images_attachments_summary">Thumbnails, image editor and defaults for new attachments</string>
+	<string name="media_downloads_summary">Save folder, file names, subfolders and notifications</string>
+	<string name="media_video_player_summary">Playback, sound, speed, gestures and picture-in-picture</string>
+</resources>
