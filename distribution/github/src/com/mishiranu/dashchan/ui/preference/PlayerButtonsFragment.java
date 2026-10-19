@@ -26,7 +26,9 @@ import com.mishiranu.dashchan.widget.ThemeEngine;
 /** Only the arrangement editor. The runtime player and its storage contract are unchanged. */
 public class PlayerButtonsFragment extends PreferenceFragment {
 	private AlertDialog columnsDialog;
+	private android.app.AlertDialog helpDialog;
 	private PlayerButtonsEditorView editor;
+	private PlayerButtonsToolbarAppearance toolbarAppearance;
 
 	@Override protected SharedPreferences getPreferences() { return Preferences.PREFERENCES; }
 	@Override public void onViewCreated(@NonNull View view, Bundle state) {
@@ -37,19 +39,42 @@ public class PlayerButtonsFragment extends PreferenceFragment {
 		super.onViewStateRestored(state);
 		((FragmentHandler) requireActivity()).setTitleSubtitle(getString(R.string.player_buttons_layout), null);
 	}
+	@Override public void onStart() {
+		super.onStart();
+		restoreToolbar();
+		toolbarAppearance = new PlayerButtonsToolbarAppearance(((FragmentHandler) requireActivity()).getToolbarView(),
+				new PlayerButtonsColors(requireContext()));
+	}
+	private void restoreToolbar() {
+		if (toolbarAppearance != null) { toolbarAppearance.restore(); toolbarAppearance = null; }
+	}
 	@Override public void onStop() {
 		if (editor != null) editor.finishVisuals();
 		dismissColumns();
+		dismissHelp(); restoreToolbar();
 		super.onStop();
 	}
 	@Override public void onDestroyView() {
 		if (editor != null) editor.finishVisuals();
 		editor = null;
 		dismissColumns();
+		dismissHelp(); restoreToolbar();
 		super.onDestroyView();
 	}
 	private void dismissColumns() {
 		if (columnsDialog != null) { columnsDialog.dismiss(); columnsDialog = null; }
+	}
+	private void dismissHelp() {
+		if (helpDialog != null) { helpDialog.dismiss(); helpDialog = null; }
+	}
+	private void showHelp() {
+		if (editor == null || editor.isDragging()) return;
+		dismissHelp();
+		// Existing themed dialog component; this only explains the already implemented gestures.
+		helpDialog = new com.mishiranu.dashchan.content.security.SecureDialogBuilder(requireContext())
+				.setTitle(R.string.player_buttons_help_title).setMessage(R.string.player_buttons_help_body)
+				.setPositiveButton(R.string.player_buttons_help_close, null).create();
+		helpDialog.show();
 	}
 	private void chooseColumns() {
 		if (editor == null || editor.isDragging()) return;
@@ -103,7 +128,7 @@ public class PlayerButtonsFragment extends PreferenceFragment {
 		@Override public ViewType getViewType() { return ViewType.PLAYER_BUTTONS_PREVIEW; }
 		@Override public ViewHolder createViewHolder(ViewGroup parent) {
 			editor = new PlayerButtonsEditorView(parent.getContext(), () -> (ViewGroup) getView(),
-					PlayerButtonsFragment.this::chooseColumns);
+					PlayerButtonsFragment.this::chooseColumns, PlayerButtonsFragment.this::showHelp);
 			editor.setLayoutParams(new ViewGroup.LayoutParams(-1, -2));
 			return new ViewHolder(editor, null, null, null);
 		}

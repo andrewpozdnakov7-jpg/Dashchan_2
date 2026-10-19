@@ -29,9 +29,13 @@ import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.service.DownloadService;
 import com.mishiranu.dashchan.ui.MainActivity;
+import com.mishiranu.dashchan.ui.DownloadedUpdatePrompt;
+import com.mishiranu.dashchan.content.update.DownloadedUpdate;
+import com.mishiranu.dashchan.util.ConcurrentUtils;
 import com.mishiranu.dashchan.ui.StateActivity;
 import com.mishiranu.dashchan.util.AndroidUtils;
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -60,7 +64,7 @@ public class UpdaterActivity extends StateActivity {
 			new ActivityResultContracts.StartActivityForResult(), result -> {
 				permissionRequest = false;
 				if (getPackageManager().canRequestPackageInstalls()) performInstallation();
-				else finish();
+				else { android.util.Log.i("UpdateInstaller", "install_permission_denied"); finish(); }
 			});
 
 	private List<String> getFiles() {
@@ -156,6 +160,7 @@ public class UpdaterActivity extends StateActivity {
 			getIntent().putStringArrayListExtra(EXTRA_FILES, UpdateInstallSession.files(this));
 			index = UpdateInstallSession.index(this);
 			int status = UpdateInstallSession.status(this);
+			android.util.Log.i("UpdateInstaller", "resume_session status=" + status);
 			if (status == PackageInstaller.STATUS_PENDING_USER_ACTION) {
 				if (installModel.confirmation != null && !token.equals(confirmationLaunched)) {
 					Intent confirmation = installModel.confirmation;
@@ -195,13 +200,20 @@ public class UpdaterActivity extends StateActivity {
 		if (files != null && index >= 0 && files.size() > index) {
 			File file = FileProvider.getUpdatesFile(files.get(index));
 			if (file == null || !file.isFile()) {
+				android.util.Log.w("UpdateInstaller", "missing_apk client=" + isInstallingClient());
 				if (isInstallingClient()) {
 					clearClientInstall(this);
+					Toast.makeText(this, R.string.downloaded_update_unavailable, Toast.LENGTH_LONG).show();
 				}
 				index++;
 				performInstallation();
 			} else {
 				if (!getPackageManager().canRequestPackageInstalls()) {
+					if (isInstallingClient()) {
+						DownloadedUpdate.Entry entry = DownloadedUpdate.read(this);
+						try { if (entry != null && entry.file.equals(file.getName())) DownloadedUpdate.beginInstallation(this, entry.id); }
+						catch (IOException e) { android.util.Log.w("UpdateInstaller", "postpone_save_failed"); finish(); return; }
+					}
 					permissionRequest = true;
 					try {
 						unknownSources.launch(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
@@ -220,6 +232,7 @@ public class UpdaterActivity extends StateActivity {
 				}
 			}
 		} else {
+			android.util.Log.w("UpdateInstaller", "no_installable_files count=" + (files != null ? files.size() : -1));
 			finish();
 		}
 	}
@@ -230,6 +243,11 @@ public class UpdaterActivity extends StateActivity {
 		public void onReceive(Context context, Intent intent) {
 			if (intent == null || !Intent.ACTION_MY_PACKAGE_REPLACED.equals(intent.getAction())) {
 				return;
+			}
+			DownloadedUpdate.Entry entry = DownloadedUpdate.read(context);
+			if (entry != null && entry.code <= BuildConfig.VERSION_CODE) {
+				try { DownloadedUpdate.clear(context, entry.id); }
+				catch (IOException e) { android.util.Log.w("UpdateInstaller", "installed_receipt_clear_failed"); }
 			}
 			android.content.SharedPreferences preferences = context.getSharedPreferences(
 					RESUME_PREFERENCES, Context.MODE_PRIVATE);
@@ -266,11 +284,23 @@ public class UpdaterActivity extends StateActivity {
 	}
 
 	private static Connection activeConnection;
+	private static boolean preparingRequest;
+	private static volatile int requestGeneration;
+	private static final java.util.concurrent.Executor REQUESTS = ConcurrentUtils.newSingleThreadPool(3000, "UpdateRequest", null);
+	public static boolean isDownloadActive() { return preparingRequest || activeConnection != null; }
 
-	static Intent createInstallIntent(Context context, ArrayList<String> files) {
+	public static Intent createInstallIntent(Context context, ArrayList<String> files) {
 		return new Intent(context, UpdaterActivity.class)
 				.putStringArrayListExtra(EXTRA_FILES, files)
 				.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+	}
+	private static void installationReady(Context context, ArrayList<String> files) {
+		try { notifyInstallReady(context, files); }
+		catch (RuntimeException e) {
+			android.util.Log.w("UpdateInstaller", "ready_notification_failed type=" + e.getClass().getSimpleName());
+		}
+		android.util.Log.i("UpdateInstaller", "download_ready count=" + files.size());
+		if (!DownloadedUpdatePrompt.installIfVisible(files)) DownloadedUpdatePrompt.changed();
 	}
 
 	private static void notifyInstallReady(Context context, ArrayList<String> files) {
@@ -295,12 +325,16 @@ public class UpdaterActivity extends StateActivity {
 	private static class Connection implements ServiceConnection, DownloadService.Callback {
 		private final Context context;
 		private final List<DownloadService.DownloadItem> downloadItems;
+		private final ArrayList<String> installFiles;
 		private final HashMap<String, Boolean> status = new HashMap<>();
 
-		public Connection(Context context, List<DownloadService.DownloadItem> downloadItems) {
+		public Connection(Context context, List<DownloadService.DownloadItem> downloadItems, ArrayList<String> installFiles) {
 			this.context = context;
 			this.downloadItems = downloadItems;
-			context.bindService(new Intent(context, DownloadService.class), this, BIND_AUTO_CREATE);
+			this.installFiles = installFiles;
+			if (!context.bindService(new Intent(context, DownloadService.class), this, BIND_AUTO_CREATE)) {
+				throw new IllegalStateException("Cannot connect to download service");
+			}
 		}
 
 		private DownloadService.Binder binder;
@@ -338,37 +372,19 @@ public class UpdaterActivity extends StateActivity {
 
 		@Override
 		public void onFinishDownloading(boolean success, DataFile.Target target, String path, String name) {
-			if (target == DataFile.Target.UPDATES && StringUtils.isEmpty(path)) {
-				status.put(name, success);
+			if (target != DataFile.Target.UPDATES || !StringUtils.isEmpty(path)) return;
+			status.put(name, success);
+			boolean successAll = true;
+			for (DownloadService.DownloadItem downloadItem : downloadItems) {
+				Boolean result = status.get(downloadItem.name);
+				if (result == null) return;
+				if (!result) successAll = false;
 			}
-			if (success) {
-				boolean successAll = true;
-				for (DownloadService.DownloadItem downloadItem : downloadItems) {
-					Boolean status = this.status.get(downloadItem.name);
-					if (status == null || !status) {
-						successAll = false;
-						break;
-					}
-				}
-				if (successAll) {
-					if (finish()) {
-						ArrayList<String> files = new ArrayList<>(downloadItems.size());
-						File directory = FileProvider.getUpdatesDirectory();
-						for (DownloadService.DownloadItem downloadItem : downloadItems) {
-							if (!new File(directory, downloadItem.name).exists()) {
-								break;
-							}
-							files.add(downloadItem.name);
-						}
-						if (files.size() == downloadItems.size()) {
-							notifyInstallReady(context, files);
-							try {
-								context.startActivity(createInstallIntent(context, files));
-							} catch (RuntimeException e) {
-								e.printStackTrace();
-							}
-						}
-					}
+			if (finish()) {
+				if (successAll) installationReady(context, installFiles);
+				else {
+					android.util.Log.w("UpdateInstaller", "download_queue_failed");
+					DownloadedUpdatePrompt.changed();
 				}
 			}
 		}
@@ -378,13 +394,6 @@ public class UpdaterActivity extends StateActivity {
 			finish();
 		}
 
-		public void cancel() {
-			if (binder != null) {
-				binder.unregister(this);
-				binder = null;
-				context.unbindService(this);
-			}
-		}
 	}
 
 	public static class Request {
@@ -393,14 +402,20 @@ public class UpdaterActivity extends StateActivity {
 		public final Uri uri;
 		public final byte[] sha256sum;
 		public final ChanManager.Fingerprints checkFingerprints;
+		public final long versionCode, length;
 
 		public Request(String extensionName, String versionName, Uri uri,
 				byte[] sha256sum, ChanManager.Fingerprints checkFingerprints) {
+			this(extensionName, versionName, uri, sha256sum, checkFingerprints, -1, -1);
+		}
+		public Request(String extensionName, String versionName, Uri uri,
+				byte[] sha256sum, ChanManager.Fingerprints checkFingerprints, long versionCode, long length) {
 			this.extensionName = extensionName;
 			this.versionName = versionName;
 			this.uri = uri;
 			this.sha256sum = sha256sum;
 			this.checkFingerprints = checkFingerprints;
+			this.versionCode = versionCode; this.length = length;
 		}
 	}
 
@@ -417,6 +432,7 @@ public class UpdaterActivity extends StateActivity {
 			return;
 		}
 		DownloadService.DownloadItem clientDownloadItem = null;
+		Request clientRequest = null;
 		ArrayList<DownloadService.DownloadItem> downloadItems = new ArrayList<>();
 		for (Request request : requests) {
 			if (!BuildConfig.ALLOW_APPLICATION_SELF_UPDATE &&
@@ -428,6 +444,7 @@ public class UpdaterActivity extends StateActivity {
 					request.uri, name, request.sha256sum, request.checkFingerprints);
 			if (ChanManager.EXTENSION_NAME_CLIENT.equals(request.extensionName)) {
 				clientDownloadItem = downloadItem;
+				clientRequest = request;
 			} else {
 				downloadItems.add(downloadItem);
 			}
@@ -439,8 +456,48 @@ public class UpdaterActivity extends StateActivity {
 			return;
 		}
 		if (activeConnection != null) {
-			activeConnection.cancel();
+			// Do not attach a second owner to a file the service is still writing.
+			android.util.Log.i("UpdateInstaller", "download_already_active");
+			return;
 		}
-		activeConnection = new Connection(MainApplication.getInstance(), downloadItems);
+		final int generation = ++requestGeneration;
+		final Request client = clientRequest;
+		final DownloadService.DownloadItem clientItem = clientDownloadItem;
+		Context context = MainApplication.getInstance();
+		preparingRequest = true;
+		REQUESTS.execute(() -> {
+			if (generation != requestGeneration) return;
+			DownloadedUpdate.Check cached = null;
+			boolean failed = false;
+			try {
+				if (client != null) cached = DownloadedUpdate.check(context, DownloadedUpdate.remember(context, client));
+			} catch (IOException | RuntimeException e) {
+				failed = true;
+				android.util.Log.w("UpdateInstaller", "receipt_save_failed type=" + e.getClass().getSimpleName());
+			}
+			final boolean failure = failed;
+			final DownloadedUpdate.Check check = cached;
+			new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
+				if (generation != requestGeneration) return;
+				preparingRequest = false;
+				if (failure) { Toast.makeText(context, R.string.unknown_error, Toast.LENGTH_LONG).show(); return; }
+				ArrayList<String> files = new ArrayList<>();
+				for (DownloadService.DownloadItem item : downloadItems) files.add(item.name);
+				if (check == DownloadedUpdate.Check.READY || check == DownloadedUpdate.Check.INSTALLED) {
+					downloadItems.remove(clientItem);
+					if (check == DownloadedUpdate.Check.INSTALLED) files.remove(clientItem.name);
+					android.util.Log.i("UpdateInstaller", "cached_client result=" + check);
+				}
+				if (downloadItems.isEmpty()) {
+					if (!files.isEmpty()) installationReady(context, files);
+				} else {
+					try { activeConnection = new Connection(context, downloadItems, files); }
+					catch (RuntimeException e) {
+						android.util.Log.w("UpdateInstaller", "download_bind_failed type=" + e.getClass().getSimpleName());
+						Toast.makeText(context, R.string.unknown_error, Toast.LENGTH_LONG).show();
+					}
+				}
+			});
+		});
 	}
 }

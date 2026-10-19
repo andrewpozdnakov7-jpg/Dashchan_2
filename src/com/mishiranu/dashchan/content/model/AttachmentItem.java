@@ -28,6 +28,8 @@ public abstract class AttachmentItem {
 	private final Master master;
 
 	public abstract Uri getFileUri(Chan chan);
+	/** Some display-only attachments fall back to a thumbnail when the original is missing. */
+	public boolean hasOriginalFile() { return false; }
 	public abstract Uri getThumbnailUri(Chan chan);
 	public abstract String getThumbnailKey(Chan chan);
 	public abstract String getDialogTitle(Chan chan);
@@ -67,9 +69,12 @@ public abstract class AttachmentItem {
 
 		private String thumbnailKey;
 
+		private final boolean originalFileAvailable;
+
 		public FileAttachmentItem(Master master, ChanLocator locator, Uri fileUri, Uri thumbnailUri,
 				String originalName, int size, int width, int height) {
 			super(master);
+			originalFileAvailable = fileUri != null;
 			if (fileUri == null) {
 				fileUri = thumbnailUri;
 			}
@@ -98,6 +103,8 @@ public abstract class AttachmentItem {
 		public Uri getFileUri(Chan chan) {
 			return chan.locator.convert(fileUri);
 		}
+
+		@Override public boolean hasOriginalFile() { return originalFileAvailable; }
 
 		@Override
 		public Uri getThumbnailUri(Chan chan) {

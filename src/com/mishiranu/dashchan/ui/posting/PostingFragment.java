@@ -84,6 +84,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 	private static final String EXTRA_BOARD_NAME = "boardName";
 	private static final String EXTRA_THREAD_NUMBER = "threadNumber";
 	private static final String EXTRA_REPLY_DATA_LIST = "replyDataList";
+	private static final String EXTRA_ROLLOVER = "rollover";
 	private static final String CHAN_NAME_DVACH = "dvach";
 	private static final String CHAN_NAME_APACHAN = "apachan";
 	private static final String COMMAND_MONKEY = "@monkey";
@@ -116,6 +117,12 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		args.putString(EXTRA_THREAD_NUMBER, threadNumber);
 		args.putParcelableArrayList(EXTRA_REPLY_DATA_LIST, new ArrayList<>(replyDataList));
 		setArguments(args);
+	}
+
+	public static PostingFragment forRollover(String chanName, String boardName) {
+		PostingFragment fragment = new PostingFragment(chanName, boardName, null, Collections.emptyList());
+		fragment.requireArguments().putBoolean(EXTRA_ROLLOVER, true);
+		return fragment;
 	}
 
 	private String getChanName() {
@@ -396,7 +403,10 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		StringBuilder builder = new StringBuilder();
 		int commentCarriage = 0;
 
-		DraftsStorage.PostDraft postDraft = draftController.restorePostDraft(getChanName(), getBoardName(), getThreadNumber());
+		boolean rollover = requireArguments().getBoolean(EXTRA_ROLLOVER);
+		DraftsStorage.PostDraft postDraft = rollover
+				? draftController.restoreRolloverDraft(getChanName(), getBoardName())
+				: draftController.restorePostDraft(getChanName(), getBoardName(), getThreadNumber());
 		if (postDraft != null) {
 			if (!StringUtils.isEmpty(postDraft.comment)) {
 				builder.append(postDraft.comment);
@@ -427,7 +437,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		boolean savedCaptcha = savedInstanceState != null && savedInstanceState.containsKey(EXTRA_CAPTCHA_DRAFT);
 		DraftsStorage.CaptchaDraft captchaDraft = savedCaptcha
 				? AndroidUtils.getParcelable(savedInstanceState, EXTRA_CAPTCHA_DRAFT, DraftsStorage.CaptchaDraft.class)
-				: draftController.getCaptchaDraft(getChanName());
+				: rollover ? null : draftController.getCaptchaDraft(getChanName());
 		boolean captchaRestoreSuccess = captchaController.restoreDraft(captchaDraft, savedCaptcha, captcha);
 
 		List<Replyable.ReplyData> replyDataList = savedInstanceState != null ? Collections.emptyList()
@@ -625,14 +635,18 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 			resizeComment(true);
 		}
 
-		if (allowPosting) {
-			consumeFuturePostText();
+		// A rollover starts only with its OP payload. Leave unrelated shared inputs queued.
+		if (!requireArguments().getBoolean(EXTRA_ROLLOVER)) {
+			if (allowPosting) {
+				consumeFuturePostText();
+			}
+			ArrayList<DraftsStorage.AttachmentDraft> futureAttachmentDrafts = draftController.getFutureAttachmentDrafts();
+			if (!futureAttachmentDrafts.isEmpty()) {
+				attachmentController.addFutureAttachments(futureAttachmentDrafts);
+				draftController.consumeFutureAttachmentDrafts();
+			}
 		}
-		ArrayList<DraftsStorage.AttachmentDraft> futureAttachmentDrafts = draftController.getFutureAttachmentDrafts();
-		if (!futureAttachmentDrafts.isEmpty()) {
-			attachmentController.addFutureAttachments(futureAttachmentDrafts);
-			draftController.consumeFutureAttachmentDrafts();
-		}
+		requireArguments().putBoolean(EXTRA_ROLLOVER, false);
 
 		sendCoordinator.deliverPendingUiEvents();
 		draftController.resetSavedGuard();

@@ -4,6 +4,45 @@ import static org.junit.Assert.*;
 import org.junit.Test;
 
 public class EditorHeightPolicyTest {
+	@Test public void adaptiveEditorRetainsEmptyFormHeightWithoutAttachments() {
+		assertEquals(800, EditorHeightPolicy.adaptiveAutomaticHeight(1000, 200, 0, 100, false));
+	}
+	@Test public void adaptiveEditorShrinksOnlyBySmallAttachmentHeight() {
+		assertEquals(680, EditorHeightPolicy.adaptiveAutomaticHeight(1000, 320, 120, 100, false));
+	}
+	@Test public void attachmentCountCannotShrinkAdaptiveEditorBeyondTwentyPercent() {
+		assertEquals(640, EditorHeightPolicy.adaptiveAutomaticHeight(1000, 800, 600, 100, false));
+		assertEquals(640, EditorHeightPolicy.adaptiveAutomaticHeight(1000, 3200, 3000, 100, false));
+		assertEquals(643, EditorHeightPolicy.adaptiveAutomaticHeight(1003, 3200, 3000, 100, false));
+	}
+	@Test public void removingAttachmentsRestoresAdaptiveEditorHeight() {
+		assertEquals(640, EditorHeightPolicy.adaptiveAutomaticHeight(1000, 3200, 3000, 100, false));
+		assertEquals(800, EditorHeightPolicy.adaptiveAutomaticHeight(1000, 200, 0, 100, false));
+	}
+	@Test public void keyboardVisibleEditorDoesNotLoseHeightToAnyAttachmentCount() {
+		int emptyHeight = EditorHeightPolicy.adaptiveAutomaticHeight(420, 160, 0, 96, true);
+		assertEquals(260, emptyHeight);
+		for (int attachments : new int[] {0, 50, 450, 3000}) {
+			assertEquals(emptyHeight,
+					EditorHeightPolicy.adaptiveAutomaticHeight(420, 160 + attachments, attachments, 96, true));
+		}
+	}
+	@Test public void keyboardOnlyReducesAvailableViewportAndRestoresHiddenKeyboardPolicy() {
+		assertEquals(640, EditorHeightPolicy.adaptiveAutomaticHeight(1000, 800, 600, 96, false));
+		assertEquals(300, EditorHeightPolicy.adaptiveAutomaticHeight(500, 800, 600, 96, true));
+		assertEquals(800, EditorHeightPolicy.adaptiveAutomaticHeight(1000, 800, 600, 96, true));
+		assertEquals(640, EditorHeightPolicy.adaptiveAutomaticHeight(1000, 800, 600, 96, false));
+	}
+	@Test public void adaptiveEditorRetainsMinimumInTinyViewports() {
+		assertEquals(96, EditorHeightPolicy.adaptiveAutomaticHeight(120, 660, 500, 96, true));
+		assertEquals(96, EditorHeightPolicy.adaptiveAutomaticHeight(120, 660, 500, 96, false));
+	}
+	@Test public void adaptiveEditorClampsInvalidGeometry() {
+		assertEquals(800, EditorHeightPolicy.adaptiveAutomaticHeight(1000, 200, -1, 100, false));
+		assertEquals(800, EditorHeightPolicy.adaptiveAutomaticHeight(1000, 200, 2000, 100, false));
+		assertEquals(1, EditorHeightPolicy.adaptiveAutomaticHeight(-1, -1, -1, -1, false));
+		assertEquals(1, EditorHeightPolicy.adaptiveAutomaticHeight(-1, -1, -1, -1, true));
+	}
 	@Test public void automaticWithoutKeyboardPreservesAvailableSpacePolicy() {
 		EditorHeightPolicy.Bounds bounds = bounds(EditorHeightPolicy.Mode.AUTOMATIC, false, 400, 140, 8);
 		assertTrue(bounds.pixels);

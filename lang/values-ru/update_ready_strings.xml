@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<string name="downloaded_update_ready">Slooop %1$s уже скачан. Установить обновление сейчас?</string>
+	<string name="downloaded_update_install">Установить</string>
+	<string name="downloaded_update_later">Позже</string>
+	<string name="downloaded_update_unavailable">Скачанное обновление отсутствует или не прошло проверку. Скачайте его заново в разделе обновлений.</string>
+</resources>

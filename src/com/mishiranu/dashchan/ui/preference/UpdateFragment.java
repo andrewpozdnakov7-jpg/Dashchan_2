@@ -481,7 +481,7 @@ public class UpdateFragment extends BaseListFragment {
 						if (packageItem.source != null) {
 							requests.add(new UpdaterActivity.Request(listItem.extensionName,
 									packageItem.versionName, packageItem.source,
-									packageItem.sha256sum, packageItem.fingerprints));
+									packageItem.sha256sum, packageItem.fingerprints, packageItem.versionCode, packageItem.length));
 						}
 					}
 				}

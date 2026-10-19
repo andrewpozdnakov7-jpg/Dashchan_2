@@ -266,6 +266,7 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 
 	private void finishGalleryRefresh(ErrorItem error) { refreshController.finishGalleryRefresh(error); }
 	private boolean windowedMode;
+	private boolean showOriginalPostTitle = Preferences.isShowOriginalPostTitle();
 	private ReadPostsWindowTask postsWindowTask;
 	private int requestedWindowPosition = -1;
 	private PostNumber requestedWindowPostNumber;
@@ -729,6 +730,7 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 	protected void onResume() {
 		// Experimental toolbar preferences can change while this thread remains on the back stack.
 		updateOptionsMenu();
+		updateOriginalPostTitle();
 		if (getAdapter().setRemoveHiddenPosts(Preferences.isRemoveHiddenPosts())) {
 			updateImportantPostsFastScrollBarDecorationData();
 		}
@@ -736,6 +738,14 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 		if (retainableExtra.dialogsState != null) {
 			retainableExtra.dialogsState.dropState();
 			retainableExtra.dialogsState = null;
+		}
+	}
+
+	private void updateOriginalPostTitle() {
+		boolean show = Preferences.isShowOriginalPostTitle();
+		if (showOriginalPostTitle != show) {
+			showOriginalPostTitle = show;
+			getAdapter().refreshOriginalPostTitle();
 		}
 	}
 
@@ -1063,6 +1073,7 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 		menu.add(0, R.id.menu_gallery_toolbar, 1000, R.string.gallery).setIcon(galleryIcon)
 				.setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
 		menu.add(0, R.id.menu_select, 0, R.string.select);
+		menu.add(0, R.id.menu_thread_title, 0, R.string.thread_title).setCheckable(true);
 		SubMenu contentsMenu = menu.addSubMenu(0, R.id.menu_contents, 0, R.string.contents);
 		contentsMenu.getItem().setIcon(getActionBarIcon(R.attr.iconActionSync))
 				.setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM);
@@ -1096,6 +1107,7 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 		RetainableExtra retainableExtra = getRetainableExtra(RetainableExtra.FACTORY);
 		menu.findItem(R.id.menu_add_post).setVisible(replyable != null && replyable.onRequestReply(false));
 		menu.findItem(R.id.menu_search).setVisible(!windowedMode);
+		menu.findItem(R.id.menu_thread_title).setChecked(Preferences.isShowOriginalPostTitle());
 		boolean galleryButton = Preferences.isThreadGalleryButtonEnabled();
 		menu.findItem(R.id.menu_gallery).setVisible(!windowedMode && !galleryButton);
 		menu.findItem(R.id.menu_gallery_toolbar).setVisible(!windowedMode && galleryButton);
@@ -1162,6 +1174,13 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 			}
 			getUiManager().navigator().navigateGallery(page.chanName, gallerySet, imageIndex,
 					null, GalleryOverlay.NavigatePostMode.ENABLED, true);
+			return true;
+		} else if (item.getItemId() == R.id.menu_thread_title) {
+			boolean show = !Preferences.isShowOriginalPostTitle();
+			Preferences.setShowOriginalPostTitle(show);
+			item.setChecked(Preferences.isShowOriginalPostTitle());
+			updateOriginalPostTitle();
+			updateOptionsMenu();
 			return true;
 		} else if (item.getItemId() == R.id.menu_select) {
 			selectionMode = startActionMode(new SelectionCallback(this));

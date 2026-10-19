@@ -27,6 +27,7 @@ public class SecurityStoreTest {
 	}
 	@After public void cleanup() throws Exception {
 		if (context != null) {
+			RememberedAuthentication.revoke(context);
 			String alias = SecurityStore.pinAlias(context);
 			assertTrue(alias.contains(".test."));
 			java.security.KeyStore keys = java.security.KeyStore.getInstance("AndroidKeyStore"); keys.load(null); keys.deleteEntry(alias);
@@ -129,11 +130,14 @@ public class SecurityStoreTest {
 		SecurityStore.foreground(context, true);
 		assertTrue(SecurityStore.locked(context));
 	}
-	@Test public void processRestartIntervalChangeAndPendingResetRevokeRememberedAuthentication() throws Exception {
+	@Test public void processRestartRestoresButIntervalChangeAndPendingResetRevokeRememberedAuthentication() throws Exception {
 		prepareRecentAuthentication(3);
+		String original = SecurityStore.update(context, s -> s.getJSONObject(RememberedAuthentication.KEY).toString());
 		SecurityStore.processStarted(context, true);
+		assertTrue(SecurityStore.locked(context)); // Background startup must not open the profile.
 		SecurityStore.foreground(context, true);
-		assertTrue(SecurityStore.locked(context));
+		assertFalse(SecurityStore.locked(context));
+		assertEquals(original, SecurityStore.update(context, s -> s.getJSONObject(RememberedAuthentication.KEY).toString()));
 		SecurityStore.authenticatedUnlock(context, SecuritySessionProvider.generation(context));
 		SecurityStore.update(context, s -> { s.put(ReauthenticationPolicy.KEY, 5); return null; });
 		SecurityStore.foreground(context, true);
@@ -142,6 +146,119 @@ public class SecurityStoreTest {
 		SecurityStore.update(context, s -> { s.put("reset_pending", true); return null; });
 		SecurityStore.foreground(context, true);
 		assertTrue(SecurityStore.locked(context));
+	}
+	@Test public void repeatedColdEntryUsesTheOriginalReceiptWithoutRefreshingIt() throws Exception {
+		prepareRecentAuthentication(5);
+		String original = SecurityStore.update(context, s -> s.getJSONObject(RememberedAuthentication.KEY).toString());
+		for (int i = 0; i < 3; i++) {
+			SecurityStore.processStarted(context, true);
+			assertTrue(SecurityStore.locked(context));
+			SecurityStore.foreground(context, true);
+			assertFalse(SecurityStore.locked(context));
+			assertEquals(original, SecurityStore.update(context, s -> s.getJSONObject(RememberedAuthentication.KEY).toString()));
+		}
+	}
+	@Test public void verifiedReceiptCanRestoreAFreshAuthorityWithoutOldRamState() throws Exception {
+		prepareRecentAuthentication(5);
+		RememberedAuthentication receipt = SecurityStore.update(context, s -> RememberedAuthentication.read(context, s));
+		assertNotNull(receipt);
+		// A new provider object has no sessions, owners, generations or old client Binder.
+		SecuritySessionProvider authority = new SecuritySessionProvider();
+		android.content.pm.ProviderInfo info = new android.content.pm.ProviderInfo();
+		info.authority = context.getPackageName() + ".test.fresh-session";
+		authority.attachInfo(context, info);
+		String key = SecurityStore.directory(context).getAbsolutePath();
+		android.os.Bundle request = new android.os.Bundle(); request.putBinder("client", new android.os.Binder());
+		assertFalse(authority.call("query", key, request).getBoolean("unlocked"));
+		android.os.Bundle active = authority.call("active", key, request);
+		request.putLong("generation", active.getLong("generation"));
+		request.putInt("minutes", receipt.minutes); request.putLong("authenticated_at", receipt.authenticatedAt);
+		assertTrue(authority.call("restore", key, request).getBoolean("unlocked"));
+		authority.call("lock", key, request);
+		request.putLong("generation", authority.call("query", key, request).getLong("generation"));
+		assertFalse(authority.call("restore", key, request).getBoolean("unlocked"));
+	}
+	@Test public void forgedOrMalformedReceiptCannotRestoreEvenWithALiveRamGrant() throws Exception {
+		for (String field : new String[]{"at", "boot", "minutes", "version", "tag"}) {
+			prepareRecentAuthentication(5);
+			SecurityStore.update(context, s -> {
+				org.json.JSONObject receipt = s.getJSONObject(RememberedAuthentication.KEY);
+				if (field.equals("tag")) receipt.put(field, "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=");
+				else receipt.put(field, receipt.getLong(field) + 1);
+				return null;
+			});
+			SecurityStore.foreground(context, false);
+			SecurityStore.foreground(context, true);
+			assertTrue("Tampered " + field, SecurityStore.locked(context));
+		}
+		prepareRecentAuthentication(5);
+		SecurityStore.update(context, s -> { s.getJSONObject(RememberedAuthentication.KEY).put("at", "123"); return null; });
+		SecurityStore.foreground(context, false); SecurityStore.foreground(context, true);
+		assertTrue(SecurityStore.locked(context));
+	}
+	@Test public void explicitLockRevokesTheIndependentKeyEvenIfAnOldReceiptIsReplayed() throws Exception {
+		prepareRecentAuthentication(5);
+		org.json.JSONObject receipt = SecurityStore.update(context, s -> new org.json.JSONObject(s.getJSONObject(RememberedAuthentication.KEY).toString()));
+		SecurityStore.lock(context);
+		SecurityStore.update(context, s -> { s.put(RememberedAuthentication.KEY, receipt); return null; });
+		SecurityStore.processStarted(context, true); SecurityStore.foreground(context, true);
+		assertTrue(SecurityStore.locked(context));
+		// A new proof creates a different key; it cannot authenticate the old receipt either.
+		SecurityStore.authenticatedUnlock(context, SecuritySessionProvider.generation(context));
+		SecurityStore.update(context, s -> { s.put(RememberedAuthentication.KEY, receipt); return null; });
+		SecurityStore.foreground(context, false); SecurityStore.foreground(context, true);
+		assertTrue(SecurityStore.locked(context));
+	}
+	@Test public void failedWriteCannotReviveTheOldDiskReceiptOnNextProcessEntry() throws Exception {
+		prepareRecentAuthentication(5);
+		String original = SecurityStore.update(context, s -> s.getJSONObject(RememberedAuthentication.KEY).toString());
+		File blocker = new File(SecurityStore.directory(context), "state.json.new");
+		assertTrue(blocker.mkdir()); assertTrue(new File(blocker, "cannot-replace").createNewFile());
+		try { SecurityStore.update(context, s -> { s.put("write-failure-fixture", true); return null; }); fail("Write must fail"); }
+		catch (IOException expected) {}
+		// The old record may remain perfectly readable, but its key must already be invalid.
+		assertEquals(original, SecurityStore.update(context, s -> s.getJSONObject(RememberedAuthentication.KEY).toString()));
+		SecurityStore.processStarted(context, true); SecurityStore.foreground(context, true);
+		assertTrue(SecurityStore.locked(context));
+	}
+	@Test public void failedManualLockCommitStillRevokesTheOldReceipt() throws Exception {
+		prepareRecentAuthentication(5);
+		File blocker = new File(SecurityStore.directory(context), "state.json.new");
+		assertTrue(blocker.mkdir()); assertTrue(new File(blocker, "cannot-replace").createNewFile());
+		try { SecurityStore.lock(context); fail("Receipt removal must report failed commit"); }
+		catch (IOException expected) {}
+		SecurityStore.processStarted(context, true); SecurityStore.foreground(context, true);
+		assertTrue(SecurityStore.locked(context));
+	}
+	@Test public void profileChangeAndCredentialChangeInvalidateTheReceipt() throws Exception {
+		prepareRecentAuthentication(5);
+		SecurityStore.update(context, s -> { s.put("profile_generation", s.optLong("profile_generation") + 1); return null; });
+		SecurityStore.foreground(context, true); assertTrue(SecurityStore.locked(context));
+		SecurityStore.authenticatedUnlock(context, SecuritySessionProvider.generation(context));
+		SecurityStore.setPin(context, "654321".toCharArray(), true);
+		SecurityStore.foreground(context, true); assertTrue(SecurityStore.locked(context));
+	}
+	@Test public void freshSettingsProofCanCommitIntervalBeforeItsLeaseIsRevoked() throws Exception {
+		prepareRecentAuthentication(5);
+		long lease = SecuritySessionProvider.generation(context);
+		SecurityStore.authorizedUpdate(context, () -> lease == SecuritySessionProvider.generation(context)
+				&& SecuritySessionProvider.isUnlocked(context), s -> { s.put(ReauthenticationPolicy.KEY, 10); return null; });
+		assertEquals(lease + 1, SecuritySessionProvider.generation(context));
+		assertTrue(SecurityStore.locked(context));
+		assertFalse(SecurityStore.update(context, s -> s.has(RememberedAuthentication.KEY)));
+		SecurityStore.authenticatedUnlock(context, lease + 1);
+		SecurityStore.processStarted(context, true); SecurityStore.foreground(context, true);
+		assertFalse(SecurityStore.locked(context));
+	}
+	@Test public void lostKeystoreKeyCannotAuthorizeAfterProcessEntryButPinStillWorks() throws Exception {
+		prepareRecentAuthentication(5);
+		RememberedAuthentication.revoke(context);
+		SecurityStore.processStarted(context, true); SecurityStore.foreground(context, true);
+		assertTrue(SecurityStore.locked(context));
+		assertEquals(SecurityStore.Result.PRIMARY, SecurityStore.verify(context, "123456".toCharArray(), true));
+		SecurityStore.authenticatedUnlock(context, SecuritySessionProvider.generation(context));
+		SecurityStore.processStarted(context, true); SecurityStore.foreground(context, true);
+		assertFalse(SecurityStore.locked(context));
 	}
 	@Test public void defaultImmediateAndStaleAuthenticationDoNotGainAGracePeriod() throws Exception {
 		prepareRecentAuthentication(0);

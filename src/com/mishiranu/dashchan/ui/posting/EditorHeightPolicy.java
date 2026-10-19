@@ -13,6 +13,18 @@ public final class EditorHeightPolicy {
 		return Math.max(MIN_LINES, Math.min(MAX_LINES, lines));
 	}
 
+	/** With the keyboard hidden attachments may consume at most one fifth of the
+	 * empty-form height. With the keyboard visible all attachments belong below
+	 * the editor in the outer form's scroll range and do not reduce its height. */
+	public static int adaptiveAutomaticHeight(int available, int otherHeight, int attachmentHeight,
+			int minimum, boolean keyboard) {
+		minimum = Math.max(1, minimum);
+		otherHeight = Math.max(0, otherHeight);
+		attachmentHeight = Math.max(0, Math.min(otherHeight, attachmentHeight));
+		int baseline = Math.max(minimum, Math.max(0, available) - (otherHeight - attachmentHeight));
+		return keyboard ? baseline : Math.max(minimum, baseline - Math.min(attachmentHeight, baseline / 5));
+	}
+
 	public static final class Bounds {
 		public final boolean pixels;
 		public final int minimum, maximum;

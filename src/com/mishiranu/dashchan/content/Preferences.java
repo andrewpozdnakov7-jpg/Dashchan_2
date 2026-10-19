@@ -1040,6 +1040,10 @@ public class Preferences {
 		return PREFERENCES.getBoolean(KEY_SHOW_ORIGINAL_POST_TITLE, DEFAULT_SHOW_ORIGINAL_POST_TITLE);
 	}
 
+	public static void setShowOriginalPostTitle(boolean show) {
+		PREFERENCES.edit().put(KEY_SHOW_ORIGINAL_POST_TITLE, show).close();
+	}
+
 	public static final ChanKey KEY_DOMAIN = new ChanKey("domain");
 	public static final String KEY_AUTOMATIC_DOMAIN_SELECTION = "automatic_domain_selection";
 	public static final boolean DEFAULT_AUTOMATIC_DOMAIN_SELECTION = true;

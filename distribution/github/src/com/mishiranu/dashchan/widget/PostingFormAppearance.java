@@ -33,6 +33,7 @@ import androidx.core.graphics.ColorUtils;
 import chan.content.ChanMarkup;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
+import com.mishiranu.dashchan.ui.posting.EditorHeightPolicy;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.util.ViewUtils;
 import java.util.ArrayList;
@@ -889,9 +890,13 @@ public final class PostingFormAppearance {
 		}
 		int usableHeight = body.getHeight() - body.getPaddingTop() - body.getPaddingBottom();
 		int otherFields = dp(root, 16) + dp(root, 16);
+		boolean adaptive = Preferences.getPostingEditorHeightMode() == EditorHeightPolicy.Mode.AUTOMATIC;
 		for (int i = 0; i < form.getChildCount(); i++) {
 			View child = form.getChildAt(i);
-			if (child != editorContainer && child != actionPanel && child.getVisibility() != View.GONE) {
+			// Attachments extend the outer scroll range, not the fixed footer's minimum viewport.
+			if (child != editorContainer && child != actionPanel
+					&& (!adaptive || child.getId() != R.id.attachment_container)
+					&& child.getVisibility() != View.GONE) {
 				otherFields += child.getMeasuredHeight();
 				if (child.getLayoutParams() instanceof ViewGroup.MarginLayoutParams) {
 					ViewGroup.MarginLayoutParams params = (ViewGroup.MarginLayoutParams) child.getLayoutParams();

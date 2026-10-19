@@ -88,6 +88,18 @@ public class PostingStateControllersTest {
 		} finally { input.recycle(); output.recycle(); }
 	}
 
+	@Test public void rolloverRestorationNeverConsumesTheFailedSendQueue() {
+		Store store = new Store();
+		PostingDraftController controller = new PostingDraftController(store);
+		store.failed = post(controller);
+		assertNull(controller.restoreRolloverDraft("fixture-chan", "test"));
+		store.post = RolloverThreadDialog.createDraft("fixture-chan", "test", "New subject", "New OP", new ArrayList<>());
+		assertSame(store.post, controller.restoreRolloverDraft("fixture-chan", "test"));
+		store.queued = true;
+		assertNull(controller.restoreRolloverDraft("fixture-chan", "test"));
+		assertEquals(0, store.failedReads); assertEquals(0, store.postWrites);
+	}
+
 	@Test public void lifecycleSaveCapturesOnceBeforeStoreAndSkipsAfterSuccess() {
 		Store store = new Store();
 		PostingDraftController controller = new PostingDraftController(store);

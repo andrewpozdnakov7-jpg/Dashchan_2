@@ -541,6 +541,18 @@ public class PostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
 		notifyItemChanged(position, PAYLOAD_INVALIDATE_COMMENT);
 	}
 
+	/** Rebind only the loaded OP; no thread reload, window request or list reset. */
+	public void refreshOriginalPostTitle() {
+		for (PostNumber number : postNumbers) {
+			PostItem post = postItemsMap.get(number);
+			if (post != null && post.isOriginalPost()) {
+				int position = positionOfPostNumber(number);
+				if (position >= 0) notifyItemChanged(position, SimpleViewHolder.EMPTY_PAYLOAD);
+				break;
+			}
+		}
+	}
+
 	public void reloadAttachment(int position, AttachmentItem attachmentItem) {
 		notifyItemChanged(position, attachmentItem);
 	}

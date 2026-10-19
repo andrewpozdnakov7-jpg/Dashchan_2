@@ -2,10 +2,12 @@ package com.mishiranu.dashchan.ui.posting;
 
 import android.graphics.Paint;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.EditText;
 import android.widget.ScrollView;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
+import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.widget.PostingFormAppearance;
 import java.util.function.Consumer;
@@ -33,6 +35,7 @@ public final class PostingCommentSizing {
 		int adaptiveMinimum = mode == EditorHeightPolicy.Mode.AUTOMATIC
 				? PostingFormAppearance.minimumEditorInputHeight(editor) : 0;
 		int otherHeight = 0;
+		int attachmentHeight = 0;
 		if (mode == EditorHeightPolicy.Mode.AUTOMATIC && (!keyboard || adaptiveMinimum > 0)) {
 			View form = scroll.getChildAt(0);
 			if (form == null) return;
@@ -40,16 +43,29 @@ public final class PostingCommentSizing {
 			form.measure(View.MeasureSpec.makeMeasureSpec(Math.max(0, width), View.MeasureSpec.EXACTLY),
 					View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
 			otherHeight = form.getMeasuredHeight() - editor.getMeasuredHeight();
+			if (adaptiveMinimum > 0) {
+				View attachments = form.findViewById(R.id.attachment_container);
+				if (attachments != null && attachments.getVisibility() != View.GONE) {
+					attachmentHeight = attachments.getMeasuredHeight();
+					if (attachments.getLayoutParams() instanceof ViewGroup.MarginLayoutParams) {
+						ViewGroup.MarginLayoutParams params = (ViewGroup.MarginLayoutParams) attachments.getLayoutParams();
+						attachmentHeight += params.topMargin + params.bottomMargin;
+					}
+				}
+			}
 		}
 		if ((keyboard && adaptiveMinimum == 0) || mode != EditorHeightPolicy.Mode.AUTOMATIC) {
 			available = PostingFormAppearance.editorAvailableHeight(editor, available);
 		}
 		EditorHeightPolicy.Bounds bounds = EditorHeightPolicy.calculate(mode, keyboard && adaptiveMinimum == 0, available, otherHeight,
 				padding, editor.getLineHeight(), Preferences.getPostingEditorFixedLines());
-		int pixelHeight = adaptiveMinimum > 0 ? Math.max(adaptiveMinimum, available - otherHeight) : bounds.minimum;
+		int pixelHeight = adaptiveMinimum > 0
+				? EditorHeightPolicy.adaptiveAutomaticHeight(available, otherHeight, attachmentHeight, adaptiveMinimum, keyboard)
+				: bounds.minimum;
 		if (diagnostics != null) diagnostics.accept("resize ime=" + keyboard + " mode=" + mode
 				+ " available=" + available + " min=" + bounds.minimum + " max=" + bounds.maximum
 				+ " pixels=" + bounds.pixels + " adaptive_min=" + adaptiveMinimum
+				+ " attachments_height=" + attachmentHeight
 				+ " target_pixels=" + (bounds.pixels ? pixelHeight : 0));
 		if (bounds.pixels) {
 			int height = pixelHeight;

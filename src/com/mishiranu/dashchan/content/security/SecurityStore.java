@@ -42,12 +42,12 @@ public final class SecurityStore {
 			Change<T> change) throws IOException {
 		boolean acquired;
 		try { acquired = MONITOR.tryLock(250, java.util.concurrent.TimeUnit.MILLISECONDS); }
-		catch (InterruptedException e) { Thread.currentThread().interrupt(); SecuritySessionProvider.revoke(context); throw new IOException("Security operation interrupted"); }
-		if (!acquired) { SecuritySessionProvider.revoke(context); throw new IOException("Security storage busy"); }
+		catch (InterruptedException e) { Thread.currentThread().interrupt(); revokeAfterFailure(context); throw new IOException("Security operation interrupted"); }
+		if (!acquired) { revokeAfterFailure(context); throw new IOException("Security storage busy"); }
 		try {
 			File directory = directory(context);
 			if (!directory.isDirectory() && !directory.mkdirs()) {
-				SecuritySessionProvider.revoke(context);
+				revokeAfterFailure(context);
 				throw new IOException("Security storage unavailable");
 			}
 			AtomicFile file = new AtomicFile(new File(directory, "state.json"));
@@ -66,7 +66,20 @@ public final class SecurityStore {
 				int previousInterval = state.optInt(ReauthenticationPolicy.KEY, 0);
 				String previousMode = state.optString(AuthenticationPolicy.KEY), previousBiometricAlias = state.optString("biometric_alias");
 				boolean previousBiometric = state.optBoolean("biometric");
+				long previousProfile = state.optLong("profile_generation");
 				T result = change.apply(state);
+				boolean revoke = !previousPrimary.equals(state.optString("primary")) || !previousAdditional.equals(state.optString("additional"))
+						|| previousInterval != state.optInt(ReauthenticationPolicy.KEY, 0)
+						|| !previousMode.equals(state.optString(AuthenticationPolicy.KEY))
+						|| !previousBiometricAlias.equals(state.optString("biometric_alias"))
+						|| previousBiometric != state.optBoolean("biometric") || previousProfile != state.optLong("profile_generation")
+						|| state.optBoolean("reset_pending");
+				if (revoke) {
+					// Invalidate the independent key BEFORE writing: even a failed disk commit
+					// cannot make the old receipt reusable after a later process restart.
+					RememberedAuthentication.revoke(context);
+					state.remove(RememberedAuthentication.KEY);
+				}
 				byte[] expected = SecurityStateCodec.encode(state); // BEFORE startWrite: failed size checks leave the old file intact.
 				if (!Arrays.equals(previousBytes, expected)) {
 					FileOutputStream output = null;
@@ -78,12 +91,7 @@ public final class SecurityStore {
 						file.finishWrite(output);
 						output = null;
 						if (!Arrays.equals(expected, SecurityStateCodec.read(file, SecurityStateCodec.MAX_BYTES))) throw new IOException("Security state commit failed");
-						if (!previousPrimary.equals(state.optString("primary")) || !previousAdditional.equals(state.optString("additional"))
-								|| previousInterval != state.optInt(ReauthenticationPolicy.KEY, 0)
-								|| !previousMode.equals(state.optString(AuthenticationPolicy.KEY))
-								|| !previousBiometricAlias.equals(state.optString("biometric_alias"))
-								|| previousBiometric != state.optBoolean("biometric")
-								|| state.optBoolean("reset_pending")) SecuritySessionProvider.revoke(context);
+						if (revoke) SecuritySessionProvider.revoke(context);
 						if (!previousPrimary.equals(state.optString("primary"))
 								|| !previousMode.equals(state.optString(AuthenticationPolicy.KEY))) AppSecurity.notifyChanged(context);
 					} catch (IOException e) {
@@ -92,9 +100,15 @@ public final class SecurityStore {
 					}
 				}
 				return result;
-			} catch (IOException e) { SecuritySessionProvider.revoke(context); throw e; }
-			catch (Exception e) { SecuritySessionProvider.revoke(context); throw new IOException("Security operation failed", e); }
+			} catch (IOException e) { revokeAfterFailure(context); throw e; }
+			catch (Exception e) { revokeAfterFailure(context); throw new IOException("Security operation failed", e); }
 		} finally { MONITOR.unlock(); }
+	}
+
+	private static void revokeAfterFailure(Context context) {
+		SecuritySessionProvider.revoke(context);
+		try { RememberedAuthentication.revoke(context); }
+		catch (IOException ignored) { /* Authority remains locked; unreadable storage never authorizes. */ }
 	}
 
 	private static FileLock acquireFileLock(RandomAccessFile mutex) throws IOException {
@@ -342,6 +356,8 @@ public final class SecurityStore {
 		Integer minutes = authorizedUpdate(context, () -> generation >= 0 && generation == SecuritySessionProvider.generation(context), s -> {
 			if (s.optBoolean("reset_pending")) return null;
 			s.put("unlocked", true); s.remove("empty_launch");
+			if (authenticated) RememberedAuthentication.save(context, s, authenticatedAt);
+			else { s.remove(RememberedAuthentication.KEY); RememberedAuthentication.revoke(context); }
 			return ReauthenticationPolicy.normalize(s.optInt(ReauthenticationPolicy.KEY, 0));
 		});
 		if (minutes != null) {
@@ -358,12 +374,18 @@ public final class SecurityStore {
 
 	public static void lock(Context context) throws IOException {
 		SecuritySessionProvider.revoke(context); // Revoke before disk I/O can fail.
+		update(context, s -> {
+			// Serialize against a concurrent fresh authentication as well.
+			SecuritySessionProvider.revoke(context); RememberedAuthentication.revoke(context);
+			s.remove(RememberedAuthentication.KEY); return null;
+		});
 	}
 	/** Immediately close access, but retain a separately bounded recent-auth grant. */
 	static void suspend(Context context) { SecuritySessionProvider.suspend(context); }
 
 	public static void processStarted(Context context, boolean main) throws IOException {
-		if (main) SecuritySessionProvider.revoke(context);
+		// A process restart closes RAM access, but is NOT a manual lock or a reboot.
+		if (main) SecuritySessionProvider.suspend(context);
 		SecuritySessionProvider.foreground(context, false);
 	}
 
@@ -373,11 +395,11 @@ public final class SecurityStore {
 			android.os.PowerManager power = context.getSystemService(android.os.PowerManager.class);
 			if (power == null || !power.isInteractive()) return;
 			long lease = SecuritySessionProvider.generation(context);
-			boolean allowed = authorizedUpdate(context,
+			if (SecuritySessionProvider.isUnlocked(context)) return; // No surprise timeout while actively reading.
+			RememberedAuthentication receipt = authorizedUpdate(context,
 					() -> lease >= 0 && lease == SecuritySessionProvider.generation(context),
-					s -> authenticationMode(s) != null && !s.optBoolean("reset_pending")
-						&& ReauthenticationPolicy.normalize(s.optInt(ReauthenticationPolicy.KEY, 0)) > 0);
-			if (allowed) SecuritySessionProvider.resume(context, lease);
+					s -> RememberedAuthentication.read(context, s));
+			if (receipt != null) SecuritySessionProvider.restore(context, lease, receipt.minutes, receipt.authenticatedAt);
 		}
 	}
 

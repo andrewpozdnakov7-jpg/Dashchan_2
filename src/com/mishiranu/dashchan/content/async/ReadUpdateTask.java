@@ -317,7 +317,8 @@ public class ReadUpdateTask extends HttpHolderTask<Void, Pair<ErrorItem, ReadUpd
 				source = CommonUtils.getJsonString(chanObject, "source");
 				fingerprintsArray = chanObject.optJSONArray("fingerprints");
 				fingerprint = CommonUtils.optJsonString(chanObject, "fingerprint");
-				sha256sumString = null;
+				// The current legacy-shaped manifest also supplies a checksum for the client APK.
+				sha256sumString = CommonUtils.getJsonString(chanObject, "sha256sum");
 				requireFingerprintChecksum = false;
 				break;
 			}

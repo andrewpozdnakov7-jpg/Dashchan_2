@@ -29,9 +29,10 @@ import com.mishiranu.dashchan.util.ViewUtils;
 /** Fixed-bounds feedback. Never enables the button, opens a dialog or sends a post. */
 final class PostingPrimaryMotion implements View.OnAttachStateChangeListener {
 	private static final int CONTENT_DURATION = 180;
-	private static final int SUCCESS_CHECK_DURATION = 300;
-	private static final int SUCCESS_HOLD_DURATION = 200;
-	private static final int SUCCESS_TO_SEND_DURATION = 300;
+	private static final int SUCCESS_COLOR_DURATION = 200;
+	private static final int SUCCESS_CHECK_DURATION = 200;
+	private static final int SUCCESS_HOLD_DURATION = 150;
+	private static final int SUCCESS_TO_SEND_DURATION = 200;
 	private final Button button;
 	private final FrameLayout slot;
 	private final FrameLayout decorations;
@@ -173,7 +174,7 @@ final class PostingPrimaryMotion implements View.OnAttachStateChangeListener {
 		if (motion && change.success) { success = true; generation = feedback.begin(); }
 		settle();
 		if (motion) {
-			animateColor(startFill, startText, targetFill(), targetText(), 240);
+			animateColor(startFill, startText, targetFill(), targetText(), success ? SUCCESS_COLOR_DURATION : 240);
 			if (success) stroke.progress(0f);
 			animateContent(previous, success ? SUCCESS_CHECK_DURATION + SUCCESS_HOLD_DURATION : CONTENT_DURATION,
 					CONTENT_DURATION, generation);
