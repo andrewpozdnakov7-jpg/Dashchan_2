@@ -13,13 +13,13 @@ import android.graphics.drawable.InsetDrawable;
 import android.graphics.drawable.RippleDrawable;
 import android.view.View;
 import android.view.animation.OvershootInterpolator;
-import android.widget.ImageView;
+import androidx.appcompat.widget.AppCompatImageView;
 import androidx.core.graphics.ColorUtils;
 import com.mishiranu.dashchan.util.InterfaceMotion;
 import com.mishiranu.dashchan.util.ResourceUtils;
 
 /** Paint-only feedback: native touch/click routing and the48dp layout bounds never change. */
-final class AttachmentActionButton extends ImageView {
+final class AttachmentActionButton extends AppCompatImageView {
 	private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
 	private final GradientDrawable rippleMask = new GradientDrawable();
 	private final int tone, disabledTone;
