@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<string name="attachment_move_earlier">Move earlier</string>
+	<string name="attachment_move_later">Move later</string>
+	<string name="attachment_edit_named">Edit %1$s</string>
+	<string name="attachment_edit_unavailable_named">Editing unavailable: %1$s</string>
+	<string name="attachment_reorder_named">Reorder %1$s</string>
+	<string name="attachment_remove_named">Remove %1$s</string>
+	<string name="attachment_warning_named">File information and warnings: %1$s</string>
+	<string name="attachment_rating_named">Attachment rating: %1$s</string>
+	<string name="attachment_file_unavailable">File unavailable</string>
+	<string name="attachment_preview_unavailable">Preview unavailable. Tap the file for details.</string>
+</resources>

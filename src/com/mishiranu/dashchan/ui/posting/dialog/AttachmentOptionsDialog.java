@@ -14,6 +14,7 @@ import android.widget.ArrayAdapter;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ListView;
+import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.fragment.app.DialogFragment;
 import chan.content.ChanConfiguration;
@@ -25,6 +26,7 @@ import com.mishiranu.dashchan.ui.posting.AttachmentHolder;
 import com.mishiranu.dashchan.ui.posting.PostingDialogCallback;
 import com.mishiranu.dashchan.util.GraphicsUtils;
 import com.mishiranu.dashchan.util.ResourceUtils;
+import com.mishiranu.dashchan.widget.PostingFormAppearance;
 import java.util.ArrayList;
 import java.util.HashMap;
 
@@ -134,10 +136,19 @@ public class AttachmentOptionsDialog extends DialogFragment implements AdapterVi
 		}
 		LinearLayout linearLayout = new LinearLayout(activity);
 		linearLayout.setOrientation(LinearLayout.VERTICAL);
+		boolean compact = PostingFormAppearance.isEnabled();
+		if (compact) {
+			TextView details = new TextView(activity);
+			details.setText(holder.name + "\n" + holder.fileSize.getText());
+			details.setTextIsSelectable(true);
+			int padding = Math.round(16 * ResourceUtils.obtainDensity(activity));
+			details.setPadding(padding, padding, padding, padding / 2);
+			linearLayout.addView(details, LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+		}
 		ImageView imageView = new ImageView(activity);
 		imageView.setBackground(new TransparentTileDrawable(activity, true));
 		imageView.setImageDrawable(holder.imageView.getDrawable());
-		imageView.setScaleType(ImageView.ScaleType.CENTER_CROP);
+		imageView.setScaleType(compact ? ImageView.ScaleType.FIT_CENTER : ImageView.ScaleType.CENTER_CROP);
 		linearLayout.addView(imageView, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1));
 		listView = new ListView(activity);
 		linearLayout.addView(listView, LinearLayout.LayoutParams.MATCH_PARENT,

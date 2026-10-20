@@ -5,6 +5,7 @@ import android.view.WindowInsets;
 import android.view.WindowInsetsAnimation;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.util.InterfaceMotion;
+import com.mishiranu.dashchan.ui.posting.PostingFormDiagnostics;
 import java.util.List;
 
 /** Tracks the system IME timeline; never resizes the editor or requests keyboard/cursor actions. */
@@ -35,10 +36,15 @@ public final class ImePanelMotion extends WindowInsetsAnimation.Callback impleme
 	private float position() { int[] location = new int[2]; panel.getLocationInWindow(location); return location[1]; }
 	@Override public void onPrepare(WindowInsetsAnimation animation) {
 		if ((animation.getTypeMask() & WindowInsets.Type.ime()) == 0) return;
+		if (PostingFormDiagnostics.isRecording()) PostingFormDiagnostics.trace(root, "ime_prepare",
+				"mask=" + animation.getTypeMask() + " durationMs=" + animation.getDurationMillis() + " valid=" + valid());
 		float presented = position(); settle();
 		if (valid()) { active = animation; originalY = panel.getTranslationY(); before = presented; }
 	}
 	@Override public WindowInsetsAnimation.Bounds onStart(WindowInsetsAnimation animation, WindowInsetsAnimation.Bounds bounds) {
+		if (PostingFormDiagnostics.isRecording() && (animation.getTypeMask() & WindowInsets.Type.ime()) != 0) {
+			PostingFormDiagnostics.trace(root, "ime_start", "lower=" + bounds.getLowerBound() + " upper=" + bounds.getUpperBound());
+		}
 		if (active == animation) {
 			if (!valid()) settle();
 			else { distance = before - position(); panel.setTranslationY(originalY + distance); }
@@ -46,13 +52,23 @@ public final class ImePanelMotion extends WindowInsetsAnimation.Callback impleme
 		return bounds;
 	}
 	@Override public WindowInsets onProgress(WindowInsets insets, List<WindowInsetsAnimation> running) {
+		if (PostingFormDiagnostics.isRecording()) PostingFormDiagnostics.traceState(root, "ime_progress",
+				"visible=" + insets.isVisible(WindowInsets.Type.ime()) + " bottom=" + insets.getInsets(WindowInsets.Type.ime()).bottom
+						+ " running=" + running.size() + " active=" + (active != null)
+						+ " fraction=" + (active != null ? active.getInterpolatedFraction() : -1)
+						+ " panelTranslation=" + panel.getTranslationY());
 		if (active != null) {
 			if (!valid() || !running.contains(active)) settle();
 			else panel.setTranslationY(originalY + distance * (1f - active.getInterpolatedFraction()));
 		}
 		return insets;
 	}
-	@Override public void onEnd(WindowInsetsAnimation animation) { if (active == animation) settle(); }
+	@Override public void onEnd(WindowInsetsAnimation animation) {
+		if (PostingFormDiagnostics.isRecording() && (animation.getTypeMask() & WindowInsets.Type.ime()) != 0) {
+			PostingFormDiagnostics.trace(root, "ime_end", "active=" + (active == animation));
+		}
+		if (active == animation) settle();
+	}
 	private void settle() {
 		if (active != null && root.getTag(R.id.ime_panel_motion_owner) == this && !ElementMotion.busy(panel)) panel.setTranslationY(originalY);
 		active = null; distance = 0f;

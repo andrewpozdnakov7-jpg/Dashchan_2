@@ -9,6 +9,12 @@ public final class EditorHeightPolicy {
 	public static final int MIN_LINES = 2;
 	public static final int MAX_LINES = 20;
 
+	/** Earlier fields scroll above the editor; later content scrolls below its reserved viewport. */
+	public static int keyboardInputHeight(int available, int topInset, int editorChromeAndBottomInset, int minimum) {
+		return Math.max(Math.max(1, minimum), Math.max(0, available)
+				- Math.max(0, topInset) - Math.max(0, editorChromeAndBottomInset));
+	}
+
 	public static int clampLines(int lines) {
 		return Math.max(MIN_LINES, Math.min(MAX_LINES, lines));
 	}

@@ -34,10 +34,10 @@ public class PostingAppearanceFragment extends PreferenceFragment {
 					R.string.posting_fixed_lines, R.string.posting_fixed_lines_format, null,
 					EditorHeightPolicy.MIN_LINES, EditorHeightPolicy.MAX_LINES, 1);
 		}
-		// New independent keys inherit the old combined choice without clearing values/drafts.
-		addCheck(true, Preferences.KEY_POSTING_HIDE_NAME, Preferences.isHidePersonalData(),
+		// Each field can be restored independently after the one-time hidden-default migration.
+		addCheck(true, Preferences.KEY_POSTING_HIDE_NAME, Preferences.DEFAULT_POSTING_HIDE_NAME,
 				R.string.posting_hide_name, R.string.posting_hide_field_summary);
-		addCheck(true, Preferences.KEY_POSTING_HIDE_EMAIL, Preferences.isHidePersonalData(),
+		addCheck(true, Preferences.KEY_POSTING_HIDE_EMAIL, Preferences.DEFAULT_POSTING_HIDE_EMAIL,
 				R.string.posting_hide_email, R.string.posting_hide_field_summary);
 		addCheck(true, Preferences.KEY_POSTING_HIDE_PASSWORD, Preferences.DEFAULT_POSTING_HIDE_PASSWORD,
 				R.string.posting_hide_password, R.string.posting_hide_password_summary);

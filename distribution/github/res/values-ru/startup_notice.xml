@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="material3_notice_title">Новый интерфейс Material 3</string>
-    <string name="material3_notice_message">В Slooop появился экспериментальный интерфейс в стиле Material 3.\nЧтобы включить: Настройки → Экспериментальные функции → „Новый интерфейс Material 3“ → „Включить новый интерфейс“.</string>
-    <string name="material3_notice_read">Я прочитал</string>
-    <string name="material3_notice_save_failed">Не удалось сохранить подтверждение. Попробуйте ещё раз.</string>
+    <string name="material3_notice_message">Интерфейс в стиле Material 3 теперь включён по умолчанию. Если вам привычнее старый дизайн, его можно вернуть: Настройки → Экспериментальные функции → „Новый интерфейс Material 3“ → выключить „Включить новый интерфейс“.\n\nЭто окно появится три раза, по одному разу при запуске. После трёх подтверждений оно больше не появится. Выбор дизайна можно изменить в настройках в любое время.</string>
+    <string name="material3_notice_new">Перейти на новый дизайн</string>
+    <string name="material3_notice_old">Остаться на старом</string>
+    <string name="material3_notice_save_failed">Не удалось сохранить выбор. Попробуйте ещё раз.</string>
 </resources>

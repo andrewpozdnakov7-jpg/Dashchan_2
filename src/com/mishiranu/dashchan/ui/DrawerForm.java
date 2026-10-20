@@ -1501,7 +1501,9 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	}
 
 	private ViewHolder createItem(ViewType viewType, float density) {
-		int size = (int) (48f * density);
+		// Compact vertical rhythm; retain the existing horizontal action widths.
+		int size = (int) (36f * density);
+		int actionWidth = (int) (48f * density);
 		LinearLayout linearLayout = new LinearLayout(context);
 		linearLayout.setOrientation(LinearLayout.HORIZONTAL);
 		linearLayout.setGravity(Gravity.CENTER_VERTICAL);
@@ -1509,7 +1511,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		selectionView.setClickable(false);
 		selectionView.setFocusable(false);
 		selectionView.setVisibility(View.GONE);
-		linearLayout.addView(selectionView, size, size);
+		linearLayout.addView(selectionView, actionWidth, size);
 		ImageView iconView = null;
 		if (viewType.icon) {
 			iconView = new ImageView(context);
@@ -1518,7 +1520,9 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 			iconView.setImageTintList(ColorStateList.valueOf(drawerIconColor));
 		}
 		TextView textView = makeCommonTextView(false);
-		linearLayout.addView(textView, new LinearLayout.LayoutParams(0, size, 1));
+		// Let large fonts/two-line labels grow instead of clipping them to36dp.
+		textView.setMinHeight(size); textView.setMinimumHeight(size);
+		linearLayout.addView(textView, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
 		TextView badgeView = makeCommonTextView(false);
 		badgeView.setGravity(Gravity.CENTER);
 		badgeView.setVisibility(View.GONE);
@@ -1528,7 +1532,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		if (viewType.watcher) {
 			watcherView = new WatcherView(context, watcherViewColorSet);
 			watcherView.setOnClickListener(watcherClickListener);
-			linearLayout.addView(watcherView, size, size);
+			linearLayout.addView(watcherView, actionWidth, size);
 		}
 		if (!viewType.watcher && viewType.closeable) {
 			ImageView closeView = new ImageView(context);
@@ -1538,7 +1542,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 					android.R.attr.textColorPrimary));
 			closeView.setBackgroundResource(ResourceUtils.getResourceId(context,
 					android.R.attr.borderlessButtonStyle, android.R.attr.background, 0));
-			linearLayout.addView(closeView, size, size);
+			linearLayout.addView(closeView, actionWidth, size);
 			closeView.setOnClickListener(closeButtonListener);
 			closeView.setContentDescription(context.getString(R.string.close));
 		}
@@ -1569,12 +1573,14 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		linearLayout.setOrientation(LinearLayout.VERTICAL);
 		LinearLayout linearLayout2 = new LinearLayout(context);
 		linearLayout2.setOrientation(LinearLayout.HORIZONTAL);
+		linearLayout2.setGravity(Gravity.CENTER_VERTICAL);
 		linearLayout.addView(linearLayout2, LinearLayout.LayoutParams.MATCH_PARENT,
 				LinearLayout.LayoutParams.WRAP_CONTENT);
 		TextView textView = makeCommonTextView(true);
-		LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(0, (int) (32f * density), 1);
-		layoutParams.setMargins((int) (16f * density), (int) (8f * density),
-				(int) (16f * density), (int) (8f * density));
+		textView.setMinHeight((int) (32f * density)); textView.setMinimumHeight((int) (32f * density));
+		LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1);
+		layoutParams.setMargins((int) (16f * density), (int) (2f * density),
+				(int) (16f * density), (int) (2f * density));
 		linearLayout2.addView(textView, layoutParams);
 		ImageView imageView = null;
 		if (button) {
@@ -1585,7 +1591,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 			imageView.setOnClickListener(sectionButtonListener);
 			imageView.setImageTintList(textView.getTextColors());
 			int size = (int) (48f * density);
-			layoutParams = new LinearLayout.LayoutParams(size, size);
+			layoutParams = new LinearLayout.LayoutParams(size, (int) (36f * density));
 			layoutParams.rightMargin = (int) (4f * density);
 			linearLayout2.addView(imageView, layoutParams);
 		}
@@ -1599,7 +1605,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		arrow.setVisibility(View.GONE);
 		arrow.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
 		LinearLayout.LayoutParams arrowParams = new LinearLayout.LayoutParams((int) (24f * density),
-				(int) (48f * density));
+				(int) (36f * density));
 		arrowParams.leftMargin = (int) (16f * density);
 		linearLayout2.addView(arrow, 0, arrowParams);
 		holder.sectionArrow = arrow;
@@ -1619,7 +1625,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 					callback.onSelectDrawerMenuItem(MENU_ITEM_REDDIT_COMMUNITIES);
 				}
 			});
-			LinearLayout.LayoutParams addParams = new LinearLayout.LayoutParams((int) (48f * density), (int) (48f * density));
+			LinearLayout.LayoutParams addParams = new LinearLayout.LayoutParams((int) (48f * density), (int) (36f * density));
 			linearLayout2.addView(add, linearLayout2.indexOfChild(imageView), addParams);
 			holder.sectionAdd = add;
 		}

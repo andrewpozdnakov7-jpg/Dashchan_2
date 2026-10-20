@@ -208,7 +208,8 @@ def main():
     require(attachment("moveAttachment"), "host.saveDraftAfterAttachmentChange()")
     require(re.sub(r"\s+", " ", controller), 'newSingleThreadPool(3000, "PostingThumbnail", null)',
             "oldTask.cancel()", "boolean currentTask = videoThumbnailTasks.get(holder) == this",
-            "bitmap != null && currentTask && host != null && attachments.contains(holder) && hash.equals(holder.hash)",
+            "currentTask && host != null && attachments.contains(holder) && hash.equals(holder.hash)",
+            "if (bitmap != null)", "attachmentAppearance.thumbnailFinished(holder, bitmap != null)",
             "bitmap.recycle()", "finally { releasePermissions(); }")
     for field in ("captchaType captchaState captchaData loadedCaptchaType loadedCaptchaInput "
                   "loadedCaptchaValidity captchaImage captchaLarge captchaBlackAndWhite captchaLoadTime draftSaved").split():

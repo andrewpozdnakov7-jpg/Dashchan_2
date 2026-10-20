@@ -115,6 +115,17 @@ public final class LauncherIconManager {
 	}
 	private LauncherIconManager() {}
 
+	static void initializeInstallationLogo(com.mishiranu.dashchan.util.SharedPreferences preferences,
+			boolean existingSettings) {
+		// Persist only for a new settings store. Never reinterpret an absent key on an
+		// upgrade, overwrite a restored choice, or change the manifest's launcher aliases:
+		// existing launchers can still rely on their default component-enabled state.
+		// MainApplication applies this saved choice through the normal launcher switch.
+		if (!existingSettings && !preferences.contains(Preferences.KEY_APPLICATION_LOGO)) {
+			preferences.edit().put(Preferences.KEY_APPLICATION_LOGO, LOGO_MATERIAL_YOU).close();
+		}
+	}
+
 	public static boolean isValidValue(String value) {
 		return APPLICATION_NAMES.contains(value);
 	}

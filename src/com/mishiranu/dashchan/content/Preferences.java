@@ -136,7 +136,11 @@ public class Preferences {
 				// the separately stored destructive-deletion consent cannot be durably revoked.
 				android.util.Log.w("Preferences", "Settings restore deferred: safety state unavailable");
 			}
+			// Check after legacy rename/restore, before opening the store: a missing logo key
+			// in existing preferences means the historical default, not a fresh installation.
+			boolean existingSettings = newFile.exists() || newBackupFile.exists() || restoreFile.exists();
 			PREFERENCES = new SharedPreferences(application, PREFERENCES_NAME);
+			LauncherIconManager.initializeInstallationLogo(PREFERENCES, existingSettings);
 		} else if (application.isPrivateBrowserProcess()) {
 			// The private browser has no settings controls. It only needs a fresh snapshot for locale, theme,
 			// certificate verification, and other presentation choices during its short-lived process.
@@ -1390,17 +1394,37 @@ public class Preferences {
 	public static final String KEY_POSTING_EDITOR_LINES = "posting_editor_lines";
 	public static final String KEY_POSTING_HIDE_NAME = "posting_hide_name";
 	public static final String KEY_POSTING_HIDE_EMAIL = "posting_hide_email";
+	public static final boolean DEFAULT_POSTING_HIDE_NAME = true;
+	public static final boolean DEFAULT_POSTING_HIDE_EMAIL = true;
+	private static final String KEY_POSTING_IDENTITY_HIDDEN_MIGRATED = "posting_identity_hidden_migrated";
 	public static final String KEY_POSTING_HIDE_PASSWORD = "posting_hide_password";
 	public static final boolean DEFAULT_POSTING_HIDE_PASSWORD = true;
 	public static final String KEY_POSTING_HIDE_SUBJECT = "posting_hide_subject";
 
+	static {
+		if (PREFERENCES != null && MainApplication.getInstance().isMainProcess()) {
+			migratePostingIdentityVisibility(PREFERENCES);
+		}
+	}
+
+	static void migratePostingIdentityVisibility(SharedPreferences preferences) {
+		if (!preferences.getBoolean(KEY_POSTING_IDENTITY_HIDDEN_MIGRATED, false)) {
+			// Apply once to all installations, including explicitly visible old fields.
+			// Keep identity values/drafts; later user choices must never be reset on launch.
+			try (SharedPreferences.Editor editor = preferences.edit()) {
+				editor.put(KEY_POSTING_HIDE_NAME, DEFAULT_POSTING_HIDE_NAME);
+				editor.put(KEY_POSTING_HIDE_EMAIL, DEFAULT_POSTING_HIDE_EMAIL);
+				editor.put(KEY_POSTING_IDENTITY_HIDDEN_MIGRATED, true);
+			}
+		}
+	}
+
 	public static boolean isPostingNameHidden() {
-		// Preserve the old combined choice until the user sets the independent option.
-		return PREFERENCES.getBoolean(KEY_POSTING_HIDE_NAME, isHidePersonalData());
+		return PREFERENCES.getBoolean(KEY_POSTING_HIDE_NAME, DEFAULT_POSTING_HIDE_NAME);
 	}
 
 	public static boolean isPostingEmailHidden() {
-		return PREFERENCES.getBoolean(KEY_POSTING_HIDE_EMAIL, isHidePersonalData());
+		return PREFERENCES.getBoolean(KEY_POSTING_HIDE_EMAIL, DEFAULT_POSTING_HIDE_EMAIL);
 	}
 
 	public static boolean isPostingPasswordHidden() {
@@ -2332,7 +2356,7 @@ public class Preferences {
 	// Availability remains gated by the distribution bridge; an explicit user choice takes precedence.
 	public static final boolean DEFAULT_NEW_PHOTO_EDITOR = true;
 	public static final String KEY_NEW_INTERFACE_MOTION = "experimental_new_interface_motion";
-	public static final boolean DEFAULT_NEW_INTERFACE_MOTION = false;
+	public static final boolean DEFAULT_NEW_INTERFACE_MOTION = true;
 	public static final String KEY_NEW_POSTING_FORM = "experimental_new_posting_form";
 	public static final boolean DEFAULT_NEW_POSTING_FORM = true;
 	public static final String KEY_NEW_VIDEO_PLAYER = "experimental_new_video_player";

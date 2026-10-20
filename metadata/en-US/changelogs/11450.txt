@@ -1,0 +1,11 @@
+- The Material 3-style interface is now enabled by default 😺 A startup dialog lets you choose the new or previous design; it stops appearing after three confirmations.
+- Updated posting attachments with a compact preview grid, long-press reordering, move and removal animations, and new edit and delete buttons.
+- Improved the posting form with the keyboard open: the captcha or send button stays below the comment while additional controls are hidden. Fixed its position when switching between subject and comment.
+- Made the formatting toolbar more compact: supported commands fill available space without an unnecessary overflow menu. After solving the captcha, you can send without waiting for the animation to finish.
+- Name and email fields are now hidden by default, including for existing users. You can show them again in the posting form settings.
+- Reduced spacing between threads and sections in the navigation drawer without changing the font size.
+- A fresh installation selects the Material You icon on its first startup. Existing users keep their selected icon.
+
+To return to the previous interface: Settings → Experimental features → New Material 3 interface → turn off “Enable new interface”.
+
+Thanks to everyone testing the app, sending logs and helping find bugs! 🐾

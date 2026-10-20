@@ -14,6 +14,8 @@ public class StartupNoticeDistributionTest {
 			String bytecode = new String(input.readAllBytes(), java.nio.charset.StandardCharsets.ISO_8859_1);
 			assertEquals(com.mishiranu.dashchan.BuildConfig.ENABLE_EXPERIMENTAL_INTERFACE_MOTION,
 					bytecode.contains("material3-acknowledgements"));
+			assertEquals(com.mishiranu.dashchan.BuildConfig.ENABLE_EXPERIMENTAL_INTERFACE_MOTION,
+					bytecode.contains("material3-default-design-acknowledgements-v1"));
 		}
 	}
 	@Test public void fdroidBridgeHasNoDialogCounterOrResources() throws Exception {
@@ -29,6 +31,9 @@ public class StartupNoticeDistributionTest {
 		String text = Files.readString(Path.of("distribution/github/src/com/mishiranu/dashchan/ui/StartupNotices.java"));
 		assertEquals(1, text.split("\\.commit\\(\\)", -1).length - 1);
 		assertTrue(text.indexOf(".commit()") > text.indexOf("setOnClickListener"));
+		assertTrue(text.contains("editor.commitChecked()"));
+		assertTrue(text.contains("BUTTON_NEGATIVE).setOnClickListener"));
+		assertTrue(text.contains("host.recreate()"));
 		assertFalse(text.contains("versionCode"));
 		assertFalse(text.contains("isNewInterfaceMotionEnabled"));
 		assertTrue(text.contains("setCanceledOnTouchOutside(false)"));

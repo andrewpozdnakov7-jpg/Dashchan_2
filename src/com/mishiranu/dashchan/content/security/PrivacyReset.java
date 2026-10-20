@@ -191,8 +191,13 @@ public final class PrivacyReset {
 		PresentationPreferencesFile.retain(new File(directory, "preferences.xml"),
 				PrivacyResetPolicy::keepPreference, forced);
 		if (BuildConfig.ENABLE_EXPERIMENTAL_INTERFACE_MOTION) {
+			// A lambda body becomes a synthetic method even when this branch is folded
+			// away for F-Droid. Bind a method reference instead, keeping notice keys
+			// entirely inside the distribution-gated branch.
+			java.util.Set<String> noticeKeys = new java.util.HashSet<>(java.util.Arrays.asList(
+					"material3-acknowledgements", "material3-default-design-acknowledgements-v1"));
 			PresentationPreferencesFile.retain(new File(directory, "startup-notices.xml"),
-					"material3-acknowledgements"::equals, java.util.Collections.emptyMap());
+					noticeKeys::contains, java.util.Collections.emptyMap());
 		}
 	}
 }

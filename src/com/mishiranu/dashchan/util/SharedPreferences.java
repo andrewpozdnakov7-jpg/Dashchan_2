@@ -117,6 +117,13 @@ public class SharedPreferences {
 				}
 			}
 		}
+
+		/** Explicit durable result for UI choices that must not be acknowledged on write failure.
+		 * Call once instead of close(); this is not an asynchronous apply operation. */
+		public boolean commitChecked() {
+			if (asynchronous) throw new IllegalStateException("Checked commit requires a synchronous editor");
+			return ConcurrentUtils.isMain() ? commitInternal() : ConcurrentUtils.mainGet(this::commitInternal);
+		}
 	}
 
 	public interface Listener {
