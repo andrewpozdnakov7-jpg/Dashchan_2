@@ -86,6 +86,7 @@ public final class PostingAttachmentsController {
 	private ScrollView scrollView;
 	private Button sendButton;
 	private int attachmentColumnCount;
+	private PostingAttachmentsAppearance attachmentAppearance;
 	private ChanConfiguration.Posting postingConfiguration;
 	private List<Pair<String, String>> attachmentRatingItems;
 	private final ArrayList<AttachmentHolder> attachments = new ArrayList<>();
@@ -117,11 +118,17 @@ public final class PostingAttachmentsController {
 		this.sendButton = sendButton;
 		attachmentColumnCount = columnCount;
 		attachments.clear();
+		attachmentAppearance = PostingAttachmentsAppearance.create(container, scrollView, new PostingAttachmentsAppearance.Host() {
+			@Override public List<AttachmentHolder> attachments() { return attachments; }
+			@Override public void move(AttachmentHolder holder, int index) { moveAttachment(holder, index); }
+			@Override public void rebuild() { invalidateAttachments(true); }
+		});
 		container.setOnDragListener(attachmentContainerDragListener);
 	}
 
 	public void detachView() {
 		clearAttachmentDragState();
+		if (attachmentAppearance != null) { attachmentAppearance.close(); attachmentAppearance = null; }
 		for (VideoThumbnailTask task : videoThumbnailTasks.values()) task.cancel();
 		videoThumbnailTasks.clear();
 		if (sendButton != null && processingNotice != null) sendButton.removeCallbacks(processingNotice);
@@ -171,6 +178,7 @@ public final class PostingAttachmentsController {
 			boolean attachmentCount) {
 		postingConfiguration = posting;
 		if (attachmentOptions || attachmentCount) {
+			if (attachmentAppearance != null) attachmentAppearance.cancelMotion();
 			if (attachmentOptions) {
 				attachmentRatingItems = posting.attachmentRatings.size() > 0 ? posting.attachmentRatings : null;
 			}
@@ -648,11 +656,13 @@ public final class PostingAttachmentsController {
 		if (holder == null || attachments.size() < 2 || !attachments.contains(holder)) {
 			return false;
 		}
+		if (attachmentAppearance != null) return attachmentAppearance.startDrag(holder);
 		return v.startDragAndDrop(ClipData.newPlainText("", ""),
 				new View.DragShadowBuilder(holder.view), holder, 0);
 	};
 
 	private final View.OnDragListener attachmentContainerDragListener = (v, event) -> {
+		if (attachmentAppearance != null) return attachmentAppearance.dispatchDrag(event);
 		Object localState = event.getLocalState();
 		if (!(localState instanceof AttachmentHolder)) {
 			return false;
@@ -755,7 +765,7 @@ public final class PostingAttachmentsController {
 		}
 		attachments.remove(sourceIndex);
 		attachments.add(targetIndex, holder);
-		invalidateAttachments(true);
+		if (attachmentAppearance == null || !attachmentAppearance.deferRebuild()) invalidateAttachments(true);
 		host.saveDraftAfterAttachmentChange();
 	}
 
@@ -775,12 +785,14 @@ public final class PostingAttachmentsController {
 		@Override
 		public void onClick(View v) {
 			AttachmentHolder holder = (AttachmentHolder) v.getTag();
+			if (!attachments.contains(holder)) return;
+			if (attachmentAppearance != null) attachmentAppearance.prepareRemoval(holder);
 			if (attachments.remove(holder)) {
 				VideoThumbnailTask task = videoThumbnailTasks.remove(holder);
 				if (task != null) {
 					task.cancel();
 				}
-				if (attachmentColumnCount == 1) {
+				if (attachmentAppearance == null && attachmentColumnCount == 1) {
 					attachmentContainer.removeView(holder.view);
 				} else {
 					invalidateAttachments(true);
@@ -794,7 +806,8 @@ public final class PostingAttachmentsController {
 
 	private void invalidateAttachments(boolean clearContainer) {
 		if (clearContainer) {
-			attachmentContainer.removeAllViews();
+			if (attachmentAppearance != null) attachmentAppearance.clearCards();
+			else attachmentContainer.removeAllViews();
 		}
 		for (int i = 0; i < attachments.size(); i++) {
 			AttachmentHolder holder = attachments.get(i);
@@ -804,9 +817,11 @@ public final class PostingAttachmentsController {
 			}
 			updateAttachmentConfiguration(holder);
 		}
+		if (attachmentAppearance != null) attachmentAppearance.prune();
 	}
 
 	private void addAttachmentViewToContainer(View attachmentView, int position) {
+		if (attachmentAppearance != null) { attachmentAppearance.addCard(attachmentView); return; }
 		LinearLayout.LayoutParams layoutParams = (LinearLayout.LayoutParams) attachmentView.getLayoutParams();
 		if (attachmentColumnCount == 1) {
 			layoutParams.width = LinearLayout.LayoutParams.MATCH_PARENT;
@@ -873,6 +888,15 @@ public final class PostingAttachmentsController {
 	}
 
 	private AttachmentHolder addNewAttachment() {
+		if (attachmentAppearance != null) {
+			AttachmentHolder holder = attachmentAppearance.createCard(attachmentOptionsListener, attachmentWarningListener,
+					attachmentRatingListener, attachmentEditListener, attachmentRemoveListener, attachmentPreviewListener,
+					attachmentDragStartListener);
+			attachmentAppearance.addCard(holder.view);
+			attachments.add(holder);
+			host.invalidateOptionsMenu(); host.resizeCommentAfterAttachmentChange();
+			return holder;
+		}
 		float density = ResourceUtils.obtainDensity(getResources());
 		int minHeight = (int) (48f * density);
 		FrameLayout view = new FrameLayout(attachmentContainer.getContext());
@@ -997,6 +1021,7 @@ public final class PostingAttachmentsController {
 	}
 
 	private void bindAttachmentFile(AttachmentHolder holder, FileHolder fileHolder) {
+		if (attachmentAppearance != null) attachmentAppearance.cancelMotion();
 		VideoThumbnailTask oldTask = videoThumbnailTasks.remove(holder);
 		if (oldTask != null) oldTask.cancel();
 		JpegData jpegData = fileHolder != null ? fileHolder.getJpegData() : null;
@@ -1006,7 +1031,8 @@ public final class PostingAttachmentsController {
 		String fileSize = StringUtils.formatFileSize(size, false);
 		Bitmap bitmap = null;
 		DisplayMetrics metrics = getResources().getDisplayMetrics();
-		int targetImageSize = Math.max(metrics.widthPixels, metrics.heightPixels);
+		int targetImageSize = attachmentAppearance != null ? attachmentAppearance.thumbnailSize()
+				: Math.max(metrics.widthPixels, metrics.heightPixels);
 		boolean video = Chan.getFallback().locator.isVideoExtension(holder.name);
 		holder.imageView.setImageDrawable(null);
 		holder.imageView.setVisibility(View.GONE);
@@ -1016,10 +1042,12 @@ public final class PostingAttachmentsController {
 		holder.view.getLayoutParams().height = (int) (48f * ResourceUtils.obtainDensity(getResources()));
 		if (fileHolder != null) {
 			if (fileHolder.isImage()) {
-				try {
-					bitmap = fileHolder.readImageBitmap(targetImageSize, false, false);
-				} catch (OutOfMemoryError e) {
-					// Ignore
+				if (attachmentAppearance == null) {
+					try {
+						bitmap = fileHolder.readImageBitmap(targetImageSize, false, false);
+					} catch (OutOfMemoryError e) {
+						// Ignore
+					}
 				}
 				fileSize += " " + fileHolder.getImageWidth() + '×' + fileHolder.getImageHeight();
 			}
@@ -1044,6 +1072,15 @@ public final class PostingAttachmentsController {
 		if ((jpegData == null || jpegData.exifData == null) && (pngData == null || !pngData.hasMetadata)) {
 			holder.warningButton.setVisibility(View.GONE);
 		}
+		if (attachmentAppearance != null) {
+			boolean image = fileHolder != null && fileHolder.isImage();
+			boolean editable = fileHolder != null && Preferences.isImageEditorEnabled() && isEditableImage(fileHolder, holder.name);
+			attachmentAppearance.bindFile(holder, fileSize, fileHolder != null, image, video, editable);
+			if (image && !video) {
+				VideoThumbnailTask task = new VideoThumbnailTask(holder, holder.hash, targetImageSize, fileHolder);
+				videoThumbnailTasks.put(holder, task); task.execute(VIDEO_THUMBNAIL_EXECUTOR);
+			}
+		}
 	}
 
 	private static boolean isEditableImage(FileHolder fileHolder, String name) {
@@ -1058,19 +1095,30 @@ public final class PostingAttachmentsController {
 		}
 	}
 
+	/** Existing video worker also generates sampled, uncropped images for the compact form. */
 	private class VideoThumbnailTask extends ExecutorTask<Void, Bitmap> {
 		private final AttachmentHolder holder;
 		private final String hash;
 		private final int targetImageSize;
+		private final FileHolder imageFile;
 
 		public VideoThumbnailTask(AttachmentHolder holder, String hash, int targetImageSize) {
+			this(holder, hash, targetImageSize, null);
+		}
+
+		public VideoThumbnailTask(AttachmentHolder holder, String hash, int targetImageSize, FileHolder imageFile) {
 			this.holder = holder;
 			this.hash = hash;
 			this.targetImageSize = targetImageSize;
+			this.imageFile = imageFile;
 		}
 
 		@Override
 		protected Bitmap run() throws InterruptedException {
+			if (imageFile != null) {
+				try { return imageFile.readImageBitmap(targetImageSize, false, false); }
+				catch (RuntimeException | OutOfMemoryError e) { return null; }
+			}
 			File file = DraftsStorage.getInstance().getAttachmentDraftFile(hash);
 			if (file == null || !VideoPlayer.loadLibraries(MainApplication.getInstance()).first) {
 				return null;
@@ -1096,9 +1144,12 @@ public final class PostingAttachmentsController {
 			if (currentTask) {
 				videoThumbnailTasks.remove(holder);
 			}
-			if (bitmap != null && currentTask && host != null && attachments.contains(holder) && hash.equals(holder.hash)) {
-				holder.imageView.setImageBitmap(bitmap);
-				holder.imageView.setVisibility(View.VISIBLE);
+			if (currentTask && host != null && attachments.contains(holder) && hash.equals(holder.hash)) {
+				if (bitmap != null) {
+					holder.imageView.setImageBitmap(bitmap);
+					holder.imageView.setVisibility(View.VISIBLE);
+				}
+				if (attachmentAppearance != null) attachmentAppearance.thumbnailFinished(holder, bitmap != null);
 			} else if (bitmap != null) {
 				bitmap.recycle();
 			}

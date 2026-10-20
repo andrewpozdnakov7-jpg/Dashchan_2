@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<string name="attachment_move_earlier">Переместить раньше</string>
+	<string name="attachment_move_later">Переместить позже</string>
+	<string name="attachment_edit_named">Редактировать %1$s</string>
+	<string name="attachment_edit_unavailable_named">Редактирование недоступно: %1$s</string>
+	<string name="attachment_reorder_named">Переместить %1$s</string>
+	<string name="attachment_remove_named">Удалить %1$s</string>
+	<string name="attachment_warning_named">Сведения и предупреждения: %1$s</string>
+	<string name="attachment_rating_named">Рейтинг вложения: %1$s</string>
+	<string name="attachment_file_unavailable">Файл недоступен</string>
+	<string name="attachment_preview_unavailable">Нет предпросмотра. Нажмите на файл, чтобы открыть сведения.</string>
+</resources>

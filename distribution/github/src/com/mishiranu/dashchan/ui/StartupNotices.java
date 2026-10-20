@@ -18,14 +18,16 @@ import androidx.lifecycle.Lifecycle;
 import androidx.lifecycle.LifecycleOwner;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.mishiranu.dashchan.R;
+import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.widget.ThemeEngine;
 import java.util.function.BooleanSupplier;
 
 /** GitHub-only launch notice. The F-Droid bridge has no notice implementation or resources. */
 public final class StartupNotices {
-	private static final String TAG = "material3-startup-notice";
+	private static final String TAG = "material3-default-design-notice";
 	private static final String STORE = "startup-notices";
-	private static final String KEY = "material3-acknowledgements";
+	// A new announcement, not a reset of the old opt-in notice's acknowledgements.
+	static final String KEY = "material3-default-design-acknowledgements-v1";
 	private static final StartupNoticePolicy PROCESS = new StartupNoticePolicy();
 	private StartupNotices() {}
 
@@ -72,15 +74,17 @@ public final class StartupNotices {
 	/** Public no-argument Fragment supports normal FragmentManager state restoration. */
 	public static final class NoticeDialog extends DialogFragment {
 		private int targetCount;
+		private boolean acknowledged;
 		@Override public void onCreate(Bundle state) {
 			super.onCreate(state);
 			setCancelable(false);
 			PROCESS.restoreVisible();
-			targetCount = state != null ? state.getInt("targetCount", 0) : 0;
+			targetCount = state != null && KEY.equals(state.getString("noticeKey")) ? state.getInt("targetCount", 0) : 0;
 		}
 		@Override public void onSaveInstanceState(@NonNull Bundle state) {
 			super.onSaveInstanceState(state);
 			state.putInt("targetCount", targetCount);
+			state.putString("noticeKey", KEY);
 		}
 		@Override @NonNull public Dialog onCreateDialog(Bundle state) {
 			Context host = requireContext();
@@ -89,20 +93,40 @@ public final class StartupNotices {
 					? R.style.Theme_Slooop_StartupNotice_Light : R.style.Theme_Slooop_StartupNotice_Dark);
 			AlertDialog dialog = new MaterialAlertDialogBuilder(themed)
 					.setTitle(R.string.material3_notice_title).setMessage(R.string.material3_notice_message)
-					.setPositiveButton(R.string.material3_notice_read, null).setCancelable(false).create();
+					.setPositiveButton(R.string.material3_notice_new, null)
+					.setNegativeButton(R.string.material3_notice_old, null).setCancelable(false).create();
 			dialog.setCanceledOnTouchOutside(false);
 			return dialog;
 		}
 		@Override public void onStart() {
 			super.onStart();
 			AlertDialog dialog = (AlertDialog) requireDialog();
-			dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> {
-				SharedPreferences preferences = store(requireContext());
-				if (targetCount == 0) targetCount = StartupNoticePolicy.nextCount(preferences.getInt(KEY, 0));
-				// A checked synchronous commit is intentional: dismissal must not precede durable acknowledgement.
-				if (preferences.edit().putInt(KEY, targetCount).commit()) dismiss();
-				else Toast.makeText(requireContext(), R.string.material3_notice_save_failed, Toast.LENGTH_LONG).show();
-			});
+			dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> choose(true));
+			dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setOnClickListener(view -> choose(false));
+		}
+		private void choose(boolean enabled) {
+			if (acknowledged || getParentFragmentManager().isStateSaved()
+					|| !getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.RESUMED)) return;
+			androidx.fragment.app.FragmentActivity host = requireActivity();
+			SharedPreferences preferences = store(host);
+			if (targetCount == 0) targetCount = StartupNoticePolicy.nextCount(preferences.getInt(KEY, 0));
+			if (!persistChoice(Preferences.PREFERENCES, preferences, enabled, targetCount)) {
+				Toast.makeText(host, R.string.material3_notice_save_failed, Toast.LENGTH_LONG).show(); return;
+			}
+			acknowledged = true;
+			dismissNow();
+			if (!host.isFinishing() && !host.isDestroyed()) host.recreate();
+		}
+		static boolean persistChoice(com.mishiranu.dashchan.util.SharedPreferences design,
+				SharedPreferences notices, boolean enabled, int count) {
+			com.mishiranu.dashchan.util.SharedPreferences.Editor editor = design.edit()
+					.put(Preferences.KEY_NEW_INTERFACE_MOTION, enabled);
+			// Explicit opt-in matches the design settings screen. Opt-out retains the
+			// individual subfeature choices; the master switch disables the whole design.
+			if (enabled) editor.put(Preferences.KEY_NEW_POSTING_FORM, true).put(Preferences.KEY_NEW_VIDEO_PLAYER, true);
+			if (!editor.commitChecked()) return false;
+			// Do not count recreation/backgrounding or a failed choice write as a confirmation.
+			return notices.edit().putInt(KEY, Math.max(0, Math.min(StartupNoticePolicy.LIMIT, count))).commit();
 		}
 	}
 }

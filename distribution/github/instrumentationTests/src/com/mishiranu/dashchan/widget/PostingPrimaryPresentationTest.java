@@ -8,15 +8,68 @@ import android.graphics.Color;
 import android.view.View;
 import android.widget.Button;
 import android.widget.FrameLayout;
+import android.widget.TextView;
+import androidx.test.core.app.ActivityScenario;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
 import com.mishiranu.dashchan.R;
+import com.mishiranu.dashchan.content.Preferences;
+import com.mishiranu.dashchan.util.InterfaceMotion;
 import org.junit.Test;
+import org.junit.Assume;
 import org.junit.runner.RunWith;
 
 /** Prepared native fixtures, not an executed device check. */
 @RunWith(AndroidJUnit4.class)
 public class PostingPrimaryPresentationTest {
+	@Test public void activeSuccessFeedbackDoesNotBlockReadyClickOrEnableInvalidForm() {
+		try (ActivityScenario<PostingGestureTestActivity> scenario = ActivityScenario.launch(PostingGestureTestActivity.class)) {
+			scenario.onActivity(activity -> {
+				Object previous = Preferences.PREFERENCES.getAll().get(Preferences.KEY_NEW_INTERFACE_MOTION);
+				Context context = PostingTestContext.create(activity);
+				Button button = new Button(context); button.setEnabled(false); button.setBackgroundTintList(null);
+				FrameLayout slot = new FrameLayout(context); slot.addView(button, new FrameLayout.LayoutParams(-1, -1));
+				PostingPrimaryMotion motion = new PostingPrimaryMotion(button, slot);
+				try {
+					Preferences.PREFERENCES.edit().put(Preferences.KEY_NEW_INTERFACE_MOTION, true).close();
+					activity.setContentView(slot);
+					motion.colors(0xff335577, Color.WHITE, 0xffdbe3ec, 0xff444444);
+					PostingPrimaryState state = new PostingPrimaryState();
+					motion.bind(state.bind(PostingPrimaryState.Mode.SOLVE, false, false));
+					float density = context.getResources().getDisplayMetrics().density;
+					int width = Math.round(304 * density), height = Math.round(56 * density);
+					slot.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+							View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY));
+					slot.layout(0, 0, width, height);
+					Assume.assumeTrue(slot.isAttachedToWindow() && slot.isShown() && InterfaceMotion.duration(1) > 0);
+					int[] clicks = {0}, availabilityCallbacks = {0}; boolean[] realReady = {false};
+					motion.setAvailabilityChanged(() -> availabilityCallbacks[0]++);
+					button.setOnClickListener(view -> {
+						// Simulate the existing form validation and synchronous send-button lock; no real post/service.
+						if (!button.isEnabled() || !realReady[0] || !motion.canActivate()) return;
+						motion.finishContentTransition(); clicks[0]++; realReady[0] = false;
+						button.setEnabled(false); motion.enabledChanged();
+					});
+					motion.bind(state.bind(PostingPrimaryState.Mode.SEND, true, false));
+					assertEquals(context.getString(R.string.posting_captcha_done),
+							((TextView) slot.findViewById(R.id.posting_captcha_status)).getText().toString());
+					assertTrue(motion.canActivate()); assertFalse(button.isEnabled());
+					button.performClick(); assertEquals(0, clicks[0]);
+					realReady[0] = true; button.setEnabled(true); motion.enabledChanged();
+					assertTrue(motion.canActivate());
+					button.performClick(); assertEquals(1, clicks[0]); assertFalse(button.isEnabled());
+					button.performClick(); assertEquals(1, clicks[0]);
+					motion.finish(); assertEquals(1, clicks[0]); assertEquals(0, availabilityCallbacks[0]);
+				} finally {
+					motion.close();
+					if (previous instanceof Boolean) Preferences.PREFERENCES.edit()
+							.put(Preferences.KEY_NEW_INTERFACE_MOTION, (Boolean) previous).close();
+					else Preferences.PREFERENCES.edit().remove(Preferences.KEY_NEW_INTERFACE_MOTION).close();
+				}
+			});
+		}
+	}
+
 	@Test public void translucentIntermediateFromCrashIsNormalizedBeforeContrastCalculation() {
 		int opaqueResult = PostingFormAppearance.primaryBackground(0xff5679a1);
 		for (int alpha : new int[] {0, 127, 254, 255}) {

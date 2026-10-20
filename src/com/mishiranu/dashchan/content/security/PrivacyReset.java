@@ -192,7 +192,8 @@ public final class PrivacyReset {
 				PrivacyResetPolicy::keepPreference, forced);
 		if (BuildConfig.ENABLE_EXPERIMENTAL_INTERFACE_MOTION) {
 			PresentationPreferencesFile.retain(new File(directory, "startup-notices.xml"),
-					"material3-acknowledgements"::equals, java.util.Collections.emptyMap());
+					key -> "material3-acknowledgements".equals(key)
+							|| "material3-default-design-acknowledgements-v1".equals(key), java.util.Collections.emptyMap());
 		}
 	}
 }

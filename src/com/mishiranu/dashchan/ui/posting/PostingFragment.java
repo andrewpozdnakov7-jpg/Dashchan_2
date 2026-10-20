@@ -540,7 +540,9 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 			InterfaceAppearance.check(sageCheckBox); InterfaceAppearance.check(spoilerCheckBox);
 			InterfaceAppearance.check(originalPosterCheckBox); InterfaceAppearance.action(sendButton, true);
 		}
-		ImePanelMotion.attach(view, view.findViewById(R.id.posting_action_container));
+		// The new form owns one coordinated editor/primary transition after reparenting.
+		// Do not let the legacy inset callback also translate its action panel.
+		if (postingAppearance == null) ImePanelMotion.attach(view, view.findViewById(R.id.posting_action_container));
 	}
 
 	@Override
@@ -1318,6 +1320,9 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 						commentView.scrollTo(commentView.getScrollX(), Math.max(0, Math.min(textY, maxTextY)));
 					}
 					Rect bounds = new Rect();
+					// The new automatic editor owns the complete container's keyboard
+					// alignment. Retain internal caret scrolling above, not a second parent reveal.
+					if (PostingFormAppearance.ownsKeyboardViewport(commentView)) return true;
 					commentView.getDrawingRect(bounds);
 					scrollView.offsetDescendantRectToMyCoords(commentView, bounds);
 					int targetY = scrollView.getScrollY();

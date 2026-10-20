@@ -4,6 +4,24 @@ import static org.junit.Assert.*;
 import org.junit.Test;
 
 public class EditorHeightPolicyTest {
+	@Test public void dockedKeyboardEditorReservesOnlyPrimaryActionWithSixDpGaps() {
+		// 52dp formatting chrome; 6dp gap + original 56dp primary + 6dp lower padding.
+		assertEquals(294, EditorHeightPolicy.keyboardInputHeight(420, 6, 52 + 68, 92));
+		assertEquals(714, EditorHeightPolicy.keyboardInputHeight(840, 6, 52 + 68, 92));
+		// Attachments and the hidden utility row do not enter this calculation.
+		assertEquals(346, EditorHeightPolicy.keyboardInputHeight(420, 6, 68, 92));
+	}
+	@Test public void dockedKeyboardEditorRetainsMinimumInTinyWindow() {
+		assertEquals(92, EditorHeightPolicy.keyboardInputHeight(100, 100, 52, 92));
+		assertEquals(420, EditorHeightPolicy.keyboardInputHeight(420, -10, -1, 92));
+		assertEquals(1, EditorHeightPolicy.keyboardInputHeight(-1, -1, -1, -1));
+	}
+	@Test public void keyboardViewportUsesMeasuredToolbarOverlapRatherThanShorteningForSubject() {
+		// 115/05 geometry at density 4: 1472px viewport, 52dp formatting row,
+		// Top6dp + primary68dp, plus 8dp actual toolbar overlap over the old 56dp inset.
+		assertEquals(936, EditorHeightPolicy.keyboardInputHeight(1472, 24 + 32, 208 + 272, 368));
+		assertEquals(968, EditorHeightPolicy.keyboardInputHeight(1472, 24, 208 + 272, 368));
+	}
 	@Test public void adaptiveEditorRetainsEmptyFormHeightWithoutAttachments() {
 		assertEquals(800, EditorHeightPolicy.adaptiveAutomaticHeight(1000, 200, 0, 100, false));
 	}

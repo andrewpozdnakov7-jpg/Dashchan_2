@@ -96,7 +96,8 @@ final class PostingPrimaryMotion implements View.OnAttachStateChangeListener {
 		return slot.isAttachedToWindow() && slot.isShown() && InterfaceMotion.isEnabled() && InterfaceMotion.duration(1) > 0;
 	}
 	void setAvailabilityChanged(Runnable callback) { availabilityChanged = callback; }
-	boolean canActivate() { return !closed && !captchaModalVisible && !feedback.blocksAction(); }
+	// Visual success does not own readiness. The form/controller revalidate every click.
+	boolean canActivate() { return !closed && !captchaModalVisible; }
 	private void notifyAvailability() { if (!closed && availabilityChanged != null) availabilityChanged.run(); }
 
 	/** Retain theme hue, soften saturation for the earlier active stages, and keep white readable. */
@@ -212,15 +213,13 @@ final class PostingPrimaryMotion implements View.OnAttachStateChangeListener {
 					Bitmap done = snapshot(); success = false; settle();
 					animateContent(done, SUCCESS_TO_SEND_DURATION, SUCCESS_TO_SEND_DURATION, generation);
 				} else {
-					boolean released = feedback.complete(generation);
-					// Recompute the genuine validator before painting: no disabled flash between Success and Send.
-					if (released) { immediateAvailability = true; notifyAvailability(); }
+					feedback.complete(generation);
 					settle();
 				}
 			}
 		}); running.start();
 	}
-	private boolean filled() { return captchaModalVisible || success || feedback.blocksAction() || mode == PostingPrimaryState.Mode.LOADING || button.isEnabled(); }
+	private boolean filled() { return captchaModalVisible || success || feedback.isActive() || mode == PostingPrimaryState.Mode.LOADING || button.isEnabled(); }
 	private int targetFill() {
 		if (!filled()) return disabled;
 		if (captchaModalVisible) return solveFill;
@@ -251,7 +250,7 @@ final class PostingPrimaryMotion implements View.OnAttachStateChangeListener {
 		if (closed || enabled == button.isEnabled()) return;
 		boolean becameEnabled = !enabled && button.isEnabled(); enabled = button.isEnabled();
 		// Real click availability does not compete with success/loading stage paint.
-		if (feedback.blocksAction() || mode == PostingPrimaryState.Mode.LOADING) return;
+		if (feedback.isActive() || mode == PostingPrimaryState.Mode.LOADING) return;
 		int startFill = currentFill, startText = currentText;
 		if (immediate || !becameEnabled || !motionAllowed()) { cancelColor(); paint(targetFill(), targetText()); return; }
 		animateColor(startFill, startText, targetFill(), targetText(), 250);
@@ -281,8 +280,7 @@ final class PostingPrimaryMotion implements View.OnAttachStateChangeListener {
 		if (old != null) { old.removeAllUpdateListeners(); old.removeAllListeners(); old.cancel(); }
 	}
 	void finishContentTransition() {
-		cancelContent(); boolean released = feedback.cancel(); success = false;
-		if (released) { immediateAvailability = true; notifyAvailability(); }
+		cancelContent(); feedback.cancel(); success = false;
 		settle();
 	}
 	void finish() {

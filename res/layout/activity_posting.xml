@@ -6,7 +6,7 @@
 	android:layout_height="match_parent"
 	android:orientation="vertical">
 
-	<ScrollView
+	<com.mishiranu.dashchan.widget.PostingScrollView
 		android:id="@+id/scroll_view"
 		android:layout_width="match_parent"
 		android:layout_height="0dp"
@@ -152,7 +152,7 @@
 
 		</LinearLayout>
 
-	</ScrollView>
+	</com.mishiranu.dashchan.widget.PostingScrollView>
 
 	<FrameLayout
 		android:id="@+id/posting_action_container"

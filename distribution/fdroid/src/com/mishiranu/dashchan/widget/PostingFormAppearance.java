@@ -32,6 +32,9 @@ public final class PostingFormAppearance {
 	public void finishPrimaryTransition() {}
 	public static int editorAvailableHeight(EditText editor, int available) { return available; }
 	public static int minimumEditorInputHeight(EditText editor) { return 0; }
+	public static int keyboardEditorInputHeight(EditText editor, int available) { return 0; }
+	public static void prepareEditorLayout(EditText editor, boolean keyboard) {}
+	public static boolean ownsKeyboardViewport(EditText editor) { return false; }
 	public void formattingVisibility(boolean visible) {}
 	public void styleMarkup(View button, int tag) {}
 	public void resetCommands() {}

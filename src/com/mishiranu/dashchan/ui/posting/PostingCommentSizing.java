@@ -23,6 +23,8 @@ public final class PostingCommentSizing {
 
 	public static void apply(ScrollView scroll, EditText editor, Consumer<String> diagnostics) {
 		if (scroll == null || editor == null || scroll.getWidth() <= 0) return;
+		boolean keyboard = isKeyboardVisible(scroll);
+		PostingFormAppearance.prepareEditorLayout(editor, keyboard);
 		int available = scroll.getHeight() - scroll.getPaddingTop() - scroll.getPaddingBottom();
 		if (available <= 0) return;
 		int padding = editor.getCompoundPaddingTop() + editor.getCompoundPaddingBottom();
@@ -30,10 +32,17 @@ public final class PostingCommentSizing {
 			Paint.FontMetricsInt metrics = editor.getPaint().getFontMetricsInt();
 			padding += metrics.ascent - metrics.top + metrics.bottom - metrics.descent;
 		}
-		boolean keyboard = isKeyboardVisible(scroll);
 		EditorHeightPolicy.Mode mode = Preferences.getPostingEditorHeightMode();
 		int adaptiveMinimum = mode == EditorHeightPolicy.Mode.AUTOMATIC
 				? PostingFormAppearance.minimumEditorInputHeight(editor) : 0;
+		int dockedHeight = keyboard && adaptiveMinimum > 0
+				? PostingFormAppearance.keyboardEditorInputHeight(editor, available) : 0;
+		if (dockedHeight > 0) {
+			if (editor.getMinHeight() != dockedHeight || editor.getMaxHeight() != dockedHeight) editor.setHeight(dockedHeight);
+			if (diagnostics != null) diagnostics.accept("resize_policy=keyboard_viewport_v2 ime=true mode=" + mode
+					+ " available=" + available + " pixels=true target_pixels=" + dockedHeight);
+			return;
+		}
 		int otherHeight = 0;
 		int attachmentHeight = 0;
 		if (mode == EditorHeightPolicy.Mode.AUTOMATIC && (!keyboard || adaptiveMinimum > 0)) {

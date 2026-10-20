@@ -3,6 +3,7 @@ package com.mishiranu.dashchan.widget;
 import android.app.AlertDialog;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
+import android.graphics.Rect;
 import android.graphics.Typeface;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
@@ -30,10 +31,13 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toolbar;
 import androidx.core.graphics.ColorUtils;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 import chan.content.ChanMarkup;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.ui.posting.EditorHeightPolicy;
+import com.mishiranu.dashchan.ui.posting.PostingAttachmentsAppearance;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.util.ViewUtils;
 import java.util.ArrayList;
@@ -43,6 +47,7 @@ import java.util.Map;
 
 /** View-lifetime presentation only. Keeps the existing editors, callbacks and fixed footer. */
 public final class PostingFormAppearance {
+	private static final int FORMAT_BUTTON_WIDTH_DP = 32;
 	private final View root;
 	private final ScrollView scroll;
 	private final LinearLayout form;
@@ -53,6 +58,9 @@ public final class PostingFormAppearance {
 	private final List<View> inlineCommands = new ArrayList<>();
 	private final List<CompoundButton> checks = new ArrayList<>();
 	private final ViewTreeObserver.OnGlobalLayoutListener layoutListener = this::updateLayout;
+	private final ViewTreeObserver.OnGlobalFocusChangeListener focusListener = (before, after) -> updateLayout();
+	private final ViewTreeObserver.OnPreDrawListener editorRevealListener = this::revealKeyboardEditor;
+	private final Runnable keyboardResize = this::resizeKeyboardEditor;
 	private ThemeEngine.Theme theme;
 	private Palette palette;
 	private LinearLayout editorContainer;
@@ -63,13 +71,14 @@ public final class PostingFormAppearance {
 	private Runnable attachmentAction;
 	private boolean attachmentAvailable;
 	private Button moreButton;
-	private View formattingSpacer;
 	private PostingFormattingMenu formattingMenu;
 	private final Map<View, Integer> markupTags = new IdentityHashMap<>();
 	private CarryLayout optionsRow;
 	private FrameLayout utilitySlot;
+	private FrameLayout primarySlot;
 	private PostingUtilityRow utilityContent;
 	private PostingPrimaryMotion primaryMotion;
+	private PostingImeMotion imeMotion;
 	private final CaptchaDialogAppearance.ModalListener foregroundCaptchaListener = this::onForegroundCaptchaChanged;
 	private final PostingPrimaryState primaryState = new PostingPrimaryState();
 	private AlertDialog captchaDialog;
@@ -88,6 +97,8 @@ public final class PostingFormAppearance {
 	private Drawable captchaActionIcon;
 	private boolean captchaActionIconShown;
 	private boolean compact;
+	private boolean keyboardActions, keyboardDocked, revealKeyboardEditor;
+	private int dockViewportHeight, dockEditorHeight, dockEditorTop, dockToolbarOverlap, dockPrimaryReserve;
 	private boolean closed;
 	private Toolbar toolbar;
 	private Drawable toolbarBackground;
@@ -228,6 +239,9 @@ public final class PostingFormAppearance {
 		this.formatting = formatting;
 		container.removeView(root.findViewById(R.id.comment_format));
 		configureField(input, container, true);
+		if (scroll instanceof PostingScrollView) {
+			((PostingScrollView) scroll).setEditorViewportOwner(() -> ownsKeyboardViewport(input));
+		}
 		FormattingScrollView adaptiveScroll = new FormattingScrollView(root.getContext());
 		adaptiveScroll.onMeasureWidth = this::adaptFormatting;
 		formattingScroll = adaptiveScroll;
@@ -417,6 +431,93 @@ public final class PostingFormAppearance {
 				+ editor.getCompoundPaddingTop() + editor.getCompoundPaddingBottom());
 	}
 
+	/** Synchronize ownership before the common sizing path, not one global-layout callback later. */
+	public static void prepareEditorLayout(EditText editor, boolean keyboard) {
+		Object tag = editor.getTag(R.id.posting_form_field);
+		if (tag instanceof Field && ((Field) tag).editor) ((Field) tag).owner.updateLayout(keyboard);
+	}
+
+	public static boolean ownsKeyboardViewport(EditText editor) {
+		Object tag = editor.getTag(R.id.posting_form_field);
+		if (!(tag instanceof Field)) return false;
+		Field field = (Field) tag;
+		PostingFormAppearance owner = field.owner;
+		return field.editor && !owner.closed && editor.hasFocus()
+				&& Preferences.getPostingEditorHeightMode() == EditorHeightPolicy.Mode.AUTOMATIC
+				&& (owner.keyboardDocked
+						|| com.mishiranu.dashchan.ui.posting.PostingCommentSizing.isKeyboardVisible(owner.scroll))
+				&& owner.scroll.getHeight() - owner.scroll.getPaddingTop() - owner.scroll.getPaddingBottom()
+						>= minimumEditorInputHeight(editor) + owner.editorChromeHeight() + dp(editor, 6)
+								+ owner.keyboardPrimaryReserve() + owner.toolbarOverlap();
+	}
+
+	private int keyboardPrimaryReserve() {
+		// The same primary action is now part of the reserved viewport, immediately
+		// after the editor. Its own padding supplies the 6dp editor/button gap.
+		return keyboardActions ? 2 * dp(root, 6) + dp(root, 56) : 0;
+	}
+
+	/** One owner for editor spacing; attachment updates must not restore an IME-hidden margin. */
+	public static boolean syncAttachmentSpacing(View origin, boolean hasAttachments) {
+		PostingFormAppearance owner = captchaOwner(origin);
+		if (owner == null || owner.closed || owner.editorContainer == null) return false;
+		owner.syncEditorBottomMargin(hasAttachments);
+		return true;
+	}
+
+	private void syncEditorBottomMargin(boolean hasAttachments) {
+		if (editorContainer == null || !(editorContainer.getLayoutParams() instanceof ViewGroup.MarginLayoutParams)) return;
+		ViewGroup.MarginLayoutParams params = (ViewGroup.MarginLayoutParams) editorContainer.getLayoutParams();
+		int margin = keyboardActions || hasAttachments ? 0 : dp(root, 16);
+		if (params.bottomMargin != margin) { params.bottomMargin = margin; editorContainer.setLayoutParams(params); }
+	}
+
+	private int toolbarOverlap() {
+		if (toolbar == null || !toolbar.isAttachedToWindow() || !scroll.isAttachedToWindow()) return 0;
+		Rect toolbarBounds = new Rect();
+		if (!toolbar.getGlobalVisibleRect(toolbarBounds)) return 0;
+		int[] at = new int[2]; scroll.getLocationOnScreen(at);
+		if (toolbarBounds.right <= at[0] || toolbarBounds.left >= at[0] + scroll.getWidth()) return 0;
+		// ExpandedScreen's action-bar inset can be 56dp while this toolbar is 64dp
+		// (or taller with large text). Use the actual visible bottom, not either constant.
+		return Math.max(0, Math.min(scroll.getHeight() - scroll.getPaddingTop() - scroll.getPaddingBottom(),
+				toolbarBounds.bottom - at[1] - scroll.getPaddingTop()));
+	}
+
+	private int editorChromeHeight() {
+		return editorContainer.getPaddingTop() + editorContainer.getPaddingBottom()
+				+ (editorActions != null && editorActions.getVisibility() != View.GONE
+						? Math.max(dp(root, 52), editorActions.getMeasuredHeight()) : 0);
+	}
+
+	/** Automatic sizing reserves the original primary action, not attachment/utility rows. */
+	public static int keyboardEditorInputHeight(EditText editor, int available) {
+		Object tag = editor.getTag(R.id.posting_form_field);
+		if (!(tag instanceof Field)) return 0;
+		Field field = (Field) tag;
+		PostingFormAppearance owner = field.owner;
+		if (!field.editor || !owner.keyboardDocked || owner.closed) return 0;
+		// Measure the actual formatting row, not a subtraction of parent/child
+		// measurements that may belong to different stages of the IME resize.
+		int chrome = owner.editorChromeHeight();
+		// Earlier identity/subject fields scroll above the viewport while the comment
+		// is focused. Reserve 6dp below the toolbar and the primary action below
+		// the editor. Attachment count no longer changes this IME geometry.
+		int overlap = owner.toolbarOverlap(), minimum = minimumEditorInputHeight(editor);
+		int primaryReserve = owner.keyboardPrimaryReserve();
+		int height = EditorHeightPolicy.keyboardInputHeight(available, dp(editor, 6) + overlap,
+				chrome + primaryReserve, minimum);
+		if (com.mishiranu.dashchan.ui.posting.PostingFormDiagnostics.isRecording()) {
+			com.mishiranu.dashchan.ui.posting.PostingFormDiagnostics.traceState(editor, "height_inputs",
+					"available=" + available + " chrome=" + chrome + " toolbarOverlap=" + overlap + " minimum=" + minimum
+							+ " gaps=" + dp(editor, 6) + "," + dp(editor, 6) + " primaryReserve=" + primaryReserve
+							+ " primaryInline=" + owner.keyboardActions
+							+ " attachmentCards=" + PostingAttachmentsAppearance.cardCount(owner.root.findViewById(R.id.attachment_container))
+							+ " target=" + height);
+		}
+		return height;
+	}
+
 	public void formattingVisibility(boolean visible) {
 		finishCommands();
 		formattingScroll.setVisibility(visible ? View.VISIBLE : View.GONE);
@@ -477,20 +578,15 @@ public final class PostingFormAppearance {
 		// Reorder only the same presentation widgets; listeners, tags and selection stay owned by posting.
 		int position = 0;
 		for (int tag : new int[] {ChanMarkup.TAG_BOLD, ChanMarkup.TAG_ITALIC, ChanMarkup.TAG_UNDERLINE,
-				ChanMarkup.TAG_OVERLINE, ChanMarkup.TAG_STRIKE, ChanMarkup.TAG_SUBSCRIPT,
-				ChanMarkup.TAG_SUPERSCRIPT, ChanMarkup.TAG_SPOILER, ChanMarkup.TAG_QUOTE}) {
+				ChanMarkup.TAG_OVERLINE, ChanMarkup.TAG_STRIKE, ChanMarkup.TAG_SPOILER,
+				ChanMarkup.TAG_QUOTE, ChanMarkup.TAG_SUBSCRIPT, ChanMarkup.TAG_SUPERSCRIPT}) {
 			for (View command : commands) if (Integer.valueOf(tag).equals(markupTags.get(command))) {
 				formatting.removeView(command); formatting.addView(command, position++);
 			}
 		}
-		if (formattingSpacer == null) {
-			formattingSpacer = new View(root.getContext());
-			formattingSpacer.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-		}
-		if (formattingSpacer.getParent() == formatting) formatting.removeView(formattingSpacer);
 		if (moreButton.getParent() == formatting) formatting.removeView(moreButton);
-		formatting.addView(formattingSpacer, new LinearLayout.LayoutParams(0, 1, 1f));
-		formatting.addView(moreButton, new LinearLayout.LayoutParams(dp(root, 36), -2));
+		// Overflow follows the last visible tool; do not stretch a blank region after quote.
+		formatting.addView(moreButton, new LinearLayout.LayoutParams(dp(root, FORMAT_BUTTON_WIDTH_DP), -2));
 		renderCommand(moreButton);
 		adaptFormatting(formattingScroll.getWidth() > 0 ? formattingScroll.getWidth() : Integer.MAX_VALUE);
 	}
@@ -498,7 +594,7 @@ public final class PostingFormAppearance {
 	private int commandMinimumWidth(View view) {
 		int textWidth = view instanceof TextView ? (int) Math.ceil(android.text.Layout.getDesiredWidth(
 				((TextView) view).getText(), ((TextView) view).getPaint())) + dp(root, 8) : 0;
-		return Math.max(dp(root, 36), textWidth);
+		return Math.max(dp(root, FORMAT_BUTTON_WIDTH_DP), textWidth);
 	}
 
 	private int inlineMinimumWidth() {
@@ -511,8 +607,8 @@ public final class PostingFormAppearance {
 		if (formatting == null || moreButton == null || available <= 0) return;
 		inlineCommands.clear();
 		for (int tag : new int[] {ChanMarkup.TAG_BOLD, ChanMarkup.TAG_ITALIC, ChanMarkup.TAG_UNDERLINE,
-				ChanMarkup.TAG_OVERLINE, ChanMarkup.TAG_STRIKE, ChanMarkup.TAG_SUBSCRIPT,
-				ChanMarkup.TAG_SUPERSCRIPT, ChanMarkup.TAG_SPOILER, ChanMarkup.TAG_QUOTE}) {
+				ChanMarkup.TAG_OVERLINE, ChanMarkup.TAG_STRIKE, ChanMarkup.TAG_SPOILER,
+				ChanMarkup.TAG_QUOTE, ChanMarkup.TAG_SUBSCRIPT, ChanMarkup.TAG_SUPERSCRIPT}) {
 			for (View command : commands) if (Integer.valueOf(tag).equals(markupTags.get(command))) inlineCommands.add(command);
 		}
 		for (int tag : new int[] {ChanMarkup.TAG_SUBSCRIPT, ChanMarkup.TAG_SUPERSCRIPT,
@@ -521,14 +617,35 @@ public final class PostingFormAppearance {
 			if (inlineMinimumWidth() <= available) break;
 			for (View command : commands) if (Integer.valueOf(tag).equals(markupTags.get(command))) inlineCommands.remove(command);
 		}
+		// Test the complete row without reserving an unnecessary overflow button first.
+		// Otherwise the last two commands can both fit while neither fits beside "more".
+		int allWidth = dp(root, 4) * 2;
+		for (View command : commands) allWidth += commandMinimumWidth(command);
+		if (allWidth <= available) {
+			inlineCommands.clear(); inlineCommands.addAll(commands);
+		} else {
+			// Board-specific commands (code, ASCII art, heading, etc.) also use spare room.
+			// Keep the existing primary-tool priority and the original widgets/callbacks.
+			for (View command : commands) if (!inlineCommands.contains(command)) {
+				inlineCommands.add(command);
+				if (inlineMinimumWidth() > available) inlineCommands.remove(command);
+			}
+		}
 		boolean extra = inlineCommands.size() < commands.size();
+		if (com.mishiranu.dashchan.ui.posting.PostingFormDiagnostics.isRecording()) {
+			com.mishiranu.dashchan.ui.posting.PostingFormDiagnostics.traceState(editorContainer, "formatting_pack",
+					"availablePx=" + available + " allWidthPx=" + allWidth + " minimumButtonPx=" + dp(root, FORMAT_BUTTON_WIDTH_DP)
+							+ " inline=" + inlineCommands.size() + " total=" + commands.size() + " overflow=" + extra);
+		}
 		for (View command : commands) {
 			boolean primary = inlineCommands.contains(command);
 			command.setVisibility(primary ? View.VISIBLE : View.GONE);
 			if (command.getLayoutParams() instanceof LinearLayout.LayoutParams) {
 				LinearLayout.LayoutParams params = (LinearLayout.LayoutParams) command.getLayoutParams();
 				int width = primary ? commandMinimumWidth(command) : 0;
-				float weight = 0f;
+				// Keep minimum tool widths for packing, then share only the surplus
+				// evenly. The final tool reaches the end inset without a trailing spacer.
+				float weight = primary && available != Integer.MAX_VALUE ? 1f : 0f;
 				params.leftMargin = params.rightMargin = 0;
 				params.setMarginStart(0); params.setMarginEnd(0);
 				if (params.width != width || params.weight != weight || params.height != -2) {
@@ -581,13 +698,13 @@ public final class PostingFormAppearance {
 		if (dialog != null) dialog.dismiss();
 	}
 	private void renderCommand(View button) {
-		button.setMinimumWidth(dp(root, 36));
+		button.setMinimumWidth(dp(root, FORMAT_BUTTON_WIDTH_DP));
 		button.setMinimumHeight(dp(root, 44));
 		button.setBackgroundTintList(null);
 		button.setBackground(ripple(shape(12, Color.TRANSPARENT, 0, 0), 12));
 		if (button instanceof TextView) {
 			TextView text = (TextView) button;
-			text.setMinWidth(dp(root, 36)); text.setMinHeight(dp(root, 44));
+			text.setMinWidth(dp(root, FORMAT_BUTTON_WIDTH_DP)); text.setMinHeight(dp(root, 44));
 			text.setPadding(0, 0, 0, 0);
 			ViewUtils.setTextSizeScaled(text, 16);
 			text.setTextColor(palette.text);
@@ -628,7 +745,7 @@ public final class PostingFormAppearance {
 		}
 		utilitySlot.addView(utilityContent, new FrameLayout.LayoutParams(-1, -2, Gravity.CENTER_VERTICAL));
 		actions.addView(utilitySlot, new LinearLayout.LayoutParams(-1, -2));
-		FrameLayout primarySlot = new FrameLayout(root.getContext());
+		primarySlot = new FrameLayout(root.getContext());
 		primarySlot.addView(send, new FrameLayout.LayoutParams(-1, -1));
 		primaryMotion = new PostingPrimaryMotion(send, primarySlot);
 		primaryMotion.setAvailabilityChanged(() -> { if (primaryChanged != null) primaryChanged.run(); });
@@ -636,8 +753,13 @@ public final class PostingFormAppearance {
 		LinearLayout.LayoutParams primaryParams = new LinearLayout.LayoutParams(-1, dp(root, 56));
 		primaryParams.topMargin = dp(root, 16); actions.addView(primarySlot, primaryParams);
 		footer.addView(actions, new FrameLayout.LayoutParams(-1, -2));
+		imeMotion = new PostingImeMotion((ViewGroup) root, form, editorContainer, actionPanel, utilitySlot, utilityContent);
+		if (scroll instanceof PostingScrollView) ((PostingScrollView) scroll).setCancelEditorMotion(imeMotion::finish);
 		renderSend(); styleCaptcha(); syncOptionsVisibility();
-		root.getViewTreeObserver().addOnGlobalLayoutListener(layoutListener); updateLayout();
+		root.getViewTreeObserver().addOnGlobalLayoutListener(layoutListener);
+		root.getViewTreeObserver().addOnGlobalFocusChangeListener(focusListener);
+		root.getViewTreeObserver().addOnPreDrawListener(editorRevealListener);
+		updateLayout();
 	}
 
 	public void setPrimaryChanged(Runnable callback) { primaryChanged = callback; }
@@ -758,7 +880,7 @@ public final class PostingFormAppearance {
 		LinearLayout.LayoutParams attachParams = (LinearLayout.LayoutParams) attachButton.getLayoutParams();
 		int gap = any && attachButton.getVisibility() != View.GONE ? dp(root, 8) : 0;
 		if (attachParams.getMarginEnd() != gap) { attachParams.setMarginEnd(gap); attachButton.setLayoutParams(attachParams); }
-		// Even when the forum hides every utility control, the 64dp service slot stays reserved.
+		// Outside IME the original 64dp service slot stays reserved; IME hides its parent only.
 	}
 
 	private void renderCheck(CompoundButton check) {
@@ -870,6 +992,17 @@ public final class PostingFormAppearance {
 	}
 
 	private void updateLayout() {
+		WindowInsetsCompat insets = ViewCompat.getRootWindowInsets(scroll);
+		updateLayout(insets != null && insets.isVisible(WindowInsetsCompat.Type.ime()));
+	}
+
+	private void resizeKeyboardEditor() {
+		if (!closed) com.mishiranu.dashchan.ui.posting.PostingCommentSizing.apply(
+				scroll, root.findViewById(R.id.comment), null);
+	}
+
+	// The platform inset is separated from layout so geometry fixtures need no live IME.
+	void updateLayout(boolean keyboardVisible) {
 		if (closed) return;
 		updatePalette();
 		updateCaptchaActionIcon();
@@ -904,27 +1037,134 @@ public final class PostingFormAppearance {
 				}
 			}
 		}
-		boolean nextCompact = usableHeight > 0 && usableHeight - actionPanel.getMeasuredHeight() - otherFields < minimumEditor;
-		if (nextCompact != compact) {
+		EditText comment = root.findViewById(R.id.comment);
+		boolean actionsChanged = keyboardActions != keyboardVisible;
+		boolean nextDocked = adaptive && comment != null && comment.hasFocus() && keyboardVisible;
+		if (imeMotion != null && (actionsChanged || nextDocked != keyboardDocked)) imeMotion.begin();
+		keyboardActions = keyboardVisible;
+		if (utilitySlot != null) utilitySlot.setVisibility(keyboardActions ? View.GONE : View.VISIBLE);
+		boolean hasAttachments = PostingAttachmentsAppearance.cardCount(root.findViewById(R.id.attachment_container)) > 0;
+		if (utilitySlot != null) {
+			// The grid already supplies the entire12dp gap. Do not add the normal
+			// utility row's10dp top inset (or center its content in that extra space).
+			int top = hasAttachments ? 0 : dp(root, 10);
+			if (utilitySlot.getPaddingTop() != top) utilitySlot.setPadding(0, top, 0, dp(root, 10));
+			utilitySlot.setMinimumHeight(dp(root, hasAttachments ? 54 : 64));
+		}
+		if (primarySlot != null) {
+			LinearLayout.LayoutParams params = (LinearLayout.LayoutParams) primarySlot.getLayoutParams();
+			int margin = keyboardActions ? 0 : dp(root, 16);
+			if (params.topMargin != margin) { params.topMargin = margin; primarySlot.setLayoutParams(params); }
+		}
+		syncEditorBottomMargin(hasAttachments);
+		if (nextDocked != keyboardDocked || actionsChanged) {
+			if (com.mishiranu.dashchan.ui.posting.PostingFormDiagnostics.isRecording()) {
+				com.mishiranu.dashchan.ui.posting.PostingFormDiagnostics.trace(root, "dock_transition",
+						"from=" + keyboardDocked + " to=" + nextDocked + " ime=" + keyboardVisible
+								+ " focus=" + (comment != null && comment.hasFocus()) + " adaptive=" + adaptive
+								+ " primaryInline=" + keyboardActions);
+			}
+			keyboardDocked = nextDocked;
+			revealKeyboardEditor = nextDocked;
+			scroll.requestLayout();
+			scroll.removeCallbacks(keyboardResize); scroll.post(keyboardResize);
+		}
+		// With cards, keep the same footer immediately after the grid in the form.
+		// A window-bottom footer would introduce arbitrary viewport slack before checks.
+		boolean nextCompact = keyboardActions || hasAttachments || usableHeight > 0
+				&& usableHeight - actionPanel.getMeasuredHeight() - otherFields < minimumEditor;
+		int actionIndex = keyboardActions && editorContainer != null ? form.indexOfChild(editorContainer) + 1 : -1;
+		boolean misplaced = keyboardActions && (actionPanel.getParent() != form
+				|| form.indexOfChild(actionPanel) != actionIndex);
+		if (nextCompact != compact || misplaced || actionsChanged) {
+			if (com.mishiranu.dashchan.ui.posting.PostingFormDiagnostics.isRecording()) {
+				com.mishiranu.dashchan.ui.posting.PostingFormDiagnostics.trace(root, "footer_reparent",
+						"fromCompact=" + compact + " toCompact=" + nextCompact + " usableHeight=" + usableHeight
+								+ " otherFields=" + otherFields + " actionHeight=" + actionPanel.getMeasuredHeight());
+			}
 			ImePanelMotion.finish(root);
 			((ViewGroup) actionPanel.getParent()).removeView(actionPanel);
-			if (nextCompact) form.addView(actionPanel, new LinearLayout.LayoutParams(-1, -2));
+			if (nextCompact) {
+				if (keyboardActions && editorContainer != null) form.addView(actionPanel,
+						form.indexOfChild(editorContainer) + 1, new LinearLayout.LayoutParams(-1, -2));
+				else form.addView(actionPanel, new LinearLayout.LayoutParams(-1, -2));
+			}
 			else body.addView(actionPanel, new LinearLayout.LayoutParams(-1, -2));
 			compact = nextCompact;
 		}
-		// The editor already supplies its 16dp bottom margin. Do not add a second
-		// padding before the fixed option row. In scroll fallback this padding
-		// remains zero; the footer itself supplies its 16dp bottom-safe-area padding.
+		// IME: no editor margin or utility row; action padding alone supplies the
+		// exact6dp gap. Hidden IME uses the grid-owned12dp gap when cards exist;
+		// an empty form retains its normal footer spacing.
 		int formBottom = 0;
+		int toolbarOverlap = keyboardDocked ? toolbarOverlap() : 0;
+		int formTop = keyboardDocked ? dp(root, 6) + toolbarOverlap : dp(root, 16);
 		if (form.getPaddingLeft() != horizontal || form.getPaddingRight() != horizontal
-				|| form.getPaddingTop() != dp(root, 16) || form.getPaddingBottom() != formBottom) {
-			form.setPadding(horizontal, dp(root, 16), horizontal, formBottom);
+				|| form.getPaddingTop() != formTop || form.getPaddingBottom() != formBottom) {
+			form.setPadding(horizontal, formTop, horizontal, formBottom);
 		}
 		int actionHorizontal = compact ? 0 : horizontal;
+		int actionTop = keyboardActions ? dp(root, 6) : 0;
+		int actionBottom = dp(root, keyboardActions ? 6 : 16);
 		if (actionPanel.getPaddingLeft() != actionHorizontal || actionPanel.getPaddingRight() != actionHorizontal
-				|| actionPanel.getPaddingBottom() != dp(root, 16)) {
-			actionPanel.setPadding(actionHorizontal, 0, actionHorizontal, dp(root, 16));
+				|| actionPanel.getPaddingTop() != actionTop || actionPanel.getPaddingBottom() != actionBottom) {
+			actionPanel.setPadding(actionHorizontal, actionTop, actionHorizontal, actionBottom);
 		}
+		int viewportHeight = scroll.getHeight() - scroll.getPaddingTop() - scroll.getPaddingBottom();
+		int editorHeight = editorContainer != null ? editorContainer.getHeight() : 0;
+		int editorTop = editorContainer != null ? editorContainer.getTop() : 0;
+		int primaryReserve = keyboardPrimaryReserve();
+		if (keyboardDocked && (viewportHeight != dockViewportHeight || editorHeight != dockEditorHeight
+				|| editorTop != dockEditorTop || toolbarOverlap != dockToolbarOverlap || primaryReserve != dockPrimaryReserve)) {
+			revealKeyboardEditor = true;
+		}
+		dockViewportHeight = viewportHeight; dockEditorHeight = editorHeight; dockEditorTop = editorTop;
+		dockToolbarOverlap = toolbarOverlap;
+		dockPrimaryReserve = primaryReserve;
+	}
+
+	private boolean revealKeyboardEditor() {
+		if (revealKeyboardEditor) {
+			EditText editor = root.findViewById(R.id.comment);
+			if (!closed && keyboardDocked && editor != null) {
+				int available = scroll.getHeight() - scroll.getPaddingTop() - scroll.getPaddingBottom();
+				int height = keyboardEditorInputHeight(editor, available);
+				if (available > 0 && height > 0 && (editor.getMinHeight() != height || editor.getMaxHeight() != height)) {
+					if (com.mishiranu.dashchan.ui.posting.PostingFormDiagnostics.isRecording()) {
+						com.mishiranu.dashchan.ui.posting.PostingFormDiagnostics.trace(root, "predraw_resize",
+								"oldMin=" + editor.getMinHeight() + " oldMax=" + editor.getMaxHeight() + " target=" + height);
+					}
+					editor.setHeight(height);
+					return false; // Remeasure once before presenting/alignment, never draw stale geometry.
+				}
+				if (ownsKeyboardViewport(editor) && (!PostingImeMotion.hasMeasuredBounds(scroll, form, editorContainer, actionPanel)
+						|| editor.getHeight() != height || editor.getMeasuredHeight() != height
+						|| actionPanel.getParent() != form || actionPanel.getTop() != editorContainer.getBottom()
+						|| actionPanel.getHeight() != keyboardPrimaryReserve() || form.getHeight() < actionPanel.getBottom())) {
+					// Wait only for an actual geometry mismatch. A root/ancestor can keep
+					// requesting layout while these local bounds are already correct.
+					// In that case withholding alignment also suppresses native focus reveal,
+					// leaving the primary action below the keyboard on every focus switch.
+					com.mishiranu.dashchan.ui.posting.PostingFormDiagnostics.traceState(root, "align_wait",
+							"reason=geometry_mismatch input=" + editor.getHeight() + " target=" + height
+									+ " actionHeight=" + actionPanel.getHeight() + " reserve=" + keyboardPrimaryReserve());
+					scroll.requestLayout();
+					return false;
+				}
+			}
+			revealKeyboardEditor = false;
+			if (!closed && keyboardDocked && editorContainer != null
+					&& editorContainer.getHeight() > 0 && editorContainer.getHeight() <= dockViewportHeight) {
+				Rect bounds = new Rect(); editorContainer.getDrawingRect(bounds);
+				scroll.offsetDescendantRectToMyCoords(editorContainer, bounds);
+				// Align once after geometry/focus changes, never on every scroll or text edit.
+				// Reserve the primary action too; attachments remain below it in the scroll range.
+				int target = Math.max(0, bounds.bottom + keyboardPrimaryReserve() - scroll.getHeight() + scroll.getPaddingBottom());
+				if (scroll instanceof PostingScrollView) ((PostingScrollView) scroll).alignEditorViewport(target);
+				else scroll.scrollTo(scroll.getScrollX(), target);
+			}
+		}
+		if (imeMotion != null) imeMotion.onPreDraw();
+		return true;
 	}
 
 	public void activateToolbar(ViewGroup view) {
@@ -1032,10 +1272,20 @@ public final class PostingFormAppearance {
 		CaptchaDialogAppearance.unobserve(foregroundCaptchaListener);
 		deactivateToolbar();
 		closed = true;
+		if (imeMotion != null) imeMotion.close();
+		if (scroll instanceof PostingScrollView) {
+			((PostingScrollView) scroll).setEditorViewportOwner(null);
+			((PostingScrollView) scroll).setCancelEditorMotion(null);
+		}
+		scroll.removeCallbacks(keyboardResize);
 		primaryState.close(); primaryChanged = null;
 		if (primaryMotion != null) primaryMotion.close();
 		if (captchaRoot != null) captchaRoot.setTag(R.id.posting_form_owner, null);
-		if (root.getViewTreeObserver().isAlive()) root.getViewTreeObserver().removeOnGlobalLayoutListener(layoutListener);
+		if (root.getViewTreeObserver().isAlive()) {
+			root.getViewTreeObserver().removeOnGlobalLayoutListener(layoutListener);
+			root.getViewTreeObserver().removeOnGlobalFocusChangeListener(focusListener);
+			root.getViewTreeObserver().removeOnPreDrawListener(editorRevealListener);
+		}
 		if (root.getTag(R.id.posting_form_owner) == this) root.setTag(R.id.posting_form_owner, null);
 		for (Field field : fields) field.input.setTag(R.id.posting_form_field, null);
 		fields.clear(); commands.clear(); inlineCommands.clear(); checks.clear(); markupTags.clear();

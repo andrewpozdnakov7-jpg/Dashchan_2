@@ -23,6 +23,7 @@ import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.ui.ContentFragment;
 import com.mishiranu.dashchan.ui.FragmentHandler;
 import com.mishiranu.dashchan.ui.posting.PostingCommentSizing;
+import com.mishiranu.dashchan.ui.posting.PostingFormDiagnostics;
 import com.mishiranu.dashchan.ui.posting.text.MarkupButtonProvider;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.util.ViewUtils;
@@ -36,7 +37,10 @@ public class PostingPreviewFragment extends ContentFragment {
 	private ScrollView scroll;
 	private EditText comment;
 	private PostingFormAppearance postingAppearance;
-	private final Runnable resize = () -> PostingCommentSizing.apply(scroll, comment, null);
+	private PostingFormDiagnostics.Observer formDiagnostics;
+	private final Runnable resize = () -> PostingCommentSizing.apply(scroll, comment, detail -> {
+		if (formDiagnostics != null) formDiagnostics.decision(detail);
+	});
 
 	@Override public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle state) {
 		return inflater.inflate(R.layout.activity_posting, container, false);
@@ -157,6 +161,7 @@ public class PostingPreviewFragment extends ContentFragment {
 			actions.addView(send, new LinearLayout.LayoutParams(-1, -2));
 			footer.addView(actions, new FrameLayout.LayoutParams(-1, -2));
 		}
+		formDiagnostics = new PostingFormDiagnostics.Observer(requireActivity(), view, scroll, comment, footer);
 		scroll.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> scheduleResize());
 		comment.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
 			if (r - l != or - ol || b - t != ob - ot) scheduleResize();
@@ -223,6 +228,7 @@ public class PostingPreviewFragment extends ContentFragment {
 
 	@Override public void onDestroyView() {
 		hideKeyboard();
+		if (formDiagnostics != null) { formDiagnostics.close(); formDiagnostics = null; }
 		if (postingAppearance != null) { postingAppearance.close(); postingAppearance = null; }
 		if (scroll != null) scroll.removeCallbacks(resize);
 		ViewCompat.setOnApplyWindowInsetsListener(requireView(), null);
