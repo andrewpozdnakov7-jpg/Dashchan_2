@@ -109,7 +109,7 @@ public class DownloadsFragment extends PreferenceFragment implements FragmentHan
 		new InstanceDialog(fragmentManager, null, provider -> {
 			Context context = provider.getContext();
 			String html = IOUtils.readRawResourceString(context.getResources(), R.raw.markup_subdirectory_info);
-			return new MotionDialogBuilder(context)
+			return MotionDialogBuilder.standard(context)
 					.setTitle(R.string.subdirectory_pattern)
 					.setMessage(BUILDER_SUBDIRECTORY.fromHtmlReduced(html))
 					.setPositiveButton(android.R.string.ok, null)

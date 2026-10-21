@@ -17,7 +17,6 @@ import com.mishiranu.dashchan.content.async.ExecutorTask;
 import com.mishiranu.dashchan.content.async.TaskViewModel;
 import com.mishiranu.dashchan.content.database.PagesDatabase;
 import com.mishiranu.dashchan.content.translation.TranslationController;
-import com.mishiranu.dashchan.content.storage.FavoritesStorage;
 import com.mishiranu.dashchan.ui.DrawerForm;
 import com.mishiranu.dashchan.ui.FragmentHandler;
 import com.mishiranu.dashchan.ui.preference.core.Preference;
@@ -51,6 +50,9 @@ public class ContentsFragment extends PreferenceFragment {
 					.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 							.pushFragment(new OfflineTranslationFragment()));
 		}
+		addButton(R.string.favorites, R.string.favorites_settings_summary)
+				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
+						.pushFragment(new FavoritesFragment()));
 		addHeader(R.string.settings_boards);
 		addCheck(true, Preferences.KEY_THREAD_PAGE_PRELOAD, Preferences.DEFAULT_THREAD_PAGE_PRELOAD,
 				R.string.thread_page_preload, R.string.thread_page_preload__summary);
@@ -64,15 +66,6 @@ public class ContentsFragment extends PreferenceFragment {
 		addList(Preferences.KEY_CYCLICAL_REFRESH, enumList(Preferences.CyclicalRefreshMode.values(), v -> v.value),
 				Preferences.DEFAULT_CYCLICAL_REFRESH.value, R.string.cyclical_threads_refresh_mode,
 				enumResList(Preferences.CyclicalRefreshMode.values(), v -> v.titleResId));
-
-		addHeader(R.string.favorites);
-		addList(Preferences.KEY_FAVORITES_ORDER, enumList(Preferences.FavoritesOrder.values(), o -> o.value),
-				Preferences.DEFAULT_FAVORITES_ORDER.value, R.string.favorite_threads_order,
-				enumResList(Preferences.FavoritesOrder.values(), o -> o.titleResId))
-				.setOnAfterChangeListener(p -> FavoritesStorage.getInstance().sortIfNeeded());
-		addList(Preferences.KEY_FAVORITE_ON_REPLY, enumList(Preferences.FavoriteOnReplyMode.values(), o -> o.value),
-				Preferences.DEFAULT_FAVORITE_ON_REPLY.value, R.string.add_thread_on_reply,
-				enumResList(Preferences.FavoriteOnReplyMode.values(), o -> o.titleResId));
 
 		addHeader(R.string.additional);
 		clearCachePreference = addButton(getString(R.string.clear_cache),
@@ -108,7 +101,7 @@ public class ContentsFragment extends PreferenceFragment {
 		public AlertDialog onCreateDialog(Bundle savedInstanceState) {
 			checkedIndex = savedInstanceState != null ? savedInstanceState.getInt(EXTRA_CHECKED_INDEX) : 0;
 			String[] items = {getString(R.string.old_threads), getString(R.string.all_threads)};
-			return new MotionDialogBuilder(requireContext())
+			return MotionDialogBuilder.standard(requireContext())
 					.setTitle(getString(R.string.clear_cache))
 					.setSingleChoiceItems(items, checkedIndex, (d, which) -> checkedIndex = which)
 					.setPositiveButton(android.R.string.ok, (d, w) -> {

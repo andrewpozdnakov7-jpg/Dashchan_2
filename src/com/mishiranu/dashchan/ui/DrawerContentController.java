@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.HashMap;
 import java.util.List;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -28,6 +29,12 @@ final class DrawerContentController {
 	private final Supplier<String> currentChan;
 	private final DrawerForm.Callback callback;
 	private final Predicate<FavoritesStorage.FavoriteItem> hiddenFavorite;
+	private final Predicate<ListItem> unreadFavorite;
+	boolean favoritesGroupedByBoard, favoritesUnreadFirst;
+	boolean freezeFavoriteUnreadOrder;
+	private final HashMap<Long, Boolean> favoriteUnreadSnapshot = new HashMap<>();
+	final HashSet<String> collapsedFavoriteBoardGroups = new HashSet<>();
+	private Preferences.FavoritesOrder favoritesOrder;
 	private static final int COLLAPSED_OPEN_THREAD_LIMIT = 12;
 	final ArrayList<ListItem> pages = new ArrayList<>();
 	final ArrayList<ListItem> pageNavigation = new ArrayList<>();
@@ -52,10 +59,16 @@ final class DrawerContentController {
 
 	DrawerContentController(Context context, Supplier<String> currentChan, DrawerForm.Callback callback,
 			Predicate<FavoritesStorage.FavoriteItem> hiddenFavorite) {
+		this(context, currentChan, callback, hiddenFavorite, item -> false);
+	}
+
+	DrawerContentController(Context context, Supplier<String> currentChan, DrawerForm.Callback callback,
+			Predicate<FavoritesStorage.FavoriteItem> hiddenFavorite, Predicate<ListItem> unreadFavorite) {
 		this.context = context;
 		this.currentChan = currentChan;
 		this.callback = callback;
 		this.hiddenFavorite = hiddenFavorite;
+		this.unreadFavorite = unreadFavorite;
 	}
 
 	void updatePageNavigation() {
@@ -276,16 +289,54 @@ final class DrawerContentController {
 
 	void updateDisplayedFavorites(boolean collapsed) {
 		int threadCount = getVisibleFavoriteThreadCount();
-		displayedFavorites.clear();
-		for (ListItem item : favorites) {
+		ArrayList<ListItem> next = new ArrayList<>();
+		ArrayList<ListItem> snapshot = new ArrayList<>(favorites);
+		ArrayList<ListItem> threads = new ArrayList<>();
+		for (ListItem item : snapshot) {
+			if (item.type == ListItem.Type.FAVORITE && item.isThreadItem()) threads.add(item);
+		}
+		boolean addedThreads = false;
+		for (ListItem item : snapshot) {
 			if (item.type == ListItem.Type.SECTION && item.data == SECTION_ACTION_FAVORITES_MENU) {
-				displayedFavorites.add(new ListItem(item.type, item.data, false, item.iconResId,
+				next.add(new ListItem(item.type, item.data, false, item.iconResId,
 						null, null, null, context.getString(R.string.favorite_threads_count__format, threadCount),
 						0, !collapsed));
-			} else if (!collapsed || item.type != ListItem.Type.FAVORITE || !item.isThreadItem()) {
-				displayedFavorites.add(item);
+			} else if (item.type == ListItem.Type.FAVORITE && item.isThreadItem()) {
+				if (!addedThreads && !collapsed) appendFavoriteThreads(next, threads);
+				addedThreads = true;
+			} else {
+				next.add(item);
 			}
 		}
+		displayedFavorites.clear();
+		displayedFavorites.addAll(next);
+	}
+
+	private void appendFavoriteThreads(List<ListItem> target, List<ListItem> threads) {
+		if (!freezeFavoriteUnreadOrder) favoriteUnreadSnapshot.clear();
+		for (FavoriteThreadsLayout.Group<ListItem> group : FavoriteThreadsLayout.arrange(threads,
+				item -> item.chanName, item -> item.boardName, this::isFavoriteUnread,
+				favoritesGroupedByBoard, favoritesUnreadFirst)) {
+			boolean collapsed = false;
+			if (favoritesGroupedByBoard) {
+				collapsed = collapsedFavoriteBoardGroups.contains(Preferences.favoriteBoardGroupKey(group.forum, group.board));
+				Chan chan = Chan.get(group.forum);
+				String boardTitle = chan.configuration.formatBoardTitle(group.board,
+						chan.configuration.getBoardTitle(group.board));
+				String title = context.getString(R.string.favorite_board_group_format,
+						chan.configuration.getTitle(), boardTitle, group.items.size());
+				target.add(ListItem.favoriteGroup(group.forum, group.board, title, !collapsed));
+			}
+			if (!collapsed) target.addAll(group.items);
+		}
+	}
+
+	boolean isFavoriteUnread(ListItem item) {
+		Boolean known = favoriteUnreadSnapshot.get(item.id);
+		if (freezeFavoriteUnreadOrder && known != null) return known;
+		boolean unread = unreadFavorite.test(item);
+		favoriteUnreadSnapshot.put(item.id, unread);
+		return unread;
 	}
 
 	boolean isFavoriteThreadHidden(FavoritesStorage.FavoriteItem favoriteItem) {
@@ -371,6 +422,14 @@ final class DrawerContentController {
 		boolean redditWebReaderEnabled = Preferences.isRedditWebReaderEnabled();
 		boolean trackMyPostsEnabled = Preferences.isTrackMyPostsEnabled();
 		boolean collapseLongOpenThreadsEnabled = Preferences.isCollapseLongOpenThreadsEnabled();
+		boolean favoritesGroupedByBoard = Preferences.isFavoritesGroupedByBoard();
+		boolean favoritesUnreadFirst = Preferences.isFavoritesUnreadFirst();
+		Preferences.FavoritesOrder favoritesOrder = Preferences.getFavoritesOrder();
+		// The synchronous preference listener runs before the settings row's
+		// onAfterChange callback: apply the existing title-order policy before
+		// rebuilding its drawer snapshot, not one update later.
+		if (this.favoritesOrder != favoritesOrder) FavoritesStorage.getInstance().sortIfNeeded();
+		java.util.Set<String> collapsedFavoriteBoardGroups = Preferences.getCollapsedFavoriteBoardGroups();
 		Preferences.PagesListMode pagesListMode = Preferences.getPagesListMode();
 		List<Preferences.DrawerSection> drawerSectionOrder = Preferences.isDrawerCustomOrderEnabled()
 				? Preferences.getDrawerSectionOrder() : null;
@@ -379,6 +438,9 @@ final class DrawerContentController {
 				this.redditWebReaderEnabled != redditWebReaderEnabled ||
 				this.trackMyPostsEnabled != trackMyPostsEnabled ||
 				this.collapseLongOpenThreadsEnabled != collapseLongOpenThreadsEnabled ||
+				this.favoritesGroupedByBoard != favoritesGroupedByBoard ||
+				this.favoritesUnreadFirst != favoritesUnreadFirst || this.favoritesOrder != favoritesOrder ||
+				!this.collapsedFavoriteBoardGroups.equals(collapsedFavoriteBoardGroups) ||
 				this.pagesListMode != pagesListMode ||
 				!CommonUtils.equals(this.drawerSectionOrder, drawerSectionOrder)) {
 			this.drawerSectionOrder = drawerSectionOrder;
@@ -388,6 +450,11 @@ final class DrawerContentController {
 			this.redditWebReaderEnabled = redditWebReaderEnabled;
 			this.trackMyPostsEnabled = trackMyPostsEnabled;
 			this.collapseLongOpenThreadsEnabled = collapseLongOpenThreadsEnabled;
+			this.favoritesGroupedByBoard = favoritesGroupedByBoard;
+			this.favoritesUnreadFirst = favoritesUnreadFirst;
+			this.favoritesOrder = favoritesOrder;
+			this.collapsedFavoriteBoardGroups.clear();
+			this.collapsedFavoriteBoardGroups.addAll(collapsedFavoriteBoardGroups);
 			this.pagesExpanded = false;
 			this.pagesListMode = pagesListMode;
 			return true;
@@ -471,7 +538,7 @@ final class DrawerContentController {
 
 	static class ListItem {
 		public enum Type {HEADER, RESTART, SECTION, COMBINED_FEED, PAGE, REDDIT_PAGE,
-			PAGES_TOGGLE, FAVORITE, MENU, CHAN}
+			PAGES_TOGGLE, FAVORITE, MENU, CHAN, FAVORITE_GROUP}
 
 		public static final ListItem HEADER = new ListItem(Type.HEADER, null, null, null, null);
 		public static final ListItem RESTART = new ListItem(Type.RESTART, null, null, null, null);
@@ -515,6 +582,7 @@ final class DrawerContentController {
 				case COMBINED_FEED:
 				case PAGE:
 				case REDDIT_PAGE:
+				case FAVORITE_GROUP:
 				case FAVORITE: {
 					hash = appendIdHash(hash, chanName);
 					hash = appendIdHash(hash, boardName);
@@ -583,6 +651,10 @@ final class DrawerContentController {
 
 		public ListItem(Type type, int data, int iconResId, String title, int badgeCount) {
 			this(type, data, false, iconResId, null, null, null, title, badgeCount);
+		}
+
+		static ListItem favoriteGroup(String forum, String board, String title, boolean expanded) {
+			return new ListItem(Type.FAVORITE_GROUP, 0, false, 0, forum, board, null, title, 0, expanded);
 		}
 
 		public boolean isThreadItem() {

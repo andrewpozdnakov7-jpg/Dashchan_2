@@ -1493,7 +1493,7 @@ public class PagerUnit implements PagerInstance.Callback {
 			Chan chan = Chan.get(galleryInstance.chanName);
 			Context context = galleryInstance.callback.getWindow().getContext();
 			// Gallery chrome has its own dark theme; dialogs must use the application's theme.
-			DialogMenu dialogMenu = new DialogMenu(dialogContext);
+			DialogMenu dialogMenu = new DialogMenu(dialogContext, false);
 			dialogMenu.setTitle(!StringUtils.isEmpty(galleryItem.originalName)
 					? galleryItem.originalName : galleryItem.getFileName(chan));
 			dialogMenu.add(R.string.tiktok_filter, this::showTikTokFilterDialog);

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<string name="drawer_refresh_favorite">Обновить этот тред</string>
+    <string name="drawer_favorite_actions">Действия с избранным</string>
+    <string name="drawer_favorite_group_title_format">%1$s · %2$s</string>
+    <plurals name="drawer_heading_thread_count">
+        <item quantity="one">%1$s, %2$d тред</item>
+        <item quantity="few">%1$s, %2$d треда</item>
+        <item quantity="many">%1$s, %2$d тредов</item>
+        <item quantity="other">%1$s, %2$d треда</item>
+    </plurals>
+    <string name="drawer_tracking_on">Отслеживание включено</string>
+    <string name="drawer_tracking_off">Отслеживание выключено</string>
+    <string name="drawer_tracking_paused">Проверка приостановлена</string>
+    <string name="drawer_tracking_error">Ошибка проверки</string>
+    <string name="drawer_tracking_deleted">Тред удалён</string>
+    <string name="drawer_tracking_checking">Идёт проверка</string>
+    <string name="drawer_tracking_count_format">%1$s, новых сообщений: %2$d</string>
+    <string name="drawer_tracking_count_delta_format">%1$s, изменение числа сообщений: %2$d</string>
+    <string name="drawer_tracking_detail_format">%1$s; %2$s</string>
+</resources>

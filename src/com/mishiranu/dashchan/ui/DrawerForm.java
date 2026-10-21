@@ -55,6 +55,9 @@ import com.mishiranu.dashchan.content.storage.FavoritesStorage;
 import com.mishiranu.dashchan.content.storage.MyPostsStorage;
 import com.mishiranu.dashchan.content.storage.RedditPageStorage;
 import com.mishiranu.dashchan.graphics.ChanIconDrawable;
+import com.mishiranu.dashchan.graphics.DrawerGlyph;
+import com.mishiranu.dashchan.widget.DrawerStyle;
+import com.mishiranu.dashchan.widget.DrawerItemLayout;
 import com.mishiranu.dashchan.util.FlagUtils;
 import com.mishiranu.dashchan.util.GraphicsUtils;
 import com.mishiranu.dashchan.util.IOUtils;
@@ -91,6 +94,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	private final WatcherView.ColorSet watcherViewColorSet;
 	private final SortableHelper<ViewHolder> sortableHelper;
 	private final int drawerIconColor;
+	private final DrawerStyle drawerStyle;
 
 	private final WatcherService.Client watcherServiceClient;
 	private final InputMethodManager inputMethodManager;
@@ -125,6 +129,8 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	private boolean drawerOpened;
 	private boolean drawerAlwaysVisible;
 	private boolean favoriteSelectionActive;
+	private boolean drawerItemDragging;
+	private boolean hostResumed;
 	private final HashSet<Long> selectedFavoriteIds = new HashSet<>();
 
 	public static final int RESULT_REMOVE_ERROR_MESSAGE = 0x00000001;
@@ -197,9 +203,12 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		this.fragmentManager = fragmentManager;
 		this.watcherServiceClient = watcherServiceClient;
 		content = new DrawerContentController(context, () -> this.chanName, callback,
-				item -> watcherServiceClient.getCounter(item.chanName, item.boardName, item.threadNumber).deleted);
+				item -> watcherServiceClient.getCounter(item.chanName, item.boardName, item.threadNumber).deleted,
+				item -> watcherServiceClient.getCounter(item.chanName, item.boardName, item.threadNumber).newCount > 0);
 
 		ThemeEngine.Theme theme = ThemeEngine.getTheme(context);
+		drawerStyle = Preferences.isNewInterfaceMotionEnabled() ? new DrawerStyle(context) : null;
+		int drawerSurface = drawerStyle != null ? drawerStyle.surface : theme.card;
 		int enabledColor = theme.accent;
 		int disabledColor = 0xff666666;
 		int unavailableColor = GraphicsUtils.mixColors(disabledColor, enabledColor & 0x7fffffff);
@@ -212,7 +221,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		recyclerView.setHasFixedSize(true);
 		recyclerView.setEdgeEffectShift(this);
 		// Drawer overscroll is not a refresh affordance, keep it from flashing accent under system bars.
-		recyclerView.getEdgeEffectHandler().setColor(theme.card);
+		recyclerView.getEdgeEffectHandler().setColor(drawerSurface);
 		recyclerView.setLayoutManager(new LinearLayoutManager(recyclerView.getContext()) {
 			@Override
 			public boolean requestChildRectangleOnScreen(@NonNull RecyclerView parent, @NonNull View child,
@@ -243,12 +252,14 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 						hideKeyboard();
 					}
 				}
+				applyDrawerWatcherState();
 			}
 		});
 		setHasStableIds(true);
 		recyclerView.setAdapter(this);
 		DividerItemDecoration dividerItemDecoration = new DividerItemDecoration
-				(recyclerView.getContext(), (c, position) -> configureDivider(c, position).translate(false));
+				(recyclerView.getContext(), (c, position) -> configureDivider(c, position).translate(false),
+				drawerStyle != null ? new android.graphics.drawable.ColorDrawable(drawerStyle.outline) : null);
 		recyclerView.addItemDecoration(dividerItemDecoration);
 		dividerItemDecoration.setAboveCallback(position -> {
 			ListItem listItem = getItem(position);
@@ -257,17 +268,18 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		});
 		recyclerView.setItemAnimator(null);
 		sortableHelper = new SortableHelper<>(recyclerView, this);
-		drawerIconColor = ResourceUtils.getColor(context, android.R.attr.textColorSecondary);
+		drawerIconColor = drawerStyle != null ? drawerStyle.variant : ResourceUtils.getColor(context, android.R.attr.textColorSecondary);
 
 		float density = ResourceUtils.obtainDensity(context);
 		// Keep selection controls in the drawer, not in the Activity's obscured ActionMode.
 		contentView = new LinearLayout(context);
 		contentView.setOrientation(LinearLayout.VERTICAL);
+		if (drawerStyle != null) contentView.setBackgroundColor(drawerSurface);
 		contentView.addView(recyclerView, new LinearLayout.LayoutParams(
 				ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
 		favoriteSelectionPanel = new LinearLayout(context);
 		favoriteSelectionPanel.setOrientation(LinearLayout.VERTICAL);
-		favoriteSelectionPanel.setBackgroundColor(theme.card);
+		favoriteSelectionPanel.setBackgroundColor(drawerSurface);
 		favoriteSelectionPanel.setPadding((int) (8f * density), 0, (int) (8f * density), 0);
 		favoriteSelectionPanel.setVisibility(View.GONE);
 		contentView.addView(favoriteSelectionPanel, new LinearLayout.LayoutParams(
@@ -278,6 +290,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		favoriteSelectionCount = new TextView(context);
 		favoriteSelectionCount.setTextColor(ResourceUtils.getColor(context, android.R.attr.textColorPrimary));
 		favoriteSelectionCount.setTextSize(16);
+		if (drawerStyle != null) drawerStyle.apply(favoriteSelectionCount, DrawerStyle.Role.TITLE);
 		selectionHeader.addView(favoriteSelectionCount, new LinearLayout.LayoutParams(0,
 				ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 		Button cancelSelection = createFavoriteSelectionButton(android.R.string.cancel);
@@ -303,6 +316,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		headerView.setLayoutParams(new RecyclerView.LayoutParams(RecyclerView.LayoutParams.MATCH_PARENT,
 				RecyclerView.LayoutParams.WRAP_CONTENT));
 		this.headerView = headerView;
+		if (drawerStyle != null) headerView.setBackgroundColor(drawerSurface);
 
 		LinearLayout editTextContainer = new LinearLayout(context);
 		editTextContainer.setGravity(Gravity.CENTER_VERTICAL);
@@ -321,6 +335,10 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		searchEdit.setOnEditorActionListener(this);
 		searchEdit.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
 		searchEdit.setImeOptions(EditorInfo.IME_ACTION_GO | EditorInfo.IME_FLAG_NO_EXTRACT_UI);
+		if (drawerStyle != null) {
+			drawerStyle.apply(searchEdit, DrawerStyle.Role.THREAD);
+			searchEdit.setHintTextColor(drawerStyle.variant);
+		}
 
 		ImageView searchIcon = new ImageView(context, null, android.R.attr.buttonBarButtonStyle);
 		searchIcon.setImageResource(ResourceUtils.getResourceId(context, R.attr.iconButtonForward, 0));
@@ -332,6 +350,10 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 				LinearLayout.LayoutParams.WRAP_CONTENT, 1));
 		editTextContainer.addView(searchIcon, (int) (40f * density), (int) (40f * density));
 		editTextContainer.setPadding((int) (12f * density), (int) (8f * density), (int) (8f * density), 0);
+		if (drawerStyle != null) {
+			searchIcon.getLayoutParams().width = searchIcon.getLayoutParams().height = drawerStyle.dp(48);
+			searchIcon.setImageTintList(ColorStateList.valueOf(drawerStyle.variant));
+		}
 
 		LinearLayout selectorContainer = new LinearLayout(context);
 		this.selectorContainer = selectorContainer;
@@ -351,6 +373,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		ThemeEngine.applyStyle(chanNameView);
 		ViewUtils.setTextSizeScaled(chanNameView, 14);
 		chanNameView.setTypeface(ResourceUtils.TYPEFACE_MEDIUM);
+		if (drawerStyle != null) drawerStyle.apply(chanNameView, DrawerStyle.Role.MENU);
 		selectorContainer.addView(chanNameView, new LinearLayout.LayoutParams(0,
 				LinearLayout.LayoutParams.WRAP_CONTENT, 1));
 
@@ -359,6 +382,10 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		chanSelectorIcon.setImageTintList(ResourceUtils.getColorStateList(context,
 				android.R.attr.textColorPrimary));
 		selectorContainer.addView(chanSelectorIcon, (int) (24f * density), (int) (24f * density));
+		if (drawerStyle != null) {
+			selectorContainer.setMinimumHeight(drawerStyle.dp(48));
+			chanSelectorIcon.setImageTintList(ColorStateList.valueOf(drawerStyle.variant));
+		}
 		((LinearLayout.LayoutParams) chanSelectorIcon.getLayoutParams()).gravity = Gravity.CENTER_VERTICAL
 				| Gravity.END;
 
@@ -370,6 +397,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		ThemeEngine.applyStyle(restartTextView);
 		restartTextView.setText(R.string.new_extensions_installed__sentence);
 		restartTextView.setTextColor(ResourceUtils.getColor(context, android.R.attr.textColorPrimary));
+		if (drawerStyle != null) drawerStyle.apply(restartTextView, DrawerStyle.Role.THREAD);
 		restartTextView.setPadding((int) (16f * density), (int) (8f * density),
 				(int) (16f * density), (int) (8f * density));
 		restartView.addView(restartTextView, LinearLayout.LayoutParams.MATCH_PARENT,
@@ -605,6 +633,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		button.setMinWidth(0);
 		button.setMinimumWidth(0);
 		button.setMinHeight((int) (48f * ResourceUtils.obtainDensity(context)));
+		if (drawerStyle != null) drawerStyle.apply(button, DrawerStyle.Role.MENU);
 		return button;
 	}
 
@@ -615,6 +644,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 			selectedFavoriteIds.clear();
 			favoriteSelectionPanel.setVisibility(View.GONE);
 			dispatchAdapterDiff(previousItems);
+			applyDrawerWatcherState();
 		}
 	}
 
@@ -706,7 +736,11 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 			Context context = provider.getContext();
 			EditText editText = new SafePasteEditText(context);
 			editText.setId(android.R.id.edit);
-			editText.setSingleLine(true);
+			editText.setSingleLine(false);
+			editText.setHorizontallyScrolling(false);
+			editText.setMinLines(1);
+			editText.setMaxLines(5);
+			editText.setGravity(Gravity.TOP | Gravity.START);
 			editText.setText(title);
 			editText.setSelection(editText.length());
 			LinearLayout linearLayout = new LinearLayout(context);
@@ -768,7 +802,15 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	}
 
 	private boolean canApplyWatcherUpdates() {
-		return drawerState == DrawerLayout.STATE_IDLE && (drawerOpened || drawerAlwaysVisible);
+		return !drawerItemDragging && !favoriteSelectionActive
+				&& (drawerStyle == null || hostResumed)
+				&& recyclerView.getScrollState() == RecyclerView.SCROLL_STATE_IDLE
+				&& drawerState == DrawerLayout.STATE_IDLE && (drawerOpened || drawerAlwaysVisible);
+	}
+
+	public void setHostResumed(boolean resumed) {
+		hostResumed = resumed;
+		applyDrawerWatcherState();
 	}
 
 	private void applyDrawerWatcherState() {
@@ -1253,6 +1295,10 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 						? ViewType.SECTION_BUTTON : ViewType.SECTION;
 				break;
 			}
+			case FAVORITE_GROUP: {
+				viewType = ViewType.SECTION;
+				break;
+			}
 			case COMBINED_FEED: {
 				viewType = ViewType.ITEM;
 				break;
@@ -1490,6 +1536,10 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		textView.setEllipsize(TextUtils.TruncateAt.END);
 		textView.setSingleLine(true);
 		textView.setTypeface(ResourceUtils.TYPEFACE_MEDIUM);
+		if (drawerStyle != null) {
+			drawerStyle.apply(textView, section ? DrawerStyle.Role.GROUP : DrawerStyle.Role.MENU);
+			return textView;
+		}
 		int color = textView.getTextColors().getDefaultColor();
 		if (section) {
 			color &= 0x5effffff;
@@ -1502,9 +1552,9 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 
 	private ViewHolder createItem(ViewType viewType, float density) {
 		// Compact vertical rhythm; retain the existing horizontal action widths.
-		int size = (int) (36f * density);
+		int size = drawerStyle != null ? drawerStyle.rowHeight : (int) (36f * density);
 		int actionWidth = (int) (48f * density);
-		LinearLayout linearLayout = new LinearLayout(context);
+		LinearLayout linearLayout = drawerStyle != null ? new DrawerItemLayout(context, drawerStyle) : new LinearLayout(context);
 		linearLayout.setOrientation(LinearLayout.HORIZONTAL);
 		linearLayout.setGravity(Gravity.CENTER_VERTICAL);
 		CheckBox selectionView = new CheckBox(context);
@@ -1529,10 +1579,13 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		badgeView.setPadding((int) (8f * density), 0, (int) (16f * density), 0);
 		linearLayout.addView(badgeView, LinearLayout.LayoutParams.WRAP_CONTENT, size);
 		WatcherView watcherView = null;
+		View trailingAction = null;
 		if (viewType.watcher) {
-			watcherView = new WatcherView(context, watcherViewColorSet);
+			watcherView = new WatcherView(context, watcherViewColorSet, drawerStyle);
 			watcherView.setOnClickListener(watcherClickListener);
-			linearLayout.addView(watcherView, actionWidth, size);
+			watcherView.setOnRefreshClickListener(watcherRefreshClickListener);
+			linearLayout.addView(watcherView, drawerStyle != null ? drawerStyle.chipWidth : actionWidth, size);
+			trailingAction = watcherView;
 		}
 		if (!viewType.watcher && viewType.closeable) {
 			ImageView closeView = new ImageView(context);
@@ -1545,6 +1598,12 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 			linearLayout.addView(closeView, actionWidth, size);
 			closeView.setOnClickListener(closeButtonListener);
 			closeView.setContentDescription(context.getString(R.string.close));
+			trailingAction = closeView;
+			if (drawerStyle != null) {
+				closeView.setPadding(drawerStyle.dp(12), drawerStyle.dp(6), drawerStyle.dp(12), drawerStyle.dp(6));
+				closeView.setScaleType(ImageView.ScaleType.FIT_CENTER);
+				closeView.setImageTintList(ColorStateList.valueOf(drawerStyle.variant));
+			}
 		}
 		int layoutLeftDp = 0;
 		int layoutRightDp = 0;
@@ -1562,6 +1621,17 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		}
 		linearLayout.setPadding((int) (layoutLeftDp * density), 0, (int) (layoutRightDp * density), 0);
 		textView.setPadding((int) (textLeftDp * density), 0, (int) (textRightDp * density), 0);
+		if (drawerStyle != null) {
+			if (viewType.watcher) layoutRightDp = DrawerStyle.THREAD_END;
+			linearLayout.setPaddingRelative(drawerStyle.dp(16), 0, drawerStyle.dp(layoutRightDp), 0);
+			textView.setMinHeight(0); textView.setMinimumHeight(0);
+			textView.setPaddingRelative(0, 0, drawerStyle.dp(textRightDp), 0);
+			if (iconView != null) {
+				((LinearLayout.LayoutParams) iconView.getLayoutParams()).setMarginEnd(drawerStyle.dp(32));
+				iconView.setScaleType(ImageView.ScaleType.FIT_CENTER);
+			}
+			((DrawerItemLayout) linearLayout).setContent(textView, trailingAction);
+		}
 		ViewUtils.setSelectableItemBackground(linearLayout);
 		linearLayout.setLayoutParams(new RecyclerView.LayoutParams(RecyclerView.LayoutParams.MATCH_PARENT,
 				RecyclerView.LayoutParams.WRAP_CONTENT));
@@ -1629,6 +1699,28 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 			linearLayout2.addView(add, linearLayout2.indexOfChild(imageView), addParams);
 			holder.sectionAdd = add;
 		}
+		if (drawerStyle != null) {
+			linearLayout2.setPaddingRelative(drawerStyle.dp(16), 0, drawerStyle.dp(4), 0);
+			linearLayout2.setMinimumHeight(drawerStyle.dp(36));
+			textView.setMinHeight(drawerStyle.dp(32)); textView.setMinimumHeight(drawerStyle.dp(32));
+			LinearLayout.LayoutParams textParams = (LinearLayout.LayoutParams) textView.getLayoutParams();
+			textParams.setMargins(0, drawerStyle.dp(2), drawerStyle.dp(16), drawerStyle.dp(2));
+			arrowParams.width = drawerStyle.dp(24); arrowParams.height = drawerStyle.dp(36);
+			arrowParams.setMargins(0, 0, 0, 0);
+			arrow.setImageDrawable(new DrawerGlyph(DrawerGlyph.Kind.CHEVRON, drawerStyle.variant, drawerStyle.dp(20), 1.6f));
+			if (imageView != null) {
+				LinearLayout.LayoutParams params = (LinearLayout.LayoutParams) imageView.getLayoutParams();
+				params.width = drawerStyle.dp(48); params.height = drawerStyle.dp(36); params.setMargins(0, 0, 0, 0);
+				imageView.setPadding(drawerStyle.dp(12), drawerStyle.dp(6), drawerStyle.dp(12), drawerStyle.dp(6));
+				imageView.setScaleType(ImageView.ScaleType.FIT_CENTER);
+			}
+			if (holder.sectionAdd != null) {
+				holder.sectionAdd.getLayoutParams().height = drawerStyle.dp(36);
+				holder.sectionAdd.setPadding(drawerStyle.dp(12), drawerStyle.dp(6), drawerStyle.dp(12), drawerStyle.dp(6));
+				holder.sectionAdd.setScaleType(ImageView.ScaleType.FIT_CENTER);
+			}
+			ViewUtils.setSelectableItemBackground(linearLayout);
+		}
 		return holder;
 	}
 
@@ -1674,8 +1766,21 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	@Override
 	public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
 		ListItem listItem = getItem(position);
+		if (drawerStyle != null && holder.text != null) {
+			DrawerStyle.Role role = listItem.type == ListItem.Type.FAVORITE_GROUP ? DrawerStyle.Role.GROUP
+					: listItem.type == ListItem.Type.SECTION ? DrawerStyle.Role.TITLE
+					: listItem.isThreadItem() ? DrawerStyle.Role.THREAD : DrawerStyle.Role.MENU;
+			drawerStyle.apply(holder.text, role);
+			if (holder.itemView instanceof DrawerItemLayout) {
+				((DrawerItemLayout) holder.itemView).setThread(listItem.isThreadItem());
+				holder.itemView.setMinimumHeight(drawerStyle.rowHeight);
+			}
+		}
 		if (holder.text != null) {
-			boolean multiline = listItem.type == ListItem.Type.PAGES_TOGGLE ||
+			holder.text.setContentDescription(null);
+			boolean multiline = drawerStyle != null && listItem.type == ListItem.Type.SECTION ||
+					listItem.type == ListItem.Type.PAGES_TOGGLE ||
+					listItem.type == ListItem.Type.FAVORITE_GROUP ||
 					listItem.type == ListItem.Type.SECTION && listItem.data == SECTION_ACTION_FAVORITES_MENU;
 			holder.text.setSingleLine(!multiline);
 			holder.text.setMaxLines(multiline ? 2 : 1);
@@ -1694,11 +1799,12 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 			holder.watcher.setEnabled(!favoriteSelectionActive);
 			holder.watcher.setAlpha(!favoriteSelectionActive ? 1f : 0.45f);
 		}
-		if (listItem.type == ListItem.Type.SECTION) {
-			boolean redditSection = listItem.data == SECTION_ACTION_CLOSE_ALL_REDDIT;
+		if (listItem.type == ListItem.Type.SECTION || listItem.type == ListItem.Type.FAVORITE_GROUP) {
+			boolean favoriteGroup = listItem.type == ListItem.Type.FAVORITE_GROUP;
+			boolean redditSection = !favoriteGroup && listItem.data == SECTION_ACTION_CLOSE_ALL_REDDIT;
 			Configuration configuration = context.getResources().getConfiguration();
 			// Match the compact toolbar's portrait / below-w600dp action spacing.
-			boolean compactActions = redditSection && configuration.orientation == Configuration.ORIENTATION_PORTRAIT
+			boolean compactActions = drawerStyle == null && redditSection && configuration.orientation == Configuration.ORIENTATION_PORTRAIT
 					&& configuration.screenWidthDp < 600;
 			float density = ResourceUtils.obtainDensity(context);
 			int regularActionWidth = (int) (48f * density);
@@ -1715,7 +1821,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 				LinearLayout.LayoutParams params = (LinearLayout.LayoutParams) holder.icon.getLayoutParams();
 				// Keep the close icon centered over the 48dp close buttons in the page rows.
 				// Moving the pair's outer edge preserves the compact spacing to the plus button.
-				int rightMargin = (int) (4f * density) + (regularActionWidth - actionWidth) / 2;
+				int rightMargin = drawerStyle != null ? 0 : (int) (4f * density) + (regularActionWidth - actionWidth) / 2;
 				if (params.width != actionWidth || params.rightMargin != rightMargin) {
 					params.width = actionWidth;
 					params.rightMargin = rightMargin;
@@ -1724,13 +1830,18 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 				holder.icon.setEnabled(!redditSection || listItem.badgeCount > 0);
 				holder.icon.setAlpha(holder.icon.isEnabled() ? 1f : 0.4f);
 			}
-			boolean favoriteSection = listItem.data == SECTION_ACTION_FAVORITES_MENU;
-			holder.itemView.setOnClickListener(favoriteSection
+			boolean favoriteSection = !favoriteGroup && listItem.data == SECTION_ACTION_FAVORITES_MENU;
+			holder.itemView.setOnClickListener(favoriteGroup ? v -> toggleFavoriteBoardGroup(listItem) : favoriteSection
 					? v -> setFavoriteThreadsCollapsed(!Preferences.isFavoriteThreadsCollapsed())
 					: listItem.data == SECTION_ACTION_COMBINED_FEEDS_SETTINGS ? sectionButtonListener : null);
 			if (holder.sectionArrow != null) {
-				holder.sectionArrow.setVisibility(favoriteSection ? View.VISIBLE : View.GONE);
-				holder.sectionArrow.setRotation(listItem.expanded ? 0f : -90f);
+				holder.sectionArrow.setVisibility(favoriteSection || favoriteGroup ? View.VISIBLE : View.GONE);
+				holder.sectionArrow.setRotation(listItem.expanded ? 0f : drawerStyle != null
+						&& holder.itemView.getLayoutDirection() == View.LAYOUT_DIRECTION_RTL ? 90f : -90f);
+				if (drawerStyle != null) {
+					LinearLayout.LayoutParams textParams = (LinearLayout.LayoutParams) holder.text.getLayoutParams();
+					textParams.setMarginStart(favoriteSection || favoriteGroup ? drawerStyle.dp(16) : 0);
+				}
 			}
 		}
 		switch (listItem.type) {
@@ -1747,6 +1858,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 								listItem.boardName, listItem.threadNumber, listItem.title));
 				if (listItem.type == ListItem.Type.FAVORITE && listItem.isThreadItem() &&
 						watcherSupportSet.contains(listItem.chanName)) {
+					holder.watcher.bindThread(listItem.id, holder.text.getText().toString());
 					holder.watcher.setProgressAnimationEnabled(canApplyWatcherUpdates());
 					holder.watcher.update(getCounter(listItem));
 				}
@@ -1757,12 +1869,17 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 				break;
 			}
 			case SECTION:
+			case FAVORITE_GROUP:
 			case PAGES_TOGGLE:
 			case MENU:
 			case CHAN: {
 				holder.text.setText(listItem.title);
 				break;
 			}
+		}
+		if (drawerStyle != null && (listItem.type == ListItem.Type.FAVORITE_GROUP
+				|| listItem.type == ListItem.Type.SECTION && listItem.data == SECTION_ACTION_FAVORITES_MENU)) {
+			applyFavoriteHeading(holder.text, listItem);
 		}
 		if (holder != null && holder.icon != null) {
 			holder.icon.setRotation(listItem.type == ListItem.Type.PAGES_TOGGLE && listItem.data != 0
@@ -1779,7 +1896,71 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 			} else {
 				throw new IllegalStateException();
 			}
+			if (drawerStyle != null && !listItem.iconChan) {
+				DrawerGlyph.Kind glyph = null;
+				if (listItem.type == ListItem.Type.PAGES_TOGGLE) {
+					glyph = DrawerGlyph.Kind.CHEVRON;
+				} else if (listItem.type == ListItem.Type.SECTION && listItem.data == SECTION_ACTION_FAVORITES_MENU) {
+					glyph = DrawerGlyph.Kind.MORE;
+					holder.icon.setContentDescription(context.getString(R.string.drawer_favorite_actions));
+				} else {
+					holder.icon.setContentDescription(null);
+					if (listItem.type == ListItem.Type.MENU) switch (listItem.data) {
+						case MENU_ITEM_BOARDS: glyph = DrawerGlyph.Kind.TAG; break;
+						case MENU_ITEM_USER_BOARDS: glyph = DrawerGlyph.Kind.GROUP; break;
+						case MENU_ITEM_MY_POSTS: glyph = DrawerGlyph.Kind.CHAT; break;
+						case MENU_ITEM_HISTORY: glyph = DrawerGlyph.Kind.HISTORY; break;
+						case MENU_ITEM_LOCAL_ARCHIVES: glyph = DrawerGlyph.Kind.ARCHIVE; break;
+						case MENU_ITEM_PREFERENCES: glyph = DrawerGlyph.Kind.SETTINGS; break;
+					}
+				}
+				if (glyph != null) {
+					boolean menu = listItem.type == ListItem.Type.MENU;
+					holder.icon.setImageDrawable(new DrawerGlyph(glyph, drawerStyle.variant,
+							drawerStyle.dp(menu ? DrawerStyle.MENU_ICON : 24), 1.6f));
+					if (holder.itemView instanceof DrawerItemLayout) {
+						LinearLayout.LayoutParams iconParams = (LinearLayout.LayoutParams) holder.icon.getLayoutParams();
+						iconParams.setMarginEnd(drawerStyle.dp(menu ? DrawerStyle.MENU_ICON_GAP : 32));
+						holder.icon.setLayoutParams(iconParams);
+						holder.icon.setScaleType(menu ? ImageView.ScaleType.CENTER : ImageView.ScaleType.FIT_CENTER);
+					}
+				}
+			}
 		}
+	}
+
+	@Override public void onViewRecycled(@NonNull ViewHolder holder) {
+		if (holder.watcher != null) holder.watcher.clearBinding();
+		super.onViewRecycled(holder);
+	}
+
+	private void applyFavoriteHeading(TextView text, ListItem item) {
+		int count;
+		String title;
+		if (item.type == ListItem.Type.FAVORITE_GROUP) {
+			// Read the already filtered snapshot, including collapsed children. No data mutation.
+			count = 0;
+			for (ListItem favorite : content.favorites) {
+				if (favorite.type == ListItem.Type.FAVORITE && favorite.isThreadItem()
+						&& CommonUtils.equals(item.chanName, favorite.chanName)
+						&& CommonUtils.equals(item.boardName, favorite.boardName)) count++;
+			}
+			Chan chan = Chan.get(item.chanName);
+			String board = chan.configuration.formatBoardTitle(item.boardName, chan.configuration.getBoardTitle(item.boardName));
+			title = context.getString(R.string.drawer_favorite_group_title_format, chan.configuration.getTitle(), board);
+		} else {
+			count = getVisibleFavoriteThreadCount();
+			title = context.getString(R.string.favorite_threads);
+		}
+		text.setText(com.mishiranu.dashchan.widget.DrawerCountSpan.format(title, count, drawerStyle,
+				text.getLayoutDirection() == View.LAYOUT_DIRECTION_RTL));
+		text.setContentDescription(context.getResources().getQuantityString(R.plurals.drawer_heading_thread_count,
+				count, title, count));
+	}
+
+	@Override public void onViewAttachedToWindow(@NonNull ViewHolder holder) {
+		super.onViewAttachedToWindow(holder);
+		if (holder.watcher != null) holder.watcher.setProgressAnimationEnabled(canApplyWatcherUpdates());
 	}
 
 	public static class ViewHolder extends RecyclerView.ViewHolder implements View.OnTouchListener {
@@ -1891,6 +2072,8 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	private DividerItemDecoration.Configuration configureDivider
 			(DividerItemDecoration.Configuration configuration, int position) {
 		float density = ResourceUtils.obtainDensity(context);
+		if (drawerStyle != null) configuration.height(drawerStyle.dp(1))
+				.horizontal(drawerStyle.dp(16), drawerStyle.dp(16));
 		int padding = (int) (8f * density);
 		ListItem current = getItem(position);
 		ListItem next = position + 1 < getItemCount() ? getItem(position + 1) : null;
@@ -1909,6 +2092,19 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		return watcherServiceClient.getCounter(listItem.chanName, listItem.boardName, listItem.threadNumber);
 	}
 
+	private void toggleFavoriteBoardGroup(ListItem group) {
+		if (favoriteSelectionActive || drawerItemDragging) return;
+		ArrayList<AdapterItem> previousItems = createAdapterSnapshot();
+		String key = Preferences.favoriteBoardGroupKey(group.chanName, group.boardName);
+		if (group.expanded) content.collapsedFavoriteBoardGroups.add(key);
+		else content.collapsedFavoriteBoardGroups.remove(key);
+		content.updateDisplayedFavorites();
+		dispatchAdapterDiff(previousItems);
+		// Publish the view state first: the synchronous preferences listener must
+		// not dispatch a second diff against this operation's old adapter snapshot.
+		Preferences.setFavoriteBoardGroupCollapsed(group.chanName, group.boardName, group.expanded);
+	}
+
 	private final View.OnClickListener watcherClickListener = v -> {
 		DrawerContentController.ListItem listItem = getItemFromChild(v);
 		if (listItem != null) {
@@ -1916,6 +2112,17 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 					listItem.boardName, listItem.threadNumber, null);
 		}
 	};
+
+	// Defer access to the constructor-initialized client until the click occurs.
+	private final View.OnClickListener watcherRefreshClickListener = this::onWatcherRefreshClick;
+
+	private void onWatcherRefreshClick(View v) {
+		if (favoriteSelectionActive) return;
+		DrawerContentController.ListItem item = getItemFromChild(v);
+		if (item != null && item.threadNumber != null) {
+			watcherServiceClient.refreshThread(item.chanName, item.boardName, item.threadNumber);
+		}
+	}
 
 	private static class WatcherUpdateKey {
 		public final String chanName;
@@ -1970,6 +2177,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 			ArrayList<AdapterItem> previousItems = null;
 			boolean itemsRemoved = false;
 			try {
+				if (content.favoritesUnreadFirst) previousItems = createAdapterSnapshot();
 				for (Map.Entry<WatcherUpdateKey, WatcherService.Counter> entry
 						: pendingWatcherUpdates.entrySet()) {
 					WatcherService.Counter counter = entry.getValue();
@@ -1985,7 +2193,8 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 					}
 				}
 				pendingWatcherUpdates.clear();
-				if (itemsRemoved) {
+				if (content.favoritesUnreadFirst) content.updateDisplayedFavorites();
+				if (itemsRemoved || content.favoritesUnreadFirst) {
 					dispatchAdapterDiff(previousItems);
 				}
 			} finally {
@@ -2007,6 +2216,11 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 			}
 		} else {
 			updateVisibleWatcher(key, counter);
+			if (content.favoritesUnreadFirst) {
+				ArrayList<AdapterItem> previousItems = createAdapterSnapshot();
+				content.updateDisplayedFavorites();
+				dispatchAdapterDiff(previousItems);
+			}
 		}
 	}
 
@@ -2015,6 +2229,8 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 
 	@Override
 	public void onDragStart(ViewHolder holder) {
+		drawerItemDragging = true;
+		content.freezeFavoriteUnreadOrder = true;
 		chanDragState.reset();
 		favoriteDragState.reset();
 		holder.setDragging(true, watcherViewColorSet.enabledColor);
@@ -2051,7 +2267,11 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 			}
 		}
 		holder.setDragging(false, 0);
+		drawerItemDragging = false;
+		content.freezeFavoriteUnreadOrder = false;
 		callback.onDraggingStateChanged(false);
+		// Let SortableHelper finish its own transaction before deferred structural diffs.
+		recyclerView.post(this::applyDrawerWatcherState);
 	}
 
 	@Override
@@ -2066,7 +2286,9 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		DrawerContentController.ListItem to = getItem(toIndex);
 		return from.type == to.type && (from.type == DrawerContentController.ListItem.Type.CHAN ||
 				from.type == DrawerContentController.ListItem.Type.FAVORITE && CommonUtils.equals(from.chanName, to.chanName) &&
-						(from.threadNumber == null) == (to.threadNumber == null));
+						(from.threadNumber == null) == (to.threadNumber == null) &&
+						(!from.isThreadItem() || !content.favoritesGroupedByBoard || CommonUtils.equals(from.boardName, to.boardName)) &&
+						(!from.isThreadItem() || !content.favoritesUnreadFirst || content.isFavoriteUnread(from) == content.isFavoriteUnread(to)));
 	}
 
 	@Override

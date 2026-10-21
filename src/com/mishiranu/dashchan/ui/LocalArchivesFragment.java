@@ -109,6 +109,9 @@ public class LocalArchivesFragment extends ContentFragment {
 		FrameLayout.LayoutParams progressLayoutParams = new FrameLayout.LayoutParams(
 				FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER);
 		root.addView(progressBar, progressLayoutParams);
+		com.mishiranu.dashchan.widget.InterfaceAppearance.standardPage(root);
+		com.mishiranu.dashchan.widget.InterfaceAppearance.serviceState(emptyView, emptyView);
+		com.mishiranu.dashchan.widget.InterfaceAppearance.standardLoading(progressBar);
 		return root;
 	}
 
@@ -195,7 +198,7 @@ public class LocalArchivesFragment extends ContentFragment {
 		for (int i = 0; i < names.length; i++) {
 			names[i] = LocalArchiveManager.getTreeName(uriStrings.get(i));
 		}
-		new MotionDialogBuilder(requireContext()).setTitle(R.string.local_archive_manage_folders)
+		MotionDialogBuilder.standard(requireContext()).setTitle(R.string.local_archive_manage_folders)
 				.setMultiChoiceItems(names, checked, (dialog, which, value) -> checked[which] = value)
 				.setNegativeButton(android.R.string.cancel, null)
 				.setPositiveButton(R.string.local_archive_remove_folders, (dialog, which) -> {
@@ -312,7 +315,7 @@ public class LocalArchivesFragment extends ContentFragment {
 	}
 
 	private void confirmDeleteArchives(ActionMode actionMode, ArrayList<LocalArchiveManager.Item> items) {
-		new MotionDialogBuilder(requireContext())
+		MotionDialogBuilder.standard(requireContext(), true)
 				.setTitle(R.string.delete_local_archive)
 				.setMessage(getResources().getQuantityString(
 						R.plurals.local_archives_delete_selected_confirmation__format,
@@ -452,7 +455,7 @@ public class LocalArchivesFragment extends ContentFragment {
 				postDateFormatter = new PostDateFormatter(parent.getContext());
 			}
 			ViewFactory.TwoLinesViewHolder holder = ViewFactory.makeTwoLinesListItem(parent,
-					ViewFactory.FEATURE_TEXT2_END | ViewFactory.FEATURE_WIDGET);
+					ViewFactory.FEATURE_TEXT2_END | ViewFactory.FEATURE_WIDGET, true);
 			CheckBox selection = new CheckBox(parent.getContext());
 			selection.setClickable(false);
 			selection.setFocusable(false);
@@ -486,6 +489,8 @@ public class LocalArchivesFragment extends ContentFragment {
 			ViewFactory.TwoLinesViewHolder viewHolder = holder.lines;
 			holder.selection.setVisibility(callback.isSelectionMode() ? View.VISIBLE : View.GONE);
 			holder.selection.setChecked(callback.isSelected(item));
+			holder.itemView.setActivated(com.mishiranu.dashchan.widget.InterfaceAppearance.isEnabled(holder.itemView.getContext())
+					&& callback.isSelected(item));
 			viewHolder.text1.setText(item.getDisplayName());
 			int typeResId = item.hasHtml() && item.hasZip() ? R.string.local_archive_html_zip
 					: item.hasHtml() ? R.string.local_archive_html : R.string.local_archive_zip;
@@ -495,6 +500,8 @@ public class LocalArchivesFragment extends ContentFragment {
 					: type;
 			viewHolder.text2.setText(item.getTitle() != null ? item.name + " · " + details : details);
 			viewHolder.text2End.setText(postDateFormatter.formatDate(item.lastModified));
+			com.mishiranu.dashchan.widget.InterfaceAppearance.serviceRow(viewHolder.view, viewHolder.text1, viewHolder.text2, viewHolder.text2End);
+			com.mishiranu.dashchan.widget.InterfaceAppearance.check(holder.selection);
 		}
 
 		@Override

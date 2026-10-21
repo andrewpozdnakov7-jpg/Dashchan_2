@@ -31,7 +31,15 @@ public final class SurfaceMotion {
 	}
 	static void applyPopupPolicy(Resources.Theme theme, Resources.Theme original, boolean enabled, boolean animate) {
 		theme.setTo(original);
-		if (enabled) theme.applyStyle(animate ? R.style.Theme_Motion_Popup : R.style.Theme_Motion_Popup_Static, true);
+		if (enabled) {
+			theme.applyStyle(animate ? R.style.Theme_Motion_Popup : R.style.Theme_Motion_Popup_Static, true);
+			// Motion chooses transitions; an explicitly standard popup still owns its
+			// typography and layout. Do not let the generic motion text overlay replace it.
+			android.util.TypedValue standard = new android.util.TypedValue();
+			if (original.resolveAttribute(R.attr.standardPopupAppearance, standard, true) && standard.data != 0) {
+				theme.applyStyle(animate ? R.style.Theme_Standard_Popup : R.style.Theme_Standard_Popup_Static, true);
+			}
+		}
 		else {
 			android.util.TypedValue value = new android.util.TypedValue();
 			if (original.resolveAttribute(android.R.attr.popupMenuStyle, value, true)

@@ -722,7 +722,7 @@ public class UpdateFragment extends BaseListFragment {
 					titles[i] = builder;
 				}
 			}
-			return new MotionDialogBuilder(requireContext())
+			return MotionDialogBuilder.standard(requireContext())
 					.setTitle(requireArguments().getString(EXTRA_TITLE))
 					.setSingleChoiceItems(titles, index, this)
 					.setNegativeButton(android.R.string.cancel, null).create();

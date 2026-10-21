@@ -1,6 +1,6 @@
 package com.mishiranu.dashchan.content.security;
 
-/** A bounded authentication interval, measured with a monotonic clock, never calendar time. */
+/** A bounded continuous-background interval, measured with a monotonic clock, never calendar time. */
 public final class ReauthenticationPolicy {
 	public static final String KEY = "reauthentication_minutes";
 	private static final int[] MINUTES = {0, 3, 5, 10, 30, 60, 120, 300};
@@ -27,5 +27,11 @@ public final class ReauthenticationPolicy {
 
 	static boolean canRestore(long authenticatedAt, int minutes, int savedBoot, int currentBoot, long now) {
 		return savedBoot >= 0 && currentBoot == savedBoot && new Grant(authenticatedAt, minutes).valid(now);
+	}
+
+	/** Only for a verified receipt AND an authoritative transition out of an unlocked session. */
+	static boolean canStartBackgroundInterval(long previousAt, int minutes, int savedBoot, int currentBoot, long now) {
+		return normalize(minutes) > 0 && savedBoot >= 0 && currentBoot == savedBoot
+				&& previousAt >= 0 && now >= previousAt;
 	}
 }

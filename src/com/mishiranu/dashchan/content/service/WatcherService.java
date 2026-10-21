@@ -69,6 +69,7 @@ public class WatcherService extends BaseService {
 		void updateConfiguration(String chanName);
 		void notifyForeground();
 		void refreshAll(String chanName);
+		void refreshThread(String chanName, String boardName, String threadNumber);
 		boolean isWatcherSupported(Chan chan);
 		Counter getCounter(String chanName, String boardName, String threadNumber);
 		Session newSession(String chanName, String boardName, String threadNumber, Session.Callback callback);
@@ -220,6 +221,14 @@ public class WatcherService extends BaseService {
 			WatcherService service = getService();
 			if (service != null) {
 				service.refreshAll(chanName, true, true);
+			}
+		}
+
+		@Override
+		public void refreshThread(String chanName, String boardName, String threadNumber) {
+			WatcherService service = getService();
+			if (service != null) {
+				service.refreshThread(new ThreadKey(chanName, boardName, threadNumber));
 			}
 		}
 
@@ -1068,6 +1077,22 @@ public class WatcherService extends BaseService {
 				}
 			}
 		}
+		Collections.sort(enqueuedWatcherItems);
+		startNext();
+	}
+
+	private void refreshThread(ThreadKey threadKey) {
+		WatcherItem item = watcherItems.get(threadKey);
+		if (item == null || item.task != null || item.state == WatcherState.ENQUEUED
+				|| !isFavoriteEnabled(threadKey) || !isWatcherSupported(Chan.get(threadKey.chanName))
+				|| isBlocked(threadKey)) {
+			return;
+		}
+		// Explicit user refresh uses the same queue/network policy as manual refreshAll.
+		// It does not enable monitoring, reload the whole thread, or cancel a running task.
+		item.state = WatcherState.ENQUEUED;
+		enqueuedWatcherItems.add(item);
+		notifyWatcherUpdate(item);
 		Collections.sort(enqueuedWatcherItems);
 		startNext();
 	}

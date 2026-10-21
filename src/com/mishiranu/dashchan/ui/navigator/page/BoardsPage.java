@@ -192,7 +192,7 @@ public class BoardsPage extends ListPage implements BoardsAdapter.Callback,
 					LinearLayout.LayoutParams.WRAP_CONTENT);
 			int padding = provider.getContext().getResources().getDimensionPixelSize(R.dimen.dialog_padding_view);
 			container.setPadding(padding, padding, padding, padding);
-			AlertDialog dialog = new MotionDialogBuilder(provider.getContext())
+			AlertDialog dialog = MotionDialogBuilder.standard(provider.getContext())
 					.setTitle(R.string.pikabu_add_community)
 					.setView(container)
 					.setNegativeButton(android.R.string.cancel, null)

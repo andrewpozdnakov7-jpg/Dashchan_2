@@ -198,9 +198,14 @@ public class BoardsAdapter extends CursorAdapter<ChanDatabase.BoardCursor, Recyc
 			categoryHolder.itemView.setContentDescription(holder.itemView.getContext().getString(expanded
 					? R.string.collapse_board_category__format : R.string.expand_board_category__format,
 					row.category));
+			com.mishiranu.dashchan.widget.InterfaceAppearance.serviceRow(categoryHolder.itemView, categoryHolder.textView, null, null);
+			if (com.mishiranu.dashchan.widget.InterfaceAppearance.isEnabled(holder.itemView.getContext())) {
+				categoryHolder.textView.setPaddingRelative(0, 0, (int) (48 * holder.itemView.getResources().getDisplayMetrics().density), 0);
+			}
 		} else {
 			((TextView) holder.itemView).setText(configuration.formatBoardTitle(
 					row.boardItem.boardName, row.boardItem.extra1));
+			com.mishiranu.dashchan.widget.InterfaceAppearance.serviceRow(holder.itemView, (TextView) holder.itemView, null, null);
 		}
 	}
 

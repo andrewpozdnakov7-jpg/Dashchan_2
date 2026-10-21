@@ -176,7 +176,7 @@ public class AboutFragment extends PreferenceFragment implements FragmentHandler
 		@Override
 		public AlertDialog onCreateDialog(Bundle savedInstanceState) {
 			String[] items = {getString(R.string.save_data), getString(R.string.restore_data)};
-			return new MotionDialogBuilder(requireContext())
+			return MotionDialogBuilder.standard(requireContext())
 					.setItems(items, this)
 					.setNegativeButton(android.R.string.cancel, null)
 					.create();
@@ -217,7 +217,7 @@ public class AboutFragment extends PreferenceFragment implements FragmentHandler
 		public AlertDialog onCreateDialog(Bundle savedInstanceState) {
 			ArrayList<String> names = requireArguments().getStringArrayList(EXTRA_NAMES);
 			String[] items = CommonUtils.toArray(names, String.class);
-			return new MotionDialogBuilder(requireContext())
+			return MotionDialogBuilder.standard(requireContext())
 					.setTitle(R.string.restore_data)
 					.setItems(items, (d, which) -> {
 						String path = requireArguments().getStringArrayList(EXTRA_FILES).get(which);
@@ -263,7 +263,7 @@ public class AboutFragment extends PreferenceFragment implements FragmentHandler
 			for (int i = 0; i < checkedItems.length; i++) {
 				checkedItems[i] = checked == null || checked.contains(entryNames.get(i));
 			}
-			return new MotionDialogBuilder(requireContext())
+			return MotionDialogBuilder.standard(requireContext())
 					.setTitle(R.string.restore_data)
 					.setMultiChoiceItems(items, checkedItems,
 							(d, which, isChecked) -> checkedItems[which] = isChecked)

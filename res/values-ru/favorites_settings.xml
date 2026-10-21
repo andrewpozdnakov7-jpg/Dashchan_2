@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="favorites_settings_summary">Сортировка, группировка и добавление тредов</string>
+    <string name="favorites_group_by_board">Группировать по доскам</string>
+    <string name="favorites_group_by_board_summary">Объединять избранные треды одной доски в сворачиваемые группы</string>
+    <string name="favorites_unread_first">Непрочитанные выше прочитанных</string>
+    <string name="favorites_unread_first_summary">Показывать треды с непрочитанными сообщениями в начале списка или группы. По данным наблюдения за избранным.</string>
+    <string name="favorite_board_group_format">%1$s · %2$s (%3$d)</string>
+</resources>

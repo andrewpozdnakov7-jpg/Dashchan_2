@@ -53,6 +53,10 @@ public final class SettingsSearchIndex {
 			@Override
 			ContentFragment createFragment() { return new OfflineTranslationFragment(); }
 		},
+		FAVORITES(R.string.contents, R.string.favorites) {
+			@Override
+			ContentFragment createFragment() { return new FavoritesFragment(); }
+		},
 		PIP_DIAGNOSTICS(R.string.experimental_features, R.string.pip_diagnostic_mode) {
 			@Override
 			ContentFragment createFragment() { return new PipDiagnosticsFragment(); }
@@ -581,9 +585,14 @@ public final class SettingsSearchIndex {
 				Preferences.KEY_AUTO_REFRESH_INTERVAL);
 		add(context, entries, Screen.CONTENTS, R.string.cyclical_threads_refresh_mode, 0,
 				Preferences.KEY_CYCLICAL_REFRESH);
-		add(context, entries, Screen.CONTENTS, R.string.favorite_threads_order, 0,
+		add(context, entries, Screen.FAVORITES, R.string.favorites, R.string.favorites_settings_summary, null);
+		add(context, entries, Screen.FAVORITES, R.string.favorites_group_by_board,
+				R.string.favorites_group_by_board_summary, Preferences.KEY_FAVORITES_GROUP_BY_BOARD);
+		add(context, entries, Screen.FAVORITES, R.string.favorites_unread_first,
+				R.string.favorites_unread_first_summary, Preferences.KEY_FAVORITES_UNREAD_FIRST);
+		add(context, entries, Screen.FAVORITES, R.string.favorite_threads_order, 0,
 				Preferences.KEY_FAVORITES_ORDER);
-		add(context, entries, Screen.CONTENTS, R.string.add_thread_on_reply, 0,
+		add(context, entries, Screen.FAVORITES, R.string.add_thread_on_reply, 0,
 				Preferences.KEY_FAVORITE_ON_REPLY);
 		add(context, entries, Screen.REPLY_NOTIFICATIONS, R.string.watch_initially, R.string.watch_initially__summary,
 				Preferences.KEY_WATCHER_WATCH_INITIALLY);

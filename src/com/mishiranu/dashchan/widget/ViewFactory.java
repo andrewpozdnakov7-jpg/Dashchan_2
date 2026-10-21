@@ -89,6 +89,10 @@ public class ViewFactory {
 	}
 
 	public static TwoLinesViewHolder makeTwoLinesListItem(ViewGroup parent, int features) {
+		return makeTwoLinesListItem(parent, features, false);
+	}
+	/** Explicit service opt-in; all original factory consumers keep their legacy layout. */
+	public static TwoLinesViewHolder makeTwoLinesListItem(ViewGroup parent, int features, boolean standardService) {
 		float density = ResourceUtils.obtainDensity(parent);
 		LinearLayout outerLayout = new LinearLayout(parent.getContext());
 		outerLayout.setLayoutParams(new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
@@ -155,7 +159,7 @@ public class ViewFactory {
 			innerLayout.addView(text1, LinearLayout.LayoutParams.WRAP_CONTENT,
 					LinearLayout.LayoutParams.WRAP_CONTENT);
 			if (featureText2End) {
-				LinearLayout text2Layout = new LinearLayout(parent.getContext());
+				LinearLayout text2Layout = standardService ? new AdaptiveMetadataLayout(parent.getContext()) : new LinearLayout(parent.getContext());
 				text2Layout.setOrientation(LinearLayout.HORIZONTAL);
 				innerLayout.addView(text2Layout, LinearLayout.LayoutParams.MATCH_PARENT,
 						LinearLayout.LayoutParams.WRAP_CONTENT);
@@ -199,6 +203,7 @@ public class ViewFactory {
 		private int defaultBreakStrategy;
 		private int defaultHyphenationFrequency;
 		private int availableHeight = Integer.MAX_VALUE;
+		private boolean standardProfile;
 		private final SharedPreferences.Listener sizeListener = key -> {
 			if (Preferences.KEY_TOOLBAR_TITLE_CUSTOMIZATION.equals(key)
 					|| Preferences.KEY_TOOLBAR_TITLE_SIZE.equals(key)
@@ -247,10 +252,11 @@ public class ViewFactory {
 			if (getBreakStrategy() != breakStrategy) setBreakStrategy(breakStrategy);
 			if (getHyphenationFrequency() != hyphenation) setHyphenationFrequency(hyphenation);
 			if (!Preferences.isToolbarTitleCustomizationEnabled()) {
-				setTextSize(TypedValue.COMPLEX_UNIT_PX, defaultTextSize);
-				if (getMaxLines() != 1) {
-					setSingleLine(true);
-					setMaxLines(1);
+				setTextSize(TypedValue.COMPLEX_UNIT_PX, standardProfile ? toPixels(AppearanceTypography.Role.COMPACT_TOOLBAR.size) : defaultTextSize);
+				int lines = standardProfile ? 2 : 1;
+				if (getMaxLines() != lines) {
+					setSingleLine(lines == 1);
+					setMaxLines(lines);
 				}
 				super.onMeasure(widthMeasureSpec, heightMeasureSpec);
 				return;
@@ -364,6 +370,11 @@ public class ViewFactory {
 			this.subtitle.setText(subtitle);
 			this.subtitle.setVisibility(StringUtils.isEmpty(subtitle) ? View.GONE : View.VISIBLE);
 		}
+		/** Only the main shared navigation toolbar opts in; gallery/editor holders do not. */
+		public void applyStandardAppearance() {
+			((ToolbarTitleView) title).standardProfile = InterfaceAppearance.isEnabled(toolbar.getContext());
+			InterfaceAppearance.standardToolbar(getToolbar(), title, subtitle);
+		}
 
 		public Toolbar getToolbar() {
 			return (Toolbar) toolbar;
@@ -401,6 +412,9 @@ public class ViewFactory {
 	}
 
 	public static View createProgressLayout(ViewGroup parent) {
+		return createProgressLayout(parent, false);
+	}
+	public static View createProgressLayout(ViewGroup parent, boolean standardService) {
 		FrameLayout progress = new FrameLayout(parent.getContext());
 		parent.addView(progress, ExpandedLayout.LayoutParams.MATCH_PARENT, ExpandedLayout.LayoutParams.MATCH_PARENT);
 		progress.setVisibility(View.GONE);
@@ -408,6 +422,7 @@ public class ViewFactory {
 		progress.addView(progressBar, FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT);
 		((FrameLayout.LayoutParams) progressBar.getLayoutParams()).gravity = Gravity.CENTER;
 		ThemeEngine.applyStyle(progressBar);
+		if (standardService) InterfaceAppearance.standardLoading(progressBar);
 		return progress;
 	}
 
@@ -422,6 +437,9 @@ public class ViewFactory {
 	}
 
 	public static ErrorHolder createErrorLayout(ViewGroup parent) {
+		return createErrorLayout(parent, false);
+	}
+	public static ErrorHolder createErrorLayout(ViewGroup parent, boolean standardService) {
 		LinearLayout layout = new LinearLayout(parent.getContext());
 		layout.setOrientation(LinearLayout.VERTICAL);
 		layout.setGravity(Gravity.CENTER);
@@ -440,6 +458,18 @@ public class ViewFactory {
 		layout.addView(text, LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
 		layout.setLayoutParams(new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
 				ViewGroup.LayoutParams.MATCH_PARENT));
+		if (standardService) InterfaceAppearance.serviceState(layout, text);
+		if (standardService && InterfaceAppearance.isEnabled(parent.getContext())) {
+			android.widget.ScrollView scroll = new android.widget.ScrollView(parent.getContext());
+			scroll.setFillViewport(true); scroll.addView(layout, new android.widget.ScrollView.LayoutParams(
+					ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+			InterfaceAppearance.serviceState(scroll, text);
+			if (InterfaceAppearance.isEnabled(parent.getContext())) {
+				image.getLayoutParams().width = (int) (40 * density); image.getLayoutParams().height = (int) (40 * density);
+				ViewUtils.setNewMarginRelative(text, null, (int) (12 * density), null, null);
+			}
+			return new ErrorHolder(scroll, text);
+		}
 		return new ErrorHolder(layout, text);
 	}
 

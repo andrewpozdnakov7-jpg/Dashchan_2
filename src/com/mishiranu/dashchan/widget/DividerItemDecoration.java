@@ -71,8 +71,12 @@ public class DividerItemDecoration extends RecyclerView.ItemDecoration {
 	private AboveCallback aboveCallback;
 
 	public DividerItemDecoration(Context context, Callback callback) {
+		this(context, callback, null);
+	}
+
+	public DividerItemDecoration(Context context, Callback callback, Drawable customDrawable) {
 		this.callback = callback;
-		drawable = ResourceUtils.getDrawable(context, android.R.attr.listDivider, 0);
+		drawable = customDrawable != null ? customDrawable : ResourceUtils.getDrawable(context, android.R.attr.listDivider, 0);
 	}
 
 	public void setAboveCallback(AboveCallback aboveCallback) {

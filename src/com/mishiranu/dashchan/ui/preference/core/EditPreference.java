@@ -53,6 +53,7 @@ public class EditPreference extends DialogPreference<String> {
 		editText.setId(android.R.id.edit);
 		configureEdit(editText, hint, inputType, getValue());
 		editText.requestFocus();
+		addFieldLabel(pair.second, hint, editText);
 		pair.second.addView(editText, LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
 		return super.configureDialog(savedInstanceState, builder).setView(pair.first)
 				.setPositiveButton(android.R.string.ok, (d, which) -> ConcurrentUtils.HANDLER

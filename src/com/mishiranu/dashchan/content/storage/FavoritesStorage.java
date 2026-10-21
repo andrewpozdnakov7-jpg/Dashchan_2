@@ -26,6 +26,7 @@ public class FavoritesStorage extends StorageManager.Storage<List<FavoritesStora
 	private static final String KEY_TITLE = "title";
 	private static final String KEY_MODIFIED_TITLE = "modifiedTitle";
 	private static final String KEY_WATCHER_ENABLED = "watcherEnabled";
+	private static final String KEY_WATCHER_DEFAULTS_VERSION = "watcherDefaultsVersion";
 
 	private static final FavoritesStorage INSTANCE = new FavoritesStorage();
 
@@ -35,10 +36,14 @@ public class FavoritesStorage extends StorageManager.Storage<List<FavoritesStora
 
 	private final HashMap<String, FavoriteItem> favoriteItemsMap = new HashMap<>();
 	private final ArrayList<FavoriteItem> favoriteItemsList = new ArrayList<>();
+	private boolean watcherDefaultsNeedSave;
 
 	private FavoritesStorage() {
 		super("favorites", 2000, 10000);
 		startRead();
+		// No observers exist yet. Publish migrated rows before the watcher service
+		// loads its initial snapshot; persist the flags and marker in the same file.
+		if (watcherDefaultsNeedSave) serialize();
 	}
 
 	@Override
@@ -53,10 +58,16 @@ public class FavoritesStorage extends StorageManager.Storage<List<FavoritesStora
 	@Override
 	public void onRead(InputStream input) throws IOException {
 		try {
+			ArrayList<FavoriteItem> items = new ArrayList<>();
+			int watcherDefaultsVersion = 0;
 			JsonSerial.Reader reader = JsonSerial.reader(input);
 			reader.startObject();
 			while (!reader.endStruct()) {
 				switch (reader.nextName()) {
+					case KEY_WATCHER_DEFAULTS_VERSION: {
+						watcherDefaultsVersion = reader.nextInt();
+						break;
+					}
 					case KEY_DATA: {
 						reader.startArray();
 						while (!reader.endStruct()) {
@@ -101,8 +112,7 @@ public class FavoritesStorage extends StorageManager.Storage<List<FavoritesStora
 							}
 							FavoriteItem favoriteItem = new FavoriteItem(chanName, boardName, threadNumber,
 									title, modifiedTitle, watcherEnabled);
-							favoriteItemsMap.put(makeKey(chanName, boardName, threadNumber), favoriteItem);
-							favoriteItemsList.add(favoriteItem);
+							items.add(favoriteItem);
 						}
 						break;
 					}
@@ -111,6 +121,14 @@ public class FavoritesStorage extends StorageManager.Storage<List<FavoritesStora
 						break;
 					}
 				}
+			}
+			watcherDefaultsNeedSave = FavoritesWatcherMigration.enableExistingThreads(items, watcherDefaultsVersion);
+			// Do not expose a partially parsed list, or mark a failed read migrated.
+			favoriteItemsMap.clear();
+			favoriteItemsList.clear();
+			for (FavoriteItem item : items) {
+				favoriteItemsMap.put(makeKey(item), item);
+				favoriteItemsList.add(item);
 			}
 		} catch (ParseException e) {
 			throw new IOException(e);
@@ -121,6 +139,8 @@ public class FavoritesStorage extends StorageManager.Storage<List<FavoritesStora
 	public void onWrite(List<FavoriteItem> favoriteItems, OutputStream output) throws IOException {
 		JsonSerial.Writer writer = JsonSerial.writer(output);
 		writer.startObject();
+		writer.name(KEY_WATCHER_DEFAULTS_VERSION);
+		writer.value(FavoritesWatcherMigration.VERSION);
 		writer.name(KEY_DATA);
 		writer.startArray();
 		for (FavoriteItem favoriteItem : favoriteItems) {

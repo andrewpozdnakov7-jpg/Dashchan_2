@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="favorites_settings_summary">Thread order, board grouping and adding favorites</string>
+    <string name="favorites_group_by_board">Group by board</string>
+    <string name="favorites_group_by_board_summary">Organize favorite threads into collapsible board groups</string>
+    <string name="favorites_unread_first">Unread above read</string>
+    <string name="favorites_unread_first_summary">Show threads with unread posts at the top of the list or group. Uses favorite-thread monitoring data.</string>
+    <string name="favorite_board_group_format">%1$s · %2$s (%3$d)</string>
+</resources>

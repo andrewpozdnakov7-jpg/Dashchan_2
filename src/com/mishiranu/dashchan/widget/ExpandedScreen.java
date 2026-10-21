@@ -15,8 +15,10 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
 import android.view.Window;
+import android.view.WindowInsetsController;
 import android.widget.FrameLayout;
 import androidx.annotation.NonNull;
+import androidx.core.graphics.ColorUtils;
 import androidx.recyclerview.widget.RecyclerView;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.graphics.BaseDrawable;
@@ -51,6 +53,11 @@ public class ExpandedScreen implements RecyclerScrollTracker.OnScrollListener {
 	private final LinkedHashMap<View, RecyclerView> contentViews = new LinkedHashMap<>();
 
 	private final List<ForegroundDrawable> foregroundDrawables;
+	private final int legacyStatusBarColor, statusBarUnderlayColor, drawerStatusBarColor;
+	private Integer standardStatusBarSurface;
+	private int statusBarForegroundAlpha = 255, statusGuardColor, legacyStatusBarIcons;
+	private float drawerSlideOffset;
+	private boolean statusBarIconsOwned;
 	private ValueAnimator chromeAnimator;
 	private float chromeValue = 1f;
 	private boolean chromeTarget = true, modernChromeOwned;
@@ -118,12 +125,16 @@ public class ExpandedScreen implements RecyclerScrollTracker.OnScrollListener {
 		fullScreenLayoutEnabled = init.fullScreenLayoutEnabled;
 		activity = init.activity;
 		Window window = activity.getWindow();
+		ThemeEngine.Theme theme = ThemeEngine.getTheme(activity);
+		legacyStatusBarColor = ThemeEngine.getStatusBarColor(theme) | Color.BLACK;
+		statusBarUnderlayColor = GraphicsUtils.mixColors(theme.window | Color.BLACK, ViewUtils.STATUS_OVERLAY_TRANSPARENT);
+		drawerStatusBarColor = GraphicsUtils.mixColors(drawerBackgroundColor | Color.BLACK, ViewUtils.STATUS_OVERLAY_TRANSPARENT);
 		ForegroundDrawable contentForeground;
 		ForegroundDrawable statusBarContentForeground;
 		ForegroundDrawable statusBarDrawerForeground;
 		List<ForegroundDrawable> foregroundDrawables;
 		if (fullScreenLayoutEnabled) {
-			int statusBarColor = ThemeEngine.getStatusBarColor(ThemeEngine.getTheme(activity)) | Color.BLACK;
+			int statusBarColor = legacyStatusBarColor;
 			int navigationBarColor = Color.BLACK;
 			ViewUtils.setStatusBarColor(window, Color.TRANSPARENT);
 			ViewUtils.setNavigationBarColor(window, Color.TRANSPARENT);
@@ -173,11 +184,62 @@ public class ExpandedScreen implements RecyclerScrollTracker.OnScrollListener {
 			}
 		}
 		updatePaddings();
+		refreshSystemBarAppearance();
+	}
+
+	/** The shared main window owns inset pixels; other Activities/dialog windows keep their policy. */
+	public void refreshSystemBarAppearance() {
+		Integer surface = toolbarView != null ? InterfaceAppearance.standardStatusBarSurface(activity) : null;
+		if (!java.util.Objects.equals(standardStatusBarSurface, surface)) {
+			standardStatusBarSurface = surface;
+			for (ForegroundDrawable drawable : foregroundDrawables) {
+				drawable.applyStatusBarColor(surface != null ? surface : legacyStatusBarColor);
+			}
+		}
+		updateStatusBarIcons();
+	}
+
+	public void setDrawerSlideOffset(float offset) {
+		drawerSlideOffset = Math.max(0f, Math.min(1f, offset)); updateStatusBarIcons();
+	}
+
+	static int visibleStatusBarColor(int surface, int underlay, int alpha, int guard, boolean drawer, int drawerColor) {
+		return drawer ? drawerColor : ColorUtils.compositeColors(guard,
+				ColorUtils.compositeColors(ColorUtils.setAlphaComponent(surface, alpha), underlay));
+	}
+	static boolean prefersDarkStatusBarIcons(int background) {
+		return ColorUtils.calculateContrast(Color.BLACK, background) >= ColorUtils.calculateContrast(Color.WHITE, background);
+	}
+	static int statusBarIconAppearance(int current, boolean darkIcons) {
+		int mask = WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS;
+		return darkIcons ? current | mask : current & ~mask;
+	}
+	private void updateStatusBarIcons() {
+		WindowInsetsController controller = activity.getWindow().getInsetsController();
+		if (controller == null) return;
+		int mask = WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS;
+		int current = controller.getSystemBarsAppearance();
+		if (standardStatusBarSurface != null) {
+			if (!statusBarIconsOwned) { legacyStatusBarIcons = current & mask; statusBarIconsOwned = true; }
+			int background = visibleStatusBarColor(standardStatusBarSurface, statusBarUnderlayColor,
+					statusBarForegroundAlpha, statusGuardColor,
+					drawerOverToolbarEnabled && drawerSlideOffset >= .5f, drawerStatusBarColor);
+			int desired = statusBarIconAppearance(current, prefersDarkStatusBarIcons(background)) & mask;
+			if ((current & mask) != desired) controller.setSystemBarsAppearance(desired, mask);
+		} else if (statusBarIconsOwned) {
+			controller.setSystemBarsAppearance(legacyStatusBarIcons, mask); statusBarIconsOwned = false;
+		}
+	}
+	private void applyForegroundAlpha(int alpha) {
+		statusBarForegroundAlpha = alpha;
+		for (ForegroundDrawable drawable : foregroundDrawables) drawable.applyAlpha(alpha);
+		updateStatusBarIcons();
 	}
 
 	private static class ForegroundDrawable extends BaseDrawable {
 		public void applyAlpha(int alpha) {}
 		public void applyStatusGuardColor(int color) {}
+		public void applyStatusBarColor(int color) {}
 	}
 
 	private static class AlphaForegroundDrawable extends ForegroundDrawable {
@@ -192,13 +254,14 @@ public class ExpandedScreen implements RecyclerScrollTracker.OnScrollListener {
 
 	private class LollipopContentForeground extends AlphaForegroundDrawable {
 		private final Paint paint = new Paint();
-		private final int statusBarColor;
+		private int statusBarColor;
 		private final int navigationBarColor;
 
 		public LollipopContentForeground(int statusBarColor, int navigationBarColor) {
 			this.statusBarColor = statusBarColor;
 			this.navigationBarColor = navigationBarColor;
 		}
+		@Override public void applyStatusBarColor(int color) { statusBarColor = color; invalidateSelf(); }
 
 		@Override
 		public void draw(@NonNull Canvas canvas) {
@@ -242,13 +305,14 @@ public class ExpandedScreen implements RecyclerScrollTracker.OnScrollListener {
 
 	private class LollipopStatusBarForeground extends AlphaForegroundDrawable {
 		private final Paint paint = new Paint();
-		private final int statusBarColor;
+		private int statusBarColor;
 
 		private int statusGuardColor = 0;
 
 		public LollipopStatusBarForeground(int statusBarColor) {
 			this.statusBarColor = statusBarColor;
 		}
+		@Override public void applyStatusBarColor(int color) { statusBarColor = color; invalidateSelf(); }
 
 		@Override
 		public void applyStatusGuardColor(int color) {
@@ -313,9 +377,7 @@ public class ExpandedScreen implements RecyclerScrollTracker.OnScrollListener {
 		public void onAnimationUpdate(ValueAnimator animation) {
 			float value = (float) animation.getAnimatedValue();
 			int alpha = (int) (0xff * value);
-			for (ForegroundDrawable foregroundDrawable : foregroundDrawables) {
-				foregroundDrawable.applyAlpha(alpha);
-			}
+			applyForegroundAlpha(alpha);
 			if (toolbarView != null) {
 				toolbarView.setAlpha(value);
 			}
@@ -350,7 +412,7 @@ public class ExpandedScreen implements RecyclerScrollTracker.OnScrollListener {
 
 	private void applyModernChrome(float value) {
 		chromeValue = value;
-		for (ForegroundDrawable drawable : foregroundDrawables) drawable.applyAlpha(Math.round(255f * value));
+		applyForegroundAlpha(Math.round(255f * value));
 		toolbarView.setAlpha(value);
 		toolbarView.setTranslationY(-24f * ResourceUtils.obtainDensity(toolbarView) * (1f - value));
 	}
@@ -393,6 +455,7 @@ public class ExpandedScreen implements RecyclerScrollTracker.OnScrollListener {
 	public void updateMotionPolicy() {
 		finishMotion();
 		if (!com.mishiranu.dashchan.util.InterfaceMotion.isEnabled()) modernChromeOwned = false;
+		refreshSystemBarAppearance();
 	}
 
 	private void applyShowActionBar(boolean show) {
@@ -521,6 +584,7 @@ public class ExpandedScreen implements RecyclerScrollTracker.OnScrollListener {
 
 	public void setDrawerOverToolbarEnabled(boolean drawerOverToolbarEnabled) {
 		this.drawerOverToolbarEnabled = drawerOverToolbarEnabled;
+		updateStatusBarIcons();
 		updatePaddings();
 	}
 
@@ -671,6 +735,7 @@ public class ExpandedScreen implements RecyclerScrollTracker.OnScrollListener {
 				for (ForegroundDrawable foregroundDrawable : foregroundDrawables) {
 					foregroundDrawable.applyStatusGuardColor(alphaColor);
 				}
+				statusGuardColor = alphaColor; updateStatusBarIcons();
 			}
 			return true;
 		}

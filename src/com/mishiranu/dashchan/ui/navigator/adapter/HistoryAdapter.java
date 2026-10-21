@@ -76,7 +76,7 @@ public class HistoryAdapter extends CursorAdapter<HistoryDatabase.HistoryCursor,
 	@Override
 	public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
 		return ListViewUtils.bind(new SimpleViewHolder(ViewFactory.makeTwoLinesListItem(parent,
-				ViewFactory.FEATURE_TEXT2_END).view), true, this::copyItem, callback);
+				ViewFactory.FEATURE_TEXT2_END, true).view), true, this::copyItem, callback);
 	}
 
 	@Override
@@ -95,6 +95,7 @@ public class HistoryAdapter extends CursorAdapter<HistoryDatabase.HistoryCursor,
 		}
 		viewHolder.text2.setText(title);
 		viewHolder.text2End.setText(postDateFormatter.formatDate(historyItem.time));
+		com.mishiranu.dashchan.widget.InterfaceAppearance.serviceRow(viewHolder.view, viewHolder.text1, viewHolder.text2, viewHolder.text2End);
 	}
 
 	public DividerItemDecoration.Configuration configureDivider

@@ -130,6 +130,81 @@ public class SecurityStoreTest {
 		SecurityStore.foreground(context, true);
 		assertTrue(SecurityStore.locked(context));
 	}
+	@Test public void backgroundTimestampIsPersistedOnceAndNextDepartureStartsAgain() throws Exception {
+		prepareRecentAuthentication(3);
+		long before = android.os.SystemClock.elapsedRealtime();
+		SecurityStore.foreground(context, false);
+		long first = SecurityStore.update(context, s -> s.getJSONObject(RememberedAuthentication.KEY).getLong("at"));
+		assertTrue(first >= before); assertTrue(first <= android.os.SystemClock.elapsedRealtime());
+		String original = SecurityStore.update(context, s -> s.getJSONObject(RememberedAuthentication.KEY).toString());
+		SecurityStore.foreground(context, false); // onPause fallback after onStop must not extend it.
+		assertEquals(original, SecurityStore.update(context, s -> s.getJSONObject(RememberedAuthentication.KEY).toString()));
+		SecurityStore.processStarted(context, true); SecurityStore.foreground(context, true);
+		assertFalse(SecurityStore.locked(context));
+		assertEquals(original, SecurityStore.update(context, s -> s.getJSONObject(RememberedAuthentication.KEY).toString()));
+		long nextDeparture = android.os.SystemClock.elapsedRealtime();
+		SecurityStore.foreground(context, false);
+		long second = SecurityStore.update(context, s -> s.getJSONObject(RememberedAuthentication.KEY).getLong("at"));
+		assertTrue(second >= nextDeparture); assertTrue(second >= first);
+		SecurityStore.foreground(context, true); assertFalse(SecurityStore.locked(context));
+	}
+	@Test public void failedBackgroundReceiptWriteRemainsLockedAfterProcessEntry() throws Exception {
+		prepareRecentAuthentication(3);
+		File blocker = new File(SecurityStore.directory(context), "state.json.new");
+		assertTrue(blocker.mkdir()); assertTrue(new File(blocker, "background-write-fixture").createNewFile());
+		try { SecurityStore.foreground(context, false); fail("Failed background write must be reported"); }
+		catch (IOException expected) {}
+		assertTrue(SecurityStore.locked(context));
+		SecurityStore.processStarted(context, true); SecurityStore.foreground(context, true);
+		assertTrue(SecurityStore.locked(context));
+	}
+	private SecuritySessionProvider freshAuthority() {
+		SecuritySessionProvider authority = new SecuritySessionProvider();
+		android.content.pm.ProviderInfo info = new android.content.pm.ProviderInfo();
+		info.authority = context.getPackageName() + ".test.background-session";
+		authority.attachInfo(context, info); return authority;
+	}
+	private android.os.Bundle clientRequest() {
+		android.os.Bundle request = new android.os.Bundle(); request.putBinder("client", new android.os.Binder());
+		return request;
+	}
+	@Test public void lastClientDepartureIssuesOneGrantAndDuplicateInactiveDoesNotSlideIt() {
+		SecuritySessionProvider authority = freshAuthority();
+		String key = SecurityStore.directory(context).getAbsolutePath();
+		android.os.Bundle first = clientRequest(), second = clientRequest();
+		first.putLong("generation", authority.call("active", key, first).getLong("generation"));
+		first.putInt("minutes", 3); first.putLong("authenticated_at", android.os.SystemClock.elapsedRealtime());
+		assertTrue(authority.call("authenticated", key, first).getBoolean("unlocked"));
+		authority.call("active", key, second);
+		assertFalse(authority.call("inactive", key, first).containsKey("background_at"));
+		android.os.Bundle background = authority.call("inactive", key, second);
+		assertTrue(background.containsKey("background_at")); assertFalse(background.getBoolean("unlocked"));
+		second.putLong("generation", background.getLong("generation"));
+		second.putLong("authenticated_at", background.getLong("background_at"));
+		assertTrue(authority.call("background-grant", key, second).getBoolean("background_grant"));
+		assertFalse(authority.call("inactive", key, second).containsKey("background_at"));
+		assertTrue(authority.call("background-grant", key, second).getBoolean("background_grant"));
+		authority.call("active", key, second);
+		assertFalse(authority.call("background-grant", key, second).getBoolean("background_grant"));
+		assertTrue(authority.call("restore", key, second).getBoolean("unlocked"));
+		assertTrue(authority.call("inactive", key, second).containsKey("background_at"));
+	}
+	@Test public void duplicateScreenOffKeepsPendingGrantButManualLockRevokesIt() {
+		SecuritySessionProvider authority = freshAuthority();
+		String key = SecurityStore.directory(context).getAbsolutePath();
+		android.os.Bundle request = clientRequest();
+		request.putLong("generation", authority.call("active", key, request).getLong("generation"));
+		request.putInt("minutes", 3); request.putLong("authenticated_at", android.os.SystemClock.elapsedRealtime());
+		authority.call("authenticated", key, request);
+		android.os.Bundle background = authority.call("suspend", key, request);
+		assertTrue(background.containsKey("background_at"));
+		request.putLong("generation", background.getLong("generation"));
+		request.putLong("authenticated_at", background.getLong("background_at"));
+		assertFalse(authority.call("suspend", key, request).containsKey("background_at"));
+		assertTrue(authority.call("background-grant", key, request).getBoolean("background_grant"));
+		authority.call("lock", key, request);
+		assertFalse(authority.call("background-grant", key, request).getBoolean("background_grant"));
+	}
 	@Test public void processRestartRestoresButIntervalChangeAndPendingResetRevokeRememberedAuthentication() throws Exception {
 		prepareRecentAuthentication(3);
 		String original = SecurityStore.update(context, s -> s.getJSONObject(RememberedAuthentication.KEY).toString());

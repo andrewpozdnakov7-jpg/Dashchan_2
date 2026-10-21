@@ -1364,6 +1364,31 @@ public class Preferences {
 
 	public static final String KEY_FAVORITES_ORDER = "favorites_order";
 	public static final FavoritesOrder DEFAULT_FAVORITES_ORDER = FavoritesOrder.DATE_DESC;
+	public static final String KEY_FAVORITES_GROUP_BY_BOARD = "favorites_group_by_board";
+	public static final boolean DEFAULT_FAVORITES_GROUP_BY_BOARD = false;
+	public static final String KEY_FAVORITES_UNREAD_FIRST = "favorites_unread_first";
+	public static final boolean DEFAULT_FAVORITES_UNREAD_FIRST = true;
+	private static final String KEY_FAVORITE_BOARD_GROUPS_COLLAPSED = "favorite_board_groups_collapsed";
+
+	public static boolean isFavoritesGroupedByBoard() {
+		return PREFERENCES.getBoolean(KEY_FAVORITES_GROUP_BY_BOARD, DEFAULT_FAVORITES_GROUP_BY_BOARD);
+	}
+	public static boolean isFavoritesUnreadFirst() {
+		return PREFERENCES.getBoolean(KEY_FAVORITES_UNREAD_FIRST, DEFAULT_FAVORITES_UNREAD_FIRST);
+	}
+	public static String favoriteBoardGroupKey(String forum, String board) {
+		return (forum != null ? forum.length() + ":" + forum : "-1:")
+				+ (board != null ? board.length() + ":" + board : "-1:");
+	}
+	public static Set<String> getCollapsedFavoriteBoardGroups() {
+		return new HashSet<>(PREFERENCES.getStringSet(KEY_FAVORITE_BOARD_GROUPS_COLLAPSED, Collections.emptySet()));
+	}
+	public static void setFavoriteBoardGroupCollapsed(String forum, String board, boolean collapsed) {
+		Set<String> groups = getCollapsedFavoriteBoardGroups();
+		String key = favoriteBoardGroupKey(forum, board);
+		if (collapsed) groups.add(key); else groups.remove(key);
+		PREFERENCES.edit().put(KEY_FAVORITE_BOARD_GROUPS_COLLAPSED, groups).close();
+	}
 
 	public static FavoritesOrder getFavoritesOrder() {
 		return getEnumValue(KEY_FAVORITES_ORDER, FavoritesOrder.values(),
@@ -3153,7 +3178,23 @@ public class Preferences {
 	}
 
 	public static final String KEY_WATCHER_WATCH_INITIALLY = "watcher_watch_initially";
-	public static final boolean DEFAULT_WATCHER_WATCH_INITIALLY = false;
+	public static final boolean DEFAULT_WATCHER_WATCH_INITIALLY = true;
+	private static final String KEY_WATCHER_DEFAULT_ENABLED_MIGRATED = "watcher_default_enabled_migrated";
+
+	static {
+		if (PREFERENCES != null && MainApplication.getInstance().isMainProcess()) {
+			migrateWatcherDefaultEnabled(PREFERENCES);
+		}
+	}
+
+	static void migrateWatcherDefaultEnabled(SharedPreferences preferences) {
+		if (!preferences.getBoolean(KEY_WATCHER_DEFAULT_ENABLED_MIGRATED, false)) {
+			try (SharedPreferences.Editor editor = preferences.edit()) {
+				editor.put(KEY_WATCHER_WATCH_INITIALLY, true);
+				editor.put(KEY_WATCHER_DEFAULT_ENABLED_MIGRATED, true);
+			}
+		}
+	}
 
 	public static boolean isWatcherWatchInitially() {
 		return PREFERENCES.getBoolean(KEY_WATCHER_WATCH_INITIALLY, DEFAULT_WATCHER_WATCH_INITIALLY);

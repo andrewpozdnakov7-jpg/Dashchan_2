@@ -67,6 +67,7 @@ public class CustomSearchView extends FrameLayout implements CollapsibleActionVi
 				new int[] {android.R.attr.contentInsetEnd}, android.R.attr.actionBarStyle, 0);
 		this.contentInsetEnd = typedArray.getDimensionPixelSize(0, 0);
 		typedArray.recycle();
+		InterfaceAppearance.standardSearch(this, searchView);
 	}
 
 	@Override
@@ -165,6 +166,7 @@ public class CustomSearchView extends FrameLayout implements CollapsibleActionVi
 
 	@Override
 	public void onActionViewExpanded() {
+		InterfaceAppearance.standardSearch(this, searchView);
 		String query = getQuery();
 		if (!query.isEmpty()) {
 			// Don't clear text view and don't fire "changed" action with empty text

@@ -98,7 +98,7 @@ public class WallpaperCatalogFragment extends BaseListFragment {
 	}
 
 	private void confirmDownload(Wallpaper wallpaper) {
-		new MotionDialogBuilder(requireContext())
+		MotionDialogBuilder.standard(requireContext())
 				.setTitle(wallpaper.title)
 				.setMessage(getString(R.string.wallpaper_download_confirmation__format,
 						wallpaper.author, wallpaper.license, formatSize(wallpaper.fileSize)))

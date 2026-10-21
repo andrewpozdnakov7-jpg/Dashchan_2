@@ -313,9 +313,8 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		watcherServiceClient.setCallback(this);
 		drawerCommon = findViewById(R.id.drawer_common);
 		drawerWide = findViewById(R.id.drawer_wide);
-		ThemeEngine.Theme theme = ThemeEngine.getTheme(this);
 		Context drawerContext = this;
-		int drawerBackground = theme.card;
+		int drawerBackground = com.mishiranu.dashchan.widget.DrawerStyle.surface(this);
 		drawerCommon.setBackgroundColor(drawerBackground);
 		drawerWide.setBackgroundColor(drawerBackground);
 		drawerForm = new DrawerForm(drawerContext, this, getSupportFragmentManager(), watcherServiceClient);
@@ -332,6 +331,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		// Allow CustomSearchView to ignore content inset
 		toolbar.setClipChildren(false);
 		toolbarHolder = ViewFactory.addToolbarTitle(toolbar);
+		toolbarHolder.applyStandardAppearance();
 		toolbarExtra = drawerInterlayer.findViewById(R.id.toolbar_extra);
 		LayoutTransition layoutTransition = new LayoutTransition();
 		layoutTransition.setStartDelay(LayoutTransition.APPEARING, 0);
@@ -804,6 +804,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	@Override
 	public void setTitleSubtitle(CharSequence title, CharSequence subtitle) {
 		toolbarHolder.update(title, subtitle);
+		toolbarHolder.applyStandardAppearance();
 	}
 
 	@Override
@@ -1819,6 +1820,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	@Override
 	protected void onResume() {
 		super.onResume();
+		drawerForm.setHostResumed(true);
 		if (ThemeEngine.isDynamicThemeOutdated(this)) {
 			recreate();
 			return;
@@ -1873,6 +1875,12 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		VideoDiagnostics.recordUi("pip_return host_target_installed");
 	}
 
+	@Override
+	public void onWindowFocusChanged(boolean hasFocus) {
+		super.onWindowFocusChanged(hasFocus);
+		if (hasFocus && expandedScreen != null) expandedScreen.refreshSystemBarAppearance();
+	}
+
 	private void showPictureInPictureReturnCover(String token) {
 		clearPictureInPictureReturnCover("replaced");
 		Bitmap frame = VideoPipActivity.getPendingGalleryReturnPreview(token);
@@ -1919,6 +1927,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	@Override
 	protected void onPause() {
+		drawerForm.setHostResumed(false);
 		savePagesSession();
 		super.onPause();
 	}
@@ -2386,6 +2395,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 			finishLocalToolbarMotion();
 			com.mishiranu.dashchan.widget.SurfaceMotion.updatePopupPolicies();
 			com.mishiranu.dashchan.widget.InterfaceAppearance.refreshTree(findViewById(android.R.id.content));
+			toolbarHolder.applyStandardAppearance();
 			com.mishiranu.dashchan.widget.PullLoadingIndicator.refreshTree(findViewById(android.R.id.content));
 			View toolbar = findViewById(R.id.toolbar);
 			if (toolbar instanceof com.mishiranu.dashchan.widget.CompactToolbar) {
@@ -2400,6 +2410,11 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 			resetPredictiveBackView(false);
 			if (drawerMotion != null) drawerMotion.updatePolicy();
 			updateSystemBackCallback();
+			if (Preferences.KEY_NEW_INTERFACE_MOTION.equals(key)) {
+				// Recreate all captured drawer surfaces/holders together (including the
+				// status-bar foreground and DrawerAppearance's original background).
+				recreate();
+			}
 		} else if (Preferences.KEY_THREAD_TOOLBAR_ACTION.equals(key)) {
 			invalidateHomeUpState();
 		} else if (Preferences.KEY_ROUNDED_DIALOGS.equals(key) || Preferences.KEY_ROUNDED_DIALOGS_RADIUS.equals(key)) {
@@ -3391,17 +3406,20 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		@Override
 		public void onDrawerSlide(@NonNull View drawerView, float slideOffset) {
 			updateVisible(drawerView, slideOffset > 0f);
+			if (expandedScreen != null) expandedScreen.setDrawerSlideOffset(slideOffset);
 		}
 
 		@Override
 		public void onDrawerOpened(@NonNull View drawerView) {
 			// Also handle opening without an animation / slide callback.
 			updateVisible(drawerView, true);
+			if (expandedScreen != null) expandedScreen.setDrawerSlideOffset(1f);
 		}
 
 		@Override
 		public void onDrawerClosed(@NonNull View drawerView) {
 			updateVisible(drawerView, false);
+			if (expandedScreen != null) expandedScreen.setDrawerSlideOffset(0f);
 		}
 
 		@Override

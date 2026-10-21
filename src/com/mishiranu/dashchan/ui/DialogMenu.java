@@ -37,6 +37,7 @@ import java.util.List;
 
 public class DialogMenu {
 	private final Context context;
+	private final boolean standard;
 
 	private final ArrayList<ListItem> listItems = new ArrayList<>();
 	private CharSequence title;
@@ -58,7 +59,10 @@ public class DialogMenu {
 	}
 
 	public DialogMenu(Context context) {
-		this.context = context;
+		this(context, true);
+	}
+	public DialogMenu(Context context, boolean standard) {
+		this.context = context; this.standard = standard;
 	}
 
 	public DialogMenu setTitle(CharSequence title) {
@@ -88,16 +92,16 @@ public class DialogMenu {
 	}
 
 	private RecyclerView getRecyclerView(AlertDialog dialog) {
-		FrameLayout custom = dialog.findViewById(android.R.id.custom);
-		return (RecyclerView) custom.getChildAt(0);
+		return dialog.findViewById(R.id.standard_menu_list);
 	}
 
 	private void setAdapter(AlertDialog dialog, RecyclerView recyclerView) {
-		recyclerView.setAdapter(new Adapter(dialog.getContext(), dialog::dismiss, new ArrayList<>(listItems)));
+		recyclerView.setAdapter(new Adapter(dialog.getContext(), dialog::dismiss, new ArrayList<>(listItems), standard));
 	}
 
 	private void updateInternal(AlertDialog dialog, RecyclerView recyclerView) {
 		dialog.setTitle(title);
+		if (standard) InterfaceAppearance.updateStandardDialogTitle(dialog, title);
 		if (dialog.isShowing()) {
 			setAdapter(dialog, recyclerView != null ? recyclerView : getRecyclerView(dialog));
 		} else if (recyclerView != null) {
@@ -116,15 +120,26 @@ public class DialogMenu {
 	}
 
 	public AlertDialog create() {
-		AlertDialog.Builder builder = new MotionDialogBuilder(context);
+		AlertDialog.Builder builder = standard ? MotionDialogBuilder.standard(context) : new MotionDialogBuilder(context);
 		RecyclerView recyclerView = new PaddedRecyclerView(builder.getContext());
+		recyclerView.setId(R.id.standard_menu_list);
 		recyclerView.setMotionEventSplittingEnabled(false);
 		recyclerView.setVerticalScrollBarEnabled(true);
 		recyclerView.setLayoutManager(new LinearLayoutManager(recyclerView.getContext()));
 		float density = ResourceUtils.obtainDensity(recyclerView);
 		recyclerView.setClipToPadding(false);
 		recyclerView.setPadding(0, (int) (8f * density), 0, (int) (8f * density));
-		AlertDialog dialog = builder.setView(recyclerView).create();
+		if (standard && InterfaceAppearance.isEnabled(context)) {
+			TextView probe = new TextView(builder.getContext());
+			com.mishiranu.dashchan.widget.AppearanceTypography.apply(probe,
+					com.mishiranu.dashchan.widget.AppearanceTypography.Role.BODY_MEDIUM);
+			float max = 0;
+			for (ListItem item : listItems) max = Math.max(max, probe.getPaint().measureText(item.title)
+					+ (item.viewType == ViewType.ITEM ? 32 : 80) * density);
+			recyclerView.setMinimumWidth(Math.min(Math.max(1, ViewUtils.getWindowContentSize(context).x - (int) (32 * density)), (int) Math.ceil(max)));
+		}
+		AlertDialog dialog = builder.setTitle(title).setView(recyclerView).create();
+		if (standard) InterfaceAppearance.prepareStandardMenuDialog(dialog, recyclerView);
 		updateInternal(dialog, recyclerView);
 		return dialog;
 	}
@@ -134,11 +149,13 @@ public class DialogMenu {
 		private final Runnable dismiss;
 		private final int layoutResId;
 		private final List<ListItem> listItems;
+		private final boolean standard;
 
-		public Adapter(Context context, Runnable dismiss, List<ListItem> listItems) {
+		public Adapter(Context context, Runnable dismiss, List<ListItem> listItems, boolean standard) {
 			this.dismiss = dismiss;
 			layoutResId = ResourceUtils.obtainAlertDialogLayoutResId(context, ResourceUtils.DialogLayout.SIMPLE);
 			this.listItems = listItems;
+			this.standard = standard;
 		}
 
 		@Override
@@ -154,7 +171,7 @@ public class DialogMenu {
 		@NonNull
 		@Override
 		public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-			ViewHolder holder = new ViewHolder(parent, layoutResId, ViewType.values()[viewType]);
+			ViewHolder holder = new ViewHolder(parent, layoutResId, ViewType.values()[viewType], standard);
 			ListViewUtils.bind(holder, false, listItems::get, this);
 			return holder;
 		}
@@ -165,6 +182,11 @@ public class DialogMenu {
 			holder.textView.setText(listItem.title);
 			if (holder.checkBox != null) {
 				holder.checkBox.setChecked(listItem.checked);
+			}
+			if (standard) {
+				holder.itemView.setActivated(InterfaceAppearance.isEnabled(holder.itemView.getContext())
+						&& listItem.viewType == ViewType.CHECK && listItem.checked);
+				InterfaceAppearance.menuRow(holder.itemView, holder.textView);
 			}
 		}
 
@@ -180,7 +202,7 @@ public class DialogMenu {
 		public final TextView textView;
 		public final CheckBox checkBox;
 
-		public ViewHolder(ViewGroup parent, int layoutResId, ViewType viewType) {
+		public ViewHolder(ViewGroup parent, int layoutResId, ViewType viewType, boolean standard) {
 			super(viewType != ViewType.ITEM ? new LinearLayout(parent.getContext())
 					: LayoutInflater.from(parent.getContext()).inflate(layoutResId, parent, false));
 			if (viewType != ViewType.ITEM) {
@@ -237,7 +259,8 @@ public class DialogMenu {
 			}
 			textView = itemView.findViewById(android.R.id.text1);
 			ViewUtils.setSelectableItemBackground(itemView);
-			InterfaceAppearance.row(itemView, textView, null, false);
+			if (standard) InterfaceAppearance.menuRow(itemView, textView);
+			else InterfaceAppearance.row(itemView, textView, null, false);
 		}
 	}
 

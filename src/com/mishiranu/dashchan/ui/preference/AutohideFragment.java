@@ -627,7 +627,7 @@ public class AutohideFragment extends BaseListFragment {
 		@Override
 		public AlertDialog onCreateDialog(Bundle savedInstanceState) {
 			int index = requireArguments().getInt(EXTRA_INDEX);
-			AlertDialog.Builder builder = new MotionDialogBuilder(requireContext())
+			AlertDialog.Builder builder = MotionDialogBuilder.standard(requireContext())
 					.setTitle(R.string.quick_filter)
 					.setView(dialogView)
 					.setNegativeButton(android.R.string.cancel, null)
@@ -768,7 +768,7 @@ public class AutohideFragment extends BaseListFragment {
 		@Override
 		public AlertDialog onCreateDialog(Bundle savedInstanceState) {
 			int index = requireArguments().getInt(EXTRA_INDEX);
-			AlertDialog.Builder builder = new MotionDialogBuilder(requireContext())
+			AlertDialog.Builder builder = MotionDialogBuilder.standard(requireContext())
 					.setView(scrollView)
 					.setNegativeButton(android.R.string.cancel, null)
 					.setPositiveButton(R.string.save, (d, which) -> ((AutohideFragment) getParentFragment())
