@@ -444,7 +444,11 @@ public class ThemeEngine {
 				if ("DecorView".equals(decorView.getClass().getSimpleName())) {
 					ThemeContext themeContext = obtainThemeContext(decorView.getContext());
 					if (themeContext != null) {
-						if (dialog && shouldApplyStyle(decorView.getContext())) {
+						boolean standardDialog = InterfaceAppearance.isEnabled(decorView.getContext())
+								&& decorView.getTag(R.id.standard_dialog_appearance) != null;
+						// A standard dialog prepares its surface before WindowManager attachment.
+						// Do not replace that surface again as native children attach.
+						if (dialog && shouldApplyStyle(decorView.getContext()) && !standardDialog) {
 							if (roundableDialog && Preferences.isRoundedDialogs()) {
 								applyRoundedDialogBackground(decorView, themeContext.theme.card);
 							} else {
@@ -494,7 +498,9 @@ public class ThemeEngine {
 							}
 						}
 						ThemeContext themeContext = requireThemeContext(decorView.getContext());
-						if (Preferences.isRoundedDialogs()) {
+						if (InterfaceAppearance.standardPopup(decorView, backgroundView)) {
+							// Explicit standard-toolbar popup; protected/local popup contexts do not opt in.
+						} else if (Preferences.isRoundedDialogs()) {
 							applyRoundedPopupBackground(decorView, backgroundView, themeContext.theme.card);
 						} else {
 							backgroundView.setBackgroundTintList(ColorStateList.valueOf(themeContext.theme.card));
@@ -793,6 +799,7 @@ public class ThemeEngine {
 			}
 			handleTag(theme, view);
 		}
+		InterfaceAppearance.popupView(view);
 	}
 
 	private static void handleTag(Theme theme, View view) {

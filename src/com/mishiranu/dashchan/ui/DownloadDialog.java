@@ -240,7 +240,7 @@ public class DownloadDialog {
 		});
 		editText.setAdapter(adapter);
 
-		AlertDialog dialog = new MotionDialogBuilder(context)
+		AlertDialog dialog = MotionDialogBuilder.standard(context)
 				.setTitle(R.string.select_where_to_save)
 				.setView(view)
 				.setNegativeButton(android.R.string.cancel, (d, w) -> callback.resolve(choiceRequest, null))
@@ -333,7 +333,7 @@ public class DownloadDialog {
 		radioGroup.setOnCheckedChangeListener((g, id) -> state.selectedId = id);
 		linearLayout.addView(radioGroup);
 
-		AlertDialog.Builder builder = new MotionDialogBuilder(context)
+		AlertDialog.Builder builder = MotionDialogBuilder.standard(context)
 				.setView(linearLayout)
 				.setPositiveButton(android.R.string.ok, (dialog, which) -> {
 					switch (radioGroup.getCheckedRadioButtonId()) {

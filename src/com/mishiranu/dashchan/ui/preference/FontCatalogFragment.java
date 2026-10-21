@@ -75,7 +75,7 @@ public class FontCatalogFragment extends BaseListFragment {
 			requireActivity().recreate();
 			return;
 		}
-		new MotionDialogBuilder(requireContext())
+		MotionDialogBuilder.standard(requireContext())
 				.setTitle(font.title)
 				.setMessage(getString(R.string.font_download_confirmation__format,
 						font.license, formatSize(font.fileSize)))

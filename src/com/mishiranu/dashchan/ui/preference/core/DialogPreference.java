@@ -26,7 +26,7 @@ public abstract class DialogPreference<T> extends Preference<T> {
 	}
 
 	protected AlertDialog createDialog(Bundle savedInstanceState) {
-		AlertDialog dialog = configureDialog(savedInstanceState, new MotionDialogBuilder(context)).create();
+		AlertDialog dialog = configureDialog(savedInstanceState, MotionDialogBuilder.standard(context)).create();
 		if (neutralButtonText != null) {
 			dialog.setButton(AlertDialog.BUTTON_NEUTRAL, neutralButtonText, (AlertDialog.OnClickListener) null);
 			dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_NEUTRAL)
@@ -37,7 +37,7 @@ public abstract class DialogPreference<T> extends Preference<T> {
 
 	protected Pair<View, LinearLayout> createDialogLayout(Context context) {
 		float density = ResourceUtils.obtainDensity(context);
-		int padding = (int) (20f * density);
+		int padding = (int) ((com.mishiranu.dashchan.widget.InterfaceAppearance.isEnabled(context) ? 24f : 20f) * density);
 		ScrollView scrollView = new ScrollView(context);
 		scrollView.setOverScrollMode(ScrollView.OVER_SCROLL_IF_CONTENT_SCROLLS);
 		ThemeEngine.applyStyle(scrollView);
@@ -62,6 +62,14 @@ public abstract class DialogPreference<T> extends Preference<T> {
 
 	protected LinearLayout getDialogLayout(AlertDialog dialog) {
 		return dialog.findViewById(android.R.id.widget_frame);
+	}
+	/** Persistent captions are siblings, not wrappers: existing field tags/state indices stay intact. */
+	protected void addFieldLabel(LinearLayout parent, CharSequence caption, View field) {
+		if (!com.mishiranu.dashchan.widget.InterfaceAppearance.isEnabled(parent.getContext()) || StringUtils.isEmpty(caption)) return;
+		TextView label = new TextView(parent.getContext()); ThemeEngine.applyStyle(label); label.setText(caption);
+		if (field.getId() != View.NO_ID) label.setLabelFor(field.getId());
+		com.mishiranu.dashchan.widget.InterfaceAppearance.standardFieldLabel(label);
+		parent.addView(label, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
 	}
 
 	protected AlertDialog.Builder configureDialog(Bundle savedInstanceState, AlertDialog.Builder builder) {

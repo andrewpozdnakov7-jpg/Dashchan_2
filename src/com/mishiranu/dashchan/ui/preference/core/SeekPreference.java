@@ -52,6 +52,7 @@ public class SeekPreference extends DialogPreference<Integer> {
 				specialValue != null, minValue, maxValue, step, dialogValueFormat);
 		InterfaceAppearance.slider(holder.layout.findViewById(R.id.seek_bar));
 		InterfaceAppearance.check(holder.layout.findViewById(R.id.switch_view));
+		InterfaceAppearance.standardFieldLabel(holder.layout.findViewById(R.id.current_value));
 		if (savedInstanceState != null) {
 			holder.setEnabled(savedInstanceState.getBoolean(STATE_ENABLED));
 			holder.setValue(savedInstanceState.getInt(STATE_VALUE));

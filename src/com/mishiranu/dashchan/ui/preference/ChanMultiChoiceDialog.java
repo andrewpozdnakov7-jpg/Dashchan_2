@@ -62,7 +62,7 @@ public class ChanMultiChoiceDialog extends DialogFragment implements DialogInter
 		for (int i = 0; i < chans.size(); i++) {
 			checkedItems[i] = selectedSet.contains(chanNames[i]);
 		}
-		AlertDialog dialog = new MotionDialogBuilder(requireContext())
+		AlertDialog dialog = MotionDialogBuilder.standard(requireContext())
 				.setMultiChoiceItems(items, checkedItems, this)
 				.setNegativeButton(android.R.string.cancel, null)
 				.setPositiveButton(android.R.string.ok, (d, which) -> ((Callback) getParentFragment())

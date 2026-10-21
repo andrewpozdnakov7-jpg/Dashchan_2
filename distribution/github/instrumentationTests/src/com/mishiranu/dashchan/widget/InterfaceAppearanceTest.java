@@ -22,6 +22,40 @@ import org.junit.runner.RunWith;
 @RunWith(AndroidJUnit4.class)
 public class InterfaceAppearanceTest {
 	private Context context() { return PostingTestContext.create(); }
+	@Test public void repeatedCompatibilityApplyThenDisableRestoresOriginalState() {
+		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+			Button view = new Button(context()); view.setTextSize(19); view.setLineSpacing(5, 1.1f);
+			view.setPaddingRelative(3, 4, 5, 6); view.setMinimumHeight(23);
+			android.graphics.Typeface typeface = view.getTypeface(); float size = view.getTextSize();
+			android.text.method.TransformationMethod transformation = view.getTransformationMethod();
+			InterfaceAppearance.State state = new InterfaceAppearance.State(view); state.role = InterfaceAppearance.Role.ACTION;
+			int[] clicks = {0}; view.setOnClickListener(v -> clicks[0]++);
+			InterfaceAppearance.renderResolved(view, state, true);
+			int height = view.getMinimumHeight(), padding = view.getPaddingStart();
+			android.graphics.drawable.Drawable first = view.getBackground();
+			InterfaceAppearance.renderResolved(view, state, true);
+			assertSame(first, view.getBackground()); assertEquals(height, view.getMinimumHeight());
+			assertEquals(padding, view.getPaddingStart()); assertEquals(typeface, view.getTypeface());
+			assertEquals(5f, view.getLineSpacingExtra(), .01f); assertEquals(1.1f, view.getLineSpacingMultiplier(), .01f);
+			InterfaceAppearance.renderResolved(view, state, false); view.performClick();
+			assertEquals(size, view.getTextSize(), .01f); assertSame(transformation, view.getTransformationMethod());
+			assertEquals(23, view.getMinimumHeight()); assertEquals(3, view.getPaddingStart());
+			assertEquals(6, view.getPaddingBottom()); assertEquals(1, clicks[0]);
+		});
+	}
+	@Test public void resourceAttributeChangeWithSameThemeObjectInvalidatesResolvedPalette() {
+		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+			Context context = context(); Button view = new Button(context);
+			InterfaceAppearance.State state = new InterfaceAppearance.State(view); state.role = InterfaceAppearance.Role.ACTION;
+			ThemeEngine.Theme theme = ThemeEngine.getTheme(context);
+			context.getTheme().applyStyle(android.R.style.Theme_Material_Light, true);
+			InterfaceAppearance.renderResolved(view, state, true);
+			AppearanceColors before = state.appliedColors;
+			context.getTheme().applyStyle(android.R.style.Theme_Material, true);
+			InterfaceAppearance.renderResolved(view, state, true);
+			assertSame(theme, ThemeEngine.getTheme(context)); assertNotEquals(before, state.appliedColors);
+		});
+	}
 	@Test public void customThemeForegroundAlwaysMeetsRequestedContrast() {
 		int[] colors = {Color.WHITE, Color.BLACK, Color.YELLOW, Color.RED, Color.GREEN, Color.BLUE, 0xff777777, 0xff1c1c1c};
 		for (int background : colors) for (int requested : colors) {

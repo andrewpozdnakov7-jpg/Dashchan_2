@@ -19,8 +19,6 @@ import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.LayerDrawable;
 import android.graphics.drawable.RippleDrawable;
 import android.graphics.drawable.StateListDrawable;
-import android.text.method.TransformationMethod;
-import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
@@ -37,13 +35,15 @@ import androidx.core.view.OneShotPreDrawListener;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.util.InterfaceMotion;
 import com.mishiranu.dashchan.util.ResourceUtils;
-import java.util.WeakHashMap;
+import com.mishiranu.dashchan.util.OpaqueColors;
+import java.util.Objects;
 
 /** Explicit component roles. Does not replace widgets, listeners, data or the application's theme. */
 public final class InterfaceAppearance {
 	private InterfaceAppearance() {}
-	enum Role {ROW, HEADER, TEXT, SECONDARY, ACTION, TEXT_ACTION, FIELD, POSTING_FORM, POSTING_FIELD, CHECK, SWITCH, SLIDER, ICON, AUDIO_TITLE}
-	private static final WeakHashMap<Context, Palette> PALETTES = new WeakHashMap<>();
+	enum Role {ROW, HEADER, TEXT, SECONDARY, ACTION, TEXT_ACTION, FIELD, POSTING_FORM, POSTING_FIELD, CHECK, SWITCH, SLIDER, ICON, AUDIO_TITLE,
+		SETTING_TITLE, SETTING_SUMMARY, SECTION_TITLE, MENU_TITLE, POPUP_TEXT, SERVICE_TITLE, SERVICE_META, DIALOG_TITLE, DIALOG_BODY,
+		STANDARD_BUTTON, TOOLBAR_TITLE, TOOLBAR_SUBTITLE, SEARCH_TEXT, STATE_TITLE}
 	public static boolean isEnabled(Context context) {
 		return InterfaceMotion.isEnabled() && supported(context);
 	}
@@ -55,21 +55,14 @@ public final class InterfaceAppearance {
 		}
 		return true;
 	}
-	static int opaque(int color, int background) { return ColorUtils.compositeColors(color, background); }
+	static int opaque(int color, int background) { return OpaqueColors.over(color, background); }
 	static int contrasting(int requested, int background, double ratio) {
-		int foreground = opaque(requested, background);
-		if (ColorUtils.calculateContrast(foreground, background) >= ratio) return foreground;
-		int target = ColorUtils.calculateContrast(Color.BLACK, background) >= ColorUtils.calculateContrast(Color.WHITE, background) ? Color.BLACK : Color.WHITE;
-		for (int i = 1; i <= 20; i++) {
-			int candidate = ColorUtils.blendARGB(foreground, target, i / 20f);
-			if (ColorUtils.calculateContrast(candidate, background) >= ratio) return candidate;
-		}
-		return target;
+		return OpaqueColors.readable(requested, background, ratio, OpaqueColors.Policy.INTERFACE_COMPATIBILITY);
 	}
 	static int postingBackground(int window) {
 		// Leave room for a lighter field even in nearly white custom themes.
 		return ColorUtils.setAlphaComponent(ColorUtils.calculateLuminance(window) > .9
-				? ColorUtils.blendARGB(window, Color.BLACK, .04f) : window, 255);
+				? OpaqueColors.blend(window, Color.BLACK, .04f) : window, 255);
 	}
 	static int lighterPostingFill(int requested, int background) {
 		int fill = opaque(requested, background);
@@ -78,39 +71,38 @@ public final class InterfaceAppearance {
 		for (int i = 0; i <= 20; i++) {
 			// Float interpolation can truncate an opaque alpha to 254. Contrast requires
 			// an opaque background, and these are intentionally opaque field surfaces.
-			int candidate = ColorUtils.setAlphaComponent(ColorUtils.blendARGB(fill, Color.WHITE, i / 20f), 255);
+			int candidate = OpaqueColors.blend(fill, Color.WHITE, i / 20f);
 			if (ColorUtils.calculateLuminance(candidate) > backgroundLuminance
-					&& ColorUtils.calculateContrast(candidate, background) >= 1.08) return candidate;
+					&& OpaqueColors.contrast(candidate, background) >= 1.08) return candidate;
 		}
 		return Color.WHITE;
 	}
 	private static final class Palette {
-		final ThemeEngine.Theme theme; final int window, surface, text, secondary, accent, onAccent, outline, tonal, error;
+		final AppearanceColors colors; final int window, surface, text, secondary, accent, onAccent, outline, tonal, error;
 		Palette(Context context, ThemeEngine.Theme theme) {
-			this.theme = theme;
-			window = opaque(theme.window, theme.base == ThemeEngine.Theme.Base.LIGHT ? Color.WHITE : Color.BLACK);
-			surface = opaque(theme.card, window);
-			text = contrasting(ResourceUtils.getColor(context, android.R.attr.textColorPrimary), surface, 4.5);
-			secondary = contrasting(ColorUtils.blendARGB(surface, text, .72f), surface, 4.5);
-			accent = opaque(theme.accent, surface); onAccent = contrasting(text, accent, 4.5);
-			outline = contrasting(ColorUtils.blendARGB(surface, text, .5f), surface, 3);
-			tonal = ColorUtils.blendARGB(surface, accent, .10f);
-			error = contrasting(ResourceUtils.getColor(context, R.attr.colorTextError), surface, 3);
+			colors = AppearanceColors.interfaceCompatibility(theme.base == ThemeEngine.Theme.Base.DARK,
+					theme.window, theme.card, theme.accent, ResourceUtils.getColor(context, android.R.attr.textColorPrimary),
+					ResourceUtils.getColor(context, R.attr.colorTextError));
+			window = colors.window; surface = colors.surface; text = colors.onSurface;
+			secondary = colors.onSurfaceVariant; accent = colors.primary; onAccent = colors.onPrimary;
+			outline = colors.outline; tonal = colors.primaryContainer;
+			error = colors.errorIcon; // Legacy stroke recipe; text is contrasted against its actual field fill.
 		}
 	}
 	private static Palette palette(View view) {
-		Context context = view.getContext(); ThemeEngine.Theme theme = ThemeEngine.getTheme(context);
-		Palette palette = PALETTES.get(context);
-		if (palette == null || palette.theme != theme) { palette = new Palette(context, theme); PALETTES.put(context, palette); }
-		return palette;
+		Context context = view.getContext();
+		return new Palette(context, ThemeEngine.getTheme(context));
 	}
 	private static int dp(View view, float amount) { return Math.round(ResourceUtils.obtainDensity(view) * amount); }
 	private static ColorStateList enabled(int color, int surface) {
-		return new ColorStateList(new int[][] {{-android.R.attr.state_enabled}, {}}, new int[] {ColorUtils.blendARGB(surface, color, .38f), color});
+		// Transparent text-action containers remain transparent/translucent by design.
+		int disabled = Color.alpha(color) == 255 ? OpaqueColors.blend(surface, color, .38f)
+				: ColorUtils.blendARGB(surface, color, .38f);
+		return new ColorStateList(new int[][] {{-android.R.attr.state_enabled}, {}}, new int[] {disabled, color});
 	}
 	private static ColorStateList fieldStates(int normal, int focused, int window) {
 		return new ColorStateList(new int[][] {{-android.R.attr.state_enabled}, {android.R.attr.state_focused}, {}},
-				new int[] {ColorUtils.blendARGB(window, normal, .38f), focused, normal});
+				new int[] {OpaqueColors.blend(window, normal, .38f), focused, normal});
 	}
 	private static void setBottomMargin(View view, int margin) {
 		if (view.getLayoutParams() instanceof ViewGroup.MarginLayoutParams) {
@@ -149,12 +141,53 @@ public final class InterfaceAppearance {
 	public static void icon(ImageView view) { role(view, Role.ICON); }
 	public static void secondary(TextView view) { role(view, Role.SECONDARY); }
 	public static void audioTitle(TextView view) { role(view, Role.AUDIO_TITLE); }
+	public static void settingsRow(View view, TextView title, TextView summary, View widgets, boolean header) {
+		StandardAppearance.prepare(view, title, summary, null, widgets);
+		row(view, title, summary, header);
+		role(title, header ? Role.SECTION_TITLE : Role.SETTING_TITLE); role(summary, Role.SETTING_SUMMARY);
+		StandardAppearance.settings(view, title, summary, widgets, header);
+	}
+	public static void serviceRow(View view, TextView title, TextView metadata, TextView end) {
+		StandardAppearance.prepare(view, title, metadata, end, null);
+		row(view, title, metadata, false); role(title, Role.SERVICE_TITLE);
+		role(metadata, Role.SERVICE_META); role(end, Role.SERVICE_META);
+		StandardAppearance.service(view, title, metadata, end);
+	}
+	public static void menuRow(View view, TextView title) {
+		StandardAppearance.prepare(view, title, null, null, null);
+		row(view, title, null, false); role(title, Role.MENU_TITLE); StandardAppearance.menu(view, title);
+	}
+	public static void serviceState(View view, TextView message) {
+		role(message, Role.STATE_TITLE); StandardAppearance.state(view, message);
+	}
+	public static void standardPage(View view) { StandardAppearance.page(view); }
+	/** Main chrome only; null means retain legacy/F-Droid status-bar ownership. */
+	public static Integer standardStatusBarSurface(Context context) {
+		return isEnabled(context) ? StandardAppearance.colors(context).surface : null;
+	}
+	public static void standardLoading(android.widget.ProgressBar view) { StandardAppearance.loading(view); }
+	public static void standardToolbar(android.widget.Toolbar toolbar, TextView title, TextView subtitle) {
+		StandardAppearance.toolbar(toolbar, title, subtitle);
+	}
+	public static void standardSearch(View root, android.widget.SearchView search) { StandardAppearance.search(root, search); }
+	public static Context standardDialogContext(Context context) { return StandardAppearance.dialogContext(context); }
+	public static void configureStandardDialog(AlertDialog dialog) { StandardAppearance.dialog(dialog); }
+	public static void prepareStandardMenuDialog(AlertDialog dialog, View menu) { StandardAppearance.dialogMenu(dialog, menu); }
+	public static void standardDialogTitle(TextView title) { role(title, Role.DIALOG_TITLE); }
+	public static void standardFieldLabel(TextView label) { role(label, Role.SECTION_TITLE); }
+	public static void updateStandardDialogTitle(AlertDialog dialog, CharSequence title) {
+		TextView view = dialog.findViewById(R.id.standard_dialog_title);
+		if (view != null) { view.setText(title); view.setVisibility(title == null || title.length() == 0 ? View.GONE : View.VISIBLE); }
+	}
+	public static void popupView(View view) { StandardAppearance.popupView(view); }
+	public static boolean standardPopup(View decor, View background) { return StandardAppearance.popup(decor, background); }
 	public static void fieldError(EditText view, boolean error) {
 		if (PostingFormAppearance.fieldError(view, error)) return;
 		Object tag = view.getTag(R.id.interface_appearance_state);
 		if (tag instanceof State && (((State) tag).role == Role.FIELD || ((State) tag).role == Role.POSTING_FIELD)) {
 			State state = (State) tag; state.rendered = false; state.error = error; state.legacyError = error ? view.getBackground() : null;
 			if (isEnabled(view.getContext())) render(view, state);
+			StandardAppearance.refresh(view);
 		}
 	}
 	public static void refreshTree(View view) {
@@ -166,6 +199,8 @@ public final class InterfaceAppearance {
 			ViewGroup group = (ViewGroup) view;
 			for (int i = 0; i < group.getChildCount(); i++) refreshTree(group.getChildAt(i));
 		}
+		// Parent-owned layout must run after child typography restore, not be undone by it.
+		StandardAppearance.refresh(view);
 	}
 	public static void configureDialog(AlertDialog dialog) {
 		if (!supported(dialog.getContext())) return;
@@ -195,17 +230,38 @@ public final class InterfaceAppearance {
 		}
 	}
 	private static void render(View view, State state) {
-		boolean enabled = isEnabled(view.getContext());
+		renderResolved(view, state, isEnabled(view.getContext()));
+	}
+	static void renderResolved(View view, State state, boolean enabled) {
 		Palette p = enabled ? palette(view) : null;
+		AppearanceTypography.Configuration typography = enabled ? new AppearanceTypography.Configuration(view.getContext()) : null;
 		if (state.rendered && state.applied == enabled && state.appliedRole == state.role
-				&& state.appliedTheme == (p != null ? p.theme : null) && state.appliedError == state.error) return;
+				&& Objects.equals(state.appliedColors, p != null ? p.colors : null)
+				&& Objects.equals(state.appliedTypography, typography) && state.appliedError == state.error) return;
 		state.restore(view); state.rendered = true; state.applied = enabled; state.appliedRole = state.role;
-		state.appliedTheme = p != null ? p.theme : null; state.appliedError = state.error;
+		state.appliedColors = p != null ? p.colors : null; state.appliedTypography = typography; state.appliedError = state.error;
 		if (!enabled) return;
+		AppearanceTypography.Role typographyRole = standardTypography(state.role);
+		if (typographyRole != null) {
+			TextView text = (TextView) view;
+			AppearanceTypography.apply(text, typographyRole);
+			AppearanceColors standard = StandardAppearance.colors(view.getContext());
+			boolean secondary = state.role == Role.SETTING_SUMMARY || state.role == Role.SERVICE_META || state.role == Role.TOOLBAR_SUBTITLE;
+			text.setTextColor(enabled(secondary ? standard.onSurfaceVariant : standard.onSurface, standard.surface));
+			if (state.role == Role.SETTING_TITLE || state.role == Role.SETTING_SUMMARY || state.role == Role.MENU_TITLE
+					|| state.role == Role.SERVICE_TITLE || state.role == Role.SERVICE_META || state.role == Role.DIALOG_BODY
+					|| state.role == Role.DIALOG_TITLE || state.role == Role.STATE_TITLE) {
+				text.setSingleLine(false); text.setMaxLines(Integer.MAX_VALUE);
+			}
+			return;
+		}
 		switch (state.role) {
 			case TEXT: case SECONDARY: case AUDIO_TITLE: {
 				TextView text = (TextView) view; text.setTextColor(enabled(state.role == Role.SECONDARY ? p.secondary : p.text, p.surface));
-				if (state.role == Role.AUDIO_TITLE) { text.setSingleLine(false); text.setMaxLines(2); text.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18); }
+				if (state.role == Role.AUDIO_TITLE) {
+					text.setSingleLine(false); text.setMaxLines(2);
+					AppearanceTypography.apply(text, AppearanceTypography.Role.COMPAT_AUDIO_TITLE);
+				}
 				break;
 			}
 			case HEADER: {
@@ -217,24 +273,27 @@ public final class InterfaceAppearance {
 				// Keep the original row height; appearance must not enlarge menus or preferences.
 				ColorStateList fill = new ColorStateList(new int[][] {{android.R.attr.state_selected}, {android.R.attr.state_activated}, {}},
 						new int[] {p.tonal, p.tonal, Color.TRANSPARENT});
-				view.setBackgroundTintList(null); view.setBackground(ripple(view, shape(view, 12, fill), 12, p.text)); break;
+				view.setBackgroundTintList(null); view.setBackground(ripple(view, shape(view, AppearanceShapes.MEDIUM, fill), AppearanceShapes.MEDIUM, p.text)); break;
 			}
 			case ACTION: case TEXT_ACTION: case ICON: {
 				boolean filled = state.role != Role.TEXT_ACTION;
-				view.setBackgroundTintList(null); view.setBackground(ripple(view, shape(view, 28, enabled(filled ? p.accent : Color.TRANSPARENT, p.surface)), 28, filled ? p.onAccent : p.text));
+				view.setBackgroundTintList(null); view.setBackground(ripple(view, shape(view, AppearanceShapes.EXTRA_LARGE,
+						enabled(filled ? p.accent : Color.TRANSPARENT, p.surface)), AppearanceShapes.EXTRA_LARGE, filled ? p.onAccent : p.text));
 				view.setElevation(0); view.setStateListAnimator(null);
 				if (view instanceof Button) {
 					Button button = (Button) view; button.setAllCaps(false); button.setTextColor(enabled(filled ? p.onAccent : contrasting(p.accent, p.surface, 4.5), filled ? p.accent : p.surface));
-					button.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14); button.setMinimumHeight(dp(view, 48));
-					button.setPaddingRelative(dp(view, 16), dp(view, 8), dp(view, 16), dp(view, 8));
+					AppearanceTypography.apply(button, AppearanceTypography.Role.COMPAT_ACTION);
+					button.setMinimumHeight(dp(view, AppearanceShapes.ACTION_MIN_HEIGHT));
+					button.setPaddingRelative(dp(view, AppearanceShapes.SPACE_16), dp(view, AppearanceShapes.SPACE_8),
+							dp(view, AppearanceShapes.SPACE_16), dp(view, AppearanceShapes.SPACE_8));
 				} else ((ImageView) view).setImageTintList(enabled(p.onAccent, p.accent));
 				break;
 			}
 			case FIELD: {
 				EditText edit = (EditText) view; edit.setBackgroundTintList(null);
 				StateListDrawable background = new StateListDrawable();
-				GradientDrawable focus = shape(view, 12, ColorStateList.valueOf(p.surface)); focus.setStroke(dp(view, 2), state.error ? p.error : contrasting(p.accent, p.surface, 3));
-				GradientDrawable normal = shape(view, 12, enabled(p.tonal, p.surface)); normal.setStroke(dp(view, 1), state.error ? p.error : contrasting(p.outline, p.tonal, 3));
+				GradientDrawable focus = shape(view, AppearanceShapes.MEDIUM, ColorStateList.valueOf(p.surface)); focus.setStroke(dp(view, AppearanceShapes.FIELD_FOCUS_STROKE), state.error ? p.error : contrasting(p.accent, p.surface, 3));
+				GradientDrawable normal = shape(view, AppearanceShapes.MEDIUM, enabled(p.tonal, p.surface)); normal.setStroke(dp(view, AppearanceShapes.FIELD_STROKE), state.error ? p.error : contrasting(p.outline, p.tonal, 3));
 				background.addState(new int[] {android.R.attr.state_enabled, android.R.attr.state_focused}, focus); background.addState(new int[0], normal);
 				edit.setBackground(background); edit.setMinimumHeight(Math.max(state.minimumHeight, dp(view, 48)));
 				edit.setPaddingRelative(dp(view, 12), dp(view, 10), dp(view, 12), dp(view, 10));
@@ -270,7 +329,7 @@ public final class InterfaceAppearance {
 			case SWITCH: {
 				Switch control = (Switch) view; control.setTrackTintList(null); control.setThumbTintList(null);
 				GradientDrawable track = shape(view, 16, new ColorStateList(new int[][] {{-android.R.attr.state_enabled}, {android.R.attr.state_checked}, {}},
-						new int[] {ColorUtils.blendARGB(p.surface, p.text, .12f), p.accent, p.tonal}));
+						new int[] {OpaqueColors.blend(p.surface, p.text, .12f), p.accent, p.tonal}));
 				track.setSize(dp(view, 52), dp(view, 32)); track.setStroke(dp(view, 1), p.outline);
 				GradientDrawable thumb = shape(view, 12, new ColorStateList(new int[][] {{-android.R.attr.state_enabled}, {android.R.attr.state_checked}, {}},
 						new int[] {p.secondary, p.onAccent, p.outline})); thumb.setSize(dp(view, 24), dp(view, 24));
@@ -278,7 +337,7 @@ public final class InterfaceAppearance {
 			}
 			case SLIDER: {
 				SeekBar seek = (SeekBar) view;
-				GradientDrawable track = shape(view, 4, enabled(ColorUtils.blendARGB(p.surface, p.text, .16f), p.surface)); track.setSize(dp(view, 1), dp(view, 6));
+				GradientDrawable track = shape(view, 4, enabled(OpaqueColors.blend(p.surface, p.text, .16f), p.surface)); track.setSize(dp(view, 1), dp(view, 6));
 				GradientDrawable progress = shape(view, 4, enabled(p.accent, p.surface)); progress.setSize(dp(view, 1), dp(view, 6));
 				LayerDrawable layers = new LayerDrawable(new Drawable[] {track, new ClipDrawable(progress, Gravity.LEFT, ClipDrawable.HORIZONTAL)});
 				layers.setId(0, android.R.id.background); layers.setId(1, android.R.id.progress);
@@ -290,12 +349,27 @@ public final class InterfaceAppearance {
 		}
 		TouchFeedback.apply(view);
 	}
+	private static AppearanceTypography.Role standardTypography(Role role) {
+		if (role == null) return null;
+		switch (role) {
+			case SETTING_TITLE: case SEARCH_TEXT: return AppearanceTypography.Role.BODY_LARGE;
+			case SETTING_SUMMARY: case MENU_TITLE: case POPUP_TEXT: case SERVICE_TITLE: case DIALOG_BODY: return AppearanceTypography.Role.BODY_MEDIUM;
+			case SECTION_TITLE: case STANDARD_BUTTON: return AppearanceTypography.Role.LABEL_LARGE;
+			case SERVICE_META: case TOOLBAR_SUBTITLE: return AppearanceTypography.Role.BODY_SMALL;
+			case DIALOG_TITLE: return AppearanceTypography.Role.TITLE_LARGE;
+			case TOOLBAR_TITLE: return AppearanceTypography.Role.COMPACT_TOOLBAR;
+			case STATE_TITLE: return AppearanceTypography.Role.TITLE_MEDIUM;
+			default: return null;
+		}
+	}
+	static void standardRole(View view, Role role) { role(view, role); }
 	static final class State {
-		Role role, appliedRole; boolean error, rendered, applied, appliedError; Drawable legacyError; ThemeEngine.Theme appliedTheme;
+		Role role, appliedRole; boolean error, rendered, applied, appliedError; Drawable legacyError;
+		AppearanceColors appliedColors; AppearanceTypography.Configuration appliedTypography;
 		final Drawable background; final ColorStateList backgroundTint; final StateListAnimator animator; final float elevation;
 		final int start, top, end, bottom, minimumHeight, bottomMargin;
 		final ColorStateList text, hint, imageTint, buttonTint, trackTint, thumbTint, progressTint, progressBackgroundTint;
-		final TransformationMethod transformation; final float textSize; final int maxLines;
+		final AppearanceTypography.Snapshot typography; final int minLines, maxLines;
 		final Drawable mark, track, thumb, progress; final int switchWidth, thumbOffset, minTrackHeight, maxTrackHeight; final boolean splitTrack;
 		State(View view) {
 			background = view.getBackground(); backgroundTint = view.getBackgroundTintList(); animator = view.getStateListAnimator(); elevation = view.getElevation();
@@ -303,7 +377,8 @@ public final class InterfaceAppearance {
 			bottomMargin = view.getLayoutParams() instanceof ViewGroup.MarginLayoutParams
 					? ((ViewGroup.MarginLayoutParams) view.getLayoutParams()).bottomMargin : 0;
 			TextView t = view instanceof TextView ? (TextView) view : null; text = t != null ? t.getTextColors() : null; hint = t != null ? t.getHintTextColors() : null;
-			textSize = t != null ? t.getTextSize() : 0; transformation = t != null ? t.getTransformationMethod() : null; maxLines = t != null ? t.getMaxLines() : -1;
+			typography = t != null ? new AppearanceTypography.Snapshot(t) : null;
+			minLines = t != null ? t.getMinLines() : -1; maxLines = t != null ? t.getMaxLines() : -1;
 			imageTint = view instanceof ImageView ? ((ImageView) view).getImageTintList() : null;
 			CompoundButton c = view instanceof CompoundButton ? (CompoundButton) view : null; mark = c != null ? c.getButtonDrawable() : null; buttonTint = c != null ? c.getButtonTintList() : null;
 			Switch s = view instanceof Switch ? (Switch) view : null; SeekBar b = view instanceof SeekBar ? (SeekBar) view : null;
@@ -320,13 +395,27 @@ public final class InterfaceAppearance {
 			if (role == Role.POSTING_FIELD || appliedRole == Role.POSTING_FIELD) setBottomMargin(view, bottomMargin);
 			if (view instanceof TextView) {
 				TextView t = (TextView) view; t.setTextColor(text); if (hint != null) t.setHintTextColor(hint);
-				if (role == Role.ACTION || role == Role.TEXT_ACTION || role == Role.AUDIO_TITLE) {
-					if (role == Role.AUDIO_TITLE) t.setSingleLine(true);
-					t.setTransformationMethod(transformation); t.setTextSize(TypedValue.COMPLEX_UNIT_PX, textSize);
-					if (role == Role.AUDIO_TITLE && maxLines >= 0) t.setMaxLines(maxLines);
+				if (standardTypography(role) != null || standardTypography(appliedRole) != null) {
+					if (role == Role.SEARCH_TEXT || appliedRole == Role.SEARCH_TEXT) typography.restoreTextMetrics(t);
+					else {
+						typography.restore(t); t.setSingleLine(maxLines == 1);
+						if (minLines >= 0) t.setMinLines(minLines); if (maxLines >= 0) t.setMaxLines(maxLines);
+					}
+				}
+				if (role == Role.ACTION || role == Role.TEXT_ACTION || role == Role.AUDIO_TITLE
+						|| appliedRole == Role.ACTION || appliedRole == Role.TEXT_ACTION || appliedRole == Role.AUDIO_TITLE) {
+					if (role == Role.AUDIO_TITLE || appliedRole == Role.AUDIO_TITLE) {
+						t.setSingleLine(maxLines == 1);
+						if (minLines >= 0) t.setMinLines(minLines);
+						if (maxLines >= 0) t.setMaxLines(maxLines);
+					}
+					typography.restoreSizeAndTransformation(t);
 				}
 			}
-			if (role == Role.ACTION || role == Role.TEXT_ACTION || role == Role.ICON) { view.setStateListAnimator(animator); view.setElevation(elevation); }
+			if (role == Role.ACTION || role == Role.TEXT_ACTION || role == Role.ICON
+					|| appliedRole == Role.ACTION || appliedRole == Role.TEXT_ACTION || appliedRole == Role.ICON) {
+				view.setStateListAnimator(animator); view.setElevation(elevation);
+			}
 			if (view instanceof ImageView) ((ImageView) view).setImageTintList(imageTint);
 			if (view instanceof CompoundButton) { CompoundButton c = (CompoundButton) view; c.setButtonDrawable(mark); c.setButtonTintList(buttonTint); }
 			if (view instanceof Switch) {
@@ -350,7 +439,7 @@ public final class InterfaceAppearance {
 		@Override public void draw(Canvas canvas) {
 			boolean checked = false, enabled = false; for (int state : getState()) { if (state == android.R.attr.state_checked) checked = true; if (state == android.R.attr.state_enabled) enabled = true; }
 			Rect b = getBounds(); int save = canvas.save(); canvas.translate(b.left, b.top); canvas.scale(b.width() / 24f, b.height() / 24f);
-			int color = checked ? palette.accent : palette.outline; if (!enabled) color = ColorUtils.blendARGB(palette.surface, color, .38f);
+			int color = checked ? palette.accent : palette.outline; if (!enabled) color = OpaqueColors.blend(palette.surface, color, .38f);
 			paint.setColor(color); paint.setAlpha(alpha); paint.setStyle(checked ? Paint.Style.FILL : Paint.Style.STROKE); paint.setStrokeWidth(2);
 			canvas.drawRoundRect(3, 3, 21, 21, 4, 4, paint);
 			if (checked) { paint.setColor(palette.onAccent); paint.setAlpha(alpha); paint.setStyle(Paint.Style.STROKE); paint.setStrokeWidth(2); paint.setStrokeCap(Paint.Cap.ROUND); paint.setStrokeJoin(Paint.Join.ROUND);

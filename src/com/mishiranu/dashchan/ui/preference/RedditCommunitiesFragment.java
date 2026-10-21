@@ -121,7 +121,7 @@ public class RedditCommunitiesFragment extends BaseListFragment {
 		text.setHint(R.string.reddit_category_name);
 		if (category != null) text.setText(category.title);
 		form.addView(text);
-		AlertDialog edit = new MotionDialogBuilder(requireContext()).setTitle(category == null
+		AlertDialog edit = MotionDialogBuilder.standard(requireContext()).setTitle(category == null
 				? R.string.reddit_add_category : R.string.reddit_rename_category).setView(form)
 				.setNegativeButton(android.R.string.cancel, null).setPositiveButton(android.R.string.ok, null).create();
 		show(edit);
@@ -159,7 +159,7 @@ public class RedditCommunitiesFragment extends BaseListFragment {
 		spinner.setContentDescription(getString(R.string.reddit_category_name));
 		spinner.setSelection(source != null ? categories.indexOf(source) : 0);
 		form.addView(spinner);
-		AlertDialog edit = new MotionDialogBuilder(requireContext()).setTitle(original == null
+		AlertDialog edit = MotionDialogBuilder.standard(requireContext()).setTitle(original == null
 				? R.string.reddit_add_community : R.string.reddit_edit_community).setView(form)
 				.setNegativeButton(android.R.string.cancel, null).setPositiveButton(android.R.string.ok, null).create();
 		show(edit);
@@ -182,12 +182,12 @@ public class RedditCommunitiesFragment extends BaseListFragment {
 	}
 
 	private void communityActions(Category category, String name) {
-		show(new MotionDialogBuilder(requireContext()).setTitle("r/" + name).setItems(new String[] {
+		show(MotionDialogBuilder.standard(requireContext()).setTitle("r/" + name).setItems(new String[] {
 				getString(R.string.reddit_edit_community), getString(R.string.reddit_move_up),
 				getString(R.string.reddit_move_down), getString(R.string.reddit_remove_community)}, (d, which) -> {
 			if (which == 0) editCommunity(category, name);
 			else if (which == 3) {
-				show(new MotionDialogBuilder(requireContext()).setMessage(R.string.reddit_remove_community_confirm)
+				show(MotionDialogBuilder.standard(requireContext()).setMessage(R.string.reddit_remove_community_confirm)
 						.setNegativeButton(android.R.string.cancel, null).setPositiveButton(android.R.string.ok,
 						(d2, w) -> { category.communities.remove(name); changed(); }).create());
 			} else {
@@ -201,12 +201,12 @@ public class RedditCommunitiesFragment extends BaseListFragment {
 
 	private void categoryActions(Category category) {
 		if (RedditCommunities.UNGROUPED.equals(category.id)) { editCommunity(category, null); return; }
-		show(new MotionDialogBuilder(requireContext()).setTitle(title(category)).setItems(new String[] {
+		show(MotionDialogBuilder.standard(requireContext()).setTitle(title(category)).setItems(new String[] {
 				getString(R.string.reddit_rename_category), getString(R.string.reddit_move_up),
 				getString(R.string.reddit_move_down), getString(R.string.reddit_remove_category)}, (d, which) -> {
 			if (which == 0) editCategory(category);
 			else if (which == 3) {
-				show(new MotionDialogBuilder(requireContext()).setMessage(R.string.reddit_remove_category_confirm)
+				show(MotionDialogBuilder.standard(requireContext()).setMessage(R.string.reddit_remove_category_confirm)
 						.setNegativeButton(android.R.string.cancel, null).setPositiveButton(android.R.string.ok, (d2, w) -> {
 							categories.get(0).communities.addAll(category.communities);
 							categories.remove(category); changed();

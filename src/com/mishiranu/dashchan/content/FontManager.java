@@ -101,6 +101,13 @@ public final class FontManager {
 		}
 	}
 
+	/** Explicit appearance roles share the existing selected-font cache and medium fallback. */
+	public static Typeface resolveTypeface(Context context, boolean medium) {
+		Typeface selected = getSelectedTypeface(context);
+		return selected != null ? Typeface.create(selected, medium ? 500 : 400, false)
+				: medium ? ResourceUtils.TYPEFACE_MEDIUM : Typeface.DEFAULT;
+	}
+
 	public static List<FontOption> getKnownCatalogFonts() {
 		return KNOWN_CATALOG_FONTS;
 	}

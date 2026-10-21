@@ -101,6 +101,7 @@ public class MultipleEditPreference<T> extends DialogPreference<T> {
 				viewHolder = new EditTextViewHolder(builder.getContext(), hint, inputType, value);
 			}
 			viewHolders.add(viewHolder);
+			addFieldLabel(pair.second, hints != null && hints.size() > i ? hints.get(i) : null, viewHolder.getView());
 			pair.second.addView(viewHolder.getView());
 			if (viewHolder.getView() instanceof android.widget.EditText) {
 				InterfaceAppearance.field((android.widget.EditText) viewHolder.getView());

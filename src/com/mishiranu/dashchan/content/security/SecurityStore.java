@@ -380,8 +380,17 @@ public final class SecurityStore {
 			s.remove(RememberedAuthentication.KEY); return null;
 		});
 	}
-	/** Immediately close access, but retain a separately bounded recent-auth grant. */
-	static void suspend(Context context) { SecuritySessionProvider.suspend(context); }
+	/** Screen-off closes RAM access and starts one bounded absence, even before onStop. */
+	static void suspend(Context context) {
+		try { rememberBackground(context, SecuritySessionProvider.suspend(context)); }
+		catch (IOException ignored) { /* Failed writes revoke the receipt and remain locked. */ }
+	}
+	private static void rememberBackground(Context context, SecuritySessionProvider.BackgroundGrant grant) throws IOException {
+		if (grant == null) return; // Duplicate inactive callbacks must not slide the deadline.
+		authorizedUpdate(context, () -> SecuritySessionProvider.canRememberBackground(context, grant), s -> {
+			RememberedAuthentication.startBackgroundInterval(context, s, grant.at); return null;
+		});
+	}
 
 	public static void processStarted(Context context, boolean main) throws IOException {
 		// A process restart closes RAM access, but is NOT a manual lock or a reboot.
@@ -390,10 +399,13 @@ public final class SecurityStore {
 	}
 
 	public static void foreground(Context context, boolean active) throws IOException {
-		SecuritySessionProvider.foreground(context, active);
 		if (active) {
 			android.os.PowerManager power = context.getSystemService(android.os.PowerManager.class);
 			if (power == null || !power.isInteractive()) return;
+		}
+		SecuritySessionProvider.BackgroundGrant background = SecuritySessionProvider.foreground(context, active);
+		if (!active) rememberBackground(context, background);
+		if (active) {
 			long lease = SecuritySessionProvider.generation(context);
 			if (SecuritySessionProvider.isUnlocked(context)) return; // No surprise timeout while actively reading.
 			RememberedAuthentication receipt = authorizedUpdate(context,

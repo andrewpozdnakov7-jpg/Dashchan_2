@@ -52,4 +52,30 @@ public class ReauthenticationPolicyTest {
 			assertFalse(ReauthenticationPolicy.canRestore(at, minutes, 3, 3, Long.MAX_VALUE));
 		}
 	}
+	@Test public void tenMinutesOfActiveReadingDoNotConsumeTheNextThreeMinuteAbsence() {
+		long proof = 1_000, background = proof + 10 * 60_000L;
+		assertFalse(ReauthenticationPolicy.canRestore(proof, 3, 5, 5, background));
+		// Renewal additionally requires a verified MAC and the provider's background grant.
+		assertTrue(ReauthenticationPolicy.canStartBackgroundInterval(proof, 3, 5, 5, background));
+		assertTrue(ReauthenticationPolicy.canRestore(background, 3, 5, 5, background + 150_000));
+		assertFalse(ReauthenticationPolicy.canRestore(background, 3, 5, 5, background + 180_000));
+	}
+	@Test public void returningAfterTwoAndAHalfMinutesAllowsANewFullIntervalOnNextDeparture() {
+		long firstDeparture = 1_000, firstReturn = firstDeparture + 150_000;
+		assertTrue(ReauthenticationPolicy.canRestore(firstDeparture, 3, 7, 7, firstReturn));
+		long nextDeparture = firstReturn + 600_000;
+		assertTrue(ReauthenticationPolicy.canStartBackgroundInterval(firstDeparture, 3, 7, 7, nextDeparture));
+		assertTrue(ReauthenticationPolicy.canRestore(nextDeparture, 3, 7, 7, nextDeparture + 179_999));
+		assertFalse(ReauthenticationPolicy.canRestore(nextDeparture, 3, 7, 7, nextDeparture + 180_000));
+		// Merely opening/querying while STILL in the background cannot use this renewal rule.
+		assertFalse(ReauthenticationPolicy.canRestore(firstDeparture, 3, 7, 7, nextDeparture));
+	}
+	@Test public void backgroundRenewalNeverAcceptsImmediateUnknownBootOrClockRollback() {
+		assertFalse(ReauthenticationPolicy.canStartBackgroundInterval(100, 0, 2, 2, 200));
+		assertFalse(ReauthenticationPolicy.canStartBackgroundInterval(100, 4, 2, 2, 200));
+		assertFalse(ReauthenticationPolicy.canStartBackgroundInterval(100, 3, 2, 3, 200));
+		assertFalse(ReauthenticationPolicy.canStartBackgroundInterval(100, 3, -1, -1, 200));
+		assertFalse(ReauthenticationPolicy.canStartBackgroundInterval(100, 3, 2, 2, 99));
+		assertFalse(ReauthenticationPolicy.canStartBackgroundInterval(-1, 3, 2, 2, 200));
+	}
 }

@@ -56,7 +56,7 @@ public class OfflineTranslationFragment extends PreferenceFragment implements Tr
 			});
 		}
 		addButton(R.string.clear_translation_cache, R.string.clear_translation_cache_summary).setOnClickListener(p ->
-				new MotionDialogBuilder(requireContext()).setTitle(R.string.clear_translation_cache)
+				MotionDialogBuilder.standard(requireContext()).setTitle(R.string.clear_translation_cache)
 						.setMessage(R.string.clear_translation_cache_summary)
 						.setNegativeButton(android.R.string.cancel, null)
 						.setPositiveButton(android.R.string.ok, (dialog, which) ->

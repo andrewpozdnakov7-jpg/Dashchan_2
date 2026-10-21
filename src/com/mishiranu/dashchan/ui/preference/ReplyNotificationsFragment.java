@@ -236,7 +236,7 @@ public class ReplyNotificationsFragment extends PreferenceFragment {
 	}
 
 	private void showDisableTrackingDialog(Preference<Boolean> preference) {
-		new MotionDialogBuilder(requireContext())
+		MotionDialogBuilder.standard(requireContext())
 				.setTitle(R.string.disable_reply_tracking__title)
 				.setMessage(R.string.disable_reply_tracking__message)
 				.setPositiveButton(R.string.disable_reply_tracking_keep, (dialog, which) ->
@@ -278,7 +278,7 @@ public class ReplyNotificationsFragment extends PreferenceFragment {
 			if (!value) {
 				return true;
 			}
-			new MotionDialogBuilder(requireContext())
+			MotionDialogBuilder.standard(requireContext())
 					.setTitle(R.string.reply_push)
 					.setMessage(R.string.reply_push_consent__message)
 					.setPositiveButton(R.string.enable, (dialog, which) -> {
@@ -372,7 +372,7 @@ public class ReplyNotificationsFragment extends PreferenceFragment {
 			if (ReplyPushContract.IDENTITY_RESET_COOLDOWN_MILLIS > 0L) {
 				message += "\n\n" + getString(R.string.reply_push_reset_identity__cooldown);
 			}
-			new MotionDialogBuilder(requireContext())
+			MotionDialogBuilder.standard(requireContext())
 					.setTitle(R.string.reply_push_reset_identity)
 					.setMessage(message)
 					.setPositiveButton(R.string.reply_push_reset_identity, (dialog, which) -> {

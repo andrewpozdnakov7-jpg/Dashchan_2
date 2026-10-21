@@ -31,7 +31,7 @@ public class UserBoardsAdapter extends CursorAdapter<ChanDatabase.BoardCursor, R
 	@NonNull
 	@Override
 	public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-		return ListViewUtils.bind(new SimpleViewHolder(ViewFactory.makeTwoLinesListItem(parent, 0).view),
+		return ListViewUtils.bind(new SimpleViewHolder(ViewFactory.makeTwoLinesListItem(parent, 0, true).view),
 				true, this::copyItem, callback);
 	}
 
@@ -46,5 +46,6 @@ public class UserBoardsAdapter extends CursorAdapter<ChanDatabase.BoardCursor, R
 		} else {
 			viewHolder.text2.setVisibility(View.GONE);
 		}
+		com.mishiranu.dashchan.widget.InterfaceAppearance.serviceRow(viewHolder.view, viewHolder.text1, viewHolder.text2, null);
 	}
 }

@@ -139,7 +139,7 @@ public class CategoriesFragment extends PreferenceFragment {
 			item.setOnLongClickListener(preference -> {
 				SettingsSearchHistory history = searchHistory;
 				if (history == null) return;
-				new MotionDialogBuilder(requireContext()).setTitle(query)
+				MotionDialogBuilder.standard(requireContext(), true).setTitle(query)
 						.setMessage(R.string.settings_search_history_delete_confirm)
 						.setNegativeButton(android.R.string.cancel, null)
 						.setPositiveButton(android.R.string.ok, (dialog, which) -> {
@@ -151,7 +151,7 @@ public class CategoriesFragment extends PreferenceFragment {
 		addButton(R.string.settings_search_clear_history, 0).setOnClickListener(preference -> {
 			SettingsSearchHistory history = searchHistory;
 			if (history == null) return;
-			new MotionDialogBuilder(requireContext()).setTitle(R.string.settings_search_clear_history)
+			MotionDialogBuilder.standard(requireContext(), true).setTitle(R.string.settings_search_clear_history)
 					.setMessage(R.string.settings_search_history_clear_confirm)
 					.setNegativeButton(android.R.string.cancel, null)
 					.setPositiveButton(android.R.string.ok, (dialog, which) -> {

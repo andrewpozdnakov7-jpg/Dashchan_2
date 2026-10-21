@@ -74,7 +74,7 @@ public class OutboxFragment extends PreferenceFragment {
 	}
 
 	private void showEntry(OutboxStorage.Entry entry, String title) {
-		AlertDialog.Builder builder = new MotionDialogBuilder(requireContext()).setTitle(title)
+		AlertDialog.Builder builder = MotionDialogBuilder.standard(requireContext()).setTitle(title)
 				.setMessage(getString(stateTitle(entry.state)) + "\n\n" + getString(
 						entry.state == OutboxState.UNKNOWN_RESULT ? R.string.outbox_unknown_summary : R.string.outbox_summary))
 				.setNegativeButton(android.R.string.cancel, null);
@@ -86,7 +86,7 @@ public class OutboxFragment extends PreferenceFragment {
 			builder.setPositiveButton(R.string.outbox_open_thread, (d, which) -> startActivity(destination(entry, false)));
 		}
 		if (!entry.state.isActive()) builder.setNeutralButton(R.string.outbox_delete, (d, which) -> {
-			dialog = new MotionDialogBuilder(requireContext()).setTitle(R.string.outbox_delete)
+			dialog = MotionDialogBuilder.standard(requireContext(), true).setTitle(R.string.outbox_delete)
 					.setMessage(R.string.outbox_delete_summary).setNegativeButton(android.R.string.cancel, null)
 					.setPositiveButton(android.R.string.ok, (confirmation, button) ->
 							OutboxStorage.getInstance().delete(entry.id, () -> {
@@ -104,7 +104,7 @@ public class OutboxFragment extends PreferenceFragment {
 	}
 
 	private void confirmRestore(OutboxStorage.Entry entry) {
-		dialog = new MotionDialogBuilder(requireContext()).setTitle(R.string.outbox_restore)
+		dialog = MotionDialogBuilder.standard(requireContext()).setTitle(R.string.outbox_restore)
 				.setMessage(R.string.outbox_restore_summary).setNegativeButton(android.R.string.cancel, null)
 				.setPositiveButton(android.R.string.ok, (d, which) -> restore(entry, false)).show();
 	}
@@ -121,7 +121,7 @@ public class OutboxFragment extends PreferenceFragment {
 		}, error -> {
 			if (getView() == null || current != generation) return;
 			if (!textOnly && error instanceof OutboxStorage.AttachmentRecoveryException) {
-				dialog = new MotionDialogBuilder(requireContext()).setTitle(R.string.outbox_restore_text)
+				dialog = MotionDialogBuilder.standard(requireContext()).setTitle(R.string.outbox_restore_text)
 						.setMessage(R.string.outbox_restore_text_summary)
 						.setNegativeButton(android.R.string.cancel, null)
 						.setPositiveButton(android.R.string.ok, (d, which) -> restore(entry, true)).show();

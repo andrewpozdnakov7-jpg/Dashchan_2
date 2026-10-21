@@ -18,6 +18,7 @@ import org.json.JSONObject;
 /** A boot-bound receipt inside SecurityStore's atomic, no-backup record. Contains no PIN. */
 final class RememberedAuthentication {
 	static final String KEY = "remembered_authentication";
+	// Historical field name: fresh-proof timestamp initially, latest background start thereafter.
 	final long authenticatedAt;
 	final int minutes;
 	private RememberedAuthentication(long authenticatedAt, int minutes) {
@@ -79,14 +80,31 @@ final class RememberedAuthentication {
 		return ((Number) value).longValue();
 	}
 	static RememberedAuthentication read(Context context, JSONObject state) {
+		return read(context, state, false);
+	}
+
+	/** Called only with a generation-guarded background transition from the RAM authority. */
+	static void startBackgroundInterval(Context context, JSONObject state, long backgroundAt) throws Exception {
+		// Active reading may outlast the old receipt. Still verify its MAC/boot/credentials,
+		// but never let this relaxed age check restore access or create proof after ordinary unlock.
+		RememberedAuthentication previous = read(context, state, true);
+		if (previous != null && backgroundAt >= previous.authenticatedAt) save(context, state, backgroundAt);
+	}
+
+	private static RememberedAuthentication read(Context context, JSONObject state, boolean startingBackground) {
 		try {
 			if (SecurityStore.authenticationMode(state) == null || state.optBoolean("reset_pending")) return null;
 			JSONObject receipt = state.getJSONObject(KEY);
 			if (receipt.length() != 5 || integer(receipt, "version") != 1) return null;
 			long at = integer(receipt, "at"), minutes = integer(receipt, "minutes"), savedBoot = integer(receipt, "boot");
 			if (minutes != ReauthenticationPolicy.normalize(state.optInt(ReauthenticationPolicy.KEY, 0))
-					|| savedBoot < 0 || savedBoot > Integer.MAX_VALUE
-					|| !ReauthenticationPolicy.canRestore(at, (int) minutes, (int) savedBoot, boot(context), SystemClock.elapsedRealtime())) return null;
+					|| savedBoot < 0 || savedBoot > Integer.MAX_VALUE) return null;
+			int currentBoot = boot(context);
+			long now = SystemClock.elapsedRealtime();
+			boolean allowed = startingBackground
+					? ReauthenticationPolicy.canStartBackgroundInterval(at, (int) minutes, (int) savedBoot, currentBoot, now)
+					: ReauthenticationPolicy.canRestore(at, (int) minutes, (int) savedBoot, currentBoot, now);
+			if (!allowed) return null;
 			Object encoded = receipt.get("tag");
 			if (!(encoded instanceof String) || ((String) encoded).length() != 44) return null;
 			byte[] tag = Base64.decode((String) encoded, Base64.NO_WRAP);

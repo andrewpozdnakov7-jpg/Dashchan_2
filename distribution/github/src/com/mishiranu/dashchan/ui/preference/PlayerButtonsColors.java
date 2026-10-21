@@ -7,6 +7,7 @@ import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.RippleDrawable;
 import androidx.core.graphics.ColorUtils;
 import com.mishiranu.dashchan.util.ResourceUtils;
+import com.mishiranu.dashchan.util.OpaqueColors;
 import com.mishiranu.dashchan.widget.ThemeEngine;
 
 /** Local semantic roles, derived from the user's palette, not the reference SVG palette. */
@@ -31,22 +32,10 @@ final class PlayerButtonsColors {
 		error = contrast(ResourceUtils.getColor(context, android.R.attr.colorError), card, 3);
 	}
 	static int opaqueBlend(int first, int second, float ratio) {
-		// Float interpolation can truncate alpha 254.99998 to 254 even for two opaque inputs.
-		// These semantic surfaces are opaque; translucent ripple/highlight colors are separate.
-		return ColorUtils.setAlphaComponent(ColorUtils.blendARGB(first, second, ratio), 255);
+		return OpaqueColors.blend(first, second, ratio);
 	}
 	static int contrast(int color, int background, double minimum) {
-		// This local helper operates on opaque surfaces, as required by calculateContrast.
-		background = ColorUtils.setAlphaComponent(background, 255);
-		color = ColorUtils.compositeColors(color, background);
-		if (ColorUtils.calculateContrast(color, background) >= minimum) return color;
-		int end = ColorUtils.calculateContrast(Color.BLACK, background)
-				> ColorUtils.calculateContrast(Color.WHITE, background) ? Color.BLACK : Color.WHITE;
-		for (int i = 1; i <= 100; i++) {
-			int next = opaqueBlend(color, end, i / 100f);
-			if (ColorUtils.calculateContrast(next, background) >= minimum) return next;
-		}
-		return end;
+		return OpaqueColors.readable(color, background, minimum, OpaqueColors.Policy.PLAYER_COMPATIBILITY);
 	}
 	static GradientDrawable shape(int color, float radius) {
 		GradientDrawable result = new GradientDrawable();

@@ -116,6 +116,7 @@ public abstract class PreferenceFragment extends ContentFragment {
 		ExpandedLayout layout = new ExpandedLayout(container.getContext(), true);
 		layout.addView(recyclerView, ExpandedLayout.LayoutParams.MATCH_PARENT,
 				ExpandedLayout.LayoutParams.MATCH_PARENT);
+		InterfaceAppearance.standardPage(layout);
 		return layout;
 	}
 
@@ -532,10 +533,10 @@ public abstract class PreferenceFragment extends ContentFragment {
 			Preference.ViewType type = preference.getViewType();
 			if (type == Preference.ViewType.NORMAL || type == Preference.ViewType.CATEGORY
 					|| type == Preference.ViewType.CHECK || type == Preference.ViewType.HEADER) {
-				InterfaceAppearance.row(holder.viewHolder.view, holder.viewHolder.title, holder.viewHolder.summary,
-						type == Preference.ViewType.HEADER);
+				InterfaceAppearance.settingsRow(holder.viewHolder.view, holder.viewHolder.title, holder.viewHolder.summary,
+						holder.viewHolder.widgetFrame, type == Preference.ViewType.HEADER);
 			}
-			if (holder.textContainer != null) {
+			if (holder.textContainer != null && !InterfaceAppearance.isEnabled(holder.itemView.getContext())) {
 				boolean afterHeader = position > 0
 						&& preferences.get(position - 1).getViewType() == Preference.ViewType.HEADER;
 				int top = afterHeader ? (int) (6f * ResourceUtils.obtainDensity(holder.textContainer) + 0.5f)

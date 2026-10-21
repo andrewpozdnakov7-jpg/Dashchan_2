@@ -63,6 +63,21 @@ public class SurfaceMotionTest {
 			assertEquals(text, attribute(inherited, android.R.attr.textColorPrimary));
 		});
 	}
+	@Test public void standardPopupMarkerAndTypographySurviveCachedMotionPolicy() {
+		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+			Context context = context(); Resources.Theme theme = context.getResources().newTheme();
+			theme.setTo(context.getTheme()); theme.applyStyle(R.style.Theme_Standard_Popup, true);
+			Resources.Theme original = context.getResources().newTheme(); original.setTo(theme);
+			for (boolean animate : new boolean[]{true, false, true}) {
+				SurfaceMotion.applyPopupPolicy(theme, original, true, animate);
+				assertTrue(attribute(theme, R.attr.isPopup) != 0);
+				assertTrue(attribute(theme, R.attr.standardPopupAppearance) != 0);
+				assertEquals(R.style.TextAppearance_Standard_Menu, attribute(theme, android.R.attr.textAppearanceLargePopupMenu));
+				assertEquals(animate ? R.style.Widget_Standard_Popup : R.style.Widget_Standard_Popup_Static,
+						attribute(theme, android.R.attr.popupMenuStyle));
+			}
+		});
+	}
 	@Test public void popupFrameRestoresImplicitPivotAndDoesNotRestoreAForeignOwner() {
 		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
 			View view = new View(context()); view.layout(0, 0, 100, 60); view.setAlpha(.6f); view.setScaleX(.8f);

@@ -242,8 +242,11 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 		recyclerView.setVerticalScrollBarEnabled(true);
 		recyclerView.setClipToPadding(false);
 		recyclerView.setFastScrollerEnabled(Preferences.isActiveScrollbar());
-		progressView = ViewFactory.createProgressLayout(layout);
-		errorHolder = ViewFactory.createErrorLayout(layout);
+		boolean standardService = getPage().content == Page.Content.HISTORY || getPage().content == Page.Content.BOARDS
+				|| getPage().content == Page.Content.USER_BOARDS;
+		progressView = ViewFactory.createProgressLayout(layout, standardService);
+		errorHolder = ViewFactory.createErrorLayout(layout, standardService);
+		if (standardService) com.mishiranu.dashchan.widget.InterfaceAppearance.standardPage(layout);
 		errorHolder.layout.setVisibility(View.GONE);
 		layout.addView(errorHolder.layout);
 		if (getPage().content == Page.Content.POSTS || getPage().content == Page.Content.THREADS

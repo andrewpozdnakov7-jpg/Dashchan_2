@@ -1,0 +1,10 @@
+- We continue updating the Material 3-style interface: improvements to settings, dialogs, pop-up menus, search, history and local archives. The status bar now matches the toolbar, with improved spacing and dialog opening animations. 😺
+- Added Settings → Contents → Favorites. Favorite threads can be grouped by board and unread threads shown first. Unread first is enabled by default; grouping by board is disabled. The rename field now supports long titles.
+- Updated the side menu and favorite counters. Tap the eye to toggle thread watching; tap the number to check for new replies. Watching is enabled by default, including for existing favorite threads.
+- Fixed the reauthentication timer: the interval starts when leaving the app. Returning before it expires means the next departure starts a new full interval.
+
+Enable or disable the new design in Settings → Experimental features → New Material 3 interface → Enable new interface.
+
+App protection remains experimental.
+
+Thanks to everyone testing the app, sending logs and helping find bugs! 🐾
