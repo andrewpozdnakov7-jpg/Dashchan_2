@@ -49,7 +49,7 @@ public class WallpaperFragment extends PreferenceFragment {
 				.setOnClickListener(p -> selectCustomWallpaper());
 		if (WallpaperManager.hasActiveWallpaper(requireContext())) {
 			addButton(R.string.wallpaper_remove, R.string.wallpaper_remove__summary)
-					.setOnClickListener(p -> new MotionDialogBuilder(requireContext())
+					.setOnClickListener(p -> MotionDialogBuilder.standard(requireContext(), true)
 							.setMessage(R.string.wallpaper_remove_confirmation)
 							.setPositiveButton(R.string.delete, (dialog, which) -> {
 								WallpaperManager.remove(requireContext());

@@ -1197,6 +1197,7 @@ public class VideoUnit {
 		PlayerButtonsLayout buttonsLayout = modern ? Preferences.getVideoButtonsLayout() : null;
 		String buttonsSpec = modern ? buttonsLayout.encode() : null;
 		boolean speedControl = Preferences.isVideoPlaybackSpeedControl();
+		if (modern) speedControl = buttonsLayout.isShown(PlayerButtonsLayout.Button.SPEED, speedControl);
 		boolean pictureInPictureControl = Preferences.isVideoPictureInPicture() && context.getPackageManager()
 				.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE);
 		boolean rightHandControls = Preferences.isVideoRightHandControls();

@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+	<string name="my_posts_tracking_active">Отслеживание включено</string>
+	<string name="my_posts_tracking_stopped">Отслеживание остановлено</string>
 	<string name="close_gallery_grid_on_background_tap">Закрывать галерею касанием фона</string>
 	<string name="close_gallery_grid_on_background_tap__summary">Закрывать сетку галереи касанием пустого места вне миниатюр файлов. Прокрутка и выбор файлов не закрывают галерею.</string>
 	<string name="close_gallery_on_background_tap">Закрывать просмотр касанием фона</string>
@@ -1458,13 +1460,13 @@
 	<string name="outbox_delete_summary">Удалить запись журнала и сохранённые для неё вложения? Сообщение на форуме не удаляется.</string>
 	<string name="outbox_prepare_failed">Не удалось сохранить исходящее сообщение или вложения. Ничего не отправлено. Проверьте свободное место и журнал исходящих.</string>
 	<string name="outbox_operation_failed">Не удалось выполнить действие с журналом. Проверьте свободное место и сохранённые вложения.</string>
-	<string name="form_diagnostics_start">Записать диагностику формы</string>
-	<string name="form_diagnostics_stop">Остановить и сохранить диагностику формы</string>
-	<string name="form_diagnostics_summary">Проверка перекрытия клавиатурой и прокрутки поля ввода</string>
-	<string name="form_diagnostics_notice">Начните запись, откройте форму сообщения и повторите проблему. Затем вернитесь сюда, остановите запись и поделитесь отчётом. Не закрывайте приложение до сохранения. Записываются только размеры окна, состояние клавиатуры, положение курсора и длина текста. Содержимое полей и скриншоты не собираются.</string>
-	<string name="form_diagnostics_saved">Диагностика формы сохранена</string>
-	<string name="form_diagnostics_saved_summary">Отправьте отчёт разработчику. Он содержит события разметки и клавиатуры, но не текст сообщения.</string>
-	<string name="form_diagnostics_share">Поделиться диагностикой формы</string>
+	<string name="form_diagnostics_start">Записать диагностику экранов</string>
+	<string name="form_diagnostics_stop">Остановить и сохранить диагностику экранов</string>
+	<string name="form_diagnostics_summary">Размеры экранов и диалогов, оформление и перекрытие клавиатурой</string>
+	<string name="form_diagnostics_notice">Начните запись, откройте нужный экран или диалог и повторите проблему. Затем вернитесь сюда, остановите запись и поделитесь отчётом. Не закрывайте приложение до сохранения. Записываются размеры, отступы, цвета и скругления, состояние нового интерфейса и клавиатуры, модель устройства, версия Android и хеш установленного APK. В форме сообщения также записываются положение курсора и длина текста. Текст, значения полей, ссылки, имена файлов, пароли и скриншоты не собираются.</string>
+	<string name="form_diagnostics_saved">Диагностика экранов сохранена</string>
+	<string name="form_diagnostics_saved_summary">Отправьте отчёт разработчику. Он содержит параметры окон, оформления и клавиатуры, но не содержимое сообщений.</string>
+	<string name="form_diagnostics_share">Поделиться диагностикой экранов</string>
 	<string name="drawer_section_order">Порядок разделов бокового меню</string>
 	<string name="drawer_section_order_entry_summary">Расположение разделов и кнопок в боковом меню</string>
 	<string name="drawer_custom_order">Свой порядок разделов</string>

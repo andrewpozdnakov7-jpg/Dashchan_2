@@ -1336,7 +1336,7 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 			ThreadsPage threadsPage = extract(provider);
 			String message = provider.getContext().getString(R.string.open_forum__format_sentence,
 					Chan.get(target.chanName).configuration.getTitle());
-			return new MotionDialogBuilder(provider.getContext())
+			return MotionDialogBuilder.standard(provider.getContext())
 					.setMessage(message)
 					.setNegativeButton(android.R.string.cancel, null)
 					.setPositiveButton(android.R.string.ok, (d, which) -> threadsPage

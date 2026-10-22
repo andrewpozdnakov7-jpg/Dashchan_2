@@ -44,6 +44,8 @@ import com.mishiranu.dashchan.widget.ClickableToast;
 import com.mishiranu.dashchan.widget.DividerItemDecoration;
 import com.mishiranu.dashchan.widget.SimpleViewHolder;
 import com.mishiranu.dashchan.widget.ThemeEngine;
+import com.mishiranu.dashchan.widget.ThemeChoiceRow;
+import com.mishiranu.dashchan.widget.InterfaceAppearance;
 import com.mishiranu.dashchan.widget.ViewFactory;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -59,6 +61,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 public class ThemesFragment extends BaseListFragment {
+	@Override protected boolean useStandardServiceAppearance() { return true; }
 	private final ActivityResultLauncher<Intent> themePicker = registerForActivityResult(
 			new ActivityResultContracts.StartActivityForResult(),
 			result -> onThemeSelected(result.getResultCode(), result.getData()));
@@ -345,12 +348,14 @@ public class ThemesFragment extends BaseListFragment {
 
 		private static class ItemViewHolder extends RecyclerView.ViewHolder {
 			public final Preference.Runtime.IconViewHolder holder;
+			public final ThemeChoiceRow row;
 
 			public ItemViewHolder(Preference.Runtime.IconViewHolder iconViewHolder) {
 				super(iconViewHolder.view);
 				ViewUtils.setSelectableItemBackground(itemView);
 				this.holder = iconViewHolder;
 				iconViewHolder.summary.setVisibility(View.GONE);
+				row = new ThemeChoiceRow(iconViewHolder, false);
 			}
 		}
 
@@ -395,7 +400,7 @@ public class ThemesFragment extends BaseListFragment {
 							true, null, this);
 				}
 				case HEADER: {
-					return new SimpleViewHolder(ViewFactory.makeListTextHeader(parent));
+					return new SimpleViewHolder(ViewFactory.makeListTextHeader(parent, true));
 				}
 				default: {
 					throw new IllegalStateException();
@@ -408,13 +413,12 @@ public class ThemesFragment extends BaseListFragment {
 			ListItem listItem = listItems.get(position);
 			switch (ViewType.values()[holder.getItemViewType()]) {
 				case ITEM: {
-					Preference.Runtime.IconViewHolder viewHolder = ((ItemViewHolder) holder).holder;
-					viewHolder.icon.setImageDrawable(listItem.theme.createThemeChoiceDrawable());
-					viewHolder.title.setText(listItem.theme.name);
+					((ItemViewHolder) holder).row.bind(listItem.theme, listItem.installed);
 					break;
 				}
 				case HEADER: {
 					((TextView) holder.itemView).setText(listItem.title);
+					InterfaceAppearance.refreshTree(holder.itemView);
 					break;
 				}
 			}

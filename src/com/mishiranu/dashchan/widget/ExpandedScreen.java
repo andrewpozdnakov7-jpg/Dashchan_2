@@ -58,6 +58,11 @@ public class ExpandedScreen implements RecyclerScrollTracker.OnScrollListener {
 	private int statusBarForegroundAlpha = 255, statusGuardColor, legacyStatusBarIcons;
 	private float drawerSlideOffset;
 	private boolean statusBarIconsOwned;
+	private WindowInsetsController statusBarController;
+	private final WindowInsetsController.OnControllableInsetsChangedListener statusBarControlListener =
+			(controller, types) -> {
+				if ((types & android.view.WindowInsets.Type.statusBars()) != 0) refreshSystemBarAppearance();
+			};
 	private ValueAnimator chromeAnimator;
 	private float chromeValue = 1f;
 	private boolean chromeTarget = true, modernChromeOwned;
@@ -189,6 +194,13 @@ public class ExpandedScreen implements RecyclerScrollTracker.OnScrollListener {
 
 	/** The shared main window owns inset pixels; other Activities/dialog windows keep their policy. */
 	public void refreshSystemBarAppearance() {
+		WindowInsetsController controller = activity.getWindow().getInsetsController();
+		if (controller != null && statusBarController != controller) {
+			if (statusBarController != null) statusBarController.removeOnControllableInsetsChangedListener(statusBarControlListener);
+			// Store before registration: Android can call the listener synchronously.
+			statusBarController = controller;
+			controller.addOnControllableInsetsChangedListener(statusBarControlListener);
+		}
 		Integer surface = toolbarView != null ? InterfaceAppearance.standardStatusBarSurface(activity) : null;
 		if (!java.util.Objects.equals(standardStatusBarSurface, surface)) {
 			standardStatusBarSurface = surface;
@@ -197,6 +209,13 @@ public class ExpandedScreen implements RecyclerScrollTracker.OnScrollListener {
 			}
 		}
 		updateStatusBarIcons();
+	}
+
+	public void dispose() {
+		if (statusBarController != null) {
+			statusBarController.removeOnControllableInsetsChangedListener(statusBarControlListener);
+			statusBarController = null;
+		}
 	}
 
 	public void setDrawerSlideOffset(float offset) {

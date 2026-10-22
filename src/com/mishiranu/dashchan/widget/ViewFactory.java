@@ -51,6 +51,19 @@ public class ViewFactory {
 		return textView;
 	}
 
+	/** Service screens opt in; the original factories retain their native geometry. */
+	public static TextView makeListTextHeader(ViewGroup parent, boolean standardService) {
+		TextView text = makeListTextHeader(parent);
+		if (standardService) InterfaceAppearance.serviceHeader(text);
+		return text;
+	}
+
+	public static View makeSingleLineListItem(ViewGroup parent, boolean standardService) {
+		TextView text = (TextView) makeSingleLineListItem(parent);
+		if (standardService) InterfaceAppearance.serviceRow(text, text, null, null);
+		return text;
+	}
+
 	public static View makeSingleLineListItem(ViewGroup parent) {
 		float density = ResourceUtils.obtainDensity(parent);
 		TextView textView = new TextView(parent.getContext());
@@ -458,16 +471,11 @@ public class ViewFactory {
 		layout.addView(text, LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
 		layout.setLayoutParams(new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
 				ViewGroup.LayoutParams.MATCH_PARENT));
-		if (standardService) InterfaceAppearance.serviceState(layout, text);
+		if (standardService) InterfaceAppearance.serviceErrorState(layout, image, text);
 		if (standardService && InterfaceAppearance.isEnabled(parent.getContext())) {
 			android.widget.ScrollView scroll = new android.widget.ScrollView(parent.getContext());
 			scroll.setFillViewport(true); scroll.addView(layout, new android.widget.ScrollView.LayoutParams(
 					ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-			InterfaceAppearance.serviceState(scroll, text);
-			if (InterfaceAppearance.isEnabled(parent.getContext())) {
-				image.getLayoutParams().width = (int) (40 * density); image.getLayoutParams().height = (int) (40 * density);
-				ViewUtils.setNewMarginRelative(text, null, (int) (12 * density), null, null);
-			}
 			return new ErrorHolder(scroll, text);
 		}
 		return new ErrorHolder(layout, text);

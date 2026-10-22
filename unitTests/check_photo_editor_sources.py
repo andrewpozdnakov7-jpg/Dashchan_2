@@ -7,7 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 COMMON = ROOT / "src/com/mishiranu/dashchan/ui/posting"
-JAVA = ROOT / "distribution/github/src/com/mishiranu/dashchan/ui/posting"
+JAVA = ROOT / "src/com/mishiranu/dashchan/ui/posting"
 
 
 def lexical_balance(path):
@@ -39,7 +39,7 @@ def lexical_balance(path):
 
 def main():
     files = [JAVA / "ExperimentalImageEditorActivity.java", *sorted((JAVA / "photo").glob("*.java")),
-             *sorted((ROOT / "distribution/github/instrumentationTests/src/com/mishiranu/dashchan").glob("PhotoEditor*Test.java"))]
+             *sorted((ROOT / "instrumentationTests/src/com/mishiranu/dashchan").glob("PhotoEditor*Test.java"))]
     for path in files: lexical_balance(path)
     texts = "\n".join(path.read_text(encoding="utf-8") for path in files)
     default = ET.Element("resources"); russian = ET.Element("resources")
@@ -62,7 +62,7 @@ def main():
         assert path.is_file(), f"Missing drawable: {name}"
         ET.parse(path)
     activity = files[0].read_text(encoding="utf-8")
-    assert "new AlertDialog.Builder(this, R.style.PhotoEditorDialogTheme)" in activity
+    assert "new com.mishiranu.dashchan.content.security.SecureDialogBuilder(this, R.style.PhotoEditorDialogTheme)" in activity
     assert "input.setSingleLine(false)" in activity and "input.setMinLines(3)" in activity
     assert "item.color = textColor[0]" in activity and "input.getText().toString().trim()" not in activity
     build = activity[activity.index("private void buildPanel()"):activity.index("private void mutate(")]
@@ -114,7 +114,7 @@ def main():
     assert "EditorStickers.GROUPS[stickerGroup]" in activity and "new EditorStickers.Tile(" in activity
     render = canvas[canvas.index("public void refresh()"):canvas.index("private static String photoKey(")]
     assert "handler.removeCallbacks(renderRequest)" not in render
-    lexical_balance(ROOT / "distribution/github/unitTests/src/com/mishiranu/dashchan/ui/posting/EditorPreviewSchedulerTest.java")
+    lexical_balance(ROOT / "unitTests/src/com/mishiranu/dashchan/ui/posting/EditorPreviewSchedulerTest.java")
     contract = {"EXTRA_SOURCE_HASH": "sourceHash", "EXTRA_SOURCE_NAME": "sourceName",
                 "EXTRA_ATTACHMENT_INDEX": "attachmentIndex", "EXTRA_RESULT_HASH": "resultHash",
                 "EXTRA_RESULT_NAME": "resultName", "EXTRA_RESULT_ATTACHMENT_INDEX": "resultAttachmentIndex",

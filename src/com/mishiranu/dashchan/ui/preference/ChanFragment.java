@@ -966,7 +966,7 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 		@NonNull
 		@Override
 		public ProgressDialog onCreateDialog(Bundle savedInstanceState) {
-			ProgressDialog dialog = new ProgressDialog(requireContext(), null);
+			ProgressDialog dialog = ProgressDialog.standard(requireContext(), null);
 			dialog.setMessage(getString(R.string.loading__ellipsis));
 			return dialog;
 		}

@@ -28,7 +28,7 @@ public class WhatsNewDialog extends DialogFragment {
 		String versionName = release != null ? release.name : BuildConfig.VERSION_NAME;
 		CharSequence message = release != null ? formatChanges(release.text)
 				: getText(R.string.whats_new_unavailable);
-		return new MotionDialogBuilder(requireContext())
+		return MotionDialogBuilder.standard(requireContext())
 				.setTitle(getString(R.string.whats_new_title__format, versionName))
 				.setMessage(message)
 				.setNeutralButton(R.string.changelog, (dialog, which) ->

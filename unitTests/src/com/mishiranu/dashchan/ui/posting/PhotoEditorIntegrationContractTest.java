@@ -31,19 +31,20 @@ public class PhotoEditorIntegrationContractTest {
         String legacy = source("src/com/mishiranu/dashchan/ui/posting/ImageEditorActivity.java");
         assertTrue(legacy.contains("PhotoEditorBridge.createIntent("));
         assertFalse(legacy.contains("ExperimentalImageEditorActivity"));
-        assertTrue(source("distribution/github/src/com/mishiranu/dashchan/ui/posting/PhotoEditorBridge.java")
+        assertTrue(source("src/com/mishiranu/dashchan/ui/posting/PhotoEditorBridge.java")
                 .contains("ExperimentalImageEditorActivity.createIntent("));
         assertTrue(legacy.contains("new Intent(context, ImageEditorActivity.class)"));
         assertTrue(source("src/com/mishiranu/dashchan/ui/posting/PostingAttachmentsController.java")
                 .contains("AttachmentResultGuard.matches("));
         String manifest = source("AndroidManifest.xml");
         assertTrue(manifest.contains(".ui.posting.ImageEditorActivity"));
-        assertFalse(manifest.contains(".ui.posting.ExperimentalImageEditorActivity"));
-        assertTrue(source("distribution/github/AndroidManifest.xml").contains(".ui.posting.ExperimentalImageEditorActivity"));
+        assertTrue(manifest.contains(".ui.posting.ExperimentalImageEditorActivity"));
+        assertFalse(source("distribution/github/AndroidManifest.xml").contains(".ui.posting.ExperimentalImageEditorActivity"));
+        assertFalse(source("distribution/fdroid/AndroidManifest.xml").contains("ExperimentalImageEditorActivity"));
     }
 
     @Test public void sessionIoUsesDetachedWorkerSnapshot() throws Exception {
-        String activity = source("distribution/github/src/com/mishiranu/dashchan/ui/posting/ExperimentalImageEditorActivity.java");
+        String activity = source("src/com/mishiranu/dashchan/ui/posting/ExperimentalImageEditorActivity.java");
         String persist = activity.substring(activity.indexOf("private void persist()"),
                 activity.indexOf("@Override protected void onSaveInstanceState"));
         assertTrue(persist.contains("sessionBuilder(document.copy()).build()"));
@@ -53,21 +54,21 @@ public class PhotoEditorIntegrationContractTest {
     }
 
     @Test public void cropGesturesUseExportGeometryAndRulersReadTheModel() throws Exception {
-        String canvas = source("distribution/github/src/com/mishiranu/dashchan/ui/posting/photo/EditorCanvasView.java");
+        String canvas = source("src/com/mishiranu/dashchan/ui/posting/photo/EditorCanvasView.java");
         assertTrue(canvas.contains("EditorGeometry.pinchCrop(document.state(), cropStart"));
         assertTrue(canvas.contains("EditorGeometry.resizeCrop(state, cropStart"));
         assertTrue(canvas.contains("event.findPointerIndex(pinchPointerId0)"));
-        String activity = source("distribution/github/src/com/mishiranu/dashchan/ui/posting/ExperimentalImageEditorActivity.java");
+        String activity = source("src/com/mishiranu/dashchan/ui/posting/ExperimentalImageEditorActivity.java");
         assertTrue(activity.contains("() -> document.state().straighten"));
         assertTrue(activity.contains("control.syncValue(current.get())"));
         assertTrue(activity.contains("for (Runnable binding : rulerBindings) binding.run()"));
-        String ruler = source("distribution/github/src/com/mishiranu/dashchan/ui/posting/photo/EditorRulerView.java");
+        String ruler = source("src/com/mishiranu/dashchan/ui/posting/photo/EditorRulerView.java");
         String sync = ruler.substring(ruler.indexOf("public void syncValue("), ruler.indexOf("private void setValue("));
         assertFalse(sync.contains("listener.onValue("));
     }
 
     @Test public void editorControlsRemainReadableAndTextErrorsKeepTheDialogOpen() throws Exception {
-        String activity = source("distribution/github/src/com/mishiranu/dashchan/ui/posting/ExperimentalImageEditorActivity.java");
+        String activity = source("src/com/mishiranu/dashchan/ui/posting/ExperimentalImageEditorActivity.java");
         assertTrue(activity.contains("highlight(jpeg, !png[0])"));
         assertTrue(activity.contains("highlight(pngButton, png[0])"));
         assertFalse(activity.contains("setTextColor(selectedColor)"));
@@ -81,7 +82,7 @@ public class PhotoEditorIntegrationContractTest {
     }
 
     @Test public void primarySaveIsDirectAndOptionsAreAnIndependentDraft() throws Exception {
-        String activity = source("distribution/github/src/com/mishiranu/dashchan/ui/posting/ExperimentalImageEditorActivity.java");
+        String activity = source("src/com/mishiranu/dashchan/ui/posting/ExperimentalImageEditorActivity.java");
         assertTrue(activity.contains("save = button(R.string.pe_save, this::saveDirect)"));
         String direct = activity.substring(activity.indexOf("private void saveDirect()"), activity.indexOf("private int exportSample("));
         assertTrue(direct.contains("prepareSave();"));
@@ -104,43 +105,43 @@ public class PhotoEditorIntegrationContractTest {
     }
 
     @Test public void sceneMasksUseOneWorkerQueueAndNeverRedrawSharpObjectsOnTop() throws Exception {
-        String canvas = source("distribution/github/src/com/mishiranu/dashchan/ui/posting/photo/EditorCanvasView.java");
+        String canvas = source("src/com/mishiranu/dashchan/ui/posting/photo/EditorCanvasView.java");
         assertTrue(canvas.contains("previewScheduler.start(liveMaskGesture || directInput)"));
         assertTrue(canvas.contains("final Map<String, Bitmap> assetSnapshot = new java.util.HashMap<>(assets)"));
         assertTrue(canvas.contains("EditorRenderer.prepareScene(source, state, assetSnapshot"));
         assertTrue(canvas.contains("processedIsScene = scene"));
         String draw = canvas.substring(canvas.indexOf("private void drawCurrentScene()"), canvas.indexOf("public void resetViewport()"));
         assertTrue(draw.indexOf("if (processedIsScene) return") < draw.indexOf("EditorRenderer.drawAnnotations("));
-        String renderer = source("distribution/github/src/com/mishiranu/dashchan/ui/posting/photo/EditorRenderer.java");
+        String renderer = source("src/com/mishiranu/dashchan/ui/posting/photo/EditorRenderer.java");
         assertTrue(renderer.contains("if (!scene) drawAnnotations("));
         assertTrue(renderer.contains("PorterDuff.Mode.SRC"));
-        String document = source("distribution/github/src/com/mishiranu/dashchan/ui/posting/photo/EditorDocument.java");
+        String document = source("src/com/mishiranu/dashchan/ui/posting/photo/EditorDocument.java");
         assertTrue(document.contains("json.optBoolean(\"affectAnnotations\", false)"));
         assertTrue(document.contains("out.affectAnnotations = affectAnnotations"));
     }
 
     @Test public void presentationDoesNotBecomePartOfTheDocumentOrExportRecipe() throws Exception {
-        String document = source("distribution/github/src/com/mishiranu/dashchan/ui/posting/photo/EditorDocument.java");
+        String document = source("src/com/mishiranu/dashchan/ui/posting/photo/EditorDocument.java");
         assertFalse(document.contains("EditorPose")); assertFalse(document.contains("ValueAnimator"));
-        String renderer = source("distribution/github/src/com/mishiranu/dashchan/ui/posting/photo/EditorRenderer.java");
+        String renderer = source("src/com/mishiranu/dashchan/ui/posting/photo/EditorRenderer.java");
         assertFalse(renderer.contains("EditorPose")); assertFalse(renderer.contains("ValueAnimator"));
-        String transition = source("distribution/github/src/com/mishiranu/dashchan/ui/posting/photo/EditorPoseTransition.java");
+        String transition = source("src/com/mishiranu/dashchan/ui/posting/photo/EditorPoseTransition.java");
         assertFalse(transition.contains("EditorDocument")); assertFalse(transition.contains("toJson("));
-        String activity = source("distribution/github/src/com/mishiranu/dashchan/ui/posting/ExperimentalImageEditorActivity.java");
+        String activity = source("src/com/mishiranu/dashchan/ui/posting/ExperimentalImageEditorActivity.java");
         String filters = activity.substring(activity.indexOf("private void filterPanel()"), activity.indexOf("private void drawingPanel("));
         assertFalse(filters.contains("buildPanel()"));
-        String ruler = source("distribution/github/src/com/mishiranu/dashchan/ui/posting/photo/EditorRulerView.java");
+        String ruler = source("src/com/mishiranu/dashchan/ui/posting/photo/EditorRulerView.java");
         assertTrue(ruler.contains("new AccessibilityNodeInfo.RangeInfo("));
         assertFalse(ruler.contains("RangeInfo.obtain("));
     }
 
     @Test public void compositionFlagsAndIndependentToolSettingsSurviveRestoration() throws Exception {
-        String document = source("distribution/github/src/com/mishiranu/dashchan/ui/posting/photo/EditorDocument.java");
+        String document = source("src/com/mishiranu/dashchan/ui/posting/photo/EditorDocument.java");
         assertTrue(document.contains("out.drawOnComposition = drawOnComposition"));
         assertTrue(document.contains("put(\"drawOnComposition\", drawOnComposition)"));
         assertTrue(document.contains("json.optBoolean(\"drawOnComposition\", false)"));
-        String activity = source("distribution/github/src/com/mishiranu/dashchan/ui/posting/ExperimentalImageEditorActivity.java");
-        String codec = source("distribution/github/src/com/mishiranu/dashchan/ui/posting/photo/EditorSessionCodec.java");
+        String activity = source("src/com/mishiranu/dashchan/ui/posting/ExperimentalImageEditorActivity.java");
+        String codec = source("src/com/mishiranu/dashchan/ui/posting/photo/EditorSessionCodec.java");
         for (String key : new String[] {"mosaicSize", "blurPreset", "drawAll", "toolSettingsV2"}) {
             assertTrue(key, codec.contains("put(\"" + key + "\","));
             assertTrue(key, codec.contains("json.opt") && codec.contains("\"" + key + "\""));
@@ -156,23 +157,23 @@ public class PhotoEditorIntegrationContractTest {
     }
 
     @Test public void wholeEraserRequiresWorkerSceneAndPlaquesStayStickerObjects() throws Exception {
-        String renderer = source("distribution/github/src/com/mishiranu/dashchan/ui/posting/photo/EditorRenderer.java");
+        String renderer = source("src/com/mishiranu/dashchan/ui/posting/photo/EditorRenderer.java");
         assertTrue(renderer.contains("item.kind == EditorDocument.Kind.ERASER && item.drawOnComposition"));
         assertTrue(renderer.contains("drawTopDrawing(scene, state, i"));
         assertTrue(renderer.contains("EditorStickers.drawCaption(canvas, item, bounds)"));
         assertTrue(renderer.contains("Color.red(c) * alpha"));
         assertTrue(renderer.contains("Color.argb(a / count, r / a, g / a, b / a)"));
-        String canvas = source("distribution/github/src/com/mishiranu/dashchan/ui/posting/photo/EditorCanvasView.java");
+        String canvas = source("src/com/mishiranu/dashchan/ui/posting/photo/EditorCanvasView.java");
         assertTrue(canvas.contains("drawing.drawOnComposition = EditorRenderer.isDrawing(drawingKind) && drawOnComposition"));
         assertTrue(canvas.contains("append(item.drawOnComposition)"));
-        String activity = source("distribution/github/src/com/mishiranu/dashchan/ui/posting/ExperimentalImageEditorActivity.java");
+        String activity = source("src/com/mishiranu/dashchan/ui/posting/ExperimentalImageEditorActivity.java");
         assertTrue(activity.contains("if (!plaque) item.kind = EditorDocument.Kind.TEXT"));
         assertTrue(activity.contains("text.length() > 120"));
         assertTrue(activity.contains("!document.isInTransaction() && toolBinding != null"));
     }
 
     @Test public void phoneDialogsAndLiveMaskPreviewKeepTheirContracts() throws Exception {
-        String activity = source("distribution/github/src/com/mishiranu/dashchan/ui/posting/ExperimentalImageEditorActivity.java");
+        String activity = source("src/com/mishiranu/dashchan/ui/posting/ExperimentalImageEditorActivity.java");
         assertTrue(activity.contains("new com.mishiranu.dashchan.content.security.SecureDialogBuilder(this, R.style.PhotoEditorDialogTheme)"));
         String secureBuilder = source("src/com/mishiranu/dashchan/content/security/SecureDialogBuilder.java");
         assertTrue(secureBuilder.contains("extends android.app.AlertDialog.Builder"));
@@ -184,7 +185,7 @@ public class PhotoEditorIntegrationContractTest {
         assertTrue(activity.contains("input.setHorizontallyScrolling(false)"));
         assertTrue(activity.contains("item.color = textColor[0]"));
         assertTrue(activity.contains("String text = input.getText().toString();"));
-        String canvas = source("distribution/github/src/com/mishiranu/dashchan/ui/posting/photo/EditorCanvasView.java");
+        String canvas = source("src/com/mishiranu/dashchan/ui/posting/photo/EditorCanvasView.java");
         String render = canvas.substring(canvas.indexOf("public void refresh()"), canvas.indexOf("private static String photoKey("));
         assertFalse(render.contains("removeCallbacks(renderRequest)"));
         assertTrue(canvas.contains("previewScheduler.cancelled(request)"));
@@ -194,7 +195,7 @@ public class PhotoEditorIntegrationContractTest {
     }
 
     @Test public void cropKeepsSharedNavigationOutOfPanelTransitionsAndCanvasInsets() throws Exception {
-        String activity = source("distribution/github/src/com/mishiranu/dashchan/ui/posting/ExperimentalImageEditorActivity.java");
+        String activity = source("src/com/mishiranu/dashchan/ui/posting/ExperimentalImageEditorActivity.java");
         String build = activity.substring(activity.indexOf("private void buildPanel()"), activity.indexOf("private void mutate("));
         assertTrue(build.contains("categories.setVisibility(View.VISIBLE)"));
         assertFalse(build.contains("categories.setVisibility(crop"));
@@ -211,13 +212,13 @@ public class PhotoEditorIntegrationContractTest {
     }
 
     @Test public void toolViewportAndAnimationCaptureKeepScrollingContentInsideThePanel() throws Exception {
-        String activity = source("distribution/github/src/com/mishiranu/dashchan/ui/posting/ExperimentalImageEditorActivity.java");
+        String activity = source("src/com/mishiranu/dashchan/ui/posting/ExperimentalImageEditorActivity.java");
         String viewport = activity.substring(activity.indexOf("private static final class ToolScroll"),
                 activity.indexOf("public static Intent createIntent"));
         assertTrue(viewport.contains("setClipBounds(new Rect(0, 0, width, height))"));
         assertTrue(viewport.contains("super.onSizeChanged(width, height, oldWidth, oldHeight)"));
         assertTrue(activity.contains("root.setClipChildren(false)"));
-        String motion = source("distribution/github/src/com/mishiranu/dashchan/ui/posting/photo/EditorPanelMotion.java");
+        String motion = source("src/com/mishiranu/dashchan/ui/posting/photo/EditorPanelMotion.java");
         int clip = motion.indexOf("canvas.clipRect(0, 0, panel.getWidth(), panel.getHeight())");
         int scroll = motion.indexOf("canvas.translate(-panel.getScrollX(), -panel.getScrollY())");
         int draw = motion.indexOf("panel.draw(canvas)");
@@ -225,7 +226,7 @@ public class PhotoEditorIntegrationContractTest {
     }
 
     @Test public void directToolSwitchCommitsBeforeCheckpointWithoutHomeOrFakeHistory() throws Exception {
-        String activity = source("distribution/github/src/com/mishiranu/dashchan/ui/posting/ExperimentalImageEditorActivity.java");
+        String activity = source("src/com/mishiranu/dashchan/ui/posting/ExperimentalImageEditorActivity.java");
         String open = activity.substring(activity.indexOf("private void openSection("), activity.indexOf("private void closeSection("));
         assertTrue(open.contains("target == section) return"));
         assertTrue(open.indexOf("target == section") < open.indexOf("canvas.finishGesture(true)"));

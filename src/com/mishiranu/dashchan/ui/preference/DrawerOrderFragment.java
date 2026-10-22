@@ -114,7 +114,7 @@ public class DrawerOrderFragment extends PreferenceFragment {
 		String[] entries = new String[order.size()];
 		for (int i = 0; i < order.size(); i++) entries[i] = (i + 1) + ". " + getString(order.get(i).titleResId);
 		if (positionDialog != null) positionDialog.dismiss();
-		positionDialog = new MotionDialogBuilder(requireContext()).setTitle(section.titleResId)
+		positionDialog = MotionDialogBuilder.standard(requireContext()).setTitle(section.titleResId)
 				.setSingleChoiceItems(entries, order.indexOf(section), (dialog, position) -> {
 					int from = order.indexOf(section);
 					if (getView() != null && Preferences.isDrawerCustomOrderEnabled() && from >= 0) {

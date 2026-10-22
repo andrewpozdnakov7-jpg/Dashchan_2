@@ -435,9 +435,9 @@ public class RedditWebReaderFragment extends ContentFragment {
 			editText.setText(currentUrl);
 			editText.selectAll();
 		}
-		new MotionDialogBuilder(requireContext())
+		MotionDialogBuilder.standard(requireContext())
 				.setTitle(R.string.open_reddit_link)
-				.setView(editText)
+				.setInputView(editText)
 				.setNegativeButton(android.R.string.cancel, null)
 				.setPositiveButton(android.R.string.ok, (dialog, which) -> {
 					String value = editText.getText().toString().trim();

@@ -10,11 +10,17 @@ import com.mishiranu.dashchan.widget.ThemeEngine;
 public class ColorScheme {
 	public ColorScheme(Context context, ThemeEngine.Theme theme) {
 		this(context, theme.window, theme.spoiler, theme.link, theme.quote, theme.tripcode, theme.capcode,
-				theme.colorGainFactor);
+				theme.colorGainFactor, false);
+	}
+
+	/** Scoped document palette; the post/comment scheme continues to use the original constructor. */
+	public ColorScheme(Context context, ThemeEngine.Theme theme, int window, int link) {
+		this(context, window, theme.spoiler, link, theme.quote, theme.tripcode, theme.capcode, theme.colorGainFactor, true);
 	}
 
 	private ColorScheme(Context context, int windowBackgroundColor, int spoilerBackgroundColor,
-			int linkColor, int quoteColor, int tripcodeColor, int capcodeColor, float colorGainFactor) {
+			int linkColor, int quoteColor, int tripcodeColor, int capcodeColor, float colorGainFactor, boolean serviceDocument) {
+		this.serviceDocument = serviceDocument;
 		this.windowBackgroundColor = windowBackgroundColor;
 		this.tripcodeColor = tripcodeColor;
 		this.capcodeColor = capcodeColor;
@@ -47,6 +53,7 @@ public class ColorScheme {
 	public final int highlightBackgroundColor;
 
 	public final float colorGainFactor;
+	public final boolean serviceDocument;
 
 	public interface Span {
 		void applyColorScheme(ColorScheme colorScheme);

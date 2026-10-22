@@ -58,6 +58,31 @@ public class WatcherChipActionsTest {
 			}
 		});
 	}
+	@Test public void emptySpaceAboveAndBelowCapsuleKeepsEyeAndNumberActionsIncludingWiderRtlHost() {
+		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+			for (int direction : new int[]{View.LAYOUT_DIRECTION_LTR, View.LAYOUT_DIRECTION_RTL}) {
+				int[] clicks = new int[2]; WatcherView view = fixture(direction, clicks);
+				float density = view.getResources().getDisplayMetrics().density;
+				int width = view.getWidth() + Math.round(31 * density), height = view.getHeight() + Math.round(24 * density);
+				view.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY));
+				view.layout(0, 0, width, height);
+				android.graphics.RectF capsule = new android.graphics.RectF(); view.getCapsuleBounds(capsule);
+				for (float y : new float[]{1, height - 1}) {
+					assertTrue(y < capsule.top || y > capsule.bottom);
+					for (boolean number : new boolean[]{false, true}) {
+						float x = direction == View.LAYOUT_DIRECTION_RTL ? capsule.right - (number ? 40 : 16) * density
+								: capsule.left + (number ? 40 : 16) * density;
+						long now = SystemClock.uptimeMillis();
+						MotionEvent down = MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, x, y, 0);
+						try { assertTrue(view.dispatchTouchEvent(down)); assertTrue(view.performClick()); }
+						finally { down.recycle(); }
+						touch(view, MotionEvent.ACTION_CANCEL, number);
+					}
+				}
+				assertArrayEquals(new int[]{2, 2}, clicks);
+			}
+		});
+	}
 	@Test public void disabledTrackingAndSelectionCannotRefreshOrAccidentallyToggle() {
 		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
 			int[] clicks = new int[2]; WatcherView view = fixture(View.LAYOUT_DIRECTION_LTR, clicks);

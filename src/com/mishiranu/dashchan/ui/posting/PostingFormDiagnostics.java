@@ -23,6 +23,7 @@ import com.mishiranu.dashchan.BuildConfig;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
+import com.mishiranu.dashchan.util.ScreenDiagnostics;
 import com.mishiranu.dashchan.widget.PostingFormAppearance;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -64,15 +65,27 @@ public final class PostingFormDiagnostics {
 		pendingExport = null;
 		started = SystemClock.elapsedRealtime();
 		generation++;
-		header = "Posting form geometry diagnostics v3\nviewportPolicy=keyboard_viewport_v2\napp=" + BuildConfig.VERSION_NAME
+		header = "Screen and posting form geometry diagnostics v5\nscreenProbe=screen_windows_v2_theme_choices_v1\nviewportPolicy=keyboard_viewport_v2\napp=" + BuildConfig.VERSION_NAME
 				+ " code=" + BuildConfig.VERSION_CODE + " android=" + Build.VERSION.RELEASE
 				+ " sdk=" + Build.VERSION.SDK_INT + " manufacturer=" + Build.MANUFACTURER
 				+ " model=" + Build.MODEL + " targetSdk=" + context.getApplicationInfo().targetSdkVersion
 				+ "\nstartedUtcMillis=" + System.currentTimeMillis()
-				+ "\nlimits: ringChars=" + MAX_CHARS + " sampleMs=50 treeMs=250 attachmentNodes=96 eventsPerSecond=160"
+				+ "\nlimits: ringChars=" + MAX_CHARS + " sampleMs=50 treeMs=250 attachmentNodes=96 eventsPerSecond=160 screenSampleMs=250 screenPollMs=500 screenNodes=48 themeScanNodes=512 themeRows=16"
 				+ "\nNo text, field values, filenames, file paths, URLs, credentials, clipboard, screenshots or key input are recorded.\n";
 		recording = true;
 		record("capture_start");
+		ScreenDiagnostics.recordingStarted(context, generation);
+	}
+
+	/** Shared export sink. Capture tokens prevent a late background APK hash entering another report. */
+	public static synchronized long captureId() { return generation; }
+	public static synchronized void recordScreen(long capture, String details) {
+		if (recording && generation == capture) {
+			if (details.startsWith("baseApkSha256=") || details.startsWith("baseApkHashUnavailable=")) {
+				header += details + "\n";
+			}
+			record("screen " + details);
+		}
 	}
 
 	private static synchronized void record(String message) {
@@ -85,7 +98,7 @@ public final class PostingFormDiagnostics {
 			dropped++;
 		}
 		for (int offset = 0; offset < line.length(); offset += LOGCAT_CHUNK) {
-			Log.i("PostingForm", (offset > 0 ? "continued " : "")
+			Log.i(message.startsWith("screen ") ? "ScreenDiagnostics" : "PostingForm", (offset > 0 ? "continued " : "")
 					+ line.substring(offset, Math.min(line.length(), offset + LOGCAT_CHUNK)));
 		}
 	}
@@ -116,8 +129,10 @@ public final class PostingFormDiagnostics {
 	}
 
 	public static File getLastFile(Context context) {
-		File file = new File(context.getCacheDir(), "posting-form-diagnostics.txt");
-		return file.isFile() ? file : null;
+		File file = new File(context.getCacheDir(), "screen-diagnostics.txt");
+		if (file.isFile()) return file;
+		File legacy = new File(context.getCacheDir(), "posting-form-diagnostics.txt");
+		return legacy.isFile() ? legacy : null;
 	}
 
 	public static void stopAndSave(Context context, Consumer<File> callback) {
@@ -127,6 +142,7 @@ public final class PostingFormDiagnostics {
 			if (recording) {
 				record("capture_stop");
 				recording = false;
+				ScreenDiagnostics.recordingStopped();
 				pendingExport = header + "droppedOldEvents=" + dropped + "\n" + String.join("\n", LINES) + "\n";
 				LINES.clear();
 				chars = 0;
@@ -135,7 +151,7 @@ public final class PostingFormDiagnostics {
 			report = pendingExport;
 			saving = true;
 		}
-		File file = new File(context.getApplicationContext().getCacheDir(), "posting-form-diagnostics.txt");
+		File file = new File(context.getApplicationContext().getCacheDir(), "screen-diagnostics.txt");
 		ConcurrentUtils.PARALLEL_EXECUTOR.execute(() -> {
 			File result = null;
 			try (FileOutputStream output = new FileOutputStream(file)) {

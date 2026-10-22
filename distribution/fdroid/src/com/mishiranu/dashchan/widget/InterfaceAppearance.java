@@ -17,11 +17,30 @@ public final class InterfaceAppearance {
 	public static void row(View view, TextView title, TextView summary, boolean header) {}
 	public static void settingsRow(View view, TextView title, TextView summary, View widgets, boolean header) {}
 	public static void serviceRow(View view, TextView title, TextView metadata, TextView end) {}
+	public static void serviceHeader(TextView text) {}
+	public static void serviceTableCell(TextView text, boolean header) {}
+	public static void serviceText(TextView text, boolean nested, boolean medium) {}
+	public static void serviceCategory(View root, TextView title, ImageView arrow) {}
+	public static void servicePreview(View root, TextView title, TextView metadata, TextView date,
+			boolean muted, boolean emphasized, float legacyAlpha) {}
+	public static void serviceAction(TextView text, boolean empty) {}
+	public static void serviceTab(View root, TextView text, View indicator, boolean selected) {}
+	public static void themeChoice(View root, TextView title, ImageView preview, ImageView check, boolean selected, boolean dialog) {}
+	public static void serviceDocument(TextView text) {}
+	public static com.mishiranu.dashchan.graphics.ColorScheme serviceDocumentColors(Context context) {
+		return ThemeEngine.getColorScheme(context);
+	}
+	public static int serviceWarningColor(Context context) {
+		return com.mishiranu.dashchan.util.ResourceUtils.getColor(context, com.mishiranu.dashchan.R.attr.colorTextError);
+	}
 	public static void menuRow(View view, TextView title) {}
 	public static void serviceState(View view, TextView message) {}
+	public static void serviceErrorState(View view, ImageView icon, TextView message) {}
 	public static void standardPage(View view) {}
 	public static Integer standardStatusBarSurface(Context context) { return null; }
 	public static void standardLoading(android.widget.ProgressBar view) {}
+	public static ProgressDialog.Content standardProgressContent(Context context, String format) { return null; }
+	public static void standardProgressText(TextView text, boolean caption) {}
 	public static void standardToolbar(android.widget.Toolbar toolbar, TextView title, TextView subtitle) {}
 	public static void standardSearch(View root, android.widget.SearchView search) {}
 	public static Context standardDialogContext(Context context) { return context; }

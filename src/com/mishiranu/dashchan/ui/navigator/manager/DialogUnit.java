@@ -1623,7 +1623,7 @@ public class DialogUnit {
 					chanNameItems[canArchiveLocal ? i + 1 : i] = archiveChan.name;
 					items[canArchiveLocal ? i + 1 : i] = archiveChan.configuration.getTitle();
 				}
-				return new MotionDialogBuilder(provider.getContext())
+				return MotionDialogBuilder.standard(provider.getContext())
 						.setTitle(R.string.archive__verb)
 						.setItems(items, (d, which) -> performSendArchiveThreadInternal(provider.getContext(),
 								provider.getFragmentManager(), state, chanNameItems[which], posts))
@@ -1866,7 +1866,7 @@ public class DialogUnit {
 			SendMultifunctionalTask.State state, String type, String text, List<String> options) {
 		new InstanceDialog(fragmentManager, null, provider -> {
 			Context context = provider.getContext();
-			ProgressDialog dialog = new ProgressDialog(context, null);
+			ProgressDialog dialog = ProgressDialog.standard(context, null);
 			dialog.setMessage(context.getString(state.archiveQueryOnly
 					? R.string.loading__ellipsis : R.string.sending__ellipsis));
 			MultifunctionalViewModel viewModel = provider.getViewModel(MultifunctionalViewModel.class);
@@ -1942,7 +1942,7 @@ public class DialogUnit {
 	private static void showLocalArchiveWarning(FragmentManager fragmentManager,
 			String chanName, String boardName, String threadNumber, String threadTitle, Collection<Post> posts,
 			boolean saveThumbnails, boolean saveFiles) {
-		new InstanceDialog(fragmentManager, null, provider -> new MotionDialogBuilder(provider.getContext())
+		new InstanceDialog(fragmentManager, null, provider -> MotionDialogBuilder.standard(provider.getContext())
 				.setMessage(R.string.zip_archive_warning)
 				.setNegativeButton(android.R.string.cancel, null)
 				.setPositiveButton(android.R.string.ok, (dialog, which) -> startLocalArchiveProcess(
@@ -1958,7 +1958,7 @@ public class DialogUnit {
 				threadNumber, threadTitle, posts, saveThumbnails, saveFiles, createZip);
 		new InstanceDialog(fragmentManager, null, provider -> {
 			Context context = provider.getContext();
-			ProgressDialog dialog = new ProgressDialog(context, "%d / %d");
+			ProgressDialog dialog = ProgressDialog.standard(context, "%d / %d");
 			dialog.setMessage(context.getString(R.string.processing_data__ellipsis));
 			dialog.setMax(request.posts.size());
 			LocalArchiveViewModel viewModel = provider.getViewModel(LocalArchiveViewModel.class);

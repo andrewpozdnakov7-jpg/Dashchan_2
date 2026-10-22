@@ -192,7 +192,7 @@ public class GeneralFragment extends PreferenceFragment implements FragmentHandl
 
 	private void displayCaptchaSolvingCheckDialog() {
 		if (captchaSolvingCheckDialog == null) {
-			captchaSolvingCheckDialog = new ProgressDialog(requireContext(), null);
+			captchaSolvingCheckDialog = ProgressDialog.standard(requireContext(), null);
 			captchaSolvingCheckDialog.setMessage(getString(R.string.loading__ellipsis));
 			captchaSolvingCheckDialog.setOnCancelListener(d -> {
 				captchaSolvingCheckDialog = null;

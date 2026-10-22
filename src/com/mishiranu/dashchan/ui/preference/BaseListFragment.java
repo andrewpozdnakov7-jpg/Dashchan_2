@@ -13,10 +13,13 @@ import com.mishiranu.dashchan.widget.DividerItemDecoration;
 import com.mishiranu.dashchan.widget.ExpandedLayout;
 import com.mishiranu.dashchan.widget.PaddedRecyclerView;
 import com.mishiranu.dashchan.widget.ViewFactory;
+import com.mishiranu.dashchan.widget.InterfaceAppearance;
 
 public abstract class BaseListFragment extends ContentFragment {
 	private RecyclerView recyclerView;
 	private ViewFactory.ErrorHolder errorHolder;
+
+	protected boolean useStandardServiceAppearance() { return false; }
 
 	@Override
 	public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
@@ -30,10 +33,11 @@ public abstract class BaseListFragment extends ContentFragment {
 		recyclerView.addItemDecoration(new DividerItemDecoration(recyclerView.getContext(), this::configureDivider));
 		layout.addView(recyclerView, ExpandedLayout.LayoutParams.MATCH_PARENT,
 				ExpandedLayout.LayoutParams.MATCH_PARENT);
-		errorHolder = ViewFactory.createErrorLayout(layout);
+		errorHolder = ViewFactory.createErrorLayout(layout, useStandardServiceAppearance());
 		errorHolder.layout.setVisibility(View.GONE);
 		layout.addView(errorHolder.layout);
 		setListPadding(recyclerView);
+		if (useStandardServiceAppearance()) InterfaceAppearance.standardPage(layout);
 		return layout;
 	}
 

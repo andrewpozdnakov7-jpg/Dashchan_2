@@ -128,7 +128,7 @@ public final class DownloadedUpdatePrompt {
 	public static final class ReadyDialog extends DialogFragment {
 		@Override public void onCreate(Bundle state) { super.onCreate(state); setCancelable(false); }
 		@Override @NonNull public Dialog onCreateDialog(Bundle state) {
-			return new MotionDialogBuilder(requireContext()).setTitle(R.string.update_downloaded)
+			return MotionDialogBuilder.standard(requireContext()).setTitle(R.string.update_downloaded)
 					.setMessage(getString(R.string.downloaded_update_ready, requireArguments().getString("version")))
 					.setPositiveButton(R.string.downloaded_update_install, null)
 					.setNegativeButton(R.string.downloaded_update_later, null).create();

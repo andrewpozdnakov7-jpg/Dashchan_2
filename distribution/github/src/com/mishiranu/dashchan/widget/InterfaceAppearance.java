@@ -43,7 +43,7 @@ public final class InterfaceAppearance {
 	private InterfaceAppearance() {}
 	enum Role {ROW, HEADER, TEXT, SECONDARY, ACTION, TEXT_ACTION, FIELD, POSTING_FORM, POSTING_FIELD, CHECK, SWITCH, SLIDER, ICON, AUDIO_TITLE,
 		SETTING_TITLE, SETTING_SUMMARY, SECTION_TITLE, MENU_TITLE, POPUP_TEXT, SERVICE_TITLE, SERVICE_META, DIALOG_TITLE, DIALOG_BODY,
-		STANDARD_BUTTON, TOOLBAR_TITLE, TOOLBAR_SUBTITLE, SEARCH_TEXT, STATE_TITLE}
+		STANDARD_BUTTON, TOOLBAR_TITLE, TOOLBAR_SUBTITLE, SEARCH_TEXT, STATE_TITLE, SERVICE_DOCUMENT}
 	public static boolean isEnabled(Context context) {
 		return InterfaceMotion.isEnabled() && supported(context);
 	}
@@ -153,6 +153,64 @@ public final class InterfaceAppearance {
 		role(metadata, Role.SERVICE_META); role(end, Role.SERVICE_META);
 		StandardAppearance.service(view, title, metadata, end);
 	}
+	public static void serviceHeader(TextView text) {
+		ServiceAppearance.State state = ServiceAppearance.prepare(text, text); state.kind = ServiceAppearance.Kind.HEADER;
+		settingsRow(text, text, null, null, true); state.apply();
+	}
+	public static void serviceTableCell(TextView text, boolean header) { role(text, header ? Role.SECTION_TITLE : Role.SERVICE_TITLE); }
+	public static void serviceText(TextView text, boolean nested, boolean medium) {
+		ServiceAppearance.State state = ServiceAppearance.prepare(text, text);
+		state.kind = ServiceAppearance.Kind.TEXT; state.nested = nested; state.medium = medium;
+		state.legacyTypeface = text.getTypeface();
+		serviceRow(text, text, null, null); state.apply();
+	}
+	public static void serviceCategory(View root, TextView title, ImageView arrow) {
+		ServiceAppearance.State state = ServiceAppearance.prepare(root, title);
+		if (state.icon == null) { state.icon = arrow; state.iconTint = arrow.getImageTintList(); }
+		state.kind = ServiceAppearance.Kind.CATEGORY;
+		serviceRow(root, title, null, null); state.apply();
+	}
+	public static void servicePreview(View root, TextView title, TextView metadata, TextView date,
+			boolean muted, boolean emphasized, float legacyAlpha) {
+		ServiceAppearance.State state = ServiceAppearance.prepare(root, title);
+		state.kind = ServiceAppearance.Kind.PREVIEW; state.metadata = metadata; state.date = date;
+		state.muted = muted; state.medium = emphasized; state.legacyAlpha = legacyAlpha; state.legacyTypeface = title.getTypeface();
+		serviceRow(root, title, metadata, date); state.apply();
+	}
+	public static void serviceAction(TextView text, boolean empty) {
+		ServiceAppearance.State state = ServiceAppearance.prepare(text, text);
+		state.kind = empty ? ServiceAppearance.Kind.EMPTY : ServiceAppearance.Kind.ACTION;
+		if (empty) serviceState(text, text);
+		else { serviceRow(text, text, null, null); role(text, Role.STANDARD_BUTTON); }
+		state.apply();
+	}
+	public static void serviceTab(View root, TextView text, View indicator, boolean selected) {
+		ServiceAppearance.State state = ServiceAppearance.prepare(root, text);
+		state.kind = ServiceAppearance.Kind.TAB; state.indicator = indicator; state.selected = selected;
+		role(text, Role.STANDARD_BUTTON); state.apply();
+	}
+	public static void themeChoice(View root, TextView title, ImageView preview, ImageView check, boolean selected, boolean dialog) {
+		ServiceAppearance.State state = ServiceAppearance.prepare(root, title);
+		if (state.icon == null) { state.icon = preview; state.iconMarginEnd = ((ViewGroup.MarginLayoutParams) preview.getLayoutParams()).getMarginEnd(); }
+		state.kind = ServiceAppearance.Kind.THEME; state.check = check; state.selected = selected; state.dialog = dialog;
+		settingsRow(root, title, null, (View) check.getParent(), false); state.apply();
+	}
+	/** Only TextFragment's document widgets opt in; spans and selection remain intact. */
+	public static void serviceDocument(TextView text) { role(text, Role.SERVICE_DOCUMENT); }
+	public static com.mishiranu.dashchan.graphics.ColorScheme serviceDocumentColors(Context context) {
+		return documentColors(context, isEnabled(context));
+	}
+	private static com.mishiranu.dashchan.graphics.ColorScheme documentColors(Context context, boolean enabled) {
+		ThemeEngine.Theme theme = ThemeEngine.getTheme(context);
+		if (!enabled) return ThemeEngine.getColorScheme(context);
+		AppearanceColors c = StandardAppearance.colors(context);
+		return new com.mishiranu.dashchan.graphics.ColorScheme(context, theme, c.window,
+				contrasting(opaque(theme.link, c.window), c.window, 4.5));
+	}
+	public static int serviceWarningColor(Context context) {
+		return isEnabled(context) ? StandardAppearance.colors(context).error
+				: ResourceUtils.getColor(context, R.attr.colorTextError);
+	}
 	public static void menuRow(View view, TextView title) {
 		StandardAppearance.prepare(view, title, null, null, null);
 		row(view, title, null, false); role(title, Role.MENU_TITLE); StandardAppearance.menu(view, title);
@@ -160,12 +218,19 @@ public final class InterfaceAppearance {
 	public static void serviceState(View view, TextView message) {
 		role(message, Role.STATE_TITLE); StandardAppearance.state(view, message);
 	}
+	public static void serviceErrorState(View view, ImageView icon, TextView message) {
+		role(message, Role.STATE_TITLE); StandardAppearance.errorState(view, icon, message);
+	}
 	public static void standardPage(View view) { StandardAppearance.page(view); }
 	/** Main chrome only; null means retain legacy/F-Droid status-bar ownership. */
 	public static Integer standardStatusBarSurface(Context context) {
-		return isEnabled(context) ? StandardAppearance.colors(context).surface : null;
+		return isEnabled(context) ? ToolbarPalette.resolve(context).background : null;
 	}
 	public static void standardLoading(android.widget.ProgressBar view) { StandardAppearance.loading(view); }
+	public static ProgressDialog.Content standardProgressContent(Context context, String format) {
+		return isEnabled(context) ? new StandardProgressContent(context, format) : null;
+	}
+	public static void standardProgressText(TextView text, boolean caption) { role(text, caption ? Role.SERVICE_META : Role.DIALOG_BODY); }
 	public static void standardToolbar(android.widget.Toolbar toolbar, TextView title, TextView subtitle) {
 		StandardAppearance.toolbar(toolbar, title, subtitle);
 	}
@@ -240,18 +305,28 @@ public final class InterfaceAppearance {
 				&& Objects.equals(state.appliedTypography, typography) && state.appliedError == state.error) return;
 		state.restore(view); state.rendered = true; state.applied = enabled; state.appliedRole = state.role;
 		state.appliedColors = p != null ? p.colors : null; state.appliedTypography = typography; state.appliedError = state.error;
-		if (!enabled) return;
+		if (!enabled) {
+			if (state.role == Role.SERVICE_DOCUMENT) documentColors(view.getContext(), false).apply(((TextView) view).getText());
+			return;
+		}
 		AppearanceTypography.Role typographyRole = standardTypography(state.role);
 		if (typographyRole != null) {
 			TextView text = (TextView) view;
 			AppearanceTypography.apply(text, typographyRole);
 			AppearanceColors standard = StandardAppearance.colors(view.getContext());
 			boolean secondary = state.role == Role.SETTING_SUMMARY || state.role == Role.SERVICE_META || state.role == Role.TOOLBAR_SUBTITLE;
-			text.setTextColor(enabled(secondary ? standard.onSurfaceVariant : standard.onSurface, standard.surface));
-			if (state.role == Role.SETTING_TITLE || state.role == Role.SETTING_SUMMARY || state.role == Role.MENU_TITLE
+			if (state.role == Role.TOOLBAR_SUBTITLE) {
+				ToolbarPalette toolbar = ToolbarPalette.resolve(view.getContext());
+				text.setTextColor(enabled(toolbar.subtitle, toolbar.background));
+			} else text.setTextColor(enabled(secondary ? standard.onSurfaceVariant : standard.onSurface, standard.surface));
+			if (supportsStandardLineLimits(text) && (state.role == Role.SETTING_TITLE || state.role == Role.SETTING_SUMMARY || state.role == Role.MENU_TITLE
 					|| state.role == Role.SERVICE_TITLE || state.role == Role.SERVICE_META || state.role == Role.DIALOG_BODY
-					|| state.role == Role.DIALOG_TITLE || state.role == Role.STATE_TITLE) {
+					|| state.role == Role.DIALOG_TITLE || state.role == Role.STATE_TITLE || state.role == Role.SERVICE_DOCUMENT)) {
 				text.setSingleLine(false); text.setMaxLines(Integer.MAX_VALUE);
+			}
+			if (state.role == Role.SERVICE_DOCUMENT) {
+				com.mishiranu.dashchan.graphics.ColorScheme scheme = documentColors(view.getContext(), true);
+				text.setLinkTextColor(scheme.linkColor); scheme.apply(text.getText());
 			}
 			return;
 		}
@@ -259,7 +334,7 @@ public final class InterfaceAppearance {
 			case TEXT: case SECONDARY: case AUDIO_TITLE: {
 				TextView text = (TextView) view; text.setTextColor(enabled(state.role == Role.SECONDARY ? p.secondary : p.text, p.surface));
 				if (state.role == Role.AUDIO_TITLE) {
-					text.setSingleLine(false); text.setMaxLines(2);
+					if (supportsStandardLineLimits(text)) { text.setSingleLine(false); text.setMaxLines(2); }
 					AppearanceTypography.apply(text, AppearanceTypography.Role.COMPAT_AUDIO_TITLE);
 				}
 				break;
@@ -349,11 +424,16 @@ public final class InterfaceAppearance {
 		}
 		TouchFeedback.apply(view);
 	}
+	private static boolean supportsStandardLineLimits(TextView text) {
+		// CommentTextView owns folding via setLinesLimit and deliberately rejects setMaxLines.
+		// TextView.setSingleLine also invokes that virtual setter, even for false.
+		return !(text instanceof CommentTextView);
+	}
 	private static AppearanceTypography.Role standardTypography(Role role) {
 		if (role == null) return null;
 		switch (role) {
 			case SETTING_TITLE: case SEARCH_TEXT: return AppearanceTypography.Role.BODY_LARGE;
-			case SETTING_SUMMARY: case MENU_TITLE: case POPUP_TEXT: case SERVICE_TITLE: case DIALOG_BODY: return AppearanceTypography.Role.BODY_MEDIUM;
+			case SETTING_SUMMARY: case MENU_TITLE: case POPUP_TEXT: case SERVICE_TITLE: case DIALOG_BODY: case SERVICE_DOCUMENT: return AppearanceTypography.Role.BODY_MEDIUM;
 			case SECTION_TITLE: case STANDARD_BUTTON: return AppearanceTypography.Role.LABEL_LARGE;
 			case SERVICE_META: case TOOLBAR_SUBTITLE: return AppearanceTypography.Role.BODY_SMALL;
 			case DIALOG_TITLE: return AppearanceTypography.Role.TITLE_LARGE;
@@ -369,6 +449,7 @@ public final class InterfaceAppearance {
 		final Drawable background; final ColorStateList backgroundTint; final StateListAnimator animator; final float elevation;
 		final int start, top, end, bottom, minimumHeight, bottomMargin;
 		final ColorStateList text, hint, imageTint, buttonTint, trackTint, thumbTint, progressTint, progressBackgroundTint;
+		final ColorStateList linkText;
 		final AppearanceTypography.Snapshot typography; final int minLines, maxLines;
 		final Drawable mark, track, thumb, progress; final int switchWidth, thumbOffset, minTrackHeight, maxTrackHeight; final boolean splitTrack;
 		State(View view) {
@@ -377,6 +458,7 @@ public final class InterfaceAppearance {
 			bottomMargin = view.getLayoutParams() instanceof ViewGroup.MarginLayoutParams
 					? ((ViewGroup.MarginLayoutParams) view.getLayoutParams()).bottomMargin : 0;
 			TextView t = view instanceof TextView ? (TextView) view : null; text = t != null ? t.getTextColors() : null; hint = t != null ? t.getHintTextColors() : null;
+			linkText = t != null ? t.getLinkTextColors() : null;
 			typography = t != null ? new AppearanceTypography.Snapshot(t) : null;
 			minLines = t != null ? t.getMinLines() : -1; maxLines = t != null ? t.getMaxLines() : -1;
 			imageTint = view instanceof ImageView ? ((ImageView) view).getImageTintList() : null;
@@ -395,16 +477,20 @@ public final class InterfaceAppearance {
 			if (role == Role.POSTING_FIELD || appliedRole == Role.POSTING_FIELD) setBottomMargin(view, bottomMargin);
 			if (view instanceof TextView) {
 				TextView t = (TextView) view; t.setTextColor(text); if (hint != null) t.setHintTextColor(hint);
+				if (role == Role.SERVICE_DOCUMENT && linkText != null) t.setLinkTextColor(linkText);
 				if (standardTypography(role) != null || standardTypography(appliedRole) != null) {
 					if (role == Role.SEARCH_TEXT || appliedRole == Role.SEARCH_TEXT) typography.restoreTextMetrics(t);
 					else {
-						typography.restore(t); t.setSingleLine(maxLines == 1);
-						if (minLines >= 0) t.setMinLines(minLines); if (maxLines >= 0) t.setMaxLines(maxLines);
+						typography.restore(t);
+						if (supportsStandardLineLimits(t)) {
+							t.setSingleLine(maxLines == 1);
+							if (minLines >= 0) t.setMinLines(minLines); if (maxLines >= 0) t.setMaxLines(maxLines);
+						}
 					}
 				}
 				if (role == Role.ACTION || role == Role.TEXT_ACTION || role == Role.AUDIO_TITLE
 						|| appliedRole == Role.ACTION || appliedRole == Role.TEXT_ACTION || appliedRole == Role.AUDIO_TITLE) {
-					if (role == Role.AUDIO_TITLE || appliedRole == Role.AUDIO_TITLE) {
+					if (supportsStandardLineLimits(t) && (role == Role.AUDIO_TITLE || appliedRole == Role.AUDIO_TITLE)) {
 						t.setSingleLine(maxLines == 1);
 						if (minLines >= 0) t.setMinLines(minLines);
 						if (maxLines >= 0) t.setMaxLines(maxLines);

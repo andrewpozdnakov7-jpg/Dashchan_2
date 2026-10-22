@@ -57,7 +57,7 @@ public class ThreadshotPerformer {
 	private static void start(ThreadshotPerformer performer, FragmentManager fragmentManager,
 			String chanName, String boardName, String threadNumber, String threadTitle) {
 		new InstanceDialog(fragmentManager, null, provider -> {
-			ProgressDialog dialog = new ProgressDialog(provider.getContext(), null);
+			ProgressDialog dialog = ProgressDialog.standard(provider.getContext(), null);
 			dialog.setMessage(provider.getContext().getString(R.string.processing_data__ellipsis));
 			ThreadshotViewModel viewModel = provider.getViewModel(ThreadshotViewModel.class);
 			if (!viewModel.hasTaskOrValue()) {

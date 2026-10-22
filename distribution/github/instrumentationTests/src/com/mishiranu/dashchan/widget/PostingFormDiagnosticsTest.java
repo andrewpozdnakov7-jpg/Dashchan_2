@@ -49,6 +49,14 @@ public class PostingFormDiagnosticsTest {
 					((LinearLayout) root.findViewById(R.id.attachment_container)).addView(filename);
 					activity.setContentView(root);
 					PostingFormDiagnostics.start(exportContext);
+					android.app.AlertDialog fixture = MotionDialogBuilder.standard(context).setTitle(canaries[0])
+							.setMessage(canaries[1]).setPositiveButton(android.R.string.ok, null).create();
+					android.graphics.drawable.Drawable original = fixture.getWindow().getDecorView().getBackground();
+					int originalWidth = fixture.getWindow().getAttributes().width;
+					com.mishiranu.dashchan.util.ScreenDiagnostics.observe(fixture.getWindow(), "fixture");
+					assertSame(original, fixture.getWindow().getDecorView().getBackground());
+					assertEquals(originalWidth, fixture.getWindow().getAttributes().width);
+					fixture.show(); fixture.dismiss();
 					PostingFormDiagnostics.Observer observer = new PostingFormDiagnostics.Observer(activity, root,
 							root.findViewById(R.id.scroll_view), root.findViewById(R.id.comment), root.findViewById(R.id.footer_container));
 					PostingFormDiagnostics.trace(root.findViewById(R.id.comment), "fixture_event", "height=123");
@@ -58,7 +66,9 @@ public class PostingFormDiagnosticsTest {
 				});
 				assertTrue(saved.await(5, TimeUnit.SECONDS)); assertNotNull(export[0]);
 				String report = new String(Files.readAllBytes(export[0].toPath()), StandardCharsets.UTF_8);
-				assertTrue(report.contains("diagnostics v3")); assertTrue(report.contains("geometry editor{"));
+				assertTrue(report.contains("diagnostics v5")); assertTrue(report.contains("geometry editor{"));
+				assertTrue(report.contains("screen window=")); assertTrue(report.contains("standardRequested=true"));
+				assertFalse(report.contains("snapshotUnavailable="));
 				assertTrue(report.contains("attachment_tree")); assertTrue(report.contains("fixture_event height=123"));
 				assertFalse(report.contains("MUST_NOT_APPEAR_AFTER_CLOSE"));
 				for (String canary : canaries) assertFalse(report.contains(canary));

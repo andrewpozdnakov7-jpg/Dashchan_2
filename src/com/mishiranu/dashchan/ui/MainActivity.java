@@ -1820,6 +1820,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	@Override
 	protected void onResume() {
 		super.onResume();
+		if (expandedScreen != null) expandedScreen.refreshSystemBarAppearance();
 		drawerForm.setHostResumed(true);
 		if (ThemeEngine.isDynamicThemeOutdated(this)) {
 			recreate();
@@ -1964,6 +1965,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	@Override
 	protected void onDestroy() {
+		if (expandedScreen != null) expandedScreen.dispose();
 		finishLocalToolbarMotion();
 		if (screenMotion != null) screenMotion.finish();
 		if (threadMotion != null) threadMotion.clear();
@@ -3201,7 +3203,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	};
 
 	private void showStorageInstructionsDialog() {
-		new MotionDialogBuilder(this)
+		MotionDialogBuilder.standard(this)
 				.setTitle(R.string.download_directory)
 				.setMessage(R.string.saf_instructions__sentence)
 				.setPositiveButton(R.string.proceed, (d, w) -> startStorageDirectoryPicker())
@@ -3219,7 +3221,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	}
 
 	private void showInitialStorageSetupDialog() {
-		new MotionDialogBuilder(this)
+		MotionDialogBuilder.standard(this)
 				.setTitle(R.string.download_directory)
 				.setMessage(R.string.download_directory_setup__sentence)
 				.setPositiveButton(R.string.select_folder, (d, w) -> startStorageDirectoryPicker())

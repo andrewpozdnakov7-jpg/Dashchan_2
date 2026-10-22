@@ -29,7 +29,7 @@ public class UpdateDialogHelper {
 			return;
 		}
 		Context context = fragment.requireContext();
-		ProgressDialog progressDialog = new ProgressDialog(context, null);
+		ProgressDialog progressDialog = ProgressDialog.standard(context, null);
 		progressDialog.setMessage(context.getString(R.string.checking_for_updates__ellipsis));
 		final boolean[] completed = {false};
 		final UpdateChecker.CheckTask[] taskHolder = {null};
@@ -73,7 +73,7 @@ public class UpdateDialogHelper {
 		switch (result.status) {
 			case NO_UPDATE: {
 				if (manual) {
-					new MotionDialogBuilder(context)
+					MotionDialogBuilder.standard(context)
 							.setTitle(R.string.check_for_updates)
 							.setMessage(R.string.latest_version_installed)
 							.setPositiveButton(android.R.string.ok, null)
@@ -83,7 +83,7 @@ public class UpdateDialogHelper {
 			}
 			case ERROR: {
 				if (manual) {
-					new MotionDialogBuilder(context)
+					MotionDialogBuilder.standard(context)
 							.setTitle(R.string.update_check_failed)
 							.setMessage(!StringUtils.isEmpty(result.errorMessage)
 									? result.errorMessage : context.getString(R.string.unknown_error))
@@ -120,10 +120,9 @@ public class UpdateDialogHelper {
 		actions.add(ACTION_SKIP);
 		labels.add(context.getString(android.R.string.cancel));
 		actions.add(ACTION_CLOSE);
-		AlertDialog.Builder builder = new MotionDialogBuilder(context)
+		AlertDialog.Builder builder = MotionDialogBuilder.standard(context)
 				.setTitle(title)
-				.setMessage(message)
-				.setItems(labels.toArray(new String[0]), (dialog, which) -> {
+				.setItemsWithMessage(message, labels.toArray(new String[0]), (dialog, which) -> {
 					switch (actions.get(which)) {
 						case ACTION_OPEN: {
 							openDownloadPage(context, result);

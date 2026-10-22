@@ -26,6 +26,7 @@ import android.widget.SearchView;
 import android.widget.TextView;
 import android.widget.Toolbar;
 import com.mishiranu.dashchan.R;
+import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.util.OpaqueColors;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.util.ViewUtils;
@@ -49,6 +50,12 @@ final class StandardAppearance {
 		return new ColorStateList(new int[][]{{-android.R.attr.state_enabled}, {}},
 				new int[]{OpaqueColors.blend(surface, text, .38f), text});
 	}
+	static ColorStateList serviceTextColors(int normal, int background, AppearanceColors c) {
+		int selected = InterfaceAppearance.contrasting(normal, c.primaryContainer, 4.5);
+		return new ColorStateList(new int[][]{{-android.R.attr.state_enabled}, {android.R.attr.state_checked},
+				{android.R.attr.state_activated}, {android.R.attr.state_selected}, {}}, new int[]{
+				com.mishiranu.dashchan.util.OpaqueColors.blend(background, normal, .38f), selected, selected, selected, normal});
+	}
 	private static Drawable rowBackground(View view, AppearanceColors c) {
 		StateListDrawable fill = new StateListDrawable();
 		fill.addState(new int[]{-android.R.attr.state_enabled}, shape(view, Color.TRANSPARENT, 0));
@@ -60,7 +67,7 @@ final class StandardAppearance {
 				new int[]{Color.TRANSPARENT, c.ripple}), fill, shape(view, Color.WHITE, 0));
 	}
 
-	private enum Kind {SETTINGS, SECTION, SERVICE, MENU, STATE, PAGE, INPUT}
+	private enum Kind {SETTINGS, SECTION, SERVICE, MENU, STATE, ERROR, PAGE, INPUT}
 	private static final class Saved {
 		final View view; final int start, top, end, bottom, minHeight, minWidth, height;
 		final int marginStart, marginEnd, marginTop, marginBottom, textMinHeight, textMinWidth, textMaxWidth;
@@ -101,6 +108,7 @@ final class StandardAppearance {
 	private static final class Layout {
 		final View root; final ArrayList<Saved> saved = new ArrayList<>();
 		Kind kind; TextView title, summary, end; View widgets; boolean applied;
+		ImageView errorIcon; int errorIconWidth, errorIconHeight;
 		Layout(View root) { this.root = root; remember(root); }
 		void remember(View view) {
 			if (view == null) return;
@@ -112,6 +120,11 @@ final class StandardAppearance {
 		}
 		void applyResolved(boolean enabled) {
 			if (applied) for (Saved s : saved) s.restore();
+			if (applied && errorIcon != null) {
+				ViewGroup.LayoutParams params = errorIcon.getLayoutParams();
+				params.width = errorIconWidth; params.height = errorIconHeight;
+				errorIcon.setLayoutParams(params);
+			}
 			applied = enabled;
 			if (!applied) return;
 			AppearanceColors c = colors(root.getContext());
@@ -120,6 +133,18 @@ final class StandardAppearance {
 			if (kind == Kind.STATE) {
 				// ExpandedLayout remains the sole owner of the host's system/toolbar insets.
 				title.setPaddingRelative(dp(root, 24), dp(root, 24), dp(root, 24), dp(root, 24));
+				return;
+			}
+			if (kind == Kind.ERROR) {
+				// Group owns outer vertical breathing room; the icon/text gap has ONE owner.
+				root.setPaddingRelative(0, dp(root, 24), 0, dp(root, 24));
+				title.setPaddingRelative(dp(root, 24), 0, dp(root, 24), 0);
+				if (errorIcon != null) {
+					ViewGroup.LayoutParams params = errorIcon.getLayoutParams();
+					params.width = dp(root, 40); params.height = dp(root, 40);
+					errorIcon.setLayoutParams(params);
+					((ViewGroup.MarginLayoutParams) title.getLayoutParams()).topMargin = dp(root, 12);
+				}
 				return;
 			}
 			if (kind == Kind.SECTION) {
@@ -134,20 +159,26 @@ final class StandardAppearance {
 			root.setBackgroundTintList(null); root.setBackground(rowBackground(root, c));
 			View textContainer = title != null && title != root && title.getParent() instanceof View
 					? (View) title.getParent() : root;
+			// Cookie titles have a small icon row; metadata is its sibling. The common
+			// content container, not that icon row, owns the vertical padding.
+			if (kind == Kind.SERVICE && summary != null) {
+				while (textContainer != root && !contains(textContainer, summary)
+						&& textContainer.getParent() instanceof View) textContainer = (View) textContainer.getParent();
+			}
 			if (textContainer != root) {
 				root.setPaddingRelative(dp(root, 16), 0, dp(root, 16), 0);
 				textContainer.setPaddingRelative(0, dp(root, 8), 0, dp(root, 8));
 			} else root.setPaddingRelative(dp(root, 16), dp(root, 8), dp(root, 16), dp(root, 8));
-			if (kind == Kind.MENU && title != root) title.setPadding(0, 0, 0, 0);
+			if (kind == Kind.MENU && title != root) {
+				// Only the row owns the 48dp target. Native labels can carry two minima.
+				title.setPadding(0, 0, 0, 0); title.setMinHeight(0); title.setMinimumHeight(0);
+			}
 			if (kind == Kind.SERVICE || kind == Kind.MENU) {
 				for (TextView text : new TextView[]{title, summary, end}) {
 					if (text == null) continue;
-					if (text != root) text.setDuplicateParentStateEnabled(true);
+					if (text != root) text.setDuplicateParentStateEnabled(text.isEnabled() == root.isEnabled());
 					int normal = text == title ? c.onSurface : c.onSurfaceVariant;
-					int selected = InterfaceAppearance.contrasting(normal, c.primaryContainer, 4.5);
-					text.setTextColor(new ColorStateList(new int[][]{{-android.R.attr.state_enabled}, {android.R.attr.state_checked},
-							{android.R.attr.state_activated}, {android.R.attr.state_selected}, {}},
-							new int[]{OpaqueColors.blend(c.surface, normal, .38f), selected, selected, selected, normal}));
+					text.setTextColor(serviceTextColors(normal, c.surface, c));
 				}
 			}
 			if (summary != null && summary.getLayoutParams() instanceof ViewGroup.MarginLayoutParams) {
@@ -157,6 +188,13 @@ final class StandardAppearance {
 				((ViewGroup.MarginLayoutParams) widgets.getLayoutParams()).setMarginStart(dp(root, 12));
 			}
 		}
+	}
+	private static boolean contains(View parent, View child) {
+		for (View current = child; current != null;) {
+			if (current == parent) return true;
+			current = current.getParent() instanceof View ? (View) current.getParent() : null;
+		}
+		return false;
 	}
 	private static void layout(View root, Kind kind, TextView title, TextView summary, TextView end) {
 		if (root == null) return;
@@ -185,6 +223,15 @@ final class StandardAppearance {
 	static void service(View root, TextView title, TextView metadata, TextView end) { layout(root, Kind.SERVICE, title, metadata, end); }
 	static void menu(View root, TextView title) { layout(root, Kind.MENU, title, null, null); }
 	static void state(View root, TextView message) { layout(root, Kind.STATE, message, null, null); }
+	static void errorState(View root, ImageView icon, TextView message) {
+		layout(root, Kind.ERROR, message, null, null);
+		Layout state = (Layout) root.getTag(R.id.standard_layout_appearance);
+		if (state.errorIcon == null) {
+			state.errorIcon = icon; state.errorIconWidth = icon.getLayoutParams().width;
+			state.errorIconHeight = icon.getLayoutParams().height;
+		}
+		state.apply();
+	}
 	static void page(View root) { layout(root, Kind.PAGE, null, null, null); }
 	/** Detached fixture seam; does not modify app preferences, callbacks or values. */
 	static void resolveLayout(View root, boolean enabled) {
@@ -196,6 +243,8 @@ final class StandardAppearance {
 		Object search = view.getTag(R.id.standard_search_appearance); if (search instanceof SearchState) ((SearchState) search).apply();
 		Object loading = view.getTag(R.id.standard_loading_appearance); if (loading instanceof LoadingState) ((LoadingState) loading).apply();
 		Object dialog = view.getTag(R.id.standard_dialog_appearance); if (dialog instanceof DialogState) ((DialogState) dialog).apply();
+		ServiceAppearance.refresh(view);
+		if (view instanceof ProgressDialog.Content) ((ProgressDialog.Content) view).refreshAppearance();
 	}
 
 	static Context dialogContext(Context context) {
@@ -235,6 +284,10 @@ final class StandardAppearance {
 		DialogState(AlertDialog dialog) { this.dialog = dialog; }
 		void prepareWindow() {
 			Window window = dialog.getWindow();
+			if (com.mishiranu.dashchan.ui.posting.PostingFormDiagnostics.isRecording()) {
+				com.mishiranu.dashchan.util.ScreenDiagnostics.note(window, "standard_prepare",
+						"effective=" + InterfaceAppearance.isEnabled(dialog.getContext()) + " menu=" + (menu != null));
+			}
 			if (window == null || !InterfaceAppearance.isEnabled(dialog.getContext())) return;
 			View decor = window.getDecorView();
 			if (!windowOwned) {
@@ -245,8 +298,7 @@ final class StandardAppearance {
 			int radius = menu != null ? 12 : 28;
 			Point available = ViewUtils.getWindowContentSize(dialog.getContext());
 			int margin = dp(decor, available.x < dp(decor, 328) ? 16 : 24);
-			preparedWidth = Math.max(1, menu != null ? Math.min(available.x - dp(decor, 32), Math.max(1, menu.getMinimumWidth()))
-					: Math.min(dp(decor, AppearanceShapes.STANDARD_DIALOG_MAX_WIDTH), available.x - 2 * margin));
+			preparedWidth = Math.max(1, Math.min(dp(decor, AppearanceShapes.STANDARD_DIALOG_MAX_WIDTH), available.x - 2 * margin));
 			if (!backgroundPrepared || preparedColor != c.surfaceContainer || preparedRadius != radius) {
 				window.setBackgroundDrawable(shape(decor, c.surfaceContainer, radius));
 				preparedColor = c.surfaceContainer; preparedRadius = radius; backgroundPrepared = true;
@@ -284,6 +336,10 @@ final class StandardAppearance {
 				}
 			}
 			applied = true; applyDialog(dialog);
+			if (com.mishiranu.dashchan.ui.posting.PostingFormDiagnostics.isRecording()) {
+				com.mishiranu.dashchan.util.ScreenDiagnostics.note(window, "standard_applied",
+						"widthPx=" + preparedWidth + " radiusDp=" + preparedRadius);
+			}
 		}
 	}
 	/** Only the direct parent of our own title and decorative spacer views are adjusted. */
@@ -473,31 +529,40 @@ final class StandardAppearance {
 		final Toolbar toolbar; final TextView title, subtitle; final Saved saved, parent;
 		final int popupTheme; final int height; final ArrayList<IconSaved> icons = new ArrayList<>();
 		final ArrayList<ToolbarTextSaved> texts = new ArrayList<>();
+		final ToolbarTextSaved titleColors, subtitleColors;
 		ToolbarState(Toolbar toolbar, TextView title, TextView subtitle) {
 			this.toolbar = toolbar; this.title = title; this.subtitle = subtitle; saved = new Saved(toolbar);
 			parent = toolbar.getParent() instanceof View ? new Saved((View) toolbar.getParent()) : null;
 			popupTheme = toolbar.getPopupTheme(); height = toolbar.getLayoutParams() != null ? toolbar.getLayoutParams().height : -2;
+			titleColors = title != null ? new ToolbarTextSaved(title) : null;
+			subtitleColors = subtitle != null ? new ToolbarTextSaved(subtitle) : null;
 		}
 		void apply() {
 			boolean enabled = InterfaceAppearance.isEnabled(toolbar.getContext());
 			if (!enabled) {
 				saved.restore(); if (parent != null) parent.restore();
 				setHeight(height);
+				if (titleColors != null) titleColors.restore();
+				if (subtitleColors != null) subtitleColors.restore();
 				if (toolbar.getPopupTheme() != popupTheme) toolbar.setPopupTheme(popupTheme);
 				for (IconSaved icon : icons) icon.restore(); for (ToolbarTextSaved text : texts) text.restore(); return;
 			}
-			AppearanceColors c = colors(toolbar.getContext());
-			toolbar.setBackgroundTintList(null); toolbar.setBackgroundColor(c.surface);
-			if (parent != null) { parent.view.setBackgroundTintList(null); parent.view.setBackgroundColor(c.surface); }
+			ToolbarPalette palette = ToolbarPalette.resolve(toolbar.getContext());
+			toolbar.setBackgroundTintList(null); toolbar.setBackgroundColor(palette.background);
+			if (parent != null) { parent.view.setBackgroundTintList(null); parent.view.setBackgroundColor(palette.background); }
 			toolbar.setMinimumHeight(dp(toolbar, AppearanceShapes.STANDARD_TOOLBAR_MIN_HEIGHT));
-			setHeight(ViewGroup.LayoutParams.WRAP_CONTENT);
-			InterfaceAppearance.standardRole(title, InterfaceAppearance.Role.TOOLBAR_TITLE);
+			// Preserve the original height budget used by the user's adaptive title fitting.
+			// Unlimited WRAP_CONTENT let a three-line title stay at its largest size.
+			setHeight(Preferences.isToolbarTitleCustomizationEnabled() ? height : ViewGroup.LayoutParams.WRAP_CONTENT);
+			// ToolbarTitleView is the sole owner of size/wrapping/line metrics. Do not
+			// reapply a fixed 20sp/24sp role after its measurement; keep the selected font.
+			if (title != null) title.setTextColor(textColors(palette.title, palette.background));
 			InterfaceAppearance.standardRole(subtitle, InterfaceAppearance.Role.TOOLBAR_SUBTITLE);
+			if (subtitle != null) subtitle.setTextColor(textColors(palette.subtitle, palette.background));
 			if (toolbar.getPopupTheme() != R.style.Theme_Standard_Popup) {
 				toolbar.setPopupTheme(R.style.Theme_Standard_Popup);
 			}
-			int iconColor = InterfaceAppearance.contrasting(c.onSurfaceVariant, c.surface, 3);
-			for (int i = 0; i < toolbar.getChildCount(); i++) tintToolbarChild(toolbar.getChildAt(i), iconColor, c.surface);
+			for (int i = 0; i < toolbar.getChildCount(); i++) tintToolbarChild(toolbar.getChildAt(i), palette.icon, palette.background);
 		}
 		void setHeight(int height) {
 			ViewGroup.LayoutParams params = toolbar.getLayoutParams();
@@ -627,33 +692,49 @@ final class StandardAppearance {
 	static void resolveSearch(View root, boolean enabled) {
 		Object tag = root.getTag(R.id.standard_search_appearance); if (tag instanceof SearchState) ((SearchState) tag).applyResolved(enabled);
 	}
-	private static final class LoadingState {
+	private static final class LoadingState implements View.OnAttachStateChangeListener,
+			android.view.ViewTreeObserver.OnPreDrawListener, android.view.ViewTreeObserver.OnWindowFocusChangeListener {
 		final android.widget.ProgressBar view; final Drawable legacy; final ColorStateList legacyTint; final int width, height;
-		com.google.android.material.loadingindicator.LoadingIndicator material;
+		StandardLoadingDrawable drawable;
+		android.view.ViewTreeObserver tree;
 		boolean modern;
 		LoadingState(android.widget.ProgressBar view) {
 			this.view = view; legacy = view.getIndeterminateDrawable(); legacyTint = view.getIndeterminateTintList();
 			width = view.getMinimumWidth(); height = view.getMinimumHeight();
+			view.addOnAttachStateChangeListener(this);
+			if (view.isAttachedToWindow()) onViewAttachedToWindow(view);
 		}
 		void apply() {
 			if (!InterfaceAppearance.isEnabled(view.getContext())) {
-				if (modern) { view.setIndeterminateDrawable(legacy); view.setIndeterminateTintList(legacyTint); view.setMinimumWidth(width); view.setMinimumHeight(height); modern = false; }
+				if (modern) { drawable.stop(); view.setIndeterminateDrawable(legacy); view.setIndeterminateTintList(legacyTint); view.setMinimumWidth(width); view.setMinimumHeight(height); modern = false; }
 				return;
 			}
 			AppearanceColors c = colors(view.getContext());
 			view.setIndeterminateTintList(null);
-			Drawable desired;
-			if (android.animation.ValueAnimator.areAnimatorsEnabled()) {
-				if (material == null) material = PullLoadingIndicator.createMaterial(view.getContext());
-				material.setContainerColor(c.surfaceContainer);
-				material.setIndicatorColor(InterfaceAppearance.contrasting(c.primary, c.surfaceContainer, 3));
-				desired = material.getDrawable();
-			} else {
-				GradientDrawable still = shape(view, c.primary, 24); still.setSize(dp(view, 24), dp(view, 24)); desired = still;
+			if (drawable == null) drawable = new StandardLoadingDrawable(view);
+			boolean dialog = false;
+			for (android.view.ViewParent p = view.getParent(); p instanceof View; p = p.getParent()) {
+				if (p instanceof ProgressDialog.Content) { dialog = true; break; }
 			}
-			if (view.getIndeterminateDrawable() != desired) view.setIndeterminateDrawable(desired);
+			int background = dialog ? c.surfaceContainer : c.window;
+			drawable.palette(background, InterfaceAppearance.contrasting(c.primary, background, 3));
+			if (view.getIndeterminateDrawable() != drawable) view.setIndeterminateDrawable(drawable);
 			view.setMinimumWidth(dp(view, 48)); view.setMinimumHeight(dp(view, 48)); modern = true;
+			drawable.sync();
 		}
+		@Override public void onViewAttachedToWindow(View v) {
+			tree = view.getViewTreeObserver(); tree.addOnPreDrawListener(this); tree.addOnWindowFocusChangeListener(this);
+			apply();
+		}
+		@Override public void onViewDetachedFromWindow(View v) {
+			if (tree != null && tree.isAlive()) { tree.removeOnPreDrawListener(this); tree.removeOnWindowFocusChangeListener(this); }
+			tree = null; if (drawable != null) drawable.stop();
+		}
+		@Override public boolean onPreDraw() {
+			if (modern != InterfaceAppearance.isEnabled(view.getContext())) apply();
+			if (drawable != null) drawable.sync(); return true;
+		}
+		@Override public void onWindowFocusChanged(boolean focused) { if (drawable != null) drawable.sync(); }
 	}
 	static void loading(android.widget.ProgressBar view) {
 		Object tag = view.getTag(R.id.standard_loading_appearance);

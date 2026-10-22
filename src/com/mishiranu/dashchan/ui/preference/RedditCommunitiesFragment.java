@@ -20,11 +20,13 @@ import com.mishiranu.dashchan.content.storage.RedditCommunities.Category;
 import com.mishiranu.dashchan.ui.FragmentHandler;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.widget.ViewFactory;
+import com.mishiranu.dashchan.widget.InterfaceAppearance;
 import java.util.ArrayList;
 import java.util.Collections;
 
 /** Editor for local Reddit bookmarks. No network requests or account changes. */
 public class RedditCommunitiesFragment extends BaseListFragment {
+	@Override protected boolean useStandardServiceAppearance() { return true; }
 	private ArrayList<Category> categories;
 	private final ArrayList<Row> rows = new ArrayList<>();
 	private RecyclerView.Adapter<Holder> adapter;
@@ -49,6 +51,7 @@ public class RedditCommunitiesFragment extends BaseListFragment {
 			@Override public int getItemCount() { return rows.size() + 2; }
 			@NonNull @Override public Holder onCreateViewHolder(@NonNull ViewGroup parent, int type) {
 				Holder holder = new Holder((TextView) ViewFactory.makeSingleLineListItem(parent));
+				InterfaceAppearance.serviceText(holder.text, false, false);
 				holder.itemView.setOnClickListener(v -> {
 					int position = holder.getBindingAdapterPosition();
 					if (position == RecyclerView.NO_POSITION) return;
@@ -73,6 +76,7 @@ public class RedditCommunitiesFragment extends BaseListFragment {
 				int padding = (int) (ResourceUtils.obtainDensity(holder.itemView) * (row != null && row.name != null ? 32 : 16));
 				holder.text.setPaddingRelative(padding, holder.text.getPaddingTop(),
 						(int) (16 * ResourceUtils.obtainDensity(holder.itemView)), holder.text.getPaddingBottom());
+				InterfaceAppearance.serviceText(holder.text, row != null && row.name != null, row != null && row.name == null);
 			}
 		};
 		getRecyclerView().setAdapter(adapter);

@@ -15,6 +15,70 @@ import org.junit.runner.RunWith;
 /** Prepared UI fixtures on the existing disposable debug Activity, not user data. NOT executed. */
 @RunWith(AndroidJUnit4.class)
 public class StandardDialogLifecycleTest {
+	@Test public void simpleInputRetainsTextSelectionAndOneOutsideInset() {
+		AtomicReference<AlertDialog> current = new AtomicReference<>();
+		AtomicReference<EditText> field = new AtomicReference<>();
+		try (ActivityScenario<PostingGestureTestActivity> scenario = ActivityScenario.launch(PostingGestureTestActivity.class)) {
+			scenario.onActivity(activity -> {
+				Context context = PostingTestContext.create(activity);
+				org.junit.Assume.assumeTrue(InterfaceAppearance.isEnabled(context));
+				EditText input = new EditText(context); input.setSingleLine(false);
+				input.setMinLines(1); input.setMaxLines(5);
+				input.setText("A multiline favorite title\nsecond line"); input.setSelection(2, 9);
+				android.widget.LinearLayout container = new android.widget.LinearLayout(context);
+				container.addView(input, -1, -2);
+				AlertDialog dialog = MotionDialogBuilder.standard(context).setTitle("Rename")
+						.setInputView(container).setPositiveButton(android.R.string.ok, null).create();
+				current.set(dialog); field.set(input); dialog.show();
+			});
+			InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+			scenario.onActivity(activity -> {
+				AlertDialog dialog = current.get(); EditText input = field.get();
+				InterfaceAppearance.refreshTree(dialog.getWindow().getDecorView());
+				InterfaceAppearance.refreshTree(dialog.getWindow().getDecorView());
+				assertEquals("A multiline favorite title\nsecond line", input.getText().toString());
+				assertEquals(2, input.getSelectionStart()); assertEquals(9, input.getSelectionEnd());
+				android.view.View container = (android.view.View) input.getParent();
+				android.view.View outside = (android.view.View) container.getParent();
+				assertEquals(0, container.getPaddingStart()); assertEquals(0, container.getPaddingEnd());
+				assertEquals(StandardAppearance.dp(input, 24), outside.getPaddingStart());
+				assertEquals(StandardAppearance.dp(input, 24), outside.getPaddingEnd());
+				assertTrue(input.getMinimumHeight() >= StandardAppearance.dp(input, 56)); dialog.dismiss();
+			});
+		}
+	}
+	@Test public void messageAndActionsAreBothVisibleWithoutShiftingClickPositions() {
+		AtomicReference<AlertDialog> current = new AtomicReference<>();
+		AtomicInteger clicked = new AtomicInteger(-1), calls = new AtomicInteger();
+		try (ActivityScenario<PostingGestureTestActivity> scenario = ActivityScenario.launch(PostingGestureTestActivity.class)) {
+			scenario.onActivity(activity -> {
+				Context context = PostingTestContext.create(activity);
+				org.junit.Assume.assumeTrue(InterfaceAppearance.isEnabled(context));
+				AlertDialog dialog = MotionDialogBuilder.standard(context).setTitle("Update available")
+						.setItemsWithMessage("Version details\nRelease notes",
+								new String[]{"Open page", "Skip this version", "Cancel"}, (d, which) -> {
+									clicked.set(which); calls.incrementAndGet();
+								}).setPositiveButton("Open updates", null).create();
+				current.set(dialog); dialog.show();
+			});
+			InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+			scenario.onActivity(activity -> {
+				AlertDialog dialog = current.get();
+				InterfaceAppearance.refreshTree(dialog.getWindow().getDecorView());
+				android.widget.TextView body = dialog.findViewById(android.R.id.message);
+				assertNotNull(body); assertTrue(body.isShown()); assertTrue(body.getHeight() > 0);
+				assertEquals("Version details\nRelease notes", body.getText().toString());
+				android.widget.ListView list = dialog.getListView();
+				assertTrue(list.isShown()); assertTrue(list.getHeight() > 0);
+				assertEquals(3, list.getCount()); assertEquals(0, list.getHeaderViewsCount());
+				assertEquals(0, calls.get());
+				assertTrue(dialog.getButton(AlertDialog.BUTTON_POSITIVE).isShown());
+				list.performItemClick(list.getChildAt(1 - list.getFirstVisiblePosition()), 1, list.getAdapter().getItemId(1));
+			});
+			InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+			assertEquals(1, calls.get()); assertEquals(1, clicked.get());
+		}
+	}
 	@Test public void customOnShowValidationAndCancelRemainSingleDispatch() {
 		AtomicInteger shows = new AtomicInteger(), positives = new AtomicInteger(), cancels = new AtomicInteger(), dismisses = new AtomicInteger();
 		AtomicReference<AlertDialog> current = new AtomicReference<>();
@@ -142,6 +206,11 @@ public class StandardDialogLifecycleTest {
 						.add("First", () -> {}).add("Second", () -> {}).create();
 				width.set(dialog.getWindow().getAttributes().width); assertTrue(width.get() > 0);
 				surface.set(dialog.getWindow().getDecorView().getBackground()); current.set(dialog); dialog.show();
+				android.graphics.Point available = com.mishiranu.dashchan.util.ViewUtils.getWindowContentSize(context);
+				int margin = StandardAppearance.dp(dialog.getWindow().getDecorView(),
+						available.x < StandardAppearance.dp(dialog.getWindow().getDecorView(), 328) ? 16 : 24);
+				assertEquals(Math.max(1, Math.min(StandardAppearance.dp(dialog.getWindow().getDecorView(),
+						AppearanceShapes.STANDARD_DIALOG_MAX_WIDTH), available.x - 2 * margin)), width.get());
 			});
 			InstrumentationRegistry.getInstrumentation().waitForIdleSync();
 			scenario.onActivity(activity -> {

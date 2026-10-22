@@ -36,6 +36,10 @@ public final class PlayerButtonsLayout {
 	public List<Button> getLeft() { return left; }
 	public List<Button> getRight() { return right; }
 	public boolean isEnabled(Button button) { return button != null && !hidden.contains(button); }
+	/** Effective speed visibility is shared by the editor and the modern player. */
+	public boolean isShown(Button button, boolean speedControl) {
+		return isEnabled(button) && (button != Button.SPEED || speedControl);
+	}
 	public List<Button> getVisibleLeft() { return visible(left); }
 	public List<Button> getVisibleRight() { return visible(right); }
 	private List<Button> visible(List<Button> order) {

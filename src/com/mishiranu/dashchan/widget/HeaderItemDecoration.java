@@ -21,14 +21,20 @@ public class HeaderItemDecoration extends RecyclerView.ItemDecoration {
 	private final Provider provider;
 	private final Rect rect = new Rect();
 	private TextView headerView;
+	private final boolean standardService;
 
 	public HeaderItemDecoration(Provider provider) {
 		this(null, provider);
 	}
 
 	public HeaderItemDecoration(Configuration configuration, Provider provider) {
+		this(configuration, provider, false);
+	}
+
+	public HeaderItemDecoration(Configuration configuration, Provider provider, boolean standardService) {
 		this.configuration = configuration;
 		this.provider = provider;
+		this.standardService = standardService;
 	}
 
 	private View prepareHeaderView(RecyclerView parent, String header, boolean layout) {
@@ -39,6 +45,7 @@ public class HeaderItemDecoration extends RecyclerView.ItemDecoration {
 			}
 		}
 		headerView.setText(header);
+		if (standardService) InterfaceAppearance.serviceHeader(headerView);
 		headerView.measure(View.MeasureSpec.makeMeasureSpec(parent.getWidth(), View.MeasureSpec.EXACTLY),
 				View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
 		if (layout) {

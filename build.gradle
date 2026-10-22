@@ -268,8 +268,8 @@ android {
 
 	defaultConfig {
 		applicationId = 'io.dashchan2'
-		versionCode = 11460
-		versionName = '3.2.66'
+		versionCode = 11470
+		versionName = '3.2.67'
 		def releaseVersionCode = versionCode
 		def packageVersionCodeProperty = project.findProperty('packageVersionCode')
 		if (packageVersionCodeProperty != null) {
@@ -408,7 +408,7 @@ android {
 		resources.srcDirs = ['unitTests/resources']
 	}
 	sourceSets.androidTest.java.srcDirs = ['instrumentationTests/src']
-	// Experimental photo editor code/resources and its executable tests are GitHub-only.
+	// Photo editor code/resources/tests live in the shared roots; other experimental UI remains flavour-specific.
 	sourceSets.maybeCreate('testGithub').java.srcDir 'distribution/github/unitTests/src'
 	sourceSets.maybeCreate('androidTestGithub').java.srcDir 'distribution/github/instrumentationTests/src'
 	sourceSets.maybeCreate('testFdroid').java.srcDir 'distribution/fdroid/unitTests/src'

@@ -4,24 +4,27 @@ import android.content.Context;
 import android.content.Intent;
 import androidx.annotation.Nullable;
 import androidx.annotation.StringRes;
+import com.mishiranu.dashchan.R;
+import com.mishiranu.dashchan.content.Preferences;
 
-/** F-Droid always uses the existing editor, including after restoring a GitHub preferences backup. */
+/** Shared editor routing for both distributions; preserves the user's legacy-editor choice. */
 public final class PhotoEditorBridge {
 	private PhotoEditorBridge() {}
 
 	public static boolean isAvailable() {
-		return false;
+		return true;
 	}
 
 	@StringRes public static int getTitleResId() {
-		return 0;
+		return R.string.new_photo_editor;
 	}
 
 	@StringRes public static int getSummaryResId() {
-		return 0;
+		return R.string.new_photo_editor__summary;
 	}
 
 	@Nullable public static Intent createIntent(Context context, String sourceHash, String sourceName, int attachmentIndex) {
-		return null;
+		return Preferences.isNewPhotoEditorEnabled()
+				? ExperimentalImageEditorActivity.createIntent(context, sourceHash, sourceName, attachmentIndex) : null;
 	}
 }

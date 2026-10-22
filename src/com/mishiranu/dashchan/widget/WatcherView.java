@@ -27,6 +27,8 @@ import com.mishiranu.dashchan.util.ResourceUtils;
 
 @SuppressLint("ViewConstructor")
 public class WatcherView extends FrameLayout {
+	// Visible legacy badge, not the hit target. Previously these were implicit in a 48x36 row.
+	private static final int LEGACY_CAPSULE_WIDTH = 32, LEGACY_CAPSULE_MIN_HEIGHT = 12;
 	public static class ColorSet {
 		public final int enabledColor;
 		public final int unavailableColor;
@@ -70,12 +72,14 @@ public class WatcherView extends FrameLayout {
 		if (style != null) {
 			progressBar = null;
 			chip = new WatcherChipView(context, style);
-			addView(chip, new FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
+			// Decorative content owns its intrinsic metrics. The parent owns the larger hit target.
+			addView(chip, new FrameLayout.LayoutParams(style.chipWidth, style.chipHeight, Gravity.CENTER));
 			setMinimumHeight(style.rowHeight); setFocusable(true);
 			update(WatcherService.Counter.INITIAL);
 			return;
 		}
 		chip = null;
+		setMinimumHeight(DrawerStyle.minimumRowHeight(context));
 
 		com.mishiranu.dashchan.util.ViewUtils.setSelectableItemBackground(this);
 		progressBar = new ProgressBar(context, null, android.R.attr.progressBarStyleSmall);
@@ -103,8 +107,11 @@ public class WatcherView extends FrameLayout {
 			if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
 				// Keep the selected action for the entire gesture, including a deferred performClick.
 				touchActionPending = true; touchThreadId = boundThreadId;
-				float fromStart = getLayoutDirection() == LAYOUT_DIRECTION_RTL ? getWidth() - event.getX() : event.getX();
-				refreshClickPending = fromStart >= style.numberStart();
+				boolean rtl = getLayoutDirection() == LAYOUT_DIRECTION_RTL;
+				float fromStart = rtl ? getWidth() - event.getX() : event.getX();
+				getCapsuleBounds(rectF);
+				float capsuleInset = rtl ? getWidth() - rectF.right : rectF.left;
+				refreshClickPending = fromStart >= capsuleInset + style.numberStart();
 			} else if (event.getActionMasked() == MotionEvent.ACTION_CANCEL) {
 				refreshClickPending = false; touchActionPending = false;
 			}
@@ -145,10 +152,11 @@ public class WatcherView extends FrameLayout {
 		if (style != null) {
 			GradientDrawable mask = new GradientDrawable();
 			mask.setColor(Color.WHITE); mask.setCornerRadius(style.chipRadius());
-			int inset = Math.max(0, (h - style.chipHeight) / 2);
-			int bottomInset = Math.max(0, h - style.chipHeight - inset);
+			int start = (w - style.chipWidth) / 2, end = w - style.chipWidth - start;
+			int inset = (h - style.chipHeight) / 2;
+			int bottomInset = h - style.chipHeight - inset;
 			setForeground(new RippleDrawable(ColorStateList.valueOf((style.onSurface & 0xffffff) | 0x18000000),
-					null, new InsetDrawable(mask, 0, inset, 0, bottomInset)));
+					null, new InsetDrawable(mask, start, inset, end, bottomInset)));
 		}
 	}
 
@@ -169,14 +177,28 @@ public class WatcherView extends FrameLayout {
 	private final RectF rectF = new RectF();
 	private final Rect rect = new Rect();
 
+	/** Position may follow the host; visible size depends only on badge/font metrics. */
+	void getCapsuleBounds(RectF out) {
+		float density = ResourceUtils.obtainDensity(this);
+		int width, height;
+		if (style != null) { width = style.chipWidth; height = style.chipHeight; }
+		else {
+			paint.setTextSize((int) (TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 12,
+					getResources().getDisplayMetrics()) + .5f));
+			// A stable numeric glyph sample avoids size changes while the count/loader changes.
+			paint.getTextBounds("0X?", 0, 3, rect);
+			width = Math.round(LEGACY_CAPSULE_WIDTH * density);
+			height = Math.max(Math.round(LEGACY_CAPSULE_MIN_HEIGHT * density), rect.height() + Math.round(2 * density));
+		}
+		int left = (getWidth() - width) / 2, top = (getHeight() - height) / 2;
+		out.set(left, top, left + width, top + height);
+	}
+
 	@Override
 	public void draw(Canvas canvas) {
 		if (chip != null) { super.draw(canvas); return; }
 		float density = ResourceUtils.obtainDensity(this);
-		int paddingHorizontal = (int) (8f * density);
-		int paddingVertical = (int) (12f * density);
-		rectF.set(paddingHorizontal, paddingVertical, getWidth() - paddingHorizontal,
-				getHeight() - paddingVertical);
+		getCapsuleBounds(rectF);
 		int cornerRadius = (int) density;
 		paint.setColor(color);
 		canvas.drawRoundRect(rectF, cornerRadius, cornerRadius, paint);
@@ -190,21 +212,19 @@ public class WatcherView extends FrameLayout {
 			if (!hasNew) {
 				paint.setAlpha(0x99);
 			}
-			canvas.drawCircle(getWidth() / 2f, getHeight() / 2f, (int) (3f * density), paint);
+			canvas.drawCircle(rectF.centerX(), rectF.centerY(), (int) (3f * density), paint);
 		} else if (progressBar.getVisibility() != View.VISIBLE) {
 			paint.setColor(Color.WHITE);
 			paint.setAlpha(0xff);
 			if (!hasNew) {
 				paint.setAlpha(0x99);
 			}
-			paint.setTextSize((int) (TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 12,
-					getResources().getDisplayMetrics()) + 0.5f));
 			paint.setTextAlign(Paint.Align.CENTER);
 			paint.getTextBounds(text, 0, text.length(), rect);
-			canvas.drawText(text, getWidth() / 2f, (getHeight() + rect.height()) / 2f, paint);
+			canvas.drawText(text, rectF.centerX(), rectF.centerY() + rect.height() / 2f, paint);
 		} else if (hasNew) {
 			paint.setColor(Color.WHITE);
-			canvas.drawCircle(getWidth() / 2f, getHeight() / 2f, (int) (4f * density), paint);
+			canvas.drawCircle(rectF.centerX(), rectF.centerY(), (int) (4f * density), paint);
 		}
 		canvas.restore();
 	}

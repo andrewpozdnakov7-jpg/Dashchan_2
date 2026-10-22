@@ -28,6 +28,7 @@ public final class AppLockActivity extends ComponentActivity {
 	public static final String DISABLE = "disable";
 	public static final String DOWNLOADS = "downloads";
 	public static final String SCREENSHOTS = "screenshots";
+	public static final String PIP_VIDEO = "pip_video";
 	public static final String REAUTHENTICATION = "reauthentication";
 	public static final String AUTHENTICATION_MODE = "authentication_mode";
 	private enum Step { UNLOCK, AUTHORIZE, CHOOSE_MODE, NEW, CONFIRM }
@@ -276,6 +277,13 @@ public final class AppLockActivity extends ComponentActivity {
 			configureDownloads();
 		} else if (SCREENSHOTS.equals(action)) {
 			configureScreenshots();
+		} else if (PIP_VIDEO.equals(action)) {
+			if (!settingsAuthorized(generation)) return;
+			try {
+				SecurityStore.setHidePipVideo(this, !SecurityStore.hidePipVideo(this),
+						() -> settingsAuthorized(generation));
+				complete();
+			} catch (IOException e) { unavailable(); }
 		} else if (REAUTHENTICATION.equals(action)) {
 			configureReauthentication();
 		} else if (DISABLE.equals(action) || REMOVE_ADDITIONAL.equals(action)) {
@@ -286,6 +294,7 @@ public final class AppLockActivity extends ComponentActivity {
 					if (DISABLE.equals(action)) {
 						s.remove("primary"); s.remove("biometric"); s.remove("biometric_alias");
 						s.remove(AuthenticationPolicy.KEY); s.remove(SecurityStore.ALLOW_SCREENSHOTS);
+						s.remove(SecurityStore.HIDE_PIP_VIDEO);
 						s.put("unlocked", true);
 					}
 					return null;

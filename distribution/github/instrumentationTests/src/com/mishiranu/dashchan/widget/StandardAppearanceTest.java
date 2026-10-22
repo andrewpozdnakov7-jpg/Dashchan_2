@@ -190,6 +190,75 @@ public class StandardAppearanceTest {
 			}
 		});
 	}
+	@Test public void compoundMenuLabelReleasesNativeMinimumAndRestoresItWhenDisabled() {
+		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+			Context context = context(1); LinearLayout row = new LinearLayout(context);
+			row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+			TextView label = new TextView(context); label.setText("Short");
+			label.setMinHeight(StandardAppearance.dp(label, 64));
+			label.setMinimumHeight(StandardAppearance.dp(label, 72));
+			int legacyTextMinimum = label.getMinHeight(), legacyViewMinimum = label.getMinimumHeight();
+			row.addView(label, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+			View arrow = new View(context);
+			row.addView(arrow, new LinearLayout.LayoutParams(StandardAppearance.dp(row, 24), StandardAppearance.dp(row, 24)));
+			InterfaceAppearance.menuRow(row, label);
+			for (int i = 0; i < 3; i++) {
+				resolve(row, true); layout(row, StandardAppearance.dp(row, 300));
+				assertEquals(0, label.getMinHeight()); assertEquals(0, label.getMinimumHeight());
+				assertEquals(StandardAppearance.dp(row, 48), row.getHeight());
+				assertEquals(label.getTop() + label.getHeight() / 2f, arrow.getTop() + arrow.getHeight() / 2f, 1f);
+			}
+			label.setText("A sufficiently long menu label that wraps onto several lines without clipping");
+			resolve(row, true); layout(row, StandardAppearance.dp(row, 180));
+			assertTrue(row.getHeight() > StandardAppearance.dp(row, 48));
+			assertTrue(label.getHeight() >= label.getLayout().getHeight());
+			resolve(row, false); assertEquals(legacyTextMinimum, label.getMinHeight());
+			assertEquals(legacyViewMinimum, label.getMinimumHeight());
+		});
+	}
+	@Test public void errorStateHasOneIconGapAndRestoresLegacyWhileEmptyStateKeepsItsInsets() {
+		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+			Context context = context(1); FrameLayout parent = new FrameLayout(context);
+			ViewFactory.ErrorHolder holder = ViewFactory.createErrorLayout(parent, false);
+			LinearLayout group = (LinearLayout) holder.layout;
+			android.widget.ImageView icon = (android.widget.ImageView) group.getChildAt(0);
+			int width = icon.getLayoutParams().width, height = icon.getLayoutParams().height;
+			int originalPadding = holder.text.getPaddingStart();
+			holder.text.setText("A test error"); InterfaceAppearance.serviceErrorState(group, icon, holder.text);
+			for (int i = 0; i < 3; i++) {
+				resolve(group, true); layout(group, StandardAppearance.dp(group, 240));
+				assertEquals(StandardAppearance.dp(group, 40), icon.getWidth());
+				assertEquals(StandardAppearance.dp(group, 40), icon.getHeight());
+				assertEquals(StandardAppearance.dp(group, 12), holder.text.getTop() - icon.getBottom());
+				assertEquals(0, holder.text.getPaddingTop());
+				assertEquals(StandardAppearance.dp(group, 24), holder.text.getPaddingStart());
+			}
+			resolve(group, false); assertEquals(width, icon.getLayoutParams().width);
+			assertEquals(height, icon.getLayoutParams().height); assertEquals(originalPadding, holder.text.getPaddingStart());
+			assertEquals(0, ((LinearLayout.LayoutParams) holder.text.getLayoutParams()).topMargin);
+			TextView empty = new TextView(context); InterfaceAppearance.serviceState(empty, empty); resolve(empty, true);
+			assertEquals(StandardAppearance.dp(empty, 24), empty.getPaddingTop());
+			assertEquals(StandardAppearance.dp(empty, 24), empty.getPaddingStart());
+		});
+	}
+	@Test public void toolbarReapplyDoesNotOverwriteTheMeasuredTitleSizeOrLineMetrics() {
+		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+			Context context = context(1); org.junit.Assume.assumeTrue(InterfaceAppearance.isEnabled(context));
+			android.widget.Toolbar toolbar = new android.widget.Toolbar(context);
+			toolbar.setLayoutParams(new FrameLayout.LayoutParams(-1, StandardAppearance.dp(toolbar, 56)));
+			LinearLayout titles = new LinearLayout(context); titles.setOrientation(LinearLayout.VERTICAL); toolbar.addView(titles);
+			TextView title = new TextView(context), subtitle = new TextView(context);
+			titles.addView(title); titles.addView(subtitle); title.setText("Measured multiline title");
+			title.setTextSize(12); title.setLineSpacing(3, 1f); title.setMaxLines(3);
+			float size = title.getTextSize(), spacing = title.getLineSpacingExtra();
+			InterfaceAppearance.standardToolbar(toolbar, title, subtitle);
+			for (int i = 0; i < 3; i++) {
+				layout(toolbar, StandardAppearance.dp(toolbar, 260)); InterfaceAppearance.refreshTree(toolbar);
+				assertEquals(size, title.getTextSize(), .01f); assertEquals(spacing, title.getLineSpacingExtra(), .01f);
+				assertEquals(3, title.getMaxLines());
+			}
+		});
+	}
 	@Test public void popupBackgroundKeepsPremeasurePaddingWhenThePaletteIsApplied() {
 		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
 			Context context = new android.view.ContextThemeWrapper(context(1), R.style.Theme_Standard_Popup);

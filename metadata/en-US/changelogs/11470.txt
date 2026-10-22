@@ -1,0 +1,12 @@
+- We continue updating the Material 3-style interface 😺 Dialogs, menus, utility screens and loading indicators have been refined. Toolbar colors now better match the selected theme.
+- The navigation drawer is more spacious, with taller rows and larger touch targets while keeping counter badges compact.
+- Fixed the video player's speed button visibility. With app protection enabled, an unlocked app should no longer cover PiP video with a black shield. Video hiding can be enabled separately in security settings.
+- Fixed overly narrow post action menus, oversized wrapping titles and a crash when opening text documents.
+- Form diagnostics has been renamed to Screen diagnostics and expanded to help investigate display issues.
+- The new photo editor will soon be available in the F-Droid version too. 🐾
+
+To restore the old design: Settings → Experimental features → New Material 3 interface → turn off Enable the new interface.
+
+Protection features are still in testing.
+
+Thank you for testing, sending logs and helping find bugs! 🐾

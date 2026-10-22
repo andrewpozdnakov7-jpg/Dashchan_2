@@ -223,8 +223,8 @@ final class WatcherChipView extends FrameLayout {
 		super.onDraw(canvas);
 		if (state == null) return;
 		if (loaderVisible && !canAnimateChip()) { cancelVisuals(); snap(); }
-		float top = (getHeight() - style.chipHeight) / 2;
-		rect.set(0, top, getWidth(), top + style.chipHeight);
+		// Intrinsic child bounds, independent of the containing row/hit target.
+		rect.set(0, 0, style.chipWidth, style.chipHeight);
 		paint.setColor(background); paint.setAlpha(255);
 		canvas.drawRoundRect(rect, style.chipRadius(), style.chipRadius(), paint);
 		drawContent(canvas);

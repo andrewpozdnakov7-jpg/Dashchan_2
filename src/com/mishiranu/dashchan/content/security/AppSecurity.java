@@ -123,24 +123,30 @@ public final class AppSecurity implements Application.ActivityLifecycleCallbacks
 	}
 	private static void refreshPrivateWindows(Context context, boolean cover) {
 		boolean protect = isProtected(context);
+		boolean hidePip = protect && SecurityStore.hidePipVideo(context);
+		boolean locked = protect && SecurityStore.locked(context);
 		refreshPopups(protect, cover, protect && cover || shouldSecureWindow(context));
 		synchronized (WINDOWS) {
 			java.util.Iterator<java.lang.ref.WeakReference<android.view.Window>> iterator = WINDOWS.iterator();
 			while (iterator.hasNext()) {
 				android.view.Window window = iterator.next().get();
 				if (window == null) { iterator.remove(); continue; }
-				applyCaptureFlag(window, protect && cover);
+				Activity owner = windowActivity(window.getContext());
+				// One paused window must not cover another resumed window (e.g. the PiP host).
+				boolean backgroundCover = owner != null && instance != null ? !instance.resumed.contains(owner) : cover;
+				boolean windowCover = PipProtectionPolicy.cover(protect, locked, visiblePip(owner), hidePip, backgroundCover);
+				applyCaptureFlag(window, windowCover);
 				if (window.getCallback() instanceof SecurityWindowCallback) ((SecurityWindowCallback) window.getCallback()).setProtected(protect);
 				ViewGroup decor = (ViewGroup) window.peekDecorView();
 				if (decor == null) continue;
 				View shield = decor.findViewWithTag(WINDOW_SHIELD);
-				if (protect && cover && shield == null) {
+				if (windowCover && shield == null) {
 					concealAccessibility(decor);
 					shield = new View(window.getContext()); shield.setTag(WINDOW_SHIELD);
 					shield.setBackgroundColor(Color.BLACK); shield.setClickable(true); shield.setFocusableInTouchMode(true);
 					shield.setElevation(10000 * context.getResources().getDisplayMetrics().density);
 					decor.addView(shield, new ViewGroup.LayoutParams(-1, -1)); shield.requestFocus();
-				} else if ((!protect || !cover) && shield != null) { decor.removeView(shield); restoreAccessibility(decor); }
+				} else if (!windowCover && shield != null) { decor.removeView(shield); restoreAccessibility(decor); }
 			}
 		}
 	}
@@ -153,6 +159,8 @@ public final class AppSecurity implements Application.ActivityLifecycleCallbacks
 	private void checkForeground() {
 		boolean active = false;
 		for (Activity activity : resumed) if (!activity.isFinishing() && !activity.isInPictureInPictureMode()) active = true;
+		// Android pauses a visible PiP Activity. It is not a hidden/background client.
+		for (Activity activity : started) if (visiblePip(activity) && !activity.isFinishing()) active = true;
 		try { SecurityStore.foreground(application, active); } catch (IOException ignored) {}
 		if (SecurityStore.locked(application)) protectAll();
 	}
@@ -202,6 +210,28 @@ public final class AppSecurity implements Application.ActivityLifecycleCallbacks
 		return activity != null && exempt(activity);
 	}
 
+	private static boolean visiblePip(Activity activity) {
+		return activity instanceof com.mishiranu.dashchan.ui.gallery.VideoPipActivity
+				&& activity.isInPictureInPictureMode();
+	}
+
+	private static boolean coverActivity(Activity activity, boolean backgroundCover) {
+		boolean protect = isProtected(activity);
+		boolean hidePip = protect && SecurityStore.hidePipVideo(activity);
+		return PipProtectionPolicy.cover(protect, protect && SecurityStore.locked(activity), visiblePip(activity),
+				hidePip, backgroundCover);
+	}
+
+	/** Reconcile both shields after the platform confirms entry/exit (callback order varies). */
+	public static void pictureInPictureModeChanged(Activity activity) {
+		if (instance == null) return;
+		instance.checkForeground();
+		boolean cover = coverActivity(activity, !instance.resumed.contains(activity));
+		if (cover) instance.shield(activity); else instance.unshield(activity);
+		refreshPrivateWindows(activity, !instance.resumed.contains(activity));
+		applyCaptureFlag(activity.getWindow(), cover);
+	}
+
 	/** Capture policy is separate from authentication, shielding and notification redaction. */
 	public static boolean shouldSecureWindow(Context context) {
 		if (!com.mishiranu.dashchan.BuildConfig.ENABLE_APP_SECURITY_SETTINGS) return false;
@@ -210,7 +240,8 @@ public final class AppSecurity implements Application.ActivityLifecycleCallbacks
 		Activity activity = windowActivity(context);
 		// A still-valid RAM lease during a short Activity handoff is not permission to capture
 		// a paused window. This also covers delayed dialog/popup updates in the background.
-		return activity != null && instance != null && !instance.resumed.contains(activity) && isProtected(context);
+		return activity != null && instance != null && !instance.resumed.contains(activity)
+				&& !visiblePip(activity) && isProtected(context);
 	}
 
 	private static void applyCaptureFlag(Window window, boolean covered) {
@@ -281,7 +312,10 @@ public final class AppSecurity implements Application.ActivityLifecycleCallbacks
 		boolean locked = SecurityStore.locked(instance.application);
 		refreshPrivateWindows(instance.application, locked);
 		if (locked) instance.protectAll();
-		else for (Activity activity : instance.started) instance.unshield(activity);
+		else for (Activity activity : instance.started) {
+			if (coverActivity(activity, false)) instance.shield(activity);
+			else instance.unshield(activity);
+		}
 		for (Activity activity : instance.started) {
 			applyCaptureFlag(activity.getWindow(), instance.shields.containsKey(activity));
 		}
@@ -354,9 +388,10 @@ public final class AppSecurity implements Application.ActivityLifecycleCallbacks
 	@Override public void onActivityPrePaused(Activity activity) {
 		resumed.remove(activity);
 		if (enabled()) {
-			// Concealment remains independent of capture opt-in, including temporary all-window capture.
-			applyCaptureFlag(activity.getWindow(), true);
-			shield(activity);
+			// Paused does not mean hidden for PiP. A true lock still overrides the opt-out.
+			boolean cover = coverActivity(activity, true);
+			applyCaptureFlag(activity.getWindow(), cover);
+			if (cover) shield(activity); else unshield(activity);
 			refreshPrivateWindows(activity, true);
 		}
 	}
@@ -365,7 +400,7 @@ public final class AppSecurity implements Application.ActivityLifecycleCallbacks
 		started.remove(activity);
 		if (activity.isChangingConfigurations()) return;
 		boolean foreground = false;
-		for (Activity other : started) if (!other.isFinishing() && !other.isInPictureInPictureMode()) foreground = true;
+		for (Activity other : started) if (!other.isFinishing()) foreground = true;
 		try { SecurityStore.foreground(activity, foreground); } catch (IOException ignored) {}
 		if (SecurityStore.locked(activity)) protectAll();
 	}

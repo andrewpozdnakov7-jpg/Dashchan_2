@@ -37,7 +37,7 @@ public class WatcherChipRetargetTest {
 		Context context = ThemeEngine.attach(InstrumentationRegistry.getInstrumentation().getTargetContext());
 		DrawerStyle style = new DrawerStyle(context); WatcherChipView view = new WatcherChipView(context, style);
 		view.measure(View.MeasureSpec.makeMeasureSpec(style.chipWidth, View.MeasureSpec.EXACTLY),
-				View.MeasureSpec.makeMeasureSpec(style.rowHeight, View.MeasureSpec.EXACTLY));
+				View.MeasureSpec.makeMeasureSpec(style.chipHeight, View.MeasureSpec.EXACTLY));
 		view.layout(0, 0, view.getMeasuredWidth(), view.getMeasuredHeight()); view.bind(1, "A");
 		view.update(new WatcherService.Counter(WatcherService.Counter.State.ENABLED, false, 0, false, false));
 		return view;

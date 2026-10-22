@@ -19,6 +19,8 @@
 	<string name="security_cleanup_incomplete_short">Some files remain undeleted</string>
 	<string name="security_cleanup_idle_short">No unfinished cleanup</string>
 	<string name="security_allow_screenshots">Allow screenshots</string>
+	<string name="security_hide_pip_video">Hide video in PiP</string>
+	<string name="security_hide_pip_video_summary">Cover video with a black placeholder in picture-in-picture, even while the app is unlocked.</string>
 	<string name="security_screenshots_summary">Allow capture while the app is unlocked. Off by default.</string>
 	<string name="security_screenshots_warning">Screenshots, screen recording and screen sharing may expose application content. Saved copies are outside the app lock and may remain after cleanup. PIN and security setup screens remain protected. Enable capture only if you accept this risk.</string>
 	<string name="security_screenshots_design_summary">Allow screenshots of every Slooop screen, including PIN entry</string>

@@ -135,7 +135,7 @@ public class ContentsFragment extends PreferenceFragment {
 		@NonNull
 		@Override
 		public ProgressDialog onCreateDialog(Bundle savedInstanceState) {
-			ProgressDialog dialog = new ProgressDialog(requireContext(), null);
+			ProgressDialog dialog = ProgressDialog.standard(requireContext(), null);
 			dialog.setMessage(getString(R.string.clearing__ellipsis));
 			return dialog;
 		}

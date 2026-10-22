@@ -326,7 +326,7 @@ public class AboutFragment extends PreferenceFragment implements FragmentHandler
 		@NonNull
 		@Override
 		public ProgressDialog onCreateDialog(Bundle savedInstanceState) {
-			ProgressDialog dialog = new ProgressDialog(requireContext(), null);
+			ProgressDialog dialog = ProgressDialog.standard(requireContext(), null);
 			dialog.setMessage(getString(R.string.processing_data__ellipsis));
 			dialog.setButton(DialogInterface.BUTTON_NEGATIVE, getString(android.R.string.cancel),
 					(d, which) -> dismiss());

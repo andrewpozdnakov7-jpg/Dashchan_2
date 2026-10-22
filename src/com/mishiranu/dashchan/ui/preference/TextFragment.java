@@ -4,6 +4,7 @@ import android.content.Context;
 import android.content.res.Resources;
 import android.graphics.Canvas;
 import android.graphics.Paint;
+import android.graphics.Typeface;
 import android.graphics.RectF;
 import android.os.Bundle;
 import android.os.SystemClock;
@@ -40,8 +41,8 @@ import com.mishiranu.dashchan.widget.DividerItemDecoration;
 import com.mishiranu.dashchan.widget.ExpandedLayout;
 import com.mishiranu.dashchan.widget.PostLinearLayout;
 import com.mishiranu.dashchan.widget.PostsLayoutManager;
-import com.mishiranu.dashchan.widget.ThemeEngine;
 import com.mishiranu.dashchan.widget.ViewFactory;
+import com.mishiranu.dashchan.widget.InterfaceAppearance;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -51,6 +52,7 @@ import java.util.List;
 import java.util.Locale;
 
 public class TextFragment extends BaseListFragment {
+	@Override protected boolean useStandardServiceAppearance() { return true; }
 	private static final String EXTRA_TYPE = "type";
 
 	private static final String EXTRA_CHANGELOG_ENTRIES = "changelogEntries";
@@ -78,7 +80,7 @@ public class TextFragment extends BaseListFragment {
 	@Override
 	public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
 		ExpandedLayout layout = (ExpandedLayout) super.onCreateView(inflater, container, savedInstanceState);
-		progressView = ViewFactory.createProgressLayout(layout);
+		progressView = ViewFactory.createProgressLayout(layout, true);
 		return layout;
 	}
 
@@ -506,6 +508,7 @@ public class TextFragment extends BaseListFragment {
 				textView.setPadding(padding, padding, padding, padding);
 				layout.addView(textView, PostLinearLayout.LayoutParams.MATCH_PARENT,
 						PostLinearLayout.LayoutParams.WRAP_CONTENT);
+				InterfaceAppearance.serviceDocument(textView);
 				ListViewUtils.bind(this, false, null, this);
 			}
 
@@ -525,7 +528,7 @@ public class TextFragment extends BaseListFragment {
 		private List<CharSequence> items = Collections.emptyList();
 
 		public void setItems(Context context, List<CharSequence> items) {
-			ColorScheme colorScheme = ThemeEngine.getColorScheme(context);
+			ColorScheme colorScheme = InterfaceAppearance.serviceDocumentColors(context);
 			for (CharSequence text : items) {
 				colorScheme.apply(text);
 			}
@@ -547,6 +550,8 @@ public class TextFragment extends BaseListFragment {
 		@Override
 		public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
 			holder.textView.setText(items.get(position));
+			InterfaceAppearance.serviceDocumentColors(holder.textView.getContext()).apply(holder.textView.getText());
+			InterfaceAppearance.serviceDocument(holder.textView);
 		}
 	}
 
@@ -579,16 +584,18 @@ public class TextFragment extends BaseListFragment {
 
 		private int background;
 		private int foreground;
+		private boolean serviceDocument;
 
-		private static void updateTextSize(Paint paint) {
+		private void updateTextSize(Paint paint) {
 			paint.setTextSize((int) (11f / 14f * paint.getTextSize() + 0.5f));
-			paint.setTypeface(ResourceUtils.TYPEFACE_MEDIUM);
+			paint.setTypeface(serviceDocument ? Typeface.create(paint.getTypeface(), 500, false) : ResourceUtils.TYPEFACE_MEDIUM);
 		}
 
 		@Override
 		public void applyColorScheme(ColorScheme colorScheme) {
 			background = colorScheme.linkColor;
 			foreground = colorScheme.windowBackgroundColor;
+			serviceDocument = colorScheme.serviceDocument;
 		}
 
 		private static CharSequence getText(CharSequence text, int start, int end) {
