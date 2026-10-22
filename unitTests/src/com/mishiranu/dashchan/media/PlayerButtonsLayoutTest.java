@@ -8,6 +8,16 @@ import java.util.HashSet;
 import org.junit.Test;
 
 public class PlayerButtonsLayoutTest {
+	@Test public void speedVisibilityMatchesGlobalControlWithoutLosingLayoutOrHiddenChoices() {
+		PlayerButtonsLayout layout = PlayerButtonsLayout.defaults();
+		String saved = layout.encode();
+		assertFalse(layout.isShown(Button.SPEED, false));
+		assertTrue(layout.isShown(Button.SPEED, true));
+		assertFalse(layout.toggle(Button.SPEED).isShown(Button.SPEED, true));
+		assertTrue(layout.isShown(Button.SAVE, false));
+		assertFalse(layout.toggle(Button.SAVE).isShown(Button.SAVE, true));
+		assertEquals(saved, layout.encode());
+	}
 	@Test public void defaultsAndRoundTripKeepTheAgreedOrder() {
 		PlayerButtonsLayout layout = PlayerButtonsLayout.defaults();
 		assertEquals(4, layout.columns);

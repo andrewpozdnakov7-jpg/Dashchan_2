@@ -12,6 +12,7 @@ import java.util.WeakHashMap;
 public final class SurfaceMotion {
 	private SurfaceMotion() {}
 	public static void configureDialog(Dialog dialog) {
+		com.mishiranu.dashchan.util.ScreenDiagnostics.observe(dialog.getWindow(), "dialog");
 		com.mishiranu.dashchan.content.security.AppSecurity.protectDialog(dialog);
 		configureDialog(dialog, InterfaceMotion.isEnabled(), InterfaceMotion.duration(1) > 0);
 	}

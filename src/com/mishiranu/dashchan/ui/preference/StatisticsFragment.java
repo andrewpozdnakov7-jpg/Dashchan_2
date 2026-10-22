@@ -1,13 +1,18 @@
 package com.mishiranu.dashchan.ui.preference;
 
+import android.content.Context;
 import android.os.Bundle;
+import android.text.Layout;
 import android.text.TextUtils;
 import android.view.Gravity;
+import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.LinearLayout;
+import android.widget.HorizontalScrollView;
+import android.widget.FrameLayout;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.core.widget.TextViewCompat;
@@ -22,11 +27,59 @@ import com.mishiranu.dashchan.ui.FragmentHandler;
 import com.mishiranu.dashchan.util.PostDateFormatter;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.widget.ThemeEngine;
+import com.mishiranu.dashchan.widget.InterfaceAppearance;
+import com.mishiranu.dashchan.widget.AppearanceTypography;
+import com.mishiranu.dashchan.widget.ExpandedLayout;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
 public class StatisticsFragment extends BaseListFragment {
+	@Override protected boolean useStandardServiceAppearance() { return true; }
+
+	@Override
+	public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
+		ExpandedLayout root = (ExpandedLayout) super.onCreateView(inflater, container, savedInstanceState);
+		if (InterfaceAppearance.isEnabled(root.getContext())) {
+			RecyclerView recycler = getRecyclerView();
+			ViewGroup.LayoutParams params = recycler.getLayoutParams();
+			root.removeView(recycler);
+			TableLayout table = new TableLayout(root.getContext(), recycler);
+			root.addView(table, 0, params);
+			root.setRecyclerView(recycler);
+		}
+		return root;
+	}
+
+	/** A single horizontal viewport owns ALL columns and the header; vertical scrolling
+	 * remains RecyclerView's responsibility. There are no per-row scroll containers. */
+	static final class TableLayout extends HorizontalScrollView {
+		final RecyclerView recycler;
+		TableLayout(Context context, RecyclerView recycler) {
+			super(context); this.recycler = recycler; setFillViewport(true);
+			addView(recycler, new FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
+		}
+		@Override protected void onMeasure(int widthSpec, int heightSpec) {
+			int viewport = Math.max(0, MeasureSpec.getSize(widthSpec) - getPaddingLeft() - getPaddingRight());
+			int width = viewport;
+			if (recycler.getAdapter() instanceof Adapter) {
+				Adapter adapter = (Adapter) recycler.getAdapter();
+				width = adapter.measureTable(getContext(), viewport);
+			}
+			recycler.getLayoutParams().width = width;
+			if (width <= viewport) scrollTo(0, 0);
+			super.onMeasure(widthSpec, heightSpec);
+		}
+		@Override protected void measureChildWithMargins(View child, int parentWidthSpec, int widthUsed,
+				int parentHeightSpec, int heightUsed) {
+			// HorizontalScrollView normally passes UNSPECIFIED width to its child.
+			// RecyclerView must instead receive our exact shared table width.
+			ViewGroup.MarginLayoutParams lp = (ViewGroup.MarginLayoutParams) child.getLayoutParams();
+			int height = getChildMeasureSpec(parentHeightSpec, getPaddingTop() + getPaddingBottom()
+					+ lp.topMargin + lp.bottomMargin + heightUsed, lp.height);
+			child.measure(MeasureSpec.makeMeasureSpec(Math.max(0, lp.width), MeasureSpec.EXACTLY), height);
+		}
+	}
 	@Override
 	public void onViewCreated(@NonNull View view, Bundle savedInstanceState) {
 		super.onViewCreated(view, savedInstanceState);
@@ -97,7 +150,7 @@ public class StatisticsFragment extends BaseListFragment {
 		return super.onMenuItemSelected(item);
 	}
 
-	private static class Adapter extends RecyclerView.Adapter<Adapter.ViewHolder> {
+	static class Adapter extends RecyclerView.Adapter<Adapter.ViewHolder> {
 		public static class ListItem {
 			public final String text1;
 			public final String text2;
@@ -128,6 +181,62 @@ public class StatisticsFragment extends BaseListFragment {
 		}
 
 		private final List<ListItem> listItems;
+		private int[] columns;
+		private int[] naturalColumns;
+		private AppearanceTypography.Configuration measuredTypography;
+
+		int measureTable(Context context, int viewport) {
+			if (!InterfaceAppearance.isEnabled(context)) { columns = null; return viewport; }
+			AppearanceTypography.Configuration typography = new AppearanceTypography.Configuration(context);
+			if (naturalColumns == null || !typography.equals(measuredTypography)) {
+				TextView probe = new TextView(context);
+				naturalColumns = new int[4];
+				for (int row = 0; row < listItems.size(); row++) {
+					AppearanceTypography.apply(probe, row == 0 ? AppearanceTypography.Role.LABEL_LARGE : AppearanceTypography.Role.BODY_MEDIUM);
+					ListItem item = listItems.get(row);
+					String[] text = {item.text1, item.text2, item.text3, item.text4};
+					for (int i = 0; i < text.length; i++) naturalColumns[i] = Math.max(naturalColumns[i],
+							(int) Math.ceil(Layout.getDesiredWidth(text[i] != null ? text[i] : "", probe.getPaint())) + 2);
+				}
+				measuredTypography = typography;
+			}
+			int padding = Math.round(16 * ResourceUtils.obtainDensity(context));
+			int gap = Math.round(8 * ResourceUtils.obtainDensity(context));
+			columns = StatisticsColumnWidths.resolve(naturalColumns, Math.max(0, viewport - 2 * padding - 3 * gap));
+			int width = 2 * padding + 3 * gap;
+			for (int column : columns) width += column;
+			return Math.max(viewport, width);
+		}
+
+		private final class TableRow extends LinearLayout {
+			private boolean material;
+			TableRow(Context context) { super(context); }
+			@Override protected void onMeasure(int widthSpec, int heightSpec) {
+				if (InterfaceAppearance.isEnabled(getContext()) && columns != null) {
+					material = true;
+					int padding = Math.round(16 * ResourceUtils.obtainDensity(this));
+					int gap = Math.round(8 * ResourceUtils.obtainDensity(this));
+					setPaddingRelative(padding, gap, padding, gap); setMinimumHeight(Math.round(48 * ResourceUtils.obtainDensity(this)));
+					getLayoutParams().height = ViewGroup.LayoutParams.WRAP_CONTENT;
+					for (int i = 0; i < 4; i++) {
+						LinearLayout.LayoutParams lp = (LinearLayout.LayoutParams) getChildAt(i).getLayoutParams();
+						lp.width = columns[i]; lp.weight = 0; lp.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+						lp.leftMargin = 0; lp.rightMargin = 0; lp.setMarginStart(i == 0 ? 0 : gap); lp.setMarginEnd(0);
+					}
+				} else if (material) {
+					material = false;
+					int padding = Math.round(16 * ResourceUtils.obtainDensity(this));
+					int gap = Math.round(8 * ResourceUtils.obtainDensity(this));
+					setPadding(padding - gap, 0, padding, 0); setMinimumHeight(0);
+					getLayoutParams().height = Math.round(48 * ResourceUtils.obtainDensity(this));
+					for (int i = 0; i < 4; i++) {
+						LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, i == 0 ? 3 : 2);
+						lp.leftMargin = gap; getChildAt(i).setLayoutParams(lp);
+					}
+				}
+				super.onMeasure(widthSpec, heightSpec);
+			}
+		}
 
 		public Adapter(List<ListItem> listItems) {
 			this.listItems = listItems;
@@ -151,13 +260,14 @@ public class StatisticsFragment extends BaseListFragment {
 					.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, weight);
 			layoutParams.leftMargin = padding;
 			parent.addView(textView, layoutParams);
+			InterfaceAppearance.serviceTableCell(textView, false);
 			return textView;
 		}
 
 		@NonNull
 		@Override
 		public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-			LinearLayout linearLayout = new LinearLayout(parent.getContext());
+			LinearLayout linearLayout = new TableRow(parent.getContext());
 			linearLayout.setOrientation(LinearLayout.HORIZONTAL);
 			float density = ResourceUtils.obtainDensity(linearLayout);
 			int outerPadding = (int) (16f * density);
@@ -168,7 +278,8 @@ public class StatisticsFragment extends BaseListFragment {
 			TextView text3 = addTextView(linearLayout, true, 2f, innerPadding);
 			TextView text4 = addTextView(linearLayout, true, 2f, innerPadding);
 			linearLayout.setLayoutParams(new RecyclerView.LayoutParams
-					(RecyclerView.LayoutParams.MATCH_PARENT, (int) (48f * density)));
+					(RecyclerView.LayoutParams.MATCH_PARENT, InterfaceAppearance.isEnabled(parent.getContext())
+							? RecyclerView.LayoutParams.WRAP_CONTENT : (int) (48f * density)));
 			return new ViewHolder(linearLayout, text1, text2, text3, text4);
 		}
 
@@ -179,6 +290,10 @@ public class StatisticsFragment extends BaseListFragment {
 			holder.text2.setText(listItem.text2);
 			holder.text3.setText(listItem.text3);
 			holder.text4.setText(listItem.text4);
+			holder.itemView.getLayoutParams().height = InterfaceAppearance.isEnabled(holder.itemView.getContext())
+					? RecyclerView.LayoutParams.WRAP_CONTENT : (int) (48f * ResourceUtils.obtainDensity(holder.itemView));
+			for (TextView text : new TextView[]{holder.text1, holder.text2, holder.text3, holder.text4})
+				InterfaceAppearance.serviceTableCell(text, position == 0);
 		}
 	}
 }

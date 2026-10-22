@@ -129,15 +129,8 @@ public class DialogMenu {
 		float density = ResourceUtils.obtainDensity(recyclerView);
 		recyclerView.setClipToPadding(false);
 		recyclerView.setPadding(0, (int) (8f * density), 0, (int) (8f * density));
-		if (standard && InterfaceAppearance.isEnabled(context)) {
-			TextView probe = new TextView(builder.getContext());
-			com.mishiranu.dashchan.widget.AppearanceTypography.apply(probe,
-					com.mishiranu.dashchan.widget.AppearanceTypography.Role.BODY_MEDIUM);
-			float max = 0;
-			for (ListItem item : listItems) max = Math.max(max, probe.getPaint().measureText(item.title)
-					+ (item.viewType == ViewType.ITEM ? 32 : 80) * density);
-			recyclerView.setMinimumWidth(Math.min(Math.max(1, ViewUtils.getWindowContentSize(context).x - (int) (32 * density)), (int) Math.ceil(max)));
-		}
+		// Standard dialog bounds own the width, including control slots and safe outer
+		// margins. A text-only estimate made post menus narrow and wrapped check labels.
 		AlertDialog dialog = builder.setTitle(title).setView(recyclerView).create();
 		if (standard) InterfaceAppearance.prepareStandardMenuDialog(dialog, recyclerView);
 		updateInternal(dialog, recyclerView);

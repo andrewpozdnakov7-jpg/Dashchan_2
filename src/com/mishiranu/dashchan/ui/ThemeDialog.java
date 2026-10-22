@@ -19,6 +19,7 @@ import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.util.ViewUtils;
 import com.mishiranu.dashchan.widget.PaddedRecyclerView;
 import com.mishiranu.dashchan.widget.ThemeEngine;
+import com.mishiranu.dashchan.widget.ThemeChoiceRow;
 import java.util.Collections;
 import java.util.List;
 
@@ -50,7 +51,7 @@ public class ThemeDialog extends DialogFragment {
 		recyclerView.setLayoutManager(new LinearLayoutManager(context));
 		float density = ResourceUtils.obtainDensity(context);
 		recyclerView.setPadding(0, (int) (12f * density), 0, 0);
-		AlertDialog dialog = new MotionDialogBuilder(context)
+		AlertDialog dialog = MotionDialogBuilder.standard(context)
 				.setTitle(R.string.change_theme)
 				.setView(recyclerView)
 				.setNegativeButton(android.R.string.cancel, null)
@@ -70,6 +71,7 @@ public class ThemeDialog extends DialogFragment {
 	private static class Adapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
 		private static class ItemViewHolder extends RecyclerView.ViewHolder {
 			public final Preference.Runtime.IconViewHolder holder;
+			public final ThemeChoiceRow row;
 
 			public ItemViewHolder(Preference.Runtime.IconViewHolder iconViewHolder) {
 				super(iconViewHolder.view);
@@ -79,6 +81,7 @@ public class ThemeDialog extends DialogFragment {
 				float density = ResourceUtils.obtainDensity(itemView);
 				itemView.setPadding(itemView.getPaddingLeft() + (int) (8f * density), itemView.getPaddingTop(),
 						itemView.getPaddingRight() + (int) (8f * density), itemView.getPaddingBottom());
+				row = new ThemeChoiceRow(iconViewHolder, true);
 			}
 		}
 
@@ -106,10 +109,8 @@ public class ThemeDialog extends DialogFragment {
 
 		@Override
 		public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
-			Preference.Runtime.IconViewHolder viewHolder = ((ItemViewHolder) holder).holder;
 			ThemeEngine.Theme theme = themes.get(position);
-			viewHolder.icon.setImageDrawable(theme.createThemeChoiceDrawable());
-			viewHolder.title.setText(theme.name);
+			((ItemViewHolder) holder).row.bind(theme, true);
 		}
 	}
 }

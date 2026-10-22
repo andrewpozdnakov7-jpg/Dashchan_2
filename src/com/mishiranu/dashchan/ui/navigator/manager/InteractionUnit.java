@@ -113,7 +113,7 @@ public class InteractionUnit {
 				messageId = R.string.follow_the_link__sentence;
 			}
 			final ChanLocator.NavigationData navigationDataFinal = navigationData;
-			return new MotionDialogBuilder(provider.getContext())
+			return MotionDialogBuilder.standard(provider.getContext())
 					.setMessage(messageId)
 					.setNegativeButton(android.R.string.cancel, null)
 					.setPositiveButton(android.R.string.ok, (d, which) -> UiManager.extract(provider).navigator()

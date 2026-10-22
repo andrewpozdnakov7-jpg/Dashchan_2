@@ -10,6 +10,7 @@ import com.mishiranu.dashchan.util.ResourceUtils;
 /** Drawer-local tokens. No global theme change or Material dependency in shared sources. */
 public final class DrawerStyle {
 	public enum Role {TITLE, GROUP, THREAD, MENU}
+	public static final int MIN_ROW_HEIGHT = 48;
 	// Drawer visual-polish V1 dimensions, not global Material defaults.
 	public static final int CHIP_MIN_WIDTH = 64, CHIP_MIN_HEIGHT = 28;
 	public static final int CHIP_PADDING = 6, CHIP_ICON = 16, CHIP_ICON_GAP = 4;
@@ -58,7 +59,12 @@ public final class DrawerStyle {
 		apply(probe, Role.THREAD);
 		int textHeight = probe.getLineHeight();
 		apply(probe, Role.TITLE);
-		rowHeight = Math.max(dp(36), Math.max(chipHeight + dp(4), Math.max(textHeight, probe.getLineHeight()) + dp(4)));
+		rowHeight = Math.max(dp(MIN_ROW_HEIGHT), Math.max(chipHeight + dp(4), Math.max(textHeight, probe.getLineHeight()) + dp(4)));
+	}
+
+	/** Shared density floor for both drawer profiles; does not resolve a palette or resize a badge. */
+	public static int minimumRowHeight(Context context) {
+		return Math.round(MIN_ROW_HEIGHT * ResourceUtils.obtainDensity(context));
 	}
 
 	public int dp(float value) { return Math.round(value * ResourceUtils.obtainDensity(context)); }

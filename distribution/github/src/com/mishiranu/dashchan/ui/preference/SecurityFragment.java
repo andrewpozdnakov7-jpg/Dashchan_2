@@ -25,7 +25,7 @@ public final class SecurityFragment extends PreferenceFragment {
 	private static final String GUIDE_URL = "https://github.com/andrewpozdnakov7-jpg/Dashchan_2/wiki/Security";
 	private final ArrayList<Preference<?>> items = new ArrayList<>();
 	private final ArrayList<Preference<?>> protectedItems = new ArrayList<>();
-	private CheckPreference downloadsToggle, screenshotsToggle;
+	private CheckPreference downloadsToggle, screenshotsToggle, pipToggle;
 	private AuthenticationPolicy.Mode displayedMode;
 	@Override protected SharedPreferences getPreferences() { return Preferences.PREFERENCES; }
 	@Override public void onViewCreated(@NonNull View view, Bundle state) {
@@ -54,6 +54,8 @@ public final class SecurityFragment extends PreferenceFragment {
 		items.add(interval); protectedItems.add(interval);
 		screenshotsToggle = addCheck(false, null, false, R.string.security_allow_screenshots, 0);
 		screenshotsToggle.setOnClickListener(p -> open(AppLockActivity.SCREENSHOTS)); protectedItems.add(screenshotsToggle);
+		pipToggle = addCheck(false, null, false, R.string.security_hide_pip_video, R.string.security_hide_pip_video_summary);
+		pipToggle.setOnClickListener(p -> open(AppLockActivity.PIP_VIDEO)); protectedItems.add(pipToggle);
 		button(R.string.security_additional_pin, AppLockActivity.ADDITIONAL, "additional");
 		downloadsToggle = addCheck(false, null, false, R.string.security_delete_downloads, 0);
 		downloadsToggle.setOnClickListener(p -> open(AppLockActivity.DOWNLOADS)); protectedItems.add(downloadsToggle);
@@ -100,13 +102,14 @@ public final class SecurityFragment extends PreferenceFragment {
 		for (Preference<?> item : protectedItems) item.setEnabled(enabled);
 		try {
 			screenshotsToggle.setValue(enabled && SecurityStore.update(requireContext(), s -> s.optBoolean(SecurityStore.ALLOW_SCREENSHOTS, false)));
+			pipToggle.setValue(enabled && SecurityStore.hidePipVideo(requireContext()));
 			downloadsToggle.setValue(SecurityStore.update(requireContext(), s -> s.has("delete_downloads_uri")));
 			downloadsToggle.setEnabled(enabled && SecurityStore.update(requireContext(), s -> s.has("additional")));
-		} catch (IOException ignored) { downloadsToggle.setValue(false); screenshotsToggle.setValue(false); }
+		} catch (IOException ignored) { downloadsToggle.setValue(false); screenshotsToggle.setValue(false); pipToggle.setValue(false); }
 		for (Preference<?> item : items) item.invalidate();
 	}
 	@Override public void onDestroyView() {
-		items.clear(); protectedItems.clear(); downloadsToggle = null; screenshotsToggle = null; displayedMode = null; super.onDestroyView();
+		items.clear(); protectedItems.clear(); downloadsToggle = null; screenshotsToggle = null; pipToggle = null; displayedMode = null; super.onDestroyView();
 	}
 	@Override public void onViewStateRestored(Bundle state) {
 		super.onViewStateRestored(state);

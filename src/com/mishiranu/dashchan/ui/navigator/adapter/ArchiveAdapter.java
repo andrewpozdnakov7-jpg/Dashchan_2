@@ -86,7 +86,7 @@ public class ArchiveAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 	@NonNull
 	@Override
 	public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-		return ListViewUtils.bind(new SimpleViewHolder(ViewFactory.makeSingleLineListItem(parent)),
+		return ListViewUtils.bind(new SimpleViewHolder(ViewFactory.makeSingleLineListItem(parent, true)),
 				true, this::getThreadNumber, callback);
 	}
 
@@ -94,6 +94,7 @@ public class ArchiveAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 	public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
 		ThreadSummary threadSummary = getItem(position);
 		((TextView) holder.itemView).setText(getDisplayTitle(threadSummary));
+		com.mishiranu.dashchan.widget.InterfaceAppearance.refreshTree(holder.itemView);
 	}
 
 	public DividerItemDecoration.Configuration configureDivider(DividerItemDecoration.Configuration configuration,

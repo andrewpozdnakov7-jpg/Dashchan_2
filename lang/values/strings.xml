@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+	<string name="my_posts_tracking_active">Tracking active</string>
+	<string name="my_posts_tracking_stopped">Tracking stopped</string>
 	<string name="close_gallery_grid_on_background_tap">Close gallery by tapping the background</string>
 	<string name="close_gallery_grid_on_background_tap__summary">Close the gallery grid by tapping empty space outside file thumbnails. Scrolling and selecting files do not close it.</string>
 	<string name="close_gallery_on_background_tap">Close viewer by tapping the background</string>
@@ -1431,13 +1433,13 @@
 	<string name="outbox_delete_summary">Delete this journal entry and its retained attachments? This does not delete any message from the forum.</string>
 	<string name="outbox_prepare_failed">Could not save the outgoing message or attachments. Nothing was sent. Check free space and the outgoing journal.</string>
 	<string name="outbox_operation_failed">Could not complete the journal operation. Check free space and retained attachments.</string>
-	<string name="form_diagnostics_start">Record posting form diagnostics</string>
-	<string name="form_diagnostics_stop">Stop and save form diagnostics</string>
-	<string name="form_diagnostics_summary">Investigate keyboard overlap and editor scrolling</string>
-	<string name="form_diagnostics_notice">Start recording, open the posting form and reproduce the problem. Then return here to stop and share the report. Keep the app running until you save it. Only window sizes, keyboard visibility, cursor positions and text length are recorded; field contents and screenshots are not collected.</string>
-	<string name="form_diagnostics_saved">Form diagnostics saved</string>
-	<string name="form_diagnostics_saved_summary">Share the report with the developer. It contains layout and keyboard events, not the message text.</string>
-	<string name="form_diagnostics_share">Share form diagnostics</string>
+	<string name="form_diagnostics_start">Record screen diagnostics</string>
+	<string name="form_diagnostics_stop">Stop and save screen diagnostics</string>
+	<string name="form_diagnostics_summary">Screen and dialog sizes, appearance and keyboard overlap</string>
+	<string name="form_diagnostics_notice">Start recording, open the relevant screen or dialog and reproduce the problem. Then return here to stop and share the report. Keep the app running until you save it. Recorded data includes sizes, padding, colors and corner radii, interface and keyboard state, device model, Android version and the installed APK hash. Posting forms also record cursor position and text length. Text, field values, links, filenames, passwords and screenshots are not collected.</string>
+	<string name="form_diagnostics_saved">Screen diagnostics saved</string>
+	<string name="form_diagnostics_saved_summary">Share the report with the developer. It contains window, appearance and keyboard parameters, not message contents.</string>
+	<string name="form_diagnostics_share">Share screen diagnostics</string>
 	<string name="drawer_section_order">Sidebar section order</string>
 	<string name="drawer_section_order_entry_summary">Arrange sidebar sections and navigation buttons</string>
 	<string name="drawer_custom_order">Custom section order</string>

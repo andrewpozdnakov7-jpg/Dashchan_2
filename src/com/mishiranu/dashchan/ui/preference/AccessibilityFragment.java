@@ -141,10 +141,10 @@ public class AccessibilityFragment extends PreferenceFragment {
 		for (int i = 0; i < installedFonts.size(); i++) {
 			entries[i] = installedFonts.get(i).name;
 		}
-		AlertDialog dialog = new MotionDialogBuilder(requireContext())
+		AlertDialog dialog = MotionDialogBuilder.standard(requireContext())
 				.setTitle(R.string.delete_installed_font)
 				.setItems(entries, (listDialog, which) -> {
-					AlertDialog confirmationDialog = new MotionDialogBuilder(requireContext())
+					AlertDialog confirmationDialog = MotionDialogBuilder.standard(requireContext(), true)
 						.setMessage(getString(R.string.delete_custom_font_confirmation__format, entries[which]))
 						.setNegativeButton(android.R.string.cancel, null)
 						.setPositiveButton(R.string.delete, (confirmation, confirmationWhich) -> {

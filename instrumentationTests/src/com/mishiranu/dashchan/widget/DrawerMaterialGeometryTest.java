@@ -50,10 +50,36 @@ public class DrawerMaterialGeometryTest {
 			assertEquals(style.dp(320 - DrawerStyle.THREAD_END), watcher.getRight());
 			assertEquals(style.chipWidth, watcher.getWidth());
 			assertTrue(text.getRight() <= watcher.getLeft());
-			assertEquals(style.dp(36), style.rowHeight);
+			assertTrue(style.rowHeight >= DrawerStyle.minimumRowHeight(context));
 			assertEquals(style.rowHeight, row.getHeight());
 			assertEquals(row.getHeight(), watcher.getHeight());
 			assertTrue(style.chipHeight <= watcher.getHeight());
+		});
+	}
+	@Test public void capsuleSizeDoesNotFollowHostWidthOrRowHeightInEitherProfile() {
+		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+			for (float scale : new float[]{1f, 2f}) {
+				Context c = context(scale); DrawerStyle style = new DrawerStyle(c);
+				for (boolean modern : new boolean[]{false, true}) {
+					WatcherView watcher = new WatcherView(c, new WatcherView.ColorSet(0, 0, 0), modern ? style : null);
+					android.graphics.RectF previous = null;
+					for (int extra : new int[]{0, style.dp(24), style.dp(60)}) {
+						int width = (modern ? style.chipWidth : DrawerStyle.minimumRowHeight(c)) + extra;
+						int height = style.rowHeight + extra;
+						watcher.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+								View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY));
+						watcher.layout(0, 0, width, height);
+						android.graphics.RectF bounds = new android.graphics.RectF(); watcher.getCapsuleBounds(bounds);
+						if (previous != null) { assertEquals(previous.width(), bounds.width(), 0); assertEquals(previous.height(), bounds.height(), 0); }
+						assertEquals(width / 2f, bounds.centerX(), .5f); assertEquals(height / 2f, bounds.centerY(), .5f);
+						if (modern) {
+							View chip = watcher.getChildAt(0); assertEquals(style.chipWidth, chip.getWidth()); assertEquals(style.chipHeight, chip.getHeight());
+							assertEquals(chip.getLeft(), bounds.left, 0); assertEquals(chip.getTop(), bounds.top, 0);
+						}
+						previous = bounds;
+					}
+				}
+			}
 		});
 	}
 	@Test public void compactTypographyUsesApprovedNormalBodyAndMediumHeadingWithoutLargerText() {

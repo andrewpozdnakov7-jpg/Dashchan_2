@@ -320,7 +320,7 @@ public class MyPostsPage extends ListPage implements MyPostsAdapter.Callback, Re
 	}
 
 	private void showClearMyPostsListDialog() {
-		new InstanceDialog(getFragmentManager(), null, provider -> new MotionDialogBuilder(provider.getContext())
+		new InstanceDialog(getFragmentManager(), null, provider -> MotionDialogBuilder.standard(provider.getContext(), true)
 				.setMessage(R.string.clear_my_posts_list__sentence)
 				.setNegativeButton(android.R.string.cancel, null)
 				.setPositiveButton(android.R.string.ok, (dialog, which) -> {
@@ -331,7 +331,7 @@ public class MyPostsPage extends ListPage implements MyPostsAdapter.Callback, Re
 	}
 
 	private void showClearReplyHistoryDialog() {
-		new InstanceDialog(getFragmentManager(), null, provider -> new MotionDialogBuilder(provider.getContext())
+		new InstanceDialog(getFragmentManager(), null, provider -> MotionDialogBuilder.standard(provider.getContext(), true)
 				.setMessage(R.string.clear_reply_history__sentence)
 				.setNegativeButton(android.R.string.cancel, null)
 				.setPositiveButton(android.R.string.ok, (dialog, which) -> clearReplyHistory())

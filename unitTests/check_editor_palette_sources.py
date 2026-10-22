@@ -5,7 +5,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-JAVA = ROOT / 'distribution/github/src/com/mishiranu/dashchan/ui/posting'
+JAVA = ROOT / 'src/com/mishiranu/dashchan/ui/posting'
 
 
 def main():
@@ -17,11 +17,11 @@ def main():
     theme = (ROOT / 'src/com/mishiranu/dashchan/widget/ThemeEngine.java').read_text(encoding='utf-8')
     for path in (JAVA / 'photo').glob('*.java'):
         balance(path)
-    balance(ROOT / 'distribution/github/unitTests/src/com/mishiranu/dashchan/ui/posting/EditorColorStateTest.java')
+    balance(ROOT / 'unitTests/src/com/mishiranu/dashchan/ui/posting/EditorColorStateTest.java')
     attrs = ET.parse(ROOT / 'res/values/attrs.xml').getroot()
     assert any(n.attrib.get('name') == 'themeEnginePreserveColors' and n.attrib.get('format') == 'boolean'
                for n in attrs.iter('attr'))
-    styles = ET.parse(ROOT / 'distribution/github/res/values/photo_editor_styles.xml').getroot()
+    styles = ET.parse(ROOT / 'res/values/photo_editor_styles.xml').getroot()
     assert any(n.attrib.get('name') == 'themeEnginePreserveColors' and n.text == 'true'
                for n in styles.iter('item'))
     assert 'ThemeContextAppearance_themeEnginePreserveColors, false' in theme

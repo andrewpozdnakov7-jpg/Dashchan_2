@@ -22,8 +22,10 @@ import com.mishiranu.dashchan.util.ViewUtils;
 import com.mishiranu.dashchan.widget.DividerItemDecoration;
 import com.mishiranu.dashchan.widget.HeaderItemDecoration;
 import com.mishiranu.dashchan.widget.ViewFactory;
+import com.mishiranu.dashchan.widget.InterfaceAppearance;
 
 public class RedditSectionsFragment extends BaseListFragment {
+	@Override protected boolean useStandardServiceAppearance() { return true; }
 	private static final String EXTRA_EXPANDED_CATEGORIES = "expandedCategoryIds";
 
 	private static final Section[] NAVIGATION = {
@@ -120,7 +122,7 @@ public class RedditSectionsFragment extends BaseListFragment {
 				.pushFragment(RedditWebReaderFragment.newInstance(section.url)), () ->
 				((FragmentHandler) requireActivity()).pushFragment(new RedditCommunitiesFragment()));
 		getRecyclerView().setAdapter(adapter);
-		getRecyclerView().addItemDecoration(new HeaderItemDecoration(adapter::getItemHeader));
+		getRecyclerView().addItemDecoration(new HeaderItemDecoration(null, adapter::getItemHeader, true));
 		getRecyclerView().setItemAnimator(null);
 		((FragmentHandler) requireActivity()).setTitleSubtitle(getString(R.string.reddit_sections), null);
 	}
@@ -305,6 +307,7 @@ public class RedditSectionsFragment extends BaseListFragment {
 				FrameLayout.LayoutParams iconLayoutParams = new FrameLayout.LayoutParams((int) (48f * density),
 						(int) (48f * density), Gravity.END | Gravity.CENTER_VERTICAL);
 				layout.addView(iconView, iconLayoutParams);
+				InterfaceAppearance.serviceCategory(layout, textView, iconView);
 				CategoryViewHolder holder = new CategoryViewHolder(layout, textView, iconView);
 				layout.setOnClickListener(v -> onItemClick(holder));
 				return holder;
@@ -316,6 +319,7 @@ public class RedditSectionsFragment extends BaseListFragment {
 				textView.setPaddingRelative((int) (32f * density), 0, (int) (16f * density), 0);
 			}
 			SectionViewHolder holder = new SectionViewHolder(textView);
+			InterfaceAppearance.serviceText(textView, viewType == Row.TYPE_COMMUNITY, false);
 			textView.setOnClickListener(v -> onItemClick(holder));
 			return holder;
 		}
@@ -362,6 +366,7 @@ public class RedditSectionsFragment extends BaseListFragment {
 					sectionHolder.textView.setText(section.title);
 				}
 			}
+			InterfaceAppearance.refreshTree(holder.itemView);
 		}
 
 		@Override

@@ -50,12 +50,17 @@ final class PlayerButtonsEditorView extends FrameLayout {
 	private final Supplier<PlayerButtonsLayout> read;
 	private final Consumer<PlayerButtonsLayout> write;
 	private boolean changingGeometry;
+	private boolean preferencesBacked;
 
 	PlayerButtonsEditorView(Context context, Supplier<ViewGroup> root, Runnable chooseColumns) {
 		this(context, root, chooseColumns, Preferences::getVideoButtonsLayout, Preferences::setVideoButtonsLayout);
+		preferencesBacked = true;
+		refreshButtonStates();
 	}
 	PlayerButtonsEditorView(Context context, Supplier<ViewGroup> root, Runnable chooseColumns, Runnable showHelp) {
 		this(context, root, chooseColumns, Preferences::getVideoButtonsLayout, Preferences::setVideoButtonsLayout, showHelp);
+		preferencesBacked = true;
+		refreshButtonStates();
 	}
 	/** Store seam allows behavioral UI fixtures without editing the installed user's preferences. */
 	PlayerButtonsEditorView(Context context, Supplier<ViewGroup> root, Runnable chooseColumns,
@@ -204,7 +209,7 @@ final class PlayerButtonsEditorView extends FrameLayout {
 	void refreshButtonStates() {
 		for (Button button : Button.values()) {
 			View cell = board.buttons.get(button);
-			boolean enabled = board.model.isEnabled(button);
+			boolean enabled = board.model.isShown(button, !preferencesBacked || Preferences.isVideoPlaybackSpeedControl());
 			int color = enabled ? colors.ink : colors.disabled;
 			View icon = ((FrameLayout) cell).getChildAt(0);
 			if (icon instanceof TextView) ((TextView) icon).setTextColor(color);
@@ -217,7 +222,14 @@ final class PlayerButtonsEditorView extends FrameLayout {
 	private void toggleButton(Button button) {
 		if (isDragging()) return;
 		finishVisuals();
-		saveLayout(readLayout().toggle(button));
+		PlayerButtonsLayout layout = readLayout();
+		if (preferencesBacked && button == Button.SPEED
+				&& !Preferences.isVideoPlaybackSpeedControl()) {
+			// A globally unavailable SPEED is displayed as off. Tapping it enables it;
+			// moving another cell or changing columns must never change that global setting.
+			Preferences.PREFERENCES.edit().put(Preferences.KEY_VIDEO_PLAYBACK_SPEED_CONTROL, true).close();
+			if (!layout.isEnabled(button)) saveLayout(layout.toggle(button));
+		} else saveLayout(layout.toggle(button));
 		reload();
 	}
 	void applyCommand(PlayerButtonsLayout next, Button focus) {

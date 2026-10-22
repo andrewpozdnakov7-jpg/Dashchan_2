@@ -185,7 +185,7 @@ public class LocalArchiveViewerFragment extends ContentFragment implements Posts
 			items[i] = getViewModeTitle(i);
 		}
 		new InstanceDialog(getParentFragmentManager(), "local-archive-view-mode", provider ->
-				new MotionDialogBuilder(provider.getContext()).setTitle(R.string.local_archive_view_mode)
+				MotionDialogBuilder.standard(provider.getContext()).setTitle(R.string.local_archive_view_mode)
 						.setSingleChoiceItems(items, Math.min(viewMode, count - 1), (dialog, which) -> {
 							applyViewMode(which);
 							dialog.dismiss();

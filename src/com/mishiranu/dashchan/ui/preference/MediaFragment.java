@@ -119,7 +119,7 @@ public class MediaFragment extends PreferenceFragment {
 				checkedItems = new boolean[] {true, true};
 			}
 			String[] items = {getString(R.string.thumbnails), getString(R.string.cached_files)};
-			return new MotionDialogBuilder(requireContext())
+			return MotionDialogBuilder.standard(requireContext())
 					.setTitle(getString(R.string.clear_cache))
 					.setMultiChoiceItems(items, checkedItems, (d, which, isChecked) -> checkedItems[which] = isChecked)
 					.setPositiveButton(android.R.string.ok, (d, w) -> {
@@ -155,7 +155,7 @@ public class MediaFragment extends PreferenceFragment {
 		@NonNull
 		@Override
 		public ProgressDialog onCreateDialog(Bundle savedInstanceState) {
-			ProgressDialog dialog = new ProgressDialog(requireContext(), null);
+			ProgressDialog dialog = ProgressDialog.standard(requireContext(), null);
 			dialog.setMessage(getString(R.string.clearing__ellipsis));
 			return dialog;
 		}

@@ -206,7 +206,7 @@ public class InterfaceFragment extends PreferenceFragment {
 		new InstanceDialog(fragmentManager, null, provider -> {
 			Context context = provider.getContext();
 			String html = IOUtils.readRawResourceString(context.getResources(), R.raw.markup_advanced_search);
-			return new MotionDialogBuilder(context)
+			return MotionDialogBuilder.standard(context)
 					.setTitle(R.string.advanced_search)
 					.setMessage(BUILDER_ADVANCED_SEARCH.fromHtmlReduced(html))
 					.setPositiveButton(android.R.string.ok, null)

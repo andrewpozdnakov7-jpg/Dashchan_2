@@ -1,6 +1,5 @@
 package com.mishiranu.dashchan.ui.navigator.page;
 
-import android.app.AlertDialog;
 import android.net.Uri;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -21,6 +20,7 @@ import com.mishiranu.dashchan.util.ConcurrentUtils;
 import com.mishiranu.dashchan.widget.DividerItemDecoration;
 import com.mishiranu.dashchan.widget.HeaderItemDecoration;
 import com.mishiranu.dashchan.widget.ListPosition;
+import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import com.mishiranu.dashchan.widget.PaddedRecyclerView;
 
 public class HistoryPage extends ListPage implements HistoryAdapter.Callback, GetHistoryTask.Callback {
@@ -118,8 +118,7 @@ public class HistoryPage extends ListPage implements HistoryAdapter.Callback, Ge
 	}
 
 	private static void showClearHistoryDialog(FragmentManager fragmentManager, String chanName) {
-		new InstanceDialog(fragmentManager, null, provider -> new AlertDialog
-				.Builder(provider.getContext())
+		new InstanceDialog(fragmentManager, null, provider -> MotionDialogBuilder.standard(provider.getContext(), true)
 				.setMessage(R.string.clear_history__sentence)
 				.setNegativeButton(android.R.string.cancel, null)
 				.setPositiveButton(android.R.string.ok, (d, w) -> CommonDatabase

@@ -14,21 +14,22 @@ import org.junit.runner.RunWith;
 /** Run on a disposable test installation; temporarily changes/restores one experimental preference. */
 @RunWith(AndroidJUnit4.class)
 public class PhotoEditorDistributionSmokeTest {
-	@Test public void defaultAndExplicitDisableRespectDistribution() {
+	@Test public void defaultAndExplicitDisableWorkInBothDistributions() {
 		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
 			Object previous = Preferences.PREFERENCES.getAll().get(Preferences.KEY_NEW_PHOTO_EDITOR);
 			Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
 			try {
 				Preferences.PREFERENCES.edit().remove(Preferences.KEY_NEW_PHOTO_EDITOR).close();
-				assertEquals(PhotoEditorBridge.isAvailable(), Preferences.isNewPhotoEditorEnabled());
+				assertTrue(PhotoEditorBridge.isAvailable());
+				assertTrue(Preferences.isNewPhotoEditorEnabled());
 				Intent defaultIntent = ImageEditorActivity.createIntent(context, "fixture-hash", "fixture.png", 3);
 				assertNotNull(defaultIntent.getComponent());
-				String expected = PhotoEditorBridge.isAvailable()
-						? "com.mishiranu.dashchan.ui.posting.ExperimentalImageEditorActivity" : ImageEditorActivity.class.getName();
+				String expected = "com.mishiranu.dashchan.ui.posting.ExperimentalImageEditorActivity";
 				assertEquals(expected, defaultIntent.getComponent().getClassName());
 				assertEquals("fixture-hash", defaultIntent.getStringExtra("sourceHash"));
 				assertEquals("fixture.png", defaultIntent.getStringExtra("sourceName"));
 				assertEquals(3, defaultIntent.getIntExtra("attachmentIndex", -1));
+				assertNotNull(context.getPackageManager().resolveActivity(defaultIntent, 0));
 				Preferences.PREFERENCES.edit().put(Preferences.KEY_NEW_PHOTO_EDITOR, false).close();
 				assertFalse(Preferences.isNewPhotoEditorEnabled());
 				Intent legacyIntent = ImageEditorActivity.createIntent(context, "fixture-hash", "fixture.png", 3);
@@ -44,27 +45,21 @@ public class PhotoEditorDistributionSmokeTest {
 		});
 	}
 
-	@Test public void restoredOptInCannotEnableAnEditorExcludedFromTheDistribution() {
+	@Test public void restoredOptInRoutesToTheSharedRegisteredEditor() {
 		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
 			Object previous = Preferences.PREFERENCES.getAll().get(Preferences.KEY_NEW_PHOTO_EDITOR);
 			Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
 			try {
 				Preferences.PREFERENCES.edit().put(Preferences.KEY_NEW_PHOTO_EDITOR, true).close();
-				assertEquals(PhotoEditorBridge.isAvailable(), Preferences.isNewPhotoEditorEnabled());
+				assertTrue(Preferences.isNewPhotoEditorEnabled());
 				Intent intent = ImageEditorActivity.createIntent(context, "fixture-hash", "fixture.png", 3);
 				assertNotNull(intent.getComponent());
-				String expected = PhotoEditorBridge.isAvailable()
-						? "com.mishiranu.dashchan.ui.posting.ExperimentalImageEditorActivity" : ImageEditorActivity.class.getName();
+				String expected = "com.mishiranu.dashchan.ui.posting.ExperimentalImageEditorActivity";
 				assertEquals(expected, intent.getComponent().getClassName());
 				assertEquals("fixture-hash", intent.getStringExtra("sourceHash"));
 				assertEquals("fixture.png", intent.getStringExtra("sourceName"));
 				assertEquals(3, intent.getIntExtra("attachmentIndex", -1));
 				assertNotNull(context.getPackageManager().resolveActivity(intent, 0));
-				if (!PhotoEditorBridge.isAvailable()) {
-					assertNull(PhotoEditorBridge.createIntent(context, "fixture-hash", "fixture.png", 3));
-					assertEquals(0, PhotoEditorBridge.getTitleResId());
-					assertEquals(0, PhotoEditorBridge.getSummaryResId());
-				}
 			} finally {
 				if (previous instanceof Boolean) {
 					Preferences.PREFERENCES.edit().put(Preferences.KEY_NEW_PHOTO_EDITOR, (Boolean) previous).close();

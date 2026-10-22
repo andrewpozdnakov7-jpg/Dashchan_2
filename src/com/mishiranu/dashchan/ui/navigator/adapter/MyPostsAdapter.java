@@ -9,6 +9,8 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import androidx.core.view.ViewCompat;
+import com.mishiranu.dashchan.widget.InterfaceAppearance;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 import chan.content.Chan;
@@ -227,6 +229,7 @@ public class MyPostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 			textView.setGravity(Gravity.CENTER);
 			textView.setText(R.string.my_posts_show_more);
 			textView.setOnClickListener(v -> callback.onLoadMorePosts());
+			InterfaceAppearance.serviceAction(textView, false);
 			return new SimpleViewHolder(textView);
 		}
 		if (viewType == VIEW_TYPE_EMPTY) {
@@ -234,16 +237,19 @@ public class MyPostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 			textView.setGravity(Gravity.CENTER);
 			textView.setAlpha(0.7f);
 			textView.setBackground(null);
+			InterfaceAppearance.serviceAction(textView, true);
 			return new SimpleViewHolder(textView);
 		}
 		ViewFactory.TwoLinesViewHolder views = ViewFactory.makeTwoLinesListItem(parent,
-				ViewFactory.FEATURE_TEXT2_END | ViewFactory.FEATURE_MULTILINE_TITLE);
+				ViewFactory.FEATURE_TEXT2_END | ViewFactory.FEATURE_MULTILINE_TITLE, true);
 		views.text1.setMaxLines(5);
 		views.text1.setEllipsize(TextUtils.TruncateAt.END);
 		int verticalPadding = (int) (8f * ResourceUtils.obtainDensity(parent) + 0.5f);
 		views.view.setPaddingRelative(views.view.getPaddingStart(), verticalPadding,
 				views.view.getPaddingEnd(), verticalPadding);
-		return ListViewUtils.bind(new ItemViewHolder(views.view, views.text1.getTypeface()), true,
+		ItemViewHolder holder = new ItemViewHolder(views.view, views.text1.getTypeface());
+		InterfaceAppearance.servicePreview(views.view, views.text1, views.text2, views.text2End, false, false, 1f);
+		return ListViewUtils.bind(holder, true,
 				this::getItem, callback);
 	}
 
@@ -276,12 +282,14 @@ public class MyPostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 		container.addView(indicator, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
 				(int) (2f * density + 0.5f)));
 		root.addView(container, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+		InterfaceAppearance.serviceTab(container, text, indicator, false);
 		return new TabView(container, text, indicator);
 	}
 
 	@Override
 	public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
 		if (getItemViewType(position) == VIEW_TYPE_MORE) {
+			InterfaceAppearance.refreshTree(holder.itemView);
 			return;
 		}
 		if (holder instanceof TabsViewHolder) {
@@ -292,6 +300,7 @@ public class MyPostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 		}
 		if (items.isEmpty()) {
 			((TextView) holder.itemView).setText(emptyText);
+			InterfaceAppearance.refreshTree(holder.itemView);
 			return;
 		}
 		Item item = getItem(position);
@@ -309,6 +318,7 @@ public class MyPostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 		tab.text.setTextColor(selected ? accent
 				: ResourceUtils.getColor(tab.text.getContext(), android.R.attr.textColorSecondary));
 		tab.indicator.setBackgroundColor(selected ? accent : Color.TRANSPARENT);
+		InterfaceAppearance.serviceTab(tab.container, tab.text, tab.indicator, selected);
 	}
 
 	private void bindReply(ItemViewHolder itemHolder, ViewFactory.TwoLinesViewHolder viewHolder,
@@ -327,6 +337,9 @@ public class MyPostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 		viewHolder.text1.setAlpha(alpha);
 		viewHolder.text2.setAlpha(alpha);
 		viewHolder.text2End.setAlpha(alpha);
+		InterfaceAppearance.servicePreview(viewHolder.view, viewHolder.text1, viewHolder.text2,
+				viewHolder.text2End, !reply.unread, reply.unread, alpha);
+		ViewCompat.setStateDescription(viewHolder.view, null);
 	}
 
 	private void bindPost(ItemViewHolder itemHolder, ViewFactory.TwoLinesViewHolder viewHolder,
@@ -340,6 +353,10 @@ public class MyPostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 		viewHolder.text1.setAlpha(alpha);
 		viewHolder.text2.setAlpha(alpha);
 		viewHolder.text2End.setAlpha(alpha);
+		InterfaceAppearance.servicePreview(viewHolder.view, viewHolder.text1, viewHolder.text2,
+				viewHolder.text2End, !post.trackingActive, false, alpha);
+		ViewCompat.setStateDescription(viewHolder.view, InterfaceAppearance.isEnabled(context)
+				? context.getString(post.trackingActive ? R.string.my_posts_tracking_active : R.string.my_posts_tracking_stopped) : null);
 	}
 
 	private String obtainComment(String comment, String postNumber) {

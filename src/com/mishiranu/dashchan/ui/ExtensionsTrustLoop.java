@@ -75,7 +75,7 @@ public class ExtensionsTrustLoop {
 			fingerprints.setSpan(new MonospaceSpan(false), 0, fingerprints.length(),
 					SpannableStringBuilder.SPAN_EXCLUSIVE_EXCLUSIVE);
 			message.append("SHA-256 fingerprint:\n").append(fingerprints);
-			AlertDialog dialog = new MotionDialogBuilder(context)
+			AlertDialog dialog = MotionDialogBuilder.standard(context)
 					.setTitle(extensionItem.title).setMessage(message)
 					.setCancelable(false)
 					.setPositiveButton(android.R.string.ok, (d, w) -> {

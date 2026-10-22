@@ -441,6 +441,7 @@ public class ThemeEngine {
 			if (!processed) {
 				processed = true;
 				View decorView = ViewUtils.getDecorView(view);
+				com.mishiranu.dashchan.util.ScreenDiagnostics.observeRoot(decorView, dialog ? "dialog" : "overlay");
 				if ("DecorView".equals(decorView.getClass().getSimpleName())) {
 					ThemeContext themeContext = obtainThemeContext(decorView.getContext());
 					if (themeContext != null) {
@@ -690,6 +691,13 @@ public class ThemeEngine {
 		return new ArrayList<>(INSTANCE.themes.values());
 	}
 
+	/** Dynamic palettes are resolved copies. Compare their installed source identity,
+	 * not a display label or an uninstalled download with the same name. */
+	public static boolean isCurrentTheme(Context context, Theme candidate) {
+		Theme current = getTheme(context);
+		return candidate == current || candidate == INSTANCE.themes.get(current.name);
+	}
+
 	public static Theme attachAndApply(Context context) {
 		Context themeContext = attach(context);
 		applyTheme(themeContext);
@@ -706,6 +714,12 @@ public class ThemeEngine {
 		ThemeContext themeContext = requireThemeContext(context);
 		ensureTheme(themeContext);
 		return themeContext.theme;
+	}
+
+	/** Read-only diagnostic lookup: no fallback theme creation, preference writes or reapplication. */
+	public static Theme peekTheme(Context context) {
+		ThemeContext themeContext = obtainThemeContext(context);
+		return themeContext != null ? themeContext.theme : null;
 	}
 
 	public static boolean isDynamicThemeOutdated(Context context) {

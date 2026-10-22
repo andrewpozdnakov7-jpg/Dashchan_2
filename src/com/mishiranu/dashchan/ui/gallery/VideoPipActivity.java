@@ -1392,6 +1392,7 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 	@Override
 	public void onPictureInPictureModeChanged(boolean isInPictureInPictureMode, Configuration newConfig) {
 		super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig);
+		com.mishiranu.dashchan.content.security.AppSecurity.pictureInPictureModeChanged(this);
 		cancelPictureInPictureBoundsObservation();
 		pictureInPictureEntryRequested = false;
 		pictureInPictureGeometryDeferred = true;

@@ -19,6 +19,8 @@
 	<string name="security_cleanup_incomplete_short">Есть неудалённые файлы</string>
 	<string name="security_cleanup_idle_short">Нет незавершённой очистки</string>
 	<string name="security_allow_screenshots">Разрешить снимки экрана</string>
+	<string name="security_hide_pip_video">Скрывать видео в PiP</string>
+	<string name="security_hide_pip_video_summary">Закрывать видео чёрной заглушкой в режиме «картинка в картинке», даже если приложение разблокировано.</string>
 	<string name="security_screenshots_summary">Разрешать съёмку разблокированного приложения. По умолчанию выключено.</string>
 	<string name="security_screenshots_warning">Снимки, запись и трансляция экрана могут раскрыть содержимое приложения. Сохранённые копии не защищены PIN-кодом Slooop и могут остаться после очистки. Экраны ввода PIN и настройки защиты останутся защищёнными. Включайте, только если принимаете этот риск.</string>
 	<string name="security_screenshots_design_summary">Разрешать снимки всех экранов Slooop, включая ввод PIN</string>

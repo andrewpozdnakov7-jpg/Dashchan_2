@@ -328,7 +328,7 @@ public class BrowserFragment extends ContentFragment implements DownloadListener
 			String chanName = requireArguments().getString(EXTRA_CHAN_NAME);
 			ChanLocator.NavigationData navigationData = AndroidUtils.getParcelable(requireArguments(),
 					EXTRA_NAVIGATION_DATA, ChanLocator.NavigationData.class);
-			return new MotionDialogBuilder(requireContext())
+			return MotionDialogBuilder.standard(requireContext())
 					.setMessage(R.string.follow_the_link__sentence)
 					.setNegativeButton(android.R.string.cancel, null)
 					.setPositiveButton(android.R.string.ok, (dialog, which) -> ((FragmentHandler)

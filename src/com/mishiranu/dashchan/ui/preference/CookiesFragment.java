@@ -22,9 +22,11 @@ import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.util.ViewUtils;
 import com.mishiranu.dashchan.widget.CursorAdapter;
 import com.mishiranu.dashchan.widget.ViewFactory;
+import com.mishiranu.dashchan.widget.InterfaceAppearance;
 import java.util.Collection;
 
 public class CookiesFragment extends BaseListFragment implements FragmentHandler.Callback {
+	@Override protected boolean useStandardServiceAppearance() { return true; }
 	private static final String EXTRA_CHAN_NAME = "chanName";
 
 	public CookiesFragment() {}
@@ -136,6 +138,7 @@ public class CookiesFragment extends BaseListFragment implements FragmentHandler
 				ViewUtils.setNewMarginRelative(blocked, margin, top, 0, 0);
 				titleLayout.addView(deleteOnExit, size, size);
 				ViewUtils.setNewMarginRelative(deleteOnExit, margin, top, 0, 0);
+				InterfaceAppearance.serviceRow(itemView, title, value, null);
 			}
 		}
 
@@ -164,6 +167,9 @@ public class CookiesFragment extends BaseListFragment implements FragmentHandler
 			holder.deleteOnExit.setEnabled(!cookieItem.blocked);
 			holder.title.setEnabled(!cookieItem.blocked);
 			holder.value.setEnabled(!cookieItem.blocked);
+			InterfaceAppearance.serviceRow(holder.itemView, holder.title, holder.value, null);
+			holder.blocked.setImageTintList(holder.title.getTextColors());
+			holder.deleteOnExit.setImageTintList(holder.title.getTextColors());
 		}
 
 		@Override

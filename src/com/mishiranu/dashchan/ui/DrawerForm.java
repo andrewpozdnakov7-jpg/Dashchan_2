@@ -1,6 +1,7 @@
 package com.mishiranu.dashchan.ui;
 
 import com.mishiranu.dashchan.widget.MotionDialogBuilder;
+import com.mishiranu.dashchan.widget.InterfaceAppearance;
 import com.mishiranu.dashchan.util.AuditDiagnostics;
 import com.mishiranu.dashchan.ui.DrawerContentController.ListItem;
 import com.mishiranu.dashchan.ui.DrawerContentController.CategoriesOrder;
@@ -749,9 +750,11 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 					LinearLayout.LayoutParams.WRAP_CONTENT);
 			int padding = context.getResources().getDimensionPixelSize(R.dimen
 					.dialog_padding_view);
-			linearLayout.setPadding(padding, padding, padding, padding);
-			AlertDialog dialog = new MotionDialogBuilder(context)
-					.setView(linearLayout).setTitle(R.string.rename)
+			if (!InterfaceAppearance.isEnabled(context)) {
+				linearLayout.setPadding(padding, padding, padding, padding);
+			}
+			AlertDialog dialog = MotionDialogBuilder.standard(context)
+					.setInputView(linearLayout).setTitle(R.string.rename)
 					.setNegativeButton(android.R.string.cancel, null)
 					.setPositiveButton(android.R.string.ok, (d, which) -> {
 						String newTitle = editText.getText().toString();
@@ -1551,8 +1554,8 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	}
 
 	private ViewHolder createItem(ViewType viewType, float density) {
-		// Compact vertical rhythm; retain the existing horizontal action widths.
-		int size = drawerStyle != null ? drawerStyle.rowHeight : (int) (36f * density);
+		// Row/touch size is separate from the watcher's intrinsic decorative capsule.
+		int size = drawerStyle != null ? drawerStyle.rowHeight : DrawerStyle.minimumRowHeight(context);
 		int actionWidth = (int) (48f * density);
 		LinearLayout linearLayout = drawerStyle != null ? new DrawerItemLayout(context, drawerStyle) : new LinearLayout(context);
 		linearLayout.setOrientation(LinearLayout.HORIZONTAL);
@@ -1570,7 +1573,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 			iconView.setImageTintList(ColorStateList.valueOf(drawerIconColor));
 		}
 		TextView textView = makeCommonTextView(false);
-		// Let large fonts/two-line labels grow instead of clipping them to36dp.
+		// A density floor, not a fixed ceiling: large fonts/two-line labels may grow.
 		textView.setMinHeight(size); textView.setMinimumHeight(size);
 		linearLayout.addView(textView, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
 		TextView badgeView = makeCommonTextView(false);
@@ -1644,6 +1647,9 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		LinearLayout linearLayout2 = new LinearLayout(context);
 		linearLayout2.setOrientation(LinearLayout.HORIZONTAL);
 		linearLayout2.setGravity(Gravity.CENTER_VERTICAL);
+		int sectionHeight = DrawerStyle.minimumRowHeight(context);
+		linearLayout.setMinimumHeight(sectionHeight);
+		linearLayout2.setMinimumHeight(sectionHeight);
 		linearLayout.addView(linearLayout2, LinearLayout.LayoutParams.MATCH_PARENT,
 				LinearLayout.LayoutParams.WRAP_CONTENT);
 		TextView textView = makeCommonTextView(true);
@@ -1661,7 +1667,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 			imageView.setOnClickListener(sectionButtonListener);
 			imageView.setImageTintList(textView.getTextColors());
 			int size = (int) (48f * density);
-			layoutParams = new LinearLayout.LayoutParams(size, (int) (36f * density));
+			layoutParams = new LinearLayout.LayoutParams(size, sectionHeight);
 			layoutParams.rightMargin = (int) (4f * density);
 			linearLayout2.addView(imageView, layoutParams);
 		}
@@ -1675,7 +1681,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		arrow.setVisibility(View.GONE);
 		arrow.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
 		LinearLayout.LayoutParams arrowParams = new LinearLayout.LayoutParams((int) (24f * density),
-				(int) (36f * density));
+				sectionHeight);
 		arrowParams.leftMargin = (int) (16f * density);
 		linearLayout2.addView(arrow, 0, arrowParams);
 		holder.sectionArrow = arrow;
@@ -1695,27 +1701,27 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 					callback.onSelectDrawerMenuItem(MENU_ITEM_REDDIT_COMMUNITIES);
 				}
 			});
-			LinearLayout.LayoutParams addParams = new LinearLayout.LayoutParams((int) (48f * density), (int) (36f * density));
+			LinearLayout.LayoutParams addParams = new LinearLayout.LayoutParams((int) (48f * density), sectionHeight);
 			linearLayout2.addView(add, linearLayout2.indexOfChild(imageView), addParams);
 			holder.sectionAdd = add;
 		}
 		if (drawerStyle != null) {
 			linearLayout2.setPaddingRelative(drawerStyle.dp(16), 0, drawerStyle.dp(4), 0);
-			linearLayout2.setMinimumHeight(drawerStyle.dp(36));
+			linearLayout2.setMinimumHeight(sectionHeight);
 			textView.setMinHeight(drawerStyle.dp(32)); textView.setMinimumHeight(drawerStyle.dp(32));
 			LinearLayout.LayoutParams textParams = (LinearLayout.LayoutParams) textView.getLayoutParams();
 			textParams.setMargins(0, drawerStyle.dp(2), drawerStyle.dp(16), drawerStyle.dp(2));
-			arrowParams.width = drawerStyle.dp(24); arrowParams.height = drawerStyle.dp(36);
+			arrowParams.width = drawerStyle.dp(24); arrowParams.height = sectionHeight;
 			arrowParams.setMargins(0, 0, 0, 0);
 			arrow.setImageDrawable(new DrawerGlyph(DrawerGlyph.Kind.CHEVRON, drawerStyle.variant, drawerStyle.dp(20), 1.6f));
 			if (imageView != null) {
 				LinearLayout.LayoutParams params = (LinearLayout.LayoutParams) imageView.getLayoutParams();
-				params.width = drawerStyle.dp(48); params.height = drawerStyle.dp(36); params.setMargins(0, 0, 0, 0);
+				params.width = drawerStyle.dp(48); params.height = sectionHeight; params.setMargins(0, 0, 0, 0);
 				imageView.setPadding(drawerStyle.dp(12), drawerStyle.dp(6), drawerStyle.dp(12), drawerStyle.dp(6));
 				imageView.setScaleType(ImageView.ScaleType.FIT_CENTER);
 			}
 			if (holder.sectionAdd != null) {
-				holder.sectionAdd.getLayoutParams().height = drawerStyle.dp(36);
+				holder.sectionAdd.getLayoutParams().height = sectionHeight;
 				holder.sectionAdd.setPadding(drawerStyle.dp(12), drawerStyle.dp(6), drawerStyle.dp(12), drawerStyle.dp(6));
 				holder.sectionAdd.setScaleType(ImageView.ScaleType.FIT_CENTER);
 			}
@@ -1802,13 +1808,8 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		if (listItem.type == ListItem.Type.SECTION || listItem.type == ListItem.Type.FAVORITE_GROUP) {
 			boolean favoriteGroup = listItem.type == ListItem.Type.FAVORITE_GROUP;
 			boolean redditSection = !favoriteGroup && listItem.data == SECTION_ACTION_CLOSE_ALL_REDDIT;
-			Configuration configuration = context.getResources().getConfiguration();
-			// Match the compact toolbar's portrait / below-w600dp action spacing.
-			boolean compactActions = drawerStyle == null && redditSection && configuration.orientation == Configuration.ORIENTATION_PORTRAIT
-					&& configuration.screenWidthDp < 600;
 			float density = ResourceUtils.obtainDensity(context);
-			int regularActionWidth = (int) (48f * density);
-			int actionWidth = compactActions ? (int) (30f * density) : regularActionWidth;
+			int actionWidth = (int) (48f * density);
 			if (holder.sectionAdd != null) {
 				holder.sectionAdd.setVisibility(redditSection ? View.VISIBLE : View.GONE);
 				ViewGroup.LayoutParams params = holder.sectionAdd.getLayoutParams();
@@ -1820,8 +1821,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 			if (holder.icon != null) {
 				LinearLayout.LayoutParams params = (LinearLayout.LayoutParams) holder.icon.getLayoutParams();
 				// Keep the close icon centered over the 48dp close buttons in the page rows.
-				// Moving the pair's outer edge preserves the compact spacing to the plus button.
-				int rightMargin = drawerStyle != null ? 0 : (int) (4f * density) + (regularActionWidth - actionWidth) / 2;
+				int rightMargin = drawerStyle != null ? 0 : (int) (4f * density);
 				if (params.width != actionWidth || params.rightMargin != rightMargin) {
 					params.width = actionWidth;
 					params.rightMargin = rightMargin;

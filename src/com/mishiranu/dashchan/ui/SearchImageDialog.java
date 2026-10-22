@@ -120,7 +120,7 @@ public class SearchImageDialog extends DialogFragment {
 		@NonNull
 		@Override
 		public ProgressDialog onCreateDialog(Bundle savedInstanceState) {
-			ProgressDialog dialog = new ProgressDialog(requireContext(), null);
+			ProgressDialog dialog = ProgressDialog.standard(requireContext(), null);
 			dialog.setMessage(getString(R.string.uploading_image__ellipsis));
 			return dialog;
 		}

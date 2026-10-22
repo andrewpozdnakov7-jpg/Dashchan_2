@@ -395,7 +395,7 @@ public class ClickableToast implements DefaultLifecycleObserver {
 				overflowDialog.dismiss();
 			}
 			String id = update ? updateId : UUID.randomUUID().toString();
-			AlertDialog.Builder builder = new MotionDialogBuilder(activity)
+			AlertDialog.Builder builder = MotionDialogBuilder.standard(activity)
 					.setMessage(message).setPositiveButton(android.R.string.ok, null);
 			if (realClickable && button != null) {
 				Runnable callback = button.callback;

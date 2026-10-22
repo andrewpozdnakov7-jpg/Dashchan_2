@@ -56,7 +56,7 @@ public class ExperimentalFragment extends PreferenceFragment {
 		}
 		addList(Preferences.KEY_THREAD_TOOLBAR_ACTION, toolbarValues,
 				Preferences.DEFAULT_THREAD_TOOLBAR_ACTION.value, R.string.thread_toolbar_action, toolbarEntries);
-		addFormDiagnosticsPreferences();
+		addScreenDiagnosticsPreferences();
 		addButton(R.string.toolbar_title_sizes, R.string.toolbar_title_sizes__summary)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 						.pushFragment(new ToolbarTitleSettingsFragment()));
@@ -92,7 +92,7 @@ public class ExperimentalFragment extends PreferenceFragment {
 		}
 	}
 
-	private void addFormDiagnosticsPreferences() {
+	private void addScreenDiagnosticsPreferences() {
 		boolean recording = PostingFormDiagnostics.isRecording();
 		boolean saving = PostingFormDiagnostics.isSaving();
 		boolean retry = PostingFormDiagnostics.hasPendingExport();

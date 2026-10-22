@@ -10,6 +10,18 @@ import com.mishiranu.dashchan.util.ResourceUtils;
 import java.text.NumberFormat;
 
 public class ProgressDialog extends AlertDialog {
+	/** Presentation only. Implementations must not own task or dialog listeners. */
+	public abstract static class Content extends android.widget.FrameLayout {
+		public Content(Context context) { super(context); }
+		public abstract void message(CharSequence value);
+		public abstract void state(int value, int max, boolean indeterminate);
+		public abstract void refreshAppearance();
+	}
+	final Content standardContent;
+	private final ProgressValues values = new ProgressValues();
+	public static ProgressDialog standard(Context context, String progressFormat) {
+		return new ProgressDialog(context, progressFormat, InterfaceAppearance.isEnabled(context));
+	}
 	private final String progressFormat;
 	private final NumberFormat numberFormat;
 	private final ProgressBar progressBar;
@@ -18,12 +30,25 @@ public class ProgressDialog extends AlertDialog {
 	private final TextView progress;
 
 	public ProgressDialog(Context context, String progressFormat) {
-		super(context);
+		this(context, progressFormat, false);
+	}
+	private ProgressDialog(Context context, String progressFormat, boolean standard) {
+		super(standard ? InterfaceAppearance.standardDialogContext(context) : context);
 		SurfaceMotion.configureDialog(this);
 		context = getContext();
 		setCanceledOnTouchOutside(false);
 
 		this.progressFormat = progressFormat;
+		standardContent = standard ? InterfaceAppearance.standardProgressContent(context, progressFormat) : null;
+		if (standardContent != null) {
+			progressBar = null; message = null; percent = null; progress = null; numberFormat = null;
+			values.indeterminate = progressFormat == null;
+			// Public AlertDialog API, not the inaccessible Builder overload. One padding owner.
+			setView(standardContent, 0, 0, 0, 0);
+			InterfaceAppearance.configureStandardDialog(this);
+			standardContent.state(values.value, values.max, values.indeterminate);
+			return;
+		}
 		if (progressFormat != null) {
 			numberFormat = NumberFormat.getPercentInstance();
 			numberFormat.setMaximumFractionDigits(0);
@@ -84,23 +109,27 @@ public class ProgressDialog extends AlertDialog {
 
 	@Override
 	public void setMessage(CharSequence message) {
+		if (standardContent != null) { standardContent.message(message); return; }
 		if (progressFormat == null) {
-			this.message.setText(message);
+			if (this.message != null) this.message.setText(message);
 		} else {
 			super.setMessage(message);
 		}
 	}
 
 	public void setIndeterminate(boolean indeterminate) {
+		if (standardContent != null) { values.indeterminate = indeterminate; updateStandard(); return; }
 		progressBar.setIndeterminate(indeterminate);
 	}
 
 	public void setValue(int value) {
+		if (standardContent != null) { values.value = value; updateStandard(); return; }
 		progressBar.setProgress(value);
 		updateProgress();
 	}
 
 	public void setMax(int max) {
+		if (standardContent != null) { values.max = max; updateStandard(); return; }
 		progressBar.setMax(max);
 		updateProgress();
 	}
@@ -112,5 +141,10 @@ public class ProgressDialog extends AlertDialog {
 			percent.setText(numberFormat.format((double) value / (double) max));
 			progress.setText(String.format(progressFormat, value, max));
 		}
+	}
+	private void updateStandard() { standardContent.state(values.value, values.max, values.indeterminate); }
+	@Override protected void onStart() {
+		super.onStart();
+		if (standardContent != null) standardContent.refreshAppearance();
 	}
 }

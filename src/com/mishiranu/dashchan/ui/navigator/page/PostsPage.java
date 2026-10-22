@@ -1268,8 +1268,7 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 	}
 
 	private static void showEraseDialog(FragmentManager fragmentManager) {
-		new InstanceDialog(fragmentManager, null, provider -> new AlertDialog
-				.Builder(provider.getContext())
+		new InstanceDialog(fragmentManager, null, provider -> MotionDialogBuilder.standard(provider.getContext(), true)
 				.setTitle(R.string.erase)
 				.setMessage(R.string.thread_will_be_deleted_from_cache__sentence)
 				.setPositiveButton(android.R.string.ok, (d, w) -> {
@@ -1281,8 +1280,7 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 	}
 
 	private static void showClearDeletedDialog(FragmentManager fragmentManager) {
-		new InstanceDialog(fragmentManager, null, provider -> new AlertDialog
-				.Builder(provider.getContext())
+		new InstanceDialog(fragmentManager, null, provider -> MotionDialogBuilder.standard(provider.getContext(), true)
 				.setTitle(R.string.clear_deleted)
 				.setMessage(R.string.deleted_posts_will_be_deleted__sentence)
 				.setPositiveButton(android.R.string.ok, (d, w) -> {
@@ -1350,8 +1348,7 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 
 	private static void showHiddenPostsDialog(FragmentManager fragmentManager, List<String> localFilters) {
 		boolean[] checked = new boolean[localFilters.size()];
-		new InstanceDialog(fragmentManager, null, provider -> new AlertDialog
-				.Builder(provider.getContext())
+		new InstanceDialog(fragmentManager, null, provider -> MotionDialogBuilder.standard(provider.getContext(), true)
 				.setTitle(R.string.remove_rules)
 				.setMultiChoiceItems(CommonUtils.toArray(localFilters, String.class),
 						checked, (d, which, isChecked) -> checked[which] = isChecked)

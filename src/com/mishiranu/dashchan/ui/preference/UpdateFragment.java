@@ -54,6 +54,7 @@ import java.util.List;
 import java.util.Map;
 
 public class UpdateFragment extends BaseListFragment {
+	@Override protected boolean useStandardServiceAppearance() { return true; }
 	private static final String VERSION_TITLE_RELEASE = "Release";
 
 	private static final String EXTRA_UPDATE_DATA_MAP = "updateDataMap";
@@ -155,7 +156,7 @@ public class UpdateFragment extends BaseListFragment {
 	@Override
 	public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
 		ExpandedLayout layout = (ExpandedLayout) super.onCreateView(inflater, container, savedInstanceState);
-		progressView = ViewFactory.createProgressLayout(layout);
+		progressView = ViewFactory.createProgressLayout(layout, true);
 		return layout;
 	}
 
@@ -503,8 +504,7 @@ public class UpdateFragment extends BaseListFragment {
 
 	private static void displayExtensionInstallConsentDialog(FragmentManager fragmentManager,
 			ArrayList<UpdaterActivity.Request> requests) {
-		new InstanceDialog(fragmentManager, null, provider -> new AlertDialog
-				.Builder(provider.getContext())
+		new InstanceDialog(fragmentManager, null, provider -> MotionDialogBuilder.standard(provider.getContext())
 				.setTitle(R.string.extension_install_consent_title)
 				.setMessage(R.string.extension_install_consent__sentence)
 				.setNegativeButton(android.R.string.cancel, null)
@@ -516,8 +516,7 @@ public class UpdateFragment extends BaseListFragment {
 	}
 
 	private static void displayUpdateReminderDialog(FragmentManager fragmentManager) {
-		new InstanceDialog(fragmentManager, null, provider -> new AlertDialog
-				.Builder(provider.getContext())
+		new InstanceDialog(fragmentManager, null, provider -> MotionDialogBuilder.standard(provider.getContext())
 				.setMessage(R.string.update_reminder__sentence)
 				.setPositiveButton(android.R.string.ok, (d, w) -> ((FragmentHandler) provider
 						.getActivity()).removeFragment())
@@ -630,11 +629,13 @@ public class UpdateFragment extends BaseListFragment {
 				case ITEM: {
 					CheckPreference.CheckViewHolder viewHolder = checkPreference.createViewHolder(parent);
 					ViewUtils.setSelectableItemBackground(viewHolder.view);
+					com.mishiranu.dashchan.widget.InterfaceAppearance.settingsRow(viewHolder.view,
+							viewHolder.title, viewHolder.summary, viewHolder.widgetFrame, false);
 					viewHolder.view.setTag(viewHolder);
 					return ListViewUtils.bind(new SimpleViewHolder(viewHolder.view), false, listItems::get, callback);
 				}
 				case HEADER: {
-					return new SimpleViewHolder(ViewFactory.makeListTextHeader(parent));
+					return new SimpleViewHolder(ViewFactory.makeListTextHeader(parent, true));
 				}
 				default: {
 					throw new IllegalStateException();
@@ -656,17 +657,20 @@ public class UpdateFragment extends BaseListFragment {
 					if (listItem.warning != null) {
 						SpannableString spannable = new SpannableString(listItem.target + "\n" + listItem.warning);
 						int length = spannable.length();
-						spannable.setSpan(new ForegroundColorSpan(ResourceUtils.getColor(holder.itemView.getContext(),
-								R.attr.colorTextError)), length - listItem.warning.length(), length,
+						spannable.setSpan(new ForegroundColorSpan(com.mishiranu.dashchan.widget.InterfaceAppearance
+								.serviceWarningColor(holder.itemView.getContext())), length - listItem.warning.length(), length,
 								SpannableString.SPAN_EXCLUSIVE_EXCLUSIVE);
 						viewHolder.summary.setText(spannable);
 					} else {
 						viewHolder.summary.setText(listItem.target);
 					}
+					com.mishiranu.dashchan.widget.InterfaceAppearance.settingsRow(viewHolder.view,
+							viewHolder.title, viewHolder.summary, viewHolder.widgetFrame, false);
 					break;
 				}
 				case HEADER: {
 					((TextView) holder.itemView).setText(listItem.title);
+					com.mishiranu.dashchan.widget.InterfaceAppearance.refreshTree(holder.itemView);
 					break;
 				}
 			}

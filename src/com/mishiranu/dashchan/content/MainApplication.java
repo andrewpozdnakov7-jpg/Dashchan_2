@@ -98,6 +98,7 @@ public class MainApplication extends Application {
 
 		if (isMainProcess()) {
 			Logger.init(this);
+			com.mishiranu.dashchan.util.ScreenDiagnostics.install(this);
 			FontManager.register(this);
 			LauncherIconManager.apply(this, Preferences.getApplicationName());
 			UserAgentProvider.initialize(this);

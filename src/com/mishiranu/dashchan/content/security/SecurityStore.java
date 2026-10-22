@@ -24,6 +24,22 @@ import org.json.JSONObject;
 /** Cross-process, atomic state; outside Android and manual application backups. */
 public final class SecurityStore {
 	public static final String ALLOW_SCREENSHOTS = "allow_screenshots";
+	public static final String HIDE_PIP_VIDEO = "hide_pip_video";
+
+	public static boolean hidePipVideo(Context context) {
+		if (!com.mishiranu.dashchan.BuildConfig.ENABLE_APP_SECURITY_SETTINGS) return false;
+		try { return update(context, s -> s.optBoolean(HIDE_PIP_VIDEO, false)); }
+		catch (IOException e) { return true; }
+	}
+
+	static void setHidePipVideo(Context context, boolean hidden,
+			java.util.function.BooleanSupplier authorization) throws IOException {
+		authorizedUpdate(context, authorization, s -> {
+			if (authenticationMode(s) == null || s.optBoolean("reset_pending")) throw new IOException("PiP setting unavailable");
+			s.put(HIDE_PIP_VIDEO, hidden); return null;
+		});
+		AppSecurity.notifyChanged(context);
+	}
 	private static final java.util.concurrent.locks.ReentrantLock MONITOR = new java.util.concurrent.locks.ReentrantLock();
 	private static final String PIN_KEY = "slooop.app-lock.pin.v1";
 	public interface Change<T> { T apply(JSONObject state) throws Exception; }
