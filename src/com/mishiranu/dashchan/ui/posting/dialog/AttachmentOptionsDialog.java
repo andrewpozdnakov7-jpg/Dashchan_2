@@ -74,12 +74,17 @@ public class AttachmentOptionsDialog extends DialogFragment implements AdapterVi
 		public View getView(int position, View convertView, @NonNull ViewGroup parent) {
 			View view = super.getView(position, convertView, parent);
 			view.setEnabled(isEnabled(position));
+			com.mishiranu.dashchan.widget.InterfaceAppearance.standardChoiceRow(view, view.findViewById(android.R.id.text1));
 			return view;
 		}
 
 		@Override
 		public boolean isEnabled(int position) {
 			return enabledItems.get(position, true);
+		}
+
+		@Override public boolean areAllItemsEnabled() {
+			return !com.mishiranu.dashchan.widget.InterfaceAppearance.isEnabled(getContext());
 		}
 
 		public void setEnabled(int index, boolean enabled) {
@@ -136,21 +141,32 @@ public class AttachmentOptionsDialog extends DialogFragment implements AdapterVi
 		}
 		LinearLayout linearLayout = new LinearLayout(activity);
 		linearLayout.setOrientation(LinearLayout.VERTICAL);
+		boolean standard = com.mishiranu.dashchan.widget.InterfaceAppearance.isEnabled(activity);
 		boolean compact = PostingFormAppearance.isEnabled();
-		if (compact) {
+		if (compact || standard) {
 			TextView details = new TextView(activity);
 			details.setText(holder.name + "\n" + holder.fileSize.getText());
 			details.setTextIsSelectable(true);
-			int padding = Math.round(16 * ResourceUtils.obtainDensity(activity));
+			int padding = Math.round((standard ? 24 : 16) * ResourceUtils.obtainDensity(activity));
 			details.setPadding(padding, padding, padding, padding / 2);
+			com.mishiranu.dashchan.widget.InterfaceAppearance.standardCustomContent(details);
 			linearLayout.addView(details, LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
 		}
 		ImageView imageView = new ImageView(activity);
 		imageView.setBackground(new TransparentTileDrawable(activity, true));
 		imageView.setImageDrawable(holder.imageView.getDrawable());
-		imageView.setScaleType(compact ? ImageView.ScaleType.FIT_CENTER : ImageView.ScaleType.CENTER_CROP);
-		linearLayout.addView(imageView, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1));
-		listView = new ListView(activity);
+		imageView.setScaleType(standard || compact ? ImageView.ScaleType.FIT_CENTER : ImageView.ScaleType.CENTER_CROP);
+		if (standard) {
+			float density = ResourceUtils.obtainDensity(activity);
+			int previewHeight = Math.round(Math.min(160f, activity.getResources().getConfiguration().screenHeightDp / 4f) * density);
+			linearLayout.addView(imageView, new LinearLayout.LayoutParams(-1, previewHeight));
+		} else linearLayout.addView(imageView, new LinearLayout.LayoutParams(-1, 0, 1));
+		listView = new ListView(activity) {
+			@Override protected void onMeasure(int widthSpec, int heightSpec) {
+				// A single outer viewport owns scrolling, so large text cannot push choices off-screen.
+				super.onMeasure(widthSpec, standard ? View.MeasureSpec.makeMeasureSpec(0x1fffffff, View.MeasureSpec.AT_MOST) : heightSpec);
+			}
+		};
 		linearLayout.addView(listView, LinearLayout.LayoutParams.MATCH_PARENT,
 				LinearLayout.LayoutParams.WRAP_CONTENT);
 		listView.setChoiceMode(ListView.CHOICE_MODE_MULTIPLE);
@@ -163,7 +179,12 @@ public class AttachmentOptionsDialog extends DialogFragment implements AdapterVi
 		}
 		listView.setOnItemClickListener(this);
 		updateItemsEnabled(adapter, holder);
-		AlertDialog dialog = new MotionDialogBuilder(activity).setView(linearLayout).create();
+		View content = linearLayout;
+		if (standard) {
+			android.widget.ScrollView scroll = new android.widget.ScrollView(activity);
+			scroll.addView(linearLayout); content = scroll;
+		}
+		AlertDialog dialog = MotionDialogBuilder.standard(activity).setView(content).create();
 		dialog.setCanceledOnTouchOutside(true);
 		return dialog;
 	}

@@ -54,6 +54,7 @@ public class UpdaterActivity extends StateActivity {
 	private boolean resumed;
 	private boolean permissionRequest;
 	private String confirmationLaunched;
+	private String installationToken;
 
 	private final ActivityResultLauncher<Intent> packageInstaller = registerForActivityResult(
 			new ActivityResultContracts.StartActivityForResult(), result -> {
@@ -103,6 +104,7 @@ public class UpdaterActivity extends StateActivity {
 			index = savedInstanceState.getInt(EXTRA_INDEX);
 			permissionRequest = savedInstanceState.getBoolean("permission_request");
 			confirmationLaunched = savedInstanceState.getString("confirmation_launched");
+			installationToken = savedInstanceState.getString("installation_token");
 		}
 		installModel = new ViewModelProvider(this).get(UpdateInstallSession.Model.class);
 		installModel.recoverPreparation();
@@ -128,6 +130,29 @@ public class UpdaterActivity extends StateActivity {
 
 	@Override protected void onNewIntent(Intent intent) {
 		super.onNewIntent(intent);
+		String resumeToken = intent.getStringExtra(UpdateInstallSession.EXTRA_TOKEN);
+		if (resumeToken != null && !resumeToken.equals(UpdateInstallSession.token(this))) {
+			android.util.Log.i("UpdateInstaller", "new_intent_stale_resume");
+			return;
+		}
+		boolean live = UpdateInstallSession.token(this) != null
+				&& UpdateInstallSession.status(this) < PackageInstaller.STATUS_SUCCESS;
+		boolean sameLiveQueue = resumeToken == null && live
+				&& UpdateInstallSession.files(this).equals(intent.getStringArrayListExtra(EXTRA_FILES));
+		if (resumeToken == null && live && !sameLiveQueue) {
+			// Keep this live model/window intact rather than replacing or cancelling another queue.
+			android.util.Log.i("UpdateInstaller", "new_intent_deferred_busy");
+			Toast.makeText(this, R.string.unknown_error, Toast.LENGTH_LONG).show();
+			return;
+		}
+		if (!sameLiveQueue && (resumeToken == null || !resumeToken.equals(installationToken))) {
+			// CLEAR_TOP may reuse this Activity for an entirely new download/request.
+			index = 0;
+			installationToken = null;
+			confirmationLaunched = null;
+			permissionRequest = false;
+			if (installModel != null) installModel.confirmation = null;
+		}
 		setIntent(intent);
 		readPendingConfirmation(intent);
 		if (resumed) performInstallation();
@@ -136,9 +161,12 @@ public class UpdaterActivity extends StateActivity {
 	private void readPendingConfirmation(Intent intent) {
 		String token = UpdateInstallSession.token(this);
 		if (token != null && token.equals(intent.getStringExtra(UpdateInstallSession.EXTRA_TOKEN))) {
+			installationToken = token;
 			installModel.confirmation = AndroidUtils.getParcelableExtra(intent,
 					UpdateInstallSession.EXTRA_CONFIRMATION, Intent.class);
 			intent.removeExtra(UpdateInstallSession.EXTRA_CONFIRMATION);
+			// Consume the resume token; recovery may replace this session after a lost confirmation.
+			intent.removeExtra(UpdateInstallSession.EXTRA_TOKEN);
 			confirmationLaunched = null;
 		}
 	}
@@ -149,17 +177,27 @@ public class UpdaterActivity extends StateActivity {
 		outState.putInt(EXTRA_INDEX, index);
 		outState.putBoolean("permission_request", permissionRequest);
 		outState.putString("confirmation_launched", confirmationLaunched);
+		outState.putString("installation_token", installationToken);
 	}
 
 	private void performInstallation() {
 		if (com.mishiranu.dashchan.content.security.SecurityStore.locked(this)) return;
 		if (!resumed || isFinishing() || permissionRequest) return;
-		String token = UpdateInstallSession.token(this);
-		if (token != null) {
+		UpdateInstallSession.RequestState request = UpdateInstallSession.resolveRequest(this, installationToken,
+				getIntent().getStringExtra(UpdateInstallSession.EXTRA_TOKEN), getFiles());
+		if (request.kind == UpdateInstallSession.RequestKind.BUSY || request.kind == UpdateInstallSession.RequestKind.STALE) {
+			if (request.kind == UpdateInstallSession.RequestKind.BUSY)
+				Toast.makeText(this, R.string.unknown_error, Toast.LENGTH_LONG).show();
+			finish();
+			return;
+		}
+		String token = request.token;
+		if (request.kind == UpdateInstallSession.RequestKind.RESUME) {
+			installationToken = token;
 			// The durable session owns the exact queue, including across process recreation.
-			getIntent().putStringArrayListExtra(EXTRA_FILES, UpdateInstallSession.files(this));
-			index = UpdateInstallSession.index(this);
-			int status = UpdateInstallSession.status(this);
+			getIntent().putStringArrayListExtra(EXTRA_FILES, request.files);
+			index = request.index;
+			int status = request.status;
 			android.util.Log.i("UpdateInstaller", "resume_session status=" + status);
 			if (status == PackageInstaller.STATUS_PENDING_USER_ACTION) {
 				if (installModel.confirmation != null && !token.equals(confirmationLaunched)) {
@@ -185,6 +223,7 @@ public class UpdaterActivity extends StateActivity {
 			}
 			if (status < PackageInstaller.STATUS_SUCCESS) return;
 			UpdateInstallSession.clear(this, token);
+			installationToken = null;
 			confirmationLaunched = null;
 			if (status != PackageInstaller.STATUS_SUCCESS) {
 				clearClientInstall(this);
@@ -223,7 +262,11 @@ public class UpdaterActivity extends StateActivity {
 						finish();
 					}
 				} else {
-					try { installModel.start(new ArrayList<>(files), index, file, isInstallingClient()); }
+					try {
+						installModel.start(new ArrayList<>(files), index, file, isInstallingClient());
+						// start() persists its token synchronously before the worker prepares the APK.
+						installationToken = UpdateInstallSession.token(this);
+					}
 					catch (RuntimeException e) {
 						android.util.Log.w("UpdateInstaller", "start_failed type=" + e.getClass().getSimpleName());
 						clearClientInstall(this);

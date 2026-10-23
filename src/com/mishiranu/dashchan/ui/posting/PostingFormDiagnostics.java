@@ -391,6 +391,9 @@ public final class PostingFormDiagnostics {
 						+ " screenDp=" + root.getResources().getConfiguration().screenWidthDp + ","
 								+ root.getResources().getConfiguration().screenHeightDp
 						+ " layoutDirection=" + root.getLayoutDirection()
+						+ " keyboardConfig=" + root.getResources().getConfiguration().keyboard
+						+ " hardKeyboardHidden=" + root.getResources().getConfiguration().hardKeyboardHidden
+						+ " showSoftInputOnFocus=" + editor.getShowSoftInputOnFocus()
 						+ " multiWindow=" + activity.isInMultiWindowMode() + " pip=" + activity.isInPictureInPictureMode()
 						+ " textSizePx=" + editor.getTextSize() + " lineHeight=" + editor.getLineHeight()
 						+ " viewport=" + scroll.getWidth() + "x" + scroll.getHeight() + " scrollY=" + scroll.getScrollY()
@@ -399,6 +402,7 @@ public final class PostingFormDiagnostics {
 						+ " gapsValidIme=" + (imeBottom > 0)
 						+ " viewportOwner=" + PostingFormAppearance.ownsKeyboardViewport(editor)
 						+ " newForm=" + PostingFormAppearance.isEnabled() + " heightMode=" + Preferences.getPostingEditorHeightMode()
+						+ " maxRelaxImeFix=" + Preferences.isMaxRelaxImeFixEnabled()
 						+ " fixedLines=" + Preferences.getPostingEditorFixedLines()
 						+ " hiddenFields=" + Preferences.isPostingNameHidden() + "," + Preferences.isPostingEmailHidden()
 								+ "," + Preferences.isPostingPasswordHidden() + "," + Preferences.isPostingSubjectHidden()

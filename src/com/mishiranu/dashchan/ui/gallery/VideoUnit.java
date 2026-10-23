@@ -2382,11 +2382,11 @@ public class VideoUnit {
 	private static void showMetadata(FragmentManager fragmentManager, Map<String, String> metadata) {
 		new InstanceDialog(fragmentManager, null, provider -> {
 			Context context = GalleryInstance.getCallback(provider).getWindow().getContext();
-			AlertDialog dialog = new MotionDialogBuilder(context)
+			AlertDialog dialog = MotionDialogBuilder.standard(context)
 					.setTitle(R.string.metadata)
 					.setPositiveButton(android.R.string.ok, null)
 					.create();
-			SummaryLayout layout = new SummaryLayout(dialog);
+			SummaryLayout layout = SummaryLayout.standard(dialog);
 			String videoFormat = metadata.get("video_format");
 			String width = metadata.get("width");
 			String height = metadata.get("height");

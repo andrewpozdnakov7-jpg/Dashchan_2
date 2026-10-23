@@ -1482,6 +1482,10 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 		textView.setTextColor(ThemeEngine.getTheme(context).accent);
 		textView.setTextSize(14f);
 		textView.setPadding(0, topPadding, 0, topPadding / 3);
+		com.mishiranu.dashchan.widget.InterfaceAppearance.standardFieldLabel(textView);
+		if (com.mishiranu.dashchan.widget.InterfaceAppearance.isEnabled(context))
+			textView.setPadding(0, Math.round(16f * ResourceUtils.obtainDensity(context)), 0,
+					Math.round(8f * ResourceUtils.obtainDensity(context)));
 		return textView;
 	}
 
@@ -1536,7 +1540,8 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 
 		ScrollView scrollView = new ScrollView(context);
 		scrollView.addView(container);
-		new MotionDialogBuilder(context).setTitle(R.string.gallery_filter).setView(scrollView)
+		com.mishiranu.dashchan.widget.InterfaceAppearance.standardCustomContent(container);
+		MotionDialogBuilder.standard(context).setTitle(R.string.gallery_filter).setView(scrollView)
 				.setNegativeButton(android.R.string.cancel, null)
 				.setNeutralButton(R.string.gallery_filter_reset, (dialog, which) ->
 						applyGalleryFilter(FILTER_ALL, GallerySort.POST_ORDER))

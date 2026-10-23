@@ -137,6 +137,8 @@ public class RoundedDialogsRadiusPreference extends DialogPreference<Integer> {
 				}
 			}
 		});
+		com.mishiranu.dashchan.widget.InterfaceAppearance.standardCustomContent(pair.second, previewContainer);
+		com.mishiranu.dashchan.widget.InterfaceAppearance.standardCustomInsets(pair.second);
 		return super.configureDialog(savedInstanceState, builder).setView(pair.first)
 				.setPositiveButton(android.R.string.ok, (dialog, which) ->
 						ConcurrentUtils.HANDLER.post(() -> setValue(currentValue)));

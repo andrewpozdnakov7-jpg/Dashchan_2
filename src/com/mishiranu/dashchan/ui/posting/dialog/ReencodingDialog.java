@@ -49,11 +49,15 @@ public class ReencodingDialog extends DialogFragment implements DialogInterface.
 				ResourceUtils.getColonString(getResources(), R.string.reduce, "%dx"));
 		reduceLayoutHolder.setValue(savedInstanceState != null ? savedInstanceState.getInt(EXTRA_REDUCE) : 1);
 		int padding = getResources().getDimensionPixelSize(R.dimen.dialog_padding_view);
+		if (com.mishiranu.dashchan.widget.InterfaceAppearance.isEnabled(context))
+			padding = Math.round(24f * ResourceUtils.obtainDensity(context));
 		ViewUtils.setNewPadding(qualityLayoutHolder.layout, null, 0, null, padding / 2);
 		ViewUtils.setNewPadding(reduceLayoutHolder.layout, null, 0, null, null);
 		radioGroup = new RadioGroup(context);
 		radioGroup.setOrientation(RadioGroup.VERTICAL);
 		radioGroup.setPadding(padding, padding, padding, padding / 2);
+		if (com.mishiranu.dashchan.widget.InterfaceAppearance.isEnabled(context))
+			radioGroup.setPadding(padding, 0, padding, Math.round(8f * ResourceUtils.obtainDensity(context)));
 		radioGroup.setOnCheckedChangeListener(this);
 		for (int i = 0; i < OPTIONS.length; i++) {
 			RadioButton radioButton = new RadioButton(context);
@@ -80,7 +84,20 @@ public class ReencodingDialog extends DialogFragment implements DialogInterface.
 		ScrollView scrollView = new ScrollView(context);
 		scrollView.addView(linearLayout, ScrollView.LayoutParams.MATCH_PARENT,
 				ScrollView.LayoutParams.WRAP_CONTENT);
-		return new MotionDialogBuilder(context).setTitle(R.string.reencode_image)
+		com.mishiranu.dashchan.widget.InterfaceAppearance.standardCustomContent(linearLayout);
+		if (com.mishiranu.dashchan.widget.InterfaceAppearance.isEnabled(context)) {
+			for (ViewFactory.SeekLayoutHolder holder : new ViewFactory.SeekLayoutHolder[] {qualityLayoutHolder, reduceLayoutHolder}) {
+				android.view.ViewGroup content = (android.view.ViewGroup) holder.layout;
+				for (int i = 0; i < content.getChildCount(); i++) {
+					android.view.View row = content.getChildAt(i);
+					row.setPaddingRelative(padding, row.getPaddingTop(), padding, row.getPaddingBottom());
+					row.getLayoutParams().height = android.view.ViewGroup.LayoutParams.WRAP_CONTENT;
+				}
+				com.mishiranu.dashchan.widget.InterfaceAppearance.standardCustomCaption(content.findViewById(R.id.min_value));
+				com.mishiranu.dashchan.widget.InterfaceAppearance.standardCustomCaption(content.findViewById(R.id.max_value));
+			}
+		}
+		return MotionDialogBuilder.standard(context).setTitle(R.string.reencode_image)
 				.setView(scrollView).setNegativeButton(android.R.string.cancel, null)
 				.setPositiveButton(android.R.string.ok, this).create();
 	}

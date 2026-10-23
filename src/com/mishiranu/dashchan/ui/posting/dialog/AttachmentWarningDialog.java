@@ -61,7 +61,7 @@ public class AttachmentWarningDialog extends DialogFragment {
 		if (geolocation != null) {
 			message = appendMessage(message, getString(R.string.geolocation));
 		}
-		return new MotionDialogBuilder(activity).setTitle(R.string.warning)
+		return MotionDialogBuilder.standard(activity).setTitle(R.string.warning)
 				.setMessage(getString(R.string.file_contains_data__format_sentence, message))
 				.setPositiveButton(android.R.string.ok, null).create();
 	}

@@ -57,6 +57,8 @@ public class ExperimentalFragment extends PreferenceFragment {
 		addList(Preferences.KEY_THREAD_TOOLBAR_ACTION, toolbarValues,
 				Preferences.DEFAULT_THREAD_TOOLBAR_ACTION.value, R.string.thread_toolbar_action, toolbarEntries);
 		addScreenDiagnosticsPreferences();
+		addCheck(true, Preferences.KEY_MAX_RELAX_IME_FIX, Preferences.DEFAULT_MAX_RELAX_IME_FIX,
+				R.string.max_relax_ime_fix, R.string.max_relax_ime_fix_summary);
 		addButton(R.string.toolbar_title_sizes, R.string.toolbar_title_sizes__summary)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 						.pushFragment(new ToolbarTitleSettingsFragment()));

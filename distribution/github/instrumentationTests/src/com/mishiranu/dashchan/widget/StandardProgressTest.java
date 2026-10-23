@@ -59,18 +59,43 @@ public class StandardProgressTest {
 	@Test public void standardFactoryPreservesCallerListenersAndLatestStateAcrossShow() {
 		try (ActivityScenario<PostingGestureTestActivity> scenario = ActivityScenario.launch(PostingGestureTestActivity.class)) {
 			scenario.onActivity(a -> {
+				Object previous = com.mishiranu.dashchan.content.Preferences.PREFERENCES.getAll()
+						.get(com.mishiranu.dashchan.content.Preferences.KEY_NEW_INTERFACE_MOTION);
+				ProgressDialog d = null;
+				try {
+				com.mishiranu.dashchan.content.Preferences.PREFERENCES.edit()
+						.put(com.mishiranu.dashchan.content.Preferences.KEY_NEW_INTERFACE_MOTION, true).close();
 				Context c = PostingTestContext.create(a); int[] events = new int[2];
-				ProgressDialog d = ProgressDialog.standard(c, "%d / %d");
+				d = ProgressDialog.standard(c, "%d / %d");
+				assertNotNull(d.standardContent);
 				d.setValue(7); d.setMax(10); d.setMessage("Synthetic operation");
 				d.setOnCancelListener(x -> events[0]++); d.setOnDismissListener(x -> events[1]++);
 				d.show(); d.onStart(); d.onStart();
-				if (d.standardContent != null) {
-					StandardProgressContent v = (StandardProgressContent) d.standardContent;
-					assertEquals(String.format("%d / %d", 7, 10), v.count.getText().toString()); assertEquals(1, v.getChildCount());
-				}
+				StandardProgressContent v = (StandardProgressContent) d.standardContent;
+				assertEquals(String.format("%d / %d", 7, 10), v.count.getText().toString()); assertEquals(1, v.getChildCount());
 				d.dismiss(); assertEquals(0, events[0]); assertEquals(1, events[1]);
 				d.show(); d.cancel(); assertEquals(1, events[0]); assertEquals(2, events[1]);
+				} finally {
+					if (d != null) d.dismiss();
+					restoreProfile(previous);
+				}
 			});
 		}
+	}
+	@Test public void standardFactoryFallsBackWhenProfileIsExplicitlyOff() {
+		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+			Object previous = com.mishiranu.dashchan.content.Preferences.PREFERENCES.getAll()
+					.get(com.mishiranu.dashchan.content.Preferences.KEY_NEW_INTERFACE_MOTION);
+			try {
+				com.mishiranu.dashchan.content.Preferences.PREFERENCES.edit()
+						.put(com.mishiranu.dashchan.content.Preferences.KEY_NEW_INTERFACE_MOTION, false).close();
+				assertNull(ProgressDialog.standard(context(), "%d / %d").standardContent);
+			} finally { restoreProfile(previous); }
+		});
+	}
+	private static void restoreProfile(Object value) {
+		String key = com.mishiranu.dashchan.content.Preferences.KEY_NEW_INTERFACE_MOTION;
+		if (value instanceof Boolean) com.mishiranu.dashchan.content.Preferences.PREFERENCES.edit().put(key, (Boolean) value).close();
+		else com.mishiranu.dashchan.content.Preferences.PREFERENCES.edit().remove(key).close();
 	}
 }

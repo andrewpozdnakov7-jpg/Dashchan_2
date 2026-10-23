@@ -399,7 +399,7 @@ public class PagerUnit implements PagerInstance.Callback {
 			String[] choices = {provider.getContext().getString(R.string.tiktok_filter_all),
 					provider.getContext().getString(R.string.tiktok_filter_video),
 					provider.getContext().getString(R.string.tiktok_filter_image)};
-			return new MotionDialogBuilder(provider.getContext()).setTitle(R.string.tiktok_filter)
+			return MotionDialogBuilder.standard(provider.getContext()).setTitle(R.string.tiktok_filter)
 					.setSingleChoiceItems(choices, unit.tikTokFilter, (dialog, which) -> {
 						provider.dismiss();
 						unit.selectTikTokFilter(which, enable);
@@ -423,7 +423,7 @@ public class PagerUnit implements PagerInstance.Callback {
 						PagerUnit unit = new ViewModelProvider(provider.getParentFragment())
 								.get(PagerUnitViewModel.class).pagerUnit.get();
 						if (unit == null || unit.finished) return provider.createDismissDialog();
-						return new MotionDialogBuilder(provider.getContext()).setMessage(R.string.tiktok_filter_first)
+						return MotionDialogBuilder.standard(provider.getContext()).setMessage(R.string.tiktok_filter_first)
 								.setPositiveButton(android.R.string.ok, (d, w) -> {
 									int index = unit.findTikTokItem(0, 1, filter);
 									if (index >= 0) unit.applyTikTokFilter(filter, true, index);

@@ -258,9 +258,14 @@ public class PostMarksColorsFragment extends PreferenceFragment {
 					ViewGroup.LayoutParams.WRAP_CONTENT));
 			setSwatch(preview, color);
 
-			return new MotionDialogBuilder(context)
+			com.mishiranu.dashchan.widget.InterfaceAppearance.standardCustomContent(layout, preview, palette);
+			com.mishiranu.dashchan.widget.InterfaceAppearance.standardCustomInsets(layout);
+			com.mishiranu.dashchan.widget.InterfaceAppearance.standardFieldLabel(paletteTitle);
+			android.widget.ScrollView scroll = new android.widget.ScrollView(context);
+			if (com.mishiranu.dashchan.widget.InterfaceAppearance.isEnabled(context)) scroll.addView(layout);
+			return MotionDialogBuilder.standard(context)
 					.setTitle(requireArguments().getInt(EXTRA_TITLE))
-					.setView(layout)
+					.setView(com.mishiranu.dashchan.widget.InterfaceAppearance.isEnabled(context) ? scroll : layout)
 					.setNegativeButton(android.R.string.cancel, null)
 					.setPositiveButton(android.R.string.ok, null)
 					.create();

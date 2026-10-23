@@ -56,7 +56,7 @@ public class AttachmentRatingDialog extends DialogFragment implements DialogInte
 				checkedItem = i;
 			}
 		}
-		return new MotionDialogBuilder(activity).setTitle(R.string.rating).setSingleChoiceItems(items,
+		return MotionDialogBuilder.standard(activity).setTitle(R.string.rating).setSingleChoiceItems(items,
 				checkedItem, this).setNegativeButton(android.R.string.cancel, null).create();
 	}
 

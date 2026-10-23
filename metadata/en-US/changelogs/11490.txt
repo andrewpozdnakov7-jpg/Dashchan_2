@@ -1,0 +1,11 @@
+- Continuing the Material 3-style interface update 😺 Refined settings dialogs, thread and file information, attachment options and gallery filters, with consistent labels, fields, selection controls and buttons.
+- Updated the custom application shortcut screen with refreshed controls and an image preview that fits the available screen width.
+- Added the experimental “Fix for Max Relax” option for devices where opening the reply form does not show the keyboard. It is available in Experimental features and is off by default.
+- Fixed an update installation issue: saved state from a previous installation should no longer prevent the installer from opening for a new version.
+- The F-Droid update has been submitted and accepted by the maintainers! That build restores the Mozilla Bergamot offline translator and adds the new photo editor. We are now waiting for the update to appear in the catalog. 🐾
+
+To return to the old design: Settings → Experimental features → New Material 3 interface → turn off “Enable the new interface”.
+
+Protection features remain in testing.
+
+Thanks to everyone testing the app, sending logs and helping find bugs! 🐾

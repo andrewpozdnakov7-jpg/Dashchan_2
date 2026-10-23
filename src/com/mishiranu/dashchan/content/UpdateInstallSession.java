@@ -26,6 +26,7 @@ import java.io.FileInputStream;
 import java.io.OutputStream;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -48,6 +49,48 @@ public final class UpdateInstallSession {
 	static String token(Context context) { return preferences(context).getString("token", null); }
 	static int status(Context context) { return preferences(context).getInt("status", PREPARING); }
 	static int index(Context context) { return preferences(context).getInt("index", 0); }
+
+	enum RequestKind {FRESH, RESUME, BUSY, STALE}
+	static final class RequestState {
+		final RequestKind kind;
+		final String token;
+		final ArrayList<String> files;
+		final int index, status;
+		RequestState(RequestKind kind, String token, ArrayList<String> files, int index, int status) {
+			this.kind = kind; this.token = token; this.files = files; this.index = index; this.status = status;
+		}
+	}
+
+	/** Resolve ownership before a durable queue is allowed to replace a new request's files. */
+	static synchronized RequestState resolveRequest(Context context, String ownedToken, String resumeToken,
+			List<String> requestedFiles) {
+		String current = token(context);
+		if (resumeToken != null && !resumeToken.equals(current)) {
+			android.util.Log.i("UpdateInstaller", "request_stale_resume");
+			return new RequestState(RequestKind.STALE, null, null, 0, PREPARING);
+		}
+		if (current == null) return new RequestState(RequestKind.FRESH, null, null, 0, PREPARING);
+		int result = status(context);
+		boolean owned = current.equals(ownedToken) || current.equals(resumeToken);
+		if (!owned && result >= PackageInstaller.STATUS_SUCCESS) {
+			// Self-replacement can terminate the old Activity before it consumes STATUS_SUCCESS.
+			// That receipt must not replace a later request, even if its filenames happen to match.
+			clear(context, current);
+			if (token(context) != null) {
+				android.util.Log.w("UpdateInstaller", "request_terminal_clear_failed");
+				return new RequestState(RequestKind.BUSY, current, null, 0, result);
+			}
+			android.util.Log.i("UpdateInstaller", "request_terminal_discarded status=" + result);
+			return new RequestState(RequestKind.FRESH, null, null, 0, PREPARING);
+		}
+		ArrayList<String> queue = files(context);
+		if (!owned && !queue.equals(requestedFiles)) {
+			// An unrelated live session is not permission to install a different queue or abandon it.
+			android.util.Log.i("UpdateInstaller", "request_busy_different_queue");
+			return new RequestState(RequestKind.BUSY, current, null, 0, result);
+		}
+		return new RequestState(RequestKind.RESUME, current, queue, index(context), result);
+	}
 
 	static ArrayList<String> files(Context context) {
 		ArrayList<String> result = new ArrayList<>();

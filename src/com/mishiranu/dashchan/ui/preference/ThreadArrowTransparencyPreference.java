@@ -86,7 +86,9 @@ public class ThreadArrowTransparencyPreference extends DialogPreference<Integer>
 		Integer initial = parseValue(input.getText());
 		seek.setProgress(initial != null ? initial : getValue());
 		layout.second.addView(seek, LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-		AlertDialog dialog = super.configureDialog(savedInstanceState, new MotionDialogBuilder(context))
+		com.mishiranu.dashchan.widget.InterfaceAppearance.standardCustomContent(layout.second);
+		com.mishiranu.dashchan.widget.InterfaceAppearance.standardCustomInsets(layout.second);
+		AlertDialog dialog = super.configureDialog(savedInstanceState, MotionDialogBuilder.standard(context))
 				.setView(layout.first).setPositiveButton(android.R.string.ok, (d, which) -> {
 					Integer value = parseValue(input.getText());
 					if (value != null) ConcurrentUtils.HANDLER.post(() -> setValue(value));
@@ -94,6 +96,7 @@ public class ThreadArrowTransparencyPreference extends DialogPreference<Integer>
 		Runnable validate = () -> {
 			Integer value = parseValue(input.getText());
 			input.setError(value == null ? context.getString(R.string.thread_arrow_transparency_range) : null);
+			com.mishiranu.dashchan.widget.InterfaceAppearance.fieldError(input, value == null);
 			if (value != null) seek.setProgress(value);
 			if (dialog.isShowing()) dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(value != null);
 		};

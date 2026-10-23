@@ -424,6 +424,8 @@ public final class SettingsSearchIndex {
 				R.string.hardware_video_acceleration__summary, Preferences.KEY_HARDWARE_VIDEO_ACCELERATION);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.video_diagnostics_extended,
 				R.string.video_diagnostics_extended__summary, Preferences.KEY_EXTENDED_VIDEO_DIAGNOSTICS);
+		add(context, entries, Screen.EXPERIMENTAL, R.string.max_relax_ime_fix,
+				R.string.max_relax_ime_fix_summary, Preferences.KEY_MAX_RELAX_IME_FIX);
 		add(context, entries, Screen.PIP_DIAGNOSTICS, R.string.pip_diagnostic_mode,
 				R.string.pip_diagnostic_hidden_summary, null);
 		add(context, entries, Screen.MEDIA_IMAGES, R.string.open_configured_attachment_folder,

@@ -1,0 +1,1 @@
+Added the experimental “Fix for Max Relax” option to show the keyboard when opening the reply form; off by default. Fixed saved installation session handling so a completed previous installation does not interfere with a new extension installation request.

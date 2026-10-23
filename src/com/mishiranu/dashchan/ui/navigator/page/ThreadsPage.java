@@ -781,11 +781,11 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 		new InstanceDialog(fragmentManager, null, provider -> {
 			Chan chan = Chan.get(chanName);
 			Context context = provider.getContext();
-			AlertDialog dialog = new MotionDialogBuilder(context)
+			AlertDialog dialog = MotionDialogBuilder.standard(context)
 					.setTitle(R.string.summary)
 					.setPositiveButton(android.R.string.ok, null)
 					.create();
-			SummaryLayout layout = new SummaryLayout(dialog);
+			SummaryLayout layout = SummaryLayout.standard(dialog);
 			if (boardName != null) {
 				String title = chan.configuration.formatBoardTitle(boardName);
 				layout.add(context.getString(R.string.board), title);

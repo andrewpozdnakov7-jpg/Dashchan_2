@@ -154,7 +154,7 @@ public class GestureSettingsFragment extends PreferenceFragment {
 			loadValues(savedInstanceState);
 			Context context = requireContext();
 			float density = ResourceUtils.obtainDensity(context);
-			int padding = Math.round(20f * density);
+			int padding = Math.round((com.mishiranu.dashchan.widget.InterfaceAppearance.isEnabled(context) ? 24f : 20f) * density);
 
 			LinearLayout layout = new LinearLayout(context);
 			layout.setOrientation(LinearLayout.VERTICAL);
@@ -169,6 +169,8 @@ public class GestureSettingsFragment extends PreferenceFragment {
 
 			RadioGroup orientationGroup = new RadioGroup(context);
 			orientationGroup.setOrientation(LinearLayout.HORIZONTAL);
+			if (com.mishiranu.dashchan.widget.InterfaceAppearance.isEnabled(context))
+				orientationGroup.setOrientation(LinearLayout.VERTICAL);
 			RadioButton portraitButton = new RadioButton(context);
 			ThemeEngine.applyStyle(portraitButton);
 			portraitButton.setId(View.generateViewId());
@@ -181,6 +183,10 @@ public class GestureSettingsFragment extends PreferenceFragment {
 					new RadioGroup.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 			orientationGroup.addView(landscapeButton,
 					new RadioGroup.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+			if (com.mishiranu.dashchan.widget.InterfaceAppearance.isEnabled(context)) {
+				portraitButton.setLayoutParams(new RadioGroup.LayoutParams(-1, -2));
+				landscapeButton.setLayoutParams(new RadioGroup.LayoutParams(-1, -2));
+			}
 			LinearLayout.LayoutParams orientationParams = new LinearLayout.LayoutParams(
 					ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
 			orientationParams.topMargin = Math.round(8f * density);
@@ -246,7 +252,10 @@ public class GestureSettingsFragment extends PreferenceFragment {
 			scrollView.addView(layout, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
 					ViewGroup.LayoutParams.WRAP_CONTENT));
 
-			return new MotionDialogBuilder(context)
+			com.mishiranu.dashchan.widget.InterfaceAppearance.standardCustomContent(layout, previewContainer);
+			com.mishiranu.dashchan.widget.InterfaceAppearance.standardCustomInsets(layout);
+			com.mishiranu.dashchan.widget.InterfaceAppearance.standardCustomCaption(hint);
+			return MotionDialogBuilder.standard(context)
 					.setTitle(R.string.video_volume_gesture_area)
 					.setView(scrollView)
 					.setNegativeButton(android.R.string.cancel, null)
