@@ -1,0 +1,2 @@
+Added Settings → Contents → Favorites, with optional grouping by board and unread threads first. Unread first is enabled by default; grouping by board is disabled. Saved choices are preserved.
+Favorite-thread renaming now supports long titles. Thread watching is enabled by default, including for existing favorite threads.

@@ -63,3 +63,27 @@ prebuilt WebAssembly runtime nor exposes translation settings. Enabling it for F
 2. scanner and license review of the produced runtime;
 3. reviewer agreement for the optional model downloads;
 4. reproducibility and on-device tests of the resulting F-Droid APK.
+
+### F-Droid preparation: not enabled yet
+
+The missing translation settings are an intentional build boundary, not a missing language download or a setting
+that can be restored from a backup. `ContentsFragment` and `SettingsSearchIndex` hide the entry when
+`ENABLE_LOCAL_TRANSLATION` is false; `TranslationController` and `Preferences` also enforce that flag. Separately,
+`androidComponents.onVariants` adds `prepareBergamotRuntime` assets only to GitHub variants. Changing just one of
+these conditions would expose an unavailable translator or package a prebuilt runtime without a source recipe.
+
+Before enabling Mozilla translation in F-Droid:
+
+- Pin the runtime source revision and all submodules, the Emscripten/toolchain version and build options. Produce
+  the JavaScript wrapper and WebAssembly as a matched pair compatible with `assets/translation/runner.js` and the
+  pinned models; do not assume another Bergamot release has the same API or model compatibility.
+- Add a local-runtime input path to the build, with no fallback download of Mozilla's prebuilt WASM for F-Droid.
+  Use the same source-built runtime and build inputs for signed references and the upstream recipe.
+- Verify redistribution terms for the engine and both optional model packages, and resolve any reviewer concerns
+  about model downloads. Keep Google translation, Gemini Nano, Material UI and app protection excluded.
+- Test language-package download, cancellation, deletion and both translation directions, including offline use
+  after installation. Verify the three ABI APKs and their reproducibility before making the update ready.
+
+The current preparation does not enable Bergamot, publish reference APKs, change the stable release or assert that
+an upstream build with translation has passed. Keep the source PR and F-Droid MR in draft until these prerequisites
+are satisfied.
