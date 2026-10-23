@@ -50,7 +50,8 @@ class RuntimeContractTest(unittest.TestCase):
     def test_wrong_source_recipe_toolchain_and_dependencies(self):
         with tempfile.TemporaryDirectory() as directory:
             manifest = self.make_runtime(directory)
-            for key in ("sourceRevision", "recipeSha256", "emscriptenVersion", "dependencyRevisions"):
+            for key in ("sourceRevision", "recipeSha256", "emscriptenVersion", "dependencyRevisions",
+                        "emscriptenDebianPackage", "sourcePatches"):
                 with self.subTest(field=key):
                     changed = copy.deepcopy(manifest)
                     changed[key] = "unexpected"
@@ -99,6 +100,17 @@ class RuntimeContractTest(unittest.TestCase):
                     self.assertIn(file[field], java)
                 for field in ("size", "compressedSize"):
                     self.assertIn(str(file[field]), java.replace("_", ""))
+
+    def test_source_compatibility_refuses_unknown_edits(self):
+        with tempfile.TemporaryDirectory() as directory:
+            relative = "inference/marian-fork/src/CMakeLists.txt"
+            file = Path(directory) / relative
+            file.parent.mkdir(parents=True)
+            file.write_text("keep this unrelated edit\n", encoding="utf-8")
+            with patch.object(runtime, "SOURCE", Path(directory)):
+                with self.assertRaisesRegex(ValueError, "Refusing"):
+                    runtime.apply_source_compatibility()
+            self.assertEqual(file.read_text(encoding="utf-8"), "keep this unrelated edit\n")
 
 
 if __name__ == "__main__":

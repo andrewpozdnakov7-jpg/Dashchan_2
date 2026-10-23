@@ -19,6 +19,11 @@ if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     # STRICT intentionally has an empty incoming API. Declare the exact app
     # factory/runner inputs rather than weakening STRICT or adding a filesystem.
     target_link_options(bergamot-translator PRIVATE
+      # Link-time -g3 preserves external wasm_gemm import names. -g2 still
+      # minifies those names in 3.1.69, breaking the runtime-supplied imports.
+      # Compilation remains upstream Release/-O3/-g1 (no DWARF input); this
+      # does not enable assertions or change the Android release build mode.
+      "-g3"
       "-sINCOMING_MODULE_JS_API=['wasmBinary','instantiateWasm','onAbort','onRuntimeInitialized','print','printErr','INITIAL_MEMORY']")
   endfunction()
   cmake_language(DEFER CALL slooop_bergamot_link_settings)

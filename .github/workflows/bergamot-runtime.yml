@@ -44,7 +44,9 @@ jobs:
           python3 tools/bergamot/runtime.py prepare
 
       - name: Test source and runtime validation
-        run: python3 -m unittest discover -s tools/bergamot -p '*_test.py' -v
+        run: |
+          python3 -m unittest discover -s tools/bergamot -p '*_test.py' -v
+          node tools/bergamot/test-factory.cjs
 
       - name: Build engine from source
         run: |
@@ -57,7 +59,10 @@ jobs:
 
       - name: Rebuild independently and compare bytes
         run: |
-          python3 tools/bergamot/runtime.py build \
+          mkdir "$RUNNER_TEMP/independent-checkout"
+          tar --exclude=./build -cf - . | tar -xf - -C "$RUNNER_TEMP/independent-checkout"
+          git config --global --add safe.directory "$RUNNER_TEMP/independent-checkout"
+          python3 "$RUNNER_TEMP/independent-checkout/tools/bergamot/runtime.py" build \
             --build-dir "$RUNNER_TEMP/separate/engine-b" --output-dir build/bergamot/rebuilt
           diff -r build/bergamot/runtime build/bergamot/rebuilt
 

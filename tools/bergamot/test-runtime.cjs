@@ -74,6 +74,15 @@ async function testDirection(directory, model, files) {
   vm.runInContext("window = globalThis; self = globalThis; location = {href: 'https://translation.invalid/'};", context);
   vm.runInContext(fs.readFileSync(path.join(directory, "bergamot-translator.js"), "utf8"), context,
     {filename: "bergamot-translator.js"});
+  // Preserve engine diagnostics in this test only; the Android runner deliberately
+  // suppresses engine stderr and reports a generic initialization error.
+  vm.runInContext(`const engineFactory = loadBergamot;
+    loadBergamot = function (options) {
+      options.printErr = console.error;
+      const abort = options.onAbort;
+      options.onAbort = function (reason) { console.error(reason); abort(reason); };
+      return engineFactory(options);
+    };`, context);
   vm.runInContext(fs.readFileSync(path.join(__dirname, "../../assets/translation/runner.js"), "utf8"), context,
     {filename: "runner.js"});
   context.window.SlooopBergamot.initialize(model.source, model.target);
