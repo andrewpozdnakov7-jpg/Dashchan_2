@@ -5,6 +5,7 @@ import importlib.util
 import io
 import json
 from pathlib import Path
+import re
 import struct
 import sys
 import tempfile
@@ -19,7 +20,7 @@ SPEC.loader.exec_module(checker)
 
 
 class ApkContractTest(unittest.TestCase):
-    def check_fixture(self, change=None, code=11470, abis="armeabi-v7a,arm64-v8a,x86"):
+    def check_fixture(self, change=None, offset=0, abis="armeabi-v7a,arm64-v8a,x86"):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             entries = {"assets/translation/" + name: name.encode("ascii") for name in checker.runtime.OUTPUTS}
@@ -40,7 +41,10 @@ class ApkContractTest(unittest.TestCase):
             with zipfile.ZipFile(apk, "w") as archive:
                 for name, data in entries.items():
                     archive.writestr(name, data)
-            badging = "package: name='io.dashchan2' versionCode='" + str(code) + "' versionName='3.2.67'"
+            source = (checker.runtime.ROOT / "build.gradle").read_text(encoding="utf-8")
+            version = re.findall(r"^\s*versionName\s*=\s*'([^']+)'\s*$", source, re.M)[0]
+            code = int(re.findall(r"^\s*versionCode\s*=\s*(\d+)\s*$", source, re.M)[0]) + offset
+            badging = "package: name='io.dashchan2' versionCode='" + str(code) + "' versionName='" + version + "'"
             with patch.object(sys, "argv", ["check-apk.py", str(apk), "--aapt", "fixture", "--abis", abis]), \
                     patch.object(checker.runtime, "HERE", root), \
                     patch.object(checker.runtime, "recipe_digest", return_value="fixture"), \
@@ -50,7 +54,7 @@ class ApkContractTest(unittest.TestCase):
 
     def test_universal_and_split_codes(self):
         self.check_fixture()
-        self.check_fixture(code=11472, abis="arm64-v8a")
+        self.check_fixture(offset=2, abis="arm64-v8a")
 
     def test_runtime_substitution_rejected(self):
         def change(entries, manifest):
