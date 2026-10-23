@@ -15,7 +15,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
 SOURCE = ROOT / "third_party/mozilla-translations"
 SPECS = HERE / "sources.json"
-OUTPUTS = ("bergamot-translator.js", "bergamot-translator.wasm")
+OUTPUTS = ("bergamot-translator.js", "bergamot-translator.wasm", "LICENSES.txt")
 
 
 def digest(path):
@@ -49,13 +49,44 @@ def check_sources():
     expected = specs()
     if git(SOURCE, "rev-parse", "HEAD") != expected["revision"]:
         raise ValueError("Bergamot source revision mismatch")
-    if git(SOURCE, "status", "--porcelain", "--untracked-files=no", "--ignore-submodules=none"):
-        raise ValueError("Bergamot sources or submodule revisions have local modifications")
+    changed = set(git(SOURCE, "diff", "--name-only", "HEAD", "--ignore-submodules=none").splitlines())
+    if changed - set(expected["patches"]):
+        raise ValueError("Bergamot sources or submodule revisions have unapproved modifications")
+    for name, patch in expected["patches"].items():
+        actual = hashlib.sha256((SOURCE / name).read_text(encoding="utf-8").encode("utf-8")).hexdigest()
+        if actual != patch["afterSha256"]:
+            raise ValueError("Missing or modified approved source patch; run prepare: " + name)
     for name, revision in expected["submodules"].items():
         if git(SOURCE / name, "rev-parse", "HEAD") != revision:
             raise ValueError("Bergamot dependency revision mismatch: " + name)
         if git(SOURCE / name, "status", "--porcelain", "--untracked-files=no"):
             raise ValueError("Modified Bergamot dependency: " + name)
+
+
+def apply_source_compatibility():
+    """Fix upstream's relative .git-file resolution, with whole-file hash guards."""
+    name = "inference/marian-fork/src/CMakeLists.txt"
+    patch = specs()["patches"][name]
+    path = SOURCE / name
+    text = path.read_text(encoding="utf-8")
+    actual = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    if actual == patch["afterSha256"]:
+        return
+    if actual != patch["beforeSha256"]:
+        raise ValueError("Refusing to replace modified upstream CMake source")
+    start = text.index("set(MARIAN_GIT_DIR ")
+    ending = "endif(NOT IS_DIRECTORY ${MARIAN_GIT_DIR})"
+    end = text.index(ending, start) + len(ending)
+    replacement = (
+        "execute_process(COMMAND ${GIT_EXECUTABLE} rev-parse --absolute-git-dir\n"
+        "  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}\n"
+        "  OUTPUT_VARIABLE MARIAN_GIT_DIR\n"
+        "  OUTPUT_STRIP_TRAILING_WHITESPACE\n"
+        "  COMMAND_ERROR_IS_FATAL ANY)")
+    text = text[:start] + replacement + text[end:]
+    if hashlib.sha256(text.encode("utf-8")).hexdigest() != patch["afterSha256"]:
+        raise ValueError("Approved CMake patch result differs from its pin")
+    path.write_text(text, encoding="utf-8", newline="\n")
 
 
 def prepare(_args):
@@ -75,6 +106,7 @@ def prepare(_args):
     for name in expected["submodules"]:
         run(["git", "-C", SOURCE, "submodule", "update", "--init", "--checkout", "--depth", "1",
              "--", name])
+    apply_source_compatibility()
     check_sources()
     print("Verified pinned Bergamot sources (no runtime binaries downloaded)")
 
@@ -88,6 +120,19 @@ def ensure_disjoint(*paths):
     return resolved
 
 
+def write_licenses(directory):
+    candidates = {SOURCE / "LICENSE"}
+    for path in (SOURCE / "inference").rglob("*"):
+        if path.is_file() and not path.is_symlink() and path.name.upper().startswith(
+                ("LICENSE", "COPYING", "COPYRIGHT", "NOTICE")):
+            candidates.add(path)
+    sections = []
+    for path in sorted(candidates, key=lambda item: item.relative_to(SOURCE).as_posix()):
+        sections.append("===== " + path.relative_to(SOURCE).as_posix() + " =====\n"
+                        + path.read_text(encoding="utf-8").replace("\r\n", "\n").rstrip() + "\n")
+    (directory / "LICENSES.txt").write_text("\n".join(sections), encoding="utf-8", newline="\n")
+
+
 def build(args):
     check_sources()
     expected = specs()
@@ -95,6 +140,10 @@ def build(args):
     match = re.search(r"emcc .*? (\d+\.\d+\.\d+)", compiler.splitlines()[0])
     if not match or match.group(1) != expected["emscriptenVersion"]:
         raise ValueError("Use the pinned Debian Emscripten " + expected["emscriptenVersion"])
+    package_version = subprocess.check_output(
+        ["dpkg-query", "-W", "-f=${Version}", "emscripten"], text=True).strip()
+    if package_version != expected["emscriptenDebianPackage"]:
+        raise ValueError("Use the pinned Debian Emscripten package " + expected["emscriptenDebianPackage"])
     source, build_dir, output_dir = ensure_disjoint(SOURCE, args.build_dir, args.output_dir)
     if build_dir.exists() and any(build_dir.iterdir()):
         raise ValueError("Use a new empty build directory; stale objects are not accepted")
@@ -125,9 +174,12 @@ def build(args):
     shutil.copyfile(build_dir / OUTPUTS[1], output_dir / OUTPUTS[1])
     if (output_dir / OUTPUTS[1]).read_bytes()[:8] != b"\0asm\x01\0\0\0":
         raise ValueError("Compiler did not produce a WebAssembly module")
+    write_licenses(output_dir)
     manifest = {"schema": 1, "sourceRevision": expected["revision"],
                 "dependencyRevisions": expected["submodules"],
+                "sourcePatches": {name: patch["afterSha256"] for name, patch in expected["patches"].items()},
                 "emscriptenVersion": expected["emscriptenVersion"],
+                "emscriptenDebianPackage": package_version,
                 "recipeSha256": recipe_digest(),
                 "files": {name: {"sha256": digest(output_dir / name),
                                   "size": (output_dir / name).stat().st_size} for name in OUTPUTS}}
@@ -142,7 +194,9 @@ def verify(args):
     expected = specs()
     if (manifest.get("schema") != 1 or manifest.get("sourceRevision") != expected["revision"]
             or manifest.get("dependencyRevisions") != expected["submodules"]
+            or manifest.get("sourcePatches") != {name: patch["afterSha256"] for name, patch in expected["patches"].items()}
             or manifest.get("emscriptenVersion") != expected["emscriptenVersion"]
+            or manifest.get("emscriptenDebianPackage") != expected["emscriptenDebianPackage"]
             or manifest.get("recipeSha256") != recipe_digest()):
         raise ValueError("Runtime source, recipe or toolchain provenance mismatch")
     for name in OUTPUTS:
@@ -150,6 +204,10 @@ def verify(args):
         info = manifest["files"][name]
         if file.stat().st_size != info["size"] or digest(file) != info["sha256"]:
             raise ValueError("Runtime output checksum mismatch: " + name)
+    if (directory / OUTPUTS[1]).read_bytes()[:8] != b"\0asm\x01\0\0\0":
+        raise ValueError("Invalid WebAssembly module")
+    if "function loadBergamot(Module)" not in (directory / OUTPUTS[0]).read_text(encoding="utf-8"):
+        raise ValueError("Missing runtime factory")
     if args.lock:
         lock = json.loads(Path(args.lock).read_text(encoding="utf-8"))
         if lock != manifest:

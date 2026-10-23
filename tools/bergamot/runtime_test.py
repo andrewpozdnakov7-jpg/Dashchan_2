@@ -16,10 +16,14 @@ class RuntimeContractTest(unittest.TestCase):
         directory = Path(directory)
         for name in runtime.OUTPUTS:
             (directory / name).write_bytes(b"verified fixture " + name.encode("ascii"))
+        (directory / runtime.OUTPUTS[0]).write_text("function loadBergamot(Module) {}", encoding="utf-8")
+        (directory / runtime.OUTPUTS[1]).write_bytes(b"\0asm\x01\0\0\0")
         expected = runtime.specs()
         manifest = {"schema": 1, "sourceRevision": expected["revision"],
                     "dependencyRevisions": expected["submodules"],
+                    "sourcePatches": {name: patch["afterSha256"] for name, patch in expected["patches"].items()},
                     "emscriptenVersion": expected["emscriptenVersion"],
+                    "emscriptenDebianPackage": expected["emscriptenDebianPackage"],
                     "recipeSha256": runtime.recipe_digest(),
                     "files": {name: {"sha256": runtime.digest(directory / name),
                                       "size": (directory / name).stat().st_size}
