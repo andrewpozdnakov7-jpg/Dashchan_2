@@ -35,9 +35,19 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  bergamot:
+    name: F-Droid source-built translator
+    if: >-
+      github.ref == 'refs/heads/master' && inputs.include_fdroid_splits &&
+      inputs.candidate == 'stable' && inputs.confirmation == 'SIGN CANDIDATE' && inputs.source_sha == ''
+    uses: ./.github/workflows/bergamot-runtime.yml
+
   build:
+    needs: bergamot
     name: Build ${{ inputs.candidate }} candidate
-    if: github.ref == 'refs/heads/master'
+    if: >-
+      always() && !cancelled() && github.ref == 'refs/heads/master' &&
+      (needs.bergamot.result == 'success' || needs.bergamot.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 150
     env:
@@ -138,6 +148,20 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
+
+      - name: Download this run's source-built F-Droid translator
+        if: inputs.include_fdroid_splits
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: bergamot-runtime-${{ github.sha }}
+          path: ${{ runner.temp }}/bergamot-runtime
+
+      - name: Verify F-Droid translator output lock
+        if: inputs.include_fdroid_splits
+        run: |
+          python3 tools/bergamot/runtime.py verify \
+            --runtime-dir "$RUNNER_TEMP/bergamot-runtime" --lock tools/bergamot/runtime-lock.json
+          echo "ORG_GRADLE_PROJECT_bergamotRuntimeDir=$RUNNER_TEMP/bergamot-runtime" >> "$GITHUB_ENV"
 
       - name: Install native build tools
         run: |
@@ -288,6 +312,8 @@ jobs:
                 exit 1
               fi
               cp "${fdroid_apks[0]}" "unsigned-candidates/fdroid-$label.apk"
+              python3 tools/bergamot/check-apk.py "unsigned-candidates/fdroid-$label.apk" \
+                --aapt "${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}/build-tools/36.0.0/aapt" --abis "$abi"
             done
           fi
 

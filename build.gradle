@@ -231,6 +231,75 @@ abstract class PreparePrivacyPolicyAssetTask extends org.gradle.api.DefaultTask 
 	}
 }
 
+/** F-Droid never downloads Mozilla's prebuilt WASM, even as a fallback. */
+abstract class PrepareFdroidBergamotRuntimeTask extends org.gradle.api.DefaultTask {
+	@org.gradle.api.tasks.InputDirectory
+	@org.gradle.api.tasks.PathSensitive(org.gradle.api.tasks.PathSensitivity.RELATIVE)
+	abstract org.gradle.api.file.DirectoryProperty getRecipeDirectory()
+
+	@org.gradle.api.tasks.InputDirectory
+	@org.gradle.api.tasks.Optional
+	@org.gradle.api.tasks.PathSensitive(org.gradle.api.tasks.PathSensitivity.RELATIVE)
+	abstract org.gradle.api.file.DirectoryProperty getProvidedRuntimeDirectory()
+
+	@org.gradle.api.tasks.InputFiles
+	@org.gradle.api.tasks.PathSensitive(org.gradle.api.tasks.PathSensitivity.RELATIVE)
+	abstract org.gradle.api.file.ConfigurableFileCollection getSourceFiles()
+
+	@org.gradle.api.tasks.Input
+	abstract org.gradle.api.provider.Property<String> getPythonExecutable()
+
+	@org.gradle.api.tasks.Internal
+	abstract org.gradle.api.file.DirectoryProperty getLocalWorkDirectory()
+
+	@org.gradle.api.tasks.OutputDirectory
+	abstract org.gradle.api.file.DirectoryProperty getOutputDirectory()
+
+	@javax.inject.Inject
+	abstract org.gradle.process.ExecOperations getExecOperations()
+
+	@org.gradle.api.tasks.TaskAction
+	void prepare() {
+		File recipe = recipeDirectory.get().asFile
+		File root = recipe.parentFile.parentFile
+		File script = new File(recipe, 'runtime.py')
+		File lock = new File(recipe, 'runtime-lock.json')
+		if (!lock.isFile()) {
+			throw new GradleException('The verified source-built Bergamot runtime lock is missing')
+		}
+		def python = { List arguments ->
+			execOperations.exec {
+				workingDir root
+				commandLine([pythonExecutable.get(), script.absolutePath] + arguments)
+			}
+		}
+		File runtime
+		if (providedRuntimeDirectory.isPresent()) {
+			runtime = providedRuntimeDirectory.get().asFile
+		} else {
+			File work = localWorkDirectory.get().asFile
+			if (!work.mkdirs() && !work.isDirectory()) {
+				throw new GradleException('Cannot create Bergamot build work directory')
+			}
+			// Every invocation starts with new objects. Source preparation is an
+			// explicit pre-scan step; the compiler never fetches source or binaries.
+			File invocation = java.nio.file.Files.createTempDirectory(work.toPath(), 'engine-').toFile()
+			runtime = new File(invocation, 'runtime')
+			python(['build', '--build-dir', new File(invocation, 'objects').absolutePath,
+					'--output-dir', runtime.absolutePath])
+		}
+		python(['verify', '--runtime-dir', runtime.absolutePath, '--lock', lock.absolutePath])
+		File output = new File(outputDirectory.get().asFile, 'translation')
+		if (!output.mkdirs() && !output.isDirectory()) {
+			throw new GradleException('Cannot create F-Droid translation assets directory')
+		}
+		['bergamot-translator.js', 'bergamot-translator.wasm', 'provenance.json', 'LICENSES.txt'].each { name ->
+			java.nio.file.Files.copy(new File(runtime, name).toPath(), new File(output, name).toPath(),
+					java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+		}
+	}
+}
+
 def bergamotRuntimeFiles = [
 		[
 				name: 'bergamot-translator.js',
@@ -259,6 +328,22 @@ def preparePrivacyPolicyAsset = tasks.register('preparePrivacyPolicyAsset', Prep
 	policyFile.set(layout.projectDirectory.file('PRIVACY.md'))
 	outputDirectory.set(layout.buildDirectory.dir('generated/privacy-policy/assets'))
 }
+def fdroidBergamotInput = providers.gradleProperty('bergamotRuntimeDir')
+		.orElse(providers.environmentVariable('SLOOOP_BERGAMOT_RUNTIME_DIR'))
+def prepareFdroidBergamotRuntime = tasks.register('prepareFdroidBergamotRuntime', PrepareFdroidBergamotRuntimeTask) {
+	description = 'Builds or verifies the pinned source-built Bergamot runtime for F-Droid only.'
+	recipeDirectory.set(layout.projectDirectory.dir('tools/bergamot'))
+	pythonExecutable.set(providers.gradleProperty('bergamotPython').orElse('python3'))
+	localWorkDirectory.set(layout.buildDirectory.dir('bergamot/compiler'))
+	outputDirectory.set(layout.buildDirectory.dir('generated/bergamot-fdroid/assets'))
+	if (fdroidBergamotInput.isPresent()) {
+		providedRuntimeDirectory.set(layout.dir(fdroidBergamotInput.map { path -> file(path) }))
+	} else {
+		sourceFiles.from(fileTree('third_party/mozilla-translations/inference') {
+			exclude '**/.git', '**/.git/**', '**/build*/**', '**/__pycache__/**'
+		})
+	}
+}
 
 android {
 	namespace = 'com.mishiranu.dashchan'
@@ -268,8 +353,8 @@ android {
 
 	defaultConfig {
 		applicationId = 'io.dashchan2'
-		versionCode = 11470
-		versionName = '3.2.67'
+		versionCode = 11480
+		versionName = '3.2.68'
 		def releaseVersionCode = versionCode
 		def packageVersionCodeProperty = project.findProperty('packageVersionCode')
 		if (packageVersionCodeProperty != null) {
@@ -362,7 +447,7 @@ android {
 		fdroid {
 			dimension = 'distribution'
 			buildConfigField 'boolean', 'ENABLE_APP_SECURITY_SETTINGS', 'false'
-			buildConfigField 'boolean', 'ENABLE_LOCAL_TRANSLATION', 'false'
+			buildConfigField 'boolean', 'ENABLE_LOCAL_TRANSLATION', 'true'
 			buildConfigField 'boolean', 'ENABLE_EXPERIMENTAL_INTERFACE_MOTION', 'false'
 			buildConfigField 'boolean', 'ENABLE_GOOGLE_TRANSLATION', 'false'
 			buildConfigField 'boolean', 'ENABLE_GEMINI_NANO_TRANSLATION', 'false'
@@ -512,6 +597,10 @@ androidComponents {
 			}
 			if (github) {
 				variant.sources.assets.addGeneratedSourceDirectory(prepareBergamotRuntime) { task ->
+					task.outputDirectory
+				}
+			} else {
+				variant.sources.assets.addGeneratedSourceDirectory(prepareFdroidBergamotRuntime) { task ->
 					task.outputDirectory
 				}
 			}

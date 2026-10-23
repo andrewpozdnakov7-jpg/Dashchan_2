@@ -29,7 +29,7 @@ Slooop доступен в [GitHub Releases](https://github.com/andrewpozdnakov7
 
 GitHub-версия содержит встроенную проверку обновлений. Офлайн-переводчик Google ML Kit для неё устанавливается по желанию отдельным дополнением размером около 50 МБ и не увеличивает основной APK. Языковой пакет также загружается отдельно. Свободные шрифты и готовые фоновые изображения скачиваются из публичного каталога дополнений только по выбору пользователя.
 
-F-Droid-версия не содержит встроенный механизм обновления приложения, Firebase, Google Play Services, серверные push-уведомления, экспериментальный офлайн-переводчик и интеграцию с дополнением Google ML Kit. Обновления устанавливаются через F-Droid; локальная фоновая проверка ответов остаётся доступной средствами Android.
+F-Droid-версия не содержит встроенный механизм обновления приложения, Firebase, Google Play Services, серверные push-уведомления и интеграцию с дополнением Google ML Kit или Gemini Nano. Подготавливаемая версия поддерживает офлайн-перевод Mozilla Bergamot со сборкой движка из исходников; эта доработка ещё не опубликована в каталоге. Обновления устанавливаются через F-Droid; локальная фоновая проверка ответов остаётся доступной средствами Android.
 
 ### Возможности
 
@@ -122,7 +122,7 @@ Forum support and the native player libraries are bundled into the main APK. Sep
 
 The GitHub build includes the in-app update checker. Its Google ML Kit offline translator is an optional separate add-on of approximately 50 MB and does not increase the main APK size. Its language pack is downloaded separately as well. Free fonts and ready-made wallpapers are downloaded from the public add-ons catalog only when selected by the user.
 
-The F-Droid build excludes the application self-updater, Firebase, Google Play Services, server push notifications, the experimental offline translator, and integration with the Google ML Kit add-on. Updates are delivered through F-Droid, while local background reply checks remain available through Android.
+The F-Droid build excludes the application self-updater, Firebase, Google Play Services, server push notifications, and integration with the Google ML Kit add-on or Gemini Nano. The version in preparation supports Mozilla Bergamot offline translation with a source-built engine; this change is not published in the catalogue yet. Updates are delivered through F-Droid, while local background reply checks remain available through Android.
 
 ### Highlights
 

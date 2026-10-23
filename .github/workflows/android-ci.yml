@@ -43,6 +43,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  bergamot:
+    name: F-Droid source-built translator
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.distribution == 'fdroid'
+    uses: ./.github/workflows/bergamot-runtime.yml
+
   signing-workflow:
     name: Signing workflow (actionlint + provenance)
     runs-on: ubuntu-latest
@@ -169,6 +174,12 @@ jobs:
           PY
 
   build:
+    needs: bergamot
+    if: >-
+      always() && !cancelled() &&
+      (needs.bergamot.result == 'success' ||
+      (needs.bergamot.result == 'skipped' &&
+      !(github.event_name == 'workflow_dispatch' && github.event.inputs.distribution == 'fdroid')))
     name: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.distribution == 'fdroid' && 'Release' || 'Ndebug' }} (${{ github.event_name == 'workflow_dispatch' && github.event.inputs.build_scope || 'arm64' }})
     runs-on: ubuntu-latest
     timeout-minutes: 120
@@ -256,6 +267,20 @@ jobs:
       - name: Set up Gradle
         if: steps.validation.outputs.build_required == 'true'
         uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
+
+      - name: Download this run's source-built F-Droid translator
+        if: steps.validation.outputs.build_required == 'true' && env.BUILD_TASK == 'assembleFdroidRelease'
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: bergamot-runtime-${{ github.sha }}
+          path: ${{ runner.temp }}/bergamot-runtime
+
+      - name: Verify F-Droid translator output lock
+        if: steps.validation.outputs.build_required == 'true' && env.BUILD_TASK == 'assembleFdroidRelease'
+        run: |
+          python3 tools/bergamot/runtime.py verify \
+            --runtime-dir "$RUNNER_TEMP/bergamot-runtime" --lock tools/bergamot/runtime-lock.json
+          echo "ORG_GRADLE_PROJECT_bergamotRuntimeDir=$RUNNER_TEMP/bergamot-runtime" >> "$GITHUB_ENV"
 
       - name: Install native build tools
         if: steps.validation.outputs.build_required == 'true'
@@ -384,6 +409,16 @@ jobs:
           done
           ./gradlew --no-daemon --stacktrace "${gradle_tasks[@]}" "${gradle_args[@]}" \
             2>&1 | tee build-main.log
+
+      - name: Verify actual F-Droid APK translator and flavour boundaries
+        if: steps.validation.outputs.build_required == 'true' && env.BUILD_TASK == 'assembleFdroidRelease'
+        run: |
+          set -euo pipefail
+          sdk="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          mapfile -d '' apks < <(find build/outputs/apk/fdroid/release -type f -name '*-unsigned.apk' -print0)
+          [ "${#apks[@]}" -eq 1 ] || { echo 'Expected one F-Droid release APK' >&2; exit 1; }
+          python3 tools/bergamot/check-apk.py "${apks[0]}" \
+            --aapt "$sdk/build-tools/36.0.0/aapt" --abis "$NATIVE_ABIS"
 
       - name: Verify retired beta update channel is absent
         if: steps.validation.outputs.build_required == 'true'

@@ -31,6 +31,36 @@ builds after the exact source, reference assets, and reproducibility result are 
 
 ## Distribution profiles
 
+### Mozilla Bergamot source runtime
+
+The F-Droid build includes the opt-in Mozilla backend, compiled from the pinned `mozilla/translations` Git
+submodule rather than Mozilla's ready-made WASM. The normal GitHub build continues using its existing pinned
+prebuilt JS/WASM pair. No Google/Gemini translation, Material interface or application protection is enabled by
+this F-Droid change. This work is in preparation; it is not a statement that the catalogue has already updated.
+
+Before the F-Droid source scan, prepare only the required nested source modules and approved CMake fix:
+
+```sh
+python3 tools/bergamot/runtime.py prepare
+```
+
+The metadata recipe must install Debian trixie's `emscripten=3.1.69+dfsg-3`, CMake, Ninja and Python 3 along with the
+existing native-player build tools. The normal `assembleFdroidRelease` asset task then compiles the engine with
+no source/binary downloads and verifies its output lock. The optional language models are downloaded later only
+by the user; they are not build inputs or APK assets.
+
+An already source-built runtime can instead be supplied through `-PbergamotRuntimeDir=...` or
+`SLOOOP_BERGAMOT_RUNTIME_DIR`. This is not permission to substitute a binary: source revision, nested module pins,
+approved source patch, recipe, compiler package and every output must match the committed runtime lock. Missing
+or mismatched data fails the build rather than falling back to a download.
+
+Protected reference builds use the same pinned Debian source-build workflow and consume only its same-run
+artifact. F-Droid independently repeats the source compilation as part of each APK rebuild. Per-directory engine
+rebuilds and Node translation tests are useful intermediate checks, not proof that the final APK reproduces.
+Record that separate result and Android WebView/device tests before removing the publication hold.
+
+### Application flavour
+
 The `github` and `fdroid` product flavors share the same source code and `io.dashchan2` application ID:
 
 - `assembleGithubNdebug` retains the optional Google Play Services security provider, application update channels, automatic update checks, and package installer used by the existing GitHub distribution;

@@ -1,0 +1,80 @@
+name: F-Droid Bergamot
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - '.gitmodules'
+      - 'third_party/mozilla-translations'
+      - 'tools/bergamot/**'
+      - '.github/workflows/bergamot-runtime.yml'
+      - 'assets/translation/**'
+      - 'build.gradle'
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bergamot-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  runtime:
+    name: Source build and reproducibility
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    container: debian:trixie-slim@sha256:62bd423aeee912639ca8ee681c2b762cb3e25137e0a92b20be455898a9f034ad
+    steps:
+      - name: Install Debian source-build toolchain
+        run: |
+          apt-get update
+          apt-get install --no-install-recommends -y \
+            ca-certificates git python3 cmake ninja-build nodejs \
+            emscripten=3.1.69+dfsg-3
+
+      - name: Check out exact application source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+
+      - name: Prepare pinned source modules
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          python3 tools/bergamot/runtime.py prepare
+
+      - name: Test source and runtime validation
+        run: |
+          python3 -m unittest discover -s tools/bergamot -p '*_test.py' -v
+          node tools/bergamot/test-factory.cjs
+
+      - name: Build engine from source
+        run: |
+          python3 tools/bergamot/runtime.py build \
+            --build-dir "$RUNNER_TEMP/engine-a" --output-dir build/bergamot/runtime
+          python3 tools/bergamot/runtime.py verify --runtime-dir build/bergamot/runtime
+          if [ -f tools/bergamot/runtime-lock.json ]; then
+            python3 tools/bergamot/runtime.py verify \
+              --runtime-dir build/bergamot/runtime --lock tools/bergamot/runtime-lock.json
+          fi
+
+      - name: Translate both pinned Android language packages offline
+        run: node --expose-gc tools/bergamot/test-runtime.cjs build/bergamot/runtime "$RUNNER_TEMP/model-downloads"
+
+      - name: Rebuild independently and compare bytes
+        run: |
+          mkdir "$RUNNER_TEMP/independent-checkout"
+          tar --exclude=./build -cf - . | tar -xf - -C "$RUNNER_TEMP/independent-checkout"
+          git config --global --add safe.directory "$RUNNER_TEMP/independent-checkout"
+          python3 "$RUNNER_TEMP/independent-checkout/tools/bergamot/runtime.py" build \
+            --build-dir "$RUNNER_TEMP/separate/engine-b" --output-dir build/bergamot/rebuilt
+          diff -r build/bergamot/runtime build/bergamot/rebuilt
+
+      - name: Upload source-built engine and provenance
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: bergamot-runtime-${{ github.sha }}
+          path: build/bergamot/runtime/
+          if-no-files-found: warn
+          retention-days: 7

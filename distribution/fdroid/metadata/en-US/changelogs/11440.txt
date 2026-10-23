@@ -1,0 +1,2 @@
+Added “Roll over thread” to the opening post's menu: prepare a new thread with its subject, text and attachments without sending it automatically. Replacing an existing draft requires confirmation.
+Added a “Thread title” toggle to display and copy the opening post's subject.

@@ -1,0 +1,2 @@
+Name and email fields are hidden by default; they can be restored in the posting form settings.
+The formatting toolbar fits supported commands more compactly. Improved posting form and attachment handling.

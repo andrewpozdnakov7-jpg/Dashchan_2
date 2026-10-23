@@ -11,8 +11,10 @@ filesystem paths, workstation identifiers, signing data, credentials, or private
 - Build task: `assembleFdroidRelease`.
 - The F-Droid flavor disables the Google Play Services security-provider path.
 - The F-Droid flavor disables application self-update endpoints, UI, background checks, and client APK requests.
-- The experimental Bergamot translator is disabled and the prebuilt WebAssembly runtime is not packaged. A separate
-  source-build and reviewer-policy pass is required before this feature can be enabled for F-Droid.
+- The draft source preparation enables the optional Mozilla Bergamot backend using a pinned source-built JS/WASM
+  pair, never Mozilla's prebuilt runtime. See [OFFLINE_TRANSLATION.md](OFFLINE_TRANSLATION.md) for source/toolchain
+  pins, output verification, model licensing and pending APK/device/packager gates. This amendment records the
+  implementation change, not a new independent security audit or catalogue publication.
 - Imageboard extensions remain separate APKs and require an explicit F-Droid-specific warning and confirmation
   before any download starts.
 
@@ -38,6 +40,7 @@ the transitive-dependency result produced by `fdroid scanner`.
 | FFmpeg 8.1.3 | Release archive with fixed SHA-256; LGPL-only configuration without `--enable-gpl` or `--enable-nonfree` | LGPL-2.1-or-later |
 | dav1d 1.5.4 | Release archive with fixed SHA-256 | BSD-2-Clause |
 | GIFLIB decoder sources | Stored as source under `jni/src/gif/dgif` | MIT |
+| Mozilla Bergamot | Pinned `mozilla/translations` inference source and required submodules; compiled with Debian Emscripten | MPL-2.0 and bundled dependency notices |
 
 The F-Droid build accepts both downloaded native source trees through `DASHCHAN_DAV1D_SOURCE_DIR`
 and `DASHCHAN_FFMPEG_SOURCE_DIR`. Gradle then uses only those pre-provided trees and
@@ -45,6 +48,9 @@ does not fetch native sources.
 
 ## Assets
 
+- The F-Droid runtime carries source-build provenance and collected upstream/toolchain license notices. Its
+  optional EN/RU language packages are verified data downloads, not APK assets; Mozilla identifies the weights as
+  MPL-2.0. Source preparation excludes unused training tools and upstream binary test models.
 - Optional fonts are not bundled in the APK. The application downloads a user-selected font from the public
   Slooop add-ons catalog, verifies its declared size and SHA-256, and stores it in application-private data.
   The catalog provides the upstream source and per-family license link for every font. Manual TTF/OTF import
