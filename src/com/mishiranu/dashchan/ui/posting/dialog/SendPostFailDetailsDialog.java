@@ -31,12 +31,12 @@ public class SendPostFailDetailsDialog extends DialogFragment {
 	@Override
 	public Dialog onCreateDialog(Bundle savedInstanceState) {
 		ApiException.Extra extra = AndroidUtils.getParcelable(requireArguments(), EXTRA_EXTRA, ApiException.Extra.class);
-		AlertDialog dialog = new MotionDialogBuilder(requireContext())
+		AlertDialog dialog = MotionDialogBuilder.standard(requireContext())
 				.setTitle(R.string.details)
 				.setPositiveButton(android.R.string.ok, null)
 				.create();
 		if (extra instanceof ApiException.BanExtra) {
-			SummaryLayout layout = new SummaryLayout(dialog);
+			SummaryLayout layout = SummaryLayout.standard(dialog);
 			PostDateFormatter formatter = new PostDateFormatter(requireContext());
 			ApiException.BanExtra banExtra = (ApiException.BanExtra) extra;
 			if (!StringUtils.isEmpty(banExtra.id)) {

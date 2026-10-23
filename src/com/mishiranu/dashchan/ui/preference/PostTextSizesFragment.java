@@ -167,7 +167,9 @@ public class PostTextSizesFragment extends PreferenceFragment {
 			Preview preview = new Preview(context);
 			preview.update(key, initial != null ? initial : getValue());
 			layout.second.addView(preview);
-			AlertDialog dialog = super.configureDialog(savedInstanceState, new MotionDialogBuilder(context))
+			com.mishiranu.dashchan.widget.InterfaceAppearance.standardCustomContent(layout.second, preview);
+			com.mishiranu.dashchan.widget.InterfaceAppearance.standardCustomInsets(layout.second);
+			AlertDialog dialog = super.configureDialog(savedInstanceState, MotionDialogBuilder.standard(context))
 					.setView(layout.first).setPositiveButton(android.R.string.ok, (d, which) -> {
 						Integer value = parse(input.getText());
 						if (value != null) ConcurrentUtils.HANDLER.post(() -> setValue(value));
@@ -175,6 +177,7 @@ public class PostTextSizesFragment extends PreferenceFragment {
 			Runnable validate = () -> {
 				Integer value = parse(input.getText());
 				input.setError(value == null ? context.getString(R.string.post_text_scale_range) : null);
+				com.mishiranu.dashchan.widget.InterfaceAppearance.fieldError(input, value == null);
 				if (value != null) {
 					seek.setProgress(value - Preferences.MIN_TEXT_SCALE);
 					preview.update(key, value);

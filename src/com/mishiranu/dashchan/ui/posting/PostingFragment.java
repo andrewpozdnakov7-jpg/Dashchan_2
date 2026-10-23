@@ -159,6 +159,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 
 	// View-owned state: initialized in onViewCreated and released in onDestroyView.
 	private PostingFormDiagnostics.Observer formDiagnostics;
+	private PostingKeyboardRequest initialKeyboardRequest;
 
 	private ScrollView scrollView;
 	private UriPasteEditText commentView;
@@ -543,10 +544,20 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		// The new form owns one coordinated editor/primary transition after reparenting.
 		// Do not let the legacy inset callback also translate its action panel.
 		if (postingAppearance == null) ImePanelMotion.attach(view, view.findViewById(R.id.posting_action_container));
+		// Only a fresh form opening opts in. Rotation/restoration and returning from a picker
+		// must preserve the user's keyboard choice, rather than issuing another show request.
+		if (savedInstanceState == null && allowPosting && Preferences.isMaxRelaxImeFixEnabled()) {
+			initialKeyboardRequest = new PostingKeyboardRequest(requireActivity().getWindow(), view, commentView,
+					() -> isResumed() && getView() == view && Preferences.isMaxRelaxImeFixEnabled());
+		}
 	}
 
 	@Override
 	public void onDestroyView() {
+		if (initialKeyboardRequest != null) {
+			initialKeyboardRequest.cancel("view_destroyed");
+			initialKeyboardRequest = null;
+		}
 		ImePanelMotion.release(getView());
 		if (postingAppearance != null) {
 			postingAppearance.close();
@@ -654,11 +665,14 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		draftController.resetSavedGuard();
 		if (!allowPosting || sendCoordinator.isSendSuccess()) {
 			((FragmentHandler) requireActivity()).removeFragment();
+		} else if (initialKeyboardRequest != null) {
+			initialKeyboardRequest.start();
 		}
 	}
 
 	@Override
 	public void onPause() {
+		if (initialKeyboardRequest != null) initialKeyboardRequest.cancel("paused");
 		if (postingAppearance != null) postingAppearance.deactivateToolbar();
 		super.onPause();
 	}

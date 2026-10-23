@@ -42,7 +42,7 @@ public class ApplicationLogoDialog extends DialogFragment {
 	public Dialog onCreateDialog(Bundle savedInstanceState) {
 		Context context = requireContext();
 		float density = ResourceUtils.obtainDensity(context);
-		int padding = Math.round(16f * density);
+		int padding = Math.round((com.mishiranu.dashchan.widget.InterfaceAppearance.isEnabled(context) ? 24f : 16f) * density);
 		int smallPadding = Math.round(8f * density);
 
 		ScrollView scrollView = new ScrollView(context);
@@ -74,7 +74,9 @@ public class ApplicationLogoDialog extends DialogFragment {
 					density, padding, smallPadding));
 		}
 
-		return new MotionDialogBuilder(context)
+		com.mishiranu.dashchan.widget.InterfaceAppearance.standardCustomContent(invitation);
+		com.mishiranu.dashchan.widget.InterfaceAppearance.standardCustomCaption(requirements);
+		return MotionDialogBuilder.standard(context)
 				.setTitle(R.string.application_logo)
 				.setView(scrollView)
 				.setNegativeButton(android.R.string.cancel, null)
@@ -111,6 +113,7 @@ public class ApplicationLogoDialog extends DialogFragment {
 		title.setText(option.titleResId);
 		title.setTextAppearance(android.R.style.TextAppearance_Material_Subhead);
 		ThemeEngine.applyStyle(title);
+		com.mishiranu.dashchan.widget.InterfaceAppearance.standardChoiceText(title);
 		textLayout.addView(title);
 
 		int summaryResId = 0;
@@ -123,6 +126,7 @@ public class ApplicationLogoDialog extends DialogFragment {
 			summary.setText(summaryResId);
 			summary.setTextAppearance(android.R.style.TextAppearance_Material_Caption);
 			ThemeEngine.applyStyle(summary);
+			com.mishiranu.dashchan.widget.InterfaceAppearance.standardCustomCaption(summary);
 			textLayout.addView(summary);
 		}
 
@@ -130,6 +134,11 @@ public class ApplicationLogoDialog extends DialogFragment {
 		ThemeEngine.applyStyle(radioButton);
 		radioButton.setChecked(selected);
 		radioButton.setClickable(false);
+		com.mishiranu.dashchan.widget.InterfaceAppearance.standardCustomContent(radioButton);
+		if (com.mishiranu.dashchan.widget.InterfaceAppearance.isEnabled(context)) {
+			radioButton.setFocusable(false);
+			radioButton.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+		}
 		row.addView(radioButton, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
 				ViewGroup.LayoutParams.WRAP_CONTENT));
 		row.setOnClickListener(v -> select(option));

@@ -399,6 +399,8 @@
 	<string name="video_audio_boost_level">Максимальное усиление звука видео</string>
 	<string name="video_audio_boost_level__format">+%d дБ</string>
 	<string name="video_diagnostics_start">Записать диагностику видео</string>
+	<string name="max_relax_ime_fix">Фикс для Max Relax</string>
+	<string name="max_relax_ime_fix_summary">Показывать клавиатуру при открытии формы ответа. Экспериментальное исправление для некоторых устройств.</string>
 	<string name="video_diagnostics_begin">Начать</string>
 	<string name="video_diagnostics_extended">Расширенный лог</string>
 	<string name="video_diagnostics_saving">Сохранение диагностики…</string>

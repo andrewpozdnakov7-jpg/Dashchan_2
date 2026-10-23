@@ -112,11 +112,14 @@ public class PopupColorDialog extends DialogFragment {
 		layout.addView(hue, new LinearLayout.LayoutParams(-1, dp(48)));
 		int[] presets = {0xffffffff, 0xff303030, 0xff000000, 0xff616161,
 				0xff1976d2, 0xff4cae4f, 0xfff9a825, 0xff7b1fa2};
+		java.util.ArrayList<View> semantic = new java.util.ArrayList<>();
+		semantic.add(preview); semantic.add(field); semantic.add(spectrum);
 		for (int row = 0; row < 2; row++) {
 			LinearLayout palette = new LinearLayout(context);
 			for (int column = 0; column < 4; column++) {
 				int preset = presets[row * 4 + column];
 				Button swatch = new Button(context);
+				semantic.add(swatch);
 				swatch.setForceDarkAllowed(false);
 				GradientDrawable background = new GradientDrawable();
 				background.setColor(preset);
@@ -167,7 +170,12 @@ public class PopupColorDialog extends DialogFragment {
 		if (savedInstanceState != null) hex.setText(savedInstanceState.getString("hex", formatColor(color)));
 		ScrollView scroll = new ScrollView(context);
 		scroll.addView(layout);
-		return new MotionDialogBuilder(context).setTitle(requireArguments().getInt("title"))
+		com.mishiranu.dashchan.widget.InterfaceAppearance.standardCustomContent(layout, semantic.toArray(new View[0]));
+		com.mishiranu.dashchan.widget.InterfaceAppearance.standardCustomInsets(layout);
+		com.mishiranu.dashchan.widget.InterfaceAppearance.standardCustomAction(code, false);
+		com.mishiranu.dashchan.widget.InterfaceAppearance.standardCustomCaption(warning);
+		com.mishiranu.dashchan.widget.InterfaceAppearance.standardFieldLabel(hueLabel);
+		return MotionDialogBuilder.standard(context).setTitle(requireArguments().getInt("title"))
 				.setView(scroll).setNegativeButton(android.R.string.cancel, null)
 				.setPositiveButton(android.R.string.ok, null).create();
 	}

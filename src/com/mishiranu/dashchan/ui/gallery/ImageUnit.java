@@ -203,7 +203,7 @@ public class ImageUnit {
 	private static void showMetadata(FragmentManager fragmentManager, JpegData jpegData, String fileName) {
 		new InstanceDialog(fragmentManager, null, provider -> {
 			Context context = GalleryInstance.getCallback(provider).getWindow().getContext();
-			AlertDialog.Builder dialogBuilder = new MotionDialogBuilder(context)
+			AlertDialog.Builder dialogBuilder = MotionDialogBuilder.standard(context)
 					.setTitle(R.string.metadata)
 					.setPositiveButton(android.R.string.ok, null);
 			ExifData exifData = jpegData != null ? jpegData.exifData : null;
@@ -218,7 +218,7 @@ public class ImageUnit {
 				}
 			}
 			AlertDialog dialog = dialogBuilder.create();
-			SummaryLayout layout = new SummaryLayout(dialog);
+			SummaryLayout layout = SummaryLayout.standard(dialog);
 			if (exifData != null) {
 				for (Pair<String, String> pair : exifData.getUserMetadata()) {
 					if (pair != null) {

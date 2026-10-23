@@ -74,11 +74,15 @@ public class CustomShortcutFragment extends ContentFragment {
 		int smallPadding = Math.round(8f * density);
 
 		ScrollView scrollView = new ScrollView(context);
+		com.mishiranu.dashchan.widget.InterfaceAppearance.standardPage(scrollView);
 		scrollView.setFillViewport(true);
 		scrollView.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
 		LinearLayout layout = new LinearLayout(context);
 		layout.setOrientation(LinearLayout.VERTICAL);
 		layout.setPadding(padding, 0, padding, padding);
+		if (com.mishiranu.dashchan.widget.InterfaceAppearance.isEnabled(context)) {
+			int horizontal = Math.round(24f * density); layout.setPadding(horizontal, 0, horizontal, padding);
+		}
 		scrollView.addView(layout, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
 				ViewGroup.LayoutParams.WRAP_CONTENT));
 
@@ -120,18 +124,23 @@ public class CustomShortcutFragment extends ContentFragment {
 		layout.addView(nameEdit, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
 				ViewGroup.LayoutParams.WRAP_CONTENT));
 
-		preview = new ImageView(context);
+		preview = com.mishiranu.dashchan.widget.InterfaceAppearance.createShortcutPreview(context);
 		preview.setContentDescription(getString(R.string.shortcut_image));
 		preview.setScaleType(ImageView.ScaleType.CENTER_CROP);
 		preview.setBackgroundColor(ThemeEngine.getTheme(context).card);
 		int previewSize = Math.round(256f * density);
 		LinearLayout.LayoutParams previewParams = new LinearLayout.LayoutParams(previewSize, previewSize);
+		if (com.mishiranu.dashchan.widget.InterfaceAppearance.isEnabled(context)) {
+			previewParams.width = ViewGroup.LayoutParams.MATCH_PARENT;
+			previewParams.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+		}
 		previewParams.gravity = Gravity.CENTER_HORIZONTAL;
 		previewParams.topMargin = padding;
 		previewParams.bottomMargin = smallPadding;
 		layout.addView(preview, previewParams);
 
 		progressBar = new ProgressBar(context);
+		com.mishiranu.dashchan.widget.InterfaceAppearance.standardLoading(progressBar);
 		progressBar.setVisibility(View.GONE);
 		LinearLayout.LayoutParams progressParams = new LinearLayout.LayoutParams(
 				ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -175,6 +184,11 @@ public class CustomShortcutFragment extends ContentFragment {
 		createParams.topMargin = smallPadding;
 		layout.addView(createButton, createParams);
 
+		com.mishiranu.dashchan.widget.InterfaceAppearance.standardCustomContent(layout);
+		com.mishiranu.dashchan.widget.InterfaceAppearance.standardCustomAction(copyButton, false);
+		com.mishiranu.dashchan.widget.InterfaceAppearance.standardCustomAction(selectButton, false);
+		com.mishiranu.dashchan.widget.InterfaceAppearance.standardFieldLabel(promptHeader);
+		com.mishiranu.dashchan.widget.InterfaceAppearance.standardFieldLabel(shortcutHeader);
 		if (savedInstanceState != null) {
 			nameEdit.setText(savedInstanceState.getString(EXTRA_NAME));
 			fitButton.setChecked(savedInstanceState.getBoolean(EXTRA_FIT));

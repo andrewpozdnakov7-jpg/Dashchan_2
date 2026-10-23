@@ -67,7 +67,7 @@ final class StandardAppearance {
 				new int[]{Color.TRANSPARENT, c.ripple}), fill, shape(view, Color.WHITE, 0));
 	}
 
-	private enum Kind {SETTINGS, SECTION, SERVICE, MENU, STATE, ERROR, PAGE, INPUT}
+	private enum Kind {SETTINGS, SECTION, SERVICE, MENU, STATE, ERROR, PAGE, INPUT, CUSTOM_CONTENT, CUSTOM_CHOICE_ROW}
 	private static final class Saved {
 		final View view; final int start, top, end, bottom, minHeight, minWidth, height;
 		final int marginStart, marginEnd, marginTop, marginBottom, textMinHeight, textMinWidth, textMaxWidth;
@@ -129,6 +129,7 @@ final class StandardAppearance {
 			if (!applied) return;
 			AppearanceColors c = colors(root.getContext());
 			if (kind == Kind.PAGE) { root.setBackgroundTintList(null); root.setBackgroundColor(c.window); return; }
+			if (kind == Kind.CUSTOM_CONTENT) { root.setPaddingRelative(dp(root, 24), 0, dp(root, 24), dp(root, 8)); return; }
 			if (kind == Kind.INPUT) { root.setMinimumHeight(dp(root, AppearanceShapes.STANDARD_FIELD_MIN_HEIGHT)); return; }
 			if (kind == Kind.STATE) {
 				// ExpandedLayout remains the sole owner of the host's system/toolbar insets.
@@ -165,20 +166,23 @@ final class StandardAppearance {
 				while (textContainer != root && !contains(textContainer, summary)
 						&& textContainer.getParent() instanceof View) textContainer = (View) textContainer.getParent();
 			}
+			int horizontal = kind == Kind.CUSTOM_CHOICE_ROW ? 24 : 16;
 			if (textContainer != root) {
-				root.setPaddingRelative(dp(root, 16), 0, dp(root, 16), 0);
+				root.setPaddingRelative(dp(root, horizontal), 0, dp(root, horizontal), 0);
 				textContainer.setPaddingRelative(0, dp(root, 8), 0, dp(root, 8));
-			} else root.setPaddingRelative(dp(root, 16), dp(root, 8), dp(root, 16), dp(root, 8));
-			if (kind == Kind.MENU && title != root) {
+			} else root.setPaddingRelative(dp(root, horizontal), dp(root, 8), dp(root, horizontal), dp(root, 8));
+			if ((kind == Kind.MENU || kind == Kind.CUSTOM_CHOICE_ROW) && title != root) {
 				// Only the row owns the 48dp target. Native labels can carry two minima.
 				title.setPadding(0, 0, 0, 0); title.setMinHeight(0); title.setMinimumHeight(0);
 			}
-			if (kind == Kind.SERVICE || kind == Kind.MENU) {
+			if (kind == Kind.SERVICE || kind == Kind.MENU || kind == Kind.CUSTOM_CHOICE_ROW) {
 				for (TextView text : new TextView[]{title, summary, end}) {
 					if (text == null) continue;
 					if (text != root) text.setDuplicateParentStateEnabled(text.isEnabled() == root.isEnabled());
 					int normal = text == title ? c.onSurface : c.onSurfaceVariant;
 					text.setTextColor(serviceTextColors(normal, c.surface, c));
+					if (kind == Kind.CUSTOM_CHOICE_ROW && text instanceof android.widget.CheckedTextView)
+						((android.widget.CheckedTextView) text).setCheckMarkTintList(choiceColors(c));
 				}
 			}
 			if (summary != null && summary.getLayoutParams() instanceof ViewGroup.MarginLayoutParams) {
@@ -222,6 +226,8 @@ final class StandardAppearance {
 	}
 	static void service(View root, TextView title, TextView metadata, TextView end) { layout(root, Kind.SERVICE, title, metadata, end); }
 	static void menu(View root, TextView title) { layout(root, Kind.MENU, title, null, null); }
+	static void customInsets(View root) { layout(root, Kind.CUSTOM_CONTENT, null, null, null); }
+	static void customChoiceRow(View root, TextView title) { layout(root, Kind.CUSTOM_CHOICE_ROW, title, null, null); }
 	static void state(View root, TextView message) { layout(root, Kind.STATE, message, null, null); }
 	static void errorState(View root, ImageView icon, TextView message) {
 		layout(root, Kind.ERROR, message, null, null);

@@ -41,9 +41,24 @@ import java.util.Objects;
 /** Explicit component roles. Does not replace widgets, listeners, data or the application's theme. */
 public final class InterfaceAppearance {
 	private InterfaceAppearance() {}
+	public static ImageView createShortcutPreview(Context context) {
+		return new androidx.appcompat.widget.AppCompatImageView(context) {
+			@Override protected void onMeasure(int widthSpec, int heightSpec) {
+				if (InterfaceAppearance.isEnabled(getContext())) {
+					int limit = Math.round(256f * ResourceUtils.obtainDensity(this));
+					int width = MeasureSpec.getMode(widthSpec) == MeasureSpec.UNSPECIFIED
+							? limit : MeasureSpec.getSize(widthSpec);
+					int side = Math.min(width, limit);
+					super.onMeasure(MeasureSpec.makeMeasureSpec(side, MeasureSpec.EXACTLY),
+							MeasureSpec.makeMeasureSpec(side, MeasureSpec.EXACTLY));
+				} else super.onMeasure(widthSpec, heightSpec);
+			}
+		};
+	}
 	enum Role {ROW, HEADER, TEXT, SECONDARY, ACTION, TEXT_ACTION, FIELD, POSTING_FORM, POSTING_FIELD, CHECK, SWITCH, SLIDER, ICON, AUDIO_TITLE,
 		SETTING_TITLE, SETTING_SUMMARY, SECTION_TITLE, MENU_TITLE, POPUP_TEXT, SERVICE_TITLE, SERVICE_META, DIALOG_TITLE, DIALOG_BODY,
-		STANDARD_BUTTON, TOOLBAR_TITLE, TOOLBAR_SUBTITLE, SEARCH_TEXT, STATE_TITLE, SERVICE_DOCUMENT}
+		STANDARD_BUTTON, TOOLBAR_TITLE, TOOLBAR_SUBTITLE, SEARCH_TEXT, STATE_TITLE, SERVICE_DOCUMENT,
+		CUSTOM_BODY, CUSTOM_CAPTION, CUSTOM_FIELD, CUSTOM_CHOICE, CUSTOM_ACTION, CUSTOM_TEXT_ACTION, CUSTOM_SLIDER, CUSTOM_CHOICE_TEXT}
 	public static boolean isEnabled(Context context) {
 		return InterfaceMotion.isEnabled() && supported(context);
 	}
@@ -79,6 +94,11 @@ public final class InterfaceAppearance {
 	}
 	private static final class Palette {
 		final AppearanceColors colors; final int window, surface, text, secondary, accent, onAccent, outline, tonal, error;
+		Palette(AppearanceColors colors) {
+			this.colors = colors; window = colors.window; surface = colors.surfaceContainer;
+			text = colors.onSurface; secondary = colors.onSurfaceVariant; accent = contrasting(colors.primary, surface, 3);
+			onAccent = contrasting(colors.onPrimary, accent, 4.5); outline = colors.outline; tonal = colors.primaryContainer; error = colors.error;
+		}
 		Palette(Context context, ThemeEngine.Theme theme) {
 			colors = AppearanceColors.interfaceCompatibility(theme.base == ThemeEngine.Theme.Base.DARK,
 					theme.window, theme.card, theme.accent, ResourceUtils.getColor(context, android.R.attr.textColorPrimary),
@@ -131,13 +151,49 @@ public final class InterfaceAppearance {
 		role(view, header ? Role.HEADER : Role.ROW); if (title != view) role(title, header ? Role.HEADER : Role.TEXT); role(summary, Role.SECONDARY);
 	}
 	public static void action(Button view, boolean primary) { role(view, primary ? Role.ACTION : Role.TEXT_ACTION); }
-	public static void field(EditText view) { role(view, Role.FIELD); }
+	public static void field(EditText view) { role(view, hasRole(view, Role.CUSTOM_FIELD) ? Role.CUSTOM_FIELD : Role.FIELD); }
 	/** Local backdrop only; does not change the application's window or theme. */
 	public static void postingForm(View view) { role(view, Role.POSTING_FORM); }
 	/** Filled, borderless fields scoped to the real posting form and its offline preview. */
 	public static void postingField(EditText view) { role(view, Role.POSTING_FIELD); }
-	public static void check(CompoundButton view) { role(view, view instanceof Switch ? Role.SWITCH : Role.CHECK); }
-	public static void slider(SeekBar view) { role(view, Role.SLIDER); }
+	public static void check(CompoundButton view) { role(view, hasRole(view, Role.CUSTOM_CHOICE) ? Role.CUSTOM_CHOICE : view instanceof Switch ? Role.SWITCH : Role.CHECK); }
+	private static boolean hasRole(View view, Role role) {
+		Object state = view != null ? view.getTag(R.id.interface_appearance_state) : null;
+		return state instanceof State && ((State) state).role == role;
+	}
+	/** Explicit opt-in for custom dialog/page content. Semantic previews are excluded by identity. */
+	public static void standardCustomContent(View view, View... previews) {
+		if (view == null) return;
+		for (View preview : previews) if (view == preview) return;
+		if (view instanceof EditText) role(view, Role.CUSTOM_FIELD);
+		else if (view instanceof CompoundButton) role(view, Role.CUSTOM_CHOICE);
+		else if (view instanceof Button) role(view, Role.CUSTOM_ACTION);
+		else if (view instanceof SeekBar) role(view, Role.CUSTOM_SLIDER);
+		else if (view instanceof TextView && !hasRole(view, Role.CUSTOM_CAPTION) && !hasRole(view, Role.SECTION_TITLE)) role(view, Role.CUSTOM_BODY);
+		if (view instanceof ViewGroup) {
+			ViewGroup group = (ViewGroup) view;
+			for (int i = 0; i < group.getChildCount(); i++) standardCustomContent(group.getChildAt(i), previews);
+		}
+	}
+	public static void standardCustomCaption(TextView view) { role(view, Role.CUSTOM_CAPTION); }
+	public static void standardCustomInsets(View view) { StandardAppearance.customInsets(view); }
+	public static void standardChoiceText(TextView view) { role(view, Role.CUSTOM_CHOICE_TEXT); }
+	public static void standardCustomAction(Button view, boolean primary) { role(view, primary ? Role.CUSTOM_ACTION : Role.CUSTOM_TEXT_ACTION); }
+	public static void standardChoiceRow(View row, TextView text) {
+		menuRow(row, text);
+		standardChoiceText(text);
+		StandardAppearance.customChoiceRow(row, text);
+		if (isEnabled(row.getContext()) && text instanceof android.widget.CheckedTextView)
+			((android.widget.CheckedTextView) text).setCheckMarkTintList(StandardAppearance.choiceColors(StandardAppearance.colors(row.getContext())));
+	}
+	/** SummaryLayout owns its metric spans; do not apply a global line height or line-limit setters. */
+	public static int[] standardSummaryColors(Context context) {
+		if (!isEnabled(context)) return null;
+		AppearanceColors c = StandardAppearance.colors(context);
+		return new int[] {contrasting(c.onSurface, c.surfaceContainer, 4.5),
+				contrasting(c.onSurfaceVariant, c.surfaceContainer, 4.5), c.outlineVariant};
+	}
+	public static void slider(SeekBar view) { role(view, hasRole(view, Role.CUSTOM_SLIDER) ? Role.CUSTOM_SLIDER : Role.SLIDER); }
 	public static void icon(ImageView view) { role(view, Role.ICON); }
 	public static void secondary(TextView view) { role(view, Role.SECONDARY); }
 	public static void audioTitle(TextView view) { role(view, Role.AUDIO_TITLE); }
@@ -249,7 +305,7 @@ public final class InterfaceAppearance {
 	public static void fieldError(EditText view, boolean error) {
 		if (PostingFormAppearance.fieldError(view, error)) return;
 		Object tag = view.getTag(R.id.interface_appearance_state);
-		if (tag instanceof State && (((State) tag).role == Role.FIELD || ((State) tag).role == Role.POSTING_FIELD)) {
+		if (tag instanceof State && (((State) tag).role == Role.FIELD || ((State) tag).role == Role.CUSTOM_FIELD || ((State) tag).role == Role.POSTING_FIELD)) {
 			State state = (State) tag; state.rendered = false; state.error = error; state.legacyError = error ? view.getBackground() : null;
 			if (isEnabled(view.getContext())) render(view, state);
 			StandardAppearance.refresh(view);
@@ -298,7 +354,10 @@ public final class InterfaceAppearance {
 		renderResolved(view, state, isEnabled(view.getContext()));
 	}
 	static void renderResolved(View view, State state, boolean enabled) {
-		Palette p = enabled ? palette(view) : null;
+		boolean custom = state.role == Role.CUSTOM_BODY || state.role == Role.CUSTOM_CAPTION
+				|| state.role == Role.CUSTOM_FIELD || state.role == Role.CUSTOM_CHOICE || state.role == Role.CUSTOM_ACTION
+				|| state.role == Role.CUSTOM_TEXT_ACTION || state.role == Role.CUSTOM_SLIDER || state.role == Role.CUSTOM_CHOICE_TEXT;
+		Palette p = enabled ? custom ? new Palette(StandardAppearance.colors(view.getContext())) : palette(view) : null;
 		AppearanceTypography.Configuration typography = enabled ? new AppearanceTypography.Configuration(view.getContext()) : null;
 		if (state.rendered && state.applied == enabled && state.appliedRole == state.role
 				&& Objects.equals(state.appliedColors, p != null ? p.colors : null)
@@ -314,11 +373,15 @@ public final class InterfaceAppearance {
 			TextView text = (TextView) view;
 			AppearanceTypography.apply(text, typographyRole);
 			AppearanceColors standard = StandardAppearance.colors(view.getContext());
-			boolean secondary = state.role == Role.SETTING_SUMMARY || state.role == Role.SERVICE_META || state.role == Role.TOOLBAR_SUBTITLE;
+			boolean secondary = state.role == Role.SETTING_SUMMARY || state.role == Role.SERVICE_META || state.role == Role.TOOLBAR_SUBTITLE || state.role == Role.CUSTOM_CAPTION;
 			if (state.role == Role.TOOLBAR_SUBTITLE) {
 				ToolbarPalette toolbar = ToolbarPalette.resolve(view.getContext());
 				text.setTextColor(enabled(toolbar.subtitle, toolbar.background));
-			} else text.setTextColor(enabled(secondary ? standard.onSurfaceVariant : standard.onSurface, standard.surface));
+			} else {
+				int surface = custom ? standard.surfaceContainer : standard.surface;
+				int color = secondary ? standard.onSurfaceVariant : standard.onSurface;
+				text.setTextColor(enabled(custom ? contrasting(color, surface, 4.5) : color, surface));
+			}
 			if (supportsStandardLineLimits(text) && (state.role == Role.SETTING_TITLE || state.role == Role.SETTING_SUMMARY || state.role == Role.MENU_TITLE
 					|| state.role == Role.SERVICE_TITLE || state.role == Role.SERVICE_META || state.role == Role.DIALOG_BODY
 					|| state.role == Role.DIALOG_TITLE || state.role == Role.STATE_TITLE || state.role == Role.SERVICE_DOCUMENT)) {
@@ -350,21 +413,22 @@ public final class InterfaceAppearance {
 						new int[] {p.tonal, p.tonal, Color.TRANSPARENT});
 				view.setBackgroundTintList(null); view.setBackground(ripple(view, shape(view, AppearanceShapes.MEDIUM, fill), AppearanceShapes.MEDIUM, p.text)); break;
 			}
-			case ACTION: case TEXT_ACTION: case ICON: {
-				boolean filled = state.role != Role.TEXT_ACTION;
+			case ACTION: case TEXT_ACTION: case ICON: case CUSTOM_ACTION: case CUSTOM_TEXT_ACTION: {
+				boolean filled = state.role != Role.TEXT_ACTION && state.role != Role.CUSTOM_TEXT_ACTION;
 				view.setBackgroundTintList(null); view.setBackground(ripple(view, shape(view, AppearanceShapes.EXTRA_LARGE,
 						enabled(filled ? p.accent : Color.TRANSPARENT, p.surface)), AppearanceShapes.EXTRA_LARGE, filled ? p.onAccent : p.text));
 				view.setElevation(0); view.setStateListAnimator(null);
 				if (view instanceof Button) {
 					Button button = (Button) view; button.setAllCaps(false); button.setTextColor(enabled(filled ? p.onAccent : contrasting(p.accent, p.surface, 4.5), filled ? p.accent : p.surface));
-					AppearanceTypography.apply(button, AppearanceTypography.Role.COMPAT_ACTION);
+					AppearanceTypography.apply(button, custom ? AppearanceTypography.Role.LABEL_LARGE : AppearanceTypography.Role.COMPAT_ACTION);
+					if (custom) button.setCompoundDrawableTintList(enabled(filled ? p.onAccent : contrasting(p.accent, p.surface, 4.5), filled ? p.accent : p.surface));
 					button.setMinimumHeight(dp(view, AppearanceShapes.ACTION_MIN_HEIGHT));
 					button.setPaddingRelative(dp(view, AppearanceShapes.SPACE_16), dp(view, AppearanceShapes.SPACE_8),
 							dp(view, AppearanceShapes.SPACE_16), dp(view, AppearanceShapes.SPACE_8));
 				} else ((ImageView) view).setImageTintList(enabled(p.onAccent, p.accent));
 				break;
 			}
-			case FIELD: {
+			case FIELD: case CUSTOM_FIELD: {
 				EditText edit = (EditText) view; edit.setBackgroundTintList(null);
 				StateListDrawable background = new StateListDrawable();
 				GradientDrawable focus = shape(view, AppearanceShapes.MEDIUM, ColorStateList.valueOf(p.surface)); focus.setStroke(dp(view, AppearanceShapes.FIELD_FOCUS_STROKE), state.error ? p.error : contrasting(p.accent, p.surface, 3));
@@ -373,6 +437,11 @@ public final class InterfaceAppearance {
 				edit.setBackground(background); edit.setMinimumHeight(Math.max(state.minimumHeight, dp(view, 48)));
 				edit.setPaddingRelative(dp(view, 12), dp(view, 10), dp(view, 12), dp(view, 10));
 				edit.setTextColor(enabled(contrasting(p.text, p.tonal, 4.5), p.surface)); edit.setHintTextColor(enabled(contrasting(p.secondary, p.tonal, 4.5), p.surface));
+				if (state.role == Role.CUSTOM_FIELD) {
+					android.graphics.Typeface original = edit.getTypeface();
+					AppearanceTypography.apply(edit, AppearanceTypography.Role.BODY_LARGE);
+					if (android.graphics.Typeface.MONOSPACE.equals(original)) edit.setTypeface(original);
+				}
 				break;
 			}
 			case POSTING_FORM: {
@@ -398,8 +467,14 @@ public final class InterfaceAppearance {
 				// Keep the themed cursor, text size, editor bounds, selection and IME behavior.
 				break;
 			}
-			case CHECK: {
-				CompoundButton check = (CompoundButton) view; check.setButtonTintList(null); check.setButtonDrawable(new Mark(view, p)); break;
+			case CHECK: case CUSTOM_CHOICE: {
+				CompoundButton check = (CompoundButton) view; check.setButtonTintList(null);
+				check.setButtonDrawable(new Mark(view, p, state.role == Role.CUSTOM_CHOICE && view instanceof android.widget.RadioButton));
+				if (state.role == Role.CUSTOM_CHOICE) {
+					AppearanceTypography.apply(check, AppearanceTypography.Role.BODY_LARGE);
+					check.setTextColor(enabled(p.text, p.surface)); check.setMinimumHeight(Math.max(state.minimumHeight, dp(view, 48)));
+				}
+				break;
 			}
 			case SWITCH: {
 				Switch control = (Switch) view; control.setTrackTintList(null); control.setThumbTintList(null);
@@ -410,7 +485,7 @@ public final class InterfaceAppearance {
 						new int[] {p.secondary, p.onAccent, p.outline})); thumb.setSize(dp(view, 24), dp(view, 24));
 				control.setTrackDrawable(track); control.setThumbDrawable(new android.graphics.drawable.InsetDrawable(thumb, 0, dp(view, 4), 0, dp(view, 4))); control.setSwitchMinWidth(dp(view, 52)); control.setSplitTrack(false); break;
 			}
-			case SLIDER: {
+			case SLIDER: case CUSTOM_SLIDER: {
 				SeekBar seek = (SeekBar) view;
 				GradientDrawable track = shape(view, 4, enabled(OpaqueColors.blend(p.surface, p.text, .16f), p.surface)); track.setSize(dp(view, 1), dp(view, 6));
 				GradientDrawable progress = shape(view, 4, enabled(p.accent, p.surface)); progress.setSize(dp(view, 1), dp(view, 6));
@@ -436,6 +511,9 @@ public final class InterfaceAppearance {
 			case SETTING_SUMMARY: case MENU_TITLE: case POPUP_TEXT: case SERVICE_TITLE: case DIALOG_BODY: case SERVICE_DOCUMENT: return AppearanceTypography.Role.BODY_MEDIUM;
 			case SECTION_TITLE: case STANDARD_BUTTON: return AppearanceTypography.Role.LABEL_LARGE;
 			case SERVICE_META: case TOOLBAR_SUBTITLE: return AppearanceTypography.Role.BODY_SMALL;
+			case CUSTOM_BODY: return AppearanceTypography.Role.BODY_MEDIUM;
+			case CUSTOM_CAPTION: return AppearanceTypography.Role.BODY_SMALL;
+			case CUSTOM_CHOICE_TEXT: return AppearanceTypography.Role.BODY_LARGE;
 			case DIALOG_TITLE: return AppearanceTypography.Role.TITLE_LARGE;
 			case TOOLBAR_TITLE: return AppearanceTypography.Role.COMPACT_TOOLBAR;
 			case STATE_TITLE: return AppearanceTypography.Role.TITLE_MEDIUM;
@@ -449,7 +527,7 @@ public final class InterfaceAppearance {
 		final Drawable background; final ColorStateList backgroundTint; final StateListAnimator animator; final float elevation;
 		final int start, top, end, bottom, minimumHeight, bottomMargin;
 		final ColorStateList text, hint, imageTint, buttonTint, trackTint, thumbTint, progressTint, progressBackgroundTint;
-		final ColorStateList linkText;
+		final ColorStateList linkText, compoundTint;
 		final AppearanceTypography.Snapshot typography; final int minLines, maxLines;
 		final Drawable mark, track, thumb, progress; final int switchWidth, thumbOffset, minTrackHeight, maxTrackHeight; final boolean splitTrack;
 		State(View view) {
@@ -459,6 +537,7 @@ public final class InterfaceAppearance {
 					? ((ViewGroup.MarginLayoutParams) view.getLayoutParams()).bottomMargin : 0;
 			TextView t = view instanceof TextView ? (TextView) view : null; text = t != null ? t.getTextColors() : null; hint = t != null ? t.getHintTextColors() : null;
 			linkText = t != null ? t.getLinkTextColors() : null;
+			compoundTint = t != null ? t.getCompoundDrawableTintList() : null;
 			typography = t != null ? new AppearanceTypography.Snapshot(t) : null;
 			minLines = t != null ? t.getMinLines() : -1; maxLines = t != null ? t.getMaxLines() : -1;
 			imageTint = view instanceof ImageView ? ((ImageView) view).getImageTintList() : null;
@@ -472,11 +551,16 @@ public final class InterfaceAppearance {
 			minTrackHeight = b != null ? b.getMinHeight() : 0; maxTrackHeight = b != null ? b.getMaxHeight() : 0;
 		}
 		void restore(View view) {
-			view.setBackground((role == Role.FIELD || role == Role.POSTING_FIELD) && error && legacyError != null ? legacyError : background); view.setBackgroundTintList(backgroundTint);
+			view.setBackground((role == Role.FIELD || role == Role.CUSTOM_FIELD || role == Role.POSTING_FIELD) && error && legacyError != null ? legacyError : background); view.setBackgroundTintList(backgroundTint);
 			view.setPaddingRelative(start, top, end, bottom); view.setMinimumHeight(minimumHeight);
 			if (role == Role.POSTING_FIELD || appliedRole == Role.POSTING_FIELD) setBottomMargin(view, bottomMargin);
 			if (view instanceof TextView) {
 				TextView t = (TextView) view; t.setTextColor(text); if (hint != null) t.setHintTextColor(hint);
+				if (role == Role.CUSTOM_ACTION || appliedRole == Role.CUSTOM_ACTION || role == Role.CUSTOM_TEXT_ACTION || appliedRole == Role.CUSTOM_TEXT_ACTION) t.setCompoundDrawableTintList(compoundTint);
+				if (role == Role.CUSTOM_FIELD || appliedRole == Role.CUSTOM_FIELD) typography.restoreTextMetrics(t);
+				else if (role == Role.CUSTOM_CHOICE || role == Role.CUSTOM_ACTION || appliedRole == Role.CUSTOM_CHOICE
+						|| appliedRole == Role.CUSTOM_ACTION || role == Role.CUSTOM_TEXT_ACTION || appliedRole == Role.CUSTOM_TEXT_ACTION)
+					typography.restore(t);
 				if (role == Role.SERVICE_DOCUMENT && linkText != null) t.setLinkTextColor(linkText);
 				if (standardTypography(role) != null || standardTypography(appliedRole) != null) {
 					if (role == Role.SEARCH_TEXT || appliedRole == Role.SEARCH_TEXT) typography.restoreTextMetrics(t);
@@ -498,8 +582,9 @@ public final class InterfaceAppearance {
 					typography.restoreSizeAndTransformation(t);
 				}
 			}
-			if (role == Role.ACTION || role == Role.TEXT_ACTION || role == Role.ICON
-					|| appliedRole == Role.ACTION || appliedRole == Role.TEXT_ACTION || appliedRole == Role.ICON) {
+			if (role == Role.ACTION || role == Role.TEXT_ACTION || role == Role.ICON || role == Role.CUSTOM_ACTION
+					|| appliedRole == Role.ACTION || appliedRole == Role.TEXT_ACTION || appliedRole == Role.ICON || appliedRole == Role.CUSTOM_ACTION
+					|| role == Role.CUSTOM_TEXT_ACTION || appliedRole == Role.CUSTOM_TEXT_ACTION) {
 				view.setStateListAnimator(animator); view.setElevation(elevation);
 			}
 			if (view instanceof ImageView) ((ImageView) view).setImageTintList(imageTint);
@@ -514,7 +599,8 @@ public final class InterfaceAppearance {
 	}
 	private static final class Mark extends Drawable {
 		final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG); final Path path = new Path(); final Palette palette; final int size; int alpha = 255;
-		Mark(View view, Palette palette) { this.palette = palette; size = dp(view, 24); }
+		final boolean radio;
+		Mark(View view, Palette palette, boolean radio) { this.palette = palette; this.radio = radio; size = dp(view, 24); }
 		@Override public boolean isStateful() { return true; }
 		@Override protected boolean onStateChange(int[] state) { invalidateSelf(); return true; }
 		@Override public int getIntrinsicWidth() { return size; }
@@ -527,8 +613,11 @@ public final class InterfaceAppearance {
 			Rect b = getBounds(); int save = canvas.save(); canvas.translate(b.left, b.top); canvas.scale(b.width() / 24f, b.height() / 24f);
 			int color = checked ? palette.accent : palette.outline; if (!enabled) color = OpaqueColors.blend(palette.surface, color, .38f);
 			paint.setColor(color); paint.setAlpha(alpha); paint.setStyle(checked ? Paint.Style.FILL : Paint.Style.STROKE); paint.setStrokeWidth(2);
-			canvas.drawRoundRect(3, 3, 21, 21, 4, 4, paint);
-			if (checked) { paint.setColor(palette.onAccent); paint.setAlpha(alpha); paint.setStyle(Paint.Style.STROKE); paint.setStrokeWidth(2); paint.setStrokeCap(Paint.Cap.ROUND); paint.setStrokeJoin(Paint.Join.ROUND);
+			if (radio) {
+				paint.setStyle(Paint.Style.STROKE); canvas.drawCircle(12, 12, 9, paint);
+				if (checked) { paint.setStyle(Paint.Style.FILL); canvas.drawCircle(12, 12, 5, paint); }
+			} else canvas.drawRoundRect(3, 3, 21, 21, 4, 4, paint);
+			if (checked && !radio) { paint.setColor(palette.onAccent); paint.setAlpha(alpha); paint.setStyle(Paint.Style.STROKE); paint.setStrokeWidth(2); paint.setStrokeCap(Paint.Cap.ROUND); paint.setStrokeJoin(Paint.Join.ROUND);
 				path.reset(); path.moveTo(7, 12); path.lineTo(10.5f, 15.5f); path.lineTo(17, 9); canvas.drawPath(path, paint); }
 			canvas.restoreToCount(save);
 		}

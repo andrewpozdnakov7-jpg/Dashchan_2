@@ -163,6 +163,10 @@ public class VolumeGestureSensitivityPreference extends DialogPreference<Integer
 				}
 			}
 		});
+		com.mishiranu.dashchan.widget.InterfaceAppearance.standardCustomContent(pair.second, testView);
+		com.mishiranu.dashchan.widget.InterfaceAppearance.standardCustomInsets(pair.second);
+		com.mishiranu.dashchan.widget.InterfaceAppearance.standardCustomAction(resetTestButton, false);
+		com.mishiranu.dashchan.widget.InterfaceAppearance.standardCustomCaption(hintView);
 		return super.configureDialog(savedInstanceState, builder)
 				.setTitle(R.string.video_volume_gesture_configure_and_test).setView(pair.first)
 				.setPositiveButton(android.R.string.ok, (dialog, which) ->

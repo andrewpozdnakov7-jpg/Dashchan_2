@@ -37,6 +37,10 @@ public class SummaryLayout implements CommentTextView.PrepareToCopyListener, Vie
 	private final CommentTextView textView;
 	private final SpannableStringBuilder builder = new SpannableStringBuilder();
 	private final Drawable dividerDrawable;
+	private final int titleSizeSp;
+	private final int textSizeSp;
+	private final int titleColor;
+	private final boolean standard;
 
 	private final float titlePaddingTextSize;
 	private final float blockPaddingTextSize;
@@ -45,7 +49,19 @@ public class SummaryLayout implements CommentTextView.PrepareToCopyListener, Vie
 	private final int dividerExtraBottom;
 
 	public SummaryLayout(AlertDialog dialog) {
+		this(dialog, false);
+	}
+
+	/** Explicit profile; legacy callers keep their original metrics and selection implementation. */
+	public static SummaryLayout standard(AlertDialog dialog) { return new SummaryLayout(dialog, true); }
+
+	private SummaryLayout(AlertDialog dialog, boolean requestStandard) {
 		Context context = dialog.getContext();
+		int[] colors = requestStandard ? InterfaceAppearance.standardSummaryColors(context) : null;
+		standard = colors != null;
+		titleSizeSp = standard ? 12 : TITLE_SIZE_SP;
+		textSizeSp = standard ? 14 : TEXT_SIZE_SP;
+		titleColor = standard ? colors[1] : ResourceUtils.getColor(context, android.R.attr.textColorSecondary);
 		ScrollView scrollView = new ScrollView(context) {
 			@Override
 			public boolean requestChildRectangleOnScreen(View child, Rect rectangle, boolean immediate) {
@@ -61,30 +77,39 @@ public class SummaryLayout implements CommentTextView.PrepareToCopyListener, Vie
 		textView = new CommentTextView(context, null, android.R.attr.textViewStyle);
 		frameLayout.addView(textView, FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT);
 		textView.setTextColor(ResourceUtils.getColorStateList(context, android.R.attr.textColorPrimary));
+		if (standard) {
+			textView.setTextColor(colors[0]);
+			textView.setTypeface(com.mishiranu.dashchan.content.FontManager.resolveTypeface(context, false));
+		}
 		textView.setPrepareToCopyListener(this);
 
 		// Dialogs have disabled dividers.
 		boolean light = GraphicsUtils.isLight(ResourceUtils.getDialogBackground(context));
 		Context dividerContext = new ContextThemeWrapper(context,
 				light ? R.style.Theme_Main_Light : R.style.Theme_Main_Dark);
-		dividerDrawable = ResourceUtils.getDrawable(dividerContext, android.R.attr.dividerHorizontal, 0);
+		if (standard) {
+			android.graphics.drawable.GradientDrawable divider = new android.graphics.drawable.GradientDrawable();
+			divider.setColor(colors[2]); divider.setSize(1, Math.max(1, Math.round(ResourceUtils.obtainDensity(context))));
+			dividerDrawable = divider;
+		} else dividerDrawable = ResourceUtils.getDrawable(dividerContext, android.R.attr.dividerHorizontal, 0);
 
 		int unspecifiedSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
 		Paint.FontMetrics fontMetrics = new Paint.FontMetrics();
-		textView.setText("Measure");
-		ViewUtils.setTextSizeScaled(textView, TEXT_SIZE_SP);
+		textView.setText(measureText(false));
+		ViewUtils.setTextSizeScaled(textView, textSizeSp);
 		textView.measure(unspecifiedSpec, unspecifiedSpec);
 		textView.getPaint().getFontMetrics(fontMetrics);
 		dividerExtraTop = textView.getLayout().getLineBottom(0) - textView.getLayout().getLineBaseline(0);
-		ViewUtils.setTextSizeScaled(textView, TITLE_SIZE_SP);
+		ViewUtils.setTextSizeScaled(textView, titleSizeSp);
+		textView.setText(measureText(true));
 		textView.measure(unspecifiedSpec, unspecifiedSpec);
 		textView.getPaint().getFontMetrics(fontMetrics);
 		dividerExtraBottom = textView.getLayout().getLineBaseline(0) - textView.getLayout().getLineTop(0);
 
-		ViewUtils.setTextSizeScaled(textView, TEXT_SIZE_SP);
+		ViewUtils.setTextSizeScaled(textView, textSizeSp);
 		float density = ResourceUtils.obtainDensity(context);
 		int blockPadding = (int) (BLOCK_PADDING_DP * density + 0.5f);
-		int titlePadding = (int) (TITLE_PADDING_DP * density + 0.5f);
+		int titlePadding = (int) ((standard ? 8 : TITLE_PADDING_DP) * density + 0.5f);
 		titlePaddingTextSize = calculateFontSize(textView, titlePadding, true, false);
 		blockPaddingTextSize = calculateFontSize(textView, blockPadding, false, true);
 		dividerPaddingTextSize = calculateFontSize(textView, 2 * blockPadding +
@@ -94,8 +119,17 @@ public class SummaryLayout implements CommentTextView.PrepareToCopyListener, Vie
 		textView.setPadding((int) (24f * density), (int) (20f * density),
 				(int) (24f * density), (int) (8f * density));
 	}
+	private CharSequence measureText(boolean title) {
+		SpannableStringBuilder text = new SpannableStringBuilder("Measure");
+		lineHeight(text, 0, text.length(), title); return text;
+	}
+	private void lineHeight(SpannableStringBuilder text, int start, int end, boolean title) {
+		if (standard && end > start) text.setSpan(new TextLineHeight(Math.round(android.util.TypedValue.applyDimension(
+				android.util.TypedValue.COMPLEX_UNIT_SP, title ? 16 : 20, textView.getResources().getDisplayMetrics()))),
+				start, end, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+	}
 
-	private static float calculateFontSize(TextView textView, int padding, boolean titleFirst, boolean titleSecond) {
+	private float calculateFontSize(TextView textView, int padding, boolean titleFirst, boolean titleSecond) {
 		int unspecifiedSpec = View.MeasureSpec.makeMeasureSpec(Integer.MAX_VALUE / 2, View.MeasureSpec.AT_MOST);
 		SpannableStringBuilder builder = new SpannableStringBuilder();
 		addTestLines(builder, "Line", titleFirst, titleSecond);
@@ -124,10 +158,12 @@ public class SummaryLayout implements CommentTextView.PrepareToCopyListener, Vie
 		return paddingSpan.textSize;
 	}
 
-	private static void addTestLines(SpannableStringBuilder builder, String lineText,
+	private void addTestLines(SpannableStringBuilder builder, String lineText,
 			boolean titleFirst, boolean titleSecond) {
 		builder.append(lineText).append('\n').append(lineText).append(' ');
-		float titleSize = (float) TITLE_SIZE_SP / TEXT_SIZE_SP;
+		lineHeight(builder, builder.length() - 2 * lineText.length() - 2, builder.length() - lineText.length() - 1, titleSecond);
+		lineHeight(builder, builder.length() - lineText.length() - 1, builder.length(), titleFirst);
+		float titleSize = (float) titleSizeSp / textSizeSp;
 		if (titleFirst) {
 			builder.setSpan(new RelativeSizeSpan(titleSize),
 					builder.length() - lineText.length() - 1, builder.length(),
@@ -161,16 +197,18 @@ public class SummaryLayout implements CommentTextView.PrepareToCopyListener, Vie
 		}
 		addDivider = false;
 		builder.append(title).append('\n');
-		builder.setSpan(new RelativeSizeSpan((float) TITLE_SIZE_SP / TEXT_SIZE_SP),
+		lineHeight(builder, builder.length() - title.length() - 1, builder.length(), true);
+		builder.setSpan(new RelativeSizeSpan((float) titleSizeSp / textSizeSp),
 				builder.length() - title.length() - 1, builder.length(),
 				SpannableStringBuilder.SPAN_EXCLUSIVE_EXCLUSIVE);
-		builder.setSpan(new ForegroundColorSpan(ResourceUtils.getColor(textView.getContext(),
-				android.R.attr.textColorSecondary)), builder.length() - title.length() - 1, builder.length(),
+		builder.setSpan(new ForegroundColorSpan(titleColor), builder.length() - title.length() - 1, builder.length(),
 				SpannableStringBuilder.SPAN_EXCLUSIVE_EXCLUSIVE);
 		builder.append('\n');
 		builder.setSpan(new PaddingSpan(titlePaddingTextSize),
 				builder.length() - 1, builder.length(), SpannableStringBuilder.SPAN_EXCLUSIVE_EXCLUSIVE);
+		int textStart = builder.length();
 		builder.append(text);
+		lineHeight(builder, textStart, builder.length(), false);
 		textView.setText(builder);
 	}
 
@@ -211,6 +249,15 @@ public class SummaryLayout implements CommentTextView.PrepareToCopyListener, Vie
 		@Override
 		public void updateDrawState(TextPaint textPaint) {
 			updateMeasureState(textPaint);
+		}
+	}
+	/** Only real title/body lines; spacer and divider lines retain their independently measured metrics. */
+	private static final class TextLineHeight implements android.text.style.LineHeightSpan {
+		private final int height;
+		TextLineHeight(int height) { this.height = height; }
+		@Override public void chooseHeight(CharSequence text, int start, int end, int spanStartV, int v, Paint.FontMetricsInt fm) {
+			int extra = Math.max(0, height - (fm.descent - fm.ascent));
+			fm.descent += extra; fm.bottom = Math.max(fm.bottom, fm.descent);
 		}
 	}
 

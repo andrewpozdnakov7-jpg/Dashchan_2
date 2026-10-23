@@ -393,6 +393,8 @@
 	<string name="video_audio_boost_level">Maximum video audio boost</string>
 	<string name="video_audio_boost_level__format">+%d dB</string>
 	<string name="video_diagnostics_start">Record video diagnostics</string>
+	<string name="max_relax_ime_fix">Fix for Max Relax</string>
+	<string name="max_relax_ime_fix_summary">Show the keyboard when opening the posting form. Experimental workaround for some devices.</string>
 	<string name="video_diagnostics_begin">Start</string>
 	<string name="video_diagnostics_extended">Extended log</string>
 	<string name="video_diagnostics_saving">Saving diagnostics…</string>

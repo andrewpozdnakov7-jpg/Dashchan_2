@@ -1324,11 +1324,11 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 					}
 				}
 			}
-			AlertDialog dialog = new MotionDialogBuilder(context)
+			AlertDialog dialog = MotionDialogBuilder.standard(context)
 					.setTitle(R.string.summary)
 					.setPositiveButton(android.R.string.ok, null)
 					.create();
-			SummaryLayout layout = new SummaryLayout(dialog);
+			SummaryLayout layout = SummaryLayout.standard(dialog);
 			String boardName = page.boardName;
 			if (boardName != null) {
 				Chan chan = Chan.get(page.chanName);

@@ -1778,7 +1778,13 @@ public class DialogUnit {
 		int padding = context.getResources().getDimensionPixelSize(R.dimen.dialog_padding_view);
 		linearLayout.setPadding(padding, padding, padding, padding);
 
-		AlertDialog.Builder builder = new MotionDialogBuilder(context);
+		if (com.mishiranu.dashchan.widget.InterfaceAppearance.isEnabled(context)) {
+			padding = Math.round(24f * density);
+			linearLayout.setPadding(padding, 0, padding, Math.round(8f * density));
+		}
+		com.mishiranu.dashchan.widget.InterfaceAppearance.standardCustomContent(linearLayout);
+		AlertDialog.Builder builder = MotionDialogBuilder.standard(context,
+				state.operation == SendMultifunctionalTask.Operation.DELETE);
 		if (linearLayout.getChildCount() > 0) {
 			ScrollView scrollView = new ScrollView(context);
 			scrollView.addView(linearLayout, ScrollView.LayoutParams.MATCH_PARENT,

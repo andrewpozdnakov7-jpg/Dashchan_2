@@ -13,6 +13,7 @@ import android.widget.TextView;
 /** The experimental appearance remains exclusive to the GitHub distribution. */
 public final class InterfaceAppearance {
 	private InterfaceAppearance() {}
+	public static ImageView createShortcutPreview(Context context) { return new ImageView(context); }
 	public static boolean isEnabled(Context context) { return false; }
 	public static void row(View view, TextView title, TextView summary, boolean header) {}
 	public static void settingsRow(View view, TextView title, TextView summary, View widgets, boolean header) {}
@@ -41,6 +42,13 @@ public final class InterfaceAppearance {
 	public static void standardLoading(android.widget.ProgressBar view) {}
 	public static ProgressDialog.Content standardProgressContent(Context context, String format) { return null; }
 	public static void standardProgressText(TextView text, boolean caption) {}
+	public static void standardCustomContent(View view, View... previews) {}
+	public static void standardCustomCaption(TextView view) {}
+	public static void standardCustomInsets(View view) {}
+	public static void standardChoiceText(TextView view) {}
+	public static void standardCustomAction(Button view, boolean primary) {}
+	public static void standardChoiceRow(View row, TextView text) {}
+	public static int[] standardSummaryColors(Context context) { return null; }
 	public static void standardToolbar(android.widget.Toolbar toolbar, TextView title, TextView subtitle) {}
 	public static void standardSearch(View root, android.widget.SearchView search) {}
 	public static Context standardDialogContext(Context context) { return context; }
