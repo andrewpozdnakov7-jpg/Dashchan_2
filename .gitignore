@@ -3,6 +3,7 @@
 !/.github
 !/.github/**
 !/.gitignore
+!/.gitmodules
 !/AGENTS.md
 !/AndroidManifest.xml
 !/assets
@@ -41,3 +42,11 @@
 !/instrumentationTests
 !/instrumentationTests/**
 !/update
+!/tools
+/tools/*
+!/tools/bergamot
+!/tools/bergamot/**
+/tools/bergamot/__pycache__/
+!/third_party
+/third_party/*
+!/third_party/mozilla-translations

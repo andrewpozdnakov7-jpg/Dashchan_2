@@ -1,0 +1,39 @@
+{
+  "baseUrl": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data/",
+  "directions": [
+    {
+      "source": "en", "target": "ru", "id": "en-ru-base-memory-v1",
+      "prefix": "models/en-ru/retrain_base-memory_KJ23-iDVTcymG1ZldWY17w/exported/",
+      "subject": "Hello world!", "html": "<p>This is a translation test.</p>",
+      "expectedScript": "[А-Яа-я]",
+      "files": [
+        {"name": "lex.50.50.enru.s2t.bin.gz", "output": "lex.bin", "compressedSize": 1378563, "size": 2774540,
+         "compressedSha256": "9c111984d8207f8dc6b9dd5c17ab4d18042f7c0e34105a09a35909538facc958",
+         "sha256": "4d91839726b960e70b6d05c53d0cffd16262832b1c0e1ea99d66f412dcc6a239"},
+        {"name": "model.enru.intgemm.alphas.bin.gz", "output": "model.bin", "compressedSize": 21988864, "size": 31561787,
+         "compressedSha256": "e766bc83434f4a9ff4110abe5450043a62cd402c6a7a8bca5e3e4d83b408dcb4",
+         "sha256": "184cb5cda528eeefc0f75f5d0035d787b71d74af135e3c5608d01ae02ecfb920"},
+        {"name": "vocab.enru.spm.gz", "output": "vocab.spm", "compressedSize": 419005, "size": 904455,
+         "compressedSha256": "9aa498dce5d27c02ac998c646c51a7475a421500ecdbbd1dff9ff3e77e64b21c",
+         "sha256": "56ee63e14e8cb926c394242adc3ed7cc602644c3d33058cff2ce2959d52a6258"}
+      ]
+    },
+    {
+      "source": "ru", "target": "en", "id": "ru-en-tiny-v1",
+      "prefix": "models/ru-en/spring-2024_QrcdYgbwS7e7xbhtOSdoNQ/exported/",
+      "subject": "Привет, мир!", "html": "<p>Это тест перевода.</p>",
+      "expectedScript": "[A-Za-z]",
+      "files": [
+        {"name": "lex.50.50.ruen.s2t.bin.gz", "output": "lex.bin", "compressedSize": 1962008, "size": 4483844,
+         "compressedSha256": "6524f5c898f1fef52992bd2565a6d4acfafb6a4e8dcd6aef237bd888239418a0",
+         "sha256": "f654693577505fd38b1f3d220cdd4ffffbb45afb900a60cf751f0724eadc74e0"},
+        {"name": "model.ruen.intgemm.alphas.bin.gz", "output": "model.bin", "compressedSize": 12613599, "size": 17141051,
+         "compressedSha256": "4a8a7b9b07c9e06a167ec5bf2542528817321516db4edf614fda45011fa8e5d1",
+         "sha256": "b1d85c13cfbb05e1d326dd6f0fb5ef270a2011b547450260f96567a93f446c94"},
+        {"name": "vocab.ruen.spm.gz", "output": "vocab.spm", "compressedSize": 419860, "size": 905257,
+         "compressedSha256": "cd70b828e99e4d0c79d48cd56d8579d656c87c1db20bf88883da3085dcbfef75",
+         "sha256": "93bdc941b16e523695c319f74778bca9fd8b75a25ad75020cdc98aef74cdc0fc"}
+      ]
+    }
+  ]
+}
