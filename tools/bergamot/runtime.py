@@ -45,6 +45,48 @@ def recipe_digest():
     return value.hexdigest()
 
 
+def release_wasm(data):
+    """Drop optional debug custom sections without changing code or import names."""
+    if data[:8] != b"\0asm\x01\0\0\0":
+        raise ValueError("Invalid WebAssembly module header")
+
+    def uint32(offset, limit):
+        value = 0
+        for shift in range(0, 35, 7):
+            if offset >= limit:
+                raise ValueError("Truncated WebAssembly section length")
+            byte = data[offset]
+            offset += 1
+            if shift == 28 and byte > 15:
+                raise ValueError("Invalid WebAssembly uint32")
+            value |= (byte & 127) << shift
+            if byte < 128:
+                return value, offset
+        raise ValueError("Invalid WebAssembly uint32")
+
+    output = bytearray(data[:8])
+    offset = 8
+    while offset < len(data):
+        start = offset
+        section = data[offset]
+        size, payload = uint32(offset + 1, len(data))
+        end = payload + size
+        if end > len(data):
+            raise ValueError("Truncated WebAssembly section")
+        remove = False
+        if section == 0:
+            length, name_start = uint32(payload, end)
+            if name_start + length > end:
+                raise ValueError("Truncated WebAssembly custom section name")
+            name = data[name_start:name_start + length].decode("utf-8")
+            remove = name == "name" or name.startswith(".debug_") or name in (
+                "sourceMappingURL", "external_debug_info")
+        if not remove:
+            output.extend(data[start:end])
+        offset = end
+    return bytes(output)
+
+
 def check_sources():
     expected = specs()
     if git(SOURCE, "rev-parse", "HEAD") != expected["revision"]:
@@ -176,9 +218,14 @@ def build(args):
         raise ValueError("Unexpected Emscripten output or runtime factory")
     (output_dir / OUTPUTS[0]).write_text(factory.replace(marker, generated), encoding="utf-8", newline="\n")
     shutil.copyfile(build_dir / OUTPUTS[1], output_dir / OUTPUTS[1])
-    if (output_dir / OUTPUTS[1]).read_bytes()[:8] != b"\0asm\x01\0\0\0":
-        raise ValueError("Compiler did not produce a WebAssembly module")
+    wasm = output_dir / OUTPUTS[1]
+    wasm.write_bytes(release_wasm(wasm.read_bytes()))
     write_licenses(output_dir)
+    write_provenance(output_dir, package_version)
+
+
+def write_provenance(output_dir, package_version):
+    expected = specs()
     manifest = {"schema": 1, "sourceRevision": expected["revision"],
                 "dependencyRevisions": expected["submodules"],
                 "sourcePatches": {name: patch["afterSha256"] for name, patch in expected["patches"].items()},

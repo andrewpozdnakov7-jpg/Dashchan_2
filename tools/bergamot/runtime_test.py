@@ -112,6 +112,19 @@ class RuntimeContractTest(unittest.TestCase):
                     runtime.apply_source_compatibility()
             self.assertEqual(file.read_text(encoding="utf-8"), "keep this unrelated edit\n")
 
+    def test_release_wasm_strips_only_debug_custom_sections(self):
+        header = b"\0asm\x01\0\0\0"
+        code = b"\x01\x01\x00"
+        features = b"\x00\x06\x03abcXY"
+        name = b"\x00\x07\x04nameXY"
+        dwarf = b"\x00\x0e\x0b.debug_infoXY"
+        self.assertEqual(runtime.release_wasm(header + name + code + dwarf + features), header + code + features)
+        self.assertEqual(runtime.release_wasm(header + code), header + code)
+        for malformed in (b"bad", header + b"\x00", header + b"\x00\x02\x04a",
+                          header + b"\x01\x10", header + b"\x01\xff\xff\xff\xff\xff"):
+            with self.subTest(data=malformed), self.assertRaises(ValueError):
+                runtime.release_wasm(malformed)
+
 
 if __name__ == "__main__":
     unittest.main()

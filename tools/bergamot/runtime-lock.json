@@ -1,0 +1,29 @@
+{
+  "dependencyRevisions": {
+    "inference/marian-fork/src/3rd_party/intgemm": "f7401513da71758dacce52fed1c7855549abee59",
+    "inference/marian-fork/src/3rd_party/onnxjs": "924924b08e9596b41aeebada4a172f026be95f5a",
+    "inference/marian-fork/src/3rd_party/sentencepiece": "ae41b7740d7006596bb9257e83340b2620db9d00"
+  },
+  "emscriptenDebianPackage": "3.1.69+dfsg-3",
+  "emscriptenVersion": "3.1.69",
+  "files": {
+    "LICENSES.txt": {
+      "sha256": "d0fe4ba44ed5765fb24cc180979494f12e5bb2682aabed0c5064dbb356da8049",
+      "size": 357946
+    },
+    "bergamot-translator.js": {
+      "sha256": "ec4c141f83698fee1c11852e9fc0082f51a5a8ce62bd4918644f971186a47a96",
+      "size": 122745
+    },
+    "bergamot-translator.wasm": {
+      "sha256": "ee103e314a04fac9e5422918ad7f7fe2cab28f93937a57015fab14e0b7b08f50",
+      "size": 5185756
+    }
+  },
+  "recipeSha256": "7308ea307a66dd8f25dc57efc51334b0deed994a56681623a997e734924b971a",
+  "schema": 1,
+  "sourcePatches": {
+    "inference/marian-fork/src/CMakeLists.txt": "57f1202cd2d66e213232ad14dda4b66d9555eaad300c356c24e4e26aa331d4ec"
+  },
+  "sourceRevision": "1de4a085d3a7afb625c51a60aabb5ad298e4059f"
+}

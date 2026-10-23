@@ -1,2 +1,3 @@
 Added the experimental photo editor, enabled by default: crop, straighten, color adjustment, filters, drawing, text, stickers, blur and mosaic. Export size and quality are configurable; the previous editor remains available in experimental settings.
 Fixed overly narrow post-action menus, oversized wrapping titles and a crash when opening text documents. Screen diagnostics has been expanded.
+Added Mozilla Bergamot offline translation (EN↔RU).

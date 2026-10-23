@@ -54,36 +54,44 @@ https://github.com/mozilla/translations and
 https://github.com/mozilla/translations/issues/1434#issuecomment-4734030816 for model provenance and licensing
 clarification.
 
-## Distribution boundary
+## Distribution-specific runtime builds
 
-`BuildConfig.ENABLE_LOCAL_TRANSLATION` is true only for the GitHub flavor. The F-Droid flavor neither packages the
-prebuilt WebAssembly runtime nor exposes translation settings. Enabling it for F-Droid is a separate task requiring:
+Both flavours enable the Mozilla backend at build time. Translation itself is still opt-in and the user's saved
+choice is preserved. The F-Droid settings expose Mozilla only: Google translation and Gemini Nano stay disabled,
+as do the separate experimental Material interface and application protection.
 
-1. a reproducible source build of Bergamot WebAssembly inside the F-Droid recipe;
-2. scanner and license review of the produced runtime;
-3. reviewer agreement for the optional model downloads;
-4. reproducibility and on-device tests of the resulting F-Droid APK.
+The GitHub flavour keeps the pinned ready-made Mozilla JS/WASM files listed above. It does not compile Bergamot
+or change its existing runtime loader. The F-Droid flavour never downloads those binaries, including as a fallback.
 
-### F-Droid preparation: not enabled yet
+F-Droid uses `third_party/mozilla-translations`, a Git submodule pinned to the same Mozilla inference revision
+`1de4a085d3a7afb625c51a60aabb5ad298e4059f`. `tools/bergamot/sources.json` also pins the required SentencePiece,
+intgemm and ONNX SGEMM source modules, Debian Emscripten `3.1.69+dfsg-3` and source timestamp. No training or CUDA
+tools, emsdk installer or upstream test model binaries are needed. A hash-guarded CMake fix resolves nested Git
+metadata correctly; strict Emscripten settings are retained while obsolete link options are removed.
 
-The missing translation settings are an intentional build boundary, not a missing language download or a setting
-that can be restored from a backup. `ContentsFragment` and `SettingsSearchIndex` hide the entry when
-`ENABLE_LOCAL_TRANSLATION` is false; `TranslationController` and `Preferences` also enforce that flag. Separately,
-`androidComponents.onVariants` adds `prepareBergamotRuntime` assets only to GitHub variants. Changing just one of
-these conditions would expose an unavailable translator or package a prebuilt runtime without a source recipe.
+`tools/bergamot/runtime.py prepare` fetches these sources and applies the approved compatibility fix before the
+F-Droid source scanner runs. `runtime.py build` performs no downloads, compiles JS/WASM as a matched pair, adds the
+factory required by the app runner and collects upstream/toolchain license notices. Prefix maps, a fixed epoch
+and a fixed Git abbreviation avoid build-directory-dependent metadata. The runtime provenance contains only
+source/recipe/tool versions and output hashes, never machine-specific paths.
+Linking preserves external import names; the final packaging removes optional WASM name/DWARF/source-map custom
+sections without modifying executable code, imports or exports.
 
-Before enabling Mozilla translation in F-Droid:
+`PrepareFdroidBergamotRuntimeTask` either compiles these prepared sources or accepts a `bergamotRuntimeDir`
+produced by the same source build. Both paths must pass `runtime.py verify` against the committed
+`tools/bergamot/runtime-lock.json`; a different source revision, toolchain, recipe or output is rejected. Only the
+verified JS, WASM, provenance and license files are copied into F-Droid assets.
 
-- Pin the runtime source revision and all submodules, the Emscripten/toolchain version and build options. Produce
-  the JavaScript wrapper and WebAssembly as a matched pair compatible with `assets/translation/runner.js` and the
-  pinned models; do not assume another Bergamot release has the same API or model compatibility.
-- Add a local-runtime input path to the build, with no fallback download of Mozilla's prebuilt WASM for F-Droid.
-  Use the same source-built runtime and build inputs for signed references and the upstream recipe.
-- Verify redistribution terms for the engine and both optional model packages, and resolve any reviewer concerns
-  about model downloads. Keep Google translation, Gemini Nano, Material UI and app protection excluded.
-- Test language-package download, cancellation, deletion and both translation directions, including offline use
-  after installation. Verify the three ABI APKs and their reproducibility before making the update ready.
+The reusable `F-Droid Bergamot` workflow builds the engine in pinned Debian twice in separate directories,
+compares bytes and runs the actual app runner against both pinned Android language packages. Its Node/WebAssembly
+checks cover real subject/HTML translation and an empty request, but do not replace Android WebView/device QA.
+F-Droid CI and the protected signed-candidate workflow consume only the same run's verified source artifact.
+The existing signing confirmation, protected source SHA and certificate/native-cache checks remain in force.
 
-The current preparation does not enable Bergamot, publish reference APKs, change the stable release or assert that
-an upstream build with translation has passed. Keep the source PR and F-Droid MR in draft until these prerequisites
-are satisfied.
+The models remain optional data downloads, not files bundled in the APK. Mozilla confirmed that the model weights
+are also MPL-2.0 in the linked licensing clarification. Model redistribution/scanning and the final application
+recipe remain subject to F-Droid packager review.
+
+This implementation is in a draft PR/MR and is not yet published in the F-Droid catalogue. Keep publication on
+hold until the source-build, APK, upstream reproducibility and device-validation results are recorded. A green
+source/Node test must not be presented as a completed upstream APK comparison or a successful device test.

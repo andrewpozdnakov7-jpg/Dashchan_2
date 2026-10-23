@@ -21,8 +21,9 @@ if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     target_link_options(bergamot-translator PRIVATE
       # Link-time -g3 preserves external wasm_gemm import names. -g2 still
       # minifies those names in 3.1.69, breaking the runtime-supplied imports.
-      # Compilation remains upstream Release/-O3/-g1 (no DWARF input); this
-      # does not enable assertions or change the Android release build mode.
+      # Compilation remains upstream Release/-O3/-g1. runtime.py then removes
+      # optional name/DWARF sections without changing code or import names.
+      # This does not enable assertions or change Android release build mode.
       "-g3"
       "-sINCOMING_MODULE_JS_API=['wasmBinary','instantiateWasm','onAbort','onRuntimeInitialized','print','printErr','INITIAL_MEMORY']")
   endfunction()

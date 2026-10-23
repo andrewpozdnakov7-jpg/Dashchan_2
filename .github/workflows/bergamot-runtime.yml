@@ -53,6 +53,10 @@ jobs:
           python3 tools/bergamot/runtime.py build \
             --build-dir "$RUNNER_TEMP/engine-a" --output-dir build/bergamot/runtime
           python3 tools/bergamot/runtime.py verify --runtime-dir build/bergamot/runtime
+          if [ -f tools/bergamot/runtime-lock.json ]; then
+            python3 tools/bergamot/runtime.py verify \
+              --runtime-dir build/bergamot/runtime --lock tools/bergamot/runtime-lock.json
+          fi
 
       - name: Translate both pinned Android language packages offline
         run: node --expose-gc tools/bergamot/test-runtime.cjs build/bergamot/runtime "$RUNNER_TEMP/model-downloads"
