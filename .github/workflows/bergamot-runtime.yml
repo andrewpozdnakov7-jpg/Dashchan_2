@@ -15,6 +15,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: bergamot-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   runtime:
     name: Source build and reproducibility
@@ -42,17 +46,20 @@ jobs:
       - name: Test source and runtime validation
         run: python3 -m unittest discover -s tools/bergamot -p '*_test.py' -v
 
-      - name: Build engine twice in separate directories
+      - name: Build engine from source
         run: |
           python3 tools/bergamot/runtime.py build \
             --build-dir "$RUNNER_TEMP/engine-a" --output-dir build/bergamot/runtime
-          python3 tools/bergamot/runtime.py build \
-            --build-dir "$RUNNER_TEMP/separate/engine-b" --output-dir build/bergamot/rebuilt
-          diff -r build/bergamot/runtime build/bergamot/rebuilt
           python3 tools/bergamot/runtime.py verify --runtime-dir build/bergamot/runtime
 
       - name: Translate both pinned Android language packages offline
         run: node --expose-gc tools/bergamot/test-runtime.cjs build/bergamot/runtime "$RUNNER_TEMP/model-downloads"
+
+      - name: Rebuild independently and compare bytes
+        run: |
+          python3 tools/bergamot/runtime.py build \
+            --build-dir "$RUNNER_TEMP/separate/engine-b" --output-dir build/bergamot/rebuilt
+          diff -r build/bergamot/runtime build/bergamot/rebuilt
 
       - name: Upload source-built engine and provenance
         if: always()

@@ -130,6 +130,10 @@ def write_licenses(directory):
     for path in sorted(candidates, key=lambda item: item.relative_to(SOURCE).as_posix()):
         sections.append("===== " + path.relative_to(SOURCE).as_posix() + " =====\n"
                         + path.read_text(encoding="utf-8").replace("\r\n", "\n").rstrip() + "\n")
+    # This also preserves notices for Emscripten's linked system/JS runtime.
+    toolchain_notice = Path("/usr/share/doc/emscripten/copyright")
+    sections.append("===== Debian Emscripten runtime notices =====\n"
+                    + toolchain_notice.read_text(encoding="utf-8").rstrip() + "\n")
     (directory / "LICENSES.txt").write_text("\n".join(sections), encoding="utf-8", newline="\n")
 
 
