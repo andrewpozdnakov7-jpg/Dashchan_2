@@ -13,6 +13,7 @@ import android.widget.TextView;
 /** The experimental appearance remains exclusive to the GitHub distribution. */
 public final class InterfaceAppearance {
 	private InterfaceAppearance() {}
+	public static ImageView createShortcutPreview(Context context) { return new ImageView(context); }
 	public static boolean isEnabled(Context context) { return false; }
 	public static void row(View view, TextView title, TextView summary, boolean header) {}
 	public static void settingsRow(View view, TextView title, TextView summary, View widgets, boolean header) {}

@@ -124,17 +124,7 @@ public class CustomShortcutFragment extends ContentFragment {
 		layout.addView(nameEdit, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
 				ViewGroup.LayoutParams.WRAP_CONTENT));
 
-		preview = new ImageView(context) {
-			@Override protected void onMeasure(int widthSpec, int heightSpec) {
-				if (com.mishiranu.dashchan.widget.InterfaceAppearance.isEnabled(getContext())) {
-					int width = View.MeasureSpec.getMode(widthSpec) == View.MeasureSpec.UNSPECIFIED
-							? Math.round(256f * ResourceUtils.obtainDensity(this)) : View.MeasureSpec.getSize(widthSpec);
-					int side = Math.min(width, Math.round(256f * ResourceUtils.obtainDensity(this)));
-					super.onMeasure(View.MeasureSpec.makeMeasureSpec(side, View.MeasureSpec.EXACTLY),
-							View.MeasureSpec.makeMeasureSpec(side, View.MeasureSpec.EXACTLY));
-				} else super.onMeasure(widthSpec, heightSpec);
-			}
-		};
+		preview = com.mishiranu.dashchan.widget.InterfaceAppearance.createShortcutPreview(context);
 		preview.setContentDescription(getString(R.string.shortcut_image));
 		preview.setScaleType(ImageView.ScaleType.CENTER_CROP);
 		preview.setBackgroundColor(ThemeEngine.getTheme(context).card);

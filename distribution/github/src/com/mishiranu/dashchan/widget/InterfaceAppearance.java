@@ -41,6 +41,20 @@ import java.util.Objects;
 /** Explicit component roles. Does not replace widgets, listeners, data or the application's theme. */
 public final class InterfaceAppearance {
 	private InterfaceAppearance() {}
+	public static ImageView createShortcutPreview(Context context) {
+		return new androidx.appcompat.widget.AppCompatImageView(context) {
+			@Override protected void onMeasure(int widthSpec, int heightSpec) {
+				if (InterfaceAppearance.isEnabled(getContext())) {
+					int limit = Math.round(256f * ResourceUtils.obtainDensity(this));
+					int width = MeasureSpec.getMode(widthSpec) == MeasureSpec.UNSPECIFIED
+							? limit : MeasureSpec.getSize(widthSpec);
+					int side = Math.min(width, limit);
+					super.onMeasure(MeasureSpec.makeMeasureSpec(side, MeasureSpec.EXACTLY),
+							MeasureSpec.makeMeasureSpec(side, MeasureSpec.EXACTLY));
+				} else super.onMeasure(widthSpec, heightSpec);
+			}
+		};
+	}
 	enum Role {ROW, HEADER, TEXT, SECONDARY, ACTION, TEXT_ACTION, FIELD, POSTING_FORM, POSTING_FIELD, CHECK, SWITCH, SLIDER, ICON, AUDIO_TITLE,
 		SETTING_TITLE, SETTING_SUMMARY, SECTION_TITLE, MENU_TITLE, POPUP_TEXT, SERVICE_TITLE, SERVICE_META, DIALOG_TITLE, DIALOG_BODY,
 		STANDARD_BUTTON, TOOLBAR_TITLE, TOOLBAR_SUBTITLE, SEARCH_TEXT, STATE_TITLE, SERVICE_DOCUMENT,
