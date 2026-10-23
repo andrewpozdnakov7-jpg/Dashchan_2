@@ -35,7 +35,9 @@ jobs:
           persist-credentials: false
 
       - name: Prepare pinned source modules
-        run: python3 tools/bergamot/runtime.py prepare
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          python3 tools/bergamot/runtime.py prepare
 
       - name: Test source and runtime validation
         run: python3 -m unittest discover -s tools/bergamot -p '*_test.py' -v
