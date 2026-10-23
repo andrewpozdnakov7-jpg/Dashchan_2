@@ -1,0 +1,1 @@
+Added Mozilla Bergamot offline translation (EN↔RU) to the F-Droid build. The engine is built from source; language packages are downloaded separately. The experimental photo editor is also available and enabled by default. Enable translation under Settings → Content → Offline translation.
