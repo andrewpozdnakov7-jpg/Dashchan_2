@@ -42,6 +42,7 @@ import com.mishiranu.dashchan.util.WebViewUtils;
 import com.mishiranu.dashchan.widget.ClickableToast;
 import com.mishiranu.dashchan.widget.ThemeEngine;
 import com.mishiranu.dashchan.widget.ViewFactory;
+import com.mishiranu.dashchan.widget.InterfaceAppearance;
 
 /**
  * An ordinary-looking browser backed by a dedicated WebView process and data directory. Its browsing data is
@@ -143,6 +144,7 @@ public class PrivateBrowserActivity extends StateActivity implements DownloadLis
 	private void createLayout() {
 		LinearLayout root = new LinearLayout(this);
 		root.setOrientation(LinearLayout.VERTICAL);
+		InterfaceAppearance.standardPage(root);
 		setContentView(root);
 
 		getLayoutInflater().inflate(R.layout.widget_toolbar, root, true);
@@ -151,6 +153,7 @@ public class PrivateBrowserActivity extends StateActivity implements DownloadLis
 		setTitle(null);
 		toolbarHolder = ViewFactory.addToolbarTitle(toolbar);
 		toolbarHolder.update(getString(R.string.web_browser), null);
+		toolbarHolder.applyStandardAppearance();
 		ActionBar actionBar = getActionBar();
 		if (actionBar != null) {
 			actionBar.setDisplayHomeAsUpEnabled(true);
@@ -167,6 +170,7 @@ public class PrivateBrowserActivity extends StateActivity implements DownloadLis
 		FrameLayout.LayoutParams progressParams = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
 				height, Gravity.TOP);
 		content.addView(progressBar, progressParams);
+		InterfaceAppearance.standardLinearProgress(progressBar);
 	}
 
 	@Override
@@ -176,6 +180,9 @@ public class PrivateBrowserActivity extends StateActivity implements DownloadLis
 				.setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM);
 		menu.add(0, R.id.menu_copy_link, 0, R.string.copy_link);
 		menu.add(0, R.id.menu_share_link, 0, R.string.share_link);
+		// ToolbarHolder owns the shared palette, including newly installed action icons.
+		Toolbar toolbar = findViewById(R.id.toolbar);
+		if (toolbar != null) InterfaceAppearance.refreshTree(toolbar);
 		return true;
 	}
 

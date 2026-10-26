@@ -22,6 +22,7 @@ public class FileProvider extends ContentProvider {
 	private static final String AUTHORITY = BuildConfig.FILE_PROVIDER_AUTHORITY;
 	private static final String PATH_UPDATES = "updates";
 	private static final String PATH_SHARE = "share";
+	private static final String PATH_CRASH_REPORT = "crash-report";
 	static final String GALLERY_SHARE_FILE_NAME_START = "gallery-share-";
 
 	@Override
@@ -89,6 +90,12 @@ public class FileProvider extends ContentProvider {
 		}
 		return Uri.fromFile(file);
 	}
+	public static Uri crashReportUri(String name) throws IOException {
+		if (com.mishiranu.dashchan.util.CrashReports.resolveShare(MainApplication.getInstance(), name) == null) {
+			throw new IOException("Report export unavailable");
+		}
+		return buildUri(PATH_CRASH_REPORT, name, null);
+	}
 
 	private static List<String> getSegments(Uri uri) {
 		if (!"content".equals(uri.getScheme()) || !AUTHORITY.equals(uri.getAuthority())) {
@@ -106,6 +113,10 @@ public class FileProvider extends ContentProvider {
 		String path = String.join("/", segments.subList(1, segments.size()));
 		try {
 			switch (segments.get(0)) {
+				case PATH_CRASH_REPORT: {
+					return segments.size() == 2 ? com.mishiranu.dashchan.util.CrashReports
+							.resolveShare(MainApplication.getInstance(), path) : null;
+				}
 				case PATH_UPDATES: {
 					return segments.size() == 2 ? getUpdatesFile(path) : null;
 				}
@@ -130,6 +141,7 @@ public class FileProvider extends ContentProvider {
 		if (PATH_UPDATES.equals(getSegments(uri).get(0))) {
 			return "application/vnd.android.package-archive";
 		}
+		if (PATH_CRASH_REPORT.equals(getSegments(uri).get(0))) return "text/plain";
 		String type = uri.getQueryParameter("type");
 		return !StringUtils.isEmpty(type) ? type
 				: MimeTypes.forExtension(StringUtils.getFileExtension(file.getName()), "application/octet-stream");

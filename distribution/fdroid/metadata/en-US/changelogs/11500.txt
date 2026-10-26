@@ -1,0 +1,2 @@
+Added local crash reports with viewing, manual sharing and deletion. Nothing is sent automatically.
+Fixed video frame cache clearing when switching to the gallery grid or normally moving to the background. Expanded image-loading and preview-selection diagnostics.

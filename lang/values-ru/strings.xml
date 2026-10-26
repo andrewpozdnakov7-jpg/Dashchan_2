@@ -1,5 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+	<string name="crash_reports_title">Отчёты о сбоях</string>
+	<string name="crash_report_prompt_enabled">Предлагать отправку отчётов о сбоях</string>
+	<string name="crash_report_prompt_summary">После сбоя при следующем запуске. Отправка только вручную.</string>
+	<string name="crash_reports_saved">Сохранённые отчёты о сбоях</string>
+	<string name="crash_reports_saved_summary">Только на этом устройстве: до 8 отчётов, не дольше 14 дней.</string>
+	<string name="crash_reports_empty">Сохранённых отчётов нет</string>
+	<string name="crash_report_offer_title">Приложение неожиданно закрылось</string>
+	<string name="crash_report_offer_message">Сохранён технический отчёт, который поможет разобраться в причине. Перед отправкой его можно просмотреть. Автоматически ничего не отправляется.</string>
+	<string name="crash_report_view">Посмотреть отчёт</string>
+	<string name="crash_report_send">Отправить</string>
+	<string name="crash_report_later">Не сейчас</string>
+	<string name="crash_report_loading">Загрузка отчёта…</string>
+	<string name="crash_report_unavailable">Отчёт недоступен</string>
+	<string name="crash_report_delete_confirm">Удалить этот отчёт о сбое?</string>
+	<string name="crash_test_title">Уронить приложение</string>
+	<string name="crash_test_summary">Намеренно аварийно завершает приложение для проверки отчёта о сбое.</string>
+	<string name="crash_test_confirm">Приложение аварийно завершится для проверки отчёта о сбое. Несохранённые изменения могут быть потеряны. Затем откройте приложение снова.</string>
 	<string name="my_posts_tracking_active">Отслеживание включено</string>
 	<string name="my_posts_tracking_stopped">Отслеживание остановлено</string>
 	<string name="close_gallery_grid_on_background_tap">Закрывать галерею касанием фона</string>

@@ -1,6 +1,7 @@
 package com.mishiranu.dashchan.ui.preference;
 
 import com.mishiranu.dashchan.widget.MotionDialogBuilder;
+import com.mishiranu.dashchan.widget.InterfaceAppearance;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.text.Editable;
@@ -92,6 +93,7 @@ public final class PlaybackSpeedDialog {
 		remove.setOnClickListener(v -> {
 			if (rows.getChildCount() > 1) {
 				rows.removeView(row);
+				InterfaceAppearance.standardCustomRows(rows);
 				addButton.setEnabled(true);
 			} else {
 				input.setText("");
@@ -102,6 +104,9 @@ public final class PlaybackSpeedDialog {
 				ViewGroup.LayoutParams.WRAP_CONTENT));
 		rows.addView(row, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
 				ViewGroup.LayoutParams.WRAP_CONTENT));
+		InterfaceAppearance.standardCustomContent(row);
+		InterfaceAppearance.standardCustomAction(remove, false);
+		InterfaceAppearance.standardCustomRows(rows);
 		addButton.setEnabled(rows.getChildCount() < MAX_PRESETS);
 		if (playbackSpeed <= 0) {
 			input.requestFocus();
@@ -179,13 +184,19 @@ public final class PlaybackSpeedDialog {
 			layout.addView(warning, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
 					ViewGroup.LayoutParams.WRAP_CONTENT));
 
-			AlertDialog dialog = new MotionDialogBuilder(context)
+			InterfaceAppearance.standardCustomCaption(warning);
+			// Each dynamic row already owns its field/percent/text-action roles.
+			InterfaceAppearance.standardCustomContent(layout, rows);
+			InterfaceAppearance.standardCustomStack(layout);
+			InterfaceAppearance.standardFieldLabel(label);
+			AlertDialog dialog = MotionDialogBuilder.standard(context)
 					.setTitle(R.string.playback_speed_presets)
 					.setView(scrollView)
 					.setNegativeButton(android.R.string.cancel, null)
 					.setNeutralButton(R.string.restore_defaults, null)
 					.setPositiveButton(android.R.string.ok, null)
 					.create();
+			InterfaceAppearance.standardCustomDialogContent(dialog, scrollView);
 			dialog.setOnShowListener(d -> {
 				dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v -> {
 					rows.removeAllViews();
@@ -292,13 +303,18 @@ public final class PlaybackSpeedDialog {
 				public void afterTextChanged(Editable s) {}
 			});
 
-			AlertDialog dialog = new MotionDialogBuilder(context)
+			InterfaceAppearance.standardCustomCaption(warning);
+			InterfaceAppearance.standardCustomContent(layout);
+			InterfaceAppearance.standardCustomStack(layout);
+			InterfaceAppearance.standardFieldLabel(label);
+			AlertDialog dialog = MotionDialogBuilder.standard(context)
 					.setTitle(R.string.playback_speed)
 					.setView(layout)
 					.setNegativeButton(android.R.string.cancel, null)
 					.setNeutralButton(R.string.restore_defaults, null)
 					.setPositiveButton(android.R.string.ok, null)
 					.create();
+			InterfaceAppearance.standardCustomDialogContent(dialog, layout);
 			dialog.setOnShowListener(d -> {
 				dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v -> {
 					input.setText("100");

@@ -159,7 +159,9 @@ public class AudioPlayerDialog extends DialogFragment {
 		timeRow.addView(elapsedView, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
 		timeRow.addView(durationView, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
 		linearLayout.addView(timeRow); updateTime(0);
-		AlertDialog dialog = new MotionDialogBuilder(context)
+		// Keep the audio title/slider/icon/secondary roles; only the shell and outer inset opt in.
+		InterfaceAppearance.standardUntitledInsets(linearLayout);
+		AlertDialog dialog = MotionDialogBuilder.standard(context)
 				.setView(linearLayout)
 				.setPositiveButton(R.string.stop, (d, w) -> {
 					if (audioPlayerBinder != null) {
@@ -167,6 +169,7 @@ public class AudioPlayerDialog extends DialogFragment {
 					}
 				})
 				.create();
+		InterfaceAppearance.standardCustomDialogContent(dialog, linearLayout);
 		dialog.setVolumeControlStream(AudioManager.STREAM_MUSIC);
 		requireContext().bindService(new Intent(requireContext(), AudioPlayerService.class),
 				audioPlayerConnection, Context.BIND_AUTO_CREATE);

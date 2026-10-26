@@ -20,6 +20,7 @@ import chan.http.HttpResponse;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.async.HttpHolderTask;
 import com.mishiranu.dashchan.content.model.ErrorItem;
+import com.mishiranu.dashchan.media.VideoDiagnostics;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
 import com.mishiranu.dashchan.util.CancellableSleep;
 import com.mishiranu.dashchan.util.WeightedLruCache;
@@ -82,6 +83,8 @@ public class ImageLoader {
 		}
 
 		private boolean notFound;
+		private String diagnosticSource = "none";
+		private String diagnosticFailure = "none";
 
 		public LoaderTask(Uri uri, Chan chan, String key, String memoryKey, int targetSize, boolean fromCacheOnly,
 				long resourcesGeneration) {
@@ -106,11 +109,17 @@ public class ImageLoader {
 			Bitmap bitmap = null;
 			try {
 				bitmap = storeExternal ? CacheManager.getInstance().loadThumbnailExternal(key, targetSize) : null;
+				if (bitmap != null) diagnosticSource = "disk";
+				VideoDiagnostics.recordImageCacheBitmap("thumbnail_loader", bitmap != null ? "disk_hit" : storeExternal ? "disk_miss" : "disk_bypassed",
+						uri.toString(), null, "cache_only=" + fromCacheOnly + " target_px=" + targetSize, bitmap);
 				if (isCancelled()) {
 					if (bitmap != null) bitmap.recycle();
 					return null;
 				}
 				if (bitmap == null && (!fromCacheOnly || localArchiveScheme)) {
+					diagnosticSource = chanScheme ? "extension_resource" : dataScheme ? "inline_image"
+							: localArchiveScheme ? "local_archive" : "network";
+					VideoDiagnostics.recordImageCache("thumbnail_loader", "fetch", uri.toString(), null, "source=" + diagnosticSource);
 					if (chanScheme) {
 						ThumbnailDecoder.LimitedOutput output = new ThumbnailDecoder.LimitedOutput();
 						Chan resourceChan = ChanResourceAccess.resolveResourceChan(chan, uri);
@@ -157,6 +166,7 @@ public class ImageLoader {
 									}
 								}
 							} catch (ExtensionException e) {
+								diagnosticFailure = "extension";
 								e.getErrorItemAndHandle();
 								return null;
 							} catch (HttpException e) {
@@ -189,12 +199,15 @@ public class ImageLoader {
 					}
 				}
 			} catch (HttpException e) {
+				diagnosticFailure = "http";
 				int responseCode = e.getResponseCode();
+				VideoDiagnostics.recordImageCache("thumbnail_loader", "http_error", uri.toString(), null, "status=" + responseCode);
 				if (responseCode == HttpURLConnection.HTTP_NOT_FOUND ||
 						responseCode == HttpURLConnection.HTTP_GONE) {
 					notFound = true;
 				}
 			} catch (Exception | OutOfMemoryError e) {
+				diagnosticFailure = e instanceof OutOfMemoryError ? "out_of_memory" : "decode_or_read";
 				e.printStackTrace();
 			}
 			return bitmap;
@@ -208,6 +221,7 @@ public class ImageLoader {
 					resourcesGeneration != ChanResourceAccess.resolveResourceChan(chan, uri)
 							.configuration.getResourcesGenerationInternal();
 			if (obsoleteResource) {
+				VideoDiagnostics.recordImageCache("thumbnail_loader", "discard", uri.toString(), null, "reason=resource_generation_changed");
 				// Never publish a resource decoded while its extension/configuration was being replaced.
 				if (bitmap != null) bitmap.recycle();
 				bitmap = null;
@@ -229,6 +243,9 @@ public class ImageLoader {
 				notFoundMap.remove(memoryKey);
 				bitmapCache.put(memoryKey, bitmap);
 			}
+			VideoDiagnostics.recordImageCacheBitmap("thumbnail_loader", "result", uri.toString(), null,
+					"source=" + diagnosticSource + " success=" + (bitmap != null) + " not_found=" + notFound
+							+ " failure=" + diagnosticFailure + " cache_only=" + fromCacheOnly + " targets=" + completedCallbacks.size(), bitmap);
 			for (TaskCallback callback : completedCallbacks) {
 				callback.onTaskFinished(key, memoryKey, bitmap, !fromCacheOnly);
 			}
@@ -236,12 +253,14 @@ public class ImageLoader {
 
 		@Override
 		public void cancel() {
+			VideoDiagnostics.recordImageCache("thumbnail_loader", "cancel", uri != null ? uri.toString() : null, null, "targets=" + callbacks.size());
 			ConcurrentUtils.HANDLER.removeCallbacks(startRunnable);
 			super.cancel();
 		}
 
 		@Override
 		protected void onCancel(Bitmap bitmap) {
+			VideoDiagnostics.recordImageCache("thumbnail_loader", "discard", uri != null ? uri.toString() : null, null, "reason=task_cancelled had_bitmap=" + (bitmap != null));
 			if (bitmap != null) bitmap.recycle(); // Never published to cache or a View.
 			callbacks.clear();
 		}
@@ -458,15 +477,19 @@ public class ImageLoader {
 			return false;
 		}
 		if (memoryCachedBitmap != null) {
+			VideoDiagnostics.recordImageCacheBitmap("thumbnail_loader", "memory_hit", uri != null ? uri.toString() : null, null,
+					"cache_only=" + fromCacheOnly + " target_px=" + targetSize, memoryCachedBitmap);
 			target.onResult(key, memoryCachedBitmap, false, true);
 			return true;
 		} else if (!mainThread) {
+			VideoDiagnostics.recordImageCache("thumbnail_loader", "miss", uri != null ? uri.toString() : null, null, "reason=worker_cache_only");
 			// Don't enqueue tasks requested from non-main thread
 			target.onResult(key, null, false, true);
 			return false;
 		}
 		// Check "not found" images once per 5 minutes
 		if (notFoundMap.contains(memoryKey)) {
+			VideoDiagnostics.recordImageCache("thumbnail_loader", "miss", uri != null ? uri.toString() : null, null, "reason=negative_cache");
 			target.onResult(key, null, !fromCacheOnly, true);
 			return false;
 		}
@@ -477,6 +500,8 @@ public class ImageLoader {
 		boolean startTask = currentLoaderTask == null ||
 				currentLoaderTask.fromCacheOnly && !fromCacheOnly;
 		LoaderTask registerLoaderTask = currentLoaderTask;
+		VideoDiagnostics.recordImageCache("thumbnail_loader", startTask ? "queued" : "joined", uri != null ? uri.toString() : null, null,
+				"cache_only=" + fromCacheOnly + " target_px=" + targetSize);
 		if (startTask) {
 			LoaderTask loaderTask = new LoaderTask(uri, chan, key, memoryKey, targetSize, fromCacheOnly,
 					resourcesGeneration);

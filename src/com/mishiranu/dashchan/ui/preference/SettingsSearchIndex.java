@@ -41,6 +41,9 @@ public final class SettingsSearchIndex {
 			@Override
 			ContentFragment createFragment() { return new ExperimentalFragment(); }
 		},
+		CRASH_REPORTS(R.string.experimental_features, R.string.crash_reports_title) {
+			@Override ContentFragment createFragment() { return new CrashReportsFragment(); }
+		},
 		MATERIAL3_DESIGN(R.string.experimental_features, R.string.material3_design_settings) {
 			@Override
 			ContentFragment createFragment() { return new Material3DesignFragment(); }
@@ -426,6 +429,10 @@ public final class SettingsSearchIndex {
 				R.string.video_diagnostics_extended__summary, Preferences.KEY_EXTENDED_VIDEO_DIAGNOSTICS);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.max_relax_ime_fix,
 				R.string.max_relax_ime_fix_summary, Preferences.KEY_MAX_RELAX_IME_FIX);
+		add(context, entries, Screen.EXPERIMENTAL, R.string.crash_report_prompt_enabled,
+				R.string.crash_report_prompt_summary, Preferences.KEY_CRASH_REPORT_PROMPTS);
+		add(context, entries, Screen.CRASH_REPORTS, R.string.crash_reports_saved, R.string.crash_reports_saved_summary, null);
+		add(context, entries, Screen.EXPERIMENTAL, R.string.crash_test_title, R.string.crash_test_summary, null);
 		add(context, entries, Screen.PIP_DIAGNOSTICS, R.string.pip_diagnostic_mode,
 				R.string.pip_diagnostic_hidden_summary, null);
 		add(context, entries, Screen.MEDIA_IMAGES, R.string.open_configured_attachment_folder,

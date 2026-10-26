@@ -580,6 +580,8 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 			progressBar.setMax(100);
 			layout.addView(progressBar, new LinearLayout.LayoutParams(
 					ViewGroup.LayoutParams.MATCH_PARENT, (int) (3f * density + 0.5f)));
+			com.mishiranu.dashchan.widget.InterfaceAppearance.standardLinearProgress(progressBar);
+			com.mishiranu.dashchan.widget.InterfaceAppearance.standardNativePanel(layout, null, domainView, null);
 
 			webView = new WebView(requireContext());
 			webView.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_YES);
@@ -610,12 +612,14 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 
 			if (savedInstanceState != null) webView.restoreState(savedInstanceState);
 			else webView.loadUrl(PIKABU_URL);
-			return MotionDialogBuilder.standard(requireContext())
+			AlertDialog dialog = MotionDialogBuilder.standardPage(requireContext())
 					.setView(layout)
 					.setNegativeButton(android.R.string.cancel, null)
 					.setNeutralButton(R.string.pikabu_check_adult_settings, null)
 					.setPositiveButton(R.string.pikabu_finish_sign_in, null)
 					.create();
+			com.mishiranu.dashchan.widget.InterfaceAppearance.standardCustomDialogContent(dialog, layout);
+			return dialog;
 		}
 
 		// Keep the existing dialog resize behavior for the login WebView and keyboard.

@@ -9,6 +9,42 @@ public class VideoPageFramesTest {
 	private static VideoPreparationIdentity key(String resource) {
 		return new VideoPreparationIdentity(resource, "cache-" + resource, 100, 10, 0, true, true);
 	}
+	@Test public void gridBackgroundAndListRebindKeepFramesButCloseReleasesTheOwner() {
+		VideoPageFrames<Object> frames = new VideoPageFrames<>();
+		Object current = new Object(), next = new Object();
+		frames.setWindow("a", Collections.singletonList("b")); frames.put(key("a"), current); frames.put(key("b"), next);
+		for (VideoPageFrames.Transition transition : Arrays.asList(VideoPageFrames.Transition.GRID,
+				VideoPageFrames.Transition.PAUSE, VideoPageFrames.Transition.CONFIGURATION, VideoPageFrames.Transition.ITEMS_CHANGED)) {
+			frames.onTransition(transition);
+			assertSame(current, frames.get(key("a"))); assertSame(next, frames.get(key("b"))); assertEquals(2, frames.size());
+		}
+		// Returning from the grid may recreate page Views, but the same owner's frame remains reusable.
+		frames.setWindow("a", Collections.singletonList("b")); assertSame(current, frames.get(key("a")));
+		frames.onTransition(VideoPageFrames.Transition.CLOSE); assertEquals(0, frames.size());
+		assertNull(frames.get(key("a"))); assertNotNull(current); // Borrowers are not manually recycled.
+	}
+	@Test public void retainedFrameStillRequiresMatchingFileAndResumePositionAndCanBeReplaced() {
+		VideoPageFrames<Object> frames = new VideoPageFrames<>(); Object start = new Object(), resumed = new Object();
+		frames.setWindow("a", Collections.emptyList()); frames.put(key("a"), start); frames.onTransition(VideoPageFrames.Transition.GRID);
+		VideoPreparationIdentity resume = new VideoPreparationIdentity("a", "cache-a", 100, 10, 850, true, true);
+		assertNull(frames.get(resume)); assertSame(start, frames.get(key("a")));
+		frames.put(resume, resumed); assertSame(resumed, frames.get(resume)); assertNull(frames.get(key("a")));
+		assertNull(frames.get(new VideoPreparationIdentity("a", "cache-a", 200, 10, 850, true, true)));
+		frames.remove("a"); assertNull(frames.get(resume));
+	}
+	@Test public void diagnosticsDistinguishMissRetentionReplacementEvictionAndCloseWithoutChangingResults() {
+		java.util.ArrayList<String> events = new java.util.ArrayList<>();
+		VideoPageFrames<Object> frames = new VideoPageFrames<>((event, reason, requested, stored, frame, entries) -> events.add(event + ":" + reason));
+		frames.setWindow("a", Collections.singletonList("b")); Object a = new Object(); frames.put(key("a"), a);
+		assertSame(a, frames.get(key("a"))); assertTrue(events.contains("hit:exact"));
+		assertNull(frames.get(key("b"))); assertTrue(events.contains("miss:not_stored"));
+		assertNull(frames.get(new VideoPreparationIdentity("a", "cache-a", 100, 10, 5, true, true)));
+		assertTrue(events.contains("miss:position_changed"));
+		frames.onTransition(VideoPageFrames.Transition.GRID); assertTrue(events.contains("retain:GRID")); assertSame(a, frames.get(key("a")));
+		frames.put(key("b"), new Object()); frames.setWindow("a", Collections.emptyList()); assertTrue(events.contains("evict:outside_window"));
+		frames.put(key("a"), a); assertTrue(events.contains("replace:published"));
+		frames.onTransition(VideoPageFrames.Transition.CLOSE); assertTrue(events.contains("clear:close_previous_1")); assertEquals(0, frames.size());
+	}
 
 	@Test public void bothDirectionsRetainTheSameFrameWithoutTakingTheDecoder() {
 		VideoPageFrames<Object> frames = new VideoPageFrames<>();

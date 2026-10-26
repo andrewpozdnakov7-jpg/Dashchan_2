@@ -428,6 +428,10 @@ public class ViewFactory {
 		return createProgressLayout(parent, false);
 	}
 	public static View createProgressLayout(ViewGroup parent, boolean standardService) {
+		return createProgressLayout(parent, standardService, false);
+	}
+	/** Explicit surface for popup-post loading; no change to legacy/default callers. */
+	public static View createProgressLayout(ViewGroup parent, boolean standardService, boolean dialogSurface) {
 		FrameLayout progress = new FrameLayout(parent.getContext());
 		parent.addView(progress, ExpandedLayout.LayoutParams.MATCH_PARENT, ExpandedLayout.LayoutParams.MATCH_PARENT);
 		progress.setVisibility(View.GONE);
@@ -435,7 +439,10 @@ public class ViewFactory {
 		progress.addView(progressBar, FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT);
 		((FrameLayout.LayoutParams) progressBar.getLayoutParams()).gravity = Gravity.CENTER;
 		ThemeEngine.applyStyle(progressBar);
-		if (standardService) InterfaceAppearance.standardLoading(progressBar);
+		if (standardService) {
+			if (dialogSurface) InterfaceAppearance.standardDialogLoading(progressBar);
+			else InterfaceAppearance.standardLoading(progressBar);
+		}
 		return progress;
 	}
 

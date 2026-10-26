@@ -192,6 +192,11 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	private final FragmentManager.FragmentLifecycleCallbacks contentLifecycle =
 			new FragmentManager.FragmentLifecycleCallbacks() {
 		@Override
+		public void onFragmentResumed(@NonNull FragmentManager manager, @NonNull Fragment fragment) {
+			com.mishiranu.dashchan.util.CrashReports.record(
+					com.mishiranu.dashchan.util.CrashReports.Event.SCREEN, fragment.getClass());
+		}
+		@Override
 		public void onFragmentPreAttached(@NonNull FragmentManager manager, @NonNull Fragment fragment,
 				@NonNull Context context) {
 			if (fragment instanceof ContentFragment && contentNavigation.isPendingFragment((ContentFragment) fragment)) {
@@ -276,6 +281,8 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		StartupNotices.install(this, () -> storageRequestState == StorageRequestState.NONE
 				&& ChanManager.getInstance().getFirstUntrustedExtension() == null);
 		DownloadedUpdatePrompt.install(this, () -> storageRequestState == StorageRequestState.NONE
+				&& ChanManager.getInstance().getFirstUntrustedExtension() == null);
+		CrashReportPrompt.install(this, () -> storageRequestState == StorageRequestState.NONE
 				&& ChanManager.getInstance().getFirstUntrustedExtension() == null);
 	}
 

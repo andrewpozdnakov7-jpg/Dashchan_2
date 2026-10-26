@@ -615,6 +615,7 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 		ProgressBar searchProgress = new ProgressBar(toolbarContext, null, android.R.attr.progressBarStyleSmall);
 		int color = ResourceUtils.getColor(toolbarContext, android.R.attr.textColorPrimary);
 		searchProgress.setIndeterminateTintList(ColorStateList.valueOf(color));
+		com.mishiranu.dashchan.widget.InterfaceAppearance.standardCompactLoading(searchProgress);
 		searchProcessLayout.addView(searchProgress, (int) (20f * density), (int) (20f * density));
 		((FrameLayout.LayoutParams) searchProgress.getLayoutParams()).gravity = Gravity.CENTER;
 		ViewUtils.setNewMarginRelative(searchProgress, (int) (12f * density), 0, (int) (16f * density), 0);
@@ -969,6 +970,8 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 	@Override
 	protected void onScrollToPost(PostNumber postNumber) {
 		int position = getAdapter().positionOfPostNumber(postNumber);
+		com.mishiranu.dashchan.media.VideoDiagnostics.recordImageCache("thread_sync", "target", null, null,
+				"found=" + (position >= 0) + " index=" + position + " windowed=" + windowedMode);
 		if (position >= 0) {
 			getUiManager().dialog().closeDialogs(getAdapter().getConfigurationSet().stackInstance);
 			ListViewUtils.smoothScrollToPosition(getRecyclerView(), position);

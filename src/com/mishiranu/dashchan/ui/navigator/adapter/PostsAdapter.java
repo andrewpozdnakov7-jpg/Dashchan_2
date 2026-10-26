@@ -238,6 +238,7 @@ public class PostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
 			FrameLayout.LayoutParams layoutParams = new FrameLayout.LayoutParams(
 					FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER);
 			layout.addView(progressBar, layoutParams);
+			com.mishiranu.dashchan.widget.InterfaceAppearance.standardLoading(progressBar);
 			return new SimpleViewHolder(layout);
 		}
 		return uiManager.view().createView(parent, ViewUnit.ViewType.values()[viewType]);

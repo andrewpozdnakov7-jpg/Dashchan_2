@@ -11,7 +11,6 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.io.PrintStream;
 import java.util.Arrays;
 import java.util.UUID;
 
@@ -146,7 +145,6 @@ public class Logger {
 
 	private static void initDirectories(File packageDirectory) {
 		File logsDirectory = new File(packageDirectory, "logs");
-		LogcatThread logcatThread = null;
 		if (logsDirectory.exists() && logsDirectory.isDirectory()) {
 			File[] files = logsDirectory.listFiles();
 			if (files != null) {
@@ -168,30 +166,11 @@ public class Logger {
 				}
 			}
 			File logFile = new File(logsDirectory, "log-" + System.currentTimeMillis() + ".txt");
-			logcatThread = new LogcatThread(logFile);
+			new LogcatThread(logFile);
 		}
 
-		File errorsDirectory = new File(packageDirectory, "errors");
-		if (errorsDirectory.exists() || errorsDirectory.mkdirs()) {
-			LogcatThread finalLogcatThread = logcatThread;
-			Thread.UncaughtExceptionHandler systemHandler = Thread.getDefaultUncaughtExceptionHandler();
-			Thread.setDefaultUncaughtExceptionHandler((thread, e) -> {
-				if (finalLogcatThread != null) {
-					finalLogcatThread.stop();
-				}
-				try {
-					File errorFile = new File(errorsDirectory, "error-" + System.currentTimeMillis() + ".txt");
-					PrintStream stream = new PrintStream(errorFile);
-					writeTechnicalData(stream::print);
-					stream.println(DIVIDER);
-					e.printStackTrace(stream);
-				} catch (Throwable t) {
-					// Ignore any exceptions in default exception handler
-				} finally {
-					systemHandler.uncaughtException(thread, e);
-				}
-			});
-		}
+		// Fatal exceptions are handled by CrashReports in private, no-backup storage.
+		// Never wait for the opt-in logcat reader from an uncaught exception handler.
 	}
 
 	private static class LogcatThread implements Runnable {

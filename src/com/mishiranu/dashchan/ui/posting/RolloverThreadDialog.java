@@ -27,6 +27,7 @@ import com.mishiranu.dashchan.content.storage.DraftsStorage;
 import com.mishiranu.dashchan.ui.MainActivity;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
 import com.mishiranu.dashchan.widget.MotionDialogBuilder;
+import com.mishiranu.dashchan.widget.InterfaceAppearance;
 import com.mishiranu.dashchan.widget.ThemeEngine;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -85,9 +86,12 @@ public final class RolloverThreadDialog extends DialogFragment {
 		progress.setIndeterminate(true);
 		int padding = Math.round(16 * getResources().getDisplayMetrics().density);
 		progress.setPadding(padding, padding, padding, padding);
-		return new MotionDialogBuilder(requireContext()).setTitle(R.string.rollover_thread)
+		InterfaceAppearance.standardDialogLoading(progress);
+		AlertDialog dialog = MotionDialogBuilder.standard(requireContext()).setTitle(R.string.rollover_thread)
 				.setMessage(R.string.rollover_preparing).setView(progress).setPositiveButton(android.R.string.ok, null)
 				.setNegativeButton(android.R.string.cancel, null).create();
+		InterfaceAppearance.standardCustomDialogContent(dialog, progress);
+		return dialog;
 	}
 
 	@Override public void onStart() {

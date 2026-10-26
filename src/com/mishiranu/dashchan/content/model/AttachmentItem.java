@@ -406,6 +406,12 @@ public abstract class AttachmentItem {
 
 	public void configureAndLoad(AttachmentView view, Chan chan, boolean needShowMultipleIcon, boolean force,
 			boolean cacheOnly) {
+		if (com.mishiranu.dashchan.media.VideoDiagnostics.isRecording()) {
+			Uri media = getFileUri(chan), thumbnail = getThumbnailUri(chan);
+			com.mishiranu.dashchan.media.VideoDiagnostics.recordImageCache("post_thumbnail", "select",
+					media != null ? media.toString() : null, thumbnail != null ? thumbnail.toString() : null,
+					"source=site_thumbnail view=" + System.identityHashCode(view) + " cache_only=" + cacheOnly);
+		}
 		view.setCropEnabled(Preferences.isCutThumbnails());
 		Type type = getType();
 		String key = getThumbnailKey(chan);

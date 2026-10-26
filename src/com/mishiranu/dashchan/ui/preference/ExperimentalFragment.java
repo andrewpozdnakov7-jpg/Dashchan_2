@@ -92,6 +92,13 @@ public class ExperimentalFragment extends PreferenceFragment {
 					.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 							.pushFragment(new WallpaperFragment()));
 		}
+		addHeader(R.string.crash_reports_title);
+		addCheck(true, Preferences.KEY_CRASH_REPORT_PROMPTS, Preferences.DEFAULT_CRASH_REPORT_PROMPTS,
+				R.string.crash_report_prompt_enabled, R.string.crash_report_prompt_summary);
+		addButton(R.string.crash_reports_saved, R.string.crash_reports_saved_summary).setOnClickListener(p ->
+				((FragmentHandler) requireActivity()).pushFragment(new CrashReportsFragment()));
+		addButton(R.string.crash_test_title, R.string.crash_test_summary)
+				.setOnClickListener(p -> CrashReportDialogs.confirmTest(requireActivity()));
 	}
 
 	private void addScreenDiagnosticsPreferences() {

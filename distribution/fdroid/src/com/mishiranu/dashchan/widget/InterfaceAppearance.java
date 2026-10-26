@@ -40,11 +40,17 @@ public final class InterfaceAppearance {
 	public static void standardPage(View view) {}
 	public static Integer standardStatusBarSurface(Context context) { return null; }
 	public static void standardLoading(android.widget.ProgressBar view) {}
+	public static void standardCompactLoading(android.widget.ProgressBar view) {}
+	public static void standardDialogLoading(android.widget.ProgressBar view) {}
 	public static ProgressDialog.Content standardProgressContent(Context context, String format) { return null; }
 	public static void standardProgressText(TextView text, boolean caption) {}
 	public static void standardCustomContent(View view, View... previews) {}
 	public static void standardCustomCaption(TextView view) {}
 	public static void standardCustomInsets(View view) {}
+	public static void standardUntitledInsets(View view) {}
+	public static void standardCustomStack(android.view.ViewGroup view) {}
+	public static void standardCustomRows(android.view.ViewGroup view) {}
+	public static void standardCustomDialogContent(AlertDialog dialog, View content) {}
 	public static void standardChoiceText(TextView view) {}
 	public static void standardCustomAction(Button view, boolean primary) {}
 	public static void standardChoiceRow(View row, TextView text) {}
@@ -53,6 +59,9 @@ public final class InterfaceAppearance {
 	public static void standardSearch(View root, android.widget.SearchView search) {}
 	public static Context standardDialogContext(Context context) { return context; }
 	public static void configureStandardDialog(AlertDialog dialog) {}
+	public static void configureStandardPageDialog(AlertDialog dialog) {}
+	public static void standardLinearProgress(android.widget.ProgressBar view) {}
+	public static void standardNativePanel(android.view.ViewGroup root, TextView title, TextView status, android.view.ViewGroup actions) {}
 	public static void prepareStandardMenuDialog(AlertDialog dialog, View menu) {}
 	public static void standardDialogTitle(TextView title) {}
 	public static void standardFieldLabel(TextView label) {}

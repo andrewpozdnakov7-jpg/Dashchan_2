@@ -1,6 +1,8 @@
 package com.mishiranu.dashchan.media;
 
 import android.graphics.Matrix;
+import android.graphics.Bitmap;
+import android.graphics.Color;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.media.MediaCodecInfo;
@@ -65,6 +67,8 @@ public final class VideoDiagnostics {
 	private static boolean uiReportTruncated;
 	private static File lastFile;
 	private static final LinkedHashMap<Integer, SurfaceStats> surfaces = new LinkedHashMap<>();
+	// Capture-local correlation only. Never print these keys or retain them after capture stops.
+	private static final ImageCacheTrace imageCacheTrace = new ImageCacheTrace();
 	private static class SurfaceStats {
 		long updates, sampledUpdates, updatedAt;
 	}
@@ -102,9 +106,15 @@ public final class VideoDiagnostics {
 			lastResourceSampleElapsed = startedElapsedRealtime;
 			lastProcessCpuMs = Process.getElapsedCpuTime();
 			uiReport.setLength(0);
+			imageCacheTrace.reset();
 			uiReportTruncated = false;
 			appendUiReportLocked("capture_started=true");
 			appendUiReportLocked("mode=" + (extended ? "extended" : "standard"));
+			appendUiReportLocked("image_cache_schema=1 resource_ids=capture_local no_resource_hashes=true"
+					+ " scroll_thread_gallery=" + Preferences.isScrollThreadGallery()
+					+ " scroll_gallery_to_current=" + Preferences.isScrollGalleryToCurrentFile()
+					+ " video_preload=" + Preferences.isVideoPreload() + " preload_count=" + Preferences.getVideoPreloadCount()
+					+ " remember_video_position=" + Preferences.isRememberLastVideoPosition());
 			for (SurfaceStats surface : surfaces.values()) {
 				surface.sampledUpdates = surface.updates;
 				surface.updatedAt = 0;
@@ -136,6 +146,7 @@ public final class VideoDiagnostics {
 			}
 			appendUiReportLocked("capture_stopped=true");
 			recording = false;
+			imageCacheTrace.reset();
 			saving = true;
 			if (sampler != null) { sampler.cancel(false); sampler = null; }
 			sessionStartedAt = startedAt;
@@ -231,6 +242,41 @@ public final class VideoDiagnostics {
 				appendUiReportLocked(message);
 			}
 		}
+	}
+	/** scope/event/details are code-owned labels and numbers, NEVER caller content, keys or exception messages. */
+	public static void recordImageCache(String scope, String event, String resource, String relatedResource, String details) {
+		recordImageCacheBitmap(scope, event, resource, relatedResource, details, null);
+	}
+	public static void recordImageCacheBitmap(String scope, String event, String resource, String relatedResource,
+			String details, Bitmap bitmap) {
+		if (!recording) return;
+		synchronized (LOCK) {
+			if (!recording) return;
+			// Repeated identical cache lookups/rebinds must not crowd operation events out of the bounded report.
+			String eventLine = imageCacheTrace.record(scope, event, resource, relatedResource, details, SystemClock.elapsedRealtime());
+			if (eventLine == null) return;
+			StringBuilder line = new StringBuilder(eventLine);
+			if (bitmap != null) describeImageBitmap(line, bitmap);
+			appendUiReportLocked(line.toString());
+		}
+	}
+	private static void describeImageBitmap(StringBuilder line, Bitmap bitmap) {
+		try {
+			if (bitmap.isRecycled()) { line.append(" bitmap_recycled=true"); return; }
+			int width = bitmap.getWidth(), height = bitmap.getHeight();
+			line.append(" bitmap_width=").append(width).append(" bitmap_height=").append(height)
+					.append(" allocation_bytes=").append(bitmap.getAllocationByteCount());
+			// 16 sparse samples, only while recording. Export aggregates, not pixels, hashes or image data.
+			int luma = 0, dark = 0, transparent = 0;
+			for (int y = 0; y < 4; y++) for (int x = 0; x < 4; x++) {
+				int color = bitmap.getPixel(Math.min(width - 1, (2 * x + 1) * width / 8),
+						Math.min(height - 1, (2 * y + 1) * height / 8));
+				int value = (77 * Color.red(color) + 150 * Color.green(color) + 29 * Color.blue(color)) >> 8;
+				luma += value; if (value <= 16) dark++; if (Color.alpha(color) <= 16) transparent++;
+			}
+			line.append(" sample_luma=").append(luma / 16).append(" dark_samples=").append(dark)
+					.append(" transparent_samples=").append(transparent).append(" samples=16");
+		} catch (RuntimeException e) { line.append(" bitmap_sample=unavailable"); }
 	}
 
 	// Permanent extended-video diagnostics. Read geometry only; never mutate layout or retain Views.
@@ -362,7 +408,7 @@ public final class VideoDiagnostics {
 		try (FileOutputStream output = new FileOutputStream(file);
 				BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(output, StandardCharsets.UTF_8))) {
 			writer.write("Dashchan video diagnostics\n");
-			writer.write("schema=4\n");
+			writer.write("schema=5\n");
 			writer.write("mode=" + (extended ? "extended" : "standard") + "\n");
 			writer.write("started_utc=" + formatTime(startedAt, "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'") + "\n");
 			writer.write("stopped_utc=" + formatTime(stoppedAt, "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'") + "\n");

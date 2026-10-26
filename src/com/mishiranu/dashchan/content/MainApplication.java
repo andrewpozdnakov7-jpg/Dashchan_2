@@ -95,6 +95,9 @@ public class MainApplication extends Application {
 		}
 		if (checkProcess("security")) return;
 		if (isMainProcess() || isPrivateBrowserProcess()) AppSecurity.install(this, isMainProcess());
+		if (isMainProcess() || isPrivateBrowserProcess() || checkProcess(PROCESS_TRANSLATION)) {
+			com.mishiranu.dashchan.util.CrashReports.install(this, isMainProcess());
+		}
 
 		if (isMainProcess()) {
 			Logger.init(this);

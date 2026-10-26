@@ -539,7 +539,7 @@ public class ListUnit implements ActionMode.Callback {
 		Chan chan = Chan.get(chanName);
 		// Use the same application dialog theme as attachments in the thread and opened files.
 		// Keep the gallery window context for the existing clipboard/share actions below.
-		DialogMenu dialogMenu = new DialogMenu(provider.getContext(), false);
+		DialogMenu dialogMenu = new DialogMenu(provider.getContext());
 		dialogMenu.setTitle(!StringUtils.isEmpty(galleryItem.originalName)
 				? galleryItem.originalName : galleryItem.getFileName(chan));
 		dialogMenu.add(R.string.download_file, () -> callback.downloadGalleryItem(galleryItem));
@@ -849,6 +849,12 @@ public class ListUnit implements ActionMode.Callback {
 			}
 			holder.attachmentInfo.setText(attachmentInfo);
 			Uri thumbnailUri = galleryItem.getThumbnailUri(chan);
+			if (VideoDiagnostics.isRecording()) {
+				Uri media = galleryItem.getFileUri(chan);
+				VideoDiagnostics.recordImageCache("grid_thumbnail", "select", media != null ? media.toString() : null,
+						thumbnailUri != null ? thumbnailUri.toString() : null,
+						"source=site_thumbnail index=" + position + " view=" + System.identityHashCode(holder.thumbnail));
+			}
 			if (thumbnailUri != null) {
 				CacheManager cacheManager = CacheManager.getInstance();
 				String key = cacheManager.getCachedFileKey(thumbnailUri);
