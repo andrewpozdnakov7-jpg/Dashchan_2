@@ -194,7 +194,9 @@ prepare_source_with_git_fallback() {
 	shift 8
 	local marker="$target/.dashchan-version"
 	local expected="$name:$version"
-	if [ -f "$marker" ] && [ "$(cat "$marker")" != "$expected" ]; then
+	if [ -f "$marker" ] && { [ "$(cat "$marker")" != "$expected" ] ||
+			{ [ "$name" = ffmpeg ] && [ ! -f "$target/VERSION" ]; }; }; then
+		# Re-prepare old Git fallbacks produced before VERSION was preserved.
 		rm -rf "$target"
 	fi
 	if [ ! -f "$marker" ]; then

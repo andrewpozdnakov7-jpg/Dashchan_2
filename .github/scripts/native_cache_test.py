@@ -229,7 +229,7 @@ class FfmpegGitFallbackTest(unittest.TestCase):
         repo = Path(__file__).resolve().parents[2]
         source = (repo / "Dashchan-Webm/shared-prepare.sh").read_text(encoding="utf-8")
         function = "prepare_git_source() {" + source.split("prepare_git_source() {", 1)[1].split(
-            "\nprepare_source_with_git_fallback()", 1)[0]
+            "\nsources_dav1d=", 1)[0]
         self.script = self.root / "prepare-fixture.sh"
         self.script.write_text('set -e -o pipefail\n' + function + '\nprepare_git_source "$@"\n', encoding="utf-8")
         self.bash = os.environ.get("SLOOOP_TEST_BASH") or shutil.which("bash")
@@ -245,15 +245,23 @@ class FfmpegGitFallbackTest(unittest.TestCase):
                  "commit", "-qm", "Synthetic release fixture")
         return self.git(directory, "rev-parse", "HEAD")
 
-    def prepare(self, release="8.1.3", archive_version=None, wrong_commit=False):
+    def prepare(self, release="8.1.3", archive_version=None, wrong_commit=False, stale=False):
         (self.upstream / "RELEASE").write_text(release + "\n")
         if archive_version is not None:
             (self.upstream / "VERSION").write_text(archive_version + "\n")
         revision = self.commit(self.upstream)
         self.git(self.upstream, "tag", "n8.1.3")
-        result = subprocess.run([self.bash, self.script.as_posix(), "ffmpeg", "8.1.3", "refs/tags/n8.1.3",
-                                 "0" * 40 if wrong_commit else revision,
-                                 self.upstream.as_posix(), self.target.as_posix()],
+        arguments = ["ffmpeg", "8.1.3", "refs/tags/n8.1.3", "0" * 40 if wrong_commit else revision,
+                     self.upstream.as_posix(), self.target.as_posix()]
+        if stale:
+            self.target.mkdir(parents=True)
+            (self.target / ".dashchan-version").write_text("ffmpeg:8.1.3\n")
+            (self.target / "RELEASE").write_text("8.1.3\n")
+            text = self.script.read_text().replace('prepare_git_source "$@"',
+                'download_and_extract() { return 1; }\nprepare_source_with_git_fallback "$@"')
+            self.script.write_text(text)
+            arguments[2:2] = ["https://example.invalid/not-requested", "synthetic-checksum"]
+        result = subprocess.run([self.bash, self.script.as_posix(), *arguments],
                                 cwd=self.parent, text=True, capture_output=True)
         return result
 
@@ -268,6 +276,11 @@ class FfmpegGitFallbackTest(unittest.TestCase):
     def test_wrong_pinned_commit_does_not_publish_version_or_marker(self):
         self.assertNotEqual(0, self.prepare(wrong_commit=True).returncode)
         self.assertFalse(self.target.exists())
+
+    def test_old_prepared_git_snapshot_without_version_is_revalidated(self):
+        result = self.prepare(stale=True)
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("8.1.3\n", (self.target / "VERSION").read_text())
 
     def test_wrong_release_cannot_be_relabelled_as_the_pin(self):
         self.assertNotEqual(0, self.prepare(release="8.1.2").returncode)
