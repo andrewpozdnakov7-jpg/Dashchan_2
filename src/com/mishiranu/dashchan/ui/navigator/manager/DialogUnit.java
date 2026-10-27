@@ -221,7 +221,7 @@ public class DialogUnit {
 			recyclerView.setMotionEventSplittingEnabled(false);
 			recyclerView.setVerticalScrollBarEnabled(true);
 			recyclerView.setClipToPadding(false);
-			View progress = ViewFactory.createProgressLayout(content);
+			View progress = ViewFactory.createProgressLayout(content, true, true);
 			progress.setPadding(0, (int) (60f * density), 0, (int) (60f * density));
 			int dividerPadding = (int) (12f * density);
 			recyclerView.setLayoutManager(new PostsLayoutManager(recyclerView.getContext()));
@@ -1520,14 +1520,30 @@ public class DialogUnit {
 			textView.setPadding((int) (26f * density), 0, 0, 0); // 26f = 24f + 2f
 			ViewUtils.setTextSizeScaled(textView, 14);
 			textView.setTypeface(ResourceUtils.TYPEFACE_MEDIUM);
+			if (com.mishiranu.dashchan.widget.InterfaceAppearance.isEnabled(context)) {
+				// Explanations are not menu actions. Keep semantic icons and let long labels wrap.
+				linearLayout.setPaddingRelative(0, Math.round(8 * density), 0, Math.round(8 * density));
+				textView.setSingleLine(false);
+				textView.setPaddingRelative(Math.round(16 * density), 0, 0, 0);
+				com.mishiranu.dashchan.widget.InterfaceAppearance.standardCustomContent(textView);
+			}
 		}
-		AlertDialog.Builder builder = new MotionDialogBuilder(context).setPositiveButton(android.R.string.ok, null);
+		AlertDialog.Builder builder = MotionDialogBuilder.standard(context).setPositiveButton(android.R.string.ok, null);
 		if (!StringUtils.isEmpty(emailToCopy)) {
 			builder.setNeutralButton(R.string.copy_email,
 					(dialog, which) -> StringUtils.copyToClipboard(context, emailToCopy));
 		}
-		builder.setView(container);
-		return builder.create();
+		android.view.View content = container;
+		com.mishiranu.dashchan.widget.InterfaceAppearance.standardUntitledInsets(container);
+		if (com.mishiranu.dashchan.widget.InterfaceAppearance.isEnabled(context)) {
+			android.widget.ScrollView scroll = new android.widget.ScrollView(context);
+			scroll.addView(container, new android.widget.ScrollView.LayoutParams(-1, -2));
+			content = scroll;
+		}
+		builder.setView(content);
+		AlertDialog dialog = builder.create();
+		com.mishiranu.dashchan.widget.InterfaceAppearance.standardCustomDialogContent(dialog, content);
+		return dialog;
 	}
 
 	public void performSendDeletePosts(FragmentManager fragmentManager,

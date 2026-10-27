@@ -14,6 +14,7 @@ import com.mishiranu.dashchan.util.ViewUtils;
 /** Leaves creation, callbacks, cancellation and dismissal entirely with the platform. */
 public final class MotionDialogBuilder extends AlertDialog.Builder {
 	private boolean standard;
+	private boolean page;
 	private CharSequence standardTitle;
 	private boolean customTitle;
 	private boolean destructive;
@@ -27,6 +28,10 @@ public final class MotionDialogBuilder extends AlertDialog.Builder {
 	}
 	public static MotionDialogBuilder standard(Context context, boolean destructive) {
 		MotionDialogBuilder builder = standard(context); builder.destructive = destructive; return builder;
+	}
+	/** Native full-page WebView shell: standard actions, but no modal width/radius cap. */
+	public static MotionDialogBuilder standardPage(Context context) {
+		MotionDialogBuilder builder = standard(context); builder.page = true; return builder;
 	}
 	/** Single owner for the outside inset of a simple standard input. Legacy views stay untouched. */
 	public MotionDialogBuilder setInputView(View view) {
@@ -105,7 +110,8 @@ public final class MotionDialogBuilder extends AlertDialog.Builder {
 		if (destructive && dialog.getWindow() != null) dialog.getWindow().getDecorView()
 				.setTag(com.mishiranu.dashchan.R.id.standard_destructive_action, Boolean.TRUE);
 		SurfaceMotion.configureDialog(dialog);
-		if (standard) InterfaceAppearance.configureStandardDialog(dialog);
+		if (page) InterfaceAppearance.configureStandardPageDialog(dialog);
+		else if (standard) InterfaceAppearance.configureStandardDialog(dialog);
 		else InterfaceAppearance.configureDialog(dialog);
 		if (com.mishiranu.dashchan.ui.posting.PostingFormDiagnostics.isRecording()) {
 			com.mishiranu.dashchan.util.ScreenDiagnostics.note(dialog.getWindow(), "builder_created",

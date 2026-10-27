@@ -177,6 +177,13 @@ public final class InterfaceAppearance {
 	}
 	public static void standardCustomCaption(TextView view) { role(view, Role.CUSTOM_CAPTION); }
 	public static void standardCustomInsets(View view) { StandardAppearance.customInsets(view); }
+	public static void standardUntitledInsets(View view) { StandardAppearance.untitledInsets(view); }
+	public static void standardCustomStack(ViewGroup view) { StandardAppearance.customStack(view, true); }
+	public static void standardCustomRows(ViewGroup view) { StandardAppearance.customStack(view, false); }
+	/** The opted-in custom content already owns its insets; AlertController must not add another set. */
+	public static void standardCustomDialogContent(AlertDialog dialog, View content) {
+		if (isEnabled(dialog.getContext())) dialog.setView(content, 0, 0, 0, 0);
+	}
 	public static void standardChoiceText(TextView view) { role(view, Role.CUSTOM_CHOICE_TEXT); }
 	public static void standardCustomAction(Button view, boolean primary) { role(view, primary ? Role.CUSTOM_ACTION : Role.CUSTOM_TEXT_ACTION); }
 	public static void standardChoiceRow(View row, TextView text) {
@@ -283,6 +290,9 @@ public final class InterfaceAppearance {
 		return isEnabled(context) ? ToolbarPalette.resolve(context).background : null;
 	}
 	public static void standardLoading(android.widget.ProgressBar view) { StandardAppearance.loading(view); }
+	/** Toolbar-sized waiting, with identical drawable ownership and reduced-motion policy. */
+	public static void standardCompactLoading(android.widget.ProgressBar view) { StandardAppearance.loading(view, true, false); }
+	public static void standardDialogLoading(android.widget.ProgressBar view) { StandardAppearance.loading(view, false, true); }
 	public static ProgressDialog.Content standardProgressContent(Context context, String format) {
 		return isEnabled(context) ? new StandardProgressContent(context, format) : null;
 	}
@@ -293,6 +303,11 @@ public final class InterfaceAppearance {
 	public static void standardSearch(View root, android.widget.SearchView search) { StandardAppearance.search(root, search); }
 	public static Context standardDialogContext(Context context) { return StandardAppearance.dialogContext(context); }
 	public static void configureStandardDialog(AlertDialog dialog) { StandardAppearance.dialog(dialog); }
+	public static void configureStandardPageDialog(AlertDialog dialog) { StandardAppearance.dialog(dialog, true); }
+	public static void standardLinearProgress(android.widget.ProgressBar view) { NativeContentAppearance.linear(view); }
+	public static void standardNativePanel(ViewGroup root, TextView title, TextView status, ViewGroup actions) {
+		NativeContentAppearance.panel(root, title, status, actions);
+	}
 	public static void prepareStandardMenuDialog(AlertDialog dialog, View menu) { StandardAppearance.dialogMenu(dialog, menu); }
 	public static void standardDialogTitle(TextView title) { role(title, Role.DIALOG_TITLE); }
 	public static void standardFieldLabel(TextView label) { role(label, Role.SECTION_TITLE); }

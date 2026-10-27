@@ -164,6 +164,19 @@ prepare_git_source() {
 			return 1
 		}
 		git -C "$repository" archive 'FETCH_HEAD^{commit}' | tar -C "$target" -x
+		if [ "$name" = ffmpeg ]; then
+			# Release tarballs include VERSION; git archive does not. Without it,
+			# ffbuild/version.sh may discover the enclosing application's Git repo.
+			# Derive the same release value only after the exact commit and RELEASE
+			# agree with the pin; do not relabel an unknown source or weaken checks.
+			if [ ! -f "$target/RELEASE" ] || [ "$(cat "$target/RELEASE")" != "$version" ] ||
+					{ [ -f "$target/VERSION" ] && [ "$(cat "$target/VERSION")" != "$version" ]; }; then
+				echo 'Pinned FFmpeg release metadata mismatch' >&2
+				rm -rf "$repository" "$target"
+				return 1
+			fi
+			printf '%s\n' "$version" > "$target/VERSION"
+		fi
 		rm -rf "$repository"
 		printf '%s\n' "$expected" > "$marker"
 	fi
@@ -181,7 +194,9 @@ prepare_source_with_git_fallback() {
 	shift 8
 	local marker="$target/.dashchan-version"
 	local expected="$name:$version"
-	if [ -f "$marker" ] && [ "$(cat "$marker")" != "$expected" ]; then
+	if [ -f "$marker" ] && { [ "$(cat "$marker")" != "$expected" ] ||
+			{ [ "$name" = ffmpeg ] && [ ! -f "$target/VERSION" ]; }; }; then
+		# Re-prepare old Git fallbacks produced before VERSION was preserved.
 		rm -rf "$target"
 	fi
 	if [ ! -f "$marker" ]; then

@@ -1,6 +1,7 @@
 package com.mishiranu.dashchan.ui;
 
 import com.mishiranu.dashchan.widget.MotionDialogBuilder;
+import com.mishiranu.dashchan.widget.InterfaceAppearance;
 import android.app.AlertDialog;
 import android.app.Dialog;
 import android.os.Bundle;
@@ -82,7 +83,7 @@ public final class ApachanEditPostDialog {
 		@NonNull
 		@Override
 		public Dialog onCreateDialog(Bundle savedInstanceState) {
-			ProgressDialog dialog = new ProgressDialog(requireContext(), null);
+			ProgressDialog dialog = ProgressDialog.standard(requireContext(), null);
 			dialog.setMessage(getString(R.string.loading__ellipsis));
 			return dialog;
 		}
@@ -188,9 +189,12 @@ public final class ApachanEditPostDialog {
 
 			ScrollView scrollView = new ScrollView(requireContext());
 			scrollView.addView(root, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-			AlertDialog dialog = new MotionDialogBuilder(requireContext()).setTitle(R.string.edit_post)
+			InterfaceAppearance.standardCustomContent(root);
+			InterfaceAppearance.standardCustomStack(root);
+			AlertDialog dialog = MotionDialogBuilder.standard(requireContext()).setTitle(R.string.edit_post)
 					.setView(scrollView).setNegativeButton(android.R.string.cancel, null)
 					.setPositiveButton(R.string.save, null).create();
+			InterfaceAppearance.standardCustomDialogContent(dialog, scrollView);
 			dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE)
 					.setOnClickListener(button -> send()));
 			return dialog;
@@ -229,7 +233,7 @@ public final class ApachanEditPostDialog {
 		@NonNull
 		@Override
 		public Dialog onCreateDialog(Bundle savedInstanceState) {
-			ProgressDialog dialog = new ProgressDialog(requireContext(), null);
+			ProgressDialog dialog = ProgressDialog.standard(requireContext(), null);
 			dialog.setMessage(getString(R.string.sending__ellipsis));
 			return dialog;
 		}

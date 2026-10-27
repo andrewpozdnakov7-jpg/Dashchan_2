@@ -67,7 +67,7 @@ final class StandardAppearance {
 				new int[]{Color.TRANSPARENT, c.ripple}), fill, shape(view, Color.WHITE, 0));
 	}
 
-	private enum Kind {SETTINGS, SECTION, SERVICE, MENU, STATE, ERROR, PAGE, INPUT, CUSTOM_CONTENT, CUSTOM_CHOICE_ROW}
+	private enum Kind {SETTINGS, SECTION, SERVICE, MENU, STATE, ERROR, PAGE, INPUT, CUSTOM_CONTENT, CUSTOM_UNTITLED, CUSTOM_STACK, CUSTOM_ROWS, CUSTOM_CHOICE_ROW}
 	private static final class Saved {
 		final View view; final int start, top, end, bottom, minHeight, minWidth, height;
 		final int marginStart, marginEnd, marginTop, marginBottom, textMinHeight, textMinWidth, textMaxWidth;
@@ -107,6 +107,7 @@ final class StandardAppearance {
 	}
 	private static final class Layout {
 		final View root; final ArrayList<Saved> saved = new ArrayList<>();
+		final java.util.IdentityHashMap<View, Integer> stackMargins = new java.util.IdentityHashMap<>();
 		Kind kind; TextView title, summary, end; View widgets; boolean applied;
 		ImageView errorIcon; int errorIconWidth, errorIconHeight;
 		Layout(View root) { this.root = root; remember(root); }
@@ -120,6 +121,10 @@ final class StandardAppearance {
 		}
 		void applyResolved(boolean enabled) {
 			if (applied) for (Saved s : saved) s.restore();
+			if (applied) for (java.util.Map.Entry<View, Integer> entry : stackMargins.entrySet()) {
+				ViewGroup.LayoutParams p = entry.getKey().getLayoutParams();
+				if (p instanceof ViewGroup.MarginLayoutParams) ((ViewGroup.MarginLayoutParams) p).topMargin = entry.getValue();
+			}
 			if (applied && errorIcon != null) {
 				ViewGroup.LayoutParams params = errorIcon.getLayoutParams();
 				params.width = errorIconWidth; params.height = errorIconHeight;
@@ -129,7 +134,21 @@ final class StandardAppearance {
 			if (!applied) return;
 			AppearanceColors c = colors(root.getContext());
 			if (kind == Kind.PAGE) { root.setBackgroundTintList(null); root.setBackgroundColor(c.window); return; }
-			if (kind == Kind.CUSTOM_CONTENT) { root.setPaddingRelative(dp(root, 24), 0, dp(root, 24), dp(root, 8)); return; }
+			if (kind == Kind.CUSTOM_CONTENT || kind == Kind.CUSTOM_UNTITLED || kind == Kind.CUSTOM_STACK || kind == Kind.CUSTOM_ROWS) {
+				if (kind != Kind.CUSTOM_ROWS) root.setPaddingRelative(dp(root, 24), kind == Kind.CUSTOM_UNTITLED ? dp(root, 24) : 0, dp(root, 24), dp(root, 8));
+				if (kind == Kind.CUSTOM_STACK || kind == Kind.CUSTOM_ROWS) {
+					ViewGroup group = (ViewGroup) root; boolean first = true;
+					for (int i = 0; i < group.getChildCount(); i++) {
+						View child = group.getChildAt(i); if (child.getVisibility() == View.GONE) continue;
+						if (child.getLayoutParams() instanceof ViewGroup.MarginLayoutParams) {
+							ViewGroup.MarginLayoutParams p = (ViewGroup.MarginLayoutParams) child.getLayoutParams();
+							p.topMargin = first ? 0 : dp(root, child instanceof Button ? 16 : 8);
+						}
+						first = false;
+					}
+				}
+				return;
+			}
 			if (kind == Kind.INPUT) { root.setMinimumHeight(dp(root, AppearanceShapes.STANDARD_FIELD_MIN_HEIGHT)); return; }
 			if (kind == Kind.STATE) {
 				// ExpandedLayout remains the sole owner of the host's system/toolbar insets.
@@ -227,6 +246,19 @@ final class StandardAppearance {
 	static void service(View root, TextView title, TextView metadata, TextView end) { layout(root, Kind.SERVICE, title, metadata, end); }
 	static void menu(View root, TextView title) { layout(root, Kind.MENU, title, null, null); }
 	static void customInsets(View root) { layout(root, Kind.CUSTOM_CONTENT, null, null, null); }
+	static void untitledInsets(View root) { layout(root, Kind.CUSTOM_UNTITLED, null, null, null); }
+	static void customStack(ViewGroup root, boolean outerInsets) {
+		// Capture child margins before opting in; OFF restores them through the same layout state.
+		prepare(root, null, null, null, null);
+		Layout state = (Layout) root.getTag(R.id.standard_layout_appearance);
+		state.stackMargins.keySet().removeIf(child -> child.getParent() != root);
+		for (int i = 0; i < root.getChildCount(); i++) {
+			View child = root.getChildAt(i);
+			if (!state.stackMargins.containsKey(child) && child.getLayoutParams() instanceof ViewGroup.MarginLayoutParams)
+				state.stackMargins.put(child, ((ViewGroup.MarginLayoutParams) child.getLayoutParams()).topMargin);
+		}
+		state.kind = outerInsets ? Kind.CUSTOM_STACK : Kind.CUSTOM_ROWS; state.apply();
+	}
 	static void customChoiceRow(View root, TextView title) { layout(root, Kind.CUSTOM_CHOICE_ROW, title, null, null); }
 	static void state(View root, TextView message) { layout(root, Kind.STATE, message, null, null); }
 	static void errorState(View root, ImageView icon, TextView message) {
@@ -250,6 +282,7 @@ final class StandardAppearance {
 		Object loading = view.getTag(R.id.standard_loading_appearance); if (loading instanceof LoadingState) ((LoadingState) loading).apply();
 		Object dialog = view.getTag(R.id.standard_dialog_appearance); if (dialog instanceof DialogState) ((DialogState) dialog).apply();
 		ServiceAppearance.refresh(view);
+		NativeContentAppearance.refresh(view);
 		if (view instanceof ProgressDialog.Content) ((ProgressDialog.Content) view).refreshAppearance();
 	}
 
@@ -257,9 +290,12 @@ final class StandardAppearance {
 		return InterfaceAppearance.isEnabled(context) ? new ContextThemeWrapper(context, R.style.Theme_Standard_Dialog) : context;
 	}
 	static void dialog(AlertDialog dialog) {
+		dialog(dialog, false);
+	}
+	static void dialog(AlertDialog dialog, boolean page) {
 		Window window = dialog.getWindow(); if (window == null) return;
 		View decor = window.getDecorView();
-		DialogState state = new DialogState(dialog);
+		DialogState state = new DialogState(dialog, page);
 		decor.setTag(R.id.standard_dialog_appearance, state);
 		// WindowManager must receive final bounds/background on its initial addView.
 		// Do not eagerly call dialog.create(): callers may still set buttons/views.
@@ -281,13 +317,14 @@ final class StandardAppearance {
 	}
 	private static final class DialogState {
 		final AlertDialog dialog; final ArrayList<Saved> buttons = new ArrayList<>();
+		final boolean page;
 		ButtonBarState bar;
 		TitlePanelState titlePanel;
 		Saved listPadding;
 		View menu;
 		Drawable background; int width, height, preparedWidth, preparedColor, preparedRadius;
 		boolean applied, windowOwned, backgroundPrepared;
-		DialogState(AlertDialog dialog) { this.dialog = dialog; }
+		DialogState(AlertDialog dialog, boolean page) { this.dialog = dialog; this.page = page; }
 		void prepareWindow() {
 			Window window = dialog.getWindow();
 			if (com.mishiranu.dashchan.ui.posting.PostingFormDiagnostics.isRecording()) {
@@ -301,16 +338,19 @@ final class StandardAppearance {
 				windowOwned = true;
 			}
 			AppearanceColors c = colors(dialog.getContext());
-			int radius = menu != null ? 12 : 28;
+			int radius = page ? 0 : menu != null ? 12 : 28;
 			Point available = ViewUtils.getWindowContentSize(dialog.getContext());
 			int margin = dp(decor, available.x < dp(decor, 328) ? 16 : 24);
-			preparedWidth = Math.max(1, Math.min(dp(decor, AppearanceShapes.STANDARD_DIALOG_MAX_WIDTH), available.x - 2 * margin));
-			if (!backgroundPrepared || preparedColor != c.surfaceContainer || preparedRadius != radius) {
-				window.setBackgroundDrawable(shape(decor, c.surfaceContainer, radius));
-				preparedColor = c.surfaceContainer; preparedRadius = radius; backgroundPrepared = true;
+			preparedWidth = page ? available.x : Math.max(1, Math.min(dp(decor, AppearanceShapes.STANDARD_DIALOG_MAX_WIDTH), available.x - 2 * margin));
+			int surface = page ? c.window : c.surfaceContainer;
+			if (!backgroundPrepared || preparedColor != surface || preparedRadius != radius) {
+				window.setBackgroundDrawable(shape(decor, surface, radius));
+				preparedColor = surface; preparedRadius = radius; backgroundPrepared = true;
 			}
-			if (window.getAttributes().width != preparedWidth || window.getAttributes().height != WindowManager.LayoutParams.WRAP_CONTENT) {
-				window.setLayout(preparedWidth, WindowManager.LayoutParams.WRAP_CONTENT);
+			int targetWidth = page ? WindowManager.LayoutParams.MATCH_PARENT : preparedWidth;
+			int targetHeight = page ? WindowManager.LayoutParams.MATCH_PARENT : WindowManager.LayoutParams.WRAP_CONTENT;
+			if (window.getAttributes().width != targetWidth || window.getAttributes().height != targetHeight) {
+				window.setLayout(targetWidth, targetHeight);
 			}
 		}
 		void apply() {
@@ -701,10 +741,15 @@ final class StandardAppearance {
 	private static final class LoadingState implements View.OnAttachStateChangeListener,
 			android.view.ViewTreeObserver.OnPreDrawListener, android.view.ViewTreeObserver.OnWindowFocusChangeListener {
 		final android.widget.ProgressBar view; final Drawable legacy; final ColorStateList legacyTint; final int width, height;
+		final boolean compact, dialogSurface;
 		StandardLoadingDrawable drawable;
 		android.view.ViewTreeObserver tree;
 		boolean modern;
 		LoadingState(android.widget.ProgressBar view) {
+			this(view, false, false);
+		}
+		LoadingState(android.widget.ProgressBar view, boolean compact, boolean dialogSurface) {
+			this.compact = compact; this.dialogSurface = dialogSurface;
 			this.view = view; legacy = view.getIndeterminateDrawable(); legacyTint = view.getIndeterminateTintList();
 			width = view.getMinimumWidth(); height = view.getMinimumHeight();
 			view.addOnAttachStateChangeListener(this);
@@ -717,15 +762,15 @@ final class StandardAppearance {
 			}
 			AppearanceColors c = colors(view.getContext());
 			view.setIndeterminateTintList(null);
-			if (drawable == null) drawable = new StandardLoadingDrawable(view);
-			boolean dialog = false;
+			if (drawable == null) drawable = compact ? new StandardLoadingDrawable(view, 20, 14) : new StandardLoadingDrawable(view);
+			boolean dialog = dialogSurface;
 			for (android.view.ViewParent p = view.getParent(); p instanceof View; p = p.getParent()) {
 				if (p instanceof ProgressDialog.Content) { dialog = true; break; }
 			}
-			int background = dialog ? c.surfaceContainer : c.window;
+			int background = compact ? ToolbarPalette.resolve(view.getContext()).background : dialog ? c.surfaceContainer : c.window;
 			drawable.palette(background, InterfaceAppearance.contrasting(c.primary, background, 3));
 			if (view.getIndeterminateDrawable() != drawable) view.setIndeterminateDrawable(drawable);
-			view.setMinimumWidth(dp(view, 48)); view.setMinimumHeight(dp(view, 48)); modern = true;
+			view.setMinimumWidth(compact ? width : dp(view, 48)); view.setMinimumHeight(compact ? height : dp(view, 48)); modern = true;
 			drawable.sync();
 		}
 		@Override public void onViewAttachedToWindow(View v) {
@@ -743,8 +788,11 @@ final class StandardAppearance {
 		@Override public void onWindowFocusChanged(boolean focused) { if (drawable != null) drawable.sync(); }
 	}
 	static void loading(android.widget.ProgressBar view) {
+		loading(view, false, false);
+	}
+	static void loading(android.widget.ProgressBar view, boolean compact, boolean dialogSurface) {
 		Object tag = view.getTag(R.id.standard_loading_appearance);
-		LoadingState state = tag instanceof LoadingState ? (LoadingState) tag : new LoadingState(view);
+		LoadingState state = tag instanceof LoadingState ? (LoadingState) tag : new LoadingState(view, compact, dialogSurface);
 		view.setTag(R.id.standard_loading_appearance, state); state.apply();
 	}
 }

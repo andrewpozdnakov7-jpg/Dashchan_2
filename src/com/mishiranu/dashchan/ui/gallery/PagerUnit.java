@@ -617,7 +617,7 @@ public class PagerUnit implements PagerInstance.Callback {
 			return;
 		}
 		cancelTikTokTransitionImmediately();
-		interrupt(true);
+		interrupt(true, VideoPageFrames.Transition.ITEMS_CHANGED);
 		pagerAdapter.recycleAll();
 		viewPager.setCount(galleryInstance.galleryItems.size());
 		viewPager.setCurrentIndex(Math.max(0, Math.min(position, galleryInstance.galleryItems.size() - 1)));
@@ -680,7 +680,7 @@ public class PagerUnit implements PagerInstance.Callback {
 		updateImageTikTokButton(getCurrentGalleryItem());
 		updateActive();
 		if (galleryMode) {
-			interrupt(true);
+			interrupt(true, VideoPageFrames.Transition.GRID);
 			pagerInstance.leftHolder = null;
 			pagerInstance.currentHolder = null;
 			pagerInstance.rightHolder = null;
@@ -784,10 +784,13 @@ public class PagerUnit implements PagerInstance.Callback {
 	}
 
 	private void interrupt(boolean force) {
+		interrupt(force, force ? VideoPageFrames.Transition.CLOSE : null);
+	}
+	private void interrupt(boolean force, VideoPageFrames.Transition transition) {
 		seekGestureView.removeCallbacks(hideSeekGesture);
 		hideSeekGesture.run();
 		imageUnit.interrupt(force);
-		videoUnit.interrupt(force);
+		videoUnit.interrupt(force, transition);
 	}
 
 	public void onFinish() {
@@ -920,6 +923,14 @@ public class PagerUnit implements PagerInstance.Callback {
 				boolean matchingResource = holder.galleryItem != null && key.equals(CacheManager.getInstance()
 						.getCachedFileKey(holder.galleryItem.getThumbnailUri(chan)));
 				boolean setImage = canApplyThumbnail(holder, awaitImmediate, matchingResource);
+				if (VideoDiagnostics.isRecording()) {
+					Uri media = holder.galleryItem != null ? holder.galleryItem.getFileUri(chan) : null;
+					Uri thumbnail = holder.galleryItem != null ? holder.galleryItem.getThumbnailUri(chan) : null;
+					VideoDiagnostics.recordImageCache("pager_thumbnail", setImage ? "apply" : "reject",
+							media != null ? media.toString() : null, thumbnail != null ? thumbnail.toString() : null,
+							"instant=" + instantly + " await_immediate=" + awaitImmediate + " matches=" + matchingResource
+									+ " page_frame=" + (holder.videoPageFrame != null) + " has_image=" + holder.photoView.hasImage());
+				}
 				if (setImage) {
 					holder.recyclePhotoView();
 					holder.simpleBitmapDrawable = new SimpleBitmapDrawable(bitmap,
@@ -946,6 +957,11 @@ public class PagerUnit implements PagerInstance.Callback {
 		}
 		Chan chan = Chan.get(galleryInstance.chanName);
 		Uri uri = holder.galleryItem.getThumbnailUri(chan);
+		if (VideoDiagnostics.isRecording()) {
+			Uri media = holder.galleryItem.getFileUri(chan);
+			VideoDiagnostics.recordImageCache("pager_thumbnail", "fallback", media != null ? media.toString() : null,
+					uri != null ? uri.toString() : null, "source=site_thumbnail reason=no_matching_page_frame");
+		}
 		if (uri != null && holder.galleryItem.width > 0 && holder.galleryItem.height > 0) {
 			target.awaitImmediate = true;
 			target.keepScale = keepScale;
@@ -981,6 +997,10 @@ public class PagerUnit implements PagerInstance.Callback {
 		holder.photoView.setImage(holder.simpleBitmapDrawable, false, true, false);
 		holder.photoViewThumbnail = true;
 		VideoDiagnostics.recordUi("gallery page_frame phase=bound holder=" + System.identityHashCode(holder));
+		if (VideoDiagnostics.isRecording()) {
+			VideoDiagnostics.recordImageCacheBitmap("pager_frame", "bind", null, null,
+					"holder=" + System.identityHashCode(holder) + " frame=" + System.identityHashCode(frame), frame.bitmap);
+		}
 		return true;
 	}
 
@@ -1287,6 +1307,7 @@ public class PagerUnit implements PagerInstance.Callback {
 					+ " manually=" + manually + " gridMode=" + galleryMode
 					+ " finished=" + finished + " initialized=" + viewsInitialized);
 			if (finished || !viewsInitialized) return;
+			com.mishiranu.dashchan.util.CrashReports.record(com.mishiranu.dashchan.util.CrashReports.Event.GALLERY_PAGE);
 			boolean mayShowThumbnailOnly = galleryMode || (!manually && !Preferences.isVideoPlayAfterScroll());
 			PagerInstance.ViewHolder holder = (PagerInstance.ViewHolder) centerView.getTag();
 			if (index < previousIndex) {
@@ -1493,7 +1514,7 @@ public class PagerUnit implements PagerInstance.Callback {
 			Chan chan = Chan.get(galleryInstance.chanName);
 			Context context = galleryInstance.callback.getWindow().getContext();
 			// Gallery chrome has its own dark theme; dialogs must use the application's theme.
-			DialogMenu dialogMenu = new DialogMenu(dialogContext, false);
+			DialogMenu dialogMenu = new DialogMenu(dialogContext);
 			dialogMenu.setTitle(!StringUtils.isEmpty(galleryItem.originalName)
 					? galleryItem.originalName : galleryItem.getFileName(chan));
 			dialogMenu.add(R.string.tiktok_filter, this::showTikTokFilterDialog);

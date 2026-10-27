@@ -499,10 +499,15 @@ public class ForegroundManager implements Handler.Callback {
 
 	private static class ItemsAdapter extends ArrayAdapter<CharSequence> {
 		private final View header;
+		private final boolean standard;
 
 		public ItemsAdapter(Context context, int resource, ArrayList<CharSequence> items, View header) {
+			this(context, resource, items, header, false);
+		}
+		public ItemsAdapter(Context context, int resource, ArrayList<CharSequence> items, View header, boolean standard) {
 			super(context, resource, android.R.id.text1, items);
 			this.header = header;
+			this.standard = standard;
 		}
 
 		@Override
@@ -519,7 +524,12 @@ public class ForegroundManager implements Handler.Callback {
 			if (header != null && position == 0) {
 				return header;
 			}
-			return super.getView(position, convertView, parent);
+			View row = super.getView(position, convertView, parent);
+			if (standard) {
+				TextView text = row.findViewById(android.R.id.text1);
+				com.mishiranu.dashchan.widget.InterfaceAppearance.standardChoiceRow(row, text);
+			}
+			return row;
 		}
 
 		@Override
@@ -597,6 +607,10 @@ public class ForegroundManager implements Handler.Callback {
 				int outerPadding = imageLayout.getResources().getDimensionPixelOffset(R.dimen.dialog_padding_text);
 				((FrameLayout.LayoutParams) imageView.getLayoutParams()).setMargins(0, outerPadding, outerPadding,
 						outerPadding / 2);
+				if (com.mishiranu.dashchan.widget.InterfaceAppearance.isEnabled(requireContext())) {
+					((FrameLayout.LayoutParams) imageView.getLayoutParams()).setMargins(0, 0, 0, 0);
+					com.mishiranu.dashchan.widget.InterfaceAppearance.standardCustomInsets(imageLayout);
+				}
 			}
 			ArrayList<CharSequence> itemsList = new ArrayList<>();
 			if (imageLayout != null) {
@@ -605,8 +619,8 @@ public class ForegroundManager implements Handler.Callback {
 			Collections.addAll(itemsList, items);
 			int resId = ResourceUtils.obtainAlertDialogLayoutResId(requireContext(), multiple
 					? ResourceUtils.DialogLayout.MULTI_CHOICE : ResourceUtils.DialogLayout.SINGLE_CHOICE);
-			ItemsAdapter adapter = new ItemsAdapter(requireContext(), resId, itemsList, imageLayout);
-			AlertDialog alertDialog = new MotionDialogBuilder(requireContext())
+			ItemsAdapter adapter = new ItemsAdapter(requireContext(), resId, itemsList, imageLayout, true);
+			AlertDialog alertDialog = MotionDialogBuilder.standard(requireContext())
 					.setTitle(descriptionText)
 					.setAdapter(adapter, null)
 					.setPositiveButton(android.R.string.ok, this)

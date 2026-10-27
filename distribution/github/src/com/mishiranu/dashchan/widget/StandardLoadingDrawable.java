@@ -26,10 +26,13 @@ final class StandardLoadingDrawable extends Drawable implements Animatable, Draw
 	private boolean requested;
 	private int mode = -1, background, ink;
 	StandardLoadingDrawable(ProgressBar view) {
-		owner = new WeakReference<>(view); size = StandardAppearance.dp(view, 48);
+		this(view, 48, 34);
+	}
+	StandardLoadingDrawable(ProgressBar view, int containerDp, int indicatorDp) {
+		owner = new WeakReference<>(view); size = StandardAppearance.dp(view, containerDp);
 		material = PullLoadingIndicator.createMaterial(view.getContext()); child = material.getDrawable();
 		material.setContainerWidth(size); material.setContainerHeight(size);
-		material.setIndicatorSize(StandardAppearance.dp(view, 34));
+		material.setIndicatorSize(StandardAppearance.dp(view, indicatorDp));
 		child.setVisible(false, false, false); child.setCallback(this);
 	}
 	void palette(int background, int ink) {
@@ -39,10 +42,14 @@ final class StandardLoadingDrawable extends Drawable implements Animatable, Draw
 		}
 	}
 	void sync() {
+		sync(ValueAnimator.areAnimatorsEnabled() && InterfaceMotion.isEnabled());
+	}
+	/** Package fixture seam for reduced motion, without changing device animation settings. */
+	void sync(boolean animate) {
 		ProgressBar view = owner.get();
 		boolean active = requested && isVisible() && view != null && view.isAttachedToWindow() && view.isShown()
 				&& view.getWindowVisibility() == View.VISIBLE && view.hasWindowFocus();
-		int next = !active ? 0 : ValueAnimator.areAnimatorsEnabled() && InterfaceMotion.isEnabled() ? 2 : 1;
+		int next = !active ? 0 : animate ? 2 : 1;
 		if (mode != next) {
 			mode = next; child.setVisible(next != 0, false, next == 2);
 			if (next != 2) { for (Runnable task : scheduled) unscheduleSelf(task); scheduled.clear(); }

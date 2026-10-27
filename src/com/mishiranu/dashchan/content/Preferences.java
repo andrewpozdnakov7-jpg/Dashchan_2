@@ -2255,6 +2255,11 @@ public class Preferences {
 	public static final String KEY_HARDWARE_VIDEO_ACCELERATION = "hardware_video_acceleration";
 	public static final String KEY_EXTENDED_VIDEO_DIAGNOSTICS = "extended_video_diagnostics";
 	public static final String KEY_MAX_RELAX_IME_FIX = "experimental_max_relax_ime_fix";
+	public static final String KEY_CRASH_REPORT_PROMPTS = "crash_report_prompts";
+	public static final boolean DEFAULT_CRASH_REPORT_PROMPTS = true;
+	public static boolean isCrashReportPromptEnabled() {
+		return PREFERENCES.getBoolean(KEY_CRASH_REPORT_PROMPTS, DEFAULT_CRASH_REPORT_PROMPTS);
+	}
 	public static final boolean DEFAULT_MAX_RELAX_IME_FIX = false;
 
 	public static boolean isMaxRelaxImeFixEnabled() {

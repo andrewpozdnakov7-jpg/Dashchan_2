@@ -1,5 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+	<string name="crash_reports_title">Crash reports</string>
+	<string name="crash_report_prompt_enabled">Offer to share crash reports</string>
+	<string name="crash_report_prompt_summary">After a crash, on the next launch. Reports are never sent automatically.</string>
+	<string name="crash_reports_saved">Saved crash reports</string>
+	<string name="crash_reports_saved_summary">Stored on this device only: up to 8 reports, for 14 days.</string>
+	<string name="crash_reports_empty">No saved crash reports</string>
+	<string name="crash_report_offer_title">The app closed unexpectedly</string>
+	<string name="crash_report_offer_message">A technical report was saved to help find the cause. You can review it before sharing. Nothing is sent automatically.</string>
+	<string name="crash_report_view">View report</string>
+	<string name="crash_report_send">Send</string>
+	<string name="crash_report_later">Not now</string>
+	<string name="crash_report_loading">Loading report…</string>
+	<string name="crash_report_unavailable">The report is unavailable</string>
+	<string name="crash_report_delete_confirm">Delete this crash report?</string>
+	<string name="crash_test_title">Crash the app</string>
+	<string name="crash_test_summary">Deliberately crash the app to test crash reports.</string>
+	<string name="crash_test_confirm">The app will deliberately crash to test crash reports. Unsaved changes may be lost. Open the app again afterwards.</string>
 	<string name="my_posts_tracking_active">Tracking active</string>
 	<string name="my_posts_tracking_stopped">Tracking stopped</string>
 	<string name="close_gallery_grid_on_background_tap">Close gallery by tapping the background</string>

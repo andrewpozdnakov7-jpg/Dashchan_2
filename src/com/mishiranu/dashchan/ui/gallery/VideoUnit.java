@@ -119,7 +119,17 @@ public class VideoUnit {
 	private BackgroundDrawable backgroundDrawable;
 	private VideoStartupPreview startupPreview;
 	private final NextVideoPreparation nextVideoPreparation;
-	private final VideoPageFrames<VideoPageFrame> pageFrames = new VideoPageFrames<>();
+	private final VideoPageFrames<VideoPageFrame> pageFrames = new VideoPageFrames<>(this::recordPageFrameCache);
+	private void recordPageFrameCache(String event, String reason, VideoPreparationIdentity requested,
+			VideoPreparationIdentity stored, VideoPageFrame frame, int entries) {
+		if (!VideoDiagnostics.isRecording()) return;
+		String details = "owner=" + System.identityHashCode(this) + " reason=" + reason + " entries=" + entries
+				+ " frame=" + (frame != null ? System.identityHashCode(frame) : 0)
+				+ " requested_ms=" + (requested != null ? requested.requestedPosition : -1)
+				+ " cached_ms=" + (stored != null ? stored.requestedPosition : -1);
+		VideoDiagnostics.recordImageCacheBitmap("page_frame", event,
+				requested != null ? requested.resource : null, null, details, frame != null ? frame.bitmap : null);
+	}
 	private VideoPreparationIdentity startupFrameIdentity;
 	private Bitmap preparedStartupFrame;
 	private boolean firstFrameReady;
@@ -578,7 +588,7 @@ public class VideoUnit {
 
 	public void onPause(boolean changingConfigurations) {
 		nextVideoPreparation.stop();
-		pageFrames.clear();
+		pageFrames.onTransition(changingConfigurations ? VideoPageFrames.Transition.CONFIGURATION : VideoPageFrames.Transition.PAUSE);
 		finishControlsMotion();
 		preloadResumed = false;
 		dismissPlaybackSpeedPopupMenu();
@@ -650,9 +660,12 @@ public class VideoUnit {
 	}
 
 	public void interrupt(boolean force) {
+		interrupt(force, force ? VideoPageFrames.Transition.CLOSE : null);
+	}
+	void interrupt(boolean force, VideoPageFrames.Transition transition) {
 		if (force) controlsBinding.clear();
 		startupFrameIdentity = null;
-		if (force) pageFrames.clear();
+		if (transition != null) pageFrames.onTransition(transition);
 		PagerInstance.ViewHolder selected = instance.currentHolder;
 		if (force || !preloadResumed || pictureInPictureTransferred) nextVideoPreparation.stop();
 		else nextVideoPreparation.retainFor(selected != null && selected.galleryItem != null
@@ -857,14 +870,23 @@ public class VideoUnit {
 	}
 
 	VideoPageFrame findPageFrame(GalleryItem item) {
-		if (item == null || !Preferences.isUseVideoPlayer() || !nextVideoPreparation.allowsPageFrames()) return null;
+		if (item == null || !Preferences.isUseVideoPlayer() || !nextVideoPreparation.allowsPageFrames()) {
+			VideoDiagnostics.recordImageCache("page_frame", "miss", null, null,
+					"owner=" + System.identityHashCode(this) + " reason=" + (item == null ? "no_item"
+							: !Preferences.isUseVideoPlayer() ? "player_disabled" : "low_ram_policy"));
+			return null;
+		}
 		updatePageFrameWindow();
 		Chan chan = Chan.get(instance.galleryInstance.chanName);
 		if (!item.isOpenableVideo(chan)) return null;
 		Uri uri = item.getFileUri(chan);
 		File file = uri != null && "file".equals(uri.getScheme()) && uri.getPath() != null ? new File(uri.getPath())
 				: uri != null ? CacheManager.getInstance().getMediaFile(uri, false) : null;
-		if (uri == null || file == null || !file.isFile()) return null;
+		if (uri == null || file == null || !file.isFile()) {
+			VideoDiagnostics.recordImageCache("page_frame", "miss", uri != null ? uri.toString() : null, null,
+					"owner=" + System.identityHashCode(this) + " reason=local_file_unavailable");
+			return null;
+		}
 		cachePreparedPageFrame();
 		return pageFrames.get(NextVideoPreparation.identity(uri, file));
 	}
@@ -1038,6 +1060,7 @@ public class VideoUnit {
 	}
 
 	private void initializePlayer(Bitmap preparedFrame) {
+		com.mishiranu.dashchan.util.CrashReports.record(com.mishiranu.dashchan.util.CrashReports.Event.VIDEO_START);
 		boolean animateEntrance = !controlsBinding.retainsControls();
 		bindingMediaControls = true;
 		try {
@@ -1890,6 +1913,7 @@ public class VideoUnit {
 			return false;
 		}
 		nextVideoPreparation.stop();
+		com.mishiranu.dashchan.util.CrashReports.record(com.mishiranu.dashchan.util.CrashReports.Event.PIP_ENTER);
 		clearStartupPreview();
 		cancelScrubbing();
 		boolean playing = player.isPlaying();

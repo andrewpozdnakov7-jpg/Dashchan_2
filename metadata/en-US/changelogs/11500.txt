@@ -1,0 +1,4 @@
+Continued Material 3 interface updates: playback speed, gallery menus, audio player, additional dialogs, loading indicators and the built-in browser.
+Added local crash reports with viewing, manual sharing and deletion. Nothing is sent automatically.
+Fixed video frame cache clearing when switching to the gallery grid or normally moving to the background. Expanded image-loading and preview-selection diagnostics.
+Protection features remain in testing.

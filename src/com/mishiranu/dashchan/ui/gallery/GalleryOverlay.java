@@ -344,6 +344,7 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
+		com.mishiranu.dashchan.util.CrashReports.record(com.mishiranu.dashchan.util.CrashReports.Event.GALLERY_OPEN);
 		galleryState = new ViewModelProvider(this).get(GalleryStateViewModel.class);
 		viewportState = new ViewModelProvider(requireActivity()).get(GalleryViewportViewModel.class);
 		if (savedInstanceState != null) {
@@ -1773,6 +1774,12 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 
 	@Override
 	public void navigatePost(GalleryItem galleryItem, boolean manually, boolean force) {
+		if (VideoDiagnostics.isRecording()) {
+			Uri media = galleryItem.getFileUri(Chan.get(instance.chanName));
+			VideoDiagnostics.recordImageCache("thread_sync", "request", media != null ? media.toString() : null, null,
+					"enabled=" + scrollThread + " allowed=" + checkAllowNavigatePost(manually)
+							+ " manual=" + manually + " force=" + force + " grid=" + galleryMode);
+		}
 		if (checkAllowNavigatePost(manually) && (scrollThread || force)) {
 			if (force) rememberViewport();
 			((FragmentHandler) requireActivity()).scrollToPost(instance.chanName, galleryItem.boardName,

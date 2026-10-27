@@ -197,6 +197,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 	@android.annotation.SuppressLint("AppCompatCustomView")
 	public void onViewCreated(@NonNull View view, Bundle savedInstanceState) {
 		super.onViewCreated(view, savedInstanceState);
+		com.mishiranu.dashchan.util.CrashReports.record(com.mishiranu.dashchan.util.CrashReports.Event.POSTING_OPEN);
 
 		Chan chan = Chan.get(getChanName());
 		postingConfiguration = chan.configuration.safe().obtainPosting(getBoardName(), getThreadNumber() == null);

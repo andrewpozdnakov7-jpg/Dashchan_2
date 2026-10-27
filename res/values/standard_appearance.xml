@@ -6,6 +6,7 @@
     <item type="id" name="standard_search_appearance" />
     <item type="id" name="standard_menu_list" />
     <item type="id" name="standard_loading_appearance" />
+    <item type="id" name="standard_native_content_appearance" />
     <item type="id" name="standard_dialog_appearance" />
     <item type="id" name="standard_destructive_action" />
     <attr name="standardPopupAppearance" format="boolean" />
