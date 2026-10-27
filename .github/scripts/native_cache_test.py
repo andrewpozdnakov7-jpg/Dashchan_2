@@ -1,5 +1,8 @@
 import json
+import os
 from pathlib import Path
+import shutil
+import subprocess
 import tempfile
 import unittest
 from unittest import mock
@@ -208,6 +211,71 @@ class NativeCacheTest(unittest.TestCase):
             self.skipTest("Symlink privilege unavailable")
         with self.assertRaises(ValueError):
             self.key()
+
+
+class FfmpegGitFallbackTest(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.upstream = self.root / "upstream"
+        self.parent = self.root / "application"
+        for directory in (self.upstream, self.parent):
+            directory.mkdir()
+            self.git(directory, "init", "-q")
+        (self.parent / "application.txt").write_text("synthetic application\n")
+        self.commit(self.parent)
+        self.target = self.parent / "build/ffmpeg"
+        repo = Path(__file__).resolve().parents[2]
+        source = (repo / "Dashchan-Webm/shared-prepare.sh").read_text(encoding="utf-8")
+        function = "prepare_git_source() {" + source.split("prepare_git_source() {", 1)[1].split(
+            "\nprepare_source_with_git_fallback()", 1)[0]
+        self.script = self.root / "prepare-fixture.sh"
+        self.script.write_text('set -e -o pipefail\n' + function + '\nprepare_git_source "$@"\n', encoding="utf-8")
+        self.bash = os.environ.get("SLOOOP_TEST_BASH") or shutil.which("bash")
+        if not self.bash:
+            self.skipTest("Bash unavailable; exercised by Linux CI")
+
+    def git(self, directory, *arguments):
+        return subprocess.check_output(["git", "-C", str(directory), *arguments], text=True).strip()
+
+    def commit(self, directory):
+        self.git(directory, "add", ".")
+        self.git(directory, "-c", "user.name=Release Fixture", "-c", "user.email=test@example.invalid",
+                 "commit", "-qm", "Synthetic release fixture")
+        return self.git(directory, "rev-parse", "HEAD")
+
+    def prepare(self, release="8.1.3", archive_version=None, wrong_commit=False):
+        (self.upstream / "RELEASE").write_text(release + "\n")
+        if archive_version is not None:
+            (self.upstream / "VERSION").write_text(archive_version + "\n")
+        revision = self.commit(self.upstream)
+        self.git(self.upstream, "tag", "n8.1.3")
+        result = subprocess.run([self.bash, self.script.as_posix(), "ffmpeg", "8.1.3", "refs/tags/n8.1.3",
+                                 "0" * 40 if wrong_commit else revision,
+                                 self.upstream.as_posix(), self.target.as_posix()],
+                                cwd=self.parent, text=True, capture_output=True)
+        return result
+
+    def test_git_snapshot_inside_application_has_release_version_file(self):
+        result = self.prepare()
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("8.1.3\n", (self.target / "VERSION").read_text())
+        self.assertEqual("ffmpeg:8.1.3\n", (self.target / ".dashchan-version").read_text())
+        # The ancestor is a real unrelated Git repository, as on a CI checkout.
+        self.assertEqual(self.git(self.parent, "rev-parse", "HEAD"), self.git(self.target, "rev-parse", "HEAD"))
+
+    def test_wrong_pinned_commit_does_not_publish_version_or_marker(self):
+        self.assertNotEqual(0, self.prepare(wrong_commit=True).returncode)
+        self.assertFalse(self.target.exists())
+
+    def test_wrong_release_cannot_be_relabelled_as_the_pin(self):
+        self.assertNotEqual(0, self.prepare(release="8.1.2").returncode)
+        self.assertFalse(self.target.exists())
+
+    def test_conflicting_existing_version_cannot_be_overwritten(self):
+        self.assertNotEqual(0, self.prepare(archive_version="other-source").returncode)
+        self.assertFalse(self.target.exists())
 
 
 if __name__ == "__main__":
