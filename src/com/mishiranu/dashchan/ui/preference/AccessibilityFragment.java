@@ -142,7 +142,7 @@ public class AccessibilityFragment extends PreferenceFragment {
 			entries[i] = installedFonts.get(i).name;
 		}
 		AlertDialog dialog = MotionDialogBuilder.standard(requireContext())
-				.setTitle(R.string.delete_installed_font)
+				.setTitle(R.string.delete_font_dialog_title)
 				.setItems(entries, (listDialog, which) -> {
 					AlertDialog confirmationDialog = MotionDialogBuilder.standard(requireContext(), true)
 						.setMessage(getString(R.string.delete_custom_font_confirmation__format, entries[which]))

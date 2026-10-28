@@ -1,0 +1,6 @@
+E444 built-in integration for Slooop
+Based on ech-bz/Dashchan-Extensions (fork of TrixiEther/Dashchan-Extensions).
+Source revision: 432b8e0df6563dc68c202efac2008165b6293ffc
+Source: https://github.com/ech-bz/Dashchan-Extensions/tree/432b8e0df6563dc68c202efac2008165b6293ffc/extensions/e444
+Original code is distributed under GNU GPL version 3 or later; see root COPYING.
+Slooop adaptations replace reflective hooks with typed post binding and explicit JSON adapters.

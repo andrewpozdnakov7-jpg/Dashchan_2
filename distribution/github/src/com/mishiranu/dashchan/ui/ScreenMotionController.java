@@ -76,7 +76,8 @@ public final class ScreenMotionController {
 		int duration = container ? (back ? 300 : 340) : spec.durationMs;
 		Session session = new Session(spec, transition, duration, scene, bounds);
 		install(session);
-		if (scene != null) outgoing.suppressScreenMotionExit();
+		// A local state change reuses its root; it must not suppress a future fragment exit.
+		if (scene != null && outgoing != incoming) outgoing.suppressScreenMotionExit();
 		return session;
 	}
 

@@ -134,7 +134,8 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 							}
 						}
 						return text;
-					}, null, InputType.TYPE_CLASS_TEXT);
+					}, null, InputType.TYPE_CLASS_TEXT)
+					.setHelperText(getString(R.string.default_starting_board__summary));
 		}
 		if (board.allowCatalog) {
 			addCheck(true, Preferences.KEY_LOAD_CATALOG.bind(chanName), Preferences.DEFAULT_LOAD_CATALOG,

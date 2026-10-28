@@ -12,21 +12,30 @@ import android.view.View;
 import android.view.WindowManager;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.TextView;
+import chan.util.StringUtils;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
 import com.mishiranu.dashchan.util.FlagUtils;
 import com.mishiranu.dashchan.util.SharedPreferences;
+import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.util.ViewUtils;
 import com.mishiranu.dashchan.widget.SafePasteEditText;
+import com.mishiranu.dashchan.widget.ThemeEngine;
 
 public class EditPreference extends DialogPreference<String> {
 	public final CharSequence hint;
 	public final int inputType;
+	private CharSequence helperText;
 
 	public EditPreference(Context context, String key, String defaultValue,
 			CharSequence title, SummaryProvider<String> summaryProvider, CharSequence hint, int inputType) {
 		super(context, key, defaultValue, title, summaryProvider);
 		this.hint = hint;
 		this.inputType = inputType;
+	}
+
+	public void setHelperText(CharSequence helperText) {
+		this.helperText = helperText;
 	}
 
 	@Override
@@ -55,6 +64,20 @@ public class EditPreference extends DialogPreference<String> {
 		editText.requestFocus();
 		addFieldLabel(pair.second, hint, editText);
 		pair.second.addView(editText, LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+		if (!StringUtils.isEmpty(helperText)) {
+			TextView helper = new TextView(pair.second.getContext(), null, android.R.attr.textAppearanceSmall);
+			ThemeEngine.applyStyle(helper);
+			helper.setText(helperText);
+			helper.setTextColor(ResourceUtils.getColor(helper.getContext(), android.R.attr.textColorSecondary));
+			ViewUtils.setTextSizeScaled(helper, 12);
+			helper.setSingleLine(false);
+			helper.setMaxLines(Integer.MAX_VALUE);
+			helper.setEllipsize(null);
+			helper.setPaddingRelative(editText.getPaddingStart(),
+					Math.round(4 * ResourceUtils.obtainDensity(helper)), editText.getPaddingEnd(), 0);
+			InterfaceAppearance.standardCustomCaption(helper);
+			pair.second.addView(helper, LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+		}
 		return super.configureDialog(savedInstanceState, builder).setView(pair.first)
 				.setPositiveButton(android.R.string.ok, (d, which) -> ConcurrentUtils.HANDLER
 						.post(() -> setValue(editText.getText().toString())));

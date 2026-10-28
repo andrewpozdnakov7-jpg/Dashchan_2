@@ -28,6 +28,8 @@ public interface FragmentHandler {
 
 	void pushFragment(ContentFragment fragment);
 	void removeFragment();
+	/** Present a local state change using the host's normal back transition. No navigation is committed. */
+	default void animateContentBack(ContentFragment owner, Runnable change) { change.run(); }
 
 	DownloadService.Binder getDownloadBinder();
 	boolean requestStorage();

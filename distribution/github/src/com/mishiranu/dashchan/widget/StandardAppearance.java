@@ -56,7 +56,7 @@ final class StandardAppearance {
 				{android.R.attr.state_activated}, {android.R.attr.state_selected}, {}}, new int[]{
 				com.mishiranu.dashchan.util.OpaqueColors.blend(background, normal, .38f), selected, selected, selected, normal});
 	}
-	private static Drawable rowBackground(View view, AppearanceColors c) {
+	static Drawable rowBackground(View view, AppearanceColors c) {
 		StateListDrawable fill = new StateListDrawable();
 		fill.addState(new int[]{-android.R.attr.state_enabled}, shape(view, Color.TRANSPARENT, 0));
 		fill.addState(new int[]{android.R.attr.state_checked}, shape(view, c.primaryContainer, 0));
@@ -67,48 +67,87 @@ final class StandardAppearance {
 				new int[]{Color.TRANSPARENT, c.ripple}), fill, shape(view, Color.WHITE, 0));
 	}
 
-	private enum Kind {SETTINGS, SECTION, SERVICE, MENU, STATE, ERROR, PAGE, INPUT, CUSTOM_CONTENT, CUSTOM_UNTITLED, CUSTOM_STACK, CUSTOM_ROWS, CUSTOM_CHOICE_ROW}
-	private static final class Saved {
+	private enum Kind {SETTINGS, SECTION, SERVICE, MENU, MODAL_CHOICE, STATE, ERROR, PAGE, INPUT, MESSAGE, SPINNER, CUSTOM_CONTENT, CUSTOM_UNTITLED, CUSTOM_STACK, CUSTOM_ROWS, CUSTOM_CHOICE_ROW}
+	static final class Saved {
 		final View view; final int start, top, end, bottom, minHeight, minWidth, height;
 		final int marginStart, marginEnd, marginTop, marginBottom, textMinHeight, textMinWidth, textMaxWidth;
 		final boolean duplicateParent;
+		final int textMinLines, textMaxLines, textMaxHeight, gravity, textMinEms, textMaxEms;
+		final boolean hadLayoutParams, textSingleLine;
 		final Drawable background; final ColorStateList backgroundTint;
 		final ColorStateList compoundTint, checkMarkTint;
+		final android.text.TextUtils.TruncateAt ellipsize;
+		final android.text.method.TransformationMethod transformation;
 		Saved(View view) {
 			this.view = view; start = view.getPaddingStart(); top = view.getPaddingTop();
 			end = view.getPaddingEnd(); bottom = view.getPaddingBottom(); minHeight = view.getMinimumHeight();
 			minWidth = view.getMinimumWidth(); background = view.getBackground(); backgroundTint = view.getBackgroundTintList();
 			textMinHeight = view instanceof TextView ? ((TextView) view).getMinHeight() : -1;
+			textMinLines = view instanceof TextView ? ((TextView) view).getMinLines() : -1;
+			textMaxLines = view instanceof TextView ? ((TextView) view).getMaxLines() : -1;
+			textMaxHeight = view instanceof TextView ? ((TextView) view).getMaxHeight() : -1;
+			textSingleLine = view instanceof TextView && ((TextView) view).isSingleLine();
+			textMinEms = view instanceof TextView ? ((TextView) view).getMinEms() : -1;
+			textMaxEms = view instanceof TextView ? ((TextView) view).getMaxEms() : -1;
+			gravity = view instanceof TextView ? ((TextView) view).getGravity() : 0;
 			textMinWidth = view instanceof TextView ? ((TextView) view).getMinWidth() : -1;
 			textMaxWidth = view instanceof TextView ? ((TextView) view).getMaxWidth() : -1;
 			duplicateParent = view.isDuplicateParentStateEnabled();
 			compoundTint = view instanceof TextView ? ((TextView) view).getCompoundDrawableTintList() : null;
 			checkMarkTint = view instanceof android.widget.CheckedTextView ? ((android.widget.CheckedTextView) view).getCheckMarkTintList() : null;
+			ellipsize = view instanceof TextView ? ((TextView) view).getEllipsize() : null;
+			transformation = view instanceof TextView ? ((TextView) view).getTransformationMethod() : null;
 			ViewGroup.LayoutParams params = view.getLayoutParams(); height = params != null ? params.height : 0;
+			hadLayoutParams = params != null;
 			ViewGroup.MarginLayoutParams margin = params instanceof ViewGroup.MarginLayoutParams ? (ViewGroup.MarginLayoutParams) params : null;
 			marginStart = margin != null ? margin.getMarginStart() : 0; marginEnd = margin != null ? margin.getMarginEnd() : 0;
 			marginTop = margin != null ? margin.topMargin : 0; marginBottom = margin != null ? margin.bottomMargin : 0;
 		}
 		void restore() {
-			view.setPaddingRelative(start, top, end, bottom); view.setMinimumHeight(minHeight); view.setMinimumWidth(minWidth);
+			restoreSpacing(); view.setMinimumHeight(minHeight); view.setMinimumWidth(minWidth);
 			if (textMinHeight >= 0) ((TextView) view).setMinHeight(textMinHeight);
+			else if (textMinLines >= 0) ((TextView) view).setMinLines(textMinLines);
+			if (view instanceof TextView) ((TextView) view).setGravity(gravity);
 			if (textMinWidth >= 0) ((TextView) view).setMinWidth(textMinWidth);
+			else if (textMinEms >= 0) ((TextView) view).setMinEms(textMinEms);
 			if (textMaxWidth >= 0) ((TextView) view).setMaxWidth(textMaxWidth);
+			else if (textMaxEms >= 0) ((TextView) view).setMaxEms(textMaxEms);
 			view.setDuplicateParentStateEnabled(duplicateParent);
 			if (view instanceof TextView) ((TextView) view).setCompoundDrawableTintList(compoundTint);
+			if (view instanceof TextView) ((TextView) view).setEllipsize(ellipsize);
 			if (view instanceof android.widget.CheckedTextView) ((android.widget.CheckedTextView) view).setCheckMarkTintList(checkMarkTint);
 			view.setBackground(background); view.setBackgroundTintList(backgroundTint);
+		}
+		void restoreSpacing() {
+			view.setPaddingRelative(start, top, end, bottom);
+			restoreMargins();
+		}
+		void restoreMargins() {
 			ViewGroup.LayoutParams params = view.getLayoutParams();
 			if (params instanceof ViewGroup.MarginLayoutParams) {
 				ViewGroup.MarginLayoutParams m = (ViewGroup.MarginLayoutParams) params;
 				m.setMarginStart(marginStart); m.setMarginEnd(marginEnd); m.topMargin = marginTop; m.bottomMargin = marginBottom;
 			}
 		}
+		void restoreHeight() {
+			if (hadLayoutParams && view.getLayoutParams() != null) view.getLayoutParams().height = height;
+		}
+		void restoreTextBounds() {
+			if (!(view instanceof TextView)) return;
+			TextView text = (TextView) view;
+			text.setSingleLine(textSingleLine);
+			if (textMinHeight >= 0) text.setMinHeight(textMinHeight);
+			else if (textMinLines >= 0) text.setMinLines(textMinLines);
+			if (textMaxLines >= 0) text.setMaxLines(textMaxLines);
+			else if (textMaxHeight >= 0) text.setMaxHeight(textMaxHeight);
+			text.setTransformationMethod(transformation);
+		}
 	}
 	private static final class Layout {
 		final View root; final ArrayList<Saved> saved = new ArrayList<>();
 		final java.util.IdentityHashMap<View, Integer> stackMargins = new java.util.IdentityHashMap<>();
 		Kind kind; TextView title, summary, end; View widgets; boolean applied;
+		View adapterContent;
 		ImageView errorIcon; int errorIconWidth, errorIconHeight;
 		Layout(View root) { this.root = root; remember(root); }
 		void remember(View view) {
@@ -121,6 +160,8 @@ final class StandardAppearance {
 		}
 		void applyResolved(boolean enabled) {
 			if (applied) for (Saved s : saved) s.restore();
+			boolean choice = kind == Kind.MENU || kind == Kind.MODAL_CHOICE || kind == Kind.CUSTOM_CHOICE_ROW;
+			if (applied && choice) for (Saved s : saved) s.restoreHeight();
 			if (applied) for (java.util.Map.Entry<View, Integer> entry : stackMargins.entrySet()) {
 				ViewGroup.LayoutParams p = entry.getKey().getLayoutParams();
 				if (p instanceof ViewGroup.MarginLayoutParams) ((ViewGroup.MarginLayoutParams) p).topMargin = entry.getValue();
@@ -133,6 +174,34 @@ final class StandardAppearance {
 			applied = enabled;
 			if (!applied) return;
 			AppearanceColors c = colors(root.getContext());
+			if (kind == Kind.SPINNER) {
+				root.setMinimumHeight(dp(root, 48));
+				root.setPaddingRelative(dp(root, 24), dp(root, 8), dp(root, 24), dp(root, 8));
+				root.setBackgroundTintList(null); root.setBackground(rowBackground(root, c));
+				styleSpinnerLabels(widgets, root.isEnabled(), c);
+				if (title != null) { title.setPadding(0, 0, 0, 0); title.setMinHeight(0); title.setMinimumHeight(0); }
+				if (end instanceof android.widget.CheckedTextView) ((android.widget.CheckedTextView) end).setCheckMarkTintList(choiceColors(c));
+				return;
+			}
+			if (kind == Kind.MESSAGE) {
+				title.setPaddingRelative(dp(root, 24), dp(root, 24), dp(root, 24), dp(root, 16));
+				ViewGroup actions = (ViewGroup) widgets;
+				summary.setPaddingRelative(dp(root, 24), title.getVisibility() == View.GONE ? dp(root, 24) : 0,
+						dp(root, 24), dp(root, actions.getChildCount() == 0 ? 24 : 16));
+				title.setTextColor(textColors(InterfaceAppearance.contrasting(c.onSurface, c.surfaceContainer, 4.5), c.surfaceContainer));
+				summary.setTextColor(title.getTextColors());
+				widgets.setPaddingRelative(dp(root, 24), 0, dp(root, 24), dp(root, actions.getChildCount() == 0 ? 0 : 16));
+				for (int i = 0; i < actions.getChildCount(); i++) {
+					Button button = (Button) actions.getChildAt(i);
+					button.setMinHeight(dp(root, 48)); button.setMinimumHeight(dp(root, 48));
+					button.setMinWidth(dp(root, 48)); button.setMinimumWidth(dp(root, 48));
+					button.setTextColor(textColors(InterfaceAppearance.contrasting(c.primary, c.surfaceContainer, 4.5), c.surfaceContainer));
+					button.setBackgroundTintList(null);
+					button.setBackground(new RippleDrawable(ColorStateList.valueOf(c.ripple), null, shape(button, Color.WHITE, 28)));
+					button.setPaddingRelative(dp(root, 12), dp(root, 4), dp(root, 12), dp(root, 4));
+				}
+				return;
+			}
 			if (kind == Kind.PAGE) { root.setBackgroundTintList(null); root.setBackgroundColor(c.window); return; }
 			if (kind == Kind.CUSTOM_CONTENT || kind == Kind.CUSTOM_UNTITLED || kind == Kind.CUSTOM_STACK || kind == Kind.CUSTOM_ROWS) {
 				if (kind != Kind.CUSTOM_ROWS) root.setPaddingRelative(dp(root, 24), kind == Kind.CUSTOM_UNTITLED ? dp(root, 24) : 0, dp(root, 24), dp(root, 8));
@@ -185,21 +254,27 @@ final class StandardAppearance {
 				while (textContainer != root && !contains(textContainer, summary)
 						&& textContainer.getParent() instanceof View) textContainer = (View) textContainer.getParent();
 			}
-			int horizontal = kind == Kind.CUSTOM_CHOICE_ROW ? 24 : 16;
+			int horizontal = kind == Kind.CUSTOM_CHOICE_ROW || kind == Kind.MODAL_CHOICE ? 24 : 16;
 			if (textContainer != root) {
 				root.setPaddingRelative(dp(root, horizontal), 0, dp(root, horizontal), 0);
 				textContainer.setPaddingRelative(0, dp(root, 8), 0, dp(root, 8));
 			} else root.setPaddingRelative(dp(root, horizontal), dp(root, 8), dp(root, horizontal), dp(root, 8));
-			if ((kind == Kind.MENU || kind == Kind.CUSTOM_CHOICE_ROW) && title != root) {
+			if (choice && title != null) {
 				// Only the row owns the 48dp target. Native labels can carry two minima.
-				title.setPadding(0, 0, 0, 0); title.setMinHeight(0); title.setMinimumHeight(0);
+				if (title != root) title.setPadding(0, 0, 0, 0);
+				title.setMinHeight(0); title.setMinimumHeight(title == root ? dp(root, 48) : 0);
+				title.setGravity((title.getGravity() & ~android.view.Gravity.VERTICAL_GRAVITY_MASK) | android.view.Gravity.CENTER_VERTICAL);
+				if (title.getLayoutParams() != null) title.getLayoutParams().height = ViewGroup.LayoutParams.WRAP_CONTENT;
+				if (root.getLayoutParams() != null) root.getLayoutParams().height = ViewGroup.LayoutParams.WRAP_CONTENT;
 			}
-			if (kind == Kind.SERVICE || kind == Kind.MENU || kind == Kind.CUSTOM_CHOICE_ROW) {
+			if (kind == Kind.SERVICE || choice) {
 				for (TextView text : new TextView[]{title, summary, end}) {
 					if (text == null) continue;
 					if (text != root) text.setDuplicateParentStateEnabled(text.isEnabled() == root.isEnabled());
 					int normal = text == title ? c.onSurface : c.onSurfaceVariant;
-					text.setTextColor(serviceTextColors(normal, c.surface, c));
+					int surface = kind == Kind.MODAL_CHOICE ? c.surfaceContainer : c.surface;
+					if (kind == Kind.MODAL_CHOICE) normal = InterfaceAppearance.contrasting(normal, surface, 4.5);
+					text.setTextColor(serviceTextColors(normal, surface, c));
 					if (kind == Kind.CUSTOM_CHOICE_ROW && text instanceof android.widget.CheckedTextView)
 						((android.widget.CheckedTextView) text).setCheckMarkTintList(choiceColors(c));
 				}
@@ -245,6 +320,7 @@ final class StandardAppearance {
 	}
 	static void service(View root, TextView title, TextView metadata, TextView end) { layout(root, Kind.SERVICE, title, metadata, end); }
 	static void menu(View root, TextView title) { layout(root, Kind.MENU, title, null, null); }
+	static void modalChoice(View root, TextView title) { layout(root, Kind.MODAL_CHOICE, title, null, null); }
 	static void customInsets(View root) { layout(root, Kind.CUSTOM_CONTENT, null, null, null); }
 	static void untitledInsets(View root) { layout(root, Kind.CUSTOM_UNTITLED, null, null, null); }
 	static void customStack(ViewGroup root, boolean outerInsets) {
@@ -260,6 +336,82 @@ final class StandardAppearance {
 		state.kind = outerInsets ? Kind.CUSTOM_STACK : Kind.CUSTOM_ROWS; state.apply();
 	}
 	static void customChoiceRow(View root, TextView title) { layout(root, Kind.CUSTOM_CHOICE_ROW, title, null, null); }
+	static void messageContent(View root, TextView title, TextView message, ViewGroup actions) {
+		prepare(root, title, message, null, actions);
+		Layout state = (Layout) root.getTag(R.id.standard_layout_appearance);
+		state.kind = Kind.MESSAGE; state.title = title; state.summary = message; state.widgets = actions;
+		InterfaceAppearance.standardRole(title, InterfaceAppearance.Role.DIALOG_TITLE);
+		InterfaceAppearance.standardRole(message, InterfaceAppearance.Role.DIALOG_BODY);
+		for (int i = 0; i < actions.getChildCount(); i++) {
+			View button = actions.getChildAt(i); state.remember(button);
+			InterfaceAppearance.standardRole(button, InterfaceAppearance.Role.STANDARD_BUTTON);
+		}
+		state.apply();
+	}
+	/** Only labels receive typography. Semantic bitmaps and compound drawables keep their colors. */
+	static void spinnerText(View view) {
+		if (view instanceof TextView && !(view instanceof EditText)) {
+			InterfaceAppearance.standardRole(view, InterfaceAppearance.Role.CUSTOM_CHOICE_TEXT);
+		} else if (view instanceof ViewGroup) {
+			ViewGroup group = (ViewGroup) view;
+			for (int i = 0; i < group.getChildCount(); i++) spinnerText(group.getChildAt(i));
+		}
+	}
+	static void spinnerChoice(View root, View content, TextView marker) {
+		root.setTag(R.id.standard_spinner_choice, Boolean.TRUE);
+		View label = content instanceof ViewGroup && ((ViewGroup) content).getChildCount() == 1
+				? ((ViewGroup) content).getChildAt(0) : content;
+		prepare(root, null, null, marker, content);
+		Layout state = (Layout) root.getTag(R.id.standard_layout_appearance);
+		if (state.adapterContent != label) {
+			// Adapters may replace even their convertView. Do not retain detached row trees.
+			state.saved.removeIf(s -> s.view != root && s.view != content && s.view != marker);
+			state.adapterContent = label;
+		}
+		rememberSpinnerLabels(state, content);
+		state.kind = Kind.SPINNER; state.title = label instanceof TextView ? (TextView) label : null;
+		state.widgets = content; state.end = marker;
+		spinnerText(content); state.apply();
+	}
+	private static void rememberSpinnerLabels(Layout state, View view) {
+		if (view instanceof TextView) state.remember(view);
+		else if (view instanceof ViewGroup) {
+			ViewGroup group = (ViewGroup) view;
+			for (int i = 0; i < group.getChildCount(); i++) rememberSpinnerLabels(state, group.getChildAt(i));
+		}
+	}
+	static void resetSpinnerChoice(View root) {
+		Object tag = root.getTag(R.id.standard_layout_appearance);
+		if (!(tag instanceof Layout) || ((Layout) tag).kind != Kind.SPINNER) return;
+		Layout state = (Layout) tag;
+		for (Saved saved : state.saved) saved.restore();
+		resetSpinnerLabels(state.widgets);
+		state.saved.clear(); state.remember(root); state.applied = false; state.adapterContent = null;
+	}
+	private static void resetSpinnerLabels(View view) {
+		if (view instanceof TextView && !(view instanceof EditText)) {
+			Object tag = view.getTag(R.id.interface_appearance_state);
+			if (tag instanceof InterfaceAppearance.State) {
+				((InterfaceAppearance.State) tag).restore(view);
+				view.setTag(R.id.interface_appearance_state, null);
+			}
+		} else if (view instanceof ViewGroup) {
+			ViewGroup group = (ViewGroup) view;
+			for (int i = 0; i < group.getChildCount(); i++) resetSpinnerLabels(group.getChildAt(i));
+		}
+	}
+	private static void styleSpinnerLabels(View view, boolean enabled, AppearanceColors c) {
+		view.setEnabled(enabled);
+		if (view instanceof TextView && !(view instanceof EditText)) {
+			TextView text = (TextView) view;
+			text.setSingleLine(false); text.setMaxLines(Integer.MAX_VALUE); text.setEllipsize(null);
+			text.setTextColor(textColors(InterfaceAppearance.contrasting(c.onSurface, c.surfaceContainer, 4.5), c.surfaceContainer));
+			if (text instanceof android.widget.CheckedTextView) ((android.widget.CheckedTextView) text).setCheckMarkTintList(choiceColors(c));
+		} else if (view instanceof ViewGroup) {
+			ViewGroup group = (ViewGroup) view;
+			for (int i = 0; i < group.getChildCount(); i++) styleSpinnerLabels(group.getChildAt(i), enabled, c);
+		}
+	}
 	static void state(View root, TextView message) { layout(root, Kind.STATE, message, null, null); }
 	static void errorState(View root, ImageView icon, TextView message) {
 		layout(root, Kind.ERROR, message, null, null);
@@ -275,6 +427,10 @@ final class StandardAppearance {
 	static void resolveLayout(View root, boolean enabled) {
 		Object tag = root.getTag(R.id.standard_layout_appearance); if (tag instanceof Layout) ((Layout) tag).applyResolved(enabled);
 	}
+	static void resolveDialog(AlertDialog dialog, boolean enabled) {
+		Object state = dialog.getWindow().getDecorView().getTag(R.id.standard_dialog_appearance);
+		if (state instanceof DialogState) ((DialogState) state).applyResolved(enabled);
+	}
 	static void refresh(View view) {
 		Object tag = view.getTag(R.id.standard_layout_appearance); if (tag instanceof Layout) ((Layout) tag).apply();
 		Object toolbar = view.getTag(R.id.standard_toolbar_appearance); if (toolbar instanceof ToolbarState) ((ToolbarState) toolbar).apply();
@@ -282,8 +438,13 @@ final class StandardAppearance {
 		Object loading = view.getTag(R.id.standard_loading_appearance); if (loading instanceof LoadingState) ((LoadingState) loading).apply();
 		Object dialog = view.getTag(R.id.standard_dialog_appearance); if (dialog instanceof DialogState) ((DialogState) dialog).apply();
 		ServiceAppearance.refresh(view);
+		SettingsContentAppearance.refresh(view);
 		NativeContentAppearance.refresh(view);
 		if (view instanceof ProgressDialog.Content) ((ProgressDialog.Content) view).refreshAppearance();
+		if (view instanceof MessageDialog.Content) ((MessageDialog.Content) view).refreshAppearance();
+		if (view instanceof SecureSpinner.ChoiceRow) ((SecureSpinner.ChoiceRow) view).refreshAppearance();
+		if (view instanceof com.mishiranu.dashchan.chan.e444.E444PostView)
+			((com.mishiranu.dashchan.chan.e444.E444PostView) view).refreshAppearance();
 	}
 
 	static Context dialogContext(Context context) {
@@ -293,6 +454,10 @@ final class StandardAppearance {
 		dialog(dialog, false);
 	}
 	static void dialog(AlertDialog dialog, boolean page) {
+		installDialog(dialog, page);
+	}
+	static void textDialog(android.app.Dialog dialog) { installDialog(dialog, false); }
+	private static void installDialog(android.app.Dialog dialog, boolean page) {
 		Window window = dialog.getWindow(); if (window == null) return;
 		View decor = window.getDecorView();
 		DialogState state = new DialogState(dialog, page);
@@ -316,7 +481,7 @@ final class StandardAppearance {
 		}
 	}
 	private static final class DialogState {
-		final AlertDialog dialog; final ArrayList<Saved> buttons = new ArrayList<>();
+		final android.app.Dialog dialog; final ArrayList<Saved> buttons = new ArrayList<>();
 		final boolean page;
 		ButtonBarState bar;
 		TitlePanelState titlePanel;
@@ -324,14 +489,17 @@ final class StandardAppearance {
 		View menu;
 		Drawable background; int width, height, preparedWidth, preparedColor, preparedRadius;
 		boolean applied, windowOwned, backgroundPrepared;
-		DialogState(AlertDialog dialog, boolean page) { this.dialog = dialog; this.page = page; }
+		DialogState(android.app.Dialog dialog, boolean page) { this.dialog = dialog; this.page = page; }
 		void prepareWindow() {
+			prepareWindow(InterfaceAppearance.isEnabled(dialog.getContext()));
+		}
+		void prepareWindow(boolean enabled) {
 			Window window = dialog.getWindow();
 			if (com.mishiranu.dashchan.ui.posting.PostingFormDiagnostics.isRecording()) {
 				com.mishiranu.dashchan.util.ScreenDiagnostics.note(window, "standard_prepare",
 						"effective=" + InterfaceAppearance.isEnabled(dialog.getContext()) + " menu=" + (menu != null));
 			}
-			if (window == null || !InterfaceAppearance.isEnabled(dialog.getContext())) return;
+			if (window == null || !enabled) return;
 			View decor = window.getDecorView();
 			if (!windowOwned) {
 				background = decor.getBackground(); width = window.getAttributes().width; height = window.getAttributes().height;
@@ -354,34 +522,37 @@ final class StandardAppearance {
 			}
 		}
 		void apply() {
+			applyResolved(InterfaceAppearance.isEnabled(dialog.getContext()));
+		}
+		void applyResolved(boolean enabled) {
 			Window window = dialog.getWindow(); if (window == null) return;
-			if (!InterfaceAppearance.isEnabled(dialog.getContext())) {
+			if (!enabled) {
 				if (windowOwned) {
 					window.setBackgroundDrawable(background); window.setLayout(width, height);
 					windowOwned = false; backgroundPrepared = false;
 				}
-				if (applied) {
-					for (Saved button : buttons) button.restore();
+				if (applied && dialog instanceof AlertDialog) {
 					if (bar != null) bar.restore();
+					for (Saved button : buttons) { button.restore(); button.restoreHeight(); }
 					if (titlePanel != null) titlePanel.restore();
 					if (listPadding != null) listPadding.restore();
-					ListView list = dialog.getListView();
+					ListView list = ((AlertDialog) dialog).getListView();
 					if (list != null && list.getAdapter() instanceof ChoiceAdapter) {
-						android.util.SparseBooleanArray checked = list.getCheckedItemPositions() != null ? list.getCheckedItemPositions().clone() : null;
-						list.setAdapter(((ChoiceAdapter) list.getAdapter()).delegate);
-						if (checked != null) for (int i = 0; i < checked.size(); i++) list.setItemChecked(checked.keyAt(i), checked.valueAt(i));
+						replaceAdapter(list, ((ChoiceAdapter) list.getAdapter()).delegate);
 					}
 					applied = false;
 				}
 				return;
 			}
-			prepareWindow();
+			prepareWindow(enabled);
+			if (!(dialog instanceof AlertDialog)) return;
+			AlertDialog alertDialog = (AlertDialog) dialog;
 			if (!applied) {
 				for (int which : new int[]{AlertDialog.BUTTON_POSITIVE, AlertDialog.BUTTON_NEGATIVE, AlertDialog.BUTTON_NEUTRAL}) {
-					Button button = dialog.getButton(which); if (button != null && buttons.stream().noneMatch(s -> s.view == button)) buttons.add(new Saved(button));
+					Button button = alertDialog.getButton(which); if (button != null && buttons.stream().noneMatch(s -> s.view == button)) buttons.add(new Saved(button));
 				}
 			}
-			applied = true; applyDialog(dialog);
+			applied = true; applyDialog(alertDialog);
 			if (com.mishiranu.dashchan.ui.posting.PostingFormDiagnostics.isRecording()) {
 				com.mishiranu.dashchan.util.ScreenDiagnostics.note(window, "standard_applied",
 						"widthPx=" + preparedWidth + " radiusDp=" + preparedRadius);
@@ -405,10 +576,12 @@ final class StandardAppearance {
 		}
 		void apply() {
 			parent.view.setPadding(0, 0, 0, 0);
+			parent.view.setMinimumHeight(0);
+			if (parent.view.getLayoutParams() != null) parent.view.getLayoutParams().height = ViewGroup.LayoutParams.WRAP_CONTENT;
 			for (View spacer : spacers) spacer.setVisibility(View.GONE);
 		}
 		void restore() {
-			parent.restore(); for (int i = 0; i < spacers.size(); i++) spacers.get(i).setVisibility(visibility.get(i));
+			parent.restore(); parent.restoreHeight(); for (int i = 0; i < spacers.size(); i++) spacers.get(i).setVisibility(visibility.get(i));
 		}
 	}
 	/** Only public button references and a validated LinearLayout parent; no internal IDs/order assumptions. */
@@ -438,12 +611,14 @@ final class StandardAppearance {
 		}
 		void reflow(int width) {
 			restore();
+			parent.setMinimumHeight(0);
 			// 12dp container + 12dp button text inset = the content's 24dp edge.
 			parent.setPaddingRelative(dp(parent, 12), dp(parent, 8), dp(parent, 12), dp(parent, 12));
 			if (scroll != null) scroll.view.setPadding(0, 0, 0, 0);
 			int desired = 0, visibleButtons = 0;
 			for (View child : children) if (child instanceof Button && child.getVisibility() != View.GONE) {
 				Button button = (Button) child;
+				button.getLayoutParams().height = ViewGroup.LayoutParams.WRAP_CONTENT;
 				desired += Math.max(dp(parent, 48), (int) Math.ceil(android.text.Layout.getDesiredWidth(button.getText(), button.getPaint())) + dp(parent, 24));
 				visibleButtons++;
 			}
@@ -480,7 +655,8 @@ final class StandardAppearance {
 			Button button = dialog.getButton(which); if (button == null) continue;
 			InterfaceAppearance.standardRole(button, InterfaceAppearance.Role.STANDARD_BUTTON);
 			button.setSingleLine(false); button.setMaxLines(Integer.MAX_VALUE); button.setAllCaps(false);
-			button.setMinimumHeight(dp(button, 48));
+			button.setMinHeight(dp(button, 48)); button.setMinimumHeight(dp(button, 48));
+			if (button.getLayoutParams() != null) button.getLayoutParams().height = ViewGroup.LayoutParams.WRAP_CONTENT;
 			button.setMinimumWidth(0); button.setMinWidth(0);
 			button.setMaxWidth(Math.max(1, (width - dp(decor, 48)) / Math.max(1, buttonCount) - dp(decor, 8)));
 			boolean destructive = which == AlertDialog.BUTTON_POSITIVE && Boolean.TRUE.equals(decor.getTag(R.id.standard_destructive_action));
@@ -523,12 +699,17 @@ final class StandardAppearance {
 		View custom = dialog.findViewById(android.R.id.custom); styleDialogInputs(custom);
 		ListView list = dialog.getListView();
 		if (list != null && list.getAdapter() != null && !(list.getAdapter() instanceof ChoiceAdapter)) {
-			android.util.SparseBooleanArray checked = list.getCheckedItemPositions() != null ? list.getCheckedItemPositions().clone() : null;
-			int position = list.getSelectedItemPosition() >= 0 ? list.getSelectedItemPosition() : list.getFirstVisiblePosition();
-			list.setAdapter(new ChoiceAdapter(list.getAdapter()));
-			if (checked != null) for (int i = 0; i < checked.size(); i++) list.setItemChecked(checked.keyAt(i), checked.valueAt(i));
-			if (position >= 0) list.setSelection(position);
+			replaceAdapter(list, new ChoiceAdapter(list.getAdapter()));
 		}
+	}
+	private static void replaceAdapter(ListView list, ListAdapter adapter) {
+		android.util.SparseBooleanArray checked = list.getCheckedItemPositions() != null ? list.getCheckedItemPositions().clone() : null;
+		int first = list.getFirstVisiblePosition(), selected = list.getSelectedItemPosition();
+		int anchor = selected >= first && selected < first + list.getChildCount() ? selected : first;
+		View row = list.getChildAt(anchor - first); int top = row != null ? row.getTop() : 0;
+		list.setAdapter(adapter);
+		if (checked != null) for (int i = 0; i < checked.size(); i++) list.setItemChecked(checked.keyAt(i), checked.valueAt(i));
+		if (anchor >= 0) list.setSelectionFromTop(anchor, top);
 	}
 	private static void styleDialogInputs(View view) {
 		if (view == null) return;
@@ -557,13 +738,13 @@ final class StandardAppearance {
 		@Override public void unregisterDataSetObserver(android.database.DataSetObserver observer) { delegate.unregisterDataSetObserver(observer); }
 		@Override public View getView(int position, View convertView, ViewGroup parent) {
 			View row = delegate.getView(position, convertView, parent);
+			if (Boolean.TRUE.equals(row.getTag(R.id.standard_spinner_choice))) return row;
 			TextView text = row instanceof TextView ? (TextView) row : row.findViewById(android.R.id.text1);
 			if (text != null) {
-				InterfaceAppearance.menuRow(row, text);
+				InterfaceAppearance.modalChoiceRow(row, text);
 				if (InterfaceAppearance.isEnabled(row.getContext())) {
 					AppearanceColors c = colors(row.getContext());
 					ColorStateList tint = choiceColors(c);
-					text.setCompoundDrawableTintList(tint);
 					if (text instanceof android.widget.CheckedTextView) ((android.widget.CheckedTextView) text).setCheckMarkTintList(tint);
 				}
 			}

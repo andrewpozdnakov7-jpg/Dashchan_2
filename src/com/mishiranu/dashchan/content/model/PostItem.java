@@ -79,6 +79,9 @@ public class PostItem implements AttachmentItem.Master, ChanMarkup.MarkupExtra, 
 	}
 
 	private final Post post;
+	private String e444Data;
+	public String getE444Data() { return e444Data != null ? e444Data : post.e444Data; }
+	public void setE444Data(String data) { e444Data = data; }
 	private final ThreadData threadData;
 	private final String chanName;
 	private final String boardName;

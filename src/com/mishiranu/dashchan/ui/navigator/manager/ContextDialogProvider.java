@@ -120,6 +120,7 @@ final class ContextDialogProvider extends DialogUnit.DialogProvider<ContextDialo
 					() -> { revealed.add(key(post)); rebuild(); }).create().show();
 		}
 	}
+	@Override public boolean canHandleBack() { return !closed && !factory.history.isEmpty(); }
 	@Override public boolean onBackPressed() {
 		if (closed || factory.history.isEmpty()) return false;
 		factory.target = factory.history.removeLast(); resetSelection(); load(); return true;

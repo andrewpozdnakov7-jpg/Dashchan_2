@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+	<item type="id" name="settings_content_appearance" />
 	<item type="id" name="screen_theme_choice" />
 
 	<item type="id" name="drawer_recycler_view" />
@@ -98,4 +99,6 @@
 	<item type="id" name="standard_service_appearance" />
 	<item type="id" name="posting_form_owner" />
 	<item type="id" name="posting_form_field" />
+	<item type="id" name="standard_spinner_choice" />
+	<item type="id" name="ech_post_appearance" />
 </resources>

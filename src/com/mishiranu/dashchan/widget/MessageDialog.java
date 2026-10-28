@@ -51,8 +51,9 @@ public final class MessageDialog extends com.mishiranu.dashchan.content.security
 
 	private MessageDialog(Builder builder) {
 		super(builder.context, ResourceUtils.getResourceId(builder.context, android.R.attr.alertDialogTheme, 0));
-		SurfaceMotion.configureDialog(this);
+		// configureDialog observes getDecorView(): choose the title-free layout before it is inflated.
 		requestWindowFeature(Window.FEATURE_NO_TITLE);
+		SurfaceMotion.configureDialog(this);
 		setCanceledOnTouchOutside(true);
 		Context context = getContext();
 		Content content = new Content(context);
@@ -64,12 +65,15 @@ public final class MessageDialog extends com.mishiranu.dashchan.content.security
 		addButton(content.actions, builder.positive, BUTTON_POSITIVE, builder.positiveListener);
 		setContentView(content, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
 				ViewGroup.LayoutParams.WRAP_CONTENT));
+		InterfaceAppearance.configureStandardTextDialog(this);
+		content.refreshAppearance();
 	}
 
 	private void addButton(ActionRow actions, CharSequence text, int which,
 			DialogInterface.OnClickListener listener) {
 		if (text == null) return;
 		Button button = new Button(getContext(), null, android.R.attr.buttonBarButtonStyle);
+		button.setId(which == BUTTON_POSITIVE ? android.R.id.button1 : android.R.id.button2);
 		ThemeEngine.applyStyle(button);
 		button.setText(text);
 		button.setAllCaps(false);
@@ -115,7 +119,7 @@ public final class MessageDialog extends com.mishiranu.dashchan.content.security
 		}
 	}
 
-	private static final class Content extends ViewGroup {
+	static final class Content extends ViewGroup {
 		final TextView title;
 		final TextView message;
 		final ScrollView scroll;
@@ -124,14 +128,18 @@ public final class MessageDialog extends com.mishiranu.dashchan.content.security
 		Content(Context context) {
 			super(context);
 			title = new TextView(context);
+			title.setId(com.mishiranu.dashchan.R.id.standard_dialog_title);
 			ThemeEngine.applyStyle(title);
 			title.setTextColor(ResourceUtils.getColorStateList(context, android.R.attr.textColorPrimary));
 			title.setTextSize(20);
 			title.setTypeface(ResourceUtils.TYPEFACE_MEDIUM);
 			title.setAccessibilityHeading(true);
+			title.setSingleLine(false);
+			title.setEllipsize(null);
 			title.setPadding(dp(context, 24), dp(context, 20), dp(context, 24), dp(context, 12));
 			addView(title);
 			message = new TextView(context);
+			message.setId(android.R.id.message);
 			ThemeEngine.applyStyle(message);
 			message.setTextColor(ResourceUtils.getColorStateList(context, android.R.attr.textColorPrimary));
 			message.setTextSize(16);
@@ -145,20 +153,26 @@ public final class MessageDialog extends com.mishiranu.dashchan.content.security
 			addView(actions);
 		}
 
+		void refreshAppearance() {
+			InterfaceAppearance.standardMessageContent(this, title, message, actions);
+		}
+
 		@Override
 		protected void onMeasure(int widthSpec, int heightSpec) {
 			int availableHeight = Math.max(1, (int) (ViewUtils.getWindowContentSize(getContext()).y * 0.85f));
 			if (MeasureSpec.getMode(heightSpec) != MeasureSpec.UNSPECIFIED) {
 				availableHeight = Math.min(availableHeight, MeasureSpec.getSize(heightSpec));
 			}
-			int width = resolveSize(dp(getContext(), 420), widthSpec);
+			int width = resolveSize(dp(getContext(), InterfaceAppearance.isEnabled(getContext())
+					? AppearanceShapes.STANDARD_DIALOG_MAX_WIDTH : 420), widthSpec);
 			int childWidth = MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY);
 			// Reserve action space first. Only the message is allowed to consume the remaining height.
 			actions.measure(childWidth, MeasureSpec.makeMeasureSpec(availableHeight, MeasureSpec.AT_MOST));
 			int remaining = Math.max(0, availableHeight - actions.getMeasuredHeight());
 			int titleHeight = 0;
 			if (title.getVisibility() != GONE) {
-				title.measure(childWidth, MeasureSpec.makeMeasureSpec(remaining / 2, MeasureSpec.AT_MOST));
+				title.measure(childWidth, MeasureSpec.makeMeasureSpec(InterfaceAppearance.isEnabled(getContext())
+						? remaining : remaining / 2, MeasureSpec.AT_MOST));
 				titleHeight = title.getMeasuredHeight();
 			}
 			scroll.measure(childWidth, MeasureSpec.makeMeasureSpec(Math.max(0, remaining - titleHeight), MeasureSpec.AT_MOST));

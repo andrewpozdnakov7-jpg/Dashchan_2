@@ -35,6 +35,14 @@ public final class InterfaceAppearance {
 		return com.mishiranu.dashchan.util.ResourceUtils.getColor(context, com.mishiranu.dashchan.R.attr.colorTextError);
 	}
 	public static void menuRow(View view, TextView title) {}
+	public static void modalChoiceRow(View view, TextView title) {}
+	public static void standardContentHeading(TextView text) {}
+	public static void standardFormHeading(TextView text) {}
+	public static void standardFormChoice(CompoundButton button) {}
+	public static void standardCatalogCard(View card, TextView title, TextView metadata) {}
+	public static int standardCatalogColumns(Context context, int width) { return 2; }
+	public static void standardAutohideContent(View root, boolean quick) {}
+	public static void standardMixedIndicator(View indicator, CompoundButton check) {}
 	public static void serviceState(View view, TextView message) {}
 	public static void serviceErrorState(View view, ImageView icon, TextView message) {}
 	public static void standardPage(View view) {}
@@ -59,6 +67,11 @@ public final class InterfaceAppearance {
 	public static void standardSearch(View root, android.widget.SearchView search) {}
 	public static Context standardDialogContext(Context context) { return context; }
 	public static void configureStandardDialog(AlertDialog dialog) {}
+	public static void configureStandardTextDialog(android.app.Dialog dialog) {}
+	public static void standardMessageContent(View root, TextView title, TextView message, ViewGroup actions) {}
+	public static void standardSpinnerChoice(View root, View content, TextView marker) {}
+	public static void standardSpinnerField(View selected) {}
+	public static void resetSpinnerChoice(View row) {}
 	public static void configureStandardPageDialog(AlertDialog dialog) {}
 	public static void standardLinearProgress(android.widget.ProgressBar view) {}
 	public static void standardNativePanel(android.view.ViewGroup root, TextView title, TextView status, android.view.ViewGroup actions) {}

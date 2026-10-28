@@ -545,11 +545,11 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		// The new form owns one coordinated editor/primary transition after reparenting.
 		// Do not let the legacy inset callback also translate its action panel.
 		if (postingAppearance == null) ImePanelMotion.attach(view, view.findViewById(R.id.posting_action_container));
-		// Only a fresh form opening opts in. Rotation/restoration and returning from a picker
+		// Only a fresh form opening requests the IME. Rotation/restoration and returning from a picker
 		// must preserve the user's keyboard choice, rather than issuing another show request.
-		if (savedInstanceState == null && allowPosting && Preferences.isMaxRelaxImeFixEnabled()) {
+		if (savedInstanceState == null && allowPosting) {
 			initialKeyboardRequest = new PostingKeyboardRequest(requireActivity().getWindow(), view, commentView,
-					() -> isResumed() && getView() == view && Preferences.isMaxRelaxImeFixEnabled());
+					() -> isResumed() && getView() == view);
 		}
 	}
 

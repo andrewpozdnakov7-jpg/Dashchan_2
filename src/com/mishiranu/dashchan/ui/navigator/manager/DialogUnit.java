@@ -177,6 +177,7 @@ public class DialogUnit {
 		}
 
 		@Override public boolean onBackPressed() { return delegate.provider.onBackPressed(); }
+		@Override public boolean canHandleBack() { return delegate.provider.canHandleBack(); }
 
 		@Override
 		public boolean isScrolledToTop(View view) {
@@ -458,6 +459,7 @@ public class DialogUnit {
 		public CharSequence placeholder(PostItem postItem) { return null; }
 		public void onPlaceholderClick(PostItem postItem) {}
 		public boolean onBackPressed() { return false; }
+		public boolean canHandleBack() { return false; }
 
 		public void onRequestUpdate() {}
 

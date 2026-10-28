@@ -86,6 +86,7 @@ public final class CaptchaDialogAppearance {
 		content.setPadding(0, 0, 0, 0);
 		LinearLayout header = new LinearLayout(context); header.setGravity(Gravity.CENTER_VERTICAL);
 		TextView title = label(instruction, 16, text);
+		ChoiceDialogInstruction.allowFullText(title);
 		header.addView(title, new LinearLayout.LayoutParams(0, -2, 1f));
 		processingSlot = new FrameLayout(context); selectionLoading = loading();
 		processingSlot.addView(selectionLoading, new FrameLayout.LayoutParams(dp(32), dp(32), Gravity.CENTER));

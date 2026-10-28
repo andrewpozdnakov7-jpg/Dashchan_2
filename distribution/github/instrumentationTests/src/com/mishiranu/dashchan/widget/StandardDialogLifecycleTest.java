@@ -15,6 +15,91 @@ import org.junit.runner.RunWith;
 /** Prepared UI fixtures on the existing disposable debug Activity, not user data. NOT executed. */
 @RunWith(AndroidJUnit4.class)
 public class StandardDialogLifecycleTest {
+	@Test public void nativeChoiceLayoutsKeepTitleListAndUpToThreeActionsInsideTheWindow() {
+		try (ActivityScenario<PostingGestureTestActivity> scenario = ActivityScenario.launch(PostingGestureTestActivity.class)) {
+			AtomicReference<AlertDialog> current = new AtomicReference<>();
+			for (int choice = 0; choice < 3; choice++) for (int mask = 0; mask < 8; mask++) {
+				final int mode = choice, options = mask;
+				scenario.onActivity(activity -> {
+					Context context = PostingTestContext.create(activity);
+					org.junit.Assume.assumeTrue(InterfaceAppearance.isEnabled(context));
+					AlertDialog.Builder builder = MotionDialogBuilder.standard(context);
+					if ((options & 1) != 0) builder.setTitle("Delete font");
+					CharSequence[] items = {"Open Sans", "Roboto", "Ubuntu"};
+					if (mode == 0) builder.setItems(items, (d, which) -> {});
+					else if (mode == 1) builder.setSingleChoiceItems(items, 1, (d, which) -> {});
+					else builder.setMultiChoiceItems(items, new boolean[]{true, false, true}, (d, which, checked) -> {});
+					int count = options >> 1;
+					if (count > 0) builder.setPositiveButton("A long action label that must remain fully readable", null);
+					if (count > 1) builder.setNegativeButton("A second long action label", null);
+					if (count > 2) builder.setNeutralButton("A third long action label", null);
+					AlertDialog dialog = builder.create(); current.set(dialog); dialog.show();
+				});
+				InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+				scenario.onActivity(activity -> {
+					AlertDialog dialog = current.get(); android.widget.ListView list = dialog.getListView();
+					InterfaceAppearance.refreshTree(dialog.getWindow().getDecorView());
+					assertTrue(list.isShown()); assertTrue(list.getHeight() > 0); assertEquals(3, list.getCount());
+					assertEquals(0, list.getPaddingTop() - ((options & 1) != 0 ? 0 : StandardAppearance.dp(list, 16)));
+					if (mode == 1) assertTrue(list.isItemChecked(1));
+					if (mode == 2) { assertTrue(list.isItemChecked(0)); assertTrue(list.isItemChecked(2)); }
+					android.graphics.Rect listRect = new android.graphics.Rect(); list.getGlobalVisibleRect(listRect);
+					java.util.ArrayList<android.graphics.Rect> actions = new java.util.ArrayList<>();
+					for (int which : new int[]{AlertDialog.BUTTON_POSITIVE, AlertDialog.BUTTON_NEGATIVE, AlertDialog.BUTTON_NEUTRAL}) {
+						android.widget.Button button = dialog.getButton(which);
+						if (button == null || button.getVisibility() != android.view.View.VISIBLE) continue;
+						assertTrue(button.getHeight() >= StandardAppearance.dp(button, 48));
+						android.graphics.Rect bounds = new android.graphics.Rect(); assertTrue(button.getGlobalVisibleRect(bounds));
+						assertFalse(android.graphics.Rect.intersects(bounds, listRect));
+						for (android.graphics.Rect other : actions) assertFalse(android.graphics.Rect.intersects(bounds, other));
+						actions.add(bounds);
+					}
+					assertEquals(options >> 1, actions.size()); dialog.dismiss();
+				});
+			}
+		}
+	}
+	@Test public void choiceRecyclingAndAppearanceRefreshKeepDisabledIdsAndSelectedCallback() {
+		AtomicReference<AlertDialog> current = new AtomicReference<>(); AtomicInteger calls = new AtomicInteger();
+		AtomicReference<String> selected = new AtomicReference<>(); AtomicInteger shows = new AtomicInteger();
+		try (ActivityScenario<PostingGestureTestActivity> scenario = ActivityScenario.launch(PostingGestureTestActivity.class)) {
+			scenario.onActivity(activity -> {
+				Context context = PostingTestContext.create(activity);
+				org.junit.Assume.assumeTrue(InterfaceAppearance.isEnabled(context));
+				String[] entries = {"Fixture one", "Disabled", "Fixture three"};
+				android.widget.ArrayAdapter<String> adapter = new android.widget.ArrayAdapter<String>(context, android.R.layout.simple_list_item_1, entries) {
+					@Override public boolean areAllItemsEnabled() { return false; }
+					@Override public boolean isEnabled(int position) { return position != 1; }
+					@Override public boolean hasStableIds() { return true; }
+					@Override public long getItemId(int position) { return 900 + position; }
+					@Override public android.view.View getView(int position, android.view.View recycled, android.view.ViewGroup parent) {
+						android.widget.TextView text = (android.widget.TextView) super.getView(position, recycled, parent);
+						text.setMinHeight(StandardAppearance.dp(text, 72)); text.setMinimumHeight(StandardAppearance.dp(text, 64));
+						return text;
+					}
+				};
+				AlertDialog dialog = MotionDialogBuilder.standard(context).setTitle("Synthetic installed fonts")
+						.setAdapter(adapter, (d, which) -> { selected.set(entries[which]); calls.incrementAndGet(); })
+						.setNegativeButton(android.R.string.cancel, null).create();
+				dialog.setOnShowListener(d -> { shows.incrementAndGet(); com.mishiranu.dashchan.content.FontManager.apply(dialog.getWindow().getDecorView()); });
+				current.set(dialog); dialog.show();
+			});
+			InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+			scenario.onActivity(activity -> {
+				AlertDialog dialog = current.get(); android.widget.ListView list = dialog.getListView();
+				for (int i = 0; i < 3; i++) InterfaceAppearance.refreshTree(dialog.getWindow().getDecorView());
+				assertEquals(1, shows.get()); assertEquals(0, calls.get());
+				assertFalse(list.getAdapter().isEnabled(1)); assertEquals(902, list.getAdapter().getItemId(2));
+				assertTrue(list.getAdapter() instanceof android.widget.WrapperListAdapter);
+				assertFalse(((android.widget.WrapperListAdapter) list.getAdapter()).getWrappedAdapter() instanceof android.widget.WrapperListAdapter);
+				android.view.View row = list.getAdapter().getView(2, list.getChildAt(0), list);
+				assertEquals(0, ((android.widget.TextView) row).getMinHeight());
+				list.performItemClick(row, 2, 902);
+			});
+			InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+			assertEquals(1, calls.get()); assertEquals("Fixture three", selected.get());
+		}
+	}
 	@Test public void simpleInputRetainsTextSelectionAndOneOutsideInset() {
 		AtomicReference<AlertDialog> current = new AtomicReference<>();
 		AtomicReference<EditText> field = new AtomicReference<>();
@@ -150,7 +235,7 @@ public class StandardDialogLifecycleTest {
 				assertTrue(row instanceof android.widget.CheckedTextView);
 				android.widget.CheckedTextView text = (android.widget.CheckedTextView) row;
 				AppearanceColors colors = StandardAppearance.colors(dialog.getContext());
-				int checked = text.getCompoundDrawableTintList().getColorForState(
+				int checked = text.getCheckMarkTintList().getColorForState(
 						new int[]{android.R.attr.state_enabled, android.R.attr.state_checked}, 0);
 				assertEquals(InterfaceAppearance.contrasting(colors.primary, colors.surfaceContainer, 3), checked);
 				android.widget.Button cancel = dialog.getButton(AlertDialog.BUTTON_NEGATIVE);

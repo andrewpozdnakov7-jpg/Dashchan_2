@@ -8,6 +8,7 @@ import android.text.SpannableString;
 import android.text.Spanned;
 import android.text.style.BackgroundColorSpan;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.CheckBox;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
@@ -37,6 +38,7 @@ public class StandardAppearanceTest {
 			for (int i = 0; i < group.getChildCount(); i++) resolve(group.getChildAt(i), enabled);
 		}
 		StandardAppearance.resolveLayout(view, enabled);
+		SettingsContentAppearance.resolve(view, enabled);
 	}
 	private void layout(View view, int width) {
 		view.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
@@ -269,6 +271,88 @@ public class StandardAppearanceTest {
 			assertEquals(before, after);
 			assertEquals(StandardAppearance.dp(probe, 8), after.left); assertEquals(after.left, after.right);
 			assertEquals(StandardAppearance.dp(probe, 8) * 2, after.top); assertEquals(after.top, after.bottom);
+		});
+	}
+	@Test public void flatModalLabelsNormalizeBothMinimaAndRestoreThemIncludingLineMode() {
+		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+			for (boolean checked : new boolean[]{false, true}) for (boolean lines : new boolean[]{false, true}) {
+				TextView row = checked ? new android.widget.CheckedTextView(context(1)) : new TextView(context(1));
+				row.setText("Short"); row.setMinHeight(StandardAppearance.dp(row, 72));
+				if (lines) row.setMinLines(2);
+				row.setMinimumHeight(StandardAppearance.dp(row, 64));
+				row.setLayoutParams(new android.widget.AbsListView.LayoutParams(-1, -2));
+				if (checked) {
+					((android.widget.CheckedTextView) row).setCheckMarkDrawable(android.R.drawable.checkbox_on_background);
+					((android.widget.CheckedTextView) row).setChecked(true);
+				}
+				InterfaceAppearance.modalChoiceRow(row, row);
+				for (int i = 0; i < 3; i++) {
+					resolve(row, true); layout(row, StandardAppearance.dp(row, 240));
+					assertEquals(0, row.getMinHeight()); assertEquals(StandardAppearance.dp(row, 48), row.getMinimumHeight());
+					if (com.mishiranu.dashchan.content.FontManager.resolveTypeface(row.getContext(), false).equals(Typeface.DEFAULT))
+						assertEquals(StandardAppearance.dp(row, 48), row.getHeight(), 1);
+					if (checked) { assertTrue(((android.widget.CheckedTextView) row).isChecked()); assertNotNull(((android.widget.CheckedTextView) row).getCheckMarkDrawable()); }
+				}
+				resolve(row, false); assertEquals(StandardAppearance.dp(row, 64), row.getMinimumHeight());
+				if (lines) { assertEquals(2, row.getMinLines()); assertEquals(-1, row.getMinHeight()); }
+				else assertEquals(StandardAppearance.dp(row, 72), row.getMinHeight());
+				resolve(row, true); layout(row, StandardAppearance.dp(row, 240)); assertTrue(row.getHeight() >= StandardAppearance.dp(row, 48));
+			}
+		});
+	}
+	@Test public void modalCompoundRowHasOneTargetAndRestoresFixedHeightAndLabelConstraints() {
+		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+			Context context = context(1); LinearLayout root = new LinearLayout(context);
+			root.setGravity(android.view.Gravity.CENTER_VERTICAL);
+			root.setLayoutParams(new android.widget.AbsListView.LayoutParams(-1, StandardAppearance.dp(root, 96)));
+			TextView text = new TextView(context); text.setText("Choice"); text.setPadding(8, 12, 8, 12);
+			text.setMinHeight(StandardAppearance.dp(root, 72)); text.setMinimumHeight(StandardAppearance.dp(root, 64));
+			root.addView(text, new LinearLayout.LayoutParams(0, -2, 1));
+			android.widget.ImageView image = new android.widget.ImageView(context);
+			image.setImageDrawable(new android.graphics.drawable.ColorDrawable(android.graphics.Color.GREEN));
+			root.addView(image, new LinearLayout.LayoutParams(StandardAppearance.dp(root, 24), StandardAppearance.dp(root, 24)));
+			InterfaceAppearance.modalChoiceRow(root, text); resolve(root, true); layout(root, StandardAppearance.dp(root, 240));
+			assertEquals(0, text.getMinHeight()); assertEquals(0, text.getMinimumHeight());
+			assertEquals(ViewGroup.LayoutParams.WRAP_CONTENT, root.getLayoutParams().height);
+			assertTrue(root.getHeight() >= StandardAppearance.dp(root, 48)); assertNull(image.getImageTintList());
+			assertEquals(StandardAppearance.dp(root, 24), image.getHeight());
+			resolve(root, false); assertEquals(StandardAppearance.dp(root, 96), root.getLayoutParams().height);
+			assertEquals(StandardAppearance.dp(root, 72), text.getMinHeight()); assertEquals(12, text.getPaddingTop());
+		});
+	}
+	@Test public void longModalLabelsGrowAtLargeScalesWhileCompactMenusKeepTheirOwnTypography() {
+		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+			for (float scale : new float[]{1f, 1.3f, 2f}) {
+				TextView modal = new TextView(context(scale));
+				modal.setText("A long choice label with enough words to require several fully visible lines");
+				InterfaceAppearance.modalChoiceRow(modal, modal); resolve(modal, true);
+				layout(modal, StandardAppearance.dp(modal, 160));
+				assertTrue(modal.getLineCount() > 1);
+				assertTrue(modal.getHeight() >= modal.getLayout().getHeight() + modal.getCompoundPaddingTop() + modal.getCompoundPaddingBottom());
+				TextView compact = new TextView(context(scale)); compact.setText("Menu");
+				InterfaceAppearance.menuRow(compact, compact); resolve(compact, true);
+				assertTrue(modal.getTextSize() > compact.getTextSize());
+			}
+		});
+	}
+	@Test public void modalButtonsNormalizeAndRestoreNativeTextMinimumAndLayoutHeight() {
+		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+			android.app.AlertDialog dialog = MotionDialogBuilder.standard(context(1))
+					.setPositiveButton("OK", null).setNegativeButton("Cancel", null).create();
+			try {
+				dialog.create(); android.widget.Button button = dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE);
+				button.setMinHeight(StandardAppearance.dp(button, 72)); button.setMinimumHeight(StandardAppearance.dp(button, 64));
+				button.getLayoutParams().height = StandardAppearance.dp(button, 96);
+				StandardAppearance.resolveDialog(dialog, true);
+				layout(button, StandardAppearance.dp(button, 140));
+				assertEquals(StandardAppearance.dp(button, 48), button.getMinHeight());
+				assertEquals(StandardAppearance.dp(button, 48), button.getMinimumHeight());
+				assertEquals(ViewGroup.LayoutParams.WRAP_CONTENT, button.getLayoutParams().height);
+				StandardAppearance.resolveDialog(dialog, false);
+				assertEquals(StandardAppearance.dp(button, 72), button.getMinHeight());
+				assertEquals(StandardAppearance.dp(button, 64), button.getMinimumHeight());
+				assertEquals(StandardAppearance.dp(button, 96), button.getLayoutParams().height);
+			} finally { dialog.dismiss(); }
 		});
 	}
 }

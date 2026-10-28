@@ -38,6 +38,7 @@ import com.mishiranu.dashchan.widget.CardView;
 import com.mishiranu.dashchan.widget.ClickableToast;
 import com.mishiranu.dashchan.widget.DividerItemDecoration;
 import com.mishiranu.dashchan.widget.ThemeEngine;
+import com.mishiranu.dashchan.widget.InterfaceAppearance;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -49,6 +50,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 public class WallpaperCatalogFragment extends BaseListFragment {
+	@Override protected boolean useStandardServiceAppearance() { return true; }
 	private static final int MAX_CATALOG_ITEMS = 100;
 
 	@Override
@@ -56,7 +58,16 @@ public class WallpaperCatalogFragment extends BaseListFragment {
 		super.onViewCreated(view, savedInstanceState);
 		((FragmentHandler) requireActivity()).setTitleSubtitle(getString(R.string.wallpaper_catalog), null);
 		RecyclerView recyclerView = getRecyclerView();
-		recyclerView.setLayoutManager(new GridLayoutManager(recyclerView.getContext(), 2));
+		int initialWidth = Math.round(getResources().getConfiguration().screenWidthDp * ResourceUtils.obtainDensity(recyclerView))
+				- recyclerView.getPaddingLeft() - recyclerView.getPaddingRight();
+		GridLayoutManager grid = new GridLayoutManager(recyclerView.getContext(),
+				InterfaceAppearance.standardCatalogColumns(recyclerView.getContext(), initialWidth));
+		recyclerView.setLayoutManager(grid);
+		recyclerView.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
+			int columns = InterfaceAppearance.standardCatalogColumns(v.getContext(),
+					r - l - v.getPaddingLeft() - v.getPaddingRight());
+			if (grid.getSpanCount() != columns) grid.setSpanCount(columns);
+		});
 		Adapter adapter = new Adapter(recyclerView.getContext(), this::confirmDownload);
 		recyclerView.setAdapter(adapter);
 		setErrorText(getString(R.string.wallpaper_catalog_loading));
@@ -201,6 +212,7 @@ public class WallpaperCatalogFragment extends BaseListFragment {
 			holder.preview.setImageDrawable(null);
 			ImageLoader.getInstance().loadImage(Chan.getFallback(), wallpaper.previewUri, false, holder.preview);
 			holder.itemView.setOnClickListener(v -> callback.onClick(wallpaper));
+			InterfaceAppearance.standardCatalogCard(holder.itemView, holder.title, holder.summary);
 		}
 
 		@Override

@@ -5,6 +5,7 @@
 	android:layout_height="wrap_content">
 
 	<LinearLayout
+		android:id="@+id/autohide_form_content"
 		android:layout_width="match_parent"
 		android:layout_height="wrap_content"
 		android:orientation="vertical"
@@ -156,6 +157,7 @@
 			android:hint="@string/test_string" />
 
 		<View
+			android:id="@+id/autohide_width_spacer"
 			android:layout_width="320dp"
 			android:layout_height="0dp" />
 

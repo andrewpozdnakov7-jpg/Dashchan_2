@@ -331,8 +331,16 @@ public final class ScreenDiagnostics {
 			if (view instanceof TextView) {
 				TextView text = (TextView) view;
 				out.append(" textColor=").append(tint(text.getTextColors())).append(" textSizePx=").append(text.getTextSize())
-						.append(" lineHeightPx=").append(text.getLineHeight());
+						.append(" lineHeightPx=").append(text.getLineHeight())
+						.append(" textMinMaxPx=").append(text.getMinHeight()).append(",").append(text.getMaxHeight())
+						.append(" minMaxLines=").append(text.getMinLines()).append(",").append(text.getMaxLines())
+						.append(" gravity=").append(text.getGravity()).append(" fontPadding=").append(text.getIncludeFontPadding())
+						.append(" lines=").append(text.getLineCount());
+				android.graphics.Paint.FontMetricsInt metrics = text.getPaint().getFontMetricsInt();
+				out.append(" fontMetricsPx=").append(metrics.top).append(",").append(metrics.ascent).append(",")
+						.append(metrics.descent).append(",").append(metrics.bottom);
 			}
+			if (view instanceof android.widget.ListView) out.append(" dividerHeightPx=").append(((android.widget.ListView) view).getDividerHeight());
 			if (view instanceof ImageView) out.append(" iconTint=").append(tint(((ImageView) view).getImageTintList()));
 		}
 	}

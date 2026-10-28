@@ -18,6 +18,7 @@ public class StackItem implements Parcelable {
 	public final String className;
 	public final Bundle arguments;
 	public final Fragment.SavedState savedState;
+	Object backPreviewKey;
 
 	public StackItem(String className, Bundle arguments, Fragment.SavedState savedState) {
 		this.className = className;
@@ -28,6 +29,7 @@ public class StackItem implements Parcelable {
 	public StackItem(FragmentManager fragmentManager, Fragment fragment, SaveFragment saveFragment) {
 		this(fragment.getClass().getName(), fragment.getArguments(), saveFragment != null
 				? saveFragment.save(fragmentManager, fragment) : fragmentManager.saveFragmentInstanceState(fragment));
+		if (fragment instanceof ContentFragment) backPreviewKey = ((ContentFragment) fragment).backPreviewKey;
 	}
 
 	public Fragment create(ReplaceFragment replaceFragment) {
@@ -45,6 +47,9 @@ public class StackItem implements Parcelable {
 		}
 		if (savedState != null) {
 			fragment.setInitialSavedState(savedState);
+		}
+		if (backPreviewKey != null && replaceFragment == null && fragment instanceof ContentFragment) {
+			((ContentFragment) fragment).backPreviewKey = backPreviewKey;
 		}
 		return fragment;
 	}

@@ -28,6 +28,7 @@ import com.mishiranu.dashchan.util.ConcurrentUtils;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.widget.ClickableToast;
 import com.mishiranu.dashchan.widget.ThemeEngine;
+import com.mishiranu.dashchan.widget.InterfaceAppearance;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
@@ -35,6 +36,7 @@ import java.util.Locale;
 import org.json.JSONException;
 
 public class FontCatalogFragment extends BaseListFragment {
+	@Override protected boolean useStandardServiceAppearance() { return true; }
 	@Override
 	public void onViewCreated(@NonNull View view, Bundle savedInstanceState) {
 		super.onViewCreated(view, savedInstanceState);
@@ -165,6 +167,7 @@ public class FontCatalogFragment extends BaseListFragment {
 							? context.getString(R.string.font_catalog_installed_state)
 							: context.getString(R.string.download_file)));
 			holder.itemView.setOnClickListener(v -> callback.onClick(font));
+			InterfaceAppearance.serviceRow(holder.itemView, holder.title, holder.summary, null);
 		}
 
 		private static class ViewHolder extends RecyclerView.ViewHolder {

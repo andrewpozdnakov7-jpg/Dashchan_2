@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ech_captcha_prompt">Select the image where the puzzle piece fits the gap</string>
+    <string name="ech_request_failed">Could not complete the ECH request. Refresh the thread before trying again.</string>
+</resources>

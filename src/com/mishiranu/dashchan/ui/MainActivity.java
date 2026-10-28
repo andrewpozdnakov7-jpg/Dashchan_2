@@ -59,6 +59,7 @@ import chan.content.ChanConfiguration;
 import chan.content.ChanLocator;
 import chan.content.ChanManager;
 import chan.util.CommonUtils;
+import chan.util.StringUtils;
 import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.CacheManager;
@@ -180,6 +181,8 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	private DrawerMotionController drawerMotion;
 	private ThreadMotionController threadMotion;
 	private ScreenMotionController screenMotion;
+	private PredictiveBackController predictiveBack;
+	private boolean predictiveNavigationDispatch;
 	private final PageSessionStore pageSessionStore = new PageSessionStore(this::getFilesDir,
 			() -> CacheManager.getInstance().getInternalCacheFile("saved-pages"), getClass().getClassLoader());
 	private final ContentNavigationCoordinator contentNavigation = new ContentNavigationCoordinator(
@@ -275,6 +278,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		restoreDrawerPresentation(savedInstanceState);
 		CreationRestoreState state = readCreationState(savedInstanceState);
 		restoreNavigationStacks(state);
+		prepareDefaultBoardStartup(savedInstanceState, state);
 		restoreCurrentContent(state);
 		initializeStartupNavigation(savedInstanceState, state.restoredPagesSession);
 		finishCreation();
@@ -330,6 +334,8 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		drawerCommon.addView(drawerParent);
 		drawerLayout = findViewById(R.id.drawer_layout);
 		drawerLayout.setSaveEnabled(false);
+		predictiveBack = new PredictiveBackController((ViewGroup) drawerLayout.getChildAt(0),
+				this::scheduleSystemBackCallbackUpdate);
 		FrameLayout drawerInterlayer = findViewById(R.id.drawer_interlayer);
 		getLayoutInflater().inflate(R.layout.widget_toolbar, drawerInterlayer);
 		Toolbar toolbar = drawerInterlayer.findViewById(R.id.toolbar);
@@ -508,6 +514,42 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 				iterator.remove();
 			}
 		}
+	}
+
+	private void prepareDefaultBoardStartup(Bundle savedInstanceState, CreationRestoreState state) {
+		Intent intent = getIntent();
+		// Only a fresh launcher start may choose a new landing page. Framework recreation,
+		// explicit app restarts, links, notifications and PiP keep their own destination.
+		if (savedInstanceState != null || !state.restoredPagesSession
+				|| !Intent.ACTION_MAIN.equals(intent.getAction()) || !intent.hasCategory(Intent.CATEGORY_LAUNCHER)
+				|| intent.getData() != null || intent.hasExtra(C.EXTRA_CHAN_NAME)
+				|| intent.hasExtra(C.EXTRA_BOARD_NAME) || intent.hasExtra(C.EXTRA_THREAD_NUMBER)
+				|| VideoPipActivity.getPendingGalleryReturnToken() != null) return;
+		if (DrawerForm.CHAN_REDDIT.equals(getLastVisitedEnabledForum())) return;
+		Chan chan = getLastVisitedEnabledChan();
+		if (chan == null) return;
+		// This is an explicit per-forum choice, not a single-board extension's implicit default.
+		String boardName = StringUtils.validateBoardName(Preferences.PREFERENCES
+				.getString(Preferences.KEY_DEFAULT_BOARD_NAME.bind(chan.name), null));
+		if (boardName == null) return;
+
+		if (state.currentFragmentFromSaved instanceof PageFragment && currentPageItem != null
+				&& state.currentStackItemFromSaved != null) {
+			Page page = ((PageFragment) state.currentFragmentFromSaved).getPage();
+			if (Chan.get(page.chanName).name != null) {
+				Iterator<SavedPageItem> iterator = new ConcatIterable<>(preservedPageItems, stackPageItems).iterator();
+				while (iterator.hasNext()) {
+					if (getSavedPage(iterator.next()).equals(page)) iterator.remove();
+				}
+				preservedPageItems.add(new SavedPageItem(state.currentStackItemFromSaved,
+						currentPageItem.createdRealtime, currentPageItem.threadTitle, currentPageItem.allowReturn));
+			}
+		}
+		// Keep the saved boards/threads, but let normal startup navigation open the default board.
+		fragments.clear();
+		currentPageItem = null;
+		state.currentFragmentFromSaved = null;
+		state.currentStackItemFromSaved = null;
 	}
 
 	private void restoreCurrentContent(CreationRestoreState state) {
@@ -776,7 +818,15 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		}
 	}
 
-	private boolean deferContentNavigation(Runnable action) { return contentNavigation.defer(action); }
+	private boolean deferContentNavigation(Runnable action) {
+		// Keep the presentation scope on the queued request, never on an unrelated next request.
+		boolean predictive = predictiveNavigationDispatch;
+		return contentNavigation.defer(() -> {
+			boolean previous = predictiveNavigationDispatch;
+			predictiveNavigationDispatch = predictive;
+			try { action.run(); } finally { predictiveNavigationDispatch = previous; }
+		});
+	}
 
 	private void scheduleContentNavigationDrain() { contentNavigation.scheduleDrain(); }
 
@@ -789,8 +839,12 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		int ticket = contentNavigation.begin(fragment, pageItem);
 		try {
 			FragmentTransaction transaction = getSupportFragmentManager().beginTransaction();
-			if (animate) transaction.setTransition(InterfaceMotion.isEnabled() ? motionTransition
-					: FragmentTransaction.TRANSIT_FRAGMENT_OPEN);
+			boolean predictiveCommit = predictiveNavigationDispatch && predictiveBack != null &&
+					predictiveBack.isDestination(fragment.backPreviewKey);
+			if (animate && !predictiveCommit) {
+				transaction.setTransition(InterfaceMotion.isEnabled() ? motionTransition
+						: FragmentTransaction.TRANSIT_FRAGMENT_OPEN);
+			}
 			transaction.replace(R.id.content_fragment, fragment).runOnCommit(() -> {
 				if (!contentNavigation.complete(ticket)) return;
 				if (!isFinishing() && !isDestroyed()) {
@@ -800,6 +854,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 					scheduleSystemBackCallbackUpdate();
 					if (contentNavigation.shouldSaveSession()) savePagesSession();
 					scheduleContentNavigationDrain();
+					if (predictiveCommit) predictiveBack.destinationCommitted(fragment.backPreviewKey);
 				}
 			}).commit();
 		} catch (RuntimeException | Error e) {
@@ -1215,37 +1270,37 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	}
 
 	private SavedPageItem prepareTargetPreviousPage(boolean allowForeignChan) {
-		ContentFragment currentFragment = getCurrentFragment("FragmentAccess/prepareTargetPreviousPage");
+		SavedPageItem saved = peekTargetPreviousPage(allowForeignChan);
+		if (saved != null) stackPageItems.remove(saved);
+		return saved;
+	}
+
+	private boolean hasTargetPreviousPage(boolean allowForeignChan) {
+		return peekTargetPreviousPage(allowForeignChan) != null;
+	}
+
+	private SavedPageItem peekTargetPreviousPage(boolean allowForeignChan) {
+		ContentFragment currentFragment = getCurrentFragment("FragmentAccess/peekTargetPreviousPage");
+		if (!(currentFragment instanceof PageFragment)) return null;
 		String chanName = ((PageFragment) currentFragment).getPage().chanName;
 		boolean mergeChans = Preferences.isMergeChans();
 		boolean allowAnyChan = currentPageItem != null && allowForeignChan && currentPageItem.allowReturn;
 		for (int i = stackPageItems.size() - 1; i >= 0; i--) {
-			SavedPageItem savedPageItem = stackPageItems.get(i);
-			Page page = getSavedPage(savedPageItem);
-			if (isPageEnabled(page) && (allowAnyChan || mergeChans || page.chanName.equals(chanName))) {
-				stackPageItems.remove(i);
-				return savedPageItem;
-			}
+			SavedPageItem saved = stackPageItems.get(i);
+			Page page = getSavedPage(saved);
+			if (isPageEnabled(page) && (allowAnyChan || mergeChans || page.chanName.equals(chanName))) return saved;
 		}
 		return null;
 	}
 
-	private boolean hasTargetPreviousPage(boolean allowForeignChan) {
-		ContentFragment currentFragment = getCurrentFragment("FragmentAccess/hasTargetPreviousPage");
-		if (!(currentFragment instanceof PageFragment)) {
-			return false;
+	private StackItem peekBackDestination(ContentFragment current) {
+		if (current instanceof PageFragment) {
+			SavedPageItem saved = peekTargetPreviousPage(true);
+			return saved != null ? saved.stackItem : null;
 		}
-		String chanName = ((PageFragment) currentFragment).getPage().chanName;
-		boolean mergeChans = Preferences.isMergeChans();
-		boolean allowAnyChan = currentPageItem != null && allowForeignChan && currentPageItem.allowReturn;
-		for (int i = stackPageItems.size() - 1; i >= 0; i--) {
-			Page page = getSavedPage(stackPageItems.get(i));
-			if (isPageEnabled(page) &&
-					(allowAnyChan || mergeChans || page.chanName.equals(chanName))) {
-				return true;
-			}
-		}
-		return false;
+		if (!fragments.isEmpty()) return fragments.get(fragments.size() - 1);
+		SavedPageItem saved = getLastEnabledSavedPage();
+		return saved != null ? saved.stackItem : null;
 	}
 
 	private boolean navigateInitial(boolean closeOverlays) {
@@ -1549,6 +1604,24 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		navigateFragment(fragment, null, true);
 	}
 
+	@Override
+	public void animateContentBack(ContentFragment owner, Runnable change) {
+		if (owner != getCurrentFragment("FragmentAccess/animateContentBack") || owner.getView() == null) return;
+		ScreenMotionController.Session session = screenMotion != null
+				? screenMotion.prepare(owner, owner, FragmentTransaction.TRANSIT_FRAGMENT_CLOSE, false) : null;
+		try {
+			change.run();
+			if (session != null) {
+				session.bind(owner.requireView());
+				android.animation.Animator animator = session.createAnimator(null);
+				if (animator != null) animator.start();
+			}
+		} catch (RuntimeException | Error e) {
+			if (session != null) session.finish();
+			throw e;
+		}
+	}
+
 	private void navigateFragment(ContentFragment fragment, PageItem pageItem, boolean closeOverlays) {
 		navigateFragment(fragment, pageItem, closeOverlays, navigationMotionTransition());
 	}
@@ -1568,10 +1641,20 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		FragmentManager fragmentManager = getSupportFragmentManager();
 		ContentFragment currentFragment = getCurrentFragment("FragmentAccess/navigateFragment");
 		if (screenMotion != null) screenMotion.finish();
-		ThreadMotionController.Session session = threadMotion != null
+		if (threadMotion != null) threadMotion.finish();
+		boolean predictiveCommit = predictiveNavigationDispatch && predictiveBack != null &&
+				predictiveBack.isDestination(fragment.backPreviewKey);
+		if (predictiveBack != null && !predictiveCommit) {
+			predictiveBack.finish();
+			finishLocalToolbarMotion();
+			if (currentFragment != null && localBackAction(currentFragment) == 0 && !isInPictureInPictureMode()) {
+				predictiveBack.remember(currentFragment.backPreviewKey);
+			} else if (currentFragment != null) predictiveBack.forget(currentFragment.backPreviewKey);
+		}
+		ThreadMotionController.Session session = !predictiveCommit && threadMotion != null
 				? threadMotion.prepare(currentFragment, fragment, motionTransition, opening) : null;
 		fragment.setThreadMotionSession(session);
-		ScreenMotionController.Session screenSession = screenMotion != null
+		ScreenMotionController.Session screenSession = !predictiveCommit && screenMotion != null
 				? screenMotion.prepare(currentFragment, fragment, motionTransition, session != null) : null;
 		fragment.setScreenMotionSession(screenSession);
 		if (currentFragment instanceof PageFragment) {
@@ -1827,6 +1910,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	@Override
 	protected void onResume() {
 		super.onResume();
+		if (drawerMotion != null && !wideMode) drawerMotion.resume();
 		if (expandedScreen != null) expandedScreen.refreshSystemBarAppearance();
 		drawerForm.setHostResumed(true);
 		if (ThemeEngine.isDynamicThemeOutdated(this)) {
@@ -1886,6 +1970,10 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	@Override
 	public void onWindowFocusChanged(boolean hasFocus) {
 		super.onWindowFocusChanged(hasFocus);
+		if (!hasFocus) {
+			resetPredictiveBackView(false);
+			if (drawerMotion != null) drawerMotion.recover(false);
+		}
 		if (hasFocus && expandedScreen != null) expandedScreen.refreshSystemBarAppearance();
 	}
 
@@ -1936,6 +2024,9 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	@Override
 	protected void onPause() {
 		drawerForm.setHostResumed(false);
+		if (drawerMotion != null) drawerMotion.suspend();
+		resetPredictiveBackView(false);
+		if (predictiveBack != null) predictiveBack.clear();
 		savePagesSession();
 		super.onPause();
 	}
@@ -1976,6 +2067,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		finishLocalToolbarMotion();
 		if (screenMotion != null) screenMotion.finish();
 		if (threadMotion != null) threadMotion.clear();
+		if (predictiveBack != null) predictiveBack.clear();
 		contentNavigation.close();
 		getSupportFragmentManager().unregisterFragmentLifecycleCallbacks(contentLifecycle);
 		super.onDestroy();
@@ -2038,7 +2130,28 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	}
 
 	private long backPressed = 0;
-	private View predictiveBackView;
+	private boolean backGestureStarted, backGestureAborted;
+	private int backGestureLocalAction;
+	private ContentFragment backGestureSource;
+	private StackItem backGestureDestination;
+
+	private int localBackAction(ContentFragment fragment) {
+		if (com.mishiranu.dashchan.widget.PredictiveBackMotion.isImeVisible(getWindow().getDecorView())) return 1;
+		if (currentActionMode != null && currentActionMode.get() != null) return 2;
+		return fragment != null && fragment.canHandleBack() ? 3 : 0;
+	}
+
+	@Override
+	public boolean dispatchTouchEvent(android.view.MotionEvent event) {
+		return predictiveBack != null && predictiveBack.isBusy() || drawerMotion != null && drawerMotion.isBusy()
+				|| super.dispatchTouchEvent(event);
+	}
+
+	@Override
+	public void onTrimMemory(int level) {
+		if (predictiveBack != null) predictiveBack.clear();
+		super.onTrimMemory(level);
+	}
 
 	private boolean isDrawerVisibleForBack() {
 		return drawerLayout != null && (drawerLayout.isDrawerOpen(GravityCompat.START) ||
@@ -2054,7 +2167,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		if (currentFragment == null) {
 			return false;
 		}
-		if (currentFragment.canHandleBack()) {
+		if (localBackAction(currentFragment) != 0) {
 			return true;
 		}
 		if (currentFragment instanceof PageFragment) {
@@ -2078,24 +2191,32 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	@Override
 	protected boolean shouldHandleSystemBack() {
-		return !isSystemPredictiveBackEnabled() || canHandleBackInApp();
+		return predictiveBack != null && predictiveBack.isBusy() || !isSystemPredictiveBackEnabled() || canHandleBackInApp();
 	}
 
 	@Override
 	protected void onSystemBackStarted(BackEventCompat backEvent) {
+		if (predictiveBack != null && predictiveBack.isCommitting()) return;
+		resetPredictiveBackView(false);
 		if (screenMotion != null) screenMotion.finish();
 		if (threadMotion != null) threadMotion.finish();
-		if (InterfaceMotion.isEnabled() && InterfaceMotion.duration(1) == 0) return;
-		if (!wideMode && !contentNavigation.isPending() && drawerMotion != null &&
+		finishLocalToolbarMotion();
+		backGestureAborted = false;
+		if (!isSystemPredictiveBackEnabled() || isInPictureInPictureMode() || !hasWindowFocus() ||
+				getSupportFragmentManager().isStateSaved() || contentNavigation.isPending() || contentNavigation.hasRequests()) {
+			backGestureAborted = true; return;
+		}
+		if (!wideMode && drawerMotion != null &&
 				drawerMotion.start(backEvent.getSwipeEdge() == BackEventCompat.EDGE_LEFT)) return;
-		if (isSystemPredictiveBackEnabled() && !contentNavigation.isPending() && drawerLayout != null &&
-				!isDrawerVisibleForBack()) {
-			ContentFragment currentFragment = getCurrentFragment("FragmentAccess/onSystemBackStarted");
-			predictiveBackView = currentFragment != null ? currentFragment.getView() : null;
-			if (predictiveBackView != null) {
-				InterfaceMotion.cancel(predictiveBackView);
-				predictiveBackView.animate().cancel();
-			}
+		if (isDrawerVisibleForBack() && !wideMode) return;
+		backGestureSource = getCurrentFragment("FragmentAccess/onSystemBackStarted");
+		if (backGestureSource == null) return;
+		backGestureStarted = true;
+		backGestureLocalAction = localBackAction(backGestureSource);
+		backGestureDestination = backGestureLocalAction != 0 ? null : peekBackDestination(backGestureSource);
+		if (predictiveBack != null && backGestureDestination != null) {
+			predictiveBack.start(backGestureDestination.backPreviewKey,
+					backEvent.getSwipeEdge() == BackEventCompat.EDGE_LEFT);
 		}
 	}
 
@@ -2103,68 +2224,57 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	protected void onSystemBackProgressed(BackEventCompat backEvent) {
 		if (drawerMotion != null && drawerMotion.isTracking()) {
 			drawerMotion.progress(backEvent.getProgress(), backEvent.getSwipeEdge() == BackEventCompat.EDGE_LEFT);
-			return;
-		}
-		if (predictiveBackView != null) {
-			float progress = 1f - (float) Math.pow(1f - backEvent.getProgress(), 3f);
-			float direction = backEvent.getSwipeEdge() == BackEventCompat.EDGE_LEFT ? 1f : -1f;
-			float translation = 32f * ResourceUtils.obtainDensity(this) * progress;
-			predictiveBackView.setTranslationX(direction * translation);
-			predictiveBackView.setScaleX(1f - 0.02f * progress);
-			predictiveBackView.setScaleY(1f - 0.02f * progress);
-			predictiveBackView.setAlpha(1f - 0.08f * progress);
-		}
+		} else if (predictiveBack != null) predictiveBack.progress(backEvent.getProgress());
 	}
 
 	@Override
 	protected void onSystemBackCancelled() {
 		if (drawerMotion != null) drawerMotion.recover(true);
 		resetPredictiveBackView(true);
+		backGestureAborted = false;
 	}
 
 	private void resetPredictiveBackView(boolean animate) {
-		View view = predictiveBackView;
-		predictiveBackView = null;
-		resetPredictiveBackView(view, animate);
-	}
-
-	private void resetPredictiveBackView(View view, boolean animate) {
-		if (view != null) {
-			view.animate().cancel();
-			if (animate && view.isAttachedToWindow()) {
-				if (InterfaceMotion.isEnabled()) {
-					view.animate().translationX(0f).scaleX(1f).scaleY(1f).alpha(1f)
-							.setDuration(InterfaceMotion.duration(InterfaceMotion.RECOVERY_DURATION))
-							.setInterpolator(InterfaceMotion.STANDARD).start();
-				} else {
-					view.animate().translationX(0f).scaleX(1f).scaleY(1f).alpha(1f).setDuration(150)
-							.setInterpolator(new android.view.animation.AccelerateDecelerateInterpolator()).start();
-				}
-			} else {
-				view.setTranslationX(0f);
-				view.setScaleX(1f);
-				view.setScaleY(1f);
-				view.setAlpha(1f);
-			}
+		backGestureAborted |= backGestureStarted;
+		backGestureStarted = false;
+		backGestureSource = null; backGestureDestination = null;
+		if (predictiveBack != null) {
+			if (animate) predictiveBack.cancel(); else predictiveBack.finish();
 		}
 	}
 
 	@Override
 	protected void onSystemBackPressed() {
+		if (predictiveBack != null && predictiveBack.isCommitting()) return;
+		if (drawerMotion != null && drawerMotion.commitBack()) return;
+		if (backGestureAborted) { backGestureAborted = false; resetPredictiveBackView(false); return; }
+		if (backGestureStarted) {
+			ContentFragment current = getCurrentFragment("FragmentAccess/onSystemBackInvoked");
+			// Async navigation / a new local Back action must not redirect an already-started gesture.
+			if (current != backGestureSource || localBackAction(current) != backGestureLocalAction ||
+					(!wideMode && isDrawerVisibleForBack()) || contentNavigation.isPending() ||
+					contentNavigation.hasRequests() || getSupportFragmentManager().isStateSaved() ||
+					(backGestureLocalAction == 0 && peekBackDestination(current) != backGestureDestination)) {
+				resetPredictiveBackView(false);
+				backGestureAborted = false;
+				scheduleSystemBackCallbackUpdate();
+				return;
+			}
+		}
+		backGestureStarted = false; backGestureSource = null; backGestureDestination = null;
 		if (screenMotion != null) screenMotion.finish();
 		if (threadMotion != null) threadMotion.finish();
 		if (drawerMotion != null) drawerMotion.recover(true);
-		View predictiveBackView = this.predictiveBackView;
-		this.predictiveBackView = null;
-		if (InterfaceMotion.isEnabled()) {
-			// Hand the root back to FragmentManager before its exit animator starts.
-			resetPredictiveBackView(predictiveBackView, false);
-			onBackPressed(false, true, this::performDefaultBack);
-		} else {
-			onBackPressed(false, true, this::performDefaultBack);
-			resetPredictiveBackView(predictiveBackView, true);
+		Runnable navigate = () -> {
+			predictiveNavigationDispatch = predictiveBack != null && predictiveBack.isCommitting();
+			try { onBackPressed(false, true, this::performDefaultBack); }
+			finally { predictiveNavigationDispatch = false; }
+			scheduleSystemBackCallbackUpdate();
+		};
+		if (predictiveBack == null || !predictiveBack.commit(navigate)) {
+			if (predictiveBack != null) predictiveBack.finish();
+			navigate.run();
 		}
-		scheduleSystemBackCallbackUpdate();
 	}
 
 	private void onBackPressed(boolean homeHandled, boolean allowTimeout, Runnable close) {
@@ -2173,6 +2283,17 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 			drawerLayout.closeDrawers();
 		} else {
 			ContentFragment currentFragment = getCurrentFragment("FragmentAccess/onBackPressed");
+			int localAction = localBackAction(currentFragment);
+			if (!homeHandled && localAction == 1) {
+				InputMethodManager manager = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+				if (manager != null) manager.hideSoftInputFromWindow(getWindow().getDecorView().getWindowToken(), 0);
+				return;
+			}
+			if (!homeHandled && localAction == 2) {
+				ActionMode mode = currentActionMode.get();
+				if (mode != null) mode.finish();
+				return;
+			}
 			if (!homeHandled && currentFragment != null && currentFragment.onBackPressed()) {
 				return;
 			}
@@ -2417,6 +2538,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 			if (screenMotion != null) screenMotion.finish();
 			if (threadMotion != null) threadMotion.clear();
 			resetPredictiveBackView(false);
+			if (predictiveBack != null) predictiveBack.clear();
 			if (drawerMotion != null) drawerMotion.updatePolicy();
 			updateSystemBackCallback();
 			if (Preferences.KEY_NEW_INTERFACE_MOTION.equals(key)) {
@@ -2424,6 +2546,10 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 				// status-bar foreground and DrawerAppearance's original background).
 				recreate();
 			}
+		} else if (Preferences.KEY_S24_ULTRA_ONEUI9_TOOLBAR_FIX.equals(key)) {
+			// Native menu widgets retain their construction theme. Recreate both enabling and
+			// disabling so the original policy returns without stale per-child overrides.
+			recreate();
 		} else if (Preferences.KEY_THREAD_TOOLBAR_ACTION.equals(key)) {
 			invalidateHomeUpState();
 		} else if (Preferences.KEY_ROUNDED_DIALOGS.equals(key) || Preferences.KEY_ROUNDED_DIALOGS_RADIUS.equals(key)) {

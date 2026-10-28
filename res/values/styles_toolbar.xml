@@ -16,4 +16,34 @@
 		<item name="android:paddingStart">0dp</item>
 		<item name="android:paddingEnd">0dp</item>
 	</style>
+
+	<!-- Optional toolbar-only policy; does not depend on experimental appearance or OEM padding. -->
+	<style name="Theme.CompactToolbar.S24UltraFix" parent="">
+		<item name="android:actionButtonStyle">@style/Widget.CompactToolbar.S24UltraFix.ActionButton</item>
+		<item name="android:actionOverflowButtonStyle">@style/Widget.CompactToolbar.S24UltraFix.OverflowButton</item>
+	</style>
+
+	<style name="Widget.CompactToolbar.S24UltraFix.ActionButton" parent="@android:style/Widget.Material.ActionButton">
+		<item name="android:minWidth">48dp</item>
+		<item name="android:minHeight">48dp</item>
+		<item name="android:paddingLeft">0dp</item>
+		<item name="android:paddingRight">0dp</item>
+		<item name="android:paddingStart">0dp</item>
+		<item name="android:paddingEnd">0dp</item>
+		<item name="android:paddingTop">0dp</item>
+		<item name="android:paddingBottom">0dp</item>
+		<item name="android:gravity">center</item>
+	</style>
+
+	<style name="Widget.CompactToolbar.S24UltraFix.OverflowButton" parent="@android:style/Widget.Material.ActionButton.Overflow">
+		<item name="android:minWidth">48dp</item>
+		<item name="android:minHeight">48dp</item>
+		<item name="android:paddingLeft">0dp</item>
+		<item name="android:paddingRight">0dp</item>
+		<item name="android:paddingStart">0dp</item>
+		<item name="android:paddingEnd">0dp</item>
+		<item name="android:paddingTop">0dp</item>
+		<item name="android:paddingBottom">0dp</item>
+		<item name="android:scaleType">center</item>
+	</style>
 </resources>
