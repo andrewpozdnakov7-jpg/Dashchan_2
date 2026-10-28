@@ -629,6 +629,7 @@ public class ViewUnit {
 		holder.bottomBarExpand.setVisibility(View.GONE);
 		holder.invalidateBottomBar();
 
+		holder.e444.bind(uiManager, postItem, configurationSet.chanName);
 		bindPostViewSelection(viewHolder, postItem, configurationSet, demandSet.selection);
 	}
 
@@ -654,6 +655,7 @@ public class ViewUnit {
 				? VOTE_DISLIKE_COLOR : inactiveVoteIconColor));
 		holder.voteLike.setAlpha(1f);
 		holder.voteDislike.setAlpha(1f);
+		holder.e444.setInteractionEnabled(viewsEnabled);
 		holder.thumbnail.setEnabled(viewsEnabled);
 		holder.comment.setEnabled(viewsEnabled);
 		holder.head.setEnabled(viewsEnabled);
@@ -1391,6 +1393,7 @@ public class ViewUnit {
 		public final TextView voteDislike;
 		public final View textSelectionPadding;
 		public final View textBarPadding;
+		public final com.mishiranu.dashchan.chan.e444.E444PostView e444;
 		public final View bottomBar;
 		public final TextView bottomBarReplies;
 		public final TextView bottomBarExpand;
@@ -1434,6 +1437,9 @@ public class ViewUnit {
 			voteDislike.setTextColor(VOTE_DISLIKE_COLOR);
 			textSelectionPadding = itemView.findViewById(R.id.text_selection_padding);
 			textBarPadding = itemView.findViewById(R.id.text_bar_padding);
+			e444 = new com.mishiranu.dashchan.chan.e444.E444PostView(parent.getContext());
+			layout.addView(e444, layout.indexOfChild(textBarPadding), new android.widget.LinearLayout.LayoutParams(
+					ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 			bottomBar = itemView.findViewById(R.id.bottom_bar);
 			bottomBarReplies = itemView.findViewById(R.id.bottom_bar_replies);
 			bottomBarExpand = itemView.findViewById(R.id.bottom_bar_expand);

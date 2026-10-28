@@ -269,7 +269,8 @@ public final class SettingsSearchIndex {
 					? chan.configuration.safe().obtainDeleting(null) : null;
 
 			if (!chan.configuration.getOption(ChanConfiguration.OPTION_SINGLE_BOARD_MODE)) {
-				addChan(context, entries, breadcrumb, chan.name, R.string.default_starting_board, 0,
+				addChan(context, entries, breadcrumb, chan.name, R.string.default_starting_board,
+						R.string.default_starting_board__summary,
 						Preferences.KEY_DEFAULT_BOARD_NAME.bind(chan.name));
 			}
 			if (board.allowCatalog) {
@@ -427,8 +428,8 @@ public final class SettingsSearchIndex {
 				R.string.hardware_video_acceleration__summary, Preferences.KEY_HARDWARE_VIDEO_ACCELERATION);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.video_diagnostics_extended,
 				R.string.video_diagnostics_extended__summary, Preferences.KEY_EXTENDED_VIDEO_DIAGNOSTICS);
-		add(context, entries, Screen.EXPERIMENTAL, R.string.max_relax_ime_fix,
-				R.string.max_relax_ime_fix_summary, Preferences.KEY_MAX_RELAX_IME_FIX);
+		add(context, entries, Screen.EXPERIMENTAL, R.string.s24_ultra_oneui9_toolbar_fix,
+				R.string.s24_ultra_oneui9_toolbar_fix_summary, Preferences.KEY_S24_ULTRA_ONEUI9_TOOLBAR_FIX);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.crash_report_prompt_enabled,
 				R.string.crash_report_prompt_summary, Preferences.KEY_CRASH_REPORT_PROMPTS);
 		add(context, entries, Screen.CRASH_REPORTS, R.string.crash_reports_saved, R.string.crash_reports_saved_summary, null);

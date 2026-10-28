@@ -72,21 +72,12 @@ public class ToolbarBackContractTest {
 	@Test public void systemBackKeepsItsCallbacksExitPolicyAndPredictiveCleanup() throws Exception {
 		String back = method("onSystemBackPressed");
 		assertTrue(back.contains("onBackPressed(false, true, this::performDefaultBack)"));
-		assertTrue(back.contains("resetPredictiveBackView(predictiveBackView, true)"));
+		assertTrue(back.contains("predictiveBack.commit(navigate)"));
 		assertTrue(back.contains("scheduleSystemBackCallbackUpdate()"));
-		int modernStart = back.indexOf("if (InterfaceMotion.isEnabled())");
-		int legacyStart = back.indexOf("} else {", modernStart);
-		assertTrue("Separate modern and legacy cleanup paths", modernStart >= 0 && legacyStart > modernStart);
-		String modern = back.substring(modernStart, legacyStart);
-		assertTrue("Modern cleanup precedes exit animation",
-				modern.indexOf("resetPredictiveBackView(predictiveBackView, false)") >= 0 &&
-				modern.indexOf("resetPredictiveBackView(predictiveBackView, false)") <
-				modern.indexOf("onBackPressed(false, true, this::performDefaultBack)"));
-		String legacy = back.substring(legacyStart);
-		assertTrue("Legacy recovery still follows dispatch",
-				legacy.indexOf("onBackPressed(false, true, this::performDefaultBack)") >= 0 &&
-				legacy.indexOf("resetPredictiveBackView(predictiveBackView, true)") >
-				legacy.indexOf("onBackPressed(false, true, this::performDefaultBack)"));
+		assertTrue("Drawer Back must not also pop a page", back.contains("drawerMotion.commitBack()) return"));
+		assertTrue("Freeze the source until invocation", back.contains("current != backGestureSource"));
+		assertTrue("Suppress a second fragment animation only during the selected navigation",
+				back.contains("finally { predictiveNavigationDispatch = false; }"));
 		String dispatch = method("onBackPressed");
 		assertTrue(dispatch.contains("currentFragment.onBackPressed()"));
 		assertTrue(dispatch.contains("navigateSavedPage(savedPageItem, true, FragmentTransaction.TRANSIT_FRAGMENT_CLOSE)"));

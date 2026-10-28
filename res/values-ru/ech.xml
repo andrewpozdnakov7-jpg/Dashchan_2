@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ech_captcha_prompt">Выберите изображение, на котором фрагмент совпадает с вырезом</string>
+    <string name="ech_request_failed">Не удалось завершить запрос к ЭЧ. Обновите тред перед повторной попыткой.</string>
+</resources>

@@ -20,6 +20,8 @@ import com.mishiranu.dashchan.util.SharedPreferences;
 import com.mishiranu.dashchan.widget.ClickableToast;
 import com.mishiranu.dashchan.widget.PopupColors;
 import com.mishiranu.dashchan.widget.ThemeEngine;
+import com.mishiranu.dashchan.widget.InterfaceAppearance;
+import com.mishiranu.dashchan.widget.AppearanceShapes;
 
 public class PopupAppearanceFragment extends PreferenceFragment {
 	@Override
@@ -91,7 +93,7 @@ public class PopupAppearanceFragment extends PreferenceFragment {
 		@Override
 		public ViewHolder createViewHolder(ViewGroup parent) {
 			float density = ResourceUtils.obtainDensity(parent);
-			int padding = Math.round(16 * density);
+			int padding = Math.round(AppearanceShapes.SPACE_16 * density);
 			LinearLayout layout = new LinearLayout(context);
 			layout.setOrientation(LinearLayout.VERTICAL);
 			layout.setPadding(padding, padding, padding, padding);
@@ -122,12 +124,15 @@ public class PopupAppearanceFragment extends PreferenceFragment {
 				choices.addView(radio, new RadioGroup.LayoutParams(-1, -2));
 			}
 			layout.addView(choices);
-			return new AppearanceHolder(layout, preview, choices);
+			return new AppearanceHolder(layout, caption, preview, choices);
 		}
 
 		@Override
 		public void bindViewHolder(ViewHolder holder) {
 			AppearanceHolder h = (AppearanceHolder) holder;
+			InterfaceAppearance.standardCustomCaption(h.caption);
+			for (int i = 0; i < h.choices.getChildCount(); i++)
+				InterfaceAppearance.standardFormChoice((RadioButton) h.choices.getChildAt(i));
 			PopupColors colors = PopupColors.obtain(context);
 			GradientDrawable background = new GradientDrawable();
 			background.setColor(colors.background);
@@ -147,11 +152,13 @@ public class PopupAppearanceFragment extends PreferenceFragment {
 	}
 
 	private static class AppearanceHolder extends Preference.ViewHolder {
+		final TextView caption;
 		final TextView preview;
 		final RadioGroup choices;
 
-		AppearanceHolder(View view, TextView preview, RadioGroup choices) {
+		AppearanceHolder(View view, TextView caption, TextView preview, RadioGroup choices) {
 			super(view, null, null, null);
+			this.caption = caption;
 			this.preview = preview;
 			this.choices = choices;
 		}

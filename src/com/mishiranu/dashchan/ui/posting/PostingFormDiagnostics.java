@@ -402,7 +402,7 @@ public final class PostingFormDiagnostics {
 						+ " gapsValidIme=" + (imeBottom > 0)
 						+ " viewportOwner=" + PostingFormAppearance.ownsKeyboardViewport(editor)
 						+ " newForm=" + PostingFormAppearance.isEnabled() + " heightMode=" + Preferences.getPostingEditorHeightMode()
-						+ " maxRelaxImeFix=" + Preferences.isMaxRelaxImeFixEnabled()
+						+ " initialImeOnFreshOpen=true"
 						+ " fixedLines=" + Preferences.getPostingEditorFixedLines()
 						+ " hiddenFields=" + Preferences.isPostingNameHidden() + "," + Preferences.isPostingEmailHidden()
 								+ "," + Preferences.isPostingPasswordHidden() + "," + Preferences.isPostingSubjectHidden()

@@ -274,6 +274,7 @@
 	<string name="ddos_protection_bypass_failed">Не удалось обойти DDoS-защиту</string>
 	<string name="default_name_cant_be_hidden">Нельзя скрыть имя по умолчанию</string>
 	<string name="default_starting_board">Раздел по умолчанию</string>
+	<string name="default_starting_board__summary">Открывается при новом запуске, но не при возврате из фона.</string>
 	<string name="delete">Удалить</string>
 	<string name="delete_on_exit">Удалять при выходе</string>
 	<string name="deleted_posts_will_be_deleted__sentence">Удалённые сообщение будут удалены навсегда.</string>
@@ -416,8 +417,9 @@
 	<string name="video_audio_boost_level">Максимальное усиление звука видео</string>
 	<string name="video_audio_boost_level__format">+%d дБ</string>
 	<string name="video_diagnostics_start">Записать диагностику видео</string>
-	<string name="max_relax_ime_fix">Фикс для Max Relax</string>
-	<string name="max_relax_ime_fix_summary">Показывать клавиатуру при открытии формы ответа. Экспериментальное исправление для некоторых устройств.</string>
+	<string name="delete_font_dialog_title">Удалить шрифт</string>
+	<string name="s24_ultra_oneui9_toolbar_fix">Фикс для S24 Ultra OneUI 9</string>
+	<string name="s24_ultra_oneui9_toolbar_fix_summary">Одинаковые размеры и отступы кнопок обновления и меню в верхней панели.</string>
 	<string name="video_diagnostics_begin">Начать</string>
 	<string name="video_diagnostics_extended">Расширенный лог</string>
 	<string name="video_diagnostics_saving">Сохранение диагностики…</string>

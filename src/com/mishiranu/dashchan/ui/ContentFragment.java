@@ -31,6 +31,8 @@ import java.util.ArrayList;
 import java.util.WeakHashMap;
 
 public abstract class ContentFragment extends Fragment implements MenuProvider {
+	// In-memory preview identity, deliberately absent from saved state / backups.
+	Object backPreviewKey = new Object();
 	private ThreadMotionController.Session threadMotionSession;
 	private ScreenMotionController.Session screenMotionSession;
 	private boolean suppressScreenMotionExit;
@@ -222,9 +224,26 @@ public abstract class ContentFragment extends Fragment implements MenuProvider {
 	@Override
 	public void onResume() {
 		super.onResume();
-		// Request a fresh host-owned menu after resume, never prepare a cached Menu directly.
-		// The host may have cleared that same object while this provider was stopped.
-		invalidateOptionsMenu();
+		// Rebuild through the host, unless the screen explicitly retains a verified current menu.
+		// Never prepare a cached Menu directly: the host may have cleared it while we were stopped.
+		if (shouldInvalidateOptionsMenuOnResume()) invalidateOptionsMenu();
+	}
+
+	protected boolean shouldInvalidateOptionsMenuOnResume() { return true; }
+
+	/** Only reuse a menu still owned by this view, never a menu cleared by another provider. */
+	protected final boolean hasCurrentPrimaryOptionsMenu() {
+		for (WeakHashMap.Entry<Menu, MenuState> entry : menuStates.entrySet()) {
+			MenuState state = entry.getValue();
+			if (state.created && !state.actionItems.isEmpty() && isPrimaryMenu(entry.getKey())) {
+				for (WeakReference<MenuItem> reference : state.actionItems) {
+					MenuItem item = reference.get();
+					if (item == null || entry.getKey().findItem(item.getItemId()) != item) return false;
+				}
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private MenuState obtainMenuState(Menu menu) {

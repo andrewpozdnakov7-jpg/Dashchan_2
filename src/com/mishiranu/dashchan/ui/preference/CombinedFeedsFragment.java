@@ -1,6 +1,8 @@
 package com.mishiranu.dashchan.ui.preference;
 
 import com.mishiranu.dashchan.widget.MotionDialogBuilder;
+import com.mishiranu.dashchan.widget.InterfaceAppearance;
+import com.mishiranu.dashchan.widget.DialogFormScrollView;
 import android.app.AlertDialog;
 import android.os.Bundle;
 import android.text.Editable;
@@ -192,6 +194,11 @@ public class CombinedFeedsFragment extends PreferenceFragment implements GetBoar
 		showBoard.setText(R.string.combined_feed_show_board);
 		showBoard.setChecked(existing == null || existing.showBoard);
 		root.addView(showBoard, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+		InterfaceAppearance.standardCustomInsets(root);
+		InterfaceAppearance.standardCustomContent(name);
+		InterfaceAppearance.standardCustomContent(search);
+		InterfaceAppearance.standardFormChoice(showSticky);
+		InterfaceAppearance.standardFormChoice(showBoard);
 
 		HashSet<String> selected = new HashSet<>();
 		if (existing != null) {
@@ -275,6 +282,7 @@ public class CombinedFeedsFragment extends PreferenceFragment implements GetBoar
 						rebuild[0].run();
 					});
 					checks.addView(header, ViewGroup.LayoutParams.MATCH_PARENT, (int) (48f * density));
+					InterfaceAppearance.standardFormHeading(header);
 				}
 				if (expanded) {
 					for (Board board : matches) {
@@ -290,6 +298,7 @@ public class CombinedFeedsFragment extends PreferenceFragment implements GetBoar
 						});
 						checks.addView(checkBox, ViewGroup.LayoutParams.MATCH_PARENT,
 								ViewGroup.LayoutParams.WRAP_CONTENT);
+						InterfaceAppearance.standardFormChoice(checkBox);
 					}
 				}
 			}
@@ -298,6 +307,8 @@ public class CombinedFeedsFragment extends PreferenceFragment implements GetBoar
 				empty.setText(R.string.combined_feed_no_matching_boards);
 				empty.setPadding((int) (8f * density), 0, (int) (8f * density), 0);
 				checks.addView(empty, ViewGroup.LayoutParams.MATCH_PARENT, (int) (48f * density));
+				InterfaceAppearance.standardFormHeading(empty);
+				InterfaceAppearance.standardCustomCaption(empty);
 			}
 		};
 		search.addTextChangedListener(new TextWatcher() {
@@ -313,19 +324,33 @@ public class CombinedFeedsFragment extends PreferenceFragment implements GetBoar
 			public void afterTextChanged(Editable s) {}
 		});
 		rebuild[0].run();
-		ScrollView scrollView = new ScrollView(requireContext());
-		scrollView.addView(checks, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-		root.addView(scrollView, ViewGroup.LayoutParams.MATCH_PARENT, (int) (320f * density));
+		View dialogContent;
+		if (InterfaceAppearance.isEnabled(requireContext())) {
+			// One scrolling owner for all fields and results. Short/empty bodies wrap;
+			// large bodies are bounded by the available dialog/IME height and 320dp.
+			root.addView(checks, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+			DialogFormScrollView form = new DialogFormScrollView(requireContext());
+			form.addView(root, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+			dialogContent = form;
+		} else {
+			ScrollView scrollView = new ScrollView(requireContext());
+			scrollView.addView(checks, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+			root.addView(scrollView, ViewGroup.LayoutParams.MATCH_PARENT, (int) (320f * density));
+			dialogContent = root;
+		}
 
 		AlertDialog.Builder builder = MotionDialogBuilder.standard(requireContext())
 				.setTitle(existing != null ? R.string.edit_combined_feed : R.string.add_combined_feed)
-				.setView(root)
+				.setView(dialogContent)
 				.setNegativeButton(android.R.string.cancel, null)
 				.setPositiveButton(android.R.string.ok, null);
 		if (existing != null) {
 			builder.setNeutralButton(R.string.delete, null);
 		}
 		AlertDialog dialog = builder.create();
+		InterfaceAppearance.standardCustomDialogContent(dialog, dialogContent);
+		if (InterfaceAppearance.isEnabled(requireContext())) dialog.getWindow().setSoftInputMode(
+				android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
 		dialog.setOnShowListener(ignored -> {
 			dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(button -> {
 				String title = name.getText().toString().trim();

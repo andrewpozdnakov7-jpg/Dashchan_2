@@ -28,6 +28,7 @@ import androidx.customview.widget.ViewDragHelper;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.util.GraphicsUtils;
+import com.mishiranu.dashchan.util.InterfaceMotion;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.util.SharedPreferences;
 import com.mishiranu.dashchan.util.ViewUtils;
@@ -130,6 +131,7 @@ public class DialogStack<T extends DialogStack.ViewFactory<T>> implements Iterab
 	private class RegularKeyBackHandler implements KeyBackHandler {
 		@Override
 		public boolean onBackKey(KeyEvent event, boolean allowPop) {
+			if (predictiveMotion.isCommitting()) return true;
 			if (event.getAction() == KeyEvent.ACTION_UP) {
 				if (!event.isLongPress() && allowPop) {
 					handleBackInvocation();
@@ -149,6 +151,11 @@ public class DialogStack<T extends DialogStack.ViewFactory<T>> implements Iterab
 	private Dialog dialog;
 	private Object predictiveBackCallback;
 	private boolean backInvocationHandled;
+	private final Runnable releaseBackInvocation = () -> backInvocationHandled = false;
+	private final PredictiveBackMotion predictiveMotion = new PredictiveBackMotion();
+	private T predictiveSource;
+	private boolean predictiveStarted, predictivePop, predictiveAborted;
+	private int predictiveLocalAction;
 
 	@SuppressWarnings("FieldCanBeLocal")
 	private final ThemeEngine.OnOverlayFocusListener overlayFocusListener = stack -> {
@@ -177,6 +184,7 @@ public class DialogStack<T extends DialogStack.ViewFactory<T>> implements Iterab
 	};
 
 	public void push(T viewFactory) {
+		predictiveMotion.finish();
 		motion.finish();
 		DialogView previous = visibleViews.isEmpty() ? null : visibleViews.getLast().second;
 		DialogStackMotion.Snapshot snapshot = restoring ? null : motion.capture(previous);
@@ -186,12 +194,17 @@ public class DialogStack<T extends DialogStack.ViewFactory<T>> implements Iterab
 				@Override
 				protected void onStart() {
 					super.onStart();
+					predictiveAborted = false;
 					registerPredictiveBackCallback(this);
 					Preferences.PREFERENCES.register(motionPreferencesListener);
 				}
 
 				@Override
 				protected void onStop() {
+					predictiveMotion.finish();
+					contentView.removeCallbacks(releaseBackInvocation);
+					backInvocationHandled = false;
+					predictiveStarted = false; predictiveSource = null;
 					unregisterPredictiveBackCallback(this);
 					Preferences.PREFERENCES.unregister(motionPreferencesListener);
 					motion.closed(getWindow());
@@ -212,6 +225,21 @@ public class DialogStack<T extends DialogStack.ViewFactory<T>> implements Iterab
 						}
 					}
 					super.onActionModeFinished(mode);
+				}
+
+				@Override
+				public void onWindowFocusChanged(boolean hasFocus) {
+					if (!hasFocus) {
+						predictiveAborted |= predictiveStarted;
+						predictiveStarted = false; predictiveSource = null;
+						predictiveMotion.finish();
+					}
+					super.onWindowFocusChanged(hasFocus);
+				}
+
+				@Override
+				public boolean dispatchTouchEvent(android.view.MotionEvent event) {
+					return predictiveMotion.isBusy() || super.dispatchTouchEvent(event);
 				}
 
 				@Override
@@ -306,20 +334,77 @@ public class DialogStack<T extends DialogStack.ViewFactory<T>> implements Iterab
 		}
 	}
 
+	private int localBackAction() {
+		if (PredictiveBackMotion.isImeVisible(contentView)) return 1;
+		if (currentActionMode != null && currentActionMode.get() != null) return 2;
+		return !visibleViews.isEmpty() && visibleViews.getLast().first.canHandleBack() ? 3 : 0;
+	}
+
+	private void startPredictiveBack(boolean fromLeft) {
+		if (predictiveMotion.isCommitting()) return;
+		predictiveMotion.finish(); motion.finish();
+		predictiveAborted = false;
+		predictiveSource = visibleViews.isEmpty() ? null : visibleViews.getLast().first;
+		predictiveStarted = predictiveSource != null;
+		predictiveLocalAction = localBackAction();
+		if (predictiveSource == null || predictiveLocalAction != 0) return;
+		View card = visibleViews.getLast().second;
+		predictiveMotion.start(card, fromLeft ? 1f : -1f,
+				Math.min(card.getWidth() * .35f, 96f * ResourceUtils.obtainDensity(card)), .08f);
+	}
+
+	private void cancelPredictiveBack() {
+		predictiveAborted = false;
+		predictiveStarted = false; predictiveSource = null; predictiveMotion.cancel();
+	}
+
 	private void handleBackInvocation() {
+		if (dialog == null || !dialog.isShowing()) return;
+		if (predictiveAborted) {
+			predictiveAborted = predictiveStarted = false; predictiveSource = null; predictiveMotion.finish(); return;
+		}
+		if (predictiveStarted && (visibleViews.isEmpty() || visibleViews.getLast().first != predictiveSource ||
+				localBackAction() != predictiveLocalAction)) {
+			predictiveStarted = false; predictiveSource = null; predictiveMotion.finish(); return;
+		}
+		predictiveStarted = false; predictiveSource = null;
+		if (predictiveMotion.isTracking()) {
+			if (localBackAction() != 0) {
+				predictiveMotion.finish(); return;
+			}
+			T expected = visibleViews.getLast().first;
+			Dialog expectedDialog = dialog;
+			predictiveMotion.commit(() -> {
+				if (dialog != expectedDialog || expectedDialog == null || !expectedDialog.isShowing() ||
+						visibleViews.isEmpty() || visibleViews.getLast().first != expected || localBackAction() != 0) return;
+				predictivePop = true;
+				try { performBackInvocation(); } finally { predictivePop = false; }
+			});
+			return;
+		}
+		if (!predictiveMotion.isBusy()) performBackInvocation();
+	}
+
+	private void performBackInvocation() {
 		if (!backInvocationHandled && !visibleViews.isEmpty()) {
-			// Keep both platform and legacy Back paths for OEM compatibility, but allow only one
-			// stack mutation per rendered frame when a device dispatches the same action through both.
+			// One mutation per frame for OEMs delivering both the platform and legacy event.
 			backInvocationHandled = true;
-			contentView.postOnAnimation(() -> backInvocationHandled = false);
-			if (!visibleViews.isEmpty() && visibleViews.getLast().first.onBackPressed()) return;
+			contentView.postOnAnimation(releaseBackInvocation);
+			if (PredictiveBackMotion.isImeVisible(contentView)) { PredictiveBackMotion.hideIme(contentView); return; }
+			ActionMode actionMode = currentActionMode != null ? currentActionMode.get() : null;
+			if (actionMode != null) { actionMode.finish(); return; }
+			if (visibleViews.getLast().first.onBackPressed()) return;
 			popInternal();
 		}
 	}
 
 	private T popInternal() {
+		predictiveMotion.finish();
 		motion.finish();
-		DialogStackMotion.Snapshot snapshot = clearing ? null : motion.capture(visibleViews.getLast().second);
+		// Finishing an accepted predictive pop may already have removed the final entry.
+		if (visibleViews.isEmpty()) return null;
+		if (predictivePop && visibleViews.size() == 1 && dialog != null) dialog.getWindow().setWindowAnimations(0);
+		DialogStackMotion.Snapshot snapshot = clearing || predictivePop ? null : motion.capture(visibleViews.getLast().second);
 		if (hiddenViews.size() > 0) {
 			int index = rootView.indexOfChild(visibleViews.getFirst().second.getContainer());
 			T last = hiddenViews.removeLast();
@@ -347,17 +432,24 @@ public class DialogStack<T extends DialogStack.ViewFactory<T>> implements Iterab
 	}
 
 	private final SharedPreferences.Listener motionPreferencesListener = key -> {
-		if (Preferences.KEY_NEW_INTERFACE_MOTION.equals(key)) updateMotionPolicy();
+		if (Preferences.KEY_NEW_INTERFACE_MOTION.equals(key) || Preferences.KEY_PREDICTIVE_BACK.equals(key)) updateMotionPolicy();
 	};
 
 	private void updateMotionPolicy() {
-		motion.finish();
-		if (dialog != null) motion.configure(dialog.getWindow(), dialogDimAmount, dialogAnimations);
+		predictiveAborted |= predictiveStarted;
+		predictiveStarted = false; predictiveSource = null;
+		predictiveMotion.finish(); motion.finish();
+		if (dialog != null) {
+			motion.configure(dialog.getWindow(), dialogDimAmount, dialogAnimations);
+			unregisterPredictiveBackCallback(dialog);
+			registerPredictiveBackCallback(dialog);
+		}
 	}
 
 	private void registerPredictiveBackCallback(Dialog dialog) {
 		if (predictiveBackCallback == null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-			predictiveBackCallback = Api33Impl.register(dialog, this::handleBackInvocation);
+			predictiveBackCallback = Build.VERSION.SDK_INT >= 34 && InterfaceMotion.isPredictiveBackEnabled()
+					? Api34Impl.register(dialog, this) : Api33Impl.register(dialog, this::handleBackInvocation);
 		}
 	}
 
@@ -380,6 +472,25 @@ public class DialogStack<T extends DialogStack.ViewFactory<T>> implements Iterab
 		public static void unregister(Dialog dialog, Object callback) {
 			dialog.getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(
 					(android.window.OnBackInvokedCallback) callback);
+		}
+	}
+
+	@RequiresApi(34)
+	private static final class Api34Impl {
+		static Object register(Dialog dialog, DialogStack<?> stack) {
+			android.window.OnBackAnimationCallback callback = new android.window.OnBackAnimationCallback() {
+				@Override public void onBackStarted(android.window.BackEvent event) {
+					stack.startPredictiveBack(event.getSwipeEdge() == android.window.BackEvent.EDGE_LEFT);
+				}
+				@Override public void onBackProgressed(android.window.BackEvent event) {
+					stack.predictiveMotion.progress(event.getProgress());
+				}
+				@Override public void onBackCancelled() { stack.cancelPredictiveBack(); }
+				@Override public void onBackInvoked() { stack.handleBackInvocation(); }
+			};
+			dialog.getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
+					android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, callback);
+			return callback;
 		}
 	}
 
@@ -930,6 +1041,7 @@ public class DialogStack<T extends DialogStack.ViewFactory<T>> implements Iterab
 
 	public interface ViewFactory<T extends ViewFactory<T>> {
 		default boolean onBackPressed() { return false; }
+		default boolean canHandleBack() { return false; }
 		View createView(DialogStack<T> dialogStack);
 		default void destroyView(View view, boolean remove) {}
 

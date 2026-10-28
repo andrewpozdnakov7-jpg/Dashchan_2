@@ -7,14 +7,22 @@ import android.view.View;
 import android.view.MotionEvent;
 import com.mishiranu.dashchan.R;
 import android.view.ViewGroup;
+import android.view.ContextThemeWrapper;
 import android.widget.ImageButton;
 import android.widget.Toolbar;
+import com.mishiranu.dashchan.content.Preferences;
 
 /** Keeps navigation compact without shrinking its touch target below 48 dp. */
 public class CompactToolbar extends Toolbar {
 	public CompactToolbar(Context context, AttributeSet attrs) {
-		super(context, attrs);
+		super(toolbarContext(context), attrs);
 		ThemeEngine.applyToolbarStyle(this);
+	}
+
+	private static Context toolbarContext(Context context) {
+		// Scope the opt-in geometry to this toolbar, before its native menu buttons are created.
+		return Preferences.isS24UltraOneUi9ToolbarFixEnabled()
+				? new ContextThemeWrapper(context, R.style.Theme_CompactToolbar_S24UltraFix) : context;
 	}
 
 	public void refreshMotionPolicy() { ToolbarSearchMotion.finish(this); }

@@ -6,6 +6,7 @@ import android.view.CollapsibleActionView;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.inputmethod.EditorInfo;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.SearchView;
@@ -29,6 +30,8 @@ public class CustomSearchView extends FrameLayout implements CollapsibleActionVi
 
 	private boolean focusOnExpand = true;
 	private boolean suppressChange = false;
+	private boolean expandedWithoutInput;
+	private int collapsedImeOptions;
 
 	public CustomSearchView(Context context) {
 		super(context);
@@ -164,9 +167,35 @@ public class CustomSearchView extends FrameLayout implements CollapsibleActionVi
 		this.focusOnExpand = focusOnExpand;
 	}
 
+	public void clearSearchFocus() {
+		searchView.clearFocus();
+		requestFocus();
+	}
+
+	public void requestSearchFocus() {
+		searchView.setIconified(false);
+	}
+
 	@Override
 	public void onActionViewExpanded() {
 		InterfaceAppearance.standardSearch(this, searchView);
+		if (!focusOnExpand) {
+			// SearchView.onActionViewExpanded() requests the IME even when focus is cleared
+			// afterwards. Restore the visible field through the non-interactive public API.
+			if (!expandedWithoutInput) {
+				collapsedImeOptions = searchView.getImeOptions();
+				expandedWithoutInput = true;
+			}
+			clearSearchFocus();
+			searchView.setImeOptions(collapsedImeOptions | EditorInfo.IME_FLAG_NO_FULLSCREEN);
+			searchView.setIconifiedByDefault(false);
+			return;
+		}
+		if (expandedWithoutInput) {
+			searchView.setImeOptions(collapsedImeOptions);
+			expandedWithoutInput = false;
+		}
+		searchView.setIconifiedByDefault(true);
 		String query = getQuery();
 		if (!query.isEmpty()) {
 			// Don't clear text view and don't fire "changed" action with empty text
@@ -178,10 +207,6 @@ public class CustomSearchView extends FrameLayout implements CollapsibleActionVi
 		} else {
 			searchView.onActionViewExpanded();
 		}
-		if (!focusOnExpand) {
-			searchView.clearFocus();
-			requestFocus();
-		}
 	}
 
 	@Override
@@ -192,7 +217,16 @@ public class CustomSearchView extends FrameLayout implements CollapsibleActionVi
 		boolean suppressChange = this.suppressChange;
 		this.suppressChange = true;
 		try {
-			searchView.onActionViewCollapsed();
+			if (expandedWithoutInput) {
+				// The platform action-view expansion was deliberately skipped above.
+				searchView.setQuery("", false);
+				searchView.clearFocus();
+				searchView.setIconifiedByDefault(true);
+				searchView.setImeOptions(collapsedImeOptions);
+				expandedWithoutInput = false;
+			} else {
+				searchView.onActionViewCollapsed();
+			}
 		} finally {
 			this.suppressChange = suppressChange;
 		}

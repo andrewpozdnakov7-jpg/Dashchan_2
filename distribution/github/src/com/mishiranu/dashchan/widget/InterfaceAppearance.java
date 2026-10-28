@@ -58,7 +58,7 @@ public final class InterfaceAppearance {
 	enum Role {ROW, HEADER, TEXT, SECONDARY, ACTION, TEXT_ACTION, FIELD, POSTING_FORM, POSTING_FIELD, CHECK, SWITCH, SLIDER, ICON, AUDIO_TITLE,
 		SETTING_TITLE, SETTING_SUMMARY, SECTION_TITLE, MENU_TITLE, POPUP_TEXT, SERVICE_TITLE, SERVICE_META, DIALOG_TITLE, DIALOG_BODY,
 		STANDARD_BUTTON, TOOLBAR_TITLE, TOOLBAR_SUBTITLE, SEARCH_TEXT, STATE_TITLE, SERVICE_DOCUMENT,
-		CUSTOM_BODY, CUSTOM_CAPTION, CUSTOM_FIELD, CUSTOM_CHOICE, CUSTOM_ACTION, CUSTOM_TEXT_ACTION, CUSTOM_SLIDER, CUSTOM_CHOICE_TEXT}
+		CUSTOM_BODY, CUSTOM_CAPTION, CUSTOM_FIELD, CUSTOM_CHOICE, CUSTOM_ACTION, CUSTOM_TEXT_ACTION, CUSTOM_SLIDER, CUSTOM_CHOICE_TEXT, MODAL_CHOICE_TEXT, CONTENT_HEADING, CATALOG_TITLE}
 	public static boolean isEnabled(Context context) {
 		return InterfaceMotion.isEnabled() && supported(context);
 	}
@@ -278,6 +278,24 @@ public final class InterfaceAppearance {
 		StandardAppearance.prepare(view, title, null, null, null);
 		row(view, title, null, false); role(title, Role.MENU_TITLE); StandardAppearance.menu(view, title);
 	}
+	public static void modalChoiceRow(View view, TextView title) {
+		StandardAppearance.prepare(view, title, null, null, null);
+		row(view, title, null, false); role(title, Role.MODAL_CHOICE_TEXT);
+		StandardAppearance.modalChoice(view, title);
+	}
+	public static void standardContentHeading(TextView text) { role(text, Role.CONTENT_HEADING); }
+	public static void standardFormHeading(TextView text) { SettingsContentAppearance.heading(text); }
+	public static void standardFormChoice(CompoundButton button) { SettingsContentAppearance.choice(button); }
+	public static void standardCatalogCard(View card, TextView title, TextView metadata) { SettingsContentAppearance.card(card, title, metadata); }
+	public static int standardCatalogColumns(Context context, int width) {
+		if (!isEnabled(context)) return 2;
+		float scale = Math.max(1f, context.getResources().getConfiguration().fontScale);
+		float minimum = (AppearanceShapes.CATALOG_MIN_CARD_WIDTH * scale + AppearanceShapes.SPACE_16)
+				* ResourceUtils.obtainDensity(context);
+		return width >= 2f * minimum ? 2 : 1;
+	}
+	public static void standardAutohideContent(View root, boolean quick) { SettingsContentAppearance.autohide(root, quick); }
+	public static void standardMixedIndicator(View indicator, CompoundButton check) { SettingsContentAppearance.mixed(indicator, check); }
 	public static void serviceState(View view, TextView message) {
 		role(message, Role.STATE_TITLE); StandardAppearance.state(view, message);
 	}
@@ -303,6 +321,15 @@ public final class InterfaceAppearance {
 	public static void standardSearch(View root, android.widget.SearchView search) { StandardAppearance.search(root, search); }
 	public static Context standardDialogContext(Context context) { return StandardAppearance.dialogContext(context); }
 	public static void configureStandardDialog(AlertDialog dialog) { StandardAppearance.dialog(dialog); }
+	public static void configureStandardTextDialog(android.app.Dialog dialog) { StandardAppearance.textDialog(dialog); }
+	public static void standardMessageContent(View root, TextView title, TextView message, ViewGroup actions) {
+		StandardAppearance.messageContent(root, title, message, actions);
+	}
+	public static void standardSpinnerChoice(View root, View content, TextView marker) {
+		StandardAppearance.spinnerChoice(root, content, marker);
+	}
+	public static void standardSpinnerField(View selected) { StandardAppearance.spinnerText(selected); }
+	public static void resetSpinnerChoice(View row) { StandardAppearance.resetSpinnerChoice(row); }
 	public static void configureStandardPageDialog(AlertDialog dialog) { StandardAppearance.dialog(dialog, true); }
 	public static void standardLinearProgress(android.widget.ProgressBar view) { NativeContentAppearance.linear(view); }
 	public static void standardNativePanel(ViewGroup root, TextView title, TextView status, ViewGroup actions) {
@@ -399,7 +426,8 @@ public final class InterfaceAppearance {
 			}
 			if (supportsStandardLineLimits(text) && (state.role == Role.SETTING_TITLE || state.role == Role.SETTING_SUMMARY || state.role == Role.MENU_TITLE
 					|| state.role == Role.SERVICE_TITLE || state.role == Role.SERVICE_META || state.role == Role.DIALOG_BODY
-					|| state.role == Role.DIALOG_TITLE || state.role == Role.STATE_TITLE || state.role == Role.SERVICE_DOCUMENT)) {
+					|| state.role == Role.DIALOG_TITLE || state.role == Role.STATE_TITLE || state.role == Role.SERVICE_DOCUMENT
+					|| state.role == Role.MODAL_CHOICE_TEXT || state.role == Role.CONTENT_HEADING || state.role == Role.CATALOG_TITLE)) {
 				text.setSingleLine(false); text.setMaxLines(Integer.MAX_VALUE);
 			}
 			if (state.role == Role.SERVICE_DOCUMENT) {
@@ -528,10 +556,11 @@ public final class InterfaceAppearance {
 			case SERVICE_META: case TOOLBAR_SUBTITLE: return AppearanceTypography.Role.BODY_SMALL;
 			case CUSTOM_BODY: return AppearanceTypography.Role.BODY_MEDIUM;
 			case CUSTOM_CAPTION: return AppearanceTypography.Role.BODY_SMALL;
-			case CUSTOM_CHOICE_TEXT: return AppearanceTypography.Role.BODY_LARGE;
+			case CUSTOM_CHOICE_TEXT: case MODAL_CHOICE_TEXT: return AppearanceTypography.Role.BODY_LARGE;
 			case DIALOG_TITLE: return AppearanceTypography.Role.TITLE_LARGE;
 			case TOOLBAR_TITLE: return AppearanceTypography.Role.COMPACT_TOOLBAR;
 			case STATE_TITLE: return AppearanceTypography.Role.TITLE_MEDIUM;
+			case CONTENT_HEADING: case CATALOG_TITLE: return AppearanceTypography.Role.TITLE_MEDIUM;
 			default: return null;
 		}
 	}
@@ -543,7 +572,8 @@ public final class InterfaceAppearance {
 		final int start, top, end, bottom, minimumHeight, bottomMargin;
 		final ColorStateList text, hint, imageTint, buttonTint, trackTint, thumbTint, progressTint, progressBackgroundTint;
 		final ColorStateList linkText, compoundTint;
-		final AppearanceTypography.Snapshot typography; final int minLines, maxLines;
+		final AppearanceTypography.Snapshot typography; final int minLines, maxLines, textMinHeight, textMaxHeight;
+		final boolean singleLine;
 		final Drawable mark, track, thumb, progress; final int switchWidth, thumbOffset, minTrackHeight, maxTrackHeight; final boolean splitTrack;
 		State(View view) {
 			background = view.getBackground(); backgroundTint = view.getBackgroundTintList(); animator = view.getStateListAnimator(); elevation = view.getElevation();
@@ -555,6 +585,8 @@ public final class InterfaceAppearance {
 			compoundTint = t != null ? t.getCompoundDrawableTintList() : null;
 			typography = t != null ? new AppearanceTypography.Snapshot(t) : null;
 			minLines = t != null ? t.getMinLines() : -1; maxLines = t != null ? t.getMaxLines() : -1;
+			textMinHeight = t != null ? t.getMinHeight() : -1; textMaxHeight = t != null ? t.getMaxHeight() : -1;
+			singleLine = t != null && t.isSingleLine();
 			imageTint = view instanceof ImageView ? ((ImageView) view).getImageTintList() : null;
 			CompoundButton c = view instanceof CompoundButton ? (CompoundButton) view : null; mark = c != null ? c.getButtonDrawable() : null; buttonTint = c != null ? c.getButtonTintList() : null;
 			Switch s = view instanceof Switch ? (Switch) view : null; SeekBar b = view instanceof SeekBar ? (SeekBar) view : null;
@@ -580,11 +612,13 @@ public final class InterfaceAppearance {
 				if (standardTypography(role) != null || standardTypography(appliedRole) != null) {
 					if (role == Role.SEARCH_TEXT || appliedRole == Role.SEARCH_TEXT) typography.restoreTextMetrics(t);
 					else {
-						typography.restore(t);
 						if (supportsStandardLineLimits(t)) {
-							t.setSingleLine(maxLines == 1);
+							t.setSingleLine(singleLine);
 							if (minLines >= 0) t.setMinLines(minLines); if (maxLines >= 0) t.setMaxLines(maxLines);
+							if (minLines < 0 && textMinHeight >= 0) t.setMinHeight(textMinHeight);
+							if (maxLines < 0 && textMaxHeight >= 0) t.setMaxHeight(textMaxHeight);
 						}
+						typography.restore(t);
 					}
 				}
 				if (role == Role.ACTION || role == Role.TEXT_ACTION || role == Role.AUDIO_TITLE

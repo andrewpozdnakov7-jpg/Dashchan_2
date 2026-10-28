@@ -269,6 +269,7 @@
 	<string name="ddos_protection_bypass_failed">DDoS-protection bypass failed</string>
 	<string name="default_name_cant_be_hidden">Default name can\'t be hidden</string>
 	<string name="default_starting_board">Default starting board</string>
+	<string name="default_starting_board__summary">Opens on a fresh app launch, not when returning from the background.</string>
 	<string name="delete">Delete</string>
 	<string name="delete_on_exit">Delete on exit</string>
 	<string name="deleted_posts_will_be_deleted__sentence">Deleted posts will be permanently deleted.</string>
@@ -410,8 +411,9 @@
 	<string name="video_audio_boost_level">Maximum video audio boost</string>
 	<string name="video_audio_boost_level__format">+%d dB</string>
 	<string name="video_diagnostics_start">Record video diagnostics</string>
-	<string name="max_relax_ime_fix">Fix for Max Relax</string>
-	<string name="max_relax_ime_fix_summary">Show the keyboard when opening the posting form. Experimental workaround for some devices.</string>
+	<string name="delete_font_dialog_title">Delete font</string>
+	<string name="s24_ultra_oneui9_toolbar_fix">Fix for S24 Ultra OneUI 9</string>
+	<string name="s24_ultra_oneui9_toolbar_fix_summary">Use consistent sizes and spacing for refresh and menu buttons in the top bar.</string>
 	<string name="video_diagnostics_begin">Start</string>
 	<string name="video_diagnostics_extended">Extended log</string>
 	<string name="video_diagnostics_saving">Saving diagnostics…</string>

@@ -105,7 +105,7 @@ Dashchan_2 основан на исходном коде Dashchan. Отдель�
 
 ## English
 
-Slooop is the user-facing name of the unofficial Dashchan_2 branch for Android 11 and newer. It installs alongside the original Dashchan under the `io.dashchan2` package and bundles support for Dvach, Kekabu (Pikabu), d3.ru, Ejchan, Apachan, Arhivach, Zchan, Endchan, experimental 4chan and Reddit modes, and an FFmpeg-based video player.
+Slooop is the user-facing name of the unofficial Dashchan_2 branch for Android 11 and newer. It installs alongside the original Dashchan under the `io.dashchan2` package and bundles support for Dvach, Kekabu (Pikabu), d3.ru, Ejchan, ECH (ech.bz), Apachan, Arhivach, Zchan, Endchan, experimental 4chan and Reddit modes, and an FFmpeg-based video player.
 
 ### Download
 
@@ -129,7 +129,7 @@ The F-Droid build excludes the application self-updater, Firebase, Google Play S
 - boards, threads, media gallery, favorites, thread watching, and background notifications;
 - built-in Dvach posting, Passcode support, AI filtering, and votes on supported boards;
 - built-in Kekabu access with a catalog of up to 200 popular communities, collapsible categories, search and custom communities, official-site sign-in, account-available 18+ media, user-initiated story and comment votes, and posting and deletion of the user's own comments;
-- built-in Ejchan, Apachan, Zchan, and Endchan reading and posting, plus read-only d3.ru and Arhivach and experimental read-only 4chan access;
+- built-in Ejchan, ECH (ech.bz), Apachan, Zchan, and Endchan reading and posting, plus read-only d3.ru and Arhivach and experimental read-only 4chan access;
 - experimental Reddit modes with the official website inside the app, a catalog of up to 200 popular communities, and separate opt-in board and discussion-reader modes;
 - Apachan post editing and thread sorting by last bump, creation date, or post count;
 - My Boards feeds that combine boards from different imageboards into several custom feeds;
@@ -174,3 +174,11 @@ Use [GitHub Issues](https://github.com/andrewpozdnakov7-jpg/Dashchan_2/issues) f
 Dashchan_2 is based on Dashchan. Ideas and code paths were studied and adapted from [TrixiEther/DashchanFork](https://github.com/TrixiEther/DashchanFork), and themes were imported from [TrixiEther/Dashchan-Meta](https://github.com/TrixiEther/Dashchan-Meta). OpenAI Codex and Anthropic Claude assisted with development and verification; final responsibility remains with the maintainer.
 
 Licensed under the [GNU General Public License, version 3 or later](COPYING).
+
+### ECH (e444)
+
+ECH support is built in and uses ech.bz / ech.ist over HTTPS. Legacy ech.u links are recognized.
+The separately installed com.mishiranu.dashchan.chan.e444 extension is superseded and its code is not loaded.
+The e444 forum identity is retained for existing preferences, favorites and stored threads.
+Reactions, poll voting and server-provided navigation menus use native post binding, without reflective UI hooks.
+Device acceptance testing of ECH support remains pending.

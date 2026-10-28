@@ -71,7 +71,7 @@ public class PlayerButtonsFragment extends PreferenceFragment {
 		if (editor == null || editor.isDragging()) return;
 		dismissHelp();
 		// Existing themed dialog component; this only explains the already implemented gestures.
-		helpDialog = new com.mishiranu.dashchan.content.security.SecureDialogBuilder(requireContext())
+		helpDialog = com.mishiranu.dashchan.widget.MotionDialogBuilder.standard(requireContext())
 				.setTitle(R.string.player_buttons_help_title).setMessage(R.string.player_buttons_help_body)
 				.setPositiveButton(R.string.player_buttons_help_close, null).create();
 		helpDialog.show();

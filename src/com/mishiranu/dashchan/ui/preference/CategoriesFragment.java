@@ -20,21 +20,21 @@ import java.util.List;
 
 public class CategoriesFragment extends PreferenceFragment {
 	private static final String EXTRA_SEARCH_QUERY = "searchQuery";
-	private static final String EXTRA_SEARCH_FOCUSED = "searchFocused";
 
 	private List<SettingsSearchIndex.Entry> searchIndex;
 	private SettingsSearchHistory searchHistory;
 	private CustomSearchView searchView;
 	private MenuItem searchMenuItem;
 	private String searchQuery;
-	private boolean searchFocused;
+	// Input is a one-shot user action, never part of restored navigation state.
+	private boolean requestSearchInput;
+	private boolean restoringSearch;
 
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 
 		searchQuery = savedInstanceState != null ? savedInstanceState.getString(EXTRA_SEARCH_QUERY) : null;
-		searchFocused = savedInstanceState != null && savedInstanceState.getBoolean(EXTRA_SEARCH_FOCUSED);
 	}
 
 	@Override
@@ -51,7 +51,7 @@ public class CategoriesFragment extends PreferenceFragment {
 		searchView = obtainSearchView();
 		searchView.setHint(getString(R.string.search_settings));
 		searchView.setOnChangeListener(query -> {
-			if (searchQuery != null) {
+			if (searchQuery != null && !restoringSearch) {
 				searchQuery = query;
 				populatePreferences();
 			}
@@ -72,6 +72,8 @@ public class CategoriesFragment extends PreferenceFragment {
 				for (SettingsSearchIndex.Entry entry : results) {
 					addButton(entry.getTitle(), entry.getBreadcrumb()).setOnClickListener(preference -> {
 						SettingsSearchHistory history = searchHistory;
+						requestSearchInput = false;
+						if (searchView != null) searchView.clearSearchFocus();
 						((FragmentHandler) requireActivity()).pushFragment(entry.createFragment());
 						if (history != null) history.record(completedQuery);
 					});
@@ -175,17 +177,19 @@ public class CategoriesFragment extends PreferenceFragment {
 	public void onSaveInstanceState(@NonNull Bundle outState) {
 		super.onSaveInstanceState(outState);
 
-		if (searchView != null) {
-			searchFocused = searchView.isSearchFocused();
-		}
 		outState.putString(EXTRA_SEARCH_QUERY, searchQuery);
-		outState.putBoolean(EXTRA_SEARCH_FOCUSED, searchFocused);
 	}
 
 	@Override
 	public void onViewStateRestored(Bundle savedInstanceState) {
 		super.onViewStateRestored(savedInstanceState);
 		((FragmentHandler) requireActivity()).setTitleSubtitle(getString(R.string.preferences), null);
+	}
+
+	@Override
+	protected boolean shouldInvalidateOptionsMenuOnResume() {
+		// STARTED already creates this static menu; retain it when its items still belong to us.
+		return !hasCurrentPrimaryOptionsMenu();
 	}
 
 	@Override
@@ -220,8 +224,12 @@ public class CategoriesFragment extends PreferenceFragment {
 	@Override
 	public boolean onSearchRequested() {
 		if (searchMenuItem != null) {
-			searchFocused = true;
-			searchMenuItem.expandActionView();
+			if (searchMenuItem.isActionViewExpanded()) {
+				searchView.requestSearchFocus();
+			} else {
+				requestSearchInput = true;
+				searchMenuItem.expandActionView();
+			}
 			return true;
 		}
 		return false;
@@ -238,21 +246,32 @@ public class CategoriesFragment extends PreferenceFragment {
 			searchMenuItem.setActionView(searchView);
 			searchMenuItem.setOnActionExpandListener(new MenuExpandListener((menuItem, expand) -> {
 				if (expand) {
-					searchView.setFocusOnExpand(searchFocused);
+					searchView.setFocusOnExpand(requestSearchInput);
+					requestSearchInput = false;
 					if (searchQuery == null) {
 						searchQuery = "";
 					}
 					searchView.setQuery(searchQuery);
+					if (!restoringSearch) populatePreferences();
 				} else {
-					searchQuery = null;
-					searchFocused = false;
+					((FragmentHandler) requireActivity()).animateContentBack(this, () -> {
+						searchQuery = null;
+						requestSearchInput = false;
+						populatePreferences();
+					});
 				}
-				populatePreferences();
 				requireView().post(this::notifyBackNavigationChanged);
 				return true;
-			}));
+			}, () -> !restoringSearch && searchQuery == null));
 			if (searchQuery != null) {
-				searchMenuItem.expandActionView();
+				// Restore an already-open search as part of the page transition, without replaying
+				// a separate toolbar reveal or rebuilding the results on a synthetic query change.
+				restoringSearch = true;
+				try {
+					searchMenuItem.expandActionView();
+				} finally {
+					restoringSearch = false;
+				}
 			}
 		}
 	}
@@ -260,14 +279,7 @@ public class CategoriesFragment extends PreferenceFragment {
 	@Override
 	public boolean onMenuItemSelected(MenuItem item) {
 		if (item.getItemId() == R.id.menu_search) {
-			if (item == searchMenuItem) {
-				searchFocused = true;
-				return false;
-			} else if (searchMenuItem != null) {
-				searchFocused = true;
-				searchMenuItem.expandActionView();
-			}
-			return true;
+			return onSearchRequested();
 		}
 		return super.onMenuItemSelected(item);
 	}

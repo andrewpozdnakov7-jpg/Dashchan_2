@@ -52,6 +52,17 @@ public class SecureSpinnerTest {
 		});
 	}
 	@Test public void categorySelectionHasItsOwnSecureFlagBeforeShowing() { checkSelection(true); }
+	@Test public void messageDialogKeepsTheRegisteredProtectedWindowBeforeShowing() {
+		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+			MessageDialog dialog = new MessageDialog.Builder(context).setMessage("Fixture message").create();
+			assertEquals(BuildConfig.ENABLE_APP_SECURITY_SETTINGS,
+					(dialog.getWindow().getAttributes().flags & WindowManager.LayoutParams.FLAG_SECURE) != 0);
+			if (BuildConfig.ENABLE_APP_SECURITY_SETTINGS) {
+				assertEquals("com.mishiranu.dashchan.content.security.SecurityWindowCallback", dialog.getWindow().getCallback().getClass().getName());
+			}
+			dialog.dismiss();
+		});
+	}
 	@Test public void ordinaryUnlockedUnprotectedSelectionIsNotForcedSecure() throws Exception {
 		if (BuildConfig.ENABLE_APP_SECURITY_SETTINGS) {
 			SecurityStore.update(context, s -> { s.remove("primary"); return null; });

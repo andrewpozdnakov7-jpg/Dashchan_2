@@ -10,7 +10,7 @@ import androidx.core.view.WindowInsetsCompat;
 import com.mishiranu.dashchan.util.InterfaceMotion;
 import java.util.function.BooleanSupplier;
 
-/** One view-lifetime, opt-in IME request. Never steals focus or forces the keyboard to stay open. */
+/** One view-lifetime IME request. Never steals focus or forces the keyboard to stay open. */
 final class PostingKeyboardRequest implements ViewTreeObserver.OnPreDrawListener,
 		ViewTreeObserver.OnWindowFocusChangeListener, ViewTreeObserver.OnGlobalFocusChangeListener,
 		View.OnAttachStateChangeListener {

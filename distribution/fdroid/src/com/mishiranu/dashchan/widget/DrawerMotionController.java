@@ -7,20 +7,28 @@ import androidx.drawerlayout.widget.DrawerLayout;
 public final class DrawerMotionController {
 	private final DrawerLayout layout;
 	private final DrawerAppearance appearance;
+	private final DrawerBackController back;
 
 	public DrawerMotionController(DrawerLayout layout, View panel, View drawerContent) {
 		this.layout = layout;
 		appearance = new DrawerAppearance(panel);
+		back = new DrawerBackController(layout, panel, this::updateScrim);
 		updatePolicy();
 	}
 
-	public void updatePolicy() { appearance.update(); layout.setScrimColor(0x99000000); }
-	public void resume() {}
-	public void suspend() {}
-	public void onLockModeChanged() {}
-	public boolean start(boolean fromLeft) { return false; }
-	public boolean isTracking() { return false; }
-	public void progress(float value, boolean fromLeft) {}
-	public void recover(boolean animate) {}
-	public void reset() {}
+	private void updateScrim() { layout.setScrimColor(Math.round(153f * (1f - .8f * back.progress())) << 24); }
+	public void updatePolicy() { appearance.update(); back.update(); updateScrim(); }
+	public void resume() { back.resume(); }
+	public void suspend() { back.suspend(); }
+	public void onLockModeChanged() { back.update(); }
+	public boolean start(boolean fromLeft) { return back.start(); }
+	public boolean isTracking() { return back.isTracking(); }
+	public boolean isBusy() { return back.isBusy(); }
+	public void progress(float value, boolean fromLeft) { back.progress(value); }
+	public void recover(boolean animate) { back.recover(animate); }
+	public void reset() { back.reset(); }
+	public boolean commitBack() {
+		if (back.isTracking()) { back.commit(); return true; }
+		return back.isBusy();
+	}
 }

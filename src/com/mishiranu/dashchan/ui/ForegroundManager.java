@@ -2,6 +2,7 @@ package com.mishiranu.dashchan.ui;
 
 import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import com.mishiranu.dashchan.widget.CaptchaDialogAppearance;
+import com.mishiranu.dashchan.widget.ChoiceDialogInstruction;
 import android.app.AlertDialog;
 import android.app.Dialog;
 import android.content.Context;
@@ -620,9 +621,11 @@ public class ForegroundManager implements Handler.Callback {
 			int resId = ResourceUtils.obtainAlertDialogLayoutResId(requireContext(), multiple
 					? ResourceUtils.DialogLayout.MULTI_CHOICE : ResourceUtils.DialogLayout.SINGLE_CHOICE);
 			ItemsAdapter adapter = new ItemsAdapter(requireContext(), resId, itemsList, imageLayout, true);
-			AlertDialog alertDialog = MotionDialogBuilder.standard(requireContext())
-					.setTitle(descriptionText)
-					.setAdapter(adapter, null)
+			MotionDialogBuilder builder = MotionDialogBuilder.standard(requireContext());
+			if (!StringUtils.isEmpty(descriptionText)) {
+				builder.setCustomTitle(ChoiceDialogInstruction.createScrollableTitle(builder.getContext(), descriptionText));
+			}
+			AlertDialog alertDialog = builder.setAdapter(adapter, null)
 					.setPositiveButton(android.R.string.ok, this)
 					.setNegativeButton(android.R.string.cancel, this)
 					.create();
@@ -894,16 +897,11 @@ public class ForegroundManager implements Handler.Callback {
 			int outerPadding = container.getResources().getDimensionPixelOffset(R.dimen.dialog_padding_text);
 			int verticalPadding = landscape ? (int) (8f * density) : outerPadding;
 			if (appearance == null) container.setPadding(outerPadding, verticalPadding, outerPadding, verticalPadding);
-			if (landscape && !StringUtils.isEmpty(descriptionText)) {
-				TextView titleView = new TextView(container.getContext());
-				titleView.setText(descriptionText);
-				titleView.setTextColor(ResourceUtils.getColor(titleView.getContext(),
-						android.R.attr.textColorPrimary));
-				titleView.setTypeface(ResourceUtils.TYPEFACE_MEDIUM);
-				ViewUtils.setTextSizeScaled(titleView, 16);
+			if (appearance == null && !StringUtils.isEmpty(descriptionText)) {
+				TextView titleView = ChoiceDialogInstruction.create(container.getContext(), descriptionText, landscape);
 				LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(
 						LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-				layoutParams.bottomMargin = (int) (4f * density);
+				layoutParams.bottomMargin = landscape ? (int) (4f * density) : outerPadding;
 				container.addView(titleView, layoutParams);
 			}
 			if (descriptionImage != null) {
@@ -934,19 +932,14 @@ public class ForegroundManager implements Handler.Callback {
 			}
 			buildKeyboard(keyboardContainer, images, landscape, density);
 
-			View contentView;
-			if (landscape) { contentView = container; }
-			else {
-				ScrollView scrollView = new ScrollView(container.getContext());
-				scrollView.addView(container, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-				contentView = scrollView;
-			}
+			// Keep the entire instruction reachable in both orientations, including large system fonts.
+			ScrollView contentView = new ScrollView(container.getContext());
+			contentView.addView(container, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
 			AlertDialog alertDialog;
 			if (appearance != null) {
 				alertDialog = appearance.create(contentView, this, () -> { publishResult(false); dismiss(); });
 			} else {
 				AlertDialog.Builder builder = new MotionDialogBuilder(requireContext());
-				if (!landscape) builder.setTitle(descriptionText);
 				alertDialog = builder.setView(contentView).setPositiveButton(android.R.string.ok, this)
 						.setNegativeButton(android.R.string.cancel, this).create();
 				if (requireArguments().getBoolean(EXTRA_ALLOW_REFRESH))

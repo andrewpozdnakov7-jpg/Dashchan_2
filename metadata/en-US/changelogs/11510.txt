@@ -1,0 +1,12 @@
+- Continued the Material 3 interface update: font and wallpaper catalogs, popup appearance settings, combined feeds, autohide and player-button help. Improved spacing and long labels; fixed duplicate dialog titles.
+- Added built-in E444 (ech.bz) reading, posting, reactions and polls. A separate e444 extension is no longer required and an installed extension does not override built-in support.
+- Fixed clipped captcha instructions, settings-search flicker and repeated keyboard requests when returning from a search result. Added an animated exit from settings search.
+- Improved experimental predictive Back on Android 14+, including previous-screen previews and drawer, reply-window and gallery dismissal. Previews are not available for every transition.
+- A configured default board now opens on a fresh application launch. Returning from the background keeps the current screen; the setting includes a short explanation.
+- Added the optional "Fix for S24 Ultra OneUI 9" setting for refresh and overflow button geometry in the top bar. Disabled by default.
+
+To restore the old interface: Settings > Experimental features > New Material 3 interface > disable "Enable new interface".
+
+Application protection features remain in testing.
+
+Thanks for testing, logs and help finding bugs! 🐾

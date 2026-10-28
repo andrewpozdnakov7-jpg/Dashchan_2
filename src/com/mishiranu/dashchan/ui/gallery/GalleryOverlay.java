@@ -147,7 +147,13 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 	private boolean galleryMode;
 	private boolean hiddenForPictureInPicture;
 	private boolean retirePictureInPictureGallery;
-	private boolean predictiveBackRunning;
+	private final com.mishiranu.dashchan.widget.PredictiveBackMotion predictiveBackMotion =
+			new com.mishiranu.dashchan.widget.PredictiveBackMotion();
+	private GalleryDialog predictiveBackDialog;
+	private boolean galleryBackGestureStarted, galleryBackGestureAborted, predictiveBackDismissPending;
+	private boolean backGestureGrid, backGestureWindow, backGestureFullscreen, backGestureLocalAction;
+	private boolean backGesturePhotoClosePending;
+	private Runnable backGestureShowcase;
 	private CornerAnimator cornerAnimator;
 	private String galleryFilter = FILTER_ALL;
 	private GallerySort gallerySort = GallerySort.POST_ORDER;
@@ -423,6 +429,7 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 	@NonNull
 	@Override
 	public GalleryDialog onCreateDialog(Bundle savedInstanceState) {
+		predictiveBackDismissPending = galleryBackGestureStarted = galleryBackGestureAborted = false;
 		if (galleryState.dialogState != null) savedInstanceState = galleryState.dialogState;
 		pendingDialogState = savedInstanceState != null ? new Bundle(savedInstanceState) : null;
 		return new GalleryDialog(this);
@@ -651,7 +658,7 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 		pendingSystemUiFlags = invalidateSystemUiFlags;
 		windowFocusView = dialog.getWindow().getDecorView();
 		windowFocusListener = (v, hasFocus) -> {
-			if (!hasFocus) finishGalleryMotion();
+			if (!hasFocus) { resetPredictiveBackView(false); finishGalleryMotion(); }
 			if (pagerUnit != null) {
 				// Block touch events when dialogs are opened
 				pagerUnit.setHasFocus(hasFocus);
@@ -862,6 +869,8 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 
 	@Override
 	public void onPause() {
+		resetPredictiveBackView(false);
+		galleryBackGestureStarted = false;
 		finishGalleryMotion();
 		swipeChrome.reset();
 		disableAnimationForWindowRecreation();
@@ -925,6 +934,7 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 
 	@Override
 	public boolean onBackPressed() {
+		if (predictiveBackMotion.isBusy() || predictiveBackDismissPending) return true;
 		if (destroyShowcase(true)) {
 			return true;
 		}
@@ -936,7 +946,7 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 	}
 
 	boolean isGalleryMotionBlocking() {
-		return rootView != null && GalleryMotionController.blocks(rootView) ||
+		return predictiveBackDismissPending || predictiveBackMotion.isBusy() || rootView != null && GalleryMotionController.blocks(rootView) ||
 				pagerUnit != null && pagerUnit.isModeMotionRunning() ||
 				listUnit != null && GalleryMotionController.blocks(listUnit.getRecyclerView());
 	}
@@ -991,58 +1001,81 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 
 	@Override
 	public void onPredictiveBackStarted(boolean fromLeft) {
+		if (predictiveBackMotion.isCommitting()) return;
+		resetPredictiveBackView(false);
+		galleryBackGestureStarted = true;
+		galleryBackGestureAborted = false;
+		backGestureLocalAction = getDialog() != null && getDialog().hasLocalBackAction();
+		backGestureShowcase = showcaseDestroy;
+		backGesturePhotoClosePending = photoSwipeClosePending;
+		backGestureGrid = galleryMode; backGestureWindow = galleryWindow; backGestureFullscreen = videoFullscreen;
 		finishGalleryMotion();
-		if (InterfaceMotion.isEnabled() && InterfaceMotion.duration(1) == 0) return;
-		if (rootView != null) {
-			predictiveBackRunning = true;
-			rootView.animate().cancel();
+		// Back-to-grid and showcase dismissal are local actions, not closing this window.
+		if (!InterfaceMotion.isPredictiveBackEnabled() || backGestureLocalAction || predictiveBackDismissPending ||
+				hiddenForPictureInPicture || photoSwipeClosePending ||
+				showcaseDestroy != null || galleryWindow && !galleryMode && !videoFullscreen) return;
+		GalleryDialog dialog = getDialog();
+		if (dialog == null || dialog.getWindow() == null) return;
+		View decor = dialog.getWindow().getDecorView();
+		if (predictiveBackMotion.start(decor, fromLeft ? 1f : -1f,
+				Math.min(decor.getWidth() * .35f, 96f * ResourceUtils.obtainDensity(decor)), .08f)) {
+			predictiveBackDialog = dialog;
 		}
 	}
 
 	@Override
 	public void onPredictiveBackProgressed(float progress, boolean fromLeft) {
-		if (predictiveBackRunning && rootView != null) {
-			float easedProgress = 1f - (float) Math.pow(1f - progress, 3f);
-			float direction = fromLeft ? 1f : -1f;
-			rootView.setTranslationX(direction * 24f * ResourceUtils.obtainDensity(rootView.getContext()) * easedProgress);
-			rootView.setScaleX(1f - 0.04f * easedProgress);
-			rootView.setScaleY(1f - 0.04f * easedProgress);
-			rootView.setAlpha(1f - 0.18f * easedProgress);
-		}
+		predictiveBackMotion.progress(progress);
 	}
 
 	@Override
 	public void onPredictiveBackCancelled() {
-		resetPredictiveBackView(true);
+		galleryBackGestureStarted = false;
+		galleryBackGestureAborted = false;
+		backGestureShowcase = null;
+		predictiveBackMotion.cancel(); predictiveBackDialog = null;
 	}
 
 	@Override
-	public void onPredictiveBackCommitted() {
-		if (photoSwipeClosePending || galleryMotion != null && galleryMotion.isClosing()) return;
-		resetPredictiveBackView(true);
+	public boolean onPredictiveBackCommitted() {
+		if (predictiveBackDismissPending || predictiveBackMotion.isCommitting()) return true;
+		if (galleryBackGestureAborted) {
+			galleryBackGestureStarted = galleryBackGestureAborted = false; resetPredictiveBackView(false); return true;
+		}
+		if (galleryBackGestureStarted && (galleryMode != backGestureGrid || galleryWindow != backGestureWindow ||
+				videoFullscreen != backGestureFullscreen || hiddenForPictureInPicture ||
+				showcaseDestroy != backGestureShowcase || photoSwipeClosePending != backGesturePhotoClosePending ||
+				(getDialog() != null && getDialog().hasLocalBackAction()) != backGestureLocalAction)) {
+			galleryBackGestureStarted = false; resetPredictiveBackView(false); return true;
+		}
+		galleryBackGestureStarted = false;
+		backGestureShowcase = null;
+		if (!predictiveBackMotion.isTracking()) return predictiveBackMotion.isBusy();
+		GalleryDialog expected = predictiveBackDialog;
+		if (expected == null || getDialog() != expected || hiddenForPictureInPicture ||
+				showcaseDestroy != null || galleryWindow && !galleryMode && !videoFullscreen) {
+			resetPredictiveBackView(false); return true;
+		}
+		return predictiveBackMotion.commit(() -> {
+			predictiveBackDialog = null;
+			if (getDialog() != expected || !expected.isShowing() || hiddenForPictureInPicture ||
+					!isAdded() || isRemoving() || expected.hasLocalBackAction() || showcaseDestroy != null ||
+					photoSwipeClosePending || galleryMode != backGestureGrid || galleryWindow != backGestureWindow ||
+					videoFullscreen != backGestureFullscreen) return;
+			predictiveBackDismissPending = true;
+			if (expected.getWindow() != null) expected.getWindow().setWindowAnimations(0);
+			dismissPhotoAfterMotion(expected);
+		});
 	}
 
 	private void resetPredictiveBackView(boolean animate) {
-		predictiveBackRunning = false;
-		if (rootView != null) {
-			rootView.animate().cancel();
-			if (animate && rootView.isAttachedToWindow()) {
-				if (InterfaceMotion.isEnabled()) {
-					rootView.animate().translationX(0f).scaleX(1f).scaleY(1f).alpha(1f)
-							.setDuration(InterfaceMotion.duration(InterfaceMotion.RECOVERY_DURATION))
-							.setInterpolator(InterfaceMotion.STANDARD).start();
-				} else {
-					rootView.animate().translationX(0f).scaleX(1f).scaleY(1f).alpha(1f).setDuration(150)
-							.setInterpolator(new android.view.animation.AccelerateDecelerateInterpolator()).start();
-				}
-			} else {
-				rootView.setTranslationX(0f);
-				rootView.setScaleX(1f);
-				rootView.setScaleY(1f);
-				rootView.setAlpha(1f);
-			}
-		}
+		galleryBackGestureAborted |= galleryBackGestureStarted;
+		backGestureShowcase = null;
+		predictiveBackDialog = null;
+		if (animate) predictiveBackMotion.cancel(); else predictiveBackMotion.finish();
 	}
+
+	void finishPredictiveBack() { resetPredictiveBackView(false); }
 
 	@Override
 	public void onCreateMenu(@NonNull Menu menu, @NonNull MenuInflater inflater) {
@@ -1253,6 +1286,7 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 	private static final int GALLERY_TRANSITION_DURATION = 150;
 
 	private void switchMode(boolean galleryMode, boolean animated) {
+		resetPredictiveBackView(false);
 		instance.logNavigation("mode_change fromGrid=" + this.galleryMode + " toGrid=" + galleryMode
 				+ " index=" + pagerUnit.getCurrentIndex() + " animated=" + animated);
 		finishGalleryMotion();

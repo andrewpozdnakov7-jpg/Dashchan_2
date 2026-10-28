@@ -405,6 +405,12 @@ public final class Post implements Comparable<Post> {
 		public Vote vote;
 	}
 
+	/** Built-in E444 wire metadata, persisted with the post. */
+	public Post setE444Data(String data) {
+		builder.builder.e444Data = data;
+		return this;
+	}
+
 	public com.mishiranu.dashchan.content.model.Post build() {
 		if (builder.attachments != null && builder.attachments.length > 0) {
 			builder.builder.attachments = new ArrayList<>();

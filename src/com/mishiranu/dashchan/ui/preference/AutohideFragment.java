@@ -1,6 +1,7 @@
 package com.mishiranu.dashchan.ui.preference;
 
 import com.mishiranu.dashchan.widget.MotionDialogBuilder;
+import com.mishiranu.dashchan.widget.InterfaceAppearance;
 import android.annotation.SuppressLint;
 import android.app.AlertDialog;
 import android.content.Context;
@@ -508,6 +509,8 @@ public class AutohideFragment extends BaseListFragment {
 			int stateResId = mixed ? R.string.partially_enabled
 					: checkedCount > 0 ? R.string.enabled : R.string.disabled;
 			checkBox.setContentDescription(label + ": " + getContext().getString(stateResId));
+			InterfaceAppearance.standardFormChoice(checkBox);
+			InterfaceAppearance.standardMixedIndicator(mixedIndicator, checkBox);
 		}
 	}
 
@@ -525,6 +528,7 @@ public class AutohideFragment extends BaseListFragment {
 		textLayout.setOrientation(LinearLayout.VERTICAL);
 		TextView title = makeHeaderText(context, R.string.autohide_scope, 16f, false);
 		title.setTypeface(ResourceUtils.TYPEFACE_MEDIUM);
+		InterfaceAppearance.standardContentHeading(title);
 		TextView summary = makeHeaderText(context, R.string.all_rules, 14f, true);
 		textLayout.addView(title, LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
 		textLayout.addView(summary, LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
@@ -562,6 +566,7 @@ public class AutohideFragment extends BaseListFragment {
 			textView.setTextColor(ResourceUtils.getColorStateList(context, android.R.attr.textColorSecondary));
 		}
 		ThemeEngine.applyStyle(textView);
+		if (secondary) InterfaceAppearance.standardCustomCaption(textView);
 		return textView;
 	}
 
@@ -575,6 +580,7 @@ public class AutohideFragment extends BaseListFragment {
 		checkBox.setContentDescription(context.getText(descriptionResId));
 		cell.addView(checkBox, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT,
 				FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER));
+		InterfaceAppearance.standardFormChoice(checkBox);
 		return checkBox;
 	}
 
@@ -615,6 +621,7 @@ public class AutohideFragment extends BaseListFragment {
 			}
 			valueEdit.setText(value);
 			valueEdit.setSelection(valueEdit.length());
+			InterfaceAppearance.standardAutohideContent(dialogView, true);
 		}
 
 		@Override
@@ -637,6 +644,7 @@ public class AutohideFragment extends BaseListFragment {
 						(dialog, which) -> ((AutohideFragment) getParentFragment()).onDelete(index));
 			}
 			AlertDialog dialog = builder.create();
+			InterfaceAppearance.standardCustomDialogContent(dialog, dialogView);
 			dialog.setOnShowListener(ignored -> {
 				dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
 					String value = valueEdit.getText().toString().trim();
@@ -756,6 +764,7 @@ public class AutohideFragment extends BaseListFragment {
 				valueEdit.setText(null);
 			}
 			updateTestResult();
+			InterfaceAppearance.standardAutohideContent(scrollView, false);
 		}
 
 		@Override
@@ -778,6 +787,7 @@ public class AutohideFragment extends BaseListFragment {
 						(d, which) -> ((AutohideFragment) getParentFragment()).onDelete(index));
 			}
 			AlertDialog dialog = builder.create();
+			InterfaceAppearance.standardCustomDialogContent(dialog, scrollView);
 			dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN);
 			return dialog;
 		}

@@ -20,6 +20,8 @@ import androidx.annotation.RequiresApi;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.util.ViewUtils;
 import com.mishiranu.dashchan.util.InterfaceMotion;
+import com.mishiranu.dashchan.content.Preferences;
+import com.mishiranu.dashchan.util.SharedPreferences;
 import com.mishiranu.dashchan.widget.ViewFactory;
 
 public class GalleryDialog extends com.mishiranu.dashchan.content.security.SecureDialog {
@@ -28,7 +30,7 @@ public class GalleryDialog extends com.mishiranu.dashchan.content.security.Secur
 		void onPredictiveBackStarted(boolean fromLeft);
 		void onPredictiveBackProgressed(float progress, boolean fromLeft);
 		void onPredictiveBackCancelled();
-		void onPredictiveBackCommitted();
+		boolean onPredictiveBackCommitted();
 		void onCreateActionContextBarView();
 	}
 
@@ -39,6 +41,28 @@ public class GalleryDialog extends com.mishiranu.dashchan.content.security.Secur
 	private View actionBar;
 	private View actionContextBar;
 	private Object predictiveBackCallback;
+	private ActionMode currentActionMode;
+	private final SharedPreferences.Listener motionPreferencesListener = this::onMotionPreferenceChanged;
+	private void onMotionPreferenceChanged(String key) {
+		if (Preferences.KEY_PREDICTIVE_BACK.equals(key) || Preferences.KEY_NEW_INTERFACE_MOTION.equals(key)) {
+			fragment.finishPredictiveBack();
+			unregisterPredictiveBackCallback(); registerPredictiveBackCallback();
+		}
+	}
+
+	boolean hasLocalBackAction() {
+		return currentActionMode != null || com.mishiranu.dashchan.widget.PredictiveBackMotion
+				.isImeVisible(getWindow().getDecorView());
+	}
+
+	private boolean performLocalBackAction() {
+		View decor = getWindow().getDecorView();
+		if (com.mishiranu.dashchan.widget.PredictiveBackMotion.isImeVisible(decor)) {
+			com.mishiranu.dashchan.widget.PredictiveBackMotion.hideIme(decor); return true;
+		}
+		if (currentActionMode != null) { currentActionMode.finish(); return true; }
+		return false;
+	}
 
 	public GalleryDialog(GalleryOverlay fragment) {
 		super(fragment.requireContext(), R.style.Theme_Gallery);
@@ -83,10 +107,14 @@ public class GalleryDialog extends com.mishiranu.dashchan.content.security.Secur
 	protected void onStart() {
 		super.onStart();
 		registerPredictiveBackCallback();
+		Preferences.PREFERENCES.register(motionPreferencesListener);
 	}
 
 	@Override
 	protected void onStop() {
+		Preferences.PREFERENCES.unregister(motionPreferencesListener);
+		fragment.finishPredictiveBack();
+		currentActionMode = null;
 		unregisterPredictiveBackCallback();
 		super.onStop();
 	}
@@ -127,8 +155,10 @@ public class GalleryDialog extends com.mishiranu.dashchan.content.security.Secur
 	private void dispatchPredictiveBackPressed() {
 		if (fragment instanceof Callback && fragment.isAdded()) {
 			Callback callback = (Callback) fragment;
+			// A progressive dismissal owns completion. Do not navigate first and then reset its view.
+			if (callback.onPredictiveBackCommitted()) return;
+			if (performLocalBackAction()) return;
 			boolean handled = callback.onBackPressed();
-			callback.onPredictiveBackCommitted();
 			if (handled) {
 				return;
 			}
@@ -234,9 +264,7 @@ public class GalleryDialog extends com.mishiranu.dashchan.content.security.Secur
 	@Override
 	@SuppressWarnings("deprecation")
 	public void onBackPressed() {
-		if (!(fragment instanceof Callback) || !((Callback) fragment).onBackPressed()) {
-			super.onBackPressed();
-		}
+		dispatchPredictiveBackPressed();
 	}
 
 	@Override
@@ -281,7 +309,13 @@ public class GalleryDialog extends com.mishiranu.dashchan.content.security.Secur
 
 	@Override
 	public void onActionModeStarted(ActionMode mode) {
+		currentActionMode = mode;
 		super.onActionModeStarted(mode);
 		getActionContextBarView();
+	}
+
+	@Override public void onActionModeFinished(ActionMode mode) {
+		if (currentActionMode == mode) currentActionMode = null;
+		super.onActionModeFinished(mode);
 	}
 }
