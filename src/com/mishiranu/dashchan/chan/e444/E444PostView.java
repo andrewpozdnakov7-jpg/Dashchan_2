@@ -122,6 +122,8 @@ public final class E444PostView extends LinearLayout {
         return view;
     }
 
+    // Both distributions use the platform Widget.PostButton theme, as do the other native post views.
+    @android.annotation.SuppressLint("AppCompatCustomView")
     private final class ActionView extends TextView {
         final boolean poll;
         ActionView(boolean poll) { super(E444PostView.this.getContext(), null, 0, R.style.Widget_PostButton); this.poll = poll; }

@@ -181,4 +181,4 @@ ECH support is built in and uses ech.bz / ech.ist over HTTPS. Legacy ech.u links
 The separately installed com.mishiranu.dashchan.chan.e444 extension is superseded and its code is not loaded.
 The e444 forum identity is retained for existing preferences, favorites and stored threads.
 Reactions, poll voting and server-provided navigation menus use native post binding, without reflective UI hooks.
-This source change has not yet undergone release-build or device acceptance testing.
+Device acceptance testing of ECH support remains pending.
