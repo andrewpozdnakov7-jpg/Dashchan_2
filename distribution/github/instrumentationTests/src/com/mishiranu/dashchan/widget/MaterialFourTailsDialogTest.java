@@ -70,7 +70,7 @@ public class MaterialFourTailsDialogTest {
 							assertTrue(content.scroll.getHeight() > 0);
 							View action = dialog.findViewById(android.R.id.button1);
 							assertSame(content.actions, action.getParent()); assertTrue(action.getHeight() > 0);
-							assertTrue(content.actions.getBottom() <= content.getHeight());
+							assertTrue(((View) content.actions).getBottom() <= content.getHeight());
 						} finally { dialog.dismiss(); }
 					}
 				}

@@ -3,6 +3,7 @@ package com.mishiranu.dashchan.widget;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.CompoundButton;
 import android.widget.EditText;
