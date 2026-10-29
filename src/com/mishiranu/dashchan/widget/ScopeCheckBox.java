@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.widget;
 
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.res.ColorStateList;
 import android.graphics.Canvas;
@@ -19,6 +20,9 @@ import com.mishiranu.dashchan.util.ResourceUtils;
 import java.util.Arrays;
 
 /** Label-free tri-state presentation. CheckBox retains click, key and accessibility semantics. */
+// Like the other native widgets in this app, this control deliberately uses the framework
+// theme (minSdk 30). Its glyph and ripple are drawn here; no AppCompat tint adapter is needed.
+@SuppressLint("AppCompatCustomView")
 public final class ScopeCheckBox extends CheckBox {
 	private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
 	private final Path path = new Path();
