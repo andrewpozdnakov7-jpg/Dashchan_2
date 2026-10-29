@@ -16,6 +16,30 @@ import org.junit.runner.RunWith;
 /** Flavor and restored-preference policy. Does not navigate or change the system animation scale. */
 @RunWith(AndroidJUnit4.class)
 public class InterfaceMotionDistributionTest {
+	@Test public void predictiveSwitchIsIndependentOfTheDesignInBothDistributions() {
+		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+			String[] keys = {Preferences.KEY_NEW_INTERFACE_MOTION, Preferences.KEY_PREDICTIVE_BACK};
+			java.util.Map<String, ?> before = Preferences.PREFERENCES.getAll();
+			try {
+				for (boolean design : new boolean[]{false, true}) {
+					for (boolean predictive : new boolean[]{false, true}) {
+						Preferences.PREFERENCES.edit().put(keys[0], design).put(keys[1], predictive).close();
+						assertEquals(Build.VERSION.SDK_INT >= 33 && predictive, InterfaceMotion.isPredictiveBackEnabled());
+						assertEquals(BuildConfig.ENABLE_EXPERIMENTAL_INTERFACE_MOTION && design, InterfaceMotion.isEnabled());
+					}
+				}
+			} finally {
+				try (SharedPreferences.Editor editor = Preferences.PREFERENCES.edit()) {
+					for (String key : keys) {
+						Object value = before.get(key);
+						if (value instanceof Boolean) editor.put(key, (Boolean) value);
+						else editor.remove(key);
+					}
+				}
+			}
+		});
+	}
+
 	@Test public void restoredExperimentalPreferenceCannotEnableTheFeatureInFdroid() {
 		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
 			String key = Preferences.KEY_NEW_INTERFACE_MOTION;

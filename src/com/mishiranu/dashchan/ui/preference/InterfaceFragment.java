@@ -9,12 +9,14 @@ import android.view.View;
 import androidx.annotation.NonNull;
 import androidx.fragment.app.FragmentManager;
 import chan.content.ChanMarkup;
+import com.mishiranu.dashchan.BuildConfig;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.LauncherIconManager;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.ui.FragmentHandler;
 import com.mishiranu.dashchan.ui.InstanceDialog;
 import com.mishiranu.dashchan.ui.StateActivity;
+import com.mishiranu.dashchan.ui.preference.core.CheckPreference;
 import com.mishiranu.dashchan.ui.preference.core.Preference;
 import com.mishiranu.dashchan.ui.preference.core.PreferenceFragment;
 import com.mishiranu.dashchan.util.IOUtils;
@@ -27,6 +29,8 @@ import java.util.List;
 
 public class InterfaceFragment extends PreferenceFragment {
 	private Preference<Void> applicationLogoPreference;
+	private CheckPreference predictiveBackPreference;
+	private boolean confirmingPredictiveBack;
 
 	@Override
 	protected SharedPreferences getPreferences() {
@@ -107,9 +111,22 @@ public class InterfaceFragment extends PreferenceFragment {
 				R.string.night_theme, darkThemeEntries).setOnAfterChangeListener(p -> requireActivity().recreate());
 		addDependency(Preferences.KEY_DAY_THEME, Preferences.KEY_AUTOMATIC_DAY_NIGHT_THEME, true);
 		addDependency(Preferences.KEY_NIGHT_THEME, Preferences.KEY_AUTOMATIC_DAY_NIGHT_THEME, true);
-		addCheck(true, Preferences.KEY_PREDICTIVE_BACK, Preferences.DEFAULT_PREDICTIVE_BACK,
-				R.string.enable_predictive_back, R.string.enable_predictive_back__summary)
-				.setOnAfterChangeListener(p -> ((StateActivity) requireActivity()).updateSystemBackCallback());
+		predictiveBackPreference = addCheck(true, Preferences.KEY_PREDICTIVE_BACK, Preferences.DEFAULT_PREDICTIVE_BACK,
+				R.string.enable_predictive_back, R.string.enable_predictive_back__summary);
+		predictiveBackPreference.setOnBeforeChangeListener((preference, value) -> {
+			if (value && !preference.getValue() && !confirmingPredictiveBack &&
+					BuildConfig.ENABLE_EXPERIMENTAL_INTERFACE_MOTION && !Preferences.isNewInterfaceMotionEnabled()) {
+				PredictiveBackPreferenceDialog.show(getChildFragmentManager(),
+						PredictiveBackPreferenceDialog.ENABLE_NEW_INTERFACE);
+				return false;
+			}
+			return true;
+		});
+		predictiveBackPreference.setOnAfterChangeListener(p ->
+				((StateActivity) requireActivity()).updateSystemBackCallback());
+		getChildFragmentManager().setFragmentResultListener(PredictiveBackPreferenceDialog.RESULT,
+				getViewLifecycleOwner(), (key, result) -> applyPredictiveBackChoice(
+						result.getInt(PredictiveBackPreferenceDialog.CHOICE)));
 		addButton(R.string.gesture_controls, R.string.gesture_controls__summary)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 						.pushFragment(new GestureSettingsFragment()));
@@ -190,9 +207,29 @@ public class InterfaceFragment extends PreferenceFragment {
 		}
 	}
 
+	private void applyPredictiveBackChoice(int choice) {
+		if (predictiveBackPreference == null || !BuildConfig.ENABLE_EXPERIMENTAL_INTERFACE_MOTION ||
+				(choice != PredictiveBackPreferenceDialog.ENABLE_NEW_INTERFACE &&
+				choice != PredictiveBackPreferenceDialog.ENABLE_OLD_INTERFACE)) return;
+		CheckPreference preference = predictiveBackPreference;
+		// Publish the complete choice before preference listeners can recreate the Activity.
+		try (SharedPreferences.Editor editor = Preferences.PREFERENCES.edit()) {
+			if (choice == PredictiveBackPreferenceDialog.ENABLE_NEW_INTERFACE) {
+				editor.put(Preferences.KEY_NEW_INTERFACE_MOTION, true)
+						.put(Preferences.KEY_NEW_POSTING_FORM, true).put(Preferences.KEY_NEW_VIDEO_PLAYER, true);
+			}
+			editor.put(Preferences.KEY_PREDICTIVE_BACK, true);
+		}
+		if (predictiveBackPreference != preference || getView() == null) return;
+		confirmingPredictiveBack = true;
+		try { preference.setValue(true); }
+		finally { confirmingPredictiveBack = false; }
+	}
+
 	@Override
 	public void onDestroyView() {
 		applicationLogoPreference = null;
+		predictiveBackPreference = null;
 		super.onDestroyView();
 	}
 

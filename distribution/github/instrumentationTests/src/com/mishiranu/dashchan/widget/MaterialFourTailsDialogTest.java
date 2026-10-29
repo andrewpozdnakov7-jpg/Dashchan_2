@@ -27,14 +27,16 @@ public class MaterialFourTailsDialogTest {
 	@Test public void optionalTitleAndActionCombinationsRemainOptional() {
 		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
 			Context context = PostingTestContext.create();
-			for (int mask = 0; mask < 4; mask++) {
+			for (int mask = 0; mask < 8; mask++) {
 				MessageDialog.Builder builder = new MessageDialog.Builder(context).setMessage("Fixture");
 				if ((mask & 1) != 0) builder.setPositiveButton(android.R.string.ok, null);
 				if ((mask & 2) != 0) builder.setNegativeButton(android.R.string.cancel, null);
+				if ((mask & 4) != 0) builder.setNeutralButton(com.mishiranu.dashchan.R.string.predictive_back_keep_old_interface, null);
 				MessageDialog dialog = builder.create();
 				InterfaceAppearance.refreshTree(dialog.getWindow().getDecorView());
 				assertEquals((mask & 1) != 0, dialog.findViewById(android.R.id.button1) != null);
 				assertEquals((mask & 2) != 0, dialog.findViewById(android.R.id.button2) != null);
+				assertEquals((mask & 4) != 0, dialog.findViewById(android.R.id.button3) != null);
 				assertEquals(View.GONE, dialog.findViewById(com.mishiranu.dashchan.R.id.standard_dialog_title).getVisibility());
 				dialog.dismiss();
 			}
@@ -53,7 +55,8 @@ public class MaterialFourTailsDialogTest {
 					for (boolean hasTitle : new boolean[]{false, true}) {
 						MessageDialog dialog = new MessageDialog.Builder(context).setTitle(hasTitle ? "Fixture" : null)
 								.setMessage(message).setPositiveButton(android.R.string.ok, null)
-								.setNegativeButton(android.R.string.cancel, null).create();
+								.setNegativeButton(android.R.string.cancel, null)
+								.setNeutralButton(com.mishiranu.dashchan.R.string.predictive_back_keep_old_interface, null).create();
 						try {
 							TextView body = dialog.findViewById(android.R.id.message);
 							MessageDialog.Content content = (MessageDialog.Content) body.getParent().getParent();
@@ -71,6 +74,16 @@ public class MaterialFourTailsDialogTest {
 							View action = dialog.findViewById(android.R.id.button1);
 							assertSame(content.actions, action.getParent()); assertTrue(action.getHeight() > 0);
 							assertTrue(((View) content.actions).getBottom() <= content.getHeight());
+							for (int id : new int[]{android.R.id.button1, android.R.id.button2, android.R.id.button3}) {
+								TextView button = dialog.findViewById(id);
+								assertTrue(button.getWidth() > 0); assertTrue(button.getHeight() > 0);
+								assertTrue(button.getRight() <= ((View) content.actions).getWidth());
+								assertTrue(button.getBottom() <= ((View) content.actions).getHeight());
+								assertNotNull(button.getLayout());
+								for (int line = 0; line < button.getLayout().getLineCount(); line++) {
+									assertEquals(0, button.getLayout().getEllipsisCount(line));
+								}
+							}
 						} finally { dialog.dismiss(); }
 					}
 				}
@@ -95,6 +108,48 @@ public class MaterialFourTailsDialogTest {
 			});
 		}
 	}
+	@Test public void compactConfirmationKeepsCancelAndEnableTogetherWhenTheyFit() {
+		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+			for (boolean enabled : new boolean[]{false, true}) StandardCustomContentTest.profile(enabled, () -> {
+				for (float scale : new float[]{1, 2}) {
+					Context base = InstrumentationRegistry.getInstrumentation().getTargetContext();
+					Configuration config = new Configuration(base.getResources().getConfiguration()); config.fontScale = scale;
+					Context context = PostingTestContext.create(base.createConfigurationContext(config));
+					for (int direction : new int[]{View.LAYOUT_DIRECTION_LTR, View.LAYOUT_DIRECTION_RTL}) {
+						MessageDialog dialog = new MessageDialog.Builder(context).setCompactActions(true)
+								.setTitle(com.mishiranu.dashchan.R.string.predictive_back_enable_title)
+								.setMessage(com.mishiranu.dashchan.R.string.predictive_back_enable_design_message)
+								.setNeutralButton(com.mishiranu.dashchan.R.string.predictive_back_keep_old_interface, null)
+								.setNegativeButton(android.R.string.cancel, null)
+								.setPositiveButton(com.mishiranu.dashchan.R.string.predictive_back_enable, null).create();
+						try {
+							TextView body = dialog.findViewById(android.R.id.message);
+							MessageDialog.Content content = (MessageDialog.Content) body.getParent().getParent();
+							content.setLayoutDirection(direction);
+							InterfaceAppearance.refreshTree(dialog.getWindow().getDecorView());
+							content.measure(View.MeasureSpec.makeMeasureSpec(StandardAppearance.dp(body, 280), View.MeasureSpec.EXACTLY),
+									View.MeasureSpec.makeMeasureSpec(StandardAppearance.dp(body, 600), View.MeasureSpec.AT_MOST));
+							content.layout(0, 0, content.getMeasuredWidth(), content.getMeasuredHeight());
+							ViewGroup actions = (ViewGroup) content.actions;
+							for (int id : new int[]{android.R.id.button1, android.R.id.button2, android.R.id.button3}) {
+								View button = dialog.findViewById(id);
+								assertTrue(button.getHeight() >= StandardAppearance.dp(body, 48));
+								assertTrue(button.getLeft() >= 0); assertTrue(button.getRight() <= actions.getWidth());
+								assertTrue(button.getTop() >= 0); assertTrue(button.getBottom() <= actions.getHeight());
+							}
+							if (scale == 1) {
+								View cancel = dialog.findViewById(android.R.id.button2), enable = dialog.findViewById(android.R.id.button1);
+								View neutral = dialog.findViewById(android.R.id.button3);
+								assertEquals(cancel.getTop(), enable.getTop());
+								assertTrue(neutral.getBottom() <= cancel.getTop());
+							}
+						} finally { dialog.dismiss(); }
+					}
+				}
+			});
+		});
+	}
+
 	private static final class ImageChoices extends BaseAdapter implements SpinnerAdapter {
 		final Bitmap bitmap = Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888);
 		@Override public int getCount() { return 3; }

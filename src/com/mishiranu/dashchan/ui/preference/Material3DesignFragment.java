@@ -30,6 +30,23 @@ public class Material3DesignFragment extends PreferenceFragment {
 		// Merely reopening/restoring the screen must not re-enable an opted-out feature.
 		form.setEnabled(design.getValue());
 		player.setEnabled(design.getValue());
+		design.setOnBeforeChangeListener((preference, value) -> {
+			if (!value && preference.getValue() && Preferences.isPredictiveBackEnabled()) {
+				PredictiveBackPreferenceDialog.show(getChildFragmentManager(),
+						PredictiveBackPreferenceDialog.DISABLE_NEW_INTERFACE);
+				return false;
+			}
+			return true;
+		});
+		getChildFragmentManager().setFragmentResultListener(PredictiveBackPreferenceDialog.RESULT,
+				getViewLifecycleOwner(), (key, result) -> {
+					if (result.getInt(PredictiveBackPreferenceDialog.CHOICE) ==
+							PredictiveBackPreferenceDialog.DISABLE_NEW_INTERFACE) {
+						Preferences.PREFERENCES.edit().put(Preferences.KEY_PREDICTIVE_BACK, false)
+								.put(Preferences.KEY_NEW_INTERFACE_MOTION, false).close();
+						if (getView() != null) design.setValue(false);
+					}
+				});
 		design.setOnAfterChangeListener(p -> onDesignToggled(p.getValue(), form, player));
 	}
 

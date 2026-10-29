@@ -7,4 +7,14 @@
     <string name="material3_posting_form_summary">Новая компоновка полей, форматирование внутри редактора и обновлённые кнопки. Требуется новый интерфейс. Применяется при следующем открытии формы.</string>
     <string name="material3_video_player">Новый вид видеоплеера</string>
     <string name="material3_video_player_summary">Управление и меню скорости в стиле Material 3. Выключите, чтобы вернуть прежний вид. Применяется при следующем открытии плеера.</string>
+    <string name="predictive_back_enable_title">Включить предиктив?</string>
+    <string name="predictive_back_enable_design_message">При включении предиктивного жеста «Назад» также включится новый интерфейс Material 3.</string>
+    <string name="predictive_back_enable">Включить</string>
+    <string name="predictive_back_keep_old_interface">Оставить старый</string>
+    <string name="predictive_back_old_interface_title">Предиктив в старом интерфейсе</string>
+    <string name="predictive_back_old_interface_warning">Работа предиктивного жеста в старом интерфейсе не гарантируется. Возможны ошибки анимации и возврата. Включайте его на свой страх и риск.</string>
+    <string name="predictive_back_enable_anyway">Всё равно включить</string>
+    <string name="predictive_back_disable_design_title">Выключить новый интерфейс?</string>
+    <string name="predictive_back_disable_design_message">Предиктивный жест «Назад» тоже будет выключен. Обычный свайп «Назад» продолжит работать.</string>
+    <string name="predictive_back_disable">Выключить</string>
 </resources>

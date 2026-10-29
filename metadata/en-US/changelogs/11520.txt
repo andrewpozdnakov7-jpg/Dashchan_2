@@ -1,0 +1,9 @@
+**Slooop 3.2.72**
+
+- Fixed the system Back swipe and button when Predictive Back is disabled, including with the old interface.
+- Predictive Back now has its own setting and is no longer enabled automatically with the new interface.
+- When enabling predictive Back with the old interface, you can enable the new Material 3 interface, cancel, or keep the old interface after a warning about possible issues. Disabling the new interface also shows a warning before disabling predictive Back.
+
+Application protection features remain in testing.
+
+Thanks for promptly reporting bugs and helping verify the fixes! 🐾

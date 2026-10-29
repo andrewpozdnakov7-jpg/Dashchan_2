@@ -7,4 +7,14 @@
     <string name="material3_posting_form_summary">New field layout, formatting inside the editor and redesigned actions. Requires the new interface. Applies the next time the form is opened.</string>
     <string name="material3_video_player">New video player appearance</string>
     <string name="material3_video_player_summary">Material 3-style controls and playback speed menu. Turn off to restore the previous appearance. Applies the next time the player is opened.</string>
+    <string name="predictive_back_enable_title">Enable predictive Back?</string>
+    <string name="predictive_back_enable_design_message">Enabling predictive Back will also enable the new Material 3 interface.</string>
+    <string name="predictive_back_enable">Enable</string>
+    <string name="predictive_back_keep_old_interface">Keep old interface</string>
+    <string name="predictive_back_old_interface_title">Predictive Back in the old interface</string>
+    <string name="predictive_back_old_interface_warning">Predictive Back may not work correctly in the old interface. Animation and navigation issues are possible. Enable it at your own risk.</string>
+    <string name="predictive_back_enable_anyway">Enable anyway</string>
+    <string name="predictive_back_disable_design_title">Disable the new interface?</string>
+    <string name="predictive_back_disable_design_message">Predictive Back will also be disabled. The regular Back swipe will continue to work.</string>
+    <string name="predictive_back_disable">Disable</string>
 </resources>

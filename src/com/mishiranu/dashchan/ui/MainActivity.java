@@ -2202,7 +2202,10 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		if (threadMotion != null) threadMotion.finish();
 		finishLocalToolbarMotion();
 		backGestureAborted = false;
-		if (!isSystemPredictiveBackEnabled() || isInPictureInPictureMode() || !hasWindowFocus() ||
+		// The preference controls the preview, not system Back. Without a preview,
+		// let invocation use the normal Back route instead of marking the gesture aborted.
+		if (!isSystemPredictiveBackEnabled()) return;
+		if (isInPictureInPictureMode() || !hasWindowFocus() ||
 				getSupportFragmentManager().isStateSaved() || contentNavigation.isPending() || contentNavigation.hasRequests()) {
 			backGestureAborted = true; return;
 		}
