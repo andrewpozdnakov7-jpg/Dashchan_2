@@ -178,6 +178,11 @@ public class DialogUnit {
 
 		@Override public boolean onBackPressed() { return delegate.provider.onBackPressed(); }
 		@Override public boolean canHandleBack() { return delegate.provider.canHandleBack(); }
+		@Override public long backActionRevision() { return delegate.provider.backActionRevision(); }
+		@Override public com.mishiranu.dashchan.widget.HistoryBackPreview startBackPreview(boolean fromLeft) {
+			return delegate.provider.startBackPreview(fromLeft);
+		}
+		@Override public void clearBackPreviews() { delegate.provider.clearBackPreviews(); }
 
 		@Override
 		public boolean isScrolledToTop(View view) {
@@ -259,6 +264,7 @@ public class DialogUnit {
 				}
 				return false;
 			});
+			provider.onViewBound(content);
 			return content;
 		}
 
@@ -460,6 +466,10 @@ public class DialogUnit {
 		public void onPlaceholderClick(PostItem postItem) {}
 		public boolean onBackPressed() { return false; }
 		public boolean canHandleBack() { return false; }
+		public long backActionRevision() { return 0; }
+		public com.mishiranu.dashchan.widget.HistoryBackPreview startBackPreview(boolean fromLeft) { return null; }
+		public void onViewBound(View content) {}
+		public void clearBackPreviews() {}
 
 		public void onRequestUpdate() {}
 

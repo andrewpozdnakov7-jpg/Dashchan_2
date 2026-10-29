@@ -239,6 +239,8 @@ public class DownloadDialog {
 			}
 		});
 		editText.setAdapter(adapter);
+		com.mishiranu.dashchan.widget.InterfaceAppearance.standardDownloadContent(
+				(ViewGroup) ((ViewGroup) view).getChildAt(0), true);
 
 		AlertDialog dialog = MotionDialogBuilder.standard(context)
 				.setTitle(R.string.select_where_to_save)
@@ -260,6 +262,7 @@ public class DownloadDialog {
 			onDismissListener.onDismiss(d);
 		});
 		dialog.show();
+		com.mishiranu.dashchan.widget.InterfaceAppearance.standardCustomDialogContent(dialog, view);
 		return dialog;
 	}
 
@@ -332,9 +335,12 @@ public class DownloadDialog {
 		radioGroup.setPadding(0, (int) (12f * density), 0, 0);
 		radioGroup.setOnCheckedChangeListener((g, id) -> state.selectedId = id);
 		linearLayout.addView(radioGroup);
+		com.mishiranu.dashchan.widget.InterfaceAppearance.standardDownloadContent(linearLayout, false);
+		android.widget.ScrollView scroll = new android.widget.ScrollView(context);
+		scroll.addView(linearLayout, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
 		AlertDialog.Builder builder = MotionDialogBuilder.standard(context)
-				.setView(linearLayout)
+				.setView(scroll)
 				.setPositiveButton(android.R.string.ok, (dialog, which) -> {
 					switch (radioGroup.getCheckedRadioButtonId()) {
 						case android.R.id.button1: {
@@ -377,6 +383,7 @@ public class DownloadDialog {
 		}
 		dialog.setOnDismissListener(onDismissListener);
 		dialog.show();
+		com.mishiranu.dashchan.widget.InterfaceAppearance.standardCustomDialogContent(dialog, scroll);
 		return dialog;
 	}
 
@@ -423,6 +430,7 @@ public class DownloadDialog {
 				((TextView) convertView).setEllipsize(TextUtils.TruncateAt.START);
 			}
 			((TextView) convertView).setText(dialogDirectory.getDisplayName());
+			com.mishiranu.dashchan.widget.InterfaceAppearance.standardFolderSuggestion((TextView) convertView);
 			return convertView;
 		}
 

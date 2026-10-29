@@ -35,7 +35,8 @@ public final class GalleryMotionController {
 			@Override public void onViewDetachedFromWindow(View view) { finish(); }
 		});
 		root.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
-			if (scene != null && or > ol && ob > ot && (r - l != or - ol || b - t != ob - ot)) finish();
+			if (scene != null && (scene.exit || scene.animator != null) && or > ol && ob > ot &&
+					(r - l != or - ol || b - t != ob - ot)) finish();
 		});
 	}
 
@@ -67,26 +68,31 @@ public final class GalleryMotionController {
 		start(photo, chrome, true, dismiss, item, surface);
 		return true;
 	}
+	public boolean closeFromSwipe(PhotoView photo, Object item, View chrome, Runnable dismiss) {
+		if (scene != null && scene.exit) return true;
+		finish();
+		if (!enabled() || photo == null || !photo.hasImage() || !root.isAttachedToWindow() || photo.isZoomed() || photo.isScaling()) return false;
+		start(photo, chrome, true, dismiss, item, null, true);
+		return true;
+	}
 
 	private boolean enabled() { return InterfaceMotion.isEnabled() && ValueAnimator.areAnimatorsEnabled(); }
 	private void start(PhotoView photo, View chrome, boolean exit, Runnable dismiss, Object item, View surface) {
+		start(photo, chrome, exit, dismiss, item, surface, false);
+	}
+	private void start(PhotoView photo, View chrome, boolean exit, Runnable dismiss, Object item, View surface, boolean fromSwipe) {
 		photo.finishGalleryPresentation();
 		photo.clearInitialScaleAnimationData();
-		install(new Scene(photo, chrome, exit, dismiss, item, surface));
+		install(new Scene(photo, chrome, exit, dismiss, item, surface, fromSwipe));
 	}
 	void install(Scene next) { finish(); scene = next; next.prepare(); }
 
-	private RectF target(PhotoView photo, Object item) {
+	private PhotoTransitionGeometry.Target target(PhotoView photo, Object item) {
 		AttachmentView view = source != null ? source.get() : null;
 		if (view == null || item != sourceItem || view.getImageBindingGeneration() != sourceBinding ||
 				!view.isAttachedToWindow() || !view.isShown() || view.getWidth() == 0 || view.getHeight() == 0) return null;
-		Rect visible = new Rect();
-		if (!view.getGlobalVisibleRect(visible) || visible.width() < view.getWidth() - 1 ||
-				visible.height() < view.getHeight() - 1) return null;
-		int[] from = new int[2], to = new int[2];
-		view.getLocationOnScreen(from); photo.getLocationOnScreen(to);
-		return new RectF(from[0] - to[0], from[1] - to[1],
-				from[0] - to[0] + view.getWidth(), from[1] - to[1] + view.getHeight());
+		PhotoTransitionGeometry.Target target = new PhotoTransitionGeometry.Target(view, photo);
+		return target.valid(photo) ? target : null;
 	}
 
 	public void finish() { if (scene != null) scene.run(); }
@@ -151,7 +157,7 @@ public final class GalleryMotionController {
 		}
 	}
 
-	final class Scene implements Runnable {
+	final class Scene implements PhotoView.GalleryImageReplacementOwner {
 		final PhotoView photo;
 		final PresentationFrame surface;
 		final PresentationFrame[] controls;
@@ -164,16 +170,32 @@ public final class GalleryMotionController {
 		final int backgroundAlpha, accessibility, chromeAccessibility;
 		final Runnable watchdog = this;
 		RectF image, thumbnail;
+		PhotoTransitionGeometry.Target thumbnailTarget;
+		final RectF renderedFrame = new RectF();
+		RectF rebaseFrame;
+		float progress, rebaseAt;
+		final boolean fromSwipe;
+		final RectF swipeFrame;
+		final float swipeAlpha;
 		boolean crop;
 		boolean released;
 		OneShotPreDrawListener preDraw;
 		ValueAnimator animator;
+		final View.OnLayoutChangeListener photoLayout = (v, l, t, r, b, ol, ot, or, ob) -> {
+			if (isPreparingImage()) requestStart();
+		};
 
 		Scene(PhotoView photo, View chrome, boolean exit, Runnable dismiss, Object item) {
 			this(photo, chrome, exit, dismiss, item, null);
 		}
 		Scene(PhotoView photo, View chrome, boolean exit, Runnable dismiss, Object item, View surface) {
+			this(photo, chrome, exit, dismiss, item, surface, false);
+		}
+		Scene(PhotoView photo, View chrome, boolean exit, Runnable dismiss, Object item, View surface, boolean fromSwipe) {
 			this.photo = photo; this.chrome = chrome; this.exit = exit; this.dismiss = dismiss; this.item = item;
+			this.fromSwipe = fromSwipe;
+			swipeFrame = fromSwipe ? photo.getGallerySwipeBounds() : null;
+			swipeAlpha = fromSwipe ? photo.getGallerySwipeAlpha() : 1f;
 			this.surface = surface != null ? new PresentationFrame(surface) : null;
 			java.util.ArrayList<PresentationFrame> controls = new java.util.ArrayList<>();
 			for (View view : mediaChrome) {
@@ -187,6 +209,7 @@ public final class GalleryMotionController {
 			chromeAccessibility = chrome != null ? chrome.getImportantForAccessibility() : View.IMPORTANT_FOR_ACCESSIBILITY_AUTO;
 		}
 		void prepare() {
+			photo.addOnLayoutChangeListener(photoLayout);
 			root.setTag(R.id.gallery_motion_owner, this); photo.setTag(R.id.gallery_motion_owner, this);
 			if (surface != null) surface.own(this);
 			for (PresentationFrame control : controls) control.own(this);
@@ -203,15 +226,22 @@ public final class GalleryMotionController {
 				if (chrome != null) chrome.setAlpha(0f);
 			}
 			root.postDelayed(watchdog, 600);
+			requestStart();
+		}
+		private void requestStart() {
+			if (released || preDraw != null || animator != null) return;
 			preDraw = OneShotPreDrawListener.add(root, () -> {
 				preDraw = null;
 				if (released) return;
-				root.removeCallbacks(watchdog);
-				if (!enabled() || !root.isAttachedToWindow() || photo.getWidth() == 0 || photo.getHeight() == 0) { run(); return; }
+				if (!enabled() || !root.isAttachedToWindow()) { run(); return; }
+				if (photo.getWidth() == 0 || photo.getHeight() == 0) return;
 				image = photo.getGalleryImageBounds();
-				thumbnail = photo.isGalleryImageAtRest() ? target(photo, item) : null;
-				AttachmentView from = source != null ? source.get() : null;
-				crop = from != null && from.isCropEnabled();
+				// An original/thumbnail arriving before the bounded watchdog can still start the entrance.
+				if (!exit && image == null) return;
+				root.removeCallbacks(watchdog);
+				thumbnailTarget = photo.isGalleryImageAtRest() || fromSwipe ? target(photo, item) : null;
+				thumbnail = thumbnailTarget != null ? thumbnailTarget.frame : null;
+				crop = thumbnailTarget != null && thumbnailTarget.crop;
 				if (image == null) thumbnail = null;
 				apply(0f);
 				animator = ValueAnimator.ofFloat(0f, 1f);
@@ -220,7 +250,7 @@ public final class GalleryMotionController {
 				animator.addUpdateListener(value -> {
 					if (!enabled() || photo.getTag(R.id.gallery_motion_owner) != this ||
 							root.getTag(R.id.gallery_motion_owner) != this || !photo.isAttachedToWindow()) { run(); return; }
-					if (thumbnail != null && target(photo, item) == null) { run(); return; }
+					if (thumbnailTarget != null && !thumbnailTarget.valid(photo)) { run(); return; }
 					apply((float) value.getAnimatedValue());
 				});
 				animator.addListener(new AnimatorListenerAdapter() {
@@ -231,34 +261,50 @@ public final class GalleryMotionController {
 			root.invalidate();
 		}
 		void apply(float progress) {
+			this.progress = progress;
 			float amount = exit ? 1f - progress : progress;
 			for (PresentationFrame control : controls) control.fade(this, amount);
 			if (background != null && root.getBackground() == background) background.setAlpha(Math.round(backgroundAlpha * amount));
 			if (chrome != null && chrome.getTag(R.id.gallery_motion_owner) == this) chrome.setAlpha(chromeAlpha * amount);
 			if (thumbnail != null) {
-				photo.setAlpha(alpha);
-				RectF clip = new RectF(GalleryMotionSpec.lerp(thumbnail.left, image.left, amount),
-						GalleryMotionSpec.lerp(thumbnail.top, image.top, amount),
-						GalleryMotionSpec.lerp(thumbnail.right, image.right, amount),
-						GalleryMotionSpec.lerp(thumbnail.bottom, image.bottom, amount));
-				photo.setGalleryFrame(this, clip, crop);
+				photo.setAlpha(alpha * (fromSwipe ? PhotoTransitionGeometry.lerp(swipeAlpha, 1f, progress) : 1f));
+				if (exit) PhotoTransitionGeometry.interpolate(renderedFrame, fromSwipe && swipeFrame != null ? swipeFrame : image, thumbnail, progress);
+				else PhotoTransitionGeometry.interpolate(renderedFrame, rebaseFrame != null ? rebaseFrame : thumbnail, image,
+						rebaseFrame != null ? Math.max(0f, Math.min(1f, (progress - rebaseAt) / (1f - rebaseAt))) : progress);
+				photo.setGalleryFrame(this, renderedFrame, crop && (exit ? progress > 0f : progress < 1f));
 				if (surface != null) {
-					RectF surfaceImage = new RectF(image), surfaceClip = new RectF(clip);
+					RectF surfaceImage = new RectF(image), surfaceClip = new RectF(renderedFrame);
 					float dx = photo.getLeft() - surface.view.getLeft(), dy = photo.getTop() - surface.view.getTop();
 					surfaceImage.offset(dx, dy); surfaceClip.offset(dx, dy);
 					surface.frame(this, surfaceImage, surfaceClip, crop);
 					surface.fade(this, 1f);
 				}
 			} else {
-				photo.setAlpha(alpha * amount);
+				photo.setAlpha(alpha * amount * (fromSwipe ? swipeAlpha : 1f));
+				if (fromSwipe && swipeFrame != null) photo.setGalleryFrame(this, swipeFrame, false);
 				if (surface != null) surface.fade(this, amount);
 			}
+		}
+		@Override public boolean canReplaceImage(Object replacementItem) {
+			return !released && !exit && surface == null && item == replacementItem && scene == this
+					&& progress < 1f && photo.getTag(R.id.gallery_motion_owner) == this && root.getTag(R.id.gallery_motion_owner) == this;
+		}
+		@Override public boolean isPreparingImage() { return !released && !exit && animator == null; }
+		@Override public void onImageReplaced() {
+			if (released || exit) return;
+			if (animator == null) { requestStart(); return; }
+			RectF nextImage = photo.getGalleryImageBounds();
+			if (nextImage == null) { run(); return; }
+			if (thumbnail != null && !renderedFrame.isEmpty()) { rebaseFrame = new RectF(renderedFrame); rebaseAt = progress; }
+			image = nextImage;
+			apply(progress);
 		}
 		@Override public void run() {
 			if (released) return;
 			released = true;
 			if (scene == this) scene = null;
 			root.removeCallbacks(watchdog);
+			photo.removeOnLayoutChangeListener(photoLayout);
 			if (preDraw != null) { preDraw.removeListener(); preDraw = null; }
 			if (animator != null) { animator.cancel(); animator = null; }
 			photo.clearGalleryFrame(this);

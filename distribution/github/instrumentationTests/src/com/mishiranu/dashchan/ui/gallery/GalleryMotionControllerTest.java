@@ -114,7 +114,7 @@ public class GalleryMotionControllerTest {
 			assertNull(f.photo.getTag(R.id.gallery_motion_owner));
 		});
 	}
-	private static final class SwipeListener implements PhotoView.Listener {
+	private static class SwipeListener implements PhotoView.Listener {
 		float value;
 		int completedCloses;
 		@Override public void onClick(PhotoView photo, boolean image, float x, float y) {}
@@ -240,6 +240,89 @@ public class GalleryMotionControllerTest {
 			assertEquals(.6f, surface.getAlpha(), 0f); assertEquals(.5f, controls.getAlpha(), 0f);
 			assertNull(surface.getTag(R.id.gallery_motion_owner)); assertNull(controls.getTag(R.id.gallery_motion_owner));
 			assertSame(surface, output.getParent());
+		});
+	}
+	@Test public void sameItemOriginalKeepsThePreparingEntranceAndItsOwner() {
+		fixture(f -> {
+			Object item = new Object(); f.motion.enter(f.photo, item, f.chrome, false);
+			Object owner = f.photo.getTag(R.id.gallery_motion_owner); long generation = f.photo.getGalleryImageGeneration();
+			assertFalse(f.photo.replaceGalleryOpeningImage(new Object(), new BitmapDrawable(f.context.getResources(), f.bitmap), false, false, true));
+			assertSame(owner, f.photo.getTag(R.id.gallery_motion_owner));
+			assertTrue(f.photo.replaceGalleryOpeningImage(item, new BitmapDrawable(f.context.getResources(), f.bitmap), false, false, true));
+			assertSame(owner, f.photo.getTag(R.id.gallery_motion_owner)); assertSame(owner, f.root.getTag(R.id.gallery_motion_owner));
+			assertEquals(generation + 1, f.photo.getGalleryImageGeneration()); assertEquals(0f, f.photo.getAlpha(), 0f);
+			f.motion.finish(); f.assertReleased();
+		});
+	}
+	@Test public void originalPromotionKeepsTheRenderedMidEntranceFrameAndClock() {
+		fixture(f -> {
+			Object item = new Object(); GalleryMotionController.Scene scene = f.motion.new Scene(f.photo, f.chrome, false, null, item);
+			f.motion.install(scene); scene.preDraw.removeListener(); scene.preDraw = null;
+			scene.image = f.photo.getGalleryImageBounds(); scene.thumbnail = new RectF(10, 12, 30, 22);
+			scene.animator = ValueAnimator.ofFloat(0, 1); scene.apply(.4f);
+			RectF before = new RectF(scene.renderedFrame);
+			Bitmap original = Bitmap.createBitmap(60, 40, Bitmap.Config.ARGB_8888); original.setDensity(Bitmap.DENSITY_NONE);
+			try {
+				assertTrue(f.photo.replaceGalleryOpeningImage(item, new BitmapDrawable(f.context.getResources(), original), false, false, false));
+				assertEquals(before, scene.renderedFrame); assertEquals(.4f, scene.progress, 0f);
+				assertSame(scene, f.photo.getTag(R.id.gallery_motion_owner));
+				scene.apply(1f); assertEquals(scene.image, scene.renderedFrame);
+			} finally { f.motion.finish(); f.photo.recycle(); original.recycle(); }
+		});
+	}
+	@Test public void acceptedExitCannotBePromotedAsAnOpeningAndDismissesOnlyOnce() {
+		fixture(f -> {
+			Object item = new Object(); int[] closes = {0};
+			f.motion.install(f.motion.new Scene(f.photo, f.chrome, true, () -> closes[0]++, item));
+			assertFalse(f.photo.replaceGalleryOpeningImage(item, new BitmapDrawable(f.context.getResources(), f.bitmap), false, false, false));
+			f.motion.finish(); f.motion.finish(); assertEquals(1, closes[0]); f.assertReleased();
+		});
+	}
+	@Test public void verticalSwipeHandsOffItsDrawnFrameWithoutStartingTheLegacyClose() {
+		fixture(f -> {
+			f.photo.layout(0, 0, 600, 600); int[] legacy = {0}, closes = {0};
+			GalleryMotionController.Scene[] accepted = {null}; RectF[] start = {null}; float[] opacity = {0};
+			SwipeListener listener = new SwipeListener() {
+				@Override public boolean onClose(PhotoView photo, boolean down) { legacy[0]++; return false; }
+				@Override public boolean onCloseWithPresentation(PhotoView photo, boolean down) {
+					assertFalse(down); start[0] = photo.getGallerySwipeBounds(); opacity[0] = photo.getGallerySwipeAlpha();
+					GalleryMotionController.Scene scene = f.motion.new Scene(photo, f.chrome, true, () -> closes[0]++, new Object(), null, true);
+					f.motion.install(scene); scene.preDraw.removeListener(); scene.preDraw = null;
+					scene.image = photo.getGalleryImageBounds(); scene.thumbnail = new RectF(4, 8, 24, 18);
+					scene.apply(0); accepted[0] = scene; return true;
+				}
+			};
+			f.photo.setListener(listener); long now = SystemClock.uptimeMillis();
+			dispatch(f.photo, now, now, MotionEvent.ACTION_DOWN, 100);
+			dispatch(f.photo, now, now + 50, MotionEvent.ACTION_MOVE, -600);
+			dispatch(f.photo, now, now + 100, MotionEvent.ACTION_UP, -600);
+			assertNotNull(accepted[0]); assertEquals(start[0], accepted[0].renderedFrame);
+			assertEquals(.7f * opacity[0], f.photo.getAlpha(), .001f); assertEquals(0, legacy[0]);
+			assertEquals(0, listener.completedCloses); accepted[0].apply(1);
+			assertEquals(accepted[0].thumbnail, accepted[0].renderedFrame);
+			f.motion.finish(); f.motion.finish(); assertEquals(1, closes[0]);
+		});
+	}
+	@Test public void cancelledVerticalDragRecoversWithoutClosing() {
+		fixture(f -> {
+			f.photo.layout(0, 0, 600, 600); SwipeListener listener = new SwipeListener(); f.photo.setListener(listener);
+			RectF before = f.photo.getGalleryImageBounds(); long now = SystemClock.uptimeMillis();
+			float distance = Math.max(40f, 2f * ViewConfiguration.get(f.context).getScaledTouchSlop());
+			dispatch(f.photo, now, now, MotionEvent.ACTION_DOWN, 100);
+			dispatch(f.photo, now, now + 50, MotionEvent.ACTION_MOVE, 100 + distance);
+			dispatch(f.photo, now, now + 100, MotionEvent.ACTION_CANCEL, 100 + distance);
+			f.photo.finishGalleryPresentation(); assertRecovered(f, listener, before);
+		});
+	}
+	@Test public void initialLayoutChangesDoNotTerminateAPreparingEntrance() {
+		fixture(f -> {
+			f.motion.enter(f.photo, new Object(), f.chrome, false);
+			Object owner = f.photo.getTag(R.id.gallery_motion_owner);
+			f.root.layout(0, 0, 220, 240); f.photo.layout(0, 0, 220, 240);
+			assertSame(owner, f.photo.getTag(R.id.gallery_motion_owner));
+			assertSame(owner, f.root.getTag(R.id.gallery_motion_owner));
+			assertTrue(((PhotoView.GalleryImageReplacementOwner) owner).isPreparingImage());
+			f.motion.finish(); f.assertReleased();
 		});
 	}
 }

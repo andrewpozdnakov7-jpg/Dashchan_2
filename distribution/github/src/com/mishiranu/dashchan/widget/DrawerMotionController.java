@@ -78,8 +78,10 @@ public final class DrawerMotionController implements DrawerLayout.DrawerListener
 	public void progress(float value, boolean fromLeft) { back.progress(value); }
 	public void recover(boolean animate) { back.recover(animate); }
 	public boolean commitBack() {
+		if (back.hasConsumedInvocation()) return true;
 		if (back.isTracking()) { back.commit(); return true; }
-		return back.isBusy();
+		if (back.isBusy()) { back.commit(); return true; }
+		return false;
 	}
 	public void reset() { releaseContent(); back.reset(); }
 

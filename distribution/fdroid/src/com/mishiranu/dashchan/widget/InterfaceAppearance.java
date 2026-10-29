@@ -40,6 +40,10 @@ public final class InterfaceAppearance {
 	public static void standardContentHeading(TextView text) {}
 	public static void standardFormHeading(TextView text) {}
 	public static void standardFormChoice(CompoundButton button) {}
+	public static void standardDescription(TextView text) {}
+	public static void standardDownloadContent(ViewGroup root, boolean titled) {}
+	public static void standardFolderSuggestion(TextView text) {}
+	public static int[] standardScopeColors(Context context) { return null; }
 	public static void standardCatalogCard(View card, TextView title, TextView metadata) {}
 	public static int standardCatalogColumns(Context context, int width) { return 2; }
 	public static void standardAutohideContent(View root, boolean quick) {}
@@ -72,6 +76,7 @@ public final class InterfaceAppearance {
 	public static void standardMessageContent(View root, TextView title, TextView message, ViewGroup actions) {}
 	public static void standardSpinnerChoice(View root, View content, TextView marker) {}
 	public static void standardSpinnerField(View selected) {}
+	public static void standardDropdownField(DropdownView root, android.widget.Spinner spinner, View selected) {}
 	public static void resetSpinnerChoice(View row) {}
 	public static void configureStandardPageDialog(AlertDialog dialog) {}
 	public static void standardLinearProgress(android.widget.ProgressBar view) {}

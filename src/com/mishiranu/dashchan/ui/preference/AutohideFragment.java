@@ -5,7 +5,6 @@ import com.mishiranu.dashchan.widget.InterfaceAppearance;
 import android.annotation.SuppressLint;
 import android.app.AlertDialog;
 import android.content.Context;
-import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.Layout;
@@ -51,6 +50,7 @@ import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
 public class AutohideFragment extends BaseListFragment {
+	@Override protected boolean useStandardServiceAppearance() { return true; }
 	private static final String EXTRA_SEARCH_QUERY = "searchQuery";
 	private static final String EXTRA_SEARCH_FOCUSED = "searchFocused";
 
@@ -314,7 +314,7 @@ public class AutohideFragment extends BaseListFragment {
 				return holder;
 			}
 			ViewFactory.TwoLinesViewHolder twoLines = ViewFactory.makeTwoLinesListItem(parent,
-					ViewFactory.FEATURE_SINGLE_LINE | ViewFactory.FEATURE_WIDGET);
+					ViewFactory.FEATURE_MULTILINE_TITLE | ViewFactory.FEATURE_WIDGET);
 			twoLines.widgetFrame.setVisibility(View.VISIBLE);
 			twoLines.widgetFrame.setOrientation(LinearLayout.HORIZONTAL);
 			RuleViewHolder holder = new RuleViewHolder(twoLines,
@@ -339,6 +339,8 @@ public class AutohideFragment extends BaseListFragment {
 			ruleHolder.originalPost.setChecked(autohideItem.optionOriginalPost);
 			ruleHolder.replies.setChecked(autohideItem.optionReplies);
 			holder.itemView.setAlpha(autohideItem.isEnabled() ? 1f : PAUSED_ALPHA);
+			((com.mishiranu.dashchan.widget.ScopeCheckBox) ruleHolder.originalPost).refreshAppearance();
+			((com.mishiranu.dashchan.widget.ScopeCheckBox) ruleHolder.replies).refreshAppearance();
 			viewHolder.text1.setText(StringUtils.isEmpty(autohideItem.value)
 					? getString(R.string.all_posts) : autohideItem.value);
 			StringBuilder builder = new StringBuilder();
@@ -416,6 +418,7 @@ public class AutohideFragment extends BaseListFragment {
 				builder.append("false");
 			}
 			viewHolder.text2.setText(builder);
+			InterfaceAppearance.serviceRow(holder.itemView, viewHolder.text1, viewHolder.text2, null);
 		}
 
 		private void setScope(RuleViewHolder holder, AutohideStorage.AutohideItem.Scope scope,
@@ -478,39 +481,26 @@ public class AutohideFragment extends BaseListFragment {
 	}
 
 	private static class AggregateCheckView extends FrameLayout {
-		public final CheckBox checkBox;
-		private final View mixedIndicator;
+		public final com.mishiranu.dashchan.widget.ScopeCheckBox checkBox;
 		private final CharSequence label;
 
 		public AggregateCheckView(Context context, int labelResId) {
 			super(context);
 			label = context.getText(labelResId);
-			checkBox = new CheckBox(context);
-			ThemeEngine.applyStyle(checkBox);
+			checkBox = new com.mishiranu.dashchan.widget.ScopeCheckBox(context);
 			LayoutParams checkParams = new LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT,
 					Gravity.CENTER);
 			addView(checkBox, checkParams);
 
-			mixedIndicator = new View(context);
-			GradientDrawable background = new GradientDrawable();
-			background.setColor(ThemeEngine.getTheme(context).accent);
-			mixedIndicator.setBackground(background);
-			int indicatorSize = dp(context, 8f);
-			addView(mixedIndicator, new LayoutParams(indicatorSize, indicatorSize, Gravity.CENTER));
-			mixedIndicator.setVisibility(GONE);
-			mixedIndicator.setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
 		}
 
 		public void setState(int totalCount, int checkedCount) {
 			boolean mixed = checkedCount > 0 && checkedCount < totalCount;
 			checkBox.setEnabled(totalCount > 0);
 			checkBox.setChecked(totalCount > 0 && checkedCount == totalCount);
-			mixedIndicator.setVisibility(mixed ? VISIBLE : GONE);
-			int stateResId = mixed ? R.string.partially_enabled
-					: checkedCount > 0 ? R.string.enabled : R.string.disabled;
-			checkBox.setContentDescription(label + ": " + getContext().getString(stateResId));
-			InterfaceAppearance.standardFormChoice(checkBox);
-			InterfaceAppearance.standardMixedIndicator(mixedIndicator, checkBox);
+			checkBox.setMixed(mixed);
+			checkBox.setContentDescription(label);
+			checkBox.refreshAppearance();
 		}
 	}
 
@@ -575,12 +565,10 @@ public class AutohideFragment extends BaseListFragment {
 		FrameLayout cell = new FrameLayout(context);
 		parent.addView(cell, new LinearLayout.LayoutParams(dp(context, 64f),
 				LinearLayout.LayoutParams.MATCH_PARENT));
-		CheckBox checkBox = new CheckBox(context);
-		ThemeEngine.applyStyle(checkBox);
+		CheckBox checkBox = new com.mishiranu.dashchan.widget.ScopeCheckBox(context);
 		checkBox.setContentDescription(context.getText(descriptionResId));
 		cell.addView(checkBox, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT,
 				FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER));
-		InterfaceAppearance.standardFormChoice(checkBox);
 		return checkBox;
 	}
 

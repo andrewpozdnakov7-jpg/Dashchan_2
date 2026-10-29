@@ -776,7 +776,7 @@ public class CommentTextView extends TextView {
 			CommentTextView textView = this.textView.get();
 			if (keyCode == KeyEvent.KEYCODE_BACK && v == textView && textView.isSelectionMode()) {
 				// MIUI ignores KEYCODE_BACK key events
-				if (event.getAction() == KeyEvent.ACTION_UP && !event.isLongPress()) {
+				if (BackKeyPolicy.isConfirmedRelease(event)) {
 					stopAndRemoveSelection(textView);
 				}
 				return true;

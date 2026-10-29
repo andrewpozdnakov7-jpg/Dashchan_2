@@ -73,6 +73,8 @@ final class StandardLoadingDrawable extends Drawable implements Animatable, Draw
 	@Override public void draw(Canvas canvas) { sync(); child.draw(canvas); }
 	@Override public void setAlpha(int alpha) { child.setAlpha(alpha); }
 	@Override public void setColorFilter(ColorFilter filter) { child.setColorFilter(filter); }
+	// Drawable still requires this abstract method; no replacement API is provided.
+	@SuppressWarnings("deprecation")
 	@Override public int getOpacity() { return PixelFormat.TRANSLUCENT; }
 	@Override public void invalidateDrawable(Drawable who) { invalidateSelf(); }
 	@Override public void scheduleDrawable(Drawable who, Runnable task, long when) { scheduled.add(task); scheduleSelf(task, when); }

@@ -51,6 +51,7 @@
 			android:singleLine="true" />
 
 		<View
+			android:id="@+id/download_width_spacer"
 			android:layout_width="320dp"
 			android:layout_height="0dp" />
 

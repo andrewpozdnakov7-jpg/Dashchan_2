@@ -28,7 +28,9 @@ public final class DrawerMotionController {
 	public void recover(boolean animate) { back.recover(animate); }
 	public void reset() { back.reset(); }
 	public boolean commitBack() {
+		if (back.hasConsumedInvocation()) return true;
 		if (back.isTracking()) { back.commit(); return true; }
-		return back.isBusy();
+		if (back.isBusy()) { back.commit(); return true; }
+		return false;
 	}
 }

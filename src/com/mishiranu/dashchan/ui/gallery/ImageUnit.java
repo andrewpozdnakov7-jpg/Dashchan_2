@@ -351,15 +351,19 @@ public class ImageUnit {
 
 		private void setPhotoViewImage(PagerInstance.ViewHolder holder, Drawable drawable, boolean hasAlpha) {
 			boolean still = holder.animatedPngDecoder == null && holder.gifDecoder == null;
-			boolean hadImage = holder.photoView.hasImage();
-			GalleryMotionController.Preview preview = still ? GalleryMotionController.capturePreview(holder.photoView) : null;
-			try {
-				holder.photoView.setImage(drawable, hasAlpha, false, holder.photoViewThumbnail);
-				if (still) GalleryMotionController.revealPhoto(holder.photoView, preview, hadImage);
-				else if (preview != null) preview.discard();
-			} catch (RuntimeException | Error e) {
-				if (preview != null) preview.discard();
-				throw e;
+			boolean preserved = still && holder.photoView.replaceGalleryOpeningImage(holder.galleryItem,
+					drawable, hasAlpha, false, holder.photoViewThumbnail);
+			if (!preserved) {
+				boolean hadImage = holder.photoView.hasImage();
+				GalleryMotionController.Preview preview = still ? GalleryMotionController.capturePreview(holder.photoView) : null;
+				try {
+					holder.photoView.setImage(drawable, hasAlpha, false, holder.photoViewThumbnail);
+					if (still) GalleryMotionController.revealPhoto(holder.photoView, preview, hadImage);
+					else if (preview != null) preview.discard();
+				} catch (RuntimeException | Error e) {
+					if (preview != null) preview.discard();
+					throw e;
+				}
 			}
 			holder.jpegData = fileHolder.getJpegData();
 			holder.photoViewThumbnail = false;

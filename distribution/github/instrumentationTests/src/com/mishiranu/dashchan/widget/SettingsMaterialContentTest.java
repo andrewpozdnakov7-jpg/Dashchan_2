@@ -106,4 +106,125 @@ public class SettingsMaterialContentTest {
 			assertEquals(1, scroll.getChildCount());
 		});
 	}
+	private static Object autohideView(String name, Class<?> parameter, Object argument) {
+		try {
+			java.lang.reflect.Method method = com.mishiranu.dashchan.ui.preference.AutohideFragment.class
+					.getDeclaredMethod(name, parameter);
+			method.setAccessible(true); return method.invoke(null, argument);
+		} catch (ReflectiveOperationException error) { throw new AssertionError(error); }
+	}
+	private static ScopeCheckBox addScope(LinearLayout parent, int label) {
+		try {
+			java.lang.reflect.Method method = com.mishiranu.dashchan.ui.preference.AutohideFragment.class
+					.getDeclaredMethod("addScopeCheckBox", LinearLayout.class, int.class);
+			method.setAccessible(true); return (ScopeCheckBox) method.invoke(null, parent, label);
+		} catch (ReflectiveOperationException error) { throw new AssertionError(error); }
+	}
+	private static float glyphCenter(ViewGroup screen, ScopeCheckBox check) {
+		android.graphics.Rect bounds = new android.graphics.Rect(); check.getGlyphBounds(bounds);
+		screen.offsetDescendantRectToMyCoords(check, bounds); return bounds.exactCenterX();
+	}
+	@Test public void actualAutohideHeaderAndRowGlyphsShareColumnsInBothDirections() {
+		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+			for (float scale : new float[] {1, 2}) for (int direction : new int[] {View.LAYOUT_DIRECTION_LTR, View.LAYOUT_DIRECTION_RTL}) {
+				LinearLayout screen = new LinearLayout(context(scale)); screen.setOrientation(LinearLayout.VERTICAL);
+				screen.setLayoutDirection(direction);
+				View header = (View) autohideView("makeHeaderView", ViewGroup.class, screen); screen.addView(header);
+				ScopeCheckBox[][] checks = new ScopeCheckBox[3][2];
+				int[] ids = {R.id.autohide_scope_original_post, R.id.autohide_scope_replies};
+				for (int col = 0; col < 2; col++) checks[0][col] = (ScopeCheckBox)
+						((ViewGroup) header.findViewById(ids[col])).getChildAt(0);
+				for (int row = 1; row < 3; row++) {
+					ViewFactory.TwoLinesViewHolder holder = ViewFactory.makeTwoLinesListItem(screen,
+							ViewFactory.FEATURE_WIDGET | ViewFactory.FEATURE_MULTILINE_TITLE);
+					holder.widgetFrame.setVisibility(View.VISIBLE); holder.widgetFrame.setOrientation(LinearLayout.HORIZONTAL);
+					holder.text1.setText("Synthetic rule with a long expression"); holder.text2.setText("subject | comment");
+					checks[row][0] = addScope(holder.widgetFrame, R.string.hide_in_original_post);
+					checks[row][1] = addScope(holder.widgetFrame, R.string.hide_in_replies);
+					screen.addView(holder.view); InterfaceAppearance.serviceRow(holder.view, holder.text1, holder.text2, null);
+				}
+				for (boolean modern : new boolean[] {true, true, false, true}) {
+					resolve(screen, modern); measure(screen, 360, 1800);
+					for (int col = 0; col < 2; col++) {
+						float center = glyphCenter(screen, checks[0][col]);
+						ViewGroup column = (ViewGroup) checks[0][col].getParent().getParent();
+						View label = column.getChildAt(0);
+						android.graphics.Rect labelBounds = new android.graphics.Rect(0, 0, label.getWidth(), label.getHeight());
+						screen.offsetDescendantRectToMyCoords(label, labelBounds);
+						assertEquals(labelBounds.exactCenterX(), center, 1f);
+						for (int row = 0; row < 3; row++) {
+							ScopeCheckBox check = checks[row][col];
+							assertEquals(center, glyphCenter(screen, check), 1f);
+							assertTrue(check.getWidth() >= StandardAppearance.dp(check, 48));
+							assertTrue(check.getHeight() >= StandardAppearance.dp(check, 48));
+						}
+					}
+				}
+			}
+		});
+	}
+	@Test public void scopeStatesDrawInsideOneGlyphAndBindingDoesNotClick() {
+		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+			ScopeCheckBox check = new ScopeCheckBox(context(1)); int[] clicks = {0};
+			check.setContentDescription("Synthetic scope"); check.setOnClickListener(v -> clicks[0]++);
+			measure(check, 48, 48);
+			android.graphics.Rect glyph = new android.graphics.Rect(); check.getGlyphBounds(glyph);
+			assertEquals(StandardAppearance.dp(check, 24), glyph.width());
+			int[] center = new int[3];
+			for (int state = 0; state < 3; state++) {
+				check.setChecked(state == 1); check.setMixed(state == 2); check.refreshAppearance();
+				android.graphics.Bitmap pixels = android.graphics.Bitmap.createBitmap(check.getWidth(), check.getHeight(), android.graphics.Bitmap.Config.ARGB_8888);
+				try {
+					check.draw(new android.graphics.Canvas(pixels));
+					assertEquals(0, Color.alpha(pixels.getPixel(1, 1)));
+					center[state] = pixels.getPixel(glyph.centerX(), glyph.centerY());
+				} finally { pixels.recycle(); }
+			}
+			assertNotEquals(center[1], center[2]); assertEquals(0, clicks[0]);
+			android.os.Parcelable saved = check.onSaveInstanceState();
+			ScopeCheckBox restored = new ScopeCheckBox(check.getContext()); restored.onRestoreInstanceState(saved);
+			assertTrue(restored.isMixed()); assertFalse(restored.isChecked());
+			android.view.accessibility.AccessibilityNodeInfo node = restored.createAccessibilityNodeInfo();
+			assertTrue(node.isCheckable());
+			check.performClick(); assertEquals(1, clicks[0]);
+		});
+	}
+	@Test public void downloadBodyWrapsLongFolderLabelsAndRestoresLegacySpacer() {
+		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+			View root = LayoutInflater.from(context(2)).inflate(R.layout.dialog_download_choice, null);
+			ViewGroup body = (ViewGroup) ((ViewGroup) root).getChildAt(0);
+			RadioButton common = root.findViewById(R.id.download_common);
+			common.setText("Synthetic long common folder name with enough words to wrap on a compact screen");
+			int[] clicks = {0}; common.setOnClickListener(v -> clicks[0]++);
+			InterfaceAppearance.standardDownloadContent(body, true);
+			for (int i = 0; i < 3; i++) { resolve(root, true); measure(root, 320, 1400); }
+			assertEquals(View.GONE, root.findViewById(R.id.download_width_spacer).getVisibility());
+			assertTrue(common.getLineCount() > 1); assertEquals(0, clicks[0]);
+			resolve(root, false); assertEquals(View.VISIBLE, root.findViewById(R.id.download_width_spacer).getVisibility());
+		});
+	}
+	@Test public void closedDropdownRebindingKeepsOneFieldBackgroundAndItsSelection() {
+		Context context = context(2);
+		org.junit.Assume.assumeTrue("Material profile required for this fixture", InterfaceAppearance.isEnabled(context));
+		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+			for (int direction : new int[] {View.LAYOUT_DIRECTION_LTR, View.LAYOUT_DIRECTION_RTL}) {
+				DropdownView root = new DropdownView(context); root.setLayoutDirection(direction);
+				root.setItems(java.util.Arrays.asList("HTTP", "Synthetic long SOCKS selector value that must wrap")); root.setSelection(1);
+				measure(root, 160, 900);
+				android.widget.Spinner spinner = (android.widget.Spinner) root.getChildAt(0);
+				assertTrue(spinner instanceof SecureSpinner); assertNull(spinner.getBackground());
+				android.graphics.drawable.Drawable background = root.getBackground();
+				for (int i = 0; i < 3; i++) {
+					root.refreshAppearance(); measure(root, 160, 900);
+					assertSame(background, root.getBackground()); assertEquals(1, root.getSelectedItemPosition());
+					assertEquals(0, ((ViewGroup.MarginLayoutParams) spinner.getLayoutParams()).getMarginEnd());
+					assertEquals(StandardAppearance.dp(root, 40), spinner.getPaddingEnd());
+					assertTrue(((TextView) spinner.getSelectedView()).getLineCount() > 1);
+				}
+				root.setItems(java.util.Arrays.asList("HTTP", "SOCKS")); root.setSelection(1); measure(root, 160, 900);
+				assertEquals(1, root.getSelectedItemPosition());
+				root.setEnabled(false); assertFalse(spinner.isEnabled());
+			}
+		});
+	}
 }

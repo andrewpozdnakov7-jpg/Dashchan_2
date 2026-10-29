@@ -156,7 +156,10 @@ public final class InterfaceAppearance {
 	public static void postingForm(View view) { role(view, Role.POSTING_FORM); }
 	/** Filled, borderless fields scoped to the real posting form and its offline preview. */
 	public static void postingField(EditText view) { role(view, Role.POSTING_FIELD); }
-	public static void check(CompoundButton view) { role(view, hasRole(view, Role.CUSTOM_CHOICE) ? Role.CUSTOM_CHOICE : view instanceof Switch ? Role.SWITCH : Role.CHECK); }
+	public static void check(CompoundButton view) {
+		if (view instanceof ScopeCheckBox) ((ScopeCheckBox) view).refreshAppearance();
+		else role(view, hasRole(view, Role.CUSTOM_CHOICE) ? Role.CUSTOM_CHOICE : view instanceof Switch ? Role.SWITCH : Role.CHECK);
+	}
 	private static boolean hasRole(View view, Role role) {
 		Object state = view != null ? view.getTag(R.id.interface_appearance_state) : null;
 		return state instanceof State && ((State) state).role == role;
@@ -165,7 +168,8 @@ public final class InterfaceAppearance {
 	public static void standardCustomContent(View view, View... previews) {
 		if (view == null) return;
 		for (View preview : previews) if (view == preview) return;
-		if (view instanceof EditText) role(view, Role.CUSTOM_FIELD);
+		if (view instanceof ScopeCheckBox) ((ScopeCheckBox) view).refreshAppearance();
+		else if (view instanceof EditText) role(view, Role.CUSTOM_FIELD);
 		else if (view instanceof CompoundButton) role(view, Role.CUSTOM_CHOICE);
 		else if (view instanceof Button) role(view, Role.CUSTOM_ACTION);
 		else if (view instanceof SeekBar) role(view, Role.CUSTOM_SLIDER);
@@ -285,7 +289,21 @@ public final class InterfaceAppearance {
 	}
 	public static void standardContentHeading(TextView text) { role(text, Role.CONTENT_HEADING); }
 	public static void standardFormHeading(TextView text) { SettingsContentAppearance.heading(text); }
-	public static void standardFormChoice(CompoundButton button) { SettingsContentAppearance.choice(button); }
+	public static void standardFormChoice(CompoundButton button) {
+		if (button instanceof ScopeCheckBox) ((ScopeCheckBox) button).refreshAppearance();
+		else SettingsContentAppearance.choice(button);
+	}
+	public static void standardDescription(TextView text) { SettingsContentAppearance.description(text); }
+	public static void standardDownloadContent(ViewGroup root, boolean titled) { SettingsContentAppearance.download(root, titled); }
+	public static void standardFolderSuggestion(TextView text) {
+		modalChoiceRow(text, text);
+		if (isEnabled(text.getContext())) { text.setSingleLine(true); text.setEllipsize(android.text.TextUtils.TruncateAt.START); }
+	}
+	public static int[] standardScopeColors(Context context) {
+		if (!isEnabled(context)) return null;
+		AppearanceColors c = StandardAppearance.colors(context);
+		return new int[] {contrasting(c.outline, c.surface, 3), c.primary, c.onPrimary, c.surface, c.ripple};
+	}
 	public static void standardCatalogCard(View card, TextView title, TextView metadata) { SettingsContentAppearance.card(card, title, metadata); }
 	public static int standardCatalogColumns(Context context, int width) {
 		if (!isEnabled(context)) return 2;
@@ -329,6 +347,9 @@ public final class InterfaceAppearance {
 		StandardAppearance.spinnerChoice(root, content, marker);
 	}
 	public static void standardSpinnerField(View selected) { StandardAppearance.spinnerText(selected); }
+	public static void standardDropdownField(DropdownView root, android.widget.Spinner spinner, View selected) {
+		DropdownFieldAppearance.apply(root, spinner, selected);
+	}
 	public static void resetSpinnerChoice(View row) { StandardAppearance.resetSpinnerChoice(row); }
 	public static void configureStandardPageDialog(AlertDialog dialog) { StandardAppearance.dialog(dialog, true); }
 	public static void standardLinearProgress(android.widget.ProgressBar view) { NativeContentAppearance.linear(view); }

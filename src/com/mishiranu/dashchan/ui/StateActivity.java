@@ -93,12 +93,12 @@ public abstract class StateActivity extends FragmentActivity {
 		if (systemBackCallback == null) {
 			return;
 		}
-		boolean enabled = systemBackCallback.isEnabled();
 		systemBackCallback.setEnabled(false);
 		try {
 			getOnBackPressedDispatcher().onBackPressed();
 		} finally {
-			systemBackCallback.setEnabled(enabled);
+			// Fallback may reenter lifecycle/navigation and change the applicable policy.
+			updateSystemBackCallback();
 		}
 	}
 

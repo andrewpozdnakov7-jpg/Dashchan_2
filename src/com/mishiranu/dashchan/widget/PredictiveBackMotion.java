@@ -5,7 +5,6 @@ import android.animation.AnimatorListenerAdapter;
 import android.animation.ValueAnimator;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.animation.PathInterpolator;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 
@@ -106,8 +105,8 @@ public final class PredictiveBackMotion {
 			completion.run(); return;
 		}
 		animator = ValueAnimator.ofFloat(progress, end);
-		animator.setDuration(180);
-		animator.setInterpolator(new PathInterpolator(.2f, 0f, 0f, 1f));
+		animator.setDuration(committing ? BackMotionSpec.COMPLETE_MS : BackMotionSpec.RECOVER_MS);
+		animator.setInterpolator(BackMotionSpec.EASING);
 		animator.addUpdateListener(a -> apply((float) a.getAnimatedValue()));
 		animator.addListener(new AnimatorListenerAdapter() {
 			@Override public void onAnimationEnd(Animator a) {
