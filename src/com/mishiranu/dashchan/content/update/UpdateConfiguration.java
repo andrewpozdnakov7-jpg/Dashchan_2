@@ -17,7 +17,9 @@ public final class UpdateConfiguration {
 	}
 
 	public static String getApplicationManifestUrl() {
-		return isBetaChannel() ? BuildConfig.UPDATE_MANIFEST_BETA_URL : BuildConfig.UPDATE_MANIFEST_URL;
+		String url = isBetaChannel() ? BuildConfig.UPDATE_MANIFEST_BETA_URL : BuildConfig.UPDATE_MANIFEST_URL;
+		// Both update entry points must read the published client code before using GitHub prose.
+		return url != null && !url.isEmpty() ? url : getLegacyManifestUrl();
 	}
 
 	public static String getGitHubReleasesUrl() {

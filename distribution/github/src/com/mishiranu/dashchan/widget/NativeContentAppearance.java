@@ -85,6 +85,8 @@ final class NativeContentAppearance {
 		}
 		@Override public void setAlpha(int alpha) { paint.setAlpha(alpha); invalidateSelf(); }
 		@Override public void setColorFilter(ColorFilter filter) { paint.setColorFilter(filter); invalidateSelf(); }
+		// Drawable still requires this abstract method; no replacement API is provided.
+		@SuppressWarnings("deprecation")
 		@Override public int getOpacity() { return PixelFormat.TRANSLUCENT; }
 	}
 	private static final class Panel {

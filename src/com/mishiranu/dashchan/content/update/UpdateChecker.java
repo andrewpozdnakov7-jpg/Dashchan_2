@@ -52,16 +52,16 @@ public class UpdateChecker {
 	}
 
 	public static boolean shouldShowAutomatically(UpdateResult result) {
+		return shouldShowAutomatically(result, BuildConfig.VERSION_CODE, Preferences.getUpdateSkippedVersionCode());
+	}
+
+	static boolean shouldShowAutomatically(UpdateResult result, int installedCode, int skippedCode) {
 		if (result == null || result.status != UpdateResult.Status.UPDATE_AVAILABLE &&
-				result.status != UpdateResult.Status.UPDATE_UNAVAILABLE &&
-				result.status != UpdateResult.Status.RELEASE_FOUND) {
+				result.status != UpdateResult.Status.UPDATE_UNAVAILABLE) {
 			return false;
 		}
-		int versionCode = result.getPreferenceVersionCode();
-		if (Preferences.getUpdateSkippedVersionCode() == versionCode) {
-			return false;
-		}
-		return true;
+		// Unknown releases are useful for a manual check, but are not confirmed updates.
+		return result.versionCode > installedCode && result.versionCode > 0 && result.versionCode != skippedCode;
 	}
 
 	private static UpdateResult check(Context context) {

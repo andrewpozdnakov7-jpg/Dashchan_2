@@ -195,6 +195,16 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 	private OneShotPreDrawListener listRevealListener;
 	private Runnable doOnResume;
 	private boolean searchMode = false;
+	private long searchBackRevision;
+	private boolean predictiveSearchCommit;
+	public View getPredictiveSearchView() { return searchMode ? searchView : null; }
+	public long getSearchBackRevision() { return searchBackRevision; }
+	@Override public long getBackActionRevision() { return searchBackRevision; }
+	public boolean commitPredictiveSearchBack(View expected, long revision) {
+		if (!searchMode || searchView != expected || searchBackRevision != revision) return false;
+		predictiveSearchCommit = true;
+		try { return setSearchMode(false); } finally { predictiveSearchCommit = false; }
+	}
 	private boolean saveToStack = false;
 
 	@Override
@@ -391,6 +401,7 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 				}
 			});
 			searchView.setOnChangeListener(query -> {
+				searchBackRevision++;
 				if (listPage != null) {
 					listPage.onSearchQueryChange(query);
 				}
@@ -405,6 +416,7 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 	private boolean setSearchMode(boolean search, boolean toggle) {
 		MenuItem menuItem = searchMenuItem;
 		if (menuItem != null && searchMode != search) {
+			searchBackRevision++;
 			searchMode = search;
 			if (search) {
 				CustomSearchView searchView = getSearchView(true);
@@ -477,6 +489,7 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 	public void onCreateOptionsMenu(Menu menu, boolean primary) {
 		listPage.onCreateOptionsMenu(menu);
 		if (primary) {
+			searchBackRevision++;
 			MenuItem searchMenuItem = menu.findItem(R.id.menu_search);
 			this.searchMenuItem = searchMenuItem;
 			if (searchMenuItem != null) {
@@ -496,7 +509,7 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 					}
 					setSearchMode(expand, false);
 					return true;
-				}));
+				}, () -> !predictiveSearchCommit));
 				if (searchCurrentQuery != null) {
 					searchMenuItem.expandActionView();
 				}

@@ -1788,6 +1788,7 @@
 
 		<activity
 			android:name=".ui.posting.ImageEditorActivity"
+			android:enableOnBackInvokedCallback="true"
 			android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"
 			android:exported="false" />
 

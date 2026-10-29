@@ -50,6 +50,51 @@ import com.mishiranu.dashchan.widget.InterfaceAppearance;
  * sessions stored by WebViews in the main process.
  */
 public class PrivateBrowserActivity extends StateActivity implements DownloadListener {
+	private com.mishiranu.dashchan.widget.WebHistoryPreview historyPreview;
+	private com.mishiranu.dashchan.widget.BackCallbackPolicy backPolicy;
+	private WebView backOwner;
+	private android.view.ActionMode webActionMode;
+	private Object backLocalOwner;
+	private int backRoute;
+	private long historyRevision, backHistoryRevision;
+	private boolean backStarted;
+	private boolean backInvocationHandled;
+	@Override protected boolean isSystemPredictiveBackEnabled() {
+		return com.mishiranu.dashchan.util.InterfaceMotion.isPredictiveBackEnabled();
+	}
+	@Override protected boolean shouldHandleSystemBack() {
+		return backInvocationHandled || historyPreview != null && historyPreview.isBusy() || !isSystemPredictiveBackEnabled() || com.mishiranu.dashchan.widget.PredictiveBackMotion
+				.isImeVisible(getWindow().getDecorView()) || webActionMode != null || webView != null && webView.canGoBack();
+	}
+	@Override protected void onSystemBackStarted(androidx.activity.BackEventCompat event) {
+		if (historyPreview != null && historyPreview.isCommitting()) return;
+		backStarted = true; backOwner = webView; backHistoryRevision = historyRevision;
+		backRoute = com.mishiranu.dashchan.widget.PredictiveBackMotion.isImeVisible(getWindow().getDecorView())
+				? 1 : webActionMode != null ? 3 : webView != null && webView.canGoBack() ? 2 : 0;
+		backLocalOwner = backRoute == 1 ? getCurrentFocus() : backRoute == 3 ? webActionMode : null;
+		if (backRoute == 2 && historyPreview != null) {
+			WebView expected = webView; long revision = historyRevision;
+			historyPreview.start(event.getSwipeEdge() == androidx.activity.BackEventCompat.EDGE_LEFT,
+					() -> webView == expected && historyRevision == revision && !com.mishiranu.dashchan.widget.PredictiveBackMotion
+							.isImeVisible(getWindow().getDecorView()) && webActionMode == null && hasWindowFocus());
+		}
+	}
+	@Override protected void onSystemBackProgressed(androidx.activity.BackEventCompat event) {
+		if (historyPreview != null) historyPreview.progress(event.getProgress());
+	}
+	@Override protected void onSystemBackCancelled() {
+		backStarted = false; backOwner = null; backLocalOwner = null; if (historyPreview != null) historyPreview.cancel();
+	}
+	@Override public void onActionModeStarted(android.view.ActionMode mode) {
+		webActionMode = mode; super.onActionModeStarted(mode); updateSystemBackCallback();
+	}
+	@Override public void onActionModeFinished(android.view.ActionMode mode) {
+		if (webActionMode == mode) webActionMode = null;
+		super.onActionModeFinished(mode); updateSystemBackCallback();
+	}
+	@Override public boolean dispatchTouchEvent(android.view.MotionEvent event) {
+		return historyPreview != null && historyPreview.isBusy() || super.dispatchTouchEvent(event);
+	}
 	private static final String EXTRA_URI = "uri";
 
 	public static Intent createIntent(Context context, Uri uri) {
@@ -95,6 +140,7 @@ public class PrivateBrowserActivity extends StateActivity implements DownloadLis
 		webView.setWebViewClient(new PrivateWebViewClient());
 		webView.setWebChromeClient(new PrivateWebChromeClient());
 		webView.setDownloadListener(this);
+		historyPreview = new com.mishiranu.dashchan.widget.WebHistoryPreview(webView, () -> sessionReady);
 
 		CookieManager cookieManager = CookieManager.getInstance();
 		cookieManager.setAcceptCookie(false);
@@ -212,11 +258,30 @@ public class PrivateBrowserActivity extends StateActivity implements DownloadLis
 
 	@Override
 	protected void onSystemBackPressed() {
-		if (webView != null && webView.canGoBack()) {
-			webView.goBack();
-		} else {
-			finish();
+		if (!hasWindowFocus()) { onSystemBackCancelled(); return; }
+		if (historyPreview != null && historyPreview.isCommitting()) return;
+		if (backInvocationHandled) return;
+		backInvocationHandled = true;
+		getWindow().getDecorView().postOnAnimation(() -> { backInvocationHandled = false; updateSystemBackCallback(); });
+		boolean started = backStarted; backStarted = false;
+		if (started && (webView != backOwner || historyRevision != backHistoryRevision
+				|| backRoute == 1 && getCurrentFocus() != backLocalOwner || backRoute == 3 && webActionMode != backLocalOwner)) {
+			backOwner = null; backLocalOwner = null; if (historyPreview != null) historyPreview.clear(); return;
 		}
+		backOwner = null; backLocalOwner = null;
+		if (started && backRoute != 1 && com.mishiranu.dashchan.widget.PredictiveBackMotion.isImeVisible(getWindow().getDecorView())) return;
+		if (started ? backRoute == 1 : com.mishiranu.dashchan.widget.PredictiveBackMotion.isImeVisible(getWindow().getDecorView())) {
+			com.mishiranu.dashchan.widget.PredictiveBackMotion.hideIme(getWindow().getDecorView()); return;
+		}
+		if (webActionMode != null) { if (!started || backRoute == 3) webActionMode.finish(); return; }
+		if (started && backRoute != 2) { performDefaultBack(); return; }
+		if (webView != null && webView.canGoBack()) {
+			WebView expected = webView;
+			if (historyPreview == null || !historyPreview.commit(() -> { if (webView == expected) expected.goBack(); })) webView.goBack();
+		} else {
+			performDefaultBack();
+		}
+		updateSystemBackCallback();
 	}
 
 	@Override
@@ -229,6 +294,8 @@ public class PrivateBrowserActivity extends StateActivity implements DownloadLis
 
 	@Override
 	protected void onPause() {
+		onSystemBackCancelled();
+		if (historyPreview != null) historyPreview.pause();
 		super.onPause();
 		if (webView != null) {
 			webView.onPause();
@@ -239,13 +306,20 @@ public class PrivateBrowserActivity extends StateActivity implements DownloadLis
 	@Override
 	protected void onResume() {
 		super.onResume();
+		backInvocationHandled = false;
+		if (backPolicy == null) backPolicy = new com.mishiranu.dashchan.widget.BackCallbackPolicy(
+				getWindow().getDecorView(), this::updateSystemBackCallback);
+		updateSystemBackCallback();
 		if (webView != null) {
 			webView.onResume();
 		}
+		if (historyPreview != null) historyPreview.resume();
 	}
 
 	@Override
 	protected void onDestroy() {
+		if (historyPreview != null) { historyPreview.close(); historyPreview = null; }
+		if (backPolicy != null) { backPolicy.close(); backPolicy = null; }
 		sessionGeneration++;
 		WebView currentWebView = webView;
 		webView = null;
@@ -269,6 +343,7 @@ public class PrivateBrowserActivity extends StateActivity implements DownloadLis
 	}
 
 	private void clearBrowsingData(WebView target, Runnable callback) {
+		if (historyPreview != null) historyPreview.clear();
 		CookieManager cookieManager = CookieManager.getInstance();
 		cookieManager.setAcceptCookie(false);
 		if (target != null) {
@@ -306,8 +381,26 @@ public class PrivateBrowserActivity extends StateActivity implements DownloadLis
 	}
 
 	private class PrivateWebViewClient extends WebViewClient {
+		@Override public void doUpdateVisitedHistory(WebView view, String url, boolean reload) {
+			super.doUpdateVisitedHistory(view, url, reload);
+			if (historyPreview != null) historyPreview.historyUpdated(reload);
+			historyRevision++; updateSystemBackCallback();
+		}
+		@Override public void onPageStarted(WebView view, String url, android.graphics.Bitmap icon) {
+			if (historyPreview != null) historyPreview.pageStarted();
+			super.onPageStarted(view, url, icon); historyRevision++; updateSystemBackCallback();
+		}
+		@Override public void onReceivedError(WebView view, WebResourceRequest request, android.webkit.WebResourceError error) {
+			if (request.isForMainFrame() && historyPreview != null) historyPreview.clear();
+			super.onReceivedError(view, request, error); updateSystemBackCallback();
+		}
+		@Override public void onReceivedHttpError(WebView view, WebResourceRequest request, android.webkit.WebResourceResponse response) {
+			if (request.isForMainFrame() && historyPreview != null) historyPreview.clear();
+			super.onReceivedHttpError(view, request, response);
+		}
 		@Override
 		public boolean onRenderProcessGone(WebView view, android.webkit.RenderProcessGoneDetail detail) {
+			if (historyPreview != null) { historyPreview.close(); historyPreview = null; }
 			boolean current = webView == view;
 			if (current) {
 				webView = null;
@@ -339,6 +432,8 @@ public class PrivateBrowserActivity extends StateActivity implements DownloadLis
 
 		@Override
 		public void onPageFinished(WebView view, String url) {
+			if (historyPreview != null && url != null && url.equals(view.getUrl())) historyPreview.pageReady();
+			updateSystemBackCallback();
 			String title = view.getTitle();
 			if (toolbarHolder != null) {
 				toolbarHolder.update(StringUtils.isEmptyOrWhitespace(title)
@@ -348,6 +443,7 @@ public class PrivateBrowserActivity extends StateActivity implements DownloadLis
 
 		@Override
 		public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
+			if (historyPreview != null) historyPreview.clear();
 			if (Preferences.isVerifyCertificate()) {
 				ClickableToast.show(R.string.invalid_certificate);
 				super.onReceivedSslError(view, handler, error);

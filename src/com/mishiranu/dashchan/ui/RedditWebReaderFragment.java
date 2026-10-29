@@ -255,6 +255,7 @@ public class RedditWebReaderFragment extends ContentFragment {
 				+ " auth=" + authorizationMode + " board=" + (boardStyleScript != null)
 				+ " reader=" + (readerStyleScript != null));
 		webView.setWebViewClient(new RedditWebViewClient());
+		historyPreview = new com.mishiranu.dashchan.widget.WebHistoryPreview(webView, this::permitsHistoryPreview);
 		webView.setWebChromeClient(new WebChromeClient() {
 			@Override
 			public void onProgressChanged(WebView view, int newProgress) {
@@ -303,12 +304,14 @@ public class RedditWebReaderFragment extends ContentFragment {
 	public void onResume() {
 		super.onResume();
 		webView.onResume();
+		if (historyPreview != null) historyPreview.resume();
 		if (quickNavigation != null) quickNavigation.refreshPreferences();
 		scheduleTranslationScan(0L);
 	}
 
 	@Override
 	public void onPause() {
+		if (historyPreview != null) historyPreview.pause();
 		handler.removeCallbacks(translationRescanRunnable);
 		CookieManager.getInstance().flush();
 		webView.onPause();
@@ -327,6 +330,7 @@ public class RedditWebReaderFragment extends ContentFragment {
 
 	@Override
 	public void onDestroyView() {
+		if (historyPreview != null) { historyPreview.close(); historyPreview = null; }
 		quickNavigation = null;
 		handler.removeCallbacks(translationRescanRunnable);
 		pageLoadGeneration++;
@@ -456,14 +460,38 @@ public class RedditWebReaderFragment extends ContentFragment {
 
 	@Override
 	public boolean onHomePressed() {
+		if (isHistoryBackBusy()) return true;
 		return navigateBack();
 	}
 
 	@Override
 	public boolean onBackPressed() {
+		if (isHistoryBackCommitting()) return true;
 		return navigateBack();
 	}
 
+	private com.mishiranu.dashchan.widget.WebHistoryPreview historyPreview;
+	private boolean permitsHistoryPreview() {
+		if (authorizationMode || webView == null) return false;
+		String url = webView.getUrl(); if (url == null) return false;
+		Uri uri = Uri.parse(url);
+		String path = uri.getPath(); path = path != null ? path.toLowerCase(java.util.Locale.US) : "";
+		return isAllowedRedditPage(uri) && !path.contains("login") && !path.contains("register")
+				&& !path.contains("password") && !path.contains("oauth") && !path.contains("authorize")
+				&& !path.contains("account");
+	}
+	public boolean isHistoryBackBusy() { return historyPreview != null && historyPreview.isBusy(); }
+	public boolean isHistoryBackCommitting() { return historyPreview != null && historyPreview.isCommitting(); }
+	public boolean isHistoryBackTracking() { return historyPreview != null && historyPreview.isTracking(); }
+	public void startHistoryBackPreview(boolean fromLeft, java.util.function.BooleanSupplier route) {
+		if (webView != null && webView.canGoBack() && historyPreview != null) historyPreview.start(fromLeft, route);
+	}
+	public void progressHistoryBackPreview(float fraction) { if (historyPreview != null) historyPreview.progress(fraction); }
+	public void cancelHistoryBackPreview() { if (historyPreview != null) historyPreview.cancel(); }
+	public void finishHistoryBackPreview() { if (historyPreview != null) historyPreview.finish(); }
+	public boolean commitHistoryBackPreview() {
+		return historyPreview != null && historyPreview.commit(this::navigateBack);
+	}
 	private boolean navigateBack() {
 		if (webView == null) {
 			return false;
@@ -488,6 +516,8 @@ public class RedditWebReaderFragment extends ContentFragment {
 	public boolean canHandleBack() {
 		return webView != null && (webView.canGoBack() || getThreadParentUrl(webView.getUrl()) != null);
 	}
+	private long backActionRevision;
+	@Override public long getBackActionRevision() { return backActionRevision; }
 
 	@Override
 	public boolean isPrimaryNavigationContent() {
@@ -757,6 +787,7 @@ public class RedditWebReaderFragment extends ContentFragment {
 	private void revealPage(WebView view, int generation) {
 		if (isCurrentPageLoad(view, generation)) {
 			view.setVisibility(View.VISIBLE);
+			if (historyPreview != null) historyPreview.pageReady();
 			if (quickNavigation != null) quickNavigation.setContentVisible(true);
 		}
 	}
@@ -817,12 +848,16 @@ public class RedditWebReaderFragment extends ContentFragment {
 
 		@Override
 		public void doUpdateVisitedHistory(WebView view, String url, boolean isReload) {
+			if (historyPreview != null) historyPreview.historyUpdated(isReload);
+			backActionRevision++;
 			recordVisitedPage(view, url, false);
 			notifyBackNavigationChanged();
 		}
 
 		@Override
 		public void onPageStarted(WebView view, String url, Bitmap favicon) {
+			if (historyPreview != null) historyPreview.pageStarted();
+			backActionRevision++;
 			pageLoadGeneration++;
 			logDiagnostic("event=page_started generation=" + pageLoadGeneration + " host=" + getLogHost(url));
 			translationRequestPending = false;
@@ -847,6 +882,7 @@ public class RedditWebReaderFragment extends ContentFragment {
 			String clearHistoryUrl = RedditWebReaderFragment.this.clearHistoryUrl;
 			if (clearHistoryUrl != null && clearHistoryUrl.equals(RedditPageStorage.normalizeUrl(url))) {
 				view.clearHistory();
+				if (historyPreview != null) historyPreview.clear();
 				RedditWebReaderFragment.this.clearHistoryUrl = null;
 			}
 			String currentUrl = view.getUrl();
@@ -862,6 +898,7 @@ public class RedditWebReaderFragment extends ContentFragment {
 
 		@Override
 		public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
+			if (historyPreview != null) historyPreview.clear();
 			logDiagnosticError("event=ssl_error primary=" + error.getPrimaryError());
 			handler.cancel();
 			ClickableToast.show(R.string.invalid_certificate);
@@ -870,6 +907,7 @@ public class RedditWebReaderFragment extends ContentFragment {
 		@Override
 		public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
 			if (request.isForMainFrame()) {
+				if (historyPreview != null) historyPreview.clear();
 				logDiagnosticError("event=main_frame_error code=" + error.getErrorCode());
 			}
 		}
@@ -877,6 +915,7 @@ public class RedditWebReaderFragment extends ContentFragment {
 		@Override
 		public void onReceivedHttpError(WebView view, WebResourceRequest request, WebResourceResponse errorResponse) {
 			if (request.isForMainFrame()) {
+				if (historyPreview != null) historyPreview.clear();
 				logDiagnosticError("event=main_frame_http_error status=" + errorResponse.getStatusCode());
 			}
 		}
@@ -888,6 +927,7 @@ public class RedditWebReaderFragment extends ContentFragment {
 
 		@Override
 		public boolean onRenderProcessGone(WebView view, RenderProcessGoneDetail detail) {
+			if (historyPreview != null) { historyPreview.close(); historyPreview = null; }
 			logDiagnosticError("event=renderer_gone crashed=" + detail.didCrash()
 					+ " priority=" + detail.rendererPriorityAtExit());
 			return super.onRenderProcessGone(view, detail);

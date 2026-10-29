@@ -48,6 +48,7 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.core.view.GravityCompat;
+import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentManager;
 import androidx.fragment.app.FragmentTransaction;
@@ -855,6 +856,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 					if (contentNavigation.shouldSaveSession()) savePagesSession();
 					scheduleContentNavigationDrain();
 					if (predictiveCommit) predictiveBack.destinationCommitted(fragment.backPreviewKey);
+					if (predictiveBack != null) predictiveBack.prepare(fragment.backPreviewKey);
 				}
 			}).commit();
 		} catch (RuntimeException | Error e) {
@@ -1910,6 +1912,9 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	@Override
 	protected void onResume() {
 		super.onResume();
+		backGestureAborted = false;
+		backInvocationHandled = false;
+		prepareBackPreview();
 		if (drawerMotion != null && !wideMode) drawerMotion.resume();
 		if (expandedScreen != null) expandedScreen.refreshSystemBarAppearance();
 		drawerForm.setHostResumed(true);
@@ -1970,6 +1975,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	@Override
 	public void onWindowFocusChanged(boolean hasFocus) {
 		super.onWindowFocusChanged(hasFocus);
+		if (hasFocus) { backGestureAborted = false; backInvocationHandled = false; prepareBackPreview(); }
 		if (!hasFocus) {
 			resetPredictiveBackView(false);
 			if (drawerMotion != null) drawerMotion.recover(false);
@@ -2132,8 +2138,21 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	private long backPressed = 0;
 	private boolean backGestureStarted, backGestureAborted;
 	private int backGestureLocalAction;
+	private long backGestureLocalRevision;
+	private Object backGestureLocalOwner;
+	private boolean backInvocationHandled;
 	private ContentFragment backGestureSource;
 	private StackItem backGestureDestination;
+	private com.mishiranu.dashchan.widget.PredictiveTransition searchBack;
+	private RedditWebReaderFragment webBack;
+	private boolean isWebBackBusy() { return webBack != null && webBack.isHistoryBackBusy(); }
+	private View backGestureSearch;
+	private long backGestureSearchRevision;
+	private boolean isSearchBackBusy() { return searchBack != null && searchBack.isBusy(); }
+	private void prepareBackPreview() {
+		ContentFragment current = getCurrentFragment("FragmentAccess/prepareBackPreview");
+		if (predictiveBack != null && current != null && !isInPictureInPictureMode()) predictiveBack.prepare(current.backPreviewKey);
+	}
 
 	private int localBackAction(ContentFragment fragment) {
 		if (com.mishiranu.dashchan.widget.PredictiveBackMotion.isImeVisible(getWindow().getDecorView())) return 1;
@@ -2143,19 +2162,22 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	@Override
 	public boolean dispatchTouchEvent(android.view.MotionEvent event) {
-		return predictiveBack != null && predictiveBack.isBusy() || drawerMotion != null && drawerMotion.isBusy()
+		return isWebBackBusy() || isSearchBackBusy() || predictiveBack != null && predictiveBack.isBusy() || drawerMotion != null && drawerMotion.isBusy()
 				|| super.dispatchTouchEvent(event);
 	}
 
 	@Override
 	public void onTrimMemory(int level) {
 		if (predictiveBack != null) predictiveBack.clear();
+		Fragment gallery = getSupportFragmentManager().findFragmentByTag(GalleryOverlay.class.getName());
+		if (gallery instanceof GalleryOverlay) ((GalleryOverlay) gallery).trimPredictivePreviews();
 		super.onTrimMemory(level);
+		if (hasWindowFocus()) prepareBackPreview();
 	}
 
 	private boolean isDrawerVisibleForBack() {
-		return drawerLayout != null && (drawerLayout.isDrawerOpen(GravityCompat.START) ||
-				InterfaceMotion.isDrawerEnabled() && drawerLayout.isDrawerVisible(GravityCompat.START));
+		return drawerLayout != null && drawerLayout.isDrawerVisible(GravityCompat.START)
+				&& drawerLayout.getDrawerLockMode(GravityCompat.START) == DrawerLayout.LOCK_MODE_UNLOCKED;
 	}
 
 	private boolean canHandleBackInApp() {
@@ -2191,16 +2213,19 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	@Override
 	protected boolean shouldHandleSystemBack() {
-		return predictiveBack != null && predictiveBack.isBusy() || !isSystemPredictiveBackEnabled() || canHandleBackInApp();
+		return backInvocationHandled || isWebBackBusy() || isSearchBackBusy() || predictiveBack != null && predictiveBack.isBusy()
+				|| !isSystemPredictiveBackEnabled() || canHandleBackInApp();
 	}
 
 	@Override
 	protected void onSystemBackStarted(BackEventCompat backEvent) {
+		if (webBack != null && webBack.isHistoryBackCommitting()) return;
+		if (searchBack != null && searchBack.isCommitting()) return;
 		if (predictiveBack != null && predictiveBack.isCommitting()) return;
 		resetPredictiveBackView(false);
 		if (screenMotion != null) screenMotion.finish();
 		if (threadMotion != null) threadMotion.finish();
-		finishLocalToolbarMotion();
+		// Do not reapply the whole chrome tree here: it can invalidate an otherwise fresh prepared frame.
 		backGestureAborted = false;
 		// The preference controls the preview, not system Back. Without a preview,
 		// let invocation use the normal Back route instead of marking the gesture aborted.
@@ -2216,18 +2241,47 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		if (backGestureSource == null) return;
 		backGestureStarted = true;
 		backGestureLocalAction = localBackAction(backGestureSource);
+		backGestureLocalRevision = backGestureSource.getBackActionRevision();
+		backGestureLocalOwner = backGestureLocalAction == 1 ? getCurrentFocus()
+				: backGestureLocalAction == 2 && currentActionMode != null ? currentActionMode.get() : null;
+		if (backGestureLocalAction == 3 && backGestureSource instanceof RedditWebReaderFragment) {
+			webBack = (RedditWebReaderFragment) backGestureSource;
+			RedditWebReaderFragment expected = webBack;
+			webBack.startHistoryBackPreview(backEvent.getSwipeEdge() == BackEventCompat.EDGE_LEFT,
+					() -> getCurrentFragment("FragmentAccess/webBackOwner") == expected && localBackAction(expected) == 3
+							&& !getSupportFragmentManager().isStateSaved() && !contentNavigation.isPending()
+							&& !contentNavigation.hasRequests() && hasWindowFocus());
+		}
+		if (backGestureLocalAction == 3 && backGestureSource instanceof PageFragment) {
+			com.mishiranu.dashchan.widget.ToolbarSearchMotion.finish(toolbarHolder.toolbar);
+			PageFragment page = (PageFragment) backGestureSource;
+			View search = page.getPredictiveSearchView();
+			long revision = page.getSearchBackRevision();
+			backGestureSearch = search; backGestureSearchRevision = revision;
+			if (search != null && toolbarHolder.layout.getWidth() > 0 &&
+					android.animation.ValueAnimator.areAnimatorsEnabled()) {
+				searchBack = new com.mishiranu.dashchan.widget.PredictiveTransition(toolbarHolder.toolbar,
+						new com.mishiranu.dashchan.widget.PredictiveSearchPresentation(toolbarHolder.toolbar,
+								toolbarHolder.layout, search, () -> isSystemPredictiveBackEnabled() && page.isAdded()
+								&& getCurrentFragment("FragmentAccess/searchBackOwner") == page
+								&& page.getPredictiveSearchView() == search && page.getSearchBackRevision() == revision
+								&& localBackAction(page) == 3));
+			}
+		}
 		backGestureDestination = backGestureLocalAction != 0 ? null : peekBackDestination(backGestureSource);
 		if (predictiveBack != null && backGestureDestination != null) {
 			predictiveBack.start(backGestureDestination.backPreviewKey,
-					backEvent.getSwipeEdge() == BackEventCompat.EDGE_LEFT);
+					backEvent.getSwipeEdge() == BackEventCompat.EDGE_LEFT, backEvent.getTouchY());
 		}
 	}
 
 	@Override
 	protected void onSystemBackProgressed(BackEventCompat backEvent) {
+		if (webBack != null && webBack.isHistoryBackTracking()) { webBack.progressHistoryBackPreview(backEvent.getProgress()); return; }
+		if (searchBack != null && searchBack.isTracking()) { searchBack.progress(backEvent.getProgress()); return; }
 		if (drawerMotion != null && drawerMotion.isTracking()) {
 			drawerMotion.progress(backEvent.getProgress(), backEvent.getSwipeEdge() == BackEventCompat.EDGE_LEFT);
-		} else if (predictiveBack != null) predictiveBack.progress(backEvent.getProgress());
+		} else if (predictiveBack != null) predictiveBack.progress(backEvent.getProgress(), backEvent.getTouchY());
 	}
 
 	@Override
@@ -2238,9 +2292,14 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	}
 
 	private void resetPredictiveBackView(boolean animate) {
+		if (webBack != null) { if (animate) webBack.cancelHistoryBackPreview(); else webBack.finishHistoryBackPreview(); }
+		if (!animate) webBack = null;
 		backGestureAborted |= backGestureStarted;
 		backGestureStarted = false;
 		backGestureSource = null; backGestureDestination = null;
+		if (searchBack != null) { if (animate) searchBack.cancel(); else searchBack.finish(); }
+		if (!animate) searchBack = null;
+		backGestureSearch = null;
 		if (predictiveBack != null) {
 			if (animate) predictiveBack.cancel(); else predictiveBack.finish();
 		}
@@ -2248,21 +2307,49 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	@Override
 	protected void onSystemBackPressed() {
+		if (webBack != null && webBack.isHistoryBackCommitting()) return;
+		if (isWebBackBusy() && !webBack.isHistoryBackTracking()) webBack.finishHistoryBackPreview();
+		if (searchBack != null && searchBack.isCommitting()) return;
+		if (searchBack != null && searchBack.isBusy() && !searchBack.isTracking()) { searchBack.finish(); searchBack = null; }
 		if (predictiveBack != null && predictiveBack.isCommitting()) return;
+		if (backInvocationHandled || !hasWindowFocus() || contentNavigation.isPending() || contentNavigation.hasRequests()) return;
+		backInvocationHandled = true;
+		getWindow().getDecorView().postOnAnimation(() -> { backInvocationHandled = false; updateSystemBackCallback(); });
 		if (drawerMotion != null && drawerMotion.commitBack()) return;
 		if (backGestureAborted) { backGestureAborted = false; resetPredictiveBackView(false); return; }
 		if (backGestureStarted) {
 			ContentFragment current = getCurrentFragment("FragmentAccess/onSystemBackInvoked");
 			// Async navigation / a new local Back action must not redirect an already-started gesture.
 			if (current != backGestureSource || localBackAction(current) != backGestureLocalAction ||
+					current.getBackActionRevision() != backGestureLocalRevision ||
+					(backGestureLocalAction == 1 && getCurrentFocus() != backGestureLocalOwner) ||
+					(backGestureLocalAction == 2 && (currentActionMode == null || currentActionMode.get() != backGestureLocalOwner)) ||
 					(!wideMode && isDrawerVisibleForBack()) || contentNavigation.isPending() ||
 					contentNavigation.hasRequests() || getSupportFragmentManager().isStateSaved() ||
-					(backGestureLocalAction == 0 && peekBackDestination(current) != backGestureDestination)) {
+					(backGestureLocalAction == 0 && peekBackDestination(current) != backGestureDestination) ||
+					(backGestureSearch != null && (!(current instanceof PageFragment) ||
+							((PageFragment) current).getPredictiveSearchView() != backGestureSearch ||
+							((PageFragment) current).getSearchBackRevision() != backGestureSearchRevision))) {
 				resetPredictiveBackView(false);
 				backGestureAborted = false;
 				scheduleSystemBackCallbackUpdate();
 				return;
 			}
+		}
+		if (backGestureStarted && backGestureSearch != null && searchBack != null && searchBack.isTracking()) {
+			PageFragment page = (PageFragment) backGestureSource;
+			View search = backGestureSearch; long revision = backGestureSearchRevision;
+			backGestureStarted = false; backGestureSource = null; backGestureSearch = null;
+			searchBack.commit(() -> {
+				if (getCurrentFragment("FragmentAccess/commitSearchBack") == page && localBackAction(page) == 3)
+					page.commitPredictiveSearchBack(search, revision);
+				scheduleSystemBackCallbackUpdate();
+			});
+			return;
+		}
+		if (backGestureStarted && webBack != null && backGestureSource == webBack && backGestureLocalAction == 3) {
+			backGestureStarted = false; backGestureSource = null; backGestureDestination = null;
+			if (webBack.commitHistoryBackPreview()) return;
 		}
 		backGestureStarted = false; backGestureSource = null; backGestureDestination = null;
 		if (screenMotion != null) screenMotion.finish();
@@ -2282,6 +2369,9 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	private void onBackPressed(boolean homeHandled, boolean allowTimeout, Runnable close) {
 		if (deferContentNavigation(() -> onBackPressed(homeHandled, allowTimeout, close))) return;
+		if (!homeHandled && com.mishiranu.dashchan.widget.PredictiveBackMotion.isImeVisible(getWindow().getDecorView())) {
+			com.mishiranu.dashchan.widget.PredictiveBackMotion.hideIme(getWindow().getDecorView()); return;
+		}
 		if (!wideMode && isDrawerVisibleForBack()) {
 			drawerLayout.closeDrawers();
 		} else {
@@ -2543,6 +2633,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 			resetPredictiveBackView(false);
 			if (predictiveBack != null) predictiveBack.clear();
 			if (drawerMotion != null) drawerMotion.updatePolicy();
+			prepareBackPreview();
 			updateSystemBackCallback();
 			if (Preferences.KEY_NEW_INTERFACE_MOTION.equals(key)) {
 				// Recreate all captured drawer surfaces/holders together (including the

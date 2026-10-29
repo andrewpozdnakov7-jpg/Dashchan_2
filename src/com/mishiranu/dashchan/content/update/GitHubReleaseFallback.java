@@ -45,7 +45,7 @@ public class GitHubReleaseFallback {
 		return url + (url.contains("?") ? "&" : "?") + "per_page=10";
 	}
 
-	private static UpdateResult resultFromRelease(JSONObject release) throws JSONException {
+	static UpdateResult resultFromRelease(JSONObject release) throws JSONException {
 		if (release.optBoolean("draft", false)) {
 			return UpdateResult.noUpdate(UpdateResult.Source.GITHUB_RELEASES);
 		}
@@ -64,8 +64,18 @@ public class GitHubReleaseFallback {
 			}
 			return UpdateResult.noUpdate(UpdateResult.Source.GITHUB_RELEASES);
 		}
+		if (normalizeVersionName(versionName).equals(normalizeVersionName(BuildConfig.VERSION_NAME))) {
+			return UpdateResult.noUpdate(UpdateResult.Source.GITHUB_RELEASES);
+		}
 		return UpdateResult.releaseFound(UpdateResult.Source.GITHUB_RELEASES, versionName,
 				title, summary, htmlUrl, htmlUrl);
+	}
+
+	private static String normalizeVersionName(String value) {
+		String version = value != null ? value.trim() : "";
+		if (version.length() > 1 && (version.charAt(0) == 'v' || version.charAt(0) == 'V') &&
+				Character.isDigit(version.charAt(1))) version = version.substring(1);
+		return version;
 	}
 
 	private static Integer extractVersionCode(String... values) {

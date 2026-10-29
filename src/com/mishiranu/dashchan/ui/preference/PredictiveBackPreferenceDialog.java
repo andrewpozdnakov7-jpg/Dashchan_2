@@ -6,7 +6,7 @@ import androidx.annotation.NonNull;
 import androidx.fragment.app.DialogFragment;
 import androidx.fragment.app.FragmentManager;
 import com.mishiranu.dashchan.R;
-import com.mishiranu.dashchan.widget.MessageDialog;
+import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 
 /** Pending choices survive rotation; closing either dialog never writes preferences. */
 public class PredictiveBackPreferenceDialog extends DialogFragment {
@@ -27,8 +27,7 @@ public class PredictiveBackPreferenceDialog extends DialogFragment {
 
 	@NonNull @Override public Dialog onCreateDialog(Bundle state) {
 		int mode = requireArguments().getInt(MODE);
-		MessageDialog.Builder builder = new MessageDialog.Builder(requireContext())
-				.setCompactActions(true)
+		android.app.AlertDialog.Builder builder = MotionDialogBuilder.standard(requireContext())
 				.setNegativeButton(android.R.string.cancel, null);
 		switch (mode) {
 			case ENABLE_NEW_INTERFACE:

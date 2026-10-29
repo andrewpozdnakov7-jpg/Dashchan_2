@@ -443,6 +443,8 @@ final class StandardAppearance {
 		if (view instanceof ProgressDialog.Content) ((ProgressDialog.Content) view).refreshAppearance();
 		if (view instanceof MessageDialog.Content) ((MessageDialog.Content) view).refreshAppearance();
 		if (view instanceof SecureSpinner.ChoiceRow) ((SecureSpinner.ChoiceRow) view).refreshAppearance();
+		if (view instanceof ScopeCheckBox) ((ScopeCheckBox) view).refreshAppearance();
+		if (view instanceof DropdownView) ((DropdownView) view).refreshAppearance();
 		if (view instanceof com.mishiranu.dashchan.chan.e444.E444PostView)
 			((com.mishiranu.dashchan.chan.e444.E444PostView) view).refreshAppearance();
 	}

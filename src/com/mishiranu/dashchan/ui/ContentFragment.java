@@ -75,6 +75,8 @@ public abstract class ContentFragment extends Fragment implements MenuProvider {
 	public boolean canHandleBack() {
 		return false;
 	}
+	/** Invocation-only local routes still pin their logical revision during a system gesture. */
+	public long getBackActionRevision() { return 0; }
 
 	/**
 	 * Returns whether this fragment represents the user's current forum destination rather than a temporary

@@ -252,6 +252,31 @@ public class PagerUnit implements PagerInstance.Callback {
 				holder.galleryItem.isImage(Chan.get(galleryInstance.chanName))
 				? holder.photoView : null;
 	}
+	public PhotoView getPredictiveStaticPhotoView() {
+		PhotoView photo = getStaticMotionPhotoView();
+		return photo != null && (photo.getTag(R.id.gallery_motion_owner) == null
+				|| photo.getTag(R.id.gallery_motion_owner) instanceof PredictivePhotoPresentation)
+				&& photo.isPredictiveImageAtRest() && photo.getGalleryImageBounds() != null ? photo : null;
+	}
+	private PhotoView getStaticMotionPhotoView() {
+		PagerInstance.ViewHolder holder = getCurrentHolder();
+		PhotoView photo = getMotionPhotoView();
+		if (photo == null || holder == null) return null;
+		return isStaticPhotoHolder(holder, Chan.get(galleryInstance.chanName)) && !holder.photoViewThumbnail ? photo : null;
+	}
+	private static boolean isStaticPhotoHolder(PagerInstance.ViewHolder holder, Chan chan) {
+		if (holder == null || holder.galleryItem == null || !holder.galleryItem.isImage(chan)) return false;
+		String name = holder.galleryItem.getFileName(chan);
+		if (name.regionMatches(true, Math.max(0, name.length() - 4), ".gif", 0, 4)
+				|| name.regionMatches(true, Math.max(0, name.length() - 5), ".apng", 0, 5)) return false;
+		return holder.animatedPngDecoder == null && holder.gifDecoder == null;
+	}
+	boolean isPredictivePhotoCurrent(PhotoView photo, GalleryItem item) {
+		PagerInstance.ViewHolder holder = getCurrentHolder();
+		return !galleryMode && holder != null && holder.galleryItem == item && holder.photoView == photo
+				&& holder.gifDecoder == null && holder.animatedPngDecoder == null && !holder.photoViewThumbnail
+				&& photo.isPredictiveImageAtRest();
+	}
 	public PhotoView getMotionMediaPhotoView() {
 		PagerInstance.ViewHolder holder = getCurrentHolder();
 		if (galleryMode || holder == null || holder.galleryItem == null || videoUnit.isPictureInPictureTransferred()) return null;
@@ -704,6 +729,8 @@ public class PagerUnit implements PagerInstance.Callback {
 				viewPager.setScaleX(PAGER_SCALE);
 				viewPager.setScaleY(PAGER_SCALE);
 				viewPager.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(duration).setListener(null).start();
+			} else {
+				viewPager.setAlpha(1f); viewPager.setScaleX(1f); viewPager.setScaleY(1f);
 			}
 		}
 	}
@@ -932,12 +959,18 @@ public class PagerUnit implements PagerInstance.Callback {
 									+ " page_frame=" + (holder.videoPageFrame != null) + " has_image=" + holder.photoView.hasImage());
 				}
 				if (setImage) {
-					holder.recyclePhotoView();
-					holder.simpleBitmapDrawable = new SimpleBitmapDrawable(bitmap,
+					SimpleBitmapDrawable next = new SimpleBitmapDrawable(bitmap,
 							holder.galleryItem.width, holder.galleryItem.height, false);
 					boolean fitScreen = holder.galleryItem.isVideo(chan);
 					boolean keepScale = this.keepScale && !fitScreen;
-					holder.photoView.setImage(holder.simpleBitmapDrawable, bitmap.hasAlpha(), fitScreen, keepScale);
+					if (isStaticPhotoHolder(holder, chan) && holder.decoderDrawable == null &&
+							holder.photoView.replaceGalleryOpeningImage(holder.galleryItem, next, bitmap.hasAlpha(), fitScreen, keepScale)) {
+						if (holder.simpleBitmapDrawable != null) holder.simpleBitmapDrawable.recycle();
+						holder.simpleBitmapDrawable = next; holder.jpegData = null; holder.videoPageFrame = null;
+					} else {
+						holder.recyclePhotoView(); holder.simpleBitmapDrawable = next;
+						holder.photoView.setImage(next, bitmap.hasAlpha(), fitScreen, keepScale);
+					}
 					holder.photoViewThumbnail = true;
 				}
 			}
@@ -1158,6 +1191,11 @@ public class PagerUnit implements PagerInstance.Callback {
 			if (galleryInstance.callback.deferPhotoSwipeClose(down)) return true;
 			galleryInstance.callback.navigateGalleryOrFinish(down);
 			return true;
+		}
+		@Override
+		public boolean onCloseWithPresentation(PhotoView photoView, boolean down) {
+			return !down && photoView == getStaticMotionPhotoView() && !photoView.isZoomed() && !photoView.isScaling()
+					&& galleryInstance.callback.animatePhotoSwipeClose();
 		}
 	};
 

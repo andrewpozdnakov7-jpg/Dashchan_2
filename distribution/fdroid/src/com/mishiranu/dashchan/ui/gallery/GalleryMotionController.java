@@ -12,6 +12,7 @@ public final class GalleryMotionController {
 	public void enter(PhotoView photo, Object item, View chrome, boolean restoring, View surface) {}
 	public boolean close(PhotoView photo, Object item, View chrome, Runnable dismiss) { return false; }
 	public boolean close(PhotoView photo, Object item, View chrome, Runnable dismiss, View surface) { return false; }
+	public boolean closeFromSwipe(PhotoView photo, Object item, View chrome, Runnable dismiss) { return false; }
 	public void finish() {}
 	public boolean isClosing() { return false; }
 	public static void finishHost(View host) {}

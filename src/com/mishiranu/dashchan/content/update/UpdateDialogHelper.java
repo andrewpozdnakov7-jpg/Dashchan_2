@@ -103,7 +103,7 @@ public class UpdateDialogHelper {
 
 	private static void showUpdateDialog(Context context, UpdateResult result) {
 		int versionCode = result.getPreferenceVersionCode();
-		Preferences.setUpdateLastSeenVersionCode(versionCode);
+		if (versionCode > 0) Preferences.setUpdateLastSeenVersionCode(versionCode);
 		String title = result.title;
 		if (StringUtils.isEmpty(title)) {
 			title = context.getString(result.status == UpdateResult.Status.RELEASE_FOUND
@@ -116,8 +116,11 @@ public class UpdateDialogHelper {
 			labels.add(context.getString(R.string.open_download_page));
 			actions.add(ACTION_OPEN);
 		}
-		labels.add(context.getString(R.string.skip_this_version));
-		actions.add(ACTION_SKIP);
+		// A shared -1 sentinel cannot identify which release the user chose to skip.
+		if (versionCode > 0) {
+			labels.add(context.getString(R.string.skip_this_version));
+			actions.add(ACTION_SKIP);
+		}
 		labels.add(context.getString(android.R.string.cancel));
 		actions.add(ACTION_CLOSE);
 		AlertDialog.Builder builder = MotionDialogBuilder.standard(context)

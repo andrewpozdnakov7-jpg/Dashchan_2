@@ -53,6 +53,7 @@ public abstract class DialogPreference<T> extends Preference<T> {
 			descriptionView.setPadding(testEditText.getPaddingLeft(), 0,
 					testEditText.getPaddingRight(), (int) (8f * density));
 			descriptionView.setText(description);
+			com.mishiranu.dashchan.widget.InterfaceAppearance.standardDescription(descriptionView);
 			linearLayout.addView(descriptionView, 0, new LinearLayout
 					.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
 		}

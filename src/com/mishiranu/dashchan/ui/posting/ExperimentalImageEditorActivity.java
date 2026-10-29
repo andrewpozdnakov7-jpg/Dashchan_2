@@ -73,6 +73,10 @@ import java.util.concurrent.Executors;
 
 /** Local attachment editor. The existing posting result contract is deliberately unchanged. */
 public class ExperimentalImageEditorActivity extends ComponentActivity {
+    private com.mishiranu.dashchan.widget.BackCallbackPolicy backPolicy;
+    private long backRevision;
+    private boolean backDelivered;
+    private OnBackPressedCallback editorBack;
     private static final String EXTRA_SOURCE_HASH = "sourceHash", EXTRA_SOURCE_NAME = "sourceName";
     private static final String EXTRA_ATTACHMENT_INDEX = "attachmentIndex";
     public static final String EXTRA_RESULT_HASH = "resultHash", EXTRA_RESULT_NAME = "resultName";
@@ -163,16 +167,46 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
         if (!sessionDirectory.isDirectory() && !sessionDirectory.mkdirs()) { finish(); return; }
         PhotoEditorSessionFiles.register(sessionDirectory);
         createLayout();
-        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+        setResult(RESULT_CANCELED);
+        OnBackPressedCallback back = new OnBackPressedCallback(true) {
+            private boolean started, ime;
+            private long revision;
+            private Section expectedSection;
+            private EditorDocument expectedDocument;
+            @Override public void handleOnBackStarted(androidx.activity.BackEventCompat event) {
+                started = true; revision = backRevision; expectedSection = section; expectedDocument = document;
+                ime = com.mishiranu.dashchan.widget.PredictiveBackMotion.isImeVisible(getWindow().getDecorView());
+            }
+            @Override public void handleOnBackCancelled() { started = false; expectedDocument = null; }
             @Override public void handleOnBackPressed() {
+                if (backDelivered) return;
+                backDelivered = true; getWindow().getDecorView().postOnAnimation(() -> backDelivered = false);
+                boolean tracking = started; started = false;
+                if (tracking && (revision != backRevision || expectedSection != section || expectedDocument != document)) return;
+                expectedDocument = null;
+				if (tracking && !ime && com.mishiranu.dashchan.widget.PredictiveBackMotion.isImeVisible(getWindow().getDecorView())) return;
+                if (tracking ? ime : com.mishiranu.dashchan.widget.PredictiveBackMotion.isImeVisible(getWindow().getDecorView())) {
+                    com.mishiranu.dashchan.widget.PredictiveBackMotion.hideIme(getWindow().getDecorView()); return;
+                }
                 if (busy) return;
                 if (section != Section.HOME) closeSection(false); else requestClose();
             }
-        });
+        };
+        getOnBackPressedDispatcher().addCallback(this, back);
+        editorBack = back;
+        backPolicy = new com.mishiranu.dashchan.widget.BackCallbackPolicy(getWindow().getDecorView(), () ->
+                back.setEnabled(backDelivered || !com.mishiranu.dashchan.util.InterfaceMotion.isPredictiveBackEnabled()
+                        || busy || section != Section.HOME || document.hasChanges() || document.isInTransaction()
+                        || com.mishiranu.dashchan.widget.PredictiveBackMotion.isImeVisible(getWindow().getDecorView())));
         load();
     }
 
     private int dp(float value) { return Math.round(value * getResources().getDisplayMetrics().density); }
+    @Override public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (editorBack != null) editorBack.handleOnBackCancelled();
+        if (hasFocus) backDelivered = false;
+    }
     private AlertDialog.Builder dialogBuilder() { return new com.mishiranu.dashchan.content.security.SecureDialogBuilder(this, R.style.PhotoEditorDialogTheme); }
     private GradientDrawable background(int color) {
         GradientDrawable out = new GradientDrawable(); out.setColor(color); out.setCornerRadius(dp(22)); return out;
@@ -414,6 +448,7 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
     }
 
     private void openSection(Section target) {
+        backRevision++;
         if (canvas == null || busy || target == section) return;
         canvas.finishGesture(true);
         final String nextCheckpoint;
@@ -499,6 +534,7 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
         changed(); buildPanel(); canvas.endPresentation();
     }
     private void changed() {
+        backRevision++;
         if (canvas != null) canvas.refresh(); encodedKey = null; updateHistory();
         for (Runnable binding : rulerBindings) binding.run();
         for (Runnable binding : filterBindings) binding.run();
@@ -997,7 +1033,7 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
         });
         dialog.setOnKeyListener((ignored, key, event) -> {
             if (key != android.view.KeyEvent.KEYCODE_BACK || activePicker[0] == null) return false;
-            if (event.getAction() == android.view.KeyEvent.ACTION_UP) returnToText.run();
+            if (com.mishiranu.dashchan.widget.BackKeyPolicy.isConfirmedRelease(event)) returnToText.run();
             return true;
         });
         final Runnable[] unregisterBack = {null};
@@ -1340,6 +1376,7 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
     }
 
     private void setBusy(boolean busy, int message) {
+        backRevision++;
         panelMotion.release();
         if (canvas != null) canvas.settlePresentation();
         this.busy = busy;
@@ -1477,11 +1514,18 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
 
     @Override protected void onStop() {
         settleEditor();
+        // System-owned Back can finish without going through cancel(). Do not
+        // persist a closed session; backgrounding and recreation still retain it.
+        if (isFinishing() && !isChangingConfigurations()) completed = true;
         persist();
         super.onStop();
     }
 
     @Override protected void onDestroy() {
+        if (backPolicy != null) backPolicy.close();
+        // Also cover a finish requested after onStop. Preserve an already-set
+        // RESULT_OK and keep deletion ordered behind outstanding worker jobs.
+        final boolean removeSession = completed || isFinishing() && !isChangingConfigurations();
         destroyed = true;
         panelMotion.release();
         if (canvas != null) canvas.release();
@@ -1490,7 +1534,7 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
             if (source != null && !source.isRecycled()) source.recycle();
             for (Bitmap asset : assets.values()) if (!asset.isRecycled()) asset.recycle();
             for (Bitmap bitmap : thumbnails) if (!bitmap.isRecycled()) bitmap.recycle();
-            if (completed && sessionDirectory != null) PhotoEditorSessionFiles.remove(sessionDirectory);
+            if (removeSession && sessionDirectory != null) PhotoEditorSessionFiles.remove(sessionDirectory);
             if (sessionDirectory != null) PhotoEditorSessionFiles.unregister(sessionDirectory);
         });
         worker.shutdown();

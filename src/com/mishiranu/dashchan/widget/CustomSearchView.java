@@ -32,6 +32,7 @@ public class CustomSearchView extends FrameLayout implements CollapsibleActionVi
 	private boolean suppressChange = false;
 	private boolean expandedWithoutInput;
 	private int collapsedImeOptions;
+	private boolean backKeyHidesIme;
 
 	public CustomSearchView(Context context) {
 		super(context);
@@ -234,14 +235,30 @@ public class CustomSearchView extends FrameLayout implements CollapsibleActionVi
 
 	@Override
 	public boolean dispatchKeyEventPreIme(KeyEvent event) {
-		if (searchView.hasFocus() && event.getKeyCode() == KeyEvent.KEYCODE_BACK) {
-			if (event.getAction() == KeyEvent.ACTION_UP) {
-				searchView.clearFocus();
-				requestFocus();
-			}
-			return true;
-		} else {
+		if (event.getKeyCode() != KeyEvent.KEYCODE_BACK) {
 			return super.dispatchKeyEventPreIme(event);
 		}
+		if (event.getAction() == KeyEvent.ACTION_DOWN) {
+			if (event.getRepeatCount() == 0) {
+				// Pin ownership for the whole key pair, even if IME visibility changes before UP.
+				backKeyHidesIme = searchView.hasFocus() && PredictiveBackMotion.isImeVisible(this);
+			}
+			return backKeyHidesIme;
+		}
+		if (event.getAction() == KeyEvent.ACTION_UP) {
+			boolean handled = backKeyHidesIme;
+			backKeyHidesIme = false;
+			if (handled && BackKeyPolicy.isConfirmedRelease(event)) clearSearchFocus();
+			// Do not pass an unhandled Back to the inner framework SearchView: older
+			// versions consume it just to clear focus, even when the IME is already hidden.
+			return handled;
+		}
+		return backKeyHidesIme;
+	}
+
+	@Override
+	protected void onDetachedFromWindow() {
+		backKeyHidesIme = false;
+		super.onDetachedFromWindow();
 	}
 }

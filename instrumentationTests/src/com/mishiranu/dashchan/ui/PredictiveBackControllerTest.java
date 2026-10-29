@@ -106,8 +106,8 @@ public class PredictiveBackControllerTest {
 			try {
 				View view = new View(f.context); view.layout(0, 0, 1080, 2400); view.setBackgroundColor(Color.BLUE);
 				Bitmap image = PredictiveBackController.capture(view); assertNotNull(image);
-				try { assertTrue((long) image.getWidth() * image.getHeight() <= 500_000); }
-				finally { image.recycle(); }
+				try { assertTrue(image.getAllocationByteCount() <= com.mishiranu.dashchan.widget.BackPreviewBudget.limit(f.context) / 2); }
+				finally { com.mishiranu.dashchan.widget.BackPreviewBudget.release(image); }
 				f.host.addView(new SurfaceView(f.context));
 				assertNull(PredictiveBackController.capture(f.host));
 				f.host.getChildAt(1).setVisibility(View.GONE);

@@ -327,7 +327,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 
 		searchEdit = new SafePasteEditText(context);
 		searchEdit.setOnKeyListener((v, keyCode, event) -> {
-			if (event.getAction() == KeyEvent.ACTION_UP && keyCode == KeyEvent.KEYCODE_BACK) {
+			if (com.mishiranu.dashchan.widget.BackKeyPolicy.isConfirmedRelease(event)) {
 				v.clearFocus();
 			}
 			return false;

@@ -18,6 +18,9 @@ import com.mishiranu.dashchan.util.ConcurrentUtils;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.ui.DialogMenu;
 import com.mishiranu.dashchan.widget.ListPosition;
+import com.mishiranu.dashchan.widget.BackPreviewFrame;
+import com.mishiranu.dashchan.widget.HistoryBackPreview;
+import com.mishiranu.dashchan.util.InterfaceMotion;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -32,8 +35,12 @@ import java.util.concurrent.ExecutorService;
 final class ContextDialogProvider extends DialogUnit.DialogProvider<ContextDialogProvider>
 		implements UiManager.PostsProvider {
 	static final class Factory extends DialogUnit.DialogProvider.Factory<ContextDialogProvider> {
+		static final class Entry {
+			final ContextGraph.Key key;
+			Entry(ContextGraph.Key key) { this.key = key; }
+		}
 		ContextGraph.Key target;
-		final ArrayDeque<ContextGraph.Key> history = new ArrayDeque<>();
+		final ArrayDeque<Entry> history = new ArrayDeque<>();
 		long cacheEpoch = PagesDatabase.getInstance().getContextEpoch();
 		boolean cacheErased;
 		PostNumber anchor;
@@ -63,9 +70,70 @@ final class ContextDialogProvider extends DialogUnit.DialogProvider<ContextDialo
 	private boolean closed, loading, failed, cacheErased, updatesAvailable, selectedAnchor = true;
 	private ContextGraph.Result displayedResult;
 	private final Runnable invalidateCache;
+	private View previewHost;
+	private BackPreviewFrame currentFrame;
+	private long scrollRevision, preparedScrollRevision;
+	private HistoryBackPreview backPreview;
+	private com.mishiranu.dashchan.widget.PreviewMemoryPolicy previewMemory;
+	private final java.util.LinkedHashMap<Factory.Entry, SavedPreview> previews = new java.util.LinkedHashMap<>();
+	private static final class SavedPreview {
+		final BackPreviewFrame frame;
+		final long epoch;
+		final PagesDatabase.Cache.State revision;
+		SavedPreview(BackPreviewFrame frame, ContextSource.Snapshot data) {
+			this.frame = frame; epoch = data.epoch(); revision = data.revision();
+		}
+	}
+	private final Runnable prepareFrame = () -> {
+		if (closed || previewHost == null || loading || failed || displayedResult == null
+				|| backPreview != null && backPreview.isBusy()) return;
+		if (currentFrame != null) currentFrame.release();
+		currentFrame = BackPreviewFrame.capture(previewHost, false); preparedScrollRevision = scrollRevision;
+	};
+	private final android.view.ViewTreeObserver.OnScrollChangedListener previewScroll = () -> {
+		scrollRevision++;
+		if (backPreview != null && !backPreview.isCommitting()) backPreview.close();
+		scheduleFrame();
+	};
+	private final com.mishiranu.dashchan.util.SharedPreferences.Listener previewPreferences = key -> {
+		clearPreviews(); scheduleFrame();
+	};
+	@Override public void onViewBound(View content) {
+		previewHost = content;
+		previewMemory = new com.mishiranu.dashchan.widget.PreviewMemoryPolicy(content.getContext(), this::clearPreviews);
+		content.getViewTreeObserver().addOnScrollChangedListener(previewScroll);
+		Preferences.PREFERENCES.register(previewPreferences); scheduleFrame();
+	}
+	private void scheduleFrame() {
+		if (previewHost != null) { previewHost.removeCallbacks(prepareFrame); previewHost.postDelayed(prepareFrame, 120); }
+	}
+	private void clearPreviews() {
+		if (backPreview != null) { HistoryBackPreview old = backPreview; backPreview = null; old.close(); }
+		if (previewHost != null) previewHost.removeCallbacks(prepareFrame);
+		if (currentFrame != null) { currentFrame.release(); currentFrame = null; }
+		for (SavedPreview saved : previews.values()) saved.frame.release(); previews.clear();
+	}
+	@Override public void clearBackPreviews() { clearPreviews(); }
+	@Override public HistoryBackPreview startBackPreview(boolean fromLeft) {
+		if (!canHandleBack() || previewHost == null || loading || failed || preparedScrollRevision != scrollRevision
+				|| !InterfaceMotion.isPredictiveBackEnabled()) return null;
+		Factory.Entry entry = factory.history.peekLast(); SavedPreview saved = previews.get(entry);
+		if (saved == null || saved.epoch != PagesDatabase.getInstance().getContextEpoch()
+				|| !saved.revision.equals(PagesDatabase.getInstance().getCacheState(new PagesDatabase.ThreadKey(
+						entry.key.source(), entry.key.board(), entry.key.thread())))) return null;
+		long revision = generation, scroll = scrollRevision;
+		backPreview = HistoryBackPreview.start(previewHost, saved.frame, currentFrame, fromLeft,
+				() -> !closed && generation == revision && factory.history.peekLast() == entry && !loading
+				&& scrollRevision == scroll && InterfaceMotion.isPredictiveBackEnabled()
+				&& saved.epoch == PagesDatabase.getInstance().getContextEpoch()
+				&& saved.revision.equals(PagesDatabase.getInstance().getCacheState(new PagesDatabase.ThreadKey(
+						entry.key.source(), entry.key.board(), entry.key.thread()))));
+		return backPreview;
+	}
 
 	private void onCacheInvalidated() {
 		if (closed) return;
+		clearPreviews();
 		cancelWork(); cacheErased = true; snapshot = null; displayedResult = null;
 		factory.cacheErased = true;
 		visible.clear(); placeholders.clear(); retained.clear(); revealed.clear();
@@ -117,13 +185,16 @@ final class ContextDialogProvider extends DialogUnit.DialogProvider<ContextDialo
 		if (closed || Preferences.isRemoveHiddenPosts() || snapshot == null) return;
 		if (snapshot.posts().containsKey(key(post)) && source.postStateProvider.isHiddenResolve(post)) {
 			new DialogMenu(uiManager.getContext()).add(R.string.context_show_hidden,
-					() -> { revealed.add(key(post)); rebuild(); }).create().show();
+					() -> { clearPreviews(); revealed.add(key(post)); rebuild(); }).create().show();
 		}
 	}
 	@Override public boolean canHandleBack() { return !closed && !factory.history.isEmpty(); }
+	@Override public long backActionRevision() { return generation; }
 	@Override public boolean onBackPressed() {
 		if (closed || factory.history.isEmpty()) return false;
-		factory.target = factory.history.removeLast(); resetSelection(); load(); return true;
+		Factory.Entry entry = factory.history.removeLast();
+		SavedPreview saved = previews.remove(entry); if (saved != null) saved.frame.release();
+		factory.target = entry.key; resetSelection(); load(); return true;
 	}
 	@Override public void onRequestUpdateDemandSet(UiManager.DemandSet demand, int index) {
 		demand.lastInList = index == visible.size() - 1;
@@ -159,6 +230,8 @@ final class ContextDialogProvider extends DialogUnit.DialogProvider<ContextDialo
 		status.setVisibility(View.VISIBLE);
 	}
 	private void cancelWork() {
+		if (currentFrame != null) { currentFrame.release(); currentFrame = null; }
+		if (backPreview != null && !backPreview.isCommitting()) backPreview.close();
 		generation++;
 		if (signal != null) signal.cancel();
 		loading = false;
@@ -276,6 +349,8 @@ final class ContextDialogProvider extends DialogUnit.DialogProvider<ContextDialo
 				new ListPosition(i, selectedAnchor ? 0 : anchorOffset).apply(list); break;
 			}
 			selectedAnchor = false;
+			if (backPreview != null) backPreview.destinationReady();
+			scheduleFrame();
 		});
 		android.util.Log.d("DiscussionContext", "display cards=" + visible.size() + " bindMs="
 				+ (android.os.SystemClock.elapsedRealtime() - started) + " totalMs="
@@ -288,8 +363,18 @@ final class ContextDialogProvider extends DialogUnit.DialogProvider<ContextDialo
 	}
 	private void select(PostItem post) {
 		if (closed || !matches(post) || placeholders.containsKey(post.getPostNumber())) return;
-		if (factory.history.size() == 5) factory.history.removeFirst();
-		factory.history.addLast(factory.target); factory.target = key(post); resetSelection(); load();
+		if (backPreview != null && backPreview.isBusy()) return;
+		if (factory.history.size() == 5) {
+			SavedPreview old = previews.remove(factory.history.removeFirst()); if (old != null) old.frame.release();
+		}
+		Factory.Entry entry = new Factory.Entry(factory.target);
+		BackPreviewFrame frame = previewHost != null && !loading && !failed && revealed.isEmpty() && displayedResult != null
+				? BackPreviewFrame.capture(previewHost, false) : null;
+		if (frame != null && snapshot != null) {
+			while (previews.size() >= 3) { Factory.Entry first = previews.keySet().iterator().next(); previews.remove(first).frame.release(); }
+			previews.put(entry, new SavedPreview(frame, snapshot));
+		} else if (frame != null) frame.release();
+		factory.history.addLast(entry); factory.target = key(post); resetSelection(); load();
 	}
 	@Override public boolean onItemClick(RecyclerView.ViewHolder holder, int position, PostItem post, boolean longClick) {
 		if (placeholders.containsKey(post.getPostNumber())) return true;
@@ -303,6 +388,7 @@ final class ContextDialogProvider extends DialogUnit.DialogProvider<ContextDialo
 		if (message == UiManager.Message.POST_INVALIDATE_ALL_VIEWS || message == UiManager.Message.PERFORM_SWITCH_HIDE
 				|| message == UiManager.Message.PERFORM_HIDE_REPLIES || message == UiManager.Message.PERFORM_HIDE_NAME
 				|| message == UiManager.Message.PERFORM_HIDE_SIMILAR) {
+			clearPreviews();
 			revealed.clear();
 			for (PostItem item : visible) item.setHidden(PostItem.HideState.UNDEFINED, null);
 			// Reapply visibility synchronously: no stale text while an asynchronous graph task is pending.
@@ -315,6 +401,11 @@ final class ContextDialogProvider extends DialogUnit.DialogProvider<ContextDialo
 	}
 	@Override public void onCancel() {
 		if (closed) return;
+		clearPreviews();
+		Preferences.PREFERENCES.unregister(previewPreferences);
+		if (previewMemory != null) { previewMemory.close(); previewMemory = null; }
+		if (previewHost != null) previewHost.getViewTreeObserver().removeOnScrollChangedListener(previewScroll);
+		previewHost = null;
 		PagesDatabase.getInstance().unregisterContextInvalidation(invalidateCache);
 		ListPosition position = list != null ? ListPosition.obtain(list, null) : null;
 		if (position != null && position.position < visible.size()) {

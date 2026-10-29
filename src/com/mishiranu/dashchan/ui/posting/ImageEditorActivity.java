@@ -49,6 +49,9 @@ import java.util.ArrayList;
  * the rendered result is encoded without metadata and stored as a new attachment draft.
  */
 public class ImageEditorActivity extends ComponentActivity {
+	private com.mishiranu.dashchan.widget.BackCallbackPolicy backPolicy;
+	private boolean backDelivered;
+	private OnBackPressedCallback editorBack;
 	private static final String EXTRA_SOURCE_HASH = "sourceHash";
 	private static final String EXTRA_SOURCE_NAME = "sourceName";
 	private static final String EXTRA_ATTACHMENT_INDEX = "attachmentIndex";
@@ -97,12 +100,32 @@ public class ImageEditorActivity extends ComponentActivity {
 		requestWindowFeature(Window.FEATURE_NO_TITLE);
 		ThemeEngine.applyTheme(this);
 		super.onCreate(savedInstanceState);
-		getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+		// The system-owned root exit has the same result as the explicit Cancel button.
+		setResult(RESULT_CANCELED);
+		OnBackPressedCallback back = new OnBackPressedCallback(true) {
+			private boolean started, ime;
+			@Override public void handleOnBackStarted(androidx.activity.BackEventCompat event) {
+				started = true; ime = com.mishiranu.dashchan.widget.PredictiveBackMotion.isImeVisible(getWindow().getDecorView());
+			}
+			@Override public void handleOnBackCancelled() { started = false; }
 			@Override
 			public void handleOnBackPressed() {
+				if (backDelivered) return;
+				backDelivered = true; getWindow().getDecorView().postOnAnimation(() -> backDelivered = false);
+				boolean tracking = started; started = false;
+				boolean visible = com.mishiranu.dashchan.widget.PredictiveBackMotion.isImeVisible(getWindow().getDecorView());
+				if (tracking && !ime && visible) return;
+				if (tracking ? ime : visible) {
+					com.mishiranu.dashchan.widget.PredictiveBackMotion.hideIme(getWindow().getDecorView()); return;
+				}
 				cancelEditing();
 			}
-		});
+		};
+		getOnBackPressedDispatcher().addCallback(this, back);
+		editorBack = back;
+		backPolicy = new com.mishiranu.dashchan.widget.BackCallbackPolicy(getWindow().getDecorView(), () ->
+				back.setEnabled(backDelivered || !com.mishiranu.dashchan.util.InterfaceMotion.isPredictiveBackEnabled()
+						|| com.mishiranu.dashchan.widget.PredictiveBackMotion.isImeVisible(getWindow().getDecorView())));
 		sourceHash = getIntent().getStringExtra(EXTRA_SOURCE_HASH);
 		sourceName = getIntent().getStringExtra(EXTRA_SOURCE_NAME);
 		attachmentIndex = getIntent().getIntExtra(EXTRA_ATTACHMENT_INDEX, -1);
@@ -127,6 +150,8 @@ public class ImageEditorActivity extends ComponentActivity {
 	@Override
 	public void onWindowFocusChanged(boolean hasFocus) {
 		super.onWindowFocusChanged(hasFocus);
+		if (editorBack != null) editorBack.handleOnBackCancelled();
+		if (hasFocus) backDelivered = false;
 		if (hasFocus) hideSystemBars();
 	}
 
@@ -534,6 +559,7 @@ public class ImageEditorActivity extends ComponentActivity {
 
 	@Override
 	protected void onDestroy() {
+		if (backPolicy != null) backPolicy.close();
 		stopped = true;
 		if (editorView != null) editorView.release();
 		super.onDestroy();

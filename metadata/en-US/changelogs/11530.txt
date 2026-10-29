@@ -1,0 +1,13 @@
+**Slooop 3.2.73**
+
+- Continuing to improve experimental Predictive Back on Android 14+ 😺 Added photo-to-thumbnail return in the gallery grid, a preview of the previous post in internal reply history, and previews of previous pages in the private browser and Reddit reader.
+- Fixed the extra Back gesture needed in settings search after hiding the keyboard. Improved gesture cancellation, repeated Back and focus-loss handling in the gallery.
+- Updated photo opening and upward-swipe closing animations. Loading the original image no longer interrupts a transition that started from its thumbnail.
+- Refined the Material 3 interface: predictive Back warnings, autohide, download dialogs, dropdown lists and explanatory text in settings.
+- Fixed repeated offers to install an app version that is already installed.
+
+Predictive Back remains experimental: previews are not yet available for every transition.
+
+Security features are still in testing.
+
+Thanks to everyone for testing, logs and help finding bugs! 🐾

@@ -37,6 +37,13 @@ public class PhotoView extends View implements ScaleGestureDetector.OnScaleGestu
 
 	private final TransparentTileDrawable tile;
 	private Drawable drawable;
+	private long galleryImageGeneration;
+	public long getGalleryImageGeneration() { return galleryImageGeneration; }
+	public interface GalleryImageReplacementOwner extends Runnable {
+		boolean canReplaceImage(Object item);
+		void onImageReplaced();
+		default boolean isPreparingImage() { return false; }
+	}
 	private boolean hasAlpha;
 	private boolean fitScreen;
 	private boolean drawDim;
@@ -58,9 +65,30 @@ public class PhotoView extends View implements ScaleGestureDetector.OnScaleGestu
 		RectF bounds = new RectF(initDisplayMatrixAndRect());
 		return bounds.width() > 0f && bounds.height() > 0f ? bounds : null;
 	}
+	/** Includes the shrink/opacity applied by draw() while the user's vertical drag is active. */
+	public RectF getGallerySwipeBounds() {
+		RectF bounds = getGalleryImageBounds();
+		if (bounds != null && isClosingTouchMode()) {
+			float scale = closingSwipeScale(closingSwipeFraction(bounds));
+			float x = getWidth() / 2f, y = getHeight() / 2f;
+			bounds.set(x + (bounds.left - x) * scale, y + (bounds.top - y) * scale,
+					x + (bounds.right - x) * scale, y + (bounds.bottom - y) * scale);
+		}
+		return bounds;
+	}
+	public float getGallerySwipeAlpha() {
+		RectF bounds = getGalleryImageBounds();
+		return bounds != null && isClosingTouchMode() ? (int) (255 * (1f - closingSwipeFraction(bounds))) / 255f : 1f;
+	}
+	private float closingSwipeFraction(RectF bounds) { return Math.min(Math.abs(getClosingTouchModeShift(bounds)) * 2f / getHeight(), 1f); }
+	private static float closingSwipeScale(float value) { return (1f - AnimationUtils.ACCELERATE_INTERPOLATOR.getInterpolation(value)) * .4f + .6f; }
 	public boolean isGalleryImageAtRest() {
 		return hasImage() && !isZoomed() && !isScaling() && !isClosingTouchMode() &&
 				!isDragging && flingRunnable == null;
+	}
+	public boolean isPredictiveImageAtRest() {
+		return isGalleryImageAtRest() && modernZoomAnimator == null && initialScalingAnimator == null
+				&& animatedRestoreSwipeRunnable == null;
 	}
 	/** Render-only matrix: leave the gesture/zoom matrix intact. */
 	public void setGalleryFrame(Object owner, RectF clip, boolean crop) {
@@ -177,7 +205,9 @@ public class PhotoView extends View implements ScaleGestureDetector.OnScaleGestu
 	protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
 		if (top != lastLayout.top || bottom != lastLayout.bottom
 				|| left != lastLayout.left || right != lastLayout.right) {
-			if (lastLayout.width() > 0 && lastLayout.height() > 0) finishGalleryPresentation();
+			Object owner = getTag(R.id.gallery_motion_owner);
+			boolean preparing = owner instanceof GalleryImageReplacementOwner && ((GalleryImageReplacementOwner) owner).isPreparingImage();
+			if (lastLayout.width() > 0 && lastLayout.height() > 0 && !preparing) finishGalleryPresentation();
 			lastLayout.set(left, top, right, bottom);
 			resetScale();
 		}
@@ -191,6 +221,7 @@ public class PhotoView extends View implements ScaleGestureDetector.OnScaleGestu
 		void onTransformChanged(PhotoView photoView, float left, float top, float right, float bottom);
 		void onVerticalSwipe(PhotoView photoView, boolean down, float value);
 		boolean onClose(PhotoView photoView, boolean down);
+		default boolean onCloseWithPresentation(PhotoView photoView, boolean down) { return false; }
 		default void onCloseAnimationFinished(PhotoView photoView) {}
 		default boolean isPhotoMotionEnabled(PhotoView photoView) { return false; }
 	}
@@ -200,6 +231,7 @@ public class PhotoView extends View implements ScaleGestureDetector.OnScaleGestu
 	}
 
 	public void recycle() {
+		galleryImageGeneration++;
 		finishGalleryPresentation();
 		if (drawable != null) {
 			drawable.setCallback(null);
@@ -221,10 +253,29 @@ public class PhotoView extends View implements ScaleGestureDetector.OnScaleGestu
 	public void setImage(Drawable drawable, boolean hasAlpha, boolean fitScreen, boolean keepScale) {
 		setImage(drawable, hasAlpha, fitScreen, keepScale, 0f);
 	}
+	/** Only a still-image promotion for the exact opening item may retain its presentation owner. */
+	public boolean replaceGalleryOpeningImage(Object item, Drawable next, boolean hasAlpha, boolean fitScreen, boolean keepScale) {
+		Object owner = getTag(R.id.gallery_motion_owner);
+		if (!(owner instanceof GalleryImageReplacementOwner) || !((GalleryImageReplacementOwner) owner).canReplaceImage(item)) return false;
+		galleryImageGeneration++;
+		if (drawable != null) { drawable.setCallback(null); unscheduleDrawable(drawable); }
+		try {
+			setImageData(next, hasAlpha, fitScreen, keepScale, 0f);
+			((GalleryImageReplacementOwner) owner).onImageReplaced();
+			return true;
+		} catch (RuntimeException | Error error) {
+			((GalleryImageReplacementOwner) owner).run();
+			throw error;
+		}
+	}
 
 	public void setImage(Drawable drawable, boolean hasAlpha, boolean fitScreen, boolean keepScale,
 			float maximumScaleFactor) {
 		recycle();
+		setImageData(drawable, hasAlpha, fitScreen, keepScale, maximumScaleFactor);
+	}
+	private void setImageData(Drawable drawable, boolean hasAlpha, boolean fitScreen, boolean keepScale,
+			float maximumScaleFactor) {
 		this.drawable = drawable;
 		this.hasAlpha = hasAlpha;
 		this.fitScreen = fitScreen;
@@ -311,10 +362,10 @@ public class PhotoView extends View implements ScaleGestureDetector.OnScaleGestu
 			displayMatrix.set(galleryFrameMatrix); rect = initDisplayRect();
 		}
 		int workAlpha = 0xff;
-		if (isClosingTouchMode()) {
-			float value = Math.min(Math.abs(getClosingTouchModeShift(rect)) * 2f / getHeight(), 1f);
+		if (isClosingTouchMode() && !(galleryFrameOwner != null && getTag(R.id.gallery_motion_owner) == galleryFrameOwner)) {
+			float value = closingSwipeFraction(rect);
 			workAlpha = (int) (workAlpha * (1f - value));
-			float scale = (1f - AnimationUtils.ACCELERATE_INTERPOLATOR.getInterpolation(value)) * 0.4f + 0.6f;
+			float scale = closingSwipeScale(value);
 			displayMatrix.postScale(scale, scale, getWidth() / 2f, getHeight() / 2f);
 			rect = initDisplayRect();
 		}
@@ -1268,6 +1319,7 @@ public class PhotoView extends View implements ScaleGestureDetector.OnScaleGestu
 				break;
 			}
 			case MotionEvent.ACTION_CANCEL: {
+				if (isDragging && isClosingTouchMode()) startRestoreVerticalSwipe(checkMatrixBounds(), false, 0f);
 				if (velocityTracker != null) {
 					velocityTracker.recycle();
 					velocityTracker = null;
@@ -1296,10 +1348,11 @@ public class PhotoView extends View implements ScaleGestureDetector.OnScaleGestu
 								}
 							}
 							boolean close = Math.abs(shift) >= threshold;
-							if (listener != null && close) {
+							boolean presented = listener != null && close && listener.onCloseWithPresentation(this, shift >= 0);
+							if (!presented && listener != null && close) {
 								close = listener.onClose(this, shift >= 0);
 							}
-							startRestoreVerticalSwipe(rect, close, velocity);
+							if (!presented) startRestoreVerticalSwipe(rect, close, velocity);
 						}
 					} else if (velocityTracker != null) {
 						lastTouchX = getActiveX(event);

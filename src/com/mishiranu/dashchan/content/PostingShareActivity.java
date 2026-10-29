@@ -127,10 +127,17 @@ public class PostingShareActivity extends ComponentActivity {
 		super.onCreate(savedInstanceState);
 		if (com.mishiranu.dashchan.content.security.AppSecurity.deferIfLocked(this)) return;
 		FrameLayout layout = new FrameLayout(this);
+		com.mishiranu.dashchan.widget.InterfaceAppearance.standardPage(layout);
 		ProgressBar progressBar = new ProgressBar(this);
+		com.mishiranu.dashchan.widget.InterfaceAppearance.standardLoading(progressBar);
 		layout.addView(progressBar, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
 				ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER));
 		setContentView(layout);
+		if (com.mishiranu.dashchan.widget.InterfaceAppearance.isEnabled(this)
+				&& layout.getBackground() instanceof android.graphics.drawable.ColorDrawable) {
+			getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(
+					((android.graphics.drawable.ColorDrawable) layout.getBackground()).getColor()));
+		}
 
 		Intent intent = getIntent();
 		ArrayList<Uri> uris = (intent.getFlags() & Intent.FLAG_GRANT_READ_URI_PERMISSION) != 0
