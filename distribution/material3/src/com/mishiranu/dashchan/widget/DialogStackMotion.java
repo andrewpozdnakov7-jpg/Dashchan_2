@@ -163,6 +163,8 @@ public final class DialogStackMotion {
 	}
 
 	public static boolean blocks(View host, MotionEvent event) {
+		// Cancellation must reach touch targets even while the visual transition blocks new input.
+		if (event.getActionMasked() == MotionEvent.ACTION_CANCEL) return false;
 		Object owner = host.getTag(R.id.dialog_motion_owner);
 		if (owner instanceof Scene) {
 			Scene current = (Scene) owner;

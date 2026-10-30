@@ -105,7 +105,13 @@ public class GalleryDialog extends com.mishiranu.dashchan.content.security.Secur
 	}
 
 	@Override public boolean dispatchTouchEvent(MotionEvent event) {
-		return fragment.isGalleryMotionBlocking() || super.dispatchTouchEvent(event);
+		// System Back cancels the existing touch stream after starting its preview.
+		// Let that cancellation reach the children even while the preview blocks input,
+		// otherwise their pending long press can open a menu and cancel Back itself.
+		if (event.getActionMasked() != MotionEvent.ACTION_CANCEL && fragment.isGalleryMotionBlocking()) {
+			return true;
+		}
+		return super.dispatchTouchEvent(event);
 	}
 
 	private boolean actionBarAnimationsFixed = false;

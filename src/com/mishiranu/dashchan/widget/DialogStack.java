@@ -248,6 +248,10 @@ public class DialogStack<T extends DialogStack.ViewFactory<T>> implements Iterab
 
 				@Override
 				public boolean dispatchTouchEvent(android.view.MotionEvent event) {
+					// Do not leave a child's long press or swipe pending when Back owns the gesture.
+					if (event.getActionMasked() == MotionEvent.ACTION_CANCEL) {
+						return super.dispatchTouchEvent(event);
+					}
 					return providerBusy() || predictiveMotion.isBusy() || super.dispatchTouchEvent(event);
 				}
 
@@ -988,7 +992,8 @@ public class DialogStack<T extends DialogStack.ViewFactory<T>> implements Iterab
 
 		@Override
 		public boolean dispatchTouchEvent(MotionEvent ev) {
-			return active && super.dispatchTouchEvent(ev);
+			// A card can become inactive while it still owns the touch being cancelled.
+			return (active || ev.getActionMasked() == MotionEvent.ACTION_CANCEL) && super.dispatchTouchEvent(ev);
 		}
 
 		private void updatePath(float shift) {

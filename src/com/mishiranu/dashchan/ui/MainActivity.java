@@ -856,7 +856,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 					if (contentNavigation.shouldSaveSession()) savePagesSession();
 					scheduleContentNavigationDrain();
 					if (predictiveCommit) predictiveBack.destinationCommitted(fragment.backPreviewKey);
-					if (predictiveBack != null) predictiveBack.prepare(fragment.backPreviewKey);
+					prepareBackPreview();
 				}
 			}).commit();
 		} catch (RuntimeException | Error e) {
@@ -2032,7 +2032,8 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		drawerForm.setHostResumed(false);
 		if (drawerMotion != null) drawerMotion.suspend();
 		resetPredictiveBackView(false);
-		if (predictiveBack != null) predictiveBack.clear();
+		// A transient pause (for example, posting) must not erase the previous page.
+		// There are no background capture jobs; memory callbacks and destruction release the cache.
 		savePagesSession();
 		super.onPause();
 	}
@@ -2073,7 +2074,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		finishLocalToolbarMotion();
 		if (screenMotion != null) screenMotion.finish();
 		if (threadMotion != null) threadMotion.clear();
-		if (predictiveBack != null) predictiveBack.clear();
+		if (predictiveBack != null) predictiveBack.close();
 		contentNavigation.close();
 		getSupportFragmentManager().unregisterFragmentLifecycleCallbacks(contentLifecycle);
 		super.onDestroy();
@@ -2151,7 +2152,10 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	private boolean isSearchBackBusy() { return searchBack != null && searchBack.isBusy(); }
 	private void prepareBackPreview() {
 		ContentFragment current = getCurrentFragment("FragmentAccess/prepareBackPreview");
-		if (predictiveBack != null && current != null && !isInPictureInPictureMode()) predictiveBack.prepare(current.backPreviewKey);
+		if (predictiveBack != null && current != null && !isInPictureInPictureMode()) {
+			StackItem previous = peekBackDestination(current);
+			predictiveBack.prepare(current.backPreviewKey, previous != null ? previous.backPreviewKey : null);
+		}
 	}
 
 	private int localBackAction(ContentFragment fragment) {
@@ -2162,13 +2166,17 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	@Override
 	public boolean dispatchTouchEvent(android.view.MotionEvent event) {
+		// Back takes ownership of the gesture; children must still cancel their pending touch actions.
+		if (event.getActionMasked() == android.view.MotionEvent.ACTION_CANCEL) {
+			return super.dispatchTouchEvent(event);
+		}
 		return isWebBackBusy() || isSearchBackBusy() || predictiveBack != null && predictiveBack.isBusy() || drawerMotion != null && drawerMotion.isBusy()
 				|| super.dispatchTouchEvent(event);
 	}
 
 	@Override
 	public void onTrimMemory(int level) {
-		if (predictiveBack != null) predictiveBack.clear();
+		if (predictiveBack != null) predictiveBack.trimMemory();
 		Fragment gallery = getSupportFragmentManager().findFragmentByTag(GalleryOverlay.class.getName());
 		if (gallery instanceof GalleryOverlay) ((GalleryOverlay) gallery).trimPredictivePreviews();
 		super.onTrimMemory(level);
@@ -2219,6 +2227,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	@Override
 	protected void onSystemBackStarted(BackEventCompat backEvent) {
+		if (VideoDiagnostics.isExtendedRecording()) VideoDiagnostics.recordUi("system_back start predictive=" + isSystemPredictiveBackEnabled());
 		if (webBack != null && webBack.isHistoryBackCommitting()) return;
 		if (searchBack != null && searchBack.isCommitting()) return;
 		if (predictiveBack != null && predictiveBack.isCommitting()) return;
@@ -2286,6 +2295,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	@Override
 	protected void onSystemBackCancelled() {
+		if (VideoDiagnostics.isExtendedRecording()) VideoDiagnostics.recordUi("system_back cancel");
 		if (drawerMotion != null) drawerMotion.recover(true);
 		resetPredictiveBackView(true);
 		backGestureAborted = false;
@@ -2307,6 +2317,8 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	@Override
 	protected void onSystemBackPressed() {
+		if (VideoDiagnostics.isExtendedRecording()) VideoDiagnostics.recordUi("system_back invoke started=" + backGestureStarted
+				+ " aborted=" + backGestureAborted + " focused=" + hasWindowFocus());
 		if (webBack != null && webBack.isHistoryBackCommitting()) return;
 		if (isWebBackBusy() && !webBack.isHistoryBackTracking()) webBack.finishHistoryBackPreview();
 		if (searchBack != null && searchBack.isCommitting()) return;

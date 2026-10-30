@@ -18,6 +18,7 @@
 #include <libavcodec/jni.h>
 #endif
 #include <libavformat/avformat.h>
+#include <libavutil/display.h>
 #include <libavutil/mathematics.h>
 #include <libavutil/pixdesc.h>
 #include <libavutil/ffversion.h>
@@ -28,6 +29,7 @@
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
@@ -45,6 +47,49 @@
 #endif
 
 static JavaVM * loadJavaVM;
+
+static int normalizeVideoRotation(double clockwise) {
+	if (!isfinite(clockwise)) return 0;
+	double angle = fmod(clockwise, 360.0);
+	int quarters = (int) lround(angle / 90.0);
+	// Phone orientation metadata describes quarter turns; do not guess for arbitrary transforms.
+	if (fabs(angle - quarters * 90.0) > 1.0) return 0;
+	return ((quarters % 4 + 4) % 4) * 90;
+}
+
+static int readVideoRotation(const AVStream * stream) {
+	if (!stream) return 0;
+#if LIBAVFORMAT_VERSION_MAJOR >= 61
+	const AVPacketSideData * sideData = stream->codecpar->coded_side_data;
+	int count = stream->codecpar->nb_coded_side_data;
+#else
+	const AVPacketSideData * sideData = stream->side_data;
+	int count = stream->nb_side_data;
+#endif
+	for (int i = 0; sideData && i < count; i++) {
+		if (sideData[i].type == AV_PKT_DATA_DISPLAYMATRIX) {
+			int32_t matrix[9];
+			if (!sideData[i].data || sideData[i].size < (int) sizeof(matrix)) return 0;
+			memcpy(matrix, sideData[i].data, sizeof(matrix));
+			// Mirroring/perspective are not rotations. Reject them instead of applying a wrong turn.
+			double determinant = (double) matrix[0] * matrix[4] - (double) matrix[1] * matrix[3];
+			if (determinant <= 0 || matrix[2] != 0 || matrix[5] != 0 || matrix[8] <= 0) return 0;
+			// FFmpeg reports counterclockwise angles; Android's content matrix uses clockwise.
+			return normalizeVideoRotation(-av_display_rotation_get(matrix));
+		}
+	}
+	// Older containers/demuxers may expose only the legacy clockwise rotate tag.
+	AVDictionaryEntry * tag = av_dict_get(stream->metadata, "rotate", NULL, 0);
+	if (tag && tag->value) {
+		char * end;
+		double angle = strtod(tag->value, &end);
+		if (end != tag->value) {
+			while (*end == ' ' || *end == '\t') end++;
+			if (!*end) return normalizeVideoRotation(angle);
+		}
+	}
+	return 0;
+}
 
 JavaVM * playerGetJavaVM(void) {
 	return loadJavaVM;
@@ -293,6 +338,7 @@ void init(JNIEnv * env, jlong pointer, jobject nativeBridge, jboolean seekAnyFra
 	}
 	AVStream * audioStream = audioStreamIndex != INDEX_NO_STREAM ? formatContext->streams[audioStreamIndex] : NULL;
 	AVStream * videoStream = videoStreamIndex != INDEX_NO_STREAM ? formatContext->streams[videoStreamIndex] : NULL;
+	player->av.videoRotation = readVideoRotation(videoStream);
 	if (!player->meta.audioEnabled) {
 		audioStreamIndex = INDEX_NO_STREAM;
 		audioStream = NULL;
@@ -520,12 +566,15 @@ jint getErrorCode(jlong pointer) {
 
 void getSummary(JNIEnv * env, jlong pointer, jintArray output) {
 	Player * player = POINTER_CAST(pointer);
-	jint result[3];
+	jint result[4];
 	AVCodecContext * context = GET_CONTEXT(player, video);
 	result[0] = context->width;
 	result[1] = context->height;
 	result[2] = HAS_STREAM(player, audio);
-	(*env)->SetIntArrayRegion(env, output, 0, 3, result);
+	result[3] = player->av.videoRotation;
+	// Preserve the first three slots and tolerate older Java callers of the same JNI method.
+	jsize length = (*env)->GetArrayLength(env, output);
+	if (length >= 3) (*env)->SetIntArrayRegion(env, output, 0, length >= 4 ? 4 : 3, result);
 }
 
 jlong getDuration(jlong pointer) {

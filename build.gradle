@@ -353,8 +353,8 @@ android {
 
 	defaultConfig {
 		applicationId = 'io.dashchan2'
-		versionCode = 11540
-		versionName = '3.2.74'
+		versionCode = 11550
+		versionName = '3.2.75'
 		def releaseVersionCode = versionCode
 		def packageVersionCodeProperty = project.findProperty('packageVersionCode')
 		if (packageVersionCodeProperty != null) {

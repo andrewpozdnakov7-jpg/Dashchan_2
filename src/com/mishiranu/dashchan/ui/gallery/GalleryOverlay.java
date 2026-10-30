@@ -1097,6 +1097,12 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 							() -> isCurrentPhotoBackRoute(dialog, item, index, expectedWindow) && InterfaceMotion.isPredictiveBackEnabled()
 							&& pagerUnit.isPredictivePhotoCurrent(photo, item)
 							&& (expectedGrid == null || listUnit != null && listUnit.getPredictiveGrid(item) == expectedGrid));
+			presentation.setRestoredCallback(() -> {
+				if (trimPredictiveGridPending) {
+					trimPredictiveGridPending = false;
+					if (listUnit != null) listUnit.clearPredictiveGrid();
+				}
+			});
 			photoBack = new com.mishiranu.dashchan.widget.PredictiveTransition(rootView, presentation);
 			presentation.setFinishSession(photoBack::finish);
 			return;
@@ -1208,10 +1214,11 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 		resetPredictiveBackView(false);
 		if (listUnit != null) listUnit.clearPredictiveGrid();
 	}
+	private boolean trimPredictiveGridPending;
 	public void trimPredictivePreviews() {
-		// Preserve the pinned route; if still tracking it can commit through its ordinary fallback.
-		predictiveBackMotion.finish();
-		if (photoBack != null) { photoBack.finish(); photoBack = null; }
+		// Keep an in-flight photo's grid and route valid until it finishes. Its renderer owns a lease.
+		if (photoBack != null && photoBack.isBusy()) { trimPredictiveGridPending = true; return; }
+		trimPredictiveGridPending = false;
 		if (listUnit != null) listUnit.clearPredictiveGrid();
 	}
 	@Override public void onLowMemory() { trimPredictivePreviews(); super.onLowMemory(); }

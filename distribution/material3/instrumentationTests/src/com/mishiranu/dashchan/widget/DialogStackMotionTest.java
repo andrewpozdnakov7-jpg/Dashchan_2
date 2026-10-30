@@ -79,6 +79,9 @@ public class DialogStackMotionTest {
 			assertTrue(f.motion.enter(f.snapshot(), f.old, f.incoming, false, false));
 			MotionEvent event = MotionEvent.obtain(0, 0, MotionEvent.ACTION_DOWN, 0, 0, 0);
 			try { assertTrue(DialogStackMotion.blocks(f.root, event)); } finally { event.recycle(); }
+			MotionEvent cancel = MotionEvent.obtain(0, 1, MotionEvent.ACTION_CANCEL, 0, 0, 0);
+			try { assertFalse(DialogStackMotion.blocks(f.root, cancel)); } finally { cancel.recycle(); }
+			assertNotNull(f.root.getTag(R.id.dialog_motion_owner));
 			f.motion.finish(); f.assertReleased();
 		});
 	}

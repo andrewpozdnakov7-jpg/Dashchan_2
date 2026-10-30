@@ -27,6 +27,7 @@ import com.mishiranu.dashchan.util.ListViewUtils;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.util.ViewUtils;
 import com.mishiranu.dashchan.widget.DividerItemDecoration;
+import com.mishiranu.dashchan.widget.PaddedRecyclerView;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -34,7 +35,8 @@ import java.util.Comparator;
 import java.util.IdentityHashMap;
 import java.util.List;
 
-public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> implements GalleryItem.Provider {
+public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
+		implements GalleryItem.Provider, PaddedRecyclerView.ItemFastScrollProvider {
 	public interface Callback extends ListViewUtils.SimpleCallback<PostItem> {}
 	public interface SourceLabelProvider {
 		String getSourceLabel(PostItem postItem);
@@ -85,6 +87,7 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 	private Preferences.CatalogSort catalogSort = Preferences.CatalogSort.UNSORTED;
 	private boolean cardsMode;
 	private GridMode gridMode;
+	private boolean compactHiddenRows;
 
 	public ThreadsAdapter(Context context, Callback callback, String chanName, UiManager uiManager,
 			UiManager.PostStateProvider postStateProvider, FragmentManager fragmentManager) {
@@ -105,6 +108,12 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 			List<AdapterListUpdate.Row> before = captureRows();
 			filteredPostItems = new ArrayList<>(result);
 			dispatchRows(before, false, "search_result");
+		});
+		registerAdapterDataObserver(new RecyclerView.AdapterDataObserver() {
+			@Override public void onChanged() {
+				// Includes restoring a hidden thread through the page's full-refresh path.
+				updateFastScrollGeometry();
+			}
 		});
 	}
 
@@ -365,7 +374,27 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 	}
 
 	private void dispatchRows(List<AdapterListUpdate.Row> before, boolean refresh, String reason) {
+		updateFastScrollGeometry();
 		AdapterListUpdate.dispatch(this, before, captureRows(), refresh, reason);
+	}
+
+	@Override
+	public boolean useItemFastScrollGeometry() {
+		return gridMode == null && compactHiddenRows;
+	}
+
+	private void updateFastScrollGeometry() {
+		// Resolve once when the displayed dataset changes, never while drawing or scrolling.
+		// Include offscreen rows so crossing a hidden row does not switch coordinate systems.
+		compactHiddenRows = false;
+		if (gridMode == null) {
+			for (PostItem postItem : getPostItems()) {
+				if (configurationSet.postStateProvider.isHiddenResolve(postItem)) {
+					compactHiddenRows = true;
+					break;
+				}
+			}
+		}
 	}
 
 	public void setSearchActive(boolean active) {
@@ -511,10 +540,12 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 			int contentHeight = (int) (contentWidth * (small ? 1.35f : 1.5f));
 			cardsMode = true;
 			gridMode = new GridMode(columns, small, contentHeight);
+			updateFastScrollGeometry();
 			return columns;
 		} else {
 			cardsMode = threadsView == Preferences.ThreadsView.CARDS;
 			gridMode = null;
+			updateFastScrollGeometry();
 			return 1;
 		}
 	}
@@ -535,6 +566,7 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 		int position = getPostItems().indexOf(postItem);
 		if (position >= 0) position += getSecretAbuOffset();
 		if (Preferences.isDisplayHiddenThreads()) {
+			updateFastScrollGeometry();
 			if (position >= 0) notifyItemChanged(position);
 		} else {
 			postItems.remove(postItem);
@@ -544,6 +576,7 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 			if (filteredPostItems != null) {
 				filteredPostItems.remove(postItem);
 			}
+			updateFastScrollGeometry();
 			if (position >= 0) notifyItemRemoved(position);
 			catalogSearch.retainItems(postItems);
 			// A pending snapshot must not resurrect the hidden thread.

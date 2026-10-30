@@ -135,9 +135,17 @@ public class MainApplication extends Application {
 		super.onTrimMemory(level);
 		if (securityRecoveryProcess) return;
 		if (isMainProcess()) {
+			com.mishiranu.dashchan.widget.BackPreviewBudget.trimCaches();
 			PostsWindowCache.getInstance().onTrimMemory(level);
 			ImageLoader.getInstance().onTrimMemory(level);
 		}
+	}
+
+	@SuppressWarnings("deprecation")
+	@Override
+	public void onLowMemory() {
+		super.onLowMemory();
+		if (!securityRecoveryProcess && isMainProcess()) com.mishiranu.dashchan.widget.BackPreviewBudget.trimCaches();
 	}
 
 	private void cleanupRemovedAutoBump() {

@@ -21,12 +21,18 @@ import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import com.mishiranu.dashchan.R;
+import com.mishiranu.dashchan.media.VideoDiagnostics;
 import com.mishiranu.dashchan.util.ListViewUtils;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.util.ViewUtils;
 import org.xmlpull.v1.XmlPullParser;
 
 public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandler.Shift, PullableWrapper.Wrapped {
+	/** Opt in only when a one-column grid needs continuous coordinates for unequal rows. */
+	public interface ItemFastScrollProvider {
+		boolean useItemFastScrollGeometry();
+	}
+
 	private static final long FAST_SCROLLER_TRANSITION_IN = 100;
 	private static final long FAST_SCROLLER_TRANSITION_OUT = 200;
 	private static final long FAST_SCROLLER_TRANSITION_OUT_DELAY = 1000;
@@ -59,6 +65,16 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 	private double pendingFastScrollFraction;
 	private boolean pendingFastScrollAlignEnd;
 	private int pendingFastScrollItemCount;
+	private final FastScrollProjection fastScrollProjection = new FastScrollProjection();
+	private Adapter<?> appendAdapter;
+	private LayoutManager appendLayoutManager;
+	private int appendPreviousCount;
+	private int appendWidth, appendHeight;
+	private float appendPreviousOffset;
+	private boolean appendProjectionPending;
+	private Adapter<?> projectionAdapter;
+	private LayoutManager projectionLayoutManager;
+	private int projectionItemCount, projectionWidth, projectionHeight;
 
 	private long showFastScrollingStart;
 	private boolean showFastScrolling;
@@ -171,6 +187,7 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 					if (fastScrolling) {
 						updateFastScroller(true, fastScrollerEnabled, fastScrollerAllowed, regularScrolling, false);
 					}
+					fastScrollProjection.setFrozen(fastScrolling, SystemClock.elapsedRealtime());
 				}
 			}
 		});
@@ -190,6 +207,10 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 
 	@Override
 	protected void onDetachedFromWindow() {
+		appendProjectionPending = false;
+		appendAdapter = null; appendLayoutManager = null;
+		projectionAdapter = null; projectionLayoutManager = null;
+		fastScrollProjection.reset();
 		pendingFastScrollPosition = NO_POSITION;
 		if (pullableWrapper != null) pullableWrapper.setHostActive(false);
 		if (fastScrollerOverlayHost != null) {
@@ -249,6 +270,9 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 
 	public void setFastScrollerEnabled(boolean fastScrollerEnabled) {
 		if (this.fastScrollerEnabled != fastScrollerEnabled) {
+			appendProjectionPending = false;
+			appendAdapter = null; appendLayoutManager = null;
+			fastScrollProjection.reset();
 			pendingFastScrollPosition = NO_POSITION;
 			fastScrollingDown = false;
 			updateFastScroller(true, fastScrollerEnabled, fastScrollerAllowed, regularScrolling, false);
@@ -300,6 +324,37 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 		super.onLayout(changed, l, t, r, b);
 		applyPendingFastScrollFraction();
 		updateFastScrollerOverlayBounds();
+		if (projectionAdapter != null && (getAdapter() != projectionAdapter || getLayoutManager() != projectionLayoutManager
+				|| projectionAdapter.getItemCount() < projectionItemCount
+				|| getWidth() != projectionWidth || getHeight() != projectionHeight)) {
+			fastScrollProjection.reset();
+			projectionAdapter = null; projectionLayoutManager = null;
+		}
+		if (appendProjectionPending) {
+			appendProjectionPending = false;
+			if (getAdapter() == appendAdapter && getLayoutManager() == appendLayoutManager
+					&& appendAdapter.getItemCount() > appendPreviousCount
+					&& getWidth() == appendWidth && getHeight() == appendHeight
+					&& android.animation.ValueAnimator.areAnimatorsEnabled()) {
+				float canonicalOffset = getCanonicalOffset();
+				long time = SystemClock.elapsedRealtime();
+				fastScrollProjection.rebase(canonicalOffset, appendPreviousOffset, time, fastScrolling || fastScrollingDown);
+				if ((fastScrolling || fastScrollingDown) && fastScrollingStartOffset != null) {
+					int height = getHeight() - getEdgeEffectShift(EdgeEffectHandler.Side.TOP)
+							- getEdgeEffectShift(EdgeEffectHandler.Side.BOTTOM);
+					// Preserve a held thumb even if it was at the old end before new rows arrived.
+					fastScrollingStartOffset = fastScrollProjection.project(canonicalOffset, time)
+							- (fastScrollingCurrentY - fastScrollingStartY) / Math.max(1, height - thumbDrawable.getIntrinsicHeight());
+				}
+				projectionAdapter = getAdapter(); projectionLayoutManager = getLayoutManager();
+				projectionItemCount = projectionAdapter.getItemCount();
+				projectionWidth = getWidth(); projectionHeight = getHeight();
+				if (VideoDiagnostics.isExtendedRecording()) VideoDiagnostics.recordUi("fast_scroll append old_count="
+						+ appendPreviousCount + " new_count=" + projectionItemCount
+						+ " previous_offset=" + appendPreviousOffset + " canonical_offset=" + canonicalOffset);
+			}
+			appendAdapter = null; appendLayoutManager = null;
+		}
 
 		int range = computeVerticalScrollRange();
 		int extent = computeVerticalScrollExtent();
@@ -320,6 +375,7 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 			if (fastScrolling) {
 				updateFastScroller(true, fastScrollerEnabled, fastScrollerAllowed, regularScrolling, false);
 			}
+			fastScrollProjection.setFrozen(fastScrolling, SystemClock.elapsedRealtime());
 		}
 	}
 
@@ -336,6 +392,11 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 		this.fastScrollerAllowed = fastScrollerAllowed;
 		this.regularScrolling = regularScrolling;
 		this.fastScrolling = fastScrolling;
+		fastScrollProjection.setFrozen(fastScrolling || fastScrollingDown, SystemClock.elapsedRealtime());
+		if (!isFastScrollerAvailable()) {
+			fastScrollProjection.reset(); appendProjectionPending = false;
+			appendAdapter = null; appendLayoutManager = null;
+		}
 		if (!isFastScrollerAvailable()) pendingFastScrollPosition = NO_POSITION;
 		updateVerticalScrollBar();
 		if (wasAvailable != isFastScrollerAvailable()) {
@@ -399,9 +460,16 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 		return Math.max(0, layoutManager.getItemCount() - 1);
 	}
 
+	private boolean useGridFastScrollGeometry(GridLayoutManager layoutManager) {
+		Adapter<?> adapter = getAdapter();
+		return layoutManager.getSpanCount() == 1 && adapter instanceof ItemFastScrollProvider
+				&& ((ItemFastScrollProvider) adapter).useItemFastScrollGeometry();
+	}
+
 	FastScrollGeometry getFastScrollGeometry() {
 		LayoutManager layoutManager = getLayoutManager();
-		if (layoutManager instanceof LinearLayoutManager && !(layoutManager instanceof GridLayoutManager)) {
+		if (layoutManager instanceof LinearLayoutManager && (!(layoutManager instanceof GridLayoutManager)
+				|| useGridFastScrollGeometry((GridLayoutManager) layoutManager))) {
 			LinearLayoutManager linearLayoutManager = (LinearLayoutManager) layoutManager;
 			if (linearLayoutManager.getOrientation() != VERTICAL || linearLayoutManager.getReverseLayout()) return null;
 			int count = linearLayoutManager.getItemCount();
@@ -425,7 +493,25 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 		return null;
 	}
 
+	/** Call immediately before publishing a background append, while old children still describe the old list. */
+	public void prepareFastScrollAppend() {
+		Adapter<?> adapter = getAdapter();
+		if (!isFastScrollerAvailable() || adapter == null || getLayoutManager() == null) return;
+		// Multiple publications before layout share the same old viewport, not mixed old/new counts.
+		if (!appendProjectionPending || appendAdapter == adapter && appendPreviousCount == adapter.getItemCount()) {
+			appendPreviousOffset = getCurrentOffset();
+			appendPreviousCount = adapter.getItemCount();
+			appendWidth = getWidth(); appendHeight = getHeight();
+			appendAdapter = adapter; appendLayoutManager = getLayoutManager();
+			appendProjectionPending = true;
+		}
+	}
+
 	private float getCurrentOffset() {
+		return fastScrollProjection.project(getCanonicalOffset(), SystemClock.elapsedRealtime());
+	}
+
+	private float getCanonicalOffset() {
 		FastScrollGeometry geometry = getFastScrollGeometry();
 		if (geometry != null) return geometry.offset();
 		int offset = computeVerticalScrollOffset();
@@ -434,6 +520,8 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 	}
 
 	private void scroll(float offset) {
+		// Hit testing, drawing and thumb dragging must use the same temporary scale.
+		offset = fastScrollProjection.unproject(offset, SystemClock.elapsedRealtime());
 		if (!(getLayoutManager() instanceof LinearLayoutManager)) return;
 		LinearLayoutManager layoutManager = (LinearLayoutManager) getLayoutManager();
 		int count = layoutManager.getItemCount();
@@ -496,6 +584,9 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 		pendingFastScrollPosition = NO_POSITION;
 		if (position < 0 || !isFastScrollerAvailable() || !(getLayoutManager() instanceof LinearLayoutManager)) return;
 		LinearLayoutManager layoutManager = (LinearLayoutManager) getLayoutManager();
+		// A hidden row can be restored while a fractional target is waiting for layout.
+		if (layoutManager instanceof GridLayoutManager
+				&& !useGridFastScrollGeometry((GridLayoutManager) layoutManager)) return;
 		if (pendingFastScrollItemCount != layoutManager.getItemCount() || position >= layoutManager.getItemCount()) return;
 		View target = layoutManager.findViewByPosition(position);
 		if (target != null) {
@@ -514,6 +605,7 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 		if (action == MotionEvent.ACTION_DOWN) {
 			pendingFastScrollPosition = NO_POSITION;
 			fastScrollingDown = false;
+			fastScrollProjection.setFrozen(fastScrolling, SystemClock.elapsedRealtime());
 			if (!fastScrollerAvailable) {
 				return false;
 			}
@@ -528,8 +620,10 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 				int thumbY = (int) ((height - thumbHeight) * offset);
 				boolean atThumb = event.getY() >= top + thumbY && event.getY() <= top + thumbY + thumbHeight;
 				fastScrollingDown = true;
+				fastScrollProjection.setFrozen(true, SystemClock.elapsedRealtime());
 				fastScrollingStartOffset = atThumb ? offset : null;
 				fastScrollingStartY = currentY;
+				fastScrollingCurrentY = currentY;
 				if (!ViewUtils.isGestureNavigationOverlap(this, rtl, !rtl)) {
 					fastScrollingCurrentY = currentY;
 					getParent().requestDisallowInterceptTouchEvent(true);
@@ -565,9 +659,14 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 				}
 				if (action == MotionEvent.ACTION_CANCEL) pendingFastScrollPosition = NO_POSITION;
 				if (cancel) {
+					fastScrollingDown = false;
 					updateFastScroller(false, fastScrollerEnabled, fastScrollerAllowed, regularScrolling, false);
 				}
 				return true;
+			}
+			if (finish) {
+				fastScrollingDown = false;
+				fastScrollProjection.setFrozen(false, SystemClock.elapsedRealtime());
 			}
 		}
 		return false;
@@ -605,7 +704,9 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 			int height = getHeight() - top - getEdgeEffectShift(EdgeEffectHandler.Side.BOTTOM);
 			FastScrollGeometry geometry = getFastScrollGeometry();
 			// Draw the laid-out position, not an optimistic finger position that snaps on release.
-			float offset = geometry != null ? geometry.offset() : getCurrentOffset();
+			float canonicalOffset = geometry != null ? geometry.offset() : getCanonicalOffset();
+			float offset = fastScrollProjection.project(canonicalOffset, time);
+			shouldInvalidate |= fastScrollProjection.isRunning(time);
 			int thumbHeight = thumbDrawable.getIntrinsicHeight();
 			int thumbY = (int) ((height - thumbHeight) * offset);
 
@@ -628,7 +729,7 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 			if (importantPostsMarksFastScrollBarDecoration != null &&
 					importantPostsMarksFastScrollBarDecoration.hasMarks()) {
 				importantPostsMarksFastScrollBarDecoration.draw(trackLeft, top, trackRight,
-						top + height - thumbHeight, canvas, geometry);
+						top + height - thumbHeight, canvas, geometry, fastScrollProjection, time);
 			}
 			int thumbExtra = (maxWidth - thumbDrawable.getIntrinsicWidth()) / 2;
 			thumbDrawable.setState(fastScrolling ? STATE_PRESSED : STATE_NORMAL);
