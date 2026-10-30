@@ -506,8 +506,10 @@ public final class SettingsSearchIndex {
 				R.string.automatic_day_night_themes__summary, Preferences.KEY_AUTOMATIC_DAY_NIGHT_THEME);
 		add(context, entries, Screen.INTERFACE, R.string.day_theme, 0, Preferences.KEY_DAY_THEME);
 		add(context, entries, Screen.INTERFACE, R.string.night_theme, 0, Preferences.KEY_NIGHT_THEME);
-		add(context, entries, Screen.INTERFACE, R.string.enable_predictive_back,
-				R.string.enable_predictive_back__summary, Preferences.KEY_PREDICTIVE_BACK);
+		if (BuildConfig.ENABLE_PREDICTIVE_BACK) {
+			add(context, entries, Screen.INTERFACE, R.string.enable_predictive_back,
+					R.string.enable_predictive_back__summary, Preferences.KEY_PREDICTIVE_BACK);
+		}
 		add(context, entries, Screen.GESTURES, R.string.gesture_controls);
 		add(context, entries, Screen.INTERFACE, R.string.headers_order, 0, Preferences.KEY_PAGES_LIST);
 		add(context, entries, Screen.INTERFACE, R.string.initial_position, 0, Preferences.KEY_DRAWER_INITIAL_POSITION);

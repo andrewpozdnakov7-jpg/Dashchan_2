@@ -1,0 +1,15 @@
+**Slooop 3.2.74 — F-Droid build**
+
+- The Material 3 interface is now available in the F-Droid build and enabled by default 😺 A launch dialog lets you choose the design and explains how to restore the old interface.
+- Updated the posting form, video player, settings, dialogs, menus and loading indicators. Improved spacing, wrapping of long labels and ordinary transition animations.
+- Added built-in **E444 (ech.bz)** support: reading and posting, reactions and poll voting. No separate extension is required; an installed e444 extension is not loaded over the built-in implementation.
+- Fixed settings search flicker, the keyboard reappearing and the extra Back gesture after hiding it. Fixed truncated captcha instructions.
+- Updated photo opening and upward-swipe closing animations. Loading the original image no longer interrupts the transition from its thumbnail.
+- The default section opens on a new application launch. Returning from the background preserves the current screen.
+- Added local crash reports that you can view, share manually or delete. Nothing is sent automatically.
+
+To restore the old design: Settings → Experimental features → New Material 3 interface → turn off “Enable the new interface”.
+
+Predictive Back and application protection are disabled in the F-Droid build.
+
+Thank you for testing, sending logs and helping us find bugs! 🐾

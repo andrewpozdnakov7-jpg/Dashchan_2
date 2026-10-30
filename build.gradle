@@ -353,8 +353,8 @@ android {
 
 	defaultConfig {
 		applicationId = 'io.dashchan2'
-		versionCode = 11530
-		versionName = '3.2.73'
+		versionCode = 11540
+		versionName = '3.2.74'
 		def releaseVersionCode = versionCode
 		def packageVersionCodeProperty = project.findProperty('packageVersionCode')
 		if (packageVersionCodeProperty != null) {
@@ -420,6 +420,7 @@ android {
 					'"https://slooop-push-er3p3rs4cq-ew.a.run.app"'
 			buildConfigField 'boolean', 'ENABLE_LOCAL_TRANSLATION', 'true'
 			buildConfigField 'boolean', 'ENABLE_EXPERIMENTAL_INTERFACE_MOTION', 'true'
+			buildConfigField 'boolean', 'ENABLE_PREDICTIVE_BACK', 'true'
 			buildConfigField 'boolean', 'ENABLE_GOOGLE_TRANSLATION', 'true'
 			buildConfigField 'boolean', 'ENABLE_GEMINI_NANO_TRANSLATION', 'true'
 			buildConfigField 'String', 'GOOGLE_TRANSLATION_ADDON_DOWNLOAD_URL',
@@ -448,7 +449,8 @@ android {
 			dimension = 'distribution'
 			buildConfigField 'boolean', 'ENABLE_APP_SECURITY_SETTINGS', 'false'
 			buildConfigField 'boolean', 'ENABLE_LOCAL_TRANSLATION', 'true'
-			buildConfigField 'boolean', 'ENABLE_EXPERIMENTAL_INTERFACE_MOTION', 'false'
+			buildConfigField 'boolean', 'ENABLE_EXPERIMENTAL_INTERFACE_MOTION', 'true'
+			buildConfigField 'boolean', 'ENABLE_PREDICTIVE_BACK', 'false'
 			buildConfigField 'boolean', 'ENABLE_GOOGLE_TRANSLATION', 'false'
 			buildConfigField 'boolean', 'ENABLE_GEMINI_NANO_TRANSLATION', 'false'
 			buildConfigField 'boolean', 'ALLOW_GMS_SECURITY_PROVIDER', 'false'
@@ -485,15 +487,26 @@ android {
 	def githubDebugSourceSet = sourceSets.maybeCreate('githubDebug')
 	githubDebugSourceSet.java.srcDir 'distribution/githubDebug/src'
 	githubDebugSourceSet.manifest.srcFile 'distribution/githubDebug/AndroidManifest.xml'
+	sourceSets.debug.java.srcDir 'distribution/material3/debug/src'
+	sourceSets.debug.manifest.srcFile 'distribution/material3/debug/AndroidManifest.xml'
 	sourceSets.fdroid.java.srcDir 'distribution/fdroid/src'
 	sourceSets.fdroid.manifest.srcFile 'distribution/fdroid/AndroidManifest.xml'
 	sourceSets.fdroid.assets.srcDir 'distribution/fdroid/metadata'
+	// Material 3 presentation is shared; security, push and proprietary translation stay flavour-specific.
+	['github', 'fdroid'].each { distribution ->
+		sourceSets.getByName(distribution).java.srcDir 'distribution/material3/src'
+		sourceSets.getByName(distribution).res.srcDir 'distribution/material3/res'
+	}
 	sourceSets.test {
 		java.srcDirs = ['unitTests/src']
 		resources.srcDirs = ['unitTests/resources']
 	}
 	sourceSets.androidTest.java.srcDirs = ['instrumentationTests/src']
-	// Photo editor code/resources/tests live in the shared roots; other experimental UI remains flavour-specific.
+	// Share the Material presentation fixtures, while predictive/security fixtures remain GitHub-only.
+	['Github', 'Fdroid'].each { distribution ->
+		sourceSets.maybeCreate('test' + distribution).java.srcDir 'distribution/material3/unitTests/src'
+		sourceSets.maybeCreate('androidTest' + distribution).java.srcDir 'distribution/material3/instrumentationTests/src'
+	}
 	sourceSets.maybeCreate('testGithub').java.srcDir 'distribution/github/unitTests/src'
 	sourceSets.maybeCreate('androidTestGithub').java.srcDir 'distribution/github/instrumentationTests/src'
 	sourceSets.maybeCreate('testFdroid').java.srcDir 'distribution/fdroid/unitTests/src'
@@ -697,8 +710,8 @@ dependencies {
 	leakImplementation 'com.squareup.leakcanary:leakcanary-android:3.0-alpha-9'
 	githubImplementation platform('com.google.firebase:firebase-bom:34.19.0')
 	githubImplementation 'com.google.firebase:firebase-messaging'
-	// Real Material 3 Expressive LoadingIndicator; restricted to the experimental GitHub UI.
-	githubImplementation 'com.google.android.material:material:1.14.0'
+	// Shared open-source Material 3 widgets, LoadingIndicator and locally themed launch dialog.
+	implementation 'com.google.android.material:material:1.14.0'
 	githubImplementation 'com.google.mlkit:genai-prompt:1.0.0-beta4'
 	// beta4 calls coroutine APIs missing in 1.10.x. Align core, Guava and reactive
 	// adapters too: its published POM still requests older versions of these modules.

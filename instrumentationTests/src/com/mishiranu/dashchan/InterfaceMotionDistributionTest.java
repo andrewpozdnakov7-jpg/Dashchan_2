@@ -16,7 +16,7 @@ import org.junit.runner.RunWith;
 /** Flavor and restored-preference policy. Does not navigate or change the system animation scale. */
 @RunWith(AndroidJUnit4.class)
 public class InterfaceMotionDistributionTest {
-	@Test public void predictiveSwitchIsIndependentOfTheDesignInBothDistributions() {
+	@Test public void predictiveSwitchIsIndependentOfDesignAndRespectsTheDistribution() {
 		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
 			String[] keys = {Preferences.KEY_NEW_INTERFACE_MOTION, Preferences.KEY_PREDICTIVE_BACK};
 			java.util.Map<String, ?> before = Preferences.PREFERENCES.getAll();
@@ -24,7 +24,9 @@ public class InterfaceMotionDistributionTest {
 				for (boolean design : new boolean[]{false, true}) {
 					for (boolean predictive : new boolean[]{false, true}) {
 						Preferences.PREFERENCES.edit().put(keys[0], design).put(keys[1], predictive).close();
-						assertEquals(Build.VERSION.SDK_INT >= 33 && predictive, InterfaceMotion.isPredictiveBackEnabled());
+						assertEquals(BuildConfig.ENABLE_PREDICTIVE_BACK && predictive, Preferences.isPredictiveBackEnabled());
+						assertEquals(BuildConfig.ENABLE_PREDICTIVE_BACK && Build.VERSION.SDK_INT >= 33 && predictive,
+								InterfaceMotion.isPredictiveBackEnabled());
 						assertEquals(BuildConfig.ENABLE_EXPERIMENTAL_INTERFACE_MOTION && design, InterfaceMotion.isEnabled());
 					}
 				}
@@ -40,7 +42,7 @@ public class InterfaceMotionDistributionTest {
 		});
 	}
 
-	@Test public void restoredExperimentalPreferenceCannotEnableTheFeatureInFdroid() {
+	@Test public void sharedDesignHonorsExplicitOptOutInBothDistributions() {
 		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
 			String key = Preferences.KEY_NEW_INTERFACE_MOTION;
 			Object previous = Preferences.PREFERENCES.getAll().get(key);
@@ -51,11 +53,6 @@ public class InterfaceMotionDistributionTest {
 				assertEquals(BuildConfig.ENABLE_EXPERIMENTAL_INTERFACE_MOTION,
 						Preferences.isNewInterfaceMotionEnabled());
 				assertEquals(BuildConfig.ENABLE_EXPERIMENTAL_INTERFACE_MOTION, InterfaceMotion.isEnabled());
-				if (!BuildConfig.ENABLE_EXPERIMENTAL_INTERFACE_MOTION) {
-					assertFalse(InterfaceMotion.isDrawerEnabled());
-					assertEquals(Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-							Preferences.isPredictiveBackEnabled(), InterfaceMotion.isPredictiveBackEnabled());
-				}
 				try (SharedPreferences.Editor editor = Preferences.PREFERENCES.edit()) {
 					editor.put(key, false);
 				}
@@ -70,14 +67,17 @@ public class InterfaceMotionDistributionTest {
 		});
 	}
 
-	@Test public void searchOnlyOffersExperimentalInterfaceInGithub() {
+	@Test public void searchOffersSharedDesignAndOnlyAvailablePredictiveBack() {
 		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
 			Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
 			int matches = 0;
+			int predictiveMatches = 0;
 			for (SettingsSearchIndex.Entry entry : SettingsSearchIndex.create(context)) {
 				if (context.getString(R.string.material3_enable_design).equals(entry.getTitle())) matches++;
+				if (context.getString(R.string.enable_predictive_back).equals(entry.getTitle())) predictiveMatches++;
 			}
 			assertEquals(BuildConfig.ENABLE_EXPERIMENTAL_INTERFACE_MOTION ? 1 : 0, matches);
+			assertEquals(BuildConfig.ENABLE_PREDICTIVE_BACK ? 1 : 0, predictiveMatches);
 		});
 	}
 }

@@ -44,7 +44,7 @@ def main():
     texts = "\n".join(path.read_text(encoding="utf-8") for path in files)
     default = ET.Element("resources"); russian = ET.Element("resources")
     for directory, tree in (("values", default), ("values-ru", russian)):
-        for base in (ROOT / "lang", ROOT / "distribution/github/res"):
+        for base in (ROOT / "lang", ROOT / "distribution/material3/res", ROOT / "distribution/github/res"):
             for path in (base / directory).glob("*.xml"): tree.extend(ET.parse(path).getroot())
     en = {node.attrib["name"]: node.text or "" for node in default if node.tag == "string"}
     ru = {node.attrib["name"]: node.text or "" for node in russian if node.tag == "string"}
@@ -58,6 +58,7 @@ def main():
     drawables = set(re.findall(r"R\.drawable\.(\w+)", texts))
     for name in drawables:
         path = ROOT / "res/drawable" / (name + ".xml")
+        if not path.is_file(): path = ROOT / "distribution/material3/res/drawable" / (name + ".xml")
         if not path.is_file(): path = ROOT / "distribution/github/res/drawable" / (name + ".xml")
         assert path.is_file(), f"Missing drawable: {name}"
         ET.parse(path)

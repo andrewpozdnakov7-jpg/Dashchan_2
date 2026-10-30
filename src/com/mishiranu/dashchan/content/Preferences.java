@@ -1612,7 +1612,9 @@ public class Preferences {
 	public static final boolean DEFAULT_PREDICTIVE_BACK = false;
 
 	public static boolean isPredictiveBackEnabled() {
-		return PREFERENCES.getBoolean(KEY_PREDICTIVE_BACK, DEFAULT_PREDICTIVE_BACK);
+		// A restored preference must not enable a feature excluded from this distribution.
+		return BuildConfig.ENABLE_PREDICTIVE_BACK &&
+				PREFERENCES.getBoolean(KEY_PREDICTIVE_BACK, DEFAULT_PREDICTIVE_BACK);
 	}
 
 	public enum PagesListMode {

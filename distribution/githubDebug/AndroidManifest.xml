@@ -1,9 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 	<application>
-		<activity android:name=".widget.PostingGestureTestActivity" android:exported="false" />
-		<activity android:name=".widget.StandardContentTestActivity" android:exported="false" />
-		<activity android:name=".ui.posting.RolloverHandoffTestActivity" android:exported="false" />
 		<!-- Debug-only local UI/navigation test. It never calls a production mock endpoint. -->
 		<receiver
 			android:name=".content.push.ReplyPushMockReceiver"

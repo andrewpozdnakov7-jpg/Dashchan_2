@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+	<application>
+		<!-- Disposable UI fixture hosts, shared by both debug variants. Never included in release/ndebug. -->
+		<activity android:name=".widget.PostingGestureTestActivity" android:exported="false" />
+		<activity android:name=".widget.StandardContentTestActivity" android:exported="false" />
+		<activity android:name=".ui.posting.RolloverHandoffTestActivity" android:exported="false" />
+	</application>
+</manifest>
