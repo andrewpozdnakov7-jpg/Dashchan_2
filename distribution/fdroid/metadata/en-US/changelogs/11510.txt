@@ -1,4 +1,3 @@
 Added built-in E444 (ech.bz) support. An installed e444 extension no longer overrides it.
 Fixed clipped captcha instructions, settings-search flicker and repeated keyboard requests. Added an animated exit from settings search.
-Improved experimental predictive Back on Android 14+; previews are not available for every transition.
 The default board opens on a fresh application launch. Added the optional "Fix for S24 Ultra OneUI 9" for top-bar buttons, disabled by default.

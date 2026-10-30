@@ -69,12 +69,13 @@ def main():
     assert "java.srcDirs = ['unitTests/src']" in gradle
     assert "sourceSets.androidTest.java.srcDirs = ['instrumentationTests/src']" in gradle
     fdroid = gradle[gradle.index("\n\t\tfdroid {"):gradle.index("\n\tsourceSets.main {")]
-    for feature in ("ENABLE_APP_SECURITY_SETTINGS", "ENABLE_EXPERIMENTAL_INTERFACE_MOTION",
+    assert "buildConfigField 'boolean', 'ENABLE_EXPERIMENTAL_INTERFACE_MOTION', 'true'" in fdroid
+    for feature in ("ENABLE_APP_SECURITY_SETTINGS", "ENABLE_PREDICTIVE_BACK",
                     "ENABLE_GOOGLE_TRANSLATION", "ENABLE_GEMINI_NANO_TRANSLATION"):
         assert f"buildConfigField 'boolean', '{feature}', 'false'" in fdroid
     print(f"PASS: {len(engine) + 1} editor/engine classes, Activity, resources and tests are shared")
     print("PASS: enabled default with existing explicit opt-out; no duplicate flavour routing")
-    print("PASS: unrelated F-Droid experimental gates remain disabled; no Google editor imports")
+    print("PASS: F-Droid Material UI is shared; predictive/security/proprietary gates remain disabled; no Google editor imports")
     print("NOT RUN: Gradle configuration, compilation, JUnit, instrumentation, final manifest/DEX/APK checks")
 
 

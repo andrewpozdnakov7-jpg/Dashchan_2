@@ -35,8 +35,20 @@ builds after the exact source, reference assets, and reproducibility result are 
 
 The F-Droid build includes the opt-in Mozilla backend, compiled from the pinned `mozilla/translations` Git
 submodule rather than Mozilla's ready-made WASM. The normal GitHub build continues using its existing pinned
-prebuilt JS/WASM pair. No Google/Gemini translation, Material interface or application protection is enabled by
-this F-Droid change. This work is in preparation; it is not a statement that the catalogue has already updated.
+prebuilt JS/WASM pair. Google/Gemini translation and application protection remain excluded.
+
+### Shared Material 3 interface
+
+Both distributions use the same presentation sources/resources in `distribution/material3` and the pinned
+open-source Material dependency. The interface, posting form and player default to enabled; saved explicit
+opt-outs remain effective. A locally themed Material launch dialog explains the setting and offers either design,
+with up to three explicit confirmations. Settings → Experimental features → New Material 3 interface controls it.
+
+Predictive Back remains GitHub-only through `ENABLE_PREDICTIVE_BACK`. The F-Droid capability is false even when
+a backup restores a true preference, and its setting/search entry is hidden. Ordinary system Back and ordinary
+Material transitions remain available. Security, Firebase/GMS, Google/Gemini and self-update gates are unchanged.
+See [the shared presentation contract](../distribution/material3/README.md). Source availability and reference
+publication do not establish that F-Droid has published a new catalogue version.
 
 Before the F-Droid source scan, prepare only the required nested source modules and approved CMake fix:
 

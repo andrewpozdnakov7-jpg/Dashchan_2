@@ -111,22 +111,24 @@ public class InterfaceFragment extends PreferenceFragment {
 				R.string.night_theme, darkThemeEntries).setOnAfterChangeListener(p -> requireActivity().recreate());
 		addDependency(Preferences.KEY_DAY_THEME, Preferences.KEY_AUTOMATIC_DAY_NIGHT_THEME, true);
 		addDependency(Preferences.KEY_NIGHT_THEME, Preferences.KEY_AUTOMATIC_DAY_NIGHT_THEME, true);
-		predictiveBackPreference = addCheck(true, Preferences.KEY_PREDICTIVE_BACK, Preferences.DEFAULT_PREDICTIVE_BACK,
-				R.string.enable_predictive_back, R.string.enable_predictive_back__summary);
-		predictiveBackPreference.setOnBeforeChangeListener((preference, value) -> {
-			if (value && !preference.getValue() && !confirmingPredictiveBack &&
-					BuildConfig.ENABLE_EXPERIMENTAL_INTERFACE_MOTION && !Preferences.isNewInterfaceMotionEnabled()) {
-				PredictiveBackPreferenceDialog.show(getChildFragmentManager(),
-						PredictiveBackPreferenceDialog.ENABLE_NEW_INTERFACE);
-				return false;
-			}
-			return true;
-		});
-		predictiveBackPreference.setOnAfterChangeListener(p ->
-				((StateActivity) requireActivity()).updateSystemBackCallback());
-		getChildFragmentManager().setFragmentResultListener(PredictiveBackPreferenceDialog.RESULT,
-				getViewLifecycleOwner(), (key, result) -> applyPredictiveBackChoice(
-						result.getInt(PredictiveBackPreferenceDialog.CHOICE)));
+		if (BuildConfig.ENABLE_PREDICTIVE_BACK) {
+			predictiveBackPreference = addCheck(true, Preferences.KEY_PREDICTIVE_BACK, Preferences.DEFAULT_PREDICTIVE_BACK,
+					R.string.enable_predictive_back, R.string.enable_predictive_back__summary);
+			predictiveBackPreference.setOnBeforeChangeListener((preference, value) -> {
+				if (value && !preference.getValue() && !confirmingPredictiveBack &&
+						BuildConfig.ENABLE_EXPERIMENTAL_INTERFACE_MOTION && !Preferences.isNewInterfaceMotionEnabled()) {
+					PredictiveBackPreferenceDialog.show(getChildFragmentManager(),
+							PredictiveBackPreferenceDialog.ENABLE_NEW_INTERFACE);
+					return false;
+				}
+				return true;
+			});
+			predictiveBackPreference.setOnAfterChangeListener(p ->
+					((StateActivity) requireActivity()).updateSystemBackCallback());
+			getChildFragmentManager().setFragmentResultListener(PredictiveBackPreferenceDialog.RESULT,
+					getViewLifecycleOwner(), (key, result) -> applyPredictiveBackChoice(
+							result.getInt(PredictiveBackPreferenceDialog.CHOICE)));
+		}
 		addButton(R.string.gesture_controls, R.string.gesture_controls__summary)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 						.pushFragment(new GestureSettingsFragment()));
@@ -208,7 +210,7 @@ public class InterfaceFragment extends PreferenceFragment {
 	}
 
 	private void applyPredictiveBackChoice(int choice) {
-		if (predictiveBackPreference == null || !BuildConfig.ENABLE_EXPERIMENTAL_INTERFACE_MOTION ||
+		if (!BuildConfig.ENABLE_PREDICTIVE_BACK || predictiveBackPreference == null || !BuildConfig.ENABLE_EXPERIMENTAL_INTERFACE_MOTION ||
 				(choice != PredictiveBackPreferenceDialog.ENABLE_NEW_INTERFACE &&
 				choice != PredictiveBackPreferenceDialog.ENABLE_OLD_INTERFACE)) return;
 		CheckPreference preference = predictiveBackPreference;

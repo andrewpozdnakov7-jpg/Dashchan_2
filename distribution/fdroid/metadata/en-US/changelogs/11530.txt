@@ -1,0 +1,1 @@
+Fixed the extra Back gesture in settings search after hiding the keyboard. Updated photo opening and upward-swipe closing animations: loading the original no longer interrupts the thumbnail transition. Improved download dialogs, dropdown fields, autohide and explanations in Material 3 settings.

@@ -60,8 +60,8 @@ def main():
             data = apk.read(name)
             assert not private.search(data), "Private marker in APK entry: " + name
             if name.endswith(".dex"):
-                for marker in (b"Lcom/google/firebase/", b"Lcom/google/android/gms/",
-                               b"Lcom/google/android/material/", b"Lcom/google/mlkit/"):
+                # The open-source Material UI is now shared. Proprietary services remain excluded.
+                for marker in (b"Lcom/google/firebase/", b"Lcom/google/android/gms/", b"Lcom/google/mlkit/"):
                     assert marker not in data, "Excluded dependency in DEX: " + marker.decode("ascii")
             match = re.fullmatch(r"lib/([^/]+)/([^/]+\.so)", name)
             if match:

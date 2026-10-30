@@ -7,7 +7,7 @@ import org.junit.Test;
 
 /** Source-set boundary assertions; the release APK audit additionally verifies compiled artifacts. */
 public class StartupNoticeDistributionTest {
-	@Test public void compiledResetContainsTheNoticeCounterOnlyForTheGithubFlavor() throws Exception {
+	@Test public void compiledResetRetainsTheSharedNoticeCounters() throws Exception {
 		try (java.io.InputStream input = getClass().getClassLoader().getResourceAsStream(
 				"com/mishiranu/dashchan/content/security/PrivacyReset.class")) {
 			assertNotNull("Compiled reset class must be inspected", input);
@@ -18,17 +18,23 @@ public class StartupNoticeDistributionTest {
 					bytecode.contains("material3-default-design-acknowledgements-v1"));
 		}
 	}
-	@Test public void fdroidBridgeHasNoDialogCounterOrResources() throws Exception {
-		String bridge = Files.readString(Path.of("distribution/fdroid/src/com/mishiranu/dashchan/ui/StartupNotices.java"));
-		assertTrue(bridge.contains("BooleanSupplier ready) {}"));
-		for (String forbidden : new String[] {"DialogFragment", "SharedPreferences", "MaterialAlertDialogBuilder", "material3_notice"}) {
-			assertFalse(forbidden, bridge.contains(forbidden));
+	@Test public void bothDistributionsUseTheSameMaterialDialogAndResources() throws Exception {
+		Path shared = Path.of("distribution/material3");
+		assertTrue(Files.isRegularFile(shared.resolve("src/com/mishiranu/dashchan/ui/StartupNotices.java")));
+		assertTrue(Files.isRegularFile(shared.resolve("src/com/mishiranu/dashchan/ui/StartupNoticePolicy.java")));
+		for (String locale : new String[] {"values", "values-ru"}) {
+			assertTrue(Files.isRegularFile(shared.resolve("res/" + locale + "/startup_notice.xml")));
 		}
-		assertFalse(Files.exists(Path.of("distribution/fdroid/res/values/startup_notice.xml")));
-		assertFalse(Files.exists(Path.of("distribution/fdroid/src/com/mishiranu/dashchan/ui/StartupNoticePolicy.java")));
+		for (String flavor : new String[] {"github", "fdroid"}) {
+			assertFalse(Files.exists(Path.of("distribution/" + flavor + "/src/com/mishiranu/dashchan/ui/StartupNotices.java")));
+		}
+		String gradle = Files.readString(Path.of("build.gradle"));
+		assertTrue(gradle.contains("['github', 'fdroid'].each"));
+		assertTrue(gradle.contains(".java.srcDir 'distribution/material3/src'"));
+		assertTrue(gradle.contains(".res.srcDir 'distribution/material3/res'"));
 	}
 	@Test public void durableAcknowledgementOccursOnlyInTheExplicitButtonHandler() throws Exception {
-		String text = Files.readString(Path.of("distribution/github/src/com/mishiranu/dashchan/ui/StartupNotices.java"));
+		String text = Files.readString(Path.of("distribution/material3/src/com/mishiranu/dashchan/ui/StartupNotices.java"));
 		assertEquals(1, text.split("\\.commit\\(\\)", -1).length - 1);
 		assertTrue(text.indexOf(".commit()") > text.indexOf("setOnClickListener"));
 		assertTrue(text.contains("editor.commitChecked()"));
