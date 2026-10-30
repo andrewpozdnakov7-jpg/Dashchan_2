@@ -110,6 +110,8 @@ struct Player {
 		int videoStreamIndex;
 		AVCodecContext * audioContext;
 		AVCodecContext * videoContext;
+		// Immutable after init: presentation rotation, clockwise, separate from coded dimensions.
+		int videoRotation;
 		int64_t timelineOffsetMs;
 
 		struct {

@@ -15,6 +15,6 @@ public final class ThreadMotionLayout extends FrameLayout {
 
 	@Override public boolean dispatchTouchEvent(MotionEvent event) {
 		// The visible, transformed page must not have invisible full-screen touch targets.
-		return motionBlocking || super.dispatchTouchEvent(event);
+		return event.getActionMasked() != MotionEvent.ACTION_CANCEL && motionBlocking || super.dispatchTouchEvent(event);
 	}
 }

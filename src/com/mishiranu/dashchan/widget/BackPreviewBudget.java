@@ -5,21 +5,55 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.view.View;
+import com.mishiranu.dashchan.util.InterfaceMotion;
+import java.util.ArrayList;
 import java.util.IdentityHashMap;
+import java.util.WeakHashMap;
 
 /** UI-thread-only, process-local ledger shared by page and gallery predictive snapshots. */
 public final class BackPreviewBudget {
 	public static final long NORMAL_BYTES = 48L * 1024 * 1024, LOW_MEMORY_BYTES = 12L * 1024 * 1024;
+	public static final long PREDICTIVE_BYTES = 256L * 1024 * 1024;
 	public static final float MIN_LINEAR_SCALE = .35f;
 	private static final IdentityHashMap<Bitmap, Long> allocations = new IdentityHashMap<>();
 	private static final IdentityHashMap<Bitmap, Integer> references = new IdentityHashMap<>();
 	private static long bytes, reserved;
+	/** Evicts cache ownership only. A gesture's separate lease keeps its pixels alive. */
+	public interface Cache { boolean evictOldest(); }
+	private static final WeakHashMap<Cache, Boolean> caches = new WeakHashMap<>();
 	private BackPreviewBudget() {}
 	public static long limit(Context context) {
 		ActivityManager manager = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
 		if (manager == null) return LOW_MEMORY_BYTES;
-		return manager.isLowRamDevice() ? LOW_MEMORY_BYTES
-				: Math.min(NORMAL_BYTES, Math.max(LOW_MEMORY_BYTES, manager.getMemoryClass() * 1024L * 1024 / 6));
+		return limitForMemoryClass(manager.getMemoryClass(), manager.isLowRamDevice(), InterfaceMotion.isPredictiveBackEnabled());
+	}
+	static long limitForMemoryClass(int memoryClass, boolean lowRam, boolean predictive) {
+		if (memoryClass <= 0) return LOW_MEMORY_BYTES;
+		long memoryBytes = memoryClass * 1024L * 1024;
+		if (predictive) return Math.min(PREDICTIVE_BYTES, memoryBytes / 2);
+		return lowRam ? LOW_MEMORY_BYTES : Math.min(NORMAL_BYTES, Math.max(LOW_MEMORY_BYTES, memoryBytes / 6));
+	}
+	public static void registerCache(Cache cache) { caches.put(cache, Boolean.TRUE); }
+	public static void unregisterCache(Cache cache) { caches.remove(cache); }
+	public static void trimCaches() {
+		for (Cache cache : new ArrayList<>(caches.keySet())) while (cache.evictOldest()) {}
+	}
+	static void makeRoom(Context context, long requested) {
+		long cap = limit(context);
+		while (usedBytes() > cap - requested) {
+			boolean evicted = false;
+			for (Cache cache : new ArrayList<>(caches.keySet())) {
+				if (cache.evictOldest()) { evicted = true; break; }
+			}
+			if (!evicted) break;
+		}
+	}
+	private static boolean memoryLow(Context context) {
+		ActivityManager manager = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
+		if (manager == null) return false;
+		ActivityManager.MemoryInfo info = new ActivityManager.MemoryInfo();
+		manager.getMemoryInfo(info);
+		return info.lowMemory;
 	}
 	public static long usedBytes() { return bytes + reserved; }
 	public static int[] dimensions(int width, int height, long maxBytes) {
@@ -37,10 +71,15 @@ public final class BackPreviewBudget {
 		return capture(view, maxBytes, background, true);
 	}
 	private static Bitmap capture(View view, long maxBytes, int background, boolean web) {
+		if (!web && PredictiveBackMotion.hasExternalSurface(view)) return null;
+		if (memoryLow(view.getContext())) { trimCaches(); return null; }
+		// Reclaim only the bytes needed by this capture, not an arbitrary fraction of the cache.
+		int[] requestedSize = dimensions(view.getWidth(), view.getHeight(), Math.min(maxBytes, limit(view.getContext())));
+		if (requestedSize == null) return null;
+		makeRoom(view.getContext(), 4L * requestedSize[0] * requestedSize[1]);
 		long allowance = Math.min(maxBytes, Math.max(0, limit(view.getContext()) - usedBytes()));
 		int[] size = dimensions(view.getWidth(), view.getHeight(), allowance);
-		if (size == null || size[0] < view.getWidth() * MIN_LINEAR_SCALE || size[1] < view.getHeight() * MIN_LINEAR_SCALE
-				|| (!web && PredictiveBackMotion.hasExternalSurface(view))) return null;
+		if (size == null || size[0] < view.getWidth() * MIN_LINEAR_SCALE || size[1] < view.getHeight() * MIN_LINEAR_SCALE) return null;
 		long reservation = 4L * size[0] * size[1]; reserved += reservation;
 		Bitmap image = null;
 		try {
@@ -53,7 +92,9 @@ public final class BackPreviewBudget {
 			view.draw(canvas);
 			allocations.put(image, actual); references.put(image, 1); bytes += actual; return image;
 		} catch (RuntimeException | OutOfMemoryError error) {
-			if (image != null) image.recycle(); return null;
+			if (image != null) image.recycle();
+			trimCaches();
+			return null;
 		} finally { reserved -= reservation; }
 	}
 	/** Lease an existing ledger image. Unmanaged bitmaps retain their caller's ownership. */

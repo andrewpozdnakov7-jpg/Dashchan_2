@@ -32,6 +32,10 @@ public class ImportantPostsMarksFastScrollBarDecoration {
 
 	public void draw(int scrollBarLeft, int scrollBarTop, int scrollBarRight, int scrollBarBottom,
 			Canvas canvas, FastScrollGeometry geometry) {
+		draw(scrollBarLeft, scrollBarTop, scrollBarRight, scrollBarBottom, canvas, geometry, null, 0L);
+	}
+	void draw(int scrollBarLeft, int scrollBarTop, int scrollBarRight, int scrollBarBottom,
+			Canvas canvas, FastScrollGeometry geometry, FastScrollProjection projection, long time) {
 		if (data == null || data.totalPostsCount <= 1) {
 			return;
 		}
@@ -43,13 +47,14 @@ public class ImportantPostsMarksFastScrollBarDecoration {
 			return;
 		}
 		drawPostMarks(data.userPostsPositions, userPostMarkPaint, viewportFraction,
-				scrollBarLeft, scrollBarTop, scrollBarRight, scrollBarBottom, canvas);
+				scrollBarLeft, scrollBarTop, scrollBarRight, scrollBarBottom, canvas, projection, time);
 		drawPostMarks(data.repliesPositions, replyMarkPaint, viewportFraction,
-				scrollBarLeft, scrollBarTop, scrollBarRight, scrollBarBottom, canvas);
+				scrollBarLeft, scrollBarTop, scrollBarRight, scrollBarBottom, canvas, projection, time);
 	}
 
 	private void drawPostMarks(List<Integer> postPositions, Paint postMarkPaint, double viewportFraction,
-			int scrollBarLeft, int scrollBarTop, int scrollBarRight, int scrollBarBottom, Canvas canvas) {
+			int scrollBarLeft, int scrollBarTop, int scrollBarRight, int scrollBarBottom, Canvas canvas,
+			FastScrollProjection projection, long time) {
 		int postPositionIndex = 0;
 		while (postPositionIndex < postPositions.size()) {
 			int postPosition = postPositions.get(postPositionIndex++);
@@ -65,10 +70,10 @@ public class ImportantPostsMarksFastScrollBarDecoration {
 			}
 
 			int height = scrollBarBottom - scrollBarTop;
-			float postMarkTop = scrollBarTop + height *
-					FastScrollGeometry.markOffset(postPosition, data.totalPostsCount, viewportFraction);
-			float postMarkEnd = scrollBarTop + height *
-					FastScrollGeometry.markOffset(postPosition + contiguousPostMarks, data.totalPostsCount, viewportFraction);
+			float start = FastScrollGeometry.markOffset(postPosition, data.totalPostsCount, viewportFraction);
+			float end = FastScrollGeometry.markOffset(postPosition + contiguousPostMarks, data.totalPostsCount, viewportFraction);
+			float postMarkTop = scrollBarTop + height * (projection != null ? projection.project(start, time) : start);
+			float postMarkEnd = scrollBarTop + height * (projection != null ? projection.project(end, time) : end);
 			float postMarkHeight = postMarkEnd - postMarkTop;
 			float postMarkMinHeight = postMarkMinSize * contiguousPostMarks;
 			if (postMarkHeight < postMarkMinHeight) {

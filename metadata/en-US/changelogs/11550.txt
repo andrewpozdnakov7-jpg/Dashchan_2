@@ -1,0 +1,11 @@
+**Slooop 3.2.75**
+
+- Continuing to improve experimental Predictive Back on Android 14+ 😺 Reworked previous-page previews and snapshot storage. Starting the animation no longer depends on continuously recreating a snapshot of the current screen.
+- Fixed the long-press menu appearing during the Back gesture in the gallery. Improved touch cancellation on post pages and in reply windows.
+- Fixed scrollbar jumps in lists with hidden threads. When the next page loads in the background, the indicator position now adjusts smoothly.
+- Added support for video rotation metadata: videos with orientation recorded in the file now display correctly in the player, previews and PiP.
+- Refined the experimental Samsung S24 Ultra OneUI 9 fix: aligned the spacing between the new-post, refresh and menu buttons in the top bar.
+
+Predictive Back remains experimental: previews are not yet available for every transition.
+
+Thanks to everyone for testing, logs and help finding bugs! 🐾

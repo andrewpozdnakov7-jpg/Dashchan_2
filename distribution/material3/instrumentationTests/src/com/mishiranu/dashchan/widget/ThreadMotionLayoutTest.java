@@ -11,6 +11,26 @@ import org.junit.runner.RunWith;
 /** Touch ownership only; the phone acceptance pass must also inspect the actual transition pixels. */
 @RunWith(AndroidJUnit4.class)
 public class ThreadMotionLayoutTest {
+	@Test public void cancellationReachesAnExistingChildWhileNewTouchesAreBlocked() {
+		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+			ThreadMotionLayout host = new ThreadMotionLayout(InstrumentationRegistry.getInstrumentation().getTargetContext(), null);
+			int[] cancelled = {0};
+			host.addView(new View(host.getContext()) {
+				@Override public boolean onTouchEvent(MotionEvent event) {
+					if (event.getActionMasked() == MotionEvent.ACTION_CANCEL) cancelled[0]++;
+					return true;
+				}
+			}, new android.widget.FrameLayout.LayoutParams(100, 100));
+			host.measure(View.MeasureSpec.makeMeasureSpec(100, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(100, View.MeasureSpec.EXACTLY));
+			host.layout(0, 0, 100, 100);
+			MotionEvent down = MotionEvent.obtain(0, 0, MotionEvent.ACTION_DOWN, 50, 50, 0);
+			MotionEvent cancel = MotionEvent.obtain(0, 1, MotionEvent.ACTION_CANCEL, 50, 50, 0);
+			try {
+				assertTrue(host.dispatchTouchEvent(down)); host.setMotionBlocking(true);
+				host.dispatchTouchEvent(cancel); assertEquals(1, cancelled[0]);
+			} finally { down.recycle(); cancel.recycle(); }
+		});
+	}
 	@Test public void hiddenUntransformedTargetsCannotReceiveTouchesAndCleanupUnblocksThem() {
 		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
 			ThreadMotionLayout host = new ThreadMotionLayout(

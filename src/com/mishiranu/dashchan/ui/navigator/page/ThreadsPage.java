@@ -208,6 +208,7 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 			extra.cachedPostItems.add(unique);
 			extra.pendingThreadsUpdate = true;
 			cancelAppendScroll();
+			getRecyclerView().prepareFastScrollAppend();
 			publishPendingThreads();
 			extra.visibleThreadsTarget = Math.max(extra.visibleThreadsTarget, countVisibleCachedThreads(extra));
 			endReached = !hasThreadsPage(nextThreadsPage());

@@ -18,7 +18,9 @@ import java.util.function.BooleanSupplier;
 /** Static-photo-only renderer shared by both flavors; does not touch a player or zoom matrix. */
 final class PredictivePhotoPresentation implements PredictiveTransition.Presentation, Runnable {
 	private Runnable finishSession;
+	private Runnable restoredCallback;
 	void setFinishSession(Runnable finishSession) { this.finishSession = finishSession; }
+	void setRestoredCallback(Runnable callback) { restoredCallback = callback; }
 	@Override public void run() { if (finishSession != null) finishSession.run(); else restore(); }
 	static class Target extends PhotoTransitionGeometry.Target {
 		Target(AttachmentView target, PhotoView photo) { super(target, photo); }
@@ -105,5 +107,7 @@ final class PredictivePhotoPresentation implements PredictiveTransition.Presenta
 			if (background != null && root.getBackground() == background) background.setAlpha(backgroundAlpha);
 			if (chrome != null) chrome.setAlpha(chromeAlpha);
 		}
+		Runnable callback = restoredCallback; restoredCallback = null;
+		if (callback != null) callback.run();
 	}
 }

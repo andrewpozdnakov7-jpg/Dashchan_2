@@ -4,6 +4,7 @@ import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.pm.ApplicationInfo;
 import android.graphics.Bitmap;
+import android.graphics.Matrix;
 import android.graphics.Point;
 import android.graphics.SurfaceTexture;
 import android.os.Build;
@@ -314,10 +315,11 @@ public class VideoPlayer implements AutoCloseable {
 		try {
 			player.init(file, null);
 			Point dimensions = player.getDimensions();
+			Point codedDimensions = player.getCodedDimensions();
 			long duration = player.getDuration();
 			long targetPosition = calculateThumbnailPosition(duration);
 			surfaceTexture = new SurfaceTexture(false);
-			surfaceTexture.setDefaultBufferSize(Math.max(dimensions.x, 1), Math.max(dimensions.y, 1));
+			surfaceTexture.setDefaultBufferSize(Math.max(codedDimensions.x, 1), Math.max(codedDimensions.y, 1));
 			surface = new Surface(surfaceTexture);
 			player.setSurface(surface, Math.max(dimensions.x, 1), Math.max(dimensions.y, 1));
 			if (targetPosition > 0L) {
@@ -436,12 +438,16 @@ public class VideoPlayer implements AutoCloseable {
 			if (!VideoPreparationPolicy.dimensionsAllowed(size.x, size.y)) return null;
 			long duration = player.getDuration();
 			long position = requestedPosition > 0 && requestedPosition < duration ? requestedPosition : 0L;
-			output = new VideoFramePreparation(size.x, size.y);
+			Point codedSize = player.getCodedDimensions();
+			output = new VideoFramePreparation(codedSize.x, codedSize.y);
 			long generation = player.setSurface(output.createSurface(), size.x, size.y);
 			if (generation == 0L || cancelled.getAsBoolean()) return null;
 			// Paused seek decodes and presents one frame without starting the audio clock.
 			player.setPosition(position);
 			frame = output.awaitFrame(cancelled);
+			if (frame == null || cancelled.getAsBoolean()) return null;
+			// EGL readback contains the raw buffer; the subsequently adopted live texture rotates separately.
+			frame = player.orientDecodedFrame(frame);
 			if (frame == null || cancelled.getAsBoolean()) return null;
 			SurfaceTexture texture = output.takeTexture();
 			synchronized (player) {
@@ -583,7 +589,7 @@ public class VideoPlayer implements AutoCloseable {
 		return !consumed && sessionData != null;
 	}
 
-	private final int[] summaryOutput = new int[3];
+	private final int[] summaryOutput = new int[4];
 
 	private boolean obtainSummary() {
 		if (isInitialized()) {
@@ -594,7 +600,34 @@ public class VideoPlayer implements AutoCloseable {
 	}
 
 	public Point getDimensions() {
+		if (!obtainSummary()) return null;
+		return VideoOrientation.swapsDimensions(summaryOutput[3])
+				? new Point(summaryOutput[1], summaryOutput[0]) : new Point(summaryOutput[0], summaryOutput[1]);
+	}
+
+	private Point getCodedDimensions() {
 		return obtainSummary() ? new Point(summaryOutput[0], summaryOutput[1]) : null;
+	}
+
+	private int getVideoRotation() {
+		return obtainSummary() ? VideoOrientation.normalize(summaryOutput[3]) : 0;
+	}
+
+	/** Consumes one raw texture/EGL/native readback and applies presentation orientation once. */
+	private Bitmap orientDecodedFrame(Bitmap bitmap) {
+		int rotation = getVideoRotation();
+		if (bitmap == null || rotation == 0) return bitmap;
+		try {
+			Matrix matrix = new Matrix();
+			matrix.setRotate(rotation);
+			Bitmap oriented = Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, true);
+			if (oriented != bitmap) bitmap.recycle();
+			return oriented;
+		} catch (RuntimeException | OutOfMemoryError e) {
+			bitmap.recycle();
+			VideoDiagnostics.recordUi("video_orientation snapshot_failed=" + e.getClass().getSimpleName());
+			return null;
+		}
 	}
 
 	public boolean isAudioPresent() {
@@ -673,6 +706,7 @@ public class VideoPlayer implements AutoCloseable {
 
 	private void onDimensionChange() {
 		if (videoView != null) {
+			if (videoView instanceof PlayerTextureView) ((PlayerTextureView) videoView).updateVideoOrientation();
 			videoView.requestLayout();
 		}
 		Listener listener = this.listener;
@@ -684,6 +718,8 @@ public class VideoPlayer implements AutoCloseable {
 	@SuppressLint("ViewConstructor")
 	private static class PlayerTextureView extends TextureView implements TextureView.SurfaceTextureListener {
 		private final WeakReference<VideoPlayer> player;
+		private final Matrix videoOrientationMatrix = new Matrix();
+		private final float[] videoOrientationValues = new float[9];
 		private final int diagnosticsId = System.identityHashCode(this);
 		private Surface playerSurface;
 		private SurfaceTexture playerSurfaceTexture;
@@ -714,6 +750,21 @@ public class VideoPlayer implements AutoCloseable {
 			VideoDiagnostics.recordUi("texture=" + diagnosticsId + " created");
 		}
 
+		private void updateVideoOrientation() {
+			VideoPlayer player = this.player.get();
+			VideoOrientation.textureTransform(videoOrientationValues, getWidth(), getHeight(),
+					player != null ? player.getVideoRotation() : 0);
+			videoOrientationMatrix.setValues(videoOrientationValues);
+			// Content-only transform: gallery zoom/pan and PiP keep owning the outer View properties.
+			setTransform(videoOrientationMatrix);
+		}
+
+		@Override
+		protected void onSizeChanged(int width, int height, int oldWidth, int oldHeight) {
+			super.onSizeChanged(width, height, oldWidth, oldHeight);
+			updateVideoOrientation();
+		}
+
 		@Override
 		protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
 			super.onMeasure(widthMeasureSpec, heightMeasureSpec);
@@ -740,6 +791,7 @@ public class VideoPlayer implements AutoCloseable {
 			if (player == null) {
 				return;
 			}
+			updateVideoOrientation();
 			if (player.restoreTransferredSurface(this, width, height)) {
 				return;
 			}
@@ -1004,7 +1056,7 @@ public class VideoPlayer implements AutoCloseable {
 		public Bitmap getCurrentFrame() {
 			if (isAvailable() && firstFrameCommitted && getWidth() > 0 && getHeight() > 0) {
 				try {
-					Bitmap bitmap = getBitmap();
+					Bitmap bitmap = captureOrientedFrame(getWidth(), getHeight());
 					if (bitmap != null) {
 						VideoDiagnostics.recordUi("texture=" + diagnosticsId
 								+ " snapshot=" + bitmap.getWidth() + "x" + bitmap.getHeight());
@@ -1021,8 +1073,17 @@ public class VideoPlayer implements AutoCloseable {
 		Bitmap getCommittedPageFrame(int maxEdge) {
 			if (!isAvailable() || !firstFrameCommitted || getWidth() <= 0 || getHeight() <= 0 || maxEdge <= 0) return null;
 			float scale = Math.min(1f, (float) maxEdge / Math.max(getWidth(), getHeight()));
-			try { return getBitmap(Math.max(1, Math.round(getWidth() * scale)), Math.max(1, Math.round(getHeight() * scale))); }
+			try { return captureOrientedFrame(Math.max(1, Math.round(getWidth() * scale)), Math.max(1, Math.round(getHeight() * scale))); }
 			catch (RuntimeException | OutOfMemoryError e) { return null; }
+		}
+
+		private Bitmap captureOrientedFrame(int width, int height) {
+			VideoPlayer player = this.player.get();
+			boolean swap = player != null && VideoOrientation.swapsDimensions(player.getVideoRotation());
+			// TextureView readback omits the View's content transform. Request coded-aspect pixels
+			// before rotating, otherwise the portrait-sized raw readback would already be stretched.
+			Bitmap raw = getBitmap(swap ? height : width, swap ? width : height);
+			return player != null ? player.orientDecodedFrame(raw) : raw;
 		}
 	}
 
@@ -1121,6 +1182,7 @@ public class VideoPlayer implements AutoCloseable {
 				target.playerSurfaceTexture = deferred.surfaceTexture;
 				target.playerSurfaceGeneration = generation;
 				target.surfaceUpdates = 0;
+				target.updateVideoOrientation();
 				target.resetFrameReadiness(deferred.surfaceTexture, true);
 				target.transferredSurfaceStartedMs = surfaceTransferStartedMs;
 				setSurfaceSize(width, height);
@@ -1152,6 +1214,10 @@ public class VideoPlayer implements AutoCloseable {
 	private long setSurface(Surface surface, int width, int height) {
 		synchronized (this) {
 			if (isInitialized()) {
+				// Native scaling policy operates on unrotated decoder buffers, not display dimensions.
+				if (VideoOrientation.swapsDimensions(getVideoRotation())) {
+					int codedWidth = height; height = width; width = codedWidth;
+				}
 				SeekToPosition pendingSeek = seekToPosition;
 				cancelSetPositionLocked(false);
 				long generation = ++nextSurfaceGeneration;
@@ -1174,6 +1240,9 @@ public class VideoPlayer implements AutoCloseable {
 	private void setSurfaceSize(int width, int height) {
 		synchronized (this) {
 			if (isInitialized() && width > 0 && height > 0) {
+				if (VideoOrientation.swapsDimensions(getVideoRotation())) {
+					int codedWidth = height; height = width; width = codedWidth;
+				}
 				holder.setSurfaceSize(sessionData.pointer, width, height);
 			}
 		}
@@ -1385,7 +1454,7 @@ public class VideoPlayer implements AutoCloseable {
 				int[] frame = holder.getCurrentFrame(sessionData.pointer, dimensions);
 				if (frame != null) {
 					try {
-						return Bitmap.createBitmap(frame, dimensions[0], dimensions[1], Bitmap.Config.ARGB_8888);
+						return orientDecodedFrame(Bitmap.createBitmap(frame, dimensions[0], dimensions[1], Bitmap.Config.ARGB_8888));
 					} catch (Exception e) {
 						// Ignore exception
 					}
