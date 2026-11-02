@@ -60,4 +60,14 @@ public final class ReplyPushMessage {
 		return new ReplyPushMessage(eventId, chanName, boardName, threadNumber,
 				trackedPostNumber, replyPostNumber, null, System.currentTimeMillis());
 	}
+
+	ReplyPushMessage withContent(String text, long time) {
+		return new ReplyPushMessage(eventId, chanName, boardName, threadNumber, trackedPostNumber,
+				replyPostNumber, text, time > 0 ? time : timestamp);
+	}
+	boolean sameEvent(ReplyPushMessage other) {
+		return other != null && eventId.equals(other.eventId) && chanName.equals(other.chanName)
+				&& boardName.equals(other.boardName) && threadNumber.equals(other.threadNumber)
+				&& trackedPostNumber.equals(other.trackedPostNumber) && replyPostNumber.equals(other.replyPostNumber);
+	}
 }

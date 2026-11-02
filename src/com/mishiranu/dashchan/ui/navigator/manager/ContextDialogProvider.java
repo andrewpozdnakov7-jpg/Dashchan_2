@@ -1,9 +1,11 @@
 package com.mishiranu.dashchan.ui.navigator.manager;
 
 import android.os.CancellationSignal;
+import android.content.res.Configuration;
 import android.view.View;
 import android.widget.TextView;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.core.view.OneShotPreDrawListener;
 import chan.content.Chan;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
@@ -21,6 +23,7 @@ import com.mishiranu.dashchan.widget.ListPosition;
 import com.mishiranu.dashchan.widget.BackPreviewFrame;
 import com.mishiranu.dashchan.widget.HistoryBackPreview;
 import com.mishiranu.dashchan.util.InterfaceMotion;
+import com.mishiranu.dashchan.media.VideoDiagnostics;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -35,16 +38,30 @@ import java.util.concurrent.ExecutorService;
 final class ContextDialogProvider extends DialogUnit.DialogProvider<ContextDialogProvider>
 		implements UiManager.PostsProvider {
 	static final class Factory extends DialogUnit.DialogProvider.Factory<ContextDialogProvider> {
+		static final class Viewport {
+			final ContextGraph.Key anchor;
+			final int offset, width, direction;
+			final Configuration configuration;
+			Viewport(ContextGraph.Key anchor, int offset, RecyclerView list) {
+				this.anchor = anchor; this.offset = offset;
+				width = list.getWidth(); direction = list.getLayoutDirection();
+				configuration = new Configuration(list.getResources().getConfiguration());
+			}
+			boolean compatible(RecyclerView list) {
+				return width > 0 && width == list.getWidth() && direction == list.getLayoutDirection()
+						&& configuration.equals(list.getResources().getConfiguration());
+			}
+		}
 		static final class Entry {
 			final ContextGraph.Key key;
-			Entry(ContextGraph.Key key) { this.key = key; }
+			final Viewport viewport;
+			Entry(ContextGraph.Key key, Viewport viewport) { this.key = key; this.viewport = viewport; }
 		}
 		ContextGraph.Key target;
 		final ArrayDeque<Entry> history = new ArrayDeque<>();
 		long cacheEpoch = PagesDatabase.getInstance().getContextEpoch();
 		boolean cacheErased;
-		PostNumber anchor;
-		int anchorOffset;
+		Viewport viewport;
 		final PostNumber original;
 		Factory(String chan, PostItem post) {
 			target = ContextSource.key(chan, post.getBoardName(), post.getThreadNumber(), post.getPostNumber());
@@ -67,6 +84,7 @@ final class ContextDialogProvider extends DialogUnit.DialogProvider<ContextDialo
 	private TextView status;
 	private int generation;
 	private long loadStarted;
+	private OneShotPreDrawListener restoreDraw;
 	private boolean closed, loading, failed, cacheErased, updatesAvailable, selectedAnchor = true;
 	private ContextGraph.Result displayedResult;
 	private final Runnable invalidateCache;
@@ -85,7 +103,7 @@ final class ContextDialogProvider extends DialogUnit.DialogProvider<ContextDialo
 		}
 	}
 	private final Runnable prepareFrame = () -> {
-		if (closed || previewHost == null || loading || failed || displayedResult == null
+		if (closed || previewHost == null || loading || failed || restoreDraw != null || displayedResult == null
 				|| backPreview != null && backPreview.isBusy()) return;
 		if (currentFrame != null) currentFrame.release();
 		currentFrame = BackPreviewFrame.capture(previewHost, false); preparedScrollRevision = scrollRevision;
@@ -115,9 +133,12 @@ final class ContextDialogProvider extends DialogUnit.DialogProvider<ContextDialo
 	}
 	@Override public void clearBackPreviews() { clearPreviews(); }
 	@Override public HistoryBackPreview startBackPreview(boolean fromLeft) {
-		if (!canHandleBack() || previewHost == null || loading || failed || preparedScrollRevision != scrollRevision
+		if (!canHandleBack() || previewHost == null || loading || failed || restoreDraw != null || preparedScrollRevision != scrollRevision
 				|| !InterfaceMotion.isPredictiveBackEnabled()) return null;
 		Factory.Entry entry = factory.history.peekLast(); SavedPreview saved = previews.get(entry);
+		if (entry.viewport != null && (list == null || !entry.viewport.compatible(list))) {
+			record("preview_rejected reason=viewport_incompatible"); return null;
+		}
 		if (saved == null || saved.epoch != PagesDatabase.getInstance().getContextEpoch()
 				|| !saved.revision.equals(PagesDatabase.getInstance().getCacheState(new PagesDatabase.ThreadKey(
 						entry.key.source(), entry.key.board(), entry.key.thread())))) return null;
@@ -146,7 +167,7 @@ final class ContextDialogProvider extends DialogUnit.DialogProvider<ContextDialo
 		invalidateCache = this::onCacheInvalidated;
 		cacheErased = factory.cacheErased || factory.cacheEpoch != PagesDatabase.getInstance().getContextEpoch();
 		PagesDatabase.getInstance().registerContextInvalidation(invalidateCache);
-		selectedAnchor = factory.anchor == null;
+		selectedAnchor = factory.viewport == null;
 		// Do not briefly render a potentially stale UI post before the local snapshot arrives.
 		load();
 	}
@@ -194,7 +215,9 @@ final class ContextDialogProvider extends DialogUnit.DialogProvider<ContextDialo
 		if (closed || factory.history.isEmpty()) return false;
 		Factory.Entry entry = factory.history.removeLast();
 		SavedPreview saved = previews.remove(entry); if (saved != null) saved.frame.release();
-		factory.target = entry.key; resetSelection(); load(); return true;
+		factory.target = entry.key; resetSelection();
+		factory.viewport = entry.viewport; selectedAnchor = entry.viewport == null;
+		load(); return true;
 	}
 	@Override public void onRequestUpdateDemandSet(UiManager.DemandSet demand, int index) {
 		demand.lastInList = index == visible.size() - 1;
@@ -207,7 +230,7 @@ final class ContextDialogProvider extends DialogUnit.DialogProvider<ContextDialo
 			cacheErased |= factory.cacheEpoch != PagesDatabase.getInstance().getContextEpoch();
 			worker = ConcurrentUtils.newSingleThreadPool(3000, "DiscussionContext", null);
 			PagesDatabase.getInstance().registerContextInvalidation(invalidateCache);
-			selectedAnchor = factory.anchor == null;
+			selectedAnchor = factory.viewport == null;
 		}
 		list = recycler;
 		status = new TextView(uiManager.getContext());
@@ -230,6 +253,7 @@ final class ContextDialogProvider extends DialogUnit.DialogProvider<ContextDialo
 		status.setVisibility(View.VISIBLE);
 	}
 	private void cancelWork() {
+		if (restoreDraw != null) { restoreDraw.removeListener(); restoreDraw = null; }
 		if (currentFrame != null) { currentFrame.release(); currentFrame = null; }
 		if (backPreview != null && !backPreview.isCommitting()) backPreview.close();
 		generation++;
@@ -312,11 +336,7 @@ final class ContextDialogProvider extends DialogUnit.DialogProvider<ContextDialo
 			loading = false; failed = true; updateStatus(); return;
 		}
 		displayedResult = result;
-		ListPosition anchor = list != null ? ListPosition.obtain(list, null) : null;
-		PostNumber anchorNumber = factory.anchor != null ? factory.anchor : anchor != null && anchor.position < visible.size()
-				? visible.get(anchor.position).getPostNumber() : null;
-		int anchorOffset = factory.anchor != null ? factory.anchorOffset : anchor != null ? anchor.offset : 0;
-		factory.anchor = null;
+		Factory.Viewport viewport = factory.viewport != null ? factory.viewport : !selectedAnchor ? captureViewport() : null;
 		visible.clear(); placeholders.clear(); retained.clear();
 		Chan chan = Chan.get(factory.target.source());
 		boolean hiddenGap = false;
@@ -342,22 +362,13 @@ final class ContextDialogProvider extends DialogUnit.DialogProvider<ContextDialo
 		if (result.limited()) {
 			appendStatus(R.string.context_limited);
 		}
-		switchState(DialogUnit.State.LIST, () -> {
-			if (list == null) return;
-			PostNumber wanted = selectedAnchor ? ContextSource.number(factory.target) : anchorNumber;
-			for (int i = 0; wanted != null && i < visible.size(); i++) if (visible.get(i).getPostNumber().equals(wanted)) {
-				new ListPosition(i, selectedAnchor ? 0 : anchorOffset).apply(list); break;
-			}
-			selectedAnchor = false;
-			if (backPreview != null) backPreview.destinationReady();
-			scheduleFrame();
-		});
+		switchState(DialogUnit.State.LIST, () -> restoreViewport(viewport));
 		android.util.Log.d("DiscussionContext", "display cards=" + visible.size() + " bindMs="
 				+ (android.os.SystemClock.elapsedRealtime() - started) + " totalMs="
 				+ (android.os.SystemClock.elapsedRealtime() - loadStarted));
 	}
 	private void resetSelection() {
-		factory.anchor = null; retained.clear(); revealed.clear(); selectedAnchor = true;
+		factory.viewport = null; retained.clear(); revealed.clear(); selectedAnchor = true;
 		displayedResult = null; visible.clear(); placeholders.clear();
 		switchState(DialogUnit.State.LIST, null);
 	}
@@ -367,7 +378,7 @@ final class ContextDialogProvider extends DialogUnit.DialogProvider<ContextDialo
 		if (factory.history.size() == 5) {
 			SavedPreview old = previews.remove(factory.history.removeFirst()); if (old != null) old.frame.release();
 		}
-		Factory.Entry entry = new Factory.Entry(factory.target);
+		Factory.Entry entry = new Factory.Entry(factory.target, captureViewport());
 		BackPreviewFrame frame = previewHost != null && !loading && !failed && revealed.isEmpty() && displayedResult != null
 				? BackPreviewFrame.capture(previewHost, false) : null;
 		if (frame != null && snapshot != null) {
@@ -375,6 +386,61 @@ final class ContextDialogProvider extends DialogUnit.DialogProvider<ContextDialo
 			previews.put(entry, new SavedPreview(frame, snapshot));
 		} else if (frame != null) frame.release();
 		factory.history.addLast(entry); factory.target = key(post); resetSelection(); load();
+	}
+	private Factory.Viewport captureViewport() {
+		ListPosition position = list != null ? ListPosition.obtain(list, null) : null;
+		return position != null && position.position >= 0 && position.position < visible.size()
+				? new Factory.Viewport(key(visible.get(position.position)), position.offset, list) : null;
+	}
+	private void record(String reason) {
+		if (VideoDiagnostics.isExtendedRecording()) VideoDiagnostics.recordUi("predictive_context " + reason
+				+ " generation=" + generation + " visible=" + visible.size() + " history=" + factory.history.size());
+	}
+	private int visiblePosition(ContextGraph.Key wanted) {
+		for (int i = 0; i < visible.size(); i++) {
+			PostItem post = visible.get(i);
+			if (key(post).equals(wanted) && !placeholders.containsKey(post.getPostNumber())
+					&& !configurationSet.postStateProvider.isHiddenResolve(post)) return i;
+		}
+		return -1;
+	}
+	private void restoreViewport(Factory.Viewport viewport) {
+		if (list == null || closed) return;
+		int owner = generation;
+		RecyclerView recycler = list;
+		ContextGraph.Key target = factory.target;
+		if (restoreDraw != null) { restoreDraw.removeListener(); restoreDraw = null; }
+		Runnable restore = () -> {
+			if (closed || generation != owner || list != recycler || !factory.target.equals(target)) return;
+			int position = -1, offset = 0;
+			if (viewport != null && viewport.compatible(recycler)) {
+				position = visiblePosition(viewport.anchor);
+				if (position >= 0) offset = viewport.offset;
+				else record("restore_fallback reason=anchor_missing_or_hidden");
+			} else if (viewport != null) record("restore_fallback reason=viewport_incompatible");
+			if (position < 0) position = visiblePosition(target);
+			if (position < 0 && !visible.isEmpty()) {
+				position = 0;
+				for (int i = 0; i < visible.size(); i++) if (!placeholders.containsKey(visible.get(i).getPostNumber())) {
+					position = i; break;
+				}
+			}
+			if (position >= 0) new ListPosition(position, offset).apply(recycler);
+			selectedAnchor = false;
+			// Scroll-to-offset is consumed by layout. Hold the old pixels until that layout's pre-draw.
+			restoreDraw = OneShotPreDrawListener.add(recycler, () -> {
+				if (closed || generation != owner || list != recycler || !factory.target.equals(target)) return;
+				restoreDraw = null;
+				if (factory.viewport == viewport) factory.viewport = null;
+				if (backPreview != null) backPreview.destinationReady();
+				scheduleFrame();
+			});
+		};
+		if (recycler.getWidth() > 0) restore.run();
+		else restoreDraw = OneShotPreDrawListener.add(recycler, () -> {
+			if (closed || generation != owner || list != recycler || !factory.target.equals(target)) return;
+			restoreDraw = null; restore.run();
+		});
 	}
 	@Override public boolean onItemClick(RecyclerView.ViewHolder holder, int position, PostItem post, boolean longClick) {
 		if (placeholders.containsKey(post.getPostNumber())) return true;
@@ -401,17 +467,15 @@ final class ContextDialogProvider extends DialogUnit.DialogProvider<ContextDialo
 	}
 	@Override public void onCancel() {
 		if (closed) return;
+		if (factory.viewport == null) factory.viewport = captureViewport();
+		closed = true;
 		clearPreviews();
 		Preferences.PREFERENCES.unregister(previewPreferences);
 		if (previewMemory != null) { previewMemory.close(); previewMemory = null; }
 		if (previewHost != null) previewHost.getViewTreeObserver().removeOnScrollChangedListener(previewScroll);
 		previewHost = null;
 		PagesDatabase.getInstance().unregisterContextInvalidation(invalidateCache);
-		ListPosition position = list != null ? ListPosition.obtain(list, null) : null;
-		if (position != null && position.position < visible.size()) {
-			factory.anchor = visible.get(position.position).getPostNumber(); factory.anchorOffset = position.offset;
-		}
-		closed = true; cancelWork(); worker.shutdownNow(); snapshot = null; displayedResult = null;
+		cancelWork(); worker.shutdownNow(); snapshot = null; displayedResult = null;
 		stateListener = null;
 		visible.clear(); placeholders.clear(); list = null; status = null;
 	}

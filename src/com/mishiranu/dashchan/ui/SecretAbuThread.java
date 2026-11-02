@@ -132,12 +132,14 @@ public final class SecretAbuThread {
 		footer.setTextSize(12);
 		footer.setAlpha(0.65f);
 		footer.setPadding(padding, 0, padding, padding / 2);
+		com.mishiranu.dashchan.widget.InterfaceAppearance.compactFooter(footer);
 		card.addView(footer);
 		Button hide = new Button(context, null, android.R.attr.borderlessButtonStyle);
 		hide.setText(R.string.hide);
 		hide.setOnClickListener(v -> tryHide(state));
 		card.addView(hide, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
 				ViewGroup.LayoutParams.WRAP_CONTENT));
+		com.mishiranu.dashchan.widget.InterfaceAppearance.standardCustomAction(hide, false);
 		return new LocalHolder(card, nativeHolder, postItem, configuration, false);
 	}
 

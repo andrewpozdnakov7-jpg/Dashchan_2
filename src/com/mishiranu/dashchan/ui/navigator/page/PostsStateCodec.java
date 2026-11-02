@@ -16,7 +16,6 @@ final class PostsStateCodec {
 	static class ThreadState {
 		public final HashSet<PostNumber> expandedPosts = new HashSet<>();
 		public final HashSet<PostNumber> unreadPosts = new HashSet<>();
-		public boolean isAddedToHistory = false;
 		public String threadTitle;
 		public PostNumber scrollToPostNumber;
 		public Set<PostNumber> selectedPosts;
@@ -31,7 +30,8 @@ final class PostsStateCodec {
 		for (PostNumber number : state.unreadPosts) {
 			number.writeToParcel(dest, flags);
 		}
-		dest.writeByte((byte) (state.isAddedToHistory ? 1 : 0));
+		// Reserved legacy history flag. A new visit must not inherit it from a saved page.
+		dest.writeByte((byte) 0);
 		dest.writeString(state.threadTitle);
 		dest.writeByte((byte) (state.scrollToPostNumber != null ? 1 : 0));
 		if (state.scrollToPostNumber != null) {
@@ -54,7 +54,7 @@ final class PostsStateCodec {
 		for (int i = 0; i < unreadPostsCount; i++) {
 			parcelableExtra.unreadPosts.add(PostNumber.CREATOR.createFromParcel(source));
 		}
-		parcelableExtra.isAddedToHistory = source.readByte() != 0;
+		source.readByte(); // Consume the legacy history flag without restoring visit state.
 		parcelableExtra.threadTitle = source.readString();
 		if (source.readByte() != 0) {
 			parcelableExtra.scrollToPostNumber = PostNumber.CREATOR.createFromParcel(source);

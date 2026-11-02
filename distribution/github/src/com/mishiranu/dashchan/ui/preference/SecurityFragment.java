@@ -25,7 +25,7 @@ public final class SecurityFragment extends PreferenceFragment {
 	private static final String GUIDE_URL = "https://github.com/andrewpozdnakov7-jpg/Dashchan_2/wiki/Security";
 	private final ArrayList<Preference<?>> items = new ArrayList<>();
 	private final ArrayList<Preference<?>> protectedItems = new ArrayList<>();
-	private CheckPreference downloadsToggle, screenshotsToggle, pipToggle;
+	private CheckPreference downloadsToggle, screenshotsToggle, pipToggle, replyNotificationsToggle;
 	private AuthenticationPolicy.Mode displayedMode;
 	@Override protected SharedPreferences getPreferences() { return Preferences.PREFERENCES; }
 	@Override public void onViewCreated(@NonNull View view, Bundle state) {
@@ -56,6 +56,8 @@ public final class SecurityFragment extends PreferenceFragment {
 		screenshotsToggle.setOnClickListener(p -> open(AppLockActivity.SCREENSHOTS)); protectedItems.add(screenshotsToggle);
 		pipToggle = addCheck(false, null, false, R.string.security_hide_pip_video, R.string.security_hide_pip_video_summary);
 		pipToggle.setOnClickListener(p -> open(AppLockActivity.PIP_VIDEO)); protectedItems.add(pipToggle);
+		replyNotificationsToggle = addCheck(false, null, true, R.string.security_hide_reply_text, R.string.security_hide_reply_text_summary);
+		replyNotificationsToggle.setOnClickListener(p -> open(AppLockActivity.REPLY_NOTIFICATIONS)); protectedItems.add(replyNotificationsToggle);
 		button(R.string.security_additional_pin, AppLockActivity.ADDITIONAL, "additional");
 		downloadsToggle = addCheck(false, null, false, R.string.security_delete_downloads, 0);
 		downloadsToggle.setOnClickListener(p -> open(AppLockActivity.DOWNLOADS)); protectedItems.add(downloadsToggle);
@@ -103,13 +105,14 @@ public final class SecurityFragment extends PreferenceFragment {
 		try {
 			screenshotsToggle.setValue(enabled && SecurityStore.update(requireContext(), s -> s.optBoolean(SecurityStore.ALLOW_SCREENSHOTS, false)));
 			pipToggle.setValue(enabled && SecurityStore.hidePipVideo(requireContext()));
+			replyNotificationsToggle.setValue(enabled && SecurityStore.hideReplyTextInBackground(requireContext()));
 			downloadsToggle.setValue(SecurityStore.update(requireContext(), s -> s.has("delete_downloads_uri")));
 			downloadsToggle.setEnabled(enabled && SecurityStore.update(requireContext(), s -> s.has("additional")));
-		} catch (IOException ignored) { downloadsToggle.setValue(false); screenshotsToggle.setValue(false); pipToggle.setValue(false); }
+		} catch (IOException ignored) { downloadsToggle.setValue(false); screenshotsToggle.setValue(false); pipToggle.setValue(false); replyNotificationsToggle.setValue(true); }
 		for (Preference<?> item : items) item.invalidate();
 	}
 	@Override public void onDestroyView() {
-		items.clear(); protectedItems.clear(); downloadsToggle = null; screenshotsToggle = null; pipToggle = null; displayedMode = null; super.onDestroyView();
+		items.clear(); protectedItems.clear(); downloadsToggle = null; screenshotsToggle = null; pipToggle = null; replyNotificationsToggle = null; displayedMode = null; super.onDestroyView();
 	}
 	@Override public void onViewStateRestored(Bundle state) {
 		super.onViewStateRestored(state);

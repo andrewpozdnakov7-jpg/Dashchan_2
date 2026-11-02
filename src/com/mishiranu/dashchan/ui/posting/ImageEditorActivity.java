@@ -38,6 +38,7 @@ import com.mishiranu.dashchan.content.model.FileHolder;
 import com.mishiranu.dashchan.content.storage.DraftsStorage;
 import com.mishiranu.dashchan.util.ViewUtils;
 import com.mishiranu.dashchan.widget.ThemeEngine;
+import com.mishiranu.dashchan.widget.InterfaceAppearance;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -160,6 +161,7 @@ public class ImageEditorActivity extends ComponentActivity {
 		LinearLayout root = new LinearLayout(this);
 		root.setOrientation(LinearLayout.VERTICAL);
 		root.setBackgroundColor(0xff101010);
+		InterfaceAppearance.mediaWindow(root);
 		setContentView(root);
 		root.setOnApplyWindowInsetsListener((v, insets) -> {
 			android.graphics.Insets cutout = insets.getInsetsIgnoringVisibility(WindowInsets.Type.displayCutout());
@@ -173,9 +175,11 @@ public class ImageEditorActivity extends ComponentActivity {
 		header.setPadding((int) (4f * density), 0, (int) (4f * density), 0);
 		header.setBackgroundColor(0xff202124);
 		root.addView(header, ViewGroup.LayoutParams.MATCH_PARENT, (int) (56f * density));
+		InterfaceAppearance.mediaPanel(header, true);
 		ImageButton cancelButton = createIconButton(R.drawable.ic_editor_close, android.R.string.cancel);
 		cancelButton.setOnClickListener(v -> cancelEditing());
 		header.addView(cancelButton, (int) (34f * density), ViewGroup.LayoutParams.MATCH_PARENT);
+		InterfaceAppearance.mediaIcon(cancelButton);
 		TextView title = new TextView(this);
 		title.setText(R.string.image_editor);
 		title.setTextColor(Color.WHITE);
@@ -183,10 +187,12 @@ public class ImageEditorActivity extends ComponentActivity {
 		title.setGravity(Gravity.CENTER);
 		header.addView(title, 0, ViewGroup.LayoutParams.MATCH_PARENT);
 		((LinearLayout.LayoutParams) title.getLayoutParams()).weight = 1f;
+		InterfaceAppearance.mediaHeading(title);
 		saveButton = createIconButton(R.drawable.ic_editor_done, android.R.string.ok);
 		saveButton.setEnabled(false);
 		saveButton.setOnClickListener(v -> onSaveButtonClicked());
 		header.addView(saveButton, (int) (34f * density), ViewGroup.LayoutParams.MATCH_PARENT);
+		InterfaceAppearance.mediaIcon(saveButton);
 
 		content = new FrameLayout(this);
 		content.setBackgroundColor(Color.BLACK);
@@ -195,6 +201,7 @@ public class ImageEditorActivity extends ComponentActivity {
 		progressBar = new ProgressBar(this);
 		content.addView(progressBar, ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
 		((FrameLayout.LayoutParams) progressBar.getLayoutParams()).gravity = Gravity.CENTER;
+		InterfaceAppearance.mediaLoading(progressBar);
 		statusView = new TextView(this);
 		statusView.setText(R.string.image_editor_loading);
 		statusView.setTextColor(Color.WHITE);
@@ -203,12 +210,14 @@ public class ImageEditorActivity extends ComponentActivity {
 				ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER);
 		statusParams.topMargin = (int) (56f * density);
 		content.addView(statusView, statusParams);
+		InterfaceAppearance.mediaBody(statusView);
 
 		HorizontalScrollView toolsScroll = new HorizontalScrollView(this);
 		toolsScroll.setFillViewport(true);
 		toolsScroll.setHorizontalScrollBarEnabled(false);
 		toolsScroll.setBackgroundColor(0xff202124);
 		root.addView(toolsScroll, ViewGroup.LayoutParams.MATCH_PARENT, (int) (58f * density));
+		InterfaceAppearance.mediaPanel(toolsScroll, true);
 		tools = new LinearLayout(this);
 		tools.setGravity(Gravity.CENTER);
 		tools.setPadding((int) (4f * density), 0, (int) (4f * density), 0);
@@ -278,7 +287,8 @@ public class ImageEditorActivity extends ComponentActivity {
 		float density = getResources().getDisplayMetrics().density;
 		LinearLayout layout = new LinearLayout(this);
 		layout.setOrientation(LinearLayout.VERTICAL);
-		int padding = (int) (20f * density);
+		int padding = (int) ((InterfaceAppearance.isEnabled(this)
+				? com.mishiranu.dashchan.widget.AppearanceShapes.SPACE_24 : 20f) * density);
 		layout.setPadding(padding, (int) (8f * density), padding, 0);
 
 		TextView widthLabel = new TextView(this);
@@ -299,6 +309,7 @@ public class ImageEditorActivity extends ComponentActivity {
 			@Override public void onStopTrackingTouch(SeekBar seekBar) {}
 		});
 		updateWidthLabel.run();
+		InterfaceAppearance.mediaBody(widthLabel); InterfaceAppearance.mediaSlider(widthSeek);
 
 		TextView colorLabel = new TextView(this);
 		colorLabel.setText(R.string.image_editor_brush_color);
@@ -306,6 +317,7 @@ public class ImageEditorActivity extends ComponentActivity {
 				ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
 		colorLabelParams.topMargin = (int) (8f * density);
 		layout.addView(colorLabel, colorLabelParams);
+		InterfaceAppearance.mediaBody(colorLabel);
 		GridLayout colorsLayout = new GridLayout(this);
 		colorsLayout.setColumnCount(3);
 		colorsLayout.setRowCount(2);
@@ -338,7 +350,7 @@ public class ImageEditorActivity extends ComponentActivity {
 		}
 		updateColors.run();
 
-		new com.mishiranu.dashchan.content.security.SecureDialogBuilder(this).setTitle(R.string.image_editor_marker).setView(layout)
+		com.mishiranu.dashchan.content.security.SecureDialogBuilder.media(this).setTitle(R.string.image_editor_marker).setView(layout)
 				.setNegativeButton(android.R.string.cancel, null)
 				.setPositiveButton(android.R.string.ok, (dialog, which) -> {
 					brushWidthRatio = (widthSeek.getProgress() + 5) / 1000f;
@@ -360,8 +372,10 @@ public class ImageEditorActivity extends ComponentActivity {
 	private void showStickerPicker() {
 		float density = getResources().getDisplayMetrics().density;
 		GridLayout grid = new GridLayout(this);
-		grid.setColumnCount(3);
-		grid.setRowCount((STICKERS.length + 2) / 3);
+		int columns = InterfaceAppearance.isEnabled(this) ? Math.max(1, Math.min(3,
+				(com.mishiranu.dashchan.util.ViewUtils.getWindowContentSize(this).x - Math.round(64 * density)) / Math.round(76 * density))) : 3;
+		grid.setColumnCount(columns);
+		grid.setRowCount((STICKERS.length + columns - 1) / columns);
 		int padding = (int) (8f * density);
 		grid.setPadding(padding, padding, padding, padding);
 		FrameLayout container = new FrameLayout(this);
@@ -385,8 +399,9 @@ public class ImageEditorActivity extends ComponentActivity {
 			params.setMargins((int) (2f * density), (int) (2f * density),
 					(int) (2f * density), (int) (2f * density));
 			grid.addView(button, params);
+			InterfaceAppearance.mediaIcon(button);
 		}
-		dialog[0] = new com.mishiranu.dashchan.content.security.SecureDialogBuilder(this).setTitle(R.string.image_editor_sticker_hint)
+		dialog[0] = com.mishiranu.dashchan.content.security.SecureDialogBuilder.media(this).setTitle(R.string.image_editor_sticker_hint)
 				.setView(container).setNegativeButton(android.R.string.cancel, null).create();
 		dialog[0].show();
 	}
@@ -396,6 +411,7 @@ public class ImageEditorActivity extends ComponentActivity {
 		button.setOnClickListener(listener);
 		int size = (int) (34f * getResources().getDisplayMetrics().density);
 		tools.addView(button, size, ViewGroup.LayoutParams.MATCH_PARENT);
+		InterfaceAppearance.mediaIcon(button);
 		return button;
 	}
 
@@ -543,10 +559,12 @@ public class ImageEditorActivity extends ComponentActivity {
 			statusView.setGravity(Gravity.CENTER);
 			content.addView(progressBar, ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
 			((FrameLayout.LayoutParams) progressBar.getLayoutParams()).gravity = Gravity.CENTER;
+			InterfaceAppearance.mediaLoading(progressBar);
 			FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
 					ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER);
 			params.topMargin = (int) (56f * getResources().getDisplayMetrics().density);
 			content.addView(statusView, params);
+			InterfaceAppearance.mediaBody(statusView);
 		} else {
 			if (progressBar != null) content.removeView(progressBar);
 			if (statusView != null) content.removeView(statusView);
@@ -554,7 +572,7 @@ public class ImageEditorActivity extends ComponentActivity {
 	}
 
 	private void showFailure(int messageResId) {
-		new com.mishiranu.dashchan.content.security.SecureDialogBuilder(this).setMessage(messageResId).setPositiveButton(android.R.string.ok, null).show();
+		com.mishiranu.dashchan.content.security.SecureDialogBuilder.media(this).setMessage(messageResId).setPositiveButton(android.R.string.ok, null).show();
 	}
 
 	@Override

@@ -277,7 +277,9 @@ public class PrivateBrowserActivity extends StateActivity implements DownloadLis
 		if (started && backRoute != 2) { performDefaultBack(); return; }
 		if (webView != null && webView.canGoBack()) {
 			WebView expected = webView;
-			if (historyPreview == null || !historyPreview.commit(() -> { if (webView == expected) expected.goBack(); })) webView.goBack();
+			// A consumed old gesture must not become a second Back. Button Back has no preview session.
+			if (!started || historyPreview == null
+					|| !historyPreview.commit(() -> { if (webView == expected) expected.goBack(); })) webView.goBack();
 		} else {
 			performDefaultBack();
 		}

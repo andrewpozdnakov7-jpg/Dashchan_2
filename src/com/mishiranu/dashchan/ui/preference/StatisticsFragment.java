@@ -40,14 +40,12 @@ public class StatisticsFragment extends BaseListFragment {
 	@Override
 	public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
 		ExpandedLayout root = (ExpandedLayout) super.onCreateView(inflater, container, savedInstanceState);
-		if (InterfaceAppearance.isEnabled(root.getContext())) {
-			RecyclerView recycler = getRecyclerView();
-			ViewGroup.LayoutParams params = recycler.getLayoutParams();
-			root.removeView(recycler);
-			TableLayout table = new TableLayout(root.getContext(), recycler);
-			root.addView(table, 0, params);
-			root.setRecyclerView(recycler);
-		}
+		RecyclerView recycler = getRecyclerView();
+		ViewGroup.LayoutParams params = recycler.getLayoutParams();
+		root.removeView(recycler);
+		TableLayout table = new TableLayout(root.getContext(), recycler);
+		root.addView(table, 0, params);
+		root.setRecyclerView(recycler);
 		return root;
 	}
 
@@ -90,43 +88,52 @@ public class StatisticsFragment extends BaseListFragment {
 						new PostDateFormatter(requireContext()).formatDateTime(startTime)) : null);
 
 		ArrayList<Adapter.ListItem> listItems = new ArrayList<>();
+		String repliesTitle = getString(R.string.statistics_replies_received) + "\n"
+				+ getString(R.string.statistics_replies_since__format, new PostDateFormatter(requireContext())
+						.formatDate(StatisticsStorage.getInstance().getRepliesStartTime()));
 		listItems.add(new Adapter.ListItem(null, getString(R.string.views),
-				getString(R.string.posts), getString(R.string.threads)));
+				getString(R.string.posts), getString(R.string.threads), repliesTitle));
 
 		HashMap<String, StatisticsStorage.StatisticsItem> statisticsItems = StatisticsStorage.getInstance().getItems();
 		int totalThreadsViewed = 0;
 		int totalPostsSent = 0;
 		int totalThreadsCreated = 0;
+		long totalRepliesReceived = 0;
 		for (HashMap.Entry<String, StatisticsStorage.StatisticsItem> entry : statisticsItems.entrySet()) {
 			ChanConfiguration.Statistics statistics = Chan.get(entry.getKey()).configuration.safe().obtainStatistics();
 			StatisticsStorage.StatisticsItem statisticsItem = entry.getValue();
-			if (statistics.threadsViewed && statisticsItem.threadsViewed > 0) {
+			if (statistics != null && statistics.threadsViewed && statisticsItem.threadsViewed > 0) {
 				totalThreadsViewed += statisticsItem.threadsViewed;
 			}
-			if (statistics.postsSent && statisticsItem.postsSent > 0) {
+			if (statistics != null && statistics.postsSent && statisticsItem.postsSent > 0) {
 				totalPostsSent += statisticsItem.postsSent;
 			}
-			if (statistics.threadsCreated && statisticsItem.threadsCreated > 0) {
+			if (statistics != null && statistics.threadsCreated && statisticsItem.threadsCreated > 0) {
 				totalThreadsCreated += statisticsItem.threadsCreated;
 			}
+			totalRepliesReceived += statisticsItem.repliesReceived;
 		}
 		listItems.add(new Adapter.ListItem(getString(R.string.total), Integer.toString(totalThreadsViewed),
-				Integer.toString(totalPostsSent), Integer.toString(totalThreadsCreated)));
+				Integer.toString(totalPostsSent), Integer.toString(totalThreadsCreated), Long.toString(totalRepliesReceived)));
 
 		for (Chan chan : ChanManager.getInstance().getAvailableChans()) {
 			StatisticsStorage.StatisticsItem statisticsItem = statisticsItems.get(chan.name);
 			if (statisticsItem != null) {
 				ChanConfiguration.Statistics statistics = chan.configuration.safe().obtainStatistics();
-				if (statistics.threadsViewed && statistics.postsSent && statistics.threadsCreated) {
-					int threadsViewed = statistics.threadsViewed ? statisticsItem.threadsViewed : -1;
-					int postsSent = statistics.postsSent ? statisticsItem.postsSent : -1;
-					int threadsCreated = statistics.threadsCreated ? statisticsItem.threadsCreated : -1;
+				if (statisticsItem.repliesReceived > 0 || statistics != null
+						&& (statistics.threadsViewed || statistics.postsSent || statistics.threadsCreated)) {
+					String threadsViewed = statistics != null && statistics.threadsViewed
+							? Integer.toString(statisticsItem.threadsViewed) : "—";
+					String postsSent = statistics != null && statistics.postsSent
+							? Integer.toString(statisticsItem.postsSent) : "—";
+					String threadsCreated = statistics != null && statistics.threadsCreated
+							? Integer.toString(statisticsItem.threadsCreated) : "—";
 					String title = chan.configuration.getTitle();
 					if (StringUtils.isEmpty(title)) {
 						title = chan.name;
 					}
-					listItems.add(new Adapter.ListItem(title, Integer.toString(threadsViewed),
-							Integer.toString(postsSent), Integer.toString(threadsCreated)));
+					listItems.add(new Adapter.ListItem(title, threadsViewed,
+							postsSent, threadsCreated, Long.toString(statisticsItem.repliesReceived)));
 				}
 			}
 		}
@@ -156,12 +163,14 @@ public class StatisticsFragment extends BaseListFragment {
 			public final String text2;
 			public final String text3;
 			public final String text4;
+			public final String text5;
 
-			public ListItem(String text1, String text2, String text3, String text4) {
+			public ListItem(String text1, String text2, String text3, String text4, String text5) {
 				this.text1 = text1;
 				this.text2 = text2;
 				this.text3 = text3;
 				this.text4 = text4;
+				this.text5 = text5;
 			}
 		}
 
@@ -170,13 +179,15 @@ public class StatisticsFragment extends BaseListFragment {
 			public final TextView text2;
 			public final TextView text3;
 			public final TextView text4;
+			public final TextView text5;
 
-			public ViewHolder(@NonNull View itemView, TextView text1, TextView text2, TextView text3, TextView text4) {
+			public ViewHolder(@NonNull View itemView, TextView text1, TextView text2, TextView text3, TextView text4, TextView text5) {
 				super(itemView);
 				this.text1 = text1;
 				this.text2 = text2;
 				this.text3 = text3;
 				this.text4 = text4;
+				this.text5 = text5;
 			}
 		}
 
@@ -184,54 +195,49 @@ public class StatisticsFragment extends BaseListFragment {
 		private int[] columns;
 		private int[] naturalColumns;
 		private AppearanceTypography.Configuration measuredTypography;
+		private boolean measuredMaterial;
 
 		int measureTable(Context context, int viewport) {
-			if (!InterfaceAppearance.isEnabled(context)) { columns = null; return viewport; }
+			boolean material = InterfaceAppearance.isEnabled(context);
 			AppearanceTypography.Configuration typography = new AppearanceTypography.Configuration(context);
-			if (naturalColumns == null || !typography.equals(measuredTypography)) {
+			if (naturalColumns == null || material != measuredMaterial || !typography.equals(measuredTypography)) {
 				TextView probe = new TextView(context);
-				naturalColumns = new int[4];
+				TextViewCompat.setTextAppearance(probe, ResourceUtils.getResourceId(context,
+						android.R.attr.textAppearanceListItem, android.R.style.TextAppearance_Medium));
+				ThemeEngine.applyStyle(probe);
+				naturalColumns = new int[5];
 				for (int row = 0; row < listItems.size(); row++) {
-					AppearanceTypography.apply(probe, row == 0 ? AppearanceTypography.Role.LABEL_LARGE : AppearanceTypography.Role.BODY_MEDIUM);
+					if (material) AppearanceTypography.apply(probe,
+							row == 0 ? AppearanceTypography.Role.LABEL_LARGE : AppearanceTypography.Role.BODY_MEDIUM);
 					ListItem item = listItems.get(row);
-					String[] text = {item.text1, item.text2, item.text3, item.text4};
+					String[] text = {item.text1, item.text2, item.text3, item.text4, item.text5};
 					for (int i = 0; i < text.length; i++) naturalColumns[i] = Math.max(naturalColumns[i],
 							(int) Math.ceil(Layout.getDesiredWidth(text[i] != null ? text[i] : "", probe.getPaint())) + 2);
 				}
 				measuredTypography = typography;
+				measuredMaterial = material;
 			}
 			int padding = Math.round(16 * ResourceUtils.obtainDensity(context));
 			int gap = Math.round(8 * ResourceUtils.obtainDensity(context));
-			columns = StatisticsColumnWidths.resolve(naturalColumns, Math.max(0, viewport - 2 * padding - 3 * gap));
-			int width = 2 * padding + 3 * gap;
+			int gaps = (naturalColumns.length - 1) * gap;
+			columns = StatisticsColumnWidths.resolve(naturalColumns, Math.max(0, viewport - 2 * padding - gaps));
+			int width = 2 * padding + gaps;
 			for (int column : columns) width += column;
 			return Math.max(viewport, width);
 		}
 
 		private final class TableRow extends LinearLayout {
-			private boolean material;
 			TableRow(Context context) { super(context); }
 			@Override protected void onMeasure(int widthSpec, int heightSpec) {
-				if (InterfaceAppearance.isEnabled(getContext()) && columns != null) {
-					material = true;
+				if (columns != null) {
 					int padding = Math.round(16 * ResourceUtils.obtainDensity(this));
 					int gap = Math.round(8 * ResourceUtils.obtainDensity(this));
 					setPaddingRelative(padding, gap, padding, gap); setMinimumHeight(Math.round(48 * ResourceUtils.obtainDensity(this)));
 					getLayoutParams().height = ViewGroup.LayoutParams.WRAP_CONTENT;
-					for (int i = 0; i < 4; i++) {
+					for (int i = 0; i < columns.length; i++) {
 						LinearLayout.LayoutParams lp = (LinearLayout.LayoutParams) getChildAt(i).getLayoutParams();
 						lp.width = columns[i]; lp.weight = 0; lp.height = ViewGroup.LayoutParams.WRAP_CONTENT;
 						lp.leftMargin = 0; lp.rightMargin = 0; lp.setMarginStart(i == 0 ? 0 : gap); lp.setMarginEnd(0);
-					}
-				} else if (material) {
-					material = false;
-					int padding = Math.round(16 * ResourceUtils.obtainDensity(this));
-					int gap = Math.round(8 * ResourceUtils.obtainDensity(this));
-					setPadding(padding - gap, 0, padding, 0); setMinimumHeight(0);
-					getLayoutParams().height = Math.round(48 * ResourceUtils.obtainDensity(this));
-					for (int i = 0; i < 4; i++) {
-						LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, i == 0 ? 3 : 2);
-						lp.leftMargin = gap; getChildAt(i).setLayoutParams(lp);
 					}
 				}
 				super.onMeasure(widthSpec, heightSpec);
@@ -277,10 +283,10 @@ public class StatisticsFragment extends BaseListFragment {
 			TextView text2 = addTextView(linearLayout, true, 2f, innerPadding);
 			TextView text3 = addTextView(linearLayout, true, 2f, innerPadding);
 			TextView text4 = addTextView(linearLayout, true, 2f, innerPadding);
+			TextView text5 = addTextView(linearLayout, true, 2f, innerPadding);
 			linearLayout.setLayoutParams(new RecyclerView.LayoutParams
-					(RecyclerView.LayoutParams.MATCH_PARENT, InterfaceAppearance.isEnabled(parent.getContext())
-							? RecyclerView.LayoutParams.WRAP_CONTENT : (int) (48f * density)));
-			return new ViewHolder(linearLayout, text1, text2, text3, text4);
+					(RecyclerView.LayoutParams.MATCH_PARENT, RecyclerView.LayoutParams.WRAP_CONTENT));
+			return new ViewHolder(linearLayout, text1, text2, text3, text4, text5);
 		}
 
 		@Override
@@ -290,9 +296,11 @@ public class StatisticsFragment extends BaseListFragment {
 			holder.text2.setText(listItem.text2);
 			holder.text3.setText(listItem.text3);
 			holder.text4.setText(listItem.text4);
-			holder.itemView.getLayoutParams().height = InterfaceAppearance.isEnabled(holder.itemView.getContext())
-					? RecyclerView.LayoutParams.WRAP_CONTENT : (int) (48f * ResourceUtils.obtainDensity(holder.itemView));
-			for (TextView text : new TextView[]{holder.text1, holder.text2, holder.text3, holder.text4})
+			holder.text5.setSingleLine(position != 0);
+			holder.text5.setMaxLines(position == 0 ? 3 : 1);
+			holder.text5.setText(listItem.text5);
+			holder.itemView.getLayoutParams().height = RecyclerView.LayoutParams.WRAP_CONTENT;
+			for (TextView text : new TextView[]{holder.text1, holder.text2, holder.text3, holder.text4, holder.text5})
 				InterfaceAppearance.serviceTableCell(text, position == 0);
 		}
 	}

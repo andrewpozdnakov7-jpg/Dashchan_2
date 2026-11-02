@@ -31,4 +31,14 @@ public class StatisticsColumnWidthsTest {
 			assertEquals(Math.max(available, Arrays.stream(minimum).sum()), Arrays.stream(first).sum());
 		}
 	}
+	@Test public void receivedRepliesAndItsDateUseTheSameFiveColumnPlanAsAllRows() {
+		int[] measured = {160, 95, 80, 100, 190};
+		assertArrayEquals(measured, StatisticsColumnWidths.resolve(measured, 240));
+		for (int available = 625; available < 1200; available++) {
+			int[] columns = StatisticsColumnWidths.resolve(measured, available);
+			assertEquals(5, columns.length);
+			assertEquals(available, Arrays.stream(columns).sum());
+			for (int i = 0; i < columns.length; i++) assertTrue(columns[i] >= measured[i]);
+		}
+	}
 }

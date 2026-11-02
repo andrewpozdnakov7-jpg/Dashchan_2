@@ -119,6 +119,11 @@ public final class HttpHolder {
 		return interrupted;
 	}
 
+	/** Background reads must not open an interactive firewall challenge. Set within use(). */
+	public void setMayResolveFirewallBlock(boolean allowed) {
+		checkThread(); mayResolveFirewallBlock = allowed;
+	}
+
 	void checkInterrupted() throws HttpClient.InterruptedHttpException {
 		if (isInterrupted()) {
 			throw new HttpClient.InterruptedHttpException();

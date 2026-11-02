@@ -19,6 +19,9 @@
 	<string name="security_cleanup_incomplete_short">Есть неудалённые файлы</string>
 	<string name="security_cleanup_idle_short">Нет незавершённой очистки</string>
 	<string name="security_allow_screenshots">Разрешить снимки экрана</string>
+	<string name="security_hide_reply_text">Скрывать текст ответов в фоне</string>
+	<string name="security_hide_reply_text_summary">Не показывать содержимое ответов в уведомлениях, когда Slooop свёрнут или заблокирован. Включено по умолчанию.</string>
+	<string name="security_show_reply_text_warning">Если отключить скрытие, текст ответов может отображаться в уведомлениях, даже когда Slooop свёрнут или заблокирован. Настройки уведомлений Android продолжат действовать.</string>
 	<string name="security_hide_pip_video">Скрывать видео в PiP</string>
 	<string name="security_hide_pip_video_summary">Закрывать видео чёрной заглушкой в режиме «картинка в картинке», даже если приложение разблокировано.</string>
 	<string name="security_screenshots_summary">Разрешать съёмку разблокированного приложения. По умолчанию выключено.</string>

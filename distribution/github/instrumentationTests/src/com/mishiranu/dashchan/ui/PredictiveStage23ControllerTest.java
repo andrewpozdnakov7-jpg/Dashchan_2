@@ -107,6 +107,62 @@ public class PredictiveStage23ControllerTest {
 			}
 		}
 	}
+	@Test public void transientViewportResizeKeepsRoutesAndMixedSizeSnapshotsWithoutStretching() {
+		Assume.assumeTrue(android.os.Build.VERSION.SDK_INT >= 34 && ValueAnimator.areAnimatorsEnabled());
+		String key = com.mishiranu.dashchan.content.Preferences.KEY_PREDICTIVE_BACK;
+		Object old = com.mishiranu.dashchan.content.Preferences.PREFERENCES.getAll().get(key);
+		PredictiveBackLayout[] host = {null};
+		try (ActivityScenario<StandardContentTestActivity> scenario = ActivityScenario.launch(StandardContentTestActivity.class)) {
+			scenario.onActivity(a -> {
+				com.mishiranu.dashchan.content.Preferences.PREFERENCES.edit().put(key, true).close();
+				host[0] = new PredictiveBackLayout(a); a.setContentView(host[0]);
+			});
+			InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+			scenario.onActivity(a -> {
+				long before = BackPreviewBudget.usedBytes();
+				PredictiveBackController controller = new PredictiveBackController(host[0]);
+				try {
+					int width = host[0].getWidth(), height = host[0].getHeight();
+					Object board = new Object(), thread = new Object(), posting = new Object();
+					controller.prepare(board); controller.remember(board);
+					controller.prepare(thread, board); controller.remember(thread);
+					controller.prepare(posting, thread);
+					java.util.Map<?, ?> cached = (java.util.Map<?, ?>) field(controller, "previews");
+					assertEquals(2, cached.size());
+					assertTrue(controller.start(thread, true));
+					Bitmap full = (Bitmap) field(controller, "incoming"); assertNotNull(full);
+					// Same containing window, smaller content viewport: the IME/layout contract.
+					host[0].layout(0, 0, width, height / 2);
+					assertFalse(controller.isBusy()); assertFalse(full.isRecycled());
+					assertSame(posting, field(controller, "currentKey"));
+					assertSame(thread, field(controller, "nearestKey"));
+					assertEquals(2, cached.size());
+					assertTrue(controller.start(thread, true));
+					assertNull("Full-height pixels must not be stretched into a reduced viewport",
+							field(controller, "incoming"));
+					controller.finish();
+					// Capturing a different viewport must not erase other pages' full-height pixels.
+					controller.remember(posting); controller.prepare(new Object(), posting);
+					assertEquals(3, cached.size()); assertFalse(full.isRecycled());
+					host[0].layout(0, 0, width, height);
+					assertTrue(controller.start(thread, true));
+					assertSame(full, field(controller, "incoming")); controller.finish();
+					assertTrue(controller.start(posting, false));
+					assertNull("Reduced-height pixels must not be stretched into a full viewport",
+							field(controller, "incoming"));
+					controller.finish();
+					host[0].layout(0, 0, width, height / 2);
+					assertTrue(controller.start(posting, false));
+					assertNotNull(field(controller, "incoming"));
+				} finally { controller.close(); }
+				assertEquals(before, BackPreviewBudget.usedBytes());
+			});
+		} finally {
+			try (com.mishiranu.dashchan.util.SharedPreferences.Editor editor = com.mishiranu.dashchan.content.Preferences.PREFERENCES.edit()) {
+				if (old instanceof Boolean) editor.put(key, (Boolean) old); else editor.remove(key);
+			}
+		}
+	}
 	@Test public void missingSnapshotUsesLiveFallbackAndCancellationDoesNotCaptureOrMutateViews() {
 		Assume.assumeTrue(android.os.Build.VERSION.SDK_INT >= 34 && ValueAnimator.areAnimatorsEnabled());
 		String key = com.mishiranu.dashchan.content.Preferences.KEY_PREDICTIVE_BACK;
@@ -135,6 +191,60 @@ public class PredictiveStage23ControllerTest {
 			try (com.mishiranu.dashchan.util.SharedPreferences.Editor editor = com.mishiranu.dashchan.content.Preferences.PREFERENCES.edit()) {
 				if (old instanceof Boolean) editor.put(key, (Boolean) old); else editor.remove(key);
 			}
+		}
+	}
+	@Test public void failedCurrentCaptureUsesTheMainActivityAdapterOnceAndLateReadyCannotTouchNextGesture() {
+		Assume.assumeTrue(android.os.Build.VERSION.SDK_INT >= 34);
+		try (ActivityScenario<StandardContentTestActivity> scenario = ActivityScenario.launch(StandardContentTestActivity.class)) {
+			PredictiveBackLayout[] host = {null};
+			scenario.onActivity(a -> { host[0] = new PredictiveBackLayout(a); a.setContentView(host[0]); });
+			InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+			scenario.onActivity(a -> {
+				int[] captures = {0}, navigations = {0};
+				Bitmap previous = image();
+				PredictiveBackController controller = new PredictiveBackController(host[0], () -> {}, view -> {
+					captures[0]++; return null;
+				});
+				try {
+					host[0].setBackgroundColor(android.graphics.Color.RED);
+					controller.install(null, previous, true); controller.progress(.6f);
+					MainActivity.completePredictivePageBack(controller, () -> {
+						navigations[0]++; host[0].setBackgroundColor(android.graphics.Color.GREEN);
+					});
+					assertEquals(1, captures[0]); assertEquals(1, navigations[0]);
+					assertFalse(controller.isBusy()); assertFalse(controller.isCommitting());
+					assertNull(field(controller, "preDraw")); assertNull(field(controller, "incoming"));
+					Bitmap pixels = Bitmap.createBitmap(host[0].getWidth(), host[0].getHeight(), Bitmap.Config.ARGB_8888);
+					try {
+						host[0].draw(new android.graphics.Canvas(pixels));
+						assertEquals(android.graphics.Color.GREEN, pixels.getPixel(pixels.getWidth() / 2, pixels.getHeight() / 2));
+					} finally { pixels.recycle(); }
+					controller.install(null, previous, false);
+					controller.destinationCommitted(new Object()); host[0].getViewTreeObserver().dispatchOnPreDraw();
+					assertTrue(controller.isTracking()); assertEquals(1, navigations[0]);
+				} finally { controller.close(); previous.recycle(); }
+			});
+		}
+	}
+	@Test public void captureInvalidatedByAnotherSessionDoesNotFallbackOrFinishThatSession() {
+		Assume.assumeTrue(android.os.Build.VERSION.SDK_INT >= 34);
+		try (ActivityScenario<StandardContentTestActivity> scenario = ActivityScenario.launch(StandardContentTestActivity.class)) {
+			PredictiveBackLayout[] host = {null};
+			scenario.onActivity(a -> { host[0] = new PredictiveBackLayout(a); a.setContentView(host[0]); });
+			InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+			scenario.onActivity(a -> {
+				PredictiveBackController[] controller = {null}; Bitmap previous = image(); Bitmap[] stale = {null};
+				int[] navigations = {0};
+				controller[0] = new PredictiveBackController(host[0], () -> {}, view -> {
+					controller[0].install(null, previous, false); stale[0] = image(); return stale[0];
+				});
+				try {
+					controller[0].install(null, previous, true);
+					MainActivity.completePredictivePageBack(controller[0], () -> navigations[0]++);
+					assertEquals(0, navigations[0]); assertTrue(controller[0].isTracking());
+					assertTrue(stale[0].isRecycled());
+				} finally { controller[0].close(); previous.recycle(); }
+			});
 		}
 	}
 	@Test public void readyDestinationIsNotTimedOutWhileItsCompletionAnimatorIsStillRunning() {

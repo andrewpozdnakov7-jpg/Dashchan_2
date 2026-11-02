@@ -17,8 +17,9 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
-/** Durable, local-only retry. Work input contains validated post identifiers, never credentials or text. */
+/** Durable delivery and board-text read. Work input contains identifiers, never credentials or reply text. */
 public final class ReplyPushDeliveryWorker extends Worker {
+	private volatile ReplyPushTextReader textReader;
 	public ReplyPushDeliveryWorker(@NonNull Context context, @NonNull WorkerParameters parameters) {
 		super(context, parameters);
 	}
@@ -32,7 +33,7 @@ public final class ReplyPushDeliveryWorker extends Worker {
 				.setInputData(input.build())
 				.setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS).build();
 		try {
-			// Confirm local persistence before relying on this retry, then attempt immediate delivery.
+			// Return promptly from the messaging service; board I/O belongs to the durable worker.
 			WorkManager.getInstance(context).enqueueUniqueWork("reply-delivery-" + message.eventId,
 					ExistingWorkPolicy.KEEP, work).getResult().get(5, TimeUnit.SECONDS);
 		} catch (InterruptedException e) {
@@ -41,8 +42,9 @@ public final class ReplyPushDeliveryWorker extends Worker {
 		} catch (Exception e) {
 			// A full/unavailable disk can prevent even the durable queue from accepting work.
 			Logger.write(Logger.Type.ERROR, "ReplyPush", "delivery_enqueue_failed", e.getClass().getSimpleName());
+			// If even the durable queue is unavailable, retain the old generic-notification fallback.
+			ReplyPushManager.processData(context, values);
 		}
-		ReplyPushManager.processData(context, values);
 	}
 
 	@NonNull
@@ -63,6 +65,7 @@ public final class ReplyPushDeliveryWorker extends Worker {
 	@Override
 	public void onStopped() {
 		super.onStopped();
+		ReplyPushTextReader reader = textReader; if (reader != null) reader.close();
 		WorkerDiagnostics.event(this, "stopped", 0L);
 	}
 
@@ -72,8 +75,29 @@ public final class ReplyPushDeliveryWorker extends Worker {
 			if (!(entry.getValue() instanceof String)) return Result.failure();
 			values.put(entry.getKey(), (String) entry.getValue());
 		}
-		if (ReplyPushMessage.parse(values) == null) return Result.failure();
-		ReplyPushManager.DeliveryResult result = ReplyPushManager.processData(getApplicationContext(), values);
-		return result == ReplyPushManager.DeliveryResult.RETRY ? Result.retry() : Result.success();
+		ReplyPushMessage message = ReplyPushMessage.parse(values);
+		if (message == null) return Result.failure();
+		ReplyPushManager.ReplyTextPlan plan = ReplyPushManager.prepareReplyText(values, getRunAttemptCount() > 0);
+		if (plan == ReplyPushManager.ReplyTextPlan.RETRY) return Result.retry();
+		boolean fetch = plan == ReplyPushManager.ReplyTextPlan.READ;
+		ReplyPushMessage resolved = null; boolean retryText = false;
+		if (fetch && !isStopped()) {
+			try (ReplyPushTextReader reader = new ReplyPushTextReader()) {
+				textReader = reader; if (isStopped()) reader.close();
+				resolved = reader.read(message);
+				retryText = resolved == null && reader.isRetryable() && getRunAttemptCount() < 2;
+			} catch (RuntimeException e) {
+				Logger.write(Logger.Type.DEBUG, "ReplyPush", "reply_text_failed", e.getClass().getSimpleName());
+				retryText = getRunAttemptCount() < 2;
+			} finally { textReader = null; }
+		}
+		if (isStopped()) return Result.retry();
+		boolean hadNotification = com.mishiranu.dashchan.content.WatcherNotifications.hasActiveReply(getApplicationContext(),
+				message.chanName, message.boardName, message.threadNumber, message.replyPostNumber);
+		ReplyPushManager.DeliveryResult result = ReplyPushManager.processData(getApplicationContext(), values, resolved);
+		if (result != ReplyPushManager.DeliveryResult.RETRY && hadNotification
+				&& (result == ReplyPushManager.DeliveryResult.HANDLED || resolved != null || getRunAttemptCount() > 0))
+			com.mishiranu.dashchan.content.WatcherNotifications.refreshReplyContents(getApplicationContext());
+		return result == ReplyPushManager.DeliveryResult.RETRY || retryText ? Result.retry() : Result.success();
 	}
 }

@@ -24,6 +24,8 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
@@ -115,6 +117,88 @@ public class WatcherNotifications {
 			String chanName, String boardName, String threadNumber, Collection<PostNumber> postNumbers) {
 		EXECUTOR.execute(new Task(context, "cancel", 0, false, false, false, null,
 				chanName, boardName, threadNumber, Collections.emptyList(), postNumbers));
+	}
+
+	/** Distinguishes enrichment of an existing notice from its first audible delivery. */
+	public static boolean hasActiveReply(Context context, String chanName, String boardName, String threadNumber, PostNumber postNumber) {
+		try {
+			NotificationManager manager = context.getSystemService(NotificationManager.class);
+			String tag = Task.makeTag(chanName, boardName, threadNumber, postNumber);
+			if (manager != null) for (StatusBarNotification active : manager.getActiveNotifications()) {
+				if (isReply(active) && tag.equals(active.getTag())) return true;
+			}
+		} catch (RuntimeException e) { /* Delivery still uses its normal error/retry path. */ }
+		return false;
+	}
+
+	/** Rebind only still-active notifications, without another alert or resurrecting dismissed replies. */
+	public static void refreshReplyContents(Context context) {
+		Context application = context.getApplicationContext();
+		EXECUTOR.execute(() -> {
+			try {
+				NotificationManager manager = application.getSystemService(NotificationManager.class);
+				StatusBarNotification[] active = manager != null ? manager.getActiveNotifications() : null;
+				if (active == null || active.length == 0) return;
+				boolean hidden = com.mishiranu.dashchan.content.security.SecurityStore.shouldHideReplyText(application);
+				HashMap<String, MyPostsStorage.ReplyItem> known = new HashMap<>();
+				if (!hidden) {
+					if (!Preferences.isTrackMyPostsEnabled() || !Preferences.isTrackedRepliesNotificationsEnabled()
+							|| Preferences.isReplyPushQuietHoursActive()) return;
+					for (MyPostsStorage.ReplyItem reply : MyPostsStorage.getInstance().getUnreadReplies()) {
+						known.put(Task.makeTag(reply.chanName, reply.boardName, reply.threadNumber, reply.postNumber), reply);
+					}
+				}
+				ArrayList<MyPostsStorage.ReplyItem> group = new ArrayList<>();
+				int childCount = 0;
+				for (StatusBarNotification notification : active) if (isReply(notification) && notification.getTag() != null) {
+					childCount++;
+					MyPostsStorage.ReplyItem reply = known.get(notification.getTag()); if (reply != null) group.add(reply);
+				}
+				for (StatusBarNotification notification : active) {
+					if (!isReply(notification)) continue;
+					NotificationCompat.Builder builder = new NotificationCompat.Builder(application, notification.getNotification());
+					if (!hidden) {
+						if (notification.getTag() != null) {
+							MyPostsStorage.ReplyItem reply = known.get(notification.getTag()); if (reply == null) continue;
+							String comment = replyText(application, reply.comment);
+							builder.setContentTitle(replyTitle(application, reply)).setContentText(comment.replace('\n', ' '))
+									.setStyle(new NotificationCompat.BigTextStyle().bigText(Task.buildLongComment(comment)));
+						} else {
+							if (group.isEmpty()) continue;
+							NotificationCompat.InboxStyle style = new NotificationCompat.InboxStyle();
+							for (MyPostsStorage.ReplyItem reply : group) style.addLine(replyText(application, reply.comment).replace('\n', ' '));
+							String title = application.getResources().getQuantityString(R.plurals.new_replies_count__format, childCount, childCount);
+							builder.setContentTitle(title).setContentText(replyTitle(application, group.get(0)))
+									.setStyle(style.setBigContentTitle(title)).setNumber(childCount);
+						}
+						builder.setVisibility(NotificationCompat.VISIBILITY_PRIVATE);
+					}
+					builder.setTicker(null).setOnlyAlertOnce(true).setSilent(true);
+					// Re-evaluate privacy after rebuilding: a pause/screen-off can race this queue.
+					com.mishiranu.dashchan.content.security.AppSecurity.redactReplyNotification(application, builder);
+					boolean stillActive = false;
+					for (StatusBarNotification current : manager.getActiveNotifications()) {
+						if (current.getId() == notification.getId() && java.util.Objects.equals(current.getTag(), notification.getTag())) {
+							stillActive = true; break;
+						}
+					}
+					if (stillActive) manager.notify(notification.getTag(), notification.getId(), builder.build());
+				}
+			} catch (RuntimeException e) {
+				Logger.write(Logger.Type.ERROR, LOG_TAG, "reply_content_refresh_failed", e.getClass().getSimpleName());
+			}
+		});
+	}
+	private static boolean isReply(StatusBarNotification notification) {
+		return notification.getId() == C.NOTIFICATION_ID_REPLIES
+				&& C.NOTIFICATION_CHANNEL_REPLIES.equals(notification.getNotification().getChannelId());
+	}
+	private static String replyText(Context context, String text) {
+		return StringUtils.isEmptyOrWhitespace(text) ? context.getString(R.string.reply_push_notification_text) : StringUtils.clearHtml(text);
+	}
+	private static String replyTitle(Context context, MyPostsStorage.ReplyItem reply) {
+		String title = Chan.get(reply.chanName).configuration.getTitle() + " / " + reply.boardName + " / " + reply.threadNumber;
+		return context.getString(R.string.reply_in_thread__format, title);
 	}
 
 	/** Runs behind already queued reply deliveries, without cancelling unrelated notifications. */
@@ -340,7 +424,7 @@ public class WatcherNotifications {
 			configureNotification(builder, false);
 			String tag = makeTag(chanName, boardName, threadNumber, reply.postNumber);
 			builder.setContentIntent(createContentIntent(tag, reply.postNumber));
-			com.mishiranu.dashchan.content.security.AppSecurity.redactNotification(context, builder);
+			com.mishiranu.dashchan.content.security.AppSecurity.redactReplyNotification(context, builder);
 			notificationManager.notify(tag, C.NOTIFICATION_ID_REPLIES, builder.build());
 		}
 
@@ -378,7 +462,7 @@ public class WatcherNotifications {
 				builder.setContentIntent(summaryIntent);
 			}
 			builder.setGroupSummary(true);
-			com.mishiranu.dashchan.content.security.AppSecurity.redactNotification(context, builder);
+			com.mishiranu.dashchan.content.security.AppSecurity.redactReplyNotification(context, builder);
 			notificationManager.notify(C.NOTIFICATION_ID_REPLIES, builder.build());
 		}
 

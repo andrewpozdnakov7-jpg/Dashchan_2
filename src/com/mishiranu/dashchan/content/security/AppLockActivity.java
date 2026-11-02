@@ -30,6 +30,7 @@ public final class AppLockActivity extends ComponentActivity {
 	public static final String SCREENSHOTS = "screenshots";
 	public static final String PIP_VIDEO = "pip_video";
 	public static final String REAUTHENTICATION = "reauthentication";
+	public static final String REPLY_NOTIFICATIONS = "reply_notifications";
 	public static final String AUTHENTICATION_MODE = "authentication_mode";
 	private enum Step { UNLOCK, AUTHORIZE, CHOOSE_MODE, NEW, CONFIRM }
 	private final ExecutorService worker = Executors.newSingleThreadExecutor();
@@ -263,7 +264,7 @@ public final class AppLockActivity extends ComponentActivity {
 			} catch (IOException e) { unavailable(); }
 		}
 		else if (ADDITIONAL.equals(action)) {
-			approvalDialog = new com.mishiranu.dashchan.content.security.SecureDialogBuilder(this).setTitle(R.string.security_additional_pin)
+			approvalDialog = SecureDialogBuilder.lock(this).setTitle(R.string.security_additional_pin)
 					.setMessage(R.string.security_delete_warning)
 					.setPositiveButton(R.string.security_understand, (d, w) -> {
 						if (!settingsAuthorized(generation)) return;
@@ -284,6 +285,8 @@ public final class AppLockActivity extends ComponentActivity {
 						() -> settingsAuthorized(generation));
 				complete();
 			} catch (IOException e) { unavailable(); }
+		} else if (REPLY_NOTIFICATIONS.equals(action)) {
+			configureReplyNotifications();
 		} else if (REAUTHENTICATION.equals(action)) {
 			configureReauthentication();
 		} else if (DISABLE.equals(action) || REMOVE_ADDITIONAL.equals(action)) {
@@ -295,6 +298,7 @@ public final class AppLockActivity extends ComponentActivity {
 						s.remove("primary"); s.remove("biometric"); s.remove("biometric_alias");
 						s.remove(AuthenticationPolicy.KEY); s.remove(SecurityStore.ALLOW_SCREENSHOTS);
 						s.remove(SecurityStore.HIDE_PIP_VIDEO);
+						s.remove(SecurityStore.HIDE_REPLY_TEXT_BACKGROUND);
 						s.put("unlocked", true);
 					}
 					return null;
@@ -316,14 +320,14 @@ public final class AppLockActivity extends ComponentActivity {
 			String[] labels = new String[modes.length];
 			for (int i = 0; i < modes.length; i++) labels[i] = getString(modeTitle(modes[i]));
 			final int generation = authorizationGeneration;
-			approvalDialog = new SecureDialogBuilder(this).setTitle(R.string.security_authentication_mode)
+			approvalDialog = SecureDialogBuilder.lock(this).setTitle(R.string.security_authentication_mode)
 					.setSingleChoiceItems(labels, current != null ? current.ordinal() : -1, (dialog, which) -> {
 						if (!settingsAuthorized(generation) || which < 0 || which >= modes.length) return;
 						dialog.dismiss(); approvalDialog = null;
 						if (modes[which] == current) { complete(); return; }
 						pendingMode = modes[which]; pendingPrimary = null;
 						if (pendingMode == AuthenticationPolicy.Mode.BIOMETRIC_ONLY) {
-							approvalDialog = new SecureDialogBuilder(this).setTitle(R.string.security_mode_biometric)
+							approvalDialog = SecureDialogBuilder.lock(this).setTitle(R.string.security_mode_biometric)
 									.setMessage(R.string.security_biometric_only_warning)
 									.setPositiveButton(R.string.security_understand, (d, w) -> {
 										if (settingsAuthorized(generation)) beginModeSetup();
@@ -374,7 +378,7 @@ public final class AppLockActivity extends ComponentActivity {
 				String description = DownloadTreeCleanup.describe(this, tree);
 				runOnUiThread(() -> {
 				if (!settingsAuthorized(generation)) return;
-			approvalDialog = new com.mishiranu.dashchan.content.security.SecureDialogBuilder(this).setTitle(R.string.security_delete_downloads)
+			approvalDialog = SecureDialogBuilder.lock(this).setTitle(R.string.security_delete_downloads)
 					.setMessage(getString(R.string.security_downloads_warning) + "\n\n" + description)
 					.setPositiveButton(R.string.security_understand, (d, w) -> {
 						if (!settingsAuthorized(generation)) return;
@@ -396,7 +400,7 @@ public final class AppLockActivity extends ComponentActivity {
 		try {
 			boolean allowed = SecurityStore.update(this, s -> s.optBoolean(SecurityStore.ALLOW_SCREENSHOTS, false));
 			if (allowed) { saveScreenshots(false, generation); return; }
-			approvalDialog = new SecureDialogBuilder(this).setTitle(R.string.security_allow_screenshots)
+			approvalDialog = SecureDialogBuilder.lock(this).setTitle(R.string.security_allow_screenshots)
 					.setMessage(ScreenCapturePolicy.designRelease(com.mishiranu.dashchan.BuildConfig.VERSION_NAME)
 							? R.string.security_screenshots_design_warning : R.string.security_screenshots_warning)
 					.setPositiveButton(R.string.security_understand, (d, w) -> saveScreenshots(true, generation))
@@ -414,7 +418,7 @@ public final class AppLockActivity extends ComponentActivity {
 			for (int i = 0; i < minutes.length; i++) labels[i] = minutes[i] == 0
 					? getString(R.string.security_reauthenticate_immediately)
 					: getString(R.string.security_reauthenticate_minutes, minutes[i]);
-			approvalDialog = new SecureDialogBuilder(this).setTitle(R.string.security_reauthentication)
+			approvalDialog = SecureDialogBuilder.lock(this).setTitle(R.string.security_reauthentication)
 					.setSingleChoiceItems(labels, ReauthenticationPolicy.indexOf(current), (dialog, which) -> {
 						if (!settingsAuthorized(generation) || which < 0 || which >= minutes.length) return;
 						try {
@@ -432,6 +436,27 @@ public final class AppLockActivity extends ComponentActivity {
 						} catch (IOException e) { unavailable(); }
 					}).setNegativeButton(android.R.string.cancel, (dialog, which) -> finish())
 					.setOnCancelListener(dialog -> finish()).show();
+		} catch (IOException e) { unavailable(); }
+	}
+
+	private void configureReplyNotifications() {
+		final int generation = authorizationGeneration;
+		try {
+			if (!SecurityStore.hideReplyTextInBackground(this)) {
+				saveReplyNotifications(true, generation); return;
+			}
+			approvalDialog = SecureDialogBuilder.lock(this).setTitle(R.string.security_hide_reply_text)
+					.setMessage(R.string.security_show_reply_text_warning)
+					.setPositiveButton(R.string.security_understand, (d, w) -> saveReplyNotifications(false, generation))
+					.setNegativeButton(android.R.string.cancel, (d, w) -> finish())
+					.setOnCancelListener(d -> finish()).show();
+		} catch (IOException e) { unavailable(); }
+	}
+	private void saveReplyNotifications(boolean hidden, int generation) {
+		if (!settingsAuthorized(generation)) return;
+		try {
+			SecurityStore.setHideReplyTextInBackground(this, hidden, () -> settingsAuthorized(generation));
+			complete();
 		} catch (IOException e) { unavailable(); }
 	}
 

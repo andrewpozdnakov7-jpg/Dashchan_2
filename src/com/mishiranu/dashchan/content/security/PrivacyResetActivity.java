@@ -65,9 +65,11 @@ public final class PrivacyResetActivity extends ComponentActivity {
 		int padding = Math.round(24 * getResources().getDisplayMetrics().density);
 		layout.setPadding(padding, padding, padding, padding);
 		message = new TextView(this); message.setGravity(Gravity.CENTER);
+		SecurityPresentation.message(message);
 		layout.addView(message);
 		android.widget.ScrollView scroll = new android.widget.ScrollView(this); scroll.setFillViewport(true);
 		scroll.addView(layout, new android.widget.ScrollView.LayoutParams(-1, -2));
+		SecurityPresentation.page(scroll);
 		scroll.setOnApplyWindowInsetsListener((view, insets) -> {
 			android.graphics.Insets safe = insets.getInsets(android.view.WindowInsets.Type.systemBars() | android.view.WindowInsets.Type.ime());
 			view.setPadding(safe.left, safe.top, safe.right, safe.bottom); return insets;
@@ -126,12 +128,14 @@ public final class PrivacyResetActivity extends ComponentActivity {
 		if (isDestroyed()) return;
 		message.setText(R.string.security_reset_failed);
 		Button retry = new Button(this); retry.setText(R.string.security_retry_cleanup);
-		retry.setOnClickListener(v -> runCleanup()); layout.addView(retry);
+		SecurityPresentation.action(retry, true);
+		retry.setOnClickListener(v -> runCleanup()); SecurityPresentation.addControl(layout, retry);
 		try {
 			boolean externalOnly = SecurityStore.update(this, s -> s.optBoolean("reset_local_done") && s.has("reset_tree"));
 			if (!externalOnly) return;
 			message.setText(R.string.security_downloads_failed);
 			Button restore = new Button(this); restore.setText(R.string.security_restore_folder_access);
+			SecurityPresentation.action(restore, false);
 			restore.setOnClickListener(v -> {
 				try {
 					String expected = SecurityStore.update(this, s -> s.optString("reset_tree", null));
@@ -142,12 +146,14 @@ public final class PrivacyResetActivity extends ComponentActivity {
 									| Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION | Intent.FLAG_GRANT_PREFIX_URI_PERMISSION));
 				} catch (Exception e) { message.setText(R.string.security_downloads_failed); }
 			});
-			layout.addView(restore);
+			SecurityPresentation.addControl(layout, restore);
 			boolean biometricOnly = SecurityStore.authenticationMode(this) == AuthenticationPolicy.Mode.BIOMETRIC_ONLY;
 			EditText pin = new EditText(this); pin.setHint(R.string.security_current_pin);
 			AppLockActivity.configurePinInput(pin);
-			if (!biometricOnly) layout.addView(pin);
+			SecurityPresentation.field(pin);
+			if (!biometricOnly) SecurityPresentation.addControl(layout, pin);
 			Button skip = new Button(this); skip.setText(R.string.security_skip_downloads);
+			SecurityPresentation.action(skip, false);
 			skip.setFilterTouchesWhenObscured(true);
 			skip.setOnClickListener(v -> {
 				if (!running.compareAndSet(false, true)) return;
@@ -171,7 +177,7 @@ public final class PrivacyResetActivity extends ComponentActivity {
 					finally { PinCredential.clear(digits); running.set(false); }
 				}, "privacy-reset-recovery").start();
 			});
-			layout.addView(skip);
+			SecurityPresentation.addControl(layout, skip);
 		} catch (Exception ignored) {}
 	}
 	private void authenticateRecoverySkip() {

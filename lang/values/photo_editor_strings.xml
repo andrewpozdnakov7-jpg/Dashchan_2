@@ -90,6 +90,7 @@
     <string name="pe_export_settings">Save options</string>
     <string name="pe_export_size">Image size</string>
     <string name="pe_export_no_resize">Maximum size</string>
+    <string name="pe_export_memory_failed">Not enough memory to save at the selected resolution. Your edits remain in the editor. Choose a smaller size in export settings and try again.</string>
     <string name="pe_export_format">Format</string>
     <string name="pe_export_actual_size">Saved image size: %1$d × %2$d</string>
     <string name="pe_mask_scope">Apply to:</string>

@@ -7,11 +7,13 @@ import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.Path;
+import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
 import android.os.Build;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowManager;
 import androidx.core.view.OneShotPreDrawListener;
 import com.mishiranu.dashchan.graphics.BaseDrawable;
 import com.mishiranu.dashchan.util.InterfaceMotion;
@@ -32,7 +34,12 @@ final class PredictiveBackController {
 	private final Runnable stateChanged;
 	interface CaptureProvider { Bitmap capture(View view); }
 	private final CaptureProvider captureProvider;
-	private final LinkedHashMap<Object, Bitmap> previews = new LinkedHashMap<>(4, .75f, true);
+	private static final class Preview {
+		final Bitmap image;
+		final Signature signature;
+		Preview(Bitmap image, Signature signature) { this.image = image; this.signature = signature; }
+	}
+	private final LinkedHashMap<Object, Preview> previews = new LinkedHashMap<>(4, .75f, true);
 	private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
 	private final RectF frame = new RectF();
 	private final Path clip = new Path();
@@ -70,11 +77,15 @@ final class PredictiveBackController {
 		BackPreviewBudget.registerCache(cache);
 		host.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
 			@Override public void onViewAttachedToWindow(View view) {}
-			@Override public void onViewDetachedFromWindow(View view) { clear(); }
+			@Override public void onViewDetachedFromWindow(View view) { clear("host_detached"); }
 		});
 		host.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
 			if (r - l != or - ol || b - t != ob - ot) {
-				Object key = currentKey; clear(); if (key != null) prepare(key);
+				// A resized live surface must end its gesture, but IME-driven child layout
+				// does not invalidate snapshots from the unchanged containing window.
+				finish();
+				if (signature != null) updateSignature(new Signature(host), "layout");
+				recordState("host_layout_changed old_width=" + (or - ol) + " old_height=" + (ob - ot));
 			}
 		});
 	}
@@ -88,7 +99,8 @@ final class PredictiveBackController {
 	void prepare(Object key, Object previousKey) {
 		currentKey = key; nearestKey = previousKey;
 		// The current page is live; its old cached pixels are redundant.
-		forget(key);
+		forget(key, "current_page_live");
+		recordState("prepare");
 	}
 	private Bitmap captureCurrent() {
 		capturing = true;
@@ -96,54 +108,87 @@ final class PredictiveBackController {
 	}
 	private boolean evictOldest() {
 		if (previews.isEmpty()) return false;
-		Map.Entry<Object, Bitmap> eldest = null;
-		for (Map.Entry<Object, Bitmap> entry : previews.entrySet()) {
+		Map.Entry<Object, Preview> eldest = null;
+		for (Map.Entry<Object, Preview> entry : previews.entrySet()) {
 			if (entry.getKey() != nearestKey) { eldest = entry; break; }
 		}
 		// Only sacrifice the immediate Back destination after every other cached page.
 		if (eldest == null) eldest = previews.entrySet().iterator().next();
-		Bitmap bitmap = eldest.getValue(); previews.remove(eldest.getKey());
+		boolean nearest = eldest.getKey() == nearestKey;
+		Bitmap bitmap = eldest.getValue().image; previews.remove(eldest.getKey());
 		BackPreviewBudget.release(bitmap);
+		recordState("evict_oldest removed_previous=" + nearest);
 		return true;
 	}
-	/** Includes presentation parameters; bitmap contents are last-known pixels, never a live old Fragment. */
+	/** Separates stable window presentation from the transient drawable viewport (e.g. the IME). */
 	private static final class Signature {
-		final int width, height, direction;
+		final int width, height, direction, orientation, rotation, density;
+		final float fontScale;
+		final Rect windowBounds;
 		final Object theme, insets;
 		Signature(View view) {
 			width = view.getWidth(); height = view.getHeight(); direction = view.getLayoutDirection();
+			android.content.res.Configuration configuration = view.getResources().getConfiguration();
+			orientation = configuration.orientation; density = configuration.densityDpi;
+			fontScale = configuration.fontScale;
+			rotation = view.getDisplay() != null ? view.getDisplay().getRotation() : 0;
+			WindowManager manager = view.getContext().getSystemService(WindowManager.class);
+			// Window bounds include inset areas and do not shrink with our IME bottom margin.
+			windowBounds = Build.VERSION.SDK_INT >= 30 && manager != null
+					? new Rect(manager.getCurrentWindowMetrics().getBounds())
+					: new Rect(0, 0, view.getRootView().getWidth(), view.getRootView().getHeight());
 			theme = ThemeEngine.getTheme(view.getContext());
 			android.view.WindowInsets windowInsets = view.getRootWindowInsets();
-			insets = windowInsets != null ? windowInsets.getInsetsIgnoringVisibility(
+			insets = Build.VERSION.SDK_INT >= 30 && windowInsets != null ? windowInsets.getInsetsIgnoringVisibility(
 					android.view.WindowInsets.Type.systemBars() | android.view.WindowInsets.Type.displayCutout()) : null;
+		}
+		boolean sameWindow(Signature other) {
+			return direction == other.direction && orientation == other.orientation && rotation == other.rotation
+					&& density == other.density && Float.compare(fontScale, other.fontScale) == 0
+					&& windowBounds.equals(other.windowBounds) && theme == other.theme
+					&& java.util.Objects.equals(insets, other.insets);
 		}
 		@Override public boolean equals(Object other) {
 			if (!(other instanceof Signature)) return false;
 			Signature s = (Signature) other;
-			return width == s.width && height == s.height && direction == s.direction && theme == s.theme
-					&& java.util.Objects.equals(insets, s.insets);
+			return width == s.width && height == s.height && sameWindow(s);
 		}
-		@Override public int hashCode() { return java.util.Objects.hash(width, height, direction, theme, insets); }
+		@Override public int hashCode() {
+			return java.util.Objects.hash(width, height, direction, orientation, rotation, density,
+					fontScale, windowBounds, theme, insets);
+		}
+	}
+	private void updateSignature(Signature now, String stage) {
+		if (signature != null && !signature.sameWindow(now)) {
+			recordSignatureChange(stage, now);
+			clearImages(stage + "_window_changed");
+		}
+		signature = now;
 	}
 
 	void forget(Object key) {
-		Bitmap old = previews.remove(key);
+		forget(key, "navigation");
+	}
+	private void forget(Object key, String reason) {
+		Preview old = previews.remove(key);
 		// An active preview holds its own lease, independent of cache ownership.
-		BackPreviewBudget.release(old);
+		if (old != null) BackPreviewBudget.release(old.image);
+		if (old != null) recordState("forget reason=" + reason + " removed_previous=" + (key == nearestKey));
 	}
 
 	void remember(Object key) {
 		if (isBusy() || !enabled() || key == null) return;
 		Signature now = new Signature(host);
-		if (signature != null && !signature.equals(now)) clearImages();
-		signature = now;
+		updateSignature(now, "remember");
 		int owner = generation; Object sourceKey = currentKey;
-		forget(key);
+		forget(key, "replace_snapshot");
 		Bitmap bitmap = captureCurrent();
 		if (generation != owner || currentKey != sourceKey || !now.equals(new Signature(host))) {
+			recordState("capture_discarded generation_changed=" + (generation != owner)
+					+ " current_changed=" + (currentKey != sourceKey));
 			BackPreviewBudget.release(bitmap); return;
 		}
-		if (bitmap != null) previews.put(key, bitmap);
+		if (bitmap != null) previews.put(key, new Preview(bitmap, now));
 		currentKey = null;
 		record("remember stored=" + (bitmap != null) + " cached_pages=" + previews.size()
 				+ " used_bytes=" + BackPreviewBudget.usedBytes() + " budget_bytes=" + BackPreviewBudget.limit(host.getContext()));
@@ -155,16 +200,21 @@ final class PredictiveBackController {
 		if (!enabled() || liveHost == null || !host.isAttachedToWindow() || host.getWidth() <= 0 || host.getHeight() <= 0
 				|| externalSurface(host)) return false;
 		Signature now = new Signature(host);
-		if (signature != null && !signature.equals(now)) clearImages();
-		signature = now;
+		updateSignature(now, "start");
 		nearestKey = target;
-		Bitmap preview = previews.get(target);
-		if (preview != null && preview.isRecycled()) { previews.remove(target); preview = null; }
+		Preview saved = previews.get(target);
+		if (saved != null && saved.image.isRecycled()) {
+			previews.remove(target); saved = null; recordState("start_recycled_previous");
+		}
+		// Keep other viewport sizes cached, but never stretch their pixels into this viewport.
+		Bitmap preview = saved != null && saved.signature.equals(now) ? saved.image : null;
+		if (saved != null && preview == null) recordState("start_viewport_mismatch saved_width="
+				+ saved.signature.width + " saved_height=" + saved.signature.height);
 		// A missing destination uses the window surface, never an unrelated cached page.
 		// Current pixels are drawn live: touch feedback or a new draw cannot invalidate the start.
 		install(null, preview, fromLeft);
 		destinationKey = target;
-		record("start live=1 previous_cached=" + (preview != null));
+		recordState("start live=1 previous_cached=" + (preview != null));
 		return true;
 	}
 	boolean start(Object target, boolean fromLeft, float touchY) {
@@ -218,7 +268,18 @@ final class PredictiveBackController {
 			// Freeze once at confirmation, before navigation replaces the live hierarchy.
 			// captureCurrent bypasses the presentation, so the snapshot is untransformed.
 			Bitmap bitmap = captureCurrent();
-			if (generation != owner || !tracking) { BackPreviewBudget.release(bitmap); return false; }
+			if (generation != owner || !tracking) {
+				BackPreviewBudget.release(bitmap);
+				recordState("commit_capture_invalidated consumed=true");
+				// The old gesture no longer owns the surface. Do not fall back on a new session/route.
+				return true;
+			}
+			if (bitmap == null) {
+				recordState("commit_capture_failed fallback=normal_back");
+				finish();
+				// No callback was executed: MainActivity owns exactly one ordinary Back.
+				return false;
+			}
 			outgoing = bitmap;
 		}
 		tracking = false; committing = true;
@@ -282,20 +343,58 @@ final class PredictiveBackController {
 	}
 
 	void clear() {
+		clear("explicit");
+	}
+	void clear(String reason) {
+		recordState("clear_requested reason=" + reason);
 		finish();
 		currentKey = nearestKey = null;
-		clearImages(); signature = null;
+		clearImages(reason);
+		signature = null;
 	}
 	/** Drop cache ownership without interrupting a gesture or recycling its leased destination. */
-	void trimMemory() { clearImages(); }
-	void close() { clear(); BackPreviewBudget.unregisterCache(cache); }
-	private void clearImages() {
-		for (Bitmap bitmap : previews.values()) BackPreviewBudget.release(bitmap);
+	void trimMemory() { trimMemory(-1); }
+	void trimMemory(int level) {
+		if (com.mishiranu.dashchan.widget.PreviewMemoryPolicy.shouldTrim(level)) {
+			clearImages("trim_memory level=" + level);
+		} else {
+			recordState("trim_memory_retained level=" + level);
+		}
+	}
+	void close() { clear("controller_closed"); BackPreviewBudget.unregisterCache(cache); }
+	private void clearImages(String reason) {
+		int removed = previews.size();
+		recordState("cache_clear_begin reason=" + reason);
+		for (Preview preview : previews.values()) BackPreviewBudget.release(preview.image);
 		previews.clear();
+		recordState("cache_clear_end reason=" + reason + " removed_pages=" + removed);
 	}
 	private void invalidate() { if (liveHost != null) host.invalidate(); else layer.invalidateSelf(); }
+	/** Code-owned event labels and counts only; never log route keys, page content or snapshot pixels. */
+	void recordState(String event) {
+		if (!VideoDiagnostics.isExtendedRecording()) return;
+		record(event + " cached_pages=" + previews.size() + " previous_entry=" + previews.containsKey(nearestKey)
+				+ " current_known=" + (currentKey != null) + " previous_known=" + (nearestKey != null)
+				+ " busy=" + busy + " attached=" + host.isAttachedToWindow()
+				+ " width=" + host.getWidth() + " height=" + host.getHeight()
+				+ " shared_used_bytes=" + BackPreviewBudget.usedBytes());
+	}
+	private void recordSignatureChange(String stage, Signature now) {
+		if (!VideoDiagnostics.isExtendedRecording()) return;
+		record("signature_changed stage=" + stage
+				+ " size_changed=" + (signature.width != now.width || signature.height != now.height)
+				+ " direction_changed=" + (signature.direction != now.direction)
+				+ " window_changed=" + !signature.windowBounds.equals(now.windowBounds)
+				+ " orientation_changed=" + (signature.orientation != now.orientation || signature.rotation != now.rotation)
+				+ " density_changed=" + (signature.density != now.density || Float.compare(signature.fontScale, now.fontScale) != 0)
+				+ " theme_changed=" + (signature.theme != now.theme)
+				+ " insets_changed=" + !java.util.Objects.equals(signature.insets, now.insets));
+	}
 	private static void record(String message) {
-		if (VideoDiagnostics.isExtendedRecording()) VideoDiagnostics.recordUi("predictive_page " + message);
+		if (VideoDiagnostics.isExtendedRecording()) {
+			android.util.Log.i("SlooopPredictiveBack", "predictive_page " + message);
+			VideoDiagnostics.recordUi("predictive_page " + message);
+		}
 	}
 	private void drawLiveFrame(Canvas canvas, PredictiveBackLayout.Content content) {
 		if (capturing || !busy) content.draw(canvas); else drawFrame(canvas, content);

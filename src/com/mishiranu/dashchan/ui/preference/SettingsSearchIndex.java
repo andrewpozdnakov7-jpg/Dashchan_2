@@ -354,6 +354,7 @@ public final class SettingsSearchIndex {
 			add(context, entries, Screen.SECURITY, R.string.security_reauthentication);
 			add(context, entries, Screen.SECURITY, R.string.security_allow_screenshots);
 			add(context, entries, Screen.SECURITY, R.string.security_hide_pip_video, R.string.security_hide_pip_video_summary, null);
+			add(context, entries, Screen.SECURITY, R.string.security_hide_reply_text, R.string.security_hide_reply_text_summary, null);
 			add(context, entries, Screen.SECURITY, R.string.security_delete_downloads);
 			add(context, entries, Screen.SECURITY, R.string.security_guide);
 		}

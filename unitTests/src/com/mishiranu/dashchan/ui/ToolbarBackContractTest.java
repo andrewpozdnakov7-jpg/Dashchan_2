@@ -30,7 +30,7 @@ public class ToolbarBackContractTest {
 
 	private static String method(String name, String parameters) throws Exception {
 		String text = activity();
-		Matcher matcher = Pattern.compile("(?m)^\\t(?:private|protected|public) void " + Pattern.quote(name)
+		Matcher matcher = Pattern.compile("(?m)^\\t(?:(?:private|protected|public) )?(?:static )?void " + Pattern.quote(name)
 				+ "\\(([^)]*)\\)\\s*\\{").matcher(text);
 		boolean found = false;
 		while (matcher.find()) {
@@ -72,7 +72,12 @@ public class ToolbarBackContractTest {
 	@Test public void systemBackKeepsItsCallbacksExitPolicyAndPredictiveCleanup() throws Exception {
 		String back = method("onSystemBackPressed");
 		assertTrue(back.contains("onBackPressed(false, true, this::performDefaultBack)"));
-		assertTrue(back.contains("predictiveBack.commit(navigate)"));
+		assertTrue(back.contains("completePredictivePageBack(predictiveBack, navigate)"));
+		assertFalse("Only the shared adapter owns commit/fallback", back.contains("predictiveBack.commit(navigate)"));
+		String completion = method("completePredictivePageBack", "PredictiveBackController controller, Runnable navigate");
+		assertTrue(completion.contains("if (controller == null || !controller.commit(navigate))"));
+		assertTrue(completion.contains("if (controller != null) controller.finish()"));
+		assertTrue(completion.contains("navigate.run()"));
 		assertTrue(back.contains("scheduleSystemBackCallbackUpdate()"));
 		assertTrue("Drawer Back must not also pop a page", back.contains("drawerMotion.commitBack()) return"));
 		assertTrue("Freeze the source until invocation", back.contains("current != backGestureSource"));

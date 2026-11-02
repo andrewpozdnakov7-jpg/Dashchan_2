@@ -154,6 +154,23 @@ public final class AppSecurity implements Application.ActivityLifecycleCallbacks
 	private final Map<Activity, View> shields = new IdentityHashMap<>();
 	private final Set<Activity> started = Collections.newSetFromMap(new IdentityHashMap<>());
 	private final Set<Activity> resumed = Collections.newSetFromMap(new IdentityHashMap<>());
+	private Boolean notificationForeground;
+	private boolean notificationPrivacyEnabled() {
+		if (!enabled()) return false;
+		try { return SecurityStore.hideReplyTextInBackground(application); }
+		catch (IOException e) { return true; }
+	}
+	private void updateNotificationForeground() {
+		android.os.PowerManager power = application.getSystemService(android.os.PowerManager.class);
+		boolean active = false;
+		if (power != null && power.isInteractive()) for (Activity activity : resumed) {
+			if (!exempt(activity) && !activity.isFinishing() && !activity.isInPictureInPictureMode()) active = true;
+		}
+		if (notificationForeground == null || notificationForeground != active) {
+			if (SecuritySessionProvider.setNotificationForeground(application, active)) notificationForeground = active;
+			if (notificationPrivacyEnabled()) com.mishiranu.dashchan.content.WatcherNotifications.refreshReplyContents(application);
+		}
+	}
 	private final android.os.Handler handler = new android.os.Handler(android.os.Looper.getMainLooper());
 	private final Runnable checkForeground = this::checkForeground;
 	private void checkForeground() {
@@ -177,6 +194,9 @@ public final class AppSecurity implements Application.ActivityLifecycleCallbacks
 		application.registerReceiver(new BroadcastReceiver() {
 			@Override public void onReceive(Context context, Intent intent) {
 				SecurityStore.suspend(context);
+				SecuritySessionProvider.setNotificationForeground(application, false);
+				instance.notificationForeground = false;
+				if (instance.notificationPrivacyEnabled()) com.mishiranu.dashchan.content.WatcherNotifications.refreshReplyContents(application);
 				instance.protectAll();
 			}
 		}, filter);
@@ -258,18 +278,29 @@ public final class AppSecurity implements Application.ActivityLifecycleCallbacks
 
 	public static void redactNotification(Context context, androidx.core.app.NotificationCompat.Builder builder) {
 		if (isProtected(context)) {
-			builder.getExtras().clear();
-			builder.setStyle(null).setLargeIcon((android.graphics.Bitmap) null).setPublicVersion(null)
-					.setCustomContentView(null).setCustomBigContentView(null).setCustomHeadsUpContentView(null)
-					.setContentTitle("Slooop").setContentText(context.getString(com.mishiranu.dashchan.R.string.security_notification_hidden))
-					.setTicker(null).setSubText(null).setContentInfo(null).setVisibility(androidx.core.app.NotificationCompat.VISIBILITY_SECRET);
+			redact(builder, context);
 		}
 	}
 
+	public static void redactReplyNotification(Context context, androidx.core.app.NotificationCompat.Builder builder) {
+		if (SecurityStore.shouldHideReplyText(context)) redact(builder, context);
+	}
+
+	private static void redact(androidx.core.app.NotificationCompat.Builder builder, Context context) {
+		builder.getExtras().clear();
+		builder.setStyle(null).setLargeIcon((android.graphics.Bitmap) null).setPublicVersion(null)
+				.setCustomContentView(null).setCustomBigContentView(null).setCustomHeadsUpContentView(null)
+				.setContentTitle("Slooop").setContentText(context.getString(com.mishiranu.dashchan.R.string.security_notification_hidden))
+				.setTicker(null).setSubText(null).setContentInfo(null).setVisibility(androidx.core.app.NotificationCompat.VISIBILITY_SECRET);
+	}
+
 	public static android.app.Notification redactNotification(Context context, android.app.Notification notification) {
-		if (!isProtected(context)) return notification;
+		if (!com.mishiranu.dashchan.BuildConfig.ENABLE_APP_SECURITY_SETTINGS || notification == null) return notification;
+		boolean replies = com.mishiranu.dashchan.C.NOTIFICATION_CHANNEL_REPLIES.equals(notification.getChannelId());
+		if (!(replies ? SecurityStore.shouldHideReplyText(context) : isProtected(context))) return notification;
 		androidx.core.app.NotificationCompat.Builder builder = new androidx.core.app.NotificationCompat.Builder(context, notification);
-		redactNotification(context, builder);
+		redact(builder, context);
+		builder.setOnlyAlertOnce(true).setSilent(true);
 		return builder.build();
 	}
 
@@ -325,6 +356,7 @@ public final class AppSecurity implements Application.ActivityLifecycleCallbacks
 				notifications.notify(active.getTag(), active.getId(), redactNotification(instance.application, active.getNotification()));
 			}
 		}
+		com.mishiranu.dashchan.content.WatcherNotifications.refreshReplyContents(instance.application);
 	}
 
 	/** Side-effect-only entry activities must defer before opening another app or importing content. */
@@ -372,6 +404,7 @@ public final class AppSecurity implements Application.ActivityLifecycleCallbacks
 		// authentication before deciding whether an unlock Activity is needed.
 		try { SecurityStore.foreground(activity, true); } catch (IOException ignored) {}
 		if (exempt(activity)) { openingLock = false; return; }
+		updateNotificationForeground();
 		if (SecurityStore.locked(activity)) {
 			shield(activity);
 			if (!openingLock && !activity.isFinishing()) {
@@ -387,6 +420,7 @@ public final class AppSecurity implements Application.ActivityLifecycleCallbacks
 
 	@Override public void onActivityPrePaused(Activity activity) {
 		resumed.remove(activity);
+		updateNotificationForeground();
 		if (enabled()) {
 			// Paused does not mean hidden for PiP. A true lock still overrides the opt-out.
 			boolean cover = coverActivity(activity, true);
@@ -405,10 +439,11 @@ public final class AppSecurity implements Application.ActivityLifecycleCallbacks
 		if (SecurityStore.locked(activity)) protectAll();
 	}
 
-	@Override public void onActivityDestroyed(Activity activity) { started.remove(activity); resumed.remove(activity); shields.remove(activity); }
+	@Override public void onActivityDestroyed(Activity activity) { started.remove(activity); resumed.remove(activity); shields.remove(activity); updateNotificationForeground(); }
 	@Override public void onActivityCreated(Activity activity, Bundle state) {}
 	@Override public void onActivityResumed(Activity activity) {
 		resumed.add(activity);
+		updateNotificationForeground();
 		refreshCaptureWindow(activity);
 		handler.removeCallbacks(checkForeground);
 		try { SecurityStore.foreground(activity, true); } catch (IOException ignored) {}
