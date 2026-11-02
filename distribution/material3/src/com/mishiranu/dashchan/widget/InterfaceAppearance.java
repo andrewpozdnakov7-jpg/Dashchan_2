@@ -353,6 +353,18 @@ public final class InterfaceAppearance {
 	public static void resetSpinnerChoice(View row) { StandardAppearance.resetSpinnerChoice(row); }
 	public static void configureStandardPageDialog(AlertDialog dialog) { StandardAppearance.dialog(dialog, true); }
 	public static void standardLinearProgress(android.widget.ProgressBar view) { NativeContentAppearance.linear(view); }
+	public static void mediaCaption(TextView view) { MediaContentAppearance.apply(view, MediaContentAppearance.Role.CAPTION); }
+	public static void mediaHeading(TextView view) { MediaContentAppearance.apply(view, MediaContentAppearance.Role.HEADING); }
+	public static void mediaBody(TextView view) { MediaContentAppearance.apply(view, MediaContentAppearance.Role.BODY); }
+	public static void mediaAction(TextView view) { MediaContentAppearance.apply(view, MediaContentAppearance.Role.ACTION); }
+	public static void mediaIcon(View view) { MediaContentAppearance.apply(view, MediaContentAppearance.Role.ICON); }
+	public static void mediaPanel(View view, boolean toolbar) { MediaContentAppearance.apply(view, toolbar ? MediaContentAppearance.Role.TOOLBAR : MediaContentAppearance.Role.PANEL); }
+	public static void mediaWindow(View view) { MediaContentAppearance.apply(view, MediaContentAppearance.Role.WINDOW); }
+	public static void mediaSlider(SeekBar view) { MediaContentAppearance.apply(view, MediaContentAppearance.Role.SLIDER); }
+	public static void mediaLoading(android.widget.ProgressBar view) { MediaContentAppearance.apply(view, MediaContentAppearance.Role.LOADING); }
+	public static void quickNavigationIcon(ImageView view) { MediaContentAppearance.apply(view, MediaContentAppearance.Role.QUICK); }
+	public static void compactFooter(TextView view) { MediaContentAppearance.apply(view, MediaContentAppearance.Role.FOOTER); }
+	public static void configureMediaDialog(AlertDialog dialog) { MediaContentAppearance.dialog(dialog); }
 	public static void standardNativePanel(ViewGroup root, TextView title, TextView status, ViewGroup actions) {
 		NativeContentAppearance.panel(root, title, status, actions);
 	}
@@ -385,6 +397,7 @@ public final class InterfaceAppearance {
 		}
 		// Parent-owned layout must run after child typography restore, not be undone by it.
 		StandardAppearance.refresh(view);
+		MediaContentAppearance.refresh(view);
 	}
 	public static void configureDialog(AlertDialog dialog) {
 		if (!supported(dialog.getContext())) return;

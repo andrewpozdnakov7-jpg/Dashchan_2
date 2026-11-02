@@ -25,6 +25,34 @@ import org.json.JSONObject;
 public final class SecurityStore {
 	public static final String ALLOW_SCREENSHOTS = "allow_screenshots";
 	public static final String HIDE_PIP_VIDEO = "hide_pip_video";
+	public static final String HIDE_REPLY_TEXT_BACKGROUND = "hide_reply_text_background";
+
+	public static boolean hideReplyTextInBackground(Context context) throws IOException {
+		if (!com.mishiranu.dashchan.BuildConfig.ENABLE_APP_SECURITY_SETTINGS) return false;
+		return update(context, s -> s.optBoolean(HIDE_REPLY_TEXT_BACKGROUND, true));
+	}
+
+	public static boolean shouldHideReplyText(Context context) {
+		if (!com.mishiranu.dashchan.BuildConfig.ENABLE_APP_SECURITY_SETTINGS) return false;
+		try {
+			return update(context, s -> {
+				boolean enabled = authenticationMode(s) != null;
+				boolean hidden = s.optBoolean(HIDE_REPLY_TEXT_BACKGROUND, true);
+				return ReplyNotificationPrivacy.hide(enabled, hidden,
+						!enabled || !hidden || SecuritySessionProvider.notificationForegroundUnlocked(context),
+						s.optBoolean("reset_pending"));
+			});
+		} catch (IOException e) { return true; }
+	}
+
+	static void setHideReplyTextInBackground(Context context, boolean hidden,
+			java.util.function.BooleanSupplier authorization) throws IOException {
+		authorizedUpdate(context, authorization, s -> {
+			if (authenticationMode(s) == null || s.optBoolean("reset_pending")) throw new IOException("Notification setting unavailable");
+			s.put(HIDE_REPLY_TEXT_BACKGROUND, hidden); return null;
+		});
+		AppSecurity.notifyChanged(context);
+	}
 
 	public static boolean hidePipVideo(Context context) {
 		if (!com.mishiranu.dashchan.BuildConfig.ENABLE_APP_SECURITY_SETTINGS) return false;

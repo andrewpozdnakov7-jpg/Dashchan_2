@@ -90,6 +90,7 @@
     <string name="pe_export_settings">Параметры сохранения</string>
     <string name="pe_export_size">Размер изображения</string>
     <string name="pe_export_no_resize">Максимальный размер</string>
+    <string name="pe_export_memory_failed">Не хватает памяти для сохранения в выбранном разрешении. Правки останутся в редакторе. Выберите меньший размер в настройках экспорта и повторите сохранение.</string>
     <string name="pe_export_format">Формат</string>
     <string name="pe_export_actual_size">Размер сохранённого фото: %1$d × %2$d</string>
     <string name="pe_mask_scope">Размывать:</string>

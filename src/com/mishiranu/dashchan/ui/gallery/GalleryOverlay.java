@@ -2116,45 +2116,7 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 		}
 
 		Context context = getWindow().getContext();
-		float density = ResourceUtils.obtainDensity(context);
-		FrameLayout frameLayout = new FrameLayout(context);
-		frameLayout.setBackgroundColor(0xf0222222);
-		LinearLayout linearLayout = new LinearLayout(context);
-		linearLayout.setOrientation(LinearLayout.VERTICAL);
-		frameLayout.addView(linearLayout, new FrameLayout.LayoutParams((int) (304f * density),
-				FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER));
-
-		Button button = new Button(context, null, android.R.attr.borderlessButtonStyle);
-		ThemeEngine.applyStyle(button);
-		button.setText(R.string.got_it);
-		button.setMinimumWidth(0);
-		button.setMinWidth(0);
-
-		int paddingLeft = button.getPaddingLeft();
-		int paddingRight = button.getPaddingRight();
-		int paddingTop = button.getPaddingTop();
-		int paddingBottom = Math.max(0, (int) (24f * density) - paddingTop);
-
-		int[] titles = {R.string.context_menu, R.string.gallery};
-		int[] messages = {R.string.context_menu_description__sentence, R.string.gallery_description__sentence};
-
-		for (int i = 0; i < titles.length; i++) {
-			TextView textView1 = new TextView(context, null, android.R.attr.textAppearanceLarge);
-			ThemeEngine.applyStyle(textView1);
-			textView1.setText(titles[i]);
-			textView1.setTypeface(ResourceUtils.TYPEFACE_LIGHT);
-			textView1.setPadding(paddingLeft, paddingTop, paddingRight, (int) (4f * density));
-			TextView textView2 = new TextView(context, null, android.R.attr.textAppearanceSmall);
-			ThemeEngine.applyStyle(textView2);
-			textView2.setText(messages[i]);
-			textView2.setPadding(paddingLeft, 0, paddingRight, paddingBottom);
-			linearLayout.addView(textView1, LinearLayout.LayoutParams.MATCH_PARENT,
-					LinearLayout.LayoutParams.WRAP_CONTENT);
-			linearLayout.addView(textView2, LinearLayout.LayoutParams.MATCH_PARENT,
-					LinearLayout.LayoutParams.WRAP_CONTENT);
-		}
-
-		linearLayout.addView(button, LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+		FrameLayout frameLayout = new com.mishiranu.dashchan.widget.GalleryShowcaseView(context, () -> destroyShowcase(true));
 
 		WindowManager windowManager = (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
 		WindowManager.LayoutParams layoutParams = new WindowManager.LayoutParams();
@@ -2168,6 +2130,5 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 		windowManager.addView(frameLayout, layoutParams);
 
 		showcaseDestroy = () -> windowManager.removeViewImmediate(frameLayout);
-		button.setOnClickListener(v -> destroyShowcase(true));
 	}
 }

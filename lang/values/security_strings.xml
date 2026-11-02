@@ -19,6 +19,9 @@
 	<string name="security_cleanup_incomplete_short">Some files remain undeleted</string>
 	<string name="security_cleanup_idle_short">No unfinished cleanup</string>
 	<string name="security_allow_screenshots">Allow screenshots</string>
+	<string name="security_hide_reply_text">Hide reply text in the background</string>
+	<string name="security_hide_reply_text_summary">Hide reply contents in notifications while Slooop is in the background or locked. On by default.</string>
+	<string name="security_show_reply_text_warning">If you turn hiding off, reply text can appear in notifications even while Slooop is in the background or locked. Android notification settings still apply.</string>
 	<string name="security_hide_pip_video">Hide video in PiP</string>
 	<string name="security_hide_pip_video_summary">Cover video with a black placeholder in picture-in-picture, even while the app is unlocked.</string>
 	<string name="security_screenshots_summary">Allow capture while the app is unlocked. Off by default.</string>

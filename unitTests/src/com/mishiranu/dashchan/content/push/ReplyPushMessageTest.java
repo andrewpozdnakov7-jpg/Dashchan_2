@@ -36,6 +36,15 @@ public class ReplyPushMessageTest {
 		assertNull(message.comment);
 	}
 
+	@Test public void localContentRetainsTheExactWireIdentityAndCannotAddTextToTheWireContract() {
+		Map<String, String> data = createValidData(); ReplyPushMessage message = ReplyPushMessage.parse(data);
+		ReplyPushMessage content = message.withContent("Local board response", 12345);
+		org.junit.Assert.assertTrue(message.sameEvent(content)); assertEquals("Local board response", content.comment);
+		assertEquals(12345, content.timestamp); assertNull(message.comment);
+		data.put("reply_post_id", "790"); org.junit.Assert.assertFalse(content.sameEvent(ReplyPushMessage.parse(data)));
+		data = createValidData(); data.put("comment", "Untrusted relay text"); assertNull(ReplyPushMessage.parse(data));
+	}
+
 	@Test
 	public void rejectsUnsupportedChan() {
 		Map<String, String> data = createValidData();

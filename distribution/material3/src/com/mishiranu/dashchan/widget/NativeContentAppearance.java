@@ -23,6 +23,10 @@ final class NativeContentAppearance {
 		Linear state = tag instanceof Linear ? (Linear) tag : new Linear(view);
 		view.setTag(R.id.standard_native_content_appearance, state); state.apply();
 	}
+	static void resolveLinear(ProgressBar view, boolean enabled) {
+		Object tag = view.getTag(R.id.standard_native_content_appearance);
+		if (tag instanceof Linear) ((Linear) tag).apply(enabled);
+	}
 	static void panel(ViewGroup root, TextView title, TextView status, ViewGroup actions) {
 		Object tag = root.getTag(R.id.standard_native_content_appearance);
 		Panel state = tag instanceof Panel ? (Panel) tag : new Panel(root, title, status, actions);
@@ -50,7 +54,9 @@ final class NativeContentAppearance {
 			layers.setId(0, android.R.id.background); layers.setId(1, android.R.id.secondaryProgress); layers.setId(2, android.R.id.progress);
 		}
 		void apply() {
-			boolean enabled = InterfaceAppearance.isEnabled(view.getContext());
+			apply(InterfaceAppearance.isEnabled(view.getContext()));
+		}
+		void apply(boolean enabled) {
 			if (!enabled && !modern) return;
 			ViewGroup.LayoutParams params = view.getLayoutParams();
 			if (!enabled) {

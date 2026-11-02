@@ -43,6 +43,7 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 	private static final String KEY_REPLIES_CLEARED_THROUGH = "repliesClearedThrough";
 	private static final String KEY_UNREAD = "unread";
 	private static final String KEY_PUSH_PENDING = "pushPending";
+	private static final String KEY_STATISTICS_ELIGIBLE = "statisticsEligible";
 
 	private static final MyPostsStorage INSTANCE = new MyPostsStorage();
 
@@ -88,6 +89,7 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 		public final long time;
 		public boolean unread;
 		private boolean pushPending;
+		private boolean statisticsEligible;
 
 		private Reply(PostNumber postNumber, String comment, long time, boolean unread) {
 			this.postNumber = postNumber;
@@ -99,6 +101,7 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 		private Reply(Reply reply) {
 			this(reply.postNumber, reply.comment, reply.time, reply.unread);
 			pushPending = reply.pushPending;
+			statisticsEligible = reply.statisticsEligible;
 		}
 	}
 
@@ -202,6 +205,18 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 			clearAllHistory(success -> {});
 		} else {
 			startRead();
+			StatisticsStorage statistics = StatisticsStorage.getInstance();
+			// Legacy/own replies seed deduplication first. New-version replies can recover a
+			// delayed statistics write after process death, without recounting persisted entries.
+			for (int pass = 0; pass < 2; pass++) {
+				boolean count = pass != 0;
+				for (TrackedPost post : posts) {
+					ArrayList<PostNumber> known = new ArrayList<>();
+					for (Reply reply : post.replies) if (reply.statisticsEligible == count) known.add(reply.postNumber);
+					statistics.recordReplies(post.chanName, post.boardName, post.threadNumber, known, count);
+				}
+			}
+			statistics.await(true); // Queue the legacy baseline before any new my-posts snapshot.
 			if (pruneInactivePosts()) {
 				serialize();
 			}
@@ -322,6 +337,7 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 									long replyTime = 0L;
 									boolean unread = false;
 									boolean pushPending = false;
+									boolean statisticsEligible = false;
 									reader.startObject();
 									while (!reader.endStruct()) {
 										switch (reader.nextName()) {
@@ -340,6 +356,9 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 											case KEY_PUSH_PENDING:
 												pushPending = reader.nextBoolean();
 												break;
+											case KEY_STATISTICS_ELIGIBLE:
+												statisticsEligible = reader.nextBoolean();
+												break;
 											default:
 												reader.skip();
 												break;
@@ -348,6 +367,7 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 									if (replyNumber != null) {
 										Reply reply = new Reply(replyNumber, replyComment, replyTime, unread);
 										reply.pushPending = pushPending;
+										reply.statisticsEligible = statisticsEligible;
 										replies.add(reply);
 									}
 								}
@@ -428,6 +448,9 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 				writer.value(reply.time);
 				writer.name(KEY_UNREAD);
 				writer.value(reply.unread);
+				if (reply.statisticsEligible) {
+					writer.name(KEY_STATISTICS_ELIGIBLE); writer.value(true);
+				}
 				if (reply.pushPending) {
 					writer.name(KEY_PUSH_PENDING);
 					writer.value(true);
@@ -637,6 +660,11 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 		newReply.pushPending = fromPush;
 		trackedPost.replies.add(newReply);
 		Collections.sort(trackedPost.replies, Comparator.comparing(reply -> reply.postNumber));
+		StatisticsStorage statistics = StatisticsStorage.getInstance();
+		boolean own = postsMap.containsKey(makeKey(chanName, boardName, threadNumber, replyPostNumber));
+		newReply.statisticsEligible = !own;
+		statistics.recordReplies(chanName, boardName, threadNumber, Collections.singleton(replyPostNumber), !own);
+		statistics.await(true); // Counts and deduplication are queued together, ahead of the reply list.
 		serialize();
 		notifyChanged();
 		return AddReplyResult.ADDED;
@@ -654,6 +682,30 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 			}
 		}
 		return null;
+	}
+
+	/** Eligibility is rechecked after network I/O; a read/clear/untrack must not resurrect a reply. */
+	public synchronized boolean needsPushReplyText(String chanName, String boardName, String threadNumber,
+			PostNumber trackedPostNumber, PostNumber replyPostNumber) {
+		TrackedPost post = postsMap.get(makeKey(chanName, boardName, threadNumber, trackedPostNumber));
+		if (post == null || !post.trackingActive || post.repliesClearedThrough != null
+				&& replyPostNumber.compareTo(post.repliesClearedThrough) <= 0) return false;
+		for (Reply reply : post.replies) if (reply.postNumber.equals(replyPostNumber)) {
+			return reply.unread && StringUtils.isEmptyOrWhitespace(reply.comment);
+		}
+		return true;
+	}
+	public synchronized boolean updatePushReplyText(String chanName, String boardName, String threadNumber,
+			PostNumber trackedPostNumber, PostNumber replyPostNumber, String text) {
+		if (StringUtils.isEmptyOrWhitespace(text) || !needsPushReplyText(chanName, boardName, threadNumber, trackedPostNumber, replyPostNumber)) return false;
+		boolean changed = false;
+		for (TrackedPost post : posts) if (post.trackingActive && post.chanName.equals(chanName)
+				&& post.boardName.equals(StringUtils.emptyIfNull(boardName)) && post.threadNumber.equals(threadNumber)) {
+			for (Reply reply : post.replies) if (reply.postNumber.equals(replyPostNumber)
+					&& StringUtils.isEmptyOrWhitespace(reply.comment)) { reply.comment = text; changed = true; }
+		}
+		if (changed) { serialize(); notifyChanged(); }
+		return changed;
 	}
 
 	public synchronized boolean isPushPending(String chanName, String boardName, String threadNumber,
@@ -836,6 +888,8 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 		}
 		long now = System.currentTimeMillis();
 		boolean changed = false;
+		LinkedHashSet<PostNumber> received = new LinkedHashSet<>();
+		LinkedHashSet<PostNumber> ownReplies = new LinkedHashSet<>();
 		for (TrackedPost trackedPost : tracked) {
 			if (trackedPost.threadDeleted) {
 				trackedPost.threadDeleted = false;
@@ -866,6 +920,8 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 						&& post.number.compareTo(trackedPost.repliesClearedThrough) <= 0) {
 					continue;
 				}
+				boolean own = postsMap.containsKey(makeKey(key.chanName, key.boardName, key.threadNumber, post.number));
+				(own ? ownReplies : received).add(post.number);
 				HashMap<PostNumber, Reply> knownReplies = knownRepliesByTrackedPost.get(trackedPost);
 				Reply knownReply = knownReplies.get(post.number);
 				if (knownReply == null) {
@@ -873,6 +929,7 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 						clearedComment = HtmlParser.clear(post.comment);
 					}
 					Reply reply = new Reply(post.number, clearedComment, post.timestamp, true);
+					reply.statisticsEligible = !own;
 					trackedPost.replies.add(reply);
 					knownReplies.put(post.number, reply);
 					changed = true;
@@ -891,6 +948,10 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 			Collections.sort(trackedPost.replies,
 					Comparator.comparing(reply -> reply.postNumber));
 		}
+		StatisticsStorage statistics = StatisticsStorage.getInstance();
+		statistics.recordReplies(key.chanName, key.boardName, key.threadNumber, ownReplies, false);
+		statistics.recordReplies(key.chanName, key.boardName, key.threadNumber, received, true);
+		statistics.await(true);
 		if (changed) {
 			serialize();
 			notifyChanged();

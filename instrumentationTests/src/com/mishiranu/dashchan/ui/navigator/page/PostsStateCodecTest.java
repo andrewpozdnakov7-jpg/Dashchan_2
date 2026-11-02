@@ -15,7 +15,6 @@ public class PostsStateCodecTest {
 		PostsStateCodec.ThreadState original = new PostsStateCodec.ThreadState();
 		original.expandedPosts.add(new PostNumber(12, 0));
 		original.unreadPosts.add(new PostNumber(13, 1));
-		original.isAddedToHistory = true;
 		original.threadTitle = "title";
 		original.scrollToPostNumber = new PostNumber(14, 0);
 		original.selectedPosts = new HashSet<>(original.expandedPosts);
@@ -28,7 +27,6 @@ public class PostsStateCodecTest {
 			PostsStateCodec.readFromParcel(parcel, restored);
 			assertEquals(original.expandedPosts, restored.expandedPosts);
 			assertEquals(original.unreadPosts, restored.unreadPosts);
-			assertTrue(restored.isAddedToHistory);
 			assertEquals(original.threadTitle, restored.threadTitle);
 			assertEquals(original.scrollToPostNumber, restored.scrollToPostNumber);
 			assertEquals(original.selectedPosts, restored.selectedPosts);
@@ -44,6 +42,23 @@ public class PostsStateCodecTest {
 			PostsStateCodec.ThreadState state = new PostsStateCodec.ThreadState();
 			PostsStateCodec.readFromParcel(parcel, state);
 			assertNull(state.translationEnabled); assertNull(state.selectedPosts);
+		} finally { parcel.recycle(); }
+	}
+	@Test public void legacyRecordedHistoryFlagDoesNotShiftSavedPageFields() {
+		Parcel parcel = Parcel.obtain();
+		try {
+			parcel.writeInt(0); parcel.writeInt(0); parcel.writeByte((byte) 1);
+			parcel.writeString("cached thread"); parcel.writeByte((byte) 1);
+			new PostNumber(123, 4).writeToParcel(parcel, 0);
+			parcel.writeInt(-1); parcel.writeByte((byte) 0);
+			parcel.setDataPosition(0);
+			PostsStateCodec.ThreadState state = new PostsStateCodec.ThreadState();
+			PostsStateCodec.readFromParcel(parcel, state);
+			assertEquals("cached thread", state.threadTitle);
+			assertEquals(new PostNumber(123, 4), state.scrollToPostNumber);
+			assertNull(state.selectedPosts);
+			assertEquals(Boolean.FALSE, state.translationEnabled);
+			assertEquals(0, parcel.dataAvail());
 		} finally { parcel.recycle(); }
 	}
 	@Test public void positionWireFormatPreservesOffsetAndNullFallback() {

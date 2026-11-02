@@ -23,6 +23,8 @@ public final class SecuritySessionProvider extends ContentProvider {
 	private final HashSet<String> rememberable = new HashSet<>();
 	private final Map<String, Long> backgroundStarts = new HashMap<>();
 	private final Map<String, HashSet<IBinder>> foreground = new HashMap<>();
+	// Notification visibility is independent of authentication's handoff/grace-period bookkeeping.
+	private final Map<String, HashSet<IBinder>> notificationForeground = new HashMap<>();
 	private final Map<IBinder, IBinder.DeathRecipient> clients = new HashMap<>();
 	private final Map<String, Long> generations = new HashMap<>();
 	private final Map<String, IBinder> authenticationOwners = new HashMap<>();
@@ -52,6 +54,7 @@ public final class SecuritySessionProvider extends ContentProvider {
 		IBinder.DeathRecipient death = () -> {
 			synchronized (SecuritySessionProvider.this) {
 				clients.remove(client);
+				for (HashSet<IBinder> visible : notificationForeground.values()) visible.remove(client);
 				for (Map.Entry<String, HashSet<IBinder>> entry : foreground.entrySet()) {
 					entry.getValue().remove(client);
 					if (entry.getValue().isEmpty() || authenticationOwners.get(entry.getKey()) == client) revoke(entry.getKey());
@@ -65,13 +68,18 @@ public final class SecuritySessionProvider extends ContentProvider {
 		if (Binder.getCallingUid() != Process.myUid() || key == null) throw new SecurityException();
 		HashSet<IBinder> active = foreground.get(key);
 		if (active == null) { active = new HashSet<>(); foreground.put(key, active); }
+		HashSet<IBinder> notificationActive = notificationForeground.get(key);
+		if (notificationActive == null) { notificationActive = new HashSet<>(); notificationForeground.put(key, notificationActive); }
+		notificationActive.removeIf(client -> !client.isBinderAlive());
 		boolean lostClient = active.removeIf(client -> !client.isBinderAlive());
 		IBinder owner = authenticationOwners.get(key);
 		if (owner != null && !owner.isBinderAlive() || active.isEmpty() && lostClient) revoke(key);
 		else if (active.isEmpty() && unlocked.contains(key)) suspend(key);
 		IBinder caller = extras != null ? extras.getBinder("client") : null;
 		Long backgroundAt = null;
-		if ("lock".equals(method)) { restoreBlocked.add(key); revoke(key); }
+		if ("notifications-active".equals(method)) { if (registerClient(caller)) notificationActive.add(caller); }
+		else if ("notifications-inactive".equals(method)) { notificationActive.remove(caller); }
+		else if ("lock".equals(method)) { restoreBlocked.add(key); revoke(key); }
 		else if ("suspend".equals(method)) {
 			if (unlocked.contains(key)) backgroundAt = beginBackground(key);
 			else if (!backgroundStarts.containsKey(key)) suspend(key);
@@ -107,6 +115,7 @@ public final class SecuritySessionProvider extends ContentProvider {
 		} else if (!"query".equals(method) && !"background-grant".equals(method)) throw new IllegalArgumentException("Unknown session operation");
 		Bundle result = new Bundle();
 		result.putBoolean("unlocked", unlocked.contains(key)); result.putLong("generation", generation(key));
+		result.putBoolean("notification_foreground", !notificationActive.isEmpty());
 		if (backgroundAt != null) result.putLong("background_at", backgroundAt);
 		if ("background-grant".equals(method)) {
 			Long pending = backgroundStarts.get(key);
@@ -143,6 +152,18 @@ public final class SecuritySessionProvider extends ContentProvider {
 	}
 	static boolean isUnlocked(Context context) {
 		try { Bundle state = request(context, "query", null); return state != null && state.getBoolean("unlocked"); }
+		catch (RuntimeException e) { return false; }
+	}
+	static boolean notificationForegroundUnlocked(Context context) {
+		try {
+			Bundle state = request(context, "query", null);
+			android.os.PowerManager power = context.getSystemService(android.os.PowerManager.class);
+			return state != null && state.getBoolean("unlocked") && state.getBoolean("notification_foreground")
+					&& power != null && power.isInteractive();
+		} catch (RuntimeException e) { return false; }
+	}
+	static boolean setNotificationForeground(Context context, boolean active) {
+		try { return request(context, active ? "notifications-active" : "notifications-inactive", null) != null; }
 		catch (RuntimeException e) { return false; }
 	}
 	static void revoke(Context context) {

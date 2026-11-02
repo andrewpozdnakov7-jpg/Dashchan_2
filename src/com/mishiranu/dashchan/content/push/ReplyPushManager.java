@@ -24,6 +24,7 @@ public final class ReplyPushManager {
 	private static final Object DELIVERY_LOCK = new Object();
 
 	public enum DeliveryResult { HANDLED, IGNORED, RETRY }
+	public enum ReplyTextPlan { SKIP, READ, RETRY }
 
 	private ReplyPushManager() {}
 
@@ -137,20 +138,42 @@ public final class ReplyPushManager {
 	}
 
 	public static DeliveryResult processData(Context context, Map<String, String> data) {
+		return processData(context, data, null);
+	}
+	public static ReplyTextPlan prepareReplyText(Map<String, String> data, boolean retry) {
+		ReplyPushMessage message = ReplyPushMessage.parse(data);
 		synchronized (DELIVERY_LOCK) {
-			return processDataLocked(context, data);
+			if (message == null || !Preferences.isTrackMyPostsEnabled() || !Preferences.isReplyPushEnabled()
+					|| isHandled(message.eventId) && !retry) return ReplyTextPlan.SKIP;
+			MyPostsStorage storage = MyPostsStorage.getInstance();
+			if (!storage.needsPushReplyText(message.chanName, message.boardName, message.threadNumber,
+					message.trackedPostNumber, message.replyPostNumber)) return ReplyTextPlan.SKIP;
+			// Persist the known reply before I/O: a concurrent history clear now includes this ID.
+			if (!isHandled(message.eventId)) storage.addReply(message.chanName, message.boardName, message.threadNumber,
+					message.trackedPostNumber, message.replyPostNumber, null, message.timestamp, true);
+			if (!com.mishiranu.dashchan.content.storage.StatisticsStorage.getInstance().awaitSaved()
+					|| !storage.awaitSaved()) return ReplyTextPlan.RETRY;
+			return storage.needsPushReplyText(message.chanName, message.boardName, message.threadNumber,
+					message.trackedPostNumber, message.replyPostNumber) ? ReplyTextPlan.READ : ReplyTextPlan.SKIP;
+		}
+	}
+	/** A locally fetched body is accepted only for exactly the validated wire event. */
+	public static DeliveryResult processData(Context context, Map<String, String> data, ReplyPushMessage resolved) {
+		ReplyPushMessage message = ReplyPushMessage.parse(data);
+		if (message != null && message.sameEvent(resolved)) message = resolved;
+		synchronized (DELIVERY_LOCK) {
+			return processDataLocked(context, message);
 		}
 	}
 
-	private static DeliveryResult processDataLocked(Context context, Map<String, String> data) {
-		ReplyPushMessage message = ReplyPushMessage.parse(data);
+	private static DeliveryResult processDataLocked(Context context, ReplyPushMessage message) {
 		if (message == null) {
 			Logger.write(Logger.Type.DEBUG, LOG_TAG, "message_ignored", "reason", "invalid");
 			return DeliveryResult.IGNORED;
 		}
 		boolean trackingEnabled = Preferences.isTrackMyPostsEnabled();
 		boolean pushEnabled = Preferences.isReplyPushEnabled();
-		Logger.write(Logger.Type.DEBUG, LOG_TAG, "message_received", "fields", data.size(),
+		Logger.write(Logger.Type.DEBUG, LOG_TAG, "message_received",
 				"trackingEnabled", trackingEnabled, "pushEnabled", pushEnabled);
 		if (!trackingEnabled || !pushEnabled) {
 			Logger.write(Logger.Type.DEBUG, LOG_TAG, "message_ignored", "reason", "disabled");
@@ -159,11 +182,15 @@ public final class ReplyPushManager {
 					message.trackedPostNumber, message.replyPostNumber);
 			return storage.awaitSaved() ? DeliveryResult.IGNORED : DeliveryResult.RETRY;
 		}
+		MyPostsStorage storage = MyPostsStorage.getInstance();
+		if (message.comment != null) storage.updatePushReplyText(message.chanName, message.boardName,
+				message.threadNumber, message.trackedPostNumber, message.replyPostNumber, message.comment);
+		// Also retry a previous failed enrichment write whose text is already present in RAM.
+		if (!storage.awaitSaved()) return DeliveryResult.RETRY;
 		if (isHandled(message.eventId)) {
 			Logger.write(Logger.Type.DEBUG, LOG_TAG, "message_ignored", "reason", "duplicate");
 			return DeliveryResult.IGNORED;
 		}
-		MyPostsStorage storage = MyPostsStorage.getInstance();
 		MyPostsStorage.AddReplyResult result = storage.addReply(message.chanName, message.boardName,
 				message.threadNumber, message.trackedPostNumber, message.replyPostNumber,
 				message.comment, message.timestamp, true);
@@ -179,7 +206,8 @@ public final class ReplyPushManager {
 		boolean success = ReplyDelivery.finish(new ReplyDelivery.Steps() {
 			@Override
 			public boolean persist() {
-				boolean saved = storage.awaitSaved();
+				boolean saved = com.mishiranu.dashchan.content.storage.StatisticsStorage.getInstance().awaitSaved()
+						&& storage.awaitSaved();
 				if (!saved) Logger.write(Logger.Type.ERROR, LOG_TAG, "message_save_failed", "handled", false);
 				return saved;
 			}

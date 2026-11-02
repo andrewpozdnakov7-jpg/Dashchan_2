@@ -32,13 +32,28 @@ public final class EditorRenderer {
         int width = source.getWidth(), height = source.getHeight();
         int[] pixels = new int[width * height];
         source.getPixels(pixels, 0, width, 0, 0, width, height);
+        adjustPixels(pixels, pixels.length, state, cancelled);
+        if (state.adjustments[EditorDocument.Adjustment.SHARPNESS.storageIndex] > 0) sharpen(pixels, width, height, state.adjustments[EditorDocument.Adjustment.SHARPNESS.storageIndex] / 100f, cancelled);
+        checkCancelled(cancelled);
+        Bitmap result = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+        try {
+            result.setPixels(pixels, 0, width, 0, 0, width, height);
+            applyMasks(result, state, false, cancelled);
+            checkCancelled(cancelled);
+            return result;
+        } catch (RuntimeException | OutOfMemoryError e) {
+            result.recycle(); throw e;
+        }
+    }
+
+    private static void adjustPixels(int[] pixels, int count, EditorDocument.State state, BooleanSupplier cancelled) {
         float brightness = state.adjustments[EditorDocument.Adjustment.BRIGHTNESS.storageIndex] * 1.2f;
         float contrast = (float) Math.pow(2, state.adjustments[EditorDocument.Adjustment.CONTRAST.storageIndex] / 100f);
         float saturation = 1f + state.adjustments[EditorDocument.Adjustment.SATURATION.storageIndex] / 100f;
         float warmth = state.adjustments[EditorDocument.Adjustment.WARMTH.storageIndex] * 0.35f;
         float shadows = state.adjustments[EditorDocument.Adjustment.SHADOWS.storageIndex] * 0.8f, highlights = state.adjustments[EditorDocument.Adjustment.HIGHLIGHTS.storageIndex] * 0.8f;
         float strength = state.filterStrength / 100f;
-        for (int i = 0; i < pixels.length; i++) {
+        for (int i = 0; i < count; i++) {
             if ((i & 4095) == 0) checkCancelled(cancelled);
             int color = pixels[i];
             float r = Color.red(color), g = Color.green(color), b = Color.blue(color);
@@ -70,17 +85,6 @@ public final class EditorRenderer {
             }
             pixels[i] = Color.argb(Color.alpha(color), channel(r + (fr - r) * strength),
                     channel(g + (fg - g) * strength), channel(b + (fb - b) * strength));
-        }
-        if (state.adjustments[EditorDocument.Adjustment.SHARPNESS.storageIndex] > 0) sharpen(pixels, width, height, state.adjustments[EditorDocument.Adjustment.SHARPNESS.storageIndex] / 100f, cancelled);
-        checkCancelled(cancelled);
-        Bitmap result = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
-        try {
-            result.setPixels(pixels, 0, width, 0, 0, width, height);
-            applyMasks(result, state, false, cancelled);
-            checkCancelled(cancelled);
-            return result;
-        } catch (RuntimeException | OutOfMemoryError e) {
-            result.recycle(); throw e;
         }
     }
 
@@ -176,19 +180,27 @@ public final class EditorRenderer {
         Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         int width = photo.getWidth(), height = photo.getHeight();
         Rect rect = maskRect(item, width, height);
-        if (rect.width() < 1 || rect.height() < 1) return;
+        if (rect.width() < 1 || rect.height() < 1) { canvas.setBitmap(null); return; }
         if (item.kind == EditorDocument.Kind.COVER) {
-            paint.setColor(item.color | 0xff000000); canvas.drawRect(rect, paint); return;
+            try { paint.setColor(item.color | 0xff000000); canvas.drawRect(rect, paint); }
+            finally { canvas.setBitmap(null); }
+            return;
         }
         int cell = Math.max(2, Math.round(Math.min(width, height) * item.size));
-        Bitmap region = null, small = null;
+        Bitmap small = null;
         try {
-            region = Bitmap.createBitmap(photo, rect.left, rect.top, rect.width(), rect.height());
-            small = Bitmap.createScaledBitmap(region, Math.max(1, rect.width() / cell),
-                    Math.max(1, rect.height() / cell), true);
+            // Integer source bounds and downsampling by >=2 keep bilinear taps inside the region.
+            // Sample directly into the effect buffer, without duplicating a full-resolution region.
+            small = Bitmap.createBitmap(Math.max(1, rect.width() / cell),
+                    Math.max(1, rect.height() / cell), Bitmap.Config.ARGB_8888);
+            Canvas sampling = new Canvas(small);
+            try {
+                sampling.drawBitmap(photo, rect, new Rect(0, 0, small.getWidth(), small.getHeight()),
+                        new Paint(Paint.FILTER_BITMAP_FLAG));
+            } finally { sampling.setBitmap(null); }
             if (item.kind == EditorDocument.Kind.BLUR) {
                 Bitmap blurred = blurSmall(small, cancelled);
-                if (small != region && small != photo) small.recycle();
+                small.recycle();
                 small = blurred;
             }
             paint.setFilterBitmap(item.kind == EditorDocument.Kind.BLUR);
@@ -196,32 +208,46 @@ public final class EditorRenderer {
             paint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.SRC));
             canvas.drawBitmap(small, null, rect, paint);
         } finally {
-            if (small != null && small != region && small != photo) small.recycle();
-            if (region != null && region != photo) region.recycle();
+            canvas.setBitmap(null);
+            if (small != null) small.recycle();
         }
     }
 
     private static Bitmap blurSmall(Bitmap bitmap, BooleanSupplier cancelled) {
         int width = bitmap.getWidth(), height = bitmap.getHeight();
-        int[] pixels = new int[width * height], result = new int[pixels.length];
-        bitmap.getPixels(pixels, 0, width, 0, 0, width, height);
-        for (int y = 0; y < height; y++) {
-            checkCancelled(cancelled);
-            for (int x = 0; x < width; x++) {
-            int a = 0, r = 0, g = 0, b = 0, count = 0;
-            for (int yy = Math.max(0, y - 2); yy <= Math.min(height - 1, y + 2); yy++) {
-                for (int xx = Math.max(0, x - 2); xx <= Math.min(width - 1, x + 2); xx++) {
-                    int c = pixels[yy * width + xx];
-                    int alpha = Color.alpha(c);
-                    a += alpha; r += Color.red(c) * alpha; g += Color.green(c) * alpha; b += Color.blue(c) * alpha; count++;
+        int[][] rows = new int[5][width];
+        int[] rowNumbers = {-1, -1, -1, -1, -1}, pixels = new int[width];
+        Bitmap output = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+        try {
+            for (int y = 0; y < height; y++) {
+                checkCancelled(cancelled);
+                int first = Math.max(0, y - 2), last = Math.min(height - 1, y + 2);
+                for (int yy = first; yy <= last; yy++) {
+                    int index = yy % 5;
+                    if (rowNumbers[index] != yy) {
+                        bitmap.getPixels(rows[index], 0, width, 0, yy, width, 1);
+                        rowNumbers[index] = yy;
+                    }
                 }
+                for (int x = 0; x < width; x++) {
+                    int a = 0, r = 0, g = 0, b = 0, count = 0;
+                    for (int yy = first; yy <= last; yy++) {
+                        for (int xx = Math.max(0, x - 2); xx <= Math.min(width - 1, x + 2); xx++) {
+                            int c = rows[yy % 5][xx];
+                            int alpha = Color.alpha(c);
+                            a += alpha; r += Color.red(c) * alpha; g += Color.green(c) * alpha; b += Color.blue(c) * alpha; count++;
+                        }
+                    }
+                    // Bitmap.getPixels returns straight RGB. Average in premultiplied space,
+                    // then convert back: transparent neighbors must not darken the color.
+                    pixels[x] = a == 0 ? Color.TRANSPARENT : Color.argb(a / count, r / a, g / a, b / a);
+                }
+                output.setPixels(pixels, 0, width, 0, y, width, 1);
             }
-            // Bitmap.getPixels returns straight RGB. Average in premultiplied space,
-            // then convert back: transparent neighbors must not darken the color.
-            result[y * width + x] = a == 0 ? Color.TRANSPARENT : Color.argb(a / count, r / a, g / a, b / a);
-            }
+            return output;
+        } catch (RuntimeException | OutOfMemoryError e) {
+            output.recycle(); throw e;
         }
-        return Bitmap.createBitmap(result, width, height, Bitmap.Config.ARGB_8888);
     }
 
     public static RectF localBounds(EditorDocument.Item item, int width, int height, Map<String, Bitmap> assets) {
@@ -316,7 +342,7 @@ public final class EditorRenderer {
             EditorDocument.Item next = state.items.get(i);
             if (next.kind == EditorDocument.Kind.ERASER && !next.drawOnComposition) { isolated = true; break; }
         }
-        int layer = isolated ? canvas.saveLayer(0, 0, width, height, null) : -1;
+        int layer = isolated ? saveDrawingLayer(canvas, width, height) : -1;
         drawShape(canvas, item, width, height, paint);
         if (isolated) {
             for (int i = index + 1; i < state.items.size(); i++) {
@@ -348,7 +374,7 @@ public final class EditorRenderer {
             if (isDrawing(item.kind) && item.kind != EditorDocument.Kind.ERASER && item.drawOnComposition == above)
                 hasDrawings = true;
         if (!hasDrawings) return;
-        int layer = canvas.saveLayer(0, 0, width, height, null);
+        int layer = saveDrawingLayer(canvas, width, height);
         Paint paint = shapePaint();
         for (EditorDocument.Item item : state.items) {
             // Both eraser scopes erase earlier strokes in both drawing layers.
@@ -415,5 +441,86 @@ public final class EditorRenderer {
         } finally {
             if (processed != null) processed.recycle();
         }
+    }
+
+    private static int saveDrawingLayer(Canvas canvas, int width, int height) {
+        Rect bounds = new Rect();
+        if (!canvas.getClipBounds(bounds) || !bounds.intersect(0, 0, width, height)) return canvas.save();
+        return canvas.saveLayer(new RectF(bounds), null);
+    }
+
+    private static void drawInBands(Canvas canvas, int width, int height, Runnable draw) {
+        int rows = EditorExportPixels.bandRows(width);
+        for (int top = 0; top < height; top += rows) {
+            int save = canvas.save();
+            try {
+                canvas.clipRect(0, top, width, Math.min(height, top + rows));
+                draw.run();
+            } finally { canvas.restoreToCount(save); }
+        }
+    }
+
+    /** Worker-only export. Source must be an owned mutable sRGB decode, never the UI preview.
+     * Modifies source in place; caller retains ownership. Result may be source itself.
+     * Only an actual geometry change needs a second full-size bitmap. */
+    public static Bitmap exportMutable(Bitmap source, EditorDocument.State state, int width, int height,
+            boolean opaque, Map<String, Bitmap> assets) {
+        if (!source.isMutable() || source.getConfig() != Bitmap.Config.ARGB_8888)
+            throw new IllegalArgumentException("Mutable ARGB export source required");
+        if (width <= 0 || height <= 0) throw new IllegalArgumentException("Invalid export size");
+        int sourceWidth = source.getWidth(), sourceHeight = source.getHeight();
+        BooleanSupplier cancelled = () -> false;
+        EditorExportPixels.adjust(source, (pixels, count) -> adjustPixels(pixels, count, state, cancelled));
+        if (state.adjustments[EditorDocument.Adjustment.SHARPNESS.storageIndex] > 0)
+            EditorExportPixels.sharpen(source, state.adjustments[EditorDocument.Adjustment.SHARPNESS.storageIndex] / 100f);
+        applyMasks(source, state, false, cancelled);
+        boolean scene = hasSceneMasks(state);
+        if (scene) {
+            Canvas canvas = new Canvas(source);
+            try {
+                drawInBands(canvas, sourceWidth, sourceHeight,
+                        () -> drawBaseAnnotations(canvas, state, sourceWidth, sourceHeight, assets));
+                Paint paint = shapePaint();
+                for (int i = 0; i < state.items.size(); i++) {
+                    EditorDocument.Item item = state.items.get(i);
+                    if (isDrawing(item.kind) && item.drawOnComposition) {
+                        final int index = i;
+                        drawInBands(canvas, sourceWidth, sourceHeight,
+                                () -> drawTopDrawing(canvas, state, index, sourceWidth, sourceHeight, paint));
+                    } else if (item.affectAnnotations && isMask(item.kind)) applyMask(source, item, cancelled);
+                }
+                drawInBands(canvas, sourceWidth, sourceHeight,
+                        () -> drawObjects(canvas, state, sourceWidth, sourceHeight, assets, true));
+            } finally { canvas.setBitmap(null); }
+        }
+        boolean identity = (state.quarterTurns & 3) == 0 && !state.mirror && state.straighten == 0f
+                && state.crop.left == 0f && state.crop.top == 0f && state.crop.right == 1f && state.crop.bottom == 1f
+                && width == sourceWidth && height == sourceHeight;
+        Canvas canvas = new Canvas();
+        Bitmap result = null;
+        try {
+            result = identity ? source : Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+            canvas.setBitmap(result);
+            Matrix transform = EditorGeometry.sourceToFrame(state, sourceWidth, sourceHeight);
+            RectF crop = EditorGeometry.cropPixels(state, sourceWidth, sourceHeight);
+            transform.postTranslate(-crop.left, -crop.top);
+            transform.postScale(width / crop.width(), height / crop.height());
+            if (!identity) {
+                if (opaque) canvas.drawColor(Color.WHITE);
+                canvas.drawBitmap(source, transform, new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG));
+            }
+            if (!scene) drawInBands(canvas, width, height, () -> {
+                int save = canvas.save();
+                try {
+                    canvas.concat(transform);
+                    drawAnnotations(canvas, state, sourceWidth, sourceHeight, assets);
+                } finally { canvas.restoreToCount(save); }
+            });
+            if (identity && opaque) canvas.drawColor(Color.WHITE, PorterDuff.Mode.DST_OVER);
+            return result;
+        } catch (RuntimeException | OutOfMemoryError e) {
+            if (result != null && result != source) result.recycle();
+            throw e;
+        } finally { canvas.setBitmap(null); }
     }
 }

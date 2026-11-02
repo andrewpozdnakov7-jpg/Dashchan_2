@@ -1339,10 +1339,14 @@ public class DialogUnit {
 		int padding = (int) (8f * density);
 		int size = (int) ((tabletLarge ? 180f : tablet ? 160f : 120f) * density);
 		int columns = tablet ? 3 : 2;
+		com.mishiranu.dashchan.widget.AttachmentTilesLayout materialGrid =
+				com.mishiranu.dashchan.widget.InterfaceAppearance.isEnabled(styledContext)
+				? new com.mishiranu.dashchan.widget.AttachmentTilesLayout(styledContext) : null;
+		if (materialGrid != null) container.addView(materialGrid, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
 		HashMap<AttachmentItem, AttachmentView> attachmentViews = new HashMap<>();
 		for (int i = 0; i < attachmentItems.size(); i++) {
 			int column = total++ % columns;
-			if (column == 0) {
+			if (materialGrid == null && column == 0) {
 				boolean first = linearLayout == null;
 				linearLayout = new LinearLayout(styledContext);
 				linearLayout.setOrientation(LinearLayout.HORIZONTAL);
@@ -1357,12 +1361,14 @@ public class DialogUnit {
 			}
 			AttachmentItem attachmentItem = attachmentItems.get(i);
 			@SuppressLint("InflateParams")
-			View view = inflater.inflate(R.layout.list_item_attachment, null);
-			ViewUtils.makeRoundedCorners(view, (int) (2f * density + 0.5f), true);
+			View view = inflater.inflate(materialGrid != null ? R.layout.list_item_attachment_material : R.layout.list_item_attachment, null);
+			ViewUtils.makeRoundedCorners(view, (int) ((materialGrid != null
+					? com.mishiranu.dashchan.widget.AppearanceShapes.MEDIUM : 2f) * density + 0.5f), true);
 			AttachmentView attachmentView = view.findViewById(R.id.thumbnail);
 			TextView textView = view.findViewById(R.id.attachment_info);
 			textView.setBackgroundColor(0xcc222222);
 			textView.setTypeface(ResourceUtils.TYPEFACE_MEDIUM);
+			com.mishiranu.dashchan.widget.InterfaceAppearance.mediaCaption(textView);
 			attachmentItem.configureAndLoad(attachmentView, chan, false, true);
 			textView.setText(attachmentItem.getDescription(AttachmentItem.FormatMode.TWO_LINES));
 			View clickView = view.findViewById(R.id.attachment_click);
@@ -1374,14 +1380,16 @@ public class DialogUnit {
 			});
 			clickView.setTag(i);
 			int totalSize = size;
-			if (column == 0) {
+			if (materialGrid != null) {
+				materialGrid.addView(view);
+			} else if (column == 0) {
 				view.setPadding(padding, 0, padding, 0);
 				totalSize += 2 * padding;
 			} else {
 				view.setPadding(0, 0, padding, 0);
 				totalSize += padding;
 			}
-			linearLayout.addView(view, totalSize, size);
+			if (materialGrid == null) linearLayout.addView(view, totalSize, size);
 			attachmentViews.put(attachmentItem, attachmentView);
 		}
 		dialog.setContentView(rootView);

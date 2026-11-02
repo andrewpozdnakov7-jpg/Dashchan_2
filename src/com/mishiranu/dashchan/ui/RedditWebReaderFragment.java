@@ -15,6 +15,7 @@ import android.os.Looper;
 import android.text.InputType;
 import android.util.Log;
 import android.view.LayoutInflater;
+import android.view.Gravity;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
@@ -113,7 +114,7 @@ public class RedditWebReaderFragment extends ContentFragment {
 			"app.getAttribute('user-logged-in')==='true'||!!document.querySelector('[is-user-logged-in]');})()";
 
 	private WebView webView;
-	private View progressView;
+	private android.widget.ProgressBar progressView;
 	private String navigationDrawerLocker;
 	private String boardStyleScript;
 	private String readerStyleScript;
@@ -202,10 +203,19 @@ public class RedditWebReaderFragment extends ContentFragment {
 		});
 		webView.setVisibility(View.INVISIBLE);
 		layout.addView(webView, FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT);
-		progressView = new View(layout.getContext());
-		progressView.setBackgroundColor(0xff808080);
+		progressView = new android.widget.ProgressBar(layout.getContext(), null, android.R.attr.progressBarStyleHorizontal);
+		progressView.setMax(100);
+		progressView.setIndeterminate(false); progressView.setPadding(0, 0, 0, 0);
+		android.graphics.drawable.ClipDrawable legacyProgress = new android.graphics.drawable.ClipDrawable(
+				new android.graphics.drawable.ColorDrawable(0xff808080), Gravity.LEFT,
+				android.graphics.drawable.ClipDrawable.HORIZONTAL);
+		android.graphics.drawable.LayerDrawable legacyTrack = new android.graphics.drawable.LayerDrawable(
+				new android.graphics.drawable.Drawable[]{legacyProgress});
+		legacyTrack.setId(0, android.R.id.progress); progressView.setProgressTintList(null);
+		progressView.setProgressDrawable(legacyTrack);
 		layout.addView(progressView, FrameLayout.LayoutParams.MATCH_PARENT,
 				Math.max(1, (int) (3f * getResources().getDisplayMetrics().density + 0.5f)));
+		com.mishiranu.dashchan.widget.InterfaceAppearance.standardLinearProgress(progressView);
 		quickNavigation = new ThreadQuickNavigation(webView,
 				() -> !isAuthorizationMode() && webView != null && webView.isShown()
 						&& webView.getContentHeight() > 0, bottom -> {
@@ -260,8 +270,7 @@ public class RedditWebReaderFragment extends ContentFragment {
 			@Override
 			public void onProgressChanged(WebView view, int newProgress) {
 				if (progressView != null) {
-					progressView.setScaleX(newProgress / 100f);
-					progressView.setPivotX(0f);
+					progressView.setProgress(newProgress);
 					progressView.setVisibility(newProgress < 100 ? View.VISIBLE : View.INVISIBLE);
 				}
 			}
@@ -484,13 +493,18 @@ public class RedditWebReaderFragment extends ContentFragment {
 	public boolean isHistoryBackCommitting() { return historyPreview != null && historyPreview.isCommitting(); }
 	public boolean isHistoryBackTracking() { return historyPreview != null && historyPreview.isTracking(); }
 	public void startHistoryBackPreview(boolean fromLeft, java.util.function.BooleanSupplier route) {
-		if (webView != null && webView.canGoBack() && historyPreview != null) historyPreview.start(fromLeft, route);
+		// Start also resets the previous gesture's consumed result when only logical parentUrl remains.
+		if (webView != null && historyPreview != null) historyPreview.start(fromLeft, route);
 	}
 	public void progressHistoryBackPreview(float fraction) { if (historyPreview != null) historyPreview.progress(fraction); }
 	public void cancelHistoryBackPreview() { if (historyPreview != null) historyPreview.cancel(); }
 	public void finishHistoryBackPreview() { if (historyPreview != null) historyPreview.finish(); }
 	public boolean commitHistoryBackPreview() {
-		return historyPreview != null && historyPreview.commit(this::navigateBack);
+		WebView expected = webView;
+		// Predictive history owns a real, fixed previous entry. Logical parentUrl is only a normal-Back fallback.
+		return historyPreview != null && historyPreview.commit(() -> {
+			if (webView == expected && expected != null) expected.goBack();
+		});
 	}
 	private boolean navigateBack() {
 		if (webView == null) {

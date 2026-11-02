@@ -248,9 +248,20 @@ public abstract class FileHolder {
 	}
 
 	public Bitmap readImageBitmap(int maxSize, boolean mayUseRegionDecoder, boolean mayUseWebViewDecoder) {
+		return readImageBitmap(maxSize, mayUseRegionDecoder, mayUseWebViewDecoder, false);
+	}
+
+	/** Mutable sRGB pixels for an owner that edits its decode in place, without another full-size copy. */
+	public Bitmap readImageBitmap(int maxSize, boolean mayUseRegionDecoder, boolean mayUseWebViewDecoder,
+			boolean mutable) {
 		ImageData imageData = getImageData();
 		if (imageData.type != ImageType.NOT_IMAGE) {
 			BitmapFactory.Options options = new BitmapFactory.Options();
+			if (mutable) {
+				options.inMutable = true;
+				options.inPreferredConfig = Bitmap.Config.ARGB_8888;
+				options.inPreferredColorSpace = android.graphics.ColorSpace.get(android.graphics.ColorSpace.Named.SRGB);
+			}
 			options.inSampleSize = calculateInSampleSize(maxSize, imageData.width, imageData.height);
 			Bitmap bitmap = readBitmapInternal(options, mayUseRegionDecoder, mayUseWebViewDecoder);
 			if (bitmap != null) {

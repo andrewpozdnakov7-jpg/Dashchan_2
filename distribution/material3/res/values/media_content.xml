@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Explicit media roles: images, brush colours and website content are never recoloured. -->
+    <color name="standard_media_window">#101010</color>
+    <color name="standard_media_surface">#202124</color>
+    <color name="standard_media_on_surface">#FFFFFF</color>
+    <color name="standard_media_error">#FFB4AB</color>
+    <color name="standard_media_caption_scrim">#E6222222</color>
+    <color name="standard_media_showcase_scrim">#F0222222</color>
+    <item type="id" name="standard_media_appearance" />
+    <style name="Theme.Standard.Media.Dialog" parent="@style/Theme.Gallery.Dialog.Alert">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:dialogPreferredPadding">24dp</item>
+        <item name="android:buttonBarButtonStyle">@style/Widget.Standard.DialogButton</item>
+    </style>
+</resources>

@@ -173,6 +173,26 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 
 	public static class ExtractViewModel extends TaskViewModel.Proxy<ExtractPostsTask, ExtractPostsTask.Callback> {}
 
+	/** One visit: survives view/configuration recreation, but is not saved in the navigation stack. */
+	public static class HistoryVisitViewModel extends ViewModel {
+		private boolean recorded;
+
+		void recordIfNeeded(boolean rememberHistory, Runnable record) {
+			if (!recorded && rememberHistory) {
+				record.run();
+				recorded = true;
+			}
+		}
+	}
+
+	private void recordHistoryVisit() {
+		getViewModel(HistoryVisitViewModel.class).recordIfNeeded(Preferences.isRememberHistory(), () -> {
+			Page page = getPage();
+			CommonDatabase.getInstance().getHistory().addHistoryAsync(page.chanName,
+					page.boardName, page.threadNumber, getParcelableExtra(ParcelableExtra.FACTORY).threadTitle);
+		});
+	}
+
 	public static class ReadViewModel extends ViewModel {
 		private WatcherService.Session session;
 		private final MutableLiveData<Pair<CallbackProxy<WatcherService.Session.Callback>,
@@ -647,6 +667,9 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 								? cachedWindow.postItems.containsKey(parcelableExtra.scrollToPostNumber) : true);
 				if (cachedPosition) {
 					adapter.setWindow(cachedWindow);
+					if (!cachedWindow.postNumbers.isEmpty()) {
+						recordHistoryVisit();
+					}
 					if (pendingWindowListPosition != null && pendingWindowListPosition.position >= 0) {
 						pendingWindowListPosition.apply(recyclerView);
 						pendingWindowListPosition = null;
@@ -884,12 +907,8 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 			}
 		}
 
-		ParcelableExtra parcelableExtra = getParcelableExtra(ParcelableExtra.FACTORY);
-		if (!parcelableExtra.isAddedToHistory && !result.window.postNumbers.isEmpty()) {
-			parcelableExtra.isAddedToHistory = true;
-			Page page = getPage();
-			CommonDatabase.getInstance().getHistory().addHistoryAsync(page.chanName,
-					page.boardName, page.threadNumber, parcelableExtra.threadTitle);
+		if (!result.window.postNumbers.isEmpty()) {
+			recordHistoryVisit();
 		}
 		recyclerView.getPullable().cancelBusyState();
 		switchList();
@@ -2184,11 +2203,7 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 			listPosition.apply(getRecyclerView());
 		}
 
-		if (!parcelableExtra.isAddedToHistory) {
-			parcelableExtra.isAddedToHistory = true;
-			CommonDatabase.getInstance().getHistory().addHistoryAsync(page.chanName,
-					page.boardName, page.threadNumber, parcelableExtra.threadTitle);
-		}
+		recordHistoryVisit();
 		Iterator<PostItem> iterator = getAdapter().iterator();
 		if (iterator.hasNext()) {
 			String title = iterator.next().getSubjectOrComment();

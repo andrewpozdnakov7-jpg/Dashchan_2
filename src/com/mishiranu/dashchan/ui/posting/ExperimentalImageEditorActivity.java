@@ -49,6 +49,7 @@ import com.mishiranu.dashchan.ui.posting.photo.EditorStickers;
 import com.mishiranu.dashchan.ui.posting.photo.EditorDocument;
 import com.mishiranu.dashchan.ui.posting.photo.EditorGeometry;
 import com.mishiranu.dashchan.ui.posting.photo.EditorExportRequest;
+import com.mishiranu.dashchan.ui.posting.photo.EditorExportSizing;
 import com.mishiranu.dashchan.ui.posting.photo.EditorSessionSnapshot;
 import com.mishiranu.dashchan.ui.posting.photo.EditorSessionSnapshot.Section;
 import com.mishiranu.dashchan.ui.posting.photo.EditorSessionCodec;
@@ -1183,19 +1184,12 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
 
     private int exportSample(EditorDocument.State state, int width, int height, int side) {
         android.graphics.RectF crop = EditorGeometry.cropPixels(state, width, height);
-        float wanted = side == 0 ? 1 : Math.max(1f, Math.max(crop.width(), crop.height()) / side);
-        long budget = Math.min(12000000L, Math.max(1000000L, Runtime.getRuntime().maxMemory() / 40));
-        int sample = 1;
-        while (sample < (1 << 29) && sample * 2 <= wanted) sample *= 2;
-        while ((long) ((width + (long) sample - 1) / sample) * ((height + (long) sample - 1) / sample) > budget) sample *= 2;
-        return sample;
+        return EditorExportSizing.decodeSample(crop.width(), crop.height(), side);
     }
     private String exportDimensions(int side) {
-        int sample = exportSample(document.state(), originalWidth, originalHeight, side);
-        int w = (int) ((originalWidth + (long) sample - 1) / sample), h = (int) ((originalHeight + (long) sample - 1) / sample);
-        android.graphics.RectF crop = EditorGeometry.cropPixels(document.state(), w, h);
-        float scale = side == 0 ? 1 : Math.min(1, side / Math.max(crop.width(), crop.height()));
-        return Math.max(1, Math.round(crop.width() * scale)) + " × " + Math.max(1, Math.round(crop.height() * scale));
+        android.graphics.RectF crop = EditorGeometry.cropPixels(document.state(), originalWidth, originalHeight);
+        int[] size = EditorExportSizing.dimensions(crop.width(), crop.height(), side);
+        return size[0] + " × " + size[1];
     }
     private void showExport() {
         if (canvas == null || busy || exportDialog != null) return;
@@ -1314,12 +1308,16 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
                     int w = holder.getImageWidth();
                     int h = holder.getImageHeight();
                     if (w <= 0 || h <= 0) throw new IOException("Invalid source dimensions");
-                    // The settings size estimate and export share the existing bounded decode policy.
+                    // Subsampling is allowed only for an explicit smaller output. Maximum size is sample=1.
                     int sample = exportSample(state, w, h, options.side);
                     int decodeSide = (int) ((Math.max(w, h) + (long) sample - 1) / sample);
-                    decoded = holder.readImageBitmap(decodeSide, false, false);
+                    decoded = holder.readImageBitmap(decodeSide, false, false, true);
                     if (decoded == null) throw new IOException("Decode failed");
-                    result = EditorRenderer.export(decoded, state, options.side, !options.png, request.assets);
+                    android.graphics.RectF crop = EditorGeometry.cropPixels(state, w, h);
+                    int[] size = EditorExportSizing.dimensions(crop.width(), crop.height(), options.side);
+                    result = EditorRenderer.exportMutable(decoded, state, size[0], size[1], !options.png, request.assets);
+                    // Geometry may need a second bitmap; release its source before compression/draft IO.
+                    if (result != decoded) { decoded.recycle(); decoded = null; }
                     try (FileOutputStream stream = new FileOutputStream(output)) {
                         if (!result.compress(options.png ? Bitmap.CompressFormat.PNG : Bitmap.CompressFormat.JPEG,
                                 options.quality, stream)) {
@@ -1332,6 +1330,10 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
                 if (resultHolder == null) throw new IOException("Invalid result");
                 int outWidth = resultHolder.getImageWidth();
                 int outHeight = resultHolder.getImageHeight();
+                android.graphics.RectF expectedCrop = EditorGeometry.cropPixels(state, request.source.width, request.source.height);
+                int[] expectedSize = EditorExportSizing.dimensions(expectedCrop.width(), expectedCrop.height(), options.side);
+                if (outWidth != expectedSize[0] || outHeight != expectedSize[1])
+                    throw new IOException("Unexpected export dimensions");
                 long bytes = output.length();
                 String hash = request.attach ? DraftsStorage.getInstance().storeAttachmentFile(resultHolder) : null;
                 if (request.attach && hash == null) throw new IOException("Draft save failed");
@@ -1341,13 +1343,6 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
                     if (!request.attach) {
                         if (sizeInfo != null) sizeInfo.setText(getString(R.string.pe_export_info, outWidth, outHeight, bytes / 1024f));
                         return;
-                    }
-                    android.graphics.RectF wantedCrop = EditorGeometry.cropPixels(state, request.source.width, request.source.height);
-                    float wantedScale = options.side == 0 ? 1 : Math.min(1, options.side / Math.max(wantedCrop.width(), wantedCrop.height()));
-                    if (outWidth + 1 < Math.round(wantedCrop.width() * wantedScale)
-                            || outHeight + 1 < Math.round(wantedCrop.height() * wantedScale)) {
-                        android.widget.Toast.makeText(this, getString(R.string.pe_export_actual_size, outWidth, outHeight),
-                                android.widget.Toast.LENGTH_LONG).show();
                     }
                     int dot = request.source.name.lastIndexOf('.');
                     String base = dot > 0 ? request.source.name.substring(0, dot) : request.source.name;
@@ -1359,7 +1354,23 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
                     completed = true;
                     finish();
                 });
-            } catch (IOException | RuntimeException | OutOfMemoryError e) {
+            } catch (OutOfMemoryError e) {
+                encodedKey = null;
+                output.delete();
+                // Free large native pixel buffers before the UI allocates an error dialog.
+                if (result != null && result != decoded) result.recycle();
+                if (decoded != null) decoded.recycle();
+                result = decoded = null;
+                handler.post(() -> {
+                    if (!destroyed) {
+                        setBusy(false, 0);
+                        dialogBuilder().setTitle(R.string.image_editor_save_failed)
+                                .setMessage(R.string.pe_export_memory_failed)
+                                .setNegativeButton(android.R.string.cancel, null)
+                                .setPositiveButton(R.string.pe_export_settings, (dialog, which) -> showExport()).show();
+                    }
+                });
+            } catch (IOException | RuntimeException e) {
                 encodedKey = null;
                 output.delete();
                 handler.post(() -> {
@@ -1369,7 +1380,7 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
                     }
                 });
             } finally {
-                if (result != null) result.recycle();
+                if (result != null && result != decoded) result.recycle();
                 if (decoded != null) decoded.recycle();
             }
         });

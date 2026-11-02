@@ -27,6 +27,7 @@ public class SecurityStoreTest {
 	}
 	@After public void cleanup() throws Exception {
 		if (context != null) {
+			SecuritySessionProvider.setNotificationForeground(context, false);
 			RememberedAuthentication.revoke(context);
 			String alias = SecurityStore.pinAlias(context);
 			assertTrue(alias.contains(".test."));
@@ -673,5 +674,39 @@ public class SecurityStoreTest {
 		assertTrue(SecurityStore.locked(context));
 		try { SecurityStore.enabled(context); fail("Corruption must not return disabled"); }
 		catch (IOException expected) {}
+	}
+
+	@Test public void replyContentDefaultAndOptOutDoNotChangeTheAuthenticationLease() throws Exception {
+		org.junit.Assume.assumeTrue(context.getSystemService(android.os.PowerManager.class).isInteractive());
+		prepareRecentAuthentication(1);
+		assertTrue(SecurityStore.hideReplyTextInBackground(context));
+		long lease = SecuritySessionProvider.generation(context);
+		SecuritySessionProvider.setNotificationForeground(context, true);
+		assertFalse(SecurityStore.shouldHideReplyText(context));
+		SecuritySessionProvider.setNotificationForeground(context, false);
+		assertTrue(SecurityStore.shouldHideReplyText(context));
+		assertFalse(SecurityStore.locked(context)); assertEquals(lease, SecuritySessionProvider.generation(context));
+		SecurityStore.setHideReplyTextInBackground(context, false, () -> true);
+		SecurityStore.lock(context); assertFalse(SecurityStore.shouldHideReplyText(context));
+		SecurityStore.update(context, s -> { s.put("reset_pending", true); return null; });
+		assertTrue(SecurityStore.shouldHideReplyText(context));
+	}
+	@Test public void expiredNotificationApprovalCannotDisableTheDefaultProtection() throws Exception {
+		prepareRecentAuthentication(1);
+		try { SecurityStore.setHideReplyTextInBackground(context, false, () -> false); fail("Expired approval"); }
+		catch (IOException expected) {}
+		assertTrue(SecurityStore.hideReplyTextInBackground(context)); assertTrue(SecurityStore.shouldHideReplyText(context));
+	}
+	@Test public void replyOptOutDoesNotExposeOtherNotificationTypes() throws Exception {
+		prepareRecentAuthentication(1); SecurityStore.setHideReplyTextInBackground(context, false, () -> true);
+		androidx.core.app.NotificationCompat.Builder reply = new androidx.core.app.NotificationCompat.Builder(context,
+				com.mishiranu.dashchan.C.NOTIFICATION_CHANNEL_REPLIES).setContentTitle("reply").setContentText("body");
+		AppSecurity.redactReplyNotification(context, reply);
+		assertEquals("body", reply.build().extras.getCharSequence(android.app.Notification.EXTRA_TEXT));
+		androidx.core.app.NotificationCompat.Builder other = new androidx.core.app.NotificationCompat.Builder(context, "fixture")
+				.setContentTitle("other").setContentText("private");
+		AppSecurity.redactNotification(context, other);
+		assertEquals(context.getString(com.mishiranu.dashchan.R.string.security_notification_hidden),
+				other.build().extras.getCharSequence(android.app.Notification.EXTRA_TEXT));
 	}
 }

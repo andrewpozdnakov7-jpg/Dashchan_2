@@ -12,7 +12,11 @@ public final class PreviewMemoryPolicy implements ComponentCallbacks2, AutoClose
 	public PreviewMemoryPolicy(Context context, Runnable clear) {
 		application = context.getApplicationContext(); this.clear = clear; application.registerComponentCallbacks(this);
 	}
-	@Override public void onTrimMemory(int level) { clear.run(); }
+	/** Hiding UI is not memory pressure. Keep bounded previews until a reclamation request. */
+	public static boolean shouldTrim(int level) {
+		return level < TRIM_MEMORY_UI_HIDDEN || level >= TRIM_MEMORY_BACKGROUND;
+	}
+	@Override public void onTrimMemory(int level) { if (shouldTrim(level)) clear.run(); }
 	@Override public void onLowMemory() { clear.run(); }
 	@Override public void onConfigurationChanged(Configuration configuration) { clear.run(); }
 	@Override public void close() { application.unregisterComponentCallbacks(this); }

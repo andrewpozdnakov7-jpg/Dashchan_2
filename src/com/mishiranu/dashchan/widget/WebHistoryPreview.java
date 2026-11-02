@@ -7,6 +7,7 @@ import android.webkit.WebView;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.util.InterfaceMotion;
 import com.mishiranu.dashchan.util.SharedPreferences;
+import com.mishiranu.dashchan.media.VideoDiagnostics;
 import java.util.ArrayList;
 import java.util.Objects;
 import java.util.function.BooleanSupplier;
@@ -34,6 +35,20 @@ public final class WebHistoryPreview implements AutoCloseable {
 	private HistoryBackPreview preview;
 	private Entry destination;
 	private Entry loadingSource;
+	private static final class AcceptedBack {
+		final WebView owner;
+		final Entry source, target;
+		final int sourceIndex, historySize;
+		final long document, historyRevision;
+		boolean invalidated, executed;
+		AcceptedBack(WebView owner, Entry source, Entry target, int sourceIndex, int historySize,
+				long document, long historyRevision) {
+			this.owner = owner; this.source = source; this.target = target; this.sourceIndex = sourceIndex;
+			this.historySize = historySize; this.document = document; this.historyRevision = historyRevision;
+		}
+	}
+	private AcceptedBack acceptedBack;
+	private boolean backConsumed;
 	private final Runnable capture = this::requestVisualFrame;
 	private final android.view.ViewTreeObserver.OnScrollChangedListener scroll = () -> {
 		if (visuallyReady && !isBusy()) scheduleCapture();
@@ -43,7 +58,7 @@ public final class WebHistoryPreview implements AutoCloseable {
 		if (key != null && !Preferences.KEY_PREDICTIVE_BACK.equals(key) && !Preferences.KEY_NEW_INTERFACE_MOTION.equals(key)
 				&& !key.contains("theme") && !Preferences.KEY_REDDIT_WEB_READER_STYLE.equals(key)
 				&& !Preferences.KEY_REDDIT_BOARD_STYLE.equals(key) && !Preferences.KEY_REDDIT_WEB_READER_ENABLED.equals(key)) return;
-		clear(); if (enabled() && web.getProgress() == 100 && web.isShown()) pageReady();
+		releaseSnapshots(); if (enabled() && web.getProgress() == 100 && web.isShown()) pageReady();
 	}
 	private final View.OnAttachStateChangeListener attachment = new View.OnAttachStateChangeListener() {
 		@Override public void onViewAttachedToWindow(View view) {}
@@ -51,11 +66,11 @@ public final class WebHistoryPreview implements AutoCloseable {
 	};
 	private final View.OnLayoutChangeListener layout = this::layoutChanged;
 	private void layoutChanged(View v, int l, int t, int r, int b, int ol, int ot, int or, int ob) {
-		if (r - l != or - ol || b - t != ob - ot) { clear(); if (web.getProgress() == 100) pageReady(); }
+		if (r - l != or - ol || b - t != ob - ot) { releaseSnapshots(); if (web.getProgress() == 100) pageReady(); }
 	}
 	public WebHistoryPreview(WebView web, BooleanSupplier permitted) {
 		this.web = web; this.permitted = permitted;
-		memory = new PreviewMemoryPolicy(web.getContext(), this::clear);
+		memory = new PreviewMemoryPolicy(web.getContext(), this::releaseSnapshots);
 		web.getViewTreeObserver().addOnScrollChangedListener(scroll);
 		web.addOnAttachStateChangeListener(attachment); web.addOnLayoutChangeListener(layout);
 		Preferences.PREFERENCES.register(preferences);
@@ -65,9 +80,10 @@ public final class WebHistoryPreview implements AutoCloseable {
 	public boolean isCommitting() { return preview != null && preview.isCommitting(); }
 	public boolean isTracking() { return preview != null && preview.isTracking(); }
 	public void pageStarted() {
+		invalidateAccepted("document_changed");
 		loadingSource = current();
 		generation++; visualRequest++; loading = true; visuallyReady = false; web.removeCallbacks(capture);
-		if (preview != null && !preview.isCommitting()) { preview.close(); preview = null; }
+		if (preview != null && (!preview.isCommitting() || acceptedBack != null)) endPreview();
 	}
 	/** Only a full document navigation with a matching prefix carries entry identities forward. */
 	public void historyUpdated(boolean reload) {
@@ -77,6 +93,7 @@ public final class WebHistoryPreview implements AutoCloseable {
 		int next = history.getCurrentIndex();
 		boolean same = matches(history);
 		if (same && next == index && !reload) return;
+		invalidateAccepted("history_changed");
 		boolean expectedBack = destination != null && next == index - 1 && same
 				&& entries.get(next) == destination;
 		if (expectedBack) {
@@ -149,11 +166,15 @@ public final class WebHistoryPreview implements AutoCloseable {
 	}
 	public boolean start(boolean fromLeft, BooleanSupplier routeValid) {
 		if (isCommitting()) return false;
-		endPreview(); destination = null;
+		endPreview(); destination = null; acceptedBack = null; backConsumed = false;
 		if (!enabled() || loading || !visuallyReady || index <= 0 || !currentMatches()) return false;
 		Entry source = current(), target = entries.get(index - 1);
-		if (target.frame != null && target.frame.height != web.getHeight()) return false;
-		if (source.scrollX != web.getScrollX() || source.scrollY != web.getScrollY()) return false;
+		if (target.frame != null && target.frame.height != web.getHeight()) {
+			record("preview_rejected reason=viewport_incompatible"); return false;
+		}
+		if (source.scrollX != web.getScrollX() || source.scrollY != web.getScrollY()) {
+			record("preview_rejected reason=scroll_not_prepared"); return false;
+		}
 		long document = generation, routeRevision = revision;
 		preview = HistoryBackPreview.start(web, target.frame, source.frame, fromLeft, () -> enabled()
 				&& generation == document && revision == routeRevision && current() == source && routeValid.getAsBoolean()
@@ -164,20 +185,62 @@ public final class WebHistoryPreview implements AutoCloseable {
 	public void progress(float fraction) { if (preview != null) preview.progress(fraction); }
 	public void cancel() { if (preview != null) preview.cancel(); destination = null; }
 	public void finish() { endPreview(); destination = null; }
+	/** True means this gesture was consumed, including an accepted action invalidated later. */
 	public boolean commit(Runnable goBack) {
+		if (backConsumed) return true;
 		if (!isTracking() || !currentMatches()) { endPreview(); return false; }
-		return preview.commit(goBack);
+		if (index <= 0 || destination != entries.get(index - 1)) { endPreview(); return false; }
+		AcceptedBack action = new AcceptedBack(web, current(), destination, index, entries.size(), generation, revision);
+		HistoryBackPreview session = preview;
+		acceptedBack = action; backConsumed = true;
+		boolean result = session.commit(() -> executeAccepted(action, session, goBack));
+		if (!result) { acceptedBack = null; backConsumed = false; }
+		return result;
+	}
+	private void invalidateAccepted(String reason) {
+		if (acceptedBack != null && !acceptedBack.executed && !acceptedBack.invalidated) {
+			acceptedBack.invalidated = true;
+			record("accepted_invalidated reason=" + reason);
+		}
+	}
+	private void executeAccepted(AcceptedBack action, HistoryBackPreview session, Runnable goBack) {
+		if (action.executed) return;
+		action.executed = true;
+		// Internal entry identity plus document/revision and the complete current history shape.
+		// Java identities from different copyBackForwardList snapshots are deliberately not compared.
+		boolean valid = acceptedBack == action && !action.invalidated && !closed && action.owner == web
+				&& action.document == generation && action.historyRevision == revision
+				&& index == action.sourceIndex && entries.size() == action.historySize
+				&& current() == action.source && index > 0 && entries.get(index - 1) == action.target
+				&& currentMatches();
+		if (acceptedBack == action) acceptedBack = null;
+		if (!valid) {
+			record("accepted_suppressed reason=route_changed");
+			if (preview == session) { preview = null; destination = null; }
+			session.close();
+			return;
+		}
+		record("accepted_navigate source_index=" + action.sourceIndex);
+		visuallyReady = false;
+		goBack.run();
+	}
+	private void record(String reason) {
+		if (VideoDiagnostics.isExtendedRecording()) VideoDiagnostics.recordUi("predictive_web " + reason
+				+ " generation=" + generation + " revision=" + revision + " entries=" + entries.size());
 	}
 	private void endPreview() { HistoryBackPreview old = preview; preview = null; if (old != null) old.close(); }
 	public void clear() {
-		endPreview(); destination = loadingSource = null; generation++; revision++; visualRequest++;
+		invalidateAccepted("clear");
+		generation++; revision++; visualRequest++;
+		endPreview(); destination = loadingSource = null;
 		visuallyReady = loading = false; web.removeCallbacks(capture); truncate(0); index = -1;
 	}
-	public void pause() { paused = true; clear(); }
+	private void releaseSnapshots() { finish(); clear(); }
+	public void pause() { finish(); paused = true; clear(); }
 	public void resume() { paused = false; if (web.getProgress() == 100) pageReady(); }
 	@Override public void close() {
 		if (closed) return;
-		clear(); closed = true; memory.close(); Preferences.PREFERENCES.unregister(preferences);
+		closed = true; clear(); memory.close(); Preferences.PREFERENCES.unregister(preferences);
 		web.getViewTreeObserver().removeOnScrollChangedListener(scroll);
 		web.removeOnAttachStateChangeListener(attachment); web.removeOnLayoutChangeListener(layout);
 	}

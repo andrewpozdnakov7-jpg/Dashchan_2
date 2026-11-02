@@ -78,6 +78,7 @@ public final class ThreadQuickNavigation extends FrameLayout {
 		enabled = "left".equals(mode) || "right".equals(mode);
 		for (int i = 0; i < buttons.getChildCount(); i++) {
 			View button = buttons.getChildAt(i);
+			InterfaceAppearance.quickNavigationIcon((ImageView) button);
 			LayoutParams params = (LayoutParams) button.getLayoutParams();
 			int gravity = ("left".equals(mode) ? Gravity.LEFT : Gravity.RIGHT)
 					| (i == 0 ? Gravity.TOP : Gravity.BOTTOM);

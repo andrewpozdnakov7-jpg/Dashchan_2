@@ -1915,6 +1915,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		backGestureAborted = false;
 		backInvocationHandled = false;
 		prepareBackPreview();
+		if (predictiveBack != null) predictiveBack.recordState("host_resume");
 		if (drawerMotion != null && !wideMode) drawerMotion.resume();
 		if (expandedScreen != null) expandedScreen.refreshSystemBarAppearance();
 		drawerForm.setHostResumed(true);
@@ -1981,6 +1982,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 			if (drawerMotion != null) drawerMotion.recover(false);
 		}
 		if (hasFocus && expandedScreen != null) expandedScreen.refreshSystemBarAppearance();
+		if (predictiveBack != null) predictiveBack.recordState("host_focus focused=" + hasFocus);
 	}
 
 	private void showPictureInPictureReturnCover(String token) {
@@ -2029,6 +2031,8 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	@Override
 	protected void onPause() {
+		if (predictiveBack != null) predictiveBack.recordState("host_pause changing_configuration="
+				+ isChangingConfigurations());
 		drawerForm.setHostResumed(false);
 		if (drawerMotion != null) drawerMotion.suspend();
 		resetPredictiveBackView(false);
@@ -2052,6 +2056,8 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	@Override
 	protected void onStop() {
+		if (predictiveBack != null) predictiveBack.recordState("host_stop changing_configuration="
+				+ isChangingConfigurations());
 		finishLocalToolbarMotion();
 		if (screenMotion != null) screenMotion.finish();
 		if (threadMotion != null) threadMotion.finish();
@@ -2176,9 +2182,11 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	@Override
 	public void onTrimMemory(int level) {
-		if (predictiveBack != null) predictiveBack.trimMemory();
+		if (predictiveBack != null) predictiveBack.trimMemory(level);
 		Fragment gallery = getSupportFragmentManager().findFragmentByTag(GalleryOverlay.class.getName());
-		if (gallery instanceof GalleryOverlay) ((GalleryOverlay) gallery).trimPredictivePreviews();
+		if (gallery instanceof GalleryOverlay && com.mishiranu.dashchan.widget.PreviewMemoryPolicy.shouldTrim(level)) {
+			((GalleryOverlay) gallery).trimPredictivePreviews();
+		}
 		super.onTrimMemory(level);
 		if (hasWindowFocus()) prepareBackPreview();
 	}
@@ -2373,8 +2381,13 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 			finally { predictiveNavigationDispatch = false; }
 			scheduleSystemBackCallbackUpdate();
 		};
-		if (predictiveBack == null || !predictiveBack.commit(navigate)) {
-			if (predictiveBack != null) predictiveBack.finish();
+		completePredictivePageBack(predictiveBack, navigate);
+	}
+
+	/** Shared adapter: false means no navigation was executed; a consumed obsolete session returns true. */
+	static void completePredictivePageBack(PredictiveBackController controller, Runnable navigate) {
+		if (controller == null || !controller.commit(navigate)) {
+			if (controller != null) controller.finish();
 			navigate.run();
 		}
 	}
@@ -2643,7 +2656,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 			if (screenMotion != null) screenMotion.finish();
 			if (threadMotion != null) threadMotion.clear();
 			resetPredictiveBackView(false);
-			if (predictiveBack != null) predictiveBack.clear();
+			if (predictiveBack != null) predictiveBack.clear("motion_policy_changed");
 			if (drawerMotion != null) drawerMotion.updatePolicy();
 			prepareBackPreview();
 			updateSystemBackCallback();

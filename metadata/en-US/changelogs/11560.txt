@@ -1,0 +1,13 @@
+**Slooop 3.2.76**
+
+- Continuing to improve experimental Predictive Back on Android 14+ 😺 Fixed previous-page previews disappearing after locking the screen or using the keyboard. Improved browser Back transitions, scroll restoration in discussion context and low-memory handling.
+- Removed the artificial output resolution limit in the new photo editor. Selecting Maximum size saves the image without automatically reducing its resolution.
+- Fixed browsing history: reopening a thread after clearing history now adds it to the list again.
+- Added a received-reply counter in About → Statistics. Each reply is counted once, even when it quotes several of your posts. The screen is working, but bugs are still possible — we will keep improving it 😺
+- Improved background reply notifications. Push delivery can now fetch the reply text from the board. Security settings let you choose whether to hide notification contents while the app is in the background or locked. Hiding is enabled by default when protection is active.
+- Refined Material 3: attachment selection, the gallery hint, quick-scroll arrows, Reddit loading indicator, the legacy photo editor and security dialogs. Improved layouts on compact screens and with large fonts.
+- Renamed Video diagnostics to App diagnostics: it also helps investigate Back gestures and cache issues.
+
+Predictive Back remains experimental: previews are not yet available for every transition.
+
+Thanks to everyone for testing, logs and help finding bugs! 🐾

@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Resource-only contract, including :security. Identical to the existing lock palette. -->
+    <color name="slooop_lock_background">#151D11</color>
+    <color name="slooop_lock_on_background">#FFFFFF</color>
+    <color name="slooop_lock_secondary_text">#BECAB5</color>
+    <color name="slooop_lock_primary">#C1DFA1</color>
+    <color name="slooop_lock_on_primary">#000000</color>
+    <color name="slooop_lock_secondary_action">#C1DFA1</color>
+    <color name="slooop_lock_surface">#222B1D</color>
+    <color name="slooop_lock_outline">#89947F</color>
+    <color name="slooop_lock_focus">#C1DFA1</color>
+    <color name="slooop_lock_error">#FFB4AB</color>
+    <color name="slooop_lock_disabled_container">#303A28</color>
+    <color name="slooop_lock_disabled_content">#8D9784</color>
+    <color name="slooop_lock_primary_ripple">#1F000000</color>
+    <color name="slooop_lock_secondary_ripple">#1FC1DFA1</color>
+    <style name="Theme.Security.Presentation.Dialog" parent="@android:style/Theme.Material.Dialog.Alert">
+        <item name="android:colorAccent">@color/slooop_lock_primary</item>
+        <item name="android:colorBackground">@color/slooop_lock_surface</item>
+        <item name="android:textColorPrimary">@color/slooop_lock_on_background</item>
+        <item name="android:textColorSecondary">@color/slooop_lock_secondary_text</item>
+        <item name="android:fontFamily">sans</item>
+        <item name="android:dialogPreferredPadding">24dp</item>
+    </style>
+    <style name="Text.Security.Presentation.Body" parent="@android:style/TextAppearance.Material.Body1">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:textSize">16sp</item>
+        <item name="android:lineHeight">24sp</item>
+        <item name="android:textColor">@color/slooop_lock_on_background</item>
+    </style>
+    <style name="Text.Security.Presentation.Heading" parent="@style/Text.Security.Presentation.Body">
+        <item name="android:textSize">22sp</item>
+        <item name="android:lineHeight">28sp</item>
+    </style>
+    <style name="Text.Security.Presentation.Action" parent="@style/Text.Security.Presentation.Body">
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:lineHeight">20sp</item>
+        <item name="android:textAllCaps">false</item>
+    </style>
+</resources>

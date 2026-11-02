@@ -27,7 +27,8 @@ public final class HistoryBackPreview {
 		@Override public void draw(Canvas canvas) {
 			if (released) return;
 			int save = canvas.save();
-			canvas.translate(scrollX, scrollY); canvas.clipRect(0, 0, width, height);
+			// Overlay pixels are viewport-relative even after the destination restores a different scroll.
+			canvas.translate(host.getScrollX(), host.getScrollY()); canvas.clipRect(0, 0, width, height);
 			canvas.drawColor(previous.background);
 			bounds.set(0, 0, width, previous.height);
 			paint.setAlpha(255); canvas.drawBitmap(previous.image, null, bounds, paint);
@@ -47,6 +48,13 @@ public final class HistoryBackPreview {
 		@Override public void onViewAttachedToWindow(View view) {}
 		@Override public void onViewDetachedFromWindow(View view) { close(); }
 	};
+	private final android.view.ViewTreeObserver.OnScrollChangedListener scroll = this::updateViewport;
+	private void updateViewport() {
+		if (released) return;
+		int x = host.getScrollX(), y = host.getScrollY();
+		layer.setBounds(x, y, x + width, y + height);
+		host.invalidate();
+	}
 	public static HistoryBackPreview start(View host, BackPreviewFrame previous, BackPreviewFrame current,
 			boolean fromLeft, BooleanSupplier owner) {
 		if (previous == null || current == null || !previous.valid(host) || !current.valid(host)
@@ -58,8 +66,9 @@ public final class HistoryBackPreview {
 		this.host = host; this.previous = previous.retain(); this.current = current.retain(); this.owner = owner;
 		width = host.getWidth(); height = host.getHeight(); scrollX = host.getScrollX(); scrollY = host.getScrollY();
 		direction = fromLeft ? 1f : -1f;
-		layer.setBounds(0, 0, width, height); host.getOverlay().add(layer);
+		updateViewport(); host.getOverlay().add(layer);
 		host.addOnAttachStateChangeListener(attachment);
+		host.getViewTreeObserver().addOnScrollChangedListener(scroll);
 		transition = new PredictiveTransition(host, new PredictiveTransition.Presentation() {
 			@Override public boolean valid() { return !released && owner.getAsBoolean() && previous.valid(host)
 					&& current.valid(host) && host.getHeight() == height && host.getScrollX() == scrollX && host.getScrollY() == scrollY; }
@@ -90,6 +99,8 @@ public final class HistoryBackPreview {
 	private void release() {
 		if (released) return;
 		released = true; host.removeCallbacks(deadline); host.removeCallbacks(ready);
+		android.view.ViewTreeObserver observer = host.getViewTreeObserver();
+		if (observer.isAlive()) observer.removeOnScrollChangedListener(scroll);
 		host.removeOnAttachStateChangeListener(attachment); host.getOverlay().remove(layer);
 		previous.release(); current.release();
 	}
