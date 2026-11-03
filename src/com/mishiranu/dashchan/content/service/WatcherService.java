@@ -13,6 +13,7 @@ import chan.util.StringUtils;
 import com.mishiranu.dashchan.content.NetworkObserver;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.WatcherNotifications;
+import com.mishiranu.dashchan.content.ReplyNotificationTargets;
 import com.mishiranu.dashchan.content.async.ExecutorTask;
 import com.mishiranu.dashchan.content.async.ReadPostsTask;
 import com.mishiranu.dashchan.content.database.ChanDatabase;
@@ -658,7 +659,8 @@ public class WatcherService extends BaseService {
 							|| notificationFeatures.contains(Preferences.NotificationFeature.VIBRATION);
 					WatcherNotifications.notifyReplies(WatcherService.this,
 							notificationColor, important, sound, vibration,
-							title, threadKey.chanName, threadKey.boardName, threadKey.threadNumber, replies);
+							ReplyNotificationTargets.of(isFavoriteEnabled(threadKey), isTracked(threadKey)), title,
+							threadKey.chanName, threadKey.boardName, threadKey.threadNumber, replies);
 				}
 			}
 		}
@@ -1054,7 +1056,7 @@ public class WatcherService extends BaseService {
 	private void refreshAll(String chanName, boolean forceNetwork, boolean forceNow) {
 		long now = SystemClock.elapsedRealtime();
 		boolean unavailable = !forceNetwork && Preferences.isWatcherWifiOnly() &&
-				!NetworkObserver.getInstance().isWifiConnected();
+				!NetworkObserver.getInstance().hasActiveWifiTransport();
 		for (WatcherItem watcherItem : watcherItems.values()) {
 			if (chanName == null || chanName.equals(watcherItem.threadKey.chanName)) {
 				Chan chan = Chan.get(watcherItem.threadKey.chanName);

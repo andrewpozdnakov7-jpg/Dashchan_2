@@ -5,6 +5,7 @@ import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.graphics.ColorFilter;
 import android.graphics.drawable.RippleDrawable;
+import android.graphics.drawable.GradientDrawable;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
@@ -15,7 +16,7 @@ import com.mishiranu.dashchan.R;
 
 /** Opt-in native media chrome only. Does not traverse images, editor canvas or HTML. */
 final class MediaContentAppearance {
-    enum Role {CAPTION, HEADING, BODY, ACTION, PANEL, WINDOW, TOOLBAR, ICON, QUICK, SLIDER, LOADING, FOOTER}
+    enum Role {CAPTION, HEADING, BODY, ACTION, PANEL, WINDOW, TOOLBAR, ICON, QUICK, SLIDER, FOOTER, COLOR_CHIP}
     private MediaContentAppearance() {}
     static AppearanceColors colors(View view) {
         android.content.Context c = view.getContext();
@@ -27,6 +28,19 @@ final class MediaContentAppearance {
         Object tag = view.getTag(R.id.standard_media_appearance);
         State state = tag instanceof State ? (State) tag : new State(view);
         state.role = role; view.setTag(R.id.standard_media_appearance, state); state.apply();
+    }
+    static void colorChip(View view, int color, boolean selected) {
+        Object tag = view.getTag(R.id.standard_media_appearance);
+        State state = tag instanceof State ? (State) tag : new State(view);
+        state.role = Role.COLOR_CHIP; state.chipColor = color; state.chipSelected = selected;
+        view.setTag(R.id.standard_media_appearance, state); state.apply();
+    }
+    private static GradientDrawable chip(View view, int color, boolean selected, int outline) {
+        float density = com.mishiranu.dashchan.util.ResourceUtils.obtainDensity(view);
+        GradientDrawable drawable = new GradientDrawable(); drawable.setColor(color);
+        drawable.setCornerRadius(8f * density);
+        drawable.setStroke((int) ((selected ? 3f : 1f) * density), outline);
+        return drawable;
     }
     static void refresh(View view) {
         Object tag = view.getTag(R.id.standard_media_appearance);
@@ -41,20 +55,21 @@ final class MediaContentAppearance {
         final View view;
         final StandardAppearance.Saved saved;
         final AppearanceTypography.Snapshot type;
-        final ColorStateList text, image, progress, thumb, indeterminate;
+        final ColorStateList text, image;
+        final StandardSlider.Snapshot slider;
         final ColorFilter filter;
         final float alpha;
         final int width;
         Role role;
+        int chipColor;
+        boolean chipSelected;
         State(View view) {
             this.view = view; saved = new StandardAppearance.Saved(view);
             type = view instanceof TextView ? new AppearanceTypography.Snapshot((TextView) view) : null;
             text = view instanceof TextView ? ((TextView) view).getTextColors() : null;
             image = view instanceof ImageView ? ((ImageView) view).getImageTintList() : null;
             filter = view instanceof ImageView ? ((ImageView) view).getColorFilter() : null;
-            progress = view instanceof SeekBar ? ((SeekBar) view).getProgressTintList() : null;
-            thumb = view instanceof SeekBar ? ((SeekBar) view).getThumbTintList() : null;
-            indeterminate = view instanceof android.widget.ProgressBar ? ((android.widget.ProgressBar) view).getIndeterminateTintList() : null;
+            slider = view instanceof SeekBar ? new StandardSlider.Snapshot((SeekBar) view) : null;
             alpha = view.getAlpha(); width = view.getLayoutParams() != null ? view.getLayoutParams().width : 0;
         }
         void apply() {
@@ -64,11 +79,14 @@ final class MediaContentAppearance {
             saved.restore(); saved.restoreHeight(); saved.restoreTextBounds();
             if (type != null) { type.restore((TextView) view); ((TextView) view).setTextColor(text); }
             if (view instanceof ImageView) { ((ImageView) view).setColorFilter(filter); ((ImageView) view).setImageTintList(image); }
-            if (view instanceof SeekBar) { ((SeekBar) view).setProgressTintList(progress); ((SeekBar) view).setThumbTintList(thumb); }
-            if (view instanceof android.widget.ProgressBar) ((android.widget.ProgressBar) view).setIndeterminateTintList(indeterminate);
+            if (slider != null) slider.restore((SeekBar) view);
             if (role == Role.FOOTER) view.setAlpha(alpha);
             if (role == Role.ICON && view.getLayoutParams() != null) view.getLayoutParams().width = width;
-            if (!enabled) { view.requestLayout(); return; }
+            if (!enabled) {
+                if (role == Role.COLOR_CHIP) view.setBackground(chip(view, chipColor, chipSelected,
+                        chipSelected ? 0xff64b5f6 : 0xff808080));
+                view.requestLayout(); return;
+            }
             AppearanceColors c = role == Role.QUICK || role == Role.FOOTER ? StandardAppearance.colors(view.getContext()) : colors(view);
             int surface = role == Role.QUICK ? c.surfaceContainer : view.getContext().getColor(R.color.standard_media_surface);
             switch (role) {
@@ -110,11 +128,14 @@ final class MediaContentAppearance {
                     }
                     break;
                 case SLIDER:
-                    ((SeekBar) view).setProgressTintList(StandardAppearance.textColors(c.primary, surface));
-                    ((SeekBar) view).setThumbTintList(StandardAppearance.textColors(c.primary, surface)); break;
-                case LOADING:
-                    ((android.widget.ProgressBar) view).setIndeterminateTintList(ColorStateList.valueOf(
-                            InterfaceAppearance.contrasting(c.primary, c.window, 3))); break;
+                    StandardSlider.apply((SeekBar) view,
+                            StandardAppearance.textColors(com.mishiranu.dashchan.util.OpaqueColors.blend(surface, c.onSurface, .16f), surface),
+                            StandardAppearance.textColors(c.primary, surface),
+                            StandardAppearance.textColors(InterfaceAppearance.contrasting(c.primary, surface, 3), surface), saved.minHeight);
+                    break;
+                case COLOR_CHIP:
+                    view.setBackground(chip(view, chipColor, chipSelected, chipSelected ? c.primary : c.outline));
+                    break;
                 default:
                     TextView label = (TextView) view;
                     AppearanceTypography.apply(label, role == Role.HEADING ? AppearanceTypography.Role.TITLE_LARGE

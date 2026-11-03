@@ -24,7 +24,9 @@ import chan.content.RedirectException;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.content.Preferences;
+import com.mishiranu.dashchan.content.NetworkObserver;
 import com.mishiranu.dashchan.content.WatcherNotifications;
+import com.mishiranu.dashchan.content.ReplyNotificationTargets;
 import com.mishiranu.dashchan.content.async.ReadPostsTask;
 import com.mishiranu.dashchan.content.database.PagesDatabase;
 import com.mishiranu.dashchan.content.model.ErrorItem;
@@ -149,10 +151,9 @@ public class BackgroundWatcherWorker extends Worker {
 				"trackedLocalCheck", Preferences.isTrackedRepliesLocalCheckEnabled(),
 				"wifiOnly", wifiOnly);
 		if (enabled) {
-			NetworkType networkType = wifiOnly
-					? NetworkType.UNMETERED : NetworkType.CONNECTED;
+			// Metered Wi-Fi is still Wi-Fi. Check the transport before starting network work.
 			Constraints constraints = new Constraints.Builder()
-					.setRequiredNetworkType(networkType)
+					.setRequiredNetworkType(NetworkType.CONNECTED)
 					.build();
 			PeriodicWorkRequest request = new PeriodicWorkRequest.Builder(BackgroundWatcherWorker.class,
 					INTERVAL_MINUTES, TimeUnit.MINUTES)
@@ -222,9 +223,13 @@ public class BackgroundWatcherWorker extends Worker {
 		}
 	}
 
+	private static boolean isWatcherNetworkAllowed() {
+		return !Preferences.isWatcherWifiOnly() || NetworkObserver.getInstance().hasActiveWifiTransport();
+	}
+
 	private boolean beginRun() {
-		if (!isAutomaticCheckEnabled()) {
-			log("skip", "reason", "automatic_check_disabled");
+		if (!isAutomaticCheckEnabled() || !isWatcherNetworkAllowed()) {
+			log("skip", "reason", "automatic_check_or_network_unavailable");
 			return false;
 		}
 		synchronized (RUN_LOCK) {
@@ -278,8 +283,9 @@ public class BackgroundWatcherWorker extends Worker {
 	private Result runCheck() {
 		List<CheckTarget> targets = ConcurrentUtils.mainGet(() -> {
 			LinkedHashMap<String, CheckTarget> result = new LinkedHashMap<>();
-			for (FavoritesStorage.FavoriteItem favoriteItem : FavoritesStorage.getInstance().getThreads(null)) {
-				if (favoriteItem.watcherEnabled) {
+			if (Preferences.isBackgroundReplyCheckEnabled()) {
+				for (FavoritesStorage.FavoriteItem favoriteItem : FavoritesStorage.getInstance().getThreads(null)) {
+					if (!favoriteItem.watcherEnabled) continue;
 					FavoritesStorage.FavoriteItem copy = new FavoritesStorage.FavoriteItem(favoriteItem);
 					result.put(makeTargetKey(copy.chanName, copy.boardName, copy.threadNumber),
 							new CheckTarget(copy.chanName, copy.boardName, copy.threadNumber, copy, false));
@@ -354,15 +360,14 @@ public class BackgroundWatcherWorker extends Worker {
 		Context context = getApplicationContext();
 		WatcherNotifications.configure(context);
 		int notificationColor = ConcurrentUtils.mainGet(() -> ThemeEngine.attachAndApply(context).accent);
-		Set<Preferences.NotificationFeature> notificationFeatures = Preferences.getWatcherNotifications();
 		CountDownLatch latch = new CountDownLatch(targets.size());
 		RunStats stats = new RunStats();
 		completionLatch = latch;
 		executor = ConcurrentUtils.newThreadPool(3, 3, 0, "BackgroundWatcher", null);
 
 		for (CheckTarget target : targets) {
-			if (!acceptResults.get() || isApplicationVisible()) {
-				log("stop", "reason", "application_became_visible", "importance",
+			if (!acceptResults.get() || isApplicationVisible() || !isWatcherNetworkAllowed()) {
+				log("stop", "reason", "check_interrupted", "importance",
 						getApplicationImportance(), "startedTargets", stats.started.get());
 				stopRun(true);
 				break;
@@ -373,7 +378,7 @@ public class BackgroundWatcherWorker extends Worker {
 				return pending != null ? new HashSet<>(pending) : null;
 			});
 			ReadPostsTask.Callback callback = new Callback(context, target, notificationColor,
-					notificationFeatures, latch, acceptResults, stats);
+					latch, acceptResults, stats);
 			ReadPostsTask task = new ReadPostsTask(callback, Chan.get(target.chanName),
 					target.boardName, target.threadNumber, false, pendingUserPosts);
 			tasks.add(task);
@@ -465,19 +470,17 @@ public class BackgroundWatcherWorker extends Worker {
 		private final Context context;
 		private final CheckTarget target;
 		private final int notificationColor;
-		private final Set<Preferences.NotificationFeature> notificationFeatures;
 		private final CountDownLatch latch;
 		private final AtomicBoolean acceptResults;
 		private final RunStats stats;
 		private final AtomicBoolean finished = new AtomicBoolean();
 
 		public Callback(Context context, CheckTarget target, int notificationColor,
-				Set<Preferences.NotificationFeature> notificationFeatures, CountDownLatch latch,
+				CountDownLatch latch,
 				AtomicBoolean acceptResults, RunStats stats) {
 			this.context = context;
 			this.target = target;
 			this.notificationColor = notificationColor;
-			this.notificationFeatures = notificationFeatures;
 			this.latch = latch;
 			this.acceptResults = acceptResults;
 			this.stats = stats;
@@ -501,6 +504,7 @@ public class BackgroundWatcherWorker extends Worker {
 						target.boardName, target.threadNumber, replies);
 			}
 			stats.filteredReplies.addAndGet(replies.size());
+			Set<Preferences.NotificationFeature> notificationFeatures = Preferences.getWatcherNotifications();
 			boolean notificationsEnabled = (target.favoriteItem != null
 					&& notificationFeatures.contains(Preferences.NotificationFeature.ENABLED))
 					|| (target.tracked && Preferences.isTrackedRepliesNotificationsEnabled());
@@ -523,8 +527,8 @@ public class BackgroundWatcherWorker extends Worker {
 								|| notificationFeatures.contains(Preferences.NotificationFeature.SOUND),
 						trackedNotification
 								|| notificationFeatures.contains(Preferences.NotificationFeature.VIBRATION),
-						title, target.chanName, target.boardName,
-						target.threadNumber, replies);
+						ReplyNotificationTargets.of(target.favoriteItem != null, target.tracked), title,
+						target.chanName, target.boardName, target.threadNumber, replies);
 				stats.queuedNotifications.addAndGet(replies.size());
 				log("notifications_queued", "count", replies.size(), "tracked", target.tracked);
 			} else if (!replies.isEmpty()) {

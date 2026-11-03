@@ -738,7 +738,7 @@ public class ForegroundManager implements Handler.Callback {
 			if (taskImageView == null || selectionViews == null) {
 				return; // A restored dialog will use the updated arguments when creating its views.
 			}
-			if (appearance != null) appearance.beforeContentChange(keyboardContainer);
+			if (appearance != null) appearance.finishImageChanges();
 			if (data.images.length != selected.length) {
 				if (appearance != null) {
 					keyboardContainer.removeAllViews(); selectionViews = null; selected = null;
@@ -749,17 +749,19 @@ public class ForegroundManager implements Handler.Callback {
 					return;
 				}
 			}
-			taskImageView.setImageBitmap(data.descriptionImage);
+			if (appearance != null) appearance.bindImage(taskImageView, data.descriptionImage);
+			else taskImageView.setImageBitmap(data.descriptionImage);
 			for (int i = 0; i < selected.length; i++) {
 				selected[i] = false;
-				((ImageView) selectionViews[i].getChildAt(0)).setImageBitmap(data.images[i]);
+				ImageView image = (ImageView) selectionViews[i].getChildAt(0);
+				if (appearance != null) appearance.bindImage(image, data.images[i]);
+				else image.setImageBitmap(data.images[i]);
 				updateSelection(i);
 			}
 			if (appearance != null) appearance.bindSelection(data.selectedImages, true);
 			refreshing = false;
 			requireArguments().putBoolean(EXTRA_REFRESHING, false);
 			setWaiting(false);
-			if (appearance != null) appearance.afterContentChange(keyboardContainer);
 		}
 
 		@Override

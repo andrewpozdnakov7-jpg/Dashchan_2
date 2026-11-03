@@ -20,6 +20,7 @@ import com.mishiranu.dashchan.util.ConcurrentUtils;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.ui.DialogMenu;
 import com.mishiranu.dashchan.widget.ListPosition;
+import com.mishiranu.dashchan.widget.InterfaceAppearance;
 import com.mishiranu.dashchan.widget.BackPreviewFrame;
 import com.mishiranu.dashchan.widget.HistoryBackPreview;
 import com.mishiranu.dashchan.util.InterfaceMotion;
@@ -245,12 +246,14 @@ final class ContextDialogProvider extends DialogUnit.DialogProvider<ContextDialo
 				: failed ? R.string.context_read_error : updatesAvailable ? R.string.context_updates : 0;
 		status.setText(message != 0 ? uiManager.getContext().getText(message) : "");
 		status.setVisibility(message != 0 ? View.VISIBLE : View.GONE);
+		InterfaceAppearance.discussionStatus(status, failed && !cacheErased);
 	}
 	private void appendStatus(int message) {
 		if (status == null) return;
 		if (status.length() > 0) status.append("\n");
 		status.append(uiManager.getContext().getText(message));
 		status.setVisibility(View.VISIBLE);
+		InterfaceAppearance.discussionStatus(status, failed && !cacheErased);
 	}
 	private void cancelWork() {
 		if (restoreDraw != null) { restoreDraw.removeListener(); restoreDraw = null; }

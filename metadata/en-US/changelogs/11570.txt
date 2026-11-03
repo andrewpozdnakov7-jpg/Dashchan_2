@@ -1,0 +1,12 @@
+**Slooop 3.2.77**
+
+- Reworked My posts and replies settings to separate history, reply checks and notifications more clearly. Favorite-thread checking settings have moved to Favorites.
+- Added a separate settings text size option from 30 to 500%, with a preview.
+- Redesigned Statistics: responsive cards replace the wide table. Fixed the horizontal scrolling issue.
+- Updated swipe-to-hide threads in Material 3 with a background, icon, Hide label and smooth animations.
+- Unified checkboxes and radio buttons throughout the app, including the legacy interface. Improved their visibility across themes.
+- Removed abrupt flashing of the Done button and images when selecting captcha symbols.
+- Fixed a crash when sharing images and videos to Slooop from other apps.
+- Refined slider and loading indicator colors, discussion status styling and Favorites selection.
+
+Thanks to everyone for testing, logs and help finding bugs! 🐾

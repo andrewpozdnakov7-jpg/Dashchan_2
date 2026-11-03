@@ -5,18 +5,10 @@ import android.app.AlertDialog;
 import android.content.Context;
 import android.content.ContextWrapper;
 import android.content.res.ColorStateList;
-import android.graphics.Canvas;
 import android.graphics.Color;
-import android.graphics.ColorFilter;
-import android.graphics.Paint;
-import android.graphics.Path;
-import android.graphics.PixelFormat;
-import android.graphics.Rect;
-import android.graphics.drawable.ClipDrawable;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
-import android.graphics.drawable.LayerDrawable;
 import android.graphics.drawable.RippleDrawable;
 import android.graphics.drawable.StateListDrawable;
 import android.view.Gravity;
@@ -57,7 +49,7 @@ public final class InterfaceAppearance {
 	}
 	enum Role {ROW, HEADER, TEXT, SECONDARY, ACTION, TEXT_ACTION, FIELD, POSTING_FORM, POSTING_FIELD, CHECK, SWITCH, SLIDER, ICON, AUDIO_TITLE,
 		SETTING_TITLE, SETTING_SUMMARY, SECTION_TITLE, MENU_TITLE, POPUP_TEXT, SERVICE_TITLE, SERVICE_META, DIALOG_TITLE, DIALOG_BODY,
-		STANDARD_BUTTON, TOOLBAR_TITLE, TOOLBAR_SUBTITLE, SEARCH_TEXT, STATE_TITLE, SERVICE_DOCUMENT,
+		STANDARD_BUTTON, TOOLBAR_TITLE, TOOLBAR_SUBTITLE, SEARCH_TEXT, STATE_TITLE, SERVICE_DOCUMENT, STATISTIC_VALUE,
 		CUSTOM_BODY, CUSTOM_CAPTION, CUSTOM_FIELD, CUSTOM_CHOICE, CUSTOM_ACTION, CUSTOM_TEXT_ACTION, CUSTOM_SLIDER, CUSTOM_CHOICE_TEXT, MODAL_CHOICE_TEXT, CONTENT_HEADING, CATALOG_TITLE}
 	public static boolean isEnabled(Context context) {
 		return InterfaceMotion.isEnabled() && supported(context);
@@ -160,6 +152,14 @@ public final class InterfaceAppearance {
 		if (view instanceof ScopeCheckBox) ((ScopeCheckBox) view).refreshAppearance();
 		else role(view, hasRole(view, Role.CUSTOM_CHOICE) ? Role.CUSTOM_CHOICE : view instanceof Switch ? Role.SWITCH : Role.CHECK);
 	}
+	/** Glyph-only entry point, including native inflated and programmatically-created controls. */
+	public static void choiceIndicator(View view) {
+		if (view instanceof ScopeCheckBox) ((ScopeCheckBox) view).refreshAppearance();
+		else ChoiceAppearance.apply(view);
+	}
+	public static void choiceIndicator(View view, int surface) {
+		ChoiceAppearance.apply(view, null, ChoiceAppearance.colors(StandardAppearance.colors(view.getContext()), surface));
+	}
 	private static boolean hasRole(View view, Role role) {
 		Object state = view != null ? view.getTag(R.id.interface_appearance_state) : null;
 		return state instanceof State && ((State) state).role == role;
@@ -194,8 +194,10 @@ public final class InterfaceAppearance {
 		menuRow(row, text);
 		standardChoiceText(text);
 		StandardAppearance.customChoiceRow(row, text);
-		if (isEnabled(row.getContext()) && text instanceof android.widget.CheckedTextView)
-			((android.widget.CheckedTextView) text).setCheckMarkTintList(StandardAppearance.choiceColors(StandardAppearance.colors(row.getContext())));
+		if (text instanceof android.widget.CheckedTextView) {
+			AppearanceColors c = StandardAppearance.colors(row.getContext());
+			ChoiceAppearance.apply(text, false, ChoiceAppearance.colors(text, c, isEnabled(row.getContext()) ? c.surfaceContainer : null));
+		}
 	}
 	/** SummaryLayout owns its metric spans; do not apply a global line height or line-limit setters. */
 	public static int[] standardSummaryColors(Context context) {
@@ -214,6 +216,10 @@ public final class InterfaceAppearance {
 		role(title, header ? Role.SECTION_TITLE : Role.SETTING_TITLE); role(summary, Role.SETTING_SUMMARY);
 		StandardAppearance.settings(view, title, summary, widgets, header);
 	}
+	public static void groupSettingsRow(View view, boolean first, boolean last) {
+		StandardAppearance.groupSettingsRow(view, first, last);
+	}
+
 	public static void serviceRow(View view, TextView title, TextView metadata, TextView end) {
 		StandardAppearance.prepare(view, title, metadata, end, null);
 		row(view, title, metadata, false); role(title, Role.SERVICE_TITLE);
@@ -225,6 +231,7 @@ public final class InterfaceAppearance {
 		settingsRow(text, text, null, null, true); state.apply();
 	}
 	public static void serviceTableCell(TextView text, boolean header) { role(text, header ? Role.SECTION_TITLE : Role.SERVICE_TITLE); }
+	public static void standardStatisticValue(TextView text) { role(text, Role.STATISTIC_VALUE); }
 	public static void serviceText(TextView text, boolean nested, boolean medium) {
 		ServiceAppearance.State state = ServiceAppearance.prepare(text, text);
 		state.kind = ServiceAppearance.Kind.TEXT; state.nested = nested; state.medium = medium;
@@ -300,9 +307,13 @@ public final class InterfaceAppearance {
 		if (isEnabled(text.getContext())) { text.setSingleLine(true); text.setEllipsize(android.text.TextUtils.TruncateAt.START); }
 	}
 	public static int[] standardScopeColors(Context context) {
-		if (!isEnabled(context)) return null;
 		AppearanceColors c = StandardAppearance.colors(context);
-		return new int[] {contrasting(c.outline, c.surface, 3), c.primary, c.onPrimary, c.surface, c.ripple};
+		return ChoiceAppearance.colors(c, c.surface);
+	}
+	public static int[] scopeColors(View view, boolean drawer) {
+		AppearanceColors c = drawer ? AppearanceColors.drawerCompact(ThemeEngine.getTheme(view.getContext()))
+				: StandardAppearance.colors(view.getContext());
+		return ChoiceAppearance.colors(view, c, null);
 	}
 	public static void standardCatalogCard(View card, TextView title, TextView metadata) { SettingsContentAppearance.card(card, title, metadata); }
 	public static int standardCatalogColumns(Context context, int width) {
@@ -361,7 +372,9 @@ public final class InterfaceAppearance {
 	public static void mediaPanel(View view, boolean toolbar) { MediaContentAppearance.apply(view, toolbar ? MediaContentAppearance.Role.TOOLBAR : MediaContentAppearance.Role.PANEL); }
 	public static void mediaWindow(View view) { MediaContentAppearance.apply(view, MediaContentAppearance.Role.WINDOW); }
 	public static void mediaSlider(SeekBar view) { MediaContentAppearance.apply(view, MediaContentAppearance.Role.SLIDER); }
-	public static void mediaLoading(android.widget.ProgressBar view) { MediaContentAppearance.apply(view, MediaContentAppearance.Role.LOADING); }
+	public static void mediaLoading(android.widget.ProgressBar view) { StandardAppearance.mediaLoading(view); }
+	public static void mediaColorChip(View view, int color, boolean selected) { MediaContentAppearance.colorChip(view, color, selected); }
+	public static void discussionStatus(TextView view, boolean error) { StandardAppearance.discussionStatus(view, error); }
 	public static void quickNavigationIcon(ImageView view) { MediaContentAppearance.apply(view, MediaContentAppearance.Role.QUICK); }
 	public static void compactFooter(TextView view) { MediaContentAppearance.apply(view, MediaContentAppearance.Role.FOOTER); }
 	public static void configureMediaDialog(AlertDialog dialog) { MediaContentAppearance.dialog(dialog); }
@@ -398,6 +411,7 @@ public final class InterfaceAppearance {
 		// Parent-owned layout must run after child typography restore, not be undone by it.
 		StandardAppearance.refresh(view);
 		MediaContentAppearance.refresh(view);
+		choiceIndicator(view);
 	}
 	public static void configureDialog(AlertDialog dialog) {
 		if (!supported(dialog.getContext())) return;
@@ -420,7 +434,7 @@ public final class InterfaceAppearance {
 	}
 	private static void styleInputs(View view) {
 		if (view instanceof EditText) field((EditText) view);
-		else if (view instanceof CheckBox || view instanceof Switch) check((CompoundButton) view);
+		else if (view instanceof CheckBox || view instanceof android.widget.RadioButton || view instanceof Switch) check((CompoundButton) view);
 		else if (view instanceof SeekBar) slider((SeekBar) view);
 		if (view instanceof ViewGroup) {
 			ViewGroup group = (ViewGroup) view; for (int i = 0; i < group.getChildCount(); i++) styleInputs(group.getChildAt(i));
@@ -437,10 +451,13 @@ public final class InterfaceAppearance {
 		AppearanceTypography.Configuration typography = enabled ? new AppearanceTypography.Configuration(view.getContext()) : null;
 		if (state.rendered && state.applied == enabled && state.appliedRole == state.role
 				&& Objects.equals(state.appliedColors, p != null ? p.colors : null)
-				&& Objects.equals(state.appliedTypography, typography) && state.appliedError == state.error) return;
+				&& Objects.equals(state.appliedTypography, typography) && state.appliedError == state.error) {
+			ChoiceAppearance.apply(view); return;
+		}
 		state.restore(view); state.rendered = true; state.applied = enabled; state.appliedRole = state.role;
 		state.appliedColors = p != null ? p.colors : null; state.appliedTypography = typography; state.appliedError = state.error;
 		if (!enabled) {
+			ChoiceAppearance.apply(view);
 			if (state.role == Role.SERVICE_DOCUMENT) documentColors(view.getContext(), false).apply(((TextView) view).getText());
 			return;
 		}
@@ -545,8 +562,8 @@ public final class InterfaceAppearance {
 				break;
 			}
 			case CHECK: case CUSTOM_CHOICE: {
-				CompoundButton check = (CompoundButton) view; check.setButtonTintList(null);
-				check.setButtonDrawable(new Mark(view, p, state.role == Role.CUSTOM_CHOICE && view instanceof android.widget.RadioButton));
+				CompoundButton check = (CompoundButton) view;
+				ChoiceAppearance.apply(view);
 				if (state.role == Role.CUSTOM_CHOICE) {
 					AppearanceTypography.apply(check, AppearanceTypography.Role.BODY_LARGE);
 					check.setTextColor(enabled(p.text, p.surface)); check.setMinimumHeight(Math.max(state.minimumHeight, dp(view, 48)));
@@ -564,14 +581,9 @@ public final class InterfaceAppearance {
 			}
 			case SLIDER: case CUSTOM_SLIDER: {
 				SeekBar seek = (SeekBar) view;
-				GradientDrawable track = shape(view, 4, enabled(OpaqueColors.blend(p.surface, p.text, .16f), p.surface)); track.setSize(dp(view, 1), dp(view, 6));
-				GradientDrawable progress = shape(view, 4, enabled(p.accent, p.surface)); progress.setSize(dp(view, 1), dp(view, 6));
-				LayerDrawable layers = new LayerDrawable(new Drawable[] {track, new ClipDrawable(progress, Gravity.LEFT, ClipDrawable.HORIZONTAL)});
-				layers.setId(0, android.R.id.background); layers.setId(1, android.R.id.progress);
-				GradientDrawable thumb = shape(view, 10, enabled(contrasting(p.accent, p.surface, 3), p.surface)); thumb.setSize(dp(view, 20), dp(view, 20));
-				seek.setProgressTintList(null); seek.setProgressBackgroundTintList(null); seek.setThumbTintList(null);
-				seek.setProgressDrawable(layers); seek.setThumb(thumb); seek.setSplitTrack(false); seek.setThumbOffset(dp(view, 10));
-				seek.setMinHeight(dp(view, 6)); seek.setMaxHeight(dp(view, 6)); seek.setMinimumHeight(Math.max(state.minimumHeight, dp(view, 48))); break;
+				StandardSlider.apply(seek, enabled(OpaqueColors.blend(p.surface, p.text, .16f), p.surface),
+						enabled(p.accent, p.surface), enabled(contrasting(p.accent, p.surface, 3), p.surface), state.minimumHeight);
+				break;
 			}
 		}
 		TouchFeedback.apply(view);
@@ -591,7 +603,7 @@ public final class InterfaceAppearance {
 			case CUSTOM_BODY: return AppearanceTypography.Role.BODY_MEDIUM;
 			case CUSTOM_CAPTION: return AppearanceTypography.Role.BODY_SMALL;
 			case CUSTOM_CHOICE_TEXT: case MODAL_CHOICE_TEXT: return AppearanceTypography.Role.BODY_LARGE;
-			case DIALOG_TITLE: return AppearanceTypography.Role.TITLE_LARGE;
+			case DIALOG_TITLE: case STATISTIC_VALUE: return AppearanceTypography.Role.TITLE_LARGE;
 			case TOOLBAR_TITLE: return AppearanceTypography.Role.COMPACT_TOOLBAR;
 			case STATE_TITLE: return AppearanceTypography.Role.TITLE_MEDIUM;
 			case CONTENT_HEADING: case CATALOG_TITLE: return AppearanceTypography.Role.TITLE_MEDIUM;
@@ -678,31 +690,6 @@ public final class InterfaceAppearance {
 				SeekBar b = (SeekBar) view; b.setProgressDrawable(progress); b.setThumb(thumb); b.setProgressTintList(progressTint); b.setProgressBackgroundTintList(progressBackgroundTint);
 				b.setThumbTintList(thumbTint); b.setThumbOffset(thumbOffset); b.setSplitTrack(splitTrack); b.setMinHeight(minTrackHeight); b.setMaxHeight(maxTrackHeight);
 			}
-		}
-	}
-	private static final class Mark extends Drawable {
-		final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG); final Path path = new Path(); final Palette palette; final int size; int alpha = 255;
-		final boolean radio;
-		Mark(View view, Palette palette, boolean radio) { this.palette = palette; this.radio = radio; size = dp(view, 24); }
-		@Override public boolean isStateful() { return true; }
-		@Override protected boolean onStateChange(int[] state) { invalidateSelf(); return true; }
-		@Override public int getIntrinsicWidth() { return size; }
-		@Override public int getIntrinsicHeight() { return size; }
-		@Override public void setAlpha(int alpha) { this.alpha = alpha; invalidateSelf(); }
-		@Override public void setColorFilter(ColorFilter filter) { paint.setColorFilter(filter); invalidateSelf(); }
-		@SuppressWarnings("deprecation") @Override public int getOpacity() { return PixelFormat.TRANSLUCENT; }
-		@Override public void draw(Canvas canvas) {
-			boolean checked = false, enabled = false; for (int state : getState()) { if (state == android.R.attr.state_checked) checked = true; if (state == android.R.attr.state_enabled) enabled = true; }
-			Rect b = getBounds(); int save = canvas.save(); canvas.translate(b.left, b.top); canvas.scale(b.width() / 24f, b.height() / 24f);
-			int color = checked ? palette.accent : palette.outline; if (!enabled) color = OpaqueColors.blend(palette.surface, color, .38f);
-			paint.setColor(color); paint.setAlpha(alpha); paint.setStyle(checked ? Paint.Style.FILL : Paint.Style.STROKE); paint.setStrokeWidth(2);
-			if (radio) {
-				paint.setStyle(Paint.Style.STROKE); canvas.drawCircle(12, 12, 9, paint);
-				if (checked) { paint.setStyle(Paint.Style.FILL); canvas.drawCircle(12, 12, 5, paint); }
-			} else canvas.drawRoundRect(3, 3, 21, 21, 4, 4, paint);
-			if (checked && !radio) { paint.setColor(palette.onAccent); paint.setAlpha(alpha); paint.setStyle(Paint.Style.STROKE); paint.setStrokeWidth(2); paint.setStrokeCap(Paint.Cap.ROUND); paint.setStrokeJoin(Paint.Join.ROUND);
-				path.reset(); path.moveTo(7, 12); path.lineTo(10.5f, 15.5f); path.lineTo(17, 9); canvas.drawPath(path, paint); }
-			canvas.restoreToCount(save);
 		}
 	}
 }

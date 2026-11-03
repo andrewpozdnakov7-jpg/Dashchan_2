@@ -1,7 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+	<item type="id" name="choice_indicator_appearance" />
 	<item type="id" name="dropdown_field_appearance" />
 	<item type="id" name="settings_content_appearance" />
+	<item type="id" name="settings_text_scale_state" />
+	<item type="id" name="standard_discussion_status" />
+	<item type="id" name="thread_hide_swipe_state" />
+	<item type="id" name="thread_hide_motion_owner" />
 	<item type="id" name="screen_theme_choice" />
 
 	<item type="id" name="drawer_recycler_view" />

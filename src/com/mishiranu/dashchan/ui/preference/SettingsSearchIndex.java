@@ -9,6 +9,7 @@ import chan.util.StringUtils;
 import com.mishiranu.dashchan.BuildConfig;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
+import com.mishiranu.dashchan.content.ReplyNotificationTargets;
 import com.mishiranu.dashchan.content.push.ReplyPushManager;
 import com.mishiranu.dashchan.ui.ContentFragment;
 import com.mishiranu.dashchan.ui.preference.core.PreferenceFragment;
@@ -51,6 +52,15 @@ public final class SettingsSearchIndex {
 		REPLY_NOTIFICATIONS(R.string.contents, R.string.replies_and_notifications) {
 			@Override
 			ContentFragment createFragment() { return new ReplyNotificationsFragment(); }
+		},
+		REPLY_ADVANCED(R.string.contents, R.string.replies_and_notifications, R.string.reply_advanced) {
+			@Override ContentFragment createFragment() { return ReplyNotificationsFragment.subpage(ReplyNotificationsFragment.ADVANCED); }
+		},
+		REPLY_QUIET(R.string.contents, R.string.replies_and_notifications, R.string.reply_advanced, R.string.reply_push_quiet_hours) {
+			@Override ContentFragment createFragment() { return ReplyNotificationsFragment.subpage(ReplyNotificationsFragment.QUIET); }
+		},
+		REPLY_REGISTRATION(R.string.contents, R.string.replies_and_notifications, R.string.reply_advanced, R.string.reply_push_installation) {
+			@Override ContentFragment createFragment() { return ReplyNotificationsFragment.subpage(ReplyNotificationsFragment.REGISTRATION); }
 		},
 		OFFLINE_TRANSLATION(R.string.contents, R.string.local_translation) {
 			@Override
@@ -460,31 +470,32 @@ public final class SettingsSearchIndex {
 				R.string.video_zoom_gestures__summary, Preferences.KEY_VIDEO_ZOOM_GESTURES);
 		add(context, entries, Screen.REPLY_NOTIFICATIONS, R.string.replies_and_notifications, R.string.replies_and_notifications_entry_summary, null);
 		add(context, entries, Screen.REPLY_NOTIFICATIONS, R.string.highlight_my_posts,
-				R.string.highlight_my_posts__summary, Preferences.KEY_SHOW_MY_POSTS);
+				0, Preferences.KEY_SHOW_MY_POSTS);
 		add(context, entries, Screen.REPLY_NOTIFICATIONS, R.string.track_replies,
-				R.string.track_replies__summary, Preferences.KEY_TRACK_MY_POSTS);
-		add(context, entries, Screen.REPLY_NOTIFICATIONS, R.string.tracked_replies_local_check,
-				R.string.tracked_replies_local_check__summary, Preferences.KEY_TRACKED_REPLIES_LOCAL_CHECK);
-		add(context, entries, Screen.REPLY_NOTIFICATIONS, R.string.tracked_replies_refresh_interval,
-				0, Preferences.KEY_TRACKED_REPLIES_REFRESH_INTERVAL);
-		add(context, entries, Screen.REPLY_NOTIFICATIONS, R.string.tracked_replies_notifications,
-				R.string.tracked_replies_notifications__summary,
-				Preferences.KEY_TRACKED_REPLIES_NOTIFICATIONS);
-		add(context, entries, Screen.REPLY_NOTIFICATIONS, R.string.reply_push_quiet_hours,
-				R.string.reply_push_quiet_hours__summary,
-				Preferences.KEY_REPLY_PUSH_QUIET_HOURS_ENABLED);
-		add(context, entries, Screen.REPLY_NOTIFICATIONS, R.string.reply_push_quiet_hours_start,
-				0, Preferences.KEY_REPLY_PUSH_QUIET_HOURS_START);
-		add(context, entries, Screen.REPLY_NOTIFICATIONS, R.string.reply_push_quiet_hours_end,
-				0, Preferences.KEY_REPLY_PUSH_QUIET_HOURS_END);
-		if (ReplyPushManager.isSupported()) {
-			add(context, entries, Screen.REPLY_NOTIFICATIONS, R.string.reply_push,
-					R.string.reply_push__summary, Preferences.KEY_REPLY_PUSH_ENABLED);
-			add(context, entries, Screen.REPLY_NOTIFICATIONS, R.string.reply_push_installation_id,
-					0, null);
-			add(context, entries, Screen.REPLY_NOTIFICATIONS, R.string.reply_push_reset_identity,
-					R.string.reply_push_reset_identity__summary, null);
+				R.string.reply_history_search, Preferences.KEY_TRACK_MY_POSTS);
+		if (Preferences.isTrackMyPostsEnabled()) {
+			add(context, entries, Screen.REPLY_NOTIFICATIONS, R.string.reply_method,
+					ReplyPushManager.isSupported() ? R.string.reply_search_methods : R.string.reply_search_local, null);
+			add(context, entries, Screen.REPLY_NOTIFICATIONS, R.string.reply_advanced, R.string.reply_advanced_summary, null);
+			if (Preferences.isTrackedRepliesLocalCheckEnabled()) {
+				add(context, entries, Screen.REPLY_ADVANCED, R.string.tracked_replies_refresh_interval, 0,
+						Preferences.KEY_TRACKED_REPLIES_REFRESH_INTERVAL);
+			}
+			add(context, entries, Screen.REPLY_NOTIFICATIONS, R.string.reply_sources, R.string.reply_search_sources, null);
+			if (Preferences.getReplyAlertTargets() != ReplyNotificationTargets.NONE) {
+				add(context, entries, Screen.REPLY_ADVANCED, R.string.reply_filter, R.string.reply_search_sources, null);
+				add(context, entries, Screen.REPLY_ADVANCED, R.string.reply_push_quiet_hours);
+				if (Preferences.isReplyPushQuietHoursEnabled()) {
+					add(context, entries, Screen.REPLY_QUIET, R.string.reply_push_quiet_hours_start);
+					add(context, entries, Screen.REPLY_QUIET, R.string.reply_push_quiet_hours_end);
+				}
+			}
+			if (ReplyPushManager.isSupported() && Preferences.isReplyPushEnabled()) {
+				add(context, entries, Screen.REPLY_ADVANCED, R.string.reply_push_installation, R.string.reply_search_server, null);
+				add(context, entries, Screen.REPLY_REGISTRATION, R.string.reply_push_reset_identity);
+			}
 		}
+		add(context, entries, Preferences.isTrackMyPostsEnabled() ? Screen.REPLY_ADVANCED : Screen.REPLY_NOTIFICATIONS, R.string.reply_erase);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.form_diagnostics_start,
 				R.string.form_diagnostics_summary, null);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.video_diagnostics_start,
@@ -608,15 +619,14 @@ public final class SettingsSearchIndex {
 				Preferences.KEY_FAVORITES_ORDER);
 		add(context, entries, Screen.FAVORITES, R.string.add_thread_on_reply, 0,
 				Preferences.KEY_FAVORITE_ON_REPLY);
-		add(context, entries, Screen.REPLY_NOTIFICATIONS, R.string.watch_initially, R.string.watch_initially__summary,
+		add(context, entries, Screen.FAVORITES, R.string.watch_initially, R.string.watch_initially__summary,
 				Preferences.KEY_WATCHER_WATCH_INITIALLY);
-		add(context, entries, Screen.REPLY_NOTIFICATIONS, R.string.refresh_favorites, 0,
+		add(context, entries, Screen.FAVORITES, R.string.refresh_favorites, 0,
 				Preferences.KEY_WATCHER_REFRESH_INTERVAL);
-		add(context, entries, Screen.REPLY_NOTIFICATIONS, R.string.background_reply_check,
+		add(context, entries, Screen.FAVORITES, R.string.background_reply_check,
 				R.string.background_reply_check__summary, Preferences.KEY_BACKGROUND_REPLY_CHECK);
-		add(context, entries, Screen.REPLY_NOTIFICATIONS, R.string.wifi_only, 0, Preferences.KEY_WATCHER_WIFI_ONLY);
-		add(context, entries, Screen.REPLY_NOTIFICATIONS, R.string.reply_notifications, 0, "reply_notifications");
-		add(context, entries, Screen.REPLY_NOTIFICATIONS, R.string.favorites_watcher);
+		add(context, entries, Screen.CONTENTS, R.string.wifi_only, R.string.reply_wifi_scope, Preferences.KEY_WATCHER_WIFI_ONLY);
+		add(context, entries, Screen.FAVORITES, R.string.favorites_watcher);
 		add(context, entries, Screen.CONTENTS, R.string.clear_cache);
 		if (BuildConfig.ENABLE_EXPERIMENTAL_INTERFACE_MOTION) {
 			add(context, entries, Screen.MATERIAL3_DESIGN, R.string.material3_design_settings,
@@ -746,6 +756,7 @@ public final class SettingsSearchIndex {
 		add(context, entries, Screen.POST_TEXT_SIZES, R.string.post_subject_text_size, 0, Preferences.KEY_SUBJECT_TEXT_SCALE);
 		add(context, entries, Screen.POST_TEXT_SIZES, R.string.post_body_text_size, 0, Preferences.KEY_TEXT_SCALE);
 		add(context, entries, Screen.POST_TEXT_SIZES, R.string.post_metadata_text_size, 0, Preferences.KEY_METADATA_TEXT_SCALE);
+		add(context, entries, Screen.POST_TEXT_SIZES, R.string.settings_text_size, 0, Preferences.KEY_SETTINGS_TEXT_SCALE);
 		add(context, entries, Screen.ACCESSIBILITY, R.string.volume_buttons_text_scale,
 				R.string.volume_buttons_text_scale__summary, Preferences.KEY_VOLUME_BUTTONS_TEXT_SCALE);
 		add(context, entries, Screen.ACCESSIBILITY, R.string.video_right_hand_controls,

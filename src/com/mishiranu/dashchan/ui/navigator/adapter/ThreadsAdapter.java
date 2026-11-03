@@ -13,6 +13,7 @@ import chan.util.StringUtils;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.util.ThreadMotionKey;
+import com.mishiranu.dashchan.ui.ThreadHideSwipeController;
 import com.mishiranu.dashchan.content.async.AsyncCatalogSearch;
 import com.mishiranu.dashchan.content.async.CatalogSearch;
 import com.mishiranu.dashchan.content.model.AttachmentItem;
@@ -33,6 +34,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.IdentityHashMap;
+import java.util.HashSet;
 import java.util.List;
 
 public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
@@ -44,6 +46,9 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 
 	private static final int LIST_PADDING = 12;
 	private static final int VIEW_SECRET_ABU = -100;
+	// A retained swiped grid cell needs a new holder so ItemTouchHelper can retire the outgoing one.
+	private static final int VIEW_SWIPED_HIDDEN_CELL = -101;
+	private final HashSet<ThreadMotionKey> swipeCellReplacements = new HashSet<>();
 	private boolean secretAbuAllowed;
 	private final SecretAbuThread.State secretAbuState = new SecretAbuThread.State();
 	private String secretAbuBoardName = "abu";
@@ -124,7 +129,17 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 			return SecretAbuThread.createCatalogViewHolder(parent, secretAbuState, uiManager,
 					configurationSet.fragmentManager, cardsMode, secretAbuBoardName);
 		}
-		return uiManager.view().createView(parent, ViewUnit.ViewType.values()[viewType]);
+		return uiManager.view().createView(parent, viewType(viewType));
+	}
+
+	private static ViewUnit.ViewType viewType(int type) {
+		return type == VIEW_SWIPED_HIDDEN_CELL ? ViewUnit.ViewType.THREAD_CARD_CELL : ViewUnit.ViewType.values()[type];
+	}
+
+	public void prepareSwipeReplacement(PostItem item) {
+		if (gridMode != null && Preferences.isDisplayHiddenThreads()) {
+			swipeCellReplacements.add(new ThreadMotionKey(item.getChanName(), item.getBoardName(), item.getThreadNumber()));
+		}
 	}
 
 	@Override
@@ -135,6 +150,7 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 	@Override
 	public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder,
 			int position, @NonNull List<Object> payloads) {
+		ThreadHideSwipeController.onBinding(holder.itemView);
 		if (holder.getItemViewType() == VIEW_SECRET_ABU) {
 			holder.itemView.setTag(R.id.thread_motion_key, null);
 			SecretAbuThread.bindViewHolder(holder, uiManager);
@@ -143,7 +159,7 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 		PostItem postItem = getItem(position);
 		holder.itemView.setTag(R.id.thread_motion_key, new ThreadMotionKey(postItem.getChanName(),
 				postItem.getBoardName(), postItem.getThreadNumber()));
-		switch (ViewUnit.ViewType.values()[holder.getItemViewType()]) {
+		switch (viewType(holder.getItemViewType())) {
 			case THREAD:
 			case THREAD_CARD: {
 				if (payloads.isEmpty()) {
@@ -182,6 +198,11 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 		}
 	}
 
+	@Override public void onViewRecycled(@NonNull RecyclerView.ViewHolder holder) {
+		ThreadHideSwipeController.onBinding(holder.itemView);
+		super.onViewRecycled(holder);
+	}
+
 	private void requestTranslation(PostItem postItem) {
 		if (configurationSet.showTranslatedComments &&
 				!postItem.hasTranslatedComment(configurationSet.translationKey)) {
@@ -213,7 +234,7 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 		int end = Math.min(lastPosition, getItemCount() - 1);
 		for (int position = firstPosition; position <= end; position++) {
 			if (isSecretAbuPosition(position)) continue;
-			ViewUnit.ViewType viewType = ViewUnit.ViewType.values()[getItemViewType(position)];
+			ViewUnit.ViewType viewType = viewType(getItemViewType(position));
 			if (viewType != ViewUnit.ViewType.THREAD_HIDDEN && viewType != ViewUnit.ViewType.THREAD_CARD_HIDDEN &&
 					!getItem(position).hasTranslatedComment(key)) {
 				return true;
@@ -264,6 +285,11 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 	public int getItemViewType(int position) {
 		if (isSecretAbuPosition(position)) return VIEW_SECRET_ABU;
 		PostItem postItem = getItem(position);
+		if (gridMode != null && !swipeCellReplacements.isEmpty()
+				&& swipeCellReplacements.contains(new ThreadMotionKey(postItem.getChanName(), postItem.getBoardName(), postItem.getThreadNumber()))
+				&& configurationSet.postStateProvider.isHiddenResolve(postItem)) {
+			return VIEW_SWIPED_HIDDEN_CELL;
+		}
 		return (gridMode != null ? ViewUnit.ViewType.THREAD_CARD_CELL
 				: configurationSet.postStateProvider.isHiddenResolve(postItem)
 				? (cardsMode ? ViewUnit.ViewType.THREAD_CARD_HIDDEN : ViewUnit.ViewType.THREAD_HIDDEN)
@@ -345,6 +371,11 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 			appendItemsInternal(postItems);
 		}
 		this.catalog = catalog;
+		if (!swipeCellReplacements.isEmpty()) {
+			HashSet<ThreadMotionKey> retainedKeys = new HashSet<>();
+			for (PostItem item : postItems) retainedKeys.add(new ThreadMotionKey(item.getChanName(), item.getBoardName(), item.getThreadNumber()));
+			swipeCellReplacements.retainAll(retainedKeys);
+		}
 		catalogSearch.retainItems(postItems);
 		applyCurrentSortingAndFilter(true, true);
 		// Refresh may also change mutable hide/vote/state-provider data on retained objects.

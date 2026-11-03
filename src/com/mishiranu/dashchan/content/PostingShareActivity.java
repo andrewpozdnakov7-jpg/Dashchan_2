@@ -1,9 +1,11 @@
 package com.mishiranu.dashchan.content;
 
 import android.content.ClipData;
+import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
+import android.view.ContextThemeWrapper;
 import android.view.Gravity;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
@@ -22,6 +24,8 @@ import com.mishiranu.dashchan.content.storage.DraftsStorage;
 import com.mishiranu.dashchan.ui.MainActivity;
 import com.mishiranu.dashchan.util.AndroidUtils;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
+import com.mishiranu.dashchan.widget.InterfaceAppearance;
+import com.mishiranu.dashchan.widget.ThemeEngine;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.regex.Matcher;
@@ -122,13 +126,23 @@ public class PostingShareActivity extends ComponentActivity {
 		return null;
 	}
 
+	static Context createImportContext(Context context) {
+		if (!InterfaceAppearance.isEnabled(context)) return context;
+		// Theme only the import views. Applying the app theme to this Activity would
+		// replace its translucent window theme inherited from the share entry point.
+		Context themed = ThemeEngine.attach(new ContextThemeWrapper(context, 0));
+		ThemeEngine.applyTheme(themed);
+		return themed;
+	}
+
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		if (com.mishiranu.dashchan.content.security.AppSecurity.deferIfLocked(this)) return;
-		FrameLayout layout = new FrameLayout(this);
+		Context importContext = createImportContext(this);
+		FrameLayout layout = new FrameLayout(importContext);
 		com.mishiranu.dashchan.widget.InterfaceAppearance.standardPage(layout);
-		ProgressBar progressBar = new ProgressBar(this);
+		ProgressBar progressBar = new ProgressBar(importContext);
 		com.mishiranu.dashchan.widget.InterfaceAppearance.standardLoading(progressBar);
 		layout.addView(progressBar, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
 				ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER));

@@ -828,14 +828,27 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 		}
 	}
 
+	private final ArrayList<Consumer<Boolean>> eraseCallbacks = new ArrayList<>();
+
+	private void finishErase(boolean success) {
+		ArrayList<Consumer<Boolean>> callbacks;
+		synchronized (this) {
+			callbacks = new ArrayList<>(eraseCallbacks);
+			eraseCallbacks.clear();
+		}
+		for (Consumer<Boolean> callback : callbacks) callback.accept(success);
+	}
+
 	/** Clears own posts and replies, including the persistent recovery copies. */
 	public synchronized void clearAllHistory(Consumer<Boolean> completion) {
+		eraseCallbacks.add(completion);
+		if (eraseCallbacks.size() > 1) return;
 		posts.clear();
 		postsMap.clear();
 		notifyChanged();
 		deleteSavedData(filesDeleted -> {
 			if (!filesDeleted) {
-				completion.accept(false);
+				finishErase(false);
 				return;
 			}
 			try {
@@ -843,12 +856,12 @@ public class MyPostsStorage extends StorageManager.Storage<List<MyPostsStorage.T
 					if (success) {
 						Preferences.setReplyHistoryDeletePending(false);
 					}
-					completion.accept(success);
+					finishErase(success);
 				});
 			} catch (RuntimeException e) {
 				Logger.write(Logger.Type.ERROR, "MyPostsStorage", "clear_markers_enqueue_failed",
 						e.getClass().getSimpleName());
-				completion.accept(false);
+				finishErase(false);
 			}
 		});
 	}

@@ -1,5 +1,8 @@
 package com.mishiranu.dashchan.widget;
 
+import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
+import android.animation.ValueAnimator;
 import android.app.AlertDialog;
 import android.app.Activity;
 import android.content.Context;
@@ -7,7 +10,6 @@ import android.content.ContextWrapper;
 import android.content.DialogInterface;
 import android.content.res.ColorStateList;
 import android.graphics.Bitmap;
-import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.GradientDrawable;
@@ -69,11 +71,16 @@ public final class CaptchaDialogAppearance {
 	private Bitmap[] selected = new Bitmap[0];
 	private boolean closed, started;
 	private Runnable delayedSelection;
-	private ImageView oldGrid;
-	private ViewGroup gridParent;
-	private View changingGrid;
-	private android.animation.ValueAnimator gridFade;
+	private final CaptchaImageMotion imageMotion = new CaptchaImageMotion();
+	private final GradientDrawable doneFill;
+	private ValueAnimator doneFade;
+	private int doneColor, doneText;
+	private boolean doneAvailable = true, doneStateBound;
 	private boolean lastWaiting, lastRefreshing;
+	private final View.OnAttachStateChangeListener doneAttachment = new View.OnAttachStateChangeListener() {
+		@Override public void onViewAttachedToWindow(View view) { settleDone(); }
+		@Override public void onViewDetachedFromWindow(View view) { settleDone(); }
+	};
 
 	public CaptchaDialogAppearance(Context context, LinearLayout content, String instruction) {
 		this.context = context; this.content = content;
@@ -118,14 +125,48 @@ public final class CaptchaDialogAppearance {
 		refreshLoading = loading(); refreshSlot.addView(refreshLoading, new FrameLayout.LayoutParams(dp(32), dp(32), Gravity.CENTER));
 		cancel = button(context.getString(android.R.string.cancel), accent);
 		done = button(context.getString(R.string.captcha_dialog_done), Color.WHITE);
-		int primary = PostingFormAppearance.primaryBackground(accent);
-		android.graphics.drawable.StateListDrawable doneBackground = new android.graphics.drawable.StateListDrawable();
-		doneBackground.addState(new int[]{android.R.attr.state_enabled}, shape(24, primary));
-		doneBackground.addState(new int[0], shape(24, ColorUtils.blendARGB(surface, accent, .16f)));
-		done.setBackground(new RippleDrawable(ColorStateList.valueOf(0x33ffffff), doneBackground, shape(24, Color.WHITE)));
-		done.setTextColor(new ColorStateList(new int[][]{new int[]{android.R.attr.state_enabled}, new int[0]},
-				new int[]{Color.WHITE, secondary}));
+		doneFill = shape(24, PostingFormAppearance.primaryBackground(accent));
+		done.setBackground(new RippleDrawable(ColorStateList.valueOf(0x33ffffff), doneFill, shape(24, Color.WHITE)));
+		settleDone(); done.addOnAttachStateChangeListener(doneAttachment);
 		bindSelection(new Bitmap[0], false);
+	}
+	private int doneTargetColor() {
+		return done.isEnabled() ? PostingFormAppearance.primaryBackground(accent) : ColorUtils.blendARGB(surface, accent, .16f);
+	}
+	private void paintDone(int fill, int text) {
+		doneColor = ColorUtils.setAlphaComponent(fill, 255); doneText = text;
+		doneFill.setColor(doneColor); done.setTextColor(text);
+	}
+	private void cancelDoneFade() {
+		ValueAnimator old = doneFade; doneFade = null;
+		if (old != null) { old.removeAllUpdateListeners(); old.removeAllListeners(); old.cancel(); }
+	}
+	private void settleDone() {
+		cancelDoneFade(); doneAvailable = done.isEnabled();
+		paintDone(doneTargetColor(), doneAvailable ? Color.WHITE : secondary);
+	}
+	private void updateDone() {
+		if (!doneStateBound) { doneStateBound = true; settleDone(); return; }
+		if (doneAvailable == done.isEnabled()) return;
+		doneAvailable = done.isEnabled(); cancelDoneFade();
+		int fromFill = doneColor, fromText = doneText;
+		int toFill = doneTargetColor(), toText = doneAvailable ? Color.WHITE : secondary;
+		if (!started || !done.isAttachedToWindow() || !done.isShown() || !InterfaceMotion.isEnabled()
+				|| InterfaceMotion.duration(180) == 0) { paintDone(toFill, toText); return; }
+		ValueAnimator running = ValueAnimator.ofFloat(0f, 1f); doneFade = running;
+		running.setDuration(InterfaceMotion.duration(180)); running.setInterpolator(InterfaceMotion.STANDARD);
+		running.addUpdateListener(value -> {
+			if (closed || doneFade != value) return;
+			if (!InterfaceMotion.isEnabled() || InterfaceMotion.duration(1) == 0) { settleDone(); return; }
+			float fraction = (float) value.getAnimatedValue();
+			paintDone(PostingFormAppearance.blendPrimaryBackground(fromFill, toFill, fraction),
+					ColorUtils.blendARGB(fromText, toText, fraction));
+		});
+		running.addListener(new AnimatorListenerAdapter() {
+			@Override public void onAnimationEnd(Animator animation) {
+				if (doneFade == running) { doneFade = null; paintDone(toFill, toText); }
+			}
+		}); running.start();
 	}
 
 	/** Four stable slots use the measured viewport; additional server-provided answers remain scrollable. */
@@ -179,6 +220,10 @@ public final class CaptchaDialogAppearance {
 	public ImageView taskImage(Bitmap image) {
 		ImageView view = new ImageView(context); view.setAdjustViewBounds(true); view.setScaleType(ImageView.ScaleType.FIT_CENTER);
 		view.setImageBitmap(image); content.addView(view, new LinearLayout.LayoutParams(-1, dp(120))); return view;
+	}
+	public void finishImageChanges() { imageMotion.finish(); }
+	public void bindImage(ImageView view, Bitmap image) {
+		if (!closed) imageMotion.bind(view, image, started && InterfaceMotion.isEnabled());
 	}
 	public void bindSelection(Bitmap[] next, boolean animate) {
 		if (next == null) next = new Bitmap[0];
@@ -290,6 +335,10 @@ public final class CaptchaDialogAppearance {
 		if (!started && !closed) { started = true; MODALS.add(this); publish(); }
 	}
 	public void waiting(boolean waiting, boolean refreshing, boolean retryError) {
+		if (closed) return;
+		// ForegroundManager owns real click availability; only its current state drives the paint.
+		updateDone();
+		if (waiting || retryError) imageMotion.finish();
 		if (delayedSelection != null) { HANDLER.removeCallbacks(delayedSelection); delayedSelection = null; }
 		selectionLoading.setVisibility(View.INVISIBLE);
 		boolean refreshingNow = waiting && refreshing;
@@ -317,37 +366,12 @@ public final class CaptchaDialogAppearance {
 			HANDLER.postDelayed(delayedSelection, 300);
 		}
 	}
-	private void settleGrid() {
-		if (gridFade != null) { gridFade.removeAllUpdateListeners(); gridFade.removeAllListeners(); gridFade.cancel(); gridFade = null; }
-		if (changingGrid != null) changingGrid.setAlpha(1f);
-		if (oldGrid != null && gridParent != null) { gridParent.getOverlay().remove(oldGrid); oldGrid.setImageDrawable(null); }
-		oldGrid = null; changingGrid = null; gridParent = null;
-	}
-	public void beforeContentChange(View grid) {
-		settleGrid();
-		if (closed || !grid.isAttachedToWindow() || grid.getWidth() == 0 || grid.getHeight() == 0 || InterfaceMotion.duration(160) == 0) return;
-		// Bounded native keyboard-only snapshot, never a form, response token or user text.
-		if ((long) grid.getWidth() * grid.getHeight() > 2048L * 2048L) return;
-		Bitmap bitmap = Bitmap.createBitmap(grid.getWidth(), grid.getHeight(), Bitmap.Config.ARGB_8888);
-		grid.draw(new Canvas(bitmap)); changingGrid = grid; gridParent = (ViewGroup) grid.getParent();
-		oldGrid = new ImageView(context); oldGrid.setImageBitmap(bitmap); oldGrid.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-		oldGrid.layout(grid.getLeft(), grid.getTop(), grid.getRight(), grid.getBottom()); gridParent.getOverlay().add(oldGrid);
-	}
-	public void afterContentChange(View grid) {
-		if (oldGrid == null) return;
-		grid.setAlpha(0f); gridFade = android.animation.ValueAnimator.ofFloat(0f, 1f);
-		gridFade.setDuration(InterfaceMotion.duration(160));
-		gridFade.addUpdateListener(value -> { float fraction = (float) value.getAnimatedValue(); grid.setAlpha(fraction); if (oldGrid != null) oldGrid.setAlpha(1f - fraction); });
-		gridFade.addListener(new android.animation.AnimatorListenerAdapter() {
-			@Override public void onAnimationEnd(android.animation.Animator animation) { settleGrid(); }
-		}); gridFade.start();
-	}
 	public void close() {
 		if (closed) return; closed = true;
 		if (delayedSelection != null) HANDLER.removeCallbacks(delayedSelection);
 		selectionLoading.setVisibility(View.INVISIBLE); refreshLoading.setVisibility(View.INVISIBLE);
 		refreshLoading.animate().cancel(); refreshIcon.animate().cancel();
-		settleGrid();
+		settleDone(); done.removeOnAttachStateChangeListener(doneAttachment); imageMotion.close();
 		cancelSelectionAnimations();
 		if (started) HANDLER.postDelayed(() -> { MODALS.remove(this); publish(); }, InterfaceMotion.duration(180));
 	}

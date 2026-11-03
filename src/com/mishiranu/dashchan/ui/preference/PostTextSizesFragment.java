@@ -28,6 +28,10 @@ import com.mishiranu.dashchan.util.SharedPreferences;
 import com.mishiranu.dashchan.util.ViewUtils;
 import com.mishiranu.dashchan.widget.SafePasteEditText;
 import com.mishiranu.dashchan.widget.ThemeEngine;
+import com.mishiranu.dashchan.widget.InterfaceAppearance;
+import com.mishiranu.dashchan.widget.SettingsTextAppearance;
+import com.mishiranu.dashchan.widget.ViewFactory;
+import java.util.function.IntConsumer;
 
 public class PostTextSizesFragment extends PreferenceFragment {
 	@Override
@@ -39,10 +43,12 @@ public class PostTextSizesFragment extends PreferenceFragment {
 		addScale(Preferences.KEY_SUBJECT_TEXT_SCALE, R.string.post_subject_text_size);
 		addScale(Preferences.KEY_TEXT_SCALE, R.string.post_body_text_size);
 		addScale(Preferences.KEY_METADATA_TEXT_SCALE, R.string.post_metadata_text_size);
+		addScale(Preferences.KEY_SETTINGS_TEXT_SCALE, R.string.settings_text_size);
 		addHeader(R.string.post_text_size_preview);
 		addPreference(new PreviewPreference(requireContext()), false);
 		addButton(R.string.restore_defaults, 0).setOnClickListener(p -> {
 			Preferences.resetPostTextScales();
+			Preferences.setSettingsTextScalePercent(Preferences.DEFAULT_TEXT_SCALE);
 			requireActivity().recreate();
 		});
 	}
@@ -98,6 +104,45 @@ public class PostTextSizesFragment extends PreferenceFragment {
 		}
 	}
 
+	private static class SettingsPreview extends LinearLayout {
+		private final ViewFactory.TwoLinesViewHolder row;
+
+		SettingsPreview(Context context) {
+			super(context);
+			setOrientation(VERTICAL);
+			row = ViewFactory.makeTwoLinesListItem(this, ViewFactory.FEATURE_MULTILINE_TITLE);
+			row.text1.setText(R.string.settings_text_size_sample_title);
+			row.text2.setText(R.string.settings_text_size_sample_summary);
+			addView(row.view);
+			update(Preferences.getSettingsTextScalePercent());
+		}
+
+		void update(int percent) {
+			SettingsTextAppearance.restore(row.text1, row.text2);
+			InterfaceAppearance.settingsRow(row.view, row.text1, row.text2, row.widgetFrame, false);
+			SettingsTextAppearance.apply(percent, row.text1, row.text2);
+		}
+	}
+
+	private static class FullPreview extends LinearLayout {
+		private final Preview posts;
+		private final SettingsPreview settings;
+
+		FullPreview(Context context) {
+			super(context);
+			setOrientation(VERTICAL);
+			posts = new Preview(context);
+			settings = new SettingsPreview(context);
+			addView(posts);
+			addView(settings);
+		}
+
+		void update() {
+			posts.update(null, 0);
+			settings.update(Preferences.getSettingsTextScalePercent());
+		}
+	}
+
 	private static class PreviewPreference extends Preference<Void> {
 		PreviewPreference(Context context) {
 			super(context, null, null, null, null);
@@ -107,11 +152,11 @@ public class PostTextSizesFragment extends PreferenceFragment {
 		@Override protected void extract(SharedPreferences preferences) {}
 		@Override protected void persist(SharedPreferences preferences) {}
 		@Override public ViewHolder createViewHolder(ViewGroup parent) {
-			return new ViewHolder(new Preview(parent.getContext()), null, null, null);
+			return new ViewHolder(new FullPreview(parent.getContext()), null, null, null);
 		}
 		@Override public void bindViewHolder(ViewHolder holder) {
 			super.bindViewHolder(holder);
-			((Preview) holder.view).update(null, 0);
+			((FullPreview) holder.view).update();
 		}
 	}
 
@@ -123,10 +168,12 @@ public class PostTextSizesFragment extends PreferenceFragment {
 			setDescription(context.getString(R.string.large_text_layout_warning));
 		}
 		@Override protected void extract(SharedPreferences preferences) {
-			setValue(Preferences.getPostTextScalePercent(key));
+			setValue(Preferences.KEY_SETTINGS_TEXT_SCALE.equals(key) ? Preferences.getSettingsTextScalePercent()
+					: Preferences.getPostTextScalePercent(key));
 		}
 		@Override protected void persist(SharedPreferences preferences) {
-			Preferences.setPostTextScalePercent(key, getValue());
+			if (Preferences.KEY_SETTINGS_TEXT_SCALE.equals(key)) Preferences.setSettingsTextScalePercent(getValue());
+			else Preferences.setPostTextScalePercent(key, getValue());
 		}
 
 		private static Integer parse(CharSequence text) {
@@ -164,8 +211,18 @@ public class PostTextSizesFragment extends PreferenceFragment {
 			Integer initial = parse(input.getText());
 			seek.setProgress((initial != null ? initial : getValue()) - Preferences.MIN_TEXT_SCALE);
 			layout.second.addView(seek, LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-			Preview preview = new Preview(context);
-			preview.update(key, initial != null ? initial : getValue());
+			View preview;
+			IntConsumer updatePreview;
+			if (Preferences.KEY_SETTINGS_TEXT_SCALE.equals(key)) {
+				SettingsPreview settings = new SettingsPreview(context);
+				preview = settings;
+				updatePreview = settings::update;
+			} else {
+				Preview posts = new Preview(context);
+				preview = posts;
+				updatePreview = value -> posts.update(key, value);
+			}
+			updatePreview.accept(initial != null ? initial : getValue());
 			layout.second.addView(preview);
 			com.mishiranu.dashchan.widget.InterfaceAppearance.standardCustomContent(layout.second, preview);
 			com.mishiranu.dashchan.widget.InterfaceAppearance.standardCustomInsets(layout.second);
@@ -180,7 +237,7 @@ public class PostTextSizesFragment extends PreferenceFragment {
 				com.mishiranu.dashchan.widget.InterfaceAppearance.fieldError(input, value == null);
 				if (value != null) {
 					seek.setProgress(value - Preferences.MIN_TEXT_SCALE);
-					preview.update(key, value);
+					updatePreview.accept(value);
 				}
 				if (dialog.isShowing()) dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(value != null);
 			};

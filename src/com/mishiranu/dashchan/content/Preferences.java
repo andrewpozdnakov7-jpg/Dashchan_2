@@ -1917,10 +1917,22 @@ public class Preferences {
 	public static final String KEY_TEXT_SCALE = "text_scale";
 	public static final String KEY_SUBJECT_TEXT_SCALE = "subject_text_scale";
 	public static final String KEY_METADATA_TEXT_SCALE = "metadata_text_scale";
+	public static final String KEY_SETTINGS_TEXT_SCALE = "settings_text_scale";
 	public static final int MIN_TEXT_SCALE = 30;
 	public static final int MAX_TEXT_SCALE = 500;
 	public static final int STEP_TEXT_SCALE = 5;
 	public static final int DEFAULT_TEXT_SCALE = 100;
+
+	public static int getSettingsTextScalePercent() {
+		return Math.max(MIN_TEXT_SCALE, Math.min(PREFERENCES.getInt(KEY_SETTINGS_TEXT_SCALE,
+				DEFAULT_TEXT_SCALE), MAX_TEXT_SCALE));
+	}
+
+	public static void setSettingsTextScalePercent(int value) {
+		try (SharedPreferences.Editor editor = PREFERENCES.editAsync()) {
+			editor.put(KEY_SETTINGS_TEXT_SCALE, Math.max(MIN_TEXT_SCALE, Math.min(value, MAX_TEXT_SCALE)));
+		}
+	}
 
 	public static int getTextScalePercent() {
 		return Math.max(MIN_TEXT_SCALE, Math.min(PREFERENCES.getInt(KEY_TEXT_SCALE,
@@ -3181,6 +3193,34 @@ public class Preferences {
 		PREFERENCES.edit().put(KEY_WATCHER_NOTIFICATIONS, strings).close();
 	}
 
+	private static final String KEY_LAST_REPLY_ALERT_SCOPE = "last_reply_alert_scope";
+
+	public static ReplyNotificationTargets getReplyAlertTargets() {
+		boolean favorites = getWatcherNotifications().contains(NotificationFeature.ENABLED);
+		return ReplyNotificationTargets.of(favorites, isTrackedRepliesNotificationsEnabled());
+	}
+
+	public static boolean setReplyAlertsEnabled(boolean enabled) {
+		ReplyNotificationTargets current = getReplyAlertTargets();
+		ReplyNotificationTargets scope = current != ReplyNotificationTargets.NONE ? current
+				: ReplyNotificationTargets.restoreScope(PREFERENCES.getString(KEY_LAST_REPLY_ALERT_SCOPE, null));
+		return writeReplyAlerts(enabled, scope);
+	}
+
+	/** The existing two gates remain authoritative at delivery. Save their scope and both flags together. */
+	public static boolean writeReplyAlerts(boolean enabled, ReplyNotificationTargets scope) {
+		if (scope == ReplyNotificationTargets.NONE) throw new IllegalArgumentException("Empty scope");
+		Set<String> stored = PREFERENCES.getStringSet(KEY_WATCHER_NOTIFICATIONS, null);
+		Set<String> features = stored != null ? new HashSet<>(stored) : new HashSet<>();
+		if (stored == null) {
+			for (NotificationFeature feature : DEFAULT_WATCHER_NOTIFICATIONS) features.add(feature.value);
+		}
+		if (enabled && scope != ReplyNotificationTargets.TRACKED) features.add(NotificationFeature.ENABLED.value);
+		else features.remove(NotificationFeature.ENABLED.value);
+		return PREFERENCES.edit().put(KEY_TRACKED_REPLIES_NOTIFICATIONS, enabled && scope != ReplyNotificationTargets.FAVORITE)
+				.put(KEY_WATCHER_NOTIFICATIONS, features).put(KEY_LAST_REPLY_ALERT_SCOPE, scope.name()).commitChecked();
+	}
+
 	public static final String KEY_NOTIFICATION_PERMISSION_REQUESTED = "notification_permission_requested";
 
 	public static boolean isNotificationPermissionRequested() {
@@ -3216,7 +3256,7 @@ public class Preferences {
 
 	public static final String KEY_TRACK_MY_POSTS = "track_my_posts";
 	public static final boolean DEFAULT_TRACK_MY_POSTS = true;
-	private static final String KEY_REPLY_HISTORY_DELETE_PENDING = "reply_history_delete_pending";
+	public static final String KEY_REPLY_HISTORY_DELETE_PENDING = "reply_history_delete_pending";
 	public static final String KEY_TRACKED_REPLIES_LOCAL_CHECK = "tracked_replies_local_check";
 	public static final boolean DEFAULT_TRACKED_REPLIES_LOCAL_CHECK = true;
 	public static final String KEY_TRACKED_REPLIES_REFRESH_INTERVAL = "tracked_replies_refresh_interval";

@@ -13,6 +13,7 @@ import chan.util.StringUtils;
 import com.mishiranu.dashchan.BuildConfig;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
+import com.mishiranu.dashchan.content.service.BackgroundWatcherWorker;
 import com.mishiranu.dashchan.content.async.ExecutorTask;
 import com.mishiranu.dashchan.content.async.TaskViewModel;
 import com.mishiranu.dashchan.content.database.PagesDatabase;
@@ -53,6 +54,10 @@ public class ContentsFragment extends PreferenceFragment {
 		addButton(R.string.favorites, R.string.favorites_settings_summary)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 						.pushFragment(new FavoritesFragment()));
+		addHeader(R.string.reply_auto_checks);
+		addCheck(true, Preferences.KEY_WATCHER_WIFI_ONLY, Preferences.DEFAULT_WATCHER_WIFI_ONLY,
+				R.string.wifi_only, R.string.reply_wifi_scope)
+				.setOnAfterChangeListener(p -> BackgroundWatcherWorker.updateSchedule(requireContext()));
 		addHeader(R.string.settings_boards);
 		addCheck(true, Preferences.KEY_THREAD_PAGE_PRELOAD, Preferences.DEFAULT_THREAD_PAGE_PRELOAD,
 				R.string.thread_page_preload, R.string.thread_page_preload__summary);

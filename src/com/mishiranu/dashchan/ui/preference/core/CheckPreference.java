@@ -6,10 +6,19 @@ import android.content.Context;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.CheckBox;
+import android.widget.CompoundButton;
+import android.widget.Switch;
 import com.mishiranu.dashchan.util.SharedPreferences;
 import com.mishiranu.dashchan.widget.ThemeEngine;
 
 public class CheckPreference extends Preference<Boolean> {
+	private boolean switchStyle;
+
+	public CheckPreference asSwitch() {
+		switchStyle = true;
+		return this;
+	}
+
 	public CheckPreference(Context context, String key, boolean defaultValue,
 			CharSequence title, CharSequence summary) {
 		super(context, key, defaultValue, title, p -> summary);
@@ -27,13 +36,13 @@ public class CheckPreference extends Preference<Boolean> {
 
 	@Override
 	public ViewType getViewType() {
-		return ViewType.CHECK;
+		return switchStyle && InterfaceAppearance.isEnabled(context) ? ViewType.SWITCH : ViewType.CHECK;
 	}
 
 	public static class CheckViewHolder extends ViewHolder {
-		public final CheckBox check;
+		public final CompoundButton check;
 
-		public CheckViewHolder(ViewHolder viewHolder, CheckBox check) {
+		public CheckViewHolder(ViewHolder viewHolder, CompoundButton check) {
 			super(viewHolder);
 			this.check = check;
 		}
@@ -43,7 +52,7 @@ public class CheckPreference extends Preference<Boolean> {
 	public CheckViewHolder createViewHolder(ViewGroup parent) {
 		ViewHolder viewHolder = super.createViewHolder(parent);
 		viewHolder.widgetFrame.setVisibility(View.VISIBLE);
-		CheckBox check = new CheckBox(viewHolder.widgetFrame.getContext());
+		CompoundButton check = getViewType() == ViewType.SWITCH ? new Switch(context) : new CheckBox(context);
 		ThemeEngine.applyStyle(check);
 		InterfaceAppearance.check(check);
 		check.setClickable(false);

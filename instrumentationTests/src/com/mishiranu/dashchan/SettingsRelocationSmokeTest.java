@@ -79,11 +79,13 @@ public class SettingsRelocationSmokeTest {
 			assertRoute(context, entries, R.string.thread_page_preload, ContentsFragment.class,
 					R.string.contents);
 			for (int title : new int[]{R.string.replies_and_notifications, R.string.track_replies,
-					R.string.tracked_replies_local_check, R.string.watch_initially,
-					R.string.refresh_favorites, R.string.background_reply_check,
-					R.string.wifi_only, R.string.reply_notifications}) {
+					R.string.highlight_my_posts, R.string.reply_erase}) {
 				assertRoute(context, entries, title, ReplyNotificationsFragment.class, R.string.contents);
 			}
+			for (int title : new int[]{R.string.watch_initially, R.string.refresh_favorites, R.string.background_reply_check}) {
+				assertRoute(context, entries, title, com.mishiranu.dashchan.ui.preference.FavoritesFragment.class, R.string.contents);
+			}
+			assertRoute(context, entries, R.string.wifi_only, ContentsFragment.class, R.string.contents);
 			assertRoute(context, entries, R.string.pip_diagnostic_mode, PipDiagnosticsFragment.class,
 					R.string.experimental_features);
 		});

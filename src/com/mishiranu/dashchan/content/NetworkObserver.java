@@ -58,6 +58,11 @@ public class NetworkObserver {
 		return null;
 	}
 
+	public boolean hasActiveWifiTransport() {
+		Pair<Network, NetworkCapabilities> network = getActiveNetworkWithCapabilities();
+		return network != null && network.second.hasTransport(NetworkCapabilities.TRANSPORT_WIFI);
+	}
+
 	public boolean isWifiConnected() {
 		return networkState == NetworkState.WIFI;
 	}

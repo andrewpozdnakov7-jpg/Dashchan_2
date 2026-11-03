@@ -105,6 +105,9 @@ public final class ReplyPushManager {
 			}
 		} else if (Preferences.isReplyPushEnabled()) {
 			enable(context);
+		} else if (isSupported() && hasConsent(context)) {
+			// Recover an interrupted switch-off after the preference commit.
+			disable(context);
 		}
 	}
 
@@ -217,9 +220,9 @@ public final class ReplyPushManager {
 				MyPostsStorage.Reply pending = storage.getPendingPushReply(message.chanName, message.boardName,
 						message.threadNumber, message.trackedPostNumber, message.replyPostNumber);
 				recovered[0] = pending != null;
-				if (pending != null) markPushNotified(message.chanName, message.boardName,
-						message.threadNumber, message.replyPostNumber);
 				boolean enabled = Preferences.isTrackedRepliesNotificationsEnabled();
+				if (pending != null && enabled) markPushNotified(message.chanName, message.boardName,
+						message.threadNumber, message.replyPostNumber);
 				boolean quiet = Preferences.isReplyPushQuietHoursActive();
 				Logger.write(Logger.Type.DEBUG, LOG_TAG, "message_stored", "added", added,
 						"pending", pending != null, "notificationsEnabled", enabled, "quietHours", quiet);
@@ -253,7 +256,8 @@ public final class ReplyPushManager {
 			for (int i = 0; i < replies.size(); i++) {
 				PagesDatabase.InsertResult.Reply reply = replies.get(i);
 				if (notified.remove(makeReplyKey(chanName, boardName, threadNumber, reply.postNumber))
-						|| MyPostsStorage.getInstance().isPushPending(chanName, boardName, threadNumber, reply.postNumber)) {
+						|| (Preferences.isTrackedRepliesNotificationsEnabled() && MyPostsStorage.getInstance()
+						.isPushPending(chanName, boardName, threadNumber, reply.postNumber))) {
 					if (filtered == null) {
 						filtered = new ArrayList<>(replies.subList(0, i));
 					}

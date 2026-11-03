@@ -39,6 +39,8 @@ import com.mishiranu.dashchan.content.translation.TranslationController;
 import com.mishiranu.dashchan.ui.DialogMenu;
 import com.mishiranu.dashchan.ui.DrawerForm;
 import com.mishiranu.dashchan.ui.InstanceDialog;
+import com.mishiranu.dashchan.ui.ThreadHideSwipeController;
+import com.mishiranu.dashchan.widget.InterfaceAppearance;
 import com.mishiranu.dashchan.ui.navigator.Page;
 import com.mishiranu.dashchan.ui.navigator.adapter.ThreadsAdapter;
 import com.mishiranu.dashchan.ui.navigator.manager.DialogUnit;
@@ -97,6 +99,7 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 	public static class ReadViewModel extends TaskViewModel.Proxy<ReadThreadsTask, ReadThreadsTask.Callback> {}
 
 	private HidePerformer hidePerformer;
+	private ThreadHideSwipeController hideSwipe;
 	// A manual append may include several hidden-thread refill requests. Keep its intent
 	// until the batch is published, but never retain it when leaving this screen.
 	private HashSet<String> appendScrollPreviousThreads;
@@ -405,6 +408,10 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 	}
 
 	private void setupHideThreadsWithSwipe(RecyclerView recyclerView) {
+		if (InterfaceAppearance.isEnabled(recyclerView.getContext())) {
+			hideSwipe = new ThreadHideSwipeController(recyclerView, getAdapter(), item -> hideThread(item, true));
+			return;
+		}
 		ItemTouchHelper.Callback callback = new ItemTouchHelper.SimpleCallback
 				(0, ItemTouchHelper.LEFT | ItemTouchHelper.RIGHT) {
 			@Override
@@ -465,6 +472,7 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 	protected void onResume() {
 		super.onResume();
 		pageActive = true;
+		if (hideSwipe != null) hideSwipe.resume();
 		getAdapter().setSearchActive(true);
 		RetainableExtra retainableExtra = getRetainableExtra(RetainableExtra.FACTORY);
 		if (retainableExtra.dialogsState != null) {
@@ -476,6 +484,7 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 	@Override
 	protected void onPause() {
 		pageActive = false;
+		if (hideSwipe != null) hideSwipe.pause();
 		cancelPagePrefetch(false);
 		getAdapter().setSearchActive(false);
 		cancelAppendScroll();
@@ -485,6 +494,7 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 	@Override
 	protected void onDestroy() {
 		pageActive = false;
+		if (hideSwipe != null) { hideSwipe.close(); hideSwipe = null; }
 		cancelPagePrefetch(false);
 		getAdapter().disposeSearch();
 		cancelAppendScroll();

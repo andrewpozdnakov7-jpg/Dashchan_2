@@ -9,7 +9,6 @@ import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.InsetDrawable;
-import android.graphics.drawable.LayerDrawable;
 import android.graphics.drawable.RippleDrawable;
 import android.graphics.drawable.StateListDrawable;
 import android.view.MenuItem;
@@ -909,27 +908,8 @@ public final class PostingFormAppearance {
 		check.setBackground(ripple(shape(0, Color.TRANSPARENT, 0, 0), 0));
 		check.setCompoundDrawablePadding(0);
 		check.setSingleLine(true); check.setMaxLines(1); check.setEllipsize(null);
-		check.setButtonTintList(null);
-		StateListDrawable states = new StateListDrawable();
-		states.addState(new int[] {android.R.attr.state_checked}, new InsetDrawable(checkboxDrawable(true), 0, 0, dp(root, 6), 0));
-		states.addState(new int[] {}, new InsetDrawable(checkboxDrawable(false), 0, 0, dp(root, 6), 0));
-		check.setButtonDrawable(states);
-	}
-
-	private Drawable checkboxDrawable(boolean checked) {
-		GradientDrawable box = new GradientDrawable();
-		box.setSize(dp(root, 20), dp(root, 20));
-		box.setCornerRadius(dp(root, 3));
-		box.setColor(checked ? palette.accent : Color.TRANSPARENT);
-		if (!checked) box.setStroke(dp(root, 2), palette.outline);
-		if (!checked) return box;
-		Drawable tick = ResourceUtils.getDrawable(root.getContext(), R.drawable.ic_editor_done).mutate();
-		tick.setTint(palette.onAccent);
-		LayerDrawable layers = new LayerDrawable(new Drawable[] {box, tick});
-		layers.setLayerSize(0, dp(root, 20), dp(root, 20));
-		layers.setLayerSize(1, dp(root, 16), dp(root, 16));
-		layers.setLayerGravity(1, Gravity.CENTER);
-		return layers;
+		// Preserve the former 26dp slot (20dp old box + 6dp gap) with the shared 24dp glyph.
+		ChoiceAppearance.endInset(check, dp(root, 2));
 	}
 
 	private void renderSend() {

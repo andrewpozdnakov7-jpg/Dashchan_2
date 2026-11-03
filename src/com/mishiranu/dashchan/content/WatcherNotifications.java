@@ -49,23 +49,23 @@ public class WatcherNotifications {
 	}
 
 	public static void notifyReplies(Context context, int color, boolean important, boolean sound, boolean vibration,
-			String title, String chanName, String boardName, String threadNumber,
+			ReplyNotificationTargets targets, String title, String chanName, String boardName, String threadNumber,
 			List<PagesDatabase.InsertResult.Reply> replies) {
-		enqueueReplies(context, SOURCE_WATCHER_SERVICE, color, important, sound, vibration, title,
+		enqueueReplies(context, SOURCE_WATCHER_SERVICE, color, important, sound, vibration, targets, title,
 				chanName, boardName, threadNumber, replies);
 	}
 
 	public static void notifyBackgroundReplies(Context context, int color, boolean important,
-			boolean sound, boolean vibration, String title, String chanName, String boardName,
+			boolean sound, boolean vibration, ReplyNotificationTargets targets, String title, String chanName, String boardName,
 			String threadNumber, List<PagesDatabase.InsertResult.Reply> replies) {
-		enqueueReplies(context, SOURCE_BACKGROUND, color, important, sound, vibration, title,
+		enqueueReplies(context, SOURCE_BACKGROUND, color, important, sound, vibration, targets, title,
 				chanName, boardName, threadNumber, replies);
 	}
 
 	private static void enqueueReplies(Context context, String source, int color, boolean important,
-			boolean sound, boolean vibration, String title, String chanName, String boardName,
+			boolean sound, boolean vibration, ReplyNotificationTargets targets, String title, String chanName, String boardName,
 			String threadNumber, List<PagesDatabase.InsertResult.Reply> replies) {
-		EXECUTOR.execute(new Task(context, source, color, important, sound, vibration, title,
+		EXECUTOR.execute(new Task(context, source, color, important, sound, vibration, targets, title,
 				chanName, boardName, threadNumber, replies, Collections.emptyList()));
 	}
 
@@ -76,7 +76,7 @@ public class WatcherNotifications {
 		String title = chan.configuration.getTitle() + " / " + boardName + " / " + threadNumber;
 		String notificationComment = StringUtils.isEmptyOrWhitespace(comment)
 				? context.getString(R.string.reply_push_notification_text) : comment;
-		enqueueReplies(context, SOURCE_PUSH, 0, true, true, true, title, chanName, boardName,
+		enqueueReplies(context, SOURCE_PUSH, 0, true, true, true, ReplyNotificationTargets.TRACKED, title, chanName, boardName,
 				threadNumber, Collections.singletonList(new PagesDatabase.InsertResult.Reply(postNumber,
 						notificationComment, timestamp)));
 	}
@@ -89,7 +89,7 @@ public class WatcherNotifications {
 			String title = Chan.get(chanName).configuration.getTitle() + " / " + boardName + " / " + threadNumber;
 			String text = StringUtils.isEmptyOrWhitespace(comment)
 					? context.getString(R.string.reply_push_notification_text) : comment;
-			Task notification = new Task(context, SOURCE_PUSH, 0, true, true, true,
+			Task notification = new Task(context, SOURCE_PUSH, 0, true, true, true, ReplyNotificationTargets.TRACKED,
 					title, chanName, boardName, threadNumber,
 					Collections.singletonList(new PagesDatabase.InsertResult.Reply(postNumber, text, timestamp)),
 					Collections.emptyList());
@@ -115,7 +115,7 @@ public class WatcherNotifications {
 
 	public static void cancelReplies(Context context,
 			String chanName, String boardName, String threadNumber, Collection<PostNumber> postNumbers) {
-		EXECUTOR.execute(new Task(context, "cancel", 0, false, false, false, null,
+		EXECUTOR.execute(new Task(context, "cancel", 0, false, false, false, ReplyNotificationTargets.NONE, null,
 				chanName, boardName, threadNumber, Collections.emptyList(), postNumbers));
 	}
 
@@ -142,7 +142,7 @@ public class WatcherNotifications {
 				boolean hidden = com.mishiranu.dashchan.content.security.SecurityStore.shouldHideReplyText(application);
 				HashMap<String, MyPostsStorage.ReplyItem> known = new HashMap<>();
 				if (!hidden) {
-					if (!Preferences.isTrackMyPostsEnabled() || !Preferences.isTrackedRepliesNotificationsEnabled()
+					if (!Preferences.isTrackMyPostsEnabled() || Preferences.getReplyAlertTargets() == ReplyNotificationTargets.NONE
 							|| Preferences.isReplyPushQuietHoursActive()) return;
 					for (MyPostsStorage.ReplyItem reply : MyPostsStorage.getInstance().getUnreadReplies()) {
 						known.put(Task.makeTag(reply.chanName, reply.boardName, reply.threadNumber, reply.postNumber), reply);
@@ -182,7 +182,11 @@ public class WatcherNotifications {
 							stillActive = true; break;
 						}
 					}
-					if (stillActive) manager.notify(notification.getTag(), notification.getId(), builder.build());
+					if (stillActive && (hidden || Preferences.isTrackMyPostsEnabled()
+							&& Preferences.getReplyAlertTargets() != ReplyNotificationTargets.NONE
+							&& !Preferences.isReplyPushQuietHoursActive())) {
+						manager.notify(notification.getTag(), notification.getId(), builder.build());
+					}
 				}
 			} catch (RuntimeException e) {
 				Logger.write(Logger.Type.ERROR, LOG_TAG, "reply_content_refresh_failed", e.getClass().getSimpleName());
@@ -228,6 +232,7 @@ public class WatcherNotifications {
 		public final boolean important;
 		public final boolean sound;
 		public final boolean vibration;
+		private final ReplyNotificationTargets targets;
 		public final String title;
 		public final String chanName;
 		public final String boardName;
@@ -236,7 +241,7 @@ public class WatcherNotifications {
 		public final Collection<PostNumber> removePostNumbers;
 
 		private Task(Context context, String source, int color, boolean important,
-				boolean sound, boolean vibration, String title,
+				boolean sound, boolean vibration, ReplyNotificationTargets targets, String title,
 				String chanName, String boardName, String threadNumber,
 				List<PagesDatabase.InsertResult.Reply> replies, Collection<PostNumber> removePostNumbers) {
 			this.context = context.getApplicationContext();
@@ -245,6 +250,7 @@ public class WatcherNotifications {
 			this.important = important;
 			this.sound = sound;
 			this.vibration = vibration;
+			this.targets = targets;
 			this.title = title;
 			this.chanName = chanName;
 			this.boardName = boardName;
@@ -326,11 +332,19 @@ public class WatcherNotifications {
 			return builder.toString();
 		}
 
+		private boolean isDeliveryAllowed() {
+			boolean push = SOURCE_PUSH.equals(source);
+			boolean trackedMethod = push ? Preferences.isReplyPushEnabled() : Preferences.isTrackedRepliesLocalCheckEnabled();
+			boolean allowPosts = trackedMethod && Preferences.isTrackedRepliesNotificationsEnabled();
+			boolean allowFavorites = (!SOURCE_BACKGROUND.equals(source) || Preferences.isBackgroundReplyCheckEnabled())
+					&& Preferences.getWatcherNotifications().contains(Preferences.NotificationFeature.ENABLED);
+			return targets.allows(Preferences.isTrackMyPostsEnabled(), Preferences.isReplyPushQuietHoursActive(),
+					allowFavorites, allowPosts);
+		}
+
 		@Override
 		public void run() {
-			if (!"cancel".equals(source) && !Preferences.isTrackMyPostsEnabled()) {
-				return;
-			}
+			if (!"cancel".equals(source) && !isDeliveryAllowed()) return;
 			NotificationManager notificationManager = (NotificationManager)
 					context.getSystemService(Context.NOTIFICATION_SERVICE);
 			NotificationChannel channel = notificationManager.getNotificationChannel(C.NOTIFICATION_CHANNEL_REPLIES);
@@ -364,7 +378,7 @@ public class WatcherNotifications {
 		}
 
 		private void notifyReplies(NotificationManager notificationManager) {
-			ReplyNotificationDelivery.deliver(replies, SOURCE_PUSH.equals(source),
+			ReplyNotificationDelivery.deliver(replies, true,
 					new ReplyNotificationDelivery.Sink<PagesDatabase.InsertResult.Reply>() {
 				@Override
 				public Set<String> activeChildTags() {
@@ -425,7 +439,7 @@ public class WatcherNotifications {
 			String tag = makeTag(chanName, boardName, threadNumber, reply.postNumber);
 			builder.setContentIntent(createContentIntent(tag, reply.postNumber));
 			com.mishiranu.dashchan.content.security.AppSecurity.redactReplyNotification(context, builder);
-			notificationManager.notify(tag, C.NOTIFICATION_ID_REPLIES, builder.build());
+			if (isDeliveryAllowed()) notificationManager.notify(tag, C.NOTIFICATION_ID_REPLIES, builder.build());
 		}
 
 		private void notifySummary(NotificationManager notificationManager,
@@ -463,7 +477,7 @@ public class WatcherNotifications {
 			}
 			builder.setGroupSummary(true);
 			com.mishiranu.dashchan.content.security.AppSecurity.redactReplyNotification(context, builder);
-			notificationManager.notify(C.NOTIFICATION_ID_REPLIES, builder.build());
+			if (isDeliveryAllowed()) notificationManager.notify(C.NOTIFICATION_ID_REPLIES, builder.build());
 		}
 
 		private void cancelReplies(NotificationManager notificationManager) {
