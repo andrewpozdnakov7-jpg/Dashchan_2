@@ -58,7 +58,7 @@ final class StatisticsCardView extends LinearLayout {
 		text.setMaxLines(Integer.MAX_VALUE);
 		text.setEllipsize(null);
 		text.setGravity(Gravity.START);
-		text.setBreakStrategy(Layout.BREAK_STRATEGY_SIMPLE);
+		text.setBreakStrategy(android.graphics.text.LineBreaker.BREAK_STRATEGY_SIMPLE);
 		return text;
 	}
 

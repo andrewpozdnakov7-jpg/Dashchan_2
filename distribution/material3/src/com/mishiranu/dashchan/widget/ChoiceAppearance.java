@@ -129,7 +129,7 @@ final class ChoiceAppearance {
 		Integer surface;
 		ChoiceIndicatorDrawable drawable;
 		Drawable presentation;
-		int endInset, installedInset = -1, direction = -1;
+		int endInset, installedInset = -1, direction = View.LAYOUT_DIRECTION_LTR;
 		Binding(TextView view) {
 			this.view = view;
 			CheckedTextView checked = view instanceof CheckedTextView ? (CheckedTextView) view : null;
