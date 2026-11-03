@@ -457,6 +457,7 @@ public class LocalArchivesFragment extends ContentFragment {
 			ViewFactory.TwoLinesViewHolder holder = ViewFactory.makeTwoLinesListItem(parent,
 					ViewFactory.FEATURE_TEXT2_END | ViewFactory.FEATURE_WIDGET, true);
 			CheckBox selection = new CheckBox(parent.getContext());
+			com.mishiranu.dashchan.widget.ThemeEngine.applyStyle(selection);
 			selection.setClickable(false);
 			selection.setFocusable(false);
 			selection.setVisibility(View.GONE);

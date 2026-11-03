@@ -95,8 +95,12 @@ public final class SecureSpinner extends DistributionSpinner {
 			hasNativeMark = hasMark(view); setEnabled(enabled); setChecked(checked); refreshAppearance();
 		}
 		private static boolean hasMark(View view) {
-			if (view instanceof CheckedTextView && ((CheckedTextView) view).getCheckMarkDrawable() != null
-					|| view instanceof android.widget.CompoundButton) return true;
+			if (view instanceof CheckedTextView) {
+				CheckedTextView checked = (CheckedTextView) view;
+				android.graphics.drawable.Drawable[] compound = checked.getCompoundDrawablesRelative();
+				if (checked.getCheckMarkDrawable() != null || compound[0] != null || compound[2] != null) return true;
+			}
+			if (view instanceof android.widget.CompoundButton) return true;
 			if (view instanceof ViewGroup) {
 				ViewGroup group = (ViewGroup) view;
 				for (int i = 0; i < group.getChildCount(); i++) if (hasMark(group.getChildAt(i))) return true;

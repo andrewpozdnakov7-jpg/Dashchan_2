@@ -2,6 +2,8 @@ package com.mishiranu.dashchan.ui.preference;
 
 import android.os.Bundle;
 import android.view.View;
+import android.util.Pair;
+import com.mishiranu.dashchan.content.service.BackgroundWatcherWorker;
 import androidx.annotation.NonNull;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
@@ -25,6 +27,25 @@ public class FavoritesFragment extends PreferenceFragment {
 		addList(Preferences.KEY_FAVORITE_ON_REPLY, enumList(Preferences.FavoriteOnReplyMode.values(), o -> o.value),
 				Preferences.DEFAULT_FAVORITE_ON_REPLY.value, R.string.add_thread_on_reply,
 				enumResList(Preferences.FavoriteOnReplyMode.values(), o -> o.titleResId));
+		addHeader(R.string.favorites_watcher);
+		addCheck(true, Preferences.KEY_WATCHER_WATCH_INITIALLY, Preferences.DEFAULT_WATCHER_WATCH_INITIALLY,
+				R.string.watch_initially, R.string.watch_initially__summary);
+		addSeek(Preferences.KEY_WATCHER_REFRESH_INTERVAL, Preferences.DEFAULT_WATCHER_REFRESH_INTERVAL,
+				R.string.refresh_favorites, R.string.every_number_sec__format,
+				new Pair<>(Preferences.DISABLED_WATCHER_REFRESH_INTERVAL, R.string.disabled),
+				Preferences.MIN_WATCHER_REFRESH_INTERVAL, Preferences.MAX_WATCHER_REFRESH_INTERVAL,
+				Preferences.STEP_WATCHER_REFRESH_INTERVAL);
+		addCheck(true, Preferences.KEY_BACKGROUND_REPLY_CHECK, Preferences.DEFAULT_BACKGROUND_REPLY_CHECK,
+				R.string.background_reply_check, R.string.background_reply_check__summary)
+				.setOnAfterChangeListener(p -> BackgroundWatcherWorker.updateSchedule(requireContext()));
+		addButton(R.string.reply_notifications, R.string.favorite_reply_shortcut).setOnClickListener(p -> {
+			ReplyNotificationsFragment destination = new ReplyNotificationsFragment();
+			Bundle arguments = new Bundle();
+			PreferenceFragment.putSearchTarget(arguments, null, getString(Preferences.isTrackMyPostsEnabled()
+					? R.string.reply_sources : R.string.track_replies));
+			destination.setArguments(arguments);
+			((FragmentHandler) requireActivity()).pushFragment(destination);
+		});
 	}
 	@Override public void onViewStateRestored(Bundle state) {
 		super.onViewStateRestored(state);

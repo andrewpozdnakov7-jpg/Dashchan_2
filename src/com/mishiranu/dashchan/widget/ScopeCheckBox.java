@@ -5,17 +5,17 @@ import android.content.Context;
 import android.content.res.ColorStateList;
 import android.graphics.Canvas;
 import android.graphics.Color;
-import android.graphics.Paint;
-import android.graphics.Path;
 import android.graphics.Rect;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.RippleDrawable;
 import android.os.Parcel;
 import android.os.Parcelable;
+import android.view.View;
 import android.widget.CheckBox;
+import androidx.core.view.AccessibilityDelegateCompat;
 import androidx.core.view.ViewCompat;
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat;
 import com.mishiranu.dashchan.R;
-import com.mishiranu.dashchan.util.OpaqueColors;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import java.util.Arrays;
 
@@ -24,14 +24,20 @@ import java.util.Arrays;
 // theme (minSdk 30). Its glyph and ripple are drawn here; no AppCompat tint adapter is needed.
 @SuppressLint("AppCompatCustomView")
 public final class ScopeCheckBox extends CheckBox {
-	private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-	private final Path path = new Path();
+	private final ChoiceIndicatorDrawable indicator = new ChoiceIndicatorDrawable(this, false);
 	private final Rect glyph = new Rect();
 	private int[] colors;
 	private boolean mixed;
+	private final boolean drawerPalette;
 
 	public ScopeCheckBox(Context context) {
+		this(context, false);
+	}
+
+	ScopeCheckBox(Context context, boolean drawerPalette) {
 		super(context);
+		this.drawerPalette = drawerPalette;
+		indicator.setStateColors(() -> InterfaceAppearance.scopeColors(this, drawerPalette));
 		ThemeEngine.applyStyle(this);
 		setButtonDrawable(null);
 		setText(null);
@@ -42,20 +48,53 @@ public final class ScopeCheckBox extends CheckBox {
 	}
 
 	public void refreshAppearance() {
-		int[] next = InterfaceAppearance.standardScopeColors(getContext());
-		if (next == null) {
-			ThemeEngine.Theme theme = ThemeEngine.getTheme(getContext());
-			int surface = ResourceUtils.getColor(getContext(), android.R.attr.colorBackground);
-			next = new int[] {ResourceUtils.getColor(getContext(), android.R.attr.textColorSecondary),
-					theme.accent, OpaqueColors.readable(Color.WHITE, theme.accent, 3,
-					OpaqueColors.Policy.INTERFACE_COMPATIBILITY), surface, (theme.accent & 0xffffff) | 0x26000000};
-		}
+		refreshAppearance(InterfaceAppearance.isEnabled(getContext()));
+	}
+	void refreshAppearance(boolean material) {
+		// Indicator design is global, independently of the surrounding interface preference.
+		int[] next = InterfaceAppearance.scopeColors(this, drawerPalette);
 		if (Arrays.equals(colors, next)) return;
 		colors = next;
+		indicator.setColors(colors);
 		GradientDrawable mask = new GradientDrawable(); mask.setColor(Color.WHITE); mask.setCornerRadius(dp(24));
 		setBackgroundTintList(null);
 		setBackground(new RippleDrawable(ColorStateList.valueOf(colors[4]), null, mask));
 		invalidate();
+	}
+
+	/** The native OFF profile and the centered drawer glyph share the existing 48dp column. */
+	public static CheckBox createDrawerSelection(Context context) {
+		return createDrawerSelection(context, InterfaceAppearance.isEnabled(context));
+	}
+	static CheckBox createDrawerSelection(Context context, boolean material) {
+		CheckBox result = material ? new ScopeCheckBox(context, true) : new CheckBox(context);
+		if (!material) ThemeEngine.applyStyle(result);
+		result.setClickable(false); result.setFocusable(false);
+		result.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+		return result;
+	}
+
+	/** Install once at row creation. The row retains its existing click/long-click ownership. */
+	public static void attachDrawerSelection(View row, CheckBox indicator) {
+		ViewCompat.setAccessibilityDelegate(row, new AccessibilityDelegateCompat() {
+			@Override public void onInitializeAccessibilityNodeInfo(View host, AccessibilityNodeInfoCompat info) {
+				super.onInitializeAccessibilityNodeInfo(host, info);
+				boolean selectable = indicator.getVisibility() == View.VISIBLE;
+				info.setCheckable(selectable);
+				info.setChecked(selectable && indicator.isChecked());
+				info.setSelected(selectable && indicator.isChecked());
+			}
+		});
+	}
+
+	public static void bindDrawerSelection(View row, CheckBox indicator, boolean selectable, boolean selected) {
+		indicator.setVisibility(selectable ? View.VISIBLE : View.GONE);
+		if (indicator instanceof ScopeCheckBox) {
+			ScopeCheckBox scope = (ScopeCheckBox) indicator;
+			scope.setMixed(false); scope.refreshAppearance();
+		}
+		indicator.setChecked(selectable && selected);
+		ViewCompat.setScreenReaderFocusable(row, selectable);
 	}
 
 	public void setMixed(boolean value) {
@@ -78,20 +117,7 @@ public final class ScopeCheckBox extends CheckBox {
 		super.onDraw(canvas);
 		if (colors == null) return;
 		getGlyphBounds(glyph);
-		int save = canvas.save(); canvas.translate(glyph.left, glyph.top);
-		canvas.scale(glyph.width() / 24f, glyph.height() / 24f);
-		boolean filled = mixed || isChecked();
-		int color = colors[filled ? 1 : 0];
-		paint.setColor(isEnabled() ? color : OpaqueColors.blend(colors[3], color, .38f));
-		paint.setStyle(filled ? Paint.Style.FILL : Paint.Style.STROKE);
-		paint.setStrokeWidth(2); paint.setStrokeCap(Paint.Cap.ROUND); paint.setStrokeJoin(Paint.Join.ROUND);
-		canvas.drawRoundRect(3, 3, 21, 21, 4, 4, paint);
-		if (filled) {
-			paint.setColor(isEnabled() ? colors[2] : colors[3]); paint.setStyle(Paint.Style.STROKE);
-			if (mixed) canvas.drawLine(7, 12, 17, 12, paint);
-			else { path.reset(); path.moveTo(7, 12); path.lineTo(10.5f, 15.5f); path.lineTo(17, 9); canvas.drawPath(path, paint); }
-		}
-		canvas.restoreToCount(save);
+		indicator.setBounds(glyph); indicator.setState(getDrawableState()); indicator.setMixed(mixed); indicator.draw(canvas);
 	}
 	@Override public Parcelable onSaveInstanceState() {
 		SavedState state = new SavedState(super.onSaveInstanceState()); state.mixed = mixed; return state;

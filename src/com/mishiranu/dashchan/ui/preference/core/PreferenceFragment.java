@@ -29,6 +29,8 @@ import com.mishiranu.dashchan.widget.DividerItemDecoration;
 import com.mishiranu.dashchan.widget.ExpandedLayout;
 import com.mishiranu.dashchan.widget.PaddedRecyclerView;
 import com.mishiranu.dashchan.widget.SimpleViewHolder;
+import com.mishiranu.dashchan.widget.SettingsTextAppearance;
+import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.widget.ViewFactory;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -97,6 +99,8 @@ public abstract class PreferenceFragment extends ContentFragment {
 
 	protected abstract SharedPreferences getPreferences();
 
+	protected boolean groupSettingsRows() { return false; }
+
 	@Override
 	public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
 		recyclerView = new PaddedRecyclerView(container.getContext());
@@ -109,6 +113,7 @@ public abstract class PreferenceFragment extends ContentFragment {
 		recyclerView.addItemDecoration(new DividerItemDecoration(recyclerView.getContext(), (c, position) -> {
 			Preference<?> current = preferences.get(position);
 			Preference<?> next = preferences.size() > position + 1 ? preferences.get(position + 1) : null;
+			if (groupSettingsRows() && InterfaceAppearance.isEnabled(recyclerView.getContext())) return c.need(false);
 			boolean need = !(current instanceof HeaderPreference) &&
 					!(current instanceof CategoryPreference) && !(next instanceof CategoryPreference);
 			return c.need(need);
@@ -529,12 +534,18 @@ public abstract class PreferenceFragment extends ContentFragment {
 		@Override
 		public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
 			Preference<?> preference = preferences.get(position);
+			SettingsTextAppearance.restore(holder.viewHolder.title, holder.viewHolder.summary);
 			preference.bindViewHolder(holder.viewHolder);
 			Preference.ViewType type = preference.getViewType();
 			if (type == Preference.ViewType.NORMAL || type == Preference.ViewType.CATEGORY
-					|| type == Preference.ViewType.CHECK || type == Preference.ViewType.HEADER) {
+					|| type == Preference.ViewType.CHECK || type == Preference.ViewType.SWITCH || type == Preference.ViewType.HEADER) {
 				InterfaceAppearance.settingsRow(holder.viewHolder.view, holder.viewHolder.title, holder.viewHolder.summary,
 						holder.viewHolder.widgetFrame, type == Preference.ViewType.HEADER);
+				if (groupSettingsRows() && type != Preference.ViewType.HEADER) {
+					boolean first = position == 0 || preferences.get(position - 1) instanceof HeaderPreference;
+					boolean last = position + 1 == preferences.size() || preferences.get(position + 1) instanceof HeaderPreference;
+					InterfaceAppearance.groupSettingsRow(holder.itemView, first, last);
+				}
 			}
 			if (holder.textContainer != null && !InterfaceAppearance.isEnabled(holder.itemView.getContext())) {
 				boolean afterHeader = position > 0
@@ -547,6 +558,8 @@ public abstract class PreferenceFragment extends ContentFragment {
 							holder.textContainer.getPaddingEnd(), holder.textContainer.getPaddingBottom());
 				}
 			}
+			SettingsTextAppearance.apply(Preferences.getSettingsTextScalePercent(),
+					holder.viewHolder.title, holder.viewHolder.summary);
 			holder.itemView.setOnLongClickListener(preference.hasLongClickListener()
 					? view -> preference.performLongClick() : null);
 		}

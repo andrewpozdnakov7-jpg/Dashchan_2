@@ -59,6 +59,7 @@ import com.mishiranu.dashchan.graphics.ChanIconDrawable;
 import com.mishiranu.dashchan.graphics.DrawerGlyph;
 import com.mishiranu.dashchan.widget.DrawerStyle;
 import com.mishiranu.dashchan.widget.DrawerItemLayout;
+import com.mishiranu.dashchan.widget.ScopeCheckBox;
 import com.mishiranu.dashchan.util.FlagUtils;
 import com.mishiranu.dashchan.util.GraphicsUtils;
 import com.mishiranu.dashchan.util.IOUtils;
@@ -1560,9 +1561,8 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		LinearLayout linearLayout = drawerStyle != null ? new DrawerItemLayout(context, drawerStyle) : new LinearLayout(context);
 		linearLayout.setOrientation(LinearLayout.HORIZONTAL);
 		linearLayout.setGravity(Gravity.CENTER_VERTICAL);
-		CheckBox selectionView = new CheckBox(context);
-		selectionView.setClickable(false);
-		selectionView.setFocusable(false);
+		CheckBox selectionView = ScopeCheckBox.createDrawerSelection(context);
+		ScopeCheckBox.attachDrawerSelection(linearLayout, selectionView);
 		selectionView.setVisibility(View.GONE);
 		linearLayout.addView(selectionView, actionWidth, size);
 		ImageView iconView = null;
@@ -1798,8 +1798,8 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		boolean selectableFavorite = favoriteSelectionActive
 				&& listItem.type == ListItem.Type.FAVORITE && listItem.isThreadItem();
 		if (holder.selection != null) {
-			holder.selection.setVisibility(selectableFavorite ? View.VISIBLE : View.GONE);
-			holder.selection.setChecked(selectableFavorite && selectedFavoriteIds.contains(listItem.id));
+			ScopeCheckBox.bindDrawerSelection(holder.itemView, holder.selection, selectableFavorite,
+					selectedFavoriteIds.contains(listItem.id));
 		}
 		if (holder.watcher != null) {
 			holder.watcher.setEnabled(!favoriteSelectionActive);

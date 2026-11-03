@@ -234,8 +234,7 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
     }
     private CheckBox checkBox(Context context, int text, boolean checked) {
         CheckBox view = new CheckBox(context); view.setText(text); view.setTextColor(controlText()); view.setChecked(checked);
-        view.setButtonTintList(new ColorStateList(new int[][] {{-android.R.attr.state_enabled},
-                {android.R.attr.state_checked}, {}}, new int[] {0x66b4b6bd, ACCENT, EditorPalette.MUTED}));
+        com.mishiranu.dashchan.widget.InterfaceAppearance.choiceIndicator(view, SURFACE);
         return view;
     }
     private void styleInput(EditText view) {

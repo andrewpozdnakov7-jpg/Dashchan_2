@@ -814,6 +814,7 @@ public class ThemeEngine {
 			handleTag(theme, view);
 		}
 		InterfaceAppearance.popupView(view);
+		InterfaceAppearance.choiceIndicator(view);
 	}
 
 	private static void handleTag(Theme theme, View view) {

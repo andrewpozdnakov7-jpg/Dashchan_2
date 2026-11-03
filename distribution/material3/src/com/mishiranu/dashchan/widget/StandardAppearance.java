@@ -146,6 +146,7 @@ final class StandardAppearance {
 	private static final class Layout {
 		final View root; final ArrayList<Saved> saved = new ArrayList<>();
 		final java.util.IdentityHashMap<View, Integer> stackMargins = new java.util.IdentityHashMap<>();
+		boolean grouped, firstInGroup, lastInGroup;
 		Kind kind; TextView title, summary, end; View widgets; boolean applied;
 		View adapterContent;
 		ImageView errorIcon; int errorIconWidth, errorIconHeight;
@@ -180,7 +181,7 @@ final class StandardAppearance {
 				root.setBackgroundTintList(null); root.setBackground(rowBackground(root, c));
 				styleSpinnerLabels(widgets, root.isEnabled(), c);
 				if (title != null) { title.setPadding(0, 0, 0, 0); title.setMinHeight(0); title.setMinimumHeight(0); }
-				if (end instanceof android.widget.CheckedTextView) ((android.widget.CheckedTextView) end).setCheckMarkTintList(choiceColors(c));
+				if (end instanceof android.widget.CheckedTextView) ChoiceAppearance.apply(end, true, ChoiceAppearance.colors(c, c.surfaceContainer));
 				return;
 			}
 			if (kind == Kind.MESSAGE) {
@@ -245,7 +246,15 @@ final class StandardAppearance {
 			root.setMinimumHeight(dp(root, kind == Kind.SETTINGS ? summaryVisible
 					? AppearanceShapes.SETTING_SUMMARY_MIN_HEIGHT : AppearanceShapes.SETTING_MIN_HEIGHT
 					: summaryVisible ? AppearanceShapes.SERVICE_METADATA_MIN_HEIGHT : AppearanceShapes.SERVICE_MIN_HEIGHT));
-			root.setBackgroundTintList(null); root.setBackground(rowBackground(root, c));
+			root.setBackgroundTintList(null);
+			if (grouped && kind == Kind.SETTINGS) {
+				float top = dp(root, firstInGroup ? 16 : 2), bottom = dp(root, lastInGroup ? 16 : 2);
+				GradientDrawable fill = shape(root, c.surfaceContainer, 0);
+				fill.setCornerRadii(new float[] {top, top, top, top, bottom, bottom, bottom, bottom});
+				Drawable ripple = new RippleDrawable(ColorStateList.valueOf(c.ripple), fill, null);
+				int gutter = dp(root, 8);
+				root.setBackground(new android.graphics.drawable.InsetDrawable(ripple, gutter, 0, gutter, dp(root, 1)));
+			} else root.setBackground(rowBackground(root, c));
 			View textContainer = title != null && title != root && title.getParent() instanceof View
 					? (View) title.getParent() : root;
 			// Cookie titles have a small icon row; metadata is its sibling. The common
@@ -276,7 +285,7 @@ final class StandardAppearance {
 					if (kind == Kind.MODAL_CHOICE) normal = InterfaceAppearance.contrasting(normal, surface, 4.5);
 					text.setTextColor(serviceTextColors(normal, surface, c));
 					if (kind == Kind.CUSTOM_CHOICE_ROW && text instanceof android.widget.CheckedTextView)
-						((android.widget.CheckedTextView) text).setCheckMarkTintList(choiceColors(c));
+						ChoiceAppearance.apply(text, false, ChoiceAppearance.colors(c, c.surfaceContainer));
 				}
 			}
 			if (summary != null && summary.getLayoutParams() instanceof ViewGroup.MarginLayoutParams) {
@@ -317,6 +326,13 @@ final class StandardAppearance {
 		layout(root, header ? Kind.SECTION : Kind.SETTINGS, title, summary, null);
 		Layout state = (Layout) root.getTag(R.id.standard_layout_appearance);
 		state.remember(widgets); state.widgets = widgets; state.apply();
+	}
+	static void groupSettingsRow(View root, boolean first, boolean last) {
+		Layout state = (Layout) root.getTag(R.id.standard_layout_appearance);
+		state.grouped = true;
+		state.firstInGroup = first;
+		state.lastInGroup = last;
+		state.apply();
 	}
 	static void service(View root, TextView title, TextView metadata, TextView end) { layout(root, Kind.SERVICE, title, metadata, end); }
 	static void menu(View root, TextView title) { layout(root, Kind.MENU, title, null, null); }
@@ -406,7 +422,7 @@ final class StandardAppearance {
 			TextView text = (TextView) view;
 			text.setSingleLine(false); text.setMaxLines(Integer.MAX_VALUE); text.setEllipsize(null);
 			text.setTextColor(textColors(InterfaceAppearance.contrasting(c.onSurface, c.surfaceContainer, 4.5), c.surfaceContainer));
-			if (text instanceof android.widget.CheckedTextView) ((android.widget.CheckedTextView) text).setCheckMarkTintList(choiceColors(c));
+			if (text instanceof android.widget.CheckedTextView) ChoiceAppearance.apply(text, true, ChoiceAppearance.colors(c, c.surfaceContainer));
 		} else if (view instanceof ViewGroup) {
 			ViewGroup group = (ViewGroup) view;
 			for (int i = 0; i < group.getChildCount(); i++) styleSpinnerLabels(group.getChildAt(i), enabled, c);
@@ -436,6 +452,7 @@ final class StandardAppearance {
 		Object toolbar = view.getTag(R.id.standard_toolbar_appearance); if (toolbar instanceof ToolbarState) ((ToolbarState) toolbar).apply();
 		Object search = view.getTag(R.id.standard_search_appearance); if (search instanceof SearchState) ((SearchState) search).apply();
 		Object loading = view.getTag(R.id.standard_loading_appearance); if (loading instanceof LoadingState) ((LoadingState) loading).apply();
+		Object status = view.getTag(R.id.standard_discussion_status); if (status instanceof DiscussionStatusState) ((DiscussionStatusState) status).apply();
 		Object dialog = view.getTag(R.id.standard_dialog_appearance); if (dialog instanceof DialogState) ((DialogState) dialog).apply();
 		ServiceAppearance.refresh(view);
 		SettingsContentAppearance.refresh(view);
@@ -539,7 +556,7 @@ final class StandardAppearance {
 					if (titlePanel != null) titlePanel.restore();
 					if (listPadding != null) listPadding.restore();
 					ListView list = ((AlertDialog) dialog).getListView();
-					if (list != null && list.getAdapter() instanceof ChoiceAdapter) {
+						if (list != null && list.getAdapter() instanceof ChoiceAdapter) {
 						replaceAdapter(list, ((ChoiceAdapter) list.getAdapter()).delegate);
 					}
 					applied = false;
@@ -746,8 +763,10 @@ final class StandardAppearance {
 				InterfaceAppearance.modalChoiceRow(row, text);
 				if (InterfaceAppearance.isEnabled(row.getContext())) {
 					AppearanceColors c = colors(row.getContext());
-					ColorStateList tint = choiceColors(c);
-					if (text instanceof android.widget.CheckedTextView) ((android.widget.CheckedTextView) text).setCheckMarkTintList(tint);
+					if (text instanceof android.widget.CheckedTextView) {
+						boolean single = parent instanceof ListView && ((ListView) parent).getChoiceMode() == ListView.CHOICE_MODE_SINGLE;
+						ChoiceAppearance.apply(text, single, ChoiceAppearance.colors(c, c.surfaceContainer));
+					}
 				}
 			}
 			return row;
@@ -850,10 +869,7 @@ final class StandardAppearance {
 		return new InsetDrawable(new PaddedSurface(shape(view, color, 12), inset), inset, inset, inset, inset);
 	}
 	static ColorStateList choiceColors(AppearanceColors c) {
-		int normal = InterfaceAppearance.contrasting(c.onSurfaceVariant, c.surfaceContainer, 3);
-		int checked = InterfaceAppearance.contrasting(c.primary, c.surfaceContainer, 3);
-		return new ColorStateList(new int[][]{{-android.R.attr.state_enabled}, {android.R.attr.state_checked}, {}},
-				new int[]{OpaqueColors.blend(c.surfaceContainer, normal, .38f), checked, normal});
+		return ChoiceAppearance.tint(ChoiceAppearance.colors(c, c.surfaceContainer));
 	}
 	private static final class PaddedSurface extends android.graphics.drawable.DrawableWrapper {
 		final int padding;
@@ -865,7 +881,9 @@ final class StandardAppearance {
 		AppearanceColors c = colors(view.getContext());
 		if (view instanceof android.widget.CompoundButton) {
 			// Native popup choice controls are siblings of the label, not text rows.
-			((android.widget.CompoundButton) view).setButtonTintList(choiceColors(c));
+			if (view instanceof android.widget.CheckBox || view instanceof android.widget.RadioButton)
+				ChoiceAppearance.apply(view, null, ChoiceAppearance.colors(c, c.surfaceContainer));
+			else ((android.widget.CompoundButton) view).setButtonTintList(choiceColors(c));
 		} else if (view instanceof TextView && !(view instanceof EditText)) {
 			// Keep native single-line/ellipsize and wrap-content label height. The popup
 			// row centers this label beside its checkbox/arrow and owns the touch target.
@@ -921,10 +939,44 @@ final class StandardAppearance {
 	static void resolveSearch(View root, boolean enabled) {
 		Object tag = root.getTag(R.id.standard_search_appearance); if (tag instanceof SearchState) ((SearchState) tag).applyResolved(enabled);
 	}
+	private static final class DiscussionStatusState {
+		final TextView view;
+		final Saved saved;
+		final AppearanceTypography.Snapshot typography;
+		final ColorStateList text;
+		boolean error;
+		DiscussionStatusState(TextView view) {
+			this.view = view; saved = new Saved(view); typography = new AppearanceTypography.Snapshot(view);
+			text = view.getTextColors();
+		}
+		void apply() { applyResolved(InterfaceAppearance.isEnabled(view.getContext())); }
+		void applyResolved(boolean enabled) {
+			typography.restore(view); saved.restoreTextBounds(); view.setTextColor(text);
+			if (!enabled) return;
+			AppearanceColors c = colors(view.getContext());
+			// DialogStack owns this actual card surface; it is not the standard AlertDialog container.
+			int surface = ThemeEngine.getTheme(view.getContext()).card;
+			AppearanceTypography.apply(view, AppearanceTypography.Role.BODY_MEDIUM);
+			view.setTextColor(textColors(InterfaceAppearance.contrasting(error ? c.error : c.onSurfaceVariant,
+					surface, 4.5), surface));
+			view.setSingleLine(false); view.setMaxLines(Integer.MAX_VALUE); view.setEllipsize(null);
+		}
+	}
+	static void discussionStatus(TextView view, boolean error) {
+		Object tag = view.getTag(R.id.standard_discussion_status);
+		DiscussionStatusState state = tag instanceof DiscussionStatusState ? (DiscussionStatusState) tag : new DiscussionStatusState(view);
+		state.error = error; view.setTag(R.id.standard_discussion_status, state); state.apply();
+	}
+	static void resolveDiscussionStatus(TextView view, boolean enabled) {
+		Object state = view.getTag(R.id.standard_discussion_status);
+		if (state instanceof DiscussionStatusState) ((DiscussionStatusState) state).applyResolved(enabled);
+	}
+
 	private static final class LoadingState implements View.OnAttachStateChangeListener,
 			android.view.ViewTreeObserver.OnPreDrawListener, android.view.ViewTreeObserver.OnWindowFocusChangeListener {
 		final android.widget.ProgressBar view; final Drawable legacy; final ColorStateList legacyTint; final int width, height;
 		final boolean compact, dialogSurface;
+		boolean mediaSurface;
 		StandardLoadingDrawable drawable;
 		android.view.ViewTreeObserver tree;
 		boolean modern;
@@ -932,25 +984,33 @@ final class StandardAppearance {
 			this(view, false, false);
 		}
 		LoadingState(android.widget.ProgressBar view, boolean compact, boolean dialogSurface) {
+			this(view, compact, dialogSurface, false);
+		}
+		LoadingState(android.widget.ProgressBar view, boolean compact, boolean dialogSurface, boolean mediaSurface) {
 			this.compact = compact; this.dialogSurface = dialogSurface;
+			this.mediaSurface = mediaSurface;
 			this.view = view; legacy = view.getIndeterminateDrawable(); legacyTint = view.getIndeterminateTintList();
 			width = view.getMinimumWidth(); height = view.getMinimumHeight();
 			view.addOnAttachStateChangeListener(this);
 			if (view.isAttachedToWindow()) onViewAttachedToWindow(view);
 		}
 		void apply() {
-			if (!InterfaceAppearance.isEnabled(view.getContext())) {
+			applyResolved(InterfaceAppearance.isEnabled(view.getContext()));
+		}
+		void applyResolved(boolean enabled) {
+			if (!enabled) {
 				if (modern) { drawable.stop(); view.setIndeterminateDrawable(legacy); view.setIndeterminateTintList(legacyTint); view.setMinimumWidth(width); view.setMinimumHeight(height); modern = false; }
 				return;
 			}
-			AppearanceColors c = colors(view.getContext());
+			AppearanceColors c = mediaSurface ? MediaContentAppearance.colors(view) : colors(view.getContext());
 			view.setIndeterminateTintList(null);
 			if (drawable == null) drawable = compact ? new StandardLoadingDrawable(view, 20, 14) : new StandardLoadingDrawable(view);
 			boolean dialog = dialogSurface;
 			for (android.view.ViewParent p = view.getParent(); p instanceof View; p = p.getParent()) {
 				if (p instanceof ProgressDialog.Content) { dialog = true; break; }
 			}
-			int background = compact ? ToolbarPalette.resolve(view.getContext()).background : dialog ? c.surfaceContainer : c.window;
+			int background = mediaSurface ? c.window
+					: compact ? ToolbarPalette.resolve(view.getContext()).background : dialog ? c.surfaceContainer : c.window;
 			drawable.palette(background, InterfaceAppearance.contrasting(c.primary, background, 3));
 			if (view.getIndeterminateDrawable() != drawable) view.setIndeterminateDrawable(drawable);
 			view.setMinimumWidth(compact ? width : dp(view, 48)); view.setMinimumHeight(compact ? height : dp(view, 48)); modern = true;
@@ -974,8 +1034,17 @@ final class StandardAppearance {
 		loading(view, false, false);
 	}
 	static void loading(android.widget.ProgressBar view, boolean compact, boolean dialogSurface) {
+		loading(view, compact, dialogSurface, false);
+	}
+	static void mediaLoading(android.widget.ProgressBar view) { loading(view, false, false, true); }
+	private static void loading(android.widget.ProgressBar view, boolean compact, boolean dialogSurface, boolean mediaSurface) {
 		Object tag = view.getTag(R.id.standard_loading_appearance);
-		LoadingState state = tag instanceof LoadingState ? (LoadingState) tag : new LoadingState(view, compact, dialogSurface);
+		LoadingState state = tag instanceof LoadingState ? (LoadingState) tag : new LoadingState(view, compact, dialogSurface, mediaSurface);
+		state.mediaSurface = mediaSurface;
 		view.setTag(R.id.standard_loading_appearance, state); state.apply();
+	}
+	static void resolveLoading(android.widget.ProgressBar view, boolean enabled) {
+		Object state = view.getTag(R.id.standard_loading_appearance);
+		if (state instanceof LoadingState) ((LoadingState) state).applyResolved(enabled);
 	}
 }

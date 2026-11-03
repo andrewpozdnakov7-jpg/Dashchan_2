@@ -12,7 +12,6 @@ import android.graphics.Path;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffXfermode;
 import android.graphics.RectF;
-import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -330,7 +329,7 @@ public class ImageEditorActivity extends ComponentActivity {
 		ArrayList<View> chips = new ArrayList<>();
 		Runnable updateColors = () -> {
 			for (int i = 0; i < chips.size(); i++) {
-				chips.get(i).setBackground(createColorChipBackground(colors[i], colors[i] == pendingColor[0], density));
+				InterfaceAppearance.mediaColorChip(chips.get(i), colors[i], colors[i] == pendingColor[0]);
 			}
 		};
 		for (int color : colors) {
@@ -358,15 +357,6 @@ public class ImageEditorActivity extends ComponentActivity {
 					editorView.setBrush(brushWidthRatio, brushColor);
 					editorView.setMode(EditorView.Mode.DRAW);
 				}).show();
-	}
-
-	private static GradientDrawable createColorChipBackground(int color, boolean selected, float density) {
-		GradientDrawable drawable = new GradientDrawable();
-		drawable.setColor(color);
-		drawable.setCornerRadius(8f * density);
-		drawable.setStroke((int) ((selected ? 3f : 1f) * density),
-				selected ? 0xff64b5f6 : 0xff808080);
-		return drawable;
 	}
 
 	private void showStickerPicker() {
