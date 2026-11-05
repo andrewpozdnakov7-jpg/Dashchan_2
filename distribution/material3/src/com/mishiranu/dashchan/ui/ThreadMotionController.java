@@ -26,6 +26,7 @@ import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.util.ThreadMotionKey;
 import com.mishiranu.dashchan.widget.ThemeEngine;
 import com.mishiranu.dashchan.widget.ThreadMotionLayout;
+import com.mishiranu.dashchan.widget.SnapshotDrawing;
 import java.lang.ref.WeakReference;
 import java.util.LinkedHashMap;
 import java.util.function.Consumer;
@@ -183,7 +184,7 @@ public final class ThreadMotionController {
 					Math.max(1, (int) (height * scale)), Bitmap.Config.ARGB_8888);
 			Canvas canvas = new Canvas(bitmap);
 			canvas.scale(bitmap.getWidth() / (float) width, bitmap.getHeight() / (float) height);
-			view.draw(canvas);
+			SnapshotDrawing.draw(view, canvas);
 			success = true;
 			return bitmap;
 		} catch (RuntimeException | OutOfMemoryError e) {
@@ -213,7 +214,7 @@ public final class ThreadMotionController {
 			canvas.drawColor(ThemeEngine.getTheme(root.getContext()).window);
 			canvas.scale(bitmap.getWidth() / (float) width, bitmap.getHeight() / (float) height);
 			canvas.translate(-viewport.left, -viewport.top);
-			draw.accept(canvas);
+			SnapshotDrawing.draw(root, canvas, draw);
 			success = true;
 			return bitmap;
 		} catch (RuntimeException | OutOfMemoryError e) {

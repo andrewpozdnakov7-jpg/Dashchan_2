@@ -89,7 +89,7 @@ public final class BackPreviewBudget {
 			Canvas canvas = new Canvas(image); canvas.drawColor(background);
 			canvas.scale(size[0] / (float) view.getWidth(), size[1] / (float) view.getHeight());
 			if (web) canvas.translate(-view.getScrollX(), -view.getScrollY());
-			view.draw(canvas);
+			SnapshotDrawing.draw(view, canvas);
 			allocations.put(image, actual); references.put(image, 1); bytes += actual; return image;
 		} catch (RuntimeException | OutOfMemoryError error) {
 			if (image != null) image.recycle();

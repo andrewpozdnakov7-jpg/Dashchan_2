@@ -34,7 +34,7 @@ final class CaptchaImageMotion implements AutoCloseable {
 		}
 		// Capture this one captcha ImageView, never the dialog, form, user text or response token.
 		Bitmap snapshot = Bitmap.createBitmap(view.getWidth(), view.getHeight(), Bitmap.Config.ARGB_8888);
-		view.draw(new Canvas(snapshot));
+		SnapshotDrawing.draw(view, new Canvas(snapshot));
 		Change change = new Change(view, snapshot, pixels); changes.put(view, change); snapshotPixels += pixels;
 		view.setImageBitmap(next); // Do not fade the real image or its clickable/accessibility parent.
 		change.start();

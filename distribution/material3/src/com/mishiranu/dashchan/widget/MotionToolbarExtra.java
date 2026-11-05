@@ -43,7 +43,7 @@ public final class MotionToolbarExtra extends FrameLayout {
 			previous = Bitmap.createBitmap(Math.max(1, (int) (getWidth() * scale)), Math.max(1, (int) (getHeight() * scale)), Bitmap.Config.ARGB_8888);
 			previousDisplayHeight = getHeight();
 			Canvas canvas = new Canvas(previous); canvas.scale((float) previous.getWidth() / getWidth(), (float) previous.getHeight() / getHeight());
-			super.dispatchDraw(canvas);
+			SnapshotDrawing.draw(this, canvas, c -> super.dispatchDraw(c));
 		} catch (RuntimeException | OutOfMemoryError error) { recyclePrevious(); }
 	}
 	@Override public void addView(View child, int index, android.view.ViewGroup.LayoutParams params) {

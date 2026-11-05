@@ -5,11 +5,15 @@ import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.view.SurfaceView;
+import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.FrameLayout;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
 import com.mishiranu.dashchan.widget.ThemeEngine;
+import com.mishiranu.dashchan.widget.CustomDrawerLayout;
+import com.mishiranu.dashchan.widget.PredictiveBackLayout;
+import com.mishiranu.dashchan.R;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -85,6 +89,43 @@ public class PredictiveBackControllerTest {
 				assertFalse(f.controller.isBusy()); assertTrue(f.current.isRecycled());
 				f.host.getViewTreeObserver().dispatchOnPreDraw(); assertFalse(f.controller.isCommitting());
 			} finally { f.close(); }
+		});
+	}
+
+	@Test public void imeViewportResizeKeepsTheWindowPreviewAndItsDestinationPixels() {
+		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+			android.content.Context context = ThemeEngine.attach(InstrumentationRegistry.getInstrumentation().getTargetContext());
+			CustomDrawerLayout root = (CustomDrawerLayout) LayoutInflater.from(context).inflate(R.layout.activity_main, null);
+			PredictiveBackLayout host = (PredictiveBackLayout) root.getChildAt(0);
+			Runnable layout = () -> {
+				root.measure(View.MeasureSpec.makeMeasureSpec(400, View.MeasureSpec.EXACTLY),
+						View.MeasureSpec.makeMeasureSpec(800, View.MeasureSpec.EXACTLY));
+				root.layout(0, 0, 400, 800);
+			};
+			layout.run();
+			PredictiveBackController controller = new PredictiveBackController(host);
+			Bitmap current = Bitmap.createBitmap(400, 800, Bitmap.Config.ARGB_8888);
+			Bitmap previous = Bitmap.createBitmap(400, 800, Bitmap.Config.ARGB_8888);
+			current.eraseColor(Color.RED); previous.eraseColor(Color.BLUE);
+			try {
+				controller.install(current, previous, true); controller.progress(.5f);
+				assertTrue(root.setImeViewportInset(300)); layout.run();
+				assertEquals(800, host.getHeight()); assertTrue(controller.isBusy());
+				assertEquals(500, root.findViewById(R.id.thread_motion_host).getHeight());
+				assertEquals(500, root.findViewById(R.id.drawer_interlayer).getHeight());
+				assertEquals(500, root.findViewById(R.id.drawer_common).getHeight());
+				Bitmap pixels = Bitmap.createBitmap(400, 800, Bitmap.Config.ARGB_8888);
+				try {
+					host.draw(new Canvas(pixels)); int revealed = pixels.getPixel(5, 100);
+					assertTrue(Color.blue(revealed) > Color.red(revealed));
+				} finally { pixels.recycle(); }
+				int[] navigations = {0}; assertTrue(controller.commit(() -> navigations[0]++));
+				assertTrue(root.setImeViewportInset(0)); layout.run();
+				assertEquals(800, host.getHeight()); assertTrue(controller.isCommitting());
+				assertEquals(1, navigations[0]);
+				assertEquals(800, root.findViewById(R.id.thread_motion_host).getHeight());
+				assertEquals(800, root.findViewById(R.id.drawer_common).getHeight());
+			} finally { controller.clear(); previous.recycle(); }
 		});
 	}
 

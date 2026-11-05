@@ -1918,6 +1918,7 @@ public class Preferences {
 	public static final String KEY_SUBJECT_TEXT_SCALE = "subject_text_scale";
 	public static final String KEY_METADATA_TEXT_SCALE = "metadata_text_scale";
 	public static final String KEY_SETTINGS_TEXT_SCALE = "settings_text_scale";
+	public static final String KEY_DRAWER_TEXT_SCALE = "drawer_text_scale";
 	public static final int MIN_TEXT_SCALE = 30;
 	public static final int MAX_TEXT_SCALE = 500;
 	public static final int STEP_TEXT_SCALE = 5;
@@ -1931,6 +1932,17 @@ public class Preferences {
 	public static void setSettingsTextScalePercent(int value) {
 		try (SharedPreferences.Editor editor = PREFERENCES.editAsync()) {
 			editor.put(KEY_SETTINGS_TEXT_SCALE, Math.max(MIN_TEXT_SCALE, Math.min(value, MAX_TEXT_SCALE)));
+		}
+	}
+
+	public static int getDrawerTextScalePercent() {
+		return Math.max(MIN_TEXT_SCALE, Math.min(PREFERENCES.getInt(KEY_DRAWER_TEXT_SCALE,
+				DEFAULT_TEXT_SCALE), MAX_TEXT_SCALE));
+	}
+
+	public static void setDrawerTextScalePercent(int value) {
+		try (SharedPreferences.Editor editor = PREFERENCES.editAsync()) {
+			editor.put(KEY_DRAWER_TEXT_SCALE, Math.max(MIN_TEXT_SCALE, Math.min(value, MAX_TEXT_SCALE)));
 		}
 	}
 

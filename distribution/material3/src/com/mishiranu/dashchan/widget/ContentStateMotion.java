@@ -45,7 +45,7 @@ public final class ContentStateMotion {
 		try {
 			bitmap = Bitmap.createBitmap(Math.max(1, (int) (w * scale)), Math.max(1, (int) (h * scale)), Bitmap.Config.ARGB_8888);
 			Canvas canvas = new Canvas(bitmap); canvas.scale(bitmap.getWidth() / (float) w, bitmap.getHeight() / (float) h);
-			view.draw(canvas); return bitmap;
+			SnapshotDrawing.draw(view, canvas); return bitmap;
 		} catch (RuntimeException | OutOfMemoryError error) { if (bitmap != null) bitmap.recycle(); return null; }
 	}
 	public static OneShotPreDrawListener revealBeforeDraw(View view, View root, BooleanSupplier valid) {

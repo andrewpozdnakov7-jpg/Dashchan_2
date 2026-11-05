@@ -6,7 +6,10 @@ import android.os.Bundle;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
+import android.view.ViewTreeObserver;
 import androidx.annotation.NonNull;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 import com.mishiranu.dashchan.BuildConfig;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
@@ -29,6 +32,7 @@ public class CategoriesFragment extends PreferenceFragment {
 	// Input is a one-shot user action, never part of restored navigation state.
 	private boolean requestSearchInput;
 	private boolean restoringSearch;
+	private SearchNavigation searchNavigation;
 
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
@@ -52,6 +56,7 @@ public class CategoriesFragment extends PreferenceFragment {
 		searchView.setHint(getString(R.string.search_settings));
 		searchView.setOnChangeListener(query -> {
 			if (searchQuery != null && !restoringSearch) {
+				if (searchNavigation != null) searchNavigation.close();
 				searchQuery = query;
 				populatePreferences();
 			}
@@ -73,9 +78,10 @@ public class CategoriesFragment extends PreferenceFragment {
 					addButton(entry.getTitle(), entry.getBreadcrumb()).setOnClickListener(preference -> {
 						SettingsSearchHistory history = searchHistory;
 						requestSearchInput = false;
-						if (searchView != null) searchView.clearSearchFocus();
-						((FragmentHandler) requireActivity()).pushFragment(entry.createFragment());
-						if (history != null) history.record(completedQuery);
+						openSearchResult(() -> {
+							((FragmentHandler) requireActivity()).pushFragment(entry.createFragment());
+							if (history != null) history.record(completedQuery);
+						});
 					});
 				}
 			}
@@ -117,6 +123,66 @@ public class CategoriesFragment extends PreferenceFragment {
 		addCategory(R.string.accessibility, R.drawable.ic_accessibility)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 						.pushFragment(new AccessibilityFragment()));
+	}
+
+	private void openSearchResult(Runnable navigate) {
+		if (searchNavigation != null) return;
+		View owner = getView();
+		if (owner == null || !isAdded()) return;
+		WindowInsetsCompat insets = ViewCompat.getRootWindowInsets(owner);
+		boolean hidingIme = insets != null && (insets.isVisible(WindowInsetsCompat.Type.ime())
+				|| insets.getInsets(WindowInsetsCompat.Type.ime()).bottom > 0);
+		if (searchView != null) searchView.clearSearchFocus();
+		if (!hidingIme) { navigate.run(); return; }
+		// Capture/start the page transition only after IME resize has settled. Otherwise
+		// ScreenMotionController correctly treats that resize as invalidated scene geometry.
+		searchNavigation = new SearchNavigation(owner, navigate);
+		searchNavigation.start();
+	}
+
+	private final class SearchNavigation implements ViewTreeObserver.OnPreDrawListener,
+			View.OnAttachStateChangeListener {
+		final View owner;
+		final Runnable navigate;
+		final Runnable timeout = this::complete;
+		int width = -1, height = -1, stable;
+		boolean closed;
+		SearchNavigation(View owner, Runnable navigate) { this.owner = owner; this.navigate = navigate; }
+		void start() {
+			owner.addOnAttachStateChangeListener(this);
+			owner.getViewTreeObserver().addOnPreDrawListener(this);
+			owner.postDelayed(timeout, 1200); // Safety net for an IME which never reports its final layout.
+			owner.postInvalidateOnAnimation();
+		}
+		@Override public boolean onPreDraw() {
+			if (closed) return true;
+			if (!owner.hasWindowFocus() || searchView != null && searchView.isSearchFocused()) { close(); return true; }
+			WindowInsetsCompat insets = ViewCompat.getRootWindowInsets(owner);
+			boolean hidden = insets == null || !insets.isVisible(WindowInsetsCompat.Type.ime())
+					&& insets.getInsets(WindowInsetsCompat.Type.ime()).bottom == 0;
+			if (hidden && owner.getWidth() == owner.getMeasuredWidth() && owner.getHeight() == owner.getMeasuredHeight()
+					&& owner.getWidth() > 0 && owner.getHeight() > 0
+					&& width == owner.getWidth() && height == owner.getHeight()) stable++;
+			else stable = 0;
+			width = owner.getWidth(); height = owner.getHeight();
+			if (stable >= 2) complete();
+			else owner.postInvalidateOnAnimation();
+			return true;
+		}
+		void complete() {
+			if (closed) return;
+			close();
+			if (isAdded() && isResumed() && getView() == owner && owner.hasWindowFocus()
+					&& !getParentFragmentManager().isStateSaved()) navigate.run();
+		}
+		void close() {
+			if (closed) return;
+			closed = true; owner.removeCallbacks(timeout); owner.removeOnAttachStateChangeListener(this);
+			if (owner.getViewTreeObserver().isAlive()) owner.getViewTreeObserver().removeOnPreDrawListener(this);
+			if (searchNavigation == this) searchNavigation = null;
+		}
+		@Override public void onViewAttachedToWindow(View view) {}
+		@Override public void onViewDetachedFromWindow(View view) { close(); }
 	}
 
 	private void populateSearchHistory() {
@@ -165,6 +231,7 @@ public class CategoriesFragment extends PreferenceFragment {
 
 	@Override
 	public void onDestroyView() {
+		if (searchNavigation != null) searchNavigation.close();
 		super.onDestroyView();
 
 		searchIndex = null;
@@ -204,6 +271,7 @@ public class CategoriesFragment extends PreferenceFragment {
 
 	@Override
 	public boolean onBackPressed() {
+		if (searchNavigation != null) searchNavigation.close();
 		if (searchMenuItem != null && searchMenuItem.isActionViewExpanded()) {
 			searchMenuItem.collapseActionView();
 			return true;
@@ -223,6 +291,7 @@ public class CategoriesFragment extends PreferenceFragment {
 
 	@Override
 	public boolean onSearchRequested() {
+		if (searchNavigation != null) searchNavigation.close();
 		if (searchMenuItem != null) {
 			if (searchMenuItem.isActionViewExpanded()) {
 				searchView.requestSearchFocus();

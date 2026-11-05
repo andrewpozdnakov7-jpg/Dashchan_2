@@ -1,0 +1,13 @@
+**Slooop 3.2.78**
+
+- Fixed delayed updates to the unread reply count next to Replies in the side menu.
+- Added a separate side menu text size setting from 30 to 500%, with a preview.
+- Refined the new message form: attachment button placement, primary actions and animations when the keyboard opens and closes. Fixed the Send button disappearing after captcha and abrupt jumps of the bottom action panel.
+- You can now leave the new message form with a single Back gesture even when the keyboard is open. Your draft is preserved.
+- Improved swipe to reply: the post card smoothly returns to its original position, then the reply form opens without an extra entrance animation or waiting for it before requesting the keyboard.
+- Fixed navigation from settings search: transitions remain animated with the keyboard open.
+- Added a gray background to the SP spoiler button to make it easier to spot.
+- Fixed an empty background instead of the previous page preview when using predictive back from a new message with the keyboard open.
+- Removed unnecessary toolbar layout passes and numerous log warnings when capturing snapshots for animations.
+
+Thanks to everyone for testing, logs and help finding bugs! 🐾

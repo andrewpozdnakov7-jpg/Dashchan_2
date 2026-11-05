@@ -4,19 +4,13 @@ import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.res.ColorStateList;
-import android.graphics.Canvas;
-import android.graphics.Color;
-import android.graphics.Paint;
-import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Parcel;
 import android.os.Parcelable;
 import android.os.SystemClock;
 import android.util.Pair;
-import android.util.TypedValue;
 import android.view.ActionMode;
 import android.view.Gravity;
-import android.view.HapticFeedbackConstants;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.SubMenu;
@@ -31,7 +25,6 @@ import androidx.fragment.app.FragmentManager;
 import androidx.lifecycle.LifecycleOwner;
 import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.ViewModel;
-import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import chan.content.Chan;
@@ -68,6 +61,7 @@ import com.mishiranu.dashchan.content.translation.TranslationController;
 import com.mishiranu.dashchan.ui.ApachanEditPostDialog;
 import com.mishiranu.dashchan.ui.DrawerForm;
 import com.mishiranu.dashchan.ui.InstanceDialog;
+import com.mishiranu.dashchan.ui.ReplySwipeController;
 import com.mishiranu.dashchan.ui.gallery.GalleryOverlay;
 import com.mishiranu.dashchan.ui.navigator.Page;
 import com.mishiranu.dashchan.ui.navigator.adapter.PostsAdapter;
@@ -297,6 +291,7 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 	private ThreadOpenDiagnostics.Operation threadOpenFullPrepareOperation;
 
 	private Replyable replyable;
+	private ReplySwipeController replySwipe;
 	private HidePerformer hidePerformer;
 
 	private ActionMode selectionMode;
@@ -364,162 +359,29 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 		return (PostsAdapter) getRecyclerView().getAdapter();
 	}
 
-	private void setupReplyWithSwipe(RecyclerView recyclerView, PostsAdapter adapter) {
-		Context context = recyclerView.getContext();
-		float density = ResourceUtils.obtainDensity(context);
-		float triggerDistance = 45f * density;
-		float maxRevealDistance = 56f * density;
-		float actionCircleSize = 32f * density;
-		int iconSize = Math.round(20f * density);
-		float iconTextGap = 3f * density;
-		Paint actionPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-		int actionColor = ResourceUtils.getColor(context, R.attr.colorAccentSupport);
-		actionPaint.setColor(actionColor);
-		int foregroundColor = GraphicsUtils.isLight(actionColor) ? Color.BLACK : Color.WHITE;
-		Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-		textPaint.setColor(actionColor);
-		textPaint.setTextSize(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 10f,
-				context.getResources().getDisplayMetrics()));
-		String replyText = context.getString(R.string.reply);
-		float textWidth = textPaint.measureText(replyText);
-		Drawable replyIcon = ResourceUtils.getDrawable(context, R.drawable.ic_swipe_reply).mutate();
-		replyIcon.setTint(foregroundColor);
-
-		ItemTouchHelper.Callback callback = new ItemTouchHelper.SimpleCallback
-				(0, ItemTouchHelper.LEFT | ItemTouchHelper.RIGHT) {
-			private RecyclerView.ViewHolder activeHolder;
-			private boolean thresholdReached;
-
-			private boolean isRightHandMode() {
-				return Preferences.isVideoRightHandControls();
-			}
-
-			@Override
-			public int getSwipeDirs(@NonNull RecyclerView recyclerView,
-					@NonNull RecyclerView.ViewHolder viewHolder) {
-				if (!Preferences.isSwipeReplyEnabled()) return 0;
-				int position = viewHolder.getBindingAdapterPosition();
+	private void setupReplyWithSwipe(PaddedRecyclerView recyclerView, PostsAdapter adapter) {
+		Page source = getPage();
+		replySwipe = new ReplySwipeController(recyclerView, adapter, new ReplySwipeController.Host() {
+			@Override public PostNumber post(RecyclerView.ViewHolder holder) {
+				int position = holder.getBindingAdapterPosition();
 				if (position == RecyclerView.NO_POSITION || position >= adapter.getItemCount()
-						|| !(viewHolder instanceof UiManager.Holder)
-						|| !(viewHolder instanceof CommentTextView.RecyclerKeeper.Holder)) {
-					return 0;
-				}
-				CommentTextView comment = ((CommentTextView.RecyclerKeeper.Holder) viewHolder)
-						.getCommentTextView();
-				PostItem postItem = adapter.getItem(position);
-				if (comment.isSelectionMode() || postItem == null || replyable == null
-						|| !replyable.onRequestReply(false)) {
-					return 0;
-				}
-				return isRightHandMode() ? ItemTouchHelper.RIGHT : ItemTouchHelper.LEFT;
+						|| !(holder instanceof UiManager.Holder)
+						|| !(holder instanceof CommentTextView.RecyclerKeeper.Holder)) return null;
+				CommentTextView comment = ((CommentTextView.RecyclerKeeper.Holder) holder).getCommentTextView();
+				PostItem item = adapter.getItem(position);
+				return !comment.isSelectionMode() && item != null ? item.getPostNumber() : null;
 			}
-
-			@Override
-			public float getSwipeThreshold(@NonNull RecyclerView.ViewHolder viewHolder) {
-				return Math.min(0.95f, triggerDistance / Math.max(1f, viewHolder.itemView.getWidth()));
+			@Override public boolean canReply() {
+				return isRunning() && getPage() == source
+						&& getLifecycle().getCurrentState() == androidx.lifecycle.Lifecycle.State.RESUMED
+						&& replyable != null && replyable.onRequestReply(false);
 			}
-
-			@Override
-			public float getSwipeEscapeVelocity(float defaultValue) {
-				// A short fling must not bypass the physical-distance threshold.
-				return Float.MAX_VALUE;
-			}
-
-			@Override
-			public boolean onMove(@NonNull RecyclerView recyclerView,
-					@NonNull RecyclerView.ViewHolder viewHolder,
-					@NonNull RecyclerView.ViewHolder target) {
-				return false;
-			}
-
-			@Override
-			public void onSwiped(@NonNull RecyclerView.ViewHolder viewHolder, int direction) {
-				int position = viewHolder.getBindingAdapterPosition();
-				PostItem postItem = position != RecyclerView.NO_POSITION && position < adapter.getItemCount()
-						? adapter.getItem(position) : null;
-				viewHolder.itemView.setTranslationX(0f);
-				if (position != RecyclerView.NO_POSITION && position < adapter.getItemCount()) {
-					adapter.notifyItemChanged(position);
-				}
-				if (postItem != null && replyable != null && replyable.onRequestReply(false)) {
-					replyable.onRequestReply(true,
-							new Replyable.ReplyData(postItem.getPostNumber(), null));
+			@Override public void reply(PostNumber post, java.util.function.BooleanSupplier stillValid) {
+				if (canReply() && adapter.findPostItem(post) != null) {
+					replyable.onRequestReplyFromSwipe(true, stillValid, new Replyable.ReplyData(post, null));
 				}
 			}
-
-			@Override
-			public void onChildDraw(@NonNull Canvas canvas, @NonNull RecyclerView recyclerView,
-					@NonNull RecyclerView.ViewHolder viewHolder, float dX, float dY,
-					int actionState, boolean isCurrentlyActive) {
-				boolean rightHandMode = isRightHandMode();
-				float limitedDx = rightHandMode ? Math.max(0f, Math.min(maxRevealDistance, dX))
-						: Math.min(0f, Math.max(-maxRevealDistance, dX));
-				float reveal = Math.abs(limitedDx);
-				if (actionState == ItemTouchHelper.ACTION_STATE_SWIPE && reveal > 0f) {
-					View itemView = viewHolder.itemView;
-					float left = rightHandMode ? itemView.getLeft() : itemView.getRight() - reveal;
-					float right = rightHandMode ? itemView.getLeft() + reveal : itemView.getRight();
-					canvas.save();
-					canvas.clipRect(left, itemView.getTop(), right, itemView.getBottom());
-
-					int alpha = Math.round(255f * Math.min(1f, reveal / triggerDistance));
-					actionPaint.setAlpha(alpha);
-					textPaint.setAlpha(alpha);
-					replyIcon.setAlpha(alpha);
-					float centerX = rightHandMode ? itemView.getLeft() + maxRevealDistance / 2f
-							: itemView.getRight() - maxRevealDistance / 2f;
-					float centerY = (itemView.getTop() + itemView.getBottom()) / 2f;
-					Paint.FontMetrics fontMetrics = textPaint.getFontMetrics();
-					float textHeight = fontMetrics.descent - fontMetrics.ascent;
-					float contentHeight = actionCircleSize + iconTextGap + textHeight;
-					float circleCenterY = centerY - contentHeight / 2f + actionCircleSize / 2f;
-					float scale = 0.82f + 0.18f * Math.min(1f, reveal / triggerDistance);
-					float circleRadius = actionCircleSize * scale / 2f;
-					canvas.drawCircle(centerX, circleCenterY, circleRadius, actionPaint);
-					int iconLeft = Math.round(centerX - iconSize / 2f);
-					int iconTop = Math.round(circleCenterY - iconSize / 2f);
-					replyIcon.setBounds(iconLeft, iconTop, iconLeft + iconSize, iconTop + iconSize);
-					if (rightHandMode) {
-						canvas.save();
-						canvas.scale(-1f, 1f, centerX, circleCenterY);
-						replyIcon.draw(canvas);
-						canvas.restore();
-					} else {
-						replyIcon.draw(canvas);
-					}
-					float textBaseline = circleCenterY + actionCircleSize / 2f + iconTextGap
-							- fontMetrics.ascent;
-					canvas.drawText(replyText, centerX - textWidth / 2f, textBaseline, textPaint);
-					canvas.restore();
-
-					if (isCurrentlyActive) {
-						if (activeHolder != viewHolder) {
-							activeHolder = viewHolder;
-							thresholdReached = false;
-						}
-						boolean reached = reveal >= triggerDistance;
-						if (reached && !thresholdReached) {
-							itemView.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
-						}
-						thresholdReached = reached;
-					}
-				}
-				super.onChildDraw(canvas, recyclerView, viewHolder, limitedDx, dY,
-						actionState, isCurrentlyActive);
-			}
-
-			@Override
-			public void clearView(@NonNull RecyclerView recyclerView,
-					@NonNull RecyclerView.ViewHolder viewHolder) {
-				super.clearView(recyclerView, viewHolder);
-				viewHolder.itemView.setTranslationX(0f);
-				if (activeHolder == viewHolder) {
-					activeHolder = null;
-					thresholdReached = false;
-				}
-			}
-		};
-		new ItemTouchHelper(callback).attachToRecyclerView(recyclerView);
+		});
 	}
 
 	@Override
@@ -559,13 +421,19 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 		if (windowedMode) {
 			threadOpenDiagnosticSessionId = ThreadOpenDiagnostics.beginSession();
 		}
-		replyable = (click, data) -> {
-			ChanConfiguration.Board board = getChan().configuration.safe().obtainBoard(page.boardName);
-			if (click && board.allowPosting) {
-				getUiManager().navigator().navigatePosting(page.chanName, page.boardName,
-						page.threadNumber, data);
+		replyable = new Replyable() {
+			@Override public boolean onRequestReply(boolean click, ReplyData... data) { return request(null, click, data); }
+			@Override public boolean onRequestReplyFromSwipe(boolean click, java.util.function.BooleanSupplier stillValid, ReplyData... data) {
+				return stillValid.getAsBoolean() && request(stillValid, click, data);
 			}
-			return board.allowPosting;
+			private boolean request(java.util.function.BooleanSupplier stillValid, boolean click, ReplyData... data) {
+				ChanConfiguration.Board board = getChan().configuration.safe().obtainBoard(page.boardName);
+				if (click && board.allowPosting) {
+					if (stillValid != null) getUiManager().navigator().navigatePostingFromSwipe(page.chanName, page.boardName, page.threadNumber, stillValid, data);
+					else getUiManager().navigator().navigatePosting(page.chanName, page.boardName, page.threadNumber, data);
+				}
+				return board.allowPosting;
+			}
 		};
 		PostsAdapter adapter = new PostsAdapter(this, page.chanName, uiManager,
 				replyable, postStateProvider, getFragmentManager(), recyclerView, retainableExtra.postItems,
@@ -763,6 +631,11 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 			retainableExtra.dialogsState.dropState();
 			retainableExtra.dialogsState = null;
 		}
+		if (replySwipe != null) replySwipe.resume();
+	}
+
+	@Override protected void onPause() {
+		if (replySwipe != null) replySwipe.pause();
 	}
 
 	private void updateOriginalPostTitle() {
@@ -942,6 +815,7 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 
 	@Override
 	protected void onDestroy() {
+		if (replySwipe != null) { replySwipe.close(); replySwipe = null; }
 		finishGalleryRefresh(new ErrorItem(ErrorItem.Type.UNKNOWN));
 		stopRefresh();
 		if (postsWindowTask != null) {

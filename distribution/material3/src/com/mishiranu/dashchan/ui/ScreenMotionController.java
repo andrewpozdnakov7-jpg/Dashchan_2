@@ -26,6 +26,7 @@ import com.mishiranu.dashchan.util.PerformanceDiagnostics;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.widget.ThemeEngine;
 import com.mishiranu.dashchan.widget.ThreadMotionLayout;
+import com.mishiranu.dashchan.widget.SnapshotDrawing;
 
 /**
  * One temporary outgoing image plus the live destination; no navigation or content ownership.
@@ -130,7 +131,7 @@ public final class ScreenMotionController {
 					Bitmap.Config.ARGB_8888);
 			Canvas canvas = new Canvas(bitmap); canvas.drawColor(background);
 			canvas.scale(bitmap.getWidth() / (float) w, bitmap.getHeight() / (float) h);
-			view.draw(canvas); success = true; return bitmap;
+			SnapshotDrawing.draw(view, canvas); success = true; return bitmap;
 		} catch (RuntimeException | OutOfMemoryError e) {
 			if (bitmap != null) bitmap.recycle(); return null;
 		} finally {

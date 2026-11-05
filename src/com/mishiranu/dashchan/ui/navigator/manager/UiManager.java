@@ -166,6 +166,10 @@ public class UiManager {
 		void navigateTargetAllowReturn(String chanName, ChanLocator.NavigationData data);
 		void navigatePosting(String chanName, String boardName, String threadNumber,
 				Replyable.ReplyData... data);
+		default void navigatePostingFromSwipe(String chanName, String boardName, String threadNumber,
+				java.util.function.BooleanSupplier stillValid, Replyable.ReplyData... data) {
+			if (stillValid.getAsBoolean()) navigatePosting(chanName, boardName, threadNumber, data);
+		}
 		void navigateGallery(String chanName, GalleryItem.Set gallerySet, int imageIndex,
 				View view, GalleryOverlay.NavigatePostMode navigatePostMode, boolean galleryMode);
 		void navigateSetTheme(ThemeEngine.Theme theme);

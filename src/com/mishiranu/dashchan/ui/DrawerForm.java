@@ -151,7 +151,11 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 
 	public static final String CHAN_REDDIT = "reddit-web-reader";
 
-	private final Runnable myPostsObserver = () -> updateConfigurationInternal(chanName, true);
+	private boolean disposed;
+	// Retain this exact callback until dispose(): the observable itself holds only weak references.
+	private final Runnable myPostsObserver = () -> {
+		if (!disposed) updateConfigurationInternal(chanName, true);
+	};
 
 	public static class Page implements Comparable<Page> {
 		public final String chanName;
@@ -293,6 +297,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		favoriteSelectionCount.setTextColor(ResourceUtils.getColor(context, android.R.attr.textColorPrimary));
 		favoriteSelectionCount.setTextSize(16);
 		if (drawerStyle != null) drawerStyle.apply(favoriteSelectionCount, DrawerStyle.Role.TITLE);
+		else DrawerStyle.scaleText(favoriteSelectionCount, Preferences.getDrawerTextScalePercent());
 		selectionHeader.addView(favoriteSelectionCount, new LinearLayout.LayoutParams(0,
 				ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 		Button cancelSelection = createFavoriteSelectionButton(android.R.string.cancel);
@@ -340,7 +345,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		if (drawerStyle != null) {
 			drawerStyle.apply(searchEdit, DrawerStyle.Role.THREAD);
 			searchEdit.setHintTextColor(drawerStyle.variant);
-		}
+		} else DrawerStyle.scaleText(searchEdit, Preferences.getDrawerTextScalePercent());
 
 		ImageView searchIcon = new ImageView(context, null, android.R.attr.buttonBarButtonStyle);
 		searchIcon.setImageResource(ResourceUtils.getResourceId(context, R.attr.iconButtonForward, 0));
@@ -376,6 +381,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		ViewUtils.setTextSizeScaled(chanNameView, 14);
 		chanNameView.setTypeface(ResourceUtils.TYPEFACE_MEDIUM);
 		if (drawerStyle != null) drawerStyle.apply(chanNameView, DrawerStyle.Role.MENU);
+		else DrawerStyle.scaleText(chanNameView, Preferences.getDrawerTextScalePercent());
 		selectorContainer.addView(chanNameView, new LinearLayout.LayoutParams(0,
 				LinearLayout.LayoutParams.WRAP_CONTENT, 1));
 
@@ -400,6 +406,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		restartTextView.setText(R.string.new_extensions_installed__sentence);
 		restartTextView.setTextColor(ResourceUtils.getColor(context, android.R.attr.textColorPrimary));
 		if (drawerStyle != null) drawerStyle.apply(restartTextView, DrawerStyle.Role.THREAD);
+		else DrawerStyle.scaleText(restartTextView, Preferences.getDrawerTextScalePercent());
 		restartTextView.setPadding((int) (16f * density), (int) (8f * density),
 				(int) (16f * density), (int) (8f * density));
 		restartView.addView(restartTextView, LinearLayout.LayoutParams.MATCH_PARENT,
@@ -415,6 +422,13 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		MyPostsStorage.getInstance().getObservable().register(myPostsObserver);
 		updatePreferencesWithoutConfiguration();
 		updateChansWithoutConfiguration();
+	}
+
+	/** Release the owner's subscription when its Activity is destroyed, including recreation. */
+	public void dispose() {
+		if (disposed) return;
+		disposed = true;
+		MyPostsStorage.getInstance().getObservable().unregister(myPostsObserver);
 	}
 
 	private void updateConfigurationInternal(String chanName, boolean force) {
@@ -636,6 +650,10 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		button.setMinimumWidth(0);
 		button.setMinHeight((int) (48f * ResourceUtils.obtainDensity(context)));
 		if (drawerStyle != null) drawerStyle.apply(button, DrawerStyle.Role.MENU);
+		else DrawerStyle.scaleText(button, Preferences.getDrawerTextScalePercent());
+		if (Preferences.getDrawerTextScalePercent() > Preferences.DEFAULT_TEXT_SCALE) {
+			button.setSingleLine(false); button.setMaxLines(2);
+		}
 		return button;
 	}
 
@@ -1544,6 +1562,7 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 			drawerStyle.apply(textView, section ? DrawerStyle.Role.GROUP : DrawerStyle.Role.MENU);
 			return textView;
 		}
+		DrawerStyle.scaleText(textView, Preferences.getDrawerTextScalePercent());
 		int color = textView.getTextColors().getDefaultColor();
 		if (section) {
 			color &= 0x5effffff;
@@ -1558,7 +1577,9 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 		// Row/touch size is separate from the watcher's intrinsic decorative capsule.
 		int size = drawerStyle != null ? drawerStyle.rowHeight : DrawerStyle.minimumRowHeight(context);
 		int actionWidth = (int) (48f * density);
-		LinearLayout linearLayout = drawerStyle != null ? new DrawerItemLayout(context, drawerStyle) : new LinearLayout(context);
+		LinearLayout linearLayout = drawerStyle != null ? new DrawerItemLayout(context, drawerStyle)
+				: Preferences.getDrawerTextScalePercent() != Preferences.DEFAULT_TEXT_SCALE
+						? new DrawerItemLayout(context, size) : new LinearLayout(context);
 		linearLayout.setOrientation(LinearLayout.HORIZONTAL);
 		linearLayout.setGravity(Gravity.CENTER_VERTICAL);
 		CheckBox selectionView = ScopeCheckBox.createDrawerSelection(context);
@@ -1587,7 +1608,8 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 			watcherView = new WatcherView(context, watcherViewColorSet, drawerStyle);
 			watcherView.setOnClickListener(watcherClickListener);
 			watcherView.setOnRefreshClickListener(watcherRefreshClickListener);
-			linearLayout.addView(watcherView, drawerStyle != null ? drawerStyle.chipWidth : actionWidth, size);
+			linearLayout.addView(watcherView, drawerStyle != null ? drawerStyle.chipWidth
+					: WatcherView.legacyActionWidth(context), size);
 			trailingAction = watcherView;
 		}
 		if (!viewType.watcher && viewType.closeable) {
@@ -1633,8 +1655,8 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 				((LinearLayout.LayoutParams) iconView.getLayoutParams()).setMarginEnd(drawerStyle.dp(32));
 				iconView.setScaleType(ImageView.ScaleType.FIT_CENTER);
 			}
-			((DrawerItemLayout) linearLayout).setContent(textView, trailingAction);
 		}
+		if (linearLayout instanceof DrawerItemLayout) ((DrawerItemLayout) linearLayout).setContent(textView, trailingAction);
 		ViewUtils.setSelectableItemBackground(linearLayout);
 		linearLayout.setLayoutParams(new RecyclerView.LayoutParams(RecyclerView.LayoutParams.MATCH_PARENT,
 				RecyclerView.LayoutParams.WRAP_CONTENT));
@@ -1772,19 +1794,20 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	@Override
 	public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
 		ListItem listItem = getItem(position);
+		if (holder.itemView instanceof DrawerItemLayout) ((DrawerItemLayout) holder.itemView).setThread(listItem.isThreadItem());
 		if (drawerStyle != null && holder.text != null) {
 			DrawerStyle.Role role = listItem.type == ListItem.Type.FAVORITE_GROUP ? DrawerStyle.Role.GROUP
 					: listItem.type == ListItem.Type.SECTION ? DrawerStyle.Role.TITLE
 					: listItem.isThreadItem() ? DrawerStyle.Role.THREAD : DrawerStyle.Role.MENU;
 			drawerStyle.apply(holder.text, role);
 			if (holder.itemView instanceof DrawerItemLayout) {
-				((DrawerItemLayout) holder.itemView).setThread(listItem.isThreadItem());
 				holder.itemView.setMinimumHeight(drawerStyle.rowHeight);
 			}
 		}
 		if (holder.text != null) {
 			holder.text.setContentDescription(null);
 			boolean multiline = drawerStyle != null && listItem.type == ListItem.Type.SECTION ||
+					Preferences.getDrawerTextScalePercent() > Preferences.DEFAULT_TEXT_SCALE ||
 					listItem.type == ListItem.Type.PAGES_TOGGLE ||
 					listItem.type == ListItem.Type.FAVORITE_GROUP ||
 					listItem.type == ListItem.Type.SECTION && listItem.data == SECTION_ACTION_FAVORITES_MENU;

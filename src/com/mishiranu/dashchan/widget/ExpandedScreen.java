@@ -624,8 +624,13 @@ public class ExpandedScreen implements RecyclerScrollTracker.OnScrollListener {
 			boolean useGesture29 = this.useGesture29;
 			int bottomImeHeight = imeBottom29;
 			if (rootView != null) {
+				// Resizing the predictive host discards a valid full-window destination and
+				// cancels a committing Back when the IME hides. In the main drawer layout,
+				// apply the same inset to its content children, preserving the outer surface.
+				boolean stableViewport = rootView instanceof CustomDrawerLayout
+						&& ((CustomDrawerLayout) rootView).setImeViewportInset(bottomImeHeight);
 				ViewUtils.setNewMargin(rootView, leftNavigationBarHeight, 0,
-						rightNavigationBarHeight, bottomImeHeight);
+						rightNavigationBarHeight, stableViewport ? 0 : bottomImeHeight);
 			}
 			if (drawerInterlayer != null) {
 				ViewUtils.setNewPadding(drawerInterlayer, null, statusBarHeight, null, bottomNavigationBarHeight);

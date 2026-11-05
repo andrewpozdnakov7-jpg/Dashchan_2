@@ -89,7 +89,7 @@ public final class DialogStackMotion {
 			bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
 			Canvas canvas = new Canvas(bitmap);
 			canvas.scale((float) bitmap.getWidth() / card.getWidth(), (float) bitmap.getHeight() / card.getHeight());
-			card.draw(canvas);
+			SnapshotDrawing.draw(card, canvas);
 			int[] position = new int[2], origin = new int[2];
 			card.getLocationInWindow(position); root.getLocationInWindow(origin);
 			return new Snapshot(bitmap, new RectF(position[0] - origin[0], position[1] - origin[1],

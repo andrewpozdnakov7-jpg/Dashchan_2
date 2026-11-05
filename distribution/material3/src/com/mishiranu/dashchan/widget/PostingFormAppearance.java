@@ -2,7 +2,10 @@ package com.mishiranu.dashchan.widget;
 
 import android.app.AlertDialog;
 import android.content.res.ColorStateList;
+import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.ColorFilter;
+import android.graphics.Paint;
 import android.graphics.Rect;
 import android.graphics.Typeface;
 import android.graphics.drawable.ColorDrawable;
@@ -35,6 +38,7 @@ import androidx.core.view.WindowInsetsCompat;
 import chan.content.ChanMarkup;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
+import com.mishiranu.dashchan.graphics.BaseDrawable;
 import com.mishiranu.dashchan.ui.posting.EditorHeightPolicy;
 import com.mishiranu.dashchan.ui.posting.PostingAttachmentsAppearance;
 import com.mishiranu.dashchan.util.ResourceUtils;
@@ -59,6 +63,7 @@ public final class PostingFormAppearance {
 	private final ViewTreeObserver.OnGlobalLayoutListener layoutListener = this::updateLayout;
 	private final ViewTreeObserver.OnGlobalFocusChangeListener focusListener = (before, after) -> updateLayout();
 	private final ViewTreeObserver.OnPreDrawListener editorRevealListener = this::revealKeyboardEditor;
+	private final ViewTreeObserver.OnWindowFocusChangeListener primaryRevealFocus = this::onPrimaryRevealWindowFocus;
 	private final Runnable keyboardResize = this::resizeKeyboardEditor;
 	private ThemeEngine.Theme theme;
 	private Palette palette;
@@ -75,6 +80,7 @@ public final class PostingFormAppearance {
 	private CarryLayout optionsRow;
 	private FrameLayout utilitySlot;
 	private FrameLayout primarySlot;
+	private LinearLayout primaryRow;
 	private PostingUtilityRow utilityContent;
 	private PostingPrimaryMotion primaryMotion;
 	private PostingImeMotion imeMotion;
@@ -97,6 +103,9 @@ public final class PostingFormAppearance {
 	private boolean captchaActionIconShown;
 	private boolean compact;
 	private boolean keyboardActions, keyboardDocked, revealKeyboardEditor;
+	private boolean foregroundCaptchaVisible, revealPrimaryAfterCaptcha;
+	private final Rect lastPrimaryRevealBounds = new Rect();
+	private int primaryRevealFrames, primaryRevealWidth, primaryRevealHeight;
 	private int dockViewportHeight, dockEditorHeight, dockEditorTop, dockToolbarOverlap, dockPrimaryReserve;
 	private boolean closed;
 	private Toolbar toolbar;
@@ -115,7 +124,23 @@ public final class PostingFormAppearance {
 	public static boolean isEnabled() { return Preferences.isNewPostingFormEnabled(); }
 
 	private void onForegroundCaptchaChanged(boolean visible) {
-		if (!closed && primaryMotion != null) primaryMotion.setCaptchaDialogVisible(visible);
+		if (closed) return;
+		boolean dismissed = foregroundCaptchaVisible && !visible;
+		foregroundCaptchaVisible = visible;
+		if (primaryMotion != null) primaryMotion.setCaptchaDialogVisible(visible);
+		if (visible) cancelPrimaryReveal();
+		else if (dismissed) requestPrimaryReveal();
+	}
+
+	private void requestPrimaryReveal() {
+		if (closed || primarySlot == null) return;
+		revealPrimaryAfterCaptcha = true; primaryRevealFrames = 0;
+		primaryRevealWidth = primaryRevealHeight = -1; lastPrimaryRevealBounds.setEmpty();
+		root.postInvalidateOnAnimation();
+	}
+	private void cancelPrimaryReveal() { revealPrimaryAfterCaptcha = false; primaryRevealFrames = 0; }
+	private void onPrimaryRevealWindowFocus(boolean hasFocus) {
+		if (hasFocus && revealPrimaryAfterCaptcha) root.postInvalidateOnAnimation();
 	}
 
 	public PostingFormAppearance(View root) {
@@ -277,24 +302,56 @@ public final class PostingFormAppearance {
 	}
 
 	public void setAttachmentAction(Runnable action) {
+		if (attachmentAction != action && imeMotion != null) imeMotion.finish();
 		attachmentAction = action;
 		if (attachButton != null) attachButton.setEnabled(attachmentAvailable && action != null);
+		layoutAttachment();
 	}
 
 	public void setAttachmentAvailable(boolean available) {
+		if (attachmentAvailable != available && imeMotion != null) imeMotion.finish();
 		attachmentAvailable = available;
 		if (attachButton != null) {
 			attachButton.setVisibility(available ? View.VISIBLE : View.GONE);
 			attachButton.setEnabled(available && attachmentAction != null);
 			updateEditorActionsVisibility();
+			layoutAttachment();
 		}
 	}
 
 	private void renderAttachment() {
 		attachButton.setBackgroundTintList(null);
 		attachButton.setImageTintList(ColorStateList.valueOf(palette.accent));
-		attachButton.setMinimumWidth(dp(root, 40)); attachButton.setMinimumHeight(dp(root, 44));
+		int width = dp(root, keyboardActions ? 48 : 40), height = dp(root, keyboardActions ? 48 : 44);
+		if (attachButton.getMinimumWidth() != width) attachButton.setMinimumWidth(width);
+		if (attachButton.getMinimumHeight() != height) attachButton.setMinimumHeight(height);
 		attachButton.setBackground(ripple(shape(14, palette.tonal, 0, 0), 14));
+	}
+
+	/** One real attachment action; GONE releases both its width and its end margin. */
+	private void layoutAttachment() {
+		if (attachButton == null || primaryRow == null || utilityContent == null) return;
+		LinearLayout parent = keyboardActions ? primaryRow : utilityContent;
+		int width = dp(root, keyboardActions ? 48 : 40), height = dp(root, keyboardActions ? 48 : 44);
+		boolean any = false;
+		for (CompoundButton check : checks) any |= check.getVisibility() != View.GONE;
+		int gap = keyboardActions ? dp(root, 12) : any ? dp(root, 8) : 0;
+		if (attachButton.getParent() != parent) {
+			if (attachButton.getParent() instanceof ViewGroup) ((ViewGroup) attachButton.getParent()).removeView(attachButton);
+			LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(width, height);
+			params.gravity = Gravity.CENTER_VERTICAL; params.setMarginEnd(gap);
+			parent.addView(attachButton, 0, params);
+		} else {
+			LinearLayout.LayoutParams params = (LinearLayout.LayoutParams) attachButton.getLayoutParams();
+			if (params.width != width || params.height != height || params.getMarginEnd() != gap) {
+				params.width = width; params.height = height; params.setMarginEnd(gap);
+				params.gravity = Gravity.CENTER_VERTICAL; attachButton.setLayoutParams(params);
+			}
+		}
+		if (attachButton.getMinimumWidth() != width) attachButton.setMinimumWidth(width);
+		if (attachButton.getMinimumHeight() != height) attachButton.setMinimumHeight(height);
+		attachButton.setVisibility(attachmentAvailable && attachmentAction != null ? View.VISIBLE : View.GONE);
+		attachButton.setEnabled(attachmentAvailable && attachmentAction != null);
 	}
 
 	private void updateEditorActionsVisibility() {
@@ -409,6 +466,14 @@ public final class PostingFormAppearance {
 	public static void refreshView(View view) {
 		Object tag = view.getTag(R.id.posting_form_owner);
 		if (tag instanceof PostingFormAppearance) ((PostingFormAppearance) tag).updatePalette();
+	}
+	/** Settle only presentation; retain the native keyboard, draft and selection. */
+	static void finishImePresentation(View view) {
+		Object tag = view.getTag(R.id.posting_form_owner);
+		if (tag instanceof PostingFormAppearance) {
+			PostingImeMotion motion = ((PostingFormAppearance) tag).imeMotion;
+			if (motion != null) motion.finish();
+		}
 	}
 
 	public static int editorAvailableHeight(EditText editor, int available) {
@@ -696,17 +761,57 @@ public final class PostingFormAppearance {
 		formattingMenu = null;
 		if (dialog != null) dialog.dismiss();
 	}
+	/** Neutral counterpart of the panel, shaded in the direction opposite its surface luminance. */
+	private int spoilerGlyphFill() {
+		double luminance = ColorUtils.calculateLuminance(palette.tonal);
+		// Convert the panel luminance to neutral sRGB before shading, so custom accent
+		// hues never tint the spoiler glyph's background.
+		double channel = luminance <= .0031308 ? 12.92 * luminance
+				: 1.055 * Math.pow(luminance, 1.0 / 2.4) - .055;
+		int gray = (int) Math.round(channel * 255);
+		gray = Math.round(gray + (luminance < .5 ? 255 - gray : -gray) * .16f);
+		return Color.rgb(gray, gray, gray);
+	}
+
+	/** Decoration only: no intrinsic/minimum size or padding can affect tool packing. */
+	private static final class SpoilerGlyphBackground extends BaseDrawable {
+		private final TextView label;
+		private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+		SpoilerGlyphBackground(TextView label, int color) {
+			this.label = label; paint.setColor(color);
+		}
+		@Override public void draw(Canvas canvas) {
+			Rect bounds = getBounds(); if (bounds.isEmpty()) return;
+			float textWidth = android.text.Layout.getDesiredWidth(label.getText(), label.getPaint());
+			Paint.FontMetrics metrics = label.getPaint().getFontMetrics();
+			float width = Math.min(bounds.width(), Math.max(dp(label, 30), textWidth + dp(label, 4)));
+			float height = Math.min(bounds.height(), Math.max(dp(label, 28), metrics.descent - metrics.ascent + dp(label, 4)));
+			float x = bounds.exactCenterX(), y = bounds.exactCenterY();
+			canvas.drawRoundRect(x - width / 2, y - height / 2, x + width / 2, y + height / 2,
+					dp(label, 5), dp(label, 5), paint);
+		}
+		@Override public void setAlpha(int alpha) { paint.setAlpha(alpha); invalidateSelf(); }
+		@Override public void setColorFilter(ColorFilter filter) { paint.setColorFilter(filter); invalidateSelf(); }
+	}
+
 	private void renderCommand(View button) {
 		button.setMinimumWidth(dp(root, FORMAT_BUTTON_WIDTH_DP));
 		button.setMinimumHeight(dp(root, 44));
 		button.setBackgroundTintList(null);
-		button.setBackground(ripple(shape(12, Color.TRANSPARENT, 0, 0), 12));
+		int textColor = palette.text;
+		Drawable content = shape(12, Color.TRANSPARENT, 0, 0);
+		if (button == spoilerCommand && button instanceof TextView) {
+			int fill = spoilerGlyphFill();
+			content = new SpoilerGlyphBackground((TextView) button, fill);
+			textColor = InterfaceAppearance.contrasting(palette.text, fill, 4.5);
+		}
+		button.setBackground(ripple(content, 12));
 		if (button instanceof TextView) {
 			TextView text = (TextView) button;
 			text.setMinWidth(dp(root, FORMAT_BUTTON_WIDTH_DP)); text.setMinHeight(dp(root, 44));
 			text.setPadding(0, 0, 0, 0);
 			ViewUtils.setTextSizeScaled(text, 16);
-			text.setTextColor(palette.text);
+			text.setTextColor(textColor);
 		}
 		if (button instanceof ImageView) ((ImageView) button).setImageTintList(ColorStateList.valueOf(palette.text));
 	}
@@ -749,15 +854,26 @@ public final class PostingFormAppearance {
 		primaryMotion = new PostingPrimaryMotion(send, primarySlot);
 		primaryMotion.setAvailabilityChanged(() -> { if (primaryChanged != null) primaryChanged.run(); });
 		CaptchaDialogAppearance.observe(foregroundCaptchaListener);
+		primaryRow = new LinearLayout(root.getContext()); primaryRow.setOrientation(LinearLayout.HORIZONTAL);
+		primaryRow.setGravity(Gravity.CENTER_VERTICAL);
+		primaryRow.addView(primarySlot, new LinearLayout.LayoutParams(0, dp(root, 56), 1f));
 		LinearLayout.LayoutParams primaryParams = new LinearLayout.LayoutParams(-1, dp(root, 56));
-		primaryParams.topMargin = dp(root, 16); actions.addView(primarySlot, primaryParams);
+		primaryParams.topMargin = dp(root, 16); actions.addView(primaryRow, primaryParams);
 		footer.addView(actions, new FrameLayout.LayoutParams(-1, -2));
 		imeMotion = new PostingImeMotion((ViewGroup) root, form, editorContainer, actionPanel, utilitySlot, utilityContent);
-		if (scroll instanceof PostingScrollView) ((PostingScrollView) scroll).setCancelEditorMotion(imeMotion::finish);
+		imeMotion.bindActions(primaryRow, primarySlot, attachButton, send);
+		if (scroll instanceof PostingScrollView) {
+			((PostingScrollView) scroll).setCancelEditorMotion(imeMotion::finish);
+			((PostingScrollView) scroll).setEditorMotionTouchHandler(event -> {
+				if (event.getActionMasked() == MotionEvent.ACTION_DOWN) cancelPrimaryReveal();
+				return imeMotion.onTouchEvent(event);
+			});
+		}
 		renderSend(); styleCaptcha(); syncOptionsVisibility();
 		root.getViewTreeObserver().addOnGlobalLayoutListener(layoutListener);
 		root.getViewTreeObserver().addOnGlobalFocusChangeListener(focusListener);
 		root.getViewTreeObserver().addOnPreDrawListener(editorRevealListener);
+		root.getViewTreeObserver().addOnWindowFocusChangeListener(primaryRevealFocus);
 		updateLayout();
 	}
 
@@ -799,6 +915,7 @@ public final class PostingFormAppearance {
 
 	private void openImageCaptcha() {
 		if (closed || !root.isAttachedToWindow() || !root.isShown() || captchaDialog != null) return;
+		cancelPrimaryReveal();
 		dialogAccepted = false; dialogPreviousInput = captchaInput.getText().toString(); dialogRevision = captchaRevision;
 		((ViewGroup) captchaRoot.getParent()).removeView(captchaRoot);
 		captchaRoot.setVisibility(View.VISIBLE);
@@ -812,7 +929,7 @@ public final class PostingFormAppearance {
 			if (!dialogAccepted && dialogRevision == captchaRevision) captchaInput.setText(dialogPreviousInput);
 			dialogPreviousInput = null;
 			ViewUtils.removeFromParent(captchaRoot); ((ViewGroup) captchaParking).addView(captchaRoot);
-			if (!closed) updateCaptchaEntry();
+			if (!closed) { updateCaptchaEntry(); requestPrimaryReveal(); }
 		});
 		dialog.setOnShowListener(ignored -> {
 			dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> confirmCaptchaDialog());
@@ -872,13 +989,7 @@ public final class PostingFormAppearance {
 
 	public void syncOptionsVisibility() {
 		if (utilityContent == null) return;
-		boolean any = false;
-		for (CompoundButton check : checks) {
-			any |= check.getVisibility() != View.GONE;
-		}
-		LinearLayout.LayoutParams attachParams = (LinearLayout.LayoutParams) attachButton.getLayoutParams();
-		int gap = any && attachButton.getVisibility() != View.GONE ? dp(root, 8) : 0;
-		if (attachParams.getMarginEnd() != gap) { attachParams.setMarginEnd(gap); attachButton.setLayoutParams(attachParams); }
+		layoutAttachment();
 		// Outside IME the original 64dp service slot stays reserved; IME hides its parent only.
 	}
 
@@ -977,12 +1088,14 @@ public final class PostingFormAppearance {
 	}
 
 	private void resizeKeyboardEditor() {
+		if (imeMotion != null) imeMotion.prepareLayout();
 		if (!closed) com.mishiranu.dashchan.ui.posting.PostingCommentSizing.apply(
 				scroll, root.findViewById(R.id.comment), null);
 	}
 
 	// The platform inset is separated from layout so geometry fixtures need no live IME.
 	void updateLayout(boolean keyboardVisible) {
+		if (imeMotion != null) imeMotion.prepareLayout();
 		if (closed) return;
 		updatePalette();
 		updateCaptchaActionIcon();
@@ -1022,6 +1135,7 @@ public final class PostingFormAppearance {
 		boolean nextDocked = adaptive && comment != null && comment.hasFocus() && keyboardVisible;
 		if (imeMotion != null && (actionsChanged || nextDocked != keyboardDocked)) imeMotion.begin();
 		keyboardActions = keyboardVisible;
+		layoutAttachment();
 		if (utilitySlot != null) utilitySlot.setVisibility(keyboardActions ? View.GONE : View.VISIBLE);
 		boolean hasAttachments = PostingAttachmentsAppearance.cardCount(root.findViewById(R.id.attachment_container)) > 0;
 		if (utilitySlot != null) {
@@ -1029,12 +1143,13 @@ public final class PostingFormAppearance {
 			// utility row's10dp top inset (or center its content in that extra space).
 			int top = hasAttachments ? 0 : dp(root, 10);
 			if (utilitySlot.getPaddingTop() != top) utilitySlot.setPadding(0, top, 0, dp(root, 10));
-			utilitySlot.setMinimumHeight(dp(root, hasAttachments ? 54 : 64));
+			int minimum = dp(root, hasAttachments ? 54 : 64);
+			if (utilitySlot.getMinimumHeight() != minimum) utilitySlot.setMinimumHeight(minimum);
 		}
-		if (primarySlot != null) {
-			LinearLayout.LayoutParams params = (LinearLayout.LayoutParams) primarySlot.getLayoutParams();
+		if (primaryRow != null) {
+			LinearLayout.LayoutParams params = (LinearLayout.LayoutParams) primaryRow.getLayoutParams();
 			int margin = keyboardActions ? 0 : dp(root, 16);
-			if (params.topMargin != margin) { params.topMargin = margin; primarySlot.setLayoutParams(params); }
+			if (params.topMargin != margin) { params.topMargin = margin; primaryRow.setLayoutParams(params); }
 		}
 		syncEditorBottomMargin(hasAttachments);
 		if (nextDocked != keyboardDocked || actionsChanged) {
@@ -1103,6 +1218,7 @@ public final class PostingFormAppearance {
 	}
 
 	private boolean revealKeyboardEditor() {
+		if (imeMotion != null) imeMotion.prepareLayout();
 		if (revealKeyboardEditor) {
 			EditText editor = root.findViewById(R.id.comment);
 			if (!closed && keyboardDocked && editor != null) {
@@ -1144,7 +1260,51 @@ public final class PostingFormAppearance {
 			}
 		}
 		if (imeMotion != null) imeMotion.onPreDraw();
+		revealPrimaryAfterCaptcha();
 		return true;
+	}
+
+	/** One-shot modal return, after the IME/layout owner has committed its final pose. */
+	private void revealPrimaryAfterCaptcha() {
+		if (!revealPrimaryAfterCaptcha || closed || primarySlot == null) return;
+		if (!root.hasWindowFocus() || !root.isShown() || captchaDialog != null || foregroundCaptchaVisible) return;
+		if (imeMotion != null && imeMotion.isTransitionRunning()
+				|| !PostingImeMotion.hasMeasuredBounds(scroll, form, editorContainer, actionPanel, primaryRow, primarySlot)) {
+			primaryRevealFrames = 0; root.postInvalidateOnAnimation(); return;
+		}
+		Rect bounds = new Rect();
+		// Use complete local bounds, not a clipped global rectangle: the button can be
+		// fully outside the viewport, and unrelated ancestor requestLayout flags can persist.
+		int[] location = new int[2]; primarySlot.getLocationInWindow(location);
+		bounds.set(location[0], location[1], location[0] + primarySlot.getWidth(), location[1] + primarySlot.getHeight());
+		if (scroll.getWidth() == primaryRevealWidth && scroll.getHeight() == primaryRevealHeight
+				&& bounds.equals(lastPrimaryRevealBounds)) primaryRevealFrames++;
+		else primaryRevealFrames = 0;
+		primaryRevealWidth = scroll.getWidth(); primaryRevealHeight = scroll.getHeight(); lastPrimaryRevealBounds.set(bounds);
+		if (primaryRevealFrames < 2) { root.postInvalidateOnAnimation(); return; }
+		cancelPrimaryReveal(); // Consume before scrolling; later edits/frames cannot repeat this action.
+		boolean changed = revealPrimaryAction(scroll, primarySlot, actionPanel.getPaddingBottom());
+		com.mishiranu.dashchan.ui.posting.PostingFormDiagnostics.trace(root, "primary_reveal",
+				"reason=captcha_return changed=" + changed);
+	}
+
+	/** Native viewport operation only; deliberately independent of focus, IME and editor sizing. */
+	static boolean revealPrimaryAction(ScrollView scroll, View action, int bottomInset) {
+		View parent = action;
+		while (parent != null && parent != scroll) parent = parent.getParent() instanceof View ? (View) parent.getParent() : null;
+		// A fixed footer outside the scroller is already independently visible.
+		if (parent != scroll || scroll.getHeight() <= 0 || action.getHeight() <= 0) return false;
+		Rect bounds = new Rect(); action.getDrawingRect(bounds); scroll.offsetDescendantRectToMyCoords(action, bounds);
+		int before = scroll.getScrollY(), target = before;
+		int top = before + scroll.getPaddingTop(), bottom = before + scroll.getHeight() - scroll.getPaddingBottom();
+		if (bounds.bottom + Math.max(0, bottomInset) > bottom) {
+			target = bounds.bottom + Math.max(0, bottomInset) - scroll.getHeight() + scroll.getPaddingBottom();
+		} else if (bounds.top < top) target = bounds.top - scroll.getPaddingTop();
+		target = Math.max(0, target);
+		if (target == before) return false;
+		if (scroll instanceof PostingScrollView) ((PostingScrollView) scroll).alignEditorViewport(target);
+		else { scroll.scrollTo(scroll.getScrollX(), target); scroll.smoothScrollBy(0, 0); }
+		return scroll.getScrollY() != before;
 	}
 
 	public void activateToolbar(ViewGroup view) {
@@ -1252,10 +1412,12 @@ public final class PostingFormAppearance {
 		CaptchaDialogAppearance.unobserve(foregroundCaptchaListener);
 		deactivateToolbar();
 		closed = true;
+		cancelPrimaryReveal();
 		if (imeMotion != null) imeMotion.close();
 		if (scroll instanceof PostingScrollView) {
 			((PostingScrollView) scroll).setEditorViewportOwner(null);
 			((PostingScrollView) scroll).setCancelEditorMotion(null);
+			((PostingScrollView) scroll).setEditorMotionTouchHandler(null);
 		}
 		scroll.removeCallbacks(keyboardResize);
 		primaryState.close(); primaryChanged = null;
@@ -1265,6 +1427,7 @@ public final class PostingFormAppearance {
 			root.getViewTreeObserver().removeOnGlobalLayoutListener(layoutListener);
 			root.getViewTreeObserver().removeOnGlobalFocusChangeListener(focusListener);
 			root.getViewTreeObserver().removeOnPreDrawListener(editorRevealListener);
+			root.getViewTreeObserver().removeOnWindowFocusChangeListener(primaryRevealFocus);
 		}
 		if (root.getTag(R.id.posting_form_owner) == this) root.setTag(R.id.posting_form_owner, null);
 		for (Field field : fields) field.input.setTag(R.id.posting_form_field, null);

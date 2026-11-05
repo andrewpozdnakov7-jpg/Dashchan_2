@@ -30,6 +30,7 @@ import com.mishiranu.dashchan.widget.SafePasteEditText;
 import com.mishiranu.dashchan.widget.ThemeEngine;
 import com.mishiranu.dashchan.widget.InterfaceAppearance;
 import com.mishiranu.dashchan.widget.SettingsTextAppearance;
+import com.mishiranu.dashchan.widget.DrawerStyle;
 import com.mishiranu.dashchan.widget.ViewFactory;
 import java.util.function.IntConsumer;
 
@@ -44,11 +45,13 @@ public class PostTextSizesFragment extends PreferenceFragment {
 		addScale(Preferences.KEY_TEXT_SCALE, R.string.post_body_text_size);
 		addScale(Preferences.KEY_METADATA_TEXT_SCALE, R.string.post_metadata_text_size);
 		addScale(Preferences.KEY_SETTINGS_TEXT_SCALE, R.string.settings_text_size);
+		addScale(Preferences.KEY_DRAWER_TEXT_SCALE, R.string.drawer_text_size);
 		addHeader(R.string.post_text_size_preview);
 		addPreference(new PreviewPreference(requireContext()), false);
 		addButton(R.string.restore_defaults, 0).setOnClickListener(p -> {
 			Preferences.resetPostTextScales();
 			Preferences.setSettingsTextScalePercent(Preferences.DEFAULT_TEXT_SCALE);
+			Preferences.setDrawerTextScalePercent(Preferences.DEFAULT_TEXT_SCALE);
 			requireActivity().recreate();
 		});
 	}
@@ -124,22 +127,55 @@ public class PostTextSizesFragment extends PreferenceFragment {
 		}
 	}
 
+	private static class DrawerPreview extends LinearLayout {
+		private final TextView group, item;
+		DrawerPreview(Context context) {
+			super(context); setOrientation(VERTICAL);
+			int padding = Math.round(12 * ResourceUtils.obtainDensity(context));
+			setPadding(padding, padding, padding, padding);
+			setBackgroundColor(DrawerStyle.surface(context));
+			group = new TextView(context); item = new TextView(context);
+			ThemeEngine.applyStyle(group); ThemeEngine.applyStyle(item);
+			group.setText(R.string.favorite_threads); item.setText(R.string.history);
+			addView(group, LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT);
+			addView(item, LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT);
+			update(Preferences.getDrawerTextScalePercent());
+		}
+		void update(int percent) {
+			if (Preferences.isNewInterfaceMotionEnabled()) {
+				DrawerStyle style = new DrawerStyle(getContext(), percent);
+				style.apply(group, DrawerStyle.Role.GROUP); style.apply(item, DrawerStyle.Role.MENU);
+			} else {
+				int color = ResourceUtils.getColor(getContext(), android.R.attr.textColorPrimary);
+				group.setTextColor(color & 0x5effffff); item.setTextColor(color & 0xddffffff);
+				for (TextView view : new TextView[]{group, item}) {
+					ViewUtils.setTextSizeScaled(view, 14); view.setTypeface(ResourceUtils.TYPEFACE_MEDIUM);
+					DrawerStyle.scaleText(view, percent);
+				}
+			}
+		}
+	}
+
 	private static class FullPreview extends LinearLayout {
 		private final Preview posts;
 		private final SettingsPreview settings;
+		private final DrawerPreview drawer;
 
 		FullPreview(Context context) {
 			super(context);
 			setOrientation(VERTICAL);
 			posts = new Preview(context);
 			settings = new SettingsPreview(context);
+			drawer = new DrawerPreview(context);
 			addView(posts);
 			addView(settings);
+			addView(drawer);
 		}
 
 		void update() {
 			posts.update(null, 0);
 			settings.update(Preferences.getSettingsTextScalePercent());
+			drawer.update(Preferences.getDrawerTextScalePercent());
 		}
 	}
 
@@ -169,10 +205,12 @@ public class PostTextSizesFragment extends PreferenceFragment {
 		}
 		@Override protected void extract(SharedPreferences preferences) {
 			setValue(Preferences.KEY_SETTINGS_TEXT_SCALE.equals(key) ? Preferences.getSettingsTextScalePercent()
+					: Preferences.KEY_DRAWER_TEXT_SCALE.equals(key) ? Preferences.getDrawerTextScalePercent()
 					: Preferences.getPostTextScalePercent(key));
 		}
 		@Override protected void persist(SharedPreferences preferences) {
 			if (Preferences.KEY_SETTINGS_TEXT_SCALE.equals(key)) Preferences.setSettingsTextScalePercent(getValue());
+			else if (Preferences.KEY_DRAWER_TEXT_SCALE.equals(key)) Preferences.setDrawerTextScalePercent(getValue());
 			else Preferences.setPostTextScalePercent(key, getValue());
 		}
 
@@ -217,6 +255,10 @@ public class PostTextSizesFragment extends PreferenceFragment {
 				SettingsPreview settings = new SettingsPreview(context);
 				preview = settings;
 				updatePreview = settings::update;
+			} else if (Preferences.KEY_DRAWER_TEXT_SCALE.equals(key)) {
+				DrawerPreview drawer = new DrawerPreview(context);
+				preview = drawer;
+				updatePreview = drawer::update;
 			} else {
 				Preview posts = new Preview(context);
 				preview = posts;

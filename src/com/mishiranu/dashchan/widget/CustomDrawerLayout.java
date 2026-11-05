@@ -9,6 +9,7 @@ import android.view.ViewConfiguration;
 import androidx.core.view.GravityCompat;
 import androidx.drawerlayout.widget.DrawerLayout;
 import com.mishiranu.dashchan.util.ResourceUtils;
+import com.mishiranu.dashchan.util.ViewUtils;
 
 public class CustomDrawerLayout extends DrawerLayout {
 	// Match the default edge width of the pinned AndroidX ViewDragHelper.
@@ -33,6 +34,22 @@ public class CustomDrawerLayout extends DrawerLayout {
 
 	public void setExpandableFromAnyPoint(boolean expandableFromAnyPoint) {
 		this.expandableFromAnyPoint = expandableFromAnyPoint;
+	}
+
+	/** Keep predictive pixels in window coordinates while the native content avoids the IME. */
+	public boolean setImeViewportInset(int bottom) {
+		if (getChildCount() == 0 || !(getChildAt(0) instanceof PredictiveBackLayout)) return false;
+		PredictiveBackLayout host = (PredictiveBackLayout) getChildAt(0);
+		bottom = Math.max(0, bottom);
+		// Both the page/wide-drawer row and toolbar/interlayer retain their former viewport.
+		for (int i = 0; i < host.getChildCount(); i++) {
+			ViewUtils.setNewMargin(host.getChildAt(i), null, null, null, bottom);
+		}
+		// The sliding drawer's search field must also stay above the keyboard.
+		for (int i = 1; i < getChildCount(); i++) {
+			ViewUtils.setNewMargin(getChildAt(i), null, null, null, bottom);
+		}
+		return true;
 	}
 
 	@Override

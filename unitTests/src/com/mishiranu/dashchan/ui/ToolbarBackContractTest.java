@@ -72,6 +72,11 @@ public class ToolbarBackContractTest {
 	@Test public void systemBackKeepsItsCallbacksExitPolicyAndPredictiveCleanup() throws Exception {
 		String back = method("onSystemBackPressed");
 		assertTrue(back.contains("onBackPressed(false, true, this::performDefaultBack)"));
+		assertTrue("Only the posting form can replace the ordinary exit policy",
+				back.contains("boolean posting = getCurrentFragment(\"FragmentAccess/postingBackCommit\") instanceof PostingFragment;"));
+		assertTrue("Posting skips the exit timeout, while other screens retain the ordinary route",
+				back.contains("if (posting) { onBackPressed(false, false, () -> navigateInitial(true));"
+						+ " } else { onBackPressed(false, true, this::performDefaultBack); }"));
 		assertTrue(back.contains("completePredictivePageBack(predictiveBack, navigate)"));
 		assertFalse("Only the shared adapter owns commit/fallback", back.contains("predictiveBack.commit(navigate)"));
 		String completion = method("completePredictivePageBack", "PredictiveBackController controller, Runnable navigate");

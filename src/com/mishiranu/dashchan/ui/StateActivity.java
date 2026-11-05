@@ -2,6 +2,7 @@ package com.mishiranu.dashchan.ui;
 
 import com.mishiranu.dashchan.util.AuditDiagnostics;
 import android.os.Bundle;
+import android.os.Build;
 import androidx.activity.BackEventCompat;
 import androidx.activity.OnBackPressedCallback;
 import androidx.fragment.app.Fragment;
@@ -10,6 +11,7 @@ import androidx.fragment.app.FragmentManager;
 
 public abstract class StateActivity extends FragmentActivity {
 	private OnBackPressedCallback systemBackCallback;
+	private Object priorityBackRegistration;
 
 	public static class InstanceFragment extends Fragment {
 		@Override
@@ -73,9 +75,60 @@ public abstract class StateActivity extends FragmentActivity {
 		return !isSystemPredictiveBackEnabled();
 	}
 
+	/** A screen-specific Back destination can take precedence over IME dismissal. */
+	protected boolean shouldPrioritizeSystemBackOverIme() { return false; }
+
 	public final void updateSystemBackCallback() {
 		if (systemBackCallback != null) {
 			systemBackCallback.setEnabled(shouldHandleSystemBack());
+			boolean priority = getLifecycle().getCurrentState().isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)
+					&& !isFinishing() && systemBackCallback.isEnabled() && shouldPrioritizeSystemBackOverIme();
+			if (Build.VERSION.SDK_INT >= 33) {
+				if (priority && priorityBackRegistration == null) {
+					priorityBackRegistration = Build.VERSION.SDK_INT >= 34 ? Api34.register(this) : Api33.register(this);
+				} else if (!priority && priorityBackRegistration != null) {
+					Api33.unregister(priorityBackRegistration); priorityBackRegistration = null;
+				}
+			}
+		}
+	}
+
+	@Override public void onWindowFocusChanged(boolean hasFocus) {
+		super.onWindowFocusChanged(hasFocus); updateSystemBackCallback();
+	}
+	@Override protected void onStart() {
+		super.onStart(); updateSystemBackCallback();
+	}
+
+	@androidx.annotation.RequiresApi(33)
+	private static final class Api33 {
+		static Object register(StateActivity activity) {
+			android.window.OnBackInvokedDispatcher dispatcher = activity.getOnBackInvokedDispatcher();
+			android.window.OnBackInvokedCallback callback = activity::onSystemBackPressed;
+			dispatcher.registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_OVERLAY, callback);
+			return new Object[]{dispatcher, callback};
+		}
+		static void unregister(Object registration) {
+			Object[] values = (Object[]) registration;
+			((android.window.OnBackInvokedDispatcher) values[0]).unregisterOnBackInvokedCallback(
+					(android.window.OnBackInvokedCallback) values[1]);
+		}
+	}
+	@androidx.annotation.RequiresApi(34)
+	private static final class Api34 {
+		static Object register(StateActivity activity) {
+			android.window.OnBackInvokedDispatcher dispatcher = activity.getOnBackInvokedDispatcher();
+			android.window.OnBackAnimationCallback callback = new android.window.OnBackAnimationCallback() {
+				private BackEventCompat compatEvent(android.window.BackEvent event) {
+					return new BackEventCompat(event.getTouchX(), event.getTouchY(), event.getProgress(), event.getSwipeEdge());
+				}
+				@Override public void onBackStarted(android.window.BackEvent event) { activity.onSystemBackStarted(compatEvent(event)); }
+				@Override public void onBackProgressed(android.window.BackEvent event) { activity.onSystemBackProgressed(compatEvent(event)); }
+				@Override public void onBackCancelled() { activity.onSystemBackCancelled(); }
+				@Override public void onBackInvoked() { activity.onSystemBackPressed(); }
+			};
+			dispatcher.registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_OVERLAY, callback);
+			return new Object[]{dispatcher, callback};
 		}
 	}
 
@@ -119,12 +172,16 @@ public abstract class StateActivity extends FragmentActivity {
 	@Override
 	protected void onStop() {
 		super.onStop();
+		updateSystemBackCallback();
 		callOnFinish(false, "stop");
 		AuditDiagnostics.requestSummary();
 	}
 
 	@Override
 	protected void onDestroy() {
+		if (priorityBackRegistration != null && Build.VERSION.SDK_INT >= 33) {
+			Api33.unregister(priorityBackRegistration); priorityBackRegistration = null;
+		}
 		super.onDestroy();
 		callOnFinish(false, "destroy");
 	}

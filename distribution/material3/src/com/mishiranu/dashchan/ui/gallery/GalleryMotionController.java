@@ -17,6 +17,7 @@ import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.util.InterfaceMotion;
 import com.mishiranu.dashchan.widget.AttachmentView;
 import com.mishiranu.dashchan.widget.PhotoView;
+import com.mishiranu.dashchan.widget.SnapshotDrawing;
 import java.lang.ref.WeakReference;
 
 /** Media presentation only. Owns transient rendering, never item selection, zoom state or a player. */
@@ -374,7 +375,7 @@ public final class GalleryMotionController {
 			}
 			bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
 			Canvas canvas = new Canvas(bitmap); canvas.scale((float) width / photo.getWidth(), (float) height / photo.getHeight());
-			photo.draw(canvas);
+			SnapshotDrawing.draw(photo, canvas);
 			return new Preview(bitmap);
 		} catch (RuntimeException | OutOfMemoryError e) { if (bitmap != null) bitmap.recycle(); return null; }
 	}
