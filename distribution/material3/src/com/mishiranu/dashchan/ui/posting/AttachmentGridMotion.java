@@ -17,6 +17,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import androidx.core.view.OneShotPreDrawListener;
 import com.mishiranu.dashchan.util.InterfaceMotion;
+import com.mishiranu.dashchan.widget.SnapshotDrawing;
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -79,7 +80,7 @@ final class AttachmentGridMotion {
 				View view = holder.view;
 				if (view.getWidth() <= 0 || view.getHeight() <= 0) { release(s); return false; }
 				Bitmap image = Bitmap.createBitmap(view.getWidth(), view.getHeight(), Bitmap.Config.ARGB_8888);
-				s.images.put(holder, image); view.draw(new Canvas(image));
+				s.images.put(holder, image); SnapshotDrawing.draw(view, new Canvas(image));
 			}
 		} catch (RuntimeException | OutOfMemoryError e) { release(s); return false; }
 		capture(s, s.old); RectF sourceBounds = s.old.get(source);

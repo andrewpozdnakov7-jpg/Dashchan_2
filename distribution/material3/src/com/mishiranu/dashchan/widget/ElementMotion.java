@@ -42,6 +42,7 @@ public final class ElementMotion {
 	}
 	public static void finishTree(View view) {
 		if (view == null) return;
+		PostingFormAppearance.finishImePresentation(view);
 		ContentStateMotion.finish(view); ImePanelMotion.finish(view); finish(view);
 		if (view instanceof ViewGroup) {
 			ViewGroup group = (ViewGroup) view;

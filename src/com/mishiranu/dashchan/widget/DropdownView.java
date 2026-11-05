@@ -76,7 +76,7 @@ public class DropdownView extends FrameLayout {
 				editText.getMeasuredHeight(), Bitmap.Config.ARGB_8888);
 		Canvas canvas = new Canvas(bitmap);
 		background.setBounds(0, 0, editText.getMeasuredWidth(), editText.getMeasuredHeight());
-		background.draw(canvas);
+		SnapshotDrawing.draw(background, canvas);
 		int[] pixels = new int[bitmap.getHeight()];
 		@SuppressWarnings("MismatchedReadAndWriteOfArray")
 		int[] zeroPixels = new int[bitmap.getHeight()];

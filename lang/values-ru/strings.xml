@@ -1493,11 +1493,12 @@
 	<string name="drawer_custom_order">Свой порядок разделов</string>
 	<string name="drawer_section_order_summary">Перетаскивайте разделы за значок справа или нажмите на раздел, чтобы выбрать место. Порядок общий для всех форумов. Недоступные разделы не показываются в меню; перемещение не включает их. При выключении возвращается обычный порядок, а ваши настройки сохраняются.</string>
 	<string name="post_text_sizes">Размеры текста</string>
-	<string name="post_text_sizes_summary">Отдельные размеры заголовков тредов, сообщений, служебной информации и текста настроек</string>
+	<string name="post_text_sizes_summary">Отдельные размеры заголовков тредов, сообщений, служебной информации, текста настроек и боковой панели</string>
 	<string name="post_subject_text_size">Размер заголовков тредов</string>
 	<string name="post_body_text_size">Размер текста сообщений</string>
 	<string name="post_metadata_text_size">Размер служебной информации</string>
 	<string name="settings_text_size">Размер текста настроек</string>
+	<string name="drawer_text_size">Размер текста боковой панели</string>
 	<string name="settings_text_size_sample_title">Пример настройки</string>
 	<string name="settings_text_size_sample_summary">Описание настройки. Название и описание увеличиваются вместе, независимо от текста постов.</string>
 	<string name="post_text_size_preview">Предпросмотр</string>

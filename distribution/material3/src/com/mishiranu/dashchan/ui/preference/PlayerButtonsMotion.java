@@ -21,6 +21,7 @@ import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.media.PlayerButtonsLayout;
 import com.mishiranu.dashchan.media.PlayerButtonsLayout.Button;
 import com.mishiranu.dashchan.util.InterfaceMotion;
+import com.mishiranu.dashchan.widget.SnapshotDrawing;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.Map;
@@ -129,7 +130,7 @@ final class PlayerButtonsMotion {
 				if (view.getWidth() <= 0 || view.getHeight() <= 0) { release(s); return null; }
 				Bitmap bitmap = Bitmap.createBitmap(view.getWidth(), view.getHeight(), Bitmap.Config.ARGB_8888);
 				s.snapshots.put(button, bitmap);
-				view.draw(new Canvas(bitmap));
+				SnapshotDrawing.draw(view, new Canvas(bitmap));
 			}
 			captureBounds(s.old, s.oldPanels, root);
 			captureFurniture(s, false);

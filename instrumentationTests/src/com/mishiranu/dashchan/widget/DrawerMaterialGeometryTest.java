@@ -135,6 +135,42 @@ public class DrawerMaterialGeometryTest {
 			}
 		});
 	}
+	@Test public void independentDrawerScaleSurvivesRebindingWithoutChangingLayoutParams() {
+		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+			Context context = context(1);
+			DrawerStyle normal = new DrawerStyle(context, 100), large = new DrawerStyle(context, 200);
+			TextView text = new TextView(context);
+			LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, -2, 1);
+			text.setLayoutParams(params); normal.apply(text, DrawerStyle.Role.MENU);
+			float baseline = text.getTextSize();
+			for (int i = 0; i < 3; i++) {
+				large.apply(text, DrawerStyle.Role.MENU);
+				assertEquals(2 * baseline, text.getTextSize(), .01f);
+				assertSame(params, text.getLayoutParams()); assertEquals(0, params.width); assertEquals(-2, params.height);
+			}
+			normal.apply(text, DrawerStyle.Role.MENU); assertEquals(baseline, text.getTextSize(), .01f);
+			assertEquals(2 * normal.counterTextSize, large.counterTextSize, .01f);
+			assertTrue(large.chipHeight >= normal.chipHeight); assertTrue(large.chipWidth >= normal.chipWidth);
+		});
+	}
+	@Test public void drawerScaleUsesExistingNarrowRowWrappingAndFitsCounterText() {
+		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+			Context context = context(1); DrawerStyle style = new DrawerStyle(context, 200);
+			android.graphics.Paint paint = new android.graphics.Paint();
+			paint.setTypeface(style.counterTypeface); paint.setTextSize(style.counterTextSize); paint.setFontFeatureSettings("tnum");
+			int available = style.chipWidth - style.numberStart() - style.dp(DrawerStyle.CHIP_PADDING);
+			assertTrue(paint.measureText(WatcherPresentation.format(Integer.MAX_VALUE)) <= available);
+			for (int direction : new int[]{View.LAYOUT_DIRECTION_LTR, View.LAYOUT_DIRECTION_RTL}) {
+				TextView text = new TextView(context);
+				WatcherView watcher = new WatcherView(context, new WatcherView.ColorSet(0, 0, 0), style);
+				DrawerItemLayout row = row(context, style, text, watcher, true);
+				row.setLayoutDirection(direction); layout(row, style.dp(220));
+				assertEquals(2, text.getMaxLines()); assertTrue(watcher.getTop() >= text.getBottom());
+				assertTrue(watcher.getLeft() >= 0); assertTrue(watcher.getRight() <= row.getWidth());
+				assertTrue(watcher.getBottom() <= row.getHeight());
+			}
+		});
+	}
 	@Test public void rebindingDoesNotExposePreviousThreadsTitleOrMaskedReplyCounts() {
 		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
 			Context context = context(1); DrawerStyle style = new DrawerStyle(context);

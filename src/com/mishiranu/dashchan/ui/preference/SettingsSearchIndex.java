@@ -757,6 +757,7 @@ public final class SettingsSearchIndex {
 		add(context, entries, Screen.POST_TEXT_SIZES, R.string.post_body_text_size, 0, Preferences.KEY_TEXT_SCALE);
 		add(context, entries, Screen.POST_TEXT_SIZES, R.string.post_metadata_text_size, 0, Preferences.KEY_METADATA_TEXT_SCALE);
 		add(context, entries, Screen.POST_TEXT_SIZES, R.string.settings_text_size, 0, Preferences.KEY_SETTINGS_TEXT_SCALE);
+		add(context, entries, Screen.POST_TEXT_SIZES, R.string.drawer_text_size, 0, Preferences.KEY_DRAWER_TEXT_SCALE);
 		add(context, entries, Screen.ACCESSIBILITY, R.string.volume_buttons_text_scale,
 				R.string.volume_buttons_text_scale__summary, Preferences.KEY_VOLUME_BUTTONS_TEXT_SCALE);
 		add(context, entries, Screen.ACCESSIBILITY, R.string.video_right_hand_controls,

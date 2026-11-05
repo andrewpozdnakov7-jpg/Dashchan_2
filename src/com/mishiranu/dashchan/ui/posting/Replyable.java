@@ -6,6 +6,9 @@ import com.mishiranu.dashchan.content.model.PostNumber;
 
 public interface Replyable {
 	boolean onRequestReply(boolean click, ReplyData... data);
+	default boolean onRequestReplyFromSwipe(boolean click, java.util.function.BooleanSupplier stillValid, ReplyData... data) {
+		return stillValid.getAsBoolean() && onRequestReply(click, data);
+	}
 
 	class ReplyData implements Parcelable {
 		public final PostNumber postNumber;

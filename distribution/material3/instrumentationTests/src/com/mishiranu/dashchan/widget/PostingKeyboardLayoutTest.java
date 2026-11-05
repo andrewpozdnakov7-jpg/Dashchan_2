@@ -78,6 +78,39 @@ public class PostingKeyboardLayoutTest {
 		});
 	}
 
+	@Test public void captchaReturnRevealsOffscreenPrimaryOnceWithoutChangingDraftOrFocus() {
+		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+			Context context = PostingTestContext.create(); ProbeScroll scroll = new ProbeScroll(context);
+			FrameLayout form = new FrameLayout(context); scroll.addView(form, new FrameLayout.LayoutParams(-1, 1800));
+			EditText editor = new EditText(context); editor.setText("retained draft"); editor.setSelection(3);
+			form.addView(editor, new FrameLayout.LayoutParams(-1, 900));
+			Button action = new Button(context); int[] clicks = {0}; action.setOnClickListener(v -> clicks[0]++);
+			FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(-1, 56); params.topMargin = 1700;
+			form.addView(action, params); layout(scroll, 400, 800); assertTrue(editor.requestFocus());
+			scroll.setEditorViewportOwner(() -> true); // Explicit reveal must not depend on native focus scrolling.
+			assertTrue(PostingFormAppearance.revealPrimaryAction(scroll, action, 16));
+			Rect bounds = new Rect(); action.getDrawingRect(bounds); scroll.offsetDescendantRectToMyCoords(action, bounds);
+			assertEquals(scroll.getHeight() - 16, bounds.bottom - scroll.getScrollY());
+			int target = scroll.getScrollY(); scroll.computeScroll(); assertEquals(target, scroll.getScrollY());
+			assertFalse(PostingFormAppearance.revealPrimaryAction(scroll, action, 16));
+			assertEquals(target, scroll.getScrollY()); assertEquals(0, clicks[0]); assertTrue(editor.hasFocus());
+			assertEquals("retained draft", editor.getText().toString()); assertEquals(3, editor.getSelectionEnd());
+		});
+	}
+
+	@Test public void primaryRevealLeavesVisibleOrFixedFooterAndManualScrollingAlone() {
+		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+			Context context = PostingTestContext.create(); ProbeScroll scroll = new ProbeScroll(context);
+			FrameLayout form = new FrameLayout(context); scroll.addView(form, new FrameLayout.LayoutParams(-1, 1800));
+			View action = new View(context); FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(-1, 56);
+			params.topMargin = 600; form.addView(action, params); layout(scroll, 400, 800);
+			assertFalse(PostingFormAppearance.revealPrimaryAction(scroll, action, 16)); assertEquals(0, scroll.getScrollY());
+			View fixedFooter = new View(context); fixedFooter.layout(0, 0, 400, 56);
+			assertFalse(PostingFormAppearance.revealPrimaryAction(scroll, fixedFooter, 16));
+			scroll.scrollTo(0, 200); scroll.computeScroll(); assertEquals(200, scroll.getScrollY());
+		});
+	}
+
 	@Test public void keyboardKeepsOnlyOriginalPrimarySixDpBelowEditorBeforeAttachments() {
 		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
 			String key = Preferences.KEY_POSTING_EDITOR_HEIGHT;
@@ -106,6 +139,10 @@ public class PostingKeyboardLayoutTest {
 				CompoundButton op = root.findViewById(R.id.original_poster_checkbox);
 				sage.setChecked(true); op.setChecked(true);
 				appearance.finishSetup(send, sage, op);
+				int[] picks = {0}; appearance.setAttachmentAction(() -> picks[0]++);
+				appearance.setAttachmentAvailable(true);
+				View attach = root.findViewById(R.id.menu_attach);
+				View slot = (View) send.getParent(); View row = (View) slot.getParent();
 				View utility = (View) sage.getParent().getParent();
 				editor.setText("sample draft"); editor.setSelection(3); assertTrue(editor.requestFocus());
 				float density = context.getResources().getDisplayMetrics().density;
@@ -125,6 +162,13 @@ public class PostingKeyboardLayoutTest {
 					assertEquals(form.indexOfChild(container) + 1, form.indexOfChild(actions));
 					assertTrue(actions.getBottom() <= attachments.getTop());
 					assertEquals(View.GONE, utility.getVisibility());
+					assertSame(row, attach.getParent());
+					assertEquals(Math.round(48 * density), attach.getWidth());
+					assertEquals(Math.round(48 * density), attach.getHeight());
+					assertEquals(Math.round(56 * density), slot.getHeight());
+					assertEquals(Math.round(12 * density), slot.getLeft() - attach.getRight());
+					assertEquals(row.getWidth(), slot.getRight());
+					assertEquals(row.getWidth() - attach.getWidth() - Math.round(12 * density), slot.getWidth());
 					assertTrue(sage.isChecked()); assertTrue(op.isChecked());
 					Rect bounds = new Rect(); container.getDrawingRect(bounds);
 					scroll.offsetDescendantRectToMyCoords(container, bounds);
@@ -137,6 +181,14 @@ public class PostingKeyboardLayoutTest {
 					assertEquals(expected, editor.getHeight());
 					assertEquals("sample draft", editor.getText().toString()); assertEquals(3, editor.getSelectionEnd());
 				}
+				attach.performClick(); assertEquals(1, picks[0]); assertEquals(0, submissions[0]);
+				appearance.setAttachmentAvailable(false); layout(root, width, height);
+				assertEquals(View.GONE, attach.getVisibility()); assertEquals(row.getWidth(), slot.getWidth());
+				appearance.setAttachmentAvailable(true); layout(root, width, height);
+				root.setLayoutDirection(View.LAYOUT_DIRECTION_RTL); layout(root, width, height);
+				assertEquals(0, slot.getLeft());
+				assertEquals(Math.round(12 * density), attach.getLeft() - slot.getRight());
+				root.setLayoutDirection(View.LAYOUT_DIRECTION_LTR); layout(root, width, height);
 				// Earlier fields stay in the form, but scroll above it rather than reducing its height.
 				subject.setVisibility(View.VISIBLE); PostingFormAppearance.syncFieldVisibility(subject);
 				for (int pass = 0; pass < 3; pass++) {
@@ -175,6 +227,10 @@ public class PostingKeyboardLayoutTest {
 				}
 				appearance.updateLayout(false); layout(root, width, height);
 				assertEquals(View.VISIBLE, utility.getVisibility());
+				assertSame(sage.getParent(), attach.getParent());
+				assertEquals(Math.round(40 * density), attach.getWidth());
+				assertEquals(Math.round(44 * density), attach.getHeight());
+				assertEquals(row.getWidth(), slot.getWidth());
 				assertTrue(sage.isChecked()); assertTrue(op.isChecked());
 				assertEquals(Math.round(16 * density), form.getPaddingTop());
 				assertSame(scroll.getParent(), actions.getParent());

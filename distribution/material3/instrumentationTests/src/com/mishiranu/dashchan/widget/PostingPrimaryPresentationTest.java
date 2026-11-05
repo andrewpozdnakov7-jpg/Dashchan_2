@@ -22,6 +22,37 @@ import org.junit.runner.RunWith;
 /** Prepared native fixtures, not an executed device check. */
 @RunWith(AndroidJUnit4.class)
 public class PostingPrimaryPresentationTest {
+	@Test public void variableWidthKeepsLiveCaptionAndLoadingIndicatorInsideThePrimarySlot() {
+		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+			Context context = PostingTestContext.create();
+			Button button = new Button(context); FrameLayout slot = new FrameLayout(context);
+			slot.addView(button, new FrameLayout.LayoutParams(-1, -1));
+			PostingPrimaryMotion motion = new PostingPrimaryMotion(button, slot);
+			try {
+				motion.colors(0xff335577, Color.WHITE, 0xffdbe3ec, 0xff444444);
+				PostingPrimaryState state = new PostingPrimaryState();
+				float density = context.getResources().getDisplayMetrics().density;
+				TextView label = slot.findViewById(R.id.posting_captcha_status); float textSize = label.getTextSize();
+				for (PostingPrimaryState.Mode mode : new PostingPrimaryState.Mode[]{PostingPrimaryState.Mode.SOLVE, PostingPrimaryState.Mode.LOADING, PostingPrimaryState.Mode.SEND}) {
+					motion.bind(state.bind(mode, false, true));
+					for (int dpWidth : new int[]{268, 110, 328}) {
+						int width = Math.round(dpWidth * density), height = Math.round(56 * density);
+						slot.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+								View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY));
+						slot.layout(0, 0, width, height);
+						View shown = slot.findViewById(mode == PostingPrimaryState.Mode.LOADING
+								? R.id.posting_captcha_loading : R.id.posting_captcha_status);
+						android.graphics.Rect bounds = new android.graphics.Rect(); shown.getDrawingRect(bounds);
+						slot.offsetDescendantRectToMyCoords(shown, bounds);
+						assertTrue(bounds.left >= 0); assertTrue(bounds.right <= width);
+						assertTrue(Math.abs(bounds.exactCenterX() - width / 2f) <= 1f);
+						assertEquals(textSize, label.getTextSize(), 0f);
+						assertNotNull(button.getContentDescription()); assertEquals(height, button.getHeight());
+					}
+				}
+			} finally { motion.close(); }
+		});
+	}
 	@Test public void activeSuccessFeedbackDoesNotBlockReadyClickOrEnableInvalidForm() {
 		try (ActivityScenario<PostingGestureTestActivity> scenario = ActivityScenario.launch(PostingGestureTestActivity.class)) {
 			scenario.onActivity(activity -> {

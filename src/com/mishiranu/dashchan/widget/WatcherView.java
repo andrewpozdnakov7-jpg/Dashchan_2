@@ -22,6 +22,7 @@ import android.view.View;
 import android.widget.FrameLayout;
 import android.widget.ProgressBar;
 import com.mishiranu.dashchan.content.service.WatcherService;
+import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.util.ResourceUtils;
 
@@ -176,6 +177,25 @@ public class WatcherView extends FrameLayout {
 	private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.LINEAR_TEXT_FLAG);
 	private final RectF rectF = new RectF();
 	private final Rect rect = new Rect();
+	private static float legacyTextSize(Context context) {
+		int base = (int) (TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 12,
+				context.getResources().getDisplayMetrics()) + .5f);
+		return base * Preferences.getDrawerTextScalePercent() / 100f;
+	}
+	private static int legacyCapsuleWidth(Context context, Paint paint) {
+		float density = ResourceUtils.obtainDensity(context);
+		int width = Math.round(LEGACY_CAPSULE_WIDTH * density);
+		if (Preferences.getDrawerTextScalePercent() != Preferences.DEFAULT_TEXT_SCALE) {
+			width = Math.max(width, (int) Math.ceil(paint.measureText("999K+X")) + Math.round(4 * density));
+		}
+		return width;
+	}
+	public static int legacyActionWidth(Context context) {
+		float density = ResourceUtils.obtainDensity(context);
+		if (Preferences.getDrawerTextScalePercent() == Preferences.DEFAULT_TEXT_SCALE) return (int) (48f * density);
+		Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG); paint.setTextSize(legacyTextSize(context));
+		return Math.max(Math.round(48 * density), legacyCapsuleWidth(context, paint) + Math.round(16 * density));
+	}
 
 	/** Position may follow the host; visible size depends only on badge/font metrics. */
 	void getCapsuleBounds(RectF out) {
@@ -183,11 +203,10 @@ public class WatcherView extends FrameLayout {
 		int width, height;
 		if (style != null) { width = style.chipWidth; height = style.chipHeight; }
 		else {
-			paint.setTextSize((int) (TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 12,
-					getResources().getDisplayMetrics()) + .5f));
+			paint.setTextSize(legacyTextSize(getContext()));
 			// A stable numeric glyph sample avoids size changes while the count/loader changes.
 			paint.getTextBounds("0X?", 0, 3, rect);
-			width = Math.round(LEGACY_CAPSULE_WIDTH * density);
+			width = legacyCapsuleWidth(getContext(), paint);
 			height = Math.max(Math.round(LEGACY_CAPSULE_MIN_HEIGHT * density), rect.height() + Math.round(2 * density));
 		}
 		int left = (getWidth() - width) / 2, top = (getHeight() - height) / 2;

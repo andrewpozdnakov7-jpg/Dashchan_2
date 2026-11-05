@@ -26,8 +26,20 @@ import com.mishiranu.dashchan.util.ListViewUtils;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.util.ViewUtils;
 import org.xmlpull.v1.XmlPullParser;
+import java.util.function.Consumer;
 
 public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandler.Shift, PullableWrapper.Wrapped {
+	private Consumer<MotionEvent> replySwipeTouchObserver;
+	/** Observe release/cancel before RecyclerView forwards the event to its active touch helper. */
+	public void setReplySwipeTouchObserver(Consumer<MotionEvent> observer) { replySwipeTouchObserver = observer; }
+	public void clearReplySwipeTouchObserver(Consumer<MotionEvent> observer) {
+		if (replySwipeTouchObserver == observer) replySwipeTouchObserver = null;
+	}
+	@Override public boolean dispatchTouchEvent(MotionEvent event) {
+		Consumer<MotionEvent> observer = replySwipeTouchObserver;
+		if (observer != null) observer.accept(event);
+		return super.dispatchTouchEvent(event);
+	}
 	/** Opt in only when a one-column grid needs continuous coordinates for unequal rows. */
 	public interface ItemFastScrollProvider {
 		boolean useItemFastScrollGeometry();

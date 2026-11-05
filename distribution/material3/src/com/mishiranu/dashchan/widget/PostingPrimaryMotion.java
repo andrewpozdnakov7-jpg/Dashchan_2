@@ -19,6 +19,7 @@ import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import androidx.appcompat.widget.AppCompatTextView;
 import androidx.core.graphics.ColorUtils;
 import com.google.android.material.loadingindicator.LoadingIndicator;
 import com.mishiranu.dashchan.R;
@@ -70,7 +71,9 @@ final class PostingPrimaryMotion implements View.OnAttachStateChangeListener {
 		slot.addView(decorations, new FrameLayout.LayoutParams(-1, -1));
 		outgoing = new ImageView(button.getContext());
 		outgoing.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-		outgoing.setScaleType(ImageView.ScaleType.FIT_CENTER);
+		// IME changes slot width while a state crossfade may still be active. Keep the
+		// old caption at its original text size; the capsule clips and centers it.
+		outgoing.setScaleType(ImageView.ScaleType.CENTER);
 		decorations.addView(outgoing, new FrameLayout.LayoutParams(-1, -1));
 		content = new LinearLayout(button.getContext()); content.setGravity(Gravity.CENTER);
 		content.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
@@ -81,10 +84,23 @@ final class PostingPrimaryMotion implements View.OnAttachStateChangeListener {
 		check = new ImageView(button.getContext()); check.setImageDrawable(stroke); check.setId(R.id.posting_captcha_ready);
 		LinearLayout.LayoutParams checkParams = new LinearLayout.LayoutParams(dp(22), dp(22));
 		checkParams.setMarginEnd(dp(8)); content.addView(check, checkParams);
-		label = new TextView(button.getContext()); label.setGravity(Gravity.CENTER); label.setId(R.id.posting_captcha_status);
+		label = new PrimaryLabel(button.getContext()); label.setGravity(Gravity.CENTER); label.setId(R.id.posting_captcha_status);
 		ViewUtils.setTextSizeScaled(label, 16); content.addView(label, new LinearLayout.LayoutParams(-2, -2));
 		decorations.addView(content, new FrameLayout.LayoutParams(-2, -2, Gravity.CENTER));
 		slot.setClipToOutline(true); slot.addOnAttachStateChangeListener(this);
+	}
+	/** The IME row can narrow this action; keep live text inside its actual height/width. */
+	private static final class PrimaryLabel extends AppCompatTextView {
+		PrimaryLabel(android.content.Context context) {
+			super(context); setMaxLines(2); setEllipsize(android.text.TextUtils.TruncateAt.END);
+		}
+		@Override protected void onMeasure(int widthSpec, int heightSpec) {
+			int available = View.MeasureSpec.getSize(heightSpec) - getCompoundPaddingTop() - getCompoundPaddingBottom();
+			int lines = View.MeasureSpec.getMode(heightSpec) == View.MeasureSpec.UNSPECIFIED ? 2
+					: Math.max(1, Math.min(2, available / Math.max(1, getLineHeight())));
+			if (getMaxLines() != lines) setMaxLines(lines);
+			super.onMeasure(widthSpec, heightSpec);
+		}
 	}
 	private int dp(float value) { return Math.round(value * ResourceUtils.obtainDensity(button)); }
 	private CharSequence caption() {
@@ -187,7 +203,7 @@ final class PostingPrimaryMotion implements View.OnAttachStateChangeListener {
 		// Only decorative CTA pixels, including the real loader/check; never the form or captcha.
 		// Capture both current layers, with their actual alpha/scale, when a fast event interrupts a fade.
 		Bitmap bitmap = Bitmap.createBitmap(decorations.getWidth(), decorations.getHeight(), Bitmap.Config.ARGB_8888);
-		decorations.draw(new Canvas(bitmap)); return bitmap;
+		SnapshotDrawing.draw(decorations, new Canvas(bitmap)); return bitmap;
 	}
 	private void animateContent(Bitmap previous, int duration, int fadeDuration, long generation) {
 		outgoing.setImageBitmap(previous);

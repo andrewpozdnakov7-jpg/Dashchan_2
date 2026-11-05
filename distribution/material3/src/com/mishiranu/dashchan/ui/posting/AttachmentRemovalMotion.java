@@ -14,6 +14,7 @@ import android.view.ViewTreeObserver;
 import androidx.core.view.OneShotPreDrawListener;
 import com.mishiranu.dashchan.util.InterfaceMotion;
 import com.mishiranu.dashchan.widget.ElementMotion;
+import com.mishiranu.dashchan.widget.SnapshotDrawing;
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -108,7 +109,7 @@ final class AttachmentRemovalMotion {
 			int imageWidth = Math.max(1, (int) (w * scale)), imageHeight = Math.max(1, (int) (h * scale));
 			s.image = Bitmap.createBitmap(imageWidth, imageHeight, Bitmap.Config.ARGB_8888);
 			Canvas canvas = new Canvas(s.image); canvas.scale((float) imageWidth / w, (float) imageHeight / h);
-			removed.view.draw(canvas);
+			SnapshotDrawing.draw(removed.view, canvas);
 		} catch (RuntimeException | OutOfMemoryError e) { if (s.image != null) s.image.recycle(); return; }
 		session = s;
 		root.addOnLayoutChangeListener(s.resize); ui.container.addOnAttachStateChangeListener(s.attachment);

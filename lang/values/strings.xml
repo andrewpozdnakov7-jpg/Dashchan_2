@@ -1466,11 +1466,12 @@
 	<string name="drawer_custom_order">Custom section order</string>
 	<string name="drawer_section_order_summary">Drag sections by their handles, or tap to choose a position. The order applies to all forums. Sections are only shown where available; moving a section does not enable it. Turning this off restores the standard order without erasing your choices.</string>
 	<string name="post_text_sizes">Text sizes</string>
-	<string name="post_text_sizes_summary">Separate sizes for thread titles, messages, post information and settings text</string>
+	<string name="post_text_sizes_summary">Separate sizes for thread titles, messages, post information, settings and side panel text</string>
 	<string name="post_subject_text_size">Thread title size</string>
 	<string name="post_body_text_size">Message text size</string>
 	<string name="post_metadata_text_size">Post information size</string>
 	<string name="settings_text_size">Settings text size</string>
+	<string name="drawer_text_size">Side panel text size</string>
 	<string name="settings_text_size_sample_title">Example setting</string>
 	<string name="settings_text_size_sample_summary">A setting description. Titles and descriptions scale together, independently of post text.</string>
 	<string name="post_text_size_preview">Preview</string>

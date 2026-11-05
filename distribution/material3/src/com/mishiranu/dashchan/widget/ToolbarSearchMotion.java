@@ -65,7 +65,7 @@ public final class ToolbarSearchMotion implements Runnable, View.OnAttachStateCh
 		try {
 			bitmap = Bitmap.createBitmap(Math.max(1, (int) (width * scale)), Math.max(1, (int) (height * scale)), Bitmap.Config.ARGB_8888);
 			Canvas canvas = new Canvas(bitmap); canvas.scale((float) bitmap.getWidth() / width, (float) bitmap.getHeight() / height);
-			toolbar.draw(canvas); return bitmap;
+			SnapshotDrawing.draw(toolbar, canvas); return bitmap;
 		} catch (RuntimeException | OutOfMemoryError error) { if (bitmap != null) bitmap.recycle(); return null; }
 	}
 	public void commit() {

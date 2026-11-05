@@ -36,6 +36,12 @@ import java.util.ArrayList;
 final class StandardAppearance {
 	private StandardAppearance() {}
 	static int dp(View view, float value) { return Math.round(value * ResourceUtils.obtainDensity(view)); }
+	private static void setMinimumSize(View view, int width, int height) {
+		// View's minimum setters request layout even for unchanged values. Toolbar styling
+		// also runs from a layout listener, so reapplying it must not schedule another pass.
+		if (view.getMinimumWidth() != width) view.setMinimumWidth(width);
+		if (view.getMinimumHeight() != height) view.setMinimumHeight(height);
+	}
 	static AppearanceColors colors(Context context) {
 		ThemeEngine.Theme theme = ThemeEngine.getTheme(context);
 		return AppearanceColors.standardInterface(theme.base == ThemeEngine.Theme.Base.DARK,
@@ -104,7 +110,7 @@ final class StandardAppearance {
 			marginTop = margin != null ? margin.topMargin : 0; marginBottom = margin != null ? margin.bottomMargin : 0;
 		}
 		void restore() {
-			restoreSpacing(); view.setMinimumHeight(minHeight); view.setMinimumWidth(minWidth);
+			restoreSpacing(); setMinimumSize(view, minWidth, minHeight);
 			if (textMinHeight >= 0) ((TextView) view).setMinHeight(textMinHeight);
 			else if (textMinLines >= 0) ((TextView) view).setMinLines(textMinLines);
 			if (view instanceof TextView) ((TextView) view).setGravity(gravity);
@@ -798,7 +804,7 @@ final class StandardAppearance {
 			ToolbarPalette palette = ToolbarPalette.resolve(toolbar.getContext());
 			toolbar.setBackgroundTintList(null); toolbar.setBackgroundColor(palette.background);
 			if (parent != null) { parent.view.setBackgroundTintList(null); parent.view.setBackgroundColor(palette.background); }
-			toolbar.setMinimumHeight(dp(toolbar, AppearanceShapes.STANDARD_TOOLBAR_MIN_HEIGHT));
+			setMinimumSize(toolbar, toolbar.getMinimumWidth(), dp(toolbar, AppearanceShapes.STANDARD_TOOLBAR_MIN_HEIGHT));
 			// Preserve the original height budget used by the user's adaptive title fitting.
 			// Unlimited WRAP_CONTENT let a three-line title stay at its largest size.
 			setHeight(Preferences.isToolbarTitleCustomizationEnabled() ? height : ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -822,7 +828,7 @@ final class StandardAppearance {
 				ImageView image = (ImageView) view; boolean found = false;
 				for (IconSaved icon : icons) if (icon.image == image) { found = true; break; }
 				if (!found) icons.add(new IconSaved(image));
-				image.setImageTintList(textColors(color, surface)); image.setMinimumWidth(dp(view, 48)); image.setMinimumHeight(dp(view, 48));
+				image.setImageTintList(textColors(color, surface)); setMinimumSize(image, dp(view, 48), dp(view, 48));
 			} else if (view instanceof TextView && !(view instanceof EditText)) {
 				TextView text = (TextView) view; boolean found = false;
 				for (ToolbarTextSaved old : texts) if (old.view == text) { found = true; break; }
@@ -842,7 +848,7 @@ final class StandardAppearance {
 	private static final class IconSaved {
 		final ImageView image; final ColorStateList tint; final int width, height;
 		IconSaved(ImageView image) { this.image = image; tint = image.getImageTintList(); width = image.getMinimumWidth(); height = image.getMinimumHeight(); }
-		void restore() { image.setImageTintList(tint); image.setMinimumWidth(width); image.setMinimumHeight(height); }
+		void restore() { image.setImageTintList(tint); setMinimumSize(image, width, height); }
 	}
 	static void toolbar(Toolbar toolbar, TextView title, TextView subtitle) {
 		Object tag = toolbar.getTag(R.id.standard_toolbar_appearance);
