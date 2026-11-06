@@ -29,12 +29,18 @@ public final class BackPreviewFrame {
 				: BackPreviewBudget.capture(view, cap, background);
 		if (bitmap == null) return null;
 		try { return new BackPreviewFrame(view, bitmap, background); }
-		catch (RuntimeException | OutOfMemoryError error) { BackPreviewBudget.release(bitmap); return null; }
+		catch (RuntimeException | OutOfMemoryError error) {
+			BackPreviewBudget.release(bitmap);
+			PreviewMemoryPolicy.reclaim(view.getContext(), error instanceof OutOfMemoryError
+					? "frame_out_of_memory" : "frame_runtime_failure");
+			return null;
+		}
 	}
 	public boolean valid(View view) {
 		return references > 0 && !image.isRecycled() && view.isAttachedToWindow() && width == view.getWidth()
 				&& rootWidth == view.getRootView().getWidth() && rootHeight == view.getRootView().getHeight()
-				&& direction == view.getLayoutDirection() && configuration.equals(view.getResources().getConfiguration())
+				&& direction == view.getLayoutDirection()
+				&& !PreviewMemoryPolicy.presentationChanged(configuration, view.getResources().getConfiguration())
 				&& theme == ThemeEngine.getTheme(view.getContext()) && java.util.Objects.equals(insets, view.getRootWindowInsets());
 	}
 	public BackPreviewFrame retain() { if (references <= 0) throw new IllegalStateException(); references++; return this; }

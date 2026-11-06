@@ -70,12 +70,12 @@ public final class VideoDiagnostics {
 	private static final ImageCacheTrace imageCacheTrace = new ImageCacheTrace();
 	// Opaque in-memory route keys only. Weak keys must never keep a page or bitmap alive.
 	private static final int BACK_ROUTE_TRACE_LIMIT = 512;
+	// Tiny process history survives recording start/stop. Keys are internal UUID strings, never exported.
+	private static final BackPreviewTrace backPreviewTrace = new BackPreviewTrace(java.util.UUID.randomUUID().toString(), 512);
 	private static final WeakHashMap<Object, BackRouteTrace> backRoutes = new WeakHashMap<>();
 	private static long nextBackRouteId;
 	private static class BackRouteTrace {
 		final long id;
-		String event = "unknown_before_observation";
-		long eventMs = -1, storedMs = -1;
 		BackRouteTrace(long id) { this.id = id; }
 	}
 	private static class SurfaceStats {
@@ -123,8 +123,10 @@ public final class VideoDiagnostics {
 			appendUiReportLocked("ui_buffer_limit_bytes=" + (extended ? EXTENDED_UI_REPORT_LIMIT_BYTES : UI_REPORT_LIMIT_BYTES)
 					+ " unit=utf16_payload chunk_chars=" + DiagnosticTextBuffer.CHUNK_CHARS
 					+ " max_line_chars=" + DiagnosticTextBuffer.MAX_LINE_CHARS + " initial_context_retained=true");
-			appendUiReportLocked("back_trace_schema=1 enabled=" + extended + " route_ids=capture_local weak_keys=true"
-					+ " route_limit=" + BACK_ROUTE_TRACE_LIMIT + " history_before_capture=unknown");
+			appendUiReportLocked("back_trace_schema=2 enabled=" + extended + " route_ids=capture_local weak_keys=true"
+					+ " route_limit=" + BACK_ROUTE_TRACE_LIMIT + " history_before_capture=process_metadata"
+					+ " history_limit=512 history_entries=" + backPreviewTrace.size()
+					+ " history_evictions=" + backPreviewTrace.evictions() + " snapshot_persistence=process_only");
 			appendUiReportLocked("image_cache_schema=1 resource_ids=capture_local no_resource_hashes=true"
 					+ " scroll_thread_gallery=" + Preferences.isScrollThreadGallery()
 					+ " scroll_gallery_to_current=" + Preferences.isScrollGalleryToCurrentFile()
@@ -285,14 +287,25 @@ public final class VideoDiagnostics {
 		}
 	}
 
-	/** Keep the last cache event after older UI lines roll out of a long recording. */
-	public static void recordBackPreviewEvent(Object key, String event) {
+	/** Local saved-state marker only. It is never written to diagnostic output. */
+	public static String backPreviewProcessMarker() { return backPreviewTrace.processMarker(); }
+	public static void registerBackPreviewRoute(Object key, String savedProcessMarker, boolean restored) {
+		if (!(key instanceof String)) return;
 		synchronized (LOCK) {
-			BackRouteTrace trace = backRouteLocked(key);
-			if (trace == null) return;
-			trace.event = event;
-			trace.eventMs = Math.max(0L, SystemClock.elapsedRealtime() - startedElapsedRealtime);
-			if ("stored".equals(event)) trace.storedMs = trace.eventMs;
+			backPreviewTrace.register((String) key, savedProcessMarker, restored, SystemClock.elapsedRealtime());
+		}
+	}
+	/** Keep the last cache event even when no recording is active. */
+	public static void recordBackPreviewEvent(Object key, String event) {
+		recordBackPreviewEvent(key, event, false);
+	}
+	public static void recordBackPreviewRemoval(Object key, String reason) {
+		recordBackPreviewEvent(key, reason, true);
+	}
+	private static void recordBackPreviewEvent(Object key, String event, boolean removed) {
+		if (!(key instanceof String)) return;
+		synchronized (LOCK) {
+			backPreviewTrace.record((String) key, event, removed, SystemClock.elapsedRealtime());
 		}
 	}
 
@@ -300,8 +313,9 @@ public final class VideoDiagnostics {
 		synchronized (LOCK) {
 			BackRouteTrace trace = backRouteLocked(key);
 			return trace == null ? "route=0 snapshot_history=unavailable"
-					: "route=" + trace.id + " snapshot_last_event=" + trace.event
-					+ " snapshot_event_ms=" + trace.eventMs + " snapshot_stored_ms=" + trace.storedMs;
+					: "route=" + trace.id + " " + backPreviewTrace.describe(key instanceof String ? (String) key : null,
+							startedElapsedRealtime, SystemClock.elapsedRealtime())
+							+ " snapshot_history_evictions=" + backPreviewTrace.evictions();
 		}
 	}
 	/** scope/event/details are code-owned labels and numbers, NEVER caller content, keys or exception messages. */

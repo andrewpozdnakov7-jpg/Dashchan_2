@@ -232,6 +232,7 @@ final class PredictiveBackController {
 
 	void remember(Object key) {
 		if (isBusy() || !enabled() || key == null) {
+			VideoDiagnostics.recordBackPreviewEvent(key, isBusy() ? "capture_skipped_busy" : "capture_skipped_disabled");
 			if (VideoDiagnostics.isExtendedRecording()) recordState("remember_skipped route="
 					+ VideoDiagnostics.backRouteId(key) + " enabled=" + enabled() + " key_known=" + (key != null));
 			return;
@@ -240,6 +241,7 @@ final class PredictiveBackController {
 		updateSignature(now, "remember");
 		int owner = generation; Object sourceKey = currentKey;
 		forget(key, "replace_snapshot");
+		VideoDiagnostics.recordBackPreviewEvent(key, "capture_requested");
 		Bitmap bitmap = captureCurrent();
 		if (generation != owner || currentKey != sourceKey || !store.owns(storeOwner) || !now.equals(new Signature(host))) {
 			VideoDiagnostics.recordBackPreviewEvent(key, "capture_discarded");
@@ -422,15 +424,6 @@ final class PredictiveBackController {
 		finish();
 		currentKey = nearestKey = null;
 		if (!closed && store.owns(storeOwner)) clearImages(reason);
-	}
-	/** Drop cache ownership without interrupting a gesture or recycling its leased destination. */
-	void trimMemory() { trimMemory(-1); }
-	void trimMemory(int level) {
-		if (com.mishiranu.dashchan.widget.PreviewMemoryPolicy.shouldTrim(level)) {
-			clearImages("trim_memory level=" + level);
-		} else {
-			recordState("trim_memory_retained level=" + level);
-		}
 	}
 	void close() {
 		if (closed) return;

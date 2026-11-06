@@ -25,6 +25,7 @@ public class StackItem implements Parcelable {
 		this.arguments = arguments;
 		this.savedState = savedState;
 		backPreviewKey = ContentFragment.readBackPreviewKey(arguments);
+		ContentFragment.registerRestoredBackPreviewRoute(arguments);
 	}
 
 	public StackItem(FragmentManager fragmentManager, Fragment fragment, SaveFragment saveFragment) {
@@ -64,7 +65,10 @@ public class StackItem implements Parcelable {
 		dest.writeString(className);
 		dest.writeByte((byte) (arguments != null ? 1 : 0));
 		if (arguments != null) {
-			arguments.writeToParcel(dest, flags);
+			// Refresh only the serialized copy; never mutate the live navigation arguments.
+			Bundle copy = new Bundle(arguments);
+			if (backPreviewKey != null) ContentFragment.stampBackPreviewProcess(copy);
+			copy.writeToParcel(dest, flags);
 		}
 		dest.writeByte((byte) (savedState != null ? 1 : 0));
 		if (savedState != null) {

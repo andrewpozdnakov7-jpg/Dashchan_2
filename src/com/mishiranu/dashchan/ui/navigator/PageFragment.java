@@ -263,7 +263,7 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 		layout.addView(errorHolder.layout);
 		if (getPage().content == Page.Content.POSTS || getPage().content == Page.Content.THREADS
 				|| getPage().content == Page.Content.COMBINED_THREADS) {
-			quickNavigation = new ThreadQuickNavigation(recyclerView);
+			quickNavigation = new ThreadQuickNavigation(recyclerView, getPage().content == Page.Content.POSTS);
 			layout.addView(quickNavigation, ExpandedLayout.LayoutParams.MATCH_PARENT,
 					ExpandedLayout.LayoutParams.MATCH_PARENT);
 		}

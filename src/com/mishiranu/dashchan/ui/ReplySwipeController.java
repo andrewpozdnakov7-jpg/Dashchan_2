@@ -16,21 +16,22 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.model.PostNumber;
+import com.mishiranu.dashchan.ui.posting.PostingFragment;
 import com.mishiranu.dashchan.util.GraphicsUtils;
 import com.mishiranu.dashchan.util.InterfaceMotion;
+import com.mishiranu.dashchan.util.ReplySwipeOverlapSpec;
 import com.mishiranu.dashchan.util.ReplySwipeRecovery;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.widget.PaddedRecyclerView;
 import java.util.Objects;
 import java.util.function.Consumer;
-import java.util.function.BooleanSupplier;
 
 /** Page-local reply presentation. ItemTouchHelper still owns gesture recognition. */
 public final class ReplySwipeController implements AutoCloseable, View.OnAttachStateChangeListener {
 	public interface Host {
 		PostNumber post(RecyclerView.ViewHolder holder);
 		boolean canReply();
-		void reply(PostNumber post, BooleanSupplier stillValid);
+		void reply(PostNumber post, ReplySwipeOverlap.Request request);
 	}
 	private final PaddedRecyclerView list;
 	private final RecyclerView.Adapter<?> adapter;
@@ -44,6 +45,7 @@ public final class ReplySwipeController implements AutoCloseable, View.OnAttachS
 	private Gesture selected;
 	private Return returning;
 	private long revision;
+	private boolean capturingReturn;
 	private boolean enabled, closed, attached, resetPending, clearingNative, released, canceled;
 	private final Consumer<MotionEvent> touchObserver = this::touch;
 	private final Runnable reset = this::resetHelper;
@@ -61,11 +63,54 @@ public final class ReplySwipeController implements AutoCloseable, View.OnAttachS
 		final Gesture gesture;
 		final ReplySwipeRecovery recovery;
 		final boolean accepted;
-		boolean posted;
+		final long releasedAt = android.os.SystemClock.uptimeMillis();
+		final float releaseX;
+		boolean posted, openingPosted, transferred;
+		ReplySwipeOverlap.Clock clock;
+		Request request;
 		final Runnable complete = () -> complete(this);
+		final Runnable open = () -> requestOverlap(this);
 		Return(Gesture gesture, float from, float to, float visible, boolean accepted) {
-			this.gesture = gesture; this.accepted = accepted;
+			this.gesture = gesture; this.accepted = accepted; releaseX = visible;
 			recovery = new ReplySwipeRecovery(host, gesture.post, gesture.revision, from, to, visible, accepted);
+		}
+		void stop() {
+			list.removeCallbacks(complete); list.removeCallbacks(open);
+			if (clock != null) { clock.stop(); clock = null; }
+		}
+	}
+
+	private final class Request implements ReplySwipeOverlap.Request {
+		final Return motion;
+		boolean committed;
+
+		Request(Return motion) { this.motion = motion; }
+		@Override public long releasedAtUptime() { return motion.releasedAt; }
+		@Override public boolean getAsBoolean() {
+			return !committed && motion.request == this && valid(motion.gesture);
+		}
+		@Override public boolean prepare(ReplySwipeOverlap overlap, View source, PostingFragment destination) {
+			if (!getAsBoolean()) return false;
+			if (returning == motion && motion.clock != null && motion.clock.time() < ReplySwipeOverlapSpec.RETURN_MS) {
+				capturingReturn = true;
+				boolean captured;
+				try {
+					captured = overlap != null && !list.isComputingLayout()
+							&& overlap.prepare(source, list, motion.gesture.holder.itemView,
+									destination, motion.clock, motion.releaseX);
+				} finally {
+					capturingReturn = false;
+				}
+				if (!captured) {
+					motion.request = null; // The existing completion can still open the form.
+					return false;
+				}
+				motion.clock = null; motion.transferred = true;
+				// A subsequent predictive-Back snapshot must see the thread in its neutral state.
+				clear(motion.gesture);
+			}
+			committed = true;
+			return true;
 		}
 	}
 
@@ -116,6 +161,7 @@ public final class ReplySwipeController implements AutoCloseable, View.OnAttachS
 		int action = event.getActionMasked();
 		if (action == MotionEvent.ACTION_DOWN) {
 			if (selected != null || returning != null) invalidate();
+			else revision++; // A new touch also invalidates any deferred reply from a completed return.
 			released = canceled = false;
 		} else if (action == MotionEvent.ACTION_UP) released = !canceled;
 		else if (action == MotionEvent.ACTION_CANCEL || action == MotionEvent.ACTION_POINTER_DOWN) {
@@ -128,7 +174,7 @@ public final class ReplySwipeController implements AutoCloseable, View.OnAttachS
 	private void cancelState() {
 		revision++;
 		if (returning != null) {
-			list.removeCallbacks(returning.complete); returning.recovery.cancel(); clear(returning.gesture);
+			returning.stop(); returning.recovery.cancel(); clear(returning.gesture);
 		}
 		clear(selected); selected = null; returning = null; released = false; canceled = true;
 		list.invalidate();
@@ -153,6 +199,26 @@ public final class ReplySwipeController implements AutoCloseable, View.OnAttachS
 			}
 		} finally { clearingNative = false; }
 	}
+	private void frame(Return motion) {
+		if (returning != motion || motion.clock == null) return;
+		float time = motion.clock.time();
+		if (time >= ReplySwipeOverlapSpec.RETURN_MS) postComplete(motion);
+		else if (time >= ReplySwipeOverlapSpec.OPEN_MS && !motion.openingPosted) {
+			motion.openingPosted = true;
+			list.post(motion.open);
+		}
+		list.invalidate();
+	}
+	private void requestOverlap(Return motion) {
+		if (returning != motion || motion.clock == null || motion.request != null || !valid(motion.gesture)) return;
+		if (motion.clock.time() >= ReplySwipeOverlapSpec.RETURN_MS) { postComplete(motion); return; }
+		dispatch(motion, motion.gesture.post);
+	}
+	private void dispatch(Return motion, PostNumber post) {
+		Request request = new Request(motion);
+		motion.request = request;
+		host.reply(post, request);
+	}
 	private void postComplete(Return motion) {
 		if (motion == returning && !motion.posted) { motion.posted = true; list.post(motion.complete); }
 	}
@@ -160,12 +226,12 @@ public final class ReplySwipeController implements AutoCloseable, View.OnAttachS
 		if (returning != motion) return;
 		if (list.isComputingLayout()) { list.post(motion.complete); return; }
 		PostNumber post = valid(motion.gesture) ? current(motion.gesture.holder) : null;
-		boolean dispatch = motion.recovery.consume(host, post, revision);
-		clear(motion.gesture); selected = null; returning = null;
+		boolean confirmed = motion.recovery.consume(host, post, revision);
+		motion.stop(); clear(motion.gesture); selected = null; returning = null;
 		// Detach through the public API after drawing, clearing native elevation/translation.
 		// No adapter mutation or change animation is needed to clean up a non-dismissed row.
 		resetWhenSafe();
-		if (dispatch && valid(motion.gesture)) host.reply(post, () -> valid(motion.gesture));
+		if (confirmed && motion.request == null && valid(motion.gesture)) dispatch(motion, post);
 	}
 	private final RecyclerView.AdapterDataObserver data = new RecyclerView.AdapterDataObserver() {
 		@Override public void onChanged() { invalidate(); }
@@ -219,23 +285,39 @@ public final class ReplySwipeController implements AutoCloseable, View.OnAttachS
 			Return motion = new Return(selected, end - dx, end, selected.holder.itemView.getTranslationX(),
 					success && released && !canceled && valid(selected));
 			returning = motion;
-			long duration = InterfaceMotion.duration(160);
+			long duration = InterfaceMotion.duration(ReplySwipeOverlapSpec.RETURN_MS);
 			if (duration == 0) postComplete(motion);
+			else if (motion.accepted && Float.isFinite(motion.releaseX) && motion.releaseX != 0f
+					&& InterfaceMotion.isEnabled()) {
+				motion.clock = new ReplySwipeOverlap.Clock(() -> frame(motion));
+				motion.clock.start();
+			}
 			return duration;
 		}
 		@Override public void onSwiped(@NonNull RecyclerView.ViewHolder holder, int direction) {
-			if (returning != null && returning.gesture.holder == holder) postComplete(returning);
+			if (returning != null && returning.gesture.holder == holder && returning.clock == null
+					&& !returning.transferred) postComplete(returning);
 		}
 		@Override public void clearView(@NonNull RecyclerView parent, @NonNull RecyclerView.ViewHolder holder) {
 			super.clearView(parent, holder);
 			if (clearingNative) return;
 			if (returning != null && returning.gesture.holder == holder) {
-				if (!returning.accepted) postComplete(returning); else invalidate();
+				if (!returning.accepted) postComplete(returning); else if (!returning.transferred) invalidate();
 			}
 		}
 		@Override public void onChildDraw(@NonNull Canvas canvas, @NonNull RecyclerView parent,
 				@NonNull RecyclerView.ViewHolder holder, float dx, float dy, int state, boolean active) {
-			Gesture gesture = active ? selected : returning != null ? returning.gesture : null;
+			Return motion = returning;
+			if (capturingReturn) {
+				// The still scene omits the row; the existing action is behind the independently moving card.
+				if (motion != null && motion.clock != null && motion.gesture.holder == holder) {
+					float offset = ReplySwipeOverlapSpec.offset(motion.releaseX, motion.clock.time());
+					if (offset != 0f) drawAction(canvas, holder.itemView, offset, motion.gesture.right);
+				}
+				return;
+			}
+			if (!active && motion != null && motion.transferred) return;
+			Gesture gesture = active ? selected : motion != null ? motion.gesture : null;
 			float visible = 0;
 			if (gesture != null && gesture.holder == holder && !valid(gesture)) invalidate();
 			if (gesture != null && gesture.holder == holder && valid(gesture)) {
@@ -244,10 +326,11 @@ public final class ReplySwipeController implements AutoCloseable, View.OnAttachS
 					boolean reached = Math.abs(visible) >= trigger;
 					if (reached && !gesture.haptic) holder.itemView.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
 					gesture.haptic = reached;
+				} else if (motion.clock != null) {
+					visible = ReplySwipeOverlapSpec.offset(motion.releaseX, motion.clock.time());
 				} else {
-					visible = returning.recovery.offset(dx);
-					// Completion follows this helper's final draw, not unrelated ItemAnimator work.
-					if (returning.recovery.progress(dx) >= 1f) postComplete(returning);
+					visible = motion.recovery.offset(dx);
+					if (motion.recovery.progress(dx) >= 1f) postComplete(motion);
 				}
 				if (Math.abs(visible) > 0) drawAction(canvas, holder.itemView, visible, gesture.right);
 			}

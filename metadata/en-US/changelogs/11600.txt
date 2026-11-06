@@ -1,0 +1,12 @@
+**Slooop 3.2.80**
+
+- History text size now follows the side menu text scale.
+- When replying with a swipe, the reply form starts opening while the post card returns to its original position.
+- Thread navigation arrows smoothly disappear at their respective edges and reappear when scrolling back.
+- With classic navigation, the Back button first hides the keyboard and leaves the message form open. A predictive Back gesture retains the single-gesture exit from the form.
+- Reworked predictive Back preview retention: ordinary screen locking and backgrounding no longer trigger snapshot clearing.
+- Improved the stability of the built-in player during seeking, closing videos and audio playback. Obsolete external WebM extensions are disabled; the built-in player no longer needs them.
+- Refined file handling through Share and verification of downloaded extension updates.
+- Expanded player, interface and predictive Back diagnostics.
+
+Thanks to everyone for testing, logs and help finding bugs! 🐾

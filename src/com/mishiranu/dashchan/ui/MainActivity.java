@@ -182,6 +182,8 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	private DrawerMotionController drawerMotion;
 	private ThreadMotionController threadMotion;
 	private ScreenMotionController screenMotion;
+	private ReplySwipeOverlap replySwipeOverlap;
+	private long replySwipeCancelledAt = -1;
 	private PredictiveBackController predictiveBack;
 	private boolean predictiveNavigationDispatch;
 	private final PageSessionStore pageSessionStore = new PageSessionStore(this::getFilesDir,
@@ -199,6 +201,19 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		public void onFragmentResumed(@NonNull FragmentManager manager, @NonNull Fragment fragment) {
 			com.mishiranu.dashchan.util.CrashReports.record(
 					com.mishiranu.dashchan.util.CrashReports.Event.SCREEN, fragment.getClass());
+		}
+		@Override
+		public void onFragmentViewCreated(@NonNull FragmentManager manager, @NonNull Fragment fragment,
+				@NonNull View view, Bundle savedInstanceState) {
+			if (replySwipeOverlap != null && fragment instanceof PostingFragment) {
+				replySwipeOverlap.bind((PostingFragment) fragment, view);
+			}
+		}
+		@Override
+		public void onFragmentViewDestroyed(@NonNull FragmentManager manager, @NonNull Fragment fragment) {
+			if (replySwipeOverlap != null && fragment instanceof PostingFragment) {
+				replySwipeOverlap.release((PostingFragment) fragment);
+			}
 		}
 		@Override
 		public void onFragmentPreAttached(@NonNull FragmentManager manager, @NonNull Fragment fragment,
@@ -316,6 +331,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		setContentView(R.layout.activity_main);
 		ThreadMotionLayout motionHost = findViewById(R.id.thread_motion_host);
 		threadMotion = new ThreadMotionController(motionHost);
+		replySwipeOverlap = new ReplySwipeOverlap(motionHost);
 		ClickableToast.register(this);
 		ForegroundManager.getInstance().register(this);
 		FavoritesStorage.getInstance().getObservable().register(this);
@@ -983,19 +999,26 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	@Override
 	public void navigatePostingFromSwipe(String chanName, String boardName, String threadNumber,
-			java.util.function.BooleanSupplier stillValid, Replyable.ReplyData... data) {
-		navigatePostingFromSwipe(getCurrentFragment("FragmentAccess/swipeReplySource"), chanName, boardName, threadNumber, stillValid, data);
+			ReplySwipeOverlap.Request swipeRequest, Replyable.ReplyData... data) {
+		navigatePostingFromSwipe(getCurrentFragment("FragmentAccess/swipeReplySource"), chanName, boardName, threadNumber, swipeRequest, data);
 	}
 	private void navigatePostingFromSwipe(ContentFragment owner, String chanName, String boardName,
-			String threadNumber, java.util.function.BooleanSupplier stillValid, Replyable.ReplyData... data) {
-		if (!(owner instanceof PageFragment) || !stillValid.getAsBoolean()) return;
-		if (deferContentNavigation(() -> navigatePostingFromSwipe(owner, chanName, boardName, threadNumber, stillValid, data))) return;
+			String threadNumber, ReplySwipeOverlap.Request swipeRequest, Replyable.ReplyData... data) {
+		if (!(owner instanceof PageFragment) || !swipeRequest.getAsBoolean()
+				|| swipeRequest.releasedAtUptime() <= replySwipeCancelledAt || backGestureStarted) return;
+		if (deferContentNavigation(() -> navigatePostingFromSwipe(owner, chanName, boardName, threadNumber, swipeRequest, data))) return;
 		if (owner != getCurrentFragment("FragmentAccess/swipeReplyCommit") || !hasWindowFocus()
 				|| !((PageFragment) owner).getPage().is(Page.Content.POSTS, chanName, boardName, threadNumber)
 				|| !Chan.get(chanName).configuration.safe().obtainBoard(boardName).allowPosting) return;
-		fragments.clear();
-		navigateFragment(new PostingFragment(chanName, boardName, threadNumber, Arrays.asList(data)),
-				null, true, navigationMotionTransition(), null, false);
+		PostingFragment destination = new PostingFragment(chanName, boardName, threadNumber, Arrays.asList(data));
+		if (!swipeRequest.prepare(replySwipeOverlap, owner.getView(), destination)) return;
+		try {
+			fragments.clear();
+			navigateFragment(destination, null, true, navigationMotionTransition(), null, false);
+		} catch (RuntimeException | Error e) {
+			if (replySwipeOverlap != null) replySwipeOverlap.release(destination);
+			throw e;
+		}
 	}
 
 	public void navigatePostingRollover(String chanName, String boardName) {
@@ -1662,6 +1685,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 			int motionTransition, ThreadMotionController.Opening opening, boolean animate) {
 		if (deferContentNavigation(() -> navigateFragment(fragment, pageItem, closeOverlays,
 				motionTransition, opening, animate))) return;
+		if (replySwipeOverlap != null) replySwipeOverlap.keepOnly(fragment);
 		if (closeOverlays) {
 			closeOverlaysForNavigation();
 		}
@@ -1678,11 +1702,11 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 			if (currentFragment != null && localBackAction(currentFragment) == 0 && !isInPictureInPictureMode()) {
 				predictiveBack.remember(currentFragment.getBackPreviewKey());
 			} else if (currentFragment != null) {
+				com.mishiranu.dashchan.media.VideoDiagnostics.recordBackPreviewEvent(
+						currentFragment.getBackPreviewKey(), "capture_not_requested_local_action_or_pip");
 				if (com.mishiranu.dashchan.media.VideoDiagnostics.isExtendedRecording()) {
 					recordBackRoute("capture_not_requested", currentFragment, fragment.getBackPreviewKey(),
 							fragment.getClass().getSimpleName(), localBackAction(currentFragment));
-					com.mishiranu.dashchan.media.VideoDiagnostics.recordBackPreviewEvent(
-							currentFragment.getBackPreviewKey(), "capture_not_requested_local_action_or_pip");
 				}
 				predictiveBack.forget(currentFragment.getBackPreviewKey());
 			}
@@ -1706,6 +1730,8 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 			fragments.clear();
 		}
 
+		// Install only after predictive Back remembers the neutral outgoing page.
+		if (replySwipeOverlap != null) replySwipeOverlap.install(fragment);
 		if (currentFragment != null) {
 			currentFragment.onTerminate();
 		}
@@ -2012,6 +2038,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		super.onWindowFocusChanged(hasFocus);
 		if (hasFocus) { backGestureAborted = false; backInvocationHandled = false; prepareBackPreview(); }
 		if (!hasFocus) {
+			if (replySwipeOverlap != null) replySwipeOverlap.finish();
 			resetPredictiveBackView(false);
 			if (drawerMotion != null) drawerMotion.recover(false);
 		}
@@ -2066,6 +2093,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	@Override
 	protected void onPause() {
+		if (replySwipeOverlap != null) replySwipeOverlap.finish();
 		if (predictiveBack != null) predictiveBack.recordState("host_pause changing_configuration="
 				+ isChangingConfigurations());
 		drawerForm.setHostResumed(false);
@@ -2111,6 +2139,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	@Override
 	protected void onDestroy() {
+		if (replySwipeOverlap != null) replySwipeOverlap.close();
 		if (drawerForm != null) drawerForm.dispose();
 		if (expandedScreen != null) expandedScreen.dispose();
 		finishLocalToolbarMotion();
@@ -2179,7 +2208,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	}
 
 	private long backPressed = 0;
-	private boolean backGestureStarted, backGestureAborted;
+	private boolean backGestureStarted, backGestureAborted, postingBackGesture;
 	private int backGestureLocalAction;
 	private long backGestureLocalRevision;
 	private Object backGestureLocalOwner;
@@ -2237,17 +2266,22 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	}
 
 	private int localBackAction(ContentFragment fragment) {
-		if (shouldHideImeBeforeBack(fragment)) return 1;
+		return localBackAction(fragment, postingBackGesture);
+	}
+	private int localBackAction(ContentFragment fragment, boolean postingGesture) {
+		if (shouldHideImeBeforeBack(fragment, postingGesture)) return 1;
 		if (currentActionMode != null && currentActionMode.get() != null) return 2;
 		return fragment != null && fragment.canHandleBack() ? 3 : 0;
 	}
 
-	private boolean shouldHideImeBeforeBack(ContentFragment fragment) {
-		return !(fragment instanceof PostingFragment)
-				&& com.mishiranu.dashchan.widget.PredictiveBackMotion.isImeVisible(getWindow().getDecorView());
+	private boolean shouldHideImeBeforeBack(ContentFragment fragment, boolean postingGesture) {
+		return com.mishiranu.dashchan.util.PostingBackPolicy.shouldHideIme(fragment instanceof PostingFragment,
+				postingGesture, com.mishiranu.dashchan.widget.PredictiveBackMotion.isImeVisible(getWindow().getDecorView()));
 	}
 
 	@Override protected boolean shouldPrioritizeSystemBackOverIme() {
+		if (!com.mishiranu.dashchan.util.PostingBackPolicy.canPrioritizeIme(Build.VERSION.SDK_INT,
+				isSystemPredictiveBackEnabled())) return false;
 		if (drawerLayout == null || !hasWindowFocus() || isInPictureInPictureMode()
 				|| getSupportFragmentManager().isStateSaved() || contentNavigation.isPending() || contentNavigation.hasRequests()) return false;
 		ContentFragment fragment = getCurrentFragment("FragmentAccess/postingBackPriority");
@@ -2280,11 +2314,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	@Override
 	public void onTrimMemory(int level) {
-		if (predictiveBack != null) predictiveBack.trimMemory(level);
-		Fragment gallery = getSupportFragmentManager().findFragmentByTag(GalleryOverlay.class.getName());
-		if (gallery instanceof GalleryOverlay && com.mishiranu.dashchan.widget.PreviewMemoryPolicy.shouldTrim(level)) {
-			((GalleryOverlay) gallery).trimPredictivePreviews();
-		}
+		// All predictive owners share PreviewMemoryPolicy's process-level decision.
 		super.onTrimMemory(level);
 		if (hasWindowFocus()) prepareBackPreview();
 	}
@@ -2334,6 +2364,8 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	@Override
 	protected void onSystemBackStarted(BackEventCompat backEvent) {
+		replySwipeCancelledAt = SystemClock.uptimeMillis();
+		if (replySwipeOverlap != null) replySwipeOverlap.finish();
 		if (VideoDiagnostics.isExtendedRecording()) VideoDiagnostics.recordUi("system_back start predictive=" + isSystemPredictiveBackEnabled());
 		if (webBack != null && webBack.isHistoryBackCommitting()) return;
 		if (searchBack != null && searchBack.isCommitting()) return;
@@ -2345,7 +2377,8 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		backGestureAborted = false;
 		// The preference controls the preview, not system Back. Without a preview,
 		// let invocation use the normal Back route instead of marking the gesture aborted.
-		if (!isSystemPredictiveBackEnabled()) return;
+		if (!com.mishiranu.dashchan.util.PostingBackPolicy.isPredictiveGesture(Build.VERSION.SDK_INT,
+				isSystemPredictiveBackEnabled(), backEvent.getSwipeEdge(), backEvent.getTouchX(), backEvent.getTouchY())) return;
 		if (isInPictureInPictureMode() || !hasWindowFocus() ||
 				getSupportFragmentManager().isStateSaved() || contentNavigation.isPending() || contentNavigation.hasRequests()) {
 			backGestureAborted = true; return;
@@ -2355,6 +2388,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		if (isDrawerVisibleForBack() && !wideMode) return;
 		backGestureSource = getCurrentFragment("FragmentAccess/onSystemBackStarted");
 		if (backGestureSource == null) return;
+		postingBackGesture = backGestureSource instanceof PostingFragment;
 		if (backGestureSource instanceof PostingFragment) {
 			com.mishiranu.dashchan.widget.ElementMotion.finishTree(backGestureSource.getView());
 		}
@@ -2419,6 +2453,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		if (!animate) webBack = null;
 		backGestureAborted |= backGestureStarted;
 		backGestureStarted = false;
+		postingBackGesture = false;
 		backGestureSource = null; backGestureDestination = null;
 		if (searchBack != null) { if (animate) searchBack.cancel(); else searchBack.finish(); }
 		if (!animate) searchBack = null;
@@ -2481,6 +2516,8 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 			backGestureStarted = false; backGestureSource = null; backGestureDestination = null;
 			if (webBack.commitHistoryBackPreview()) return;
 		}
+		ContentFragment postingGestureOwner = postingBackGesture && backGestureStarted ? backGestureSource : null;
+		postingBackGesture = false;
 		backGestureStarted = false; backGestureSource = null; backGestureDestination = null;
 		if (screenMotion != null) screenMotion.finish();
 		if (threadMotion != null) threadMotion.finish();
@@ -2490,7 +2527,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 			try {
 				boolean posting = getCurrentFragment("FragmentAccess/postingBackCommit") instanceof PostingFragment;
 				if (posting) {
-					onBackPressed(false, false, () -> navigateInitial(true));
+					onBackPressed(false, false, () -> navigateInitial(true), postingGestureOwner);
 				} else {
 					onBackPressed(false, true, this::performDefaultBack);
 				}
@@ -2510,15 +2547,23 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	}
 
 	private void onBackPressed(boolean homeHandled, boolean allowTimeout, Runnable close) {
-		if (deferContentNavigation(() -> onBackPressed(homeHandled, allowTimeout, close))) return;
+		onBackPressed(homeHandled, allowTimeout, close, null);
+	}
+	private void onBackPressed(boolean homeHandled, boolean allowTimeout, Runnable close, ContentFragment postingGestureOwner) {
+		replySwipeCancelledAt = SystemClock.uptimeMillis();
+		if (replySwipeOverlap != null) replySwipeOverlap.finish();
+		if (deferContentNavigation(() -> onBackPressed(homeHandled, allowTimeout, close, postingGestureOwner))) return;
 		ContentFragment currentFragment = getCurrentFragment("FragmentAccess/onBackPressed");
-		if (!homeHandled && shouldHideImeBeforeBack(currentFragment)) {
+		// A delayed gesture cannot redirect its IME bypass to a replacement form or another page.
+		if (postingGestureOwner != null && currentFragment != postingGestureOwner) return;
+		boolean postingGesture = currentFragment instanceof PostingFragment && currentFragment == postingGestureOwner;
+		if (!homeHandled && shouldHideImeBeforeBack(currentFragment, postingGesture)) {
 			com.mishiranu.dashchan.widget.PredictiveBackMotion.hideIme(getWindow().getDecorView()); return;
 		}
 		if (!wideMode && isDrawerVisibleForBack()) {
 			drawerLayout.closeDrawers();
 		} else {
-			int localAction = localBackAction(currentFragment);
+			int localAction = localBackAction(currentFragment, postingGesture);
 			if (!homeHandled && localAction == 1) {
 				InputMethodManager manager = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
 				if (manager != null) manager.hideSoftInputFromWindow(getWindow().getDecorView().getWindowToken(), 0);

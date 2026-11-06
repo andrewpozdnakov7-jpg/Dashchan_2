@@ -56,8 +56,10 @@ public class ReplySwipeControllerTest {
 					int position = holder.getBindingAdapterPosition(); return position >= 0 ? new PostNumber(position + 1, 0) : null;
 				}
 				@Override public boolean canReply() { return true; }
-				@Override public void reply(PostNumber post, java.util.function.BooleanSupplier stillValid) {
-					assertTrue(stillValid.getAsBoolean());
+				@Override public void reply(PostNumber post, ReplySwipeOverlap.Request request) {
+					assertTrue(request.getAsBoolean());
+					// No Activity presentation here: an early request must fall back to the completed return.
+					if (!request.prepare(null, null, null)) return;
 					for (int i = 0; i < list.getChildCount(); i++) assertEquals(0, list.getChildAt(i).getTranslationX(), .01f);
 					replies.add(post);
 				}
