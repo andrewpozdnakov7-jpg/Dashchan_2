@@ -23,7 +23,8 @@
 #define DASHCHAN_FFMPEG_FLAVOR "ffmpeg"
 #endif
 
-#define DIAGNOSTICS_BUFFER_SIZE (96 * 1024 * 1024)
+#define DIAGNOSTICS_BUFFER_SIZE (128 * 1024 * 1024)
+#define DIAGNOSTICS_STANDARD_BUFFER_SIZE (4 * 1024 * 1024)
 #define DIAGNOSTICS_SUMMARY_RESERVE (4 * 1024)
 #define DIAGNOSTICS_CHUNK_SIZE (64 * 1024)
 #define DIAGNOSTICS_MAX_PLAYERS 16
@@ -142,7 +143,7 @@ static int diagnosticsActive(void) {
 }
 
 static void diagnosticsAppendVLineLocked(size_t limit, const char * format, va_list arguments) {
-	(void) limit; // Chunk budget includes summary lines; no contiguous 100 MiB allocation.
+	(void) limit; // Chunk budget includes summary lines; no contiguous full-report allocation.
 	char line[4096];
 	int64_t elapsed = diagnostics.startedAt > 0 ? diagnosticsNowUs() / 1000 - diagnostics.startedAt : 0;
 	int prefix = snprintf(line, sizeof(line), "[+%" PRId64 "ms] ", elapsed);
@@ -157,7 +158,7 @@ static void diagnosticsAppendVLineLocked(size_t limit, const char * format, va_l
 	line[length++] = '\n';
 	if (!diagnostics.last || diagnostics.last->length + length > DIAGNOSTICS_CHUNK_SIZE) {
 		DiagnosticsChunk * chunk = NULL;
-		size_t budget = diagnostics.extended ? DIAGNOSTICS_BUFFER_SIZE : 512 * 1024;
+		size_t budget = diagnostics.extended ? DIAGNOSTICS_BUFFER_SIZE : DIAGNOSTICS_STANDARD_BUFFER_SIZE;
 		if (diagnostics.chunks < budget / sizeof(DiagnosticsChunk)) {
 			chunk = malloc(sizeof(DiagnosticsChunk));
 			if (chunk) diagnostics.chunks++;
@@ -238,7 +239,8 @@ static void startPlayerDiagnosticsMode(int extended) {
 				"capture_started=true");
 		diagnosticsAppendLineLocked(DIAGNOSTICS_BUFFER_SIZE,
 				"mode=%s periodic_sample_ms=%d native_budget_kib=%d",
-				extended ? "extended" : "standard", extended ? 1000 : 0, extended ? 96 * 1024 : 512);
+				extended ? "extended" : "standard", extended ? 1000 : 0,
+				(extended ? DIAGNOSTICS_BUFFER_SIZE : DIAGNOSTICS_STANDARD_BUFFER_SIZE) / 1024);
 		diagnosticsAppendLineLocked(DIAGNOSTICS_BUFFER_SIZE - DIAGNOSTICS_SUMMARY_RESERVE,
 				"diagnostics_schema=20 chunk_kib=64"
 				" monotonic_clock=1 nonblocking_samples=1 playback_speed=1 speed_scale=1000 native_seek_locks=1 mediacodec_stages=1"

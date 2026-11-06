@@ -54,6 +54,7 @@ import com.mishiranu.dashchan.graphics.GalleryBackgroundDrawable;
 import com.mishiranu.dashchan.media.VideoDiagnostics;
 import com.mishiranu.dashchan.ui.FragmentHandler;
 import com.mishiranu.dashchan.ui.MainActivity;
+import com.mishiranu.dashchan.ui.MainNavigationIntent;
 import com.mishiranu.dashchan.util.AndroidUtils;
 import com.mishiranu.dashchan.util.AnimationUtils;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
@@ -1894,7 +1895,8 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 	public void bringGalleryToForeground(Context context) {
 		Activity activity = getActivity();
 		if (activity != null) {
-			Intent intent = new Intent(context, activity.getClass())
+			Intent intent = (activity instanceof MainActivity ? MainNavigationIntent.create(context)
+					: new Intent(context, activity.getClass()))
 					.setAction(C.ACTION_RETURN_FROM_PICTURE_IN_PICTURE)
 					.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP
 							| Intent.FLAG_ACTIVITY_SINGLE_TOP);

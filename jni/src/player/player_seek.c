@@ -65,7 +65,7 @@ static int seekFrame(Player * player, int64_t position, int flags,
 
 static int isSeekCancelled(Player * player) {
 	pthread_mutex_lock(&player->file.controlMutex);
-	int cancelled = player->meta.interrupt || player->file.cancelSeek;
+	int cancelled = playerIsInterrupted(player) || player->file.cancelSeek;
 	pthread_mutex_unlock(&player->file.controlMutex);
 	return cancelled;
 }
@@ -551,18 +551,27 @@ void playerSeekSetPosition(JNIEnv * env, Player * player, int64_t position) {
 	player->sync.lastDrawTimes[1] = 0;
 	if (primedVideoPacket) {
 		PacketHolder * packetHolder = playerDemuxCreatePacketHolder(0);
-		packetHolder->type = PACKET_HOLDER_MEDIA;
-		packetHolder->generation = __atomic_load_n(&player->decode.packets.generation, __ATOMIC_ACQUIRE);
-		packetHolder->packet = primedVideoPacket;
-		primedVideoPacket = NULL;
-		blockingQueueAdd(&player->video.packetQueue, packetHolder);
-		player->video.finished = 0;
-		player->sync.seekFirstVideoPacketPending = 0;
-		diagnosticsLog("player=%u seek_first_video_packet pts=%" PRId64
-				" dts=%" PRId64 " key=%d target_ms=%" PRId64 " primed=1",
-				player->meta.diagnosticsId, packetHolder->packet->pts, packetHolder->packet->dts,
-				!!(packetHolder->packet->flags & AV_PKT_FLAG_KEY), player->sync.seekTargetPosition);
-		diagnosticsRecordVideoPacket(player, packetHolder->packet);
+		if (packetHolder) {
+			packetHolder->type = PACKET_HOLDER_MEDIA;
+			packetHolder->generation = __atomic_load_n(&player->decode.packets.generation, __ATOMIC_ACQUIRE);
+			packetHolder->packet = primedVideoPacket;
+			primedVideoPacket = NULL;
+			if (blockingQueueAdd(&player->video.packetQueue, packetHolder)) {
+				player->video.finished = 0;
+				player->sync.seekFirstVideoPacketPending = 0;
+				diagnosticsLog("player=%u seek_first_video_packet pts=%" PRId64
+						" dts=%" PRId64 " key=%d target_ms=%" PRId64 " primed=1",
+						player->meta.diagnosticsId, packetHolder->packet->pts, packetHolder->packet->dts,
+						!!(packetHolder->packet->flags & AV_PKT_FLAG_KEY), player->sync.seekTargetPosition);
+				diagnosticsRecordVideoPacket(player, packetHolder->packet);
+			} else {
+				playerPacketQueueFreeCallback(packetHolder);
+				playerReportPlaybackError(player);
+			}
+		} else {
+			av_packet_free(&primedVideoPacket);
+			playerReportPlaybackError(player);
+		}
 	}
 	if (HAS_STREAM(player, video)) {
 		PLAYER_SEND_MESSAGE(env, player, bridge, BRIDGE_MESSAGE_START_SEEKING);

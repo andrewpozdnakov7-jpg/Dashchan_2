@@ -2686,6 +2686,15 @@ public class VideoUnit {
 
 	private final VideoPlayer.Listener playerListener = new VideoPlayer.Listener() {
 		@Override
+		public void onError(VideoPlayer player) {
+			if (player != VideoUnit.this.player || pictureInPictureTransferred) return;
+			PagerInstance.ViewHolder holder = instance.currentHolder;
+			if (holder != null) {
+				instance.callback.showError(holder, new ErrorItem(ErrorItem.Type.UNKNOWN).toString());
+			}
+		}
+
+		@Override
 		public void onComplete(VideoPlayer player) {
 			if (player != VideoUnit.this.player || !initialized || pictureInPictureTransferred) return;
 			// Previewing EOF must not restart the loop or change play/pause under the user's finger.

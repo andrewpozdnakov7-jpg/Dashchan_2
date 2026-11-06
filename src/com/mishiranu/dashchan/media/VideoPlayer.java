@@ -19,7 +19,6 @@ import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
-import chan.content.ChanManager;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.BuildConfig;
 import com.mishiranu.dashchan.content.Preferences;
@@ -45,6 +44,7 @@ import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.BooleanSupplier;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
@@ -62,11 +62,6 @@ public class VideoPlayer implements AutoCloseable {
 	// Extraction requirements. The Holder static initializer below keeps the
 	// actual System.loadLibrary order explicit because the JNI dependencies are order-sensitive.
 	private static final boolean BUNDLED_ATEMPO = "ffmpeg8".equals(BuildConfig.NATIVE_PLAYER_FFMPEG_FLAVOR);
-	private static final String[] PLAYER_LIBRARIES = BUNDLED_ATEMPO
-			? new String[] {"player", "avfilter"} : new String[] {"player"};
-	private static final String[] WEBM_REQUIRED_LIBRARIES =
-			{"avutil", "swresample", "swscale", "avcodec", "avformat"};
-	private static final String[] WEBM_OPTIONAL_LIBRARIES = {"dav1d"};
 	private static final String[] BUNDLED_REQUIRED_LIBRARIES = BUNDLED_ATEMPO
 			? new String[] {"player", "dav1d", "avutil", "swresample", "swscale", "avcodec", "avformat",
 					"avfilter"}
@@ -81,23 +76,10 @@ public class VideoPlayer implements AutoCloseable {
 			try {
 				plan = NativeLibraryPlan.createBundled(context);
 			} catch (IOException e) {
-				ChanManager.ExtensionItem extensionItem = ChanManager.getInstance().getWebmLibraryExtension();
-				if (extensionItem == null) {
-					e.printStackTrace();
-					return new Pair<>(false, formatLoadFailure("Bundled video libraries missing or broken", e));
-				}
-				try {
-					plan = NativeLibraryPlan.createExternal(context, extensionItem);
-				} catch (IOException externalException) {
-					e.printStackTrace();
-					externalException.printStackTrace();
-					return new Pair<>(false, formatLoadFailure("Bundled video libraries missing or broken", e) +
-							"\n\n" + formatLoadFailure("External WebM2 fallback failed", externalException));
-				}
+				e.printStackTrace();
+				return new Pair<>(false, formatLoadFailure("Bundled video libraries missing or broken", e));
 			}
-			// System.loadLibrary uses a path from ClassLoader, so I must create one
-			// containing all paths to native libraries (client + webm libraries package).
-			// Holder class is loaded from this class loader, so all libraries will load correctly.
+			// Resolve Holder and its native dependencies exclusively from this application's APK.
 			PathClassLoader classLoader = new PathClassLoader(plan.dexPath,
 					plan.librarySearchPath, Context.class.getClassLoader());
 			try {
@@ -226,6 +208,7 @@ public class VideoPlayer implements AutoCloseable {
 
 	public interface Listener {
 		void onComplete(VideoPlayer player);
+		default void onError(VideoPlayer player) {}
 		void onBusyStateChange(VideoPlayer player, boolean busy);
 		void onDimensionChange(VideoPlayer player);
 		default void onDurationChange(VideoPlayer player, long duration) {}
@@ -254,6 +237,7 @@ public class VideoPlayer implements AutoCloseable {
 	}
 
 	private volatile Listener listener;
+	private boolean playbackFailed; // Main-thread delivery, retained across gallery/PiP listener transfers.
 	private final boolean seekAnyFrame;
 	private final boolean audioEnabled;
 
@@ -261,6 +245,8 @@ public class VideoPlayer implements AutoCloseable {
 	private SessionData initData;
 
 	private volatile boolean consumed = false;
+	private volatile boolean closing;
+	private final ReentrantReadWriteLock nativeReadAccess = new ReentrantReadWriteLock();
 	private boolean playing = false;
 	private int playbackSpeed = 1000;
 	private long nextSurfaceGeneration;
@@ -300,7 +286,10 @@ public class VideoPlayer implements AutoCloseable {
 			if (consumed) return;
 			this.listener = listener;
 			handler.post(() -> {
-				if (!consumed && this.listener == listener) notifyBusyState();
+				if (!consumed && this.listener == listener) {
+					if (playbackFailed && listener != null) listener.onError(this);
+					else notifyBusyState();
+				}
 			});
 		}
 	}
@@ -379,13 +368,14 @@ public class VideoPlayer implements AutoCloseable {
 		try {
 			SessionData initData = null;
 			synchronized (this) {
-				if (sessionData == null && initData == null && !consumed) {
+				if (sessionData == null && initData == null && !consumed && !closing) {
 					long initPointer;
 					try (ParcelFileDescriptor descriptor = ParcelFileDescriptor
 							.open(file, ParcelFileDescriptor.MODE_READ_ONLY)) {
 						int fd = descriptor.detachFd();
 						initPointer = holder.preInit(fd);
 					}
+					if (initPointer == 0L) throw new IOException("Cannot allocate native video player");
 					if (rangeCallback == null) {
 						long length = file.length();
 						holder.setRange(initPointer, 0, length, length);
@@ -403,7 +393,7 @@ public class VideoPlayer implements AutoCloseable {
 				holder.init(initData.pointer, new NativeBridge(this), seekAnyFrame);
 				synchronized (this) {
 					this.initData = null;
-					if (consumed) {
+					if (consumed || closing) {
 						holder.destroy(initData.pointer, false);
 					} else {
 						int errorCode = holder.getErrorCode(initData.pointer);
@@ -586,31 +576,40 @@ public class VideoPlayer implements AutoCloseable {
 	}
 
 	private boolean isInitialized() {
-		return !consumed && sessionData != null;
+		return !closing && !consumed && sessionData != null;
 	}
 
-	private final int[] summaryOutput = new int[4];
+	private final ThreadLocal<int[]> summaryOutput = ThreadLocal.withInitial(() -> new int[4]);
 
-	private boolean obtainSummary() {
-		if (isInitialized()) {
-			holder.getSummary(sessionData.pointer, summaryOutput);
-			return true;
+	private int[] obtainSummary() {
+		if (!nativeReadAccess.readLock().tryLock()) return null;
+		try {
+			if (isInitialized()) {
+				int[] output = summaryOutput.get();
+				holder.getSummary(sessionData.pointer, output);
+				return output;
+			}
+			return null;
+		} finally {
+			nativeReadAccess.readLock().unlock();
 		}
-		return false;
 	}
 
 	public Point getDimensions() {
-		if (!obtainSummary()) return null;
-		return VideoOrientation.swapsDimensions(summaryOutput[3])
-				? new Point(summaryOutput[1], summaryOutput[0]) : new Point(summaryOutput[0], summaryOutput[1]);
+		int[] output = obtainSummary();
+		if (output == null) return null;
+		return VideoOrientation.swapsDimensions(output[3])
+				? new Point(output[1], output[0]) : new Point(output[0], output[1]);
 	}
 
 	private Point getCodedDimensions() {
-		return obtainSummary() ? new Point(summaryOutput[0], summaryOutput[1]) : null;
+		int[] output = obtainSummary();
+		return output != null ? new Point(output[0], output[1]) : null;
 	}
 
 	private int getVideoRotation() {
-		return obtainSummary() ? VideoOrientation.normalize(summaryOutput[3]) : 0;
+		int[] output = obtainSummary();
+		return output != null ? VideoOrientation.normalize(output[3]) : 0;
 	}
 
 	/** Consumes one raw texture/EGL/native readback and applies presentation orientation once. */
@@ -631,17 +630,23 @@ public class VideoPlayer implements AutoCloseable {
 	}
 
 	public boolean isAudioPresent() {
-		return obtainSummary() ? summaryOutput[2] != 0 : null;
+		int[] output = obtainSummary();
+		return output != null && output[2] != 0;
 	}
 
 	public long getDuration() {
-		return isInitialized() ? holder.getDuration(sessionData.pointer) : 0;
+		if (!nativeReadAccess.readLock().tryLock()) return 0L;
+		try { return isInitialized() ? holder.getDuration(sessionData.pointer) : 0L; }
+		finally { nativeReadAccess.readLock().unlock(); }
 	}
 
 	public long getPosition() {
-		SeekToPosition seekToPosition = this.seekToPosition;
-		return isInitialized() ? seekToPosition != null ? seekToPosition.position
-				: holder.getPosition(sessionData.pointer) : 0;
+		if (!nativeReadAccess.readLock().tryLock()) return 0L;
+		try {
+			SeekToPosition seekToPosition = this.seekToPosition;
+			return isInitialized() ? seekToPosition != null ? seekToPosition.position
+					: holder.getPosition(sessionData.pointer) : 0L;
+		} finally { nativeReadAccess.readLock().unlock(); }
 	}
 
 	private void cancelSetPositionLocked(boolean wait) {
@@ -1205,6 +1210,7 @@ public class VideoPlayer implements AutoCloseable {
 		setPlaying(false);
 		stopAudioImmediately();
 		releaseVideoView();
+		closing = true;
 		ConcurrentUtils.SEPARATE_EXECUTOR.execute(() -> {
 			VideoDiagnostics.recordUi("player_release_and_destroy native_destroy_started");
 			destroy();
@@ -1500,10 +1506,12 @@ public class VideoPlayer implements AutoCloseable {
 	public void destroyAsync() {
 		setPlaying(false);
 		stopAudioImmediately();
+		closing = true;
 		ConcurrentUtils.SEPARATE_EXECUTOR.execute(this::destroy);
 	}
 
 	private void destroyInternal(SessionData preInitSessionData) {
+		closing = true;
 		synchronized (this) {
 			if (!consumed) {
 				consumed = true;
@@ -1518,7 +1526,9 @@ public class VideoPlayer implements AutoCloseable {
 						synchronized (seekerThread) {
 							seekerThread.notifyAll();
 						}
-						holder.destroy(sessionData.pointer, false);
+						nativeReadAccess.writeLock().lock();
+						try { holder.destroy(sessionData.pointer, false); }
+						finally { nativeReadAccess.writeLock().unlock(); }
 					}
 				} finally {
 					handler.removeCallbacksAndMessages(null);
@@ -1553,11 +1563,19 @@ public class VideoPlayer implements AutoCloseable {
 	}
 
 	private enum Message {PLAYBACK_COMPLETE, SIZE_CHANGED, START_SEEKING, END_SEEKING, START_BUFFERING, END_BUFFERING,
-		REPORT_STALLED_SEEK, SURFACE_APPLIED, REQUEST_RANGE, DURATION_CHANGED, NETWORK_BUFFERING}
+		REPORT_STALLED_SEEK, SURFACE_APPLIED, REQUEST_RANGE, DURATION_CHANGED, NETWORK_BUFFERING, PLAYBACK_ERROR}
 
 	private final Handler handler = new Handler(Looper.getMainLooper(), msg -> {
 		if (consumed) return true;
 		switch (Message.values()[msg.what]) {
+			case PLAYBACK_ERROR: {
+				if (playbackFailed) return true;
+				playbackFailed = true;
+				VideoDiagnostics.recordUi("playback_failed reason=native_output_initialization");
+				Listener listener = this.listener;
+				if (listener != null) listener.onError(this);
+				return true;
+			}
 			case NETWORK_BUFFERING: {
 				long serial = (long) msg.obj;
 				synchronized (this) {
@@ -1705,6 +1723,10 @@ public class VideoPlayer implements AutoCloseable {
 				}
 				if (sessionData != null) {
 					seekerMutex.acquireUninterruptibly();
+					if (consumed) {
+						seekerMutex.release();
+						return;
+					}
 					holder.setCancelSeek(sessionData.pointer, false);
 				} else {
 					continue;
@@ -1741,6 +1763,7 @@ public class VideoPlayer implements AutoCloseable {
 		private static final int BRIDGE_MESSAGE_SIZE_CHANGED = 2;
 		private static final int BRIDGE_MESSAGE_START_SEEKING = 3;
 		private static final int BRIDGE_MESSAGE_END_SEEKING = 4;
+		private static final int BRIDGE_MESSAGE_PLAYBACK_ERROR = 5;
 
 		private final WeakReference<VideoPlayer> player;
 
@@ -1802,6 +1825,10 @@ public class VideoPlayer implements AutoCloseable {
 			VideoPlayer player = this.player.get();
 			if (player != null) {
 				switch (what) {
+					case BRIDGE_MESSAGE_PLAYBACK_ERROR: {
+						player.handler.sendEmptyMessage(Message.PLAYBACK_ERROR.ordinal());
+						break;
+					}
 					case BRIDGE_MESSAGE_PLAYBACK_COMPLETE: {
 						// Current bundled engines deliver a generation through onPlaybackComplete.
 						VideoDiagnostics.recordUi("playback_complete discarded reason=missing_generation");
@@ -1930,7 +1957,7 @@ public class VideoPlayer implements AutoCloseable {
 			try {
 				System.loadLibrary("dav1d");
 			} catch (UnsatisfiedLinkError ignored) {
-				// Optional in older WebM library builds.
+				// The bundled library plan validates dav1d before this initializer runs.
 			}
 			System.loadLibrary("avutil");
 			System.loadLibrary("swresample");
@@ -1991,51 +2018,6 @@ public class VideoPlayer implements AutoCloseable {
 			}
 		}
 
-		public static NativeLibraryPlan createExternal(Context context, ChanManager.ExtensionItem extensionItem)
-				throws IOException {
-			ApplicationInfo applicationInfo = context.getApplicationInfo();
-			String applicationSourceDir = requirePath(applicationInfo.sourceDir, "Application APK is unavailable");
-			String extensionSourceDir = requirePath(extensionItem.getSourceDir(),
-					"WebM2 extension APK is unavailable: " + extensionItem.packageName);
-			File applicationSourceFile = requireSourceFile("app", applicationSourceDir);
-			File extensionSourceFile = requireSourceFile("webm", extensionSourceDir);
-			LinkedHashSet<String> dexPaths = new LinkedHashSet<>();
-			dexPaths.add(applicationSourceDir);
-			dexPaths.add(extensionSourceDir);
-			LinkedHashSet<String> libraryPaths = new LinkedHashSet<>();
-			try (ZipFile applicationZipFile = new ZipFile(applicationSourceFile);
-					ZipFile extensionZipFile = new ZipFile(extensionSourceFile)) {
-				String abi = findCommonAbi(applicationZipFile, extensionZipFile);
-				if (abi == null) {
-					throw new IOException(createCommonAbiError(applicationZipFile, extensionZipFile));
-				}
-				File applicationExtractedDir = extractLibraries(context, "app", applicationZipFile,
-						applicationSourceFile, context.getPackageName(), BuildConfig.VERSION_CODE, abi,
-						PLAYER_LIBRARIES, null);
-				File extensionExtractedDir = extractLibraries(context, "webm", extensionZipFile,
-						extensionSourceFile, extensionItem.packageName, extensionItem.versionCode, abi,
-						WEBM_REQUIRED_LIBRARIES, WEBM_OPTIONAL_LIBRARIES);
-				cleanupStaleNativeCache(context, applicationExtractedDir, extensionExtractedDir);
-				libraryPaths.add(applicationExtractedDir.getPath());
-				libraryPaths.add(extensionExtractedDir.getPath());
-				String librarySearchPath = joinPaths(libraryPaths);
-				StringBuilder description = new StringBuilder();
-				description.append("bundledWebm=false");
-				description.append("\nexternalWebm=true");
-				description.append("\ndexPath=").append(joinPaths(dexPaths));
-				description.append("\nlibrarySearchPath=").append(librarySearchPath);
-				description.append("\nplayerBuild=").append(BuildConfig.NATIVE_PLAYER_FFMPEG_FLAVOR)
-						.append(" / ").append(joinArray(BuildConfig.NATIVE_PLAYER_ABIS));
-				description.append("\ndeviceAbis=").append(joinArray(Build.SUPPORTED_ABIS));
-				description.append("\nselectedAbi=").append(abi);
-				description.append("\nappAvailableAbis=").append(describeAvailableAbis(applicationZipFile));
-				description.append("\nwebmAvailableAbis=").append(describeAvailableAbis(extensionZipFile));
-				description.append("\nappExtracted=").append(applicationExtractedDir.getPath());
-				description.append("\nwebmExtracted=").append(extensionExtractedDir.getPath());
-				return new NativeLibraryPlan(joinPaths(dexPaths), librarySearchPath, description.toString());
-			}
-		}
-
 		private static String requirePath(String path, String message) throws IOException {
 			if (StringUtils.isEmpty(path)) {
 				throw new IOException(message);
@@ -2049,20 +2031,6 @@ public class VideoPlayer implements AutoCloseable {
 				throw new IOException(label + " APK is unavailable: " + sourceDir);
 			}
 			return sourceFile;
-		}
-
-		private static String joinPaths(Iterable<String> paths) {
-			StringBuilder builder = new StringBuilder();
-			for (String path : paths) {
-				if (StringUtils.isEmpty(path)) {
-					continue;
-				}
-				if (builder.length() > 0) {
-					builder.append(File.pathSeparatorChar);
-				}
-				builder.append(path);
-			}
-			return builder.toString();
 		}
 
 		private static File extractLibraries(Context context, String label, ZipFile zipFile, File sourceFile,
@@ -2102,16 +2070,6 @@ public class VideoPlayer implements AutoCloseable {
 			return null;
 		}
 
-		private static String findCommonAbi(ZipFile applicationZipFile, ZipFile extensionZipFile) {
-			for (String abi : Build.SUPPORTED_ABIS) {
-				if (hasLibraries(applicationZipFile, abi, PLAYER_LIBRARIES) &&
-						hasLibraries(extensionZipFile, abi, WEBM_REQUIRED_LIBRARIES)) {
-					return abi;
-				}
-			}
-			return null;
-		}
-
 		private static boolean hasLibraries(ZipFile zipFile, String abi, String[] libraries) {
 			for (String library : libraries) {
 				if (zipFile.getEntry(getEntryName(abi, library)) == null) {
@@ -2132,24 +2090,6 @@ public class VideoPlayer implements AutoCloseable {
 				String bundledMissing = describeMissingLibraries(applicationZipFile, abi, BUNDLED_REQUIRED_LIBRARIES);
 				if (!StringUtils.isEmpty(bundledMissing)) {
 					builder.append("\n").append(abi).append(": bundledMissing=").append(bundledMissing);
-				}
-			}
-			return builder.toString();
-		}
-
-		private static String createCommonAbiError(ZipFile applicationZipFile, ZipFile extensionZipFile) {
-			StringBuilder builder = new StringBuilder();
-			builder.append("Missing common native ABI for video player");
-			builder.append(": device=").append(joinArray(Build.SUPPORTED_ABIS));
-			builder.append(", appApk=").append(describeAvailableAbis(applicationZipFile));
-			builder.append(", webmApk=").append(describeAvailableAbis(extensionZipFile));
-			for (String abi : Build.SUPPORTED_ABIS) {
-				String appMissing = describeMissingLibraries(applicationZipFile, abi, PLAYER_LIBRARIES);
-				String webmMissing = describeMissingLibraries(extensionZipFile, abi, WEBM_REQUIRED_LIBRARIES);
-				if (!StringUtils.isEmpty(appMissing) || !StringUtils.isEmpty(webmMissing)) {
-					builder.append("\n").append(abi).append(": appMissing=")
-							.append(StringUtils.emptyIfNull(appMissing));
-					builder.append(", webmMissing=").append(StringUtils.emptyIfNull(webmMissing));
 				}
 			}
 			return builder.toString();

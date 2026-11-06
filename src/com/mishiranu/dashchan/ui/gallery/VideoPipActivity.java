@@ -31,6 +31,7 @@ import android.view.WindowInsetsController;
 import android.view.WindowManager;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
+import com.mishiranu.dashchan.ui.MainNavigationIntent;
 import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
@@ -1239,7 +1240,7 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 		this.player = null;
 		audioFocus.release();
 		VideoDiagnostics.recordUi("pip recreate_gallery reason=" + reason);
-		Intent intent = new Intent(this, MainActivity.class)
+		Intent intent = MainNavigationIntent.create(this)
 				.setAction(C.ACTION_RETURN_FROM_PICTURE_IN_PICTURE)
 				.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP
 						| Intent.FLAG_ACTIVITY_SINGLE_TOP);
@@ -1519,6 +1520,13 @@ public class VideoPipActivity extends Activity implements VideoPlayer.Listener {
 				updatePictureInPictureControls();
 			}
 		});
+	}
+
+	@Override
+	public void onError(VideoPlayer player) {
+		if (this.player != player || isFinishing()) return;
+		ClickableToast.show(new ErrorItem(ErrorItem.Type.UNKNOWN).toString());
+		finish();
 	}
 
 	@Override

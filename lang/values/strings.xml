@@ -1471,7 +1471,7 @@
 	<string name="post_body_text_size">Message text size</string>
 	<string name="post_metadata_text_size">Post information size</string>
 	<string name="settings_text_size">Settings text size</string>
-	<string name="drawer_text_size">Side panel text size</string>
+	<string name="drawer_text_size">Side panel and history text size</string>
 	<string name="settings_text_size_sample_title">Example setting</string>
 	<string name="settings_text_size_sample_summary">A setting description. Titles and descriptions scale together, independently of post text.</string>
 	<string name="post_text_size_preview">Preview</string>

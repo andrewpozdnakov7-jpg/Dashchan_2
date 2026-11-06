@@ -33,6 +33,7 @@ import java.util.Date;
 import java.util.Locale;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.WeakHashMap;
 import java.util.TimeZone;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -44,9 +45,8 @@ public final class VideoDiagnostics {
 	private static final String DIRECTORY_NAME = "video-diagnostics";
 	private static final String FILE_PREFIX = "video-diagnostics-";
 	private static final int MAX_FILES = 3;
-	private static final int UI_REPORT_LIMIT = 64 * 1024;
-	// UTF-16 storage plus the export snapshot stay within roughly 4 MiB.
-	private static final int EXTENDED_UI_REPORT_LIMIT = 512 * 1024;
+	private static final int UI_REPORT_LIMIT_BYTES = 4 * 1024 * 1024;
+	private static final int EXTENDED_UI_REPORT_LIMIT_BYTES = 128 * 1024 * 1024;
 	private static final ScheduledExecutorService WORKER = Executors.newSingleThreadScheduledExecutor(r -> {
 		Thread thread = new Thread(r, "VideoDiagnostics");
 		thread.setDaemon(true);
@@ -63,12 +63,21 @@ public final class VideoDiagnostics {
 	private static long startedElapsedRealtime;
 	private static long lastResourceSampleElapsed;
 	private static long lastProcessCpuMs;
-	private static StringBuilder uiReport = new StringBuilder();
-	private static boolean uiReportTruncated;
+	private static DiagnosticTextBuffer uiReport;
 	private static File lastFile;
 	private static final LinkedHashMap<Integer, SurfaceStats> surfaces = new LinkedHashMap<>();
 	// Capture-local correlation only. Never print these keys or retain them after capture stops.
 	private static final ImageCacheTrace imageCacheTrace = new ImageCacheTrace();
+	// Opaque in-memory route keys only. Weak keys must never keep a page or bitmap alive.
+	private static final int BACK_ROUTE_TRACE_LIMIT = 512;
+	private static final WeakHashMap<Object, BackRouteTrace> backRoutes = new WeakHashMap<>();
+	private static long nextBackRouteId;
+	private static class BackRouteTrace {
+		final long id;
+		String event = "unknown_before_observation";
+		long eventMs = -1, storedMs = -1;
+		BackRouteTrace(long id) { this.id = id; }
+	}
 	private static class SurfaceStats {
 		long updates, sampledUpdates, updatedAt;
 	}
@@ -105,11 +114,17 @@ public final class VideoDiagnostics {
 			startedElapsedRealtime = SystemClock.elapsedRealtime();
 			lastResourceSampleElapsed = startedElapsedRealtime;
 			lastProcessCpuMs = Process.getElapsedCpuTime();
-			uiReport.setLength(0);
+			uiReport = new DiagnosticTextBuffer(extended ? EXTENDED_UI_REPORT_LIMIT_BYTES : UI_REPORT_LIMIT_BYTES);
 			imageCacheTrace.reset();
-			uiReportTruncated = false;
+			backRoutes.clear();
+			nextBackRouteId = 0;
 			appendUiReportLocked("capture_started=true");
 			appendUiReportLocked("mode=" + (extended ? "extended" : "standard"));
+			appendUiReportLocked("ui_buffer_limit_bytes=" + (extended ? EXTENDED_UI_REPORT_LIMIT_BYTES : UI_REPORT_LIMIT_BYTES)
+					+ " unit=utf16_payload chunk_chars=" + DiagnosticTextBuffer.CHUNK_CHARS
+					+ " max_line_chars=" + DiagnosticTextBuffer.MAX_LINE_CHARS + " initial_context_retained=true");
+			appendUiReportLocked("back_trace_schema=1 enabled=" + extended + " route_ids=capture_local weak_keys=true"
+					+ " route_limit=" + BACK_ROUTE_TRACE_LIMIT + " history_before_capture=unknown");
 			appendUiReportLocked("image_cache_schema=1 resource_ids=capture_local no_resource_hashes=true"
 					+ " scroll_thread_gallery=" + Preferences.isScrollThreadGallery()
 					+ " scroll_gallery_to_current=" + Preferences.isScrollGalleryToCurrentFile()
@@ -138,7 +153,7 @@ public final class VideoDiagnostics {
 
 	public static synchronized File stop() {
 		long sessionStartedAt;
-		String uiReport;
+		DiagnosticTextBuffer uiReport;
 		synchronized (LOCK) {
 			if (!recording) {
 				saving = false;
@@ -147,12 +162,14 @@ public final class VideoDiagnostics {
 			appendUiReportLocked("capture_stopped=true");
 			recording = false;
 			imageCacheTrace.reset();
+			backRoutes.clear();
 			saving = true;
 			if (sampler != null) { sampler.cancel(false); sampler = null; }
 			sessionStartedAt = startedAt;
 			startedAt = 0L;
 			startedElapsedRealtime = 0L;
-			uiReport = VideoDiagnostics.uiReport.toString();
+			uiReport = VideoDiagnostics.uiReport;
+			VideoDiagnostics.uiReport = null;
 		}
 		try {
 			int nativeLength = VideoPlayer.finishDiagnosticCapture();
@@ -164,7 +181,7 @@ public final class VideoDiagnostics {
 			return file;
 		} finally {
 			VideoPlayer.releaseDiagnosticCapture();
-			synchronized (LOCK) { saving = false; VideoDiagnostics.uiReport = new StringBuilder(); }
+			synchronized (LOCK) { saving = false; }
 		}
 	}
 
@@ -241,6 +258,50 @@ public final class VideoDiagnostics {
 			if (recording) {
 				appendUiReportLocked(message);
 			}
+		}
+	}
+
+	// These methods accept only ContentFragment.backPreviewKey, never a URL or page identifier.
+	// IDs have no relationship to object hashes, content, account or device identifiers.
+	private static BackRouteTrace backRouteLocked(Object key) {
+		if (!recording || !extended || key == null) return null;
+		BackRouteTrace trace = backRoutes.get(key);
+		if (trace == null) {
+			if (backRoutes.size() >= BACK_ROUTE_TRACE_LIMIT) {
+				backRoutes.clear();
+				// Do not reuse IDs if a very long capture exhausts the bounded dictionary.
+				appendUiReportLocked("back_trace_dictionary_reset history_discarded=true");
+			}
+			trace = new BackRouteTrace(++nextBackRouteId);
+			backRoutes.put(key, trace);
+		}
+		return trace;
+	}
+
+	public static long backRouteId(Object key) {
+		synchronized (LOCK) {
+			BackRouteTrace trace = backRouteLocked(key);
+			return trace != null ? trace.id : 0;
+		}
+	}
+
+	/** Keep the last cache event after older UI lines roll out of a long recording. */
+	public static void recordBackPreviewEvent(Object key, String event) {
+		synchronized (LOCK) {
+			BackRouteTrace trace = backRouteLocked(key);
+			if (trace == null) return;
+			trace.event = event;
+			trace.eventMs = Math.max(0L, SystemClock.elapsedRealtime() - startedElapsedRealtime);
+			if ("stored".equals(event)) trace.storedMs = trace.eventMs;
+		}
+	}
+
+	public static String backPreviewHistory(Object key) {
+		synchronized (LOCK) {
+			BackRouteTrace trace = backRouteLocked(key);
+			return trace == null ? "route=0 snapshot_history=unavailable"
+					: "route=" + trace.id + " snapshot_last_event=" + trace.event
+					+ " snapshot_event_ms=" + trace.eventMs + " snapshot_stored_ms=" + trace.storedMs;
 		}
 	}
 	/** scope/event/details are code-owned labels and numbers, NEVER caller content, keys or exception messages. */
@@ -351,15 +412,6 @@ public final class VideoDiagnostics {
 		long elapsed = startedElapsedRealtime > 0L
 				? Math.max(0L, SystemClock.elapsedRealtime() - startedElapsedRealtime) : 0L;
 		String line = "[+" + elapsed + "ms] " + safeLine(message) + "\n";
-		int limit = extended ? EXTENDED_UI_REPORT_LIMIT : UI_REPORT_LIMIT;
-		if (line.length() > limit / 2) line = line.substring(0, limit / 2) + " [line_truncated]\n";
-		if (uiReport.length() + line.length() > limit) {
-			int keep = uiReport.indexOf("\n", 4096) + 1;
-			int end = uiReport.indexOf("\n", Math.max(keep, uiReport.length() + line.length() - limit + limit / 4));
-			uiReport.delete(keep, end >= 0 ? end + 1 : uiReport.length());
-			uiReport.insert(keep, "[older_ui_events_evicted]\n");
-			uiReportTruncated = true;
-		}
 		uiReport.append(line);
 	}
 
@@ -399,7 +451,7 @@ public final class VideoDiagnostics {
 		return lastFile;
 	}
 
-	private static File writeReport(long startedAt, long stoppedAt, int nativeLength, String nativeReport, String uiReport) {
+	private static File writeReport(long startedAt, long stoppedAt, int nativeLength, String nativeReport, DiagnosticTextBuffer uiReport) {
 		File directory = getDirectory();
 		if (directory == null || !(directory.isDirectory() || directory.mkdirs())) {
 			return null;
@@ -408,7 +460,7 @@ public final class VideoDiagnostics {
 		try (FileOutputStream output = new FileOutputStream(file);
 				BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(output, StandardCharsets.UTF_8))) {
 			writer.write("Dashchan video diagnostics\n");
-			writer.write("schema=5\n");
+			writer.write("schema=6\n");
 			writer.write("mode=" + (extended ? "extended" : "standard") + "\n");
 			writer.write("started_utc=" + formatTime(startedAt, "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'") + "\n");
 			writer.write("stopped_utc=" + formatTime(stoppedAt, "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'") + "\n");
@@ -442,12 +494,10 @@ public final class VideoDiagnostics {
 				writer.write("native_player_not_loaded=true\n");
 			}
 			writer.write("\n[ui_player]\n");
-			writer.write("older_events_evicted=" + uiReportTruncated + "\n");
-			if (uiReport != null && !uiReport.isEmpty()) {
-				writer.write(uiReport);
-				if (uiReport.charAt(uiReport.length() - 1) != '\n') {
-					writer.write('\n');
-				}
+			writer.write("older_events_evicted=" + (uiReport != null && uiReport.hasEvicted()) + "\n");
+			if (uiReport != null) {
+				writer.write("allocated_ui_payload_bytes=" + uiReport.allocatedBytes() + "\n");
+				uiReport.writeTo(writer);
 			} else {
 				writer.write("ui_player_not_recorded=true\n");
 			}

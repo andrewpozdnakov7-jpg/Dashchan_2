@@ -24,6 +24,12 @@
 #define SOFTWARE_SEEK_FAST_RESTORE_MARGIN_MS 500
 #define MAX_FPS 60
 
+static void reportAllocationFailure(Player * player, JNIEnv * env, const char * stage, int bytes) {
+	diagnosticsLog("player=%u allocation_failed stage=%s bytes=%d", player->meta.diagnosticsId, stage, bytes);
+	Bridge * bridge = playerObtainBridge(player, env);
+	PLAYER_SEND_MESSAGE(env, player, bridge, BRIDGE_MESSAGE_PLAYBACK_ERROR);
+}
+
 // Callers hold decode.video.frameMutex. The normal late-frame governor may
 // already require non-reference discard, so seek acceleration always restores
 // the decoder to that session baseline instead of unconditionally disabling it.
@@ -302,11 +308,11 @@ void * playerVideoDrawThread(void * data) {
 			? player->video.lastBuffer.width : context->width;
 	int lastHeight = player->video.lastBuffer.height > 0
 			? player->video.lastBuffer.height : context->height;
-	while (!player->meta.interrupt) {
+	while (!playerIsInterrupted(player)) {
 		BufferItem * bufferItem = NULL;
 		DiagnosticsWorkStamp drawWaitStamp = diagnosticsWorkBegin();
 		pthread_mutex_lock(&player->video.queueMutex);
-		while (!player->meta.interrupt && !bufferItem) {
+		while (!playerIsInterrupted(player) && !bufferItem) {
 			if (player->video.bufferQueue) {
 				bufferItem = bufferQueueSeize(player->video.bufferQueue);
 			}
@@ -317,16 +323,16 @@ void * playerVideoDrawThread(void * data) {
 		playerSetSkipFlag(&player->sync.skip.drawWorkFrame, 0);
 		pthread_mutex_unlock(&player->video.queueMutex);
 		diagnosticsWorkEnd(player, DIAGNOSTICS_WORK_DRAW_WAIT, drawWaitStamp, 0);
-		if (player->meta.interrupt) {
+		if (playerIsInterrupted(player)) {
 			goto SKIP_DRAW_FRAME;
 		}
 
 		pthread_mutex_lock(&player->play.finishMutex);
-		while (!player->meta.interrupt && !playerVideoCanPresent(player)) {
+		while (!playerIsInterrupted(player) && !playerVideoCanPresent(player)) {
 			pthread_cond_wait(&player->play.finishCond, &player->play.finishMutex);
 		}
 		pthread_mutex_unlock(&player->play.finishMutex);
-		if (player->meta.interrupt) {
+		if (playerIsInterrupted(player)) {
 			goto SKIP_DRAW_FRAME;
 		}
 
@@ -364,7 +370,7 @@ void * playerVideoDrawThread(void * data) {
 			LOG("sleep video %" PRId64 " %" PRId64 " %" PRId64, waitTime, player->sync.videoPosition, position);
 			unsigned int revision = __atomic_load_n(&player->video.softwareRateRevision, __ATOMIC_ACQUIRE);
 			int64_t deadline = calculateFrameTime(player, waitTime);
-			while (!player->meta.interrupt && !playerGetSkipFlag(&player->sync.skip.drawWorkFrame)) {
+			while (!playerIsInterrupted(player) && !playerGetSkipFlag(&player->sync.skip.drawWorkFrame)) {
 				if (extra->outputEpoch != __atomic_load_n(&player->video.softwareOutputEpoch, __ATOMIC_ACQUIRE)) break;
 				unsigned int currentRevision = __atomic_load_n(&player->video.softwareRateRevision, __ATOMIC_ACQUIRE);
 				if (revision != currentRevision) {
@@ -416,7 +422,13 @@ void * playerVideoDrawThread(void * data) {
 		}
 		DiagnosticsWorkStamp lastCopyStamp = diagnosticsWorkBegin();
 		if (bufferSize > player->video.lastBuffer.size) {
-			player->video.lastBuffer.data = realloc(player->video.lastBuffer.data, bufferSize);
+			uint8_t * replacement = realloc(player->video.lastBuffer.data, bufferSize);
+			if (!replacement) {
+				diagnosticsWorkEnd(player, DIAGNOSTICS_WORK_LAST_FRAME_COPY, lastCopyStamp, -1);
+				reportAllocationFailure(player, env, "last_frame", bufferSize);
+				UNLOCK_AND_GOTO(&player->video.sleepDrawMutex, SKIP_DRAW_FRAME);
+			}
+			player->video.lastBuffer.data = replacement;
 			player->video.lastBuffer.size = bufferSize;
 		}
 		memcpy(player->video.lastBuffer.data, bufferItem->buffer, bufferSize);
@@ -467,14 +479,15 @@ void * playerVideoDrawThread(void * data) {
 	return NULL;
 }
 
-static void extendScaleHolder(ScaleHolder * scaleHolder, int bufferSize, int width, int height,
+static int extendScaleHolder(ScaleHolder * scaleHolder, int bufferSize, int width, int height,
 		int bytesPerPixel, int isYUV) {
+	if (bufferSize <= 0) return 0;
 	if (bufferSize > scaleHolder->bufferSize) {
+		uint8_t * replacement = av_malloc(bufferSize);
+		if (!replacement) return 0;
+		av_free(scaleHolder->scaleBuffer);
+		scaleHolder->scaleBuffer = replacement;
 		scaleHolder->bufferSize = bufferSize;
-		if (scaleHolder->scaleBuffer) {
-			av_free(scaleHolder->scaleBuffer);
-		}
-		scaleHolder->scaleBuffer = av_malloc(bufferSize);
 	}
 	size_t lumaSize = (size_t) width * (size_t) height;
 	scaleHolder->scaleData[0] = scaleHolder->scaleBuffer;
@@ -485,6 +498,7 @@ static void extendScaleHolder(ScaleHolder * scaleHolder, int bufferSize, int wid
 	scaleHolder->scaleLinesize[1] = isYUV ? width / 2 : 0;
 	scaleHolder->scaleLinesize[2] = isYUV ? width / 2 : 0;
 	scaleHolder->scaleLinesize[3] = 0;
+	return 1;
 }
 
 void * playerVideoDecodeThread(void * data) {
@@ -492,26 +506,26 @@ void * playerVideoDecodeThread(void * data) {
 	JNIEnv * env;
 	(*playerGetJavaVM())->AttachCurrentThread(playerGetJavaVM(), &env, NULL);
 	AVStream * stream = GET_STREAM(player, video);
-	while (!player->meta.interrupt && !player->video.bufferQueue && !player->video.hardwareDecoderActive) {
+	while (!playerIsInterrupted(player) && !player->video.bufferQueue && !player->video.hardwareDecoderActive) {
 		if (playerVideoHasPendingSurface(player)) {
 			playerVideoApplyPendingSurface(player, env);
 			continue;
 		}
 		pthread_mutex_lock(&player->video.sleepDrawMutex);
-		if (!player->meta.interrupt && !player->video.bufferQueue
+		if (!playerIsInterrupted(player) && !player->video.bufferQueue
 				&& !player->video.hardwareDecoderActive && !playerVideoHasPendingSurface(player)) {
 			pthread_cond_wait(&player->video.sleepCond, &player->video.sleepDrawMutex);
 		}
 		pthread_mutex_unlock(&player->video.sleepDrawMutex);
 	}
-	if (player->meta.interrupt) {
+	if (playerIsInterrupted(player)) {
 		(*playerGetJavaVM())->DetachCurrentThread(playerGetJavaVM());
 		return NULL;
 	}
 #ifdef DASHCHAN_HAS_MEDIACODEC
 	if (player->video.hardwareDecoderActive) {
 		playerVideoDecodeMediaCodec(player, env, stream);
-		if (player->meta.interrupt || player->video.hardwareDecoderActive) {
+		if (playerIsInterrupted(player) || player->video.hardwareDecoderActive) {
 			(*playerGetJavaVM())->DetachCurrentThread(playerGetJavaVM());
 			return NULL;
 		}
@@ -540,12 +554,15 @@ void * playerVideoDecodeThread(void * data) {
 			&lastOutputWidth, &lastOutputHeight);
 	int initialBufferSize = getVideoBufferSize(player->video.format,
 			lastOutputWidth, lastOutputHeight);
-	extendScaleHolder(&scaleHolder, initialBufferSize, lastOutputWidth, lastOutputHeight,
-			bytesPerPixel, isYUV);
 	struct SwsContext * scaleContext = NULL;
 	PacketHolder * packetHolder = NULL;
+	if (!frame || !extendScaleHolder(&scaleHolder, initialBufferSize, lastOutputWidth, lastOutputHeight,
+			bytesPerPixel, isYUV)) {
+		reportAllocationFailure(player, env, "software_decode_init", initialBufferSize);
+		goto CLEANUP_VIDEO_DECODE;
+	}
 
-	while (!player->meta.interrupt) {
+	while (!playerIsInterrupted(player)) {
 		if (playerVideoHasPendingSurface(player)) {
 			playerVideoApplyPendingSurface(player, env);
 			continue;
@@ -562,21 +579,21 @@ void * playerVideoDecodeThread(void * data) {
 		if (playerGetSkipFlag(&player->sync.skip.videoWorkFrame)) {
 			playerSetSkipFlag(&player->sync.skip.videoWorkFrame, 0);
 		}
-		if (!packetHolder || player->meta.interrupt) {
+		if (!packetHolder || playerIsInterrupted(player)) {
 			break;
 		}
 		condBroadcastLocked(&player->decode.packets.flowCond, &player->decode.packets.flowMutex);
-		if (player->meta.interrupt) {
+		if (playerIsInterrupted(player)) {
 			break;
 		}
 
 		pthread_mutex_lock(&player->play.finishMutex);
-		while (!player->meta.interrupt && !playerVideoCanDecode(player)
+		while (!playerIsInterrupted(player) && !playerVideoCanDecode(player)
 				&& !playerVideoHasPendingSurface(player)) {
 			pthread_cond_wait(&player->play.finishCond, &player->play.finishMutex);
 		}
 		pthread_mutex_unlock(&player->play.finishMutex);
-		if (player->meta.interrupt) {
+		if (playerIsInterrupted(player)) {
 			break;
 		}
 		if (playerVideoHasPendingSurface(player)) {
@@ -635,6 +652,10 @@ void * playerVideoDecodeThread(void * data) {
 
 			if (ready) {
 				extra = malloc(sizeof(VideoFrameExtra));
+				if (!extra) {
+					reportAllocationFailure(player, env, "frame_metadata", sizeof(VideoFrameExtra));
+					goto SKIP_VIDEO_FRAME;
+				}
 				extra->outputEpoch = outputEpoch;
 				extra->position = decodedFramePosition;
 				diagnosticsIncrement(PLAYER_DIAGNOSTICS_SOFTWARE_DECODED);
@@ -687,8 +708,11 @@ void * playerVideoDecodeThread(void * data) {
 				int outputChanged = sourceChanged || lastOutputWidth != outputWidth ||
 						lastOutputHeight != outputHeight;
 				if (outputChanged) {
-					extendScaleHolder(&scaleHolder, outputBufferSize, outputWidth, outputHeight,
-							bytesPerPixel, isYUV);
+					if (!extendScaleHolder(&scaleHolder, outputBufferSize, outputWidth, outputHeight,
+							bytesPerPixel, isYUV)) {
+						reportAllocationFailure(player, env, "scale_frame", outputBufferSize);
+						goto SKIP_VIDEO_FRAME;
+					}
 					diagnosticsLog("player=%u software_output source=%dx%d surface=%dx%d"
 							" output=%dx%d level=%s buffer_bytes=%d",
 							player->meta.diagnosticsId, frame->width, frame->height,
@@ -746,9 +770,14 @@ void * playerVideoDecodeThread(void * data) {
 				}
 				bufferQueueExtend(player->video.bufferQueue, outputBufferSize);
 				BufferItem * bufferItem = NULL;
-				while (!player->meta.interrupt && !playerGetSkipFlag(&player->sync.skip.videoWorkFrame)
+				int allocationFailed = 0;
+				while (!playerIsInterrupted(player) && !playerGetSkipFlag(&player->sync.skip.videoWorkFrame)
 						&& !bufferItem) {
-					bufferItem = bufferQueuePrepare(player->video.bufferQueue);
+					bufferItem = bufferQueuePrepare(player->video.bufferQueue, &allocationFailed);
+					if (allocationFailed) {
+						reportAllocationFailure(player, env, "queued_frame", outputBufferSize);
+						break; // Allocation failure is not an empty queue; do not wait for a release.
+					}
 					if (!bufferItem) {
 						pthread_cond_wait(&player->video.queueCond, &player->video.queueMutex);
 					}
@@ -788,6 +817,7 @@ void * playerVideoDecodeThread(void * data) {
 		playerPacketQueueFreeCallback(packetHolder);
 		packetHolder = NULL;
 	}
+	CLEANUP_VIDEO_DECODE:
 	if (packetHolder) {
 		playerPacketQueueFreeCallback(packetHolder);
 	}
@@ -828,10 +858,25 @@ int playerVideoSoftwarePrepareOutputLocked(Player * player) {
 		if (videoBufferSize <= 0) {
 			return 0;
 		}
+		BufferQueue * queue = malloc(sizeof(BufferQueue));
+		if (!queue) return 0;
+		if (!bufferQueueInit(queue, videoBufferSize, 3)) {
+			free(queue);
+			diagnosticsLog("player=%u allocation_failed stage=output_queue", player->meta.diagnosticsId);
+			return 0;
+		}
+		uint8_t * lastBuffer = malloc(videoBufferSize);
+		if (!lastBuffer) {
+			bufferQueueDestroy(queue, NULL);
+			free(queue);
+			diagnosticsLog("player=%u allocation_failed stage=output_frame bytes=%d",
+					player->meta.diagnosticsId, videoBufferSize);
+			return 0;
+		}
+		// Publish only a complete output; failed attempts can be retried safely.
 		player->video.format = videoFormat;
-		player->video.bufferQueue = malloc(sizeof(BufferQueue));
-		bufferQueueInit(player->video.bufferQueue, videoBufferSize, 3);
-		player->video.lastBuffer.data = malloc(videoBufferSize);
+		player->video.bufferQueue = queue;
+		player->video.lastBuffer.data = lastBuffer;
 		player->video.lastBuffer.size = videoBufferSize;
 		player->video.lastBuffer.dataSize = videoBufferSize;
 		player->video.lastBuffer.width = width;

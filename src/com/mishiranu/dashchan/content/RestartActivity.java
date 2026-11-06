@@ -6,7 +6,7 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
-import com.mishiranu.dashchan.ui.MainActivity;
+import com.mishiranu.dashchan.ui.MainNavigationIntent;
 
 public class RestartActivity extends Activity {
 	private static final long RESTART_DELAY_MS = 250L;
@@ -20,7 +20,7 @@ public class RestartActivity extends Activity {
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		new Handler(Looper.getMainLooper()).postDelayed(() -> {
-			Intent intent = new Intent(this, MainActivity.class)
+			Intent intent = MainNavigationIntent.create(this)
 					.setAction(Intent.ACTION_MAIN)
 					.addCategory(Intent.CATEGORY_LAUNCHER)
 					.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);

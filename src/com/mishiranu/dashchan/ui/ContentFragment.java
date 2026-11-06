@@ -31,8 +31,35 @@ import java.util.ArrayList;
 import java.util.WeakHashMap;
 
 public abstract class ContentFragment extends Fragment implements MenuProvider {
-	// In-memory preview identity, deliberately absent from saved state / backups.
-	Object backPreviewKey = new Object();
+	private static final String ARG_BACK_PREVIEW_KEY = "slooop.internal.backPreviewKey";
+	// Only this opaque alias is persisted. Snapshot pixels always remain process-local.
+	private String backPreviewKey = java.util.UUID.randomUUID().toString();
+	@Override public void onCreate(Bundle savedInstanceState) {
+		if (savedInstanceState != null) backPreviewKey = savedInstanceState.getString(ARG_BACK_PREVIEW_KEY, backPreviewKey);
+		super.onCreate(savedInstanceState);
+	}
+	@Override public void onSaveInstanceState(@NonNull Bundle outState) {
+		super.onSaveInstanceState(outState);
+		outState.putString(ARG_BACK_PREVIEW_KEY, getBackPreviewKey());
+	}
+	final String getBackPreviewKey() {
+		String restored = readBackPreviewKey(getArguments());
+		return restored != null ? restored : backPreviewKey;
+	}
+	static String readBackPreviewKey(Bundle arguments) {
+		return arguments != null ? arguments.getString(ARG_BACK_PREVIEW_KEY) : null;
+	}
+	final Bundle copyBackPreviewArguments() {
+		Bundle arguments = getArguments() != null ? new Bundle(getArguments()) : new Bundle();
+		arguments.putString(ARG_BACK_PREVIEW_KEY, getBackPreviewKey());
+		return arguments;
+	}
+	final void resetBackPreviewKey() {
+		backPreviewKey = java.util.UUID.randomUUID().toString();
+		Bundle arguments = getArguments() != null ? new Bundle(getArguments()) : new Bundle();
+		arguments.putString(ARG_BACK_PREVIEW_KEY, backPreviewKey);
+		setArguments(arguments);
+	}
 	private ThreadMotionController.Session threadMotionSession;
 	private ScreenMotionController.Session screenMotionSession;
 	private boolean suppressScreenMotionExit;

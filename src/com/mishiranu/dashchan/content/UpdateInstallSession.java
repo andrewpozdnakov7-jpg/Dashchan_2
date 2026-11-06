@@ -196,12 +196,8 @@ public final class UpdateInstallSession {
 							OutputStream output = session.openWrite("base.apk", 0, length)) {
 						if (client) DownloadedUpdate.copyVerified(update, input, output);
 						else {
-							byte[] buffer = new byte[65536];
-							int count;
-							while ((count = input.read(buffer)) != -1) {
-								if (cancelled) return;
-								output.write(buffer, 0, count);
-							}
+							com.mishiranu.dashchan.content.update.DownloadedApk.copyVerified(
+									file, input, output, () -> cancelled);
 						}
 						session.fsync(output);
 					}

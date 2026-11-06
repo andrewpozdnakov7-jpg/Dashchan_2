@@ -28,6 +28,7 @@ import chan.content.ChanManager;
 import chan.util.CommonUtils;
 import chan.util.DataFile;
 import chan.util.StringUtils;
+import com.mishiranu.dashchan.ui.MainNavigationIntent;
 import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.CacheManager;
@@ -39,7 +40,6 @@ import com.mishiranu.dashchan.content.async.ReadFileTask;
 import com.mishiranu.dashchan.content.database.ChanDatabase;
 import com.mishiranu.dashchan.content.model.ErrorItem;
 import com.mishiranu.dashchan.content.model.FileHolder;
-import com.mishiranu.dashchan.ui.MainActivity;
 import com.mishiranu.dashchan.util.AndroidUtils;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
 import com.mishiranu.dashchan.util.IOUtils;
@@ -1115,11 +1115,11 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 		}
 		PendingIntent contentIntent = null;
 		if (notificationData.type == NotificationData.Type.REQUEST) {
-			contentIntent = PendingIntent.getActivity(this, 0, new Intent(this, MainActivity.class),
+			contentIntent = PendingIntent.getActivity(this, 0, MainNavigationIntent.create(this),
 					PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 		} else if (notificationData.type == NotificationData.Type.RESULT) {
 			if (notificationData.localArchiveId != null) {
-				Intent intent = new Intent(this, MainActivity.class)
+				Intent intent = MainNavigationIntent.create(this)
 						.setAction(C.ACTION_LOCAL_ARCHIVE)
 						.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP)
 						.putExtra(C.EXTRA_LOCAL_ARCHIVE_ID, notificationData.localArchiveId);

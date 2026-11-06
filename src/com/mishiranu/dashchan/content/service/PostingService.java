@@ -23,6 +23,7 @@ import chan.content.ChanPerformer;
 import chan.text.CommentEditor;
 import chan.util.CommonUtils;
 import chan.util.StringUtils;
+import com.mishiranu.dashchan.ui.MainNavigationIntent;
 import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.LocaleManager;
@@ -46,7 +47,6 @@ import com.mishiranu.dashchan.content.storage.DraftsStorage;
 import com.mishiranu.dashchan.content.storage.FavoritesStorage;
 import com.mishiranu.dashchan.content.storage.MyPostsStorage;
 import com.mishiranu.dashchan.content.storage.StatisticsStorage;
-import com.mishiranu.dashchan.ui.MainActivity;
 import com.mishiranu.dashchan.util.AndroidUtils;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
 import com.mishiranu.dashchan.util.Hasher;
@@ -738,7 +738,7 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 				builder.setContentTitle(getString(R.string.post_sent));
 				builder.setContentText(buildNotificationText(chan, data.boardName, targetThreadNumber, postNumber));
 				String tag = newPostData.tag;
-				Intent intent = new Intent(this, MainActivity.class).setAction(tag)
+				Intent intent = MainNavigationIntent.create(this).setAction(tag)
 						.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP)
 						.putExtra(C.EXTRA_CHAN_NAME, chanName)
 						.putExtra(C.EXTRA_BOARD_NAME, data.boardName)
@@ -817,7 +817,7 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 			}
 			advanceQueue();
 			if (!queueItem.allowFloodRetry) {
-				startActivity(new Intent(this, MainActivity.class).setAction(C.ACTION_POSTING)
+				startActivity(MainNavigationIntent.create(this).setAction(C.ACTION_POSTING)
 						.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK).putExtra(C.EXTRA_CHAN_NAME, chanName)
 						.putExtra(C.EXTRA_BOARD_NAME, data.boardName)
 						.putExtra(C.EXTRA_THREAD_NUMBER, data.threadNumber)
@@ -840,7 +840,7 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 		builder.setContentText(details);
 		builder.setStyle(new NotificationCompat.BigTextStyle().bigText(details));
 		com.mishiranu.dashchan.content.security.AppSecurity.redactNotification(this, builder);
-		Intent intent = new Intent(this, MainActivity.class).setAction(C.ACTION_POSTING)
+		Intent intent = MainNavigationIntent.create(this).setAction(C.ACTION_POSTING)
 				.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP)
 				.putExtra(C.EXTRA_CHAN_NAME, queueItem.chanName)
 				.putExtra(C.EXTRA_BOARD_NAME, queueItem.data.boardName)

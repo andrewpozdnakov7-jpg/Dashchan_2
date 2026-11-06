@@ -31,7 +31,7 @@ int64_t getStreamDurationMs(AVStream * stream) {
 
 static int durationProbeReadData(void * opaque, uint8_t * buffer, int bufferSize) {
 	DurationProbeIO * io = opaque;
-	if (io->player->meta.interrupt || io->offset >= io->total) {
+	if (playerIsInterrupted(io->player) || io->offset >= io->total) {
 		return AVERROR_EOF;
 	}
 	int64_t remaining = io->total - io->offset;
@@ -66,7 +66,7 @@ static int64_t durationProbeSeekData(void * opaque, int64_t offset, int whence) 
 
 static int durationProbeInterrupt(void * opaque) {
 	DurationProbeIO * io = opaque;
-	return io->player->meta.interrupt;
+	return playerIsInterrupted(io->player);
 }
 
 static int64_t getPacketEndMs(AVFormatContext * formatContext, AVPacket * packet) {
@@ -136,7 +136,7 @@ static void * performDurationProbe(void * data) {
 	if (!packet) {
 		goto FINISH;
 	}
-	while (!player->meta.interrupt && (readResult = av_read_frame(formatContext, packet)) >= 0) {
+	while (!playerIsInterrupted(player) && (readResult = av_read_frame(formatContext, packet)) >= 0) {
 		int64_t packetEnd = getPacketEndMs(formatContext, packet);
 		if (packetEnd > observedDuration) {
 			observedDuration = packetEnd;
@@ -161,7 +161,7 @@ static void * performDurationProbe(void * data) {
 	int64_t effectiveDuration = __atomic_load_n(&player->av.duration.effectiveMs, __ATOMIC_ACQUIRE);
 	int64_t difference = declaredDuration >= observedDuration
 			? declaredDuration - observedDuration : observedDuration - declaredDuration;
-	int changed = !player->meta.interrupt && reachedPhysicalEnd && observedDuration > 0 &&
+	int changed = !playerIsInterrupted(player) && reachedPhysicalEnd && observedDuration > 0 &&
 			(declaredDuration <= 0 || difference > DURATION_PROBE_TOLERANCE_MS) &&
 			effectiveDuration != observedDuration;
 	if (changed) {
@@ -181,7 +181,7 @@ static void * performDurationProbe(void * data) {
 
 void maybeStartDurationProbeLocked(Player * player) {
 	if (!player->av.duration.initialized || !player->av.duration.probeRequired ||
-			player->av.duration.probeThreadStarted || player->meta.interrupt ||
+			player->av.duration.probeThreadStarted || playerIsInterrupted(player) ||
 			player->file.total <= 0 || player->file.start > 0 ||
 			player->file.end < player->file.total) {
 		return;

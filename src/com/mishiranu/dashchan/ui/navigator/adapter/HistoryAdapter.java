@@ -12,6 +12,7 @@ import com.mishiranu.dashchan.util.ListViewUtils;
 import com.mishiranu.dashchan.util.PostDateFormatter;
 import com.mishiranu.dashchan.widget.CursorAdapter;
 import com.mishiranu.dashchan.widget.DividerItemDecoration;
+import com.mishiranu.dashchan.widget.HistoryTextAppearance;
 import com.mishiranu.dashchan.widget.SimpleViewHolder;
 import com.mishiranu.dashchan.widget.ViewFactory;
 import java.util.Calendar;
@@ -95,7 +96,7 @@ public class HistoryAdapter extends CursorAdapter<HistoryDatabase.HistoryCursor,
 		}
 		viewHolder.text2.setText(title);
 		viewHolder.text2End.setText(postDateFormatter.formatDate(historyItem.time));
-		com.mishiranu.dashchan.widget.InterfaceAppearance.serviceRow(viewHolder.view, viewHolder.text1, viewHolder.text2, viewHolder.text2End);
+		HistoryTextAppearance.row(viewHolder);
 	}
 
 	public DividerItemDecoration.Configuration configureDivider

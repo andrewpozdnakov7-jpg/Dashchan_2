@@ -76,5 +76,4 @@ public class C {
 	public static final String EXTRA_FROM_CLIENT = "com.mishiranu.dashchan.extra.FROM_CLIENT";
 	public static final String EXTRA_LOCAL_ARCHIVE_ID = "com.mishiranu.dashchan.extra.LOCAL_ARCHIVE_ID";
 	public static final String EXTRA_THREAD_NUMBER = "com.mishiranu.dashchan.extra.THREAD_NUMBER";
-	public static final String EXTRA_UPDATE_DATA_MAP = "com.mishiranu.dashchan.extra.UPDATE_DATA_MAP";
 }

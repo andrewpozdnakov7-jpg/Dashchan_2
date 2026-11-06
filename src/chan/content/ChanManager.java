@@ -61,6 +61,8 @@ public class ChanManager {
 		HashSet<String> reservedExtensionNames = new HashSet<>();
 		reservedExtensionNames.add(EXTENSION_NAME_CLIENT);
 		reservedExtensionNames.add(EXTENSION_NAME_META);
+		// The player is bundled. Never register the obsolete external video engines.
+		Collections.addAll(reservedExtensionNames, "webm", "webm2");
 		Collections.addAll(reservedExtensionNames, Preferences.SPECIAL_EXTENSION_NAMES);
 		RESERVED_EXTENSION_NAMES = Collections.unmodifiableSet(reservedExtensionNames);
 		HashSet<String> reservedChanNames = new HashSet<>(reservedExtensionNames);
@@ -612,6 +614,9 @@ public class ChanManager {
 				}
 				boolean chanExtension = isChanExtension(packageInfo);
 				boolean libExtension = isLibExtension(packageInfo);
+				if (isObsoleteWebmExtensionName(readExtensionName(packageInfo, chanExtension, libExtension))) {
+					return;
+				}
 				boolean knownPackage = isKnownPackage(packageName, BuildConfig.KNOWN_CHAN_EXTENSION_PACKAGES) ||
 						isKnownPackage(packageName, BuildConfig.KNOWN_LIB_EXTENSION_PACKAGES);
 				if (knownPackage && hasLoadedExtensionNameConflict(packageInfo, chanExtension, libExtension)) {
@@ -824,6 +829,9 @@ public class ChanManager {
 		}
 		String name = data.getString(chanExtension ? META_CHAN_EXTENSION_NAME
 				: libExtension ? META_LIB_EXTENSION_NAME : null);
+		if (isObsoleteWebmExtensionName(name)) {
+			return null;
+		}
 		if (name == null || !VALID_EXTENSION_NAME.matcher(name).matches() ||
 				(chanExtension ? RESERVED_CHAN_NAMES : RESERVED_EXTENSION_NAMES).contains(name)) {
 			Log.e("ChanManager", "Invalid extension name: " + name);
@@ -987,21 +995,13 @@ public class ChanManager {
 		return builder.toString();
 	}
 
-	private void loadLibrary(ExtensionItem libraryItem) {
-		if (EXTENSION_NAMES_LIB_WEBM.contains(libraryItem.name) && Preferences.isUseVideoPlayer()) {
-			VideoPlayer.loadLibraries(MainApplication.getInstance());
-		}
+	public static boolean isObsoleteWebmExtensionName(String name) {
+		return "webm".equals(name) || "webm2".equals(name);
 	}
 
 	public void loadLibraries() {
 		if (Preferences.isUseVideoPlayer()) {
 			VideoPlayer.loadLibraries(MainApplication.getInstance());
-		}
-		for (Extension extension : extensions.values()) {
-			if (extension.item.type == ExtensionItem.Type.LIBRARY &&
-					extension.item.trustState == ExtensionItem.TrustState.TRUSTED) {
-				loadLibrary(extension.item);
-			}
 		}
 	}
 
@@ -1026,7 +1026,6 @@ public class ChanManager {
 			} else if (extension.item.type == ExtensionItem.Type.LIBRARY) {
 				Extension newExtension = new Extension(extension.item.changeTrustState(true), null);
 				updateExtensions(newExtension, null, false);
-				loadLibrary(newExtension.item);
 			}
 		} else {
 			Extension newExtension = new Extension(extension.item.changeTrustState(false), null);
@@ -1141,21 +1140,6 @@ public class ChanManager {
 		for (Extension extension : extensions.values()) {
 			if (extension.item.trustState == ExtensionItem.TrustState.UNTRUSTED) {
 				return extension.item;
-			}
-		}
-		return null;
-	}
-
-	public ExtensionItem getLibraryExtension(String libraryName) {
-		Extension extension = extensions.get(libraryName);
-		return extension != null && extension.item.type == ExtensionItem.Type.LIBRARY ? extension.item : null;
-	}
-
-	public ExtensionItem getWebmLibraryExtension() {
-		for (String libraryName : EXTENSION_NAMES_LIB_WEBM) {
-			ExtensionItem extensionItem = getLibraryExtension(libraryName);
-			if (extensionItem != null) {
-				return extensionItem;
 			}
 		}
 		return null;

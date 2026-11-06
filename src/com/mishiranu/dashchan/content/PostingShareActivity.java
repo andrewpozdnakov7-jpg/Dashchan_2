@@ -15,13 +15,14 @@ import androidx.activity.ComponentActivity;
 import androidx.lifecycle.ViewModelProvider;
 import chan.content.Chan;
 import chan.util.StringUtils;
+import com.mishiranu.dashchan.ui.MainNavigationIntent;
 import com.mishiranu.dashchan.C;
+import com.mishiranu.dashchan.BuildConfig;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.async.ExecutorTask;
 import com.mishiranu.dashchan.content.async.TaskViewModel;
 import com.mishiranu.dashchan.content.model.FileHolder;
 import com.mishiranu.dashchan.content.storage.DraftsStorage;
-import com.mishiranu.dashchan.ui.MainActivity;
 import com.mishiranu.dashchan.util.AndroidUtils;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
 import com.mishiranu.dashchan.widget.InterfaceAppearance;
@@ -46,35 +47,40 @@ public class PostingShareActivity extends ComponentActivity {
 				|| "https".equalsIgnoreCase(uri.getScheme()));
 	}
 
-	private static boolean isStreamUri(Uri uri) {
-		return uri != null && "content".equalsIgnoreCase(uri.getScheme());
+	private static boolean isStreamUri(Uri uri, java.util.Map<String, Boolean> providers) {
+		if (uri == null || !"content".equalsIgnoreCase(uri.getScheme()) || uri.getAuthority() == null) return false;
+		String authority = uri.getAuthority();
+		// Android can qualify a provider with a profile/user ID (content://10@authority/...).
+		int user = authority.lastIndexOf('@');
+		if (user >= 0) authority = authority.substring(user + 1);
+		if (BuildConfig.FILE_PROVIDER_AUTHORITY.equalsIgnoreCase(authority)) return false;
+		Boolean cached = providers.get(authority);
+		if (cached != null) return cached;
+		try {
+			android.content.pm.ProviderInfo provider = MainApplication.getInstance().getPackageManager()
+					.resolveContentProvider(authority, 0);
+			boolean allowed = provider == null || !MainApplication.getInstance().getPackageName().equals(provider.packageName);
+			providers.put(authority, allowed);
+			return allowed;
+		} catch (RuntimeException e) { return false; }
 	}
 
 	private static ArrayList<Uri> collectStreamUris(Intent intent) {
+		// Android migrates EXTRA_STREAM into ClipData before delivery and validates its grants.
+		// A sender can suppress that migration with unrelated ClipData: never import those hidden extras.
 		LinkedHashSet<Uri> uris = new LinkedHashSet<>();
-		if (Intent.ACTION_SEND.equals(intent.getAction())) {
-			Uri uri = AndroidUtils.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri.class);
-			if (uri != null) {
-				uris.add(uri);
-			}
-		} else if (Intent.ACTION_SEND_MULTIPLE.equals(intent.getAction())) {
-			ArrayList<Uri> extraUris = AndroidUtils.getParcelableArrayListExtra(intent,
-					Intent.EXTRA_STREAM, Uri.class);
-			if (extraUris != null) {
-				uris.addAll(extraUris);
-			}
-		}
+		java.util.Map<String, Boolean> providers = new java.util.HashMap<>();
 		ClipData clipData = intent.getClipData();
 		if (clipData != null) {
 			for (int i = 0; i < clipData.getItemCount(); i++) {
 				Uri uri = clipData.getItemAt(i).getUri();
-				if (isStreamUri(uri)) {
+				if (isStreamUri(uri, providers)) {
 					uris.add(uri);
 				}
 			}
 		}
 		Uri data = intent.getData();
-		if (isStreamUri(data)) {
+		if (isStreamUri(data, providers)) {
 			uris.add(data);
 		}
 		return new ArrayList<>(uris);
@@ -181,10 +187,10 @@ public class PostingShareActivity extends ComponentActivity {
 			Preferences.storeFuturePostText(uris.isEmpty() ? sharedText : null);
 			Toast.makeText(this, R.string.draft_saved, Toast.LENGTH_SHORT).show();
 		} else if (contentUri != null) {
-			startActivity(new Intent(this, MainActivity.class).setData(contentUri));
+			startActivity(MainNavigationIntent.create(this).setData(contentUri));
 		} else if (sharedText != null) {
 			Preferences.storeFuturePostText(sharedText);
-			startActivity(new Intent(this, MainActivity.class).setAction(C.ACTION_POSTING_SHARE));
+			startActivity(MainNavigationIntent.create(this).setAction(C.ACTION_POSTING_SHARE));
 		} else {
 			Toast.makeText(this, R.string.unknown_address, Toast.LENGTH_SHORT).show();
 		}
@@ -224,11 +230,15 @@ public class PostingShareActivity extends ComponentActivity {
 			ArrayList<DraftsStorage.AttachmentDraft> attachmentDrafts = new ArrayList<>();
 			for (Uri uri : uris) {
 				if (isCancelled()) break;
-				FileHolder fileHolder = FileHolder.obtainForStreaming(uri);
-				if (fileHolder != null) {
-					DraftsStorage.AttachmentDraft attachmentDraft =
-							draftsStorage.prepareFutureAttachmentDraft(fileHolder);
-					if (attachmentDraft != null) attachmentDrafts.add(attachmentDraft);
+				try {
+					FileHolder fileHolder = FileHolder.obtainForStreaming(uri);
+					if (fileHolder != null) {
+						DraftsStorage.AttachmentDraft attachmentDraft =
+								draftsStorage.prepareFutureAttachmentDraft(fileHolder);
+						if (attachmentDraft != null) attachmentDrafts.add(attachmentDraft);
+					}
+				} catch (RuntimeException e) {
+					android.util.Log.w("PostingShare", "provider_failed type=" + e.getClass().getSimpleName());
 				}
 			}
 			return attachmentDrafts;

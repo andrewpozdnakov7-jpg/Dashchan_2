@@ -67,7 +67,6 @@ import com.mishiranu.dashchan.content.CacheManager;
 import com.mishiranu.dashchan.content.FontCatalogManager;
 import com.mishiranu.dashchan.content.LocaleManager;
 import com.mishiranu.dashchan.content.Preferences;
-import com.mishiranu.dashchan.content.async.ReadUpdateTask;
 import com.mishiranu.dashchan.content.database.ChanDatabase;
 import com.mishiranu.dashchan.content.model.GalleryItem;
 import com.mishiranu.dashchan.content.model.PostNumber;
@@ -254,6 +253,8 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
+		Intent initialIntent = MainNavigationIntent.sanitize(this, getIntent());
+		setIntent(initialIntent != null ? initialIntent : new Intent(Intent.ACTION_MAIN));
 		try {
 			securityProfileGeneration = com.mishiranu.dashchan.content.security.ProfileGeneration.current(this);
 			if (savedInstanceState != null && savedInstanceState.getLong(
@@ -337,7 +338,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		drawerLayout = findViewById(R.id.drawer_layout);
 		drawerLayout.setSaveEnabled(false);
 		predictiveBack = new PredictiveBackController((ViewGroup) drawerLayout.getChildAt(0),
-				this::scheduleSystemBackCallbackUpdate);
+				this::scheduleSystemBackCallbackUpdate, BackPreviewStore.forProcess(this, securityProfileGeneration));
 		FrameLayout drawerInterlayer = findViewById(R.id.drawer_interlayer);
 		getLayoutInflater().inflate(R.layout.widget_toolbar, drawerInterlayer);
 		Toolbar toolbar = drawerInterlayer.findViewById(R.id.toolbar);
@@ -631,6 +632,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		}
 		FontCatalogManager.restoreSelectedFontAsync(this, restored -> {
 			if (restored && !isFinishing() && !isDestroyed()) {
+				if (predictiveBack != null) predictiveBack.clear("font_restored");
 				recreate();
 			}
 		});
@@ -649,6 +651,11 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	@Override
 	protected void onNewIntent(Intent intent) {
+		intent = MainNavigationIntent.sanitize(this, intent);
+		if (intent == null) {
+			super.onNewIntent(new Intent(Intent.ACTION_MAIN));
+			return;
+		}
 		super.onNewIntent(intent);
 		if (C.ACTION_RETURN_FROM_PICTURE_IN_PICTURE.equals(intent.getAction())) {
 			VideoDiagnostics.recordUi("pip_return host_new_intent changing=" + isChangingConfigurations());
@@ -842,7 +849,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		try {
 			FragmentTransaction transaction = getSupportFragmentManager().beginTransaction();
 			boolean predictiveCommit = predictiveNavigationDispatch && predictiveBack != null &&
-					predictiveBack.isDestination(fragment.backPreviewKey);
+					predictiveBack.isDestination(fragment.getBackPreviewKey());
 			if (animate && !predictiveCommit) {
 				transaction.setTransition(InterfaceMotion.isEnabled() ? motionTransition
 						: FragmentTransaction.TRANSIT_FRAGMENT_OPEN);
@@ -856,7 +863,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 					scheduleSystemBackCallbackUpdate();
 					if (contentNavigation.shouldSaveSession()) savePagesSession();
 					scheduleContentNavigationDrain();
-					if (predictiveCommit) predictiveBack.destinationCommitted(fragment.backPreviewKey);
+					if (predictiveCommit) predictiveBack.destinationCommitted(fragment.getBackPreviewKey());
 					prepareBackPreview();
 				}
 			}).commit();
@@ -1068,12 +1075,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 					+ (VideoPipActivity.getPendingGalleryReturnToken() != null));
 			return;
 		}
-		ReadUpdateTask.UpdateDataMap updateDataMap = AndroidUtils.getParcelableExtra(intent,
-				C.EXTRA_UPDATE_DATA_MAP, ReadUpdateTask.UpdateDataMap.class);
-		if (updateDataMap != null) {
-			fragments.clear();
-			navigateFragment(new UpdateFragment(updateDataMap), null, true);
-		} else if (C.ACTION_LOCAL_ARCHIVE.equals(intent.getAction())) {
+		if (C.ACTION_LOCAL_ARCHIVE.equals(intent.getAction())) {
 			String id = intent.getStringExtra(C.EXTRA_LOCAL_ARCHIVE_ID);
 			if (id != null && !id.isEmpty()) {
 				fragments.clear();
@@ -1665,16 +1667,25 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		}
 		FragmentManager fragmentManager = getSupportFragmentManager();
 		ContentFragment currentFragment = getCurrentFragment("FragmentAccess/navigateFragment");
+		recordBackRoute("navigate", currentFragment, fragment.getBackPreviewKey(), fragment.getClass().getSimpleName(), -1);
 		if (screenMotion != null) screenMotion.finish();
 		if (threadMotion != null) threadMotion.finish();
 		boolean predictiveCommit = predictiveNavigationDispatch && predictiveBack != null &&
-				predictiveBack.isDestination(fragment.backPreviewKey);
+				predictiveBack.isDestination(fragment.getBackPreviewKey());
 		if (predictiveBack != null && !predictiveCommit) {
 			predictiveBack.finish();
 			finishLocalToolbarMotion();
 			if (currentFragment != null && localBackAction(currentFragment) == 0 && !isInPictureInPictureMode()) {
-				predictiveBack.remember(currentFragment.backPreviewKey);
-			} else if (currentFragment != null) predictiveBack.forget(currentFragment.backPreviewKey);
+				predictiveBack.remember(currentFragment.getBackPreviewKey());
+			} else if (currentFragment != null) {
+				if (com.mishiranu.dashchan.media.VideoDiagnostics.isExtendedRecording()) {
+					recordBackRoute("capture_not_requested", currentFragment, fragment.getBackPreviewKey(),
+							fragment.getClass().getSimpleName(), localBackAction(currentFragment));
+					com.mishiranu.dashchan.media.VideoDiagnostics.recordBackPreviewEvent(
+							currentFragment.getBackPreviewKey(), "capture_not_requested_local_action_or_pip");
+				}
+				predictiveBack.forget(currentFragment.getBackPreviewKey());
+			}
 		}
 		ThreadMotionController.Session session = animate && !predictiveCommit && threadMotion != null
 				? threadMotion.prepare(currentFragment, fragment, motionTransition, opening) : null;
@@ -2061,7 +2072,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		if (drawerMotion != null) drawerMotion.suspend();
 		resetPredictiveBackView(false);
 		// A transient pause (for example, posting) must not erase the previous page.
-		// There are no background capture jobs; memory callbacks and destruction release the cache.
+		// No background capture jobs. The process store survives window teardown within its memory budget.
 		savePagesSession();
 		super.onPause();
 	}
@@ -2184,9 +2195,45 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	private void prepareBackPreview() {
 		ContentFragment current = getCurrentFragment("FragmentAccess/prepareBackPreview");
 		if (predictiveBack != null && current != null && !isInPictureInPictureMode()) {
+			pruneBackPreviews(current);
 			StackItem previous = peekBackDestination(current);
-			predictiveBack.prepare(current.backPreviewKey, previous != null ? previous.backPreviewKey : null);
+			recordBackRoute("prepare", current, previous != null ? previous.backPreviewKey : null,
+					previous != null ? previous.className : "none", 0);
+			predictiveBack.prepare(current.getBackPreviewKey(), previous != null ? previous.backPreviewKey : null);
 		}
+	}
+	private void pruneBackPreviews(ContentFragment current) {
+		if (predictiveBack == null || current == null || contentNavigation.isPending()
+				|| contentNavigation.hasRequests()) return;
+		recordBackRoute("prune", current, null, "none", -1);
+		java.util.Set<Object> reachable = new java.util.HashSet<>();
+		reachable.add(current.getBackPreviewKey());
+		for (StackItem item : fragments) reachable.add(item.backPreviewKey);
+		for (SavedPageItem item : new ConcatIterable<>(stackPageItems, preservedPageItems)) {
+			if (item.stackItem != null) reachable.add(item.stackItem.backPreviewKey);
+		}
+		predictiveBack.retainReachable(reachable);
+	}
+
+	private static String backRouteKind(ContentFragment fragment) {
+		if (fragment == null) return "none";
+		return fragment instanceof PageFragment ? "PageFragment/" + ((PageFragment) fragment).getPage().content.name()
+				: fragment.getClass().getSimpleName();
+	}
+
+	/** Developer-owned screen types and capture-local aliases only; no board/thread/query values. */
+	private void recordBackRoute(String stage, ContentFragment source, Object target, String targetKind, int localAction) {
+		if (!com.mishiranu.dashchan.media.VideoDiagnostics.isExtendedRecording()) return;
+		com.mishiranu.dashchan.media.VideoDiagnostics.recordUi("back_route stage=" + stage
+				+ " source_route=" + com.mishiranu.dashchan.media.VideoDiagnostics.backRouteId(
+						source != null ? source.getBackPreviewKey() : null)
+				+ " source_kind=" + backRouteKind(source)
+				+ " target_route=" + com.mishiranu.dashchan.media.VideoDiagnostics.backRouteId(target)
+				+ " target_kind=" + targetKind + " local_action=" + localAction
+				+ " fragments=" + fragments.size() + " stack_pages=" + stackPageItems.size()
+				+ " preserved_pages=" + preservedPageItems.size() + " current_page_item=" + (currentPageItem != null)
+				+ " pending=" + contentNavigation.isPending() + " queued=" + contentNavigation.hasRequests()
+				+ " focused=" + hasWindowFocus() + " state_saved=" + getSupportFragmentManager().isStateSaved());
 	}
 
 	private int localBackAction(ContentFragment fragment) {
@@ -2341,6 +2388,9 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 			}
 		}
 		backGestureDestination = backGestureLocalAction != 0 ? null : peekBackDestination(backGestureSource);
+		recordBackRoute("gesture_start", backGestureSource,
+				backGestureDestination != null ? backGestureDestination.backPreviewKey : null,
+				backGestureDestination != null ? backGestureDestination.className : "none", backGestureLocalAction);
 		if (predictiveBack != null && backGestureDestination != null) {
 			predictiveBack.start(backGestureDestination.backPreviewKey,
 					backEvent.getSwipeEdge() == BackEventCompat.EDGE_LEFT, backEvent.getTouchY());
@@ -2387,7 +2437,12 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		if (searchBack != null && searchBack.isCommitting()) return;
 		if (searchBack != null && searchBack.isBusy() && !searchBack.isTracking()) { searchBack.finish(); searchBack = null; }
 		if (predictiveBack != null && predictiveBack.isCommitting()) return;
-		if (backInvocationHandled || !hasWindowFocus() || contentNavigation.isPending() || contentNavigation.hasRequests()) return;
+		if (backInvocationHandled || !hasWindowFocus()) return;
+		if (contentNavigation.isPending() || contentNavigation.hasRequests()) {
+			backGestureAborted = false;
+			resetPredictiveBackView(false);
+			return;
+		}
 		backInvocationHandled = true;
 		getWindow().getDecorView().postOnAnimation(() -> { backInvocationHandled = false; updateSystemBackCallback(); });
 		if (drawerMotion != null && drawerMotion.commitBack()) return;
@@ -2952,6 +3007,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 					break;
 				}
 			}
+			pruneBackPreviews(currentFragment);
 			drawerForm.updateItems(true, false);
 			invalidateHomeUpState();
 		}
@@ -3049,6 +3105,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 			}
 			preservedPageItems.addAll(addPreserved);
 		}
+		pruneBackPreviews(currentFragment);
 		drawerForm.updateItems(true, false);
 		invalidateHomeUpState();
 	}

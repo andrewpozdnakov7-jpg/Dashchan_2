@@ -8,13 +8,18 @@ import android.widget.TextView;
 
 /** Opt-in service metadata only: move the trailing date/count below instead of overlapping. */
 final class AdaptiveMetadataLayout extends LinearLayout {
+	private boolean wrapWhenLegacy;
 	AdaptiveMetadataLayout(Context context) { super(context); }
+	/** A scaled history row also needs wrapping with the legacy interface. Other rows retain their policy. */
+	void setWrapWhenLegacy(boolean enabled) {
+		if (wrapWhenLegacy != enabled) { wrapWhenLegacy = enabled; requestLayout(); }
+	}
 	@Override protected void onMeasure(int widthSpec, int heightSpec) {
 		if (getChildCount() == 2) {
 			TextView first = (TextView) getChildAt(0), end = (TextView) getChildAt(1);
 			LayoutParams a = (LayoutParams) first.getLayoutParams(), b = (LayoutParams) end.getLayoutParams();
 			int available = MeasureSpec.getSize(widthSpec) - getPaddingStart() - getPaddingEnd();
-			boolean stacked = InterfaceAppearance.isEnabled(getContext()) && first.getVisibility() != View.GONE
+			boolean stacked = (wrapWhenLegacy || InterfaceAppearance.isEnabled(getContext())) && first.getVisibility() != View.GONE
 					&& end.getVisibility() != View.GONE && MeasureSpec.getMode(widthSpec) != MeasureSpec.UNSPECIFIED
 					&& Layout.getDesiredWidth(first.getText(), first.getPaint()) + Layout.getDesiredWidth(end.getText(), end.getPaint())
 					+ Math.round(8 * getResources().getDisplayMetrics().density) > available;

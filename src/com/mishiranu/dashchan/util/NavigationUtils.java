@@ -24,6 +24,7 @@ import chan.http.CookieBuilder;
 import chan.http.FirewallResolver;
 import chan.util.CommonUtils;
 import chan.util.StringUtils;
+import com.mishiranu.dashchan.ui.MainNavigationIntent;
 import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.AdvancedPreferences;
@@ -32,7 +33,6 @@ import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.RestartActivity;
 import com.mishiranu.dashchan.content.service.AudioPlayerService;
 import com.mishiranu.dashchan.media.VideoPlayer;
-import com.mishiranu.dashchan.ui.MainActivity;
 import com.mishiranu.dashchan.ui.PrivateBrowserActivity;
 import com.mishiranu.dashchan.ui.YouTubePlayerActivity;
 import com.mishiranu.dashchan.widget.ThemeEngine;
@@ -104,7 +104,7 @@ public class NavigationUtils {
 				return;
 			} else {
 				// Keep an in-app fallback for devices without a Custom Tabs provider.
-				intent = new Intent(context, MainActivity.class).setAction(C.ACTION_BROWSER).setData(uri);
+				intent = MainNavigationIntent.create(context).setAction(C.ACTION_BROWSER).setData(uri);
 			}
 		} else {
 			boolean attachmentUri = chanName != null && Chan.get(chanName).locator.safe(false).isAttachmentUri(uri);
@@ -231,7 +231,7 @@ public class NavigationUtils {
 	}
 
 	public static void openImageVideo(Context context, Uri uri) {
-		context.startActivity(new Intent(context, MainActivity.class).setAction(C.ACTION_GALLERY).setData(uri));
+		context.startActivity(MainNavigationIntent.create(context).setAction(C.ACTION_GALLERY).setData(uri));
 	}
 
 	public static boolean isOpenableVideoPath(String path) {

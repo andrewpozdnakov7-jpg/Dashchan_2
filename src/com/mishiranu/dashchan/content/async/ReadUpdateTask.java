@@ -721,7 +721,8 @@ public class ReadUpdateTask extends HttpHolderTask<Void, Pair<ErrorItem, ReadUpd
 						Iterator<String> keys = response.jsonObject.keys();
 						while (keys.hasNext()) {
 							String extensionName = keys.next();
-							if (ChanManager.EXTENSION_NAME_META.equals(extensionName)) {
+							if (ChanManager.EXTENSION_NAME_META.equals(extensionName) ||
+									ChanManager.isObsoleteWebmExtensionName(extensionName)) {
 								continue;
 							}
 							if (response.extensionNames.contains(extensionName)) {
@@ -738,6 +739,9 @@ public class ReadUpdateTask extends HttpHolderTask<Void, Pair<ErrorItem, ReadUpd
 							for (int i = 0; i < jsonArray.length(); i++) {
 								JSONObject jsonObject = jsonArray.getJSONObject(i);
 								ApplicationItem extractedItem = ApplicationItem.fromJsonV1(jsonObject);
+								if (ChanManager.isObsoleteWebmExtensionName(extractedItem.name)) {
+									continue;
+								}
 								if (response.extensionNames.contains(extractedItem.name)) {
 									JSONArray packagesArray = jsonObject.getJSONArray("packages");
 									handleUpdateItems(response, extractedItem.name, updateDataMap, fingerprintsMap,
@@ -764,7 +768,8 @@ public class ReadUpdateTask extends HttpHolderTask<Void, Pair<ErrorItem, ReadUpd
 						Iterator<String> keys = response.jsonObject.keys();
 						while (keys.hasNext()) {
 							String extensionName = keys.next();
-							if (ChanManager.EXTENSION_NAME_META.equals(extensionName)) {
+							if (ChanManager.EXTENSION_NAME_META.equals(extensionName) ||
+									ChanManager.isObsoleteWebmExtensionName(extensionName)) {
 								continue;
 							}
 							if (!updateDataMap.containsKey(extensionName)) {
@@ -781,6 +786,9 @@ public class ReadUpdateTask extends HttpHolderTask<Void, Pair<ErrorItem, ReadUpd
 							for (int i = 0; i < jsonArray.length(); i++) {
 								JSONObject jsonObject = jsonArray.getJSONObject(i);
 								ApplicationItem extractedItem = ApplicationItem.fromJsonV1(jsonObject);
+								if (ChanManager.isObsoleteWebmExtensionName(extractedItem.name)) {
+								continue;
+								}
 								if (!updateDataMap.containsKey(extractedItem.name)) {
 									JSONArray packagesArray = jsonObject.getJSONArray("packages");
 									handleInstallItems(response, extractedItem.name, installDataMap,

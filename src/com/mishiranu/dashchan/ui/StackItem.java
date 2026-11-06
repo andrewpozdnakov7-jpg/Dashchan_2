@@ -18,18 +18,19 @@ public class StackItem implements Parcelable {
 	public final String className;
 	public final Bundle arguments;
 	public final Fragment.SavedState savedState;
-	Object backPreviewKey;
+	final Object backPreviewKey;
 
 	public StackItem(String className, Bundle arguments, Fragment.SavedState savedState) {
 		this.className = className;
 		this.arguments = arguments;
 		this.savedState = savedState;
+		backPreviewKey = ContentFragment.readBackPreviewKey(arguments);
 	}
 
 	public StackItem(FragmentManager fragmentManager, Fragment fragment, SaveFragment saveFragment) {
-		this(fragment.getClass().getName(), fragment.getArguments(), saveFragment != null
+		this(fragment.getClass().getName(), fragment instanceof ContentFragment
+				? ((ContentFragment) fragment).copyBackPreviewArguments() : fragment.getArguments(), saveFragment != null
 				? saveFragment.save(fragmentManager, fragment) : fragmentManager.saveFragmentInstanceState(fragment));
-		if (fragment instanceof ContentFragment) backPreviewKey = ((ContentFragment) fragment).backPreviewKey;
 	}
 
 	public Fragment create(ReplaceFragment replaceFragment) {
@@ -40,16 +41,15 @@ public class StackItem implements Parcelable {
 			throw new RuntimeException(e);
 		}
 		if (arguments != null) {
-			fragment.setArguments(arguments);
+			fragment.setArguments(new Bundle(arguments));
 		}
 		if (replaceFragment != null) {
 			fragment = replaceFragment.replace(fragment);
+			// Reusing scroll/retained data for another logical page must not reuse its pixels.
+			if (fragment instanceof ContentFragment) ((ContentFragment) fragment).resetBackPreviewKey();
 		}
 		if (savedState != null) {
 			fragment.setInitialSavedState(savedState);
-		}
-		if (backPreviewKey != null && replaceFragment == null && fragment instanceof ContentFragment) {
-			((ContentFragment) fragment).backPreviewKey = backPreviewKey;
 		}
 		return fragment;
 	}

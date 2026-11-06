@@ -1,0 +1,1 @@
+Updated text-size settings, statistics and swipe-to-hide threads. Unified checkboxes and radio buttons. Removed captcha flicker and fixed a crash when sharing media from another application.

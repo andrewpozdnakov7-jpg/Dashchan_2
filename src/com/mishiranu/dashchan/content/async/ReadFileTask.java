@@ -126,8 +126,14 @@ public class ReadFileTask extends HttpHolderTask<long[], Boolean> {
 		boolean success = false;
 		try {
 			loadingStarted = true;
+			boolean updateApk = toFile.getTarget() == DataFile.Target.UPDATES;
+			File updateFile = updateApk ? toFile.getFileOrUri().first : null;
+			if (updateFile != null) {
+				try { com.mishiranu.dashchan.content.update.DownloadedApk.invalidate(updateFile); }
+				catch (IOException e) { errorItem = new ErrorItem(ErrorItem.Type.DOWNLOAD); return false; }
+			}
 			MessageDigest digest = null;
-			if (checkSha256 != null) {
+			if (checkSha256 != null || updateApk) {
 				try {
 					digest = MessageDigest.getInstance("SHA-256");
 				} catch (NoSuchAlgorithmException e) {
@@ -246,11 +252,11 @@ public class ReadFileTask extends HttpHolderTask<long[], Boolean> {
 					}
 				}
 			}
-			if (digest != null) {
-				byte[] sha256 = digest.digest();
-				if (!Arrays.equals(sha256, checkSha256)) {
+			byte[] downloadedSha256 = digest != null ? digest.digest() : null;
+			if (checkSha256 != null) {
+				if (!Arrays.equals(downloadedSha256, checkSha256)) {
 					Log.e("ReadFileTask", "SHA-256 validation failed: requested " +
-							Arrays.toString(checkSha256) + ", got " + Arrays.toString(sha256));
+							Arrays.toString(checkSha256) + ", got " + Arrays.toString(downloadedSha256));
 					errorItem = new ErrorItem(ErrorItem.Type.INVALID_RESPONSE);
 					return false;
 				}
@@ -273,6 +279,14 @@ public class ReadFileTask extends HttpHolderTask<long[], Boolean> {
 				if (errorReason != null) {
 					Log.e("ReadFileTask", "Fingerprint validation failed: " + errorReason);
 					errorItem = new ErrorItem(ErrorItem.Type.INVALID_RESPONSE);
+					return false;
+				}
+			}
+			if (updateFile != null) {
+				try {
+					com.mishiranu.dashchan.content.update.DownloadedApk.record(updateFile, downloadedSha256);
+				} catch (IOException e) {
+					errorItem = new ErrorItem(ErrorItem.Type.DOWNLOAD);
 					return false;
 				}
 			}

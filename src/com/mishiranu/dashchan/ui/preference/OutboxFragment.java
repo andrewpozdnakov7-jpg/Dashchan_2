@@ -1,5 +1,6 @@
 package com.mishiranu.dashchan.ui.preference;
 
+import com.mishiranu.dashchan.ui.MainNavigationIntent;
 import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import android.app.AlertDialog;
 import android.content.Intent;
@@ -13,7 +14,6 @@ import com.mishiranu.dashchan.content.storage.DraftsStorage;
 import com.mishiranu.dashchan.content.storage.OutboxState;
 import com.mishiranu.dashchan.content.storage.OutboxStorage;
 import com.mishiranu.dashchan.ui.FragmentHandler;
-import com.mishiranu.dashchan.ui.MainActivity;
 import com.mishiranu.dashchan.ui.preference.core.PreferenceFragment;
 import com.mishiranu.dashchan.util.SharedPreferences;
 import com.mishiranu.dashchan.widget.ClickableToast;
@@ -97,7 +97,7 @@ public class OutboxFragment extends PreferenceFragment {
 	}
 
 	private Intent destination(OutboxStorage.Entry entry, boolean posting) {
-		return new Intent(requireContext(), MainActivity.class).setAction(posting ? C.ACTION_POSTING : "outbox:" + entry.id)
+		return MainNavigationIntent.create(requireContext()).setAction(posting ? C.ACTION_POSTING : "outbox:" + entry.id)
 				.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP)
 				.putExtra(C.EXTRA_CHAN_NAME, entry.chanName).putExtra(C.EXTRA_BOARD_NAME, entry.boardName)
 				.putExtra(C.EXTRA_THREAD_NUMBER, entry.threadNumber).putExtra(C.EXTRA_POST_NUMBER, entry.postNumber);

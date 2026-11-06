@@ -1498,7 +1498,7 @@
 	<string name="post_body_text_size">Размер текста сообщений</string>
 	<string name="post_metadata_text_size">Размер служебной информации</string>
 	<string name="settings_text_size">Размер текста настроек</string>
-	<string name="drawer_text_size">Размер текста боковой панели</string>
+	<string name="drawer_text_size">Размер текста боковой панели и истории</string>
 	<string name="settings_text_size_sample_title">Пример настройки</string>
 	<string name="settings_text_size_sample_summary">Описание настройки. Название и описание увеличиваются вместе, независимо от текста постов.</string>
 	<string name="post_text_size_preview">Предпросмотр</string>

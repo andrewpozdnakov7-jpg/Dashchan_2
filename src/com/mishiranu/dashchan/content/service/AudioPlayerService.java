@@ -12,6 +12,7 @@ import android.os.PowerManager;
 import android.os.SystemClock;
 import androidx.core.app.NotificationCompat;
 import chan.content.Chan;
+import com.mishiranu.dashchan.ui.MainNavigationIntent;
 import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.CacheManager;
@@ -19,7 +20,6 @@ import com.mishiranu.dashchan.content.LocaleManager;
 import com.mishiranu.dashchan.content.async.ReadFileTask;
 import com.mishiranu.dashchan.content.database.ChanDatabase;
 import com.mishiranu.dashchan.content.model.ErrorItem;
-import com.mishiranu.dashchan.ui.MainActivity;
 import com.mishiranu.dashchan.util.AndroidUtils;
 import com.mishiranu.dashchan.util.AudioFocus;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
@@ -329,7 +329,7 @@ public class AudioPlayerService extends BaseService implements MediaPlayer.OnCom
 			builder.setSmallIcon(R.drawable.ic_audiotrack_white_24dp);
 			builder.setColor(notificationColor);
 			PendingIntent contentIntent = PendingIntent.getActivity(this, 0,
-					new Intent(this, MainActivity.class).setAction(C.ACTION_PLAYER),
+					MainNavigationIntent.create(this).setAction(C.ACTION_PLAYER),
 					PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 			builder.setContentIntent(contentIntent);
 			PendingIntent toggleIntent = AndroidUtils.getAnyServicePendingIntent(this, 0,
