@@ -3,11 +3,12 @@ package com.mishiranu.dashchan.ui.posting;
 import android.os.Parcel;
 import android.os.Parcelable;
 import com.mishiranu.dashchan.content.model.PostNumber;
+import com.mishiranu.dashchan.ui.ReplySwipeOverlap;
 
 public interface Replyable {
 	boolean onRequestReply(boolean click, ReplyData... data);
-	default boolean onRequestReplyFromSwipe(boolean click, java.util.function.BooleanSupplier stillValid, ReplyData... data) {
-		return stillValid.getAsBoolean() && onRequestReply(click, data);
+	default boolean onRequestReplyFromSwipe(boolean click, ReplySwipeOverlap.Request swipeRequest, ReplyData... data) {
+		return swipeRequest.getAsBoolean() && onRequestReply(click, data);
 	}
 
 	class ReplyData implements Parcelable {

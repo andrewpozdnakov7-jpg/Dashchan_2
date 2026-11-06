@@ -75,7 +75,7 @@ public class ToolbarBackContractTest {
 		assertTrue("Only the posting form can replace the ordinary exit policy",
 				back.contains("boolean posting = getCurrentFragment(\"FragmentAccess/postingBackCommit\") instanceof PostingFragment;"));
 		assertTrue("Posting skips the exit timeout, while other screens retain the ordinary route",
-				back.contains("if (posting) { onBackPressed(false, false, () -> navigateInitial(true));"
+				back.contains("if (posting) { onBackPressed(false, false, () -> navigateInitial(true), postingGestureOwner);"
 						+ " } else { onBackPressed(false, true, this::performDefaultBack); }"));
 		assertTrue(back.contains("completePredictivePageBack(predictiveBack, navigate)"));
 		assertFalse("Only the shared adapter owns commit/fallback", back.contains("predictiveBack.commit(navigate)"));
@@ -88,7 +88,12 @@ public class ToolbarBackContractTest {
 		assertTrue("Freeze the source until invocation", back.contains("current != backGestureSource"));
 		assertTrue("Suppress a second fragment animation only during the selected navigation",
 				back.contains("finally { predictiveNavigationDispatch = false; }"));
-		String dispatch = method("onBackPressed");
+		String ordinary = method("onBackPressed", "boolean homeHandled, boolean allowTimeout, Runnable close");
+		assertTrue("Ordinary Back cannot inherit a predictive IME bypass",
+				ordinary.contains("onBackPressed(homeHandled, allowTimeout, close, null)"));
+		String dispatch = method("onBackPressed", "boolean homeHandled, boolean allowTimeout, Runnable close, ContentFragment postingGestureOwner");
+		assertTrue("Deferred Back keeps its own source identity", dispatch.contains("onBackPressed(homeHandled, allowTimeout, close, postingGestureOwner)"));
+		assertTrue("A replaced form cannot consume the previous gesture", dispatch.contains("postingGestureOwner != null && currentFragment != postingGestureOwner"));
 		assertTrue(dispatch.contains("currentFragment.onBackPressed()"));
 		assertTrue(dispatch.contains("navigateSavedPage(savedPageItem, true, FragmentTransaction.TRANSIT_FRAGMENT_CLOSE)"));
 		assertTrue(dispatch.contains("navigateFragment(fragment, null, true, FragmentTransaction.TRANSIT_FRAGMENT_CLOSE)"));

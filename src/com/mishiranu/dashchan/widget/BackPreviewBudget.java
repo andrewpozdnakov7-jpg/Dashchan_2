@@ -19,7 +19,12 @@ public final class BackPreviewBudget {
 	private static final IdentityHashMap<Bitmap, Integer> references = new IdentityHashMap<>();
 	private static long bytes, reserved;
 	/** Evicts cache ownership only. A gesture's separate lease keeps its pixels alive. */
-	public interface Cache { boolean evictOldest(); }
+	public interface Cache {
+		boolean evictOldest();
+		default boolean evictOldest(String reason) { return evictOldest(); }
+		/** The nearest return page is considered only after other caches have yielded. */
+		default boolean evictUnprotected(String reason) { return evictOldest(reason); }
+	}
 	private static final WeakHashMap<Cache, Boolean> caches = new WeakHashMap<>();
 	private BackPreviewBudget() {}
 	public static long limit(Context context) {
@@ -36,24 +41,31 @@ public final class BackPreviewBudget {
 	public static void registerCache(Cache cache) { caches.put(cache, Boolean.TRUE); }
 	public static void unregisterCache(Cache cache) { caches.remove(cache); }
 	public static void trimCaches() {
-		for (Cache cache : new ArrayList<>(caches.keySet())) while (cache.evictOldest()) {}
+		trimCaches("explicit_reclaim");
+	}
+	static void trimCaches(String reason) {
+		for (Cache cache : new ArrayList<>(caches.keySet())) while (evict(cache, reason, false)) {}
+	}
+	private static boolean evict(Cache cache, String reason, boolean protectNearest) {
+		long before = usedBytes();
+		boolean removed = protectNearest ? cache.evictUnprotected(reason) : cache.evictOldest(reason);
+		if (removed) PreviewMemoryPolicy.record("evicted reason=" + reason + " released_bytes="
+				+ (before - usedBytes()) + " used_bytes=" + usedBytes());
+		return removed;
 	}
 	static void makeRoom(Context context, long requested) {
 		long cap = limit(context);
 		while (usedBytes() > cap - requested) {
 			boolean evicted = false;
-			for (Cache cache : new ArrayList<>(caches.keySet())) {
-				if (cache.evictOldest()) { evicted = true; break; }
+			ArrayList<Cache> candidates = new ArrayList<>(caches.keySet());
+			for (Cache cache : candidates) {
+				if (evict(cache, "budget_pressure", true)) { evicted = true; break; }
+			}
+			if (!evicted) for (Cache cache : candidates) {
+				if (evict(cache, "budget_pressure_nearest", false)) { evicted = true; break; }
 			}
 			if (!evicted) break;
 		}
-	}
-	private static boolean memoryLow(Context context) {
-		ActivityManager manager = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
-		if (manager == null) return false;
-		ActivityManager.MemoryInfo info = new ActivityManager.MemoryInfo();
-		manager.getMemoryInfo(info);
-		return info.lowMemory;
 	}
 	public static long usedBytes() { return bytes + reserved; }
 	public static int[] dimensions(int width, int height, long maxBytes) {
@@ -72,7 +84,9 @@ public final class BackPreviewBudget {
 	}
 	private static Bitmap capture(View view, long maxBytes, int background, boolean web) {
 		if (!web && PredictiveBackMotion.hasExternalSurface(view)) return null;
-		if (memoryLow(view.getContext())) { trimCaches(); return null; }
+		if (PreviewMemoryPolicy.isMemoryLow(view.getContext())) {
+			PreviewMemoryPolicy.reclaim(view.getContext(), "capture_low_memory"); return null;
+		}
 		// Reclaim only the bytes needed by this capture, not an arbitrary fraction of the cache.
 		int[] requestedSize = dimensions(view.getWidth(), view.getHeight(), Math.min(maxBytes, limit(view.getContext())));
 		if (requestedSize == null) return null;
@@ -92,8 +106,12 @@ public final class BackPreviewBudget {
 			SnapshotDrawing.draw(view, canvas);
 			allocations.put(image, actual); references.put(image, 1); bytes += actual; return image;
 		} catch (RuntimeException | OutOfMemoryError error) {
-			if (image != null) image.recycle();
-			trimCaches();
+			if (image != null) {
+				// Admission can fail between the two map writes; bytes is added only after both succeed.
+				allocations.remove(image); references.remove(image); image.recycle();
+			}
+			PreviewMemoryPolicy.reclaim(view.getContext(), error instanceof OutOfMemoryError
+					? "capture_out_of_memory" : "capture_runtime_failure");
 			return null;
 		} finally { reserved -= reservation; }
 	}

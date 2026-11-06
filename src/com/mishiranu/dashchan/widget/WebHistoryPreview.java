@@ -29,8 +29,12 @@ public final class WebHistoryPreview implements AutoCloseable {
 	private final BooleanSupplier permitted;
 	private final PreviewMemoryPolicy memory;
 	private final ArrayList<Entry> entries = new ArrayList<>();
+	private final BackPreviewBudget.Cache previewCache = new BackPreviewBudget.Cache() {
+		@Override public boolean evictOldest() { return evictFrame(false); }
+		@Override public boolean evictUnprotected(String reason) { return evictFrame(true); }
+	};
 	private int index = -1;
-	private long generation, revision, visualRequest;
+	private long generation, revision, visualRequest, cacheGeneration;
 	private boolean loading, visuallyReady, closed, paused;
 	private HistoryBackPreview preview;
 	private Entry destination;
@@ -70,7 +74,7 @@ public final class WebHistoryPreview implements AutoCloseable {
 	}
 	public WebHistoryPreview(WebView web, BooleanSupplier permitted) {
 		this.web = web; this.permitted = permitted;
-		memory = new PreviewMemoryPolicy(web.getContext(), this::releaseSnapshots);
+		memory = new PreviewMemoryPolicy(web.getContext(), this::releaseCachedSnapshots, previewCache);
 		web.getViewTreeObserver().addOnScrollChangedListener(scroll);
 		web.addOnAttachStateChangeListener(attachment); web.addOnLayoutChangeListener(layout);
 		Preferences.PREFERENCES.register(preferences);
@@ -139,7 +143,7 @@ public final class WebHistoryPreview implements AutoCloseable {
 	private void requestVisualFrame() {
 		if (!enabled() || !web.isAttachedToWindow() || !web.isShown() || current() == null || !currentMatches()
 				|| preview != null && preview.isTracking()) return;
-		long document = generation, historyRevision = revision, request = ++visualRequest;
+		long document = generation, historyRevision = revision, request = ++visualRequest, cacheRevision = cacheGeneration;
 		Entry entry = current(); int x = web.getScrollX(), y = web.getScrollY();
 		web.postVisualStateCallback(request, new WebView.VisualStateCallback() {
 			@Override public void onComplete(long id) {
@@ -148,10 +152,12 @@ public final class WebHistoryPreview implements AutoCloseable {
 				loading = false; visuallyReady = true;
 				if (preview != null && preview.isCommitting()) {
 					if (entry == destination) preview.destinationReady(); else endPreview();
-					scheduleCapture(); return;
+					if (cacheRevision == cacheGeneration) scheduleCapture();
+					return;
 				}
 				web.postOnAnimation(() -> {
 					if (!enabled() || document != generation || historyRevision != revision || request != visualRequest
+							|| cacheRevision != cacheGeneration
 							|| current() != entry || !currentMatches() || x != web.getScrollX() || y != web.getScrollY() || isBusy()) return;
 					entry.release(); // Return its reservation before replacing it; active sessions hold their own lease.
 					entry.frame = BackPreviewFrame.capture(web, true); entry.scrollX = x; entry.scrollY = y;
@@ -163,6 +169,22 @@ public final class WebHistoryPreview implements AutoCloseable {
 	private void evictImages(Entry keep) {
 		int count = 0; for (Entry entry : entries) if (entry.frame != null) count++;
 		for (Entry entry : entries) if (count > MAX_IMAGES && entry != keep && entry.frame != null) { entry.release(); count--; }
+	}
+	private boolean evictFrame(boolean protectNearest) {
+		for (int i = 0; i < entries.size(); i++) {
+			Entry entry = entries.get(i);
+			if (entry.frame != null && (!protectNearest || i != index && i != index - 1)) {
+				entry.release(); record("snapshot_removed index=" + i + " reason=budget_pressure"); return true;
+			}
+		}
+		return false;
+	}
+	/** Keep route identities and the running renderer's frame leases intact. */
+	private void releaseCachedSnapshots(String reason) {
+		cacheGeneration++; web.removeCallbacks(capture);
+		int removed = 0;
+		for (Entry entry : entries) if (entry.frame != null) { entry.release(); removed++; }
+		record("snapshots_removed reason=" + reason + " removed_images=" + removed);
 	}
 	public boolean start(boolean fromLeft, BooleanSupplier routeValid) {
 		if (isCommitting()) return false;

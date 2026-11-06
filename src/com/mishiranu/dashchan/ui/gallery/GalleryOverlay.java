@@ -451,8 +451,10 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 
 	@Override
 	public void onDestroyView() {
+		if (previewMemory != null) { previewMemory.close(); previewMemory = null; }
 		if (listUnit != null) listUnit.clearPredictiveGrid();
 		finishGalleryMotion();
+		trimPredictiveGridPending = false; trimPredictiveGridPendingReason = null;
 		swipeChrome.reset();
 		if (restoreSignal != null) restoreSignal.cancel();
 		restoreSignal = null;
@@ -728,6 +730,8 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 					galleryState.refreshKnownPosts = refreshSource.getGalleryPostNumbers();
 				}
 				listUnit = new ListUnit(instance);
+				previewMemory = new com.mishiranu.dashchan.widget.PreviewMemoryPolicy(instance.context,
+						this::trimPredictivePreviews, this::evictPredictivePreviews);
 				GalleryViewportMemory.Snapshot viewport = galleryState.viewport != null ? galleryState.viewport
 						: viewportState.memory.get(viewportScope());
 				if (listUnit.setViewport(viewport)) instance.logNavigation("grid_session_restore available=true");
@@ -1101,7 +1105,8 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 			presentation.setRestoredCallback(() -> {
 				if (trimPredictiveGridPending) {
 					trimPredictiveGridPending = false;
-					if (listUnit != null) listUnit.clearPredictiveGrid();
+					releasePredictiveGrid("deferred_" + trimPredictiveGridPendingReason);
+					trimPredictiveGridPendingReason = null;
 				}
 			});
 			photoBack = new com.mishiranu.dashchan.widget.PredictiveTransition(rootView, presentation);
@@ -1216,13 +1221,30 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 		if (listUnit != null) listUnit.clearPredictiveGrid();
 	}
 	private boolean trimPredictiveGridPending;
-	public void trimPredictivePreviews() {
-		// Keep an in-flight photo's grid and route valid until it finishes. Its renderer owns a lease.
-		if (photoBack != null && photoBack.isBusy()) { trimPredictiveGridPending = true; return; }
-		trimPredictiveGridPending = false;
-		if (listUnit != null) listUnit.clearPredictiveGrid();
+	private String trimPredictiveGridPendingReason;
+	private com.mishiranu.dashchan.widget.PreviewMemoryPolicy previewMemory;
+	private boolean evictPredictivePreviews() {
+		if (photoBack != null && photoBack.isBusy()) return false;
+		return releasePredictiveGrid("budget_pressure");
 	}
-	@Override public void onLowMemory() { trimPredictivePreviews(); super.onLowMemory(); }
+	private boolean releasePredictiveGrid(String reason) {
+		if (listUnit == null || !listUnit.hasPredictiveGrid()) return false;
+		long before = com.mishiranu.dashchan.widget.BackPreviewBudget.usedBytes();
+		listUnit.clearPredictiveGrid();
+		if (VideoDiagnostics.isExtendedRecording()) VideoDiagnostics.recordUi("predictive_gallery snapshot_removed reason="
+				+ reason + " released_bytes=" + (before - com.mishiranu.dashchan.widget.BackPreviewBudget.usedBytes()));
+		return true;
+	}
+	private void trimPredictivePreviews(String reason) {
+		// Keep an in-flight photo's grid and route valid until it finishes. Its renderer owns a lease.
+		if (photoBack != null && photoBack.isBusy()) {
+			trimPredictiveGridPending = true; trimPredictiveGridPendingReason = reason;
+			if (VideoDiagnostics.isExtendedRecording()) VideoDiagnostics.recordUi("predictive_gallery cache_clear_deferred reason=" + reason);
+			return;
+		}
+		trimPredictiveGridPending = false; trimPredictiveGridPendingReason = null;
+		releasePredictiveGrid(reason);
+	}
 
 	@Override
 	public void onCreateMenu(@NonNull Menu menu, @NonNull MenuInflater inflater) {

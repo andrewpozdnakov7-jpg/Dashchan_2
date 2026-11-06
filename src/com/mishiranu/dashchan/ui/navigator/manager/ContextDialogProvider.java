@@ -95,6 +95,11 @@ final class ContextDialogProvider extends DialogUnit.DialogProvider<ContextDialo
 	private HistoryBackPreview backPreview;
 	private com.mishiranu.dashchan.widget.PreviewMemoryPolicy previewMemory;
 	private final java.util.LinkedHashMap<Factory.Entry, SavedPreview> previews = new java.util.LinkedHashMap<>();
+	private final com.mishiranu.dashchan.widget.BackPreviewBudget.Cache previewCache =
+			new com.mishiranu.dashchan.widget.BackPreviewBudget.Cache() {
+		@Override public boolean evictOldest() { return evictPreview(false); }
+		@Override public boolean evictUnprotected(String reason) { return evictPreview(true); }
+	};
 	private static final class SavedPreview {
 		final BackPreviewFrame frame;
 		final long epoch;
@@ -119,7 +124,9 @@ final class ContextDialogProvider extends DialogUnit.DialogProvider<ContextDialo
 	};
 	@Override public void onViewBound(View content) {
 		previewHost = content;
-		previewMemory = new com.mishiranu.dashchan.widget.PreviewMemoryPolicy(content.getContext(), this::clearPreviews);
+		if (previewMemory != null) previewMemory.close();
+		previewMemory = new com.mishiranu.dashchan.widget.PreviewMemoryPolicy(content.getContext(),
+				this::releasePreviewImages, previewCache);
 		content.getViewTreeObserver().addOnScrollChangedListener(previewScroll);
 		Preferences.PREFERENCES.register(previewPreferences); scheduleFrame();
 	}
@@ -128,9 +135,30 @@ final class ContextDialogProvider extends DialogUnit.DialogProvider<ContextDialo
 	}
 	private void clearPreviews() {
 		if (backPreview != null) { HistoryBackPreview old = backPreview; backPreview = null; old.close(); }
+		releasePreviewImages("owner_invalidated");
+	}
+	/** Cache ownership only; HistoryBackPreview keeps its own leases and navigation contract. */
+	private void releasePreviewImages(String reason) {
 		if (previewHost != null) previewHost.removeCallbacks(prepareFrame);
+		int removed = previews.size() + (currentFrame != null ? 1 : 0);
 		if (currentFrame != null) { currentFrame.release(); currentFrame = null; }
 		for (SavedPreview saved : previews.values()) saved.frame.release(); previews.clear();
+		record("snapshots_removed reason=" + reason + " removed_images=" + removed);
+	}
+	private boolean evictPreview(boolean protectNearest) {
+		java.util.Iterator<java.util.Map.Entry<Factory.Entry, SavedPreview>> iterator = previews.entrySet().iterator();
+		while (iterator.hasNext()) {
+			java.util.Map.Entry<Factory.Entry, SavedPreview> entry = iterator.next();
+			if (!protectNearest || entry.getKey() != factory.history.peekLast()) {
+				entry.getValue().frame.release(); iterator.remove();
+				record("snapshot_removed reason=budget_pressure"); return true;
+			}
+		}
+		if (!protectNearest && currentFrame != null) {
+			currentFrame.release(); currentFrame = null;
+			record("snapshot_removed reason=budget_pressure_current"); return true;
+		}
+		return false;
 	}
 	@Override public void clearBackPreviews() { clearPreviews(); }
 	@Override public HistoryBackPreview startBackPreview(boolean fromLeft) {

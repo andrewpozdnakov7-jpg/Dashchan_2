@@ -233,6 +233,7 @@ public class ListUnit implements ActionMode.Callback {
 	private final java.util.IdentityHashMap<GalleryItem, Boolean> predictiveGridItems = new java.util.IdentityHashMap<>();
 	private PredictiveGridGeometry predictiveGridGeometry;
 	private final java.util.IdentityHashMap<GalleryItem, PredictiveGridGeometry.Cell> predictiveGridTargets = new java.util.IdentityHashMap<>();
+	boolean hasPredictiveGrid() { return predictiveGrid != null; }
 	void clearPredictiveGrid() {
 		com.mishiranu.dashchan.widget.BackPreviewBudget.release(predictiveGrid); predictiveGrid = null; predictiveGridItems.clear();
 		predictiveGridGeometry = null; predictiveGridTargets.clear();

@@ -32,15 +32,21 @@ import java.util.WeakHashMap;
 
 public abstract class ContentFragment extends Fragment implements MenuProvider {
 	private static final String ARG_BACK_PREVIEW_KEY = "slooop.internal.backPreviewKey";
-	// Only this opaque alias is persisted. Snapshot pixels always remain process-local.
+	private static final String ARG_BACK_PREVIEW_PROCESS = "slooop.internal.backPreviewProcess";
+	// Only an opaque alias and process marker are persisted. Pixels always remain process-local.
 	private String backPreviewKey = java.util.UUID.randomUUID().toString();
 	@Override public void onCreate(Bundle savedInstanceState) {
 		if (savedInstanceState != null) backPreviewKey = savedInstanceState.getString(ARG_BACK_PREVIEW_KEY, backPreviewKey);
+		Bundle source = savedInstanceState != null ? savedInstanceState : getArguments();
+		com.mishiranu.dashchan.media.VideoDiagnostics.registerBackPreviewRoute(getBackPreviewKey(),
+				source != null ? source.getString(ARG_BACK_PREVIEW_PROCESS) : null,
+				savedInstanceState != null || readBackPreviewKey(getArguments()) != null);
 		super.onCreate(savedInstanceState);
 	}
 	@Override public void onSaveInstanceState(@NonNull Bundle outState) {
 		super.onSaveInstanceState(outState);
 		outState.putString(ARG_BACK_PREVIEW_KEY, getBackPreviewKey());
+		stampBackPreviewProcess(outState);
 	}
 	final String getBackPreviewKey() {
 		String restored = readBackPreviewKey(getArguments());
@@ -49,15 +55,26 @@ public abstract class ContentFragment extends Fragment implements MenuProvider {
 	static String readBackPreviewKey(Bundle arguments) {
 		return arguments != null ? arguments.getString(ARG_BACK_PREVIEW_KEY) : null;
 	}
+	static void registerRestoredBackPreviewRoute(Bundle arguments) {
+		com.mishiranu.dashchan.media.VideoDiagnostics.registerBackPreviewRoute(readBackPreviewKey(arguments),
+				arguments != null ? arguments.getString(ARG_BACK_PREVIEW_PROCESS) : null, true);
+	}
+	static void stampBackPreviewProcess(Bundle arguments) {
+		arguments.putString(ARG_BACK_PREVIEW_PROCESS,
+				com.mishiranu.dashchan.media.VideoDiagnostics.backPreviewProcessMarker());
+	}
 	final Bundle copyBackPreviewArguments() {
 		Bundle arguments = getArguments() != null ? new Bundle(getArguments()) : new Bundle();
 		arguments.putString(ARG_BACK_PREVIEW_KEY, getBackPreviewKey());
+		stampBackPreviewProcess(arguments);
 		return arguments;
 	}
 	final void resetBackPreviewKey() {
 		backPreviewKey = java.util.UUID.randomUUID().toString();
+		com.mishiranu.dashchan.media.VideoDiagnostics.registerBackPreviewRoute(backPreviewKey, null, false);
 		Bundle arguments = getArguments() != null ? new Bundle(getArguments()) : new Bundle();
 		arguments.putString(ARG_BACK_PREVIEW_KEY, backPreviewKey);
+		stampBackPreviewProcess(arguments);
 		setArguments(arguments);
 	}
 	private ThreadMotionController.Session threadMotionSession;

@@ -135,19 +135,10 @@ public class MainApplication extends Application {
 		super.onTrimMemory(level);
 		if (securityRecoveryProcess) return;
 		if (isMainProcess()) {
-			if (com.mishiranu.dashchan.widget.PreviewMemoryPolicy.shouldTrim(level)) {
-				com.mishiranu.dashchan.widget.BackPreviewBudget.trimCaches();
-			}
+			// PreviewMemoryPolicy owns the single process callback for predictive caches.
 			PostsWindowCache.getInstance().onTrimMemory(level);
 			ImageLoader.getInstance().onTrimMemory(level);
 		}
-	}
-
-	@SuppressWarnings("deprecation")
-	@Override
-	public void onLowMemory() {
-		super.onLowMemory();
-		if (!securityRecoveryProcess && isMainProcess()) com.mishiranu.dashchan.widget.BackPreviewBudget.trimCaches();
 	}
 
 	private void cleanupRemovedAutoBump() {

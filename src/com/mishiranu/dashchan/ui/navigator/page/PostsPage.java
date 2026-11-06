@@ -62,6 +62,7 @@ import com.mishiranu.dashchan.ui.ApachanEditPostDialog;
 import com.mishiranu.dashchan.ui.DrawerForm;
 import com.mishiranu.dashchan.ui.InstanceDialog;
 import com.mishiranu.dashchan.ui.ReplySwipeController;
+import com.mishiranu.dashchan.ui.ReplySwipeOverlap;
 import com.mishiranu.dashchan.ui.gallery.GalleryOverlay;
 import com.mishiranu.dashchan.ui.navigator.Page;
 import com.mishiranu.dashchan.ui.navigator.adapter.PostsAdapter;
@@ -376,9 +377,9 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 						&& getLifecycle().getCurrentState() == androidx.lifecycle.Lifecycle.State.RESUMED
 						&& replyable != null && replyable.onRequestReply(false);
 			}
-			@Override public void reply(PostNumber post, java.util.function.BooleanSupplier stillValid) {
+			@Override public void reply(PostNumber post, ReplySwipeOverlap.Request swipeRequest) {
 				if (canReply() && adapter.findPostItem(post) != null) {
-					replyable.onRequestReplyFromSwipe(true, stillValid, new Replyable.ReplyData(post, null));
+					replyable.onRequestReplyFromSwipe(true, swipeRequest, new Replyable.ReplyData(post, null));
 				}
 			}
 		});
@@ -423,13 +424,13 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 		}
 		replyable = new Replyable() {
 			@Override public boolean onRequestReply(boolean click, ReplyData... data) { return request(null, click, data); }
-			@Override public boolean onRequestReplyFromSwipe(boolean click, java.util.function.BooleanSupplier stillValid, ReplyData... data) {
-				return stillValid.getAsBoolean() && request(stillValid, click, data);
+			@Override public boolean onRequestReplyFromSwipe(boolean click, ReplySwipeOverlap.Request swipeRequest, ReplyData... data) {
+				return swipeRequest.getAsBoolean() && request(swipeRequest, click, data);
 			}
-			private boolean request(java.util.function.BooleanSupplier stillValid, boolean click, ReplyData... data) {
+			private boolean request(ReplySwipeOverlap.Request swipeRequest, boolean click, ReplyData... data) {
 				ChanConfiguration.Board board = getChan().configuration.safe().obtainBoard(page.boardName);
 				if (click && board.allowPosting) {
-					if (stillValid != null) getUiManager().navigator().navigatePostingFromSwipe(page.chanName, page.boardName, page.threadNumber, stillValid, data);
+					if (swipeRequest != null) getUiManager().navigator().navigatePostingFromSwipe(page.chanName, page.boardName, page.threadNumber, swipeRequest, data);
 					else getUiManager().navigator().navigatePosting(page.chanName, page.boardName, page.threadNumber, data);
 				}
 				return board.allowPosting;

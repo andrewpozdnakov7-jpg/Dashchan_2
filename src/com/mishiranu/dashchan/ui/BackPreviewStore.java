@@ -31,7 +31,7 @@ final class BackPreviewStore implements BackPreviewBudget.Cache {
 		this.retained = retained;
 		BackPreviewBudget.registerCache(this);
 		memoryPolicy = retained && application != null
-				? new PreviewMemoryPolicy(application, () -> clear("process_memory_policy")) : null;
+				? new PreviewMemoryPolicy(application, this::clear) : null;
 	}
 	void attach(Object token) {
 		if (owns(token)) return;
@@ -44,28 +44,39 @@ final class BackPreviewStore implements BackPreviewBudget.Cache {
 		if (owns(token)) { owner = nearest = null; record("owner_detached"); }
 	}
 	@Override public boolean evictOldest() {
+		return evict("evict_oldest", false);
+	}
+	@Override public boolean evictOldest(String reason) { return evict(reason, false); }
+	@Override public boolean evictUnprotected(String reason) { return evict(reason, true); }
+	private boolean evict(String reason, boolean protectNearest) {
 		if (previews.isEmpty()) return false;
 		Map.Entry<Object, PredictiveBackController.Preview> eldest = null;
 		for (Map.Entry<Object, PredictiveBackController.Preview> entry : previews.entrySet()) {
 			if (!Objects.equals(entry.getKey(), nearest)) { eldest = entry; break; }
 		}
-		if (eldest == null) eldest = previews.entrySet().iterator().next();
+		if (eldest == null) {
+			if (protectNearest) return false;
+			eldest = previews.entrySet().iterator().next();
+		}
 		Object key = eldest.getKey();
-		recordRemoval(key, "evict_oldest");
+		recordRemoval(key, reason);
 		PredictiveBackController.Preview removed = previews.remove(key);
 		BackPreviewBudget.release(removed.image);
-		if (VideoDiagnostics.isExtendedRecording()) VideoDiagnostics.recordUi("predictive_page evict_oldest"
+		if (VideoDiagnostics.isExtendedRecording()) VideoDiagnostics.recordUi("predictive_page evict_oldest reason=" + reason
 				+ " removed_previous=" + Objects.equals(key, nearest) + " cached_pages=" + previews.size());
 		return true;
 	}
 	void clear(String reason) {
+		long before = BackPreviewBudget.usedBytes();
+		int removed = previews.size();
 		record("clear_begin reason=" + reason);
 		for (Map.Entry<Object, PredictiveBackController.Preview> entry : previews.entrySet()) {
 			recordRemoval(entry.getKey(), "cache_clear_" + reason);
 			BackPreviewBudget.release(entry.getValue().image);
 		}
 		previews.clear(); signature = null;
-		record("clear_end reason=" + reason);
+		record("clear_end reason=" + reason + " removed_pages=" + removed
+				+ " released_bytes=" + (before - BackPreviewBudget.usedBytes()));
 	}
 	private void record(String event) {
 		if (VideoDiagnostics.isExtendedRecording()) VideoDiagnostics.recordUi("predictive_store " + event
@@ -78,8 +89,8 @@ final class BackPreviewStore implements BackPreviewBudget.Cache {
 		BackPreviewBudget.unregisterCache(this);
 	}
 	static void recordRemoval(Object key, String reason) {
+		VideoDiagnostics.recordBackPreviewRemoval(key, reason);
 		if (!VideoDiagnostics.isExtendedRecording()) return;
-		VideoDiagnostics.recordBackPreviewEvent(key, reason);
 		VideoDiagnostics.recordUi("predictive_page snapshot_removed reason=" + reason + " "
 				+ VideoDiagnostics.backPreviewHistory(key));
 	}

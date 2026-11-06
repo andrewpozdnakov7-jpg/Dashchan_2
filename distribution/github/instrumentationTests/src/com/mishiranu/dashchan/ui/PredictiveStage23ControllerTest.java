@@ -86,15 +86,16 @@ public class PredictiveStage23ControllerTest {
 					for (int i = 0; i < pages.length; i++) { pages[i] = new Object(); controller.prepare(pages[i]); controller.remember(pages[i]); }
 					assertEquals(20, ((java.util.Map<?, ?>) field(controller, "previews")).size());
 					assertTrue(controller.start(pages[0], true)); controller.finish();
-					assertTrue(((BackPreviewBudget.Cache) field(controller, "cache")).evictOldest());
+					assertTrue(((BackPreviewBudget.Cache) field(controller, "store")).evictOldest());
 					java.util.Map<?, ?> cached = (java.util.Map<?, ?>) field(controller, "previews");
 					assertTrue(cached.containsKey(pages[0])); assertFalse(cached.containsKey(pages[1]));
 					controller.prepare(new Object(), pages[2]);
-					assertTrue(((BackPreviewBudget.Cache) field(controller, "cache")).evictOldest());
+					assertTrue(((BackPreviewBudget.Cache) field(controller, "store")).evictOldest());
 					assertTrue(cached.containsKey(pages[2])); assertFalse(cached.containsKey(pages[3]));
 					controller.prepare(new Object()); assertTrue(controller.start(pages[19], true));
 					Bitmap active = (Bitmap) field(controller, "incoming"); assertNotNull(active);
-					controller.progress(.5f); controller.trimMemory();
+					controller.progress(.5f);
+					com.mishiranu.dashchan.widget.PreviewMemoryPolicy.reclaim(a, "test_memory_pressure");
 					assertTrue(controller.isTracking()); assertFalse(active.isRecycled());
 					assertEquals(0, ((java.util.Map<?, ?>) field(controller, "previews")).size());
 					controller.finish(); assertTrue(active.isRecycled());

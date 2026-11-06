@@ -60,7 +60,8 @@ public class BackPreviewStoreTest {
 				store.previews.put(new String("nearest"), new PredictiveBackController.Preview(leased, signature));
 				store.previews.put("other", new PredictiveBackController.Preview(other, signature));
 				store.protect(token, new String("nearest"));
-				assertTrue(store.evictOldest()); assertTrue(other.isRecycled());
+				assertTrue(store.evictUnprotected("test_budget")); assertTrue(other.isRecycled());
+				assertFalse(store.evictUnprotected("test_budget"));
 				assertFalse(leased.isRecycled());
 				assertTrue(BackPreviewBudget.retain(leased));
 				store.clear("test_pressure");
@@ -88,6 +89,25 @@ public class BackPreviewStoreTest {
 				assertNotEquals(alias, replacement.getBackPreviewKey());
 				assertEquals(alias, restored.backPreviewKey);
 			} finally { write.recycle(); read.recycle(); }
+		});
+	}
+	@Test public void serializingAnOldRestoredRouteRefreshesOnlyTheSavedCopyProcessMarker() {
+		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+			ContentFragment original = new PageFragment(new Page(Page.Content.BOARDS, "test", null, null, null), "retain");
+			Bundle arguments = original.copyBackPreviewArguments();
+			String markerKey = "slooop.internal.backPreviewProcess";
+			String current = com.mishiranu.dashchan.media.VideoDiagnostics.backPreviewProcessMarker();
+			assertEquals(current, arguments.getString(markerKey));
+			arguments.putString(markerKey, "previous-test-process");
+			StackItem saved = new StackItem(PageFragment.class.getName(), arguments, null);
+			Parcel parcel = Parcel.obtain();
+			try {
+				saved.writeToParcel(parcel, 0); parcel.setDataPosition(0);
+				StackItem restored = StackItem.CREATOR.createFromParcel(parcel);
+				assertEquals(current, restored.arguments.getString(markerKey));
+				assertEquals("previous-test-process", saved.arguments.getString(markerKey));
+				assertEquals(saved.backPreviewKey, restored.backPreviewKey);
+			} finally { parcel.recycle(); }
 		});
 	}
 }

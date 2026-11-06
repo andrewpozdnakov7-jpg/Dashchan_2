@@ -15,6 +15,7 @@ import com.mishiranu.dashchan.content.model.AttachmentItem;
 import com.mishiranu.dashchan.content.model.GalleryItem;
 import com.mishiranu.dashchan.content.model.PostItem;
 import com.mishiranu.dashchan.content.model.PostNumber;
+import com.mishiranu.dashchan.ui.ReplySwipeOverlap;
 import com.mishiranu.dashchan.content.service.DownloadService;
 import com.mishiranu.dashchan.content.service.WatcherService;
 import com.mishiranu.dashchan.ui.InstanceDialog;
@@ -167,8 +168,8 @@ public class UiManager {
 		void navigatePosting(String chanName, String boardName, String threadNumber,
 				Replyable.ReplyData... data);
 		default void navigatePostingFromSwipe(String chanName, String boardName, String threadNumber,
-				java.util.function.BooleanSupplier stillValid, Replyable.ReplyData... data) {
-			if (stillValid.getAsBoolean()) navigatePosting(chanName, boardName, threadNumber, data);
+				ReplySwipeOverlap.Request swipeRequest, Replyable.ReplyData... data) {
+			if (swipeRequest.getAsBoolean()) navigatePosting(chanName, boardName, threadNumber, data);
 		}
 		void navigateGallery(String chanName, GalleryItem.Set gallerySet, int imageIndex,
 				View view, GalleryOverlay.NavigatePostMode navigatePostMode, boolean galleryMode);
