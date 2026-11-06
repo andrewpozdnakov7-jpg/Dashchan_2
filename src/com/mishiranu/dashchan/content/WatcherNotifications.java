@@ -10,12 +10,12 @@ import android.service.notification.StatusBarNotification;
 import androidx.core.app.NotificationCompat;
 import chan.content.Chan;
 import chan.util.StringUtils;
+import com.mishiranu.dashchan.ui.MainNavigationIntent;
 import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.database.PagesDatabase;
 import com.mishiranu.dashchan.content.model.PostNumber;
 import com.mishiranu.dashchan.content.storage.MyPostsStorage;
-import com.mishiranu.dashchan.ui.MainActivity;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
 import com.mishiranu.dashchan.util.Hasher;
 import com.mishiranu.dashchan.util.Logger;
@@ -289,7 +289,7 @@ public class WatcherNotifications {
 		}
 
 		private PendingIntent createContentIntent(String tag, PostNumber postNumber) {
-			Intent intent = new Intent(context, MainActivity.class).setAction(tag)
+			Intent intent = MainNavigationIntent.create(context).setAction(tag)
 					.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP)
 					.putExtra(C.EXTRA_CHAN_NAME, chanName)
 					.putExtra(C.EXTRA_BOARD_NAME, boardName)

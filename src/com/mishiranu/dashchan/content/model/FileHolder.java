@@ -549,6 +549,9 @@ public abstract class FileHolder {
 				// A document provider may reject a URI when the file was removed after
 				// it had been resolved. Treat it as an unavailable file.
 				return null;
+			} catch (RuntimeException e) {
+				android.util.Log.w("FileHolder", "provider_failed type=" + e.getClass().getSimpleName());
+				return null;
 			}
 		}
 		return null;

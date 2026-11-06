@@ -1,0 +1,1 @@
+The player respects video rotation metadata. Fixed scrollbar jumps with hidden threads and background page loading. Improved touch cancellation and Samsung S24 Ultra OneUI 9 toolbar spacing.

@@ -124,6 +124,12 @@
 
 		</activity>
 
+		<!-- Same singleTask host, with an entry point that other application UIDs cannot call. -->
+		<activity-alias
+			android:name=".ui.InternalNavigation"
+			android:targetActivity=".ui.MainActivity"
+			android:exported="false" />
+
 		<activity
 			android:name=".ui.PrivateBrowserActivity"
 			android:enableOnBackInvokedCallback="true"
@@ -1711,6 +1717,7 @@
 		<activity
 			android:name=".content.PostingShareActivity"
 			android:exported="true"
+			android:requireContentUriPermissionFromCaller="read"
 			android:taskAffinity=".postingshare"
 			android:launchMode="singleInstance"
 			android:excludeFromRecents="true"

@@ -9,7 +9,7 @@ void playerVideoReleaseSurface(Player * player);
 void playerVideoResetHardwareOutputLocked(Player * player);
 #ifdef DASHCHAN_HAS_MEDIACODEC
 void playerVideoDecodeMediaCodec(Player * player, JNIEnv * env, AVStream * stream);
-int playerVideoFallbackMediaCodecToSoftware(Player * player);
+int playerVideoFallbackMediaCodecToSoftware(Player * player, JNIEnv * env);
 #endif
 
 #endif // PLAYER_VIDEO_MEDIACODEC_H

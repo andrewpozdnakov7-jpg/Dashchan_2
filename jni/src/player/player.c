@@ -115,36 +115,47 @@ void playerSetDiagnosticsMediaCodecStage(Player * player, int stage, int64_t fra
 	__atomic_store_n(&player->decode.video.diagnosticsStage, stage, __ATOMIC_RELEASE);
 }
 
-Bridge * playerObtainBridge(Player * player, JNIEnv * env) {
-	int index = pthread_self();
-	Bridge * bridge = sparseArrayGet(&player->bridge.array, index);
-	if (!bridge) {
-		bridge = malloc(sizeof(Bridge));
-		jclass class = (*env)->GetObjectClass(env, player->bridge.native);
-		bridge->env = env;
-		bridge->methodOnSeek = (*env)->GetMethodID(env, class, "onSeek", "(J)V");
-		bridge->methodOnMessage = (*env)->GetMethodID(env, class, "onMessage", "(I)V");
-		bridge->methodOnPlaybackComplete = (*env)->GetMethodID(env, class, "onPlaybackComplete", "(J)V");
-		bridge->methodOnNetworkBuffering = (*env)->GetMethodID(env, class,
-				"onNetworkBuffering", "(JZ)V");
-		bridge->methodOnDurationChanged = (*env)->GetMethodID(env, class,
-				"onDurationChanged", "(J)V");
-		bridge->methodOnSurfaceApplied = (*env)->GetMethodID(env, class,
-				"onSurfaceApplied", "(JJZ)V");
-		bridge->methodFindHardwareVideoDecoder = (*env)->GetMethodID(env, class,
-				"findHardwareVideoDecoder", "(Ljava/lang/String;IIFIIII)Ljava/lang/String;");
-		sparseArrayAdd(&player->bridge.array, index, bridge);
+Bridge * playerObtainBridge(Player * player, UNUSED JNIEnv * env) {
+	return player->bridge.methods;
+}
+
+static int initializeBridge(Player * player, JNIEnv * env) {
+	Bridge * bridge = calloc(1, sizeof(Bridge));
+	if (!bridge) return 0;
+	jclass class = (*env)->GetObjectClass(env, player->bridge.native);
+	int valid = class &&
+			(bridge->methodOnSeek = (*env)->GetMethodID(env, class, "onSeek", "(J)V")) &&
+			(bridge->methodOnMessage = (*env)->GetMethodID(env, class, "onMessage", "(I)V")) &&
+			(bridge->methodOnPlaybackComplete = (*env)->GetMethodID(env, class, "onPlaybackComplete", "(J)V")) &&
+			(bridge->methodOnNetworkBuffering = (*env)->GetMethodID(env, class, "onNetworkBuffering", "(JZ)V")) &&
+			(bridge->methodOnDurationChanged = (*env)->GetMethodID(env, class, "onDurationChanged", "(J)V")) &&
+			(bridge->methodOnSurfaceApplied = (*env)->GetMethodID(env, class, "onSurfaceApplied", "(JJZ)V")) &&
+			(bridge->methodFindHardwareVideoDecoder = (*env)->GetMethodID(env, class,
+					"findHardwareVideoDecoder", "(Ljava/lang/String;IIFIIII)Ljava/lang/String;"));
+	if (class) (*env)->DeleteLocalRef(env, class);
+	if (!valid) { free(bridge); return 0; }
+	player->bridge.methods = bridge;
+	return 1;
+}
+
+void playerReportPlaybackError(Player * player) {
+	JNIEnv * env = NULL;
+	int attached = (*loadJavaVM)->GetEnv(loadJavaVM, (void **) &env, JNI_VERSION_1_6) == JNI_OK;
+	if (attached || (*loadJavaVM)->AttachCurrentThread(loadJavaVM, &env, NULL) == JNI_OK) {
+		Bridge * bridge = player->bridge.methods;
+		if (bridge) PLAYER_SEND_MESSAGE(env, player, bridge, BRIDGE_MESSAGE_PLAYBACK_ERROR);
+		if (!attached) (*loadJavaVM)->DetachCurrentThread(loadJavaVM);
 	}
-	return bridge;
 }
 
 void playerNotifyDurationChanged(Player * player, int64_t duration) {
-	JNIEnv * env;
-	if ((*loadJavaVM)->AttachCurrentThread(loadJavaVM, &env, NULL) == JNI_OK) {
+	JNIEnv * env = NULL;
+	int attached = (*loadJavaVM)->GetEnv(loadJavaVM, (void **) &env, JNI_VERSION_1_6) == JNI_OK;
+	if (attached || (*loadJavaVM)->AttachCurrentThread(loadJavaVM, &env, NULL) == JNI_OK) {
 		Bridge * bridge = playerObtainBridge(player, env);
 		(*env)->CallVoidMethod(env, player->bridge.native,
 				bridge->methodOnDurationChanged, (jlong) duration);
-		(*loadJavaVM)->DetachCurrentThread(loadJavaVM);
+		if (!attached) (*loadJavaVM)->DetachCurrentThread(loadJavaVM);
 	}
 }
 
@@ -168,6 +179,7 @@ void playerCloseAndFreeVideoCodecContext(Player * player, AVCodecContext ** cont
 
 void playerPacketQueueFreeCallback(void * data) {
 	PacketHolder * packetHolder = (PacketHolder *) data;
+	if (!packetHolder) return;
 	if (packetHolder->packet) {
 		av_packet_free(&packetHolder->packet);
 	}
@@ -235,6 +247,7 @@ void playerLogDestroyStage(Player * player, const char * stage) {
 
 static Player * createPlayer(void) {
 	Player * player = malloc(sizeof(Player));
+	if (!player) return NULL;
 	memset(player, 0, sizeof(Player));
 	player->meta.diagnosticsId = diagnosticsNextPlayerId();
 	player->file.total = -1;
@@ -246,7 +259,6 @@ static Player * createPlayer(void) {
 	__atomic_store_n(&player->decode.video.diagnosticsFramePosition, -1, __ATOMIC_RELAXED);
 	player->audio.localVolume = 100;
 	player->sync.playbackSpeed = PLAYBACK_SPEED_DEFAULT;
-	sparseArrayInit(&player->bridge.array, 4);
 	pthread_mutex_init(&player->file.controlMutex, NULL);
 	pthread_cond_init(&player->file.controlCond, NULL);
 	pthread_mutex_init(&player->decode.packets.readMutex, NULL);
@@ -273,6 +285,7 @@ static Player * createPlayer(void) {
 
 jlong preInit(UNUSED JNIEnv * env, jint fd) {
 	Player * player = createPlayer();
+	if (!player) { close(fd); return 0; }
 	player->file.fd = fd;
 	diagnosticsLog("player=%u created", player->meta.diagnosticsId);
 	return (jlong) (long) player;
@@ -289,9 +302,14 @@ void init(JNIEnv * env, jlong pointer, jobject nativeBridge, jboolean seekAnyFra
 			player->meta.diagnosticsId, !!seekAnyFrame);
 	player->meta.seekAnyFrame = !!seekAnyFrame;
 	player->bridge.native = (*env)->NewGlobalRef(env, nativeBridge);
-	playerObtainBridge(player, env);
+	if (!player->bridge.native || !initializeBridge(player, env)) {
+		if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+		player->meta.errorCode = ERROR_LOAD_IO;
+		return;
+	}
 	int contextBufferSize = 8 * 1024;
 	uint8_t * contextBuffer = av_malloc(contextBufferSize);
+	if (!contextBuffer) { player->meta.errorCode = ERROR_LOAD_IO; return; }
 	AVIOContext * ioContext = avio_alloc_context(contextBuffer, contextBufferSize, 0, player,
 			&playerDemuxRead, NULL, &playerDemuxSeek);
 	if (!ioContext) {
@@ -300,6 +318,12 @@ void init(JNIEnv * env, jlong pointer, jobject nativeBridge, jboolean seekAnyFra
 		return;
 	}
 	AVFormatContext * formatContext = avformat_alloc_context();
+	if (!formatContext) {
+		av_free(ioContext->buffer);
+		av_free(ioContext);
+		player->meta.errorCode = ERROR_LOAD_FORMAT;
+		return;
+	}
 	formatContext->pb = ioContext;
 	LOG("start avformat_open_input");
 	if (avformat_open_input(&formatContext, "", NULL, NULL) != 0) {
@@ -447,7 +471,7 @@ void destroy(JNIEnv * env, jlong pointer, jboolean initOnly) {
 			player->meta.diagnosticsId, !!initOnly, player->meta.errorCode,
 			player->video.hardwareDecoderActive);
 	playerLogDestroyStage(player, "started");
-	player->meta.interrupt = 1;
+	playerInterrupt(player);
 	condBroadcastLocked(&player->file.controlCond, &player->file.controlMutex);
 	if (!!initOnly) {
 		playerLogDestroyStage(player, "init_only_finished");
@@ -492,6 +516,9 @@ void destroy(JNIEnv * env, jlong pointer, jboolean initOnly) {
 	pthread_mutex_lock(&player->audio.sleepBufferMutex);
 	playerAudioClearOutputLocked(player, 0);
 	pthread_mutex_unlock(&player->audio.sleepBufferMutex);
+	// OpenSL callbacks may still be inside sleepBufferMutex after observing interrupt=0.
+	// Destroy the audio objects after workers join, while all their locks/queues still exist.
+	playerAudioDestroy(player);
 	playerLogDestroyStage(player, "synchronization_cleanup_started");
 	diagnosticsUnregisterPlayer(player);
 	pthread_mutex_destroy(&player->decode.packets.readMutex);
@@ -523,7 +550,6 @@ void destroy(JNIEnv * env, jlong pointer, jboolean initOnly) {
 	}
 	playerLogDestroyStage(player, "buffers_cleanup_finished");
 
-	playerAudioDestroy(player);
 	if (HAS_STREAM(player, video)) {
 		playerLogDestroyStage(player, "video_codec_close_started");
 		playerCloseAndFreeVideoCodecContext(player, &player->av.videoContext);
@@ -545,7 +571,7 @@ void destroy(JNIEnv * env, jlong pointer, jboolean initOnly) {
 		(*env)->DeleteGlobalRef(env, activeSurface);
 	}
 	playerLogDestroyStage(player, "surface_released");
-	sparseArrayDestroy(&player->bridge.array, free);
+	free(player->bridge.methods);
 	if (player->bridge.native) {
 		(*env)->DeleteGlobalRef(env, player->bridge.native);
 	}
@@ -568,8 +594,8 @@ void getSummary(JNIEnv * env, jlong pointer, jintArray output) {
 	Player * player = POINTER_CAST(pointer);
 	jint result[4];
 	AVCodecContext * context = GET_CONTEXT(player, video);
-	result[0] = context->width;
-	result[1] = context->height;
+	result[0] = context ? context->width : 0;
+	result[1] = context ? context->height : 0;
 	result[2] = HAS_STREAM(player, audio);
 	result[3] = player->av.videoRotation;
 	// Preserve the first three slots and tolerate older Java callers of the same JNI method.

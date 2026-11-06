@@ -56,6 +56,12 @@ static BufferedPackets measureBufferedPackets(BlockingQueue * queue, AVStream * 
 // Called only by playback demux (under readMutex or flowMutex), or by a seek
 // holding BOTH locks. The callback only posts to Java; never pauses OpenSL or
 // takes playback/decoder locks while demux/file locks are held.
+static JNIEnv * currentEnv(void) {
+	JNIEnv * env = NULL;
+	JavaVM * vm = playerGetJavaVM();
+	return (*vm)->GetEnv(vm, (void **) &env, JNI_VERSION_1_6) == JNI_OK ? env : NULL;
+}
+
 static void setNetworkBuffering(Player * player, Bridge * bridge, int buffering, const char * reason) {
 	if (player->decode.packets.buffering == buffering) return;
 	player->decode.packets.buffering = buffering;
@@ -65,7 +71,8 @@ static void setNetworkBuffering(Player * player, Bridge * bridge, int buffering,
 			" reason=%s target_viewing_ms=%d speed_milli=%d",
 			player->meta.diagnosticsId, buffering, serial, reason,
 			REBUFFER_VIEWING_MS, getPlaybackSpeed(player));
-	(*bridge->env)->CallVoidMethod(bridge->env, player->bridge.native,
+	JNIEnv * env = currentEnv();
+	if (env && bridge) (*env)->CallVoidMethod(env, player->bridge.native,
 			bridge->methodOnNetworkBuffering, (jlong) serial, (jboolean) !!buffering);
 }
 
@@ -167,7 +174,9 @@ void playerDemuxJoinWorkers(Player * player) {
 
 PacketHolder * playerDemuxCreatePacketHolder(int allocPacket) {
 	PacketHolder * packetHolder = malloc(sizeof(PacketHolder));
+	if (!packetHolder) return NULL;
 	packetHolder->packet = allocPacket ? av_packet_alloc() : NULL;
+	if (allocPacket && !packetHolder->packet) { free(packetHolder); return NULL; }
 	packetHolder->type = allocPacket ? PACKET_HOLDER_MEDIA : PACKET_HOLDER_END_OF_STREAM;
 	packetHolder->generation = 0;
 	return packetHolder;
@@ -175,7 +184,7 @@ PacketHolder * playerDemuxCreatePacketHolder(int allocPacket) {
 
 PacketHolder * playerCreateSurfaceRequestPacketHolder(void) {
 	PacketHolder * packetHolder = playerDemuxCreatePacketHolder(0);
-	packetHolder->type = PACKET_HOLDER_SURFACE_REQUEST;
+	if (packetHolder) packetHolder->type = PACKET_HOLDER_SURFACE_REQUEST;
 	return packetHolder;
 }
 
@@ -185,18 +194,18 @@ void * playerDemuxRun(void * data) {
 	(*playerGetJavaVM())->AttachCurrentThread(playerGetJavaVM(), &env, NULL);
 	Bridge * bridge = playerObtainBridge(player, env);
 	AVPacket packet;
-	while (!player->meta.interrupt) {
+	while (!playerIsInterrupted(player)) {
 		uint64_t endGeneration = __atomic_load_n(&player->decode.packets.generation,
 				__ATOMIC_ACQUIRE);
-		while (!player->meta.interrupt) {
+		while (!playerIsInterrupted(player)) {
 			// Never hold readMutex while waiting: the replacement seek needs it.
 			pthread_mutex_lock(&player->decode.packets.flowMutex);
-			while (!player->meta.interrupt &&
+			while (!playerIsInterrupted(player) &&
 					__atomic_load_n(&player->decode.packets.seekPending, __ATOMIC_ACQUIRE)) {
 				pthread_cond_wait(&player->decode.packets.flowCond, &player->decode.packets.flowMutex);
 			}
 			pthread_mutex_unlock(&player->decode.packets.flowMutex);
-			if (player->meta.interrupt) break;
+			if (playerIsInterrupted(player)) break;
 			pthread_mutex_lock(&player->decode.packets.readMutex);
 			// A seek may have started between the gate and acquiring readMutex.
 			if (__atomic_load_n(&player->decode.packets.seekPending, __ATOMIC_ACQUIRE)) {
@@ -227,7 +236,7 @@ void * playerDemuxRun(void * data) {
 						packet.stream_index, packet.pts);
 				goto SKIP_FRAME;
 			}
-			while (!player->meta.interrupt && !player->decode.packets.buffering &&
+			while (!playerIsInterrupted(player) && !player->decode.packets.buffering &&
 					(!HAS_STREAM(player, video) || blockingQueueCount(&player->video.packetQueue) >= 10) &&
 					(!HAS_STREAM(player, audio) || blockingQueueCount(&player->audio.packetQueue) >= 20)) {
 				pthread_cond_wait(&player->decode.packets.flowCond, &player->decode.packets.flowMutex);
@@ -246,14 +255,27 @@ void * playerDemuxRun(void * data) {
 			int isVideo = packet.stream_index == player->av.videoStreamIndex;
 			if (isAudio || isVideo) {
 				PacketHolder * packetHolder = playerDemuxCreatePacketHolder(1);
+				if (!packetHolder) { playerReportPlaybackError(player); goto SKIP_FRAME; }
 				packetHolder->generation = packetGeneration;
-				av_packet_ref(packetHolder->packet, &packet);
+				if (av_packet_ref(packetHolder->packet, &packet) < 0) {
+					playerPacketQueueFreeCallback(packetHolder);
+					playerReportPlaybackError(player);
+					goto SKIP_FRAME;
+				}
 				if (isAudio) {
-					blockingQueueAdd(&player->audio.packetQueue, packetHolder);
+					if (!blockingQueueAdd(&player->audio.packetQueue, packetHolder)) {
+						playerPacketQueueFreeCallback(packetHolder);
+						playerReportPlaybackError(player);
+						goto SKIP_FRAME;
+					}
 					player->audio.finished = 0;
 					LOG("enqueue audio %" PRId64, packet.pts);
 				} else if (isVideo) {
-					blockingQueueAdd(&player->video.packetQueue, packetHolder);
+					if (!blockingQueueAdd(&player->video.packetQueue, packetHolder)) {
+						playerPacketQueueFreeCallback(packetHolder);
+						playerReportPlaybackError(player);
+						goto SKIP_FRAME;
+					}
 					player->video.finished = 0;
 					if (player->sync.seekFirstVideoPacketPending) {
 						player->sync.seekFirstVideoPacketPending = 0;
@@ -274,7 +296,7 @@ void * playerDemuxRun(void * data) {
 			av_packet_unref(&packet);
 			pthread_mutex_unlock(&player->decode.packets.flowMutex);
 		}
-		if (player->meta.interrupt) {
+		if (playerIsInterrupted(player)) {
 			break;
 		}
 		pthread_mutex_lock(&player->decode.packets.flowMutex);
@@ -285,13 +307,20 @@ void * playerDemuxRun(void * data) {
 		if (!staleEnd) {
 			checkNetworkBuffering(player, bridge, 0, 1);
 			if (HAS_STREAM(player, audio)) {
-				blockingQueueAdd(&player->audio.packetQueue, playerDemuxCreatePacketHolder(0));
+				PacketHolder * end = playerDemuxCreatePacketHolder(0);
+				if (!end || !blockingQueueAdd(&player->audio.packetQueue, end)) {
+					playerPacketQueueFreeCallback(end);
+					playerReportPlaybackError(player);
+				}
 				player->audio.finished = 0;
 			}
 			if (HAS_STREAM(player, video)) {
 				PacketHolder * end = playerDemuxCreatePacketHolder(0);
-				end->generation = currentGeneration;
-				blockingQueueAdd(&player->video.packetQueue, end);
+				if (end) end->generation = currentGeneration;
+				if (!end || !blockingQueueAdd(&player->video.packetQueue, end)) {
+					playerPacketQueueFreeCallback(end);
+					playerReportPlaybackError(player);
+				}
 				player->video.finished = 0;
 			}
 		}
@@ -312,7 +341,7 @@ void * playerDemuxRun(void * data) {
 		}
 		player->decode.packets.finished = 1;
 		int needSendFinishMessage = 1;
-		while (!player->meta.interrupt && player->decode.packets.finished) {
+		while (!playerIsInterrupted(player) && player->decode.packets.finished) {
 			if (endGeneration != __atomic_load_n(&player->decode.packets.generation, __ATOMIC_ACQUIRE) ||
 					__atomic_load_n(&player->decode.packets.seekPending, __ATOMIC_ACQUIRE)) break;
 			if (needSendFinishMessage &&
@@ -328,8 +357,9 @@ void * playerDemuxRun(void * data) {
 		}
 		pthread_mutex_unlock(&player->play.finishMutex);
 	}
-	blockingQueueAdd(&player->audio.packetQueue, NULL);
-	blockingQueueAdd(&player->video.packetQueue, NULL);
+	// Shutdown must not need an allocation for a wake-up queue node.
+	blockingQueueInterrupt(&player->audio.packetQueue);
+	blockingQueueInterrupt(&player->video.packetQueue);
 	playerLogDestroyStage(player, "packet_thread_join_workers");
 	playerDemuxJoinWorkers(player);
 	playerLogDestroyStage(player, "packet_thread_finished");
@@ -347,7 +377,7 @@ int playerDemuxRead(void * opaque, uint8_t * buf, int bufSize) {
 	if (offset >= 0) {
 		int request = 1;
 		int waitedForRange = 0;
-		while (!player->meta.interrupt && !player->file.cancelSeek) {
+		while (!playerIsInterrupted(player) && !player->file.cancelSeek) {
 			if (player->file.total >= 0 && offset >= player->file.total) {
 				break;
 			}
@@ -364,17 +394,18 @@ int playerDemuxRead(void * opaque, uint8_t * buf, int bufSize) {
 				diagnosticsLog("player=%u range_wait_started offset=%" PRId64
 						" available=[%ld-%ld/%ld]", player->meta.diagnosticsId, offset,
 						player->file.start, player->file.end, player->file.total);
-				Bridge * bridge = sparseArrayGet(&player->bridge.array, (int) pthread_self());
-				if (bridge) {
+				JNIEnv * env = currentEnv();
+				Bridge * bridge = playerObtainBridge(player, env);
+				if (bridge && env) {
 					LOG("read data request");
-					(*bridge->env)->CallVoidMethod(bridge->env, player->bridge.native, bridge->methodOnSeek, offset);
+					(*env)->CallVoidMethod(env, player->bridge.native, bridge->methodOnSeek, offset);
 				}
 			}
 			LOG("read data wait");
 			// Recheck the speed-dependent target even when the connection stops sending
 			// bytes. The already queued media may suffice after a speed decrease.
 			if (player->decode.packets.readingForPlayback) {
-				Bridge * bridge = sparseArrayGet(&player->bridge.array, (int) pthread_self());
+				Bridge * bridge = playerObtainBridge(player, NULL);
 				if (!player->decode.packets.buffering && packetReserveLow(player)) {
 					setNetworkBuffering(player, bridge, 1, "range_starved");
 				}
@@ -389,7 +420,7 @@ int playerDemuxRead(void * opaque, uint8_t * buf, int bufSize) {
 			diagnosticsRangeWait(player, 0);
 			diagnosticsLog("player=%u range_wait_finished offset=%" PRId64
 					" cancelled=%d interrupt=%d available=[%ld-%ld/%ld]", player->meta.diagnosticsId,
-					offset, player->file.cancelSeek, player->meta.interrupt,
+					offset, player->file.cancelSeek, playerIsInterrupted(player),
 					player->file.start, player->file.end, player->file.total);
 		}
 	}

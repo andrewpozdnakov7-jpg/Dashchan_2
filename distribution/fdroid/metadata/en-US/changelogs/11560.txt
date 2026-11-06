@@ -1,0 +1,1 @@
+Removed the photo editor output-resolution limit. Fixed revisited threads missing from cleared history. Added a received-replies counter; statistics are still being refined.

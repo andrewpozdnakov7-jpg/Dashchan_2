@@ -7,7 +7,7 @@ import android.widget.TextView;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
 
-/** Scoped to preference labels. Restore before binding so recycling never compounds the scale. */
+/** Font-only scaling for preferences and opted-in service labels. Restore before rebinding. */
 public final class SettingsTextAppearance {
 	private SettingsTextAppearance() {}
 

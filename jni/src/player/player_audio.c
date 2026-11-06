@@ -246,7 +246,7 @@ static int64_t reconcileAudioOutputLocked(Player * player, SLuint32 nativeCount)
 // callback. It is only polled while decoded PCM is back-pressured.
 static void checkAudioOutputProgressLocked(Player * player) {
 	if (player->audio.outputRecoveryFailed) return;
-	if (!player->play.playing || player->meta.interrupt ||
+	if (!player->play.playing || playerIsInterrupted(player) ||
 			playerGetSkipFlag(&player->sync.skip.audioWorkFrame) ||
 			!player->audio.sl.queue || !player->audio.sl.play) {
 		player->audio.outputProgressTime = 0;
@@ -387,7 +387,7 @@ int playerAudioEnqueueBuffer(Player * player) {
 
 static void audioPlayerCallback(SLAndroidSimpleBufferQueueItf slQueue, void * context) {
 	Player * player = (Player *) context;
-	if (player->meta.interrupt) {
+	if (playerIsInterrupted(player)) {
 		return;
 	}
 	LOG("audio callback");
@@ -436,12 +436,12 @@ static int queueDecodedAudio(Player * player, uint8_t * buffer, int size,
 	playerSetDiagnosticsAudioStage(player, DIAGNOSTICS_AUDIO_STAGE_WAIT_SLEEP_BUFFER_MUTEX);
 	pthread_mutex_lock(&player->audio.sleepBufferMutex);
 	playerSetDiagnosticsAudioStage(player, DIAGNOSTICS_AUDIO_STAGE_QUEUE_BUFFER);
-	if (player->meta.interrupt || playerGetSkipFlag(&player->sync.skip.audioWorkFrame)) {
+	if (playerIsInterrupted(player) || playerGetSkipFlag(&player->sync.skip.audioWorkFrame)) {
 		pthread_mutex_unlock(&player->audio.sleepBufferMutex);
 		playerSetDiagnosticsAudioStage(player, DIAGNOSTICS_AUDIO_STAGE_IDLE);
 		return 0;
 	}
-	while (!player->meta.interrupt && !playerGetSkipFlag(&player->sync.skip.audioWorkFrame) &&
+	while (!playerIsInterrupted(player) && !playerGetSkipFlag(&player->sync.skip.audioWorkFrame) &&
 			blockingQueueCount(&player->audio.bufferQueue) >= 5) {
 		if (player->play.playing) {
 			condSleepUntilMs(&player->audio.bufferCond, &player->audio.sleepBufferMutex, getTime() + 250);
@@ -451,17 +451,17 @@ static int queueDecodedAudio(Player * player, uint8_t * buffer, int size,
 			pthread_cond_wait(&player->audio.bufferCond, &player->audio.sleepBufferMutex);
 		}
 	}
-	if (player->meta.interrupt || playerGetSkipFlag(&player->sync.skip.audioWorkFrame)) {
+	if (playerIsInterrupted(player) || playerGetSkipFlag(&player->sync.skip.audioWorkFrame)) {
 		pthread_mutex_unlock(&player->audio.sleepBufferMutex);
 		playerSetDiagnosticsAudioStage(player, DIAGNOSTICS_AUDIO_STAGE_IDLE);
 		return 0;
 	}
 	int waitedForVideo = player->sync.videoPositionNotSync;
-	while (!player->meta.interrupt && !playerGetSkipFlag(&player->sync.skip.audioWorkFrame)
+	while (!playerIsInterrupted(player) && !playerGetSkipFlag(&player->sync.skip.audioWorkFrame)
 			&& player->sync.videoPositionNotSync) {
 		pthread_cond_wait(&player->audio.sleepCond, &player->audio.sleepBufferMutex);
 	}
-	if (player->meta.interrupt || playerGetSkipFlag(&player->sync.skip.audioWorkFrame)) {
+	if (playerIsInterrupted(player) || playerGetSkipFlag(&player->sync.skip.audioWorkFrame)) {
 		pthread_mutex_unlock(&player->audio.sleepBufferMutex);
 		playerSetDiagnosticsAudioStage(player, DIAGNOSTICS_AUDIO_STAGE_IDLE);
 		return 0;
@@ -476,6 +476,7 @@ static int queueDecodedAudio(Player * player, uint8_t * buffer, int size,
 	if (!audioBuffer) {
 		pthread_mutex_unlock(&player->audio.sleepBufferMutex);
 		playerSetDiagnosticsAudioStage(player, DIAGNOSTICS_AUDIO_STAGE_IDLE);
+		playerReportPlaybackError(player);
 		return 0;
 	}
 	audioBuffer->buffer = buffer;
@@ -496,7 +497,13 @@ static int queueDecodedAudio(Player * player, uint8_t * buffer, int size,
 	}
 	applyAudioBoost(player, audioBuffer->buffer, audioBuffer->size);
 	int needEnqueue = player->audio.bufferNeedEnqueueAfterDecode;
-	blockingQueueAdd(&player->audio.bufferQueue, audioBuffer);
+	if (!blockingQueueAdd(&player->audio.bufferQueue, audioBuffer)) {
+		free(audioBuffer); // The caller retains ownership of the sample buffer on failure.
+		pthread_mutex_unlock(&player->audio.sleepBufferMutex);
+		playerSetDiagnosticsAudioStage(player, DIAGNOSTICS_AUDIO_STAGE_IDLE);
+		playerReportPlaybackError(player);
+		return 0;
+	}
 	if (needEnqueue) {
 		playerAudioEnqueueBuffer(player);
 	}
@@ -509,7 +516,7 @@ static int queueDecodedAudio(Player * player, uint8_t * buffer, int size,
 static int drainTempoProcessor(Player * player, TempoProcessor * processor,
 		int sampleRate, int channels, int speed, int64_t startPosition,
 		int64_t * outputSamples, int * silentAudioLength) {
-	while (!player->meta.interrupt && !playerGetSkipFlag(&player->sync.skip.audioWorkFrame)) {
+	while (!playerIsInterrupted(player) && !playerGetSkipFlag(&player->sync.skip.audioWorkFrame)) {
 		uint8_t * buffer = NULL;
 		int size = 0;
 		int samples = 0;
@@ -554,8 +561,12 @@ void * playerAudioDecodeThread(void * data) {
 	int64_t tempoStartPosition = -1;
 	int64_t tempoOutputSamples = 0;
 #endif
+	if (!frame || !resampleContext) {
+		playerReportPlaybackError(player);
+		goto CLEANUP_AUDIO_DECODE;
+	}
 
-	while (!player->meta.interrupt) {
+	while (!playerIsInterrupted(player)) {
 		packetHolder = (PacketHolder *) blockingQueueGet(&player->audio.packetQueue, 1);
 		if (playerGetSkipFlag(&player->sync.skip.audioWorkFrame)) {
 			playerSetSkipFlag(&player->sync.skip.audioWorkFrame, 0);
@@ -565,20 +576,20 @@ void * playerAudioDecodeThread(void * data) {
 			tempoOutputSamples = 0;
 #endif
 		}
-		if (!packetHolder || player->meta.interrupt) {
+		if (!packetHolder || playerIsInterrupted(player)) {
 			break;
 		}
 		condBroadcastLocked(&player->decode.packets.flowCond, &player->decode.packets.flowMutex);
-		if (player->meta.interrupt) {
+		if (playerIsInterrupted(player)) {
 			break;
 		}
 
 		pthread_mutex_lock(&player->play.finishMutex);
-		while (!player->meta.interrupt && !player->play.playing) {
+		while (!playerIsInterrupted(player) && !player->play.playing) {
 			pthread_cond_wait(&player->play.finishCond, &player->play.finishMutex);
 		}
 		pthread_mutex_unlock(&player->play.finishMutex);
-		if (player->meta.interrupt) {
+		if (playerIsInterrupted(player)) {
 			break;
 		}
 
@@ -791,6 +802,7 @@ void * playerAudioDecodeThread(void * data) {
 					player->audio.outputChunkCount);
 		}
 	}
+	CLEANUP_AUDIO_DECODE:
 	if (packetHolder) {
 		playerPacketQueueFreeCallback(packetHolder);
 	}

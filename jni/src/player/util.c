@@ -22,8 +22,9 @@ void queueClear(Queue * queue, void callback(void * data)) {
 	queue->count = 0;
 }
 
-void queueAdd(Queue * queue, void * data) {
+int queueAdd(Queue * queue, void * data) {
 	QueueItem * queueItem = malloc(sizeof(QueueItem));
+	if (!queueItem) return 0;
 	queueItem->data = data;
 	queueItem->next = NULL;
 	if (queue->last) {
@@ -33,6 +34,7 @@ void queueAdd(Queue * queue, void * data) {
 	}
 	queue->last = queueItem;
 	queue->count++;
+	return 1;
 }
 
 void * queueGet(Queue * queue) {
@@ -76,11 +78,12 @@ void blockingQueueDestroy(BlockingQueue * blockingQueue, void callback(void * da
 	pthread_mutex_destroy(&blockingQueue->mutex);
 }
 
-void blockingQueueAdd(BlockingQueue * blockingQueue, void * data) {
+int blockingQueueAdd(BlockingQueue * blockingQueue, void * data) {
 	pthread_mutex_lock(&blockingQueue->mutex);
-	queueAdd(&blockingQueue->queue, data);
+	int added = queueAdd(&blockingQueue->queue, data);
 	pthread_cond_broadcast(&blockingQueue->cond);
 	pthread_mutex_unlock(&blockingQueue->mutex);
+	return added;
 }
 
 void * blockingQueueGet(BlockingQueue * blockingQueue, int wait) {
@@ -104,44 +107,69 @@ int blockingQueueCount(BlockingQueue * blockingQueue) {
 	return blockingQueue->queue.count;
 }
 
-void bufferQueueInit(BufferQueue * bufferQueue, int bufferSize, int maxCount) {
+static void bufferQueuePut(Queue * queue, BufferItem * item) {
+	QueueItem * node = &item->queueItem;
+	node->data = item;
+	node->next = NULL;
+	if (queue->last) queue->last->next = node;
+	else queue->first = node;
+	queue->last = node;
+	queue->count++;
+}
+
+static BufferItem * bufferQueueTake(Queue * queue) {
+	QueueItem * node = queue->first;
+	if (!node) return NULL;
+	queue->first = node->next;
+	if (!queue->first) queue->last = NULL;
+	queue->count--;
+	node->next = NULL;
+	return node->data;
+}
+
+int bufferQueueInit(BufferQueue * bufferQueue, int bufferSize, int maxCount) {
 	queueInit(&bufferQueue->freeQueue);
 	queueInit(&bufferQueue->busyQueue);
 	bufferQueue->bufferSize = bufferSize;
+	if (bufferSize <= 0 || maxCount <= 0) return 0;
 	for (int i = 0; i < maxCount; i++) {
-		uint8_t * buffer = malloc(bufferSize);
 		BufferItem * bufferItem = malloc(sizeof(BufferItem));
+		uint8_t * buffer = bufferItem ? malloc(bufferSize) : NULL;
+		if (!bufferItem || !buffer) {
+			free(bufferItem);
+			bufferQueueDestroy(bufferQueue, NULL);
+			return 0;
+		}
 		bufferItem->buffer = buffer;
 		bufferItem->bufferSize = bufferSize;
 		bufferItem->dataSize = 0;
 		bufferItem->extra = NULL;
-		queueAdd(&bufferQueue->freeQueue, bufferItem);
+		bufferQueuePut(&bufferQueue->freeQueue, bufferItem);
 	}
+	return 1;
 }
 
 void bufferQueueClear(BufferQueue * bufferQueue, void callback(BufferItem * bufferItem)) {
 	while (1) {
-		BufferItem * bufferItem = queueGet(&bufferQueue->busyQueue);
+		BufferItem * bufferItem = bufferQueueTake(&bufferQueue->busyQueue);
 		if (!bufferItem) {
 			break;
 		}
 		if (callback) {
 			callback(bufferItem);
 		}
-		queueAdd(&bufferQueue->freeQueue, bufferItem);
+		bufferQueuePut(&bufferQueue->freeQueue, bufferItem);
 	}
-}
-
-static void bufferQueueDestroyItem(void * data) {
-	BufferItem * bufferItem = data;
-	free(bufferItem->buffer);
-	free(bufferItem);
 }
 
 void bufferQueueDestroy(BufferQueue * bufferQueue, void callback(BufferItem * bufferItem)) {
 	bufferQueueClear(bufferQueue, callback);
-	queueClear(&bufferQueue->freeQueue, bufferQueueDestroyItem);
-	queueClear(&bufferQueue->busyQueue, NULL);
+	BufferItem * item;
+	while ((item = bufferQueueTake(&bufferQueue->freeQueue))) {
+		free(item->buffer);
+		free(item);
+	}
+	bufferQueue->bufferSize = 0;
 }
 
 void bufferQueueExtend(BufferQueue * bufferQueue, int bufferSize)
@@ -151,80 +179,39 @@ void bufferQueueExtend(BufferQueue * bufferQueue, int bufferSize)
 	}
 }
 
-BufferItem * bufferQueuePrepare(BufferQueue * bufferQueue) {
-	BufferItem * bufferItem = queueGet(&bufferQueue->freeQueue);
+BufferItem * bufferQueuePrepare(BufferQueue * bufferQueue, int * allocationFailed) {
+	*allocationFailed = 0;
+	BufferItem * bufferItem = bufferQueue->freeQueue.first ? bufferQueue->freeQueue.first->data : NULL;
 	if (bufferItem && bufferItem->bufferSize < bufferQueue->bufferSize) {
-		uint8_t * buffer = malloc(bufferQueue->bufferSize);
-		memcpy(buffer, bufferItem->buffer, bufferItem->bufferSize);
-		free(bufferItem->buffer);
+		uint8_t * buffer = realloc(bufferItem->buffer, bufferQueue->bufferSize);
+		if (!buffer) {
+			*allocationFailed = 1;
+			return NULL; // Keep the old allocation and its queue node for a later retry.
+		}
 		bufferItem->buffer = buffer;
 		bufferItem->bufferSize = bufferQueue->bufferSize;
 	}
 	if (bufferItem) {
+		bufferQueueTake(&bufferQueue->freeQueue);
 		bufferItem->dataSize = 0;
 	}
 	return bufferItem;
 }
 
 void bufferQueueAdd(BufferQueue * bufferQueue, BufferItem * bufferItem) {
-	queueAdd(&bufferQueue->busyQueue, bufferItem);
+	bufferQueuePut(&bufferQueue->busyQueue, bufferItem);
 }
 
 BufferItem * bufferQueueSeize(BufferQueue * bufferQueue) {
-	return queueGet(&bufferQueue->busyQueue);
+	return bufferQueueTake(&bufferQueue->busyQueue);
 }
 
 void bufferQueueRelease(BufferQueue * bufferQueue, BufferItem * bufferItem) {
-	queueAdd(&bufferQueue->freeQueue, bufferItem);
+	bufferQueuePut(&bufferQueue->freeQueue, bufferItem);
 }
 
 int bufferQueueCount(BufferQueue * bufferQueue) {
 	return bufferQueue->busyQueue.count;
-}
-
-void sparseArrayInit(SparseArray * sparseArray, int initialCapacity) {
-	sparseArray->items = malloc(sizeof(SparseArrayItem) * initialCapacity);
-	sparseArray->capacity = initialCapacity;
-	sparseArray->count = 0;
-}
-
-void sparseArrayDestroy(SparseArray * sparseArray, SparseArrayDestroyCallback callback) {
-	if (callback) {
-		for (int i = 0; i < sparseArray->count; i++) {
-			SparseArrayItem sparseArrayItem = sparseArray->items[i];
-			if (sparseArrayItem.data) {
-				callback(sparseArrayItem.data);
-			}
-		}
-	}
-	free(sparseArray->items);
-	sparseArray->count = 0;
-}
-
-void sparseArrayAdd(SparseArray * sparseArray, int index, void * data) {
-	if (sparseArray->count == sparseArray->capacity) {
-		int newCapacity = sparseArray->capacity * 2;
-		SparseArrayItem * items = malloc(sizeof(SparseArrayItem) * newCapacity);
-		memcpy(items, sparseArray->items, sizeof(SparseArrayItem) * sparseArray->capacity);
-		free(sparseArray->items);
-		sparseArray->capacity = newCapacity;
-		sparseArray->items = items;
-	}
-	sparseArray->items[sparseArray->count].data = data;
-	sparseArray->items[sparseArray->count].index = index;
-	sparseArray->count++;
-}
-
-void * sparseArrayGet(SparseArray * sparseArray, int index) {
-	void * data = NULL;
-	for (int i = 0; i < sparseArray->count; i++) {
-		SparseArrayItem sparseArrayItem = sparseArray->items[i];
-		if (sparseArrayItem.index == index) {
-			data = sparseArrayItem.data;
-			break;
-		}
-	}
-	return data;
 }
 
 int64_t getTime(void) {

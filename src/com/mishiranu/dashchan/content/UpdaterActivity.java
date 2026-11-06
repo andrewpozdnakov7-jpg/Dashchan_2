@@ -24,11 +24,11 @@ import androidx.lifecycle.ViewModelProvider;
 import chan.content.ChanManager;
 import chan.util.DataFile;
 import chan.util.StringUtils;
+import com.mishiranu.dashchan.ui.MainNavigationIntent;
 import com.mishiranu.dashchan.BuildConfig;
 import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.service.DownloadService;
-import com.mishiranu.dashchan.ui.MainActivity;
 import com.mishiranu.dashchan.ui.DownloadedUpdatePrompt;
 import com.mishiranu.dashchan.content.update.DownloadedUpdate;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
@@ -310,7 +310,7 @@ public class UpdaterActivity extends StateActivity {
 					context.getSystemService(Context.NOTIFICATION_SERVICE);
 			notificationManager.createNotificationChannel(AndroidUtils.createHeadsUpNotificationChannel(
 					C.NOTIFICATION_CHANNEL_UPDATES, context.getString(R.string.updates)));
-			Intent openApp = new Intent(context, MainActivity.class)
+			Intent openApp = MainNavigationIntent.create(context)
 					.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
 			PendingIntent pendingIntent = PendingIntent.getActivity(context,
 					C.NOTIFICATION_ID_UPDATE_INSTALLED, openApp,

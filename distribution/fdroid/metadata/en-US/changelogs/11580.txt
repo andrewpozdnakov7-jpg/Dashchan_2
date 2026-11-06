@@ -1,0 +1,1 @@
+Fixed the side-menu reply counter. Added side-menu text scaling. Refined the posting form, keyboard handling and settings-search transitions. Made the SP control clearer and removed unnecessary toolbar layouts.

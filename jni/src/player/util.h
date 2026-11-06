@@ -2,6 +2,7 @@
 #define PLAYER_UTIL_H
 
 #include <pthread.h>
+#include <stdint.h>
 #include <android/log.h>
 
 #define UNUSED __attribute__((unused))
@@ -30,7 +31,7 @@ struct Queue {
 void queueInit(Queue * queue);
 void queueClear(Queue * queue, void callback(void * data));
 void queueDestroy(Queue * queue, void callback(void * data));
-void queueAdd(Queue * queue, void * data);
+int queueAdd(Queue * queue, void * data);
 void * queueGet(Queue * queue);
 
 typedef struct BlockingQueue BlockingQueue;
@@ -46,7 +47,7 @@ void blockingQueueInit(BlockingQueue * blockingQueue);
 void blockingQueueInterrupt(BlockingQueue * blockingQueue);
 void blockingQueueClear(BlockingQueue * blockingQueue, void callback(void * data));
 void blockingQueueDestroy(BlockingQueue * blockingQueue, void callback(void * data));
-void blockingQueueAdd(BlockingQueue * blockingQueue, void * data);
+int blockingQueueAdd(BlockingQueue * blockingQueue, void * data);
 void * blockingQueueGet(BlockingQueue * blockingQueue, int wait);
 int blockingQueueCount(BlockingQueue * blockingQueue);
 
@@ -54,6 +55,7 @@ typedef struct BufferItem BufferItem;
 typedef struct BufferQueue BufferQueue;
 
 struct BufferItem {
+	QueueItem queueItem; // Reused between free/busy queues; no per-frame allocation.
 	uint8_t * buffer;
 	int bufferSize;
 	int dataSize;
@@ -66,35 +68,15 @@ struct BufferQueue {
 	int bufferSize;
 };
 
-void bufferQueueInit(BufferQueue * bufferQueue, int bufferSize, int maxCount);
+int bufferQueueInit(BufferQueue * bufferQueue, int bufferSize, int maxCount);
 void bufferQueueClear(BufferQueue * bufferQueue, void callback(BufferItem * bufferItem));
 void bufferQueueDestroy(BufferQueue * bufferQueue, void callback(BufferItem * bufferItem));
 void bufferQueueExtend(BufferQueue * bufferQueue, int bufferSize);
-BufferItem * bufferQueuePrepare(BufferQueue * bufferQueue);
+BufferItem * bufferQueuePrepare(BufferQueue * bufferQueue, int * allocationFailed);
 void bufferQueueAdd(BufferQueue * bufferQueue, BufferItem * bufferItem);
 BufferItem * bufferQueueSeize(BufferQueue * bufferQueue);
 void bufferQueueRelease(BufferQueue * bufferQueue, BufferItem * bufferItem);
 int bufferQueueCount(BufferQueue * bufferQueue);
-
-typedef struct SparseArrayItem SparseArrayItem;
-typedef struct SparseArray SparseArray;
-
-struct SparseArrayItem {
-	int index;
-	void * data;
-};
-
-struct SparseArray {
-	SparseArrayItem * items;
-	int capacity;
-	int count;
-};
-
-typedef void (*SparseArrayDestroyCallback)(void *);
-void sparseArrayInit(SparseArray * sparseArray, int initialCapacity);
-void sparseArrayDestroy(SparseArray * sparseArray, SparseArrayDestroyCallback callback);
-void sparseArrayAdd(SparseArray * sparseArray, int index, void * data);
-void * sparseArrayGet(SparseArray * sparseArray, int index);
 
 int64_t getTime(void);
 int64_t getTimeUs(void);

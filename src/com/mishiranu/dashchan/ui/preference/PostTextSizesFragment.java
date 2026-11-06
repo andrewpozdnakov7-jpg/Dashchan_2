@@ -31,6 +31,7 @@ import com.mishiranu.dashchan.widget.ThemeEngine;
 import com.mishiranu.dashchan.widget.InterfaceAppearance;
 import com.mishiranu.dashchan.widget.SettingsTextAppearance;
 import com.mishiranu.dashchan.widget.DrawerStyle;
+import com.mishiranu.dashchan.widget.HistoryTextAppearance;
 import com.mishiranu.dashchan.widget.ViewFactory;
 import java.util.function.IntConsumer;
 
@@ -129,6 +130,7 @@ public class PostTextSizesFragment extends PreferenceFragment {
 
 	private static class DrawerPreview extends LinearLayout {
 		private final TextView group, item;
+		private final HistoryPreview history;
 		DrawerPreview(Context context) {
 			super(context); setOrientation(VERTICAL);
 			int padding = Math.round(12 * ResourceUtils.obtainDensity(context));
@@ -139,6 +141,8 @@ public class PostTextSizesFragment extends PreferenceFragment {
 			group.setText(R.string.favorite_threads); item.setText(R.string.history);
 			addView(group, LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT);
 			addView(item, LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT);
+			history = new HistoryPreview(context);
+			addView(history, LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT);
 			update(Preferences.getDrawerTextScalePercent());
 		}
 		void update(int percent) {
@@ -153,6 +157,27 @@ public class PostTextSizesFragment extends PreferenceFragment {
 					DrawerStyle.scaleText(view, percent);
 				}
 			}
+			history.update(percent);
+		}
+	}
+
+	private static class HistoryPreview extends LinearLayout {
+		private final TextView header;
+		private final ViewFactory.TwoLinesViewHolder row;
+		HistoryPreview(Context context) {
+			super(context); setOrientation(VERTICAL);
+			header = ViewFactory.makeListTextHeader(this); header.setText(R.string.today);
+			addView(header);
+			row = ViewFactory.makeTwoLinesListItem(this, ViewFactory.FEATURE_TEXT2_END, true);
+			row.text1.setText(R.string.post_text_size_sample_subject);
+			row.text2.setText(R.string.board);
+			row.text2End.setText(new com.mishiranu.dashchan.util.PostDateFormatter(context)
+					.formatDate(System.currentTimeMillis()));
+			addView(row.view);
+		}
+		void update(int percent) {
+			HistoryTextAppearance.header(header, percent);
+			HistoryTextAppearance.row(row, percent);
 		}
 	}
 

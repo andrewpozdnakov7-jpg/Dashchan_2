@@ -1,0 +1,13 @@
+**Slooop 3.2.79 — F-Droid build**
+
+- Includes the improvements since F-Droid 3.2.74: refined the Material 3 posting form, dialogs, menus and transitions. Fixed the send button disappearing after captcha, keyboard-related footer jumps and captcha button/image flicker. Made the SP spoiler control easier to recognize.
+- Added settings and side-menu text sizes from 30 to 500%, with previews. History now follows the side-menu scale. Unified checkboxes and radio buttons across themes and both interface choices.
+- Fixed a crash when sharing images or videos from another application. Removed the photo editor's artificial maximum output-resolution limit.
+- Improved ordinary Back navigation, settings search and leaving the posting form with the keyboard open. Fixed scrollbar jumps with hidden threads and background page loading. Added clearer feedback when hiding threads with a swipe.
+- The player respects video rotation metadata. Improved error handling, shutdown and resource management. The obsolete external WebM extension is no longer used; playback uses the built-in player.
+- Fixed revisited threads missing from cleared history and delayed unread-reply counts in the side menu. Refined the statistics screen and added a received-replies counter. Statistics are still being refined and may contain inaccuracies.
+- Removed unnecessary toolbar layouts and animation warnings. Expanded manual local diagnostics: the UI and player journals each have separate 4 MiB standard and 128 MiB extended budgets. Reports are not sent automatically.
+
+Material 3 remains enabled by default while preserving an explicit opt-out. Predictive Back, application protection, Google/Firebase services and application self-update remain disabled in F-Droid.
+
+Thank you for testing, reporting bugs and sharing logs!

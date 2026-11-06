@@ -75,13 +75,13 @@ static int renderMediaCodecFrame(Player * player, JNIEnv * env, AVStream * strea
 	pthread_mutex_lock(&player->video.sleepDrawMutex);
 	playerSetDiagnosticsMediaCodecStage(player, DIAGNOSTICS_MEDIACODEC_STAGE_RENDER_FRAME,
 			framePosition);
-	while (!player->meta.interrupt && !playerGetSkipFlag(&player->sync.skip.videoWorkFrame)
+	while (!playerIsInterrupted(player) && !playerGetSkipFlag(&player->sync.skip.videoWorkFrame)
 			&& !playerVideoCanPresent(player)) {
 		// Surface requests intentionally signal without taking decoder locks. A
 		// bounded wait also observes their skip flag if that signal races this wait.
 		condSleepUntilMs(&player->video.sleepCond, &player->video.sleepDrawMutex, getTime() + 100);
 	}
-	if (player->meta.interrupt || playerGetSkipFlag(&player->sync.skip.videoWorkFrame)) {
+	if (playerIsInterrupted(player) || playerGetSkipFlag(&player->sync.skip.videoWorkFrame)) {
 		render = 0;
 		outputAction = DIAGNOSTICS_OUTPUT_DROPPED_STATE;
 		goto RELEASE_BUFFER;
@@ -121,12 +121,12 @@ static int renderMediaCodecFrame(Player * player, JNIEnv * env, AVStream * strea
 		player->video.hardwareCadenceDrops++;
 	}
 	while (render && waitTime > 0) {
-		while (!player->meta.interrupt && !playerGetSkipFlag(&player->sync.skip.videoWorkFrame)
+		while (!playerIsInterrupted(player) && !playerGetSkipFlag(&player->sync.skip.videoWorkFrame)
 				&& !playerVideoCanPresent(player)) {
 			condSleepUntilMs(&player->video.sleepCond, &player->video.sleepDrawMutex, getTime() + 100);
 			waitTime = framePosition - calculatePosition(player, 1);
 		}
-		if (player->meta.interrupt || playerGetSkipFlag(&player->sync.skip.videoWorkFrame)) {
+		if (playerIsInterrupted(player) || playerGetSkipFlag(&player->sync.skip.videoWorkFrame)) {
 			render = 0;
 			outputAction = DIAGNOSTICS_OUTPUT_DROPPED_STATE;
 			break;
@@ -145,7 +145,7 @@ static int renderMediaCodecFrame(Player * player, JNIEnv * env, AVStream * strea
 		playerSetDiagnosticsMediaCodecStage(player, DIAGNOSTICS_MEDIACODEC_STAGE_WAIT_RENDER_TIME,
 				framePosition);
 		condSleepUntilMs(&player->video.sleepCond, &player->video.sleepDrawMutex, wakeTime);
-		if (player->meta.interrupt || playerGetSkipFlag(&player->sync.skip.videoWorkFrame)) {
+		if (playerIsInterrupted(player) || playerGetSkipFlag(&player->sync.skip.videoWorkFrame)) {
 			render = 0;
 			outputAction = DIAGNOSTICS_OUTPUT_DROPPED_STATE;
 			break;
@@ -295,18 +295,18 @@ static void reportHardwarePump(Player * player) {
 
 void playerVideoDecodeMediaCodec(Player * player, JNIEnv * env, AVStream * stream) {
 	PacketHolder * pending = NULL;
-	while (!player->meta.interrupt && player->video.hardwareDecoderActive) {
+	while (!playerIsInterrupted(player) && player->video.hardwareDecoderActive) {
 		if (playerVideoHasPendingSurface(player)) {
 			if (pending) { playerPacketQueueFreeCallback(pending); pending = NULL; }
 			playerVideoApplyPendingSurface(player, env);
 			continue;
 		}
 		pthread_mutex_lock(&player->play.finishMutex);
-		while (!player->meta.interrupt && !playerVideoCanDecode(player) && !playerVideoHasPendingSurface(player)) {
+		while (!playerIsInterrupted(player) && !playerVideoCanDecode(player) && !playerVideoHasPendingSurface(player)) {
 			condSleepUntilMs(&player->play.finishCond, &player->play.finishMutex, getTime() + 100);
 		}
 		pthread_mutex_unlock(&player->play.finishMutex);
-		if (player->meta.interrupt) break;
+		if (playerIsInterrupted(player)) break;
 		if (playerVideoHasPendingSurface(player)) continue;
 		int progress = 0, decoderError = 0, end = 0;
 		playerSetDiagnosticsMediaCodecStage(player, DIAGNOSTICS_MEDIACODEC_STAGE_WAIT_FRAME_MUTEX, -1);
@@ -321,7 +321,7 @@ void playerVideoDecodeMediaCodec(Player * player, JNIEnv * env, AVStream * strea
 		catchUpHardwareDecoder(player, stream, &pending);
 		// Bounded pump: fill the two-frame lookahead before waiting for presentation.
 		// A packet stays owned here until send_packet ACCEPTS it (EAGAIN is not consumption).
-		for (int steps = 0; steps < 16 && !player->meta.interrupt
+		for (int steps = 0; steps < 16 && !playerIsInterrupted(player)
 				&& !playerGetSkipFlag(&player->sync.skip.videoWorkFrame)
 				&& !playerVideoHasPendingSurface(player) && playerVideoCanDecode(player)
 				&& player->video.hardwareOutputCount < HARDWARE_OUTPUT_CAPACITY; steps++) {
@@ -387,7 +387,7 @@ void playerVideoDecodeMediaCodec(Player * player, JNIEnv * env, AVStream * strea
 			break; // Refill before waiting for the next presentation deadline.
 		}
 		if (decoderError) {
-			if (++player->video.hardwareDecodeErrors >= 3) playerVideoFallbackMediaCodecToSoftware(player);
+			if (++player->video.hardwareDecodeErrors >= 3) playerVideoFallbackMediaCodecToSoftware(player, env);
 		} else if (progress) player->video.hardwareDecodeErrors = 0;
 		end = player->video.hardwareDecoderEof && player->video.hardwareOutputCount == 0;
 		reportHardwarePump(player);
@@ -398,14 +398,14 @@ void playerVideoDecodeMediaCodec(Player * player, JNIEnv * env, AVStream * strea
 			playerMarkStreamFinished(player, 1);
 			// Wait for a seek/surface request or stop; EOF is not a reason to terminate the worker.
 			pthread_mutex_lock(&player->play.finishMutex);
-			if (!player->meta.interrupt && !playerVideoHasPendingSurface(player)) {
+			if (!playerIsInterrupted(player) && !playerVideoHasPendingSurface(player)) {
 				condSleepUntilMs(&player->play.finishCond, &player->play.finishMutex, getTime() + 100);
 			}
 			pthread_mutex_unlock(&player->play.finishMutex);
 		} else if (!progress) {
 			// No busy spin, no wait for network packets while holding a codec/Surface lock.
 			pthread_mutex_lock(&player->video.sleepDrawMutex);
-			if (!player->meta.interrupt) condSleepUntilMs(&player->video.sleepCond,
+			if (!playerIsInterrupted(player)) condSleepUntilMs(&player->video.sleepCond,
 					&player->video.sleepDrawMutex, getTime() + 2);
 			pthread_mutex_unlock(&player->video.sleepDrawMutex);
 		}
@@ -629,7 +629,7 @@ static int configureMediaCodecSurface(Player * player, JNIEnv * env, jobject sur
 	return decoderReset;
 }
 
-int playerVideoFallbackMediaCodecToSoftware(Player * player) {
+int playerVideoFallbackMediaCodecToSoftware(Player * player, JNIEnv * env) {
 	if (!player->video.window ||
 			playerVideoSoftwareGetFormat(ANativeWindow_getFormat(player->video.window)) < 0) {
 		return 0;
@@ -645,6 +645,10 @@ int playerVideoFallbackMediaCodecToSoftware(Player * player) {
 	player->video.hardwareDecoderFailed = 1;
 	player->video.hardwareDecodeErrors = 0;
 	int outputPrepared = playerVideoSoftwarePrepareOutputLocked(player);
+	if (!outputPrepared) {
+		Bridge * bridge = playerObtainBridge(player, env);
+		PLAYER_SEND_MESSAGE(env, player, bridge, BRIDGE_MESSAGE_PLAYBACK_ERROR);
+	}
 	pthread_mutex_unlock(&player->video.sleepDrawMutex);
 	diagnosticsIncrement(PLAYER_DIAGNOSTICS_SOFTWARE_FALLBACK);
 	diagnosticsLog("player=%u mediacodec_runtime_fallback output_prepared=%d",
@@ -675,7 +679,10 @@ static int setPlayerSurfaceLocked(JNIEnv * env, Player * player, jobject surface
 			pthread_cond_broadcast(&player->video.sleepCond);
 			return decoderReset;
 		}
-		playerVideoSoftwarePrepareOutputLocked(player);
+		if (!playerVideoSoftwarePrepareOutputLocked(player)) {
+			Bridge * bridge = playerObtainBridge(player, env);
+			PLAYER_SEND_MESSAGE(env, player, bridge, BRIDGE_MESSAGE_PLAYBACK_ERROR);
+		}
 	}
 	return decoderReset;
 }
@@ -767,7 +774,7 @@ void setHardwareAcceleration(jlong pointer, jboolean hardwareAcceleration) {
 void requestSurface(JNIEnv * env, jlong pointer, jobject surface, jlong generation,
 		jint width, jint height) {
 	Player * player = POINTER_CAST(pointer);
-	if (!surface || player->meta.interrupt) {
+	if (!surface || playerIsInterrupted(player)) {
 		return;
 	}
 	jobject surfaceReference = (*env)->NewGlobalRef(env, surface);
@@ -803,12 +810,16 @@ void requestSurface(JNIEnv * env, jlong pointer, jobject surface, jlong generati
 	pthread_cond_broadcast(&player->video.sleepCond);
 	pthread_cond_broadcast(&player->video.queueCond);
 	pthread_cond_broadcast(&player->play.finishCond);
-	blockingQueueAdd(&player->video.packetQueue, playerCreateSurfaceRequestPacketHolder());
+	PacketHolder * request = playerCreateSurfaceRequestPacketHolder();
+	if (!request || !blockingQueueAdd(&player->video.packetQueue, request)) {
+		playerPacketQueueFreeCallback(request);
+		playerReportPlaybackError(player);
+	}
 }
 
 void setSurfaceSize(jlong pointer, jint width, jint height) {
 	Player * player = POINTER_CAST(pointer);
-	if (width <= 0 || height <= 0 || player->meta.interrupt) {
+	if (width <= 0 || height <= 0 || playerIsInterrupted(player)) {
 		return;
 	}
 	pthread_mutex_lock(&player->video.surfaceMutex);

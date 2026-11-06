@@ -29,6 +29,7 @@
 #define BRIDGE_MESSAGE_SIZE_CHANGED 2
 #define BRIDGE_MESSAGE_START_SEEKING 3
 #define BRIDGE_MESSAGE_END_SEEKING 4
+#define BRIDGE_MESSAGE_PLAYBACK_ERROR 5
 
 #define PACKET_HOLDER_MEDIA 0
 #define PACKET_HOLDER_END_OF_STREAM 1
@@ -100,7 +101,7 @@ struct Player {
 	// JNI bridge objects are created by the lifecycle facade and reused by workers.
 	struct PlayerBridgeState {
 		jobject native;
-		SparseArray array;
+		Bridge * methods; // Immutable after init, before any worker starts.
 	} bridge;
 
 	// Container and codec contexts are initialized and destroyed by the lifecycle facade.
@@ -300,8 +301,16 @@ struct Player {
 	} sync;
 };
 
+// The stop flag is read by workers and the OpenSL callback outside their individual locks.
+// Relaxed access is sufficient: ownership cleanup is ordered by mutexes and pthread_join.
+static inline int playerIsInterrupted(const Player * player) {
+	return __atomic_load_n(&player->meta.interrupt, __ATOMIC_RELAXED);
+}
+static inline void playerInterrupt(Player * player) {
+	__atomic_store_n(&player->meta.interrupt, 1, __ATOMIC_RELAXED);
+}
+
 struct Bridge {
-	JNIEnv * env;
 	jmethodID methodOnSeek;
 	jmethodID methodOnMessage;
 	jmethodID methodOnPlaybackComplete;
@@ -362,5 +371,6 @@ int playerDecodeFrame(Player * player, int video, AVCodecContext * context, cons
 PacketHolder * playerCreateSurfaceRequestPacketHolder(void);
 void playerLogDestroyStage(Player * player, const char * stage);
 void playerNotifyDurationChanged(Player * player, int64_t duration);
+void playerReportPlaybackError(Player * player);
 
 #endif // PLAYER_INTERNAL_H

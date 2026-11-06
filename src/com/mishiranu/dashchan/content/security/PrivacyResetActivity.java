@@ -10,6 +10,7 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import androidx.activity.ComponentActivity;
 import androidx.activity.OnBackPressedCallback;
+import com.mishiranu.dashchan.ui.MainNavigationIntent;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.ui.MainActivity;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -113,7 +114,7 @@ public final class PrivacyResetActivity extends ComponentActivity {
 		if (!resumed || !launchReady || isDestroyed() || isFinishing()) return;
 		try {
 			launchReady = false;
-			Intent intent = new Intent(this, MainActivity.class)
+			Intent intent = MainNavigationIntent.create(this)
 					.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
 			// MainActivity revalidates expiry, boot, generation and RAM lease before
 			// consuming a real receipt. A normal recovery never bypasses the main PIN.

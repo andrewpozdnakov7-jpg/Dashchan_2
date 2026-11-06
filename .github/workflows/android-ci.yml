@@ -350,6 +350,14 @@ jobs:
           cc -std=c99 -Wall -Wextra -Wpedantic -Werror \
             jni/tests/player_video_policy_test.c -o "$RUNNER_TEMP/player-video-policy-test"
           "$RUNNER_TEMP/player-video-policy-test"
+          # util.c uses POSIX queues only; its Android logging include is unused by this test.
+          mkdir -p "$RUNNER_TEMP/queue-test-stubs/android"
+          printf '/* Logging is not used by the production queue functions. */\n' \
+            > "$RUNNER_TEMP/queue-test-stubs/android/log.h"
+          cc -std=c99 -Wall -Wextra -Wpedantic -Werror -pthread \
+            -I "$RUNNER_TEMP/queue-test-stubs" \
+            jni/tests/player_buffer_queue_test.c -o "$RUNNER_TEMP/player-buffer-queue-test"
+          "$RUNNER_TEMP/player-buffer-queue-test"
 
       - name: Build APK and run GitHub unit tests
         if: steps.validation.outputs.build_required == 'true'

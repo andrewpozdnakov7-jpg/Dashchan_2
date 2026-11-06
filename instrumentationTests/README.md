@@ -172,9 +172,17 @@ performance, full video decoding or PiP tests.
 The default connected tasks above test Debug, which is not minified. They do
 not validate R8's final Ndebug/Release output. In addition, externally build and
 test an optimized APK: forum loading, captcha/Brotli, screen restoration, local
-archives, video diagnostics and optional external WebM engine loading exercise
+archives, video diagnostics and bundled native player loading exercise
 the retained reflection/JNI contracts. JVM tests and a successful APK build do
 not replace this device check.
+
+`MainNavigationIntentTest` checks public-intent filtering and the non-exported
+internal alias, including real MainActivity startup/recreation on a disposable
+test install. Also verify rejection from a separate ordinary application UID;
+in-process sanitization tests alone do not prove Android caller isolation.
+`VideoPlayerFailureDeliveryTest` checks fatal native-message coalescing and error
+delivery across listener transfers, without decoding media. Native allocation
+failure injection is separate: `jni/tests/player_buffer_queue_test.c`.
 
 Extension resource tests add isolated configuration/resource replacement,
 process-unique generations, legacy and owner-qualified chan URI reads, invalid
