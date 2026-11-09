@@ -76,7 +76,9 @@ jobs:
 
       - name: Validate GitHub Actions workflows
         # SC2016 is a false positive for intentionally single-quoted Python heredocs.
-        run: actionlint -ignore 'SC2016' .github/workflows/*.yml
+        run: |
+          actionlint -ignore 'SC2016' .github/workflows/*.yml
+          python3 -m unittest discover -s .github/scripts -p 'translator_workflow_test.py' -v
 
       - name: Verify protected add-on source provenance
         env:

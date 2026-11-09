@@ -41,6 +41,8 @@ jobs:
       github.ref == 'refs/heads/master' && inputs.include_fdroid_splits &&
       inputs.candidate == 'stable' && inputs.confirmation == 'SIGN CANDIDATE' && inputs.source_sha == ''
     uses: ./.github/workflows/bergamot-runtime.yml
+    with:
+      force_source_build: true
 
   build:
     needs: bergamot
@@ -337,7 +339,9 @@ jobs:
   sign:
     name: Sign and verify ${{ inputs.candidate }} candidate
     needs: build
-    if: needs.build.result == 'success' && github.ref == 'refs/heads/master'
+    if: >-
+      always() && !cancelled() && needs.build.result == 'success' &&
+      github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment:

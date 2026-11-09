@@ -10,7 +10,29 @@ on:
       - '.github/workflows/bergamot-runtime.yml'
       - 'assets/translation/**'
       - 'build.gradle'
+  push:
+    branches: [master]
+    paths:
+      - '.gitmodules'
+      - 'third_party/mozilla-translations'
+      - 'tools/bergamot/**'
+      - '.github/workflows/bergamot-runtime.yml'
+      - 'assets/translation/**'
+      - 'build.gradle'
   workflow_call:
+    inputs:
+      force_source_build:
+        description: Independently rebuild even when a verified cache exists
+        type: boolean
+        required: false
+        default: false
+  workflow_dispatch:
+    inputs:
+      force_source_build:
+        description: Independently rebuild even when a verified cache exists
+        type: boolean
+        required: true
+        default: true
 
 permissions:
   contents: read
@@ -48,7 +70,31 @@ jobs:
           python3 -m unittest discover -s tools/bergamot -p '*_test.py' -v
           node tools/bergamot/test-factory.cjs
 
+      - name: Compute exact translator cache key
+        id: cache-key
+        run: python3 tools/bergamot/cache.py key --state "$RUNNER_TEMP/bergamot-cache-inputs.json"
+
+      # PRs may read the default-branch cache, but never populate the trusted entry.
+      # Real F-Droid signing requests do not restore compiled runtime outputs.
+      - name: Restore trusted source-built translator
+        if: ${{ !inputs.force_source_build }}
+        id: cache-lookup
+        continue-on-error: true
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0 (Node 24)
+        with:
+          path: ${{ runner.temp }}/slooop-bergamot-cache
+          key: ${{ steps.cache-key.outputs.key }}
+
+      - name: Verify translator cache identity, hashes and output lock
+        if: ${{ !inputs.force_source_build }}
+        id: cache-verified
+        run: |
+          python3 tools/bergamot/cache.py restore \
+            --state "$RUNNER_TEMP/bergamot-cache-inputs.json" \
+            --entry "$RUNNER_TEMP/slooop-bergamot-cache" --runtime build/bergamot/runtime
+
       - name: Build engine from source
+        if: steps.cache-verified.outputs.hit != 'true'
         run: |
           python3 tools/bergamot/runtime.py build \
             --build-dir "$RUNNER_TEMP/engine-a" --output-dir build/bergamot/runtime
@@ -62,6 +108,7 @@ jobs:
         run: node --expose-gc tools/bergamot/test-runtime.cjs build/bergamot/runtime "$RUNNER_TEMP/model-downloads"
 
       - name: Rebuild independently and compare bytes
+        if: steps.cache-verified.outputs.hit != 'true'
         run: |
           mkdir "$RUNNER_TEMP/independent-checkout"
           tar --exclude=./build -cf - . | tar -xf - -C "$RUNNER_TEMP/independent-checkout"
@@ -70,11 +117,32 @@ jobs:
             --build-dir "$RUNNER_TEMP/separate/engine-b" --output-dir build/bergamot/rebuilt
           diff -r build/bergamot/runtime build/bergamot/rebuilt
 
+      - name: Package independently verified translator cache
+        if: >-
+          github.ref == 'refs/heads/master' && github.ref_protected &&
+          github.event_name != 'pull_request' &&
+          steps.cache-verified.outputs.hit != 'true' && steps.cache-lookup.outputs.cache-hit != 'true'
+        run: |
+          python3 tools/bergamot/cache.py pack \
+            --state "$RUNNER_TEMP/bergamot-cache-inputs.json" \
+            --runtime build/bergamot/runtime --rebuilt build/bergamot/rebuilt \
+            --entry "$RUNNER_TEMP/slooop-bergamot-cache"
+
+      - name: Save trusted translator cache
+        if: >-
+          github.ref == 'refs/heads/master' && github.ref_protected &&
+          github.event_name != 'pull_request' &&
+          steps.cache-verified.outputs.hit != 'true' && steps.cache-lookup.outputs.cache-hit != 'true'
+        continue-on-error: true
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0 (Node 24)
+        with:
+          path: ${{ runner.temp }}/slooop-bergamot-cache
+          key: ${{ steps.cache-key.outputs.key }}
+
       - name: Upload source-built engine and provenance
-        if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: bergamot-runtime-${{ github.sha }}
           path: build/bergamot/runtime/
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 7
