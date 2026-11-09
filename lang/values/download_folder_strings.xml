@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<string name="download_type_folders">Subfolders by file type</string>
+	<string name="download_type_folders_summary">Save images, videos, audio, app backups and other files in separate subfolders. The subdirectory pattern applies inside the file type folder. Existing files stay in place.</string>
+	<string name="download_folder_names">Subfolder names</string>
+	<string name="download_folder_names_summary">Choose names for the folders inside the download directory</string>
+	<string name="download_folder_images">Images</string>
+	<string name="download_folder_videos">Videos</string>
+	<string name="download_folder_audio">Audio</string>
+	<string name="download_folder_backups">Slooop backups</string>
+	<string name="download_folder_other">Other files</string>
+	<string name="download_folder_name_hint">A single folder name. The folder is created when a file is saved.</string>
+	<string name="download_folder_name_invalid">Enter a non-empty folder name without path separators or special characters</string>
+	<string name="download_configuration_summary">Choose a subfolder and file naming options before saving</string>
+	<string name="download_subdirectory_summary">Sets the download subfolder name using the site, board and thread</string>
+</resources>

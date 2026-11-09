@@ -8,12 +8,15 @@ import android.util.AttributeSet;
 import android.view.MotionEvent;
 import android.view.KeyEvent;
 import android.view.View;
+import android.widget.EditText;
 import android.widget.ScrollView;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 import com.mishiranu.dashchan.ui.posting.PostingFormDiagnostics;
 import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
 
-/** Native scrolling unless the posting editor explicitly owns keyboard viewport alignment. */
+/** Native scrolling with scoped posting-editor gesture and keyboard viewport ownership. */
 public class PostingScrollView extends ScrollView {
 	public interface BackCallback {
 		boolean canHandlePostingBack(View owner);
@@ -23,6 +26,13 @@ public class PostingScrollView extends ScrollView {
 	private Runnable cancelEditorMotion;
 	private Predicate<MotionEvent> editorMotionTouchHandler;
 	private BackCallback legacyBackOwner;
+	private EditText commentEditor;
+	private boolean commentGestureOwned;
+	private final Rect commentHitRect = new Rect();
+	private final View.OnAttachStateChangeListener commentLifetime = new View.OnAttachStateChangeListener() {
+		@Override public void onViewAttachedToWindow(View view) {}
+		@Override public void onViewDetachedFromWindow(View view) { releaseCommentGesture(); }
+	};
 
 	public PostingScrollView(Context context) { super(context); }
 	public PostingScrollView(Context context, AttributeSet attrs) { super(context, attrs); }
@@ -30,6 +40,54 @@ public class PostingScrollView extends ScrollView {
 	public void setEditorViewportOwner(BooleanSupplier owner) { editorViewportOwner = owner; }
 	public void setCancelEditorMotion(Runnable cancel) { cancelEditorMotion = cancel; }
 	public void setEditorMotionTouchHandler(Predicate<MotionEvent> handler) { editorMotionTouchHandler = handler; }
+
+	public void setCommentEditor(EditText editor) {
+		if (commentEditor == editor) return;
+		releaseCommentGesture();
+		if (commentEditor != null) commentEditor.removeOnAttachStateChangeListener(commentLifetime);
+		commentEditor = editor;
+		if (editor != null) editor.addOnAttachStateChangeListener(commentLifetime);
+	}
+
+	public boolean isCommentGestureOwned() { return commentGestureOwned; }
+
+	boolean isCommentImeVisible() {
+		WindowInsetsCompat insets = commentEditor != null ? ViewCompat.getRootWindowInsets(commentEditor) : null;
+		return insets != null && insets.isVisible(WindowInsetsCompat.Type.ime());
+	}
+
+	private void beginCommentGesture(MotionEvent event) {
+		EditText editor = commentEditor;
+		commentGestureOwned = editor != null && editor.isEnabled() && editor.isShown()
+				&& editor.getWidth() > 0 && editor.getHeight() > 0
+				&& isCommentImeVisible() && (editor.canScrollVertically(-1) || editor.canScrollVertically(1))
+				&& editor.getGlobalVisibleRect(commentHitRect)
+				&& commentHitRect.contains((int) event.getRawX(), (int) event.getRawY());
+		if (commentGestureOwned) {
+			// Stop the old outer fling at its current position through the same public
+			// zero-distance scroller reset used by alignEditorViewport. No synthetic input.
+			smoothScrollBy(0, 0);
+			requestDisallowInterceptTouchEvent(true);
+		}
+	}
+
+	private void releaseCommentGesture() {
+		if (!commentGestureOwned) return;
+		commentGestureOwned = false;
+		super.requestDisallowInterceptTouchEvent(false);
+	}
+
+	@Override public void requestDisallowInterceptTouchEvent(boolean disallowIntercept) {
+		// Native EditText/selection handling may release interception at an edge.
+		// Only UP/CANCEL or owner teardown may release this particular sequence.
+		super.requestDisallowInterceptTouchEvent(disallowIntercept || commentGestureOwned);
+	}
+
+	@Override public boolean onInterceptTouchEvent(MotionEvent event) {
+		// In particular, do not let ScrollView intercept DOWN because an old fling
+		// was running before the comment listener could see the new sequence.
+		return !commentGestureOwned && super.onInterceptTouchEvent(event);
+	}
 
 	private BackCallback backCallback() {
 		Context context = getContext();
@@ -64,10 +122,10 @@ public class PostingScrollView extends ScrollView {
 	}
 	@Override public void onWindowFocusChanged(boolean hasWindowFocus) {
 		super.onWindowFocusChanged(hasWindowFocus);
-		if (!hasWindowFocus) legacyBackOwner = null;
+		if (!hasWindowFocus) { legacyBackOwner = null; releaseCommentGesture(); }
 	}
 	@Override protected void onDetachedFromWindow() {
-		legacyBackOwner = null; super.onDetachedFromWindow();
+		legacyBackOwner = null; releaseCommentGesture(); super.onDetachedFromWindow();
 	}
 
 	@Override protected int computeScrollDeltaToGetChildRectOnScreen(Rect rect) {
@@ -110,6 +168,15 @@ public class PostingScrollView extends ScrollView {
 	}
 	@Override public boolean dispatchTouchEvent(MotionEvent event) {
 		int action = event.getActionMasked();
+		if (action == MotionEvent.ACTION_DOWN) releaseCommentGesture();
+		try {
+			return dispatchPostingTouchEvent(event, action);
+		} finally {
+			if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) releaseCommentGesture();
+		}
+	}
+
+	private boolean dispatchPostingTouchEvent(MotionEvent event, int action) {
 		if (editorMotionTouchHandler != null && editorMotionTouchHandler.test(event)) {
 			// A moving action owns this tap, not the button which ends up underneath it.
 			// Keep delivering drags to the native scroller; the presentation owner cancels
@@ -117,10 +184,14 @@ public class PostingScrollView extends ScrollView {
 			super.onTouchEvent(event);
 			return true;
 		}
-		if (action == MotionEvent.ACTION_DOWN && cancelEditorMotion != null) cancelEditorMotion.run();
+		if (action == MotionEvent.ACTION_DOWN) {
+			if (cancelEditorMotion != null) cancelEditorMotion.run();
+			beginCommentGesture(event);
+		}
 		if (PostingFormDiagnostics.isRecording() && (action == MotionEvent.ACTION_DOWN
 				|| action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL)) {
-			PostingFormDiagnostics.trace(this, "form_touch", "action=" + action + " pointers=" + event.getPointerCount());
+			PostingFormDiagnostics.trace(this, "form_touch", "action=" + action + " pointers=" + event.getPointerCount()
+					+ " commentOwned=" + commentGestureOwned);
 		}
 		return super.dispatchTouchEvent(event);
 	}

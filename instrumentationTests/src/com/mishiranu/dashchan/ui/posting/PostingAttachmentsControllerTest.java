@@ -155,6 +155,32 @@ public class PostingAttachmentsControllerTest {
 		});
 	}
 
+	@Test public void uiSnapshotCountsRestoredAndSuccessfullyImportedFilesAcrossLimitChanges() {
+		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+			Fixture f = new Fixture(1, hash -> null);
+			try {
+				f.posting.attachmentCount = 4; f.controller.updateConfiguration(f.posting, false, true);
+				f.restore(draft(1, null, 0, null));
+				assertEquals(1, f.controller.getUiState().count);
+				f.controller.setAttachmentImportInProgress(true);
+				PostingAttachmentState importing = f.controller.getUiState();
+				assertTrue(importing.importing); assertFalse(importing.atLimit()); assertTrue(importing.hasRoom());
+				ArrayList<Pair<String, String>> accepted = new ArrayList<>();
+				accepted.add(new Pair<>(draft(2, null, 0, null).hash, "accepted.txt"));
+				f.controller.onAttachmentImportComplete(new PostingAttachmentsController.AttachmentImportResult(accepted, 3));
+				assertEquals(2, f.controller.getUiState().count); // Not the three requested URIs.
+				assertFalse(f.controller.getUiState().importing);
+				assertTrue(lastTaggedClickable(f.controller.getAttachmentHolder(1).view,
+						f.controller.getAttachmentHolder(1)).performClick());
+				assertEquals(1, f.controller.getUiState().count);
+				f.posting.attachmentCount = 1; f.controller.updateConfiguration(f.posting, false, true);
+				assertTrue(f.controller.getUiState().atLimit());
+				f.posting.attachmentCount = 0; f.controller.updateConfiguration(f.posting, false, true);
+				assertFalse(f.controller.getUiState().visible(true));
+			} finally { f.controller.detachView(); }
+		});
+	}
+
 	@Test public void sendSnapshotKeepsOrderHashesRatingFallbackMissingFilesAndOptions() throws Exception {
 		Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
 		File file = File.createTempFile("posting-controller-", ".txt", context.getCacheDir());

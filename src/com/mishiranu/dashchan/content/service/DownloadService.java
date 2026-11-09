@@ -32,6 +32,7 @@ import com.mishiranu.dashchan.ui.MainNavigationIntent;
 import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.CacheManager;
+import com.mishiranu.dashchan.content.DownloadDirectoryPolicy;
 import com.mishiranu.dashchan.content.LocaleManager;
 import com.mishiranu.dashchan.content.OpenFileActivity;
 import com.mishiranu.dashchan.content.Preferences;
@@ -43,6 +44,7 @@ import com.mishiranu.dashchan.content.model.FileHolder;
 import com.mishiranu.dashchan.util.AndroidUtils;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
 import com.mishiranu.dashchan.util.IOUtils;
+import com.mishiranu.dashchan.util.MimeTypes;
 import com.mishiranu.dashchan.util.WeakObservable;
 import com.mishiranu.dashchan.widget.ClickableToast;
 import com.mishiranu.dashchan.widget.ThemeEngine;
@@ -60,10 +62,13 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -385,13 +390,13 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 						}
 						DownloadItem downloadItem = directRequest.downloadItems.get(0);
 						enqueue(new TaskData(downloadItem.chanName, directRequest.overwrite, directRequest.input,
-								directRequest.target, directRequest.path, downloadItem.name, directRequest.allowWrite,
+								directRequest.target, directRequest.getPath(downloadItem), downloadItem.name, directRequest.allowWrite,
 								directRequest.localArchiveId));
 					} else {
 						for (DownloadItem downloadItem : directRequest.downloadItems) {
 							enqueue(new TaskData(downloadItem.chanName, directRequest.overwrite, downloadItem.uri,
 									downloadItem.checkSha256, downloadItem.checkFingerprints, directRequest.target,
-									directRequest.path, downloadItem.name, directRequest.allowWrite,
+									directRequest.getPath(downloadItem), downloadItem.name, directRequest.allowWrite,
 									directRequest.localArchiveId).withSuccessHaptic(downloadItem.successHapticView));
 						}
 					}
@@ -448,6 +453,21 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 		return activeKeys;
 	}
 
+	private static HashMap<String, DataFile> getDownloadChildren(DataFile.Target target, String path,
+			HashMap<String, HashMap<String, DataFile>> directories) {
+		String key = getTargetPathKey(target, StringUtils.emptyIfNull(path));
+		HashMap<String, DataFile> children = directories.get(key);
+		if (children == null) {
+			children = new HashMap<>();
+			List<DataFile> files = DataFile.obtain(target, path).getChildren();
+			if (files != null) {
+				for (DataFile file : files) children.put(file.getName().toLowerCase(Locale.getDefault()), file);
+			}
+			directories.put(key, children);
+		}
+		return children;
+	}
+
 	private ReplaceRequest createReplaceRequest(DirectRequest directRequest,
 			HashSet<String> activeKeys) throws InterruptedException {
 		int queued = 0;
@@ -455,16 +475,11 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 		DataFile lastExistingFile = null;
 		HashSet<String> keys = new HashSet<>();
 		ArrayList<DownloadItem> availableItems = new ArrayList<>();
-		DataFile parent = DataFile.obtain(directRequest.target, directRequest.path);
-		HashMap<String, DataFile> children = new HashMap<>();
-		List<DataFile> childrenList = parent.getChildren();
-		if (childrenList != null) {
-			for (DataFile file : childrenList) {
-				children.put(file.getName().toLowerCase(Locale.getDefault()), file);
-			}
-		}
+		HashMap<String, HashMap<String, DataFile>> directories = new HashMap<>();
 		for (DownloadService.DownloadItem downloadItem : directRequest.downloadItems) {
-			String key = getTargetPathKey(directRequest.target, directRequest.path, downloadItem.name);
+			String path = directRequest.getPath(downloadItem);
+			HashMap<String, DataFile> children = getDownloadChildren(directRequest.target, path, directories);
+			String key = getTargetPathKey(directRequest.target, path, downloadItem.name);
 			if (keys.contains(key) || activeKeys.contains(key)) {
 				queued++;
 			} else {
@@ -535,20 +550,21 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 			HashSet<String> activeKeys) throws InterruptedException {
 		HashSet<String> keys = new HashSet<>();
 		DataFile.Target target = replaceRequest.directRequest.target;
-		String path = replaceRequest.directRequest.path;
 		List<DownloadItem> downloadItems = replaceRequest.directRequest.downloadItems;
 		ArrayList<DownloadItem> finalItems = new ArrayList<>(downloadItems.size());
-		DataFile parent = DataFile.obtain(target, path);
-		HashSet<String> children = new HashSet<>();
-		List<DataFile> childrenList = parent.getChildren();
-		if (childrenList != null) {
-			for (DataFile file : childrenList) {
-				children.add(file.getName().toLowerCase(Locale.getDefault()));
-			}
+		Map<DownloadItem, String> itemPaths = new IdentityHashMap<>();
+		HashMap<String, HashMap<String, DataFile>> directories = new HashMap<>();
+		Set<DownloadItem> availableItems = Collections.newSetFromMap(new IdentityHashMap<>());
+		availableItems.addAll(replaceRequest.availableItems);
+		// Reserve every unchanged item before allocating new names (including later items in the batch).
+		for (DownloadItem item : replaceRequest.availableItems) {
+			keys.add(getTargetPathKey(target, replaceRequest.directRequest.getPath(item), item.name));
 		}
 		for (DownloadService.DownloadItem downloadItem : downloadItems) {
-			if (replaceRequest.availableItems.contains(downloadItem)) {
-				keys.add(getTargetPathKey(target, replaceRequest.directRequest.path, downloadItem.name));
+			String path = replaceRequest.directRequest.getPath(downloadItem);
+			HashMap<String, DataFile> children = getDownloadChildren(target, path, directories);
+			if (availableItems.contains(downloadItem)) {
+				itemPaths.put(downloadItem, path);
 				finalItems.add(downloadItem);
 			} else {
 				String extension = StringUtils.getFileExtension(downloadItem.name);
@@ -563,20 +579,22 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 					name = nameWithoutExtension + append;
 					key = getTargetPathKey(target, path, nameWithoutExtension + append);
 					i++;
-				} while (children.contains(name.toLowerCase(Locale.getDefault())) ||
+				} while (children.containsKey(name.toLowerCase(Locale.getDefault())) ||
 						keys.contains(key) || activeKeys.contains(key));
 				keys.add(key);
 				DownloadItem renamed = new DownloadItem(downloadItem.chanName, downloadItem.uri, name,
 						downloadItem.checkSha256, downloadItem.checkFingerprints);
 				renamed.successHapticView = downloadItem.successHapticView;
 				finalItems.add(renamed);
+				itemPaths.put(renamed, path);
 			}
 			if (Thread.interrupted()) {
 				throw new InterruptedException();
 			}
 		}
-		return new DirectRequest(target, path, false, finalItems, replaceRequest.directRequest.input,
-				replaceRequest.directRequest.allowWrite, replaceRequest.directRequest.localArchiveId);
+		return new DirectRequest(target, replaceRequest.directRequest.path, false, finalItems,
+				replaceRequest.directRequest.input, replaceRequest.directRequest.allowWrite,
+				replaceRequest.directRequest.localArchiveId, itemPaths);
 	}
 
 	private void handlePrimaryReplaceKeepAllReplace(ReplaceRequest replaceRequest) {
@@ -621,7 +639,7 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 								replaceRequest.directRequest.path, replaceRequest.directRequest.overwrite,
 								replaceRequest.availableItems, replaceRequest.directRequest.input,
 								replaceRequest.directRequest.allowWrite,
-								replaceRequest.directRequest.localArchiveId));
+								replaceRequest.directRequest.localArchiveId, replaceRequest.directRequest.itemPaths));
 					} else {
 						// Request with input should contain only 1 download item.
 						// Cleanup the request to ensure input stream is closed.
@@ -824,10 +842,15 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 			handleRequestsOrAccumulate();
 		}
 
+		public void downloadBackup(InputStream input, String fileName) {
+			primaryRequest = new StreamRequest(false, false, input, fileName, null, null, null, null, true);
+			handleRequestsOrAccumulate();
+		}
+
 		public void downloadStorage(InputStream input, String chanName, String boardName, String threadNumber,
 				String threadTitle, String fileName, boolean allowDialog, boolean allowWrite) {
 			primaryRequest = new StreamRequest(Preferences.getDownloadSubdirMode().isEnabled(false) && allowDialog,
-					allowWrite, input, fileName, chanName, boardName, threadNumber, threadTitle);
+					allowWrite, input, fileName, chanName, boardName, threadNumber, threadTitle, false);
 			handleRequestsOrAccumulate();
 		}
 	}
@@ -1409,6 +1432,15 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 	}
 
 	public static abstract class ChoiceRequest implements Request {
+		protected final DownloadDirectoryPolicy folders = Preferences.getDownloadDirectoryPolicy();
+
+		protected String getDownloadPath(String path, String fileName, boolean backup) {
+			String extension = StringUtils.getFileExtension(fileName);
+			DownloadDirectoryPolicy.Type type = backup ? DownloadDirectoryPolicy.Type.BACKUPS
+					: DownloadDirectoryPolicy.classify(fileName, MimeTypes.forExtension(extension, null));
+			return folders.resolve(type, path);
+		}
+
 		private final boolean shouldHandle;
 		public final String chanName;
 		public final String boardName;
@@ -1442,8 +1474,17 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 		public final boolean allowWrite;
 		public final String localArchiveId;
 
+		private final Map<DownloadItem, String> itemPaths;
+
 		private DirectRequest(DataFile.Target target, String path, boolean overwrite,
 				List<DownloadItem> downloadItems, InputStream input, boolean allowWrite, String localArchiveId) {
+			this(target, path, overwrite, downloadItems, input, allowWrite, localArchiveId, Collections.emptyMap());
+		}
+
+		private DirectRequest(DataFile.Target target, String path, boolean overwrite,
+				List<DownloadItem> downloadItems, InputStream input, boolean allowWrite, String localArchiveId,
+				Map<DownloadItem, String> itemPaths) {
+			this.itemPaths = Collections.unmodifiableMap(new IdentityHashMap<>(itemPaths));
 			this.target = target;
 			this.path = path;
 			this.overwrite = overwrite;
@@ -1451,6 +1492,10 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 			this.input = input;
 			this.allowWrite = allowWrite;
 			this.localArchiveId = localArchiveId;
+		}
+
+		private String getPath(DownloadItem item) {
+			return itemPaths.containsKey(item) ? itemPaths.get(item) : path;
 		}
 
 		private void cleanup() {
@@ -1528,24 +1573,28 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 		@Override
 		public DirectRequest complete(String path, boolean detailName, boolean originalName) {
 			List<DownloadItem> downloadItems = new ArrayList<>(items.size());
+			Map<DownloadItem, String> itemPaths = new IdentityHashMap<>();
 			for (RequestItem requestItem : items) {
 				DownloadItem downloadItem = new DownloadItem(chanName, requestItem.uri, getDesiredFileName(requestItem.uri,
 						requestItem.fileName, originalName ? requestItem.originalName : null, detailName,
 						chanName, boardName, threadNumber), null, null);
 				downloadItem.successHapticView = items.size() == 1 ? requestItem.successHapticView : null;
 				downloadItems.add(downloadItem);
+				itemPaths.put(downloadItem, getDownloadPath(path, downloadItem.name, false));
 			}
-			return new DirectRequest(DataFile.Target.DOWNLOADS, path, true, downloadItems, null, allowWrite, null);
+			return new DirectRequest(DataFile.Target.DOWNLOADS, path, true, downloadItems, null, allowWrite, null, itemPaths);
 		}
 	}
 
 	private static class StreamRequest extends ChoiceRequest {
+		private final boolean backup;
 		public final InputStream input;
 		public final String fileName;
 
 		private StreamRequest(boolean shouldHandle, boolean allowWrite, InputStream input, String fileName,
-				String chanName, String boardName, String threadNumber, String threadTitle) {
+				String chanName, String boardName, String threadNumber, String threadTitle, boolean backup) {
 			super(shouldHandle, allowWrite, chanName, boardName, threadNumber, threadTitle);
+			this.backup = backup;
 			this.input = input;
 			this.fileName = fileName;
 		}
@@ -1565,7 +1614,7 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 			String fileName = detailName ? getFileNameWithChanBoardThreadData(this.fileName,
 					chanName, boardName, threadNumber) : this.fileName;
 			DownloadItem downloadItem = new DownloadItem(chanName, null, fileName, null, null);
-			return new DirectRequest(DataFile.Target.DOWNLOADS, path, true,
+			return new DirectRequest(DataFile.Target.DOWNLOADS, getDownloadPath(path, fileName, backup), true,
 					Collections.singletonList(downloadItem), input, allowWrite, null);
 		}
 

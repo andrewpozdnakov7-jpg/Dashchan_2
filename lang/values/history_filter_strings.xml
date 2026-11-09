@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<string name="history_filter_sections">Filter by sections</string>
+	<string name="history_all_sections">All sections</string>
+	<string name="history_sections_selected">Selected sections: %1$d</string>
+	<string name="history_sections_summary">Sections: %1$s</string>
+	<string name="history_reset_filter">Reset</string>
+	<string name="history_apply_filter">Apply</string>
+	<string name="history_no_matches">No history entries match your search and section filter</string>
+	<string name="history_clear_all_scope">Clear all history for all sites? The search and section filter do not limit deletion.</string>
+	<string name="history_clear_site_scope">Clear all history for %1$s? The search and section filter do not limit deletion.</string>
+</resources>

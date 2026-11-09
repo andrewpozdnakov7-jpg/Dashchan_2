@@ -1526,4 +1526,11 @@
 	<string name="reddit_remove_community_confirm">Убрать сообщество из вашего локального списка? Подписки в Reddit не изменятся.</string>
 	<string name="new_interface_motion">Новые анимации интерфейса</string>
 	<string name="new_interface_motion_summary">Переходы экранов и галереи в стиле Material 3, новое оформление видеоплеера. Новое оформление бокового меню и анимация жеста «Назад» на Android 14+. Применяется при следующих переходах и открытиях плеера.</string>
+	<string name="thread_fab_menu">Плавающее меню треда</string>
+	<string name="thread_fab_menu_summary">Переносит ответ, обновление, избранное и сохранение в кнопку внизу треда</string>
+	<string name="thread_fab_actions">Действия треда</string>
+	<string name="thread_fab_close">Закрыть действия треда</string>
+	<string name="thread_fab_refresh">Обновить тред</string>
+	<string name="thread_fab_save">Сохранить тред</string>
+	<string name="thread_fab_reload">Перезагрузить весь тред</string>
 </resources>

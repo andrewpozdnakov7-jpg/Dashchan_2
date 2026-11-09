@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<string name="download_type_folders">Подпапки по типам файлов</string>
+	<string name="download_type_folders_summary">Сохраняет изображения, видео, аудио, резервные копии приложения и остальные файлы в отдельные подпапки. Шаблон подкаталога применяется внутри папки выбранного типа. Старые файлы остаются на месте.</string>
+	<string name="download_folder_names">Названия подпапок</string>
+	<string name="download_folder_names_summary">Названия папок внутри основной папки загрузок</string>
+	<string name="download_folder_images">Изображения</string>
+	<string name="download_folder_videos">Видео</string>
+	<string name="download_folder_audio">Аудио</string>
+	<string name="download_folder_backups">Резервные копии Слоупа</string>
+	<string name="download_folder_other">Остальные файлы</string>
+	<string name="download_folder_name_hint">Одно название без пути. Папка создаётся при сохранении файла.</string>
+	<string name="download_folder_name_invalid">Введите непустое название папки без разделителей пути и специальных символов</string>
+	<string name="download_configuration_summary">Позволяет выбрать подпапку и параметры имени файла перед сохранением</string>
+	<string name="download_subdirectory_summary">Задаёт название подпапки для загрузок по сайту, разделу и треду</string>
+</resources>

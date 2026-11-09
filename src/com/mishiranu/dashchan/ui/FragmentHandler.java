@@ -16,6 +16,8 @@ public interface FragmentHandler {
 		default void onStorageRequestResult() {}
 	}
 
+	default boolean isContentObscured() { return false; }
+
 	void setTitleSubtitle(CharSequence title, CharSequence subtitle);
 	default void setCompactToolbarTitle(boolean compact) {}
 	ViewGroup getToolbarView();

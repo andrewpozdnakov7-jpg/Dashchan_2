@@ -955,6 +955,70 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 		postItem.setHidden(hideState, null);
 	}
 
+	/** Business rules shared by the ordinary toolbar and the opt-in floating menu. */
+	public boolean usesThreadFabMenu() {
+		return Preferences.isThreadFabMenuEnabled()
+				&& !getChan().configuration.getOption(ChanConfiguration.OPTION_LOCAL_MODE);
+	}
+
+	public boolean canShowThreadFabMenu() {
+		if (!isRunning() || !usesThreadFabMenu() || selectionMode != null) return false;
+		PostsAdapter adapter = getAdapter();
+		return adapter.getItemCount() > 0 && adapter.getItem(adapter.isWindowed() ? adapter.getWindowStartPosition() : 0) != null;
+	}
+
+	private boolean canArchiveThread() {
+		return !windowedMode && (!ChanManager.getInstance().getArchiveChanNames(getPage().chanName).isEmpty()
+				|| !getChan().configuration.getOption(ChanConfiguration.OPTION_LOCAL_MODE));
+	}
+
+	public java.util.List<com.mishiranu.dashchan.widget.ThreadFabMenu.Action> getThreadFabActions() {
+		java.util.ArrayList<com.mishiranu.dashchan.widget.ThreadFabMenu.Action> actions = new java.util.ArrayList<>();
+		if (replyable != null && replyable.onRequestReply(false)) {
+			actions.add(new com.mishiranu.dashchan.widget.ThreadFabMenu.Action(R.id.menu_add_post,
+					R.string.reply, R.drawable.ic_reply, true, true));
+		}
+		actions.add(new com.mishiranu.dashchan.widget.ThreadFabMenu.Action(R.id.menu_refresh,
+				R.string.thread_fab_refresh, R.drawable.ic_refresh, !hasReadTask() && !hasExtractTask(), false));
+		Page page = getPage();
+		boolean favorite = FavoritesStorage.getInstance().hasFavorite(page.chanName, page.boardName, page.threadNumber);
+		actions.add(new com.mishiranu.dashchan.widget.ThreadFabMenu.Action(favorite ? R.id.menu_unstar_text : R.id.menu_star_text,
+				favorite ? R.string.remove_from_favorites : R.string.add_to_favorites,
+				favorite ? R.drawable.ic_star : R.drawable.ic_star_outline, true, false));
+		if (canArchiveThread()) actions.add(new com.mishiranu.dashchan.widget.ThreadFabMenu.Action(R.id.menu_archive,
+				R.string.thread_fab_save, R.drawable.ic_save, true, true));
+		return actions;
+	}
+
+	public boolean performThreadAction(int id) {
+		Page page = getPage();
+		if (id == R.id.menu_add_post) {
+			if (replyable != null && replyable.onRequestReply(false)) {
+				getUiManager().navigator().navigatePosting(page.chanName, page.boardName, page.threadNumber);
+			}
+		} else if (id == R.id.menu_refresh) {
+			if (!usesThreadFabMenu() || !hasReadTask() && !hasExtractTask()) refreshPosts(false);
+		} else if (id == R.id.menu_star_text || id == R.id.menu_star_icon) {
+			FavoritesStorage.getInstance().add(page.chanName, page.boardName, page.threadNumber,
+					getParcelableExtra(ParcelableExtra.FACTORY).threadTitle, true);
+			updateOptionsMenu();
+		} else if (id == R.id.menu_unstar_text || id == R.id.menu_unstar_icon) {
+			FavoritesStorage.getInstance().remove(page.chanName, page.boardName, page.threadNumber);
+			updateOptionsMenu();
+		} else if (id == R.id.menu_archive) {
+			if (!canArchiveThread()) return true;
+			String threadTitle = null;
+			ArrayList<Post> posts = new ArrayList<>();
+			for (PostItem postItem : getAdapter()) {
+				if (threadTitle == null) threadTitle = StringUtils.emptyIfNull(postItem.getSubjectOrComment());
+				posts.add(postItem.getPost());
+			}
+			getUiManager().dialog().performSendArchiveThread(getFragmentManager(),
+					page.chanName, page.boardName, page.threadNumber, threadTitle, posts);
+		} else return false;
+		return true;
+	}
+
 	@Override
 	public void onCreateOptionsMenu(Menu menu) {
 		menu.add(0, R.id.menu_add_post, 0, R.string.reply)
@@ -1043,17 +1107,24 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 		boolean canBeArchived = !ChanManager.getInstance().getArchiveChanNames(page.chanName).isEmpty() ||
 				!getChan().configuration.getOption(ChanConfiguration.OPTION_LOCAL_MODE);
 		menu.findItem(R.id.menu_archive).setVisible(canBeArchived && !windowedMode);
+		boolean floating = usesThreadFabMenu();
+		if (floating) {
+			for (int id : new int[] {R.id.menu_add_post, R.id.menu_refresh, R.id.menu_star_text,
+					R.id.menu_star_icon, R.id.menu_unstar_text, R.id.menu_unstar_icon, R.id.menu_archive}) {
+				menu.findItem(id).setVisible(false);
+			}
+			menu.findItem(R.id.menu_contents).setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER);
+		}
+		menu.findItem(R.id.menu_refresh).setVisible(!floating);
+		menu.findItem(R.id.menu_reload).setTitle(floating ? R.string.thread_fab_reload : R.string.reload);
 	}
 
 	@Override
 	public boolean onOptionsItemSelected(MenuItem item) {
 		Page page = getPage();
 		PostsAdapter adapter = getAdapter();
-		if (item.getItemId() == R.id.menu_add_post) {
-			getUiManager().navigator().navigatePosting(page.chanName, page.boardName,
-					page.threadNumber);
-			return true;
-		} else if (item.getItemId() == R.id.menu_gallery || item.getItemId() == R.id.menu_gallery_toolbar) {
+		if (performThreadAction(item.getItemId())) return true;
+		if (item.getItemId() == R.id.menu_gallery || item.getItemId() == R.id.menu_gallery_toolbar) {
 			int imageIndex = -1;
 			PaddedRecyclerView recyclerView = getRecyclerView();
 			View child = recyclerView.getChildAt(0);
@@ -1081,9 +1152,6 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 			return true;
 		} else if (item.getItemId() == R.id.menu_select) {
 			selectionMode = startActionMode(new SelectionCallback(this));
-			return true;
-		} else if (item.getItemId() == R.id.menu_refresh) {
-			refreshPosts(false);
 			return true;
 		} else if (item.getItemId() == R.id.menu_translate) {
 			if (!TranslationController.isEnabledForChan(page.chanName)) {
@@ -1123,16 +1191,6 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 			List<String> localFilters = hidePerformer.getReadableLocalFilters(getContext());
 			showHiddenPostsDialog(getFragmentManager(), localFilters);
 			return true;
-		} else if (item.getItemId() == R.id.menu_star_text || item.getItemId() == R.id.menu_star_icon) {
-			ParcelableExtra parcelableExtra = getParcelableExtra(ParcelableExtra.FACTORY);
-			FavoritesStorage.getInstance().add(page.chanName, page.boardName, page.threadNumber,
-					parcelableExtra.threadTitle, true);
-			updateOptionsMenu();
-			return true;
-		} else if (item.getItemId() == R.id.menu_unstar_text || item.getItemId() == R.id.menu_unstar_icon) {
-			FavoritesStorage.getInstance().remove(page.chanName, page.boardName, page.threadNumber);
-			updateOptionsMenu();
-			return true;
 		} else if (item.getItemId() == R.id.menu_open_original_thread) {
 			RetainableExtra retainableExtra = getRetainableExtra(RetainableExtra.FACTORY);
 			Chan chan = Chan.getPreferred(null, retainableExtra.archivedThreadUri);
@@ -1147,18 +1205,6 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 					getUiManager().navigator().navigatePosts(chan.name, boardName, threadNumber, null, threadTitle);
 				}
 			}
-			return true;
-		} else if (item.getItemId() == R.id.menu_archive) {
-			String threadTitle = null;
-			ArrayList<Post> posts = new ArrayList<>();
-			for (PostItem postItem : adapter) {
-				if (threadTitle == null) {
-					threadTitle = StringUtils.emptyIfNull(postItem.getSubjectOrComment());
-				}
-				posts.add(postItem.getPost());
-			}
-			getUiManager().dialog().performSendArchiveThread(getFragmentManager(),
-					page.chanName, page.boardName, page.threadNumber, threadTitle, posts);
 			return true;
 		}
 		return false;

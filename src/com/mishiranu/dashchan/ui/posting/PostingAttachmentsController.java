@@ -157,6 +157,11 @@ public final class PostingAttachmentsController {
 		return !attachmentImportInProgress && attachments.size() < postingConfiguration.attachmentCount;
 	}
 
+	public PostingAttachmentState getUiState() {
+		return new PostingAttachmentState(attachments.size(),
+				postingConfiguration != null ? postingConfiguration.attachmentCount : 0, attachmentImportInProgress);
+	}
+
 	private Context requireContext() {
 		if (host == null) throw new IllegalStateException("Attachment view not attached");
 		return host.requireContext();

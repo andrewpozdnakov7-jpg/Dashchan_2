@@ -51,6 +51,9 @@ public class ExpandedScreen implements RecyclerScrollTracker.OnScrollListener {
 
 	private boolean drawerOverToolbarEnabled;
 	private final LinkedHashMap<View, RecyclerView> contentViews = new LinkedHashMap<>();
+	private View scrollOwner;
+	private RecyclerView scrollOwnerList;
+	private boolean threadScrollOwner, disposed;
 
 	private final List<ForegroundDrawable> foregroundDrawables;
 	private final int legacyStatusBarColor, statusBarUnderlayColor, drawerStatusBarColor;
@@ -66,6 +69,7 @@ public class ExpandedScreen implements RecyclerScrollTracker.OnScrollListener {
 	private ValueAnimator chromeAnimator;
 	private float chromeValue = 1f;
 	private boolean chromeTarget = true, modernChromeOwned;
+	private float chromeShiftDp = 24f;
 
 	private ValueAnimator foregroundAnimator;
 	private boolean foregroundAnimatorShow;
@@ -88,6 +92,8 @@ public class ExpandedScreen implements RecyclerScrollTracker.OnScrollListener {
 	private final int minItemsCount;
 
 	public interface Layout {
+		default boolean isExpandedThread() { return false; }
+
 		default RecyclerView getRecyclerView() {
 			return null;
 		}
@@ -212,6 +218,12 @@ public class ExpandedScreen implements RecyclerScrollTracker.OnScrollListener {
 	}
 
 	public void dispose() {
+		disposed = true;
+		ConcurrentUtils.HANDLER.removeCallbacks(showStateRunnable);
+		finishMotion(); cancelChromeAnimators();
+		for (RecyclerView list : contentViews.values()) if (list != null) recyclerScrollTracker.detach(list);
+		contentViews.clear(); scrollOwner = null; scrollOwnerList = null; threadScrollOwner = false;
+		if (toolbarView != null) toolbarView.setTranslationY(0f);
 		if (statusBarController != null) {
 			statusBarController.removeOnControllableInsetsChangedListener(statusBarControlListener);
 			statusBarController = null;
@@ -433,14 +445,19 @@ public class ExpandedScreen implements RecyclerScrollTracker.OnScrollListener {
 		chromeValue = value;
 		applyForegroundAlpha(Math.round(255f * value));
 		toolbarView.setAlpha(value);
-		toolbarView.setTranslationY(-24f * ResourceUtils.obtainDensity(toolbarView) * (1f - value));
+		toolbarView.setTranslationY(-chromeShiftDp * ResourceUtils.obtainDensity(toolbarView) * (1f - value));
+	}
+
+	private void cancelChromeAnimators() {
+		if (foregroundAnimator != null) { ValueAnimator old = foregroundAnimator; foregroundAnimator = null; old.cancel(); }
+		if (chromeAnimator != null) { ValueAnimator old = chromeAnimator; chromeAnimator = null; old.cancel(); }
 	}
 
 	private void showModernChrome(boolean show) {
-		if (foregroundAnimator != null) { ValueAnimator old = foregroundAnimator; foregroundAnimator = null; old.cancel(); }
-		if (chromeAnimator != null) { ValueAnimator old = chromeAnimator; chromeAnimator = null; old.cancel(); }
+		cancelChromeAnimators();
 		if (!modernChromeOwned) chromeValue = activity.getActionBar().isShowing() ? toolbarView.getAlpha() : 0f;
 		modernChromeOwned = true; chromeTarget = show;
+		chromeShiftDp = threadScrollOwner ? 12f : 24f;
 		ToolbarSearchMotion.finish(activity.findViewById(com.mishiranu.dashchan.R.id.toolbar));
 		if (show) activity.getActionBar().show();
 		applyModernChrome(chromeValue);
@@ -448,7 +465,9 @@ public class ExpandedScreen implements RecyclerScrollTracker.OnScrollListener {
 			finishMotion(); return;
 		}
 		ValueAnimator next = ValueAnimator.ofFloat(chromeValue, show ? 1f : 0f); chromeAnimator = next;
-		next.setDuration(com.mishiranu.dashchan.util.InterfaceMotion.duration(show ? 240 : 180));
+		int duration = threadScrollOwner ? Math.round((show ? 180 : 160) * Math.abs(chromeValue - (show ? 1f : 0f)))
+				: show ? 240 : 180;
+		next.setDuration(com.mishiranu.dashchan.util.InterfaceMotion.duration(duration));
 		next.setInterpolator(com.mishiranu.dashchan.util.InterfaceMotion.STANDARD);
 		next.addUpdateListener(value -> {
 			if (chromeAnimator != value) return;
@@ -472,6 +491,7 @@ public class ExpandedScreen implements RecyclerScrollTracker.OnScrollListener {
 	}
 
 	public void updateMotionPolicy() {
+		recyclerScrollTracker.reset(scrollOwnerList);
 		finishMotion();
 		if (!com.mishiranu.dashchan.util.InterfaceMotion.isEnabled()) modernChromeOwned = false;
 		refreshSystemBarAppearance();
@@ -479,6 +499,13 @@ public class ExpandedScreen implements RecyclerScrollTracker.OnScrollListener {
 
 	private void applyShowActionBar(boolean show) {
 		ActionBar actionBar = activity.getActionBar();
+		if (threadScrollOwner && !ValueAnimator.areAnimatorsEnabled()) {
+			cancelChromeAnimators(); chromeTarget = show; chromeValue = show ? 1f : 0f; modernChromeOwned = false;
+			if (toolbarView != null) { toolbarView.setAlpha(chromeValue); toolbarView.setTranslationY(0f); }
+			applyForegroundAlpha(show ? 255 : 0);
+			if (show) actionBar.show(); else actionBar.hide();
+			return;
+		}
 		if (fullScreenLayoutEnabled && toolbarView != null && com.mishiranu.dashchan.util.InterfaceMotion.isEnabled()) {
 			if (chromeTarget != show || !modernChromeOwned) showModernChrome(show);
 			return;
@@ -515,6 +542,9 @@ public class ExpandedScreen implements RecyclerScrollTracker.OnScrollListener {
 
 	private boolean isActionBarShowing() {
 		if (chromeAnimator != null) return chromeTarget;
+		// Native ActionMode can show its container while our regular toolbar is still at
+		// the hidden endpoint. A forced show must restore that endpoint, not become a no-op.
+		if (threadScrollOwner && modernChromeOwned && !chromeTarget) return false;
 		if (!activity.getActionBar().isShowing()) {
 			return false;
 		}
@@ -528,6 +558,7 @@ public class ExpandedScreen implements RecyclerScrollTracker.OnScrollListener {
 	private long lastShowStateChanged;
 
 	private final Runnable showStateRunnable = () -> {
+		if (disposed) return;
 		if (enqueuedShowState != isActionBarShowing()) {
 			boolean show = enqueuedShowState;
 			setState(State.SHOW, show);
@@ -552,6 +583,7 @@ public class ExpandedScreen implements RecyclerScrollTracker.OnScrollListener {
 	}
 
 	private void setLocked(boolean locked) {
+		recyclerScrollTracker.reset(scrollOwnerList);
 		setState(State.LOCKED, locked);
 		if (locked) {
 			setShowActionBar(true, false);
@@ -562,6 +594,13 @@ public class ExpandedScreen implements RecyclerScrollTracker.OnScrollListener {
 		if (!show) {
 			show = checkState(State.LOCKED) || checkState(State.ACTION_MODE) &&
 					!activity.getWindow().hasFeature(Window.FEATURE_ACTION_MODE_OVERLAY);
+		}
+		if (threadScrollOwner) {
+			// The thread tracker already consumed the distance threshold. No legacy queue/debounce.
+			ConcurrentUtils.HANDLER.removeCallbacks(showStateRunnable);
+			enqueuedShowState = show;
+			showStateRunnable.run();
+			return;
 		}
 		if (enqueuedShowState != show) {
 			enqueuedShowState = show;
@@ -582,13 +621,16 @@ public class ExpandedScreen implements RecyclerScrollTracker.OnScrollListener {
 	private final RecyclerScrollTracker recyclerScrollTracker = new RecyclerScrollTracker(this);
 
 	public void addContentView(View view) {
+		if (disposed) return;
 		RecyclerView recyclerView = null;
 		if (view instanceof Layout) {
 			recyclerView = ((Layout) view).getRecyclerView();
 		}
-		contentViews.put(view, recyclerView);
+		RecyclerView previous = contentViews.put(view, recyclerView);
+		if (previous != null) recyclerScrollTracker.detach(previous);
+		selectScrollOwner(view);
 		if (recyclerView != null && expandingEnabled) {
-			recyclerScrollTracker.attach(recyclerView);
+			recyclerScrollTracker.attach(recyclerView, threadScrollOwner);
 		}
 		updatePaddings();
 		setShowActionBar(true, true);
@@ -599,6 +641,29 @@ public class ExpandedScreen implements RecyclerScrollTracker.OnScrollListener {
 		if (recyclerView != null && expandingEnabled) {
 			recyclerScrollTracker.detach(recyclerView);
 		}
+		if (scrollOwner == view) {
+			View next = null;
+			for (View candidate : contentViews.keySet()) next = candidate;
+			selectScrollOwner(next);
+		}
+	}
+
+	private void selectScrollOwner(View view) {
+		if (scrollOwner == view && scrollOwnerList == contentViews.get(view)) return;
+		ConcurrentUtils.HANDLER.removeCallbacks(showStateRunnable);
+		recyclerScrollTracker.reset(scrollOwnerList);
+		boolean wasThread = threadScrollOwner;
+		scrollOwner = view; scrollOwnerList = contentViews.get(view);
+		threadScrollOwner = expandingEnabled && view instanceof Layout && ((Layout) view).isExpandedThread();
+		recyclerScrollTracker.reset(scrollOwnerList);
+		if (wasThread || threadScrollOwner) {
+			// A former page cannot finish hiding the next page's toolbar. Restore the shared view
+			// once at the ownership boundary, never by changing list padding or per-frame geometry.
+			cancelChromeAnimators(); modernChromeOwned = false; chromeTarget = true; chromeValue = 1f;
+			if (toolbarView != null) { toolbarView.setAlpha(1f); toolbarView.setTranslationY(0f); }
+			applyForegroundAlpha(255); activity.getActionBar().show(); setState(State.SHOW, true);
+		}
+		enqueuedShowState = isActionBarShowing();
 	}
 
 	public void setDrawerOverToolbarEnabled(boolean drawerOverToolbarEnabled) {
@@ -662,6 +727,7 @@ public class ExpandedScreen implements RecyclerScrollTracker.OnScrollListener {
 
 	@Override
 	public void onScroll(ViewGroup view, boolean scrollingDown, int totalItemCount, boolean first, boolean last) {
+		if (disposed || view != scrollOwnerList) return;
 		boolean show = true;
 		if (scrollingDown) {
 			int childCount = view.getChildCount();
@@ -682,9 +748,23 @@ public class ExpandedScreen implements RecyclerScrollTracker.OnScrollListener {
 		setShowActionBar(show, true);
 	}
 
+	@Override
+	public void onThreadScroll(RecyclerView view, ExpandedThreadScrollState.Decision decision) {
+		if (disposed || !threadScrollOwner || view != scrollOwnerList || !view.isShown() || !view.hasWindowFocus()
+				|| checkState(State.LOCKED) || checkState(State.ACTION_MODE)
+				&& !activity.getWindow().hasFeature(Window.FEATURE_ACTION_MODE_OVERLAY)) {
+			recyclerScrollTracker.reset(view);
+			return;
+		}
+		if (decision != ExpandedThreadScrollState.Decision.KEEP) {
+			setShowActionBar(decision == ExpandedThreadScrollState.Decision.SHOW, false);
+		}
+	}
+
 	private boolean actionModeViewInitialized = false;
 
 	public void setActionModeState(boolean actionMode) {
+		recyclerScrollTracker.reset(scrollOwnerList);
 		if (actionMode && !actionModeViewInitialized) {
 			if (drawerInterlayer != null) {
 				// ActionModeBar view has lazy initialization
@@ -710,6 +790,9 @@ public class ExpandedScreen implements RecyclerScrollTracker.OnScrollListener {
 			}
 		}
 		setState(State.ACTION_MODE, actionMode);
+		if (threadScrollOwner && actionMode && !activity.getWindow().hasFeature(Window.FEATURE_ACTION_MODE_OVERLAY)) {
+			setShowActionBar(true, false);
+		}
 		if (!actionMode && checkState(State.LOCKED) && !isActionBarShowing()) {
 			// Restore action bar
 			enqueuedShowState = false;

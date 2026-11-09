@@ -70,6 +70,7 @@ import com.mishiranu.dashchan.widget.ClickableToast;
 import com.mishiranu.dashchan.widget.DropdownView;
 import com.mishiranu.dashchan.widget.ExpandedLayout;
 import com.mishiranu.dashchan.widget.ProgressDialog;
+import com.mishiranu.dashchan.widget.PostingScrollView;
 import com.mishiranu.dashchan.widget.ThemeEngine;
 import com.mishiranu.dashchan.widget.UriPasteEditText;
 import com.mishiranu.dashchan.widget.ViewFactory;
@@ -225,6 +226,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		ViewGroup postingLayout = view.findViewById(R.id.posting_layout);
 		LinearLayout commentParent = view.findViewById(R.id.comment_parent);
 		commentView = view.findViewById(R.id.comment);
+		if (scrollView instanceof PostingScrollView) ((PostingScrollView) scrollView).setCommentEditor(commentView);
 		sageCheckBox = view.findViewById(R.id.sage_checkbox);
 		spoilerCheckBox = view.findViewById(R.id.spoiler_checkbox);
 		originalPosterCheckBox = view.findViewById(R.id.original_poster_checkbox);
@@ -294,7 +296,9 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 						float y = event.getY();
 						int direction = y < previousY ? 1 : y > previousY ? -1 : 0;
 						previousY = y;
-						boolean scrollComment = direction != 0 && commentView.canScrollVertically(direction);
+						boolean owned = scrollView instanceof PostingScrollView
+								&& ((PostingScrollView) scrollView).isCommentGestureOwned();
+						boolean scrollComment = owned || direction != 0 && commentView.canScrollVertically(direction);
 						scrollView.requestDisallowInterceptTouchEvent(scrollComment);
 						break;
 					}
@@ -524,8 +528,8 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		if (postingAppearance != null) {
 			postingAppearance.decorateFields(captchaInputView);
 			postingAppearance.finishSetup(sendButton, sageCheckBox, spoilerCheckBox, originalPosterCheckBox);
-			postingAppearance.setAttachmentAction(attachmentController::openPicker);
-			postingAppearance.setAttachmentAvailable(attachmentController.canAttach());
+			postingAppearance.setAttachmentAction(this::onAttachmentAction);
+			updateAttachmentUiState();
 			postingAppearance.setPrimaryChanged(this::updateSendButtonState);
 			captchaForm.publishCurrentPresentation();
 			commentView.addTextChangedListener(new android.text.TextWatcher() {
@@ -555,6 +559,8 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 
 	@Override
 	public void onDestroyView() {
+		if (scrollView instanceof PostingScrollView) ((PostingScrollView) scrollView).setCommentEditor(null);
+		if (commentView != null) commentView.setOnTouchListener(null);
 		if (initialKeyboardRequest != null) {
 			initialKeyboardRequest.cancel("view_destroyed");
 			initialKeyboardRequest = null;
@@ -674,7 +680,10 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 	@Override
 	public void onPause() {
 		if (initialKeyboardRequest != null) initialKeyboardRequest.cancel("paused");
-		if (postingAppearance != null) postingAppearance.deactivateToolbar();
+		if (postingAppearance != null) {
+			postingAppearance.cancelAttachmentReveal();
+			postingAppearance.deactivateToolbar();
+		}
 		super.onPause();
 	}
 
@@ -857,7 +866,24 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 	public void onPrepareOptionsMenu(Menu menu, boolean primary) {
 		boolean available = attachmentController.canAttach();
 		menu.findItem(R.id.menu_attach).setVisible(postingAppearance == null && available);
-		if (postingAppearance != null) postingAppearance.setAttachmentAvailable(available);
+		updateAttachmentUiState();
+	}
+
+	private void updateAttachmentUiState() {
+		if (postingAppearance != null) postingAppearance.setAttachmentState(attachmentController.getUiState());
+	}
+
+	private void onAttachmentAction() {
+		PostingAttachmentState state = attachmentController.getUiState();
+		updateAttachmentUiState();
+		if (state.importing) {
+			ClickableToast.show(R.string.processing_data__ellipsis);
+		} else if (postingAppearance != null && postingAppearance.hasKeyboardActions() && state.atLimit()) {
+			if (initialKeyboardRequest != null) {
+				initialKeyboardRequest.cancel("attachment_grid"); initialKeyboardRequest = null;
+			}
+			postingAppearance.showAttachments();
+		} else if (state.canAdd()) attachmentController.openPicker();
 	}
 
 	@Override
@@ -1204,6 +1230,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 				((FragmentHandler) requireActivity()).requestStorage();
 			}
 			@Override public void invalidateOptionsMenu() {
+				updateAttachmentUiState();
 				PostingFragment.this.invalidateOptionsMenu();
 			}
 			@Override public void resizeCommentAfterAttachmentChange() {

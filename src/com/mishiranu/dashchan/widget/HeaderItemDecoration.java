@@ -22,6 +22,7 @@ public class HeaderItemDecoration extends RecyclerView.ItemDecoration {
 	private final Rect rect = new Rect();
 	private TextView headerView;
 	private final boolean standardService;
+	private final boolean followItemMotion;
 
 	public HeaderItemDecoration(Provider provider) {
 		this(null, provider);
@@ -32,9 +33,16 @@ public class HeaderItemDecoration extends RecyclerView.ItemDecoration {
 	}
 
 	public HeaderItemDecoration(Configuration configuration, Provider provider, boolean standardService) {
+		this(configuration, provider, standardService, false);
+	}
+
+	/** Opt in for lists with row-local motion; other screens retain their existing decoration. */
+	public HeaderItemDecoration(Configuration configuration, Provider provider, boolean standardService,
+			boolean followItemMotion) {
 		this.configuration = configuration;
 		this.provider = provider;
 		this.standardService = standardService;
+		this.followItemMotion = followItemMotion;
 	}
 
 	private View prepareHeaderView(RecyclerView parent, String header, boolean layout) {
@@ -65,7 +73,8 @@ public class HeaderItemDecoration extends RecyclerView.ItemDecoration {
 				if (header != null) {
 					parent.getDecoratedBoundsWithMargins(view, rect);
 					c.save();
-					c.translate(rect.left, rect.top);
+					c.translate(rect.left + (followItemMotion ? view.getTranslationX() : 0),
+							rect.top + (followItemMotion ? view.getTranslationY() : 0));
 					prepareHeaderView(parent, header, true).draw(c);
 					c.restore();
 				}

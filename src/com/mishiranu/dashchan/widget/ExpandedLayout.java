@@ -9,6 +9,7 @@ import com.mishiranu.dashchan.util.ViewUtils;
 @SuppressLint("ViewConstructor")
 public class ExpandedLayout extends FrameLayout implements ExpandedScreen.Layout {
 	private final boolean self;
+	private final boolean expandedThread;
 	private int top;
 	private int bottom;
 	private boolean useGesture29;
@@ -16,9 +17,16 @@ public class ExpandedLayout extends FrameLayout implements ExpandedScreen.Layout
 	private RecyclerView recyclerView;
 
 	public ExpandedLayout(Context context, boolean self) {
+		this(context, self, false);
+	}
+
+	public ExpandedLayout(Context context, boolean self, boolean expandedThread) {
 		super(context);
 		this.self = self;
+		this.expandedThread = expandedThread;
 	}
+
+	@Override public boolean isExpandedThread() { return expandedThread; }
 
 	public void setRecyclerView(RecyclerView recyclerView) {
 		this.recyclerView = recyclerView;

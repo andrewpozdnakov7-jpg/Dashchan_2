@@ -8,8 +8,10 @@ import chan.content.Chan;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.database.HistoryDatabase;
+import com.mishiranu.dashchan.ui.HistoryRemoveSwipeController;
 import com.mishiranu.dashchan.util.ListViewUtils;
 import com.mishiranu.dashchan.util.PostDateFormatter;
+import com.mishiranu.dashchan.util.ThreadMotionKey;
 import com.mishiranu.dashchan.widget.CursorAdapter;
 import com.mishiranu.dashchan.widget.DividerItemDecoration;
 import com.mishiranu.dashchan.widget.HistoryTextAppearance;
@@ -73,6 +75,11 @@ public class HistoryAdapter extends CursorAdapter<HistoryDatabase.HistoryCursor,
 		return historyItem.update(moveTo(position)).copy();
 	}
 
+	/** Snapshot for a confirmed row action; callers must validate the current adapter position. */
+	public HistoryDatabase.HistoryItem getItem(int position) {
+		return copyItem(position);
+	}
+
 	@NonNull
 	@Override
 	public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
@@ -82,7 +89,10 @@ public class HistoryAdapter extends CursorAdapter<HistoryDatabase.HistoryCursor,
 
 	@Override
 	public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
+		HistoryRemoveSwipeController.onBinding(holder.itemView);
 		HistoryDatabase.HistoryItem historyItem = this.historyItem.update(moveTo(position));
+		holder.itemView.setTag(R.id.history_item_motion_key, new ThreadMotionKey(
+				historyItem.chanName, historyItem.boardName, historyItem.threadNumber));
 		ViewFactory.TwoLinesViewHolder viewHolder = (ViewFactory.TwoLinesViewHolder) holder.itemView.getTag();
 		viewHolder.text1.setText(StringUtils.isEmpty(historyItem.title)
 				? StringUtils.formatThreadTitle(historyItem.chanName, historyItem.boardName,
@@ -97,6 +107,13 @@ public class HistoryAdapter extends CursorAdapter<HistoryDatabase.HistoryCursor,
 		viewHolder.text2.setText(title);
 		viewHolder.text2End.setText(postDateFormatter.formatDate(historyItem.time));
 		HistoryTextAppearance.row(viewHolder);
+	}
+
+	@Override
+	public void onViewRecycled(@NonNull RecyclerView.ViewHolder holder) {
+		HistoryRemoveSwipeController.onBinding(holder.itemView);
+		holder.itemView.setTag(R.id.history_item_motion_key, null);
+		super.onViewRecycled(holder);
 	}
 
 	public DividerItemDecoration.Configuration configureDivider

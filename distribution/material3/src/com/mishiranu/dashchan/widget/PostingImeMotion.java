@@ -60,6 +60,9 @@ final class PostingImeMotion implements View.OnAttachStateChangeListener {
 	}
 	void bindActions(ViewGroup row, View slot, View attachment, View action) {
 		this.actionRow = row; this.primarySlot = slot; this.attachment = attachment; this.action = action;
+		if (attachment instanceof PostingAttachmentButton) {
+			((PostingAttachmentButton) attachment).setBadgeChanged(this::invalidateAttachment);
+		}
 	}
 	private final class ViewTreeFocus implements android.view.ViewTreeObserver.OnWindowFocusChangeListener {
 		@Override public void onWindowFocusChanged(boolean hasFocus) { if (!hasFocus) finish(); }
@@ -74,6 +77,20 @@ final class PostingImeMotion implements View.OnAttachStateChangeListener {
 		return new RectF(at[0] - base[0], at[1] - base[1],
 				at[0] - base[0] + view.getWidth(), at[1] - base[1] + view.getHeight());
 	}
+	private RectF attachmentBounds() {
+		if (attachment == null) return new RectF();
+		if (attachment.getVisibility() != View.GONE || !(attachment.getParent() instanceof ViewGroup)) return bounds(attachment);
+		// At the limit the ordinary row has no attachment slot. Use its virtual endpoint only
+		// for the existing flight, without reserving width or laying out a second button.
+		ViewGroup parent = (ViewGroup) attachment.getParent(); RectF at = bounds(parent);
+		ViewGroup.LayoutParams params = attachment.getLayoutParams();
+		float width = params.width > 0 ? params.width : attachment.getWidth();
+		float height = params.height > 0 ? params.height : attachment.getHeight();
+		float left = parent.getLayoutDirection() == View.LAYOUT_DIRECTION_RTL
+				? at.right - parent.getPaddingRight() - width : at.left + parent.getPaddingLeft();
+		float top = at.top + (parent.getHeight() - height) / 2f;
+		return new RectF(left, top, left + width, top + height);
+	}
 	private boolean visible(View view, RectF bounds) {
 		return view != null && view.getVisibility() == View.VISIBLE && view.isShown()
 				&& !bounds.isEmpty() && view.getGlobalVisibleRect(new Rect());
@@ -83,6 +100,15 @@ final class PostingImeMotion implements View.OnAttachStateChangeListener {
 		if (!view.getGlobalVisibleRect(clip)) return new RectF();
 		int[] at = new int[2]; root.getLocationOnScreen(at); clip.offset(-at[0], -at[1]);
 		return new RectF(clip);
+	}
+	private RectF editorViewport() {
+		// Capture the clipping viewport, not an editor rectangle which may become
+		// stale when native layout moves the editor again during the same IME animation.
+		for (View current = editor; current != null; current = current.getParent() instanceof View
+				? (View) current.getParent() : null) {
+			if (current instanceof android.widget.ScrollView || current == root) return visibleClip(current);
+		}
+		return visibleClip(root);
 	}
 	private void refreshWindowHeight() {
 		android.view.WindowManager manager = root.getContext().getSystemService(android.view.WindowManager.class);
@@ -113,21 +139,29 @@ final class PostingImeMotion implements View.OnAttachStateChangeListener {
 		// preceded this capture. Keep that edge separate from the displayed IME edge.
 		final float layoutImeEdge = keyboardEdge();
 		final float imeEdge = followingSystem && systemFrames ? keyboardEdge(imeBottom) : layoutImeEdge;
-		final RectF editorClip = visibleClip(editor);
+		final RectF editorViewport = editorViewport();
 		final RectF capsule = primarySlot != null ? bounds(primarySlot) : new RectF();
-		final RectF attach = attachment != null ? bounds(attachment) : new RectF();
+		final RectF attach = attachmentBounds();
+		final float attachOpacity;
+		final boolean badgeVisible = attachment instanceof PostingAttachmentButton
+				&& ((PostingAttachmentButton) attachment).isBadgeRequested();
 		final boolean utilityVisible = utilitySlot.getVisibility() == View.VISIBLE && utility.isShown();
 		final List<Item> options = new ArrayList<>();
 		final Rect utilityClip = new Rect();
 		boolean attachVisible;
 		boolean primaryVisible = visible(primarySlot != null ? primarySlot : primary, capsule);
 		Frame() {
-			if (pose != null) editorClip.set(pose.shownEditorClip);
+			if (pose != null) editorViewport.set(pose.shownEditorViewport);
 			if (pose != null && pose.capsuleLayer != null) {
 				capsule.set(pose.shownCapsule); primaryVisible = primary.getAlpha() > .05f;
 			}
 			attachVisible = visible(attachment, attach);
-			if (pose != null && pose.flight != null) { attach.set(pose.attach); attachVisible = true; }
+			if (pose != null && pose.flight != null) {
+				attach.set(pose.attach); attachOpacity = pose.shownAttachmentOpacity;
+				attachVisible = attachOpacity > 0f;
+			} else {
+				attachOpacity = attachVisible ? 1f : 0f;
+			}
 			if (utilityVisible && utility.getGlobalVisibleRect(utilityClip)) {
 				int[] base = new int[2]; root.getLocationOnScreen(base); utilityClip.offset(-base[0], -base[1]);
 				if (utility instanceof ViewGroup) {
@@ -278,19 +312,25 @@ final class PostingImeMotion implements View.OnAttachStateChangeListener {
 		final Drawable capsuleLayer;
 		final Drawable editorLayer;
 		final RectF shownCapsule = new RectF();
-		final RectF shownEditorClip = new RectF(), endEditorClip;
+		final RectF shownEditorClip = new RectF(), shownEditorViewport = new RectF(), endEditorViewport;
 		final float endTop;
 		final float endImeEdge;
-		final int endEditorHeight;
 		boolean layoutPrepared;
 		final RectF attach = new RectF();
+		final float endAttachmentOpacity;
+		final float startBadgeAlpha = attachment instanceof PostingAttachmentButton
+				? ((PostingAttachmentButton) attachment).getBadgeAlpha() : 0f;
+		final boolean endBadgeVisible;
+		float shownAttachmentOpacity;
 		Pose(Frame before) {
 			this.before = before;
 			Frame after = new Frame(); showUtility = !before.utilityVisible && after.utilityVisible;
+			endAttachmentOpacity = after.attachOpacity;
+			endBadgeVisible = after.badgeVisible;
+			shownAttachmentOpacity = before.attachOpacity;
 			endTop = !after.capsule.isEmpty() ? after.capsule.top : after.primaryTop;
 			endImeEdge = after.layoutImeEdge;
-			endEditorHeight = after.editorHeight;
-			endEditorClip = new RectF(after.editorClip);
+			endEditorViewport = new RectF(after.editorViewport);
 			editorLayer = new BaseDrawable() {
 				@Override public void draw(Canvas canvas) {
 					if (shownEditorClip.isEmpty()) return;
@@ -319,7 +359,7 @@ final class PostingImeMotion implements View.OnAttachStateChangeListener {
 			inForm = childOfForm; docked = attachment != null && attachment.getParent() == actionRow;
 			outgoing = before.utilityVisible && !after.utilityVisible && !before.utilityClip.isEmpty() ? new UtilityExit(before) : null;
 			if (outgoing != null) root.getOverlay().add(outgoing);
-			flight = before.attachVisible && after.attachVisible && attachment != null ? new BaseDrawable() {
+			flight = (before.attachVisible || after.attachVisible) && attachment != null ? new BaseDrawable() {
 				@Override public void draw(Canvas canvas) { drawAttachment(canvas); }
 			} : null;
 			if (flight != null) {
@@ -348,6 +388,10 @@ final class PostingImeMotion implements View.OnAttachStateChangeListener {
 		void apply(float value) {
 			layoutPrepared = false;
 			float progress = Math.max(0f, Math.min(1f, value));
+			if (attachment instanceof PostingAttachmentButton) {
+				((PostingAttachmentButton) attachment).setImeBadgeAlpha(
+						PostingAttachmentBadgeMotion.alpha(startBadgeAlpha, endBadgeVisible, progress));
+			}
 			// Read natural bounds again after native remeasurement, including OEM IME resize frames.
 			form.setTranslationY(formY); primary.setTranslationY(primaryY);
 			editorShape.restore();
@@ -359,17 +403,29 @@ final class PostingImeMotion implements View.OnAttachStateChangeListener {
 					? keyboardEdge(imeBottom) - lerp(before.imeEdge - shownTop, endImeEdge - endTop, progress)
 					: lerp(shownTop, endTop, progress);
 			float primaryDelta = reveal ? 24 * ResourceUtils.obtainDensity(root) * (1f - progress) : desiredTop - targetTop;
-			RectF destination = attachment != null ? bounds(attachment) : new RectF();
+			RectF destination = attachmentBounds();
 			float fade = Math.min(1f, progress * (260f / 160f));
 			form.setTranslationY(formY + contentDelta * (1f - progress));
 			primary.setTranslationY(primaryY + primaryDelta - (inForm ? contentDelta * (1f - progress) : 0));
 			// Presentation bounds only: min/max/height policy and LayoutParams stay untouched.
 			// Formatting remains at the visible editor bottom instead of snapping ahead of the CTA.
-			editorShape.apply(Math.round(lerp(before.editorHeight, endEditorHeight, progress)));
-			RectF startClip = before.editorClip.isEmpty() ? endEditorClip : before.editorClip;
-			RectF endClip = endEditorClip.isEmpty() ? startClip : endEditorClip;
-			shownEditorClip.set(lerp(startClip.left, endClip.left, progress), lerp(startClip.top, endClip.top, progress),
-					lerp(startClip.right, endClip.right, progress), lerp(startClip.bottom, endClip.bottom, progress));
+			// Native IME/OEM layouts may refine the final height after this pose starts.
+			// Use the restored current model, so the last overlay frame matches the live editor.
+			editorShape.apply(Math.round(lerp(before.editorHeight, editor.getHeight(), progress)));
+			RectF endViewport = editorViewport();
+			if (endViewport.isEmpty()) endViewport.set(endEditorViewport);
+			RectF startViewport = before.editorViewport.isEmpty() ? endViewport : before.editorViewport;
+			shownEditorViewport.set(lerp(startViewport.left, endViewport.left, progress),
+					lerp(startViewport.top, endViewport.top, progress), lerp(startViewport.right, endViewport.right, progress),
+					lerp(startViewport.bottom, endViewport.bottom, progress));
+			// The shape and its clipping rectangle must use the same presented bounds.
+			// Interpolating old clipped editor endpoints can cut off the formatting row
+			// after a native remeasurement, even though that row still fits the viewport.
+			shownEditorClip.set(bounds(editor));
+			if (!shownEditorClip.intersect(shownEditorViewport)) shownEditorClip.setEmpty();
+			float imeEdge = followingSystem && systemFrames ? keyboardEdge(imeBottom)
+					: lerp(before.imeEdge, endImeEdge, progress);
+			shownEditorClip.bottom = Math.min(shownEditorClip.bottom, imeEdge);
 			editorLayer.invalidateSelf();
 			if (reveal) primary.setAlpha(primaryAlpha * fade);
 			if (showUtility) {
@@ -377,6 +433,7 @@ final class PostingImeMotion implements View.OnAttachStateChangeListener {
 				utility.setTranslationY(utilityY + 8 * ResourceUtils.obtainDensity(root) * (1f - progress));
 			}
 			if (flight != null) {
+				shownAttachmentOpacity = lerp(before.attachOpacity, endAttachmentOpacity, progress);
 				flight.setBounds(0, 0, overlayHost.getWidth(), overlayHost.getHeight());
 				attach.set(lerp(before.attach.left, destination.left, progress), lerp(before.attach.top, destination.top, progress),
 						lerp(before.attach.right, destination.right, progress), lerp(before.attach.bottom, destination.bottom, progress));
@@ -405,17 +462,24 @@ final class PostingImeMotion implements View.OnAttachStateChangeListener {
 			}
 		}
 		private void drawAttachment(Canvas canvas) {
+			if (shownAttachmentOpacity <= 0f) return;
 			int save = canvas.save();
 			try {
 				translateOverlay(canvas); canvas.translate(attach.left, attach.top);
+				int layer = canvas.saveLayerAlpha(0, 0, attach.width(), attach.height(),
+						Math.round(255 * attachmentAlpha * shownAttachmentOpacity));
 				Drawable background = attachment.getBackground();
 				if (background != null) drawAt(background, canvas, 0, 0, Math.round(attach.width()), Math.round(attach.height()));
-				if (attachment instanceof android.widget.ImageView) {
+				if (attachment instanceof PostingAttachmentButton) {
+					PostingAttachmentButton button = (PostingAttachmentButton) attachment;
+					button.drawContents(canvas, attach.width(), attach.height(), button.getBadgeAlpha());
+				} else if (attachment instanceof android.widget.ImageView) {
 					Drawable icon = ((android.widget.ImageView) attachment).getDrawable();
 					int size = Math.round(24 * ResourceUtils.obtainDensity(root));
 					int x = Math.round((attach.width() - size) / 2), y = Math.round((attach.height() - size) / 2);
 					if (icon != null) drawAt(icon, canvas, x, y, x + size, y + size);
 				}
+				canvas.restoreToCount(layer);
 			} finally { canvas.restoreToCount(save); }
 		}
 		void restore() {
@@ -478,6 +542,7 @@ final class PostingImeMotion implements View.OnAttachStateChangeListener {
 	}
 	private static float lerp(float a, float b, float f) { return a + (b - a) * f; }
 	boolean isTransitionRunning() { return pending != null || pose != null || systemAnimation != null; }
+	void invalidateAttachment() { if (pose != null && pose.flight != null) pose.flight.invalidateSelf(); }
 	private static float smooth(float f) { f = Math.max(0, Math.min(1, f)); return f * f * (3 - 2 * f); }
 	private int finalInset() {
 		if (attachment == null || attachment.getParent() != actionRow || attachment.getVisibility() == View.GONE) return 0;
@@ -536,6 +601,7 @@ final class PostingImeMotion implements View.OnAttachStateChangeListener {
 	}
 	void close() {
 		finish(); closed = true; last = null;
+		if (attachment instanceof PostingAttachmentButton) ((PostingAttachmentButton) attachment).setBadgeChanged(null);
 		root.setWindowInsetsAnimationCallback(null);
 		root.removeOnAttachStateChangeListener(this);
 		if (root.getViewTreeObserver().isAlive()) root.getViewTreeObserver().removeOnWindowFocusChangeListener(focus);

@@ -34,6 +34,9 @@ import com.mishiranu.dashchan.widget.ListPosition;
 import com.mishiranu.dashchan.widget.MenuExpandListener;
 import com.mishiranu.dashchan.widget.PaddedRecyclerView;
 import com.mishiranu.dashchan.widget.ThreadQuickNavigation;
+import com.mishiranu.dashchan.widget.ThreadFabMenu;
+import com.mishiranu.dashchan.widget.ThreadFabCardDecoration;
+import com.mishiranu.dashchan.ui.navigator.page.PostsPage;
 import com.mishiranu.dashchan.widget.ViewFactory;
 import java.util.Collection;
 import java.util.UUID;
@@ -123,6 +126,30 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 	private ViewFactory.ErrorHolder errorHolder;
 	private PaddedRecyclerView recyclerView;
 	private ThreadQuickNavigation quickNavigation;
+	private ThreadFabMenu threadFabMenu;
+	private ThreadFabCardDecoration threadFabCards;
+	private boolean threadContentVisible;
+
+	private PostsPage threadFabPage() { return listPage instanceof PostsPage ? (PostsPage) listPage : null; }
+	private void refreshThreadFabPreferences() {
+		if (threadFabMenu == null) return;
+		PostsPage posts = threadFabPage();
+		boolean enabled = posts != null && posts.usesThreadFabMenu();
+		threadFabMenu.setEnabledForThread(enabled);
+		updateThreadFabGeometry();
+	}
+	private void updateThreadFabGeometry() {
+		if (threadFabMenu == null || recyclerView == null) return;
+		PostsPage posts = threadFabPage();
+		boolean enabled = posts != null && posts.usesThreadFabMenu();
+		Rect bounds = threadFabMenu.getFabBounds();
+		if (quickNavigation != null) quickNavigation.setThreadFab(enabled, threadFabMenu.isOpen(), bounds);
+		int[] fabLocation = new int[2], listLocation = new int[2];
+		threadFabMenu.getLocationInWindow(fabLocation); recyclerView.getLocationInWindow(listLocation);
+		bounds.offset(fabLocation[0] - listLocation[0], fabLocation[1] - listLocation[1]);
+		if (threadFabCards != null) threadFabCards.configure(enabled, bounds);
+	}
+
 
 	/** The visible message viewport, in root coordinates, excluding toolbar/system padding. */
 	public Rect getThreadMotionContentBounds() {
@@ -242,7 +269,7 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 		actionBarLockerPull = "pull-" + UUID.randomUUID();
 		actionBarLockerSearch = "search-" + UUID.randomUUID();
 
-		ExpandedLayout layout = new ExpandedLayout(container.getContext(), false);
+		ExpandedLayout layout = new ExpandedLayout(container.getContext(), false, getPage().content == Page.Content.POSTS);
 		recyclerView = new PaddedRecyclerView(layout.getContext());
 		layout.addView(recyclerView, ExpandedLayout.LayoutParams.MATCH_PARENT,
 				ExpandedLayout.LayoutParams.MATCH_PARENT);
@@ -263,21 +290,50 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 		layout.addView(errorHolder.layout);
 		if (getPage().content == Page.Content.POSTS || getPage().content == Page.Content.THREADS
 				|| getPage().content == Page.Content.COMBINED_THREADS) {
-			quickNavigation = new ThreadQuickNavigation(recyclerView, getPage().content == Page.Content.POSTS);
+			quickNavigation = new ThreadQuickNavigation(recyclerView, true);
 			layout.addView(quickNavigation, ExpandedLayout.LayoutParams.MATCH_PARENT,
 					ExpandedLayout.LayoutParams.MATCH_PARENT);
+		}
+
+		if (getPage().content == Page.Content.POSTS) {
+			threadFabCards = new ThreadFabCardDecoration(recyclerView);
+			recyclerView.addItemDecoration(threadFabCards);
+			threadFabMenu = new ThreadFabMenu(recyclerView, new ThreadFabMenu.Host() {
+				@Override public boolean isAvailable() {
+					PostsPage posts = threadFabPage();
+					return isResumed() && threadContentVisible && !searchMode && posts != null && posts.canShowThreadFabMenu()
+							&& !((FragmentHandler) requireActivity()).isContentObscured();
+				}
+				@Override public java.util.List<ThreadFabMenu.Action> getActions() { return threadFabPage().getThreadFabActions(); }
+				@Override public void onAction(int id) {
+					PostsPage posts = threadFabPage();
+					if (posts != null && posts.canShowThreadFabMenu()) posts.performThreadAction(id);
+				}
+				@Override public void onOpenChanged() {
+					searchBackRevision++;
+					updateThreadFabGeometry();
+					notifyBackNavigationChanged();
+				}
+				@Override public void onGeometryChanged(Rect bounds) { updateThreadFabGeometry(); }
+				@Override public View getToolbar() { return ((FragmentHandler) requireActivity()).getToolbarView(); }
+			});
+			layout.addView(threadFabMenu, ExpandedLayout.LayoutParams.MATCH_PARENT, ExpandedLayout.LayoutParams.MATCH_PARENT);
 		}
 
 		allowShowScale = true;
 		listPage = getPage().content.newPage();
 		recyclerView.getPullable().setOnPullListener(listPage);
+		// Thread refresh/loading must not reveal or pin the toolbar. Its scroll policy
+		// and explicit search/drawer/action-mode owners still control visibility.
 		recyclerView.getPullable().setPullStateListener((wrapper, busy) -> ((FragmentHandler) requireActivity())
-				.setActionBarLocked(actionBarLockerPull, busy));
+				.setActionBarLocked(actionBarLockerPull, busy && getPage().content != Page.Content.POSTS));
 		return layout;
 	}
 
 	@Override
 	public void onDestroyView() {
+		if (threadFabMenu != null) threadFabMenu.dispose();
+		if (threadFabCards != null) threadFabCards.dispose();
 		doOnResume = null;
 		clearPendingListReveal();
 		InterfaceMotion.cancel(recyclerView);
@@ -295,6 +351,9 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 		errorHolder = null;
 		recyclerView = null;
 		quickNavigation = null;
+		threadFabMenu = null;
+		threadFabCards = null;
+		threadContentVisible = false;
 		searchView = null;
 		searchMenuItem = null;
 	}
@@ -323,6 +382,8 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 		if (listPage == null) return;
 		listPage.resume();
 		if (quickNavigation != null) quickNavigation.refreshPreferences();
+		refreshThreadFabPreferences();
+		if (threadFabMenu != null) threadFabMenu.setActive(true);
 		Runnable doOnResume = this.doOnResume;
 		this.doOnResume = null;
 		if (doOnResume != null && listPage != null && listPage.isRunning()) {
@@ -332,6 +393,7 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 
 	@Override
 	public void onPause() {
+		if (threadFabMenu != null) threadFabMenu.setActive(false);
 		super.onPause();
 
 		if (listPage != null) {
@@ -418,6 +480,7 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 		if (menuItem != null && searchMode != search) {
 			searchBackRevision++;
 			searchMode = search;
+			if (search && threadFabMenu != null) threadFabMenu.close(false, false);
 			if (search) {
 				CustomSearchView searchView = getSearchView(true);
 				searchView.setHint(menuItem.getTitle());
@@ -561,12 +624,12 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 
 	@Override
 	public boolean onBackPressed() {
-		return setSearchMode(false);
+		return threadFabMenu != null && threadFabMenu.close(true, true) || setSearchMode(false);
 	}
 
 	@Override
 	public boolean canHandleBack() {
-		return searchMode;
+		return threadFabMenu != null && threadFabMenu.isOpen() || searchMode;
 	}
 
 	@Override
@@ -605,6 +668,7 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 
 	@Override
 	public ActionMode startActionMode(ActionMode.Callback callback) {
+		if (threadFabMenu != null) threadFabMenu.close(false, false);
 		return requireActivity().startActionMode(callback);
 	}
 
@@ -615,6 +679,7 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 
 	@Override
 	public void switchList() {
+		threadContentVisible = true;
 		ContentStateMotion.Session motion = prepareStateMotion(recyclerView);
 		if (quickNavigation != null) quickNavigation.setContentVisible(true);
 		initErrorItem = null;
@@ -625,6 +690,8 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 
 	@Override
 	public void switchProgress() {
+		threadContentVisible = false;
+		if (threadFabMenu != null) threadFabMenu.close(false, false);
 		ContentStateMotion.Session motion = prepareStateMotion(progressView);
 		if (quickNavigation != null) quickNavigation.setContentVisible(false);
 		initErrorItem = null;
@@ -635,6 +702,8 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 
 	@Override
 	public void switchError(ErrorItem errorItem) {
+		threadContentVisible = false;
+		if (threadFabMenu != null) threadFabMenu.close(false, false);
 		ContentStateMotion.Session motion = prepareStateMotion(errorHolder.layout);
 		if (quickNavigation != null) quickNavigation.setContentVisible(false);
 		if (errorItem == null) {

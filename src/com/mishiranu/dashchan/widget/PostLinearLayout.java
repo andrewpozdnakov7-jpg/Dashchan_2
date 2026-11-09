@@ -48,8 +48,25 @@ public class PostLinearLayout extends LinearLayout {
 	}
 
 	private Drawable secondaryBackground;
+	private Runnable backgroundExtensionInvalidation;
 	private final Paint postMarkPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG);
 	private int postMark = MARK_NONE;
+
+	/** Live unread/selection fill only. Do not extend touch ink, post content or its hit target. */
+	public int getBackgroundExtensionColor() {
+		return secondaryBackground instanceof ColorDrawable ? ((ColorDrawable) secondaryBackground).getColor() : 0;
+	}
+
+	public void setBackgroundExtensionInvalidation(Runnable invalidation) {
+		backgroundExtensionInvalidation = invalidation;
+	}
+
+	@Override public void invalidateDrawable(@NonNull Drawable drawable) {
+		super.invalidateDrawable(drawable);
+		if (drawable == secondaryBackground && backgroundExtensionInvalidation != null) {
+			backgroundExtensionInvalidation.run();
+		}
+	}
 
 	public void setSecondaryBackgroundColor(int color) {
 		if (secondaryBackground instanceof ColorDrawable) {
@@ -70,6 +87,7 @@ public class PostLinearLayout extends LinearLayout {
 				drawable.setCallback(this);
 			}
 			invalidate();
+			if (backgroundExtensionInvalidation != null) backgroundExtensionInvalidation.run();
 		}
 	}
 
