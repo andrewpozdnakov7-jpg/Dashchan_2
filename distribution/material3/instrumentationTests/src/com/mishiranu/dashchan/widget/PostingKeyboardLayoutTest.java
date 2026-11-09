@@ -17,6 +17,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
+import com.mishiranu.dashchan.ui.posting.PostingAttachmentState;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -181,6 +182,19 @@ public class PostingKeyboardLayoutTest {
 					assertEquals(expected, editor.getHeight());
 					assertEquals("sample draft", editor.getText().toString()); assertEquals(3, editor.getSelectionEnd());
 				}
+				for (PostingAttachmentState state : new PostingAttachmentState[]{
+						new PostingAttachmentState(1, 4, false), new PostingAttachmentState(2, 4, false),
+						new PostingAttachmentState(4, 4, false), new PostingAttachmentState(2, 4, true)}) {
+					appearance.setAttachmentState(state); layout(root, width, height);
+					assertSame(row, attach.getParent()); assertEquals(View.VISIBLE, attach.getVisibility());
+					assertTrue(attach.isEnabled());
+					assertEquals(Math.round(48 * density), attach.getWidth());
+					assertEquals(Math.round(48 * density), attach.getHeight());
+					assertEquals(Math.round(12 * density), slot.getLeft() - attach.getRight());
+					assertEquals(row.getWidth() - attach.getWidth() - Math.round(12 * density), slot.getWidth());
+					assertEquals("sample draft", editor.getText().toString()); assertEquals(3, editor.getSelectionEnd());
+				}
+				appearance.setAttachmentAvailable(true);
 				attach.performClick(); assertEquals(1, picks[0]); assertEquals(0, submissions[0]);
 				appearance.setAttachmentAvailable(false); layout(root, width, height);
 				assertEquals(View.GONE, attach.getVisibility()); assertEquals(row.getWidth(), slot.getWidth());

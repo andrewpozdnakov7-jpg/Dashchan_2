@@ -310,12 +310,29 @@ public class BackupManager {
 
 	public static List<BackupFile> getAvailableBackups(Context context) {
 		DataFile root = DataFile.obtain(DataFile.Target.DOWNLOADS, null);
-		List<DataFile> files = root.getChildren();
+		List<DataFile> files = new ArrayList<>();
+		List<DataFile> rootFiles = root.getChildren();
+		if (rootFiles != null) files.addAll(rootFiles);
+		// Match against the root inventory: no lookup per obsolete or absent folder name.
+		HashSet<String> folderNames = new HashSet<>();
+		for (String folder : Preferences.getBackupDownloadFolderNames()) {
+			folderNames.add(folder.toLowerCase(java.util.Locale.getDefault()));
+		}
+		if (rootFiles != null) {
+			for (DataFile folder : rootFiles) {
+				if (folder.isDirectory() && folderNames.contains(folder.getName().toLowerCase(java.util.Locale.getDefault()))) {
+					List<DataFile> children = folder.getChildren();
+					if (children != null) files.addAll(children);
+				}
+			}
+		}
+		HashSet<String> seenPaths = new HashSet<>();
 		List<BackupFile> backupFiles = new ArrayList<>();
 		if (files != null) {
 			DateFormat timeFormat = android.text.format.DateFormat.getTimeFormat(context);
 			DateFormat dateFormat = android.text.format.DateFormat.getDateFormat(context);
 			for (DataFile file : files) {
+				if (file.isDirectory() || !seenPaths.add(file.getRelativePath())) continue;
 				String name = file.getName();
 				if (name.startsWith(FILE_NAME_PREFIX) && name.endsWith(FILE_NAME_SUFFIX)) {
 					name = name.substring(FILE_NAME_PREFIX.length(), name.length() - FILE_NAME_SUFFIX.length());
@@ -388,8 +405,7 @@ public class BackupManager {
 	}
 
 	public static void saveBackup(DownloadService.Binder binder, InputStream input) {
-		binder.downloadStorage(input, null, null, null, null,
-				FILE_NAME_PREFIX + System.currentTimeMillis() + FILE_NAME_SUFFIX, false, false);
+		binder.downloadBackup(input, FILE_NAME_PREFIX + System.currentTimeMillis() + FILE_NAME_SUFFIX);
 	}
 
 	public static List<Entry> readBackupEntries(DataFile file) {

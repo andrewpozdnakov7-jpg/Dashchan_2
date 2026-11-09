@@ -40,10 +40,12 @@ import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.graphics.BaseDrawable;
 import com.mishiranu.dashchan.ui.posting.EditorHeightPolicy;
+import com.mishiranu.dashchan.ui.posting.PostingAttachmentState;
 import com.mishiranu.dashchan.ui.posting.PostingAttachmentsAppearance;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.util.ViewUtils;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
@@ -64,16 +66,27 @@ public final class PostingFormAppearance {
 	private final ViewTreeObserver.OnGlobalFocusChangeListener focusListener = (before, after) -> updateLayout();
 	private final ViewTreeObserver.OnPreDrawListener editorRevealListener = this::revealKeyboardEditor;
 	private final ViewTreeObserver.OnWindowFocusChangeListener primaryRevealFocus = this::onPrimaryRevealWindowFocus;
-	private final Runnable keyboardResize = this::resizeKeyboardEditor;
+	private final Runnable editorResize = this::resizeEditor;
+	private boolean editorResizePending;
+	private int[] automaticEditorGeometry;
 	private ThemeEngine.Theme theme;
 	private Palette palette;
 	private LinearLayout editorContainer;
 	private HorizontalScrollView formattingScroll;
 	private LinearLayout formatting;
 	private LinearLayout editorActions;
-	private ImageButton attachButton;
+	private PostingAttachmentButton attachButton;
 	private Runnable attachmentAction;
-	private boolean attachmentAvailable;
+	private PostingAttachmentState attachmentState = new PostingAttachmentState(0, 0, false);
+	private boolean revealAttachments;
+	private int attachmentRevealFrames;
+	private final Rect lastAttachmentRevealBounds = new Rect();
+	private final View.OnAttachStateChangeListener attachmentRevealLifetime = new View.OnAttachStateChangeListener() {
+		@Override public void onViewAttachedToWindow(View view) { automaticEditorGeometry = null; }
+		@Override public void onViewDetachedFromWindow(View view) {
+			cancelAttachmentReveal(); cancelEditorResize(); automaticEditorGeometry = null;
+		}
+	};
 	private Button moreButton;
 	private PostingFormattingMenu formattingMenu;
 	private final Map<View, Integer> markupTags = new IdentityHashMap<>();
@@ -140,6 +153,7 @@ public final class PostingFormAppearance {
 	}
 	private void cancelPrimaryReveal() { revealPrimaryAfterCaptcha = false; primaryRevealFrames = 0; }
 	private void onPrimaryRevealWindowFocus(boolean hasFocus) {
+		if (!hasFocus) cancelAttachmentReveal();
 		if (hasFocus && revealPrimaryAfterCaptcha) root.postInvalidateOnAnimation();
 	}
 
@@ -150,6 +164,7 @@ public final class PostingFormAppearance {
 		actionPanel = root.findViewById(R.id.posting_action_container);
 		body = (LinearLayout) scroll.getParent();
 		root.setTag(R.id.posting_form_owner, this);
+		root.addOnAttachStateChangeListener(attachmentRevealLifetime);
 		updatePalette();
 	}
 
@@ -282,7 +297,7 @@ public final class PostingFormAppearance {
 		editorActions.setOrientation(LinearLayout.HORIZONTAL);
 		editorActions.setGravity(Gravity.CENTER_VERTICAL);
 		editorActions.setPadding(dp(root, 8), 0, dp(root, 8), dp(root, 8));
-		attachButton = new ImageButton(root.getContext(), null, android.R.attr.borderlessButtonStyle);
+		attachButton = new PostingAttachmentButton(root.getContext());
 		attachButton.setId(R.id.menu_attach);
 		attachButton.setImageResource(R.drawable.ic_attach_file_edited);
 		attachButton.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
@@ -291,7 +306,7 @@ public final class PostingFormAppearance {
 		attachButton.setTooltipText(attachButton.getContentDescription());
 		attachButton.setVisibility(View.GONE);
 		attachButton.setOnClickListener(v -> {
-			if (!closed && attachmentAvailable && attachmentAction != null) attachmentAction.run();
+			if (!closed && attachmentState.visible(keyboardActions) && attachmentAction != null) attachmentAction.run();
 		});
 		// The same attachment widget moves to the utility row in finishSetup; no replacement callback.
 		editorActions.addView(formattingScroll, new LinearLayout.LayoutParams(0, -2, 1f));
@@ -304,24 +319,50 @@ public final class PostingFormAppearance {
 	public void setAttachmentAction(Runnable action) {
 		if (attachmentAction != action && imeMotion != null) imeMotion.finish();
 		attachmentAction = action;
-		if (attachButton != null) attachButton.setEnabled(attachmentAvailable && action != null);
 		layoutAttachment();
 	}
 
+	/** Capability-only settings preview/fixtures. Real posting binds the complete controller snapshot. */
 	public void setAttachmentAvailable(boolean available) {
-		if (attachmentAvailable != available && imeMotion != null) imeMotion.finish();
-		attachmentAvailable = available;
+		setAttachmentState(new PostingAttachmentState(0, available ? 1 : 0, false));
+	}
+
+	public void setAttachmentState(PostingAttachmentState state) {
+		boolean geometryChanged = attachmentState.visible(keyboardActions) != state.visible(keyboardActions);
+		if (geometryChanged && imeMotion != null) imeMotion.finish();
+		attachmentState = state;
 		if (attachButton != null) {
-			attachButton.setVisibility(available ? View.VISIBLE : View.GONE);
-			attachButton.setEnabled(available && attachmentAction != null);
-			updateEditorActionsVisibility();
-			layoutAttachment();
+			attachButton.setPresentation(state, keyboardActions);
+			if (imeMotion != null) imeMotion.invalidateAttachment();
+			if (geometryChanged) { updateEditorActionsVisibility(); layoutAttachment(); }
 		}
 	}
+
+	public boolean hasKeyboardActions() { return keyboardActions; }
+
+	/** Explicit IME hide, never Back. Existing pre-draw owns the one-shot grid reveal after layout. */
+	public void showAttachments() {
+		if (closed || !root.isAttachedToWindow() || attachmentState.count == 0) return;
+		revealAttachments = true; attachmentRevealFrames = 0; lastAttachmentRevealBounds.setEmpty();
+		cancelPrimaryReveal();
+		android.view.WindowInsetsController controller = root.getWindowInsetsController();
+		if (controller != null) controller.hide(android.view.WindowInsets.Type.ime());
+		else {
+			android.view.inputmethod.InputMethodManager manager = root.getContext()
+					.getSystemService(android.view.inputmethod.InputMethodManager.class);
+			if (manager != null) manager.hideSoftInputFromWindow(root.getWindowToken(), 0);
+		}
+		root.postInvalidateOnAnimation();
+	}
+
+	public void cancelAttachmentReveal() { revealAttachments = false; attachmentRevealFrames = 0; }
 
 	private void renderAttachment() {
 		attachButton.setBackgroundTintList(null);
 		attachButton.setImageTintList(ColorStateList.valueOf(palette.accent));
+		int badgeFill = ColorUtils.setAlphaComponent(palette.accent, 255);
+		attachButton.setColors(palette.accent, badgeFill, InterfaceAppearance.contrasting(palette.onAccent, badgeFill, 4.5));
+		if (imeMotion != null) imeMotion.invalidateAttachment();
 		int width = dp(root, keyboardActions ? 48 : 40), height = dp(root, keyboardActions ? 48 : 44);
 		if (attachButton.getMinimumWidth() != width) attachButton.setMinimumWidth(width);
 		if (attachButton.getMinimumHeight() != height) attachButton.setMinimumHeight(height);
@@ -350,8 +391,10 @@ public final class PostingFormAppearance {
 		}
 		if (attachButton.getMinimumWidth() != width) attachButton.setMinimumWidth(width);
 		if (attachButton.getMinimumHeight() != height) attachButton.setMinimumHeight(height);
-		attachButton.setVisibility(attachmentAvailable && attachmentAction != null ? View.VISIBLE : View.GONE);
-		attachButton.setEnabled(attachmentAvailable && attachmentAction != null);
+		boolean visible = attachmentState.visible(keyboardActions) && attachmentAction != null;
+		attachButton.setPresentation(attachmentState, keyboardActions);
+		attachButton.setVisibility(visible ? View.VISIBLE : View.GONE);
+		attachButton.setEnabled(visible);
 	}
 
 	private void updateEditorActionsVisibility() {
@@ -1087,7 +1130,16 @@ public final class PostingFormAppearance {
 		updateLayout(insets != null && insets.isVisible(WindowInsetsCompat.Type.ime()));
 	}
 
-	private void resizeKeyboardEditor() {
+	private void scheduleEditorResize() {
+		if (!closed && !editorResizePending) editorResizePending = scroll.post(editorResize);
+	}
+
+	private void cancelEditorResize() {
+		scroll.removeCallbacks(editorResize); editorResizePending = false;
+	}
+
+	private void resizeEditor() {
+		editorResizePending = false;
 		if (imeMotion != null) imeMotion.prepareLayout();
 		if (!closed) com.mishiranu.dashchan.ui.posting.PostingCommentSizing.apply(
 				scroll, root.findViewById(R.id.comment), null);
@@ -1162,7 +1214,7 @@ public final class PostingFormAppearance {
 			keyboardDocked = nextDocked;
 			revealKeyboardEditor = nextDocked;
 			scroll.requestLayout();
-			scroll.removeCallbacks(keyboardResize); scroll.post(keyboardResize);
+			scheduleEditorResize();
 		}
 		// With cards, keep the same footer immediately after the grid in the form.
 		// A window-bottom footer would introduce arbitrary viewport slack before checks.
@@ -1215,6 +1267,42 @@ public final class PostingFormAppearance {
 		dockViewportHeight = viewportHeight; dockEditorHeight = editorHeight; dockEditorTop = editorTop;
 		dockToolbarOverlap = toolbarOverlap;
 		dockPrimaryReserve = primaryReserve;
+		syncAutomaticEditorGeometry(comment, adaptive, keyboardVisible);
+	}
+
+	/** Recalculate after measured content changes, even if IME and viewport size stay the same. */
+	private void syncAutomaticEditorGeometry(EditText editor, boolean automatic, boolean keyboard) {
+		if (!automatic || keyboard || editor == null || editorContainer == null || scroll.getHeight() <= 0) {
+			automaticEditorGeometry = null;
+			return;
+		}
+		int surroundingHeight = 0, attachmentHeight = 0;
+		for (int i = 0; i < form.getChildCount(); i++) {
+			View child = form.getChildAt(i);
+			if (child == editorContainer || child == actionPanel || child.getVisibility() == View.GONE) continue;
+			int height = child.getMeasuredHeight();
+			if (child.getLayoutParams() instanceof ViewGroup.MarginLayoutParams) {
+				ViewGroup.MarginLayoutParams params = (ViewGroup.MarginLayoutParams) child.getLayoutParams();
+				height += params.topMargin + params.bottomMargin;
+			}
+			surroundingHeight += height;
+			if (child.getId() == R.id.attachment_container) attachmentHeight = height;
+		}
+		int editorMargin = 0;
+		if (editorContainer.getLayoutParams() instanceof ViewGroup.MarginLayoutParams) {
+			ViewGroup.MarginLayoutParams params = (ViewGroup.MarginLayoutParams) editorContainer.getLayoutParams();
+			editorMargin = params.topMargin + params.bottomMargin;
+		}
+		// Exclude the editable area's own height: resizing it must not schedule itself forever.
+		int[] geometry = {scroll.getWidth(), scroll.getHeight(), scroll.getPaddingLeft(), scroll.getPaddingRight(),
+				scroll.getPaddingTop(), scroll.getPaddingBottom(), form.getPaddingTop(), form.getPaddingBottom(),
+				surroundingHeight, attachmentHeight, actionPanel.getMeasuredHeight(), actionPanel.getParent() == form ? 1 : 0,
+				editorChromeHeight(), editorMargin, editor.getLineHeight(), editor.getCompoundPaddingTop(),
+				editor.getCompoundPaddingBottom(), PostingAttachmentsAppearance.cardCount(root.findViewById(R.id.attachment_container))};
+		if (!Arrays.equals(automaticEditorGeometry, geometry)) {
+			automaticEditorGeometry = geometry;
+			scheduleEditorResize();
+		}
 	}
 
 	private boolean revealKeyboardEditor() {
@@ -1260,8 +1348,55 @@ public final class PostingFormAppearance {
 			}
 		}
 		if (imeMotion != null) imeMotion.onPreDraw();
+		syncAttachmentBadge();
+		revealAttachmentGridAfterIme();
 		revealPrimaryAfterCaptcha();
 		return true;
+	}
+
+	private void syncAttachmentBadge() {
+		if (attachButton == null || closed) return;
+		attachButton.updateBadge(imeMotion != null && imeMotion.isTransitionRunning());
+	}
+
+	private void revealAttachmentGridAfterIme() {
+		if (!revealAttachments || closed || keyboardActions || keyboardDocked) return;
+		WindowInsetsCompat insets = ViewCompat.getRootWindowInsets(root);
+		if (insets != null && insets.isVisible(WindowInsetsCompat.Type.ime())) return;
+		View container = root.findViewById(R.id.attachment_container);
+		if (attachmentState.count == 0 || container == null) { cancelAttachmentReveal(); return; }
+		if (!root.isAttachedToWindow() || !root.isShown() || !root.hasWindowFocus()) return;
+		if (imeMotion != null && imeMotion.isTransitionRunning()
+				|| !PostingImeMotion.hasMeasuredBounds(scroll, form, container)) {
+			attachmentRevealFrames = 0; root.postInvalidateOnAnimation(); return;
+		}
+		Rect bounds = new Rect(); container.getDrawingRect(bounds);
+		scroll.offsetDescendantRectToMyCoords(container, bounds);
+		if (bounds.equals(lastAttachmentRevealBounds)) attachmentRevealFrames++;
+		else attachmentRevealFrames = 0;
+		lastAttachmentRevealBounds.set(bounds);
+		if (attachmentRevealFrames < 2) { root.postInvalidateOnAnimation(); return; }
+		cancelAttachmentReveal(); // Consume before scrolling; edits and later layouts cannot repeat it.
+		revealAttachmentGrid(scroll, container);
+	}
+
+	static boolean revealAttachmentGrid(ScrollView scroll, View container) {
+		View first = container;
+		// The existing container owns one grid; its first card is in the first row.
+		if (first instanceof ViewGroup && ((ViewGroup) first).getChildCount() > 0) {
+			first = ((ViewGroup) first).getChildAt(0);
+			if (first instanceof ViewGroup && ((ViewGroup) first).getChildCount() > 0) first = ((ViewGroup) first).getChildAt(0);
+		}
+		if (scroll.getHeight() <= 0 || first.getHeight() <= 0) return false;
+		Rect bounds = new Rect(); first.getDrawingRect(bounds); scroll.offsetDescendantRectToMyCoords(first, bounds);
+		int before = scroll.getScrollY(), top = before + scroll.getPaddingTop();
+		int bottom = before + scroll.getHeight() - scroll.getPaddingBottom();
+		if (bounds.top >= top && (bounds.bottom <= bottom || bounds.height() > bottom - top && bounds.top < bottom)) return false;
+		int target = Math.max(0, bounds.top - scroll.getPaddingTop());
+		if (target == before) return false;
+		if (scroll instanceof PostingScrollView) ((PostingScrollView) scroll).alignEditorViewport(target);
+		else { scroll.scrollTo(scroll.getScrollX(), target); scroll.smoothScrollBy(0, 0); }
+		return scroll.getScrollY() != before;
 	}
 
 	/** One-shot modal return, after the IME/layout owner has committed its final pose. */
@@ -1413,13 +1548,16 @@ public final class PostingFormAppearance {
 		deactivateToolbar();
 		closed = true;
 		cancelPrimaryReveal();
+		cancelAttachmentReveal();
+		root.removeOnAttachStateChangeListener(attachmentRevealLifetime);
 		if (imeMotion != null) imeMotion.close();
+		if (attachButton != null) attachButton.close();
 		if (scroll instanceof PostingScrollView) {
 			((PostingScrollView) scroll).setEditorViewportOwner(null);
 			((PostingScrollView) scroll).setCancelEditorMotion(null);
 			((PostingScrollView) scroll).setEditorMotionTouchHandler(null);
 		}
-		scroll.removeCallbacks(keyboardResize);
+		cancelEditorResize(); automaticEditorGeometry = null;
 		primaryState.close(); primaryChanged = null;
 		if (primaryMotion != null) primaryMotion.close();
 		if (captchaRoot != null) captchaRoot.setTag(R.id.posting_form_owner, null);

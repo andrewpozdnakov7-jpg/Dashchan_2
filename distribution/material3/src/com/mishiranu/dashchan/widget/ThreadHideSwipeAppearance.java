@@ -28,8 +28,12 @@ public final class ThreadHideSwipeAppearance {
 	private AppearanceTypography.Configuration typography;
 
 	public ThreadHideSwipeAppearance(Context context) {
-		this.context = context; label = new TextView(context); label.setText(R.string.hide);
-		icon = context.getDrawable(R.drawable.ic_pe_hide).mutate();
+		this(context, R.string.hide, R.drawable.ic_pe_hide);
+	}
+	/** Reuse the same tonal surface, typography and motion for other list actions. */
+	public ThreadHideSwipeAppearance(Context context, int labelResId, int iconResId) {
+		this.context = context; label = new TextView(context); label.setText(labelResId);
+		icon = context.getDrawable(iconResId).mutate();
 	}
 	private float dp(float value) { return value * context.getResources().getDisplayMetrics().density; }
 	public Shape shape(View view) {

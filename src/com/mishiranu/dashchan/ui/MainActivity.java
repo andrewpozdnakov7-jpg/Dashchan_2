@@ -2265,6 +2265,10 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 				+ " focused=" + hasWindowFocus() + " state_saved=" + getSupportFragmentManager().isStateSaved());
 	}
 
+	@Override public boolean isContentObscured() {
+		return currentActionMode != null && currentActionMode.get() != null || !wideMode && isDrawerVisibleForBack();
+	}
+
 	private int localBackAction(ContentFragment fragment) {
 		return localBackAction(fragment, postingBackGesture);
 	}

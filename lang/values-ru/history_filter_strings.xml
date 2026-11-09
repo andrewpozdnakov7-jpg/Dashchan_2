@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<string name="history_filter_sections">Фильтр по разделам</string>
+	<string name="history_all_sections">Все разделы</string>
+	<string name="history_sections_selected">Выбрано разделов: %1$d</string>
+	<string name="history_sections_summary">Разделы: %1$s</string>
+	<string name="history_reset_filter">Сбросить</string>
+	<string name="history_apply_filter">Применить</string>
+	<string name="history_no_matches">В истории нет записей по выбранным разделам и поисковому запросу</string>
+	<string name="history_clear_all_scope">Очистить всю историю всех сайтов? Поиск и фильтр по разделам не ограничивают удаление.</string>
+	<string name="history_clear_site_scope">Очистить всю историю сайта «%1$s»? Поиск и фильтр по разделам не ограничивают удаление.</string>
+</resources>

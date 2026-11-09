@@ -246,9 +246,9 @@ def main():
     assert STATE_TESTS.read_text(encoding="utf-8").count("@Test ") == 13
     assert JVM.read_text(encoding="utf-8").count("@Test ") == 14
     assert ANDROID.read_text(encoding="utf-8").count("@Test ") == 8
-    assert ANDROID_CONTROLLER.read_text(encoding="utf-8").count("@Test ") == 8
+    assert ANDROID_CONTROLLER.read_text(encoding="utf-8").count("@Test ") == 9
     print("PASS: posting source boundaries (drafts, ordered attachments, captcha, send, lifecycle, activity results)")
-    print("PASS: lexical balance; prepared 14 JVM source contracts, 8 Android model round trips, 8 Android attachment, 13 captcha/draft and 12 send-controller tests")
+    print("PASS: lexical balance; prepared 14 JVM source contracts, 8 Android model round trips, 9 Android attachment, 13 captcha/draft and 12 send-controller tests")
     print("NOT RUN: Java compilation, JUnit, Android instrumentation, Gradle build, lint, device smoke")
 
 

@@ -9,6 +9,7 @@ import chan.util.StringUtils;
 import com.mishiranu.dashchan.BuildConfig;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
+import com.mishiranu.dashchan.content.DownloadDirectoryPolicy;
 import com.mishiranu.dashchan.content.ReplyNotificationTargets;
 import com.mishiranu.dashchan.content.push.ReplyPushManager;
 import com.mishiranu.dashchan.ui.ContentFragment;
@@ -121,6 +122,10 @@ public final class SettingsSearchIndex {
 		MEDIA_DOWNLOADS(R.string.media, R.string.downloads) {
 			@Override
 			ContentFragment createFragment() { return new DownloadsFragment(); }
+		},
+		MEDIA_DOWNLOAD_FOLDERS(R.string.media, R.string.downloads, R.string.download_folder_names) {
+			@Override
+			ContentFragment createFragment() { return new DownloadFoldersFragment(); }
 		},
 		MEDIA_PLAYER(R.string.media, R.string.video_player) {
 			@Override
@@ -642,6 +647,7 @@ public final class SettingsSearchIndex {
 				R.string.thread_toolbar_action__summary, Preferences.KEY_THREAD_TOOLBAR_ACTION);
 		addExperimentalToggle(context, entries, ExperimentalPreferenceDescriptors.outboxJournal());
 		addExperimentalToggle(context, entries, ExperimentalPreferenceDescriptors.discussionContext());
+		addExperimentalToggle(context, entries, ExperimentalPreferenceDescriptors.threadFabMenu());
 		addExperimentalToggle(context, entries, ExperimentalPreferenceDescriptors.photoEditor());
 		add(context, entries, Screen.CONTENTS, R.string.thread_page_preload,
 				R.string.thread_page_preload__summary, Preferences.KEY_THREAD_PAGE_PRELOAD);
@@ -683,11 +689,19 @@ public final class SettingsSearchIndex {
 		add(context, entries, Screen.MEDIA_DOWNLOADS, R.string.original_file_name, R.string.original_file_name__summary,
 				Preferences.KEY_DOWNLOAD_ORIGINAL_NAME);
 		add(context, entries, Screen.MEDIA_DOWNLOADS, R.string.download_directory);
+		add(context, entries, Screen.MEDIA_DOWNLOADS, R.string.download_type_folders,
+				R.string.download_type_folders_summary, Preferences.KEY_DOWNLOAD_TYPE_FOLDERS);
+		add(context, entries, Screen.MEDIA_DOWNLOADS, R.string.download_folder_names,
+				R.string.download_folder_names_summary, null);
+		for (DownloadDirectoryPolicy.Type type : DownloadDirectoryPolicy.Type.values()) {
+			add(context, entries, Screen.MEDIA_DOWNLOAD_FOLDERS, DownloadFoldersFragment.getTitleResId(type),
+					R.string.download_folder_name_hint, type.preferenceKey);
+		}
 		add(context, entries, Screen.MEDIA_DOWNLOADS, R.string.if_file_already_exists, 0,
 				Preferences.KEY_DOWNLOAD_CONFLICT_MODE);
-		add(context, entries, Screen.MEDIA_DOWNLOADS, R.string.show_download_configuration_dialog, 0,
+		add(context, entries, Screen.MEDIA_DOWNLOADS, R.string.show_download_configuration_dialog, R.string.download_configuration_summary,
 				Preferences.KEY_DOWNLOAD_SUBDIR);
-		add(context, entries, Screen.MEDIA_DOWNLOADS, R.string.subdirectory_pattern, 0, Preferences.KEY_SUBDIR_PATTERN);
+		add(context, entries, Screen.MEDIA_DOWNLOADS, R.string.subdirectory_pattern, R.string.download_subdirectory_summary, Preferences.KEY_SUBDIR_PATTERN);
 		add(context, entries, Screen.MEDIA_DOWNLOADS, R.string.notify_when_download_is_completed,
 				R.string.notify_when_download_is_completed__summary, Preferences.KEY_NOTIFY_DOWNLOAD_COMPLETE);
 		add(context, entries, Screen.MEDIA_PLAYER, R.string.use_built_in_video_player,

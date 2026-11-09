@@ -13,12 +13,15 @@ import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.ui.FragmentHandler;
 import com.mishiranu.dashchan.ui.InstanceDialog;
+import com.mishiranu.dashchan.ui.preference.core.CheckPreference;
 import com.mishiranu.dashchan.ui.preference.core.EditPreference;
 import com.mishiranu.dashchan.ui.preference.core.Preference;
 import com.mishiranu.dashchan.ui.preference.core.PreferenceFragment;
 import com.mishiranu.dashchan.util.IOUtils;
 import com.mishiranu.dashchan.util.SharedPreferences;
 import com.mishiranu.dashchan.widget.MotionDialogBuilder;
+import java.util.ArrayList;
+import java.util.List;
 
 public class DownloadsFragment extends PreferenceFragment implements FragmentHandler.Callback {
 	private static final String EXTRA_IN_STORAGE_REQUEST = "inStorageRequest";
@@ -62,11 +65,25 @@ public class DownloadsFragment extends PreferenceFragment implements FragmentHan
 				enumList(Preferences.DownloadConflictMode.values(), v -> v.value),
 				Preferences.DEFAULT_DOWNLOAD_CONFLICT_MODE.value, R.string.if_file_already_exists,
 				enumResList(Preferences.DownloadConflictMode.values(), v -> v.titleResId));
+		CheckPreference typeFolders = addCheck(true, Preferences.KEY_DOWNLOAD_TYPE_FOLDERS, false,
+				R.string.download_type_folders, R.string.download_type_folders_summary);
+		Preference<?> folderNames = addButton(R.string.download_folder_names, R.string.download_folder_names_summary);
+		folderNames.setOnClickListener(p ->
+				((FragmentHandler) requireActivity()).pushFragment(new DownloadFoldersFragment()));
+		folderNames.setEnabled(typeFolders.getValue());
+		typeFolders.setOnAfterChangeListener(p -> folderNames.setEnabled(p.getValue()));
+		List<CharSequence> downloadConfigurationSummaries = new ArrayList<>();
+		for (Preferences.DownloadSubdirMode mode : Preferences.DownloadSubdirMode.values()) {
+			downloadConfigurationSummaries.add(getString(mode.titleResId) + "\n"
+					+ getString(R.string.download_configuration_summary));
+		}
 		addList(Preferences.KEY_DOWNLOAD_SUBDIR, enumList(Preferences.DownloadSubdirMode.values(), v -> v.value),
 				Preferences.DEFAULT_DOWNLOAD_SUBDIR.value, R.string.show_download_configuration_dialog,
-				enumResList(Preferences.DownloadSubdirMode.values(), v -> v.titleResId));
+				enumResList(Preferences.DownloadSubdirMode.values(), v -> v.titleResId), downloadConfigurationSummaries);
 		EditPreference subdirectoryPreference = addEdit(Preferences.KEY_SUBDIR_PATTERN,
-				Preferences.DEFAULT_SUBDIR_PATTERN, R.string.subdirectory_pattern, Preferences.DEFAULT_SUBDIR_PATTERN,
+				Preferences.DEFAULT_SUBDIR_PATTERN, R.string.subdirectory_pattern,
+				p -> getString(R.string.download_subdirectory_summary) + "\n" + p.getValue(),
+				Preferences.DEFAULT_SUBDIR_PATTERN,
 				InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
 		String subdirectoryHtml = IOUtils.readRawResourceString(getResources(), R.raw.markup_subdirectory);
 		subdirectoryPreference.setDescription(BUILDER_SUBDIRECTORY.fromHtmlReduced(subdirectoryHtml));

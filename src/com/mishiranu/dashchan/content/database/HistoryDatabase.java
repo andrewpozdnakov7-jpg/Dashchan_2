@@ -3,6 +3,7 @@ package com.mishiranu.dashchan.content.database;
 import android.content.ContentValues;
 import android.database.Cursor;
 import android.database.CursorWrapper;
+import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteDatabase;
 import android.os.CancellationSignal;
 import android.os.OperationCanceledException;
@@ -12,6 +13,12 @@ import chan.util.StringUtils;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
 import com.mishiranu.dashchan.util.WeakObservable;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 public class HistoryDatabase implements CommonDatabase.Instance {
@@ -32,6 +39,7 @@ public class HistoryDatabase implements CommonDatabase.Instance {
 	public static class HistoryCursor extends CursorWrapper {
 		public final boolean hasItems;
 		public final boolean filtered;
+		public final List<Board> boards;
 
 		private final int chanNameIndex;
 		private final int boardNameIndex;
@@ -39,15 +47,39 @@ public class HistoryDatabase implements CommonDatabase.Instance {
 		private final int timeIndex;
 		private final int titleIndex;
 
-		private HistoryCursor(Cursor cursor, boolean hasItems, boolean filtered) {
+		private HistoryCursor(Cursor cursor, List<Board> boards, boolean filtered) {
 			super(cursor);
-			this.hasItems = hasItems;
+			this.boards = Collections.unmodifiableList(boards);
+			this.hasItems = !boards.isEmpty();
 			this.filtered = filtered;
 			chanNameIndex = cursor.getColumnIndex(Schema.History.Columns.CHAN_NAME);
 			boardNameIndex = cursor.getColumnIndex(Schema.History.Columns.BOARD_NAME);
 			threadNumberIndex = cursor.getColumnIndex(Schema.History.Columns.THREAD_NUMBER);
 			timeIndex = cursor.getColumnIndex(Schema.History.Columns.TIME);
 			titleIndex = cursor.getColumnIndex(Schema.History.Columns.TITLE);
+		}
+	}
+
+	/** A section belongs to a specific site, even in merged history. */
+	public static final class Board {
+		public final String chanName;
+		public final String boardName;
+
+		public Board(String chanName, String boardName) {
+			this.chanName = Objects.requireNonNull(chanName);
+			this.boardName = StringUtils.emptyIfNull(boardName);
+		}
+
+		@Override
+		public boolean equals(Object object) {
+			if (!(object instanceof Board)) return false;
+			Board board = (Board) object;
+			return chanName.equals(board.chanName) && boardName.equals(board.boardName);
+		}
+
+		@Override
+		public int hashCode() {
+			return Objects.hash(chanName, boardName);
 		}
 	}
 
@@ -198,37 +230,37 @@ public class HistoryDatabase implements CommonDatabase.Instance {
 
 	public HistoryCursor getHistory(String chanName, String searchQuery,
 			CancellationSignal signal) throws OperationCanceledException {
-		int count = database.execute(database -> {
-			String[] projection = {"COUNT(*)"};
+		return getHistory(chanName, searchQuery, Collections.emptyList(), signal);
+	}
+
+	public HistoryCursor getHistory(String chanName, String searchQuery, Collection<Board> selectedBoards,
+			CancellationSignal signal) throws OperationCanceledException {
+		// Options come from the entire site scope, independently of text/section filters.
+		List<Board> boards = database.execute(database -> {
+			String[] projection = {Schema.History.Columns.CHAN_NAME, Schema.History.Columns.BOARD_NAME};
 			Expression.Filter.Builder filterBuilder = Expression.filter();
 			if (chanName != null) {
 				filterBuilder.equals(Schema.History.Columns.CHAN_NAME, chanName);
 			}
 			Expression.Filter filter = filterBuilder.build();
-			try (Cursor cursor = database.query(false, Schema.History.TABLE_NAME,
-					projection, filter.value, filter.args, null, null, null, null, signal)) {
-				if (cursor.moveToFirst()) {
-					return cursor.getInt(0);
+			ArrayList<Board> result = new ArrayList<>();
+			try (Cursor cursor = database.query(true, Schema.History.TABLE_NAME,
+					projection, filter.value, filter.args, null, null,
+					Schema.History.Columns.CHAN_NAME + ", " + Schema.History.Columns.BOARD_NAME, null, signal)) {
+				while (cursor.moveToNext()) {
+					signal.throwIfCanceled();
+					result.add(new Board(cursor.getString(0), cursor.getString(1)));
 				}
 			}
-			return 0;
+			return result;
 		});
 		String[] projection = {"rowid", "*"};
-		Expression.Filter.Builder filterBuilder = Expression.filter();
-		if (chanName != null) {
-			filterBuilder.equals(Schema.History.Columns.CHAN_NAME, chanName);
-		}
-		boolean filtered = false;
-		if (!StringUtils.isEmpty(searchQuery)) {
-			filterBuilder.like(Schema.History.Columns.TITLE, "%" + searchQuery + "%");
-			filtered = true;
-		}
-		Expression.Filter filter = filterBuilder.build();
+		Expression.Filter filter = buildHistoryFilter(chanName, searchQuery, selectedBoards);
+		boolean filtered = !StringUtils.isEmpty(searchQuery) || !selectedBoards.isEmpty();
 		Cursor cursor = database.query(database -> database.query(false, Schema.History.TABLE_NAME, projection,
 				filter.value, filter.args, null, null, Schema.History.Columns.TIME + " DESC", null, signal));
 		try {
-			// SQLiteCursor is lazy: without this call RecyclerView#getItemCount performs the query and fills the
-			// first CursorWindow on the main thread during its initial layout. Materialize it on the task thread.
+			// Materialize on the worker, not during RecyclerView layout on the main thread.
 			Trace.beginSection("History/materializeCursor");
 			try {
 				cursor.getCount();
@@ -236,11 +268,47 @@ public class HistoryDatabase implements CommonDatabase.Instance {
 			} finally {
 				Trace.endSection();
 			}
-			return new HistoryCursor(cursor, count > 0, filtered);
+			return new HistoryCursor(cursor, boards, filtered);
 		} catch (RuntimeException e) {
 			cursor.close();
 			throw e;
 		}
+	}
+
+	static Expression.Filter buildHistoryFilter(String chanName, String searchQuery, Collection<Board> boards) {
+		Expression.Filter.Builder filterBuilder = Expression.filter();
+		if (chanName != null) {
+			filterBuilder.equals(Schema.History.Columns.CHAN_NAME, chanName);
+		}
+		if (!StringUtils.isEmpty(searchQuery)) {
+			filterBuilder.like(Schema.History.Columns.TITLE, "%" + searchQuery + "%");
+		}
+		if (!boards.isEmpty()) {
+			Map<String, ArrayList<String>> grouped = new LinkedHashMap<>();
+			for (Board board : boards) {
+				ArrayList<String> names = grouped.get(board.chanName);
+				if (names == null) {
+					names = new ArrayList<>();
+					grouped.put(board.chanName, names);
+				}
+				names.add(board.boardName);
+			}
+			Expression.Filter.Builder sections = Expression.filterOr();
+			for (Map.Entry<String, ArrayList<String>> entry : grouped.entrySet()) {
+				// Escape SQL literals, rather than consuming one bind per section. Large histories can
+				// exceed SQLite's bind limit; group by site to avoid a deep OR expression as well.
+				StringBuilder clause = new StringBuilder(Schema.History.Columns.CHAN_NAME).append(" = ")
+						.append(DatabaseUtils.sqlEscapeString(entry.getKey())).append(" AND ")
+						.append(Schema.History.Columns.BOARD_NAME).append(" IN (");
+				for (String name : entry.getValue()) {
+					if (clause.charAt(clause.length() - 1) != '(') clause.append(", ");
+					clause.append(DatabaseUtils.sqlEscapeString(name));
+				}
+				sections.raw("(" + clause.append(')') + ")");
+			}
+			filterBuilder.append(sections);
+		}
+		return filterBuilder.build();
 	}
 
 	public void remove(@NonNull String chanName, String boardName, @NonNull String threadNumber) {

@@ -1499,4 +1499,11 @@
 	<string name="reddit_remove_community_confirm">Remove this community from your local list? Your Reddit subscriptions will not change.</string>
 	<string name="new_interface_motion">New interface animations</string>
 	<string name="new_interface_motion_summary">Screen and gallery transitions inspired by Material 3, with redesigned video controls. New side menu appearance and back gesture animation on Android 14+. Applies to subsequent transitions and player openings.</string>
+	<string name="thread_fab_menu">Floating thread menu</string>
+	<string name="thread_fab_menu_summary">Moves reply, refresh, favorites, and save into a button at the bottom of the thread.</string>
+	<string name="thread_fab_actions">Thread actions</string>
+	<string name="thread_fab_close">Close thread actions</string>
+	<string name="thread_fab_refresh">Refresh thread</string>
+	<string name="thread_fab_save">Save thread</string>
+	<string name="thread_fab_reload">Reload entire thread</string>
 </resources>

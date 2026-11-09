@@ -297,6 +297,12 @@ public class PaddedRecyclerView extends RecyclerView implements EdgeEffectHandle
 		invalidateFastScroller();
 	}
 
+	/** Stable reservation for the complete fast-scroll touch strip, not only its painted thumb. */
+	public int getFastScrollerTouchWidth() {
+		return fastScrollerEnabled ? Math.max(minTrackSize,
+				Math.max(thumbDrawable.getIntrinsicWidth(), trackDrawable.getIntrinsicWidth())) : 0;
+	}
+
 	private boolean isFastScrollerAvailable() {
 		return fastScrollerEnabled && fastScrollerAllowed;
 	}

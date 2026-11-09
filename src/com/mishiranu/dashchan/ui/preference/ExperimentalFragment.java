@@ -68,6 +68,7 @@ public class ExperimentalFragment extends PreferenceFragment {
 						.pushFragment(new PipDiagnosticsFragment()));
 		addExperimentalToggle(ExperimentalPreferenceDescriptors.photoEditor());
 		addExperimentalToggle(ExperimentalPreferenceDescriptors.discussionContext());
+		addExperimentalToggle(ExperimentalPreferenceDescriptors.threadFabMenu());
 		CheckPreference outboxPreference = addExperimentalToggle(ExperimentalPreferenceDescriptors.outboxJournal());
 		if (outboxPreference != null) {
 			outboxPreference.setOnAfterChangeListener(p -> refreshPreferences());

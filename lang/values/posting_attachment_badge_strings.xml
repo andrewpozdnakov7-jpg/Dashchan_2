@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<string name="posting_show_attachments">Show attachments</string>
+	<plurals name="posting_attachment_action_count">
+		<item quantity="one">%1$s. %2$d file attached</item>
+		<item quantity="other">%1$s. %2$d files attached</item>
+	</plurals>
+</resources>

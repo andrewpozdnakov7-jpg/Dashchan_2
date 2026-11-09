@@ -1257,6 +1257,43 @@ public class Preferences {
 		}
 	}
 
+	public static final String KEY_DOWNLOAD_TYPE_FOLDERS = "download_type_folders";
+	private static final String KEY_DOWNLOAD_BACKUP_FOLDER_HISTORY = "download_backup_folder_history";
+
+	public static String getDownloadFolderName(DownloadDirectoryPolicy.Type type) {
+		String name = DownloadDirectoryPolicy.normalizeName(PREFERENCES.getString(type.preferenceKey, type.defaultName));
+		return name != null ? name : type.defaultName;
+	}
+
+	public static DownloadDirectoryPolicy getDownloadDirectoryPolicy() {
+		Map<String, ?> values = PREFERENCES.getAll();
+		java.util.EnumMap<DownloadDirectoryPolicy.Type, String> names =
+				new java.util.EnumMap<>(DownloadDirectoryPolicy.Type.class);
+		for (DownloadDirectoryPolicy.Type type : DownloadDirectoryPolicy.Type.values()) {
+			Object value = values.get(type.preferenceKey);
+			names.put(type, value instanceof String ? (String) value : type.defaultName);
+		}
+		return new DownloadDirectoryPolicy(Boolean.TRUE.equals(values.get(KEY_DOWNLOAD_TYPE_FOLDERS)), names);
+	}
+
+	public static Set<String> getBackupDownloadFolderNames() {
+		Set<String> names = new HashSet<>();
+		names.add(DownloadDirectoryPolicy.Type.BACKUPS.defaultName);
+		names.add(getDownloadFolderName(DownloadDirectoryPolicy.Type.BACKUPS));
+		for (String value : PREFERENCES.getStringSet(KEY_DOWNLOAD_BACKUP_FOLDER_HISTORY, Collections.emptySet())) {
+			String name = DownloadDirectoryPolicy.normalizeName(value);
+			if (name != null) names.add(name);
+		}
+		return names;
+	}
+
+	public static void rememberBackupDownloadFolder(String newName) {
+		Set<String> names = getBackupDownloadFolderNames();
+		String name = DownloadDirectoryPolicy.normalizeName(newName);
+		if (name != null) names.add(name);
+		PREFERENCES.edit().put(KEY_DOWNLOAD_BACKUP_FOLDER_HISTORY, names).close();
+	}
+
 	public static final String KEY_DOWNLOAD_SUBDIR = "download_subdir";
 	public static final DownloadSubdirMode DEFAULT_DOWNLOAD_SUBDIR = DownloadSubdirMode.DISABLED;
 
@@ -2411,6 +2448,13 @@ public class Preferences {
 	public static final boolean DEFAULT_LOCAL_TRANSLATION = false;
 	public static final String KEY_PERSISTENT_TRANSLATION_CACHE = "experimental_translation_cache";
 	public static final boolean DEFAULT_PERSISTENT_TRANSLATION_CACHE = false;
+	public static final String KEY_THREAD_FAB_MENU = "thread_fab_menu";
+	public static final boolean DEFAULT_THREAD_FAB_MENU = false;
+
+	public static boolean isThreadFabMenuEnabled() {
+		return PREFERENCES.getBoolean(KEY_THREAD_FAB_MENU, DEFAULT_THREAD_FAB_MENU);
+	}
+
 	public static final String KEY_OUTBOX_JOURNAL = "experimental_outbox_journal";
 	public static final boolean DEFAULT_OUTBOX_JOURNAL = false;
 	public static final String KEY_DISCUSSION_CONTEXT = "experimental_discussion_context";

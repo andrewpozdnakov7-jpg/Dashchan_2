@@ -1,0 +1,11 @@
+**Slooop 3.2.81**
+
+- History now has a board filter: select multiple boards and combine filtering with search. The previous Filter action has been renamed to Search.
+- History entries can now be removed with a right-to-left swipe and a smooth animation.
+- Added File type subfolders in Media → Downloads: images, videos, audio, backups and other files are saved separately. Subfolder names can be changed. Previously downloaded files stay in place.
+- Added Floating thread menu in experimental settings: reply, refresh, favorites and save are grouped in a button at the bottom. Disabled by default.
+- Updated the appearance of quick navigation arrows. Smooth hiding at list edges now also works on boards.
+- With the keyboard open, the attachment button in the message form shows the number of attached files and the available limit. Refined keyboard opening and closing transitions, as well as scrolling long comments.
+- Refined how the top bar hides while scrolling in expanded-screen mode. Refreshing a thread no longer forces it to appear.
+
+Thanks to everyone for testing, logs and help finding bugs! 🐾

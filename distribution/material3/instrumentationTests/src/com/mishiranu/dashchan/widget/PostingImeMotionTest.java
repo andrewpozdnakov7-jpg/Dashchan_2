@@ -4,6 +4,9 @@ import static org.junit.Assert.*;
 
 import android.content.Context;
 import android.graphics.Insets;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Color;
 import android.view.View;
 import android.view.MotionEvent;
 import android.view.WindowInsets;
@@ -313,6 +316,95 @@ public class PostingImeMotionTest {
 					finally { down.recycle(); up.recycle(); }
 					assertEquals(1, picks[0]); assertEquals(0, sends[0]); f.assertSettled();
 					assertEquals(1f, f.attachment.getAlpha(), 0f); assertEquals(f.row.getWidth() - 60, f.slot.getWidth());
+				} finally {
+					f.motion.close();
+					if (previous instanceof Boolean) Preferences.PREFERENCES.edit().put(Preferences.KEY_NEW_INTERFACE_MOTION, (Boolean) previous).close();
+					else Preferences.PREFERENCES.edit().remove(Preferences.KEY_NEW_INTERFACE_MOTION).close();
+				}
+			});
+		}
+	}
+
+	private static Bitmap captureRootWithDecorOverlays(View root) {
+		View decor = root.getRootView(); int[] at = new int[2], origin = new int[2];
+		root.getLocationInWindow(at); decor.getLocationInWindow(origin);
+		Bitmap bitmap = Bitmap.createBitmap(root.getWidth(), root.getHeight(), Bitmap.Config.ARGB_8888);
+		Canvas canvas = new Canvas(bitmap); canvas.translate(origin[0] - at[0], origin[1] - at[1]);
+		SnapshotDrawing.draw(decor, canvas); return bitmap;
+	}
+
+	@Test public void nativeRemeasureCannotClipAwayTheFormattingRowDuringOpeningOrClosing() {
+		try (ActivityScenario<PostingGestureTestActivity> scenario = ActivityScenario.launch(PostingGestureTestActivity.class)) {
+			scenario.onActivity(activity -> {
+				Object previous = Preferences.PREFERENCES.getAll().get(Preferences.KEY_NEW_INTERFACE_MOTION);
+				try {
+					Preferences.PREFERENCES.edit().put(Preferences.KEY_NEW_INTERFACE_MOTION, true).close();
+					for (boolean opening : new boolean[]{false, true}) {
+						Fixture f = new Fixture(activity, true); f.tools.setBackgroundColor(Color.MAGENTA);
+						try {
+							f.editorContainer.getLayoutParams().height = opening ? 500 : 220;
+							activity.setContentView(f.root); f.layout();
+							Assume.assumeTrue(f.root.hasWindowFocus() && InterfaceMotion.duration(1) > 0);
+							f.motion.onPreDraw();
+							WindowInsetsAnimation animation = new WindowInsetsAnimation(WindowInsets.Type.ime(), new LinearInterpolator(), 250);
+							f.root.dispatchWindowInsetsAnimationPrepare(animation);
+							f.editorContainer.getLayoutParams().height = opening ? 220 : 420; f.move(opening); f.motion.onPreDraw();
+							// A later native layout moves the editor below a resized subject/toolbar
+							// and refines its height while the same IME timeline is still active.
+							f.motion.prepareLayout();
+							FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) f.editorContainer.getLayoutParams();
+							params.topMargin += 60; params.height += 40; f.editorContainer.setLayoutParams(params); f.layout();
+							animation.setFraction(.5f);
+							f.root.dispatchWindowInsetsAnimationProgress(new WindowInsets.Builder().build(), java.util.Collections.singletonList(animation));
+							int[] at = new int[2], origin = new int[2];
+							f.editorContainer.getLocationInWindow(at); f.root.getLocationInWindow(origin);
+							int x = at[0] - origin[0] + f.editorContainer.getWidth() / 2;
+							int y = at[1] - origin[1] + f.tools.getTop() + f.tools.getHeight() / 2;
+							Bitmap bitmap = captureRootWithDecorOverlays(f.root);
+							try { assertEquals("The formatting row must remain painted after native remeasurement", Color.MAGENTA, bitmap.getPixel(x, y)); }
+							finally { bitmap.recycle(); }
+							animation.setFraction(1f);
+							f.root.dispatchWindowInsetsAnimationProgress(new WindowInsets.Builder().build(), java.util.Collections.singletonList(animation));
+							assertEquals(params.height, f.editorContainer.getHeight());
+							assertEquals(params.height - f.tools.getHeight(), f.tools.getTop());
+							f.root.dispatchWindowInsetsAnimationEnd(animation); f.assertSettled();
+						} finally { f.motion.close(); }
+					}
+				} finally {
+					if (previous instanceof Boolean) Preferences.PREFERENCES.edit().put(Preferences.KEY_NEW_INTERFACE_MOTION, (Boolean) previous).close();
+					else Preferences.PREFERENCES.edit().remove(Preferences.KEY_NEW_INTERFACE_MOTION).close();
+				}
+			});
+		}
+	}
+
+	@Test public void editorOverlayStillRespectsTheRealScrollViewport() {
+		try (ActivityScenario<PostingGestureTestActivity> scenario = ActivityScenario.launch(PostingGestureTestActivity.class)) {
+			scenario.onActivity(activity -> {
+				Object previous = Preferences.PREFERENCES.getAll().get(Preferences.KEY_NEW_INTERFACE_MOTION);
+				Fixture f = new Fixture(activity, true); f.tools.setBackgroundColor(Color.MAGENTA);
+				android.widget.ScrollView viewport = new android.widget.ScrollView(activity);
+				f.root.removeView(f.form); viewport.addView(f.form, new android.widget.ScrollView.LayoutParams(-1, 800));
+				f.root.addView(viewport, new FrameLayout.LayoutParams(-1, 400));
+				try {
+					Preferences.PREFERENCES.edit().put(Preferences.KEY_NEW_INTERFACE_MOTION, true).close();
+					f.editorContainer.getLayoutParams().height = 500; activity.setContentView(f.root); f.layout();
+					Assume.assumeTrue(f.root.hasWindowFocus() && InterfaceMotion.duration(1) > 0);
+					f.motion.onPreDraw();
+					WindowInsetsAnimation animation = new WindowInsetsAnimation(WindowInsets.Type.ime(), new LinearInterpolator(), 250);
+					f.root.dispatchWindowInsetsAnimationPrepare(animation);
+					f.editorContainer.getLayoutParams().height = 600; f.move(false); f.motion.onPreDraw();
+					animation.setFraction(.5f);
+					f.root.dispatchWindowInsetsAnimationProgress(new WindowInsets.Builder().build(), java.util.Collections.singletonList(animation));
+					int[] at = new int[2], origin = new int[2];
+					f.editorContainer.getLocationInWindow(at); f.root.getLocationInWindow(origin);
+					int x = at[0] - origin[0] + f.editorContainer.getWidth() / 2;
+					int y = at[1] - origin[1] + f.tools.getTop() + f.tools.getHeight() / 2;
+					assertTrue(y > viewport.getBottom());
+					Bitmap bitmap = captureRootWithDecorOverlays(f.root);
+					try { assertNotEquals("The overlay must not paint formatting outside the scroll viewport", Color.MAGENTA, bitmap.getPixel(x, y)); }
+					finally { bitmap.recycle(); }
+					f.motion.finish(); f.assertSettled();
 				} finally {
 					f.motion.close();
 					if (previous instanceof Boolean) Preferences.PREFERENCES.edit().put(Preferences.KEY_NEW_INTERFACE_MOTION, (Boolean) previous).close();

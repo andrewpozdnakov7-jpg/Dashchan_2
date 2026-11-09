@@ -43,6 +43,11 @@ final class ExperimentalPreferenceDescriptors {
 				true, R.string.discussion_context, R.string.discussion_context_summary);
 	}
 
+	static Toggle threadFabMenu() {
+		return new Toggle(Preferences.KEY_THREAD_FAB_MENU, Preferences.DEFAULT_THREAD_FAB_MENU,
+				true, R.string.thread_fab_menu, R.string.thread_fab_menu_summary);
+	}
+
 	static Toggle outboxJournal() {
 		return new Toggle(Preferences.KEY_OUTBOX_JOURNAL, Preferences.DEFAULT_OUTBOX_JOURNAL,
 				true, R.string.outbox_title, R.string.outbox_experimental_summary);
