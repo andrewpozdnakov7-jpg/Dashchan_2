@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<string name="update_video_thumbnails">Обновлять превью видео</string>
+	<string name="update_video_thumbnails_summary">После возврата в галерею заменять миниатюру последним просмотренным кадром видео</string>
+</resources>

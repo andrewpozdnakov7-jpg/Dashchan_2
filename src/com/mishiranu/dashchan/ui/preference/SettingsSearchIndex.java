@@ -648,6 +648,7 @@ public final class SettingsSearchIndex {
 		addExperimentalToggle(context, entries, ExperimentalPreferenceDescriptors.outboxJournal());
 		addExperimentalToggle(context, entries, ExperimentalPreferenceDescriptors.discussionContext());
 		addExperimentalToggle(context, entries, ExperimentalPreferenceDescriptors.threadFabMenu());
+		addExperimentalToggle(context, entries, ExperimentalPreferenceDescriptors.videoThumbnails());
 		addExperimentalToggle(context, entries, ExperimentalPreferenceDescriptors.photoEditor());
 		add(context, entries, Screen.CONTENTS, R.string.thread_page_preload,
 				R.string.thread_page_preload__summary, Preferences.KEY_THREAD_PAGE_PRELOAD);

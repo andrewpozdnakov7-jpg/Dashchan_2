@@ -87,7 +87,12 @@ public class PhotoView extends View implements ScaleGestureDetector.OnScaleGestu
 				!isDragging && flingRunnable == null;
 	}
 	public boolean isPredictiveImageAtRest() {
-		return isGalleryImageAtRest() && modernZoomAnimator == null && initialScalingAnimator == null
+		return hasImage() && isPredictiveMediaAtRest();
+	}
+	/** An empty loading page can still present Back; it has no image zoom to preserve. */
+	public boolean isPredictiveMediaAtRest() {
+		return (!hasImage() || !isZoomed()) && !isScaling() && !isClosingTouchMode()
+				&& !isDragging && flingRunnable == null && modernZoomAnimator == null && initialScalingAnimator == null
 				&& animatedRestoreSwipeRunnable == null;
 	}
 	/** Render-only matrix: leave the gesture/zoom matrix intact. */
@@ -253,14 +258,18 @@ public class PhotoView extends View implements ScaleGestureDetector.OnScaleGestu
 	public void setImage(Drawable drawable, boolean hasAlpha, boolean fitScreen, boolean keepScale) {
 		setImage(drawable, hasAlpha, fitScreen, keepScale, 0f);
 	}
-	/** Only a still-image promotion for the exact opening item may retain its presentation owner. */
+	/** A promotion accepted by the exact opening/Back owner may retain its presentation. */
 	public boolean replaceGalleryOpeningImage(Object item, Drawable next, boolean hasAlpha, boolean fitScreen, boolean keepScale) {
+		return replaceGalleryOpeningImage(item, next, hasAlpha, fitScreen, keepScale, 0f);
+	}
+	public boolean replaceGalleryOpeningImage(Object item, Drawable next, boolean hasAlpha, boolean fitScreen,
+			boolean keepScale, float maximumScaleFactor) {
 		Object owner = getTag(R.id.gallery_motion_owner);
 		if (!(owner instanceof GalleryImageReplacementOwner) || !((GalleryImageReplacementOwner) owner).canReplaceImage(item)) return false;
 		galleryImageGeneration++;
 		if (drawable != null) { drawable.setCallback(null); unscheduleDrawable(drawable); }
 		try {
-			setImageData(next, hasAlpha, fitScreen, keepScale, 0f);
+			setImageData(next, hasAlpha, fitScreen, keepScale, maximumScaleFactor);
 			((GalleryImageReplacementOwner) owner).onImageReplaced();
 			return true;
 		} catch (RuntimeException | Error error) {

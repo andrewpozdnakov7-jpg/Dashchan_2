@@ -133,6 +133,7 @@ public class VideoUnit {
 	private VideoPreparationIdentity startupFrameIdentity;
 	private Bitmap preparedStartupFrame;
 	private boolean firstFrameReady;
+	private boolean videoThumbnailPublished;
 	private int playbackSpeed = 1000;
 	private boolean muted;
 	private boolean muteSupported = true;
@@ -658,6 +659,38 @@ public class VideoUnit {
 		finishControlsMotion();
 		return pictureInPictureTransferred ? new View[0] : new View[] {controlsView, centerPlayPauseButton};
 	}
+	private boolean predictiveBackActive;
+	void beginPredictiveBack() {
+		finishControlsMotion();
+		predictiveBackActive = true;
+		cancelControlsAutoHide();
+	}
+	void endPredictiveBack() {
+		if (!predictiveBackActive) return;
+		predictiveBackActive = false;
+		updateControlsAutoHide();
+	}
+	View getPredictiveVideoView(PagerInstance.ViewHolder holder) {
+		// Read ownership only: never create/reattach the player's TextureView for a preview.
+		View view = getOwnedVideoView(holder);
+		return view != null && view.isAttachedToWindow() && view.isShown()
+				&& holder.galleryItem != null
+				&& holder.galleryItem.isVideo(Chan.get(instance.galleryInstance.chanName)) ? view : null;
+	}
+	void publishVideoThumbnail() {
+		PagerInstance.ViewHolder holder = instance.currentHolder;
+		if (!Preferences.isUpdateVideoThumbnails() || videoThumbnailPublished || !initialized || !firstFrameReady
+				|| holder == null || holder.galleryItem == null || getOwnedVideoView(holder) == null) return;
+		Chan chan = Chan.get(instance.galleryInstance.chanName);
+		if (!holder.galleryItem.isVideo(chan)) return;
+		Uri uri = holder.galleryItem.getFileUri(chan);
+		if (uri == null) return;
+		videoThumbnailPublished = true;
+		VideoPlayer owner = player;
+		com.mishiranu.dashchan.widget.VideoThumbnailPreview.publish(instance.galleryInstance.context, uri.toString(),
+				() -> owner == player && getOwnedVideoView(holder) != null
+						? owner.getCommittedPageFrame(com.mishiranu.dashchan.widget.VideoThumbnailPreview.MAX_EDGE) : null);
+	}
 
 	public void interrupt(boolean force) {
 		interrupt(force, force ? VideoPageFrames.Transition.CLOSE : null);
@@ -922,6 +955,7 @@ public class VideoUnit {
 	}
 
 	public void applyVideo(Uri uri, File file, boolean reload) {
+		if (reload && uri != null) com.mishiranu.dashchan.widget.VideoThumbnailPreview.invalidate(uri.toString());
 		instance.mediaPreloader.stop();
 		updatePageFrameWindow();
 		startupFrameIdentity = !reload && file.isFile() ? NextVideoPreparation.identity(uri, file) : null;
@@ -1061,7 +1095,7 @@ public class VideoUnit {
 
 	private void initializePlayer(Bitmap preparedFrame) {
 		com.mishiranu.dashchan.util.CrashReports.record(com.mishiranu.dashchan.util.CrashReports.Event.VIDEO_START);
-		boolean animateEntrance = !controlsBinding.retainsControls();
+		boolean animateEntrance = !predictiveBackActive && !controlsBinding.retainsControls();
 		bindingMediaControls = true;
 		try {
 			initializePlayerControls(preparedFrame, animateEntrance);
@@ -1075,8 +1109,12 @@ public class VideoUnit {
 		clearStartupPreview();
 		preparedStartupFrame = preparedFrame;
 		firstFrameReady = false;
+		videoThumbnailPublished = false;
 		PagerInstance.ViewHolder holder = instance.currentHolder;
 		holder.progressBar.setVisible(false, false);
+		Object motionOwner = holder.photoView.getTag(com.mishiranu.dashchan.R.id.gallery_motion_owner);
+		PredictivePhotoPresentation back = motionOwner instanceof PredictivePhotoPresentation
+				? (PredictivePhotoPresentation) motionOwner : null;
 		Point dimensions = player.getDimensions();
 		if (holder.mediaSummary.updateDimensions(dimensions.x, dimensions.y)) {
 			instance.galleryInstance.callback.updateTitle();
@@ -1091,7 +1129,8 @@ public class VideoUnit {
 				: holder.photoViewThumbnail ? holder.simpleBitmapDrawable : null;
 		boolean pageFrameAvailable = holder.videoPageFrame != null;
 		VideoStartupPreview.Geometry startupGeometry = preparedFrame == null && startupThumbnail != null
-				? VideoStartupPreview.captureGeometry(holder.photoView, holder.surfaceParent) : null;
+				? VideoStartupPreview.captureGeometry(holder.photoView, holder.surfaceParent,
+						back != null ? back.getPhotoAlphaForHandoff() : holder.photoView.getAlpha()) : null;
 		if (VideoDiagnostics.isExtendedRecording()) {
 			VideoDiagnostics.recordUi("gallery startup_handoff schema=1 phase=before_photo_clear holder="
 					+ System.identityHashCode(holder) + " parent=" + System.identityHashCode(holder.surfaceParent)
@@ -1101,9 +1140,17 @@ public class VideoUnit {
 					+ " hide_surface=" + hideSurfaceOnInit + " dimensions=" + dimensions.x + "x" + dimensions.y);
 			VideoDiagnostics.recordViewGeometry("startup_before_photo_clear", holder.photoView);
 		}
-		holder.recyclePhotoView();
 		boolean zoomGestures = Preferences.isVideoZoomGesturesEnabled();
-		holder.photoView.setImage(backgroundDrawable, false, !zoomGestures, false, zoomGestures ? 10f : 0f);
+		boolean preserved = back != null && holder.photoView.replaceGalleryOpeningImage(holder.galleryItem,
+				backgroundDrawable, false, !zoomGestures, false, zoomGestures ? 10f : 0f);
+		if (preserved) {
+			if (holder.simpleBitmapDrawable != null) holder.simpleBitmapDrawable.recycle();
+			holder.simpleBitmapDrawable = null; holder.jpegData = null;
+			holder.videoPageFrame = null; holder.photoViewThumbnail = false;
+		} else {
+			holder.recyclePhotoView();
+			holder.photoView.setImage(backgroundDrawable, false, !zoomGestures, false, zoomGestures ? 10f : 0f);
+		}
 		View videoView = player.getVideoView(instance.galleryInstance.context);
 		resetVideoTransform(videoView);
 		holder.surfaceParent.setClickable(false);
@@ -1158,6 +1205,10 @@ public class VideoUnit {
 		setPlaying((preloadResumed || playbackHandoff != null && playbackHandoff.isPlaying()) && wasPlaying, true);
 		if (preloadResumed) finishPlaybackHandoff();
 		updatePlayState();
+		if (preserved) {
+			back.attachVideoSurface(holder.surfaceParent, getGalleryMotionControls(),
+					() -> getOwnedVideoView(holder) == videoView);
+		}
 	}
 
 	private void onFirstVideoFrame(VideoPlayer owner, PagerInstance.ViewHolder holder) {
@@ -2536,7 +2587,7 @@ public class VideoUnit {
 	// One timer for the whole modern overlay, not separate timers for its buttons.
 	// Playback progress updates must not reset the inactivity deadline.
 	private boolean canAutoHideControls() {
-		return modernControls && preloadResumed && controlsWindowHasFocus && initialized
+		return !predictiveBackActive && modernControls && preloadResumed && controlsWindowHasFocus && initialized
 				&& player != null && player.isPlaying() && !finishedPlayback
 				&& !pictureInPictureTransferred && controlsVisible
 				&& instance.galleryInstance.callback.isSystemUiVisible()

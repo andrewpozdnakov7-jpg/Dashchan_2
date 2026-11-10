@@ -531,6 +531,7 @@ public final class InterfaceAppearance {
 				edit.setBackground(background); edit.setMinimumHeight(Math.max(state.minimumHeight, dp(view, 48)));
 				edit.setPaddingRelative(dp(view, 12), dp(view, 10), dp(view, 12), dp(view, 10));
 				edit.setTextColor(enabled(contrasting(p.text, p.tonal, 4.5), p.surface)); edit.setHintTextColor(enabled(contrasting(p.secondary, p.tonal, 4.5), p.surface));
+				TextInputAppearance.apply(edit, p.accent, p.surface);
 				if (state.role == Role.CUSTOM_FIELD) {
 					android.graphics.Typeface original = edit.getTypeface();
 					AppearanceTypography.apply(edit, AppearanceTypography.Role.BODY_LARGE);
@@ -557,8 +558,9 @@ public final class InterfaceAppearance {
 				edit.setTextColor(fieldStates(contrasting(p.text, fill, 4.5), contrasting(p.text, focused, 4.5), background));
 				int hint = state.error ? p.error : p.secondary;
 				edit.setHintTextColor(fieldStates(contrasting(hint, fill, 4.5), contrasting(hint, focused, 4.5), background));
+				TextInputAppearance.apply(edit, p.accent, focused);
 				setBottomMargin(view, Math.max(state.bottomMargin, dp(view, 8)));
-				// Keep the themed cursor, text size, editor bounds, selection and IME behavior.
+				// Keep text size, editor bounds, selection and IME behavior.
 				break;
 			}
 			case CHECK: case CUSTOM_CHOICE: {
@@ -646,6 +648,7 @@ public final class InterfaceAppearance {
 		void restore(View view) {
 			view.setBackground((role == Role.FIELD || role == Role.CUSTOM_FIELD || role == Role.POSTING_FIELD) && error && legacyError != null ? legacyError : background); view.setBackgroundTintList(backgroundTint);
 			view.setPaddingRelative(start, top, end, bottom); view.setMinimumHeight(minimumHeight);
+			if (view instanceof EditText) TextInputAppearance.restoreTheme((EditText) view);
 			if (role == Role.POSTING_FIELD || appliedRole == Role.POSTING_FIELD) setBottomMargin(view, bottomMargin);
 			if (view instanceof TextView) {
 				TextView t = (TextView) view; t.setTextColor(text); if (hint != null) t.setHintTextColor(hint);

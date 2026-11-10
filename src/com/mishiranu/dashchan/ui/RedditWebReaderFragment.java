@@ -441,6 +441,7 @@ public class RedditWebReaderFragment extends ContentFragment {
 
 	private void showOpenLinkDialog() {
 		EditText editText = new EditText(requireContext());
+		ThemeEngine.applyStyle(editText);
 		editText.setSingleLine(true);
 		editText.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
 		String currentUrl = webView != null ? webView.getUrl() : null;

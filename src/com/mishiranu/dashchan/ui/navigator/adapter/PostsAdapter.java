@@ -131,6 +131,9 @@ public class PostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
 		}
 	}
 	private void bindThreadFabMinimum(View view, boolean lastRealPost) {
+		if (view instanceof com.mishiranu.dashchan.widget.PostLinearLayout && (!threadFabReservation || !lastRealPost)) {
+			((com.mishiranu.dashchan.widget.PostLinearLayout) view).setThreadFabEndReservation(0);
+		}
 		Object saved = view.getTag(com.mishiranu.dashchan.R.id.thread_fab_original_min_height);
 		if (saved == null && !threadFabReservation) return;
 		if (saved == null) {
@@ -143,6 +146,9 @@ public class PostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
 		if (view.getMinimumHeight() != minimum) view.setMinimumHeight(minimum);
 	}
 	@Override public void onViewRecycled(@NonNull RecyclerView.ViewHolder holder) {
+		if (holder.itemView instanceof com.mishiranu.dashchan.widget.PostLinearLayout) {
+			((com.mishiranu.dashchan.widget.PostLinearLayout) holder.itemView).setThreadFabEndReservation(0);
+		}
 		Object original = holder.itemView.getTag(com.mishiranu.dashchan.R.id.thread_fab_original_min_height);
 		if (original instanceof Integer) {
 			holder.itemView.setMinimumHeight((Integer) original);

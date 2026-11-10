@@ -1,0 +1,8 @@
+**Slooop 3.2.82**
+
+- Fixed cursor and text selection colors to match the theme.
+- Improved predictive Back in the gallery for videos, animations, loading attachments and after paging between files.
+- A compatible grid preview is retained when the app is normally moved to the background.
+- Fixed the compressed post background next to the floating thread menu.
+- Added the experimental Update video previews setting: after returning, the thumbnail is replaced with the last viewed video frame. Disabled by default.
+- Expanded diagnostics for reasons why a predictive preview is unavailable.

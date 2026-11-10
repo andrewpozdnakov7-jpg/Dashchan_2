@@ -6,7 +6,7 @@ import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.ui.posting.PhotoEditorBridge;
 
-/** Shared descriptions for four experimental toggles; callers keep their existing screen/search order. */
+/** Shared descriptions for experimental toggles; callers keep their existing screen/search order. */
 final class ExperimentalPreferenceDescriptors {
 	static final class Toggle {
 		final String key;
@@ -51,5 +51,10 @@ final class ExperimentalPreferenceDescriptors {
 	static Toggle outboxJournal() {
 		return new Toggle(Preferences.KEY_OUTBOX_JOURNAL, Preferences.DEFAULT_OUTBOX_JOURNAL,
 				true, R.string.outbox_title, R.string.outbox_experimental_summary);
+	}
+
+	static Toggle videoThumbnails() {
+		return new Toggle(Preferences.KEY_UPDATE_VIDEO_THUMBNAILS, Preferences.DEFAULT_UPDATE_VIDEO_THUMBNAILS,
+				true, R.string.update_video_thumbnails, R.string.update_video_thumbnails_summary);
 	}
 }

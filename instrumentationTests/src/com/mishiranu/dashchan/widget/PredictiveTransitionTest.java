@@ -37,4 +37,17 @@ public class PredictiveTransitionTest {
 			next.finish(); assertFalse(next.commit(() -> actions[0]++)); assertEquals(1, actions[0]);
 		});
 	}
+	@Test public void adoptedOpeningPoseTracksRemainingDistanceAndCancelRecoversFullyOpen() {
+		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+			View host = new View(InstrumentationRegistry.getInstrumentation().getTargetContext()); Surface surface = new Surface();
+			PredictiveTransition transition = new PredictiveTransition(host, surface, .6f);
+			assertEquals(.6f, transition.getFraction(), .001f); assertEquals(.97f, surface.position, .001f);
+			transition.progress(0f); assertEquals(.6f, transition.getFraction(), .001f);
+			transition.progress(.5f); assertEquals(.8f, transition.getFraction(), .001f);
+			transition.progress(.2f); assertEquals(.68f, transition.getFraction(), .001f);
+			transition.cancel(); transition.finish(); assertEquals(1, surface.restores);
+			assertEquals(.37f, surface.position, 0f); assertFalse(transition.isBusy());
+			assertFalse(transition.commit(() -> fail("Cancelled entrance must not navigate")));
+		});
+	}
 }

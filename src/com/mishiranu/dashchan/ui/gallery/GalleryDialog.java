@@ -46,7 +46,7 @@ public class GalleryDialog extends com.mishiranu.dashchan.content.security.Secur
 	private final SharedPreferences.Listener motionPreferencesListener = this::onMotionPreferenceChanged;
 	private void onMotionPreferenceChanged(String key) {
 		if (Preferences.KEY_PREDICTIVE_BACK.equals(key) || Preferences.KEY_NEW_INTERFACE_MOTION.equals(key)) {
-			fragment.finishPredictiveBack();
+			fragment.onPredictiveBackSettingsChanged();
 			unregisterPredictiveBackCallback(); registerPredictiveBackCallback();
 		}
 	}

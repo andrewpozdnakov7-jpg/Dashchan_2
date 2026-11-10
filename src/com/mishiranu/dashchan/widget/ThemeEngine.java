@@ -585,6 +585,7 @@ public class ThemeEngine {
 			// Also cover fully qualified custom views and children created by constructors.
 			// This is an inflation-time pass, not a per-frame or scrolling observer.
 			TouchFeedback.applyTree(result);
+			TextInputAppearance.applyTree(result);
 			return result;
 		}
 	}
@@ -757,6 +758,14 @@ public class ThemeEngine {
 		return layoutInflater instanceof ThemeLayoutInflater && ((ThemeLayoutInflater) layoutInflater).isToolbar();
 	}
 
+	static void applyTextInputStyle(EditText view) {
+		ThemeContext context = obtainThemeContext(view.getContext());
+		if (context != null && shouldApplyStyle(view.getContext())) {
+			ensureTheme(context);
+			TextInputAppearance.applyTheme(view);
+		}
+	}
+
 	public static void applyStyle(View view) {
 		TouchFeedback.apply(view);
 		// Stateful tints are buggy on Android 5.0, so some changes are applied to 5.1+ only
@@ -783,6 +792,7 @@ public class ThemeEngine {
 					textView.setLinkTextColor(theme.link);
 					if (view instanceof EditText) {
 						view.setBackgroundTintList(themeContext.getEditTextColors());
+						TextInputAppearance.applyTheme((EditText) view);
 					} else if (view instanceof CheckedTextView) {
 						// Mostly used by alert dialogs to display lists
 						((CheckedTextView) textView).setCheckMarkTintList(themeContext.getCheckBoxColors());

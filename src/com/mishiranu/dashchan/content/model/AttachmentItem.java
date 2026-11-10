@@ -445,6 +445,8 @@ public abstract class AttachmentItem {
 			}
 		}
 		view.resetImage(key, overlay);
+		Uri mediaResource = getFileUri(chan);
+		view.setMediaResource(mediaResource != null ? mediaResource.toString() : null);
 		if (cacheOnly) {
 			if (key != null) ImageLoader.getInstance().loadImage(chan, getThumbnailUri(chan), key, true, view);
 			else ImageLoader.getInstance().cancel(view);

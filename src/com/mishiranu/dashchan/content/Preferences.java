@@ -2469,6 +2469,11 @@ public class Preferences {
 	public static final String KEY_NEW_VIDEO_PLAYER = "experimental_new_video_player";
 	// Preserve the modern player for users who already enabled the new interface.
 	public static final boolean DEFAULT_NEW_VIDEO_PLAYER = true;
+	public static final String KEY_UPDATE_VIDEO_THUMBNAILS = "experimental_update_video_thumbnails";
+	public static final boolean DEFAULT_UPDATE_VIDEO_THUMBNAILS = false;
+	public static boolean isUpdateVideoThumbnails() {
+		return PREFERENCES.getBoolean(KEY_UPDATE_VIDEO_THUMBNAILS, DEFAULT_UPDATE_VIDEO_THUMBNAILS);
+	}
 	public enum ThreadToolbarAction {
 		BACK("back", R.string.thread_toolbar_back),
 		THREAD_LIST("thread_list", R.string.thread_toolbar_list),

@@ -1370,6 +1370,10 @@ public class DialogUnit {
 			textView.setTypeface(ResourceUtils.TYPEFACE_MEDIUM);
 			com.mishiranu.dashchan.widget.InterfaceAppearance.mediaCaption(textView);
 			attachmentItem.configureAndLoad(attachmentView, chan, false, true);
+			Uri mediaUri = attachmentItem.getFileUri(chan);
+			com.mishiranu.dashchan.widget.VideoThumbnailPreview.bind(attachmentView,
+					mediaUri != null && chan.locator.isVideoExtension(chan.locator.createAttachmentFileName(mediaUri))
+							? mediaUri.toString() : null);
 			textView.setText(attachmentItem.getDescription(AttachmentItem.FormatMode.TWO_LINES));
 			View clickView = view.findViewById(R.id.attachment_click);
 			clickView.setOnClickListener(clickListener);

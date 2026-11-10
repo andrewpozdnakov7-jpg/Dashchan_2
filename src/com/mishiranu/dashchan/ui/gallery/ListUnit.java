@@ -76,6 +76,8 @@ public class ListUnit implements ActionMode.Callback {
 	private GalleryViewportMemory.Snapshot viewport;
 	private GalleryViewportMemory.Snapshot pendingViewport;
 	private GalleryItem viewportItem;
+	private Runnable pendingGridOpen;
+	private final Runnable gridOpenTimeout = this::finishPendingGridOpen;
 
 	public ListUnit(GalleryInstance instance) {
 		this.instance = instance;
@@ -99,6 +101,7 @@ public class ListUnit implements ActionMode.Callback {
 			@Override
 			public void onScrollStateChanged(@NonNull RecyclerView view, int newState) {
 				if (newState == RecyclerView.SCROLL_STATE_DRAGGING) {
+					cancelPendingGridOpen();
 					// A user's scroll takes priority over a previous navigation request.
 					pendingListPosition = null;
 					pendingReturnItem = null;
@@ -148,6 +151,7 @@ public class ListUnit implements ActionMode.Callback {
 				logPosition("grid_pre_draw");
 			}
 			captureViewport();
+			if (pendingGridOpen != null && isPredictiveGridReady()) finishPendingGridOpen();
 			return true;
 		});
 		recyclerView.addOnLayoutChangeListener((view, left, top, right, bottom,
@@ -215,6 +219,36 @@ public class ListUnit implements ActionMode.Callback {
 		scrollListToPosition(position, 0);
 	}
 
+	void openPageWhenReady(Runnable open) {
+		cancelPendingGridOpen();
+		recyclerView.stopScroll();
+		if (!com.mishiranu.dashchan.util.InterfaceMotion.isPredictiveBackEnabled() || isPredictiveGridReady()) {
+			open.run();
+			return;
+		}
+		pendingGridOpen = open;
+		// Wait only for the visible grid's existing layout/entrance to settle, never indefinitely.
+		recyclerView.postDelayed(gridOpenTimeout, 400L);
+		scheduleGridMetricsUpdate();
+		recyclerView.postInvalidateOnAnimation();
+		recordPredictiveGrid("capture_deferred reason=grid_not_settled");
+	}
+	void cancelPendingGridOpen() {
+		pendingGridOpen = null;
+		recyclerView.removeCallbacks(gridOpenTimeout);
+	}
+	private void finishPendingGridOpen() {
+		Runnable open = pendingGridOpen;
+		cancelPendingGridOpen();
+		if (open != null && gridVisible && recyclerView.isAttachedToWindow()) open.run();
+	}
+	private boolean isPredictiveGridReady() {
+		return isGridLayoutSettled() && !GalleryMotionController.blocks(recyclerView)
+				&& recyclerView.getMatrix().isIdentity() && recyclerView.getAlpha() >= .999f;
+	}
+	private void recordPredictiveGrid(String event) {
+		if (VideoDiagnostics.isExtendedRecording()) VideoDiagnostics.recordUi("predictive_gallery grid_" + event);
+	}
 	void onPageOpenedFromGrid(int position) {
 		recyclerView.stopScroll();
 		captureViewport();
@@ -229,25 +263,51 @@ public class ListUnit implements ActionMode.Callback {
 	private android.graphics.Bitmap predictiveGrid;
 	private int predictiveGridWidth, predictiveGridHeight, predictiveGridDirection;
 	private int predictiveGridColumns;
+	private int predictiveGridFirstPosition, predictiveGridFirstTop;
 	private Object predictiveGridTheme, predictiveGridInsets;
 	private final java.util.IdentityHashMap<GalleryItem, Boolean> predictiveGridItems = new java.util.IdentityHashMap<>();
 	private PredictiveGridGeometry predictiveGridGeometry;
+	private String predictiveGridClearReason = "not_captured";
+	private String predictiveGridFailure = "missing_not_captured";
 	private final java.util.IdentityHashMap<GalleryItem, PredictiveGridGeometry.Cell> predictiveGridTargets = new java.util.IdentityHashMap<>();
 	boolean hasPredictiveGrid() { return predictiveGrid != null; }
 	void clearPredictiveGrid() {
+		clearPredictiveGrid("explicit_clear");
+	}
+	void clearPredictiveGrid(String reason) {
 		com.mishiranu.dashchan.widget.BackPreviewBudget.release(predictiveGrid); predictiveGrid = null; predictiveGridItems.clear();
 		predictiveGridGeometry = null; predictiveGridTargets.clear();
+		predictiveGridClearReason = reason;
 	}
 	private void preparePredictiveGrid() {
-		clearPredictiveGrid();
-		if (!com.mishiranu.dashchan.util.InterfaceMotion.isPredictiveBackEnabled() || !isGridLayoutSettled()) return;
-		predictiveGrid = com.mishiranu.dashchan.widget.BackPreviewBudget.capture(recyclerView,
-				com.mishiranu.dashchan.widget.BackPreviewBudget.limit(recyclerView.getContext()) / 4, android.graphics.Color.BLACK);
-		if (predictiveGrid == null) return;
+		if (!com.mishiranu.dashchan.util.InterfaceMotion.isPredictiveBackEnabled()) {
+			clearPredictiveGrid("predictive_disabled"); return;
+		}
+		String failure = !isPredictiveGridReady() ? "grid_not_settled" : null;
+		boolean hadGrid = predictiveGrid != null;
+		android.graphics.Bitmap next = failure == null ? com.mishiranu.dashchan.widget.BackPreviewBudget.capture(recyclerView,
+				com.mishiranu.dashchan.widget.BackPreviewBudget.limit(recyclerView.getContext()) / 4, android.graphics.Color.BLACK)
+				: null;
+		if (next == null) {
+			if (failure == null) failure = "capture_failed";
+			String incompatible = predictiveGrid != null ? predictiveGridCompatibilityFailure() : null;
+			if (incompatible != null) clearPredictiveGrid(incompatible);
+			if (!hadGrid && predictiveGrid == null) predictiveGridClearReason = failure;
+			recordPredictiveGrid("capture_skipped reason=" + failure + " retained=" + (predictiveGrid != null));
+			return;
+		}
+		// Only a successful capture replaces the previous frame. Budget pressure may
+		// independently evict the old cache while admitting this new bitmap.
+		clearPredictiveGrid("replaced");
+		predictiveGrid = next;
 		predictiveGridGeometry = new PredictiveGridGeometry(recyclerView);
 		predictiveGridWidth = recyclerView.getWidth(); predictiveGridHeight = recyclerView.getHeight();
 		predictiveGridDirection = recyclerView.getLayoutDirection();
-		predictiveGridColumns = ((GridLayoutManager) recyclerView.getLayoutManager()).getSpanCount();
+		GridLayoutManager manager = (GridLayoutManager) recyclerView.getLayoutManager();
+		predictiveGridColumns = manager.getSpanCount();
+		predictiveGridFirstPosition = manager.findFirstVisibleItemPosition();
+		View first = manager.findViewByPosition(predictiveGridFirstPosition);
+		predictiveGridFirstTop = first != null ? manager.getDecoratedTop(first) : 0;
 		predictiveGridTheme = com.mishiranu.dashchan.widget.ThemeEngine.getTheme(recyclerView.getContext());
 		predictiveGridInsets = recyclerView.getRootWindowInsets();
 		for (int i = 0; i < recyclerView.getChildCount(); i++) {
@@ -262,14 +322,34 @@ public class ListUnit implements ActionMode.Callback {
 				if (cell != null) predictiveGridTargets.put(item, cell);
 			}
 		}
+		recordPredictiveGrid("captured items=" + predictiveGridItems.size() + " targets=" + predictiveGridTargets.size());
+	}
+	String getPredictiveGridFailure() { return predictiveGridFailure; }
+	private String predictiveGridCompatibilityFailure() {
+		if (predictiveGrid.isRecycled()) return "bitmap_recycled";
+		if (recyclerView.getWidth() != predictiveGridWidth || recyclerView.getHeight() != predictiveGridHeight) return "size_changed";
+		if (recyclerView.getLayoutDirection() != predictiveGridDirection) return "direction_changed";
+		if (((GridLayoutManager) recyclerView.getLayoutManager()).getSpanCount() != predictiveGridColumns) return "columns_changed";
+		GridLayoutManager manager = (GridLayoutManager) recyclerView.getLayoutManager();
+		int firstPosition = manager.findFirstVisibleItemPosition();
+		View first = manager.findViewByPosition(firstPosition);
+		if (firstPosition != predictiveGridFirstPosition
+				|| (first != null ? manager.getDecoratedTop(first) : 0) != predictiveGridFirstTop) return "viewport_changed";
+		if (com.mishiranu.dashchan.widget.ThemeEngine.getTheme(recyclerView.getContext()) != predictiveGridTheme) return "theme_changed";
+		if (!java.util.Objects.equals(recyclerView.getRootWindowInsets(), predictiveGridInsets)) return "insets_changed";
+		if (predictiveGridGeometry == null || !predictiveGridGeometry.valid()) return "geometry_changed";
+		return null;
 	}
 	android.graphics.Bitmap getPredictiveGrid(GalleryItem item) {
-		return predictiveGrid != null && !predictiveGrid.isRecycled() && predictiveGridItems.containsKey(item)
-				&& recyclerView.getWidth() == predictiveGridWidth && recyclerView.getHeight() == predictiveGridHeight
-				&& recyclerView.getLayoutDirection() == predictiveGridDirection
-				&& ((GridLayoutManager) recyclerView.getLayoutManager()).getSpanCount() == predictiveGridColumns
-				&& com.mishiranu.dashchan.widget.ThemeEngine.getTheme(recyclerView.getContext()) == predictiveGridTheme
-				&& java.util.Objects.equals(recyclerView.getRootWindowInsets(), predictiveGridInsets) ? predictiveGrid : null;
+		if (predictiveGrid == null) { predictiveGridFailure = "missing_" + predictiveGridClearReason; return null; }
+		String failure = predictiveGridCompatibilityFailure();
+		if (failure != null) {
+			predictiveGridFailure = failure;
+			clearPredictiveGrid(failure);
+			return null;
+		}
+		predictiveGridFailure = predictiveGridItems.containsKey(item) ? "ready" : "item_not_in_snapshot";
+		return "ready".equals(predictiveGridFailure) ? predictiveGrid : null;
 	}
 	PredictivePhotoPresentation.Target getPredictiveGridTarget(GalleryItem item,
 			com.mishiranu.dashchan.widget.PhotoView photo) {
@@ -445,7 +525,8 @@ public class ListUnit implements ActionMode.Callback {
 	}
 
 	public void onGalleryItemsChanged() {
-		clearPredictiveGrid();
+		cancelPendingGridOpen();
+		clearPredictiveGrid("content_changed");
 		pendingListPosition = null;
 		pendingReturnItem = null;
 		openedFromGridItem = null;
@@ -466,7 +547,8 @@ public class ListUnit implements ActionMode.Callback {
 	}
 
 	public void onGalleryItemsRefreshed(List<GalleryItem> oldItems) {
-		clearPredictiveGrid();
+		cancelPendingGridOpen();
+		clearPredictiveGrid("content_refreshed");
 		ListPosition anchor = ListPosition.obtain(recyclerView, null);
 		ArrayList<GalleryItem> selectedItems = new ArrayList<>();
 		for (int i = 0; i < selected.size(); i++) {
@@ -932,6 +1014,8 @@ public class ListUnit implements ActionMode.Callback {
 				holder.thumbnail.resetImage(null, AttachmentView.Overlay.WARNING);
 				ImageLoader.getInstance().cancel(holder.thumbnail);
 			}
+			Uri mediaUri = galleryItem.isVideo(chan) ? galleryItem.getFileUri(chan) : null;
+			com.mishiranu.dashchan.widget.VideoThumbnailPreview.bind(holder.thumbnail, mediaUri != null ? mediaUri.toString() : null);
 			boolean checked = callback.isItemChecked(position);
 			holder.selectorCheckDrawable.setSelected(checked, false);
 		}

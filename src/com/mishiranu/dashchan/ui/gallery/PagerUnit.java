@@ -252,11 +252,33 @@ public class PagerUnit implements PagerInstance.Callback {
 				holder.galleryItem.isImage(Chan.get(galleryInstance.chanName))
 				? holder.photoView : null;
 	}
-	public PhotoView getPredictiveStaticPhotoView() {
-		PhotoView photo = getStaticMotionPhotoView();
+	public PhotoView getPredictiveMediaPhotoView() {
+		PhotoView photo = getMotionMediaPhotoView();
 		return photo != null && (photo.getTag(R.id.gallery_motion_owner) == null
 				|| photo.getTag(R.id.gallery_motion_owner) instanceof PredictivePhotoPresentation)
-				&& photo.isPredictiveImageAtRest() && photo.getGalleryImageBounds() != null ? photo : null;
+				&& photo.isPredictiveMediaAtRest() && photo.getWidth() > 0 && photo.getHeight() > 0 ? photo : null;
+	}
+	View getPredictiveVideoView() {
+		return !galleryMode ? videoUnit.getPredictiveVideoView(getCurrentHolder()) : null;
+	}
+	boolean isPredictiveMediaCurrent(PhotoView photo, GalleryItem item, View video) {
+		PagerInstance.ViewHolder holder = getCurrentHolder();
+		return !galleryMode && holder != null && holder.galleryItem == item && holder.photoView == photo
+				&& getMotionMediaPhotoView() == photo && (video == null || getPredictiveVideoView() == video)
+				&& photo.isPredictiveMediaAtRest();
+	}
+	void beginPredictiveVideoBack() { videoUnit.beginPredictiveBack(); }
+	void endPredictiveVideoBack() { videoUnit.endPredictiveBack(); }
+	View[] getPredictiveMediaControls() {
+		PagerInstance.ViewHolder holder = getCurrentHolder();
+		if (holder == null) return new View[0];
+		View[] playerControls = holder.galleryItem != null && holder.galleryItem.isVideo(Chan.get(galleryInstance.chanName))
+				? getMotionVideoControls() : new View[0];
+		View[] controls = java.util.Arrays.copyOf(playerControls, playerControls.length + 3);
+		controls[playerControls.length] = holder.progressBar;
+		controls[playerControls.length + 1] = holder.errorHolder.layout;
+		controls[playerControls.length + 2] = holder.playButton;
+		return controls;
 	}
 	private PhotoView getStaticMotionPhotoView() {
 		PagerInstance.ViewHolder holder = getCurrentHolder();
@@ -270,12 +292,6 @@ public class PagerUnit implements PagerInstance.Callback {
 		if (name.regionMatches(true, Math.max(0, name.length() - 4), ".gif", 0, 4)
 				|| name.regionMatches(true, Math.max(0, name.length() - 5), ".apng", 0, 5)) return false;
 		return holder.animatedPngDecoder == null && holder.gifDecoder == null;
-	}
-	boolean isPredictivePhotoCurrent(PhotoView photo, GalleryItem item) {
-		PagerInstance.ViewHolder holder = getCurrentHolder();
-		return !galleryMode && holder != null && holder.galleryItem == item && holder.photoView == photo
-				&& holder.gifDecoder == null && holder.animatedPngDecoder == null && !holder.photoViewThumbnail
-				&& photo.isPredictiveImageAtRest();
 	}
 	public PhotoView getMotionMediaPhotoView() {
 		PagerInstance.ViewHolder holder = getCurrentHolder();
@@ -684,6 +700,7 @@ public class PagerUnit implements PagerInstance.Callback {
 		videoUnit.forcePause();
 		videoUnit.showHideVideoView(false);
 	}
+	void publishVideoThumbnail() { videoUnit.publishVideoThumbnail(); }
 
 	private static final float PAGER_SCALE = 0.9f;
 
@@ -963,7 +980,8 @@ public class PagerUnit implements PagerInstance.Callback {
 							holder.galleryItem.width, holder.galleryItem.height, false);
 					boolean fitScreen = holder.galleryItem.isVideo(chan);
 					boolean keepScale = this.keepScale && !fitScreen;
-					if (isStaticPhotoHolder(holder, chan) && holder.decoderDrawable == null &&
+					boolean predictive = holder.photoView.getTag(R.id.gallery_motion_owner) instanceof PredictivePhotoPresentation;
+					if ((predictive || isStaticPhotoHolder(holder, chan) && holder.decoderDrawable == null) &&
 							holder.photoView.replaceGalleryOpeningImage(holder.galleryItem, next, bitmap.hasAlpha(), fitScreen, keepScale)) {
 						if (holder.simpleBitmapDrawable != null) holder.simpleBitmapDrawable.recycle();
 						holder.simpleBitmapDrawable = next; holder.jpegData = null; holder.videoPageFrame = null;

@@ -98,9 +98,13 @@ final class VideoStartupPreview extends BaseDrawable implements View.OnAttachSta
 	}
 
 	static Geometry captureGeometry(PhotoView photo, ViewGroup parent) {
+		return captureGeometry(photo, parent, photo.getAlpha());
+	}
+	static Geometry captureGeometry(PhotoView photo, ViewGroup parent, float alpha) {
 		RectF bounds = new RectF();
-		return photo.getImageDisplayRect(bounds) != null && !bounds.isEmpty()
+		Geometry geometry = photo.getImageDisplayRect(bounds) != null && !bounds.isEmpty()
 				? geometryFromView(photo, parent, bounds) : null;
+		return geometry != null ? new Geometry(geometry.imageBounds, geometry.viewport, geometry.localToParent, alpha) : null;
 	}
 
 	private static Geometry geometryFromView(View source, ViewGroup parent, RectF imageBounds) {

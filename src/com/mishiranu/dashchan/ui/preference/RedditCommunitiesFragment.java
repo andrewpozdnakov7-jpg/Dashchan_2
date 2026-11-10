@@ -21,6 +21,7 @@ import com.mishiranu.dashchan.ui.FragmentHandler;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.widget.ViewFactory;
 import com.mishiranu.dashchan.widget.InterfaceAppearance;
+import com.mishiranu.dashchan.widget.ThemeEngine;
 import java.util.ArrayList;
 import java.util.Collections;
 
@@ -120,6 +121,7 @@ public class RedditCommunitiesFragment extends BaseListFragment {
 	private void editCategory(Category category) {
 		LinearLayout form = form();
 		EditText text = new EditText(requireContext());
+		ThemeEngine.applyStyle(text);
 		text.setSingleLine(true);
 		text.setFilters(new InputFilter[] {new InputFilter.LengthFilter(80)});
 		text.setHint(R.string.reddit_category_name);
@@ -145,6 +147,7 @@ public class RedditCommunitiesFragment extends BaseListFragment {
 	private void editCommunity(Category source, String original) {
 		LinearLayout form = form();
 		EditText text = new EditText(requireContext());
+		ThemeEngine.applyStyle(text);
 		text.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI
 				| android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE);
 		text.setMinLines(1);

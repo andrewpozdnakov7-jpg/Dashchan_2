@@ -19,6 +19,7 @@ abstract class LockScreenForm {
 	Runnable inputChanged;
 	LockScreenForm(Context activity) {
 		input = new EditText(activity);
+		com.mishiranu.dashchan.widget.TextInputAppearance.preserve(input);
 		input.setId(View.generateViewId());
 		AppLockActivity.configurePinInput(input);
 		title = new TextView(activity); status = new TextView(activity);

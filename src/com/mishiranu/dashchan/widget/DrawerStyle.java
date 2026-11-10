@@ -93,5 +93,8 @@ public final class DrawerStyle {
 				: AppearanceTypography.Role.DRAWER_BODY);
 		scaleText(text, textScalePercent);
 		text.setTextColor(role == Role.GROUP ? variant : onSurface);
+		if (text instanceof android.widget.EditText) {
+			TextInputAppearance.apply((android.widget.EditText) text, colors.primary, surface);
+		}
 	}
 }
