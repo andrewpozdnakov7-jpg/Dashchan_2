@@ -11,6 +11,7 @@ import androidx.core.view.OneShotPreDrawListener;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.util.InterfaceMotion;
 import com.mishiranu.dashchan.widget.AttachmentView;
+import com.mishiranu.dashchan.widget.PredictiveTransition;
 import java.lang.ref.WeakReference;
 
 /** Attachment picker shares media geometry/dim timing, without copying bitmaps or changing selection. */
@@ -20,6 +21,8 @@ public final class AttachmentGridMotionController {
 	private final WeakReference<AttachmentView> source;
 	private final long binding;
 	private Scene scene;
+	private PredictiveTransition predictive;
+	private int predictiveGeneration;
 
 	public AttachmentGridMotionController(View content, Window window, View source) {
 		this.content = content; this.window = window;
@@ -43,6 +46,7 @@ public final class AttachmentGridMotionController {
 		install(new Scene(false, null));
 	}
 	public boolean close(Runnable cancel) {
+		if (isPredictiveBackCommitting()) return true;
 		if (scene != null && scene.exit) return true;
 		dispose();
 		if (!enabled() || window == null || !content.isAttachedToWindow()) return false;
@@ -51,9 +55,83 @@ public final class AttachmentGridMotionController {
 		return true;
 	}
 	void install(Scene next) { scene = next; next.prepare(); }
-	public boolean isRunning() { return scene != null; }
-	public void finish() { if (scene != null) scene.release(true); }
-	public void dispose() { if (scene != null) scene.release(false); }
+	public boolean isRunning() { return scene != null || predictive != null && predictive.isBusy(); }
+	public boolean isPredictiveBackCommitting() { return predictive != null && predictive.isCommitting(); }
+	public void finish() { finishPredictiveBack(); if (scene != null) scene.release(true); }
+	public void dispose() {
+		// Forced removal must not turn an accepted animation into an OnCancel callback.
+		predictiveGeneration++; finishPredictiveBack(); if (scene != null) scene.release(false);
+	}
+	private void finishPredictiveBack() {
+		PredictiveTransition old = predictive; predictive = null; if (old != null) old.finish();
+	}
+	private boolean predictiveEnabled() {
+		return InterfaceMotion.isPredictiveBackEnabled() && ValueAnimator.areAnimatorsEnabled();
+	}
+	public boolean startPredictiveBack() {
+		if (isPredictiveBackCommitting() || scene != null && scene.exit) return false;
+		finish(); // Settle an opening or cancelled gesture before capturing neutral properties.
+		if (!predictiveEnabled() || window == null || !content.isAttachedToWindow()
+				|| content.getWidth() <= 0 || content.getHeight() <= 0
+				|| content.getTag(R.id.gallery_motion_owner) != null) return false;
+		predictiveGeneration++;
+		BackPresentation presentation = new BackPresentation();
+		predictive = new PredictiveTransition(content, presentation);
+		return true;
+	}
+	public void progressPredictiveBack(float progress) { if (predictive != null) predictive.progress(progress); }
+	public void cancelPredictiveBack() { if (predictive != null) predictive.cancel(); }
+	public boolean commitPredictiveBack(Runnable cancel) {
+		int generation = predictiveGeneration;
+		return predictive != null && predictive.commit(() -> {
+			if (generation != predictiveGeneration) return;
+			window.setWindowAnimations(0); cancel.run();
+		});
+	}
+
+	private void applyFrame(Object owner, GalleryMotionController.PresentationFrame frame,
+			RectF image, RectF thumbnail, RectF clip, float dim, float amount) {
+		setDim(dim * amount);
+		if (thumbnail != null) {
+			clip.set(GalleryMotionSpec.lerp(thumbnail.left, image.left, amount),
+					GalleryMotionSpec.lerp(thumbnail.top, image.top, amount),
+					GalleryMotionSpec.lerp(thumbnail.right, image.right, amount),
+					GalleryMotionSpec.lerp(thumbnail.bottom, image.bottom, amount));
+			frame.frame(owner, image, clip, true); frame.fade(owner, 1f);
+		} else frame.fade(owner, amount);
+	}
+
+	/** The same grid geometry/dim as ordinary close, driven by Back instead of a second clock. */
+	final class BackPresentation implements PredictiveTransition.Presentation {
+		final GalleryMotionController.PresentationFrame frame = new GalleryMotionController.PresentationFrame(content);
+		final float dim = window.getAttributes().dimAmount;
+		final int accessibility = content.getImportantForAccessibility();
+		final int width = content.getWidth(), height = content.getHeight();
+		final RectF image = new RectF(0, 0, width, height), thumbnail = target(), clip = new RectF();
+		final Rect sourceBounds = new Rect(), currentSourceBounds = new Rect();
+		boolean restored;
+		BackPresentation() {
+			AttachmentView view = source.get(); if (thumbnail != null && view != null) view.getGlobalVisibleRect(sourceBounds);
+			frame.own(this);
+			content.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
+		}
+		@Override public boolean valid() {
+			if (restored || !predictiveEnabled() || !content.isAttachedToWindow()
+					|| content.getWidth() != width || content.getHeight() != height
+					|| content.getTag(R.id.gallery_motion_owner) != this) return false;
+			AttachmentView view = source.get();
+			return thumbnail == null || view != null && view.isAttachedToWindow() && view.isShown()
+					&& view.getImageBindingGeneration() == binding && view.getGlobalVisibleRect(currentSourceBounds)
+					&& sourceBounds.equals(currentSourceBounds);
+		}
+		@Override public void apply(float fraction) { applyFrame(this, frame, image, thumbnail, clip, dim, 1f - fraction); }
+		@Override public void restore() {
+			if (restored) return; restored = true;
+			if (content.getTag(R.id.gallery_motion_owner) == this) {
+				frame.release(this); content.setImportantForAccessibility(accessibility); setDim(dim);
+			}
+		}
+	}
 
 	private void setDim(float amount) {
 		// During detach, do not dispatch a WindowManager layout update to a removed decor.
@@ -84,6 +162,7 @@ public final class AttachmentGridMotionController {
 		OneShotPreDrawListener preDraw;
 		ValueAnimator animator;
 		RectF image, thumbnail;
+		final RectF clip = new RectF();
 		boolean released;
 
 		Scene(boolean exit, Runnable cancel) { this.exit = exit; this.cancel = cancel; }
@@ -120,14 +199,7 @@ public final class AttachmentGridMotionController {
 		}
 		void apply(float progress) {
 			float amount = exit ? 1f - progress : progress;
-			setDim(dim * amount);
-			if (thumbnail != null) {
-				RectF clip = new RectF(GalleryMotionSpec.lerp(thumbnail.left, image.left, amount),
-						GalleryMotionSpec.lerp(thumbnail.top, image.top, amount),
-						GalleryMotionSpec.lerp(thumbnail.right, image.right, amount),
-						GalleryMotionSpec.lerp(thumbnail.bottom, image.bottom, amount));
-				frame.frame(this, image, clip, true); frame.fade(this, 1f);
-			} else frame.fade(this, amount);
+			applyFrame(this, frame, image, thumbnail, clip, dim, amount);
 		}
 		void release(boolean complete) {
 			if (released) return; released = true;

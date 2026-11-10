@@ -479,7 +479,7 @@ public final class PostingFormAppearance {
 		field.input.setPadding(dp(root, 16), dp(root, 16), dp(root, 16), dp(root, field.editor ? 8 : 16));
 		field.input.setTextColor(palette.text);
 		field.input.setHintTextColor(field.error ? palette.error : palette.secondary);
-		field.input.setHighlightColor(ColorUtils.setAlphaComponent(palette.accent, 64));
+		TextInputAppearance.apply(field.input, palette.accent, palette.surface);
 		StateListDrawable background = new StateListDrawable();
 		float radius = field.editor ? 20 : 16;
 		background.addState(new int[] {android.R.attr.state_focused},

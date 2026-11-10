@@ -48,24 +48,26 @@ public class PostLinearLayout extends LinearLayout {
 	}
 
 	private Drawable secondaryBackground;
-	private Runnable backgroundExtensionInvalidation;
+	private int threadFabEndReservation;
 	private final Paint postMarkPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG);
 	private int postMark = MARK_NONE;
 
-	/** Live unread/selection fill only. Do not extend touch ink, post content or its hit target. */
-	public int getBackgroundExtensionColor() {
-		return secondaryBackground instanceof ColorDrawable ? ((ColorDrawable) secondaryBackground).getColor() : 0;
+	/** Reserve content, not the width of the row/background. Logical end also covers RTL. */
+	public void setThreadFabEndReservation(int pixels) {
+		pixels = Math.max(0, pixels);
+		if (threadFabEndReservation == pixels) return;
+		int baseEnd = Math.max(0, getPaddingEnd() - threadFabEndReservation);
+		threadFabEndReservation = pixels;
+		setPaddingRelative(getPaddingStart(), getPaddingTop(), baseEnd + pixels, getPaddingBottom());
 	}
 
-	public void setBackgroundExtensionInvalidation(Runnable invalidation) {
-		backgroundExtensionInvalidation = invalidation;
-	}
-
-	@Override public void invalidateDrawable(@NonNull Drawable drawable) {
-		super.invalidateDrawable(drawable);
-		if (drawable == secondaryBackground && backgroundExtensionInvalidation != null) {
-			backgroundExtensionInvalidation.run();
+	@Override public boolean dispatchTouchEvent(MotionEvent event) {
+		if (threadFabEndReservation > 0 && event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+			boolean reserved = getLayoutDirection() == LAYOUT_DIRECTION_RTL
+					? event.getX() < threadFabEndReservation : event.getX() >= getWidth() - threadFabEndReservation;
+			if (reserved) return false;
 		}
+		return super.dispatchTouchEvent(event);
 	}
 
 	public void setSecondaryBackgroundColor(int color) {
@@ -87,7 +89,6 @@ public class PostLinearLayout extends LinearLayout {
 				drawable.setCallback(this);
 			}
 			invalidate();
-			if (backgroundExtensionInvalidation != null) backgroundExtensionInvalidation.run();
 		}
 	}
 

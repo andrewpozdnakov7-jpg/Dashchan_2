@@ -25,6 +25,13 @@ public class ExperimentalPreferenceDescriptorsTest {
 		assertEquals(PhotoEditorBridge.getTitleResId(), toggle.titleResId);
 		assertEquals(PhotoEditorBridge.getSummaryResId(), toggle.summaryResId);
 	}
+	@Test public void videoThumbnailExperimentIsAvailableAndDefaultsOff() {
+		ExperimentalPreferenceDescriptors.Toggle toggle = ExperimentalPreferenceDescriptors.videoThumbnails();
+		assertTrue(toggle.available); assertFalse(toggle.defaultValue);
+		assertEquals(Preferences.KEY_UPDATE_VIDEO_THUMBNAILS, toggle.key);
+		assertEquals(R.string.update_video_thumbnails, toggle.titleResId);
+		assertEquals(R.string.update_video_thumbnails_summary, toggle.summaryResId);
+	}
 
 	@Test public void motionDescriptionUsesTheExistingDistributionGate() {
 		ExperimentalPreferenceDescriptors.Toggle toggle = ExperimentalPreferenceDescriptors.interfaceMotion();
@@ -64,6 +71,7 @@ public class ExperimentalPreferenceDescriptorsTest {
 					ExperimentalPreferenceDescriptors.interfaceMotion(),
 					ExperimentalPreferenceDescriptors.photoEditor(),
 					ExperimentalPreferenceDescriptors.discussionContext(),
+					ExperimentalPreferenceDescriptors.videoThumbnails(),
 					ExperimentalPreferenceDescriptors.outboxJournal()}) {
 				int count = 0;
 				boolean design = Preferences.KEY_NEW_INTERFACE_MOTION.equals(toggle.key);

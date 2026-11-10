@@ -72,10 +72,24 @@ public class AttachmentView extends View {
 	public enum Overlay {NONE, MULTIPLE, AUDIO, VIDEO, FILE, WARNING}
 
 	private String key;
+	private String mediaResource;
 	private long imageBindingGeneration;
 	public long getImageBindingGeneration() { return imageBindingGeneration; }
+	public String getMediaResource() { return mediaResource; }
+	/** Logical media identity is independent of the thumbnail/cache key. */
+	public void setMediaResource(String resource) {
+		if (!CommonUtils.equals(mediaResource, resource)) {
+			VideoThumbnailPreview.unbind(this);
+			mediaResource = resource;
+			imageBindingGeneration++;
+		}
+	}
 	public boolean isCropEnabled() { return cropEnabled; }
 	private Bitmap bitmap;
+	private Bitmap videoThumbnailPreview;
+	void setVideoThumbnailPreview(Bitmap preview) {
+		if (videoThumbnailPreview != preview) { videoThumbnailPreview = preview; invalidate(); }
+	}
 	private boolean error;
 	private Overlay overlay;
 	private Drawable overlayDrawable;
@@ -88,6 +102,7 @@ public class AttachmentView extends View {
 	public void resetImage(String key, Overlay overlay) {
 		boolean invalidate = false;
 		if (!CommonUtils.equals(this.key, key)) {
+			VideoThumbnailPreview.unbind(this);
 			this.key = key;
 			imageBindingGeneration++;
 			if (bitmap != null || error) {
@@ -145,7 +160,7 @@ public class AttachmentView extends View {
 	}
 
 	public boolean hasImage() {
-		return bitmap != null;
+		return videoThumbnailPreview != null || bitmap != null;
 	}
 
 	@SuppressLint("ClickableViewAccessibility")
@@ -216,10 +231,12 @@ public class AttachmentView extends View {
 	public void draw(Canvas canvas) {
 		Interpolator interpolator = AnimationUtils.DECELERATE_INTERPOLATOR;
 		canvas.drawColor(backgroundColor);
-		Bitmap bitmap = this.bitmap != null && !this.bitmap.isRecycled() ? this.bitmap : null;
+		Bitmap selected = videoThumbnailPreview != null ? videoThumbnailPreview : this.bitmap;
+		Bitmap bitmap = selected != null && !selected.isRecycled() ? selected : null;
 		boolean hasImage = bitmap != null;
 		int vw = getWidth(), vh = getHeight();
-		int dt = imageApplyTime > 0L ? (int) (SystemClock.elapsedRealtime() - imageApplyTime) : Integer.MAX_VALUE;
+		int dt = videoThumbnailPreview == null && imageApplyTime > 0L
+				? (int) (SystemClock.elapsedRealtime() - imageApplyTime) : Integer.MAX_VALUE;
 		float alpha = interpolator.getInterpolation(Math.min(dt / 200f, 1f));
 		boolean invalidate = false;
 		if (hasImage) {
@@ -269,8 +286,8 @@ public class AttachmentView extends View {
 		if (sfwMode) {
 			canvas.drawColor(backgroundColor & 0x00ffffff | 0xe0000000);
 		}
-		Drawable overlayDrawable = this.overlayDrawable;
-		if (error && !keepOverlayOnError) {
+		Drawable overlayDrawable = videoThumbnailPreview != null && overlay == Overlay.WARNING ? null : this.overlayDrawable;
+		if (videoThumbnailPreview == null && error && !keepOverlayOnError) {
 			if (errorOverlayDrawable == null) {
 				errorOverlayDrawable = ResourceUtils.getDrawable(getContext(), R.attr.iconAttachmentWarning, 0);
 			}

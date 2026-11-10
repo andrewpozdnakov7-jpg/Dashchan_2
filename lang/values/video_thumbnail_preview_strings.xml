@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<string name="update_video_thumbnails">Update video previews</string>
+	<string name="update_video_thumbnails_summary">Replace the thumbnail with the last viewed video frame after returning to the gallery</string>
+</resources>

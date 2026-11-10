@@ -36,8 +36,8 @@ public class GalleryGridReturnContractTest {
 
 	@Test public void remembersOriginBeforeHidingGrid() throws Exception {
 		String body = method("GalleryOverlay", "public void navigatePageFromList(");
-		assertTrue(body.indexOf("listUnit.onPageOpenedFromGrid(position)") >= 0);
-		assertTrue(body.indexOf("listUnit.onPageOpenedFromGrid(position)")
+		assertTrue(body.indexOf("listUnit.onPageOpenedFromGrid(currentPosition)") >= 0);
+		assertTrue(body.indexOf("listUnit.onPageOpenedFromGrid(currentPosition)")
 				< body.indexOf("switchMode(false, true)"));
 	}
 

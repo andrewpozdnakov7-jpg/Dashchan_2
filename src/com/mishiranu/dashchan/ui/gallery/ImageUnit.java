@@ -351,7 +351,9 @@ public class ImageUnit {
 
 		private void setPhotoViewImage(PagerInstance.ViewHolder holder, Drawable drawable, boolean hasAlpha) {
 			boolean still = holder.animatedPngDecoder == null && holder.gifDecoder == null;
-			boolean preserved = still && holder.photoView.replaceGalleryOpeningImage(holder.galleryItem,
+			boolean predictive = holder.photoView.getTag(com.mishiranu.dashchan.R.id.gallery_motion_owner)
+					instanceof PredictivePhotoPresentation;
+			boolean preserved = (still || predictive) && holder.photoView.replaceGalleryOpeningImage(holder.galleryItem,
 					drawable, hasAlpha, false, holder.photoViewThumbnail);
 			if (!preserved) {
 				boolean hadImage = holder.photoView.hasImage();

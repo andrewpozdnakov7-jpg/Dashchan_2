@@ -86,6 +86,7 @@
 	<item type="id" name="tag_insets_draw_data" />
 	<item type="id" name="tag_insets_gesture_navigation" />
 	<item type="id" name="tag_text_colors" />
+	<item type="id" name="text_input_appearance" />
 	<item type="id" name="tag_theme_engine" />
 
 	<item type="id" name="toolbar_search_motion_owner" />

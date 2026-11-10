@@ -6,6 +6,7 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Rect;
 import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.AnimationDrawable;
 import android.view.View;
 import android.widget.FrameLayout;
 import androidx.test.core.app.ActivityScenario;
@@ -84,5 +85,118 @@ public class PredictivePhotoPresentationTest {
 				assertEquals(1, modeChanges[0]); s.assertRestored();
 			});
 		} finally { grid.recycle(); if (f[0] != null) f[0].image.recycle(); }
+	}
+	@Test public void loadingPreviewCanBePromotedDuringBackAndReversedWithoutLosingTheSession() {
+		Fixture[] f = {null}; Bitmap full = Bitmap.createBitmap(20, 20, Bitmap.Config.ARGB_8888);
+		full.setDensity(Bitmap.DENSITY_NONE); full.eraseColor(Color.BLUE);
+		try (ActivityScenario<StandardContentTestActivity> scenario = ActivityScenario.launch(StandardContentTestActivity.class)) {
+			scenario.onActivity(a -> f[0] = new Fixture(a)); InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+			scenario.onActivity(a -> {
+				Fixture s = f[0]; Object item = new Object();
+				PredictivePhotoPresentation p = new PredictivePhotoPresentation(s.root, s.photo, s.chrome,
+						new PredictivePhotoPresentation.Target(s.thumbnail, s.photo), null, null, () -> true,
+						null, new View[0], item);
+				PredictiveTransition session = new PredictiveTransition(s.root, p); p.setFinishSession(session::finish);
+				session.progress(.55f); Rect before = s.blueBounds();
+				BitmapDrawable decoded = new BitmapDrawable(a.getResources(), full);
+				assertFalse(s.photo.replaceGalleryOpeningImage(new Object(), decoded, false, false, false));
+				assertTrue(s.photo.replaceGalleryOpeningImage(item, decoded, false, false, false));
+				assertTrue(session.isTracking()); assertTrue(p.valid()); assertSame(p, s.photo.getTag(R.id.gallery_motion_owner));
+				Rect after = s.blueBounds();
+				assertTrue(Math.abs(before.left - after.left) <= 1); assertTrue(Math.abs(before.top - after.top) <= 1);
+				assertTrue(Math.abs(before.right - after.right) <= 1); assertTrue(Math.abs(before.bottom - after.bottom) <= 1);
+				session.progress(.2f); assertTrue(s.blueBounds().width() > after.width());
+				session.cancel(); session.finish(); s.assertRestored();
+				Rect restored = s.blueBounds(); assertEquals(240, restored.width()); assertEquals(240, restored.height());
+			});
+		} finally { full.recycle(); if (f[0] != null) f[0].image.recycle(); }
+	}
+	@Test public void fullImageArrivingAfterAcceptanceKeepsExactlyOneCompletion() {
+		Fixture[] f = {null}; Bitmap full = Bitmap.createBitmap(40, 20, Bitmap.Config.ARGB_8888);
+		full.setDensity(Bitmap.DENSITY_NONE); full.eraseColor(Color.BLUE);
+		try (ActivityScenario<StandardContentTestActivity> scenario = ActivityScenario.launch(StandardContentTestActivity.class)) {
+			scenario.onActivity(a -> f[0] = new Fixture(a)); InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+			scenario.onActivity(a -> {
+				Fixture s = f[0]; Object item = new Object(); int[] closes = {0};
+				PredictivePhotoPresentation p = new PredictivePhotoPresentation(s.root, s.photo, s.chrome,
+						new PredictivePhotoPresentation.Target(s.thumbnail, s.photo), null, null, () -> true,
+						null, new View[0], item);
+				PredictiveTransition session = new PredictiveTransition(s.root, p); p.setFinishSession(session::finish);
+				session.progress(.45f); assertTrue(session.commit(() -> closes[0]++));
+				BitmapDrawable decoded = new BitmapDrawable(a.getResources(), full);
+				assertTrue(s.photo.replaceGalleryOpeningImage(item, decoded, false, false, false)); assertTrue(p.valid());
+				session.finish(); session.finish(); assertEquals(1, closes[0]); s.assertRestored();
+				assertFalse(s.photo.replaceGalleryOpeningImage(item, decoded, false, false, false));
+			});
+		} finally { full.recycle(); if (f[0] != null) f[0].image.recycle(); }
+	}
+	@Test public void animatedDrawablePromotionAndFrameChangesKeepTheGestureOwner() {
+		Fixture[] f = {null}; AnimationDrawable animation = new AnimationDrawable();
+		try (ActivityScenario<StandardContentTestActivity> scenario = ActivityScenario.launch(StandardContentTestActivity.class)) {
+			scenario.onActivity(a -> f[0] = new Fixture(a)); InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+			scenario.onActivity(a -> {
+				Fixture s = f[0]; Object item = new Object();
+				animation.addFrame(new BitmapDrawable(a.getResources(), s.image), 100);
+				animation.addFrame(new BitmapDrawable(a.getResources(), s.image), 100);
+				PredictivePhotoPresentation p = new PredictivePhotoPresentation(s.root, s.photo, s.chrome,
+						new PredictivePhotoPresentation.Target(s.thumbnail, s.photo), null, null, () -> true,
+						null, new View[0], item);
+				PredictiveTransition session = new PredictiveTransition(s.root, p); p.setFinishSession(session::finish);
+				session.progress(.4f);
+				assertTrue(s.photo.replaceGalleryOpeningImage(item, animation, false, false, false));
+				long generation = s.photo.getGalleryImageGeneration(); animation.start(); animation.selectDrawable(1);
+				session.progress(.7f); assertTrue(session.isTracking()); assertTrue(p.valid());
+				assertEquals(generation, s.photo.getGalleryImageGeneration());
+				session.cancel(); session.finish(); s.assertRestored(); animation.stop();
+			});
+		} finally { animation.stop(); if (f[0] != null) f[0].image.recycle(); }
+	}
+	@Test public void emptyLoadingPageAcceptsItsFirstPreviewWithoutEndingBack() {
+		Fixture[] f = {null};
+		try (ActivityScenario<StandardContentTestActivity> scenario = ActivityScenario.launch(StandardContentTestActivity.class)) {
+			scenario.onActivity(a -> f[0] = new Fixture(a)); InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+			scenario.onActivity(a -> {
+				Fixture s = f[0]; s.photo.recycle(); assertFalse(s.photo.hasImage());
+				assertTrue(s.photo.isPredictiveMediaAtRest()); Object item = new Object();
+				PredictivePhotoPresentation p = new PredictivePhotoPresentation(s.root, s.photo, s.chrome,
+						new PredictivePhotoPresentation.Target(s.thumbnail, s.photo), null, null, () -> true,
+						null, new View[0], item);
+				PredictiveTransition session = new PredictiveTransition(s.root, p); p.setFinishSession(session::finish);
+				session.progress(.4f); assertTrue(session.isTracking());
+				assertTrue(s.photo.replaceGalleryOpeningImage(item,
+						new BitmapDrawable(a.getResources(), s.image), false, false, false));
+				session.progress(.6f); assertTrue(p.valid()); assertTrue(session.isTracking());
+				session.cancel(); session.finish(); s.assertRestored(); assertTrue(s.photo.hasImage());
+			});
+		} finally { if (f[0] != null) f[0].image.recycle(); }
+	}
+	@Test public void openingTransfersItsVisibleFrameAndOpacityBeforeAnyFurtherDraw() {
+		Fixture[] f = {null};
+		try (ActivityScenario<StandardContentTestActivity> scenario = ActivityScenario.launch(StandardContentTestActivity.class)) {
+			scenario.onActivity(a -> f[0] = new Fixture(a)); InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+			scenario.onActivity(a -> {
+				Fixture s = f[0]; Object item = new Object(); GalleryMotionController motion = new GalleryMotionController(s.root);
+				GalleryMotionController.Scene entrance = motion.new Scene(s.photo, s.chrome, false, null, item);
+				motion.install(entrance); entrance.image = s.photo.getGalleryImageBounds();
+				entrance.thumbnailTarget = new PhotoTransitionGeometry.Target(s.thumbnail, s.photo);
+				entrance.thumbnail = new android.graphics.RectF(entrance.thumbnailTarget.frame);
+				entrance.crop = entrance.thumbnailTarget.crop; entrance.apply(.35f);
+				Rect before = s.blueBounds(); float chromeAlpha = s.chrome.getAlpha(); int backgroundAlpha = s.root.getBackground().getAlpha();
+				assertFalse(motion.canHandoffOpening(s.photo, new Object())); assertTrue(motion.canHandoffOpening(s.photo, item));
+				GalleryMotionController.OpeningFrame opening = motion.takeOpening(s.photo, item); assertNotNull(opening);
+				assertEquals(.65f, opening.fraction, .001f); assertNull(motion.takeOpening(s.photo, item));
+				PredictivePhotoPresentation p = new PredictivePhotoPresentation(s.root, s.photo, s.chrome,
+						new PredictivePhotoPresentation.Target(s.thumbnail, s.photo), null, null, () -> true,
+						null, new View[0], item);
+				p.startFromOpening(opening); PredictiveTransition session = new PredictiveTransition(s.root, p, opening.fraction);
+				p.setFinishSession(session::finish); s.root.getViewTreeObserver().dispatchOnPreDraw();
+				Rect after = s.blueBounds(); assertTrue(Math.abs(before.left - after.left) <= 1);
+				assertTrue(Math.abs(before.top - after.top) <= 1); assertTrue(Math.abs(before.right - after.right) <= 1);
+				assertTrue(Math.abs(before.bottom - after.bottom) <= 1); assertEquals(chromeAlpha, s.chrome.getAlpha(), .001f);
+				assertEquals(backgroundAlpha, s.root.getBackground().getAlpha());
+				session.progress(.6f); assertTrue(s.blueBounds().width() < after.width());
+				session.cancel(); session.finish(); s.assertRestored(); assertEquals(240, s.blueBounds().width());
+			});
+		} finally { if (f[0] != null) f[0].image.recycle(); }
 	}
 }

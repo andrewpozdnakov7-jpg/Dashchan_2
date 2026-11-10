@@ -115,6 +115,34 @@ public final class BackPreviewBudget {
 			return null;
 		} finally { reserved -= reservation; }
 	}
+	/** Admit a bounded decoder readback under the same ledger, before allocating its pixels. */
+	public static Bitmap captureBitmap(Context context, long maxBytes, java.util.function.Supplier<Bitmap> capture) {
+		if (maxBytes <= 0) return null;
+		if (PreviewMemoryPolicy.isMemoryLow(context)) {
+			PreviewMemoryPolicy.reclaim(context, "video_preview_low_memory"); return null;
+		}
+		long cap = maxBytes;
+		if (cap > limit(context)) return null;
+		makeRoom(context, cap);
+		if (usedBytes() > limit(context) - cap) return null;
+		reserved += cap;
+		Bitmap image = null;
+		try {
+			image = capture.get();
+			if (image == null || image.isRecycled()) return null;
+			if (allocations.containsKey(image)) { image = null; return null; }
+			long actual = image.getAllocationByteCount();
+			if (actual > cap || bytes + reserved - cap + actual > limit(context)) {
+				image.recycle(); return null;
+			}
+			allocations.put(image, actual); references.put(image, 1); bytes += actual;
+			return image;
+		} catch (RuntimeException | OutOfMemoryError error) {
+			if (image != null) { allocations.remove(image); references.remove(image); if (!image.isRecycled()) image.recycle(); }
+			PreviewMemoryPolicy.reclaim(context, "video_preview_capture_failed");
+			return null;
+		} finally { reserved -= cap; }
+	}
 	/** Lease an existing ledger image. Unmanaged bitmaps retain their caller's ownership. */
 	public static boolean retain(Bitmap image) {
 		Integer count = references.get(image);

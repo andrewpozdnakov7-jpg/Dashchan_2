@@ -913,11 +913,21 @@ final class StandardAppearance {
 		}
 		void applyResolved(boolean enabled) {
 			if (!enabled) {
-				saved.restore(); for (Saved frame : frames) frame.restore(); for (IconSaved icon : icons) icon.restore(); return;
+				saved.restore(); for (Saved frame : frames) frame.restore(); for (IconSaved icon : icons) icon.restore();
+				styleLegacyInput(search); return;
 			}
 			AppearanceColors c = colors(root.getContext()); root.setBackgroundTintList(null);
 			root.setBackground(new InsetDrawable(shape(root, c.surfaceContainer, 28), 0, dp(root, 4), 0, dp(root, 4)));
 			root.setMinimumHeight(dp(root, AppearanceShapes.STANDARD_TARGET)); style(search, c);
+		}
+		void styleLegacyInput(View view) {
+			if (view instanceof EditText) {
+				ThemeEngine.Theme theme = ThemeEngine.getTheme(root.getContext());
+				TextInputAppearance.apply((EditText) view, theme.accent, theme.primary);
+			} else if (view instanceof ViewGroup) {
+				ViewGroup group = (ViewGroup) view;
+				for (int i = 0; i < group.getChildCount(); i++) styleLegacyInput(group.getChildAt(i));
+			}
 		}
 		void style(View view, AppearanceColors c) {
 			boolean remembered = false; for (Saved old : frames) if (old.view == view) { remembered = true; break; }
@@ -927,6 +937,7 @@ final class StandardAppearance {
 				TextView text = (TextView) view; InterfaceAppearance.standardRole(text, InterfaceAppearance.Role.SEARCH_TEXT);
 				text.setTextColor(InterfaceAppearance.contrasting(c.onSurface, c.surfaceContainer, 4.5));
 				text.setHintTextColor(InterfaceAppearance.contrasting(c.onSurfaceVariant, c.surfaceContainer, 4.5));
+				TextInputAppearance.apply((EditText) view, c.primary, c.surfaceContainer);
 				text.setMinimumHeight(dp(root, AppearanceShapes.STANDARD_SEARCH_MIN_HEIGHT));
 			} else if (view instanceof ImageView) {
 				ImageView image = (ImageView) view; boolean found = false; for (IconSaved old : icons) if (old.image == image) { found = true; break; }

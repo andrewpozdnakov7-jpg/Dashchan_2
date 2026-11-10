@@ -14,6 +14,7 @@ public final class PredictiveTransition {
 	}
 	private final View host;
 	private final Presentation presentation;
+	private final float gestureStartFraction;
 	private ValueAnimator animator;
 	private boolean tracking = true, released, committing;
 	private float fraction;
@@ -26,9 +27,15 @@ public final class PredictiveTransition {
 		if (r - l != or - ol || b - t != ob - ot) finish();
 	};
 	public PredictiveTransition(View host, Presentation presentation) {
+		this(host, presentation, 0f);
+	}
+	/** Adopt an already rendered opening pose; cancellation still recovers to fully open (0). */
+	public PredictiveTransition(View host, Presentation presentation, float initialFraction) {
 		this.host = host; this.presentation = presentation;
+		gestureStartFraction = BackMotionSpec.fraction(initialFraction);
+		fraction = gestureStartFraction;
 		host.addOnAttachStateChangeListener(attachment); host.addOnLayoutChangeListener(layout);
-		presentation.apply(0f);
+		presentation.apply(fraction);
 	}
 	public boolean isBusy() { return !released; }
 	public boolean isCommitting() { return committing && !released; }
@@ -37,7 +44,7 @@ public final class PredictiveTransition {
 	public void progress(float value) {
 		if (!isTracking()) return;
 		if (!presentation.valid()) { finish(); return; }
-		apply(BackMotionSpec.fraction(value));
+		apply(gestureStartFraction + (1f - gestureStartFraction) * BackMotionSpec.fraction(value));
 	}
 	private void apply(float value) { fraction = value; presentation.apply(value); }
 	public void cancel() {

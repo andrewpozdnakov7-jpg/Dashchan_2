@@ -98,6 +98,34 @@ public final class GalleryMotionController {
 
 	public void finish() { if (scene != null) scene.run(); }
 	public boolean isClosing() { return scene != null && scene.exit; }
+	boolean canHandoffOpening(PhotoView photo, Object item) {
+		return scene != null && !scene.released && !scene.exit && scene.photo == photo && scene.item == item
+				&& root.isAttachedToWindow() && photo.isAttachedToWindow() && photo.getWidth() > 0 && photo.getHeight() > 0
+				&& root.getTag(R.id.gallery_motion_owner) == scene && photo.getTag(R.id.gallery_motion_owner) == scene
+				&& (scene.thumbnailTarget == null || scene.thumbnailTarget.valid(photo));
+	}
+	static final class OpeningFrame {
+		final float fraction;
+		final RectF visible;
+		OpeningFrame(float fraction, RectF visible) { this.fraction = fraction; this.visible = visible; }
+	}
+	OpeningFrame takeOpening(PhotoView photo, Object item) {
+		if (!canHandoffOpening(photo, item)) return null;
+		Scene opening = scene;
+		RectF visible = opening.thumbnail != null && !opening.renderedFrame.isEmpty()
+				? new RectF(opening.renderedFrame) : null;
+		if (visible != null && !opening.crop && opening.image != null) {
+			float scale = Math.min(visible.width() / opening.image.width(), visible.height() / opening.image.height());
+			float x = visible.centerX(), y = visible.centerY();
+			float halfWidth = opening.image.width() * scale / 2f, halfHeight = opening.image.height() * scale / 2f;
+			visible.set(x - halfWidth, y - halfHeight, x + halfWidth, y + halfHeight);
+		}
+		OpeningFrame frame = new OpeningFrame(1f - opening.progress, visible);
+		// Release listeners and restore baselines synchronously; the next owner applies
+		// this pose before the UI thread can draw. An exit/dismissal is never transferred.
+		opening.run();
+		return frame;
+	}
 	public static void finishHost(View host) {
 		Object owner = host.getTag(R.id.gallery_motion_owner);
 		if (owner instanceof Runnable) ((Runnable) owner).run();

@@ -2,6 +2,7 @@ package com.mishiranu.dashchan.ui;
 
 import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import com.mishiranu.dashchan.widget.InterfaceAppearance;
+import com.mishiranu.dashchan.widget.ThemeEngine;
 import android.app.AlertDialog;
 import android.app.Dialog;
 import android.os.Bundle;
@@ -161,6 +162,7 @@ public final class ApachanEditPostDialog {
 			root.setPadding(padding, (int) (8f * density), padding, 0);
 
 			subjectView = new EditText(requireContext());
+			ThemeEngine.applyStyle(subjectView);
 			subjectView.setHint(R.string.subject);
 			subjectView.setSingleLine(true);
 			subjectView.setText(savedInstanceState != null ? savedInstanceState.getString(EXTRA_SUBJECT)
@@ -168,6 +170,7 @@ public final class ApachanEditPostDialog {
 			root.addView(subjectView, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
 
 			commentView = new EditText(requireContext());
+			ThemeEngine.applyStyle(commentView);
 			commentView.setHint(R.string.comment);
 			commentView.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE
 					| InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
