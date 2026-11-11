@@ -22,6 +22,7 @@ import com.mishiranu.dashchan.ui.preference.VideoPreloadFragment;
 import com.mishiranu.dashchan.ui.preference.PlaybackSpeedFragment;
 import com.mishiranu.dashchan.ui.preference.ContentsFragment;
 import com.mishiranu.dashchan.ui.preference.OfflineTranslationFragment;
+import com.mishiranu.dashchan.ui.preference.PipDiagnosticsFragment;
 import com.mishiranu.dashchan.ui.preference.ReplyNotificationsFragment;
 import com.mishiranu.dashchan.ui.preference.SettingsSearchIndex;
 import java.util.List;
