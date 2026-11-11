@@ -73,13 +73,15 @@ public class PostingFlowContractTest {
 
 	@Test public void launchersStayInFragmentInPickerThenEditorOrder() throws Exception {
 		String source = source();
-		int picker = source.indexOf("attachmentPicker = registerForActivityResult(");
-		int editor = source.indexOf("imageEditor = registerForActivityResult(");
+		String registration = "com.mishiranu.dashchan.content.security.ProtectedActivityResults.register(";
+		int picker = source.indexOf("attachmentPicker = " + registration);
+		int editor = source.indexOf("imageEditor = " + registration);
 		int constructor = source.indexOf("public PostingFragment()");
 		assertTrue(picker >= 0 && picker < editor && editor < constructor);
-		assertEquals(2, source.split("registerForActivityResult\\(", -1).length - 1);
-		containsAll(source.substring(picker, editor), "C.REQUEST_CODE_ATTACH", "result.getResultCode()", "result.getData()");
-		containsAll(source.substring(editor, constructor), "C.REQUEST_CODE_IMAGE_EDITOR", "result.getResultCode()", "result.getData()");
+		assertEquals(2, source.split(Pattern.quote(registration), -1).length - 1);
+		assertFalse("Posting pickers must not bypass the lock/profile result gate", source.contains("registerForActivityResult("));
+		containsAll(source.substring(picker, editor), "this, \"posting-attachments\"", "C.REQUEST_CODE_ATTACH", "result.getResultCode()", "result.getData()");
+		containsAll(source.substring(editor, constructor), "this, \"posting-editor\"", "C.REQUEST_CODE_IMAGE_EDITOR", "result.getResultCode()", "result.getData()");
 	}
 
 	@Test public void draftsKeepAllRawFieldsAndAttachmentOrder() throws Exception {
@@ -143,14 +145,18 @@ public class PostingFlowContractTest {
 		String move = attachment("moveAttachment");
 		containsAll(move, "attachments.indexOf(holder)", "sourceIndex < 0 || sourceIndex == targetIndex",
 				"attachments.remove(sourceIndex)", "attachments.add(targetIndex, holder)",
-				"invalidateAttachments(true)", "host.saveDraftAfterAttachmentChange()");
+				"invalidateAttachments(true)", "attachmentsChanged()");
 		assertTrue(move.indexOf("attachments.remove(sourceIndex)") < move.indexOf("attachments.add(targetIndex, holder)"));
 		assertFalse(move.contains("new AttachmentHolder"));
 		String source = source("PostingAttachmentsController");
 		String remove = source.substring(source.indexOf("private final View.OnClickListener attachmentRemoveListener"),
 				source.indexOf("private void invalidateAttachments"));
 		containsAll(remove, "(AttachmentHolder) v.getTag()", "attachments.remove(holder)",
-				"videoThumbnailTasks.remove(holder)", "task.cancel()", "host.saveDraftAfterAttachmentChange()");
+				"videoThumbnailTasks.remove(holder)", "task.cancel()", "attachmentsChanged()");
+		String changed = attachment("attachmentsChanged");
+		containsAll(changed, "host.saveDraftAfterAttachmentChange()", "removeCallbacks(compressionRefresh)", "post(compressionRefresh)");
+		assertTrue("Original draft must be saved before conversion can start",
+				changed.indexOf("host.saveDraftAfterAttachmentChange()") < changed.indexOf("post(compressionRefresh)"));
 	}
 
 	@Test public void sendFiltersVisibilityAndKeepsPasswordRatingAndOptionFallbacks() throws Exception {
@@ -172,10 +178,17 @@ public class PostingFlowContractTest {
 		containsAll(attachment("createSendAttachments"),
 				"for (int i = 0; i < attachments.size(); i++)", "AttachmentHolder data = attachments.get(i)",
 				"if (!found)", "rating = null", "attachmentRatingItems.get(0).first", "if (fileHolder != null)",
-				"attachmentHashes.add(data.hash)", "fileHolder, data.name, rating",
+				"attachmentHashes.add(converted != null ? converted.hash : data.hash)",
+				"fileHolder, converted != null ? converted.name : data.name, rating",
 				"data.optionUniqueHash, data.optionRemoveMetadata, data.optionRemoveFileName",
 				"postingConfiguration.attachmentSpoiler && data.optionSpoiler, data.reencoding",
 				"return new SendAttachments(attachments, attachmentHashes)");
+		containsAll(attachment("compressed"), "CompressionSettings.enabled()", "compressionSignature().equals(compressionModel.signature)",
+				"job.phase == VideoCompressionJob.Phase.DONE ? job.results.get(holder.hash) : null");
+		containsAll(attachment("createSendAttachments"), "converted != null && !compressionModel.job.current()",
+				"if (fileHolder == null) throw new CompressionUnavailableException()");
+		containsAll(method("submitPostingForm"), "catch (PostingAttachmentsController.CompressionUnavailableException e)",
+				"attachmentController.handleCompressionUnavailable()");
 	}
 
 	@Test public void deletionPasswordRetainsCustomValueOrUsesForumFallback() {

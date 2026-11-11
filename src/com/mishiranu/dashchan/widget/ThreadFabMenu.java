@@ -1,16 +1,20 @@
 package com.mishiranu.dashchan.widget;
 
+import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
 import android.animation.ValueAnimator;
 import android.content.res.ColorStateList;
 import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.InsetDrawable;
 import android.graphics.drawable.RippleDrawable;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
 import android.view.accessibility.AccessibilityNodeInfo;
+import android.view.accessibility.AccessibilityManager;
 import android.widget.FrameLayout;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
@@ -19,6 +23,7 @@ import android.widget.TextView;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
+import androidx.recyclerview.widget.RecyclerView;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.util.InterfaceMotion;
 import com.mishiranu.dashchan.util.ResourceUtils;
@@ -28,6 +33,8 @@ import java.util.Map;
 
 /** Presentation only. PageFragment owns visibility/Back, PostsPage owns every command. */
 public final class ThreadFabMenu extends FrameLayout {
+	private static final int TOUCH_SIZE = 48, SURFACE_SIZE = 40;
+	private static final float HIDE_TRAVEL_DP = 36f, SHOW_TRAVEL_DP = 18f;
 	public static final class Action {
 		public final int id, title, icon;
 		public final boolean enabled;
@@ -58,7 +65,27 @@ public final class ThreadFabMenu extends FrameLayout {
 	private final IdentityHashMap<View, Integer> accessibility = new IdentityHashMap<>();
 	private final IdentityHashMap<ViewGroup, Integer> focusability = new IdentityHashMap<>();
 	private final ViewTreeObserver.OnPreDrawListener observer = () -> { syncAvailability(); return true; };
+	private final RecyclerView.OnScrollListener scrollListener = new RecyclerView.OnScrollListener() {
+		@Override public void onScrolled(RecyclerView view, int dx, int dy) {
+			if (!available || opened || touchExplorationEnabled()) return;
+			if (!view.canScrollVertically(-1)) {
+				scrollTravel = 0f;
+				setScrollHidden(false);
+				return;
+			}
+			// Layout, refresh and restored anchors must not count as a user's scroll.
+			if (dy == 0 || view.getScrollState() == RecyclerView.SCROLL_STATE_IDLE) return;
+			float delta = dy / ResourceUtils.obtainDensity(view);
+			if (delta * scrollTravel < 0f) scrollTravel = 0f;
+			scrollTravel += delta;
+			if (scrollTravel > HIDE_TRAVEL_DP) setScrollHidden(true);
+			else if (scrollTravel < -SHOW_TRAVEL_DP) setScrollHidden(false);
+		}
+	};
 	private boolean enabled, active, available, opened, disposed;
+	private boolean scrollHidden, fabShown;
+	private float scrollTravel, visibilityProgress;
+	private ValueAnimator visibilityAnimator;
 	private boolean scrollToBottomPending;
 	private int safeLeft, safeTop, safeRight, safeBottom;
 	private ValueAnimator shapeAnimator;
@@ -90,9 +117,11 @@ public final class ThreadFabMenu extends FrameLayout {
 		moreIcon = getContext().getDrawable(R.drawable.ic_thread_fab_more).mutate();
 		closeIcon = getContext().getDrawable(R.drawable.ic_close).mutate();
 		fab.setImageDrawable(new android.graphics.drawable.LayerDrawable(new Drawable[] {moreIcon, closeIcon}));
-		fab.setBackground(new RippleDrawable(ColorStateList.valueOf(colors.ripple), fabShape, null));
+		InsetDrawable surface = new InsetDrawable(fabShape, dp((TOUCH_SIZE - SURFACE_SIZE) / 2f));
+		fab.setBackground(new RippleDrawable(ColorStateList.valueOf(colors.ripple), surface, null));
 		fab.setScaleType(android.widget.ImageView.ScaleType.CENTER_INSIDE);
-		fab.setPadding(dp(16), dp(16), dp(16), dp(16));
+		int iconPadding = dp((TOUCH_SIZE - 21) / 2f);
+		fab.setPadding(iconPadding, iconPadding, iconPadding, iconPadding);
 		fab.setElevation(dp(4));
 		fab.setOnClickListener(v -> { if (opened) close(true, true); else open(); });
 		addView(fab);
@@ -109,6 +138,64 @@ public final class ThreadFabMenu extends FrameLayout {
 		syncAvailability();
 	}
 	public void setActive(boolean active) { this.active = active; syncAvailability(); }
+	private boolean touchExplorationEnabled() {
+		AccessibilityManager manager = (AccessibilityManager) getContext().getSystemService(android.content.Context.ACCESSIBILITY_SERVICE);
+		return manager != null && manager.isTouchExplorationEnabled();
+	}
+	private void setScrollHidden(boolean hidden) {
+		if (scrollHidden == hidden) return;
+		scrollHidden = hidden;
+		updateFabVisibility(true);
+	}
+	private void cancelVisibilityAnimation() {
+		ValueAnimator animator = visibilityAnimator;
+		visibilityAnimator = null;
+		if (animator != null) animator.cancel();
+	}
+	private void applyVisibilityProgress(float progress) {
+		visibilityProgress = progress;
+		float clamped = Math.max(0f, Math.min(1f, progress));
+		fab.setAlpha(clamped);
+		float scale = .94f + .06f * clamped;
+		fab.setScaleX(scale); fab.setScaleY(scale);
+		fab.setTranslationY((1f - clamped) * dp(TOUCH_SIZE) * .8f - Math.max(0f, progress - 1f) * dp(10));
+	}
+	private void updateFabVisibility(boolean animate) {
+		boolean show = available && (!scrollHidden || opened);
+		boolean changed = fabShown != show;
+		fabShown = show;
+		fab.setClickable(show); fab.setFocusable(show);
+		if (!show) { fab.cancelPendingInputEvents(); fab.setPressed(false); }
+		setImportantForAccessibility(show ? IMPORTANT_FOR_ACCESSIBILITY_AUTO : IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
+		if (!changed && animate) return;
+		cancelVisibilityAnimation();
+		float target = show ? 1f : 0f;
+		long duration = animate && getWidth() > 0 ? InterfaceMotion.duration(show ? 420 : 260) : 0;
+		if (duration == 0) {
+			applyVisibilityProgress(target);
+			fab.setVisibility(show ? VISIBLE : INVISIBLE);
+			return;
+		}
+		fab.setVisibility(VISIBLE);
+		ValueAnimator animator = ValueAnimator.ofFloat(visibilityProgress, target);
+		visibilityAnimator = animator;
+		animator.setDuration(duration);
+		if (show) {
+			// Damped return like Artefact; alpha/scale are clamped, only position overshoots.
+			animator.setInterpolator(t -> t == 1f ? 1f : (float) (1 - Math.exp(-7 * t)
+					* (Math.cos(10 * t) + .7 * Math.sin(10 * t))));
+		} else animator.setInterpolator(InterfaceMotion.STANDARD);
+		animator.addUpdateListener(a -> applyVisibilityProgress((float) a.getAnimatedValue()));
+		animator.addListener(new AnimatorListenerAdapter() {
+			@Override public void onAnimationEnd(Animator animation) {
+				if (visibilityAnimator != animation) return;
+				visibilityAnimator = null;
+				applyVisibilityProgress(target);
+				fab.setVisibility(fabShown ? VISIBLE : INVISIBLE);
+			}
+		});
+		animator.start();
+	}
 
 	private void syncAvailability() {
 		WindowInsetsCompat insets = ViewCompat.getRootWindowInsets(this);
@@ -116,11 +203,13 @@ public final class ThreadFabMenu extends FrameLayout {
 				&& (insets == null || !insets.isVisible(WindowInsetsCompat.Type.ime()));
 		if (available != visible) {
 			available = visible;
+			scrollHidden = false; scrollTravel = 0f;
 			if (!visible) close(false, false);
 			setVisibility(visible ? VISIBLE : INVISIBLE);
-			fab.setClickable(visible); fab.setFocusable(visible);
-			setImportantForAccessibility(visible ? IMPORTANT_FOR_ACCESSIBILITY_AUTO : IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
+			// Obscured screens and paused owners disappear immediately; never leave a ghost above them.
+			updateFabVisibility(visible);
 		}
+		if (available && scrollHidden && touchExplorationEnabled()) setScrollHidden(false);
 		// Insets may change without a size change. Use the owner's padding, subtracting already
 		// consumed ancestor insets, and reserve the full scrollbar hit strip throughout scrolling.
 		if (updateSafeBounds()) requestLayout();
@@ -147,7 +236,9 @@ public final class ThreadFabMenu extends FrameLayout {
 
 	private void open() {
 		syncAvailability();
-		if (!available || opened) return;
+		if (!available || !fabShown || opened) return;
+		scrollHidden = false; scrollTravel = 0f;
+		updateFabVisibility(false);
 		scroller.animate().cancel();
 		scroller.setAlpha(1f); scroller.setTranslationY(0f);
 		actions.removeAllViews();
@@ -251,7 +342,7 @@ public final class ThreadFabMenu extends FrameLayout {
 	}
 	private void updateFabShape() {
 		fabShape.setColor(androidx.core.graphics.ColorUtils.blendARGB(colors.primaryContainer, colors.primary, shapeProgress));
-		fabShape.setCornerRadius(dp(18 + 10 * shapeProgress));
+		fabShape.setCornerRadius(dp(14 + 6 * shapeProgress));
 		int tint = androidx.core.graphics.ColorUtils.blendARGB(colors.onPrimaryContainer, colors.onPrimary, shapeProgress);
 		moreIcon.setTint(tint); closeIcon.setTint(tint);
 		moreIcon.setAlpha(Math.round(255 * (1 - shapeProgress))); closeIcon.setAlpha(Math.round(255 * shapeProgress));
@@ -300,33 +391,47 @@ public final class ThreadFabMenu extends FrameLayout {
 		int width = MeasureSpec.getSize(widthSpec), height = MeasureSpec.getSize(heightSpec);
 		setMeasuredDimension(width, height); updateSafeBounds();
 		scrim.measure(MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY));
-		fab.measure(MeasureSpec.makeMeasureSpec(dp(56), MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(dp(56), MeasureSpec.EXACTLY));
+		fab.measure(MeasureSpec.makeMeasureSpec(dp(TOUCH_SIZE), MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(dp(TOUCH_SIZE), MeasureSpec.EXACTLY));
 		scroller.measure(MeasureSpec.makeMeasureSpec(Math.max(0, Math.min(dp(360), width - safeLeft - safeRight - dp(32))), MeasureSpec.AT_MOST),
 				MeasureSpec.makeMeasureSpec(Math.max(0, height - safeTop - safeBottom - dp(84)), MeasureSpec.AT_MOST));
 	}
 	@Override protected void onLayout(boolean changed, int l, int t, int r, int b) {
 		int width = r - l, height = b - t;
 		boolean rtl = getLayoutDirection() == LAYOUT_DIRECTION_RTL;
-		int x = rtl ? safeLeft + dp(16) : width - safeRight - dp(72), y = height - safeBottom - dp(64);
-		fab.layout(x, y, x + dp(56), y + dp(56));
+		int x = rtl ? safeLeft + dp(16) : width - safeRight - dp(16 + TOUCH_SIZE), y = height - safeBottom - dp(8 + TOUCH_SIZE);
+		fab.layout(x, y, x + dp(TOUCH_SIZE), y + dp(TOUCH_SIZE));
+		fab.setPivotX(dp(TOUCH_SIZE) / 2f); fab.setPivotY(dp(TOUCH_SIZE));
 		scrim.layout(0, 0, width, height);
-		int actionX = rtl ? x : x + dp(56) - scroller.getMeasuredWidth();
+		int actionX = rtl ? x : x + dp(TOUCH_SIZE) - scroller.getMeasuredWidth();
 		int actionBottom = y - dp(12);
 		scroller.layout(actionX, actionBottom - scroller.getMeasuredHeight(), actionX + scroller.getMeasuredWidth(), actionBottom);
 		if (opened && scrollToBottomPending) {
 			scrollToBottomPending = false;
 			scroller.scrollTo(0, actions.getHeight());
 		}
-		bounds.set(x, y, x + dp(56), y + dp(56));
+		bounds.set(x, y, x + dp(TOUCH_SIZE), y + dp(TOUCH_SIZE));
 		if (!reportedBounds.equals(bounds)) { reportedBounds.set(bounds); host.onGeometryChanged(new Rect(bounds)); }
 	}
 	@Override public void onWindowFocusChanged(boolean focused) { super.onWindowFocusChanged(focused); syncAvailability(); }
-	@Override protected void onAttachedToWindow() { super.onAttachedToWindow(); getViewTreeObserver().addOnPreDrawListener(observer); }
+	@Override protected void onAttachedToWindow() {
+		super.onAttachedToWindow();
+		getViewTreeObserver().addOnPreDrawListener(observer);
+		list.addOnScrollListener(scrollListener);
+	}
 	@Override protected void onDetachedFromWindow() {
+		list.removeOnScrollListener(scrollListener);
+		cancelVisibilityAnimation();
+		scrollHidden = false; scrollTravel = 0f;
+		fabShown = false; available = false;
+		applyVisibilityProgress(0f); fab.setVisibility(INVISIBLE); setVisibility(INVISIBLE);
 		getViewTreeObserver().removeOnPreDrawListener(observer); close(false, false);
 		scrim.animate().cancel(); scroller.animate().cancel();
 		if (shapeAnimator != null) { shapeAnimator.cancel(); shapeAnimator = null; }
 		super.onDetachedFromWindow();
 	}
-	public void dispose() { disposed = true; active = false; syncAvailability(); restoreAccessibility(); }
+	public void dispose() {
+		disposed = true; active = false;
+		list.removeOnScrollListener(scrollListener);
+		syncAvailability(); cancelVisibilityAnimation(); restoreAccessibility();
+	}
 }

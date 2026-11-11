@@ -124,7 +124,7 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
     private AlertDialog exportDialog;
     private LinearLayout exportControls;
     private final java.util.EnumMap<Section, LinearLayout> navigation = new java.util.EnumMap<>(Section.class);
-    private final ActivityResultLauncher<String> imagePicker = registerForActivityResult(
+    private final ActivityResultLauncher<String> imagePicker = com.mishiranu.dashchan.content.security.ProtectedActivityResults.register(this, "editor-image",
             new ActivityResultContracts.GetContent(), uri -> {
                 if (uri != null && canvas != null && !busy) importImage(FileHolder.obtain(uri));
             });

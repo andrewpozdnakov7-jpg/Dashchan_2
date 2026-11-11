@@ -161,7 +161,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	private enum StorageRequestState {NONE, INITIAL_INSTRUCTIONS, INSTRUCTIONS, PICKER}
 
-	private final ActivityResultLauncher<Intent> storageDirectoryPicker = registerForActivityResult(
+	private final ActivityResultLauncher<Intent> storageDirectoryPicker = com.mishiranu.dashchan.content.security.ProtectedActivityResults.register(this, "download-directory",
 			new ActivityResultContracts.StartActivityForResult(), this::onStorageDirectoryResult);
 
 	private final ArrayList<StackItem> fragments = new ArrayList<>();

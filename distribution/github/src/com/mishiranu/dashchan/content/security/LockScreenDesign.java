@@ -274,7 +274,7 @@ final class LockScreenDesign extends LockScreenForm {
 			activity.overrideActivityTransition(Activity.OVERRIDE_TRANSITION_OPEN, 0, 0);
 			activity.overrideActivityTransition(Activity.OVERRIDE_TRANSITION_CLOSE, 0, 0);
 		}
-		if (resume != null) activity.startActivity(new Intent(resume).addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION),
+		if (resume != null) launchResume(activity, new Intent(resume).addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION),
 				ActivityOptions.makeCustomAnimation(activity, 0, 0).toBundle());
 		activity.finish();
 		if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) suppressLegacyTransition(activity);

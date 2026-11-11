@@ -44,7 +44,7 @@ import com.mishiranu.dashchan.widget.ViewFactory;
 import java.io.IOException;
 
 public class CustomShortcutFragment extends ContentFragment {
-	private final ActivityResultLauncher<Intent> imagePicker = registerForActivityResult(
+	private final ActivityResultLauncher<Intent> imagePicker = com.mishiranu.dashchan.content.security.ProtectedActivityResults.register(this, "shortcut-image",
 			new ActivityResultContracts.StartActivityForResult(),
 			result -> onImageSelected(result.getResultCode(), result.getData()));
 

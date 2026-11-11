@@ -399,12 +399,23 @@ public abstract class ContentFragment extends Fragment implements MenuProvider {
 		ViewHolderFragment viewHolder = getViewHolder();
 		return viewHolder.obtainSearchView(this);
 	}
+	/** Cleanup never obtains a view or takes it away from another screen. */
+	protected final void clearCustomSearchView() {
+		if (!isAdded()) return;
+		ViewHolderFragment viewHolder = getViewHolder();
+		if (viewHolder != null) viewHolder.clearCustomSearchView(this);
+	}
 
 	public static class ViewHolderFragment extends Fragment {
 		public static final String TAG = ViewHolderFragment.class.getName();
 
 		private CustomSearchView searchView;
 		private WeakReference<ContentFragment> searchViewOwner;
+		private void clearCustomSearchView(ContentFragment fragment) {
+			if (searchView != null && searchViewOwner != null && searchViewOwner.get() == fragment) {
+				searchView.setCustomView(null);
+			}
+		}
 
 		private void resetSearchView(ContentFragment fragment) {
 			if (searchView != null) {
@@ -418,6 +429,8 @@ public abstract class ContentFragment extends Fragment implements MenuProvider {
 				if (reset) {
 					searchView.setOnSubmitListener(null);
 					searchView.setOnChangeListener(null);
+					searchView.setCustomView(null);
+					searchViewOwner = null;
 				}
 			}
 		}

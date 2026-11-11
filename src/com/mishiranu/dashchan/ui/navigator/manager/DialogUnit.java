@@ -1370,6 +1370,7 @@ public class DialogUnit {
 			textView.setTypeface(ResourceUtils.TYPEFACE_MEDIUM);
 			com.mishiranu.dashchan.widget.InterfaceAppearance.mediaCaption(textView);
 			attachmentItem.configureAndLoad(attachmentView, chan, false, true);
+			// This standalone attachment picker keeps its existing style and cache binding.
 			Uri mediaUri = attachmentItem.getFileUri(chan);
 			com.mishiranu.dashchan.widget.VideoThumbnailPreview.bind(attachmentView,
 					mediaUri != null && chan.locator.isVideoExtension(chan.locator.createAttachmentFileName(mediaUri))

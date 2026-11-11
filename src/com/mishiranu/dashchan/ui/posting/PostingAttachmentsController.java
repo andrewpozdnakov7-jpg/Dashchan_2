@@ -29,6 +29,11 @@ import chan.content.ChanConfiguration;
 import chan.content.ChanPerformer;
 import chan.util.CommonUtils;
 import chan.util.StringUtils;
+import com.mishiranu.dashchan.media.compression.VideoCompressionJob;
+import com.mishiranu.dashchan.media.compression.VideoCompressionService;
+import com.mishiranu.dashchan.media.compression.CompressionSettings;
+import com.mishiranu.dashchan.content.security.ProfileGeneration;
+import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.MainApplication;
@@ -98,6 +103,14 @@ public final class PostingAttachmentsController {
 	private boolean attachmentImportInProgress;
 	private AttachmentImportViewModel attachmentImportViewModel;
 	private Runnable processingNotice;
+	private PostingCompressionModel compressionModel;
+	private androidx.fragment.app.Fragment compressionOwner;
+	private TextView compressionStatus;
+	private android.app.AlertDialog compressionDialog;
+	private String compressionChan, compressionBoard;
+	private boolean compressionRendering;
+	private boolean compressionWasBusy;
+	private final Runnable compressionRefresh = this::scheduleCompression;
 	private final java.util.function.Function<String, FileHolder> attachmentFileResolver;
 
 	public PostingAttachmentsController() {
@@ -117,6 +130,8 @@ public final class PostingAttachmentsController {
 		this.scrollView = scrollView;
 		this.sendButton = sendButton;
 		attachmentColumnCount = columnCount;
+		compressionStatus = container.getRootView().findViewById(R.id.compression_status);
+		if (compressionStatus != null) { ThemeEngine.applyStyle(compressionStatus); compressionStatus.setOnClickListener(v -> showCompressionActions()); }
 		attachments.clear();
 		attachmentAppearance = PostingAttachmentsAppearance.create(container, scrollView, new PostingAttachmentsAppearance.Host() {
 			@Override public List<AttachmentHolder> attachments() { return attachments; }
@@ -127,6 +142,9 @@ public final class PostingAttachmentsController {
 	}
 
 	public void detachView() {
+		if (attachmentContainer != null) attachmentContainer.removeCallbacks(compressionRefresh);
+		if (compressionDialog != null) compressionDialog.dismiss();
+		compressionDialog = null; compressionStatus = null; compressionOwner = null; compressionModel = null;
 		clearAttachmentDragState();
 		if (attachmentAppearance != null) { attachmentAppearance.close(); attachmentAppearance = null; }
 		for (VideoThumbnailTask task : videoThumbnailTasks.values()) task.cancel();
@@ -150,16 +168,153 @@ public final class PostingAttachmentsController {
 	}
 
 	public boolean isImportInProgress() {
-		return attachmentImportInProgress;
+		return attachmentImportInProgress || isCompressionInProgress();
+	}
+
+	public void resumeCompression() { scheduleCompression(); }
+	public boolean isCompressionInProgress() {
+		return compressionModel != null && compressionModel.job != null && compressionModel.job.busy();
+	}
+	public void bindCompression(androidx.fragment.app.Fragment owner, String chan, String board) {
+		compressionOwner = owner; compressionChan = chan; compressionBoard = board;
+		compressionModel = new ViewModelProvider(owner).get(PostingCompressionModel.class);
+		compressionModel.state.observe(owner.getViewLifecycleOwner(), job -> renderCompression());
+		scheduleCompression();
+	}
+	private String compressionSignature() {
+		StringBuilder signature = new StringBuilder(compressionChan).append('/').append(compressionBoard)
+				.append(':').append(CompressionSettings.signature());
+		for (AttachmentHolder holder : attachments) signature.append('\n').append(holder.hash).append(':').append(holder.name);
+		if (compressionModel != null) signature.append("\nforced:").append(new java.util.TreeSet<>(compressionModel.forcedVideos));
+		return signature.toString();
+	}
+	public boolean canConvertVideoAttachment(int index) {
+		AttachmentHolder holder = getAttachmentHolder(index);
+		return CompressionSettings.enabled() && compressionModel != null && !isImportInProgress()
+				&& holder != null && Chan.getFallback().locator.isVideoExtension(holder.name);
+	}
+	public void convertVideoAttachment(int index, String sourceHash, String sourceName) {
+		AttachmentHolder holder = getAttachmentHolder(index);
+		if (!canConvertVideoAttachment(index) || !AttachmentResultGuard.matches(sourceHash, sourceName,
+				holder != null ? holder.hash : null, holder != null ? holder.name : null)) {
+			ClickableToast.show(R.string.compression_attachment_changed); return;
+		}
+		attachmentsChanged();
+		compressionModel.forcedVideos.add(holder.hash);
+		compressionModel.signature = null;
+		scheduleCompression();
+	}
+	private void attachmentsChanged() {
+		host.saveDraftAfterAttachmentChange();
+		if (attachmentContainer != null) { attachmentContainer.removeCallbacks(compressionRefresh); attachmentContainer.post(compressionRefresh); }
+	}
+	private void scheduleCompression() {
+		if (host == null || compressionModel == null || attachmentImportInProgress) return;
+		if (!CompressionSettings.enabled()) {
+			compressionModel.forcedVideos.clear();
+			compressionModel.clear(); if (compressionStatus != null) compressionStatus.setVisibility(View.GONE); return;
+		}
+		java.util.Set<String> current = new java.util.HashSet<>();
+		for (AttachmentHolder holder : attachments) current.add(holder.hash);
+		compressionModel.forcedVideos.retainAll(current);
+		String signature = compressionSignature();
+		if (signature.equals(compressionModel.signature)) { renderCompression(); return; }
+		ArrayList<VideoCompressionJob.Source> sources = new ArrayList<>();
+		boolean hasVideo = false;
+		for (AttachmentHolder holder : attachments) {
+			File file = DraftsStorage.getInstance().getAttachmentDraftFile(holder.hash);
+			if (file != null) {
+				sources.add(new VideoCompressionJob.Source(holder.hash, holder.name, file));
+				hasVideo |= Chan.getFallback().locator.isVideoExtension(holder.name);
+			}
+		}
+		if (!hasVideo) { compressionModel.clear(); if (compressionStatus != null) compressionStatus.setVisibility(View.GONE); return; }
+		try {
+			long profile = ProfileGeneration.current(requireContext());
+			Collection<String> types = postingConfiguration.attachmentMimeTypes;
+			boolean mp4 = types.contains("video/mp4") || types.contains("video/*") || types.contains("*/*");
+			compressionModel.replace(new VideoCompressionJob(requireContext(), sources, profile,
+					compressionChan, compressionBoard, mp4, new java.util.HashSet<>(compressionModel.forcedVideos)), signature);
+		} catch (java.io.IOException e) { ClickableToast.show(R.string.compression_start_failed); }
+	}
+	private VideoCompressionJob.Result compressed(AttachmentHolder holder) {
+		if (compressionModel == null || compressionModel.job == null
+				|| !CompressionSettings.enabled()
+				|| !compressionSignature().equals(compressionModel.signature)) return null;
+		VideoCompressionJob job = compressionModel.job;
+		return job.phase == VideoCompressionJob.Phase.DONE ? job.results.get(holder.hash) : null;
+	}
+	private void renderCompression() {
+		if (host == null || compressionModel == null || compressionStatus == null || compressionRendering) return;
+		compressionRendering = true;
+		try {
+			VideoCompressionJob job = compressionModel.job;
+			compressionStatus.setVisibility(job != null ? View.VISIBLE : View.GONE);
+			if (job == null) return;
+			int text = R.string.compression_preparing;
+			switch (job.phase) {
+				case DONE: text = job.results.isEmpty() ? R.string.compression_unchanged : R.string.compression_done; break;
+				case ERROR: text = job.error; break;
+				case CANCELLED: text = R.string.compression_cancelled; break;
+				case NEEDS_CONSENT: text = R.string.compression_quality_title; break;
+				case READY: break;
+			}
+			compressionStatus.setText(job.phase == VideoCompressionJob.Phase.RUNNING && job.percent >= 0
+					? requireContext().getString(R.string.compression_progress, job.percent, job.index + 1, job.queue.size())
+							+ (job.attempt > 1 ? "\n" + requireContext().getString(R.string.compression_retry, job.attempt) : "") : getString(text));
+			if (job.phase == VideoCompressionJob.Phase.NEEDS_CONSENT && compressionOwner != null
+					&& compressionOwner.isResumed()) showCompressionActions();
+			if (!job.busy()) for (AttachmentHolder holder : attachments) bindAttachmentFile(holder, resolveAttachmentFile(holder.hash));
+		} finally {
+			compressionRendering = false;
+			boolean busy = isCompressionInProgress();
+			if (busy != compressionWasBusy) { compressionWasBusy = busy; host.invalidateOptionsMenu(); }
+			host.updateSendButtonState();
+		}
+	}
+	private void showCompressionActions() {
+		if (host == null || compressionModel == null || compressionModel.job == null || compressionDialog != null
+				|| compressionOwner == null || !compressionOwner.isResumed()) return;
+		VideoCompressionJob job = compressionModel.job;
+		MotionDialogBuilder builder = MotionDialogBuilder.standard(requireContext());
+		builder.setTitle(R.string.compression_title);
+		if (job.phase == VideoCompressionJob.Phase.NEEDS_CONSENT) {
+			builder.setTitle(R.string.compression_quality_title).setMessage(R.string.compression_quality_warning)
+					.setPositiveButton(R.string.compression_continue, (dialog, which) -> {
+						if (compressionModel != null && compressionModel.job == job && job.current()) {
+							job.phase = VideoCompressionJob.Phase.READY; job.changed(); }
+					}).setNegativeButton(android.R.string.cancel, (dialog, which) ->
+						VideoCompressionService.cancel(job));
+		} else if (job.busy()) {
+			builder.setMessage(compressionStatus.getText()).setPositiveButton(android.R.string.cancel, (dialog, which) ->
+					VideoCompressionService.cancel(job))
+					.setNegativeButton(android.R.string.ok, null);
+		} else {
+			StringBuilder details = new StringBuilder(compressionStatus.getText());
+			for (VideoCompressionJob.Result result : job.results.values()) {
+				details.append('\n').append(requireContext().getString(R.string.compression_result,
+						StringUtils.formatFileSize(result.before, false), StringUtils.formatFileSize(result.after, false), result.codec));
+			}
+			builder.setMessage(details).setNegativeButton(android.R.string.ok, null);
+			if (!job.results.isEmpty()) builder.setPositiveButton(R.string.compression_restore, (dialog, which) ->
+					VideoCompressionService.cancel(job));
+			else builder.setPositiveButton(R.string.compression_restart, (dialog, which) -> { compressionModel.signature = null; scheduleCompression(); });
+		}
+		compressionDialog = builder.create();
+		compressionDialog.setOnCancelListener(dialog -> {
+			if (job.phase == VideoCompressionJob.Phase.NEEDS_CONSENT)
+				VideoCompressionService.cancel(job);
+		});
+		compressionDialog.setOnDismissListener(dialog -> compressionDialog = null); compressionDialog.show();
 	}
 
 	public boolean canAttach() {
-		return !attachmentImportInProgress && attachments.size() < postingConfiguration.attachmentCount;
+		return !isImportInProgress() && attachments.size() < postingConfiguration.attachmentCount;
 	}
 
 	public PostingAttachmentState getUiState() {
 		return new PostingAttachmentState(attachments.size(),
-				postingConfiguration != null ? postingConfiguration.attachmentCount : 0, attachmentImportInProgress);
+				postingConfiguration != null ? postingConfiguration.attachmentCount : 0, isImportInProgress());
 	}
 
 	private Context requireContext() {
@@ -239,6 +394,13 @@ public final class PostingAttachmentsController {
 			this.hashes = hashes;
 		}
 	}
+	static final class CompressionUnavailableException extends IllegalStateException {
+		private static final long serialVersionUID = 1L;
+	}
+	public void handleCompressionUnavailable() {
+		if (compressionModel != null && compressionModel.job != null) compressionModel.job.fail(R.string.compression_failed);
+		ClickableToast.show(R.string.compression_failed);
+	}
 
 	public boolean hasSendAttachments() {
 		for (AttachmentHolder holder : attachments) if (resolveAttachmentFile(holder.hash) != null) return true;
@@ -271,8 +433,12 @@ public final class PostingAttachmentsController {
 			}
 			FileHolder fileHolder = resolveAttachmentFile(data.hash);
 			if (fileHolder != null) {
-				attachmentHashes.add(data.hash);
-				array.add(new ChanPerformer.SendPostData.Attachment(fileHolder, data.name, rating,
+				VideoCompressionJob.Result converted = compressed(data);
+				if (converted != null && !compressionModel.job.current()) throw new CompressionUnavailableException();
+				if (converted != null) fileHolder = resolveAttachmentFile(converted.hash);
+				if (fileHolder == null) throw new CompressionUnavailableException();
+				attachmentHashes.add(converted != null ? converted.hash : data.hash);
+				array.add(new ChanPerformer.SendPostData.Attachment(fileHolder, converted != null ? converted.name : data.name, rating,
 						data.optionUniqueHash, data.optionRemoveMetadata, data.optionRemoveFileName,
 						postingConfiguration.attachmentSpoiler && data.optionSpoiler, data.reencoding));
 			}
@@ -285,7 +451,7 @@ public final class PostingAttachmentsController {
 	}
 
 	public void openPicker() {
-		if (attachmentImportInProgress) {
+		if (isImportInProgress()) {
 			ClickableToast.show(R.string.processing_data__ellipsis);
 			return;
 		}
@@ -395,7 +561,7 @@ public final class PostingAttachmentsController {
 		}
 		int attachedCount = attachments.size() - oldCount;
 		if (attachedCount > 0) {
-			host.saveDraftAfterAttachmentChange();
+			attachmentsChanged();
 		}
 		int errorCount = result.requestedCount - attachedCount;
 		if (errorCount > 0) {
@@ -509,7 +675,7 @@ public final class PostingAttachmentsController {
 		}
 		intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
 		try {
-			host.saveDraftAfterAttachmentChange();
+			attachmentsChanged();
 			host.launchAttachmentPicker(intent);
 		} catch (ActivityNotFoundException e) {
 			if (initialUri != null) {
@@ -577,7 +743,7 @@ public final class PostingAttachmentsController {
 							holder.reencoding = null;
 						}
 						bindAttachmentFile(holder, fileHolder);
-						host.saveDraftAfterAttachmentChange();
+						attachmentsChanged();
 					}
 					break;
 				}
@@ -594,7 +760,7 @@ public final class PostingAttachmentsController {
 		}
 		int newCount = attachments.size() - oldCount;
 		if (newCount > 0) {
-			host.saveDraftAfterAttachmentChange();
+			attachmentsChanged();
 		}
 		int errorCount = addedCount - newCount;
 		if (errorCount > 0) {
@@ -634,14 +800,15 @@ public final class PostingAttachmentsController {
 		if (holder == null || !attachments.contains(holder)) {
 			return;
 		}
-		File file = DraftsStorage.getInstance().getAttachmentDraftFile(holder.hash);
+		VideoCompressionJob.Result converted = compressed(holder);
+		File file = DraftsStorage.getInstance().getAttachmentDraftFile(converted != null ? converted.hash : holder.hash);
 		if (file == null) {
 			ClickableToast.show(R.string.unknown_error);
 			return;
 		}
 		String tag = GalleryOverlay.class.getName();
 		if (host.getParentFragmentManager().findFragmentByTag(tag) == null) {
-			new GalleryOverlay(Uri.fromFile(file), holder.name).show(host.getParentFragmentManager(), tag);
+			new GalleryOverlay(Uri.fromFile(file), converted != null ? converted.name : holder.name).show(host.getParentFragmentManager(), tag);
 		}
 	};
 
@@ -650,7 +817,7 @@ public final class PostingAttachmentsController {
 		int attachmentIndex = attachments.indexOf(holder);
 		if (attachmentIndex >= 0 && Preferences.isImageEditorEnabled()) {
 			// Persist the exact source list before leaving for an external Activity.
-			host.saveDraftAfterAttachmentChange();
+			attachmentsChanged();
 			host.launchImageEditor(ImageEditorActivity.createIntent(requireContext(), holder.hash, holder.name,
 					attachmentIndex));
 		}
@@ -771,7 +938,7 @@ public final class PostingAttachmentsController {
 		attachments.remove(sourceIndex);
 		attachments.add(targetIndex, holder);
 		if (attachmentAppearance == null || !attachmentAppearance.deferRebuild()) invalidateAttachments(true);
-		host.saveDraftAfterAttachmentChange();
+		attachmentsChanged();
 	}
 
 	private void clearAttachmentDragState() {
@@ -804,7 +971,7 @@ public final class PostingAttachmentsController {
 				}
 				host.invalidateOptionsMenu();
 				host.resizeCommentAfterAttachmentChange();
-				host.saveDraftAfterAttachmentChange();
+				attachmentsChanged();
 			}
 		}
 	};
@@ -1026,14 +1193,18 @@ public final class PostingAttachmentsController {
 	}
 
 	private void bindAttachmentFile(AttachmentHolder holder, FileHolder fileHolder) {
+		VideoCompressionJob.Result converted = compressed(holder);
+		if (converted != null) fileHolder = resolveAttachmentFile(converted.hash);
 		if (attachmentAppearance != null) attachmentAppearance.cancelMotion();
 		VideoThumbnailTask oldTask = videoThumbnailTasks.remove(holder);
 		if (oldTask != null) oldTask.cancel();
 		JpegData jpegData = fileHolder != null ? fileHolder.getJpegData() : null;
 		PngData pngData = fileHolder != null ? fileHolder.getPngData() : null;
-		holder.fileName.setText(holder.name);
+		holder.fileName.setText(converted != null ? converted.name : holder.name);
 		int size = fileHolder != null ? fileHolder.getSize() : 0;
-		String fileSize = StringUtils.formatFileSize(size, false);
+		String fileSize = converted != null ? requireContext().getString(R.string.compression_result,
+				StringUtils.formatFileSize(converted.before, false), StringUtils.formatFileSize(converted.after, false), converted.codec)
+				: StringUtils.formatFileSize(size, false);
 		Bitmap bitmap = null;
 		DisplayMetrics metrics = getResources().getDisplayMetrics();
 		int targetImageSize = attachmentAppearance != null ? attachmentAppearance.thumbnailSize()

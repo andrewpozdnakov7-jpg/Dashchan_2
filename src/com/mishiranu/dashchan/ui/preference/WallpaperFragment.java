@@ -22,7 +22,7 @@ import com.mishiranu.dashchan.widget.ClickableToast;
 import java.io.IOException;
 
 public class WallpaperFragment extends PreferenceFragment {
-	private final ActivityResultLauncher<Intent> wallpaperPicker = registerForActivityResult(
+	private final ActivityResultLauncher<Intent> wallpaperPicker = com.mishiranu.dashchan.content.security.ProtectedActivityResults.register(this, "wallpaper",
 			new ActivityResultContracts.StartActivityForResult(),
 			result -> onWallpaperSelected(result.getResultCode(), result.getData()));
 

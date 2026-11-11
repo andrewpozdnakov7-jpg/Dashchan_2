@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 	<string name="new_photo_editor">New photo editor</string>
-	<string name="new_photo_editor__summary">Experimental editor with crop, adjustments, filters and drawing. Disable to use the previous editor.</string>
+	<string name="new_photo_editor__summary">Editor with crop, adjustments, filters and drawing. Disable to use the previous editor.</string>
 	<string name="pe_save">Save</string>
 	<string name="pe_original">Hold: original</string>
 	<string name="pe_crop">Crop</string>

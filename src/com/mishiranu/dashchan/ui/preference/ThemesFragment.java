@@ -62,7 +62,7 @@ import org.json.JSONObject;
 
 public class ThemesFragment extends BaseListFragment {
 	@Override protected boolean useStandardServiceAppearance() { return true; }
-	private final ActivityResultLauncher<Intent> themePicker = registerForActivityResult(
+	private final ActivityResultLauncher<Intent> themePicker = com.mishiranu.dashchan.content.security.ProtectedActivityResults.register(this, "theme",
 			new ActivityResultContracts.StartActivityForResult(),
 			result -> onThemeSelected(result.getResultCode(), result.getData()));
 

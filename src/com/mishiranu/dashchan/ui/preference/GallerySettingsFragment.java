@@ -19,6 +19,8 @@ public class GallerySettingsFragment extends PreferenceFragment {
 	public void onViewCreated(@NonNull View view, Bundle savedInstanceState) {
 		super.onViewCreated(view, savedInstanceState);
 
+		ExperimentalPreferenceDescriptors.Toggle thumbnails = ExperimentalPreferenceDescriptors.videoThumbnails();
+		addCheck(true, thumbnails.key, thumbnails.defaultValue, thumbnails.titleResId, thumbnails.summaryResId);
 		addCheck(true, Preferences.KEY_CLOSE_GALLERY_ON_BACKGROUND_TAP,
 				Preferences.DEFAULT_CLOSE_GALLERY_ON_BACKGROUND_TAP, R.string.close_gallery_on_background_tap,
 				R.string.close_gallery_on_background_tap__summary);

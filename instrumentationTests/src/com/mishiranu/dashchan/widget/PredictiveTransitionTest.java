@@ -50,4 +50,30 @@ public class PredictiveTransitionTest {
 			assertFalse(transition.commit(() -> fail("Cancelled entrance must not navigate")));
 		});
 	}
+	@Test public void commitHasItsOwnCompletionClockAndRunsOnlyOnceEvenAfterALongGesture() {
+		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+			View host = new View(InstrumentationRegistry.getInstrumentation().getTargetContext());
+			float[] completion = {-1f}; int[] calls = {0};
+			Surface surface = new Surface() {
+				@Override public void applyCommit(float fraction, float progress) { completion[0] = progress; apply(fraction); }
+			};
+			PredictiveTransition transition = new PredictiveTransition(host, surface);
+			transition.progress(.99f); assertEquals(-1f, completion[0], 0f);
+			assertTrue(transition.commit(() -> calls[0]++));
+			// Unattached fixture completes synchronously, through the same end-pose callback.
+			assertEquals(1f, completion[0], 0f); assertEquals(1, calls[0]);
+			transition.finish(); assertFalse(transition.commit(() -> calls[0]++)); assertEquals(1, calls[0]);
+		});
+	}
+	@Test public void cancellingDoesNotStartTheCompletionFadeClock() {
+		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+			View host = new View(InstrumentationRegistry.getInstrumentation().getTargetContext());
+			Surface surface = new Surface() {
+				@Override public void applyCommit(float fraction, float progress) { fail("Cancellation must not fade through"); }
+			};
+			PredictiveTransition transition = new PredictiveTransition(host, surface);
+			transition.progress(.8f); transition.cancel(); transition.finish();
+			assertEquals(1, surface.restores); assertEquals(.37f, surface.position, 0f);
+		});
+	}
 }

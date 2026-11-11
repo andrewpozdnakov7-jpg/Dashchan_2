@@ -35,7 +35,6 @@ import com.mishiranu.dashchan.widget.MenuExpandListener;
 import com.mishiranu.dashchan.widget.PaddedRecyclerView;
 import com.mishiranu.dashchan.widget.ThreadQuickNavigation;
 import com.mishiranu.dashchan.widget.ThreadFabMenu;
-import com.mishiranu.dashchan.widget.ThreadFabCardDecoration;
 import com.mishiranu.dashchan.ui.navigator.page.PostsPage;
 import com.mishiranu.dashchan.widget.ViewFactory;
 import java.util.Collection;
@@ -106,6 +105,7 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 	}
 
 	private ListPage listPage;
+	private boolean destroyingView;
 
 	public boolean canRefreshGallery() {
 		return listPage instanceof com.mishiranu.dashchan.ui.navigator.page.PostsPage &&
@@ -127,7 +127,6 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 	private PaddedRecyclerView recyclerView;
 	private ThreadQuickNavigation quickNavigation;
 	private ThreadFabMenu threadFabMenu;
-	private ThreadFabCardDecoration threadFabCards;
 	private boolean threadContentVisible;
 
 	private PostsPage threadFabPage() { return listPage instanceof PostsPage ? (PostsPage) listPage : null; }
@@ -144,10 +143,6 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 		boolean enabled = posts != null && posts.usesThreadFabMenu();
 		Rect bounds = threadFabMenu.getFabBounds();
 		if (quickNavigation != null) quickNavigation.setThreadFab(enabled, threadFabMenu.isOpen(), bounds);
-		int[] fabLocation = new int[2], listLocation = new int[2];
-		threadFabMenu.getLocationInWindow(fabLocation); recyclerView.getLocationInWindow(listLocation);
-		bounds.offset(fabLocation[0] - listLocation[0], fabLocation[1] - listLocation[1]);
-		if (threadFabCards != null) threadFabCards.configure(enabled, bounds);
 	}
 
 
@@ -266,6 +261,7 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 
 	@Override
 	public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
+		destroyingView = false;
 		actionBarLockerPull = "pull-" + UUID.randomUUID();
 		actionBarLockerSearch = "search-" + UUID.randomUUID();
 
@@ -296,8 +292,6 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 		}
 
 		if (getPage().content == Page.Content.POSTS) {
-			threadFabCards = new ThreadFabCardDecoration(recyclerView);
-			recyclerView.addItemDecoration(threadFabCards);
 			threadFabMenu = new ThreadFabMenu(recyclerView, new ThreadFabMenu.Host() {
 				@Override public boolean isAvailable() {
 					PostsPage posts = threadFabPage();
@@ -332,8 +326,8 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 
 	@Override
 	public void onDestroyView() {
+		destroyingView = true;
 		if (threadFabMenu != null) threadFabMenu.dispose();
-		if (threadFabCards != null) threadFabCards.dispose();
 		doOnResume = null;
 		clearPendingListReveal();
 		InterfaceMotion.cancel(recyclerView);
@@ -352,7 +346,6 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 		recyclerView = null;
 		quickNavigation = null;
 		threadFabMenu = null;
-		threadFabCards = null;
 		threadContentVisible = false;
 		searchView = null;
 		searchMenuItem = null;
@@ -650,6 +643,8 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 
 	@Override
 	public void setCustomSearchView(View view) {
+		if (view == null) { clearCustomSearchView(); return; }
+		if (destroyingView || !isAdded()) return;
 		getSearchView(true).setCustomView(view);
 	}
 

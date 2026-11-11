@@ -21,6 +21,9 @@ import java.util.concurrent.Executors;
 
 /** PIN input is never written into Bundle, preferences, logs, autofill, or the clipboard. */
 public final class AppLockActivity extends ComponentActivity {
+	private static final String STATE_RESUME = "security.pending_resume";
+	private static final String STATE_RESUME_PROFILE = "security.pending_resume_profile";
+	private long resumeProfile = -1;
 	public static final String PRIMARY = "primary";
 	public static final String ADDITIONAL = "additional";
 	public static final String REMOVE_ADDITIONAL = "remove_additional";
@@ -51,6 +54,7 @@ public final class AppLockActivity extends ComponentActivity {
 	private boolean busy;
 	private volatile boolean resumed;
 	private boolean failedClosed;
+	private boolean retryFailureOnResume;
 	private volatile int authorizationGeneration;
 	private volatile boolean credentialAuthorized, initialSetup;
 	private volatile long authorizationLease = -1;
@@ -111,6 +115,15 @@ public final class AppLockActivity extends ComponentActivity {
 		action = getIntent().getStringExtra("security_action");
 		try {
 			if (SecurityStore.pending(this)) { startReset(); return; }
+			if (action == null) {
+				resumeProfile = ProfileGeneration.current(this);
+				if (state != null) {
+					if (state.getLong(STATE_RESUME_PROFILE, -1) == resumeProfile) {
+						Intent pending = androidx.core.os.BundleCompat.getParcelable(state, STATE_RESUME, Intent.class);
+						if (ownResume(pending)) setIntent(new Intent(getIntent()).putExtra("resume", pending));
+					} else getIntent().removeExtra("resume");
+				}
+			}
 			authorizationLease = SecuritySessionProvider.generation(this);
 			boolean enabled = SecurityStore.enabled(this);
 			initialSetup = !enabled && (PRIMARY.equals(action) || AUTHENTICATION_MODE.equals(action));
@@ -206,7 +219,7 @@ public final class AppLockActivity extends ComponentActivity {
 					if (!canAccept(generation)) return;
 					step = Step.NEW; updatePrompt(); status.setText(R.string.security_save_failed); form.error();
 				}); }
-				finally { PinCredential.clear(pin); runOnUiThread(() -> setBusy(false)); }
+				finally { PinCredential.clear(pin); finishBusy(generation); }
 			});
 			return;
 		}
@@ -247,8 +260,8 @@ public final class AppLockActivity extends ComponentActivity {
 						}
 					} catch (IOException e) { unavailable(); }
 				});
-			} catch (IOException e) { runOnUiThread(this::unavailable); }
-			finally { PinCredential.clear(pin); runOnUiThread(() -> setBusy(false)); }
+			} catch (IOException e) { runOnUiThread(() -> { if (canAccept(generation)) unavailable(); }); }
+			finally { PinCredential.clear(pin); finishBusy(generation); }
 		});
 	}
 
@@ -292,14 +305,11 @@ public final class AppLockActivity extends ComponentActivity {
 		} else if (DISABLE.equals(action) || REMOVE_ADDITIONAL.equals(action)) {
 			try {
 				settingsUpdate(s -> {
-					s.remove("additional");
-					s.remove("delete_downloads_uri"); s.remove("delete_downloads_label");
 					if (DISABLE.equals(action)) {
-						s.remove("primary"); s.remove("biometric"); s.remove("biometric_alias");
-						s.remove(AuthenticationPolicy.KEY); s.remove(SecurityStore.ALLOW_SCREENSHOTS);
-						s.remove(SecurityStore.HIDE_PIP_VIDEO);
-						s.remove(SecurityStore.HIDE_REPLY_TEXT_BACKGROUND);
-						s.put("unlocked", true);
+						SecurityStore.clearProtectionConfiguration(s);
+					} else {
+						s.remove("additional");
+						s.remove("delete_downloads_uri"); s.remove("delete_downloads_label");
 					}
 					return null;
 				});
@@ -569,13 +579,52 @@ public final class AppLockActivity extends ComponentActivity {
 		presentationFallback = null;
 	}
 
+	@Override protected void onNewIntent(Intent intent) {
+		super.onNewIntent(intent);
+		// An incoming Share is an ordinary unlock, never a new settings approval.
+		if (intent.hasExtra("security_action")) return;
+		Intent resume = AndroidUtils.getParcelableExtra(intent, "resume", Intent.class);
+		if (ownResume(resume)) {
+			boolean retargeted = action != null;
+			if (retargeted) {
+				// The user left a settings confirmation for another app and shared a
+				// file. Cancel that old operation/proof before handling the new request.
+				authorizationGeneration++; credentialAuthorized = false; authenticatedAt = -1;
+				cancelPresentation(); cancelBiometric();
+				if (approvalDialog != null) approvalDialog.dismiss(); approvalDialog = null;
+				pendingMode = null; pendingPrimary = null; initialSetup = false;
+				PinCredential.clear(firstPin); firstPin = null; input.setText("");
+				action = null; step = Step.UNLOCK; busy = false;
+				autoBiometricShown = false; additionalEntry = false; pinPresentation = false;
+			}
+			setIntent(new Intent(intent));
+			try { resumeProfile = ProfileGeneration.current(this); }
+			catch (IOException e) { resumeProfile = -1; unavailable(); return; }
+			if (retargeted) { updatePrompt(); refreshControls(); }
+		}
+	}
+	private boolean ownResume(Intent resume) {
+		return resume != null && resume.getComponent() != null
+				&& getPackageName().equals(resume.getComponent().getPackageName());
+	}
+	@Override protected void onSaveInstanceState(Bundle state) {
+		super.onSaveInstanceState(state);
+		if (action == null) {
+			state.putLong(STATE_RESUME_PROFILE, resumeProfile);
+			Intent resume = AndroidUtils.getParcelableExtra(getIntent(), "resume", Intent.class);
+			if (ownResume(resume)) state.putParcelable(STATE_RESUME, resume);
+		}
+		// No PIN, authentication proof or settings authorization is saved.
+	}
+
 	private void complete() {
 		if (isFinishing() || isDestroyed()) return;
 		AppSecurity.refresh();
 		Intent resume = AndroidUtils.getParcelableExtra(getIntent(), "resume", Intent.class);
-		boolean ownResume = resume != null && resume.getComponent() != null
-				&& getPackageName().equals(resume.getComponent().getPackageName());
-		if (form != null) form.finish(this, ownResume ? resume : null, decoratedExit);
+		boolean validResume = ownResume(resume) && ProfileGeneration.canWrite(this, resumeProfile);
+		if (action == null && SecurityStore.locked(this)) { unavailable(); return; }
+		getIntent().removeExtra("resume"); resumeProfile = -1;
+		if (form != null) form.finish(this, validResume ? resume : null, decoratedExit);
 		else finish();
 	}
 
@@ -600,6 +649,11 @@ public final class AppLockActivity extends ComponentActivity {
 		if (value && form != null) form.verifying();
 		refreshControls();
 	}
+	private void finishBusy(int generation) {
+		runOnUiThread(() -> {
+			if (!isDestroyed() && generation == authorizationGeneration) setBusy(false);
+		});
+	}
 	private void refreshControls() {
 		if (form != null && !isDestroyed()) form.available(resumed && !busy && !failedClosed
 				&& !presentationFinishing && cancellation == null && !isFinishing());
@@ -623,6 +677,9 @@ public final class AppLockActivity extends ComponentActivity {
 
 	@Override protected void onResume() {
 		super.onResume(); resumed = true; decoratedExit = false;
+		// Retry only after a real departure. A persistent storage/Keystore error
+		// cannot create an automatic recreate loop or turn into an unlock.
+		if (retryFailureOnResume) { retryFailureOnResume = false; recreate(); return; }
 		if (initialSetup) {
 			try {
 				if (SecurityStore.enabled(this)) { initialSetup = false; credentialAuthorized = false; }
@@ -653,7 +710,8 @@ public final class AppLockActivity extends ComponentActivity {
 	}
 
 	@Override protected void onPause() {
-		resumed = false; credentialAuthorized = false; authenticatedAt = -1; authorizationGeneration++;
+		retryFailureOnResume = failedClosed;
+		resumed = false; credentialAuthorized = false; authenticatedAt = -1; authorizationGeneration++; busy = false;
 		cancelPresentation();
 		autoBiometricShown = false; additionalEntry = false; pinPresentation = false; pendingMode = null; pendingPrimary = null;
 		PinCredential.clear(firstPin); firstPin = null;

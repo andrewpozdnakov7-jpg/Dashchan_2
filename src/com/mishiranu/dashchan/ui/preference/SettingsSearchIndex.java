@@ -43,8 +43,14 @@ public final class SettingsSearchIndex {
 			@Override
 			ContentFragment createFragment() { return new ExperimentalFragment(); }
 		},
-		CRASH_REPORTS(R.string.experimental_features, R.string.crash_reports_title) {
+		CRASH_REPORTS(R.string.about, R.string.settings_diagnostics, R.string.crash_reports_saved) {
 			@Override ContentFragment createFragment() { return new CrashReportsFragment(); }
+		},
+		DIAGNOSTICS(R.string.about, R.string.settings_diagnostics) {
+			@Override ContentFragment createFragment() { return new DiagnosticsFragment(); }
+		},
+		VIDEO_COMPRESSION(R.string.experimental_features, R.string.compression_title) {
+			@Override ContentFragment createFragment() { return new VideoCompressionFragment(); }
 		},
 		MATERIAL3_DESIGN(R.string.experimental_features, R.string.material3_design_settings) {
 			@Override
@@ -71,31 +77,33 @@ public final class SettingsSearchIndex {
 			@Override
 			ContentFragment createFragment() { return new FavoritesFragment(); }
 		},
-		PIP_DIAGNOSTICS(R.string.experimental_features, R.string.pip_diagnostic_mode) {
-			@Override
-			ContentFragment createFragment() { return new PipDiagnosticsFragment(); }
-		},
 		INTERFACE(R.string.user_interface) {
 			@Override
 			ContentFragment createFragment() { return new InterfaceFragment(); }
+		},
+		APPEARANCE(R.string.user_interface, R.string.appearance) {
+			@Override ContentFragment createFragment() { return new AppearanceSettingsFragment(); }
+		},
+		POST_LIST(R.string.user_interface, R.string.posts_list) {
+			@Override ContentFragment createFragment() { return new PostsListSettingsFragment(); }
 		},
 		COMBINED_FEEDS(R.string.forums, R.string.combined_feeds) {
 			@Override
 			ContentFragment createFragment() { return new CombinedFeedsFragment(); }
 		},
-		GESTURES(R.string.user_interface, R.string.gesture_controls) {
+		GESTURES(R.string.user_interface, R.string.appearance, R.string.gesture_controls) {
 			@Override
 			ContentFragment createFragment() { return new GestureSettingsFragment(); }
 		},
-		THREAD_NAVIGATION(R.string.user_interface, R.string.thread_quick_navigation) {
+		THREAD_NAVIGATION(R.string.user_interface, R.string.posts_list, R.string.thread_quick_navigation) {
 			@Override
 			ContentFragment createFragment() { return new ThreadQuickNavigationFragment(); }
 		},
-		POST_MARKS(R.string.user_interface, R.string.post_marks_colors) {
+		POST_MARKS(R.string.user_interface, R.string.posts_list, R.string.post_marks_colors) {
 			@Override
 			ContentFragment createFragment() { return new PostMarksColorsFragment(); }
 		},
-		POPUP_APPEARANCE(R.string.user_interface, R.string.popup_appearance) {
+		POPUP_APPEARANCE(R.string.user_interface, R.string.appearance, R.string.popup_appearance) {
 			@Override
 			ContentFragment createFragment() { return new PopupAppearanceFragment(); }
 		},
@@ -167,7 +175,7 @@ public final class SettingsSearchIndex {
 			@Override
 			ContentFragment createFragment() { return new AccessibilityFragment(); }
 		},
-		POST_TEXT_SIZES(R.string.accessibility, R.string.post_text_sizes) {
+		POST_TEXT_SIZES(R.string.user_interface, R.string.appearance, R.string.post_text_sizes) {
 			@Override
 			ContentFragment createFragment() { return new PostTextSizesFragment(); }
 		};
@@ -239,8 +247,13 @@ public final class SettingsSearchIndex {
 
 	private static void addExperimentalToggle(Context context, List<Entry> entries,
 			ExperimentalPreferenceDescriptors.Toggle toggle) {
+		addToggle(context, entries, Screen.EXPERIMENTAL, toggle);
+	}
+
+	private static void addToggle(Context context, List<Entry> entries, Screen screen,
+			ExperimentalPreferenceDescriptors.Toggle toggle) {
 		if (toggle.available) {
-			add(context, entries, Screen.EXPERIMENTAL, toggle.titleResId, toggle.summaryResId, toggle.key);
+			add(context, entries, screen, toggle.titleResId, toggle.summaryResId, toggle.key);
 		}
 	}
 
@@ -371,6 +384,7 @@ public final class SettingsSearchIndex {
 			add(context, entries, Screen.SECURITY, R.string.security_hide_pip_video, R.string.security_hide_pip_video_summary, null);
 			add(context, entries, Screen.SECURITY, R.string.security_hide_reply_text, R.string.security_hide_reply_text_summary, null);
 			add(context, entries, Screen.SECURITY, R.string.security_delete_downloads);
+			add(context, entries, Screen.SECURITY, R.string.security_limits, R.string.security_limits_summary, null);
 			add(context, entries, Screen.SECURITY, R.string.security_guide);
 		}
 		add(context, entries, Screen.FORUMS, R.string.forums);
@@ -383,9 +397,11 @@ public final class SettingsSearchIndex {
 				R.string.drawer_section_order_entry_summary, null);
 		add(context, entries, Screen.DRAWER_ORDER, R.string.drawer_custom_order,
 				R.string.drawer_section_order_summary, Preferences.KEY_DRAWER_CUSTOM_ORDER);
-		add(context, entries, Screen.INTERFACE, R.string.show_original_post_title,
+		add(context, entries, Screen.POST_LIST, R.string.show_original_post_title,
 				R.string.show_original_post_title__summary, Preferences.KEY_SHOW_ORIGINAL_POST_TITLE);
 		add(context, entries, Screen.INTERFACE, R.string.user_interface);
+		add(context, entries, Screen.APPEARANCE, R.string.appearance, R.string.appearance_settings_summary, null);
+		add(context, entries, Screen.POST_LIST, R.string.posts_list, R.string.posts_list_settings_summary, null);
 		add(context, entries, Screen.INTERFACE, R.string.collapse_long_open_threads,
 				R.string.collapse_long_open_threads__summary, Preferences.KEY_COLLAPSE_LONG_OPEN_THREADS);
 		add(context, entries, Screen.CONTENTS, R.string.contents);
@@ -416,7 +432,7 @@ public final class SettingsSearchIndex {
 
 		add(context, entries, Screen.EXPERIMENTAL, R.string.toolbar_title_sizes,
 				R.string.toolbar_title_sizes__summary, null);
-		add(context, entries, Screen.INTERFACE, R.string.thread_gallery_button,
+		add(context, entries, Screen.POST_LIST, R.string.thread_gallery_button,
 				R.string.thread_gallery_button__summary, Preferences.KEY_THREAD_GALLERY_BUTTON);
 		add(context, entries, Screen.TOOLBAR_TITLE, R.string.toolbar_title_customization,
 				R.string.toolbar_title_customization__summary, Preferences.KEY_TOOLBAR_TITLE_CUSTOMIZATION);
@@ -442,20 +458,19 @@ public final class SettingsSearchIndex {
 				R.string.reddit_board_style__summary, Preferences.KEY_REDDIT_BOARD_STYLE);
 		add(context, entries, Screen.MEDIA_PLAYER, R.string.hardware_video_acceleration,
 				R.string.hardware_video_acceleration__summary, Preferences.KEY_HARDWARE_VIDEO_ACCELERATION);
-		add(context, entries, Screen.EXPERIMENTAL, R.string.video_diagnostics_extended,
+		add(context, entries, Screen.DIAGNOSTICS, R.string.video_diagnostics_extended,
 				R.string.video_diagnostics_extended__summary, Preferences.KEY_EXTENDED_VIDEO_DIAGNOSTICS);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.s24_ultra_oneui9_toolbar_fix,
 				R.string.s24_ultra_oneui9_toolbar_fix_summary, Preferences.KEY_S24_ULTRA_ONEUI9_TOOLBAR_FIX);
-		add(context, entries, Screen.EXPERIMENTAL, R.string.crash_report_prompt_enabled,
+		add(context, entries, Screen.DIAGNOSTICS, R.string.crash_report_prompt_enabled,
 				R.string.crash_report_prompt_summary, Preferences.KEY_CRASH_REPORT_PROMPTS);
 		add(context, entries, Screen.CRASH_REPORTS, R.string.crash_reports_saved, R.string.crash_reports_saved_summary, null);
-		add(context, entries, Screen.EXPERIMENTAL, R.string.crash_test_title, R.string.crash_test_summary, null);
-		add(context, entries, Screen.PIP_DIAGNOSTICS, R.string.pip_diagnostic_mode,
-				R.string.pip_diagnostic_hidden_summary, null);
+		add(context, entries, Screen.DIAGNOSTICS, R.string.crash_test_title, R.string.crash_test_summary, null);
+		add(context, entries, Screen.DIAGNOSTICS, R.string.settings_diagnostics, R.string.settings_diagnostics_summary, null);
 		add(context, entries, Screen.MEDIA_IMAGES, R.string.open_configured_attachment_folder,
 				R.string.open_configured_attachment_folder__summary,
 				Preferences.KEY_OPEN_CONFIGURED_ATTACHMENT_FOLDER);
-		add(context, entries, Screen.INTERFACE, R.string.swipe_reply,
+		add(context, entries, Screen.POST_LIST, R.string.swipe_reply,
 				R.string.swipe_reply__summary, Preferences.KEY_SWIPE_REPLY);
 		if (BuildConfig.ENABLE_LOCAL_TRANSLATION) {
 			add(context, entries, Screen.OFFLINE_TRANSLATION, R.string.persistent_translation_cache,
@@ -501,9 +516,9 @@ public final class SettingsSearchIndex {
 			}
 		}
 		add(context, entries, Preferences.isTrackMyPostsEnabled() ? Screen.REPLY_ADVANCED : Screen.REPLY_NOTIFICATIONS, R.string.reply_erase);
-		add(context, entries, Screen.EXPERIMENTAL, R.string.form_diagnostics_start,
+		add(context, entries, Screen.DIAGNOSTICS, R.string.form_diagnostics_start,
 				R.string.form_diagnostics_summary, null);
-		add(context, entries, Screen.EXPERIMENTAL, R.string.video_diagnostics_start,
+		add(context, entries, Screen.DIAGNOSTICS, R.string.video_diagnostics_start,
 				R.string.video_diagnostics_start__summary, null);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.wallpaper_background,
 				R.string.wallpaper_background__summary, Preferences.KEY_WALLPAPER_ENABLED);
@@ -512,19 +527,19 @@ public final class SettingsSearchIndex {
 
 		add(context, entries, Screen.INTERFACE, R.string.application_name, 0, Preferences.KEY_APPLICATION_NAME);
 		add(context, entries, Screen.INTERFACE, R.string.application_logo);
-		add(context, entries, Screen.INTERFACE, R.string.thumbnail_scale, 0, Preferences.KEY_THUMBNAILS_SCALE);
-		add(context, entries, Screen.INTERFACE, R.string.crop_thumbnails, R.string.crop_thumbnails__summary,
+		add(context, entries, Screen.APPEARANCE, R.string.thumbnail_scale, 0, Preferences.KEY_THUMBNAILS_SCALE);
+		add(context, entries, Screen.APPEARANCE, R.string.crop_thumbnails, R.string.crop_thumbnails__summary,
 				Preferences.KEY_CUT_THUMBNAILS);
-		add(context, entries, Screen.INTERFACE, R.string.active_scrollbar, 0, Preferences.KEY_ACTIVE_SCROLLBAR);
-		add(context, entries, Screen.INTERFACE, R.string.scroll_thread_when_scrolling_gallery, 0,
+		add(context, entries, Screen.APPEARANCE, R.string.active_scrollbar, 0, Preferences.KEY_ACTIVE_SCROLLBAR);
+		add(context, entries, Screen.APPEARANCE, R.string.scroll_thread_when_scrolling_gallery, 0,
 				Preferences.KEY_SCROLL_THREAD_GALLERY);
-		add(context, entries, Screen.INTERFACE, R.string.themes);
-		add(context, entries, Screen.INTERFACE, R.string.automatic_day_night_themes,
+		add(context, entries, Screen.APPEARANCE, R.string.themes);
+		add(context, entries, Screen.APPEARANCE, R.string.automatic_day_night_themes,
 				R.string.automatic_day_night_themes__summary, Preferences.KEY_AUTOMATIC_DAY_NIGHT_THEME);
-		add(context, entries, Screen.INTERFACE, R.string.day_theme, 0, Preferences.KEY_DAY_THEME);
-		add(context, entries, Screen.INTERFACE, R.string.night_theme, 0, Preferences.KEY_NIGHT_THEME);
+		add(context, entries, Screen.APPEARANCE, R.string.day_theme, 0, Preferences.KEY_DAY_THEME);
+		add(context, entries, Screen.APPEARANCE, R.string.night_theme, 0, Preferences.KEY_NIGHT_THEME);
 		if (BuildConfig.ENABLE_PREDICTIVE_BACK) {
-			add(context, entries, Screen.INTERFACE, R.string.enable_predictive_back,
+			add(context, entries, Screen.APPEARANCE, R.string.enable_predictive_back,
 					R.string.enable_predictive_back__summary, Preferences.KEY_PREDICTIVE_BACK);
 		}
 		add(context, entries, Screen.GESTURES, R.string.gesture_controls);
@@ -540,25 +555,25 @@ public final class SettingsSearchIndex {
 				R.string.thread_quick_navigation__search_summary, Preferences.KEY_THREAD_QUICK_NAVIGATION);
 		add(context, entries, Screen.THREAD_NAVIGATION, R.string.thread_quick_navigation_transparency,
 				0, Preferences.KEY_THREAD_QUICK_NAVIGATION_TRANSPARENCY);
-		add(context, entries, Screen.INTERFACE, R.string.remove_hidden_posts, R.string.remove_hidden_posts__summary,
+		add(context, entries, Screen.POST_LIST, R.string.remove_hidden_posts, R.string.remove_hidden_posts__summary,
 				Preferences.KEY_REMOVE_HIDDEN_POSTS);
-		add(context, entries, Screen.INTERFACE, R.string.display_post_year, 0, Preferences.KEY_DISPLAY_POST_YEAR);
-		add(context, entries, Screen.INTERFACE, R.string.hide_thread_title, R.string.hide_thread_title__summary,
+		add(context, entries, Screen.POST_LIST, R.string.display_post_year, 0, Preferences.KEY_DISPLAY_POST_YEAR);
+		add(context, entries, Screen.POST_LIST, R.string.hide_thread_title, R.string.hide_thread_title__summary,
 				Preferences.KEY_HIDE_THREAD_TITLE);
-		add(context, entries, Screen.INTERFACE, R.string.max_lines_count, R.string.max_lines_count__summary,
+		add(context, entries, Screen.POST_LIST, R.string.max_lines_count, R.string.max_lines_count__summary,
 				Preferences.KEY_POST_MAX_LINES);
-		add(context, entries, Screen.INTERFACE, R.string.all_attachments, R.string.all_attachments__summary,
+		add(context, entries, Screen.POST_LIST, R.string.all_attachments, R.string.all_attachments__summary,
 				Preferences.KEY_ALL_ATTACHMENTS);
-		add(context, entries, Screen.INTERFACE, R.string.highlight_unread_posts, 0,
+		add(context, entries, Screen.POST_LIST, R.string.highlight_unread_posts, 0,
 				Preferences.KEY_HIGHLIGHT_UNREAD);
 		add(context, entries, Screen.POST_MARKS, R.string.post_marks_colors);
-		add(context, entries, Screen.INTERFACE, R.string.touch_feedback,
+		add(context, entries, Screen.APPEARANCE, R.string.touch_feedback,
 				R.string.touch_feedback_intensity, Preferences.KEY_TOUCH_FEEDBACK);
 		add(context, entries, Screen.POPUP_APPEARANCE, R.string.popup_appearance,
 				R.string.popup_appearance__summary, null);
-		add(context, entries, Screen.INTERFACE, R.string.rounded_dialogs, R.string.rounded_dialogs__summary,
+		add(context, entries, Screen.APPEARANCE, R.string.rounded_dialogs, R.string.rounded_dialogs__summary,
 				Preferences.KEY_ROUNDED_DIALOGS);
-		add(context, entries, Screen.INTERFACE, R.string.rounded_dialogs_radius, 0,
+		add(context, entries, Screen.APPEARANCE, R.string.rounded_dialogs_radius, 0,
 				Preferences.KEY_ROUNDED_DIALOGS_RADIUS);
 		add(context, entries, Screen.POPUP_APPEARANCE, R.string.popup_color_style, 0,
 				Preferences.KEY_POPUP_COLOR_MODE);
@@ -567,9 +582,9 @@ public final class SettingsSearchIndex {
 		add(context, entries, Screen.POPUP_APPEARANCE, R.string.popup_text_color, 0,
 				Preferences.KEY_POPUP_FOREGROUND);
 		add(context, entries, Screen.POPUP_APPEARANCE, R.string.popup_preview);
-		add(context, entries, Screen.INTERFACE, R.string.advanced_search, R.string.advanced_search__summary,
+		add(context, entries, Screen.POST_LIST, R.string.advanced_search, R.string.advanced_search__summary,
 				Preferences.KEY_ADVANCED_SEARCH);
-		add(context, entries, Screen.INTERFACE, R.string.display_post_icons, R.string.display_post_icons__summary,
+		add(context, entries, Screen.POST_LIST, R.string.display_post_icons, R.string.display_post_icons__summary,
 				Preferences.KEY_DISPLAY_ICONS);
 		add(context, entries, Screen.POSTING_APPEARANCE, R.string.posting_appearance,
 				R.string.posting_appearance_summary, null);
@@ -645,11 +660,21 @@ public final class SettingsSearchIndex {
 		}
 		add(context, entries, Screen.EXPERIMENTAL, R.string.thread_toolbar_action,
 				R.string.thread_toolbar_action__summary, Preferences.KEY_THREAD_TOOLBAR_ACTION);
-		addExperimentalToggle(context, entries, ExperimentalPreferenceDescriptors.outboxJournal());
-		addExperimentalToggle(context, entries, ExperimentalPreferenceDescriptors.discussionContext());
 		addExperimentalToggle(context, entries, ExperimentalPreferenceDescriptors.threadFabMenu());
-		addExperimentalToggle(context, entries, ExperimentalPreferenceDescriptors.videoThumbnails());
-		addExperimentalToggle(context, entries, ExperimentalPreferenceDescriptors.photoEditor());
+		addToggle(context, entries, Screen.MEDIA_GALLERY, ExperimentalPreferenceDescriptors.videoThumbnails());
+		add(context, entries, Screen.VIDEO_COMPRESSION, R.string.compression_title, R.string.compression_summary,
+				com.mishiranu.dashchan.media.compression.CompressionSettings.ENABLED);
+		add(context, entries, Screen.VIDEO_COMPRESSION, R.string.compression_codec, 0,
+				com.mishiranu.dashchan.media.compression.CompressionSettings.CODEC);
+		add(context, entries, Screen.VIDEO_COMPRESSION, R.string.compression_engine, R.string.compression_engine_summary, null);
+		add(context, entries, Screen.VIDEO_COMPRESSION, R.string.compression_always, R.string.compression_always_summary,
+				com.mishiranu.dashchan.media.compression.CompressionSettings.ALWAYS);
+		add(context, entries, Screen.VIDEO_COMPRESSION, R.string.compression_total_limit, 0,
+				com.mishiranu.dashchan.media.compression.CompressionSettings.TOTAL_LIMIT);
+		add(context, entries, Screen.VIDEO_COMPRESSION, R.string.compression_file_limit, 0,
+				com.mishiranu.dashchan.media.compression.CompressionSettings.FILE_LIMIT);
+		add(context, entries, Screen.VIDEO_COMPRESSION, R.string.compression_system_test);
+		addToggle(context, entries, Screen.MEDIA_IMAGES, ExperimentalPreferenceDescriptors.photoEditor());
 		add(context, entries, Screen.CONTENTS, R.string.thread_page_preload,
 				R.string.thread_page_preload__summary, Preferences.KEY_THREAD_PAGE_PRELOAD);
 
@@ -767,7 +792,7 @@ public final class SettingsSearchIndex {
 		add(context, entries, Screen.ACCESSIBILITY, R.string.install_custom_font,
 				R.string.install_custom_font__summary, null);
 		add(context, entries, Screen.ACCESSIBILITY, R.string.delete_installed_font);
-		add(context, entries, Screen.ACCESSIBILITY, R.string.post_text_sizes, R.string.post_text_sizes_summary, null);
+		add(context, entries, Screen.POST_TEXT_SIZES, R.string.post_text_sizes, R.string.post_text_sizes_summary, null);
 		add(context, entries, Screen.POST_TEXT_SIZES, R.string.post_subject_text_size, 0, Preferences.KEY_SUBJECT_TEXT_SCALE);
 		add(context, entries, Screen.POST_TEXT_SIZES, R.string.post_body_text_size, 0, Preferences.KEY_TEXT_SCALE);
 		add(context, entries, Screen.POST_TEXT_SIZES, R.string.post_metadata_text_size, 0, Preferences.KEY_METADATA_TEXT_SCALE);

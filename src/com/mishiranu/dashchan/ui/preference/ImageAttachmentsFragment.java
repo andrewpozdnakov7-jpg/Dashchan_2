@@ -20,6 +20,8 @@ public class ImageAttachmentsFragment extends PreferenceFragment {
 		super.onViewCreated(view, savedInstanceState);
 
 		addHeader(R.string.images);
+		ExperimentalPreferenceDescriptors.Toggle editor = ExperimentalPreferenceDescriptors.photoEditor();
+		if (editor.available) addCheck(true, editor.key, editor.defaultValue, editor.titleResId, editor.summaryResId);
 		addList(Preferences.KEY_LOAD_THUMBNAILS, enumList(Preferences.NetworkMode.values(), v -> v.value),
 				Preferences.DEFAULT_LOAD_THUMBNAILS.value, R.string.load_thumbnails,
 				enumResList(Preferences.NetworkMode.values(), v -> v.titleResId));

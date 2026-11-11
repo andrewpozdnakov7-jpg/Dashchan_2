@@ -353,8 +353,8 @@ android {
 
 	defaultConfig {
 		applicationId = 'io.dashchan2'
-		versionCode = 11620
-		versionName = '3.2.82'
+		versionCode = 11630
+		versionName = '3.2.83'
 		def releaseVersionCode = versionCode
 		def packageVersionCodeProperty = project.findProperty('packageVersionCode')
 		if (packageVersionCodeProperty != null) {
@@ -726,6 +726,9 @@ dependencies {
 	implementation 'androidx.webkit:webkit:1.17.1'
 	implementation 'androidx.browser:browser:1.10.0'
 	implementation 'androidx.work:work-runtime:2.12.0'
+	// Attachment export only; the existing FFmpeg player remains independent.
+	implementation 'androidx.media3:media3-transformer:1.11.1'
+	implementation 'androidx.media3:media3-effect:1.11.1'
 	implementation 'org.jsoup:jsoup:1.23.2'
 	testImplementation 'junit:junit:4.13.2'
 	androidTestImplementation 'androidx.test:core:1.7.0'

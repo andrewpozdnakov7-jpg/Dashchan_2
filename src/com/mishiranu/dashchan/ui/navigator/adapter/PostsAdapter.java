@@ -123,39 +123,6 @@ public class PostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
 	}
 
 	private int bumpLimitOrdinalIndex = PostItem.ORDINAL_INDEX_NONE;
-	private boolean threadFabReservation;
-	public void setThreadFabReservation(boolean enabled) {
-		if (threadFabReservation != enabled) {
-			threadFabReservation = enabled;
-			notifyDataSetChanged();
-		}
-	}
-	private void bindThreadFabMinimum(View view, boolean lastRealPost) {
-		if (view instanceof com.mishiranu.dashchan.widget.PostLinearLayout && (!threadFabReservation || !lastRealPost)) {
-			((com.mishiranu.dashchan.widget.PostLinearLayout) view).setThreadFabEndReservation(0);
-		}
-		Object saved = view.getTag(com.mishiranu.dashchan.R.id.thread_fab_original_min_height);
-		if (saved == null && !threadFabReservation) return;
-		if (saved == null) {
-			saved = view.getMinimumHeight();
-			view.setTag(com.mishiranu.dashchan.R.id.thread_fab_original_min_height, saved);
-		}
-		int original = (Integer) saved;
-		int minimum = threadFabReservation && lastRealPost
-				? Math.max(original, Math.round(56 * ResourceUtils.obtainDensity(view))) : original;
-		if (view.getMinimumHeight() != minimum) view.setMinimumHeight(minimum);
-	}
-	@Override public void onViewRecycled(@NonNull RecyclerView.ViewHolder holder) {
-		if (holder.itemView instanceof com.mishiranu.dashchan.widget.PostLinearLayout) {
-			((com.mishiranu.dashchan.widget.PostLinearLayout) holder.itemView).setThreadFabEndReservation(0);
-		}
-		Object original = holder.itemView.getTag(com.mishiranu.dashchan.R.id.thread_fab_original_min_height);
-		if (original instanceof Integer) {
-			holder.itemView.setMinimumHeight((Integer) original);
-			holder.itemView.setTag(com.mishiranu.dashchan.R.id.thread_fab_original_min_height, null);
-		}
-		super.onViewRecycled(holder);
-	}
 	private boolean selection = false;
 	private boolean removeHiddenPosts = false;
 
@@ -286,7 +253,6 @@ public class PostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
 	public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position,
 			@NonNull List<Object> payloads) {
 		PostItem postItem = getItem(position);
-		bindThreadFabMinimum(holder.itemView, postItem != null && position == getItemCount() - 1);
 		if (postItem == null) {
 			requestWindow(position);
 			return;

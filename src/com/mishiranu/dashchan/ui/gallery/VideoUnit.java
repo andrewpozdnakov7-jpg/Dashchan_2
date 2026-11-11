@@ -139,6 +139,7 @@ public class VideoUnit {
 	private boolean muteSupported = true;
 	private boolean initialized;
 	private boolean wasPlaying;
+	private final com.mishiranu.dashchan.media.PlaybackLockState playbackLock = new com.mishiranu.dashchan.media.PlaybackLockState();
 	private boolean pausedByTransientLossOfFocus;
 	private boolean finishedPlayback;
 	private boolean trackingNow;
@@ -605,7 +606,8 @@ public class VideoUnit {
 		if (pictureInPictureTransferred) {
 			return;
 		}
-		if (changingConfigurations && player != null && initialized && !finishedPlayback) {
+		if (changingConfigurations && player != null && initialized && !finishedPlayback && !playbackLock.hasPendingResume()
+				&& !com.mishiranu.dashchan.content.security.SecurityStore.locked(instance.galleryInstance.context)) {
 			wasPlaying = player.isPlaying();
 			if (playbackHandoff == null) playbackHandoff = new VideoPlaybackHandoff(
 					instance.galleryInstance.context, player, audioFocus, "configuration");
@@ -618,11 +620,12 @@ public class VideoUnit {
 				markPlaybackFinished();
 				preserveFinishedPlaybackFrame();
 			} else {
-				wasPlaying = player.isPlaying();
+				wasPlaying = playbackLock.beforePause(player.isPlaying());
 				setPlaying(false, true);
 			}
 		} else {
 			wasPlaying = false;
+			playbackLock.reset();
 		}
 	}
 
@@ -696,6 +699,7 @@ public class VideoUnit {
 		interrupt(force, force ? VideoPageFrames.Transition.CLOSE : null);
 	}
 	void interrupt(boolean force, VideoPageFrames.Transition transition) {
+		playbackLock.reset();
 		if (force) controlsBinding.clear();
 		startupFrameIdentity = null;
 		if (transition != null) pageFrames.onTransition(transition);
@@ -955,6 +959,7 @@ public class VideoUnit {
 	}
 
 	public void applyVideo(Uri uri, File file, boolean reload) {
+		playbackLock.reset();
 		if (reload && uri != null) com.mishiranu.dashchan.widget.VideoThumbnailPreview.invalidate(uri.toString());
 		instance.mediaPreloader.stop();
 		updatePageFrameWindow();
@@ -1060,6 +1065,12 @@ public class VideoUnit {
 	}
 
 	private boolean setPlaying(boolean playing, boolean resetFocus) {
+		// Cover every native resume path (lifecycle, initialization and focus return),
+		// before acquiring audio focus or asking the decoder to start.
+		boolean requestedPlayback = playing;
+		playing = playbackLock.request(playing, playing
+				&& com.mishiranu.dashchan.content.security.SecurityStore.locked(instance.galleryInstance.context));
+		if (requestedPlayback && !playing) resetFocus = true;
 		// EOF may already have stopped the decoder. Focus still needs explicit release,
 		// even when the requested playback state equals the decoder's current state.
 		if (resetFocus) {
@@ -1095,7 +1106,9 @@ public class VideoUnit {
 
 	private void initializePlayer(Bitmap preparedFrame) {
 		com.mishiranu.dashchan.util.CrashReports.record(com.mishiranu.dashchan.util.CrashReports.Event.VIDEO_START);
-		boolean animateEntrance = !predictiveBackActive && !controlsBinding.retainsControls();
+		Object motionOwner = instance.currentHolder.photoView.getTag(com.mishiranu.dashchan.R.id.gallery_motion_owner);
+		boolean animateEntrance = !(motionOwner instanceof com.mishiranu.dashchan.widget.PhotoView.GalleryVideoReplacementOwner)
+				&& !predictiveBackActive && !controlsBinding.retainsControls();
 		bindingMediaControls = true;
 		try {
 			initializePlayerControls(preparedFrame, animateEntrance);
@@ -1113,8 +1126,9 @@ public class VideoUnit {
 		PagerInstance.ViewHolder holder = instance.currentHolder;
 		holder.progressBar.setVisible(false, false);
 		Object motionOwner = holder.photoView.getTag(com.mishiranu.dashchan.R.id.gallery_motion_owner);
-		PredictivePhotoPresentation back = motionOwner instanceof PredictivePhotoPresentation
-				? (PredictivePhotoPresentation) motionOwner : null;
+		com.mishiranu.dashchan.widget.PhotoView.GalleryVideoReplacementOwner presentation =
+				motionOwner instanceof com.mishiranu.dashchan.widget.PhotoView.GalleryVideoReplacementOwner
+						? (com.mishiranu.dashchan.widget.PhotoView.GalleryVideoReplacementOwner) motionOwner : null;
 		Point dimensions = player.getDimensions();
 		if (holder.mediaSummary.updateDimensions(dimensions.x, dimensions.y)) {
 			instance.galleryInstance.callback.updateTitle();
@@ -1130,7 +1144,7 @@ public class VideoUnit {
 		boolean pageFrameAvailable = holder.videoPageFrame != null;
 		VideoStartupPreview.Geometry startupGeometry = preparedFrame == null && startupThumbnail != null
 				? VideoStartupPreview.captureGeometry(holder.photoView, holder.surfaceParent,
-						back != null ? back.getPhotoAlphaForHandoff() : holder.photoView.getAlpha()) : null;
+						presentation != null ? presentation.getPhotoAlphaForHandoff() : holder.photoView.getAlpha()) : null;
 		if (VideoDiagnostics.isExtendedRecording()) {
 			VideoDiagnostics.recordUi("gallery startup_handoff schema=1 phase=before_photo_clear holder="
 					+ System.identityHashCode(holder) + " parent=" + System.identityHashCode(holder.surfaceParent)
@@ -1141,7 +1155,7 @@ public class VideoUnit {
 			VideoDiagnostics.recordViewGeometry("startup_before_photo_clear", holder.photoView);
 		}
 		boolean zoomGestures = Preferences.isVideoZoomGesturesEnabled();
-		boolean preserved = back != null && holder.photoView.replaceGalleryOpeningImage(holder.galleryItem,
+		boolean preserved = presentation != null && holder.photoView.replaceGalleryOpeningImage(holder.galleryItem,
 				backgroundDrawable, false, !zoomGestures, false, zoomGestures ? 10f : 0f);
 		if (preserved) {
 			if (holder.simpleBitmapDrawable != null) holder.simpleBitmapDrawable.recycle();
@@ -1206,8 +1220,12 @@ public class VideoUnit {
 		if (preloadResumed) finishPlaybackHandoff();
 		updatePlayState();
 		if (preserved) {
-			back.attachVideoSurface(holder.surfaceParent, getGalleryMotionControls(),
+			presentation.attachVideoSurface(holder.surfaceParent, getGalleryMotionControls(),
 					() -> getOwnedVideoView(holder) == videoView);
+		}
+		if (VideoDiagnostics.isExtendedRecording()) {
+			VideoDiagnostics.recordUi("gallery startup_handoff schema=1 phase=presentation_promoted preserved=" + preserved
+					+ " owner=" + (motionOwner != null ? motionOwner.getClass().getSimpleName() : "none"));
 		}
 	}
 

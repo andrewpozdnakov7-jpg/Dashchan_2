@@ -25,7 +25,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class AccessibilityFragment extends PreferenceFragment {
-	private final ActivityResultLauncher<Intent> fontPicker = registerForActivityResult(
+	private final ActivityResultLauncher<Intent> fontPicker = com.mishiranu.dashchan.content.security.ProtectedActivityResults.register(this, "font",
 			new ActivityResultContracts.StartActivityForResult(),
 			result -> onFontSelected(result.getResultCode(), result.getData()));
 
@@ -84,10 +84,7 @@ public class AccessibilityFragment extends PreferenceFragment {
 		deleteFont.setEnabled(!installedFonts.isEmpty());
 		deleteFont.setOnClickListener(p -> showDeleteFontDialog(installedFonts));
 
-		addHeader(R.string.appearance);
-		addButton(R.string.post_text_sizes, R.string.post_text_sizes_summary)
-				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
-						.pushFragment(new PostTextSizesFragment()));
+		addHeader(R.string.additional);
 		addCheck(true, Preferences.KEY_VOLUME_BUTTONS_TEXT_SCALE, Preferences.DEFAULT_VOLUME_BUTTONS_TEXT_SCALE,
 				R.string.volume_buttons_text_scale, R.string.volume_buttons_text_scale__summary);
 		addCheck(true, Preferences.KEY_VIDEO_RIGHT_HAND_CONTROLS,

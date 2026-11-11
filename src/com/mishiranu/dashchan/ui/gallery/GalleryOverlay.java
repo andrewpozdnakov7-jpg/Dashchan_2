@@ -1105,30 +1105,30 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 					|| surface.getWidth() <= 0 || surface.getHeight() <= 0)) return "skip_video_surface_owned_or_unmeasured";
 			GalleryItem item = backGestureItem; int index = backGestureIndex;
 			boolean returnToGrid = galleryWindow && !videoFullscreen;
-			android.graphics.Bitmap grid = returnToGrid && listUnit != null ? listUnit.getPredictiveGrid(item) : null;
+			android.graphics.Bitmap grid = returnToGrid && listUnit != null ? listUnit.getPredictiveGridScene() : null;
 			PredictivePhotoPresentation.Target target = null;
 			android.graphics.Rect gridBounds = null;
-			if (returnToGrid) {
-				if (grid == null) return "skip_grid_" + (listUnit != null ? listUnit.getPredictiveGridFailure() : "not_initialized");
+			if (returnToGrid && grid != null) {
 				gridBounds = new android.graphics.Rect();
-				if (!listUnit.getPredictiveGridBounds(rootView, gridBounds)) return "skip_grid_bounds_changed";
+				if (!listUnit.getPredictiveGridBounds(rootView, gridBounds)) { grid = null; gridBounds = null; }
 				target = listUnit.getPredictiveGridTarget(item, photo);
 				if (target != null && !target.valid(photo)) target = null;
 				// A PhotoView-local background cannot cover viewport pixels outside that View.
-				// Keep the existing full-root fade rather than drawing a clipped grid preview.
+				// Use the full-root fade-through instead of a thumbnail morph with a clipped grid.
 				int[] rootLocation = new int[2], photoLocation = new int[2];
 				rootView.getLocationOnScreen(rootLocation); photo.getLocationOnScreen(photoLocation);
 				android.graphics.Rect photoBounds = new android.graphics.Rect(photoLocation[0] - rootLocation[0],
 						photoLocation[1] - rootLocation[1], photoLocation[0] - rootLocation[0] + photo.getWidth(),
 						photoLocation[1] - rootLocation[1] + photo.getHeight());
-				if (!photoBounds.contains(gridBounds)) target = null;
-			} else {
+				if (gridBounds == null || !photoBounds.contains(gridBounds)) target = null;
+			} else if (!returnToGrid) {
 				Uri resource = item != null ? item.getFileUri(Chan.get(instance.chanName)) : null;
 				com.mishiranu.dashchan.widget.AttachmentView source = predictiveSources != null
 						? predictiveSources.resolve(resource != null ? resource.toString() : null) : null;
-				if (source == null) return "skip_source_current_item_unavailable";
-				target = new PredictivePhotoPresentation.Target(source, photo);
-				if (!target.valid(photo)) return "skip_source_geometry_changed";
+				if (source != null) {
+					target = new PredictivePhotoPresentation.Target(source, photo);
+					if (!target.valid(photo)) target = null;
+				}
 			}
 			android.graphics.Bitmap expectedGrid = grid;
 			boolean expectedWindow = galleryWindow;
@@ -1142,7 +1142,7 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 			PredictivePhotoPresentation presentation = new PredictivePhotoPresentation(rootView, photo, dialog.getActionBarView(), target, grid, gridBounds,
 							() -> isCurrentPhotoBackRoute(dialog, item, index, expectedWindow, expectedFullscreen) && InterfaceMotion.isPredictiveBackEnabled()
 							&& pagerUnit.isPredictiveMediaCurrent(photo, item, video)
-							&& (expectedGrid == null || listUnit != null && listUnit.getPredictiveGrid(item) == expectedGrid),
+							&& (expectedGrid == null || listUnit != null && listUnit.getPredictiveGridScene() == expectedGrid),
 							surface, pagerUnit.getPredictiveMediaControls(), item);
 			if (openingFrame != null) presentation.startFromOpening(openingFrame);
 			presentation.setRestoredCallback(() -> {
@@ -1156,7 +1156,8 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 			photoBack = new com.mishiranu.dashchan.widget.PredictiveTransition(rootView, presentation,
 					openingFrame != null ? openingFrame.fraction : 0f);
 			presentation.setFinishSession(photoBack::finish);
-			return openingFrame != null ? "started_opening_handoff" : target != null ? "started_media_thumbnail" : "started_media_fade";
+			return openingFrame != null ? "started_opening_handoff" : target != null ? "started_media_thumbnail"
+					: grid != null ? "started_media_fade_through_grid" : "started_media_fade_through_no_snapshot";
 		}
 		View decor = dialog.getWindow().getDecorView();
 		if (predictiveBackMotion.start(decor, fromLeft ? 1f : -1f,

@@ -742,6 +742,7 @@ public class ViewUnit {
 						attachmentHolder.thumbnail = view.findViewById(R.id.thumbnail);
 						attachmentHolder.attachmentInfo = view.findViewById(R.id.attachment_info);
 						attachmentHolder.thumbnail.setDrawTouching(true);
+						attachmentHolder.thumbnail.setPostVideoStyle(true);
 						attachmentHolder.thumbnail.applyRoundedCorners(postBackgroundColor);
 						attachmentHolder.thumbnail.setOnClickListener(attachmentHolder.thumbnailClickListener);
 						attachmentHolder.thumbnail.setOnLongClickListener(attachmentHolder.thumbnailLongClickListener);
@@ -1481,6 +1482,7 @@ public class ViewUnit {
 
 			this.dimensions = dimensions.get(this);
 			thumbnail.setDrawTouching(true);
+			thumbnail.setPostVideoStyle(true);
 			ViewGroup.LayoutParams thumbnailLayoutParams = thumbnail.getLayoutParams();
 			float thumbnailsScale = Preferences.getThumbnailsScale();
 			if (thumbnailsScale != 1f) {

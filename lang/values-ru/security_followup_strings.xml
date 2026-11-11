@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<string name="security_resume_unavailable">Вход выполнен, но переданный файл или действие уже недоступны. Повторите попытку.</string>
+</resources>

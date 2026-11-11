@@ -1,0 +1,11 @@
+**Slooop 3.2.83**
+
+- Added experimental video compression and conversion to H.264/H.265: size limits, progress, cancellation and hardware encoding checks. Forced conversion and conversion of individual attachments are available.
+- Updated video thumbnails in posts: a small Play icon in the corner, no full-frame dimming and smooth preview changes. The last viewed frame appears in posts and the gallery.
+- The floating thread menu is more compact and smoothly hides while scrolling. Posts keep their full width.
+- Improved video opening and predictive gallery Back animations, including files without a visible thumbnail.
+- Appearance and Post list now have separate screens. Text sizes moved to Interface → Appearance. Removed obsolete experimental features.
+- The new photo editor and video preview updates are enabled for everyone on upgrade. They can be disabled under Media → Images and attachments and Media → Gallery.
+- Crash reports and log recording moved to About → Diagnostics. The support address is prefilled when sending a report.
+- Improved app locking: returning from the browser and file pickers, Share handling, video and notifications while locked.
+- Fixed a possible crash when the app screen is recreated.

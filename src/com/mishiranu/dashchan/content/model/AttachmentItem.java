@@ -11,6 +11,7 @@ import com.mishiranu.dashchan.content.NetworkObserver;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.net.EmbeddedType;
 import com.mishiranu.dashchan.widget.AttachmentView;
+import com.mishiranu.dashchan.widget.VideoThumbnailPreview;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -447,6 +448,12 @@ public abstract class AttachmentItem {
 		view.resetImage(key, overlay);
 		Uri mediaResource = getFileUri(chan);
 		view.setMediaResource(mediaResource != null ? mediaResource.toString() : null);
+		if (view.isPostVideoStyle()) {
+			// Bind after both resets, including single post attachments and reply dialogs.
+			// A collapsed group keeps its original group thumbnail and MULTIPLE overlay.
+			VideoThumbnailPreview.bind(view, type == Type.VIDEO && !needShowMultipleIcon
+					? view.getMediaResource() : null);
+		}
 		if (cacheOnly) {
 			if (key != null) ImageLoader.getInstance().loadImage(chan, getThumbnailUri(chan), key, true, view);
 			else ImageLoader.getInstance().cancel(view);

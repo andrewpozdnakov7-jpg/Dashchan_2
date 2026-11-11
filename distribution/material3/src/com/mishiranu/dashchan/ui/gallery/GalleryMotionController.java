@@ -186,10 +186,11 @@ public final class GalleryMotionController {
 		}
 	}
 
-	final class Scene implements PhotoView.GalleryImageReplacementOwner {
+	final class Scene implements PhotoView.GalleryVideoReplacementOwner {
 		final PhotoView photo;
-		final PresentationFrame surface;
-		final PresentationFrame[] controls;
+		PresentationFrame surface;
+		PresentationFrame[] controls;
+		java.util.function.BooleanSupplier surfaceCurrent;
 		final View chrome;
 		final Object item;
 		final boolean exit;
@@ -290,6 +291,7 @@ public final class GalleryMotionController {
 			root.invalidate();
 		}
 		void apply(float progress) {
+			if (surfaceCurrent != null && !surfaceCurrent.getAsBoolean()) { run(); return; }
 			this.progress = progress;
 			float amount = exit ? 1f - progress : progress;
 			for (PresentationFrame control : controls) control.fade(this, amount);
@@ -315,8 +317,32 @@ public final class GalleryMotionController {
 			}
 		}
 		@Override public boolean canReplaceImage(Object replacementItem) {
-			return !released && !exit && surface == null && item == replacementItem && scene == this
+			return !released && !exit && item == replacementItem && scene == this
+					&& (surface == null || surface.view.getTag(R.id.gallery_motion_owner) == this)
 					&& progress < 1f && photo.getTag(R.id.gallery_motion_owner) == this && root.getTag(R.id.gallery_motion_owner) == this;
+		}
+		@Override public float getPhotoAlphaForHandoff() { return alpha; }
+		@Override public void attachVideoSurface(View view, View[] mediaControls, java.util.function.BooleanSupplier current) {
+			if (released) return;
+			if (!canReplaceImage(item) || view == null || surface != null && surface.view != view
+					|| view.getTag(R.id.gallery_motion_owner) != null && view.getTag(R.id.gallery_motion_owner) != this) { run(); return; }
+			java.util.ArrayList<PresentationFrame> frames = new java.util.ArrayList<>(java.util.Arrays.asList(controls));
+			for (View control : mediaControls) {
+				if (control != null && control != chrome && control != root && control != photo && control != view
+						&& frames.stream().noneMatch(frame -> frame.view == control)) {
+					if (control.getTag(R.id.gallery_motion_owner) != null) { run(); return; }
+					frames.add(new PresentationFrame(control));
+				}
+			}
+			// The pager already owns an empty surface container before its TextureView arrives.
+			// Keep its original baseline, and join newly created player controls to the same clock.
+			if (surface == null) surface = new PresentationFrame(view);
+			surfaceCurrent = current;
+			controls = frames.toArray(new PresentationFrame[0]);
+			surface.own(this);
+			for (PresentationFrame control : controls) control.own(this);
+			if (animator != null) apply(progress); else surface.fade(this, 0f);
+			if (animator == null) for (PresentationFrame control : controls) control.fade(this, 0f);
 		}
 		@Override public boolean isPreparingImage() { return !released && !exit && animator == null; }
 		@Override public void onImageReplaced() {
@@ -331,6 +357,7 @@ public final class GalleryMotionController {
 		@Override public void run() {
 			if (released) return;
 			released = true;
+			surfaceCurrent = null;
 			if (scene == this) scene = null;
 			root.removeCallbacks(watchdog);
 			photo.removeOnLayoutChangeListener(photoLayout);

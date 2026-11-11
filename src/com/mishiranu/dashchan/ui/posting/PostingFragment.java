@@ -101,10 +101,10 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 
 	// Launchers belong to the Fragment, not an attachment controller.
 	// Register in a fixed order for every instance, including restoration while a picker is open.
-	private final ActivityResultLauncher<Intent> attachmentPicker = registerForActivityResult(
+	private final ActivityResultLauncher<Intent> attachmentPicker = com.mishiranu.dashchan.content.security.ProtectedActivityResults.register(this, "posting-attachments",
 			new ActivityResultContracts.StartActivityForResult(), result -> handlePostingActivityResult(
 					C.REQUEST_CODE_ATTACH, result.getResultCode(), result.getData()));
-	private final ActivityResultLauncher<Intent> imageEditor = registerForActivityResult(
+	private final ActivityResultLauncher<Intent> imageEditor = com.mishiranu.dashchan.content.security.ProtectedActivityResults.register(this, "posting-editor",
 			new ActivityResultContracts.StartActivityForResult(), result -> handlePostingActivityResult(
 					C.REQUEST_CODE_IMAGE_EDITOR, result.getResultCode(), result.getData()));
 
@@ -611,6 +611,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		captchaController.bindState(this);
 
 		attachmentController.bindImportState(this);
+		attachmentController.bindCompression(this, getChanName(), getBoardName());
 	}
 
 	// Snapshot raw form values (including hidden fields), unlike the visibility-filtered send payload.
@@ -647,6 +648,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 	@Override
 	public void onResume() {
 		super.onResume();
+		attachmentController.resumeCompression();
 		if (postingAppearance != null) {
 			postingAppearance.activateToolbar(((FragmentHandler) requireActivity()).getToolbarView());
 		}
@@ -1059,7 +1061,8 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 			return;
 		}
 		if (sendCoordinator.canSend()) {
-			sendCoordinator.send(collectPostingFormData(), this::capturePostDraft, this::captureCaptchaDraft);
+			try { sendCoordinator.send(collectPostingFormData(), this::capturePostDraft, this::captureCaptchaDraft); }
+			catch (PostingAttachmentsController.CompressionUnavailableException e) { attachmentController.handleCompressionUnavailable(); }
 		}
 	}
 
@@ -1097,6 +1100,10 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 	@Override
 	public AttachmentHolder getAttachmentHolder(int index) {
 		return attachmentController.getAttachmentHolder(index);
+	}
+	@Override public boolean canConvertVideoAttachment(int index) { return attachmentController.canConvertVideoAttachment(index); }
+	@Override public void convertVideoAttachment(int index, String sourceHash, String sourceName) {
+		attachmentController.convertVideoAttachment(index, sourceHash, sourceName);
 	}
 
 	@Override

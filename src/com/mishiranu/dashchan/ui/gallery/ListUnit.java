@@ -340,7 +340,8 @@ public class ListUnit implements ActionMode.Callback {
 		if (predictiveGridGeometry == null || !predictiveGridGeometry.valid()) return "geometry_changed";
 		return null;
 	}
-	android.graphics.Bitmap getPredictiveGrid(GalleryItem item) {
+	/** A compatible destination scene can be shown even when the current item has no visible cell. */
+	android.graphics.Bitmap getPredictiveGridScene() {
 		if (predictiveGrid == null) { predictiveGridFailure = "missing_" + predictiveGridClearReason; return null; }
 		String failure = predictiveGridCompatibilityFailure();
 		if (failure != null) {
@@ -348,6 +349,11 @@ public class ListUnit implements ActionMode.Callback {
 			clearPredictiveGrid(failure);
 			return null;
 		}
+		predictiveGridFailure = "ready";
+		return predictiveGrid;
+	}
+	android.graphics.Bitmap getPredictiveGrid(GalleryItem item) {
+		if (getPredictiveGridScene() == null) return null;
 		predictiveGridFailure = predictiveGridItems.containsKey(item) ? "ready" : "item_not_in_snapshot";
 		return "ready".equals(predictiveGridFailure) ? predictiveGrid : null;
 	}
