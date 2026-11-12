@@ -4,6 +4,23 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 
 public class VideoConversionPolicyTest {
+	@Test public void manualActionPrefersHevcAndFallsBackToAvcOnlyWithoutItsEncoder() {
+		assertEquals("video/hevc", VideoConversionPolicy.outputMime("avc", false, true, true));
+		assertEquals("video/hevc", VideoConversionPolicy.outputMime("auto", false, true, true));
+		assertEquals("video/avc", VideoConversionPolicy.outputMime("hevc", true, true, false));
+	}
+	@Test public void automaticConversionStillHonorsItsExistingCodecChoice() {
+		assertEquals("video/avc", VideoConversionPolicy.outputMime("avc", true, false, true));
+		assertEquals("video/hevc", VideoConversionPolicy.outputMime("hevc", false, false, false));
+		assertEquals("video/hevc", VideoConversionPolicy.outputMime("auto", true, false, true));
+		assertEquals("video/avc", VideoConversionPolicy.outputMime("auto", false, false, true));
+	}
+	@Test public void manualRepackKeepsCompatibleTracksButCannotCopyWhenShrinkingOrChangingCodec() {
+		assertTrue(VideoConversionPolicy.canCopyVideo("video/hevc", "video/hevc", false, false, true));
+		assertTrue(VideoConversionPolicy.canCopyVideo("video/hevc", "video/hevc", true, false, true));
+		assertFalse(VideoConversionPolicy.canCopyVideo("video/avc", "video/hevc", false, false, true));
+		assertFalse(VideoConversionPolicy.canCopyVideo("video/hevc", "video/hevc", false, true, true));
+	}
 	@Test public void compatibleSdrVideoCanBeCopiedButShrinkingOrHdrCannot() {
 		assertTrue(VideoConversionPolicy.canCopyVideo("video/hevc", "video/hevc", false, false));
 		assertFalse(VideoConversionPolicy.canCopyVideo("video/hevc", "video/avc", false, false));

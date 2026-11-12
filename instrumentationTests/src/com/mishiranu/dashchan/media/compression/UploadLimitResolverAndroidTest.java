@@ -18,5 +18,7 @@ public class UploadLimitResolverAndroidTest {
 		assertEquals(0, UploadLimitResolver.parseBoardBytes("<html>challenge</html>"));
 		assertEquals(0, UploadLimitResolver.parseBoardBytes("<p>MAXFILESSIZE:999999,</p>"));
 		assertEquals(0, UploadLimitResolver.parseBoardBytes("<script>_CFG.BOARD={MAXFILESSIZE:1e9};</script>"));
+		assertEquals(0, UploadLimitResolver.parseBoardBytes(
+				"<!-- <script>_CFG.BOARD={MAXFILESSIZE:999999};</script> -->"));
 	}
 }

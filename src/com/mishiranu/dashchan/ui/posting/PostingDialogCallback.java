@@ -10,4 +10,7 @@ public interface PostingDialogCallback {
 	ChanConfiguration.Posting getPostingConfiguration();
 	default boolean canConvertVideoAttachment(int index) { return false; }
 	default void convertVideoAttachment(int index, String sourceHash, String sourceName) {}
+	default boolean hasVideoConversionDetails(int index) { return false; }
+	default void showVideoConversionDetails(int index, String sourceHash) {}
+	default int[] getVideoConversionPosition(int index) { return new int[] {0, 0}; }
 }

@@ -31,6 +31,7 @@ final class PostingImeMotion implements View.OnAttachStateChangeListener {
 	private final SystemTimeline timeline = new SystemTimeline();
 	private ViewGroup actionRow;
 	private View primarySlot, attachment, action;
+	private final View conversionCaption;
 	private Frame last, pending;
 	private Pose pose;
 	private ValueAnimator animator;
@@ -40,6 +41,7 @@ final class PostingImeMotion implements View.OnAttachStateChangeListener {
 	private boolean imeEdges;
 	private Frame displayedBeforeLayout;
 	private float fraction;
+	private int transitionDuration = 260;
 	private int runningWidth, runningHeight;
 	private int windowHeight;
 	private View touchTarget;
@@ -51,6 +53,7 @@ final class PostingImeMotion implements View.OnAttachStateChangeListener {
 		this.root = root; this.form = form; this.editor = editor; this.primary = primary;
 		this.overlayHost = root.getRootView() instanceof ViewGroup ? (ViewGroup) root.getRootView() : root;
 		this.utilitySlot = utilitySlot; this.utility = utility;
+		conversionCaption = root.findViewById(com.mishiranu.dashchan.R.id.compression_status);
 		root.addOnAttachStateChangeListener(this);
 		root.getViewTreeObserver().addOnWindowFocusChangeListener(focus);
 		// This posting root is stable when the action row moves between footer and form.
@@ -132,6 +135,11 @@ final class PostingImeMotion implements View.OnAttachStateChangeListener {
 		}
 	}
 	private final class Frame {
+		final WindowInsetsAnimation systemOwner = followingSystem ? systemAnimation : null;
+		final float systemFraction = followingSystem ? fraction : 0f;
+		final RectF captionBounds = conversionCaption != null ? bounds(conversionCaption) : new RectF();
+		boolean captionVisible = conversionCaption != null && conversionCaption.getVisibility() == View.VISIBLE;
+		float captionOpacity = captionVisible ? 1f : 0f;
 		final int width = root.getWidth();
 		final float editorTop = bounds(editor).top, primaryTop = bounds(primary).top;
 		final int editorHeight = editor.getHeight();
@@ -151,6 +159,9 @@ final class PostingImeMotion implements View.OnAttachStateChangeListener {
 		boolean attachVisible;
 		boolean primaryVisible = visible(primarySlot != null ? primarySlot : primary, capsule);
 		Frame() {
+			if (pose != null && pose.captionLayer != null) {
+				captionBounds.set(pose.shownCaption); captionOpacity = pose.shownCaptionOpacity; captionVisible = captionOpacity > .01f;
+			}
 			if (pose != null) editorViewport.set(pose.shownEditorViewport);
 			if (pose != null && pose.capsuleLayer != null) {
 				capsule.set(pose.shownCapsule); primaryVisible = primary.getAlpha() > .05f;
@@ -183,6 +194,11 @@ final class PostingImeMotion implements View.OnAttachStateChangeListener {
 		finish(); systemAnimation = candidate; systemFrames = frames;
 		if (candidate != null) armSystemTimeout();
 		if (before != null && allowed()) pending = before;
+		transitionDuration = 260;
+	}
+	void beginCaptionChange() { begin(); transitionDuration = 180; }
+	static float retargetFraction(float value, float start) {
+		return Math.max(0f, Math.min(1f, (value - start) / Math.max(.0001f, 1f - start)));
 	}
 	/** Restore only presentation bounds before the existing sizing/alignment owner reads them. */
 	void prepareLayout() {
@@ -226,7 +242,7 @@ final class PostingImeMotion implements View.OnAttachStateChangeListener {
 			return;
 		}
 		ValueAnimator running = ValueAnimator.ofFloat(0f, 1f); animator = running;
-		running.setDuration(InterfaceMotion.duration(260)); running.setInterpolator(InterfaceMotion.STANDARD);
+		running.setDuration(InterfaceMotion.duration(transitionDuration)); running.setInterpolator(InterfaceMotion.STANDARD);
 		running.addUpdateListener(value -> {
 			if (animator != value) return;
 			if (!allowed() || root.getWidth() != runningWidth || root.getHeight() != runningHeight) { finish(); return; }
@@ -235,7 +251,7 @@ final class PostingImeMotion implements View.OnAttachStateChangeListener {
 		running.addListener(new AnimatorListenerAdapter() {
 			@Override public void onAnimationEnd(Animator animation) { if (animator == animation) finish(); }
 		});
-		PostingFormDiagnostics.trace(root, "ime_form_motion", "source=fallback durationMs=260");
+		PostingFormDiagnostics.trace(root, "ime_form_motion", "source=fallback durationMs=" + transitionDuration);
 		running.start();
 	}
 	/** One timeline per transition, on the posting root which survives action-row reparenting. */
@@ -299,6 +315,12 @@ final class PostingImeMotion implements View.OnAttachStateChangeListener {
 	}
 
 	private final class Pose {
+		final float systemStartFraction;
+		final Drawable captionLayer;
+		final float captionAlpha = conversionCaption != null ? conversionCaption.getAlpha() : 1f;
+		final RectF shownCaption = new RectF(), endCaption;
+		final boolean endCaptionVisible;
+		float shownCaptionOpacity;
 		final Frame before;
 		final float formY = form.getTranslationY(), primaryY = primary.getTranslationY();
 		final float utilityY = utility.getTranslationY(), utilityAlpha = utility.getAlpha(), primaryAlpha = primary.getAlpha();
@@ -324,7 +346,26 @@ final class PostingImeMotion implements View.OnAttachStateChangeListener {
 		float shownAttachmentOpacity;
 		Pose(Frame before) {
 			this.before = before;
+			systemStartFraction = followingSystem && before.systemOwner == systemAnimation ? before.systemFraction : 0f;
 			Frame after = new Frame(); showUtility = !before.utilityVisible && after.utilityVisible;
+			endCaption = new RectF(after.captionBounds); endCaptionVisible = after.captionVisible;
+			shownCaption.set(before.captionBounds); shownCaptionOpacity = before.captionOpacity;
+			captionLayer = conversionCaption != null && (before.captionVisible || after.captionVisible) ? new BaseDrawable() {
+				@Override public void draw(Canvas canvas) {
+					if (shownCaptionOpacity <= 0f || shownCaption.isEmpty()) return;
+					int save = canvas.save();
+					try {
+						translateOverlay(canvas); canvas.translate(shownCaption.left, shownCaption.top);
+						int layer = canvas.saveLayerAlpha(0, 0, Math.max(shownCaption.width(), conversionCaption.getWidth()),
+								Math.max(shownCaption.height(), conversionCaption.getHeight()), Math.round(255 * shownCaptionOpacity * captionAlpha));
+						SnapshotDrawing.draw(conversionCaption, canvas); canvas.restoreToCount(layer);
+					} finally { canvas.restoreToCount(save); }
+				}
+			} : null;
+			if (captionLayer != null) {
+				conversionCaption.setAlpha(0f); captionLayer.setBounds(0, 0, overlayHost.getWidth(), overlayHost.getHeight());
+				overlayHost.getOverlay().add(captionLayer);
+			}
 			endAttachmentOpacity = after.attachOpacity;
 			endBadgeVisible = after.badgeVisible;
 			shownAttachmentOpacity = before.attachOpacity;
@@ -387,7 +428,12 @@ final class PostingImeMotion implements View.OnAttachStateChangeListener {
 		}
 		void apply(float value) {
 			layoutPrepared = false;
-			float progress = Math.max(0f, Math.min(1f, value));
+			float progress = retargetFraction(value, systemStartFraction);
+			if (captionLayer != null) {
+				shownCaption.set(endCaptionVisible ? endCaption : before.captionBounds);
+				shownCaptionOpacity = lerp(before.captionOpacity, endCaptionVisible ? 1f : 0f,
+						Math.min(1f, progress * ((followingSystem ? 260f : transitionDuration) / 140f)));
+			}
 			if (attachment instanceof PostingAttachmentButton) {
 				((PostingAttachmentButton) attachment).setImeBadgeAlpha(
 						PostingAttachmentBadgeMotion.alpha(startBadgeAlpha, endBadgeVisible, progress));
@@ -460,6 +506,10 @@ final class PostingImeMotion implements View.OnAttachStateChangeListener {
 				outgoing.setBounds(0, 0, root.getWidth(), root.getHeight());
 				outgoing.fraction = fade; outgoing.invalidateSelf();
 			}
+			if (captionLayer != null) {
+				float anchor = endCaptionVisible ? endTop : before.capsule.isEmpty() ? before.primaryTop : before.capsule.top;
+				shownCaption.offset(0, desiredTop - anchor); captionLayer.invalidateSelf();
+			}
 		}
 		private void drawAttachment(Canvas canvas) {
 			if (shownAttachmentOpacity <= 0f) return;
@@ -483,6 +533,7 @@ final class PostingImeMotion implements View.OnAttachStateChangeListener {
 			} finally { canvas.restoreToCount(save); }
 		}
 		void restore() {
+			if (captionLayer != null) { overlayHost.getOverlay().remove(captionLayer); conversionCaption.setAlpha(captionAlpha); }
 			editorShape.restore();
 			overlayHost.getOverlay().remove(editorLayer); editor.setAlpha(editorAlpha);
 			form.setTranslationY(formY); primary.setTranslationY(primaryY); primary.setAlpha(primaryAlpha);

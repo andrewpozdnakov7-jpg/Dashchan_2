@@ -24,6 +24,7 @@ import com.mishiranu.dashchan.content.storage.DraftsStorage;
 import com.mishiranu.dashchan.graphics.TransparentTileDrawable;
 import com.mishiranu.dashchan.ui.posting.AttachmentHolder;
 import com.mishiranu.dashchan.ui.posting.PostingDialogCallback;
+import com.mishiranu.dashchan.ui.posting.VideoConversionSetup;
 import com.mishiranu.dashchan.util.GraphicsUtils;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.widget.PostingFormAppearance;
@@ -34,6 +35,7 @@ public class AttachmentOptionsDialog extends DialogFragment implements AdapterVi
 	public static final String TAG = AttachmentOptionsDialog.class.getName();
 
 	private static final String EXTRA_ATTACHMENT_INDEX = "attachmentIndex";
+	private static final String EXTRA_ALL_OPTIONS = "allOptions";
 
 	private enum Type {UNIQUE_HASH, REMOVE_METADATA, REENCODE_IMAGE, REMOVE_FILE_NAME, SPOILER}
 
@@ -107,6 +109,22 @@ public class AttachmentOptionsDialog extends DialogFragment implements AdapterVi
 		if (holder == null || fileHolder == null) {
 			dismiss();
 			return new com.mishiranu.dashchan.content.security.SecureDialog(activity);
+		}
+		PostingDialogCallback callback = (PostingDialogCallback) getParentFragment();
+		int attachmentIndex = requireArguments().getInt(EXTRA_ATTACHMENT_INDEX);
+		boolean video = chan.content.Chan.getFallback().locator.isVideoExtension(holder.name);
+		if (video && com.mishiranu.dashchan.media.compression.CompressionSettings.enabled()
+				&& !requireArguments().getBoolean(EXTRA_ALL_OPTIONS)) {
+			String hash = holder.hash, name = holder.name;
+			int[] position = callback.getVideoConversionPosition(attachmentIndex);
+			return VideoConversionSetup.create(activity, holder, position[0], position[1],
+					callback.canConvertVideoAttachment(attachmentIndex), callback.hasVideoConversionDetails(attachmentIndex),
+					() -> callback.convertVideoAttachment(attachmentIndex, hash, name),
+					() -> callback.showVideoConversionDetails(attachmentIndex, hash), () -> {
+						AttachmentOptionsDialog options = new AttachmentOptionsDialog(attachmentIndex);
+						options.requireArguments().putBoolean(EXTRA_ALL_OPTIONS, true);
+						options.show(getParentFragmentManager(), TAG + ".all");
+					});
 		}
 		ChanConfiguration.Posting postingConfiguration = ((PostingDialogCallback) getParentFragment())
 				.getPostingConfiguration();
@@ -185,12 +203,15 @@ public class AttachmentOptionsDialog extends DialogFragment implements AdapterVi
 			scroll.addView(linearLayout); content = scroll;
 		}
 		MotionDialogBuilder builder = MotionDialogBuilder.standard(activity).setView(content);
-		PostingDialogCallback callback = (PostingDialogCallback) getParentFragment();
-		int attachmentIndex = requireArguments().getInt(EXTRA_ATTACHMENT_INDEX);
 		if (callback.canConvertVideoAttachment(attachmentIndex)) {
 			String sourceHash = holder.hash, sourceName = holder.name;
 			builder.setPositiveButton(R.string.compression_convert, (dialog, which) ->
 					callback.convertVideoAttachment(attachmentIndex, sourceHash, sourceName));
+		}
+		if (callback.hasVideoConversionDetails(attachmentIndex)) {
+			String hash = holder.hash;
+			builder.setNeutralButton(R.string.slooop_converter_ui_details,
+					(dialog, which) -> callback.showVideoConversionDetails(attachmentIndex, hash));
 		}
 		AlertDialog dialog = builder.create();
 		dialog.setCanceledOnTouchOutside(true);

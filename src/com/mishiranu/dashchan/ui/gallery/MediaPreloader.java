@@ -1,13 +1,9 @@
 package com.mishiranu.dashchan.ui.gallery;
 
-import android.content.Context;
-import android.net.ConnectivityManager;
-import android.net.Network;
-import android.net.NetworkCapabilities;
 import android.net.Uri;
-import androidx.annotation.NonNull;
 import chan.content.Chan;
 import com.mishiranu.dashchan.content.CacheManager;
+import com.mishiranu.dashchan.content.NetworkObserver;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.async.PreloadMediaTask;
 import com.mishiranu.dashchan.content.model.GalleryItem;
@@ -21,11 +17,12 @@ import java.util.concurrent.Executor;
 final class MediaPreloader {
 	private static final Executor EXECUTOR = ConcurrentUtils.newSingleThreadPool(20000, "MediaPreloader", null);
 	private final GalleryInstance gallery;
-	private final ConnectivityManager connectivity;
+	private final NetworkObserver networkObserver;
 	private final ArrayDeque<Entry> queue = new ArrayDeque<>();
 	private PreloadMediaTask task;
 	private Entry currentEntry;
-	private ConnectivityManager.NetworkCallback networkCallback;
+	private final Runnable networkListener = this::onNetworkChanged;
+	private boolean observingNetwork;
 	private boolean resumed;
 	private int generation;
 	private Runnable onVideoCached;
@@ -46,8 +43,7 @@ final class MediaPreloader {
 
 	MediaPreloader(GalleryInstance gallery) {
 		this.gallery = gallery;
-		connectivity = (ConnectivityManager) gallery.context.getApplicationContext()
-				.getSystemService(Context.CONNECTIVITY_SERVICE);
+		networkObserver = NetworkObserver.getInstance();
 	}
 
 	void setResumed(boolean resumed) {
@@ -65,19 +61,15 @@ final class MediaPreloader {
 			task.cancel();
 			task = null;
 		}
-		if (networkCallback != null) {
-			try {
-				connectivity.unregisterNetworkCallback(networkCallback);
-			} catch (IllegalArgumentException ignored) {
-				// It may already have been unregistered by the system.
-			}
-			networkCallback = null;
+		if (observingNetwork) {
+			networkObserver.removeListener(networkListener);
+			observingNetwork = false;
 		}
 	}
 
 	void start(GalleryItem current) {
 		stop();
-		if (!resumed || current == null || gallery.callback.isGalleryMode() || connectivity == null) return;
+		if (!resumed || current == null || gallery.callback.isGalleryMode()) return;
 		int index = gallery.galleryItems.indexOf(current);
 		if (index < 0) return;
 		Chan chan = Chan.get(gallery.chanName);
@@ -109,38 +101,29 @@ final class MediaPreloader {
 			if (cached != null && !cached.exists()) queue.add(new Entry(uri, image, maxBytes, network));
 		}
 		if (queue.isEmpty()) return;
-		networkCallback = new ConnectivityManager.NetworkCallback() {
-			private void check() {
-				if (networkCallback == this && currentEntry != null && !allowed(currentEntry)) {
-					if (task != null) task.cancel();
-					task = null;
-					currentEntry = null;
-					next();
-				}
-			}
-			@Override
-			public void onCapabilitiesChanged(@NonNull Network network, @NonNull NetworkCapabilities capabilities) {
-				check();
-			}
-			@Override
-			public void onLost(@NonNull Network network) {
-				check();
-			}
-		};
-		try {
-			connectivity.registerDefaultNetworkCallback(networkCallback, ConcurrentUtils.HANDLER);
-		} catch (SecurityException | IllegalArgumentException e) {
-			networkCallback = null;
+		if (!networkObserver.addListener(networkListener)) {
+			// Preserve the old refusal to preload when network-change cancellation cannot be installed.
 			queue.clear();
 			return;
 		}
+		observingNetwork = true;
 		next();
+	}
+
+	private void onNetworkChanged() {
+		if (observingNetwork && currentEntry != null && !allowed(currentEntry)) {
+			generation++;
+			if (task != null) task.cancel();
+			task = null;
+			currentEntry = null;
+			next();
+		}
 	}
 
 	private boolean allowed(Entry entry) {
 		return resumed && !gallery.callback.isGalleryMode()
 				&& (entry.image ? Preferences.isImagePreload() : Preferences.isVideoPreload() && Preferences.isUseVideoPlayer())
-				&& PreloadMediaTask.isNetworkAllowed(connectivity, entry.network);
+				&& PreloadMediaTask.isNetworkAllowed(entry.network);
 	}
 
 	private void next() {
@@ -151,7 +134,7 @@ final class MediaPreloader {
 			int expectedGeneration = generation;
 			Entry expectedEntry = entry;
 			task = new PreloadMediaTask(Chan.getPreferred(gallery.chanName, entry.uri), entry.uri, entry.maxBytes,
-					connectivity, entry.network, () -> {
+					entry.network, () -> {
 						if (generation != expectedGeneration || currentEntry != expectedEntry) return;
 						task = null;
 						currentEntry = null;

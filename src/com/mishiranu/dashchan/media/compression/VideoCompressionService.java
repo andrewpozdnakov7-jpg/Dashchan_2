@@ -124,8 +124,9 @@ public final class VideoCompressionService extends Service {
 			if (!job.current()) { job.cancel(); finish(); return; }
 			ProgressHolder value = new ProgressHolder();
 			if (transformer.getProgress(value) == Transformer.PROGRESS_STATE_AVAILABLE) {
+				job.itemPercent = value.progress;
 				job.percent = CompressionBudget.progress(job.completedMs, job.queue.get(job.index).durationMs, job.totalMs, value.progress);
-			} else job.percent = -1;
+			} else { job.percent = -1; job.itemPercent = -1; }
 			job.changed();
 			try { getSystemService(NotificationManager.class).notify(NOTIFICATION, notification().build()); }
 			catch (RuntimeException ignored) {}
@@ -144,10 +145,12 @@ public final class VideoCompressionService extends Service {
 		}
 		triedAvc = false; forceEncode = false; pass = 0;
 		VideoCompressionJob.Source source = job.queue.get(job.index);
-		mime = "avc".equals(job.codec) || "auto".equals(job.codec) && !job.preferHevc ? HardwareVideoCodecs.AVC : HardwareVideoCodecs.HEVC;
-		if (!canCopyVideo(source) && !HardwareVideoCodecs.available(mime) && "auto".equals(job.codec)) { mime = HardwareVideoCodecs.AVC; triedAvc = true; }
+		boolean manual = job.isManualSource(source);
+		mime = VideoConversionPolicy.outputMime(job.codec, job.preferHevc, manual,
+				manual && HardwareVideoCodecs.available(HardwareVideoCodecs.HEVC));
+		if (!canCopyVideo(source) && !HardwareVideoCodecs.available(mime) && (manual || "auto".equals(job.codec))) { mime = HardwareVideoCodecs.AVC; triedAvc = true; }
 		if (!canCopyVideo(source) && !HardwareVideoCodecs.available(mime)) { job.fail(R.string.compression_no_encoder); finish(); return; }
-		if (canCopyVideo(source) && source.name.toLowerCase(java.util.Locale.ROOT).endsWith(".mp4")
+		if (!manual && canCopyVideo(source) && source.name.toLowerCase(java.util.Locale.ROOT).endsWith(".mp4")
 				&& (!source.hasAudio || MimeTypes.AUDIO_AAC.equals(source.audioMime))) {
 			job.reuseOriginal(source, getString(R.string.compression_already_codec, codecLabel(mime)));
 			handler.post(this::next); return;
@@ -161,7 +164,7 @@ public final class VideoCompressionService extends Service {
 	}
 	private String codecLabel(String type) { return HardwareVideoCodecs.HEVC.equals(type) ? "H.265" : "H.264"; }
 	private boolean canCopyVideo(VideoCompressionJob.Source source) {
-		return !forceEncode && VideoConversionPolicy.canCopyVideo(source.videoMime, mime, source.hdr, source.shrinking);
+		return !forceEncode && VideoConversionPolicy.canCopyVideo(source.videoMime, mime, source.hdr, source.shrinking, job.isManualSource(source));
 	}
 	private int audioBitrate(VideoCompressionJob.Source source) {
 		return source.hasAudio ? (int) Math.max(8_000, Math.min(96_000, source.target * 0.96 * 8000.0 / source.durationMs * 0.12)) : 0;
@@ -205,7 +208,7 @@ public final class VideoCompressionService extends Service {
 									+ result.videoConversionProcess + " audio_process=" + result.audioConversionProcess);
 							if (output.length() > 0 && output.length() <= source.target) {
 								File completed = output; output = null;
-								String label = codecLabel(result.videoMimeType);
+								String label = codecLabel(result.videoMimeType != null ? result.videoMimeType : requestedMime);
 								if (result.videoConversionProcess == ExportResult.CONVERSION_PROCESS_TRANSMUXED)
 									label = getString(R.string.compression_copied_codec, label);
 								job.importResult(source, completed, label, () -> next());
@@ -217,10 +220,10 @@ public final class VideoCompressionService extends Service {
 							handler.removeCallbacks(progress); transformer = null; retry(true);
 						}
 					}).build();
-			job.attempt = ++pass; job.percent = -1; job.changed();
+			job.attempt = ++pass; job.percent = -1; job.itemPercent = -1; job.importing = false; job.changed();
 			lastProgress = android.os.SystemClock.elapsedRealtime(); previousProgress = -1;
 			Composition composition = new Composition.Builder(EditedMediaItemSequence.withAudioAndVideoFrom(Collections.singletonList(item)))
-					.setHdrMode(source.hdr ? Composition.HDR_MODE_TONE_MAP_HDR_TO_SDR_USING_OPEN_GL : Composition.HDR_MODE_KEEP_HDR).build();
+					.setHdrMode(source.hdr && !copyVideo ? Composition.HDR_MODE_TONE_MAP_HDR_TO_SDR_USING_OPEN_GL : Composition.HDR_MODE_KEEP_HDR).build();
 			transformer.start(composition, output.getPath()); handler.post(progress);
 		} catch (Exception e) { retry(true); }
 	}
@@ -230,7 +233,7 @@ public final class VideoCompressionService extends Service {
 		long length = output != null ? output.length() : 0;
 		if (output != null) { output.delete(); output = null; }
 		if (!job.current()) { finish(); return; }
-		if (error && "auto".equals(job.codec) && HardwareVideoCodecs.HEVC.equals(mime) && !triedAvc
+		if (error && (job.isManualSource(job.queue.get(job.index)) || "auto".equals(job.codec)) && HardwareVideoCodecs.HEVC.equals(mime) && !triedAvc
 				&& HardwareVideoCodecs.available(HardwareVideoCodecs.AVC)) {
 			triedAvc = true; mime = HardwareVideoCodecs.AVC; forceEncode = false;
 			videoBitrate = chooseBitrate(job.queue.get(job.index)); export(); return;
@@ -255,11 +258,10 @@ public final class VideoCompressionService extends Service {
 		if (active == this) active = null;
 		stopForeground(STOP_FOREGROUND_REMOVE);
 		if (ending != null && !ending.cancelled && !ending.queue.isEmpty()
-				&& (ending.phase == VideoCompressionJob.Phase.DONE || ending.phase == VideoCompressionJob.Phase.ERROR)) {
+				&& ending.phase == VideoCompressionJob.Phase.ERROR) {
 			try {
 				NotificationCompat.Builder complete = notification().clearActions().setOngoing(false).setAutoCancel(true)
-						.setProgress(0, 0, false).setContentText(getString(ending.phase == VideoCompressionJob.Phase.DONE
-								? R.string.compression_finished : ending.error));
+						.setProgress(0, 0, false).setContentText(getString(ending.error));
 				getSystemService(NotificationManager.class).notify(NOTIFICATION, complete.build());
 			} catch (RuntimeException ignored) {}
 		}

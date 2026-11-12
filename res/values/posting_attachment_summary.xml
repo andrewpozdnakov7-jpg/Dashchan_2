@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<plurals name="posting_attachment_count">
+		<item quantity="one">%1$d/%2$d file</item>
+		<item quantity="other">%1$d/%2$d files</item>
+	</plurals>
+	<string name="posting_attachment_size_limit">%1$s/%2$s</string>
+	<string name="posting_attachment_summary">%1$s · %2$s</string>
+</resources>
