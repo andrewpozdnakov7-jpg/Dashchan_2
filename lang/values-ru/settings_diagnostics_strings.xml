@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<string name="settings_diagnostics">Диагностика</string>
+	<string name="settings_diagnostics_summary">Отчёты о сбоях и запись логов экранов, плеера и интерфейса</string>
+</resources>

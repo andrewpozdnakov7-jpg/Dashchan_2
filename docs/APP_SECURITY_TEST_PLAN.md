@@ -1,4 +1,16 @@
-# Application lock and additional PIN — local test candidate
+# Application lock and additional PIN — test plan
+
+## Current contract and historical verification notes (2026-11-11)
+
+This document includes historical patch notes. Their "not run" statements describe
+those individual changes, not an inventory of all later CI runs. Device/destructive
+scenarios still need explicit disposable-profile execution. The authoritative interval
+contract is `REAUTHENTICATION_PERSISTENCE_TEST_PLAN.md`: a continuous background
+absence, process-independent verified receipt, no timer while actively reading.
+Visible built-in PiP currently counts as an active client; its hide-video option
+does not mute audio or independently revoke access. That policy is under review,
+not replaced by the old unconditional-stop wording. The YouTube path differs.
+Reply-content redaction follows its dedicated background-privacy option.
 
 This source patch is not a security certification. It does not encrypt existing
 databases, conceal the existence of the additional PIN, guarantee forensic
@@ -51,8 +63,11 @@ Settings → Security:
    PIN input/authorization is intentionally not serialized; setup may restart.
    Background completion of a verification must not unlock a hidden app.
 6. Open gallery/editor/private browser and switch between app activities without
-   redundant authentication. Leaving for another app requires unlock on return.
-   Lock-enabled background/PiP playback is stopped; lock-disabled PiP is unchanged.
+   redundant authentication. With no visible built-in PiP client, leaving the app
+   requires unlock on return according to the selected absence interval.
+   Visible built-in PiP currently retains its session; hide-video covers only the
+   picture, not audio. Screen-off and actual revocation close it. Check YouTube
+   separately; do not assume the same PiP exception. Lock-disabled PiP is unchanged.
 7. Seed disposable history, own/reply marks and texts, favorites, custom communities,
    boards, drafts/outbox, cookies, proxy credentials, temporary media, translations,
    saved video position and diagnostic logs. Enter additional PIN. All must be gone,
@@ -112,9 +127,10 @@ Use only a disposable installation, synthetic backup and disposable folders.
 - Bounded cross-process file locks and AtomicFile configuration under
   no_backup/app-security-v1. Authorization is RAM-only in the private session
   provider, with Binder lifetime tokens and revocable authentication generations;
-  a saved `unlocked` field never authorizes access. Authentication resets on cold
-  main-process startup. Screen-off/background revoke access; configuration
-  recreation is not a login. Settings callbacks require a current authorization
+  a saved `unlocked` field never authorizes access. A cold process may restore
+  a bounded remaining absence from a verified receipt; it cannot invent extra
+  time. Screen-off/background suspend RAM access; configuration recreation is
+  not a login. Settings callbacks require a current authorization
   both when presenting approval and immediately before committing it.
 - Separate :security reset activity stops other application processes and jobs;
   a component-factory recovery barrier prevents ordinary ContentProviders, stores
@@ -132,8 +148,9 @@ Use only a disposable installation, synthetic backup and disposable folders.
   uses a separate normal-relaunch path once state is readable; it never starts
   deletion without a real pending journal or bypasses the configured main PIN.
 - All registered private Activity/Dialog windows are secure and shielded when
-  locked. Own/reply, download and audio notifications are redacted while enabled,
-  including notifications that already existed when protection was configured.
+  locked. Reply text is visible in an unlocked foreground app and follows the
+  dedicated hide-in-background option otherwise. Download/posting/audio details
+  stay redacted while protection is enabled. Existing notifications are refreshed.
   Explicit exports, existing externally granted/shared copies, system logs and
   remote push/server state are outside guaranteed deletion. An already submitted
   network post cannot be recalled by killing the local sender.
@@ -291,17 +308,20 @@ Device checks outstanding:
 The GitHub security screen offers Immediately (default), 3, 5, 10, 30, 60, 120
 and 300 minutes. Configuration lives in the atomic no-backup security record,
 requires fresh PRIMARY verification, and accepts only this exact allowlist.
-It is not an idle timer and reopening cannot slide the original deadline.
+It is not an idle timer: a return before expiry ends that absence, and a new
+departure can start a full new interval. Duplicate events within one absence
+must never slide its deadline.
 
-The provider keeps a monotonic-clock recent-auth grant in RAM, bound to the
-authenticating process's live Binder. Background/screen-off immediately suspend
-the foreground session, conceal private windows and invalidate callback leases.
-On a subsequent interactive foreground entry, an unexpired remembered grant can
-restore the session without another prompt. Expiry is checked on entry; it does
-not interrupt ongoing foreground use with a new PIN screen.
+The provider keeps foreground access in RAM with generation/Binder checks. An
+HMAC-verified no-backup receipt preserves the continuous-absence interval across
+ordinary process loss. Background/screen-off suspend foreground access, conceal
+ordinary private windows and invalidate settings callback leases. An interactive
+return may restore an unexpired receipt. Foreground reading is not interrupted.
 
-Explicit lock, main-process restart, dead authenticating Binder/provider, storage
-failure, credential/interval change or pending cleanup revoke remembered grants.
+Explicit lock, reboot, unreadable/unverifiable state, credential/interval change
+or pending cleanup deny/revoke remembered authority under the current contract.
+Ordinary process loss alone does not replace a valid remaining interval with a
+new one. Provider death/races still require device validation.
 An empty-profile receipt and ordinary internal unlock never create a new grant.
 Settings authorization is still a fresh PRIMARY PIN operation, not inherited
 from the remembered ordinary-unlock grant. Changed-interval confirmation uses
@@ -319,11 +339,12 @@ Device checks still required, only on a disposable installation:
 2. Three minutes: PIN and strong biometrics each establish a grant; repeated
    Home/app, screen-off/on, PiP and multiple Activity handoffs within the window
    do not ask again, but background content remains concealed.
-3. Return after three minutes from the ORIGINAL successful authentication:
-   ask again, even if the app was reopened repeatedly in between.
+3. Leave for 2:30, return before expiry, read, then leave again: another full
+   three-minute interval. Stay absent for the complete interval: ask again.
 4. Stay foreground beyond the interval: do not interrupt current work; after
    the next background/return, require authentication.
-5. Force-stop/main-process death and restart: ask again despite the saved interval.
+5. Process loss and cold launch within a correctly recorded absence may restore
+   only the remainder. After reboot, expiry or unverifiable state: ask again.
 6. During a valid grant, changing PIN, consent, biometrics or destructive settings
    still requires fresh primary-method authentication. Background/cancel prevents
    stale callbacks (main PIN in PIN-capable modes, strong biometrics in BIO-only).
@@ -394,3 +415,50 @@ Required disposable-device matrix, without using real profile/download data:
 No compilation, Gradle, lint, test execution, install, hardware-authentication or
 destructive device checks were performed. No Wiki/release publication in this
 source-only change. Update both public guide languages before release.
+
+## 2026-11-11 audit follow-up — prepared source, not device acceptance
+
+- Repeated private-browser locking re-arms the main-process unlock request after
+  the shared session is observed unlocked. Verify two Home/return cycles with
+  Immediately, then screen-off; no permanently black browser window.
+- Native playback checks authorization before every common start/focus request.
+  A denied resume preserves play intent across the lock-screen pause; an explicit
+  pause or a new media item clears it. Verify gallery initialization, focus return,
+  rotation, cancelled authentication and successful unlock. No sound should resume
+  before authorization; user-paused video must stay paused afterward. WebView
+  media behavior remains a separate device question, not a proven guarantee.
+- A storage/Keystore failure remains closed. After Home and return, the unlock
+  Activity can be recreated once to retry; a persistent failure must not loop or
+  create an authenticated session. Old asynchronous errors cannot disable a new
+  lifecycle generation. Do not save PIN input or settings authorization.
+- Disabling protection clears the configured absence interval, along with the
+  existing capture/PiP/reply options and folder consent. Reconfigure a new lock:
+  Immediately and capture blocked. Unresolved cleanup warnings are not erased.
+- Secondary processes may hide existing reply notifications, but cannot restore
+  their text by constructing the main process's profile stores.
+- Send another Share while an ordinary unlock screen exists. Its own-app target
+  must survive rotation/retry, remain bound to the same profile generation,
+  and launch once after authorization. A settings
+  approval is cancelled (including its old proof/callbacks) before switching to
+  ordinary unlock for a new Share; incoming intents cannot create settings approval.
+  Expired grants/missing targets
+  show a generic failure without URI logging or a crash in either lock UI.
+- For downloads, archives, attachments/editor, themes, wallpaper, fonts and
+  shortcut images: return from the picker while locked, rotate, then authenticate.
+  Apply the latest result once to the current owner. Cancellation remains a
+  cancellation; destroyed owners and changed/reset-pending profiles cannot apply
+  old payloads. With protection off, preserve immediate callback delivery. If the
+  profile generation cannot be read, fail closed; a selection may need repeating.
+- Protection limits uses the existing standard dialog components. Check large
+  text, both interface styles, dark/light/custom themes and Back dismissal.
+
+Prepared fixtures: `PlaybackLockStateTest` (two pure state-sequence cases),
+`ProtectedActivityResultsTest` (three isolated saved-state/profile cases),
+`LockResumeDispatchTest` (three synthetic launch cases), and one added
+`SecurityStoreTest` case for authorized disable/new-lock defaults. None compiled
+or executed for this source patch. Real AppLock/private-browser lifecycle,
+biometric hardware, OEM audio timing, URI grant forwarding and SAF transitions
+remain device checks. Cleanup scenarios require a disposable profile and files.
+
+PiP policy, storage-busy revocation, authority-process lifetime/500 ms and Recents
+snapshot policy are deliberately unchanged pending separate analysis/decisions.

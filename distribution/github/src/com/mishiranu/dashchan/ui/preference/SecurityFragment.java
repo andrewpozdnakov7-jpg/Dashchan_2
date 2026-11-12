@@ -76,6 +76,10 @@ public final class SecurityFragment extends PreferenceFragment {
 		remove.setOnClickListener(p -> open(AppLockActivity.REMOVE_ADDITIONAL)); protectedItems.add(remove);
 		Preference<?> disable = addButton(R.string.security_disable, 0);
 		disable.setOnClickListener(p -> open(AppLockActivity.DISABLE)); protectedItems.add(disable);
+		addButton(R.string.security_limits, 0).setOnClickListener(p ->
+				new com.mishiranu.dashchan.widget.MotionDialogBuilder(requireContext())
+						.setTitle(R.string.security_limits).setMessage(R.string.security_limits_summary)
+						.setPositiveButton(android.R.string.ok, null).show());
 		addButton(R.string.security_guide, 0).setOnClickListener(p ->
 				NavigationUtils.openSystemBrowser(requireContext(), Uri.parse(GUIDE_URL
 						+ ("ru".equals(getResources().getConfiguration().getLocales().get(0).getLanguage())

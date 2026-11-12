@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 	<string name="new_photo_editor">Новый редактор фото</string>
-	<string name="new_photo_editor__summary">Экспериментальный редактор с обрезкой, коррекцией, фильтрами и рисованием. Выключите, чтобы использовать прежний редактор.</string>
+	<string name="new_photo_editor__summary">Редактор с обрезкой, коррекцией, фильтрами и рисованием. Выключите, чтобы использовать прежний редактор.</string>
 	<string name="pe_save">Сохранить</string>
 	<string name="pe_original">Удерживай: исходник</string>
 	<string name="pe_crop">Кроп</string>

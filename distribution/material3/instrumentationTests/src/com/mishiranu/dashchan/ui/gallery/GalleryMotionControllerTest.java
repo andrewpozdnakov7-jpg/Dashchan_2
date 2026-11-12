@@ -278,6 +278,67 @@ public class GalleryMotionControllerTest {
 			f.motion.finish(); f.motion.finish(); assertEquals(1, closes[0]); f.assertReleased();
 		});
 	}
+	@Test public void videoPromotionKeepsTheEmptySurfaceAndMidEntranceClock() {
+		fixture(f -> {
+			Object item = new Object(); FrameLayout surface = new FrameLayout(f.context);
+			f.root.addView(surface); surface.layout(0, 0, 200, 200);
+			surface.setAlpha(.6f);
+			GalleryMotionController.Scene scene = f.motion.new Scene(f.photo, f.chrome, false, null, item, surface);
+			f.motion.install(scene); scene.preDraw.removeListener(); scene.preDraw = null;
+			scene.image = f.photo.getGalleryImageBounds(); scene.thumbnail = new RectF(10, 12, 30, 22);
+			scene.animator = ValueAnimator.ofFloat(0, 1); scene.apply(.4f);
+			ValueAnimator clock = scene.animator; RectF before = new RectF(scene.renderedFrame);
+			Bitmap decoded = Bitmap.createBitmap(60, 40, Bitmap.Config.ARGB_8888);
+			decoded.setDensity(Bitmap.DENSITY_NONE);
+			try {
+				assertTrue(f.photo.replaceGalleryOpeningImage(item, new BitmapDrawable(f.context.getResources(), decoded), false, false, false));
+				assertEquals(before, scene.renderedFrame); assertEquals(.4f, scene.progress, 0f);
+				View video = new View(f.context); surface.addView(video);
+				View controls = new View(f.context); f.root.addView(controls); controls.setAlpha(.8f);
+				scene.attachVideoSurface(surface, new View[] {controls, controls}, () -> true);
+				assertSame(clock, scene.animator); assertSame(scene, f.photo.getTag(R.id.gallery_motion_owner));
+				assertEquals(before, scene.renderedFrame); assertSame(surface, video.getParent());
+				assertEquals(.32f, controls.getAlpha(), .001f); assertEquals(.6f, surface.getAlpha(), .001f);
+				scene.apply(1f); assertEquals(scene.image, scene.renderedFrame);
+				f.motion.finish(); f.assertReleased();
+				assertEquals(.8f, controls.getAlpha(), .001f); assertEquals(.6f, surface.getAlpha(), .001f);
+				assertNull(controls.getTag(R.id.gallery_motion_owner)); assertNull(surface.getTag(R.id.gallery_motion_owner));
+				assertEquals(1f, surface.getScaleX(), 0f); assertEquals(0f, surface.getTranslationY(), 0f);
+				assertNull(surface.getClipBounds()); assertSame(surface, video.getParent());
+			} finally { f.motion.finish(); f.photo.recycle(); decoded.recycle(); }
+		});
+	}
+	@Test public void preparingVideoPromotionStaysHiddenUntilTheEntranceStarts() {
+		fixture(f -> {
+			Object item = new Object(); FrameLayout surface = new FrameLayout(f.context);
+			f.root.addView(surface); surface.layout(0, 0, 200, 200);
+			GalleryMotionController.Scene scene = f.motion.new Scene(f.photo, f.chrome, false, null, item, surface);
+			f.motion.install(scene);
+			assertTrue(f.photo.replaceGalleryOpeningImage(item, new BitmapDrawable(f.context.getResources(), f.bitmap), false, false, false));
+			View controls = new View(f.context); f.root.addView(controls);
+			scene.attachVideoSurface(surface, new View[] {controls}, () -> true);
+			assertEquals(0f, surface.getAlpha(), 0f); assertEquals(0f, controls.getAlpha(), 0f);
+			assertEquals(0f, f.photo.getAlpha(), 0f); assertTrue(scene.isPreparingImage());
+			f.motion.finish(); f.assertReleased();
+			assertEquals(1f, controls.getAlpha(), 0f); assertEquals(1f, surface.getAlpha(), 0f);
+		});
+	}
+	@Test public void staleVideoPromotionReleasesItsOwnSceneAndLateAttachCannotStealAnotherOwner() {
+		fixture(f -> {
+			Object item = new Object(); FrameLayout surface = new FrameLayout(f.context);
+			f.root.addView(surface); surface.layout(0, 0, 200, 200);
+			GalleryMotionController.Scene scene = f.motion.new Scene(f.photo, f.chrome, false, null, item, surface);
+			f.motion.install(scene); scene.preDraw.removeListener(); scene.preDraw = null;
+			scene.image = f.photo.getGalleryImageBounds(); scene.thumbnail = new RectF(10, 12, 30, 22);
+			scene.animator = ValueAnimator.ofFloat(0, 1); scene.apply(.4f);
+			scene.attachVideoSurface(surface, new View[0], () -> false);
+			assertTrue(scene.released); f.assertReleased();
+			Object next = new Object(); surface.setTag(R.id.gallery_motion_owner, next); surface.setAlpha(.3f);
+			scene.attachVideoSurface(surface, new View[0], () -> true);
+			assertSame(next, surface.getTag(R.id.gallery_motion_owner)); assertEquals(.3f, surface.getAlpha(), 0f);
+			surface.setTag(R.id.gallery_motion_owner, null);
+		});
+	}
 	@Test public void verticalSwipeHandsOffItsDrawnFrameWithoutStartingTheLegacyClose() {
 		fixture(f -> {
 			f.photo.layout(0, 0, 600, 600); int[] legacy = {0}, closes = {0};
@@ -323,6 +384,41 @@ public class GalleryMotionControllerTest {
 			assertSame(owner, f.root.getTag(R.id.gallery_motion_owner));
 			assertTrue(((PhotoView.GalleryImageReplacementOwner) owner).isPreparingImage());
 			f.motion.finish(); f.assertReleased();
+		});
+	}
+	@Test public void untargetedVideoBackShrinksWhileTrackingAndFadesOnlyAfterCommit() {
+		fixture(f -> {
+			FrameLayout surface = new FrameLayout(f.context); View video = new View(f.context);
+			surface.addView(video); f.root.addView(surface); surface.layout(0, 0, 200, 200);
+			View controls = new View(f.context); controls.setAlpha(.8f); f.root.addView(controls);
+			PredictivePhotoPresentation presentation = new PredictivePhotoPresentation(f.root, f.photo, f.chrome,
+					null, null, null, () -> true, surface, new View[] {controls});
+			try {
+				presentation.apply(1f);
+				assertEquals(.9f, surface.getScaleX(), .001f); assertEquals(.9f, surface.getScaleY(), .001f);
+				assertEquals(.7f, f.photo.getAlpha(), .001f); assertEquals(.8f, controls.getAlpha(), .001f);
+				presentation.apply(.2f); assertTrue(surface.getScaleX() > .9f);
+				presentation.applyCommit(1f, .35f);
+				assertEquals(0f, f.photo.getAlpha(), .001f); assertEquals(0f, surface.getAlpha(), .001f);
+				assertEquals(0f, controls.getAlpha(), .001f); assertSame(surface, video.getParent());
+			} finally { presentation.restore(); }
+			f.assertReleased(); assertEquals(1f, surface.getScaleX(), 0f); assertEquals(.8f, controls.getAlpha(), 0f);
+			assertNull(surface.getTag(R.id.gallery_motion_owner)); assertNull(surface.getClipBounds());
+		});
+	}
+	@Test public void untargetedPhotoBackDrawsTheCompatibleGridOnlyAfterTheFadeThroughGap() {
+		fixture(f -> {
+			Bitmap grid = Bitmap.createBitmap(200, 200, Bitmap.Config.ARGB_8888); grid.eraseColor(Color.RED);
+			Bitmap output = Bitmap.createBitmap(200, 200, Bitmap.Config.ARGB_8888);
+			PredictivePhotoPresentation presentation = new PredictivePhotoPresentation(f.root, f.photo, f.chrome,
+					null, grid, new Rect(0, 0, 200, 200), () -> true);
+			try {
+				presentation.apply(.9f); f.root.draw(new Canvas(output));
+				assertNotEquals(Color.RED, output.getPixel(100, 100));
+				presentation.applyCommit(1f, 1f); output.eraseColor(Color.TRANSPARENT); f.root.draw(new Canvas(output));
+				assertEquals(Color.RED, output.getPixel(100, 100));
+			} finally { presentation.restore(); output.recycle(); grid.recycle(); }
+			f.assertReleased();
 		});
 	}
 }

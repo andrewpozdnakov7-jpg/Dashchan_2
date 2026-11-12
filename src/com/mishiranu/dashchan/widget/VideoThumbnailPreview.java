@@ -17,7 +17,8 @@ public final class VideoThumbnailPreview implements BackPreviewBudget.Cache {
 	private static final int MAX_ENTRIES = 20;
 	private static VideoThumbnailPreview instance;
 	private final LinkedHashMap<String, Bitmap> frames = new LinkedHashMap<>(16, .75f, true);
-	// Views borrow cache-owned pixels. Clear their override before releasing/recycling an entry.
+	// Views borrow current pixels and may lease a previous frame for a bounded post-thumbnail fade.
+	// Clear their override (including transition leases) before releasing/recycling an entry.
 	private final WeakHashMap<AttachmentView, String> bindings = new WeakHashMap<>();
 	private final PreviewMemoryPolicy memory;
 	private final SharedPreferences.Listener preferences = key -> {
@@ -32,10 +33,11 @@ public final class VideoThumbnailPreview implements BackPreviewBudget.Cache {
 		return instance;
 	}
 	public static void bind(AttachmentView view, String resource) {
-		if (resource == null || !Preferences.isUpdateVideoThumbnails()) { unbind(view); return; }
+		if (resource == null) { unbind(view); return; }
 		VideoThumbnailPreview cache = obtain(view.getContext());
 		cache.bindings.put(view, resource);
-		view.setVideoThumbnailPreview(cache.frames.get(resource));
+		// Remember weak media bindings while disabled so the next publish after re-enabling can update them.
+		view.setVideoThumbnailPreview(Preferences.isUpdateVideoThumbnails() ? cache.frames.get(resource) : null);
 	}
 	public static void unbind(AttachmentView view) {
 		if (instance != null) instance.bindings.remove(view);
@@ -51,7 +53,7 @@ public final class VideoThumbnailPreview implements BackPreviewBudget.Cache {
 		Bitmap next = BackPreviewBudget.captureBitmap(context, 8L * MAX_EDGE * MAX_EDGE, capture);
 		if (next == null) return false;
 		Bitmap previous = cache.frames.put(resource, next);
-		cache.bindings.forEach((view, key) -> { if (resource.equals(key)) view.setVideoThumbnailPreview(next); });
+		cache.bindings.forEach((view, key) -> { if (resource.equals(key)) view.setVideoThumbnailPreview(next, true); });
 		BackPreviewBudget.release(previous);
 		while (cache.frames.size() > MAX_ENTRIES) cache.evictOldest();
 		if (VideoDiagnostics.isExtendedRecording()) VideoDiagnostics.recordUi("gallery video_thumbnail published width="

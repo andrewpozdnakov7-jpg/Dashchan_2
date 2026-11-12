@@ -412,6 +412,9 @@ public final class AppSecurity implements Application.ActivityLifecycleCallbacks
 				activity.startActivity(new Intent(activity, AppLockActivity.class));
 			}
 		} else {
+			// The unlock Activity belongs to the main process. A private-browser
+			// client must re-arm its own launch gate after observing the shared unlock.
+			openingLock = false;
 			unshield(activity);
 			refreshPrivateWindows(activity, false);
 			applyCaptureFlag(activity.getWindow(), false);
@@ -439,7 +442,10 @@ public final class AppSecurity implements Application.ActivityLifecycleCallbacks
 		if (SecurityStore.locked(activity)) protectAll();
 	}
 
-	@Override public void onActivityDestroyed(Activity activity) { started.remove(activity); resumed.remove(activity); shields.remove(activity); updateNotificationForeground(); }
+	@Override public void onActivityDestroyed(Activity activity) {
+		if (exempt(activity)) openingLock = false;
+		started.remove(activity); resumed.remove(activity); shields.remove(activity); updateNotificationForeground();
+	}
 	@Override public void onActivityCreated(Activity activity, Bundle state) {}
 	@Override public void onActivityResumed(Activity activity) {
 		resumed.add(activity);

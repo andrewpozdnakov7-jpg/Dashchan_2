@@ -2470,7 +2470,23 @@ public class Preferences {
 	// Preserve the modern player for users who already enabled the new interface.
 	public static final boolean DEFAULT_NEW_VIDEO_PLAYER = true;
 	public static final String KEY_UPDATE_VIDEO_THUMBNAILS = "experimental_update_video_thumbnails";
-	public static final boolean DEFAULT_UPDATE_VIDEO_THUMBNAILS = false;
+	public static final boolean DEFAULT_UPDATE_VIDEO_THUMBNAILS = true;
+	private static final String KEY_STABLE_MEDIA_DEFAULTS_MIGRATED = "stable_media_defaults_v1_migrated";
+	static {
+		if (PREFERENCES != null && MainApplication.getInstance().isMainProcess()) {
+			migrateStableMediaDefaults(PREFERENCES);
+		}
+	}
+	static void migrateStableMediaDefaults(SharedPreferences preferences) {
+		if (!preferences.getBoolean(KEY_STABLE_MEDIA_DEFAULTS_MIGRATED, false)) {
+			// One upgrade-wide opt-in, including old explicit false values. Later choices remain intact.
+			try (SharedPreferences.Editor editor = preferences.edit()) {
+				editor.put(KEY_NEW_PHOTO_EDITOR, true);
+				editor.put(KEY_UPDATE_VIDEO_THUMBNAILS, true);
+				editor.put(KEY_STABLE_MEDIA_DEFAULTS_MIGRATED, true);
+			}
+		}
+	}
 	public static boolean isUpdateVideoThumbnails() {
 		return PREFERENCES.getBoolean(KEY_UPDATE_VIDEO_THUMBNAILS, DEFAULT_UPDATE_VIDEO_THUMBNAILS);
 	}
@@ -2552,7 +2568,8 @@ public class Preferences {
 	}
 
 	public static String getPipDiagnosticMode() {
-		return PREFERENCES.getString(KEY_PIP_DIAGNOSTIC_MODE, DEFAULT_PIP_DIAGNOSTIC_MODE);
+		// Retired diagnostic trials must not survive an upgrade or backup restore.
+		return DEFAULT_PIP_DIAGNOSTIC_MODE;
 	}
 
 	public static boolean isDefaultAttachmentUniqueHash() {
@@ -2579,7 +2596,8 @@ public class Preferences {
 	}
 
 	public static boolean isWindowedThreadLoadingEnabled() {
-		return PREFERENCES.getBoolean(KEY_WINDOWED_THREAD_LOADING, DEFAULT_WINDOWED_THREAD_LOADING);
+		// Retired experiment: ignore old saved opt-ins, including restored backups.
+		return false;
 	}
 
 	public static boolean isSwipeReplyEnabled() {
@@ -2648,11 +2666,13 @@ public class Preferences {
 	}
 
 	public static boolean isOutboxJournalEnabled() {
-		return PREFERENCES.getBoolean(KEY_OUTBOX_JOURNAL, DEFAULT_OUTBOX_JOURNAL);
+		// Retired experiment: ignore old saved opt-ins, including restored backups.
+		return false;
 	}
 
 	public static boolean isDiscussionContextEnabled() {
-		return PREFERENCES.getBoolean(KEY_DISCUSSION_CONTEXT, DEFAULT_DISCUSSION_CONTEXT);
+		// Retired experiment: ignore old saved opt-ins, including restored backups.
+		return false;
 	}
 
 	public static String getTranslationNativeLanguage() {

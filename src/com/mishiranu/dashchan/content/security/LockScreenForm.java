@@ -3,6 +3,7 @@ package com.mishiranu.dashchan.content.security;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
+import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.View;
@@ -53,8 +54,21 @@ abstract class LockScreenForm {
 	void biometricStarted() {}
 	int success(boolean bio, boolean leaving, Runnable complete) { complete.run(); return 0; }
 	boolean customExit() { return false; }
+	static void launchResume(Activity activity, Intent resume, Bundle options) {
+		if (!tryLaunchResume(activity, resume, options)) {
+			// An expired URI grant cannot undo authentication or crash the unlock screen.
+			// Do not put the attachment URI or Intent extras into a log or toast.
+			android.widget.Toast.makeText(activity, com.mishiranu.dashchan.R.string.security_resume_unavailable,
+					android.widget.Toast.LENGTH_LONG).show();
+		}
+	}
+	static boolean tryLaunchResume(Activity activity, Intent resume, Bundle options) {
+		if (resume == null) return true;
+		try { activity.startActivity(resume, options); return true; }
+		catch (SecurityException | android.content.ActivityNotFoundException e) { return false; }
+	}
 	void finish(Activity activity, Intent resume, boolean decorated) {
-		if (resume != null) activity.startActivity(resume);
+		launchResume(activity, resume, null);
 		activity.finish();
 	}
 	void dispose() {}

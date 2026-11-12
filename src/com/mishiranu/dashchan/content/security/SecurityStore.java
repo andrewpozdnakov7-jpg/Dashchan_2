@@ -71,6 +71,15 @@ public final class SecurityStore {
 	private static final java.util.concurrent.locks.ReentrantLock MONITOR = new java.util.concurrent.locks.ReentrantLock();
 	private static final String PIN_KEY = "slooop.app-lock.pin.v1";
 	public interface Change<T> { T apply(JSONObject state) throws Exception; }
+	/** Called only inside an authorized update; keep a new lock's defaults together. */
+	static void clearProtectionConfiguration(JSONObject state) throws org.json.JSONException {
+		state.remove("primary"); state.remove("additional");
+		state.remove("biometric"); state.remove("biometric_alias"); state.remove(AuthenticationPolicy.KEY);
+		state.remove("delete_downloads_uri"); state.remove("delete_downloads_label");
+		state.remove(ALLOW_SCREENSHOTS); state.remove(HIDE_PIP_VIDEO); state.remove(HIDE_REPLY_TEXT_BACKGROUND);
+		state.remove(ReauthenticationPolicy.KEY);
+		state.put("unlocked", true);
+	}
 	public enum Result { PRIMARY, ADDITIONAL, FAILED, WAIT }
 	private SecurityStore() {}
 

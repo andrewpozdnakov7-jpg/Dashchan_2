@@ -184,7 +184,15 @@ public class AttachmentOptionsDialog extends DialogFragment implements AdapterVi
 			android.widget.ScrollView scroll = new android.widget.ScrollView(activity);
 			scroll.addView(linearLayout); content = scroll;
 		}
-		AlertDialog dialog = MotionDialogBuilder.standard(activity).setView(content).create();
+		MotionDialogBuilder builder = MotionDialogBuilder.standard(activity).setView(content);
+		PostingDialogCallback callback = (PostingDialogCallback) getParentFragment();
+		int attachmentIndex = requireArguments().getInt(EXTRA_ATTACHMENT_INDEX);
+		if (callback.canConvertVideoAttachment(attachmentIndex)) {
+			String sourceHash = holder.hash, sourceName = holder.name;
+			builder.setPositiveButton(R.string.compression_convert, (dialog, which) ->
+					callback.convertVideoAttachment(attachmentIndex, sourceHash, sourceName));
+		}
+		AlertDialog dialog = builder.create();
 		dialog.setCanceledOnTouchOutside(true);
 		return dialog;
 	}

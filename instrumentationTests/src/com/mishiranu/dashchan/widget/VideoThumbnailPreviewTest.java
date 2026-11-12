@@ -42,7 +42,7 @@ public class VideoThumbnailPreviewTest {
 		withPreference(false, context -> {
 			int[] captures = {0};
 			assertFalse(VideoThumbnailPreview.publish(context, RESOURCE, () -> { captures[0]++; return frame(Color.RED); }));
-			assertEquals(0, captures[0]); assertFalse(Preferences.DEFAULT_UPDATE_VIDEO_THUMBNAILS);
+			assertEquals(0, captures[0]); assertFalse(Preferences.isUpdateVideoThumbnails());
 		});
 	}
 	@Test public void lateSiteThumbnailCannotOverwriteVideoFrameAndEvictionRestoresOriginal() {
@@ -56,6 +56,19 @@ public class VideoThumbnailPreviewTest {
 				VideoThumbnailPreview.invalidate(RESOURCE); assertTrue(video.isRecycled());
 				assertEquals(Color.BLUE, color(view)); assertEquals(binding, view.getImageBindingGeneration());
 			} finally { VideoThumbnailPreview.invalidate(RESOURCE); VideoThumbnailPreview.unbind(view); if (!video.isRecycled()) video.recycle(); original.recycle(); }
+		});
+	}
+	@Test public void disabledBindingReceivesTheNextFrameAfterReEnablingWithoutRebinding() {
+		withPreference(false, context -> {
+			AttachmentView view = thumbnail(context); Bitmap original = frame(Color.GREEN);
+			try {
+				view.handleLoadedImage("site", original, false, true);
+				VideoThumbnailPreview.bind(view, RESOURCE);
+				assertEquals(Color.GREEN, color(view));
+				Preferences.PREFERENCES.edit().put(Preferences.KEY_UPDATE_VIDEO_THUMBNAILS, true).close();
+				assertTrue(VideoThumbnailPreview.publish(context, RESOURCE, () -> frame(Color.RED)));
+				assertEquals(Color.RED, color(view));
+			} finally { VideoThumbnailPreview.invalidate(RESOURCE); VideoThumbnailPreview.unbind(view); original.recycle(); }
 		});
 	}
 	@Test public void recycledBindingRejectsUpdatesForThePreviousMedia() {

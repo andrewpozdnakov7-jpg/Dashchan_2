@@ -10,6 +10,9 @@ import com.mishiranu.dashchan.ui.ContentFragment;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.ui.preference.DrawerOrderFragment;
 import com.mishiranu.dashchan.ui.preference.InterfaceFragment;
+import com.mishiranu.dashchan.ui.preference.AppearanceSettingsFragment;
+import com.mishiranu.dashchan.ui.preference.PostsListSettingsFragment;
+import com.mishiranu.dashchan.ui.preference.PostTextSizesFragment;
 import com.mishiranu.dashchan.ui.preference.MediaFragment;
 import com.mishiranu.dashchan.ui.preference.GallerySettingsFragment;
 import com.mishiranu.dashchan.ui.preference.ImageAttachmentsFragment;
@@ -70,9 +73,9 @@ public class SettingsRelocationSmokeTest {
 					R.string.user_interface);
 			assertRoute(context, entries, R.string.collapse_long_open_threads, InterfaceFragment.class,
 					R.string.user_interface);
-			assertRoute(context, entries, R.string.thread_gallery_button, InterfaceFragment.class,
+			assertRoute(context, entries, R.string.thread_gallery_button, PostsListSettingsFragment.class,
 					R.string.user_interface);
-			assertRoute(context, entries, R.string.show_original_post_title, InterfaceFragment.class,
+			assertRoute(context, entries, R.string.show_original_post_title, PostsListSettingsFragment.class,
 					R.string.user_interface);
 			assertRoute(context, entries, R.string.hardware_video_acceleration, VideoPlayerSettingsFragment.class,
 					R.string.media);
@@ -86,8 +89,9 @@ public class SettingsRelocationSmokeTest {
 				assertRoute(context, entries, title, com.mishiranu.dashchan.ui.preference.FavoritesFragment.class, R.string.contents);
 			}
 			assertRoute(context, entries, R.string.wifi_only, ContentsFragment.class, R.string.contents);
-			assertRoute(context, entries, R.string.pip_diagnostic_mode, PipDiagnosticsFragment.class,
-					R.string.experimental_features);
+			for (SettingsSearchIndex.Entry entry : entries) {
+				assertNotEquals(context.getString(R.string.pip_diagnostic_mode), entry.getTitle());
+			}
 		});
 	}
 
@@ -169,6 +173,33 @@ public class SettingsRelocationSmokeTest {
 							+ context.getString(R.string.video_player) + " \u203a "
 							+ context.getString(R.string.playback_speed), entry.getBreadcrumb());
 				}
+			}
+		});
+	}
+
+	@Test public void interfaceSubpagesAndTextSizesUseTheirNewHierarchy() {
+		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+			Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
+			List<SettingsSearchIndex.Entry> entries = SettingsSearchIndex.create(context);
+			assertRoute(context, entries, R.string.appearance, AppearanceSettingsFragment.class, R.string.user_interface);
+			assertRoute(context, entries, R.string.posts_list, PostsListSettingsFragment.class, R.string.user_interface);
+			assertRoute(context, entries, R.string.post_text_sizes, PostTextSizesFragment.class, R.string.user_interface);
+			String textPath = context.getString(R.string.user_interface) + " \u203a "
+					+ context.getString(R.string.appearance) + " \u203a " + context.getString(R.string.post_text_sizes);
+			for (int title : new int[] {R.string.post_subject_text_size, R.string.post_body_text_size,
+					R.string.post_metadata_text_size, R.string.settings_text_size, R.string.drawer_text_size}) {
+				assertRoute(context, entries, title, PostTextSizesFragment.class, R.string.user_interface);
+				for (SettingsSearchIndex.Entry entry : entries) if (entry.getTitle().equals(context.getString(title))) {
+					assertEquals(textPath, entry.getBreadcrumb());
+				}
+			}
+			for (int title : new int[] {R.string.thumbnail_scale, R.string.rounded_dialogs,
+					R.string.automatic_day_night_themes, R.string.touch_feedback}) {
+				assertRoute(context, entries, title, AppearanceSettingsFragment.class, R.string.user_interface);
+			}
+			for (int title : new int[] {R.string.swipe_reply, R.string.max_lines_count,
+					R.string.all_attachments, R.string.advanced_search}) {
+				assertRoute(context, entries, title, PostsListSettingsFragment.class, R.string.user_interface);
 			}
 		});
 	}

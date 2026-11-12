@@ -48,27 +48,8 @@ public class PostLinearLayout extends LinearLayout {
 	}
 
 	private Drawable secondaryBackground;
-	private int threadFabEndReservation;
 	private final Paint postMarkPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG);
 	private int postMark = MARK_NONE;
-
-	/** Reserve content, not the width of the row/background. Logical end also covers RTL. */
-	public void setThreadFabEndReservation(int pixels) {
-		pixels = Math.max(0, pixels);
-		if (threadFabEndReservation == pixels) return;
-		int baseEnd = Math.max(0, getPaddingEnd() - threadFabEndReservation);
-		threadFabEndReservation = pixels;
-		setPaddingRelative(getPaddingStart(), getPaddingTop(), baseEnd + pixels, getPaddingBottom());
-	}
-
-	@Override public boolean dispatchTouchEvent(MotionEvent event) {
-		if (threadFabEndReservation > 0 && event.getActionMasked() == MotionEvent.ACTION_DOWN) {
-			boolean reserved = getLayoutDirection() == LAYOUT_DIRECTION_RTL
-					? event.getX() < threadFabEndReservation : event.getX() >= getWidth() - threadFabEndReservation;
-			if (reserved) return false;
-		}
-		return super.dispatchTouchEvent(event);
-	}
 
 	public void setSecondaryBackgroundColor(int color) {
 		if (secondaryBackground instanceof ColorDrawable) {

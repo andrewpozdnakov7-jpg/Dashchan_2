@@ -24,6 +24,7 @@ import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import java.io.IOException;
 
 public final class CrashReportDialogs {
+	private static final String REPORT_EMAIL = "andrewpozdnakov7@gmail.com";
 	private CrashReportDialogs() {}
 	private static Bundle arguments(FragmentActivity host, String id) throws IOException {
 		Bundle args = new Bundle(); args.putString("id", id); args.putLong("profile", ProfileGeneration.current(host)); return args;
@@ -78,6 +79,7 @@ public final class CrashReportDialogs {
 						try {
 							Uri uri = FileProvider.crashReportUri(exported.getName());
 							Intent intent = new Intent(Intent.ACTION_SEND).setType("text/plain")
+									.putExtra(Intent.EXTRA_EMAIL, new String[] {REPORT_EMAIL})
 									.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION).putExtra(Intent.EXTRA_STREAM, uri);
 							intent.setClipData(ClipData.newUri(requireContext().getContentResolver(), "Slooop crash report", uri));
 							startActivity(Intent.createChooser(intent, null));

@@ -1,36 +1,19 @@
 package com.mishiranu.dashchan.ui.preference;
 
-import com.mishiranu.dashchan.widget.MotionDialogBuilder;
-import android.app.AlertDialog;
-import android.content.Context;
 import android.os.Bundle;
-import android.text.InputType;
 import android.view.View;
 import androidx.annotation.NonNull;
-import androidx.fragment.app.FragmentManager;
-import chan.content.ChanMarkup;
-import com.mishiranu.dashchan.BuildConfig;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.LauncherIconManager;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.ui.FragmentHandler;
-import com.mishiranu.dashchan.ui.InstanceDialog;
-import com.mishiranu.dashchan.ui.StateActivity;
-import com.mishiranu.dashchan.ui.preference.core.CheckPreference;
 import com.mishiranu.dashchan.ui.preference.core.Preference;
 import com.mishiranu.dashchan.ui.preference.core.PreferenceFragment;
-import com.mishiranu.dashchan.util.IOUtils;
-import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.util.SharedPreferences;
-import com.mishiranu.dashchan.widget.ThemeEngine;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
 
 public class InterfaceFragment extends PreferenceFragment {
 	private Preference<Void> applicationLogoPreference;
-	private CheckPreference predictiveBackPreference;
-	private boolean confirmingPredictiveBack;
 
 	@Override
 	protected SharedPreferences getPreferences() {
@@ -54,84 +37,9 @@ public class InterfaceFragment extends PreferenceFragment {
 			logoPreference.setOnClickListener(preference ->
 					ApplicationLogoDialog.show(getChildFragmentManager()));
 		}
-		addHeader(R.string.appearance);
-		addList(Preferences.KEY_TOUCH_FEEDBACK, Arrays.asList("normal", "dimmed", "off"),
-				Preferences.DEFAULT_TOUCH_FEEDBACK, R.string.touch_feedback,
-				Arrays.asList(getString(R.string.touch_feedback_normal),
-						getString(R.string.touch_feedback_dimmed), getString(R.string.touch_feedback_off)))
-				.setOnAfterChangeListener(p -> requireActivity().recreate());
-		if ("dimmed".equals(Preferences.PREFERENCES.getString(Preferences.KEY_TOUCH_FEEDBACK,
-				Preferences.DEFAULT_TOUCH_FEEDBACK))) {
-			ThreadArrowTransparencyPreference intensity = new ThreadArrowTransparencyPreference(requireContext(),
-					Preferences.KEY_TOUCH_FEEDBACK_INTENSITY, Preferences.DEFAULT_TOUCH_FEEDBACK_INTENSITY,
-					R.string.touch_feedback_intensity);
-			addDialogPreference(intensity);
-			intensity.setOnAfterChangeListener(p -> requireActivity().recreate());
-		}
-		String scaleFormat = ResourceUtils.getColonString(getResources(), R.string.scale, "%d%%");
-		addSeek(Preferences.KEY_THUMBNAILS_SCALE, Preferences.DEFAULT_THUMBNAILS_SCALE,
-				getString(R.string.thumbnail_scale), scaleFormat, null,
-				Preferences.MIN_THUMBNAILS_SCALE, Preferences.MAX_THUMBNAILS_SCALE, Preferences.STEP_THUMBNAILS_SCALE)
-				.setOnAfterChangeListener(p -> requireActivity().recreate());
-		addCheck(true, Preferences.KEY_CUT_THUMBNAILS, Preferences.DEFAULT_CUT_THUMBNAILS,
-				R.string.crop_thumbnails, R.string.crop_thumbnails__summary);
-		addCheck(true, Preferences.KEY_ACTIVE_SCROLLBAR, Preferences.DEFAULT_ACTIVE_SCROLLBAR,
-				R.string.active_scrollbar, 0);
-		addCheck(true, Preferences.KEY_SCROLL_THREAD_GALLERY, Preferences.DEFAULT_SCROLL_THREAD_GALLERY,
-				R.string.scroll_thread_when_scrolling_gallery, 0);
-		addButton(R.string.themes, 0).setOnClickListener(p -> ((FragmentHandler) requireActivity())
-				.pushFragment(new ThemesFragment()));
-		addButton(R.string.popup_appearance, R.string.popup_appearance__summary)
+		addButton(R.string.appearance, R.string.appearance_settings_summary)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
-						.pushFragment(new PopupAppearanceFragment()));
-		addCheck(true, Preferences.KEY_ROUNDED_DIALOGS, Preferences.DEFAULT_ROUNDED_DIALOGS,
-				R.string.rounded_dialogs, R.string.rounded_dialogs__summary);
-		RoundedDialogsRadiusPreference roundedDialogsRadiusPreference =
-				new RoundedDialogsRadiusPreference(requireContext());
-		addDialogPreference(roundedDialogsRadiusPreference);
-		addDependency(Preferences.KEY_ROUNDED_DIALOGS_RADIUS, Preferences.KEY_ROUNDED_DIALOGS, true);
-		List<String> lightThemeValues = new ArrayList<>();
-		List<CharSequence> lightThemeEntries = new ArrayList<>();
-		List<String> darkThemeValues = new ArrayList<>();
-		List<CharSequence> darkThemeEntries = new ArrayList<>();
-		for (ThemeEngine.Theme theme : ThemeEngine.getThemes()) {
-			List<String> values = theme.base == ThemeEngine.Theme.Base.DARK ? darkThemeValues : lightThemeValues;
-			List<CharSequence> entries = theme.base == ThemeEngine.Theme.Base.DARK
-					? darkThemeEntries : lightThemeEntries;
-			values.add(theme.name);
-			entries.add(theme.name);
-		}
-		addCheck(true, Preferences.KEY_AUTOMATIC_DAY_NIGHT_THEME,
-				Preferences.DEFAULT_AUTOMATIC_DAY_NIGHT_THEME, R.string.automatic_day_night_themes,
-				R.string.automatic_day_night_themes__summary)
-				.setOnAfterChangeListener(p -> requireActivity().recreate());
-		addList(Preferences.KEY_DAY_THEME, lightThemeValues, lightThemeValues.get(0),
-				R.string.day_theme, lightThemeEntries).setOnAfterChangeListener(p -> requireActivity().recreate());
-		addList(Preferences.KEY_NIGHT_THEME, darkThemeValues, darkThemeValues.get(0),
-				R.string.night_theme, darkThemeEntries).setOnAfterChangeListener(p -> requireActivity().recreate());
-		addDependency(Preferences.KEY_DAY_THEME, Preferences.KEY_AUTOMATIC_DAY_NIGHT_THEME, true);
-		addDependency(Preferences.KEY_NIGHT_THEME, Preferences.KEY_AUTOMATIC_DAY_NIGHT_THEME, true);
-		if (BuildConfig.ENABLE_PREDICTIVE_BACK) {
-			predictiveBackPreference = addCheck(true, Preferences.KEY_PREDICTIVE_BACK, Preferences.DEFAULT_PREDICTIVE_BACK,
-					R.string.enable_predictive_back, R.string.enable_predictive_back__summary);
-			predictiveBackPreference.setOnBeforeChangeListener((preference, value) -> {
-				if (value && !preference.getValue() && !confirmingPredictiveBack &&
-						BuildConfig.ENABLE_EXPERIMENTAL_INTERFACE_MOTION && !Preferences.isNewInterfaceMotionEnabled()) {
-					PredictiveBackPreferenceDialog.show(getChildFragmentManager(),
-							PredictiveBackPreferenceDialog.ENABLE_NEW_INTERFACE);
-					return false;
-				}
-				return true;
-			});
-			predictiveBackPreference.setOnAfterChangeListener(p ->
-					((StateActivity) requireActivity()).updateSystemBackCallback());
-			getChildFragmentManager().setFragmentResultListener(PredictiveBackPreferenceDialog.RESULT,
-					getViewLifecycleOwner(), (key, result) -> applyPredictiveBackChoice(
-							result.getInt(PredictiveBackPreferenceDialog.CHOICE)));
-		}
-		addButton(R.string.gesture_controls, R.string.gesture_controls__summary)
-				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
-						.pushFragment(new GestureSettingsFragment()));
+						.pushFragment(new AppearanceSettingsFragment()));
 
 		addHeader(R.string.navigation_drawer);
 		addButton(R.string.drawer_section_order, R.string.drawer_section_order_entry_summary)
@@ -158,42 +66,9 @@ public class InterfaceFragment extends PreferenceFragment {
 		addCheck(true, Preferences.KEY_HIDE_THREADS_WITH_SWIPE,
 				Preferences.DEFAULT_HIDE_THREADS_WITH_SWIPE, R.string.hide_threads_with_swipe, 0);
 
-		addHeader(R.string.posts_list);
-		addCheck(true, Preferences.KEY_THREAD_GALLERY_BUTTON, Preferences.DEFAULT_THREAD_GALLERY_BUTTON,
-				R.string.thread_gallery_button, R.string.thread_gallery_button__summary);
-		addCheck(true, Preferences.KEY_SHOW_ORIGINAL_POST_TITLE, Preferences.DEFAULT_SHOW_ORIGINAL_POST_TITLE,
-				R.string.show_original_post_title, R.string.show_original_post_title__summary)
-				.setOnAfterChangeListener(p -> requireActivity().recreate());
-		addButton(R.string.thread_quick_navigation, R.string.thread_quick_navigation__search_summary)
+		addButton(R.string.posts_list, R.string.posts_list_settings_summary)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
-						.pushFragment(new ThreadQuickNavigationFragment()));
-		addCheck(true, Preferences.KEY_SWIPE_REPLY, Preferences.DEFAULT_SWIPE_REPLY,
-				R.string.swipe_reply, R.string.swipe_reply__summary);
-		addCheck(true, Preferences.KEY_REMOVE_HIDDEN_POSTS, Preferences.DEFAULT_REMOVE_HIDDEN_POSTS,
-				R.string.remove_hidden_posts, R.string.remove_hidden_posts__summary);
-		addCheck(true, Preferences.KEY_DISPLAY_POST_YEAR, Preferences.DEFAULT_DISPLAY_POST_YEAR,
-				R.string.display_post_year, 0).setOnAfterChangeListener(p -> requireActivity().recreate());
-		addCheck(true, Preferences.KEY_HIDE_THREAD_TITLE, Preferences.DEFAULT_HIDE_THREAD_TITLE,
-				R.string.hide_thread_title, R.string.hide_thread_title__summary);
-		addEdit(Preferences.KEY_POST_MAX_LINES, Preferences.DEFAULT_POST_MAX_LINES,
-				R.string.max_lines_count, R.string.max_lines_count__summary, null, InputType.TYPE_CLASS_NUMBER);
-		addCheck(true, Preferences.KEY_ALL_ATTACHMENTS, Preferences.DEFAULT_ALL_ATTACHMENTS,
-				R.string.all_attachments, R.string.all_attachments__summary);
-		addList(Preferences.KEY_HIGHLIGHT_UNREAD, enumList(Preferences.HighlightUnreadMode.values(), o -> o.value),
-				Preferences.DEFAULT_HIGHLIGHT_UNREAD.value, R.string.highlight_unread_posts,
-				enumResList(Preferences.HighlightUnreadMode.values(), o -> o.titleResId));
-		addButton(getString(R.string.post_marks_colors), preference -> getString(
-				Preferences.getPostMarksColorMode().titleResId)).setOnClickListener(preference ->
-				((FragmentHandler) requireActivity()).pushFragment(new PostMarksColorsFragment()));
-		addCheck(true, Preferences.KEY_ADVANCED_SEARCH, Preferences.DEFAULT_ADVANCED_SEARCH,
-				R.string.advanced_search, R.string.advanced_search__summary)
-				.setOnAfterChangeListener(p -> {
-					if (p.getValue()) {
-						displayAdvancedSearchDialog(getChildFragmentManager());
-					}
-				});
-		addCheck(true, Preferences.KEY_DISPLAY_ICONS, Preferences.DEFAULT_DISPLAY_ICONS,
-				R.string.display_post_icons, R.string.display_post_icons__summary);
+						.pushFragment(new PostsListSettingsFragment()));
 
 		addHeader(R.string.submission_form);
 		addButton(R.string.posting_appearance, R.string.posting_appearance_summary)
@@ -209,29 +84,9 @@ public class InterfaceFragment extends PreferenceFragment {
 		}
 	}
 
-	private void applyPredictiveBackChoice(int choice) {
-		if (!BuildConfig.ENABLE_PREDICTIVE_BACK || predictiveBackPreference == null || !BuildConfig.ENABLE_EXPERIMENTAL_INTERFACE_MOTION ||
-				(choice != PredictiveBackPreferenceDialog.ENABLE_NEW_INTERFACE &&
-				choice != PredictiveBackPreferenceDialog.ENABLE_OLD_INTERFACE)) return;
-		CheckPreference preference = predictiveBackPreference;
-		// Publish the complete choice before preference listeners can recreate the Activity.
-		try (SharedPreferences.Editor editor = Preferences.PREFERENCES.edit()) {
-			if (choice == PredictiveBackPreferenceDialog.ENABLE_NEW_INTERFACE) {
-				editor.put(Preferences.KEY_NEW_INTERFACE_MOTION, true)
-						.put(Preferences.KEY_NEW_POSTING_FORM, true).put(Preferences.KEY_NEW_VIDEO_PLAYER, true);
-			}
-			editor.put(Preferences.KEY_PREDICTIVE_BACK, true);
-		}
-		if (predictiveBackPreference != preference || getView() == null) return;
-		confirmingPredictiveBack = true;
-		try { preference.setValue(true); }
-		finally { confirmingPredictiveBack = false; }
-	}
-
 	@Override
 	public void onDestroyView() {
 		applicationLogoPreference = null;
-		predictiveBackPreference = null;
 		super.onDestroyView();
 	}
 
@@ -241,18 +96,5 @@ public class InterfaceFragment extends PreferenceFragment {
 		((FragmentHandler) requireActivity()).setTitleSubtitle(getString(R.string.user_interface), null);
 	}
 
-	private static void displayAdvancedSearchDialog(FragmentManager fragmentManager) {
-		new InstanceDialog(fragmentManager, null, provider -> {
-			Context context = provider.getContext();
-			String html = IOUtils.readRawResourceString(context.getResources(), R.raw.markup_advanced_search);
-			return MotionDialogBuilder.standard(context)
-					.setTitle(R.string.advanced_search)
-					.setMessage(BUILDER_ADVANCED_SEARCH.fromHtmlReduced(html))
-					.setPositiveButton(android.R.string.ok, null)
-					.create();
-		});
-	}
 
-	private static final ChanMarkup.MarkupBuilder BUILDER_ADVANCED_SEARCH = new ChanMarkup
-			.MarkupBuilder(markup -> markup.addTag("b", ChanMarkup.TAG_BOLD));
 }

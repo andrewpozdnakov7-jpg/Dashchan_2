@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<string name="security_resume_unavailable">Signed in, but the shared file or requested action is no longer available. Please try again.</string>
+</resources>

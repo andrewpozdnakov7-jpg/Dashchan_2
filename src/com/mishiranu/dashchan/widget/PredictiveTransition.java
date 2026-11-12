@@ -10,6 +10,9 @@ public final class PredictiveTransition {
 	public interface Presentation {
 		boolean valid();
 		void apply(float fraction);
+		/** Separate completion clock: a late release still gets the whole fade-through. */
+		default void applyCommit(float fraction, float progress) { apply(fraction); }
+		default android.animation.TimeInterpolator getCommitInterpolator() { return BackMotionSpec.EASING; }
 		void restore();
 	}
 	private final View host;
@@ -57,12 +60,18 @@ public final class PredictiveTransition {
 		animate(1f, BackMotionSpec.COMPLETE_MS); return true;
 	}
 	private void animate(float end, long duration) {
-		if (!host.isAttachedToWindow() || !ValueAnimator.areAnimatorsEnabled()) { apply(end); finish(); return; }
-		ValueAnimator next = ValueAnimator.ofFloat(fraction, end); animator = next;
-		next.setDuration(duration); next.setInterpolator(BackMotionSpec.EASING);
+		if (!host.isAttachedToWindow() || !ValueAnimator.areAnimatorsEnabled()) {
+			if (committing) { fraction = end; presentation.applyCommit(end, 1f); } else apply(end);
+			finish(); return;
+		}
+		float start = fraction;
+		ValueAnimator next = ValueAnimator.ofFloat(0f, 1f); animator = next;
+		next.setDuration(duration); next.setInterpolator(committing ? presentation.getCommitInterpolator() : BackMotionSpec.EASING);
 		next.addUpdateListener(value -> {
 			if (!presentation.valid()) { finish(); return; }
-			apply((float) value.getAnimatedValue());
+			float clock = (float) value.getAnimatedValue();
+			float frame = start + (end - start) * clock;
+			if (committing) { fraction = frame; presentation.applyCommit(frame, clock); } else apply(frame);
 		});
 		next.addListener(new AnimatorListenerAdapter() {
 			@Override public void onAnimationEnd(Animator animation) { if (animator == animation) finish(); }

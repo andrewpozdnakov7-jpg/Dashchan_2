@@ -22,6 +22,7 @@ import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.graphics.RoundedCornersDrawable;
 import com.mishiranu.dashchan.graphics.TransparentTileDrawable;
 import com.mishiranu.dashchan.util.AnimationUtils;
+import com.mishiranu.dashchan.util.InterfaceMotion;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.util.ViewUtils;
 
@@ -39,6 +40,11 @@ public class AttachmentView extends View {
 	private boolean sfwMode = false;
 	private boolean drawTouching = false;
 	private RoundedCornersDrawable cornersDrawable;
+	private int cornersBackgroundColor;
+	private boolean postVideoStyle;
+	private Drawable cornerPlayDrawable;
+	private final Paint cornerPlayPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+	private final RectF cornerPlayBounds = new RectF();
 
 	private long lastClickTime;
 
@@ -69,6 +75,19 @@ public class AttachmentView extends View {
 		this.sfwMode = sfwMode;
 	}
 
+	/** Opt in only post thumbnails; gallery/catalog and grouped attachment overlays keep their style. */
+	public void setPostVideoStyle(boolean enabled) {
+		if (postVideoStyle != enabled) {
+			postVideoStyle = enabled;
+			finishVideoThumbnailTransition();
+			if (!enabled) VideoThumbnailPreview.unbind(this);
+			recreateCorners();
+			invalidate();
+		}
+	}
+
+	public boolean isPostVideoStyle() { return postVideoStyle; }
+
 	public enum Overlay {NONE, MULTIPLE, AUDIO, VIDEO, FILE, WARNING}
 
 	private String key;
@@ -87,8 +106,55 @@ public class AttachmentView extends View {
 	public boolean isCropEnabled() { return cropEnabled; }
 	private Bitmap bitmap;
 	private Bitmap videoThumbnailPreview;
+	private Bitmap previousVideoThumbnail;
+	private boolean videoThumbnailTransition;
+	private long videoThumbnailTransitionStart;
+	private static final int VIDEO_THUMBNAIL_FADE_DURATION = 180;
+	private final Runnable finishVideoThumbnailTransition = this::finishVideoThumbnailTransition;
+
 	void setVideoThumbnailPreview(Bitmap preview) {
-		if (videoThumbnailPreview != preview) { videoThumbnailPreview = preview; invalidate(); }
+		setVideoThumbnailPreview(preview, false);
+	}
+
+	void setVideoThumbnailPreview(Bitmap preview, boolean animate) {
+		if (videoThumbnailPreview == preview) {
+			// Cached rebinds settle immediately, even if this row was already fading to that frame.
+			if (!animate && videoThumbnailTransition) finishVideoThumbnailTransition();
+			return;
+		}
+		finishVideoThumbnailTransition();
+		if (preview != null && animate && postVideoStyle && overlay == Overlay.VIDEO
+				&& isAttachedToWindow() && isShown() && InterfaceMotion.isEnabled()
+				&& InterfaceMotion.duration(VIDEO_THUMBNAIL_FADE_DURATION) > 0) {
+			// The cache releases its old ownership immediately after publish. Lease only managed pixels.
+			if (videoThumbnailPreview != null && BackPreviewBudget.retain(videoThumbnailPreview)) {
+				previousVideoThumbnail = videoThumbnailPreview;
+				videoThumbnailTransition = true;
+			} else if (videoThumbnailPreview == null && bitmap != null && !bitmap.isRecycled()) {
+				// The site image remains owned by ImageLoader and this binding; never release it here.
+				videoThumbnailTransition = true;
+			}
+			if (videoThumbnailTransition) {
+				videoThumbnailTransitionStart = SystemClock.uptimeMillis();
+				postDelayed(finishVideoThumbnailTransition, VIDEO_THUMBNAIL_FADE_DURATION);
+			}
+		}
+		videoThumbnailPreview = preview;
+		invalidate();
+	}
+
+	private void finishVideoThumbnailTransition() {
+		removeCallbacks(finishVideoThumbnailTransition);
+		videoThumbnailTransition = false;
+		BackPreviewBudget.release(previousVideoThumbnail);
+		previousVideoThumbnail = null;
+		invalidate();
+	}
+
+	@Override
+	protected void onDetachedFromWindow() {
+		finishVideoThumbnailTransition();
+		super.onDetachedFromWindow();
 	}
 	private boolean error;
 	private Overlay overlay;
@@ -141,6 +207,8 @@ public class AttachmentView extends View {
 				}
 			}
 			this.overlay = overlay;
+			finishVideoThumbnailTransition();
+			recreateCorners();
 			overlayDrawable = overlayAttrId != 0 ? ResourceUtils.getDrawable(getContext(), overlayAttrId, 0) : null;
 			this.keepOverlayOnError = keepOverlayOnError;
 			invalidate = true;
@@ -193,6 +261,7 @@ public class AttachmentView extends View {
 	}
 
 	public void applyRoundedCorners(int backgroundColor) {
+		cornersBackgroundColor = backgroundColor;
 		if (cornersDrawable == null) {
 			float density = ResourceUtils.obtainDensity(this);
 			int radius = (int) (2f * density + 0.5f);
@@ -202,6 +271,13 @@ public class AttachmentView extends View {
 			}
 		}
 		cornersDrawable.setColor(backgroundColor);
+	}
+
+	private void recreateCorners() {
+		if (cornersDrawable != null) {
+			cornersDrawable = null;
+			applyRoundedCorners(cornersBackgroundColor);
+		}
 	}
 
 	@Override
@@ -227,6 +303,39 @@ public class AttachmentView extends View {
 
 	private long imageApplyTime = 0L;
 
+	private void setBitmapBounds(Bitmap image, int width, int height) {
+		int bw = image.getWidth(), bh = image.getHeight();
+		float scale, dx, dy;
+		if (bw * height > width * bh ^ !cropEnabled) {
+			scale = (float) height / bh;
+			dx = (int) ((width - bw * scale) * .5f + .5f);
+			dy = 0f;
+		} else {
+			scale = (float) width / bw;
+			dx = 0f;
+			dy = (int) ((height - bh * scale) * .5f + .5f);
+		}
+		source.set(0, 0, bw, bh);
+		destination.set(dx, dy, dx + bw * scale, dy + bh * scale);
+	}
+
+	private void drawCornerPlay(Canvas canvas, int width, int height) {
+		float density = ResourceUtils.obtainDensity(this);
+		float size = Math.min(24f * density, Math.min(width, height) - 8f * density);
+		if (size <= 0f) return;
+		float inset = 4f * density;
+		float left = getLayoutDirection() == LAYOUT_DIRECTION_RTL ? inset : width - inset - size;
+		float top = height - inset - size;
+		cornerPlayBounds.set(left, top, left + size, top + size);
+		cornerPlayPaint.setColor(0xb3000000);
+		canvas.drawRoundRect(cornerPlayBounds, 8f * density, 8f * density, cornerPlayPaint);
+		if (cornerPlayDrawable == null) cornerPlayDrawable = getContext().getDrawable(R.drawable.ic_play_arrow);
+		int iconSize = Math.round(size * .75f);
+		int x = Math.round(left + (size - iconSize) / 2f), y = Math.round(top + (size - iconSize) / 2f);
+		cornerPlayDrawable.setBounds(x, y, x + iconSize, y + iconSize);
+		cornerPlayDrawable.draw(canvas);
+	}
+
 	@Override
 	public void draw(Canvas canvas) {
 		Interpolator interpolator = AnimationUtils.DECELERATE_INTERPOLATOR;
@@ -239,20 +348,30 @@ public class AttachmentView extends View {
 				? (int) (SystemClock.elapsedRealtime() - imageApplyTime) : Integer.MAX_VALUE;
 		float alpha = interpolator.getInterpolation(Math.min(dt / 200f, 1f));
 		boolean invalidate = false;
-		if (hasImage) {
-			int bw = bitmap.getWidth(), bh = bitmap.getHeight();
-			float scale, dx, dy;
-			if (bw * vh > vw * bh ^ !cropEnabled) {
-				scale = (float) vh / (float) bh;
-				dx = (int) ((vw - bw * scale) * 0.5f + 0.5f);
-				dy = 0f;
-			} else {
-				scale = (float) vw / (float) bw;
-				dx = 0f;
-				dy = (int) ((vh - bh * scale) * 0.5f + 0.5f);
+		float previewAlpha = 1f;
+		if (videoThumbnailTransition) {
+			float progress = Math.min((SystemClock.uptimeMillis() - videoThumbnailTransitionStart)
+					/ (float) VIDEO_THUMBNAIL_FADE_DURATION, 1f);
+			if (progress >= 1f) finishVideoThumbnailTransition();
+			else {
+				Bitmap previous = previousVideoThumbnail != null ? previousVideoThumbnail : this.bitmap;
+				if (previous != null && !previous.isRecycled()) {
+					setBitmapBounds(previous, vw, vh);
+					bitmapPaint.setAlpha(255);
+					bitmapPaint.setColorFilter(null);
+					canvas.drawBitmap(previous, source, destination, bitmapPaint);
+					previewAlpha = interpolator.getInterpolation(progress);
+				}
+				invalidate = true;
 			}
-			source.set(0, 0, bw, bh);
-			destination.set(dx, dy, dx + bw * scale, dy + bh * scale);
+		}
+		// Composite the whole new frame, including fit-mode borders, over the previous one.
+		// Canvas owns the small temporary render layer; no extra captured Bitmap is allocated.
+		int previewLayer = previewAlpha < 1f
+				? canvas.saveLayerAlpha(0, 0, vw, vh, Math.round(255 * previewAlpha)) : -1;
+		if (previewLayer >= 0) canvas.drawColor(backgroundColor);
+		if (hasImage) {
+			setBitmapBounds(bitmap, vw, vh);
 			if (bitmap.hasAlpha()) {
 				int left = Math.max((int) (destination.left + 0.5f), 0);
 				int top = Math.max((int) (destination.top + 0.5f), 0);
@@ -280,9 +399,10 @@ public class AttachmentView extends View {
 			} else {
 				bitmapPaint.setColorFilter(null);
 			}
-			invalidate = saturation < 1f;
+			invalidate |= saturation < 1f;
 			canvas.drawBitmap(bitmap, source, destination, bitmapPaint);
 		}
+		if (previewLayer >= 0) canvas.restoreToCount(previewLayer);
 		if (sfwMode) {
 			canvas.drawColor(backgroundColor & 0x00ffffff | 0xe0000000);
 		}
@@ -293,7 +413,11 @@ public class AttachmentView extends View {
 			}
 			overlayDrawable = errorOverlayDrawable;
 		}
-		if (overlayDrawable != null) {
+		boolean cornerPlay = postVideoStyle && overlay == Overlay.VIDEO && hasImage
+				&& (videoThumbnailPreview != null || !error);
+		if (cornerPlay) {
+			drawCornerPlay(canvas, vw, vh);
+		} else if (overlayDrawable != null) {
 			if (hasImage && !sfwMode) {
 				canvas.drawColor((int) (0x66 * alpha) << 24);
 			}

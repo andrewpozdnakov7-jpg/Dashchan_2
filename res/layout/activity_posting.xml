@@ -144,6 +144,15 @@
 
 			</com.mishiranu.dashchan.widget.CarryLayout>
 
+			<TextView
+				android:id="@+id/compression_status"
+				android:layout_width="match_parent"
+				android:layout_height="wrap_content"
+				android:minHeight="48dp"
+				android:gravity="center_vertical"
+				android:padding="8dp"
+				android:visibility="gone"
+				android:textAppearance="?android:attr/textAppearanceSmall" />
 			<LinearLayout
 				android:id="@+id/attachment_container"
 				android:layout_width="match_parent"

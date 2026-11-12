@@ -39,7 +39,7 @@ import java.util.HashSet;
 import java.util.List;
 
 public class LocalArchivesFragment extends ContentFragment {
-	private final ActivityResultLauncher<Intent> archiveFolderPicker = registerForActivityResult(
+	private final ActivityResultLauncher<Intent> archiveFolderPicker = com.mishiranu.dashchan.content.security.ProtectedActivityResults.register(this, "archive-directory",
 			new ActivityResultContracts.StartActivityForResult(),
 			result -> onArchiveFolderSelected(result.getResultCode(), result.getData()));
 

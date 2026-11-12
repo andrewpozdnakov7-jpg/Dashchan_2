@@ -55,6 +55,22 @@ public class SecurityStoreTest {
 		SecurityStore.authenticatedUnlock(context, SecuritySessionProvider.generation(context));
 		assertFalse(SecurityStore.locked(context));
 	}
+	@Test public void disablingProtectionResetsTheIntervalAndCannotCommitWithoutFreshApproval() throws Exception {
+		prepareRecentAuthentication(300);
+		SecurityStore.update(context, s -> { s.put(SecurityStore.ALLOW_SCREENSHOTS, true); return null; });
+		try {
+			SecurityStore.authorizedUpdate(context, () -> false, s -> { SecurityStore.clearProtectionConfiguration(s); return null; });
+			fail("Expired approval must not disable protection");
+		} catch (IOException expected) {}
+		assertTrue(SecurityStore.enabled(context));
+		assertEquals(300, (int) SecurityStore.update(context, s -> s.optInt(ReauthenticationPolicy.KEY)));
+		SecurityStore.authorizedUpdate(context, () -> true, s -> { SecurityStore.clearProtectionConfiguration(s); return null; });
+		assertFalse(SecurityStore.enabled(context));
+		assertFalse(SecurityStore.update(context, s -> s.has(ReauthenticationPolicy.KEY)));
+		SecurityStore.setPin(context, "123456".toCharArray(), false);
+		assertEquals(0, (int) SecurityStore.update(context, s -> s.optInt(ReauthenticationPolicy.KEY, 0)));
+		assertTrue(SecurityStore.screenCaptureBlocked(context));
+	}
 	@Test public void biometricOnlyWithoutPrimaryStillProtectsProfileAndRejectsPinFallback() throws Exception {
 		SecurityStore.setPin(context, "123456".toCharArray(), false);
 		SecurityStore.setPin(context, "654321".toCharArray(), true);

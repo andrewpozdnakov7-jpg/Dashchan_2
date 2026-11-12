@@ -44,6 +44,11 @@ public class PhotoView extends View implements ScaleGestureDetector.OnScaleGestu
 		void onImageReplaced();
 		default boolean isPreparingImage() { return false; }
 	}
+	/** Opening and predictive Back share the same atomic thumbnail-to-player promotion. */
+	public interface GalleryVideoReplacementOwner extends GalleryImageReplacementOwner {
+		float getPhotoAlphaForHandoff();
+		void attachVideoSurface(View surface, View[] controls, java.util.function.BooleanSupplier current);
+	}
 	private boolean hasAlpha;
 	private boolean fitScreen;
 	private boolean drawDim;

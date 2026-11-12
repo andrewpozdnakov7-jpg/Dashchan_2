@@ -11,7 +11,7 @@ import android.widget.LinearLayout;
 import androidx.test.platform.app.InstrumentationRegistry;
 import org.junit.Test;
 
-/** Full-row background/content reservation fixtures; no forum or posting/network. Prepared, not run. */
+/** Full-width post background/touch fixtures; no forum or posting/network. Prepared, not run. */
 public class ThreadFabPostBackgroundTest {
 	private static PostLinearLayout row() {
 		PostLinearLayout row = new PostLinearLayout(InstrumentationRegistry.getInstrumentation().getTargetContext());
@@ -26,11 +26,11 @@ public class ThreadFabPostBackgroundTest {
 				View.MeasureSpec.makeMeasureSpec(80, View.MeasureSpec.EXACTLY));
 		row.layout(0, 0, 200, 80);
 	}
-	@Test public void ownPostBackgroundAndLiveHighlightCoverTheFullRowWithReservedContent() {
+	@Test public void ownPostBackgroundAndLiveHighlightCoverTheFullRow() {
 		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
 			PostLinearLayout row = row(); row.setPostMark(PostLinearLayout.MARK_USER_POST, Color.MAGENTA);
-			row.setThreadFabEndReservation(40); layout(row); assertEquals(200, row.getWidth());
-			assertEquals(142, row.getChildAt(0).getWidth());
+			layout(row); assertEquals(200, row.getWidth());
+			assertEquals(182, row.getChildAt(0).getWidth());
 			Bitmap pixels = Bitmap.createBitmap(200, 80, Bitmap.Config.ARGB_8888);
 			try {
 				row.draw(new Canvas(pixels)); assertEquals(Color.DKGRAY, pixels.getPixel(180, 60));
@@ -41,30 +41,26 @@ public class ThreadFabPostBackgroundTest {
 			} finally { pixels.recycle(); }
 		});
 	}
-	@Test public void repeatedBindingAndMovingReservationRestoreBasePaddingAndHandleRtl() {
+	@Test public void fullWidthAndBasePaddingArePreservedAcrossLayoutsAndRtl() {
 		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
-			PostLinearLayout first = row(), second = row();
-			first.setThreadFabEndReservation(40); first.setThreadFabEndReservation(40); layout(first);
-			assertEquals(50, first.getPaddingEnd()); assertEquals(142, first.getChildAt(0).getWidth());
-			first.setThreadFabEndReservation(0); second.setThreadFabEndReservation(40); layout(first); layout(second);
-			assertEquals(10, first.getPaddingEnd()); assertEquals(182, first.getChildAt(0).getWidth());
-			second.setLayoutDirection(View.LAYOUT_DIRECTION_RTL); layout(second);
-			assertEquals(50, second.getPaddingLeft()); assertEquals(8, second.getPaddingRight());
-			second.setThreadFabEndReservation(0); layout(second);
-			assertEquals(10, second.getPaddingEnd()); assertEquals(182, second.getChildAt(0).getWidth());
+			PostLinearLayout row = row(); layout(row); layout(row);
+			assertEquals(10, row.getPaddingEnd()); assertEquals(182, row.getChildAt(0).getWidth());
+			row.setLayoutDirection(View.LAYOUT_DIRECTION_RTL); layout(row);
+			assertEquals(10, row.getPaddingLeft()); assertEquals(8, row.getPaddingRight());
+			assertEquals(182, row.getChildAt(0).getWidth());
 		});
 	}
 	private static boolean touch(PostLinearLayout row, int action, float x) {
 		long now = SystemClock.uptimeMillis(); MotionEvent e = MotionEvent.obtain(now, now, action, x, 40f, 0);
 		try { return row.dispatchTouchEvent(e); } finally { e.recycle(); }
 	}
-	@Test public void reservedColumnDoesNotBecomeAPostTapTargetInEitherDirection() {
+	@Test public void uncoveredEndOfPostRemainsATapTargetInEitherDirection() {
 		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
-			PostLinearLayout row = row(); row.setOnClickListener(v -> {}); row.setThreadFabEndReservation(40); layout(row);
-			assertFalse(touch(row, MotionEvent.ACTION_DOWN, 180f)); assertFalse(row.isPressed());
+			PostLinearLayout row = row(); row.setOnClickListener(v -> {}); layout(row);
+			assertTrue(touch(row, MotionEvent.ACTION_DOWN, 180f)); touch(row, MotionEvent.ACTION_CANCEL, 180f);
 			assertTrue(touch(row, MotionEvent.ACTION_DOWN, 60f)); touch(row, MotionEvent.ACTION_CANCEL, 60f);
 			row.setLayoutDirection(View.LAYOUT_DIRECTION_RTL); layout(row);
-			assertFalse(touch(row, MotionEvent.ACTION_DOWN, 20f)); assertFalse(row.isPressed());
+			assertTrue(touch(row, MotionEvent.ACTION_DOWN, 20f)); touch(row, MotionEvent.ACTION_CANCEL, 20f);
 			assertTrue(touch(row, MotionEvent.ACTION_DOWN, 100f)); touch(row, MotionEvent.ACTION_CANCEL, 100f);
 		});
 	}

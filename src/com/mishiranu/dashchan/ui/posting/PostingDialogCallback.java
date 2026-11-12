@@ -8,4 +8,6 @@ public interface PostingDialogCallback {
 	AttachmentHolder getAttachmentHolder(int index);
 	List<Pair<String, String>> getAttachmentRatingItems();
 	ChanConfiguration.Posting getPostingConfiguration();
+	default boolean canConvertVideoAttachment(int index) { return false; }
+	default void convertVideoAttachment(int index, String sourceHash, String sourceName) {}
 }

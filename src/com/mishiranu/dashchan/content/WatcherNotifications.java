@@ -140,6 +140,9 @@ public class WatcherNotifications {
 				StatusBarNotification[] active = manager != null ? manager.getActiveNotifications() : null;
 				if (active == null || active.length == 0) return;
 				boolean hidden = com.mishiranu.dashchan.content.security.SecurityStore.shouldHideReplyText(application);
+				// Secondary processes may redact existing notifications, but profile stores
+				// and their writers belong exclusively to the main process.
+				if (!hidden && !MainApplication.getInstance().isMainProcess()) return;
 				HashMap<String, MyPostsStorage.ReplyItem> known = new HashMap<>();
 				if (!hidden) {
 					if (!Preferences.isTrackMyPostsEnabled() || Preferences.getReplyAlertTargets() == ReplyNotificationTargets.NONE

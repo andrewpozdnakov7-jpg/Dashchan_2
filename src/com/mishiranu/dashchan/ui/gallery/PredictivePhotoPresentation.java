@@ -16,7 +16,10 @@ import com.mishiranu.dashchan.widget.PredictiveTransition;
 import java.util.function.BooleanSupplier;
 
 /** Live-media renderer shared by both flavors; never changes a player or its zoom matrix. */
-final class PredictivePhotoPresentation implements PredictiveTransition.Presentation, PhotoView.GalleryImageReplacementOwner {
+final class PredictivePhotoPresentation implements PredictiveTransition.Presentation, PhotoView.GalleryVideoReplacementOwner {
+	// https://developer.android.com/design/ui/mobile/guides/patterns/predictive-back#full-screen-surfaces
+	private static final android.view.animation.PathInterpolator SURFACE_EASING =
+			new android.view.animation.PathInterpolator(.1f, .1f, 0f, 1f);
 	private Runnable finishSession;
 	private Runnable restoredCallback;
 	void setFinishSession(Runnable finishSession) { this.finishSession = finishSession; }
@@ -51,11 +54,21 @@ final class PredictivePhotoPresentation implements PredictiveTransition.Presenta
 	private BooleanSupplier surfaceCurrent;
 	private final RectF surfaceImage = new RectF(), surfaceFrame = new RectF();
 	private float fraction;
+	private float commitProgress;
 	private final BaseDrawable gridLayer = new BaseDrawable() {
 		final Paint paint = new Paint(Paint.FILTER_BITMAP_FLAG);
 		@Override public void draw(Canvas canvas) {
 			if (grid != null && !grid.isRecycled()) {
-				paint.setAlpha(Math.round(255 * fraction)); canvas.drawBitmap(grid, null, getBounds(), paint);
+				paint.setAlpha(Math.round(255 * (target != null ? fraction : GalleryFallbackMotion.incomingAlpha(commitProgress))));
+				int saved = canvas.save();
+				try {
+					canvas.clipRect(getBounds());
+					if (target == null) {
+						float scale = GalleryFallbackMotion.incomingScale(commitProgress);
+						canvas.scale(scale, scale, getBounds().exactCenterX(), getBounds().exactCenterY());
+					}
+					canvas.drawBitmap(grid, null, getBounds(), paint);
+				} finally { canvas.restoreToCount(saved); }
 			}
 		}
 	};
@@ -121,8 +134,8 @@ final class PredictivePhotoPresentation implements PredictiveTransition.Presenta
 		replacementTarget.set(target.frame);
 		if (!target.crop) fitFrame(replacementTarget, image, target.frame);
 	}
-	float getPhotoAlphaForHandoff() { return photoAlpha; }
-	void attachVideoSurface(View view, View[] mediaControls, BooleanSupplier current) {
+	@Override public float getPhotoAlphaForHandoff() { return photoAlpha; }
+	@Override public void attachVideoSurface(View view, View[] mediaControls, BooleanSupplier current) {
 		if (restored) return;
 		if (!valid() || view == null || view.getWidth() <= 0 || view.getHeight() <= 0
 				|| surface != null || view.getTag(R.id.gallery_motion_owner) != null) { run(); return; }
@@ -148,9 +161,9 @@ final class PredictivePhotoPresentation implements PredictiveTransition.Presenta
 		if (next == null) { run(); return; }
 		// Keep the visible rectangle at the current finger position, even when decoded
 		// dimensions differ from the thumbnail metadata. Reversal still reaches the new rest bounds.
-		RectF visible = target != null && fraction > 0f && fraction < 1f && !frame.isEmpty()
+		RectF visible = fraction > 0f && fraction < 1f && !frame.isEmpty()
 				? new RectF(frame) : null;
-		if (visible != null && replacementFrame == null && !target.crop) fitFrame(visible, image, frame);
+		if (visible != null && target != null && replacementFrame == null && !target.crop) fitFrame(visible, image, frame);
 		replacementFrame = visible;
 		replacementFraction = fraction;
 		image = next;
@@ -185,6 +198,7 @@ final class PredictivePhotoPresentation implements PredictiveTransition.Presenta
 	}
 	@Override public void apply(float value) {
 		fraction = value;
+		float opacity = target != null ? 1f - value : GalleryFallbackMotion.outgoingAlpha(commitProgress);
 		if (target != null && image != null) {
 			if (replacementFrame != null && value < replacementFraction) {
 				PhotoTransitionGeometry.interpolate(frame, image, replacementFrame, value / replacementFraction);
@@ -193,22 +207,50 @@ final class PredictivePhotoPresentation implements PredictiveTransition.Presenta
 						(value - replacementFraction) / (1f - replacementFraction));
 			} else PhotoTransitionGeometry.interpolate(frame, image, target.frame, value);
 			photo.setGalleryFrame(this, frame, value > 0f && (target.crop || replacementFrame != null));
-		} else photo.setAlpha(photoAlpha * (1f - value));
+		} else if (image != null) {
+			// No matching thumbnail: a standard full-screen Back preview, not an arbitrary flight target.
+			float progress = SURFACE_EASING.getInterpolation(value);
+			float scale = GalleryFallbackMotion.previewScale(progress);
+			frame.set(image);
+			float dx = image.width() * (1f - scale) / 2f, dy = image.height() * (1f - scale) / 2f;
+			frame.inset(dx, dy);
+			if (replacementFrame != null) {
+				float replacedAt = SURFACE_EASING.getInterpolation(replacementFraction);
+				if (progress < replacedAt) PhotoTransitionGeometry.interpolate(frame, image, replacementFrame, progress / replacedAt);
+				else {
+					RectF destination = new RectF(image);
+					destination.inset(image.width() * .05f, image.height() * .05f);
+					PhotoTransitionGeometry.interpolate(frame, replacementFrame, destination,
+							(progress - replacedAt) / Math.max(.000001f, 1f - replacedAt));
+				}
+			}
+			photo.setGalleryFrame(this, frame, false);
+			photo.setAlpha(photoAlpha * opacity);
+		} else photo.setAlpha(photoAlpha * opacity);
 		if (surface != null) {
-			if (target != null && image != null) {
+			if (image != null) {
 				surfaceImage.set(image); surfaceFrame.set(frame);
 				float dx = photo.getLeft() - surfaceLeft, dy = photo.getTop() - surfaceTop;
 				surfaceImage.offset(dx, dy); surfaceFrame.offset(dx, dy);
 				// Transform only the parent. Texture, decoder, orientation and user zoom stay intact.
-				surface.frame(this, surfaceImage, surfaceFrame, value > 0f && (target.crop || replacementFrame != null));
-			} else surface.fade(this, 1f - value);
+				surface.frame(this, surfaceImage, surfaceFrame, target != null && value > 0f && (target.crop || replacementFrame != null));
+				surface.fade(this, target != null ? 1f : opacity);
+			} else surface.fade(this, opacity);
 		}
-		for (GalleryMotionController.PresentationFrame control : controls) control.fade(this, 1f - value);
+		for (GalleryMotionController.PresentationFrame control : controls) control.fade(this, opacity);
 		if (grid == null) {
-			if (background != null && root.getBackground() == background) background.setAlpha(Math.round(backgroundAlpha * (1f - value)));
-			if (chrome != null) chrome.setAlpha(chromeAlpha * (1f - value));
+			float scrim = target != null ? 1f - value : 1f - GalleryFallbackMotion.incomingAlpha(commitProgress);
+			if (background != null && root.getBackground() == background) background.setAlpha(Math.round(backgroundAlpha * scrim));
 		}
+		if (chrome != null && (grid == null || target == null)) chrome.setAlpha(chromeAlpha * opacity);
 		gridLayer.invalidateSelf();
+	}
+	@Override public void applyCommit(float fraction, float progress) {
+		commitProgress = progress;
+		apply(fraction);
+	}
+	@Override public android.animation.TimeInterpolator getCommitInterpolator() {
+		return target == null ? SURFACE_EASING : com.mishiranu.dashchan.widget.BackMotionSpec.EASING;
 	}
 	static float lerp(float from, float to, float value) { return from + (to - from) * value; }
 	@Override public void restore() {

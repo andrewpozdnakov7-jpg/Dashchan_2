@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<string name="appearance_settings_summary">Темы, миниатюры, размеры текста и поведение интерфейса</string>
+	<string name="posts_list_settings_summary">Отображение сообщений, вложения, жест ответа и подсветка</string>
+</resources>

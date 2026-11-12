@@ -62,6 +62,8 @@ public class AboutFragment extends PreferenceFragment implements FragmentHandler
 	public void onViewCreated(@NonNull View view, Bundle savedInstanceState) {
 		super.onViewCreated(view, savedInstanceState);
 
+		addButton(R.string.settings_diagnostics, R.string.settings_diagnostics_summary)
+				.setOnClickListener(p -> ((FragmentHandler) requireActivity()).pushFragment(new DiagnosticsFragment()));
 		addButton(R.string.statistics, 0)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 						.pushFragment(new StatisticsFragment()));
