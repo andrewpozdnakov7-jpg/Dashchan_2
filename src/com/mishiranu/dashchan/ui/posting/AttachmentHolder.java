@@ -18,6 +18,8 @@ public class AttachmentHolder {
 	public String hash;
 	public String name;
 	public String rating;
+	// Original draft size; conversion results are overlaid by the attachment controller.
+	public long sourceSize = -1;
 	public boolean optionUniqueHash = false;
 	public boolean optionRemoveMetadata = false;
 	public boolean optionRemoveFileName = false;

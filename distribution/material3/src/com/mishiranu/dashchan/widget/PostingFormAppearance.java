@@ -52,6 +52,8 @@ import java.util.Map;
 
 /** View-lifetime presentation only. Keeps the existing editors, callbacks and fixed footer. */
 public final class PostingFormAppearance {
+	private TextView conversionCaption;
+	private String conversionCaptionText = "";
 	private static final int FORMAT_BUTTON_WIDTH_DP = 32;
 	private final View root;
 	private final ScrollView scroll;
@@ -534,7 +536,7 @@ public final class PostingFormAppearance {
 		Field field = (Field) tag;
 		int tools = field.owner.editorActions != null && field.owner.editorActions.getVisibility() != View.GONE
 				? Math.max(dp(editor, 52), field.owner.editorActions.getMeasuredHeight()) : 0;
-		return Math.max(dp(editor, 144) - tools, editor.getLineHeight()
+		return Math.max(dp(editor, 144) - tools - field.owner.attachmentSummaryHeight(), editor.getLineHeight()
 				+ editor.getCompoundPaddingTop() + editor.getCompoundPaddingBottom());
 	}
 
@@ -561,7 +563,38 @@ public final class PostingFormAppearance {
 	private int keyboardPrimaryReserve() {
 		// The same primary action is now part of the reserved viewport, immediately
 		// after the editor. Its own padding supplies the 6dp editor/button gap.
-		return keyboardActions ? 2 * dp(root, 6) + dp(root, 56) : 0;
+		int caption = 0;
+		if (keyboardActions && conversionCaption != null && conversionCaption.getVisibility() == View.VISIBLE) {
+			conversionCaption.measure(View.MeasureSpec.makeMeasureSpec(Math.max(dp(root, 80), scroll.getWidth() - 2 * dp(root, 16)), View.MeasureSpec.EXACTLY),
+					View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+			caption = conversionCaption.getMeasuredHeight();
+		}
+		return keyboardActions ? 2 * dp(root, 6) + dp(root, 56) + caption : 0;
+	}
+
+	/** The existing IME owner controls visibility, space and motion; progress owns text only. */
+	public static void setConversionStatus(View origin, CharSequence status) {
+		PostingFormAppearance owner = captchaOwner(origin);
+		if (owner == null || owner.conversionCaption == null) {
+			View legacy = origin.getRootView().findViewById(R.id.compression_status);
+			if (legacy != null) legacy.setVisibility(View.GONE); // Legacy form keeps visible previews and their badges.
+			return;
+		}
+		String text = status != null ? status.toString() : "";
+		if (text.equals(owner.conversionCaptionText)) return;
+		boolean visibilityChanged = (owner.conversionCaption.getVisibility() == View.VISIBLE)
+				!= (owner.keyboardDocked && !text.isEmpty());
+		owner.conversionCaptionText = text;
+		if (!text.isEmpty()) owner.conversionCaption.setText(text);
+		if (visibilityChanged) { owner.updateLayout(owner.keyboardActions); owner.scheduleEditorResize(); }
+	}
+	private void syncConversionCaption(boolean hiddenByIme) {
+		if (conversionCaption == null) return;
+		int visibility = hiddenByIme && !conversionCaptionText.isEmpty() ? View.VISIBLE : View.GONE;
+		if (conversionCaption.getVisibility() != visibility) {
+			if (imeMotion != null) imeMotion.beginCaptionChange();
+			conversionCaption.setVisibility(visibility);
+		}
 	}
 
 	/** One owner for editor spacing; attachment updates must not restore an IME-hidden margin. */
@@ -593,8 +626,19 @@ public final class PostingFormAppearance {
 
 	private int editorChromeHeight() {
 		return editorContainer.getPaddingTop() + editorContainer.getPaddingBottom()
+				+ attachmentSummaryHeight()
 				+ (editorActions != null && editorActions.getVisibility() != View.GONE
 						? Math.max(dp(root, 52), editorActions.getMeasuredHeight()) : 0);
+	}
+	private int attachmentSummaryHeight() {
+		View summary = editorContainer != null ? editorContainer.findViewById(R.id.posting_attachment_summary) : null;
+		if (summary == null || summary.getVisibility() == View.GONE) return 0;
+		int width = Math.max(0, scroll.getWidth() - scroll.getPaddingLeft() - scroll.getPaddingRight()
+				- form.getPaddingLeft() - form.getPaddingRight() - editorContainer.getPaddingLeft() - editorContainer.getPaddingRight());
+		if (width > 0 && (summary.isLayoutRequested() || summary.getMeasuredWidth() != width)) {
+			summary.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+		}
+		return summary.getMeasuredHeight();
 	}
 
 	/** Automatic sizing reserves the original primary action, not attachment/utility rows. */
@@ -892,6 +936,14 @@ public final class PostingFormAppearance {
 		}
 		utilitySlot.addView(utilityContent, new FrameLayout.LayoutParams(-1, -2, Gravity.CENTER_VERTICAL));
 		actions.addView(utilitySlot, new LinearLayout.LayoutParams(-1, -2));
+		conversionCaption = root.findViewById(R.id.compression_status);
+		if (conversionCaption != null) {
+			((ViewGroup) conversionCaption.getParent()).removeView(conversionCaption);
+			conversionCaption.setPadding(0, 0, 0, 0); conversionCaption.setMinHeight(dp(root, 20));
+			ViewUtils.setTextSizeScaled(conversionCaption, 13);
+			conversionCaption.setTextColor(ResourceUtils.getColor(root.getContext(), android.R.attr.textColorSecondary));
+			actions.addView(conversionCaption, new LinearLayout.LayoutParams(-1, -2));
+		}
 		primarySlot = new FrameLayout(root.getContext());
 		primarySlot.addView(send, new FrameLayout.LayoutParams(-1, -1));
 		primaryMotion = new PostingPrimaryMotion(send, primarySlot);
@@ -1187,6 +1239,7 @@ public final class PostingFormAppearance {
 		boolean nextDocked = adaptive && comment != null && comment.hasFocus() && keyboardVisible;
 		if (imeMotion != null && (actionsChanged || nextDocked != keyboardDocked)) imeMotion.begin();
 		keyboardActions = keyboardVisible;
+		syncConversionCaption(nextDocked);
 		layoutAttachment();
 		if (utilitySlot != null) utilitySlot.setVisibility(keyboardActions ? View.GONE : View.VISIBLE);
 		boolean hasAttachments = PostingAttachmentsAppearance.cardCount(root.findViewById(R.id.attachment_container)) > 0;

@@ -4,9 +4,6 @@ import android.app.ActivityManager;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.content.Context;
-import android.net.ConnectivityManager;
-import android.net.Network;
-import android.net.NetworkCapabilities;
 import android.os.PowerManager;
 import android.os.SystemClock;
 import androidx.annotation.NonNull;
@@ -183,10 +180,7 @@ public class BackgroundWatcherWorker extends Worker {
 		Context context = getApplicationContext();
 		ActivityManager activityManager = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
 		PowerManager powerManager = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
-		ConnectivityManager connectivityManager = (ConnectivityManager)
-				context.getSystemService(Context.CONNECTIVITY_SERVICE);
-		Network network = connectivityManager.getActiveNetwork();
-		NetworkCapabilities capabilities = connectivityManager.getNetworkCapabilities(network);
+		NetworkObserver.Snapshot network = NetworkObserver.getInstance().getSnapshot();
 		NotificationManager notificationManager = (NotificationManager)
 				context.getSystemService(Context.NOTIFICATION_SERVICE);
 		NotificationChannel channel = notificationManager.getNotificationChannel(C.NOTIFICATION_CHANNEL_REPLIES);
@@ -195,16 +189,12 @@ public class BackgroundWatcherWorker extends Worker {
 				"deviceIdle", powerManager.isDeviceIdleMode(), "powerSave", powerManager.isPowerSaveMode(),
 				"interactive", powerManager.isInteractive(),
 				"batteryOptimizationExempt", powerManager.isIgnoringBatteryOptimizations(context.getPackageName()),
-				"networkMetered", connectivityManager.isActiveNetworkMetered(),
-				"networkAvailable", capabilities != null,
-				"networkValidated", capabilities != null
-						&& capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED),
-				"networkUnmetered", capabilities != null
-						&& capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED),
-				"networkWifi", capabilities != null
-						&& capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI),
-				"networkCellular", capabilities != null
-						&& capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR),
+				"networkMetered", network.metered,
+				"networkAvailable", network.available,
+				"networkValidated", network.validated,
+				"networkUnmetered", network.available && !network.metered,
+				"networkWifi", network.wifi,
+				"networkCellular", network.cellular,
 				"notificationsEnabled", notificationManager.areNotificationsEnabled(),
 				"channelImportance", channel != null ? channel.getImportance() : "missing",
 				"channelSound", channel != null && channel.getSound() != null,

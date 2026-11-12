@@ -23,4 +23,18 @@ public class UploadLimitResolverTest {
 		assertEquals(0, CompressionSettings.bytes("NaN"));
 		assertEquals(0, CompressionSettings.bytes("999999999999999999999999"));
 	}
+	@Test(timeout = 5_000) public void repeatedUnterminatedScriptTagsCannotCauseRegexBacktracking() {
+		StringBuilder html = new StringBuilder();
+		for (int i = 0; i < 25_000; i++) html.append("<script ");
+		assertEquals(0, UploadLimitResolver.parseBoardBytes(html.toString()));
+		html.setLength(0);
+		for (int i = 0; i < 25_000; i++) html.append("<script>a");
+		assertEquals(0, UploadLimitResolver.parseBoardBytes(html.toString()));
+	}
+	@Test public void onlyRealScriptElementsSupplyBoardLimits() {
+		assertEquals(0, UploadLimitResolver.parseBoardBytes(
+				"<!-- <script>_CFG.BOARD={MAXFILESSIZE:999999};</script> -->"));
+		assertEquals(41_943_040L, UploadLimitResolver.parseBoardBytes(
+				"<SCRIPT type='text/javascript'>_CFG.BOARD={MAXFILESSIZE:40960};</SCRIPT>"));
+	}
 }

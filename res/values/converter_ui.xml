@@ -1,0 +1,27 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="slooop_converter_ui_title">Video conversion</string>
+    <string name="slooop_converter_ui_file_position">Video %1$d of %2$d</string>
+    <string name="slooop_converter_ui_unique_hash">Unique hash</string>
+    <string name="slooop_converter_ui_remove_filename">Remove file name</string>
+    <string name="slooop_converter_ui_convert">Convert</string>
+    <string name="slooop_converter_ui_cancel">Cancel</string>
+    <string name="slooop_converter_ui_queued">Queued</string>
+    <string name="slooop_converter_ui_preparing_badge">Preparing…</string>
+    <string name="slooop_converter_ui_optimizing_badge">Optimizing…</string>
+    <string name="slooop_converter_ui_checking_badge">Checking…</string>
+    <string name="slooop_converter_ui_percent">%1$d%%</string>
+    <string name="slooop_converter_ui_compressing_caption">Compressing video · %1$d%%</string>
+    <string name="slooop_converter_ui_compressing_position_caption">Compressing video %1$d of %2$d · %3$d%%</string>
+    <string name="slooop_converter_ui_preparing_caption">Preparing video…</string>
+    <string name="slooop_converter_ui_optimizing_caption">Optimizing size…</string>
+    <string name="slooop_converter_ui_checking_caption">Checking video…</string>
+    <string name="slooop_converter_ui_error_badge">Error</string>
+    <string name="slooop_converter_ui_error_caption">Could not compress video</string>
+    <string name="slooop_converter_ui_details">Conversion details…</string>
+    <string name="slooop_converter_ui_restore_one">Restore original</string>
+    <string name="slooop_converter_ui_restore_many">Restore originals</string>
+    <string name="slooop_converter_ui_a11y_progress">Video %1$d of %2$d, compression %3$d percent</string>
+    <string name="slooop_converter_ui_file_position_compact">%1$d of %2$d</string>
+    <string name="slooop_converter_ui_more_options">More file options</string>
+</resources>

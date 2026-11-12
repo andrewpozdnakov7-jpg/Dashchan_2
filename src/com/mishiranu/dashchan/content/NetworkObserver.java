@@ -5,10 +5,10 @@ import android.net.ConnectivityManager;
 import android.net.Network;
 import android.net.NetworkCapabilities;
 import android.telephony.TelephonyManager;
-import android.util.Pair;
 import androidx.annotation.NonNull;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
 import java.util.Locale;
+import java.util.concurrent.CopyOnWriteArraySet;
 
 public class NetworkObserver {
 	private static final NetworkObserver INSTANCE = new NetworkObserver();
@@ -17,59 +17,133 @@ public class NetworkObserver {
 		return INSTANCE;
 	}
 
-	private enum NetworkState {WIFI, MOBILE, UNDEFINED}
+	/** Immutable, safely published to UI and worker threads. No mutable framework objects escape. */
+	public static final class Snapshot {
+		private static final Snapshot DISCONNECTED = new Snapshot(null);
+		public final boolean available, internet, wifi, cellular, vpn, validated, metered;
+
+		Snapshot(NetworkCapabilities capabilities) {
+			this(capabilities != null,
+					capabilities != null && capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET),
+					capabilities != null && capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI),
+					capabilities != null && capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR),
+					capabilities != null && capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN),
+					capabilities != null && capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED),
+					capabilities == null || !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED));
+		}
+
+		// Explicit flags also let policy fixtures avoid hidden NetworkCapabilities mutators.
+		Snapshot(boolean available, boolean internet, boolean wifi, boolean cellular,
+				boolean vpn, boolean validated, boolean metered) {
+			this.available = available; this.internet = internet; this.wifi = wifi; this.cellular = cellular;
+			this.vpn = vpn; this.validated = validated; this.metered = metered;
+		}
+
+		public boolean allowsPreload(String mode) {
+			if (!internet) return false;
+			if ("all".equals(mode) || "wifi_3g".equals(mode)) return true;
+			return wifi && !cellular;
+		}
+	}
 
 	private final ConnectivityManager connectivityManager;
 	private final TelephonyManager telephonyManager;
 
-	private NetworkState networkState = NetworkState.UNDEFINED;
+	private final DefaultNetworkState<Network, Snapshot> state =
+			new DefaultNetworkState<>(Snapshot.DISCONNECTED);
+	private final CopyOnWriteArraySet<Runnable> listeners = new CopyOnWriteArraySet<>();
+	private final boolean observing;
 
 	private NetworkObserver() {
 		Context context = MainApplication.getInstance();
 		connectivityManager = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
 		telephonyManager = (TelephonyManager) context.getSystemService(Context.TELEPHONY_SERVICE);
-		onActiveNetworkChange();
-		Runnable onActiveNetworkChange = NetworkObserver.this::onActiveNetworkChange;
-		connectivityManager.registerDefaultNetworkCallback(new ConnectivityManager.NetworkCallback() {
-			private void handleChange() {
-				ConcurrentUtils.HANDLER.removeCallbacks(onActiveNetworkChange);
-				ConcurrentUtils.HANDLER.postDelayed(onActiveNetworkChange, 500L);
-			}
+		boolean registered = false;
+		try {
+			connectivityManager.registerDefaultNetworkCallback(new ConnectivityManager.NetworkCallback() {
+				@Override
+				public void onAvailable(@NonNull Network network) {
+					state.available(network);
+				}
 
-			@Override
-			public void onCapabilitiesChanged(@NonNull Network network,
-					@NonNull NetworkCapabilities networkCapabilities) {
-				handleChange();
-			}
+				@Override
+				public void onCapabilitiesChanged(@NonNull Network network,
+						@NonNull NetworkCapabilities capabilities) {
+					// Use the delivered capabilities, not synchronous queries from inside the callback.
+					if (state.capabilities(network, new Snapshot(capabilities))) notifyListeners();
+				}
 
-			@Override
-			public void onLost(@NonNull Network network) {
-				handleChange();
+				@Override
+				public void onLost(@NonNull Network network) {
+					if (state.lost(network)) notifyListeners();
+				}
+			});
+			registered = true;
+		} catch (RuntimeException ignored) {
+			// If an OEM refuses registration, retain live queries rather than an indefinitely stale cache.
+		}
+		observing = registered;
+		getSnapshot();
+	}
+
+	public Snapshot getSnapshot() {
+		Snapshot snapshot = state.get();
+		if (observing && snapshot != null) return snapshot;
+		// Bootstrap or the short onAvailable -> onCapabilitiesChanged interval only.
+		for (int attempt = 0; attempt < 2; attempt++) {
+			long revision;
+			synchronized (state) {
+				snapshot = state.get();
+				if (observing && snapshot != null) return snapshot;
+				revision = state.revision();
 			}
+			Network network;
+			NetworkCapabilities capabilities;
+			try {
+				network = connectivityManager.getActiveNetwork();
+				capabilities = network != null ? connectivityManager.getNetworkCapabilities(network) : null;
+			} catch (SecurityException e) {
+				return Snapshot.DISCONNECTED;
+			}
+			Snapshot queried = new Snapshot(capabilities);
+			if (!observing) return queried;
+			// An incomplete answer must not freeze the cache before the first capabilities event.
+			if (network != null && capabilities == null) {
+				snapshot = state.get();
+				return snapshot != null ? snapshot : Snapshot.DISCONNECTED;
+			}
+			if (state.initialize(revision, network, queried)) return queried;
+		}
+		snapshot = state.get();
+		return snapshot != null ? snapshot : Snapshot.DISCONNECTED;
+	}
+
+	public boolean addListener(Runnable listener) {
+		if (!observing) return false;
+		listeners.add(listener);
+		return true;
+	}
+	public void removeListener(Runnable listener) { listeners.remove(listener); }
+
+	private void notifyListeners() {
+		// Publish flags on Android's callback thread, dispatch gallery work on the UI thread only.
+		ConcurrentUtils.HANDLER.post(() -> {
+			for (Runnable listener : listeners) listener.run();
 		});
 	}
 
-	private Pair<Network, NetworkCapabilities> getActiveNetworkWithCapabilities() {
-		Network network = connectivityManager.getActiveNetwork();
-		if (network != null) {
-			NetworkCapabilities capabilities = connectivityManager.getNetworkCapabilities(network);
-			return capabilities != null ? new Pair<>(network, capabilities) : null;
-		}
-		return null;
-	}
-
 	public boolean hasActiveWifiTransport() {
-		Pair<Network, NetworkCapabilities> network = getActiveNetworkWithCapabilities();
-		return network != null && network.second.hasTransport(NetworkCapabilities.TRANSPORT_WIFI);
+		return getSnapshot().wifi;
 	}
 
 	public boolean isWifiConnected() {
-		return networkState == NetworkState.WIFI;
+		Snapshot snapshot = getSnapshot();
+		// Preserve the existing thumbnail policy: any available non-cellular network is classified as Wi-Fi.
+		return snapshot.available && !snapshot.cellular;
 	}
 
 	public boolean isVpnConnected() {
-		Pair<Network, NetworkCapabilities> pair = getActiveNetworkWithCapabilities();
-		return pair != null && pair.second.hasTransport(NetworkCapabilities.TRANSPORT_VPN);
+		return getSnapshot().vpn;
 	}
 
 	public String getCountryIso() {
@@ -92,20 +166,6 @@ public class NetworkObserver {
 
 	public boolean isWifiOrMobileConnected() {
 		// Keep the existing connectivity/VPN classification, without inspecting radio generation.
-		return networkState == NetworkState.WIFI || networkState == NetworkState.MOBILE;
-	}
-
-	private void onActiveNetworkChange() {
-		updateNetworkState();
-	}
-
-	private void updateNetworkState() {
-		NetworkState networkState = NetworkState.UNDEFINED;
-		Pair<Network, NetworkCapabilities> pair = getActiveNetworkWithCapabilities();
-		if (pair != null) {
-			networkState = pair.second.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
-					? NetworkState.MOBILE : NetworkState.WIFI;
-		}
-		this.networkState = networkState;
+		return getSnapshot().available;
 	}
 }

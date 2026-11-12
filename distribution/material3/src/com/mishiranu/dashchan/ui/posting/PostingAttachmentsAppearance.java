@@ -250,6 +250,9 @@ public final class PostingAttachmentsAppearance {
 			card.status.setText(R.string.attachment_preview_unavailable); card.status.setVisibility(View.VISIBLE);
 		}
 	}
+	public void conversionActive(AttachmentHolder holder, boolean active) {
+		Card card = cards.get(holder); if (card != null) card.placeholder.setAlpha(active ? 0f : 1f);
+	}
 	public boolean startDrag(AttachmentHolder holder) { removal.finish(); return motion.start(holder); }
 	public boolean dispatchDrag(DragEvent event) { return motion.dispatch(event); }
 	public void cancelMotion() { motion.cancel(); removal.finish(); }
@@ -263,8 +266,8 @@ public final class PostingAttachmentsAppearance {
 		boolean expectsPreview;
 		Card(Context context) {
 			super(context); setOrientation(VERTICAL); setBackground(shape(surface, 12));
-			setClipToOutline(true); setElevation(0); setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
-			stage = new FrameLayout(context); stage.setBackgroundColor(previewSurface);
+			setClipToOutline(false); setElevation(0); setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
+			stage = new FrameLayout(context); stage.setBackground(shape(previewSurface, 2)); stage.setClipToOutline(true);
 			addView(stage, new LinearLayout.LayoutParams(-1, dp(96))); selectable(stage);
 			image = new ImageView(context); image.setScaleType(ImageView.ScaleType.FIT_CENTER);
 			image.setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);

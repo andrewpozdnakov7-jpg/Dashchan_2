@@ -1,0 +1,27 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="slooop_converter_ui_title">Конвертация видео</string>
+    <string name="slooop_converter_ui_file_position">Видео %1$d из %2$d</string>
+    <string name="slooop_converter_ui_unique_hash">Уникальный хеш</string>
+    <string name="slooop_converter_ui_remove_filename">Удалить имя файла</string>
+    <string name="slooop_converter_ui_convert">Конвертировать</string>
+    <string name="slooop_converter_ui_cancel">Отмена</string>
+    <string name="slooop_converter_ui_queued">В очереди</string>
+    <string name="slooop_converter_ui_preparing_badge">Подготовка…</string>
+    <string name="slooop_converter_ui_optimizing_badge">Подгоняем…</string>
+    <string name="slooop_converter_ui_checking_badge">Проверяем…</string>
+    <string name="slooop_converter_ui_percent">%1$d%%</string>
+    <string name="slooop_converter_ui_compressing_caption">Сжимаем видео · %1$d%%</string>
+    <string name="slooop_converter_ui_compressing_position_caption">Сжимаем видео %1$d из %2$d · %3$d%%</string>
+    <string name="slooop_converter_ui_preparing_caption">Подготавливаем видео…</string>
+    <string name="slooop_converter_ui_optimizing_caption">Подгоняем размер…</string>
+    <string name="slooop_converter_ui_checking_caption">Проверяем видео…</string>
+    <string name="slooop_converter_ui_error_badge">Ошибка</string>
+    <string name="slooop_converter_ui_error_caption">Не удалось сжать видео</string>
+    <string name="slooop_converter_ui_details">Результат конвертации…</string>
+    <string name="slooop_converter_ui_restore_one">Вернуть оригинал</string>
+    <string name="slooop_converter_ui_restore_many">Вернуть оригиналы</string>
+    <string name="slooop_converter_ui_a11y_progress">Видео %1$d из %2$d, сжатие %3$d процентов</string>
+    <string name="slooop_converter_ui_file_position_compact">%1$d из %2$d</string>
+    <string name="slooop_converter_ui_more_options">Другие параметры файла</string>
+</resources>

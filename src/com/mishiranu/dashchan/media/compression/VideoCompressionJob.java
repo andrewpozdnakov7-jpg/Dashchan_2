@@ -19,7 +19,7 @@ import java.util.concurrent.Executors;
 
 /** A queue transaction: no partially converted attachment can reach the send boundary. Main-thread state. */
 public final class VideoCompressionJob {
-	public enum Phase {PREPARING, NEEDS_CONSENT, READY, RUNNING, DONE, ERROR, CANCELLED}
+	public enum Phase {PREPARING, READY, RUNNING, DONE, ERROR, CANCELLED}
 	public static final class Source {
 		public final String hash, name;
 		public final File file;
@@ -55,6 +55,9 @@ public final class VideoCompressionJob {
 	public final List<Source> queue = new ArrayList<>();
 	public Phase phase = Phase.PREPARING;
 	public int percent = -1, index, attempt = 1, error;
+	// Presentation only: the real current export, separate from the queue-wide notification percentage.
+	public int itemPercent = -1;
+	public boolean importing;
 	public long totalMs, completedMs;
 	public long effectiveFileLimit, effectiveTotalLimit;
 	public final boolean preferHevc;
@@ -76,6 +79,7 @@ public final class VideoCompressionJob {
 		DraftsStorage.getInstance().retainAttachmentDrafts(retained);
 	}
 	public boolean current() { return !cancelled && ProfileGeneration.canWrite(context, profile); }
+	public boolean isManualSource(Source source) { return forcedVideos.contains(source.hash); }
 	public void changed() {
 		String diagnostic = "compression phase=" + phase + " item=" + index + " count=" + queue.size() + " attempt=" + attempt + " error=" + error;
 		if (!diagnostic.equals(lastDiagnostic)) {
@@ -83,10 +87,10 @@ public final class VideoCompressionJob {
 		}
 		changes.setValue(this);
 	}
-	public boolean busy() { return phase == Phase.PREPARING || phase == Phase.NEEDS_CONSENT || phase == Phase.READY || phase == Phase.RUNNING; }
+	public boolean busy() { return phase == Phase.PREPARING || phase == Phase.READY || phase == Phase.RUNNING; }
 	public void prepare() {
 		IO.execute(() -> {
-			int failure = 0; boolean severe = false;
+			int failure = 0;
 			try {
 				long remote = 0;
 				try { remote = UploadLimitResolver.resolve(chan.content.Chan.get(chanName), boardName); }
@@ -148,22 +152,20 @@ public final class VideoCompressionJob {
 					s.shrinking = s.target < sizes[i];
 					if (videos[i] && (s.shrinking || s.forced)) {
 						queue.add(s); totalMs = Math.addExact(totalMs, s.durationMs);
-						// A warning is intentionally conservative; consent never promises readable output.
-						severe |= s.shrinking && ((double) s.target / sizes[i] < 0.25 || s.target * 8000.0 / s.durationMs < 500_000
-								|| s.target * 8000.0 / s.durationMs < s.width * (double) s.height * s.frameRate * 0.075);
 					}
 				}
 				if (!allowMp4 && !queue.isEmpty()) failure = R.string.compression_format_unsupported;
 			} catch (Exception e) { failure = R.string.compression_failed; }
-			final int finalFailure = failure; final boolean needsConsent = severe;
+			final int finalFailure = failure;
 			MAIN.post(() -> {
 				if (!current()) { cancel(); return; }
 				if (finalFailure != 0) fail(finalFailure);
-				else { phase = queue.isEmpty() ? Phase.DONE : needsConsent ? Phase.NEEDS_CONSENT : Phase.READY; changed(); }
+				else { phase = queue.isEmpty() ? Phase.DONE : Phase.READY; changed(); }
 			});
 		});
 	}
 	public void importResult(Source source, File output, String usedCodec, Runnable next) {
+		importing = true; changed();
 		IO.execute(() -> {
 			String hash = null; long length = output.length();
 			try { if (!cancelled && length > 0 && length <= source.target && length <= Integer.MAX_VALUE)

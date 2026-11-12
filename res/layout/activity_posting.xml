@@ -100,6 +100,19 @@
 					android:inputType="textLongMessage|textMultiLine|textCapSentences"
 					android:imeOptions="flagNoExtractUi" />
 
+				<com.mishiranu.dashchan.widget.PostingAttachmentSummaryView
+				android:id="@+id/posting_attachment_summary"
+				android:layout_width="match_parent"
+				android:layout_height="wrap_content"
+				android:paddingStart="16dp"
+				android:paddingEnd="16dp"
+				android:paddingTop="4dp"
+				android:paddingBottom="8dp"
+				android:textSize="12sp"
+				android:textColor="?android:attr/textColorSecondary"
+				android:gravity="end"
+				android:visibility="gone" />
+
 			</LinearLayout>
 
 			<TextView
@@ -148,9 +161,10 @@
 				android:id="@+id/compression_status"
 				android:layout_width="match_parent"
 				android:layout_height="wrap_content"
-				android:minHeight="48dp"
+				android:minHeight="20dp"
 				android:gravity="center_vertical"
-				android:padding="8dp"
+				android:textSize="13sp"
+				android:textColor="?android:attr/textColorSecondary"
 				android:visibility="gone"
 				android:textAppearance="?android:attr/textAppearanceSmall" />
 			<LinearLayout

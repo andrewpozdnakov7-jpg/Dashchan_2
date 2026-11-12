@@ -284,8 +284,16 @@ public class PostingFlowContractTest {
 		assertTrue(click.indexOf("captchaForm.publishCurrentPresentation()") < click.indexOf("needsCaptchaSolution()"));
 		assertTrue(click.indexOf("requestCaptchaSolution()") < click.indexOf("submitPostingForm()"));
 		containsAll(method("onConfirmCaptcha"), "confirmCaptchaDialog()", "return", "submitPostingForm()");
-		containsAll(method("updateSendButtonState"), "sendButtonEnabled", "isImportInProgress()", "needsCaptchaSolution()",
+		String availability = method("updateSendButtonState");
+		containsAll(availability, "sendButtonEnabled", "isAttachmentImportInProgress()", "needsCaptchaSolution()",
 				"isLoading()", "hasSendAttachments()", "captchaController.canSend() && content", "canActivatePrimary()");
+		// Conversion blocks submission, but must not disable the same button's captcha action.
+		containsAll(availability, "solve ? !captchaController.isLoading()"
+				+ " : !attachmentController.isCompressionInProgress() && captchaController.canSend() && content");
+		assertFalse(availability.contains("isImportInProgress()"));
+		// Keep the authoritative guard for every submission path, including classic posting.
+		containsAll(method("submitPostingForm"), "if (attachmentController.isImportInProgress())",
+				"return;", "sendCoordinator.canSend()");
 	}
 
 	@Test public void finalLifecycleBindsOnceAndReleasesEachUiHostAfterSnapshot() throws Exception {

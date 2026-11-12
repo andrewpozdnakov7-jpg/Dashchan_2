@@ -24,12 +24,10 @@ public class AuditPassOneContractTest {
 
 	@Test public void networkModeKeepsSerializedBackupValueWithoutRadioGenerations() throws Exception {
 		String observer = appSource("content/NetworkObserver.java");
-		assertTrue(observer.contains("networkState == NetworkState.WIFI || networkState == NetworkState.MOBILE"));
 		assertFalse(observer.contains("getActiveNetworkInfo"));
 		assertFalse(observer.contains("getDataNetworkType"));
 		assertFalse(observer.contains("NETWORK_TYPE_"));
 		assertTrue(appSource("content/Preferences.java").contains("WIFI_MOBILE(\"wifi_3g\""));
-		assertTrue(appSource("content/async/PreloadMediaTask.java").contains("isWifiOrMobileConnected()"));
 	}
 
 	@Test public void cookieLoadWaitsForCompletionAndRejectsStaleOwners() throws Exception {

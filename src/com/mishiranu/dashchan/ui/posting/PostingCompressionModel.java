@@ -12,7 +12,14 @@ public final class PostingCompressionModel extends ViewModel {
 	VideoCompressionJob job;
 	String signature;
 	final java.util.Set<String> forcedVideos = new java.util.HashSet<>();
-	private final Observer<VideoCompressionJob> observer = state::setValue;
+	final java.util.Map<String, Long> acceptedAt = new java.util.HashMap<>();
+	private final Observer<VideoCompressionJob> observer = value -> {
+		if (value != null) for (int i = 0; i < Math.min(value.index, value.queue.size()); i++) {
+			String hash = value.queue.get(i).hash, key = i + ":" + hash;
+			if (value.results.containsKey(hash) && !acceptedAt.containsKey(key)) acceptedAt.put(key, android.os.SystemClock.uptimeMillis());
+		}
+		state.setValue(value);
+	};
 	void replace(VideoCompressionJob next, String signature) {
 		clear(); this.signature = signature; job = next;
 		if (next != null) {
@@ -26,7 +33,7 @@ public final class PostingCompressionModel extends ViewModel {
 			job.changes.removeObserver(observer);
 			if (job.busy()) VideoCompressionService.cancel(job); else job.release();
 		}
-		job = null; signature = null; state.setValue(null);
+		job = null; signature = null; acceptedAt.clear(); state.setValue(null);
 	}
 	@Override protected void onCleared() { clear(); }
 }

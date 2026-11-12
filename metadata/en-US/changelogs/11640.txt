@@ -1,0 +1,6 @@
+- Updated the video conversion interface: a compact bottom sheet, progress on each file's preview, and a short status when attachments are hidden by the keyboard. The indicators fade out after completion.
+- The Convert button selects H.265 when hardware encoding is supported, otherwise H.264. Compatible H.265 videos that do not need a size reduction are quickly remuxed without re-encoding the video track. The conversion window will be refined further 😺
+- You can now solve the captcha during video conversion. Posting waits until the files are ready. The separate notification for successful completion has been removed.
+- Added an attachment count and total-size counter inside the comment field. The known upload limit is displayed; for Dvach, the passcode is taken into account. The counter wraps when using a larger font.
+- The Play icon in posts has moved from the thumbnail to the caption next to the video format.
+- Reduced repeated calls to Android's system network services when checking the connection, VPN, and media preloading.

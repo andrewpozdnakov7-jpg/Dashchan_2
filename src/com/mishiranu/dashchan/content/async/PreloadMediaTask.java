@@ -1,7 +1,5 @@
 package com.mishiranu.dashchan.content.async;
 
-import android.net.ConnectivityManager;
-import android.net.NetworkCapabilities;
 import android.net.Uri;
 import chan.content.Chan;
 import chan.content.ChanPerformer;
@@ -12,7 +10,6 @@ import chan.http.HttpHolder;
 import chan.http.HttpResponse;
 import com.mishiranu.dashchan.content.CacheManager;
 import com.mishiranu.dashchan.content.NetworkObserver;
-import com.mishiranu.dashchan.util.ConcurrentUtils;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -23,41 +20,25 @@ public final class PreloadMediaTask extends HttpHolderTask<Void, File> {
 	private final Chan chan;
 	private final Uri uri;
 	private final long maxBytes;
-	private final ConnectivityManager connectivity;
 	private final String networkMode;
 	private final Runnable callback;
 
-	public PreloadMediaTask(Chan chan, Uri uri, long maxBytes, ConnectivityManager connectivity,
+	public PreloadMediaTask(Chan chan, Uri uri, long maxBytes,
 			String networkMode, Runnable callback) {
 		super(chan);
 		this.chan = chan;
 		this.uri = uri;
 		this.maxBytes = maxBytes;
-		this.connectivity = connectivity;
 		this.networkMode = networkMode;
 		this.callback = callback;
 	}
 
-	public static boolean isNetworkAllowed(ConnectivityManager connectivity, String networkMode) {
-		if (connectivity == null) return false;
-		try {
-			NetworkCapabilities capabilities = connectivity.getNetworkCapabilities(connectivity.getActiveNetwork());
-			if (capabilities == null || !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) {
-				return false;
-			}
-			if ("all".equals(networkMode)) return true;
-			if ("wifi_3g".equals(networkMode)) {
-				return ConcurrentUtils.mainGet(() -> NetworkObserver.getInstance().isWifiOrMobileConnected());
-			}
-			return capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
-					&& !capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR);
-		} catch (SecurityException e) {
-			return false;
-		}
+	public static boolean isNetworkAllowed(String networkMode) {
+		return NetworkObserver.getInstance().getSnapshot().allowsPreload(networkMode);
 	}
 
 	private boolean allowed() {
-		return !isCancelled() && isNetworkAllowed(connectivity, networkMode);
+		return !isCancelled() && isNetworkAllowed(networkMode);
 	}
 
 	@Override

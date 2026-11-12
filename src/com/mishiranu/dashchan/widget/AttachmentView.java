@@ -42,9 +42,6 @@ public class AttachmentView extends View {
 	private RoundedCornersDrawable cornersDrawable;
 	private int cornersBackgroundColor;
 	private boolean postVideoStyle;
-	private Drawable cornerPlayDrawable;
-	private final Paint cornerPlayPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-	private final RectF cornerPlayBounds = new RectF();
 
 	private long lastClickTime;
 
@@ -319,23 +316,6 @@ public class AttachmentView extends View {
 		destination.set(dx, dy, dx + bw * scale, dy + bh * scale);
 	}
 
-	private void drawCornerPlay(Canvas canvas, int width, int height) {
-		float density = ResourceUtils.obtainDensity(this);
-		float size = Math.min(24f * density, Math.min(width, height) - 8f * density);
-		if (size <= 0f) return;
-		float inset = 4f * density;
-		float left = getLayoutDirection() == LAYOUT_DIRECTION_RTL ? inset : width - inset - size;
-		float top = height - inset - size;
-		cornerPlayBounds.set(left, top, left + size, top + size);
-		cornerPlayPaint.setColor(0xb3000000);
-		canvas.drawRoundRect(cornerPlayBounds, 8f * density, 8f * density, cornerPlayPaint);
-		if (cornerPlayDrawable == null) cornerPlayDrawable = getContext().getDrawable(R.drawable.ic_play_arrow);
-		int iconSize = Math.round(size * .75f);
-		int x = Math.round(left + (size - iconSize) / 2f), y = Math.round(top + (size - iconSize) / 2f);
-		cornerPlayDrawable.setBounds(x, y, x + iconSize, y + iconSize);
-		cornerPlayDrawable.draw(canvas);
-	}
-
 	@Override
 	public void draw(Canvas canvas) {
 		Interpolator interpolator = AnimationUtils.DECELERATE_INTERPOLATOR;
@@ -413,11 +393,9 @@ public class AttachmentView extends View {
 			}
 			overlayDrawable = errorOverlayDrawable;
 		}
-		boolean cornerPlay = postVideoStyle && overlay == Overlay.VIDEO && hasImage
+		boolean cleanVideoPreview = postVideoStyle && overlay == Overlay.VIDEO && hasImage
 				&& (videoThumbnailPreview != null || !error);
-		if (cornerPlay) {
-			drawCornerPlay(canvas, vw, vh);
-		} else if (overlayDrawable != null) {
+		if (!cleanVideoPreview && overlayDrawable != null) {
 			if (hasImage && !sfwMode) {
 				canvas.drawColor((int) (0x66 * alpha) << 24);
 			}

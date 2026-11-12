@@ -337,6 +337,12 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 					ViewGroup.LayoutParams.WRAP_CONTENT);
 			commentParent.removeView(commentView);
 			postingLayout.addView(commentView, postingLayout.indexOfChild(commentParent));
+			// Legacy layout has no shared editor frame; keep the same counter when that wrapper is removed.
+			View summary = commentParent.findViewById(R.id.posting_attachment_summary);
+			if (summary != null) {
+				commentParent.removeView(summary);
+				postingLayout.addView(summary, postingLayout.indexOfChild(commentParent));
+			}
 			postingLayout.removeView(commentParent);
 		}
 		ViewUtils.setNewMargin(checkBoxParent, 0, (int) (4f * density), 0, 0);
@@ -1019,14 +1025,16 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 
 	private void updateSendButtonState() {
 		if (sendButton == null) return;
-		boolean available = sendButtonEnabled && !attachmentController.isImportInProgress();
+		boolean available = sendButtonEnabled && !attachmentController.isAttachmentImportInProgress();
 		if (postingAppearance != null) {
 			boolean solve = postingAppearance.needsCaptchaSolution();
 			boolean content = commentView != null && !commentView.getText().toString().trim().isEmpty()
 					|| attachmentController.hasSendAttachments();
 			sendButton.setEnabled(available && postingAppearance.canActivatePrimary()
-					&& (solve ? !captchaController.isLoading() : captchaController.canSend() && content));
-		} else sendButton.setEnabled(available && captchaController.canSend());
+					&& (solve ? !captchaController.isLoading()
+							: !attachmentController.isCompressionInProgress() && captchaController.canSend() && content));
+		} else sendButton.setEnabled(available && !attachmentController.isCompressionInProgress()
+				&& captchaController.canSend());
 		if (postingAppearance != null) postingAppearance.updateSendState();
 	}
 
@@ -1102,6 +1110,9 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		return attachmentController.getAttachmentHolder(index);
 	}
 	@Override public boolean canConvertVideoAttachment(int index) { return attachmentController.canConvertVideoAttachment(index); }
+	@Override public boolean hasVideoConversionDetails(int index) { return attachmentController.hasVideoConversionDetails(index); }
+	@Override public void showVideoConversionDetails(int index, String sourceHash) { attachmentController.showVideoConversionDetails(index, sourceHash); }
+	@Override public int[] getVideoConversionPosition(int index) { return attachmentController.getVideoConversionPosition(index); }
 	@Override public void convertVideoAttachment(int index, String sourceHash, String sourceName) {
 		attachmentController.convertVideoAttachment(index, sourceHash, sourceName);
 	}
