@@ -33,7 +33,10 @@ def main():
     assert "application-debuggable" not in badging, "Debuggable F-Droid release"
     manifest = subprocess.check_output([args.aapt, "dump", "xmltree", args.apk, "AndroidManifest.xml"], text=True)
     assert not re.search(r"android:(debuggable|testOnly)[^\n]*0xffffffff", manifest), "Test APK manifest"
-    for name in ("AppLockActivity", "PrivacyResetActivity", "SecuritySessionProvider", "FirebaseInitProvider"):
+    for name in ("AppLockActivity", "PrivacyResetActivity", "SecuritySessionProvider", "SecurityComponentFactory",
+                 "android.permission.USE_BIOMETRIC"):
+        assert name in manifest, "Shared security component missing: " + name
+    for name in ("FirebaseInitProvider", "VideoCompressionService", "android.permission.FOREGROUND_SERVICE_MEDIA_PROCESSING"):
         assert name not in manifest, "Excluded component: " + name
     assert "ExperimentalImageEditorActivity" in manifest, "Shared photo editor missing"
     assert "content.service.translation.TranslationService" in manifest, "Translation service missing"
@@ -55,13 +58,15 @@ def main():
             assert len(data) == expected["files"][name]["size"], "Wrong runtime asset size: " + name
             assert hashlib.sha256(data).hexdigest() == expected["files"][name]["sha256"], "Wrong runtime asset: " + name
         for name in entries:
+            assert "androidx.media3" not in name, "Excluded export dependency metadata: " + name
             assert "\\" not in name and ".." not in name.split("/"), "Unsafe ZIP path"
             assert not re.search(r"\.(jks|keystore|log)$|(^|/)(local|keystore)\.properties$", name, re.I), "Private APK entry"
             data = apk.read(name)
             assert not private.search(data), "Private marker in APK entry: " + name
             if name.endswith(".dex"):
                 # The open-source Material UI is now shared. Proprietary services remain excluded.
-                for marker in (b"Lcom/google/firebase/", b"Lcom/google/android/gms/", b"Lcom/google/mlkit/"):
+                for marker in (b"Lcom/google/firebase/", b"Lcom/google/android/gms/", b"Lcom/google/mlkit/",
+                               b"Landroidx/media3/"):
                     assert marker not in data, "Excluded dependency in DEX: " + marker.decode("ascii")
             match = re.fullmatch(r"lib/([^/]+)/([^/]+\.so)", name)
             if match:
