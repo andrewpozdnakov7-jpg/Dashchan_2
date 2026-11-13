@@ -3,12 +3,16 @@
 	xmlns:android="http://schemas.android.com/apk/res/android"
 	xmlns:tools="http://schemas.android.com/tools">
 	<uses-permission android:name="io.dashchan2.permission.BIND_GOOGLE_TRANSLATION_ADDON" />
+	<uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROCESSING" />
 
 	<queries>
 		<package android:name="io.dashchan2.addon.googletranslate" />
 	</queries>
 
 	<application>
+
+		<service android:name=".media.compression.VideoCompressionService"
+			android:exported="false" android:foregroundServiceType="dataSync|mediaProcessing" />
 		<activity
 			android:name=".content.security.AppLockActivity"
 			android:theme="@style/Theme.Slooop.Lock"

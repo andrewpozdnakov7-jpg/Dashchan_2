@@ -155,6 +155,24 @@ public class PostingAttachmentsControllerTest {
 		});
 	}
 
+	@Test public void draftSnapshotPreservesConversionBeforeCompressionModelIsBound() {
+		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+			Fixture f = new Fixture(1, hash -> null);
+			try {
+				com.mishiranu.dashchan.content.storage.AttachmentConversion conversion =
+						new com.mishiranu.dashchan.content.storage.AttachmentConversion(draft(2, null, 0, null).hash,
+								"converted.mp4", "H.265", "group", 0, 9000, 4500);
+				DraftsStorage.AttachmentDraft saved = new DraftsStorage.AttachmentDraft(draft(1, null, 0, null).hash,
+						"original.mp4", null, false, false, false, false, null, true, conversion);
+				f.restore(saved);
+				DraftsStorage.AttachmentDraft captured = f.controller.createAttachmentDrafts().get(0);
+				assertEquals(saved.hash, captured.hash);
+				assertTrue(captured.forceVideoConversion);
+				assertSame(conversion, captured.conversion);
+			} finally { f.controller.detachView(); }
+		});
+	}
+
 	@Test public void uiSnapshotCountsRestoredAndSuccessfullyImportedFilesAcrossLimitChanges() {
 		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
 			Fixture f = new Fixture(1, hash -> null);

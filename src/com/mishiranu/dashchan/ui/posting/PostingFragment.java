@@ -1113,6 +1113,12 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 	@Override public boolean hasVideoConversionDetails(int index) { return attachmentController.hasVideoConversionDetails(index); }
 	@Override public void showVideoConversionDetails(int index, String sourceHash) { attachmentController.showVideoConversionDetails(index, sourceHash); }
 	@Override public int[] getVideoConversionPosition(int index) { return attachmentController.getVideoConversionPosition(index); }
+	@Override public VideoSizeSummary getVideoSizeSummary(int index, String hash, String name) {
+		return attachmentController.getVideoSizeSummary(index, hash, name);
+	}
+	@Override public Runnable observeVideoConversion(androidx.lifecycle.LifecycleOwner owner, Runnable changed) {
+		return attachmentController.observeVideoConversion(owner, changed);
+	}
 	@Override public void convertVideoAttachment(int index, String sourceHash, String sourceName) {
 		attachmentController.convertVideoAttachment(index, sourceHash, sourceName);
 	}

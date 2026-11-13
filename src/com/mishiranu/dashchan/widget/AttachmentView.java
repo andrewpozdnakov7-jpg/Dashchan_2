@@ -42,6 +42,8 @@ public class AttachmentView extends View {
 	private RoundedCornersDrawable cornersDrawable;
 	private int cornersBackgroundColor;
 	private boolean postVideoStyle;
+	private final Drawable videoMiniBadge;
+	private final float videoBadgeInset, videoBadgeWidth, videoBadgeHeight;
 
 	private long lastClickTime;
 
@@ -58,6 +60,11 @@ public class AttachmentView extends View {
 		workColorMatrix = new float[] {1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0};
 		colorMatrix1 = new ColorMatrix(workColorMatrix);
 		colorMatrix2 = new ColorMatrix(workColorMatrix);
+		float density = ResourceUtils.obtainDensity(context);
+		videoBadgeInset = 2f * density;
+		videoBadgeWidth = 16f * density;
+		videoBadgeHeight = 14f * density;
+		videoMiniBadge = context.getDrawable(R.drawable.slooop_video_mini_badge).mutate();
 	}
 
 	public void setCropEnabled(boolean enabled) {
@@ -395,6 +402,19 @@ public class AttachmentView extends View {
 		}
 		boolean cleanVideoPreview = postVideoStyle && overlay == Overlay.VIDEO && hasImage
 				&& (videoThumbnailPreview != null || !error);
+		if (cleanVideoPreview && !sfwMode) {
+			// Use the visible image, not fit-mode letterboxing; keep the physical right corner in RTL.
+			float left = Math.max(0f, destination.left), top = Math.max(0f, destination.top);
+			float right = Math.min(vw, destination.right), bottom = Math.min(vh, destination.bottom);
+			if (right - left >= videoBadgeWidth + 2 * videoBadgeInset
+					&& bottom - top >= videoBadgeHeight + 2 * videoBadgeInset) {
+				int badgeRight = Math.round(right - videoBadgeInset), badgeBottom = Math.round(bottom - videoBadgeInset);
+				videoMiniBadge.setBounds(badgeRight - Math.round(videoBadgeWidth), badgeBottom - Math.round(videoBadgeHeight),
+						badgeRight, badgeBottom);
+				videoMiniBadge.setAlpha(Math.round(255 * alpha));
+				videoMiniBadge.draw(canvas);
+			}
+		}
 		if (!cleanVideoPreview && overlayDrawable != null) {
 			if (hasImage && !sfwMode) {
 				canvas.drawColor((int) (0x66 * alpha) << 24);

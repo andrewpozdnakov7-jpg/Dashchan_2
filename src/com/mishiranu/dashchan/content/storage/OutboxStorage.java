@@ -155,24 +155,22 @@ public final class OutboxStorage {
 			values.put("draft", bytes);
 			db.insertOrThrow("outgoing", null, values);
 			try {
-				if (draft.attachmentDrafts != null) {
-					for (DraftsStorage.AttachmentDraft attachment : draft.attachmentDrafts) {
-						File source = attachments.get(attachment.hash);
-						if (source == null || !source.isFile()) throw new IOException("Outgoing attachment missing");
-						File target = attachmentFile(id, attachment.hash);
-						if (!target.getParentFile().isDirectory() && !target.getParentFile().mkdirs()) {
-							throw new IOException("Outgoing attachment directory unavailable");
-						}
-						AtomicFile atomicFile = new AtomicFile(target);
-						FileOutputStream output = atomicFile.startWrite();
-						try (FileInputStream input = new FileInputStream(source)) {
-							String hash = StringUtils.formatHex(Hasher.getInstanceSha256().calculateAndCopy(input, output));
-							if (!attachment.hash.equals(hash)) throw new IOException("Outgoing attachment changed");
-							atomicFile.finishWrite(output);
-						} catch (Exception e) {
-							atomicFile.failWrite(output);
-							throw e;
-						}
+				for (String attachmentHash : referencedAttachmentHashes(draft)) {
+					File source = attachments.get(attachmentHash);
+					if (source == null || !source.isFile()) throw new IOException("Outgoing attachment missing");
+					File target = attachmentFile(id, attachmentHash);
+					if (!target.getParentFile().isDirectory() && !target.getParentFile().mkdirs()) {
+						throw new IOException("Outgoing attachment directory unavailable");
+					}
+					AtomicFile atomicFile = new AtomicFile(target);
+					FileOutputStream output = atomicFile.startWrite();
+					try (FileInputStream input = new FileInputStream(source)) {
+						String hash = StringUtils.formatHex(Hasher.getInstanceSha256().calculateAndCopy(input, output));
+						if (!attachmentHash.equals(hash)) throw new IOException("Outgoing attachment changed");
+						atomicFile.finishWrite(output);
+					} catch (Exception e) {
+						atomicFile.failWrite(output);
+						throw e;
 					}
 				}
 				setState(id, OutboxState.READY);
@@ -277,12 +275,10 @@ public final class OutboxStorage {
 						draft.name, draft.email, null, draft.subject, draft.comment, draft.commentCarriage,
 						null, draft.optionSage, draft.optionSpoiler, draft.optionOriginalPoster, draft.userIcon);
 			}
-			if (draft.attachmentDrafts != null) {
-				for (DraftsStorage.AttachmentDraft attachment : draft.attachmentDrafts) {
-					File file = attachmentFile(id, attachment.hash);
-					if (!file.isFile() || !attachment.hash.equals(DraftsStorage.getInstance().storeAttachmentFile(FileHolder.obtain(file)))) {
-						throw new AttachmentRecoveryException();
-					}
+			for (String attachmentHash : referencedAttachmentHashes(draft)) {
+				File file = attachmentFile(id, attachmentHash);
+				if (!file.isFile() || !attachmentHash.equals(DraftsStorage.getInstance().storeAttachmentFile(FileHolder.obtain(file)))) {
+					throw new AttachmentRecoveryException();
 				}
 			}
 			return draft;
@@ -298,6 +294,14 @@ public final class OutboxStorage {
 			deleteAttachments(id);
 			return null;
 		}, ignored -> callback.run(), failure);
+	}
+
+	private static Set<String> referencedAttachmentHashes(DraftsStorage.PostDraft draft) {
+		Set<String> hashes = new HashSet<>();
+		if (draft.attachmentDrafts != null) {
+			for (DraftsStorage.AttachmentDraft attachment : draft.attachmentDrafts) attachment.collectHashes(hashes);
+		}
+		return hashes;
 	}
 
 	private void deleteAttachments(String id) throws IOException {

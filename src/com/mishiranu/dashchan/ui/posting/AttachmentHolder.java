@@ -25,6 +25,9 @@ public class AttachmentHolder {
 	public boolean optionRemoveFileName = false;
 	public boolean optionSpoiler = false;
 	public GraphicsUtils.Reencoding reencoding;
+	// Restored detached state; a live compression model becomes authoritative after binding.
+	public boolean forceVideoConversion;
+	public com.mishiranu.dashchan.content.storage.AttachmentConversion conversionDraft;
 
 	public AttachmentHolder(View view, TextView fileName, TextView fileSize, ImageView imageView, View previewButton,
 			View warningButton, View ratingButton, View editButton) {

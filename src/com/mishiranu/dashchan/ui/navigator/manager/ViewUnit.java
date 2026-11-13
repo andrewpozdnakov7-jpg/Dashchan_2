@@ -60,7 +60,6 @@ import com.mishiranu.dashchan.widget.PostLinearLayout;
 import com.mishiranu.dashchan.widget.PostMarksColorProvider;
 import com.mishiranu.dashchan.widget.ThemeEngine;
 import com.mishiranu.dashchan.widget.ThreadDescriptionView;
-import com.mishiranu.dashchan.widget.VideoMetadataSpan;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -725,7 +724,7 @@ public class ViewUnit {
 			if (size >= 2 && Preferences.isAllAttachments()) {
 				holder.thumbnail.resetImage(null);
 				holder.thumbnail.setVisibility(View.GONE);
-				VideoMetadataSpan.bind(holder.attachmentInfo, "", false);
+				holder.attachmentInfo.setText("");
 				holder.attachmentInfo.setVisibility(View.GONE);
 				ArrayList<AttachmentHolder> attachmentHolders = holder.attachmentHolders;
 				if (attachmentHolders == null) {
@@ -774,16 +773,14 @@ public class ViewUnit {
 							? GalleryOverlay.NavigatePostMode.MANUALLY : GalleryOverlay.NavigatePostMode.ENABLED);
 					attachmentHolder.thumbnailLongClickListener.update(attachmentItem);
 					attachmentHolder.thumbnail.setSfwMode(sfwMode);
-					VideoMetadataSpan.bind(attachmentHolder.attachmentInfo,
-							attachmentItem.getDescription(AttachmentItem.FormatMode.THREE_LINES),
-							attachmentItem.getType() == AttachmentItem.Type.VIDEO);
+					attachmentHolder.attachmentInfo.setText(attachmentItem.getDescription(AttachmentItem.FormatMode.THREE_LINES));
 					attachmentHolder.container.setVisibility(View.VISIBLE);
 				}
 				for (int i = size; i < holders; i++) {
 					AttachmentHolder attachmentHolder = attachmentHolders.get(i);
 					ImageLoader.getInstance().cancel(attachmentHolder.thumbnail);
 					attachmentHolder.thumbnail.resetImage(null);
-					VideoMetadataSpan.bind(attachmentHolder.attachmentInfo, "", false);
+					attachmentHolder.attachmentInfo.setText("");
 					attachmentHolder.container.setVisibility(View.GONE);
 				}
 				holder.attachments.setVisibility(View.VISIBLE);
@@ -796,9 +793,7 @@ public class ViewUnit {
 				holder.thumbnailLongClickListener.update(attachmentItem);
 				holder.thumbnail.setSfwMode(Preferences.isSfwMode());
 				holder.thumbnail.setVisibility(View.VISIBLE);
-				VideoMetadataSpan.bind(holder.attachmentInfo,
-						postItem.getAttachmentsDescription(context.getResources(), AttachmentItem.FormatMode.LONG),
-						size == 1 && attachmentItem.getType() == AttachmentItem.Type.VIDEO);
+				holder.attachmentInfo.setText(postItem.getAttachmentsDescription(context.getResources(), AttachmentItem.FormatMode.LONG));
 				holder.attachmentInfo.setVisibility(View.VISIBLE);
 				holder.attachments.setVisibility(View.GONE);
 				holder.attachmentViewCount = 1;
@@ -807,7 +802,7 @@ public class ViewUnit {
 			ImageLoader.getInstance().cancel(holder.thumbnail);
 			holder.thumbnail.resetImage(null);
 			holder.thumbnail.setVisibility(View.GONE);
-			VideoMetadataSpan.bind(holder.attachmentInfo, "", false);
+			holder.attachmentInfo.setText("");
 			holder.attachmentInfo.setVisibility(View.GONE);
 			holder.attachments.setVisibility(View.GONE);
 			holder.attachmentViewCount = 1;

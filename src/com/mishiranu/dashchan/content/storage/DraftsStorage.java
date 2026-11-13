@@ -276,12 +276,12 @@ public class DraftsStorage extends StorageManager.Storage<Pair<List<DraftsStorag
 		for (PostDraft postDraft : postDrafts.values()) {
 			if (postDraft.attachmentDrafts != null) {
 				for (AttachmentDraft attachmentDraft : postDraft.attachmentDrafts) {
-					hashes.add(attachmentDraft.hash);
+					attachmentDraft.collectHashes(hashes);
 				}
 			}
 		}
 		for (AttachmentDraft attachmentDraft : futureAttachmentDrafts) {
-			hashes.add(attachmentDraft.hash);
+			attachmentDraft.collectHashes(hashes);
 		}
 		return hashes;
 	}
@@ -364,9 +364,13 @@ public class DraftsStorage extends StorageManager.Storage<Pair<List<DraftsStorag
 
 	private void handleRemoveAttachmentDrafts(ArrayList<AttachmentDraft> attachmentDrafts) {
 		HashSet<String> hashes = collectAttachmentDraftHashes();
+		HashSet<String> removed = new HashSet<>();
 		for (AttachmentDraft attachmentDraft : attachmentDrafts) {
-			if (!hashes.contains(attachmentDraft.hash)) {
-				File file = resolveAttachmentDraftFile(attachmentDraft.hash);
+			attachmentDraft.collectHashes(removed);
+		}
+		for (String hash : removed) {
+			if (!hashes.contains(hash)) {
+				File file = resolveAttachmentDraftFile(hash);
 				if (file != null) {
 					file.delete();
 				}
@@ -705,6 +709,8 @@ public class DraftsStorage extends StorageManager.Storage<Pair<List<DraftsStorag
 		private static final String KEY_OPTION_REMOVE_FILE_NAME = "optionRemoveFileName";
 		private static final String KEY_OPTION_SPOILER = "optionSpoiler";
 		private static final String KEY_REENCODING = "reencoding";
+		private static final String KEY_FORCE_VIDEO_CONVERSION = "forceVideoConversion";
+		private static final String KEY_CONVERSION = "videoConversion";
 
 		private static final String KEY_REENCODING_FORMAT = "format";
 		private static final String KEY_REENCODING_QUALITY = "quality";
@@ -718,10 +724,18 @@ public class DraftsStorage extends StorageManager.Storage<Pair<List<DraftsStorag
 		public final boolean optionRemoveFileName;
 		public final boolean optionSpoiler;
 		public final GraphicsUtils.Reencoding reencoding;
+		public final boolean forceVideoConversion;
+		public final AttachmentConversion conversion;
 
 		public AttachmentDraft(String hash, String name, String rating, boolean optionUniqueHash,
 				boolean optionRemoveMetadata, boolean optionRemoveFileName, boolean optionSpoiler,
 				GraphicsUtils.Reencoding reencoding) {
+			this(hash, name, rating, optionUniqueHash, optionRemoveMetadata, optionRemoveFileName,
+					optionSpoiler, reencoding, false, null);
+		}
+		public AttachmentDraft(String hash, String name, String rating, boolean optionUniqueHash,
+				boolean optionRemoveMetadata, boolean optionRemoveFileName, boolean optionSpoiler,
+				GraphicsUtils.Reencoding reencoding, boolean forceVideoConversion, AttachmentConversion conversion) {
 			this.hash = hash;
 			this.name = name;
 			this.rating = rating;
@@ -730,6 +744,12 @@ public class DraftsStorage extends StorageManager.Storage<Pair<List<DraftsStorag
 			this.optionRemoveFileName = optionRemoveFileName;
 			this.optionSpoiler = optionSpoiler;
 			this.reencoding = reencoding;
+			this.forceVideoConversion = forceVideoConversion;
+			this.conversion = conversion != null && conversion.isValid() ? conversion : null;
+		}
+		public void collectHashes(Collection<String> hashes) {
+			hashes.add(hash);
+			if (conversion != null) conversion.collectHash(hashes);
 		}
 
 		public void serialize(JsonSerial.Writer writer) throws IOException {
@@ -754,6 +774,12 @@ public class DraftsStorage extends StorageManager.Storage<Pair<List<DraftsStorag
 			writer.value(optionRemoveFileName);
 			writer.name(KEY_OPTION_SPOILER);
 			writer.value(optionSpoiler);
+			if (forceVideoConversion) {
+				writer.name(KEY_FORCE_VIDEO_CONVERSION); writer.value(true);
+			}
+			if (conversion != null) {
+				writer.name(KEY_CONVERSION); conversion.serialize(writer);
+			}
 			if (reencoding != null) {
 				writer.name(KEY_REENCODING);
 				writer.startObject();
@@ -779,6 +805,8 @@ public class DraftsStorage extends StorageManager.Storage<Pair<List<DraftsStorag
 			boolean optionRemoveFileName = false;
 			boolean optionSpoiler = false;
 			GraphicsUtils.Reencoding reencoding = null;
+			boolean forceVideoConversion = false;
+			AttachmentConversion conversion = null;
 			reader.startObject();
 			while (!reader.endStruct()) {
 				switch (reader.nextName()) {
@@ -809,6 +837,12 @@ public class DraftsStorage extends StorageManager.Storage<Pair<List<DraftsStorag
 					case KEY_OPTION_SPOILER: {
 						optionSpoiler = reader.nextBoolean();
 						break;
+					}
+					case KEY_FORCE_VIDEO_CONVERSION: {
+						forceVideoConversion = reader.nextBoolean(); break;
+					}
+					case KEY_CONVERSION: {
+						conversion = AttachmentConversion.deserialize(reader); break;
 					}
 					case KEY_REENCODING: {
 						String format = null;
@@ -848,7 +882,7 @@ public class DraftsStorage extends StorageManager.Storage<Pair<List<DraftsStorag
 				return null;
 			}
 			return new AttachmentDraft(hash, name, rating, optionUniqueHash, optionRemoveMetadata,
-					optionRemoveFileName, optionSpoiler, reencoding);
+					optionRemoveFileName, optionSpoiler, reencoding, forceVideoConversion, conversion);
 		}
 	}
 }

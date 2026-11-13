@@ -199,6 +199,12 @@ public final class PostingAttachmentsController {
 	public void bindCompression(androidx.fragment.app.Fragment owner, String chan, String board) {
 		compressionOwner = owner; compressionChan = chan; compressionBoard = board;
 		compressionModel = new ViewModelProvider(owner).get(PostingCompressionModel.class);
+		if (compressionModel.job == null) {
+			for (AttachmentHolder holder : attachments) {
+				if (holder.forceVideoConversion) compressionModel.forcedVideos.add(holder.hash);
+			}
+			restoreCompressionDraft();
+		}
 		compressionModel.state.observe(owner.getViewLifecycleOwner(), job -> renderCompression());
 		limitsModel = new ViewModelProvider(owner).get(PostingLimitsModel.class);
 		limitsModel.totalBytes.observe(owner.getViewLifecycleOwner(), bytes -> updateAttachmentSummary());
@@ -214,10 +220,69 @@ public final class PostingAttachmentsController {
 		if (compressionModel != null) signature.append("\nforced:").append(new java.util.TreeSet<>(compressionModel.forcedVideos));
 		return signature.toString();
 	}
+	/** Restore the whole accepted transaction; never mix stale results with a changed attachment set. */
+	private boolean restoreCompressionDraft() {
+		if (!CompressionSettings.enabled() || postingConfiguration == null) return false;
+		String signature = compressionSignature();
+		ArrayList<VideoCompressionJob.Source> sources = new ArrayList<>();
+		java.util.Map<String, VideoCompressionJob.Result> results = new java.util.LinkedHashMap<>();
+		try {
+			long profile = ProfileGeneration.current(requireContext());
+			if (!ProfileGeneration.canWrite(requireContext(), profile)) return false;
+			for (AttachmentHolder holder : attachments) {
+				File original = DraftsStorage.getInstance().getAttachmentDraftFile(holder.hash);
+				if (original == null) return false;
+				sources.add(new VideoCompressionJob.Source(holder.hash, holder.name, original));
+				com.mishiranu.dashchan.content.storage.AttachmentConversion saved = holder.conversionDraft;
+				if (saved != null) {
+					File output = DraftsStorage.getInstance().getAttachmentDraftFile(saved.hash);
+					if (!saved.matches(signature, profile, output) || original.length() != saved.before) return false;
+					results.put(holder.hash, new VideoCompressionJob.Result(saved.hash, saved.name,
+							saved.codec, saved.before, saved.after));
+				} else if (compressionModel.forcedVideos.contains(holder.hash)) {
+					// An interrupted/missing manual result must be converted again, not silently sent as original.
+					return false;
+				}
+			}
+			Collection<String> types = postingConfiguration.attachmentMimeTypes;
+			boolean mp4 = types.contains("video/mp4") || types.contains("video/*") || types.contains("*/*");
+			if (results.isEmpty() || !mp4) return false;
+			VideoCompressionJob restored = VideoCompressionJob.restoreCompleted(requireContext(), sources, profile,
+					compressionChan, compressionBoard, mp4, new java.util.HashSet<>(compressionModel.forcedVideos), results);
+			compressionModel.restore(restored, signature);
+			return true;
+		} catch (java.io.IOException e) {
+			com.mishiranu.dashchan.media.VideoDiagnostics.recordUi("compression restore_skipped reason=profile_unavailable");
+			return false;
+		}
+	}
 	public boolean canConvertVideoAttachment(int index) {
 		AttachmentHolder holder = getAttachmentHolder(index);
-		return CompressionSettings.enabled() && compressionModel != null && !isImportInProgress()
+		return CompressionSettings.enabled() && compressionModel != null && !isImportInProgress() && !isCompressionInProgress()
 				&& holder != null && Chan.getFallback().locator.isVideoExtension(holder.name);
+	}
+	public VideoSizeSummary getVideoSizeSummary(int index, String hash, String name) {
+		AttachmentHolder holder = getAttachmentHolder(index);
+		if (host == null || holder == null || !AttachmentResultGuard.matches(hash, name, holder.hash, holder.name)) return null;
+		FileHolder original = resolveAttachmentFile(holder.hash);
+		long current = original != null ? original.getSize() : -1;
+		VideoCompressionJob.Result result = compressed(holder);
+		if (result != null && compressionModel.job.current()) {
+			FileHolder output = resolveAttachmentFile(result.hash);
+			if (output != null && output.getSize() == result.after) {
+				boolean converted = !result.hash.equals(holder.hash);
+				return new VideoSizeSummary(result.after, result.before, result.after, converted,
+						false, canConvertVideoAttachment(index));
+			}
+		}
+		return new VideoSizeSummary(current, -1, -1, false, isCompressionInProgress(), canConvertVideoAttachment(index));
+	}
+	public Runnable observeVideoConversion(androidx.lifecycle.LifecycleOwner owner, Runnable changed) {
+		PostingCompressionModel model = compressionModel;
+		if (model == null) return () -> {};
+		androidx.lifecycle.Observer<VideoCompressionJob> observer = job -> changed.run();
+		model.state.observe(owner, observer);
+		return () -> model.state.removeObserver(observer);
 	}
 	public boolean hasVideoConversionDetails(int index) {
 		AttachmentHolder holder = getAttachmentHolder(index);
@@ -258,9 +323,9 @@ public final class PostingAttachmentsController {
 				holder != null ? holder.hash : null, holder != null ? holder.name : null)) {
 			ClickableToast.show(R.string.compression_attachment_changed); return;
 		}
-		attachmentsChanged();
 		compressionModel.forcedVideos.add(holder.hash);
 		compressionModel.signature = null;
+		attachmentsChanged();
 		scheduleCompression();
 	}
 	private void attachmentsChanged() {
@@ -308,12 +373,14 @@ public final class PostingAttachmentsController {
 	private void renderCompression() {
 		if (host == null || compressionModel == null || compressionStatus == null || compressionRendering) return;
 		compressionRendering = true;
+		boolean saveDraft = false;
 		try {
 			VideoCompressionJob job = compressionModel.job;
 			String fileState = job != null && job.phase == VideoCompressionJob.Phase.DONE && CompressionSettings.enabled() ? job.id : "";
 			if (!fileState.equals(boundConversionState)) {
 				boundConversionState = fileState;
 				for (AttachmentHolder holder : attachments) bindAttachmentFile(holder, resolveAttachmentFile(holder.hash));
+				saveDraft = true;
 			}
 			renderConversionBadges(job);
 			com.mishiranu.dashchan.widget.PostingFormAppearance.setConversionStatus(attachmentContainer,
@@ -325,6 +392,7 @@ public final class PostingAttachmentsController {
 			if (busy != compressionWasBusy) { compressionWasBusy = busy; host.invalidateOptionsMenu(); }
 			host.updateSendButtonState();
 		}
+		if (saveDraft) host.saveDraftAfterAttachmentChange();
 	}
 	private void showCompressionActions() {
 		if (host == null || compressionModel == null || compressionModel.job == null || compressionDialog != null
@@ -334,7 +402,7 @@ public final class PostingAttachmentsController {
 		builder.setTitle(R.string.compression_title);
 		if (job.busy()) {
 			builder.setMessage(compressionDescription(job)).setPositiveButton(android.R.string.cancel, (dialog, which) ->
-					VideoCompressionService.cancel(job))
+					restoreOriginals(job))
 					.setNegativeButton(android.R.string.ok, null);
 		} else {
 			StringBuilder details = new StringBuilder(compressionDescription(job));
@@ -344,11 +412,21 @@ public final class PostingAttachmentsController {
 			}
 			builder.setMessage(details).setNegativeButton(android.R.string.ok, null);
 			if (!job.results.isEmpty()) builder.setPositiveButton(R.string.slooop_converter_ui_restore_many, (dialog, which) ->
-					VideoCompressionService.cancel(job));
+					restoreOriginals(job));
 			else builder.setPositiveButton(R.string.compression_restart, (dialog, which) -> { compressionModel.signature = null; scheduleCompression(); });
 		}
 		compressionDialog = builder.create();
 		compressionDialog.setOnDismissListener(dialog -> compressionDialog = null); compressionDialog.show();
+	}
+	private void restoreOriginals(VideoCompressionJob job) {
+		if (compressionModel == null || compressionModel.job != job) return;
+		compressionModel.forcedVideos.clear();
+		for (AttachmentHolder holder : attachments) {
+			holder.forceVideoConversion = false; holder.conversionDraft = null;
+		}
+		compressionModel.signature = compressionSignature();
+		VideoCompressionService.cancel(job);
+		host.saveDraftAfterAttachmentChange();
 	}
 
 	private String compressionDescription(VideoCompressionJob job) {
@@ -484,7 +562,7 @@ public final class PostingAttachmentsController {
 
 	private void updateAttachmentSummary() {
 		if (host == null || attachmentSummary == null || postingConfiguration == null) return;
-		boolean visible = postingConfiguration.attachmentCount > 0;
+		boolean visible = postingConfiguration.attachmentCount > 0 && !attachments.isEmpty();
 		if (visible) {
 			int max = postingConfiguration.attachmentCount;
 			String count = getResources().getQuantityString(R.plurals.posting_attachment_count,
@@ -518,9 +596,19 @@ public final class PostingAttachmentsController {
 		if (attachments.size() > 0) {
 			attachmentDrafts = new ArrayList<>(attachments.size());
 			for (AttachmentHolder holder : attachments) {
+				boolean forced = compressionModel != null ? CompressionSettings.enabled()
+						&& compressionModel.forcedVideos.contains(holder.hash) : holder.forceVideoConversion;
+				VideoCompressionJob.Result result = compressed(holder);
+				com.mishiranu.dashchan.content.storage.AttachmentConversion conversion = !com.mishiranu.dashchan.BuildConfig.ENABLE_VIDEO_COMPRESSION || compressionModel == null
+						? holder.conversionDraft : null;
+				if (result != null && compressionModel.job.current()) {
+					conversion = new com.mishiranu.dashchan.content.storage.AttachmentConversion(result.hash,
+							result.name, result.codec, compressionModel.signature, compressionModel.job.profile,
+							result.before, result.after);
+				}
 				attachmentDrafts.add(new DraftsStorage.AttachmentDraft(holder.hash, holder.name, holder.rating,
 						holder.optionUniqueHash, holder.optionRemoveMetadata, holder.optionRemoveFileName,
-						holder.optionSpoiler, holder.reencoding));
+						holder.optionSpoiler, holder.reencoding, forced, conversion));
 			}
 		}
 		return attachmentDrafts;
@@ -533,6 +621,9 @@ public final class PostingAttachmentsController {
 						attachmentDraft.optionUniqueHash, attachmentDraft.optionRemoveMetadata,
 						attachmentDraft.optionRemoveFileName, attachmentDraft.optionSpoiler,
 						attachmentDraft.reencoding);
+				AttachmentHolder holder = attachments.get(attachments.size() - 1);
+				holder.forceVideoConversion = attachmentDraft.forceVideoConversion;
+				holder.conversionDraft = attachmentDraft.conversion;
 			}
 		}
 		updateAttachmentSummary();
@@ -896,8 +987,11 @@ public final class PostingAttachmentsController {
 						break;
 					}
 					if (hash != null && name != null) {
+						if (compressionModel != null) compressionModel.forcedVideos.remove(holder.hash);
 						holder.hash = hash;
 						holder.name = name;
+						holder.forceVideoConversion = false;
+						holder.conversionDraft = null;
 						FileHolder fileHolder = resolveAttachmentFile(hash);
 						if (fileHolder == null || !GraphicsUtils.canReencode(fileHolder)) {
 							holder.reencoding = null;

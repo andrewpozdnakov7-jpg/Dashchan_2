@@ -5,6 +5,7 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.Dialog;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.os.Bundle;
 import android.util.SparseBooleanArray;
 import android.view.View;
@@ -35,7 +36,6 @@ public class AttachmentOptionsDialog extends DialogFragment implements AdapterVi
 	public static final String TAG = AttachmentOptionsDialog.class.getName();
 
 	private static final String EXTRA_ATTACHMENT_INDEX = "attachmentIndex";
-	private static final String EXTRA_ALL_OPTIONS = "allOptions";
 
 	private enum Type {UNIQUE_HASH, REMOVE_METADATA, REENCODE_IMAGE, REMOVE_FILE_NAME, SPOILER}
 
@@ -55,6 +55,8 @@ public class AttachmentOptionsDialog extends DialogFragment implements AdapterVi
 	private final HashMap<Type, Integer> optionIndices = new HashMap<>();
 
 	private ListView listView;
+	private VideoConversionSetup.Panel videoPanel;
+	private Runnable removeVideoObserver;
 
 	public AttachmentOptionsDialog() {}
 
@@ -113,18 +115,13 @@ public class AttachmentOptionsDialog extends DialogFragment implements AdapterVi
 		PostingDialogCallback callback = (PostingDialogCallback) getParentFragment();
 		int attachmentIndex = requireArguments().getInt(EXTRA_ATTACHMENT_INDEX);
 		boolean video = chan.content.Chan.getFallback().locator.isVideoExtension(holder.name);
-		if (video && com.mishiranu.dashchan.media.compression.CompressionSettings.enabled()
-				&& !requireArguments().getBoolean(EXTRA_ALL_OPTIONS)) {
+		if (video && com.mishiranu.dashchan.media.compression.CompressionSettings.enabled()) {
 			String hash = holder.hash, name = holder.name;
-			int[] position = callback.getVideoConversionPosition(attachmentIndex);
-			return VideoConversionSetup.create(activity, holder, position[0], position[1],
-					callback.canConvertVideoAttachment(attachmentIndex), callback.hasVideoConversionDetails(attachmentIndex),
-					() -> callback.convertVideoAttachment(attachmentIndex, hash, name),
-					() -> callback.showVideoConversionDetails(attachmentIndex, hash), () -> {
-						AttachmentOptionsDialog options = new AttachmentOptionsDialog(attachmentIndex);
-						options.requireArguments().putBoolean(EXTRA_ALL_OPTIONS, true);
-						options.show(getParentFragmentManager(), TAG + ".all");
-					});
+			videoPanel = VideoConversionSetup.create(activity, holder,
+					() -> callback.getAttachmentHolder(attachmentIndex) == holder
+							? callback.getVideoSizeSummary(attachmentIndex, hash, name) : null,
+					() -> callback.convertVideoAttachment(attachmentIndex, hash, name));
+			return videoPanel;
 		}
 		ChanConfiguration.Posting postingConfiguration = ((PostingDialogCallback) getParentFragment())
 				.getPostingConfiguration();
@@ -217,6 +214,21 @@ public class AttachmentOptionsDialog extends DialogFragment implements AdapterVi
 		dialog.setCanceledOnTouchOutside(true);
 		return dialog;
 	}
+
+	@Override public void onStart() {
+		super.onStart();
+		removeVideoObserver();
+		if (videoPanel != null) {
+			videoPanel.refresh();
+			removeVideoObserver = ((PostingDialogCallback) requireParentFragment()).observeVideoConversion(this, videoPanel::refresh);
+		}
+	}
+	private void removeVideoObserver() {
+		if (removeVideoObserver != null) { removeVideoObserver.run(); removeVideoObserver = null; }
+	}
+	@Override public void onStop() { removeVideoObserver(); super.onStop(); }
+	@Override public void onDismiss(@NonNull DialogInterface dialog) { removeVideoObserver(); super.onDismiss(dialog); }
+	@Override public void onDestroyView() { removeVideoObserver(); videoPanel = null; super.onDestroyView(); }
 
 	private void updateItemsEnabled(ItemsAdapter adapter, AttachmentHolder holder) {
 		Integer reencodeIndex = optionIndices.get(Type.REENCODE_IMAGE);

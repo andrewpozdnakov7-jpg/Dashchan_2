@@ -12,7 +12,7 @@ public final class CompressionSettings {
 	public static final String FILE_LIMIT = "video_compression_file_mb";
 	public static final String TOTAL_LIMIT = "video_compression_total_mb";
 	private CompressionSettings() {}
-	public static boolean enabled() { return Preferences.PREFERENCES.getBoolean(ENABLED, false); }
+	public static boolean enabled() { return com.mishiranu.dashchan.BuildConfig.ENABLE_VIDEO_COMPRESSION && Preferences.PREFERENCES.getBoolean(ENABLED, false); }
 	public static String codec() { return Preferences.PREFERENCES.getString(CODEC, "auto"); }
 	public static boolean always() { return Preferences.PREFERENCES.getBoolean(ALWAYS, false); }
 	public static long fileLimit() { return bytes(Preferences.PREFERENCES.getString(FILE_LIMIT, "")); }
