@@ -176,11 +176,17 @@ public class GraphicsUtils {
 		public final String format;
 		public final int quality;
 		public final int reduce;
+		public final int width, height;
 
 		public Reencoding(String format, int quality, int reduce) {
+			this(format, quality, reduce, 0, 0);
+		}
+		public Reencoding(String format, int quality, int reduce, int width, int height) {
 			this.format = FORMAT_JPEG.equals(format) || FORMAT_PNG.equals(format) ? format : FORMAT_JPEG;
 			this.quality = Math.max(1, Math.min(quality, 100));
 			this.reduce = Math.max(1, Math.min(reduce, 8));
+			this.width = width > 0 && height > 0 && width <= 1000000 && height <= 1000000 ? width : 0;
+			this.height = this.width > 0 ? height : 0;
 		}
 
 		public static boolean allowQuality(String format) {
@@ -249,10 +255,12 @@ public class GraphicsUtils {
 			}
 			if (bitmap != null) {
 				try {
-					if (reencoding.reduce > 1) {
+					if (reencoding.reduce > 1 || reencoding.width > 0) {
+						int[] size = reencoding.width > 0
+								? ImageOutputSizing.fit(bitmap.getWidth(), bitmap.getHeight(), reencoding.width, reencoding.height)
+								: new int[] {Math.max(bitmap.getWidth() / reencoding.reduce, 1), Math.max(bitmap.getHeight() / reencoding.reduce, 1)};
 						Bitmap scaledBitmap = Bitmap.createScaledBitmap(bitmap,
-								Math.max(bitmap.getWidth() / reencoding.reduce, 1),
-								Math.max(bitmap.getHeight() / reencoding.reduce, 1), true);
+								size[0], size[1], true);
 						if (scaledBitmap != bitmap) {
 							bitmap.recycle();
 							bitmap = scaledBitmap;

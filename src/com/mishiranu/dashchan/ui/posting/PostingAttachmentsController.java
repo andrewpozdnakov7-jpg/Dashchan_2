@@ -88,6 +88,8 @@ public final class PostingAttachmentsController {
 	}
 
 	private Host host;
+	private boolean openingAttachmentDialog, openingPhotoEditor;
+	private final Runnable clearAttachmentDialogOpening = () -> openingAttachmentDialog = false;
 	private LinearLayout attachmentContainer;
 	private ScrollView scrollView;
 	private Button sendButton;
@@ -149,6 +151,8 @@ public final class PostingAttachmentsController {
 	}
 
 	public void detachView() {
+		if (attachmentContainer != null) attachmentContainer.removeCallbacks(clearAttachmentDialogOpening);
+		openingAttachmentDialog = false;
 		for (VideoConversionBadge badge : conversionBadges.values()) badge.release();
 		conversionBadges.clear();
 		boundConversionState = "";
@@ -486,9 +490,9 @@ public final class PostingAttachmentsController {
 				badge = new VideoConversionBadge(requireContext(), VideoConversionSetup.materialContext(requireContext()), preview);
 				int inset = Math.round(4 * ResourceUtils.obtainDensity(preview));
 				FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM | Gravity.END);
-				params.setMarginEnd(inset); params.bottomMargin = inset
-						+ (attachmentAppearance == null ? Math.round(48 * ResourceUtils.obtainDensity(preview)) : 0);
+				params.setMarginEnd(inset); params.bottomMargin = inset;
 				preview.addView(badge, params); conversionBadges.put(holder, badge);
+				badge.setVisibilityChanged(() -> updateVideoMarker(holder));
 			}
 			if (badge != null) {
 				int text;
@@ -506,11 +510,15 @@ public final class PostingAttachmentsController {
 						: stage == VideoConversionBadge.Stage.SUCCESS ? getString(R.string.compression_done) : label;
 				badge.bind((job != null ? job.id : "") + ":" + position + ":" + holder.hash, stage, job != null ? job.itemPercent : -1, label, description, accepted);
 			}
-			boolean converting = stage == VideoConversionBadge.Stage.QUEUED || stage == VideoConversionBadge.Stage.PREPARING
-					|| stage == VideoConversionBadge.Stage.PROGRESS || stage == VideoConversionBadge.Stage.OPTIMIZING || stage == VideoConversionBadge.Stage.CHECKING;
-			holder.previewButton.setAlpha(converting ? 0f : 1f);
-			if (attachmentAppearance != null) attachmentAppearance.conversionActive(holder, converting);
+			updateVideoMarker(holder);
 		}
+	}
+
+	private void updateVideoMarker(AttachmentHolder holder) {
+		VideoConversionBadge badge = conversionBadges.get(holder);
+		boolean covered = badge != null && badge.getVisibility() == View.VISIBLE;
+		holder.videoMarker.setAlpha(covered ? 0f : 1f);
+		if (attachmentAppearance != null) attachmentAppearance.conversionActive(holder, covered);
 	}
 
 	public boolean canAttach() {
@@ -608,7 +616,9 @@ public final class PostingAttachmentsController {
 				}
 				attachmentDrafts.add(new DraftsStorage.AttachmentDraft(holder.hash, holder.name, holder.rating,
 						holder.optionUniqueHash, holder.optionRemoveMetadata, holder.optionRemoveFileName,
-						holder.optionSpoiler, holder.reencoding, forced, conversion));
+						holder.optionSpoiler, holder.reencoding, forced, conversion,
+                        holder.photoOptions != null ? holder.photoOptions.withFlags(holder.optionUniqueHash,holder.optionRemoveMetadata,holder.optionRemoveFileName,holder.optionSpoiler) : null,
+                        holder.attachmentId, holder.photoEditorRequest));
 			}
 		}
 		return attachmentDrafts;
@@ -622,7 +632,11 @@ public final class PostingAttachmentsController {
 						attachmentDraft.optionRemoveFileName, attachmentDraft.optionSpoiler,
 						attachmentDraft.reencoding);
 				AttachmentHolder holder = attachments.get(attachments.size() - 1);
-				holder.forceVideoConversion = attachmentDraft.forceVideoConversion;
+				holder.attachmentId = attachmentDraft.attachmentId;
+                holder.photoEditorRequest = attachmentDraft.photoEditorRequest;
+                holder.photoOptions = attachmentDraft.photoOptions;
+                holder.reencoding = attachmentDraft.reencoding;
+                holder.forceVideoConversion = attachmentDraft.forceVideoConversion;
 				holder.conversionDraft = attachmentDraft.conversion;
 			}
 		}
@@ -691,7 +705,7 @@ public final class PostingAttachmentsController {
 				attachmentHashes.add(converted != null ? converted.hash : data.hash);
 				array.add(new ChanPerformer.SendPostData.Attachment(fileHolder, converted != null ? converted.name : data.name, rating,
 						data.optionUniqueHash, data.optionRemoveMetadata, data.optionRemoveFileName,
-						postingConfiguration.attachmentSpoiler && data.optionSpoiler, data.reencoding));
+						postingConfiguration.attachmentSpoiler && data.optionSpoiler, data.photoOptions != null ? data.photoOptions.pending(data.hash) : data.reencoding));
 			}
 		}
 		ChanPerformer.SendPostData.Attachment[] attachments = null;
@@ -938,6 +952,7 @@ public final class PostingAttachmentsController {
 	}
 
 	public void handleActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode == C.REQUEST_CODE_IMAGE_EDITOR) openingPhotoEditor = false;
 		if (host == null) return;
 		if (resultCode == Activity.RESULT_OK && data != null) {
 			switch (requestCode) {
@@ -979,24 +994,33 @@ public final class PostingAttachmentsController {
 					String hash = data.getStringExtra(ImageEditorActivity.EXTRA_RESULT_HASH);
 					String name = data.getStringExtra(ImageEditorActivity.EXTRA_RESULT_NAME);
 					AttachmentHolder holder = getAttachmentHolder(index);
-					if (holder == null || !AttachmentResultGuard.matches(
+                    String id = data.getStringExtra(com.mishiranu.dashchan.ui.posting.photo.PhotoEditorContract.ID);
+                    String request = data.getStringExtra(com.mishiranu.dashchan.ui.posting.photo.PhotoEditorContract.REQUEST);
+                    if (holder == null || !AttachmentResultGuard.matches(
 							data.getStringExtra(ImageEditorActivity.EXTRA_RESULT_SOURCE_HASH),
-							data.getStringExtra(ImageEditorActivity.EXTRA_RESULT_SOURCE_NAME), holder.hash, holder.name)) {
+							data.getStringExtra(ImageEditorActivity.EXTRA_RESULT_SOURCE_NAME), id, request,
+                            holder.hash, holder.name, holder.attachmentId, holder.photoEditorRequest)) {
 						host.onAttachmentDiagnostic("editor_result_stale");
 						ClickableToast.show(R.string.image_editor_attachment_changed);
 						break;
 					}
-					if (hash != null && name != null) {
-						if (compressionModel != null) compressionModel.forcedVideos.remove(holder.hash);
+                    com.mishiranu.dashchan.ui.posting.photo.PhotoAttachmentOptions options = com.mishiranu.dashchan.ui.posting.photo.PhotoEditorContract.read(data);
+                    FileHolder resultFile = hash != null ? resolveAttachmentFile(hash) : null;
+                    boolean encoded = data.getBooleanExtra(com.mishiranu.dashchan.ui.posting.photo.PhotoEditorContract.ENCODED,false);
+                    if (name == null || resultFile == null || options == null
+                            || (encoded ? !options.isApplied(hash) : !holder.hash.equals(hash) || !holder.name.equals(name))) break;
+                    if (hash != null && name != null) {
+                        holder.photoEditorRequest = null;
+                        if (compressionModel != null) compressionModel.forcedVideos.remove(holder.hash);
 						holder.hash = hash;
 						holder.name = name;
 						holder.forceVideoConversion = false;
 						holder.conversionDraft = null;
-						FileHolder fileHolder = resolveAttachmentFile(hash);
-						if (fileHolder == null || !GraphicsUtils.canReencode(fileHolder)) {
-							holder.reencoding = null;
-						}
-						bindAttachmentFile(holder, fileHolder);
+                        holder.photoOptions = options;
+                        holder.optionUniqueHash=options.uniqueHash; holder.optionRemoveMetadata=options.removeMetadata;
+                        holder.optionRemoveFileName=options.removeFileName; holder.optionSpoiler=options.spoiler;
+                        holder.reencoding=options.pending(hash);
+                        bindAttachmentFile(holder, resultFile);
 						attachmentsChanged();
 					}
 					break;
@@ -1034,7 +1058,12 @@ public final class PostingAttachmentsController {
 	private final View.OnClickListener attachmentOptionsListener = v -> {
 		AttachmentHolder holder = (AttachmentHolder) v.getTag();
 		int attachmentIndex = attachments.indexOf(holder);
-		new AttachmentOptionsDialog(attachmentIndex).show(host.getChildFragmentManager(), AttachmentOptionsDialog.TAG);
+		if (host == null || attachmentIndex < 0 || openingAttachmentDialog) return;
+		androidx.fragment.app.FragmentManager manager = host.getChildFragmentManager();
+		if (manager.isDestroyed() || manager.isStateSaved() || manager.findFragmentByTag(AttachmentOptionsDialog.TAG) != null) return;
+		openingAttachmentDialog = true;
+		new AttachmentOptionsDialog(attachmentIndex).show(manager, AttachmentOptionsDialog.TAG);
+		attachmentContainer.post(clearAttachmentDialogOpening);
 	};
 
 	private final View.OnClickListener attachmentWarningListener = v -> {
@@ -1049,9 +1078,13 @@ public final class PostingAttachmentsController {
 		new AttachmentRatingDialog(attachmentIndex).show(host.getChildFragmentManager(), AttachmentRatingDialog.TAG);
 	};
 
+	static boolean videoPreviewAllowed(boolean available) {
+		return available && Preferences.isAttachmentVideoPreview() && Preferences.isUseVideoPlayer();
+	}
 	private final View.OnClickListener attachmentPreviewListener = v -> {
 		AttachmentHolder holder = (AttachmentHolder) v.getTag();
-		if (holder == null || !attachments.contains(holder)) {
+		if (host == null || holder == null || !holder.video || !attachments.contains(holder)
+				|| !videoPreviewAllowed(true) || openingAttachmentDialog) {
 			return;
 		}
 		VideoCompressionJob.Result converted = compressed(holder);
@@ -1061,20 +1094,36 @@ public final class PostingAttachmentsController {
 			return;
 		}
 		String tag = GalleryOverlay.class.getName();
-		if (host.getParentFragmentManager().findFragmentByTag(tag) == null) {
-			new GalleryOverlay(Uri.fromFile(file), converted != null ? converted.name : holder.name).show(host.getParentFragmentManager(), tag);
+		androidx.fragment.app.FragmentManager manager = host.getParentFragmentManager();
+		if (!manager.isDestroyed() && !manager.isStateSaved() && manager.findFragmentByTag(tag) == null) {
+			openingAttachmentDialog = true;
+			new GalleryOverlay(Uri.fromFile(file), converted != null ? converted.name : holder.name).show(manager, tag);
+			attachmentContainer.post(clearAttachmentDialogOpening);
 		}
 	};
 
 	private final View.OnClickListener attachmentEditListener = v -> {
 		AttachmentHolder holder = (AttachmentHolder) v.getTag();
 		int attachmentIndex = attachments.indexOf(holder);
-		if (attachmentIndex >= 0 && Preferences.isImageEditorEnabled()) {
-			// Persist the exact source list before leaving for an external Activity.
-			attachmentsChanged();
-			host.launchImageEditor(ImageEditorActivity.createIntent(requireContext(), holder.hash, holder.name,
-					attachmentIndex));
-		}
+        if (host == null || attachmentIndex < 0 || openingPhotoEditor || openingAttachmentDialog) return;
+        FileHolder file = resolveAttachmentFile(holder.hash);
+        if (file == null || !Preferences.isImageEditorEnabled() || !isEditableImage(file,holder.name)) {
+            attachmentOptionsListener.onClick(v); return;
+        }
+        com.mishiranu.dashchan.ui.posting.photo.PhotoAttachmentOptions options = holder.photoOptions != null
+                ? holder.photoOptions.withFlags(holder.optionUniqueHash,holder.optionRemoveMetadata,holder.optionRemoveFileName,holder.optionSpoiler)
+                : com.mishiranu.dashchan.ui.posting.photo.PhotoAttachmentOptions.legacy(holder.optionUniqueHash,holder.optionRemoveMetadata,
+                        holder.optionRemoveFileName,holder.optionSpoiler,holder.reencoding,file.getImageWidth(),file.getImageHeight(),
+                        file.getImageType()==FileHolder.ImageType.IMAGE_PNG);
+        holder.photoEditorRequest = java.util.UUID.randomUUID().toString();
+        Intent intent = com.mishiranu.dashchan.ui.posting.photo.PhotoEditorContract.input(
+                ImageEditorActivity.createIntent(requireContext(),holder.hash,holder.name,attachmentIndex),options,
+                holder.attachmentId,holder.photoEditorRequest,postingConfiguration.attachmentSpoiler,GraphicsUtils.canRemoveMetadata(file));
+        openingPhotoEditor = true;
+        // Persist identity/token and exact source list before leaving the posting Activity.
+        attachmentsChanged();
+        try { host.launchImageEditor(intent); }
+        catch (RuntimeException e) { openingPhotoEditor=false; holder.photoEditorRequest=null; throw e; }
 	};
 
 	private final View.OnLongClickListener attachmentDragStartListener = v -> {
@@ -1336,7 +1385,10 @@ public final class PostingAttachmentsController {
 		imageView.setScaleType(ImageView.ScaleType.CENTER_CROP);
 		imageView.setBackground(new TransparentTileDrawable(imageView.getContext(), true));
 		imageView.setVisibility(View.GONE);
-		view.addView(imageView, FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT);
+		FrameLayout stage = new FrameLayout(view.getContext());
+		view.addView(stage, new FrameLayout.LayoutParams(-1, -1));
+		imageView.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+		stage.addView(imageView, FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT);
 		View overlay = new View(view.getContext());
 		overlay.setBackgroundColor(ResourceUtils.getColor(overlay.getContext(), R.attr.colorBlockBackground));
 		view.addView(overlay, FrameLayout.LayoutParams.MATCH_PARENT, minHeight);
@@ -1344,19 +1396,9 @@ public final class PostingAttachmentsController {
 		View options = new View(view.getContext());
 		ViewUtils.setSelectableItemBackground(options);
 		options.setOnClickListener(attachmentOptionsListener);
-		view.addView(options, FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT);
-		ImageView previewButton = new ImageView(view.getContext(), null, android.R.attr.borderlessButtonStyle);
-		previewButton.setScaleType(ImageView.ScaleType.CENTER);
-		previewButton.setImageDrawable(ResourceUtils.getDrawable(previewButton.getContext(),
-				R.attr.iconAttachmentVideo, 0));
-		previewButton.setVisibility(View.GONE);
-		previewButton.setContentDescription(getString(R.string.preview_video_attachment));
-		previewButton.setOnClickListener(attachmentPreviewListener);
-		int previewButtonSize = (int) (48f * density);
-		view.addView(previewButton, previewButtonSize, previewButtonSize);
-		FrameLayout.LayoutParams previewLayoutParams = (FrameLayout.LayoutParams) previewButton.getLayoutParams();
-		previewLayoutParams.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
-		previewLayoutParams.topMargin = (int) (16f * density);
+		stage.addView(options, FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT);
+		AttachmentVideoMarker videoMarker = new AttachmentVideoMarker(view.getContext(), imageView);
+		stage.addView(videoMarker, new FrameLayout.LayoutParams(-1, -1));
 
 		LinearLayout controls = new LinearLayout(view.getContext());
 		controls.setOrientation(LinearLayout.HORIZONTAL);
@@ -1394,7 +1436,8 @@ public final class PostingAttachmentsController {
 				R.drawable.ic_edit, attachmentEditListener);
 		int editIconColor = GraphicsUtils.isLight(ResourceUtils.getColor(editButton.getContext(),
 				R.attr.colorBlockBackground)) ? 0xff000000 : 0xffffffff;
-		((ImageView) editButton).setImageTintList(ColorStateList.valueOf(editIconColor));
+		((ImageView) editButton).setImageTintList(new ColorStateList(new int[][] {{-android.R.attr.state_enabled}, {}},
+				new int[] {(editIconColor & 0x00ffffff) | 0x60000000, editIconColor}));
 		editButton.setVisibility(View.GONE);
 		editButton.setContentDescription(getString(R.string.edit_image));
 		View dragButton = addAttachmentButton(controls, minHeight,
@@ -1402,15 +1445,36 @@ public final class PostingAttachmentsController {
 		View removeButton = addAttachmentButton(controls, minHeight,
 				R.attr.iconButtonCancel, attachmentRemoveListener);
 
-		AttachmentHolder holder = new AttachmentHolder(view, fileName, fileSize, imageView, previewButton,
-				warningButton, ratingButton, editButton);
+		AttachmentHolder holder = new AttachmentHolder(view, fileName, fileSize, imageView, videoMarker,
+				warningButton, ratingButton, editButton, options, removeButton, dragButton);
 		warningButton.setTag(holder);
 		ratingButton.setTag(holder);
 		editButton.setTag(holder);
 		dragButton.setTag(holder);
 		dragButton.setContentDescription(getString(R.string.reorder_attachment));
 		dragButton.setOnLongClickListener(attachmentDragStartListener);
-		previewButton.setTag(holder);
+		options.setFocusable(true);
+		options.setOnLongClickListener(v -> attachments.contains(holder)
+				&& (attachmentDragStartListener.onLongClick(v) || holder.video));
+		options.setAccessibilityDelegate(new View.AccessibilityDelegate() {
+			@Override public void onInitializeAccessibilityNodeInfo(View v, android.view.accessibility.AccessibilityNodeInfo info) {
+				super.onInitializeAccessibilityNodeInfo(v, info);
+				int index = attachments.indexOf(holder);
+				if (index > 0) info.addAction(new android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction(
+						android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD, getString(R.string.attachment_move_earlier)));
+				if (index >= 0 && index + 1 < attachments.size()) info.addAction(new android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction(
+						android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_FORWARD, getString(R.string.attachment_move_later)));
+			}
+			@Override public boolean performAccessibilityAction(View v, int action, android.os.Bundle arguments) {
+				if (action == android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD
+						|| action == android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_FORWARD) {
+					int from = attachments.indexOf(holder), to = from + (action == android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD ? -1 : 1);
+					if (from < 0 || to < 0 || to >= attachments.size()) return false;
+					moveAttachment(holder, to); return true;
+				}
+				return super.performAccessibilityAction(v, action, arguments);
+			}
+		});
 		removeButton.setTag(holder);
 		options.setTag(holder);
 		attachments.add(holder);
@@ -1467,7 +1531,7 @@ public final class PostingAttachmentsController {
 		boolean video = Chan.getFallback().locator.isVideoExtension(holder.name);
 		holder.imageView.setImageDrawable(null);
 		holder.imageView.setVisibility(View.GONE);
-		holder.previewButton.setVisibility(View.GONE);
+		holder.videoMarker.setVisibility(View.INVISIBLE);
 		holder.warningButton.setVisibility(View.VISIBLE);
 		holder.editButton.setVisibility(View.GONE);
 		holder.view.getLayoutParams().height = (int) (48f * ResourceUtils.obtainDensity(getResources()));
@@ -1484,8 +1548,7 @@ public final class PostingAttachmentsController {
 			}
 		}
 		if (video) {
-			holder.previewButton.setVisibility(Preferences.isAttachmentVideoPreview()
-					&& Preferences.isUseVideoPlayer() ? View.VISIBLE : View.GONE);
+			holder.videoMarker.setVisibility(videoPreviewAllowed(fileHolder != null) ? View.VISIBLE : View.INVISIBLE);
 			holder.view.getLayoutParams().height = (int) (128f * ResourceUtils.obtainDensity(getResources()));
 			VideoThumbnailTask task = new VideoThumbnailTask(holder, holder.hash, targetImageSize);
 			videoThumbnailTasks.put(holder, task);
@@ -1500,6 +1563,9 @@ public final class PostingAttachmentsController {
 			holder.view.getLayoutParams().height = (int) (128f * ResourceUtils.obtainDensity(getResources()));
 		}
 		holder.fileSize.setText(fileSize);
+		holder.video = video; holder.videoPreviewAllowed = video && videoPreviewAllowed(fileHolder != null);
+		if (holder.removeButton != null) holder.removeButton.setContentDescription(requireContext().getString(R.string.attachment_remove_named, holder.name));
+		if (attachmentAppearance == null) bindLegacyActions(holder, fileHolder != null, fileHolder != null && Preferences.isImageEditorEnabled() && isEditableImage(fileHolder,holder.name));
 		if ((jpegData == null || jpegData.exifData == null) && (pngData == null || !pngData.hasMetadata)) {
 			holder.warningButton.setVisibility(View.GONE);
 		}
@@ -1514,14 +1580,50 @@ public final class PostingAttachmentsController {
 		}
 	}
 
+	private void bindLegacyActions(AttachmentHolder holder, boolean available, boolean editable) {
+		boolean video = holder.video;
+		View surface = holder.previewSurface;
+		surface.setOnClickListener(video ? holder.videoPreviewAllowed ? attachmentPreviewListener : null : editable ? attachmentEditListener : attachmentOptionsListener);
+		holder.fileName.setTag(holder); holder.fileName.setClickable(!video);
+		holder.fileName.setOnClickListener(video ? null : editable ? attachmentEditListener : attachmentOptionsListener);
+		surface.setClickable(!video || holder.videoPreviewAllowed);
+		surface.setContentDescription(holder.videoPreviewAllowed
+				? requireContext().getString(R.string.attachment_open_video_named, holder.name)
+                : editable ? requireContext().getString(R.string.pe_file_edit_named,holder.name) : holder.name);
+		FrameLayout.LayoutParams stage = (FrameLayout.LayoutParams) ((View) holder.imageView.getParent()).getLayoutParams();
+		stage.bottomMargin = video ? Math.round(48 * ResourceUtils.obtainDensity(surface)) : 0;
+		((View) holder.imageView.getParent()).setLayoutParams(stage);
+		holder.imageView.setScaleType(video ? ImageView.ScaleType.FIT_CENTER : ImageView.ScaleType.CENTER_CROP);
+		holder.imageView.setBackground(video ? null : new TransparentTileDrawable(holder.imageView.getContext(), true));
+		holder.editButton.setOnClickListener(video ? attachmentOptionsListener : attachmentEditListener);
+		((ImageView) holder.editButton).setImageResource(video ? R.drawable.slooop_attachment_video_tune : R.drawable.ic_edit);
+		if (video) {
+			holder.editButton.setVisibility(View.VISIBLE); holder.editButton.setEnabled(available);
+			holder.editButton.setContentDescription(requireContext().getString(R.string.attachment_video_options_named, holder.name));
+			holder.fileSize.setVisibility(available ? View.GONE : View.VISIBLE);
+			if (!available) holder.fileSize.setText(R.string.attachment_file_unavailable);
+		} else {
+			holder.editButton.setEnabled(true); holder.editButton.setContentDescription(getString(R.string.edit_image));
+			holder.fileSize.setVisibility(View.VISIBLE);
+		}
+		if (holder.dragButton != null) holder.dragButton.setVisibility(video ? View.GONE : View.VISIBLE);
+		for (View button : new View[] {holder.editButton, holder.removeButton}) {
+			if (button == null) continue;
+			LinearLayout.LayoutParams params = (LinearLayout.LayoutParams) button.getLayoutParams();
+			params.setMarginStart(video ? 0 : Math.round(-8 * ResourceUtils.obtainDensity(button))); button.setLayoutParams(params);
+		}
+	}
+
 	private static boolean isEditableImage(FileHolder fileHolder, String name) {
 		String extension = StringUtils.getFileExtension(name);
 		if ("gif".equals(extension) || "apng".equals(extension) || "svg".equals(extension)) return false;
 		switch (fileHolder.getImageType()) {
-			case IMAGE_JPEG:
-			case IMAGE_PNG:
-			case IMAGE_WEBP:
-			case IMAGE_BMP: return true;
+            case IMAGE_PNG: {
+                com.mishiranu.dashchan.media.PngData png=fileHolder.getPngData();
+                return png!=null && png.complete && !png.animated;
+            }
+            case IMAGE_JPEG:
+            case IMAGE_BMP: return true;
 			default: return false;
 		}
 	}
@@ -1580,6 +1682,7 @@ public final class PostingAttachmentsController {
 					holder.imageView.setImageBitmap(bitmap);
 					holder.imageView.setVisibility(View.VISIBLE);
 				}
+				holder.videoMarker.invalidate();
 				if (attachmentAppearance != null) attachmentAppearance.thumbnailFinished(holder, bitmap != null);
 			} else if (bitmap != null) {
 				bitmap.recycle();

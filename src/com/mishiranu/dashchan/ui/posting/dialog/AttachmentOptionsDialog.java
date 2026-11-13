@@ -138,7 +138,7 @@ public class AttachmentOptionsDialog extends DialogFragment implements AdapterVi
 		}
 		if (GraphicsUtils.canReencode(fileHolder)) {
 			optionItems.add(new OptionItem(getString(R.string.reencode_image), Type.REENCODE_IMAGE,
-					holder.reencoding != null));
+					holder.photoOptions != null ? holder.photoOptions.reencode : holder.reencoding != null));
 			optionIndices.put(Type.REENCODE_IMAGE, index++);
 		}
 		optionItems.add(new OptionItem(getString(R.string.remove_file_name), Type.REMOVE_FILE_NAME,
@@ -232,10 +232,11 @@ public class AttachmentOptionsDialog extends DialogFragment implements AdapterVi
 
 	private void updateItemsEnabled(ItemsAdapter adapter, AttachmentHolder holder) {
 		Integer reencodeIndex = optionIndices.get(Type.REENCODE_IMAGE);
-		boolean allowRemoveMetadata = reencodeIndex == null || holder.reencoding == null;
+		boolean allowRemoveMetadata = reencodeIndex == null || !(holder.photoOptions != null ? holder.photoOptions.reencode : holder.reencoding != null);
 		Integer removeMetadataIndex = optionIndices.get(Type.REMOVE_METADATA);
 		if (removeMetadataIndex != null) {
 			adapter.setEnabled(removeMetadataIndex, allowRemoveMetadata);
+            listView.setItemChecked(removeMetadataIndex,!allowRemoveMetadata || holder.optionRemoveMetadata);
 			adapter.notifyDataSetChanged();
 		}
 	}
@@ -259,7 +260,11 @@ public class AttachmentOptionsDialog extends DialogFragment implements AdapterVi
 					listView.setItemChecked(position, false);
 					new ReencodingDialog().show(getChildFragmentManager(), ReencodingDialog.TAG);
 				} else {
-					holder.reencoding = null;
+                    holder.reencoding = null;
+                    if(holder.photoOptions!=null){
+                        com.mishiranu.dashchan.ui.posting.photo.PhotoAttachmentOptions.Builder options=new com.mishiranu.dashchan.ui.posting.photo.PhotoAttachmentOptions.Builder(holder.photoOptions);
+                        options.reencode=false;holder.photoOptions=options.build();
+                    }
 				}
 				break;
 			}
@@ -272,14 +277,21 @@ public class AttachmentOptionsDialog extends DialogFragment implements AdapterVi
 				break;
 			}
 		}
-		updateItemsEnabled((ItemsAdapter) listView.getAdapter(), holder);
-	}
+        if(holder.photoOptions!=null)holder.photoOptions=holder.photoOptions.withFlags(holder.optionUniqueHash,holder.optionRemoveMetadata,holder.optionRemoveFileName,holder.optionSpoiler);
+        updateItemsEnabled((ItemsAdapter) listView.getAdapter(), holder);
+    }
 
-	public void setReencoding(GraphicsUtils.Reencoding reencoding) {
+    public void setReencoding(GraphicsUtils.Reencoding reencoding) {
 		AttachmentHolder holder = getAttachmentHolder();
 		Integer reencodeIndex = optionIndices.get(Type.REENCODE_IMAGE);
 		if (reencodeIndex != null) {
 			holder.reencoding = reencoding;
+            if(holder.photoOptions!=null) {
+                FileHolder file=DraftsStorage.getInstance().getAttachmentDraftFileHolder(holder.hash);
+                holder.photoOptions=com.mishiranu.dashchan.ui.posting.photo.PhotoAttachmentOptions.legacy(holder.optionUniqueHash,holder.optionRemoveMetadata,
+                        holder.optionRemoveFileName,holder.optionSpoiler,reencoding,file!=null?file.getImageWidth():0,file!=null?file.getImageHeight():0,
+                        file!=null&&file.getImageType()==FileHolder.ImageType.IMAGE_PNG);
+            }
 			listView.setItemChecked(reencodeIndex, reencoding != null);
 			updateItemsEnabled((ItemsAdapter) listView.getAdapter(), holder);
 		}

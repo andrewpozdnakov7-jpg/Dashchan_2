@@ -10,11 +10,23 @@ public final class EditorExportRequest {
     public static final class Options {
         public final int side, quality;
         public final boolean png;
+        public final int width, height;
+        public final PhotoAttachmentOptions attachmentOptions;
 
         public Options(int side, int quality, boolean png) {
             this.side = side;
             this.quality = quality;
             this.png = png;
+            width = height = 0;
+            attachmentOptions = null;
+        }
+        public Options(PhotoAttachmentOptions options) {
+            attachmentOptions=options; side=0; quality=options.quality; png=options.png;
+            width=options.width; height=options.height;
+        }
+        public int[] dimensions(float cropWidth,float cropHeight) {
+            return width>0 ? PhotoAttachmentOptions.dimensions(cropWidth,cropHeight,width,height)
+                    : EditorExportSizing.dimensions(cropWidth,cropHeight,side);
         }
     }
 
@@ -55,6 +67,7 @@ public final class EditorExportRequest {
         // Keep the old key exactly: history and UI presentation do not affect encoded pixels.
         String cacheKey = document.toJson().getJSONObject("state").toString()
                 + ":" + options.side + ":" + options.quality + ":" + options.png;
+        if (options.attachmentOptions!=null) cacheKey=document.toJson().getJSONObject("state").toString()+":"+options.attachmentOptions.outputSignature();
         return new EditorExportRequest(state, options, source, attach, cacheKey, new HashMap<>(assets));
     }
 }

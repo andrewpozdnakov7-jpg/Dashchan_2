@@ -4,6 +4,12 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 
 public class AttachmentResultGuardTest {
+	@Test public void duplicateFilesAndConsumedRequestsAreNotInterchangeable() {
+		assertTrue(AttachmentResultGuard.matches("hash","photo.jpg","one","request","hash","photo.jpg","one","request"));
+		assertFalse(AttachmentResultGuard.matches("hash","photo.jpg","one","request","hash","photo.jpg","two","request"));
+		assertFalse(AttachmentResultGuard.matches("hash","photo.jpg","one","request","hash","photo.jpg","one",null));
+		assertFalse(AttachmentResultGuard.matches("hash","photo.jpg","one","old","hash","photo.jpg","one","new"));
+	}
 	@Test public void sameSourceAfterDraftRestoreIsAccepted() {
 		assertTrue(AttachmentResultGuard.matches("hash-a", "a.png", new String("hash-a"), "a.png"));
 	}

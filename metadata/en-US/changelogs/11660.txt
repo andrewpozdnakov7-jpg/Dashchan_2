@@ -1,0 +1,8 @@
+- Tapping an attached photo opens your selected editor directly. The gear menu brings together file options: unique hash, metadata and filename removal, JPEG/PNG format, quality and size.
+- Photo options persist between editor sessions. Changing only upload options does not recompress the image; completed output is not resized or re-encoded again.
+- Updated attached-video controls: the preview opens the player, while a separate button opens file options. The options show the size before and after conversion.
+- The Play indicator in posts now sits in a corner of the thumbnail and takes up less space.
+- The expanded floating thread menu is now a compact vertical icon toolbar with tooltips and a shared smooth animation.
+- Drafts retain original files and completed video conversions. With unchanged settings, conversion does not need to run again.
+- Improved MP4 input preparation for conversion and expanded diagnostic logs.
+- The attachment count, size and upload-limit line appears only after a file is attached.

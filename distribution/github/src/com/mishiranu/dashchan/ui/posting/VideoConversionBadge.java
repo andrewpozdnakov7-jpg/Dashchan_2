@@ -20,6 +20,12 @@ import com.mishiranu.dashchan.R;
 
 /** Decoration only. Never starts work, owns files, or intercepts the preview's actions. */
 final class VideoConversionBadge extends LinearLayout {
+	private Runnable visibilityChanged;
+	void setVisibilityChanged(Runnable listener) { visibilityChanged = listener; if (listener != null) listener.run(); }
+	@Override protected void onVisibilityChanged(View changedView, int visibility) {
+		super.onVisibilityChanged(changedView, visibility);
+		if (changedView == this && visibilityChanged != null) visibilityChanged.run();
+	}
 	enum Stage {NONE, QUEUED, PREPARING, PROGRESS, OPTIMIZING, CHECKING, SUCCESS, ERROR}
 	private final CircularProgressIndicator ring;
 	private final TextView label;
@@ -127,6 +133,7 @@ final class VideoConversionBadge extends LinearLayout {
 	void release() {
 		generation++; cancelCosmetics(); if (arc != null) { arc.cancel(); arc = null; }
 		stage = Stage.NONE; setVisibility(GONE);
+		visibilityChanged = null;
 		ring.setVisibility(GONE); ring.setIndeterminate(false); preview.setStateDescription(null);
 	}
 	@Override protected void onAttachedToWindow() {

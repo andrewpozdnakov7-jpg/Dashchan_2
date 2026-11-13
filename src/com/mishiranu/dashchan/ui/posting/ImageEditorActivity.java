@@ -38,6 +38,9 @@ import com.mishiranu.dashchan.content.storage.DraftsStorage;
 import com.mishiranu.dashchan.util.ViewUtils;
 import com.mishiranu.dashchan.widget.ThemeEngine;
 import com.mishiranu.dashchan.widget.InterfaceAppearance;
+import com.mishiranu.dashchan.ui.posting.photo.PhotoAttachmentOptions;
+import com.mishiranu.dashchan.ui.posting.photo.PhotoEditorContract;
+import com.mishiranu.dashchan.ui.posting.photo.PhotoFileOptionsSheet;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -86,6 +89,11 @@ public class ImageEditorActivity extends ComponentActivity {
 	private String sourceHash;
 	private String sourceName;
 	private int attachmentIndex;
+    private boolean busy;
+    private PhotoAttachmentOptions initialOptions, fileOptions;
+    private PhotoFileOptionsSheet fileSheet;
+    private String fileSheetState, restoredOptions;
+    private View fileOptionsButton;
 	private volatile boolean stopped;
 	private float brushWidthRatio = 0.035f;
 	private int brushColor = Color.BLACK;
@@ -125,10 +133,14 @@ public class ImageEditorActivity extends ComponentActivity {
 		editorBack = back;
 		backPolicy = new com.mishiranu.dashchan.widget.BackCallbackPolicy(getWindow().getDecorView(), () ->
 				back.setEnabled(backDelivered || !com.mishiranu.dashchan.util.InterfaceMotion.isPredictiveBackEnabled()
-						|| com.mishiranu.dashchan.widget.PredictiveBackMotion.isImeVisible(getWindow().getDecorView())));
+                        || busy || fileSheet!=null || isEditorDirty()
+                        || com.mishiranu.dashchan.widget.PredictiveBackMotion.isImeVisible(getWindow().getDecorView())));
 		sourceHash = getIntent().getStringExtra(EXTRA_SOURCE_HASH);
 		sourceName = getIntent().getStringExtra(EXTRA_SOURCE_NAME);
 		attachmentIndex = getIntent().getIntExtra(EXTRA_ATTACHMENT_INDEX, -1);
+        initialOptions=PhotoEditorContract.read(getIntent());fileOptions=initialOptions;
+        restoredOptions=savedInstanceState!=null?savedInstanceState.getString("photoOptionsV1"):null;
+        fileSheetState=savedInstanceState!=null?savedInstanceState.getString("photoFileSheet"):null;
 		if (sourceHash == null || sourceName == null || attachmentIndex < 0) {
 			finish();
 			return;
@@ -236,6 +248,7 @@ public class ImageEditorActivity extends ComponentActivity {
 	}
 
 	private void addToolButtons() {
+        fileOptionsButton=addTool(R.drawable.ic_settings,R.string.pe_file_options,v->showFileOptions());
 		undoButton = addTool(R.drawable.ic_editor_undo, R.string.image_editor_undo, v -> {
 			leaveCropMode();
 			editorView.undo();
@@ -433,10 +446,35 @@ public class ImageEditorActivity extends ComponentActivity {
 		}
 	}
 
-	private void cancelEditing() {
-		setResult(RESULT_CANCELED);
-		finish();
-	}
+    private boolean isEditorDirty() { return editorView!=null && editorView.hasChanges() || fileOptions!=null && !fileOptions.equals(initialOptions); }
+    private void cancelEditing() {
+        if(busy)return;
+        if(fileSheet!=null){fileSheet.cancel();return;}
+        if(isEditorDirty()) new com.mishiranu.dashchan.content.security.SecureDialogBuilder(this,R.style.PhotoEditorDialogTheme)
+                .setMessage(R.string.pe_file_discard_changes).setNegativeButton(android.R.string.cancel,null)
+                .setPositiveButton(R.string.pe_discard_button,(d,w)->finishCanceled()).show();
+        else finishCanceled();
+    }
+    private void finishCanceled(){setResult(RESULT_CANCELED);finish();}
+    private void showFileOptions() {
+        if(editorView==null || busy || fileSheet!=null)return;
+        applyCropMode();
+        fileSheet=new PhotoFileOptionsSheet(this,fileOptions,fileSheetState,editorView.hasChanges(),
+                editorView.baseBitmap.getWidth(),editorView.baseBitmap.getHeight(),
+                getIntent().getBooleanExtra(PhotoEditorContract.METADATA,false),getIntent().getBooleanExtra(PhotoEditorContract.SPOILER,false),
+                options->fileOptions=options,state->fileSheetState=state,()->{
+                    if(stopped)return;
+                    fileSheet=null;fileSheetState=null;
+                    if(!isFinishing()&&fileOptionsButton!=null)fileOptionsButton.requestFocus();
+                });
+        fileSheetState=fileSheet.snapshot();fileSheet.show();
+    }
+    @Override protected void onSaveInstanceState(Bundle out) {
+        if(fileSheet!=null)fileSheetState=fileSheet.snapshot();
+        if(fileOptions!=null)try{out.putString("photoOptionsV1",fileOptions.toJson().toString());}catch(org.json.JSONException e){throw new IllegalStateException(e);}
+        if(fileSheetState!=null)out.putString("photoFileSheet",fileSheetState);
+        super.onSaveInstanceState(out);
+    }
 
 	private void updateHistoryButtons() {
 		if (undoButton != null) {
@@ -453,6 +491,11 @@ public class ImageEditorActivity extends ComponentActivity {
 			Bitmap bitmap = null;
 			if (fileHolder != null) {
 				sourceType = fileHolder.getImageType();
+                if(initialOptions==null)initialOptions=PhotoAttachmentOptions.legacy(false,false,false,false,null,
+                        fileHolder.getImageWidth(),fileHolder.getImageHeight(),sourceType==FileHolder.ImageType.IMAGE_PNG);
+                fileOptions=initialOptions;
+                PhotoAttachmentOptions restored=PhotoAttachmentOptions.parse(restoredOptions);
+                if(restored!=null)fileOptions=restored;
 				try {
 					bitmap = fileHolder.readImageBitmap(MAX_IMAGE_SIZE, false, false);
 				} catch (OutOfMemoryError e) {
@@ -474,35 +517,52 @@ public class ImageEditorActivity extends ComponentActivity {
 				content.addView(editorView, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
 				((View) tools.getParent()).setVisibility(View.VISIBLE);
 				saveButton.setEnabled(true);
-				addToolButtons();
-			});
+                addToolButtons();
+                if(fileSheetState!=null)showFileOptions();
+            });
 		}, "ImageEditorLoad").start();
 	}
 
-	private void saveImage() {
-		if (editorView == null) return;
+    private void saveImage() {
+        if (editorView == null || busy) return;
 		applyCropMode();
 		updateHistoryButtons();
-		Bitmap bitmap = editorView.createResultBitmap();
+        final PhotoAttachmentOptions options=fileOptions;
+        if(!options.needsExport(sourceHash,editorView.hasChanges())) {
+            setResult(RESULT_OK,PhotoEditorContract.result(getIntent(),sourceHash,sourceName,sourceHash,sourceName,attachmentIndex,options,false));
+            finish();return;
+        }
+        Bitmap bitmap = editorView.createResultBitmap();
 		if (bitmap == null) {
 			showFailure(R.string.image_editor_save_failed);
 			return;
 		}
 		setBusy(R.string.image_editor_saving);
 		new Thread(() -> {
-			boolean png = sourceType == FileHolder.ImageType.IMAGE_PNG;
+			boolean png = options.png;
 			String extension = png ? ".png" : ".jpg";
 			File directory = new File(getCacheDir(), "image-editor");
 			File tempFile = null;
 			String hash = null;
 			try {
 				if ((directory.isDirectory() || directory.mkdirs())) {
-					tempFile = File.createTempFile("edited-", extension, directory);
+                    int[] size=options.dimensions(bitmap.getWidth(),bitmap.getHeight());
+                    if(size[0]!=bitmap.getWidth() || size[1]!=bitmap.getHeight()) {
+                        Bitmap scaled=Bitmap.createScaledBitmap(bitmap,size[0],size[1],true);
+                        try {
+                            tempFile=File.createTempFile("edited-",extension,directory);
+                            try(FileOutputStream output=new FileOutputStream(tempFile)) {
+                                if(!scaled.compress(png?Bitmap.CompressFormat.PNG:Bitmap.CompressFormat.JPEG,options.quality,output))throw new IOException();
+                            }
+                        } finally {if(scaled!=bitmap)scaled.recycle();}
+                    } else {
+                    tempFile = File.createTempFile("edited-", extension, directory);
 					try (FileOutputStream output = new FileOutputStream(tempFile)) {
 						Bitmap.CompressFormat format = png ? Bitmap.CompressFormat.PNG : Bitmap.CompressFormat.JPEG;
-						if (!bitmap.compress(format, png ? 100 : 94, output)) throw new IOException();
+						if (!bitmap.compress(format, options.quality, output)) throw new IOException();
 					}
-					FileHolder fileHolder = FileHolder.obtain(tempFile);
+                    }
+                    FileHolder fileHolder = FileHolder.obtain(tempFile);
 					if (fileHolder != null) hash = DraftsStorage.getInstance().storeAttachmentFile(fileHolder);
 				}
 			} catch (IOException | OutOfMemoryError e) {
@@ -520,12 +580,8 @@ public class ImageEditorActivity extends ComponentActivity {
 					return;
 				}
 				String resultName = createEditedName(sourceName, extension);
-				setResult(RESULT_OK, new Intent()
-						.putExtra(EXTRA_RESULT_HASH, resultHash)
-						.putExtra(EXTRA_RESULT_NAME, resultName)
-						.putExtra(EXTRA_RESULT_SOURCE_HASH, sourceHash)
-						.putExtra(EXTRA_RESULT_SOURCE_NAME, sourceName)
-						.putExtra(EXTRA_RESULT_ATTACHMENT_INDEX, attachmentIndex));
+                setResult(RESULT_OK,PhotoEditorContract.result(getIntent(),resultHash,resultName,sourceHash,sourceName,
+                        attachmentIndex,options.applied(resultHash),true));
 				finish();
 			});
 		}, "ImageEditorSave").start();
@@ -538,7 +594,7 @@ public class ImageEditorActivity extends ComponentActivity {
 	}
 
 	private void setBusy(Integer messageResId) {
-		boolean busy = messageResId != null;
+		boolean busy = messageResId != null; this.busy=busy;
 		saveButton.setEnabled(!busy);
 		((View) tools.getParent()).setVisibility(busy ? View.GONE : View.VISIBLE);
 		if (busy) {
@@ -569,6 +625,7 @@ public class ImageEditorActivity extends ComponentActivity {
 	protected void onDestroy() {
 		if (backPolicy != null) backPolicy.close();
 		stopped = true;
+        if(fileSheet!=null){fileSheet.detach();fileSheet=null;}
 		if (editorView != null) editorView.release();
 		super.onDestroy();
 	}
@@ -576,6 +633,8 @@ public class ImageEditorActivity extends ComponentActivity {
 	private static class EditorView extends View {
 		enum Mode {NONE, CROP, DRAW, ERASE, STICKER}
 		private static final int MAX_HISTORY = 2;
+        private long revision, nextRevision;
+        boolean hasChanges(){return revision!=0;}
 		private static final int CROP_LEFT = 1;
 		private static final int CROP_TOP = 2;
 		private static final int CROP_RIGHT = 4;
@@ -1191,19 +1250,19 @@ public class ImageEditorActivity extends ComponentActivity {
 
 		private void pushHistory() {
 			try {
-				undo.addLast(new Snapshot(baseBitmap, overlayBitmap, stickers));
+				undo.addLast(new Snapshot(baseBitmap, overlayBitmap, stickers, revision));
 				while (undo.size() > MAX_HISTORY) undo.removeFirst().recycle();
 				clearHistory(redo);
 			} catch (OutOfMemoryError e) {
 				clearHistory(undo);
-				clearHistory(redo);
-			}
-		}
+                clearHistory(redo);
+            } finally {revision=++nextRevision;}
+        }
 
-		void undo() {
+        void undo() {
 			commitActiveSticker();
 			if (undo.isEmpty()) return;
-			redo.addLast(new Snapshot(baseBitmap, overlayBitmap, stickers));
+			redo.addLast(new Snapshot(baseBitmap, overlayBitmap, stickers, revision));
 			while (redo.size() > MAX_HISTORY) redo.removeFirst().recycle();
 			restore(undo.removeLast());
 		}
@@ -1211,12 +1270,13 @@ public class ImageEditorActivity extends ComponentActivity {
 		void redo() {
 			commitActiveSticker();
 			if (redo.isEmpty()) return;
-			undo.addLast(new Snapshot(baseBitmap, overlayBitmap, stickers));
+			undo.addLast(new Snapshot(baseBitmap, overlayBitmap, stickers, revision));
 			while (undo.size() > MAX_HISTORY) undo.removeFirst().recycle();
 			restore(redo.removeLast());
 		}
 
 		private void restore(Snapshot snapshot) {
+            revision=snapshot.revision;
 			baseBitmap.recycle();
 			overlayBitmap.recycle();
 			baseBitmap = snapshot.base;
@@ -1261,7 +1321,9 @@ public class ImageEditorActivity extends ComponentActivity {
 			final Bitmap overlay;
 			final ArrayList<StickerPlacement> stickers;
 
-			Snapshot(Bitmap base, Bitmap overlay, ArrayList<StickerPlacement> stickers) {
+			final long revision;
+            Snapshot(Bitmap base, Bitmap overlay, ArrayList<StickerPlacement> stickers, long revision) {
+                this.revision=revision;
 				this.base = base.copy(Bitmap.Config.ARGB_8888, true);
 				this.overlay = overlay.copy(Bitmap.Config.ARGB_8888, true);
 				this.stickers = new ArrayList<>(stickers.size());

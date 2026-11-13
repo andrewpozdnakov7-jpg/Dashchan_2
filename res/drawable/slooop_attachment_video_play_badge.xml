@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Decorative marker; the entire preview owns playback and long-press.
+     Keep ImageView tint null. Do not tint this two-color drawable. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="16dp"
+    android:height="14dp"
+    android:viewportWidth="16"
+    android:viewportHeight="14">
+    <path
+        android:fillColor="#B81B1F24"
+        android:strokeColor="#59FFFFFF"
+        android:strokeWidth="0.5"
+        android:pathData="M3.25,0.25 L12.75,0.25 Q15.75,0.25 15.75,3.25 L15.75,10.75 Q15.75,13.75 12.75,13.75 L3.25,13.75 Q0.25,13.75 0.25,10.75 L0.25,3.25 Q0.25,0.25 3.25,0.25 Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M5.5,3 L11,7 L5.5,11 Z" />
+</vector>

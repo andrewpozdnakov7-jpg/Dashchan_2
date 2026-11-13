@@ -984,7 +984,7 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 		boolean favorite = FavoritesStorage.getInstance().hasFavorite(page.chanName, page.boardName, page.threadNumber);
 		actions.add(new com.mishiranu.dashchan.widget.ThreadFabMenu.Action(favorite ? R.id.menu_unstar_text : R.id.menu_star_text,
 				favorite ? R.string.remove_from_favorites : R.string.add_to_favorites,
-				favorite ? R.drawable.ic_star : R.drawable.ic_star_outline, true, false));
+				favorite ? R.drawable.ic_star : R.drawable.ic_star_outline, true, false, favorite));
 		if (canArchiveThread()) actions.add(new com.mishiranu.dashchan.widget.ThreadFabMenu.Action(R.id.menu_archive,
 				R.string.thread_fab_save, R.drawable.ic_save, true, true));
 		return actions;

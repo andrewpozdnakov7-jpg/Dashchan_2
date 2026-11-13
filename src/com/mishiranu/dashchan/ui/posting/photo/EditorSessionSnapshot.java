@@ -26,6 +26,8 @@ public final class EditorSessionSnapshot {
     public final int exportSide;
     public final int exportQuality;
     public final boolean exportPng;
+    public final PhotoAttachmentOptions photoOptions;
+    public final String fileSheetState;
 
     private EditorSessionSnapshot(Builder builder) {
         document = builder.document;
@@ -46,6 +48,7 @@ public final class EditorSessionSnapshot {
         exportSide = builder.exportSide;
         exportQuality = builder.exportQuality;
         exportPng = builder.exportPng;
+        photoOptions=builder.photoOptions; fileSheetState=builder.fileSheetState;
     }
 
     /** Named fields also let the codec preserve the old incremental restore/fallback behavior. */
@@ -68,6 +71,9 @@ public final class EditorSessionSnapshot {
         public int exportSide;
         public int exportQuality = 94;
         public boolean exportPng;
+        public PhotoAttachmentOptions photoOptions;
+        public String fileSheetState;
+        public int sourceWidth, sourceHeight;
 
         public Builder(EditorDocument document, String sourceHash, String sourceName) {
             this.document = document;

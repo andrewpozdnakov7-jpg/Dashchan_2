@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="attachment_open_video_named">Open video: %1$s</string>
+    <string name="attachment_video_options_named">Video options: %1$s</string>
+</resources>

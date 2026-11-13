@@ -122,20 +122,18 @@ public final class PostingAttachmentsAppearance {
 			View.OnClickListener rating, View.OnClickListener edit, View.OnClickListener remove,
 			View.OnClickListener preview, View.OnLongClickListener drag) {
 		Card card = new Card(container.getContext());
-		AttachmentHolder holder = new AttachmentHolder(card, card.name, card.info, card.image, card.preview,
-				card.warning, card.rating, card.edit);
+		card.optionsAction = options; card.previewAction = preview; card.editAction = edit;
+		AttachmentHolder holder = new AttachmentHolder(card, card.name, card.info, card.image, card.marker,
+				card.warning, card.rating, card.edit, card.stage, card.remove, null);
 		cards.put(holder, card);
 		bindClick(card.stage, holder, options); bindClick(card.name, holder, options);
 		bindClick(card.warning, holder, warning); bindClick(card.rating, holder, rating);
 		bindClick(card.edit, holder, edit); bindClick(card.remove, holder, remove);
-		bindClick(card.preview, holder, preview);
 		bindDrag(card.stage, holder, drag);
-		// The video's play overlay retains its short-tap action, but must not mask
-		// the same long-press gesture on the rest of the preview.
-		bindDrag(card.preview, holder, drag);
 		card.stage.setAccessibilityDelegate(new View.AccessibilityDelegate() {
 			@Override public void onInitializeAccessibilityNodeInfo(View view, AccessibilityNodeInfo info) {
 				super.onInitializeAccessibilityNodeInfo(view, info);
+				if (holder.video && holder.videoPreviewAllowed) info.setClassName("android.widget.Button");
 				info.addAction(new AccessibilityNodeInfo.AccessibilityAction(AccessibilityNodeInfo.ACTION_LONG_CLICK,
 						container.getContext().getString(R.string.attachment_reorder_named, holder.name)));
 				int index = host.attachments().indexOf(holder);
@@ -165,12 +163,13 @@ public final class PostingAttachmentsAppearance {
 		view.setTag(holder);
 		view.setOnTouchListener((target, event) -> { motion.grab(holder, target, event); return false; });
 		view.setOnLongClickListener(target -> cards.containsKey(holder)
-				&& host.attachments().contains(holder) && listener.onLongClick(target));
+				&& host.attachments().contains(holder) && (listener.onLongClick(target) || holder.video));
 		// A consumed native long click supplies the standard system haptic feedback.
 		// Do not vibrate a second time or consume ordinary clicks / scroll gestures.
 	}
 	private void bindClick(View view, AttachmentHolder holder, View.OnClickListener listener) {
 		view.setTag(holder); view.setOnClickListener(v -> {
+			if (!cards.containsKey(holder) || !host.attachments().contains(holder)) return;
 			motion.cancel();
 			removal.finish();
 			if (cards.containsKey(holder) && host.attachments().contains(holder)) listener.onClick(v);
@@ -220,22 +219,39 @@ public final class PostingAttachmentsAppearance {
 	public void bindFile(AttachmentHolder holder, String details, boolean available, boolean image,
 			boolean video, boolean editable) {
 		Card card = cards.get(holder); if (card == null) return;
+		holder.video = video;
+		holder.videoPreviewAllowed = video && PostingAttachmentsController.videoPreviewAllowed(available);
+		if (video) {
+			card.name.setOnClickListener(null); card.name.setClickable(false); card.name.setFocusable(false);
+			card.name.setForeground(null);
+			if (holder.videoPreviewAllowed) bindClick(card.stage, holder, card.previewAction);
+			else { card.stage.setOnClickListener(null); card.stage.setClickable(false); }
+		} else {
+			bindClick(card.stage, holder, editable ? card.editAction : card.optionsAction); bindClick(card.name, holder, editable ? card.editAction : card.optionsAction);
+			selectable(card.name);
+		}
+		card.marker.setVisibility(holder.videoPreviewAllowed ? View.VISIBLE : View.INVISIBLE);
 		card.name.setText(AttachmentDisplayName.withoutExtension(holder.name));
 		card.info.setText(details);
 		card.image.setContentDescription(null);
-		card.stage.setContentDescription(holder.name + ", " + details);
-		card.name.setContentDescription(holder.name);
-		card.edit.setVisibility(View.VISIBLE); card.edit.setEnabled(editable);
-		card.edit.setContentDescription(container.getContext().getString(editable
-				? R.string.attachment_edit_named : R.string.attachment_edit_unavailable_named, holder.name));
+		card.stage.setContentDescription(holder.videoPreviewAllowed
+				? container.getContext().getString(R.string.attachment_open_video_named, holder.name)
+                : editable ? container.getContext().getString(R.string.pe_file_edit_named,holder.name) : holder.name + ", " + details);
+		card.name.setContentDescription(video ? null : holder.name);
+		((AttachmentActionButton) card.edit).setPlain(video);
+		((AttachmentActionButton) card.remove).setPlain(video);
+		card.edit.setImageResource(video ? R.drawable.slooop_attachment_video_tune : R.drawable.ic_edit);
+		bindClick(card.edit, holder, video ? card.optionsAction : card.editAction);
+		card.edit.setVisibility(View.VISIBLE); card.edit.setEnabled(video ? available : editable);
+		card.edit.setContentDescription(container.getContext().getString(video ? R.string.attachment_video_options_named
+				: editable ? R.string.attachment_edit_named : R.string.attachment_edit_unavailable_named, holder.name));
 		card.remove.setContentDescription(container.getContext().getString(R.string.attachment_remove_named, holder.name));
 		card.warning.setContentDescription(container.getContext().getString(R.string.attachment_warning_named, holder.name));
 		card.rating.setContentDescription(container.getContext().getString(R.string.attachment_rating_named, holder.name));
-		card.preview.setContentDescription(container.getContext().getString(R.string.preview_video_attachment) + ": " + holder.name);
 		card.status.setText(available ? "" : container.getContext().getString(R.string.attachment_file_unavailable));
 		card.status.setVisibility(available ? View.GONE : View.VISIBLE);
 		card.placeholder.setImageDrawable(ResourceUtils.getDrawable(container.getContext(),
-				available ? video ? R.attr.iconAttachmentVideo : R.attr.iconAttachmentFile : R.attr.iconAttachmentWarning, 0));
+				available ? R.attr.iconAttachmentFile : R.attr.iconAttachmentWarning, 0));
 		card.placeholder.setVisibility(View.VISIBLE);
 		card.expectsPreview = available && (image || video);
 		card.image.setVisibility(View.INVISIBLE);
@@ -261,7 +277,9 @@ public final class PostingAttachmentsAppearance {
 
 	private final class Card extends LinearLayout {
 		final FrameLayout stage;
-		final ImageView image, placeholder, preview, warning, rating, edit, remove;
+		final ImageView image, placeholder, warning, rating, edit, remove;
+		final AttachmentVideoMarker marker;
+		View.OnClickListener optionsAction, previewAction, editAction;
 		final TextView name, info, status;
 		boolean expectsPreview;
 		Card(Context context) {
@@ -275,10 +293,8 @@ public final class PostingAttachmentsAppearance {
 			placeholder = new ImageView(context); placeholder.setImageTintList(ColorStateList.valueOf(ink));
 			placeholder.setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
 			stage.addView(placeholder, new FrameLayout.LayoutParams(dp(32), dp(32), Gravity.CENTER));
-			preview = new ImageView(context); preview.setImageDrawable(ResourceUtils.getDrawable(context, R.attr.iconAttachmentVideo, 0));
-			preview.setImageTintList(ColorStateList.valueOf(ink)); preview.setPadding(dp(12), dp(12), dp(12), dp(12));
-			preview.setBackground(shape(surface, 24)); selectable(preview); preview.setVisibility(GONE);
-			stage.addView(preview, new FrameLayout.LayoutParams(dp(48), dp(48), Gravity.CENTER));
+			marker = new AttachmentVideoMarker(context, image);
+			stage.addView(marker, new FrameLayout.LayoutParams(-1, -1));
 			name = text(12); name.setTypeface(ResourceUtils.TYPEFACE_MEDIUM); name.setSingleLine(true);
 			name.setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO); // Stage already exposes full name/details.
 			name.setEllipsize(TextUtils.TruncateAt.END); name.setMinWidth(0); name.setMinimumWidth(0);
