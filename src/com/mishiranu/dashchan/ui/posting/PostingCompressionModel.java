@@ -35,5 +35,9 @@ public final class PostingCompressionModel extends ViewModel {
 		}
 		job = null; signature = null; acceptedAt.clear(); state.setValue(null);
 	}
+	void restore(VideoCompressionJob next, String signature) {
+		clear(); this.signature = signature; job = next;
+		next.changes.observeForever(observer); state.setValue(next);
+	}
 	@Override protected void onCleared() { clear(); }
 }

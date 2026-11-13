@@ -54,7 +54,7 @@ public class ExperimentalFragment extends PreferenceFragment {
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 						.pushFragment(new ToolbarTitleSettingsFragment()));
 		addExperimentalToggle(ExperimentalPreferenceDescriptors.threadFabMenu());
-		addButton(R.string.compression_title, R.string.compression_summary).setOnClickListener(p ->
+		if (com.mishiranu.dashchan.BuildConfig.ENABLE_VIDEO_COMPRESSION) addButton(R.string.compression_title, R.string.compression_summary).setOnClickListener(p ->
 				((FragmentHandler) requireActivity()).pushFragment(new VideoCompressionFragment()));
 		CheckPreference wallpaperPreference = addCheck(true, Preferences.KEY_WALLPAPER_ENABLED,
 				Preferences.DEFAULT_WALLPAPER_ENABLED, R.string.wallpaper_background,

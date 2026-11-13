@@ -10,12 +10,15 @@ import chan.content.ChanConfiguration;
 import chan.content.ChanPerformer;
 import chan.text.JsonSerial;
 import com.mishiranu.dashchan.content.async.ReadCaptchaTask;
+import com.mishiranu.dashchan.content.storage.AttachmentConversion;
 import com.mishiranu.dashchan.content.storage.DraftsStorage;
 import com.mishiranu.dashchan.util.AndroidUtils;
 import com.mishiranu.dashchan.util.GraphicsUtils;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -37,6 +40,19 @@ public class PostingDraftContractTest {
 		assertEquals(expected.optionRemoveMetadata, actual.optionRemoveMetadata);
 		assertEquals(expected.optionRemoveFileName, actual.optionRemoveFileName);
 		assertEquals(expected.optionSpoiler, actual.optionSpoiler);
+		assertEquals(expected.forceVideoConversion, actual.forceVideoConversion);
+		if (expected.conversion == null) {
+			assertNull(actual.conversion);
+		} else {
+			assertNotNull(actual.conversion);
+			assertEquals(expected.conversion.hash, actual.conversion.hash);
+			assertEquals(expected.conversion.name, actual.conversion.name);
+			assertEquals(expected.conversion.codec, actual.conversion.codec);
+			assertEquals(expected.conversion.signature, actual.conversion.signature);
+			assertEquals(expected.conversion.profile, actual.conversion.profile);
+			assertEquals(expected.conversion.before, actual.conversion.before);
+			assertEquals(expected.conversion.after, actual.conversion.after);
+		}
 		if (expected.reencoding == null) {
 			assertNull(actual.reencoding);
 		} else {
@@ -76,6 +92,56 @@ public class PostingDraftContractTest {
 		DraftsStorage.AttachmentDraft draft = new DraftsStorage.AttachmentDraft(attachment(1, 0).hash,
 				null, null, false, false, false, false, null);
 		sameAttachment(draft, roundTrip(draft));
+	}
+
+	@Test public void convertedPostKeepsOriginalOutputAndManualIntentAfterRoundTrip() throws Exception {
+		String original = attachment(1, 0).hash, output = attachment(2, 0).hash;
+		AttachmentConversion conversion = new AttachmentConversion(output, "converted.mp4", "H.265",
+				"fixture/test:true:auto:0:0:false\nforced:[" + original + "]", 7, 9000, 4500);
+		DraftsStorage.AttachmentDraft accepted = new DraftsStorage.AttachmentDraft(original, "original.mp4",
+				null, false, true, false, true, null, true, conversion);
+		DraftsStorage.AttachmentDraft pending = new DraftsStorage.AttachmentDraft(attachment(3, 0).hash,
+				"pending.mp4", null, false, false, false, false, null, true, null);
+		DraftsStorage.PostDraft post = new DraftsStorage.PostDraft("fixture", "test", "123", null,
+				null, null, null, "retry", 5, new ArrayList<>(Arrays.asList(accepted, pending)), false, false, false, null);
+		DraftsStorage.PostDraft restored = roundTrip(post);
+		sameAttachment(accepted, restored.attachmentDrafts.get(0));
+		sameAttachment(pending, restored.attachmentDrafts.get(1));
+		HashSet<String> retained = new HashSet<>();
+		restored.attachmentDrafts.get(0).collectHashes(retained);
+		assertEquals(new HashSet<>(Arrays.asList(original, output)), retained);
+	}
+
+	@Test public void legacyDraftDefaultsToOriginalAndIncompleteConversionIsIgnored() throws Exception {
+		String original = attachment(1, 0).hash;
+		try (JsonSerial.Reader reader = JsonSerial.reader(("{\"hash\":\"" + original
+				+ "\",\"name\":\"legacy.mp4\",\"videoConversion\":{\"future\":{},\"hash\":\"invalid\"}}")
+				.getBytes(StandardCharsets.UTF_8))) {
+			DraftsStorage.AttachmentDraft draft = DraftsStorage.AttachmentDraft.deserialize(reader);
+			assertNotNull(draft);
+			assertFalse(draft.forceVideoConversion);
+			assertNull(draft.conversion);
+			HashSet<String> retained = new HashSet<>();
+			draft.collectHashes(retained);
+			assertEquals(new HashSet<>(Arrays.asList(original)), retained);
+		}
+	}
+
+	@Test public void convertedOutputRequiresMatchingGroupProfileAndExistingFileLength() throws Exception {
+		java.nio.file.Path output = Files.createTempFile("conversion-contract-", ".tmp");
+		try {
+			Files.write(output, new byte[] {1, 2, 3});
+			AttachmentConversion conversion = new AttachmentConversion(attachment(2, 0).hash,
+					"converted.mp4", "H.265", "group", 7, 9, 3);
+			assertTrue(conversion.matches("group", 7, output.toFile()));
+			assertFalse(conversion.matches("changed-group", 7, output.toFile()));
+			assertFalse(conversion.matches("group", 8, output.toFile()));
+			assertFalse(conversion.matches("group", 7, null));
+			Files.write(output, new byte[] {1, 2});
+			assertFalse(conversion.matches("group", 7, output.toFile()));
+			Files.delete(output);
+			assertFalse(conversion.matches("group", 7, output.toFile()));
+		} finally { Files.deleteIfExists(output); }
 	}
 
 	@Test public void postRoundTripPreservesAllFieldsCursorAndOrderedAttachments() throws Exception {

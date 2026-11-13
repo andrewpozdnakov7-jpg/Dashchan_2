@@ -27,6 +27,7 @@ import androidx.media3.transformer.ExportException;
 import androidx.media3.transformer.ExportResult;
 import androidx.media3.transformer.ProgressHolder;
 import androidx.media3.transformer.Transformer;
+import androidx.media3.transformer.TransformationRequest;
 import androidx.media3.transformer.VideoEncoderSettings;
 import com.google.common.collect.ImmutableList;
 import com.mishiranu.dashchan.R;
@@ -50,6 +51,7 @@ public final class VideoCompressionService extends Service {
 	private boolean triedAvc;
 	private boolean forceEncode;
 	private boolean finishing;
+	private CompressionDiagnostics.Session diagnostics;
 	private android.os.PowerManager.WakeLock wakeLock;
 	private final androidx.lifecycle.Observer<VideoCompressionJob> stateObserver = value -> {
 		if (value.phase == VideoCompressionJob.Phase.READY) { value.phase = VideoCompressionJob.Phase.RUNNING; value.changed(); next(); }
@@ -63,7 +65,10 @@ public final class VideoCompressionService extends Service {
 		if (pending != null || active != null) { job.fail(R.string.compression_busy); return false; }
 		pending = job;
 		try { ContextCompat.startForegroundService(context, new Intent(context, VideoCompressionService.class)); return true; }
-		catch (RuntimeException e) { pending = null; job.fail(R.string.compression_start_failed); return false; }
+		catch (RuntimeException e) {
+			CompressionDiagnostics.failure("service_start", e);
+			pending = null; job.fail(R.string.compression_start_failed); return false;
+		}
 	}
 	public static void cancel(VideoCompressionJob job) {
 		job.cancel();
@@ -73,6 +78,8 @@ public final class VideoCompressionService extends Service {
 	@Override public IBinder onBind(Intent intent) { return null; }
 	@Override public void onCreate() {
 		super.onCreate();
+		try { VideoInputNormalizer.cleanup(new File(getCacheDir(), "video-compression-inputs")); }
+		catch (java.io.IOException e) { CompressionDiagnostics.failure("input_cache_cleanup", e); }
 		// Only this exporter's own abandoned files; never traverse or delete the source draft cache.
 		File directory = new File(getCacheDir(), "video-compression");
 		File[] stale = directory.listFiles();
@@ -95,7 +102,10 @@ public final class VideoCompressionService extends Service {
 			int type = Build.VERSION.SDK_INT >= 35 ? ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROCESSING
 					: ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC;
 			startForeground(NOTIFICATION, notification().build(), type);
-		} catch (RuntimeException e) { if (job != null) job.fail(R.string.compression_start_failed); finish(); return START_NOT_STICKY; }
+		} catch (RuntimeException e) {
+			CompressionDiagnostics.failure("foreground_start", e);
+			if (job != null) job.fail(R.string.compression_start_failed); finish(); return START_NOT_STICKY;
+		}
 		if (job == null || !job.current()) { finish(); return START_NOT_STICKY; }
 		job.changes.observeForever(stateObserver);
 		if (job != null && job.phase == VideoCompressionJob.Phase.READY) { job.phase = VideoCompressionJob.Phase.RUNNING; job.changed(); next(); }
@@ -123,16 +133,22 @@ public final class VideoCompressionService extends Service {
 			if (job == null || transformer == null) return;
 			if (!job.current()) { job.cancel(); finish(); return; }
 			ProgressHolder value = new ProgressHolder();
-			if (transformer.getProgress(value) == Transformer.PROGRESS_STATE_AVAILABLE) {
+			int progressState = transformer.getProgress(value);
+			if (progressState == Transformer.PROGRESS_STATE_AVAILABLE) {
 				job.itemPercent = value.progress;
 				job.percent = CompressionBudget.progress(job.completedMs, job.queue.get(job.index).durationMs, job.totalMs, value.progress);
 			} else { job.percent = -1; job.itemPercent = -1; }
+			if (value.progress != previousProgress) { previousProgress = value.progress; lastProgress = android.os.SystemClock.elapsedRealtime(); }
+			if (diagnostics != null) diagnostics.tick(progressState, job.itemPercent, output != null ? output.length() : -1,
+					android.os.SystemClock.elapsedRealtime() - lastProgress, wakeLock != null && wakeLock.isHeld());
 			job.changed();
 			try { getSystemService(NotificationManager.class).notify(NOTIFICATION, notification().build()); }
 			catch (RuntimeException ignored) {}
 			// A stalled export must not keep a foreground service/codecs alive indefinitely.
-			if (value.progress != previousProgress) { previousProgress = value.progress; lastProgress = android.os.SystemClock.elapsedRealtime(); }
-			if (android.os.SystemClock.elapsedRealtime() - lastProgress > 180_000) { job.fail(R.string.compression_failed); finish(); return; }
+			if (android.os.SystemClock.elapsedRealtime() - lastProgress > 180_000) {
+				if (diagnostics != null) diagnostics.detail("service_watchdog no_progress_ms=180000");
+				job.fail(R.string.compression_failed); finish(); return;
+			}
 			handler.postDelayed(this, 1000);
 		}
 	};
@@ -146,9 +162,17 @@ public final class VideoCompressionService extends Service {
 		triedAvc = false; forceEncode = false; pass = 0;
 		VideoCompressionJob.Source source = job.queue.get(job.index);
 		boolean manual = job.isManualSource(source);
+		boolean hevcEncoderAvailable = manual && HardwareVideoCodecs.available(HardwareVideoCodecs.HEVC);
 		mime = VideoConversionPolicy.outputMime(job.codec, job.preferHevc, manual,
-				manual && HardwareVideoCodecs.available(HardwareVideoCodecs.HEVC));
-		if (!canCopyVideo(source) && !HardwareVideoCodecs.available(mime) && (manual || "auto".equals(job.codec))) { mime = HardwareVideoCodecs.AVC; triedAvc = true; }
+				hevcEncoderAvailable);
+		com.mishiranu.dashchan.media.VideoDiagnostics.recordUi("compression codec_selection manual=" + manual
+				+ " input=" + source.videoMime + " requested=" + mime + " hevc_encoder_available="
+				+ (manual ? Boolean.toString(hevcEncoderAvailable) : "not_queried"));
+		if (!canCopyVideo(source) && !HardwareVideoCodecs.available(mime) && (manual || "auto".equals(job.codec))) {
+			if (!HardwareVideoCodecs.AVC.equals(mime)) com.mishiranu.dashchan.media.VideoDiagnostics.recordUi(
+					"compression codec_fallback from=" + mime + " to=" + HardwareVideoCodecs.AVC + " reason=encoder_unavailable");
+			mime = HardwareVideoCodecs.AVC; triedAvc = true;
+		}
 		if (!canCopyVideo(source) && !HardwareVideoCodecs.available(mime)) { job.fail(R.string.compression_no_encoder); finish(); return; }
 		if (!manual && canCopyVideo(source) && source.name.toLowerCase(java.util.Locale.ROOT).endsWith(".mp4")
 				&& (!source.hasAudio || MimeTypes.AUDIO_AAC.equals(source.audioMime))) {
@@ -194,18 +218,23 @@ public final class VideoCompressionService extends Service {
 			double scale = source.shrinking ? Math.min(1.0, Math.sqrt(videoBitrate / (source.frameRate * 0.075 * source.width * (double) source.height))) : 1.0;
 			int width = Math.max(2, ((int) (source.width * scale) / 2) * 2);
 			int height = Math.max(2, ((int) (source.height * scale) / 2) * 2);
-			EditedMediaItem.Builder itemBuilder = new EditedMediaItem.Builder(MediaItem.fromUri(Uri.fromFile(source.file)));
+			EditedMediaItem.Builder itemBuilder = new EditedMediaItem.Builder(MediaItem.fromUri(Uri.fromFile(source.exportFile())));
 			if (source.shrinking) itemBuilder.setEffects(new Effects(Collections.emptyList(), Collections.singletonList(
 					Presentation.createForWidthAndHeight(width, height, Presentation.LAYOUT_SCALE_TO_FIT))));
 			EditedMediaItem item = itemBuilder.build();
 			int current = ++generation;
+			diagnostics = CompressionDiagnostics.begin(job, pass + 1, mime, copyVideo, width, height, videoBitrate);
+			final CompressionDiagnostics.Session exportDiagnostics = diagnostics;
 			transformer = new Transformer.Builder(this).setVideoMimeType(mime).setAudioMimeType(MimeTypes.AUDIO_AAC)
-					.setEncoderFactory(factory).addListener(new Transformer.Listener() {
+					.setEncoderFactory(exportDiagnostics.wrap(factory)).addListener(new Transformer.Listener() {
 						@Override public void onCompleted(Composition composition, ExportResult result) {
 							if (current != generation || !job.current()) return;
+							exportDiagnostics.result("completed", result, output != null ? output.length() : -1);
+							closeDiagnostics("completed");
 							handler.removeCallbacks(progress); transformer = null;
 							com.mishiranu.dashchan.media.VideoDiagnostics.recordUi("compression output video_process="
-									+ result.videoConversionProcess + " audio_process=" + result.audioConversionProcess);
+									+ result.videoConversionProcess + " audio_process=" + result.audioConversionProcess
+									+ " requested_mime=" + requestedMime + " actual_mime=" + result.videoMimeType);
 							if (output.length() > 0 && output.length() <= source.target) {
 								File completed = output; output = null;
 								String label = codecLabel(result.videoMimeType != null ? result.videoMimeType : requestedMime);
@@ -216,8 +245,20 @@ public final class VideoCompressionService extends Service {
 						}
 						@Override public void onError(Composition composition, ExportResult result, ExportException exception) {
 							if (current != generation || !job.current()) return;
-							com.mishiranu.dashchan.media.VideoDiagnostics.recordUi("compression export_error=" + exception.errorCode);
+							com.mishiranu.dashchan.media.VideoDiagnostics.recordUi("compression export_error=" + exception.errorCode
+									+ " error_name=" + exception.getErrorCodeName() + " requested_mime=" + requestedMime + " run=" + job.diagnosticRun);
+							exportDiagnostics.result("error", result, output != null ? output.length() : -1);
+							exportDiagnostics.failure("export", exception);
+							closeDiagnostics("error");
 							handler.removeCallbacks(progress); transformer = null; retry(true);
+						}
+						@Override public void onFallbackApplied(Composition composition, TransformationRequest original, TransformationRequest fallback) {
+							if (current != generation || job == null) return;
+							exportDiagnostics.detail("media3_fallback video=" + CompressionDiagnostics.mime(original.videoMimeType)
+									+ " next_video=" + CompressionDiagnostics.mime(fallback.videoMimeType)
+									+ " audio=" + CompressionDiagnostics.mime(original.audioMimeType) + " next_audio=" + CompressionDiagnostics.mime(fallback.audioMimeType)
+									+ " original_height=" + original.outputHeight + " next_height=" + fallback.outputHeight
+									+ " original_hdr_mode=" + original.hdrMode + " next_hdr_mode=" + fallback.hdrMode);
 						}
 					}).build();
 			job.attempt = ++pass; job.percent = -1; job.itemPercent = -1; job.importing = false; job.changed();
@@ -225,33 +266,52 @@ public final class VideoCompressionService extends Service {
 			Composition composition = new Composition.Builder(EditedMediaItemSequence.withAudioAndVideoFrom(Collections.singletonList(item)))
 					.setHdrMode(source.hdr && !copyVideo ? Composition.HDR_MODE_TONE_MAP_HDR_TO_SDR_USING_OPEN_GL : Composition.HDR_MODE_KEEP_HDR).build();
 			transformer.start(composition, output.getPath()); handler.post(progress);
-		} catch (Exception e) { retry(true); }
+		} catch (Exception e) {
+			com.mishiranu.dashchan.media.VideoDiagnostics.recordUi("compression start_error=" + e.getClass().getSimpleName()
+					+ " requested_mime=" + mime);
+			if (diagnostics != null) diagnostics.failure("export_start", e); else CompressionDiagnostics.failure("export_start", e);
+			retry(true);
+		}
 	}
 	private void retry(boolean error) {
 		handler.removeCallbacks(progress);
 		if (transformer != null) { try { transformer.cancel(); } catch (RuntimeException ignored) {} transformer = null; }
 		long length = output != null ? output.length() : 0;
+		if (diagnostics != null) diagnostics.detail("retry export_error=" + error + " output_bytes=" + length);
+		closeDiagnostics("retry");
 		if (output != null) { output.delete(); output = null; }
 		if (!job.current()) { finish(); return; }
 		if (error && (job.isManualSource(job.queue.get(job.index)) || "auto".equals(job.codec)) && HardwareVideoCodecs.HEVC.equals(mime) && !triedAvc
 				&& HardwareVideoCodecs.available(HardwareVideoCodecs.AVC)) {
+			com.mishiranu.dashchan.media.VideoDiagnostics.recordUi("compression codec_fallback from=" + mime
+					+ " to=" + HardwareVideoCodecs.AVC + " reason=export_failure");
 			triedAvc = true; mime = HardwareVideoCodecs.AVC; forceEncode = false;
 			videoBitrate = chooseBitrate(job.queue.get(job.index)); export(); return;
 		}
 		if (!error && pass < 4 && length > 0) {
+			com.mishiranu.dashchan.media.VideoDiagnostics.recordUi("compression bitrate_retry output_bytes=" + length
+					+ " target_bytes=" + job.queue.get(job.index).target + " previous_bitrate=" + videoBitrate + " run=" + job.diagnosticRun);
 			forceEncode = true;
 			videoBitrate = (int) Math.max(1_000, videoBitrate * (job.queue.get(job.index).target / (double) length) * 0.90);
 			export(); return;
 		}
 		job.fail(R.string.compression_failed); finish();
 	}
+	private void closeDiagnostics(String reason) {
+		CompressionDiagnostics.Session ending = diagnostics; diagnostics = null;
+		if (ending != null) ending.close(reason);
+	}
 	private void finish() {
 		if (finishing) return;
 		finishing = true;
 		generation++; handler.removeCallbacksAndMessages(null);
 		VideoCompressionJob ending = job; job = null;
+		if (diagnostics != null) diagnostics.detail("service_finish phase=" + (ending != null ? ending.phase : "none")
+				+ " output_bytes=" + (output != null ? output.length() : -1));
 		if (ending != null) ending.changes.removeObserver(stateObserver);
 		if (transformer != null) { try { transformer.cancel(); } catch (RuntimeException ignored) {} transformer = null; }
+		closeDiagnostics("service_finish");
+		if (ending != null) ending.releasePreparedInputs();
 		if (output != null) { output.delete(); output = null; }
 		if (wakeLock != null && wakeLock.isHeld()) { try { wakeLock.release(); } catch (RuntimeException ignored) {} }
 		if (ending != null && ending.busy()) ending.cancel();
@@ -267,6 +327,9 @@ public final class VideoCompressionService extends Service {
 		}
 		stopSelf();
 	}
-	@Override public void onTimeout(int startId, int fgsType) { if (job != null) job.fail(R.string.compression_failed); finish(); }
+	@Override public void onTimeout(int startId, int fgsType) {
+		if (diagnostics != null) diagnostics.detail("os_service_timeout fgs_type=" + fgsType);
+		if (job != null) job.fail(R.string.compression_failed); finish();
+	}
 	@Override public void onDestroy() { finish(); super.onDestroy(); }
 }

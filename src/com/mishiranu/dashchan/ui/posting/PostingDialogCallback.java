@@ -13,4 +13,6 @@ public interface PostingDialogCallback {
 	default boolean hasVideoConversionDetails(int index) { return false; }
 	default void showVideoConversionDetails(int index, String sourceHash) {}
 	default int[] getVideoConversionPosition(int index) { return new int[] {0, 0}; }
+	default VideoSizeSummary getVideoSizeSummary(int index, String hash, String name) { return null; }
+	default Runnable observeVideoConversion(androidx.lifecycle.LifecycleOwner owner, Runnable changed) { return () -> {}; }
 }

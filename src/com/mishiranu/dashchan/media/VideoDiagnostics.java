@@ -94,7 +94,7 @@ public final class VideoDiagnostics {
 		synchronized (LOCK) { return recording && extended; }
 	}
 
-	static long getExtendedCaptureId() {
+	public static long getExtendedCaptureId() {
 		synchronized (LOCK) { return recording && extended ? startedElapsedRealtime : 0L; }
 	}
 
@@ -120,6 +120,8 @@ public final class VideoDiagnostics {
 			nextBackRouteId = 0;
 			appendUiReportLocked("capture_started=true");
 			appendUiReportLocked("mode=" + (extended ? "extended" : "standard"));
+			appendUiReportLocked("compression_trace_schema=1 detailed=" + extended
+					+ " raw_messages=false trace_extras=false trace_window_first_last=10");
 			appendUiReportLocked("ui_buffer_limit_bytes=" + (extended ? EXTENDED_UI_REPORT_LIMIT_BYTES : UI_REPORT_LIMIT_BYTES)
 					+ " unit=utf16_payload chunk_chars=" + DiagnosticTextBuffer.CHUNK_CHARS
 					+ " max_line_chars=" + DiagnosticTextBuffer.MAX_LINE_CHARS + " initial_context_retained=true");
@@ -138,6 +140,7 @@ public final class VideoDiagnostics {
 			}
 		}
 		VideoPlayer.startDiagnosticCapture();
+		com.mishiranu.dashchan.media.compression.CompressionDiagnostics.captureStarted();
 		if (extended) sampler = WORKER.scheduleWithFixedDelay(VideoDiagnostics::sample, 1, 1, TimeUnit.SECONDS);
 		return true;
 	}
@@ -154,6 +157,8 @@ public final class VideoDiagnostics {
 	}
 
 	public static synchronized File stop() {
+		// Flush the active export before detaching the UI buffer. Never call under LOCK.
+		if (isRecording()) com.mishiranu.dashchan.media.compression.CompressionDiagnostics.captureStopping();
 		long sessionStartedAt;
 		DiagnosticTextBuffer uiReport;
 		synchronized (LOCK) {
@@ -260,6 +265,12 @@ public final class VideoDiagnostics {
 			if (recording) {
 				appendUiReportLocked(message);
 			}
+		}
+	}
+
+	public static void recordExtendedUi(long capture, String message) {
+		synchronized (LOCK) {
+			if (recording && extended && capture != 0 && capture == startedElapsedRealtime) appendUiReportLocked(message);
 		}
 	}
 

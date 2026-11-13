@@ -5,9 +5,9 @@ import com.mishiranu.dashchan.BuildConfig;
 import com.mishiranu.dashchan.content.Preferences;
 import org.junit.Test;
 
-/** Mozilla and Material 3 are shared; proprietary bridges, predictive Back and security are excluded. */
+/** Mozilla and Material 3 are shared; proprietary bridges remain excluded; local security and predictive Back are shared. */
 public class TranslationDistributionTest {
-    @Test public void mozillaAndMaterialAreAvailableWithoutGooglePredictiveBackOrSecurity() {
+    @Test public void sharedFeaturesAreAvailableWithoutGoogleOrVideoExport() {
         assertTrue(BuildConfig.ENABLE_LOCAL_TRANSLATION);
         assertTrue(TranslationEngine.MOZILLA.isAvailable());
         assertFalse(Preferences.DEFAULT_LOCAL_TRANSLATION);
@@ -19,7 +19,8 @@ public class TranslationDistributionTest {
         assertTrue(Preferences.DEFAULT_NEW_INTERFACE_MOTION);
         assertTrue(Preferences.DEFAULT_NEW_POSTING_FORM);
         assertTrue(Preferences.DEFAULT_NEW_VIDEO_PLAYER);
-        assertFalse(BuildConfig.ENABLE_PREDICTIVE_BACK);
-        assertFalse(BuildConfig.ENABLE_APP_SECURITY_SETTINGS);
+        assertTrue(BuildConfig.ENABLE_PREDICTIVE_BACK);
+        assertFalse(BuildConfig.ENABLE_VIDEO_COMPRESSION);
+        assertTrue(BuildConfig.ENABLE_APP_SECURITY_SETTINGS);
     }
 }

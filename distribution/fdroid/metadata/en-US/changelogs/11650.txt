@@ -1,0 +1,4 @@
+• F-Droid now includes predictive Back and app security settings: PIN, biometrics and privacy controls.
+• Updated the posting form, settings and floating controls. Added board filters and swipe deletion in history.
+• Added download subfolders by file type. Improved the photo editor, player, video thumbnails and reply notifications.
+• Video conversion and Google services are not included in the F-Droid build.

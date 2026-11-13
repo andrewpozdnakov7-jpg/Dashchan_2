@@ -353,8 +353,8 @@ android {
 
 	defaultConfig {
 		applicationId = 'io.dashchan2'
-		versionCode = 11640
-		versionName = '3.2.84'
+		versionCode = 11650
+		versionName = '3.2.85'
 		def releaseVersionCode = versionCode
 		def packageVersionCodeProperty = project.findProperty('packageVersionCode')
 		if (packageVersionCodeProperty != null) {
@@ -414,6 +414,7 @@ android {
 	flavorDimensions += 'distribution'
 	productFlavors {
 		github {
+			buildConfigField 'boolean', 'ENABLE_VIDEO_COMPRESSION', 'true'
 			dimension = 'distribution'
 			buildConfigField 'boolean', 'ENABLE_APP_SECURITY_SETTINGS', 'true'
 			buildConfigField 'String', 'SLOOOP_PUSH_BASE_URL',
@@ -446,11 +447,12 @@ android {
 			buildConfigField 'String', 'UPDATE_GITHUB_BETA_LATEST_RELEASE_URL', '""'
 		}
 		fdroid {
+			buildConfigField 'boolean', 'ENABLE_VIDEO_COMPRESSION', 'false'
 			dimension = 'distribution'
-			buildConfigField 'boolean', 'ENABLE_APP_SECURITY_SETTINGS', 'false'
+			buildConfigField 'boolean', 'ENABLE_APP_SECURITY_SETTINGS', 'true'
 			buildConfigField 'boolean', 'ENABLE_LOCAL_TRANSLATION', 'true'
 			buildConfigField 'boolean', 'ENABLE_EXPERIMENTAL_INTERFACE_MOTION', 'true'
-			buildConfigField 'boolean', 'ENABLE_PREDICTIVE_BACK', 'false'
+			buildConfigField 'boolean', 'ENABLE_PREDICTIVE_BACK', 'true'
 			buildConfigField 'boolean', 'ENABLE_GOOGLE_TRANSLATION', 'false'
 			buildConfigField 'boolean', 'ENABLE_GEMINI_NANO_TRANSLATION', 'false'
 			buildConfigField 'boolean', 'ALLOW_GMS_SECURITY_PROVIDER', 'false'
@@ -492,24 +494,29 @@ android {
 	sourceSets.fdroid.java.srcDir 'distribution/fdroid/src'
 	sourceSets.fdroid.manifest.srcFile 'distribution/fdroid/AndroidManifest.xml'
 	sourceSets.fdroid.assets.srcDir 'distribution/fdroid/metadata'
-	// Material 3 presentation is shared; security, push and proprietary translation stay flavour-specific.
+	// Material presentation, local app security and predictive Back are shared; Google SDKs stay flavour-specific.
 	['github', 'fdroid'].each { distribution ->
 		sourceSets.getByName(distribution).java.srcDir 'distribution/material3/src'
 		sourceSets.getByName(distribution).res.srcDir 'distribution/material3/res'
+		sourceSets.getByName(distribution).java.srcDir 'distribution/features/src'
+		sourceSets.getByName(distribution).res.srcDir 'distribution/features/res'
 	}
 	sourceSets.test {
 		java.srcDirs = ['unitTests/src']
 		resources.srcDirs = ['unitTests/resources']
 	}
 	sourceSets.androidTest.java.srcDirs = ['instrumentationTests/src']
-	// Share the Material presentation fixtures, while predictive/security fixtures remain GitHub-only.
+	// Material, security and predictive fixtures run for both distributions.
 	['Github', 'Fdroid'].each { distribution ->
 		sourceSets.maybeCreate('test' + distribution).java.srcDir 'distribution/material3/unitTests/src'
 		sourceSets.maybeCreate('androidTest' + distribution).java.srcDir 'distribution/material3/instrumentationTests/src'
+		sourceSets.maybeCreate('test' + distribution).java.srcDir 'distribution/features/unitTests/src'
+		sourceSets.maybeCreate('androidTest' + distribution).java.srcDir 'distribution/features/instrumentationTests/src'
 	}
 	sourceSets.maybeCreate('testGithub').java.srcDir 'distribution/github/unitTests/src'
 	sourceSets.maybeCreate('androidTestGithub').java.srcDir 'distribution/github/instrumentationTests/src'
 	sourceSets.maybeCreate('testFdroid').java.srcDir 'distribution/fdroid/unitTests/src'
+	sourceSets.maybeCreate('androidTestFdroid').java.srcDir 'distribution/fdroid/instrumentationTests/src'
 	if (builtinWebmEnabled) {
 		sourceSets.main.jniLibs.srcDirs += builtinWebmJniLibDirs
 	}
@@ -727,8 +734,8 @@ dependencies {
 	implementation 'androidx.browser:browser:1.10.0'
 	implementation 'androidx.work:work-runtime:2.12.0'
 	// Attachment export only; the existing FFmpeg player remains independent.
-	implementation 'androidx.media3:media3-transformer:1.11.1'
-	implementation 'androidx.media3:media3-effect:1.11.1'
+	githubImplementation 'androidx.media3:media3-transformer:1.11.1'
+	githubImplementation 'androidx.media3:media3-effect:1.11.1'
 	implementation 'org.jsoup:jsoup:1.23.2'
 	testImplementation 'junit:junit:4.13.2'
 	androidTestImplementation 'androidx.test:core:1.7.0'

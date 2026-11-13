@@ -662,6 +662,7 @@ public final class SettingsSearchIndex {
 				R.string.thread_toolbar_action__summary, Preferences.KEY_THREAD_TOOLBAR_ACTION);
 		addExperimentalToggle(context, entries, ExperimentalPreferenceDescriptors.threadFabMenu());
 		addToggle(context, entries, Screen.MEDIA_GALLERY, ExperimentalPreferenceDescriptors.videoThumbnails());
+		if (BuildConfig.ENABLE_VIDEO_COMPRESSION) {
 		add(context, entries, Screen.VIDEO_COMPRESSION, R.string.compression_title, R.string.compression_summary,
 				com.mishiranu.dashchan.media.compression.CompressionSettings.ENABLED);
 		add(context, entries, Screen.VIDEO_COMPRESSION, R.string.compression_codec, 0,
@@ -674,6 +675,7 @@ public final class SettingsSearchIndex {
 		add(context, entries, Screen.VIDEO_COMPRESSION, R.string.compression_file_limit, 0,
 				com.mishiranu.dashchan.media.compression.CompressionSettings.FILE_LIMIT);
 		add(context, entries, Screen.VIDEO_COMPRESSION, R.string.compression_system_test);
+		}
 		addToggle(context, entries, Screen.MEDIA_IMAGES, ExperimentalPreferenceDescriptors.photoEditor());
 		add(context, entries, Screen.CONTENTS, R.string.thread_page_preload,
 				R.string.thread_page_preload__summary, Preferences.KEY_THREAD_PAGE_PRELOAD);

@@ -132,6 +132,8 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 		public final ChanPerformer.SendPostData data;
 		public final DraftsStorage.PostDraft postDraft;
 		public final ArrayList<String> attachmentHashes;
+		// The selected payload hashes stay ordered; draft recovery also owns its originals.
+		public final Set<String> retainedAttachmentHashes;
 		public final boolean allowFloodRetry;
 		public int floodRetryCount;
 
@@ -143,6 +145,12 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 			this.data = data;
 			this.postDraft = postDraft;
 			this.attachmentHashes = new ArrayList<>(attachmentHashes);
+			this.retainedAttachmentHashes = new HashSet<>(attachmentHashes);
+			if (postDraft != null && postDraft.attachmentDrafts != null) {
+				for (DraftsStorage.AttachmentDraft attachment : postDraft.attachmentDrafts) {
+					attachment.collectHashes(retainedAttachmentHashes);
+				}
+			}
 			this.allowFloodRetry = allowFloodRetry;
 		}
 	}
@@ -214,7 +222,7 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 		if (queueItem != null) {
 			DraftsStorage draftsStorage = DraftsStorage.getInstance();
 			draftsStorage.store(queueItem.postDraft);
-			draftsStorage.releaseAttachmentDrafts(queueItem.attachmentHashes);
+			draftsStorage.releaseAttachmentDrafts(queueItem.retainedAttachmentHashes);
 			return queueItem.postDraft;
 		}
 		return null;
@@ -233,7 +241,7 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 		DraftsStorage draftsStorage = DraftsStorage.getInstance();
 		if (draftsStorage.getPostDraft(queueItem.key.chanName, queueItem.key.boardName,
 				queueItem.key.threadNumber) == queueItem.postDraft) {
-			draftsStorage.releaseAttachmentDrafts(queueItem.attachmentHashes);
+			draftsStorage.releaseAttachmentDrafts(queueItem.retainedAttachmentHashes);
 			return;
 		}
 		ArrayDeque<QueueItem> queueItems = FAILED_POSTS.get(queueItem.key);
@@ -409,10 +417,10 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 				return false;
 			}
 			QueueItem queueItem = new QueueItem(chanName, data, postDraft, attachmentHashes, allowFloodRetry);
-			DraftsStorage.getInstance().retainAttachmentDrafts(queueItem.attachmentHashes);
+			DraftsStorage.getInstance().retainAttachmentDrafts(queueItem.retainedAttachmentHashes);
 			if (queueItem.outboxId != null) {
 				HashMap<String, File> journalAttachments = new HashMap<>();
-				for (String hash : queueItem.attachmentHashes) {
+				for (String hash : queueItem.retainedAttachmentHashes) {
 					journalAttachments.put(hash, DraftsStorage.getInstance().getAttachmentDraftFile(hash));
 				}
 				queueItem.journalReady = OutboxStorage.getInstance().enqueue(queueItem.outboxId,
@@ -562,7 +570,7 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 
 	private void releaseQueueItem(QueueItem queueItem) {
 		unmarkPostDraftQueued(queueItem);
-		DraftsStorage.getInstance().releaseAttachmentDrafts(queueItem.attachmentHashes);
+		DraftsStorage.getInstance().releaseAttachmentDrafts(queueItem.retainedAttachmentHashes);
 	}
 
 	private void advanceQueue() {
