@@ -33,7 +33,9 @@ class ApkContractTest(unittest.TestCase):
                 elf[:4] = b"\x7fELF"
                 struct.pack_into("<H", elf, 18, {"armeabi-v7a": 40, "arm64-v8a": 183, "x86": 3}[abi])
                 entries["lib/" + abi + "/libfixture.so"] = elf
-            manifest = "ExperimentalImageEditorActivity content.service.translation.TranslationService"
+            manifest = ("ExperimentalImageEditorActivity content.service.translation.TranslationService "
+                        "AppLockActivity PrivacyResetActivity SecuritySessionProvider SecurityComponentFactory "
+                        "android.permission.USE_BIOMETRIC")
             if change:
                 manifest = change(entries, manifest)
             (root / "runtime-lock.json").write_text(json.dumps(expected), encoding="utf-8")
@@ -64,14 +66,35 @@ class ApkContractTest(unittest.TestCase):
             self.check_fixture(change)
 
     def test_excluded_component_rejected(self):
-        with self.assertRaisesRegex(AssertionError, "Excluded component"):
-            self.check_fixture(lambda entries, manifest: manifest + " AppLockActivity")
+        for component in ("FirebaseInitProvider", "VideoCompressionService", "android.permission.FOREGROUND_SERVICE_MEDIA_PROCESSING"):
+            with self.subTest(component=component), self.assertRaisesRegex(AssertionError, "Excluded component"):
+                self.check_fixture(lambda entries, manifest: manifest + " " + component)
+
+    def test_missing_security_rejected(self):
+        for component in ("AppLockActivity", "PrivacyResetActivity", "SecuritySessionProvider", "SecurityComponentFactory",
+                          "android.permission.USE_BIOMETRIC"):
+            with self.subTest(component=component), self.assertRaisesRegex(AssertionError, "security component missing"):
+                self.check_fixture(lambda entries, manifest: manifest.replace(component, ""))
 
     def test_excluded_dependency_rejected(self):
         def change(entries, manifest):
             entries["classes.dex"] = b"Lcom/google/mlkit/fixture;"
             return manifest
         with self.assertRaisesRegex(AssertionError, "Excluded dependency"):
+            self.check_fixture(change)
+
+    def test_export_dependency_rejected(self):
+        def change(entries, manifest):
+            entries["classes.dex"] = b"Landroidx/media3/transformer/Transformer;"
+            return manifest
+        with self.assertRaisesRegex(AssertionError, "Excluded dependency"):
+            self.check_fixture(change)
+
+    def test_obfuscated_export_dependency_metadata_rejected(self):
+        def change(entries, manifest):
+            entries["META-INF/androidx.media3_media3-transformer.version"] = b"1.11.1"
+            return manifest
+        with self.assertRaisesRegex(AssertionError, "export dependency metadata"):
             self.check_fixture(change)
 
     def test_local_path_rejected(self):
