@@ -19,13 +19,13 @@ import android.widget.FrameLayout;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
-import android.widget.TextView;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.recyclerview.widget.RecyclerView;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.util.InterfaceMotion;
+import com.mishiranu.dashchan.util.OpaqueColors;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -39,8 +39,13 @@ public final class ThreadFabMenu extends FrameLayout {
 		public final int id, title, icon;
 		public final boolean enabled;
 		public final boolean opensSurface;
+		public final boolean selected;
 		public Action(int id, int title, int icon, boolean enabled, boolean opensSurface) {
-			this.id = id; this.title = title; this.icon = icon; this.enabled = enabled; this.opensSurface = opensSurface;
+			this(id, title, icon, enabled, opensSurface, false);
+		}
+		public Action(int id, int title, int icon, boolean enabled, boolean opensSurface, boolean selected) {
+			this.id = id; this.title = title; this.icon = icon; this.enabled = enabled;
+			this.opensSurface = opensSurface; this.selected = selected;
 		}
 	}
 	public interface Host {
@@ -60,6 +65,7 @@ public final class ThreadFabMenu extends FrameLayout {
 	private final Drawable moreIcon, closeIcon;
 	private final ScrollView scroller;
 	private final LinearLayout actions;
+	private final int panelWidth, actionTouchSize, panelGap, panelOpenTravel, panelCloseTravel;
 	private final Rect bounds = new Rect(), reportedBounds = new Rect();
 	private final int[] location = new int[2], rootLocation = new int[2];
 	private final IdentityHashMap<View, Integer> accessibility = new IdentityHashMap<>();
@@ -89,6 +95,7 @@ public final class ThreadFabMenu extends FrameLayout {
 	private boolean scrollToBottomPending;
 	private int safeLeft, safeTop, safeRight, safeBottom;
 	private ValueAnimator shapeAnimator;
+	private ValueAnimator menuAnimator;
 	private float shapeProgress;
 
 	public ThreadFabMenu(PaddedRecyclerView list, Host host) {
@@ -99,6 +106,11 @@ public final class ThreadFabMenu extends FrameLayout {
 		colors = AppearanceColors.interfaceCompatibility(theme.base == ThemeEngine.Theme.Base.DARK,
 				theme.window, theme.card, theme.accent, ResourceUtils.getColor(getContext(), android.R.attr.textColorPrimary),
 				ResourceUtils.getColor(getContext(), R.attr.colorTextError));
+		panelWidth = getResources().getDimensionPixelSize(R.dimen.thread_fab_compact_panel_width);
+		actionTouchSize = getResources().getDimensionPixelSize(R.dimen.thread_fab_compact_action_touch_size);
+		panelGap = getResources().getDimensionPixelSize(R.dimen.thread_fab_compact_visible_gap);
+		panelOpenTravel = getResources().getDimensionPixelSize(R.dimen.thread_fab_compact_open_translation);
+		panelCloseTravel = getResources().getDimensionPixelSize(R.dimen.thread_fab_compact_close_translation);
 		scrim = new View(getContext());
 		scrim.setBackgroundColor(android.graphics.Color.BLACK);
 		scrim.setAlpha(0f);
@@ -107,10 +119,21 @@ public final class ThreadFabMenu extends FrameLayout {
 		addView(scrim);
 		actions = new LinearLayout(getContext());
 		actions.setOrientation(LinearLayout.VERTICAL);
-		actions.setGravity(Gravity.END);
+		actions.setGravity(Gravity.CENTER_HORIZONTAL);
+		int horizontalPadding = getResources().getDimensionPixelSize(R.dimen.thread_fab_compact_padding_horizontal);
+		int verticalPadding = getResources().getDimensionPixelSize(R.dimen.thread_fab_compact_padding_vertical);
+		actions.setPadding(horizontalPadding, verticalPadding, horizontalPadding, verticalPadding);
 		scroller = new ScrollView(getContext());
 		scroller.setFillViewport(false);
-		scroller.setClipToPadding(false);
+		scroller.setVerticalScrollBarEnabled(false);
+		GradientDrawable panelShape = new GradientDrawable();
+		panelShape.setColor(colors.surfaceContainer);
+		panelShape.setCornerRadius(getResources().getDimension(R.dimen.thread_fab_compact_corner_radius));
+		scroller.setBackground(panelShape);
+		scroller.setClipToOutline(true);
+		scroller.setElevation(getResources().getDimension(R.dimen.thread_fab_compact_elevation));
+		// A fading, already closed panel must not scroll or pass a touch through to a post.
+		scroller.setOnTouchListener((view, event) -> !opened);
 		scroller.addView(actions, new ScrollView.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
 		addView(scroller);
 		fab = new ImageButton(getContext());
@@ -239,26 +262,30 @@ public final class ThreadFabMenu extends FrameLayout {
 		if (!available || !fabShown || opened) return;
 		scrollHidden = false; scrollTravel = 0f;
 		updateFabVisibility(false);
-		scroller.animate().cancel();
-		scroller.setAlpha(1f); scroller.setTranslationY(0f);
+		boolean continuing = scroller.getVisibility() == VISIBLE;
+		cancelMenuAnimation();
 		actions.removeAllViews();
 		List<Action> model = host.getActions();
+		if (model.isEmpty()) { finishClosed(); animateShape(false, 0); return; }
 		// Model order is nearest FAB first. Layout order runs from top to bottom.
 		for (int i = model.size() - 1; i >= 0; i--) {
 			Action action = model.get(i);
-			TextView button = new TextView(getContext());
-			button.setText(action.title);
-			button.setTextSize(14);
-			button.setTextColor(action.enabled ? colors.onPrimaryContainer : colors.disabledContent);
-			button.setGravity(Gravity.CENTER_VERTICAL);
-			button.setMinHeight(dp(50));
-			button.setPadding(dp(18), dp(12), dp(18), dp(12));
+			ImageButton button = new ImageButton(getContext());
+			String title = getContext().getString(action.title);
+			button.setContentDescription(title);
+			button.setTooltipText(title);
+			button.setSelected(action.selected);
+			button.setMinimumWidth(0); button.setMinimumHeight(0);
+			int iconSize = getResources().getDimensionPixelSize(R.dimen.thread_fab_compact_icon_size);
+			int iconPadding = (actionTouchSize - iconSize) / 2;
+			button.setPadding(iconPadding, iconPadding, iconPadding, iconPadding);
+			button.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
 			Drawable icon = getContext().getDrawable(action.icon).mutate();
-			icon.setTint(action.enabled ? colors.onPrimaryContainer : colors.disabledContent);
-			icon.setBounds(0, 0, dp(24), dp(24));
-			button.setCompoundDrawablesRelative(icon, null, null, null);
-			button.setCompoundDrawablePadding(dp(12));
-			button.setBackground(background(colors.primaryContainer, 25));
+			int tint = OpaqueColors.readable(action.selected ? colors.primary : colors.onSurface,
+					colors.surfaceContainer, 4.5, OpaqueColors.Policy.INTERFACE_COMPATIBILITY);
+			icon.setTint(action.enabled ? tint : colors.disabledContent);
+			button.setImageDrawable(icon);
+			button.setBackground(actionBackground());
 			button.setEnabled(action.enabled); button.setFocusable(action.enabled);
 			button.setAccessibilityDelegate(new AccessibilityDelegate() {
 				@Override public void onInitializeAccessibilityNodeInfo(View view, AccessibilityNodeInfo info) {
@@ -266,30 +293,30 @@ public final class ThreadFabMenu extends FrameLayout {
 				}
 			});
 			button.setOnClickListener(v -> {
+				syncAvailability();
 				if (!opened || !available) return;
-				// New surfaces own focus; never schedule a focus restoration behind their window.
-				close(false, !action.opensSurface); host.onAction(action.id);
+				// A background refresh may change availability while the panel is open.
+				for (Action current : host.getActions()) if (current.id == action.id && current.enabled) {
+					// New surfaces own focus; never restore focus behind their window.
+					close(false, !current.opensSurface); host.onAction(current.id);
+					return;
+				}
 			});
-			LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT);
-			params.gravity = Gravity.END; params.bottomMargin = i == 0 ? 0 : dp(8);
+			LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(actionTouchSize, actionTouchSize);
 			actions.addView(button, params);
 		}
 		opened = true;
 		scrollToBottomPending = true;
 		isolateAccessibility();
 		scrim.setVisibility(VISIBLE); scroller.setVisibility(VISIBLE);
+		scroller.setDescendantFocusability(FOCUS_AFTER_DESCENDANTS);
 		scroller.setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_AUTO);
 		long duration = InterfaceMotion.duration(230);
-		scrim.animate().cancel();
-		if (duration > 0) scrim.animate().alpha(.24f).setDuration(duration).start(); else scrim.setAlpha(.24f);
-		for (int i = 0; i < actions.getChildCount(); i++) {
-			View child = actions.getChildAt(i);
-			child.setAlpha(duration > 0 ? 0f : 1f); child.setTranslationY(duration > 0 ? dp(12) : 0f);
-			child.setScaleX(duration > 0 ? .96f : 1f); child.setScaleY(duration > 0 ? .96f : 1f);
-			if (duration > 0) child.animate().alpha(1f).translationY(0).scaleX(1).scaleY(1)
-					.setStartDelay((actions.getChildCount() - 1 - i) * 18L).setDuration(duration)
-					.setInterpolator(InterfaceMotion.STANDARD).start();
+		if (!continuing) {
+			scroller.setAlpha(0f); scroller.setTranslationY(panelOpenTravel);
+			scroller.setScaleX(.96f); scroller.setScaleY(.96f); scrim.setAlpha(0f);
 		}
+		animateMenu(true, duration);
 		animateShape(true, duration);
 		fab.setContentDescription(getContext().getString(R.string.thread_fab_close));
 		host.onOpenChanged();
@@ -301,8 +328,7 @@ public final class ThreadFabMenu extends FrameLayout {
 	public boolean close(boolean animate, boolean restoreFocus) {
 		if (!opened) {
 			if (!animate) {
-				scrim.animate().cancel(); scroller.animate().cancel();
-				for (int i = 0; i < actions.getChildCount(); i++) actions.getChildAt(i).animate().cancel();
+				cancelMenuAnimation();
 				finishClosed(); animateShape(false, 0);
 			}
 			return false;
@@ -310,17 +336,16 @@ public final class ThreadFabMenu extends FrameLayout {
 		opened = false;
 		restoreAccessibility();
 		scroller.setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
+		scroller.setDescendantFocusability(FOCUS_BLOCK_DESCENDANTS);
+		scroller.cancelPendingInputEvents();
 		for (int i = 0; i < actions.getChildCount(); i++) {
-			View child = actions.getChildAt(i); child.animate().cancel();
-			child.setClickable(false); child.setFocusable(false); child.cancelPendingInputEvents();
+			View child = actions.getChildAt(i);
+			child.setEnabled(false); child.setClickable(false); child.setFocusable(false);
+			child.setTooltipText(null); child.setLongClickable(false);
+			child.cancelPendingInputEvents(); child.setPressed(false);
 		}
 		long duration = animate ? InterfaceMotion.duration(180) : 0;
-		scrim.animate().cancel(); scroller.animate().cancel();
-		if (duration > 0) {
-			scrim.animate().alpha(0).setDuration(duration).start();
-			scroller.animate().alpha(0).translationY(dp(8)).setDuration(duration)
-					.withEndAction(() -> { if (!opened) finishClosed(); }).start();
-		} else finishClosed();
+		animateMenu(false, duration);
 		animateShape(false, duration);
 		fab.setContentDescription(getContext().getString(R.string.thread_fab_actions));
 		host.onOpenChanged();
@@ -330,15 +355,58 @@ public final class ThreadFabMenu extends FrameLayout {
 		}
 		return true;
 	}
+	private void cancelMenuAnimation() {
+		ValueAnimator animator = menuAnimator;
+		menuAnimator = null;
+		if (animator != null) animator.cancel();
+	}
+	private void animateMenu(boolean open, long duration) {
+		cancelMenuAnimation();
+		if (duration == 0) {
+			if (open) {
+				scroller.setAlpha(1f); scroller.setTranslationY(0f);
+				scroller.setScaleX(1f); scroller.setScaleY(1f); scrim.setAlpha(.10f);
+			} else finishClosed();
+			return;
+		}
+		float alpha = scroller.getAlpha(), translation = scroller.getTranslationY();
+		float scale = scroller.getScaleX(), scrimAlpha = scrim.getAlpha();
+		float targetAlpha = open ? 1f : 0f, targetTranslation = open ? 0f : panelCloseTravel;
+		float targetScale = open ? 1f : .96f, targetScrimAlpha = open ? .10f : 0f;
+		ValueAnimator animator = ValueAnimator.ofFloat(0f, 1f);
+		menuAnimator = animator;
+		animator.setDuration(duration); animator.setInterpolator(InterfaceMotion.STANDARD);
+		animator.addUpdateListener(a -> {
+			if (menuAnimator != a) return;
+			float f = (float) a.getAnimatedValue();
+			scroller.setAlpha(alpha + (targetAlpha - alpha) * f);
+			scroller.setTranslationY(translation + (targetTranslation - translation) * f);
+			float currentScale = scale + (targetScale - scale) * f;
+			scroller.setScaleX(currentScale); scroller.setScaleY(currentScale);
+			scrim.setAlpha(scrimAlpha + (targetScrimAlpha - scrimAlpha) * f);
+		});
+		animator.addListener(new AnimatorListenerAdapter() {
+			@Override public void onAnimationEnd(Animator animation) {
+				if (menuAnimator != animation) return;
+				menuAnimator = null;
+				if (!opened) finishClosed();
+			}
+		});
+		animator.start();
+	}
 	private void finishClosed() {
 		scrollToBottomPending = false;
 		scrim.setVisibility(INVISIBLE); scroller.setVisibility(INVISIBLE);
-		scrim.setAlpha(0); scroller.setAlpha(1); scroller.setTranslationY(0);
+		scrim.setAlpha(0); scroller.setAlpha(0); scroller.setTranslationY(panelOpenTravel);
+		scroller.setScaleX(.96f); scroller.setScaleY(.96f);
+		scroller.setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
+		scroller.setDescendantFocusability(FOCUS_BLOCK_DESCENDANTS);
 		fab.setContentDescription(getContext().getString(R.string.thread_fab_actions));
 	}
-	private Drawable background(int color, float radius) {
-		GradientDrawable shape = new GradientDrawable(); shape.setColor(color); shape.setCornerRadius(dp(radius));
-		return new RippleDrawable(ColorStateList.valueOf(colors.ripple), shape, null);
+	private Drawable actionBackground() {
+		GradientDrawable mask = new GradientDrawable();
+		mask.setShape(GradientDrawable.OVAL); mask.setColor(android.graphics.Color.WHITE);
+		return new RippleDrawable(ColorStateList.valueOf(colors.ripple), null, mask);
 	}
 	private void updateFabShape() {
 		fabShape.setColor(androidx.core.graphics.ColorUtils.blendARGB(colors.primaryContainer, colors.primary, shapeProgress));
@@ -392,19 +460,28 @@ public final class ThreadFabMenu extends FrameLayout {
 		setMeasuredDimension(width, height); updateSafeBounds();
 		scrim.measure(MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY));
 		fab.measure(MeasureSpec.makeMeasureSpec(dp(TOUCH_SIZE), MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(dp(TOUCH_SIZE), MeasureSpec.EXACTLY));
-		scroller.measure(MeasureSpec.makeMeasureSpec(Math.max(0, Math.min(dp(360), width - safeLeft - safeRight - dp(32))), MeasureSpec.AT_MOST),
-				MeasureSpec.makeMeasureSpec(Math.max(0, height - safeTop - safeBottom - dp(84)), MeasureSpec.AT_MOST));
+		int actionBottom = height - safeBottom - dp(8 + TOUCH_SIZE) + dp((TOUCH_SIZE - SURFACE_SIZE) / 2f) - panelGap;
+		scroller.measure(MeasureSpec.makeMeasureSpec(panelWidth, MeasureSpec.EXACTLY),
+				MeasureSpec.makeMeasureSpec(Math.max(0, actionBottom - safeTop), MeasureSpec.AT_MOST));
 	}
 	@Override protected void onLayout(boolean changed, int l, int t, int r, int b) {
 		int width = r - l, height = b - t;
 		boolean rtl = getLayoutDirection() == LAYOUT_DIRECTION_RTL;
 		int x = rtl ? safeLeft + dp(16) : width - safeRight - dp(16 + TOUCH_SIZE), y = height - safeBottom - dp(8 + TOUCH_SIZE);
+		// Keep the shared axis inside both system safe bounds and the complete scrollbar hit strip.
+		int panelSafeLeft = rtl ? Math.max(safeLeft, list.getPaddingLeft() + list.getFastScrollerTouchWidth()) : safeLeft;
+		int panelSafeRight = rtl ? safeRight : Math.max(safeRight, list.getPaddingRight() + list.getFastScrollerTouchWidth());
+		int panelExtra = (panelWidth - dp(TOUCH_SIZE) + 1) / 2;
+		int minX = panelSafeLeft + panelExtra, maxX = width - panelSafeRight - dp(TOUCH_SIZE) - panelExtra;
+		x = Math.max(minX, Math.min(x, maxX));
 		fab.layout(x, y, x + dp(TOUCH_SIZE), y + dp(TOUCH_SIZE));
 		fab.setPivotX(dp(TOUCH_SIZE) / 2f); fab.setPivotY(dp(TOUCH_SIZE));
 		scrim.layout(0, 0, width, height);
-		int actionX = rtl ? x : x + dp(TOUCH_SIZE) - scroller.getMeasuredWidth();
-		int actionBottom = y - dp(12);
+		int actionX = x + (dp(TOUCH_SIZE) - scroller.getMeasuredWidth()) / 2;
+		// Visible FAB surface begins inside its 48 dp touch target; do not count this inset twice.
+		int actionBottom = y + dp((TOUCH_SIZE - SURFACE_SIZE) / 2f) - panelGap;
 		scroller.layout(actionX, actionBottom - scroller.getMeasuredHeight(), actionX + scroller.getMeasuredWidth(), actionBottom);
+		scroller.setPivotX(scroller.getWidth() / 2f); scroller.setPivotY(scroller.getHeight());
 		if (opened && scrollToBottomPending) {
 			scrollToBottomPending = false;
 			scroller.scrollTo(0, actions.getHeight());
@@ -425,13 +502,13 @@ public final class ThreadFabMenu extends FrameLayout {
 		fabShown = false; available = false;
 		applyVisibilityProgress(0f); fab.setVisibility(INVISIBLE); setVisibility(INVISIBLE);
 		getViewTreeObserver().removeOnPreDrawListener(observer); close(false, false);
-		scrim.animate().cancel(); scroller.animate().cancel();
+		cancelMenuAnimation();
 		if (shapeAnimator != null) { shapeAnimator.cancel(); shapeAnimator = null; }
 		super.onDetachedFromWindow();
 	}
 	public void dispose() {
 		disposed = true; active = false;
 		list.removeOnScrollListener(scrollListener);
-		syncAvailability(); cancelVisibilityAnimation(); restoreAccessibility();
+		syncAvailability(); close(false, false); cancelVisibilityAnimation(); restoreAccessibility();
 	}
 }

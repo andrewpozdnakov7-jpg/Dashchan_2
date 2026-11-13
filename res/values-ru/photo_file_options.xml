@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Reuse existing remove_file_name, reencode_image,
+     pe_save, pe_color_done and android.R.string.cancel. These are proposed NEW keys. -->
+<resources>
+    <string name="pe_file_options">Параметры файла</string>
+    <string name="pe_file_unique_hash">Уникальный хэш</string>
+    <string name="pe_file_remove_metadata">Удалить метаданные</string>
+    <string name="pe_file_metadata_automatic">Удаляются при перекодировке</string>
+    <string name="pe_file_reencoding_required">Требуется для изменений</string>
+    <string name="pe_file_option_unsupported">Недоступно для этого формата</string>
+    <string name="pe_file_metadata_absent">Метаданных нет</string>
+    <string name="pe_file_quality_jpeg">Качество JPEG</string>
+    <string name="pe_file_size">Размер</string>
+    <string name="pe_file_format">Формат</string>
+    <string name="pe_file_discard_changes">Отменить изменения фото и параметров файла?</string>
+    <string name="pe_file_edit_named">Редактировать фото: %1$s</string>
+</resources>

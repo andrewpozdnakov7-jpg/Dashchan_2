@@ -119,11 +119,11 @@ public class PhotoEditorSessionCodecTest {
         EditorSessionSnapshot.Builder restored = seed();
         EditorSessionCodec.restore(json, restored);
         assertEquals(6, restored.adjustmentIndex);
-        assertEquals(50, restored.exportQuality);
+        assertEquals(12, restored.exportQuality);
         assertEquals(.1f, restored.brushSize, 0f);
         assertEquals(.001f, restored.mosaicSize, 0f);
         assertEquals(2, restored.blurPreset);
-        assertEquals(0, restored.exportSide);
+        assertEquals(99, restored.exportSide);
         json.put("adjustment", -9).put("quality", 120).put("side", 1024).put("toolSettingsV2", true);
         json.remove("blurPreset");
         EditorSessionCodec.restore(json, restored);

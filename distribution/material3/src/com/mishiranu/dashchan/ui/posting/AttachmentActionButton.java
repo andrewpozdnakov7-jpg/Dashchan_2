@@ -23,8 +23,10 @@ final class AttachmentActionButton extends AppCompatImageView {
 	private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
 	private final GradientDrawable rippleMask = new GradientDrawable();
 	private final int tone, disabledTone;
+	private final int plainInk, raisedInk;
 	private float pressProgress;
 	private boolean pressedShape;
+	private boolean plain;
 	private ValueAnimator feedback;
 
 	AttachmentActionButton(Context context, int surface, int accent, int ink) {
@@ -32,6 +34,7 @@ final class AttachmentActionButton extends AppCompatImageView {
 		tone = PostingAttachmentsAppearance.opaqueBlend(surface, accent, .13f);
 		disabledTone = PostingAttachmentsAppearance.opaqueBlend(surface, ink, .04f);
 		int foreground = PostingAttachmentsAppearance.contrasting(ink, tone, 4.5);
+		plainInk = ink; raisedInk = foreground;
 		setImageTintList(new ColorStateList(new int[][] {{-android.R.attr.state_enabled}, {}},
 				new int[] {ColorUtils.setAlphaComponent(foreground, 96), foreground}));
 		setPadding(dp(14), dp(14), dp(14), dp(14));
@@ -43,9 +46,19 @@ final class AttachmentActionButton extends AppCompatImageView {
 				ColorStateList.valueOf(ColorUtils.setAlphaComponent(foreground, 32)), null, rippleMask), dp(6)));
 	}
 	private int dp(float value) { return Math.round(ResourceUtils.obtainDensity(this) * value); }
+	void setPlain(boolean plain) {
+		if (this.plain == plain) return;
+		this.plain = plain; resetFeedback();
+		int ink = plain ? plainInk : raisedInk;
+		setImageTintList(new ColorStateList(new int[][] {{-android.R.attr.state_enabled}, {}},
+				new int[] {ColorUtils.setAlphaComponent(ink, 96), ink}));
+		setForeground(new InsetDrawable(new RippleDrawable(
+				ColorStateList.valueOf(ColorUtils.setAlphaComponent(ink, 32)), null, rippleMask), dp(6)));
+	}
 	@Override public CharSequence getAccessibilityClassName() { return "android.widget.ImageButton"; }
 
 	@Override protected void onDraw(Canvas canvas) {
+		if (plain) { super.onDraw(canvas); return; }
 		float scale = 1f - .06f * pressProgress;
 		int saved = canvas.save();
 		canvas.scale(scale, scale, getWidth() / 2f, getHeight() / 2f);
@@ -67,6 +80,7 @@ final class AttachmentActionButton extends AppCompatImageView {
 	}
 	private void animatePress(boolean pressed) {
 		cancelFeedback();
+		if (plain) { setProgress(0); return; }
 		float target = pressed ? 1f : 0f;
 		int duration = InterfaceMotion.duration(pressed ? 100 : 300);
 		if (!isAttachedToWindow() || !isShown() || !hasWindowFocus() || !isEnabled()

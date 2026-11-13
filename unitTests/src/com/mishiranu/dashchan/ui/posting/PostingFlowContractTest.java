@@ -181,7 +181,7 @@ public class PostingFlowContractTest {
 				"attachmentHashes.add(converted != null ? converted.hash : data.hash)",
 				"fileHolder, converted != null ? converted.name : data.name, rating",
 				"data.optionUniqueHash, data.optionRemoveMetadata, data.optionRemoveFileName",
-				"postingConfiguration.attachmentSpoiler && data.optionSpoiler, data.reencoding",
+				"postingConfiguration.attachmentSpoiler && data.optionSpoiler, data.photoOptions != null ? data.photoOptions.pending(data.hash) : data.reencoding",
 				"return new SendAttachments(attachments, attachmentHashes)");
 		containsAll(attachment("compressed"), "CompressionSettings.enabled()", "compressionSignature().equals(compressionModel.signature)",
 				"job.phase == VideoCompressionJob.Phase.DONE ? job.results.get(holder.hash) : null");

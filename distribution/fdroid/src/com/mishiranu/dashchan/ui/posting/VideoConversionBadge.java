@@ -8,4 +8,5 @@ final class VideoConversionBadge extends LinearLayout {
     VideoConversionBadge(Context context, Context materialContext, View preview) { super(context); setVisibility(GONE); }
     void bind(String token, Stage stage, int percent, CharSequence text, CharSequence description, long time) {}
     void release() {}
+    void setVisibilityChanged(Runnable listener) {}
 }

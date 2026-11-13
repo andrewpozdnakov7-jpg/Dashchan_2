@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Merge matching keys into the existing base/English strings resource. -->
+<resources>
+    <string name="pe_file_options">File options</string>
+    <string name="pe_file_unique_hash">Unique hash</string>
+    <string name="pe_file_remove_metadata">Remove metadata</string>
+    <string name="pe_file_metadata_automatic">Removed when re-encoding</string>
+    <string name="pe_file_reencoding_required">Required for edits</string>
+    <string name="pe_file_option_unsupported">Unavailable for this format</string>
+    <string name="pe_file_metadata_absent">No metadata</string>
+    <string name="pe_file_quality_jpeg">JPEG quality</string>
+    <string name="pe_file_size">Size</string>
+    <string name="pe_file_format">Format</string>
+    <string name="pe_file_discard_changes">Discard changes to the photo and file options?</string>
+    <string name="pe_file_edit_named">Edit photo: %1$s</string>
+</resources>

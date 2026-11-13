@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="thread_fab_compact_panel_width">56dp</dimen>
+    <dimen name="thread_fab_compact_action_touch_size">48dp</dimen>
+    <dimen name="thread_fab_compact_icon_size">24dp</dimen>
+    <dimen name="thread_fab_compact_padding_horizontal">4dp</dimen>
+    <dimen name="thread_fab_compact_padding_vertical">8dp</dimen>
+    <dimen name="thread_fab_compact_corner_radius">28dp</dimen>
+    <dimen name="thread_fab_compact_visible_gap">8dp</dimen>
+    <dimen name="thread_fab_compact_elevation">3dp</dimen>
+    <dimen name="thread_fab_compact_open_translation">12dp</dimen>
+    <dimen name="thread_fab_compact_close_translation">8dp</dimen>
+</resources>

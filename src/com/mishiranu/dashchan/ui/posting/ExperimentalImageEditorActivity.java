@@ -49,6 +49,9 @@ import com.mishiranu.dashchan.ui.posting.photo.EditorStickers;
 import com.mishiranu.dashchan.ui.posting.photo.EditorDocument;
 import com.mishiranu.dashchan.ui.posting.photo.EditorGeometry;
 import com.mishiranu.dashchan.ui.posting.photo.EditorExportRequest;
+import com.mishiranu.dashchan.ui.posting.photo.PhotoAttachmentOptions;
+import com.mishiranu.dashchan.ui.posting.photo.PhotoEditorContract;
+import com.mishiranu.dashchan.ui.posting.photo.PhotoFileOptionsSheet;
 import com.mishiranu.dashchan.ui.posting.photo.EditorExportSizing;
 import com.mishiranu.dashchan.ui.posting.photo.EditorSessionSnapshot;
 import com.mishiranu.dashchan.ui.posting.photo.EditorSessionSnapshot.Section;
@@ -72,7 +75,7 @@ import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/** Local attachment editor. The existing posting result contract is deliberately unchanged. */
+/** Local attachment editor. Pixel tools are independent of the detached file-options transaction. */
 public class ExperimentalImageEditorActivity extends ComponentActivity {
     private com.mishiranu.dashchan.widget.BackCallbackPolicy backPolicy;
     private long backRevision;
@@ -121,8 +124,10 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
     private EditorColorPickerView.Swatch brushSwatch;
     private volatile int panelGeneration;
     private volatile int sessionGeneration;
-    private AlertDialog exportDialog;
-    private LinearLayout exportControls;
+    private PhotoAttachmentOptions initialOptions, fileOptions;
+    private PhotoFileOptionsSheet fileSheet;
+    private String fileSheetState, savedFileOptions, savedFileSheet;
+    private View fileOptionsButton;
     private final java.util.EnumMap<Section, LinearLayout> navigation = new java.util.EnumMap<>(Section.class);
     private final ActivityResultLauncher<String> imagePicker = com.mishiranu.dashchan.content.security.ProtectedActivityResults.register(this, "editor-image",
             new ActivityResultContracts.GetContent(), uri -> {
@@ -161,6 +166,9 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
         requestWindowFeature(Window.FEATURE_NO_TITLE); ThemeEngine.applyTheme(this); super.onCreate(saved);
         sourceHash = getIntent().getStringExtra(EXTRA_SOURCE_HASH); sourceName = getIntent().getStringExtra(EXTRA_SOURCE_NAME);
         attachmentIndex = getIntent().getIntExtra(EXTRA_ATTACHMENT_INDEX, -1);
+        initialOptions=PhotoEditorContract.read(getIntent()); fileOptions=initialOptions;
+        savedFileOptions=saved!=null?saved.getString("photoOptionsV1"):null;
+        savedFileSheet=saved!=null?saved.getString("photoFileSheet"):null;
         if (sourceHash == null || sourceName == null || attachmentIndex < 0) { finish(); return; }
         String id = saved == null ? null : saved.getString(SESSION);
         if (id == null || !id.matches("[a-f0-9]{32}")) id = UUID.randomUUID().toString().replace("-", "");
@@ -197,7 +205,7 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
         editorBack = back;
         backPolicy = new com.mishiranu.dashchan.widget.BackCallbackPolicy(getWindow().getDecorView(), () ->
                 back.setEnabled(backDelivered || !com.mishiranu.dashchan.util.InterfaceMotion.isPredictiveBackEnabled()
-                        || busy || section != Section.HOME || document.hasChanges() || document.isInTransaction()
+                        || busy || fileSheet!=null || section != Section.HOME || isEditorDirty() || document.isInTransaction()
                         || com.mishiranu.dashchan.widget.PredictiveBackMotion.isImeVisible(getWindow().getDecorView())));
         load();
     }
@@ -364,7 +372,8 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
         undo = iconButton(R.drawable.ic_editor_undo, R.string.image_editor_undo, () -> history(false)); addButton(history, undo);
         redo = iconButton(R.drawable.ic_editor_redo, R.string.image_editor_redo, () -> history(true)); addButton(history, redo);
         View spacer = new View(this); history.addView(spacer, new LinearLayout.LayoutParams(0, 1, 1));
-        addButton(history, iconButton(R.drawable.ic_settings, R.string.pe_export_settings, this::showExport));
+        Button settings=iconButton(R.drawable.ic_settings,R.string.pe_file_options,this::showExport);
+        fileOptionsButton=settings; addButton(history,settings);
         Button compare = iconButton(R.drawable.ic_pe_compare, R.string.pe_original, () -> {});
         compare.setOnTouchListener((v, event) -> {
             if (canvas != null && !busy) canvas.compare(event.getActionMasked() != MotionEvent.ACTION_UP
@@ -397,6 +406,9 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
                 if (holder == null) throw new IOException("Missing attachment");
                 originalWidth = holder.getImageWidth(); originalHeight = holder.getImageHeight();
                 exportPng = holder.getImageType() == FileHolder.ImageType.IMAGE_PNG;
+                if(initialOptions==null) initialOptions=PhotoAttachmentOptions.legacy(false,false,false,false,null,originalWidth,originalHeight,exportPng);
+                fileOptions=initialOptions;
+                exportPng=fileOptions.png; exportQuality=fileOptions.quality;
                 AtomicFile session = new AtomicFile(new File(sessionDirectory, "session.json"));
                 if (session.getBaseFile().isFile()) {
                     EditorSessionSnapshot.Builder restored = sessionBuilder(document);
@@ -412,6 +424,9 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
                     }
                     applySession(restored.build());
                 }
+                PhotoAttachmentOptions savedOptions=PhotoAttachmentOptions.parse(savedFileOptions);
+                if(savedOptions!=null) fileOptions=savedOptions;
+                if(savedFileSheet!=null) fileSheetState=savedFileSheet;
                 loaded = holder.readImageBitmap(1536, false, false);
                 if (loaded == null) throw new IOException("Unsupported photo");
                 File[] files = sessionDirectory.listFiles((dir, name) -> name.startsWith("asset-") && name.endsWith(".png"));
@@ -439,6 +454,7 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
                     content.removeAllViews(); content.addView(canvas, new FrameLayout.LayoutParams(-1, -1));
                     save.setEnabled(true); buildPanel(); changed();
                     if (restoredWithLoss) failure(R.string.pe_restore_failed);
+                    else if(fileSheetState!=null) showExport();
                 });
             } catch (IOException | RuntimeException | OutOfMemoryError e) {
                 if (loaded != null) loaded.recycle();
@@ -1178,7 +1194,17 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
     private void saveDirect() {
         if (canvas == null || busy) return;
         prepareSave();
-        encode(true, null);
+        if(!fileOptions.needsExport(sourceHash,document.hasChanges())) {
+            final PhotoAttachmentOptions options=fileOptions;
+            setBusy(true,R.string.image_editor_saving);
+            worker.execute(()->{
+                boolean present=DraftsStorage.getInstance().getAttachmentDraftFile(sourceHash)!=null;
+                handler.post(()->{if(destroyed||completed)return;
+                    setBusy(false,0);
+                    if(present) finishPhotoResult(sourceHash,sourceName,options,false); else failure(R.string.image_editor_save_failed);
+                });
+            });
+        } else encode(true, null);
     }
 
     private int exportSample(EditorDocument.State state, int width, int height, int side) {
@@ -1191,94 +1217,27 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
         return size[0] + " × " + size[1];
     }
     private void showExport() {
-        if (canvas == null || busy || exportDialog != null) return;
-        canvas.finishGesture(true);
-        canvas.settlePresentation();
-        AlertDialog.Builder builder = dialogBuilder();
-        Context context = builder.getContext();
-        LinearLayout layout = new LinearLayout(context);
-        layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setPadding(dp(16), dp(8), dp(16), dp(8));
-        // This is a draft: Cancel, outside tap and Back leave export settings unchanged.
-        int[] side = {exportSide};
-        int[] quality = {exportQuality};
-        boolean[] png = {exportPng};
-        TextView dimensions = label(context, R.string.pe_export_size);
-        layout.addView(dimensions);
-        Button size = button(context, side[0] == 0 ? getString(R.string.pe_export_no_resize) + " · " + exportDimensions(0)
-                : exportDimensions(side[0]), () -> {});
-        layout.addView(size);
-        size.setOnClickListener(v -> {
-            java.util.ArrayList<Integer> limits = new java.util.ArrayList<>();
-            java.util.ArrayList<String> labels = new java.util.ArrayList<>();
-            limits.add(0);
-            labels.add(getString(R.string.pe_export_no_resize) + " · " + exportDimensions(0));
-            android.graphics.RectF crop = EditorGeometry.cropPixels(document.state(), originalWidth, originalHeight);
-            for (int limit : new int[] {4096, 3072, 2048, 1024}) {
-                if (limit < Math.max(crop.width(), crop.height())) {
-                    String dimensionsLabel = exportDimensions(limit);
-                    if (!dimensionsLabel.equals(exportDimensions(0)) && !labels.contains(dimensionsLabel)) {
-                        limits.add(limit);
-                        labels.add(dimensionsLabel);
-                    }
-                }
-            }
-            int checked = limits.indexOf(side[0]);
-            if (checked < 0) {
-                checked = labels.indexOf(exportDimensions(side[0]));
-                if (checked < 0) checked = 0;
-            }
-            dialogBuilder().setTitle(R.string.pe_export_size)
-                    .setSingleChoiceItems(labels.toArray(new String[0]), checked, (d, which) -> {
-                        side[0] = limits.get(which);
-                        size.setText(side[0] == 0 ? getString(R.string.pe_export_no_resize) + " · " + exportDimensions(0)
-                                : exportDimensions(side[0]));
-                        d.dismiss();
-                    }).setNegativeButton(android.R.string.cancel, null).show();
-        });
-        TextView formatTitle = label(context, R.string.pe_export_format);
-        layout.addView(formatTitle);
-        LinearLayout formats = scrollRow(layout);
-        Button jpeg = button(context, "JPEG", () -> {});
-        Button pngButton = button(context, "PNG", () -> {});
-        addButton(formats, jpeg);
-        addButton(formats, pngButton);
-        View qualityControl = slider(layout, R.string.pe_quality, 50, 100, quality[0],
-                value -> quality[0] = value, false, "%");
-        Runnable sync = () -> {
-            highlight(jpeg, !png[0]);
-            highlight(pngButton, png[0]);
-            qualityControl.setVisibility(png[0] ? View.GONE : View.VISIBLE);
-        };
-        jpeg.setOnClickListener(v -> {
-            png[0] = false;
-            sync.run();
-        });
-        pngButton.setOnClickListener(v -> {
-            png[0] = true;
-            sync.run();
-        });
-        sync.run();
-        ScrollView scroll = new ScrollView(context);
-        scroll.addView(layout);
-        AlertDialog dialog = builder.setTitle(R.string.pe_export_settings).setView(scroll)
-                .setNegativeButton(android.R.string.cancel, null)
-                .setPositiveButton(R.string.pe_color_done, (d, w) -> {
-                    exportSide = side[0];
-                    exportQuality = quality[0];
-                    exportPng = png[0];
-                    encodedKey = null;
-                    persist();
-                }).create();
-        exportDialog = dialog;
-        exportControls = layout;
-        dialog.setOnDismissListener(d -> {
-            if (exportDialog == dialog) {
-                exportDialog = null;
-                exportControls = null;
-            }
-        });
-        dialog.show();
+        if(canvas==null || busy || fileSheet!=null) return;
+        canvas.finishGesture(true); canvas.settlePresentation();
+        android.graphics.RectF crop=EditorGeometry.cropPixels(document.state(),originalWidth,originalHeight);
+        fileSheet=new PhotoFileOptionsSheet(this,fileOptions,fileSheetState,document.hasChanges(),
+                Math.max(1,Math.round(crop.width())),Math.max(1,Math.round(crop.height())),
+                getIntent().getBooleanExtra(PhotoEditorContract.METADATA,false),getIntent().getBooleanExtra(PhotoEditorContract.SPOILER,false),
+                options->{
+                    if(!options.outputSignature().equals(fileOptions.outputSignature())) encodedKey=null;
+                    fileOptions=options; exportPng=options.png; exportQuality=options.quality;
+                    backRevision++; persist();
+                }, state->fileSheetState=state, ()->{
+                    if(destroyed)return;
+                    fileSheet=null;fileSheetState=null;backRevision++;persist();
+                    if(!isFinishing() && fileOptionsButton!=null) fileOptionsButton.requestFocus();
+                });
+        fileSheetState=fileSheet.snapshot(); backRevision++; fileSheet.show();
+    }
+    private void finishPhotoResult(String hash,String name,PhotoAttachmentOptions options,boolean encoded) {
+        if(destroyed || completed) return;
+        setResult(RESULT_OK,PhotoEditorContract.result(getIntent(),hash,name,sourceHash,sourceName,attachmentIndex,options,encoded));
+        completed=true; finish();
     }
 
     private void encode(boolean attach, TextView sizeInfo) {
@@ -1286,7 +1245,7 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
         final EditorExportRequest request;
         try {
             request = EditorExportRequest.capture(document,
-                    new EditorExportRequest.Options(exportSide, exportQuality, exportPng),
+                    new EditorExportRequest.Options(fileOptions),
                     new EditorExportRequest.Source(sourceHash, sourceName, attachmentIndex, originalWidth, originalHeight),
                     attach, assets);
         } catch (JSONException e) {
@@ -1308,12 +1267,12 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
                     int h = holder.getImageHeight();
                     if (w <= 0 || h <= 0) throw new IOException("Invalid source dimensions");
                     // Subsampling is allowed only for an explicit smaller output. Maximum size is sample=1.
-                    int sample = exportSample(state, w, h, options.side);
+                    android.graphics.RectF crop = EditorGeometry.cropPixels(state,w,h);
+                    int[] size=options.dimensions(crop.width(),crop.height());
+                    int sample=EditorExportSizing.decodeSample(crop.width(),crop.height(),Math.max(size[0],size[1]));
                     int decodeSide = (int) ((Math.max(w, h) + (long) sample - 1) / sample);
                     decoded = holder.readImageBitmap(decodeSide, false, false, true);
                     if (decoded == null) throw new IOException("Decode failed");
-                    android.graphics.RectF crop = EditorGeometry.cropPixels(state, w, h);
-                    int[] size = EditorExportSizing.dimensions(crop.width(), crop.height(), options.side);
                     result = EditorRenderer.exportMutable(decoded, state, size[0], size[1], !options.png, request.assets);
                     // Geometry may need a second bitmap; release its source before compression/draft IO.
                     if (result != decoded) { decoded.recycle(); decoded = null; }
@@ -1330,7 +1289,7 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
                 int outWidth = resultHolder.getImageWidth();
                 int outHeight = resultHolder.getImageHeight();
                 android.graphics.RectF expectedCrop = EditorGeometry.cropPixels(state, request.source.width, request.source.height);
-                int[] expectedSize = EditorExportSizing.dimensions(expectedCrop.width(), expectedCrop.height(), options.side);
+                int[] expectedSize = options.dimensions(expectedCrop.width(), expectedCrop.height());
                 if (outWidth != expectedSize[0] || outHeight != expectedSize[1])
                     throw new IOException("Unexpected export dimensions");
                 long bytes = output.length();
@@ -1345,13 +1304,7 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
                     }
                     int dot = request.source.name.lastIndexOf('.');
                     String base = dot > 0 ? request.source.name.substring(0, dot) : request.source.name;
-                    setResult(RESULT_OK, new Intent().putExtra(EXTRA_RESULT_HASH, hash)
-                            .putExtra(EXTRA_RESULT_NAME, base + "_edited." + (options.png ? "png" : "jpg"))
-                            .putExtra(EXTRA_RESULT_ATTACHMENT_INDEX, request.source.attachmentIndex)
-                            .putExtra(EXTRA_RESULT_SOURCE_HASH, request.source.hash)
-                            .putExtra(EXTRA_RESULT_SOURCE_NAME, request.source.name));
-                    completed = true;
-                    finish();
+                    finishPhotoResult(hash,base + "_edited." + (options.png ? "png" : "jpg"),options.attachmentOptions.applied(hash),true);
                 });
             } catch (OutOfMemoryError e) {
                 encodedKey = null;
@@ -1397,13 +1350,6 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
         if (cropToolbar != null) setTreeEnabled(cropToolbar, !busy);
         if (cropScale != null) setTreeEnabled(cropScale, !busy);
         setTreeEnabled(categories, !busy);
-        if (exportDialog != null) {
-            exportDialog.setCancelable(!busy);
-            exportDialog.setCanceledOnTouchOutside(!busy);
-            exportDialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(!busy);
-            exportDialog.getButton(AlertDialog.BUTTON_NEGATIVE).setEnabled(!busy);
-            setTreeEnabled(exportControls, !busy);
-        }
         if (busy) {
             subtitle.setVisibility(View.VISIBLE);
             subtitle.setText(message);
@@ -1418,9 +1364,11 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
         if (view instanceof ViewGroup) for (int i = 0; i < ((ViewGroup) view).getChildCount(); i++) setTreeEnabled(((ViewGroup) view).getChildAt(i), enabled);
     }
 
+    private boolean isEditorDirty() { return document.hasChanges() || fileOptions!=null && !fileOptions.equals(initialOptions); }
     private void requestClose() {
         if (busy) return;
-        if (document.hasChanges()) dialogBuilder().setMessage(R.string.pe_discard)
+        if(fileSheet!=null) {fileSheet.cancel();return;}
+        if (isEditorDirty()) dialogBuilder().setMessage(R.string.pe_file_discard_changes)
                 .setNegativeButton(android.R.string.cancel, null).setPositiveButton(R.string.pe_discard_button, (d, w) -> cancel()).show();
         else cancel();
     }
@@ -1446,6 +1394,8 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
         builder.exportSide = exportSide;
         builder.exportQuality = exportQuality;
         builder.exportPng = exportPng;
+        builder.photoOptions=fileOptions; builder.fileSheetState=fileSheetState;
+        builder.sourceWidth=originalWidth;builder.sourceHeight=originalHeight;
         return builder;
     }
 
@@ -1466,6 +1416,8 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
         exportSide = snapshot.exportSide;
         exportQuality = snapshot.exportQuality;
         exportPng = snapshot.exportPng;
+        if(snapshot.photoOptions!=null) fileOptions=snapshot.photoOptions;
+        fileSheetState=snapshot.fileSheetState;
     }
 
     private void persist() {
@@ -1501,6 +1453,9 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
     @Override protected void onSaveInstanceState(Bundle out) {
         if (sessionDirectory != null) out.putString(SESSION, sessionDirectory.getName());
         settleEditor();
+        if(fileSheet!=null) fileSheetState=fileSheet.snapshot();
+        if(fileOptions!=null) try {out.putString("photoOptionsV1",fileOptions.toJson().toString());}catch(JSONException e){throw new IllegalStateException(e);}
+        if(fileSheetState!=null)out.putString("photoFileSheet",fileSheetState);
         persist();
         super.onSaveInstanceState(out);
     }
@@ -1537,6 +1492,7 @@ public class ExperimentalImageEditorActivity extends ComponentActivity {
         // RESULT_OK and keep deletion ordered behind outstanding worker jobs.
         final boolean removeSession = completed || isFinishing() && !isChangingConfigurations();
         destroyed = true;
+        if(fileSheet!=null){fileSheet.detach();fileSheet=null;}
         panelMotion.release();
         if (canvas != null) canvas.release();
         // Cleanup is ordered after every render/export job; bitmaps cannot be recycled under a running worker.

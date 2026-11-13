@@ -8,4 +8,9 @@ final class AttachmentResultGuard {
 		return sourceHash != null && !sourceHash.isEmpty() && sourceName != null
 				&& sourceHash.equals(currentHash) && sourceName.equals(currentName);
 	}
+	static boolean matches(String sourceHash, String sourceName, String sourceId, String request,
+			String currentHash, String currentName, String currentId, String currentRequest) {
+		return matches(sourceHash,sourceName,currentHash,currentName) && sourceId != null && sourceId.equals(currentId)
+				&& request != null && request.equals(currentRequest);
+	}
 }

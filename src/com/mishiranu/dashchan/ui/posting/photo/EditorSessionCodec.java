@@ -30,6 +30,8 @@ public final class EditorSessionCodec {
         json.put("quality", snapshot.exportQuality);
         json.put("exportOptionsV2", true);
         json.put("maskAll", snapshot.maskAll);
+        if(snapshot.photoOptions!=null) json.put("photoOptionsV1",snapshot.photoOptions.toJson());
+        if(snapshot.fileSheetState!=null) json.put("fileSheet",new JSONObject(snapshot.fileSheetState));
         return json;
     }
 
@@ -61,8 +63,19 @@ public final class EditorSessionCodec {
                 json.optBoolean("toolSettingsV2", false) ? 1 : EditorBlurPresets.nearest(restored.brushSize)));
         restored.drawAll = json.optBoolean("drawAll", true);
         restored.objectAboveEffects = json.optBoolean("objectAboveEffects", false);
-        if (restored.exportSide != 0 && restored.exportSide != 1024 && restored.exportSide != 2048
-                && restored.exportSide != 3072 && restored.exportSide != 4096) restored.exportSide = 0;
-        restored.exportQuality = Math.max(50, Math.min(100, restored.exportQuality));
+        if(restored.exportSide<0 || restored.exportSide>1000000) restored.exportSide=0;
+        restored.exportQuality = Math.max(1, Math.min(100, restored.exportQuality));
+        if(json.has("photoOptionsV1")) restored.photoOptions=PhotoAttachmentOptions.fromJson(json.getJSONObject("photoOptionsV1"));
+        else if(restored.photoOptions!=null) {
+            PhotoAttachmentOptions.Builder options=new PhotoAttachmentOptions.Builder(restored.photoOptions);
+            options.reencode=options.reencode || restored.exportSide>0 || options.png!=restored.exportPng || options.quality!=restored.exportQuality;
+            options.png=restored.exportPng;options.quality=restored.exportQuality;
+            if(restored.exportSide>0 && restored.sourceWidth>0 && restored.sourceHeight>0) {
+                int[] size=EditorExportSizing.dimensions(restored.sourceWidth,restored.sourceHeight,restored.exportSide);
+                options.width=size[0];options.height=size[1];
+            }
+            restored.photoOptions=options.build();
+        }
+        restored.fileSheetState=json.has("fileSheet")?json.getJSONObject("fileSheet").toString():null;
     }
 }

@@ -69,8 +69,8 @@ public class PhotoEditorIntegrationContractTest {
 
     @Test public void editorControlsRemainReadableAndTextErrorsKeepTheDialogOpen() throws Exception {
         String activity = source("src/com/mishiranu/dashchan/ui/posting/ExperimentalImageEditorActivity.java");
-        assertTrue(activity.contains("highlight(jpeg, !png[0])"));
-        assertTrue(activity.contains("highlight(pngButton, png[0])"));
+        assertTrue(source("src/com/mishiranu/dashchan/ui/posting/photo/PhotoFileOptionsSheet.java")
+                .contains("MaterialButtonToggleGroup"));
         assertFalse(activity.contains("setTextColor(selectedColor)"));
         assertFalse(activity.contains("ORIENTATION_LANDSCAPE ? View.GONE"));
         assertTrue(activity.contains("view.setBackgroundTintList(null)"));
@@ -88,17 +88,13 @@ public class PhotoEditorIntegrationContractTest {
         assertTrue(direct.contains("prepareSave();"));
         assertTrue(direct.contains("encode(true, null);"));
         assertTrue(direct.indexOf("prepareSave();") < direct.indexOf("encode(true, null);"));
-        assertTrue(activity.contains("R.string.pe_export_settings, this::showExport"));
+        assertTrue(activity.contains("R.string.pe_file_options,this::showExport"));
         String options = activity.substring(activity.indexOf("private void showExport()"), activity.indexOf("private void encode("));
         assertFalse(options.contains("closeSection("));
         assertFalse(options.contains("encode("));
-        assertTrue(options.contains("int[] side = {exportSide}"));
-        assertTrue(options.contains("int[] quality = {exportQuality}"));
-        assertTrue(options.contains("boolean[] png = {exportPng}"));
-        assertTrue(options.contains("setPositiveButton(R.string.pe_color_done"));
-        assertTrue(options.contains("exportSide = side[0]"));
-        assertTrue(options.contains("exportQuality = quality[0]"));
-        assertTrue(options.contains("exportPng = png[0]"));
+        assertTrue(options.contains("new PhotoFileOptionsSheet("));
+        assertFalse(options.contains("AttachmentOptionsDialog"));
+        // Applied/requested state, no-op save and per-sheet transactions have behavioral fixtures.
         for (String oldControl : new String[] {"pe_export_hint", "pe_measure", "pe_png", "pe_size_unknown"}) {
             assertFalse(options.contains(oldControl));
         }

@@ -6,12 +6,13 @@ import java.io.InputStream;
 
 public class PngData {
 	public final boolean hasMetadata;
+	public final boolean animated, complete;
 
 	private final boolean hasGammaCorrection;
 	private final float gammaCorrection;
 
-	private PngData(boolean hasMetadata, boolean hasGammaCorrection, float gammaCorrection) {
-		this.hasMetadata = hasMetadata;
+	private PngData(boolean hasMetadata, boolean hasGammaCorrection, float gammaCorrection, boolean animated, boolean complete) {
+		this.hasMetadata = hasMetadata; this.animated = animated; this.complete = complete;
 		this.hasGammaCorrection = hasGammaCorrection;
 		this.gammaCorrection = gammaCorrection;
 	}
@@ -21,7 +22,7 @@ public class PngData {
 	}
 
 	public static PngData extract(InputStream input) throws IOException {
-		boolean hasMetadata = false;
+		boolean hasMetadata = false, animated = false, complete = false;
 		boolean hasGammaCorrection = false;
 		boolean ignoreGammaCorrection = false;
 		float gammaCorrection = 1f;
@@ -32,9 +33,11 @@ public class PngData {
 					break;
 				}
 				int size = IOUtils.bytesToInt(false, 0, 4, buffer);
+				if (size < 0 || size > Integer.MAX_VALUE - 4) break;
 				String name = new String(buffer, 4, 4);
 				boolean handled = false;
 				switch (name) {
+					case "acTL": { animated = true; break; }
 					case "tEXt":
 					case "zTXt":
 					case "iTXt":
@@ -64,7 +67,7 @@ public class PngData {
 						break;
 					}
 					case "IEND": {
-						break OUT;
+						complete = size == 0; break OUT;
 					}
 				}
 				if (!IOUtils.skipExactlyCheck(input, (handled ? 0 : size) + 4)) {
@@ -76,6 +79,6 @@ public class PngData {
 			hasGammaCorrection = false;
 			gammaCorrection = 1f;
 		}
-		return new PngData(hasMetadata, hasGammaCorrection, gammaCorrection);
+		return new PngData(hasMetadata, hasGammaCorrection, gammaCorrection, animated, complete);
 	}
 }

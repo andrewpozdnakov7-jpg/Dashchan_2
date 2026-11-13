@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Merge into the current shared resource set. Do not replace a whole file. -->
+<resources>
+    <dimen name="pe_file_sheet_corner">28dp</dimen>
+    <dimen name="pe_file_sheet_padding_horizontal">24dp</dimen>
+    <dimen name="pe_file_sheet_handle_width">32dp</dimen>
+    <dimen name="pe_file_sheet_handle_height">4dp</dimen>
+    <dimen name="pe_file_sheet_handle_top">12dp</dimen>
+    <dimen name="pe_file_sheet_title_gap">16dp</dimen>
+    <dimen name="pe_file_sheet_title_size">22sp</dimen>
+    <dimen name="pe_file_option_min_height">48dp</dimen>
+    <dimen name="pe_file_option_supporting_min_height">64dp</dimen>
+    <dimen name="pe_file_option_label_size">16sp</dimen>
+    <dimen name="pe_file_option_supporting_size">12sp</dimen>
+    <dimen name="pe_file_output_controls_top">8dp</dimen>
+    <dimen name="pe_file_footer_padding_vertical">12dp</dimen>
+</resources>

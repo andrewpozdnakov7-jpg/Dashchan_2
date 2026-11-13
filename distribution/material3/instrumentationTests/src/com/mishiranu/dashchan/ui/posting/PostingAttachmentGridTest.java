@@ -213,7 +213,8 @@ public class PostingAttachmentGridTest {
 				assertEquals(nameWidth, holder.fileName.getWidth()); assertEquals(cardHeight, holder.view.getHeight());
 				assertEquals(f.ui.dp(144), cardHeight);
 				f.ui.bindFile(holder, "10 kB", true, false, true, false);
-				assertFalse(edit.isEnabled()); assertTrue(remove.isEnabled());
+				assertTrue(edit.isEnabled()); assertTrue(remove.isEnabled());
+				edit.performClick(); assertEquals(1, f.optionClicks); assertNull(f.edited);
 				f.ui.bindFile(holder, "10 kB", true, true, false, true);
 				assertTrue(edit.isEnabled()); edit.performClick(); assertSame(holder, f.edited);
 				remove.performClick(); assertEquals(1, f.removals); assertTrue(f.holders.isEmpty());
@@ -250,25 +251,82 @@ public class PostingAttachmentGridTest {
 			} finally { f.ui.close(); }
 		});
 	}
-	@Test public void previewLongPressUsesSameHolderAndKeepsShortTapActions() {
-		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
-			Fixture f = new Fixture(1); try {
-				f.add(2); f.measure(328); f.consumeLongPress = true;
-				AttachmentHolder holder = f.holders.get(0);
-				View stage = ((ViewGroup) holder.view).getChildAt(0);
-				assertSame(holder, stage.getTag()); assertTrue(stage.isLongClickable());
-				assertTrue(stage.performLongClick()); assertEquals(1, f.longPresses);
-				assertEquals(0, f.optionClicks); assertEquals(0, f.previewClicks);
-				stage.performClick(); assertEquals(1, f.optionClicks);
-				holder.previewButton.setVisibility(View.VISIBLE);
-				assertSame(holder, holder.previewButton.getTag());
-				assertTrue(holder.previewButton.performLongClick()); assertEquals(2, f.longPresses);
-				holder.previewButton.performClick(); assertEquals(1, f.previewClicks);
-				f.holders.remove(holder); // A late callback from a removed card must do nothing.
-				assertFalse(stage.performLongClick()); assertEquals(2, f.longPresses);
-			} finally { f.ui.close(); }
-		});
+	private static void withVideoPreview(boolean enabled, Runnable run) {
+		String[] keys = {Preferences.KEY_ATTACHMENT_VIDEO_PREVIEW, Preferences.KEY_USE_VIDEO_PLAYER};
+		boolean[] present = new boolean[2], value = new boolean[2];
+		for (int i = 0; i < keys.length; i++) {
+			present[i] = Preferences.PREFERENCES.contains(keys[i]);
+			value[i] = Preferences.PREFERENCES.getBoolean(keys[i], true);
+		}
+		try {
+			Preferences.PREFERENCES.edit().put(keys[0], enabled).put(keys[1], enabled).close(); run.run();
+		} finally {
+			try (com.mishiranu.dashchan.util.SharedPreferences.Editor edit = Preferences.PREFERENCES.edit()) {
+				for (int i = 0; i < keys.length; i++) { if (present[i]) edit.put(keys[i], value[i]); else edit.remove(keys[i]); }
+			}
+		}
 	}
+	@Test public void videoSurfacePlaysWhileNameAndDecorativeMarkerDoNotOpenSettings() {
+		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> withVideoPreview(true, () -> {
+			Fixture f = new Fixture(1); try {
+				f.add(2); f.measure(328); AttachmentHolder holder = f.holders.get(0);
+				View stage = holder.previewSurface;
+				stage.performClick(); assertEquals(1, f.optionClicks); // Existing photo route.
+				f.ui.bindFile(holder, "10 kB", true, false, true, false);
+				stage.performClick(); assertEquals(1, f.previewClicks); assertEquals(1, f.optionClicks);
+				holder.fileName.performClick(); holder.videoMarker.performClick();
+				assertEquals(1, f.previewClicks); assertEquals(1, f.optionClicks);
+				assertFalse(holder.videoMarker.isClickable()); assertFalse(holder.videoMarker.isLongClickable());
+				assertFalse(holder.videoMarker.isFocusable()); assertNull(holder.videoMarker.getContentDescription());
+				assertEquals(View.IMPORTANT_FOR_ACCESSIBILITY_NO, holder.videoMarker.getImportantForAccessibility());
+				f.edit(holder).performClick(); assertEquals(2, f.optionClicks); assertNull(f.edited);
+				f.move(holder, 1); stage.performClick(); assertEquals(2, f.previewClicks);
+				assertTrue(stage.performLongClick()); // Even a refused drag consumes the hold, not playback.
+				assertEquals(1, f.longPresses); assertEquals(2, f.previewClicks);
+				f.holders.remove(holder); stage.performClick(); f.edit(holder).performClick();
+				assertEquals(2, f.previewClicks); assertEquals(2, f.optionClicks);
+				assertFalse(stage.performLongClick());
+			} finally { f.ui.close(); }
+		}));
+	}
+	@Test public void singleVideoHoldIsConsumedAndDisabledPlaybackKeepsOptionsSeparate() {
+		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> withVideoPreview(false, () -> {
+			Fixture f = new Fixture(1); try {
+				f.add(1); AttachmentHolder holder = f.holders.get(0);
+				f.ui.bindFile(holder, "10 kB", true, false, true, false);
+				assertTrue(holder.previewSurface.performLongClick());
+				assertFalse(holder.previewSurface.isClickable()); holder.previewSurface.performClick();
+				assertEquals(0, f.previewClicks); assertEquals(0, f.optionClicks);
+				assertEquals(View.INVISIBLE, holder.videoMarker.getVisibility());
+				assertTrue(f.edit(holder).isEnabled()); f.edit(holder).performClick(); assertEquals(1, f.optionClicks);
+				f.ui.bindFile(holder, "10 kB", true, true, false, true);
+				f.edit(holder).performClick(); assertSame(holder, f.edited);
+				holder.previewSurface.performClick(); assertEquals(2, f.optionClicks);
+			} finally { f.ui.close(); }
+		}));
+	}
+	@Test public void videoMarkerUsesLetterboxedImageBoundsAndFlatActionsKeepTheirFullTargets() {
+		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> withVideoPreview(true, () -> {
+			Fixture f = new Fixture(1); Bitmap image = Bitmap.createBitmap(200, 400, Bitmap.Config.ARGB_8888);
+			try {
+				f.add(2); AttachmentHolder holder = f.holders.get(0);
+				f.ui.bindFile(holder, "10 kB", true, false, true, false);
+				holder.imageView.setImageBitmap(image); holder.imageView.setVisibility(View.VISIBLE); f.measure(328);
+				android.graphics.RectF frame = new android.graphics.RectF();
+				((AttachmentVideoMarker) holder.videoMarker).imageBounds(frame);
+				assertTrue(frame.left > 0); assertTrue(frame.right < holder.videoMarker.getWidth());
+				assertEquals(f.ui.dp(96), frame.height(), 1f);
+				for (View view : new View[] {f.edit(holder), f.removeButton(holder)}) {
+					assertEquals(f.ui.dp(48), view.getWidth()); assertEquals(f.ui.dp(48), view.getHeight());
+					Bitmap paint = Bitmap.createBitmap(view.getWidth(), view.getHeight(), Bitmap.Config.ARGB_8888);
+					try { view.draw(new Canvas(paint)); assertEquals(0, Color.alpha(paint.getPixel(f.ui.dp(8), f.ui.dp(24)))); }
+					finally { paint.recycle(); }
+				}
+				assertEquals(f.ui.dp(144), holder.view.getHeight());
+			} finally { f.ui.close(); image.recycle(); }
+		}));
+	}
+
 	@Test public void largeTextAndConditionalRatingDoNotCoverActionTargets() {
 		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
 			Fixture f = new Fixture(2); try {

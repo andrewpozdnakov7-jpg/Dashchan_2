@@ -711,6 +711,7 @@ public class DraftsStorage extends StorageManager.Storage<Pair<List<DraftsStorag
 		private static final String KEY_REENCODING = "reencoding";
 		private static final String KEY_FORCE_VIDEO_CONVERSION = "forceVideoConversion";
 		private static final String KEY_CONVERSION = "videoConversion";
+		private static final String KEY_PHOTO = "photoOptionsV1", KEY_ID = "attachmentId", KEY_EDITOR_REQUEST = "photoEditorRequest";
 
 		private static final String KEY_REENCODING_FORMAT = "format";
 		private static final String KEY_REENCODING_QUALITY = "quality";
@@ -726,6 +727,8 @@ public class DraftsStorage extends StorageManager.Storage<Pair<List<DraftsStorag
 		public final GraphicsUtils.Reencoding reencoding;
 		public final boolean forceVideoConversion;
 		public final AttachmentConversion conversion;
+		public final com.mishiranu.dashchan.ui.posting.photo.PhotoAttachmentOptions photoOptions;
+		public final String attachmentId, photoEditorRequest;
 
 		public AttachmentDraft(String hash, String name, String rating, boolean optionUniqueHash,
 				boolean optionRemoveMetadata, boolean optionRemoveFileName, boolean optionSpoiler,
@@ -736,14 +739,24 @@ public class DraftsStorage extends StorageManager.Storage<Pair<List<DraftsStorag
 		public AttachmentDraft(String hash, String name, String rating, boolean optionUniqueHash,
 				boolean optionRemoveMetadata, boolean optionRemoveFileName, boolean optionSpoiler,
 				GraphicsUtils.Reencoding reencoding, boolean forceVideoConversion, AttachmentConversion conversion) {
-			this.hash = hash;
+            this(hash,name,rating,optionUniqueHash,optionRemoveMetadata,optionRemoveFileName,optionSpoiler,
+                    reencoding,forceVideoConversion,conversion,null,null,null);
+        }
+        public AttachmentDraft(String hash, String name, String rating, boolean optionUniqueHash,
+                boolean optionRemoveMetadata, boolean optionRemoveFileName, boolean optionSpoiler,
+                GraphicsUtils.Reencoding reencoding, boolean forceVideoConversion, AttachmentConversion conversion,
+                com.mishiranu.dashchan.ui.posting.photo.PhotoAttachmentOptions photoOptions, String attachmentId, String photoEditorRequest) {
+            this.hash = hash;
 			this.name = name;
 			this.rating = rating;
 			this.optionUniqueHash = optionUniqueHash;
 			this.optionRemoveMetadata = optionRemoveMetadata;
 			this.optionRemoveFileName = optionRemoveFileName;
 			this.optionSpoiler = optionSpoiler;
-			this.reencoding = reencoding;
+			this.photoOptions = photoOptions != null ? photoOptions.withFlags(optionUniqueHash,optionRemoveMetadata,optionRemoveFileName,optionSpoiler) : null;
+            this.reencoding = this.photoOptions != null ? this.photoOptions.pending(hash) : reencoding;
+            this.attachmentId = attachmentId != null && attachmentId.matches("[a-f0-9-]{36}") ? attachmentId : java.util.UUID.randomUUID().toString();
+            this.photoEditorRequest = photoEditorRequest != null && photoEditorRequest.matches("[a-f0-9-]{36}") ? photoEditorRequest : null;
 			this.forceVideoConversion = forceVideoConversion;
 			this.conversion = conversion != null && conversion.isValid() ? conversion : null;
 		}
@@ -766,7 +779,14 @@ public class DraftsStorage extends StorageManager.Storage<Pair<List<DraftsStorag
 				writer.name(KEY_RATING);
 				writer.value(rating);
 			}
-			writer.name(KEY_OPTION_UNIQUE_HASH);
+			writer.name(KEY_ID); writer.value(attachmentId);
+            if (photoEditorRequest != null) { writer.name(KEY_EDITOR_REQUEST); writer.value(photoEditorRequest); }
+            if (photoOptions != null) {
+                writer.name(KEY_PHOTO);
+                try { writer.value(photoOptions.toJson().toString()); }
+                catch (org.json.JSONException e) { throw new IOException(e); }
+            }
+            writer.name(KEY_OPTION_UNIQUE_HASH);
 			writer.value(optionUniqueHash);
 			writer.name(KEY_OPTION_REMOVE_METADATA);
 			writer.value(optionRemoveMetadata);
@@ -791,6 +811,10 @@ public class DraftsStorage extends StorageManager.Storage<Pair<List<DraftsStorag
 				writer.value(reencoding.quality);
 				writer.name(KEY_REENCODING_REDUCE);
 				writer.value(reencoding.reduce);
+                if (reencoding.width > 0) {
+                    writer.name("width"); writer.value(reencoding.width);
+                    writer.name("height"); writer.value(reencoding.height);
+                }
 				writer.endObject();
 			}
 			writer.endObject();
@@ -807,7 +831,9 @@ public class DraftsStorage extends StorageManager.Storage<Pair<List<DraftsStorag
 			GraphicsUtils.Reencoding reencoding = null;
 			boolean forceVideoConversion = false;
 			AttachmentConversion conversion = null;
-			reader.startObject();
+            com.mishiranu.dashchan.ui.posting.photo.PhotoAttachmentOptions photoOptions = null;
+            String attachmentId = null, photoEditorRequest = null;
+            reader.startObject();
 			while (!reader.endStruct()) {
 				switch (reader.nextName()) {
 					case KEY_HASH: {
@@ -838,7 +864,10 @@ public class DraftsStorage extends StorageManager.Storage<Pair<List<DraftsStorag
 						optionSpoiler = reader.nextBoolean();
 						break;
 					}
-					case KEY_FORCE_VIDEO_CONVERSION: {
+					case KEY_PHOTO: { photoOptions = com.mishiranu.dashchan.ui.posting.photo.PhotoAttachmentOptions.parse(reader.nextString()); break; }
+                    case KEY_ID: { attachmentId = reader.nextString(); break; }
+                    case KEY_EDITOR_REQUEST: { photoEditorRequest = reader.nextString(); break; }
+                    case KEY_FORCE_VIDEO_CONVERSION: {
 						forceVideoConversion = reader.nextBoolean(); break;
 					}
 					case KEY_CONVERSION: {
@@ -847,11 +876,13 @@ public class DraftsStorage extends StorageManager.Storage<Pair<List<DraftsStorag
 					case KEY_REENCODING: {
 						String format = null;
 						int quality = 0;
-						int reduce = 0;
+						int reduce = 0, width = 0, height = 0;
 						reader.startObject();
 						while (!reader.endStruct()) {
 							switch (reader.nextName()) {
-								case KEY_REENCODING_FORMAT: {
+								case "width": { width = reader.nextInt(); break; }
+                                case "height": { height = reader.nextInt(); break; }
+                                case KEY_REENCODING_FORMAT: {
 									format = reader.nextString();
 									break;
 								}
@@ -869,7 +900,7 @@ public class DraftsStorage extends StorageManager.Storage<Pair<List<DraftsStorag
 								}
 							}
 						}
-						reencoding = new GraphicsUtils.Reencoding(format, quality, reduce);
+						reencoding = new GraphicsUtils.Reencoding(format, quality, reduce, width, height);
 						break;
 					}
 					default: {
@@ -882,7 +913,7 @@ public class DraftsStorage extends StorageManager.Storage<Pair<List<DraftsStorag
 				return null;
 			}
 			return new AttachmentDraft(hash, name, rating, optionUniqueHash, optionRemoveMetadata,
-					optionRemoveFileName, optionSpoiler, reencoding, forceVideoConversion, conversion);
+					optionRemoveFileName, optionSpoiler, reencoding, forceVideoConversion, conversion, photoOptions, attachmentId, photoEditorRequest);
 		}
 	}
 }
