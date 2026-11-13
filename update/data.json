@@ -5,14 +5,14 @@
 	"client": [
 		{
 			"title": "Release",
-			"name": "3.2.84",
-			"code": 11640,
+			"name": "3.2.86",
+			"code": 11660,
 			"minVersion": 1,
 			"maxVersion": 1,
 			"minSdk": 30,
-			"length": 46714270,
-			"sha256sum": "41171bdf84498bcb7c851702fadbbb790ee1e0df94a9ce11900cdafadcc5fd9d",
-			"source": "https://github.com/andrewpozdnakov7-jpg/Dashchan_2/releases/download/3.2.84/Slooop-3.2.84-11640-ffmpeg8-all-abi-signed.apk",
+			"length": 46841669,
+			"sha256sum": "4a00c1cdb80997442f406eb2db25cf15bde7a2656bb82a4882f94d2808c51f3f",
+			"source": "https://github.com/andrewpozdnakov7-jpg/Dashchan_2/releases/download/3.2.86/Slooop-3.2.86-11660-ffmpeg8-all-abi-signed.apk",
 			"fingerprint": "a9fbac6c498f7ad8e7c56849afe43881966bed2ed2bc1dd1c73d0ffe0b9ebeba"
 		}
 	],
