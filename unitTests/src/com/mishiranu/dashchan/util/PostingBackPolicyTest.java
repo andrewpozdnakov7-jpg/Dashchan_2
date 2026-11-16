@@ -39,4 +39,26 @@ public class PostingBackPolicyTest {
 		assertTrue(PostingBackPolicy.shouldHideIme(false, true, true));
 		assertTrue(PostingBackPolicy.shouldHideIme(false, false, true));
 	}
+	@Test public void postingEdgeSwipeBypassesBothImeAndItsOwnTextSelection() {
+		for (int api : new int[]{34, 35, 36, 37}) {
+			for (int edge : new int[]{0, 1}) {
+				boolean gesture = PostingBackPolicy.isPredictiveGesture(api, true, edge, 100f, 200f);
+				assertFalse(PostingBackPolicy.shouldHideIme(true, gesture, true));
+				assertFalse(PostingBackPolicy.shouldDismissTextActionMode(true, gesture, true));
+				assertTrue(PostingBackPolicy.shouldDismissTextActionMode(false, gesture, true));
+				assertTrue(PostingBackPolicy.shouldDismissTextActionMode(true, gesture, false));
+			}
+		}
+	}
+	@Test public void buttonDisabledPredictiveAndOlderApiRetainSelectionBackAction() {
+		assertTrue(PostingBackPolicy.shouldDismissTextActionMode(true,
+				PostingBackPolicy.isPredictiveGesture(36, true, 2, 100f, 200f), true));
+		assertTrue(PostingBackPolicy.shouldDismissTextActionMode(true,
+				PostingBackPolicy.isPredictiveGesture(36, false, 0, 100f, 200f), true));
+		assertTrue(PostingBackPolicy.shouldDismissTextActionMode(true,
+				PostingBackPolicy.isPredictiveGesture(33, true, 0, 100f, 200f), true));
+		assertTrue(PostingBackPolicy.shouldDismissTextActionMode(true,
+				PostingBackPolicy.isPredictiveGesture(36, true, 0, Float.NaN, 200f), true));
+		assertTrue(PostingBackPolicy.shouldDismissTextActionMode(true, false, true));
+	}
 }

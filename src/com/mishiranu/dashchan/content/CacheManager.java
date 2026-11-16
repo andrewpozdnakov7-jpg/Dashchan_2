@@ -429,7 +429,21 @@ public class CacheManager implements Runnable {
 	}
 
 	public File getMediaFile(Uri uri, boolean touch) {
+		// Gallery-local sources already identify a file. They are not remote cache keys;
+		// browsing them must not touch the eviction order or create another cached copy.
+		if (uri != null && "file".equals(uri.getScheme())) {
+			String path = uri.getPath();
+			return path != null ? new File(path) : null;
+		}
 		return getMediaFile(getCachedFileKey(uri), touch);
+	}
+
+	/** Completed-index check for the browser; does not wait for scans or renew an entry. */
+	boolean isCompletedMediaFile(File file, long length, long modified) {
+		synchronized (mediaCache) {
+			CacheItem item = mediaCache.get(file.getName().toLowerCase(Locale.US));
+			return item != null && item.length == length && item.lastModified == modified;
+		}
 	}
 
 	public File getPartialMediaFile(Uri uri) {

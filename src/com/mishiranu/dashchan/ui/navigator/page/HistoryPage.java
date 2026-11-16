@@ -217,7 +217,7 @@ public class HistoryPage extends ListPage implements HistoryAdapter.Callback, Ge
 					// Resolve the current page after rotation; never retain the old page's views in a dialog.
 					ListPage page = extract(provider);
 					if (page instanceof HistoryPage) ((HistoryPage) page).applySectionFilter(selected);
-				}));
+				}, provider.getLifecycleOwner()));
 	}
 
 	private void applySectionFilter(Collection<HistoryDatabase.Board> selected) {

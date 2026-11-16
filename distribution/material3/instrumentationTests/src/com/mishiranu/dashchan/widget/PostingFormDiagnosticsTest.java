@@ -49,6 +49,11 @@ public class PostingFormDiagnosticsTest {
 					((LinearLayout) root.findViewById(R.id.attachment_container)).addView(filename);
 					activity.setContentView(root);
 					PostingFormDiagnostics.start(exportContext);
+					((EditText) root.findViewById(R.id.comment)).setSelection(0, 3);
+					EditText secret = root.findViewById(R.id.password);
+					secret.setSelection(0, 3);
+					com.mishiranu.dashchan.util.InputGestureDiagnostics.event(secret, "fixture_secret",
+							com.mishiranu.dashchan.util.InputGestureDiagnostics.editorState(secret));
 					android.app.AlertDialog fixture = MotionDialogBuilder.standard(context).setTitle(canaries[0])
 							.setMessage(canaries[1]).setPositiveButton(android.R.string.ok, null).create();
 					android.graphics.drawable.Drawable original = fixture.getWindow().getDecorView().getBackground();
@@ -66,7 +71,9 @@ public class PostingFormDiagnosticsTest {
 				});
 				assertTrue(saved.await(5, TimeUnit.SECONDS)); assertNotNull(export[0]);
 				String report = new String(Files.readAllBytes(export[0].toPath()), StandardCharsets.UTF_8);
-				assertTrue(report.contains("diagnostics v5")); assertTrue(report.contains("geometry editor{"));
+				assertTrue(report.contains("diagnostics v6")); assertTrue(report.contains("inputGestureSchema=1"));
+				assertTrue(report.contains("phase=editor_selection")); assertTrue(report.contains("selection=redacted"));
+				assertTrue(report.contains("geometry editor{"));
 				assertTrue(report.contains("screen window=")); assertTrue(report.contains("standardRequested=true"));
 				assertFalse(report.contains("snapshotUnavailable="));
 				assertTrue(report.contains("attachment_tree")); assertTrue(report.contains("fixture_event height=123"));

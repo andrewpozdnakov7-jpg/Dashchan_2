@@ -90,6 +90,11 @@
 	<string name="boards">Boards</string>
 	<string name="bump_limit">Bump limit</string>
 	<string name="cache_is_unavailable">Cache is unavailable</string>
+	<string name="cache_browser">View cache</string>
+	<string name="cache_browser_summary">View cached images, GIFs and videos offline. Files are temporary and may be cleared automatically.</string>
+	<string name="cache_browser_loading">Reading cached media…</string>
+	<string name="cache_browser_empty">No cached media to display</string>
+	<string name="cache_browser_file_unavailable">The cached file is missing or cannot be opened</string>
 	<string name="cache_size">Cache size</string>
 	<string name="cached_files">Cached files</string>
 	<string name="captcha">Captcha</string>
@@ -306,8 +311,15 @@
 	<string name="empty_response">Empty response</string>
 	<string name="no_more_threads">There are no more threads</string>
 	<string name="enabled">Enabled</string>
-	<string name="enable_predictive_back">Enable Predictive Back (experimental)</string>
-	<string name="enable_predictive_back__summary">Use Predictive Back on Android 13+. System gesture navigation must be enabled. Leaving the app uses the system animation; on Android 14+ internal pages and the gallery follow the gesture. Experimental: use the toolbar arrow if your firmware behaves unexpectedly. Behavior is unchanged on Android 11–12.</string>
+	<string name="predictive_back_title">Predictive Back</string>
+	<string name="predictive_back_settings_summary">Back gesture previews and behavior in the posting form</string>
+	<string name="predictive_back_enable_system_gestures">Enable gesture navigation in Android settings</string>
+	<string name="predictive_back_requires_android">Available on Android 13 and newer</string>
+	<string name="enable_predictive_back">Enable Predictive Back</string>
+	<string name="enable_predictive_back__summary">Preview the previous screen during the Back gesture. Enabled automatically when gesture navigation is detected, unless you have already made a choice.</string>
+	<string name="posting_back_single_gesture">Close “New message” with one gesture</string>
+	<string name="posting_back_single_gesture_summary">Leave the form immediately, even with the keyboard open or text selected. When disabled, Back handles the keyboard and selection first.</string>
+	<string name="posting_back_single_gesture_requires_android">Available on Android 14 and newer</string>
 	<string name="enter_valid_data">Enter a valid data</string>
 	<string name="erase">Erase</string>
 	<string name="every_number_sec__format">Every %d sec.</string>
@@ -414,6 +426,8 @@
 	<string name="delete_font_dialog_title">Delete font</string>
 	<string name="s24_ultra_oneui9_toolbar_fix">Fix for S24 Ultra OneUI 9</string>
 	<string name="s24_ultra_oneui9_toolbar_fix_summary">Use consistent sizes and spacing for refresh and menu buttons in the top bar.</string>
+	<string name="galaxy_m12_selection_fix">Fix for Samsung Galaxy M12</string>
+	<string name="galaxy_m12_selection_fix_summary">Protect text selection from interception by the side panel and form scrolling. On by default.</string>
 	<string name="video_diagnostics_begin">Start</string>
 	<string name="video_diagnostics_extended">Extended log</string>
 	<string name="video_diagnostics_saving">Saving diagnostics…</string>
@@ -1506,4 +1520,6 @@
 	<string name="thread_fab_refresh">Refresh thread</string>
 	<string name="thread_fab_save">Save thread</string>
 	<string name="thread_fab_reload">Reload entire thread</string>
+	<string name="dialog_form_ime">New keyboard handling in dialogs</string>
+	<string name="dialog_form_ime_summary">Improves layout and scrolling in the feed editor and history filter, and preserves the feed draft on rotation. Off by default.</string>
 </resources>

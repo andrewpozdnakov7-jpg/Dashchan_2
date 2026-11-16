@@ -24,6 +24,7 @@ import androidx.core.view.inputmethod.EditorInfoCompat;
 import androidx.core.view.inputmethod.InputConnectionCompat;
 
 import com.mishiranu.dashchan.R;
+import com.mishiranu.dashchan.util.InputGestureDiagnostics;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -270,21 +271,27 @@ public class UriPasteEditText extends SafePasteEditText implements ActionMode.Ca
 
 	@Override
 	public ActionMode startActionMode(ActionMode.Callback callback) {
+		if (InputGestureDiagnostics.isRecording()) InputGestureDiagnostics.event(this, "editor_action_mode_request", "type=primary");
 		actionModeCallbackDelegate = callback;
 		actionMode = super.startActionMode(this);
+		if (InputGestureDiagnostics.isRecording()) InputGestureDiagnostics.event(this, "editor_action_mode_result", "created=" + (actionMode != null));
 		return actionMode;
 	}
 
 	@Override
 	public ActionMode startActionMode(ActionMode.Callback callback, int type) {
+		if (InputGestureDiagnostics.isRecording()) InputGestureDiagnostics.event(this, "editor_action_mode_request", "type=" + type);
 		actionModeCallbackDelegate = callback;
 		actionMode = super.startActionMode(this, type);
+		if (InputGestureDiagnostics.isRecording()) InputGestureDiagnostics.event(this, "editor_action_mode_result", "created=" + (actionMode != null));
 		return actionMode;
 	}
 
 	@Override
 	public boolean onCreateActionMode(ActionMode mode, Menu menu) {
-		return actionModeCallbackDelegate != null && actionModeCallbackDelegate.onCreateActionMode(mode, menu);
+		boolean created = actionModeCallbackDelegate != null && actionModeCallbackDelegate.onCreateActionMode(mode, menu);
+		if (InputGestureDiagnostics.isRecording()) InputGestureDiagnostics.event(this, "editor_action_mode_created", "type=" + mode.getType() + " accepted=" + created);
+		return created;
 	}
 
 	@Override
@@ -299,6 +306,7 @@ public class UriPasteEditText extends SafePasteEditText implements ActionMode.Ca
 
 	@Override
 	public void onDestroyActionMode(ActionMode mode) {
+		if (InputGestureDiagnostics.isRecording()) InputGestureDiagnostics.event(this, "editor_action_mode_destroyed", "type=" + mode.getType());
 		if (actionModeCallbackDelegate != null) {
 			actionModeCallbackDelegate.onDestroyActionMode(mode);
 		}

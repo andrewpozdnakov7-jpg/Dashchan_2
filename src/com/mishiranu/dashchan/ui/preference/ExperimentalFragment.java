@@ -50,6 +50,10 @@ public class ExperimentalFragment extends PreferenceFragment {
 				Preferences.DEFAULT_THREAD_TOOLBAR_ACTION.value, R.string.thread_toolbar_action, toolbarEntries);
 		addCheck(true, Preferences.KEY_S24_ULTRA_ONEUI9_TOOLBAR_FIX, Preferences.DEFAULT_S24_ULTRA_ONEUI9_TOOLBAR_FIX,
 				R.string.s24_ultra_oneui9_toolbar_fix, R.string.s24_ultra_oneui9_toolbar_fix_summary);
+		addCheck(true, Preferences.KEY_DIALOG_FORM_IME, Preferences.DEFAULT_DIALOG_FORM_IME,
+				R.string.dialog_form_ime, R.string.dialog_form_ime_summary);
+		addCheck(true, Preferences.KEY_GALAXY_M12_SELECTION_FIX, Preferences.DEFAULT_GALAXY_M12_SELECTION_FIX,
+				R.string.galaxy_m12_selection_fix, R.string.galaxy_m12_selection_fix_summary);
 		addButton(R.string.toolbar_title_sizes, R.string.toolbar_title_sizes__summary)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 						.pushFragment(new ToolbarTitleSettingsFragment()));

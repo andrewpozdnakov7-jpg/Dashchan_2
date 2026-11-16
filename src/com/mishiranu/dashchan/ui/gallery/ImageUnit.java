@@ -65,7 +65,11 @@ public class ImageUnit {
 	}
 
 	public void applyImage(Uri uri, File file, boolean reload) {
-		if (!reload && file.exists()) {
+		boolean local = uri != null && "file".equals(uri.getScheme());
+		if (local && !file.isFile()) {
+			instance.callback.showError(instance.currentHolder,
+					instance.galleryInstance.context.getString(R.string.cache_browser_file_unavailable));
+		} else if ((!reload || local) && file.exists()) {
 			applyImageFromFile(file);
 		} else {
 			loadImage(uri, file, instance.currentHolder);

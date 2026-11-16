@@ -86,6 +86,8 @@
 	<item type="id" name="tag_insets_draw_data" />
 	<item type="id" name="tag_insets_gesture_navigation" />
 	<item type="id" name="tag_text_colors" />
+	<item type="id" name="combined_feed_dialog_name" />
+	<item type="id" name="combined_feed_dialog_search" />
 	<item type="id" name="text_input_appearance" />
 	<item type="id" name="tag_theme_engine" />
 

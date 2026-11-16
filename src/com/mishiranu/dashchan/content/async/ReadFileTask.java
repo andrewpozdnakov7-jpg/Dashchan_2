@@ -81,7 +81,7 @@ public class ReadFileTask extends HttpHolderTask<long[], Boolean> {
 			boolean overwrite, byte[] checkSha256, ChanManager.Fingerprints checkFingerprints) {
 		File cachedMediaFile = CacheManager.getInstance().getMediaFile(fromUri, true);
 		if (cachedMediaFile == null || !cachedMediaFile.exists() ||
-				CacheManager.getInstance().cancelCachedMediaBusy(cachedMediaFile)) {
+				!"file".equals(fromUri.getScheme()) && CacheManager.getInstance().cancelCachedMediaBusy(cachedMediaFile)) {
 			cachedMediaFile = null;
 		}
 		return new ReadFileTask(callback, chan, fromUri, toFile, cachedMediaFile,
@@ -153,6 +153,10 @@ public class ReadFileTask extends HttpHolderTask<long[], Boolean> {
 					errorItem = new ErrorItem(type != null ? type : ErrorItem.Type.UNKNOWN);
 					return false;
 				}
+			} else if ("file".equals(fromUri.getScheme())) {
+				// A cache file may disappear between listing and Save. Never retry it over HTTP.
+				errorItem = new ErrorItem(ErrorItem.Type.DOWNLOAD);
+				return false;
 			} else if (LocalArchiveManager.RESOURCE_SCHEME.equals(fromUri.getScheme())) {
 				try (InputStream input = LocalArchiveManager.openResource(fromUri);
 						OutputStream output = toFile.openOutputStream()) {

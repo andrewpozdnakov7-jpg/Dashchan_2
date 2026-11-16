@@ -482,6 +482,11 @@ final class StandardAppearance {
 		installDialog(dialog, page);
 	}
 	static void textDialog(android.app.Dialog dialog) { installDialog(dialog, false); }
+	static void formDialog(AlertDialog dialog) {
+		Window window = dialog.getWindow(); if (window == null) return;
+		Object tag = window.getDecorView().getTag(R.id.standard_dialog_appearance);
+		if (tag instanceof DialogState) ((DialogState) tag).form = true;
+	}
 	private static void installDialog(android.app.Dialog dialog, boolean page) {
 		Window window = dialog.getWindow(); if (window == null) return;
 		View decor = window.getDecorView();
@@ -494,8 +499,9 @@ final class StandardAppearance {
 			@Override public void onViewAttachedToWindow(View view) {
 				// AlertController installed its content; initial measure/relayout has not run.
 				state.apply();
+				state.observeForm();
 			}
-			@Override public void onViewDetachedFromWindow(View view) {}
+			@Override public void onViewDetachedFromWindow(View view) { state.stopObservingForm(); }
 		});
 	}
 	static void dialogMenu(AlertDialog dialog, View menu) {
@@ -514,7 +520,57 @@ final class StandardAppearance {
 		View menu;
 		Drawable background; int width, height, preparedWidth, preparedColor, preparedRadius;
 		boolean applied, windowOwned, backgroundPrepared;
+		boolean form;
+		android.view.ViewTreeObserver formTree;
+		int formLayoutKey;
+		int formAvailableWidth = -1;
+		int formTitleHeight;
+		final android.view.ViewTreeObserver.OnGlobalLayoutListener formLayout = this::updateFormLayout;
 		DialogState(android.app.Dialog dialog, boolean page) { this.dialog = dialog; this.page = page; }
+		void observeForm() {
+			if (!form || formTree != null) return;
+			formTree = dialog.getWindow().getDecorView().getViewTreeObserver();
+			formTree.addOnGlobalLayoutListener(formLayout);
+		}
+		void stopObservingForm() {
+			if (!form) return;
+			if (formTree != null && formTree.isAlive()) formTree.removeOnGlobalLayoutListener(formLayout);
+			formTree = null; formLayoutKey = 0; formAvailableWidth = -1;
+			if (bar != null) bar.releaseFormReserve();
+		}
+		void updateFormLayout() {
+			if (!form || !InterfaceAppearance.isEnabled(dialog.getContext()) || !(dialog instanceof AlertDialog)) return;
+			int availableWidth = ViewUtils.getWindowContentSize(dialog.getContext()).x;
+			if (availableWidth != formAvailableWidth) { formAvailableWidth = availableWidth; prepareWindow(); }
+			int key = preparedWidth;
+			AlertDialog alert = (AlertDialog) dialog;
+			for (int which : new int[]{AlertDialog.BUTTON_POSITIVE, AlertDialog.BUTTON_NEGATIVE, AlertDialog.BUTTON_NEUTRAL}) {
+				Button button = alert.getButton(which);
+				if (button != null) key = 31 * key + java.util.Objects.hash(button.getText().toString(),
+						button.getVisibility(), button.getTextSize(), button.getTypeface());
+			}
+			if (key == formLayoutKey) {
+				if (bar != null) bar.updateFormReserve(formButtonBudget());
+				return;
+			}
+			formLayoutKey = key;
+			// The existing DialogState remains the sole owner of width and reflow.
+			apply();
+		}
+		int formButtonBudget() {
+			// Only use a validated native sibling hierarchy and its actual local height.
+			// If header + actions cannot fit, preserve native action-panel scrolling.
+			if (bar == null || bar.scroll == null || titlePanel == null) return Integer.MAX_VALUE;
+			View panel = bar.scroll.view, title = titlePanel.parent.view;
+			if (panel.getParent() != title.getParent() || !(panel.getParent() instanceof ViewGroup)) return Integer.MAX_VALUE;
+			ViewGroup parent = (ViewGroup) panel.getParent();
+			if (parent.getHeight() <= 0) return Integer.MAX_VALUE;
+			int margins = 0;
+			for (View child : new View[]{panel, title}) if (child.getLayoutParams() instanceof ViewGroup.MarginLayoutParams) {
+				ViewGroup.MarginLayoutParams p = (ViewGroup.MarginLayoutParams) child.getLayoutParams(); margins += p.topMargin + p.bottomMargin;
+			}
+			return Math.max(0, parent.getHeight() - parent.getPaddingTop() - parent.getPaddingBottom() - formTitleHeight - margins);
+		}
 		void prepareWindow() {
 			prepareWindow(InterfaceAppearance.isEnabled(dialog.getContext()));
 		}
@@ -616,6 +672,7 @@ final class StandardAppearance {
 		final ArrayList<View> children = new ArrayList<>();
 		final ArrayList<LinearLayout.LayoutParams> params = new ArrayList<>();
 		final ArrayList<Integer> visibility = new ArrayList<>();
+		int formRequiredHeight;
 		ButtonBarState(LinearLayout parent) {
 			this.parent = parent; orientation = parent.getOrientation(); gravity = parent.getGravity();
 			saved = new Saved(parent);
@@ -656,6 +713,28 @@ final class StandardAppearance {
 					((Button) child).setMaxWidth(Math.max(1, width));
 				} else child.setVisibility(View.GONE);
 			}
+		}
+		void reserveFormHeight(int width) {
+			// This runs from attach/global-layout, outside a child's onMeasure. Measure the
+			// real styled/wrapped buttons, including all padding/margins and stacked rows.
+			parent.setMinimumHeight(0);
+			parent.measure(View.MeasureSpec.makeMeasureSpec(Math.max(1, width), View.MeasureSpec.EXACTLY),
+					View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+			formRequiredHeight = parent.getMeasuredHeight();
+		}
+		void updateFormReserve(int budget) {
+			if (formRequiredHeight <= 0) return;
+			if (scroll != null) {
+				// ButtonBarLayout can rewrite its own minimum during native measurement.
+				// The validated public ScrollView parent owns the reservation instead.
+				int reserve = Math.min(formRequiredHeight, budget);
+				if (scroll.view.getMinimumHeight() != reserve) scroll.view.setMinimumHeight(reserve);
+			} else if (parent.getMinimumHeight() != formRequiredHeight) parent.setMinimumHeight(formRequiredHeight);
+		}
+		void releaseFormReserve() {
+			if (parent.getMinimumHeight() != saved.minHeight) parent.setMinimumHeight(saved.minHeight);
+			if (scroll != null && scroll.view.getMinimumHeight() != scroll.minHeight) scroll.view.setMinimumHeight(scroll.minHeight);
+			formRequiredHeight = 0;
 		}
 	}
 	private static void applyDialog(AlertDialog dialog) {
@@ -719,7 +798,19 @@ final class StandardAppearance {
 					if (valid) state.bar = new ButtonBarState(parent);
 				}
 			}
-			if (state.bar != null) state.bar.reflow(Math.max(1, width - dp(decor, 24)));
+			if (state.bar != null) {
+				state.bar.reflow(Math.max(1, width - dp(decor, 24)));
+				if (state.form) {
+					state.bar.reserveFormHeight(width);
+					if (state.titlePanel != null) {
+						View titleView = state.titlePanel.parent.view;
+						titleView.measure(View.MeasureSpec.makeMeasureSpec(Math.max(1, width), View.MeasureSpec.EXACTLY),
+								View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+						state.formTitleHeight = titleView.getMeasuredHeight();
+					}
+					state.bar.updateFormReserve(state.formButtonBudget());
+				}
+			}
 		}
 		View custom = dialog.findViewById(android.R.id.custom); styleDialogInputs(custom);
 		ListView list = dialog.getListView();

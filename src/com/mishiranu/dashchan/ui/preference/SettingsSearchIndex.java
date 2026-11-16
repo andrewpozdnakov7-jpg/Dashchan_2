@@ -84,6 +84,10 @@ public final class SettingsSearchIndex {
 		APPEARANCE(R.string.user_interface, R.string.appearance) {
 			@Override ContentFragment createFragment() { return new AppearanceSettingsFragment(); }
 		},
+		PREDICTIVE_BACK(R.string.user_interface, R.string.appearance, R.string.predictive_back_title) {
+			@Override ContentFragment createFragment() { return PredictiveBackSettingsFragment.isAvailable()
+					? new PredictiveBackSettingsFragment() : new AppearanceSettingsFragment(); }
+		},
 		POST_LIST(R.string.user_interface, R.string.posts_list) {
 			@Override ContentFragment createFragment() { return new PostsListSettingsFragment(); }
 		},
@@ -458,10 +462,12 @@ public final class SettingsSearchIndex {
 				R.string.reddit_board_style__summary, Preferences.KEY_REDDIT_BOARD_STYLE);
 		add(context, entries, Screen.MEDIA_PLAYER, R.string.hardware_video_acceleration,
 				R.string.hardware_video_acceleration__summary, Preferences.KEY_HARDWARE_VIDEO_ACCELERATION);
-		add(context, entries, Screen.DIAGNOSTICS, R.string.video_diagnostics_extended,
-				R.string.video_diagnostics_extended__summary, Preferences.KEY_EXTENDED_VIDEO_DIAGNOSTICS);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.s24_ultra_oneui9_toolbar_fix,
 				R.string.s24_ultra_oneui9_toolbar_fix_summary, Preferences.KEY_S24_ULTRA_ONEUI9_TOOLBAR_FIX);
+		add(context, entries, Screen.EXPERIMENTAL, R.string.dialog_form_ime,
+				R.string.dialog_form_ime_summary, Preferences.KEY_DIALOG_FORM_IME);
+		add(context, entries, Screen.EXPERIMENTAL, R.string.galaxy_m12_selection_fix,
+				R.string.galaxy_m12_selection_fix_summary, Preferences.KEY_GALAXY_M12_SELECTION_FIX);
 		add(context, entries, Screen.DIAGNOSTICS, R.string.crash_report_prompt_enabled,
 				R.string.crash_report_prompt_summary, Preferences.KEY_CRASH_REPORT_PROMPTS);
 		add(context, entries, Screen.CRASH_REPORTS, R.string.crash_reports_saved, R.string.crash_reports_saved_summary, null);
@@ -516,10 +522,8 @@ public final class SettingsSearchIndex {
 			}
 		}
 		add(context, entries, Preferences.isTrackMyPostsEnabled() ? Screen.REPLY_ADVANCED : Screen.REPLY_NOTIFICATIONS, R.string.reply_erase);
-		add(context, entries, Screen.DIAGNOSTICS, R.string.form_diagnostics_start,
-				R.string.form_diagnostics_summary, null);
 		add(context, entries, Screen.DIAGNOSTICS, R.string.video_diagnostics_start,
-				R.string.video_diagnostics_start__summary, null);
+				R.string.app_diagnostics_summary, null);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.wallpaper_background,
 				R.string.wallpaper_background__summary, Preferences.KEY_WALLPAPER_ENABLED);
 		add(context, entries, Screen.COMBINED_FEEDS, R.string.configure_combined_feeds,
@@ -539,8 +543,11 @@ public final class SettingsSearchIndex {
 		add(context, entries, Screen.APPEARANCE, R.string.day_theme, 0, Preferences.KEY_DAY_THEME);
 		add(context, entries, Screen.APPEARANCE, R.string.night_theme, 0, Preferences.KEY_NIGHT_THEME);
 		if (BuildConfig.ENABLE_PREDICTIVE_BACK) {
-			add(context, entries, Screen.APPEARANCE, R.string.enable_predictive_back,
+			add(context, entries, Screen.APPEARANCE, R.string.predictive_back_title, R.string.predictive_back_settings_summary, null);
+			add(context, entries, Screen.PREDICTIVE_BACK, R.string.enable_predictive_back,
 					R.string.enable_predictive_back__summary, Preferences.KEY_PREDICTIVE_BACK);
+			add(context, entries, Screen.PREDICTIVE_BACK, R.string.posting_back_single_gesture,
+					R.string.posting_back_single_gesture_summary, Preferences.KEY_POSTING_BACK_SINGLE_GESTURE);
 		}
 		add(context, entries, Screen.GESTURES, R.string.gesture_controls);
 		add(context, entries, Screen.INTERFACE, R.string.headers_order, 0, Preferences.KEY_PAGES_LIST);
@@ -785,6 +792,7 @@ public final class SettingsSearchIndex {
 		add(context, entries, Screen.MEDIA_PLAYER, R.string.attachment_video_preview,
 				R.string.attachment_video_preview__summary, Preferences.KEY_ATTACHMENT_VIDEO_PREVIEW);
 		add(context, entries, Screen.MEDIA, R.string.cache_size, 0, Preferences.KEY_CACHE_SIZE);
+		add(context, entries, Screen.MEDIA, R.string.cache_browser, R.string.cache_browser_summary, null);
 		add(context, entries, Screen.MEDIA, R.string.clear_cache);
 
 		add(context, entries, Screen.ACCESSIBILITY, R.string.application_font, 0,

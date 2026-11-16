@@ -15,4 +15,10 @@ public final class PostingBackPolicy {
 	public static boolean shouldHideIme(boolean posting, boolean predictiveGesture, boolean imeVisible) {
 		return imeVisible && (!posting || !predictiveGesture);
 	}
+	public static boolean shouldDismissTextActionMode(boolean posting, boolean predictiveGesture,
+			boolean editorOwnedByPosting) {
+		// A confirmed posting swipe leaves the whole form. A button press, another
+		// screen's selection or an unrelated ActionMode retains its local Back action.
+		return !posting || !predictiveGesture || !editorOwnedByPosting;
+	}
 }

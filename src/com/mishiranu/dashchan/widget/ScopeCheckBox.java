@@ -81,7 +81,8 @@ public final class ScopeCheckBox extends CheckBox {
 				super.onInitializeAccessibilityNodeInfo(host, info);
 				boolean selectable = indicator.getVisibility() == View.VISIBLE;
 				info.setCheckable(selectable);
-				info.setChecked(selectable && indicator.isChecked());
+				info.setChecked(selectable && indicator.isChecked()
+						? AccessibilityNodeInfoCompat.CHECKED_STATE_TRUE : AccessibilityNodeInfoCompat.CHECKED_STATE_FALSE);
 				info.setSelected(selectable && indicator.isChecked());
 			}
 		});

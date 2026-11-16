@@ -12,6 +12,7 @@ import androidx.fragment.app.FragmentManager;
 public abstract class StateActivity extends FragmentActivity {
 	private OnBackPressedCallback systemBackCallback;
 	private Object priorityBackRegistration;
+	private com.mishiranu.dashchan.util.SystemNavigationMode.Observer navigationModeObserver;
 
 	public static class InstanceFragment extends Fragment {
 		@Override
@@ -94,11 +95,18 @@ public abstract class StateActivity extends FragmentActivity {
 	}
 
 	@Override public void onWindowFocusChanged(boolean hasFocus) {
-		super.onWindowFocusChanged(hasFocus); updateSystemBackCallback();
+		super.onWindowFocusChanged(hasFocus);
+		if (hasFocus && navigationModeObserver != null) navigationModeObserver.refresh();
+		updateSystemBackCallback();
 	}
 	@Override protected void onStart() {
-		super.onStart(); updateSystemBackCallback();
+		super.onStart();
+		if (navigationModeObserver == null) navigationModeObserver =
+				new com.mishiranu.dashchan.util.SystemNavigationMode.Observer(getWindow().getDecorView(), this::onSystemNavigationModeChanged);
+		navigationModeObserver.refresh();
+		updateSystemBackCallback();
 	}
+	protected void onSystemNavigationModeChanged() { updateSystemBackCallback(); }
 
 	@androidx.annotation.RequiresApi(33)
 	private static final class Api33 {
@@ -171,6 +179,7 @@ public abstract class StateActivity extends FragmentActivity {
 
 	@Override
 	protected void onStop() {
+		if (navigationModeObserver != null) { navigationModeObserver.close(); navigationModeObserver = null; }
 		super.onStop();
 		updateSystemBackCallback();
 		callOnFinish(false, "stop");
@@ -179,6 +188,7 @@ public abstract class StateActivity extends FragmentActivity {
 
 	@Override
 	protected void onDestroy() {
+		if (navigationModeObserver != null) { navigationModeObserver.close(); navigationModeObserver = null; }
 		if (priorityBackRegistration != null && Build.VERSION.SDK_INT >= 33) {
 			Api33.unregister(priorityBackRegistration); priorityBackRegistration = null;
 		}

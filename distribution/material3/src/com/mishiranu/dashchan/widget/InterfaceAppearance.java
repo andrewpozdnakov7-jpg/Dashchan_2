@@ -25,6 +25,7 @@ import android.widget.TextView;
 import androidx.core.graphics.ColorUtils;
 import androidx.core.view.OneShotPreDrawListener;
 import com.mishiranu.dashchan.R;
+import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.util.InterfaceMotion;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.util.OpaqueColors;
@@ -187,6 +188,10 @@ public final class InterfaceAppearance {
 	/** The opted-in custom content already owns its insets; AlertController must not add another set. */
 	public static void standardCustomDialogContent(AlertDialog dialog, View content) {
 		if (isEnabled(dialog.getContext())) dialog.setView(content, 0, 0, 0, 0);
+	}
+	/** Opt-in for the two IME-aware scrolling forms, not a policy for all standard dialogs. */
+	public static void standardFormDialog(AlertDialog dialog) {
+		if (Preferences.isDialogFormImeEnabled()) StandardAppearance.formDialog(dialog);
 	}
 	public static void standardChoiceText(TextView view) { role(view, Role.CUSTOM_CHOICE_TEXT); }
 	public static void standardCustomAction(Button view, boolean primary) { role(view, primary ? Role.CUSTOM_ACTION : Role.CUSTOM_TEXT_ACTION); }

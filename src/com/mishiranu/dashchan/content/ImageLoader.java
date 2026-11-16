@@ -2,6 +2,9 @@ package com.mishiranu.dashchan.content;
 
 import com.mishiranu.dashchan.util.AuditDiagnostics;
 import android.graphics.Bitmap;
+import android.media.ThumbnailUtils;
+import android.os.CancellationSignal;
+import android.util.Size;
 import android.content.ComponentCallbacks2;
 import android.net.Uri;
 import android.os.Process;
@@ -26,6 +29,7 @@ import com.mishiranu.dashchan.util.CancellableSleep;
 import com.mishiranu.dashchan.util.WeightedLruCache;
 import com.mishiranu.dashchan.widget.AttachmentView;
 import java.io.IOException;
+import java.io.File;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.util.ArrayList;
@@ -85,6 +89,7 @@ public class ImageLoader {
 		private boolean notFound;
 		private String diagnosticSource = "none";
 		private String diagnosticFailure = "none";
+		private final CancellationSignal localThumbnailCancellation = new CancellationSignal();
 
 		public LoaderTask(Uri uri, Chan chan, String key, String memoryKey, int targetSize, boolean fromCacheOnly,
 				long resourcesGeneration) {
@@ -105,7 +110,8 @@ public class ImageLoader {
 			boolean chanScheme = ChanConfiguration.SCHEME_CHAN.equals(scheme);
 			boolean dataScheme = "data".equals(scheme);
 			boolean localArchiveScheme = LocalArchiveManager.RESOURCE_SCHEME.equals(scheme);
-			boolean storeExternal = !chanScheme && !dataScheme;
+			boolean fileScheme = "file".equals(scheme);
+			boolean storeExternal = !chanScheme && !dataScheme && !fileScheme;
 			Bitmap bitmap = null;
 			try {
 				bitmap = storeExternal ? CacheManager.getInstance().loadThumbnailExternal(key, targetSize) : null;
@@ -116,9 +122,9 @@ public class ImageLoader {
 					if (bitmap != null) bitmap.recycle();
 					return null;
 				}
-				if (bitmap == null && (!fromCacheOnly || localArchiveScheme)) {
+				if (bitmap == null && (!fromCacheOnly || localArchiveScheme || fileScheme)) {
 					diagnosticSource = chanScheme ? "extension_resource" : dataScheme ? "inline_image"
-							: localArchiveScheme ? "local_archive" : "network";
+							: localArchiveScheme ? "local_archive" : fileScheme ? "local_file" : "network";
 					VideoDiagnostics.recordImageCache("thumbnail_loader", "fetch", uri.toString(), null, "source=" + diagnosticSource);
 					if (chanScheme) {
 						ThumbnailDecoder.LimitedOutput output = new ThumbnailDecoder.LimitedOutput();
@@ -140,6 +146,15 @@ public class ImageLoader {
 								bitmap = ThumbnailDecoder.decode(bytes, bytes.length, targetSize);
 							}
 						}
+					} else if (fileScheme) {
+						String path = uri.getPath();
+						File file = path != null ? new File(path) : null;
+						if (file != null && file.isFile()) {
+							bitmap = CachedMedia.isVideoThumbnail(uri)
+									? ThumbnailUtils.createVideoThumbnail(file, new Size(targetSize, targetSize), localThumbnailCancellation)
+									: ThumbnailDecoder.decode(file, targetSize);
+							}
+						// Local files never fall through to HTTP, even if evicted while opening.
 					} else if (localArchiveScheme) {
 						try (InputStream input = LocalArchiveManager.openResource(uri)) {
 							if (input != null) {
@@ -255,6 +270,7 @@ public class ImageLoader {
 		public void cancel() {
 			VideoDiagnostics.recordImageCache("thumbnail_loader", "cancel", uri != null ? uri.toString() : null, null, "targets=" + callbacks.size());
 			ConcurrentUtils.HANDLER.removeCallbacks(startRunnable);
+			localThumbnailCancellation.cancel();
 			super.cancel();
 		}
 

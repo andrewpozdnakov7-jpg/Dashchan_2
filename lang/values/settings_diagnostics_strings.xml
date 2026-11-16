@@ -2,4 +2,7 @@
 <resources>
 	<string name="settings_diagnostics">Diagnostics</string>
 	<string name="settings_diagnostics_summary">Crash reports and screen, player and interface logs</string>
+	<string name="app_diagnostics_summary">One detailed report for screens, text selection, gestures, video, conversion and Predictive Back</string>
+	<string name="app_diagnostics_retry">Save diagnostic report</string>
+	<string name="app_diagnostics_notice">Start recording, reproduce the problem, then return here to stop and share one report. Detailed recording is always used. For video freezes, wait 5–10 seconds before stopping.\n\nThe report includes the device model, Android and app versions, installed APK hash, screen geometry, keyboard state, touch dispatch, selection positions, player, conversion and Back gesture events. Technical events may also appear in the Android system log.\n\nMessage text, clipboard contents, passwords, links, file contents, accounts and device identifiers are not recorded. Nothing is sent automatically.</string>
 </resources>
