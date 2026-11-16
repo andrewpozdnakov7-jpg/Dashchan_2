@@ -1647,6 +1647,12 @@ public class Preferences {
 
 	public static final String KEY_PREDICTIVE_BACK = "predictive_back";
 	public static final boolean DEFAULT_PREDICTIVE_BACK = false;
+	public static final String KEY_POSTING_BACK_SINGLE_GESTURE = "posting_back_single_gesture";
+	public static final boolean DEFAULT_POSTING_BACK_SINGLE_GESTURE = true;
+
+	public static boolean isPostingBackSingleGestureEnabled() {
+		return PREFERENCES.getBoolean(KEY_POSTING_BACK_SINGLE_GESTURE, DEFAULT_POSTING_BACK_SINGLE_GESTURE);
+	}
 
 	public static boolean isPredictiveBackEnabled() {
 		// A restored preference must not enable a feature excluded from this distribution.
@@ -2327,6 +2333,35 @@ public class Preferences {
 
 	public static boolean isS24UltraOneUi9ToolbarFixEnabled() {
 		return PREFERENCES.getBoolean(KEY_S24_ULTRA_ONEUI9_TOOLBAR_FIX, DEFAULT_S24_ULTRA_ONEUI9_TOOLBAR_FIX);
+	}
+
+	public static final String KEY_DIALOG_FORM_IME = "experimental_dialog_form_ime";
+	public static final boolean DEFAULT_DIALOG_FORM_IME = false;
+
+	public static boolean isDialogFormImeEnabled() {
+		return PREFERENCES.getBoolean(KEY_DIALOG_FORM_IME, DEFAULT_DIALOG_FORM_IME);
+	}
+
+	public static final String KEY_GALAXY_M12_SELECTION_FIX = "experimental_galaxy_m12_selection_fix";
+	public static final boolean DEFAULT_GALAXY_M12_SELECTION_FIX = true;
+	private static final String KEY_SELECTION_FIX_DEFAULT_ON_MIGRATED = "selection_fix_default_on_v1_migrated";
+	static {
+		if (PREFERENCES != null && MainApplication.getInstance().isMainProcess()) {
+			migrateSelectionFixDefaultOn(PREFERENCES);
+		}
+	}
+	static void migrateSelectionFixDefaultOn(SharedPreferences preferences) {
+		if (!preferences.getBoolean(KEY_SELECTION_FIX_DEFAULT_ON_MIGRATED, false)) {
+			// Enable once for this rollout, including existing installations. Later opt-outs survive.
+			try (SharedPreferences.Editor editor = preferences.edit()) {
+				editor.put(KEY_GALAXY_M12_SELECTION_FIX, true);
+				editor.put(KEY_SELECTION_FIX_DEFAULT_ON_MIGRATED, true);
+			}
+		}
+	}
+
+	public static boolean isGalaxyM12SelectionFixEnabled() {
+		return PREFERENCES.getBoolean(KEY_GALAXY_M12_SELECTION_FIX, DEFAULT_GALAXY_M12_SELECTION_FIX);
 	}
 
 	public static final boolean DEFAULT_HARDWARE_VIDEO_ACCELERATION = true;

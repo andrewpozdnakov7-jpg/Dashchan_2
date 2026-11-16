@@ -1,0 +1,6 @@
+- Added a cache browser in Media > Additional: cached images, GIFs and videos can be opened offline and saved to downloads.
+- Moved Predictive Back settings to a separate screen. The feature turns on automatically when system gesture navigation is detected, unless you have already changed this setting.
+- On Android 14+, you can choose how Back works in New post: close the form immediately, or first hide the keyboard and clear text selection. Closing with one gesture is enabled by default.
+- Improved text selection: the side panel and form scrolling should no longer intercept finger movement. The fix is enabled by default and can be disabled in experimental settings.
+- Added the experimental New keyboard handling in dialogs setting: improved layout and scrolling in the feed editor and history filter, plus feed draft retention on rotation. Off by default; the previous behavior is used without the checkbox.
+- Combined app and screen diagnostics into one recording with detailed gesture and text-selection data. Sharing a report by email now fills in the recipient automatically.

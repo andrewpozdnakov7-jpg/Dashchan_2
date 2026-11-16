@@ -108,7 +108,9 @@ public final class VideoDiagnostics {
 				return false;
 			}
 			recording = true;
-			extended = Preferences.PREFERENCES.getBoolean(Preferences.KEY_EXTENDED_VIDEO_DIAGNOSTICS, false);
+			// All user-started app captures include the extended player/UI trace.
+			// Ignore the retired selector, including an old false restored from backup.
+			extended = true;
 			samplingUnavailable = false;
 			startedAt = System.currentTimeMillis();
 			startedElapsedRealtime = SystemClock.elapsedRealtime();

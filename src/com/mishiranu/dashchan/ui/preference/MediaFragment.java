@@ -63,6 +63,8 @@ public class MediaFragment extends PreferenceFragment {
 		addHeader(R.string.additional);
 		addSeek(Preferences.KEY_CACHE_SIZE, Preferences.DEFAULT_CACHE_SIZE, getString(R.string.cache_size), "%d MB",
 				null, Preferences.MIN_CACHE_SIZE, Preferences.MAX_CACHE_SIZE, Preferences.STEP_CACHE_SIZE);
+		addButton(R.string.cache_browser, R.string.cache_browser_summary).setOnClickListener(p ->
+				CachedMediaDialog.open(getParentFragmentManager()));
 		clearCachePreference = addButton(getString(R.string.clear_cache),
 				p -> {
 					long size = CacheManager.getInstance().getCacheSize();

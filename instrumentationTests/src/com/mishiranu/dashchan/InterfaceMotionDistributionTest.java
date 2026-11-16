@@ -25,7 +25,9 @@ public class InterfaceMotionDistributionTest {
 					for (boolean predictive : new boolean[]{false, true}) {
 						Preferences.PREFERENCES.edit().put(keys[0], design).put(keys[1], predictive).close();
 						assertEquals(BuildConfig.ENABLE_PREDICTIVE_BACK && predictive, Preferences.isPredictiveBackEnabled());
-						assertEquals(BuildConfig.ENABLE_PREDICTIVE_BACK && Build.VERSION.SDK_INT >= 33 && predictive,
+						assertEquals(BuildConfig.ENABLE_PREDICTIVE_BACK && Build.VERSION.SDK_INT >= 33 && predictive
+								&& com.mishiranu.dashchan.util.SystemNavigationMode.get()
+										!= com.mishiranu.dashchan.util.SystemNavigationMode.Mode.BUTTONS,
 								InterfaceMotion.isPredictiveBackEnabled());
 						assertEquals(BuildConfig.ENABLE_EXPERIMENTAL_INTERFACE_MOTION && design, InterfaceMotion.isEnabled());
 					}

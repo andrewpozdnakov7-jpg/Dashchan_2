@@ -9,8 +9,8 @@ import com.mishiranu.dashchan.ui.FragmentHandler;
 import com.mishiranu.dashchan.ui.preference.core.PreferenceFragment;
 import com.mishiranu.dashchan.util.SharedPreferences;
 import com.mishiranu.dashchan.BuildConfig;
-import com.mishiranu.dashchan.ui.StateActivity;
-import com.mishiranu.dashchan.ui.preference.core.CheckPreference;
+import com.mishiranu.dashchan.ui.preference.core.Preference;
+import com.mishiranu.dashchan.util.SystemNavigationMode;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.widget.ThemeEngine;
 import java.util.ArrayList;
@@ -19,8 +19,8 @@ import java.util.List;
 
 /** Appearance controls retain their existing keys, dependencies and dialog behavior. */
 public class AppearanceSettingsFragment extends PreferenceFragment {
-	private CheckPreference predictiveBackPreference;
-	private boolean confirmingPredictiveBack;
+	private Preference<Void> predictiveBackEntry;
+	private final Runnable navigationChanged = this::refreshPredictiveEntry;
 	@Override protected SharedPreferences getPreferences() { return Preferences.PREFERENCES; }
 	@Override public void onViewCreated(@NonNull View view, Bundle savedInstanceState) {
 		super.onViewCreated(view, savedInstanceState);
@@ -84,22 +84,13 @@ public class AppearanceSettingsFragment extends PreferenceFragment {
 		addDependency(Preferences.KEY_DAY_THEME, Preferences.KEY_AUTOMATIC_DAY_NIGHT_THEME, true);
 		addDependency(Preferences.KEY_NIGHT_THEME, Preferences.KEY_AUTOMATIC_DAY_NIGHT_THEME, true);
 		if (BuildConfig.ENABLE_PREDICTIVE_BACK) {
-			predictiveBackPreference = addCheck(true, Preferences.KEY_PREDICTIVE_BACK, Preferences.DEFAULT_PREDICTIVE_BACK,
-					R.string.enable_predictive_back, R.string.enable_predictive_back__summary);
-			predictiveBackPreference.setOnBeforeChangeListener((preference, value) -> {
-				if (value && !preference.getValue() && !confirmingPredictiveBack &&
-						BuildConfig.ENABLE_EXPERIMENTAL_INTERFACE_MOTION && !Preferences.isNewInterfaceMotionEnabled()) {
-					PredictiveBackPreferenceDialog.show(getChildFragmentManager(),
-							PredictiveBackPreferenceDialog.ENABLE_NEW_INTERFACE);
-					return false;
-				}
-				return true;
+			predictiveBackEntry = addButton(getString(R.string.predictive_back_title),
+					p -> PredictiveBackSettingsFragment.entrySummary(requireContext()));
+			predictiveBackEntry.setOnClickListener(p -> {
+				if (PredictiveBackSettingsFragment.isAvailable()) ((FragmentHandler) requireActivity())
+						.pushFragment(new PredictiveBackSettingsFragment());
 			});
-			predictiveBackPreference.setOnAfterChangeListener(p ->
-					((StateActivity) requireActivity()).updateSystemBackCallback());
-			getChildFragmentManager().setFragmentResultListener(PredictiveBackPreferenceDialog.RESULT,
-					getViewLifecycleOwner(), (key, result) -> applyPredictiveBackChoice(
-							result.getInt(PredictiveBackPreferenceDialog.CHOICE)));
+			refreshPredictiveEntry();
 		}
 		addButton(R.string.gesture_controls, R.string.gesture_controls__summary)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
@@ -107,27 +98,24 @@ public class AppearanceSettingsFragment extends PreferenceFragment {
 
 	}
 
-	private void applyPredictiveBackChoice(int choice) {
-		if (!BuildConfig.ENABLE_PREDICTIVE_BACK || predictiveBackPreference == null || !BuildConfig.ENABLE_EXPERIMENTAL_INTERFACE_MOTION ||
-				(choice != PredictiveBackPreferenceDialog.ENABLE_NEW_INTERFACE &&
-				choice != PredictiveBackPreferenceDialog.ENABLE_OLD_INTERFACE)) return;
-		CheckPreference preference = predictiveBackPreference;
-		// Publish the complete choice before preference listeners can recreate the Activity.
-		try (SharedPreferences.Editor editor = Preferences.PREFERENCES.edit()) {
-			if (choice == PredictiveBackPreferenceDialog.ENABLE_NEW_INTERFACE) {
-				editor.put(Preferences.KEY_NEW_INTERFACE_MOTION, true)
-						.put(Preferences.KEY_NEW_POSTING_FORM, true).put(Preferences.KEY_NEW_VIDEO_PLAYER, true);
-			}
-			editor.put(Preferences.KEY_PREDICTIVE_BACK, true);
-		}
-		if (predictiveBackPreference != preference || getView() == null) return;
-		confirmingPredictiveBack = true;
-		try { preference.setValue(true); }
-		finally { confirmingPredictiveBack = false; }
+	private void refreshPredictiveEntry() {
+		if (getView() == null || predictiveBackEntry == null) return;
+		boolean enabled = PredictiveBackSettingsFragment.isAvailable();
+		if (predictiveBackEntry.isEnabled() != enabled) predictiveBackEntry.setEnabled(enabled);
+		predictiveBackEntry.invalidate();
+	}
+	@Override public void onStart() {
+		super.onStart(); SystemNavigationMode.addListener(navigationChanged);
+	}
+	@Override public void onResume() {
+		super.onResume(); SystemNavigationMode.refresh(requireActivity().getWindow().getDecorView()); refreshPredictiveEntry();
+	}
+	@Override public void onStop() {
+		SystemNavigationMode.removeListener(navigationChanged); super.onStop();
 	}
 
 	@Override public void onDestroyView() {
-		predictiveBackPreference = null;
+		SystemNavigationMode.removeListener(navigationChanged); predictiveBackEntry = null;
 		super.onDestroyView();
 	}
 	@Override public void onViewStateRestored(Bundle savedInstanceState) {

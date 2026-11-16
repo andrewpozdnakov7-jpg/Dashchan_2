@@ -354,7 +354,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		drawerLayout = findViewById(R.id.drawer_layout);
 		drawerLayout.setSaveEnabled(false);
 		predictiveBack = new PredictiveBackController((ViewGroup) drawerLayout.getChildAt(0),
-				this::scheduleSystemBackCallbackUpdate, BackPreviewStore.forProcess(this, securityProfileGeneration));
+				this::onPredictiveBackStateChanged, BackPreviewStore.forProcess(this, securityProfileGeneration));
 		FrameLayout drawerInterlayer = findViewById(R.id.drawer_interlayer);
 		getLayoutInflater().inflate(R.layout.widget_toolbar, drawerInterlayer);
 		Toolbar toolbar = drawerInterlayer.findViewById(R.id.toolbar);
@@ -2146,6 +2146,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		if (screenMotion != null) screenMotion.finish();
 		if (threadMotion != null) threadMotion.clear();
 		if (predictiveBack != null) predictiveBack.close();
+		finishPredictiveTextSelection();
 		contentNavigation.close();
 		getSupportFragmentManager().unregisterFragmentLifecycleCallbacks(contentLifecycle);
 		super.onDestroy();
@@ -2216,6 +2217,17 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	private ContentFragment backGestureSource;
 	private StackItem backGestureDestination;
 	private com.mishiranu.dashchan.widget.PredictiveTransition searchBack;
+	private com.mishiranu.dashchan.widget.PredictiveTextSelection predictiveTextSelection;
+	private void onPredictiveBackStateChanged() {
+		// Keep native editor windows hidden through recovery, not just until finger-up.
+		if (predictiveBack == null || !predictiveBack.isBusy()) finishPredictiveTextSelection();
+		scheduleSystemBackCallbackUpdate();
+	}
+	private void finishPredictiveTextSelection() {
+		com.mishiranu.dashchan.widget.PredictiveTextSelection previous = predictiveTextSelection;
+		predictiveTextSelection = null;
+		if (previous != null) previous.close();
+	}
 	private RedditWebReaderFragment webBack;
 	private boolean isWebBackBusy() { return webBack != null && webBack.isHistoryBackBusy(); }
 	private View backGestureSearch;
@@ -2274,8 +2286,21 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	}
 	private int localBackAction(ContentFragment fragment, boolean postingGesture) {
 		if (shouldHideImeBeforeBack(fragment, postingGesture)) return 1;
-		if (currentActionMode != null && currentActionMode.get() != null) return 2;
+		ActionMode mode = currentActionMode != null ? currentActionMode.get() : null;
+		if (mode != null && com.mishiranu.dashchan.util.PostingBackPolicy.shouldDismissTextActionMode(
+				fragment instanceof PostingFragment, postingGesture, isPostingTextActionMode(fragment, mode))) return 2;
 		return fragment != null && fragment.canHandleBack() ? 3 : 0;
+	}
+
+	private boolean isPostingTextActionMode(ContentFragment fragment, ActionMode mode) {
+		if (!(fragment instanceof PostingFragment) || mode == null || mode.getType() != ActionMode.TYPE_FLOATING) return false;
+		View editor = currentActionModeEditor != null ? currentActionModeEditor.get() : null;
+		View root = fragment.getView();
+		if (editor == null || root == null || !editor.hasFocus()) return false;
+		for (View view = editor; view != null; view = view.getParent() instanceof View ? (View) view.getParent() : null) {
+			if (view == root) return true;
+		}
+		return false;
 	}
 
 	private boolean shouldHideImeBeforeBack(ContentFragment fragment, boolean postingGesture) {
@@ -2285,7 +2310,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	@Override protected boolean shouldPrioritizeSystemBackOverIme() {
 		if (!com.mishiranu.dashchan.util.PostingBackPolicy.canPrioritizeIme(Build.VERSION.SDK_INT,
-				isSystemPredictiveBackEnabled())) return false;
+				isSystemPredictiveBackEnabled()) || !Preferences.isPostingBackSingleGestureEnabled()) return false;
 		if (drawerLayout == null || !hasWindowFocus() || isInPictureInPictureMode()
 				|| getSupportFragmentManager().isStateSaved() || contentNavigation.isPending() || contentNavigation.hasRequests()) return false;
 		ContentFragment fragment = getCurrentFragment("FragmentAccess/postingBackPriority");
@@ -2392,7 +2417,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		if (isDrawerVisibleForBack() && !wideMode) return;
 		backGestureSource = getCurrentFragment("FragmentAccess/onSystemBackStarted");
 		if (backGestureSource == null) return;
-		postingBackGesture = backGestureSource instanceof PostingFragment;
+		postingBackGesture = backGestureSource instanceof PostingFragment && Preferences.isPostingBackSingleGestureEnabled();
 		if (backGestureSource instanceof PostingFragment) {
 			com.mishiranu.dashchan.widget.ElementMotion.finishTree(backGestureSource.getView());
 		}
@@ -2432,6 +2457,20 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		if (predictiveBack != null && backGestureDestination != null) {
 			predictiveBack.start(backGestureDestination.backPreviewKey,
 					backEvent.getSwipeEdge() == BackEventCompat.EDGE_LEFT, backEvent.getTouchY());
+			if (predictiveBack.isTracking() && postingBackGesture && backGestureLocalAction == 0) {
+				View focus = getCurrentFocus(), root = backGestureSource.getView();
+				if (focus instanceof android.widget.EditText && root != null) {
+					for (View ancestor = focus; ancestor != null;
+							ancestor = ancestor.getParent() instanceof View ? (View) ancestor.getParent() : null) {
+						if (ancestor == root) {
+							ActionMode mode = currentActionMode != null ? currentActionMode.get() : null;
+							predictiveTextSelection = new com.mishiranu.dashchan.widget.PredictiveTextSelection(
+									(android.widget.EditText) focus, isPostingTextActionMode(backGestureSource, mode) ? mode : null);
+							break;
+						}
+					}
+				}
+			}
 		}
 	}
 
@@ -2465,6 +2504,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		if (predictiveBack != null) {
 			if (animate) predictiveBack.cancel(); else predictiveBack.finish();
 		}
+		if (predictiveBack == null || !predictiveBack.isBusy()) finishPredictiveTextSelection();
 	}
 
 	@Override
@@ -2619,22 +2659,35 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	}
 
 	private WeakReference<ActionMode> currentActionMode;
+	private WeakReference<View> currentActionModeEditor;
 
 	@Override
 	public void onActionModeStarted(ActionMode mode) {
 		super.onActionModeStarted(mode);
+		if (com.mishiranu.dashchan.util.InputGestureDiagnostics.isRecording()) {
+			com.mishiranu.dashchan.util.InputGestureDiagnostics.event(drawerLayout, "action_mode_started",
+					"type=" + mode.getType() + " focus=" + com.mishiranu.dashchan.ui.posting.PostingFormDiagnostics.viewLabel(getCurrentFocus()));
+		}
 		expandedScreen.setActionModeState(true);
 		if (currentActionMode == null) {
 			setNavigationAreaLocked(LOCKER_ACTION_MODE, true);
 		}
 		currentActionMode = new WeakReference<>(mode);
+		View focus = getCurrentFocus();
+		currentActionModeEditor = focus instanceof android.widget.EditText ? new WeakReference<>(focus) : null;
+		if (predictiveTextSelection != null) predictiveTextSelection.onActionModeStarted(mode, focus);
 	}
 
 	@Override
 	public void onActionModeFinished(ActionMode mode) {
+		if (predictiveTextSelection != null) predictiveTextSelection.onActionModeFinished(mode);
+		if (com.mishiranu.dashchan.util.InputGestureDiagnostics.isRecording()) {
+			com.mishiranu.dashchan.util.InputGestureDiagnostics.event(drawerLayout, "action_mode_finished", "type=" + mode.getType());
+		}
 		if (currentActionMode != null) {
 			if (currentActionMode.get() == mode) {
 				currentActionMode = null;
+				currentActionModeEditor = null;
 				setNavigationAreaLocked(LOCKER_ACTION_MODE, false);
 			}
 		}
@@ -2803,6 +2856,20 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		if (expandedScreen != null) expandedScreen.finishMotion();
 	}
 
+	private com.mishiranu.dashchan.util.SystemNavigationMode.Mode appliedNavigationMode =
+			com.mishiranu.dashchan.util.SystemNavigationMode.Mode.UNKNOWN;
+	@Override protected void onSystemNavigationModeChanged() {
+		com.mishiranu.dashchan.util.SystemNavigationMode.Mode next = com.mishiranu.dashchan.util.SystemNavigationMode.get();
+		boolean changed = appliedNavigationMode != next;
+		boolean buttons = appliedNavigationMode == com.mishiranu.dashchan.util.SystemNavigationMode.Mode.BUTTONS
+				|| next == com.mishiranu.dashchan.util.SystemNavigationMode.Mode.BUTTONS;
+		appliedNavigationMode = next;
+		// Returning from the background in the same mode must keep predictive snapshots.
+		if (changed && buttons && drawerForm != null && toolbarHolder != null) {
+			preferencesListener.onChanged(Preferences.KEY_PREDICTIVE_BACK);
+		} else updateSystemBackCallback();
+	}
+
 	private final SharedPreferences.Listener preferencesListener = key -> {
 		drawerForm.updatePreferences();
 		if (Preferences.KEY_PREDICTIVE_BACK.equals(key) || Preferences.KEY_NEW_INTERFACE_MOTION.equals(key)) {
@@ -2831,6 +2898,9 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 				// status-bar foreground and DrawerAppearance's original background).
 				recreate();
 			}
+		} else if (Preferences.KEY_POSTING_BACK_SINGLE_GESTURE.equals(key)) {
+			resetPredictiveBackView(false);
+			updateSystemBackCallback();
 		} else if (Preferences.KEY_S24_ULTRA_ONEUI9_TOOLBAR_FIX.equals(key)) {
 			// Native menu widgets retain their construction theme. Recreate both enabling and
 			// disabling so the original policy returns without stale per-child overrides.
@@ -3828,6 +3898,10 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		@Override
 		public void onDrawerSlide(@NonNull View drawerView, float slideOffset) {
 			updateVisible(drawerView, slideOffset > 0f);
+			if (com.mishiranu.dashchan.util.InputGestureDiagnostics.isRecording()) {
+				com.mishiranu.dashchan.util.InputGestureDiagnostics.event(drawerLayout, "drawer_slide",
+						"offset=" + slideOffset + " focus=" + com.mishiranu.dashchan.ui.posting.PostingFormDiagnostics.viewLabel(getCurrentFocus()));
+			}
 			if (expandedScreen != null) expandedScreen.setDrawerSlideOffset(slideOffset);
 		}
 
@@ -3845,7 +3919,11 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		}
 
 		@Override
-		public void onDrawerStateChanged(int newState) {}
+		public void onDrawerStateChanged(int newState) {
+			if (com.mishiranu.dashchan.util.InputGestureDiagnostics.isRecording()) {
+				com.mishiranu.dashchan.util.InputGestureDiagnostics.event(drawerLayout, "drawer_state", "state=" + newState);
+			}
+		}
 	}
 
 	private class DeferredDrawerNavigationListener implements CustomDrawerLayout.DrawerListener {

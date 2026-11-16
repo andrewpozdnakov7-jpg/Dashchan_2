@@ -12,7 +12,9 @@ import android.widget.EditText;
 import android.widget.ScrollView;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
+import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.ui.posting.PostingFormDiagnostics;
+import com.mishiranu.dashchan.util.InputGestureDiagnostics;
 import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
 
@@ -27,11 +29,14 @@ public class PostingScrollView extends ScrollView {
 	private Predicate<MotionEvent> editorMotionTouchHandler;
 	private BackCallback legacyBackOwner;
 	private EditText commentEditor;
+	private boolean commentGestureActive;
 	private boolean commentGestureOwned;
+	private boolean commentSelectionOwned;
 	private final Rect commentHitRect = new Rect();
+	private final InputGestureDiagnostics.Trace gestureTrace = new InputGestureDiagnostics.Trace();
 	private final View.OnAttachStateChangeListener commentLifetime = new View.OnAttachStateChangeListener() {
 		@Override public void onViewAttachedToWindow(View view) {}
-		@Override public void onViewDetachedFromWindow(View view) { releaseCommentGesture(); }
+		@Override public void onViewDetachedFromWindow(View view) { releaseCommentGesture("editor_detach"); }
 	};
 
 	public PostingScrollView(Context context) { super(context); }
@@ -43,7 +48,7 @@ public class PostingScrollView extends ScrollView {
 
 	public void setCommentEditor(EditText editor) {
 		if (commentEditor == editor) return;
-		releaseCommentGesture();
+		releaseCommentGesture("editor_changed");
 		if (commentEditor != null) commentEditor.removeOnAttachStateChangeListener(commentLifetime);
 		commentEditor = editor;
 		if (editor != null) editor.addOnAttachStateChangeListener(commentLifetime);
@@ -58,35 +63,76 @@ public class PostingScrollView extends ScrollView {
 
 	private void beginCommentGesture(MotionEvent event) {
 		EditText editor = commentEditor;
-		commentGestureOwned = editor != null && editor.isEnabled() && editor.isShown()
+		boolean hitEditor = editor != null && editor.isEnabled() && editor.isShown()
 				&& editor.getWidth() > 0 && editor.getHeight() > 0
-				&& isCommentImeVisible() && (editor.canScrollVertically(-1) || editor.canScrollVertically(1))
 				&& editor.getGlobalVisibleRect(commentHitRect)
 				&& commentHitRect.contains((int) event.getRawX(), (int) event.getRawY());
-		if (commentGestureOwned) {
+		// Sample the opt-in at DOWN. With it off, keep precisely the released
+		// IME + internally scrollable-editor rule, without selection ownership.
+		commentGestureActive = hitEditor && Preferences.isGalaxyM12SelectionFixEnabled();
+		if (hitEditor) {
+			if (commentGestureActive && editor.hasSelection()) ownCommentGesture(true, "selected_down");
+			else if (isCommentImeVisible() && (editor.canScrollVertically(-1) || editor.canScrollVertically(1))) {
+				ownCommentGesture(false, "scrollable_editor");
+			}
+		}
+	}
+
+	private void protectCommentSelection() {
+		// Check BEFORE native interception, even when a child previously released
+		// disallowIntercept. A long press creates selection after DOWN, including
+		// short text with no internal scroll range. Keep this sequence owned when
+		// the finger subsequently leaves the text line or the editor's bounds.
+		if (commentGestureActive && commentEditor != null && commentEditor.hasSelection()) {
+			ownCommentGesture(true, "selection_drag");
+		}
+	}
+
+	private void ownCommentGesture(boolean selection, String reason) {
+		boolean changed = !commentGestureOwned || selection && !commentSelectionOwned;
+		commentSelectionOwned |= selection;
+		if (!commentGestureOwned) {
+			commentGestureOwned = true;
 			// Stop the old outer fling at its current position through the same public
 			// zero-distance scroller reset used by alignEditorViewport. No synthetic input.
 			smoothScrollBy(0, 0);
 			requestDisallowInterceptTouchEvent(true);
 		}
+		if (changed && InputGestureDiagnostics.isRecording()) gestureTrace.state(this, "comment_gesture_claim",
+				"reason=" + reason + " selectionOwned=" + commentSelectionOwned);
 	}
 
-	private void releaseCommentGesture() {
-		if (!commentGestureOwned) return;
+	private void releaseCommentGesture(String reason) {
+		boolean owned = commentGestureOwned;
+		if (owned && InputGestureDiagnostics.isRecording()) gestureTrace.state(this, "comment_gesture_release",
+				"reason=" + reason + " selectionOwned=" + commentSelectionOwned);
+		commentGestureActive = false;
 		commentGestureOwned = false;
-		super.requestDisallowInterceptTouchEvent(false);
+		commentSelectionOwned = false;
+		if (owned) super.requestDisallowInterceptTouchEvent(false);
 	}
 
 	@Override public void requestDisallowInterceptTouchEvent(boolean disallowIntercept) {
 		// Native EditText/selection handling may release interception at an edge.
 		// Only UP/CANCEL or owner teardown may release this particular sequence.
-		super.requestDisallowInterceptTouchEvent(disallowIntercept || commentGestureOwned);
+		boolean effective = disallowIntercept || commentGestureOwned;
+		if (InputGestureDiagnostics.isRecording()) gestureTrace.state(this, "posting_intercept_request",
+				"requested=" + disallowIntercept + " effective=" + effective + " commentOwned=" + commentGestureOwned
+						+ " selectionOwned=" + commentSelectionOwned);
+		super.requestDisallowInterceptTouchEvent(effective);
 	}
 
 	@Override public boolean onInterceptTouchEvent(MotionEvent event) {
 		// In particular, do not let ScrollView intercept DOWN because an old fling
 		// was running before the comment listener could see the new sequence.
-		return !commentGestureOwned && super.onInterceptTouchEvent(event);
+		boolean result = !commentGestureOwned && super.onInterceptTouchEvent(event);
+		// Once an ordinary vertical drag has been handed to ScrollView, a stale
+		// selection in the cancelled child must not reclaim the remainder of it.
+		if (result) commentGestureActive = false;
+		if (InputGestureDiagnostics.isRecording()) gestureTrace.state(this, "posting_intercept_result",
+				"action=" + event.getActionMasked() + " result=" + result + " commentOwned=" + commentGestureOwned
+						+ " selectionOwned=" + commentSelectionOwned);
+		return result;
 	}
 
 	private BackCallback backCallback() {
@@ -122,10 +168,10 @@ public class PostingScrollView extends ScrollView {
 	}
 	@Override public void onWindowFocusChanged(boolean hasWindowFocus) {
 		super.onWindowFocusChanged(hasWindowFocus);
-		if (!hasWindowFocus) { legacyBackOwner = null; releaseCommentGesture(); }
+		if (!hasWindowFocus) { legacyBackOwner = null; releaseCommentGesture("window_focus_lost"); }
 	}
 	@Override protected void onDetachedFromWindow() {
-		legacyBackOwner = null; releaseCommentGesture(); super.onDetachedFromWindow();
+		legacyBackOwner = null; releaseCommentGesture("detach"); super.onDetachedFromWindow();
 	}
 
 	@Override protected int computeScrollDeltaToGetChildRectOnScreen(Rect rect) {
@@ -168,11 +214,19 @@ public class PostingScrollView extends ScrollView {
 	}
 	@Override public boolean dispatchTouchEvent(MotionEvent event) {
 		int action = event.getActionMasked();
-		if (action == MotionEvent.ACTION_DOWN) releaseCommentGesture();
+		if (action == MotionEvent.ACTION_DOWN) gestureTrace.begin(event);
+		if (action == MotionEvent.ACTION_DOWN) releaseCommentGesture("next_down");
 		try {
-			return dispatchPostingTouchEvent(event, action);
+			boolean handled = dispatchPostingTouchEvent(event, action);
+			if (InputGestureDiagnostics.isRecording()) gestureTrace.motion(this, "posting_dispatch", event,
+					"handled=" + handled + " commentActive=" + commentGestureActive + " commentOwned=" + commentGestureOwned
+					+ " selectionOwned=" + commentSelectionOwned + " ime=" + isCommentImeVisible()
+					+ " scrollY=" + getScrollY() + " " + InputGestureDiagnostics.editorState(commentEditor));
+			return handled;
 		} finally {
-			if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) releaseCommentGesture();
+			if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+				releaseCommentGesture(action == MotionEvent.ACTION_UP ? "up" : "cancel");
+			}
 		}
 	}
 
@@ -187,6 +241,8 @@ public class PostingScrollView extends ScrollView {
 		if (action == MotionEvent.ACTION_DOWN) {
 			if (cancelEditorMotion != null) cancelEditorMotion.run();
 			beginCommentGesture(event);
+		} else if (action != MotionEvent.ACTION_UP && action != MotionEvent.ACTION_CANCEL) {
+			protectCommentSelection();
 		}
 		if (PostingFormDiagnostics.isRecording() && (action == MotionEvent.ACTION_DOWN
 				|| action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL)) {

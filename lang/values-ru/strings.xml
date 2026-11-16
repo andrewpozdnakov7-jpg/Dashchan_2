@@ -92,6 +92,11 @@
 	<string name="boards">Разделы</string>
 	<string name="bump_limit">Бамплимит</string>
 	<string name="cache_is_unavailable">Кэш недоступен</string>
+	<string name="cache_browser">Просмотр кэша</string>
+	<string name="cache_browser_summary">Сохранённые изображения, GIF и видео без интернета. Файлы временные и могут удаляться автоматически.</string>
+	<string name="cache_browser_loading">Чтение медиа из кэша…</string>
+	<string name="cache_browser_empty">В кэше нет медиа для просмотра</string>
+	<string name="cache_browser_file_unavailable">Файл из кэша удалён или не открывается</string>
 	<string name="cache_size">Размер кэша</string>
 	<string name="cached_files">Кэшированные файлы</string>
 	<string name="captcha">Капча</string>
@@ -309,8 +314,15 @@
 	<string name="empty_response">Пустой ответ сервера</string>
 	<string name="no_more_threads">Больше тредов нет</string>
 	<string name="enabled">Включено</string>
-	<string name="enable_predictive_back">Активировать Predictive Back (экспериментально)</string>
-	<string name="enable_predictive_back__summary">Использовать Predictive Back на Android 13+. Для работы должна быть включена системная навигация жестами. При выходе работает системная анимация; на Android 14+ внутренние страницы и галерея следуют за жестом. Функция экспериментальная: при проблемах прошивки используйте стрелку в верхней панели. На Android 11–12 поведение не изменяется.</string>
+	<string name="predictive_back_title">Predictive Back</string>
+	<string name="predictive_back_settings_summary">Предпросмотр возврата и поведение жеста в форме сообщения</string>
+	<string name="predictive_back_enable_system_gestures">Включите управление жестами в настройках Android</string>
+	<string name="predictive_back_requires_android">Доступно на Android 13 и новее</string>
+	<string name="enable_predictive_back">Включить Predictive Back</string>
+	<string name="enable_predictive_back__summary">Показывать предыдущий экран во время жеста «Назад». Включается автоматически при обнаружении системных жестов, если вы ещё не меняли эту настройку.</string>
+	<string name="posting_back_single_gesture">Закрывать «Новое сообщение» одним жестом</string>
+	<string name="posting_back_single_gesture_summary">Сразу выходить из формы, даже если открыта клавиатура или выделен текст. При отключении «Назад» сначала скрывает клавиатуру и снимает выделение.</string>
+	<string name="posting_back_single_gesture_requires_android">Доступно на Android 14 и новее</string>
 	<string name="enter_valid_data">Введите корректные данные</string>
 	<string name="erase">Стереть</string>
 	<string name="every_number_sec__format">Каждые %d сек.</string>
@@ -419,6 +431,8 @@
 	<string name="delete_font_dialog_title">Удалить шрифт</string>
 	<string name="s24_ultra_oneui9_toolbar_fix">Фикс для S24 Ultra OneUI 9</string>
 	<string name="s24_ultra_oneui9_toolbar_fix_summary">Одинаковые размеры и отступы кнопок обновления и меню в верхней панели.</string>
+	<string name="galaxy_m12_selection_fix">Фикс для Samsung Galaxy M12</string>
+	<string name="galaxy_m12_selection_fix_summary">Защищает выделение текста от перехвата боковой панелью и прокруткой формы. По умолчанию включён.</string>
 	<string name="video_diagnostics_begin">Начать</string>
 	<string name="video_diagnostics_extended">Расширенный лог</string>
 	<string name="video_diagnostics_saving">Сохранение диагностики…</string>
@@ -1533,4 +1547,6 @@
 	<string name="thread_fab_refresh">Обновить тред</string>
 	<string name="thread_fab_save">Сохранить тред</string>
 	<string name="thread_fab_reload">Перезагрузить весь тред</string>
+	<string name="dialog_form_ime">Новая обработка клавиатуры в диалогах</string>
+	<string name="dialog_form_ime_summary">Улучшает размещение и прокрутку редактора ленты и фильтра истории, сохраняет черновик ленты при повороте. По умолчанию выключена.</string>
 </resources>

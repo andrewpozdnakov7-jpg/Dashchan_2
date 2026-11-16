@@ -53,14 +53,14 @@ public class CombinedFeedsFragment extends PreferenceFragment implements GetBoar
 		return fragment;
 	}
 
-	private static class Board {
+	static final class Board {
 		public final String chanName;
 		public final String chanTitle;
 		public final String name;
 		public final String title;
 		public final boolean unavailable;
 
-		private Board(String chanName, String chanTitle, String name, String title, boolean unavailable) {
+		Board(String chanName, String chanTitle, String name, String title, boolean unavailable) {
 			this.chanName = chanName;
 			this.chanTitle = chanTitle;
 			this.name = name;
@@ -68,7 +68,7 @@ public class CombinedFeedsFragment extends PreferenceFragment implements GetBoar
 			this.unavailable = unavailable;
 		}
 
-		private String getKey() {
+		String getKey() {
 			return makeSourceKey(chanName, name);
 		}
 	}
@@ -128,11 +128,11 @@ public class CombinedFeedsFragment extends PreferenceFragment implements GetBoar
 		}
 	}
 
-	private static String makeSourceKey(String chanName, String boardName) {
+	static String makeSourceKey(String chanName, String boardName) {
 		return chanName + '\n' + boardName;
 	}
 
-	private static String getChanTitle(String chanName) {
+	static String getChanTitle(String chanName) {
 		if ("dvach".equals(chanName)) {
 			return "2ch";
 		}
@@ -150,7 +150,7 @@ public class CombinedFeedsFragment extends PreferenceFragment implements GetBoar
 		return title;
 	}
 
-	private static String formatSourceLabel(String chanName, String boardName) {
+	static String formatSourceLabel(String chanName, String boardName) {
 		return getChanTitle(chanName) + " /" + boardName + "/";
 	}
 
@@ -168,6 +168,12 @@ public class CombinedFeedsFragment extends PreferenceFragment implements GetBoar
 	private void showFeedDialog(CombinedFeedStorage.Feed existing) {
 		if (!boardsLoaded) {
 			ClickableToast.show(R.string.loading__ellipsis);
+			return;
+		}
+		if (Preferences.isDialogFormImeEnabled()) {
+			CombinedFeedDialog.State draft = new CombinedFeedDialog.State(existing, new ArrayList<>(boards), loadingChans.size() > 1);
+			new com.mishiranu.dashchan.ui.InstanceDialog(getChildFragmentManager(), CombinedFeedDialog.class.getName(),
+					provider -> CombinedFeedDialog.create(provider, draft));
 			return;
 		}
 		float density = ResourceUtils.obtainDensity(requireContext());

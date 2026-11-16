@@ -990,8 +990,9 @@ public class VideoUnit {
 			else NextVideoPreparation.dispose(prepared);
 		}
 		boolean loadedFromFile = player != null;
+		boolean local = uri != null && "file".equals(uri.getScheme());
 		if (player == null) player = new VideoPlayer(playerListener, seekAnyFrame);
-		if (!loadedFromFile && !reload && file.exists()) {
+		if (!loadedFromFile && (!reload || local) && file.exists()) {
 			try {
 				player.init(file, null);
 				loadedFromFile = true;
@@ -1014,6 +1015,10 @@ public class VideoUnit {
 			updateSaveButton();
 			updatePictureInPictureButton();
 			instance.galleryInstance.callback.invalidateOptionsMenu();
+		} else if (local) {
+			player.close(); this.player = null;
+			instance.callback.showError(instance.currentHolder,
+					instance.galleryInstance.context.getString(R.string.cache_browser_file_unavailable));
 		} else {
 			instance.currentHolder.progressBar.setIndeterminate(true);
 			instance.currentHolder.progressBar.setVisible(true, false);

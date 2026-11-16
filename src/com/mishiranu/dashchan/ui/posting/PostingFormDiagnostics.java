@@ -65,10 +65,15 @@ public final class PostingFormDiagnostics {
 		pendingExport = null;
 		started = SystemClock.elapsedRealtime();
 		generation++;
-		header = "Screen and posting form geometry diagnostics v5\nscreenProbe=screen_windows_v2_theme_choices_v1\nviewportPolicy=keyboard_viewport_v2\napp=" + BuildConfig.VERSION_NAME
+		header = "Screen and posting form geometry diagnostics v6\nscreenProbe=screen_windows_v2_theme_choices_v1\nviewportPolicy=keyboard_viewport_v2\ninputGestureSchema=1 moveSampleMs=16 nonsecret_selection_positions=true\napp=" + BuildConfig.VERSION_NAME
 				+ " code=" + BuildConfig.VERSION_CODE + " android=" + Build.VERSION.RELEASE
 				+ " sdk=" + Build.VERSION.SDK_INT + " manufacturer=" + Build.MANUFACTURER
 				+ " model=" + Build.MODEL + " targetSdk=" + context.getApplicationInfo().targetSdkVersion
+				+ "\ndialogFormIme=" + Preferences.isDialogFormImeEnabled()
+				+ "\ngalaxyM12SelectionFix=" + Preferences.isGalaxyM12SelectionFixEnabled()
+				+ " systemNavigation=" + com.mishiranu.dashchan.util.SystemNavigationMode.get()
+				+ " predictiveBack=" + Preferences.isPredictiveBackEnabled()
+				+ " postingSingleGesture=" + Preferences.isPostingBackSingleGestureEnabled()
 				+ "\nstartedUtcMillis=" + System.currentTimeMillis()
 				+ "\nlimits: ringChars=" + MAX_CHARS + " sampleMs=50 treeMs=250 attachmentNodes=96 eventsPerSecond=160 screenSampleMs=250 screenPollMs=500 screenNodes=48 themeScanNodes=512 themeRows=16"
 				+ "\nNo text, field values, filenames, file paths, URLs, credentials, clipboard, screenshots or key input are recorded.\n";

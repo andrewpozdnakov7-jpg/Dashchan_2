@@ -10,7 +10,9 @@ import android.view.WindowManager;
 import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import androidx.lifecycle.LifecycleOwner;
 import android.widget.ScrollView;
+import com.mishiranu.dashchan.content.Preferences;
 import android.widget.TextView;
 import chan.content.Chan;
 import chan.util.StringUtils;
@@ -37,6 +39,7 @@ public final class HistoryBoardFilterDialog {
 		private final LinkedHashSet<String> expanded = new LinkedHashSet<>();
 		private boolean initialized;
 		private String query = "";
+		private final DialogFormScrollView.State viewport = new DialogFormScrollView.State();
 
 		public State(Collection<Board> selected) {
 			this.selected = new LinkedHashSet<>(selected);
@@ -58,9 +61,12 @@ public final class HistoryBoardFilterDialog {
 		return StringUtils.isEmptyOrWhitespace(title) ? sectionCode(board) : sectionCode(board) + " — " + title;
 	}
 
-	@SuppressWarnings("deprecation") // Same IME resize policy as the existing feed editor.
 	public static AlertDialog create(Context context, Collection<Board> boards, State state,
 			Consumer<Collection<Board>> apply) {
+		return create(context, boards, state, apply, null);
+	}
+	public static AlertDialog create(Context context, Collection<Board> boards, State state,
+			Consumer<Collection<Board>> apply, LifecycleOwner owner) {
 		MotionDialogBuilder builder = MotionDialogBuilder.standard(context);
 		Context dialogContext = builder.getContext();
 		float density = ResourceUtils.obtainDensity(dialogContext);
@@ -69,6 +75,7 @@ public final class HistoryBoardFilterDialog {
 		root.setOrientation(LinearLayout.VERTICAL);
 		root.setPadding(padding, padding, padding, 0);
 		EditText search = new SafePasteEditText(dialogContext);
+		if (Preferences.isDialogFormImeEnabled()) search.setId(R.id.combined_feed_dialog_search);
 		search.setSingleLine(true);
 		search.setHint(R.string.combined_feed_search_boards);
 		search.setText(state.query);
@@ -177,17 +184,24 @@ public final class HistoryBoardFilterDialog {
 			@Override public void afterTextChanged(Editable s) {}
 		});
 		rebuild[0].run();
+		boolean newIme = Preferences.isDialogFormImeEnabled();
 		View content;
-		if (InterfaceAppearance.isEnabled(dialogContext)) {
-			root.addView(checks, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-			DialogFormScrollView form = new DialogFormScrollView(dialogContext);
-			form.addView(root, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-			content = form;
+		if (newIme) {
+			DialogFormScrollView form = DialogFormScrollView.create(dialogContext, root, checks, InterfaceAppearance.isEnabled(dialogContext));
+			if (owner != null) form.retain(state.viewport, owner, search);
+			content = form.dialogContent();
 		} else {
-			ScrollView scroll = new ScrollView(dialogContext);
-			scroll.addView(checks, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-			root.addView(scroll, ViewGroup.LayoutParams.MATCH_PARENT, (int) (320f * density));
-			content = root;
+			if (InterfaceAppearance.isEnabled(dialogContext)) {
+				root.addView(checks, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+				DialogFormScrollView form = new DialogFormScrollView(dialogContext);
+				form.addView(root, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+				content = form;
+			} else {
+				ScrollView scroll = new ScrollView(dialogContext);
+				scroll.addView(checks, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+				root.addView(scroll, ViewGroup.LayoutParams.MATCH_PARENT, (int) (320f * density));
+				content = root;
+			}
 		}
 		AlertDialog dialog = builder.setTitle(R.string.history_filter_sections).setView(content)
 				.setNegativeButton(android.R.string.cancel, null)
@@ -195,8 +209,14 @@ public final class HistoryBoardFilterDialog {
 				.setPositiveButton(R.string.history_apply_filter, (d, which) -> apply.accept(new ArrayList<>(state.selected)))
 				.create();
 		InterfaceAppearance.standardCustomDialogContent(dialog, content);
-		dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN
-				| (InterfaceAppearance.isEnabled(dialogContext) ? WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE : 0));
+		if (newIme) {
+			dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
+			DialogFormInsets.configure(dialog);
+		} else {
+			dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN
+					| (InterfaceAppearance.isEnabled(dialogContext) ? WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE : 0));
+		}
+
 		dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v -> {
 			state.selected.clear();
 			search.setText("");

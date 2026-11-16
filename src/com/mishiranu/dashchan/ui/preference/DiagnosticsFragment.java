@@ -5,28 +5,26 @@ import android.view.View;
 import androidx.annotation.NonNull;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
-import com.mishiranu.dashchan.media.VideoDiagnostics;
 import com.mishiranu.dashchan.ui.FragmentHandler;
-import com.mishiranu.dashchan.ui.posting.PostingFormDiagnostics;
-import com.mishiranu.dashchan.ui.preference.core.CheckPreference;
 import com.mishiranu.dashchan.ui.preference.core.Preference;
 import com.mishiranu.dashchan.ui.preference.core.PreferenceFragment;
-import com.mishiranu.dashchan.util.NavigationUtils;
+import com.mishiranu.dashchan.util.AppDiagnostics;
+import com.mishiranu.dashchan.util.DiagnosticReportSharing;
 import com.mishiranu.dashchan.util.SharedPreferences;
 import com.mishiranu.dashchan.widget.ClickableToast;
 import com.mishiranu.dashchan.widget.MessageDialog;
 import java.io.File;
 
-/** Existing diagnostics controls, grouped under About; recording is always user initiated. */
+/** One explicit capture control, before the unchanged crash-report settings. */
 public class DiagnosticsFragment extends PreferenceFragment {
 	@Override protected SharedPreferences getPreferences() { return Preferences.PREFERENCES; }
 	@Override public void onViewCreated(@NonNull View view, Bundle savedInstanceState) {
-		super.onViewCreated(view, savedInstanceState);
-		refreshPreferences();
+		super.onViewCreated(view, savedInstanceState); refreshPreferences();
 	}
 	private void refreshPreferences() {
 		if (getView() == null) return;
 		removeAllPreferences();
+		addAppDiagnosticsPreferences();
 		addHeader(R.string.crash_reports_title);
 		addCheck(true, Preferences.KEY_CRASH_REPORT_PROMPTS, Preferences.DEFAULT_CRASH_REPORT_PROMPTS,
 				R.string.crash_report_prompt_enabled, R.string.crash_report_prompt_summary);
@@ -34,115 +32,49 @@ public class DiagnosticsFragment extends PreferenceFragment {
 				((FragmentHandler) requireActivity()).pushFragment(new CrashReportsFragment()));
 		addButton(R.string.crash_test_title, R.string.crash_test_summary)
 				.setOnClickListener(p -> CrashReportDialogs.confirmTest(requireActivity()));
-		addScreenDiagnosticsPreferences();
-		addVideoDiagnosticsPreferences();
 	}
-
-	private void addScreenDiagnosticsPreferences() {
-		boolean recording = PostingFormDiagnostics.isRecording();
-		boolean saving = PostingFormDiagnostics.isSaving();
-		boolean retry = PostingFormDiagnostics.hasPendingExport();
+	private void addAppDiagnosticsPreferences() {
+		boolean recording = AppDiagnostics.isRecording(), saving = AppDiagnostics.isSaving(), retry = AppDiagnostics.hasPendingExport();
 		Preference<Void> capture = addButton(saving ? R.string.video_diagnostics_saving
-				: recording || retry ? R.string.form_diagnostics_stop : R.string.form_diagnostics_start,
-				R.string.form_diagnostics_summary);
+				: recording ? R.string.video_diagnostics_stop : retry ? R.string.app_diagnostics_retry : R.string.video_diagnostics_start,
+				recording ? R.string.video_diagnostics_stop__summary : R.string.app_diagnostics_summary);
 		capture.setEnabled(!saving);
 		capture.setOnClickListener(p -> {
-			if (PostingFormDiagnostics.isRecording() || PostingFormDiagnostics.hasPendingExport()) {
-				PostingFormDiagnostics.stopAndSave(requireContext(), file -> {
+			if (AppDiagnostics.isRecording() || AppDiagnostics.hasPendingExport()) {
+				AppDiagnostics.stopAndSave(requireContext(), file -> {
 					if (!isAdded() || getView() == null) return;
 					refreshPreferences();
 					if (file != null) {
-						new MessageDialog.Builder(requireContext()).setTitle(R.string.form_diagnostics_saved)
-								.setMessage(R.string.form_diagnostics_saved_summary)
-								.setPositiveButton(R.string.share, (dialog, which) ->
-										NavigationUtils.shareFile(requireContext(), file, file.getName()))
+						new MessageDialog.Builder(requireContext()).setTitle(R.string.video_diagnostics_saved)
+								.setMessage(R.string.video_diagnostics_saved__message)
+								.setPositiveButton(R.string.share, (dialog, which) -> DiagnosticReportSharing.share(requireActivity(), file))
 								.setNegativeButton(android.R.string.ok, null).show();
 					} else ClickableToast.show(R.string.video_diagnostics_save_failed);
 				});
 				refreshPreferences();
 			} else {
-				new MessageDialog.Builder(requireContext()).setTitle(R.string.form_diagnostics_start)
-						.setMessage(R.string.form_diagnostics_notice)
+				new MessageDialog.Builder(requireContext()).setTitle(R.string.video_diagnostics_start)
+						.setMessage(getString(R.string.app_diagnostics_notice) + "\n\n" + getString(R.string.video_diagnostics_memory_notice))
 						.setPositiveButton(R.string.video_diagnostics_begin, (dialog, which) -> {
-							PostingFormDiagnostics.start(requireContext());
+							if (!AppDiagnostics.start(requireContext())) ClickableToast.show(R.string.video_diagnostics_save_failed);
 							refreshPreferences();
 						}).setNegativeButton(android.R.string.cancel, null).show();
 			}
 		});
-		File report = PostingFormDiagnostics.getLastFile(requireContext());
+		File report = AppDiagnostics.getLastFile(requireContext());
 		if (!recording && !saving && !retry && report != null) {
-			addButton(R.string.form_diagnostics_share, 0).setOnClickListener(p ->
-					NavigationUtils.shareFile(requireContext(), report, report.getName()));
+			addButton(R.string.video_diagnostics_share, R.string.video_diagnostics_share__summary)
+					.setOnClickListener(p -> DiagnosticReportSharing.share(requireActivity(), report));
+			addButton(R.string.video_diagnostics_delete, 0).setOnClickListener(p -> {
+				if (AppDiagnostics.deleteLastFile(requireContext())) {
+					ClickableToast.show(R.string.video_diagnostics_deleted); refreshPreferences();
+				} else ClickableToast.show(R.string.unknown_error);
+			});
 		}
 	}
-
-	private void addVideoDiagnosticsPreferences() {
-		boolean recording = VideoDiagnostics.isRecording();
-		boolean saving = VideoDiagnostics.isSaving();
-		CheckPreference extendedPreference = addCheck(true, Preferences.KEY_EXTENDED_VIDEO_DIAGNOSTICS,
-				false, R.string.video_diagnostics_extended, R.string.video_diagnostics_extended__summary);
-		extendedPreference.setEnabled(!recording && !saving);
-		Preference<Void> capturePreference = addButton(saving ? getString(R.string.video_diagnostics_saving) : recording
-						? getString(R.string.video_diagnostics_stop)
-						: getString(R.string.video_diagnostics_start),
-				recording ? getString(R.string.video_diagnostics_stop__summary)
-						: getString(R.string.video_diagnostics_start__summary));
-		capturePreference.setEnabled(!saving);
-		capturePreference.setOnClickListener(p -> {
-			if (VideoDiagnostics.isRecording()) {
-				VideoDiagnostics.stopAsync(file -> {
-					if (!isAdded() || getView() == null) return;
-					refreshPreferences();
-					if (file != null) {
-						new MessageDialog.Builder(requireContext())
-								.setTitle(R.string.video_diagnostics_saved)
-								.setMessage(R.string.video_diagnostics_saved__message)
-								.setPositiveButton(R.string.share, (dialog, which) ->
-										NavigationUtils.shareFile(requireContext(), file, file.getName()))
-								.setNegativeButton(android.R.string.ok, null)
-								.show();
-					} else {
-						ClickableToast.show(R.string.video_diagnostics_save_failed);
-					}
-				});
-				refreshPreferences();
-			} else {
-				new MessageDialog.Builder(requireContext())
-						.setTitle(R.string.video_diagnostics_start)
-						.setMessage(getString(R.string.video_diagnostics_privacy_notice)
-								+ "\n\n" + getString(R.string.video_diagnostics_memory_notice))
-						.setPositiveButton(R.string.video_diagnostics_begin, (dialog, which) -> {
-							VideoDiagnostics.start();
-							refreshPreferences();
-						})
-						.setNegativeButton(android.R.string.cancel, null)
-						.show();
-			}
-		});
-		if (!recording && !saving) {
-			File lastFile = VideoDiagnostics.getLastFile();
-			if (lastFile != null) {
-				addButton(R.string.video_diagnostics_share, R.string.video_diagnostics_share__summary)
-						.setOnClickListener(p ->
-								NavigationUtils.shareFile(requireContext(), lastFile, lastFile.getName()));
-				addButton(R.string.video_diagnostics_delete, 0).setOnClickListener(p -> {
-					if (VideoDiagnostics.deleteLastFile()) {
-						ClickableToast.show(R.string.video_diagnostics_deleted);
-						refreshPreferences();
-					} else {
-						ClickableToast.show(R.string.unknown_error);
-					}
-				});
-			}
-		}
-	}
-
 	@Override public void onViewStateRestored(Bundle savedInstanceState) {
 		super.onViewStateRestored(savedInstanceState);
 		((FragmentHandler) requireActivity()).setTitleSubtitle(getString(R.string.settings_diagnostics), null);
 	}
-	@Override public void onResume() {
-		super.onResume();
-		refreshPreferences();
-	}
+	@Override public void onResume() { super.onResume(); refreshPreferences(); }
 }

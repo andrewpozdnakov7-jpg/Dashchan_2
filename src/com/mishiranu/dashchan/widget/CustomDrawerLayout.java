@@ -5,11 +5,14 @@ import android.content.Context;
 import android.util.AttributeSet;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewParent;
 import android.view.ViewConfiguration;
 import androidx.core.view.GravityCompat;
 import androidx.drawerlayout.widget.DrawerLayout;
+import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.util.ViewUtils;
+import com.mishiranu.dashchan.util.InputGestureDiagnostics;
 
 public class CustomDrawerLayout extends DrawerLayout {
 	// Match the default edge width of the pinned AndroidX ViewDragHelper.
@@ -23,6 +26,90 @@ public class CustomDrawerLayout extends DrawerLayout {
 	private float startY;
 	private boolean handle;
 	private boolean ignoreTouch;
+	private boolean editorGestureOwned;
+	private boolean closedAtDown;
+	private long gestureDownTime;
+	private final InputGestureDiagnostics.Trace gestureTrace = new InputGestureDiagnostics.Trace();
+	boolean isEditorGestureOwned() { return editorGestureOwned; }
+
+	/** Opt-in workaround only; otherwise retain the released editor/drawer dispatch. */
+	static void protectEditorGesture(View editor, MotionEvent event) {
+		if (!editor.isEnabled() || event.getActionMasked() != MotionEvent.ACTION_DOWN) return;
+		if (!Preferences.isGalaxyM12SelectionFixEnabled()) return;
+		ViewParent parent = editor.getParent();
+		while (parent != null) {
+			if (parent instanceof CustomDrawerLayout) {
+				CustomDrawerLayout drawer = (CustomDrawerLayout) parent;
+				if (drawer.closedAtDown && drawer.gestureDownTime == event.getDownTime()) {
+					drawer.editorGestureOwned = true;
+					drawer.handle = false;
+					drawer.ignoreTouch = false;
+					// Native DrawerLayout also cancels pending edge-peek callbacks here.
+					drawer.requestDisallowInterceptTouchEvent(true);
+					if (InputGestureDiagnostics.isRecording()) InputGestureDiagnostics.event(drawer, "drawer_editor_claim",
+							"gesture=" + event.getDownTime() + " owner="
+							+ com.mishiranu.dashchan.ui.posting.PostingFormDiagnostics.viewLabel(editor));
+				}
+				return;
+			}
+			parent = parent.getParent();
+		}
+	}
+
+	private String gestureState() {
+		return "editorOwned=" + editorGestureOwned + " anywhere=" + expandableFromAnyPoint
+				+ " handle=" + handle + " ignore=" + ignoreTouch
+				+ " visible=" + isDrawerVisible(GravityCompat.START) + "," + isDrawerVisible(GravityCompat.END)
+				+ " locks=" + getDrawerLockMode(GravityCompat.START) + "," + getDrawerLockMode(GravityCompat.END);
+	}
+
+	private void releaseEditorGesture(String reason) {
+		if (editorGestureOwned) {
+			if (InputGestureDiagnostics.isRecording()) InputGestureDiagnostics.event(this, "drawer_editor_release",
+					"gesture=" + gestureDownTime + " reason=" + reason);
+			editorGestureOwned = false;
+			super.requestDisallowInterceptTouchEvent(false);
+		}
+	}
+
+	@Override public boolean dispatchTouchEvent(MotionEvent event) {
+		int action = event.getActionMasked();
+		if (action == MotionEvent.ACTION_DOWN) {
+			gestureTrace.begin(event);
+			releaseEditorGesture("next_down");
+			gestureDownTime = event.getDownTime();
+			closedAtDown = !isDrawerVisible(GravityCompat.START) && !isDrawerVisible(GravityCompat.END);
+		}
+		try {
+			boolean handled = super.dispatchTouchEvent(event);
+			if (InputGestureDiagnostics.isRecording()) gestureTrace.motion(this, "drawer_dispatch", event,
+					"handled=" + handled + " " + gestureState());
+			return handled;
+		} finally {
+			if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+				releaseEditorGesture(action == MotionEvent.ACTION_UP ? "up" : "cancel");
+				closedAtDown = false;
+			}
+		}
+	}
+
+	@Override public void requestDisallowInterceptTouchEvent(boolean disallow) {
+		boolean effective = disallow || editorGestureOwned;
+		if (gestureTrace != null && InputGestureDiagnostics.isRecording()) gestureTrace.state(this, "drawer_intercept_request",
+				"gesture=" + gestureDownTime + " requested=" + disallow + " effective=" + effective + " " + gestureState());
+		super.requestDisallowInterceptTouchEvent(effective);
+	}
+
+	@Override public void onWindowFocusChanged(boolean focused) {
+		super.onWindowFocusChanged(focused);
+		if (!focused && (editorGestureOwned || Preferences.isGalaxyM12SelectionFixEnabled())) {
+			releaseEditorGesture("window_focus_lost"); closedAtDown = false; handle = false;
+		}
+	}
+	@Override protected void onDetachedFromWindow() {
+		releaseEditorGesture("detach"); closedAtDown = false; handle = false;
+		super.onDetachedFromWindow();
+	}
 
 	public CustomDrawerLayout(Context context, AttributeSet attrs) {
 		super(context, attrs);
@@ -34,6 +121,7 @@ public class CustomDrawerLayout extends DrawerLayout {
 
 	public void setExpandableFromAnyPoint(boolean expandableFromAnyPoint) {
 		this.expandableFromAnyPoint = expandableFromAnyPoint;
+		if (InputGestureDiagnostics.isRecording()) gestureTrace.state(this, "drawer_anywhere_policy", gestureState());
 	}
 
 	/** Keep predictive pixels in window coordinates while the native content avoids the IME. */
@@ -71,6 +159,8 @@ public class CustomDrawerLayout extends DrawerLayout {
 					boolean left = !rtl && dx > 0 && startX >= edgeSize;
 					boolean right = rtl && dx < 0 && startX <= getWidth() - edgeSize;
 					if (left || right) {
+						if (InputGestureDiagnostics.isRecording()) InputGestureDiagnostics.event(this, "drawer_anywhere_start",
+								"gesture=" + ev.getDownTime() + " dx=" + dx + " dy=" + dy + " " + gestureState());
 						startX = ev.getX();
 						startY = ev.getY();
 						ignoreTouch = true;
@@ -93,6 +183,8 @@ public class CustomDrawerLayout extends DrawerLayout {
 			}
 		}
 		boolean result = super.onInterceptTouchEvent(ev);
+		if (InputGestureDiagnostics.isRecording()) gestureTrace.state(this, "drawer_intercept_result",
+				"gesture=" + ev.getDownTime() + " action=" + ev.getActionMasked() + " result=" + result + " " + gestureState());
 		if (result && handle) {
 			handle = false;
 		}

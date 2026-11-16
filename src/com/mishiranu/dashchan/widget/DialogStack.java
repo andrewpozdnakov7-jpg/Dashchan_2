@@ -203,6 +203,7 @@ public class DialogStack<T extends DialogStack.ViewFactory<T>> implements Iterab
 					predictiveAborted = false;
 					registerPredictiveBackCallback(this);
 					Preferences.PREFERENCES.register(motionPreferencesListener);
+					com.mishiranu.dashchan.util.SystemNavigationMode.addListener(navigationModeChanged);
 				}
 
 				@Override
@@ -213,6 +214,7 @@ public class DialogStack<T extends DialogStack.ViewFactory<T>> implements Iterab
 					predictiveStarted = false; predictiveSource = null;
 					unregisterPredictiveBackCallback(this);
 					Preferences.PREFERENCES.unregister(motionPreferencesListener);
+					com.mishiranu.dashchan.util.SystemNavigationMode.removeListener(navigationModeChanged);
 					for (Pair<T, DialogView> pair : visibleViews) pair.first.clearBackPreviews();
 					motion.closed(getWindow());
 					super.onStop();
@@ -469,6 +471,7 @@ public class DialogStack<T extends DialogStack.ViewFactory<T>> implements Iterab
 		return last.first;
 	}
 
+	private final Runnable navigationModeChanged = this::updateMotionPolicy;
 	private final SharedPreferences.Listener motionPreferencesListener = key -> {
 		if (Preferences.KEY_NEW_INTERFACE_MOTION.equals(key) || Preferences.KEY_PREDICTIVE_BACK.equals(key)) updateMotionPolicy();
 	};
