@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="compact_dialogs">Компактные окна и подсказки</string>
+    <string name="compact_dialogs_summary">Подсказки к меткам постов, компактные формы и короткие сообщения без модального окна. По умолчанию выключено.</string>
+    <string name="compact_post_statuses">Метки сообщения</string>
+    <string name="compact_bump_limit">Достигнут бамп-лимит</string>
+    <string name="compact_show_post_statuses">Показать метки сообщения</string>
+</resources>

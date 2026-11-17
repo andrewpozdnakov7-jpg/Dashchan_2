@@ -1506,6 +1506,19 @@ public class DialogUnit {
 		showPostDescriptionDialogStatic(fragmentManager, icons, chanName, emailToCopy);
 	}
 
+	public void showPostDescriptionDialog(FragmentManager fragmentManager,
+			Collection<IconData> icons, String chanName, String emailToCopy, View anchor, View owner) {
+		if (com.mishiranu.dashchan.widget.CompactDialogUi.isEnabled() && anchor != null && owner != null) {
+			if (!anchor.isAttachedToWindow() || !owner.isAttachedToWindow()) return;
+			if (!com.mishiranu.dashchan.widget.StatusExplanationPopup.isHostActive(anchor)) return;
+			java.util.ArrayList<com.mishiranu.dashchan.widget.StatusExplanationPopup.Entry> entries = new java.util.ArrayList<>();
+			for (IconData icon : icons) entries.add(new com.mishiranu.dashchan.widget.StatusExplanationPopup.Entry(icon.title, icon.attrId, icon.uri));
+			if (com.mishiranu.dashchan.widget.StatusExplanationPopup.show(anchor, owner, chanName, entries, emailToCopy)) return;
+			// Tiny/unavailable viewport: keep the explanation accessible using the existing dialog.
+		}
+		showPostDescriptionDialogStatic(fragmentManager, icons, chanName, emailToCopy);
+	}
+
 	private static void showPostDescriptionDialogStatic(FragmentManager fragmentManager,
 			Collection<IconData> icons, String chanName, String emailToCopy) {
 		new InstanceDialog(fragmentManager, null, provider -> createPostDescriptionDialog(provider.getContext(),
@@ -2011,6 +2024,7 @@ public class DialogUnit {
 			LocalArchiveViewModel viewModel = provider.getViewModel(LocalArchiveViewModel.class);
 			viewModel.startIfNeeded(request);
 			viewModel.observe(provider.getLifecycleOwner(), result -> {
+				if (result.status == LocalArchiveViewModel.PreparationResult.Status.PREPARED) viewModel.handOff(result.downloadResult);
 				provider.dismiss();
 				if (result.status == LocalArchiveViewModel.PreparationResult.Status.ERROR) {
 					ClickableToast.show(R.string.unknown_error);

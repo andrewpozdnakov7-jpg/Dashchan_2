@@ -175,6 +175,7 @@ public class PopupColorDialog extends DialogFragment {
 		com.mishiranu.dashchan.widget.InterfaceAppearance.standardCustomAction(code, false);
 		com.mishiranu.dashchan.widget.InterfaceAppearance.standardCustomCaption(warning);
 		com.mishiranu.dashchan.widget.InterfaceAppearance.standardFieldLabel(hueLabel);
+		com.mishiranu.dashchan.widget.CompactDialogUi.markForm(scroll, layout);
 		return MotionDialogBuilder.standard(context).setTitle(requireArguments().getInt("title"))
 				.setView(scroll).setNegativeButton(android.R.string.cancel, null)
 				.setPositiveButton(android.R.string.ok, null).create();

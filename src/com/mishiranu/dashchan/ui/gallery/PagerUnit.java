@@ -27,6 +27,7 @@ import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import android.widget.ImageButton;
 import android.widget.TextView;
+import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentManager;
 import androidx.lifecycle.ViewModel;
 import androidx.lifecycle.ViewModelProvider;
@@ -191,7 +192,14 @@ public class PagerUnit implements PagerInstance.Callback {
 	}
 
 	public static class PagerUnitViewModel extends ViewModel {
-		private WeakReference<PagerUnit> pagerUnit;
+		private WeakReference<PagerUnit> pagerUnit = new WeakReference<>(null);
+	}
+
+	private static PagerUnit resolveDialogPagerUnit(InstanceDialog.Provider provider) {
+		Fragment parent = provider.getParentFragment();
+		if (parent == null || !parent.isAdded() || parent.isRemoving()) return null;
+		PagerUnit unit = new ViewModelProvider(parent).get(PagerUnitViewModel.class).pagerUnit.get();
+		return unit != null && !unit.finished && unit.viewsInitialized ? unit : null;
 	}
 
 	public View getView() {
@@ -434,9 +442,8 @@ public class PagerUnit implements PagerInstance.Callback {
 	private void showTikTokFilterDialog(boolean enable) {
 		new InstanceDialog(galleryInstance.callback.getChildFragmentManager(),
 				PagerUnit.class.getName() + ":TikTokFilter", provider -> {
-			PagerUnit unit = new ViewModelProvider(provider.getParentFragment()).get(PagerUnitViewModel.class)
-					.pagerUnit.get();
-			if (unit == null || unit.finished) return provider.createDismissDialog();
+			PagerUnit unit = resolveDialogPagerUnit(provider);
+			if (unit == null) return provider.createDismissDialog();
 			String[] choices = {provider.getContext().getString(R.string.tiktok_filter_all),
 					provider.getContext().getString(R.string.tiktok_filter_video),
 					provider.getContext().getString(R.string.tiktok_filter_image)};
@@ -461,9 +468,8 @@ public class PagerUnit implements PagerInstance.Callback {
 				} else {
 					new InstanceDialog(galleryInstance.callback.getChildFragmentManager(),
 							PagerUnit.class.getName() + ":TikTokFirst", provider -> {
-						PagerUnit unit = new ViewModelProvider(provider.getParentFragment())
-								.get(PagerUnitViewModel.class).pagerUnit.get();
-						if (unit == null || unit.finished) return provider.createDismissDialog();
+						PagerUnit unit = resolveDialogPagerUnit(provider);
+						if (unit == null) return provider.createDismissDialog();
 						return MotionDialogBuilder.standard(provider.getContext()).setMessage(R.string.tiktok_filter_first)
 								.setPositiveButton(android.R.string.ok, (d, w) -> {
 									int index = unit.findTikTokItem(0, 1, filter);
@@ -726,6 +732,7 @@ public class PagerUnit implements PagerInstance.Callback {
 			pagerInstance.leftHolder = null;
 			pagerInstance.currentHolder = null;
 			pagerInstance.rightHolder = null;
+			invalidatePopupMenu();
 			if (GalleryMotionController.mode(viewPager, false, duration, false)) {
 				// Shared mode clock owns only rendering and final visibility.
 			} else if (duration > 0) {
@@ -791,7 +798,7 @@ public class PagerUnit implements PagerInstance.Callback {
 	}
 
 	public OptionsMenuCapabilities obtainOptionsMenuCapabilities() {
-		PagerInstance.ViewHolder holder = pagerInstance.currentHolder;
+		PagerInstance.ViewHolder holder = getPopupHolder();
 		boolean available = false;
 		boolean save = false;
 		boolean refresh = false;
@@ -840,6 +847,7 @@ public class PagerUnit implements PagerInstance.Callback {
 	public void onFinish() {
 		finishPhotoMotion();
 		finished = true;
+		invalidatePopupMenu();
 		pagerInstance.mediaPreloader.setResumed(false);
 		endVolumeGesture();
 		verticalGesture = VerticalGesture.NONE;
@@ -1167,9 +1175,11 @@ public class PagerUnit implements PagerInstance.Callback {
 
 		@Override
 		public void onLongClick(PhotoView photoView, float x, float y) {
+			PagerInstance.ViewHolder holder = getPopupHolder();
+			if (holder == null || holder.photoView != photoView) return;
 			float centerLeft = photoView.getWidth() / 3f;
 			if (!tikTokPagingActive || canHandleTikTokTap(photoView) && x >= centerLeft && x < centerLeft * 2f) {
-				displayPopupMenu(galleryInstance.callback.getChildFragmentManager());
+				displayPopupMenu(galleryInstance.callback.getChildFragmentManager(), holder.galleryItem);
 			}
 		}
 
@@ -1563,8 +1573,24 @@ public class PagerUnit implements PagerInstance.Callback {
 
 	private static final String TAG_POPUP_MENU = PagerUnit.class.getName() + ":PopupMenu";
 
+	/** A long press and its deferred dialog can straddle paging, grid entry or view teardown. */
+	private PagerInstance.ViewHolder getPopupHolder() {
+		if (finished || !viewsInitialized || galleryMode) return null;
+		PagerInstance.ViewHolder holder = pagerInstance.currentHolder;
+		return holder != null && holder.galleryItem != null ? holder : null;
+	}
+
+	private void addPopupAction(DialogMenu menu, GalleryItem expectedItem, int title, Runnable action) {
+		menu.add(title, () -> {
+			PagerInstance.ViewHolder holder = getPopupHolder();
+			if (holder != null && holder.galleryItem == expectedItem) action.run();
+		});
+	}
+
 	private DialogMenu buildPopupMenu(Context dialogContext) {
-		GalleryItem galleryItem = pagerInstance.currentHolder.galleryItem;
+		PagerInstance.ViewHolder holder = getPopupHolder();
+		if (holder == null) return null;
+		GalleryItem galleryItem = holder.galleryItem;
 		OptionsMenuCapabilities capabilities = obtainOptionsMenuCapabilities();
 		if (capabilities != null && capabilities.available) {
 			Chan chan = Chan.get(galleryInstance.chanName);
@@ -1573,18 +1599,18 @@ public class PagerUnit implements PagerInstance.Callback {
 			DialogMenu dialogMenu = new DialogMenu(dialogContext);
 			dialogMenu.setTitle(!StringUtils.isEmpty(galleryItem.originalName)
 					? galleryItem.originalName : galleryItem.getFileName(chan));
-			dialogMenu.add(R.string.tiktok_filter, this::showTikTokFilterDialog);
+			addPopupAction(dialogMenu, galleryItem, R.string.tiktok_filter, this::showTikTokFilterDialog);
 			if (!galleryInstance.callback.isSystemUiVisible()) {
 				if (capabilities.save) {
-					dialogMenu.add(R.string.save, () -> galleryInstance.callback
+					addPopupAction(dialogMenu, galleryItem, R.string.save, () -> galleryInstance.callback
 							.downloadGalleryItem(galleryItem));
 				}
 				if (capabilities.refresh) {
-					dialogMenu.add(R.string.refresh, this::refreshCurrent);
+					addPopupAction(dialogMenu, galleryItem, R.string.refresh, this::refreshCurrent);
 				}
 			}
 			if (capabilities.viewMetadata) {
-				dialogMenu.add(R.string.metadata, () -> {
+				addPopupAction(dialogMenu, galleryItem, R.string.metadata, () -> {
 					if (galleryItem.isImage(chan)) {
 						imageUnit.viewMetadata();
 					} else if (galleryItem.isVideo(chan)) {
@@ -1593,7 +1619,7 @@ public class PagerUnit implements PagerInstance.Callback {
 				});
 			}
 			if (capabilities.searchImage) {
-				dialogMenu.add(R.string.search_image, () -> {
+				addPopupAction(dialogMenu, galleryItem, R.string.search_image, () -> {
 					videoUnit.forcePause();
 					new SearchImageDialog(galleryInstance.chanName, galleryItem.getDisplayImageUri(chan),
 							galleryItem.getThumbnailUri(chan))
@@ -1601,11 +1627,11 @@ public class PagerUnit implements PagerInstance.Callback {
 				});
 			}
 			if (galleryInstance.callback.isAllowNavigatePostManually(true) && capabilities.navigatePost) {
-				dialogMenu.add(R.string.go_to_post, () -> galleryInstance.callback
+				addPopupAction(dialogMenu, galleryItem, R.string.go_to_post, () -> galleryInstance.callback
 						.navigatePost(galleryItem, true, true));
 			}
 			if (capabilities.shareFile && galleryItem.isImage(chan)) {
-				dialogMenu.add(R.string.copy_image, () -> {
+				addPopupAction(dialogMenu, galleryItem, R.string.copy_image, () -> {
 					File file = CacheManager.getInstance().getMediaFile(galleryItem.getFileUri(chan), false);
 					if (file == null) {
 						ClickableToast.show(R.string.cache_is_unavailable);
@@ -1614,14 +1640,14 @@ public class PagerUnit implements PagerInstance.Callback {
 					}
 				});
 			}
-			dialogMenu.add(R.string.copy_link, () -> StringUtils.copyToClipboard(context,
+			addPopupAction(dialogMenu, galleryItem, R.string.copy_link, () -> StringUtils.copyToClipboard(context,
 					galleryItem.getFileUri(chan).toString()));
-			dialogMenu.add(R.string.share_link, () -> {
+			addPopupAction(dialogMenu, galleryItem, R.string.share_link, () -> {
 				videoUnit.forcePause();
 				NavigationUtils.shareLink(context, null, galleryItem.getFileUri(chan));
 			});
 			if (capabilities.shareFile) {
-				dialogMenu.add(R.string.share_file, () -> {
+				addPopupAction(dialogMenu, galleryItem, R.string.share_file, () -> {
 					videoUnit.forcePause();
 					Uri uri = galleryItem.getFileUri(chan);
 					File file = CacheManager.getInstance().getMediaFile(uri, false);
@@ -1637,11 +1663,13 @@ public class PagerUnit implements PagerInstance.Callback {
 		return null;
 	}
 
-	private static void displayPopupMenu(FragmentManager fragmentManager) {
+	private static void displayPopupMenu(FragmentManager fragmentManager, GalleryItem expectedItem) {
 		new InstanceDialog(fragmentManager, TAG_POPUP_MENU, provider -> {
-			PagerUnitViewModel viewModel = new ViewModelProvider(provider.getParentFragment())
-					.get(PagerUnitViewModel.class);
-			PagerUnit pagerUnit = viewModel.pagerUnit.get();
+			PagerUnit pagerUnit = resolveDialogPagerUnit(provider);
+			if (pagerUnit == null || pagerUnit.getCurrentGalleryItem() != expectedItem) {
+				VideoDiagnostics.recordUi("gallery popup_skipped reason=owner_or_item_changed");
+				return provider.createDismissDialog();
+			}
 			DialogMenu dialogMenu = pagerUnit.buildPopupMenu(provider.getContext());
 			if (dialogMenu != null) {
 				return dialogMenu.create();
@@ -1655,8 +1683,14 @@ public class PagerUnit implements PagerInstance.Callback {
 		InstanceDialog instanceDialog = (InstanceDialog) galleryInstance.callback
 				.getChildFragmentManager().findFragmentByTag(TAG_POPUP_MENU);
 		if (instanceDialog != null) {
-			AlertDialog dialog = (AlertDialog) instanceDialog.getDialog();
-			if (dialog != null) {
+			if (getPopupHolder() == null) {
+				// A menu has no user operation to retain after its attachment was closed.
+				instanceDialog.dismissAllowingStateLoss();
+				return;
+			}
+			android.app.Dialog currentDialog = instanceDialog.getDialog();
+			if (currentDialog instanceof AlertDialog) {
+				AlertDialog dialog = (AlertDialog) currentDialog;
 				DialogMenu dialogMenu = buildPopupMenu(dialog.getContext());
 				if (dialogMenu != null) {
 					dialogMenu.update(dialog);

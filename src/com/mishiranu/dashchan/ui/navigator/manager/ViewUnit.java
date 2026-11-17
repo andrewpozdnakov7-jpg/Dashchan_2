@@ -482,6 +482,7 @@ public class ViewUnit {
 			PostItem postItem, UiManager.ConfigurationSet configurationSet, UiManager.DemandSet demandSet) {
 		ColorScheme colorScheme = ThemeEngine.getColorScheme(uiManager.getContext());
 		PostViewHolder holder = (PostViewHolder) viewHolder;
+		com.mishiranu.dashchan.widget.StatusExplanationPopup.dismissForOwner(holder.itemView);
 		Chan chan = Chan.get(configurationSet.chanName);
 		holder.resetAnimations();
 		holder.configure(postItem, configurationSet);
@@ -507,6 +508,21 @@ public class ViewUnit {
 		for (int i = 0; i < PostState.POST_ITEM_STATES.size(); i++) {
 			boolean visible = PostState.POST_ITEM_STATES.get(i).predicate.apply(stateData);
 			holder.stateImages[i].setVisibility(visible ? View.VISIBLE : View.GONE);
+			View status = holder.stateImages[i];
+			if (com.mishiranu.dashchan.widget.CompactDialogUi.isEnabled()) {
+				status.setContentDescription(postStatusTitle(PostState.POST_ITEM_STATES.get(i), postItem));
+				status.setFocusable(true);
+				status.setOnClickListener(view -> showPostStatusDescription(holder, false, view));
+				status.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
+				androidx.core.view.ViewCompat.replaceAccessibilityAction(status,
+						androidx.core.view.accessibility.AccessibilityNodeInfoCompat.AccessibilityActionCompat.ACTION_CLICK,
+						uiManager.getContext().getString(R.string.compact_show_post_statuses),
+						(view, args) -> { showPostStatusDescription(holder, false, view); return true; });
+			} else {
+				androidx.core.view.ViewCompat.removeAccessibilityAction(status, android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK);
+				status.setContentDescription(null); status.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_AUTO);
+				status.setOnClickListener(null); status.setClickable(false); status.setFocusable(false);
+			}
 		}
 		viewHolder.itemView.setAlpha(postItem.isDeleted() ? ALPHA_DELETED_POST : 1f);
 
@@ -841,6 +857,20 @@ public class ViewUnit {
 				ImageView imageView = holder.badgeImages.get(i);
 				if (i < icons.size()) {
 					imageView.setVisibility(View.VISIBLE);
+					if (com.mishiranu.dashchan.widget.CompactDialogUi.isEnabled()) {
+						imageView.setContentDescription(icons.get(i).title);
+						imageView.setFocusable(true);
+						imageView.setOnClickListener(view -> showPostStatusDescription(holder, true, view));
+						imageView.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
+						androidx.core.view.ViewCompat.replaceAccessibilityAction(imageView,
+								androidx.core.view.accessibility.AccessibilityNodeInfoCompat.AccessibilityActionCompat.ACTION_CLICK,
+								context.getString(R.string.compact_show_post_statuses),
+								(view, args) -> { showPostStatusDescription(holder, true, view); return true; });
+					} else {
+						androidx.core.view.ViewCompat.removeAccessibilityAction(imageView, android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK);
+						imageView.setContentDescription(null); imageView.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_AUTO);
+						imageView.setOnClickListener(null); imageView.setClickable(false); imageView.setFocusable(false);
+					}
 					Uri uri = icons.get(i).uri;
 					if (uri != null) {
 						uri = uri.isRelative() ? chan.locator.convert(uri) : uri;
@@ -954,13 +984,14 @@ public class ViewUnit {
 
 		private int type;
 		private float startX, startY;
+		private View touchedAnchor;
 
 		@SuppressLint("ClickableViewAccessibility")
 		@Override
 		public boolean onTouch(View v, MotionEvent event) {
 			switch (event.getAction()) {
 				case MotionEvent.ACTION_DOWN: {
-					type = TYPE_NONE;
+					type = TYPE_NONE; touchedAnchor = null;
 					float x = event.getX();
 					float y = event.getY();
 					PostViewHolder holder = ListViewUtils.getViewHolder(v, PostViewHolder.class);
@@ -979,12 +1010,12 @@ public class ViewUnit {
 								startY = y;
 								// noinspection SuspiciousMethodCalls
 								if (holder.badgeImages != null && holder.badgeImages.contains(child)) {
-									type = TYPE_BADGES;
+									type = TYPE_BADGES; touchedAnchor = child;
 									return true;
 								}
 								// noinspection SuspiciousMethodCalls
 								if (Arrays.asList(holder.stateImages).contains(child)) {
-									type = TYPE_STATES;
+									type = TYPE_STATES; touchedAnchor = child;
 									return true;
 								}
 							}
@@ -996,49 +1027,60 @@ public class ViewUnit {
 					if (type != TYPE_NONE) {
 						Context context = uiManager.getContext();
 						PostViewHolder holder = ListViewUtils.getViewHolder(v, PostViewHolder.class);
-						PostItem postItem = holder.getPostItem();
-						UiManager.ConfigurationSet configurationSet = holder.getConfigurationSet();
 						int touchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
 						if (Math.abs(event.getX() - startX) <= touchSlop &&
 								Math.abs(event.getY() - startY) <= touchSlop) {
-							ArrayList<DialogUnit.IconData> icons = new ArrayList<>();
-							String emailToCopy = null;
-							switch (type) {
-								case TYPE_BADGES: {
-									Chan chan = Chan.get(configurationSet.chanName);
-									List<Post.Icon> postIcons = postItem.getIcons();
-									for (Post.Icon postIcon : postIcons) {
-										Uri uri = postIcon.uri;
-										if (uri != null) {
-											uri = uri.isRelative() ? chan.locator.convert(uri) : uri;
-										}
-										icons.add(new DialogUnit.IconData(postIcon.title, uri));
-									}
-									break;
-								}
-								case TYPE_STATES: {
-									for (int i = 0; i < PostState.POST_ITEM_STATES.size(); i++) {
-										if (holder.stateImages[i].getVisibility() == View.VISIBLE) {
-											PostState postState = PostState.POST_ITEM_STATES.get(i);
-											String title = postState.titleProvider
-													.get(uiManager.getContext(), postItem);
-											icons.add(new DialogUnit.IconData(title, postState.iconAttrResId));
-										}
-									}
-									break;
-								}
-							}
-							uiManager.dialog().showPostDescriptionDialog(configurationSet.fragmentManager,
-									icons, configurationSet.chanName, emailToCopy);
+							showPostStatusDescription(holder, type == TYPE_BADGES, touchedAnchor);
 						}
+						type = TYPE_NONE; touchedAnchor = null;
 						return true;
 					}
+					break;
+				}
+				case MotionEvent.ACTION_CANCEL: {
+					type = TYPE_NONE; touchedAnchor = null;
 					break;
 				}
 			}
 			return false;
 		}
 	};
+
+
+	private void showPostStatusDescription(PostViewHolder holder, boolean badges, View anchor) {
+		if (holder == null || !holder.itemView.isAttachedToWindow() || !holder.itemView.isShown()) return;
+		PostItem postItem = holder.getPostItem();
+		UiManager.ConfigurationSet configurationSet = holder.getConfigurationSet();
+		if (postItem == null || configurationSet == null || configurationSet.fragmentManager.isDestroyed()) return;
+		ArrayList<DialogUnit.IconData> icons = new ArrayList<>();
+		if (badges) {
+			Chan chan = Chan.get(configurationSet.chanName);
+			for (Post.Icon postIcon : postItem.getIcons()) {
+				Uri uri = postIcon.uri;
+				if (uri != null && uri.isRelative()) uri = chan.locator.convert(uri);
+				icons.add(new DialogUnit.IconData(postIcon.title, uri));
+			}
+		} else {
+			for (int i = 0; i < PostState.POST_ITEM_STATES.size(); i++) {
+				if (holder.stateImages[i].getVisibility() == View.VISIBLE) {
+					PostState state = PostState.POST_ITEM_STATES.get(i);
+					String title = postStatusTitle(state, postItem);
+					icons.add(new DialogUnit.IconData(title, state.iconAttrResId));
+				}
+			}
+		}
+		if (!icons.isEmpty()) uiManager.dialog().showPostDescriptionDialog(configurationSet.fragmentManager,
+				icons, configurationSet.chanName, null, anchor, holder.itemView);
+	}
+
+	private String postStatusTitle(PostState state, PostItem postItem) {
+		if (com.mishiranu.dashchan.widget.CompactDialogUi.isEnabled()
+				&& state == PostState.SAGE && !postItem.isSage()) {
+			// The visible SAGE glyph with !isSage is produced by the computed bump-limit state.
+			return uiManager.getContext().getString(R.string.compact_bump_limit);
+		}
+		return state.titleProvider.get(uiManager.getContext(), postItem);
+	}
 
 	private enum PostState {
 		USER_POST(R.attr.iconPostUserPost, R.string.my_post,

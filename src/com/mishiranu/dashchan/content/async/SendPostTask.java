@@ -150,7 +150,7 @@ public class SendPostTask<Key> extends ExecutorTask<long[], Boolean> {
 				if (data.captchaData != null) {
 					try (HttpHolder.Use ignore2 = fallbackHolder.use()) {
 						String response = ReadCaptchaTask.readForegroundCaptcha(fallbackHolder,
-							chan.name, data.captchaData, data.captchaType);
+							data.captchaData, data.captchaType);
 						if (response != null) {
 							data.captchaData.put(ChanPerformer.CaptchaData.INPUT, response);
 							success = true;

@@ -322,7 +322,8 @@ public class UpdaterActivity extends StateActivity {
 					.setContentText(context.getString(R.string.update_installed_open_app))
 					.setContentIntent(pendingIntent)
 					.setAutoCancel(true);
-			notificationManager.notify(C.NOTIFICATION_ID_UPDATE_INSTALLED, notification.build());
+			notificationManager.notify(C.NOTIFICATION_ID_UPDATE_INSTALLED, com.mishiranu.dashchan.content.security.AppSecurity
+					.prepareNotification(context, null, C.NOTIFICATION_ID_UPDATE_INSTALLED, notification.build()));
 		}
 	}
 
@@ -362,7 +363,8 @@ public class UpdaterActivity extends StateActivity {
 				.setAutoCancel(true)
 				.setPriority(NotificationCompat.PRIORITY_HIGH)
 				.setVibrate(new long[0]);
-		notificationManager.notify(C.NOTIFICATION_ID_UPDATES, builder.build());
+		notificationManager.notify(C.NOTIFICATION_ID_UPDATES, com.mishiranu.dashchan.content.security.AppSecurity
+				.prepareNotification(context, null, C.NOTIFICATION_ID_UPDATES, builder.build()));
 	}
 
 	private static class Connection implements ServiceConnection, DownloadService.Callback {

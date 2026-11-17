@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<string name="local_archive_update_busy">Этот тред уже сохраняется. Дождитесь завершения.</string>
+	<string name="local_archive_update_partial">Не все файлы сохранены. Предыдущая копия архива оставлена. Повторите сохранение, чтобы докачать недостающие файлы.</string>
+	<string name="local_archive_update_failed">Не удалось сохранить архив. Предыдущая копия не заменена.</string>
+	<string name="local_archive_save_failed">Не удалось сохранить архив. Проверьте доступ к папке загрузок и повторите сохранение.</string>
+	<string name="local_archive_save_partial">Не все файлы сохранены. Повторите сохранение, чтобы докачать недостающие файлы.</string>
+	<string name="local_archive_update_zip_failed">Не удалось создать ZIP. Предыдущая копия архива сохранена. Повторите сохранение.</string>
+	<string name="local_archive_save_zip_failed">Не удалось создать ZIP. Сохранённые файлы оставлены. Повторите сохранение.</string>
+</resources>

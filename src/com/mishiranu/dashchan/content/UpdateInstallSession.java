@@ -324,10 +324,11 @@ public final class UpdateInstallSession {
 		PendingIntent pending = PendingIntent.getActivity(context, 0, resume,
 				PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 		manager.notify(operation, C.NOTIFICATION_ID_INSTALL_CONFIRMATION,
+				com.mishiranu.dashchan.content.security.AppSecurity.prepareNotification(context, operation, C.NOTIFICATION_ID_INSTALL_CONFIRMATION,
 				new NotificationCompat.Builder(context, C.NOTIFICATION_CHANNEL_UPDATES)
 						.setSmallIcon(android.R.drawable.stat_sys_download_done)
 						.setContentTitle(context.getString(R.string.update_downloaded))
 						.setContentText(context.getString(R.string.tap_to_install_update__sentence))
-						.setContentIntent(pending).setAutoCancel(true).build());
+						.setContentIntent(pending).setAutoCancel(true).build()));
 	}
 }

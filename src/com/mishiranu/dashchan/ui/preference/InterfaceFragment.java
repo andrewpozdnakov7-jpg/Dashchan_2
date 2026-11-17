@@ -41,21 +41,10 @@ public class InterfaceFragment extends PreferenceFragment {
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 						.pushFragment(new AppearanceSettingsFragment()));
 
-		addHeader(R.string.navigation_drawer);
-		addButton(R.string.drawer_section_order, R.string.drawer_section_order_entry_summary)
+		addHeader(R.string.navigation);
+		addButton(R.string.navigation_drawer, R.string.navigation_drawer_settings_summary)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
-						.pushFragment(new DrawerOrderFragment()));
-		addCheck(true, Preferences.KEY_COLLAPSE_LONG_OPEN_THREADS,
-				Preferences.DEFAULT_COLLAPSE_LONG_OPEN_THREADS,
-				R.string.collapse_long_open_threads,
-				R.string.collapse_long_open_threads__summary);
-		addList(Preferences.KEY_PAGES_LIST, enumList(Preferences.PagesListMode.values(), o -> o.value),
-				Preferences.DEFAULT_PAGES_LIST.value, R.string.headers_order,
-				enumResList(Preferences.PagesListMode.values(), o -> o.titleResId));
-		addList(Preferences.KEY_DRAWER_INITIAL_POSITION,
-				enumList(Preferences.DrawerInitialPosition.values(), o -> o.value),
-				Preferences.DEFAULT_DRAWER_INITIAL_POSITION.value, R.string.initial_position,
-				enumResList(Preferences.DrawerInitialPosition.values(), o -> o.titleResId));
+						.pushFragment(new NavigationDrawerSettingsFragment()));
 
 		addHeader(R.string.threads_list);
 		addCheck(true, Preferences.KEY_PAGE_BY_PAGE, Preferences.DEFAULT_PAGE_BY_PAGE,

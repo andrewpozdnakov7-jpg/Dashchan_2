@@ -19,6 +19,7 @@ public final class MotionDialogBuilder extends AlertDialog.Builder {
 	private boolean customTitle;
 	private boolean destructive;
 	private View inputView;
+	private View explicitContent;
 	public MotionDialogBuilder(Context context) { super(context); }
 	public MotionDialogBuilder(Context context, int theme) { super(context, theme); }
 	/** Explicit opt-in: specialized posting/player/lock dialogs retain their existing constructor. */
@@ -39,10 +40,10 @@ public final class MotionDialogBuilder extends AlertDialog.Builder {
 		return this;
 	}
 	@Override public MotionDialogBuilder setView(View view) {
-		inputView = null; super.setView(view); return this;
+		inputView = null; explicitContent = view; super.setView(view); return this;
 	}
 	@Override public MotionDialogBuilder setView(int layoutResId) {
-		inputView = null; super.setView(layoutResId); return this;
+		inputView = null; explicitContent = null; super.setView(layoutResId); return this;
 	}
 	/**
 	 * Native AlertController chooses message OR list. Keep both without list headers that
@@ -100,8 +101,10 @@ public final class MotionDialogBuilder extends AlertDialog.Builder {
 			title.setPaddingRelative(padding, padding, padding, Math.round(16 * getContext().getResources().getDisplayMetrics().density));
 			InterfaceAppearance.standardDialogTitle(title); super.setCustomTitle(title);
 		}
+		boolean compactForm = standard && CompactDialogUi.prepareForm(explicitContent);
 		AlertDialog dialog = super.create();
-		if (inputView != null && standard && InterfaceAppearance.isEnabled(getContext())) {
+		if (compactForm) dialog.setView(explicitContent, 0, 0, 0, 0);
+		if (!compactForm && inputView != null && standard && InterfaceAppearance.isEnabled(getContext())) {
 			int inset = getContext().getResources().getDimensionPixelSize(R.dimen.dialog_padding_text);
 			// This spacing overload is public on AlertDialog, not on its Builder.
 			// Configure before show; do not eagerly create the dialog's content.

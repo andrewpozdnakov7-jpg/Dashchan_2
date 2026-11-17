@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<string name="page_cleanup_notice_message">You can now automatically close old and deleted threads in the side menu’s Pages section. Choose an inactivity period or a maximum number of threads.\n\nThe feature is off by default. History, favorites and saved files are kept.</string>
+	<string name="page_cleanup_notice_limit">This notice will appear no more than three times.</string>
+	<string name="page_cleanup_notice_keep_off">Leave disabled</string>
+	<string name="page_cleanup_notice_settings">Go to settings</string>
+	<string name="page_cleanup_notice_save_failed">Could not save the reminder state. Please try again.</string>
+</resources>

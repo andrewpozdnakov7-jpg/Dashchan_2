@@ -407,9 +407,6 @@
     <string name="skip">Salta</string>
     <string name="some_posts_have_been_edited">Alcuni post sono stati modificati</string>
     <string name="sorting">Ordina</string>
-    <string name="specific_to_internal_services__sentence">Questa opzione riguarda unicamente alcuni servizi interni
-		come captcha e aggiornamenti client. L\'HTTPS per i forum va gestito
-		nelle impostazioni delle rispettive board.</string>
     <string name="spoiler">Spoiler</string>
     <string name="spoilers">Spoiler</string>
     <string name="ssl_https_error">Errore SSL/HTTPS</string>
@@ -473,8 +470,6 @@
     <string name="video_diagnostics_save_failed">Impossibile salvare il log diagnostico</string>
     <string name="video_diagnostics_privacy_notice">Riproduci il problema, poi torna qui e interrompi la registrazione. Se il video si blocca, attendi 5–10 secondi.\n\nIl rapporto contiene modello del dispositivo, versioni di app e Android ed eventi tecnici. La modalità estesa aggiunge dettagli su video, gesti Indietro e cache. Gli eventi tecnici possono apparire anche nel log di sistema Android.\n\nNon contiene URL, testo dei post, dati multimediali, account o identificatori del dispositivo. Nulla viene caricato automaticamente.</string>
     <string name="use_gms_security_provider">Usa provider sicurezza GMS</string>
-    <string name="use_javascript_for_recaptcha">Usa JavaScript per i reCAPTCHA</string>
-    <string name="use_javascript_for_recaptcha__summary">Potrebbe semplificare i reCAPTCHA di Google</string>
     <string name="user_authorization">Autorizzazione utente</string>
     <string name="user_boards">Board utenti</string>
     <string name="user_interface">Interfaccia utente</string>

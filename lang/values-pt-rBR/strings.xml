@@ -313,8 +313,6 @@
 	<string name="similar_to_number__format">Similar a %s</string>
 	<string name="some_posts_have_been_edited">Alguns posts foram editados</string>
 	<string name="sorting">Ordenar</string>
-	<string name="specific_to_internal_services__sentence">A configuração a seguir só funciona no captcha ou
-		na atualização do aplicativo. Você pode configurar HTTPS para boards individuas.</string>
 	<string name="spoiler">Spoiler</string>
 	<string name="spoilers">Spoilers</string>
 	<string name="ssl_https_error">Erro de SSL/HTTPS</string>

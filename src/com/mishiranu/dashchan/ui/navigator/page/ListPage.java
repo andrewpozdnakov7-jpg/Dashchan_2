@@ -86,6 +86,12 @@ public abstract class ListPage implements LifecycleOwner, PullableWrapper.PullCa
 	private InitRequest initRequest;
 	private InitSearch initSearch;
 
+	protected final void setThreadDeleted(boolean deleted) {
+		if (fragment != null && fragment.getArguments() != null) {
+			fragment.getArguments().putBoolean(com.mishiranu.dashchan.ui.navigator.PageItem.EXTRA_THREAD_DELETED, deleted);
+		}
+	}
+
 	public final void init(Page page, Callback callback, Fragment fragment, PaddedRecyclerView recyclerView,
 			ListPosition listPosition, UiManager uiManager, Retainable retainableExtra, Parcelable parcelableExtra,
 			InitRequest initRequest, InitSearch initSearch) {

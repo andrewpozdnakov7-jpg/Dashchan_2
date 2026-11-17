@@ -669,8 +669,7 @@ public class DraftsStorage extends StorageManager.Storage<Pair<List<DraftsStorag
 			public CaptchaDraft createFromParcel(Parcel source) {
 				String captchaType = source.readString();
 				String captchaStateString = source.readString();
-				ReadCaptchaTask.CaptchaState captchaState = captchaStateString != null
-						? ReadCaptchaTask.CaptchaState.valueOf(captchaStateString) : null;
+				ReadCaptchaTask.CaptchaState captchaState = ReadCaptchaTask.CaptchaState.fromSaved(captchaStateString);
 				ChanPerformer.CaptchaData captchaData = source.readByte() != 0
 						? ChanPerformer.CaptchaData.CREATOR.createFromParcel(source) : null;
 				String loadedCaptchaType = source.readString();

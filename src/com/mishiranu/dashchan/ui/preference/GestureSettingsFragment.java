@@ -23,6 +23,7 @@ import androidx.fragment.app.DialogFragment;
 import androidx.fragment.app.FragmentManager;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
+import com.mishiranu.dashchan.media.VideoPlayer;
 import com.mishiranu.dashchan.ui.FragmentHandler;
 import com.mishiranu.dashchan.ui.preference.core.Preference;
 import com.mishiranu.dashchan.ui.preference.core.PreferenceFragment;
@@ -82,6 +83,9 @@ public class GestureSettingsFragment extends PreferenceFragment {
 				seekIntervalEntries);
 		addDependency(Preferences.KEY_VIDEO_DOUBLE_TAP_SEEK_INTERVAL,
 				Preferences.KEY_VIDEO_DOUBLE_TAP_SEEK, true);
+		addCheck(true, Preferences.KEY_VIDEO_ZOOM_GESTURES, Preferences.DEFAULT_VIDEO_ZOOM_GESTURES,
+				R.string.video_zoom_gestures, R.string.video_zoom_gestures__summary)
+				.setEnabled(VideoPlayer.loadLibraries(requireContext()).first);
 	}
 
 	private CharSequence formatAreaSummary() {
@@ -255,6 +259,7 @@ public class GestureSettingsFragment extends PreferenceFragment {
 			com.mishiranu.dashchan.widget.InterfaceAppearance.standardCustomContent(layout, previewContainer);
 			com.mishiranu.dashchan.widget.InterfaceAppearance.standardCustomInsets(layout);
 			com.mishiranu.dashchan.widget.InterfaceAppearance.standardCustomCaption(hint);
+			com.mishiranu.dashchan.widget.CompactDialogUi.markForm(scrollView, layout);
 			return MotionDialogBuilder.standard(context)
 					.setTitle(R.string.video_volume_gesture_area)
 					.setView(scrollView)

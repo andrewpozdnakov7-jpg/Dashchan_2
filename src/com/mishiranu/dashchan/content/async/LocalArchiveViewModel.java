@@ -55,6 +55,7 @@ public class LocalArchiveViewModel extends TaskViewModel<SendLocalArchiveTask,
 	private final TaskFactory taskFactory;
 	private final Executor executor;
 	private boolean started;
+	private SendLocalArchiveTask.DownloadResult pendingDownload;
 	public final MutableLiveData<Integer> progress = new MutableLiveData<>();
 
 	public LocalArchiveViewModel() {
@@ -84,6 +85,17 @@ public class LocalArchiveViewModel extends TaskViewModel<SendLocalArchiveTask,
 
 	@Override
 	public void onLocalArchivationComplete(SendLocalArchiveTask.DownloadResult result) {
+		pendingDownload = result;
 		handleResult(new PreparationResult(result));
+	}
+
+	/** Transfer before dismissing the preparation dialog, whose ViewModel is about to be cleared. */
+	public void handOff(SendLocalArchiveTask.DownloadResult result) {
+		if (pendingDownload == result) pendingDownload = null;
+	}
+
+	@Override protected void onCleared() {
+		super.onCleared();
+		if (pendingDownload != null) { pendingDownload.cancel(); pendingDownload = null; }
 	}
 }

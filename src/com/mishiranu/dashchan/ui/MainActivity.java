@@ -168,6 +168,11 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	private final ArrayList<SavedPageItem> stackPageItems = new ArrayList<>();
 	private final ArrayList<SavedPageItem> preservedPageItems = new ArrayList<>();
 	private PageItem currentPageItem;
+	private static final PageCleanupPolicy.AgeGate PAGE_CLEANUP_AGE_GATE = new PageCleanupPolicy.AgeGate();
+	private boolean pageCleanupCountDirty = true, pageCleanupDeletedDirty = true;
+	private boolean pageCleanupPosted, pageCleanupRunning;
+	private int pageCleanupRetries;
+	private final Runnable pageCleanup = this::runPageCleanup;
 
 	private UiManager uiManager;
 	private InstanceViewModel instanceViewModel;
@@ -306,6 +311,13 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 				&& ChanManager.getInstance().getFirstUntrustedExtension() == null);
 		CrashReportPrompt.install(this, () -> storageRequestState == StorageRequestState.NONE
 				&& ChanManager.getInstance().getFirstUntrustedExtension() == null);
+		PageCleanupNotice.install(this, () -> storageRequestState == StorageRequestState.NONE
+				&& ChanManager.getInstance().getFirstUntrustedExtension() == null
+				&& !contentNavigation.isPending() && !contentNavigation.hasRequests() && !backGestureStarted
+				&& !isContentObscured() && !isInPictureInPictureMode()
+				&& (screenMotion == null || !screenMotion.hasActiveSession())
+				&& (threadMotion == null || !threadMotion.hasActiveSession())
+				&& getSupportFragmentManager().findFragmentByTag(GalleryOverlay.class.getName()) == null);
 	}
 
 	private static final class CreationLayout {
@@ -800,6 +812,146 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		rebasePagesRealtime(stackPageItems, offset);
 	}
 
+	private static PageCleanupPolicy.Key pageCleanupKey(Page page) {
+		return page != null && page.content == Page.Content.POSTS
+				? new PageCleanupPolicy.Key(page.chanName, page.boardName, page.threadNumber) : null;
+	}
+
+	private void touchPageVisit(ContentFragment fragment, boolean mayBeNew) {
+		if (!(fragment instanceof PageFragment)) return;
+		PageFragment pageFragment = (PageFragment) fragment;
+		Bundle arguments = pageFragment.getArguments();
+		if (pageFragment.getPage().content != Page.Content.POSTS || arguments == null) return;
+		if (mayBeNew && !arguments.containsKey(PageItem.EXTRA_LAST_VISIT_TIME)) pageCleanupCountDirty = true;
+		arguments.putLong(PageItem.EXTRA_LAST_VISIT_TIME, System.currentTimeMillis());
+	}
+
+	private void requestPageCleanup() {
+		if (!Preferences.isPageCleanupEnabled() || pageCleanupPosted || pageCleanupRunning
+				|| isFinishing() || isDestroyed()) return;
+		boolean ageDue = Preferences.getPageCleanupAgeDays() > 0
+				&& PAGE_CLEANUP_AGE_GATE.isDue(SystemClock.elapsedRealtime());
+		if (!ageDue && !pageCleanupCountDirty && !pageCleanupDeletedDirty) return;
+		pageCleanupRetries = 3;
+		pageCleanupPosted = true;
+		ConcurrentUtils.HANDLER.postDelayed(pageCleanup, 750);
+	}
+
+	private void runPageCleanup() {
+		pageCleanupPosted = false;
+		if (!Preferences.isPageCleanupEnabled() || isFinishing() || isDestroyed()
+				|| !getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.RESUMED)
+				|| !com.mishiranu.dashchan.content.security.ProfileGeneration.canWrite(this, securityProfileGeneration)) return;
+		// Never rewrite a destination while a gesture, animation or queued navigation owns the stack.
+		boolean busy = !hasWindowFocus() || getSupportFragmentManager().isStateSaved()
+				|| contentNavigation.isPending() || contentNavigation.hasRequests() || backGestureStarted
+				|| isWebBackBusy() || isSearchBackBusy() || predictiveBack != null && predictiveBack.isBusy()
+				|| drawerMotion != null && drawerMotion.isBusy() || drawerNavigation.isTransitionRunning()
+				|| screenMotion != null && screenMotion.hasActiveSession()
+				|| threadMotion != null && threadMotion.hasActiveSession()
+				|| getSupportFragmentManager().findFragmentByTag(GalleryOverlay.class.getName()) != null;
+		if (busy) {
+			// Bounded retries only during this event; no polling timer or background worker.
+			if (pageCleanupRetries-- > 0) {
+				pageCleanupPosted = true;
+				ConcurrentUtils.HANDLER.postDelayed(pageCleanup, 750);
+			}
+			return;
+		}
+		long now = System.currentTimeMillis(), elapsed = SystemClock.elapsedRealtime();
+		int ageDays = Preferences.getPageCleanupAgeDays(), maximum = Preferences.getPageCleanupLimit();
+		boolean checkAge = ageDays > 0 && PAGE_CLEANUP_AGE_GATE.isDue(elapsed);
+		boolean checkLimit = pageCleanupCountDirty && maximum > 0;
+		boolean checkDeleted = Preferences.isPageCleanupDeleted();
+		boolean deletedDue = pageCleanupDeletedDirty && checkDeleted;
+		if (!checkAge && !checkLimit && !deletedDue) {
+			pageCleanupCountDirty = false; pageCleanupDeletedDirty = false;
+			return;
+		}
+		pageCleanupCountDirty = false; pageCleanupDeletedDirty = false;
+		if (checkAge) PAGE_CLEANUP_AGE_GATE.checked(elapsed);
+		List<RedditPageStorage.Entry> redditPages = RedditPageStorage.getInstance().getPages();
+		if (checkLimit && !checkAge && !deletedDue
+				&& stackPageItems.size() + preservedPageItems.size() + redditPages.size() <= maximum) return;
+		ContentFragment current = getCurrentFragment("FragmentAccess/pageCleanup");
+		Page protectedPage = current instanceof PageFragment ? ((PageFragment) current).getPage() : null;
+		if (protectedPage == null) {
+			SavedPageItem previous = getLastEnabledSavedPage();
+			if (previous != null) protectedPage = getSavedPage(previous);
+		}
+		PageCleanupPolicy.Key protectedKey = pageCleanupKey(protectedPage);
+		boolean keepFavorites = Preferences.isPageCleanupKeepFavorites();
+		java.util.LinkedHashMap<PageCleanupPolicy.Key, PageCleanupPolicy.Entry> candidates = new java.util.LinkedHashMap<>();
+		for (SavedPageItem saved : new ConcatIterable<>(preservedPageItems, stackPageItems)) {
+			Page page = getSavedPage(saved);
+			PageCleanupPolicy.Key key = pageCleanupKey(page);
+			if (key == null || saved.stackItem.arguments == null) continue;
+			long visited = saved.stackItem.arguments.getLong(PageItem.EXTRA_LAST_VISIT_TIME, 0);
+			if (visited <= 0 || visited > now) {
+				// Upgrade/restored pages have no wall clock date: give them a full grace period.
+				visited = now;
+				saved.stackItem.arguments.putLong(PageItem.EXTRA_LAST_VISIT_TIME, visited);
+			}
+			long order = now - Math.max(0L, elapsed - saved.createdRealtime);
+			boolean protect = key.equals(protectedKey) || keepFavorites && FavoritesStorage.getInstance()
+					.hasFavorite(page.chanName, page.boardName, page.threadNumber);
+			WatcherService.Counter counter = checkDeleted ? watcherServiceClient
+					.getCounter(page.chanName, page.boardName, page.threadNumber) : null;
+			boolean deleted = checkDeleted && (saved.stackItem.arguments.getBoolean(PageItem.EXTRA_THREAD_DELETED, false)
+					|| counter != null && counter.deleted && !counter.error);
+			PageCleanupPolicy.Entry previous = candidates.get(key);
+			if (previous == null || order > previous.order) {
+				candidates.put(key, new PageCleanupPolicy.Entry(key, visited, order, protect, deleted));
+			}
+		}
+		String currentReddit = getCurrentRedditPageUrl();
+		for (RedditPageStorage.Entry entry : redditPages) {
+			if (entry.type != RedditPageStorage.Type.THREAD) continue;
+			PageCleanupPolicy.Key key = new PageCleanupPolicy.Key(DrawerForm.CHAN_REDDIT, entry.subreddit, entry.threadId);
+			boolean protect = entry.url.equals(currentReddit) || keepFavorites && FavoritesStorage.getInstance()
+					.hasFavorite(key.chan, key.board, key.thread);
+			candidates.put(key, new PageCleanupPolicy.Entry(key, entry.timestamp, entry.timestamp, protect, false));
+		}
+		java.util.Set<PageCleanupPolicy.Key> remove = PageCleanupPolicy.select(new ArrayList<>(candidates.values()),
+				checkLimit ? maximum : 0, ageDays * 86400000L, now, checkAge);
+		if (remove.isEmpty()) return;
+		pageCleanupRunning = true;
+		try {
+			Iterator<SavedPageItem> iterator = new ConcatIterable<>(preservedPageItems, stackPageItems).iterator();
+			while (iterator.hasNext()) {
+				if (remove.contains(pageCleanupKey(getSavedPage(iterator.next())))) iterator.remove();
+			}
+			ArrayList<RedditPageStorage.Entry> redditTargets = new ArrayList<>();
+			for (RedditPageStorage.Entry entry : redditPages) {
+				if (entry.type == RedditPageStorage.Type.THREAD && remove.contains(new PageCleanupPolicy.Key(
+						DrawerForm.CHAN_REDDIT, entry.subreddit, entry.threadId))) redditTargets.add(entry);
+			}
+			if (!redditTargets.isEmpty()) RedditPageStorage.getInstance().removeThreads(redditTargets, currentReddit);
+			pruneClosedPageRetainables(current);
+			pruneBackPreviews(current);
+			drawerForm.updateItems(true, false);
+			invalidateHomeUpState();
+			savePagesSession();
+			VideoDiagnostics.recordUi("page_cleanup closed=" + remove.size() + " age_checked=" + checkAge);
+		} finally {
+			pageCleanupRunning = false;
+		}
+	}
+
+	private void pruneClosedPageRetainables(ContentFragment current) {
+		HashSet<String> retainIds = new HashSet<>();
+		if (current instanceof PageFragment) retainIds.add(((PageFragment) current).getRetainId());
+		for (SavedPageItem saved : new ConcatIterable<>(preservedPageItems, stackPageItems)) {
+			REFERENCE_FRAGMENT.setArguments(saved.stackItem.arguments);
+			retainIds.add(REFERENCE_FRAGMENT.getRetainId());
+		}
+		Iterator<HashMap.Entry<String, ListPage.Retainable>> iterator = instanceViewModel.extras.entrySet().iterator();
+		while (iterator.hasNext()) {
+			HashMap.Entry<String, ListPage.Retainable> entry = iterator.next();
+			if (!retainIds.contains(entry.getKey())) { entry.getValue().clear(); iterator.remove(); }
+		}
+	}
+
 	private static void rebasePagesRealtime(ArrayList<SavedPageItem> items, long offset) {
 		for (int i = 0; i < items.size(); i++) {
 			SavedPageItem item = items.get(i);
@@ -874,6 +1026,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 				if (!contentNavigation.complete(ticket)) return;
 				if (!isFinishing() && !isDestroyed()) {
 					currentPageItem = pageItem;
+					requestPageCleanup();
 					PerformanceDiagnostics.run("ContentNavigation/committedConfiguration",
 							() -> updatePostFragmentConfiguration(fragment));
 					scheduleSystemBackCallbackUpdate();
@@ -1720,6 +1873,10 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		if (currentFragment instanceof PageFragment) {
 			// currentPageItem == null means page was deleted
 			if (currentPageItem != null) {
+				Bundle outgoingArguments = currentFragment.getArguments();
+				if (outgoingArguments != null && outgoingArguments.getBoolean(PageItem.EXTRA_THREAD_DELETED, false)) {
+					pageCleanupDeletedDirty = true;
+				}
 				stackPageItems.add(currentPageItem.toSaved(fragmentManager,
 						(PageFragment) currentFragment));
 			}
@@ -1744,6 +1901,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		}
 		if (pageItem != null) {
 			pageItem.createdRealtime = SystemClock.elapsedRealtime();
+			touchPageVisit(fragment, true);
 		}
 		// Configuration belongs to this destination and runs after its own commit, not via a getter flush.
 		try {
@@ -1755,24 +1913,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		}
 
 		if (currentFragment instanceof PageFragment || fragment instanceof PageFragment) {
-			HashSet<String> retainIds = new HashSet<>(1 + stackPageItems.size() + preservedPageItems.size());
-			if (fragment instanceof PageFragment) {
-				retainIds.add(((PageFragment) fragment).getRetainId());
-			}
-			for (SavedPageItem savedPageItem : new ConcatIterable<>(preservedPageItems, stackPageItems)) {
-				REFERENCE_FRAGMENT.setArguments(savedPageItem.stackItem.arguments);
-				String retainId = REFERENCE_FRAGMENT.getRetainId();
-				retainIds.add(retainId);
-			}
-			Iterator<HashMap.Entry<String, ListPage.Retainable>> iterator =
-					instanceViewModel.extras.entrySet().iterator();
-			while (iterator.hasNext()) {
-				HashMap.Entry<String, ListPage.Retainable> entry = iterator.next();
-				if (!retainIds.contains(entry.getKey())) {
-					entry.getValue().clear();
-					iterator.remove();
-				}
-			}
+			pruneClosedPageRetainables(fragment);
 		}
 		scheduleSystemBackCallbackUpdate();
 	}
@@ -1972,6 +2113,8 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	@Override
 	protected void onResume() {
 		super.onResume();
+		touchPageVisit(getCurrentFragment("FragmentAccess/pageVisitResume"), false);
+		requestPageCleanup();
 		backGestureAborted = false;
 		backInvocationHandled = false;
 		prepareBackPreview();
@@ -2093,6 +2236,9 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	@Override
 	protected void onPause() {
+		ConcurrentUtils.HANDLER.removeCallbacks(pageCleanup);
+		pageCleanupPosted = false;
+		touchPageVisit(getCurrentFragment("FragmentAccess/pageVisitPause"), false);
 		if (replySwipeOverlap != null) replySwipeOverlap.finish();
 		if (predictiveBack != null) predictiveBack.recordState("host_pause changing_configuration="
 				+ isChangingConfigurations());
@@ -2139,6 +2285,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	@Override
 	protected void onDestroy() {
+		ConcurrentUtils.HANDLER.removeCallbacks(pageCleanup);
 		if (replySwipeOverlap != null) replySwipeOverlap.close();
 		if (drawerForm != null) drawerForm.dispose();
 		if (expandedScreen != null) expandedScreen.dispose();
@@ -2872,6 +3019,11 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	private final SharedPreferences.Listener preferencesListener = key -> {
 		drawerForm.updatePreferences();
+		if (Preferences.isPageCleanupKey(key)) {
+			PAGE_CLEANUP_AGE_GATE.reset();
+			pageCleanupCountDirty = true; pageCleanupDeletedDirty = true;
+			requestPageCleanup();
+		}
 		if (Preferences.KEY_PREDICTIVE_BACK.equals(key) || Preferences.KEY_NEW_INTERFACE_MOTION.equals(key)) {
 			finishLocalToolbarMotion();
 			com.mishiranu.dashchan.widget.SurfaceMotion.updatePopupPolicies();
@@ -3039,6 +3191,9 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 
 	@Override
 	public void onRedditPagesChanged() {
+		if (pageCleanupRunning) return;
+		pageCleanupCountDirty = true;
+		requestPageCleanup();
 		if (drawerForm != null) {
 			drawerForm.updateItems(true, false);
 		}
@@ -3784,6 +3939,10 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	public void onWatcherUpdate(String chanName, String boardName, String threadNumber,
 			WatcherService.Counter counter) {
 		drawerForm.onWatcherUpdate(chanName, boardName, threadNumber, counter);
+		if (counter.deleted && !counter.error && Preferences.isPageCleanupDeleted()) {
+			pageCleanupDeletedDirty = true;
+			requestPageCleanup();
+		}
 	}
 
 	@Override

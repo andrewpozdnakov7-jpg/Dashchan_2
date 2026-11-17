@@ -63,12 +63,15 @@ does not receive the built-in player's exception and may close with protection o
 
 ## Notifications
 
-**Hide reply text in the background** is on by default. Reply text is visible in
-an unlocked foreground app, hidden in the background or while locked. Disable
-this option only with fresh approval; Android's notification/lock-screen settings
-also apply. Download, posting and audio notification details remain hidden while
-protection is enabled, independently of this reply option. Previously saved system
-notification history and captures cannot be recalled.
+**Hide reply and notification text in background** is on by default when app protection is enabled.
+One checkbox controls replies, downloads, posting, player, conversion and updates. Contents are visible in an unlocked
+foreground app and hidden in the background or while locked. Disabling the option requires fresh approval; Android's
+notification/lock-screen settings still apply. The previous checkbox value is preserved.
+
+Still-active notifications change presentation silently; dismissed notices are never restored. Original service
+notification presentations are held only in process memory, bounded to the 32 latest entries. After process restart or
+entry eviction, details return on the producer's next notification update. Replies are rebuilt from unread replies.
+Previously saved system notification history and captures cannot be recalled.
 
 ## Additional PIN and cleanup
 

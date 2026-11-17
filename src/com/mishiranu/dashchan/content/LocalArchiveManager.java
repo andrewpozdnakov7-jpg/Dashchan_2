@@ -25,6 +25,7 @@ import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.jsoup.Jsoup;
 
 public class LocalArchiveManager {
 	public static final String DIRECTORY_ARCHIVE = "Archive";
@@ -156,10 +157,12 @@ public class LocalArchiveManager {
 	}
 
 	public static boolean delete(Item item) {
+		if (!safeDirectory(item.name)) return false;
 		boolean success;
 		if (item.treeUri == null) {
 			success = deleteDefault(item.name);
 		} else {
+			String resourceDirectory = resourceDirectory(item);
 			ContentResolver resolver = MainApplication.getInstance().getContentResolver();
 			if (!hasWritePermission(resolver, item.treeUri)) {
 				return false;
@@ -167,7 +170,9 @@ public class LocalArchiveManager {
 			try {
 				success = delete(resolver, item.htmlUri) & delete(resolver, item.zipUri)
 						& delete(resolver, item.manifestUri);
-				success &= delete(resolver, findDocument(item.treeUri, item.name));
+				if (success && !hasResourceFamily(item.treeUri, resourceDirectory)) {
+					success = delete(resolver, findDocument(item.treeUri, resourceDirectory));
+				}
 			} catch (RuntimeException e) {
 				success = false;
 			}
@@ -181,15 +186,144 @@ public class LocalArchiveManager {
 	}
 
 	public static boolean deleteDefault(String name) {
-		if (!DataFile.isValidSegment(name)) {
+		try { return deleteDefaultInternal(name); }
+		catch (RuntimeException e) { return false; }
+	}
+
+	private static boolean deleteDefaultInternal(String name) {
+		if (!safeDirectory(name)) {
 			return false;
 		}
 		DataFile directory = DataFile.obtain(DataFile.Target.DOWNLOADS, DIRECTORY_ARCHIVE);
+		String resources = resourceDirectory(defaultItem(name));
 		boolean success = delete(directory.getChild(name + ".html"))
 				& delete(directory.getChild(name + ".htm"))
 				& delete(directory.getChild(name + ".zip"))
 				& delete(directory.getChild(name + ".json"));
-		return deleteRecursively(directory.getChild(name)) & success;
+		return success && (hasResourceFamily(null, resources) || deleteRecursively(directory.getChild(resources)));
+	}
+
+	private static Item defaultItem(String name) {
+		DataFile root = DataFile.obtain(DataFile.Target.DOWNLOADS, DIRECTORY_ARCHIVE);
+		DataFile html = root.getChild(name + ".html"), zip = root.getChild(name + ".zip"), manifest = root.getChild(name + ".json");
+		if (!html.exists()) html = root.getChild(name + ".htm");
+		return new Item("default", name, null, html.exists() ? html : null, zip.exists() ? zip : null,
+				manifest.exists() ? manifest : null, null, null, null, null, 0, 0);
+	}
+
+	private static boolean safeDirectory(String name) {
+		return DataFile.isValidSegment(name) && name.indexOf('/') < 0 && name.indexOf('\\') < 0;
+	}
+
+	private static boolean familyName(String name, String resources) {
+		if (name.equals(resources)) return true;
+		if (!name.startsWith(resources + "_")) return false;
+		String suffix = name.substring(resources.length() + 1);
+		return !suffix.isEmpty() && suffix.chars().allMatch(value -> value >= '0' && value <= '9');
+	}
+
+	public static String resourceDirectory(Item item) {
+		return resourceDirectory(item, readManifest(item));
+	}
+
+	private static String resourceDirectory(Item item, JSONObject manifest) {
+		String resources = manifest != null ? manifest.optString("resources", "") : "";
+		if (resources.isEmpty() && item.hasHtml()) {
+			try {
+				org.jsoup.nodes.Element meta = Jsoup.parse(new String(readHtml(item), StandardCharsets.UTF_8))
+						.selectFirst("meta[name=slooop-local-archive-resources]");
+				if (meta != null) resources = meta.attr("content");
+			} catch (IOException | RuntimeException ignored) {}
+		}
+		return safeDirectory(resources) && familyName(item.name, resources) ? resources : item.name;
+	}
+
+	/** A failed directory listing retains data. Metadata-only interrupted snapshots count as references too. */
+	private static boolean hasResourceFamily(Uri tree, String resources) {
+		try {
+			java.util.HashSet<String> seen = new java.util.HashSet<>();
+			if (tree == null) {
+				List<DataFile> children = DataFile.obtain(DataFile.Target.DOWNLOADS, DIRECTORY_ARCHIVE).getChildren();
+				if (children == null) return true;
+				for (DataFile child : children) if (!child.isDirectory() && familyFile(child.getName(), resources)) {
+					String name = snapshotName(child.getName());
+					if (seen.add(name) && referencesResources(defaultItem(name), resources)) return true;
+				}
+			} else {
+				ArrayList<Item> items = new ArrayList<>();
+				collectTree(items, tree);
+				HashMap<String, Item> byName = new HashMap<>();
+				for (Item item : items) byName.put(item.name, item);
+				ContentResolver resolver = MainApplication.getInstance().getContentResolver();
+				Uri children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree));
+				try (Cursor cursor = resolver.query(children, new String[] {DocumentsContract.Document.COLUMN_DISPLAY_NAME}, null, null, null)) {
+					if (cursor == null) return true;
+					while (cursor.moveToNext()) if (familyFile(cursor.getString(0), resources)) {
+						String name = snapshotName(cursor.getString(0));
+						if (seen.add(name)) {
+							Item item = byName.get(name);
+							if (item == null || referencesResources(item, resources)) return true;
+						}
+					}
+				}
+			}
+			return false;
+		} catch (RuntimeException e) { return true; }
+	}
+
+	private static boolean referencesResources(Item item, String resources) {
+		JSONObject manifest = readManifest(item);
+		if (manifest == null) {
+			// Unknown metadata is not evidence that this snapshot no longer needs its media.
+			if (!item.hasHtml()) return true;
+			try {
+				org.jsoup.nodes.Element meta = Jsoup.parse(new String(readHtml(item), StandardCharsets.UTF_8))
+						.selectFirst("meta[name=slooop-local-archive-resources]");
+				if (meta == null) return resources.equals(item.name); // Legacy independent resource folder.
+				String declared = meta.attr("content");
+				return !safeDirectory(declared) || !familyName(item.name, declared) || resources.equals(declared);
+			} catch (IOException | RuntimeException e) { return true; }
+		}
+		return resources.equals(resourceDirectory(item, manifest));
+	}
+
+	private static String snapshotName(String fileName) {
+		String extension = StringUtils.getFileExtension(fileName);
+		return fileName.substring(0, fileName.length() - extension.length() - 1);
+	}
+
+	private static boolean familyFile(String name, String resources) {
+		String extension = StringUtils.getFileExtension(name);
+		return ("html".equalsIgnoreCase(extension) || "htm".equalsIgnoreCase(extension)
+				|| "json".equalsIgnoreCase(extension) || "zip".equalsIgnoreCase(extension))
+				&& familyName(snapshotName(name), resources);
+	}
+
+	/** Called only after the new snapshot and every requested resource are complete. */
+	public static boolean deleteSuperseded(String currentName) {
+		Item current = defaultItem(currentName);
+		JSONObject identity = readManifest(current);
+		if (identity == null) return false;
+		String resources = resourceDirectory(current);
+		List<DataFile> children = DataFile.obtain(DataFile.Target.DOWNLOADS, DIRECTORY_ARCHIVE).getChildren();
+		if (children == null) return false;
+		java.util.HashSet<String> names = new java.util.HashSet<>();
+		for (DataFile child : children) {
+			String fileName = child.getName(), extension = StringUtils.getFileExtension(fileName);
+			if (familyFile(fileName, resources)) names.add(fileName.substring(0, fileName.length() - extension.length() - 1));
+		}
+		boolean success = true;
+		for (String name : names) {
+			if (name.equals(currentName)) continue;
+			Item previous = defaultItem(name);
+			JSONObject manifest = readManifest(previous);
+			if (manifest != null && MANIFEST_SCHEMA.equals(manifest.optString("schema"))
+					&& resources.equals(resourceDirectory(previous))
+					&& identity.optString("chan").equals(manifest.optString("chan"))
+					&& identity.optString("board").equals(manifest.optString("board"))
+					&& identity.optString("thread").equals(manifest.optString("thread"))) success &= delete(previous);
+		}
+		return success;
 	}
 
 	private static boolean hasWritePermission(ContentResolver resolver, Uri treeUri) {
@@ -374,6 +508,20 @@ public class LocalArchiveManager {
 	}
 
 	public static boolean createZip(String archiveName, List<String> files, List<String> thumbnails) {
+		return createZip(archiveName, archiveName, files, thumbnails);
+	}
+
+	/** Rewrite only the newly staged snapshot. A failure never modifies its previous snapshot. */
+	public static void writeDefaultManifest(String archiveName, JSONObject manifest) throws IOException {
+		if (!safeDirectory(archiveName)) throw new IOException("Invalid archive name");
+		DataFile file = DataFile.obtain(DataFile.Target.DOWNLOADS, DIRECTORY_ARCHIVE).getChild(archiveName + ".json");
+		try (java.io.OutputStream output = file.openOutputStream()) {
+			output.write(manifest.toString().getBytes(StandardCharsets.UTF_8));
+		}
+	}
+
+	public static boolean createZip(String archiveName, String resources, List<String> files, List<String> thumbnails) {
+		if (!safeDirectory(archiveName) || !safeDirectory(resources) || !familyName(archiveName, resources)) return false;
 		DataFile archiveDirectory = DataFile.obtain(DataFile.Target.DOWNLOADS, DIRECTORY_ARCHIVE);
 		DataFile zipFile = archiveDirectory.getChild(archiveName + ".zip");
 		boolean success = false;
@@ -384,16 +532,17 @@ public class LocalArchiveManager {
 			DataFile htmlFile = archiveDirectory.getChild(archiveName + ".html");
 			putFile(output, archiveName + ".html", htmlFile);
 			for (String name : thumbnails) {
-				putFile(output, archiveName + "/" + DIRECTORY_THUMBNAILS + "/" + name,
-						archiveDirectory.getChild(archiveName + "/" + DIRECTORY_THUMBNAILS + "/" + name));
+				putFile(output, resources + "/" + DIRECTORY_THUMBNAILS + "/" + name,
+						archiveDirectory.getChild(resources + "/" + DIRECTORY_THUMBNAILS + "/" + name));
 			}
 			for (String name : files) {
-				putFile(output, archiveName + "/" + DIRECTORY_FILES + "/" + name,
-						archiveDirectory.getChild(archiveName + "/" + DIRECTORY_FILES + "/" + name));
+				putFile(output, resources + "/" + DIRECTORY_FILES + "/" + name,
+						archiveDirectory.getChild(resources + "/" + DIRECTORY_FILES + "/" + name));
 			}
 			success = true;
 			return true;
 		} catch (IOException e) {
+			com.mishiranu.dashchan.media.VideoDiagnostics.recordUi("archive_update stage=pack_io_failed type=" + e.getClass().getSimpleName());
 			return false;
 		} finally {
 			if (!success) {
@@ -511,7 +660,14 @@ public class LocalArchiveManager {
 		if (item == null || path == null || path.length() <= 1) {
 			return null;
 		}
-		return openResource(item, path.substring(1));
+		return uri.getBooleanQueryParameter("zipOnly", false) ? openZipResource(item, path.substring(1))
+				: openResource(item, path.substring(1));
+	}
+
+	public static InputStream openZipResource(Item item, String path) throws IOException {
+		if (item == null || !isSafePath(path)) return null;
+		InputStream input = open(item.zipFile, item.zipUri);
+		return input != null ? openZipEntry(input, path) : null;
 	}
 
 	private static InputStream open(DataFile file, Uri uri) throws IOException {

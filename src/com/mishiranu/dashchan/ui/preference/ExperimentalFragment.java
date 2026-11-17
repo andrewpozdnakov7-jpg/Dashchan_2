@@ -57,6 +57,8 @@ public class ExperimentalFragment extends PreferenceFragment {
 		addButton(R.string.toolbar_title_sizes, R.string.toolbar_title_sizes__summary)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 						.pushFragment(new ToolbarTitleSettingsFragment()));
+		CheckPreference compactDialogs = addExperimentalToggle(ExperimentalPreferenceDescriptors.compactDialogs());
+		if (compactDialogs != null) compactDialogs.setOnAfterChangeListener(p -> requireActivity().recreate());
 		addExperimentalToggle(ExperimentalPreferenceDescriptors.threadFabMenu());
 		if (com.mishiranu.dashchan.BuildConfig.ENABLE_VIDEO_COMPRESSION) addButton(R.string.compression_title, R.string.compression_summary).setOnClickListener(p ->
 				((FragmentHandler) requireActivity()).pushFragment(new VideoCompressionFragment()));

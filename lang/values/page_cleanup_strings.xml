@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<string name="page_cleanup">Automatic page cleanup</string>
+	<string name="page_cleanup_summary">Automatically close old and deleted threads in the side menu</string>
+	<string name="page_cleanup_enabled">Enable automatic cleanup</string>
+	<string name="page_cleanup_deleted">Close deleted threads</string>
+	<string name="page_cleanup_deleted_summary">When a regular refresh confirms the thread no longer exists. No additional requests are made.</string>
+	<string name="page_cleanup_age">Close after inactivity</string>
+	<string name="page_cleanup_age_unlimited">Do not close by age</string>
+	<string name="page_cleanup_limit">Maximum open threads</string>
+	<string name="page_cleanup_count_unlimited">No limit</string>
+	<string name="page_cleanup_keep_favorites">Keep favorite threads open</string>
+	<string name="page_cleanup_keep_favorites_summary">Favorite threads are kept in addition to the selected limit.</string>
+	<string name="page_cleanup_explanation">The current thread stays open. History, favorites and saved files are kept. Age is measured from the last visit.</string>
+	<plurals name="page_cleanup_days">
+		<item quantity="one">%d day</item>
+		<item quantity="other">%d days</item>
+	</plurals>
+	<plurals name="page_cleanup_threads">
+		<item quantity="one">%d thread</item>
+		<item quantity="other">%d threads</item>
+	</plurals>
+</resources>

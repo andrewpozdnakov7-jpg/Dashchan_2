@@ -25,6 +25,7 @@ import org.json.JSONObject;
 public final class SecurityStore {
 	public static final String ALLOW_SCREENSHOTS = "allow_screenshots";
 	public static final String HIDE_PIP_VIDEO = "hide_pip_video";
+	// Keep the persisted key and existing accessors: the user's previous choice now covers all notifications.
 	public static final String HIDE_REPLY_TEXT_BACKGROUND = "hide_reply_text_background";
 
 	public static boolean hideReplyTextInBackground(Context context) throws IOException {
@@ -33,6 +34,11 @@ public final class SecurityStore {
 	}
 
 	public static boolean shouldHideReplyText(Context context) {
+		return shouldHideNotificationText(context);
+	}
+
+	/** One content-visibility policy for replies and all other app-owned notifications. */
+	public static boolean shouldHideNotificationText(Context context) {
 		if (!com.mishiranu.dashchan.BuildConfig.ENABLE_APP_SECURITY_SETTINGS) return false;
 		try {
 			return update(context, s -> {

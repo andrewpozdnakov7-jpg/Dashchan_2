@@ -11,13 +11,10 @@ import chan.http.HttpException;
 import chan.http.HttpHolder;
 import chan.util.CommonUtils;
 import chan.util.StringUtils;
-import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.model.ErrorItem;
-import com.mishiranu.dashchan.content.net.CaptchaSolving;
 import com.mishiranu.dashchan.content.net.RecaptchaReader;
 import com.mishiranu.dashchan.util.GraphicsUtils;
 import java.util.List;
-import java.util.Set;
 
 public class ReadCaptchaTask extends ExecutorTask<Void, Pair<ErrorItem, ReadCaptchaTask.Result>> {
 	public static final String RECAPTCHA_SKIP_RESPONSE = "recaptcha_skip_response";
@@ -31,7 +28,6 @@ public class ReadCaptchaTask extends ExecutorTask<Void, Pair<ErrorItem, ReadCapt
 	private final String captchaType;
 	private final List<String> captchaPass;
 	private final boolean mayShowLoadButton;
-	private final boolean allowSolveAutomatically;
 	private final String requirement;
 	private final Chan chan;
 	private final String boardName;
@@ -66,18 +62,27 @@ public class ReadCaptchaTask extends ExecutorTask<Void, Pair<ErrorItem, ReadCapt
 		}
 	}
 
-	public enum CaptchaState {CAPTCHA, SKIP, PASS, NEED_LOAD, MAY_LOAD, MAY_LOAD_SOLVING}
+	public enum CaptchaState {
+		CAPTCHA, SKIP, PASS, NEED_LOAD, MAY_LOAD;
+
+		public static CaptchaState fromSaved(String value) {
+			if (value == null) return null;
+			try { return valueOf(value); }
+			catch (IllegalArgumentException e) {
+				// Old or newer unavailable modes must request a fresh captcha instead of crashing restoration.
+				return MAY_LOAD;
+			}
+		}
+	}
 
 	public static class RemoteResult {
 		public final ChanPerformer.ReadCaptchaResult result;
 		public final Object challengeExtra;
-		public final boolean allowSolveAutomatically;
 
 		public RemoteResult(ChanPerformer.ReadCaptchaResult result,
-				Object challengeExtra, boolean allowSolveAutomatically) {
+				Object challengeExtra) {
 			this.result = result;
 			this.challengeExtra = challengeExtra;
-			this.allowSolveAutomatically = allowSolveAutomatically;
 		}
 	}
 
@@ -100,7 +105,7 @@ public class ReadCaptchaTask extends ExecutorTask<Void, Pair<ErrorItem, ReadCapt
 			if (result == null) {
 				throw new ExtensionException(new RuntimeException("Captcha result is null"));
 			}
-			return new RemoteResult(result, null, allowSolveAutomatically(chan.name));
+			return new RemoteResult(result, null);
 		}
 	}
 
@@ -108,7 +113,7 @@ public class ReadCaptchaTask extends ExecutorTask<Void, Pair<ErrorItem, ReadCapt
 
 	public ReadCaptchaTask(Callback callback, CaptchaReader captchaReader,
 			String captchaType, String requirement, List<String> captchaPass, boolean mayShowLoadButton,
-			boolean allowSolveAutomatically, Chan chan, String boardName, String threadNumber) {
+			Chan chan, String boardName, String threadNumber) {
 		chanHolder = new HttpHolder(chan);
 		if (captchaReader == null) {
 			captchaReader = new ChanCaptchaReader(chan);
@@ -118,16 +123,10 @@ public class ReadCaptchaTask extends ExecutorTask<Void, Pair<ErrorItem, ReadCapt
 		this.captchaType = captchaType;
 		this.captchaPass = captchaPass;
 		this.mayShowLoadButton = mayShowLoadButton;
-		this.allowSolveAutomatically = allowSolveAutomatically;
 		this.requirement = requirement;
 		this.chan = chan;
 		this.boardName = boardName;
 		this.threadNumber = threadNumber;
-	}
-
-	private static boolean allowSolveAutomatically(String chanName) {
-		Set<String> chanNames = Preferences.getCaptchaSolvingChans();
-		return chanNames.isEmpty() || chanNames.contains(chanName);
 	}
 
 	public static ForegroundCaptcha checkForegroundCaptcha(String captchaType) {
@@ -139,22 +138,21 @@ public class ReadCaptchaTask extends ExecutorTask<Void, Pair<ErrorItem, ReadCapt
 		}
 	}
 
-	public static String readForegroundCaptcha(HttpHolder holder, String chanName,
+	public static String readForegroundCaptcha(HttpHolder holder,
 			ChanPerformer.CaptchaData captchaData, String captchaType) throws HttpException, InterruptedException {
 		ForegroundCaptcha foregroundCaptcha = checkForegroundCaptcha(captchaType);
 		if (foregroundCaptcha == null) {
 			return null;
 		}
 		try {
-			return readForegroundCaptcha(holder, captchaData, foregroundCaptcha, null,
-					allowSolveAutomatically(chanName));
+			return readForegroundCaptcha(holder, captchaData, foregroundCaptcha, null);
 		} catch (RecaptchaReader.CancelException e) {
 			return null;
 		}
 	}
 
 	private static String readForegroundCaptcha(HttpHolder holder, ChanPerformer.CaptchaData captchaData,
-			ForegroundCaptcha foregroundCaptcha, Object challengeExtra, boolean allowSolveAutomatically)
+			ForegroundCaptcha foregroundCaptcha, Object challengeExtra)
 			throws HttpException, RecaptchaReader.CancelException, InterruptedException {
 		String apiKey = captchaData.get(ChanPerformer.CaptchaData.API_KEY);
 		String referer = captchaData.get(ChanPerformer.CaptchaData.REFERER);
@@ -163,13 +161,10 @@ public class ReadCaptchaTask extends ExecutorTask<Void, Pair<ErrorItem, ReadCapt
 				RecaptchaReader.ChallengeExtra ? (RecaptchaReader.ChallengeExtra) challengeExtra : null;
 		if (recaptchaChallengeExtra == null) {
 			if (foregroundCaptcha == ForegroundCaptcha.HCAPTCHA) {
-				recaptchaChallengeExtra = recaptchaReader.getChallengeHcaptcha(holder,
-						apiKey, referer, false, allowSolveAutomatically);
+				recaptchaChallengeExtra = recaptchaReader.getChallengeHcaptcha(apiKey, referer, false);
 			} else {
 				boolean invisible = foregroundCaptcha == ForegroundCaptcha.RECAPTCHA_2_INVISIBLE;
-				recaptchaChallengeExtra = recaptchaReader.getChallenge2(holder,
-						apiKey, invisible, referer, Preferences.isRecaptchaJavascript(),
-						false, allowSolveAutomatically);
+				recaptchaChallengeExtra = recaptchaReader.getChallenge2(apiKey, invisible, referer, false);
 			}
 		}
 		return recaptchaChallengeExtra.getResponse(holder);
@@ -224,11 +219,10 @@ public class ReadCaptchaTask extends ExecutorTask<Void, Pair<ErrorItem, ReadCapt
 					? loadedCaptchaType : this.captchaType);
 			if (foregroundCaptcha != null) {
 				try (HttpHolder.Use ignore = fallbackHolder.use()) {
-					captchaState = CaptchaSolving.getInstance().checkActive(fallbackHolder)
-							? CaptchaState.MAY_LOAD_SOLVING : CaptchaState.MAY_LOAD;
+					captchaState = CaptchaState.MAY_LOAD;
 					if (!mayShowLoadButton) {
 						String response = readForegroundCaptcha(fallbackHolder, captchaData, foregroundCaptcha,
-								result.challengeExtra, allowSolveAutomatically && result.allowSolveAutomatically);
+								result.challengeExtra);
 						captchaData.put(RECAPTCHA_SKIP_RESPONSE, response);
 						captchaState = CaptchaState.SKIP;
 					}

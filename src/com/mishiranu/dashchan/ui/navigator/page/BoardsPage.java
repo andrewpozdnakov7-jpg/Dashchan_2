@@ -192,6 +192,7 @@ public class BoardsPage extends ListPage implements BoardsAdapter.Callback,
 					LinearLayout.LayoutParams.WRAP_CONTENT);
 			int padding = provider.getContext().getResources().getDimensionPixelSize(R.dimen.dialog_padding_view);
 			container.setPadding(padding, padding, padding, padding);
+			com.mishiranu.dashchan.widget.CompactDialogUi.markForm(container, container);
 			AlertDialog dialog = MotionDialogBuilder.standard(provider.getContext())
 					.setTitle(R.string.pikabu_add_community)
 					.setView(container)

@@ -31,6 +31,9 @@ public class VideoPlayerSettingsFragment extends PreferenceFragment {
 			addButton(R.string.player_buttons_layout, R.string.player_buttons_layout_summary).setOnClickListener(p ->
 					((FragmentHandler) requireActivity()).pushFragment(new PlayerButtonsFragment()));
 		}
+		addButton(R.string.gesture_controls, R.string.gesture_controls__summary)
+				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
+						.pushFragment(new GestureSettingsFragment()));
 
 		addCheck(true, Preferences.KEY_HARDWARE_VIDEO_ACCELERATION,
 				Preferences.DEFAULT_HARDWARE_VIDEO_ACCELERATION,
@@ -78,8 +81,6 @@ public class VideoPlayerSettingsFragment extends PreferenceFragment {
 				R.string.play_after_scroll, R.string.play_after_scroll__summary).setEnabled(playerLoadResult.first);
 		addCheck(true, Preferences.KEY_VIDEO_SEEK_ANY_FRAME, Preferences.DEFAULT_VIDEO_SEEK_ANY_FRAME,
 				R.string.seek_any_frame, R.string.seek_any_frame__summary).setEnabled(playerLoadResult.first);
-		addCheck(true, Preferences.KEY_VIDEO_ZOOM_GESTURES, Preferences.DEFAULT_VIDEO_ZOOM_GESTURES,
-				R.string.video_zoom_gestures, R.string.video_zoom_gestures__summary).setEnabled(playerLoadResult.first);
 		addList(Preferences.KEY_YOUTUBE_OPEN_MODE,
 				enumList(Preferences.YouTubeOpenMode.values(), value -> value.value),
 				Preferences.DEFAULT_YOUTUBE_OPEN_MODE.value, R.string.youtube_open_mode,

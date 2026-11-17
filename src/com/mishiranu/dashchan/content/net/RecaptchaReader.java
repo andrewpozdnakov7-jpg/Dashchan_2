@@ -4,13 +4,10 @@ import android.annotation.SuppressLint;
 import android.app.Dialog;
 import android.content.Context;
 import android.content.DialogInterface;
-import android.graphics.Bitmap;
-import android.graphics.Canvas;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.SystemClock;
 import android.util.Log;
-import android.util.Pair;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -29,29 +26,20 @@ import androidx.annotation.NonNull;
 import androidx.fragment.app.DialogFragment;
 import androidx.lifecycle.ViewModel;
 import androidx.lifecycle.ViewModelProvider;
-import chan.content.Chan;
 import chan.http.HttpException;
 import chan.http.HttpHolder;
-import chan.http.HttpRequest;
-import chan.http.UrlEncodedEntity;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.R;
-import com.mishiranu.dashchan.content.AdvancedPreferences;
 import com.mishiranu.dashchan.content.MainApplication;
 import com.mishiranu.dashchan.content.model.ErrorItem;
-import com.mishiranu.dashchan.text.HtmlParser;
 import com.mishiranu.dashchan.ui.ForegroundManager;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
-import com.mishiranu.dashchan.util.GraphicsUtils;
 import com.mishiranu.dashchan.util.IOUtils;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.util.ViewUtils;
 import com.mishiranu.dashchan.util.WebViewUtils;
 import com.mishiranu.dashchan.widget.ScaledWebView;
 import java.util.Arrays;
-import org.jsoup.Jsoup;
-import org.jsoup.nodes.Document;
-import org.jsoup.nodes.Element;
 
 public class RecaptchaReader {
 	private static final float EXTRA_SCALE_FOR_SYSTEM_PADDING = 0.8f;
@@ -102,149 +90,31 @@ public class RecaptchaReader {
 		}
 	}
 
-	private static Pair<String, String> parseResponse2(String responseText) {
-		if (StringUtils.isEmpty(responseText)) {
-			return null;
-		}
-		Document document = Jsoup.parse(responseText);
-		Element description = document.selectFirst(".rc-imageselect-desc, .rc-imageselect-desc-no-canonical, " +
-				".fbc-imageselect-message-error");
-		Element challengeInput = document.selectFirst("input[name=c][value]");
-		if (challengeInput == null) {
-			challengeInput = document.selectFirst("input[value]");
-		}
-		if (challengeInput != null) {
-			String challenge = challengeInput.attr("value");
-			if (challenge.length() < 20) {
-				return null;
-			}
-			String imageSelectorDescription = description != null ? description.html() : null;
-			return new Pair<>(imageSelectorDescription, challenge);
-		}
-		return null;
-	}
-
-	public ChallengeExtra getChallenge2(HttpHolder initialHolder, String apiKey, boolean invisible,
-			String referer, boolean useJavaScript, boolean solveInBackground, boolean solveAutomatically)
-			throws CancelException, HttpException {
+	public ChallengeExtra getChallenge2(String apiKey, boolean invisible, String referer,
+			boolean solveInBackground) throws CancelException, HttpException {
 		String refererFinal = referer != null ? referer : "https://www.google.com/";
-		if (solveAutomatically) {
-			String autoResponse = CaptchaSolving.getInstance().solveCaptcha(initialHolder,
-					invisible ? CaptchaSolving.CaptchaType.RECAPTCHA_2_INVISIBLE :
-							CaptchaSolving.CaptchaType.RECAPTCHA_2, apiKey, refererFinal);
-			if (autoResponse != null) {
-				return new ChallengeExtra(null, autoResponse, null);
-			}
-		}
-		if (useJavaScript) {
-			ChallengeExtra.ForegroundSolver solver = (newHolder, challengeExtra) -> {
-				synchronized (accessLock) {
-					String response = ForegroundManager.getInstance()
-							.requireUserRecaptchaV2(refererFinal, apiKey, invisible, false, challengeExtra);
-					if (response == null) {
-						throw new CancelException();
-					}
-					return response;
-				}
-			};
+		ChallengeExtra.ForegroundSolver solver = (newHolder, challengeExtra) -> {
 			synchronized (accessLock) {
-				if (solveInBackground) {
-					return new BackgroundSolver(solver, refererFinal, apiKey, invisible, false).await();
-				} else {
-					return new ChallengeExtra(solver, null, null);
+				String response = ForegroundManager.getInstance()
+						.requireUserRecaptchaV2(refererFinal, apiKey, invisible, false, challengeExtra);
+				if (response == null) {
+					throw new CancelException();
 				}
+				return response;
 			}
-		} else {
-			Chan chan = Chan.getFallback();
-			Uri uri = chan.locator.buildQueryWithHost("www.google.com", "recaptcha/api/fallback", "k", apiKey);
-			String acceptLanguage = "en-US,en;q=0.5";
-			String initialResponseText = new HttpRequest(uri, initialHolder)
-					.addCookie(AdvancedPreferences.getGoogleCookie())
-					.addHeader("Accept-Language", acceptLanguage)
-					.addHeader("Referer", refererFinal)
-					.perform().readString();
-			if (initialResponseText == null) {
-				throw new HttpException(ErrorItem.Type.INVALID_RESPONSE, false, false);
+		};
+		synchronized (accessLock) {
+			if (solveInBackground) {
+				return new BackgroundSolver(solver, refererFinal, apiKey, invisible, false).await();
+			} else {
+				return new ChallengeExtra(solver, null, null);
 			}
-			Pair<String, String> initialResponse = parseResponse2(initialResponseText);
-			if (initialResponse == null) {
-				if (initialResponseText
-						.contains("Please enable JavaScript to get a reCAPTCHA challenge")) {
-					return getChallenge2(initialHolder, apiKey, invisible, refererFinal,
-							true, solveInBackground, false);
-				} else {
-					throw new HttpException(ErrorItem.Type.INVALID_RESPONSE, false, false);
-				}
-			}
-			boolean[] consumed = {false};
-			ChallengeExtra.ForegroundSolver solver = (holder, challengeExtra) -> {
-				Bitmap captchaImage = null;
-				Pair<String, String> response;
-				if (consumed[0]) {
-					String responseText = new HttpRequest(uri, holder)
-							.addCookie(AdvancedPreferences.getGoogleCookie())
-							.addHeader("Accept-Language", acceptLanguage)
-							.addHeader("Referer", refererFinal)
-							.perform().readString();
-					response = parseResponse2(responseText);
-				} else {
-					consumed[0] = true;
-					response = initialResponse;
-				}
-				while (true) {
-					if (response != null) {
-						if (captchaImage != null) {
-							captchaImage.recycle();
-						}
-						captchaImage = getImage2(holder, apiKey, response.second, null, false).first;
-						boolean[] result = ForegroundManager.getInstance().requireUserImageMultipleChoice(3, null,
-								splitImages(captchaImage, 3, 3), HtmlParser.clear(response.first), null);
-						if (result != null) {
-							boolean hasSelected = false;
-							UrlEncodedEntity entity = new UrlEncodedEntity("c", response.second);
-							for (int i = 0; i < result.length; i++) {
-								if (result[i]) {
-									entity.add("response", Integer.toString(i));
-									hasSelected = true;
-								}
-							}
-							if (!hasSelected) {
-								continue;
-							}
-							String responseText = new HttpRequest(uri, holder).setPostMethod(entity)
-									.addCookie(AdvancedPreferences.getGoogleCookie())
-									.setRedirectHandler(HttpRequest.RedirectHandler.STRICT)
-									.addHeader("Accept-Language", acceptLanguage)
-									.addHeader("Referer", referer)
-									.perform().readString();
-							Element resultElement = !StringUtils.isEmpty(responseText)
-									? Jsoup.parse(responseText).selectFirst("textarea") : null;
-							if (resultElement != null) {
-								return resultElement.text();
-							}
-							response = parseResponse2(responseText);
-							continue;
-						}
-						throw new CancelException();
-					} else {
-						throw new HttpException(ErrorItem.Type.INVALID_RESPONSE, false, false);
-					}
-				}
-			};
-			return new ChallengeExtra(solver, null, null);
 		}
 	}
 
-	public ChallengeExtra getChallengeHcaptcha(HttpHolder initialHolder, String apiKey, String referer,
-			boolean solveInBackground, boolean solveAutomatically) throws CancelException, HttpException {
+	public ChallengeExtra getChallengeHcaptcha(String apiKey, String referer,
+			boolean solveInBackground) throws CancelException, HttpException {
 		String refererFinal = referer != null ? referer : "https://www.hcaptcha.com/";
-		if (solveAutomatically) {
-			String autoResponse = CaptchaSolving.getInstance().solveCaptcha(initialHolder,
-					CaptchaSolving.CaptchaType.HCAPTCHA, apiKey, refererFinal);
-			if (autoResponse != null) {
-				return new ChallengeExtra(null, autoResponse, null);
-			}
-		}
 		ChallengeExtra.ForegroundSolver solver = (holder, challengeExtra) -> {
 			synchronized (accessLock) {
 				String response = ForegroundManager.getInstance()
@@ -262,32 +132,6 @@ public class RecaptchaReader {
 				return new ChallengeExtra(solver, null, null);
 			}
 		}
-	}
-
-	private Pair<Bitmap, Boolean> getImage2(HttpHolder holder, String apiKey, String challenge, String id,
-			boolean transformBlackAndWhite) throws HttpException {
-		Chan chan = Chan.getFallback();
-		Uri uri = chan.locator.buildQueryWithHost("www.google.com", "recaptcha/api2/payload",
-				"c", challenge, "k", apiKey, "id", StringUtils.emptyIfNull(id));
-		Bitmap image = new HttpRequest(uri, holder).perform().readBitmap();
-		if (transformBlackAndWhite) {
-			transformBlackAndWhite = GraphicsUtils.isBlackAndWhiteCaptchaImage(image);
-		}
-		return transformBlackAndWhite ? GraphicsUtils.handleBlackAndWhiteCaptchaImage(image) : new Pair<>(image, false);
-	}
-
-	private static Bitmap[] splitImages(Bitmap image, int sizeX, int sizeY) {
-		Bitmap[] images = new Bitmap[sizeX * sizeY];
-		int width = image.getWidth() / sizeX;
-		int height = image.getHeight() / sizeY;
-		for (int y = 0; y < sizeY; y++) {
-			for (int x = 0; x < sizeX; x++) {
-				Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
-				new Canvas(bitmap).drawBitmap(image, -x * width, -y * height, null);
-				images[y * sizeX + x] = bitmap;
-			}
-		}
-		return images;
 	}
 
 	public static class CancelException extends Exception {

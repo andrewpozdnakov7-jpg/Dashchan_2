@@ -115,6 +115,7 @@ public class RedditCommunitiesFragment extends BaseListFragment {
 		form.setOrientation(LinearLayout.VERTICAL);
 		int padding = (int) (24 * ResourceUtils.obtainDensity(form));
 		form.setPadding(padding, 0, padding, 0);
+		com.mishiranu.dashchan.widget.CompactDialogUi.markForm(form, form);
 		return form;
 	}
 

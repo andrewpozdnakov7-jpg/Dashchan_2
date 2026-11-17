@@ -45,7 +45,7 @@ public final class PostingCaptchaController implements ReadCaptchaTask.Callback 
 		CaptchaSnapshot(String type, ReadCaptchaTask.CaptchaState state, ChanPerformer.CaptchaData data,
 				ChanConfiguration.Captcha.Input input, ChanConfiguration.Captcha.Validity validity) {
 			this.type = type; this.state = state; this.data = data; this.input = input; this.validity = validity;
-			needLoad = state == ReadCaptchaTask.CaptchaState.MAY_LOAD || state == ReadCaptchaTask.CaptchaState.MAY_LOAD_SOLVING;
+			needLoad = state == ReadCaptchaTask.CaptchaState.MAY_LOAD;
 		}
 	}
 
@@ -144,7 +144,6 @@ public final class PostingCaptchaController implements ReadCaptchaTask.Callback 
 
 	void refreshCaptcha(Fragment owner, boolean forceCaptcha, boolean mayShowLoadButton, boolean restart) {
 		if (host == null) return;
-		boolean allowSolveAutomatically = !forceCaptcha || captchaState != ReadCaptchaTask.CaptchaState.MAY_LOAD_SOLVING;
 		captchaState = null;
 		loading = true;
 		loadedCaptchaType = null;
@@ -156,7 +155,7 @@ public final class PostingCaptchaController implements ReadCaptchaTask.Callback 
 			Chan chan = Chan.get(chanName);
 			List<String> captchaPass = forceCaptcha ? null : Preferences.getCaptchaPass(chan);
 			ReadCaptchaTask task = new ReadCaptchaTask(viewModel.callback, null, captchaType, null, captchaPass,
-					mayShowLoadButton, allowSolveAutomatically, chan, boardName, threadNumber);
+					mayShowLoadButton, chan, boardName, threadNumber);
 			task.execute(ConcurrentUtils.PARALLEL_EXECUTOR);
 			viewModel.attach(task);
 		}

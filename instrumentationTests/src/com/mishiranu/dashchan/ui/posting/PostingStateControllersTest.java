@@ -194,7 +194,7 @@ public class PostingStateControllersTest {
 			snapshot.data.put(ChanPerformer.CaptchaData.CHALLENGE, "changed-in-send");
 			assertEquals("fixture-challenge", original.captchaData.get(ChanPerformer.CaptchaData.CHALLENGE));
 			assertEquals("original-input", original.captchaData.get(ChanPerformer.CaptchaData.INPUT));
-			assertEquals(state == ReadCaptchaTask.CaptchaState.MAY_LOAD || state == ReadCaptchaTask.CaptchaState.MAY_LOAD_SOLVING, snapshot.needLoad);
+			assertEquals(state == ReadCaptchaTask.CaptchaState.MAY_LOAD, snapshot.needLoad);
 			assertEquals(state != ReadCaptchaTask.CaptchaState.NEED_LOAD, controller.canSend());
 		}
 		PostingCaptchaController empty = controller(new Host(), "test", null);

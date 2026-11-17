@@ -89,6 +89,12 @@ public class WakabaLikeHtmlBuilder {
 	}
 
 	private boolean originalPost = true;
+
+	public void setResourceDirectory(String directory) {
+		int head = builder.indexOf("</head>");
+		if (head >= 0) builder.insert(head, "<meta name=\"slooop-local-archive-resources\" content=\""
+				+ escapeHtml(directory) + "\" />\n");
+	}
 	private String number;
 	private String subject;
 	private String name;

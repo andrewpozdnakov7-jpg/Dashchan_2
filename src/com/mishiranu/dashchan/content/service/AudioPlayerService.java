@@ -162,8 +162,8 @@ public class AudioPlayerService extends BaseService implements MediaPlayer.OnCom
 	}
 
 	private void startForeground(NotificationCompat.Builder builder, int foregroundServiceType) {
-		com.mishiranu.dashchan.content.security.AppSecurity.redactNotification(this, builder);
-		startForeground(C.NOTIFICATION_ID_AUDIO_PLAYER, builder.build(), foregroundServiceType);
+		startForeground(C.NOTIFICATION_ID_AUDIO_PLAYER, com.mishiranu.dashchan.content.security.AppSecurity
+				.prepareNotification(this, null, C.NOTIFICATION_ID_AUDIO_PLAYER, builder.build()), foregroundServiceType);
 	}
 
 	private void cleanup(boolean stopSelf, boolean notify) {
@@ -346,7 +346,6 @@ public class AudioPlayerService extends BaseService implements MediaPlayer.OnCom
 			builder.setContentTitle(getString(R.string.audio_playback));
 			builder.setContentText(getString(R.string.file_name__format, fileName));
 		}
-		com.mishiranu.dashchan.content.security.AppSecurity.redactNotification(this, builder);
 		return builder;
 	}
 
@@ -383,7 +382,6 @@ public class AudioPlayerService extends BaseService implements MediaPlayer.OnCom
 			builder.setProgress(progressMax, progress, progressMax == 0 ||
 					progress > progressMax || progress < 0);
 		}
-		com.mishiranu.dashchan.content.security.AppSecurity.redactNotification(this, builder);
 		return builder;
 	}
 
@@ -403,7 +401,8 @@ public class AudioPlayerService extends BaseService implements MediaPlayer.OnCom
 		} else {
 			cleanup(true, true);
 			notificationManager.notify(C.NOTIFICATION_ID_AUDIO_PLAYER,
-					getDownloadingNotification(true, true, uri).build());
+					com.mishiranu.dashchan.content.security.AppSecurity.prepareNotification(this, null,
+							C.NOTIFICATION_ID_AUDIO_PLAYER, getDownloadingNotification(true, true, uri).build()));
 		}
 	}
 

@@ -84,6 +84,7 @@ public final class PrivacyReset {
 			JobScheduler scheduler = context.getSystemService(JobScheduler.class);
 			if (scheduler != null) scheduler.cancelAll();
 			NotificationManager notifications = context.getSystemService(NotificationManager.class);
+			AppSecurity.clearNotificationContents();
 			if (notifications != null) notifications.cancelAll();
 			preservePresentationPreferences(context);
 			File data = context.getDataDir().getCanonicalFile();

@@ -530,6 +530,10 @@ public class DrawerForm extends RecyclerView.Adapter<DrawerForm.ViewHolder> impl
 	}
 
 	public void updatePreferences() {
+		// A section hidden through settings/restore must not strand its bulk-selection mode.
+		if (favoriteSelectionActive && !Preferences.isDrawerSectionVisible(Preferences.DrawerSection.FAVORITE_THREADS)) {
+			finishFavoriteSelection();
+		}
 		ArrayList<AdapterItem> previousItems = createAdapterSnapshot();
 		boolean redditWebReaderEnabledChanged = content.redditWebReaderEnabled != Preferences.isRedditWebReaderEnabled();
 		if (updatePreferencesWithoutConfiguration()) {
