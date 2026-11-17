@@ -52,6 +52,7 @@ public final class ScreenMotionController {
 	}
 
 	public void finish() { if (active != null) active.finish(); }
+	public boolean hasActiveSession() { return active != null; }
 
 	/** Capture before onTerminate removes the old toolbar action views / formatting row. */
 	public Session prepare(ContentFragment outgoing, ContentFragment incoming, int transition, boolean container) {

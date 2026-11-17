@@ -72,6 +72,8 @@ public class UpdateDialogHelper {
 		}
 		switch (result.status) {
 			case NO_UPDATE: {
+				if (manual && com.mishiranu.dashchan.widget.CompactDialogUi.isEnabled()
+						&& com.mishiranu.dashchan.widget.ClickableToast.show(R.string.latest_version_installed) != null) return;
 				if (manual) {
 					MotionDialogBuilder.standard(context)
 							.setTitle(R.string.check_for_updates)

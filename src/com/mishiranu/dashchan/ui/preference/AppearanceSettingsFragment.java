@@ -92,9 +92,6 @@ public class AppearanceSettingsFragment extends PreferenceFragment {
 			});
 			refreshPredictiveEntry();
 		}
-		addButton(R.string.gesture_controls, R.string.gesture_controls__summary)
-				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
-						.pushFragment(new GestureSettingsFragment()));
 
 	}
 

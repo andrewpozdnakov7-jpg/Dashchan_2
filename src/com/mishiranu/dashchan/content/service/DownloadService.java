@@ -1072,7 +1072,8 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 	}
 
 	private void startStopForeground(boolean foreground, Notification notification) {
-		if (notification != null) notification = com.mishiranu.dashchan.content.security.AppSecurity.redactNotification(this, notification);
+		if (notification != null) notification = com.mishiranu.dashchan.content.security.AppSecurity
+				.prepareNotification(this, null, C.NOTIFICATION_ID_DOWNLOADING, notification);
 		synchronized (this) {
 			if (foreground) {
 				if (!isForegroundWorker) {
@@ -1237,8 +1238,8 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 					return;
 				}
 			}
-			com.mishiranu.dashchan.content.security.AppSecurity.redactNotification(this, builder);
-			notificationManager.notify(C.NOTIFICATION_ID_DOWNLOADING, builder.build());
+			notificationManager.notify(C.NOTIFICATION_ID_DOWNLOADING, com.mishiranu.dashchan.content.security.AppSecurity
+					.prepareNotification(this, null, C.NOTIFICATION_ID_DOWNLOADING, builder.build()));
 		}
 	}
 

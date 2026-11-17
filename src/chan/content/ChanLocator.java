@@ -195,7 +195,7 @@ public class ChanLocator implements Chan.Linked {
 		HttpsMode httpsMode = this.httpsMode;
 		if (httpsMode == HttpsMode.CONFIGURABLE) {
 			Chan chan = get();
-			return chan.name != null ? Preferences.isUseHttps(chan) : Preferences.isUseHttpsGeneral();
+			return chan.name == null || Preferences.isUseHttps(chan);
 		}
 		return httpsMode == HttpsMode.HTTPS_ONLY;
 	}

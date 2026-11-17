@@ -39,6 +39,11 @@ final class ExperimentalPreferenceDescriptors {
 	}
 
 
+	static Toggle compactDialogs() {
+		return new Toggle(Preferences.KEY_COMPACT_DIALOGS, Preferences.DEFAULT_COMPACT_DIALOGS,
+				true, R.string.compact_dialogs, R.string.compact_dialogs_summary);
+	}
+
 	static Toggle threadFabMenu() {
 		return new Toggle(Preferences.KEY_THREAD_FAB_MENU, Preferences.DEFAULT_THREAD_FAB_MENU,
 				true, R.string.thread_fab_menu, R.string.thread_fab_menu_summary);

@@ -104,9 +104,6 @@
 	<string name="captcha_pass">Captcha pass</string>
 	<string name="captcha_pass__summary">Allows to skip captcha</string>
 	<string name="add_from_favorites">Add from favorites</string>
-	<string name="captcha_solving">Captcha solving</string>
-	<string name="captcha_solving__summary">Use external service to solve reCAPTCHA or hCaptcha automatically</string>
-	<string name="captcha_solving_info__sentence">Antigate API-compatible services are supported.</string>
 	<string name="captcha_type">Captcha type</string>
 	<string name="cards">Cards</string>
 	<string name="catalog">Catalog</string>
@@ -533,6 +530,7 @@
 	<string name="names_are_disabled">Names are disabled</string>
 	<string name="navigation">Navigation</string>
 	<string name="navigation_drawer">Navigation drawer</string>
+	<string name="navigation_drawer_settings_summary">Side menu sections and open page display</string>
 	<string name="never">Never</string>
 	<string name="never_highlight">Never highlight</string>
 	<string name="new_extensions_installed__sentence">New extensions were installed. Restart required.</string>
@@ -669,7 +667,7 @@
 	<string name="video_volume_gesture_test_area">Volume gesture test area</string>
 	<string name="video_volume_gesture_test_reset">Reset test volume to 50%</string>
 	<string name="gesture_controls">Gesture controls</string>
-	<string name="gesture_controls__summary">Configure video player gesture areas</string>
+	<string name="gesture_controls__summary">Video volume, seeking and zoom gestures</string>
 	<string name="rounded_dialogs">Rounded pop-up windows</string>
 	<string name="rounded_dialogs__summary">Round the corners of dialogs, menus, and post previews, as well as the outer edge of the side menu</string>
 	<string name="rounded_dialogs_radius">Corner radius</string>
@@ -890,8 +888,6 @@
 	<string name="some_posts_have_been_edited">Some posts have been edited</string>
 	<string name="sorting">Sorting</string>
 	<string name="sound">Sound</string>
-	<string name="specific_to_internal_services__sentence">The following option is specific to some internal services
-		such as captchas or client updating. HTTPS for forums can be managed at the respective settings page.</string>
 	<string name="spoiler">Spoiler</string>
 	<string name="spoilers">Spoilers</string>
 	<string name="ssl_https_error">SSL/HTTPS error</string>
@@ -1012,8 +1008,6 @@
 	<string name="use_built_in_video_player__summary">Play WebM video attachments</string>
 	<string name="use_forum_settings">Use forum settings</string>
 	<string name="use_gms_security_provider">Use GMS security provider</string>
-	<string name="use_javascript_for_recaptcha">Use JavaScript for reCAPTCHA</string>
-	<string name="use_javascript_for_recaptcha__summary">May simplify Google reCAPTCHA</string>
 	<string name="user_authorization">User authorization</string>
 	<string name="user_boards">User boards</string>
 	<string name="user_interface">User interface</string>
@@ -1475,10 +1469,16 @@
 	<string name="form_diagnostics_saved">Screen diagnostics saved</string>
 	<string name="form_diagnostics_saved_summary">Share the report with the developer. It contains window, appearance and keyboard parameters, not message contents.</string>
 	<string name="form_diagnostics_share">Share screen diagnostics</string>
-	<string name="drawer_section_order">Sidebar section order</string>
-	<string name="drawer_section_order_entry_summary">Arrange sidebar sections and navigation buttons</string>
+	<string name="drawer_section_order">Side menu</string>
+	<string name="drawer_section_order_entry_summary">Order and visibility of side menu sections</string>
 	<string name="drawer_custom_order">Custom section order</string>
-	<string name="drawer_section_order_summary">Drag sections by their handles, or tap to choose a position. The order applies to all forums. Sections are only shown where available; moving a section does not enable it. Turning this off restores the standard order without erasing your choices.</string>
+	<string name="drawer_section_order_summary">Checkboxes control visibility. To change the order, drag a section by its handle or tap its name.</string>
+	<string name="drawer_section_visibility">Section visibility</string>
+	<string name="drawer_section_visibility_summary">Hide or show sections in the side menu</string>
+	<string name="drawer_section_hidden">Hidden</string>
+	<string name="drawer_settings_always_visible">Always shown</string>
+	<string name="drawer_show_section__format">Show: %s</string>
+	<string name="drawer_restore_defaults_summary">Standard order and all available sections</string>
 	<string name="post_text_sizes">Text sizes</string>
 	<string name="post_text_sizes_summary">Separate sizes for thread titles, messages, post information, settings and side panel text</string>
 	<string name="post_subject_text_size">Thread title size</string>

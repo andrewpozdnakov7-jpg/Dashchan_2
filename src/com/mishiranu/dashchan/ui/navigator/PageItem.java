@@ -6,6 +6,8 @@ import androidx.fragment.app.FragmentManager;
 import com.mishiranu.dashchan.ui.StackItem;
 
 public class PageItem implements Parcelable {
+	public static final String EXTRA_LAST_VISIT_TIME = "openPageLastVisitTime";
+	public static final String EXTRA_THREAD_DELETED = "openThreadDeleted";
 	public long createdRealtime;
 	public String threadTitle;
 	public boolean allowReturn;
@@ -21,6 +23,9 @@ public class PageItem implements Parcelable {
 	};
 
 	public SavedPageItem toSaved(FragmentManager fragmentManager, PageFragment fragment) {
+		if (fragment.getPage().content == Page.Content.POSTS && fragment.getArguments() != null) {
+			fragment.getArguments().putLong(EXTRA_LAST_VISIT_TIME, System.currentTimeMillis());
+		}
 		return new SavedPageItem(new StackItem(fragmentManager, fragment, SAVE),
 				createdRealtime, threadTitle, allowReturn);
 	}

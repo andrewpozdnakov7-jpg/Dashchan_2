@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<string name="local_archive_update_busy">This thread is already being saved. Wait for it to finish.</string>
+	<string name="local_archive_update_partial">Some files could not be saved. The previous archive was kept. Save again to download the missing files.</string>
+	<string name="local_archive_update_failed">Could not save the archive. The previous copy was not replaced.</string>
+	<string name="local_archive_save_failed">Could not save the archive. Check access to the downloads folder and save again.</string>
+	<string name="local_archive_save_partial">Some files could not be saved. Save again to download the missing files.</string>
+	<string name="local_archive_update_zip_failed">Could not create the ZIP. The previous archive was kept. Save again to retry.</string>
+	<string name="local_archive_save_zip_failed">Could not create the ZIP. Saved files were kept. Save again to retry.</string>
+</resources>

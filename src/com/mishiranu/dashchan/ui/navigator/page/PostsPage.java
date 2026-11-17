@@ -979,7 +979,8 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 					R.string.reply, R.drawable.ic_reply, true, true));
 		}
 		actions.add(new com.mishiranu.dashchan.widget.ThreadFabMenu.Action(R.id.menu_refresh,
-				R.string.thread_fab_refresh, R.drawable.ic_refresh, !hasReadTask() && !hasExtractTask(), false));
+				R.string.thread_fab_refresh, R.drawable.ic_refresh, !hasReadTask() && !hasExtractTask(), false,
+				false, R.id.menu_reload, R.string.thread_fab_reload));
 		Page page = getPage();
 		boolean favorite = FavoritesStorage.getInstance().hasFavorite(page.chanName, page.boardName, page.threadNumber);
 		actions.add(new com.mishiranu.dashchan.widget.ThreadFabMenu.Action(favorite ? R.id.menu_unstar_text : R.id.menu_star_text,
@@ -996,8 +997,8 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 			if (replyable != null && replyable.onRequestReply(false)) {
 				getUiManager().navigator().navigatePosting(page.chanName, page.boardName, page.threadNumber);
 			}
-		} else if (id == R.id.menu_refresh) {
-			if (!usesThreadFabMenu() || !hasReadTask() && !hasExtractTask()) refreshPosts(false);
+		} else if (id == R.id.menu_refresh || id == R.id.menu_reload) {
+			if (!usesThreadFabMenu() || !hasReadTask() && !hasExtractTask()) refreshPosts(id == R.id.menu_reload);
 		} else if (id == R.id.menu_star_text || id == R.id.menu_star_icon) {
 			FavoritesStorage.getInstance().add(page.chanName, page.boardName, page.threadNumber,
 					getParcelableExtra(ParcelableExtra.FACTORY).threadTitle, true);
@@ -1171,9 +1172,6 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 				ClickableToast.show(R.string.translation_initializing);
 			}
 			updateOptionsMenu();
-			return true;
-		} else if (item.getItemId() == R.id.menu_reload) {
-			refreshPosts(true);
 			return true;
 		} else if (item.getItemId() == R.id.menu_erase) {
 			showEraseDialog(getFragmentManager());
@@ -2218,6 +2216,7 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 
 	@Override
 	public void onReadPostsSuccess(PagesDatabase.Cache.State cacheState, ConsumeReplies consumeReplies) {
+		setThreadDeleted(false);
 		refreshController.markReadComplete();
 		ReadViewModel readViewModel = getViewModel(ReadViewModel.class);
 		RetainableExtra retainableExtra = getRetainableExtra(RetainableExtra.FACTORY);
@@ -2259,6 +2258,7 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 
 	@Override
 	public void onReadPostsFail(ErrorItem errorItem) {
+		if (errorItem.type == ErrorItem.Type.THREAD_NOT_EXISTS) setThreadDeleted(true);
 		cancelProgressIfNecessary();
 		handleError(errorItem);
 		ParcelableExtra parcelableExtra = getParcelableExtra(ParcelableExtra.FACTORY);

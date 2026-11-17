@@ -58,6 +58,7 @@ public abstract class DialogPreference<T> extends Preference<T> {
 					.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
 		}
 		linearLayout.setId(android.R.id.widget_frame);
+		com.mishiranu.dashchan.widget.CompactDialogUi.markForm(scrollView, linearLayout);
 		return new Pair<>(scrollView, linearLayout);
 	}
 

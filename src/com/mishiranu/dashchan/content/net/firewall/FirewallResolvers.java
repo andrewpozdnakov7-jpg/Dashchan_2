@@ -220,14 +220,12 @@ public class FirewallResolvers extends FirewallResolver.Implementation {
 		private final String apiKey;
 		private final String referer;
 		private final Object challengeExtra;
-		private final boolean allowSolveAutomatically;
 
 		public FirewallResolverCaptchaReader(String apiKey, String referer,
-				Object challengeExtra, boolean allowSolveAutomatically) {
+				Object challengeExtra) {
 			this.apiKey = apiKey;
 			this.referer = referer;
 			this.challengeExtra = challengeExtra;
-			this.allowSolveAutomatically = allowSolveAutomatically;
 		}
 
 		@Override
@@ -236,7 +234,7 @@ public class FirewallResolvers extends FirewallResolver.Implementation {
 			captchaData.put(ChanPerformer.CaptchaData.API_KEY, apiKey);
 			captchaData.put(ChanPerformer.CaptchaData.REFERER, referer);
 			return new ReadCaptchaTask.RemoteResult(new ChanPerformer.ReadCaptchaResult
-					(ChanPerformer.CaptchaState.CAPTCHA, captchaData), challengeExtra, allowSolveAutomatically);
+					(ChanPerformer.CaptchaState.CAPTCHA, captchaData), challengeExtra);
 		}
 	}
 
@@ -324,11 +322,11 @@ public class FirewallResolvers extends FirewallResolver.Implementation {
 		}
 
 		private String requireUserCaptcha(String captchaType, String apiKey, String referer,
-				Object challengeExtra, boolean allowSolveAutomatically, boolean retry) {
+				Object challengeExtra, boolean retry) {
 			String description = MainApplication.getInstance().getLocalizedContext().getString
 					(R.string.firewall_block__format_sentence, client.getName() + " (" + chanTitle + ")");
 			FirewallResolverCaptchaReader reader = new FirewallResolverCaptchaReader(apiKey, referer,
-					challengeExtra, allowSolveAutomatically);
+					challengeExtra);
 			ChanPerformer.CaptchaData captchaData;
 			synchronized (this) {
 				if (interrupted) {
@@ -359,15 +357,12 @@ public class FirewallResolvers extends FirewallResolver.Implementation {
 		@Override
 		public String onRecaptchaV2(String apiKey, boolean invisible, String referer) {
 			boolean retry = isRetry();
-			boolean allowSolveAutomatically = !retry;
 			String captchaType = invisible ? ChanConfiguration.CAPTCHA_TYPE_RECAPTCHA_2_INVISIBLE
 					: ChanConfiguration.CAPTCHA_TYPE_RECAPTCHA_2;
 			RecaptchaReader.ChallengeExtra challengeExtra;
 			HttpHolder holder = new HttpHolder(Chan.getFallback());
 			try (HttpHolder.Use ignored = holder.use()) {
-				challengeExtra = RecaptchaReader.getInstance().getChallenge2(holder,
-						apiKey, invisible, referer, Preferences.isRecaptchaJavascript(),
-						true, allowSolveAutomatically);
+				challengeExtra = RecaptchaReader.getInstance().getChallenge2(apiKey, invisible, referer, true);
 			} catch (RecaptchaReader.CancelException | HttpException e) {
 				return null;
 			}
@@ -376,7 +371,7 @@ public class FirewallResolvers extends FirewallResolver.Implementation {
 					return challengeExtra.response;
 				}
 				return requireUserCaptcha(captchaType, apiKey, referer, challengeExtra,
-						allowSolveAutomatically, retry);
+						retry);
 			} finally {
 				if (challengeExtra != null) {
 					challengeExtra.cleanup();
@@ -387,12 +382,10 @@ public class FirewallResolvers extends FirewallResolver.Implementation {
 		@Override
 		public String onHcaptcha(String apiKey, String referer) {
 			boolean retry = isRetry();
-			boolean allowSolveAutomatically = !retry;
 			RecaptchaReader.ChallengeExtra challengeExtra;
 			HttpHolder holder = new HttpHolder(Chan.getFallback());
 			try (HttpHolder.Use ignored = holder.use()) {
-				challengeExtra = RecaptchaReader.getInstance().getChallengeHcaptcha(holder,
-						apiKey, referer, true, allowSolveAutomatically);
+				challengeExtra = RecaptchaReader.getInstance().getChallengeHcaptcha(apiKey, referer, true);
 			} catch (RecaptchaReader.CancelException | HttpException e) {
 				return null;
 			}
@@ -401,7 +394,7 @@ public class FirewallResolvers extends FirewallResolver.Implementation {
 					return challengeExtra.response;
 				}
 				return requireUserCaptcha(ChanConfiguration.CAPTCHA_TYPE_HCAPTCHA,
-						apiKey, referer, challengeExtra, allowSolveAutomatically, retry);
+						apiKey, referer, challengeExtra, retry);
 			} finally {
 				if (challengeExtra != null) {
 					challengeExtra.cleanup();

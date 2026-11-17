@@ -158,7 +158,7 @@ public class PostingSendCoordinatorTest {
 			assertNull(data.name); assertNull(data.email); assertNull(data.password); assertNull(data.userIcon);
 			assertFalse(data.optionSage || data.optionSpoiler || data.optionOriginalPoster);
 			assertTrue(snapshot.createAttachmentHashes().isEmpty());
-			assertEquals(state == ReadCaptchaTask.CaptchaState.MAY_LOAD || state == ReadCaptchaTask.CaptchaState.MAY_LOAD_SOLVING, data.captchaNeedLoad);
+			assertEquals(state == ReadCaptchaTask.CaptchaState.MAY_LOAD, data.captchaNeedLoad);
 			assertEquals(state == ReadCaptchaTask.CaptchaState.PASS, snapshot.allowFloodRetry());
 		}
 	}

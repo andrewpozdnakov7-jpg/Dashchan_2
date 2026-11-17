@@ -40,6 +40,7 @@ final class DrawerContentController {
 	final ArrayList<ListItem> pageNavigation = new ArrayList<>();
 	final ArrayList<ListItem> orderedDrawerItems = new ArrayList<>();
 	List<Preferences.DrawerSection> drawerSectionOrder;
+	java.util.Set<Preferences.DrawerSection> hiddenDrawerSections = Collections.emptySet();
 	final ArrayList<Page> collapsedPages = new ArrayList<>();
 	final ArrayList<RedditPageStorage.Entry> collapsedRedditPages = new ArrayList<>();
 	final ArrayList<ListItem> favorites = new ArrayList<>();
@@ -360,12 +361,13 @@ final class DrawerContentController {
 			if (categoriesOrder != CategoriesOrder.HIDE_PAGES) orderedDrawerItems.addAll(pages);
 			if (categoriesOrder != CategoriesOrder.FAVORITES_FIRST) orderedDrawerItems.addAll(displayedFavorites);
 			orderedDrawerItems.addAll(menu);
-			return;
+			// Preserve the original path and exact row order when nothing is hidden.
+			if (hiddenDrawerSections.isEmpty()) return;
 		}
 		// Split only at real section boundaries; keep headers, collapsed state and rows together.
 		java.util.EnumMap<Preferences.DrawerSection, List<ListItem>> blocks =
 				new java.util.EnumMap<>(Preferences.DrawerSection.class);
-		blocks.put(Preferences.DrawerSection.MY_BOARDS, pageNavigation);
+		blocks.put(Preferences.DrawerSection.MY_BOARDS, new ArrayList<>(pageNavigation));
 		if (categoriesOrder != CategoriesOrder.HIDE_PAGES) blocks.put(Preferences.DrawerSection.PAGES, pages);
 		Preferences.DrawerSection favoriteSection = Preferences.DrawerSection.FAVORITE_THREADS;
 		for (ListItem item : displayedFavorites) {
@@ -391,10 +393,25 @@ final class DrawerContentController {
 			}
 			blocks.computeIfAbsent(section, key -> new ArrayList<>()).add(item);
 		}
-		for (Preferences.DrawerSection section : drawerSectionOrder) {
-			List<ListItem> block = blocks.get(section);
-			if (block != null) orderedDrawerItems.addAll(block);
+		if (drawerSectionOrder != null) {
+			for (Preferences.DrawerSection section : drawerSectionOrder) {
+				List<ListItem> block = blocks.get(section);
+				if (isSectionVisible(section) && block != null) orderedDrawerItems.addAll(block);
+			}
+		} else {
+			// Filter entire blocks before exposing rows to the adapter, preserving legacy ordering.
+			// Hash membership keeps this linear even with large favorites/page lists.
+			java.util.Set<ListItem> hiddenRows = Collections.newSetFromMap(new java.util.IdentityHashMap<>());
+			for (Preferences.DrawerSection section : hiddenDrawerSections) {
+				List<ListItem> block = blocks.get(section);
+				if (!isSectionVisible(section) && block != null) hiddenRows.addAll(block);
+			}
+			orderedDrawerItems.removeAll(hiddenRows);
 		}
+	}
+
+	private boolean isSectionVisible(Preferences.DrawerSection section) {
+		return !section.canHide() || !hiddenDrawerSections.contains(section);
 	}
 
 	boolean removeFavoriteThreadFromList(String chanName, String boardName, String threadNumber) {
@@ -433,6 +450,7 @@ final class DrawerContentController {
 		Preferences.PagesListMode pagesListMode = Preferences.getPagesListMode();
 		List<Preferences.DrawerSection> drawerSectionOrder = Preferences.isDrawerCustomOrderEnabled()
 				? Preferences.getDrawerSectionOrder() : null;
+		java.util.Set<Preferences.DrawerSection> hiddenDrawerSections = Preferences.getHiddenDrawerSections();
 		if (this.mergeChans != mergeChans || this.showHistory != showHistory ||
 				this.combinedFeedsEnabled != combinedFeedsEnabled ||
 				this.redditWebReaderEnabled != redditWebReaderEnabled ||
@@ -442,8 +460,10 @@ final class DrawerContentController {
 				this.favoritesUnreadFirst != favoritesUnreadFirst || this.favoritesOrder != favoritesOrder ||
 				!this.collapsedFavoriteBoardGroups.equals(collapsedFavoriteBoardGroups) ||
 				this.pagesListMode != pagesListMode ||
+				!this.hiddenDrawerSections.equals(hiddenDrawerSections) ||
 				!CommonUtils.equals(this.drawerSectionOrder, drawerSectionOrder)) {
 			this.drawerSectionOrder = drawerSectionOrder;
+			this.hiddenDrawerSections = hiddenDrawerSections;
 			this.mergeChans = mergeChans;
 			this.showHistory = showHistory;
 			this.combinedFeedsEnabled = combinedFeedsEnabled;

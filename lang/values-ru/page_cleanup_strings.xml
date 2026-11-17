@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<string name="page_cleanup">Автоочистка страниц</string>
+	<string name="page_cleanup_summary">Автоматически закрывать старые и удалённые треды в боковом меню</string>
+	<string name="page_cleanup_enabled">Включить автоочистку</string>
+	<string name="page_cleanup_deleted">Закрывать удалённые треды</string>
+	<string name="page_cleanup_deleted_summary">Когда при обычном обновлении подтверждено, что тред больше не существует. Дополнительные запросы не выполняются.</string>
+	<string name="page_cleanup_age">Закрывать после отсутствия</string>
+	<string name="page_cleanup_age_unlimited">Не закрывать по времени</string>
+	<string name="page_cleanup_limit">Максимум открытых тредов</string>
+	<string name="page_cleanup_count_unlimited">Без ограничения</string>
+	<string name="page_cleanup_keep_favorites">Не закрывать избранные треды</string>
+	<string name="page_cleanup_keep_favorites_summary">Избранные треды сохраняются сверх установленного лимита.</string>
+	<string name="page_cleanup_explanation">Текущий тред не закрывается. История, избранное и сохранённые файлы сохраняются. Срок считается с последнего посещения.</string>
+	<plurals name="page_cleanup_days">
+		<item quantity="one">%d день</item>
+		<item quantity="few">%d дня</item>
+		<item quantity="many">%d дней</item>
+		<item quantity="other">%d дня</item>
+	</plurals>
+	<plurals name="page_cleanup_threads">
+		<item quantity="one">%d тред</item>
+		<item quantity="few">%d треда</item>
+		<item quantity="many">%d тредов</item>
+		<item quantity="other">%d треда</item>
+	</plurals>
+</resources>

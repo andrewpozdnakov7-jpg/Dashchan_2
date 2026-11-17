@@ -14,7 +14,6 @@ import chan.content.ChanConfiguration;
 import chan.content.ChanManager;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.BuildConfig;
-import com.mishiranu.dashchan.C;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.media.PlaybackSpeed;
 import com.mishiranu.dashchan.media.PlayerButtonsLayout;
@@ -42,6 +41,7 @@ import org.json.JSONObject;
 public class Preferences {
 	public static final String KEY_DRAWER_CUSTOM_ORDER = "drawer_custom_order";
 	private static final String KEY_DRAWER_SECTION_ORDER = "drawer_section_order";
+	public static final String KEY_DRAWER_HIDDEN_SECTIONS = "drawer_hidden_sections";
 
 	public enum DrawerSection {
 		MY_BOARDS("my_boards", R.string.combined_feeds),
@@ -63,6 +63,8 @@ public class Preferences {
 			this.key = key;
 			this.titleResId = titleResId;
 		}
+
+		public boolean canHide() { return this != SETTINGS; }
 	}
 
 	public static boolean isDrawerCustomOrderEnabled() {
@@ -105,6 +107,42 @@ public class Preferences {
 
 	public static void resetDrawerSectionOrder() {
 		PREFERENCES.editAsync().remove(KEY_DRAWER_SECTION_ORDER).close();
+	}
+
+	/** Visibility is independent of custom ordering and of each forum's available features. */
+	public static Set<DrawerSection> getHiddenDrawerSections() {
+		Set<String> keys = PREFERENCES.getStringSet(KEY_DRAWER_HIDDEN_SECTIONS, Collections.emptySet());
+		Set<DrawerSection> result = java.util.EnumSet.noneOf(DrawerSection.class);
+		for (DrawerSection section : DrawerSection.values()) {
+			if (section.canHide() && keys.contains(section.key)) result.add(section);
+		}
+		return result;
+	}
+
+	public static boolean isDrawerSectionVisible(DrawerSection section) {
+		return !section.canHide() || !PREFERENCES.getStringSet(KEY_DRAWER_HIDDEN_SECTIONS,
+				Collections.emptySet()).contains(section.key);
+	}
+
+	public static void setDrawerSectionVisible(DrawerSection section, boolean visible) {
+		if (!section.canHide()) return;
+		// Copy Android's set before editing. Preserve unknown keys for newer app versions.
+		Set<String> hidden = new HashSet<>(PREFERENCES.getStringSet(KEY_DRAWER_HIDDEN_SECTIONS,
+				Collections.emptySet()));
+		if (visible) hidden.remove(section.key); else hidden.add(section.key);
+		hidden.remove(DrawerSection.SETTINGS.key);
+		try (SharedPreferences.Editor editor = PREFERENCES.editAsync()) {
+			if (hidden.isEmpty()) editor.remove(KEY_DRAWER_HIDDEN_SECTIONS);
+			else editor.put(KEY_DRAWER_HIDDEN_SECTIONS, hidden);
+		}
+	}
+
+	public static void resetDrawerMenu() {
+		try (SharedPreferences.Editor editor = PREFERENCES.editAsync()) {
+			editor.remove(KEY_DRAWER_SECTION_ORDER);
+			editor.remove(KEY_DRAWER_HIDDEN_SECTIONS);
+			editor.remove(KEY_DRAWER_CUSTOM_ORDER);
+		}
 	}
 
 	public static final SharedPreferences PREFERENCES;
@@ -645,52 +683,6 @@ public class Preferences {
 			return unpackOrCastMultipleValues(value, authorization.fieldsCount);
 		} else {
 			return null;
-		}
-	}
-
-	public static final String KEY_CAPTCHA_SOLVING = "captcha_solving";
-	public static final String SUB_KEY_CAPTCHA_SOLVING_ENDPOINT = "endpoint";
-	public static final String SUB_KEY_CAPTCHA_SOLVING_TOKEN = "token";
-	public static final String SUB_KEY_CAPTCHA_SOLVING_TIMEOUT = "timeout";
-	public static final List<String> KEYS_CAPTCHA_SOLVING = Arrays
-			.asList(SUB_KEY_CAPTCHA_SOLVING_ENDPOINT, SUB_KEY_CAPTCHA_SOLVING_TOKEN, SUB_KEY_CAPTCHA_SOLVING_TIMEOUT);
-
-	public static Map<String, String> getCaptchaSolving() {
-		String value = PREFERENCES.getString(KEY_CAPTCHA_SOLVING, null);
-		return unpackOrCastMultipleValues(value, KEYS_CAPTCHA_SOLVING);
-	}
-
-	public static final String KEY_CAPTCHA_SOLVING_CHANS = "captcha_solving_chans";
-
-	public static Set<String> getCaptchaSolvingChans() {
-		String value = PREFERENCES.getString(KEY_CAPTCHA_SOLVING_CHANS, null);
-		if (StringUtils.isEmpty(value)) {
-			return Collections.emptySet();
-		}
-		try {
-			JSONArray jsonArray = new JSONArray(value);
-			HashSet<String> chanNames = new HashSet<>(jsonArray.length());
-			for (int i = 0; i < jsonArray.length(); i++) {
-				String chanName = jsonArray.optString(i);
-				if (!StringUtils.isEmpty(chanName)) {
-					chanNames.add(chanName);
-				}
-			}
-			return chanNames;
-		} catch (JSONException e) {
-			return Collections.emptySet();
-		}
-	}
-
-	public static void setCaptchaSolvingChans(Collection<String> chanNames) {
-		if (chanNames == null || chanNames.isEmpty()) {
-			PREFERENCES.edit().remove(KEY_CAPTCHA_SOLVING_CHANS).close();
-		} else {
-			JSONArray jsonArray = new JSONArray();
-			for (String chanName : chanNames) {
-				jsonArray.put(chanName);
-			}
-			PREFERENCES.edit().put(KEY_CAPTCHA_SOLVING_CHANS, jsonArray.toString()).close();
 		}
 	}
 
@@ -1677,6 +1669,32 @@ public class Preferences {
 	}
 
 	public static final String KEY_PAGES_LIST = "pages_list";
+	public static final String KEY_PAGE_CLEANUP_ENABLED = "page_cleanup_enabled";
+	public static final String KEY_PAGE_CLEANUP_DELETED = "page_cleanup_deleted";
+	public static final String KEY_PAGE_CLEANUP_AGE = "page_cleanup_age";
+	public static final String KEY_PAGE_CLEANUP_LIMIT = "page_cleanup_limit";
+	public static final String KEY_PAGE_CLEANUP_KEEP_FAVORITES = "page_cleanup_keep_favorites";
+	public static final String[] PAGE_CLEANUP_AGES = {"0", "1", "3", "7", "14", "30"};
+	public static final String[] PAGE_CLEANUP_LIMITS = {"0", "10", "20", "30", "50", "100", "200"};
+
+	public static boolean isPageCleanupEnabled() { return PREFERENCES.getBoolean(KEY_PAGE_CLEANUP_ENABLED, false); }
+	public static boolean isPageCleanupDeleted() { return PREFERENCES.getBoolean(KEY_PAGE_CLEANUP_DELETED, true); }
+	public static boolean isPageCleanupKeepFavorites() {
+		return PREFERENCES.getBoolean(KEY_PAGE_CLEANUP_KEEP_FAVORITES, true);
+	}
+	public static int getPageCleanupAgeDays() { return getPageCleanupValue(KEY_PAGE_CLEANUP_AGE, PAGE_CLEANUP_AGES); }
+	public static int getPageCleanupLimit() { return getPageCleanupValue(KEY_PAGE_CLEANUP_LIMIT, PAGE_CLEANUP_LIMITS); }
+	private static int getPageCleanupValue(String key, String[] values) {
+		String stored = PREFERENCES.getString(key, "0");
+		for (String value : values) if (value.equals(stored)) return Integer.parseInt(value);
+		return 0;
+	}
+	public static boolean isPageCleanupKey(String key) {
+		return KEY_PAGE_CLEANUP_ENABLED.equals(key) || KEY_PAGE_CLEANUP_DELETED.equals(key)
+				|| KEY_PAGE_CLEANUP_AGE.equals(key) || KEY_PAGE_CLEANUP_LIMIT.equals(key)
+				|| KEY_PAGE_CLEANUP_KEEP_FAVORITES.equals(key);
+	}
+
 	public static final PagesListMode DEFAULT_PAGES_LIST = PagesListMode.PAGES_FIRST;
 
 	public static PagesListMode getPagesListMode() {
@@ -1781,13 +1799,6 @@ public class Preferences {
 			}
 		}
 		return map;
-	}
-
-	public static final String KEY_RECAPTCHA_JAVASCRIPT = "recaptcha_javascript";
-	public static final boolean DEFAULT_RECAPTCHA_JAVASCRIPT = true;
-
-	public static boolean isRecaptchaJavascript() {
-		return PREFERENCES.getBoolean(KEY_RECAPTCHA_JAVASCRIPT, DEFAULT_RECAPTCHA_JAVASCRIPT);
 	}
 
 	public static final String KEY_REMEMBER_HISTORY = "remember_history";
@@ -2234,7 +2245,6 @@ public class Preferences {
 	}
 
 	public static final ChanKey KEY_USE_HTTPS = new ChanKey("use_https");
-	public static final String KEY_USE_HTTPS_GENERAL = KEY_USE_HTTPS.bind(SPECIAL_CHAN_NAME_GENERAL);
 	public static final boolean DEFAULT_USE_HTTPS = true;
 
 	public static boolean isUseHttps(Chan chan) {
@@ -2243,10 +2253,6 @@ public class Preferences {
 
 	public static void setUseHttps(Chan chan, boolean useHttps) {
 		PREFERENCES.edit().put(KEY_USE_HTTPS.bind(chan.name), useHttps).close();
-	}
-
-	public static boolean isUseHttpsGeneral() {
-		return PREFERENCES.getBoolean(KEY_USE_HTTPS_GENERAL, DEFAULT_USE_HTTPS);
 	}
 
 	public static final String KEY_USE_VIDEO_PLAYER = "use_video_player";
@@ -2333,6 +2339,12 @@ public class Preferences {
 
 	public static boolean isS24UltraOneUi9ToolbarFixEnabled() {
 		return PREFERENCES.getBoolean(KEY_S24_ULTRA_ONEUI9_TOOLBAR_FIX, DEFAULT_S24_ULTRA_ONEUI9_TOOLBAR_FIX);
+	}
+
+	public static final String KEY_COMPACT_DIALOGS = "experimental_compact_dialogs";
+	public static final boolean DEFAULT_COMPACT_DIALOGS = false;
+	public static boolean isCompactDialogsEnabled() {
+		return PREFERENCES.getBoolean(KEY_COMPACT_DIALOGS, DEFAULT_COMPACT_DIALOGS);
 	}
 
 	public static final String KEY_DIALOG_FORM_IME = "experimental_dialog_form_ime";

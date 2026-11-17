@@ -1,0 +1,9 @@
+- The Side menu setting now lets you reorder sections and hide the ones you do not need. Their contents are preserved.
+- Added automatic cleanup of open pages: close deleted threads or threads not visited for a while, and limit the number of open pages. The current thread is protected, and favorites can be kept. Disabled by default.
+- Holding the refresh button in the FAB menu now reloads the thread with haptic feedback. A short press performs a normal refresh.
+- Improved local archive updates: new posts are added to the saved ones, and completed attachments are reused. The previous copy is preserved if a download is incomplete. Expanded saving diagnostics.
+- Added the Compact dialogs and hints experiment: post badge explanations open in a small card near the icon, and forms use more compact spacing. Disabled by default.
+- In Security, the setting for hiding text in the background now applies to replies and all other app notifications.
+- Navigation drawer settings now have a separate screen. Video player gesture settings have moved to Media → Video player.
+- Removed the obsolete Services and Connection sections from general settings. Per-forum connection settings remain in Forums.
+- Fixed a rare crash when opening an attachment context menu in the gallery.

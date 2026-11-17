@@ -101,7 +101,8 @@ public final class VideoCompressionService extends Service {
 			manager.createNotificationChannel(new NotificationChannel(CHANNEL, getString(R.string.compression_title), NotificationManager.IMPORTANCE_LOW));
 			int type = Build.VERSION.SDK_INT >= 35 ? ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROCESSING
 					: ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC;
-			startForeground(NOTIFICATION, notification().build(), type);
+			startForeground(NOTIFICATION, com.mishiranu.dashchan.content.security.AppSecurity
+					.prepareNotification(this, null, NOTIFICATION, notification().build()), type);
 		} catch (RuntimeException e) {
 			CompressionDiagnostics.failure("foreground_start", e);
 			if (job != null) job.fail(R.string.compression_start_failed); finish(); return START_NOT_STICKY;
@@ -142,7 +143,8 @@ public final class VideoCompressionService extends Service {
 			if (diagnostics != null) diagnostics.tick(progressState, job.itemPercent, output != null ? output.length() : -1,
 					android.os.SystemClock.elapsedRealtime() - lastProgress, wakeLock != null && wakeLock.isHeld());
 			job.changed();
-			try { getSystemService(NotificationManager.class).notify(NOTIFICATION, notification().build()); }
+			try { getSystemService(NotificationManager.class).notify(NOTIFICATION, com.mishiranu.dashchan.content.security.AppSecurity
+					.prepareNotification(VideoCompressionService.this, null, NOTIFICATION, notification().build())); }
 			catch (RuntimeException ignored) {}
 			// A stalled export must not keep a foreground service/codecs alive indefinitely.
 			if (android.os.SystemClock.elapsedRealtime() - lastProgress > 180_000) {
@@ -322,7 +324,8 @@ public final class VideoCompressionService extends Service {
 			try {
 				NotificationCompat.Builder complete = notification().clearActions().setOngoing(false).setAutoCancel(true)
 						.setProgress(0, 0, false).setContentText(getString(ending.error));
-				getSystemService(NotificationManager.class).notify(NOTIFICATION, complete.build());
+				getSystemService(NotificationManager.class).notify(NOTIFICATION, com.mishiranu.dashchan.content.security.AppSecurity
+						.prepareNotification(this, null, NOTIFICATION, complete.build()));
 			} catch (RuntimeException ignored) {}
 		}
 		stopSelf();

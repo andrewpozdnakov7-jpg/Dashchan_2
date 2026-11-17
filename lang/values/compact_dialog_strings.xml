@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="compact_dialogs">Compact dialogs and hints</string>
+    <string name="compact_dialogs_summary">Post status hints, compact form spacing and non-blocking status messages. Off by default.</string>
+    <string name="compact_post_statuses">Post status</string>
+    <string name="compact_bump_limit">Bump limit reached</string>
+    <string name="compact_show_post_statuses">Show post status</string>
+</resources>

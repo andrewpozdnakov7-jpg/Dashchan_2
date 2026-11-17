@@ -263,6 +263,8 @@ public class PostMarksColorsFragment extends PreferenceFragment {
 			com.mishiranu.dashchan.widget.InterfaceAppearance.standardFieldLabel(paletteTitle);
 			android.widget.ScrollView scroll = new android.widget.ScrollView(context);
 			if (com.mishiranu.dashchan.widget.InterfaceAppearance.isEnabled(context)) scroll.addView(layout);
+			com.mishiranu.dashchan.widget.CompactDialogUi.markForm(scroll, layout);
+			com.mishiranu.dashchan.widget.CompactDialogUi.markForm(layout, layout);
 			return MotionDialogBuilder.standard(context)
 					.setTitle(requireArguments().getInt(EXTRA_TITLE))
 					.setView(com.mishiranu.dashchan.widget.InterfaceAppearance.isEnabled(context) ? scroll : layout)

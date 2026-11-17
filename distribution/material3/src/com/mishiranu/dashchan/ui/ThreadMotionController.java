@@ -82,6 +82,7 @@ public final class ThreadMotionController {
 	}
 
 	public void finish() { if (active != null) active.finish(); }
+	public boolean hasActiveSession() { return active != null; }
 	public void clear() { finish(); anchors.clear(); }
 
 	/** Called before outgoing.onTerminate(): a destroyed adapter is too late to capture. */

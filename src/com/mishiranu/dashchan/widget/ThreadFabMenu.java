@@ -37,6 +37,7 @@ public final class ThreadFabMenu extends FrameLayout {
 	private static final float HIDE_TRAVEL_DP = 36f, SHOW_TRAVEL_DP = 18f;
 	public static final class Action {
 		public final int id, title, icon;
+		public final int longPressId, longPressTitle;
 		public final boolean enabled;
 		public final boolean opensSurface;
 		public final boolean selected;
@@ -44,8 +45,13 @@ public final class ThreadFabMenu extends FrameLayout {
 			this(id, title, icon, enabled, opensSurface, false);
 		}
 		public Action(int id, int title, int icon, boolean enabled, boolean opensSurface, boolean selected) {
+			this(id, title, icon, enabled, opensSurface, selected, 0, 0);
+		}
+		public Action(int id, int title, int icon, boolean enabled, boolean opensSurface, boolean selected,
+				int longPressId, int longPressTitle) {
 			this.id = id; this.title = title; this.icon = icon; this.enabled = enabled;
 			this.opensSurface = opensSurface; this.selected = selected;
+			this.longPressId = longPressId; this.longPressTitle = longPressTitle;
 		}
 	}
 	public interface Host {
@@ -290,18 +296,22 @@ public final class ThreadFabMenu extends FrameLayout {
 			button.setAccessibilityDelegate(new AccessibilityDelegate() {
 				@Override public void onInitializeAccessibilityNodeInfo(View view, AccessibilityNodeInfo info) {
 					super.onInitializeAccessibilityNodeInfo(view, info); info.setClassName(android.widget.Button.class.getName());
+					if (action.longPressId != 0 && view.isEnabled()) {
+						info.addAction(new AccessibilityNodeInfo.AccessibilityAction(
+								AccessibilityNodeInfo.ACTION_LONG_CLICK, getContext().getString(action.longPressTitle)));
+					}
 				}
 			});
-			button.setOnClickListener(v -> {
-				syncAvailability();
-				if (!opened || !available) return;
-				// A background refresh may change availability while the panel is open.
-				for (Action current : host.getActions()) if (current.id == action.id && current.enabled) {
-					// New surfaces own focus; never restore focus behind their window.
-					close(false, !current.opensSurface); host.onAction(current.id);
-					return;
-				}
-			});
+			button.setOnClickListener(v -> dispatchAction(action, false));
+			if (action.longPressId != 0) {
+				button.setOnLongClickListener(v -> {
+					boolean performed = dispatchAction(action, true);
+					// View supplies one standard long-press haptic. Suppress it if the action became unavailable.
+					v.setHapticFeedbackEnabled(performed);
+					// Always consume the hold: releasing must never fall through to ordinary refresh.
+					return true;
+				});
+			}
 			LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(actionTouchSize, actionTouchSize);
 			actions.addView(button, params);
 		}
@@ -323,6 +333,21 @@ public final class ThreadFabMenu extends FrameLayout {
 		requestLayout();
 		// Do not replace the accessibility tree again while opening.
 		fab.requestFocus();
+	}
+
+	private boolean dispatchAction(Action action, boolean longPress) {
+		syncAvailability();
+		if (!opened || !available) return false;
+		// A background refresh may change availability while the panel is open.
+		for (Action current : host.getActions()) if (current.id == action.id && current.enabled) {
+			int id = longPress ? current.longPressId : current.id;
+			if (id == 0) return false;
+			// New surfaces own focus; never restore focus behind their window.
+			close(false, !current.opensSurface);
+			host.onAction(id);
+			return true;
+		}
+		return false;
 	}
 
 	public boolean close(boolean animate, boolean restoreFocus) {

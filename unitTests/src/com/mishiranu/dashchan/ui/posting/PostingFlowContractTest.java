@@ -214,7 +214,6 @@ public class PostingFlowContractTest {
 		containsAll(captcha("snapshot"), "loadedCaptchaType != null ? loadedCaptchaType : captchaType",
 				"captchaData.copy()", "data.put(ChanPerformer.CaptchaData.INPUT, userInput)");
 		assertTrue(source("PostingCaptchaController").contains("ReadCaptchaTask.CaptchaState.MAY_LOAD"));
-		assertTrue(source("PostingCaptchaController").contains("ReadCaptchaTask.CaptchaState.MAY_LOAD_SOLVING"));
 		containsAll(draft("storeForSend"), "store.storePost(postDraft)", "store.storeCaptcha(chan, captcha.get())", "draftSaved = true");
 		assertTrue(coordinator("send").indexOf("drafts.storeForSend(") < coordinator("send").indexOf("postingBinder.send("));
 		assertTrue(captcha("snapshot").indexOf("captchaData.copy()") < captcha("snapshot").indexOf("data.put("));

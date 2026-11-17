@@ -17,6 +17,26 @@ import org.junit.runner.RunWith;
 /** Real resource/search/navigation checks; run the common test in both distribution variants. */
 @RunWith(AndroidJUnit4.class)
 public class ExperimentalPreferenceDescriptorsTest {
+	@Test public void compactDialogsAreAnOptInExperimentWithOneSearchDestination() {
+		ExperimentalPreferenceDescriptors.Toggle toggle = ExperimentalPreferenceDescriptors.compactDialogs();
+		assertTrue(toggle.available); assertFalse(toggle.defaultValue);
+		assertEquals(Preferences.KEY_COMPACT_DIALOGS, toggle.key);
+		assertEquals(R.string.compact_dialogs, toggle.titleResId);
+		assertEquals(R.string.compact_dialogs_summary, toggle.summaryResId);
+		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+			Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
+			List<SettingsSearchIndex.Entry> entries = SettingsSearchIndex.create(context);
+			int count = 0;
+			for (SettingsSearchIndex.Entry entry : entries) {
+				if (hasTargetKey(entry, context.getString(R.string.experimental_features), toggle.key)) {
+					assertTrue(entry.createFragment() instanceof ExperimentalFragment);
+					assertEquals(context.getString(toggle.titleResId), entry.getTitle());
+					assertTrue(SettingsSearchIndex.search(entries, entry.getTitle()).contains(entry)); count++;
+				}
+			}
+			assertEquals(1, count);
+		});
+	}
 	@Test public void photoEditorDescriptionRespectsDistributionAndDefault() {
 		ExperimentalPreferenceDescriptors.Toggle toggle = ExperimentalPreferenceDescriptors.photoEditor();
 		assertEquals(Preferences.KEY_NEW_PHOTO_EDITOR, toggle.key);

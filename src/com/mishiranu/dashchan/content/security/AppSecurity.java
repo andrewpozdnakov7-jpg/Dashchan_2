@@ -21,6 +21,8 @@ import java.util.Set;
 /** One gate for all activities, including editor, external intents and the private-browser process. */
 public final class AppSecurity implements Application.ActivityLifecycleCallbacks {
 	private static AppSecurity instance;
+	private static final NotificationContentCache<android.app.Notification> NOTIFICATION_CONTENTS = new NotificationContentCache<>();
+	private static final String NOTIFICATION_HIDDEN = "slooop.notification.content_hidden";
 	private static final java.util.List<java.lang.ref.WeakReference<android.view.Window>> WINDOWS = new java.util.ArrayList<>();
 	private static final String WINDOW_SHIELD = "slooop.security.window.shield";
 	private static final java.util.List<Popup> POPUPS = new java.util.ArrayList<>();
@@ -168,7 +170,7 @@ public final class AppSecurity implements Application.ActivityLifecycleCallbacks
 		}
 		if (notificationForeground == null || notificationForeground != active) {
 			if (SecuritySessionProvider.setNotificationForeground(application, active)) notificationForeground = active;
-			if (notificationPrivacyEnabled()) com.mishiranu.dashchan.content.WatcherNotifications.refreshReplyContents(application);
+			if (notificationPrivacyEnabled()) refreshNotificationContents(application);
 		}
 	}
 	private final android.os.Handler handler = new android.os.Handler(android.os.Looper.getMainLooper());
@@ -196,7 +198,7 @@ public final class AppSecurity implements Application.ActivityLifecycleCallbacks
 				SecurityStore.suspend(context);
 				SecuritySessionProvider.setNotificationForeground(application, false);
 				instance.notificationForeground = false;
-				if (instance.notificationPrivacyEnabled()) com.mishiranu.dashchan.content.WatcherNotifications.refreshReplyContents(application);
+				if (instance.notificationPrivacyEnabled()) refreshNotificationContents(application);
 				instance.protectAll();
 			}
 		}, filter);
@@ -277,7 +279,7 @@ public final class AppSecurity implements Application.ActivityLifecycleCallbacks
 	}
 
 	public static void redactNotification(Context context, androidx.core.app.NotificationCompat.Builder builder) {
-		if (isProtected(context)) {
+		if (SecurityStore.shouldHideNotificationText(context)) {
 			redact(builder, context);
 		}
 	}
@@ -292,16 +294,65 @@ public final class AppSecurity implements Application.ActivityLifecycleCallbacks
 				.setCustomContentView(null).setCustomBigContentView(null).setCustomHeadsUpContentView(null)
 				.setContentTitle("Slooop").setContentText(context.getString(com.mishiranu.dashchan.R.string.security_notification_hidden))
 				.setTicker(null).setSubText(null).setContentInfo(null).setVisibility(androidx.core.app.NotificationCompat.VISIBILITY_SECRET);
+		builder.getExtras().putBoolean(NOTIFICATION_HIDDEN, true);
 	}
 
 	public static android.app.Notification redactNotification(Context context, android.app.Notification notification) {
 		if (!com.mishiranu.dashchan.BuildConfig.ENABLE_APP_SECURITY_SETTINGS || notification == null) return notification;
-		boolean replies = com.mishiranu.dashchan.C.NOTIFICATION_CHANNEL_REPLIES.equals(notification.getChannelId());
-		if (!(replies ? SecurityStore.shouldHideReplyText(context) : isProtected(context))) return notification;
-		androidx.core.app.NotificationCompat.Builder builder = new androidx.core.app.NotificationCompat.Builder(context, notification);
+		if (!SecurityStore.shouldHideNotificationText(context)) return notification;
+		androidx.core.app.NotificationCompat.Builder builder = new androidx.core.app.NotificationCompat.Builder(context, notification.clone());
 		redact(builder, context);
-		builder.setOnlyAlertOnce(true).setSilent(true);
 		return builder.build();
+	}
+
+	/** Keep the producer's builder untouched so subsequent progress updates retain their original presentation. */
+	public static android.app.Notification prepareNotification(Context context, String tag, int id,
+			android.app.Notification notification) {
+		if (notification == null || !com.mishiranu.dashchan.BuildConfig.ENABLE_APP_SECURITY_SETTINGS) return notification;
+		NOTIFICATION_CONTENTS.put(tag, id, notification.getChannelId(), notification.when, notification.clone());
+		return redactNotification(context, notification);
+	}
+
+	static void clearNotificationContents() { NOTIFICATION_CONTENTS.clear(); }
+
+	/** Rebind only active notices. Replies have a separate authoritative source in MyPostsStorage. */
+	private static void refreshNotificationContents(Context context) {
+		try {
+			android.app.NotificationManager manager = context.getSystemService(android.app.NotificationManager.class);
+			if (manager != null) {
+				android.service.notification.StatusBarNotification[] active = manager.getActiveNotifications();
+				java.util.HashSet<String> keys = new java.util.HashSet<>();
+				for (android.service.notification.StatusBarNotification item : active) keys.add(NotificationContentCache.key(item.getTag(), item.getId()));
+				NOTIFICATION_CONTENTS.retain(keys);
+				boolean hide = SecurityStore.shouldHideNotificationText(context);
+				for (android.service.notification.StatusBarNotification item : active) {
+					android.app.Notification shown = item.getNotification();
+					if (com.mishiranu.dashchan.C.NOTIFICATION_CHANNEL_REPLIES.equals(shown.getChannelId())) continue;
+					boolean hidden = shown.extras != null && (shown.extras.getBoolean(NOTIFICATION_HIDDEN)
+							|| "Slooop".contentEquals(shown.extras.getCharSequence(android.app.Notification.EXTRA_TITLE, ""))
+							&& context.getString(com.mishiranu.dashchan.R.string.security_notification_hidden)
+									.contentEquals(shown.extras.getCharSequence(android.app.Notification.EXTRA_TEXT, "")));
+					if (hidden == hide) continue;
+					android.app.Notification original = NOTIFICATION_CONTENTS.get(item.getTag(), item.getId(), shown.getChannelId(), shown.when);
+					if (original == null) {
+						if (!hide) continue; // A process restart cannot reconstruct already-hidden service content.
+						original = shown;
+						NOTIFICATION_CONTENTS.put(item.getTag(), item.getId(), shown.getChannelId(), shown.when, shown.clone());
+					}
+					androidx.core.app.NotificationCompat.Builder builder = new androidx.core.app.NotificationCompat.Builder(context, original.clone())
+							.setOnlyAlertOnce(true).setSilent(true);
+					android.app.Notification updated = redactNotification(context, builder.build());
+					// A dismissed or newly replaced notification must not be resurrected or overwritten.
+					for (android.service.notification.StatusBarNotification current : manager.getActiveNotifications()) {
+						if (item.getId() == current.getId() && java.util.Objects.equals(item.getTag(), current.getTag())
+								&& item.getPostTime() == current.getPostTime()) {
+							manager.notify(item.getTag(), item.getId(), updated); break;
+						}
+					}
+				}
+			}
+		} catch (RuntimeException ignored) { /* Publishing retains the same policy on its next update. */ }
+		com.mishiranu.dashchan.content.WatcherNotifications.refreshReplyContents(context);
 	}
 
 	private static boolean exempt(Activity activity) {
@@ -350,13 +401,7 @@ public final class AppSecurity implements Application.ActivityLifecycleCallbacks
 		for (Activity activity : instance.started) {
 			applyCaptureFlag(activity.getWindow(), instance.shields.containsKey(activity));
 		}
-		if (instance.enabled()) {
-			android.app.NotificationManager notifications = instance.application.getSystemService(android.app.NotificationManager.class);
-			if (notifications != null) for (android.service.notification.StatusBarNotification active : notifications.getActiveNotifications()) {
-				notifications.notify(active.getTag(), active.getId(), redactNotification(instance.application, active.getNotification()));
-			}
-		}
-		com.mishiranu.dashchan.content.WatcherNotifications.refreshReplyContents(instance.application);
+		refreshNotificationContents(instance.application);
 	}
 
 	/** Side-effect-only entry activities must defer before opening another app or importing content. */

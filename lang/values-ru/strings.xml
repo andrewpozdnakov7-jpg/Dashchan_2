@@ -106,10 +106,6 @@
 	<string name="captcha_pass">Пропуск капчи</string>
 	<string name="captcha_pass__summary">Код для пропуска капчи</string>
 	<string name="add_from_favorites">Добавить из избранного</string>
-	<string name="captcha_solving">Решение капчи</string>
-	<string name="captcha_solving__summary">Использование стороннего сервиса для автоматического решения
-		reCAPTCHA или hCaptcha</string>
-	<string name="captcha_solving_info__sentence">Поддерживаются совместимые с Antigate API сервисы.</string>
 	<string name="captcha_type">Тип капчи</string>
 	<string name="cards">Карточки</string>
 	<string name="catalog">Каталог</string>
@@ -536,6 +532,7 @@
 	<string name="names_are_disabled">Имена отключены</string>
 	<string name="navigation">Навигация</string>
 	<string name="navigation_drawer">Панель навигации</string>
+	<string name="navigation_drawer_settings_summary">Разделы бокового меню и отображение открытых страниц</string>
 	<string name="never">Никогда</string>
 	<string name="never_highlight">Не подсвечивать</string>
 	<string name="new_extensions_installed__sentence">Были установлены новые расширения. Необходим перезапуск.</string>
@@ -690,7 +687,7 @@
 	<string name="video_volume_gesture_test_area">Область проверки жеста громкости</string>
 	<string name="video_volume_gesture_test_reset">Вернуть тестовую громкость к 50%</string>
 	<string name="gesture_controls">Управление жестами</string>
-	<string name="gesture_controls__summary">Настройка областей жестов видеоплеера</string>
+	<string name="gesture_controls__summary">Громкость, перемотка и масштабирование видео</string>
 	<string name="rounded_dialogs">Скруглённые всплывающие окна</string>
 	<string name="rounded_dialogs__summary">Скругляет углы диалогов, меню и окон предпросмотра постов, а также внешний край бокового меню</string>
 	<string name="rounded_dialogs_radius">Радиус скругления</string>
@@ -914,9 +911,6 @@
 	<string name="some_posts_have_been_edited">Есть изменённые сообщения</string>
 	<string name="sorting">Сортировка</string>
 	<string name="sound">Звук</string>
-	<string name="specific_to_internal_services__sentence">Следующая опция является частной для некоторых сервисов,
-		таких как капчи и обновление приложения. Вы можете настроить HTTPS для форумов в соответствующих
-		категориях настроек.</string>
 	<string name="spoiler">Спойлер</string>
 	<string name="spoilers">Спойлеры</string>
 	<string name="ssl_https_error">Ошибка SSL/HTTPS</string>
@@ -1035,8 +1029,6 @@
 	<string name="use_built_in_video_player__summary">Воспроизводить вложенные WebM видео</string>
 	<string name="use_forum_settings">Использовать настройки форума</string>
 	<string name="use_gms_security_provider">Использ. постав. безопасности GMS</string>
-	<string name="use_javascript_for_recaptcha">Использ. JavaScript для reCAPTCHA</string>
-	<string name="use_javascript_for_recaptcha__summary">Google reCAPTCHA может быть упрощена</string>
 	<string name="user_authorization">Авторизация пользователя</string>
 	<string name="user_boards">Пользовательские разделы</string>
 	<string name="user_interface">Интерфейс</string>
@@ -1502,10 +1494,16 @@
 	<string name="form_diagnostics_saved">Диагностика экранов сохранена</string>
 	<string name="form_diagnostics_saved_summary">Отправьте отчёт разработчику. Он содержит параметры окон, оформления и клавиатуры, но не содержимое сообщений.</string>
 	<string name="form_diagnostics_share">Поделиться диагностикой экранов</string>
-	<string name="drawer_section_order">Порядок разделов бокового меню</string>
-	<string name="drawer_section_order_entry_summary">Расположение разделов и кнопок в боковом меню</string>
+	<string name="drawer_section_order">Боковое меню</string>
+	<string name="drawer_section_order_entry_summary">Порядок и видимость разделов бокового меню</string>
 	<string name="drawer_custom_order">Свой порядок разделов</string>
-	<string name="drawer_section_order_summary">Перетаскивайте разделы за значок справа или нажмите на раздел, чтобы выбрать место. Порядок общий для всех форумов. Недоступные разделы не показываются в меню; перемещение не включает их. При выключении возвращается обычный порядок, а ваши настройки сохраняются.</string>
+	<string name="drawer_section_order_summary">Галочки управляют видимостью. Для изменения порядка перетаскивайте разделы за значок справа или нажимайте на название.</string>
+	<string name="drawer_section_visibility">Видимость разделов</string>
+	<string name="drawer_section_visibility_summary">Скрыть или показать разделы бокового меню</string>
+	<string name="drawer_section_hidden">Скрыт</string>
+	<string name="drawer_settings_always_visible">Всегда показываются</string>
+	<string name="drawer_show_section__format">Показывать: %s</string>
+	<string name="drawer_restore_defaults_summary">Обычный порядок и все доступные разделы</string>
 	<string name="post_text_sizes">Размеры текста</string>
 	<string name="post_text_sizes_summary">Отдельные размеры заголовков тредов, сообщений, служебной информации, текста настроек и боковой панели</string>
 	<string name="post_subject_text_size">Размер заголовков тредов</string>

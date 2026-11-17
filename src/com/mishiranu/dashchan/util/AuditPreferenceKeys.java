@@ -12,6 +12,7 @@ final class AuditPreferenceKeys {
 			case "favorite_threads_collapsed": return "favorite_threads_collapsed";
 			case "drawer_section_order": return "drawer_section_order";
 			case "drawer_custom_order": return "drawer_custom_order";
+			case "drawer_hidden_sections": return "drawer_hidden_sections";
 			case "show_spoilers": return "show_spoilers";
 			case "popup_color_mode": case "popup_background": case "popup_foreground": return "popup_colors";
 			case "text_scale": case "subject_text_scale": case "metadata_text_scale": return "text_scale";

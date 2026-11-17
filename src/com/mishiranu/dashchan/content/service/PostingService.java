@@ -383,8 +383,8 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 					}
 				}
 				builder.setContentText(taskState.text);
-				com.mishiranu.dashchan.content.security.AppSecurity.redactNotification(PostingService.this, builder);
-				startForeground(C.NOTIFICATION_ID_POSTING, builder.build(),
+				startForeground(C.NOTIFICATION_ID_POSTING, com.mishiranu.dashchan.content.security.AppSecurity
+						.prepareNotification(PostingService.this, null, C.NOTIFICATION_ID_POSTING, builder.build()),
 						ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
 			}
 			if (notificationData.syncLatch != null) {
@@ -754,8 +754,8 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 						.putExtra(C.EXTRA_POST_NUMBER, postNumber != null ? postNumber.toString() : null);
 				builder.setContentIntent(PendingIntent.getActivity(this, 0, intent,
 						PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
-				com.mishiranu.dashchan.content.security.AppSecurity.redactNotification(this, builder);
-				notificationManager.notify(tag, 0, builder.build());
+				notificationManager.notify(tag, 0, com.mishiranu.dashchan.content.security.AppSecurity
+						.prepareNotification(this, tag, 0, builder.build()));
 			}
 
 			if (targetThreadNumber != null && Preferences.getFavoriteOnReply().isEnabled(data.optionSage)) {
@@ -847,7 +847,6 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 		builder.setContentTitle(getString(R.string.post_not_sent));
 		builder.setContentText(details);
 		builder.setStyle(new NotificationCompat.BigTextStyle().bigText(details));
-		com.mishiranu.dashchan.content.security.AppSecurity.redactNotification(this, builder);
 		Intent intent = MainNavigationIntent.create(this).setAction(C.ACTION_POSTING)
 				.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP)
 				.putExtra(C.EXTRA_CHAN_NAME, queueItem.chanName)
@@ -859,7 +858,8 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 						+ System.nanoTime()));
 		builder.setContentIntent(PendingIntent.getActivity(this, tag.hashCode(), intent,
 				PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
-		notificationManager.notify(tag, 0, builder.build());
+		notificationManager.notify(tag, 0, com.mishiranu.dashchan.content.security.AppSecurity
+				.prepareNotification(this, tag, 0, builder.build()));
 	}
 
 	public static class Receiver extends BroadcastReceiver {

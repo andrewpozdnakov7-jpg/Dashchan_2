@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<string name="page_cleanup_notice_message">Теперь можно автоматически закрывать старые и удалённые треды в разделе «Страницы» бокового меню. Доступны срок хранения и ограничение количества тредов.\n\nПо умолчанию функция выключена. История, избранное и сохранённые файлы сохраняются.</string>
+	<string name="page_cleanup_notice_limit">Это окно появится не более трёх раз.</string>
+	<string name="page_cleanup_notice_keep_off">Оставить выключенной</string>
+	<string name="page_cleanup_notice_settings">Перейти в настройки</string>
+	<string name="page_cleanup_notice_save_failed">Не удалось сохранить состояние напоминания. Попробуйте ещё раз.</string>
+</resources>
