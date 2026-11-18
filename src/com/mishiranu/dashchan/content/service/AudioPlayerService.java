@@ -27,6 +27,7 @@ import com.mishiranu.dashchan.util.WeakObservable;
 import com.mishiranu.dashchan.widget.ClickableToast;
 import com.mishiranu.dashchan.widget.ThemeEngine;
 import java.io.File;
+import java.util.UUID;
 
 public class AudioPlayerService extends BaseService implements MediaPlayer.OnCompletionListener,
 		MediaPlayer.OnErrorListener, ReadFileTask.FileCallback {
@@ -46,6 +47,7 @@ public class AudioPlayerService extends BaseService implements MediaPlayer.OnCom
 	private NotificationCompat.Builder builder;
 	private ReadFileTask readFileTask;
 	private MediaPlayer mediaPlayer;
+	private Uri playbackSession;
 
 	private String chanName;
 	private String fileName;
@@ -67,6 +69,7 @@ public class AudioPlayerService extends BaseService implements MediaPlayer.OnCom
 		super.onCreate();
 
 		audioFocus = new AudioFocus(this, change -> {
+			if (mediaPlayer == null) return;
 			switch (change) {
 				case LOSS: {
 					pause(true);
@@ -136,6 +139,7 @@ public class AudioPlayerService extends BaseService implements MediaPlayer.OnCom
 						ClickableToast.show(R.string.cache_is_unavailable);
 						cleanup(true, true);
 					} else {
+						playbackSession = Uri.fromParts("slooop-audio", UUID.randomUUID().toString(), null);
 						wakeLock.acquire();
 						if (cachedFile.exists()) {
 							initAndPlayAudio(cachedFile);
@@ -147,12 +151,27 @@ public class AudioPlayerService extends BaseService implements MediaPlayer.OnCom
 					}
 				}
 			} else if (ACTION_CANCEL.equals(action)) {
-				cleanup(true, true);
+				if (isCurrentSession(intent) || playbackSession == null && mediaPlayer == null && readFileTask == null) {
+					cleanup(true, true);
+				}
 			} else if (ACTION_TOGGLE.equals(action)) {
-				togglePlayback();
+				if (mediaPlayer != null && isCurrentSession(intent)) {
+					togglePlayback();
+				} else if (mediaPlayer == null && readFileTask == null) {
+					cleanup(true, true);
+				}
 			}
 		}
 		return START_NOT_STICKY;
+	}
+
+	private boolean isCurrentSession(Intent command) {
+		return playbackSession != null && playbackSession.equals(command.getData());
+	}
+
+	private PendingIntent sessionCommand(String action) {
+		return AndroidUtils.getAnyServicePendingIntent(this, 0,
+				obtainIntent(this, action).setData(playbackSession), PendingIntent.FLAG_IMMUTABLE);
 	}
 
 	@Override
@@ -167,17 +186,18 @@ public class AudioPlayerService extends BaseService implements MediaPlayer.OnCom
 	}
 
 	private void cleanup(boolean stopSelf, boolean notify) {
+		playbackSession = null;
+		pausedByTransientLossOfFocus = false;
 		if (readFileTask != null) {
 			readFileTask.cancel();
 			readFileTask = null;
 		}
 		audioFocus.release();
 		if (mediaPlayer != null) {
-			mediaPlayer.stop();
 			mediaPlayer.release();
 			mediaPlayer = null;
 		}
-		wakeLock.release();
+		if (wakeLock.isHeld()) wakeLock.release();
 		if (stopSelf) {
 			// Ensure service was started foreground at least once
 			startForeground(getPlaybackNotification(false), ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
@@ -263,6 +283,7 @@ public class AudioPlayerService extends BaseService implements MediaPlayer.OnCom
 
 	@Override
 	public void onCompletion(MediaPlayer mp) {
+		if (mp != mediaPlayer) return;
 		pause(true);
 		mediaPlayer.stop();
 		mediaPlayer.release();
@@ -271,6 +292,7 @@ public class AudioPlayerService extends BaseService implements MediaPlayer.OnCom
 
 	@Override
 	public boolean onError(MediaPlayer mp, int what, int extra) {
+		if (mp != mediaPlayer) return true;
 		ClickableToast.show(R.string.playback_error);
 		if (audioFile != null) {
 			audioFile.delete();
@@ -315,7 +337,11 @@ public class AudioPlayerService extends BaseService implements MediaPlayer.OnCom
 			return;
 		}
 		startForeground(getPlaybackNotification(true), ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
-		play(true);
+		if (!play(true)) {
+			ClickableToast.show(R.string.playback_error);
+			cleanup(true, true);
+			return;
+		}
 		startForeground(getPlaybackNotification(true), ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
 	}
 
@@ -332,16 +358,13 @@ public class AudioPlayerService extends BaseService implements MediaPlayer.OnCom
 					MainNavigationIntent.create(this).setAction(C.ACTION_PLAYER),
 					PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 			builder.setContentIntent(contentIntent);
-			PendingIntent toggleIntent = AndroidUtils.getAnyServicePendingIntent(this, 0,
-					obtainIntent(this, ACTION_TOGGLE),
-					PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-			boolean playing = mediaPlayer != null && mediaPlayer.isPlaying();
-			builder.addAction(0,
-					getString(playing ? R.string.pause : R.string.play), toggleIntent);
-			PendingIntent cancelIntent = AndroidUtils.getAnyServicePendingIntent(this, 0,
-					obtainIntent(this, ACTION_CANCEL),
-					PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-			builder.addAction(0, getString(R.string.stop), cancelIntent);
+			if (playbackSession != null && mediaPlayer != null) {
+				PendingIntent toggleIntent = sessionCommand(ACTION_TOGGLE);
+				builder.addAction(0, getString(mediaPlayer.isPlaying() ? R.string.pause : R.string.play), toggleIntent);
+			}
+			if (playbackSession != null) {
+				builder.addAction(0, getString(R.string.stop), sessionCommand(ACTION_CANCEL));
+			}
 			this.builder = builder;
 			builder.setContentTitle(getString(R.string.audio_playback));
 			builder.setContentText(getString(R.string.file_name__format, fileName));
@@ -355,19 +378,15 @@ public class AudioPlayerService extends BaseService implements MediaPlayer.OnCom
 			builder = new NotificationCompat.Builder(this, C.NOTIFICATION_CHANNEL_AUDIO_PLAYER);
 			builder.setSmallIcon(error ? android.R.drawable.stat_sys_download_done
 					: android.R.drawable.stat_sys_download);
-			builder.setDeleteIntent(AndroidUtils.getAnyServicePendingIntent(this, 0,
-					obtainIntent(this, ACTION_CANCEL),
-					PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
 			if (error) {
 				PendingIntent retryIntent = AndroidUtils.getAnyServicePendingIntent(this, 0,
 						obtainIntent(this, ACTION_START).setData(uri).putExtra(EXTRA_CHAN_NAME, chanName)
 								.putExtra(EXTRA_FILE_NAME, fileName),
 						PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 				builder.addAction(0, getString(R.string.retry), retryIntent);
-			} else {
-				PendingIntent cancelIntent = AndroidUtils.getAnyServicePendingIntent(this, 0,
-						obtainIntent(this, ACTION_CANCEL),
-						PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+			} else if (playbackSession != null) {
+				PendingIntent cancelIntent = sessionCommand(ACTION_CANCEL);
+				builder.setDeleteIntent(cancelIntent);
 				builder.addAction(0, getString(android.R.string.cancel), cancelIntent);
 			}
 			builder.setColor(notificationColor);

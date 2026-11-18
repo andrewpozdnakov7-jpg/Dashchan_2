@@ -49,7 +49,8 @@ public final class PhotoEditorSessionFiles {
             if (files == null) return false;
             for (File file : files) {
                 if (!file.isFile() || !directChild(session, file)
-                        || !file.getName().matches("session\\.json(?:\\.bak|\\.new)?|export\\.(?:jpg|png)|asset-[a-f0-9-]{36}\\.png")) return false;
+                        || !file.getName().matches("(?:session\\.json|classic\\.zip)(?:\\.bak|\\.new)?"
+                                + "|export\\.(?:jpg|png)|asset-[a-f0-9-]{36}\\.png")) return false;
             }
             for (File file : files) if (!file.delete()) return false;
             return session.delete();

@@ -43,6 +43,7 @@ public class WebViewService extends Service {
 		public final HttpClient.ProxyData proxyData;
 		public final boolean verifyCertificate;
 		public final long timeout;
+		public final boolean diagnostics;
 		public final WebViewExtra extra;
 		public final IRequestCallback requestCallback;
 
@@ -54,14 +55,28 @@ public class WebViewService extends Service {
 		public boolean recaptchaIsHcaptcha;
 
 		private CookieRequest(String uriString, String userAgent, HttpClient.ProxyData proxyData,
-				boolean verifyCertificate, long timeout, WebViewExtra extra, IRequestCallback requestCallback) {
+				boolean verifyCertificate, long timeout, boolean diagnostics, WebViewExtra extra,
+				IRequestCallback requestCallback) {
 			this.uriString = uriString;
 			this.userAgent = userAgent;
 			this.proxyData = proxyData;
 			this.verifyCertificate = verifyCertificate;
 			this.timeout = timeout;
+			this.diagnostics = diagnostics;
 			this.extra = extra;
 			this.requestCallback = requestCallback;
+		}
+
+		void diagnostic(int event, int code) {
+			if (diagnostics) reportDiagnostic(requestCallback, event, code);
+		}
+	}
+
+	private static void reportDiagnostic(IRequestCallback callback, int event, int code) {
+		try {
+			callback.onDiagnosticEvent(event, code);
+		} catch (RemoteException ignored) {
+			// An unavailable diagnostic consumer must not affect this request.
 		}
 	}
 
@@ -95,6 +110,9 @@ public class WebViewService extends Service {
 			case MESSAGE_HANDLE_FINISH: {
 				CookieRequest cookieRequest = this.cookieRequest;
 				if (cookieRequest != null) {
+					if (message.arg1 == IRequestCallback.DIAG_TIMEOUT) {
+						cookieRequest.diagnostic(IRequestCallback.DIAG_TIMEOUT, 0);
+					}
 					synchronized (cookieRequest) {
 						if (!cookieRequest.ready) {
 							cookieRequest.ready = true;
@@ -120,7 +138,7 @@ public class WebViewService extends Service {
 					message.getTarget().removeMessages(MESSAGE_HANDLE_FINISH);
 					if (cookieRequest.recaptchaV2Result != null) {
 						webView.loadUrl("javascript:handleResult('" + cookieRequest.recaptchaV2Result + "')");
-						message.getTarget().sendEmptyMessageDelayed(MESSAGE_HANDLE_FINISH, cookieRequest.timeout);
+						scheduleTimeout(cookieRequest);
 					} else {
 						message.getTarget().sendEmptyMessage(MESSAGE_HANDLE_FINISH);
 					}
@@ -146,6 +164,11 @@ public class WebViewService extends Service {
 		}
 		return false;
 	});
+
+	private void scheduleTimeout(CookieRequest request) {
+		handler.sendMessageDelayed(handler.obtainMessage(MESSAGE_HANDLE_FINISH, IRequestCallback.DIAG_TIMEOUT, 0),
+				request.timeout);
+	}
 
 	private class ServiceClient extends WebViewClient {
 		@Override
@@ -211,6 +234,7 @@ public class WebViewService extends Service {
 			CookieRequest cookieRequest = WebViewService.this.cookieRequest;
 			if (cookieRequest != null) {
 				if (cookieRequest.verifyCertificate) {
+					cookieRequest.diagnostic(IRequestCallback.DIAG_TLS_ERROR, error != null ? error.getPrimaryError() : 0);
 					sslHandler.cancel();
 					handler.removeMessages(MESSAGE_HANDLE_FINISH);
 					handler.sendEmptyMessage(MESSAGE_HANDLE_FINISH);
@@ -228,7 +252,20 @@ public class WebViewService extends Service {
 			super.onReceivedError(view, request, error);
 
 			if (request == null || request.isForMainFrame()) {
+				CookieRequest current = WebViewService.this.cookieRequest;
+				if (current != null) {
+					current.diagnostic(IRequestCallback.DIAG_MAIN_FRAME_ERROR, error != null ? error.getErrorCode() : 0);
+				}
 				handleReceivedError();
+			}
+		}
+
+		@Override
+		public void onReceivedHttpError(WebView view, WebResourceRequest request, WebResourceResponse response) {
+			super.onReceivedHttpError(view, request, response);
+			CookieRequest current = WebViewService.this.cookieRequest;
+			if (view == webView && !destroyed && current != null && request.isForMainFrame()) {
+				current.diagnostic(IRequestCallback.DIAG_MAIN_FRAME_HTTP_ERROR, response.getStatusCode());
 			}
 		}
 
@@ -322,6 +359,7 @@ public class WebViewService extends Service {
 					createWebView();
 				} catch (RuntimeException e) {
 					android.util.Log.w("WebViewRecovery", "service_create_failed type=" + e.getClass().getSimpleName());
+					cookieRequest.diagnostic(IRequestCallback.DIAG_CREATE_FAILED, 0);
 					if (webView != null) webView.destroy();
 					webView = null;
 					completeFailedRequest(cookieRequest);
@@ -336,7 +374,7 @@ public class WebViewService extends Service {
 			WebView clearedView = webView;
 			if (cookieRequest != null) {
 				handler.removeMessages(MESSAGE_HANDLE_FINISH);
-				handler.sendEmptyMessageDelayed(MESSAGE_HANDLE_FINISH, cookieRequest.timeout);
+				scheduleTimeout(cookieRequest);
 				WebViewUtils.clearAll(clearedView, () -> {
 					if (destroyed || this.cookieRequest != cookieRequest || webView != clearedView
 							|| cookieRequest.ready) return;
@@ -344,6 +382,7 @@ public class WebViewService extends Service {
 					WebViewUtils.setProxy(this, cookieRequest.proxyData, () -> {
 						if (!destroyed && this.cookieRequest == cookieRequest && webView == clearedView
 								&& !cookieRequest.ready) {
+							cookieRequest.diagnostic(IRequestCallback.DIAG_LOAD, 0);
 							clearedView.loadUrl(cookieRequest.uriString);
 						}
 					});
@@ -369,15 +408,16 @@ public class WebViewService extends Service {
 			@Override
 			public boolean loadWithCookieResult(String requestId, String uriString, String userAgent,
 					boolean proxySocks, String proxyHost, int proxyPort, boolean verifyCertificate, long timeout,
-					WebViewExtra extra, IRequestCallback requestCallback) throws RemoteException {
+					boolean diagnostics, WebViewExtra extra, IRequestCallback requestCallback) throws RemoteException {
 			if (proxySocks && !WebViewFeature.isFeatureSupported(WebViewFeature.PROXY_OVERRIDE)) {
 				// The fallback proxy path handles HTTP only. Never silently load a SOCKS forum directly.
+				if (diagnostics) reportDiagnostic(requestCallback, IRequestCallback.DIAG_PROXY_UNSUPPORTED, 0);
 				return false;
 			}
 				HttpClient.ProxyData proxyData = proxyHost != null
 						? new HttpClient.ProxyData(proxySocks, proxyHost, proxyPort) : null;
 				CookieRequest cookieRequest = new CookieRequest(uriString, userAgent, proxyData,
-						verifyCertificate, timeout, extra, requestCallback);
+						verifyCertificate, timeout, diagnostics, extra, requestCallback);
 				synchronized (interruptedRequests) {
 					if (interruptedRequests.containsKey(requestId)) {
 						interruptedRequests.remove(requestId);
@@ -473,6 +513,8 @@ public class WebViewService extends Service {
 				if (webView != createdView || destroyed) return false;
 				String text = consoleMessage.message();
 				if (text != null && text.contains("SyntaxError")) {
+					CookieRequest request = cookieRequest;
+					if (request != null) request.diagnostic(IRequestCallback.DIAG_SCRIPT_ERROR, 0);
 					handler.removeMessages(MESSAGE_HANDLE_FINISH);
 					handler.sendEmptyMessage(MESSAGE_HANDLE_FINISH);
 					return true;

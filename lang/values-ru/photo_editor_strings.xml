@@ -70,6 +70,8 @@
 	<string name="pe_preview_failed">Не удалось обновить превью. Попробуй уменьшить количество правок.</string>
 	<string name="pe_restore_failed">Часть данных сессии не удалось восстановить. Проверь фото перед сохранением.</string>
 	<string name="pe_session_failed">Не удалось сохранить сессию. При закрытии процесса правки могут потеряться.</string>
+	<string name="pe_session_restore_failed">Не удалось восстановить правки. Открыто исходное изображение.</string>
+	<string name="pe_session_restored_previous">Восстановлены последние сохранённые правки. Более поздние изменения могли потеряться.</string>
 	<string name="pe_discard">Отменить правки и закрыть редактор?</string>
 	<string name="pe_discard_button">Отменить правки</string>
     <string name="pe_color_grid">Сетка</string>

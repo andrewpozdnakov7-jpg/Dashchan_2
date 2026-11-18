@@ -7,7 +7,6 @@ import android.content.res.ColorStateList;
 import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
-import android.graphics.drawable.InsetDrawable;
 import android.graphics.drawable.RippleDrawable;
 import android.view.Gravity;
 import android.view.View;
@@ -33,7 +32,6 @@ import java.util.Map;
 
 /** Presentation only. PageFragment owns visibility/Back, PostsPage owns every command. */
 public final class ThreadFabMenu extends FrameLayout {
-	private static final int TOUCH_SIZE = 48, SURFACE_SIZE = 40;
 	private static final float HIDE_TRAVEL_DP = 36f, SHOW_TRAVEL_DP = 18f;
 	public static final class Action {
 		public final int id, title, icon;
@@ -71,6 +69,7 @@ public final class ThreadFabMenu extends FrameLayout {
 	private final Drawable moreIcon, closeIcon;
 	private final ScrollView scroller;
 	private final LinearLayout actions;
+	private final int fabSize, fabMargin;
 	private final int panelWidth, actionTouchSize, panelGap, panelOpenTravel, panelCloseTravel;
 	private final Rect bounds = new Rect(), reportedBounds = new Rect();
 	private final int[] location = new int[2], rootLocation = new int[2];
@@ -112,6 +111,8 @@ public final class ThreadFabMenu extends FrameLayout {
 		colors = AppearanceColors.interfaceCompatibility(theme.base == ThemeEngine.Theme.Base.DARK,
 				theme.window, theme.card, theme.accent, ResourceUtils.getColor(getContext(), android.R.attr.textColorPrimary),
 				ResourceUtils.getColor(getContext(), R.attr.colorTextError));
+		fabSize = getResources().getDimensionPixelSize(R.dimen.thread_fab_size);
+		fabMargin = getResources().getDimensionPixelSize(R.dimen.thread_fab_margin);
 		panelWidth = getResources().getDimensionPixelSize(R.dimen.thread_fab_compact_panel_width);
 		actionTouchSize = getResources().getDimensionPixelSize(R.dimen.thread_fab_compact_action_touch_size);
 		panelGap = getResources().getDimensionPixelSize(R.dimen.thread_fab_compact_visible_gap);
@@ -146,12 +147,12 @@ public final class ThreadFabMenu extends FrameLayout {
 		moreIcon = getContext().getDrawable(R.drawable.ic_thread_fab_more).mutate();
 		closeIcon = getContext().getDrawable(R.drawable.ic_close).mutate();
 		fab.setImageDrawable(new android.graphics.drawable.LayerDrawable(new Drawable[] {moreIcon, closeIcon}));
-		InsetDrawable surface = new InsetDrawable(fabShape, dp((TOUCH_SIZE - SURFACE_SIZE) / 2f));
-		fab.setBackground(new RippleDrawable(ColorStateList.valueOf(colors.ripple), surface, null));
+		fabShape.setCornerRadius(getResources().getDimension(R.dimen.thread_fab_corner_radius));
+		fab.setBackground(new RippleDrawable(ColorStateList.valueOf(colors.ripple), fabShape, null));
 		fab.setScaleType(android.widget.ImageView.ScaleType.CENTER_INSIDE);
-		int iconPadding = dp((TOUCH_SIZE - 21) / 2f);
+		int iconPadding = (fabSize - getResources().getDimensionPixelSize(R.dimen.thread_fab_compact_icon_size)) / 2;
 		fab.setPadding(iconPadding, iconPadding, iconPadding, iconPadding);
-		fab.setElevation(dp(4));
+		fab.setElevation(getResources().getDimension(R.dimen.thread_fab_elevation));
 		fab.setOnClickListener(v -> { if (opened) close(true, true); else open(); });
 		addView(fab);
 		setVisibility(INVISIBLE);
@@ -187,7 +188,7 @@ public final class ThreadFabMenu extends FrameLayout {
 		fab.setAlpha(clamped);
 		float scale = .94f + .06f * clamped;
 		fab.setScaleX(scale); fab.setScaleY(scale);
-		fab.setTranslationY((1f - clamped) * dp(TOUCH_SIZE) * .8f - Math.max(0f, progress - 1f) * dp(10));
+		fab.setTranslationY((1f - clamped) * fabSize * .8f - Math.max(0f, progress - 1f) * dp(10));
 	}
 	private void updateFabVisibility(boolean animate) {
 		boolean show = available && (!scrollHidden || opened);
@@ -435,7 +436,6 @@ public final class ThreadFabMenu extends FrameLayout {
 	}
 	private void updateFabShape() {
 		fabShape.setColor(androidx.core.graphics.ColorUtils.blendARGB(colors.primaryContainer, colors.primary, shapeProgress));
-		fabShape.setCornerRadius(dp(14 + 6 * shapeProgress));
 		int tint = androidx.core.graphics.ColorUtils.blendARGB(colors.onPrimaryContainer, colors.onPrimary, shapeProgress);
 		moreIcon.setTint(tint); closeIcon.setTint(tint);
 		moreIcon.setAlpha(Math.round(255 * (1 - shapeProgress))); closeIcon.setAlpha(Math.round(255 * shapeProgress));
@@ -484,34 +484,35 @@ public final class ThreadFabMenu extends FrameLayout {
 		int width = MeasureSpec.getSize(widthSpec), height = MeasureSpec.getSize(heightSpec);
 		setMeasuredDimension(width, height); updateSafeBounds();
 		scrim.measure(MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY));
-		fab.measure(MeasureSpec.makeMeasureSpec(dp(TOUCH_SIZE), MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(dp(TOUCH_SIZE), MeasureSpec.EXACTLY));
-		int actionBottom = height - safeBottom - dp(8 + TOUCH_SIZE) + dp((TOUCH_SIZE - SURFACE_SIZE) / 2f) - panelGap;
+		int fabSpec = MeasureSpec.makeMeasureSpec(fabSize, MeasureSpec.EXACTLY);
+		fab.measure(fabSpec, fabSpec);
+		int actionBottom = height - safeBottom - fabMargin - fabSize - panelGap;
 		scroller.measure(MeasureSpec.makeMeasureSpec(panelWidth, MeasureSpec.EXACTLY),
 				MeasureSpec.makeMeasureSpec(Math.max(0, actionBottom - safeTop), MeasureSpec.AT_MOST));
 	}
 	@Override protected void onLayout(boolean changed, int l, int t, int r, int b) {
 		int width = r - l, height = b - t;
 		boolean rtl = getLayoutDirection() == LAYOUT_DIRECTION_RTL;
-		int x = rtl ? safeLeft + dp(16) : width - safeRight - dp(16 + TOUCH_SIZE), y = height - safeBottom - dp(8 + TOUCH_SIZE);
+		int x = rtl ? safeLeft + fabMargin : width - safeRight - fabMargin - fabSize;
+		int y = height - safeBottom - fabMargin - fabSize;
 		// Keep the shared axis inside both system safe bounds and the complete scrollbar hit strip.
 		int panelSafeLeft = rtl ? Math.max(safeLeft, list.getPaddingLeft() + list.getFastScrollerTouchWidth()) : safeLeft;
 		int panelSafeRight = rtl ? safeRight : Math.max(safeRight, list.getPaddingRight() + list.getFastScrollerTouchWidth());
-		int panelExtra = (panelWidth - dp(TOUCH_SIZE) + 1) / 2;
-		int minX = panelSafeLeft + panelExtra, maxX = width - panelSafeRight - dp(TOUCH_SIZE) - panelExtra;
+		int panelExtra = Math.max(0, (panelWidth - fabSize + 1) / 2);
+		int minX = panelSafeLeft + panelExtra, maxX = width - panelSafeRight - fabSize - panelExtra;
 		x = Math.max(minX, Math.min(x, maxX));
-		fab.layout(x, y, x + dp(TOUCH_SIZE), y + dp(TOUCH_SIZE));
-		fab.setPivotX(dp(TOUCH_SIZE) / 2f); fab.setPivotY(dp(TOUCH_SIZE));
+		fab.layout(x, y, x + fabSize, y + fabSize);
+		fab.setPivotX(fabSize / 2f); fab.setPivotY(fabSize);
 		scrim.layout(0, 0, width, height);
-		int actionX = x + (dp(TOUCH_SIZE) - scroller.getMeasuredWidth()) / 2;
-		// Visible FAB surface begins inside its 48 dp touch target; do not count this inset twice.
-		int actionBottom = y + dp((TOUCH_SIZE - SURFACE_SIZE) / 2f) - panelGap;
+		int actionX = x + (fabSize - scroller.getMeasuredWidth()) / 2;
+		int actionBottom = y - panelGap;
 		scroller.layout(actionX, actionBottom - scroller.getMeasuredHeight(), actionX + scroller.getMeasuredWidth(), actionBottom);
 		scroller.setPivotX(scroller.getWidth() / 2f); scroller.setPivotY(scroller.getHeight());
 		if (opened && scrollToBottomPending) {
 			scrollToBottomPending = false;
 			scroller.scrollTo(0, actions.getHeight());
 		}
-		bounds.set(x, y, x + dp(TOUCH_SIZE), y + dp(TOUCH_SIZE));
+		bounds.set(x, y, x + fabSize, y + fabSize);
 		if (!reportedBounds.equals(bounds)) { reportedBounds.set(bounds); host.onGeometryChanged(new Rect(bounds)); }
 	}
 	@Override public void onWindowFocusChanged(boolean focused) { super.onWindowFocusChanged(focused); syncAvailability(); }

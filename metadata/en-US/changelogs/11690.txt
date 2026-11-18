@@ -1,0 +1,7 @@
+- The floating thread button now follows Material 3 sizing. You can hide and reorder actions and add Gallery to the menu.
+- When updating a local archive, Slooop reuses attachments from earlier copies and verifies the new archive before removing them.
+- The new keyboard handling for editing feeds and filtering history is enabled by default.
+- The classic photo editor restores saved edits after Android unloads the app from memory.
+- Automatic cleanup keeps the thread you are replying to open. Fixed the tooltips for sage and the bump limit.
+- Fixed page restoration in the built-in browser and Reddit, and audio controls in notifications.
+- Android 17 has a local network permission for connecting to local proxies and servers. Diagnostics now records network events and app exits due to memory limits.

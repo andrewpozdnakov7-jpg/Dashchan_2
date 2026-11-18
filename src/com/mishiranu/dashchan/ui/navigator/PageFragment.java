@@ -14,6 +14,7 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Button;
 import androidx.annotation.NonNull;
 import androidx.core.view.OneShotPreDrawListener;
 import com.mishiranu.dashchan.R;
@@ -124,6 +125,7 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 	}
 	private View progressView;
 	private ViewFactory.ErrorHolder errorHolder;
+	private Button localNetworkSettingsButton;
 	private PaddedRecyclerView recyclerView;
 	private ThreadQuickNavigation quickNavigation;
 	private ThreadFabMenu threadFabMenu;
@@ -343,6 +345,7 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 		}
 		progressView = null;
 		errorHolder = null;
+		localNetworkSettingsButton = null;
 		recyclerView = null;
 		quickNavigation = null;
 		threadFabMenu = null;
@@ -708,6 +711,22 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 		progressView.setVisibility(View.GONE);
 		errorHolder.layout.setVisibility(View.VISIBLE);
 		errorHolder.text.setText(errorItem.toString());
+		boolean localNetworkError = errorItem.type == ErrorItem.Type.LOCAL_NETWORK_PERMISSION
+				&& getPage().chanName != null;
+		if (localNetworkError && localNetworkSettingsButton == null) {
+			ViewGroup parent = (ViewGroup) errorHolder.text.getParent();
+			localNetworkSettingsButton = new Button(parent.getContext(), null, android.R.attr.borderlessButtonStyle);
+			localNetworkSettingsButton.setText(R.string.local_network_access);
+			localNetworkSettingsButton.setOnClickListener(v -> {
+				if (isResumed()) ((FragmentHandler) requireActivity()).pushFragment(
+						new com.mishiranu.dashchan.ui.preference.ChanFragment(getPage().chanName));
+			});
+			parent.addView(localNetworkSettingsButton, ViewGroup.LayoutParams.WRAP_CONTENT,
+					ViewGroup.LayoutParams.WRAP_CONTENT);
+		}
+		if (localNetworkSettingsButton != null) {
+			localNetworkSettingsButton.setVisibility(localNetworkError ? View.VISIBLE : View.GONE);
+		}
 		if (motion != null) motion.commit();
 	}
 

@@ -104,7 +104,17 @@ public class PostingFlowContractTest {
 		containsAll(captcha("createDraft"), "captchaType, captchaState, captchaData, loadedCaptchaType",
 				"loadedCaptchaInput, loadedCaptchaValidity, input, captchaImage, captchaLarge",
 				"captchaBlackAndWhite, captchaLoadTime, boardName, threadNumber");
-		containsAll(method("onSaveInstanceState"), "outState.putParcelable(EXTRA_CAPTCHA_DRAFT, captchaDraft)", "saveDraftIfNeeded()");
+		String savedState = method("onSaveInstanceState");
+		containsAll(savedState, "DraftsStorage.CaptchaDraft draft = captureCaptchaDraft()",
+				"outState.putString(EXTRA_CAPTCHA_DRAFT_KEY, captchaState().retainDraft(draft))",
+				"captchaController.saveReusableDraft(draft, config)",
+				"outState.putBundle(EXTRA_REUSABLE_CAPTCHA, reusable)", "saveDraftIfNeeded()");
+		assertFalse(savedState.contains("putParcelable(EXTRA_CAPTCHA_DRAFT"));
+		containsAll(method("captchaState"), "new ViewModelProvider(this).get(PostingCaptchaController.CaptchaViewModel.class)");
+		containsAll(method("onViewCreated"), "getRetainedDraft(savedInstanceState.getString(EXTRA_CAPTCHA_DRAFT_KEY))",
+				"restoreReusableDraft(savedInstanceState.getBundle(EXTRA_REUSABLE_CAPTCHA), captcha)",
+				"AndroidUtils.getParcelable(savedInstanceState, EXTRA_CAPTCHA_DRAFT, DraftsStorage.CaptchaDraft.class)",
+				"if (!captchaRestoreSuccess)", "captchaController.refreshCaptcha(");
 		containsAll(method("saveDraftIfNeeded"), "draftController.saveDraft(sendCoordinator.isSendSuccess(), getChanName(), this::capturePostDraft, this::captureCaptchaDraft)");
 		containsAll(draft("saveDraft"), "if (!sendSuccess && !draftSaved)", "draftSaved = true", "store.storePost(post.get())", "store.storeCaptcha(chan, captcha.get())");
 	}

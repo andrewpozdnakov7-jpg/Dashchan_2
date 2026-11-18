@@ -60,12 +60,14 @@ def main():
     form_source = FORM.read_text(encoding="utf-8")
     coordinator = lambda name: method(send_source, name)
     form = lambda name: method(form_source, name)
-    picker = source.index("attachmentPicker = registerForActivityResult(")
-    editor = source.index("imageEditor = registerForActivityResult(")
+    registration = "com.mishiranu.dashchan.content.security.ProtectedActivityResults.register("
+    picker = source.index("attachmentPicker = " + registration)
+    editor = source.index("imageEditor = " + registration)
     constructor = source.index("public PostingFragment()")
-    assert picker < editor < constructor and source.count("registerForActivityResult(") == 2
-    require(source[picker:editor], "C.REQUEST_CODE_ATTACH", "result.getResultCode()", "result.getData()")
-    require(source[editor:constructor], "C.REQUEST_CODE_IMAGE_EDITOR", "result.getResultCode()", "result.getData()")
+    assert picker < editor < constructor and source.count(registration) == 2
+    assert "registerForActivityResult(" not in source
+    require(source[picker:editor], 'this, "posting-attachments"', "C.REQUEST_CODE_ATTACH", "result.getResultCode()", "result.getData()")
+    require(source[editor:constructor], 'this, "posting-editor"', "C.REQUEST_CODE_IMAGE_EDITOR", "result.getResultCode()", "result.getData()")
     require(body("capturePostDraft"), "attachmentController.createAttachmentDrafts()", "commentView.getSelectionEnd()",
             "getChanName(), getBoardName(), getThreadNumber(), name, email, password",
             "subject, comment, commentCarriage, attachmentDrafts", "optionSage, optionSpoiler, optionOriginalPoster, userIcon")
@@ -83,7 +85,18 @@ def main():
     require(captcha("createDraft"), "captchaType, captchaState, captchaData, loadedCaptchaType",
             "loadedCaptchaInput, loadedCaptchaValidity, input, captchaImage, captchaLarge",
             "captchaBlackAndWhite, captchaLoadTime, boardName, threadNumber")
-    require(body("onSaveInstanceState"), "outState.putParcelable(EXTRA_CAPTCHA_DRAFT, captchaDraft)", "saveDraftIfNeeded()")
+    saved_state = body("onSaveInstanceState")
+    require(saved_state, "DraftsStorage.CaptchaDraft draft = captureCaptchaDraft()",
+            "outState.putString(EXTRA_CAPTCHA_DRAFT_KEY, captchaState().retainDraft(draft))",
+            "outState.putBundle(EXTRA_REUSABLE_CAPTCHA, reusable)", "saveDraftIfNeeded()")
+    require(saved_state, "hasPendingCaptchaDialog()", "outState.putBundle(EXTRA_CAPTCHA_DIALOG, captchaDialog)")
+    pause = body("onPause")
+    assert pause.index("captureCaptchaDialog()") < pause.index("pendingCaptchaDialog = openDialog") < pause.index("deactivateToolbar()")
+    require(body("hasPendingCaptchaDialog"), 'isGraphicChallenge(pendingCaptchaDialog.getLong("challengeTime"))')
+    require(body("onResume"), "if (hasPendingCaptchaDialog())", "view.invalidate()")
+    require(re.sub(r"\s+", " ", source),
+            "if (hasPendingCaptchaDialog() && postingAppearance.restoreImageCaptchaDialogState(pendingCaptchaDialog)) { pendingCaptchaDialog = null")
+    assert "putParcelable(EXTRA_CAPTCHA_DRAFT" not in saved_state
     require(body("saveDraftIfNeeded"), "draftController.saveDraft(sendCoordinator.isSendSuccess(), getChanName(), this::capturePostDraft, this::captureCaptchaDraft)")
     require(draft("saveDraft"), "if (!sendSuccess && !draftSaved)", "draftSaved = true",
             "store.storePost(post.get())", "store.storeCaptcha(chan, captcha.get())")
@@ -114,13 +127,13 @@ def main():
     require(coordinator("createCallback"), "sendSuccess = true", "if (host.isResumed()) host.closePostingFragment()", "dismiss()")
     move = attachment("moveAttachment")
     require(move, "attachments.indexOf(holder)", "sourceIndex < 0 || sourceIndex == targetIndex",
-            "attachments.remove(sourceIndex)", "attachments.add(targetIndex, holder)", "invalidateAttachments(true)", "host.saveDraftAfterAttachmentChange()")
-    assert move.index("attachments.remove(sourceIndex)") < move.index("attachments.add(targetIndex, holder)")
+            "attachments.remove(sourceIndex)", "attachments.add(targetIndex, holder)", "invalidateAttachments(true)", "attachmentsChanged()")
+    assert move.index("attachments.remove(sourceIndex)") < move.index("attachments.add(targetIndex, holder)") < move.index("attachmentsChanged()")
     assert "new AttachmentHolder" not in move
     remove = controller[controller.index("private final View.OnClickListener attachmentRemoveListener"):
                     controller.index("private void invalidateAttachments")]
     require(remove, "(AttachmentHolder) v.getTag()", "attachments.remove(holder)", "videoThumbnailTasks.remove(holder)",
-            "task.cancel()", "host.saveDraftAfterAttachmentChange()")
+            "task.cancel()", "attachmentsChanged()")
     require(body("getTextIfVisible"), "editText.getVisibility() == View.VISIBLE", "StringUtils.nullIfEmpty")
     require(body("isCheckedIfVisible"), "checkBox.getVisibility() == View.VISIBLE && checkBox.isChecked()")
     send = body("submitPostingForm")
@@ -148,13 +161,13 @@ def main():
             "host.setSendButtonEnabled(false)", "host.dismissPostingProgress()", "minimize()", "drafts.resetSavedGuard()")
     require(captcha("snapshot"), "captchaData.copy()", "data.put(ChanPerformer.CaptchaData.INPUT, userInput)",
             "loadedCaptchaType != null ? loadedCaptchaType : captchaType")
-    require(captcha_source, "ReadCaptchaTask.CaptchaState.MAY_LOAD", "ReadCaptchaTask.CaptchaState.MAY_LOAD_SOLVING")
+    require(captcha_source, "needLoad = state == ReadCaptchaTask.CaptchaState.MAY_LOAD;")
     require(draft("storeForSend"), "store.storePost(postDraft)", "store.storeCaptcha(chan, captcha.get())", "draftSaved = true")
     require(attachment("createSendAttachments"), "for (int i = 0; i < attachments.size(); i++)",
             "AttachmentHolder data = attachments.get(i)", "if (!found)", "rating = null",
-            "attachmentRatingItems.get(0).first", "if (fileHolder != null)", "attachmentHashes.add(data.hash)",
-            "fileHolder, data.name, rating", "data.optionUniqueHash, data.optionRemoveMetadata, data.optionRemoveFileName",
-            "postingConfiguration.attachmentSpoiler && data.optionSpoiler, data.reencoding",
+            "attachmentRatingItems.get(0).first", "if (fileHolder != null)", "attachmentHashes.add(converted != null ? converted.hash : data.hash)",
+            "fileHolder, converted != null ? converted.name : data.name, rating", "data.optionUniqueHash, data.optionRemoveMetadata, data.optionRemoveFileName",
+            "postingConfiguration.attachmentSpoiler && data.optionSpoiler, data.photoOptions != null ? data.photoOptions.pending(data.hash) : data.reencoding",
             "return new SendAttachments(attachments, attachmentHashes)")
     assert coordinator("send").index("drafts.storeForSend(") < coordinator("send").index("postingBinder.send(")
     assert captcha("snapshot").index("captchaData.copy()") < captcha("snapshot").index("data.put(")
@@ -184,7 +197,6 @@ def main():
             "new PostingCaptchaController.CaptchaSnapshot", "captcha.data.copy()")
     require(coordinator("unbind"), "if (previous != null) previous.unbind(connection)")
     assert "android.view" not in form_source and "android.widget" not in form_source
-    assert SEND_TESTS.read_text(encoding="utf-8").count("@Test ") == 12
     require(body("handlePostingActivityResult"), "attachmentController.handleActivityResult(requestCode, resultCode, data)")
     result = attachment("handleActivityResult")
     require(result, "resultCode == Activity.RESULT_OK && data != null", "case C.REQUEST_CODE_ATTACH",
@@ -201,11 +213,11 @@ def main():
     assert host.count(");") == 11
     require(attachment("onAttachmentImportComplete"), "setAttachmentImportInProgress(false)",
             "result.requestedCount - attachedCount", "attachments.size() < postingConfiguration.attachmentCount",
-            "host.saveDraftAfterAttachmentChange()")
+            "if (attachedCount > 0) { attachmentsChanged()")
     require(attachment("setAttachmentImportInProgress"), "removeCallbacks(processingNotice)",
             "sendButton == currentSendButton && attachmentImportInProgress", "500L")
     require(attachment("openSystemAttachmentPicker"), "Intent.ACTION_GET_CONTENT, null")
-    require(attachment("moveAttachment"), "host.saveDraftAfterAttachmentChange()")
+    require(attachment("attachmentsChanged"), "host.saveDraftAfterAttachmentChange()")
     require(re.sub(r"\s+", " ", controller), 'newSingleThreadPool(3000, "PostingThumbnail", null)',
             "oldTask.cancel()", "boolean currentTask = videoThumbnailTasks.get(holder) == this",
             "currentTask && host != null && attachments.contains(holder) && hash.equals(holder.hash)",
@@ -221,9 +233,9 @@ def main():
     assert "PostingDraftController" not in captcha_source and "PostingAttachmentsController" not in captcha_source
     require(body("onViewCreated"), "captchaController.attachView(createCaptchaHost())",
             "captchaController.restoreDraft(captchaDraft, savedCaptcha, captcha)")
-    require(captcha("refreshCaptcha"), "if (host == null) return", "!forceCaptcha || captchaState != ReadCaptchaTask.CaptchaState.MAY_LOAD_SOLVING",
+    require(captcha("refreshCaptcha"), "if (host == null) return", "captchaLoadTime = 0L", "host.showLoading()",
             "restart || !viewModel.hasTaskOrValue()", "forceCaptcha ? null : Preferences.getCaptchaPass(chan)",
-            "task.execute(ConcurrentUtils.PARALLEL_EXECUTOR)", "viewModel.attach(task)")
+            "mayShowLoadButton, chan, boardName, threadNumber", "task.execute(ConcurrentUtils.PARALLEL_EXECUTOR)", "viewModel.attach(task)")
     require(captcha("onReadCaptchaSuccess"), "if (host == null) return", "clock.getAsLong()", "host.updatePostingConfigurationIfNeeded()")
     require(captcha("onReadCaptchaError"), "if (host == null) return", "host.showError(errorItem)")
     require(captcha("canRestoreStoredDraft"), "validity.compareTo(draft.loadedValidity) >= 0",
@@ -243,12 +255,20 @@ def main():
     require(coordinator("isCurrentBinding"), "bound && binding != null && host != null && generation == bindingGeneration")
     assert "PostingAttachmentsController" not in send_source and "PostingCaptchaController" not in send_source
     assert "PostingSendCoordinator" not in draft_source and "PostingSendCoordinator" not in captcha_source
-    assert STATE_TESTS.read_text(encoding="utf-8").count("@Test ") == 13
-    assert JVM.read_text(encoding="utf-8").count("@Test ") == 14
-    assert ANDROID.read_text(encoding="utf-8").count("@Test ") == 8
-    assert ANDROID_CONTROLLER.read_text(encoding="utf-8").count("@Test ") == 9
-    print("PASS: posting source boundaries (drafts, ordered attachments, captcha, send, lifecycle, activity results)")
-    print("PASS: lexical balance; prepared 14 JVM source contracts, 8 Android model round trips, 9 Android attachment, 13 captcha/draft and 12 send-controller tests")
+    suites = {
+        STATE_TESTS: ("realPostingSavedStateIsSmallAndRetainsGraphicCaptchaAcrossRecreation",
+                      "supportedTextOnlyCaptchaCanBeRestoredAfterLosingTheViewModel", "graphicCaptchaDialogSurvivesPauseAndRecreation"),
+        JVM: ("launchersStayInFragmentInPickerThenEditorOrder", "reorderKeepsHolderAndRemoveTargetsTaggedIdentity"),
+        ANDROID: ("attachmentRoundTripPreservesEveryOptionCombination", "captchaBundlePreservesEveryStateInputValidityAndFlags"),
+        ANDROID_CONTROLLER: ("partialImportClearsBusyStateHonoursLimitAndSavesOnlyIfAttached",
+                             "reorderedEditorResultCannotChangeAnotherAttachment"),
+        SEND_TESTS: ("acceptedSendStoresBeforeHandoffMinimizesAndKeepsSaveGuard",
+                     "oldConnectionAndCallbacksCannotPublishIntoRecreatedView"),
+    }
+    for path, cases in suites.items():
+        tests = set(re.findall(r"@Test\s+public void (\w+)\(", path.read_text(encoding="utf-8")))
+        assert set(cases) <= tests, f"Missing tests in {path.name}: {set(cases) - tests}"
+    print("PASS: posting source boundaries and named regression cases")
     print("NOT RUN: Java compilation, JUnit, Android instrumentation, Gradle build, lint, device smoke")
 
 

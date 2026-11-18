@@ -44,7 +44,7 @@ def main():
     texts = "\n".join(path.read_text(encoding="utf-8") for path in files)
     default = ET.Element("resources"); russian = ET.Element("resources")
     for directory, tree in (("values", default), ("values-ru", russian)):
-        for base in (ROOT / "lang", ROOT / "distribution/material3/res", ROOT / "distribution/github/res"):
+        for base in (ROOT / "res", ROOT / "lang", ROOT / "distribution/material3/res", ROOT / "distribution/github/res"):
             for path in (base / directory).glob("*.xml"): tree.extend(ET.parse(path).getroot())
     en = {node.attrib["name"]: node.text or "" for node in default if node.tag == "string"}
     ru = {node.attrib["name"]: node.text or "" for node in russian if node.tag == "string"}
@@ -88,10 +88,15 @@ def main():
     assert 0 <= direct.index("prepareSave();") < direct.index("encode(true, null);")
     export_options = activity[activity.index("private void showExport()"):activity.index("private void encode(")]
     assert "closeSection(" not in export_options and "encode(" not in export_options
-    for draft in ("int[] side = {exportSide}", "int[] quality = {exportQuality}", "boolean[] png = {exportPng}"):
-        assert draft in export_options
-    for update in ("exportSide = side[0]", "exportQuality = quality[0]", "exportPng = png[0]"):
-        assert update in export_options
+    assert "new PhotoFileOptionsSheet(this,fileOptions,fileSheetState" in export_options
+    assert "fileOptions=options; exportPng=options.png; exportQuality=options.quality;" in export_options
+    sheet = (JAVA / "photo/PhotoFileOptionsSheet.java").read_text(encoding="utf-8")
+    assert "draft=new PhotoAttachmentOptions.Builder(options)" in sheet
+    cancel = sheet[sheet.index("cancel.setOnClickListener"):sheet.index("done.setOnClickListener")]
+    assert "leaveSize(false)" in cancel and "else cancel()" in cancel and "commit.accept(" not in cancel
+    done = sheet[sheet.index("done.setOnClickListener"):sheet.index("ViewGroup content=")]
+    assert done.index("result=draft.build()") < done.index("commit.accept(result)") < done.index("dismiss()")
+    assert sheet.count("commit.accept(") == 1
     persist = activity[activity.index("private void persist()"):activity.index("@Override protected void onSaveInstanceState")]
     assert "sessionBuilder(document.copy()).build()" in persist
     assert persist.count("if (request != sessionGeneration) return") == 2
@@ -105,7 +110,8 @@ def main():
     codec = (JAVA / "photo/EditorSessionCodec.java").read_text(encoding="utf-8")
     keys = set(re.findall(r'json\.put\("(\w+)"', codec))
     assert keys == {"hash", "name", "document", "section", "checkpoint", "adjustment", "drawTool", "hideTool", "color", "size", "png",
-                    "toolSettingsV2", "mosaicSize", "blurPreset", "drawAll", "objectAboveEffects", "side", "quality", "exportOptionsV2", "maskAll"}
+                    "toolSettingsV2", "mosaicSize", "blurPreset", "drawAll", "objectAboveEffects", "side", "quality", "exportOptionsV2", "maskAll",
+                    "photoOptionsV1", "fileSheet"}
     document = (JAVA / "photo/EditorDocument.java").read_text(encoding="utf-8")
     assert "new int[Adjustment.COUNT]" in document and "ordinal()" not in document
     assert "Math.max(-100, Math.min(100, adjustments.getInt(i)))" in document
@@ -127,6 +133,8 @@ def main():
     assert "attachmentController.handleActivityResult(requestCode, resultCode, data)" in posting_fragment
     posting = (COMMON / "PostingAttachmentsController.java").read_text(encoding="utf-8")
     assert "AttachmentResultGuard.matches(" in posting, "Missing stale attachment guard"
+    lexical_balance(COMMON / "ImageEditorActivity.java")
+    lexical_balance(ROOT / "instrumentationTests/src/com/mishiranu/dashchan/ui/posting/ClassicEditorSessionTest.java")
     legacy = (COMMON / "ImageEditorActivity.java").read_text(encoding="utf-8")
     assert "PhotoEditorBridge.createIntent(" in legacy and "if (experimental != null) return experimental" in legacy
     bridge = (JAVA / "PhotoEditorBridge.java").read_text(encoding="utf-8")

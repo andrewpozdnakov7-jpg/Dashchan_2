@@ -4,6 +4,7 @@ import android.os.Handler;
 import android.os.Looper;
 import com.mishiranu.dashchan.content.MainApplication;
 import com.mishiranu.dashchan.util.IOUtils;
+import com.mishiranu.dashchan.util.NetworkDiagnostics;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.File;
@@ -151,6 +152,7 @@ public final class TranslationModelManager {
 
 	private void downloadFile(TranslationModel.Direction direction, TranslationModel.FileSpec file,
 			File destination, long alreadyDownloaded) throws IOException {
+		NetworkDiagnostics trace = NetworkDiagnostics.startApp("translation_model");
 		HttpURLConnection connection = (HttpURLConnection) new URL(file.url).openConnection();
 		connection.setConnectTimeout(30000);
 		connection.setReadTimeout(120000);
@@ -159,6 +161,7 @@ public final class TranslationModelManager {
 		connection.setRequestProperty("User-Agent", "Slooop-Offline-Translation/1");
 		try {
 			int responseCode = connection.getResponseCode();
+			if (trace != null) trace.event("http_response status=" + responseCode);
 			if (responseCode < 200 || responseCode >= 300) {
 				throw new IOException("HTTP " + responseCode);
 			}
@@ -177,6 +180,10 @@ public final class TranslationModelManager {
 					updateProgress(direction, progress);
 				});
 			}
+			if (trace != null) trace.event("body_verified bytes=" + file.compressedSize);
+		} catch (IOException e) {
+			if (trace != null) trace.failure("request_failed", e);
+			throw e;
 		} finally {
 			connection.disconnect();
 		}

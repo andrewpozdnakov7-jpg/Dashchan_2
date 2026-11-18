@@ -10,7 +10,7 @@ GALLERY = ROOT / "src/com/mishiranu/dashchan/ui/gallery"
 
 
 def method(source, name):
-    match = re.search(r"(?:private|public|protected) [\w<>.]+ " + re.escape(name) + r"\(", source)
+    match = re.search(r"(?:private|public|protected) (?:static )?[\w<>.]+ " + re.escape(name) + r"\(", source)
     assert match, f"Missing method {name}"
     start = source.index("{", match.end()) + 1
     depth, end = 1, start
@@ -79,12 +79,17 @@ def main():
             assert forbidden not in body, f"Unexpected side effect in {name}: {forbidden}"
     assert "PipDiagnosticMode.NORMAL" in method(activity, "endPictureInPictureDiagnosticTrial")
     assert "endPictureInPictureDiagnosticTrial" in method(activity, "replacePictureInPictureContent")
-    assert 'Arrays.asList("normal", "no_hint", "entry_hint", "layout_hint", "no_seamless_resize")' in experimental
-    assert "Preferences.KEY_PIP_DIAGNOSTIC_MODE" in search
-    refs = set(re.findall(r"R.string.(pip_diagnostic_\w+)", activity + experimental + search))
+    assert "return DEFAULT_PIP_DIAGNOSTIC_MODE;" in method(preferences, "getPipDiagnosticMode")
+    assert "getString(" not in method(preferences, "getPipDiagnosticMode")
+    diagnostics = ROOT / "src/com/mishiranu/dashchan/ui/preference/PipDiagnosticsFragment.java"
+    balance(diagnostics)
+    settings = diagnostics.read_text(encoding="utf-8")
+    assert "addButton(0, R.string.pip_diagnostic_hidden_summary).setSelectable(false)" in method(settings, "onViewCreated")
+    assert all("KEY_PIP_DIAGNOSTIC_MODE" not in source for source in (experimental, search, settings))
+    refs = set(re.findall(r"R\.string\.(pip_diagnostic_\w+)", activity + experimental + search + settings))
     for locale in ["values", "values-ru"]:
-        strings = ET.parse(ROOT / "lang" / locale / "pip_diagnostics_strings.xml").getroot()
-        names = [node.attrib["name"] for node in strings]
+        names = [node.get("name") for file in (ROOT / "lang" / locale).glob("*.xml")
+                 for node in ET.parse(file).getroot().findall("string") if node.get("name", "").startswith("pip_diagnostic_")]
         assert len(names) == len(set(names)) and refs <= set(names), f"Missing/duplicate {locale} strings"
     print("PASS: PiP lexical balance, default-off/frozen selection, final publication guard, hint-only mode 2")
     print("PASS: settings/search/localization, live playback controls, normal branch and invalidation safeguards")

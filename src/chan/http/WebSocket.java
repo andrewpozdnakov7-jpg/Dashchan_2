@@ -199,7 +199,14 @@ public final class WebSocket {
 			}
 			boolean verifyCertificate = holder.chan.locator.isUseHttps() && Preferences.isVerifyCertificate();
 			HttpSession session = holder.createSession(client, uri, null, verifyCertificate, 0, 5);
-			SocketResult socketResult = openSocket(session, verifyCertificate);
+			SocketResult socketResult;
+			try {
+				socketResult = openSocket(session, verifyCertificate);
+			} catch (HttpException | IOException e) {
+				if (session.diagnostics != null) session.diagnostics.failure("websocket_open_failed", e);
+				throw e;
+			}
+			if (session.diagnostics != null) session.diagnostics.event("websocket_open");
 			socket = socketResult.socket;
 			inputStream = socketResult.inputStream;
 			outputStream = socketResult.outputStream;
@@ -382,6 +389,8 @@ public final class WebSocket {
 						.setTimeouts(connectTimeout, readTimeout).open();
 			} catch (InetSocket.InvalidCertificateException e) {
 				throw new HttpException(ErrorItem.Type.INVALID_CERTIFICATE, false, false, e);
+			} catch (IOException e) {
+				throw HttpClient.transformConnectionIOException(e, proxy, url.getHost());
 			} finally {
 				HttpClient.setProxyAuthentication(previousAuthData);
 			}

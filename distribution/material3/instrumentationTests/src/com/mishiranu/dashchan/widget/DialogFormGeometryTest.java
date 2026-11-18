@@ -1,7 +1,9 @@
 package com.mishiranu.dashchan.widget;
 
 import static org.junit.Assert.*;
+import android.content.Context;
 import android.view.View;
+import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -27,6 +29,12 @@ public class DialogFormGeometryTest {
 		}
 	}
 
+	private static View contentWithHeight(Context context, int height) {
+		View child = new View(context);
+		child.setMinimumHeight(height);
+		return child;
+	}
+
 	private static void layout(View view, int width, int height, int mode) {
 		view.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(height, mode));
 		view.layout(0, 0, view.getMeasuredWidth(), view.getMeasuredHeight());
@@ -49,8 +57,8 @@ public class DialogFormGeometryTest {
 					super.onMeasure(width, MeasureSpec.makeMeasureSpec(Math.max(0, cap), MeasureSpec.AT_MOST));
 				}
 			};
-			actual.addView(new View(context), new ScrollView.LayoutParams(-1, 3000));
-			published.addView(new View(context), new ScrollView.LayoutParams(-1, 3000));
+			actual.addView(contentWithHeight(context, 3000), new ScrollView.LayoutParams(-1, -2));
+			published.addView(contentWithHeight(context, 3000), new ScrollView.LayoutParams(-1, -2));
 			for (int mode : new int[] {View.MeasureSpec.EXACTLY, View.MeasureSpec.AT_MOST, View.MeasureSpec.UNSPECIFIED}) {
 				layout(actual, 500, 600, mode); layout(published, 500, 600, mode);
 				assertEquals(published.getMeasuredHeight(), actual.getMeasuredHeight());
@@ -67,10 +75,11 @@ public class DialogFormGeometryTest {
 	@Test public void modernViewportWrapsCapsAndRespectsAnExactOuterSlot() {
 		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
 			DialogFormScrollView form = new DialogFormScrollView(PostingTestContext.create());
-			View child = new View(form.getContext()); form.addView(child, new ScrollView.LayoutParams(-1, 30));
+			View child = contentWithHeight(form.getContext(), 30);
+			form.addView(child, new ScrollView.LayoutParams(-1, -2));
 			int cap = StandardAppearance.dp(form, AppearanceShapes.DIALOG_FORM_MAX_HEIGHT);
 			layout(form, 500, cap * 2, View.MeasureSpec.AT_MOST); assertEquals(30, form.getHeight());
-			child.getLayoutParams().height = cap * 3;
+			child.setMinimumHeight(cap * 3);
 			layout(form, 500, cap * 2, View.MeasureSpec.AT_MOST); assertEquals(cap, form.getHeight());
 			layout(form, 500, 0, View.MeasureSpec.UNSPECIFIED); assertEquals(cap, form.getHeight());
 			View slot = form.dialogContent(); layout(slot, 500, cap * 2, View.MeasureSpec.EXACTLY);
@@ -85,14 +94,35 @@ public class DialogFormGeometryTest {
 			EditText input = new EditText(context); input.setText("retained selection"); input.setSelection(2, 7);
 			fields.addView(input, new LinearLayout.LayoutParams(-1, 100));
 			LinearLayout choices = new LinearLayout(context); choices.setOrientation(LinearLayout.VERTICAL);
+			choices.addView(new View(context), new LinearLayout.LayoutParams(-1, 40));
+			CheckBox firstBoard = new CheckBox(context);
+			firstBoard.setText("Board");
+			firstBoard.setMinHeight(64);
+			choices.addView(firstBoard, new LinearLayout.LayoutParams(-1, -2));
 			for (int i = 0; i < 50; i++) choices.addView(new View(context), new LinearLayout.LayoutParams(-1, 40));
 			DialogFormScrollView form = DialogFormScrollView.create(context, fields, choices, false);
 			View slot = form.dialogContent(); ScrollView list = (ScrollView) choices.getParent();
 			int cap = StandardAppearance.dp(form, AppearanceShapes.DIALOG_FORM_MAX_HEIGHT);
 			layout(slot, 500, cap + 200, View.MeasureSpec.AT_MOST);
 			assertEquals(cap, list.getHeight()); assertFalse(form.canScrollVertically(1)); assertTrue(list.canScrollVertically(1));
-			layout(slot, 500, 100 + cap / 2, View.MeasureSpec.AT_MOST);
-			assertEquals(cap / 2, list.getHeight()); assertFalse(form.canScrollVertically(1));
+			int rowHeight = firstBoard.getHeight();
+			assertTrue(rowHeight >= 64 && rowHeight <= cap);
+			list.scrollTo(0, 80);
+			layout(slot, 500, 100 + rowHeight, View.MeasureSpec.AT_MOST);
+			assertEquals(rowHeight, list.getHeight());
+			assertFalse(form.canScrollVertically(1));
+			assertEquals(80, list.getScrollY());
+			layout(slot, 500, 100 + rowHeight - 1, View.MeasureSpec.AT_MOST);
+			assertTrue(form.canScrollVertically(1));
+			assertFalse(list.canScrollVertically(1));
+			assertFalse(list.canScrollVertically(-1));
+			assertEquals(180, form.getScrollY());
+			layout(slot, 500, 101, View.MeasureSpec.AT_MOST);
+			assertTrue(form.canScrollVertically(1));
+			assertFalse(list.canScrollVertically(1));
+			layout(slot, 500, 100 + rowHeight, View.MeasureSpec.AT_MOST);
+			assertEquals(0, form.getScrollY());
+			assertEquals(80, list.getScrollY());
 			layout(slot, 500, 50, View.MeasureSpec.AT_MOST);
 			assertTrue(form.canScrollVertically(1)); assertFalse(list.canScrollVertically(1));
 			assertSame(fields, input.getParent()); assertEquals(2, input.getSelectionStart()); assertEquals(7, input.getSelectionEnd());

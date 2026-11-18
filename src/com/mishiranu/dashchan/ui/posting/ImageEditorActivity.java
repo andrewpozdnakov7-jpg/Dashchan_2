@@ -4,6 +4,7 @@ import android.app.AlertDialog;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Matrix;
@@ -13,6 +14,7 @@ import android.graphics.PorterDuff;
 import android.graphics.PorterDuffXfermode;
 import android.graphics.RectF;
 import android.os.Bundle;
+import android.util.AtomicFile;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.MotionEvent;
@@ -41,11 +43,22 @@ import com.mishiranu.dashchan.widget.InterfaceAppearance;
 import com.mishiranu.dashchan.ui.posting.photo.PhotoAttachmentOptions;
 import com.mishiranu.dashchan.ui.posting.photo.PhotoEditorContract;
 import com.mishiranu.dashchan.ui.posting.photo.PhotoFileOptionsSheet;
+import com.mishiranu.dashchan.ui.posting.photo.PhotoEditorSessionFiles;
+import com.mishiranu.dashchan.util.ConcurrentUtils;
+import com.mishiranu.dashchan.widget.ClickableToast;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.FilterOutputStream;
 import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.UUID;
+import java.util.concurrent.Executor;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
+import java.util.zip.ZipOutputStream;
 
 /**
  * A deliberately self-contained editor for posting attachments. It never overwrites the source draft:
@@ -65,6 +78,9 @@ public class ImageEditorActivity extends ComponentActivity {
 	public static final String EXTRA_RESULT_SOURCE_NAME = "resultSourceName";
 
 	private static final int MAX_IMAGE_SIZE = 2048;
+	private static final String STATE_SESSION = "classicEditorSession";
+	private static final String STATE_REVISION = "classicEditorRevision";
+	private static final Executor SESSION_IO = ConcurrentUtils.newSingleThreadPool(30000, "ClassicPhotoEditor", "Session");
 	private static final String[] STICKERS = {"😀", "😂", "❤️", "👍", "🔥", "💩", "🤡", "🚫"};
 
 	public static Intent createIntent(Context context, String sourceHash, String sourceName, int attachmentIndex) {
@@ -89,6 +105,13 @@ public class ImageEditorActivity extends ComponentActivity {
 	private String sourceHash;
 	private String sourceName;
 	private int attachmentIndex;
+	private File sessionDirectory;
+	private long restoredRevision;
+	private long publishedRevision;
+	private long writingRevision;
+	private boolean sessionSavePending;
+	private final Runnable saveSessionAfterEdit = this::persistSession;
+	private boolean sessionWriteFailed;
     private boolean busy;
     private PhotoAttachmentOptions initialOptions, fileOptions;
     private PhotoFileOptionsSheet fileSheet;
@@ -145,6 +168,14 @@ public class ImageEditorActivity extends ComponentActivity {
 			finish();
 			return;
 		}
+		String sessionId = savedInstanceState != null ? savedInstanceState.getString(STATE_SESSION) : null;
+		if (sessionId != null && sessionId.matches("[a-f0-9]{32}")) {
+			restoredRevision = savedInstanceState.getLong(STATE_REVISION);
+		} else {
+			sessionId = UUID.randomUUID().toString().replace("-", "");
+		}
+		sessionDirectory = new File(new File(getCacheDir(), "photo-editor"), sessionId);
+		PhotoEditorSessionFiles.register(sessionDirectory);
 		ViewUtils.setWindowLayoutFullscreen(getWindow());
 		createLayout();
 		hideSystemBars();
@@ -470,6 +501,11 @@ public class ImageEditorActivity extends ComponentActivity {
         fileSheetState=fileSheet.snapshot();fileSheet.show();
     }
     @Override protected void onSaveInstanceState(Bundle out) {
+		if (sessionDirectory != null) {
+			out.putString(STATE_SESSION, sessionDirectory.getName());
+			out.putLong(STATE_REVISION, editorView != null ? editorView.revision : restoredRevision);
+			persistSession();
+		}
         if(fileSheet!=null)fileSheetState=fileSheet.snapshot();
         if(fileOptions!=null)try{out.putString("photoOptionsV1",fileOptions.toJson().toString());}catch(org.json.JSONException e){throw new IllegalStateException(e);}
         if(fileSheetState!=null)out.putString("photoFileSheet",fileSheetState);
@@ -483,12 +519,20 @@ public class ImageEditorActivity extends ComponentActivity {
 			undoButton.setAlpha(undoButton.isEnabled() ? 1f : 0.35f);
 			redoButton.setAlpha(redoButton.isEnabled() ? 1f : 0.35f);
 		}
+		if (editorView != null) {
+			editorView.removeCallbacks(saveSessionAfterEdit);
+			if (editorView.hasChanges() && editorView.revision != latestSessionRevision()) {
+				editorView.postDelayed(saveSessionAfterEdit, 800L);
+			}
+		}
 	}
 
 	private void loadImage() {
-		new Thread(() -> {
+		SESSION_IO.execute(() -> {
+			PhotoEditorSessionFiles.prune(sessionDirectory.getParentFile(), System.currentTimeMillis());
 			FileHolder fileHolder = DraftsStorage.getInstance().getAttachmentDraftFileHolder(sourceHash);
 			Bitmap bitmap = null;
+			EditorView.Snapshot restoredCanvas = null;
 			if (fileHolder != null) {
 				sourceType = fileHolder.getImageType();
                 if(initialOptions==null)initialOptions=PhotoAttachmentOptions.legacy(false,false,false,false,null,
@@ -496,31 +540,216 @@ public class ImageEditorActivity extends ComponentActivity {
                 fileOptions=initialOptions;
                 PhotoAttachmentOptions restored=PhotoAttachmentOptions.parse(restoredOptions);
                 if(restored!=null)fileOptions=restored;
-				try {
-					bitmap = fileHolder.readImageBitmap(MAX_IMAGE_SIZE, false, false);
-				} catch (OutOfMemoryError e) {
-					// Handled as an unsupported image below.
+				if (restoredRevision > 0L) {
+					try {
+						restoredCanvas = readSession(new AtomicFile(new File(sessionDirectory, "classic.zip")),
+								sourceHash);
+					} catch (IOException | RuntimeException | OutOfMemoryError e) {
+						// Keep the original draft available even if its editing session was evicted.
+					}
+				}
+				if (restoredCanvas == null) {
+					try {
+						bitmap = fileHolder.readImageBitmap(MAX_IMAGE_SIZE, false, false);
+					} catch (OutOfMemoryError e) {
+						// Handled as an unsupported image below.
+					}
 				}
 			}
 			Bitmap result = bitmap;
+			EditorView.Snapshot session = restoredCanvas;
 			runOnUiThread(() -> {
 				if (stopped) {
 					if (result != null) result.recycle();
+					if (session != null) session.recycle();
 					return;
 				}
-				if (result == null) {
+				if (result == null && session == null) {
 					showFailure(R.string.image_editor_load_failed);
 					return;
 				}
-				editorView = new EditorView(this, result, this::updateHistoryButtons);
+				editorView = new EditorView(this, result, session, this::updateHistoryButtons);
+				if (session != null) {
+					publishedRevision = session.revision;
+					// A restored older snapshot must not reuse the identity of an unpublished edit.
+					editorView.nextRevision = Math.max(session.revision, restoredRevision);
+				}
 				content.removeAllViews();
 				content.addView(editorView, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
 				((View) tools.getParent()).setVisibility(View.VISIBLE);
 				saveButton.setEnabled(true);
                 addToolButtons();
                 if(fileSheetState!=null)showFileOptions();
+				if (session == null && restoredRevision > 0L) {
+					ClickableToast.show(R.string.pe_session_restore_failed);
+				} else if (session != null && session.revision != restoredRevision) {
+					ClickableToast.show(R.string.pe_session_restored_previous);
+				}
             });
-		}, "ImageEditorLoad").start();
+		});
+	}
+
+	@Override
+	protected void onStart() {
+		super.onStart();
+		if (sessionWriteFailed) {
+			sessionWriteFailed = false;
+			ClickableToast.show(R.string.pe_session_failed);
+		}
+	}
+
+	@Override
+	protected void onStop() {
+		persistSession();
+		super.onStop();
+	}
+
+	private void persistSession() {
+		EditorView editor = editorView;
+		if (editor == null || stopped || isFinishing()) return;
+		editor.removeCallbacks(saveSessionAfterEdit);
+		if (!editor.hasChanges()) return;
+		if (writingRevision != 0L) {
+			sessionSavePending = true;
+			return;
+		}
+		if (editor.revision == publishedRevision) return;
+		EditorView.Snapshot snapshot;
+		try {
+			snapshot = EditorView.Snapshot.copyForEdit(editor.baseBitmap, editor.overlayBitmap,
+					editor.stickers, editor.revision);
+		} catch (OutOfMemoryError e) {
+			sessionWriteFailed = true;
+			return;
+		}
+		enqueueSessionWrite(snapshot);
+	}
+
+	private long latestSessionRevision() {
+		return writingRevision != 0L ? writingRevision : publishedRevision;
+	}
+
+	private void enqueueSessionWrite(EditorView.Snapshot snapshot) {
+		writingRevision = snapshot.revision;
+		AtomicFile file = new AtomicFile(new File(sessionDirectory, "classic.zip"));
+		SESSION_IO.execute(() -> {
+			boolean written = false;
+			try {
+				writeSession(file, sourceHash, snapshot);
+				written = true;
+			} catch (IOException | RuntimeException | OutOfMemoryError e) {
+				// AtomicFile keeps the previous complete revision available.
+			} finally {
+				snapshot.recycle();
+			}
+			boolean success = written;
+			runOnUiThread(() -> {
+				if (stopped) return;
+				writingRevision = 0L;
+				if (success) publishedRevision = snapshot.revision;
+				sessionWriteFailed = !success;
+				if (sessionSavePending) {
+					sessionSavePending = false;
+					persistSession();
+				}
+			});
+		});
+	}
+
+	private static void writeSession(AtomicFile file, String hash, EditorView.Snapshot snapshot) throws IOException {
+		FileOutputStream output = file.startWrite();
+		try {
+			// Closing the ZIP releases its encoder. AtomicFile still owns publication of the file.
+			try (ZipOutputStream zip = new ZipOutputStream(new FilterOutputStream(output) {
+				@Override public void close() throws IOException { flush(); }
+				@Override public void write(byte[] b, int offset, int length) throws IOException {
+					out.write(b, offset, length);
+				}
+			})) {
+				zip.setLevel(0);
+				zip.putNextEntry(new ZipEntry("state"));
+				DataOutputStream state = new DataOutputStream(zip);
+				state.writeInt(1);
+				state.writeUTF(hash);
+				state.writeLong(snapshot.revision);
+				state.writeInt(snapshot.stickers.size());
+				for (EditorView.StickerPlacement sticker : snapshot.stickers) {
+					state.writeUTF(sticker.text);
+					state.writeFloat(sticker.x);
+					state.writeFloat(sticker.y);
+					state.writeFloat(sticker.size);
+				}
+				zip.closeEntry();
+				writeSessionImage(zip, "base.png", snapshot.base);
+				writeSessionImage(zip, "overlay.png", snapshot.overlay);
+			}
+			file.finishWrite(output);
+			output = null;
+			try (ZipFile published = new ZipFile(file.getBaseFile());
+					DataInputStream state = openSessionState(published, hash)) {
+				if (state.readLong() != snapshot.revision) throw new IOException("Editor revision was not published");
+			}
+		} finally {
+			if (output != null) file.failWrite(output);
+		}
+	}
+
+	private static void writeSessionImage(ZipOutputStream zip, String name, Bitmap image) throws IOException {
+		zip.putNextEntry(new ZipEntry(name));
+		if (!image.compress(Bitmap.CompressFormat.PNG, 100, zip)) throw new IOException("Cannot write editor image");
+		zip.closeEntry();
+	}
+
+	private static EditorView.Snapshot readSession(AtomicFile file, String hash) throws IOException {
+		Bitmap base = null;
+		Bitmap overlay = null;
+		// Let AtomicFile recover its base if writing was interrupted, then require a complete ZIP directory.
+		file.openRead().close();
+		try (ZipFile zip = new ZipFile(file.getBaseFile()); DataInputStream state = openSessionState(zip, hash)) {
+			long revision = state.readLong();
+			if (revision <= 0L) throw new IOException("Invalid editor revision");
+			int count = state.readInt();
+			if (count < 0 || count > 65536) throw new IOException("Invalid sticker count");
+			ArrayList<EditorView.StickerPlacement> stickers = new ArrayList<>(count);
+			for (int i = 0; i < count; i++) {
+				stickers.add(new EditorView.StickerPlacement(state.readUTF(),
+						state.readFloat(), state.readFloat(), state.readFloat()));
+			}
+			BitmapFactory.Options options = new BitmapFactory.Options();
+			options.inMutable = true;
+			options.inPreferredConfig = Bitmap.Config.ARGB_8888;
+			try (java.io.InputStream input = zip.getInputStream(requireSessionEntry(zip, "base.png"))) {
+				base = BitmapFactory.decodeStream(input, null, options);
+			}
+			try (java.io.InputStream input = zip.getInputStream(requireSessionEntry(zip, "overlay.png"))) {
+				overlay = BitmapFactory.decodeStream(input, null, options);
+			}
+			if (base == null || overlay == null || base.getWidth() != overlay.getWidth()
+					|| base.getHeight() != overlay.getHeight() || base.getWidth() > MAX_IMAGE_SIZE
+					|| base.getHeight() > MAX_IMAGE_SIZE) throw new IOException("Invalid editor images");
+			return new EditorView.Snapshot(base, overlay, stickers, revision);
+		} catch (IOException | RuntimeException | OutOfMemoryError e) {
+			if (base != null) base.recycle();
+			if (overlay != null) overlay.recycle();
+			throw e;
+		}
+	}
+
+	private static DataInputStream openSessionState(ZipFile zip, String hash) throws IOException {
+		DataInputStream state = new DataInputStream(zip.getInputStream(requireSessionEntry(zip, "state")));
+		try {
+			if (state.readInt() != 1 || !hash.equals(state.readUTF())) throw new IOException("Wrong editor attachment");
+			return state;
+		} catch (IOException e) {
+			state.close();
+			throw e;
+		}
+	}
+
+	private static ZipEntry requireSessionEntry(ZipFile zip, String name) throws IOException {
+		ZipEntry entry = zip.getEntry(name);
+		if (entry == null || entry.isDirectory()) throw new IOException("Incomplete editor session");
+		return entry;
 	}
 
     private void saveImage() {
@@ -626,7 +855,24 @@ public class ImageEditorActivity extends ComponentActivity {
 		if (backPolicy != null) backPolicy.close();
 		stopped = true;
         if(fileSheet!=null){fileSheet.detach();fileSheet=null;}
-		if (editorView != null) editorView.release();
+		if (editorView != null) {
+			editorView.removeCallbacks(saveSessionAfterEdit);
+			// Once detached, the final buffers can go straight to the session worker without a copy.
+			content.removeView(editorView);
+			boolean flush = !isFinishing() && editorView.hasChanges() && editorView.revision != latestSessionRevision();
+			EditorView.Snapshot last = editorView.takeCanvasOnRelease();
+			editorView = null;
+			if (flush) enqueueSessionWrite(last);
+			else last.recycle();
+		}
+		if (sessionDirectory != null) {
+			File directory = sessionDirectory;
+			boolean finished = isFinishing();
+			SESSION_IO.execute(() -> {
+				if (finished) PhotoEditorSessionFiles.remove(directory);
+				PhotoEditorSessionFiles.unregister(directory);
+			});
+		}
 		super.onDestroy();
 	}
 
@@ -658,7 +904,7 @@ public class ImageEditorActivity extends ComponentActivity {
 		private final Path brushPath = new Path();
 		private final ArrayDeque<Snapshot> undo = new ArrayDeque<>();
 		private final ArrayDeque<Snapshot> redo = new ArrayDeque<>();
-		private final ArrayList<StickerPlacement> stickers = new ArrayList<>();
+		private ArrayList<StickerPlacement> stickers = new ArrayList<>();
 		private final Runnable historyChanged;
 		private Mode mode = Mode.NONE;
 		private String selectedSticker;
@@ -689,11 +935,18 @@ public class ImageEditorActivity extends ComponentActivity {
 		private float viewportFocusBitmapX;
 		private float viewportFocusBitmapY;
 
-		EditorView(Context context, Bitmap source, Runnable historyChanged) {
+		EditorView(Context context, Bitmap source, Snapshot snapshot, Runnable historyChanged) {
 			super(context);
 			this.historyChanged = historyChanged;
-			baseBitmap = ensureArgbBitmap(source);
-			overlayBitmap = Bitmap.createBitmap(baseBitmap.getWidth(), baseBitmap.getHeight(), Bitmap.Config.ARGB_8888);
+			if (snapshot != null) {
+				baseBitmap = snapshot.base;
+				overlayBitmap = snapshot.overlay;
+				stickers = snapshot.stickers;
+				revision = nextRevision = snapshot.revision;
+			} else {
+				baseBitmap = ensureArgbBitmap(source);
+				overlayBitmap = Bitmap.createBitmap(baseBitmap.getWidth(), baseBitmap.getHeight(), Bitmap.Config.ARGB_8888);
+			}
 			overlayCanvas = new Canvas(overlayBitmap);
 			cropPaint.setStyle(Paint.Style.STROKE);
 			cropPaint.setStrokeWidth(2f * getResources().getDisplayMetrics().density);
@@ -1031,7 +1284,9 @@ public class ImageEditorActivity extends ComponentActivity {
 		}
 
 		private void ensureStickerHistory() {
-			if (!stickerHistoryPushed) {
+			if (stickerHistoryPushed) {
+				revision = ++nextRevision;
+			} else {
 				pushHistory();
 				stickerHistoryPushed = true;
 			}
@@ -1079,6 +1334,9 @@ public class ImageEditorActivity extends ComponentActivity {
 						pushHistory();
 						brushStarted = true;
 						overlayCanvas.drawPoint(lastBrushX, lastBrushY, brushPaint);
+					} else {
+						// A session snapshot may have captured the preceding points of this same stroke.
+						revision = ++nextRevision;
 					}
 					float middleX = (lastBrushX + x) / 2f;
 					float middleY = (lastBrushY + y) / 2f;
@@ -1096,6 +1354,7 @@ public class ImageEditorActivity extends ComponentActivity {
 						brushStarted = true;
 						overlayCanvas.drawPoint(x, y, brushPaint);
 					} else if (brushStarted) {
+						revision = ++nextRevision;
 						brushPath.lineTo(x, y);
 						overlayCanvas.drawPath(brushPath, brushPaint);
 					}
@@ -1249,41 +1508,38 @@ public class ImageEditorActivity extends ComponentActivity {
 		}
 
 		private void pushHistory() {
+			clearHistory(redo);
+			if (undo.size() == MAX_HISTORY) undo.removeFirst().recycle();
 			try {
-				undo.addLast(new Snapshot(baseBitmap, overlayBitmap, stickers, revision));
-				while (undo.size() > MAX_HISTORY) undo.removeFirst().recycle();
-				clearHistory(redo);
+				undo.addLast(Snapshot.copyForEdit(baseBitmap, overlayBitmap, stickers, revision));
 			} catch (OutOfMemoryError e) {
 				clearHistory(undo);
-                clearHistory(redo);
-            } finally {revision=++nextRevision;}
-        }
+			}
+			revision = ++nextRevision;
+		}
 
-        void undo() {
-			commitActiveSticker();
-			if (undo.isEmpty()) return;
-			redo.addLast(new Snapshot(baseBitmap, overlayBitmap, stickers, revision));
-			while (redo.size() > MAX_HISTORY) redo.removeFirst().recycle();
-			restore(undo.removeLast());
+		void undo() {
+			moveHistory(undo, redo);
 		}
 
 		void redo() {
-			commitActiveSticker();
-			if (redo.isEmpty()) return;
-			undo.addLast(new Snapshot(baseBitmap, overlayBitmap, stickers, revision));
-			while (undo.size() > MAX_HISTORY) undo.removeFirst().recycle();
-			restore(redo.removeLast());
+			moveHistory(redo, undo);
 		}
 
-		private void restore(Snapshot snapshot) {
-            revision=snapshot.revision;
-			baseBitmap.recycle();
-			overlayBitmap.recycle();
-			baseBitmap = snapshot.base;
-			overlayBitmap = snapshot.overlay;
-			overlayCanvas = new Canvas(overlayBitmap);
-			stickers.clear();
-			stickers.addAll(snapshot.stickers);
+		private void moveHistory(ArrayDeque<Snapshot> from, ArrayDeque<Snapshot> to) {
+			commitActiveSticker();
+			if (from.isEmpty()) return;
+			Snapshot next = from.getLast();
+			Canvas nextCanvas = new Canvas(next.overlay);
+			// Moving between revisions transfers exclusive ownership of the bitmaps and stickers.
+			to.addLast(new Snapshot(baseBitmap, overlayBitmap, stickers, revision));
+			from.removeLast();
+			if (to.size() > MAX_HISTORY) to.removeFirst().recycle();
+			revision = next.revision;
+			baseBitmap = next.base;
+			overlayBitmap = next.overlay;
+			overlayCanvas = nextCanvas;
+			stickers = next.stickers;
 			mode = Mode.NONE;
 			selectedSticker = null;
 			activeSticker = null;
@@ -1305,11 +1561,10 @@ public class ImageEditorActivity extends ComponentActivity {
 			}
 		}
 
-		void release() {
-			if (baseBitmap != null && !baseBitmap.isRecycled()) baseBitmap.recycle();
-			if (overlayBitmap != null && !overlayBitmap.isRecycled()) overlayBitmap.recycle();
+		Snapshot takeCanvasOnRelease() {
 			clearHistory(undo);
 			clearHistory(redo);
+			return new Snapshot(baseBitmap, overlayBitmap, stickers, revision);
 		}
 
 		private static void clearHistory(ArrayDeque<Snapshot> history) {
@@ -1322,12 +1577,29 @@ public class ImageEditorActivity extends ComponentActivity {
 			final ArrayList<StickerPlacement> stickers;
 
 			final long revision;
-            Snapshot(Bitmap base, Bitmap overlay, ArrayList<StickerPlacement> stickers, long revision) {
-                this.revision=revision;
-				this.base = base.copy(Bitmap.Config.ARGB_8888, true);
-				this.overlay = overlay.copy(Bitmap.Config.ARGB_8888, true);
-				this.stickers = new ArrayList<>(stickers.size());
-				for (StickerPlacement sticker : stickers) this.stickers.add(new StickerPlacement(sticker));
+			Snapshot(Bitmap base, Bitmap overlay, ArrayList<StickerPlacement> stickers, long revision) {
+				this.base = base;
+				this.overlay = overlay;
+				this.stickers = stickers;
+				this.revision = revision;
+			}
+
+			static Snapshot copyForEdit(Bitmap base, Bitmap overlay, ArrayList<StickerPlacement> stickers,
+					long revision) {
+				ArrayList<StickerPlacement> placements = new ArrayList<>(stickers.size());
+				for (StickerPlacement sticker : stickers) placements.add(new StickerPlacement(sticker));
+				Bitmap baseCopy = base.copy(Bitmap.Config.ARGB_8888, true);
+				if (baseCopy == null) throw new OutOfMemoryError("Unable to copy editor image");
+				Bitmap overlayCopy = null;
+				try {
+					overlayCopy = overlay.copy(Bitmap.Config.ARGB_8888, true);
+					if (overlayCopy == null) throw new OutOfMemoryError("Unable to copy editor overlay");
+					return new Snapshot(baseCopy, overlayCopy, placements, revision);
+				} catch (OutOfMemoryError e) {
+					baseCopy.recycle();
+					if (overlayCopy != null) overlayCopy.recycle();
+					throw e;
+				}
 			}
 
 			void recycle() {

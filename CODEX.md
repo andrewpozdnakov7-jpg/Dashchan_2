@@ -60,7 +60,40 @@ Forbidden:
 
 ### Source ZIP handoff workflow
 
-When the user explicitly requests a source ZIP for external compilation:
+An explicit source ZIP request authorizes packaging sources in `SOURCE PATCH ONLY`.
+Choose the workflow by the intended use of the archive.
+
+#### Quick local source ZIP
+
+Use this workflow for «быстрый ZIP», «ZIP без проверок», or a source archive
+requested for local compilation.
+
+1. Enumerate the active checkout with
+   `git ls-files --cached --others --exclude-standard -z`. Package the current
+   working-tree contents, including modifications and intended new files.
+   Omit working-tree deletions and explicitly excluded entries. Validate that
+   all input files resolve inside the checkout and that the list contains the
+   expected source directories, build scripts and Gradle wrapper files. Open
+   the wrapper JAR and check for `org/gradle/wrapper/GradleWrapperMain.class`.
+2. Open a new timestamped ZIP in `build-artifacts/source-bundles` with
+   `FileMode.CreateNew` and use `ZipArchive` with `CompressionLevel.Fastest`.
+   Stream each file directly from the checkout into `Dashchan_2/<relative path>`
+   with `/` separators. Write fresh `SOURCE_PACKAGE_INFO.txt` and any requested
+   WSL helpers at the ZIP root. Stream files directly from the checkout and
+   keep the checkout steady during packaging and verification.
+3. Reopen the closed ZIP once. Check readability, the expected entry names and
+   count, duplicate or forbidden paths, the single `Dashchan_2/` source root,
+   and the embedded Gradle wrapper JAR. Report the path, exact size, and
+   SHA-256 after the gate passes. If the gate fails, report the invalid archive
+   and create a fresh ZIP after correcting the cause. Perform additional
+   content verification only when requested or when the fast gate raises a
+   concern.
+
+#### Staged source ZIP for publication or release verification
+
+Use this workflow for source archives intended for publication or formal
+release verification. Finish the complete content and privacy checks before
+upload.
 
 1. Freeze the intended working-tree state and create the ZIP before starting
    lengthy archive-content verification.
@@ -105,10 +138,8 @@ When the user explicitly requests a source ZIP for external compilation:
 11. If verification fails, immediately mark that ZIP as invalid, explain why,
     create a replacement, and repeat the workflow.
 12. After the ZIP has been closed, its mandatory fast layout gate and SHA-256
-    calculation have passed, and any requested content verification is complete,
-    automatically delete the staging directory created for this bundle. For a
-    user-requested fast ZIP without content verification, clean up after the
-    mandatory fast gate and hash; do not start additional checks just to clean up.
+    calculation have passed, and content verification is complete, automatically
+    delete the staging directory created for this bundle.
     Use a separate native PowerShell cleanup command with `-LiteralPath` after
     validating the exact target as described below. Keep the ZIP itself.
     If creation or verification fails, retain staging for recovery and report it;
@@ -117,10 +148,10 @@ When the user explicitly requests a source ZIP for external compilation:
     staging cleanup completed. If cleanup fails, report the remaining directory
     without invalidating an otherwise valid ZIP.
 
-#### Reliable first-pass implementation
+#### Windows implementation for the staged workflow
 
-Use this exact sequence for Windows source bundles. Do not collapse it into one
-large PowerShell command:
+Use this exact sequence for staged source bundles on Windows. Do not collapse
+it into one large PowerShell command:
 
 1. Choose a new timestamped bundle name and a new staging directory. If either
    path already exists, stop and choose another timestamp; do not delete or
@@ -163,7 +194,7 @@ large PowerShell command:
    files, or staging directories belonging to earlier operations. Cleaning up
    old staging directories is a separate task requiring explicit user scope.
 
-Creating this source-only ZIP does not authorize Gradle, compilation, APK/AAB
+Creating a source-only ZIP does not authorize Gradle, compilation, APK/AAB
 packaging, installation, publication, or upload.
 
 ## 2. FAST LOCAL TEST

@@ -1024,6 +1024,11 @@
 	<string name="watch_initially">Watch newly added favorite threads</string>
 	<string name="watch_initially__summary">Enable watcher when thread is added to favorites</string>
 	<string name="web_browser">Web browser</string>
+	<string name="local_network_access">Local network access</string>
+	<string name="local_network_access_summary">Allow connections to a proxy or server on your local network</string>
+	<string name="local_network_access_required">Could not connect to the local address. Check local network access in the forum settings.</string>
+	<string name="local_network_access_denied">Allow local network access in Android settings if you want to use this proxy or server</string>
+	<string name="local_network_app_settings">Open Android settings</string>
 	<string name="wifi_only">Wi-Fi only</string>
 	<string name="wifi_or_mobile">Wi-Fi or mobile network</string>
 	<string name="with_name_name__format">With name %s</string>
@@ -1514,12 +1519,14 @@
 	<string name="new_interface_motion">New interface animations</string>
 	<string name="new_interface_motion_summary">Screen and gallery transitions inspired by Material 3, with redesigned video controls. New side menu appearance and back gesture animation on Android 14+. Applies to subsequent transitions and player openings.</string>
 	<string name="thread_fab_menu">Floating thread menu</string>
-	<string name="thread_fab_menu_summary">Moves reply, refresh, favorites, and save into a button at the bottom of the thread.</string>
+	<string name="thread_fab_menu_summary">Choose which actions appear in the floating menu and change their order.</string>
+	<string name="thread_fab_order">Button order</string>
+	<string name="thread_fab_order_summary">From bottom to top, starting next to the floating button.</string>
 	<string name="thread_fab_actions">Thread actions</string>
 	<string name="thread_fab_close">Close thread actions</string>
 	<string name="thread_fab_refresh">Refresh thread</string>
 	<string name="thread_fab_save">Save thread</string>
 	<string name="thread_fab_reload">Reload entire thread</string>
 	<string name="dialog_form_ime">New keyboard handling in dialogs</string>
-	<string name="dialog_form_ime_summary">Improves layout and scrolling in the feed editor and history filter, and preserves the feed draft on rotation. Off by default.</string>
+	<string name="dialog_form_ime_summary">Improves layout and scrolling in the feed editor and history filter, and preserves the feed draft on rotation. On by default.</string>
 </resources>

@@ -118,10 +118,8 @@ public class BrowserFragment extends ContentFragment implements DownloadListener
 			return false;
 		});
 
-		if (savedInstanceState != null) {
-			webView.restoreState(savedInstanceState);
-		}
-		loadInitialPage(savedInstanceState);
+		boolean restored = savedInstanceState != null && webView.restoreState(savedInstanceState) != null;
+		loadInitialPage(restored);
 	}
 
 	@Override
@@ -140,12 +138,12 @@ public class BrowserFragment extends ContentFragment implements DownloadListener
 		progressView = null;
 	}
 
-	private void loadInitialPage(Bundle savedInstanceState) {
+	private void loadInitialPage(boolean restored) {
 		((FragmentHandler) requireActivity()).setTitleSubtitle(getString(R.string.web_browser), null);
 		Bundle args = getArguments();
 		Uri uri = args != null ? AndroidUtils.getParcelable(args, EXTRA_URI, Uri.class) : null;
 		if (isSupportedUri(uri)) {
-			if (savedInstanceState == null) {
+			if (!restored) {
 				webView.loadUrl(uri.toString());
 			}
 		} else {
@@ -291,7 +289,7 @@ public class BrowserFragment extends ContentFragment implements DownloadListener
 
 		@Override
 		public void onPageFinished(WebView view, String url) {
-			if (view != webView || !isAdded()) return;
+			if (view != webView || !isAdded() || url == null) return;
 			String title = view.getTitle();
 			((FragmentHandler) requireActivity()).setTitleSubtitle(StringUtils.isEmptyOrWhitespace(title)
 					? getString(R.string.web_browser) : title, null);

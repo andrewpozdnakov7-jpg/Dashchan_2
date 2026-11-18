@@ -1,6 +1,7 @@
 package com.mishiranu.dashchan.content.push;
 
 import com.mishiranu.dashchan.BuildConfig;
+import com.mishiranu.dashchan.util.NetworkDiagnostics;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -180,6 +181,7 @@ final class ReplyPushBackendClient {
 
 	private static Response execute(String method, String path, String secret, JSONObject json)
 			throws IOException {
+		NetworkDiagnostics trace = NetworkDiagnostics.startApp("reply_push");
 		byte[] request = json != null ? json.toString().getBytes(StandardCharsets.UTF_8) : null;
 		if (request != null && request.length > 16384) {
 			throw new IOException("Request is too large");
@@ -194,19 +196,24 @@ final class ReplyPushBackendClient {
 		if (secret != null) {
 			connection.setRequestProperty("Authorization", "Bearer " + secret);
 		}
-		if (request != null) {
-			connection.setDoOutput(true);
-			connection.setFixedLengthStreamingMode(request.length);
-			connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
-			try (OutputStream output = connection.getOutputStream()) {
-				output.write(request);
-			}
-		}
 		try {
+			if (request != null) {
+				connection.setDoOutput(true);
+				connection.setFixedLengthStreamingMode(request.length);
+				connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+				try (OutputStream output = connection.getOutputStream()) {
+					output.write(request);
+				}
+			}
 			int status = connection.getResponseCode();
+			if (trace != null) trace.event("http_response status=" + status);
 			InputStream input = status >= 400 ? connection.getErrorStream() : connection.getInputStream();
 			String body = input != null ? readResponse(input) : "";
+			if (trace != null) trace.event("body_read");
 			return new Response(status, parseRetryAfter(connection.getHeaderField("Retry-After")), body);
+		} catch (IOException e) {
+			if (trace != null) trace.failure("request_failed", e);
+			throw e;
 		} finally {
 			connection.disconnect();
 		}

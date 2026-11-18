@@ -9,6 +9,7 @@ import chan.text.GroupParser;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.content.model.ErrorItem;
 import com.mishiranu.dashchan.util.IOUtils;
+import com.mishiranu.dashchan.util.NetworkDiagnostics;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -156,6 +157,10 @@ public final class HttpResponse {
 		} else {
 			return null;
 		}
+	}
+
+	public NetworkDiagnostics getNetworkDiagnostics() {
+		return session != null ? session.diagnostics : null;
 	}
 
 	private static class ConcatInputStream extends SequenceInputStream {
@@ -308,7 +313,11 @@ public final class HttpResponse {
 				ByteArrayOutputStream output = new ByteArrayOutputStream();
 				IOUtils.copyStream(input, output);
 				bytes = output.toByteArray();
+				NetworkDiagnostics trace = getNetworkDiagnostics();
+				if (trace != null) trace.event("body_read bytes=" + bytes.length);
 			} catch (IOException e) {
+				NetworkDiagnostics trace = getNetworkDiagnostics();
+				if (trace != null) trace.failure("body_read_failed", e);
 				throw fail(e);
 			} finally {
 				this.input = null;

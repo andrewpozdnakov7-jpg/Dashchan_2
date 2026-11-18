@@ -49,6 +49,7 @@ import com.mishiranu.dashchan.widget.ClickableToast;
 import com.mishiranu.dashchan.widget.ExpandedLayout;
 import com.mishiranu.dashchan.ui.reddit.RedditReaderScripts;
 import com.mishiranu.dashchan.widget.ThemeEngine;
+import com.mishiranu.dashchan.widget.ViewFactory;
 import com.mishiranu.dashchan.widget.ThreadQuickNavigation;
 import java.util.Locale;
 import java.util.UUID;
@@ -269,7 +270,7 @@ public class RedditWebReaderFragment extends ContentFragment {
 		webView.setWebChromeClient(new WebChromeClient() {
 			@Override
 			public void onProgressChanged(WebView view, int newProgress) {
-				if (progressView != null) {
+				if (view == webView && progressView != null) {
 					progressView.setProgress(newProgress);
 					progressView.setVisibility(newProgress < 100 ? View.VISIBLE : View.INVISIBLE);
 				}
@@ -277,6 +278,7 @@ public class RedditWebReaderFragment extends ContentFragment {
 
 			@Override
 			public void onReceivedTitle(WebView view, String title) {
+				if (view != webView) return;
 				recordVisitedPage(view, view.getUrl(), true);
 				updateTitle();
 			}
@@ -292,8 +294,8 @@ public class RedditWebReaderFragment extends ContentFragment {
 				return super.onConsoleMessage(consoleMessage);
 			}
 		});
+		boolean restored = savedInstanceState != null && webView.restoreState(savedInstanceState) != null;
 		if (savedInstanceState != null) {
-			webView.restoreState(savedInstanceState);
 			clearHistoryUrl = savedInstanceState.getString(STATE_CLEAR_HISTORY_URL);
 			translationEnabled = savedInstanceState.getBoolean(STATE_TRANSLATION_ENABLED);
 		}
@@ -304,7 +306,7 @@ public class RedditWebReaderFragment extends ContentFragment {
 			startUrl = HOME_URL;
 		}
 		updateTitle();
-		if (savedInstanceState == null) {
+		if (!restored) {
 			webView.loadUrl(startUrl);
 		}
 	}
@@ -312,7 +314,7 @@ public class RedditWebReaderFragment extends ContentFragment {
 	@Override
 	public void onResume() {
 		super.onResume();
-		webView.onResume();
+		if (webView != null) webView.onResume();
 		if (historyPreview != null) historyPreview.resume();
 		if (quickNavigation != null) quickNavigation.refreshPreferences();
 		scheduleTranslationScan(0L);
@@ -323,7 +325,7 @@ public class RedditWebReaderFragment extends ContentFragment {
 		if (historyPreview != null) historyPreview.pause();
 		handler.removeCallbacks(translationRescanRunnable);
 		CookieManager.getInstance().flush();
-		webView.onPause();
+		if (webView != null) webView.onPause();
 		super.onPause();
 	}
 
@@ -366,6 +368,7 @@ public class RedditWebReaderFragment extends ContentFragment {
 
 	@Override
 	public void onCreateOptionsMenu(Menu menu, boolean primary) {
+		if (webView == null) return;
 		menu.add(0, R.id.menu_translate, 0, R.string.translate_posts)
 				.setIcon(((FragmentHandler) requireActivity()).getActionBarIcon(R.attr.iconActionTranslate))
 				.setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
@@ -384,6 +387,7 @@ public class RedditWebReaderFragment extends ContentFragment {
 	@Override
 	public void onPrepareOptionsMenu(Menu menu, boolean primary) {
 		MenuItem translate = menu.findItem(R.id.menu_translate);
+		if (translate == null) return;
 		boolean available = !authorizationMode && TranslationController.isEnabledForDirection(
 				TranslationModel.Direction.EN_RU);
 		translate.setVisible(available);
@@ -857,12 +861,13 @@ public class RedditWebReaderFragment extends ContentFragment {
 	private class RedditWebViewClient extends WebViewClient {
 		@Override
 		public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
-			return request.isForMainFrame() && !isAllowedRedditPage(request.getUrl()) &&
+			return view != webView || request.isForMainFrame() && !isAllowedRedditPage(request.getUrl()) &&
 					openExternal(request.getUrl());
 		}
 
 		@Override
 		public void doUpdateVisitedHistory(WebView view, String url, boolean isReload) {
+			if (view != webView) return;
 			if (historyPreview != null) historyPreview.historyUpdated(isReload);
 			backActionRevision++;
 			recordVisitedPage(view, url, false);
@@ -871,6 +876,7 @@ public class RedditWebReaderFragment extends ContentFragment {
 
 		@Override
 		public void onPageStarted(WebView view, String url, Bitmap favicon) {
+			if (view != webView) return;
 			if (historyPreview != null) historyPreview.pageStarted();
 			backActionRevision++;
 			pageLoadGeneration++;
@@ -884,6 +890,7 @@ public class RedditWebReaderFragment extends ContentFragment {
 
 		@Override
 		public void onPageCommitVisible(WebView view, String url) {
+			if (view != webView) return;
 			logDiagnostic("event=page_commit generation=" + pageLoadGeneration + " host=" + getLogHost(url));
 			String currentUrl = view.getUrl();
 			if (url != null && url.equals(currentUrl)) {
@@ -893,6 +900,7 @@ public class RedditWebReaderFragment extends ContentFragment {
 
 		@Override
 		public void onPageFinished(WebView view, String url) {
+			if (view != webView) return;
 			logDiagnostic("event=page_finished generation=" + pageLoadGeneration + " host=" + getLogHost(url));
 			String clearHistoryUrl = RedditWebReaderFragment.this.clearHistoryUrl;
 			if (clearHistoryUrl != null && clearHistoryUrl.equals(RedditPageStorage.normalizeUrl(url))) {
@@ -942,27 +950,48 @@ public class RedditWebReaderFragment extends ContentFragment {
 
 		@Override
 		public boolean onRenderProcessGone(WebView view, RenderProcessGoneDetail detail) {
-			if (historyPreview != null) { historyPreview.close(); historyPreview = null; }
-			logDiagnosticError("event=renderer_gone crashed=" + detail.didCrash()
-					+ " priority=" + detail.rendererPriorityAtExit());
-			return super.onRenderProcessGone(view, detail);
+			boolean current = view == webView;
+			ViewGroup parent = view.getParent() instanceof ViewGroup ? (ViewGroup) view.getParent() : null;
+			if (current) {
+				webView = null;
+				pageLoadGeneration++;
+				backActionRevision++;
+				handler.removeCallbacks(translationRescanRunnable);
+				translationRequestPending = false;
+				translationRequestGeneration = -1;
+				if (historyPreview != null) {
+					historyPreview.close();
+					historyPreview = null;
+				}
+				if (quickNavigation != null) {
+					ViewUtils.removeFromParent(quickNavigation);
+					quickNavigation = null;
+				}
+				if (progressView != null) progressView.setVisibility(View.GONE);
+			}
+			view.setOnTouchListener(null);
+			WebViewUtils.destroyAfterRendererGone(view, detail, "reddit");
+			if (current && parent != null) {
+				ViewFactory.ErrorHolder error = ViewFactory.createErrorLayout(parent);
+				error.text.setText(R.string.webview_renderer_gone);
+				parent.addView(error.layout);
+			}
+			if (current && isAdded()) {
+				invalidateOptionsMenu();
+				notifyBackNavigationChanged();
+			}
+			return true;
 		}
 	}
 
 	private void updateSignedInState(WebView view, Runnable completion) {
-		if (view == null || webView != view) {
-			if (completion != null) {
-				completion.run();
-			}
-			return;
-		}
+		if (view == null || webView != view) return;
 		view.evaluateJavascript(READ_SIGNED_IN_STATE_SCRIPT, value -> {
-			if (webView == view) {
-				if ("true".equals(value)) {
-					Preferences.setRedditSignedIn(true);
-				} else if ("false".equals(value)) {
-					Preferences.setRedditSignedIn(false);
-				}
+			if (view != webView) return;
+			if ("true".equals(value)) {
+				Preferences.setRedditSignedIn(true);
+			} else if ("false".equals(value)) {
+				Preferences.setRedditSignedIn(false);
 			}
 			if (completion != null) {
 				completion.run();

@@ -1,19 +1,41 @@
 package com.mishiranu.dashchan.ui.posting;
 
 import static org.junit.Assert.*;
+import android.app.AlertDialog;
 import android.graphics.Bitmap;
 import android.graphics.Color;
+import android.graphics.drawable.BitmapDrawable;
 import android.os.Bundle;
 import android.os.Parcel;
+import android.os.SystemClock;
+import android.view.View;
+import android.widget.EditText;
+import android.widget.ImageView;
+import androidx.annotation.NonNull;
+import androidx.fragment.app.Fragment;
+import androidx.lifecycle.Lifecycle;
+import androidx.lifecycle.ViewModelProvider;
+import androidx.test.core.app.ActivityScenario;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
+import chan.content.Chan;
 import chan.content.ChanConfiguration;
 import chan.content.ChanPerformer;
+import com.mishiranu.dashchan.R;
+import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.async.ReadCaptchaTask;
 import com.mishiranu.dashchan.content.model.ErrorItem;
 import com.mishiranu.dashchan.content.storage.DraftsStorage;
+import com.mishiranu.dashchan.ui.MainActivity;
 import com.mishiranu.dashchan.util.AndroidUtils;
+import com.mishiranu.dashchan.widget.PostingFormAppearance;
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Random;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -184,8 +206,14 @@ public class PostingStateControllersTest {
 	@Test public void sendSnapshotCopiesInputAndPreservesAllStateDecisions() {
 		for (ReadCaptchaTask.CaptchaState state : ReadCaptchaTask.CaptchaState.values()) {
 			PostingCaptchaController controller = controller(new Host(), "test", "123");
-			DraftsStorage.CaptchaDraft original = captcha(state, ChanConfiguration.Captcha.Validity.IN_THREAD, "test", "123", null);
-			assertTrue(controller.restoreDraft(original, true, new ChanConfiguration.Captcha()));
+			Bitmap image = state == ReadCaptchaTask.CaptchaState.CAPTCHA
+					? Bitmap.createBitmap(2, 2, Bitmap.Config.ARGB_8888) : null;
+			DraftsStorage.CaptchaDraft original = captcha(state, ChanConfiguration.Captcha.Validity.IN_THREAD, "test", "123", image);
+			try {
+				assertTrue(controller.restoreDraft(original, true, new ChanConfiguration.Captcha()));
+			} finally {
+				if (image != null) image.recycle();
+			}
 			PostingCaptchaController.CaptchaSnapshot snapshot = controller.snapshot("typed-input");
 			assertEquals("fixture-type", snapshot.type); assertSame(state, snapshot.state);
 			assertEquals(ChanConfiguration.Captcha.Input.NUMERIC, snapshot.input);
@@ -199,6 +227,277 @@ public class PostingStateControllersTest {
 		}
 		PostingCaptchaController empty = controller(new Host(), "test", null);
 		assertFalse(empty.canSend()); assertNull(empty.snapshot("ignored").data);
+	}
+
+	@Test public void savedGraphicCaptchaWithMissingOrRecycledImageIsRejected() {
+		Host host = new Host();
+		PostingCaptchaController controller = controller(host, "test", "123");
+		ChanConfiguration.Captcha config = new ChanConfiguration.Captcha();
+		assertFalse(controller.restoreDraft(captcha(ReadCaptchaTask.CaptchaState.CAPTCHA,
+				null, "test", "123", null), true, config));
+		Bitmap recycled = Bitmap.createBitmap(2, 2, Bitmap.Config.ARGB_8888);
+		recycled.recycle();
+		assertFalse(controller.restoreDraft(captcha(ReadCaptchaTask.CaptchaState.CAPTCHA,
+				null, "test", "123", recycled), true, config));
+		assertEquals(0, host.inputs);
+		assertFalse(controller.canSend());
+	}
+
+	@Test public void retainedChallengeUsesAFixedSizeKeyScopedToTheForm() {
+		Bitmap small = Bitmap.createBitmap(2, 2, Bitmap.Config.ARGB_8888);
+		Bitmap large = Bitmap.createBitmap(1024, 1024, Bitmap.Config.ARGB_8888);
+		PostingCaptchaController.CaptchaViewModel model = new PostingCaptchaController.CaptchaViewModel();
+		try {
+			DraftsStorage.CaptchaDraft smallDraft = captcha(ReadCaptchaTask.CaptchaState.CAPTCHA,
+					null, "test", "123", small);
+			String smallKey = model.retainDraft(smallDraft);
+			assertSame(smallDraft, model.getRetainedDraft(smallKey));
+			DraftsStorage.CaptchaDraft largeDraft = captcha(ReadCaptchaTask.CaptchaState.CAPTCHA,
+					null, "test", "123", large);
+			String largeKey = model.retainDraft(largeDraft);
+			assertSame(largeDraft, model.getRetainedDraft(largeKey));
+			assertNull(model.getRetainedDraft(smallKey));
+			assertNull(new PostingCaptchaController.CaptchaViewModel().getRetainedDraft(largeKey));
+			assertEquals(parcelKeySize(smallKey), parcelKeySize(largeKey));
+		} finally {
+			small.recycle();
+			large.recycle();
+		}
+	}
+
+	private static int parcelKeySize(String key) {
+		Bundle bundle = new Bundle();
+		bundle.putString("captchaDraftKey", key);
+		Parcel parcel = Parcel.obtain();
+		try {
+			parcel.writeBundle(bundle);
+			return parcel.dataSize();
+		} finally {
+			parcel.recycle();
+		}
+	}
+
+	@Test public void supportedTextOnlyCaptchaCanBeRestoredAfterLosingTheViewModel() {
+		ChanConfiguration.Captcha config = new ChanConfiguration.Captcha();
+		config.ttl = 90;
+		long[] elapsed = {15000L};
+		PostingCaptchaController controller = new PostingCaptchaController(() -> elapsed[0]);
+		controller.configure("fixture-chan", "test", "123", "fixture-type");
+		ChanPerformer.CaptchaData answer = new ChanPerformer.CaptchaData();
+		answer.put(ChanPerformer.CaptchaData.CHALLENGE, "fixture-solution");
+		DraftsStorage.CaptchaDraft solved = new DraftsStorage.CaptchaDraft("fixture-type",
+				ReadCaptchaTask.CaptchaState.SKIP, answer, null, null, null, null, null,
+				false, false, elapsed[0], "test", "123");
+		Bundle saved = controller.saveReusableDraft(solved, config);
+		assertNotNull(saved);
+		assertEquals("fixture-solution", controller.restoreReusableDraft(saved, config)
+				.captchaData.get(ChanPerformer.CaptchaData.CHALLENGE));
+		controller.configure("fixture-chan", "test", "124", "fixture-type");
+		assertNull(controller.restoreReusableDraft(saved, config));
+		controller.configure("fixture-chan", "test", "123", "fixture-type");
+		assertNull(controller.restoreReusableDraft(saved, new ChanConfiguration.Captcha()));
+		DraftsStorage.CaptchaDraft pass = new DraftsStorage.CaptchaDraft("fixture-type",
+				ReadCaptchaTask.CaptchaState.PASS, null, null, null, null, null, null,
+				false, false, elapsed[0], "test", "123");
+		assertSame(ReadCaptchaTask.CaptchaState.PASS,
+				controller.restoreReusableDraft(controller.saveReusableDraft(pass, config), config).captchaState);
+		DraftsStorage.CaptchaDraft noChallenge = new DraftsStorage.CaptchaDraft("fixture-type",
+				ReadCaptchaTask.CaptchaState.SKIP, null, null, null, null, null, null,
+				false, false, elapsed[0], "test", "123");
+		assertNotNull(controller.restoreReusableDraft(controller.saveReusableDraft(noChallenge, config), config));
+		answer.put("pass_cookie", "fixture-secret");
+		assertNull(controller.saveReusableDraft(solved, config));
+		elapsed[0] += 61000L;
+		assertNull(controller.restoreReusableDraft(saved, config));
+	}
+
+	/** A real posting screen with its first challenge supplied locally. */
+	public static class CaptchaSavedStateFragment extends PostingFragment {
+		static final AtomicInteger fixturesCreated = new AtomicInteger();
+
+		public CaptchaSavedStateFragment() {
+			super("dvach", "test", "503000001", Collections.emptyList());
+		}
+
+		@Override public void onViewCreated(@NonNull View view, Bundle savedInstanceState) {
+			if (savedInstanceState == null) {
+				fixturesCreated.incrementAndGet();
+				savedInstanceState = new Bundle();
+				Bitmap image = Bitmap.createBitmap(1600, 1200, Bitmap.Config.ARGB_8888);
+				// Make compression of the image meaningfully larger than the saved-state bound.
+				Random random = new Random(42L);
+				int[] row = new int[400];
+				for (int y = 0; y < 400; y++) {
+					for (int x = 0; x < row.length; x++) row[x] = random.nextInt() | 0xff000000;
+					image.setPixels(row, 0, row.length, 0, y, row.length, 1);
+				}
+				String captchaType = Chan.get("dvach").configuration.getCaptchaType();
+				DraftsStorage.CaptchaDraft draft = new DraftsStorage.CaptchaDraft(captchaType,
+						ReadCaptchaTask.CaptchaState.CAPTCHA, null, null, ChanConfiguration.Captcha.Input.ALL,
+						ChanConfiguration.Captcha.Validity.IN_THREAD, "fixture answer", image,
+						false, false, SystemClock.elapsedRealtime(), "test", "503000001");
+				savedInstanceState.putString("captchaDraftKey", new ViewModelProvider(this)
+						.get(PostingCaptchaController.CaptchaViewModel.class).retainDraft(draft));
+			}
+			super.onViewCreated(view, savedInstanceState);
+		}
+	}
+
+	@Test public void realPostingSavedStateIsSmallAndRetainsGraphicCaptchaAcrossRecreation() {
+		CaptchaSavedStateFragment.fixturesCreated.set(0);
+		try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
+			scenario.onActivity(activity -> activity.pushFragment(new CaptchaSavedStateFragment()));
+			checkGraphicCaptcha(scenario);
+			scenario.recreate();
+			checkGraphicCaptcha(scenario);
+			assertEquals(1, CaptchaSavedStateFragment.fixturesCreated.get());
+		}
+	}
+
+	@Test public void graphicCaptchaDialogSurvivesPauseAndRecreation() throws Exception {
+		String motion = Preferences.KEY_NEW_INTERFACE_MOTION, form = Preferences.KEY_NEW_POSTING_FORM;
+		Object oldMotion = Preferences.PREFERENCES.getAll().get(motion), oldForm = Preferences.PREFERENCES.getAll().get(form);
+		try {
+			Preferences.PREFERENCES.edit().put(motion, true).put(form, true).close();
+			try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
+				AtomicReference<PostingFragment> first = new AtomicReference<>();
+				scenario.onActivity(activity -> activity.pushFragment(new CaptchaSavedStateFragment()));
+				checkGraphicCaptcha(scenario);
+				scenario.onActivity(activity -> {
+					PostingFragment posting = posting(activity);
+					first.set(posting);
+					EditText input = posting.requireView().findViewById(R.id.captcha_input);
+					input.setText("");
+					appearance(posting).requestCaptchaSolution();
+					input.setText("part");
+					input.setSelection(1, 3);
+				});
+				awaitPartialDialog(scenario);
+				scenario.moveToState(Lifecycle.State.CREATED);
+				scenario.moveToState(Lifecycle.State.RESUMED);
+				awaitPartialDialog(scenario);
+				scenario.onActivity(activity -> assertSame(first.get(), posting(activity)));
+				scenario.recreate();
+				AlertDialog restored = awaitPartialDialog(scenario);
+				scenario.onActivity(activity -> restored.getButton(AlertDialog.BUTTON_NEGATIVE).performClick());
+				scenario.moveToState(Lifecycle.State.CREATED);
+				scenario.moveToState(Lifecycle.State.RESUMED);
+				scenario.onActivity(activity -> {
+					PostingFragment posting = posting(activity);
+					assertNull(appearance(posting).captureImageCaptchaDialogState());
+					EditText input = posting.requireView().findViewById(R.id.captcha_input);
+					assertNotNull(input); // Back in the page, with the original unconfirmed answer.
+					assertEquals("", input.getText().toString());
+				});
+				// Pause with another partial answer, then replace the challenge before resuming.
+				scenario.onActivity(activity -> {
+					PostingFragment posting = posting(activity);
+					EditText input = posting.requireView().findViewById(R.id.captcha_input);
+					appearance(posting).requestCaptchaSolution();
+					input.setText("part");
+					input.setSelection(1, 3);
+				});
+				awaitPartialDialog(scenario);
+				scenario.moveToState(Lifecycle.State.STARTED);
+				Field field = PostingFragment.class.getDeclaredField("captchaController");
+				field.setAccessible(true);
+				scenario.onActivity(activity -> {
+					try {
+						PostingCaptchaController controller = (PostingCaptchaController) field.get(posting(activity));
+						String type = Chan.get("dvach").configuration.getCaptchaType();
+						DraftsStorage.CaptchaDraft replacement = new DraftsStorage.CaptchaDraft(type,
+								ReadCaptchaTask.CaptchaState.CAPTCHA, null, null, ChanConfiguration.Captcha.Input.ALL,
+								ChanConfiguration.Captcha.Validity.IN_THREAD, "", Bitmap.createBitmap(2, 2, Bitmap.Config.ARGB_8888),
+								false, false, controller.getLoadTime() + 1, "test", "503000001");
+						assertTrue(controller.restoreDraft(replacement, true, Chan.get("dvach").configuration.safe().obtainCaptcha(type)));
+					} catch (IllegalAccessException e) {
+						throw new AssertionError(e);
+					}
+				});
+				scenario.moveToState(Lifecycle.State.RESUMED);
+				scenario.onActivity(activity -> {
+					PostingFragment posting = posting(activity);
+					Bundle saved = new Bundle();
+					posting.onSaveInstanceState(saved);
+					assertFalse(saved.containsKey("imageCaptchaDialog"));
+					assertNull(appearance(posting).captureImageCaptchaDialogState());
+					EditText input = posting.requireView().findViewById(R.id.captcha_input);
+					assertEquals("", input.getText().toString());
+				});
+			}
+		} finally {
+			restorePreference(motion, oldMotion);
+			restorePreference(form, oldForm);
+		}
+	}
+
+	private static void restorePreference(String key, Object previous) {
+		if (previous instanceof Boolean old) Preferences.PREFERENCES.edit().put(key, old).close();
+		else Preferences.PREFERENCES.edit().remove(key).close();
+	}
+
+	private static PostingFragment posting(MainActivity activity) {
+		return (PostingFragment) activity.getSupportFragmentManager().findFragmentById(R.id.content_fragment);
+	}
+
+	private static PostingFormAppearance appearance(PostingFragment fragment) {
+		return (PostingFormAppearance) fragment.requireView().getTag(R.id.posting_form_owner);
+	}
+
+	private static AlertDialog awaitPartialDialog(ActivityScenario<MainActivity> scenario) throws NoSuchFieldException {
+		Field dialogField = PostingFormAppearance.class.getDeclaredField("captchaDialog");
+		dialogField.setAccessible(true);
+		AtomicReference<AlertDialog> result = new AtomicReference<>();
+		long deadline = SystemClock.elapsedRealtime() + 5000L;
+		do {
+			scenario.onActivity(activity -> {
+				Fragment fragment = activity.getSupportFragmentManager().findFragmentById(R.id.content_fragment);
+				if (!(fragment instanceof CaptchaSavedStateFragment posting) || posting.getView() == null) return;
+				PostingFormAppearance appearance = appearance(posting);
+				Bundle dialog = appearance.captureImageCaptchaDialogState();
+				if (dialog == null) return;
+				assertEquals("part", dialog.getString("input"));
+				assertEquals(1, dialog.getInt("selectionStart"));
+				assertEquals(3, dialog.getInt("selectionEnd"));
+				try {
+					result.set((AlertDialog) dialogField.get(appearance));
+				} catch (IllegalAccessException e) {
+					throw new AssertionError(e);
+				}
+			});
+			if (result.get() != null) return result.get();
+			SystemClock.sleep(20L);
+		} while (SystemClock.elapsedRealtime() < deadline);
+		throw new AssertionError("Graphic captcha dialog did not reopen");
+	}
+
+	private static void checkGraphicCaptcha(ActivityScenario<MainActivity> scenario) {
+		long deadline = SystemClock.elapsedRealtime() + 5000L;
+		AtomicBoolean checked = new AtomicBoolean();
+		do {
+			scenario.onActivity(activity -> {
+				Fragment fragment = activity.getSupportFragmentManager().findFragmentById(R.id.content_fragment);
+				if (!(fragment instanceof CaptchaSavedStateFragment posting) || posting.getView() == null) return;
+				ImageView image = posting.requireView().findViewById(R.id.captcha_image);
+				assertTrue(image.getDrawable() instanceof BitmapDrawable);
+				assertEquals(1600, ((BitmapDrawable) image.getDrawable()).getBitmap().getWidth());
+				android.widget.EditText input = posting.requireView().findViewById(R.id.captcha_input);
+				assertEquals("fixture answer", input.getText().toString());
+				Fragment.SavedState state = activity.getSupportFragmentManager().saveFragmentInstanceState(posting);
+				assertNotNull(state);
+				Parcel parcel = Parcel.obtain();
+				try {
+					state.writeToParcel(parcel, 0);
+					assertTrue("Posting state must remain small with a large captcha", parcel.dataSize() < 64 * 1024);
+				} finally {
+					parcel.recycle();
+				}
+				checked.set(true);
+			});
+			if (checked.get()) return;
+			SystemClock.sleep(20L);
+		} while (SystemClock.elapsedRealtime() < deadline);
+		fail("Posting fixture did not become visible");
 	}
 
 	@Test public void savedBundleRestoresImageTextFlagsTimeAndScopeIntoNewController() {

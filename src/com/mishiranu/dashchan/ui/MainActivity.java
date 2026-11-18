@@ -893,7 +893,10 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 				saved.stackItem.arguments.putLong(PageItem.EXTRA_LAST_VISIT_TIME, visited);
 			}
 			long order = now - Math.max(0L, elapsed - saved.createdRealtime);
-			boolean protect = key.equals(protectedKey) || keepFavorites && FavoritesStorage.getInstance()
+			boolean protect = key.equals(protectedKey)
+					|| current instanceof PostingFragment
+					&& ((PostingFragment) current).check(page.chanName, page.boardName, page.threadNumber)
+					|| keepFavorites && FavoritesStorage.getInstance()
 					.hasFavorite(page.chanName, page.boardName, page.threadNumber);
 			WatcherService.Counter counter = checkDeleted ? watcherServiceClient
 					.getCounter(page.chanName, page.boardName, page.threadNumber) : null;

@@ -38,6 +38,9 @@ import android.widget.TextView;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.lifecycle.ViewModelProvider;
 import chan.content.Chan;
 import chan.content.ChanConfiguration;
 import chan.content.ChanMarkup;
@@ -98,6 +101,11 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 	private static final int COMMENT_MAX_LINES = 9;
 
 	private static final String EXTRA_CAPTCHA_DRAFT = "captchaDraft";
+	private static final String EXTRA_CAPTCHA_DRAFT_KEY = "captchaDraftKey";
+	private static final String EXTRA_REUSABLE_CAPTCHA = "reusableCaptcha";
+	private static final String EXTRA_IME_EDITOR = "imeEditor";
+	private static final String EXTRA_IME_VISIBLE = "imeVisible";
+	private static final String EXTRA_CAPTCHA_DIALOG = "imageCaptchaDialog";
 
 	// Launchers belong to the Fragment, not an attachment controller.
 	// Register in a fixed order for every instance, including restoration while a picker is open.
@@ -155,6 +163,11 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 	// One state owner per subsystem. Hosts are attached only for the current view lifetime.
 	private final PostingAttachmentsController attachmentController = new PostingAttachmentsController();
 	private final PostingCaptchaController captchaController = new PostingCaptchaController();
+	private int imeEditorId = View.NO_ID;
+	private boolean imeVisible;
+	private boolean restoreIme;
+	private boolean discardRestoredCaptchaInput;
+	private Bundle pendingCaptchaDialog;
 	private final PostingDraftController draftController = new PostingDraftController();
 	private final PostingSendCoordinator sendCoordinator = new PostingSendCoordinator(draftController);
 
@@ -223,6 +236,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 
 		scrollView = view.findViewById(R.id.scroll_view);
 		scrollView.getViewTreeObserver().addOnPreDrawListener(showCommentAfterLayout);
+		scrollView.getViewTreeObserver().addOnWindowFocusChangeListener(captchaWindowFocus);
 		ViewGroup postingLayout = view.findViewById(R.id.posting_layout);
 		LinearLayout commentParent = view.findViewById(R.id.comment_parent);
 		commentView = view.findViewById(R.id.comment);
@@ -355,6 +369,8 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		getLayoutInflater().inflate(resId, footerContainer);
 		LinearLayout captchaInputParentView = footerContainer.findViewById(R.id.captcha_input_parent);
 		EditText captchaInputView = footerContainer.findViewById(R.id.captcha_input);
+		// The answer belongs to its challenge, not the independent view hierarchy state.
+		captchaInputView.setSaveEnabled(false);
 		captchaInputParentView.setPadding(0, longFooter ? (int) (8f * density) : 0, 0, (int) (8f * density));
 		ViewUtils.setNewMarginRelative(captchaInputView, null, null, (int) (4f * density), null);
 		ChanConfiguration.Captcha captcha = chan.configuration.safe().obtainCaptcha(captchaType);
@@ -446,11 +462,24 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 			}
 		}
 
-		boolean savedCaptcha = savedInstanceState != null && savedInstanceState.containsKey(EXTRA_CAPTCHA_DRAFT);
-		DraftsStorage.CaptchaDraft captchaDraft = savedCaptcha
-				? AndroidUtils.getParcelable(savedInstanceState, EXTRA_CAPTCHA_DRAFT, DraftsStorage.CaptchaDraft.class)
-				: rollover ? null : draftController.getCaptchaDraft(getChanName());
+		boolean retainedCaptcha = savedInstanceState != null && savedInstanceState.containsKey(EXTRA_CAPTCHA_DRAFT_KEY);
+		boolean legacyCaptcha = savedInstanceState != null && savedInstanceState.containsKey(EXTRA_CAPTCHA_DRAFT);
+		boolean savedCaptcha = retainedCaptcha || legacyCaptcha;
+		DraftsStorage.CaptchaDraft captchaDraft;
+		if (retainedCaptcha) {
+			captchaDraft = captchaState().getRetainedDraft(savedInstanceState.getString(EXTRA_CAPTCHA_DRAFT_KEY));
+			if (captchaDraft == null) {
+				captchaDraft = captchaController.restoreReusableDraft(savedInstanceState.getBundle(EXTRA_REUSABLE_CAPTCHA), captcha);
+			}
+		} else if (legacyCaptcha) {
+			captchaDraft = AndroidUtils.getParcelable(savedInstanceState, EXTRA_CAPTCHA_DRAFT, DraftsStorage.CaptchaDraft.class);
+		} else {
+			captchaDraft = rollover ? null : draftController.getCaptchaDraft(getChanName());
+		}
 		boolean captchaRestoreSuccess = captchaController.restoreDraft(captchaDraft, savedCaptcha, captcha);
+		discardRestoredCaptchaInput = savedCaptcha && !captchaRestoreSuccess;
+		pendingCaptchaDialog = captchaRestoreSuccess && savedInstanceState != null
+				? savedInstanceState.getBundle(EXTRA_CAPTCHA_DIALOG) : null;
 
 		List<Replyable.ReplyData> replyDataList = savedInstanceState != null ? Collections.emptyList()
 				: AndroidUtils.getParcelableArrayList(requireArguments(), EXTRA_REPLY_DATA_LIST,
@@ -555,11 +584,21 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		// The new form owns one coordinated editor/primary transition after reparenting.
 		// Do not let the legacy inset callback also translate its action panel.
 		if (postingAppearance == null) ImePanelMotion.attach(view, view.findViewById(R.id.posting_action_container));
-		// Only a fresh form opening requests the IME. Rotation/restoration and returning from a picker
-		// must preserve the user's keyboard choice, rather than issuing another show request.
+		imeEditorId = savedInstanceState != null ? savedInstanceState.getInt(EXTRA_IME_EDITOR, View.NO_ID) : View.NO_ID;
+		imeVisible = savedInstanceState != null && savedInstanceState.getBoolean(EXTRA_IME_VISIBLE);
+		restoreIme = imeEditorId != View.NO_ID;
 		if (savedInstanceState == null && allowPosting) {
 			initialKeyboardRequest = new PostingKeyboardRequest(requireActivity().getWindow(), view, commentView,
 					() -> isResumed() && getView() == view);
+		}
+	}
+
+	@Override
+	public void onViewStateRestored(Bundle savedInstanceState) {
+		super.onViewStateRestored(savedInstanceState);
+		if (discardRestoredCaptchaInput) {
+			captchaForm.setText(null);
+			discardRestoredCaptchaInput = false;
 		}
 	}
 
@@ -588,6 +627,7 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		ViewUtils.removeFromParent(textFormatView);
 		scrollView.removeCallbacks(resizeComment);
 		scrollView.getViewTreeObserver().removeOnPreDrawListener(showCommentAfterLayout);
+		scrollView.getViewTreeObserver().removeOnWindowFocusChangeListener(captchaWindowFocus);
 		revealCommentAfterLayout = false;
 		scrollView = null;
 		commentView = null;
@@ -642,12 +682,28 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		return captchaController.createDraft(captchaForm.getInput());
 	}
 
+	private PostingCaptchaController.CaptchaViewModel captchaState() {
+		return new ViewModelProvider(this).get(PostingCaptchaController.CaptchaViewModel.class);
+	}
+
 	@Override
 	public void onSaveInstanceState(@NonNull Bundle outState) {
 		super.onSaveInstanceState(outState);
 
-		DraftsStorage.CaptchaDraft captchaDraft = captureCaptchaDraft();
-		outState.putParcelable(EXTRA_CAPTCHA_DRAFT, captchaDraft);
+		if (captchaForm != null) {
+			DraftsStorage.CaptchaDraft draft = captureCaptchaDraft();
+			outState.putString(EXTRA_CAPTCHA_DRAFT_KEY, captchaState().retainDraft(draft));
+			ChanConfiguration.Captcha config = Chan.get(getChanName()).configuration.safe().obtainCaptcha(draft.captchaType);
+			Bundle reusable = captchaController.saveReusableDraft(draft, config);
+			if (reusable != null) outState.putBundle(EXTRA_REUSABLE_CAPTCHA, reusable);
+		}
+		Bundle captchaDialog = captureCaptchaDialog();
+		if (captchaDialog == null && hasPendingCaptchaDialog()) captchaDialog = pendingCaptchaDialog;
+		if (captchaDialog != null) outState.putBundle(EXTRA_CAPTCHA_DIALOG, captchaDialog);
+		if (imeEditorId != View.NO_ID) {
+			outState.putInt(EXTRA_IME_EDITOR, imeEditorId);
+			outState.putBoolean(EXTRA_IME_VISIBLE, captchaDialog == null && imeVisible);
+		}
 		saveDraftIfNeeded();
 	}
 
@@ -679,9 +735,25 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		sendCoordinator.deliverPendingUiEvents();
 		draftController.resetSavedGuard();
 		if (!allowPosting || sendCoordinator.isSendSuccess()) {
+			pendingCaptchaDialog = null;
 			((FragmentHandler) requireActivity()).removeFragment();
-		} else if (initialKeyboardRequest != null) {
-			initialKeyboardRequest.start();
+		} else {
+			View view = requireView();
+			if (hasPendingCaptchaDialog()) {
+				restoreIme = false;
+				view.invalidate(); // Restore the separate window once the posting view is attached and visible.
+				return;
+			}
+			if (restoreIme) {
+				restoreIme = false;
+				View target = view.findViewById(imeEditorId);
+				if (target instanceof EditText editor && editor.isShown() && editor.isEnabled() && editor.requestFocus()
+						&& imeVisible) {
+					initialKeyboardRequest = new PostingKeyboardRequest(requireActivity().getWindow(), view, editor,
+							() -> isResumed() && getView() == view);
+				}
+			}
+			if (initialKeyboardRequest != null) initialKeyboardRequest.start();
 		}
 	}
 
@@ -689,10 +761,29 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 	public void onPause() {
 		if (initialKeyboardRequest != null) initialKeyboardRequest.cancel("paused");
 		if (postingAppearance != null) {
+			Bundle openDialog = captureCaptchaDialog();
+			if (openDialog != null) pendingCaptchaDialog = openDialog;
 			postingAppearance.cancelAttachmentReveal();
 			postingAppearance.deactivateToolbar();
 		}
 		super.onPause();
+	}
+
+	private boolean hasPendingCaptchaDialog() {
+		if (pendingCaptchaDialog != null && (postingAppearance == null
+				|| !captchaController.isGraphicChallenge(pendingCaptchaDialog.getLong("challengeTime")))) {
+			pendingCaptchaDialog = null;
+		}
+		return pendingCaptchaDialog != null;
+	}
+
+	private Bundle captureCaptchaDialog() {
+		if (postingAppearance == null) return null;
+		long time = captchaController.getLoadTime();
+		if (!captchaController.isGraphicChallenge(time)) return null;
+		Bundle dialog = postingAppearance.captureImageCaptchaDialogState();
+		if (dialog != null) dialog.putLong("challengeTime", time);
+		return dialog;
 	}
 
 	public boolean consumeFuturePostText() {
@@ -1361,7 +1452,25 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		}
 	}
 
+	private final ViewTreeObserver.OnWindowFocusChangeListener captchaWindowFocus = focused -> {
+		if (focused && pendingCaptchaDialog != null && scrollView != null) scrollView.invalidate();
+	};
+
 	private final ViewTreeObserver.OnPreDrawListener showCommentAfterLayout = () -> {
+		View form = getView();
+		if (form != null && isResumed() && !restoreIme && form.hasWindowFocus()
+				&& !requireActivity().isChangingConfigurations()) {
+			if (hasPendingCaptchaDialog() && postingAppearance.restoreImageCaptchaDialogState(pendingCaptchaDialog)) {
+				pendingCaptchaDialog = null;
+				return true;
+			}
+			WindowInsetsCompat insets = ViewCompat.getRootWindowInsets(form);
+			if (insets != null) {
+				imeVisible = insets.isVisible(WindowInsetsCompat.Type.ime());
+				View focused = form.findFocus();
+				if (focused instanceof EditText && focused.getId() != View.NO_ID) imeEditorId = focused.getId();
+			}
+		}
 		if (revealCommentAfterLayout) {
 			revealCommentAfterLayout = false;
 			if (formDiagnostics != null) formDiagnostics.decision("reveal_requested ime=" + isCommentKeyboardVisible()

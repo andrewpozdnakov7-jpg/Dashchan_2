@@ -503,14 +503,16 @@ public class ViewUnit {
 			}
 			bumpLimitReached = postItem.getBumpLimitReachedState(chan, postsCount) == PostItem.BumpLimitState.REACHED;
 		}
+		holder.bumpLimitReached = bumpLimitReached;
 		holder.number.setText("#" + postNumber);
 		PostState.Predicate.Data stateData = new PostState.Predicate.Data(postItem, configurationSet, bumpLimitReached);
 		for (int i = 0; i < PostState.POST_ITEM_STATES.size(); i++) {
-			boolean visible = PostState.POST_ITEM_STATES.get(i).predicate.apply(stateData);
-			holder.stateImages[i].setVisibility(visible ? View.VISIBLE : View.GONE);
+			PostState state = PostState.POST_ITEM_STATES.get(i);
+			boolean visible = state.predicate.apply(stateData);
 			View status = holder.stateImages[i];
+			status.setVisibility(visible ? View.VISIBLE : View.GONE);
 			if (com.mishiranu.dashchan.widget.CompactDialogUi.isEnabled()) {
-				status.setContentDescription(postStatusTitle(PostState.POST_ITEM_STATES.get(i), postItem));
+				status.setContentDescription(postStatusTitle(state, postItem, bumpLimitReached));
 				status.setFocusable(true);
 				status.setOnClickListener(view -> showPostStatusDescription(holder, false, view));
 				status.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
@@ -1064,7 +1066,7 @@ public class ViewUnit {
 			for (int i = 0; i < PostState.POST_ITEM_STATES.size(); i++) {
 				if (holder.stateImages[i].getVisibility() == View.VISIBLE) {
 					PostState state = PostState.POST_ITEM_STATES.get(i);
-					String title = postStatusTitle(state, postItem);
+					String title = postStatusTitle(state, postItem, holder.bumpLimitReached);
 					icons.add(new DialogUnit.IconData(title, state.iconAttrResId));
 				}
 			}
@@ -1073,13 +1075,12 @@ public class ViewUnit {
 				icons, configurationSet.chanName, null, anchor, holder.itemView);
 	}
 
-	private String postStatusTitle(PostState state, PostItem postItem) {
-		if (com.mishiranu.dashchan.widget.CompactDialogUi.isEnabled()
-				&& state == PostState.SAGE && !postItem.isSage()) {
-			// The visible SAGE glyph with !isSage is produced by the computed bump-limit state.
-			return uiManager.getContext().getString(R.string.compact_bump_limit);
+	private String postStatusTitle(PostState state, PostItem postItem, boolean bumpLimitReached) {
+		Context context = uiManager.getContext();
+		if (state == PostState.SAGE && bumpLimitReached) {
+			return context.getString(R.string.compact_bump_limit);
 		}
-		return state.titleProvider.get(uiManager.getContext(), postItem);
+		return state.titleProvider.get(context, postItem);
 	}
 
 	private enum PostState {
@@ -1454,6 +1455,7 @@ public class ViewUnit {
 		public final CommentTextView.LinkListener defaultLinkListener;
 
 		public UiManager.Selection selection;
+		public boolean bumpLimitReached;
 		public Animator expandAnimator;
 		public NewPostAnimation newPostAnimation;
 		public long lastCommentClick;

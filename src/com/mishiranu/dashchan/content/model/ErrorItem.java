@@ -33,7 +33,8 @@ public final class ErrorItem implements Parcelable {
 		FIREWALL_BLOCK,
 		UNSUPPORTED_SERVICE,
 		INVALID_AUTHORIZATION_DATA,
-		UNSUPPORTED_RECAPTCHA
+		UNSUPPORTED_RECAPTCHA,
+		LOCAL_NETWORK_PERMISSION
 	}
 
 	public final Type type;
@@ -165,6 +166,10 @@ public final class ErrorItem implements Parcelable {
 				resId = R.string.ddos_protection_bypass_failed;
 				break;
 			}
+			case LOCAL_NETWORK_PERMISSION: {
+				resId = R.string.local_network_access_required;
+				break;
+			}
 			case UNSUPPORTED_SERVICE: {
 				resId = R.string.unsupported_service;
 				break;
@@ -202,7 +207,15 @@ public final class ErrorItem implements Parcelable {
 		@Override
 		public ErrorItem createFromParcel(Parcel in) {
 			String typeString = in.readString();
-			Type type = typeString != null ? Type.valueOf(typeString) : null;
+			Type type = null;
+			if (typeString != null) {
+				try {
+					type = Type.valueOf(typeString);
+				} catch (IllegalArgumentException e) {
+					// A saved page may come from a build with a different set of errors.
+					type = Type.UNKNOWN;
+				}
+			}
 			int specialType = in.readInt();
 			int httpResponseCode = in.readInt();
 			String message = in.readString();

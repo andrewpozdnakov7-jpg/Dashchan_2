@@ -2348,7 +2348,7 @@ public class Preferences {
 	}
 
 	public static final String KEY_DIALOG_FORM_IME = "experimental_dialog_form_ime";
-	public static final boolean DEFAULT_DIALOG_FORM_IME = false;
+	public static final boolean DEFAULT_DIALOG_FORM_IME = true;
 
 	public static boolean isDialogFormImeEnabled() {
 		return PREFERENCES.getBoolean(KEY_DIALOG_FORM_IME, DEFAULT_DIALOG_FORM_IME);
@@ -2497,9 +2497,54 @@ public class Preferences {
 	public static final boolean DEFAULT_PERSISTENT_TRANSLATION_CACHE = false;
 	public static final String KEY_THREAD_FAB_MENU = "thread_fab_menu";
 	public static final boolean DEFAULT_THREAD_FAB_MENU = false;
+	private static final String KEY_THREAD_FAB_ORDER = "thread_fab_order";
+
+	public enum ThreadFabAction {
+		REPLY("reply", R.string.reply, true),
+		REFRESH("refresh", R.string.thread_fab_refresh, true),
+		FAVORITE("favorite", R.string.favorites, true),
+		ARCHIVE("archive", R.string.thread_fab_save, true),
+		GALLERY("gallery", R.string.gallery, false);
+
+		public final String key;
+		public final int titleResId;
+		public final boolean enabledByDefault;
+
+		ThreadFabAction(String key, int titleResId, boolean enabledByDefault) {
+			this.key = "thread_fab_action_" + key;
+			this.titleResId = titleResId;
+			this.enabledByDefault = enabledByDefault;
+		}
+	}
 
 	public static boolean isThreadFabMenuEnabled() {
 		return PREFERENCES.getBoolean(KEY_THREAD_FAB_MENU, DEFAULT_THREAD_FAB_MENU);
+	}
+
+	public static List<ThreadFabAction> getThreadFabActionOrder() {
+		ThreadFabAction[] actions = ThreadFabAction.values();
+		ArrayList<ThreadFabAction> order = new ArrayList<>(actions.length);
+		for (String key : PREFERENCES.getString(KEY_THREAD_FAB_ORDER, "").split(",")) {
+			for (ThreadFabAction action : actions) {
+				if (action.key.equals(key) && !order.contains(action)) order.add(action);
+			}
+		}
+		for (ThreadFabAction action : actions) {
+			if (!order.contains(action)) order.add(action);
+		}
+		return order;
+	}
+
+	public static List<ThreadFabAction> getEnabledThreadFabActions() {
+		List<ThreadFabAction> actions = getThreadFabActionOrder();
+		actions.removeIf(action -> !PREFERENCES.getBoolean(action.key, action.enabledByDefault));
+		return actions;
+	}
+
+	public static void setThreadFabActionOrder(List<ThreadFabAction> order) {
+		ArrayList<String> keys = new ArrayList<>(order.size());
+		for (ThreadFabAction action : order) keys.add(action.key);
+		PREFERENCES.editAsync().put(KEY_THREAD_FAB_ORDER, String.join(",", keys)).close();
 	}
 
 	public static final String KEY_OUTBOX_JOURNAL = "experimental_outbox_journal";
