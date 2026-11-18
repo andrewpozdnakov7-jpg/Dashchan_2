@@ -8,9 +8,10 @@
 - This is an application lock, **not database encryption or a guarantee of forensic erasure**.
 
 Protection remains experimental. Test the additional PIN and file deletion only
-with disposable data. This guide follows sources based on **3.2.82**; subsequent
-prepared fixes still require validation and release. It is not evidence of a
-successful device test. Security settings are available in GitHub builds, not F-Droid.
+with disposable data. This guide describes GitHub version **3.2.88**. Security
+settings are also included in F-Droid builds starting with **3.2.85**. See the
+[F-Droid listing](https://f-droid.org/packages/io.dashchan2/) for available builds.
+Setting names and behavior may differ in earlier versions.
 
 ## Unlock methods
 
@@ -47,8 +48,7 @@ authority. Clock/date/timezone changes cannot extend the monotonic interval.
 Malformed or unverifiable state never grants access. Device validation is still
 required; settings changes always need fresh proof.
 
-The prepared post-3.2.82 fix resets the interval to Immediately when protection
-is disabled, so configuring a new lock cannot silently inherit an old 300 minutes.
+Disabling app protection resets the interval to Immediately.
 
 ## Picture-in-picture
 
@@ -63,7 +63,7 @@ does not receive the built-in player's exception and may close with protection o
 
 ## Notifications
 
-**Hide reply and notification text in background** is on by default when app protection is enabled.
+In GitHub 3.2.88, **Hide reply and notification text in background** also applies to service notifications. It is on by default when app protection is enabled.
 One checkbox controls replies, downloads, posting, player, conversion and updates. Contents are visible in an unlocked
 foreground app and hidden in the background or while locked. Disabling the option requires fresh approval; Android's
 notification/lock-screen settings still apply. The previous checkbox value is preserved.

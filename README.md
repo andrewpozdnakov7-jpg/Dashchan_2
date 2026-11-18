@@ -8,11 +8,11 @@
   <img src="https://fdroid.gitlab.io/artwork/badge/get-it-on.png" alt="Get it on F-Droid" height="80">
 </a>
 
-[Политика конфиденциальности / Privacy Policy](PRIVACY.md)
+[Политика конфиденциальности / Privacy Policy](PRIVACY.md) · [Wiki](https://github.com/andrewpozdnakov7-jpg/Dashchan_2/wiki)
 
 ## Русский
 
-Slooop - пользовательское название неофициальной ветки Dashchan_2 для Android 11 и новее. Приложение устанавливается рядом с оригинальным Dashchan, использует пакет `io.dashchan2` и содержит встроенную поддержку Двача, «Кекабу» (Pikabu), d3.ru, Ежчана, Апачана, Архивача, Zchan и Endchan, экспериментальные режимы 4chan и Reddit и собственный видеоплеер на FFmpeg.
+Slooop - пользовательское название неофициальной ветки Dashchan_2 для Android 11 и новее. Приложение устанавливается рядом с оригинальным Dashchan, использует пакет `io.dashchan2` и содержит встроенную поддержку Двача, «Кекабу» (Pikabu), d3.ru, Ежчана, ECH (ech.bz), Апачана, Архивача, Zchan и Endchan, экспериментальные режимы 4chan и Reddit и собственный видеоплеер на FFmpeg.
 
 ### Скачать
 
@@ -29,14 +29,14 @@ Slooop доступен в [GitHub Releases](https://github.com/andrewpozdnakov7
 
 GitHub-версия содержит встроенную проверку обновлений. Офлайн-переводчик Google ML Kit для неё устанавливается по желанию отдельным дополнением размером около 50 МБ и не увеличивает основной APK. Языковой пакет также загружается отдельно. Свободные шрифты и готовые фоновые изображения скачиваются из публичного каталога дополнений только по выбору пользователя.
 
-F-Droid-версия не содержит встроенный механизм обновления приложения, Firebase, Google Play Services, серверные push-уведомления и интеграцию с дополнением Google ML Kit или Gemini Nano. Подготавливаемая версия поддерживает офлайн-перевод Mozilla Bergamot со сборкой движка из исходников; эта доработка ещё не опубликована в каталоге. Обновления устанавливаются через F-Droid; локальная фоновая проверка ответов остаётся доступной средствами Android.
+В F-Droid обновления устанавливаются через каталог, а ответы могут проверяться локально в фоне. В эту сборку не входят встроенное обновление, Firebase, Google Play Services, серверные push-уведомления, Google ML Kit, Gemini Nano и конвертация видео для вложений. Начиная со сборки 3.2.85 доступны офлайн-перевод Mozilla Bergamot со сборкой движка из исходников, защита приложения и Predictive Back. Доступные версии указаны в [каталоге F-Droid](https://f-droid.org/packages/io.dashchan2/).
 
 ### Возможности
 
 - просмотр досок, тредов, изображений и видео, избранное, слежение за тредами и фоновые уведомления;
 - встроенный Двач с отправкой постов, Passcode, AI-фильтром и лайками/дизлайками на поддерживаемых досках;
 - встроенный «Кекабу»: каталог до 200 популярных сообществ с категориями, сворачиваемыми разделами и поиском, добавление собственных сообществ, теги, тематические ленты, вход через официальный сайт, оценки историй и комментариев, отправка и удаление своих комментариев;
-- встроенные Ежчан, Апачан, Zchan и Endchan с чтением и отправкой сообщений, а также d3.ru, Архивач и экспериментальный 4chan в режиме чтения;
+- встроенные Ежчан, ECH (e444), Апачан, Zchan и Endchan с чтением и отправкой сообщений, а также d3.ru, Архивач и экспериментальный 4chan в режиме чтения. Подробности о доменах ECH и переходе со старого расширения есть в [справке по бордам](https://github.com/andrewpozdnakov7-jpg/Dashchan_2/wiki/Boards#ech-e444);
 - экспериментальные режимы Reddit: официальный сайт внутри приложения, каталог до 200 популярных сообществ и отдельные режимы доски и чтения обсуждений, выключенные по умолчанию;
 - редактирование постов и сортировка тредов на Апачане по последнему бампу, дате создания или количеству сообщений;
 - «Мои доски» для объединения досок разных имиджборд в несколько собственных лент;
@@ -46,19 +46,22 @@ F-Droid-версия не содержит встроенный механизм
 - скорость воспроизведения с сохранением тембра и редактируемыми пресетами, перемотка двойным нажатием, масштабирование видео до 10×, отдельная громкость, настраиваемый жест громкости, полноэкранный режим, «картинка в картинке» и TikTok-режим для переключения видео вертикальными свайпами;
 - выбор открытия YouTube-ссылок во внешнем приложении или в экспериментальном плеере Slooop с переходом в PiP;
 - галерея с фильтрами, редактор изображений, копирование и поиск по изображениям, а также фоновое сохранение медиа;
-- локальные архивы тредов в HTML и ZIP, встроенный просмотрщик и подключение дополнительных папок;
+- локальные HTML- и ZIP-архивы тредов, добавление новых постов к сохранённой копии, встроенный просмотрщик и подключение дополнительных папок;
+- настройка видимости и порядка разделов бокового меню, сворачивание и необязательная автоочистка открытых страниц;
+- [экспериментальная защита приложения](https://github.com/andrewpozdnakov7-jpg/Dashchan_2/wiki/Security) с PIN, биометрией и настройкой показа текста уведомлений в фоне;
 - встроенные, загружаемые и пользовательские темы, фоновые изображения и автоматический дневной и ночной режим;
-- поиск по настройкам, Predictive Back на Android 13+, масштаб текста, сворачивание длинного списка открытых тредов, загружаемый каталог свободных шрифтов, OpenDyslexic и импорт TTF/OTF;
+- поиск по настройкам, Predictive Back, масштаб текста, загружаемый каталог свободных шрифтов, OpenDyslexic и импорт TTF/OTF;
 - выбор имени и значка приложения, включая народное имя «ТОГДАЧ», а также создание собственного ярлыка;
 - мгновенное открытие локального списка изменений с фоновой загрузкой только новых записей;
-- проверка стабильных обновлений с докачиванием APK.
+- проверка стабильных обновлений с докачиванием APK в GitHub-версии.
 
 ### Ограничения
 
 - d3.ru, 4chan и Архивач не поддерживают отправку постов; «Кекабу» пока не публикует истории и не обходит возрастные ограничения Пикабу;
 - режимы Reddit и внутреннее воспроизведение YouTube/PiP экспериментальны, зависят от сайтов, WebView, сети и устройства и могут работать не везде; веб-интерфейсы поддерживаемых сайтов могут меняться;
 - Google ML Kit доступен только как отдельное дополнение GitHub-версии, а Gemini Nano работает только на поддерживаемых устройствах;
-- Predictive Back на Android 13+ выключен по умолчанию и включается в настройках; «картинка в картинке» и автоматический переход в неё включены по умолчанию, отключаются в настройках и требуют поддержки устройства и разрешённого Android доступа к PiP;
+- Predictive Back автоматически включается при обнаружении системной жестовой навигации на Android 13+, если пользователь ещё не выбрал настройку. Предпросмотр переходов в приложении требует Android 14+. В F-Droid 3.2.85 Predictive Back включается вручную.
+- «картинка в картинке» и автоматический переход в неё включены по умолчанию, отключаются в настройках и требуют поддержки устройства и разрешённого Android доступа к PiP;
 - локальное отслеживание в разделе «Ответы» включено по умолчанию; серверные push-уведомления включаются отдельно с согласием пользователя; системные уведомления зависят от разрешения на Android 13+ и настроек канала уведомлений;
 - `targetSdk` равен 37 для совместимости с Android 17; `minSdk` остаётся равен 30.
 
@@ -93,6 +96,10 @@ APK появится в `build/outputs/apk`. Первая сборка скач�
 
 Правила участия находятся в [CONTRIBUTING.md](CONTRIBUTING.md), нормы общения - в [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 
+### Благодарности участникам развития проекта
+
+1. **Vados** (анонимный участник) — тестирование приложения и идеи по развитию галереи, видеоплеера и поддержки Reddit.
+
 ### Происхождение и авторы
 
 Dashchan_2 основан на исходном коде Dashchan. Отдельные идеи и участки кода были изучены и адаптированы из [TrixiEther/DashchanFork](https://github.com/TrixiEther/DashchanFork), а темы - из [TrixiEther/Dashchan-Meta](https://github.com/TrixiEther/Dashchan-Meta). Спасибо авторам оригинального Dashchan, TrixiEther и участникам этих проектов.
@@ -122,14 +129,14 @@ Forum support and the native player libraries are bundled into the main APK. Sep
 
 The GitHub build includes the in-app update checker. Its Google ML Kit offline translator is an optional separate add-on of approximately 50 MB and does not increase the main APK size. Its language pack is downloaded separately as well. Free fonts and ready-made wallpapers are downloaded from the public add-ons catalog only when selected by the user.
 
-The F-Droid build excludes the application self-updater, Firebase, Google Play Services, server push notifications, and integration with the Google ML Kit add-on or Gemini Nano. The version in preparation supports Mozilla Bergamot offline translation with a source-built engine; this change is not published in the catalogue yet. Updates are delivered through F-Droid, while local background reply checks remain available through Android.
+F-Droid delivers updates through its repository. Local background reply checks remain available. This build excludes the self-updater, Firebase, Google Play Services, server push notifications, Google ML Kit, Gemini Nano, and video conversion for attachments. F-Droid builds starting with 3.2.85 support offline translation with a source-built Mozilla Bergamot engine, app protection, and Predictive Back. See the [F-Droid listing](https://f-droid.org/packages/io.dashchan2/) for available versions.
 
 ### Highlights
 
 - boards, threads, media gallery, favorites, thread watching, and background notifications;
 - built-in Dvach posting, Passcode support, AI filtering, and votes on supported boards;
 - built-in Kekabu access with a catalog of up to 200 popular communities, collapsible categories, search and custom communities, official-site sign-in, account-available 18+ media, user-initiated story and comment votes, and posting and deletion of the user's own comments;
-- built-in Ejchan, ECH (ech.bz), Apachan, Zchan, and Endchan reading and posting, plus read-only d3.ru and Arhivach and experimental read-only 4chan access;
+- built-in Ejchan, ECH (e444), Apachan, Zchan, and Endchan reading and posting, plus read-only d3.ru and Arhivach and experimental read-only 4chan access. See the [Boards guide](https://github.com/andrewpozdnakov7-jpg/Dashchan_2/wiki/Boards#ech-e444) for ECH domains and legacy extension handling;
 - experimental Reddit modes with the official website inside the app, a catalog of up to 200 popular communities, and separate opt-in board and discussion-reader modes;
 - Apachan post editing and thread sorting by last bump, creation date, or post count;
 - My Boards feeds that combine boards from different imageboards into several custom feeds;
@@ -138,18 +145,22 @@ The F-Droid build excludes the application self-updater, Firebase, Google Play S
 - FFmpeg playback for WebM, MP4, fMP4, MOV, H.264, HEVC, VP8, VP9, and AV1;
 - pitch-preserving speed control with editable presets, double-tap seeking, video zoom up to 10×, per-video volume, configurable volume gestures, fullscreen playback, picture-in-picture, and a TikTok mode for switching videos with vertical swipes;
 - a choice between opening YouTube links externally or through the experimental Slooop player with PiP;
-- gallery filters, an image editor, clipboard image copying, reverse-image search, background media saving, and local HTML/ZIP thread archives;
+- gallery filters, an image editor, clipboard image copying, reverse-image search, and background media saving;
+- local HTML/ZIP thread archives with incremental updates, a built-in viewer, and support for additional archive folders;
+- configurable side menu order and visibility, collapsible lists of open pages, and optional automatic cleanup of open pages;
+- [experimental app protection](https://github.com/andrewpozdnakov7-jpg/Dashchan_2/wiki/Security-English) with PIN, biometrics, and a setting for hiding notification text in the background;
 - bundled, downloadable, and user-imported themes, optional wallpapers, and automatic day and night switching;
-- settings search, Predictive Back, text scaling, collapsible long lists of open threads, a downloadable catalog of free fonts, OpenDyslexic, custom TTF/OTF fonts, and configurable app names and icons, including the community name “ТОГДАЧ”;
+- settings search, Predictive Back, text scaling, a downloadable catalog of free fonts, OpenDyslexic, custom TTF/OTF fonts, and configurable app names and icons, including the community name “ТОГДАЧ”;
 - immediate loading of the bundled changelog followed by background retrieval of newer entries only;
-- stable update checks with resumable APK downloads.
+- stable update checks with resumable APK downloads in the GitHub build.
 
 ### Limitations
 
 - d3.ru, 4chan, and Arhivach posting are not implemented; Kekabu does not publish stories or bypass Pikabu age restrictions;
 - Reddit modes and internal YouTube/PiP playback are experimental, depend on the websites, WebView, network, and device, and may not work everywhere; supported websites may change their interfaces;
 - Google ML Kit is available only as a separate add-on for the GitHub build, while Gemini Nano requires a supported device;
-- Predictive Back on Android 13+ is off by default and can be enabled in settings; picture-in-picture and automatic entry are on by default, can be disabled in settings, and require device support and Android PiP access;
+- Predictive Back turns on automatically when system gesture navigation is detected on Android 13+ if the user has not set a preference. In-app previews require Android 14+. In F-Droid 3.2.85, enable Predictive Back manually.
+- picture-in-picture and automatic entry are on by default, can be disabled in settings, and require device support and Android PiP access;
 - local Replies tracking is on by default; server push notifications require a separate opt-in and user consent; Android notifications depend on the Android 13+ notification permission and notification-channel settings;
 - `targetSdk` is 37 for Android 17 compatibility; `minSdk` remains 30.
 
@@ -167,18 +178,14 @@ The APK is written under `build/outputs/apk`. The first build downloads FFmpeg a
 
 See [docs/BUILDING.md](docs/BUILDING.md), [docs/TESTING.md](docs/TESTING.md), and [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md) for the complete workflow.
 
-### Feedback, Credits, And License
+### Acknowledgments
+
+1. **Vados** (anonymous contributor) — app testing and ideas for improving the gallery, video player, and Reddit support.
+
+### Feedback, Credits, and License
 
 Use [GitHub Issues](https://github.com/andrewpozdnakov7-jpg/Dashchan_2/issues) for reproducible bugs and feature requests. Report vulnerabilities according to [SECURITY.md](SECURITY.md). Contributions are described in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 Dashchan_2 is based on Dashchan. Ideas and code paths were studied and adapted from [TrixiEther/DashchanFork](https://github.com/TrixiEther/DashchanFork), and themes were imported from [TrixiEther/Dashchan-Meta](https://github.com/TrixiEther/Dashchan-Meta). OpenAI Codex and Anthropic Claude assisted with development and verification; final responsibility remains with the maintainer.
 
 Licensed under the [GNU General Public License, version 3 or later](COPYING).
-
-### ECH (e444)
-
-ECH support is built in and uses ech.bz / ech.ist over HTTPS. Legacy ech.u links are recognized.
-The separately installed com.mishiranu.dashchan.chan.e444 extension is superseded and its code is not loaded.
-The e444 forum identity is retained for existing preferences, favorites and stored threads.
-Reactions, poll voting and server-provided navigation menus use native post binding, without reflective UI hooks.
-Device acceptance testing of ECH support remains pending.
