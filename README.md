@@ -99,6 +99,7 @@ APK появится в `build/outputs/apk`. Первая сборка скач�
 ### Благодарности участникам развития проекта
 
 1. **Vados** (анонимный участник) — тестирование приложения и идеи по развитию галереи, видеоплеера и поддержки Reddit.
+2. **[kamik-hub](https://github.com/kamik-hub)** (Самсунг-кун) — тестирование сборок, отчёты о падениях и идеи по развитию интерфейса и видеоконвертера.
 
 ### Происхождение и авторы
 
@@ -181,6 +182,7 @@ See [docs/BUILDING.md](docs/BUILDING.md), [docs/TESTING.md](docs/TESTING.md), an
 ### Acknowledgments
 
 1. **Vados** (anonymous contributor) — app testing and ideas for improving the gallery, video player, and Reddit support.
+2. **[kamik-hub](https://github.com/kamik-hub)** (Самсунг-кун) — testing builds, reporting crashes, and suggesting improvements to the interface and video converter.
 
 ### Feedback, Credits, and License
 
