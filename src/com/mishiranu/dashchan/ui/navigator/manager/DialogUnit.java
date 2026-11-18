@@ -2022,17 +2022,17 @@ public class DialogUnit {
 			dialog.setMessage(context.getString(R.string.processing_data__ellipsis));
 			dialog.setMax(request.posts.size());
 			LocalArchiveViewModel viewModel = provider.getViewModel(LocalArchiveViewModel.class);
-			viewModel.startIfNeeded(request);
 			viewModel.observe(provider.getLifecycleOwner(), result -> {
 				if (result.status == LocalArchiveViewModel.PreparationResult.Status.PREPARED) viewModel.handOff(result.downloadResult);
 				provider.dismiss();
 				if (result.status == LocalArchiveViewModel.PreparationResult.Status.ERROR) {
 					ClickableToast.show(R.string.unknown_error);
-				} else {
+				} else if (result.status == LocalArchiveViewModel.PreparationResult.Status.PREPARED) {
 					enqueuePreparedLocalArchive(provider, result.downloadResult);
 				}
 			});
 			viewModel.progress.observe(provider.getLifecycleOwner(), dialog::setValue);
+			viewModel.startWhenStorageReady(request, UiManager.extract(provider).callback().getDownloadBinder());
 			return dialog;
 		});
 	}

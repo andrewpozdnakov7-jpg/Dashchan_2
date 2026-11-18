@@ -1335,7 +1335,8 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 				? getString(R.string.number_page_doesnt_exist__format, pageNumber) : errorItem.toString();
 		getAdapter().setSecretAbuAllowed(false);
 		if (getAdapter().isRealEmpty()) {
-			switchError(message);
+			if (errorItem.type == ErrorItem.Type.LOCAL_NETWORK_PERMISSION) switchError(errorItem);
+			else switchError(message);
 		} else {
 			ClickableToast.show(message);
 		}

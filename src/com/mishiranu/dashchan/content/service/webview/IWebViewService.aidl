@@ -6,6 +6,7 @@ import com.mishiranu.dashchan.content.service.webview.WebViewExtra;
 interface IWebViewService {
 	boolean loadWithCookieResult(String requestId, String uriString, String userAgent,
 			boolean proxySocks, String proxyHost, int proxyPort, boolean verifyCertificate, long timeout,
+			boolean diagnostics,
 			in WebViewExtra extra, IRequestCallback requestCallback);
 	void interrupt(String requestId);
 }

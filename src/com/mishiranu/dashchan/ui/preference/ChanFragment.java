@@ -26,6 +26,8 @@ import android.webkit.WebViewClient;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.fragment.app.DialogFragment;
 import androidx.lifecycle.ViewModelProvider;
@@ -55,6 +57,7 @@ import com.mishiranu.dashchan.ui.preference.core.MultipleEditPreference;
 import com.mishiranu.dashchan.ui.preference.core.Preference;
 import com.mishiranu.dashchan.ui.preference.core.PreferenceFragment;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
+import com.mishiranu.dashchan.util.LocalNetworkPermission;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.util.SharedPreferences;
 import com.mishiranu.dashchan.util.WebViewUtils;
@@ -72,6 +75,17 @@ import org.json.JSONTokener;
 
 public class ChanFragment extends PreferenceFragment implements FragmentHandler.Callback {
 	private static final String EXTRA_CHAN_NAME = "chanName";
+	private final ActivityResultLauncher<String> localNetworkPermission = registerForActivityResult(
+			new ActivityResultContracts.RequestPermission(), granted -> {
+				if (!granted && isAdded() && getView() != null) {
+					MotionDialogBuilder.standard(requireContext())
+							.setMessage(R.string.local_network_access_denied)
+							.setNegativeButton(android.R.string.cancel, null)
+							.setPositiveButton(R.string.local_network_app_settings, (dialog, which) ->
+									startActivity(LocalNetworkPermission.appSettings(requireContext())))
+							.show();
+				}
+			});
 
 	private Preference<List<String>> captchaPassPreference;
 	private Preference<List<String>> userAuthorizationPreference;
@@ -331,6 +345,15 @@ public class ChanFragment extends PreferenceFragment implements FragmentHandler.
 			proxyPreference.setOnAfterChangeListener(p -> {
 				proxyPreference.setDescription(!StringUtils.isEmpty(p.getValue()
 						.get(Preferences.SUB_KEY_PROXY_HOST)) ? getProxyWarning(false) : null);
+			});
+		}
+		if (LocalNetworkPermission.applies(requireContext()) && !localMode) {
+			addButton(R.string.local_network_access, R.string.local_network_access_summary).setOnClickListener(p -> {
+				if (LocalNetworkPermission.isMissing(requireContext())) {
+					localNetworkPermission.launch(LocalNetworkPermission.PERMISSION);
+				} else {
+					startActivity(LocalNetworkPermission.appSettings(requireContext()));
+				}
 			});
 		}
 		if (canReadThreadPartially) {

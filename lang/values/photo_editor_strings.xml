@@ -70,6 +70,8 @@
 	<string name="pe_preview_failed">Could not update the preview. Try reducing the edits.</string>
 	<string name="pe_restore_failed">Some session data could not be restored. Check the photo before saving.</string>
 	<string name="pe_session_failed">Could not save the editing session. Edits may be lost if the process closes.</string>
+	<string name="pe_session_restore_failed">Could not restore your edits. The original image is open.</string>
+	<string name="pe_session_restored_previous">The last saved edits were restored. Later changes may be missing.</string>
 	<string name="pe_discard">Discard the edits and close the editor?</string>
 	<string name="pe_discard_button">Discard</string>
     <string name="pe_color_grid">Grid</string>

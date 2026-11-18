@@ -93,7 +93,15 @@ public final class PostingFormDiagnostics {
 		}
 	}
 
+	public static synchronized void recordNetwork(long capture, String details) {
+		if (recording && generation == capture) record("network " + details, false);
+	}
+
 	private static synchronized void record(String message) {
+		record(message, true);
+	}
+
+	private static void record(String message, boolean logcat) {
 		if (!recording) return;
 		String line = "+" + (SystemClock.elapsedRealtime() - started) + "ms " + message;
 		LINES.addLast(line);
@@ -102,6 +110,7 @@ public final class PostingFormDiagnostics {
 			chars -= LINES.removeFirst().length();
 			dropped++;
 		}
+		if (!logcat) return;
 		for (int offset = 0; offset < line.length(); offset += LOGCAT_CHUNK) {
 			Log.i(message.startsWith("screen ") ? "ScreenDiagnostics" : "PostingForm", (offset > 0 ? "continued " : "")
 					+ line.substring(offset, Math.min(line.length(), offset + LOGCAT_CHUNK)));

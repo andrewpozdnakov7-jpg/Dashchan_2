@@ -6,6 +6,7 @@ import com.mishiranu.dashchan.BuildConfig;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.async.ExecutorTask;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
+import com.mishiranu.dashchan.util.NetworkDiagnostics;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -126,6 +127,7 @@ public class UpdateChecker {
 	}
 
 	static String downloadString(String urlString) throws IOException {
+		NetworkDiagnostics trace = NetworkDiagnostics.startApp("updates");
 		urlString = normalizeUrl(urlString);
 		URLConnection rawConnection = new URL(urlString).openConnection();
 		rawConnection.setConnectTimeout(TIMEOUT_MS);
@@ -138,6 +140,7 @@ public class UpdateChecker {
 			if (httpConnection != null) {
 				httpConnection.setInstanceFollowRedirects(true);
 				int responseCode = httpConnection.getResponseCode();
+				if (trace != null) trace.event("http_response status=" + responseCode);
 				if (responseCode == 403 || responseCode == 429) {
 					throw new IOException("HTTP " + responseCode);
 				}
@@ -155,8 +158,12 @@ public class UpdateChecker {
 					if (total > MAX_RESPONSE_BYTES) throw new IOException("Update response is too large");
 					output.write(buffer, 0, count);
 				}
+				if (trace != null) trace.event("body_read bytes=" + total);
 				return output.toString("UTF-8");
 			}
+		} catch (IOException e) {
+			if (trace != null) trace.failure("request_failed", e);
+			throw e;
 		} finally {
 			if (httpConnection != null) {
 				httpConnection.disconnect();

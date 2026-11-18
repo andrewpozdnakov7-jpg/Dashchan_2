@@ -10,6 +10,11 @@ public class CrashReportPolicyTest {
 		for (int reason = 0; reason < 40; reason++) assertEquals(reason == 4 || reason == 5 || reason == 6,
 				CrashReportPolicy.crashReason(reason));
 	}
+	@Test public void memoryLimiterMarkerIsRecognizedInSystemDescription() {
+		assertTrue(CrashReportPolicy.hasMemoryLimiterMarker("system MemoryLimiter:AnonSwap 123"));
+		assertFalse(CrashReportPolicy.hasMemoryLimiterMarker("other reason"));
+		assertFalse(CrashReportPolicy.hasMemoryLimiterMarker(null));
+	}
 	@Test public void reportIdentityCannotEscapeDirectory() {
 		assertTrue(CrashReportPolicy.reportId("report-123456-abcdef012345.txt"));
 		for (String id : new String[]{null, "", "../report-1-abcdef012345.txt", "/report-1-abcdef012345.txt",

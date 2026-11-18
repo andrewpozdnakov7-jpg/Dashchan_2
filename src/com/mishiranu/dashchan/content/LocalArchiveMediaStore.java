@@ -14,17 +14,19 @@ import java.util.List;
 
 /** Archive-scoped I/O adapter. Never opens existing files for writing. */
 public final class LocalArchiveMediaStore implements LocalArchiveMediaPlan.Storage {
-	private final LocalArchiveManager.Item previous;
+	private final List<LocalArchiveManager.Item> previous;
+	private final DataFile directory;
 	private final String resources;
 	private final HashMap<String, String> previousSources = new HashMap<>();
-	public LocalArchiveMediaStore(LocalArchiveManager.Item previous, String resources) {
-		this.previous = previous; this.resources = resources;
+	public LocalArchiveMediaStore(DataFile directory, List<LocalArchiveManager.Item> previous, String resources) {
+		this.directory = directory;
+		this.previous = previous;
+		this.resources = resources;
 	}
 	public List<String> existingPaths() {
 		ArrayList<String> paths = new ArrayList<>();
 		for (String directory : new String[] {"src", "thumb"}) {
-			List<DataFile> children = DataFile.obtain(DataFile.Target.DOWNLOADS,
-					LocalArchiveManager.DIRECTORY_ARCHIVE + '/' + resources + '/' + directory).getChildren();
+			List<DataFile> children = this.directory.getChild(resources + '/' + directory).getChildren();
 			if (children != null) for (DataFile file : children) {
 				paths.add(resources + '/' + directory + '/' + file.getName());
 			}
@@ -35,7 +37,7 @@ public final class LocalArchiveMediaStore implements LocalArchiveMediaPlan.Stora
 		if (!(LocalArchiveMediaPlan.child(resources, "src", path) || LocalArchiveMediaPlan.child(resources, "thumb", path))) {
 			throw new IllegalArgumentException("Invalid archive resource path");
 		}
-		return DataFile.obtain(DataFile.Target.DOWNLOADS, LocalArchiveManager.DIRECTORY_ARCHIVE + '/' + path);
+		return directory.getChild(path);
 	}
 	@Override public boolean exists(String path) { return file(path).exists(); }
 	@Override public boolean complete(String path, long expectedSize) {
@@ -70,11 +72,21 @@ public final class LocalArchiveMediaStore implements LocalArchiveMediaPlan.Stora
 		} catch (IOException | RuntimeException e) { return -1; }
 	}
 	@Override public String previousSource(String path, long expectedSize) {
-		if (previous == null || !previous.hasZip()) return null;
+		if (previous.isEmpty()) return null;
 		String key = path + '\0' + expectedSize;
 		if (previousSources.containsKey(key)) return previousSources.get(key);
 		String source = null;
-		try (InputStream input = LocalArchiveManager.openZipResource(previous, path)) {
+		for (LocalArchiveManager.Item archive : previous) {
+			if (!archive.hasZip()) continue;
+			source = readPreviousSource(archive, path, expectedSize);
+			if (source != null || Thread.currentThread().isInterrupted()) break;
+		}
+		previousSources.put(key, source);
+		return source;
+	}
+
+	private String readPreviousSource(LocalArchiveManager.Item archive, String path, long expectedSize) {
+		try (InputStream input = LocalArchiveManager.openZipResource(archive, path)) {
 			if (input != null) {
 				// Read through the entry so a truncated ZIP cannot cause an endless local-only retry.
 				byte[] buffer = new byte[8192];
@@ -85,12 +97,11 @@ public final class LocalArchiveMediaStore implements LocalArchiveMediaPlan.Stora
 					size += count;
 				}
 				if (size > 0 && (expectedSize <= 0 || size == expectedSize)) {
-					source = LocalArchiveManager.createResourceUri(previous, path).buildUpon()
+					return LocalArchiveManager.createResourceUri(archive, path).buildUpon()
 							.appendQueryParameter("zipOnly", "true").build().toString();
 				}
 			}
 		} catch (IOException | RuntimeException ignored) {}
-		previousSources.put(key, source);
-		return source;
+		return null;
 	}
 }

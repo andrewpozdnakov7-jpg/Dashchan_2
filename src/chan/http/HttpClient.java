@@ -9,9 +9,12 @@ import chan.content.Chan;
 import chan.util.CommonUtils;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.content.AdvancedPreferences;
+import com.mishiranu.dashchan.content.MainApplication;
 import com.mishiranu.dashchan.content.Preferences;
+import com.mishiranu.dashchan.util.LocalNetworkPermission;
 import com.mishiranu.dashchan.content.model.ErrorItem;
 import com.mishiranu.dashchan.util.IOUtils;
+import com.mishiranu.dashchan.util.NetworkDiagnostics;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.ByteArrayInputStream;
@@ -30,6 +33,9 @@ import java.net.Authenticator;
 import java.net.HttpURLConnection;
 import java.net.IDN;
 import java.net.InetAddress;
+import java.net.ConnectException;
+import java.net.NoRouteToHostException;
+import java.net.UnknownHostException;
 import java.net.InetSocketAddress;
 import java.net.MalformedURLException;
 import java.net.Proxy;
@@ -326,9 +332,16 @@ public class HttpClient {
 				try {
 					return executeInternal(session, request);
 				} catch (RetryException e) {
+					if (session.diagnostics != null) session.diagnostics.event("http_retry");
 					// Continue
 				}
 			}
+		} catch (HttpException e) {
+			if (session.diagnostics != null) {
+				session.diagnostics.failure("http_failed status=" + e.getResponseCode()
+						+ " type=" + e.getErrorItemAndHandle().type, e);
+			}
+			throw e;
 		} finally {
 			handshakeSessions.remove();
 		}
@@ -393,11 +406,11 @@ public class HttpClient {
 		ProxyData authData = getProxyData(session.holder.chan);
 		ProxyData previousAuthData = setProxyAuthentication(authData != null && session.proxy != null &&
 				session.proxy.equals(authData.getProxy()) ? authData : null);
+		Uri requestedUri = session.getCurrentRequestedUri();
 		try {
 			if (authData != null && authData.authInvalid) {
 				throw new HttpException(ErrorItem.Type.DOWNLOAD, false, false);
 			}
-			Uri requestedUri = session.getCurrentRequestedUri();
 			if (!session.holder.chan.locator.isWebScheme(requestedUri)) {
 				throw new HttpException(ErrorItem.Type.UNSUPPORTED_SCHEME, false, false);
 			}
@@ -512,8 +525,14 @@ public class HttpClient {
 				}
 			}
 			session.closeInput = true;
-			HttpValidator resultValidator = HttpValidator.obtain(connection);
+			boolean challenge = "challenge".equalsIgnoreCase(connection.getHeaderField("CF-Mitigated"));
 			String contentType = connection.getHeaderField("Content-Type");
+			if (session.diagnostics != null) {
+				session.diagnostics.event("http_response status=" + responseCode + " encoding=" + Encoding.get(connection)
+						+ " cfChallenge=" + challenge
+						+ " contentType=" + NetworkDiagnostics.contentType(contentType));
+			}
+			HttpValidator resultValidator = HttpValidator.obtain(connection);
 			String charsetName = extractCharsetName(contentType);
 			session.holder.checkInterrupted();
 			HttpResponse response = new HttpResponse(session, resultValidator, charsetName);
@@ -617,11 +636,23 @@ public class HttpClient {
 			// Do not retransmit a request here. Read operations are retried as a whole by ChanPerformer.Safe,
 			// including body download and parsing; mutating operations must remain single-shot.
 			session.disconnectAndClear();
-			throw transformIOException(e);
+			throw transformConnectionIOException(e, session.proxy, requestedUri.getHost());
 		} finally {
 			setProxyAuthentication(previousAuthData);
 			session.executing = false;
 		}
+	}
+
+	static HttpException transformConnectionIOException(IOException exception, Proxy proxy, String directHost) {
+		if (exception instanceof ConnectException || exception instanceof NoRouteToHostException
+				|| exception instanceof SocketTimeoutException || exception instanceof UnknownHostException) {
+			String host = proxy != null && proxy.address() instanceof InetSocketAddress address
+					? address.getHostString() : directHost;
+			if (LocalNetworkPermission.isLikelyLocalTarget(MainApplication.getInstance(), host)) {
+				return new HttpException(ErrorItem.Type.LOCAL_NETWORK_PERMISSION, false, false, exception);
+			}
+		}
+		return transformIOException(exception);
 	}
 
 	InputStream getInput(HttpURLConnection connection) throws IOException {
@@ -650,7 +681,11 @@ public class HttpClient {
 				}
 				response.session.holder.checkInterrupted();
 				input = new BufferedInputStream(input, 8192);
-				switch (Encoding.get(connection)) {
+				Encoding encoding = Encoding.get(connection);
+				if (response.session.diagnostics != null) {
+					response.session.diagnostics.event("body_open encoding=" + encoding);
+				}
+				switch (encoding) {
 					case IDENTITY: {
 						break;
 					}
@@ -682,6 +717,9 @@ public class HttpClient {
 		} catch (InterruptedHttpException e) {
 			throw e.toHttp();
 		} catch (IOException e) {
+			if (response.session.diagnostics != null) {
+				response.session.diagnostics.failure("body_open_failed", e);
+			}
 			throw transformIOException(e);
 		}
 	}

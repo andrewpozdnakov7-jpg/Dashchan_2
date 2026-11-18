@@ -1045,6 +1045,11 @@
 	<string name="watch_initially">Отслеживать новые избранные треды</string>
 	<string name="watch_initially__summary">Включать отслеживание при добавлении в избранное</string>
 	<string name="web_browser">Браузер</string>
+	<string name="local_network_access">Доступ к локальной сети</string>
+	<string name="local_network_access_summary">Разрешить подключение к прокси или серверу в локальной сети</string>
+	<string name="local_network_access_required">Не удалось подключиться к локальному адресу. Проверьте разрешение на доступ к локальной сети в настройках форума.</string>
+	<string name="local_network_access_denied">Чтобы подключиться к этому прокси или серверу, разрешите доступ к локальной сети в настройках Android</string>
+	<string name="local_network_app_settings">Открыть настройки Android</string>
 	<string name="wifi_only">Только через Wi-Fi</string>
 	<string name="wifi_or_mobile">Через Wi-Fi или мобильную сеть</string>
 	<string name="with_name_name__format">С именем %s</string>
@@ -1539,12 +1544,14 @@
 	<string name="new_interface_motion">Новые анимации интерфейса</string>
 	<string name="new_interface_motion_summary">Переходы экранов и галереи в стиле Material 3, новое оформление видеоплеера. Новое оформление бокового меню и анимация жеста «Назад» на Android 14+. Применяется при следующих переходах и открытиях плеера.</string>
 	<string name="thread_fab_menu">Плавающее меню треда</string>
-	<string name="thread_fab_menu_summary">Переносит ответ, обновление, избранное и сохранение в кнопку внизу треда</string>
+	<string name="thread_fab_menu_summary">Выбор кнопок плавающего меню и их порядка</string>
+	<string name="thread_fab_order">Порядок кнопок</string>
+	<string name="thread_fab_order_summary">Снизу вверх, начиная от плавающей кнопки</string>
 	<string name="thread_fab_actions">Действия треда</string>
 	<string name="thread_fab_close">Закрыть действия треда</string>
 	<string name="thread_fab_refresh">Обновить тред</string>
 	<string name="thread_fab_save">Сохранить тред</string>
 	<string name="thread_fab_reload">Перезагрузить весь тред</string>
 	<string name="dialog_form_ime">Новая обработка клавиатуры в диалогах</string>
-	<string name="dialog_form_ime_summary">Улучшает размещение и прокрутку редактора ленты и фильтра истории, сохраняет черновик ленты при повороте. По умолчанию выключена.</string>
+	<string name="dialog_form_ime_summary">Улучшает размещение и прокрутку редактора ленты и фильтра истории, сохраняет черновик ленты при повороте. По умолчанию включена.</string>
 </resources>

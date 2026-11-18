@@ -162,12 +162,15 @@ public final class CrashReports {
 			for (ApplicationExitInfo exit : exits) {
 				long timestamp = exit.getTimestamp();
 				if (timestamp <= cutoff) continue;
-				if (CrashReportPolicy.crashReason(exit.getReason())
+				boolean memoryLimited = exit.getReason() == ApplicationExitInfo.REASON_OTHER
+						&& CrashReportPolicy.hasMemoryLimiterMarker(exit.getDescription());
+				if ((CrashReportPolicy.crashReason(exit.getReason()) || memoryLimited)
 						&& System.currentTimeMillis() - timestamp <= CrashReportPolicy.MAX_AGE) {
 					byte[] summary = exit.getProcessStateSummary();
 					String[] state = summary != null ? CrashReportPolicy.parseSummary(new String(summary, StandardCharsets.US_ASCII)) : null;
 					if (state == null || exit.getReason() != ApplicationExitInfo.REASON_CRASH || !store.containsSession(state[1])) {
-						String kind = exit.getReason() == ApplicationExitInfo.REASON_CRASH_NATIVE ? "NATIVE"
+						String kind = memoryLimited ? "MEMORY_LIMIT"
+								: exit.getReason() == ApplicationExitInfo.REASON_CRASH_NATIVE ? "NATIVE"
 								: exit.getReason() == ApplicationExitInfo.REASON_ANR ? "ANR" : "SYSTEM_JAVA";
 						StringBuilder text = new StringBuilder(header(kind, timestamp, state != null ? state[1] : "unknown",
 								state != null ? state[3] : "unknown", state != null ? state[2] : "unknown",
@@ -176,7 +179,7 @@ public final class CrashReports {
 								.append(exit.getStatus()).append("\nPID: ").append(exit.getPid())
 								.append("\nMemory PSS/RSS KB: ").append(exit.getPss()).append('/').append(exit.getRss()).append('\n');
 						if (state != null) text.append("Last sampled event: ").append(state[4]).append('\n');
-						appendSystemTrace(text, exit);
+						if (!memoryLimited) appendSystemTrace(text, exit);
 						String suffix = String.format(java.util.Locale.US, "%012x", ((long) exit.getPid() << 8) | exit.getReason());
 						store.write("report-" + Math.max(0, timestamp) + "-" + suffix + ".txt", text.toString(), System.currentTimeMillis());
 					}

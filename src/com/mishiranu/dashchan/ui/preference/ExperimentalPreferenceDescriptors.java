@@ -44,12 +44,6 @@ final class ExperimentalPreferenceDescriptors {
 				true, R.string.compact_dialogs, R.string.compact_dialogs_summary);
 	}
 
-	static Toggle threadFabMenu() {
-		return new Toggle(Preferences.KEY_THREAD_FAB_MENU, Preferences.DEFAULT_THREAD_FAB_MENU,
-				true, R.string.thread_fab_menu, R.string.thread_fab_menu_summary);
-	}
-
-
 	static Toggle videoThumbnails() {
 		return new Toggle(Preferences.KEY_UPDATE_VIDEO_THUMBNAILS, Preferences.DEFAULT_UPDATE_VIDEO_THUMBNAILS,
 				true, R.string.update_video_thumbnails, R.string.update_video_thumbnails_summary);

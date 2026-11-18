@@ -13,6 +13,7 @@ import com.mishiranu.dashchan.content.MainApplication;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.service.webview.WebViewExtra;
 import com.mishiranu.dashchan.util.IOUtils;
+import com.mishiranu.dashchan.util.NetworkDiagnostics;
 import java.net.HttpURLConnection;
 import java.util.Map;
 
@@ -108,7 +109,15 @@ public class CloudFlareResolver extends FirewallResolver {
 		int responseCode = response.getResponseCode();
 		if ((responseCode == HttpURLConnection.HTTP_FORBIDDEN || responseCode == HttpURLConnection.HTTP_UNAVAILABLE)
 				&& response.getHeaderFields().containsKey("CF-RAY")) {
-			String responseText = response.readString();
+			NetworkDiagnostics diagnostics = response.getNetworkDiagnostics();
+			if (diagnostics != null) diagnostics.event("cloudflare_inspect");
+			String responseText;
+			try {
+				responseText = response.readString();
+			} catch (HttpException e) {
+				if (diagnostics != null) diagnostics.failure("cloudflare_body_unreadable", e);
+				throw e;
+			}
 			switch (responseCode) {
 				case HttpURLConnection.HTTP_FORBIDDEN:
 				case HttpURLConnection.HTTP_UNAVAILABLE: {
@@ -129,8 +138,10 @@ public class CloudFlareResolver extends FirewallResolver {
 						}
 					}
 					if (title != null) {
+						if (diagnostics != null) diagnostics.event("cloudflare_challenge_detected");
 						return new CheckResponseResult(toKey(session), new Exclusive(title));
 					}
+					if (diagnostics != null) diagnostics.event("cloudflare_page_unrecognized");
 				}
 			}
 		}

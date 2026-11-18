@@ -20,6 +20,7 @@ import com.mishiranu.dashchan.content.LocalArchiveMediaPlan;
 import com.mishiranu.dashchan.content.LocalArchiveMediaStore;
 import com.mishiranu.dashchan.content.LocalArchiveUpdateLease;
 import com.mishiranu.dashchan.content.MainApplication;
+import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.model.Post;
 import com.mishiranu.dashchan.content.model.PostItem;
 import com.mishiranu.dashchan.content.model.PostNumber;
@@ -55,6 +56,7 @@ import java.net.URLConnection;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -176,61 +178,70 @@ public class SendLocalArchiveTask extends ExecutorTask<Integer, SendLocalArchive
 		if (posts.isEmpty()) {
 			return null;
 		}
-		LocalArchiveManager.Item replacedArchive = LocalArchiveManager.findDefaultThreadArchive(
-				chan.name, boardName, threadNumber);
+		Uri downloadTree = Preferences.getDownloadUriTree(MainApplication.getInstance());
+		if (downloadTree == null) return null;
+		DataFile downloadRoot = DataFile.obtain(DataFile.Target.DOWNLOADS, "");
+		DataFile archiveDirectory = downloadRoot.getChild(DIRECTORY_ARCHIVE);
+		List<LocalArchiveManager.Item> candidates = LocalArchiveManager.findDefaultThreadArchives(
+				archiveDirectory, chan.name, boardName, threadNumber);
+		ArrayList<LocalArchiveManager.Item> previousArchives = new ArrayList<>();
+		LocalArchiveManager.Item replacedArchive = null;
+		String resourceDirectory = null;
 		boolean saveThumbnails = this.saveThumbnails;
 		boolean saveFiles = this.saveFiles;
 		boolean createZip = this.createZip;
-		int previousPostsCount = 0;
 		HashMap<PostNumber, Post> previousPosts = new HashMap<>();
 		HashMap<String, String> previousSources = new HashMap<>();
 		HashMap<String, Long> previousSizes = new HashMap<>();
-		if (replacedArchive != null) {
-			LocalArchiveReader.Archive archive = LocalArchiveReader.read(replacedArchive);
-			if (archive != null && chan.name.equals(archive.chanName) && boardName.equals(archive.boardName)
-					&& threadNumber.equals(archive.threadNumber)) {
-				TreeMap<PostNumber, Post> mergedPosts = new TreeMap<>();
-				for (PostItem postItem : archive.postItems.values()) {
-					mergedPosts.put(postItem.getPostNumber(), postItem.getPost());
-					previousPosts.put(postItem.getPostNumber(), postItem.getPost());
-				}
-				previousPostsCount = mergedPosts.size();
-				for (Post post : posts) {
-					mergedPosts.put(post.number, post);
-				}
-				posts = mergedPosts.values();
-				JSONObject manifest = LocalArchiveManager.readManifest(replacedArchive);
-				if (manifest != null) {
-					JSONObject sources = manifest.optJSONObject("mediaSources");
-					if (sources != null) for (java.util.Iterator<String> keys = sources.keys(); keys.hasNext();) {
-						String key = keys.next(), value = sources.optString(key, "");
-						if (!value.isEmpty()) previousSources.put(key, chan.locator.convert(Uri.parse(value)).toString());
-					}
-					JSONObject bytes = manifest.optJSONObject("mediaBytes");
-					if (bytes != null) for (java.util.Iterator<String> keys = bytes.keys(); keys.hasNext();) {
-						String key = keys.next();
-						long size = bytes.optLong(key, 0);
-						if (size > 0) previousSizes.put(key, size);
-					}
-					createZip |= manifest.optBoolean("zipRequested");
-					saveFiles |= manifest.optBoolean("savedFiles");
-					saveThumbnails |= manifest.optBoolean("savedThumbnails");
-				}
-				createZip |= replacedArchive.hasZip();
-			} else {
-				replacedArchive = null;
+		for (LocalArchiveManager.Item candidate : candidates) {
+			if (isCancelled()) return null;
+			String resources = LocalArchiveManager.resourceDirectory(candidate);
+			if (resourceDirectory != null && !resourceDirectory.equals(resources)) continue;
+			JSONObject manifest = LocalArchiveManager.readManifest(candidate);
+			LocalArchiveReader.Archive archive = LocalArchiveReader.readForUpdate(candidate, manifest);
+			if (archive == null || !chan.name.equals(archive.chanName) || !boardName.equals(archive.boardName)
+					|| !threadNumber.equals(archive.threadNumber)) continue;
+			if (replacedArchive == null) {
+				replacedArchive = candidate;
+				resourceDirectory = resources;
 			}
+			previousArchives.add(candidate);
+			for (PostItem postItem : archive.postItems.values()) {
+				previousPosts.putIfAbsent(postItem.getPostNumber(), postItem.getPost());
+			}
+			JSONObject sources = manifest.optJSONObject("mediaSources");
+			JSONObject bytes = manifest.optJSONObject("mediaBytes");
+			if (sources != null) for (java.util.Iterator<String> keys = sources.keys(); keys.hasNext();) {
+				String key = keys.next();
+				Uri source = Uri.parse(sources.optString(key));
+				String scheme = source.getScheme();
+				if (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme)) continue;
+				String normalized = chan.locator.convert(source).toString();
+				String preferred = previousSources.putIfAbsent(key, normalized);
+				long size = bytes != null ? bytes.optLong(key, 0) : 0;
+				if (size > 0 && (preferred == null || preferred.equals(normalized))) {
+					previousSizes.putIfAbsent(key, size);
+				}
+			}
+			createZip |= candidate.hasZip() || manifest.optBoolean("zipRequested");
+			saveFiles |= manifest.optBoolean("savedFiles");
+			saveThumbnails |= manifest.optBoolean("savedThumbnails");
+		}
+		int previousPostsCount = previousPosts.size();
+		if (!previousPosts.isEmpty()) {
+			TreeMap<PostNumber, Post> mergedPosts = new TreeMap<>(previousPosts);
+			for (Post post : posts) mergedPosts.put(post.number, post);
+			posts = mergedPosts.values();
 		}
 		trace(diagnosticId, "stage=merge previous=" + (replacedArchive != null) + " old_posts=" + previousPostsCount
 				+ " merged_posts=" + posts.size() + " receipts=" + previousSizes.size());
 		Object[] decodeTo = new Object[2];
 		ArrayList<SpanItem> spanItems = new ArrayList<>();
 		ArrayList<SpanEvent> spanEvents = new ArrayList<>();
-		String resourceDirectory = replacedArchive != null ? LocalArchiveManager.resourceDirectory(replacedArchive) : null;
-		String archiveName = chooseArchiveName(resourceDirectory != null ? resourceDirectory
+		String archiveName = chooseArchiveName(archiveDirectory, resourceDirectory != null ? resourceDirectory
 				: chan.name + '-' + boardName + '-' + threadNumber, lease);
 		if (resourceDirectory == null) resourceDirectory = archiveName;
-		LocalArchiveMediaStore mediaStore = new LocalArchiveMediaStore(replacedArchive, resourceDirectory);
+		LocalArchiveMediaStore mediaStore = new LocalArchiveMediaStore(archiveDirectory, previousArchives, resourceDirectory);
 		LocalArchiveMediaPlan media = new LocalArchiveMediaPlan(resourceDirectory, mediaStore, previousSources, previousSizes, mediaStore.existingPaths());
 		HashMap<PostNumber, List<Post.Attachment>> attachments = new HashMap<>();
 		for (Post post : posts) attachments.put(post.number, mergeAttachments(post, previousPosts.get(post.number), previousSources));
@@ -394,14 +405,20 @@ public class SendLocalArchiveTask extends ExecutorTask<Integer, SendLocalArchive
 			metadata.put("mediaSources", new JSONObject(media.sources()));
 			metadata.put("mediaBytes", receipts);
 			metadata.put("zipRequested", createZip);
+			metadata.put("mediaPending", !requiredMedia.isEmpty());
 			byte[] manifest = metadata.toString(2).getBytes(StandardCharsets.UTF_8);
 			if (createZip) {
-				preparedZipFile = createPreparedZip(archiveFile.getParentFile(), archiveName, archiveFile, manifest);
+				metadata.put("zipPending", true);
+				byte[] provisional = metadata.toString(2).getBytes(StandardCharsets.UTF_8);
+				preparedZipFile = createPreparedZip(archiveFile.getParentFile(), archiveName, archiveFile, provisional);
 			}
+			byte[] htmlDigest;
+			try (InputStream input = new FileInputStream(archiveFile)) { htmlDigest = hasher.calculate(input); }
 			success = true;
 			return new Result(archiveFile, preparedZipFile, archiveName, manifest,
 					filesToDownload, thumbnailsToDownload,
-					createZip, replacedArchive, previousPostsCount, posts.size(), resourceDirectory, requiredMedia, lease, diagnosticId);
+					createZip, replacedArchive, previousArchives, previousPostsCount, posts.size(), resourceDirectory,
+					requiredMedia, downloadTree, downloadRoot, htmlDigest, lease, diagnosticId);
 		} catch (IOException | JSONException e) {
 			trace(diagnosticId, "stage=prepare_failed type=" + e.getClass().getSimpleName());
 			return null;
@@ -419,21 +436,17 @@ public class SendLocalArchiveTask extends ExecutorTask<Integer, SendLocalArchive
 			throws IOException {
 		File zipFile = File.createTempFile("archive-", ".zip", directory);
 		boolean success = false;
-		try (ZipOutputStream output = new ZipOutputStream(new FileOutputStream(zipFile))) {
-			output.putNextEntry(new ZipEntry("manifest.json"));
-			output.write(manifest);
-			output.closeEntry();
-			output.putNextEntry(new ZipEntry(archiveName + ".html"));
-			try (InputStream input = new FileInputStream(archiveFile)) {
-				byte[] buffer = new byte[8192];
-				int count;
-				while ((count = input.read(buffer)) >= 0) {
-					if (count > 0) {
-						output.write(buffer, 0, count);
-					}
+		try {
+			try (ZipOutputStream output = new ZipOutputStream(new FileOutputStream(zipFile))) {
+				output.putNextEntry(new ZipEntry("manifest.json"));
+				output.write(manifest);
+				output.closeEntry();
+				output.putNextEntry(new ZipEntry(archiveName + ".html"));
+				try (InputStream input = new FileInputStream(archiveFile)) {
+					com.mishiranu.dashchan.util.IOUtils.copyStream(input, output);
 				}
+				output.closeEntry();
 			}
-			output.closeEntry();
 			success = true;
 			return zipFile;
 		} finally {
@@ -475,7 +488,11 @@ public class SendLocalArchiveTask extends ExecutorTask<Integer, SendLocalArchive
 		@Override public void run(DownloadService.Binder binder) {
 			if (!consumed.compareAndSet(false, true)) return;
 			trace(result.diagnosticId, "stage=handoff binder=" + (binder != null));
-			if (binder == null) { discard(result); ClickableToast.show(R.string.local_archive_update_failed); return; }
+			if (binder == null || !result.isSameDownloadTree()) {
+				discard(result);
+				ClickableToast.show(R.string.local_archive_update_failed);
+				return;
+			}
 			InputStream archiveInput = null;
 			InputStream preparedZipInput = null;
 			try {
@@ -514,7 +531,7 @@ public class SendLocalArchiveTask extends ExecutorTask<Integer, SendLocalArchive
 					result.filesToDownload, false));
 			DownloadResult enqueueResult = targetBinder -> {
 				String localArchiveId = LocalArchiveManager.createDefaultId(result.archiveName);
-				try (DownloadService.Accumulate ignored = targetBinder.accumulateLocalArchive(localArchiveId)) {
+				try (DownloadService.Accumulate ignored = targetBinder.accumulateLocalArchive(localArchiveId, result.downloadRoot)) {
 					for (DownloadResult innerDownloadResult : results) {
 						innerDownloadResult.run(targetBinder);
 					}
@@ -648,7 +665,13 @@ public class SendLocalArchiveTask extends ExecutorTask<Integer, SendLocalArchive
 		}
 
 		private void validateAndSaveReceipts(ArrayList<String> files, ArrayList<String> thumbnails) {
-				LocalArchiveMediaStore mediaStore = new LocalArchiveMediaStore(null, result.resourceDirectory);
+				if (!result.isSameDownloadTree()) {
+					requiredFilesSuccess = false;
+					return;
+				}
+				DataFile directory = result.getArchiveDirectory();
+				LocalArchiveMediaStore mediaStore = new LocalArchiveMediaStore(directory,
+						Collections.emptyList(), result.resourceDirectory);
 				JSONObject receipts = new JSONObject();
 				int index = 0;
 				for (LocalArchiveMediaPlan.Asset asset : result.requiredMedia) {
@@ -665,26 +688,45 @@ public class SendLocalArchiveTask extends ExecutorTask<Integer, SendLocalArchive
 					(LocalArchiveMediaPlan.child(result.resourceDirectory, DIRECTORY_FILES, asset.path) ? files : thumbnails).add(asset.name());
 				}
 				if (requiredFilesSuccess) {
+					String step = "manifest_build";
 					try {
 						JSONObject manifest = new JSONObject(new String(result.manifest, StandardCharsets.UTF_8));
 						manifest.put("mediaBytes", receipts);
-						LocalArchiveManager.writeDefaultManifest(result.archiveName, manifest);
+						manifest.put("mediaPending", !mediaSuccess);
+						byte[] finalManifest = manifest.toString().getBytes(StandardCharsets.UTF_8);
+						step = "manifest_write";
+						LocalArchiveManager.writeDefaultManifest(directory, result.archiveName, finalManifest);
+						step = "snapshot_verify";
+						LocalArchiveManager.SnapshotVerification verification = LocalArchiveManager.verifyDefaultSnapshot(
+								directory, result.archiveName, result.htmlDigest, finalManifest);
+						if (verification != LocalArchiveManager.SnapshotVerification.MATCH) {
+							requiredFilesSuccess = false;
+							trace(result.diagnosticId, "stage=receipts_failed step=" + step + " reason=" + verification);
+							return;
+						}
 						trace(result.diagnosticId, "stage=receipts_saved count=" + receipts.length() + " media_complete=" + mediaSuccess);
 					} catch (IOException | JSONException | RuntimeException e) {
 						requiredFilesSuccess = false;
-						trace(result.diagnosticId, "stage=receipts_failed type=" + e.getClass().getSimpleName());
+						trace(result.diagnosticId, "stage=receipts_failed step=" + step + " type=" + e.getClass().getSimpleName());
 					}
 				}
 		}
 
 		private void finishMedia(ArrayList<String> files, ArrayList<String> thumbnails) {
+			requiredFilesSuccess &= result.isSameDownloadTree();
 			if (requiredFilesSuccess && mediaSuccess && result.createZip) {
 				trace(result.diagnosticId, "stage=pack_start originals=" + files.size() + " thumbnails=" + thumbnails.size());
-				PackLocalArchiveTask task = new PackLocalArchiveTask(this, result.archiveName, result.resourceDirectory, files, thumbnails);
+				PackLocalArchiveTask task = new PackLocalArchiveTask(this, result.getArchiveDirectory(),
+						result.archiveName, result.resourceDirectory, files, thumbnails);
 				task.execute(ConcurrentUtils.PARALLEL_EXECUTOR);
 			} else {
 				complete(requiredFilesSuccess && mediaSuccess);
 			}
+		}
+
+		@Override
+		public void onArchiveQueueCancelled(String id) {
+			if (LocalArchiveManager.createDefaultId(result.archiveName).equals(id)) onCleanup();
 		}
 
 		@Override
@@ -704,7 +746,6 @@ public class SendLocalArchiveTask extends ExecutorTask<Integer, SendLocalArchive
 								if (htmlRemaining == 0 && manifestRemaining == 0 && requiredFilesSuccess) {
 									validateAndSaveReceipts(new ArrayList<>(), new ArrayList<>());
 								}
-								if (htmlRemaining != 0 || manifestRemaining != 0 || !requiredFilesSuccess) LocalArchiveManager.deleteDefault(result.archiveName);
 							} finally { result.lease.close(); }
 							});
 				});
@@ -720,12 +761,14 @@ public class SendLocalArchiveTask extends ExecutorTask<Integer, SendLocalArchive
 		}
 
 		private void complete(boolean success) {
+			success &= result.isSameDownloadTree();
 			trace(result.diagnosticId, "stage=complete success=" + success + " previous=" + (result.replacedArchive != null)
 					+ " reason=" + (success ? "ok" : !requiredFilesSuccess ? "metadata_failed" : zipFailed ? "zip_failed" : "media_incomplete"));
 			if (success && result.replacedArchive != null) {
 				ConcurrentUtils.PARALLEL_EXECUTOR.execute(() -> {
 					boolean deleted;
-					try { deleted = LocalArchiveManager.deleteSuperseded(result.archiveName); }
+					try { deleted = result.isSameDownloadTree() && LocalArchiveManager.deleteSuperseded(
+							result.getArchiveDirectory(), result.archiveName, result.previousArchives); }
 					catch (RuntimeException e) { deleted = false; }
 					finally { result.lease.close(); }
 					boolean cleaned = deleted;
@@ -741,10 +784,7 @@ public class SendLocalArchiveTask extends ExecutorTask<Integer, SendLocalArchive
 					});
 				});
 			} else if (!success) {
-				ConcurrentUtils.PARALLEL_EXECUTOR.execute(() -> {
-					try { if (!requiredFilesSuccess) LocalArchiveManager.deleteDefault(result.archiveName); }
-					finally { result.lease.close(); }
-				});
+				result.lease.close();
 				boolean previous = result.replacedArchive != null;
 				ClickableToast.show(!requiredFilesSuccess ? (previous ? R.string.local_archive_update_failed : R.string.local_archive_save_failed)
 						: zipFailed ? (previous ? R.string.local_archive_update_zip_failed : R.string.local_archive_save_zip_failed)
@@ -761,9 +801,9 @@ public class SendLocalArchiveTask extends ExecutorTask<Integer, SendLocalArchive
 		return names;
 	}
 
-	private static String chooseArchiveName(String baseName, LocalArchiveUpdateLease lease) {
+	private static String chooseArchiveName(DataFile directory, String baseName, LocalArchiveUpdateLease lease) {
 		HashSet<String> existingNames = new HashSet<>();
-		List<DataFile> children = DataFile.obtain(DataFile.Target.DOWNLOADS, DIRECTORY_ARCHIVE).getChildren();
+		List<DataFile> children = directory.getChildren();
 		if (children != null) {
 			for (DataFile child : children) {
 				String name = child.getName();
@@ -813,18 +853,24 @@ public class SendLocalArchiveTask extends ExecutorTask<Integer, SendLocalArchive
 		public final List<DownloadService.DownloadItem> thumbnailsToDownload;
 		public final boolean createZip;
 		public final LocalArchiveManager.Item replacedArchive;
+		public final List<LocalArchiveManager.Item> previousArchives;
 		public final int previousPostsCount;
 		public final int postsCount;
 		public final String resourceDirectory;
 		public final List<LocalArchiveMediaPlan.Asset> requiredMedia;
+		private final Uri downloadTree;
+		private final DataFile downloadRoot;
+		private final byte[] htmlDigest;
 		public final LocalArchiveUpdateLease lease;
 		public final String diagnosticId;
 
 		private Result(File archiveFile, File preparedZipFile, String archiveName, byte[] manifest,
 				List<DownloadService.DownloadItem> filesToDownload,
 				List<DownloadService.DownloadItem> thumbnailsToDownload, boolean createZip,
-				LocalArchiveManager.Item replacedArchive, int previousPostsCount, int postsCount, String resourceDirectory,
-				List<LocalArchiveMediaPlan.Asset> requiredMedia, LocalArchiveUpdateLease lease, String diagnosticId) {
+				LocalArchiveManager.Item replacedArchive, List<LocalArchiveManager.Item> previousArchives,
+				int previousPostsCount, int postsCount, String resourceDirectory,
+				List<LocalArchiveMediaPlan.Asset> requiredMedia, Uri downloadTree, DataFile downloadRoot, byte[] htmlDigest,
+				LocalArchiveUpdateLease lease, String diagnosticId) {
 			this.archiveFile = archiveFile;
 			this.preparedZipFile = preparedZipFile;
 			this.archiveName = archiveName;
@@ -833,13 +879,23 @@ public class SendLocalArchiveTask extends ExecutorTask<Integer, SendLocalArchive
 			this.thumbnailsToDownload = thumbnailsToDownload;
 			this.createZip = createZip;
 			this.replacedArchive = replacedArchive;
+			this.previousArchives = previousArchives;
 			this.previousPostsCount = previousPostsCount;
 			this.postsCount = postsCount;
 			this.resourceDirectory = resourceDirectory;
 			this.requiredMedia = requiredMedia;
+			this.downloadTree = downloadTree;
+			this.downloadRoot = downloadRoot;
+			this.htmlDigest = htmlDigest;
 			this.lease = lease;
 			this.diagnosticId = diagnosticId;
 		}
+
+		private boolean isSameDownloadTree() {
+			return downloadTree.equals(Preferences.getDownloadUriTree(MainApplication.getInstance()));
+		}
+
+		private DataFile getArchiveDirectory() { return downloadRoot.getChild(DIRECTORY_ARCHIVE); }
 	}
 
 	private static String resourcePath(Uri uri) {

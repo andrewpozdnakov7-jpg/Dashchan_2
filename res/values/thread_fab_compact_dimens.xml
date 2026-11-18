@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <dimen name="thread_fab_size">56dp</dimen>
+    <dimen name="thread_fab_corner_radius">16dp</dimen>
+    <dimen name="thread_fab_margin">16dp</dimen>
+    <dimen name="thread_fab_elevation">6dp</dimen>
     <dimen name="thread_fab_compact_panel_width">56dp</dimen>
     <dimen name="thread_fab_compact_action_touch_size">48dp</dimen>
     <dimen name="thread_fab_compact_icon_size">24dp</dimen>

@@ -40,6 +40,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.Objects;
 
 @Extendable
@@ -846,6 +847,22 @@ public class ChanPerformer implements Chan.Linked {
 
 		public CaptchaData copy() {
 			return new CaptchaData(new HashMap<>(data));
+		}
+
+		public CaptchaData copyAllowed(Set<String> allowedKeys, int maxCharacters) {
+			int remaining = maxCharacters;
+			for (Map.Entry<String, String> entry : data.entrySet()) {
+				String key = entry.getKey();
+				if (key == null || !allowedKeys.contains(key)) return null;
+				remaining -= key.length();
+				if (entry.getValue() != null) remaining -= entry.getValue().length();
+				if (remaining < 0) return null;
+			}
+			return copy();
+		}
+
+		public boolean isEmpty() {
+			return data.isEmpty();
 		}
 
 		@Override

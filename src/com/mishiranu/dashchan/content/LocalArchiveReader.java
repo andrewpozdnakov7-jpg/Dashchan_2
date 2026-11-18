@@ -57,6 +57,27 @@ public final class LocalArchiveReader {
 		}
 	}
 
+	public static Archive readForUpdate(LocalArchiveManager.Item item, JSONObject manifest) {
+		int expectedPosts = manifest != null ? manifest.optInt("posts") : 0;
+		if (expectedPosts <= 0) return null;
+		Archive loose = readComplete(item, manifest, expectedPosts, false);
+		if (loose != null) return loose;
+		return item.hasHtml() && item.hasZip() ? readComplete(item, manifest, expectedPosts, true) : null;
+	}
+
+	private static Archive readComplete(LocalArchiveManager.Item item, JSONObject manifest,
+			int expectedPosts, boolean zipOnly) {
+		try {
+			byte[] bytes = zipOnly ? LocalArchiveManager.readZipHtml(item) : LocalArchiveManager.readHtml(item);
+			String html = new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
+			if (!html.trim().endsWith("</html>")) return null;
+			Archive archive = parse(item, html, manifest);
+			return archive != null && archive.postItems.size() == expectedPosts ? archive : null;
+		} catch (java.io.IOException | SecurityException e) {
+			return null;
+		}
+	}
+
 	public static Archive parse(LocalArchiveManager.Item item, String html, JSONObject manifest) {
 		try {
 			Document document = Jsoup.parse(html, LOCAL_BASE_URL);

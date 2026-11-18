@@ -25,7 +25,7 @@ def main():
     assert required <= {p.name for p in engine}, "Incomplete shared photo engine"
     for path in [activity, bridge, *engine]:
         balance(path)
-        assert not re.search(r"import com\.google\.", text(path)), path
+        assert not re.search(r"(?m)^import (?:static )?com\.google\.(?!android\.material\.)", text(path)), path
     for variant in (GITHUB, FDROID):
         assert not (variant / POSTING / "PhotoEditorBridge.java").exists(), "Duplicate flavour routing"
         assert not (variant / POSTING / "ExperimentalImageEditorActivity.java").exists(), "Duplicate editor Activity"
@@ -65,17 +65,18 @@ def main():
     assert (ROOT / "unitTests/src/com/mishiranu/dashchan/ui/posting/PhotoEditorBridgeTest.java").is_file()
     assert not (FDROID / "unitTests/src/com/mishiranu/dashchan/ui/posting/PhotoEditorBridgeTest.java").exists()
     gradle = text(ROOT / "build.gradle")
+    assert re.search(r"(?m)^\s*implementation 'com\.google\.android\.material:material:", gradle)
     assert "java.srcDirs = ['src']" in gradle and "res.srcDirs = ['res', 'lang']" in gradle
     assert "java.srcDirs = ['unitTests/src']" in gradle
     assert "sourceSets.androidTest.java.srcDirs = ['instrumentationTests/src']" in gradle
     fdroid = gradle[gradle.index("\n\t\tfdroid {"):gradle.index("\n\tsourceSets.main {")]
-    assert "buildConfigField 'boolean', 'ENABLE_EXPERIMENTAL_INTERFACE_MOTION', 'true'" in fdroid
-    for feature in ("ENABLE_APP_SECURITY_SETTINGS", "ENABLE_PREDICTIVE_BACK",
-                    "ENABLE_GOOGLE_TRANSLATION", "ENABLE_GEMINI_NANO_TRANSLATION"):
+    for feature in ("ENABLE_EXPERIMENTAL_INTERFACE_MOTION", "ENABLE_APP_SECURITY_SETTINGS", "ENABLE_PREDICTIVE_BACK"):
+        assert f"buildConfigField 'boolean', '{feature}', 'true'" in fdroid
+    for feature in ("ENABLE_GOOGLE_TRANSLATION", "ENABLE_GEMINI_NANO_TRANSLATION", "ALLOW_GMS_SECURITY_PROVIDER"):
         assert f"buildConfigField 'boolean', '{feature}', 'false'" in fdroid
     print(f"PASS: {len(engine) + 1} editor/engine classes, Activity, resources and tests are shared")
     print("PASS: enabled default with existing explicit opt-out; no duplicate flavour routing")
-    print("PASS: F-Droid Material UI is shared; predictive/security/proprietary gates remain disabled; no Google editor imports")
+    print("PASS: F-Droid shares Material UI, security and predictive back; proprietary Google providers remain disabled")
     print("NOT RUN: Gradle configuration, compilation, JUnit, instrumentation, final manifest/DEX/APK checks")
 
 

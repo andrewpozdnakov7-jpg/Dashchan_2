@@ -98,6 +98,7 @@ public final class AppDiagnostics {
 				output.write(("Slooop app diagnostics\nschema=1\nmode=extended\napp=" + BuildConfig.VERSION_NAME
 						+ " code=" + BuildConfig.VERSION_CODE + "\nstartedUtcMillis=" + start + "\nstoppedUtcMillis=" + System.currentTimeMillis()
 						+ "\nsections_have_independent_timestamps_and_buffers=true\n"
+						+ "network_events_in=screens_and_input network_schema=1\n"
 						+ "privacy=no_text,no_clipboard,no_passwords,no_urls,no_media,no_accounts,no_device_ids\n").getBytes(StandardCharsets.UTF_8));
 				copyPart(output, "screens_and_input", screen);
 				copyPart(output, "player_ui_conversion_and_predictive_back", player);

@@ -1,6 +1,7 @@
 package com.mishiranu.dashchan.ui.posting;
 
 import android.graphics.Bitmap;
+import android.os.Bundle;
 import android.os.SystemClock;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
@@ -14,11 +15,17 @@ import com.mishiranu.dashchan.content.async.TaskViewModel;
 import com.mishiranu.dashchan.content.model.ErrorItem;
 import com.mishiranu.dashchan.content.storage.DraftsStorage;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
+import com.mishiranu.dashchan.util.AndroidUtils;
 import java.util.List;
+import java.util.Set;
+import java.util.UUID;
 import java.util.function.LongSupplier;
 
 /** Captcha state owner. The form stays in the Fragment; Host exists only for its view lifetime. */
 public final class PostingCaptchaController implements ReadCaptchaTask.Callback {
+	private static final long REUSABLE_RESULT_MAX_AGE_MS = 60000L;
+	private static final Set<String> REUSABLE_ANSWER_FIELDS = Set.of(ChanPerformer.CaptchaData.CHALLENGE,
+			ChanPerformer.CaptchaData.INPUT, ReadCaptchaTask.RECAPTCHA_SKIP_RESPONSE);
 	interface Host {
 		void updateSendButtonState();
 		void showLoading();
@@ -75,6 +82,12 @@ public final class PostingCaptchaController implements ReadCaptchaTask.Callback 
 	void detachView() { host = null; }
 	boolean canSend() { return captchaState != null && captchaState != ReadCaptchaTask.CaptchaState.NEED_LOAD; }
 	boolean isLoading() { return loading; }
+	boolean isGraphicChallenge(long loadTime) {
+		return captchaState == ReadCaptchaTask.CaptchaState.CAPTCHA && captchaLoadTime == loadTime
+				&& captchaImage != null && !captchaImage.isRecycled();
+	}
+
+	long getLoadTime() { return captchaLoadTime; }
 
 	CaptchaSnapshot snapshot(String userInput) {
 		ChanPerformer.CaptchaData data = captchaData != null ? captchaData.copy() : null;
@@ -89,6 +102,62 @@ public final class PostingCaptchaController implements ReadCaptchaTask.Callback 
 				captchaBlackAndWhite, captchaLoadTime, boardName, threadNumber);
 	}
 
+	Bundle saveReusableDraft(DraftsStorage.CaptchaDraft draft, ChanConfiguration.Captcha config) {
+		ReadCaptchaTask.CaptchaState state = draft.captchaState;
+		if (!isReusableResult(state) || draft.image != null
+				|| draft.loadedCaptchaType != null && !CommonUtils.equals(captchaType, draft.loadedCaptchaType)) return null;
+		ChanPerformer.CaptchaData original = draft.captchaData;
+		// A pass carrying an authorization cookie must be reacquired through the existing pass flow.
+		if (state == ReadCaptchaTask.CaptchaState.PASS && original != null && !original.isEmpty()) return null;
+		ChanPerformer.CaptchaData data = original != null ? original.copyAllowed(REUSABLE_ANSWER_FIELDS, 4096) : null;
+		if (original != null && data == null) return null;
+		long age = clock.getAsLong() - draft.loadTime;
+		if (!isFresh(draft.loadTime, age, state, data, config)) return null;
+		Bundle saved = new Bundle();
+		saved.putString("chan", chanName);
+		saved.putString("board", boardName);
+		saved.putString("thread", threadNumber);
+		saved.putString("type", captchaType);
+		saved.putString("loadedType", draft.loadedCaptchaType);
+		saved.putString("state", state.name());
+		saved.putLong("elapsedLoadTime", draft.loadTime);
+		saved.putLong("wallLoadTime", System.currentTimeMillis() - age);
+		saved.putParcelable("data", data);
+		return saved;
+	}
+
+	DraftsStorage.CaptchaDraft restoreReusableDraft(Bundle saved, ChanConfiguration.Captcha config) {
+		if (saved == null || !CommonUtils.equals(chanName, saved.getString("chan"))
+				|| !CommonUtils.equals(boardName, saved.getString("board"))
+				|| !CommonUtils.equals(threadNumber, saved.getString("thread"))
+				|| !CommonUtils.equals(captchaType, saved.getString("type"))) return null;
+		ReadCaptchaTask.CaptchaState state = ReadCaptchaTask.CaptchaState.fromSaved(saved.getString("state"));
+		String loadedType = saved.getString("loadedType");
+		if (!isReusableResult(state) || loadedType != null && !CommonUtils.equals(captchaType, loadedType)) return null;
+		ChanPerformer.CaptchaData data = AndroidUtils.getParcelable(saved, "data", ChanPerformer.CaptchaData.class);
+		if (data != null && (data.copyAllowed(REUSABLE_ANSWER_FIELDS, 4096) == null
+				|| state == ReadCaptchaTask.CaptchaState.PASS && !data.isEmpty())) return null;
+		long loadTime = saved.getLong("elapsedLoadTime");
+		long wallLoadTime = saved.getLong("wallLoadTime");
+		if (!isFresh(loadTime, clock.getAsLong() - loadTime, state, data, config)
+				|| !isFresh(wallLoadTime, System.currentTimeMillis() - wallLoadTime, state, data, config)) return null;
+		return new DraftsStorage.CaptchaDraft(captchaType, state, data, loadedType,
+				config.input, config.validity, null, null, false, false, loadTime, boardName, threadNumber);
+	}
+
+	private static boolean isReusableResult(ReadCaptchaTask.CaptchaState state) {
+		return state == ReadCaptchaTask.CaptchaState.SKIP || state == ReadCaptchaTask.CaptchaState.PASS;
+	}
+
+	private static boolean isFresh(long loadTime, long age, ReadCaptchaTask.CaptchaState state,
+			ChanPerformer.CaptchaData data, ChanConfiguration.Captcha config) {
+		if (loadTime <= 0L || age < 0L) return false;
+		if (hasSavedAnswer(state, data) && config.ttl <= 0) return false;
+		long maxAge = config.ttl > 0 ? Math.min(config.ttl * 1000L, REUSABLE_RESULT_MAX_AGE_MS)
+				: REUSABLE_RESULT_MAX_AGE_MS;
+		return age < maxAge;
+	}
+
 	boolean restoreDraft(DraftsStorage.CaptchaDraft draft, boolean savedState, ChanConfiguration.Captcha captcha) {
 		if (draft == null || host == null) return false;
 		Host restoringHost = host;
@@ -99,6 +168,8 @@ public final class PostingCaptchaController implements ReadCaptchaTask.Callback 
 
 	private boolean restoreDraftData(DraftsStorage.CaptchaDraft draft, boolean savedState, ChanConfiguration.Captcha captcha) {
 		loading = false;
+		if (draft.captchaState == ReadCaptchaTask.CaptchaState.CAPTCHA
+				&& (draft.image == null || draft.image.isRecycled())) return false;
 		if (savedState) {
 			if (draft.captchaState == null) return false;
 			captchaLoadTime = draft.loadTime;
@@ -161,7 +232,20 @@ public final class PostingCaptchaController implements ReadCaptchaTask.Callback 
 		}
 	}
 
-	public static class CaptchaViewModel extends TaskViewModel.Proxy<ReadCaptchaTask, ReadCaptchaTask.Callback> {}
+	public static class CaptchaViewModel extends TaskViewModel.Proxy<ReadCaptchaTask, ReadCaptchaTask.Callback> {
+		private String savedDraftKey;
+		private DraftsStorage.CaptchaDraft savedDraft;
+
+		String retainDraft(DraftsStorage.CaptchaDraft draft) {
+			savedDraft = draft;
+			savedDraftKey = UUID.randomUUID().toString();
+			return savedDraftKey;
+		}
+
+		DraftsStorage.CaptchaDraft getRetainedDraft(String key) {
+			return key != null && key.equals(savedDraftKey) ? savedDraft : null;
+		}
+	}
 
 	@Override
 	public void onReadCaptchaSuccess(ReadCaptchaTask.Result result) {

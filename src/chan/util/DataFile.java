@@ -126,6 +126,11 @@ public abstract class DataFile {
 	@Public
 	public abstract OutputStream openOutputStream() throws IOException;
 
+	/** Open for a full replacement when older bytes must be discarded. */
+	public OutputStream openTruncatedOutputStream() throws IOException {
+		return openOutputStream();
+	}
+
 	private static class RegularFile extends DataFile {
 		private final File file;
 
@@ -478,6 +483,15 @@ public abstract class DataFile {
 
 		@Override
 		public OutputStream openOutputStream() throws IOException {
+			return openOutputStream("w");
+		}
+
+		@Override
+		public OutputStream openTruncatedOutputStream() throws IOException {
+			return openOutputStream("wt");
+		}
+
+		private OutputStream openOutputStream(String existingMode) throws IOException {
 			Resolution resolution = this.resolution;
 			boolean mayUpdateResolution = true;
 			if (resolution.documentUri == null) {
@@ -491,7 +505,7 @@ public abstract class DataFile {
 			}
 			if (exists(resolution)) {
 				try {
-					return getContentResolver().openOutputStream(resolution.documentUri);
+					return getContentResolver().openOutputStream(resolution.documentUri, existingMode);
 				} catch (SecurityException e) {
 					throw new IOException(e);
 				}

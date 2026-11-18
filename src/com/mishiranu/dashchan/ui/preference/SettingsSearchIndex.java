@@ -43,6 +43,9 @@ public final class SettingsSearchIndex {
 			@Override
 			ContentFragment createFragment() { return new ExperimentalFragment(); }
 		},
+		THREAD_FAB(R.string.experimental_features, R.string.thread_fab_menu) {
+			@Override ContentFragment createFragment() { return new ThreadFabSettingsFragment(); }
+		},
 		CRASH_REPORTS(R.string.about, R.string.settings_diagnostics, R.string.crash_reports_saved) {
 			@Override ContentFragment createFragment() { return new CrashReportsFragment(); }
 		},
@@ -681,7 +684,12 @@ public final class SettingsSearchIndex {
 		add(context, entries, Screen.EXPERIMENTAL, R.string.thread_toolbar_action,
 				R.string.thread_toolbar_action__summary, Preferences.KEY_THREAD_TOOLBAR_ACTION);
 		addExperimentalToggle(context, entries, ExperimentalPreferenceDescriptors.compactDialogs());
-		addExperimentalToggle(context, entries, ExperimentalPreferenceDescriptors.threadFabMenu());
+		add(context, entries, Screen.THREAD_FAB, R.string.thread_fab_menu,
+				R.string.thread_fab_menu_summary, Preferences.KEY_THREAD_FAB_MENU);
+		add(context, entries, Screen.THREAD_FAB, R.string.thread_fab_order, R.string.thread_fab_order_summary, null);
+		for (Preferences.ThreadFabAction action : Preferences.ThreadFabAction.values()) {
+			add(context, entries, Screen.THREAD_FAB, action.titleResId, 0, action.key);
+		}
 		addToggle(context, entries, Screen.MEDIA_GALLERY, ExperimentalPreferenceDescriptors.videoThumbnails());
 		if (BuildConfig.ENABLE_VIDEO_COMPRESSION) {
 		add(context, entries, Screen.VIDEO_COMPRESSION, R.string.compression_title, R.string.compression_summary,

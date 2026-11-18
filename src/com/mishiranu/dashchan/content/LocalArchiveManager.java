@@ -116,7 +116,7 @@ public class LocalArchiveManager {
 
 	public static List<Item> collect() {
 		ArrayList<Item> items = new ArrayList<>();
-		collectDefault(items);
+		collectDefault(items, DataFile.obtain(DataFile.Target.DOWNLOADS, DIRECTORY_ARCHIVE));
 		for (String uriString : Preferences.getLocalArchiveUriTrees()) {
 			try {
 				collectTree(items, Uri.parse(uriString));
@@ -140,20 +140,19 @@ public class LocalArchiveManager {
 		return null;
 	}
 
-	public static Item findDefaultThreadArchive(String chanName, String boardName, String threadNumber) {
-		for (Item item : collect()) {
-			if (item.isExternal()) {
-				continue;
-			}
+	public static List<Item> findDefaultThreadArchives(DataFile directory, String chanName, String boardName,
+			String threadNumber) {
+		ArrayList<Item> items = new ArrayList<>();
+		collectDefault(items, directory);
+		items.removeIf(item -> {
 			JSONObject manifest = readManifest(item);
-			if (manifest != null && MANIFEST_SCHEMA.equals(manifest.optString("schema"))
+			return !(manifest != null && MANIFEST_SCHEMA.equals(manifest.optString("schema"))
 					&& chanName.equals(manifest.optString("chan"))
 					&& boardName.equals(manifest.optString("board"))
-					&& threadNumber.equals(manifest.optString("thread"))) {
-				return item;
-			}
-		}
-		return null;
+					&& threadNumber.equals(manifest.optString("thread")));
+		});
+		items.sort((first, second) -> Long.compare(second.lastModified, first.lastModified));
+		return items;
 	}
 
 	public static boolean delete(Item item) {
@@ -204,7 +203,10 @@ public class LocalArchiveManager {
 	}
 
 	private static Item defaultItem(String name) {
-		DataFile root = DataFile.obtain(DataFile.Target.DOWNLOADS, DIRECTORY_ARCHIVE);
+		return defaultItem(DataFile.obtain(DataFile.Target.DOWNLOADS, DIRECTORY_ARCHIVE), name);
+	}
+
+	private static Item defaultItem(DataFile root, String name) {
 		DataFile html = root.getChild(name + ".html"), zip = root.getChild(name + ".zip"), manifest = root.getChild(name + ".json");
 		if (!html.exists()) html = root.getChild(name + ".htm");
 		return new Item("default", name, null, html.exists() ? html : null, zip.exists() ? zip : null,
@@ -300,30 +302,52 @@ public class LocalArchiveManager {
 	}
 
 	/** Called only after the new snapshot and every requested resource are complete. */
-	public static boolean deleteSuperseded(String currentName) {
-		Item current = defaultItem(currentName);
+	public static boolean deleteSuperseded(DataFile directory, String currentName, List<Item> previousItems) {
+		Item current = defaultItem(directory, currentName);
 		JSONObject identity = readManifest(current);
-		if (identity == null) return false;
+		LocalArchiveReader.Archive currentArchive = LocalArchiveReader.readForUpdate(current, identity);
+		if (currentArchive == null) return false;
 		String resources = resourceDirectory(current);
-		List<DataFile> children = DataFile.obtain(DataFile.Target.DOWNLOADS, DIRECTORY_ARCHIVE).getChildren();
-		if (children == null) return false;
-		java.util.HashSet<String> names = new java.util.HashSet<>();
-		for (DataFile child : children) {
-			String fileName = child.getName(), extension = StringUtils.getFileExtension(fileName);
-			if (familyFile(fileName, resources)) names.add(fileName.substring(0, fileName.length() - extension.length() - 1));
-		}
 		boolean success = true;
-		for (String name : names) {
-			if (name.equals(currentName)) continue;
-			Item previous = defaultItem(name);
+		for (Item previous : previousItems) {
 			JSONObject manifest = readManifest(previous);
 			if (manifest != null && MANIFEST_SCHEMA.equals(manifest.optString("schema"))
 					&& resources.equals(resourceDirectory(previous))
 					&& identity.optString("chan").equals(manifest.optString("chan"))
 					&& identity.optString("board").equals(manifest.optString("board"))
-					&& identity.optString("thread").equals(manifest.optString("thread"))) success &= delete(previous);
+					&& identity.optString("thread").equals(manifest.optString("thread"))
+					&& (!previous.hasZip() || current.hasZip())
+					&& includesArchiveMedia(identity, manifest)) {
+				LocalArchiveReader.Archive archive = LocalArchiveReader.readForUpdate(previous, manifest);
+				if (archive != null && currentArchive.postItems.keySet().containsAll(archive.postItems.keySet())) {
+					// The validated replacement in this directory still uses the shared media.
+					success &= delete(directory.getChild(previous.name + ".html"))
+							& delete(directory.getChild(previous.name + ".htm"))
+							& delete(directory.getChild(previous.name + ".zip"))
+							& delete(directory.getChild(previous.name + ".json"));
+				}
+			}
 		}
 		return success;
+	}
+
+	private static boolean includesArchiveMedia(JSONObject current, JSONObject previous) {
+		JSONObject oldBytes = previous.optJSONObject("mediaBytes");
+		if (oldBytes == null || oldBytes.length() == 0) {
+			return !previous.optBoolean("savedFiles") && !previous.optBoolean("savedThumbnails");
+		}
+		JSONObject newBytes = current.optJSONObject("mediaBytes");
+		JSONObject oldSources = previous.optJSONObject("mediaSources");
+		JSONObject newSources = current.optJSONObject("mediaSources");
+		if (newBytes == null || oldSources == null || newSources == null) return false;
+		for (java.util.Iterator<String> keys = oldBytes.keys(); keys.hasNext();) {
+			String path = keys.next();
+			String source = oldSources.optString(path);
+			long size = oldBytes.optLong(path, -1);
+			if (size <= 0 || newBytes.optLong(path, -1) != size
+					|| source.isEmpty() || !source.equals(newSources.optString(path))) return false;
+		}
+		return true;
 	}
 
 	private static boolean hasWritePermission(ContentResolver resolver, Uri treeUri) {
@@ -378,8 +402,7 @@ public class LocalArchiveManager {
 		}
 	}
 
-	private static void collectDefault(List<Item> items) {
-		DataFile directory = DataFile.obtain(DataFile.Target.DOWNLOADS, DIRECTORY_ARCHIVE);
+	private static void collectDefault(List<Item> items, DataFile directory) {
 		List<DataFile> children = directory.getChildren();
 		HashMap<String, MutableItem> mutableItems = new HashMap<>();
 		if (children != null) {
@@ -507,41 +530,60 @@ public class LocalArchiveManager {
 		return manifest;
 	}
 
-	public static boolean createZip(String archiveName, List<String> files, List<String> thumbnails) {
-		return createZip(archiveName, archiveName, files, thumbnails);
-	}
-
 	/** Rewrite only the newly staged snapshot. A failure never modifies its previous snapshot. */
-	public static void writeDefaultManifest(String archiveName, JSONObject manifest) throws IOException {
+	public static void writeDefaultManifest(DataFile directory, String archiveName, byte[] manifest) throws IOException {
 		if (!safeDirectory(archiveName)) throw new IOException("Invalid archive name");
-		DataFile file = DataFile.obtain(DataFile.Target.DOWNLOADS, DIRECTORY_ARCHIVE).getChild(archiveName + ".json");
-		try (java.io.OutputStream output = file.openOutputStream()) {
-			output.write(manifest.toString().getBytes(StandardCharsets.UTF_8));
+		DataFile file = directory.getChild(archiveName + ".json");
+		try (java.io.OutputStream output = file.openTruncatedOutputStream()) {
+			if (output == null) throw new IOException("Archive manifest output unavailable");
+			output.write(manifest);
 		}
 	}
 
-	public static boolean createZip(String archiveName, String resources, List<String> files, List<String> thumbnails) {
+	public enum SnapshotVerification { MATCH, HTML_MISMATCH, MANIFEST_MISMATCH }
+
+	public static SnapshotVerification verifyDefaultSnapshot(DataFile directory, String archiveName, byte[] htmlDigest,
+			byte[] manifest) throws IOException {
+		Hasher hasher = Hasher.getInstanceSha256();
+		try (InputStream html = directory.getChild(archiveName + ".html").openInputStream()) {
+			if (html == null) throw new IOException("Archive HTML input unavailable");
+			if (!java.util.Arrays.equals(htmlDigest, hasher.calculate(html))) return SnapshotVerification.HTML_MISMATCH;
+		}
+		try (InputStream metadata = directory.getChild(archiveName + ".json").openInputStream()) {
+			if (metadata == null) throw new IOException("Archive manifest input unavailable");
+			byte[] metadataDigest = hasher.calculate(manifest);
+			return java.util.Arrays.equals(metadataDigest, hasher.calculate(metadata))
+					? SnapshotVerification.MATCH : SnapshotVerification.MANIFEST_MISMATCH;
+		}
+	}
+
+	public static boolean createZip(DataFile archiveDirectory, String archiveName, String resources,
+			List<String> files, List<String> thumbnails) {
 		if (!safeDirectory(archiveName) || !safeDirectory(resources) || !familyName(archiveName, resources)) return false;
-		DataFile archiveDirectory = DataFile.obtain(DataFile.Target.DOWNLOADS, DIRECTORY_ARCHIVE);
 		DataFile zipFile = archiveDirectory.getChild(archiveName + ".zip");
 		boolean success = false;
-		try (ZipOutputStream output = new ZipOutputStream(zipFile.openOutputStream())) {
-			output.setLevel(Deflater.NO_COMPRESSION);
-			DataFile manifestFile = archiveDirectory.getChild(archiveName + ".json");
-			putFile(output, "manifest.json", manifestFile);
-			DataFile htmlFile = archiveDirectory.getChild(archiveName + ".html");
-			putFile(output, archiveName + ".html", htmlFile);
-			for (String name : thumbnails) {
-				putFile(output, resources + "/" + DIRECTORY_THUMBNAILS + "/" + name,
-						archiveDirectory.getChild(resources + "/" + DIRECTORY_THUMBNAILS + "/" + name));
+		try {
+			java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
+			try (ZipOutputStream output = new ZipOutputStream(new java.security.DigestOutputStream(
+					zipFile.openTruncatedOutputStream(), digest))) {
+				output.setLevel(Deflater.NO_COMPRESSION);
+				DataFile manifestFile = archiveDirectory.getChild(archiveName + ".json");
+				putFile(output, "manifest.json", manifestFile);
+				DataFile htmlFile = archiveDirectory.getChild(archiveName + ".html");
+				putFile(output, archiveName + ".html", htmlFile);
+				for (String name : thumbnails) {
+					putFile(output, resources + "/" + DIRECTORY_THUMBNAILS + "/" + name,
+							archiveDirectory.getChild(resources + "/" + DIRECTORY_THUMBNAILS + "/" + name));
+				}
+				for (String name : files) {
+					putFile(output, resources + "/" + DIRECTORY_FILES + "/" + name,
+							archiveDirectory.getChild(resources + "/" + DIRECTORY_FILES + "/" + name));
+				}
 			}
-			for (String name : files) {
-				putFile(output, resources + "/" + DIRECTORY_FILES + "/" + name,
-						archiveDirectory.getChild(resources + "/" + DIRECTORY_FILES + "/" + name));
-			}
+			validateZip(zipFile, archiveName, resources, files, thumbnails, digest);
 			success = true;
 			return true;
-		} catch (IOException e) {
+		} catch (IOException | java.security.NoSuchAlgorithmException | RuntimeException e) {
 			com.mishiranu.dashchan.media.VideoDiagnostics.recordUi("archive_update stage=pack_io_failed type=" + e.getClass().getSimpleName());
 			return false;
 		} finally {
@@ -549,6 +591,32 @@ public class LocalArchiveManager {
 				zipFile.delete();
 			}
 		}
+	}
+
+	private static void validateZip(DataFile zipFile, String archiveName, String resources,
+			List<String> files, List<String> thumbnails, java.security.MessageDigest digest) throws IOException {
+		java.util.HashSet<String> expected = new java.util.HashSet<>();
+		expected.add("manifest.json");
+		expected.add(archiveName + ".html");
+		for (String name : files) expected.add(resources + "/" + DIRECTORY_FILES + "/" + name);
+		for (String name : thumbnails) expected.add(resources + "/" + DIRECTORY_THUMBNAILS + "/" + name);
+		byte[] buffer = new byte[8192];
+		byte[] writtenDigest = digest.digest();
+		try (java.security.DigestInputStream raw = new java.security.DigestInputStream(zipFile.openInputStream(), digest);
+				ZipInputStream input = new ZipInputStream(raw)) {
+			ZipEntry entry;
+			while ((entry = input.getNextEntry()) != null) {
+				if (!expected.remove(entry.getName())) throw new IOException("Unexpected archive entry");
+				long size = 0;
+				int count;
+				while ((count = input.read(buffer)) != -1) size += count;
+				if (size == 0) throw new IOException("Empty archive entry");
+			}
+			// ZipInputStream reads local entries. Include the rest of the file, including the central directory.
+			while (raw.read(buffer) != -1) {}
+		}
+		if (!expected.isEmpty()) throw new IOException("Missing archive entries");
+		if (!java.util.Arrays.equals(writtenDigest, digest.digest())) throw new IOException("Incomplete archive ZIP");
 	}
 
 	private static void putFile(ZipOutputStream output, String name, DataFile file) throws IOException {
@@ -571,6 +639,10 @@ public class LocalArchiveManager {
 		if (htmlInput != null) {
 			return readBytes(htmlInput);
 		}
+		return readZipHtml(item);
+	}
+
+	static byte[] readZipHtml(Item item) throws IOException {
 		InputStream zipInput = open(item.zipFile, item.zipUri);
 		if (zipInput != null) {
 			try (InputStream input = openZipHtml(zipInput, item.name)) {
@@ -588,6 +660,10 @@ public class LocalArchiveManager {
 			if (manifestInput != null) {
 				return new JSONObject(new String(readBytes(manifestInput), StandardCharsets.UTF_8));
 			}
+		} catch (IOException | JSONException | SecurityException e) {
+			// The packed copy can still have a readable manifest.
+		}
+		try {
 			InputStream zipInput = open(item.zipFile, item.zipUri);
 			if (zipInput != null) {
 				try (InputStream input = openZipEntry(zipInput, "manifest.json")) {

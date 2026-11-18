@@ -5,6 +5,7 @@ import android.graphics.Rect;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
+import android.widget.Checkable;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
@@ -51,6 +52,39 @@ public final class DialogFormScrollView extends ScrollView {
 		return slot;
 	}
 	private int limit() { return Math.round(AppearanceShapes.DIALOG_FORM_MAX_HEIGHT * ResourceUtils.obtainDensity(this)); }
+	// All containers in create() span their parent's content width.
+	private int minimumListHeight(int widthSpec, int horizontalInsets) {
+		View content = legacyList.getChildAt(0);
+		horizontalInsets += legacyList.getPaddingLeft() + legacyList.getPaddingRight();
+		int verticalInsets = legacyList.getPaddingTop() + legacyList.getPaddingBottom();
+		if (!(content instanceof LinearLayout)) {
+			return verticalInsets + measureRowHeight(content, widthSpec, horizontalInsets);
+		}
+		LinearLayout rows = (LinearLayout) content;
+		horizontalInsets += rows.getPaddingLeft() + rows.getPaddingRight();
+		verticalInsets += rows.getPaddingTop() + rows.getPaddingBottom();
+		int firstHeight = 0;
+		for (int i = 0; i < rows.getChildCount(); i++) {
+			View row = rows.getChildAt(i);
+			if (row.getVisibility() != VISIBLE) continue;
+			// Group headings can be shorter than the first selectable board at large font sizes.
+			if (row instanceof Checkable) {
+				return verticalInsets + Math.max(firstHeight, measureRowHeight(row, widthSpec, horizontalInsets));
+			}
+			if (firstHeight == 0) firstHeight = measureRowHeight(row, widthSpec, horizontalInsets);
+		}
+		return verticalInsets + firstHeight;
+	}
+
+	private static int measureRowHeight(View row, int widthSpec, int horizontalInsets) {
+		ViewGroup.MarginLayoutParams params = (ViewGroup.MarginLayoutParams) row.getLayoutParams();
+		int rowWidth = getChildMeasureSpec(widthSpec, horizontalInsets + params.leftMargin + params.rightMargin, params.width);
+		int rowHeight = params.height >= 0 ? MeasureSpec.makeMeasureSpec(params.height, MeasureSpec.EXACTLY)
+				: MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED);
+		row.measure(rowWidth, rowHeight);
+		return row.getMeasuredHeight() + params.topMargin + params.bottomMargin;
+	}
+
 	@Override protected void onMeasure(int widthSpec, int heightSpec) {
 		if (!newIme) {
 			getWindowVisibleDisplayFrame(visible);
@@ -63,19 +97,25 @@ public final class DialogFormScrollView extends ScrollView {
 		int mode = MeasureSpec.getMode(heightSpec), size = MeasureSpec.getSize(heightSpec);
 		if (legacyList != null) {
 			int headers = legacyBody.getPaddingTop() + legacyBody.getPaddingBottom();
+			int horizontalInsets = getPaddingLeft() + getPaddingRight()
+					+ legacyBody.getPaddingLeft() + legacyBody.getPaddingRight();
 			for (int i = 0; i < legacyBody.getChildCount(); i++) {
 				View child = legacyBody.getChildAt(i); if (child == legacyList || child.getVisibility() == GONE) continue;
-				LinearLayout.LayoutParams p = (LinearLayout.LayoutParams) child.getLayoutParams();
-				child.measure(getChildMeasureSpec(widthSpec, legacyBody.getPaddingLeft() + legacyBody.getPaddingRight()
-						+ p.leftMargin + p.rightMargin, p.width), MeasureSpec.makeMeasureSpec(Math.max(0, p.height),
-						p.height >= 0 ? MeasureSpec.EXACTLY : MeasureSpec.UNSPECIFIED));
-				headers += child.getMeasuredHeight() + p.topMargin + p.bottomMargin;
+				headers += measureRowHeight(child, widthSpec, horizontalInsets);
 			}
 			int available = mode == MeasureSpec.UNSPECIFIED ? Integer.MAX_VALUE : Math.max(0, size - getPaddingTop() - getPaddingBottom());
-			boolean wholeForm = headers >= available;
+			int listHeight = Math.min(limit(), Math.max(0, available - headers));
+			boolean wholeForm = headers >= available || listHeight < minimumListHeight(widthSpec, horizontalInsets);
 			legacyHeaderHeight = headers; legacyWhole = wholeForm;
 			// No reparenting, selection/focus reset, or second active scrolling range.
-			legacyList.getLayoutParams().height = wholeForm ? ViewGroup.LayoutParams.WRAP_CONTENT : Math.min(limit(), available - headers);
+			int targetHeight = wholeForm ? ViewGroup.LayoutParams.WRAP_CONTENT : listHeight;
+			ViewGroup.LayoutParams params = legacyList.getLayoutParams();
+			if (params.height != targetHeight) {
+				params.height = targetHeight;
+				// Remeasure in the current pass even if the body's width and measure specs are cached.
+				legacyList.forceLayout();
+				legacyBody.forceLayout();
+			}
 			legacyList.setVerticalScrollBarEnabled(!wholeForm);
 			setVerticalScrollBarEnabled(wholeForm);
 		}

@@ -95,6 +95,7 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 
 	private Request primaryRequest;
 	private final ArrayList<DirectRequest> directRequests = new ArrayList<>();
+	private final ArrayList<java.util.function.Consumer<Boolean>> storageWaiters = new ArrayList<>();
 
 	private final LinkedHashMap<String, TaskData> queuedTasks = new LinkedHashMap<>();
 	private final LinkedHashMap<String, TaskData> successTasks = new LinkedHashMap<>();
@@ -183,10 +184,25 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 			primaryRequest.cleanup();
 			primaryRequest = null;
 		}
+		ArrayList<String> cancelledArchives = new ArrayList<>();
 		for (DirectRequest directRequest : directRequests) {
 			directRequest.cleanup();
+			if (directRequest.localArchiveId != null && !cancelledArchives.contains(directRequest.localArchiveId)) {
+				cancelledArchives.add(directRequest.localArchiveId);
+			}
 		}
 		directRequests.clear();
+		for (Callback callback : callbacks) {
+			for (String id : cancelledArchives) callback.onArchiveQueueCancelled(id);
+		}
+		finishStorageWaiters(false);
+	}
+
+	private void finishStorageWaiters(boolean ready) {
+		if (storageWaiters.isEmpty()) return;
+		ArrayList<java.util.function.Consumer<Boolean>> waiters = new ArrayList<>(storageWaiters);
+		storageWaiters.clear();
+		for (java.util.function.Consumer<Boolean> waiter : waiters) waiter.accept(ready);
 	}
 
 	private void cleanup() {
@@ -226,6 +242,7 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 	}
 
 	private DataFile getDataFile(TaskData taskData) {
+		if (taskData.archiveRoot != null) return taskData.archiveRoot.getChild(taskData.path).getChild(taskData.name);
 		String key = getTargetPathKey(taskData.target, StringUtils.emptyIfNull(taskData.path));
 		DataFile file = cachedDirectories.get(key);
 		if (file == null) {
@@ -238,7 +255,7 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 	}
 
 	private boolean hasStoragePermission() {
-		boolean external = primaryRequest != null;
+		boolean external = primaryRequest != null || !storageWaiters.isEmpty();
 		if (!external) {
 			for (DirectRequest directRequest : directRequests) {
 				if (directRequest.target.isExternal()) {
@@ -265,11 +282,17 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 					boolean success = false;
 					DataFile taskDataFile = null;
 					try {
-						taskDataFile = getDataFile(taskData);
-						try (InputStream input = taskData.input; OutputStream output = taskDataFile.openOutputStream()) {
-							IOUtils.copyStream(input, output);
-							success = true;
+						try (InputStream input = taskData.input) {
+							taskDataFile = getDataFile(taskData);
+							if (taskData.localArchiveId != null && !".nomedia".equals(taskData.name)
+									&& taskDataFile.exists()) {
+								throw new IOException("Archive snapshot already exists");
+							}
+							try (OutputStream output = taskDataFile.openOutputStream()) {
+								IOUtils.copyStream(input, output);
+							}
 						}
+						success = true;
 					} catch (IOException | RuntimeException e) {
 						e.printStackTrace();
 					}
@@ -368,7 +391,7 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 	}
 
 	private void handleRequests() {
-		if (primaryRequest != null || !directRequests.isEmpty()) {
+		if (primaryRequest != null || !directRequests.isEmpty() || !storageWaiters.isEmpty()) {
 			if (!hasStoragePermission()) {
 				for (Callback callback : callbacks) {
 					callback.requestPermission();
@@ -391,18 +414,20 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 						DownloadItem downloadItem = directRequest.downloadItems.get(0);
 						enqueue(new TaskData(downloadItem.chanName, directRequest.overwrite, directRequest.input,
 								directRequest.target, directRequest.getPath(downloadItem), downloadItem.name, directRequest.allowWrite,
-								directRequest.localArchiveId));
+								directRequest.localArchiveId).withArchiveRoot(directRequest.archiveRoot));
 					} else {
 						for (DownloadItem downloadItem : directRequest.downloadItems) {
 							enqueue(new TaskData(downloadItem.chanName, directRequest.overwrite, downloadItem.uri,
 									downloadItem.checkSha256, downloadItem.checkFingerprints, directRequest.target,
 									directRequest.getPath(downloadItem), downloadItem.name, directRequest.allowWrite,
-									directRequest.localArchiveId).withSuccessHaptic(downloadItem.successHapticView));
+									directRequest.localArchiveId).withArchiveRoot(directRequest.archiveRoot)
+									.withSuccessHaptic(downloadItem.successHapticView));
 						}
 					}
 				}
 				directRequests.clear();
 				startNextTask();
+				finishStorageWaiters(true);
 			}
 		}
 		for (Callback callback : callbacks) {
@@ -659,11 +684,25 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 		default void requestPermission() {}
 		default void onFinishDownloading(boolean success, DataFile.Target target, String path, String name) {}
 		default void onCleanup() {}
+		default void onArchiveQueueCancelled(String id) {}
 	}
 
 	public enum PermissionResult {SUCCESS, FAIL, CANCEL}
 
 	public class Binder extends android.os.Binder {
+		public void whenStorageReady(java.util.function.Consumer<Boolean> callback) {
+			if (Preferences.getDownloadUriTree(DownloadService.this) != null) {
+				callback.accept(true);
+			} else {
+				storageWaiters.add(callback);
+				handleRequests();
+			}
+		}
+
+		public void removeStorageWaiter(java.util.function.Consumer<Boolean> callback) {
+			storageWaiters.remove(callback);
+		}
+
 		public void register(Callback callback) {
 			callbacks.register(callback);
 		}
@@ -755,19 +794,20 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 
 		private Boolean accumulateState;
 		private String accumulateLocalArchiveId;
+		private DataFile accumulateArchiveRoot;
 
 		public Accumulate accumulate() {
-			return accumulate(null);
+			return accumulate(null, null);
 		}
 
-		public Accumulate accumulateLocalArchive(String localArchiveId) {
+		public Accumulate accumulateLocalArchive(String localArchiveId, DataFile archiveRoot) {
 			if (StringUtils.isEmpty(localArchiveId)) {
 				throw new IllegalArgumentException();
 			}
-			return accumulate(localArchiveId);
+			return accumulate(localArchiveId, archiveRoot);
 		}
 
-		private Accumulate accumulate(String localArchiveId) {
+		private Accumulate accumulate(String localArchiveId, DataFile archiveRoot) {
 			if (accumulateState != null) {
 				throw new IllegalStateException();
 			}
@@ -779,10 +819,12 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 			}
 			accumulateState = false;
 			accumulateLocalArchiveId = localArchiveId;
+			accumulateArchiveRoot = archiveRoot;
 			return () -> {
 				boolean accumulateState = this.accumulateState;
 				this.accumulateState = null;
 				this.accumulateLocalArchiveId = null;
+				this.accumulateArchiveRoot = null;
 				if (accumulateState) {
 					handleRequests();
 				}
@@ -799,15 +841,19 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 
 		public void downloadDirect(DataFile.Target target, String path, boolean overwrite,
 				List<DownloadItem> downloadItems) {
-			directRequests.add(new DirectRequest(target, path, overwrite, downloadItems, null, false,
-					accumulateLocalArchiveId));
+			DirectRequest request = new DirectRequest(target, path, overwrite, downloadItems, null, false,
+					accumulateLocalArchiveId);
+			request.archiveRoot = accumulateArchiveRoot;
+			directRequests.add(request);
 			handleRequestsOrAccumulate();
 		}
 
 		public void downloadDirect(DataFile.Target target, String path, String name, InputStream input) {
-			directRequests.add(new DirectRequest(target, path, true,
+			DirectRequest request = new DirectRequest(target, path, true,
 					Collections.singletonList(new DownloadItem(null, null, name, null, null)), input, false,
-					accumulateLocalArchiveId));
+					accumulateLocalArchiveId);
+			request.archiveRoot = accumulateArchiveRoot;
+			directRequests.add(request);
 			handleRequestsOrAccumulate();
 		}
 
@@ -962,6 +1008,12 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 	};
 
 	private static class TaskData implements Parcelable {
+		private DataFile archiveRoot;
+
+		private TaskData withArchiveRoot(DataFile root) {
+			archiveRoot = root;
+			return this;
+		}
 		// Ephemeral UI feedback: do not retain the gallery or persist it for background retries.
 		private WeakReference<View> successHapticView;
 
@@ -1017,7 +1069,7 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 		public TaskData newFinishedFromCache(boolean finishedFromCache) {
 			return this.finishedFromCache == finishedFromCache ? this : new TaskData(chanName, finishedFromCache,
 					overwrite, input, uri, checkSha256, checkFingerprints, target, path, name, allowWrite,
-					localArchiveId).withSuccessHaptic(successHapticView);
+					localArchiveId).withArchiveRoot(archiveRoot).withSuccessHaptic(successHapticView);
 		}
 
 		public String getKey() {
@@ -1467,6 +1519,7 @@ public class DownloadService extends BaseService implements ReadFileTask.Callbac
 	}
 
 	public static class DirectRequest {
+		private DataFile archiveRoot;
 		public final DataFile.Target target;
 		public final String path;
 		public final boolean overwrite;

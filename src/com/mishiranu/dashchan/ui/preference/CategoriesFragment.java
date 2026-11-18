@@ -114,15 +114,15 @@ public class CategoriesFragment extends PreferenceFragment {
 		addCategory(R.string.autohide, R.drawable.ic_custom_fork)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 						.pushFragment(new AutohideFragment()));
-		addCategory(R.string.about, R.drawable.ic_info)
-				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
-						.pushFragment(new AboutFragment()));
 		addCategory(R.string.custom_application_shortcut, R.drawable.ic_camera_alt)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 						.pushFragment(new CustomShortcutFragment()));
 		addCategory(R.string.accessibility, R.drawable.ic_accessibility)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 						.pushFragment(new AccessibilityFragment()));
+		addCategory(R.string.about, R.drawable.ic_info)
+				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
+						.pushFragment(new AboutFragment()));
 	}
 
 	private void openSearchResult(Runnable navigate) {

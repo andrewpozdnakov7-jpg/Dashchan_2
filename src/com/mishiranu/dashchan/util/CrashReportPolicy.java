@@ -20,6 +20,9 @@ public final class CrashReportPolicy {
 		// ApplicationExitInfo constants, present since API 30: CRASH, CRASH_NATIVE, ANR.
 		return reason == 4 || reason == 5 || reason == 6;
 	}
+	public static boolean hasMemoryLimiterMarker(String description) {
+		return description != null && description.contains("MemoryLimiter:AnonSwap");
+	}
 	public static boolean shareName(String name) {
 		return name != null && name.matches("share-[a-f0-9]{32}\\.txt");
 	}

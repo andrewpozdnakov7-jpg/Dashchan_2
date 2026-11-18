@@ -21,6 +21,9 @@ import android.view.View;
 import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
+import android.view.Window;
+import android.view.WindowManager;
+import android.os.Bundle;
 import android.widget.Button;
 import android.widget.CompoundButton;
 import android.widget.EditText;
@@ -102,6 +105,7 @@ public final class PostingFormAppearance {
 	private final CaptchaDialogAppearance.ModalListener foregroundCaptchaListener = this::onForegroundCaptchaChanged;
 	private final PostingPrimaryState primaryState = new PostingPrimaryState();
 	private AlertDialog captchaDialog;
+	private boolean captchaDialogImeVisible;
 	private View captchaParking;
 	private EditText captchaInput;
 	private boolean dialogAccepted;
@@ -1009,6 +1013,10 @@ public final class PostingFormAppearance {
 	}
 
 	private void openImageCaptcha() {
+		openImageCaptcha(null);
+	}
+
+	private void openImageCaptcha(Boolean restoreKeyboard) {
 		if (closed || !root.isAttachedToWindow() || !root.isShown() || captchaDialog != null) return;
 		cancelPrimaryReveal();
 		dialogAccepted = false; dialogPreviousInput = captchaInput.getText().toString(); dialogRevision = captchaRevision;
@@ -1018,7 +1026,20 @@ public final class PostingFormAppearance {
 				.setTitle(R.string.confirmation).setView(captchaRoot)
 				.setPositiveButton(android.R.string.ok, null).setNegativeButton(android.R.string.cancel, null).create();
 		captchaDialog = dialog;
+		captchaDialogImeVisible = Boolean.TRUE.equals(restoreKeyboard);
+		Window window = dialog.getWindow();
+		View decor = window != null ? window.getDecorView() : null;
+		ViewTreeObserver.OnPreDrawListener imeObserver = () -> {
+			if (decor != null && decor.hasWindowFocus() && captchaDialog == dialog) {
+				WindowInsetsCompat insets = ViewCompat.getRootWindowInsets(decor);
+				if (insets != null) captchaDialogImeVisible = insets.isVisible(WindowInsetsCompat.Type.ime());
+			}
+			return true;
+		};
 		dialog.setOnDismissListener(ignored -> {
+			if (decor != null && decor.getViewTreeObserver().isAlive()) {
+				decor.getViewTreeObserver().removeOnPreDrawListener(imeObserver);
+			}
 			if (captchaDialog != dialog) return;
 			captchaDialog = null;
 			if (!dialogAccepted && dialogRevision == captchaRevision) captchaInput.setText(dialogPreviousInput);
@@ -1027,16 +1048,55 @@ public final class PostingFormAppearance {
 			if (!closed) { updateCaptchaEntry(); requestPrimaryReveal(); }
 		});
 		dialog.setOnShowListener(ignored -> {
+			if (captchaDialog != dialog) return;
 			dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> confirmCaptchaDialog());
 			updateCaptchaEntry();
 			captchaInput.requestFocus();
+			if (decor != null) decor.getViewTreeObserver().addOnPreDrawListener(imeObserver);
 		});
 		dialog.setCanceledOnTouchOutside(false);
+		if (window != null && restoreKeyboard != null) {
+			int mode = window.getAttributes().softInputMode & ~WindowManager.LayoutParams.SOFT_INPUT_MASK_STATE;
+			window.setSoftInputMode(mode | (restoreKeyboard ? WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE
+					: WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN));
+			captchaInput.requestFocus();
+		}
 		try { dialog.show(); }
 		catch (android.view.WindowManager.BadTokenException e) {
 			captchaDialog = null; ViewUtils.removeFromParent(captchaRoot); ((ViewGroup) captchaParking).addView(captchaRoot);
 			dialogPreviousInput = null;
 		}
+	}
+
+	public Bundle captureImageCaptchaDialogState() {
+		if (captchaDialog == null || !captchaDialog.isShowing()
+				|| dialogRevision != captchaRevision || captchaType != com.mishiranu.dashchan.ui.CaptchaForm.CaptchaViewType.IMAGE) return null;
+		Bundle result = new Bundle();
+		result.putBoolean("ime", captchaDialogImeVisible);
+		if (captchaInput.length() <= 1024) result.putString("input", captchaInput.getText().toString());
+		if (dialogPreviousInput != null && dialogPreviousInput.length() <= 1024) {
+			result.putString("previous", dialogPreviousInput);
+		}
+		result.putInt("selectionStart", captchaInput.getSelectionStart());
+		result.putInt("selectionEnd", captchaInput.getSelectionEnd());
+		return result;
+	}
+
+	public boolean restoreImageCaptchaDialogState(Bundle state) {
+		if (captchaType != com.mishiranu.dashchan.ui.CaptchaForm.CaptchaViewType.IMAGE || captchaInput == null) return false;
+		if (captchaDialog != null) return captchaDialog.isShowing();
+		openImageCaptcha(state.getBoolean("ime"));
+		if (captchaDialog == null) return false;
+		if (state.containsKey("previous")) dialogPreviousInput = state.getString("previous");
+		if (state.containsKey("input")) {
+			captchaInput.setText(state.getString("input"));
+			int start = state.getInt("selectionStart", -1);
+			int end = state.getInt("selectionEnd", -1);
+			if (start >= 0 && end >= 0 && start <= captchaInput.length() && end <= captchaInput.length()) {
+				captchaInput.setSelection(start, end);
+			}
+		}
+		return true;
 	}
 
 	/** Native IME confirmation closes only the challenge. Sending always needs a new explicit click. */

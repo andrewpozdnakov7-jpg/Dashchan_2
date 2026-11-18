@@ -3,12 +3,14 @@ package com.mishiranu.dashchan.content.async;
 import androidx.lifecycle.MutableLiveData;
 import chan.content.Chan;
 import com.mishiranu.dashchan.content.model.Post;
+import com.mishiranu.dashchan.content.service.DownloadService;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.Executor;
+import java.util.function.Consumer;
 
 /** One dialog-scoped preparation, not the later download/ZIP operation. Holds no UI dependencies. */
 public class LocalArchiveViewModel extends TaskViewModel<SendLocalArchiveTask,
@@ -38,12 +40,16 @@ public class LocalArchiveViewModel extends TaskViewModel<SendLocalArchiveTask,
 	}
 
 	public static final class PreparationResult {
-		public enum Status {PREPARED, ERROR}
+		public enum Status {PREPARED, ERROR, CANCELLED}
 		public final Status status;
 		public final SendLocalArchiveTask.DownloadResult downloadResult;
 
 		private PreparationResult(SendLocalArchiveTask.DownloadResult downloadResult) {
-			status = downloadResult != null ? Status.PREPARED : Status.ERROR;
+			this(downloadResult != null ? Status.PREPARED : Status.ERROR, downloadResult);
+		}
+
+		private PreparationResult(Status status, SendLocalArchiveTask.DownloadResult downloadResult) {
+			this.status = status;
 			this.downloadResult = downloadResult;
 		}
 	}
@@ -55,6 +61,8 @@ public class LocalArchiveViewModel extends TaskViewModel<SendLocalArchiveTask,
 	private final TaskFactory taskFactory;
 	private final Executor executor;
 	private boolean started;
+	private DownloadService.Binder waitingBinder;
+	private Consumer<Boolean> storageWaiter;
 	private SendLocalArchiveTask.DownloadResult pendingDownload;
 	public final MutableLiveData<Integer> progress = new MutableLiveData<>();
 
@@ -78,6 +86,23 @@ public class LocalArchiveViewModel extends TaskViewModel<SendLocalArchiveTask,
 		task.execute(executor);
 	}
 
+	public void startWhenStorageReady(Request request, DownloadService.Binder binder) {
+		if (started || waitingBinder != null || hasTaskOrValue()) return;
+		if (binder == null) {
+			handleResult(new PreparationResult(null));
+			return;
+		}
+		waitingBinder = binder;
+		storageWaiter = ready -> {
+			if (waitingBinder == null) return;
+			waitingBinder = null;
+			storageWaiter = null;
+			if (ready) startIfNeeded(request);
+			else handleResult(new PreparationResult(PreparationResult.Status.CANCELLED, null));
+		};
+		binder.whenStorageReady(storageWaiter);
+	}
+
 	@Override
 	public void onLocalArchivationProgressUpdate(int handledPostsCount) {
 		progress.setValue(handledPostsCount);
@@ -96,6 +121,11 @@ public class LocalArchiveViewModel extends TaskViewModel<SendLocalArchiveTask,
 
 	@Override protected void onCleared() {
 		super.onCleared();
+		if (waitingBinder != null) {
+			waitingBinder.removeStorageWaiter(storageWaiter);
+			waitingBinder = null;
+			storageWaiter = null;
+		}
 		if (pendingDownload != null) { pendingDownload.cancel(); pendingDownload = null; }
 	}
 }

@@ -2,6 +2,7 @@ package chan.http;
 
 import android.net.Uri;
 import com.mishiranu.dashchan.util.IOUtils;
+import com.mishiranu.dashchan.util.NetworkDiagnostics;
 import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.Proxy;
@@ -13,6 +14,7 @@ import java.util.Map;
 public final class HttpSession {
 	final HttpHolder holder;
 	final HttpClient client;
+	final NetworkDiagnostics diagnostics;
 	HttpResponse response;
 
 	final Proxy proxy;
@@ -36,6 +38,7 @@ public final class HttpSession {
 			boolean verifyCertificate, boolean mayCheckFirewallBlock, int delay, int maxAttempts) {
 		this.holder = holder;
 		this.client = client;
+		diagnostics = NetworkDiagnostics.start(holder.chan, uri);
 		this.proxy = proxy;
 		this.verifyCertificate = verifyCertificate;
 		this.mayCheckFirewallBlock = mayCheckFirewallBlock;

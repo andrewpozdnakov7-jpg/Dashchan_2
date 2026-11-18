@@ -30,6 +30,7 @@ import com.mishiranu.dashchan.content.service.webview.WebViewExtra;
 import com.mishiranu.dashchan.content.service.webview.WebViewService;
 import com.mishiranu.dashchan.ui.ForegroundManager;
 import com.mishiranu.dashchan.util.Hasher;
+import com.mishiranu.dashchan.util.NetworkDiagnostics;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
@@ -151,13 +152,20 @@ public class FirewallResolvers extends FirewallResolver.Implementation {
 		private final HttpHolder holder;
 		private final boolean resolve;
 		private final boolean exclusive;
+		private final NetworkDiagnostics diagnostics;
 
 		private CheckSession(Uri uri, HttpHolder holder, Chan chan,
-				FirewallResolver.Identifier identifier, boolean resolve, boolean exclusive) {
+				FirewallResolver.Identifier identifier, boolean resolve, boolean exclusive,
+				NetworkDiagnostics diagnostics) {
 			super(uri, chan, identifier);
 			this.holder = holder;
 			this.resolve = resolve;
 			this.exclusive = exclusive;
+			this.diagnostics = diagnostics;
+		}
+
+		private void diagnostic(String event) {
+			if (diagnostics != null) diagnostics.event(event);
 		}
 
 		@Override
@@ -243,13 +251,33 @@ public class FirewallResolvers extends FirewallResolver.Implementation {
 		public final Uri initialUri;
 		public final String chanTitle;
 		public final Runnable cancel;
+		private final NetworkDiagnostics diagnostics;
 
 		private WebViewRequestCallback(FirewallResolver.WebViewClient<?> client,
-				Uri initialUri, String chanTitle, Runnable cancel) {
+				Uri initialUri, String chanTitle, Runnable cancel, NetworkDiagnostics diagnostics) {
 			this.client = client;
 			this.initialUri = initialUri;
 			this.chanTitle = chanTitle;
 			this.cancel = cancel;
+			this.diagnostics = diagnostics;
+		}
+
+		@Override
+		public void onDiagnosticEvent(int event, int code) {
+			if (diagnostics == null) return;
+			String name;
+			switch (event) {
+				case DIAG_LOAD: name = "load"; break;
+				case DIAG_TIMEOUT: name = "timeout"; break;
+				case DIAG_MAIN_FRAME_ERROR: name = "main_frame_error"; break;
+				case DIAG_MAIN_FRAME_HTTP_ERROR: name = "main_frame_http_error"; break;
+				case DIAG_TLS_ERROR: name = "tls_error"; break;
+				case DIAG_SCRIPT_ERROR: name = "script_error"; break;
+				case DIAG_CREATE_FAILED: name = "create_failed"; break;
+				case DIAG_PROXY_UNSUPPORTED: name = "proxy_unsupported"; break;
+				default: return;
+			}
+			diagnostics.event("webview_" + name + " code=" + code);
 		}
 
 		@Override
@@ -276,8 +304,11 @@ public class FirewallResolvers extends FirewallResolver.Implementation {
 				cookies = Collections.emptyMap();
 			}
 			try {
-				return client.onPageFinished(uri, cookies, title);
+				boolean finished = client.onPageFinished(uri, cookies, title);
+				if (diagnostics != null) diagnostics.event("webview_page_finished finished=" + finished);
+				return finished;
 			} catch (LinkageError | RuntimeException e) {
+				if (diagnostics != null) diagnostics.failure("webview_page_callback_failed", e);
 				e.printStackTrace();
 				return true;
 			}
@@ -323,6 +354,7 @@ public class FirewallResolvers extends FirewallResolver.Implementation {
 
 		private String requireUserCaptcha(String captchaType, String apiKey, String referer,
 				Object challengeExtra, boolean retry) {
+			if (diagnostics != null) diagnostics.event("webview_captcha_requested retry=" + retry);
 			String description = MainApplication.getInstance().getLocalizedContext().getString
 					(R.string.firewall_block__format_sentence, client.getName() + " (" + chanTitle + ")");
 			FirewallResolverCaptchaReader reader = new FirewallResolverCaptchaReader(apiKey, referer,
@@ -338,6 +370,7 @@ public class FirewallResolvers extends FirewallResolver.Implementation {
 				captchaData = ForegroundManager.getInstance().requireUserCaptcha(reader,
 						captchaType, null, null, null, null, description, retry);
 			} catch (InterruptedException e) {
+				if (diagnostics != null) diagnostics.event("webview_captcha_interrupted");
 				return null;
 			} finally {
 				synchronized (this) {
@@ -351,6 +384,7 @@ public class FirewallResolvers extends FirewallResolver.Implementation {
 			if (captchaData == null) {
 				cancel.run();
 			}
+			if (diagnostics != null) diagnostics.event("webview_captcha_finished answered=" + (captchaData != null));
 			return captchaData != null ? captchaData.get(ChanPerformer.CaptchaData.INPUT) : null;
 		}
 
@@ -412,12 +446,13 @@ public class FirewallResolvers extends FirewallResolver.Implementation {
 		}
 	}
 
-	private <T> T resolveWebView(FirewallResolver.Session session, FirewallResolver.WebViewClient<T> client)
+	private <T> T resolveWebView(CheckSession session, FirewallResolver.WebViewClient<T> client)
 			throws FirewallResolver.CancelException, InterruptedException {
 		HttpClient.ProxyData configuredProxy = HttpClient.getInstance().getProxyData(session.getChan());
 		if (configuredProxy != null && (configuredProxy.authInvalid || configuredProxy.username != null)) {
 			// WebView cannot authenticate SOCKS5 and does not share HttpClient's scoped authenticator.
 			// Do not retry this challenge using an unauthenticated or direct connection.
+			session.diagnostic("webview_proxy_auth_unsupported");
 			return null;
 		}
 		Context context = MainApplication.getInstance();
@@ -448,6 +483,7 @@ public class FirewallResolvers extends FirewallResolver.Implementation {
 		};
 
 		try {
+			session.diagnostic("webview_bind_start");
 			context.bindService(new Intent(context, WebViewService.class), connection, Context.BIND_AUTO_CREATE);
 			IWebViewService service;
 			synchronized (status) {
@@ -463,6 +499,7 @@ public class FirewallResolvers extends FirewallResolver.Implementation {
 				service = status.service;
 			}
 			if (service != null) {
+				session.diagnostic("webview_bound timeoutMs=" + WEB_VIEW_TIMEOUT);
 				boolean[] finished = {false};
 				Chan chan = session.getChan();
 				Uri initialUri = session.getUri().buildUpon().clearQuery().encodedFragment(null).build();
@@ -471,7 +508,10 @@ public class FirewallResolvers extends FirewallResolver.Implementation {
 				HttpClient.ProxyData proxyData = configuredProxy;
 				boolean verifyCertificate = chan.locator.isUseHttps() && Preferences.isVerifyCertificate();
 				WebViewRequestCallback requestCallback = new WebViewRequestCallback(client, initialUri, chanTitle,
-						() -> status.cancel = true);
+						() -> {
+							status.cancel = true;
+							session.diagnostic("webview_user_cancel");
+						}, session.diagnostics);
 				String requestId = UUID.randomUUID().toString();
 				Thread blockingCallThread = new Thread(() -> {
 					WebViewExtra extra = client instanceof WebViewClientWithExtra
@@ -480,11 +520,12 @@ public class FirewallResolvers extends FirewallResolver.Implementation {
 						boolean result = service.loadWithCookieResult(requestId, initialUri.toString(), userAgent,
 								proxyData != null && proxyData.socks, proxyData != null ? proxyData.host : null,
 								proxyData != null ? proxyData.port : 0, verifyCertificate, WEB_VIEW_TIMEOUT,
-								extra, requestCallback);
+								session.diagnostics != null, extra, requestCallback);
 						synchronized (finished) {
 							finished[0] = result;
 						}
 					} catch (RemoteException e) {
+						if (session.diagnostics != null) session.diagnostics.failure("webview_remote_failed", e);
 						e.printStackTrace();
 					}
 				});
@@ -492,6 +533,7 @@ public class FirewallResolvers extends FirewallResolver.Implementation {
 				try {
 					blockingCallThread.join();
 				} catch (InterruptedException e) {
+					session.diagnostic("webview_interrupted");
 					try {
 						service.interrupt(requestId);
 					} catch (RemoteException e1) {
@@ -502,16 +544,20 @@ public class FirewallResolvers extends FirewallResolver.Implementation {
 				}
 				synchronized (finished) {
 					if (!finished[0]) {
+						session.diagnostic("webview_incomplete");
 						return null;
 					}
 				}
 				T result = client.getResult();
+				session.diagnostic("webview_result accepted=" + (result != null));
 				if (result != null) {
 					return result;
 				}
 				if (status.cancel) {
 					throw new FirewallResolver.CancelException();
 				}
+			} else {
+				session.diagnostic("webview_service_unavailable");
 			}
 			return null;
 		} finally {
@@ -532,6 +578,7 @@ public class FirewallResolvers extends FirewallResolver.Implementation {
 		synchronized (lastCheckCancel) {
 			Long cancel = lastCheckCancel.get(key);
 			if (cancel != null && cancel + 15 * 1000 > SystemClock.elapsedRealtime()) {
+				session.diagnostic("firewall_recent_cancel");
 				return false;
 			}
 		}
@@ -548,7 +595,7 @@ public class FirewallResolvers extends FirewallResolver.Implementation {
 			try {
 				try (HttpHolder.Use ignored = session.holder.use()) {
 					CheckSession exclusiveSession = new CheckSession(session.getUri(), session.holder,
-							session.getChan(), session.getIdentifier(), session.resolve, true);
+							session.getChan(), session.getIdentifier(), session.resolve, true, session.diagnostics);
 					checkHolder.success = exclusive.resolve(exclusiveSession, key);
 				} catch (FirewallResolver.CancelException e) {
 					synchronized (lastCheckCancel) {
@@ -565,6 +612,7 @@ public class FirewallResolvers extends FirewallResolver.Implementation {
 				}
 			}
 		} else {
+			session.diagnostic("firewall_wait_existing_check");
 			synchronized (checkHolder) {
 				while (!checkHolder.ready) {
 					checkHolder.wait();
@@ -581,7 +629,8 @@ public class FirewallResolvers extends FirewallResolver.Implementation {
 	public FirewallResolver.CheckResult checkResponse(Chan chan, Uri uri, HttpHolder holder, HttpResponse response,
 			FirewallResolver.Identifier identifier, boolean resolve) throws HttpException, InterruptedException {
 		if (chan.locator.getChanHosts(false).contains(uri.getHost())) {
-			CheckSession session = new CheckSession(uri, holder, chan, identifier, resolve, false);
+			CheckSession session = new CheckSession(uri, holder, chan, identifier, resolve, false,
+					response.getNetworkDiagnostics());
 			FirewallResolver.CheckResponseResult result = null;
 			for (FirewallResolver resolver : resolvers) {
 				result = resolver.checkResponse(session, response);
@@ -599,7 +648,9 @@ public class FirewallResolvers extends FirewallResolver.Implementation {
 				}
 			}
 			if (result != null && result.key != null && result.exclusive != null) {
+				session.diagnostic("firewall_check_start allowed=" + resolve);
 				boolean resolved = resolve && runExclusive(session, result.key, result.exclusive);
+				session.diagnostic("firewall_check_finished resolved=" + resolved);
 				return new FirewallResolver.CheckResult(resolved, result.retransmitOnSuccess);
 			}
 		}
