@@ -7,6 +7,7 @@ import androidx.annotation.NonNull;
 import androidx.lifecycle.ViewModelProvider;
 import chan.content.Chan;
 import chan.content.ChanConfiguration;
+import chan.content.ChanPerformer;
 import chan.content.RedirectException;
 import chan.util.CommonUtils;
 import chan.util.StringUtils;
@@ -88,6 +89,7 @@ public class WatcherService extends BaseService {
 		}
 
 		boolean refresh(boolean reload, int checkInterval);
+		void recover(ChanPerformer.ReadPostsResult recovered);
 		void notifyExtracted();
 		void notifyEraseStarted();
 		boolean hasTask();
@@ -289,6 +291,19 @@ public class WatcherService extends BaseService {
 			this.callback = callback;
 		}
 
+		private ChanPerformer.ReadPostsResult pendingRecovery;
+
+		@Override
+		public void recover(ChanPerformer.ReadPostsResult recovered) {
+			running = Running.REFRESH;
+			WatcherService service = viewModel.getService();
+			if (service != null) {
+				service.refreshForeground(threadKey, false, recovered);
+			} else {
+				pendingRecovery = recovered;
+			}
+		}
+
 		@Override
 		public boolean refresh(boolean reload, int checkInterval) {
 			WatcherService service = viewModel.getService();
@@ -349,6 +364,7 @@ public class WatcherService extends BaseService {
 
 		@Override
 		public void destroy() {
+			pendingRecovery = null;
 			viewModel.destroySession(this);
 		}
 
@@ -384,7 +400,11 @@ public class WatcherService extends BaseService {
 
 		public void handleRegister(WatcherService service, boolean immediate) {
 			service.registerSession(this, threadKey);
-			if (immediate) {
+			if (pendingRecovery != null) {
+				ChanPerformer.ReadPostsResult recovered = pendingRecovery;
+				pendingRecovery = null;
+				service.refreshForeground(threadKey, false, recovered);
+			} else if (immediate) {
 				running = Running.NONE;
 				notifyExtracted = false;
 				notifyEraseStarted = false;
@@ -577,11 +597,16 @@ public class WatcherService extends BaseService {
 		}
 
 		public void createAndExecuteTask(Worker worker, boolean reload, boolean notifyBeforeStart) {
+			createAndExecuteTask(worker, reload, notifyBeforeStart, null);
+		}
+
+		private void createAndExecuteTask(Worker worker, boolean reload, boolean notifyBeforeStart,
+				ChanPerformer.ReadPostsResult recovered) {
 			cancel();
 			Set<PendingUserPost> pendingUserPosts = PostingService.getPendingUserPosts(threadKey.chanName,
 					threadKey.boardName, threadKey.threadNumber);
 			ReadPostsTask task = new ReadPostsTask(this, Chan.get(threadKey.chanName),
-					threadKey.boardName, threadKey.threadNumber, reload, pendingUserPosts);
+					threadKey.boardName, threadKey.threadNumber, reload, recovered == null ? pendingUserPosts : null, recovered);
 			task.execute(worker.executor);
 			if (notifyBeforeStart) {
 				for (InternalSession session : getSessionConcurrentIterable(threadKey)) {
@@ -1100,9 +1125,13 @@ public class WatcherService extends BaseService {
 	}
 
 	private void refreshForeground(ThreadKey threadKey, boolean reload) {
+		refreshForeground(threadKey, reload, null);
+	}
+
+	private void refreshForeground(ThreadKey threadKey, boolean reload, ChanPerformer.ReadPostsResult recovered) {
 		WatcherItem watcherItem = watcherItems.get(threadKey);
 		if (watcherItem != null) {
-			watcherItem.createAndExecuteTask(WORKER_FOREGROUND, reload, false);
+			watcherItem.createAndExecuteTask(WORKER_FOREGROUND, reload, false, recovered);
 		}
 	}
 

@@ -71,6 +71,9 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 		public final ArrayList<List<PostItem>> publishedPostItems = new ArrayList<>();
 		public final PostItem.HideState.Map<String> hiddenThreads = new PostItem.HideState.Map<>();
 		public int startPageNumber;
+		public int challengedPageNumber = Integer.MIN_VALUE;
+		public boolean requestedAppend;
+		public boolean challengedAppend;
 		public int boardSpeed;
 		public HttpValidator validator;
 		public Boolean translationEnabled;
@@ -359,7 +362,9 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 		ReadViewModel readViewModel = getViewModel(ReadViewModel.class);
 		ListPosition listPosition = takeListPosition();
 		boolean restoredCachedItems = false;
-		if (initRequest.errorItem != null) {
+		if (initRequest.openCatalog) {
+			openCatalog();
+		} else if (initRequest.errorItem != null) {
 			switchError(initRequest.errorItem);
 		} else {
 			boolean load = true;
@@ -392,6 +397,10 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 					recyclerView.getPullable().startBusyState(bottom
 							? PullableWrapper.Side.BOTTOM : PullableWrapper.Side.TOP);
 				}
+			} else if (initRequest.recovered != null) {
+				var request = initRequest.recovered.request();
+				loadThreadsPage(request.pageNumber(), request.append(), restoredCachedItems,
+						false, false, initRequest.recovered.threads());
 			} else if (load) {
 				ChanConfiguration.Board board = chan.configuration.safe().obtainBoard(page.boardName);
 				retainableExtra.cachedPostItems.clear();
@@ -744,7 +753,7 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 			updateOptionsMenu();
 			return true;
 		} else if (item.getItemId() == R.id.menu_catalog) {
-			loadThreadsPage(PAGE_NUMBER_CATALOG, false);
+			openCatalog();
 			return true;
 		} else if (item.getItemId() == R.id.menu_pages) {
 			loadThreadsPage(0, false);
@@ -925,6 +934,10 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 
 	private static final int PAGE_NUMBER_CATALOG = ChanPerformer.ReadThreadsData.PAGE_NUMBER_CATALOG;
 
+	public void openCatalog() {
+		loadThreadsPage(PAGE_NUMBER_CATALOG, false);
+	}
+
 	private void refreshThreads(RefreshPage refreshPage) {
 		refreshThreads(refreshPage, !getAdapter().isRealEmpty());
 	}
@@ -972,6 +985,11 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 
 	private boolean loadThreadsPage(int pageNumber, boolean append, boolean showPull,
 			boolean autoFill, boolean prefetch) {
+		return loadThreadsPage(pageNumber, append, showPull, autoFill, prefetch, null);
+	}
+
+	private boolean loadThreadsPage(int pageNumber, boolean append, boolean showPull, boolean autoFill,
+			boolean prefetch, ChanPerformer.ReadThreadsResult recovered) {
 		Page page = getPage();
 		Chan chan = getChan();
 		ReadViewModel readViewModel = getViewModel(ReadViewModel.class);
@@ -994,6 +1012,7 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 			RetainableExtra retainableExtra = getRetainableExtra(RetainableExtra.FACTORY);
 			getAdapter().setSecretAbuAllowed(false);
 			if (!autoFill && !prefetch) {
+				retainableExtra.requestedAppend = append;
 				cancelAppendScroll();
 				if (append && !getAdapter().isRealEmpty() && !recyclerView.canScrollVertically(1)) {
 					appendScrollPreviousThreads = new HashSet<>();
@@ -1008,7 +1027,7 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 			HttpValidator validator = !append && retainableExtra.cachedPostItems.size() == 1
 					&& retainableExtra.startPageNumber == pageNumber ? retainableExtra.validator : null;
 			ReadThreadsTask task = new ReadThreadsTask(readViewModel.callback,
-					chan, page.boardName, pageNumber, validator, append);
+					chan, page.boardName, pageNumber, validator, append, recovered);
 			task.execute(ConcurrentUtils.PARALLEL_EXECUTOR);
 			readViewModel.attach(task);
 			if (autoFill || prefetch) {
@@ -1208,6 +1227,8 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 			onPrefetchedThreads(postItems, hiddenThreads);
 			return;
 		}
+		clearBrowserChallenge();
+		retainableExtra.challengedPageNumber = Integer.MIN_VALUE;
 		boolean autoFill = pageNumber == retainableExtra.autoFillPageNumber;
 		if (autoFill) {
 			retainableExtra.autoFillPageNumber = Integer.MIN_VALUE;
@@ -1331,6 +1352,13 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 			finishHiddenThreadsAutoFill(false);
 		}
 		cancelAppendScroll();
+		if (errorItem.type == ErrorItem.Type.BROWSER_CHALLENGE) {
+			retainableExtra.challengedPageNumber = pageNumber;
+			retainableExtra.challengedAppend = !autoFill && retainableExtra.requestedAppend;
+			if (getAdapter().isRealEmpty()) switchError(errorItem);
+			else showBrowserChallenge(errorItem);
+			return;
+		}
 		String message = errorItem.type == ErrorItem.Type.BOARD_NOT_EXISTS && pageNumber >= 1
 				? getString(R.string.number_page_doesnt_exist__format, pageNumber) : errorItem.toString();
 		getAdapter().setSecretAbuAllowed(false);
@@ -1340,6 +1368,21 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 		} else {
 			ClickableToast.show(message);
 		}
+	}
+
+	public record BrowserChallengeRequest(int pageNumber, boolean append) {}
+
+	public BrowserChallengeRequest getBrowserChallengeRequest() {
+		RetainableExtra extra = getRetainableExtra(RetainableExtra.FACTORY);
+		return extra.challengedPageNumber != Integer.MIN_VALUE
+				? new BrowserChallengeRequest(extra.challengedPageNumber, extra.challengedAppend) : null;
+	}
+
+	@Override
+	public void retryBrowserChallenge() {
+		RetainableExtra extra = getRetainableExtra(RetainableExtra.FACTORY);
+		if (extra.challengedPageNumber != Integer.MIN_VALUE) loadThreadsPage(extra.challengedPageNumber, extra.challengedAppend);
+		else super.retryBrowserChallenge();
 	}
 
 	private static void showRedirectDialog(FragmentManager fragmentManager, RedirectException.Target target) {

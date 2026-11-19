@@ -47,6 +47,9 @@
 !/tools/bergamot
 !/tools/bergamot/**
 /tools/bergamot/__pycache__/
+!/tools/design
+/tools/design/*
+!/tools/design/audit.py
 !/third_party
 /third_party/*
 !/third_party/mozilla-translations

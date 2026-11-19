@@ -1,22 +1,37 @@
 package com.mishiranu.dashchan.ui.preference;
 
+import android.annotation.SuppressLint;
 import android.app.AlertDialog;
+import android.content.res.ColorStateList;
 import android.os.Bundle;
+import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewGroup;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
 import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.ItemTouchHelper;
+import androidx.recyclerview.widget.RecyclerView;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.Preferences.ThreadFabAction;
+import com.mishiranu.dashchan.content.Preferences.ThreadFabRefreshLongPress;
 import com.mishiranu.dashchan.ui.FragmentHandler;
+import com.mishiranu.dashchan.ui.preference.core.CheckPreference;
 import com.mishiranu.dashchan.ui.preference.core.PreferenceFragment;
+import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.util.SharedPreferences;
 import com.mishiranu.dashchan.widget.MotionDialogBuilder;
+import com.mishiranu.dashchan.widget.ThemeEngine;
+import java.util.ArrayList;
 import java.util.List;
 
 public class ThreadFabSettingsFragment extends PreferenceFragment {
-	// Toggle, order button and category.
+	// Menu toggle, custom order toggle and category.
 	private static final int ACTION_OFFSET = 3;
-	private List<ThreadFabAction> order;
+	private final ArrayList<ThreadFabAction> order = new ArrayList<>();
+	private RecyclerView list;
+	private ItemTouchHelper dragHelper;
 	private AlertDialog orderDialog;
 
 	@Override protected SharedPreferences getPreferences() { return Preferences.PREFERENCES; }
@@ -24,37 +39,86 @@ public class ThreadFabSettingsFragment extends PreferenceFragment {
 	@Override
 	public void onViewCreated(@NonNull View view, Bundle savedInstanceState) {
 		super.onViewCreated(view, savedInstanceState);
-		order = Preferences.getThreadFabActionOrder();
+		list = view.findViewById(android.R.id.list);
+		dragHelper = new ItemTouchHelper(new ItemTouchHelper.SimpleCallback(ItemTouchHelper.UP | ItemTouchHelper.DOWN, 0) {
+			@Override
+			public int getMovementFlags(@NonNull RecyclerView recycler, @NonNull RecyclerView.ViewHolder holder) {
+				return isActionRow(holder) ? makeMovementFlags(ItemTouchHelper.UP | ItemTouchHelper.DOWN, 0) : 0;
+			}
+
+			@Override
+			public boolean canDropOver(@NonNull RecyclerView recycler, @NonNull RecyclerView.ViewHolder current,
+					@NonNull RecyclerView.ViewHolder target) {
+				return isActionRow(target);
+			}
+
+			@Override
+			public boolean onMove(@NonNull RecyclerView recycler, @NonNull RecyclerView.ViewHolder from,
+					@NonNull RecyclerView.ViewHolder to) {
+				if (!isActionRow(from) || !isActionRow(to)) return false;
+				moveAction(from.getBindingAdapterPosition() - ACTION_OFFSET,
+						to.getBindingAdapterPosition() - ACTION_OFFSET);
+				Preferences.setThreadFabActionOrder(order);
+				return true;
+			}
+
+			@Override public void onSwiped(@NonNull RecyclerView.ViewHolder holder, int direction) {}
+			@Override public boolean isLongPressDragEnabled() { return false; }
+		});
+		dragHelper.attachToRecyclerView(list);
+
+		order.addAll(Preferences.getThreadFabActionOrder());
 		addCheck(true, Preferences.KEY_THREAD_FAB_MENU, Preferences.DEFAULT_THREAD_FAB_MENU,
 				R.string.thread_fab_menu, 0);
-		addButton(R.string.thread_fab_order, R.string.thread_fab_order_summary)
-				.setOnClickListener(p -> chooseAction());
+		addCheck(true, Preferences.KEY_THREAD_FAB_CUSTOM_ORDER, Preferences.isThreadFabCustomOrderEnabled(),
+				R.string.thread_fab_custom_order, R.string.thread_fab_order_summary)
+				.setOnAfterChangeListener(p -> applyCustomOrder());
 		addCategory(R.string.thread_fab_actions);
 		for (ThreadFabAction action : order) {
-			addCheck(true, action.key, action.enabledByDefault, action.titleResId, 0)
-					.setOnLongClickListener(p -> choosePosition(action));
+			ActionPreference preference = new ActionPreference(action);
+			addPreference(preference, true);
+			preference.updateOrderAccess(Preferences.isThreadFabCustomOrderEnabled());
+		}
+		ThreadFabRefreshLongPress[] options = ThreadFabRefreshLongPress.values();
+		addList(Preferences.KEY_THREAD_FAB_REFRESH_LONG_PRESS, enumList(options, option -> option.value),
+				Preferences.DEFAULT_THREAD_FAB_REFRESH_LONG_PRESS.value, R.string.thread_fab_refresh_long_press,
+				enumResList(options, option -> option.titleResId));
+		addDependency(Preferences.KEY_THREAD_FAB_REFRESH_LONG_PRESS, ThreadFabAction.REFRESH.key, true);
+	}
+
+	private boolean isActionRow(RecyclerView.ViewHolder holder) {
+		int index = holder.getBindingAdapterPosition() - ACTION_OFFSET;
+		return Preferences.isThreadFabCustomOrderEnabled() && index >= 0 && index < order.size();
+	}
+
+	private void moveAction(int from, int to) {
+		if (from == to) return;
+		order.add(to, order.remove(from));
+		movePreferenceAt(ACTION_OFFSET + from, ACTION_OFFSET + to);
+	}
+
+	private void applyCustomOrder() {
+		if (orderDialog != null) orderDialog.dismiss();
+		boolean custom = Preferences.isThreadFabCustomOrderEnabled();
+		List<ThreadFabAction> target = Preferences.getThreadFabActionOrder();
+		for (int i = 0; i < target.size(); i++) {
+			ThreadFabAction action = target.get(i);
+			moveAction(order.indexOf(action), i);
+			((ActionPreference) findPreference(action.key)).updateOrderAccess(custom);
 		}
 	}
 
-	private void chooseAction() {
-		CharSequence[] titles = new CharSequence[order.size()];
-		for (int i = 0; i < titles.length; i++) titles[i] = getString(order.get(i).titleResId);
-		orderDialog = MotionDialogBuilder.standard(requireContext()).setTitle(R.string.thread_fab_order)
-				.setItems(titles, (dialog, which) -> {
-					dialog.dismiss();
-					choosePosition(order.get(which));
-				}).setNegativeButton(android.R.string.cancel, null).show();
-	}
-
 	private void choosePosition(ThreadFabAction action) {
+		if (!Preferences.isThreadFabCustomOrderEnabled()) return;
 		String[] entries = new String[order.size()];
 		for (int i = 0; i < entries.length; i++) entries[i] = (i + 1) + ". " + getString(order.get(i).titleResId);
+		if (orderDialog != null) orderDialog.dismiss();
 		orderDialog = MotionDialogBuilder.standard(requireContext()).setTitle(action.titleResId)
 				.setSingleChoiceItems(entries, order.indexOf(action), (dialog, position) -> {
 					int from = order.indexOf(action);
-					if (from != position) {
-						order.add(position, order.remove(from));
-						movePreferenceAt(ACTION_OFFSET + from, ACTION_OFFSET + position);
+					if (getView() != null && Preferences.isThreadFabCustomOrderEnabled() &&
+							from >= 0 && from != position) {
+						moveAction(from, position);
 						Preferences.setThreadFabActionOrder(order);
 					}
 					dialog.dismiss();
@@ -73,6 +137,66 @@ public class ThreadFabSettingsFragment extends PreferenceFragment {
 			orderDialog.dismiss();
 			orderDialog = null;
 		}
+		dragHelper.attachToRecyclerView(null);
+		dragHelper = null;
+		list = null;
+		order.clear();
 		super.onDestroyView();
+	}
+
+	private static class ActionViewHolder extends CheckPreference.CheckViewHolder {
+		final ImageView handle;
+
+		ActionViewHolder(CheckPreference.CheckViewHolder holder, ImageView handle) {
+			super(holder, holder.check);
+			this.handle = handle;
+		}
+	}
+
+	private final class ActionPreference extends CheckPreference {
+		private final ThreadFabAction action;
+
+		ActionPreference(ThreadFabAction action) {
+			super(requireContext(), action.key, action.enabledByDefault, getString(action.titleResId), null);
+			this.action = action;
+			setOnClickListener(p -> p.setValue(!p.getValue()));
+		}
+
+		void updateOrderAccess(boolean enabled) {
+			setOnLongClickListener(enabled ? p -> choosePosition(action) : null);
+			invalidate();
+		}
+
+		@Override public ViewType getViewType() { return ViewType.THREAD_FAB_ACTION; }
+
+		@Override
+		public ActionViewHolder createViewHolder(ViewGroup parent) {
+			CheckViewHolder holder = super.createViewHolder(parent);
+			float density = ResourceUtils.obtainDensity(parent);
+			int size = (int) (48 * density);
+			int padding = (int) (12 * density);
+			ImageView handle = new ImageView(parent.getContext());
+			handle.setImageResource(R.drawable.ic_drag_handle);
+			handle.setImageTintList(ColorStateList.valueOf(ThemeEngine.getTheme(parent.getContext()).accent));
+			handle.setPadding(padding, padding, padding, padding);
+			handle.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+			((LinearLayout) holder.view).addView(handle, 0, new LinearLayout.LayoutParams(size, size));
+			return new ActionViewHolder(holder, handle);
+		}
+
+		@SuppressLint("ClickableViewAccessibility") // The row offers an accessible position picker on long-click.
+		@Override
+		public void bindViewHolder(ViewHolder holder) {
+			super.bindViewHolder(holder);
+			ImageView handle = ((ActionViewHolder) holder).handle;
+			handle.setVisibility(Preferences.isThreadFabCustomOrderEnabled() ? View.VISIBLE : View.GONE);
+			handle.setOnTouchListener((view, event) -> {
+				if (event.getActionMasked() == MotionEvent.ACTION_DOWN && list != null) {
+					RecyclerView.ViewHolder row = list.findContainingViewHolder(holder.view);
+					if (row != null && isActionRow(row)) dragHelper.startDrag(row);
+				}
+				return true;
+			});
+		}
 	}
 }

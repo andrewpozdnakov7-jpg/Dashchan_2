@@ -71,7 +71,7 @@ requested for local compilation.
 1. Enumerate the active checkout with
    `git ls-files --cached --others --exclude-standard -z`. Package the current
    working-tree contents, including modifications and intended new files.
-   Omit working-tree deletions and explicitly excluded entries. Validate that
+   Omit working-tree deletions and `experimental/soyjak-reply/`. Validate that
    all input files resolve inside the checkout and that the list contains the
    expected source directories, build scripts and Gradle wrapper files. Open
    the wrapper JAR and check for `org/gradle/wrapper/GradleWrapperMain.class`.
@@ -79,15 +79,23 @@ requested for local compilation.
    `FileMode.CreateNew` and use `ZipArchive` with `CompressionLevel.Fastest`.
    Stream each file directly from the checkout into `Dashchan_2/<relative path>`
    with `/` separators. Write fresh `SOURCE_PACKAGE_INFO.txt` and any requested
-   WSL helpers at the ZIP root. Stream files directly from the checkout and
-   keep the checkout steady during packaging and verification.
+   WSL helpers at the ZIP root. Stream the built-in Soyjak reader from the
+   current checkout along with the other sources. Keep the checkout steady
+   during packaging and verification.
 3. Reopen the closed ZIP once. Check readability, the expected entry names and
    count, duplicate or forbidden paths, the single `Dashchan_2/` source root,
    and the embedded Gradle wrapper JAR. Report the path, exact size, and
-   SHA-256 after the gate passes. If the gate fails, report the invalid archive
-   and create a fresh ZIP after correcting the cause. Perform additional
+   SHA-256 in the handoff message after the gate passes. If the gate fails,
+   report the invalid archive and create a fresh ZIP after correcting the cause.
+   The fast gate is sufficient for routine quick ZIPs. Perform additional
    content verification only when requested or when the fast gate raises a
    concern.
+
+#### Soyjak source layout
+
+The built-in reader covers boards, catalogs, threads and attachments. Release
+builds compile the reader from the normal Gradle source sets. Keep local
+experimental patches outside the release source set.
 
 #### Staged source ZIP for publication or release verification
 
@@ -159,8 +167,9 @@ it into one large PowerShell command:
 2. Enumerate the project snapshot with
    `git ls-files --cached --others --exclude-standard`. This includes intended
    tracked and untracked source files while excluding ignored Gradle caches and
-   build outputs. Validate every resolved file against the exact repository-root
-   prefix before copying it to `Dashchan_2/` in staging.
+   build outputs. Omit `experimental/soyjak-reply/`. Validate every resolved
+   file against the exact repository-root prefix before copying it to
+   `Dashchan_2/` in staging.
 3. If WSL helper files are copied from the most recent verified bundle, copy
    only the known top-level helper files. Never reuse that bundle's
    `Dashchan_2/` tree.

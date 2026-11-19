@@ -22,3 +22,12 @@ Devices and Android versions tested:
 ## Screenshots Or Logs
 
 Attach only sanitized material needed to review the change.
+
+## User interface (when applicable)
+
+- Surface / user scenario and existing component family:
+- Visual evidence or reason device checks remain pending:
+- Theme, font scale, relevant opt-out, IME/Back if applicable:
+- New exceptions and why the shared component cannot serve this case:
+
+See `docs/design/README.md` in the repository.

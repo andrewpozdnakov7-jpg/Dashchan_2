@@ -96,6 +96,7 @@ public class ChanManager {
 	private static final String BUILTIN_PIKABU_NAME = "pikabu";
 	private static final String BUILTIN_D3_NAME = "d3ru";
 	private static final String BUILTIN_E444_NAME = "e444";
+	private static final String BUILTIN_SOYJAK_NAME = "soyjak";
 	private static final String[] BUILTIN_REPLACED_PACKAGE_NAMES = {
 			"com.mishiranu.dashchan.chan.dvach", "io.dashchan2.chan.dvach",
 			"com.mishiranu.dashchan.chan.fourchan", "io.dashchan2.chan.fourchan",
@@ -485,6 +486,20 @@ public class ChanManager {
         return new Extension(item.changeLoadError(result.error), result.chan);
     }
 
+	private static Extension loadBuiltinSoyjak(Fingerprints applicationFingerprints) {
+		MainApplication application = MainApplication.getInstance();
+		ExtensionItem item = new ExtensionItem(ExtensionItem.Type.CHAN, BUILTIN_SOYJAK_NAME, "soyjak.st",
+				ExtensionItem.TrustState.TRUSTED, application.getPackageName(), BuildConfig.VERSION_NAME,
+				BuildConfig.VERSION_CODE, application.getApplicationInfo(), applicationFingerprints,
+				MAX_VERSION, true, 0, null, null,
+				"com.mishiranu.dashchan.chan.soyjak.SoyjakChanConfiguration",
+				"com.mishiranu.dashchan.chan.soyjak.SoyjakChanPerformer",
+				"com.mishiranu.dashchan.chan.soyjak.SoyjakChanLocator",
+				"com.mishiranu.dashchan.chan.soyjak.SoyjakChanMarkup", true);
+		LoadChanResult result = loadChan(item, application.getPackageManager());
+		return new Extension(item.changeLoadError(result.error), result.chan);
+	}
+
 	private ChanManager() {
 		String packageName = MainApplication.getInstance().getPackageName();
 		Chan.Provider fallbackChanProvider = new Chan.Provider(null);
@@ -544,6 +559,9 @@ public class ChanManager {
 			Extension builtInE444 = loadBuiltinE444(applicationFingerprints);
 			extensions.add(builtInE444);
 			usedExtensionNames.add(builtInE444.item.name);
+			Extension builtInSoyjak = loadBuiltinSoyjak(applicationFingerprints);
+			extensions.add(builtInSoyjak);
+			usedExtensionNames.add(builtInSoyjak.item.name);
 			Collections.addAll(loadedPackageNames, BUILTIN_REPLACED_PACKAGE_NAMES);
 			for (String knownPackageName : BuildConfig.KNOWN_CHAN_EXTENSION_PACKAGES) {
 				loadKnownExtension(packageManager, knownPackageName, loadedPackageNames,

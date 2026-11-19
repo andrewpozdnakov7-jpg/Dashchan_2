@@ -42,6 +42,7 @@ import androidx.fragment.app.DialogFragment;
 import androidx.fragment.app.FragmentManager;
 import androidx.lifecycle.ViewModelProvider;
 import chan.content.Chan;
+import com.mishiranu.dashchan.util.NavigationUtils;
 import chan.util.CommonUtils;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.C;
@@ -1330,6 +1331,7 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 		menu.add(0, R.id.menu_select, 0, R.string.select)
 				.setIcon(ResourceUtils.getActionBarIcon(context, R.attr.iconActionSelect))
 				.setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
+		menu.add(0, R.id.menu_soyjak_file_on_site, 0, R.string.soyjak_file_on_site);
 		menu.add(0, R.id.menu_tiktok_filter, 0, R.string.tiktok_filter)
 				.setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER);
 	}
@@ -1355,7 +1357,8 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 		menu.findItem(R.id.menu_refresh).setShowAsAction(modernVideo
 				? MenuItem.SHOW_AS_ACTION_NEVER : MenuItem.SHOW_AS_ACTION_ALWAYS);
 		if (!galleryMode) {
-			menu.findItem(R.id.menu_tiktok_filter).setVisible(pagerUnit.getCurrentGalleryItem() != null);
+			menu.findItem(R.id.menu_tiktok_filter).setVisible(currentItem != null);
+			menu.findItem(R.id.menu_soyjak_file_on_site).setVisible(currentItem != null && "soyjak".equals(instance.chanName));
 			menu.findItem(R.id.menu_refresh).setEnabled(true).setTitle(R.string.refresh);
 			PagerUnit.OptionsMenuCapabilities capabilities = pagerUnit != null
 					? pagerUnit.obtainOptionsMenuCapabilities() : null;
@@ -1390,7 +1393,12 @@ public class GalleryOverlay extends DialogFragment implements GalleryDialog.Call
 			return false;
 		}
 		PagerInstance.ViewHolder holder = pagerUnit.getCurrentHolder();
-		if (item.getItemId() == R.id.menu_save) {
+		if (item.getItemId() == R.id.menu_soyjak_file_on_site) {
+			if (galleryMode || !"soyjak".equals(instance.chanName) || holder == null || holder.galleryItem == null) return false;
+			Chan chan = Chan.get(instance.chanName);
+			NavigationUtils.handleUri(requireContext(), null,
+					holder.galleryItem.getFileUri(chan), NavigationUtils.BrowserType.EXTERNAL);
+		} else if (item.getItemId() == R.id.menu_save) {
 			if (holder == null || holder.galleryItem == null) return false;
 			downloadGalleryItem(holder.galleryItem);
 		} else if (item.getItemId() == R.id.menu_refresh) {

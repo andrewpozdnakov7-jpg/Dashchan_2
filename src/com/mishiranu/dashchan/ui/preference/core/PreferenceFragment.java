@@ -538,7 +538,8 @@ public abstract class PreferenceFragment extends ContentFragment {
 			preference.bindViewHolder(holder.viewHolder);
 			Preference.ViewType type = preference.getViewType();
 			if (type == Preference.ViewType.NORMAL || type == Preference.ViewType.CATEGORY
-					|| type == Preference.ViewType.CHECK || type == Preference.ViewType.SWITCH || type == Preference.ViewType.HEADER) {
+					|| type == Preference.ViewType.CHECK || type == Preference.ViewType.SWITCH
+					|| type == Preference.ViewType.THREAD_FAB_ACTION || type == Preference.ViewType.HEADER) {
 				InterfaceAppearance.settingsRow(holder.viewHolder.view, holder.viewHolder.title, holder.viewHolder.summary,
 						holder.viewHolder.widgetFrame, type == Preference.ViewType.HEADER);
 				if (groupSettingsRows() && type != Preference.ViewType.HEADER) {

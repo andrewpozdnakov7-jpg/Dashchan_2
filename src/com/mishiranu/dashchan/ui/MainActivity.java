@@ -1082,6 +1082,12 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		navigateBoardsOrThreads(chanName, boardName, false, false);
 	}
 
+	@Override
+	public void navigateBoardCatalog(String chanName, String boardName) {
+		navigatePage(Page.Content.THREADS, chanName, boardName, null, null, null, null,
+				FLAG_PAGE_CLOSE_OVERLAYS | FLAG_PAGE_OPEN_CATALOG);
+	}
+
 	private void navigateBoardsOrThreads(String chanName, String boardName, boolean fromCache, boolean allowReturn) {
 		navigateData(chanName, boardName, null, null, null, null, FLAG_DATA_CLOSE_OVERLAYS |
 				(fromCache ? FLAG_DATA_FROM_CACHE : 0) | (allowReturn ? FLAG_DATA_ALLOW_RETURN : 0));
@@ -1626,6 +1632,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	private static final int FLAG_PAGE_FROM_CACHE = 0x00000002;
 	private static final int FLAG_PAGE_ALLOW_RETURN = 0x00000004;
 	private static final int FLAG_PAGE_RESET_SCROLL = 0x00000008;
+	private static final int FLAG_PAGE_OPEN_CATALOG = 0x00000010;
 
 	private void navigatePage(Page.Content content, String chanName, String boardName,
 			String threadNumber, PostNumber postNumber, String threadTitle, String searchQuery, int pageFlags) {
@@ -1640,6 +1647,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		ContentFragment currentFragment = getCurrentFragment("FragmentAccess/navigatePage");
 		Page currentPage = currentFragment instanceof PageFragment
 				? ((PageFragment) currentFragment).getPage() : null;
+		boolean openCatalog = FlagUtils.get(pageFlags, FLAG_PAGE_OPEN_CATALOG);
 		if (currentPage != null && currentPage.is(content, chanName, boardName, threadNumber) && searchQuery == null) {
 			if (currentPageItem == null && (content == Page.Content.BOARDS || content == Page.Content.THREADS)) {
 				// The current page may already have been removed from the stack.
@@ -1658,7 +1666,9 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 					closeOverlaysForNavigation();
 				}
 				currentPageItem.allowReturn &= FlagUtils.get(pageFlags, FLAG_PAGE_ALLOW_RETURN);
-				((PageFragment) currentFragment).updatePageConfiguration(postNumber);
+				PageFragment pageFragment = (PageFragment) currentFragment;
+				if (openCatalog) pageFragment.openCatalog();
+				else pageFragment.updatePageConfiguration(postNumber);
 				invalidateHomeUpState();
 				return;
 			}
@@ -1668,7 +1678,7 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		switch (content) {
 			case THREADS: {
 				pair = prepareAddPage(content, chanName, boardName, null, null,
-						new ListPage.InitRequest(!fromCache, null, null));
+						openCatalog ? ListPage.InitRequest.catalog() : new ListPage.InitRequest(!fromCache, null, null));
 				break;
 			}
 			case COMBINED_THREADS: {
@@ -2347,6 +2357,16 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 		if (deferContentNavigation(this::onSearchRequested)) return true;
 		ContentFragment currentFragment = getCurrentFragment("FragmentAccess/onSearchRequested");
 		return currentFragment != null && currentFragment.onSearchRequested();
+	}
+
+	void returnFromSoyjakVerification(BrowserFragment owner, Runnable action) {
+		if (owner != getCurrentFragment("FragmentAccess/soyjakVerification") || isContentObscured()) return;
+		if (backGestureStarted) {
+			// Leave the current gesture in charge. The user can retry the current document after it ends.
+			owner.allowRecoveryRetry();
+		} else if (!deferContentNavigation(() -> returnFromSoyjakVerification(owner, action))) {
+			action.run();
+		}
 	}
 
 	@Override

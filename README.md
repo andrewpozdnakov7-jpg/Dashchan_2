@@ -12,7 +12,7 @@
 
 ## Русский
 
-Slooop - пользовательское название неофициальной ветки Dashchan_2 для Android 11 и новее. Приложение устанавливается рядом с оригинальным Dashchan, использует пакет `io.dashchan2` и содержит встроенную поддержку Двача, «Кекабу» (Pikabu), d3.ru, Ежчана, ECH (ech.bz), Апачана, Архивача, Zchan и Endchan, экспериментальные режимы 4chan и Reddit и собственный видеоплеер на FFmpeg.
+Slooop - пользовательское название неофициальной ветки Dashchan_2 для Android 11 и новее. Приложение устанавливается рядом с оригинальным Dashchan, использует пакет `io.dashchan2` и содержит встроенную поддержку Двача, «Кекабу» (Pikabu), d3.ru, Ежчана, ECH (ech.bz), Апачана, Архивача, Zchan и Endchan, экспериментальные режимы 4chan, Soyjak.party и Reddit и собственный видеоплеер на FFmpeg.
 
 ### Скачать
 
@@ -37,6 +37,7 @@ GitHub-версия содержит встроенную проверку об�
 - встроенный Двач с отправкой постов, Passcode, AI-фильтром и лайками/дизлайками на поддерживаемых досках;
 - встроенный «Кекабу»: каталог до 200 популярных сообществ с категориями, сворачиваемыми разделами и поиском, добавление собственных сообществ, теги, тематические ленты, вход через официальный сайт, оценки историй и комментариев, отправка и удаление своих комментариев;
 - встроенные Ежчан, ECH (e444), Апачан, Zchan и Endchan с чтением и отправкой сообщений, а также d3.ru, Архивач и экспериментальный 4chan в режиме чтения. Подробности о доменах ECH и переходе со старого расширения есть в [справке по бордам](https://github.com/andrewpozdnakov7-jpg/Dashchan_2/wiki/Boards#ech-e444);
+- экспериментальный Soyjak.party 🫘 (`soyjak.st`) в режиме чтения с каталогами досок, тредами, вложениями и переводом постов;
 - экспериментальные режимы Reddit: официальный сайт внутри приложения, каталог до 200 популярных сообществ и отдельные режимы доски и чтения обсуждений, выключенные по умолчанию;
 - редактирование постов и сортировка тредов на Апачане по последнему бампу, дате создания или количеству сообщений;
 - «Мои доски» для объединения досок разных имиджборд в несколько собственных лент;
@@ -57,7 +58,7 @@ GitHub-версия содержит встроенную проверку об�
 
 ### Ограничения
 
-- d3.ru, 4chan и Архивач не поддерживают отправку постов; «Кекабу» пока не публикует истории и не обходит возрастные ограничения Пикабу;
+- d3.ru, 4chan, Архивач и Soyjak.party доступны в режиме чтения; «Кекабу» пока не публикует истории и не обходит возрастные ограничения Пикабу;
 - режимы Reddit и внутреннее воспроизведение YouTube/PiP экспериментальны, зависят от сайтов, WebView, сети и устройства и могут работать не везде; веб-интерфейсы поддерживаемых сайтов могут меняться;
 - Google ML Kit доступен только как отдельное дополнение GitHub-версии, а Gemini Nano работает только на поддерживаемых устройствах;
 - Predictive Back автоматически включается при обнаружении системной жестовой навигации на Android 13+, если пользователь ещё не выбрал настройку. Предпросмотр переходов в приложении требует Android 14+. В F-Droid 3.2.85 Predictive Back включается вручную.
@@ -114,7 +115,7 @@ Dashchan_2 основан на исходном коде Dashchan. Отдель�
 
 ## English
 
-Slooop is the user-facing name of the unofficial Dashchan_2 branch for Android 11 and newer. It installs alongside the original Dashchan under the `io.dashchan2` package and bundles support for Dvach, Kekabu (Pikabu), d3.ru, Ejchan, ECH (ech.bz), Apachan, Arhivach, Zchan, Endchan, experimental 4chan and Reddit modes, and an FFmpeg-based video player.
+Slooop is the user-facing name of the unofficial Dashchan_2 branch for Android 11 and newer. It installs alongside the original Dashchan under the `io.dashchan2` package and bundles support for Dvach, Kekabu (Pikabu), d3.ru, Ejchan, ECH (ech.bz), Apachan, Arhivach, Zchan, Endchan, experimental 4chan, Soyjak.party, and Reddit modes, and an FFmpeg-based video player.
 
 ### Download
 
@@ -139,6 +140,7 @@ F-Droid delivers updates through its repository. Local background reply checks r
 - built-in Dvach posting, Passcode support, AI filtering, and votes on supported boards;
 - built-in Kekabu access with a catalog of up to 200 popular communities, collapsible categories, search and custom communities, official-site sign-in, account-available 18+ media, user-initiated story and comment votes, and posting and deletion of the user's own comments;
 - built-in Ejchan, ECH (e444), Apachan, Zchan, and Endchan reading and posting, plus read-only d3.ru and Arhivach and experimental read-only 4chan access. See the [Boards guide](https://github.com/andrewpozdnakov7-jpg/Dashchan_2/wiki/Boards#ech-e444) for ECH domains and legacy extension handling;
+- experimental read-only access to Soyjak.party 🫘 (`soyjak.st`), with board catalogs, threads, attachments, and post translation;
 - experimental Reddit modes with the official website inside the app, a catalog of up to 200 popular communities, and separate opt-in board and discussion-reader modes;
 - Apachan post editing and thread sorting by last bump, creation date, or post count;
 - My Boards feeds that combine boards from different imageboards into several custom feeds;
@@ -158,7 +160,7 @@ F-Droid delivers updates through its repository. Local background reply checks r
 
 ### Limitations
 
-- d3.ru, 4chan, and Arhivach posting are not implemented; Kekabu does not publish stories or bypass Pikabu age restrictions;
+- d3.ru, 4chan, Arhivach, and Soyjak.party are read-only; Kekabu does not publish stories or bypass Pikabu age restrictions;
 - Reddit modes and internal YouTube/PiP playback are experimental, depend on the websites, WebView, network, and device, and may not work everywhere; supported websites may change their interfaces;
 - Google ML Kit is available only as a separate add-on for the GitHub build, while Gemini Nano requires a supported device;
 - Predictive Back turns on automatically when system gesture navigation is detected on Android 13+ if the user has not set a preference. In-app previews require Android 14+. In F-Droid 3.2.85, enable Predictive Back manually.

@@ -4,6 +4,7 @@ import android.os.Bundle;
 import android.view.View;
 import androidx.annotation.NonNull;
 import com.mishiranu.dashchan.R;
+import com.mishiranu.dashchan.chan.soyjak.SoyjakDiagnostics;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.ui.FragmentHandler;
 import com.mishiranu.dashchan.ui.preference.core.Preference;
@@ -25,6 +26,7 @@ public class DiagnosticsFragment extends PreferenceFragment {
 		if (getView() == null) return;
 		removeAllPreferences();
 		addAppDiagnosticsPreferences();
+		addSoyjakDiagnosticsPreferences();
 		addHeader(R.string.crash_reports_title);
 		addCheck(true, Preferences.KEY_CRASH_REPORT_PROMPTS, Preferences.DEFAULT_CRASH_REPORT_PROMPTS,
 				R.string.crash_report_prompt_enabled, R.string.crash_report_prompt_summary);
@@ -71,6 +73,13 @@ public class DiagnosticsFragment extends PreferenceFragment {
 				} else ClickableToast.show(R.string.unknown_error);
 			});
 		}
+	}
+	private void addSoyjakDiagnosticsPreferences() {
+		addHeader(R.string.soyjak_diagnostics_title);
+		addButton(R.string.soyjak_probe, R.string.soyjak_probe_summary)
+				.setOnClickListener(p -> SoyjakDiagnostics.probeAndShow(requireContext()));
+		addButton(R.string.soyjak_diagnostics_report, R.string.soyjak_diagnostics_report_summary)
+				.setOnClickListener(p -> SoyjakDiagnostics.showReport(requireContext()));
 	}
 	@Override public void onViewStateRestored(Bundle savedInstanceState) {
 		super.onViewStateRestored(savedInstanceState);

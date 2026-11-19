@@ -570,7 +570,7 @@ public class DialogUnit {
 			public ThreadDialogProvider create(UiManager uiManager, UiManager.ConfigurationSet configurationSet) {
 				String chanName = configurationSet.chanName;
 				Chan chan = Chan.get(chanName);
-				if ("apachan".equals(chanName) && postItem.getThreadPosts(chan).isEmpty()
+				if (("apachan".equals(chanName) || "soyjak".equals(chanName)) && postItem.getThreadPosts(chan).isEmpty()
 						&& postItem.getThreadPostsCount() > 1 && previewPostItems == null
 						&& errorItem == null && readTask == null) {
 					readTask = new ReadThreadPreviewTask(this, chan,
@@ -1453,6 +1453,8 @@ public class DialogUnit {
 			int imageIndex, GalleryOverlay.NavigatePostMode navigatePostMode, GalleryItem.Set gallerySet) {
 		Context context = uiManager.getContext();
 		AttachmentItem attachmentItem = attachmentItems.get(index);
+		if ("soyjak".equals(chanName) && attachmentItem.getGeneralType() == AttachmentItem.GeneralType.FILE
+				&& !attachmentItem.hasOriginalFile()) return;
 		boolean canDownload = attachmentItem.canDownloadToStorage();
 		Chan chan = Chan.get(chanName);
 		Uri uri = attachmentItem.getFileUri(chan);

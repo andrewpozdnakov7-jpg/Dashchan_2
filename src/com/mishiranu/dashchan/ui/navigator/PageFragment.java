@@ -4,6 +4,7 @@ import com.mishiranu.dashchan.widget.ContentStateMotion;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Rect;
+import android.net.Uri;
 import android.os.BadParcelableException;
 import android.os.Bundle;
 import android.os.Parcelable;
@@ -15,9 +16,16 @@ import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.LinearLayout;
 import androidx.annotation.NonNull;
 import androidx.core.view.OneShotPreDrawListener;
+import androidx.lifecycle.ViewModelProvider;
+import chan.content.Chan;
+import chan.content.ChanLocator;
+import chan.content.ChanPerformer;
 import com.mishiranu.dashchan.R;
+import com.mishiranu.dashchan.chan.soyjak.SoyjakDiagnostics;
+import com.mishiranu.dashchan.chan.soyjak.SoyjakReadRecovery;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.util.InterfaceMotion;
 import com.mishiranu.dashchan.util.ThreadMotionKey;
@@ -25,11 +33,13 @@ import com.mishiranu.dashchan.content.WallpaperManager;
 import com.mishiranu.dashchan.content.model.ErrorItem;
 import com.mishiranu.dashchan.content.model.PostNumber;
 import com.mishiranu.dashchan.ui.ContentFragment;
+import com.mishiranu.dashchan.ui.BrowserFragment;
 import com.mishiranu.dashchan.ui.FragmentHandler;
 import com.mishiranu.dashchan.ui.navigator.manager.UiManager;
 import com.mishiranu.dashchan.ui.navigator.page.ListPage;
 import com.mishiranu.dashchan.util.AndroidUtils;
 import com.mishiranu.dashchan.widget.CustomSearchView;
+import com.mishiranu.dashchan.widget.ClickableToast;
 import com.mishiranu.dashchan.widget.ExpandedLayout;
 import com.mishiranu.dashchan.widget.ListPosition;
 import com.mishiranu.dashchan.widget.MenuExpandListener;
@@ -37,6 +47,7 @@ import com.mishiranu.dashchan.widget.PaddedRecyclerView;
 import com.mishiranu.dashchan.widget.ThreadQuickNavigation;
 import com.mishiranu.dashchan.widget.ThreadFabMenu;
 import com.mishiranu.dashchan.ui.navigator.page.PostsPage;
+import com.mishiranu.dashchan.ui.navigator.page.ThreadsPage;
 import com.mishiranu.dashchan.widget.ViewFactory;
 import java.util.Collection;
 import java.util.UUID;
@@ -49,6 +60,7 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 	private static final String EXTRA_LIST_POSITION = "listPosition";
 	private static final String EXTRA_PARCELABLE_EXTRA = "parcelableExtra";
 	private static final String EXTRA_INIT_ERROR_ITEM = "initErrorItem";
+	private static final String EXTRA_BROWSER_CHALLENGE = "browserChallenge";
 	private static final String EXTRA_SEARCH_CURRENT_QUERY = "searchCurrentQuery";
 	private static final String EXTRA_SEARCH_SUBMIT_QUERY = "searchSubmitQuery";
 	private static final String EXTRA_SEARCH_FOCUSED = "searchFocused";
@@ -126,6 +138,8 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 	private View progressView;
 	private ViewFactory.ErrorHolder errorHolder;
 	private Button localNetworkSettingsButton;
+	private LinearLayout browserChallengeActions;
+	private boolean browserChallenge;
 	private PaddedRecyclerView recyclerView;
 	private ThreadQuickNavigation quickNavigation;
 	private ThreadFabMenu threadFabMenu;
@@ -253,6 +267,7 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 		}
 		initErrorItem = savedInstanceState != null
 				? AndroidUtils.getParcelable(savedInstanceState, EXTRA_INIT_ERROR_ITEM, ErrorItem.class) : null;
+		browserChallenge = savedInstanceState != null && savedInstanceState.getBoolean(EXTRA_BROWSER_CHALLENGE);
 		searchCurrentQuery = savedInstanceState != null ? savedInstanceState
 				.getString(EXTRA_SEARCH_CURRENT_QUERY) : null;
 		searchSubmitQuery = savedInstanceState != null ? savedInstanceState
@@ -283,6 +298,15 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 		progressView = ViewFactory.createProgressLayout(layout, standardService);
 		// The same bounded service-page registry owns loading, error and page appearance.
 		errorHolder = ViewFactory.createErrorLayout(layout, standardService);
+		if (isSoyjakPage()) {
+			browserChallengeActions = new LinearLayout(layout.getContext());
+			browserChallengeActions.setOrientation(LinearLayout.VERTICAL);
+			browserChallengeActions.setVisibility(View.GONE);
+			((ViewGroup) errorHolder.text.getParent()).addView(browserChallengeActions,
+					ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+			addBrowserChallengeButton(R.string.soyjak_open_page, this::openSoyjakPage);
+			addBrowserChallengeButton(R.string.retry, this::retrySoyjakPage);
+		}
 		if (standardService) com.mishiranu.dashchan.widget.InterfaceAppearance.standardPage(layout);
 		errorHolder.layout.setVisibility(View.GONE);
 		layout.addView(errorHolder.layout);
@@ -300,10 +324,11 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 					return isResumed() && threadContentVisible && !searchMode && posts != null && posts.canShowThreadFabMenu()
 							&& !((FragmentHandler) requireActivity()).isContentObscured();
 				}
+				@Override public ThreadFabMenu.Action getSingleAction() { return threadFabPage().getSingleThreadFabAction(); }
 				@Override public java.util.List<ThreadFabMenu.Action> getActions() { return threadFabPage().getThreadFabActions(); }
 				@Override public void onAction(int id) {
 					PostsPage posts = threadFabPage();
-					if (posts != null && posts.canShowThreadFabMenu()) posts.performThreadAction(id);
+					if (posts != null && posts.canShowThreadFabMenu()) posts.performThreadFabAction(id);
 				}
 				@Override public void onOpenChanged() {
 					searchBackRevision++;
@@ -365,6 +390,13 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 		if (initRequest == null && initErrorItem != null) {
 			initRequest = new ListPage.InitRequest(initErrorItem);
 		}
+		if (isSoyjakPage()) {
+			SoyjakReadRecovery.Result recovered = getSoyjakRecovery().consume(getRetainId(), getPage());
+			if (recovered != null) {
+				initRequest = ListPage.InitRequest.recovered(recovered, initRequest);
+				setBrowserChallenge(false);
+			}
+		}
 		listPage.init(getPage(), this, this, recyclerView, listPosition, getCallback().getUiManager(),
 				getCallback().getRetainableExtra(getRetainId()), parcelableExtra, initRequest,
 				new ListPage.InitSearch(searchCurrentQuery, searchSubmitQuery));
@@ -417,9 +449,10 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 		}
 		outState.putParcelable(EXTRA_LIST_POSITION, listPosition);
 		outState.putParcelable(EXTRA_PARCELABLE_EXTRA, parcelableExtra);
-		if (!saveToStack && initErrorItem != null) {
+		if (initErrorItem != null && (!saveToStack || browserChallenge)) {
 			outState.putParcelable(EXTRA_INIT_ERROR_ITEM, initErrorItem);
 		}
+		outState.putBoolean(EXTRA_BROWSER_CHALLENGE, browserChallenge);
 		outState.putString(EXTRA_SEARCH_CURRENT_QUERY, searchCurrentQuery);
 		outState.putString(EXTRA_SEARCH_SUBMIT_QUERY, searchSubmitQuery);
 		outState.putBoolean(EXTRA_SEARCH_FOCUSED, searchFocused && !saveToStack);
@@ -509,6 +542,14 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 		this.initRequest = initRequest;
 	}
 
+	public void openCatalog() {
+		if (listPage instanceof ThreadsPage && listPage.isRunning()) {
+			((ThreadsPage) listPage).openCatalog();
+		} else {
+			setInitRequest(ListPage.InitRequest.catalog());
+		}
+	}
+
 	public void requestResetScroll() {
 		resetScroll = true;
 	}
@@ -547,6 +588,12 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 	@Override
 	public void onCreateOptionsMenu(Menu menu, boolean primary) {
 		listPage.onCreateOptionsMenu(menu);
+		if (isSoyjakPage()) {
+			menu.add(0, R.id.menu_soyjak_open_page, 0, R.string.soyjak_open_page).setVisible(browserChallenge);
+			menu.add(0, R.id.menu_soyjak_retry, 0, R.string.retry).setVisible(browserChallenge);
+			menu.add(0, R.id.menu_soyjak_diagnostics, 0, R.string.soyjak_diagnostics_title)
+					.setVisible(browserChallenge);
+		}
 		if (primary) {
 			searchBackRevision++;
 			MenuItem searchMenuItem = menu.findItem(R.id.menu_search);
@@ -585,6 +632,12 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 			}
 		}
 		listPage.onPrepareOptionsMenu(menu);
+		if (isSoyjakPage()) {
+			boolean showActions = browserChallenge && errorHolder.layout.getVisibility() != View.VISIBLE;
+			menu.findItem(R.id.menu_soyjak_open_page).setVisible(showActions);
+			menu.findItem(R.id.menu_soyjak_retry).setVisible(showActions);
+			menu.findItem(R.id.menu_soyjak_diagnostics).setVisible(showActions);
+		}
 		for (int i = 0; i < menu.size(); i++) {
 			MenuItem menuItem = menu.getItem(i);
 			if (menuItem.isVisible() && searchMode && menuItem.getItemId() != R.id.menu_search) {
@@ -595,6 +648,20 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 
 	@Override
 	public boolean onMenuItemSelected(@NonNull MenuItem item) {
+		if (isSoyjakPage() && browserChallenge) {
+			if (item.getItemId() == R.id.menu_soyjak_open_page) {
+				openSoyjakPage();
+				return true;
+			}
+			if (item.getItemId() == R.id.menu_soyjak_retry) {
+				retrySoyjakPage();
+				return true;
+			}
+			if (item.getItemId() == R.id.menu_soyjak_diagnostics) {
+				SoyjakDiagnostics.showReport(requireContext());
+				return true;
+			}
+		}
 		if (item.getItemId() == R.id.menu_search) {
 			if (item == searchMenuItem) {
 				searchFocused = true;
@@ -688,6 +755,7 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 
 	@Override
 	public void switchProgress() {
+		setBrowserChallenge(false);
 		threadContentVisible = false;
 		if (threadFabMenu != null) threadFabMenu.close(false, false);
 		ContentStateMotion.Session motion = prepareStateMotion(progressView);
@@ -727,7 +795,73 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 		if (localNetworkSettingsButton != null) {
 			localNetworkSettingsButton.setVisibility(localNetworkError ? View.VISIBLE : View.GONE);
 		}
+		setBrowserChallenge(errorItem.type == ErrorItem.Type.BROWSER_CHALLENGE);
+		if (browserChallengeActions != null) {
+			browserChallengeActions.setVisibility(browserChallenge ? View.VISIBLE : View.GONE);
+		}
 		if (motion != null) motion.commit();
+	}
+
+	@Override
+	public boolean showBrowserChallenge(ErrorItem errorItem) {
+		if (!isSoyjakPage() || errorItem.type != ErrorItem.Type.BROWSER_CHALLENGE) return false;
+		SoyjakDiagnostics.event("ui_challenge_shown", null);
+		setBrowserChallenge(true);
+		ClickableToast.show(errorItem.toString(), null,
+				new ClickableToast.Button(R.string.soyjak_open_page, true, this::openSoyjakPage));
+		return true;
+	}
+
+	@Override
+	public void clearBrowserChallenge() { setBrowserChallenge(false); }
+
+	private boolean isSoyjakPage() {
+		Page page = getPage();
+		return "soyjak".equals(page.chanName) && (page.content == Page.Content.BOARDS
+				|| page.content == Page.Content.THREADS || page.content == Page.Content.POSTS);
+	}
+
+	private void setBrowserChallenge(boolean value) {
+		if (browserChallenge != value) {
+			browserChallenge = value;
+			invalidateOptionsMenu();
+		}
+	}
+
+	private void addBrowserChallengeButton(int title, Runnable action) {
+		Button button = new Button(browserChallengeActions.getContext(), null, android.R.attr.borderlessButtonStyle);
+		button.setText(title);
+		button.setOnClickListener(v -> action.run());
+		browserChallengeActions.addView(button, ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+	}
+
+	private void retrySoyjakPage() {
+		if (isResumed() && listPage != null && listPage.isRunning()) listPage.retryBrowserChallenge();
+	}
+
+	private SoyjakReadRecovery getSoyjakRecovery() {
+		return new ViewModelProvider(requireActivity()).get(SoyjakReadRecovery.class);
+	}
+
+	private void openSoyjakPage() {
+		if (!isResumed() || !isSoyjakPage() || !browserChallenge || getParentFragmentManager().isStateSaved()) return;
+		Page page = getPage();
+		SoyjakDiagnostics.event("ui_open_page", "content=" + page.content.name());
+		ChanLocator locator = Chan.get(page.chanName).locator;
+		ThreadsPage.BrowserChallengeRequest challenge = listPage instanceof ThreadsPage threadsPage
+				? threadsPage.getBrowserChallengeRequest() : null;
+		int pageNumber = challenge != null ? challenge.pageNumber() : ChanPerformer.ReadThreadsData.PAGE_NUMBER_CATALOG;
+		boolean append = challenge != null && challenge.append();
+		Uri uri = page.threadNumber != null ? locator.safe(false).createThreadUri(page.boardName, page.threadNumber)
+				: page.boardName != null ? locator.safe(false).createBoardUri(page.boardName, pageNumber) : locator.buildPath();
+		if (uri == null) {
+			ClickableToast.show(R.string.unknown_address);
+			return;
+		}
+		SoyjakReadRecovery.Request request = getSoyjakRecovery().start(getRetainId(), page, pageNumber, append, uri);
+		if (request != null) {
+			((FragmentHandler) requireActivity()).pushFragment(BrowserFragment.forSoyjakRecovery(request));
+		}
 	}
 
 	private ContentStateMotion.Session prepareStateMotion(View incoming) {

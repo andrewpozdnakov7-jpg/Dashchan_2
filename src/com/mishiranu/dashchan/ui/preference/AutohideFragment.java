@@ -659,19 +659,21 @@ public class AutohideFragment extends BaseListFragment {
 		private static final String EXTRA_ITEM = "item";
 		private static final String EXTRA_INDEX = "index";
 
+		private com.mishiranu.dashchan.widget.RuleEditorPage page;
+		private static final String SCOPE_OPEN = "ruleScopeOpen", TEST_OPEN = "ruleTestOpen", TEST_VALUE = "ruleTestValue";
 		private final HashSet<String> selectedChanNames = new HashSet<>();
 
 		private ScrollView scrollView;
 		private TextView chanNameSelector;
 		private EditText boardNameEdit;
 		private EditText threadNumberEdit;
-		private CheckBox autohideOriginalPost;
-		private CheckBox autohideReplies;
-		private CheckBox autohideSage;
-		private CheckBox autohideSubject;
-		private CheckBox autohideComment;
-		private CheckBox autohideName;
-		private CheckBox autohideFileName;
+		private android.widget.CompoundButton autohideOriginalPost;
+		private android.widget.CompoundButton autohideReplies;
+		private android.widget.CompoundButton autohideSage;
+		private android.widget.CompoundButton autohideSubject;
+		private android.widget.CompoundButton autohideComment;
+		private android.widget.CompoundButton autohideName;
+		private android.widget.CompoundButton autohideFileName;
 		private EditText valueEdit;
 		private TextView errorText;
 		private TextView matcherText;
@@ -690,7 +692,12 @@ public class AutohideFragment extends BaseListFragment {
 		@Override
 		public void onCreate(Bundle savedInstanceState) {
 			super.onCreate(savedInstanceState);
-			ScrollView view = (ScrollView) LayoutInflater.from(requireContext())
+			int index = requireArguments().getInt(EXTRA_INDEX);
+			if (com.mishiranu.dashchan.widget.CompactDialogUi.isEnabled()) {
+				page = new com.mishiranu.dashchan.widget.RuleEditorPage(requireContext(), index >= 0,
+						this::dismiss, () -> saveRule(false), () -> confirm(true));
+			}
+			ScrollView view = page != null ? page.scroll : (ScrollView) LayoutInflater.from(requireContext())
 					.inflate(R.layout.dialog_autohide, null);
 			scrollView = view;
 			chanNameSelector = view.findViewById(R.id.chan_name);
@@ -751,19 +758,40 @@ public class AutohideFragment extends BaseListFragment {
 				autohideFileName.setChecked(false);
 				valueEdit.setText(null);
 			}
+			if (page != null) {
+				TextWatcher summaryWatcher = new TextWatcher() {
+					public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+					public void onTextChanged(CharSequence s, int start, int before, int count) { updateScopeSummary(); }
+					public void afterTextChanged(Editable s) {}
+				};
+				boardNameEdit.addTextChangedListener(summaryWatcher);
+				threadNumberEdit.addTextChangedListener(summaryWatcher);
+				updateScopeSummary();
+				if (savedInstanceState != null) {
+					page.expandScope(savedInstanceState.getBoolean(SCOPE_OPEN));
+					page.expandTest(savedInstanceState.getBoolean(TEST_OPEN));
+					testStringEdit.setText(savedInstanceState.getString(TEST_VALUE, ""));
+				}
+				page.onTestVisibilityChanged = this::updateTestResult;
+			} else InterfaceAppearance.standardAutohideContent(scrollView, false);
 			updateTestResult();
-			InterfaceAppearance.standardAutohideContent(scrollView, false);
 		}
 
 		@Override
 		public void onSaveInstanceState(@NonNull Bundle outState) {
 			super.onSaveInstanceState(outState);
 			outState.putParcelable(EXTRA_ITEM, readDialogView());
+			if (page != null) {
+				outState.putBoolean(SCOPE_OPEN, page.scopeOpen());
+				outState.putBoolean(TEST_OPEN, page.testOpen());
+				outState.putString(TEST_VALUE, testStringEdit.getText().toString());
+			}
 		}
 
 		@NonNull
 		@Override
-		public AlertDialog onCreateDialog(Bundle savedInstanceState) {
+		public android.app.Dialog onCreateDialog(Bundle savedInstanceState) {
+			if (page != null) return page.dialog();
 			int index = requireArguments().getInt(EXTRA_INDEX);
 			AlertDialog.Builder builder = MotionDialogBuilder.standard(requireContext())
 					.setView(scrollView)
@@ -780,6 +808,48 @@ public class AutohideFragment extends BaseListFragment {
 			return dialog;
 		}
 
+		private void updateScopeSummary() {
+			if (page != null) page.summary(chanNameSelector.getText(), boardNameEdit.getText(), threadNumberEdit.getText());
+		}
+
+		private void saveRule(boolean accepted) {
+			if (page == null || workPattern == null) return;
+			AutohideStorage.AutohideItem item = readDialogView();
+			if (!accepted && valueEdit.length() == 0 && item.isEnabled() &&
+					(item.optionSubject || item.optionComment || item.optionName || item.optionFileName)) {
+				confirm(false); return;
+			}
+			((AutohideFragment) requireParentFragment()).onEditComplete(item, requireArguments().getInt(EXTRA_INDEX));
+			dismiss();
+		}
+
+		private void confirm(boolean delete) {
+			String tag = "ruleConfirmation";
+			if (getChildFragmentManager().isStateSaved() || getChildFragmentManager().findFragmentByTag(tag) != null) return;
+			RuleConfirmation dialog = new RuleConfirmation();
+			Bundle args = new Bundle(); args.putBoolean("delete", delete); dialog.setArguments(args);
+			dialog.showNow(getChildFragmentManager(), tag);
+		}
+
+		public static class RuleConfirmation extends DialogFragment {
+			@NonNull @Override public AlertDialog onCreateDialog(Bundle state) {
+				boolean delete = requireArguments().getBoolean("delete");
+				AlertDialog dialog = MotionDialogBuilder.standard(requireContext(), delete)
+						.setMessage(delete ? R.string.rule_delete_prompt : R.string.rule_empty_prompt)
+						.setNegativeButton(android.R.string.cancel, null)
+						.setPositiveButton(delete ? R.string.delete : R.string.save, (d, which) -> {
+							AutohideDialog editor = (AutohideDialog) requireParentFragment();
+							if (editor.page == null) return;
+							if (!delete) { editor.saveRule(true); return; }
+							int index = editor.requireArguments().getInt(EXTRA_INDEX);
+							if (index >= 0) ((AutohideFragment) editor.requireParentFragment()).onDelete(index);
+							editor.dismiss();
+						}).create();
+				com.mishiranu.dashchan.content.security.AppSecurity.protectDialog(dialog);
+				return dialog;
+			}
+		}
+
 		private void updateSelectedText() {
 			String chanNameText;
 			int size = selectedChanNames.size();
@@ -794,6 +864,7 @@ public class AutohideFragment extends BaseListFragment {
 				chanNameText = getString(R.string.forum_only__format, title);
 			}
 			chanNameSelector.setText(chanNameText);
+			updateScopeSummary();
 		}
 
 		private AutohideStorage.AutohideItem readDialogView() {
@@ -824,6 +895,13 @@ public class AutohideFragment extends BaseListFragment {
 		private ErrorEditTextSetter errorValueSetter;
 
 		private void updateError(int index, String text) {
+			if (page != null) {
+				boolean invalid = text != null;
+				errorText.setText(invalid ? getString(R.string.rule_error, text) : "");
+				errorText.setVisibility(invalid ? View.VISIBLE : View.GONE);
+				page.save.setEnabled(!invalid);
+				return;
+			}
 			boolean error = index >= 0;
 			Editable value = valueEdit.getEditableText();
 			if (error) {
@@ -868,6 +946,11 @@ public class AutohideFragment extends BaseListFragment {
 		private Pattern workPattern;
 
 		private void updateTestResult() {
+			if (page != null) {
+				boolean ready = workPattern != null && page.testOpen() && valueEdit.length() > 0 && testStringEdit.length() > 0;
+				matcherText.setVisibility(ready ? View.VISIBLE : View.GONE);
+				if (!ready) { matcherText.setText(""); return; }
+			}
 			String matchedText = null;
 			if (workPattern != null) {
 				Matcher matcher = workPattern.matcher(testStringEdit.getText().toString());

@@ -11,6 +11,7 @@ import android.widget.LinearLayout;
 import androidx.fragment.app.FragmentManager;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import chan.content.Chan;
+import chan.content.ChanPerformer;
 import chan.content.ChanConfiguration;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.R;
@@ -23,7 +24,9 @@ import com.mishiranu.dashchan.content.async.TaskViewModel;
 import com.mishiranu.dashchan.content.database.ChanDatabase;
 import com.mishiranu.dashchan.content.model.ErrorItem;
 import com.mishiranu.dashchan.content.storage.FavoritesStorage;
+import com.mishiranu.dashchan.ui.BrowserFragment;
 import com.mishiranu.dashchan.ui.DialogMenu;
+import com.mishiranu.dashchan.ui.FragmentHandler;
 import com.mishiranu.dashchan.ui.InstanceDialog;
 import com.mishiranu.dashchan.ui.navigator.adapter.BoardsAdapter;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
@@ -82,7 +85,9 @@ public class BoardsPage extends ListPage implements BoardsAdapter.Callback,
 		InitRequest initRequest = getInitRequest();
 		recyclerView.getPullable().setPullSides(PullableWrapper.Side.TOP);
 		ReadViewModel readViewModel = getViewModel(ReadViewModel.class);
-		if (initRequest.errorItem != null) {
+		if (initRequest.recovered != null) {
+			refreshBoards(false, initRequest.recovered.boards());
+		} else if (initRequest.errorItem != null) {
 			switchError(initRequest.errorItem);
 		} else {
 			recyclerView.getPullable().startBusyState(PullableWrapper.Side.BOTH);
@@ -109,8 +114,12 @@ public class BoardsPage extends ListPage implements BoardsAdapter.Callback,
 
 	@Override
 	public void onItemClick(ChanDatabase.BoardItem boardItem) {
-		getUiManager().navigator().navigateBoardsOrThreads(getPage().chanName, boardItem.boardName);
-
+		String chanName = getPage().chanName;
+		if ("soyjak".equals(chanName)) {
+			getUiManager().navigator().navigateBoardCatalog(chanName, boardItem.boardName);
+		} else {
+			getUiManager().navigator().navigateBoardsOrThreads(chanName, boardItem.boardName);
+		}
 	}
 
 	@Override
@@ -158,8 +167,12 @@ public class BoardsPage extends ListPage implements BoardsAdapter.Callback,
 		menu.addSubMenu(0, R.id.menu_appearance, 0, R.string.appearance);
 		menu.add(0, R.id.menu_make_home_page, 0, R.string.make_home_page)
 				.setVisible(Preferences.getDefaultBoardName(getChan()) != null);
-		menu.add(0, R.id.menu_add_pikabu_community, 0, R.string.pikabu_add_community)
-				.setVisible(pikabuBoards);
+		if (pikabuBoards) {
+			menu.add(0, R.id.menu_add_pikabu_community, 0, R.string.pikabu_add_community);
+		}
+		if ("soyjak".equals(getPage().chanName)) {
+			menu.add(0, R.id.menu_soyjak_webview, 0, R.string.soyjak_open_webview);
+		}
 	}
 
 	@Override
@@ -174,8 +187,12 @@ public class BoardsPage extends ListPage implements BoardsAdapter.Callback,
 			Preferences.setDefaultBoardName(getPage().chanName, null);
 			item.setVisible(false);
 			return true;
-		} else if (item.getItemId() == R.id.menu_add_pikabu_community) {
+		} else if (pikabuBoards && item.getItemId() == R.id.menu_add_pikabu_community) {
 			showAddPikabuCommunityDialog();
+			return true;
+		} else if (item.getItemId() == R.id.menu_soyjak_webview && "soyjak".equals(getPage().chanName)
+				&& getContext() instanceof FragmentHandler) {
+			((FragmentHandler) getContext()).pushFragment(BrowserFragment.forSoyjakPage(getChan().locator.buildPath()));
 			return true;
 		}
 		return false;
@@ -237,11 +254,15 @@ public class BoardsPage extends ListPage implements BoardsAdapter.Callback,
 	}
 
 	private void refreshBoards(boolean showPull) {
+		refreshBoards(showPull, null);
+	}
+
+	private void refreshBoards(boolean showPull, ChanPerformer.ReadBoardsResult recovered) {
 		if (pikabuBoards) {
 			getRetainableExtra(RetainableExtra.FACTORY).pikabuCatalogRefreshAttempted = true;
 		}
 		ReadViewModel readViewModel = getViewModel(ReadViewModel.class);
-		ReadBoardsTask task = new ReadBoardsTask(readViewModel.callback, getChan());
+		ReadBoardsTask task = new ReadBoardsTask(readViewModel.callback, getChan(), recovered);
 		task.execute(ConcurrentUtils.PARALLEL_EXECUTOR);
 		readViewModel.attach(task);
 		PaddedRecyclerView recyclerView = getRecyclerView();
@@ -292,6 +313,7 @@ public class BoardsPage extends ListPage implements BoardsAdapter.Callback,
 
 	@Override
 	public void onReadBoardsSuccess() {
+		clearBrowserChallenge();
 		PaddedRecyclerView recyclerView = getRecyclerView();
 		recyclerView.getPullable().cancelBusyState();
 		updateBoards();
@@ -303,7 +325,7 @@ public class BoardsPage extends ListPage implements BoardsAdapter.Callback,
 		getRecyclerView().getPullable().cancelBusyState();
 		if (getAdapter().isRealEmpty()) {
 			switchError(errorItem);
-		} else {
+		} else if (!showBrowserChallenge(errorItem)) {
 			ClickableToast.show(errorItem);
 		}
 	}

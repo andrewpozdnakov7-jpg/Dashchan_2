@@ -13,6 +13,7 @@ import com.mishiranu.dashchan.content.net.EmbeddedType;
 import com.mishiranu.dashchan.widget.AttachmentView;
 import com.mishiranu.dashchan.widget.VideoThumbnailPreview;
 import java.util.ArrayList;
+import com.mishiranu.dashchan.chan.soyjak.SoyjakChanLocator;
 import java.util.List;
 import java.util.Locale;
 
@@ -71,11 +72,13 @@ public abstract class AttachmentItem {
 		private String thumbnailKey;
 
 		private final boolean originalFileAvailable;
+		private final boolean previewOnly;
 
 		public FileAttachmentItem(Master master, ChanLocator locator, Uri fileUri, Uri thumbnailUri,
 				String originalName, int size, int width, int height) {
 			super(master);
 			originalFileAvailable = fileUri != null;
+			previewOnly = !originalFileAvailable && locator instanceof SoyjakChanLocator;
 			if (fileUri == null) {
 				fileUri = thumbnailUri;
 			}
@@ -142,12 +145,12 @@ public abstract class AttachmentItem {
 
 		@Override
 		public boolean isShowInGallery() {
-			return type == Type.IMAGE || type == Type.VIDEO;
+			return !previewOnly && (type == Type.IMAGE || type == Type.VIDEO);
 		}
 
 		@Override
 		public boolean canDownloadToStorage() {
-			return true;
+			return !previewOnly;
 		}
 
 		@Override

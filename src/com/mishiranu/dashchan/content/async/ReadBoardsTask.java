@@ -13,6 +13,7 @@ import com.mishiranu.dashchan.content.model.ErrorItem;
 public class ReadBoardsTask extends HttpHolderTask<Void, ErrorItem> {
 	private final Callback callback;
 	private final Chan chan;
+	private final ChanPerformer.ReadBoardsResult recovered;
 
 	public interface Callback {
 		void onReadBoardsSuccess();
@@ -20,15 +21,20 @@ public class ReadBoardsTask extends HttpHolderTask<Void, ErrorItem> {
 	}
 
 	public ReadBoardsTask(Callback callback, Chan chan) {
+		this(callback, chan, null);
+	}
+
+	public ReadBoardsTask(Callback callback, Chan chan, ChanPerformer.ReadBoardsResult recovered) {
 		super(chan);
 		this.callback = callback;
 		this.chan = chan;
+		this.recovered = recovered;
 	}
 
 	@Override
 	protected ErrorItem run(HttpHolder holder) {
 		try {
-			ChanPerformer.ReadBoardsResult result = chan.performer.safe()
+			ChanPerformer.ReadBoardsResult result = recovered != null ? recovered : chan.performer.safe()
 					.onReadBoards(new ChanPerformer.ReadBoardsData(holder));
 			BoardCategory[] boardCategories = result != null ? result.boardCategories : null;
 			if (boardCategories != null && boardCategories.length == 0) {
