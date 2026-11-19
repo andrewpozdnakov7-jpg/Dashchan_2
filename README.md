@@ -100,6 +100,7 @@ APK появится в `build/outputs/apk`. Первая сборка скач�
 
 1. **Vados** (анонимный участник) — тестирование приложения и идеи по развитию галереи, видеоплеера и поддержки Reddit.
 2. **[kamik-hub](https://github.com/kamik-hub)** (Самсунг-кун) — тестирование сборок, отчёты о падениях и идеи по развитию интерфейса и видеоконвертера.
+3. **squad wow** (fsdfdsfsd575756@gmail.com) — независимая проверка воспроизводимости сборок F-Droid, поиск багов в работе с расширениями, идеи по навигации в тредах и приватности уведомлений.
 
 ### Происхождение и авторы
 
@@ -183,6 +184,7 @@ See [docs/BUILDING.md](docs/BUILDING.md), [docs/TESTING.md](docs/TESTING.md), an
 
 1. **Vados** (anonymous contributor) — app testing and ideas for improving the gallery, video player, and Reddit support.
 2. **[kamik-hub](https://github.com/kamik-hub)** (Самсунг-кун) — testing builds, reporting crashes, and suggesting improvements to the interface and video converter.
+3. **squad wow** (fsdfdsfsd575756@gmail.com) — independently verifying reproducible F-Droid builds, finding bugs in extension handling, and suggesting improvements to thread navigation and notification privacy.
 
 ### Feedback, Credits, and License
 
