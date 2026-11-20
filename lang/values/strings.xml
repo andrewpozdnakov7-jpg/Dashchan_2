@@ -423,8 +423,6 @@
 	<string name="delete_font_dialog_title">Delete font</string>
 	<string name="s24_ultra_oneui9_toolbar_fix">Fix for S24 Ultra OneUI 9</string>
 	<string name="s24_ultra_oneui9_toolbar_fix_summary">Use consistent sizes and spacing for refresh and menu buttons in the top bar.</string>
-	<string name="galaxy_m12_selection_fix">Fix for Samsung Galaxy M12</string>
-	<string name="galaxy_m12_selection_fix_summary">Protect text selection from interception by the side panel and form scrolling. On by default.</string>
 	<string name="video_diagnostics_begin">Start</string>
 	<string name="video_diagnostics_extended">Extended log</string>
 	<string name="video_diagnostics_saving">Saving diagnostics…</string>
@@ -1048,6 +1046,8 @@
 	<string name="soyjak_probe_summary">Request the catalog through the app and show the native HTTP result</string>
 	<string name="soyjak_access_saved">Site access saved for the app</string>
 	<string name="soyjak_unavailable">Soyjak is unavailable</string>
+	<string name="soyjak_allow_posts">Allow posting</string>
+	<string name="soyjak_allow_posts_summary">Reply in existing threads using the Soyjak form opened inside Slooop.</string>
 	<string name="wifi_only">Wi-Fi only</string>
 	<string name="wifi_or_mobile">Wi-Fi or mobile network</string>
 	<string name="with_name_name__format">With name %s</string>
@@ -1542,7 +1542,7 @@
 	<string name="thread_fab_menu">Floating thread menu</string>
 	<string name="thread_fab_menu_summary">Choose which actions appear in the floating menu and change their order.</string>
 	<string name="thread_fab_custom_order">Custom action order</string>
-	<string name="thread_fab_order_summary">From bottom to top, starting next to the floating button.</string>
+	<string name="thread_fab_order_summary">From top to bottom, as in the open menu.</string>
 	<string name="thread_fab_actions">Thread actions</string>
 	<string name="thread_fab_close">Close thread actions</string>
 	<string name="thread_fab_click">Short press</string>

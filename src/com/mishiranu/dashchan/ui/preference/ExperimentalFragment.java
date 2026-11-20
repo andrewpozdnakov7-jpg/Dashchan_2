@@ -50,8 +50,6 @@ public class ExperimentalFragment extends PreferenceFragment {
 				Preferences.DEFAULT_THREAD_TOOLBAR_ACTION.value, R.string.thread_toolbar_action, toolbarEntries);
 		addCheck(true, Preferences.KEY_S24_ULTRA_ONEUI9_TOOLBAR_FIX, Preferences.DEFAULT_S24_ULTRA_ONEUI9_TOOLBAR_FIX,
 				R.string.s24_ultra_oneui9_toolbar_fix, R.string.s24_ultra_oneui9_toolbar_fix_summary);
-		addCheck(true, Preferences.KEY_GALAXY_M12_SELECTION_FIX, Preferences.DEFAULT_GALAXY_M12_SELECTION_FIX,
-				R.string.galaxy_m12_selection_fix, R.string.galaxy_m12_selection_fix_summary);
 		addButton(R.string.toolbar_title_sizes, R.string.toolbar_title_sizes__summary)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 						.pushFragment(new ToolbarTitleSettingsFragment()));
@@ -60,8 +58,6 @@ public class ExperimentalFragment extends PreferenceFragment {
 		addButton(R.string.thread_fab_menu, R.string.thread_fab_menu_summary)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 						.pushFragment(new ThreadFabSettingsFragment()));
-		if (com.mishiranu.dashchan.BuildConfig.ENABLE_VIDEO_COMPRESSION) addButton(R.string.compression_title, R.string.compression_summary).setOnClickListener(p ->
-				((FragmentHandler) requireActivity()).pushFragment(new VideoCompressionFragment()));
 		CheckPreference wallpaperPreference = addCheck(true, Preferences.KEY_WALLPAPER_ENABLED,
 				Preferences.DEFAULT_WALLPAPER_ENABLED, R.string.wallpaper_background,
 				R.string.wallpaper_background__summary);

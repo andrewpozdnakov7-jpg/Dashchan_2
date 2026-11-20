@@ -36,6 +36,8 @@ import chan.text.ParseException;
 import chan.util.CommonUtils;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.R;
+import com.mishiranu.dashchan.chan.soyjak.SoyjakChanConfiguration;
+import com.mishiranu.dashchan.chan.soyjak.SoyjakReaderPage;
 import com.mishiranu.dashchan.content.HidePerformer;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.Preferences.ThreadFabAction;
@@ -64,7 +66,9 @@ import com.mishiranu.dashchan.text.HtmlParser;
 import com.mishiranu.dashchan.content.storage.StatisticsStorage;
 import com.mishiranu.dashchan.content.translation.TranslationController;
 import com.mishiranu.dashchan.ui.ApachanEditPostDialog;
+import com.mishiranu.dashchan.ui.BrowserFragment;
 import com.mishiranu.dashchan.ui.DrawerForm;
+import com.mishiranu.dashchan.ui.FragmentHandler;
 import com.mishiranu.dashchan.ui.InstanceDialog;
 import com.mishiranu.dashchan.ui.ReplySwipeController;
 import com.mishiranu.dashchan.ui.ReplySwipeOverlap;
@@ -1050,9 +1054,16 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 				|| !getChan().configuration.getOption(ChanConfiguration.OPTION_LOCAL_MODE));
 	}
 
+	private boolean canOpenSoyjakReply() {
+		Page page = getPage();
+		return getChan().configuration instanceof SoyjakChanConfiguration configuration
+				&& !StringUtils.isEmpty(page.boardName) && !StringUtils.isEmpty(page.threadNumber)
+				&& configuration.isWebsiteReplyEnabled();
+	}
+
 	private boolean isThreadFabActionAvailable(ThreadFabAction action) {
 		switch (action) {
-			case REPLY: return replyable != null && replyable.onRequestReply(false);
+			case REPLY: return canOpenSoyjakReply() || replyable != null && replyable.onRequestReply(false);
 			case ARCHIVE: return canArchiveThread();
 			case GALLERY: return !windowedMode;
 			default: return true;
@@ -1148,7 +1159,15 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 	private boolean performThreadAction(int id, boolean fromFab) {
 		Page page = getPage();
 		if (id == R.id.menu_add_post) {
-			if (replyable != null && replyable.onRequestReply(false)) {
+			if (canOpenSoyjakReply()) {
+				Chan chan = getChan();
+				Uri uri = chan.locator.safe(false).createThreadUri(page.boardName, page.threadNumber);
+				if (SoyjakReaderPage.isSite(uri) && chan.locator.safe(false).isThreadUri(uri)) {
+					((FragmentHandler) getContext()).pushFragment(BrowserFragment.forSoyjakReply(uri));
+				} else {
+					ClickableToast.show(R.string.unknown_address);
+				}
+			} else if (replyable != null && replyable.onRequestReply(false)) {
 				getUiManager().navigator().navigatePosting(page.chanName, page.boardName, page.threadNumber);
 			}
 		} else if (id == R.id.menu_refresh || id == R.id.menu_reload) {

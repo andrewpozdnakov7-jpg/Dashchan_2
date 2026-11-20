@@ -2347,28 +2347,6 @@ public class Preferences {
 		return PREFERENCES.getBoolean(KEY_COMPACT_DIALOGS, DEFAULT_COMPACT_DIALOGS);
 	}
 
-	public static final String KEY_GALAXY_M12_SELECTION_FIX = "experimental_galaxy_m12_selection_fix";
-	public static final boolean DEFAULT_GALAXY_M12_SELECTION_FIX = true;
-	private static final String KEY_SELECTION_FIX_DEFAULT_ON_MIGRATED = "selection_fix_default_on_v1_migrated";
-	static {
-		if (PREFERENCES != null && MainApplication.getInstance().isMainProcess()) {
-			migrateSelectionFixDefaultOn(PREFERENCES);
-		}
-	}
-	static void migrateSelectionFixDefaultOn(SharedPreferences preferences) {
-		if (!preferences.getBoolean(KEY_SELECTION_FIX_DEFAULT_ON_MIGRATED, false)) {
-			// Enable once for this rollout, including existing installations. Later opt-outs survive.
-			try (SharedPreferences.Editor editor = preferences.edit()) {
-				editor.put(KEY_GALAXY_M12_SELECTION_FIX, true);
-				editor.put(KEY_SELECTION_FIX_DEFAULT_ON_MIGRATED, true);
-			}
-		}
-	}
-
-	public static boolean isGalaxyM12SelectionFixEnabled() {
-		return PREFERENCES.getBoolean(KEY_GALAXY_M12_SELECTION_FIX, DEFAULT_GALAXY_M12_SELECTION_FIX);
-	}
-
 	public static final boolean DEFAULT_HARDWARE_VIDEO_ACCELERATION = true;
 	public static final String KEY_IMAGE_EDITOR = "image_editor";
 	public static final boolean DEFAULT_IMAGE_EDITOR = true;

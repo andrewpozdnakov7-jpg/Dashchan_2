@@ -12,7 +12,6 @@ import android.widget.EditText;
 import android.widget.ScrollView;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
-import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.ui.posting.PostingFormDiagnostics;
 import com.mishiranu.dashchan.util.InputGestureDiagnostics;
 import java.util.function.BooleanSupplier;
@@ -63,15 +62,12 @@ public class PostingScrollView extends ScrollView {
 
 	private void beginCommentGesture(MotionEvent event) {
 		EditText editor = commentEditor;
-		boolean hitEditor = editor != null && editor.isEnabled() && editor.isShown()
+		commentGestureActive = editor != null && editor.isEnabled() && editor.isShown()
 				&& editor.getWidth() > 0 && editor.getHeight() > 0
 				&& editor.getGlobalVisibleRect(commentHitRect)
 				&& commentHitRect.contains((int) event.getRawX(), (int) event.getRawY());
-		// Sample the opt-in at DOWN. With it off, keep precisely the released
-		// IME + internally scrollable-editor rule, without selection ownership.
-		commentGestureActive = hitEditor && Preferences.isGalaxyM12SelectionFixEnabled();
-		if (hitEditor) {
-			if (commentGestureActive && editor.hasSelection()) ownCommentGesture(true, "selected_down");
+		if (commentGestureActive) {
+			if (editor.hasSelection()) ownCommentGesture(true, "selected_down");
 			else if (isCommentImeVisible() && (editor.canScrollVertically(-1) || editor.canScrollVertically(1))) {
 				ownCommentGesture(false, "scrollable_editor");
 			}

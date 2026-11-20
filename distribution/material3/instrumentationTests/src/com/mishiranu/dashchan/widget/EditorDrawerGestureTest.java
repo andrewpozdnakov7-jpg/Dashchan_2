@@ -11,28 +11,12 @@ import android.widget.ScrollView;
 import androidx.core.view.GravityCompat;
 import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.test.core.app.ActivityScenario;
-import androidx.test.platform.app.InstrumentationRegistry;
 import com.mishiranu.dashchan.content.Preferences;
-import org.junit.After;
-import org.junit.Before;
+import com.mishiranu.dashchan.util.SharedPreferences;
 import org.junit.Test;
 
 /** Real dispatch through drawer -> outer scroller -> editor. No IME or ActionMode is required. */
 public class EditorDrawerGestureTest {
-	private Object previousFix;
-	@Before public void enableWorkaroundForFixture() {
-		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
-			previousFix = Preferences.PREFERENCES.getAll().get(Preferences.KEY_GALAXY_M12_SELECTION_FIX);
-			Preferences.PREFERENCES.edit().put(Preferences.KEY_GALAXY_M12_SELECTION_FIX, true).close();
-		});
-	}
-	@After public void restoreWorkaroundPreference() {
-		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
-			if (previousFix instanceof Boolean) Preferences.PREFERENCES.edit()
-					.put(Preferences.KEY_GALAXY_M12_SELECTION_FIX, (Boolean) previousFix).close();
-			else Preferences.PREFERENCES.edit().remove(Preferences.KEY_GALAXY_M12_SELECTION_FIX).close();
-		});
-	}
 	private static final class Fixture implements AutoCloseable {
 		final CustomDrawerLayout drawer;
 		final PostingScrollView scroll;
@@ -173,35 +157,24 @@ public class EditorDrawerGestureTest {
 			});
 		}
 	}
-	@Test public void explicitlyDisabledPreferenceKeepsReleasedSelectionHandoff() {
+	@Test public void savedOptOutFromOlderVersionsStillProtectsSelection() {
 		try (ActivityScenario<PostingGestureTestActivity> scenario = ActivityScenario.launch(PostingGestureTestActivity.class)) {
 			scenario.onActivity(activity -> {
-				{
-					Preferences.PREFERENCES.edit().put(Preferences.KEY_GALAXY_M12_SELECTION_FIX, false).close();
-					assertFalse(Preferences.isGalaxyM12SelectionFixEnabled());
-					try (Fixture f = new Fixture(activity)) {
-						f.touch(MotionEvent.ACTION_DOWN, 200, 220); f.editor.setSelection(0, 5);
-						assertFalse(f.drawer.isEditorGestureOwned()); assertFalse(f.scroll.isCommentGestureOwned());
-						for (int y : new int[]{180, 130, 80, 40}) f.touch(MotionEvent.ACTION_MOVE, 200, y);
-						assertTrue(f.cancels > 0); assertTrue(f.scroll.getScrollY() > 0);
-						assertFalse(f.scroll.isCommentGestureOwned());
-						f.touch(MotionEvent.ACTION_UP, 200, 40);
-					}
-				}
-			});
-		}
-	}
-	@Test public void missingPreferenceProtectsSelectionByDefault() {
-		try (ActivityScenario<PostingGestureTestActivity> scenario = ActivityScenario.launch(PostingGestureTestActivity.class)) {
-			scenario.onActivity(activity -> {
-				Preferences.PREFERENCES.edit().remove(Preferences.KEY_GALAXY_M12_SELECTION_FIX).close();
-				assertTrue(Preferences.isGalaxyM12SelectionFixEnabled());
+				String legacyKey = "experimental_galaxy_m12_selection_fix";
+				SharedPreferences preferences = Preferences.PREFERENCES;
+				Object previous = preferences.getAll().get(legacyKey);
+				preferences.edit().put(legacyKey, false).close();
 				try (Fixture f = new Fixture(activity)) {
 					f.touch(MotionEvent.ACTION_DOWN, 120, 180); f.editor.setSelection(0, 5);
 					assertTrue(f.drawer.isEditorGestureOwned());
 					for (int y : new int[]{185, 220, 300, 400}) f.touch(MotionEvent.ACTION_MOVE, 200, y);
 					assertEquals(0, f.cancels); assertTrue(f.scroll.isCommentGestureOwned());
 					f.touch(MotionEvent.ACTION_UP, 200, 400); assertFalse(f.scroll.isCommentGestureOwned());
+				} finally {
+					try (SharedPreferences.Editor editor = preferences.edit()) {
+						if (previous instanceof Boolean value) editor.put(legacyKey, value);
+						else editor.remove(legacyKey);
+					}
 				}
 			});
 		}

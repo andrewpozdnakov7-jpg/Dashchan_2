@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="compression_title">Автосжатие вложений</string>
-    <string name="compression_enabled">Сжимать большие видео</string>
-    <string name="compression_summary">Подготавливать уменьшенные копии перед отправкой. Оригиналы сохраняются. Экспериментальная функция, по умолчанию выключена.</string>
+    <string name="compression_title">Конвертер видео</string>
+    <string name="compression_enabled">Включить конвертер</string>
+    <string name="compression_summary">Сжатие видео и выбор формата перед отправкой</string>
+    <string name="compression_enabled_summary">Сжимает видео под лимиты вложений и добавляет ручную конвертацию.</string>
     <string name="compression_engine">Способ конвертации</string>
     <string name="compression_engine_summary">Media3 · аппаратное кодирование видео</string>
     <string name="compression_direct_unavailable">MediaCodec напрямую — пока недоступно</string>

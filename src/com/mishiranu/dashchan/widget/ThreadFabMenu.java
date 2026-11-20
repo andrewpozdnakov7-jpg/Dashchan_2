@@ -106,7 +106,7 @@ public final class ThreadFabMenu extends FrameLayout {
 	private boolean scrollHidden, fabShown;
 	private float scrollTravel, visibilityProgress;
 	private ValueAnimator visibilityAnimator;
-	private boolean scrollToBottomPending;
+	private boolean scrollToTopPending;
 	private int safeLeft, safeTop, safeRight, safeBottom;
 	private ValueAnimator shapeAnimator;
 	private ValueAnimator menuAnimator;
@@ -353,9 +353,7 @@ public final class ThreadFabMenu extends FrameLayout {
 		actions.removeAllViews();
 		List<Action> model = host.getActions();
 		if (model.isEmpty()) { finishClosed(); animateShape(false, 0); return; }
-		// Model order is nearest FAB first. Layout order runs from top to bottom.
-		for (int i = model.size() - 1; i >= 0; i--) {
-			Action action = model.get(i);
+		for (Action action : model) {
 			ImageButton button = new ImageButton(getContext());
 			String title = getContext().getString(action.title);
 			button.setContentDescription(title);
@@ -396,7 +394,7 @@ public final class ThreadFabMenu extends FrameLayout {
 			actions.addView(button, params);
 		}
 		opened = true;
-		scrollToBottomPending = true;
+		scrollToTopPending = true;
 		isolateAccessibility();
 		scrim.setVisibility(VISIBLE); scroller.setVisibility(VISIBLE);
 		updateFabIcon();
@@ -504,7 +502,7 @@ public final class ThreadFabMenu extends FrameLayout {
 		animator.start();
 	}
 	private void finishClosed() {
-		scrollToBottomPending = false;
+		scrollToTopPending = false;
 		scrim.setVisibility(INVISIBLE); scroller.setVisibility(INVISIBLE);
 		scrim.setAlpha(0); scroller.setAlpha(0); scroller.setTranslationY(panelOpenTravel);
 		scroller.setScaleX(.96f); scroller.setScaleY(.96f);
@@ -593,9 +591,9 @@ public final class ThreadFabMenu extends FrameLayout {
 		int actionBottom = y - panelGap;
 		scroller.layout(actionX, actionBottom - scroller.getMeasuredHeight(), actionX + scroller.getMeasuredWidth(), actionBottom);
 		scroller.setPivotX(scroller.getWidth() / 2f); scroller.setPivotY(scroller.getHeight());
-		if (opened && scrollToBottomPending) {
-			scrollToBottomPending = false;
-			scroller.scrollTo(0, actions.getHeight());
+		if (opened && scrollToTopPending) {
+			scrollToTopPending = false;
+			scroller.scrollTo(0, 0);
 		}
 		bounds.set(x, y, x + fabSize, y + fabSize);
 		if (!reportedBounds.equals(bounds)) { reportedBounds.set(bounds); host.onGeometryChanged(new Rect(bounds)); }

@@ -41,7 +41,7 @@ public final class VideoCompressionFragment extends PreferenceFragment {
 	private void refresh() {
 		if (getView() == null) return;
 		removeAllPreferences();
-		addCheck(true, CompressionSettings.ENABLED, false, R.string.compression_enabled, R.string.compression_summary)
+		addCheck(true, CompressionSettings.ENABLED, false, R.string.compression_enabled, R.string.compression_enabled_summary)
 				.setOnAfterChangeListener(p -> {
 					if (p.getValue() && Build.VERSION.SDK_INT >= 33) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS);
 				});

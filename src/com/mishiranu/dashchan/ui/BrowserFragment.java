@@ -5,8 +5,10 @@ import android.annotation.SuppressLint;
 import android.app.AlertDialog;
 import android.app.Dialog;
 import android.content.ActivityNotFoundException;
+import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.ProviderInfo;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
@@ -21,6 +23,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.DownloadListener;
 import android.webkit.SslErrorHandler;
+import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
@@ -29,6 +32,8 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.fragment.app.DialogFragment;
 import androidx.lifecycle.ViewModelProvider;
@@ -45,6 +50,7 @@ import com.mishiranu.dashchan.media.VideoDiagnostics;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
 import com.mishiranu.dashchan.content.AdvancedPreferences;
 import com.mishiranu.dashchan.content.Preferences;
+import com.mishiranu.dashchan.content.security.ProtectedActivityResults;
 import com.mishiranu.dashchan.util.AndroidUtils;
 import com.mishiranu.dashchan.util.AnimationUtils;
 import com.mishiranu.dashchan.util.NavigationUtils;
@@ -61,6 +67,7 @@ import org.json.JSONTokener;
 public class BrowserFragment extends ContentFragment implements DownloadListener {
 	private static final String EXTRA_URI = "uri";
 	private static final String EXTRA_SOYJAK_SITE = "soyjak.site";
+	private static final String EXTRA_SOYJAK_REPLY = "soyjak.reply_form";
 	private static final String EXTRA_RECOVERY_TOKEN = "soyjak.recovery";
 	private static final String READ_VISIBLE_DOCUMENT = """
 			(() => {
@@ -75,6 +82,12 @@ public class BrowserFragment extends ContentFragment implements DownloadListener
 	public static BrowserFragment forSoyjakPage(Uri uri) {
 		BrowserFragment fragment = new BrowserFragment(uri);
 		fragment.requireArguments().putBoolean(EXTRA_SOYJAK_SITE, true);
+		return fragment;
+	}
+
+	public static BrowserFragment forSoyjakReply(Uri uri) {
+		BrowserFragment fragment = new BrowserFragment(uri);
+		fragment.requireArguments().putBoolean(EXTRA_SOYJAK_REPLY, true);
 		return fragment;
 	}
 
@@ -112,10 +125,42 @@ public class BrowserFragment extends ContentFragment implements DownloadListener
 	private boolean mainFrameFailed;
 	private long documentRevision;
 	private long readRevision = -1;
+	private ValueCallback<Uri[]> replyFileCallback;
+	private final ActivityResultLauncher<Intent> replyFilePicker = ProtectedActivityResults.register(
+			this, "browser-reply-attachments", new ActivityResultContracts.StartActivityForResult(), result -> {
+				if (replyFileCallback == null) return;
+				Uri[] uris = new ActivityResultContracts.OpenMultipleDocuments()
+						.parseResult(result.getResultCode(), result.getData()).stream()
+						.filter(this::isExternalDocumentUri).toArray(Uri[]::new);
+				finishReplyFileSelection(uris.length > 0 ? uris : null);
+			});
 
 	private boolean isSoyjakSite() {
 		Bundle arguments = getArguments();
 		return arguments != null && arguments.getBoolean(EXTRA_SOYJAK_SITE);
+	}
+
+	private boolean isSoyjakReply() {
+		Bundle arguments = getArguments();
+		return arguments != null && arguments.getBoolean(EXTRA_SOYJAK_REPLY);
+	}
+
+	private Uri getInitialUri() {
+		Bundle arguments = getArguments();
+		return arguments != null ? AndroidUtils.getParcelable(arguments, EXTRA_URI, Uri.class) : null;
+	}
+
+	private boolean isExternalDocumentUri(Uri uri) {
+		if (!ContentResolver.SCHEME_CONTENT.equals(uri.getScheme()) || uri.getAuthority() == null) return false;
+		Context context = requireContext();
+		ProviderInfo provider = context.getPackageManager().resolveContentProvider(uri.getAuthority(), 0);
+		return provider != null && !context.getPackageName().equals(provider.packageName);
+	}
+
+	private void finishReplyFileSelection(Uri[] uris) {
+		ValueCallback<Uri[]> callback = replyFileCallback;
+		replyFileCallback = null;
+		if (callback != null) callback.onReceiveValue(uris);
 	}
 
 	private SoyjakReadRecovery.Request pendingRecovery() {
@@ -206,6 +251,7 @@ public class BrowserFragment extends ContentFragment implements DownloadListener
 
 		WebSettings settings = webView.getSettings();
 		WebViewUtils.configureCommonSettings(settings);
+		if (isSoyjakReply()) settings.setUserAgentString(null);
 		if (arguments != null && arguments.getBoolean(EXTRA_SOYJAK_SITE)) {
 			// The clearance cookie issued by CloudFlare is bound to the exact user agent.
 			// The native stack uses the same advanced setting, so both sides must agree.
@@ -253,6 +299,7 @@ public class BrowserFragment extends ContentFragment implements DownloadListener
 	@Override
 	public void onDestroyView() {
 		super.onDestroyView();
+		finishReplyFileSelection(null);
 		documentRevision++;
 		readyDocument = null;
 
@@ -269,10 +316,11 @@ public class BrowserFragment extends ContentFragment implements DownloadListener
 	}
 
 	private void loadInitialPage(boolean restored) {
-		((FragmentHandler) requireActivity()).setTitleSubtitle(getString(R.string.web_browser), null);
-		Bundle args = getArguments();
-		Uri uri = args != null ? AndroidUtils.getParcelable(args, EXTRA_URI, Uri.class) : null;
-		if (isSupportedUri(uri)) {
+		Uri uri = getInitialUri();
+		boolean reply = isSoyjakReply();
+		if (reply ? SoyjakReaderPage.isSite(uri) : isSupportedUri(uri)) {
+			((FragmentHandler) requireActivity()).setTitleSubtitle(
+					getString(reply ? R.string.new_post : R.string.web_browser), reply ? uri.getHost() : null);
 			if (!restored) {
 				webView.loadUrl(uri.toString());
 			}
@@ -309,6 +357,10 @@ public class BrowserFragment extends ContentFragment implements DownloadListener
 
 	@Override
 	public void onCreateOptionsMenu(Menu menu, boolean primary) {
+		if (isSoyjakReply()) {
+			menu.add(0, R.id.menu_soyjak_external_browser, 0, R.string.soyjak_external_browser);
+			return;
+		}
 		menu.add(0, R.id.menu_reload, 0, R.string.reload)
 				.setIcon(((FragmentHandler) requireActivity()).getActionBarIcon(R.attr.iconActionRefresh))
 				.setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM);
@@ -325,6 +377,11 @@ public class BrowserFragment extends ContentFragment implements DownloadListener
 
 	@Override
 	public boolean onMenuItemSelected(MenuItem item) {
+		if (isSoyjakReply() && item.getItemId() == R.id.menu_soyjak_external_browser) {
+			Uri uri = getInitialUri();
+			if (SoyjakReaderPage.isSite(uri)) NavigationUtils.openSystemBrowser(requireContext(), uri);
+			return true;
+		}
 		if (webView == null) return true;
 		if (item.getItemId() == R.id.menu_soyjak_read_catalog) {
 			readRevision = -1;
@@ -355,6 +412,7 @@ public class BrowserFragment extends ContentFragment implements DownloadListener
 
 	@Override
 	public boolean onBackPressed() {
+		if (isSoyjakReply()) return false;
 		if (pendingRecovery() != null) {
 			cancelRecovery();
 			return false;
@@ -369,7 +427,7 @@ public class BrowserFragment extends ContentFragment implements DownloadListener
 
 	@Override
 	public boolean canHandleBack() {
-		return pendingRecovery() == null && webView != null && webView.canGoBack();
+		return !isSoyjakReply() && pendingRecovery() == null && webView != null && webView.canGoBack();
 	}
 
 	@Override
@@ -389,6 +447,7 @@ public class BrowserFragment extends ContentFragment implements DownloadListener
 			boolean current = webView == view;
 			ViewGroup parent = view.getParent() instanceof ViewGroup ? (ViewGroup) view.getParent() : null;
 			if (current) {
+				finishReplyFileSelection(null);
 				webView = null;
 				documentRevision++;
 			}
@@ -407,7 +466,16 @@ public class BrowserFragment extends ContentFragment implements DownloadListener
 		}
 		@Override
 		public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
-			return request.isForMainFrame() && handleUrlLoading(view, request.getUrl());
+			if (!request.isForMainFrame()) return false;
+			Uri uri = request.getUrl();
+			if (isSoyjakReply()) {
+				if (SoyjakReaderPage.isSite(uri)) return false;
+				if (request.hasGesture() && isSupportedUri(uri)) {
+					NavigationUtils.openSystemBrowser(requireContext(), uri);
+				}
+				return true;
+			}
+			return handleUrlLoading(view, uri);
 		}
 
 		private boolean handleUrlLoading(WebView view, Uri uri) {
@@ -478,7 +546,7 @@ public class BrowserFragment extends ContentFragment implements DownloadListener
 		@Override
 		public void onPageFinished(WebView view, String url) {
 			if (view != webView || !isAdded() || url == null) return;
-			if (SoyjakBrowserSession.storeCookies(url)) {
+			if (!isSoyjakReply() && SoyjakBrowserSession.storeCookies(url)) {
 				ClickableToast.show(R.string.soyjak_access_saved);
 			}
 			if (isSoyjakSite()) {
@@ -491,9 +559,11 @@ public class BrowserFragment extends ContentFragment implements DownloadListener
 				readyDocument = url;
 				readRecoveryDocument();
 			}
-			String title = view.getTitle();
-			((FragmentHandler) requireActivity()).setTitleSubtitle(StringUtils.isEmptyOrWhitespace(title)
-					? getString(R.string.web_browser) : title, null);
+			if (!isSoyjakReply()) {
+				String title = view.getTitle();
+				((FragmentHandler) requireActivity()).setTitleSubtitle(StringUtils.isEmptyOrWhitespace(title)
+						? getString(R.string.web_browser) : title, null);
+			}
 			notifyBackNavigationChanged();
 		}
 
@@ -537,6 +607,28 @@ public class BrowserFragment extends ContentFragment implements DownloadListener
 	}
 
 	private class CustomWebChromeClient extends WebChromeClient {
+		@Override
+		public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
+			if (!isSoyjakReply() || view != webView || replyFileCallback != null) return false;
+			String url = view.getUrl();
+			if (url == null || !SoyjakReaderPage.isSite(Uri.parse(url))) return false;
+			int mode = params.getMode();
+			if (mode != FileChooserParams.MODE_OPEN && mode != FileChooserParams.MODE_OPEN_MULTIPLE) return false;
+			Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
+					.setType("*/*").putExtra(Intent.EXTRA_ALLOW_MULTIPLE, mode == FileChooserParams.MODE_OPEN_MULTIPLE);
+			String[] acceptTypes = params.getAcceptTypes();
+			if (acceptTypes.length > 0 && !StringUtils.isEmpty(acceptTypes[0])) {
+				intent.putExtra(Intent.EXTRA_MIME_TYPES, acceptTypes);
+			}
+			replyFileCallback = callback;
+			try {
+				replyFilePicker.launch(intent);
+			} catch (ActivityNotFoundException e) {
+				finishReplyFileSelection(null);
+			}
+			return true;
+		}
+
 		@Override
 		public void onProgressChanged(WebView view, int newProgress) {
 			if (view == webView && progressView != null) progressView.setProgress(newProgress);
