@@ -11,20 +11,22 @@ import androidx.annotation.NonNull;
 
 public class ChanIconDrawable extends BaseDrawable {
 	private final Drawable drawable;
+	private final boolean preserveColors;
 	private final Paint paint;
 
 	private PorterDuffColorFilter colorFilter;
 	private ColorStateList tint;
 	private PorterDuff.Mode tintMode;
 
-	public ChanIconDrawable(Drawable drawable) {
+	public ChanIconDrawable(Drawable drawable, boolean preserveColors) {
 		this.drawable = drawable;
+		this.preserveColors = preserveColors;
 		paint = new Paint(Paint.ANTI_ALIAS_FLAG);
 		paint.setColor(0xffffffff);
 	}
 
 	public ChanIconDrawable newInstance() {
-		return new ChanIconDrawable(drawable);
+		return new ChanIconDrawable(drawable, preserveColors);
 	}
 
 	@Override
@@ -35,6 +37,7 @@ public class ChanIconDrawable extends BaseDrawable {
 
 	@Override
 	public void setTintList(ColorStateList tint) {
+		if (preserveColors) return;
 		super.setTintList(tint);
 
 		colorFilter = null;
@@ -44,6 +47,7 @@ public class ChanIconDrawable extends BaseDrawable {
 
 	@Override
 	public void setTintMode(PorterDuff.Mode tintMode) {
+		if (preserveColors) return;
 		super.setTintMode(tintMode);
 
 		colorFilter = null;

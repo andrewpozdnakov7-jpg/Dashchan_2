@@ -106,7 +106,7 @@ public class CommonDatabase {
 				tablesFilter.value, tablesFilter.args, null, null, null)) {
 			while (cursor.moveToNext()) {
 				String name = cursor.getString(0);
-				if (!IGNORE_TABLES.contains(name)) {
+				if (!IGNORE_TABLES.contains(name) && !PendingRepliesDatabase.TABLE.equals(name)) {
 					String sql = cursor.getString(1);
 					int index = sql.indexOf(name);
 					if (index < 0) {
@@ -125,7 +125,7 @@ public class CommonDatabase {
 			while (cursor.moveToNext()) {
 				String name = cursor.getString(0);
 				String sql = cursor.getString(1);
-				if (sql != null) {
+				if (sql != null && !PendingRepliesDatabase.INDEX.equals(name)) {
 					int index = sql.indexOf(name);
 					if (index < 0) {
 						throw new IOException();

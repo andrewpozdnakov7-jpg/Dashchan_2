@@ -15,13 +15,9 @@ import androidx.lifecycle.LifecycleEventObserver;
 import androidx.lifecycle.LifecycleOwner;
 import androidx.core.view.OneShotPreDrawListener;
 import com.mishiranu.dashchan.util.ResourceUtils;
-import com.mishiranu.dashchan.util.ViewUtils;
-import com.mishiranu.dashchan.content.Preferences;
 
-/** Opted-in form body only; native dialog title/actions remain outside this viewport. */
+/** Scrolls the form body while the native dialog keeps its title and actions visible. */
 public final class DialogFormScrollView extends ScrollView {
-	private final boolean newIme = Preferences.isDialogFormImeEnabled();
-	private final Rect visible = new Rect();
 	private final boolean bounded;
 	private LinearLayout legacyBody;
 	private ScrollView legacyList;
@@ -86,14 +82,6 @@ public final class DialogFormScrollView extends ScrollView {
 	}
 
 	@Override protected void onMeasure(int widthSpec, int heightSpec) {
-		if (!newIme) {
-			getWindowVisibleDisplayFrame(visible);
-			int available = visible.height() > 0 ? visible.height() : ViewUtils.getWindowContentSize(getContext()).y;
-			int limit = Math.min(available, Math.round(AppearanceShapes.DIALOG_FORM_MAX_HEIGHT * ResourceUtils.obtainDensity(this)));
-			if (MeasureSpec.getMode(heightSpec) != MeasureSpec.UNSPECIFIED) limit = Math.min(limit, MeasureSpec.getSize(heightSpec));
-			super.onMeasure(widthSpec, MeasureSpec.makeMeasureSpec(Math.max(0, limit), MeasureSpec.AT_MOST));
-			return;
-		}
 		int mode = MeasureSpec.getMode(heightSpec), size = MeasureSpec.getSize(heightSpec);
 		if (legacyList != null) {
 			int headers = legacyBody.getPaddingTop() + legacyBody.getPaddingBottom();
@@ -126,7 +114,6 @@ public final class DialogFormScrollView extends ScrollView {
 		super.onMeasure(widthSpec, heightSpec);
 	}
 	@Override protected void onLayout(boolean changed, int l, int t, int r, int b) {
-		if (!newIme) { super.onLayout(changed, l, t, r, b); return; }
 		int oldOuter = getScrollY(), oldList = legacyList != null ? legacyList.getScrollY() : 0;
 		int listOffset = laidOutWhole ? Math.max(0, oldOuter - laidOutHeaderHeight) : oldList;
 		super.onLayout(changed, l, t, r, b);
@@ -138,7 +125,10 @@ public final class DialogFormScrollView extends ScrollView {
 	}
 	@Override protected void onSizeChanged(int w, int h, int oldw, int oldh) {
 		super.onSizeChanged(w, h, oldw, oldh);
-		if (newIme && (w != oldw || h != oldh)) { removeCallbacks(reveal); post(reveal); }
+		if (w != oldw || h != oldh) {
+			removeCallbacks(reveal);
+			post(reveal);
+		}
 	}
 	private void revealFocusedField() {
 		View field = findFocus(); if (!(field instanceof EditText) || getHeight() <= 0) return;
@@ -155,7 +145,7 @@ public final class DialogFormScrollView extends ScrollView {
 		boolean whole;
 	}
 	public void retain(State state, LifecycleOwner owner, EditText... fields) {
-		if (newIme) new RetainedInput(this, state, owner, fields);
+		new RetainedInput(this, state, owner, fields);
 	}
 	private static final class RetainedInput implements View.OnAttachStateChangeListener,
 			ViewTreeObserver.OnGlobalFocusChangeListener, LifecycleEventObserver {

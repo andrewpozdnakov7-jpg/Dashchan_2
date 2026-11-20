@@ -872,8 +872,6 @@ public class ForegroundManager implements Handler.Callback {
 			final float density = ResourceUtils.obtainDensity(requireContext());
 			LinearLayout container = new LinearLayout(requireContext());
 			container.setOrientation(LinearLayout.VERTICAL);
-			boolean landscape = getResources().getConfiguration().orientation
-					== Configuration.ORIENTATION_LANDSCAPE;
 			Parcelable[] parcelables = AndroidUtils.getParcelableArray(requireArguments(), EXTRA_IMAGES,
 					Bitmap.class);
 			Bitmap[] images = new Bitmap[parcelables != null ? parcelables.length : 0];
@@ -890,8 +888,11 @@ public class ForegroundManager implements Handler.Callback {
 				Bitmap[] chosen = new Bitmap[choices != null ? choices.length : 0];
 				if (chosen.length > 0) System.arraycopy(choices, 0, chosen, 0, chosen.length);
 				appearance.bindSelection(chosen, false);
-				landscape = false; // Native content scrolls when short; the server's requested columns/order remain intact.
 			}
+			// Only the legacy landscape layout flattens the keyboard to one row.
+			// Modern panes preserve the server grid when the host window changes shape.
+			boolean landscape = appearance == null && getResources().getConfiguration().orientation
+					== Configuration.ORIENTATION_LANDSCAPE;
 			int outerPadding = container.getResources().getDimensionPixelOffset(R.dimen.dialog_padding_text);
 			int verticalPadding = landscape ? (int) (8f * density) : outerPadding;
 			if (appearance == null) container.setPadding(outerPadding, verticalPadding, outerPadding, verticalPadding);
@@ -930,13 +931,13 @@ public class ForegroundManager implements Handler.Callback {
 			}
 			buildKeyboard(keyboardContainer, images, landscape, density);
 
-			// Keep the entire instruction reachable in both orientations, including large system fonts.
-			ScrollView contentView = new ScrollView(container.getContext());
-			contentView.addView(container, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
 			AlertDialog alertDialog;
 			if (appearance != null) {
-				alertDialog = appearance.create(contentView, this, () -> { publishResult(false); dismiss(); });
+				View body = appearance.choiceBody(keyboardContainer);
+				alertDialog = appearance.create(body, this, () -> { publishResult(false); dismiss(); });
 			} else {
+				ScrollView contentView = new ScrollView(container.getContext());
+				contentView.addView(container, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
 				AlertDialog.Builder builder = new MotionDialogBuilder(requireContext());
 				alertDialog = builder.setView(contentView).setPositiveButton(android.R.string.ok, this)
 						.setNegativeButton(android.R.string.cancel, this).create();

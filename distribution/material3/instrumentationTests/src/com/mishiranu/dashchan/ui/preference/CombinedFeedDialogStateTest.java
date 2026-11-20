@@ -11,10 +11,8 @@ import androidx.fragment.app.DialogFragment;
 import androidx.test.core.app.ActivityScenario;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import com.mishiranu.dashchan.R;
-import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.storage.CombinedFeedStorage;
 import com.mishiranu.dashchan.ui.InstanceDialog;
-import com.mishiranu.dashchan.util.SharedPreferences;
 import com.mishiranu.dashchan.widget.StandardContentTestActivity;
 import java.util.ArrayList;
 import java.util.UUID;
@@ -26,20 +24,6 @@ import org.junit.runner.RunWith;
 /** Values-only factory survives configuration recreation, without saving a feed. NOT RUN. */
 @RunWith(AndroidJUnit4.class)
 public class CombinedFeedDialogStateTest {
-	private Boolean previousIme;
-	@org.junit.Before public void useDefaultImePreference() {
-		SharedPreferences preferences = Preferences.PREFERENCES;
-		previousIme = preferences.contains(Preferences.KEY_DIALOG_FORM_IME)
-				? preferences.getBoolean(Preferences.KEY_DIALOG_FORM_IME, false) : null;
-		preferences.edit().remove(Preferences.KEY_DIALOG_FORM_IME).close();
-	}
-	@org.junit.After public void restoreIme() {
-		try (SharedPreferences.Editor editor = Preferences.PREFERENCES.edit()) {
-			if (previousIme == null) editor.remove(Preferences.KEY_DIALOG_FORM_IME);
-			else editor.put(Preferences.KEY_DIALOG_FORM_IME, previousIme);
-		}
-	}
-
 	private static AlertDialog editor(StandardContentTestActivity activity) {
 		DialogFragment fragment = (DialogFragment) activity.getSupportFragmentManager()
 				.findFragmentByTag(CombinedFeedDialog.class.getName());
@@ -67,7 +51,6 @@ public class CombinedFeedDialogStateTest {
 	}
 
 	@Test public void recreateKeepsEditedValuesAndIdentityAndCancelDoesNotWriteStorage() throws InterruptedException {
-		assertTrue(Preferences.isDialogFormImeEnabled());
 		CombinedFeedStorage storage = CombinedFeedStorage.getInstance();
 		int count = storage.getFeeds().size();
 		CombinedFeedStorage.Feed original = new CombinedFeedStorage.Feed();

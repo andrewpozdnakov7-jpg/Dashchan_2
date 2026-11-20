@@ -67,12 +67,18 @@ final class PostsExtractController {
 		}
 	}
 
-	/** Null flags mean no change; a supplied empty snapshot clears old hidden/user flags. */
+	/** A null snapshot leaves flags alone. Hidden state still comes from the ordinary thread load. */
 	static boolean replaceFlags(PostItem.HideState.Map<PostNumber> hidden, Set<PostNumber> user,
-			PostsDatabase.Flags flags) {
+			PostsDatabase.Flags flags, long appliedUserRevision) {
 		if (flags == null) return false;
 		hidden.clear();
 		hidden.addAll(flags.hiddenPosts);
+		replaceUserFlags(user, flags, appliedUserRevision);
+		return true;
+	}
+
+	static boolean replaceUserFlags(Set<PostNumber> user, PostsDatabase.Flags flags, long appliedRevision) {
+		if (flags.revision < appliedRevision || user.equals(flags.userPosts)) return false;
 		user.clear();
 		user.addAll(flags.userPosts);
 		return true;

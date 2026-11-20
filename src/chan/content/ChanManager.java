@@ -491,7 +491,7 @@ public class ChanManager {
 		ExtensionItem item = new ExtensionItem(ExtensionItem.Type.CHAN, BUILTIN_SOYJAK_NAME, "soyjak.st",
 				ExtensionItem.TrustState.TRUSTED, application.getPackageName(), BuildConfig.VERSION_NAME,
 				BuildConfig.VERSION_CODE, application.getApplicationInfo(), applicationFingerprints,
-				MAX_VERSION, true, 0, null, null,
+				MAX_VERSION, true, R.drawable.ic_custom_soyjak, null, null,
 				"com.mishiranu.dashchan.chan.soyjak.SoyjakChanConfiguration",
 				"com.mishiranu.dashchan.chan.soyjak.SoyjakChanPerformer",
 				"com.mishiranu.dashchan.chan.soyjak.SoyjakChanLocator",
@@ -1256,13 +1256,16 @@ public class ChanManager {
 				// An invalid or removed icon must not prevent loading the extension.
 			}
 		}
+		// The tab artwork needs both colors to keep the glasses and face readable.
+		boolean preserveColors = drawable != null && BUILTIN_SOYJAK_NAME.equals(chan.name)
+				&& chan.iconResId == R.drawable.ic_custom_soyjak;
 		if (drawable == null) {
 			resources = MainApplication.getInstance().getResources();
 			drawable = resources.getDrawable(R.drawable.ic_extension, null);
 		}
 		Drawable.ConstantState state = drawable.getConstantState();
 		return new ChanIconDrawable((state != null ? state.newDrawable(resources)
-				: drawable).mutate());
+				: drawable).mutate(), preserveColors);
 	}
 
 	public void updateConfiguration(Configuration newConfig) {

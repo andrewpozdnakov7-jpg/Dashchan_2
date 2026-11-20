@@ -15,10 +15,13 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.Preferences.ThreadFabAction;
+import com.mishiranu.dashchan.content.Preferences.ThreadFabPressAction;
 import com.mishiranu.dashchan.content.Preferences.ThreadFabRefreshLongPress;
 import com.mishiranu.dashchan.ui.FragmentHandler;
 import com.mishiranu.dashchan.ui.preference.core.CheckPreference;
+import com.mishiranu.dashchan.ui.preference.core.DialogPreference;
 import com.mishiranu.dashchan.ui.preference.core.PreferenceFragment;
+import com.mishiranu.dashchan.util.ConcurrentUtils;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.util.SharedPreferences;
 import com.mishiranu.dashchan.widget.MotionDialogBuilder;
@@ -78,6 +81,18 @@ public class ThreadFabSettingsFragment extends PreferenceFragment {
 			ActionPreference preference = new ActionPreference(action);
 			addPreference(preference, true);
 			preference.updateOrderAccess(Preferences.isThreadFabCustomOrderEnabled());
+		}
+		PressPreference shortPress = new PressPreference(false);
+		PressPreference longPress = new PressPreference(true);
+		addDialogPreference(shortPress);
+		addDialogPreference(longPress);
+		for (ThreadFabAction action : order) {
+			((ActionPreference) findPreference(action.key)).setOnAfterChangeListener(preference -> {
+				if (!preference.getValue()) {
+					if (shortPress.getValue().action == action) shortPress.setValue(ThreadFabPressAction.AUTO);
+					if (longPress.getValue().action == action) longPress.setValue(ThreadFabPressAction.AUTO);
+				}
+			});
 		}
 		ThreadFabRefreshLongPress[] options = ThreadFabRefreshLongPress.values();
 		addList(Preferences.KEY_THREAD_FAB_REFRESH_LONG_PRESS, enumList(options, option -> option.value),
@@ -153,6 +168,42 @@ public class ThreadFabSettingsFragment extends PreferenceFragment {
 		}
 	}
 
+	private final class PressPreference extends DialogPreference<ThreadFabPressAction> {
+		private final boolean longPress;
+
+		PressPreference(boolean longPress) {
+			super(requireContext(), longPress ? Preferences.KEY_THREAD_FAB_HOLD : Preferences.KEY_THREAD_FAB_CLICK,
+					ThreadFabPressAction.AUTO, getString(longPress ? R.string.thread_fab_hold : R.string.thread_fab_click),
+					p -> getString(p.getValue().titleResId));
+			this.longPress = longPress;
+		}
+
+		@Override protected void extract(SharedPreferences preferences) {
+			setValue(Preferences.getThreadFabPressAction(longPress));
+		}
+
+		@Override protected void persist(SharedPreferences preferences) {
+			preferences.edit().put(key, getValue().value).close();
+		}
+
+		@Override
+		protected AlertDialog.Builder configureDialog(Bundle state, AlertDialog.Builder builder) {
+			List<ThreadFabAction> enabled = Preferences.getEnabledThreadFabActions();
+			ArrayList<ThreadFabPressAction> options = new ArrayList<>();
+			for (ThreadFabPressAction option : ThreadFabPressAction.values()) {
+				if (option == ThreadFabPressAction.NONE && !longPress) continue;
+				if (option.action == null || enabled.contains(option.action)) options.add(option);
+			}
+			CharSequence[] labels = new CharSequence[options.size()];
+			for (int i = 0; i < labels.length; i++) labels[i] = getText(options.get(i).titleResId);
+			return super.configureDialog(state, builder)
+					.setSingleChoiceItems(labels, options.indexOf(getValue()), (dialog, index) -> {
+						dialog.dismiss();
+						ConcurrentUtils.HANDLER.post(() -> setValue(options.get(index)));
+					});
+		}
+	}
+
 	private final class ActionPreference extends CheckPreference {
 		private final ThreadFabAction action;
 
@@ -174,13 +225,19 @@ public class ThreadFabSettingsFragment extends PreferenceFragment {
 			CheckViewHolder holder = super.createViewHolder(parent);
 			float density = ResourceUtils.obtainDensity(parent);
 			int size = (int) (48 * density);
+			holder.widgetFrame.removeView(holder.check);
+			LinearLayout.LayoutParams checkParams = new LinearLayout.LayoutParams(size, size);
+			checkParams.setMarginEnd((int) (8 * density));
+			((LinearLayout) holder.view).addView(holder.check, 0, checkParams);
+			holder.title.setMaxLines(Integer.MAX_VALUE);
+			holder.title.setEllipsize(null);
 			int padding = (int) (12 * density);
 			ImageView handle = new ImageView(parent.getContext());
 			handle.setImageResource(R.drawable.ic_drag_handle);
 			handle.setImageTintList(ColorStateList.valueOf(ThemeEngine.getTheme(parent.getContext()).accent));
 			handle.setPadding(padding, padding, padding, padding);
 			handle.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-			((LinearLayout) holder.view).addView(handle, 0, new LinearLayout.LayoutParams(size, size));
+			holder.widgetFrame.addView(handle, size, size);
 			return new ActionViewHolder(holder, handle);
 		}
 
@@ -189,7 +246,7 @@ public class ThreadFabSettingsFragment extends PreferenceFragment {
 		public void bindViewHolder(ViewHolder holder) {
 			super.bindViewHolder(holder);
 			ImageView handle = ((ActionViewHolder) holder).handle;
-			handle.setVisibility(Preferences.isThreadFabCustomOrderEnabled() ? View.VISIBLE : View.GONE);
+			holder.widgetFrame.setVisibility(Preferences.isThreadFabCustomOrderEnabled() ? View.VISIBLE : View.GONE);
 			handle.setOnTouchListener((view, event) -> {
 				if (event.getActionMasked() == MotionEvent.ACTION_DOWN && list != null) {
 					RecyclerView.ViewHolder row = list.findContainingViewHolder(holder.view);

@@ -36,8 +36,10 @@ def main():
     for name in ("AppLockActivity", "PrivacyResetActivity", "SecuritySessionProvider", "SecurityComponentFactory",
                  "android.permission.USE_BIOMETRIC"):
         assert name in manifest, "Shared security component missing: " + name
-    for name in ("FirebaseInitProvider", "VideoCompressionService", "android.permission.FOREGROUND_SERVICE_MEDIA_PROCESSING"):
+    for name in ("FirebaseInitProvider", "SlooopFirebaseMessagingService", "BIND_GOOGLE_TRANSLATION_ADDON"):
         assert name not in manifest, "Excluded component: " + name
+    for name in ("VideoCompressionService", "android.permission.FOREGROUND_SERVICE_MEDIA_PROCESSING"):
+        assert name in manifest, "Video conversion component missing: " + name
     assert "ExperimentalImageEditorActivity" in manifest, "Shared photo editor missing"
     assert "content.service.translation.TranslationService" in manifest, "Translation service missing"
     expected = json.loads((runtime.HERE / "runtime-lock.json").read_text(encoding="utf-8"))
@@ -58,15 +60,13 @@ def main():
             assert len(data) == expected["files"][name]["size"], "Wrong runtime asset size: " + name
             assert hashlib.sha256(data).hexdigest() == expected["files"][name]["sha256"], "Wrong runtime asset: " + name
         for name in entries:
-            assert "androidx.media3" not in name, "Excluded export dependency metadata: " + name
             assert "\\" not in name and ".." not in name.split("/"), "Unsafe ZIP path"
             assert not re.search(r"\.(jks|keystore|log)$|(^|/)(local|keystore)\.properties$", name, re.I), "Private APK entry"
             data = apk.read(name)
             assert not private.search(data), "Private marker in APK entry: " + name
             if name.endswith(".dex"):
                 # The open-source Material UI is now shared. Proprietary services remain excluded.
-                for marker in (b"Lcom/google/firebase/", b"Lcom/google/android/gms/", b"Lcom/google/mlkit/",
-                               b"Landroidx/media3/"):
+                for marker in (b"Lcom/google/firebase/", b"Lcom/google/android/gms/", b"Lcom/google/mlkit/"):
                     assert marker not in data, "Excluded dependency in DEX: " + marker.decode("ascii")
             match = re.fullmatch(r"lib/([^/]+)/([^/]+\.so)", name)
             if match:
@@ -79,7 +79,8 @@ def main():
                        for name in entries), "Language model accidentally bundled"
     print(json.dumps({"apk": args.apk.name, "version": names[0], "versionCode": code,
                       "abis": sorted(native), "nativeLibraries": native,
-                      "sourceRuntimeVerified": True, "privateMarkers": 0}, sort_keys=True))
+                      "sourceRuntimeVerified": True, "videoConversionManifestVerified": True,
+                      "privateMarkers": 0}, sort_keys=True))
 
 
 if __name__ == "__main__":

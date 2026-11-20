@@ -324,7 +324,8 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 					return isResumed() && threadContentVisible && !searchMode && posts != null && posts.canShowThreadFabMenu()
 							&& !((FragmentHandler) requireActivity()).isContentObscured();
 				}
-				@Override public ThreadFabMenu.Action getSingleAction() { return threadFabPage().getSingleThreadFabAction(); }
+				@Override public ThreadFabMenu.Action getClickAction() { return threadFabPage().getThreadFabClickAction(); }
+				@Override public ThreadFabMenu.Action getHoldAction() { return threadFabPage().getThreadFabHoldAction(); }
 				@Override public java.util.List<ThreadFabMenu.Action> getActions() { return threadFabPage().getThreadFabActions(); }
 				@Override public void onAction(int id) {
 					PostsPage posts = threadFabPage();

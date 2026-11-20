@@ -857,6 +857,7 @@
 	<string name="search_image_google_lens">Google Lens</string>
 	<string name="search_image_with_app">Open with an app</string>
 	<string name="search_image_yandex">Yandex</string>
+	<string name="search_image_tineye">TinEye</string>
 	<string name="uploading_image__ellipsis">Uploading image…</string>
 	<string name="secure_connection">Secure connection</string>
 	<string name="secure_connection__summary">Use HTTPS protocol</string>
@@ -1061,6 +1062,8 @@
 	<string name="reorder_attachment">Reorder attachment</string>
 	<string name="preview_video_attachment">Preview video</string>
 	<string name="preference_captcha_full_keyboard">Use full keyboard for captcha</string>
+	<string name="preference_show_post_voting">Show post voting</string>
+	<string name="preference_show_post_voting_summary">Like and dislike buttons and counts below posts.</string>
 	<string name="preference_monkey_button">Monkey button in the editor</string>
 	<string name="preference_monkey_button_summary">Show the Monkey button in the new post and reply editor. Available to users with at least 10 posts on 2ch.</string>
 	<string name="preference_artmonkey_button">ArtMonkey button in the editor</string>
@@ -1542,12 +1545,15 @@
 	<string name="thread_fab_order_summary">From bottom to top, starting next to the floating button.</string>
 	<string name="thread_fab_actions">Thread actions</string>
 	<string name="thread_fab_close">Close thread actions</string>
+	<string name="thread_fab_click">Short press</string>
+	<string name="thread_fab_hold">Long press</string>
+	<string name="thread_fab_press_auto">Automatic</string>
+	<string name="thread_fab_open_menu">Open menu</string>
+	<string name="thread_fab_press_none">Do nothing</string>
 	<string name="thread_fab_refresh">Refresh thread</string>
 	<string name="thread_fab_refresh_long_press">Long-press “Refresh”</string>
 	<string name="thread_fab_nothing_to_clear">No cached posts to clear</string>
 	<string name="old_posts_will_be_deleted__sentence">Old posts will be permanently removed from the local cache.</string>
 	<string name="thread_fab_save">Save thread</string>
 	<string name="thread_fab_reload">Reload entire thread</string>
-	<string name="dialog_form_ime">New keyboard handling in dialogs</string>
-	<string name="dialog_form_ime_summary">Improves layout and scrolling in the feed editor and history filter, and preserves the feed draft on rotation. On by default.</string>
 </resources>

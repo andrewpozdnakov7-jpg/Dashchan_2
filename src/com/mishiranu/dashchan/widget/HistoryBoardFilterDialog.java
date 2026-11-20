@@ -11,8 +11,6 @@ import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import androidx.lifecycle.LifecycleOwner;
-import android.widget.ScrollView;
-import com.mishiranu.dashchan.content.Preferences;
 import android.widget.TextView;
 import chan.content.Chan;
 import chan.util.StringUtils;
@@ -75,7 +73,7 @@ public final class HistoryBoardFilterDialog {
 		root.setOrientation(LinearLayout.VERTICAL);
 		root.setPadding(padding, padding, padding, 0);
 		EditText search = new SafePasteEditText(dialogContext);
-		if (Preferences.isDialogFormImeEnabled()) search.setId(R.id.combined_feed_dialog_search);
+		search.setId(R.id.combined_feed_dialog_search);
 		search.setSingleLine(true);
 		search.setHint(R.string.combined_feed_search_boards);
 		search.setText(state.query);
@@ -184,38 +182,18 @@ public final class HistoryBoardFilterDialog {
 			@Override public void afterTextChanged(Editable s) {}
 		});
 		rebuild[0].run();
-		boolean newIme = Preferences.isDialogFormImeEnabled();
-		View content;
-		if (newIme) {
-			DialogFormScrollView form = DialogFormScrollView.create(dialogContext, root, checks, InterfaceAppearance.isEnabled(dialogContext));
-			if (owner != null) form.retain(state.viewport, owner, search);
-			content = form.dialogContent();
-		} else {
-			if (InterfaceAppearance.isEnabled(dialogContext)) {
-				root.addView(checks, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-				DialogFormScrollView form = new DialogFormScrollView(dialogContext);
-				form.addView(root, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-				content = form;
-			} else {
-				ScrollView scroll = new ScrollView(dialogContext);
-				scroll.addView(checks, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-				root.addView(scroll, ViewGroup.LayoutParams.MATCH_PARENT, (int) (320f * density));
-				content = root;
-			}
-		}
+		DialogFormScrollView form = DialogFormScrollView.create(dialogContext, root, checks,
+				InterfaceAppearance.isEnabled(dialogContext));
+		if (owner != null) form.retain(state.viewport, owner, search);
+		View content = form.dialogContent();
 		AlertDialog dialog = builder.setTitle(R.string.history_filter_sections).setView(content)
 				.setNegativeButton(android.R.string.cancel, null)
 				.setNeutralButton(R.string.history_reset_filter, null)
 				.setPositiveButton(R.string.history_apply_filter, (d, which) -> apply.accept(new ArrayList<>(state.selected)))
 				.create();
 		InterfaceAppearance.standardCustomDialogContent(dialog, content);
-		if (newIme) {
-			dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
-			DialogFormInsets.configure(dialog);
-		} else {
-			dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN
-					| (InterfaceAppearance.isEnabled(dialogContext) ? WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE : 0));
-		}
+		dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
+		DialogFormInsets.configure(dialog);
 
 		dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v -> {
 			state.selected.clear();

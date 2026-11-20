@@ -45,22 +45,32 @@ public class PostsExtractControllerTest {
 		PostItem.HideState.Map<PostNumber> suppliedHidden = new PostItem.HideState.Map<>();
 		suppliedHidden.set(post(2), PostItem.HideState.HIDDEN);
 		suppliedHidden.set(post(3), PostItem.HideState.SHOWN);
-		PostsDatabase.Flags flags = new PostsDatabase.Flags(suppliedHidden, set(3));
-		assertTrue(PostsExtractController.replaceFlags(hidden, user, flags));
+		PostsDatabase.Flags flags = new PostsDatabase.Flags(suppliedHidden, set(3), 1);
+		assertTrue(PostsExtractController.replaceFlags(hidden, user, flags, 0));
 		assertEquals(2, hidden.size());
 		assertEquals(PostItem.HideState.UNDEFINED, hidden.get(post(1)));
 		assertEquals(PostItem.HideState.HIDDEN, hidden.get(post(2)));
 		assertEquals(PostItem.HideState.SHOWN, hidden.get(post(3)));
 		assertEquals(set(3), user);
-		assertFalse(PostsExtractController.replaceFlags(hidden, user, null));
+		assertFalse(PostsExtractController.replaceFlags(hidden, user, null, flags.revision));
 		assertEquals(PostItem.HideState.HIDDEN, hidden.get(post(2)));
 		// Target state must not alias the extraction snapshot.
 		hidden.set(post(2), PostItem.HideState.UNDEFINED); user.clear();
 		assertEquals(PostItem.HideState.HIDDEN, suppliedHidden.get(post(2)));
 		assertEquals(set(3), flags.userPosts);
 		assertTrue(PostsExtractController.replaceFlags(hidden, user,
-				new PostsDatabase.Flags(new PostItem.HideState.Map<>(), set())));
+				new PostsDatabase.Flags(new PostItem.HideState.Map<>(), set(), 2), flags.revision));
 		assertEquals(0, hidden.size()); assertTrue(user.isEmpty());
+	}
+
+	@Test public void inFlightExtractCannotRemoveAnOwnPostFlagThatWasJustSaved() {
+		PostItem.HideState.Map<PostNumber> hidden = new PostItem.HideState.Map<>();
+		HashSet<PostNumber> user = set();
+		PostsDatabase.Flags beforePost = new PostsDatabase.Flags(new PostItem.HideState.Map<>(), set(), 1);
+		PostsDatabase.Flags afterPost = new PostsDatabase.Flags(new PostItem.HideState.Map<>(), set(42), 2);
+		assertTrue(PostsExtractController.replaceUserFlags(user, afterPost, beforePost.revision));
+		assertTrue(PostsExtractController.replaceFlags(hidden, user, beforePost, afterPost.revision));
+		assertEquals(set(42), user);
 	}
 
 	private static final class HiddenHost implements PostsExtractController.HiddenHost {

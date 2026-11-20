@@ -35,7 +35,8 @@ class ApkContractTest(unittest.TestCase):
                 entries["lib/" + abi + "/libfixture.so"] = elf
             manifest = ("ExperimentalImageEditorActivity content.service.translation.TranslationService "
                         "AppLockActivity PrivacyResetActivity SecuritySessionProvider SecurityComponentFactory "
-                        "android.permission.USE_BIOMETRIC")
+                        "android.permission.USE_BIOMETRIC VideoCompressionService "
+                        "android.permission.FOREGROUND_SERVICE_MEDIA_PROCESSING")
             if change:
                 manifest = change(entries, manifest)
             (root / "runtime-lock.json").write_text(json.dumps(expected), encoding="utf-8")
@@ -66,7 +67,7 @@ class ApkContractTest(unittest.TestCase):
             self.check_fixture(change)
 
     def test_excluded_component_rejected(self):
-        for component in ("FirebaseInitProvider", "VideoCompressionService", "android.permission.FOREGROUND_SERVICE_MEDIA_PROCESSING"):
+        for component in ("FirebaseInitProvider", "SlooopFirebaseMessagingService", "BIND_GOOGLE_TRANSLATION_ADDON"):
             with self.subTest(component=component), self.assertRaisesRegex(AssertionError, "Excluded component"):
                 self.check_fixture(lambda entries, manifest: manifest + " " + component)
 
@@ -83,19 +84,17 @@ class ApkContractTest(unittest.TestCase):
         with self.assertRaisesRegex(AssertionError, "Excluded dependency"):
             self.check_fixture(change)
 
-    def test_export_dependency_rejected(self):
+    def test_missing_video_conversion_component_rejected(self):
+        for component in ("VideoCompressionService", "android.permission.FOREGROUND_SERVICE_MEDIA_PROCESSING"):
+            with self.subTest(component=component), self.assertRaisesRegex(AssertionError, "Video conversion component missing"):
+                self.check_fixture(lambda entries, manifest: manifest.replace(component, ""))
+
+    def test_open_source_media3_dependency_accepted(self):
         def change(entries, manifest):
             entries["classes.dex"] = b"Landroidx/media3/transformer/Transformer;"
-            return manifest
-        with self.assertRaisesRegex(AssertionError, "Excluded dependency"):
-            self.check_fixture(change)
-
-    def test_obfuscated_export_dependency_metadata_rejected(self):
-        def change(entries, manifest):
             entries["META-INF/androidx.media3_media3-transformer.version"] = b"1.11.1"
             return manifest
-        with self.assertRaisesRegex(AssertionError, "export dependency metadata"):
-            self.check_fixture(change)
+        self.check_fixture(change)
 
     def test_local_path_rejected(self):
         def change(entries, manifest):

@@ -2347,13 +2347,6 @@ public class Preferences {
 		return PREFERENCES.getBoolean(KEY_COMPACT_DIALOGS, DEFAULT_COMPACT_DIALOGS);
 	}
 
-	public static final String KEY_DIALOG_FORM_IME = "experimental_dialog_form_ime";
-	public static final boolean DEFAULT_DIALOG_FORM_IME = true;
-
-	public static boolean isDialogFormImeEnabled() {
-		return PREFERENCES.getBoolean(KEY_DIALOG_FORM_IME, DEFAULT_DIALOG_FORM_IME);
-	}
-
 	public static final String KEY_GALAXY_M12_SELECTION_FIX = "experimental_galaxy_m12_selection_fix";
 	public static final boolean DEFAULT_GALAXY_M12_SELECTION_FIX = true;
 	private static final String KEY_SELECTION_FIX_DEFAULT_ON_MIGRATED = "selection_fix_default_on_v1_migrated";
@@ -2499,6 +2492,8 @@ public class Preferences {
 	public static final boolean DEFAULT_THREAD_FAB_MENU = false;
 	public static final String KEY_THREAD_FAB_CUSTOM_ORDER = "thread_fab_custom_order";
 	private static final String KEY_THREAD_FAB_ORDER = "thread_fab_order";
+	public static final String KEY_THREAD_FAB_CLICK = "thread_fab_click";
+	public static final String KEY_THREAD_FAB_HOLD = "thread_fab_hold";
 	public static final String KEY_THREAD_FAB_REFRESH_LONG_PRESS = "thread_fab_refresh_long_press";
 	public static final ThreadFabRefreshLongPress DEFAULT_THREAD_FAB_REFRESH_LONG_PRESS =
 			ThreadFabRefreshLongPress.RELOAD;
@@ -2541,6 +2536,37 @@ public class Preferences {
 			this.titleResId = titleResId;
 			this.enabledByDefault = enabledByDefault;
 		}
+	}
+
+	public enum ThreadFabPressAction {
+		AUTO("auto", R.string.thread_fab_press_auto, null),
+		MENU("menu", R.string.thread_fab_open_menu, null),
+		NONE("none", R.string.thread_fab_press_none, null),
+		REPLY(ThreadFabAction.REPLY),
+		REFRESH(ThreadFabAction.REFRESH),
+		FAVORITE(ThreadFabAction.FAVORITE),
+		ARCHIVE(ThreadFabAction.ARCHIVE),
+		GALLERY(ThreadFabAction.GALLERY);
+
+		public final String value;
+		public final int titleResId;
+		public final ThreadFabAction action;
+
+		ThreadFabPressAction(ThreadFabAction action) {
+			this(action.key, action.titleResId, action);
+		}
+
+		ThreadFabPressAction(String value, int titleResId, ThreadFabAction action) {
+			this.value = value;
+			this.titleResId = titleResId;
+			this.action = action;
+		}
+	}
+
+	public static ThreadFabPressAction getThreadFabPressAction(boolean longPress) {
+		ThreadFabPressAction option = getEnumValue(longPress ? KEY_THREAD_FAB_HOLD : KEY_THREAD_FAB_CLICK,
+				ThreadFabPressAction.values(), ThreadFabPressAction.AUTO, action -> action.value);
+		return !longPress && option == ThreadFabPressAction.NONE ? ThreadFabPressAction.AUTO : option;
 	}
 
 	public static boolean isThreadFabMenuEnabled() {

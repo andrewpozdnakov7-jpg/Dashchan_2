@@ -40,6 +40,8 @@ public class DvachChanConfiguration extends ChanConfiguration {
 	private static final String KEY_MONKEY_BUTTONS = "monkey_buttons";
 	private static final String KEY_ART_MONKEY_BUTTON = "artmonkey_button";
 	private static final String KEY_CAPTCHA_FULL_KEYBOARD = "captcha_full_keyboard";
+	private static final String KEY_SHOW_POST_VOTING = "show_post_voting";
+	private static final boolean DEFAULT_SHOW_POST_VOTING = true;
 	private static final int CAPTCHA_TTL = 90;
 
 	public DvachChanConfiguration() {
@@ -57,6 +59,7 @@ public class DvachChanConfiguration extends ChanConfiguration {
 		addCustomPreference(KEY_MONKEY_BUTTONS, false);
 		addCustomPreference(KEY_ART_MONKEY_BUTTON, false);
 		addCustomPreference(KEY_CAPTCHA_FULL_KEYBOARD, false);
+		addCustomPreference(KEY_SHOW_POST_VOTING, DEFAULT_SHOW_POST_VOTING);
 	}
 
 	@Override
@@ -129,7 +132,7 @@ public class DvachChanConfiguration extends ChanConfiguration {
 
 	@Override
 	public Voting obtainVotingConfiguration(String boardName) {
-		if (!get(boardName, KEY_LIKES_ENABLED, false)) {
+		if (!isPostVotingShown() || !get(boardName, KEY_LIKES_ENABLED, false)) {
 			return null;
 		}
 		Voting voting = new Voting();
@@ -220,6 +223,12 @@ public class DvachChanConfiguration extends ChanConfiguration {
 	public CustomPreference obtainCustomPreferenceConfiguration(String key) {
 		Resources resources = getResources();
 		switch (key) {
+			case KEY_SHOW_POST_VOTING: {
+				CustomPreference preference = new CustomPreference();
+				preference.title = resources.getString(R.string.preference_show_post_voting);
+				preference.summary = resources.getString(R.string.preference_show_post_voting_summary);
+				return preference;
+			}
 			case KEY_MONKEY_BUTTONS: {
 				CustomPreference preference = new CustomPreference();
 				preference.title = resources.getString(R.string.preference_monkey_button);
@@ -245,6 +254,10 @@ public class DvachChanConfiguration extends ChanConfiguration {
 
 	public boolean isMonkeyButtonEnabled() {
 		return get(null, KEY_MONKEY_BUTTONS, false);
+	}
+
+	public boolean isPostVotingShown() {
+		return get(null, KEY_SHOW_POST_VOTING, DEFAULT_SHOW_POST_VOTING);
 	}
 
 	public boolean isArtMonkeyButtonEnabled() {

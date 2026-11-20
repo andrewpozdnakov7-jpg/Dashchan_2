@@ -481,8 +481,6 @@ public final class SettingsSearchIndex {
 				R.string.hardware_video_acceleration__summary, Preferences.KEY_HARDWARE_VIDEO_ACCELERATION);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.s24_ultra_oneui9_toolbar_fix,
 				R.string.s24_ultra_oneui9_toolbar_fix_summary, Preferences.KEY_S24_ULTRA_ONEUI9_TOOLBAR_FIX);
-		add(context, entries, Screen.EXPERIMENTAL, R.string.dialog_form_ime,
-				R.string.dialog_form_ime_summary, Preferences.KEY_DIALOG_FORM_IME);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.galaxy_m12_selection_fix,
 				R.string.galaxy_m12_selection_fix_summary, Preferences.KEY_GALAXY_M12_SELECTION_FIX);
 		add(context, entries, Screen.DIAGNOSTICS, R.string.crash_report_prompt_enabled,
@@ -689,6 +687,8 @@ public final class SettingsSearchIndex {
 				R.string.thread_fab_menu_summary, Preferences.KEY_THREAD_FAB_MENU);
 		add(context, entries, Screen.THREAD_FAB, R.string.thread_fab_custom_order, R.string.thread_fab_order_summary,
 				Preferences.KEY_THREAD_FAB_CUSTOM_ORDER);
+		add(context, entries, Screen.THREAD_FAB, R.string.thread_fab_click, 0, Preferences.KEY_THREAD_FAB_CLICK);
+		add(context, entries, Screen.THREAD_FAB, R.string.thread_fab_hold, 0, Preferences.KEY_THREAD_FAB_HOLD);
 		add(context, entries, Screen.THREAD_FAB, R.string.thread_fab_refresh_long_press, 0,
 				Preferences.KEY_THREAD_FAB_REFRESH_LONG_PRESS);
 		for (Preferences.ThreadFabAction action : Preferences.ThreadFabAction.values()) {

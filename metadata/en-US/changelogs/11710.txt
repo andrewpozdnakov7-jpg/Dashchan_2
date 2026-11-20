@@ -1,0 +1,9 @@
+• Experimental read-only support for Soyjak.party 🫘 (soyjak.st) adds boards, threads, attachments, and local translation.
+• F-Droid now supports local video conversion for attachments. Automatic compression is available in experimental settings.
+• Drawer sections can be reordered or hidden. Added automatic cleanup of open pages and separate short- and long-press settings for the floating thread button.
+• Browse cached media in Media → Advanced. Updating a local archive adds new posts and reuses existing attachments.
+• Improved text selection and keyboard handling in the feed editor, history filter, and autohide rule editor. The symbol CAPTCHA switches to two columns when the phone is turned sideways.
+• Predictive Back has a dedicated settings screen. Choose how the Back gesture behaves in the posting form.
+• Improved photo editing, edit recovery, and attachment options. Added reverse image search with TinEye.
+• Voting controls can be hidden on Dvach. Improved recognition of your own posts when the server confirms a reply without supplying its number.
+• Improved app diagnostics and background notification privacy when app protection is enabled.
