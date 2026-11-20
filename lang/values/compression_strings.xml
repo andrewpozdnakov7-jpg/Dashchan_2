@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="compression_title">Attachment compression</string>
-    <string name="compression_enabled">Compress oversized videos</string>
-    <string name="compression_summary">Prepare smaller copies before sending. Originals are preserved. Experimental, off by default.</string>
+    <string name="compression_title">Video converter</string>
+    <string name="compression_enabled">Enable converter</string>
+    <string name="compression_summary">Compress videos and choose the format before posting</string>
+    <string name="compression_enabled_summary">Compress videos to fit attachment limits and enable manual conversion.</string>
     <string name="compression_engine">Conversion method</string>
     <string name="compression_engine_summary">Media3 · hardware video encoding</string>
     <string name="compression_direct_unavailable">MediaCodec directly — not available yet</string>

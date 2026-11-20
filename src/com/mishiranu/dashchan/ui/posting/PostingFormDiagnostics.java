@@ -69,7 +69,6 @@ public final class PostingFormDiagnostics {
 				+ " code=" + BuildConfig.VERSION_CODE + " android=" + Build.VERSION.RELEASE
 				+ " sdk=" + Build.VERSION.SDK_INT + " manufacturer=" + Build.MANUFACTURER
 				+ " model=" + Build.MODEL + " targetSdk=" + context.getApplicationInfo().targetSdkVersion
-				+ "\ngalaxyM12SelectionFix=" + Preferences.isGalaxyM12SelectionFixEnabled()
 				+ " systemNavigation=" + com.mishiranu.dashchan.util.SystemNavigationMode.get()
 				+ " predictiveBack=" + Preferences.isPredictiveBackEnabled()
 				+ " postingSingleGesture=" + Preferences.isPostingBackSingleGestureEnabled()

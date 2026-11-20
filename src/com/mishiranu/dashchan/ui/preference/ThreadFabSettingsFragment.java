@@ -30,8 +30,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class ThreadFabSettingsFragment extends PreferenceFragment {
-	// Menu toggle, custom order toggle and category.
-	private static final int ACTION_OFFSET = 3;
+	// Menu toggle, two press actions, custom order toggle and category.
+	private static final int ACTION_OFFSET = 5;
 	private final ArrayList<ThreadFabAction> order = new ArrayList<>();
 	private RecyclerView list;
 	private ItemTouchHelper dragHelper;
@@ -73,6 +73,10 @@ public class ThreadFabSettingsFragment extends PreferenceFragment {
 		order.addAll(Preferences.getThreadFabActionOrder());
 		addCheck(true, Preferences.KEY_THREAD_FAB_MENU, Preferences.DEFAULT_THREAD_FAB_MENU,
 				R.string.thread_fab_menu, 0);
+		PressPreference shortPress = new PressPreference(false);
+		PressPreference longPress = new PressPreference(true);
+		addDialogPreference(shortPress);
+		addDialogPreference(longPress);
 		addCheck(true, Preferences.KEY_THREAD_FAB_CUSTOM_ORDER, Preferences.isThreadFabCustomOrderEnabled(),
 				R.string.thread_fab_custom_order, R.string.thread_fab_order_summary)
 				.setOnAfterChangeListener(p -> applyCustomOrder());
@@ -82,10 +86,6 @@ public class ThreadFabSettingsFragment extends PreferenceFragment {
 			addPreference(preference, true);
 			preference.updateOrderAccess(Preferences.isThreadFabCustomOrderEnabled());
 		}
-		PressPreference shortPress = new PressPreference(false);
-		PressPreference longPress = new PressPreference(true);
-		addDialogPreference(shortPress);
-		addDialogPreference(longPress);
 		for (ThreadFabAction action : order) {
 			((ActionPreference) findPreference(action.key)).setOnAfterChangeListener(preference -> {
 				if (!preference.getValue()) {

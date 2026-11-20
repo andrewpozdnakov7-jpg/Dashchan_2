@@ -52,7 +52,7 @@ public final class SettingsSearchIndex {
 		DIAGNOSTICS(R.string.about, R.string.settings_diagnostics) {
 			@Override ContentFragment createFragment() { return new DiagnosticsFragment(); }
 		},
-		VIDEO_COMPRESSION(R.string.experimental_features, R.string.compression_title) {
+		VIDEO_COMPRESSION(R.string.media, R.string.compression_title) {
 			@Override ContentFragment createFragment() { return new VideoCompressionFragment(); }
 		},
 		MATERIAL3_DESIGN(R.string.experimental_features, R.string.material3_design_settings) {
@@ -481,8 +481,6 @@ public final class SettingsSearchIndex {
 				R.string.hardware_video_acceleration__summary, Preferences.KEY_HARDWARE_VIDEO_ACCELERATION);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.s24_ultra_oneui9_toolbar_fix,
 				R.string.s24_ultra_oneui9_toolbar_fix_summary, Preferences.KEY_S24_ULTRA_ONEUI9_TOOLBAR_FIX);
-		add(context, entries, Screen.EXPERIMENTAL, R.string.galaxy_m12_selection_fix,
-				R.string.galaxy_m12_selection_fix_summary, Preferences.KEY_GALAXY_M12_SELECTION_FIX);
 		add(context, entries, Screen.DIAGNOSTICS, R.string.crash_report_prompt_enabled,
 				R.string.crash_report_prompt_summary, Preferences.KEY_CRASH_REPORT_PROMPTS);
 		add(context, entries, Screen.CRASH_REPORTS, R.string.crash_reports_saved, R.string.crash_reports_saved_summary, null);
@@ -696,18 +694,19 @@ public final class SettingsSearchIndex {
 		}
 		addToggle(context, entries, Screen.MEDIA_GALLERY, ExperimentalPreferenceDescriptors.videoThumbnails());
 		if (BuildConfig.ENABLE_VIDEO_COMPRESSION) {
-		add(context, entries, Screen.VIDEO_COMPRESSION, R.string.compression_title, R.string.compression_summary,
-				com.mishiranu.dashchan.media.compression.CompressionSettings.ENABLED);
-		add(context, entries, Screen.VIDEO_COMPRESSION, R.string.compression_codec, 0,
-				com.mishiranu.dashchan.media.compression.CompressionSettings.CODEC);
-		add(context, entries, Screen.VIDEO_COMPRESSION, R.string.compression_engine, R.string.compression_engine_summary, null);
-		add(context, entries, Screen.VIDEO_COMPRESSION, R.string.compression_always, R.string.compression_always_summary,
-				com.mishiranu.dashchan.media.compression.CompressionSettings.ALWAYS);
-		add(context, entries, Screen.VIDEO_COMPRESSION, R.string.compression_total_limit, 0,
-				com.mishiranu.dashchan.media.compression.CompressionSettings.TOTAL_LIMIT);
-		add(context, entries, Screen.VIDEO_COMPRESSION, R.string.compression_file_limit, 0,
-				com.mishiranu.dashchan.media.compression.CompressionSettings.FILE_LIMIT);
-		add(context, entries, Screen.VIDEO_COMPRESSION, R.string.compression_system_test);
+			add(context, entries, Screen.VIDEO_COMPRESSION, R.string.compression_title, R.string.compression_summary, null);
+			add(context, entries, Screen.VIDEO_COMPRESSION, R.string.compression_enabled, R.string.compression_enabled_summary,
+					com.mishiranu.dashchan.media.compression.CompressionSettings.ENABLED);
+			add(context, entries, Screen.VIDEO_COMPRESSION, R.string.compression_codec, 0,
+					com.mishiranu.dashchan.media.compression.CompressionSettings.CODEC);
+			add(context, entries, Screen.VIDEO_COMPRESSION, R.string.compression_engine, R.string.compression_engine_summary, null);
+			add(context, entries, Screen.VIDEO_COMPRESSION, R.string.compression_always, R.string.compression_always_summary,
+					com.mishiranu.dashchan.media.compression.CompressionSettings.ALWAYS);
+			add(context, entries, Screen.VIDEO_COMPRESSION, R.string.compression_total_limit, 0,
+					com.mishiranu.dashchan.media.compression.CompressionSettings.TOTAL_LIMIT);
+			add(context, entries, Screen.VIDEO_COMPRESSION, R.string.compression_file_limit, 0,
+					com.mishiranu.dashchan.media.compression.CompressionSettings.FILE_LIMIT);
+			add(context, entries, Screen.VIDEO_COMPRESSION, R.string.compression_system_test);
 		}
 		addToggle(context, entries, Screen.MEDIA_IMAGES, ExperimentalPreferenceDescriptors.photoEditor());
 		add(context, entries, Screen.CONTENTS, R.string.thread_page_preload,

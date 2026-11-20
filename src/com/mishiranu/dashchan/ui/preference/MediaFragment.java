@@ -8,6 +8,7 @@ import androidx.annotation.NonNull;
 import androidx.fragment.app.DialogFragment;
 import androidx.lifecycle.ViewModelProvider;
 import chan.util.StringUtils;
+import com.mishiranu.dashchan.BuildConfig;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.CacheManager;
 import com.mishiranu.dashchan.content.Preferences;
@@ -59,6 +60,10 @@ public class MediaFragment extends PreferenceFragment {
 				((FragmentHandler) requireActivity()).pushFragment(new DownloadsFragment()));
 		addButton(R.string.video_player, R.string.media_video_player_summary).setOnClickListener(p ->
 				((FragmentHandler) requireActivity()).pushFragment(new VideoPlayerSettingsFragment()));
+		if (BuildConfig.ENABLE_VIDEO_COMPRESSION) {
+			addButton(R.string.compression_title, R.string.compression_summary).setOnClickListener(p ->
+					((FragmentHandler) requireActivity()).pushFragment(new VideoCompressionFragment()));
+		}
 
 		addHeader(R.string.additional);
 		addSeek(Preferences.KEY_CACHE_SIZE, Preferences.DEFAULT_CACHE_SIZE, getString(R.string.cache_size), "%d MB",

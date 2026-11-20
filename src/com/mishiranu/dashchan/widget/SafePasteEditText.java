@@ -17,7 +17,7 @@ public class SafePasteEditText extends EditText {
 
 	@Override public boolean dispatchTouchEvent(MotionEvent event) {
 		if (event.getActionMasked() == MotionEvent.ACTION_DOWN) gestureTrace.begin(event);
-		// The optional Galaxy M12 workaround protects the drawer from DOWN.
+		// Reserve gestures that start in this editor before the drawer can intercept them.
 		// With it disabled the helper leaves the released native dispatch unchanged.
 		CustomDrawerLayout.protectEditorGesture(this, event);
 		boolean handled = super.dispatchTouchEvent(event);

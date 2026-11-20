@@ -1,0 +1,7 @@
+- Choose separate actions for a tap and a long press on the floating thread button, including opening the menu. Menu actions follow the order set in Settings.
+- You can hide voting buttons and counters under posts in the Dvach settings.
+- Improved recognition of your own posts when the server confirms submission without returning a post number.
+- Added TinEye to the reverse image search menu.
+- On wide screens, the character selection CAPTCHA shows the challenge and the choice buttons side by side.
+- Improved keyboard handling in the feed editor, history filter and hide-rule editor. The side panel is now prevented from opening accidentally while selecting text in the posting form.
+- Video converter settings have moved to Media → Video converter.

@@ -761,6 +761,12 @@
 			"name": "3.2.91",
 			"date": "20.11.2026",
 			"changelog": true
+		},
+		{
+			"code": 11720,
+			"name": "3.2.92",
+			"date": "20.11.2026",
+			"changelog": true
 		}
 	]
 }

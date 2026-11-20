@@ -1,10 +1,27 @@
 package com.mishiranu.dashchan.chan.soyjak;
 
 import chan.content.ChanConfiguration;
+import com.mishiranu.dashchan.R;
 
 public class SoyjakChanConfiguration extends ChanConfiguration {
+	private static final String KEY_WEBSITE_REPLIES = "website_replies";
+
 	public SoyjakChanConfiguration() {
 		setDefaultName("Anonymous");
+		addCustomPreference(KEY_WEBSITE_REPLIES, false);
+	}
+
+	@Override
+	protected CustomPreference obtainCustomPreferenceConfiguration(String key) {
+		if (!KEY_WEBSITE_REPLIES.equals(key)) return null;
+		CustomPreference preference = new CustomPreference();
+		preference.title = getResources().getString(R.string.soyjak_allow_posts);
+		preference.summary = getResources().getString(R.string.soyjak_allow_posts_summary);
+		return preference;
+	}
+
+	public boolean isWebsiteReplyEnabled() {
+		return get(null, KEY_WEBSITE_REPLIES, false);
 	}
 
 	@Override

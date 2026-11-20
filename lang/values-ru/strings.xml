@@ -427,8 +427,6 @@
 	<string name="delete_font_dialog_title">Удалить шрифт</string>
 	<string name="s24_ultra_oneui9_toolbar_fix">Фикс для S24 Ultra OneUI 9</string>
 	<string name="s24_ultra_oneui9_toolbar_fix_summary">Одинаковые размеры и отступы кнопок обновления и меню в верхней панели.</string>
-	<string name="galaxy_m12_selection_fix">Фикс для Samsung Galaxy M12</string>
-	<string name="galaxy_m12_selection_fix_summary">Защищает выделение текста от перехвата боковой панелью и прокруткой формы. По умолчанию включён.</string>
 	<string name="video_diagnostics_begin">Начать</string>
 	<string name="video_diagnostics_extended">Расширенный лог</string>
 	<string name="video_diagnostics_saving">Сохранение диагностики…</string>
@@ -1069,6 +1067,8 @@
 	<string name="soyjak_probe_summary">Запросить каталог через приложение и показать результат нативного HTTP</string>
 	<string name="soyjak_access_saved">Доступ к сайту сохранён для приложения</string>
 	<string name="soyjak_unavailable">Soyjak недоступен</string>
+	<string name="soyjak_allow_posts">Разрешить посты</string>
+	<string name="soyjak_allow_posts_summary">Ответы в существующих тредах через форму Soyjak внутри Slooop.</string>
 	<string name="wifi_only">Только через Wi-Fi</string>
 	<string name="wifi_or_mobile">Через Wi-Fi или мобильную сеть</string>
 	<string name="with_name_name__format">С именем %s</string>
@@ -1567,7 +1567,7 @@
 	<string name="thread_fab_menu">Плавающее меню треда</string>
 	<string name="thread_fab_menu_summary">Выбор кнопок плавающего меню и их порядка</string>
 	<string name="thread_fab_custom_order">Свой порядок действий</string>
-	<string name="thread_fab_order_summary">Снизу вверх, начиная от плавающей кнопки</string>
+	<string name="thread_fab_order_summary">Сверху вниз, как в открытом меню</string>
 	<string name="thread_fab_actions">Действия треда</string>
 	<string name="thread_fab_close">Закрыть действия треда</string>
 	<string name="thread_fab_click">Короткое нажатие</string>

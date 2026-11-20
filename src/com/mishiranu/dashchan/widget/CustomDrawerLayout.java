@@ -9,7 +9,6 @@ import android.view.ViewParent;
 import android.view.ViewConfiguration;
 import androidx.core.view.GravityCompat;
 import androidx.drawerlayout.widget.DrawerLayout;
-import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.util.ViewUtils;
 import com.mishiranu.dashchan.util.InputGestureDiagnostics;
@@ -32,10 +31,9 @@ public class CustomDrawerLayout extends DrawerLayout {
 	private final InputGestureDiagnostics.Trace gestureTrace = new InputGestureDiagnostics.Trace();
 	boolean isEditorGestureOwned() { return editorGestureOwned; }
 
-	/** Opt-in workaround only; otherwise retain the released editor/drawer dispatch. */
+	/** Keep gestures that start in an editor available for cursor movement and selection. */
 	static void protectEditorGesture(View editor, MotionEvent event) {
 		if (!editor.isEnabled() || event.getActionMasked() != MotionEvent.ACTION_DOWN) return;
-		if (!Preferences.isGalaxyM12SelectionFixEnabled()) return;
 		ViewParent parent = editor.getParent();
 		while (parent != null) {
 			if (parent instanceof CustomDrawerLayout) {
@@ -102,7 +100,7 @@ public class CustomDrawerLayout extends DrawerLayout {
 
 	@Override public void onWindowFocusChanged(boolean focused) {
 		super.onWindowFocusChanged(focused);
-		if (!focused && (editorGestureOwned || Preferences.isGalaxyM12SelectionFixEnabled())) {
+		if (!focused) {
 			releaseEditorGesture("window_focus_lost"); closedAtDown = false; handle = false;
 		}
 	}
